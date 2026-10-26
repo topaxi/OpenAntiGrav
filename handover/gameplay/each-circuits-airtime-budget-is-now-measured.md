@@ -1,3 +1,10 @@
+---
+status: blocked-maintainer
+titles: [pulse]
+updated: 2026-09-25
+summary: "The maintainer reads the airtime table and decides what roll_caution and roll_airtime should do per circuit"
+---
+
 # Each circuit's airtime budget is now measured; Moa Therma confirms the maintainer
 
 2026-09-07. The maintainer's own framing, on why loosening `roll_caution` (the

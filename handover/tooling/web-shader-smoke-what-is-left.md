@@ -1,3 +1,10 @@
+---
+status: blocked-maintainer
+titles: [all]
+updated: 2026-10-15
+summary: "web-shaders CI job unrun on GitHub; the maintainer pushes the branch and fixes runner assumptions"
+---
+
 # The web shader smoke test: what is left
 
 2026-10-15, lane `webgpu-smoke`. `just check-web-shaders` creates all 44 WGSL

@@ -1,4 +1,8 @@
 ---
+status: measure
+titles: [pulse]
+updated: 2026-10-02
+summary: "Zone end reads open: 0x08ab10e8 and 0x08ab2120 identities need a PPSSPP watchpoint; states 6 and 8 unmodelled"
 categories: [gameplay, rendering]
 ---
 

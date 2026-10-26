@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [all]
+updated: 2026-10-20
+summary: "Lobby: session takeover re-send, spectate, chat, invite-only and quick match unbuilt; remote runs cover only Pulse"
+---
+
 # Online lobby server: the spike is built, what is left
 
 2026-10-16. The flow, the needs and what was built, with the wire messages, ports, run and

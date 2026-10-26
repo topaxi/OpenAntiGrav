@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [pulse]
+updated: 2026-08-23
+summary: "Track art matches the delta rule for 27 of 32 circuits; the shared-atlas case is unsolved; no next step named"
+---
+
 # A model built from several small pieces sharing one atlas
 
 The delta-(-1) directory rule now covers ships (11 of 11 exact), track art (27 of 32 exact, the rest short 1-2 slots) and boost plumes (24 of 24 exact, 2026-08-23), and `oag_raceplay::load` tries it for all three. The shared-atlas case is the separate, harder problem the disc-wide 535/975 figure is really about - see [`ps2-texture.md`](../../docs/formats/ps2-texture.md#how-a-model-finds-its-texture-set-directory-position-not-a-name).

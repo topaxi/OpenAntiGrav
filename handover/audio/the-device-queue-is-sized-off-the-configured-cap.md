@@ -1,4 +1,8 @@
 ---
+status: measure
+titles: [all]
+updated: 2026-09-07
+summary: "The 60 ms audio queue does not cover 80 ms frame stalls; achieved rate versus configured cap unread"
 categories: [audio, rendering]
 ---
 

@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pulse]
+updated: 2026-08-30
+summary: "Sideshift lateral displacement not confirmed on hardware; needs a track stretch with near-zero lateral drift"
+---
+
 # Sideshift has no runtime leg
 
 Both control schemes are implemented. Note the scheme resolves once at startup and applies to the next race, not the running one.

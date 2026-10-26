@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [2048]
+updated: 2026-10-16
+summary: "2048 v1.04 patch archives are never opened by oag_2048::open; tangent decode at 76; section B leftovers"
+---
+
 # 2048's PSARC and title plumbing are wiring-ready; two binary formats changed underneath a track
 
 2026-08-26. Scoped to "load a Wipeout 2048 craft and track to spawn in via

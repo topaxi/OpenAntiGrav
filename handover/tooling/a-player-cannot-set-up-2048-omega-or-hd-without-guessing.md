@@ -1,3 +1,10 @@
+---
+status: blocked-maintainer
+titles: [2048, omega, hd]
+updated: 2026-10-07
+summary: "Decide on a player-facing Vita .pkg unpack command; walk the setup guide on real Windows and macOS"
+---
+
 # A player cannot set up 2048, Omega or HD without guessing
 
 `docs/overview/installing.md` was written by following it literally on Linux

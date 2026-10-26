@@ -1,4 +1,8 @@
 ---
+status: re-first
+titles: [pulse]
+updated: 2026-10-04
+summary: "A player wreck never reaches Race End Photo; the HUD and legend languages disagreed in one run; other titles' post-finish AI"
 categories: [rendering, frontend]
 ---
 

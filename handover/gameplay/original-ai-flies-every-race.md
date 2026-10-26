@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pulse]
+updated: 2026-10-20
+summary: "Compare the original-driver leader against the capture at 13_Track spline row 3073; lag-induced fall on the jump"
+---
+
 # The original AI flies every race with opponents: what is left
 
 2026-10-13, lane `original-ai-default`. Maintainer's decision: until

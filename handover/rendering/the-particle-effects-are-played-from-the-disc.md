@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [pulse]
+updated: 2026-10-06
+summary: "Pulse particle effects: 2 of 35 wait on a trigger; mist pitch term and NODAMAGE live checks open"
+---
+
 # The particle effects are played from the disc; 33 of the PSP's 35 play, 2 wait on a trigger
 
 2026-08-12, census rewritten 2026-10-02. `oag_pob` parses every emitter

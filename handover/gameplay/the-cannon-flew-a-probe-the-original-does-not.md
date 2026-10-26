@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pulse, hd]
+updated: 2026-10-08
+summary: "Capture a Cannon shot on Moa Therma in PPSSPP; read HD's Cannon update; Black rescues a craft ten times a race"
+---
+
 # The Cannon flew a floor probe the original does not, and left its muzzle on a bank
 
 2026-10-07, [projectile-floor.md](../../docs/gameplay/projectile-floor.md) ("The

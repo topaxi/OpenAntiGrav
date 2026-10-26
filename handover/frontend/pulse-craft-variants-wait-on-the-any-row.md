@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pulse]
+updated: 2026-10-16
+summary: "Variant loyalty gate: byte +0x99 and a live PPSSPP earn-and-unlock walk unchecked"
+---
+
 # Pulse craft variants are gated on loyalty; one byte and the live check are not
 
 ## Open

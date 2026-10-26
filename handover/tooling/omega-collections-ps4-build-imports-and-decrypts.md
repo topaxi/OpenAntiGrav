@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [omega]
+updated: 2026-10-12
+summary: "Omega PS4 asset-level leftovers beyond racing start (lighting, Wwise, eboot reads); the block-location questions were an extraction bug"
+---
+
 # Omega Collection's PS4 build imports, decrypts and is mapped; asset-level access is not there yet
 
 2026-09-15. `omega-ps4-eu.pkg`/`omega-ps4-eu-patch.pkg` (a scene fPKG, not a

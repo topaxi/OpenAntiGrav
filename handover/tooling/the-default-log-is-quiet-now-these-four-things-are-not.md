@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [all]
+updated: 2026-10-06
+summary: "Rate-limit the per-frame stutter warn on software Vulkan; a few lines more next time loader_log is touched"
+---
+
 # The default log is quiet now; two things in it are still not right
 
 2026-10-02. A launch to a race used to print 260-440 lines at the default

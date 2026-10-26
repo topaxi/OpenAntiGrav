@@ -1,3 +1,10 @@
+---
+status: blocked-hardware
+titles: [hd]
+updated: 2026-10-19
+summary: "HD velocity gate on branch hd-gpu-velocity-gate is unmerged; needs Deck spans before it lands"
+---
+
 # HD's GPU frame: the velocity gate waits for a Deck number
 
 2026-10-15, `hd-gpu`. Evidence and numbers: `docs/rendering/hd-gpu-cost.md`,

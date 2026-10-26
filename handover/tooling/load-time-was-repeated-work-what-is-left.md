@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [all]
+updated: 2026-10-19
+summary: "Inflate is 42 percent of HD's load; zlib-rs gives 9 percent and was not taken; run --measure-race-load on the Deck"
+---
+
 # Load time was repeated work; what is left
 
 The 2026-10-07 profile cut the HD race load from 7.9 s to 1.9 s (15.2 s to 3.5 s

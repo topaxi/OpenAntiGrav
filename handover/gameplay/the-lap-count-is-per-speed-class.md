@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [pure, pulse]
+updated: 2026-09-25
+summary: "The class lap table is a fallback: a campaign race should read its own cell's laps (Cell parses it); Pure VECTOR falls back to 3"
+---
+
 # The lap count is per speed class, and three of four classes raced short
 
 2026-09-09. `Mode::SINGLE_RACE_LAPS = 3` was the weakest number in

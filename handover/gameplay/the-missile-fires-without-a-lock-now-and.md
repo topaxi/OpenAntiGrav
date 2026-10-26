@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [pulse]
+updated: 2026-09-15
+summary: "Whether an AI craft has its own entity+0x860 lock bit is unrecovered; the LeachBeam bind's +0x108..0x114 writer unfound"
+---
+
 # Both lockable weapons draw their reticle now, and the black background behind it is gone
 
 2026-08-26, [missile.md](../../docs/ghidra/functions/psp-pulse-usa/missile.md) - the

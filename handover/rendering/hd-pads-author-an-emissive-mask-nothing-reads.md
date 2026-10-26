@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [hd]
+updated: 2026-10-12
+summary: "HD pad emissive mask and its own material are authored and unread; the pad specular chain opcode"
+---
+
 # HD's pads author an emissive mask and a material of their own; nothing reads either
 
 2026-09-03. Fell out of fixing the invented pad tint (`docs/rendering/pads.md`,

@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [pure]
+updated: 2026-10-26
+summary: "Pure render ranked list: hull canopy, scene darkness on Vineta and Chenghou, 12 unloaded effects, HUD gauge"
+---
+
 # Pure's render: the hull now takes its circuit's lights; what is left, ranked
 
 Lane `pure-render-fidelity`, 2026-10-26. The hull-light gap that opened this thread is closed: Pure's

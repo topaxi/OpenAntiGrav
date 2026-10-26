@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [all]
+updated: 2026-09-25
+summary: "Runtime-verify the live per-class records table on a real desktop; a campaign medal is still unfed"
+---
+
 # Race records persist across a restart, and now have an on-screen surface
 
 2026-09-08: best lap, best total time and the last result now survive a

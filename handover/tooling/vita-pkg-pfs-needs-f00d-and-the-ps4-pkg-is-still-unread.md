@@ -1,3 +1,10 @@
+---
+status: blocked-maintainer
+titles: [2048]
+updated: 2026-10-07
+summary: "Vita .pkg PFS needs the console's F00D key; ask the maintainer for a NoNpDrm .vpk of 2048 to test against"
+---
+
 # A Vita `.pkg` needs the console's F00D; the PS4 `.pkg` is feasible and unread
 
 2026-10-07, lane `direct-read`. What landed: an encrypted PS3 ISO read in place

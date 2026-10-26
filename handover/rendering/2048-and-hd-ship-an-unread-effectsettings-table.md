@@ -1,4 +1,8 @@
 ---
+status: re-first
+titles: [hd, 2048]
+updated: 2026-09-15
+summary: "Two narrow Zone render questions remain after the tint consumer was found to be fogColour; see the thread's Open"
 categories: [rendering, tooling]
 ---
 

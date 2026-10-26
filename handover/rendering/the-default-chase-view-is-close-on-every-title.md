@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pulse, 2048]
+updated: 2026-10-21
+summary: "Default chase view unmeasured on Pulse PS2 (PCSX2) and 2048 (declared only); decide a Title field when one differs"
+---
+
 # The default chase view is close on every title, and only Pulse PSP's default is measured
 
 2026-10-01. `CameraView::default()` and the settings default are `Close` for every

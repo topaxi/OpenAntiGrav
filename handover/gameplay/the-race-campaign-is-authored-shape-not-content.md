@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [pulse]
+updated: 2026-09-30
+summary: "Campaign: FUN_088085d0 and FUN_08808624 deliberately unnamed (a fourth argument Ghidra drops); further unread cell attributes"
+---
+
 # The Race Campaign is authored, all of it - shape *and* content
 
 2026-09-08. Two passes in one day. The first was archaeology over the disc's

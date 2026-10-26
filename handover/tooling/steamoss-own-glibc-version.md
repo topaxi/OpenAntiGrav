@@ -1,3 +1,10 @@
+---
+status: parked
+titles: [all]
+updated: 2026-09-07
+summary: "Whether an un-updated Steam Deck sits on a glibc below the floor is unconfirmed; record the version if one appears"
+---
+
 # SteamOS's own glibc version
 
 Established from Valve's own package mirror, not yet confirmed on physical

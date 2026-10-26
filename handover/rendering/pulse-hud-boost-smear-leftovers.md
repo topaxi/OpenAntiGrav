@@ -1,4 +1,8 @@
 ---
+status: ready-to-wire
+titles: [pulse, pure]
+updated: 2026-10-21
+summary: "Pulse boost HUD: 3D widget copy loop, text copy direction table by widget+0x172, PS2 glow and Pure unwired"
 categories: [rendering]
 ---
 

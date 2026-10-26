@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [hd]
+updated: 2026-10-06
+summary: "Is HD's Zone class announcer voice processed at runtime? Compare the MR_* WAV objectively or read the speech path"
+---
+
 # Is HD's Zone speed-class announcer voice processed at runtime?
 
 2026-10-06, maintainer's memory, unverified: the Zone speed-class announcer

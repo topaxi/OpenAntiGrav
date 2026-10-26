@@ -1,3 +1,10 @@
+---
+status: blocked-maintainer
+titles: [all]
+updated: 2026-10-20
+summary: "Status-map level calls need a maintainer or the page's lower-level rule; fix the stale-text list in a docs pass"
+---
+
 # The status-map audit: what it could not settle, what it found stale elsewhere, and the gaps it ranked
 
 2026-09-23. `docs/overview/status.md` had drifted behind the code: Sideshift,

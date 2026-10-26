@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pulse]
+updated: 2026-10-12
+summary: "Our field closes into formation slower than the original's; capture a Pulse campaign cell and compare"
+---
+
 # The original Pulse opponent flies the campaign: close what it does not match yet
 
 2026-10-11, lane `orig-ai-pulse` (RE); built 2026-10-12, lane

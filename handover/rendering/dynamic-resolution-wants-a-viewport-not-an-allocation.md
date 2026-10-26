@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [all]
+updated: 2026-09-25
+summary: "Dynamic resolution per-title default needs a reading of HD versus Pulse scene cost; feature off by default"
+---
+
 # Dynamic resolution wants a viewport, not an allocation
 
 **All five phases landed 2026-09-02.** Dynamic resolution works and is off by

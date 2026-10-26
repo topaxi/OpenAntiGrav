@@ -1,4 +1,8 @@
 ---
+status: measure
+titles: [pulse]
+updated: 2026-10-04
+summary: "Pulse roster seed is the race seed and the original reseeds per launch; the DLC case is static only"
 categories: [rendering, gameplay]
 ---
 

@@ -1,3 +1,10 @@
+---
+status: parked
+titles: [2048]
+updated: 2026-09-02
+summary: "Scratch findings on the GXP decoder, nothing open; check docs/formats/gxp.md carries them, then delete"
+---
+
 # GXP decoder - full findings (scratchpad, 2026-09-02)
 
 Scratchpad named at the start of the task. The durable results are in

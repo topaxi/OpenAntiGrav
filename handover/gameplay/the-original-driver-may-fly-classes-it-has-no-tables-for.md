@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [all]
+updated: 2026-10-13
+summary: "Sweep the recovered driver on classes with no tables (Super Phantom, modded); chosen borrow rule; nothing started"
+---
+
 # The original driver may fly classes it has no tables for
 
 2026-10-13, queued by the maintainer. Starts after the lane that makes the

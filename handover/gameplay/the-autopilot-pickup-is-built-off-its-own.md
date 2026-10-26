@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pulse]
+updated: 2026-08-24
+summary: "Autopilot pickup is not runtime-verified; break on Autopilot_Fire in PPSSPP; the control-source swap site unfound"
+---
+
 # The Autopilot pickup is built off its own two handlers; three of its parts are still ours
 
 2026-08-24. The mechanic, the confidences and what was not found are on [autopilot.md](../../docs/ghidra/functions/psp-pulse-usa/autopilot.md); this row is what is not there. **Nothing is runtime-verified** - one PPSSPP breakpoint on `Autopilot_Fire` (`0x088613bc`) with the pickup collected settles the duration and the teardown in a single run. **Two cues sit decoded and unwired**, both real: `~AUTOPILOT` (`hud.bnk`, held loop, 2.43 s) is *stopped* by the handler at `entity+0x58` and nothing located opens it, and `autopilot_eng` (`speech.bnk`, 1.28 s) has no call site at all. The search that closes the first is spelled out on the page, including the false positive it has. **Where the original swaps the control source was not found**, so the takeover is this project's reuse of `oag_ai::Driver`; `Ai_Construct` naming the local player's input `"autopilot input"` is as close as the reading gets. **A sixth `racer+0x368` use** - a craft-explosion spawner shakes the camera and plays dry only when it is zero - takes the "is the local player" hypothesis to **65**, still unnamed because no write site exists anywhere; `Placement::CraftUnlessPlayer` and `OPPONENT_ENGINE_SCALE` are the lines that move if it is wrong. **The same branch is a lead for the untraced camera shake**: `FUN_08878750`, unnamed, on the page.

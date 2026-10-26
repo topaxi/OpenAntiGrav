@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [pulse, pure]
+updated: 2026-09-25
+summary: "Run PpssppImportSymFile against a live Ghidra project and re-run apply-names; 395 harvest addresses unexamined"
+---
+
 # PPSSPP symbol bridge: export and harvest land, the Ghidra import direction does not
 
 [`docs/reverse-engineering/ppsspp-symbol-bridge.md`](../../docs/reverse-engineering/ppsspp-symbol-bridge.md)

@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pulse]
+updated: 2026-10-12
+summary: "Rocket detonates a few ticks early and the fireball is smaller; re-shoot Plasma, Mine and Quake against the original"
+---
+
 # Weapon blasts draw their own sprites and wash the screen; every flash kind with a caller is wired
 
 2026-09-24. The Quake's crest and a close Rocket blast drew as white

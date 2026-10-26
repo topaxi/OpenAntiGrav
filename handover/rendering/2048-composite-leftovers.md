@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [2048]
+updated: 2026-10-26
+summary: "2048 composite: vignette, screen tint, alphaTex, DLC light and fog from the pack's copy, other texel programs"
+---
+
 # 2048's race composite: what is still left out
 
 2026-10-26, `2048-exposure-wire`. A 2048 race now ends in its own `wo_*` chain

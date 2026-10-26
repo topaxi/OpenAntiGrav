@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pulse]
+updated: 2026-09-25
+summary: "Loading wave amplitude peak and layer0 versus layer1 not yet seen live; needs a capture past x=150"
+---
+
 # The loading screen draws now, and its wave is partly runtime-verified
 
 The rippling band is procedural and the `loading` plugin holds no video; the decode is pinned against the real blob (which is **swizzled**, bit 0 of `+0x07`, and **fully opaque**, so both plausible wrong readings are excluded by construction). The "no caller" half is stale: `LoadingStage` (`crates/game/src/main/loading_stage.rs`) constructs `oag_render::loading::Pipeline` and calls `capture::draw_wave` on both the boot path and the pre-race path (`feat(loading): recover HD's loading screen, and put one before every race`, 2026-08-24), confirmed against the real disc via `loading_screen_ground_truth` (5/5). **Two of the motion model's three open claims are now runtime-verified, one only narrowly**: `scripts/psp-loading-wave-capture.py` predicted each column's internal state (`raw`/`disp`/`energy`) from the previous one and matched what `Loading_DrawWave` actually computed to float-rounding precision across hundreds of consecutive columns, plus one observed call boundary matching the reset-to-zero, phase advance and envelope-table indexing all at once (confidence 85 -> 96). `scripts/psp-loading-wave-emit-capture.py` then confirmed the *emitted* draw arguments match that state too (52/52 exact, confidence 85 -> 90) - but every one of those captures landed inside `x=0..14`, where the wave hasn't developed any real amplitude yet, so it confirms the wiring rather than the formula at a value that would expose a value-dependent bug.

@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [all]
+updated: 2026-10-13
+summary: "Anti-lag: whether wgpu-hal 30 allows a device extension is unchecked; read the hoist's effect on a real display"
+---
+
 # VK_AMD_anti_lag is the next latency lever, and Mesa 26.3 brings it to RADV
 
 Opened 2026-10-09 at the maintainer's request. The maintainer plays with

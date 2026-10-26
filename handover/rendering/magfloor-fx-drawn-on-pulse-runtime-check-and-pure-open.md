@@ -1,4 +1,8 @@
 ---
+status: measure
+titles: [pulse, pure]
+updated: 2026-10-05
+summary: "Magfloor fx: Pure unchecked; an exact per-frame add from a paused A/B on the original"
 categories: [rendering, audio]
 ---
 

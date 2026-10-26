@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [hd, 2048]
+updated: 2026-10-20
+summary: "HD floor contacts unmeasured; 2048 holds the body-local point rate; RPCS3 Zone friction hit; wall pose-walk test"
+---
+
 # HD's wall response: what the port left open
 
 2026-10-20, `hd-wall-resolver`. HD's wall resolver is found and measured live on RPCS3

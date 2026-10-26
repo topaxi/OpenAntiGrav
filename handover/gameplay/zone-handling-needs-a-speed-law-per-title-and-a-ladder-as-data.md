@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [pulse, pure, 2048, omega]
+updated: 2026-10-12
+summary: "Wire Pulse's Zone speed-class ladder as ZoneSpeedClasses data; Pure's and Omega's ladders unread"
+---
+
 # Zone handling needs a speed law per title and the ladder as data
 
 2026-10-12, lane `speed-class`. Zone's escalating speed steps are names over one

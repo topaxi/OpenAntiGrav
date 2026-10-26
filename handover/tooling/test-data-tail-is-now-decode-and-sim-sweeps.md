@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [all]
+updated: 2026-10-21
+summary: "test-data suite was 470 s over the 450 s ceiling; wrap independent races in in_parallel, speed plan learning, 2048 sweeps"
+---
+
 # test-data's tail is now real decode and simulation sweeps
 
 The 2026-10-07 gate-speed lane did two things. It removed the HD render tests' per-texture disc reopen (`crates/render/tests/archive_cache/`). It also raced `ai_roll`'s and `ram`'s independent races side by side (`crates/game/tests/in_parallel/`). Members now gate with `just gate-affected` / `just test-data-affected`. The measurements are in

@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [pure]
+updated: 2026-09-15
+summary: "The 256-byte DLC trailer's own key is unlocated in BOOT.BIN; not needed to read a pack"
+---
+
 # Pure's DLC packs decrypt and mount
 
 2026-09-01. Follow-up to the closed `pures-dlc-packs-are-genuinely-encrypted`

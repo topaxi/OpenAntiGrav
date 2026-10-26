@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [hd]
+updated: 2026-10-12
+summary: "No frame of an HD scrolled surface in motion; wire named still families; vertex multiply-add reader"
+---
+
 # HD animates a texture in two ways now; the rest of its shader families still draw still
 
 2026-10-06, `hd-anim-textures`. HD has no keyframe block. The fragment `time`

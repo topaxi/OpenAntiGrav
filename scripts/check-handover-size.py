@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""`HANDOVER.md` may not exceed 256 KiB.
+"""`HANDOVER.md` may not exceed 256 KiB, and every `handover/` thread needs frontmatter.
+
+The second check (`scripts/handover-threads.py` owns the rules): a thread
+with missing or invalid `status`, `titles`, `updated` or `summary` fails.
 
 The limit is not arbitrary: it is the `Read` tool's own ceiling. A fresh
 session opens this file before anything else in the workflow this project
@@ -23,6 +26,7 @@ the docs page that already carries the evidence instead of repeating it here.
 
 from __future__ import annotations
 
+import importlib.util
 import sys
 from pathlib import Path
 
@@ -34,7 +38,29 @@ TARGET = ROOT / "HANDOVER.md"
 LIMIT = 256 * 1024
 
 
+def check_threads() -> int:
+    spec = importlib.util.spec_from_file_location(
+        "handover_threads", ROOT / "scripts" / "handover-threads.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    bad = 0
+    paths = mod.threads()
+    for path in paths:
+        _, errors = mod.parse(path)
+        for e in errors:
+            print(f"{path.relative_to(ROOT)}: {e}")
+            bad += 1
+    if bad:
+        print(f"\n{bad} frontmatter problem(s). See the header of scripts/handover-threads.py.")
+        return 1
+    print(f"OK: {len(paths)} handover threads have valid frontmatter")
+    return 0
+
+
 def main() -> int:
+    if check_threads():
+        return 1
     if not TARGET.is_file():
         print(f"{TARGET} not found")
         return 1
@@ -47,7 +73,7 @@ def main() -> int:
             "That limit is the Read tool's own ceiling, not a style preference - past it "
             "a fresh\nsession's first read of this file fails outright. Prune it: delete "
             "threads whose work\nhas landed rather than annotating them, and compress "
-            "narrative in the largest\n`## Open threads` rows down to current state plus "
+            "narrative in the largest\n`## Open` sections down to current state plus "
             "what is still open, pointing at\nthe docs page that already carries the "
             "evidence instead of repeating it here."
         )

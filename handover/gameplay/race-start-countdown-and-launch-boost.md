@@ -1,4 +1,8 @@
 ---
+status: re-first
+titles: [pulse, hd]
+updated: 2026-10-12
+summary: "CountdownTime, ReadyText and GoText have no code xref; Pure's Ghidra programs did not answer; Zone countdown unchecked"
 categories: [gameplay, frontend, rendering]
 ---
 

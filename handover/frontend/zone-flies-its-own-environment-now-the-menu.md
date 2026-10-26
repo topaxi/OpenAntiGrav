@@ -1,4 +1,8 @@
 ---
+status: ready-to-wire
+titles: [all]
+updated: 2026-09-16
+summary: "Zone mode still offers all 24 circuits in the menu; the executable's zone_ selector is unread; HD Zone counter has no art"
 categories: [frontend, rendering]
 ---
 

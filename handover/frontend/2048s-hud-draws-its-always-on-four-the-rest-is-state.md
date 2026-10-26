@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [2048]
+updated: 2026-10-26
+summary: "2048 HUD state-gated elements unwired; _HD layouts for the HD and Fury campaigns' modes are next"
+---
+
 # 2048's HUD draws its always-on four; the rest of what the frames show is state-gated and unwired
 
 2026-09-16, branch `lane/2048-hud`. Full write-up in

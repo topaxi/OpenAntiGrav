@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pure]
+updated: 2026-10-12
+summary: "Pure sibling driver: LeadZone, pitch fade and steering output unmeasured live; what sets the x0.7 flag unread"
+---
+
 # Pure's original opponent: a sibling driver, built and flown in Pure's campaign
 
 2026-10-12, lanes `orig-ai-pure` (the read, the throttle) and `pure-orig-driver` (the

@@ -1,3 +1,10 @@
+---
+status: blocked-maintainer
+titles: [all]
+updated: 2026-10-14
+summary: "Online pause: choose between the options when the protocol ADR is written; resume countdown art chosen"
+---
+
 # Pause in multiplayer: a local timeout, and what online does instead
 
 2026-10-13, maintainer's request. A design note; the local rule is built, the online part is open. Network play itself is unbuilt (see

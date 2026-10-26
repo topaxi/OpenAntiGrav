@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pulse]
+updated: 2026-09-25
+summary: "Capture the Cannon wall-hit spark and judge the bolt streak; the muzzle's extra particle spawn is unread"
+---
+
 # A fired Cannon round: the body, its impact, its bolt streak and its muzzle flash are all drawn now
 
 2026-09-17: **both hand-built quads landed** - see "What landed" below for the

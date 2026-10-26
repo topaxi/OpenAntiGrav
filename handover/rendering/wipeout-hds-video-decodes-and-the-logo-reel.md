@@ -1,4 +1,8 @@
 ---
+status: re-first
+titles: [hd]
+updated: 2026-09-21
+summary: "Which skin.xml a PS3 loads (and so which studio logo reel plays) is unsettled; track 0 is chosen"
 categories: [rendering, tooling]
 ---
 

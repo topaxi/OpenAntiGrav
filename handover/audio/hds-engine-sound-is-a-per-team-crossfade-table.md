@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [hd]
+updated: 2026-10-05
+summary: "HD cue groups, the stereo pair per layer and the distance writer are open; music and ambience about 3x hot"
+---
+
 # HD/Fury's engine sound: level and authored mix are measured; the stereo pair, per-cue groups and the distance writer are open
 
 2026-10-05 (second pass). An HD race plays each craft's own `xfship_<team>.xfx` layers

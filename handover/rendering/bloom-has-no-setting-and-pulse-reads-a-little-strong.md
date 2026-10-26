@@ -1,4 +1,8 @@
 ---
+status: measure
+titles: [pulse, hd]
+updated: 2026-10-26
+summary: "Pulse PSP bloom 1.2-1.6x on a racing straight unexplained; matched boost-pad pair; HD strength; Zone grid strip"
 categories: [rendering]
 ---
 

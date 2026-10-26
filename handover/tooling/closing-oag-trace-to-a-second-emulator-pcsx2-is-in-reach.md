@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [pulse, hd, 2048, omega]
+updated: 2026-10-16
+summary: "oag-trace: RPCS3 has no 60 Hz capture channel; Vita3K and ShadPS4 have no tooling; PCSX2 script lead unmeasured"
+---
+
 # Closing oag-trace to a second emulator: PCSX2 is done, RPCS3 has no transport, Vita3K/ShadPS4 have no tooling (ShadPS4 itself runs, since 2026-10-16)
 
 Investigated 2026-09-16, priority order PCSX2 -> RPCS3 -> Vita3K -> ShadPS4 as asked.

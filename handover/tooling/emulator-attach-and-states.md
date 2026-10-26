@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [hd, pulse]
+updated: 2026-10-12
+summary: "Emulator states: RPCS3 only for HD EU; wire a restored state into Session; PPSSPP guard; replace sleeps"
+---
+
 # Emulator tooling: attach mode and RPCS3 states landed, five loose ends
 
 `docs/reverse-engineering/emulator-recipes.md` has the tools and the measurements

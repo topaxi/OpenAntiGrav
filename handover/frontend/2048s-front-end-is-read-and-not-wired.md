@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [2048]
+updated: 2026-10-26
+summary: "2048 front end DLC campaigns wired; DLC circuit card names and further screens still open"
+---
+
 # 2048's front end is read and not wired
 
 2026-09-17, branch `lane/2048-frontend`. Full write-up in

@@ -1,4 +1,8 @@
 ---
+status: re-first
+titles: [pulse, hd]
+updated: 2026-09-15
+summary: "Who writes the per-frame depth override (display+0x1180, instance+0x11c) is unread in both titles"
 categories: [rendering, tooling]
 ---
 

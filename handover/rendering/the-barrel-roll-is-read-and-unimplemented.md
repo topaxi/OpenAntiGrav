@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pulse]
+updated: 2026-10-20
+summary: "Barrel roll gesture is a static read; AI_ROLL_SHIELD_FLOOR (20 percent) is invented and unmeasured; confirm against a capture"
+---
+
 # The barrel roll is playable; its visual is read but not drawn
 
 A headline Pulse mechanic this project did not have. Every number it needs is

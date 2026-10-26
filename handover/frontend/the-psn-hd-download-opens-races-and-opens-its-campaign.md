@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [hd]
+updated: 2026-10-07
+summary: "PSN HD: boot the install under RPCS3 to confirm frame and palette; Cell Selection art and grid source open"
+---
+
 # The PSN Wipeout HD download opens, races and opens its campaign; its backdrop is absent
 
 2026-10-07. `NPEA00057` v3.00 (plain HD, no Fury), installed with RPCS3 and copied to

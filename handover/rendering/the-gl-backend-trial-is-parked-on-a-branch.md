@@ -1,4 +1,8 @@
 ---
+status: parked
+titles: [all]
+updated: 2026-10-15
+summary: "GL backend trial parked on branch gl-backend, unmerged; revisit only on demand"
 categories: [rendering, tooling]
 ---
 

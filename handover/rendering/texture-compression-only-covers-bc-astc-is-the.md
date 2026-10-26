@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [all]
+updated: 2026-09-25
+summary: "ASTC encoder not wired: Apple Silicon takes the CPU-decode fallback; pick astcenc or a Rust encoder and a cache"
+---
+
 # Texture compression only covers BC; ASTC is the unimplemented other half
 
 2026-09-03. `crates/render::mesh_render::optional_features` probes and requests

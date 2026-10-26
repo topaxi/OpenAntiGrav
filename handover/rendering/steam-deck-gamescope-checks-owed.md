@@ -1,3 +1,10 @@
+---
+status: blocked-hardware
+titles: [all]
+updated: 2026-10-19
+summary: "Five Deck launches owed for borderless first size at scale 6; vertical CUT drop unreproduced; HD 4K start-of-race"
+---
+
 # Steam Deck under gamescope: the fixes landed, the Deck confirmations are owed
 
 2026-10-14, the split-screen render-perf drive. The Deck went to sleep before

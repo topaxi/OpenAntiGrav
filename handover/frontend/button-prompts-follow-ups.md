@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [all]
+updated: 2026-10-06
+summary: "Wire prompts into the HUD and pause overlay; Pure and Omega glyph tables; live Steam Deck check"
+---
+
 # Button prompts: what is left after the first landing
 
 2026-10-06, branch `button-glyphs`. The evidence and the design are in

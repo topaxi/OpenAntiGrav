@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pulse]
+updated: 2026-10-08
+summary: "Rocket, Mine, Bomb and shield looks not verified frame by frame; why the original's first Rocket updates miss the floor"
+---
+
 # Rockets, mines, the bomb and the shield look close, and none is verified frame-by-frame
 
 2026-09-17. The user, from play: "rockets, mines, bomb, shield look close, but

@@ -1,4 +1,8 @@
 ---
+status: measure
+titles: [pulse, hd, 2048]
+updated: 2026-10-01
+summary: "Camera shake: a real hard hit (severity 0.005-0.08) was never produced; HD and 2048 collision shape unchecked"
 categories: [rendering, frontend]
 ---
 

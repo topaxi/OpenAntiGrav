@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [pulse, pure, hd]
+updated: 2026-10-21
+summary: "~QUAKETRAVEL is flat-picked; a Missile bouncing out on a wall plays nothing (MISSILEEXPWALL setter unread); other titles' roll cue unread"
+---
+
 # Pulse's weapon cues are read and mostly unwired - the wiring plan
 
 2026-09-23. Landed the same evening the plan below was drafted: every "wire"

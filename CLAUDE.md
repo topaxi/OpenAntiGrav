@@ -342,8 +342,10 @@ traps); read it before non-trivial work and update it when handing off.
 Work in flight is one file per thread under [`handover/`](handover/), each with
 `## Open` and `## Next Steps`, in `rendering/`, `gameplay/`, `frontend/`,
 `tooling/` or `audio/` (a thread crossing categories carries a `categories:`
-frontmatter block naming the extras). `HANDOVER.md`'s "Open threads" is the
-index: delete a thread's file and its index line together once the work lands.
+frontmatter block naming the extras). Every thread also carries `status`,
+`titles`, `updated` and `summary` frontmatter; `just threads [--status S]
+[--title T] [--category C]` is the index (`HANDOVER.md`, "Open threads"). Delete
+a thread's file once the work lands; `just check-handover` gates the frontmatter.
 
 **Nothing outside `handover/` and `HANDOVER.md` may link into `handover/`.**
 Threads are deleted when landed, and `check-docs` only proves links resolve

@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [all]
+updated: 2026-10-06
+summary: "Split the 828-line lit_texel function and fold FSR 3 per-pass helpers into common.wesl, with the capture harness"
+---
+
 # WESL shaders: follow-ups after build-time validation
 
 2026-10-06. [ADR-0059](../../docs/architecture/adr/0059-render-shaders-are-wesl-compiled-to-wgsl-at-build-time.md)

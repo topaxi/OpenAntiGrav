@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pulse, hd]
+updated: 2026-09-25
+summary: "The reported audio skip was never reproduced under an instrument; no gap in the rendered mix"
+---
+
 # A reported skip is not in the mix we render, and the jump counter cannot see it
 
 2026-09-09. A player report - "audio seems to have some skips from time to

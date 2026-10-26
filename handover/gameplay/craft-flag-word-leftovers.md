@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pulse, hd]
+updated: 2026-10-21
+summary: "Watch craft+0x1c0 bit 0x2000 in a PPSSPP Elimination race; HD's L1 flip binding reader unfound"
+---
+
 # The craft flag word's leftovers
 
 2026-10-20, `craft-flags-sideshift`. Every writer of Pulse PSP's `craft+0x1c0` is named and

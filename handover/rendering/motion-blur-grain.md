@@ -1,3 +1,10 @@
+---
+status: blocked-maintainer
+titles: [all]
+updated: 2026-10-05
+summary: "Motion blur tap dither grain remains; ask the maintainer whether the smear still reads grainy at high"
+---
+
 # Motion blur grain: the tile wobble is gone, the tap dither is what is left
 
 2026-10-05. A maintainer report from play ("quite grainy and not smooth").

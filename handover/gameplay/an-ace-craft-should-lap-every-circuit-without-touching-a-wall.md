@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [all]
+updated: 2026-10-03
+summary: "Five layout-class plans do not verify; 05_Track 428 pad crest and two rescue cases still touch walls"
+---
+
 # An Ace craft should lap every circuit, in every speed class, without touching a wall
 
 Opened 2026-09-12 as the umbrella the four narrower AI threads sit under. The

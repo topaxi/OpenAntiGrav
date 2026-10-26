@@ -1,3 +1,10 @@
+---
+status: blocked-maintainer
+titles: [all]
+updated: 2026-10-12
+summary: "Race music resume needs the maintainer's listen on a real device; web untested; 10 s save and 0.5 s tolerance chosen"
+---
+
 # Race music resume: what is left open
 
 2026-10-12, lanes `music-resume` and `music-resume-2` (the PS2 track-1 gap and the `--race` route closed). The playlist's place persists and resumes on all six

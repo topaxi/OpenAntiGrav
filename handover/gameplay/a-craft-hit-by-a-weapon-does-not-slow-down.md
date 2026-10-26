@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pulse]
+updated: 2026-09-25
+summary: "Capture craft+0x2e0 in PPSSPP through a real weapon hit and compare with the port"
+---
+
 # A craft hit by a weapon slows down; the port is in, the runtime check is not
 
 2026-09-06. Reported from play: a craft hit by a mine, rocket or missile did not

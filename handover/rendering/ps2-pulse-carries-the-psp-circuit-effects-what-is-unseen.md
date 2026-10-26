@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pulse]
+updated: 2026-10-17
+summary: "PS2 reticle on a real AI lock, LeachBeam reticle, steam, weather and destroy cut not yet seen on a PS2 frame"
+---
+
 # PS2 Pulse carries the PSP's reticle art, wreck, circuit effects and record; what is unseen
 
 2026-10-16. The PSP's law was carried to the PS2 for the HUD sight models and the

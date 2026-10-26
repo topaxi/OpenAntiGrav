@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [omega]
+updated: 2026-10-12
+summary: "Omega opponent static only: walk the published Mode to 0x01f999e4, diff the patch eboot, 2048 campaign unread"
+---
+
 # Omega's original opponent flies its campaign
 
 2026-10-12, `orig-ai-omega`. Evidence: [ps4-omega-eu/ai-controls.md](../../docs/ghidra/functions/ps4-omega-eu/ai-controls.md)

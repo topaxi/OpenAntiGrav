@@ -1,4 +1,8 @@
 ---
+status: measure
+titles: [all]
+updated: 2026-10-13
+summary: "Race-load effect of bounded peek, BC7, PSARC inflate and raycast broadphase unmeasured; Deck load runs"
 categories: [gameplay, frontend]
 ---
 

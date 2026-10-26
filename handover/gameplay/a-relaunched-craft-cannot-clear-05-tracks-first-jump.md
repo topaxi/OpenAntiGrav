@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pulse]
+updated: 2026-10-13
+summary: "Does the original's relaunched craft clear 05_Track's first jump and at what lip speed; air acceleration 5-8 percent off"
+---
+
 # A relaunched craft cannot clear 05_Track's first jump
 
 2026-10-13, lane `jump-13-flight`. The original's reset relocation landed

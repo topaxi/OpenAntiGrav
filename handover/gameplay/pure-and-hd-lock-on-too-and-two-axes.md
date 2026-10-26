@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [hd, pure]
+updated: 2026-10-19
+summary: "Weapons::elimination (Pure's Eliminator tuning) is carried and unread; the second axis row is read by nothing"
+---
+
 # Pure and HD lock on too, and it cost two axes rather than any new recovery
 
 2026-08-26, [lock-sight.md](../../docs/ghidra/functions/psp-pulse-usa/lock-sight.md)

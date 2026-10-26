@@ -1,3 +1,10 @@
+---
+status: blocked-maintainer
+titles: [all]
+updated: 2026-10-12
+summary: "Pilot controller key (ours, original, mod): three questions await the maintainer, and an ADR for a mod ABI"
+---
+
 # A pilot file names its controller: ours, the original, or a mod's
 
 2026-10-12, the maintainer's idea: the AI pilot files

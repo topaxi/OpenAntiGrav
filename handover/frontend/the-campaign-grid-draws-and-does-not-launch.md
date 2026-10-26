@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [pulse]
+updated: 2026-10-02
+summary: "SelectorGlow is not drawn: a phase-synced halo is seen on the original; refine against it"
+---
+
 # The campaign grid draws and does not launch
 
 **Update, 2026-10-02, `pulse-cursor-live` lane: the cursor measured and fixed, the loyalty slope pinned.**

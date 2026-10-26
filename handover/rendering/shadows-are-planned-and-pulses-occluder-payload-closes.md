@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [2048, omega]
+updated: 2026-10-19
+summary: "Whether 2048's and Omega's code binds their Ambient_Shadow is unread; no executable names the path"
+---
+
 # Shadows are planned as four techniques, and Pulse's occluder payload closes at `0x50 + 32n + 16m`
 
 2026-09-02. The design is [`docs/rendering/shadows.md`](../../docs/rendering/shadows.md) - the ladder, the per-title split, the six-step plan. This file keeps only what is not there.

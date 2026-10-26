@@ -1,3 +1,10 @@
+---
+status: blocked-maintainer
+titles: [all]
+updated: 2026-10-16
+summary: "Head to Head records: does a two-person race write a profile best place? A modern-saves decision"
+---
+
 # Head to Head: what to port, per title, against what the originals do
 
 2026-10-14, `h2h-re`, for the queued `h2h-port-titles` lane. The RE is done; everything

@@ -1,4 +1,8 @@
 ---
+status: ready-to-wire
+titles: [all]
+updated: 2026-10-16
+summary: "Render bundles for the circuit and static scenery and the remaining wgpu levers, judged on the finish probe span"
 categories: [rendering]
 ---
 

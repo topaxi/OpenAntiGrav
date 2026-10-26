@@ -1,4 +1,8 @@
 ---
+status: measure
+titles: [pulse]
+updated: 2026-10-02
+summary: "Locked-tile confirm-swallow mechanism unread; MedalImg's icon-under-trophy question needs a medal-earning run capture"
 categories: [frontend]
 ---
 

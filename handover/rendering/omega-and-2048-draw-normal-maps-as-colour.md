@@ -1,4 +1,8 @@
 ---
+status: re-first
+titles: [2048, omega]
+updated: 2026-10-20
+summary: "m_diffuse_normal_constantspecular ambient-only use of Norm and Texture1 unread; most of the 41 2048 slots"
 categories: [rendering]
 ---
 

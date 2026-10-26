@@ -1,3 +1,10 @@
+---
+status: parked
+titles: [all]
+updated: 2026-09-25
+summary: "Pilot name keyboard layout is ours, chosen; no uppercase or space; Pulse's TagInput alphabet cannot spell every name"
+---
+
 # Players should be able to build pilots in game, and a naive editor would eat their comments
 
 ## Landed 2026-09-08: the string_id backlog

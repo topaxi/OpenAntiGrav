@@ -17,8 +17,8 @@ RECONSTRUCTION row selects it.** `upscale::Framebuffer::resolve_scene` reads
 `oag_post::fsr3::Fsr3::output` on a race frame whose adapter has compute
 shaders, and falls one rung to FSR 1 otherwise. It is off by default. What has
 not happened is anybody looking at a *moving* frame it produced;
-`HANDOVER.md`'s open-threads index points at the thread carrying that and the
-rest of what is left.
+the FSR 3 handover thread (`just threads --category rendering`) carries that and
+the rest of what is left.
 
 ## Provenance
 

@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [all]
+updated: 2026-10-19
+summary: "Print the psys sprite-sheet fill for one race; measure original-tier hull clone and net correction rate"
+---
+
 # Allocation opportunities, ranked (2026-10-19)
 
 A read-only scout of heap churn and peak memory across a race: load, the

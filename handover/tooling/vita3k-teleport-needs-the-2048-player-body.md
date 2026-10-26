@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [2048]
+updated: 2026-10-07
+summary: "Isolate which body drives the 2048 camera's craft in Vita3K memory; name Vineta K's DLC track in oag-game"
+---
+
 # Vita3K teleport needs the 2048 player's body
 
 2026-10-07. Memory access to a running Vita3K works (`/proc/<pid>/mem`, guest = host

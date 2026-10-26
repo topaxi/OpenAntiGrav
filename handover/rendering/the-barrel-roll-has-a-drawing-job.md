@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pulse]
+updated: 2026-10-21
+summary: "Barrel roll: the internal camera's own site was not independently captured; an optional second measurement"
+---
+
 # The barrel roll has a drawing job, and the original's own recipe for it
 
 `oag_physics::ShipState::roll_phase` ramps every tick a pilot rolls and

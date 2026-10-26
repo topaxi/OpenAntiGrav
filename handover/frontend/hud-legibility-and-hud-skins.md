@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [all]
+updated: 2026-10-16
+summary: "HUD halo about 43 percent closed and the blend underived; hud_scale settings row unbuilt"
+---
+
 # HUD legibility and HUD skins across titles
 
 Investigation done 2026-10-06; the halo and the stretch filter landed the same day

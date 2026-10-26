@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pulse, pure]
+updated: 2026-10-26
+summary: "No PPSSPP frame of the rotated 06_Track pods; PS2 PSP-format batches disagree with faces; Pure v3 files unread"
+---
+
 # `.vex` normals carry the node rotation: what is left
 
 Landed 2026-10-26 (`pulse-vex-normals`): `oag_mesh::mesh` carries a vertex normal through its

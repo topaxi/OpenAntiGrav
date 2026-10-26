@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pulse]
+updated: 2026-10-21
+summary: "grip_air has no runtime leg; weathervane drop with sideslip via a psp-trace --place variant"
+---
+
 # Airborne ticks *have* been captured - 65 of them, and they are thin in a specific way
 
 **Corrected 2026-09-07.** The title used to be "Nothing airborne has ever been

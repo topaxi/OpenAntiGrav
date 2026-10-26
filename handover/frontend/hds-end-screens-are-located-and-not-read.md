@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [hd]
+updated: 2026-10-06
+summary: "Which archive copy HD loads is unresolved; no live capture reaches a finished EndRace Results; Podium is multiplayer-only"
+---
+
 # HD's end screens: read and drawn (Results/Menu/Rewards/Podium); Podium multiplayer-only
 
 2026-09-18: located, not read. **2026-09-21: `EndRace Results`/`EndRace Menu`

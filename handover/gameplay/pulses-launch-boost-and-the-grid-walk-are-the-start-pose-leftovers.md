@@ -1,3 +1,10 @@
+---
+status: parked
+titles: [pulse]
+updated: 2026-10-04
+summary: "04_Track RAPIER AI board moved to Died after regen (one death at tick 17714); grid_walk junction hop only if a grid needs it"
+---
+
 # Pulse's start pose: the grid walk is what is left
 
 2026-10-01, `pulse-start-pose`. The weapons lane found ours 2.4 units and 1.7

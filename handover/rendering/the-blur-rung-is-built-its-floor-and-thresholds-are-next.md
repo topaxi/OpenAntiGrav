@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [all]
+updated: 2026-10-25
+summary: "Drop a full-size pass from the half-resolution blur path and measure on the Deck at 4K; DRS thresholds next"
+---
+
 # The blur rung is built; its cost floor and its thresholds are next
 
 Landed 2026-10-25 as [ADR-0075](../../docs/architecture/adr/0075-dynamic-resolution-sheds-the-blur-gather-before-pixels.md):

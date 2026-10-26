@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pulse]
+updated: 2026-10-08
+summary: "Page-transition easing curve is invented (30); land a live capture of the first transition frames"
+---
+
 # The menus draw the disc's layout and its footer ticker; the page-transition easing curve is still invented
 
 **2026-08-10, and it closes the standing "only `pulse_text.fnt` is wired to the menus" item.** `Data.wad` carries `MainMenu_Definition.xml` and 16 sibling GUI files - `menu.rs`'s comment that "the disc's own menu layout has not been read" was simply out of date. Read, then measured against a PPSSPP capture: rows at x=50, pitch 28, seven of them, in the `menu` font role, `TextColor` for an unselected row and a brightening toward white for the selected one. Our capture now measures identical to the original's - glyph tops 40.0, heights 11.5, pitch 28.0, left edge 50.0. Everything is on [menus-original.md](../../docs/ui/menus-original.md) and [fe-menu-definitions.md](../../docs/formats/fe-menu-definitions.md). **Two things are known and unbuilt.** (1) The selected row's highlight **pulses** - two frames of the same still menu measured different peaks - and its period and depth were not measured, so it is drawn flat; the same discipline, and the same warning, **do not measure it off our own build**. (2) The **easing curve is invented** (confidence 30): the capture shows only that the motion accelerates. `Tween::eased` is the one function to change if anyone reads the real curve out of the executable. **Two traps cost time here**: `just drive menu` walks straight past `Main Menu` into a live race, and the original enters an attract demo after ~120 s idle, which silently invalidates a capture left sitting.

@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [all]
+updated: 2026-10-14
+summary: "Design only: refactor lap modes into data rules, mod-declared modes and campaign.tosd, drag race example"
+---
+
 # Custom race modes and custom campaigns: what is needed
 
 2026-10-12, the maintainer's next goal after the mod system landed: (1) a race mode of this

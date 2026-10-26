@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [hd]
+updated: 2026-10-21
+summary: "HD HUD y sway needs the body+0x1b0 and ship+0x6b00 writers read; sideshift terms read not measured"
+---
+
 # The drawn lean is ported; HD's cockpit lean and HUD sway are not
 
 Since 2026-10-21 (`ship-lean`) every title's hull leans into a steer: Pulse's

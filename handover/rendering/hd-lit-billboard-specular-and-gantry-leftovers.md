@@ -1,4 +1,8 @@
 ---
+status: ready-to-wire
+titles: [hd]
+updated: 2026-10-19
+summary: "HD no-LG2 materials draw a stand-in specular the original does not; gate NO_SPECULAR per family; tv_glow, Omega card route"
 categories: [rendering]
 ---
 

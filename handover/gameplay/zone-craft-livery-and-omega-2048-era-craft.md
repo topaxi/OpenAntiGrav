@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [omega, 2048]
+updated: 2026-10-26
+summary: "Omega and 2048 Ship Select preview the Zone hull in default livery; ship_zone callers unread"
+---
+
 # Zone hull is shared on 2048 and Omega; native-craft livery and `ship_zone.vex` are open
 
 2026-10-06, `zone-craft` then `omega-2048-craft`. `ZoneCraft::OwnShipAt` loads

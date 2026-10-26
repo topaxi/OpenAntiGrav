@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [pure]
+updated: 2026-10-21
+summary: "Make the pitch-alignment gate a title axis before enabling; teach the driver Pure's bank-to-yaw 50 and measure"
+---
+
 # Pure's measured craft laws: what still waits for our AI
 
 2026-10-20. Lane `pure-physics` diffed Pure's craft update against Pulse's and measured each

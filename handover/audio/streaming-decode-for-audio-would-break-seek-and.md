@@ -1,3 +1,10 @@
+---
+status: parked
+titles: [all]
+updated: 2026-10-19
+summary: "Progressive audio decode waits on a stated handheld memory budget; nothing forces it yet"
+---
+
 # Streaming decode for audio would break seek, and nothing forces the change yet
 
 2026-08-25. The race-launch and track-boundary hitches

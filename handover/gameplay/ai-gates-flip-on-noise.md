@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [all]
+updated: 2026-10-20
+summary: "Convert the remaining single-run AI gates to distribution judging; give tests/perturb a shared home"
+---
+
 # Our AI's disc-backed gates flip on noise
 
 2026-10-20, `driver-vs-new-physics`. Lead's name for the follow-up: `ai-gate-robustness`.

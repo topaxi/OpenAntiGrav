@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pure]
+updated: 2026-10-12
+summary: "Pure's screen ordering (88) rests on Redirect targets only and was never confirmed against a capture; fifth class note"
+---
+
 # Pure splits the race box into a chain, and 2048 has none at all
 
 2026-09-05. The two titles whose race setup is *not* Pulse's, kept in one

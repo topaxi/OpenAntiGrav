@@ -1,4 +1,8 @@
 ---
+status: blocked-maintainer
+titles: [all]
+updated: 2026-10-13
+summary: "Intent plus situation resolve settings: does a rule override a pinned value, where rules live; docked Deck first"
 categories: [frontend, tooling]
 ---
 

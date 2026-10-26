@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pure, 2048]
+updated: 2026-10-10
+summary: "Live pass over Pure's selection screens under the ink-centred band; 2048's PS TV pointer behaviour unread"
+---
+
 # Pointer input: what the mouse and the touchscreen still cannot do
 
 Every screen the front end draws answers a mouse and a finger since

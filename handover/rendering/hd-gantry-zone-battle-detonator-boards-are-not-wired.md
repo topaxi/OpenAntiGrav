@@ -1,4 +1,8 @@
 ---
+status: ready-to-wire
+titles: [hd]
+updated: 2026-10-12
+summary: "Zone Battle and Detonator need Modes before their start boards draw; Zone release 210/190 tick question unmeasured"
 categories: [rendering, gameplay]
 ---
 

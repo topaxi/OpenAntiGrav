@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [2048, omega, pure]
+updated: 2026-10-26
+summary: "2048's and Omega's Autopilot cancel unread (inherit HD); Pure's absence of a cancel is static only"
+---
+
 # The Autopilot's cancel and expiry: what is still unread
 
 **Wired (2026-10-26, `autopilot-wire`).** Absorb cancels a running Autopilot, fire does nothing,

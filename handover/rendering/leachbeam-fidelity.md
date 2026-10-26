@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [hd, pulse]
+updated: 2026-10-19
+summary: "LeachBeam: HD's per-trip drain is a static read; fire a real beam on PPSSPP and RPCS3 to measure the rest"
+---
+
 # The LeachBeam against the original: what still differs after the 2026-09-23 rebuild
 
 2026-09-23. The Pulse ribbon was rebuilt from a full re-read of

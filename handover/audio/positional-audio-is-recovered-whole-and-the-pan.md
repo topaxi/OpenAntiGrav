@@ -1,3 +1,10 @@
+---
+status: parked
+titles: [pulse]
+updated: 2026-09-04
+summary: "PS2 pan, the doppler unit and nine emitter construction sites unrecovered; needs an audible reference, nothing scoped"
+---
+
 # Positional audio is recovered whole, and the pan is a table the disc computes from `cos` and `sin`
 
 2026-08-24, runtime-verified 2026-09-01. The law, the emitter layout, the

@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [pulse]
+updated: 2026-09-30
+summary: "PS2 front-end skin constants rest on one screen; a second helptext step and the title position residual open"
+---
+
 # PS2 front-end layout is hardcoded to 480x272
 
 **Closed 2026-08-09, not the way this row proposed.** `SCREEN` did not become per-source; `frontend::Space` carries a grid **and** the display aspect (24% apart on the PS2, more than one `(f32, f32)` holds), and the rects/pillarboxes route through it. `SCREEN`'s readers are where 480x272 is right whatever the disc: the loading screen, the HUD bounds check, `race::AUTHORED_ASPECT`. **That 24% was 7% until 2026-08-23**: the display aspect was 4:3 off the television and it is 480/272 - the port stretched the PSP's art by `(640/480, 448/272)`, as `FUN_001e9370` does. `docs/ps2/aspect-ratio.md` also retires the movies' declared 4:3. **The `widthlimited` half closed 2026-08-26** in `7d7cb2c3` ("wrap widthlimited front-end text, fixing BOOT_LEGAL"): `screen.rs` resolves the attribute against its enclosing `Viewport`'s width and `render/text.rs` does the wrapping, pinned by `screen/tests.rs`'s `a_widthlimited_text_wraps_against_its_viewports_width`.

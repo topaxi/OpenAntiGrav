@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pulse, pure, 2048, omega]
+updated: 2026-10-09
+summary: "Motion blur on Pulse PSP/PS2, Pure, 2048 and Omega never checked; HD has none; an original setting is decided"
+---
+
 # Do the originals have motion blur? Never checked, and the docs contradict themselves
 
 2026-10-05, queued by the maintainer and deferred to a new session. No work

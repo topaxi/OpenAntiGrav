@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [hd]
+updated: 2026-09-15
+summary: "HD flare tuning consumers unlocated (Flare Max Rotate Angle +0x478, Size Clamp +0x4b0, Depth Bias +0x4b4); no live confirmation"
+---
+
 # HD's sprite flare reads oversized against the original, and the tuning file's other 19 rows are read
 
 2026-09-01. Started from a user report from play: the exhaust flare "too

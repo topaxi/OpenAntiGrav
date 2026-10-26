@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [2048, omega]
+updated: 2026-09-25
+summary: "USSE instruction stream semantics are the harder half still open; opcode field located"
+---
+
 # 2048's GXP containers decode; the USSE stream's opcode field is located, semantics do not
 
 `docs/rendering/shadows.md` was blocked on tooling rather than on evidence:

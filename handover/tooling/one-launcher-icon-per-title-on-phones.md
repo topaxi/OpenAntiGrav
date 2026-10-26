@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [all]
+updated: 2026-10-20
+summary: "Build a touch-friendly in-app title launcher as the baseline, then an Android activity-alias icon per title"
+---
+
 # One launcher icon per title on phones
 
 2026-10-20, maintainer question. Nothing is built; this records what each platform allows and the

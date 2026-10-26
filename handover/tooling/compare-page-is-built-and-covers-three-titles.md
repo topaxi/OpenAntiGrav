@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pulse, hd, pure, 2048, omega]
+updated: 2026-10-26
+summary: "Compare page: more PS2 states and race shot, Pure, 2048 and Omega pairs partial; publishing unlocked"
+---
+
 # The compare page is built; HD and Pulse PSP give pairs, four titles are partial, publishing is unlocked
 
 `just compare-page` builds a static page of original-vs-ours pairs (split slider,

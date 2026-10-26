@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [pulse, 2048]
+updated: 2026-10-05
+summary: "Fork routes our craft cannot drive (Pulse 07 centre ramp, 2048 cathedral, sol); the writer of 2048's +0x150 unread"
+---
+
 # AI fork choice: what is left after the coin
 
 2026-10-05 (ai-forks lane). Opponents flip the original's coin at every fork

@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [all]
+updated: 2026-10-12
+summary: "Track format: visual meshes, materials and sky as optional records; non-Pulse hosts; picker preview"
+---
+
 # An own track format, with BallisticNG and the originals as importers into it
 
 2026-10-11, the maintainer's idea after the Unity content support phases: for custom

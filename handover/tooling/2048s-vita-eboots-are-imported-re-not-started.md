@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [2048]
+updated: 2026-09-04
+summary: "Run auto-analysis on the three other imported 2048 programs; data/keys is not durable across machines"
+---
+
 # 2048's four Vita eboots are decrypted and imported; loose ends from getting there
 
 2026-08-26. All four of WipEout 2048's `eboot.elf` (base + patch v1.04, USA +

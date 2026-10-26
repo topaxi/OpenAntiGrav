@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [pulse]
+updated: 2026-09-25
+summary: "182 USA-named functions have no EU counterpart; fuzzy sweeps at 0.95, 0.8, 0.6 and a structural pass remain"
+---
+
 # The EU name gap: 115 closed by exact hash, 182 functions (plus data) remain
 
 [ADR-0048](../../docs/architecture/adr/0048-eu-is-the-psp-pulse-re-target-of-record.md)

@@ -1,4 +1,8 @@
 ---
+status: re-first
+titles: [omega]
+updated: 2026-10-16
+summary: "Which race selects Omega's 2048_hud set is unread; Zone classes and runtime tables open"
 categories: [frontend, rendering]
 ---
 

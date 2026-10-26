@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [pulse]
+updated: 2026-08-25
+summary: "Decode a slot-resolved record's own bytes; stands between psys falloff and authored sprites"
+---
+
 # A *slot-resolved* record's own field layout
 
 Narrowed 2026-08-12, and the row used to overstate what was missing. The container, the `SYSP` slot table, the names **and the whole emitter tree** are decoded, parsed and corroborated on a second binary (35 PSP files / 76 emitters, 41 PS2 / 90, one unmodified parser). What is still unread is what a *slot* resolves to - 43% are developer texture paths, the rest small float runs - which is what stands between `oag_fx::psys`'s procedural falloff and the authored sprites.

@@ -29,7 +29,7 @@ the main checkout and follow it. Then read `CLAUDE.md`, `docs/README.md` and
   old one.
 - Handover hygiene: one thread per file under `handover/<category>/`, each
   with `## Open` and `## Next Steps`. When a thread's work has fully landed,
-  delete the file and its `HANDOVER.md` index line together. Nothing outside
+  delete the file (the index is its frontmatter, `just threads`); a new thread needs `status`, `titles`, `updated`, `summary`. Nothing outside
   `handover/` and `HANDOVER.md` links into `handover/`; cite the `docs/`
   page, test or address instead.
 - `HANDOVER.md` stays under 256 KiB (`just check-handover`).
