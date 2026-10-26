@@ -2,7 +2,7 @@
 status: measure
 titles: [hd]
 updated: 2026-10-26
-summary: "HD render error by 120 px tile on 13 pairs: ceiling light beams and rims lead the bias; scenery, HUD and wall are not lanes yet"
+summary: "HD gaps by 120 px tile; top-right band cut (+6.3 to +3.0): Amphiseum +5.7 and Vineta K -3.1 left; scenery, HUD, wall open"
 ---
 
 # HD/Fury render gaps ranked by pixel impact
@@ -134,6 +134,41 @@ cause. What the crops show:
    per-draw ablation on two circuits at the same moment. Acceptance: one or two
    named draws explain at least half the block's low-frequency error on both
    circuits. Only then name a lane.
+
+## Top-right band, measured and wired (2026-10-26, `hd-top-right-band`)
+
+Claim (row 5): ours runs too bright in tx 9-12, ty 0-1; acceptance, mean luma bias within +2 on
+`the-amphiseum` and `vineta-k` with the craft and track blocks unchanged. **Half true, half open.**
+Evidence and method are in `docs/formats/rcsmaterial.md`, "A program with no `LG2` reading a dot product
+draws no specular; the cone's taps are sRGB-decoded". Per-slot ablation on both pairs, then a live RPCS3 frame
+dump for the cone's sampler words.
+
+- **`vineta-k` (ramp-edge lines): a specular the program does not compute.** Slot 257 (`lambertzeroalpha`
+  `martin_alum_grill`) has `LG2`s on its lightmap curve only; `Program::has_dot_power` is `false`, so it
+  and every program like it draws no specular. Band +14.9 to -3.1 (error 25.1 to 9.1), whole frame +3.1
+  to -0.2. Overshoots the acceptance the other way: -3.1.
+- **`the-amphiseum` (light shafts): the cone's taps are gamma-7 units** (live draws 724 and 730, `@0x1520`
+  matched, address words `0x60710101` and `0x60750102`). Band +16.1 to +5.7 (error 23.5 to 14.4). Not within
+  +2.
+- **`talons` sky particles and `anulpha-pass` pillar glow: not touched, still open** (not measured; the first
+  is capture-mismatched).
+- 13-pair band mean +6.3 to +3.0 (error 13.1 to 10.4). Per pair, before to after (bias, error): moa-therma
+  +7.1/11.6 to -1.3/5.1, sebenco-climb +8.4/15.1 to +5.5/13.0, chenghou-project +2.7/8.3 to +1.2/7.2,
+  tech-de-ra +2.9/6.1 to +2.1/5.5; the other seven moved under 0.5. Worse in absolute error: Talon's and
+  Talon's Assegai left wall +0.5 (the cone streaks the original does not show), Vineta K track block +0.1.
+- Omega ships both materials as PS4 containers (unread); 2048 neither: not checkable, reasons on the page.
+
+### Open from this lane
+
+1. **Amphiseum band +5.7, 3.4 over the no-cone floor.** Shaft width or the `s` scale (0.49596); alpha
+   composition is the same as the authored blend `SRC_ALPHA, ONE`. Needs the cone's geometry against
+   the original's at the same pose, or the live `s` read off the draw's fragment constants.
+2. **Vineta K band -3.1.** Slot 96's strip is grey where the original's is blue (hue); the tower's
+   yellow-lit glass is dimmer than the original's.
+3. **Modesto Heights, Metropia and the Talon's pairs band** are unmoved by either rule (+5.6, +0.3 with
+   15.6 error, +9.2): another cause, never ablated.
+4. **Talon's cone:** same decode applied, not independently verified (no matched frame that frames a
+   cone).
 
 ## Later
 
