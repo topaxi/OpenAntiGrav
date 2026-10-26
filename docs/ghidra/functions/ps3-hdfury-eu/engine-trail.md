@@ -2517,12 +2517,13 @@ flame is the original's blue block with pink, no rays below the opening. Under t
 stays: Sol 2's and Metropia's engine bay is black in ours and dark blue in the original (its own
 cause, hd-ship-materials.md).
 
-**Other titles.** Omega: **checked, applies, not wired.** Its flame textures
+**Other titles.** Omega: **checked, does not discriminate, not wired.** Its flame textures
 (`Data/art/published/ships/common_textures/Flame_01.gnf` and `Flame_01_HD.gnf`, and every
-`Data/tex/EngineFlare/*.gnf`) carry `ChannelType::Srgb` in the GNF descriptor, so a GCN fetch
-decodes them; Omega's scene is a linear fp16 target (`hd-track-tone.md`, "checked, differs"), so a
-decoded tap would be added as light, but its flame program is GCN and unread and ours keeps the
-raw tap there. 2048: **not checkable from the file**: the `.gxt` header this project reads carries no gamma
+`Data/tex/EngineFlare/*.gnf`) carry `ChannelType::Srgb` in the GNF descriptor, but so does every
+other Omega texture read in the same census, the Bomb's ring ramps included, whose PS3 unit reads
+raw (hd-unlit-programs.md, "The Bomb's units, read live"); so the file does not say what Omega's
+sampler does. Omega's scene is a linear fp16 target (`hd-track-tone.md`, "checked, differs") and
+its flame program is GCN and unread, so ours keeps the raw tap there. 2048: **not checkable from the file**: the `.gxt` header this project reads carries no gamma
 field (on the Vita the gamma mode is texture-control state set at run time), and no Vita3K draw state of a 2048 flame has been read.
 
 ## The trail's colour taps are decoded on fetch (2026-10-26, `hd-render-fidelity`)
@@ -2556,8 +2557,7 @@ original's. That remainder is not this tap: candidates are the warm-up's full th
 craft (chosen), the trail brightness `+0x11d8`, and the bloom. The 13 grid pairs draw no trail
 at rest and do not move.
 
-**Other titles.** Omega: **checked, applies, not wired.** Its six `Data/ribboneffects/Textures/
-HD_EngineTrail*.gnf` (including `HD_EngineTrail_Red_AlphaIsNoise` and
-`HD_EngineTrail_Blue_AlphaIsTrail`) are `ChannelType::Srgb`, so a GCN fetch decodes them, but its
-trail program is unread and ours keeps the raw taps there. 2048: **not checkable from the file**,
+**Other titles.** Omega: **checked, does not discriminate, not wired.** Its six
+`Data/ribboneffects/Textures/HD_EngineTrail*.gnf` are `ChannelType::Srgb`, as is every Omega
+texture read (see the flame above); its trail program is unread and ours keeps the raw taps there. 2048: **not checkable from the file**,
 as for the flame above.

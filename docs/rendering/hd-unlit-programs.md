@@ -381,10 +381,12 @@ What it changes:
   applied to a raw source, not a missing decode; whether the original's rings are as white is
   still a picture nobody has taken (a WCB-on frame at about 1.8 s).
 
-**Omega**: checked, applies, not wired: the Bomb's models re-ship on Omega and its textures are
-`.gnf` with a channel type of their own; the fireball program is GCN and unread, and its scene
-blends linearly (`hd-track-tone.md`), so nothing was ported. **2048**: no Bomb blast of this
-shape is read; not checked.
+**Omega**: checked, does not discriminate, not wired: Omega ships the Bomb's textures
+(`Data/weapons/Textures/HD_Bombfire_BloomRing_FireRamp_128x32.gnf` and others) and every one read
+is `ChannelType::Srgb`, the ring's too, so the file does not tell what its samplers decode; its
+programs are GCN and unread and its scene blends linearly (`hd-track-tone.md`), so nothing was
+ported. **2048**: not checkable from the file (a `.gxt` header carries no gamma field) and no
+Vita3K draw state of a blast has been read.
 
 ## Open
 
