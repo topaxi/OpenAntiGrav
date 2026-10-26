@@ -8,6 +8,22 @@ parser reads `Lighting.Use Lens Flare` as a flag nobody reads. Not to be confuse
 with the engine or exhaust flare (`Engine Flare` locator, `WO_ROCKET_FLARE`) or
 HD's craft sprite flare (`engineflare.vex`).
 
+**What the maintainer saw (PPSSPP, 2026-10-26), the acceptance picture:** at
+Vineta K's start a faint circle sits at screen centre; driving forward, a chain
+of rings runs from the centre toward the bright point in the skybox (the sun).
+A classic lens flare: sun anchor plus a ring set laid along the line through
+screen centre. The compare pair `pure-psp/vineta` shows it only faintly.
+
+Pointers for the RE lane, not yet checked:
+- Sun position: Vineta K's `Skycube` (`oag-view --sky`) and the
+  `DirectionalLight` nodes (`0x12a` on Pure,
+  `docs/ghidra/functions/psp-pure-usa/scene-light.md`).
+- Ring textures: `LensflareComponents.tga` (a `Texture` node on Vineta K, texel
+  block not decoded); `glare3.tga`, `GFLARE.tga`, `absorb_glare.tga` under
+  `\Art_Resources\Psys\Tex\` are candidates.
+- Per-ring offsets: the `lensflare_shape_` child payloads, the ring count in the
+  80-byte `lensflare_` payload, then any table near `FxLensflare.cpp` in BOOT.
+
 ## Answer per title
 
 | Title | Sun or lens flare | Where it is authored | Evidence |
