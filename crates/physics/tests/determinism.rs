@@ -152,6 +152,11 @@ use oag_physics::{CraftState, Environment, ShipState, step};
 ///   world-axis diagonal and angular damping reads the world-axis momentum. Every tick the
 ///   probe is not level moves. No field hashed; `InertiaFrame::Body` reproduces the previous
 ///   constants.
+/// - **2026-10-26, behaviour (the two 3,600-tick rows; the 600-tick row did not move).**
+///   `wall::hull_sample_points` lists the original's order, lower *left* front first (it listed the
+///   mirror image first): the order the hull's contacts resolve in
+///   (`collision_cage_ground_truth::the_originals_contacts_against_our_mesh`, every sample of 2,000
+///   ticks of the weave capture). Two contacts resolved on one tick now resolve the other way round.
 const REFERENCE: &[(u32, Script, u64, u64)] = &[
     (
         600,
@@ -162,14 +167,14 @@ const REFERENCE: &[(u32, Script, u64, u64)] = &[
     (
         3_600,
         Script::Corridor,
-        0x748f_2c1e_c1e5_a041,
-        0x2090_aba1_2a31_e235,
+        0x51aa_b2b1_e45b_4f7d,
+        0xe710_8d79_a366_461f,
     ),
     (
         3_600,
         Script::Aerobatic,
-        0x1ab1_29bc_df4a_a853,
-        0x229a_4cc1_aaba_9687,
+        0x7dbd_2651_c270_069c,
+        0x879e_25b8_60ad_ea60,
     ),
 ];
 
