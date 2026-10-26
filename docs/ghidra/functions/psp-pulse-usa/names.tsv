@@ -1427,3 +1427,6 @@
 0x089387e8	function	MusicPlayer_StartPreRaceDialogue	65	now-playing.md
 0x0892ca04	function	WoPoint_Init	85	scene-light.md
 0x0892cd00	function	WoPoint_Update	85	scene-light.md
+# 2026-10-26 autopilot-re: the per-craft weapon step and its pad test (autopilot.md)
+0x0883f540	function	Ship_UpdateWeapons	80	autopilot.md
+0x0883efb4	function	Ship_TestWeaponPads	65	autopilot.md

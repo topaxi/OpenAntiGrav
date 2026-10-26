@@ -241,3 +241,6 @@
 # 2026-10-22 pure-fidelity: the speed and shield gauge (hud-speed-gauge.md)
 0x0881eabc	function	Hud_UpdateSpeedBar	85	hud-speed-gauge.md
 0x0881f13c	function	Hud_UpdateEnergyBar	80	hud-speed-gauge.md
+# 2026-10-26 autopilot-re: the Autopilot pickup (autopilot.md)
+0x0884c770	function	Autopilot_Fire	85	autopilot.md
+0x0884c794	function	Autopilot_Update	85	autopilot.md
