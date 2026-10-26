@@ -19,6 +19,7 @@ mod pilot_assist_ground_truth;
 mod pilot_assist_levels_ground_truth;
 mod plasma_ground_truth;
 mod portuguese_br_ground_truth;
+mod posed_visibility_ground_truth;
 mod post_finish_ground_truth;
 mod projectile_tilt_ground_truth;
 mod prompt_pilots;
