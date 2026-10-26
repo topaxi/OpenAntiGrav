@@ -393,7 +393,7 @@ Two smaller things are also left unread on purpose:
   `cf_alpha4glow` is the suggestive case.
 - **Which of an executable's programs carries which `_vp`/`_fp` name.** The
   ordinal correspondence is at 40 and nothing is named on it; the reasoning is
-  in the handover thread this page's index line points at.
+  in the handover thread on 2048's GXP containers (`just threads --category tooling`).
 
 ## Which sampler carries the colour (2026-10-19, `normal-maps-as-colour`)
 

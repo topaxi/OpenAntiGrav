@@ -39,13 +39,14 @@ Read-only, in order:
 
 ## 2. Pick a thread at random
 
-List the real files, since a file can lag or lead `HANDOVER.md`'s index by a commit:
+The index is each thread's frontmatter. Pick through the script, optionally filtered (`--status`, `--title`, `--category`; default to `ready-to-wire` unless the user asked for something else, and never pick `blocked-*` or `parked`):
 
 ```sh
-fd . handover -e md | shuf -n1
+just threads --paths --status ready-to-wire [--title pulse] | shuf -n1
+just threads --status ready-to-wire --title pulse   # with summaries, to choose by eye
 ```
 
-If the pick is not in `HANDOVER.md`'s **Open threads**, note the mismatch in your final report (not a blocker).
+If `just threads` reports invalid frontmatter, say so in your final report (not a blocker).
 
 ## 3. Scope one task
 
@@ -78,8 +79,8 @@ Leave the thread file as is if nothing publishable resulted; add findings to its
 
 ## 8. If you finish clean
 
-Update docs with evidence and confidence, and the thread's `## Open`/`## Next Steps` (or, if nothing is left, delete the file and its `HANDOVER.md` index line together). Commit that on its own. Run `just` before calling it done and confirm `git status` is clean. Report what now works in concrete terms, not "should work".
+Update docs with evidence and confidence, and the thread's `## Open`/`## Next Steps` (or, if nothing is left, delete the file; its frontmatter was the index). Commit that on its own. Run `just` before calling it done and confirm `git status` is clean. Report what now works in concrete terms, not "should work".
 
 **Docs-only exception**: a diff of only docs, `handover/`, `HANDOVER.md` or doc comments runs the lighter check (CLAUDE.md "Gates by change"), not the full gate. Run `just` in full the moment any `.rs` logic changes. It applies to the diff you made, not the thread's topic.
 
-**A pure-RE step usually is not "nothing left"**: it unblocks an implementation task this session should not also attempt (bundling them skips verify-then-document). Write a **new** `handover/*.md` thread for the implementation, with the RE findings as its evidence, its own `## Open`/`## Next Steps` and a `HANDOVER.md` index line, then close out the RE thread (trim its Next Steps, or delete it if nothing else is open). Implement in the same session only when the remaining work is trivial and in scope for the step you committed to in step 3.
+**A pure-RE step usually is not "nothing left"**: it unblocks an implementation task this session should not also attempt (bundling them skips verify-then-document). Write a **new** `handover/*.md` thread for the implementation, with the RE findings as its evidence, its own `## Open`/`## Next Steps` and `status`, `titles`, `updated`, `summary` frontmatter (see `HANDOVER.md`, "Open threads"), then close out the RE thread (trim its Next Steps, or delete it if nothing else is open). Implement in the same session only when the remaining work is trivial and in scope for the step you committed to in step 3.

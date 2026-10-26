@@ -111,9 +111,9 @@ Do not add a dedicated gate-runner member (costs a slot, needs plumbing `flock` 
 
 ## Drawing threads
 
-- **Pre-draw them; never let members pick at random** (two independent picks collide at merge).
+- **Pre-draw them; never let members pick at random** (two independent picks collide at merge). A thread's `status` says what kind of lane it needs: `ready-to-wire` -> `oag-wire`, `re-first` -> `oag-re`, `measure` -> `oag-capture`; `blocked-*` and `parked` are not drawn without the blocker cleared.
 - **Lanes are disjoint by function set first, crate second; a Ghidra binary may be shared.** Two members may work the same program if their briefs name disjoint function/address sets, each appends its own dated section and `names.tsv` rows (the lead resolves append-append conflicts at merge). Every brief repeats `docs/ghidra/workflow.md`'s "Bridge quirks": pass `program=` explicitly on every call (by path when names collide, e.g. `/psp-pulse-usa/BOOT.BIN`), never `switch_program` (one rename once landed on another member's active binary). **Each member spawns its own emulator** (own `HOME`/`XDG_CONFIG_HOME`, debugger port and Xvfb for PPSSPP; own config copy for RPCS3); say in every brief which ports and displays are taken.
-- Sources: `handover/**/*.md`, `HANDOVER.md`'s open-threads index, a red test on `main`, what the previous member's report left open.
+- Sources: `just threads` (frontmatter index: `--status ready-to-wire --title pulse` answers "what is ready to wire for Pulse?"; `--counts` tallies), `handover/**/*.md`, a red test on `main`, what the previous member's report left open.
 - **Prefer player-facing value** (standing instruction); a pass that produces only another analysis document is weak.
 
 ## The roster

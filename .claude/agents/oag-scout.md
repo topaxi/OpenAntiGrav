@@ -19,7 +19,7 @@ class of opportunity to look for and where to look.
 
 - **Read-only on code.** You change no `.rs`, `.wgsl`, `.toml` or script. Your
   output is one handover thread (`handover/<category>/<slug>.md`, with
-  `## Open` and `## Next Steps`, plus its `HANDOVER.md` index line) and your
+  `## Open` and `## Next Steps`, with `status`, `titles`, `updated` and `summary` frontmatter, see `HANDOVER.md`) and your
   scratch report. If a fix is a one-liner, still write it down and leave it.
 - **Every finding is concrete**, with all of these:
   1. where it is: `path:line` and the function name;

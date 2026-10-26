@@ -187,9 +187,10 @@ and the crate table in [`CLAUDE.md`](../../CLAUDE.md).
 [`HANDOVER.md`](../../HANDOVER.md) records what the repository does not: work in
 flight, what was deliberately deferred and why, which findings were independently
 verified, and the traps that cost time. Read it before starting anything
-non-trivial. Each open thread is one file in the thread directory `HANDOVER.md`
-indexes, with `## Open` and `## Next Steps` sections. Delete a thread's file and
-its index line together when its work lands. Because a thread file is deleted
+non-trivial. Each open thread is one file in the thread directory, with
+frontmatter (`status`, `titles`, `updated`, `summary`; `just threads` lists them)
+and `## Open` and `## Next Steps` sections. Delete a thread's file when its work
+lands. Because a thread file is deleted
 that way, nothing outside the thread directory and `HANDOVER.md` links to one;
 cite the `docs/` page, test or address instead.
 

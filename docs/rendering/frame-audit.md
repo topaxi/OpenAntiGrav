@@ -57,7 +57,7 @@ recorded.
 
 Camera height and FOV were not re-measured: `--pose-from` carries the original's
 own camera, so this audit cannot see a camera difference. That question is the
-race-camera FOV thread's (see `HANDOVER.md`'s open threads) and stays there.
+race-camera FOV thread's (see `just threads --category rendering`) and stays there.
 
 ## 1. Texture level selection (fixed)
 

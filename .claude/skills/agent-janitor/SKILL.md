@@ -14,7 +14,7 @@ Run as a sonnet `oag-docs` lane (docs-only). Bump `last-run` above to the run da
 1. `CLAUDE.md` (every agent loads it).
 2. `.claude/skills/*/SKILL.md` and support files such as `oag-drive/member-rules.md`. Leave scripts (`strip_rs_comments.py`) alone.
 3. `.claude/agents/*.md`: destination for role-specific text; tighten in the same style.
-4. `HANDOVER.md`: keep the "Open threads" index and every heading other docs cite ("Traps that are live", "Working rules that were learned expensively", "Read this first"). `just check-handover` ceiling is 256 KiB.
+4. `HANDOVER.md`: keep the "Open threads" section (frontmatter rule, `just threads`) and every heading other docs cite ("Traps that are live", "Working rules that were learned expensively", "Read this first"). `just check-handover` ceiling is 256 KiB.
 
 Note `.claude/` is gitignored but tracked: `git add -u .claude`, and `git add -f` for a new file.
 
