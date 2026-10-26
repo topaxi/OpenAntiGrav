@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd]
 updated: 2026-10-26
-summary: "No frame of an HD scrolled surface in motion; wire named still families; vertex multiply-add reader"
+summary: "No frame of an HD scrolled surface in motion; wire named still families; vertex clock_rate reads literal rates (nr_twinblend wired), parameter-rate MAD reader open"
 ---
 
 # HD animates a texture in two ways now; the rest of its shader families still draw still
@@ -16,6 +16,10 @@ glow (119 slots) was already wired; this lane wired the **vertex** half,
 coordinate". `crates/render/examples/hd_anim_family_census.rs` lists every family.
 
 ## Open
+
+- **`nr_twinblend` on 2048 and Omega: checked, applies, not wired** (2026-10-26, `hd-tech-de-ra`). Both
+  ship the material and its four textures (rcsmaterial.md, "`nr_twinblend`: two pictures, a scrolling
+  wipe and bars"); the programs are GXP and GCN, unread, so `mesh::rcs::twin_blend` binds HD only.
 
 - **No frame of a scrolled surface in motion exists.** The whole-circuit camera
   paints 25 and 13 pixels for Tech de Ra and Anulpha Pass, 0 for Amphiseum; a

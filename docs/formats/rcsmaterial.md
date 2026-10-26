@@ -3505,7 +3505,7 @@ and the orange AG square). The generic reading drew the wipe as the picture and 
 
 **The program (confidence 90, read with `scripts/ps3-microcode.py`, not measured live).** The
 race resolves fragment block #3 `@0x1430` and vertex block #3 `@0x1240` (feature hash
-`0xfb5bbb27`):
+`0xfb61d927`):
 
 ```text
 MOV R0.w, c[207].yyyy                   c[207] = (0, 1.875, 0, 0), the block's literal
@@ -3542,11 +3542,13 @@ second texture, the wipe third (at `lightmap_texcoord`, chunk attribute `0x81bdf
 the bars fourth (at `texcoord2`, `0x7d164d3e`, `v[8].xy`), the pictures at `0xa2762127`
 (`v[2]`). Both world-pass builders route the three pairs. The colour taps are decoded and the
 wipe is read raw: **chosen, not measured** (the units' gamma nibbles were not read off a live
-draw), as the ice pool and the snow-capped rock read theirs. Census (all 16 circuit models):
-seven slots on five circuits, every one bound, none refused (`Report::twin_blend_*`): Tech de
-Ra 133, Anulpha Pass 521, Chenghou 485 and 489, `02_track` 272, Sebenco 129 and 327. Only Tech
-de Ra's is in view on a compare pair; the other six follow the program's text, with no
-reference frame.
+draw), as the ice pool and the snow-capped rock read theirs. Census (the 12 forward circuit
+models built; the four Zone circuits ship no `nr_twinblend`): seven slots on five circuits,
+every one bound, none refused (`Report::twin_blend_*`): Tech de Ra 133, Anulpha Pass 521,
+Chenghou 485 and 489, `02_track` 272, Sebenco 129 and 327. Not built, but byte-compared: Tech de
+Ra's `materials_reversed` copy is byte-identical to its forward one, and the four `DATA03`
+`materials_dlc` copies to the `DATA02` one. Only Tech de Ra's slot is in view on a compare pair;
+the other six follow the program's text, with no reference frame.
 
 **Measured** on `hd/tech-de-ra` (the pair's own flags, sigma-7 blur, the glow mask of the
 render before the change, outside 40 px of the `321go` mask, inside x 720-1560, y 120-600;
@@ -3560,9 +3562,12 @@ Tests: `crates/render/tests/hd_twin_blend_lit_path.rs` (the shader's combine on 
 `oag-rcs vertex::tests::the_twinblend_mask_scroll_reads_its_literal_rate`.
 
 **2048 and Omega: checked, applies, not wired.** 2048 ships `nr_twinblend.rcsmaterial` in
-DLC1's Anulpha Pass and Chenghou Project (`data.psarc`, `data/art/published/DLC1/...`); Omega
-ships `NR_twinBlend*.rcsmaterial` on Tech de Ra, Vineta K, Anulpha Pass, Chenghou Project,
-Metropia and Sebenco Climb (`data01`/`data02.psarc`) and in its 2048 object library. Their
+DLC1's Anulpha Pass and Chenghou Project (`data.psarc`, `data/art/published/DLC1/...`) beside the
+same four textures (`ag_square01cl_glow`, `ag_square02cl_glow`, `animscaledballs`,
+`glowbars_noisy`, as `.gxt`); Omega ships `NR_twinBlend*.rcsmaterial` on Tech de Ra, Vineta K,
+Anulpha Pass, Chenghou Project, Metropia and Sebenco Climb (`data01`/`data02.psarc`) and in its
+2048 object library, with the four textures as `.gnf` under `tech_de_ra/TexturesPS4/` and a
+`BlendTexture` sampler and `barsUV_blendUV` attribute named in the material. Their
 programs are GXP and GCN, which this reader does not decode, and 2048's records author `time`
 as `19992.0` ([2048-material-params.md](2048-material-params.md)), so nothing here binds on
 either title.
