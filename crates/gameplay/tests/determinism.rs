@@ -617,9 +617,17 @@ fn run(ticks: u32) -> (u64, u64) {
 ///   same way: with that one write removed the previous constants reproduced
 ///   bit for bit. Replaces `0x6f3a_9672_4942_4caf` / `0x6423_786d_5305_88bb` at 60 ticks and `0xdbb7_da22_3b37_4562` /
 ///   `0x46e0_cbc8_9e6a_ea96` at 600.
+///
+/// - **Moved 2026-10-26**, when `Ship::quake_lift` (the Quake's smoothed wave
+///   height at each craft) joined the ship's hash: four more bytes per ship per
+///   tick, zero here because no scenario fires a Quake. The same change moved the
+///   Quake's hit gate from the flat `radius` test to the wave-height edge, which
+///   these runs do not reach. Isolated the same way: with that one write removed
+///   the previous constants reproduced bit for bit. Replaces `0xeaa8_47a2_289e_87cf` /
+///   `0x4134_e0d4_2589_124b` at 60 ticks and `0x2f1c_7e70_2e92_c262` / `0x9191_035b_9d0d_e5a6` at 600.
 const REFERENCE: &[(u32, u64, u64)] = &[
-    (60, 0xeaa8_47a2_289e_87cf, 0x4134_e0d4_2589_124b),
-    (600, 0x2f1c_7e70_2e92_c262, 0x9191_035b_9d0d_e5a6),
+    (60, 0xec9c_ccdb_5f5d_773f, 0x5ed8_b4a2_3d57_436b),
+    (600, 0xa7f6_6ad8_5049_aa72, 0x019e_23aa_20c7_ec46),
 ];
 
 #[test]

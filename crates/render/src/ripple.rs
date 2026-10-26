@@ -13,8 +13,8 @@
 //! ```
 //!
 //! where `d` is its distance along the track from the wave's centre - a
-//! raised-cosine bump, [`PEAK_AMPLITUDE`] tall at [`RISE_SECONDS`], fading to
-//! nothing at [`LIFETIME_SECONDS`], [`half_width`] growing from 25 to 75
+//! raised-cosine bump, `PEAK_AMPLITUDE` tall at `RISE_SECONDS`, fading to
+//! nothing at `LIFETIME_SECONDS`, `half_width` growing from 25 to 75
 //! units. Confidence 95: the static read, then matched live on PPSSPP to the
 //! short on every vertex of every armed span. **The craft does not ride it**:
 //! the floor the hover probes cast against is a separate collision soup
@@ -38,56 +38,9 @@
 use std::ops::Range;
 
 use oag_vex::quake::Span;
+use oag_weapons::projectile::quake::{LAUNCH_LEAD, amplitude, half_width};
 
 use oag_mesh::mesh::{BatchPlacement, GpuVertex};
-
-/// The bump's height at its peak, in world units.
-///
-/// `g_quake_peak_amplitude`, `0x08a88540`: `12.0f`, reached through a
-/// relocated `lui`/`lwc1` pair in `Quake_SpanAmplitude` (`0x0891b600`).
-/// Confidence 90.
-pub const PEAK_AMPLITUDE: f32 = 12.0;
-
-/// Seconds from launch to the peak: a literal in `Quake_SpanAmplitude`.
-pub const RISE_SECONDS: f32 = 0.3;
-
-/// Seconds from launch to nothing: the same `5.0` the span's retire test uses.
-pub const LIFETIME_SECONDS: f32 = 5.0;
-
-/// Half the bump's width at launch, in world units: `Quake_SpanHalfWidth`
-/// (`0x0891b654`) is `age * 50 / 5 + 25`.
-pub const HALF_WIDTH_AT_LAUNCH: f32 = 25.0;
-
-/// How much wider the bump gets over [`LIFETIME_SECONDS`] - the `50` in
-/// `age * 50 / 5`.
-pub const HALF_WIDTH_GROWTH: f32 = 50.0;
-
-/// How far ahead of the firing craft the bump is born, in the direction it
-/// travels: `g_quake_launch_lead`, `0x08a7ccac`, `15.0f`, which `Quake_Init`
-/// adds to the launch span's position. Confidence 80.
-pub const LAUNCH_LEAD: f32 = 15.0;
-
-/// The bump's height at `age` seconds after launch.
-///
-/// A linear rise to [`PEAK_AMPLITUDE`] over [`RISE_SECONDS`], then a linear fall
-/// that reaches zero at [`LIFETIME_SECONDS`]. Zero outside `0..LIFETIME_SECONDS`
-/// rather than extrapolated: the original retires every span there.
-#[must_use]
-pub fn amplitude(age: f32) -> f32 {
-    if !(0.0..LIFETIME_SECONDS).contains(&age) {
-        0.0
-    } else if age < RISE_SECONDS {
-        PEAK_AMPLITUDE * age / RISE_SECONDS
-    } else {
-        PEAK_AMPLITUDE - PEAK_AMPLITUDE * (age - RISE_SECONDS) / (LIFETIME_SECONDS - RISE_SECONDS)
-    }
-}
-
-/// Half the bump's width at `age` seconds after launch.
-#[must_use]
-pub fn half_width(age: f32) -> f32 {
-    age * HALF_WIDTH_GROWTH / LIFETIME_SECONDS + HALF_WIDTH_AT_LAUNCH
-}
 
 /// The raised-cosine profile: how far a vertex `offset` units from the bump's
 /// centre rises.

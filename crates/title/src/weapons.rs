@@ -50,6 +50,28 @@ pub struct Weapons {
     pub ai: Option<&'static str>,
     /// When a locked LeachBeam moves energy: every tick, or once a ball trip.
     pub leach_drain: LeachDrain,
+    /// How a Quake's wave reaches a craft: what gates its hit and whether the
+    /// cockpit eye rides it.
+    pub quake_hit: QuakeHit,
+}
+
+/// How a Quake's wave reaches a craft.
+///
+/// Pulse's `Quake_UpdateSpan` smooths the wave's height at each craft
+/// (`entity+0x870`, `h += (raw - h) * 8 * dt`), lands the hit on the rising edge
+/// of `h > 0.1`, trips a laid mine on the raw height `> 0.1`, and lifts the
+/// cockpit eye by `h` along the ship's up
+/// (`docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`, "2026-10-26:
+/// what a Quake does to the craft it reaches"). See
+/// `oag_weapons::projectile::quake`. A title whose own gate is read later gets
+/// its own variant.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QuakeHit {
+    /// The smoothed wave-height law above.
+    WaveHeight {
+        /// Where this came from.
+        origin: crate::Origin,
+    },
 }
 
 /// When a locked LeachBeam transfers `damage` and `repair`.

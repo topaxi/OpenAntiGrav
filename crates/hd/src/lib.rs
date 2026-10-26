@@ -189,6 +189,10 @@ pub const TITLE: &Title = &Title {
         ai: Some(r"Data\XML\WeaponAIstats.xml"),
         // Read off HD's own EBOOT: one transfer per ball trip.
         leach_drain: oag_title::weapons::LeachDrain::PerTrip,
+        // Pulse's law, inherited: HD's `Quake_UpdateSpan` uses Pulse's span record and constants; its gate is unread.
+        quake_hit: oag_title::weapons::QuakeHit::WaveHeight {
+            origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
+        },
     },
     weapon_models: race::WEAPON_MODELS,
     effects: effects::EFFECTS,

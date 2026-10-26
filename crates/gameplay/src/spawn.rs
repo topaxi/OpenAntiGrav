@@ -277,6 +277,9 @@ impl Ship {
         // teleport just broke (`Beam::link_broken` tests `active`) should not
         // take the first tick back on the line.
         self.pending_thrust_scale = 1.0;
+        // The original zeroes the wave height in the constructor; clearing it on a
+        // respawn is **chosen, not measured**.
+        self.quake_lift = 0.0;
     }
 }
 

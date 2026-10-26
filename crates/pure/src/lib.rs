@@ -89,6 +89,10 @@ pub const TITLE: &Title = &Title {
         ai: Some(r"Data\XML\WeaponAIstats.xml"),
         // Pulse's law, inherited: Pure's own drain is unread.
         leach_drain: oag_title::weapons::LeachDrain::PerTick,
+        // Pulse's law, inherited: Pure's ripple and gate are unread (`psp-pure-usa/quake.md`).
+        quake_hit: oag_title::weapons::QuakeHit::WaveHeight {
+            origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
+        },
     },
     // **Pure's own names, read off `BOOT.BIN` (2026-10-08), not Pulse's.**
     // Every Pulse literal this table used to carry (`Pulse_Mine.vex`,

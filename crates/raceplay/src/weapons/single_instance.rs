@@ -18,14 +18,15 @@ use super::*;
 
 impl Race {
     /// One tick of the Quake's own travelling wave: advances it along the
-    /// course, and applies its hit/slowdown to every craft its own radius
-    /// currently spans.
+    /// course, moves every craft's smoothed wave height, and applies the
+    /// hit/slowdown to every craft whose height just passed the gate.
     ///
-    /// A no-op with no course loaded (nothing for the wave to travel round)
-    /// and a no-op with no wave in flight - see `Race::spend_pickup`'s own
-    /// Quake arm for what launches one. See
-    /// `oag_weapons::projectile::quake` for the recovered advance rate and
-    /// the hit test this reuses whole.
+    /// The wave half is a no-op with no course loaded (nothing for the wave to
+    /// travel round) and with no wave in flight - see `Race::spend_pickup`'s own
+    /// Quake arm for what launches one - but **the height update is not**: it runs
+    /// every tick so the lift decays after the wave is gone. See
+    /// `oag_weapons::projectile::quake` for the recovered advance rate and the
+    /// hit gate.
     ///
     /// **Retires the wave once it outlives
     /// `oag_weapons::projectile::quake::LIFETIME_SECONDS`**, which is what
@@ -38,22 +39,42 @@ impl Race {
     ///
     /// Called from the tick after `Race::advance_cannons`, on this tick's own
     /// standings - so a wave that just passed over a craft credits the hit
-    /// the same tick the craft's position moved into and out of its radius,
+    /// the same tick the craft's position moved into and out of the bump,
     /// the same "this tick, not last tick's stale reading" rule every other
     /// per-craft weapon update in this module follows.
     pub(crate) fn advance_quake(&mut self) {
+        let oag_title::weapons::QuakeHit::WaveHeight { .. } = self.sim.quake_hit;
+        let dt = self.sim.dt;
+        let length = self
+            .sim
+            .course
+            .as_ref()
+            .map_or(0.0, |course| course.length());
+        let mut wave = self.sim.world.quake;
+        if let Some(live) = wave.as_mut()
+            && self.sim.course.is_some()
+        {
+            live.advance(length, dt);
+            if live.expired() {
+                self.sim.world.quake = None;
+                wave = None;
+            }
+        }
+        // Every craft's wave height moves every tick, wave or none, so it keeps
+        // decaying after the wave is dropped.
+        oag_weapons::projectile::quake::Wave::update_lift(
+            wave.as_ref(),
+            &mut self.sim.world.ships,
+            self.sim.world.ship_count,
+            length,
+            dt,
+        );
         let Some(course) = self.sim.course.as_ref() else {
             return;
         };
-        let Some(mut wave) = self.sim.world.quake else {
+        let Some(mut wave) = wave else {
             return;
         };
-        let length = course.length();
-        wave.advance(length, self.sim.dt);
-        if wave.expired() {
-            self.sim.world.quake = None;
-            return;
-        }
         let rules = self.sim.damage_rules();
         let mut hits = [oag_weapons::projectile::WeaponHit::default(); MAX_SHIPS];
         // Snapshotted before `apply_hits` runs, for `Cue::QuakeHit`'s own
@@ -63,7 +84,6 @@ impl Race {
         wave.apply_hits(
             &mut self.sim.world.ships,
             self.sim.world.ship_count,
-            length,
             rules,
             &mut hits,
         );
@@ -92,9 +112,10 @@ impl Race {
         // `Quake_SpanIntensityAt` at the mine's own track cursor and raises the
         // mine's destroy bit when the road there is rippling above `0.1`;
         // `MinePool_Update`'s teardown then plays the explosion and credits
-        // nobody. This wave model has no per-span intensity, only a front
-        // and a radius, so "rippling under the mine" is the same
-        // within-radius test the craft take. Mines only: the Bomb pool's own
+        // nobody. This wave model has no per-span intensity, so "rippling
+        // under the mine" is the wave's raw height at the mine's course
+        // distance (`Wave::raw_lift`), unsmoothed as the original's is. Mines
+        // only: the Bomb pool's own
         // update was not read for a Quake test, and one is not assumed. See
         // `docs/ghidra/functions/psp-pulse-usa/mine.md`, 2026-09-16.
         let tripped: Vec<(usize, Vec3)> = self
@@ -107,7 +128,8 @@ impl Race {
             .filter(|(_, laid)| laid.kind == Some(oag_tables::weapons::Weapon::Mine))
             .filter_map(|(slot, laid)| {
                 let located = course.locate(laid.position, None)?;
-                (wave.progress_delta(located.progress, length) <= wave.radius)
+                (wave.raw_lift(located.progress, length, dt)
+                    > oag_weapons::projectile::quake::LIFT_HIT_THRESHOLD)
                     .then_some((slot, laid.position))
             })
             .collect();

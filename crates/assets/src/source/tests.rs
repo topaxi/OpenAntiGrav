@@ -132,6 +132,9 @@ const TITLE: &Title = &Title {
         elimination: None,
         ai: None,
         leach_drain: oag_title::weapons::LeachDrain::PerTick,
+        quake_hit: oag_title::weapons::QuakeHit::WaveHeight {
+            origin: oag_title::Origin::Chosen,
+        },
     },
     // Unread on the same terms as `weapons` above: this fixture is about
     // archive discovery, not about any weapon's own model.

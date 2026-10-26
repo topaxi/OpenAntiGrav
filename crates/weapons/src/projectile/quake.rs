@@ -12,21 +12,31 @@
 //! along the spline ([`SPEED_UNITS_PER_SECOND`]), in a direction chosen once at
 //! launch by dotting the craft's forward against the track tangent. The hit and
 //! slowdown half reuses the shared pending-hit channel the Missile and Mine/Bomb
-//! spend (`entity+0x130`/`+0x138`/`+0x13c`), gated on a per-craft latch
-//! (`entity+0x860 & 0x40`) found 2026-09-07 to be a smoothed-proximity test; see
-//! [`Self::progress_delta`] and the [`radius`
-//! substitution](oag_tables::weapons::QuakeStats::radius).
+//! spend (`entity+0x130`/`+0x138`/`+0x13c`).
+//!
+//! **The hit gate is the craft's smoothed wave height (confidence 88-92, measured
+//! 2026-10-26).** Every craft carries `h` (`entity+0x870`), integrated
+//! `h += (raw - h) * 8 * dt` every tick whether or not a wave is in flight
+//! ([`smooth_lift`]), where `raw` is the wave's [`amplitude`] while the craft is
+//! within half of [`half_width`] of the bump's centre ([`Wave::raw_lift`]). The
+//! hit lands on the rising edge of `h > 0.1` ([`LIFT_HIT_THRESHOLD`]) and the
+//! per-craft latch (`entity+0x860 & 0x40`) clears when `h` falls back. A laid
+//! mine trips on the raw height `> 0.1`. The cockpit eye rises by `h`. There is
+//! no kick and no body ride: the original does neither. See
+//! `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`, "2026-10-26:
+//! what a Quake does to the craft it reaches". [`QuakeStats::radius`] is not read
+//! by the hit path any more (it superseded the 2026-09-07 reading that it was the
+//! gate).
 //!
 //! **Ours.** The wave's position is one `f32` distance along the course, in
 //! [`oag_race::Standing::progress`]'s units, not the original's segment index plus
 //! parametric `t`; equivalent for a closed ring and no new `World` state.
 //! `crates/raceplay/src/weapons.rs::advance_quake` recovers the world position for
-//! the visual (it needs [`oag_race::Course`], which this crate cannot hold).
-//! **The smoothed-proximity debounce is not reproduced: chosen, not measured.**
-//! This uses a flat in/out-of-`radius` test on circular distance, edge-triggered on
-//! [`Wave::hit`] like the original's latch. The original's analogue quantity
-//! crosses `0.1` at an unauthored `8.0` per second and needs the span-table fields
-//! (`Quake_SpanIntensityAt`'s `+0x5c`/`+0x64`/`+0x6c`) read only at shape level.
+//! the visual (it needs [`oag_race::Course`], which this crate cannot hold). The
+//! original matches the craft against the wave per road span; this uses distance
+//! along the course, which is the same to first order because the spans are
+//! distance-exact. **Chosen, not measured:** a craft on a split's other branch is
+//! treated by course distance too, where the original compares span segments.
 
 use crate::{Craft, MAX_SHIPS};
 use oag_tables::weapons::QuakeStats;
@@ -53,6 +63,73 @@ pub const SPEED_UNITS_PER_SECOND: f32 = 270.0;
 /// along, from `Quake_Init`'s `0`. A fixed engine literal, not authored.
 pub const LIFETIME_SECONDS: f32 = 5.0;
 
+/// The bump's height at its peak, in world units.
+///
+/// `g_quake_peak_amplitude`, `0x08a88540`: `12.0f`, reached through a
+/// relocated `lui`/`lwc1` pair in `Quake_SpanAmplitude` (`0x0891b600`).
+/// Confidence 90.
+pub const PEAK_AMPLITUDE: f32 = 12.0;
+
+/// Seconds from launch to the peak: a literal in `Quake_SpanAmplitude`.
+pub const RISE_SECONDS: f32 = 0.3;
+
+/// Half the bump's width at launch, in world units: `Quake_SpanHalfWidth`
+/// (`0x0891b654`) is `age * 50 / 5 + 25`.
+pub const HALF_WIDTH_AT_LAUNCH: f32 = 25.0;
+
+/// How much wider the bump gets over [`LIFETIME_SECONDS`] - the `50` in
+/// `age * 50 / 5`.
+pub const HALF_WIDTH_GROWTH: f32 = 50.0;
+
+/// How far ahead of the firing craft the bump is born, in the direction it
+/// travels: `g_quake_launch_lead`, `0x08a7ccac`, `15.0f`, which `Quake_Init`
+/// adds to the launch span's position. Confidence 80.
+pub const LAUNCH_LEAD: f32 = 15.0;
+
+/// The bump's height at `age` seconds after launch.
+///
+/// A linear rise to [`PEAK_AMPLITUDE`] over [`RISE_SECONDS`], then a linear fall
+/// that reaches zero at [`LIFETIME_SECONDS`]. Zero outside `0..LIFETIME_SECONDS`
+/// rather than extrapolated: the original retires every span there.
+#[must_use]
+pub fn amplitude(age: f32) -> f32 {
+    if !(0.0..LIFETIME_SECONDS).contains(&age) {
+        0.0
+    } else if age < RISE_SECONDS {
+        PEAK_AMPLITUDE * age / RISE_SECONDS
+    } else {
+        PEAK_AMPLITUDE - PEAK_AMPLITUDE * (age - RISE_SECONDS) / (LIFETIME_SECONDS - RISE_SECONDS)
+    }
+}
+
+/// Half the bump's width at `age` seconds after launch.
+#[must_use]
+pub fn half_width(age: f32) -> f32 {
+    age * HALF_WIDTH_GROWTH / LIFETIME_SECONDS + HALF_WIDTH_AT_LAUNCH
+}
+
+/// How fast the craft's wave height `h` chases the raw height, per second.
+///
+/// The `8.0` in `h += (raw - h) * 8 * dt`. Confidence 88
+/// (`cannon-quake-leachbeam.md`, "2026-10-26").
+pub const LIFT_RATE: f32 = 8.0;
+
+/// The wave height above which a craft is hit (on the rising edge of the
+/// smoothed height) and a laid mine trips (on the raw height).
+///
+/// Confidence 88, same page.
+pub const LIFT_HIT_THRESHOLD: f32 = 0.1;
+
+/// One tick of a craft's smoothed wave height towards `raw`.
+///
+/// Written out as the original does, `h + (raw - h) * 8 * dt`, so the float
+/// operations are in a fixed order (`oag-weapons` is bound by the determinism
+/// rules: no `mul_add`, no reassociation).
+#[must_use]
+pub fn smooth_lift(h: f32, raw: f32, dt: f32) -> f32 {
+    h + (raw - h) * LIFT_RATE * dt
+}
+
 /// The single travelling wave a fired Quake ever has, matching `Weapon_FireQuake`'s
 /// single-slot pool (same page), so `oag_gameplay::World` carries `Option<Wave>`.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -69,12 +146,11 @@ pub struct Wave {
     /// Energy the wave costs a craft it passes, once. Copied from
     /// [`QuakeStats::damage`] at launch; only one wave exists at a time.
     pub damage: f32,
-    /// The wave's proximity gate, see [`QuakeStats::radius`].
-    pub radius: f32,
     /// Seconds of slowdown the wave charges a craft it passes over, once.
     pub slowdown_time: f32,
-    /// Per-slot latch: whether this craft is inside [`Self::radius`], so a hit is
-    /// credited on the rising edge only. Mirrors `entity+0x860 & 0x40`.
+    /// Per-slot latch: whether this craft's smoothed wave height is above
+    /// [`LIFT_HIT_THRESHOLD`], so a hit is credited on the rising edge only.
+    /// Mirrors `entity+0x860 & 0x40`.
     pub hit: [bool; MAX_SHIPS],
     /// Seconds since launch, against [`LIFETIME_SECONDS`].
     ///
@@ -98,7 +174,6 @@ impl Wave {
             progress,
             direction: if forward_dot_tangent < 0.0 { -1.0 } else { 1.0 },
             damage: stats.damage,
-            radius: stats.radius,
             slowdown_time: stats.slowdown_time,
             hit: [false; MAX_SHIPS],
             age: 0.0,
@@ -127,33 +202,73 @@ impl Wave {
         self.age > LIFETIME_SECONDS
     }
 
-    /// The shortest distance around a ring of this `length` between the wave and
-    /// `other`: a ring wraps, so the straight difference overstates it across the
-    /// start line.
+    /// The raw wave height at a point `progress` along a course of this
+    /// `length`: [`amplitude`] while the point is within half of [`half_width`]
+    /// of the bump's centre, otherwise `0.0`.
+    ///
+    /// The bump sits [`LAUNCH_LEAD`] ahead of [`Self::progress`], and both
+    /// helpers are evaluated at the wave's age plus one `dt`, the lag
+    /// `Quake_UpdateSpan` stores them at (and the renderer draws the road with,
+    /// `oag_render::ripple::Wave::at`). Read after [`Self::advance`]. The distance
+    /// is the shortest way round the ring, which wraps across the start line.
     #[must_use]
-    pub fn progress_delta(&self, other: f32, length: f32) -> f32 {
-        let raw = (other - self.progress).abs();
-        if length > 0.0 {
-            raw.min(length - raw)
+    pub fn raw_lift(&self, progress: f32, length: f32, dt: f32) -> f32 {
+        let lagged = self.age + dt;
+        let centre = self.progress + self.direction * LAUNCH_LEAD;
+        let raw = (progress - centre).abs();
+        let distance = if length > 0.0 {
+            let wrapped = raw.rem_euclid(length);
+            wrapped.min(length - wrapped)
         } else {
             raw
+        };
+        if distance < half_width(lagged) * 0.5 {
+            amplitude(lagged)
+        } else {
+            0.0
         }
     }
 
-    /// One tick of the wave's hit test against every active ship.
+    /// One tick of every craft's smoothed wave height, `wave` being the wave in
+    /// flight if there is one.
+    ///
+    /// Runs for every craft every tick, **wave or none**: with no wave the raw
+    /// height is `0.0` and `h` decays at [`LIFT_RATE`], which is how it keeps
+    /// falling after an expired wave is dropped. A slot that is inactive or not
+    /// yet located is raw `0.0` too.
+    pub fn update_lift<S: Craft>(
+        wave: Option<&Self>,
+        ships: &mut [S; MAX_SHIPS],
+        ship_count: u8,
+        length: f32,
+        dt: f32,
+    ) {
+        for ship in ships.iter_mut().take(ship_count as usize) {
+            let raw = match (wave, ship.progress()) {
+                (Some(wave), Some(progress)) if ship.active() => {
+                    wave.raw_lift(progress, length, dt)
+                }
+                _ => 0.0,
+            };
+            let lift = ship.quake_lift_mut();
+            *lift = smooth_lift(*lift, raw, dt);
+        }
+    }
+
+    /// One tick of the wave's hit test against every active ship, after
+    /// [`Self::update_lift`].
     ///
     /// The owner is excluded outright, as the original's `craft_is_shooter`
-    /// short-circuit (what `FUN_088418e0`'s block branches on). A ship with no
-    /// [`oag_race::Standing::progress`] yet is skipped. Shielded craft take no hit
-    /// and their latch clears, as the original's shield branch (`entity+0x1b8 &
-    /// 0x10`) clears the bit. `hits[slot]` records absorbed or landed, see
-    /// [`super::WeaponHit`], as for [`super::blast::blast`] and
-    /// [`super::cannon::direct_hit`].
+    /// short-circuit (what `FUN_088418e0`'s block branches on), and so is a craft
+    /// whose smoothed height has not passed [`LIFT_HIT_THRESHOLD`]: both clear the
+    /// latch. Shielded craft take no hit and their latch clears, as the original's
+    /// shield branch (`entity+0x1b8 & 0x10`) clears the bit. `hits[slot]` records
+    /// absorbed or landed, see [`super::WeaponHit`], as for [`super::blast::blast`]
+    /// and [`super::cannon::direct_hit`].
     pub fn apply_hits<S: Craft>(
         &mut self,
         ships: &mut [S; MAX_SHIPS],
         ship_count: u8,
-        length: f32,
         rules: oag_physics::DamageRules,
         hits: &mut [super::WeaponHit],
     ) {
@@ -165,12 +280,9 @@ impl Wave {
             if !ship.active() {
                 continue;
             }
-            let Some(progress) = ship.progress() else {
-                continue;
-            };
             let shielded = ship.physics().shield_pickup_timer > 0.0;
-            let within = self.progress_delta(progress, length) <= self.radius;
-            if within && !shielded {
+            let lifted = ship.quake_lift() > LIFT_HIT_THRESHOLD;
+            if lifted && !shielded {
                 if !self.hit[slot] {
                     *ship.pending_slowdown_mut() += self.slowdown_time;
                     let dimensions = ship.dimensions();

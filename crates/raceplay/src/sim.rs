@@ -374,6 +374,8 @@ pub struct RaceSim {
     pub(super) weapon_pad_glow: &'static oag_title::weapon_pad::WeaponPadGlow,
     /// When a locked LeachBeam moves energy - see [`Setup::leach_drain`].
     pub(super) leach_drain: oag_title::weapons::LeachDrain,
+    /// How a Quake's wave reaches a craft - see [`Setup::quake_hit`].
+    pub(super) quake_hit: oag_title::weapons::QuakeHit,
     /// The per-class grounded-gravity scale - see [`Setup::class_gravity_scale`].
     pub(super) class_gravity_scale: f32,
     /// Which gravity term that scale multiplies, the title's craft law.

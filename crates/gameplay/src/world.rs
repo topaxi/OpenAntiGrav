@@ -202,6 +202,14 @@ pub struct Ship {
     /// fifth of its thrust is a different craft one tick later. See
     /// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
     pub pending_thrust_scale: f32,
+    /// The smoothed height of a Quake's wave at this craft, `entity+0x870`.
+    ///
+    /// `h += (raw - h) * 8 * dt` every tick for every craft, wave in flight or
+    /// not (`oag_weapons::projectile::quake::smooth_lift`). It gates the Quake's
+    /// hit and lifts the cockpit eye. **Here and not on the wave** because it
+    /// keeps decaying after `Race::advance_quake` drops an expired wave.
+    /// Hashed: it decides whether a hit lands.
+    pub quake_lift: f32,
     /// The Disruptor effect this craft is under, if any.
     ///
     /// Pure's `craft+0x134`/`+0x138`/`+0x13c` - a flag, a kind and the seconds
@@ -228,6 +236,7 @@ impl Default for Ship {
             autopilot_timer: 0.0,
             pending_slowdown: 0.0,
             pending_thrust_scale: 1.0,
+            quake_lift: 0.0,
             disruption: oag_weapons::disruption::Disruption::default(),
             active: false,
         }

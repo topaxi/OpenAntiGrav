@@ -51,6 +51,7 @@ mod multiplayer_time_trial;
 mod pads;
 mod people_grid;
 mod perfect_start;
+mod quake_lift;
 mod reconcile;
 mod reconcile_cost;
 mod reconcile_predict;
@@ -338,6 +339,9 @@ fn setup(handling: Handling) -> Setup {
         zoom_borrowed: false,
         weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
         leach_drain: oag_title::weapons::LeachDrain::PerTick,
+        quake_hit: oag_title::weapons::QuakeHit::WaveHeight {
+            origin: oag_title::Origin::Chosen,
+        },
         // A synthetic track authors no pads, which is also what every Pure
         // track does: an empty set is an ordinary state, not a stub.
         speedup_pads: Vec::new(),

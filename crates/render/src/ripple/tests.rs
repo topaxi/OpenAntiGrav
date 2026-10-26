@@ -1,23 +1,6 @@
 use super::*;
 
 #[test]
-fn the_envelope_rises_for_three_tenths_of_a_second_and_is_gone_at_five() {
-    assert_eq!(amplitude(0.0), 0.0);
-    assert!((amplitude(0.15) - 6.0).abs() < 1e-5);
-    assert!((amplitude(RISE_SECONDS) - PEAK_AMPLITUDE).abs() < 1e-5);
-    assert!((amplitude(2.65) - 6.0).abs() < 1e-4);
-    assert_eq!(amplitude(LIFETIME_SECONDS), 0.0);
-    assert_eq!(amplitude(6.0), 0.0);
-    assert_eq!(amplitude(-0.1), 0.0);
-}
-
-#[test]
-fn the_bump_widens_from_25_to_75_units() {
-    assert_eq!(half_width(0.0), 25.0);
-    assert_eq!(half_width(LIFETIME_SECONDS), 75.0);
-}
-
-#[test]
 fn the_profile_is_a_raised_cosine() {
     assert_eq!(height(0.0, 12.0, 40.0), 12.0);
     assert!((height(20.0, 12.0, 40.0) - 6.0).abs() < 1e-5);

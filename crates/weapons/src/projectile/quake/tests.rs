@@ -32,7 +32,6 @@ fn a_wave_launches_at_the_firing_crafts_own_progress() {
     assert_eq!(wave.progress, 42.0);
     assert_eq!(wave.owner, 0);
     assert_eq!(wave.damage, 5.0);
-    assert_eq!(wave.radius, 10.0);
     assert_eq!(wave.slowdown_time, 2.0);
     assert!(wave.hit.iter().all(|&h| !h));
 }
@@ -120,80 +119,190 @@ fn a_live_wave_outlives_a_full_lap_of_a_short_ring_but_not_the_bound() {
     assert!(wave.age > LIFETIME_SECONDS);
 }
 
-#[test]
-fn progress_delta_takes_the_short_way_round_the_ring() {
-    let wave = Wave::launch(0, 5.0, 1.0, &stats());
-    // Straight-line distance, no wrap needed.
-    assert_eq!(wave.progress_delta(15.0, 1000.0), 10.0);
-    // The other way round the ring is shorter for a craft just past the
-    // start line from a wave that is just before it.
-    let near_start = Wave::launch(0, 2.0, 1.0, &stats());
-    assert_eq!(near_start.progress_delta(998.0, 1000.0), 4.0);
+const DT: f32 = 1.0 / 60.0;
+const RING: f32 = 1000.0;
+
+fn hits() -> [crate::projectile::WeaponHit; crate::MAX_SHIPS] {
+    [crate::projectile::WeaponHit::default(); crate::MAX_SHIPS]
+}
+
+/// A wave of this `age` whose bump centre sits at course distance 115 (it was
+/// launched at 100, moving forward, and `age` is already advanced).
+fn wave_aged(age: f32) -> Wave {
+    let mut wave = Wave::launch(0, 100.0, 1.0, &stats());
+    wave.age = age;
+    wave
 }
 
 #[test]
-fn a_craft_inside_radius_takes_the_hit_exactly_once() {
-    let mut wave = Wave::launch(0, 0.0, 1.0, &stats());
+fn the_lift_decays_by_one_minus_eight_dt_with_no_wave() {
     let mut ships = [Ship::default(); crate::MAX_SHIPS];
     ships[1] = ship_at(5.0);
+    ships[1].quake_lift = 1.0;
+    Wave::update_lift(None, &mut ships, 2, RING, DT);
+    assert!((ships[1].quake_lift - (1.0 - 8.0 * DT)).abs() < 1e-6);
+    assert!((ships[1].quake_lift - 0.866_666_7).abs() < 1e-6);
+    assert_eq!(smooth_lift(1.0, 0.0, DT), ships[1].quake_lift);
+}
+
+#[test]
+fn the_lift_chases_the_raw_height_at_eight_per_second() {
+    assert_eq!(smooth_lift(0.0, 12.0, DT), 12.0 * 8.0 * DT);
+    assert_eq!(smooth_lift(3.0, 3.0, DT), 3.0);
+}
+
+#[test]
+fn a_craft_at_the_bump_centre_gets_the_amplitude_of_the_lagged_age() {
+    let wave = wave_aged(1.0);
+    assert_eq!(wave.raw_lift(115.0, RING, DT), amplitude(1.0 + DT));
+}
+
+#[test]
+fn the_bump_reaches_half_of_its_half_width_and_no_further() {
+    let wave = wave_aged(1.0);
+    let reach = half_width(1.0 + DT) * 0.5;
+    assert_eq!(
+        wave.raw_lift(115.0 + 0.49 * half_width(1.0 + DT), RING, DT),
+        amplitude(1.0 + DT)
+    );
+    // The flat `radius` test of old would have hit here: the law is half of it.
+    assert_eq!(
+        wave.raw_lift(115.0 + 0.51 * half_width(1.0 + DT), RING, DT),
+        0.0
+    );
+    assert_eq!(wave.raw_lift(115.0 - reach - 0.01, RING, DT), 0.0);
+}
+
+#[test]
+fn the_bump_is_ahead_of_the_wave_in_its_direction_and_wraps_the_ring() {
+    let mut backward = Wave::launch(0, 100.0, -1.0, &stats());
+    backward.age = 1.0;
+    assert_eq!(backward.raw_lift(85.0, RING, DT), amplitude(1.0 + DT));
+    // A bump centred just before the start line reaches a craft just past it.
+    let mut wrapping = Wave::launch(0, RING - 20.0, 1.0, &stats());
+    wrapping.age = 1.0;
+    assert_eq!(wrapping.raw_lift(5.0, RING, DT), amplitude(1.0 + DT));
+}
+
+#[test]
+fn a_wave_in_flight_lifts_a_craft_under_it_and_no_other() {
+    let mut ships = [Ship::default(); crate::MAX_SHIPS];
+    ships[1] = ship_at(115.0);
+    ships[2] = ship_at(500.0);
+    let wave = wave_aged(1.0);
+    Wave::update_lift(Some(&wave), &mut ships, 3, RING, DT);
+    assert_eq!(
+        ships[1].quake_lift,
+        smooth_lift(0.0, amplitude(1.0 + DT), DT)
+    );
+    assert_eq!(ships[2].quake_lift, 0.0);
+}
+
+#[test]
+fn the_hit_lands_once_on_the_first_tick_the_lift_passes_a_tenth() {
+    // At the peak the first tick already gives 12 * 8 / 60 = 1.6: a first-frame hit.
+    let mut wave = wave_aged(0.3);
+    let mut ships = [Ship::default(); crate::MAX_SHIPS];
+    ships[1] = ship_at(115.0);
+    ships[1].handling.dimensions.shield = 100.0;
     ships[1].physics.shield = 50.0;
-    ships[1].handling.dimensions.shield = 100.0;
-    let mut absorbed = [crate::projectile::WeaponHit::default(); crate::MAX_SHIPS];
-
-    wave.apply_hits(&mut ships, 2, 1000.0, DamageRules::default(), &mut absorbed);
+    let mut absorbed = hits();
+    Wave::update_lift(Some(&wave), &mut ships, 2, RING, DT);
+    assert!(ships[1].quake_lift > LIFT_HIT_THRESHOLD);
+    wave.apply_hits(&mut ships, 2, DamageRules::default(), &mut absorbed);
     assert!(wave.hit[1]);
     assert_eq!(ships[1].pending_slowdown, 2.0);
     assert_eq!(ships[1].physics.shield, 45.0);
 
-    // A second tick still inside radius: the latch holds, and no second
-    // hit is credited.
-    wave.apply_hits(&mut ships, 2, 1000.0, DamageRules::default(), &mut absorbed);
+    // Still above the gate: the latch holds and no second hit is credited.
+    Wave::update_lift(Some(&wave), &mut ships, 2, RING, DT);
+    wave.apply_hits(&mut ships, 2, DamageRules::default(), &mut absorbed);
     assert_eq!(ships[1].pending_slowdown, 2.0);
     assert_eq!(ships[1].physics.shield, 45.0);
 }
 
 #[test]
-fn a_craft_leaving_radius_clears_the_latch_so_a_second_pass_hits_again() {
-    let mut wave = Wave::launch(0, 0.0, 1.0, &stats());
+fn late_in_the_waves_life_the_hit_lands_a_tick_late() {
+    // Amplitude 0.5: one tick gives 0.067, below the gate; the second 0.124.
+    let mut wave = wave_aged(4.804);
     let mut ships = [Ship::default(); crate::MAX_SHIPS];
-    ships[1] = ship_at(5.0);
+    ships[1] = ship_at(115.0);
     ships[1].handling.dimensions.shield = 100.0;
-    let mut absorbed = [crate::projectile::WeaponHit::default(); crate::MAX_SHIPS];
-    wave.apply_hits(&mut ships, 2, 1000.0, DamageRules::default(), &mut absorbed);
-    assert!(wave.hit[1]);
+    let mut absorbed = hits();
+    let mut landed = Vec::new();
+    for tick in 0..3 {
+        Wave::update_lift(Some(&wave), &mut ships, 2, RING, DT);
+        let before = ships[1].pending_slowdown;
+        wave.apply_hits(&mut ships, 2, DamageRules::default(), &mut absorbed);
+        if ships[1].pending_slowdown > before {
+            landed.push(tick);
+        }
+    }
+    assert_eq!(landed, vec![1]);
+}
 
-    // The craft (or the wave) moves out of radius: the latch clears.
-    ships[1].standing.progress = Some(500.0);
-    wave.apply_hits(&mut ships, 2, 1000.0, DamageRules::default(), &mut absorbed);
+#[test]
+fn under_a_tenth_of_amplitude_the_wave_never_hits() {
+    let mut wave = wave_aged(4.99);
+    assert!(amplitude(4.99 + DT) < LIFT_HIT_THRESHOLD);
+    let mut ships = [Ship::default(); crate::MAX_SHIPS];
+    ships[1] = ship_at(115.0);
+    let mut absorbed = hits();
+    for _ in 0..30 {
+        Wave::update_lift(Some(&wave), &mut ships, 2, RING, DT);
+        wave.apply_hits(&mut ships, 2, DamageRules::default(), &mut absorbed);
+    }
+    assert!(!wave.hit[1]);
+    assert_eq!(ships[1].pending_slowdown, 0.0);
+}
+
+#[test]
+fn a_lift_of_exactly_a_tenth_is_not_a_hit_and_clears_the_latch() {
+    let mut wave = wave_aged(1.0);
+    let mut ships = [Ship::default(); crate::MAX_SHIPS];
+    ships[1] = ship_at(500.0);
+    ships[1].handling.dimensions.shield = 100.0;
+    let mut absorbed = hits();
+    ships[1].quake_lift = 0.11;
+    wave.apply_hits(&mut ships, 2, DamageRules::default(), &mut absorbed);
+    assert!(wave.hit[1]);
+    assert_eq!(ships[1].pending_slowdown, 2.0);
+
+    ships[1].quake_lift = LIFT_HIT_THRESHOLD;
+    wave.apply_hits(&mut ships, 2, DamageRules::default(), &mut absorbed);
     assert!(!wave.hit[1]);
     assert_eq!(ships[1].pending_slowdown, 2.0);
 
-    // Back inside: a second, independent hit.
-    ships[1].standing.progress = Some(5.0);
-    wave.apply_hits(&mut ships, 2, 1000.0, DamageRules::default(), &mut absorbed);
+    // The next rise is a second, independent hit.
+    ships[1].quake_lift = 0.11;
+    wave.apply_hits(&mut ships, 2, DamageRules::default(), &mut absorbed);
     assert!(wave.hit[1]);
     assert_eq!(ships[1].pending_slowdown, 4.0);
 }
 
 #[test]
-fn the_firing_craft_is_excluded_outright() {
-    let mut wave = Wave::launch(0, 0.0, 1.0, &stats());
+fn the_firing_crafts_lift_integrates_but_its_latch_never_sets() {
+    let mut wave = wave_aged(1.0);
+    wave.owner = 1;
     let mut ships = [Ship::default(); crate::MAX_SHIPS];
-    ships[0] = ship_at(0.0);
-    let mut absorbed = [crate::projectile::WeaponHit::default(); crate::MAX_SHIPS];
-    wave.apply_hits(&mut ships, 1, 1000.0, DamageRules::default(), &mut absorbed);
-    assert!(!wave.hit[0]);
-    assert_eq!(ships[0].pending_slowdown, 0.0);
+    ships[1] = ship_at(115.0);
+    let mut absorbed = hits();
+    Wave::update_lift(Some(&wave), &mut ships, 2, RING, DT);
+    assert!(ships[1].quake_lift > LIFT_HIT_THRESHOLD);
+    wave.apply_hits(&mut ships, 2, DamageRules::default(), &mut absorbed);
+    assert!(!wave.hit[1]);
+    assert_eq!(ships[1].pending_slowdown, 0.0);
 }
 
 #[test]
 fn a_shielded_craft_takes_no_hit_and_absorbed_is_not_set() {
-    let mut wave = Wave::launch(0, 0.0, 1.0, &stats());
+    let mut wave = wave_aged(1.0);
     let mut ships = [Ship::default(); crate::MAX_SHIPS];
-    ships[1] = ship_at(5.0);
+    ships[1] = ship_at(115.0);
     ships[1].physics.shield_pickup_timer = 1.0;
-    let mut absorbed = [crate::projectile::WeaponHit::default(); crate::MAX_SHIPS];
-    wave.apply_hits(&mut ships, 2, 1000.0, DamageRules::default(), &mut absorbed);
+    let mut absorbed = hits();
+    Wave::update_lift(Some(&wave), &mut ships, 2, RING, DT);
+    wave.apply_hits(&mut ships, 2, DamageRules::default(), &mut absorbed);
     assert!(!wave.hit[1]);
     assert_eq!(ships[1].pending_slowdown, 0.0);
     assert!(!absorbed[1].absorbed);
@@ -201,7 +310,7 @@ fn a_shielded_craft_takes_no_hit_and_absorbed_is_not_set() {
 
 #[test]
 fn an_inactive_or_unlocated_ship_is_skipped() {
-    let mut wave = Wave::launch(0, 0.0, 1.0, &stats());
+    let mut wave = wave_aged(1.0);
     let mut ships = [Ship::default(); crate::MAX_SHIPS];
     // Slot 1: active but never located.
     ships[1] = Ship {
@@ -209,10 +318,30 @@ fn an_inactive_or_unlocated_ship_is_skipped() {
         ..Ship::default()
     };
     // Slot 2: located but inactive.
-    ships[2] = ship_at(5.0);
+    ships[2] = ship_at(115.0);
     ships[2].active = false;
-    let mut absorbed = [crate::projectile::WeaponHit::default(); crate::MAX_SHIPS];
-    wave.apply_hits(&mut ships, 3, 1000.0, DamageRules::default(), &mut absorbed);
+    let mut absorbed = hits();
+    Wave::update_lift(Some(&wave), &mut ships, 3, RING, DT);
+    wave.apply_hits(&mut ships, 3, DamageRules::default(), &mut absorbed);
+    assert_eq!(ships[1].quake_lift, 0.0);
+    assert_eq!(ships[2].quake_lift, 0.0);
     assert!(!wave.hit[1]);
     assert!(!wave.hit[2]);
+}
+
+#[test]
+fn the_envelope_rises_for_three_tenths_of_a_second_and_is_gone_at_five() {
+    assert_eq!(amplitude(0.0), 0.0);
+    assert!((amplitude(0.15) - 6.0).abs() < 1e-5);
+    assert!((amplitude(RISE_SECONDS) - PEAK_AMPLITUDE).abs() < 1e-5);
+    assert!((amplitude(2.65) - 6.0).abs() < 1e-4);
+    assert_eq!(amplitude(LIFETIME_SECONDS), 0.0);
+    assert_eq!(amplitude(6.0), 0.0);
+    assert_eq!(amplitude(-0.1), 0.0);
+}
+
+#[test]
+fn the_bump_widens_from_25_to_75_units() {
+    assert_eq!(half_width(0.0), 25.0);
+    assert_eq!(half_width(LIFETIME_SECONDS), 75.0);
 }

@@ -22,7 +22,7 @@ fn surface_wave(left: Vec3, right: Vec3, up: Vec3, age: f32) -> oag_mesh::mesh_r
     let across = right - left;
     let point = |p: Vec3, w: f32| [p.x, p.y, p.z, w];
     oag_mesh::mesh_render::QuakeWave {
-        point_b: point(right, oag_render::ripple::amplitude(age)),
+        point_b: point(right, oag_weapons::projectile::quake::amplitude(age)),
         point_a: point(left, SURFACE_RADIUS),
         offset: point(across, across.length()),
         up: point(up, 0.0),
