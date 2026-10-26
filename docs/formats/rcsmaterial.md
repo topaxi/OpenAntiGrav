@@ -1650,9 +1650,10 @@ as `mesh::AnimTrack::Scroll`, the track 2048's plain scroll already is, through
   may not reach. Not measured.
 - `cf_uvanim_emssive_glowtint*`, `cf_uvanim_emssivealpha`, `jd_uvanim_*`,
   `mr_uvanim_em_*`, `mr_waterfall`, `cf_waterfall`: two material textures.
-- `nr_twinblend`, `reflectplane_dc_seawater`, `cf_chenghou_sign`,
-  `sign_emissive_glow2uv`: the rate is a **literal in the shader**, not a
-  record parameter. Readable, not read here.
+- `reflectplane_dc_seawater`, `cf_chenghou_sign`, `sign_emissive_glow2uv`: the
+  rate is a **literal in the shader**, not a record parameter. Readable, not
+  read here. (`nr_twinblend`'s literal is read and wired, 2026-10-26: "`nr_twinblend`:
+  two pictures, a scrolling wipe and bars" below.)
 - `loopmaterial`, `cf_startbeam_glow`, `cf_constantcolourglow_ramp_*`,
   `jd_landinglights`, `cf_laserrail_cap`, `dc_flashingglow`: `time` is declared
   by the vertex block but never added to a coordinate by a multiply-add this
@@ -3485,3 +3486,89 @@ block is unread.
 **Other titles.** Omega ships `Sebenco_snow_new` and `Sebenco_snow_just_snow` under `10_sebenco_climb` (`data02`, `data05`, `data08`; name census); its programs are GCN and unread: **checked,
 applies, not wired**. 2048: no Sebenco circuit, **not checkable**. Re-checked 2026-10-22 (`hd-texture-slots`): the six bindings now exist on every title's mesh pipeline, so wiring Omega's
 `Sebenco_snow_new` is a matter of reading its GCN program's units and constants; still **checked, applies, not wired**.
+
+## `nr_twinblend`: two pictures, a scrolling wipe and bars (2026-10-26, `hd-tech-de-ra`)
+
+**Found by the glow-mask split of the HD pairs.** The `glow` needle's biggest bias on any HD
+pair (+30 luma inside block 1's box on `hd/tech-de-ra`, outside 40 px of the `321go` cards) is
+**not** the `banner_*_glow` banners: a per-slot ablation puts 96% of the bias (+73 over 10,359
+px) on slot **133**, `tech_de_ra/materials/nr_twinblend.rcsmaterial`, the banner behind the
+gantry board. The needle catches it through its bars texture, `glowbars_noisy.gtf`. The
+`cf_alpha4glow` banners (slots 131, 132) and `dn_diffuse_specular_emiss_glow` (243) carry +4.
+
+**The material** binds four textures (`Material::samplers`): `BlendTexture` (`0x25c5c4d3`)
+`animscaledballs.gtf` (a `512x16` strip of growing discs), unit-3 sampler `0xd284858e` (no
+preimage) `glowbars_noisy.gtf` (`64x32` grey bars), `diffuseTexture1` (`0x8e6240ce`)
+`ag_square01cl_glow.gtf` and `diffuseTexture2` (`0x176b1174`) `ag_square02cl_glow.gtf` (the red
+and the orange AG square). The generic reading drew the wipe as the picture and added the bars
+(`emissive|add_second`): a near-white banner where the original's is red.
+
+**The program (confidence 90, read with `scripts/ps3-microcode.py`, not measured live).** The
+race resolves fragment block #3 `@0x1430` and vertex block #3 `@0x1240` (feature hash
+`0xfb61d927`):
+
+```text
+MOV R0.w, c[207].yyyy                   c[207] = (0, 1.875, 0, 0), the block's literal
+MAD o[TC4].x, R0.wwww, c[208].xxxx, v[8].zzzz      c[208] = time (parameter c464)
+MOV o[TC4].y, v[8].wwww ; MOV o[TC4].zw, v[2].xxxy ; MOV o[TC5].xy, v[8].xyxx
+
+TEX H0.x, f[TC4] unit2                  wipe at (v8.z + 1.875 t, v8.w)
+ADD H0.w, -H0.xxxx, {1} ; LG2 x4 H0.w ; EX2 H0.w          w = (1 - wipe)^4
+TEX H0.xyz, f[TC4].zwzz unit1 ; TEX H1.xyz, f[TC4].zwzz unit0
+ADD H2.xyz, H0, -H1 ; MAD H1.xyz, H0.wwww, H2, H1         c = lerp(first, second, w)
+TEX H2.xyz, f[TC5] unit3 [NE(xyzx)]     the bars at v8.xy
+MAD R1.xyz, H2, H1, -fog ; ... ; MAD H1.xyz, f, R1, fog   fog(bars * c)
+MOV H0.xyz, f[TC1] ; MOV H0.w, {0} ; ADD /2 H0.xyz, H0, H1
+```
+
+`f[TC1].xyz` is the vertex block's `c[207].x = 0`, so the close is `fog(bars * c) / 2`, the `/2`
+the emissive path's output scale already applies. The bar tap's predicate tests the condition
+the lerp's `MAD` wrote; where it fails the product is zero either way. The alpha lane is the
+literal 0, so the surface stamps no glow mask ([hd-glow-mask.md](../rendering/hd-glow-mask.md),
+unchanged). The unfogged block #2 is the same combine without fog or `/2`; the lit blocks (#5
+on) declare the light and are not drawn by any race variant measured.
+
+**The `DATA02` copy** (`15_anulpha_pass`, `04_chenghou_project`, `02_track`,
+`10_sebenco_climb`, block #3 `@0x13e0`, vertex `@0x1230`) is the same law with its registers
+renumbered: the wipe's `u` scroll lands in `o[TC0].w` and its `v` in `o[TC1].w`, the pictures at
+`TC3.xy`, the bars at `TC3.zw`, the `/2` on the fog's `MAD /2` before `MOV H0.w, {0}`, the
+literal `c[207] = (1.875, 0, 0, 0)`.
+
+**Wired** (`oag_mesh::mesh::rcs::twin_blend`): `Emissive::program` mode `PROGRAM_TWIN_BLEND`
+(6), the rate in the entry's tint `x`, read by `oag_rcs::rcsmaterial::vertex::Program::clock_rate`
+(the vertex block's literal table, now read, and the `MAD` of `time` into an interpolator):
+never typed. The first picture binds as the albedo, the second where the generic reading put the
+second texture, the wipe third (at `lightmap_texcoord`, chunk attribute `0x81bdf44d`, `v[8].zw`),
+the bars fourth (at `texcoord2`, `0x7d164d3e`, `v[8].xy`), the pictures at `0xa2762127`
+(`v[2]`). Both world-pass builders route the three pairs. The colour taps are decoded and the
+wipe is read raw: **chosen, not measured** (the units' gamma nibbles were not read off a live
+draw), as the ice pool and the snow-capped rock read theirs. Census (the 12 forward circuit
+models built; the four Zone circuits ship no `nr_twinblend`): seven slots on five circuits,
+every one bound, none refused (`Report::twin_blend_*`): Tech de Ra 133, Anulpha Pass 521,
+Chenghou 485 and 489, `02_track` 272, Sebenco 129 and 327. Not built, but byte-compared: Tech de
+Ra's `materials_reversed` copy is byte-identical to its forward one, and the four `DATA03`
+`materials_dlc` copies to the `DATA02` one. Only Tech de Ra's slot is in view on a compare pair;
+the other six follow the program's text, with no reference frame.
+
+**Measured** on `hd/tech-de-ra` (the pair's own flags, sigma-7 blur, the glow mask of the
+render before the change, outside 40 px of the `321go` mask, inside x 720-1560, y 120-600;
+26,173 px): mean luma bias **+30.35 to +1.13**, error 0.809 M to 0.087 M, whole-frame mean
+abs RGB 8.27 to 7.30. Over six offsets of the 0.53 s wipe period (`--world-clock-offset` 0 to
+0.5) the bias is +0.20 to +2.69 and the error 0.079 to 0.124 M; the original's own two captures
+differ by 0.097 M there. The bars come through at the original's stripe density (5.3 repeats
+of the 32-texel strip over the banner). The other 12 HD pairs render byte-identical.
+Tests: `crates/render/tests/hd_twin_blend_lit_path.rs` (the shader's combine on a fixture),
+`hd_twin_blend_ground_truth.rs` (Tech de Ra's slot and Chenghou's two),
+`oag-rcs vertex::tests::the_twinblend_mask_scroll_reads_its_literal_rate`.
+
+**2048 and Omega: checked, applies, not wired.** 2048 ships `nr_twinblend.rcsmaterial` in
+DLC1's Anulpha Pass and Chenghou Project (`data.psarc`, `data/art/published/DLC1/...`) beside the
+same four textures (`ag_square01cl_glow`, `ag_square02cl_glow`, `animscaledballs`,
+`glowbars_noisy`, as `.gxt`); Omega ships `NR_twinBlend*.rcsmaterial` on Tech de Ra, Vineta K,
+Anulpha Pass, Chenghou Project, Metropia and Sebenco Climb (`data01`/`data02.psarc`) and in its
+2048 object library, with the four textures as `.gnf` under `tech_de_ra/TexturesPS4/` and a
+`BlendTexture` sampler and `barsUV_blendUV` attribute named in the material. Their
+programs are GXP and GCN, which this reader does not decode, and 2048's records author `time`
+as `19992.0` ([2048-material-params.md](2048-material-params.md)), so nothing here binds on
+either title.
+

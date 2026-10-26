@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [hd]
-updated: 2026-10-12
-summary: "No frame of an HD scrolled surface in motion; wire named still families; vertex multiply-add reader"
+updated: 2026-10-26
+summary: "No frame of an HD scrolled surface in motion; wire named still families; clock_rate reads literal rates (nr_twinblend wired)"
 ---
 
 # HD animates a texture in two ways now; the rest of its shader families still draw still
@@ -17,6 +17,10 @@ coordinate". `crates/render/examples/hd_anim_family_census.rs` lists every famil
 
 ## Open
 
+- **`nr_twinblend` on 2048 and Omega: checked, applies, not wired** (2026-10-26, `hd-tech-de-ra`). Both
+  ship the material and its four textures (rcsmaterial.md, "`nr_twinblend`: two pictures, a scrolling
+  wipe and bars"); the programs are GXP and GCN, unread, so `mesh::rcs::twin_blend` binds HD only.
+
 - **No frame of a scrolled surface in motion exists.** The whole-circuit camera
   paints 25 and 13 pixels for Tech de Ra and Anulpha Pass, 0 for Amphiseum; a
   matched race camera at an Amphiseum hologram was not framed (`--camera-pose`
@@ -25,8 +29,9 @@ coordinate". `crates/render/examples/hd_anim_family_census.rs` lists every famil
 - **Not wired, by named reason**: second-UV-set scrolls (`animlights`,
   `animhexlights`, `v[8]`); two-texture materials (`cf_uvanim_emssive_glowtint*`,
   `mr_uvanim_em_*`, `cf_waterfall`, `dc_hologramwithstatic2`); shader-literal
-  rates (`nr_twinblend`, `reflectplane_dc_seawater`, `cf_chenghou_sign`,
-  `sign_emissive_glow2uv`) - readable from the microcode, not read; fragment-only
+  rates (`reflectplane_dc_seawater`, `cf_chenghou_sign`,
+  `sign_emissive_glow2uv`) - readable from the microcode, not read (`nr_twinblend`'s is read and wired,
+  2026-10-26, through `vertex::Program::clock_rate`, which the others can reuse); fragment-only
   `time` (`nr_crowd_bustle` 33, `nr_billboardholographicscanlines` 35 - all three shapes of `nr_`/`wes_` are read and wired, 2026-10-12; `scanlinebillboard*` is another program (extra parameters, a tint), still unread,
   `uvdistortion_*`, `water`).
 - The admitted set is a rate-hash table read off the vertex microcode by

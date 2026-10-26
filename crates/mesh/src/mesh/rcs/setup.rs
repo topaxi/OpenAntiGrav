@@ -230,6 +230,18 @@ pub(super) fn material_setup(
     );
     super::mag_wave::merge(&mut mag_emissive, snow.mask);
     super::mag_wave::merge(&mut wave_maps, snow.snow_normal);
+    // `nr_twinblend` binds its wipe third and its bars fourth, and writes one entry.
+    let twin = super::twin_blend::twin_blend(
+        model,
+        &material_variants,
+        textures,
+        &mut material_slots,
+        (&mut skins, &mut seconds),
+        &mut emissive,
+        report,
+    );
+    super::mag_wave::merge(&mut mag_emissive, twin.wipe);
+    super::mag_wave::merge(&mut wave_maps, twin.bars);
     // A hull's normal map rides the same third binding, and its materials are
     // none of the families above.
     let (hull_maps, mut material_tangent) =

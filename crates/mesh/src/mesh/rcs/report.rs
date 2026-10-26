@@ -255,6 +255,16 @@ pub struct Report {
     /// Snow-capped rock materials left as the generic reading drew them: a picture did not
     /// decode, a value is missing, the slot names a glow entry, or the table is full.
     pub snow_rock_unread: usize,
+    /// `nr_twinblend` materials whose two pictures, wipe, bars and wipe rate were bound - see
+    /// `super::twin_blend`.
+    pub twin_blend_bound: usize,
+    /// `nr_twinblend` materials whose resolved program is not the fogged unlit combine (the
+    /// unfogged and lit variants): drawn as the generic reading draws them.
+    pub twin_blend_other_shape: usize,
+    /// `nr_twinblend` materials left as the generic reading drew them: a picture did not
+    /// decode, the rate is not the vertex block's literal, the slot names another family's
+    /// glow entry, or the table is full.
+    pub twin_blend_unread: usize,
     /// Zone-mode light cells (`dg_zonelights1`) whose blue and mask were bound - see
     /// `super::damage_lights`.
     pub damage_lights_bound: usize,
@@ -481,6 +491,21 @@ impl Report {
             0 => String::new(),
             n => format!(
                 ", {n} snow-capped rock material(s) whose pictures or values could not be read (drawn as bare rock)"
+            ),
+        } + &match self.twin_blend_bound {
+            0 => String::new(),
+            n => format!(
+                ", {n} twin-blend material(s) with both pictures, the wipe and the bars bound"
+            ),
+        } + &match self.twin_blend_other_shape {
+            0 => String::new(),
+            n => format!(
+                ", {n} twin-blend material(s) on an unread program variant (drawn as the generic reading)"
+            ),
+        } + &match self.twin_blend_unread {
+            0 => String::new(),
+            n => format!(
+                ", {n} twin-blend material(s) whose pictures or rate could not be read (drawn as the generic reading)"
             ),
         } + &match self.damage_lights_bound {
             0 => String::new(),

@@ -76,6 +76,12 @@ pub const PROGRAM_CHEVRON: f32 = 3.0;
 /// the program's constants. See `super::rcs::snow_rock`.
 pub const PROGRAM_SNOW: f32 = 4.0;
 
+/// [`Emissive::program`]'s mode for `nr_twinblend`: the first and second textures
+/// cross-faded by `(1 - wipe)^4`, the wipe (third binding, at `lightmap_texcoord`) scrolled
+/// by the entry's tint `x` times the clock, the result multiplied by the bars (fourth
+/// binding, at the second coordinate set). See `super::rcs::twin_blend`.
+pub const PROGRAM_TWIN_BLEND: f32 = 6.0;
+
 /// [`Emissive::program`]'s mode for a PSP hull's alpha-weighted extra pass: the
 /// picture (the environment map) multiplied by the **second** texture's alpha at
 /// the second coordinate set, which carry the batch's own texture and its

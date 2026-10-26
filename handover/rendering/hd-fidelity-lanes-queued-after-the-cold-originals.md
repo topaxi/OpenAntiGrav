@@ -123,7 +123,10 @@ section above or the doc page it names). At most one lane in `crates/mesh` at a 
    `--attempts 4 --delay 0.1` and take `drive.screenshot` before the dump. The bomb lands behind the chase camera:
    holding `triangle`, `r3` or `l3` on the virtual pad in a Time Trial does not turn the view (2026-10-26), so the shot
    needs another camera (a rival's bomb ahead of the player, or the player placed behind the dropped bomb).
-2. **`hd-tech-de-ra`** (opus, mesh): Tech de Ra's missing details by a slot-skip census, the glass road's mid and far
+2. **`hd-tech-de-ra`** (opus, mesh). **Done 2026-10-26 for the glow banner only**: the `glow` needle's +30 on Tech de
+   Ra was `nr_twinblend` (slot 133, the banner behind the gantry), now drawn by its program (rcsmaterial.md,
+   "`nr_twinblend`: two pictures, a scrolling wipe and bars"; mask bias +1.13). **Still open from this item:**
+   Tech de Ra's missing details by a slot-skip census, the glass road's mid and far
    brightness (the eye dump of `c[209]`), Modesto's background building texture, and Vineta's right-hand building
    (sunlit bands about 30 grey over the original; name the material with `OAG_TINT_MATERIALS=1` and `hd_slot_list`).
 3. **Additive source strength** (mesh): Talon's grill source about 1.5x the original's, and Amphiseum's hologram
