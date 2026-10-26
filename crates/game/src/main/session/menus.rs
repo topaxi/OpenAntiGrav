@@ -613,7 +613,18 @@ impl Session {
     /// preserves an in-flight value across an unrecognised token rather than
     /// defaulting it.
     pub(crate) fn race_mode(&self) -> oag_race::Mode {
-        oag_race::Mode::from_name(&self.settings.race.mode).unwrap_or_default()
+        self.pending_race().mode
+    }
+
+    /// The race the selection screens lead to: a campaign cell's own launch options, else the
+    /// RACE page's settings ([`oag_game::pending_race::PendingRace`]).
+    pub(crate) fn pending_race(&self) -> oag_game::pending_race::PendingRace {
+        oag_game::pending_race::PendingRace::resolve(
+            &self.settings.race,
+            self.campaign_cell
+                .as_ref()
+                .and(self.race_options.as_ref()),
+        )
     }
 
     /// Re-supplies the CIRCUIT row from whichever list the current
@@ -673,6 +684,9 @@ impl Session {
     /// takes the same path, except on a title whose own chain has no team step
     /// in it ([`picker::skips_team_step`]).
     pub(crate) fn start_race_box(&mut self) {
+        // The RACE page's own race: a cell left over from an abandoned campaign launch must not
+        // make the selection screens read its mode ([`Self::pending_race`]).
+        self.campaign_cell = None;
         let skipped = self
             .shell
             .as_ref()
