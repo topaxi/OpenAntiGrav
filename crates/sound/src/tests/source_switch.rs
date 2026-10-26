@@ -8,7 +8,7 @@ use super::*;
 /// worker's OS thread gets scheduled (tick count does not pace it). Panics past
 /// five real seconds; every case resolves far sooner as the fixture paths do not
 /// exist and the worker fails on the first `open`.
-fn wait_for_source_switch(audio: &mut Audio) {
+pub(super) fn wait_for_source_switch(audio: &mut Audio) {
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
     while audio.source_switch.is_some() {
         assert!(

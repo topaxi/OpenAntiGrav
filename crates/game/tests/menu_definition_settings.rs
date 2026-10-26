@@ -330,6 +330,50 @@ fn the_hud_style_row_is_offered_only_where_the_disc_lists_one() {
     }
 }
 
+/// The DYNAMIC HUD row is offered where the title's own options list one (Pulse) and
+/// dropped on every title whose options do not, and it offers the two entries that change a frame.
+#[test]
+fn the_dynamic_hud_row_is_offered_only_where_the_options_list_one() {
+    let rows = |definition: &Definition| {
+        definition
+            .pages
+            .iter()
+            .flat_map(|page| page.entries.iter())
+            .filter(|entry| entry.setting() == Some("display.dynamic_hud"))
+            .count()
+    };
+    for (title, offered) in [
+        (oag_pulse::TITLE, 1),
+        (oag_pure::TITLE, 0),
+        (oag_hd::TITLE, 0),
+        (oag_omega::TITLE, 0),
+        (oag_2048::TITLE, 0),
+    ] {
+        let mut definition = built_in();
+        assert_eq!(rows(&definition), 1, "the definition ships the row");
+        definition.drop_unavailable_dynamic_hud(title);
+        assert_eq!(rows(&definition), offered, "{}", title.name);
+        assert_eq!(
+            title.hud_art.dynamic_hud.is_some(),
+            offered == 1,
+            "{}",
+            title.name
+        );
+    }
+    let list = oag_pulse::TITLE
+        .hud_art
+        .dynamic_hud
+        .expect("Pulse's list")
+        .value;
+    for choice in oag_display::display::DynamicHud::ALL {
+        let entry = match choice {
+            oag_display::display::DynamicHud::Default => list.entries[0],
+            oag_display::display::DynamicHud::Off => list.off,
+        };
+        assert!(list.entries.contains(&entry), "{choice} names {entry}");
+    }
+}
+
 /// Android drops QUIT (a phone app is left, not quit); every other row stays.
 #[test]
 fn drop_quit_removes_only_the_quit_rows() {

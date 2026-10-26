@@ -145,6 +145,9 @@ pub struct Overlay {
     /// The whole HUD's scale about the screen's centre, [`oag_title::HudArt::safe_area`] at the
     /// player's value; `1.0` for a title with no such option.
     safe_area_scale: f32,
+    /// Whether the HUD is drawn: `false` under Pulse's `Dynamic HUD` set to off
+    /// ([`Self::set_dynamic_hud`]). The resume countdown is the host's own and still draws.
+    hud_shown: bool,
 }
 
 impl std::fmt::Debug for Overlay {
@@ -250,7 +253,15 @@ impl Overlay {
                 .art
                 .safe_area
                 .map_or(1.0, |area| area.value.scale(None)),
+            hud_shown: true,
         }))
+    }
+
+    /// The player's `[display] dynamic_hud`, which only a title with a `Dynamic HUD` option
+    /// obeys ([`oag_title::HudArt::dynamic_hud`]): `off` draws no HUD and no song marquee.
+    /// Idempotent, so the frame loop sets it every frame and the menu row applies live.
+    pub fn set_dynamic_hud(&mut self, choice: oag_display::display::DynamicHud) {
+        self.hud_shown = self.art.dynamic_hud.is_none() || choice.shows_hud();
     }
 
     /// The player's `[graphics] hud_safe_area` (`None`: the title's own default). A title with
@@ -337,7 +348,11 @@ impl Overlay {
         countdown: Option<&str>,
         viewport: (f32, f32, f32, f32),
     ) -> Vec<oag_hud::boost_smear::GlowStamp> {
-        let mut frame = self.safe_area(draw_list(&self.context(), readout));
+        let mut frame = if self.hud_shown {
+            self.safe_area(draw_list(&self.context(), readout))
+        } else {
+            Frame::default()
+        };
         if let Some(text) = countdown {
             frame.extend(crate::hud_views::countdown_frame(
                 &self.context(),
@@ -348,7 +363,7 @@ impl Overlay {
                 self.space,
             ));
         }
-        if let Some(marquee) = &readout.now_playing {
+        if let Some(marquee) = readout.now_playing.as_ref().filter(|_| self.hud_shown) {
             let at = self.safe_area_placement();
             let marquee = at.map_or_else(|| marquee.clone(), |at| marquee.placed(&at));
             oag_hud::now_playing::append(
@@ -385,16 +400,20 @@ impl Overlay {
         viewport: (f32, f32, f32, f32),
     ) -> Vec<oag_hud::boost_smear::GlowStamp> {
         let count = readouts.len();
-        let mut frame = views_frame(&crate::hud_views::view_draws(
-            self.context(),
-            self.split.as_ref(),
-            self.split_columns.as_ref(),
-            self.split_hud.as_ref(),
-            readouts,
-            cut,
-            viewport,
-            self.space,
-        ));
+        let mut frame = if self.hud_shown {
+            views_frame(&crate::hud_views::view_draws(
+                self.context(),
+                self.split.as_ref(),
+                self.split_columns.as_ref(),
+                self.split_hud.as_ref(),
+                readouts,
+                cut,
+                viewport,
+                self.space,
+            ))
+        } else {
+            Frame::default()
+        };
         if let Some(text) = countdown.filter(|_| count > 0) {
             frame.extend(crate::hud_views::countdown_frame(
                 &self.context(),

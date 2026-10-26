@@ -43,13 +43,29 @@ A translucent bar with `Artist - song` in the `HUDSmall` face scrolling left thr
 
 - The playlist resumes across races here (`docs/architecture/race-music-resume.md`): a race after
   the menus continues the same track, mid-way, from the green light, where the original starts
-  the next song. A resume is not a new song, so its first show of the name depends on whether
-  the race before it showed one.
-- Pulse and HD gate the display on the HUD setting (Pulse's `Dynamic HUD` set to `FE_OFF`
-  hides it). This build has no such setting: always on.
-- Single view only. A split-screen race draws no marquee.
-- The executable's per-update step is assumed to be 60 Hz; no capture of the original confirms
-  it.
+  the next song at every race start (`MusicPlayer_StartNextSong`, watched on PPSSPP after a
+  restart). **Deliberate: the maintainer's resume decision.** A resume is not a new song, so its
+  first show of the name depends on whether the race before it showed one.
+- Pulse's `Dynamic HUD` option (default, concave, flat, off) is wired as a DYNAMIC HUD row on
+  Pulse's Display page, `default` or `off` (`[display] dynamic_hud`, applied live): `off` draws
+  no HUD and no song marquee, as the original's `FE_OFF` does, and a song that starts while it is
+  off is not shown late. `FE_CONCAVE` and `FE_FLAT` set a flag on the HUD's two panel groups whose
+  effect is undecoded, so they are not offered. **Checked, differs:** HD has no such option (its
+  `hud+0x115` is a runtime "HUD shown" byte Photo Mode clears), Pure's options list has none,
+  Omega and 2048 carry no string for it; those titles ignore the setting and the row is not
+  offered ([Pulse page](../ghidra/functions/psp-pulse-usa/now-playing.md#dynamic-hud-read-and-poked-2026-10-26-lane-now-playing-leftovers),
+  [HD page](../ghidra/functions/ps3-hdfury-eu/now-playing.md)).
+- Single view only, and that is the original's rule where it can be read: HD's
+  `RaceManager_ShowNowPlaying` shows the display only while `g_GameState+0xe4` is 1, the count of
+  human entrants (1 in single player, 2 in split screen,
+  [opponent-handling](../ghidra/functions/ps3-hdfury-eu/opponent-handling.md)), and its
+  `splitscreen_hud` layouts author no such item, so a split race shows none; Omega and 2048
+  inherit it (Omega's executable is unread). Pulse's and Pure's PSP originals have no split
+  screen, so theirs is the same choice, **chosen, not measured**; the PS2 Pulse's split is unread.
+  `oag_raceplay::Race::now_playing` returns nothing while the race has more than one view.
+- The per-update step is 60 Hz: **watched** on Pulse (PPSSPP, 150 updates one frame apart,
+  [Pulse page](../ghidra/functions/psp-pulse-usa/now-playing.md#watched-on-ppsspp-2026-10-26-lane-now-playing-leftovers));
+  HD's, Omega's and 2048's are the same law read from code, not watched.
 - A PS2 boot of Pulse shows nothing: its soundtrack archive carries no names.
 - HD's bar vertex colour is `alpha << 24` (black); read from the code, not seen on a frame.
 
@@ -61,7 +77,7 @@ says so per title, with where each rule came from:
 
 | Title | Rule | Origin | Evidence |
 | --- | --- | --- | --- |
-| Pulse (PSP) | at the release | **measured** (read off the executable, not watched) | [Pulse page](../ghidra/functions/psp-pulse-usa/now-playing.md#when-the-song-starts-read-2026-10-26-lane-race-music-at-green): `RaceMode_SetState(1)` stops the player, `RaceMode_UpdateCountdown` starts the next song after `SetState(2)` |
+| Pulse (PSP) | at the release | **measured** (read off the executable; the display's start at the release watched on PPSSPP, the silence before it not) | [Pulse page](../ghidra/functions/psp-pulse-usa/now-playing.md#when-the-song-starts-read-2026-10-26-lane-race-music-at-green): `RaceMode_SetState(1)` stops the player, `RaceMode_UpdateCountdown` starts the next song after `SetState(2)` |
 | Pulse (PS2) | at the release | inherited from Pulse (PSP): one definition for both pressings, the PS2 executable's player unread | - |
 | HD / Fury | at the release | **measured** (read off the executable, not watched) | [HD page](../ghidra/functions/ps3-hdfury-eu/now-playing.md#when-the-song-starts-read-2026-10-26-lane-race-music-at-green): `RaceManager_UpdateCountdown` ends in `MusicManager_ClearHold`; the authored mix has music at 0.0 until `RaceNormal` |
 | Omega | at the release | inherited from HD | - |
@@ -82,8 +98,12 @@ fly-over runs no race tick, so it never releases. `Audio::now_playing` reports n
 so a race never shows the previous race's song. A resume from the menus does not re-arm: past
 the release it plays at once, before it the same hold applies.
 
-**Open:** a `MUSIC SOURCE` switch made while the song is parked finds no race voice to move and
-is ignored until the next race; the parked track plays from the source it was fetched on.
+A `MUSIC SOURCE` switch made while the song is parked swaps the parked track for the same track on
+the new release (`Audio::set_music_source` treats a parked song as the race voice), so the release
+starts the recording the player chose; a switch that has to be fetched is queued like any other and
+a release that will not read leaves the parked track as it was. One that lands after the release
+moves the sounding song from where it has got to, as before. **Chosen, not measured**: the original
+has no such row.
 
 ## The borrowed titles
 

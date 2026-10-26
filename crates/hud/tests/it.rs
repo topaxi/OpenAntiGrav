@@ -9,6 +9,7 @@
 //! A new test file is only compiled once it is listed here, and
 //! `every_test_file_is_listed` below fails until it is.
 
+mod dynamic_hud_ground_truth;
 mod hd_hud_runtime_ground_truth;
 mod hud_asset_census_ground_truth;
 mod pulse_frame_ground_truth;

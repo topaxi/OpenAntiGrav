@@ -377,6 +377,11 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
             step_percent: 2,
         },
     )),
+    // HD's options carry no `Dynamic HUD` list (its four `additional_definition.xml` copies
+    // list `Camera`, `Pilot Assist`, `HUD Style` and the like, `docs/formats/now-playing.md`).
+    // `hud+0x115`, the flag its song display reads, is a runtime "HUD shown" byte that Photo Mode
+    // clears, not a setting.
+    dynamic_hud: None,
     // `Hud_UpdateAssistIndicator` (`0x00089c90`) binds these four at
     // `hud+0x5a0`..`+0x5ac`; `/data/xml/hud_assist_indicator.xml` nests each `*Big`
     // arrow under its small one. See `docs/ghidra/functions/ps3-hdfury-eu/pilot-assist.md`.

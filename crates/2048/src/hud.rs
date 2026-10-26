@@ -230,6 +230,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     )),
     // Checked 2026-10-21: the patch front end (`data09.psarc`) authors no `Safe Area Setting`.
     safe_area: None,
+    dynamic_hud: None,
     resume_countdown: oag_title::hud::ResumeCountdown::Text,
     assist: None,
 };

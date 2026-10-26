@@ -496,6 +496,18 @@ impl Definition {
         }
     }
 
+    /// Drops the DYNAMIC HUD row on a title whose options list no such setting
+    /// (`oag_title::HudArt::dynamic_hud`): every title but Pulse. Same once-before-read
+    /// timing as [`Self::drop_unavailable_boost_zoom`].
+    pub fn drop_unavailable_dynamic_hud(&mut self, title: &oag_title::Title) {
+        if title.hud_art.dynamic_hud.is_some() {
+            return;
+        }
+        for page in &mut self.pages {
+            page.retain_rows(|entry| entry.setting() != Some("display.dynamic_hud"));
+        }
+    }
+
     /// Drops the TRAIL ORDER row on a title whose engine ribbon is not the PSP
     /// preset (`oag_title::exhaust::Exhaust::is_psp_preset`): HD/Fury's tube keeps
     /// its own order whatever the setting holds, and Omega and 2048 reuse it. Same

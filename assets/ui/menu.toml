@@ -730,6 +730,21 @@ setting = "display.hud_style"
 values_from = "hud_styles"
 restart_required = "TAKES EFFECT THE NEXT TIME A RACE STARTS"
 
+# Pulse's `Dynamic HUD` option (`Additional_Definition.xml`, a list of `FE_DEFAULT`,
+# `FE_CONCAVE`, `FE_FLAT` and `FE_OFF`, default `FE_DEFAULT`). `off` draws no HUD at all, the
+# song marquee included: a poke of the byte `FE_OFF` clears removed every element from a
+# running frame (`docs/ghidra/functions/psp-pulse-usa/now-playing.md`). `FE_CONCAVE` and
+# `FE_FLAT` flag the HUD's two panel groups and what that draws is not decoded, so they are
+# not offered rather than offered as a choice that does nothing. Dropped on a title whose
+# options list no such setting (`menu::Definition::drop_unavailable_dynamic_hud`: every title
+# but Pulse). Applies live.
+[[page.entry]]
+kind = "choice"
+label = "DYNAMIC HUD"
+string_id = "OAG_DISPLAY_DYNAMIC_HUD"
+setting = "display.dynamic_hud"
+values = ["default", "off"]
+
 # `off` never waits and tears; `on` is classic vsync, which never tears and
 # halves the rate when a frame misses a refresh; `smooth` is that miss handled
 # properly - the newest finished frame is presented and the rest discarded.

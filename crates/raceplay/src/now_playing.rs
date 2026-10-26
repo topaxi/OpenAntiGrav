@@ -23,6 +23,10 @@ pub struct View {
     strings: oag_ui::language::StringTable,
     title_key: Option<&'static str>,
     serial: u32,
+    /// Whether the title's options can switch the HUD off ([`oag_title::HudArt::dynamic_hud`]).
+    gated: bool,
+    /// Whether the HUD is up. Only ever `false` on a `gated` title.
+    hud_shown: bool,
 }
 
 impl View {
@@ -76,6 +80,8 @@ impl View {
             strings: hud.strings.clone(),
             title_key: authored.title_key,
             serial: 0,
+            gated: title.hud_art.dynamic_hud.is_some(),
+            hud_shown: true,
         })
     }
 }
@@ -96,6 +102,11 @@ impl Race {
             return;
         };
         view.serial = song.serial;
+        // `ShowNowPlaying` shows nothing while the HUD is off, and the song it skipped is not
+        // shown later: the next one is.
+        if !view.hud_shown {
+            return;
+        }
         if let Some(name) = &song.name {
             let title = match view.title_key {
                 None => Some(name.title.clone()),
@@ -118,6 +129,20 @@ impl Race {
         }
     }
 
+    /// The player's `Dynamic HUD` choice, on a title whose options have one (anything else is
+    /// ignored). `off` takes a marquee that is up down and keeps the next songs from showing one;
+    /// switching back on shows nothing until a song starts. Display state, so the frame loop
+    /// may set it every frame.
+    pub fn set_dynamic_hud(&mut self, choice: oag_display::display::DynamicHud) {
+        let Some(view) = self.view.now_playing.as_mut() else {
+            return;
+        };
+        view.hud_shown = !view.gated || choice.shows_hud();
+        if !view.hud_shown {
+            view.display.hide();
+        }
+    }
+
     /// One tick of the marquee.
     pub(super) fn advance_now_playing(&mut self) {
         if let Some(view) = self.view.now_playing.as_mut() {
@@ -125,9 +150,17 @@ impl Race {
         }
     }
 
-    /// The marquee as this tick draws it.
+    /// The marquee as this tick draws it. **None in a split screen**: HD's
+    /// `RaceManager_ShowNowPlaying` shows the display only while `g_GameState+0xe4`, the count of
+    /// human entrants (1 in single player, 2 in split screen), is 1, and its split-screen layouts
+    /// author no such item; Omega and 2048 follow it, Pulse's and Pure's originals have no split
+    /// screen to read (`docs/formats/now-playing.md`). The song's state keeps stepping, so a race
+    /// that goes back to one view shows what is left of it.
     #[must_use]
     pub fn now_playing(&self) -> Option<oag_hud::now_playing::Marquee> {
+        if self.viewport_count() > 1 {
+            return None;
+        }
         self.view.now_playing.as_ref()?.display.marquee()
     }
 }

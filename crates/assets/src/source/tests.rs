@@ -210,6 +210,7 @@ const TITLE: &Title = &Title {
         boost_smear: None,
         sway: None,
         safe_area: None,
+        dynamic_hud: None,
         resume_countdown: oag_title::hud::ResumeCountdown::Text,
         assist: None,
     },

@@ -178,6 +178,18 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // Nobody has read a sway in this title's `Hud_Update`: the HUD stays fixed.
     sway: None,
     safe_area: None,
+    // `Additional_Definition.xml`'s `List name="Dynamic HUD" global="Dynamic HUD"
+    // Default="FE_DEFAULT"` on the PSP discs (USA and EU), read off the disc; the PS2 executable
+    // carries the string and the same menu is assumed (one definition for both pressings). What
+    // `FE_OFF` does is the one entry whose effect is known: `Hud_Update` clears the HUD's shown
+    // byte, and a poke of that byte removed every HUD element from a running frame
+    // (`docs/ghidra/functions/psp-pulse-usa/now-playing.md`).
+    dynamic_hud: Some(oag_title::pre_race::Sourced::measured(
+        oag_title::hud::DynamicHudList {
+            entries: &["FE_DEFAULT", "FE_CONCAVE", "FE_FLAT", "FE_OFF"],
+            off: "FE_OFF",
+        },
+    )),
     // **Chosen, not measured.** Neither disc authors an indicator (census in
     // `docs/architecture/asset-layers.md`); the names follow HD's and the layout
     // and art are this project's own fallback, `assets/fallback/`.

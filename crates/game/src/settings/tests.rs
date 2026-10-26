@@ -1024,6 +1024,29 @@ reconstruction = "smaa"
     assert_eq!(ps2.target_fps.hz(), Some(90));
 }
 
+/// DYNAMIC HUD is seeded only where the title's own options list it (Pulse), reads `default` from a
+/// file without the key, and the choice survives the settings file.
+#[test]
+fn dynamic_hud_is_seeded_only_where_the_options_list_it_and_round_trips() {
+    let seeded = |title, platform| {
+        menu_seeds(&Settings::default(), Anisotropy::default(), title, platform)
+            .into_iter()
+            .any(|(key, _)| key == "display.dynamic_hud")
+    };
+    assert!(seeded(oag_pulse::TITLE, oag_disc::Platform::Psp));
+    assert!(seeded(oag_pulse::TITLE, oag_disc::Platform::Ps2));
+    assert!(!seeded(oag_pure::TITLE, oag_disc::Platform::Psp));
+    assert!(!seeded(oag_hd::TITLE, oag_disc::Platform::Ps3));
+
+    let mut settings = Settings::default();
+    assert!(settings.display.dynamic_hud.shows_hud());
+    settings.display.dynamic_hud = oag_display::display::DynamicHud::Off;
+    let written = toml::to_string_pretty(&settings).expect("serialise");
+    assert!(written.contains("dynamic_hud = \"off\""), "{written}");
+    let back: Settings = toml::from_str(&written).expect("parse");
+    assert!(!back.display.dynamic_hud.shows_hud());
+}
+
 /// TRAIL ORDER is seeded only where the ribbon is the PSP preset; elsewhere its row
 /// is dropped (`Definition::drop_unavailable_trail_order`) and a seed would be
 /// reported as a setting nothing edits.

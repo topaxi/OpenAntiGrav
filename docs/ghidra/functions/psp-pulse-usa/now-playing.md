@@ -1,8 +1,8 @@
 # The in-race "now playing" display (Pulse, PSP)
 
 Addresses are `pulse-psp-usa` `BOOT.BIN`, image base `0x08804000`. Read 2026-10-26
-from the decompiler; **not yet compared against a running original** (a capture is
-the arbiter for the 60 Hz assumption in the last section).
+from the decompiler; the update rate, the display's start at the release and the next-song pick
+were then **watched on PPSSPP** ([Watched](#watched-on-ppsspp-2026-10-26-lane-now-playing-leftovers)).
 
 | Address | Name | Conf | What it is |
 | --- | --- | ---: | --- |
@@ -41,8 +41,7 @@ name"**, for example `Aphex Twin - Fenix Funk 5 (Wipeout Edit)`.
 
 It is shown only while the music player state (`+0x3c`) is 1 or 2 **and**
 `g_hud+0x121` is set. `Hud_Update` (`0x0881bf50`) sets that byte from the
-`Dynamic HUD` setting: `FE_OFF` clears it (and blanks the text), `FE_DEFAULT` and
-`FE_FLAT` set it. So the display follows the Dynamic HUD option.
+`Dynamic HUD` setting, see [Dynamic HUD](#dynamic-hud-read-and-poked-2026-10-26-lane-now-playing-leftovers).
 
 ## Timing (per update of the race manager, once per frame)
 
@@ -88,6 +87,80 @@ fly-over and then.
 
 Confidence 80 for the timing (two call sites agree and `SetState(1)` is the stop); the player's
 `+0x3bc` source-kind reading is 65.
+
+## Dynamic HUD (read and poked 2026-10-26, lane `now-playing-leftovers`)
+
+**Where it lives.** The Options page `Game options` (`Screen type="Settings"`, in
+`Data\Plugins\PI001\GUI\Additional_Definition.xml`; the Dynamic HUD list is the same on the USA and EU PSP discs) lists nine
+rows on the USA disc: Music volume, SFX volume, Music playlist, Camera, **Dynamic HUD** (`OPT_HUD`), Multiplayer
+tags, Ghost ships visible, Auto load ghost and Language. The Dynamic HUD row is `List
+name="Dynamic HUD" global="Dynamic HUD" save="true" Default="FE_DEFAULT"` with four entries,
+`FE_DEFAULT`, `FE_CONCAVE`, `FE_FLAT`, `FE_OFF` (English `Default`, `Concave`, `Flat`, and `Off`
+from the shared `FE_OFF`). Pinned by `crates/hud/tests/dynamic_hud_ground_truth.rs`. The PS2
+executable carries the `Dynamic HUD` string too; its archive has no names, so its Options screen
+was not read and the PSP's list is assumed (Pulse's presentation is one definition for both
+pressings).
+
+**What `Hud_Update` does with it** (`0x0881bf50`, when the settings-changed byte
+`DAT_08b31774+0x45b` is set, then clears it): reads the global by name (`0x08a79d9c`) and compares
+it with `FE_OFF`, `FE_DEFAULT` and `FE_FLAT`.
+
+| Entry | `hud+0x121` (HUD shown) | bit 1 of `+0xd0` on the HUD's two panel groups (`hud+0x274`, `hud+0x278`) |
+| --- | --- | --- |
+| `FE_OFF` | 0, then `RaceManager_ShowNowPlaying` runs and blanks the song text | left as it was |
+| `FE_DEFAULT` | 1 | the race mode object's `+0x6f & 1` |
+| `FE_CONCAVE` | 1 | 1 |
+| `FE_FLAT` | 1 | 0 |
+
+The same code reads `Multiplayer Tags` (`DAT_08ab083d`).
+
+**What `FE_OFF` hides: the whole HUD.** The only other reader of `hud+0x121` is `0x0881a028`, a
+virtual of the HUD's class (the vtable at `0x08ac7c9c`, slot 5, beside `Hud_Update` at slot 3) that
+returns it unless `DAT_08ab083c` (a development-hardware switch, `FUN_08887470`) is clear. Its
+caller was not found. The effect was **observed**: on PPSSPP 1.20.4 (software renderer, USA disc,
+Talon's Junction, VENOM, a restored mid-race state) a poke of `g_hud+0x121` (`g_hud` at
+`0x08ab0838`) to 0 removed every HUD element from the next frames - lap, place, best and current
+time, speed and shield bars, the weapon sight and the messages - leaving the world's own gantry
+text, and writing 1 brought them all back. One race, one setting, one sample; the poke is the
+byte the setting writes, not the setting's own path through the menu. The start-line countdown
+model, the track panel and the end screens were not seen under it. Confidence 80 for "OFF draws no
+HUD", 60 for "through that virtual".
+
+**What `FE_CONCAVE` and `FE_FLAT` change is not decoded.** Setting and clearing bit 1 of `+0xd0` on
+both panel groups in a running race (same state) moved no widget visibly in two frames, but the
+camera moved between them, so this is not a negative result. This build offers `FE_DEFAULT` and
+`FE_OFF` only.
+
+**The display is gated twice.** `RaceManager_ShowNowPlaying` (`0x08826ff4`) reads `hud+0x121` when
+a song starts: with it clear the text is blanked and the display state cleared, so a song that
+starts while the HUD is off is never shown later, and switching the HUD on again shows nothing
+until the next song. `Hud_Update` calls it itself on the `FE_OFF` transition, which takes a
+marquee that is up down at once. Wired as `oag_raceplay::Race::set_dynamic_hud`.
+
+## Watched on PPSSPP (2026-10-26, lane `now-playing-leftovers`)
+
+PPSSPP 1.20.4 (software renderer, muted, private config), USA disc, Amphiseum Black (a restart from the pause menu); the
+debugger's breakpoint and memory reads, a screenshot per sample. One race, one profile.
+
+- **One update per frame, so the 60 Hz step holds.** A breakpoint on `RaceManager_UpdateNowPlaying`
+  (`0x0882be1c`) counted the cycles between 150 consecutive hits: median 3,703,722, against
+  3,703,700 for one frame (222 MHz at 59.94 Hz). The text's x falls by about one unit an update.
+  Confidence 90. A run here that steps per tick at 60 Hz is therefore the original's rate.
+- **The display starts at the release.** After the pause menu's restart the race clock read 0.4 s
+  on the first sampled frame that held text, the bar already translucent and the text entering
+  from its right edge; the later samples (race clock 0.7, 1.0, 1.7, 2.4, 3.0, 4.0, 5.0 s) show it
+  scrolling right to left through the bar in `HUDSmall`, the last characters leaving at about 5 s,
+  and nothing at 6.7 s. The scroll length and the fade-out agree with the table above. Nothing was
+  sampled during the countdown, so **the silence from `ready` to `go` was not watched**: the
+  capture was muted, as every emulator run here is.
+- **A race start picks the next song.** The profile's first race had played `Aphex Twin - Fenix
+  Funk 5 (Wipeout Edit)`; after the restart the player held `DJ Fresh - X-Project (100% Pure Mix)`
+  with `player+0x48` at 3 and the pick (`+0x3c0`) at -1, so the song came from the player's own
+  "after `+0x48`" rule rather than a resume. This build resumes instead, by the maintainer's
+  decision (`docs/architecture/race-music-resume.md`).
+- Ours at the same crop (`--screenshot` at 960x544, ticks after the release) matches the bar,
+  the face, the direction and the timing; the song, the ship and the track differ, so no pixel
+  comparison was made.
 
 ## Other titles
 

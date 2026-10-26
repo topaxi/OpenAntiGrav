@@ -230,6 +230,7 @@ static HD_ART: oag_title::HudArt = oag_title::HudArt {
     boost_smear: None,
     sway: None,
     safe_area: None,
+    dynamic_hud: None,
     resume_countdown: oag_title::hud::ResumeCountdown::Text,
     assist: None,
 };
@@ -317,6 +318,7 @@ static HD_LEACH_ART: oag_title::HudArt = oag_title::HudArt {
     boost_smear: None,
     sway: None,
     safe_area: None,
+    dynamic_hud: None,
     resume_countdown: oag_title::hud::ResumeCountdown::Text,
     assist: None,
 };
@@ -1015,6 +1017,7 @@ fn an_unread_sight_dialect_draws_nothing() {
         boost_smear: None,
         sway: None,
         safe_area: None,
+        dynamic_hud: None,
         resume_countdown: oag_title::hud::ResumeCountdown::Text,
         assist: None,
     };

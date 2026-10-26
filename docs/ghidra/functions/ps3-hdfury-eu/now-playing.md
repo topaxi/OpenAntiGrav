@@ -17,7 +17,10 @@ Ghidra's xrefs to them land in shared string-pool tails).
 ## Show
 
 `RaceManager_ShowNowPlaying(manager, artist, title, title_is_id)`: runs when the HUD flag
-(`*(g_hud) + 0x115`) is set and `g_GameState[0xe4] == 1`. An empty artist becomes the string
+(`*(g_hud) + 0x115`) is set and `g_GameState[0xe4] == 1`: that byte counts the human entrants (1 in
+single player, 2 in split screen, [opponent-handling.md](opponent-handling.md), confidence 55 for
+that reading), so **a split-screen race shows no song display**; none of the 82 files extracted
+from `splitscreen_hud` authors one either (checked 2026-10-26). An empty artist becomes the string
 `FE_UNKNOWN_ARTIST`; an empty title `FE_UNKNOWN_TRACK` (both for custom music); when
 `title_is_id` the title is looked up as a string id. The text is `"%.256s - %.256s"`:
 **artist - title**. Then alpha 0, state 0 (`+0x2d44`), step 5 (`+0x2d6c`), the text's x back to its
@@ -38,6 +41,17 @@ Per update of the race manager, with no delta time:
 (`0x0005d598`) before the vertex colours are zeroed: HD's bar is a textured image with no
 authored colour, so 255, and the bar climbs `int(255 / 256 * 5)` = 4 a step. The vertex colour
 written is `alpha << 24` (black at that alpha). Identical to Pulse's law with a textured bar.
+
+**The flag is not a setting (checked 2026-10-26).** `RaceManager_ShowNowPlaying` reads `*(g_hud) +
+0x115`. None of HD's four `additional_definition.xml` copies (`DATA02`, `DATA03`, `DATA05`,
+`DATA06`) lists a `Dynamic HUD` or any on/off HUD entry: they hold `Camera`, `Multiplayer Tags`,
+`Ghost Ship Visible`, `Pilot Assist`, `HUD Style`, `HUD Effects` (on/off, what it switches is
+undetermined), `Music Order`, `MusicFX`, `Auto Volume` and `Resume`. The byte is written by 33
+instructions in the program, among them `Hud_LoadDefinition` and `PhotoMode_Update`, which clears
+it per player while a photo is framed and sets it again on leaving (`0x0023f9fc`, `0x0023fe60`):
+a runtime "HUD shown" byte, not an option. Omega's and 2048's executables carry no `Dynamic HUD`
+string. So the display is gated on the HUD being up here, which this build's race already draws
+only while it shows a HUD.
 
 ## Layout
 

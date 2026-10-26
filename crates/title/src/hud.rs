@@ -756,6 +756,9 @@ pub struct HudArt {
     /// The player's `Safe Area Setting`, which draws the whole HUD smaller about the screen's
     /// centre: `None` where the title has no such option. See [`SafeArea`].
     pub safe_area: Option<crate::pre_race::Sourced<SafeArea>>,
+    /// The player's `Dynamic HUD` option, which can switch the whole HUD off: `None` where the
+    /// title's options have no such list. See [`DynamicHudList`].
+    pub dynamic_hud: Option<crate::pre_race::Sourced<DynamicHudList>>,
     /// Pilot Assist's HUD indicator: the widget names, and where a layout that
     /// does not author them gets them from. `None` on a title with no
     /// indicator.
@@ -911,6 +914,26 @@ impl SafeArea {
         let snapped = self.min_percent + (value - self.min_percent) / step * step;
         f32::from(snapped) / 100.0
     }
+}
+
+/// A title's `Dynamic HUD` option: a list on its Game Options page whose `FE_OFF` entry draws
+/// no HUD at all.
+///
+/// Pulse authors it (`Additional_Definition.xml`, `List name="Dynamic HUD" global="Dynamic HUD"
+/// Default="FE_DEFAULT"`) and `Hud_Update` reads it: `FE_OFF` clears the HUD's shown byte
+/// (`+0x121`), which the song display and the HUD's own gate both read. Poking that byte to zero
+/// in a running race removed every HUD element from the frame (lap, place, time, speed and
+/// shield bars, messages) and restoring it brought them back, `docs/ghidra/functions/psp-pulse-usa/now-playing.md`.
+/// The other two entries, `FE_CONCAVE` and `FE_FLAT`, set bit 1 of `+0xd0` on the HUD's two panel
+/// groups; what that changes on screen is not decoded, so this build offers `FE_DEFAULT` and
+/// `FE_OFF` only.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DynamicHudList {
+    /// The list's entries as the disc spells them (string ids), in its order; the first is the
+    /// list's default.
+    pub entries: &'static [&'static str],
+    /// The entry that draws no HUD.
+    pub off: &'static str,
 }
 
 /// The speed and shield bars' fill law: the tip of the fill is where the marker

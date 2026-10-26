@@ -286,6 +286,8 @@ pub struct CaptureOptions {
     pub hud_scale: oag_display::display::HudScale,
     /// `[graphics] hud_safe_area`, which only a title with a `Safe Area Setting` obeys.
     pub hud_safe_area: Option<u8>,
+    /// `[display] dynamic_hud`, which only a title with a `Dynamic HUD` option obeys.
+    pub dynamic_hud: oag_display::display::DynamicHud,
     /// What casts a shadow in the captured frame: `--shadows`.
     ///
     /// Honoured the same way [`Self::motion_blur`] is, and here for the same
@@ -484,6 +486,7 @@ pub fn capture(
     race.set_model_detail(options.model_detail);
     race.set_texture_detail(options.texture_detail);
     race.set_trail_order(options.trail_order);
+    race.set_dynamic_hud(options.dynamic_hud);
     race.set_hull_shake(options.hull_shake);
     race.watch_laps(
         &hud,
@@ -1283,8 +1286,12 @@ pub fn capture(
             },
             None if !race.hud_shown() => {}
             None => match crate::hud_overlay::Overlay::new(&device, &queue, format, &hud, scale)
-                .map(|built| built.map(|o| o.with_safe_area(options.hud_safe_area)))
-            {
+                .map(|built| {
+                    built.map(|mut o| {
+                        o.set_dynamic_hud(options.dynamic_hud);
+                        o.with_safe_area(options.hud_safe_area)
+                    })
+                }) {
                 Ok(Some(mut overlay)) => {
                     // No campaign cell on this path (`campaign_medal: None` above):
                     // no ladder, so `RECORD`.
