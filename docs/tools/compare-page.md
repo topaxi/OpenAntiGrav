@@ -324,7 +324,7 @@ captured the same way as the first two. True.** It is Vineta K from `dlc1.psarc`
   `--nose-ours` instead (the nose tip read by eye off 4x crops of `(400, 230)` size 160x100, about +-1 px) and records them as `craft_offset_px.nose_tip`.
 - **Numbers.** Three cold boots, original minus ours: mean grey difference 47.4, 47.2 and 47.0; RMSE 0.263, 0.262 and 0.261; edge correlation 0.08 to 0.09; nose tip
   `(-5, -1)`, `(-5, 0)` and `(-5, 0)` px by eye (the registered pair, boot C, is read at `(476, 257)` against `(481, 257)`; a second reading of the same frames gave +1 in `y`): the
-  original's nose is 5 px left of ours' and level with it. **Re-read 2026-10-26 on 8x crops with a grid, landmark the canopy top: `(-0.5, +0.4)` unpatched and `(+0.7, +0.4)` patched; the `-5` was a wing, not the same point ("The hull shake and the grid pose").** The cause (grid heading, lateral place, camera) was not separated. The original's picture is steady across the countdown (largest RMSE 0.083 to 0.085 against the first settled frame), so a
+  original's nose is 5 px left of ours' and level with it. **Re-read 2026-10-26 on 8x crops with a grid, landmark the canopy top: `(-0.5, +0.4)` unpatched and `(+0.7, +0.4)` patched; the `-5` reading was not reproduced on that landmark ("The hull shake and the grid pose").** The cause (grid heading, lateral place, camera) was not separated. The original's picture is steady across the countdown (largest RMSE 0.083 to 0.085 against the first settled frame), so a
   single grab sits inside its own motion. The frame's mean grey is 47.9 for the original and 170.4 for ours.
 - **Not matched, and the cause is ours**: the lighting (the original is a dark sunset with long shadows and a warm sky, ours is a flat bright day: the whole of the 47 grey), the HUD (the original's HD Campaign
   HUD has no `OBJECTIVE` or `XP` lines and draws its own speed bar and weapon icon; ours draws 2048's Single Player Campaign HUD), the hull's livery (olive and teal in the original, blue and yellow in ours; whether
@@ -365,6 +365,11 @@ were the cause; if it stayed, the cause was placement or heading.
 | Empire Climb | nose `(-2.5, -1)` | A `(+4, 0)`, B `(-1, 0)` | scenery `dx -18 px`, before and after |
 | Vineta K (DLC) | canopy top `(-0.5, +0.4)` (the 2026-10-26 reading of `(-5, 0)` took another landmark) | `(+0.7, +0.4)` | scenery `dx -6 px`; floor within 2 px |
 
+  A ground landmark per pair, eye-read on 5x to 6x grid crops, original minus ours (x, y px): Queens Mall the pad lip's lower edge, Empire Climb the
+  lamp post's centre at row 225, Vineta K the wall lamp's centre. Unpatched against patched original: the same to 1 px on all three (the shake does not
+  move the world). Ours at HEAD (before): Mall `(-3, +8)`, Empire `(-24, 0)`, Vineta `(-9, -3)`. Ours put on the original's pose (after): Mall `(+1, +1)`,
+  Empire `(+3, 0)`, Vineta `(0, 0)`.
+
   So the hull is where ours' is to 2 px or better on all three (the +-4 px spread of Empire's two boots is the camera's own shake, which stays on).
   **The patch moved nothing the maintainer sees**: the offset the pairs show is the world against the craft, which the shake does not move.
 - **The grid pose is read out of the original's memory** (`--read-pose`: the drawn hull matrix, rows left, up and forward scaled by the hull scale
@@ -390,8 +395,10 @@ were the cause; if it stayed, the cause was placement or heading.
   normalised cross-correlation of the high-passed gradient magnitude, `ground_right`, `ground_left`, `far_scenery`, `hull`; the scenery band
   has an NCC of 0.15 to 0.4 and is a direction, not a number, on Queens Mall and Empire Climb). The pad edge row is the strongest step of the
   mean luminance of columns 575 to 625, rows 235 to 275.
+- **Ours draws a hull shake on 2048's grid too**: the same law (`HullShake::HD`, inherited), ticks 60, 120 and 171 against the shake switched off
+  moved the hull 3 to 7 px in x and 3 to 5 px in y, the order of the original's stock sway, so the shake is not a difference between the two sides.
 - **Vita3K sometimes sticks on its intro**: one of 12 memory-patched launches sat on "Sony Computer Entertainment presents" with the GPU thread busy
-  until killed (a relaunch booted in 30 s); the gdbstub launches did it twice in three. Not attributed to the patch, not understood. A fresh `HOME` needs `~/.config/Vita3K/config.yml` (else `-r PCSF00007` answers
+  until killed (a relaunch booted in 30 s); the gdbstub launches did it twice in three. The sticks came at a host load near 28 and not at 10 to 12. Not attributed to the patch, not understood. A fresh `HOME` needs `~/.config/Vita3K/config.yml` (else `-r PCSF00007` answers
   `not in {}`: the `-c` file is not read for the installed-title lookup) and `~/.cache/Vita3K/shaders` copied in; `vita3k-drive.py` drops
   `XDG_*` for a private instance, which Vita3K reads before `HOME`.
 - **Omega**: **checked, applies, not wired.** Its base `eboot.bin` has the same `HullShake_Update` at `0x012f7200`
@@ -399,7 +406,7 @@ were the cause; if it stayed, the cause was placement or heading.
   shadPS4's patch mechanism was not tried, so no patched Omega pair and no Omega pose read. Whether the grid pose differs on Omega the same way is **not
   checked**: its pair has no pose channel; the memory-scan method is Vita3K-specific.
 - **Adopting it** (manifests under `data/reference/compare-page/` are the lead's): copy the three pair directories made by `--read-pose`
-  (`theirs.png`, `ours.png`, `ours-original-pose.png`, `side.png`, `pair.json`, no `frames/`) over `2048-vita/{mall,empire-climb,dlc-vineta-k}`,
+  (`theirs.png`, `ours.png`, `ours-original-pose.png`, `side.png`, `pair.json`, no `frames/`; the `meta` of each stays the existing pair's `id`, `title` and notes, pass them with `--meta`, and `craft_offset_px` is set from the eye reads above, not the centroid) over `2048-vita/{mall,empire-climb,dlc-vineta-k}`,
   then `python3 scripts/compare_env.py manifest data/reference/compare-page/2048.toml data/reference/compare-page/2048-vita/{empire-climb,mall,dlc-vineta-k}` and
   `just compare-page`.
 
