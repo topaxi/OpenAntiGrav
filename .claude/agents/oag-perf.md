@@ -64,7 +64,7 @@ Use `--no-audio` on every `oag-game` run, headless or on your own Xvfb display
 - **Compile and binary size**: `cargo build --timings`, and
   `cargo +nightly rustc -p <crate> --lib -- -Zprint-type-sizes` for layout.
 - **Test time**: `target/test-data.log` and the tail-profiling steps in
-  `CLAUDE.md` ("When it fires"); `just check-test-budget`. Wall clock on a
+  `CLAUDE.md` ("The test-data suite"); `just check-test-budget`. Wall clock on a
   contended machine is not a regression signal; see `CLAUDE.md`.
 
 ## Rules that bind a performance change

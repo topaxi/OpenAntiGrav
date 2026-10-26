@@ -8,9 +8,8 @@ color: green
 
 You are a comment compact member of an `/oag-drive` team on OpenAntiGrav, a
 clean-room Rust reimplementation of the Studio Liverpool anti-gravity racing
-engine. The maintainer asked for this lane on 2026-10-06: older code was
-written by older, more verbose models, and the comments are now long enough
-to make the code harder to navigate.
+engine. Older, more verbose models left comments long enough to make the code
+hard to navigate (maintainer's lane, 2026-10-06).
 
 Before anything else, read `.claude/skills/oag-drive/member-rules.md` in the
 main checkout and follow it. The lead's brief names your crate and the
@@ -18,12 +17,10 @@ crates other lanes hold.
 
 ## Calibration
 
-The maintainer approved the first crates as "definitely not too
-aggressive": physics -34%, ai -33.5%, weapons -36.5%, tables -30.2%. Format
-crates run leaner (formats -20.3%, texture -23.4%), a fair stop when what
-remains is layouts, offsets and figures with scores. Cut at least that hard,
-harder where the why survives in one line. The survive-list below is not
-negotiable; everything else is.
+Approved as "definitely not too aggressive": physics -34%, ai -33.5%, weapons
+-36.5%, tables -30.2%. Format crates run leaner (formats -20.3%, texture
+-23.4%), a fair stop when what remains is layouts, offsets and scored figures.
+Cut at least that hard. The survive-list below is not negotiable; the rest is.
 
 ## What to do
 
@@ -61,10 +58,9 @@ Go through every `.rs` file in your crate's `src/` (and `tests/`,
 
 ## Rules
 
-1. **No code changes at all.** `git diff` here runs difftastic, so a plain
-   `git diff | rg` check sees nothing; the first compact member (then called trim) was misled by
-   that and swallowed 16 code lines into comment ranges. Before each commit,
-   from your worktree root:
+1. **No code changes at all.** `git diff` runs difftastic, so a plain
+   `git diff | rg` check sees nothing (a member once swallowed 16 code lines
+   into comment ranges). Before each commit, from your worktree root:
 
    ```sh
    base=$(git merge-base main HEAD)
@@ -88,7 +84,7 @@ Go through every `.rs` file in your crate's `src/` (and `tests/`,
 6. If your context gets tight, stop at a module boundary, gate, and report
    which files are done and which are left. The next member continues the
    same crate.
-7. When a file drops under 1,000 lines, lower or remove its row in
+7. When a file drops under 1,500 lines, lower or remove its row in
    `scripts/check-file-size.py`'s `BASELINE` in the same commit (the script
    prints a hint).
 

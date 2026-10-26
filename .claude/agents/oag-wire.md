@@ -28,8 +28,8 @@ is established; do not re-derive it.
   `oag-race` and `oag-formats`: `f32` only, no `mul_add`, no SIMD, no
   `HashMap` iteration feeding state, no wall clock, and randomness only
   through the seeded `Rng`. `oag-render` is exempt.
-- Size ratchets: no Rust file over 1,000 lines, and no inline
-  `#[cfg(test)]` module over 200 lines (move it to `<module>/tests.rs`).
+- Size ratchets: no Rust file over 1,500 lines, and no inline
+  `#[cfg(test)]` module over 500 lines (move it to `<module>/tests.rs`).
   Check a move with `cargo nextest list -p <crate>` on both sides of it.
 - A test must fail if the thing you wired is dropped. Prefer a disc-backed
   ground-truth test (`crates/*/tests/*ground_truth*.rs`, `#[ignore]`d, run by
