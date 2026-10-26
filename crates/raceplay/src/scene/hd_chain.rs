@@ -87,29 +87,71 @@ pub(super) fn build_omega(
     (omega, format)
 }
 
+/// Wipeout 2048's `wo_*` chain (`oag_post::wo_composite`), built when the
+/// title runs it and the circuit authors its keys, and no other chain already
+/// owns the scene target. Returns it and the scene format, switched to the
+/// linear float one when it is there - the same statement [`build`] makes. A
+/// failure is reported and dropped: the race then draws without it.
+pub(super) fn build_wo(
+    device: &wgpu::Device,
+    format: wgpu::TextureFormat,
+    caller_format: wgpu::TextureFormat,
+    size: (u32, u32),
+    params: Option<oag_post::wo_composite::Params>,
+) -> (Option<oag_post::wo_composite::Chain>, wgpu::TextureFormat) {
+    let wo = match params
+        .filter(|_| format == caller_format)
+        .map(|params| oag_post::wo_composite::Chain::new(device, caller_format, size, params))
+        .transpose()
+    {
+        Ok(wo) => wo,
+        Err(e) => {
+            warn!("2048's composite unavailable ({e}) - the frame draws without it");
+            None
+        }
+    };
+    let format = if wo.is_some() {
+        oag_gpu::formats::SCENE_FORMAT
+    } else {
+        format
+    };
+    (wo, format)
+}
+
+/// What the scene target stores, given the chains built: HD's says, 2048's
+/// stores its gamma-2 space, and anything else the value as computed.
+pub(super) fn store(
+    hd: Option<&oag_post::hd_bloom::Chain>,
+    wo: bool,
+) -> oag_gpu::formats::SceneStore {
+    match hd {
+        Some(hd) => hd.store(),
+        None if wo => oag_gpu::formats::SceneStore::Squared,
+        None => oag_gpu::formats::SceneStore::Computed,
+    }
+}
+
 impl Scene {
-    /// The linear float target the race pass draws into under either post
-    /// chain, or `None` when it draws straight into the caller's view.
+    /// The linear float target the race pass draws into under any post chain,
+    /// or `None` when it draws straight into the caller's view.
     pub(super) fn linear_scene_view(&self) -> Option<&wgpu::TextureView> {
-        match (&self.hd, &self.omega) {
-            (Some(hd), _) => Some(hd.scene_view()),
-            (None, Some(omega)) => Some(omega.scene_view()),
-            (None, None) => None,
+        match (&self.hd, &self.omega, &self.wo) {
+            (Some(hd), _, _) => Some(hd.scene_view()),
+            (None, Some(omega), _) => Some(omega.scene_view()),
+            (None, None, Some(wo)) => Some(wo.scene_view()),
+            (None, None, None) => None,
         }
     }
 
-    /// Whether the scene's pipelines were built against the linear float
-    /// target - see [`build`] and [`build_omega`].
     /// What the scene target stores - see `oag_gpu::formats::SceneStore`.
-    pub(super) fn store(&self) -> oag_gpu::formats::SceneStore {
-        self.hd.as_ref().map_or(
-            oag_gpu::formats::SceneStore::Computed,
-            oag_post::hd_bloom::Chain::store,
-        )
+    pub(crate) fn store(&self) -> oag_gpu::formats::SceneStore {
+        store(self.hd.as_ref(), self.wo.is_some())
     }
 
+    /// Whether the scene's pipelines were built against the linear float
+    /// target - see [`build`], [`build_omega`] and [`build_wo`].
     pub(super) fn draws_linear(&self) -> bool {
-        self.hd.is_some() || self.omega.is_some()
+        self.hd.is_some() || self.omega.is_some() || self.wo.is_some()
     }
 }
 

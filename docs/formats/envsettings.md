@@ -365,18 +365,23 @@ matches HD's own finding that its fog is near imperceptible.
 Authored and **left unread**: the `Fog Region Colour Override 0..11` and
 `Fog Region Transition Distance 0..11` ladder and `Fog Default Transition
 Distance` (what selects a region is unlocated), `Fog Alternate Color`,
-`Fog sun colour`/`direction`, `Depth Fog Offset RecipRange` (0, 0.01 on every
-circuit), and everything `HDR and Bloom`-shaped (`BloomFactor`, `BloomGate`,
-`Exposure*`): **read off the executable since 2026-10-26** (the race
-composite's exposure, adapted per frame to `ExposureScale` over a luminance
-readback, clamped at `ExposureMax`, at `ExposureSpeed` per frame; `BloomGate`
-is the bloom gate's threshold and `BloomFactor` the bloom's weight in the
-composite), see
-[exposure.md](../ghidra/functions/vita-2048-eu-v104/exposure.md); still not
-drawn by ours. A DLC circuit's values come from the pack's copy of the file,
-not the one inside `data.psarc` (Vineta K: 0.5 / 8 / 0.05 against 0.6 / 12 /
-0.05, read live). Pinned per base circuit by
-[psp2_sky_fog_ground_truth.rs](../../crates/raceplay/tests/psp2_sky_fog_ground_truth.rs).
+`Fog sun colour`/`direction` and `Depth Fog Offset RecipRange` (0, 0.01 on every
+circuit). The `HDR and Bloom`-shaped keys (`BloomFactor`, `BloomGate`,
+`Exposure*`) were read off the executable on 2026-10-26 and are **drawn since
+2026-10-26** (`2048-exposure-wire`): the race composite's exposure, adapted per
+frame to `ExposureScale` over the mean luminance the gate writes, clamped at
+`ExposureMax`, at `ExposureSpeed` per frame; `BloomGate` is the bloom gate's
+threshold and `BloomFactor` the bloom's weight in the composite
+(`oag_post::wo_composite`, `oag_tables::envsettings::EXPOSURE_SCALE` and its
+four siblings), see
+[exposure.md](../ghidra/functions/vita-2048-eu-v104/exposure.md). A DLC
+circuit's values come from the pack's copy of the file, not the one inside
+`data.psarc` (Vineta K: 0.5 / 8 / 0.05 against 0.6 / 12 / 0.05, read live), and
+ours reads them so; the light and fog keys still take the base copy (exposure.md,
+"Open"). Pinned per base circuit by
+[psp2_sky_fog_ground_truth.rs](../../crates/raceplay/tests/psp2_sky_fog_ground_truth.rs);
+the drawn values by `vita_2048_lighting_ground_truth.rs` (Altima) and
+`vita_2048_hud_event_ground_truth.rs` (Vineta K, the pack's copy).
 
 **Omega: ported.** Omega's `track.envsettings` carries the same
 `Lighting.Fog colour` bytes (altima: `[0.13, 0.11, 0.16]` at 0.0002, identical)

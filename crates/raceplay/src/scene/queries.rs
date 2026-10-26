@@ -162,6 +162,9 @@ impl Scene {
         if let Some(omega) = &mut self.omega {
             omega.resize(device, size);
         }
+        if let Some(wo) = &mut self.wo {
+            wo.resize(device, size);
+        }
         self.depth = depth_texture(device, size, sample_count);
         self.velocity = motion::velocity_texture(device, size, sample_count);
         self.msaa_color = msaa_color_texture(device, format, size, sample_count);

@@ -329,7 +329,8 @@ fn omega_two_views_each_keep_their_picture() {
     two_up_draws_two_pictures(&source, "omega two");
 }
 
-/// 2048 draws through HD's chain, so it had the same black top view.
+/// 2048 runs its own `wo_*` chain, which also resolves into the frame once per view
+/// (`oag_post::wo_composite::Chain::run_view`).
 #[test]
 #[ignore = "needs data/extracted/vita/PCSF00007 and a GPU adapter"]
 fn vita_2048_two_views_each_keep_their_picture() {

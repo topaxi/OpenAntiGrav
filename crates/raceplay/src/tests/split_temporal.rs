@@ -48,7 +48,7 @@ fn each_view_of_a_split_records_its_own_jittered_frame() {
     let gpu = (&device, &queue);
     let mut race = race_with_a_grid();
     assert_eq!(race.set_viewport_count(2), 2);
-    let scene = hull_scene(&device, &queue, &race, Msaa::Off, None, None);
+    let scene = hull_scene(&device, &queue, &race, Msaa::Off, None, None, None);
     let target = target(&device);
     let phases = 8;
     draw_split(gpu, &scene, &race, &target, None);

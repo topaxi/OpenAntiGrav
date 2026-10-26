@@ -428,6 +428,27 @@ fn the_flags_the_loader_derived_from_a_name_are_the_titles() {
 }
 
 #[test]
+fn only_2048_ends_its_race_in_the_wo_composite_and_it_is_measured() {
+    let wo = oag_2048::TITLE.looks.wo_composite;
+    assert!(wo.applies_everywhere());
+    assert_eq!(wo.origin, Origin::Measured);
+    for other in [
+        oag_pulse::TITLE,
+        oag_pure::TITLE,
+        oag_hd::TITLE,
+        oag_omega::TITLE,
+    ] {
+        for platform in [Platform::Psp, Platform::Ps2] {
+            assert!(
+                !other.looks.wo_composite.applies(platform),
+                "{}",
+                other.name
+            );
+        }
+    }
+}
+
+#[test]
 fn the_shield_tint_is_hds_own_and_everyone_elses_is_pulses_by_inheritance() {
     let tint = |t: &Title, p| t.looks.shield_palette.on(p);
     assert_eq!(tint(oag_hd::TITLE, Platform::Psp), ShieldPalette::Hd);

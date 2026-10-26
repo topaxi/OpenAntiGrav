@@ -762,6 +762,13 @@ pub struct Looks {
     /// of what is behind it (`docs/rendering/hd-track-tone.md`, "HD's blends
     /// combine encoded values").
     pub blends_encoded: Rule,
+    /// The race frame ends in the `wo_*` post chain: the scene lit in the
+    /// gamma-2 space its programs square a texel into, a quarter-resolution
+    /// gate and two diagonal blurs, and `wo_composite_nocc_fp` at an exposure
+    /// adapted to the circuit's `Lighting.Exposure*` keys. Wipeout 2048's
+    /// (`docs/ghidra/functions/vita-2048-eu-v104/exposure.md`); Omega registers
+    /// the same programs and runs none of them.
+    pub wo_composite: Rule,
 }
 
 /// The LOD bias [`Looks::material_lod_bias`] applies, in levels: the filter
@@ -809,6 +816,7 @@ impl Looks {
             material_lod_bias: Rule::UNREAD,
             material_render_state: Rule::UNREAD,
             blends_encoded: Rule::UNREAD,
+            wo_composite: Rule::UNREAD,
         }
     }
 }

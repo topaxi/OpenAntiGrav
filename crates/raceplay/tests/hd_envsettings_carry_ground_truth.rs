@@ -115,6 +115,10 @@ fn a_slice_of_environments_builds_its_bloom_chain(slice: usize) {
         })
         .unwrap_or_else(|e| panic!("{track}: loading the race: {e:#}"));
 
+        assert!(
+            loaded.wo_composite.is_none(),
+            "{track}: HD drew Wipeout 2048's composite"
+        );
         if loaded.hd_bloom.is_some() {
             built.push(*track);
         } else {

@@ -161,7 +161,9 @@ pub const TITLE: &Title = &Title {
     // but what raises each is unread, so those triggers draw nothing (ADR-0058: `None`
     // is the visible absence). The engine's own names are tried as Pulse's, by the
     // rule that an unmeasured title runs Pulse's, and the loader reports each
-    // its disc lacks. The shield tint likewise.
+    // its disc lacks. The shield tint likewise. `wo_composite` stays off: the
+    // executable registers 2048's `wo_*` programs and binds none, running its
+    // `Tonemap` chain instead (checked, differs: exposure.md, "Omega").
     effects: &EFFECTS,
     looks: &oag_title::Looks::unread(oag_title::ShieldPalettes {
         ps2: oag_title::ShieldPalette::Ps2Pulse,

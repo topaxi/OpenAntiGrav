@@ -8,12 +8,23 @@
 // no uniform needs a new field and a zeroed scene buffer cannot miss it.
 public override linear_out: f32 = 0.0;
 
+// 1.0 when the linear scene is Wipeout 2048's gamma-2 space: its lit programs
+// decode a texel by squaring it and the race composite's square root is the
+// encode (docs/ghidra/functions/vita-2048-eu-v104/exposure.md). Only meaningful
+// with `linear_out`; 0.0 everywhere else, which keeps the 2.2 power.
+public override square_decode: f32 = 0.0;
+
+// A gamma-authored colour decoded to the scene's linear space: the 2.2 power
+// the originals authored against, or the square on 2048's (`square_decode`).
+public fn decode(rgb: vec3<f32>) -> vec3<f32> {
+    return pow(rgb, vec3<f32>(select(2.2, 2.0, square_decode > 0.5)));
+}
+
 // A gamma-authored colour as the target wants it: `amount` 1.0 decodes it to
-// linear light with the 2.2 power the originals authored against, 0.0 leaves
-// it as it is. Callers pass `linear_out`, or `linear_out` scaled by a switch of
-// their own.
+// linear light with `decode`, 0.0 leaves it as it is. Callers pass
+// `linear_out`, or `linear_out` scaled by a switch of their own.
 public fn gamma_to_target(rgb: vec3<f32>, amount: f32) -> vec3<f32> {
-    return mix(rgb, pow(rgb, vec3<f32>(2.2)), amount);
+    return mix(rgb, decode(rgb), amount);
 }
 
 // 1.0 when the render target holds display (gamma-encoded) values while the

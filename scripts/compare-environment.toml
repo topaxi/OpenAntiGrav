@@ -162,6 +162,12 @@ output_note = "the Vita's own 960x544"
 aspect = "psp"
 profile_key = "Wipeout 2048 (Vita)"
 status = "scripts/vita-2048-pair.py: a grid-before-GO pair from a walked campaign event (2026-10-22)"
+# Exposure held at 1.15 on ours (`oag-game --hold-exposure`, a comparison switch, never the play
+# default). Vita3K never writes the gate target back to the guest, so the original's readback is
+# zero, `Exposure_AdaptFromReadback` never steps and every frame it draws is at `Exposure_Set`'s
+# 1.15 (docs/ghidra/functions/vita-2048-eu-v104/exposure.md). On a Vita the exposure adapts, and so
+# does ours in play. Maintainer's ruling, 2026-10-26.
+exposure_hold = 1.15
 [platform.2048.emulator]
 name = "Vita3K"
 version = "v0.2.1 4095-84184a36"

@@ -45,6 +45,7 @@ impl Default for Options {
             no_driver_for_class: false,
             server_source: false,
             zone_stage: None,
+            exposure_hold: None,
             ribbon: false,
             collision: false,
             opponents: false,

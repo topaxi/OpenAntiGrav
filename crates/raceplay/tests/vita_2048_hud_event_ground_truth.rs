@@ -16,6 +16,9 @@
 //!
 //! What this fails on: dropping `Setup::campaign_event` from `load_event`, dropping either of
 //! `text_for`'s two gates, or a layout that stops authoring the widgets (the vacuity guards).
+//!
+//! The DLC load also checks the composite's exposure keys
+//! ([`the_pack_copy_sets_the_exposure_held_for_a_comparison`]): one load serves both claims.
 
 use std::path::{Path, PathBuf};
 
@@ -96,9 +99,11 @@ fn a_dlc_circuit_raced_with_no_event_draws_neither() {
         track: Some(VINETA_K.to_string()),
         team: Some("Feisar".to_string()),
         mode: oag_race::Mode::SingleRace,
+        exposure_hold: Some(1.15),
         ..options(&source)
     })
     .expect("the DLC circuit loads");
+    the_pack_copy_sets_the_exposure_held_for_a_comparison(&loaded);
     assert!(loaded.campaign_2048_event.is_none());
     assert!(!loaded.setup.campaign_event);
     let (text, xp_authored, objective_authored) = first_frame(loaded);
@@ -111,5 +116,26 @@ fn a_dlc_circuit_raced_with_no_event_draws_neither() {
     assert!(
         text.iter().any(|text| text == "POS"),
         "the place still draws: {text:?}"
+    );
+}
+
+/// Vineta K's exposure keys come from `dlc1.psarc`'s copy of its `track.EnvSettings` (scale 0.5,
+/// max 8, gate 0.3), not the base `data.psarc`'s (0.6, 12, 0.2): the original's setters read the
+/// pack's on that circuit (`docs/ghidra/functions/vita-2048-eu-v104/exposure.md`). The comparison
+/// switch `Options::exposure_hold` lands as a held exposure.
+fn the_pack_copy_sets_the_exposure_held_for_a_comparison(loaded: &oag_raceplay::Loaded) {
+    use oag_post::wo_composite::{Exposure, Params};
+    assert_eq!(
+        loaded.wo_composite,
+        Some(Params {
+            exposure_scale: 0.5,
+            exposure_max: 8.0,
+            exposure_speed: 0.05,
+            bloom_factor: 0.2,
+            bloom_gate: 0.3,
+            exposure: Exposure::Held(1.15),
+        }),
+        "{:#?}",
+        loaded.report
     );
 }

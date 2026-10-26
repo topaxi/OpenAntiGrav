@@ -568,6 +568,19 @@ pub(crate) struct Cli {
     #[arg(long, value_name = "N")]
     pub(crate) zone_stage: Option<u32>,
 
+    /// Comparison switch: hold Wipeout 2048's race-composite exposure at `E`
+    /// instead of adapting it once a frame.
+    ///
+    /// **For the compare pairs only, never play.** Vita3K never writes the
+    /// bloom gate's target back to the guest, so the original's exposure step
+    /// reads zero and never runs there: every 2048 reference frame is drawn at
+    /// the 1.15 `Exposure_Set` resets to, and `compare_env.ours_flags` passes
+    /// `--hold-exposure 1.15` so a pair compares like with like. See
+    /// `oag_raceplay::Options::exposure_hold`. No effect on a title without
+    /// the chain.
+    #[arg(long, value_name = "E")]
+    pub(crate) hold_exposure: Option<f32>,
+
     /// Development override: draw the Zone visualiser glow from a fixed
     /// synthetic ramp instead of this project's own live audio spectrum.
     ///

@@ -95,4 +95,7 @@ fn tech_de_ras_authored_triple_reaches_the_rig() {
         .omega_tonemap
         .expect("Tech De Ra's Tonemap block is applied");
     assert!(tonemap.exposure_maximum >= tonemap.exposure_minimum);
+    // Omega registers 2048's `wo_*` programs and binds none: it ends in
+    // `Tonemap`, so it never builds 2048's composite (checked, differs).
+    assert!(loaded.wo_composite.is_none());
 }

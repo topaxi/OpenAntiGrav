@@ -387,6 +387,11 @@ pub struct Scene {
     /// executable's adaptive exposure and cubic curve, and the encode. `None`
     /// for every other title. See `oag_post::omega_tonemap`.
     omega: Option<oag_post::omega_tonemap::Chain>,
+    /// Wipeout 2048's `wo_*` chain: the same linear float scene target, in the
+    /// gamma-2 space its programs square a texel into, then the gate, the two
+    /// blurs, the composite at the adapted exposure, and the step. `None` for
+    /// every other title. See `oag_post::wo_composite`.
+    wo: Option<oag_post::wo_composite::Chain>,
     /// Per-object motion blur, run last over the finished frame - an
     /// enhancement of this project's, not a reading of the original. Built
     /// with the scene whatever `[graphics] motion_blur` says, because that
@@ -538,6 +543,7 @@ impl Scene {
         authored_fog: Option<mesh_render::Fog>,
         hd_bloom: Option<oag_post::hd_bloom::Params>,
         omega_tonemap: Option<oag_post::omega_tonemap::Params>,
+        wo_composite: Option<oag_post::wo_composite::Params>,
         zone_grade: Option<crate::zone_grade::ZoneGrade>,
         shadows: Vec<oag_render::shadow::Silhouette>,
         shadow_hulls: Vec<Option<oag_vex::shadow_occluder::Occluder>>,
@@ -564,12 +570,12 @@ impl Scene {
         let (hd, format, caller_format) = hd_chain::build(device, format, size, hd_bloom);
         // What the scene target stores, which every pipeline drawing into it is
         // built for: HD's chain says (`oag_gpu::formats::SceneStore`).
-        let store = hd.as_ref().map_or(
-            oag_gpu::formats::SceneStore::Computed,
-            oag_post::hd_bloom::Chain::store,
-        );
         let (omega, format) =
             hd_chain::build_omega(device, format, caller_format, size, omega_tonemap);
+        let (wo, format) = hd_chain::build_wo(device, format, caller_format, size, wo_composite);
+        // What the scene target stores, which every pipeline drawing into it is
+        // built for: HD's chain or 2048's says (`oag_gpu::formats::SceneStore`).
+        let store = hd_chain::store(hd.as_ref(), wo.is_some());
         // **The Zone stage's own texture, bound once per model.** The showing
         // stage's `zoneModeTrack<n>.gtf`, which `mesh.wgsl` samples at
         // `zoneColourTint.xy * (1 - meshUV)` wherever the material's albedo is
@@ -1060,6 +1066,7 @@ impl Scene {
             boost_zoom: hd_chain::BoostZoom::new(caller_format),
             hd,
             omega,
+            wo,
             motion_blur,
             blur_half: std::cell::Cell::new(false),
             velocity,

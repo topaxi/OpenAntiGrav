@@ -343,12 +343,7 @@ pub fn build_with(
     // match this used to be, since those six are numbers off the disc rather
     // than a fixed table.
     let mut constants: Vec<(&str, f64)> = Vec::new();
-    if is_linear_target(format) {
-        constants.push(("linear_out", 1.0));
-        if store == oag_gpu::formats::SceneStore::Encoded {
-            constants.push(("encoded_out", 1.0));
-        }
-    }
+    constants.extend_from_slice(linear_constants(format, store));
     if model.vertex_colour_is_light {
         constants.push(("colour_is_light", 1.0));
     }

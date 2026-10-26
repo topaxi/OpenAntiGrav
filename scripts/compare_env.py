@@ -53,6 +53,8 @@ def platform(key):
         out["ours"]["pilot_assist"] = table["pilot_assist"]
     if "hud_safe_area" in table:
         out["ours"]["hud_safe_area"] = table["hud_safe_area"]
+    if "exposure_hold" in table:
+        out["ours"]["exposure_hold"] = table["exposure_hold"]
     out["tolerance"] = dict(doc["tolerance"])
     out["profile_sha"] = hashlib.sha256(PROFILE.read_bytes()).hexdigest()[:12]
     return out
@@ -94,11 +96,17 @@ def ours_flags(plat):
              "--screen-filter", o["screen_filter"], "--anisotropy", o["anisotropy"]]
     if "pilot_assist" in o:
         flags += ["--pilot-assist", o["pilot_assist"]]
+    flags += exposure_hold_flags(o)
     # A still pair cannot match a random shake frame for frame, so ours draws every hull at its body's pose; HD
     # originals are captured with theirs patched out (`scripts/rpcs3-hd-no-hull-shake.py`). A no-op on a title without
     # one (Pulse, Pure).
     flags += ["--no-hull-shake"]
     return flags
+
+
+def exposure_hold_flags(ours):
+    """`--hold-exposure E` when the profile holds the exposure (2048: the original under Vita3K never adapts)."""
+    return ["--hold-exposure", str(ours["exposure_hold"])] if "exposure_hold" in ours else []
 
 
 def tenths_matched_ticks(clock):
@@ -479,6 +487,9 @@ def environment_text(plat, rec):
                o["shadows"], o["motion_blur"], plat["aspect"], o["hud"], o["camera"])]
     if "pilot_assist" in o:
         bits.append("Pilot Assist %s on both sides (the original's frame draws its indicator)" % o["pilot_assist"])
+    if "exposure_hold" in o:
+        bits.append("exposure held at %s on ours (Vita3K never reads the original's gate back, so its exposure never "
+                    "leaves %s; a Vita and ours in play adapt)" % (o["exposure_hold"], o["exposure_hold"]))
     ov = rec.get("overlap") or {}
     if "edge_ncc" in ov:
         bits.append("overlap: edge correlation %.2f, RMSE %.3f" % (ov["edge_ncc"], ov["rmse"]))
@@ -528,6 +539,10 @@ def environment_fields(rec):
     rb = ours.get("settings_readback") or {}
     if rb:
         f["ours_settings"] = ", ".join("%s %s" % (k.replace("_", " "), v) for k, v in rb.items())
+    flags = ours.get("flags") or []
+    if "--hold-exposure" in flags[:-1]:
+        f["ours_exposure"] = ("exposure held at %s (a comparison switch: the original under its emulator never adapts; "
+                              "in play ours does)" % flags[flags.index("--hold-exposure") + 1])
     ov = rec.get("overlap") or {}
     for key, _, fmt, _ in METRICS:
         if key in ov:

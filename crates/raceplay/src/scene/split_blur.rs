@@ -78,12 +78,15 @@ impl Scene {
     /// adaptation every frame.
     pub(super) fn retire_split_histories(&self) {
         if self.split_live.replace(false) {
-            // HD's and Omega's per-seat adaptation goes with them (`split_exposure`).
+            // HD's, Omega's and 2048's per-seat adaptation goes with them (`split_exposure`).
             if let Some(hd) = &self.hd {
                 hd.retire_seats();
             }
             if let Some(omega) = &self.omega {
                 omega.retire_seats();
+            }
+            if let Some(wo) = &self.wo {
+                wo.retire_seats();
             }
             for history in &self.histories[motion::MAX_HISTORIES..] {
                 history.forget();
@@ -117,6 +120,9 @@ impl Scene {
             }
             if let Some(omega) = &self.omega {
                 omega.retire_seat(seat);
+            }
+            if let Some(wo) = &self.wo {
+                wo.retire_seat(seat);
             }
             self.histories[motion::split_history(seat)].forget();
         }
