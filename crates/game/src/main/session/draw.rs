@@ -147,6 +147,9 @@ impl Session {
         let view = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
+        // The scene may close this encoder part-way, its first passes finished on another
+        // thread while the rest records (`oag_gpu::split_finish`); `frame_work` submits it all.
+        let frame_work = oag_gpu::split_finish::Frame::begin();
         let mut encoder = self
             .gpu
             .device
@@ -1010,7 +1013,7 @@ impl Session {
 
         self.phases.mark(super::phases::Phase::Overlay);
         let submit_start = timing_first_race_frame.then(web_time::Instant::now);
-        self.gpu.queue.submit(Some(encoder.finish()));
+        frame_work.submit(&self.gpu.queue, encoder);
         self.phases.mark(super::phases::Phase::Submit);
         // **After the submit**, which is what makes it safe to start a map on
         // the buffer this frame just copied into. What comes back is a frame or

@@ -101,7 +101,12 @@ impl Scene {
         let pass = self.prepare_view(
             &uploads, encoder, view, race, viewport, &settings, timestamps,
         );
+        // The passes so far (shadow maps, sun occlusion, adverts) are finished on another
+        // thread while the race pass records, and the race pass while the post chain does,
+        // when the frame loop opened a split frame (`oag_gpu::split_finish`).
+        oag_gpu::split_finish::split(device, encoder);
         let mut stats = self.recorder().record(&pass, encoder);
+        oag_gpu::split_finish::split(device, encoder);
         oag_gpu::perfprobe::mark("scene-pass");
         let blur_lens = pass.blur_lens;
         drop(pass);
