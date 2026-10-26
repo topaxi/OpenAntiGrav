@@ -121,6 +121,15 @@ pub const LOOKS: &Looks = &Looks {
         on: PSP,
         origin: Origin::Measured,
     },
+    // The stencil-stamped mask and the bloom over it: `docs/rendering/glow-mask.md`,
+    // `docs/ghidra/functions/psp-pulse-usa/bloom.md`.
+    psp_glow_mask: Rule {
+        on: PSP,
+        origin: Origin::Measured,
+    },
+    // Pulse's composite sits at queue key `0x70`, after every HUD widget
+    // (`bloom.md`, "The bloom draws over the HUD").
+    bloom_under_hud: Rule::UNREAD,
     // `ParticleSystem_EmitLine`/`EmitSphere`, `DrawStreak` and the frame advance, read
     // on the PSP. The PS2 ships the same `.pob` files (`docs/formats/pob.md`), so the
     // PSP's law is carried over, unmeasured on the PS2.

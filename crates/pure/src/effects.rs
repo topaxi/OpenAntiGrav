@@ -154,6 +154,19 @@ pub const LOOKS: &Looks = &Looks {
         on: Platforms::Only(&[oag_title::Platform::Psp]),
         origin: Origin::Measured,
     },
+    // Pure runs Pulse's bloom class over Pulse's stencil mask: its Modesto GE list draws the
+    // bright pass, the 1,320-vertex blur pair (weights 20/30/40/50/64/64/64/50/40/30/20) and the
+    // `FIXA 0xaf` composite, and stamps ref 4 on ordinary batches and the texture's glow byte
+    // on the `_GLOW` ones (`docs/ghidra/functions/psp-pure-usa/bloom.md`). Its composite is
+    // drawn before the first HUD sprite, so the HUD takes none of the haze.
+    psp_glow_mask: Rule {
+        on: Platforms::Only(&[oag_title::Platform::Psp]),
+        origin: Origin::Measured,
+    },
+    bloom_under_hud: Rule {
+        on: Platforms::Only(&[oag_title::Platform::Psp]),
+        origin: Origin::Measured,
+    },
     ..Looks::unread(ShieldPalettes {
         ps2: ShieldPalette::Ps2Pulse,
         elsewhere: ShieldPalette::Pulse,

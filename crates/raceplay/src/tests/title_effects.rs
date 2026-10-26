@@ -506,3 +506,22 @@ fn the_circuit_chrome_pass_is_pulses_and_pures_and_both_are_weighted() {
         assert_eq!(rules(other), (false, false), "{}", other.name);
     }
 }
+
+/// The PSP bloom and its glow mask are Pulse's and Pure's alone, and only Pure composites it
+/// before the HUD: dropping Pure's rule hands its circuits back the crisp, unglowing signs.
+#[test]
+fn the_psp_bloom_belongs_to_pulse_and_pure_and_only_pure_lands_it_under_the_hud() {
+    let mask = |t: &Title, p| t.looks.psp_glow_mask.applies(p);
+    let under = |t: &Title, p| t.looks.bloom_under_hud.applies(p);
+    assert!(mask(oag_pulse::TITLE, Platform::Psp) && !mask(oag_pulse::TITLE, Platform::Ps2));
+    assert!(mask(oag_pure::TITLE, Platform::Psp));
+    assert!(!under(oag_pulse::TITLE, Platform::Psp));
+    assert!(under(oag_pure::TITLE, Platform::Psp));
+    for other in [oag_hd::TITLE, oag_2048::TITLE, oag_omega::TITLE] {
+        assert!(
+            !mask(other, Platform::Psp) && !under(other, Platform::Psp),
+            "{}",
+            other.name
+        );
+    }
+}

@@ -706,6 +706,10 @@ impl Session {
         // here instead. See the block below.
         self.phases.mark(super::phases::Phase::Scene);
         if let Stage::Race(stage) = &mut self.stage {
+            // Pure's glow lands before its HUD (`Looks::bloom_under_hud`); a no-op elsewhere.
+            stage
+                .scene
+                .composite_bloom_under_hud(&mut encoder, self.framebuffer.output(), rect);
             // `Framebuffer::output_size`, not `self.gpu.output.size()`: the two
             // usually agree, since `resize_output` above just asked for
             // exactly that, but not always - a failed reallocation there
@@ -735,6 +739,9 @@ impl Session {
         // A race parked behind the menus has no HUD; its glow still lands,
         // before the menu rows go on.
         if let (Stage::Menu(_), Some(parked)) = (&self.stage, self.suspended_race.as_ref()) {
+            parked
+                .scene
+                .composite_bloom_under_hud(&mut encoder, self.framebuffer.output(), rect);
             parked
                 .scene
                 .composite_bloom(&mut encoder, self.framebuffer.output(), rect);

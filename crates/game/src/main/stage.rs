@@ -543,6 +543,7 @@ impl Stage {
                 .as_ref()
                 .and_then(|weather| weather.mist_texture.as_ref()),
         );
+        scene.attach_bloom_order(setup.scenery_fx.bloom_under_hud);
         scene.attach_lens_flare(
             gpu.device(),
             gpu.queue(),

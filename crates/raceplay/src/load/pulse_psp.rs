@@ -1,6 +1,7 @@
 //! What Pulse on the PSP draws differently from every other source, measured
-//! live on PPSSPP: the bloom's stencil-stamped glow mask, unmeasured on the PS2
-//! port, Pure or any later title, so it stays behind [`is_pulse_psp`]. The hull's
+//! live on PPSSPP. The bloom's stencil-stamped glow mask is its own rule
+//! (`Looks::psp_glow_mask`: Pulse and Pure on the PSP, unmeasured on the PS2 port or any
+//! later title); the rest stays behind [`is_pulse_psp`]. The hull's
 //! GE lights and the Quake's road ripple are read off the PSP executable and
 //! carried to the PS2 by the `hull_lights` and `road_ripple` rules. The hull rig
 //! is built for the PS2 too but draws nothing there: a PS2 hull vertex carries a
@@ -22,13 +23,13 @@ pub(super) fn is_pulse_psp(title: &oag_title::Title, archives: &oag_assets::Arch
 }
 
 #[cfg(feature = "view")]
-/// Marks every `.vex` model the race draws as stamping the glow mask. The
-/// circuit's own placed effects, weather, road ripple and hull lights follow
-/// their own rules, which the PS2 shares; everything else is a no-op when
-/// `pulse_psp` is false.
+/// Marks every `.vex` model the race draws as stamping the glow mask when
+/// `psp_glow_mask` says so. The circuit's own placed effects, weather, road
+/// ripple and hull lights follow their own rules, which the PS2 shares.
 pub(super) fn finish(
     loaded: &mut Loaded,
-    (pulse_psp, circuit_fx, road_ripple, hull_lights): (bool, bool, bool, bool),
+    (circuit_fx, road_ripple, hull_lights): (bool, bool, bool),
+    psp_glow_mask: bool,
     track_shine: bool,
     track_blob: &[u8],
     (archives, track): (&mut oag_assets::Archives, &str),
@@ -74,15 +75,14 @@ pub(super) fn finish(
                 ),
             });
     }
-    if !pulse_psp {
-        return;
+    if psp_glow_mask {
+        super::glow_mask::stamp_models(loaded, false);
+        loaded.report.push(
+            "glow mask: the track, sky, pads, hulls, plumes, shields and weapon bodies stamp it as \
+             the original's stencil does, a blended batch with the glow bits through a second draw"
+                .into(),
+        );
     }
-    super::glow_mask::stamp_models(loaded, false);
-    loaded.report.push(
-        "glow mask: the track, sky, pads, hulls, plumes, shields and weapon bodies stamp it as the \
-         original's stencil does, a blended batch with the glow bits through a second draw"
-            .into(),
-    );
 }
 
 #[cfg(feature = "view")]

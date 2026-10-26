@@ -1642,3 +1642,18 @@ GE does (frame MAD 20.6 to 13.1). The circuits' own chrome-map pass draws on Pur
 160x105 box at (320,45), from 20.7 with the pass off; frame MAD 11.4/9.4/8.6/9.2 to 8.8/8.7/8.1/9.0 (Vineta K, Chenghou,
 Blue Ridge, Modesto); Pulse pairs unchanged at that date (Pulse weighted since, [circuit-shine.md](../ghidra/functions/psp-pulse-usa/circuit-shine.md)). Evidence and the open ends (the `249/255` light scale, Modesto's second
 directional): [`psp-pure-usa/hull-shine.md`](../ghidra/functions/psp-pure-usa/hull-shine.md).
+
+## Pure's circuits glow: the bloom is Pulse's chain (2026-10-26)
+
+The maintainer's report: Modesto Heights' neon signs glow with a soft halo in the original and read crisp
+in ours. A GE list of the compare pair's own state, replayed with one PRIM changed, puts the halo in the bloom's
+composite: Pure runs Pulse's four-pass bloom (bright pass, 1,320-vertex blur pair with the same 11 weights,
+`FIXA 0xaf` composite) over Pulse's per-batch stencil stamps (ref `4` on ordinary batches, the texture's glow
+byte on `_GLOW` ones), in all four recorded lists. It was never wired because the rule behind it
+(`measured_draws`) covered Pulse alone. `Looks::psp_glow_mask` now carries Pulse and Pure on the PSP, and
+Pure's composite lands **before** its HUD (`Looks::bloom_under_hud`; Pulse's lands over it). Sign box (x 180-280,
+y 60-105) mean luma: original 111.1, ours 75.5 before, 111.3 after; frame MAD on Modesto 8.96 to 6.51 (sky band
+10.16 to 3.67); Vineta K, Chenghou and Blue Ridge move by 0.0 to 0.1 on the frame. Pulse is pixel-identical (frame
+and mask, Amphiseum Black). The functions are in [`psp-pure-usa/bloom.md`](../ghidra/functions/psp-pure-usa/bloom.md):
+`Bloom_Construct` `0x0886277c` and five list and tap builders, the weights at `0x08a8e89c`.
+

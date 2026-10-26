@@ -636,6 +636,7 @@ pub fn capture(
         format,
         race.scenery_fx().weather().mist_texture(),
     );
+    scene.attach_bloom_order(race.scenery_fx().bloom_under_hud());
     scene.attach_lens_flare(&device, &queue, format, race.scenery_fx().lens_flare());
     scene.prepare_ghost(
         &device,
@@ -1239,6 +1240,9 @@ pub fn capture(
             Some(framebuffer) => (framebuffer.output().clone(), rect),
             None => (view.clone(), viewport),
         };
+        // Pure's glow lands before the panel and the HUD, so neither takes its haze
+        // (`Looks::bloom_under_hud`); a no-op elsewhere.
+        scene.composite_bloom_under_hud(&mut encoder, &hud_view, hud_viewport);
         // The track-description panel, over the flyby and fading out behind the chase view - the
         // same overlay `RaceStage::draw_hud` draws, ahead of the HUD as there, and on every
         // window of a multi-window race against that window's own views.

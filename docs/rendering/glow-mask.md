@@ -116,9 +116,14 @@ plume **does not** write the mask.
   banner letters drew neither their colour nor their mask. The cutout
   pipeline for that reference now tests `LessEqual`
   (`mesh_render::cutout::depth_compare`). On a Pure and a PS2 start frame the
-  change moves no pixel.
+  change moved no pixel at the time: Pure stamps nothing there yet (see below).
 - **The bloom always runs** (no setting since 2026-10-02: the original
-  offers none) and only over a stamped mask, so a Pure or PS2 race draws none.
+  offers none) and only over a stamped mask. **Pure joined on 2026-10-26**
+  (`Looks::psp_glow_mask`, lane `pure-sign-glow`): its GE list carries the same four passes
+  over the same stencil stamps, read on Modesto Heights (`0x9e` over 3,452 pixels and `0xb7` over
+  346 in the original's EDRAM, 3,445 and 318 in ours) and composites before the HUD, not after
+  (`Looks::bloom_under_hud`; [`bloom.md`](../ghidra/functions/psp-pure-usa/bloom.md)). The PS2
+  and every other title still draw none.
 - `OAG_DUMP_GLOW_MASK=<png>` writes a `--screenshot`'s mask for this
   comparison. Talon's Junction on the grid: ours reads `4` over 107,644 of
   130,560 pixels at 480 x 272, with the strips, the banner, the panels and

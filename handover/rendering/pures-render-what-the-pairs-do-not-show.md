@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [pure, pulse]
 updated: 2026-10-26
-summary: "Pure render: canopy, sky, effect names, flare and circuit chrome-map pass closed; 250 light scale, Modesto light, HUD open"
+summary: "Pure render: canopy, sky, effect names, flare, chrome-map pass and bloom closed; 250 light scale, Modesto light, HUD open"
 ---
 
 # Pure's render: what the pairs still show, ranked
@@ -12,7 +12,10 @@ Lanes `pure-render-fidelity` and `pure-render-fidelity-2`, 2026-10-26. Closed so
 - the hull takes its circuit's lights ([`psp-pure-usa/scene-light.md`](../../docs/ghidra/functions/psp-pure-usa/scene-light.md));
 - the hull draws its `0x2000` extra pass, weighted by its texture's alpha;
 - Chenghou's colourless sky cube draws unlit at white;
-- the fifteen engine effect names Pure never requests are dropped.
+- the fifteen engine effect names Pure never requests are dropped;
+- **the bloom** (`pure-sign-glow`): Pure runs Pulse's four-pass bloom over Pulse's stencil mask, composited before its HUD.
+  Modesto's neon signs glow: sign box mean luma 75.5 to 111.3 against the original's 111.1, frame MAD 8.96 to 6.51
+  ([`psp-pure-usa/bloom.md`](../../docs/ghidra/functions/psp-pure-usa/bloom.md), `Looks::psp_glow_mask`, `Looks::bloom_under_hud`).
 
 The last three: [`psp-pure-usa/hull-shine.md`](../../docs/ghidra/functions/psp-pure-usa/hull-shine.md).
 

@@ -102,8 +102,41 @@ impl Scene {
     ///
     /// A no-op unless this frame prepared a Pulse bloom (PSP or PS2): HD runs
     /// its whole chain inside [`Scene::render`]. Calling it twice adds the
-    /// glow once.
+    /// glow once. Also a no-op on a title whose composite lands before the HUD
+    /// ([`Scene::composite_bloom_under_hud`]).
     pub fn composite_bloom(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        target: &wgpu::TextureView,
+        rect: (f32, f32, f32, f32),
+    ) {
+        if !self.bloom_under_hud.get() {
+            self.composite_bloom_now(encoder, target, rect);
+        }
+    }
+
+    /// Chooses where the glow lands: before the HUD (`true`, Pure's list draws the
+    /// composite ahead of its first HUD sprite) or over it (Pulse's queue key `0x70`).
+    /// `Looks::bloom_under_hud`, from [`crate::scenery_fx::SceneryFx::bloom_under_hud`].
+    pub fn attach_bloom_order(&self, under_hud: bool) {
+        self.bloom_under_hud.set(under_hud);
+    }
+
+    /// [`Scene::composite_bloom`] for a title whose glow lands before the HUD: the caller runs
+    /// it ahead of drawing the HUD, and the over-the-HUD call then does nothing. A no-op on
+    /// any other title.
+    pub fn composite_bloom_under_hud(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        target: &wgpu::TextureView,
+        rect: (f32, f32, f32, f32),
+    ) {
+        if self.bloom_under_hud.get() {
+            self.composite_bloom_now(encoder, target, rect);
+        }
+    }
+
+    fn composite_bloom_now(
         &self,
         encoder: &mut wgpu::CommandEncoder,
         target: &wgpu::TextureView,
