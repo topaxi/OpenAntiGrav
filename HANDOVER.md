@@ -405,743 +405,99 @@ What stays here concerns working in *this* repository with other writers in it:
 
 ## Traps that are live
 
-**On `ps4-omega-eu`, the tagged-object constructor idiom (vtable install,
-`.cpp`-tag write to `param_1[0xb]`, callback to `param_1[1]`, plus a
-linked-context-list registration walk) is shared boilerplate every class
-uses, not evidence a candidate function matches a specific sibling-binary
-class.** 2026-09-15. Investigating a `Collision.cpp`-tagged candidate for
-`ps3-hdfury-eu/collision.md`'s own `Collision_Construct`
-([`ps4-omega-eu/collision.md`](docs/ghidra/functions/ps4-omega-eu/collision.md)),
-the same busy-wait chain walk, field writes (`0x3006`/`0xffffffff`) and
-vtable/tag/callback triple that looked like collision-specific structural
-corroboration turned out to be byte-identical to code already read the same
-day in all thirteen of `ModeManager_ConstructByMode`'s branches
-([`weapons.md`](docs/ghidra/functions/ps4-omega-eu/weapons.md)) - caught by
-`advisor()` before the name was committed. **On this binary, a `.cpp` tag
-match still needs the class-specific evidence `README.md` already asks for
-(a field offset, an enum, a magic number, or - the strongest, per
-`ps3-hdfury-eu/collision.md`'s own `Collision_Construct` - a loop whose
-count times stride lands exactly on a separately-computed allocation size)**;
-the generic constructor skeleton around the tag write proves nothing on its
-own here, and won't going forward either.
+**`ps4-omega-eu`: the tagged-object constructor idiom** (vtable install, `.cpp`-tag write to `param_1[0xb]`, callback to `param_1[1]`, linked-context-list registration walk) **is boilerplate every class uses, not evidence a candidate matches a sibling-binary class** (2026-09-15; a `Collision.cpp` candidate looked like corroboration and was byte-identical to all thirteen branches of `ModeManager_ConstructByMode`, [`weapons.md`](docs/ghidra/functions/ps4-omega-eu/weapons.md); caught by `advisor()`). A `.cpp` tag match still needs class-specific evidence (a field offset, enum, magic number, or a loop whose count times stride equals a separately computed allocation size). [`collision.md`](docs/ghidra/functions/ps4-omega-eu/collision.md).
 
-**Every static negative recorded on `ps3-hdfury-eu`'s `EBOOT.elf` before 2026-09-15 09:29 is stale by construction.** Stock Ghidra could not decode the Cell `lvlx` instruction, so 851 sites across 294 functions - about 213 KB of code - held with no instructions, no xrefs and no callers; the live `ps3-hdfury-eu` program was reimported at 09:29 today with a fixed language and now carries all of it (`docs/reverse-engineering/toolchain.md#ps3`, "Some Cell vector instructions are missing"). Any "no writer", "no caller", "no consumer", "no xref", "nothing references", "no reader located" or "the sweep returned nothing" claim about that binary timestamped - or undated - before that reimport was computed over an incomplete image and needs re-running before it's trusted; three were re-run the same day: the Zone radius writer was found, `zoneOrigin`'s writer was re-confirmed against a thread that still said "none", and `craft+0x108` held as a negative. A pass on 2026-09-15 marked the still-load-bearing ones it found across `handover/` and `docs/ghidra/functions/ps3-hdfury-eu/` with `**[stale 2026-09-15: computed before the lvlx reimport; re-run per toolchain.md#ps3]**` inline rather than re-running them all; nobody has audited the rest.
+**Every static negative recorded on `ps3-hdfury-eu`'s `EBOOT.elf` before 2026-09-15 09:29 is stale by construction.** Stock Ghidra could not decode the Cell `lvlx` instruction (851 sites in 294 functions, about 213 KB, held no instructions, xrefs or callers); the program was reimported then ([toolchain.md#ps3](docs/reverse-engineering/toolchain.md#ps3), "Some Cell vector instructions are missing"). Any undated or earlier "no writer / no caller / no consumer / no xref / sweep returned nothing" about that binary needs re-running before it is trusted. Three were re-run (Zone radius writer found, `zoneOrigin`'s writer re-confirmed, `craft+0x108` negative held); load-bearing ones are marked `**[stale 2026-09-15: ...]**` inline; the rest are unaudited.
 
-**`cargo check` does not link an executable, so a `--screenshot` capture run
-between a `cargo check` and the last real `cargo build` is silently running
-the old binary.** 2026-09-13, wiring HD's chrome-title font role. The whole
-implementation pass used `cargo check`/`cargo clippy` to verify as it went -
-correctly, they are faster and catch the same type errors - but the first two
-before/after screenshot pairs both came back **zero** pixels different,
-which read as "the fix isn't visible" rather than what it was: `target/debug/oag-game`
-had not been relinked since the one `cargo build --workspace` at the very
-start of the session, so every `--menu-page` capture in between was against
-pre-change code with no error or warning saying so. Rebuilding with `cargo
-build` (not `cargo check`) surfaced the real picture - and a second, genuine
-bug the check-only loop had never run far enough to hit: a `wgpu` validation
-panic, `"the buffer bound at binding index 0 is bound with size 56 where the
-shader expects 64"`, from a `Uniforms` struct whose Rust-side size did not
-match WGSL's own alignment-driven padding. **A `cargo check`-verified change
-to `render.rs` or any `.wgsl` file needs an actual `cargo build` plus a real
-capture before trusting a before/after comparison** - `cargo check`'s silence
-proves the types line up, not that the picture on screen has moved, and a
-wgpu validation error only fires at draw time, never at compile time.
+**`cargo check` does not link an executable**: a `--screenshot` run between a `cargo check` and the last `cargo build` silently runs the old binary (2026-09-13: two before/after pairs came back zero pixels different, and a real `wgpu` validation panic, a 56-byte `Uniforms` against WGSL's 64, never showed because it fires at draw time). A `cargo check`-verified change to `render.rs` or any `.wgsl` needs a real `cargo build` plus a capture before trusting a comparison.
 
-**Adding a weapon to `oag_weapons::pickup::IMPLEMENTED` re-rolls every
-statistic downstream of `pickup::draw`, and a sparse one will flip.**
-2026-09-08. Landing the LeachBeam turned
-`oag-game::ai_roll_ground_truth a_full_grid_still_rolls_and_a_higher_tier_rolls_no_less`
-red - `skilled armed 0 rolls total against novice's 1` - (that test is six
-`a_full_grid_of_*_arms_no_fewer_rolls_than_*` tests since 2026-09-09) with nothing touching
-the barrel roll, `oag_ai` or any force law. Confirmed by isolation: that one
-line in `IMPLEMENTED` makes it fail, the same line out makes it pass. A longer
-`IMPLEMENTED` widens the weighted walk in `draw`, so every craft draws different
-pickups, so every trajectory differs, so the seven per-flight roll coin tosses
-are re-rolled. The test's per-tier totals lived in the range 0-3, and a
-statistic with four distinct values cannot carry a monotonicity claim across
-four tiers.
+**Adding a weapon to `oag_weapons::pickup::IMPLEMENTED` re-rolls every statistic downstream of `pickup::draw`** (landing the LeachBeam turned an `ai_roll` ground-truth test red with nothing about rolls touched, 2026-09-08). **A red in a race-wide behaviour statistic after a pickup change is a sample-size finding first**: check whether the statistic can absorb a reroll before hunting a bug. The maintainer's ruling: make the sample discriminate (the `ai_roll` tests sum twelve circuits by two seeds by seven opponents per tier; `race::Options::seed` is the resampling axis); **weakening the bound and re-baselining were both rejected** (same call on `craft_sticking_ground_truth`). A second case: `ram_ground_truth`'s "no worse than one in six" bound came from 2 of 27 shifts, but six races now yield nine shifts, so `2 of 9` trips it on noise (measured 11 of 123, 8.9% over forty races); the bound stayed and `RACES` went 6 to 40. **When a ground-truth bound goes red, check the denominator before the numerator.**
 
-**So a red in a race-wide *behaviour* statistic after a pickup change is a
-sample-size finding first, not a regression.** Check whether the assertion's
-statistic can absorb a reroll before looking for the bug. The fix the maintainer
-ruled for is to make the sample discriminate - that test now sums twelve forward
-circuits by two world seeds by seven opponents (24 grid races per tier, armed
-totals 5/21/43/82, each seed monotone on its own) rather than one race on
-`09_Track`. **Weakening the bound and re-baselining the number were both
-explicitly rejected**, the same call made on the `craft_sticking_ground_truth`
-tripwire the same day. `race::Options::seed` is the resampling axis: it reaches
-`World::new`, `oag_ai::Driver::for_slot` and `oag_ai::pilot_for_slot`. The cost
-is real - 350 s in debug against 17 s, which makes it the suite's longest single
-test.
+**A deterministic temp path shared by two tests races under nextest's own parallelism with no load required** (the two PS2 transcode tests; `transcode_scratch`'s doc comment in `crates/game/tests/ps2_source_ground_truth.rs`). The load correlation was a symptom convincing enough to survive three investigations.
 
-**It bit a second test the same day, and there the rate had not moved at all.**
-`oag-game::ram_ground_truth a_ram_rarely_throws_the_rammer_out_of_the_corridor`
-(merged into `a_ram_fires_only_where_there_is_room_and_rarely_throws_the_rammer_out`
-on 2026-09-09) was **already red on `main`** before this pass - isolated by reverting only the
-Quake lifetime fix, which changed the count from 9 to 11 and left it red either
-way, so it is not a consequence of that fix. Its bound is "no worse than one in
-six", set from 2 of 27 shifts over six races in August. The ram was later
-narrowed to the player slot and every pickup-pool change since has reshuffled
-the field, so six races now yield **nine** shifts and `2 of 9` trips a 1-in-6
-bound on noise alone. Re-measured over forty races on the same tree: **11 of
-123, 8.9%**, against the 7.4% the bound came from. The bound was left exactly
-where it was and `RACES` went 6 -> 40 (about 110 s in debug).
+**A `Data\Psys\<NAME>.POB` load-path string search in HD's executable discriminates weapon and debug effects and is blind to continuous/ambient ones** (2026-09-08). A control scan (`strings -a ... | rg -o 'Data.Psys.[A-Za-z0-9_]+\.POB'`) finds 46 of HD's 82 disc names; for weapons a zero hit is evidence, but no environment name is among the 46 (`WO_RAIN`, `WO_SNOW` included) and the wired `WO_SHIP_ENGINEFLARE` is absent too. **Re-establish a control for each new *category* of name before trusting a zero-hit search** (`docs/formats/pob.md`'s HD corpus section; `WO_ENGINE_FLARE`/`WO_ENGINE_JETFLARE` stay open).
 
-**The lesson both cases share**: when a ground-truth bound goes red, check the
-*denominator* before the numerator. A shrinking sample and a real regression
-look identical from the assertion message, and this suite has several bounds
-whose sample was sized against a field that has since changed.
+**A wired-effect count kept in prose drifts stale in every copy** (`RACE_EFFECTS` in `crates/raceplay/src/effects.rs` grew 8 to 15 while prose said 7 and 11). Recompute from `RACE_EFFECTS.len()` at the point of use.
 
-**Both PS2 transcode ground-truth tests shared one scratch directory, and it
-read for three days as "fails under load".** Fixed 2026-09-09 in `33913eb9`;
-`transcode_scratch`'s own doc comment in
-`crates/game/tests/ps2_source_ground_truth.rs` carries the mechanism. Kept here
-only for the general lesson: **a deterministic temp path shared by two tests
-races under `nextest`'s own parallelism, with no second worktree and no load
-required** - and the load correlation that follows from it is a symptom
-convincing enough to survive three separate investigations.
+**A tuning number chosen on the twelve lone-craft circuits can turn a *field* ground-truth test red while the whole `just` gate stays green** (2026-09-06, `oag_ai::Tuning::curvature_span` = 10 was best on the solo board and broke `lap_times_ground_truth::every_opponent_that_laps_has_a_lap_time` and `opponent_weapons_ground_truth::a_field_racing_with_real_pads_does_not_mine_itself_to_death`). A lone craft is a different machine from one shoved by seven others. `crates/raceplay/tests/ai_span_sweep.rs` reports both boards. **Run `just test-data` after any AI tuning change**: `just` never runs `#[ignore]`d disc-backed tests. The same holds for any start-line or grid-timing change (`cc395862`, holding opponents at the line through the countdown, moved every opponent tick for tick and broke two disc-backed tests invisibly): synthetic in-memory fixtures cannot see this class of regression.
 
-**A `Data\Psys\<NAME>.POB` load-path string search discriminates for weapon
-and debug particle-effect names on HD's executable, and is blind to
-continuous/ambient ones - a zero hit means opposite things for the two
-categories.** 2026-09-08, bucketing `hds-engine-trail-is-one-of-four-ribbons.md`'s
-unwired HD `.pob` inventory. For `NUMBERS`/`TEST_BOMBSPIKES`, absence from
-`EBOOT.elf`'s string table was real evidence: a control scan
-(`strings -a … | rg -o 'Data.Psys.[A-Za-z0-9_]+\.POB'`) finds 46 of HD's 82
-disc names as a load-path string, including several this engine has not
-built at all (`WO_LEACHBEAM_CHARGING`, `WO_BOMB_EXPLO_DETONATOR`), so the
-executable's string table tracks the *original* game's load paths and a
-genuine absence says something. Reused unchecked for four environment names
-(`WO_BLUE_WELDER`, `WO_MODESTO_STEAM_A`, `WO_DustMotes`,
-`WO_UNDERWATER_GODRAYS`) in the same pass, and the control silently fails
-for that category: **zero** environment-flavoured name is in the 46, wired
-or not (`WO_RAIN`/`WO_SNOW` included), and the *wired* `WO_SHIP_ENGINEFLARE`
-is absent from the string table too, same as its two unwired HD siblings
-`WO_ENGINE_FLARE`/`WO_ENGINE_JETFLARE`. A continuous or ambient effect's
-trigger evidently never puts its name in a load-path string on this disc,
-so a zero hit there proves nothing either way - caught only because advisor
-review asked for the same control re-run scoped to the new category, one
-commit after the overclaimed version had already landed
-(`f496a5b2` -> corrected in `48ef5c17`). **Re-establish a control for each
-new *category* of name before trusting a zero-hit search on it, not just
-once per search technique** - see `docs/formats/pob.md`'s HD corpus
-section and that thread's Next Steps for the worked example and the
-now-open `WO_ENGINE_FLARE`/`WO_ENGINE_JETFLARE` question it left behind.
+**A breakpoint-driven PPSSPP capture (break, screenshot, resume) burns wall-clock far faster than emulated time, and the attract-demo idle timer (about 120 s) runs on wall-clock**: a capture can roll into the demo mid-run with nothing in the frame indices saying so (2026-09-05, main-menu pulse). Combine "walk to the state" and "start capturing" in one process with no gap, and budget by wall time since the last input, not frame count.
 
-**A wired-effect count kept in prose drifts stale independently in every
-place it's copied, with nothing to catch it converging on the wrong
-number.** 2026-09-08, same pass. `RACE_EFFECTS` (`crates/raceplay/src/effects.rs`)
-grew from 8 to 15 over two weeks (Plasma, Shuriken, Quake landed
-2026-09-02) while three different prose copies of "how many are wired"
-stood still at three different stale values - 7 in a handover thread, 11 in
-`psys_inventory_ground_truth.rs`'s own doc comment - neither matching each
-other or the real number, until cross-checked against the source directly.
-**Recompute a wired/authored count from `RACE_EFFECTS.len()` (or the
-equivalent const) at the point of use rather than trusting a number
-written down earlier**, especially across a gap of more than a day or two;
-nothing enforces that these prose counts stay in sync with the source.
+**`ghidra-mcp`'s `search_byte_patterns` accepts a `mask` and silently ignores it** (a masked search degrades to exact match and reads like "not found"; `d0000108`/`fc00ffff` found nothing while `d03f0108` found three, 2026-09-05). Use `search_instructions` with `mnemonic`/`operand_pattern` (`stfs`, `0x108(` found 48). Sanity-check any masked result against a known-present sequence.
 
-**A tuning number chosen on the twelve lone-craft circuits can turn a *field*
-ground-truth test red, and the whole `just` gate will stay green while it
-does.** 2026-09-06, choosing `oag_ai::Tuning::curvature_span`. A cap of 10
-units was the best row on `race_ground_truth`'s twelve-circuit solo board -
-all twelve clean, no respawn added, `07_Track` reaching lap 4 for the first
-time - and it broke both
-`lap_times_ground_truth::every_opponent_that_laps_has_a_lap_time` and
-`opponent_weapons_ground_truth::a_field_racing_with_real_pads_does_not_mine_itself_to_death`.
-One craft in a grid of eight wedges near the start and never completes a timed
-lap; another is ground to 0.41 of its pool against a 0.45 floor. **A lone craft
-on an empty circuit is a different machine from a craft being shoved by seven
-others**, and no amount of solo circuits substitutes for one field run. The
-sweep harness (`crates/raceplay/tests/ai_span_sweep.rs`) now reports both boards,
-using the two committed field fixtures set up exactly as they set themselves
-up. The second half of the trap is why it survived review at all: **`just` does
-not run `#[ignore]`d disc-backed tests**, so `just` was green throughout. Run
-`just test-data` after any AI tuning change. Historical note, not current
-guidance: `shuriken_ground_truth` and `stall_rescue_ground_truth` were once
-the two expected reds this line named - both are fixed (2026-09-07 and
-2026-09-08 respectively, see the shuriken thread below) and `just test-data`
-should be all-green again barring a fresh regression.
+**`ghidra-mcp`'s `rename_data` rejects this project's global naming (`missing_hungarian_prefix`) while `rename_function` only warns.** Do not rename to satisfy the validator: [ADR-0005](docs/architecture/adr/0005-ghidra-conventions.md) and `names.tsv` (policed by `just check-names`) are authoritative. Use `create_label`, which applies the name and only warns. The "not PascalCase" and "not a recognized verb" warnings on `Subsystem_VerbNoun` are noise; the rename lands.
 
-**A start-line or grid-timing change can flip an `#[ignore]`d ground-truth
-test without CI ever seeing it, because `just test` never runs `#[ignore]`d
-tests at all.** 2026-09-06, bisecting `shuriken_ground_truth`'s red test (see
-the shuriken thread above). `cc395862` ("hold AI opponents at the line
-through the start countdown") updated the three synthetic `oag-game` tests
-its own gate broke and added a dedicated countdown test - every one of those
-runs under `just test` and would have caught a regression there. But it also
-changed where every opponent is, tick for tick, for the rest of any race
-longer than the countdown, and the disc-backed `shuriken_ground_truth` and
-`stall_rescue_ground_truth` tests that measure exact opponent position and
-state both broke the same day - invisibly, because both are `#[ignore]`d and
-only `just test-data` (which needs `data/images/`) runs them. A change that
-only touches synthetic, in-memory fixtures cannot see this class of
-regression at all; only a real-track, real-grid ground-truth test can, and
-those only run on demand.
+**A boot chain watched on RPCS3 with savedata present is a different, shorter chain** (2026-09-05: with `~/.config/rpcs3/dev_hdd0/home/00000001/savedata/BCES00664-AUTO-`, HD skipped `FirstPlay` and ran seven steps where `skin.xml` declares eight; only `Data BCES00664-AUTO- has been found` in `TTY.log` said so). Flipping a chain to `Measured` off such a log is [ADR-0025](docs/architecture/adr/0025-a-boot-chain-carries-its-provenance.md)'s error one level down. Move the save aside before any boot-order capture and put it back (`just rpcs3-bootchain`, [hd-frontend.md](docs/formats/hd-frontend.md)). A front end's boot order depends on profile state: which boot you watched is part of the claim.
 
-**A breakpoint-driven PPSSPP capture (break, screenshot, resume) burns real
-wall-clock time far faster than emulated game time, and the attract-demo
-idle timer runs on the former - so a capture can silently roll into the demo
-mid-run with nothing in the frame indices announcing it.** 2026-09-05,
-measuring the main menu's highlight pulse. Breaking on `Gfx_PresentFrame` and
-photographing between hits costs about a quarter second of wall time per
-frame (the screenshot round trip), so 90 in-game frames (3 s of emulated time)
-took roughly 90 real seconds - and combined with the setup time before the
-capture script even started, real elapsed time since the menu was last
-touched exceeded the documented ~120 s attract-demo threshold well before the
-frame count did. The capture kept running and photographed the demo's own
-race footage, indistinguishable from a real capture until a frame was opened
-and showed a circuit rather than `Main Menu`. **Combine "walk to the state
-you want" and "start capturing" in one process with no gap** - reading tool
-output or writing an analysis script in between is exactly the gap that
-overruns the idle window - and treat total wall-clock time since the last
-input, not frame count, as the budget against the 120 s limit.
+**A `--screenshot --until` run over a movie leg on a machine with a real audio device fails with `never reached "X" in 3600 ticks` or silently captures an early frame**: a movie with sound is audio-clocked (ADR-0019), a headless capture finishes in under a second, and the device playhead barely moves. **Pass `--no-audio`** (forces the null backend so the movie is tick-clocked, as on a device-less CI machine). Verified on Pulse's `LogoFMV` and Pure's `Developer Publisher Screen` reels. `Audio::open`/`Audio::movie_playhead` in `crates/sound/src/lib.rs`.
 
-**`ghidra-mcp`'s `search_byte_patterns` accepts a `mask` parameter and
-silently ignores it - a masked wildcard search reads exactly like "not
-found" even when the bytes are sitting right there.** 2026-09-05, hunting
-`stfs ...,0x108(rX)` for any register `X` on `ps3-hdfury-eu`. A function
-disassembly-confirmed to contain three `stfs ...,0x108(r31)` instructions
-(`d03f0108`) at known addresses returned **zero** matches for
-`pattern=d0000108, mask=fc00ffff` (byte0 masked down to just the `stfs`
-opcode bits, byte1 wildcarded to catch any register pair, byte2/3 pinned to
-the `0x108` displacement) - and the identical mask against the pattern with
-the *real* byte1 value already filled in (`d03f0108`) found all three, i.e.
-masking degrades to an exact-match requirement rather than a wildcard.
-**Use `search_instructions` with `mnemonic`/`operand_pattern` instead** - it
-matches after Ghidra's own disassembly, so `mnemonic="stfs",
-operand_pattern="0x108("` finds every register variant in one call (48 for
-this offset) with no encoding math and no mask to get wrong. Reserve
-`search_byte_patterns` for a pattern with no live-register component, and
-sanity-check any use of its `mask` against a byte sequence you already know
-is present before trusting a "no matches" result from it.
+**The `ghidra-mcp` bridge is one shared instance and `switch_program` sets a global "current program" any session can move** (2026-09-03: three `rename_function_by_address` calls with no `program` reported success and landed on a different title's binary). **Pass `program` explicitly on every mutating call** (`rename_*`, `set_*`, `create_*`) and re-verify with an explicit-`program` read. `run_script_inline` with an explicit `program` does not depend on the pointer (all 309 `ps3-hdfury-eu` names were applied that way on 2026-09-15 while `just apply-names` refused; toolchain.md#ps3).
 
-**`ghidra-mcp`'s `rename_data` rejects this project's own global-naming
-convention outright, and `rename_function` merely warns about it - so a
-data name silently doesn't land while a function name does.** 2026-09-05,
-recovering `g_MaterialDrawClass` on `ps3-hdfury-eu`. The tool enforces a
-Hungarian-prefix rule (`g_dw...`, `g_ab...`, `g_p...`) and returns
-`{"status":"rejected","issue":"missing_hungarian_prefix"}` for a plain
-`g_MaterialDrawClass` - even though `g_ChunkVisibilityMask` and every other
-`data` row in `names.tsv` is spelled that way, per
-[ADR-0005](docs/architecture/adr/0005-ghidra-conventions.md). **Do not
-rename to satisfy the validator**; ADR-0005 and `names.tsv` are
-authoritative and `just check-names` polices them. Use `create_label`
-instead, which applies the same name and only warns. The same validator
-also warns that `Subsystem_VerbNoun` "is not PascalCase" and "does not
-start with a recognized verb" on every function rename this project makes -
-those warnings are noise, and the rename does land.
+**A live Ghidra instance's function boundaries can drift from what a `docs/` page records** (2026-09-05: `mine.md`'s `0x08859ac8`/`0x08859930` decompiled to different functions, the real logic at `0x08859954`; probably `just apply-names` not replayed). Byte content at a documented address can confirm a reading even when the address is no longer the entry: disassemble around it before concluding the finding was wrong (`mine.md`, 2026-09-05).
 
-**A boot chain watched on RPCS3 with savedata present is a *different, shorter* chain, and it reads as a complete one.** 2026-09-05, and it nearly cost a wrong `Provenance::Measured`. With `~/.config/rpcs3/dev_hdd0/home/00000001/savedata/BCES00664-AUTO-` in place, Wipeout HD skips `FirstPlay` entirely and goes `EpilepsyWarning` -> `Save Warning`: seven steps where its `skin.xml` declares eight, with nothing in `TTY.log` announcing an omission - only `Data BCES00664-AUTO- has been found` and `get->isNewData: 0`, several lines away and easy to read as routine. Flipping a chain to `Measured` off such a log puts a step nobody watched inside a chain labelled watched, which is [ADR-0025](docs/architecture/adr/0025-a-boot-chain-carries-its-provenance.md)'s own error mode one level down. **Move the save aside before any boot-order capture and put it back after** - `just rpcs3-bootchain`'s recipe comment says so, and `docs/formats/hd-frontend.md` has the measurement. The general form is worth carrying to the other titles: a front end's boot order is a function of profile state, so "which boot did you watch" is part of the claim and not context.
+**Ghidra's decompile of a PS3 HD/Fury function above the `0x32d5e0` TOC break names the wrong strings** (`0x003f1300` `Shader_InitEngineParams` shows sound-bank and `.vex` literals it does not reference; [memory.md](docs/ghidra/functions/ps3-hdfury-eu/memory.md)). Cross-check a high-address PS3 function's strings with [`scripts/ps3-toc.py`](scripts/ps3-toc.py). **Fixed in place for `ps3-hdfury-eu` on 2026-08-28** (`scripts/import-ps3-eboot.sh --ps3-cspec`; `AssignPs3R2FromOpd.java` now runs in the import; 114 names re-applied clean), so TOC-relative loads resolve; any decompile read or claim made before that date and not re-verified keeps the old suspicion. Before the fix, a TOC-loaded *float* rendered as a string pointer (`(float)PTR_s_Emp__d_008a754c`) and a second failure looked right: `get_xrefs_to` on `SrcRel` reported `FUN_00550eb4` under Ghidra's one global TOC. The bridge cannot run scripts when `GHIDRA_MCP_ALLOW_SCRIPTS` is unset (`run_ghidra_script` and `run_script_inline` refuse); `ps3-toc.py resolve 0x003914b0 -0x6634` must print `Small is  %3.2f MB (%d bytes)`, not `forward`, and its `map` mode is validated against `Collision.cpp`.
 
+**A stationary `--race` capture never reaches the particle path**, so it is worthless as evidence about a sharpener, filter or compression step (2026-09-02: the `psys` path costs 199 bytes stationary versus 1.99 MB under `--autopilot --give rocket --press square`; an FSR 1 preference was carried for weeks on such a capture). Add `--give rocket --hold cross --press square` to any capture meant to judge effects, and prefer a play-test over a still for a picture-quality judgement (a byte-diff answers "different", not "better").
 
-**A `--screenshot --until` run over a movie leg on a machine with a real audio
-device fails with `never reached "X" in 3600 ticks`, or worse, silently
-captures an early frame instead of the one asked for - cost two wrong
-readings (a near-white reel frame and a black intro frame) before this was
-understood.** 2026-09-05, closing
-`handover/until-cannot-reach-a-late-movie-frame-on.md`. A movie with sound is
-audio-clocked per ADR-0019: `Audio::movie_playhead` returns
-`Some(seconds)` from the real device's own position whenever one is
-attached and streaming. A headless capture has no per-tick pacing, so it
-finishes in well under a second of real time while the movie itself can be
-tens of seconds long - the device-driven playhead barely moves and `--until`
-burns its whole tick ceiling on a picture that is still on its first
-frame. This is invisible on CI or any machine with **no** device: there,
-`movie_playhead` already falls back to `None` (tick-clocked), which is why
-the bug never showed up there. **Fix: pass `--no-audio`.** It forces the
-same null audio backend `--dump-audio` already forces (so `movie_playhead`
-takes the same tick-clocked fallback a no-device machine gets for free),
-without needing `--dump-audio`'s `--screenshot` pairing or its growing WAV
-buffer. Verified against both Pulse's `LogoFMV` reel and Pure's
-`Developer Publisher Screen` reel (which has two 2-second frame holds -
-the one place tick-clock and audio-clock provably diverge, and it still
-lands on the correct next state). See `crates/sound/src/lib.rs`'s
-`Audio::open`/`Audio::movie_playhead` and `crates/game/src/main/cli.rs`'s
-`--no-audio`.
+**Do not read a menu or front-end capture taken with `--upscaler` as evidence about the upscaler**: the flag changes the UPSCALER row's own text, and since [ADR-0038](docs/architecture/adr/0038-a-stage-with-no-scene-draws-at-presentation-resolution.md) no upscaler touches menu pixels at all.
 
-**The `ghidra-mcp` bridge is one shared instance across every concurrent session, and `switch_program` sets a global "current program" pointer any of them can move out from under you.** 2026-09-03, reading `ps3-hdfury-eu`'s `TrackSelection_Screen` while a second, independent thread (`2048-and-hd-ship-an-unread-effectsettings-table.md`) was doing overlapping Ghidra work the same week. Three `rename_function_by_address` calls with no explicit `program` argument reported success; a follow-up `get_current_program_info` showed the active program had silently become a different title's binary mid-session, and the three renames had landed there instead - `get_function_by_address` back on `ps3-hdfury-eu` still showed plain `.opd.FUN_xxxxxxxx`. Fixed by redoing all three with an explicit `program: "/hdfury/EBOOT-ps3-hdfury-eu.elf"` and re-verifying the same way. **Pass `program` explicitly on every mutating call** (`rename_*`, `set_*`, `create_*`, not just `switch_program`), and re-verify with an explicit-`program` read immediately after any rename that matters - a `switch_program` done once at the start of a session is not durable if another agent is driving the same instance. Full write-up: `hd-zone-tracklist-re-notes.md` from that session (untracked, may not survive - this paragraph is the durable copy). **The write path that does not depend on the pointer at all is `run_script_inline` with an explicit `program`**: confirmed 2026-09-15 by applying all 309 `ps3-hdfury-eu` names through one inline script while another session held the pointer on a `BOOT.BIN` and `just apply-names` was (correctly) refusing to run - see the closing paragraphs of toolchain.md#ps3.
+**ADR-0036's consequence "every race `--screenshot` changes bytes when the HUD moves" is false (only `--presented` does), and ADR-0038 supersedes its movie-on-the-scene-side item** (ADRs are immutable; this is the correction of record, 2026-09-02). The plain path in `crates/game/src/race_capture.rs` builds no `Framebuffer`, so do not re-baseline race screenshots on that sentence. A stage with no 3D scene draws its whole list straight into the presentation target and `resolve_scene` is not called.
 
-**A live Ghidra instance's own function boundaries can drift from what a `docs/` page records, even without a fresh import.** 2026-09-05, re-reading `Mine_Init`/`Mine_Construct` on `psp-pulse-usa` before wiring their models. `mine.md` records both at specific entry addresses (`0x08859ac8`, `0x08859930`, confidence 90/92); this session's live instance decompiles those exact addresses to two *different* functions - one an unrelated teardown routine, one landing mid-instruction inside its neighbour, confirmed with `disassemble_bytes` rather than trusted from the decompiler alone. The actual matrix-copy/velocity/fuse/drift logic `mine.md` describes is reachable, just at a different entry (`0x08859954`) in this instance. Most likely cause: `just apply-names` had not been replayed into this project (CLAUDE.md already notes a fresh import starts at `FUN_08940d0c` again; this suggests boundary drift can happen independently of a full reimport too). **Byte-for-byte content at a documented address can still confirm a reading even when the address itself no longer resolves to that function's entry** - don't treat a decompile-at-address mismatch as proof the earlier finding was wrong; disassemble around the documented address first to see whether it is genuinely a different function or just mid-body of a shifted one. See `mine.md`'s 2026-09-05 section for the full worked example.
+**`RemoteDebuggerOnStartup` does not pause the CPU at boot**: the first connection read `ticks: 22061009` (about 99 ms emulated), enough for a boot-time initializer to write before a watchpoint exists (2026-09-02, SAP clamp globals, `docs/ghidra/functions/psp-pulse-usa/collision.md`). If a watchpoint's "no writer" disagrees with a plainly non-default live read, suspect this; there is no way to pause at the first instruction over the API, so do a static instruction sweep (mind a split `lui`/`addiu` immediate).
 
-**Ghidra's decompile of a PS3 HD/Fury function above the `0x32d5e0` TOC break
-names the wrong strings, disc-wide, not just for one function.** Read closing
-the engine-shader-parameters thread, 2026-08-24 originally. `0x003f1300`
-(`Shader_InitEngineParams`) decompiles showing sound-bank and `.vex` path
-literals that are not what the function actually references - it sits above
-the TOC break [memory.md](docs/ghidra/functions/ps3-hdfury-eu/memory.md)
-documents, so Ghidra resolves its `lwz rX,disp(r2)` loads against the wrong
-table entries. The only correct read is
-[`scripts/ps3-toc.py`](scripts/ps3-toc.py) walking the function's own loads
-against its own OPD TOC. Check a high-address PS3 function's decompile
-against this before trusting any string or symbol name it shows - a
-plausible-looking wrong string here reads exactly like a correct one until
-checked.
+**Two debugger connections racing the same PPSSPP execution breakpoint corrupt the read** (breakpoints are global CPU state; a garbage `craft+0x1CC` read of `0` was armed as a watchpoint on `0x30` and counted nothing, 2026-08-31). Take an address a running script already printed, and bounds-check any computed watch address against `0x08000000`-`0x0A000000`. [`ppsspp-debugger.md`](docs/reverse-engineering/ppsspp-debugger.md#two-connections-racing-the-same-execution-breakpoint-corrupts-the-read-not-just-the-timing).
 
-**A stationary `--race` capture never reaches the particle path at all, so it is worthless as evidence about anything a sharpener, a filter or a compression step does to effects.** 2026-09-02, closing the FSR 1 default question. `--race` holds the throttle without steering, so the player crosses no `Weapon Pad`, fires nothing and hits nothing. Measured from the vertex side: the `psys` path costs **199 bytes** in a stationary `--race` capture and **1.99 MB** under `--autopilot --give rocket --press square` - four orders of magnitude, because the stationary run never enters it. The frame *looks* like a race and contains none of the high-frequency additive content - spark burst, rocket plume, shield shell - that the question was about. A preference for FSR 1 was carried for weeks on exactly such a capture. **Add `--give rocket --hold cross --press square` to any capture meant to judge effects**, and prefer a play-test over a still for a picture-quality judgement: a byte-diff answers "are these different", not "is this better".
+**The `00000030` emulator halt** (`E[MEMMAP] Bad memory access detected! 00000030`, JIT block `08872f98_z_un_08872f54`) **is caused by writing the LeachBeam fire bit `0x8000` via `scripts/psp-fire-weapon.py`'s raw-bit mechanism** (the instance lands in a pool with matrix pointer `+0xa0` unfilled), not by the bad watchpoint blamed earlier (corrected 2026-09-05). **Do not fire the LeachBeam that way.** The Missile is not implicated. [Account](docs/ghidra/functions/psp-pulse-usa/bad-memory-access-halt.md).
 
-**Do not read a menu or front-end capture taken with `--upscaler` as evidence about the upscaler.** The flag changes the UPSCALER row's own *text*, so two images differ for a reason that has nothing to do with resampling - that nearly produced a false conclusion once. Since [ADR-0038](docs/architecture/adr/0038-a-stage-with-no-scene-draws-at-presentation-resolution.md) the trap is worse than it was: no upscaler touches menu or front-end pixels at all any more, so the row's text is the *only* thing that can differ between the two captures.
+**RPCS3 with no PS3 firmware fails three non-obvious ways** (2026-08-30): a normal boot prints `Firmware is missing` and exits; `--no-gui --installfw` refuses; `--installfw` without `--no-gui` needs a real GUI. Firmware is the user's install, not a session default. **`pgrep -x rpcs3` never matches** (the `comm` is `AppRun.wrapped`): check `/proc/<pid>` or read `TTY.log` growth as `Session.wait_for_screen` does. The first-run "Welcome" Qt dialog overlays every screenshot and gamepad input cannot dismiss it: set `infoBoxEnabledWelcome=false` in `~/.config/rpcs3/GuiConfigs/CurrentSettings.ini`. **A `DISPLAY=127.0.0.1:77` export in one Bash call does not persist to a later call** (the emulator then opens on the maintainer's desktop): use `scripts/rpcs3-drive.py`'s `Session` (sets `DISPLAY`/`QT_QPA_PLATFORM` via `emulator_env()`). `EpilepsyWarning`'s live path needs a `cross` press (`Session.wait_for_screen_pressing`, [hd-frontend.md](docs/formats/hd-frontend.md#the-boot-chain-declared-and-then-watched)).
 
-**ADR-0036 states one consequence that is wrong, and ADR-0038 supersedes a second item in it - both ADRs are immutable, so this is the correction of record.** 2026-09-02, landing the UI-compositing restructure. (1) ADR-0036's consequence *"every race `--screenshot` changes bytes when the HUD moves"* is **false**: only `--presented` does. The plain capture path in `crates/game/src/race_capture.rs` builds no `Framebuffer` and runs no resolve, so its HUD was already drawn at native size and its bytes are untouched - verified by the capture path having no `Framebuffer` branch outside `presented`. Anyone re-baselining race screenshots on the strength of that sentence would be regenerating goldens for a change that did not reach them. (2) ADR-0036 puts a movie on the *scene* side of the UI seam, which for the front end would have meant splitting one draw list across two passes; [ADR-0038](docs/architecture/adr/0038-a-stage-with-no-scene-draws-at-presentation-resolution.md) supersedes that item, because the front end's scene side holds **nothing but the movie quad** and the launcher and loading screen have no movie at all. A stage with no 3D scene draws its whole list straight into the presentation target and `resolve_scene` is not called. Read ADR-0038 before ADR-0036's seam wording sends you to build the split.
-**`RemoteDebuggerOnStartup` does not pause the CPU at boot, so a watchpoint armed "right after connecting" can already be too late for an early write.** 2026-09-02, chasing the SAP clamp globals (`docs/ghidra/functions/psp-pulse-usa/collision.md`'s clamp section). The config option opens the websocket port at boot; it does not halt execution waiting for a client. The first successful connection after a fresh `PPSSPPSDL` launch read `cpu.status` as `{"stepping": false, "ticks": 22061009}` - the CPU was already running, and 22,061,009 ticks at the PSP's 222 MHz clock is about 99 ms of *emulated* time, easily enough for an early boot-time initializer (a `.ctors` entry, a bootstrap routine) to have already run and written a value once. A write watchpoint armed at that point, then left running through an entire menu walk and track load into a live race, never fired - not because nothing writes the target, but because whatever writes it had already finished before the watchpoint existed. If a "no writer found" read from a watchpoint disagrees with a live memory read that is plainly non-default, suspect this before concluding the write is invisible to the debugger; there is no known way to make PPSSPP pause at the very first instruction over this API, so the fix is a static instruction sweep for the write (accounting for an immediate split the naive `lui`/`addiu` operand form may not match), not a faster connection race.
+**A bit-exact comparison of the sideshift timer columns will see a tiny negative residue where a clamped port reads `0.0`; that is the original** (2026-08-27: `Ship_UpdateSideshiftInput_q`'s countdown at `0x08846a54` is `if (timer > 0.0f) timer -= dt;`, so `ss_shift_l` froze at `-0.000149006`). `crates/physics/src/airbrake.rs`'s `advance_sideshift` clamps with `.max(0.0)` deliberately: every reader gates on `> 0.0`, and the fields feed `ShipState::hash_state`'s golden hashes. If a bit-exact trace comparison wants it, drop the three `.max(0.0)` calls and regenerate the hashes. [`input-bindings.md`](docs/ghidra/functions/psp-pulse-usa/input-bindings.md#the-countdown-does-not-clamp-at-zero-and-the-ports-does---deliberately-left-that-way).
 
-**Two debugger connections racing the same PPSSPP execution breakpoint corrupts the read, not just the timing - and a watchpoint armed on the garbage address that produces counts nothing while looking like a measurement.** 2026-08-31, chasing [the M6 lighting thread](handover/rendering/m6-authored-lighting-no-hardware-light-slot-found.md)'s live capture. `psp-drive.py restart`'s own internal `Ship_UpdateCraft` breakpoint and a second, independent connection's own breakpoint at the same address raced each other (PPSSPP execution breakpoints are global CPU state, shared across every client), producing a garbage field read (`craft+0x1CC` came back `0`) that got armed as a watchpoint on address `0x30`. Fix: take an address a running script already printed instead of re-deriving it with a second breakpoint, and bounds-check any computed watch address against `0x08000000`-`0x0A000000` before arming it. [`ppsspp-debugger.md`](docs/reverse-engineering/ppsspp-debugger.md#two-connections-racing-the-same-execution-breakpoint-corrupts-the-read-not-just-the-timing).
+**A fragment `<LoadXML>` that never resolves is not always a missing file: HD's `DATA05` `speedlap_hud.xml` disables `HUD_lap_ghost.xml` by misspelling the tag `<aLoadXML>`** (also its 2-byte size difference from `DATA00`/`DATA06`). `LoadXML_Item` keys on the literal tag, so the fragment is never looked for. If a composition lacks a feature a sibling copy has, check for a misspelled tag before suspecting a parser or precedence bug.
 
-**Corrected 2026-09-05: that bad watchpoint did *not* cause the `00000030` emulator halt blamed on it, and the real cause is a one-line rule.** The halt (`E[MEMMAP] Bad memory access detected! 00000030 ... Stopping emulation`, JIT block `08872f98_z_un_08872f54`) is the emulated game loading a quad from `null + 0x30`, and it is triggered by **writing the LeachBeam fire bit `0x8000`** through `scripts/psp-fire-weapon.py`'s raw-bit mechanism - the instance lands in a weapon pool with its matrix pointer `+0xa0` never filled in. **Do not fire the LeachBeam that way**; it halts the emulator within a frame, deterministically. Reproduced on two clean boots with no watchpoint armed at all, with the null pointer read at a breakpoint one instruction before the fault, and with rocket and **Missile** controls in the same session that both fired cleanly and did not halt - so the Missile, long paired with the LeachBeam under this crash, is not implicated. Full account: [the `00000030` halt](docs/ghidra/functions/psp-pulse-usa/bad-memory-access-halt.md).
+**Reaching an arbitrary circuit through the front end is gated by Race Campaign progression, not by anything `psp-drive.py` or the debugger can skip.** RaceBox's Custom Race Track Select is a fixed wrapping list of the three `PI_Track` entries in `Data\Plugins\PI001\Definition.xml` with no `<Unlock>` (`16_Track` Talon's Junction, `03_Track` Moa Therma, `18_Track` Metropia reversed); every other circuit carries `<Unlock Grid="N">` and a fresh profile has only Grid 1 of 16 (`13_Track` needs `Grid6`, `10_Track` `Grid0`). Check the target's `Grid` before planning a capture; a high `N` means it is not this session's task.
 
-**RPCS3 with no PS3 firmware installed fails in three different, non-obvious ways depending on how you ask, and a naive liveness check lies about all of them.** 2026-08-30, first `rpcs3-drive.py browse` run in this checkout. A fresh `~/.config/rpcs3/dev_flash` is empty (firmware is a separate, user-supplied install - a disc's own bundled updater under `data/extracted/<title>/PS3_UPDATE/PS3UPDAT.PUP`, where one is present, is a legitimate source, but installing it is the user's call, not a session default). Symptoms: a normal boot prints `Firmware is missing` and exits; `rpcs3 --no-gui --installfw <path>` refuses outright (`Cannot perform installation in no-gui mode!`); `rpcs3 --installfw <path>` with no `--no-gui` needs a real GUI pass and does nothing headless. **`pgrep -x rpcs3` never matches** - the actual process `comm` is `AppRun.wrapped` (the AppImage wrapper), so any liveness or exit check built on it is silently wrong in both directions; check `/proc/<pid>` or grep `AppRun.wrapped` instead, or better, read `TTY.log` growth the way `Session.wait_for_screen` already does. Once firmware is in place, RPCS3's own first-run **"Welcome" dialog is a native Qt window that overlays every screenshot** (nothing under it is visible, including circuit-select text) and nothing the gamepad sends reaches it - fix is `infoBoxEnabledWelcome=false` in `~/.config/rpcs3/GuiConfigs/CurrentSettings.ini`, not a button. **A manual `rpcs3 ...` launch that sets `DISPLAY=127.0.0.1:77` in one Bash call and launches in a later, separate call drops the export** - shell env state does not persist across this harness's tool calls - and the emulator opens a real window on the user's desktop instead of Xvfb, interrupting their session. `scripts/rpcs3-drive.py`'s `Session` sets `DISPLAY`/`QT_QPA_PLATFORM` in-process via `emulator_env()` and is not exposed to this; prefer it over a manual `rpcs3` invocation for exactly this reason. Separately, `EpilepsyWarning`'s live path needs a `cross` press or a boot stalls there for its whole timeout - see [hd-frontend.md](docs/formats/hd-frontend.md#the-boot-chain-declared-and-then-watched) and `Session.wait_for_screen_pressing`.
+**A device test with a uniform depth buffer cannot exercise a depth-weighted term**: `post::motion_blur`'s test cleared depth to a flat `0.5`, both soft-depth gates returned 1, and a real bug hid (the third, ungated cone term used the tile neighbourhood's reach, not the centre pixel's; a still surface in front of a fast one read 199 of 255 at its silhouette; a two-depth test caught it). **Whatever a filter classifies by, the test must vary** (depth, velocity, material), else it tests the average, not the decision. Splitting tile-max into two axes needed a frame size the tile edge does not divide and motion varying in both axes. The pass binds depth as `Float { filterable: false }` and `textureLoad`s it, so an `R32Float` with `COPY_DST` works with a plain `write_texture`.
 
-**A future bit-exact comparison of the sideshift timer columns will see a tiny negative residue where a clamped port reads exactly `0.0` - that is the original, not a bug.** 2026-08-27, capturing `sideshift-double-tap.inputs` off real PPSSPP for the first time. `Ship_UpdateSideshiftInput_q`'s own countdown (`0x08846a54`, decompiled via ghidra-mcp) is `if (timer > 0.0f) timer -= dt;` - gated, not clamped - so the tick that crosses zero still subtracts a full `dt` and lands slightly negative (`ss_shift_l` froze at `-0.000149006`, `ss_tap_window_l` at `-0.0004569963`, each held bit-exact for the rest of the run), then the field is never touched again. `crates/physics/src/airbrake.rs`'s `advance_sideshift` clamps with `.max(0.0)` instead and converges to exactly `0.0`. Left that way deliberately - every reader in the tree gates on `> 0.0`/`<= 0.0`, so the residue is behaviourally invisible, and the three fields feed `ShipState::hash_state`'s committed golden hashes, so matching it costs a hash regeneration for a cosmetic difference. Full evidence and the exact decompiled block:
-[`input-bindings.md`](docs/ghidra/functions/psp-pulse-usa/input-bindings.md#the-countdown-does-not-clamp-at-zero-and-the-ports-does---deliberately-left-that-way).
-If a bit-exact trace comparison is ever built and wants to match this too, it is a small, mechanical change (drop the three `.max(0.0)` calls in `advance_sideshift`, regenerate the affected golden hashes) - not a data gap.
+**A reach cap that doubles as a tile size makes a square reduction starve the GPU**: tile-max reduced each `K x K` square (`K` = 87 at 1080p) in one pass, 7,569 serial `textureLoad`s in 299 fragments (1.5 of the chain's 2.6 ms on an Intel Arc iGPU); separable passes do the same arithmetic in 24,840 fragments (1.2 ms). The tell is fragment count: a fullscreen pass whose target is much smaller than its source. Table: [`motion-blur.md`](docs/rendering/motion-blur.md).
 
-**A fragment `<LoadXML>` never resolving is not always a missing file - HD's
-own disc disables one by misspelling the tag.** 2026-08-26, diffing the three
-copies of `speedlap_hud.xml`
-([the HUD thread](handover/frontend/wipeout-hd-furys-hud-reads-and-the-reader.md)).
-`DATA05`'s copy references `HUD_lap_ghost.xml` through `<aLoadXML>`/
-`</aLoadXML>` instead of `<LoadXML>`/`</LoadXML>` - one added letter per tag,
-which is also exactly `DATA05`'s 2-byte size difference from the otherwise
-byte-identical `DATA00`/`DATA06` copies. `LoadXML_Item`'s reader keys on the
-literal tag name, so this is not a fragment that fails to resolve and logs a
-miss - it is a fragment the reader never looks for at all, deliberately
-authored to be skipped without deleting the reference. If a HUD or front-end
-composition is ever missing a feature that a sibling copy of the same root
-has, check for a misspelled tag before assuming a parser or precedence bug.
+**A worktree sharing `CARGO_TARGET_DIR` with the main checkout compiles against the other tree's uncommitted code** (2026-08-18: `missing field 'lightmaps'` against a `mesh.rs` without it). Never share it; a worktree's `target/` is gitignored. `data/` does not travel into a worktree: `just link-data` (do not `rm -rf data`, `data/README.md` is tracked).
 
-**Reaching an arbitrary circuit through the front end is gated by Race Campaign
-progression, not by anything `psp-drive.py` or the debugger can skip.** 2026-08-26,
-chasing [airborne-ticks-have-been-captured-and-are-thin](handover/tooling/airborne-ticks-have-been-captured-and-are-thin.md).
-RaceBox's Custom Race → Track Select is a **fixed** wrapping list of three -
-confirmed live, up/down only, `right`/`left` genuinely do nothing there, matching
-`docs/reverse-engineering/ppsspp-debugger.md`'s existing note - and the three are
-exactly the `PI_Track` entries in `Data\Plugins\PI001\Definition.xml` carrying no
-`<Unlock>` element at all: `16_Track` (Talon's Junction), `03_Track` (Moa Therma),
-`18_Track` (Metropia reversed). Every other circuit's `PI_Track` node carries
-`<Unlock Grid="N">`, and a fresh profile has only Grid 1 of 16 open. **The XML
-attribute answers "how many grids" before a single button gets pressed** - no
-need to grind blind: `13_Track` needs `Grid6` (five grids of real races first),
-where `10_Track` needs `Grid0` (the currently-open grid, so just its own Race
-Campaign cell). Check the target's own `<Unlock Grid="N">` before planning a
-capture around it, and expect an `N` above 0-1 to mean the capture is not this
-session's task.
+**A grid of eight identical craft is what an *empty* roster looks like**: HD raced eight Assegais because two faults each produced an empty team list and `livery::teams_for_slots` fell back to the player's team (2026-08-18). A fallback that produces a legible picture is the hardest to notice, so both sites now report the *reason*, not `0 team(s)`. HD ships its plugin definition **five times** across seven archives with disagreeing copies (`DATA00` twelve teams/28 circuits, `DATA02` eight/eight; precedence serves `DATA00`): [hd-status.md](docs/formats/hd-status.md#it-ships-five-times-and-the-copies-disagree). Faults: `race::load`/`boot::definitions` read Pulse's `Data\Plugins\PI001\Definition.xml` for every title (HD's is `Data\Plugins\Frontend\Definition.xml`; fixed via `oag_title::Title::plugin_definition`); and `fexml::expand` refuses a file with no `<code>` dictionary, so **a new `read_name` of an XML entry should be `fexml::text`, not `fexml::expand`, unless the file is known to be shortened**.
 
-**A device test with a *uniform* depth buffer cannot exercise any
-depth-weighted term - it proves the pass runs, not that the weighting is
-right.** 2026-08-26, found reviewing the motion blur chain. `post::motion_blur`
-gathers its taps with McGuire's three weights, two of which are gated on
-`soft_depth_compare`. Its device test cleared depth to a flat `0.5`, so both
-gates returned `1` for every tap in the frame and the two cone terms absorbed
-the whole weight - the test was green, and it was structurally blind to the
-half of the filter that classifies surfaces. What hid behind that was a real
-bug: the third, *ungated* term was written against the tile neighbourhood's
-dominant reach instead of the centre pixel's own, so a still surface in front
-of a fast one took full-weight taps of the background and read 199 of 255 at
-its silhouette. Twenty lines of a second test with two depths caught it
-immediately.
+**A name-variant sweep is only as good as its extension list; when a whole class of names misses and the rest hit, the loader applies a transformation, not more spellings.** The PS2 texture resolver rewrites `.MIP` and `.TGA` to `.PCT` before hashing: none of the 18 `.mip` or 32 `.tga` literals in `SCES_547.48` resolve as spelled, 47 of 50 resolve rewritten, every `.pob`/`.vex`/`.bnk`/`.xml` name resolves untouched ([texture-names.md](docs/ghidra/functions/ps2-pulse-eu/texture-names.md), `oag_pulse::ps2_texture_name`; `Engine_noise.mip` and the loading screen's `LoadingPulseOverlay.mip`, `WADS2.WAD` entry 138, were found this way, [loading-screen.md](docs/ghidra/functions/ps2-pulse-eu/loading-screen.md)). The sweep covered `read_name` call sites in `crates/game/src` and `crates/render/src` only; no sweep outside them is done, so treat these as two instances, not the list. Any PS2 asset gap phrased "not in the archive set" deserves the rewrite tried first.
 
-Generalise it, because the next weighted gather will have the same shape:
-**whatever a filter classifies by, the test has to vary.** Uniform depth, a
-single velocity, one material - each turns an assertion about a *decision* into
-an assertion about an average. The cheap trick that made the second test easy
-is worth keeping too: the pass binds depth as `Float { filterable: false }` and
-`textureLoad`s it, so an `R32Float` texture with `COPY_DST` works and takes a
-plain `write_texture` - no depth-writing pipeline, and none of `Depth32Float`'s
-"you may not copy into me".
+**PS3 TOC trap, second failure mode (looks right): `get_xrefs_to` and decompiled symbol names for a TOC-relative load are only as trustworthy as the function's TOC matching the global one** (2026-08-25: a `SrcRel` xref landed on `FUN_00550eb4` decompiling with `PTR_s_LoadXML_Item_cpp_...` and `strncmp(param_2, "Values", 0xb)`; its real TOC is `0x008bd3c4`, not the global `0x008ad4d8`, and `0xb` is `"Set-Cookie:"`, so it is `CCookie.cpp`). Check `scripts/ps3-toc.py toc <addr>` first (`0x008ad4d8` means trust it) and prefer `ps3-toc.py map` plus raw `inspect_memory_content` reads over `search_strings`/`get_xrefs_to` for an unchecked function.
 
-The same review turned the rule on the fix and it bit twice more. Splitting
-tile-max into two axes needed a frame size the tile edge does **not** divide,
-because a power-of-two frame makes every tile square and full - and it needed
-motion that varies in *both* axes, because a velocity that is constant down
-each column lets any row of the horizontal pass answer for any other. Sizing
-the split's intermediate target wrong on purpose left two green tests before
-a third one, varying both, caught it. **A test that does not vary what the
-code branches on is a test of the average, not of the decision.**
+**Even with the TOC defect fixed, a call through an unknown pointer can hide a real TOC-relative global behind a fake local** (2026-08-28, `Environment_LoadStageTextures` `0x003d6dc8`, [zone-effectsettings-loader.md](docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md)). Every ELFv1 indirect call (`lwz r2,0x4(rX)`, then `std r2`/`ld r2` round-tripping the caller's TOC) breaks Ghidra's constant propagation, so a later `-0x58xx(r2)` load decompiles as an opaque `iStack_NNNN`. The tell: `analyze_dataflow` backward from it ends at "function input". Resolve by hand against the function's own TOC. Binary-wide.
 
-**A reach cap that doubles as a tile size makes a square reduction starve the
-GPU.** Same review. `post::motion_blur`'s tile-max reduced each `K x K` square
-in one pass, `K` being the blur's own pixel cap - 8 % of viewport height, so 87
-at 1080p. That is 7,569 serial `textureLoad`s inside each of only 299
-fragments: the right amount of arithmetic (every pixel once) at almost no
-occupancy, and it measured 1.5 ms of the chain's 2.6 ms on an Intel Arc iGPU.
-Separable - horizontal to `ceil(w / K) x h`, then vertical onto the tile grid -
-is the same arithmetic in 24,840 fragments and took the whole chain to 1.2 ms.
-The tell is the *fragment count*, not the loop: a fullscreen pass whose target
-is much smaller than its source is where this hides.
+**Proximity to a known-good table is not evidence of relatedness** (HUD thread: a dozen `get_xrefs_to` hits near `008ad9e0`, one word from `LoadXML_Item`'s attribute-name table at `008ad9f0`, were destructors releasing unrelated smart pointers; `008ad9e0` is a pooled-object free-list head). Read the actual data (the `.rodata` run at `0078bf00` held the real literals).
 
-The reproducible measurement is the table in
-[`docs/rendering/motion-blur.md`](docs/rendering/motion-blur.md) - 2.6 ms
-square, 1.2 ms separable, 1.1 ms with the reduction stubbed out entirely - not
-the stub-the-loop isolation that first pointed at it.
+**HD renderer, open or settled** ([renderer.md](docs/ghidra/functions/ps3-hdfury-eu/renderer.md)): the draw path is inline command-buffer writes on PS3 (no import census or call graph finds it; needs a search for RSX method constants). `SortRoot.cpp`'s four constructors (`0x002dbe08`, `0x002dbe50`, `0x002dbe98`, `0x002dbf40`) are spent as a render lead (2026-08-25): `0x002dbe50` has six callers leading to `DetonatorBomb.cpp` ([detonator-bomb.md](docs/ghidra/functions/ps3-hdfury-eu/detonator-bomb.md)); the "draw-order root" guess is refuted. Draw order is answered (2026-09-04): `RenderManager_FlushDrawQueue`'s `qsort` with `RenderManager_CompareQueueKeys` (`0x002d4b58`), the same `{item, key}` ascending `a->key - b->key` on `+0x04` as Pulse's `Gfx_CompareQueueKeys`; the key is twelve bits of layer over twenty of back-to-front depth, Pulse's split (layer `0x4d0` matches `ExhaustFlare_Submit`); see [the enqueue idiom](docs/ghidra/functions/ps3-hdfury-eu/renderer.md#the-enqueue-idiom-and-what-the-0x04-key-encodes). Still open: which class each of the five producer sites belongs to and where the per-instance depth override `instance+0x11c` is written. The 124 engine shader `SHO` blocks linked into `EBOOT.elf` match 124 registered names, but only 62 pairings are measured (the other 62 register by a route a direct-branch scan misses: `0x005cd700`, the registry's second constructor, has zero branches to it), and no microcode has been disassembled.
 
-**A worktree sharing `CARGO_TARGET_DIR` with the main checkout compiles against
-the *other* tree's uncommitted code.** 2026-08-18, and it cost a confusing hour.
-Setting `CARGO_TARGET_DIR=<repo>/target` from `.claude/worktrees/<name>` looks
-like a free win - the dependency builds are already there and a workspace build
-drops from minutes to seconds - and it works right up until the two trees'
-sources differ. Then `just test` in the worktree fails with
-`missing field 'lightmaps' in initializer of oag_mesh::mesh::Model` against a
-`mesh.rs` that has no such field, because the field is in the *main* checkout's
-work in progress. Nothing in the error names the other directory.
+**A model that reports the right triangle count can still render nothing: check the alpha test, not the class table** (2026-08-17: Pure's `Speedup Pad` decoded 14 nodes and 952 triangles, but `mesh.wgsl`'s invented `ALPHA_TEST_THRESHOLD` of `0.5` discarded every fragment of a glow texture that tops out at alpha 58/255). `oag-view --pads --screenshot` or `crates/render/tests/pad_alpha_test_ground_truth.rs` is the check. Since 2026-09-10 the reference is per batch and read off the file, and the pad's own `0` is the selector pattern that discriminates the recovered branch (`mesh-draw.md` "The alpha-test reference's selector, and the pad that discriminates", 86; `docs/formats/vex.md`).
 
-It also produces a subtler failure first: a run that behaves as though an edit
-had not landed, then behaves correctly a few commands later. Do not share the
-directory. A worktree's own `target/` is gitignored already (`/target/` in
-`.gitignore`), and the first build is a few minutes once.
+**`GU_GREATER` reproduced as `<` is `GEQUAL`, and at reference `0` that is no alpha test** (2026-09-10: `shaded.a < alpha_test_ref` was indistinguishable from the correct `<=` while HD's `0.5` was the only reference, since 8-bit alpha cannot land on it; Pure's pad painted a solid square plate). **A comparison that is exact either way on today's data is a latent bug.** **A one-sided count cannot see a cutout that stopped cutting**: `pad_alpha_test_ground_truth` now captures the pad twice (as authored, and with the reference forced below any alpha) and asserts the first keeps materially fewer pixels (310 against 425; broken, 425/425).
 
-The other half of the same setup is worth knowing: **`data/` does not travel
-into a worktree**, being gitignored, so `data/images/` looks empty there.
-Symlink `data/images` (and `data/cache`) at the main checkout's, and do **not**
-`rm -rf data` to do it - `data/README.md` is tracked.
+**An ordering that holds on the mean and not on one run is the measurement being noisy, not the setting being broken** (2026-08-17: one-seed `every_difficulty_is_quicker_than_the_one_below_it` gaps 495, 567 and **44**; averaged over five seeds 6,477/7,095/7,637/7,751 while elite still beats ace on two seeds). The test averages and prints the spread (`crates/raceplay/tests/difficulty_ground_truth.rs`).
 
-**A grid of eight identical craft is what an *empty* roster looks like, not what
-a broken one looks like - so nothing failed and nothing said so.** 2026-08-18.
-Wipeout HD raced eight Assegais because two independent faults each produced an
-empty team list, and `livery::teams_for_slots` did the honest thing with one:
-every slot gets the player's team. Both are fixed. The general lesson: a
-fallback that produces a legible picture is the hardest kind to notice - both
-sites now report the *reason* rather than a count of zero, since the report
-line used to read `0 team(s)` for two unrelated causes in a row and hid the
-second behind the first. Full account, including that HD ships its plugin
-definition **five times** across seven archives with the copies disagreeing
-(`DATA00` declares twelve teams/28 circuits, `DATA02` eight/eight, precedence
-serves `DATA00`):
-[hd-status.md](docs/formats/hd-status.md#it-ships-five-times-and-the-copies-disagree).
-The two faults, briefly: (1) `race::load`/`boot::definitions` read Pulse's
-numbered plugin path (`Data\Plugins\PI001\Definition.xml`) whatever title was
-open, where HD names its own (`Data\Plugins\Frontend\Definition.xml`) - fixed
-via `oag_title::Title::plugin_definition`, the fourth axis moved into the
-title package for this reason. (2) `fexml::expand` refuses a file with no
-`<code>` dictionary, and HD's definition is plain `<?xml`; **any new
-`read_name` of an XML entry should be `fexml::text`, not `fexml::expand`,
-unless the file is known to be shortened** - the trap was already written
-down for the PS2 in-race HUD and still caught this caller.
+**A synthetic race fixture has a horizon of `STALL_TICKS` (120)**: `race_with_a_grid` uses `Handling::ZERO` and an empty collision world, so craft hold full throttle without moving and the stall rescue recovers all seven opponents and zeroes the throttle. A longer fixture must give its craft handling that moves them.
 
-**A name-variant sweep is only as good as its extension list, and one whole
-class of PS2 names was missing because `.pct` was not in it.** 2026-08-18.
-`Data\Tex\engineFlare\Engine_noise.mip` is on the PS2 disc; the lookup was
-wrong, not the disc. The PS2 texture resolver rewrites `.MIP` and `.TGA` to
-`.PCT` before it hashes, so **none** of the 18 `.mip` or 32 `.tga` literals in
-`SCES_547.48` resolve as spelled and 47 of 50 resolve rewritten, while every
-`.pob`, `.vex`, `.bnk` and `.xml` name resolves on both discs untouched.
-Mechanism: [texture-names.md](docs/ghidra/functions/ps2-pulse-eu/texture-names.md),
-implemented as `oag_pulse::ps2_texture_name`. **The general lesson: when a
-whole class of names misses and every other class hits, the answer is a
-transformation the loader applies, not more spellings** - the sweep that
-missed this tried 60 candidates across path shape and case, and any remaining
-PS2 asset gap phrased as "not in the archive set" deserves the rewrite tried
-first. [loading-screen.md](docs/ghidra/functions/ps2-pulse-eu/loading-screen.md)
-had the `.mip`-to-`.pct` rewrite written down for the loading screen since
-2026-08-07, read at the time as a quirk of that one screen. Two more instances
-were found and fixed this way on 2026-08-18 - the two exhaust textures and the
-loading screen's glow strip (`Data\Defaults\Loading\LoadingPulseOverlay.mip`,
-`WADS2.WAD` entry 138, which had been falling back to
-`GlowStrip::placeholder` every boot). The sweep behind that covered
-`read_name` call sites in `crates/game/src` and `crates/render/src` only; its
-two remaining texture-path hits (`livery.rs`, `race/load.rs`) are `mesh::rcs`
-callbacks and so PS3-only. **No sweep outside those two crates has been
-done**, so treat this as two instances found, not the complete list.
+**Subsystem traps have moved to their pages**: [surveying a disc](docs/formats/wad.md#traps-when-surveying-a-disc), [the Ghidra database versus `names.tsv`](docs/ghidra/workflow.md#the-database-can-disagree-with-namestsv-and-the-docs-win), [PPSSPP session hygiene](docs/reverse-engineering/ppsspp-debugger.md#session-hygiene), and the `ffmpeg`/`ffprobe`/GStreamer traps in [frontend-boot.md](docs/architecture/frontend-boot.md). What is left is this machine and this checkout:
 
-**Fixed in place, 2026-08-28 - the workaround below is no longer needed for
-`ps3-hdfury-eu`.** The maintainer ran `scripts/import-ps3-eboot.sh --ps3-cspec`
-(Ghidra closed first, as the script requires); verified directly afterward:
-language reads `PowerPC:BE:64:A2ALT-32addr-PS3`, still 26,100 functions, real
-imports, and `scripts/apply-ghidra-names.py` re-applied all 114 of this
-binary's `names.tsv` rows clean. `AssignPs3R2FromOpd.java` now runs as part
-of the normal import (`-postScript`), so every function's TOC-relative load
-should resolve correctly without `ps3-toc.py` cross-checks going forward -
-though any *pre-existing* decompile read or claim made before this date and
-not yet re-verified should still be treated with the same suspicion the rest
-of this section describes, since it may have been made under the old,
-TOC-defective database. The history below is kept for the lesson, not as a
-live workaround to repeat.
-
-**The Ghidra bridge cannot run scripts, so the PS3 TOC defect has to be worked
-around rather than fixed in place.** 2026-08-18. `GHIDRA_MCP_ALLOW_SCRIPTS` is
-unset on this bridge, so both `run_ghidra_script` and `run_script_inline` refuse
-with "Script execution disabled" - which means **`AssignPs3R2FromOpd.java`
-cannot be applied to the live `ps3-hdfury-eu` database through MCP at all.** The
-next session will reach for it, because
-[memory.md](docs/ghidra/functions/ps3-hdfury-eu/memory.md) correctly names it as
-the fix. The two routes that do work are the full
-`scripts/import-ps3-eboot.sh` re-import (needs Ghidra closed, and is heavy), or
-**`scripts/ps3-toc.py`, which resolves each function's own TOC against the file
-with no Ghidra at all** - added 2026-08-18 for exactly this. Its self-check is
-`scripts/ps3-toc.py resolve 0x003914b0 -0x6634`, which must print
-`Small is  %3.2f MB (%d bytes)` and not `forward`. **Its `map` mode is validated
-against `Collision.cpp`**, whose two attributed addresses are already in
-`names.tsv` from independent work. The failure mode it avoids is not a visible
-error: in module-B functions Ghidra renders TOC-loaded *floats* as string
-pointers, so arithmetic decompiles as `(float)PTR_s_Emp__d_008a754c` and reads
-like a nonsense variable name rather than a wrong base.
-
-**The same defect has a second failure mode, and this one doesn't look
-wrong.** 2026-08-25. Hunting for where HD's HUD resolves a texture reference's
-extension to `.gtf` (see
-[the HUD thread](handover/frontend/wipeout-hd-furys-hud-reads-and-the-reader.md)),
-`get_xrefs_to` on the literal string `SrcRel` reported a real-looking hit:
-`FUN_00550eb4`, decompiling (under Ghidra's one global TOC) as a function
-that opens with a call site literally named `PTR_s_LoadXML_Item_cpp_...` and
-checks `strncmp(param_2, "Values", 0xb)` - a thematically perfect match for
-the LoadXML fragment loader this thread was chasing. `scripts/ps3-toc.py toc
-0x00550eb4` says its real TOC is `0x008bd3c4`, not the global
-`0x008ad4d8` - so every one of those names is Ghidra decompiling module-B
-code against module-A's table, and it happened to land on another *real,
-coherent* table (LoadXML_Item's actual attribute-name strings live a few
-words further into the same data region) rather than garbage. The `0xb`
-in that `strncmp` is the tell once you know to look: `"Values"` is 6
-characters, but `"Set-Cookie:"` is exactly 11 - the function is
-`CCookie.cpp`, confirmed by reading its real TOC's neighbouring strings
-(`Set-Cookie:`, `expires`, `domain`, `path`, `secure`) directly with
-`inspect_memory_content` rather than trusting Ghidra's resolution. **The
-general lesson: `get_xrefs_to` and decompiled symbol names for any
-TOC-relative load are only as trustworthy as the target function's TOC
-matches the global one** - check first with `scripts/ps3-toc.py toc <addr>`
-(`0x008ad4d8` means trust it, anything else means don't), and prefer
-`scripts/ps3-toc.py map` (grep the `.cpp` list) plus raw
-`inspect_memory_content` reads over `search_strings`/`get_xrefs_to` when
-hunting a specific mechanism in a function whose TOC hasn't been checked.
-
-**Even with the TOC defect fixed, a function that calls through an unknown
-pointer can still make Ghidra hide a real TOC-relative global behind a fake
-local variable.** 2026-08-28, past the `--ps3-cspec` reimport above, on
-`Environment_LoadStageTextures` (`0x003d6dc8`,
-[zone-effectsettings-loader.md](docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md)).
-Every ELFv1 indirect call (`lwz r2,0x4(rX)` loading a *different* object's TOC,
-then `std r2` / `ld r2` round-tripping the caller's own TOC to the stack
-around the call) breaks Ghidra's constant propagation even when it is
-provably faithful - so a `-0x58xx(r2)` load *after* such a call decompiles as
-an opaque `iStack_NNNN` read, indistinguishable at a glance from a genuine
-stack variable or a missing parameter. The tell is `analyze_dataflow`
-(backward, from a use of the mystery variable): it terminates at "function
-input" rather than a real definition, which is what a value equal to entry
-`r2` looks like once the direct chain of assignments is too indirect to
-fold. Once recognised, the fix is the same as ever - resolve by hand against
-the function's own already-known TOC - but the *recognition* step is new:
-don't assume a Ghidra-invented local is really local just because the TOC
-defect is fixed; check whether it's actually `r2` in disguise first.
-This is binary-wide, not specific to this one string or this one function.
-
-**A related but separate trap, hit later the same session: proximity to a
-known-good table is not evidence of relatedness, TOC issue or not.** The
-same HUD-thread session chased `get_xrefs_to` hits clustered around
-`008ad9e0`, one word away from `LoadXML_Item`'s real attribute-name pointer
-table at `008ad9f0` - a dozen-plus hits, in the right file's address range,
-looked like exactly the read-the-table code being searched for. It wasn't:
-`008ad9e0` is a generic pooled-object free-list head that many unrelated
-classes' destructors happen to share, and every one of those "hits" was a
-destructor releasing an unrelated smart-pointer field. **Read the actual data at the address in question** - the `.rodata` string
-run itself (`0078bf00`, holding the real literal names) rather than the
-nearby pointer table that references it (`008ad9f0`, one word from the
-free-list head that produced the false lead) - rather than trusting that a
-cluster of xrefs near a landmark means the landmark. This one doesn't need a
-TOC check to avoid: both addresses were module-A/global-TOC and the xrefs
-were technically real; the inference "near my table, therefore about my
-table" was simply wrong.
-
-**Deferred from the 2026-08-18 renderer sweep**, so nobody re-derives that these
-are open: the **draw path** (inline command-buffer writes on PS3, so no import
-census or call graph finds it - it needs a search for RSX method constants);
-**`SortRoot.cpp`'s four constructors** (`0x002dbe08`, `0x002dbe50`, `0x002dbe98`,
-`0x002dbf40`) - **spent as a render lead, 2026-08-25**: `0x002dbe50` turned out
-to have six real callers after all (base cannot be told from complete *and
-none is named* was true only for the other three), and chasing them one level
-further landed in `DetonatorBomb.cpp` - a bomb weapon's constructor, now named
-([`detonator-bomb.md`](docs/ghidra/functions/ps3-hdfury-eu/detonator-bomb.md)) -
-tied to `RaceManager_GetInstance()`. `SortRoot`'s only located use is gameplay
-code two hops from the render layer, not the "draw-order root" the table entry
-guessed; treat that guess as refuted, not merely unconfirmed. **The render
-draw-order question itself is now answered anyway, 2026-09-04, and not via the
-RSX-method-constant search this entry used to point at**: rereading
-`RenderManager_FlushDrawQueue` directly found the `qsort` call the earlier
-pass missed, with a comparator (`RenderManager_CompareQueueKeys`, `0x002d4b58`)
-byte-identical in shape to Pulse's `Gfx_CompareQueueKeys` - same `{item, key}`
-layout, same ascending `a->key - b->key` on `+0x04`. See
-[renderer.md](docs/ghidra/functions/ps3-hdfury-eu/renderer.md#the-per-eye-draw-dispatch-and-what-it-says-about-sort-order)
-and [the handover thread](handover/rendering/pulses-draw-order-is-recovered-and-it-is.md).
-**What HD's `+0x04` key encodes is answered too, same day**: an enqueue
-idiom inlined at five confirmed producer call sites, twelve bits of layer
-over twenty of back-to-front depth - Pulse's exact split, one layer constant
-(`0x4d0`) even matching Pulse's own `ExhaustFlare_Submit` key byte for byte.
-See [renderer.md](docs/ghidra/functions/ps3-hdfury-eu/renderer.md#the-enqueue-idiom-and-what-the-0x04-key-encodes).
-What still isn't established is which class each of the five sites belongs
-to, and where the per-instance depth-override field they all read
-(`instance+0x11c`) gets written - and -
-**now closed** - where the engine-owned shader
-programs' microcode lives: 124 `SHO` blocks linked into `EBOOT.elf` against
-exactly 124 registered names, same container as a `.rcsmaterial`. Two things
-stay open there and are on the page. **Only 62 of the 124 name-to-blob pairings
-are measured**; the rest match by count alone, because the other 62 names
-register by a route a whole-image direct-branch scan does not find - and the
-plausible explanation is disproved, not untested: `0x005cd700`, the registry's
-second constructor, has **zero branches to it anywhere in the image**. And **no
-microcode has been disassembled**, so nothing says what any program does.
-
-**A model reports the right triangle count and still renders nothing - check
-the alpha test, not the class table.** 2026-08-17. Wipeout Pure's `Speedup
-Pad`/`Weapon Pad` class ids were recovered 2026-08-13, `mesh::build_pads` is
-title-agnostic through `vex::classes::V4`, and `Data\Environments\01_Vineta_K\track.vex`
-decoded 14 `Speedup Pad` nodes, 952 triangles, correctly - every load report
-line said so. **The pad still drew zero pixels**, because `mesh.wgsl`'s
-`ALPHA_TEST_THRESHOLD` was an invented `0.5` and the pad's own glow texture
-(`speedup_GLOW_KEY.tga`) tops out at alpha 58/255 (~0.23): every fragment of
-every cutout batch discarded. A geometry decode that reports a plausible
-triangle count is not evidence a model draws anything - `oag-view --pads
---screenshot` (or the new `crates/render/tests/pad_alpha_test_ground_truth.rs`)
-is the check that would have caught this, and neither ran until the picture
-was asked for directly. Fixed by lowering `ALPHA_TEST_THRESHOLD` to `1/255`
-(`0`, one of three real GE references `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`
-recovered for this branch) - see `docs/formats/vex.md`'s materials section.
-
-**Since 2026-09-10 the reference is per batch and read off the file, and the
-pad's own value turns out to be that same `0`** - it is the one selector
-pattern that separates the recovered branch from the obvious rival reading, so
-the pad went from "saved by a permissive default" to "the case that settles the
-branch". Selector, census over three discs and the measured pixel cost:
-`mesh-draw.md`, "The alpha-test reference's selector, and the pad that
-discriminates", confidence 86. The trap above is unchanged and still the point:
-a decode that reports a plausible triangle count is not evidence a model draws.
-
-**And the pad broke a second time the same day, from the other direction:
-`GU_GREATER` reproduced as `<` is `GEQUAL`, and at reference `0` that is no
-alpha test at all.** 2026-09-10, one commit later. `mesh.wgsl` had always
-discarded at `shaded.a < alpha_test_ref`, which was indistinguishable from the
-correct `<=` while Wipeout HD's `0.5` was the only reference in play - the
-alpha is 8-bit and `0.5` sits between `127/255` and `128/255`, so no texel
-could land on the boundary, and the shader's own comment said so. Every
-reference read off a `.vex` batch lands on a texel value exactly, and
-`a < 0.0` is true of no fragment: Pure's `Speedup Pad` painted its glow
-texture's transparent background as a **solid square plate**. Two lessons, and
-the second is the reusable one:
-
-- A comparison that is *exact either way on today's data* is a latent bug, not
-  a settled one. The rationale for `<` was true and load-bearing right up to
-  the commit that made it false, and nothing re-read it.
-- **`pad_alpha_test_ground_truth`'s `lit > 100` passed harder than before.** A
-  one-sided count cannot see a cutout that stopped cutting - a filled quad is
-  strictly *more* lit pixels than a cutout of it. The test now captures the pad
-  twice, once as authored and once with the reference forced below any alpha a
-  texel can carry, and asserts the first keeps materially fewer pixels than the
-  second. Measured 310 against 425; under the broken discard it was 425/425.
-
-**A one-seed race comparison cannot resolve two adjacent difficulties, and the
-test that did it read as a regression on an improvement.** 2026-08-17.
-`every_difficulty_is_quicker_than_the_one_below_it` ran one 3,600-tick race per
-level and compared the leader's distance. Measured: novice 6,704, skilled 7,199,
-elite 7,766, ace 7,810 - the first two gaps are 495 and 567 and **the last is
-44**, half a percent, on a system of seven drivers trading places. A change that
-made *every* level faster (the stall rescue freeing a wedged craft: elite 8,078,
-ace 8,075) duly failed it by three units in eight thousand. Averaged over five
-seeds the ordering is real and comfortable - 6,477 / 7,095 / 7,637 / 7,751 -
-while elite still beats ace on two seeds of the five. **The test now averages and
-prints the spread**, and moved to `crates/raceplay/tests/difficulty_ground_truth.rs`
-(which took `race_ground_truth.rs` from 2,464 to 2,387, ratcheted in
-`check-file-size.py`). The general form is worth keeping: **an ordering that
-holds on the mean and not on one run is the measurement being noisy, not the
-setting being broken** - print the spread before touching the thing under test.
-
-**A synthetic race fixture now has a horizon, and it is `STALL_TICKS` long.**
-Same day. `race_with_a_grid` builds craft on `Handling::ZERO` with an empty
-collision world, so no force law runs and the craft hold full throttle without
-moving - which is exactly the condition the stall rescue catches. Any synthetic
-race test that ticks past 120 now recovers all seven opponents and zeroes the
-throttle on the tick it does. `the_opponents_are_driven_rather_than_parked` runs
-`STALL_TICKS / 2` for that reason. A fixture that wants to run longer has to give
-its craft handling that moves them.
-
-
-
-**Subsystem traps have moved to their pages**:
-[surveying a disc](docs/formats/wad.md#traps-when-surveying-a-disc),
-[the Ghidra database versus `names.tsv`](docs/ghidra/workflow.md#the-database-can-disagree-with-namestsv-and-the-docs-win),
-[PPSSPP session hygiene](docs/reverse-engineering/ppsspp-debugger.md#session-hygiene),
-and the `ffmpeg`/`ffprobe`/GStreamer traps on
-[frontend-boot.md](docs/architecture/frontend-boot.md). What is left is this
-machine and this checkout.
-
-- `data/` could be on `ecryptfs`. **`cp --reflink` does not work** (copying the images
-  is a real multi-GB copy), and `ls`/`rg` intermittently fail with "permission
-  denied" or "no such file" on directories that plainly exist. `fd`, `find` and
-  absolute paths work.
-- **Backticks in a justfile are command substitution at parse time**, even
-  inside an `@echo` string - an echoed example command once ran a full
-  trace-compare on every `just` invocation, `just --list` included.
-- **`XDG_CONFIG_HOME` is how you point `oag-game` at a scratch `settings.toml`**
-  for A/B config captures without touching `~/.config/oag/`.
-- **A niri screenshot piped through `wl-paste` can return the PREVIOUS clipboard
-  image.** One lap "verification" shot came out as a menu from an earlier
-  session. `psp-trace.py` now detects this and writes `.stale.png` rather than
-  citing it, but nothing else does. `niri` screenshots land in
-  `~/Pictures/Screenshots/`.
-- **`/tmp` here is quota-limited well below the project's own disk.** Extracting
-  a large WAD into it once broke the shell entirely - every command failed,
-  `echo` included, until the partial extraction was deleted. Scan through
-  `oag_assets::Archive` in memory instead.
-- **Shipped `section` data is not tidy, and a strict parser refuses real
-  tracks.** ~2 % of PVS mask bits name a section the file does not declare, one
-  id is authored three times over on four tracks, and 116 PS2 control points
-  name a section their file lacks. All benign; see
-  [`track.md`](docs/formats/track.md).
-- **No capture will ever show the BRIGHTNESS or GAMMA settings.** They apply at
-  the blit, which `--screenshot` and the race capture never reach, so a picture
-  that looks ungraded is not a bug. The real check is
-  `upscale::tests::the_grade_moves_the_picture_in_the_direction_the_setting_names`,
-  which builds the actual pipeline on a headless target and reads the pixel back
-  (mutation-checked by swapping brightness and the exponent in the shader). It
-  **skips with a note where there is no adapter**, so a green CI run does not
-  mean it ran.
-- **Judge line width at native 480x272 only.** Anything upscaled makes a
-  one-pixel authored line a magnification artefact argument rather than a
-  fidelity one.
-- **`--features native-video` makes the boot fifty times slower, and `just play`
-  turns it on** (Linux only, `justfile:25`). Measured on `pulse-psp-eu.chd`,
-  caches warm: **4.9 s** of boot with it (intro 2.7, backdrop 2.2) against
-  **0.08 s** without - `GstDecoder::open` decodes every frame into memory
-  before returning (~288 MiB for the two reels) where the AV1 cache path
-  decodes on demand.
-  [ADR-0017](docs/architecture/adr/0017-gstreamer-native-video.md) chose that
-  deliberately, costed at 270 frames/53 MiB for the backdrop (the intro is
-  1200 frames). The boot prints its own timings now, so this is re-measurable
-  rather than folklore. Making the GStreamer path lazy would remove the wait
-  rather than hide it, and is not done.
-- **Two things convert into `data/cache/movies` and they must never overlap**
-  - the boot's own two reels and the `--prefetch` worker both shell out to
-  `ffmpeg`, and two processes writing one cache file corrupts it rather than
-  racing safely. `Session::start_prefetch` is the only thing serialising them
-  now that movies run on `boot::MediaWorker`. `--refresh-video` (2026-08-12)
-  makes the worker stop skipping cached movies, so combined with `--prefetch`
-  it re-converts the boot's own two reels too - wasteful but still ordered.
-- **The loading screen's bar vanished on every ordinary boot, and the gate
-  wasn't the cause.** `0 / 0 converted` beside a full `100%` bar was real: the
-  boot's media phase reported no counts at all, and the display bundled bar,
-  counts and percentage into one row keyed on `total > 0`. Fixed 2026-08-12 by
-  giving the phase real counts (`boot::MediaPlan::loads`,
-  `boot::MediaWorker::progress`) rather than loosening the gate - **a display
-  gate keyed on "is there data" reads "nobody reported" and "nothing to
-  report" as the same thing.** The bar is now continuous (each load fills its
-  own slice from its own step, so a minute-long transcode crosses 40%->60%
-  rather than holding at 40%); the invariant to preserve is monotonicity.
-  [frontend boot](docs/architecture/frontend-boot.md#loading-is-not-transcoding).
-- **`--prefetch` could not fill the movie cache on a `native-video` build, and
-  said it had.** Found 2026-08-12. The GStreamer path writes no cache file -
-  it decodes into memory with a `{key}-gst` pseudo-path - so
-  `prefetch::convert`'s `report_picture` saw a picture and called it
-  converted, while the planning pass found nothing cached and relisted the
-  same 22 movies every run. Fixed by making `prefetch::convert` set
-  `movie::Decode::prefer_cache` unconditionally (filling the cache is the
-  worker's whole job, not a preference); confirmed empirically, the cache
-  went from 9 to 21 `.ivf` files in three minutes. **The general trap: a
-  success/failure check that asks "did this produce a picture?" cannot see
-  that the *side effect* the caller wanted did not happen.**
-- **An existing AV1 cache file now beats the platform decoder with no flag,
-  and ADR-0017's default still stands** - compatible because 0017 is only
-  about the case with nothing cached, where GStreamer still wins;
-  `open_psmf` now asks `movie::cached` first. Measured on `pulse-psp-eu.chd`,
-  both reels: 4.80 s of media phase through GStreamer, 36.08 s once to build
-  the cache (intro 30.33, backdrop 5.74), 0.06 s on every run after.
-  `--prefer-av1-cache` builds it for the boot's reels, `--prefetch` for all
-  22, `--refresh-video` implies it. ADRs are immutable, so nothing edited
-  0017; making the *uncached* default the cache would need a new one.
+- `data/` could be on `ecryptfs`: `cp --reflink` does not work (a real multi-GB copy) and `ls`/`rg` intermittently fail with "permission denied" or "no such file" on directories that exist. `fd`, `find` and absolute paths work.
+- **Backticks in a justfile are command substitution at parse time**, even inside an `@echo` string (an echoed example once ran a full trace-compare on every `just`, `just --list` included).
+- **`XDG_CONFIG_HOME` points `oag-game` at a scratch `settings.toml`** for A/B config captures without touching `~/.config/oag/`.
+- **A niri screenshot piped through `wl-paste` can return the PREVIOUS clipboard image** (`psp-trace.py` writes `.stale.png` when it detects it; nothing else does). Screenshots land in `~/Pictures/Screenshots/`.
+- **`/tmp` is quota-limited well below the disk**: extracting a large WAD into it once broke the shell (every command failed, `echo` included). Scan through `oag_assets::Archive` in memory. (It was 30 GB free at last look, so re-check before relying on this.)
+- **Shipped `section` data is not tidy and a strict parser refuses real tracks**: about 2 % of PVS mask bits name an undeclared section, one id is authored three times on four tracks, 116 PS2 control points name a section their file lacks. All benign ([`track.md`](docs/formats/track.md)).
+- **No capture shows the BRIGHTNESS or GAMMA settings** (they apply at the blit, which `--screenshot` and race capture never reach); the check is `upscale::tests::the_grade_moves_the_picture_in_the_direction_the_setting_names`, which **skips with a note where there is no adapter**, so a green CI run does not mean it ran.
+- **Judge line width at native 480x272 only**: upscaling turns a one-pixel authored line into a magnification argument.
+- **`--features native-video` makes the boot fifty times slower and `just play` turns it on** (Linux, `justfile:25`): 4.9 s of boot against 0.08 s on `pulse-psp-eu.chd` with warm caches, because `GstDecoder::open` decodes every frame into memory (~288 MiB for the two reels) where the AV1 cache path decodes on demand ([ADR-0017](docs/architecture/adr/0017-gstreamer-native-video.md) chose that, costed at 270 frames/53 MiB for the backdrop; the boot prints its own timings). A lazy GStreamer path is not done.
+- **Two things convert into `data/cache/movies` and must never overlap**: the boot's two reels and the `--prefetch` worker both shell out to `ffmpeg`, and two processes writing one cache file corrupt it. `Session::start_prefetch` serialises them; `--refresh-video` with `--prefetch` re-converts the boot's reels too (wasteful, still ordered).
+- **A display gate keyed on "is there data" reads "nobody reported" and "nothing to report" as the same thing**: the loading bar vanished on ordinary boots because the media phase reported no counts (fixed 2026-08-12 with `boot::MediaPlan::loads` and `boot::MediaWorker::progress`; the bar is continuous and must stay monotonic; [frontend boot](docs/architecture/frontend-boot.md#loading-is-not-transcoding)).
+- **A success check that asks "did this produce a picture?" cannot see that the side effect the caller wanted did not happen**: `--prefetch` on a `native-video` build wrote no cache file (GStreamer decodes into memory) yet reported converted, relisting the same 22 movies each run. `prefetch::convert` sets `movie::Decode::prefer_cache` unconditionally.
+- **An existing AV1 cache file beats the platform decoder with no flag** (`open_psmf` asks `movie::cached` first; ADR-0017's default still holds for the uncached case, and ADRs are immutable, so making the uncached default the cache needs a new one). Measured on `pulse-psp-eu.chd`: 4.80 s of media phase through GStreamer, 36.08 s once to build the cache, 0.06 s after. `--prefer-av1-cache` builds it for the boot's reels, `--prefetch` for all 22, `--refresh-video` implies it.
 
 **The Ghidra bridge's `switch_program` can silently no-op, and its own reply
 says success when it does.** 2026-08-19. Four of this project's binaries share
