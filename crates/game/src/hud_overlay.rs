@@ -264,6 +264,17 @@ impl Overlay {
         self
     }
 
+    /// The placement [`Self::safe_area`] applies, or `None` at full size.
+    fn safe_area_placement(&self) -> Option<Placement> {
+        let scale = self.safe_area_scale;
+        let size = self.space.size;
+        ((scale - 1.0).abs() >= f32::EPSILON).then(|| Placement {
+            scale,
+            offset: [(1.0 - scale) * size.0 * 0.5, (1.0 - scale) * size.1 * 0.5],
+            clip: [-1.0e9, -1.0e9, 2.0e9, 2.0e9],
+        })
+    }
+
     /// `frame` drawn at [`Self::safe_area_scale`] about the centre of the layout's grid.
     fn safe_area(&self, frame: Frame) -> Frame {
         safe_area_frame(frame, self.safe_area_scale, self.space.size)
@@ -336,6 +347,11 @@ impl Overlay {
                 viewport,
                 self.space,
             ));
+        }
+        if let Some(marquee) = &readout.now_playing {
+            let at = self.safe_area_placement();
+            let marquee = at.map_or_else(|| marquee.clone(), |at| marquee.placed(&at));
+            oag_hud::now_playing::append(&mut frame, &marquee, self.layout.default_border());
         }
         let glow = frame.glow.clone();
         self.paint(device, queue, encoder, view, frame, viewport);

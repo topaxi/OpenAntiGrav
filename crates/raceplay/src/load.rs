@@ -1180,6 +1180,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
             #[cfg(feature = "view")]
             capture_hud: options.hud,
             #[cfg(feature = "view")]
+            now_playing: crate::now_playing::View::read(&mut archives, title, &hud, &mut report),
+            #[cfg(feature = "view")]
             world_clock_offset: options.world_clock_offset,
             #[cfg(feature = "view")]
             gantry_seconds: options.gantry_seconds,

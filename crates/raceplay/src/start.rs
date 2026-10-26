@@ -115,6 +115,8 @@ impl Race {
             #[cfg(feature = "view")]
             capture_hud,
             #[cfg(feature = "view")]
+            now_playing,
+            #[cfg(feature = "view")]
             world_clock_offset,
             #[cfg(feature = "view")]
             gantry_seconds,
@@ -791,6 +793,7 @@ impl Race {
                     .map(|(grid, rule)| super::intro_camera::IntroCamera::new(grid, rule)),
                 camera_override,
                 capture_hud,
+                now_playing,
                 world_clock_offset,
                 gantry_seconds,
                 wreck_ended_tick: None,

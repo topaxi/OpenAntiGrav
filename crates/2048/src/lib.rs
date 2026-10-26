@@ -240,6 +240,7 @@ pub const MUSIC: &oag_title::Music = &oag_title::Music {
         file: names::MUSIC_TRACK_FILE,
     }),
     state_tracks: None,
+    now_playing: None,
 };
 
 /// Paths inside the packages.

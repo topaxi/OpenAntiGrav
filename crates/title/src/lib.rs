@@ -55,6 +55,7 @@ pub mod loading;
 pub mod loyalty;
 pub mod main_menu;
 pub mod menu;
+pub mod now_playing;
 pub mod opponent_autopilot;
 pub mod original_driver;
 pub mod pre_race;
@@ -310,6 +311,8 @@ pub struct Music {
     /// A soundtrack addressed by a Wwise bank state rather than by file. See
     /// [`StateTracks`]. Exclusive with [`Self::tracks`] in practice.
     pub state_tracks: Option<StateTracks>,
+    /// How the playing song is shown during a race, when the title authors a display.
+    pub now_playing: Option<now_playing::NowPlaying>,
 }
 
 /// A soundtrack whose playlist is plugin XML and whose audio is picked by

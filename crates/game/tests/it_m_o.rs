@@ -30,6 +30,7 @@ mod movie_ground_truth;
 mod mp4_movie_ground_truth;
 mod mp_time_trial_ground_truth;
 mod music_resume_ground_truth;
+mod now_playing_ground_truth;
 mod omega_campaign_launch_ground_truth;
 mod omega_campaign_screens_ground_truth;
 mod omega_colour_template_ground_truth;

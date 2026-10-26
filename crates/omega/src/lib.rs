@@ -241,6 +241,7 @@ pub const MUSIC: &oag_title::Music = &oag_title::Music {
         race_flow: &[("Game_FLOW", "Gameplay"), ("Gameplay_FLOW", "Race")],
         front_end_flow: &[("Game_FLOW", "Menus")],
     }),
+    now_playing: None,
 };
 
 /// Paths inside the packages.

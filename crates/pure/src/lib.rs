@@ -206,6 +206,7 @@ pub const MUSIC: &oag_title::Music = &oag_title::Music {
         file: names::MUSIC_TRACK_FILE,
     }),
     state_tracks: None,
+    now_playing: None,
 };
 
 /// Pure's front end: the layout its own `Skin.xml` authors and the boot chain a

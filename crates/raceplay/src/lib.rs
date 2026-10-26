@@ -245,8 +245,10 @@ mod mag_floor_fx;
 mod magstrip_wake;
 #[cfg(feature = "view")]
 mod missile_blast;
-#[cfg(feature = "view")]
 mod models;
+#[cfg(feature = "view")]
+#[cfg(feature = "view")]
+pub mod now_playing;
 mod options;
 mod original_ai;
 mod original_tables;

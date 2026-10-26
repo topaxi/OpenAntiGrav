@@ -536,6 +536,9 @@ impl Audio {
                     Some(id)
                 });
                 self.race_from = self.race_voice.and(loaded.from);
+                if self.race_voice.is_some() && seek.is_none() {
+                    self.song_serial = self.song_serial.wrapping_add(1);
+                }
                 match seek {
                     Some(seek) => debug!(
                         "audio: race music {}, {seconds:.1} s, resuming from {seek:.1} s",

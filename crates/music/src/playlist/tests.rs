@@ -50,6 +50,10 @@ fn the_soundtrack_is_declared_in_file_order_and_addressed_by_location() {
     // An `Entry` sitting beside `Values` must not be mistaken for one: the
     // node's own `name` is the id, and `Values` is the only child read.
     assert_ne!(music[0].id, music[1].id);
+
+    // The artist is read for the now-playing display; the label is not.
+    assert_eq!(music[0].artist.as_deref(), Some("Some Artist"));
+    assert_eq!(music[1].artist.as_deref(), Some("Other Artist"));
 }
 
 /// A definition with no `PI_Music` at all yields nothing rather than

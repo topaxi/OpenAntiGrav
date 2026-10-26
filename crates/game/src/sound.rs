@@ -175,6 +175,9 @@ pub fn race_tick_keeping(
         leach_beam: race.sim.world.leach_beam,
     };
     audio.race_tick(frame);
+    // The song-name marquee shows each race song once, off the same audio state a `--no-audio`
+    // run reaches: the selection does not wait on a device.
+    race.note_song(audio.now_playing().as_ref());
 }
 
 /// The listener, off the camera the frame is actually drawn from.
