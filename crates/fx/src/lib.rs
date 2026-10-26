@@ -17,6 +17,7 @@
 //! - [`beam`] is the Leach beam, [`flash`] the screen flash,
 //!   [`cockpit_hit`] the static a weapon hit throws over the cockpit view and
 //!   [`weapon_quads`] the Cannon's hand-built quads.
+//! - [`lens_flare`] is Pure's sun flare.
 //! - [`hull_overlay`] and [`absorb_shell`] are the weapon-absorb effect drawn
 //!   over a hull.
 
@@ -28,6 +29,7 @@ pub mod exhaust;
 pub mod flash;
 pub mod hull_overlay;
 pub mod leach_strip;
+pub mod lens_flare;
 pub mod magstrip;
 pub mod mist;
 pub mod psys;

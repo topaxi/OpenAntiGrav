@@ -636,6 +636,7 @@ pub fn capture(
         format,
         race.scenery_fx().weather().mist_texture(),
     );
+    scene.attach_lens_flare(&device, &queue, format, race.scenery_fx().lens_flare());
     scene.prepare_ghost(
         &device,
         &queue,

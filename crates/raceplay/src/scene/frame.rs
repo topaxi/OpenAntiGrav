@@ -141,6 +141,8 @@ impl Scene {
         hd_bloom_timestamps: Option<oag_post::hd_bloom::ChainTimestamps<'_>>,
     ) -> (bool, bool) {
         let mut hd_bloom_encoded = false;
+        // The sun flare draws over the resolved scene, ahead of every post pass and the HUD.
+        self.encode_lens_flare(device, encoder, view);
         let depth_view = &self.attachment_views.depth;
         let velocity_view = &self.attachment_views.velocity;
 
@@ -296,6 +298,7 @@ impl Scene {
         // blur - see `Race::lens_screen_motion`.
         let blur_lens = race.lens_screen_motion(projection, prev.projection, prev.shake);
         self.history().blur_lens.set(blur_lens);
+        self.place_lens_flare(race, projection, viewport);
         let frustum = cull.then(|| Frustum::from_view_projection(view_projection));
         // The same unjittered matrix, for the section boxes' view test.
         let section_view = view_projection;

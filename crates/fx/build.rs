@@ -12,6 +12,7 @@ fn main() {
             "distort",
             "exhaust",
             "flash",
+            "lens_flare",
             "mist",
             "psys",
             "weapon_quads",

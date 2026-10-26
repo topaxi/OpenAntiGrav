@@ -730,6 +730,13 @@ pub struct Looks {
     /// craft's hull, scaled per craft by the spline's light scale (so it
     /// darkens in a tunnel). Keyed on the race's own archive.
     pub hull_lights: Rule,
+    /// The sun's lens flare: ten additive quads along the line through the screen
+    /// centre, drawn where a circuit authors a `lensflare` node
+    /// (`docs/rendering/lens-flare.md`). Pure's. The rule is the law, the node is the
+    /// trigger: HD, 2048 and Omega ship a rays texture and a flag instead, and Omega's
+    /// archives also carry `lensflare_*` nodes, so a node alone must not switch it on.
+    /// Keyed on the race's own archive.
+    pub lens_flare: Rule,
     /// The shield tint.
     pub shield_palette: ShieldPalettes,
     /// The front end never waits at its language picker on a fresh run: the
@@ -810,6 +817,7 @@ impl Looks {
             circuit_effects: Rule::UNREAD,
             road_ripple: Rule::UNREAD,
             hull_lights: Rule::UNREAD,
+            lens_flare: Rule::UNREAD,
             shield_palette,
             skips_language_picker: Rule::UNREAD,
             lit_output_halved: Rule::UNREAD,

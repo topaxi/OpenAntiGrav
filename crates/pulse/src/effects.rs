@@ -150,6 +150,9 @@ pub const LOOKS: &Looks = &Looks {
         on: Platforms::Only(&[Platform::Psp, Platform::Ps2]),
         origin: Origin::Measured,
     },
+    // Pulse has no sun flare: `lensflare` (`0x3de`) is in its name table, zero nodes
+    // and zero strings (`docs/rendering/lens-flare.md`, "Cross-title").
+    lens_flare: Rule::UNREAD,
     // `docs/ghidra/functions/psp-pulse-usa/shield-pickup.md`; the PS2 tint is
     // measured on PCSX2 (`oag_render::shield::PS2_PULSE_PALETTE`).
     shield_palette: ShieldPalettes {
