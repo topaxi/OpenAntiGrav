@@ -1704,3 +1704,15 @@ the executable, and live):
 
 Not read: cases 0, 1, 4, 8; `cam+0x274`; the structure at `entity+0xae4`; whether a barrel roll is in
 `+0x794`; what `FUN_088dfb90` does to the camera; the PS2's version of any of this.
+
+## 2026-10-26: `craft+0x870` is the Quake's lift, and two rigs ride it
+
+The internal rig's `eye += row1 * (params[0x04] + craft[0x870])` above carried an
+unidentified term. It is the **smoothed Quake amplitude over the craft**, written
+once per frame in `FUN_088418e0` (`h += (raw - h) * 8.0 * dt`, `raw` the wave's flat
+amplitude while the craft is within half the bump's half-width), and measured
+live: the cockpit eye rose along the ship's up by exactly the previous frame's
+`h`. The backward rig, `Ship_UpdateBackwardCamera` (`0x0883f7b8`, confidence 80,
+eye to `craft+0x7a0`, tripod `craft+0x150`), adds the same `h` to its eye's world
+`y`. The chase rigs (`Ship_UpdateCameraRigs`) never read it. Law, addresses and the
+capture: [cannon-quake-leachbeam.md](cannon-quake-leachbeam.md#2026-10-26-what-a-quake-does-to-the-craft-it-reaches-quake-craft-re-lane).

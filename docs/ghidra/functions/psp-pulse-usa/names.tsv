@@ -727,8 +727,8 @@
 0x08938090	function	MusicPlayer_ComputeStreamGain	85	audio-levels.md
 0x0893c208	function	MusicPlayer_ComputeCallbackGain	82	audio-levels.md
 0x0898c64c	function	Audio_EnqueuePannedOutput	78	audio-levels.md
-0x0891c7e0	function	Quake_ProximityToCraft	60	cannon-quake-leachbeam.md
-0x0891c82c	function	Quake_SpanIntensityAt	55	cannon-quake-leachbeam.md
+0x0891c7e0	function	Quake_ProximityToCraft	85	cannon-quake-leachbeam.md
+0x0891c82c	function	Quake_SpanIntensityAt	85	cannon-quake-leachbeam.md
 0x0891b600	function	Quake_SpanAmplitude	90	cannon-quake-leachbeam.md
 0x0891b654	function	Quake_SpanHalfWidth	90	cannon-quake-leachbeam.md
 0x0891beac	function	QuakeNode_Load	85	cannon-quake-leachbeam.md
@@ -1411,3 +1411,4 @@
 0x0881ad10	function	Hud_UpdateZoneSpeedClass	85	zone-speed-class.md
 0x088a7a5c	function	Image_Draw	80	hud-boost-smear.md
 0x0892a408	function	Trail_Submit	85	exhaust.md
+0x0883f7b8	function	Ship_UpdateBackwardCamera	80	cannon-quake-leachbeam.md

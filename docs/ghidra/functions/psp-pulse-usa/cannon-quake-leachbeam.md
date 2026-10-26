@@ -22,8 +22,8 @@ produced it and the one that replaces it.
 | `0x08874b14` | `Quake_Init` | 82 |
 | `0x0891d268` | `Quake_Update` | 85 |
 | `0x0891c028` | `Quake_SampleSpan` | 76 |
-| `0x0891c7e0` | `Quake_ProximityToCraft_q` | 60 |
-| `0x0891c82c` | `Quake_SpanIntensityAt_q` | 55 |
+| `0x0891c7e0` | `Quake_ProximityToCraft` | 85 (was 60, 2026-10-26) |
+| `0x0891c82c` | `Quake_SpanIntensityAt` | 85 (was 55, 2026-10-26) |
 | `0x08874a30` | `Quake_UpdateSpans` | 85 (new 2026-09-08) |
 | `0x0891cab8` | `Quake_UpdateSpan` | 80 (new 2026-09-08) |
 | `0x0891b714` | `Quake_ArmSpan` | 82 (new 2026-09-08) |
@@ -3327,3 +3327,176 @@ The frame is handed to `Psys_Spawn_q` as a flag-1 pointer (`0x0891d88c`, `t0 = 1
 Test: `quake_orientation_ground_truth::the_quake_frame_leans_with_the_banked_track`.
 Cross-title: **not checkable** - `WO_QUAKE` frames on HD/2048/Omega were not read, and
 the extent law is Pulse-only, so those sources keep their previous frame.
+
+## 2026-10-26: what a Quake does to the craft it reaches (quake-craft-re lane)
+
+The question, from play on this port: "when getting hit by quake, the craft does
+not react to it, it should get hit (physics) as well as 'ride' the quake wave".
+Two claims were tested against the original: (a) a physical reaction on the hit
+beyond damage and slowdown, and (b) the craft riding the lifted road.
+
+**Verdicts.**
+
+- **(a) No kick, confidence 88.** The hit writes no velocity, angular state,
+  pending impulse, stun timer, hover state or airborne flag. Its whole motion
+  effect is the shared slowdown (engine cut, grip skip and a hover-target sink of
+  `min(timer, 4.0)`, [engine.md](engine.md)), which this port already runs.
+- **(b) The body does not ride, the hull is not drawn lifted, and the cockpit and
+  rear-view cameras do.** One per-craft value, `entity+0x870`, the **smoothed wave
+  amplitude over the craft**, is added to the internal (cockpit) rig's eye height
+  and to the backward rig's eye `y`. The chase rigs never read it. Body: 92
+  (2026-09-24, above). Hull draw: 95. Cameras: 92 (internal) and 85 (backward).
+  All three are measured live below.
+
+| Address | Name | Confidence |
+| --- | --- | --- |
+| `0x0891c7e0` | `Quake_ProximityToCraft` | 85 (was 60) |
+| `0x0891c82c` | `Quake_SpanIntensityAt` | 85 (was 55) |
+| `0x0883f7b8` | `Ship_UpdateBackwardCamera` | 80 (new) |
+
+### The value: `entity+0x870`, the amplitude over the craft, smoothed at 8 per second
+
+`Quake_SpanIntensityAt` (`0x0891c82c`), read at instruction level:
+
+```text
+if no Quake object (0x08abf594 <= 0) or no span live (table+0x04 == 0): return 0
+if |wave_t - craft_t| * 0x08b3bfac > 200.0:              return 0   ; 0x0891c8dc lui 0x4348
+seg  = AiTrack segment of the craft                                 ; jal 0x0887d37c
+frac = the craft's position along that segment, 0..1
+for each record in table order:
+    if record+0x7e (armed) and record+0x52 == seg:
+        p = (frac - record+0x54) / (record+0x58 - record+0x54)     ; 0 if the window is empty
+        if |p - record+0x5c| < (record+0x6c / record+0x40) * 0.5:  ; 0x0891c99c lui 0x3f00, 0x0891ca08 c.lt.s
+            return record+0x64                                      ; 0x0891ca1c, the amplitude
+return 0
+```
+
+So the raw value is **flat**: the span's stored amplitude `amp` (`Quake_SpanAmplitude`,
+12.0 peak at 0.3 s, linear to 0 at 5.0 s, evaluated at `age + dt`) whenever the
+craft is within **half the bump's half-width**, `w / 2` world units (12.5 growing to
+37.5), of the bump's centre, and 0 elsewhere. It is not the raised-cosine height
+of the road under the craft; the 2026-09-24 note above ("very probably how high
+is the bump under this craft") is corrected to this. The first matching record
+wins. `Quake_ProximityToCraft` (`0x0891c7e0`) only looks the craft up by index
+(`FUN_08826ea0(g_race_manager, index, 1)`) and passes its track cursor
+(`+0xaf0`, `+0xad8`). Both names rise to 85 on this read plus the live match below.
+
+The writer, in `FUN_088418e0` (`0x08841e9c`..`0x08841ed0`), once per craft per frame
+for every craft with `entity+0x368` of 0 (the human) or 2 (an AI) whose node exists:
+
+```text
+raw = Quake_ProximityToCraft(entity+0x360)       ; jal 0x0891c7e0
+h   = entity+0x870
+h  += (raw - h) * 8.0 * dt                       ; 0x08841eac lui 0x4100
+entity+0x870 = h                                 ; 0x08841ed0 swc1
+```
+
+It runs for the shooter too (only the latch excludes the shooter), it runs with no
+wave in flight (raw is 0 and `h` decays), and `Craft_Construct_q` zeroes it
+(`0x088411f4`). No transcendental: a port is plain `f32` arithmetic.
+
+### Its readers, all of them
+
+A sweep for `0x870` over `lwc1`/`swc1`/`lw`/`sw` (`psp-relocate.py field`) and over the
+VFPU loads and stores plus `addiu base, 0x870` (the same walk, opcodes `0x32`,
+`0x36`, `0x3a`, `0x3e`) finds, on the entity, exactly:
+
+| Site | Function | What it does with `h` |
+| --- | --- | --- |
+| `0x08841f80`..`0x08841f9c` | `FUN_088418e0` | the hit latch: `h <= 0.1` (`0x3dcccccd`) or shooter clears `+0x860 & 0x40`; otherwise the rising edge is the hit (above, "The latch setter") |
+| `0x08845710` | `FUN_088455ec`, the internal rig | `eye += row1 * (params.height + h)`: the cockpit eye rises along the ship's up (see [camera.md](camera.md), "The internal rig") |
+| `0x0883f85c` | `Ship_UpdateBackwardCamera` (`0x0883f7b8`) | `eye = shipPos - up * params+0x2c`, then `eye.y += h` in **world** `y`; the aim is built from the lifted eye, so eye and aim rise together; result to `entity+0x7a0`, `Tripod_LookAt_q(entity+0x150, ...)`, the backward tripod (`"%s backward tripod"`, camera.md) |
+| `0x0884223c`/`0x08842248` | `FUN_088418e0`, the hull's display matrix | `vadd.s S021, S021, S201`: adds `h` to matrix 0, column 2, row 1, **after** `vmscl.q E100, E000, S200` copied matrix 0 into matrix 1. The stores are `C100`/`C110`/`C120` (matrix 1) and `C030` (matrix 0, column 3, the translation). `S021` is in neither, so the add is never stored. Measured: no lift. |
+
+`Ship_UpdateCameraRigs` (`0x08845ed0`), which builds both external chase rigs, has no
+access to `0x870`. **So the default chase view does not ride the wave**; only the
+cockpit view and the look-behind view do.
+
+`Ship_UpdateBackwardCamera` is named here at 80: it is the one writer of
+`entity+0x7a0`, the one caller of `Tripod_LookAt_q` with `entity+0x150`, which
+camera.md's tripod table already assigns to `<BackwardCamera>`, and its eye moved
+by `h` live. The `_q`-free name rests on those three; its stats offsets
+`+0x2c`/`+0x30` are not matched to `<BackwardCamera>`'s attributes.
+
+### No kick: every store the hit reaches
+
+- **The wave block** (`0x08841e9c`..`0x08842110`) stores `+0x870` (`0x08841ed0`),
+  `+0x880` (`0x08841f88`, the barrel-roll ease, unrelated), the pending channel
+  `T+0x130`/`+0x13c`/`+0x138` (`0x08842020`, `0x0884202c`, `0x08842034`), the latch
+  `+0x860` (`0x08842094`, `0x088420a8`, `0x088420b8`) and the drain's clear of
+  `T+0x130` (`0x08842110`). It calls `Ship_Damage`, `Sound_Play` (`QUAKEHIT`) and
+  `Ship_AddSlowdown`. Nothing writes `T+0x110`, the pending impulse
+  `Ship_ApplyCollisionImpulse` spends, so **the 0.5 s collision stun at
+  `craft+0x290` is never armed by a Quake.**
+- **`Ship_Damage` (`0x088439ac`), read whole**: its stores are telemetry counters
+  off `*(0x08b31774)` (`+0x170`..`+0x228`), the attacker's placement into
+  `entity+0x84`, and HUD/scoreboard bytes; its calls are `Ship_SetShield`,
+  `Ship_SetState(4)` at zero, `Camera_ArmShake(0.6, 0.6, cam, 1)` and
+  `CockpitHitFx_Arm_q` for the human on any `source == 2` hit (`0x08843c58`..
+  `0x08843cac`, already on [shield.md](shield.md)), and `ShipCollisionFx_Trigger`
+  for the sparks. No body field.
+- **Nothing else reacts to the latch**: `psp-relocate.py masked 0x860 0x40` finds
+  one read, the latch's own (`0x08841fe0`). No AI code reads it or `+0x870`.
+- **No Quake-specific shake**: `Camera_ArmShake`'s five callers are the contact
+  and destruction paths and `Ship_Damage`'s weapon branch; none is in a Quake
+  function. The PSP has no rumble motor.
+
+So the craft's visible reaction to a Quake hit in the original is: the energy
+drop, the hit sparks, `QUAKEHIT`, the weapon-hit camera shake (and cockpit
+overlay in cockpit view), the slowdown (thrust cut, sliding, and the hover sink
+the 2026-09-24 run saw as a 1.24-unit dip against the Quake's `slowdown_time` 1.3),
+plus the screen flash `Quake_Update` restarts every frame the wave runs, and the
+cockpit/rear camera lift above.
+
+### Measured live, PPSSPP, 2026-10-26
+
+PPSSPP v1.20.4, UCUS98712, a private muted instance on its own Xvfb, from a
+Single Race save state on Talon's Junction (Venom, Assegai, lap 3, eight craft,
+the player record 7). The Quake was fired by setting bit `0x8` of a weapon
+record's `+0x1b8` at a `Weapons_DispatchFire` stop, as `scripts/psp-fire-weapon.py`
+does, then one breakpoint at `0x08842264` (the hull matrix submit, once per craft
+per frame) read the entity in `s2`, its `+0x870`, `+0x860`, `+0x88` (energy), the
+source matrix in `s0` (rows `+0x10` up, `+0x20` forward, `+0x30` position), the
+stored display matrix in `a1`, and the two camera eyes `+0x7b0` and `+0x7a0`.
+Three waves were logged, 800 to 2,400 stops each.
+
+**A harness trap, recorded for the next run.** In this save state every weapon
+record's `+0xf0` (the entity pointer, `craft->entity` in the LeachBeam section)
+read 0, and `Weapon_FireQuake` hands it to `Quake_Init` unchecked: setting the bit
+crashed PPSSPP inside `Quake_Init` (`0x08874b54`, `lwc1 f20, 0x230(s2)` with
+`s2 = 0 + 0x900`, "Bad memory access 00000b30"). The record of each entity is
+`entity+0x4c`, so the harness wrote the shooter's own entity into its record's
+`+0xf0` before setting the bit; the wave then ran normally.
+`psp-fire-weapon.py` does not do this.
+
+| Quantity | Read statically | Measured |
+| --- | --- | --- |
+| decay of `h` per frame, wave gone | `1 - 8/60 = 0.8667` | 0.8665 (0.914 to 0.792), the same on every struck craft |
+| rise of `h` | `raw = amp(age)`, flat | first frames imply raw 10.25 then 9.98 on an early hit (amplitude falling with age), 3.34 then 3.36 on a late one: a constant per frame, not a cosine profile |
+| latch | rising edge at `h > 0.1`, clears at `h <= 0.1` | set on the first frame `h` passed 0.1 (0.445 on the player), cleared between 0.106 and 0.092 on every craft |
+| the hit | on the latch edge | player energy 132.76 to 125.26 on that frame, once |
+| hull display translation minus simulated translation | 0, the add is dead | **0.0000 on every row** (6,400 craft-frames, `h` up to 7.28) |
+| cockpit eye along up, minus `params.height` | `h` | **equal to the previous frame's `h`** to three decimals (0.445, 0.833, 1.258, 1.714, ...); along forward it stays 3.000, `params.length` |
+| rear eye `y` minus the craft's `y` | baseline plus `h` | 4.72 rising to 6.53 at the peak and back, `h` one frame late plus the baseline's own drift |
+
+The one-frame lag is ordering, not a law: the camera rigs run before
+`FUN_088418e0`'s Quake block in the frame, so they read last frame's `h`.
+
+Confidence: the `h` law 92 (instruction-level and a live match on seven craft);
+the hull not lifted 95 (a dead store read from the register numbers, and zero
+difference live); the cockpit lift 92; the rear lift 85 (live, but the world-`y`
+reading is from the decompile and the baseline drifts); no chase-rig lift 85 (a
+complete field sweep, not a live read of the chase eye).
+
+### Cross-title
+
+- **HD: checked, differs (partly).** HD's film ([quake.md](../ps3-hdfury-eu/quake.md),
+  "A wave that overtakes the craft") shows the camera rising and falling with the
+  road; HD's per-craft camera code was not traced in this pass, so whether it is the
+  same smoothed flat amplitude is **not checkable** here. HD also ships three
+  authored pad rumbles the PSP cannot have: `Data/XML/Rumble/Quake_Fired_Rumble.xml`,
+  `Quake_Impact_Rumble.xml` and `Quake_Incoming_Rumble.xml` (strings at
+  `0x007a51e8`, `0x007a53a8`, `0x007a5548` in the EU `EBOOT.elf`). A player who
+  remembers the craft reacting physically may be remembering HD's rumble and camera.
+- **Pure: not checked** in this pass ([psp-pure-usa/quake.md](../psp-pure-usa/quake.md)
+  has no road lift, so a camera lift there would have nothing to follow).
