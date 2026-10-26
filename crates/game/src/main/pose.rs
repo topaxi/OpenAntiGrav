@@ -290,6 +290,7 @@ pub(crate) fn parse_hud_state(text: &str) -> Result<race::CaptureHud> {
             .transpose()?
             .filter(|&centiseconds| centiseconds > 0),
         boost_phase: None,
+        autopilot_seconds: None,
         zone: parts
             .get(7)
             .map(|text| -> Result<race::CaptureZone> {

@@ -57,6 +57,11 @@ pub struct CaptureHud {
     /// (`*(craft+0x78)+0xb8 / +0xb4` on Pulse PSP): a posed capture runs no ticks, so its flare has no
     /// timer, and the HUD's multi-copy boost draw runs on this (`oag_hud::boost_smear`).
     pub boost_phase: Option<f32>,
+    /// The seconds the player's running Autopilot pickup has left, when the capture read them
+    /// (`record+0x148` on Pulse PSP): the HUD shows its icon and `%1.2f` countdown
+    /// (`oag_hud::SubWeapon::Autopilot`). Drawn on the readout alone, the simulation's own
+    /// timer untouched, so a posed capture's craft is not handed to the driver.
+    pub autopilot_seconds: Option<f32>,
     /// Zone mode's counters as the original's frame showed them, when the capture read them.
     pub zone: Option<CaptureZone>,
 }

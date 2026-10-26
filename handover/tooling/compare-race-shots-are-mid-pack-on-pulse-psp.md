@@ -30,15 +30,15 @@ the screenshot. Recipe, checks and caveats: [`docs/tools/compare-page.md`](../..
   every section visible, the neon clock 43 s short): fixed, whole frame 14.14 to 3.29 mean grey on `pulse-psp-race/talons-alongside`;
   `docs/tools/compare-page.md` has the table. **To adopt:** `just compare-rerender-ours --only pulse-psp-race` from the main checkout
   (it recomputes the world clock for a stored race shot). The Pure race shots, if any are made, need the same two fallbacks checked
-  (they sit in generic `oag-raceplay` code, so they apply). **Still open here:** the Autopilot pickup row (icon and `5.00` counter) is
-  not drawn (`--give` exists; the pair script would read the held pickup at `entity+0x1bc` and its timer and pass both), the speed
-  readout (the HUD record's own value), and the ribbon's curve.
+  (they sit in generic `oag-raceplay` code, so they apply). **Still open here:** the speed
+  readout (the HUD record's own value), and the ribbon's curve (the pickup row is drawn since: see the next item).
 - **PSP hull skew.** On `pulse-psp-race/talons-alongside` the original hull is about 1.5x larger than ours at the camera read from RAM; holding
   the body back one tick of its velocity (about 1.8 units) matches its size (docs: "The player's hull in a race shot"). Find which of the body
   read and the camera node is a tick off the frame the PSP presents (the screenshot is the previous frame in a PPSSPP stop), then feed ours the
   right one. HD has no such skew.
-- **The pickup row** (the Autopilot icon and its `1000000000.00` counter) is not drawn in ours: nothing in the pair carries the
-  player's held pickup. `entity+0x1bc` holds it.
+- **The pickup row landed (2026-10-26, `talons-pickup-row`)**: `--hud-autopilot` draws the Autopilot icon and `5.00` on `pulse-psp-race/talons-alongside`
+  (docs: "The pickup row of a race shot"). **To adopt:** `just compare-rerender-ours --only pulse-psp-race`. Still open: the hexagon is translucent in the
+  original and flat in ours; the Zone pairs show the same row and are not given it; HD's race pair draws none (its row is not measured here).
 - **HD: one circuit.** Talon's Junction, 6th of 8 in lap 2, weapons off, the Autopilot; the walk, the hunt, the paused restore and the
   pair are in the docs page. Open: more circuits and teams; the HUD record's word order flips between boots (see the docs, item 4:
   decoded both ways, refused when ambiguous, not understood); the best-lap line (not located in the record); the Fury `Absorb`/`DAMAGE`

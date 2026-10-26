@@ -408,6 +408,7 @@ fn run(cli: Cli) -> Result<()> {
     let mut hud_state = cli.hud_state.as_deref().map(parse_hud_state).transpose()?;
     if let Some(hud) = hud_state.as_mut() {
         hud.boost_phase = cli.hud_boost_phase;
+        hud.autopilot_seconds = cli.hud_autopilot;
     }
 
     let leg = if cli.reel {

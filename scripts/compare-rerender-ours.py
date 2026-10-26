@@ -80,6 +80,15 @@ def rerender(pj, binary):
     if "--field-from" in flags and "--world-clock-offset" in flags and orig.get("world_clock_offset_s") is not None \
             and orig.get("race_clock_s") is not None and rec["profile"] == "pulse-psp":
         flags[flags.index("--world-clock-offset") + 1] = "%.3f" % (orig["world_clock_offset_s"] + orig["race_clock_s"])
+    # A race shot's pickup row (the running Autopilot's icon and countdown): pairs recorded before 2026-10-26 draw none.
+    # The countdown is the timer the pair script read at the stop (`autopilot_timer_at_stop_s`); it runs when the
+    # newer `held_pickup.autopilot_running` says so or, in an older record, the provenance's `autopilot.armed`.
+    held = orig.get("held_pickup") or {}
+    running = held.get("autopilot_running", ((orig.get("provenance") or {}).get("autopilot") or {}).get("armed"))
+    timer = orig.get("autopilot_timer_at_stop_s")
+    if "--hud-state" in flags and "--hud-autopilot" not in flags and rec["profile"] == "pulse-psp" and running \
+            and timer is not None and 0.0 < timer <= 600.0:
+        flags += ["--hud-autopilot", "%.4f" % timer]
     plat = ce.platform(rec["profile"])
     # Pairs recorded before the profile held the exposure (2048) drew an adapting one; hold it as the profile says.
     if "--hold-exposure" not in flags:

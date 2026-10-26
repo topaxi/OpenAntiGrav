@@ -81,6 +81,30 @@ left its line and the pack was gone. (The HD frames carried RPCS3's "Press and h
 resume" toast until 2026-10-21, `hd-capture-profile`: the profile now turns the native interface off.) A PSP state loads a different number of emulated frames before the stop on
 a slower instance (a Zone 8 frame moved from zone second 1.5 to 2.1, where its HUD is mid-fade).
 
+### The pickup row of a race shot (2026-10-26, `talons-pickup-row`)
+
+The Autopilot's icon with its `5.00` under it (the hexagon at the top, about x 210 to 270, y 5 to 62 at 480x272) was not drawn in
+ours. `psp-pulse-pair.py --field` now records the player's held slot beside the timer (`original.held_pickup`: `+0x1bc` read **-1**,
+empty; `+0x1b8` read `0x800`, bit `0x1000` clear; `+0x148` the timer) and passes `--hud-autopilot SECONDS` when the timer is above zero
+and below the sane bound. The frame is the evidence for what draws the row: held empty, no `0x1000`, timer 5.0, and the icon and `5.00`
+are in `theirs.png`, so the row follows the timer, as ours' readout does (`Race::sub_weapon` and the icon fallback).
+**`--give` was not the lever:** it acts inside a tick (`race_capture/tick.rs`) and a race shot runs none, and a held pickup shows no countdown until it
+runs. `--hud-autopilot` (a `CaptureHud` field, like `--hud-boost-phase`) draws the icon and countdown on the readout alone and leaves the
+race's own `autopilot_timer` at 0, so the craft is not handed to the driver and nothing in the simulation moves. `compare-rerender-ours.py`
+adds it to a stored Pulse PSP race pair from `autopilot_timer_at_stop_s` when the pair's provenance says the Autopilot was armed (the stored
+pair has no `held_pickup`; a fresh capture of the same state at `--target-clock 38.4082` gave a `theirs.png` bit-identical to the stored one and the
+slot values above).
+
+| `pulse-psp-race/talons-alongside` | before | after |
+| --- | --- | --- |
+| pickup box (205, 0, 76x64): RMSE against `theirs.png` | 0.208 | 0.122 |
+| pixels that changed in ours | none outside the box; the row is 60x53 at (210, 8) | |
+| whole frame RMSE | 0.0486 | 0.0361 |
+
+Open: the original's hexagon is translucent (the scene shows through it) where ours' is a flat green; the HD race pair (`hd-race/talons-pack`) and the
+Zone pairs are unchanged (the flag is Pulse PSP's, from `restore_autopilot_timer`'s own pair types; the Zone pair's frame
+shows the same row and has not been given it).
+
 ## Environment parity: the profile and the checks (2026-10-20)
 
 **The set from before 2026-10-20 is archived** (the maintainer's request: start fresh, make the original's and
