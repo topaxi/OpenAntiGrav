@@ -7,8 +7,8 @@ wired law:
 [autopilot.md, "Absorb cancels it, fire does not, and no corner holds it"](../../docs/ghidra/functions/psp-pulse-usa/autopilot.md#absorb-cancels-it-fire-does-not-and-no-corner-holds-it-2026-10-26-autopilot-re).
 
 **Expiry measured (2026-10-26, `autopilot-expiry`).** No title holds or eases the Autopilot when its
-timer runs out in a corner, so nothing was wired: Pulse and HD watched live, Pure live for the timer,
-2048 static. The pasted "extended in a turn zone" claim is refuted
+timer runs out in a corner, so nothing was wired: Pulse and HD watched live, Pure live for the timer
+(76 expiries, two boots), 2048 static. The pasted "extended in a turn zone" claim is refuted
 ([autopilot.md](../../docs/ghidra/functions/psp-pulse-usa/autopilot.md#expiry-mid-corner-and-the-pasted-extended-in-a-turn-zone-claim-2026-10-26-autopilot-expiry)).
 The `disengaging` call on a cancel with time left is watched live on Pulse (it fires), which closes
 the old "inferred" read.

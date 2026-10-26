@@ -244,8 +244,11 @@ test on [Pulse](../psp-pulse-usa/autopilot.md#expiry-mid-corner-and-the-pasted-e
 
 ### Static: who writes the pickup's timer, and what the blend does
 
-A search of every `stfs` and `stw` with displacement `0x158` (the pickup slot's timer) in the
-whole image, then each hit followed to its base register:
+A search of the `stfs` stores with displacement `0x158` (the pickup slot's timer; 27 in the
+whole image, all read) and the first 100 `stw` stores with it (the search lists by address and
+the hundredth is at `0x0059808c`, so every store in the weapons and ship code, `0x000c..0x0015`,
+is among them; the rest lie above it in engine and UI code and were not read), then each hit
+followed to its base register:
 
 | Store | What it is |
 | --- | --- |
@@ -258,8 +261,8 @@ whole image, then each hit followed to its base register:
 
 So nothing adds to the timer: the only writes that touch a running Autopilot's slot timer
 are the arm, the decrement and the cancel. A field scan does not exclude a write through a
-copied record or a vector store, so this is 80 and not more; the live run below is what
-carries the 90.
+copied record, a vector store or a `stw` past the hundredth hit, so this is 80 and not more;
+the live run below is what carries the 90.
 
 `Craft_Update` (`0x000f1958`) is where the hand-back happens. At `0x000f19fc` it loads the
 blend `craft+0x278` and compares it with the TOC word at `r2-0x438c`, which is
@@ -268,7 +271,8 @@ blend `craft+0x278` and compares it with the TOC word at `r2-0x438c`, which is
 with no multiply, over `craft+0x4c` and points `craft+0x84` at it (`0x000f1a18..0x000f1ab0`).
 The other reader, `0x000ecab4` in `Ship_UpdateEntity`, is the same zero test, feeding the
 two distance counters (`+0x198`, `+0x208`). **So the blend's fade over the last second never
-reaches the handling: the hand-back is one tick, not eased.** Confidence 90 (two sites,
+reaches the handling: the driver's record is used whole until the blend reads zero, and the
+pad's after: a step, not an ease.** Confidence 90 (two sites,
 the constant read, and the live rows below).
 
 ### Live: 34 expiries on Chenghou Project, two restores
@@ -295,6 +299,12 @@ lands in the corner. Summary: `scripts/autopilot-expiry-summary.py hd <file>`.
 Speeds at the expiries were 70 to 165 on `craft+0x340`, the roll out of the horizontal at
 most 29 degrees (HD's circuit has no steep banks at these corners; the Pulse run covers
 that clause). The timer fell by the row's `dt` (0.0166 or 0.0333 between rows).
+
+**The hand-back takes two frames on HD**, one more than Pulse's next-frame step: the bit clears in
+`Autopilot_Update`, the release arm in `PlayerStatus_Update` zeroes the blend and the engine
+bits in the same or the next frame (32 to 35 ms between rows is two 60 Hz frames), and
+`Craft_Update` then sees a zero blend. Ours hands back on the tick after the timer reads zero;
+whether that matches HD's second frame is a one-tick difference not chased here.
 
 **No ease.** The last driver record before the hand-back carried values such as
 `(-100, 100, 100)` and `(87.5, 100, 0)`; the first row on the pad record carried the pad's
