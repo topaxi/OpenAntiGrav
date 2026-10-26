@@ -3377,7 +3377,14 @@ craft is within **half the bump's half-width**, `w / 2` world units (12.5 growin
 37.5), of the bump's centre, and 0 elsewhere. It is not the raised-cosine height
 of the road under the craft; the 2026-09-24 note above ("very probably how high
 is the bump under this craft") is corrected to this. The first matching record
-wins. `Quake_ProximityToCraft` (`0x0891c7e0`) only looks the craft up by index
+wins. **This supersedes the 2026-09-07 reading above that the authored `radius` is
+the hit's gate**: the gate is the span's own half-width, and `radius` never enters it.
+`radius` is still read: `Weapon_FireQuake` copies `stats+0x60`/`+0x64`/`+0x68`
+(damage, radius, slowdown) into the firing record's `+0x18c`/`+0x190`/`+0x194`
+(`0x0886c670` stores the radius), a triple other fire handlers also write
+(`0x08865328`). Its reader was not identified: `psp-relocate.py field 0x190` returns
+167 sites, the float reads among them at `0x088ef3c4`, `0x088efdd4` and `0x089ed374`;
+reading those three is the recipe. `Quake_ProximityToCraft` (`0x0891c7e0`) only looks the craft up by index
 (`FUN_08826ea0(g_race_manager, index, 1)`) and passes its track cursor
 (`+0xaf0`, `+0xad8`). Both names rise to 85 on this read plus the live match below.
 
@@ -3492,8 +3499,9 @@ complete field sweep, not a live read of the chase eye).
 
 - **HD: checked, differs (partly).** HD's film ([quake.md](../ps3-hdfury-eu/quake.md),
   "A wave that overtakes the craft") shows the camera rising and falling with the
-  road; HD's per-craft camera code was not traced in this pass, so whether it is the
-  same smoothed flat amplitude is **not checkable** here. HD also ships three
+  road; HD's per-craft camera code is **not checked in this pass** (the program is
+  loaded; the read recipe is in the ready-to-wire thread's Open list), so whether it
+  is the same smoothed flat amplitude is unread. HD also ships three
   authored pad rumbles the PSP cannot have: `Data/XML/Rumble/Quake_Fired_Rumble.xml`,
   `Quake_Impact_Rumble.xml` and `Quake_Incoming_Rumble.xml` (strings at
   `0x007a51e8`, `0x007a53a8`, `0x007a5548` in the EU `EBOOT.elf`). A player who

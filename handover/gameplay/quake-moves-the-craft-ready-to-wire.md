@@ -95,7 +95,26 @@ reads `h` after the tick, which is the same value one tick later. **Chosen, not
 measured:** whether to reproduce the one-frame lag; reading the post-tick value is the
 simpler default and differs by one tick.
 
-## Files and functions
+## Which titles get it
+
+`Wave::apply_hits` is shared by every title, so the law is per-title data, never a
+title-name branch (ADR-0058, `just check-title-branching`). Add a field on
+`oag_title::Weapons` beside `leach_drain`, e.g. `quake_hit: QuakeHit` with one variant
+for this law and its provenance carried the way the title crate already records an
+`Origin` (`oag_title::effects::QuakeLook` is the nearest Quake precedent):
+
+| Title | Value | Provenance |
+| --- | --- | --- |
+| Pulse PSP | the lift law | measured, this thread's evidence page |
+| Pulse PS2 | the lift law | inherited from Pulse PSP (one Pulse definition, PSP is the reference) |
+| HD / Fury | the lift law | inherited: HD's `Quake_UpdateSpan` (`0x002d3760`) uses Pulse's span record and Pulse's constants (`ps3-hdfury-eu/quake.md`); its gate is unread |
+| Omega, 2048 | the lift law | inherited through HD (2048 inherits HD via Omega) |
+| Pure | the lift law | inherited from Pulse: Pure authors a `Quake` span node (class `0x379`) but its ripple and gate are unread (`psp-pure-usa/quake.md`, Open 1); an unmeasured title takes Pulse's law |
+
+If a later read finds a title's own gate, it gets its own variant. The camera lift
+follows the same field (a title without the law draws no lift).
+
+## Next Steps
 
 1. **`crates/weapons/src/projectile/quake.rs`**: move `amplitude`, `half_width`,
    `PEAK_AMPLITUDE`, `RISE_SECONDS`, `HALF_WIDTH_AT_LAUNCH`, `HALF_WIDTH_GROWTH` and
@@ -105,9 +124,12 @@ simpler default and differs by one tick.
    `oag-render` gains `oag-weapons` as a dependency (rule 1 forbids only the reverse;
    run `just check-deps`). No `pub use` shim. Add `Wave::raw_lift(progress, length, dt)
    -> f32` (the raw value above) and rewrite `Wave::apply_hits` to take the per-slot
-   `h` and gate on it. Delete `radius` from `Wave` once nothing reads it; keep
-   `QuakeStats::radius` decoded (its doc must then say the original's hit path never
-   reads it, which is the 2026-09-07 note's own finding).
+   `h` and gate on it. Remove `radius` from `Wave` only. **Before touching
+   `QuakeStats::radius`, check our AI's Quake firing decision and anything else that
+   reads it**: the original copies it into the firing record's `+0x190` at fire time,
+   and that copy's reader is unidentified (recipe on the evidence page). Its doc must
+   then say the hit path does not read it, superseding the 2026-09-07 reading that
+   it was the gate.
 2. **The per-craft value**: `quake_lift: f32` on `oag_gameplay::world::Ship` (beside
    `pending_slowdown`), reached through a new `Craft::quake_lift_mut` in
    `crates/weapons/src/craft.rs`. It must live on the ship, not the wave: it keeps
