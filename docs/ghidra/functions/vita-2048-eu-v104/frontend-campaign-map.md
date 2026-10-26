@@ -400,6 +400,40 @@ more like a small hand-authored pixel nudge on top of whatever `+0x15c`/
 `m_y` values (not `<CanvasLabel>`) is the concrete next empirical check, in
 `docs/formats/2048-frontend.md`'s own campaign-map section.
 
+## A tap on a mode tile leaves on one tap (measured 2026-10-26, confidence 90)
+
+Vita3K v0.2.1 4095, EU `PCSF00007` v1.04 with both packs mounted, a
+touch is `mousedown`, 0.3 s, `mouseup` on the 960x544 game window
+(`vita3k-capture.md`). Frames were read at 960x544 from a fresh boot and from a
+grid left idle.
+
+| Input | Result |
+| --- | --- |
+| one touch of SINGLE PLAYER `(295, 162)`, grid idle for minutes | campaign map within 1.2 s; never a marked tile waiting for the tick |
+| the same, 0.7 s after the grid's first frame (fresh boot) | map already up |
+| one touch of HD CAMPAIGN `(477, 162)` | the `HD` map ("uplift" group) within 1.5 s |
+| d-pad right, then cross, on the grid | nothing for 5 s: the grid answers touch only |
+
+So the tile is `toggle="true"` in the XML but a touch on it chooses and
+leaves in one go; the unlabelled `Icon_Tick` is not needed after a tile touch.
+This corrects the "two taps" reading taken off the screen XML's shape
+(`touch.rs` before 2026-10-26) and an earlier capture note that the first tap
+"highlights" it. The Fury tile was not touched on the emulator (same widget
+class as HD; ours is tested on both). Why the earlier note said two taps is
+unmeasured; the second tap of that walk lands on the campaign map.
+
+Ours: `Frontend::activate_touch` fires the tick on a `GameModeChoice` toggle at
+once (`GameModeChoice` only, so `Team_Definition.xml`'s toggles never
+auto-fire); the tick stays tappable. The pad cursor and cross are this build's
+own (the original has none here) and take the same one-press path.
+Tests: `a_click_on_a_tile_is_the_tap...` in `crates/ui/src/frontend/tests/`
+and `one_tap_on_a_tile_opens_its_campaign` in
+`crates/game/tests/vita_2048_dlc_menus_ground_truth.rs`.
+
+Omega: its front end is HD's, not 2048's `GameModeChoice`, so there is no
+forward-port. Status: **not applicable, checked** (Omega's mode choice is
+HD's `PI001` front end, a different widget set).
+
 ## Open
 
 - **The screen/refresh path that dispatches the two tier functions is still

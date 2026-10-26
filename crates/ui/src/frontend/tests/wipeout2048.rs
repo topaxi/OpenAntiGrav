@@ -203,14 +203,12 @@ fn the_title_screen_leaves_on_its_own_redirects_to_the_mode_grid() {
 }
 
 #[test]
-fn the_pad_chooses_a_mode_with_two_taps_and_the_tick_confirms() {
+fn the_pad_chooses_and_confirms_a_mode_with_one_press() {
     let mut frontend = boot(0);
     let mut input = Input::new();
     reach_the_grid(&mut frontend, &mut input);
     press(&mut frontend, &mut input, Button::Cross);
     assert_eq!(frontend.chosen_mode(), Some("FE_SP_CAMPAIGN"));
-    assert!(frontend.machine().is(w2048::GAME_MODE_CHOICE));
-    press(&mut frontend, &mut input, Button::Cross);
     assert!(frontend.machine().is(w2048::NEW_FE_SHELL));
 }
 
@@ -280,11 +278,11 @@ fn a_click_on_a_tile_is_the_tap_and_a_click_elsewhere_is_nothing() {
     assert!(frontend.pointer(&click((320.0, 250.0))));
     tick(&mut frontend, &mut input, 0);
     assert_eq!(frontend.chosen_mode(), Some("FE_MP_CAMPAIGN"));
-    // The first tile, twice: chosen, then confirmed through the tick.
+    // The first tile, once: chosen and confirmed at the same tap (measured
+    // on Vita3K, see `touch.rs`).
     assert!(frontend.pointer(&click((200.0, 250.0))));
     tick(&mut frontend, &mut input, 0);
-    assert!(frontend.pointer(&click((200.0, 250.0))));
-    tick(&mut frontend, &mut input, 0);
+    assert_eq!(frontend.chosen_mode(), Some("FE_SP_CAMPAIGN"));
     assert!(frontend.machine().is(w2048::NEW_FE_SHELL));
 }
 
@@ -373,7 +371,6 @@ fn a_middle_aligned_text_centres_its_line_once_the_face_is_known() {
 
 pub(super) fn reach_the_shell(frontend: &mut Frontend, input: &mut Input) {
     reach_the_grid(frontend, input);
-    press(frontend, input, Button::Cross);
     press(frontend, input, Button::Cross);
     assert!(frontend.machine().is(w2048::NEW_FE_SHELL));
 }

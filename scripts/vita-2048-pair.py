@@ -329,9 +329,7 @@ def boot_and_walk(s, args):
         s.key("x")
     time.sleep(2.0)
     tile = GAME_MODES[args.game_mode]
-    s.tap(tile)
-    time.sleep(3.0)
-    s.tap(tile)  # the first tap highlights the tile, the second opens it (measured)
+    s.tap(tile)  # one tap opens the mode (measured 2026-10-26, frontend-campaign-map.md); a second would land on the map
     time.sleep(3.0)
     s.tap(args.node)
     time.sleep(3.0)

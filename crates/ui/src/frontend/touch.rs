@@ -26,14 +26,21 @@
 //! declares for something, drawn as a 4-unit ring. A player needs to see
 //! where the cursor is; what the original draws there is unread.
 //!
-//! # Two taps on a toggle
+//! # One tap on a mode tile
 //!
 //! `GameModeChoice`'s mode tiles are `toggle="true"` with no `redirect`;
 //! an unlabelled one (`Icon_Tick.gtf`, `redirect="newFEshell"`) is
-//! the confirm. So a tap on a mode marks it and the tick leaves - the file's
-//! own shape, kept rather than folded into one tap; a second tap on the
-//! chosen mode is read as the tick, the language picker's own rule. `Home`'s
-//! five tiles each carry their own `redirect` and leave on the tap.
+//! the tick. **Measured on Vita3K v0.2.1 (2026-10-26, confidence 90):** one
+//! touch of the SINGLE PLAYER tile, and one of the HD tile with the DLC
+//! mounted, leaves the grid for the campaign map within a frame or two; the
+//! tile is never left marked to wait for the tick. The pad's cross, pressed
+//! after a right on the d-pad, did nothing visible: the original's grid
+//! answers touch only. So a tap here chooses and fires the tick at once; the
+//! tick stays tappable and leaves on a chosen mode as before. The pad is
+//! this build's own (cursor and cross, **chosen, not measured**) and takes
+//! the same one-press path. This replaces an earlier two-tap reading taken
+//! off the screen file's shape. `Home`'s five tiles each carry their own
+//! `redirect` and leave on the tap.
 //!
 //! Only `FE_SP_CAMPAIGN` can be confirmed here: the HD and Fury
 //! tiles (v1.04) lead to another title's campaigns, and online, ad-hoc and
@@ -355,23 +362,23 @@ impl Frontend {
         let label = tile.name.clone();
         match tile.action.clone() {
             Action::Toggle(id) => {
-                // Two taps: the first chooses, the second confirms through
-                // the screen's own tick - see the module docs. **Only on
-                // `GameModeChoice`**: every other screen this build reaches
-                // generically may carry its own label-less `Action::Redirect`
-                // tiles for an unrelated purpose - `Team_Definition.xml`'s
-                // `replay_unlock`/`replay_unlock_2` are exactly that, and
-                // without this guard a second tap on any of its toggle
-                // buttons would silently auto-fire one of them instead of
-                // simply re-choosing.
+                // One tap, measured on Vita3K (see the module docs): a mode
+                // tile chooses and leaves at once, through the screen's own
+                // tick. **Only on `GameModeChoice`**: every other screen this
+                // build reaches generically may carry its own label-less
+                // `Action::Redirect` tiles for an unrelated purpose -
+                // `Team_Definition.xml`'s `replay_unlock`/`replay_unlock_2`
+                // are exactly that, and without this guard a tap on any of
+                // its toggle buttons would silently fire one of them instead
+                // of simply choosing.
                 if current == w2048::GAME_MODE_CHOICE
-                    && self.touch.chosen_mode.as_deref() == Some(id.as_str())
                     && let Some(tick) = tiles
                         .iter()
                         .position(|t| t.label.is_none() && matches!(t.action, Action::Redirect(_)))
                 {
+                    self.touch.chosen_mode = Some(id);
                     self.notes
-                        .push(format!("{current}: {label} chosen again, confirming"));
+                        .push(format!("{current}: {label} chosen, confirming"));
                     self.activate_touch(current, tick);
                     return;
                 }
@@ -466,8 +473,7 @@ impl Frontend {
         self.machine.fire(target);
     }
 
-    /// The pointer on a touch grid: hovering selects, a click activates, a
-    /// second click on a chosen toggle confirms through the tick.
+    /// The pointer on a touch grid: hovering selects, a click activates.
     ///
     /// Returns whether a touch grid was on screen to take it.
     pub(super) fn touch_pointer(&mut self, pointer: &Pointer) -> bool {

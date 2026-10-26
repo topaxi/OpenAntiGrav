@@ -22,6 +22,7 @@ use oag_game::campaign::launch::{self, CellPlan, Refusal};
 use oag_gameplay::input::{Button, Input};
 use oag_tables::race_campaign::{Cell, Grid};
 use oag_ui::frontend::{self, Launch};
+use oag_ui::pointer::Pointer;
 
 fn package(name: &str) -> Option<PathBuf> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -120,13 +121,12 @@ fn on_the_grid(source: &Path) -> (frontend::Frontend, Input) {
     panic!("never reached the mode grid");
 }
 
-/// Chooses the tile `steps` to the right of the single-player one and
-/// confirms it.
+/// Chooses the tile `steps` to the right of the single-player one; one press
+/// confirms it (measured on Vita3K, `oag_ui::frontend::touch`).
 fn choose(frontend: &mut frontend::Frontend, input: &mut Input, steps: usize) {
     for _ in 0..steps {
         press(frontend, input, Button::Right);
     }
-    press(frontend, input, Button::Cross);
     press(frontend, input, Button::Cross);
 }
 
@@ -171,6 +171,38 @@ fn both_packages_open_their_own_campaign_from_a_tile_each() {
         press(&mut frontend, &mut input, Button::Cross);
         assert!(frontend.is_finished(), "{tile}: a cell launches");
         assert_eq!(frontend.launch(), Some(&Launch::Cell(first)));
+    }
+}
+
+/// One tap on a mode tile leaves for its map: measured on Vita3K v1.04 with
+/// both packs mounted, a single touch of the HD tile opened the HD campaign
+/// and never left the tile marked to wait for the tick.
+#[test]
+#[ignore = "needs data/extracted/vita/PCSF00007"]
+fn one_tap_on_a_tile_opens_its_campaign() {
+    let Some(eu) = package("PCSF00007") else {
+        return;
+    };
+    for (tile, at) in [
+        ("FE_RC_HD", (477.0, 162.0)),
+        ("FE_RC_FURY", (659.0, 162.0)),
+    ] {
+        let (mut frontend, mut input) = on_the_grid(&eu);
+        let tap = Pointer {
+            at: Some(at),
+            moved: true,
+            clicked: true,
+            ..Pointer::default()
+        };
+        assert!(frontend.pointer(&tap));
+        input.begin_frame(0);
+        frontend.update(1.0 / 60.0, &mut input, None);
+        assert!(
+            frontend.machine().is(w2048::NEW_FE_SHELL),
+            "{tile}: one tap leaves: {:#?}",
+            frontend.take_notes()
+        );
+        assert_eq!(frontend.campaign_tile(), Some(tile));
     }
 }
 
