@@ -3508,3 +3508,14 @@ complete field sweep, not a live read of the chase eye).
   remembers the craft reacting physically may be remembering HD's rumble and camera.
 - **Pure: not checked** in this pass ([psp-pure-usa/quake.md](../psp-pure-usa/quake.md)
   has no road lift, so a camera lift there would have nothing to follow).
+
+### Wired 2026-10-26 (quake-wire lane)
+
+Ours now runs this law: `oag_weapons::projectile::quake` (`raw_lift`, `update_lift`, `smooth_lift`,
+`apply_hits` on the rising edge of `h > 0.1`), the mine trip in `Race::advance_quake`, and
+`oag_render::camera::internal::eye` taking `Ship::quake_lift`. Held at the peak (12 units) on a
+standing craft, the cockpit view's gantry sign edge moves 285 px down in a 1440x816 frame
+(184 to 469). Per-title as `Weapons::quake_hit`. **2048 / Omega check:** checked, applies, wired
+by inheritance (HD's `Quake_UpdateSpan` uses Pulse's span record and constants; the gate itself
+is unread there, so it carries `Origin::InheritedFrom`). `QuakeStats::radius` is no longer read
+by the hit path.
