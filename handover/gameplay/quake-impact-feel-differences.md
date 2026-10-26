@@ -27,20 +27,25 @@ Ranked by what a player sees and hears. Each gap is ready to wire except the thi
      (both sides), the alpha is `(1 - p) * 255`, and a texture offset pair is redrawn every frame as
      `rand(0..7) / 8`; **an arm while it runs is ignored** (no restart, no stacking);
    - the draw, in the screen flash's layer: texture `Data\Tex\noisematt.mip` (64 x 64 RGBA8888 on
-     the disc), colour white at the alpha above, blend alpha-over, texture wrap repeat; two quads
-     full height, **left** over `x` in `[0, w]` and **right** over `[480 - w, 480]` (`w` the strip
-     width, in the PSP's 480 x 272 space, so scale by the frame's width over 480), with `u` from 0 to
-     `w / 64` and `v` from 0 to `w`, both multiplied by the texture scale `(0.125, 1.0)` and shifted by
-     the offset pair;
+     the disc), blend ADD / SRC_ALPHA / ONE_MINUS_SRC_ALPHA, texture wrap repeat; **two gradient
+     strips**, full height, **left** over `x` in `[0, w]` and **right** over `[480 - w, 480]` (`w` the
+     strip width, in the PSP's 480 x 272 space, so scale by the frame's width over 480). Vertex
+     colours: white at alpha `(1 - p) * 255` on the screen-edge pair, `0x00000000` (alpha 0) on the
+     inner pair, so each strip is opaque noise at the edge and clear at its inner edge. `u` runs 0 to
+     `w / 64`, `v` is static 0 to 4.25 (272 / 64), both multiplied by the texture scale `(0.125, 1.0)`
+     and shifted by the offset pair (the noise is stretched about 8:1 horizontally);
    - checked against 36 live rows on two boots: `p` 0.027 at +1, 0.973 at +35, active 36 rows, the
-     offsets drawn from eighths; frames in the cockpit capture show snow over the whole frame for
-     rows +2 to +10, clearing from the middle.
+     offsets drawn from eighths. The captured cockpit frames agree: the vertical noise energy of the
+     outer 30 px columns is 41 to 43 at rows +2 and +4 against 4 before the hit, 14 to 15 at x 120 to
+     150, and 9 to 10 in the middle (baseline 1.5 to 7.5). Edge-heavy, not a full-frame wash.
+     Confidence 88 on the picture, 85 on the draw's exact UV law;
    Where: a render-side node beside `oag_fx::flash` (same layer, same "HUD over it" order), armed
    from `Race::arm_weapon_hit_shake`'s sites (the hit sparks' and the correction's), shown when the
    seat's camera view is internal. The existing [cockpit eye lift](quake-craft-open-leads.md) is
    the other cockpit-only piece. Needs `noisematt.mip` through the title's texture path (Pulse PSP
    has it; the PS2 pressing was not checked). Test: the node's timeline (`p` series above) and the
-   strip width at three frames, with no disc.
+   strip width at three frames, with no disc. To exercise it in ours, `oag-game --force-hit TICK:0`
+   fires a weapon hit on seat 0 at a tick (also the test path for item 2).
 2. **`.COLLISIONS` twice per struck craft: ready to wire, Pulse PSP.** `Ship_Damage` calls
    `ShipCollisionFx_Trigger` once per locator it picks (two, or one when both draws coincide) and
    each call plays `.COLLISIONS` positionally at the locator, gated by the same 0.8 s per-locator
@@ -61,7 +66,10 @@ Ranked by what a player sees and hears. Each gap is ready to wire except the thi
    (`scripts/psp-quake-hit.py --no-autopilot`) on a stretch of straight road at least 1.5 s long;
    this state's straight ends 5 frames after the hit, so use a state made on a long straight, or a
    shooter near enough that the hit lands in the first 10 rows. Ours: `--pilot-assist off`, the
-   same hold, a counterfactual run with nothing fired on both sides.
+   same hold, a counterfactual run with nothing fired on both sides. The ours-side reading used a
+   scratch hook that was reverted and is **not pasted here**: it launched
+   `Wave::launch(slot, progress - QUAKE_BACK, 1.0, &stats)` for an opponent at a fixed tick and logged
+   the player's speed and timers per tick; rebuild it from those two names.
 
 Smaller, not worth a lane alone:
 

@@ -286,13 +286,13 @@ linearly to zero over the 0.6 s. Each frame it draws two fresh offsets in
 eighths (`Psys_RandIntRange(0, 7) * 0.125`). Its enqueue (`0x088eec20`) only
 queues a draw while the player craft's `+0x6d` is set: the internal
 (cockpit) camera flag, per [camera.md](camera.md). **So it is not in any
-chase-camera frame.** **What it draws was read and captured 2026-10-26:** a full-screen
-static of `Data\Tex\noisematt.mip` swept in from both screen edges and fading over 0.6 s
-(288 px per side at the hit, alpha `(1 - p) * 255`), absent from ours; the whole law, the node's
+chase-camera frame.** **What it draws was read and captured 2026-10-26:** a static of
+`Data\Tex\noisematt.mip` in two gradient strips from the screen edges, fading over 0.6 s
+(288 px wide each at the hit, edge alpha `(1 - p) * 255`), absent from ours; the whole law, the node's
 fields over 36 live rows and the draw state are in
 [cannon-quake-leachbeam.md](cannon-quake-leachbeam.md#2026-10-26-why-a-quake-hit-feels-stronger-on-the-original-quake-feel-capture-lane).
-Confidence **90** for the name and the picture: arm, update, enqueue and draw are read and the
-node matched the reading on two boots.
+Confidence **88** for the name and the picture: arm, update, enqueue and draw are read, the
+node matched the reading on two boots and the captured frames' noise energy follows the gradient.
 
 ## The two race options that reach the pool
 
