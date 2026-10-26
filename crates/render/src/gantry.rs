@@ -72,6 +72,13 @@ pub const SLOT8_TEXTURE: &str = "billboard8.tga";
 /// candidate is this one is not a weaker measurement for it.
 pub const HD_SLOT8_TEXTURE: &str = "billboard8.gtf";
 
+/// Omega's spelling of slot 8's placeholder: the same `billboard8` material on
+/// the PS4 build, whose track labels its textures `.../texturesps4/billboard8.gnf`
+/// (read off `tech_de_ra`'s built track model, 2026-10-26). **Inherited from
+/// HD's convention, not a PS4 measurement**: the name is HD's, only the
+/// container's extension moved.
+pub const OMEGA_SLOT8_TEXTURE: &str = "billboard8.gnf";
+
 /// The last path component of a texture label, case-preserved.
 ///
 /// **Why this exists at all, and not just `eq_ignore_ascii_case`.** A Pulse
@@ -110,7 +117,7 @@ fn basename(label: &str) -> &str {
 /// sees. HD's own eight are counted on the disc too - `billboard7.gtf` and
 /// `billboard8.gtf` on all 17 environments, the rest on a subset - in the
 /// same source cited above.
-pub const SLOT_PLACEHOLDER_TEXTURES: [&str; 16] = [
+pub const SLOT_PLACEHOLDER_TEXTURES: [&str; 24] = [
     "billboard1.tga",
     "billboard2.tga",
     "billboard3.tga",
@@ -127,6 +134,14 @@ pub const SLOT_PLACEHOLDER_TEXTURES: [&str; 16] = [
     "billboard6.gtf",
     "billboard7.gtf",
     "billboard8.gtf",
+    "billboard1.gnf",
+    "billboard2.gnf",
+    "billboard3.gnf",
+    "billboard4.gnf",
+    "billboard5.gnf",
+    "billboard6.gnf",
+    "billboard7.gnf",
+    "billboard8.gnf",
 ];
 
 /// Whether `label` names one of [`SLOT_PLACEHOLDER_TEXTURES`], matched
@@ -515,6 +530,7 @@ pub fn mount(model: &Model) -> Option<Mount> {
     surface(model, BACKPLATE_TEXTURE)
         .or_else(|| surface(model, SLOT8_TEXTURE))
         .or_else(|| surface(model, HD_SLOT8_TEXTURE))
+        .or_else(|| surface(model, OMEGA_SLOT8_TEXTURE))
 }
 
 /// The plane of every draw in `model` that binds a texture named `texture`.

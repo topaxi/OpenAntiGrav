@@ -192,7 +192,26 @@ pub const TITLE: &Title = &Title {
     },
     pressings: None,
     pre_race: None,
-    adverts: None,
+    // Omega's start grid is HD's: the same `321Go_StartFinish.vex` card and the
+    // same billboard quads, only in the Vita/PS4 container. **Inherited from HD,
+    // not re-measured on PS4**: the target, the projection and the unlit passes
+    // are HD's RPCS3 readings, judged against a shadPS4 start-grid still
+    // (`docs/formats/omega-status.md`, "Adverts"). `zone_gantry` stays `None`:
+    // Zone is unmeasured on Omega, so no mode picks `321Go_Zone.vex` yet.
+    adverts: Some(&oag_title::adverts::Adverts {
+        target: (512, 256),
+        near: 0.5,
+        far: 5500.0,
+        colour_pool: false,
+        flip_v: false,
+        wrap: true,
+        zone_shares_one_texture: true,
+        gantry_card: true,
+        adverts_unlit: true,
+        card_unlit: true,
+        zone_gantry: None,
+        origin: oag_title::Origin::InheritedFrom("Wipeout HD"),
+    }),
 };
 
 /// The effects Omega plays: the engine's own names, tried as Pulse's, minus

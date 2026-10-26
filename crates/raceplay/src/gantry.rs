@@ -656,6 +656,20 @@ fn build(
     let geometry = archives
         .read_name(&sibling)
         .with_context(|| format!("{name}: the .rcsmodel beside it, {sibling}"))?;
+    // **Omega's `.rcsmodel` is the Vita/PS4 container** (2048's reader, 8-byte
+    // pointers): it carries its own materials and needs no `.vex` to build, so
+    // it goes through `mesh::rcs::psp2` as the weapon bodies and the hull do.
+    if mesh::rcs::psp2::is_psp2(&geometry) {
+        let (model, built) = mesh::rcs::psp2::build_with_vex(name, &geometry, blob, &mut |path| {
+            archives.read_name(path).ok()
+        })
+        .with_context(|| format!("{name}: {sibling} does not build"))?;
+        report.push(format!(
+            "{name}: {} (Vita/PS4 container)",
+            built.describe()
+        ));
+        return Ok(model);
+    }
     let (model, _report) = mesh::rcs::build(
         name,
         blob,
