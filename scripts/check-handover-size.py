@@ -73,7 +73,7 @@ def main() -> int:
             "That limit is the Read tool's own ceiling, not a style preference - past it "
             "a fresh\nsession's first read of this file fails outright. Prune it: delete "
             "threads whose work\nhas landed rather than annotating them, and compress "
-            "narrative in the largest\n`## Open threads` rows down to current state plus "
+            "narrative in the largest\n`## Open` sections down to current state plus "
             "what is still open, pointing at\nthe docs page that already carries the "
             "evidence instead of repeating it here."
         )

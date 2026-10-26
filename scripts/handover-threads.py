@@ -16,7 +16,7 @@ Every thread under `handover/<category>/` opens with a frontmatter block:
 `scripts/check-handover-size.py` (`just check-handover`) refuses a thread
 whose block is missing or invalid; this module owns the parser and the rules.
 
-    python3 -I scripts/handover-threads.py [--status S] [--title T] [--category C] [--counts]
+    python3 -I scripts/handover-threads.py [--status S] [--title T] [--category C] [--counts|--paths]
 
 Standard library only.
 """
@@ -141,6 +141,7 @@ def main() -> int:
     ap.add_argument("--title", choices=TITLES, help="threads naming this title (or `all`)")
     ap.add_argument("--category", choices=CATEGORIES, help="directory or extra category")
     ap.add_argument("--counts", action="store_true", help="print the count per status")
+    ap.add_argument("--paths", action="store_true", help="print only the paths, one per line (for shuf)")
     args = ap.parse_args()
 
     rows = []
@@ -167,6 +168,10 @@ def main() -> int:
 
     order = {s: i for i, s in enumerate(STATUSES)}
     rows.sort(key=lambda r: (order[r[1]["status"]], _neg_date(r[1]["updated"]), str(r[0])))
+    if args.paths:
+        for path, _ in rows:
+            print(path.relative_to(ROOT))
+        return 1 if bad else 0
     for path, f in rows:
         titles = ",".join(f["titles"])
         print(f"{f['status']:<18} {titles:<12} {f['updated']} {path.relative_to(ROOT)}")
