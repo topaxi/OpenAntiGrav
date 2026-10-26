@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [hd]
-updated: 2026-10-26
+updated: 2026-10-27
 summary: "HD fidelity queue: original Bomb picture (no look-back), unlit taps of Missile/Leach/Plasma, scenery items, Moa pair, exposure, LOD"
 ---
 
@@ -49,7 +49,10 @@ from the craft (mean grey difference); 1-4 done, 5-8 not started. Evidence pages
    banner box 35.1 to 24.7 only); 6. Vineta's light and sky; 7. ~~Chenghou's windows~~ **wired 2026-10-22, `hd-glass-families`**
    (`glass_2nduv_reflect_glow`: the window picture, the sky through `1 - a` and the glow through the second-UV mask; the green
    strips are back, but the tower box reads 58.9 grey against 54.7, the panes' reflection too bright: open); 8. Tech de Ra's missing
-   details: **not started** (Tech de Ra carries 9 `scanlinebillboard` slots, now bound, none in the pair's view).
+   details: **census done 2026-10-27 (`hd-tech-de-ra-2`)**: the black booth window behind the right-hand railing was
+   ~~`ds_booth_glass`~~, **wired** (hd-track-tone.md, "`ds_booth_glass` reflects the sky through its normal map's alpha"; on 12
+   of 13 pairs, booth boxes 13-35 grey to 4-7). The rest of the pair's gap is clock phase, not material (see "HD's scenery
+   clock" below).
 
 **Amphiseum's `hologram.rcsmaterial` board** (2026-10-22, `hd-blend-space`): drawn through the generic emissive
 stand-in and +70 grey too bright over the start gantry (box `840,0 240x120`); the encoded store lifts it further, which is
@@ -81,7 +84,7 @@ one), or the sky map as a layer beside the probes (different sizes today, 512x25
 - **The other families that declare the sky map**: ~~`mt_windows_a`~~, ~~`glass_texture_customr`~~ and
   ~~`glass_2nduv_reflect_glow`~~ **wired 2026-10-22, `hd-glass-families`** (rows of `rcs::window_glass`'s family table;
   hd-track-tone.md, "The sky-reflecting families"; Anulpha's strip box 2 grey brighter with the normal map still left out). Still
-  open: `glass_reflect` (11 circuits), `ds_booth_glass` (11), `glass_reflect_opacity` (Chenghou 14 slots, Vineta K, `03_track`),
+  open: `glass_reflect` (11 circuits), ~~`ds_booth_glass` (11)~~ (**wired 2026-10-27**), `glass_reflect_opacity` (Chenghou 14 slots, Vineta K, `03_track`),
   `glasstest`, the water sheets of Vineta K (`rcs::water`, not started), the mag floors, the pipe family, the ice: each a row once its
   block is read, one per commit with all 13 pairs re-judged. Metropia's `glass_2nduv_reflect_glow` resolves to block `@0x18350`,
   assumed Chenghou's law, unread. The glass normal maps are the shared omission. The tint is `ProbeTint::SCENERY` (`{1, 1, 1, 0}`, read on Moa's glass only); a second circuit's
@@ -102,6 +105,15 @@ one), or the sky map as a layer beside the probes (different sizes today, 512x25
   the chunk's packed normal (same page, same section).
 - ~~**The chevron's emissive pulse**~~ **wired** (2026-10-22, `hd-texture-slots`, item 2 above); what is left is the
   clock its curve runs on.
+- **HD's scenery clock** (2026-10-27, `hd-tech-de-ra-2`; one measurement, several symptoms): ours runs every world mesh on the race
+  tick over 60 (`Race::world_clock_seconds`, HD pairs record no `--world-clock-offset`), the original on a clock whose offset over the
+  HUD clock is unread. On `hd/tech-de-ra` the camera droid sits over the left wall in the original (box `400,400 120x120`, 24 grey,
+  luma -23) and over the right-hand stands in ours (+15 there); the `nr_twinblend` GO banner shows another phase of its wipe; on
+  `hd/modesto-heights` an airship crosses the tower top right in ours only (box `1300,0 220x240`, 21 grey). The Anulpha chevron's
+  outline phase is the same input. **Recipe**: on a cold RPCS3 frame, read the scenery animation time the engine hands
+  `Anim Transform` nodes beside the HUD clock (find the writer in `/hdfury/EBOOT-ps3-hdfury-eu.elf` from the node evaluator's time
+  argument), store it in `pair.json` as `world_clock_offset_s` the way the Pulse PSP pairs do (`scripts/psp-world-anim-clock.py`) and
+  let `compare-rerender-ours` pass it. Never fit the offset to the picture.
 - **`m_diffuse_normal_constantspecular`'s normal alpha**: the RGB is a normal map
   (`docs/formats/rcsmaterial.md`); what its alpha carries is unread.
 
@@ -125,8 +137,8 @@ section above or the doc page it names). At most one lane in `crates/mesh` at a 
    needs another camera (a rival's bomb ahead of the player, or the player placed behind the dropped bomb).
 2. **`hd-tech-de-ra`** (opus, mesh). **Done 2026-10-26 for the glow banner only**: the `glow` needle's +30 on Tech de
    Ra was `nr_twinblend` (slot 133, the banner behind the gantry), now drawn by its program (rcsmaterial.md,
-   "`nr_twinblend`: two pictures, a scrolling wipe and bars"; mask bias +1.13). **Still open from this item:**
-   Tech de Ra's missing details by a slot-skip census, the glass road's mid and far
+   "`nr_twinblend`: two pictures, a scrolling wipe and bars"; mask bias +1.13). **2026-10-27 (`hd-tech-de-ra-2`)**: the
+   missing-details census found `ds_booth_glass` (wired). **Still open from this item:** the glass road's mid and far
    brightness (the eye dump of `c[209]`), Modesto's background building texture, and Vineta's right-hand building
    (sunlit bands about 30 grey over the original; name the material with `OAG_TINT_MATERIALS=1` and `hd_slot_list`).
 3. **Additive source strength** (mesh): Talon's grill source about 1.5x the original's, and Amphiseum's hologram
