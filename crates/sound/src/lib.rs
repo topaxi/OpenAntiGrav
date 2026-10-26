@@ -52,6 +52,7 @@ mod now_playing;
 pub use now_playing::NowPlaying;
 pub mod probe;
 mod race_music;
+mod race_song;
 mod resume;
 mod survey;
 use library::{Library, NoLibrary, load_entry, load_front_end};
@@ -430,6 +431,8 @@ pub struct Audio {
     output: Output,
     /// HD's authored mix, when the booted title has one. See [`hd_mix`].
     hd: hd_mix::Hd,
+    /// The race song held until the race leaves its countdown. See [`race_song`].
+    song_hold: race_song::Hold,
     /// Where `--dump-audio` writes. `None` with a device attached, because
     /// [`Output::render_tick`] refuses to pull samples the hardware callback
     /// is already draining.
@@ -635,6 +638,7 @@ impl Audio {
         let audio = Self {
             output,
             hd: hd_mix::Hd::default(),
+            song_hold: race_song::Hold::default(),
             dump: dump.map(|path| Dump {
                 path,
                 samples: Vec::new(),

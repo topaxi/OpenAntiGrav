@@ -16,13 +16,14 @@ pub struct NowPlaying {
 }
 
 impl Audio {
-    /// The race song that last started, or `None` before the first one has.
+    /// The race song that last started, or `None` before the first one has - and while the song
+    /// is held for the green light, so a race never shows the song the race before it started.
     ///
     /// Reads the listing the music worker already kept, never the disc, so it is cheap to call
     /// every tick.
     #[must_use]
     pub fn now_playing(&self) -> Option<NowPlaying> {
-        if self.song_serial == 0 {
+        if self.song_serial == 0 || self.song_hold.holding() {
             return None;
         }
         let index = self.race_index?;

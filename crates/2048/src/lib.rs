@@ -245,6 +245,12 @@ pub const MUSIC: &oag_title::Music = &oag_title::Music {
     }),
     state_tracks: None,
     now_playing: Some(NOW_PLAYING),
+    // 2048's music player is unread for this; it runs HD's rule through Omega, per the
+    // lineage rule for an unmeasured 2048 law. Inherited, not measured.
+    race_song_start: oag_title::pre_race::Sourced::inherited(
+        oag_title::race_song::RaceSongStart::AtGo,
+        "Wipeout HD",
+    ),
 };
 
 /// The race screen's now-playing marquee. **Borrowed from HD through Omega, chosen not

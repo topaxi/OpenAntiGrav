@@ -62,6 +62,7 @@ pub mod pre_race;
 pub mod pressing;
 pub mod prompts;
 pub mod race;
+pub mod race_song;
 pub mod shadow;
 pub mod speed;
 pub mod team;
@@ -313,6 +314,16 @@ pub struct Music {
     pub state_tracks: Option<StateTracks>,
     /// How the playing song is shown during a race, when the title authors a display.
     pub now_playing: Option<now_playing::NowPlaying>,
+    /// When the race song begins to sound, and where that came from. The display follows it.
+    pub race_song_start: pre_race::Sourced<race_song::RaceSongStart>,
+}
+
+impl Music {
+    /// Whether the race song waits for the race to leave its countdown.
+    #[must_use]
+    pub fn song_waits_for_go(&self) -> bool {
+        self.race_song_start.value == race_song::RaceSongStart::AtGo
+    }
 }
 
 /// A soundtrack whose playlist is plugin XML and whose audio is picked by

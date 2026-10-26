@@ -238,6 +238,10 @@ impl Audio {
             leach_beam,
         } = frame;
         self.hd_race_mix(banks.mix.as_deref(), thrust_gated);
+        // The step that voices `go` is the first the race is not gated: the held song starts on it.
+        if !thrust_gated {
+            self.release_race_song();
+        }
         if banks.is_empty()
             && announcer.is_empty()
             && class_announcer.is_empty()

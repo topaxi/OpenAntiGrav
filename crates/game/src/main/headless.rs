@@ -567,6 +567,7 @@ pub(crate) fn run_race(
         // `start_music`, so `--race` plays the same music a race launched from
         // the menus does - there is no menu voice here to switch away from,
         // so this simply starts the list at its first (or resumed) track.
+        oag_game::sound::hold_race_song(&mut audio, loaded.title);
         audio.start_race_music(
             &music_discs,
             settings.audio.music_source,

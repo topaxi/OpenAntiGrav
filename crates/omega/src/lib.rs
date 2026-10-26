@@ -246,6 +246,12 @@ pub const MUSIC: &oag_title::Music = &oag_title::Music {
         front_end_flow: &[("Game_FLOW", "Menus")],
     }),
     now_playing: Some(NOW_PLAYING),
+    // Omega's executable has not been read for this; it runs HD's rule (its front end and race
+    // flow are HD's). Inherited, not measured.
+    race_song_start: oag_title::pre_race::Sourced::inherited(
+        oag_title::race_song::RaceSongStart::AtGo,
+        "Wipeout HD",
+    ),
 };
 
 /// The race screen's now-playing marquee: the `item InGameMusicDisplay` Omega's `data00.psarc`

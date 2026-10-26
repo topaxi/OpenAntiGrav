@@ -23,8 +23,6 @@ pub struct View {
     strings: oag_ui::language::StringTable,
     title_key: Option<&'static str>,
     serial: u32,
-    /// A song that started before the lights went green, shown when they do.
-    waiting: Option<(String, f32)>,
 }
 
 impl View {
@@ -78,14 +76,18 @@ impl View {
             strings: hud.strings.clone(),
             title_key: authored.title_key,
             serial: 0,
-            waiting: None,
         })
     }
 }
 
 impl Race {
     /// The race music started a song (or has not yet): shows its name the way the title does,
-    /// once per song. `None` for a song the disc does not name, which shows nothing.
+    /// once per song, on the tick it is told. `None` for a song the disc does not name, which
+    /// shows nothing.
+    ///
+    /// The display follows the sound and does not wait for the light itself: a title whose
+    /// original starts the song at the release (`oag_title::Music::race_song_start`) holds the
+    /// song until then in `oag_sound::Audio`, which reports nothing while it is held.
     pub fn note_song(&mut self, song: Option<&oag_sound::NowPlaying>) {
         let Some(view) = self.view.now_playing.as_mut() else {
             return;
@@ -112,22 +114,13 @@ impl Race {
                 None => title,
             };
             let width = oag_ui::font::measure(&view.font, &text) * view.display.scale();
-            view.waiting = Some((text, width));
+            view.display.show(text, width);
         }
     }
 
     /// One tick of the marquee.
-    ///
-    /// A song shows from the green light on: the original's `MusicPlayer_StartNextSong` only
-    /// stores the pick while the race manager is in its intro or countdown states (0 and 1) and
-    /// starts the song, and the display with it, in state 2. This build's music starts earlier,
-    /// so the display waits for the light and the sound does not.
     pub(super) fn advance_now_playing(&mut self) {
-        let racing = !oag_race::RaceState::thrust_gated(self.sim.world.tick);
         if let Some(view) = self.view.now_playing.as_mut() {
-            if racing && let Some((text, width)) = view.waiting.take() {
-                view.display.show(text, width);
-            }
             view.display.step();
         }
     }

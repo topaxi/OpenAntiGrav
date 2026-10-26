@@ -386,6 +386,7 @@ impl Audio {
 
     /// Stops the menu voice and any race voice, before a race track starts.
     pub(super) fn stop_music_voices(&mut self) {
+        self.song_hold.drop_parked();
         if let Some(id) = self.music.take() {
             self.output.with_mixer(|mixer| mixer.stop(id));
         }
@@ -516,6 +517,9 @@ impl Audio {
 
     /// The "start a voice on what was fetched" half of every race start.
     /// Touches only the mixer and the race-playlist state.
+    ///
+    /// A track that lands while [`Audio::hold_race_song`] holds the song is banked and parked
+    /// instead, and starts when the race leaves its countdown ([`Audio::release_race_song`]).
     pub(super) fn apply_fetched_race_track(
         &mut self,
         index: usize,
@@ -523,32 +527,43 @@ impl Audio {
         seek: Option<f64>,
     ) {
         match fetched {
-            Ok(Some(loaded)) => {
-                let seconds = loaded.sound.seconds();
+            Ok(Some(loaded)) if self.song_hold.holding() => {
                 self.race_cache = loaded
                     .from
                     .map(|platform| (platform, index, Arc::clone(&loaded.sound)));
-                self.race_voice = self.output.with_mixer(|mixer| {
-                    let id = mixer.play(Play::once(loaded.sound, Bus::Music))?;
-                    if let Some(seek) = seek {
-                        mixer.seek(id, seek);
-                    }
-                    Some(id)
-                });
-                self.race_from = self.race_voice.and(loaded.from);
-                if self.race_voice.is_some() && seek.is_none() {
-                    self.song_serial = self.song_serial.wrapping_add(1);
-                }
-                match seek {
-                    Some(seek) => debug!(
-                        "audio: race music {}, {seconds:.1} s, resuming from {seek:.1} s",
-                        loaded.what
-                    ),
-                    None => debug!("audio: race music {}, {seconds:.1} s", loaded.what),
-                }
+                debug!("audio: race music {} waits for the green light", loaded.what);
+                self.song_hold.park(index, loaded, seek);
             }
+            Ok(Some(loaded)) => self.start_race_voice(index, loaded, seek),
             Ok(None) => warn!("audio: this source carries no race music this can play"),
             Err(error) => warn_no_music("no race music", &error),
+        }
+    }
+
+    /// Starts the race voice on a decoded track: `seek` resumes it part way in, which is not a
+    /// new song for the now-playing display.
+    pub(super) fn start_race_voice(&mut self, index: usize, loaded: Loaded, seek: Option<f64>) {
+        let seconds = loaded.sound.seconds();
+        self.race_cache = loaded
+            .from
+            .map(|platform| (platform, index, Arc::clone(&loaded.sound)));
+        self.race_voice = self.output.with_mixer(|mixer| {
+            let id = mixer.play(Play::once(loaded.sound, Bus::Music))?;
+            if let Some(seek) = seek {
+                mixer.seek(id, seek);
+            }
+            Some(id)
+        });
+        self.race_from = self.race_voice.and(loaded.from);
+        if self.race_voice.is_some() && seek.is_none() {
+            self.song_serial = self.song_serial.wrapping_add(1);
+        }
+        match seek {
+            Some(seek) => debug!(
+                "audio: race music {}, {seconds:.1} s, resuming from {seek:.1} s",
+                loaded.what
+            ),
+            None => debug!("audio: race music {}, {seconds:.1} s", loaded.what),
         }
     }
 
