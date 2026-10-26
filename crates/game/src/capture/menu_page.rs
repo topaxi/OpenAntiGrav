@@ -741,6 +741,7 @@ pub(super) fn picker_page(
 ) -> (Vec<oag_ui::frontend::Draw>, Option<PreviewRequest>) {
     use oag_ui_screens::picker::{Details, Entry, Kind, Picker};
     let mut grid_columns = 0;
+    let mode = oag_race::Mode::from_name(&settings.race.mode).unwrap_or_default();
     let (entries, previews): (Vec<Entry>, Vec<Option<String>>) = match kind {
         Kind::Track => {
             let (entries, previews, columns) = track_entries::track_entries(
@@ -762,7 +763,6 @@ pub(super) fn picker_page(
             } else {
                 crate::records::Store::default()
             };
-            let mode = oag_race::Mode::from_name(&settings.race.mode).unwrap_or_default();
             teams
                 .iter()
                 .map(|team| {
@@ -798,7 +798,7 @@ pub(super) fn picker_page(
                                 logo: Some(oag_ui_screens::picker::hd::logo_src(&team.location)),
                             },
                         },
-                        Some(crate::preview::ship_entry(title, &team.location)),
+                        Some(crate::preview::ship_entry(title, &team.location, mode)),
                     )
                 })
                 .unzip()
@@ -849,6 +849,7 @@ pub(super) fn picker_page(
                         &team.location,
                         chosen,
                     ),
+                    oag_race::Mode::default(),
                 )
             })
         }

@@ -48,6 +48,9 @@ pub(crate) enum PreviewSource {
         /// How a variant's suffix joins the team's directory, where the team
         /// has a variant table - the preview follows the selected variant.
         join: Option<oag_title::VariantJoin>,
+        /// The craft file this entry previews instead of the title's own, where the race
+        /// flies another hull: a Zone race's (`oag_game::preview::zone_hull_file`).
+        hull_file: Option<String>,
     },
 }
 
@@ -82,9 +85,16 @@ impl PreviewSource {
             Self::Track {
                 location, reversed, ..
             } => oag_game::preview::track_entry(front_end?, location, *reversed),
-            Self::Ship { location, .. } => Some(format!(
+            Self::Ship {
+                location,
+                hull_file,
+                ..
+            } => Some(format!(
                 r"{location}\{}",
-                ship_hull.unwrap_or("ship_FE.vex")
+                hull_file
+                    .as_deref()
+                    .or(ship_hull)
+                    .unwrap_or("ship_FE.vex")
             )),
         }
     }
@@ -387,6 +397,7 @@ impl PickerStage {
                     location: located,
                     skins: Vec::new(),
                     join: None,
+                    hull_file: None,
                 }
                 .entry_name(self.previews.ship_hull, self.previews.front_end)
             }
@@ -578,9 +589,35 @@ mod tests {
             location: r"Data\Ships\Feisar".to_string(),
             skins: Vec::new(),
             join: None,
+            hull_file: None,
         };
         assert_eq!(source.entry_name(None, None).as_deref(),
             Some(r"Data\Ships\Feisar\ship_FE.vex"));
+    }
+
+    /// A Zone race previews the Zone hull's front-end twin, not the race hull's.
+    #[test]
+    fn a_zone_race_previews_the_zone_hull() {
+        let zone = oag_game::preview::zone_hull_file(oag_pulse::TITLE, oag_race::Mode::Zone);
+        let source = PreviewSource::Ship {
+            location: r"Data\Ships\Feisar".to_string(),
+            skins: Vec::new(),
+            join: None,
+            hull_file: zone,
+        };
+        assert_eq!(
+            source.entry_name(None, None).as_deref(),
+            Some(r"Data\Ships\Feisar\Zone_FE.vex")
+        );
+        assert_eq!(
+            oag_game::preview::zone_hull_file(oag_pulse::TITLE, oag_race::Mode::TimeTrial),
+            None
+        );
+        assert_eq!(
+            oag_game::preview::zone_hull_file(oag_hd::TITLE, oag_race::Mode::Zone),
+            None,
+            "HD's Zone craft is a ship of its own, not a file in the team's directory"
+        );
     }
 
     /// HD names its race hull, not a `ship_FE.vex` that no HD archive carries.
@@ -590,6 +627,7 @@ mod tests {
             location: r"Data\Ships\Feisar_c1".to_string(),
             skins: Vec::new(),
             join: None,
+            hull_file: None,
         };
         assert_eq!(
             source.entry_name(Some("ship.vex"), None).as_deref(),

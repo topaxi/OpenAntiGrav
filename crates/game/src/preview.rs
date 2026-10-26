@@ -108,9 +108,27 @@ pub fn track_entry(
 /// The craft entry a `--menu-page ship-select` capture previews for a team at
 /// `location`.
 #[must_use]
-pub fn ship_entry(title: &oag_title::Title, location: &str) -> String {
+pub fn ship_entry(title: &oag_title::Title, location: &str, mode: oag_race::Mode) -> String {
+    let zone = zone_hull_file(title, mode);
     let file = title.front_end.and_then(|f| f.ship_preview_hull);
-    format!(r"{location}\{}", file.unwrap_or("ship_FE.vex"))
+    format!(
+        r"{location}\{}",
+        zone.as_deref().or(file).unwrap_or("ship_FE.vex")
+    )
+}
+
+/// The front-end craft file a Zone race previews, `<hull>_FE.vex`, or `None` outside Zone and for a
+/// title whose Zone craft is not a file in the team's own directory ([`oag_title::ZoneCraft`]).
+///
+/// Pulse's Zone hull is `Zone.vex` beside the team's `Ship.vex` and its front-end twin
+/// `Zone_FE.vex` is on the disc for every team; the name follows the lobby's own
+/// `%s\%s_FE.vex` template (`ship-skin.md`), which is read, not measured on Team Selection.
+#[must_use]
+pub fn zone_hull_file(title: &oag_title::Title, mode: oag_race::Mode) -> Option<String> {
+    (mode == oag_race::Mode::Zone)
+        .then(|| title.race.zone_craft.hull())
+        .flatten()
+        .map(|hull| format!("{hull}_FE.vex"))
 }
 
 /// The orbit a capture frames a preview with: the fixed hull pose, or the

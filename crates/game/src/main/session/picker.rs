@@ -279,6 +279,7 @@ impl Session {
                         ),
                         skins,
                         join: title.race.team_variants_for(&choice.value).map(|v| v.join),
+                        hull_file: oag_game::preview::zone_hull_file(title, mode),
                     },
                 )
             })
