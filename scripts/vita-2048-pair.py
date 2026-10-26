@@ -366,8 +366,96 @@ def boot_and_walk(s, args):
     sys.exit("STALLED waiting for the HUD after the flyby; last frame %s" % (s.frames / "walk-hud.png"))
 
 
-def restart_and_burst(s, count, tag):
-    """Pause, Retry, and grab `count` frames back to back; returns `[(t, path)]`, t seconds from the confirm tap."""
+def parse_ram_reads(items):
+    """`--ram-read NAME=ADDR:TYPE` into `[(name, address, type)]`. TYPE is `f32`, `u32`, `u8` or `hexN` (N bytes as hex); ADDR is a hex
+    guest address, or `[PTR]+OFF` for OFF bytes past the u32 stored at PTR."""
+    reads = []
+    for item in items:
+        name, _, rest = item.partition("=")
+        addr, _, kind = rest.rpartition(":")
+        if not name or not (kind in ("f32", "u32", "u8") or (kind.startswith("hex") and kind[3:].isdigit())):
+            sys.exit("--ram-read wants NAME=ADDR:f32|u32|u8|hexN, got %r" % item)
+        reads.append((name, parse_guest_address(addr), kind))
+    return reads
+
+
+def read_guest(pid, reads):
+    """One sample of every `--ram-read`, read out of Vita3K's guest memory (`/proc/<pid>/mem`, guest + `HOST_WINDOW[0]`); needs a Vita3K
+    that is this process's child. Returns `{name: value}`."""
+    import struct
+    got = {}
+    with open("/proc/%d/mem" % pid, "rb", 0) as mem:
+        def raw(addr, n):
+            mem.seek(HOST_WINDOW[0] + addr)
+            return mem.read(n)
+        for name, addr, kind in reads:
+            if isinstance(addr, tuple):
+                addr = struct.unpack("<I", raw(addr[0], 4))[0] + addr[1]
+            if kind.startswith("hex"):
+                got[name] = raw(addr, int(kind[3:])).hex()
+                continue
+            b = raw(addr, 1 if kind == "u8" else 4)
+            got[name] = {"f32": lambda b: struct.unpack("<f", b)[0], "u32": lambda b: struct.unpack("<I", b)[0], "u8": lambda b: b[0]}[kind](b)
+    return got
+
+
+def parse_guest_address(text):
+    """A hex guest address, or `[PTR]+OFF` for OFF bytes past the u32 stored at PTR (resolved when it is used)."""
+    if text.startswith("["):
+        ptr, _, off = text[1:].partition("]")
+        return int(ptr, 16), int(off.lstrip("+") or "0", 16)
+    return int(text, 16)
+
+
+def parse_ram_pokes(items, fills):
+    """`--ram-poke ADDR=VALUE:f32[@FROM]` and `--ram-fill ADDR=BYTE:STEP:COUNT[@FROM]` into `[(address, kind, payload, from_grab)]`."""
+    pokes = []
+    for item in items:
+        addr, _, rest = item.partition("=")
+        rest, _, start = rest.partition("@")
+        value, _, kind = rest.partition(":")
+        if kind != "f32":
+            sys.exit("--ram-poke wants ADDR=VALUE:f32[@FROM], got %r" % item)
+        pokes.append((parse_guest_address(addr), "f32", float(value), int(start or 0)))
+    for item in fills:
+        addr, _, rest = item.partition("=")
+        rest, _, start = rest.partition("@")
+        parts = rest.split(":")
+        if len(parts) != 3:
+            sys.exit("--ram-fill wants ADDR=BYTE:STEP:COUNT[@FROM], got %r" % item)
+        pokes.append((parse_guest_address(addr), "fill", tuple(int(v, 0) for v in parts), int(start or 0)))
+    return pokes
+
+
+def poke_guest(pid, pokes, grab):
+    """Write every `--ram-poke`/`--ram-fill` whose first grab is at or before `grab` into Vita3K's guest memory; needs a Vita3K that is
+    this process's child. Returns `{address: value}` of what was written."""
+    import struct
+    done = {}
+    with open("/proc/%d/mem" % pid, "r+b", 0) as mem:
+        for addr, kind, payload, start in pokes:
+            if grab < start:
+                continue
+            if isinstance(addr, tuple):
+                mem.seek(HOST_WINDOW[0] + addr[0])
+                addr = struct.unpack("<I", mem.read(4))[0] + addr[1]
+            if kind == "f32":
+                mem.seek(HOST_WINDOW[0] + addr)
+                mem.write(struct.pack("<f", payload))
+            else:
+                byte, step, count = payload
+                mem.seek(HOST_WINDOW[0] + addr)
+                span = bytearray(mem.read(step * count))
+                span[::step] = bytes([byte]) * count
+                mem.seek(HOST_WINDOW[0] + addr)
+                mem.write(span)
+            done["%#x" % addr] = payload
+    return done
+
+
+def restart_and_burst(s, count, tag, sample=None):
+    """Pause, Retry, and grab `count` frames back to back; returns `[(t, path)]`, t seconds from the confirm tap. `sample`, when given, is
+    called with the grab's index before each grab and its result is returned as a third element, `[(t, path, sample(i))]`."""
     s.key("Return")
     time.sleep(1.5)
     s.tap(PAUSE_RETRY)
@@ -377,8 +465,9 @@ def restart_and_burst(s, count, tag):
     out = []
     for i in range(count):
         path = s.frames / ("%s%03d.png" % (tag, i))
+        got = sample(i) if sample else None
         s.drive.screenshot(s.display, s.wid, path)
-        out.append((time.monotonic() - t0, path))
+        out.append((time.monotonic() - t0, path) + ((got,) if sample else ()))
     return out
 
 
@@ -386,8 +475,8 @@ def pick_grid_frame(burst, offset):
     """The first frame with the HUD up is tick 0 of the countdown; the frame `offset` seconds later is the grid.
     Returns `(index_of_hud, index_picked, t_hud, t_picked)` or None."""
     hud = None
-    for i, (t, path) in enumerate(burst):
-        if hud_up(path):
+    for i, b in enumerate(burst):
+        if hud_up(b[1]):
             hud = i
             break
     if hud is None:
@@ -476,6 +565,15 @@ def main():
     ap.add_argument("--platform", default="2048")
     ap.add_argument("--source", default=str(ROOT / SOURCE))
     ap.add_argument("--oag-game", default=str(ROOT / "target/debug/oag-game"))
+    ap.add_argument("--ram-read", action="append", default=[], metavar="NAME=ADDR:TYPE",
+                    help="with --walk: read a guest value (f32, u32, u8 or hexN bytes at a hex address, or at `[PTR]+OFF`) after every burst grab "
+                         "and record the series")
+    ap.add_argument("--ram-poke", action="append", default=[], metavar="ADDR=VALUE:f32[@FROM]",
+                    help="with --walk: write an f32 into the guest before every burst grab from grab FROM on (default 0), recorded with the reads; "
+                         "a pair made with one is a probe, not a reference")
+    ap.add_argument("--ram-fill", action="append", default=[], metavar="ADDR=BYTE:STEP:COUNT[@FROM]",
+                    help="with --walk: write BYTE at every STEP-th byte of COUNT, from ADDR (hex, or [PTR]+OFF), before every burst grab from "
+                         "grab FROM on; a probe, like --ram-poke")
     ap.add_argument("--meta", default="", help="JSON object for the manifest: id, title, track, craft, state, note")
     cp.add_arguments(ap)
     args = ap.parse_args()
@@ -520,7 +618,15 @@ def main():
         if found:
             count, pos, rows = found[0]
             original_pose = {"position": list(pos), "rows_left_up_forward_scaled": list(rows), "seen": count, "others": len(found) - 1}
-    burst = restart_and_burst(s, args.burst, "burst")
+    reads = parse_ram_reads(args.ram_read)
+    pokes = parse_ram_pokes(args.ram_poke, args.ram_fill)
+    if (reads or pokes) and not args.walk:
+        sys.exit("--ram-read, --ram-poke and --ram-fill need --walk: the memory is only open to a Vita3K this script launched")
+
+    def sample(i):
+        poked = poke_guest(args.vita_pid, pokes, i) if pokes else {}
+        return {**read_guest(args.vita_pid, reads), **({"poked": poked} if pokes else {})}
+    burst = restart_and_burst(s, args.burst, "burst", sample if reads or pokes else None)
     picked = pick_grid_frame(burst, args.grid_seconds)
     pair.check("the countdown's HUD came up after Retry", picked is not None,
                "first HUD frame at %s" % (("%.2f s" % picked[2]) if picked else "none of %d frames" % len(burst)))
@@ -528,6 +634,15 @@ def main():
         pair.finish()
     hud_i, pick_i, t_hud, t_pick = picked
     frame = burst[pick_i][1]
+    if reads or pokes:
+        pair.rec["original"]["ram_read"] = {
+            "method": "/proc/<pid>/mem at guest address + 0x400000000, written (--ram-poke) then read just before each burst grab",
+            "addresses": {name: "%s:%s" % (("[%#x]+%#x" % addr) if isinstance(addr, tuple) else "%#x" % addr, kind) for name, addr, kind in reads},
+            "at_grid_frame": burst[pick_i][2],
+            "series": [{"t": round(b[0] - t_hud, 3), "frame": Path(b[1]).name, **b[2]} for b in burst[hud_i:]]}
+        print("MEASURED ram at the grid frame: %s" % json.dumps(burst[pick_i][2]), file=sys.stderr)
+    pair.check("the original's memory was only read, never written by --ram-poke or --ram-fill (a probe is not a reference)", not pokes,
+               "%d write(s) per grab" % len(pokes))
     (out / "theirs.png").write_bytes(Path(frame).read_bytes())
     pair.rec["original"]["emulator"] = dict(plat["emulator"])
     pair.rec["original"]["hull_shake"] = (
@@ -536,7 +651,7 @@ def main():
                                     "burst_interval_s": (burst[-1][0] - burst[0][0]) / (len(burst) - 1),
                                     "grid_offset_s": t_pick - t_hud}
     # the grid is at rest: the frames after the camera settles (0.5 s after the HUD) agree to the animated sign boards
-    settled = [p for t, p in burst[hud_i:] if 0.6 <= t - t_hud <= t_pick - t_hud + 0.01]
+    settled = [b[1] for b in burst[hud_i:] if 0.6 <= b[0] - t_hud <= t_pick - t_hud + 0.01]
     first_settled = settled[0]
     drift = []
     for p in settled[1:]:

@@ -186,3 +186,9 @@ texels the emulated coefficient shader produced.
   image the chain starts from.
 - The checkerboard compute resolve `0x19685a0`, beyond its constant names.
 - Every number above on a running PS4.
+
+## 2026-10-26, `2048-exposure`: `wo_composite_nocc_fp` is 2048's live race composite
+
+The `wo_*` set this page records as unused here is the post chain Wipeout 2048 runs on every race, with the
+exposure in `bloomFactor.y`; read there off Vita3K's translation of 2048's own program and checked live, see
+[vita-2048-eu-v104/exposure.md](../vita-2048-eu-v104/exposure.md).
