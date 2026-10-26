@@ -91,7 +91,7 @@ pub(super) fn plan(
             report.twin_blend_unread += 1;
             continue;
         }
-        let mut picture = |path: &str| {
+        let picture = |path: &str| {
             cache
                 .entry(path.to_string())
                 .or_insert_with(|| {
@@ -101,7 +101,7 @@ pub(super) fn plan(
                 })
                 .clone()
         };
-        let pictures = paths.map(|p| picture(p));
+        let pictures = paths.map(picture);
         let [Some(_), Some(second), Some(wipe), Some(bars)] = pictures else {
             report.twin_blend_unread += 1;
             continue;
