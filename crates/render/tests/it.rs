@@ -93,6 +93,7 @@ mod psp2_airbrake_flaps_ground_truth;
 mod psp2_glow_ground_truth;
 mod psp2_scenery_animation_ground_truth;
 mod psp2_texture_dedupe_ground_truth;
+mod psp2_twin_blend_ground_truth;
 mod psp_slope_lod;
 mod psp_texture_levels_ground_truth;
 mod pvs_placement_ground_truth;

@@ -427,6 +427,14 @@ pub struct SubMesh {
     /// only if its material names a `lightmap` sampler - 856 of `tech_de_ra`'s
     /// 3,186, no exception either way.
     pub lightmap_texcoords: Vec<[f32; 2]>,
+    /// `barsUV_blendUV`, one per vertex: the bars' pair in `.xy`, the wipe's in `.zw`
+    /// (`nr_twinblend`; HD's `v[8]`, same hash).
+    ///
+    /// Read through the record's **own** declaration pointer on both containers (the Vita's
+    /// `u32` at the same `+0x28` as the PS4's 64-bit one, checked against the stride): keyed
+    /// by stride the attribute is found on 1 of 28 Vita twin-blend submeshes. Empty where the
+    /// record names none. A non-finite value is replaced by the origin, as the coordinates above.
+    pub bars_blend_texcoords: Vec<[f32; 4]>,
     /// How many of [`Self::texcoords`] decoded to a non-finite value and were
     /// substituted with the origin.
     ///
@@ -663,11 +671,7 @@ fn submeshes(file: &[u8], cpu: Section, gpu: Section, ps4: bool) -> Result<(Vec<
     let declarations = Declarations {
         by_stride: vertex_decl::find_by_stride(cpu_bytes),
         // Only a PS4 record's pointer is exact - see `vertex_decl`.
-        by_header: if ps4 {
-            vertex_decl::find_by_header(cpu_bytes)
-        } else {
-            std::collections::HashMap::new()
-        },
+        by_header: vertex_decl::find_by_header(cpu_bytes),
     };
     let mut sites: Vec<usize> = (0..gpu.entries)
         .map(|e| u32_at(file, gpu.table + e * RELOCATION_LEN, "relocation entry"))
@@ -797,7 +801,7 @@ fn one(
         }
     }
     let own = ps4
-        .then(|| declarations.of_record(file, cpu, record, stride))
+        .then(|| declarations.of_record(file, cpu, record, stride, true))
         .flatten();
     let by_stride = declarations.by_stride.get(&stride);
     let mut texcoords = Vec::new();
@@ -851,6 +855,32 @@ fn one(
             });
         }
     }
+    let mut bars_blend_texcoords = Vec::new();
+    let half_type = if ps4 {
+        vertex_decl::PS4_HALF2
+    } else {
+        VITA_HALF
+    };
+    if let Some(off) = declarations
+        .of_record(file, cpu, record, stride, ps4)
+        .and_then(|decl| decl.bars_blend())
+        .filter(|attr| attr.gxm_type == half_type)
+        .map(|attr| usize::from(attr.offset))
+        && stride >= off + 8
+    {
+        bars_blend_texcoords.reserve_exact(vertex_count);
+        for v in 0..vertex_count {
+            let at = vertex_at + v * stride + off;
+            let bars = unpack_texcoord([file[at], file[at + 1], file[at + 2], file[at + 3]]);
+            let blend = unpack_texcoord([file[at + 4], file[at + 5], file[at + 6], file[at + 7]]);
+            let all = [bars[0], bars[1], blend[0], blend[1]];
+            bars_blend_texcoords.push(if all.iter().all(|c| c.is_finite()) {
+                all
+            } else {
+                [0.0; 4]
+            });
+        }
+    }
     let mut tangents = Vec::new();
     let tangent_offset = own.or(by_stride).and_then(|decl| {
         let attr = decl.attribute(vertex_decl::TANGENT_HASH)?;
@@ -880,6 +910,7 @@ fn one(
         normals,
         texcoords,
         lightmap_texcoords,
+        bars_blend_texcoords,
         non_finite_texcoords,
         tangents,
         stride,
@@ -909,18 +940,27 @@ impl Declarations {
         cpu: Section,
         record: usize,
         stride: usize,
+        ps4: bool,
     ) -> Option<&vertex_decl::VertexDecl> {
         let at = cpu
             .at
             .checked_add(record)?
             .checked_add(vertex_decl::PS4_DECLARATION_POINTER)?;
-        let word = file.get(at..at.checked_add(8)?)?;
-        let target = usize::try_from(u64::from_le_bytes(word.try_into().ok()?)).ok()?;
+        let target = if ps4 {
+            let word = file.get(at..at.checked_add(8)?)?;
+            usize::try_from(u64::from_le_bytes(word.try_into().ok()?)).ok()?
+        } else {
+            let word = file.get(at..at.checked_add(4)?)?;
+            u32::from_le_bytes(word.try_into().ok()?) as usize
+        };
         self.by_header
             .get(&target)
             .filter(|decl| decl.stride == stride)
     }
 }
+
+/// The type nibble of a Vita `f16` attribute (`Uv1`, `lightmapUV` and `barsUV_blendUV`).
+const VITA_HALF: u8 = 8;
 
 fn f32_at(file: &[u8], at: usize) -> f32 {
     f32::from_le_bytes(file[at..at + 4].try_into().expect("four bytes"))

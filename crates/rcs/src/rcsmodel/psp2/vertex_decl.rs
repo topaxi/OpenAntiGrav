@@ -77,6 +77,10 @@ pub const UV1_HASH: u32 = 0x4272_14fc;
 /// `~crc32("lightmapUV")`.
 pub const LIGHTMAP_HASH: u32 = 0x26a7_b665;
 
+/// `~crc32("barsUV_blendUV")`: one four-lane half attribute, the bars' pair in `.xy` and the
+/// wipe's in `.zw`. The same hash HD's `nr_twinblend` names its `v[8]` by.
+pub const BARS_BLEND_HASH: u32 = 0x0e7e_a5a8;
+
 /// The type nibble of a PS4 two-component half-float attribute: `Uv1`,
 /// `lightmapUV` and every other coordinate set on all 43 layouts of
 /// `tech_de_ra`, which also carries two `f32` pairs (`0`) that are not
@@ -130,6 +134,14 @@ impl VertexDecl {
     #[must_use]
     pub fn lightmap_texcoord(&self) -> Option<&Attribute> {
         self.attribute(LIGHTMAP_HASH)
+    }
+
+    /// The `nr_twinblend` pair attribute, four halves. Only sound on a declaration reached
+    /// through the record's own pointer.
+    #[must_use]
+    pub fn bars_blend(&self) -> Option<&Attribute> {
+        self.attribute(BARS_BLEND_HASH)
+            .filter(|a| a.components == 4)
     }
 
     /// The diffuse coordinate of a declaration known to be **this submesh's

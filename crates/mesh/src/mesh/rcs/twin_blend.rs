@@ -52,13 +52,13 @@ use super::skin::decode_texture;
 use super::{Report, Textures};
 
 /// `~crc32("BlendTexture")`, the wipe, unit 2.
-const BLEND: u32 = 0x25c5_c4d3;
+pub(in crate::mesh::rcs) const BLEND: u32 = 0x25c5_c4d3;
 /// `~crc32("diffuseTexture1")`, unit 0.
-const FIRST: u32 = 0x8e62_40ce;
+pub(in crate::mesh::rcs) const FIRST: u32 = 0x8e62_40ce;
 /// `~crc32("diffuseTexture2")`, unit 1.
-const SECOND: u32 = 0x176b_1174;
+pub(in crate::mesh::rcs) const SECOND: u32 = 0x176b_1174;
 /// The bars, unit 3 (no preimage).
-const BARS: u32 = 0xd284_858e;
+pub(in crate::mesh::rcs) const BARS: u32 = 0xd284_858e;
 /// The fog colour, which only the fogged blocks declare.
 const FOG: u32 = 0x3dc3_1258;
 /// `~crc32("time")`, the engine clock the vertex block multiplies by its literal.
