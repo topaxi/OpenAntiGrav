@@ -734,7 +734,14 @@ fn build_planned(
     finish_bounds(&mut model);
 
     let ps4 = psp2::is_ps4(model_blob);
-    bind_textures(&decoded, (&glow, &twin), &mut model, &mut report, textures, ps4);
+    bind_textures(
+        &decoded,
+        (&glow, &twin),
+        &mut model,
+        &mut report,
+        textures,
+        ps4,
+    );
     transparency::route(&decoded, &mut model, &mut report);
     Ok((model, report))
 }
@@ -831,24 +838,32 @@ fn bind_textures(
                 model.pad_masks.push(twin_here.map(|t| t.wipe.clone()));
                 model.wave_maps.push(twin_here.map(|t| t.bars.clone()));
             }
-            if glow.has_layers() || twin.any() || decoded.materials.iter().any(|m| m.lightmap.is_some()) {
+            if glow.has_layers()
+                || twin.any()
+                || decoded.materials.iter().any(|m| m.lightmap.is_some())
+            {
                 debug_assert_eq!(model.lightmaps.len(), at);
-                let atlas = twin_here.map(|t| t.second.clone()).or_else(|| layer.map(|l| l.texture.clone())).or_else(|| {
-                    decoded.materials[index]
-                        .lightmap
-                        .as_deref()
-                        .and_then(|lmap| {
-                            let entry = atlases.entry(lmap).or_insert_with(|| {
-                                let atlas = textures(lmap)
-                                    .and_then(|blob| decode_material_texture(lmap, &blob, report))
-                                    .map(std::sync::Arc::new);
-                                report.lightmaps += usize::from(atlas.is_some());
-                                report.lightmap_misses += usize::from(atlas.is_none());
-                                atlas
-                            });
-                            entry.clone()
-                        })
-                });
+                let atlas = twin_here
+                    .map(|t| t.second.clone())
+                    .or_else(|| layer.map(|l| l.texture.clone()))
+                    .or_else(|| {
+                        decoded.materials[index]
+                            .lightmap
+                            .as_deref()
+                            .and_then(|lmap| {
+                                let entry = atlases.entry(lmap).or_insert_with(|| {
+                                    let atlas = textures(lmap)
+                                        .and_then(|blob| {
+                                            decode_material_texture(lmap, &blob, report)
+                                        })
+                                        .map(std::sync::Arc::new);
+                                    report.lightmaps += usize::from(atlas.is_some());
+                                    report.lightmap_misses += usize::from(atlas.is_none());
+                                    atlas
+                                });
+                                entry.clone()
+                            })
+                    });
                 model.lightmaps.push(atlas);
             }
             if report.diffuse_texture.is_none() {

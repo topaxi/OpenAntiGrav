@@ -140,7 +140,8 @@ impl VertexDecl {
     /// through the record's own pointer.
     #[must_use]
     pub fn bars_blend(&self) -> Option<&Attribute> {
-        self.attribute(BARS_BLEND_HASH).filter(|a| a.components == 4)
+        self.attribute(BARS_BLEND_HASH)
+            .filter(|a| a.components == 4)
     }
 
     /// The diffuse coordinate of a declaration known to be **this submesh's

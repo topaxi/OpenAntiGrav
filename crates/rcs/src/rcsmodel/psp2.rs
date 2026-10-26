@@ -856,7 +856,11 @@ fn one(
         }
     }
     let mut bars_blend_texcoords = Vec::new();
-    let half_type = if ps4 { vertex_decl::PS4_HALF2 } else { VITA_HALF };
+    let half_type = if ps4 {
+        vertex_decl::PS4_HALF2
+    } else {
+        VITA_HALF
+    };
     if let Some(off) = declarations
         .of_record(file, cpu, record, stride, ps4)
         .and_then(|decl| decl.bars_blend())
