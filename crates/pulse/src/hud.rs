@@ -96,6 +96,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     zone_speed_classes: Some(ZONE_SPEED_CLASSES),
     // Pulse's own reference frame reads `100%`. See `oag_title::HudArt::shield_percent`.
     shield_percent: true,
+    sub_weapon_line: true,
     // Read off `FUN_0881a3e0`: the speed over `700.0`, then the bar's `0.04` floor.
     speed_full_kmh: 700,
     // Measured: every one of Pulse's own language plugins names

@@ -181,6 +181,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // Unmeasured on Pure; Pulse's own reading (`true`) carries over rather
     // than guessing a change. See `oag_title::HudArt::shield_percent`.
     shield_percent: true,
+    sub_weapon_line: true,
     // **Measured, 700**: `Hud_UpdateSpeedBar` (`0x0881eabc`, `docs/ghidra/functions/psp-pure-usa/hud-speed-gauge.md`)
     // divides the speed by `0x442f0000` = 700.0 and hands the quotient to the bar model.
     speed_full_kmh: 700,

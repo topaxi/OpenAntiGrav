@@ -570,6 +570,23 @@ pub struct HudArt {
     /// `Hud_UpdateShieldReadout` builds the digits by hand and appends
     /// nothing (`docs/ghidra/functions/ps3-hdfury-eu/hud-readouts.md`).
     pub shield_percent: bool,
+    /// Whether the `SubWeapon` text widget - the line under the held pickup's icon, where
+    /// the Cannon's rounds left and the Autopilot's seconds left print - is drawn.
+    ///
+    /// **Every title's executable writes it, and the writer is the same function**: Pulse's
+    /// `PlayerStatus_Update` (`0x0883b3b8`), HD's `0x000cb928`, Omega's `FUN_012e5470`, 2048's
+    /// `FUN_811b1ee2` and, with the Autopilot half alone, Pure's `0x08922340`
+    /// (`docs/ghidra/functions/psp-pulse-usa/sub-weapon.md`). So the question per title is
+    /// where the layout puts the widget, not whether the game fills it. `true` where it sits in
+    /// the cluster of the held icon: Pulse and Pure under the hexagon, HD and Omega in
+    /// `PickupParent`.
+    ///
+    /// **2048 is `false`, unmeasured rather than absent.** Its `SubWeapon` is authored in
+    /// `HUD_pickups.xml`'s top-centre cluster with the grant announcement (`PickupText`, the
+    /// big icon), while the icon the player carries sits bottom-left in
+    /// `HUD_damage_indicator.xml`. Whether that cluster is up outside the announcement is not
+    /// read, so a count there could be drawn where the original shows nothing.
+    pub sub_weapon_line: bool,
     /// The speed, in km/h, at which this title's `SpeedBar` reads full.
     ///
     /// **HD and Omega: 700, read off the executable.** `Hud_UpdateSpeedReadout`

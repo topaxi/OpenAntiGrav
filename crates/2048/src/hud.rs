@@ -162,6 +162,9 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // `(51, 509)`. See `oag_title::HudArt::shield_percent` and
     // `docs/formats/2048-hud.md`.
     shield_percent: true,
+    // Same writer as every title, but the widget sits in the grant announcement's cluster and
+    // that cluster's runtime visibility is unread. See `oag_title::HudArt::sub_weapon_line`.
+    sub_weapon_line: false,
     speed_full_kmh: 600,
     // **Measured, and the correction this axis exists for.** 2048's language
     // plugins name no `HUD` role at all - `english/Definition.xml` carries

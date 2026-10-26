@@ -21,6 +21,16 @@ PSP's grid, twice the size, right-hand column off screen.
 
 ## Open
 
+- **2048's Cannon rounds line is written by the game and held back here (`cannon-ammo-hud`,
+  2026-10-26).** `FUN_811b1ee2` prints the Cannon's rounds (`"%d"` of `pickup+0x154`) and a running
+  Autopilot's seconds (`"%1.2f"`) into the `SubWeapon` text every frame, as Pulse, Pure, HD and
+  Omega do ([sub-weapon.md](../../docs/ghidra/functions/psp-pulse-usa/sub-weapon.md)), but the
+  widget is authored in `HUD_pickups.xml`'s top-centre cluster at `(480, 123)` with the grant
+  announcement, not under the carried icon (bottom-left, `HUD_damage_indicator.xml`).
+  `HudArt::sub_weapon_line` is `false` for 2048 until a Cannon held on Vita3K shows where the count
+  is and whether it persists; then flip it. The Rust side is ready: `Readout::sub_weapon` is
+  filled for every title.
+
 - **`EnergyBar`'s own runtime colour is still unresolved.** `EnergyBg` (not
   `EnergyBar`) tints red at or under 20% shield or during the shared
   post-hit flash, wired 2026-09-25 in `oag_hud::dialect_2048::

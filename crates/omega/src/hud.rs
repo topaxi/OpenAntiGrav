@@ -261,6 +261,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     pickup_icon_uv: None,
     zone_speed_classes: None,
     shield_percent: false,
+    sub_weapon_line: true,
     speed_full_kmh: 700,
     hud_font_role: "HUD",
     hud_small_font_role: Some("HUDSmall"),

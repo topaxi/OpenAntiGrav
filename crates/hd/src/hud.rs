@@ -306,6 +306,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // `talons-matched/{00,01,03}.png` read a bare number - `100`, `100`, `98` -
     // with no `%` anywhere. See `oag_title::HudArt::shield_percent`.
     shield_percent: false,
+    sub_weapon_line: true,
     speed_full_kmh: 700,
     // lane/2048-hud-font: measured. Every language plugin's own
     // `definition.xml` (`DATA02`/`DATA03`) names

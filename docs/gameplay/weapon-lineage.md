@@ -276,6 +276,8 @@ it fires, not that the rate matches any original's.
 | Repulser | M: field model, `WO_REPULSER_BLAST`, matched to the PSP | A | ?: no field model recovered | ?: not drawn | ?: not drawn |
 | Shuriken | M: `pulse_shuriken.vex`, `WO_SHURIKEN_*` | A | ?: no blade model recovered | ?: not drawn | ?: not drawn |
 | Shield | M: three colours, shell and sphere; PS2 draws `extrashield.vex` | ?: not investigated | M: two of three colours read | I:Pulse | I:Pulse |
+| HUD rounds left (`SubWeapon`, Cannon) | M: `PlayerStatus_Update` `%d` of `craft+0x154`, armed at the grant ([sub-weapon.md](../ghidra/functions/psp-pulse-usa/sub-weapon.md)); drawn under the icon | A | M: the same writer (`0x000cb928`), drawn under the icon | ?: checked, applies, not wired: the same writer, but the widget sits in the grant announcement's cluster, whose runtime visibility is unread | M: the same writer, read in Omega's own executable (`FUN_012e5470`, `%d` of `pickup+0x164`); drawn through HD's layouts |
+| HUD seconds left (`SubWeapon`, Autopilot) | M: `%1.2f` of the timer, seen live (`5.00`) and matched by ours; the icon stays up while it runs | M: read (`0x08922340`); drawn, though Pure's pickup icons do not | M: the same writer; drawn | ?: the same, held back with the line above | M: the same writer, read in Omega's own executable (`%1.2f` of `pickup+0x158`); drawn |
 | Hit sparks | M: `Ship_Damage` branch | ?: `Ship_Damage` unread | M: `WO_SHIP_SPARK_DAMAGE_WEAPON` | ?: unread | ?: names located (`ShipCollisionFx_Trigger` `kind 1`), the event that raises it unread |
 | Disruptor | A | ?: effect blocks authored, four have no parser branch | A | A | A |
 

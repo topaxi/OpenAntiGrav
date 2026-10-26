@@ -652,6 +652,8 @@
 0x08870240	function	Weapon_FireShuriken	88	shuriken.md
 0x08877280	function	Shuriken_Init	88	shuriken.md
 0x088577ac	function	Weapon_FireCannon	85	cannon-quake-leachbeam.md
+# 2026-10-26 (cannon-ammo-hud): the Cannon's grant arm and the SubWeapon line. See sub-weapon.md.
+0x0885776c	function	WeaponPickup_ArmCannon	85	sub-weapon.md
 0x0883f424	function	Cannon_UpdateReload	85	cannon-quake-leachbeam.md
 0x0883c74c	function	PlayerInput_Construct	85	cannon-quake-leachbeam.md
 0x0883c870	function	PlayerInput_Update	85	cannon-quake-leachbeam.md

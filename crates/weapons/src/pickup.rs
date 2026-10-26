@@ -175,7 +175,8 @@ impl Driver {
 /// What a craft is carrying.
 ///
 /// One slot, the conservative reading: the original's inventory is a flag word
-/// and whether it holds two is unread (`SubWeapon` exists as a HUD widget).
+/// and whether it holds two is unread (the `SubWeapon` HUD widget is a text line, the Cannon's
+/// rounds or the Autopilot's seconds, not a second slot).
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Held {
     /// The weapon in the slot, or `None`.
@@ -207,11 +208,14 @@ pub struct Held {
     /// [`Self::advance_cannon_reload`] and
     /// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
     ///
-    /// **Self-arming rather than armed at grant time: chosen, not measured.** A pad
-    /// crossing, `--give` and a test setting [`Self::weapon`] are three ways the slot
-    /// fills, so reading `0` as "not yet armed" on the first
+    /// **Self-arming rather than armed at grant time: chosen, not measured.** The original
+    /// arms `craft+0x154` in `WeaponPickup_ArmCannon` (`0x0885776c`), which the grant calls;
+    /// a pad crossing, `--give` and a test setting [`Self::weapon`] are three ways the slot
+    /// fills here, so reading `0` as "not yet armed" on the first
     /// [`Self::advance_cannon_reload`] arms all three alike. Safe because a spent
-    /// magazine clears [`Self::weapon`] in the same call.
+    /// magazine clears [`Self::weapon`] in the same call. **The HUD does not read this raw**:
+    /// an unarmed counter shows the authored count, as the armed original does
+    /// (`Race::sub_weapon`).
     pub cannon_rounds: u8,
     /// Seconds until the Cannon's next round: the original's `craft+0x158`,
     /// decremented every tick and reloaded with `<Stats rate>` when negative. Held at

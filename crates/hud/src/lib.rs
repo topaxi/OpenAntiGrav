@@ -65,6 +65,7 @@ mod shield_bar;
 mod sight_draw;
 pub mod split_hud;
 pub mod sprite;
+mod sub_weapon;
 mod sway;
 pub mod time_gap;
 mod time_trial_pace;
@@ -78,6 +79,7 @@ pub use kill_tags::KillTag;
 pub use pickup::pickup_icon_name;
 pub use placement::{Placement, place};
 pub use sight_draw::sight_draws;
+pub use sub_weapon::SubWeapon;
 pub use time_trial_pace::{PaceTier, RecordTarget, TimeTrialPace, pace_for};
 pub use widget::{Fill, Font, Label, Model, Sprite, VertAlign};
 
@@ -610,6 +612,9 @@ pub struct Readout {
     /// `None` on every tick of a race with weapons off, which is every mode but
     /// the single race - see `oag_race::Mode::weapons_enabled`.
     pub pickup: Option<oag_tables::weapons::Weapon>,
+    /// The `SubWeapon` line under the pickup's icon: the Cannon's rounds left, or the
+    /// Autopilot's seconds left, or nothing. See [`SubWeapon`].
+    pub sub_weapon: Option<SubWeapon>,
     /// The lock-on reticle, or `None` for a caller that has none to draw.
     ///
     /// `Copy` state off `Race`, passed whole rather than reduced to five
@@ -1019,6 +1024,8 @@ mod reticle_tests;
 mod shield_tests;
 #[cfg(test)]
 mod state_2048_tests;
+#[cfg(test)]
+mod sub_weapon_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

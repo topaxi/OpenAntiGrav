@@ -359,6 +359,9 @@ pub(super) fn text_for(
             .and_then(|slot| readout.messages[slot].as_ref())
             .and_then(|line| strings.get(&line.text).map(str::to_string)),
 
+        // The line under the pickup's icon - see [`super::sub_weapon`].
+        "SubWeapon" => readout.sub_weapon.map(super::SubWeapon::text),
+
         // The lap-line time gap - see [`super::time_gap`].
         "TimeDiffText" => readout
             .time_gap
@@ -980,6 +983,7 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
     for label in &cx.layout.labels {
         if !is_screen_positioned(&label.name)
             || (head_to_head && super::head_to_head::owns(&label.name))
+            || (label.name == "SubWeapon" && !cx.art.sub_weapon_line)
         {
             continue;
         }
