@@ -21,6 +21,22 @@ PSP's grid, twice the size, right-hand column off screen.
 
 ## Open
 
+- **The HD and Fury Campaigns' Time Trial, Speed Lap, Zone, Elimination and Zone Battle events read `_HD` layouts
+  (`2048-dlc-hud`, 2026-10-26).** The single-player race managers (`SPTimeTrial`, `SPZone`, `SPElimination`, `SPNitro`,
+  `SPTournament`) load `TimeTrial_HUD_HD.xml`, `Zone_HUD_HD.xml`, `Elimination_HUD_HD.xml`, `ZoneBattle_HUD_HD.xml` and
+  `Arcade_HUD_HD.xml` for the HD-lineage mode ids (below `0x17`); 2048's own events carry a CRC id and keep the base
+  `2048_hud\` files. `Zone_HUD_HD.xml` is the layout of the HD-campaign Vineta K Zone frames (it authors `SCORE` at the
+  top centre and `VENOM` / `ZONE` / the number bottom left, the text this page's Zone bullet below could not place). The
+  Race event is the same `Arcade_HUD.xml` as a native one. **Unwired, because ours has no HD-campaign launch to select
+  them with**: when `2048-dlc-menus` lands one, point a campaign `HudLayouts` at these roots and route the mode through
+  it, then compare a Zone and a Time Trial pair. The table is in
+  [race-hud-selection.md](../../docs/ghidra/functions/vita-2048-eu-v104/race-hud-selection.md). The Race event's `XP` and
+  `OBJECTIVE` lines are done (`Setup::campaign_event`, set by `load_event`): a launch that is not `load_event` draws
+  neither, which is the DLC campaigns' own rule.
+- **Seen in both 2048 pair originals and drawn by no widget of ours:** the white ring round the hull at the grid and the
+  key-shaped icon left of the speed bar. Neither has been matched to a widget of the `2048_hud` set; `TOTAL` reads
+  `0.00.00` in the original and `0.00.0` in ours. The `XP` caption draws without its value (`RaceXP`, a per-race tally
+  ours does not keep).
 - **2048's Cannon rounds line is written by the game and held back here (`cannon-ammo-hud`,
   2026-10-26).** `FUN_811b1ee2` prints the Cannon's rounds (`"%d"` of `pickup+0x154`) and a running
   Autopilot's seconds (`"%1.2f"`) into the `SubWeapon` text every frame, as Pulse, Pure, HD and
@@ -64,10 +80,8 @@ PSP's grid, twice the size, right-hand column off screen.
   `Readout::pilot_assist`) and its scale pulse, the zone lights' counter
   `hud+0x73c` past zones 2 and 5 and their class-up blink.
 - **`Laps`/`Position`/`EnergyText`/`TotalTime` are wired, 2026-09-25** - see
-  Next Steps 2. Zone's `SCORE` and `ZONE`/number/class text are still
-  positioned by something the composed layout does not carry (`ZoneNumber`
-  is authored top-left and drawn bottom-left; no `Score` widget exists), and
-  neither is wired. The font/language-plugin gap this bullet used to record
+  Next Steps 2. Zone's `SCORE` and `ZONE`/number/class text are not wired;
+  the first bullet above says where they are authored (`Zone_HUD_HD.xml`). The font/language-plugin gap this bullet used to record
   was already closed 2026-09-21 (`oag_title::HudArt::hud_font_role`,
   `2048-hud.md`'s "Resolved 2026-09-21" section) - captions draw in
   `2048_hud.fnt`, not the 5x7 fallback; this line was stale.

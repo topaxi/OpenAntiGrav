@@ -326,7 +326,10 @@ captured the same way as the first two. True.** It is Vineta K from `dlc1.psarc`
   original's nose is 5 px left of ours' and level with it. The cause (grid heading, lateral place, camera) was not separated. The original's picture is steady across the countdown (largest RMSE 0.083 to 0.085 against the first settled frame), so a
   single grab sits inside its own motion. The frame's mean grey is 47.9 for the original and 170.4 for ours.
 - **Not matched, and the cause is ours**: the lighting (the original is a dark sunset with long shadows and a warm sky, ours is a flat bright day: the whole of the 47 grey), the HUD (the original's HD Campaign
-  HUD has no `OBJECTIVE` or `XP` lines and draws its own speed bar and weapon icon; ours draws 2048's Single Player Campaign HUD), the hull's livery (olive and teal in the original, blue and yellow in ours; whether
+  HUD has no `OBJECTIVE` or `XP` lines; **since 2026-10-26 (`2048-dlc-hud`) ours draws neither either**, because the HUD binds the current `SP.xml` event and a DLC node never sets it,
+  [race-hud-selection.md](../ghidra/functions/vita-2048-eu-v104/race-hud-selection.md#the-xp-and-objective-lines-are-bound-to-the-current-spxml-event-2026-10-26-2048-dlc-hud). Still different: the key-shaped
+  icon left of the speed bar and the white ring round the hull, which both 2048 originals draw and ours does not, and `TOTAL` as `0.00.00`. The pair's manifest was not regenerated here;
+  `just compare-rerender-ours --only 2048` adopts the change), the hull's livery (olive and teal in the original, blue and yellow in ours; whether
   that is the shading of the dark scene or a different livery was not separated) and the rivals' craft. The pair is a baseline for the DLC circuits' lighting and HUD, not a pose check.
 - **How the walk differs**: Game Mode tile `(477, 162)` (twice), the node `(510, 340)` (Vineta K's Race; `(505, 345)` in `vita3k-capture.md` is the same hex), then **Select Team: the craft button
   `(622, 480)`, its check mark `(882, 480)` returns to the map, the node again, Play, the mode card**. Without the Select Team step the load sat at 56 to 75 percent for minutes on every one of five boots

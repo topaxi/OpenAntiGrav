@@ -185,3 +185,24 @@
 0x813502fa	function	Scream_OpKeyOffVoices	88	countdown-voice.md
 0x8134fe5c	function	Scream_OpGotoRandomMarker	88	countdown-voice.md
 0x81354b74	function	Scream_RunMasterTicks	82	countdown-voice.md
+# 2026-10-26 (2048-dlc-hud): the HUD's event binding and the per-mode race managers. See race-hud-selection.md.
+0x8114f498	function	HudScreen_Construct	85	race-hud-selection.md
+0x81192940	function	Hud_Construct	75	race-hud-selection.md
+0x8119451c	function	Hud_UpdateXpLines	78	race-hud-selection.md
+0x812b5af2	function	GameMode_SetCurrent	85	race-hud-selection.md
+0x810f7060	function	HDCampaignNode_Select	75	race-hud-selection.md
+0x810f3fa4	function	FuryCampaignNode_Select	75	race-hud-selection.md
+0x8153fcd4	data	g_HdFuryCampaignNode	75	race-hud-selection.md
+0x8153fd24	data	g_RaceMode	80	race-hud-selection.md
+0x811853ec	function	SPTournamentRaceManager_Construct	90	race-hud-selection.md
+0x81183e50	function	SPTimeTrialRaceManager_Construct	90	race-hud-selection.md
+0x81186584	function	SPZoneRaceManager_Construct	90	race-hud-selection.md
+0x81180970	function	SPFreePlayRaceManager_Construct	90	race-hud-selection.md
+0x8117fb48	function	SPEliminationRaceManager_Construct	90	race-hud-selection.md
+0x81182148	function	SPNitroRaceManager_Construct	90	race-hud-selection.md
+0x8117c5ce	function	SPDetonatorRaceManager_Construct	90	race-hud-selection.md
+0x81160574	function	MPArcadeRaceManager_Construct	90	race-hud-selection.md
+0x8116471c	function	MPTournamentRaceManager_Construct	90	race-hud-selection.md
+0x81161170	function	MPEliminationRaceManager_Construct	90	race-hud-selection.md
+0x81161c74	function	MPNitroRaceManager_Construct	90	race-hud-selection.md
+0x81148220	function	AIBatchRaceManager_Construct	90	race-hud-selection.md
