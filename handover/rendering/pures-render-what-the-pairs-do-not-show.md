@@ -42,6 +42,11 @@ Ranked by what a player notices: hull and plume, then effects, then track and li
 5. **Track and lighting.** On Vineta K and Chenghou the whole frame reads 13 to 28 grey darker in ours
    (sky band bias -28 and -14, track band -24 and -10), Blue Ridge and Modesto near level. A scene-wide
    term, not the hull: compare the sky and track textures' decode and the fog against the original.
+   **Mostly the undrawn sun lens flare (2026-10-26, `pure-lens-flare-wire`).** Those two circuits author a
+   `lensflare` node, Blue Ridge and Modesto have none in view. Masked mean diff vs the original, flare off -> on:
+   Vineta K -29.6/-26.2/-29.8 -> -3.3/-4.0/-6.7; Chenghou -25.9/-18.5/-14.5 -> -9.9/-10.0/-8.1; Modesto and Blue Ridge
+   unchanged (-6.7/-2.2/-2.3 and -0.2/-0.8/-1.3). Residual: Chenghou about -10, and the original saturates near the sun
+   where ours reads about 237. See `docs/rendering/lens-flare.md`.
 6. **HUD.** Ours draws no speed gauge (the original has one) and prints no pilot message ("JAY TRIPWIRE
    ROOM 2", "FRIENDLY WE GOT JUICE" in the originals); both are visible on the pairs.
 7. **Plume and shield.** Pure has no boost-plume model (`ship-models.md`) and no per-team
