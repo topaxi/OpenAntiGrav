@@ -133,3 +133,4 @@
 0x0131ca50	function	Collision_ProcessPairs	74	mp-time-trial-collision.md
 0x012539b0	function	Collision_TestObbSphere	72	mp-time-trial-collision.md
 0x016544a0	function	Race_ComputeLoyaltyAward	80	endrace-loyalty.md
+0x012f7200	function	HullShake_Update	80	hull-shake.md

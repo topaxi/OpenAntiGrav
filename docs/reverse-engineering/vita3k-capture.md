@@ -280,6 +280,15 @@ different offsets and little-endian; the role-word trick carries over.
   `ux0/temp/apps.dat`** (without it one launch of `-r PCSF00007` answered `CLI parsing error: --installed-path: PCSF00007 not in {}` and exited at once, after three
   that had worked), a private `HOME` (the shader cache is `~/.cache/Vita3K/shaders`, 39 MiB, copied there so a first race does not compile everything) and
   `SDL_AUDIODRIVER=dummy` (`audio-volume: 0` still opens a PipeWire stream).
+- **Four more traps on a fresh private `HOME`** (2026-10-26, `2048-queens-offset`):
+  - `-r PCSF00007` is looked up against `$XDG_CONFIG_HOME/Vita3K/config.yml`, else `$HOME/.config/Vita3K/config.yml`, **not against `-c`**: with
+    neither present the answer is `CLI parsing error: --installed-path: PCSF00007 not in {}`. Copy the private config to
+    `$HOME/.config/Vita3K/config.yml`, and do not export `XDG_*` to Vita3K (`vita3k-drive.py` drops them for a private instance).
+  - Without `~/.cache/Vita3K/shaders` in that `HOME` the first boot compiles shaders for minutes (the intro and the load look hung).
+  - **`gdbstub: true` halts the guest at the connect, serves one connection per launch, and refuses the next (`Connection refused`).** `D`
+    leaves it halted; `vCont;c` resumes it, and the game still sat on the intro or at 56 % of the first load in three of three launches. Use
+    `/proc/<pid>/mem` of a Vita3K you launched as a child (`vita3k-mem.py`, or `vita-2048-pair.py`'s `patch_hull_shake` for a write).
+  - One launch of 12 sat on "Sony Computer Entertainment presents" with the GPU thread busy until killed, with no stub involved. Relaunch.
 - **The title screen**: about 8 s after the window appears `Return`, then three `x` at 4 s spacing reach the Game Mode grid with the PSN prompt gone.
 - **Single Player Campaign opens on the second tap** of `(295, 162)` (the first highlights the tile) and shows the campaign map straight away on a save past Event 1.
 - **Screens are told apart by mean luma** of a 96x54 grey copy: menus and the loading screen 0.7 to 0.9, the ship flyby and the race 0.2 to 0.4, the pause menu 0.53; the race

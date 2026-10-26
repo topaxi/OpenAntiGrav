@@ -83,6 +83,8 @@ full comparison.
   threshold, cited by address only).
 - [archive-mount.md](archive-mount.md) - the five PSARCs, their mount order, and
   which copy answers a path the base and the patch both carry.
+- [hull-shake.md](hull-shake.md) - the drawn hull's random shake is HD's, constant for
+  constant; where it is called, and what switching it off in Vita3K does.
 - [zone-craft.md](zone-craft.md) - Zone loads one shared `hdships\Zone` hull for
   every craft; the pick selects a livery.
 - [zone-environment-fallback.md](zone-environment-fallback.md) - a race's

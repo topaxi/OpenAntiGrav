@@ -157,7 +157,14 @@ residual is material, not placement.
 
 ## Cross-title
 
-- **Omega:** not checked. A search for `2^-30` (`0x30800000`) in Omega's `eboot.bin` returns 30-odd
-  hits with no constant pool beside them. Finding it means locating Omega's ship update call site.
-- **2048:** not checked. Two hits in v1.04, neither beside the shake's other constants.
+- **2048:** **checked, applies** (2026-10-26, `2048-queens-offset`). The same functions, constant for constant, at `0x811b51bc` and
+  `0x811b5500` (`HullShake_Update`, `HullShake_Apply`), found through movt immediates rather than literal pools, which is why the
+  constant search above found nothing: ARM Thumb-2 builds `0.025` and `1.8` with `movw`/`movt`, and the random scale is `2^-31`, not
+  `2^-30`. What 2048 adds: the constructor warms the spline with `rand() % 500` steps of `Update(obj, 0.01, ...)`, `Apply` does nothing
+  while the byte at `obj+0x44c` is clear, and the ship's chase-camera node is shaken by the same object. Evidence, call sites and what
+  switching it off does in Vita3K: [`vita-2048-eu-v104/hull-shake.md`](../vita-2048-eu-v104/hull-shake.md). Not wired beyond
+  `HullShake::HD`'s inherited use; the spline seeding is not ported.
+- **Omega:** **checked, applies, not wired** (2026-10-26). The base `eboot.bin` carries `HullShake_Update` at `0x012f7200` with HD's
+  own object layout (history `+0x90`, index `+0x450`); see [`ps4-omega-eu/hull-shake.md`](../ps4-omega-eu/hull-shake.md). The patch
+  v1.07 executable that the pair script races on is not imported, so no patched Omega pair was made.
 - **Pulse, Pure:** not read.

@@ -325,8 +325,16 @@ rather than at the turn. Not separable without the original's heading at GO.
 0.78 units of position drift at `T = 216.7` s; ours unposed lands 0.198 units from the
 original there.
 
-Other titles: Pure PSP, Omega and 2048 **not checkable** (no grid state for Pure, no race reached
-on shadPS4 or Vita3K, see [the compare page](../tools/compare-page.md)). Pulse PS2 not checked
+**2048 (2026-10-26, `2048-queens-offset`): the grid pose differs, read live.** On Vita3K (`vita-2048-pair.py --read-pose`: the drawn hull matrix out of the
+guest's memory during the countdown, identical on three cold boots) the original's player craft on the 8th grid slot against ours' at the same
+tick: Queens Mall `(0.000, +0.047, -0.017)` units, heading `-0.35` degrees, **pitch `+1.15` degrees** (rests `+0.29`, ours `-0.86`); Empire Climb
+`(+0.465, +0.026, +1.453)`, **heading `-2.05` degrees**, pitch `-0.13`; the DLC's Vineta K heading `-0.62`, pitch `0.00` (position `+1.846` in `y` is the HD-derived
+hull's node, not placement). Putting ours on the original's pose lines the floor and scenery up to 2 px on all three
+([the compare page](../tools/compare-page.md), "The hull shake and the grid pose"), so the grid pose is the whole of the offset. The rule that gives the
+original's pose is **not recovered**: ours takes the authored `Start Position` (yaw only, up forced to `+y`) or, where it points the wrong way, the
+spline's tangent. The original's up row is not world up on either (Mall pitched `+0.29` degrees, Empire `-1.06`; the roll is `0.00`), so it does not force up the way ours does, though ours' hover settle moves the pitch as well, so this is not a clean read of the placement.
+
+Other titles: Pure PSP and Omega **not checkable** (no grid state for Pure, no pose channel on shadPS4; 2048's grid state itself is not read, only its pose). Pulse PS2 not checked
 (one state, no second capture to read a rate from).
 
 ## Reproducing
