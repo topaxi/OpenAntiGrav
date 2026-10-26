@@ -37,7 +37,7 @@ pub(in crate::load) fn envsettings_light(
     let Some(name) = envsettings_name(track) else {
         return mesh_render::Light::stand_in();
     };
-    let Ok(blob) = archives.read_name(&name) else {
+    let Some((_, blob)) = read_circuit_envsettings(archives, &name) else {
         return mesh_render::Light::stand_in();
     };
     let text = match String::from_utf8(blob) {

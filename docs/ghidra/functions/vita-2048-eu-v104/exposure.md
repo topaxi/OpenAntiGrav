@@ -111,6 +111,23 @@ Each equals the circuit's `track.EnvSettings`. Vineta K reads the **DLC1
 pack's** copy (`dlc1.psarc`: 0.5 / 8 / 0.05, gate 0.3), not the copy inside
 `data.psarc` (0.6 / 12 / 0.05, gate 0.2), so a loader must take the pack's.
 
+**Landed 2026-10-26: the light and fog readers take the pack's copy too**
+(`read_circuit_envsettings`, one lookup shared with the exposure keys). The pack
+and base copies differ, on four circuits (both directions each): Vineta K sun
+diffuse (1.0, 0.831, 0.486) base vs (2.0, 1.663, 0.965) pack; Anulpha Pass sun
+(0.151, 1.035, 1.1) vs (0.173, 1.218, 1.3); Moa Therma sun (1.5, 1.406, 0.982)
+vs (3.0, 2.776, 1.953); Chenghou Project ambient (0.706, 0.231, 0) vs (0.176,
+0.220, 0.412), sun equal. Fog colour is equal in both copies everywhere.
+`vita_2048_lighting_ground_truth::a_dlc_circuit_lights_and_fogs_with_the_packs_copy`
+asserts the loaded sun and ambient equal the pack's. Vineta K, 1280x720, tick
+240: frame mean grey 82.5 to 84.3, road box (440,480)-(840,640) 88.2 to 94.0.
+Wipeout HD's own Vineta K authors sun (4.0, 2.26, 1.08), ambient 0.4 (a different
+key spelling and scale); the pack's copy is the nearer of the two in
+every channel but equals neither. **Omega: checked, not applicable.** Omega's
+title record lists no add-on pack (`add_ons: &[]`), so the preference is inert
+there; its patch archives already win a name through `Archives::read_name`'s own
+search order (patch first), which `read_every_name` lists in the same order. No Vita3K frame was taken.
+
 **E is the composite's exposure, and the law fits.** With
 `--ram-poke 0x815cb93c=0:f32` (the schema's BloomFactor, so the bloom term is
 0) and E poked from 1.15 to 2.3 halfway through one burst on Queens Mall, the

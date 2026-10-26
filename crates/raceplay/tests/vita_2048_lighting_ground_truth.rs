@@ -113,3 +113,138 @@ fn altima_draws_its_own_wo_composite(loaded: &race::Loaded) {
         "2048 ends in its own composite, not HD's FunkLayerBloom"
     );
 }
+
+const KEYS: [&str; 3] = [
+    oag_tables::envsettings::PSP2_SUN_DIFFUSE_COLOUR,
+    oag_tables::envsettings::PSP2_AMBIENT_COLOUR,
+    oag_tables::envsettings::PSP2_FOG_COLOUR,
+];
+
+fn key_values(env: &oag_tables::envsettings::EnvSettings) -> Vec<Option<[f32; 4]>> {
+    KEYS.iter()
+        .map(|key| {
+            env.vec4(key)
+                .or_else(|| env.vec3(key).map(|v| [v[0], v[1], v[2], 0.0]))
+        })
+        .collect()
+}
+
+/// `(circuit entry, base copy, pack copy)` for every offered circuit whose
+/// pack and base `track.EnvSettings` disagree on the sun, ambient or fog key.
+fn differing_circuits(
+    source: &Path,
+) -> Vec<(
+    String,
+    oag_tables::envsettings::EnvSettings,
+    oag_tables::envsettings::EnvSettings,
+)> {
+    use oag_tables::envsettings::EnvSettings;
+    let mut archives = oag_assets::Archives::open(&source.display().to_string(), oag_2048::TITLE)
+        .expect("the 2048 package opens");
+    let documents = race::catalogue::documents(
+        &mut archives,
+        &[
+            oag_2048::TITLE.plugin_definition,
+            oag_2048::TITLE.track_plugin_definition.expect("split"),
+        ],
+    );
+    let packs: Vec<&str> = archives.add_ons.iter().map(|a| a.archive).collect();
+    let mut out = Vec::new();
+    for track in race::catalogue::all_tracks(&documents) {
+        let entry = track.entry_name();
+        let Some(stem) = entry
+            .strip_suffix("track.vex")
+            .or_else(|| entry.rsplit_once('\\').map(|(dir, _)| &entry[..=dir.len()]))
+        else {
+            continue;
+        };
+        let name = format!("{stem}track.EnvSettings");
+        let copies: Vec<_> = archives
+            .read_every_name(&name)
+            .into_iter()
+            .filter_map(|(label, blob)| {
+                let env = EnvSettings::parse(&String::from_utf8(blob).ok()?).ok()?;
+                Some((label, env))
+            })
+            .collect();
+        let pack = copies
+            .iter()
+            .find(|(label, _)| packs.iter().any(|p| label.to_lowercase().ends_with(p)));
+        let base = copies
+            .iter()
+            .find(|(label, _)| !packs.iter().any(|p| label.to_lowercase().ends_with(p)));
+        if let (Some((_, pack)), Some((_, base))) = (pack, base)
+            && key_values(pack) != key_values(base)
+        {
+            out.push((entry, base.clone(), pack.clone()));
+        }
+    }
+    out
+}
+
+/// A 2048 DLC race lights and fogs with the add-on pack's copy of the
+/// circuit's `track.EnvSettings`, not the base archive's copy of the same path
+/// (the base ships HD Campaign circuits' paths with different values). Vineta
+/// K's pack sun diffuse (2.0, 1.66, 0.96) is about twice the base's (1.0, 0.83, 0.49).
+#[test]
+#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
+fn a_dlc_circuit_lights_and_fogs_with_the_packs_copy() {
+    let Some(source) = source() else {
+        return;
+    };
+    let differing = differing_circuits(&source);
+    println!("circuits whose pack and base copies differ:");
+    for (entry, base, pack) in &differing {
+        let (base, pack) = (key_values(base), key_values(pack));
+        for (key, (b, p)) in KEYS.iter().zip(base.iter().zip(&pack)) {
+            if b != p {
+                println!("  {entry}: {key}: base {b:?} -> pack {p:?}");
+            }
+        }
+    }
+    assert!(
+        differing
+            .iter()
+            .any(|(entry, ..)| entry.contains("Vineta_K")),
+        "Vineta K's pack and base copies differ: {differing:?}"
+    );
+    // A reversed circuit reads the same `track.EnvSettings` as its forward twin
+    // (the census above lists both); Moa Therma reversed does not decode at all
+    // today, so the forward races stand for them.
+    for (entry, base, pack) in differing
+        .iter()
+        .filter(|(entry, ..)| !entry.contains("reversed"))
+    {
+        let loaded = race::load(&race::Options {
+            source: source.display().to_string(),
+            mode: oag_race::Mode::TimeTrial,
+            track: Some(entry.clone()),
+            ..race::Options::default()
+        })
+        .unwrap_or_else(|e| panic!("loading {entry}: {e:#}"));
+        let pack_sun = pack
+            .vec3(oag_tables::envsettings::PSP2_SUN_DIFFUSE_COLOUR)
+            .expect("the pack authors a sun");
+        let base_sun = base.vec3(oag_tables::envsettings::PSP2_SUN_DIFFUSE_COLOUR);
+        assert_eq!(
+            loaded.light.sun, pack_sun,
+            "{entry}: the sun is the pack's (base {base_sun:?}); {:#?}",
+            loaded.report
+        );
+        let pack_ambient = pack
+            .vec3(oag_tables::envsettings::PSP2_AMBIENT_COLOUR)
+            .expect("the pack authors an ambient");
+        assert_eq!(
+            loaded.light.ambient, pack_ambient,
+            "{entry}: the ambient is the pack's"
+        );
+        let pack_fog = pack.vec4(oag_tables::envsettings::PSP2_FOG_COLOUR);
+        if let Some(fog) = loaded.authored_fog.as_ref().zip(pack_fog) {
+            assert_eq!(
+                (fog.0.colour, fog.0.density),
+                ([fog.1[0], fog.1[1], fog.1[2]], fog.1[3]),
+                "{entry}: the fog is the pack's"
+            );
+        }
+    }
+}
