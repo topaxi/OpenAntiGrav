@@ -15,499 +15,38 @@ file does not need to carry its own.
 
 ## Read this first
 
-- **"What's built vs. read vs. verified, per title" is now one page**:
-  [`docs/overview/status.md`](docs/overview/status.md), not a question to
-  answer by reading four prose pages.
-- **The disc images are in place** - all six, in `data/images/`:
-  `pulse-psp-usa.chd`, `pulse-psp-eu.chd`, `pulse-ps2-eu.chd`,
-  `pure-psp-usa.chd`, `pure-psp-eu.chd` and `hdfury-ps3-eu.iso`. Hashes match
-  [`source-images.md`](docs/reverse-engineering/source-images.md), so
-  `just test-data` works. Earlier sessions have believed them lost and spent the
-  session unable to verify anything - check before concluding a ground-truth
-  test "cannot run".
-- **`rg` and `fd` cannot tell you that.** Both respect `.gitignore` and `data/`
-  is gitignored, so both return nothing with exit code 0 whether the directory
-  is full or empty - no error, no warning, and it reads exactly like "there is
-  nothing here". Use `--no-ignore`, or `/bin/ls` / `find` / `grep`. Note plain
-  `ls` may be shell-aliased (`ls -la` failing with `ls:1: command not found:
-  -la` reads like a broken argument and is not), and a spawned agent has a
-  second, independent reason to see `data/` as empty: being gitignored, it does
-  not travel into a worktree or a restricted sandbox. **In a worktree, fix that
-  with `just link-data`** before concluding anything - it symlinks every `data/`
-  subdirectory from the main checkout, and until it is run the DLC and trace
-  suites skip silently (or, under `OAG_REQUIRE_GAME_DATA=1`, fail in a heap
-  naming files that were in the main checkout all along). Added 2026-08-26 after
-  exactly that happened: five `dlc_ground_truth` failures that were a worktree
-  with no `data/dlc` in it and nothing else.
-- **Derived evidence under `data/` is not durable; the scenarios and scripts
-  that regenerate it are.** A 2026-07-29 pass found three reference traces gone,
-  leaving `force-balance-ground-truth.md`, `contact-response.md` and three
-  citations inside `wall.rs` pointing at files that were not there. Anything
-  under `data/traces/`, `data/shots/` or `data/cache/` can be absent; the
-  committed `verification/scenarios/*.inputs` are what reproduce it.
-  **Five are absent as of 2026-09-05** (corrected from "three" recorded
-  2026-09-02, which missed a pair), confirmed by `/bin/ls data/traces/` rather
-  than inferred: `pad0-boost.csv` (cited from `race/scene.rs` and
-  `race/effects.rs`), `talons-junction-time-trial-lap-omega.csv`,
-  `talons-junction-standing-start.csv` - which `crates/trace/tests/wall_contact_ground_truth.rs`
-  names as its `CAPTURE` - and **`talons-junction-steer-left.csv` and
-  `talons-junction-steer-right.csv`**, `yaw_authority_ground_truth`'s own two
-  captures, missing the same way and not previously listed here. Beware
-  `talons-junction-time-trial-lap.csv`, which *is* present and is a different
-  file from the `-omega` one.
-- **Four numbers about this suite look green and are not, and each hid the next.
-  Read all four before believing any red count.** Every one was believed by
-  somebody on 2026-09-02 - two people, working from opposite ends - before being
-  checked. They are one mistake with four faces: a green number trusted without
-  the check that would have refuted it, where the check is always *did the thing
-  I think I measured actually run*:
-  1. **`just test-data` reported one failure and there were six.** The recipe
-     had no `--no-fail-fast`, and the two `oag-formats` reds sort early enough
-     to stop the run at 138 of 3,300. Fixed in the `justfile`; a truncated run
-     reads as a far worse tree than it is *and* hides everything after it.
-  2. **`0 skipped` is not evidence any data was exercised.** nextest counts a
-     test that early-returns on a missing file as **passed**, so the count says
-     only that nothing was *filtered out*. Reading it as coverage is what
-     produced a since-deleted claim in this file that the missing traces were
-     back, when `ls` says they are not.
-  3. **A filter can select a different set of tests than you meant and report a
-     confident green on it.** `-E 'test(...)'` matches a test's own name and
-     module path, **not** the binary it lives in. So `test(rcsmodel)` selects
-     `oag-formats`'s `rcsmodel::tests::*` and `rcsmodel::vertex_decl::tests::*`
-     unit tests and none of the ground-truth ones; and `test(race_finish)`
-     selects exactly one test - `race::results::tests::the_board_is_taken_on_the_tick_the_race_finishes`,
-     whose *name* contains "race_finishes" - which passes. **That is worse than
-     selecting nothing**, because `0 tests run` is visibly wrong on the console
-     and one green test is not. A re-run of "the failures" this way came back
-     **39 passed**, of 39 tests, none of which was a failure.
-
-     **Use `binary(...)`, not `test(...)`, to re-run a ground-truth failure**:
-     `-E 'test(/^race_finish_ground_truth::/)'` lists all three of that binary's
-     tests including both reds. Keep `--run-ignored all` with it - all six are
-     `#[ignore]`d, so an exact-name filter *without* that flag is a second,
-     independent route to the same false green, reporting
-     `0 tests run: 0 passed, 3304 skipped` as success.
-
-     **The habit that catches this is `cargo nextest list` on the filter before
-     trusting the run.** It is one cheap command, and this face of the mistake
-     is the one that most needed it: the other three were each caught by
-     somebody simply re-running the thing, while this one survived *two* people
-     reasoning forward from it - one to a shared-state hypothesis, the other all
-     the way to going and looking for the shared state. Neither asked what the
-     filter had selected.
-
-  **So a red count means nothing without the variable's state attached.** The
-  same tree, same commit, same day: **6 failed / 0 skipped** plain, and
-  **17 failed / 0 skipped** under `OAG_REQUIRE_GAME_DATA=1`. The extra eleven
-  are the derived-data suites - `chase_camera` (3), `wall_contact` (3),
-  `yaw_authority` (2), `pure_dlc` (2), `maglock` (1) - failing because that
-  variable turns "silently pass on missing data" into a failure. They are
-  missing captures and DLC packs, not broken code.
-- **The six reds above are fixed, 2026-09-02, all six premise expiry rather
-  than a code bug** - each was a test whose assumption stopped being true
-  under a real, separately-verified improvement, and none of the six needed
-  its underlying subsystem touched:
-  - **Both `race_finish_ground_truth` ones**: the disc's own results-screen
-    field list gives a destroyed craft "Ship destroyed" instead of a place
-    (confidence 75, `0x08a82dfc`), so a single race ending by elimination is
-    the disc's second legitimate ending, not a bug - already recorded above.
-    Both tests now branch on which ending happened and assert the matching
-    one; see `crates/raceplay/tests/race_finish_ground_truth.rs`'s module doc.
-  - **`stall_rescue_ground_truth::a_craft_that_stops_on_the_disc_is_put_back`**:
-    only *half* premise expiry, and worth reading carefully rather than
-    trusting the first pass on it - an earlier version of this entry claimed
-    the disc no longer beaches a craft anywhere and that was wrong, caught by
-    re-tracing the fix's own claim rather than trusting it. `docs/gameplay/ai.md`'s
-    hover-probe sweep (the "last three" fix) closed the *sustained*-stall
-    shape of the failure disc-wide - swept all twelve circuits at all four
-    difficulties, no cell reaches `STALL_TICKS` by sustained dwell any more
-    (closest: `07_Track` novice at 46 of 120) - which is real and is what the
-    original test measured. **It did not close the bounce-in-place gap**
-    `docs/ghidra/functions/psp-pulse-usa/grid.md` already had open: re-traced
-    2026-09-02, `05_Track` at novice sits frozen near `(-717, 19, -512)` from
-    roughly tick 5,000 to 12,000 while its speed keeps flicking 0-13 units/s,
-    never sustained low enough to trip the dwell counter - one lap in 12,000
-    ticks, zero respawns. `07_Track` novice shows the same shape, milder.
-    Renamed to `no_circuit_sustains_a_stall_past_the_rescue_threshold`
-    (split per difficulty into `..._at_novice`/`_at_skilled`/`_at_elite`/`_at_ace`
-    on 2026-09-09), scoped to the claim that actually holds, and now prints laps rather than
-    hiding the ones that stay low. The dwell-counter mechanism itself moved to
-    a direct unit test,
-    `crates/raceplay/src/tests/respawn.rs::a_stopped_opponent_is_flagged_after_the_dwell`,
-    which proves the counter fires exactly at its threshold - it was never in
-    question, the open part is a craft that never describes the state it
-    watches for. `grid.md`'s "bounce in place" open item is re-confirmed open,
-    not closed.
-  - **`difficulty_ground_truth::every_difficulty_is_quicker_than_the_one_below_it`**:
-    the same AI-gained-weapons change as the race-finish pair, one level up -
-    `ace`'s opponents now shoot each other (3 of 5 seeds put one out of the
-    race), which the old `wrecked == 0` assertion read as a bug. It is not:
-    the leader-distance metric this test actually measures is unaffected
-    either way (`Standing::distance` on a wrecked craft just stops advancing
-    and falls out of contention), the ordering still holds on the same runs,
-    and a wreck is now printed rather than asserted against.
-  - **Both `oag-formats` ones**: leftovers from `3ce4e5ac`'s `STRIDES` fix
-    (2026-08-25, three widths to the disc's own seven) that the commit landing
-    the fix did not update. `the_disc_declares_more_widths_than_the_search_looks_for`
-    asserted the pre-fix gap by name and could not survive it closing -
-    deleted, since `rcsmodel_stride_ground_truth.rs` (the same commit) already
-    pins the correct invariant with more rigor. `a_third_of_a_circuits_chunks_are_see_through`'s
-    pinned count moved `(257, 560)` to `(251, 553)`, confirmed rather than
-    assumed as `STRIDES`'s doing - setting it back to `[14, 18, 22]` locally
-    reproduces `(257, 560)` exactly. Likely mechanism, from reading rather than
-    tracing every changed chunk: `solve_stride_without_a_box`'s three rules
-    each pick a winner by its margin over the runner-up among `STRIDES`, and
-    four more candidates give a few chunks that used to win by default a
-    closer contender to tie or lose against. The share barely moved (31.4% to
-    31.2%) - same disc, more carefully measured.
-
-  Verified together and against the rest of the disc-backed suite: `cargo
-  nextest run --workspace --run-ignored all --no-fail-fast -E
-  'test(/^race_finish_ground_truth::/) or test(/^stall_rescue_ground_truth::/) or
-  test(/^difficulty_ground_truth::/) or test(/^rcsmodel_decl_ground_truth::/) or
-  test(/^rcsmodel_material_ground_truth::/) or test(/^rcsmodel_stride_ground_truth::/)'`
-  - 29 of 29 pass, 76s.
-- **Check `git status` before assuming the tree is clean.** A whole milestone's
-  work once sat uncommitted for a day.
-- **Gate status:** last measured green at **2,949 tests (2026-09-04)** in 13.8s,
-  with `fmt`, `clippy`, `check-docs`, `check-deps`, `check-determinism`,
-  `check-size`, `check-names` and `check-handover` all clean (575 skipped -
-  the `#[ignore]`d disc-backed ones). Re-measure rather than trusting the number here -
-  `git stash && just test` is how the drift was caught last time.
-- **Plain `just test-data` is 2 failed / 0 skipped; `OAG_REQUIRE_GAME_DATA=1`
-  is 13 failed / 0 skipped - both measured 2026-09-05 against local `main`.**
-  Say which one a number means, always: this file has been burned by exactly
-  this ambiguity before (see the 6-vs-17 entry below, 2026-09-02). Plain
-  `just test-data` (486s) is the command CLAUDE.md documents and the one the
-  next agent will actually run; it shows only the 2 deterministic reds below,
-  because the other 11 are absent-derived-data tests that silently pass
-  without the flag. The 13-under-the-flag number was **reproduced twice**, at
-  load 22-29 (10:51) and on a quiet machine (6:49) - both runs named the
-  **exact same 13 tests**, with byte-identical assertion values on the two
-  that assert a value, so contention cost wall time on this measurement, not
-  correctness. Re-measure the same way rather than trusting either list past
-  the next batch of merges; it is exactly the kind of number three sessions
-  disagreed on this same day before this was pinned down.
-  - **11 of 13 are environment-dependent, not code bugs**: absent derived
-    data that `OAG_REQUIRE_GAME_DATA=1` turns into a hard failure instead of a
-    silent early return. `chase_camera_ground_truth` (3, needs
-    `data/traces/pad0-boost.csv`), `wall_contact_ground_truth` (3, needs
-    `data/traces/talons-junction-standing-start.csv`), `yaw_authority_ground_truth`
-    (2, needs the `-steer-left`/`-steer-right` pair), `maglock_ground_truth`
-    (1, needs `data/traces/talons-junction-time-trial-lap-omega.csv`) - all
-    five files confirmed absent, see the trace-absence bullet above - and
-    `pure_dlc_ground_truth` (2, needs `data/keys/pure-dlc-keys.txt`, a
-    maintainer-only decryption key table; the DLC zips themselves *are*
-    present under `data/dlc/`). Neither cause got its own `handover/` thread:
-    the trace-capture gap is the already-documented, already-actionable
-    situation two bullets up (`verification/scenarios/*.inputs` regenerates
-    them; the recorded absence there is now the whole account) and the DLC
-    key table is a maintainer-supplied credential this repo cannot regenerate
-    at all, not an investigation with a next step.
-  - **1 of 13 *was* deterministically red and is now green. There is no
-    inherited red in this suite.** The diagnosis is kept below because it is
-    the useful part, and because of this file's own standing rule: a red
-    ground-truth test usually encodes a real disagreement, so "make it green"
-    is the wrong instinct without understanding why first. **Re-confirmed
-    2026-09-09** against `main` at `1328d108`, unmodified - `PASS [0.812s]`,
-    plus two independent full `test-data` runs green the same day on unrelated
-    branches. **Do not hand a member "expect one inherited failure" as a
-    baseline**: this row's opening line said "not fixed" for a day after its
-    own body said "Resolved", and a member given that figure will dismiss a
-    real regression as inherited. The test and its history:
-    `shuriken_ground_truth::a_thrown_blade_bounces_off_a_real_circuit_and_dies_on_its_fuse`
-    (one press throws zero blades - **not** `0c78c477`, that attribution is
-    refuted; bisected to `cc395862`, the countdown-hold fix, which correctly
-    leaves the field grid-tight at throw time and a blade clips a grid-mate -
-    **deferred 2026-09-06**: the Shuriken's race-table odds are zero in every
-    class, so this scenario - a blade thrown off a standing start in a single
-    race - is one no implemented mode can produce a weapon pad for; it needs
-    `Mode::Eliminator`, which does not exist yet, so chasing `hull_radius`
-    further is parked rather than a next step). **Resolved 2026-09-08**, once
-    `Mode::Eliminator` landed: the diagnosis above was exactly right and the
-    engine's behaviour was never the bug - a hull hit correctly detonates a
-    Shuriken by design, the confound was a grid-mate in the blade's path. The
-    test now runs in Eliminator (the mode the weapon is actually reachable
-    in) with the other seven grid slots switched off before the throw, which
-    is what its own doc comment already claimed to be testing - a blade
-    against track geometry, not a craft's hull. Green: 119 of 120 fuse ticks
-    alive, 3 bounces. The `hull_radius` question this thread left open is
-    therefore moot for this scenario and was not otherwise chased.
-    `stall_rescue_ground_truth::a_healthy_craft_never_looks_stalled_for_a_single_tick`
-    was the other one - **fixed 2026-09-07**: instrumenting `(tick, thrust,
-    speed)` around the countdown release confirmed the standing hypothesis
-    exactly (thrust 0 -> 100 at `COUNTDOWN_TICKS`, speed still ~0.57 <
-    `STALL_SPEED`, then >1.0 the very next tick, identically on `16_Track`,
-    `03_Track` and `06_Track`), so the test now excludes that one understood
-    tick from the stall count rather than the threshold being loosened.
-  - `ps2_source_ground_truth`'s transcode test - historically flaky under load
-    per the entries below - **passed cleanly in both runs today**, including
-    at load 22-29 (298s), the same contention level the older flake reports
-    were attributed to. That weakens rather than confirms "ordinary contention
-    triggers it"; whatever the older failures needed, this session's load
-    wasn't it.
-  - This supersedes the 2,488-of-2,494 count below, which is over two weeks
-    stale (2026-08-18) and against a workspace that has nearly tripled in
-    test count since; the mechanism notes below it (the ffmpeg flake's shape,
-    the build-profile fix) are still accurate and worth reading.
-- **`just test-data` takes about 3:20, not 11:27 and not 9:47.** If it takes
-  eleven minutes you are on a tree from before the build-profile fix:
-  `[profile.dev.package."*"]` never matched a workspace member, so our own
-  decoders and the sim compiled at `opt-level = 0`, and the suite additionally
-  ran its multi-minute tests last. Both are fixed in `Cargo.toml` and
-  `.config/nextest.toml`; the measurement and the reasoning are in
-  [workspace-layout.md](docs/architecture/workspace-layout.md#build-profiles).
-  **Do not "simplify" either file back:** the per-crate `opt-level` lines look
-  redundant next to the `"*"` glob and are not, and the nextest priorities look
-  cosmetic and are worth half the win.
-  **If it takes nine or ten minutes you are on a tree from before 2026-09-09**,
-  when the suite had drifted back to 587s with a *single* test accounting for
-  525s of it - the six tail tests were matrices in one `#[test]` each, and
-  `cargo nextest` parallelises across tests, so each ran on one core. They are
-  split now, and `just test-data` runs `scripts/check-test-budget.py` over its
-  own log afterwards so the next one fails at review: **450s for the suite,
-  300s for any single test** (both under-load durations - see that script).
-  The split took it to 379s, and sharing one open `DiscImage` across a
-  source's archives to **344s**. When that fires, re-profile the tail rather than
-  adding a `BASELINE` row - CLAUDE.md's "Commands" section has the four-step
-  recipe and the worked examples of which splits keep which assertions. **The four `oag-trace` failures this bullet used to warn
-  about are gone**: the disc-backed `oag-game` and `oag-formats` suites are
-  **1,269 of 1,269, 0 skipped** under `--run-ignored all` (re-measured
-  2026-08-17 after the HD HUD and `.gtf` passes; `oag-game` alone read 739, then
-  656, then 652). **`oag-trace`'s five `data/traces/` failures are fixed
-  (2026-08-19), and it is skips now, not reds**: `wall_contact_ground_truth` and
-  `yaw_authority_ground_truth` used to fail with `No such file or directory` on
-  `data/traces/talons-junction-standing-start.csv` and `-steer-left.csv`/`-steer-right.csv`
-  whenever `data/traces/` did not exist, because - unlike every other
-  ground-truth test in the tree - they read those files with a bare `expect`
-  instead of the usual skip-if-absent guard. Both files now gate on a
-  `capture()`/`capture_path()` helper matching the pattern `image()` already
-  uses elsewhere (`OAG_REQUIRE_GAME_DATA` forces a hard failure, otherwise a
-  missing capture prints the `verification/scenarios/*.inputs` command that
-  regenerates it and the test returns early). Verified both ways: all five skip
-  cleanly with `data/traces/` absent, and fail loudly under
-  `OAG_REQUIRE_GAME_DATA=1`. **Two of them were flaky rather than solid, both in
-  `ps2_source_ground_truth`, and both are fixed as of 2026-09-09
-  (`33913eb9`).** The cause, undiagnosed across four separate investigations
-  between 2026-08-16 and 2026-09-09: the two transcode tests shared one
-  deterministic scratch directory, so `nextest`'s own parallelism had them
-  writing and reading a single set of files. Every observation those
-  investigations recorded follows from it - a failure in a full sweep then a
-  pass alone, `movie.frames` being `None`, `ffprobe` "invalid float literal"
-  and "Invalid data found", and the correlation with machine load, which only
-  changed the interleaving. See `transcode_scratch`'s doc comment in
-  `crates/game/tests/ps2_source_ground_truth.rs`. **The lesson worth keeping is
-  the shape**: a red that moves with load, passes alone, and resists diagnosis
-  is a shared-path race before it is a starvation story. Separately, and still
-  true, **one failure is the machine rather than the code**:
-  machine rather than the code**:
-  `oag-disc::ground_truth listing_matches_chdman_and_the_reference_iso` shells
-  out to `chdman extractdvd` into `/tmp/oag-ground-truth.iso`, `/tmp` here is a
-  6.8 G tmpfs, and the extracted PSP ISO does not fit in what is free. It fails
-  at "Extracting, 29.4% complete... Error writing to file; check disk space",
-  which `nextest` reports as `chdman extractdvd failed` two frames up and reads
-  like a broken invocation. Free `/tmp` or point the test elsewhere; do not go
-  looking for a disc bug.
-- **Rendering fidelity gaps are mostly not bugs.** Bloom, colour grading and
-  every authored light class (`AmbientLight`/`DirectionalLight`/etc.) are still
-  unchecked M6 roadmap items - the flat, dark look that produces is a known,
-  documented gap, not something to guess-fix from a screenshot.
-- **And a second one was, in the other direction: the disc authors the light
-  rig and nothing read it.** `mesh.wgsl`'s two invented light directions were a
-  stand-in and its own header said so; Wipeout HD states a sun direction, a sun
-  colour and a constant ambient in a plain-text `track.envsettings` beside every
-  circuit. Read and drawn on 2026-08-18 -
-  [`envsettings.md`](docs/formats/envsettings.md). **The trap in the file**:
-  `"Lighting.Sky colour"=128 128 128 0` is a byte quadruple where every other
-  colour is normalised, and the only thing that says so is the missing decimal
-  point; and `Sun direction` is **not** a unit vector on most circuits, with
-  four degenerate. **The hold**: its magnitudes are authored for a linear HDR
-  pipeline with a tonemapper and this one has neither, so the hue is drawn and
-  the scale is not. That the file authors magnitudes above 1.0 at all is
-  evidence that ADR-0020's gamma-authoritative model is wrong *for HD
-  specifically* - recorded on the page, not acted on, because superseding an ADR
-  needs a reference frame from the running original.
-- **But one of them was, and the shape of it is worth carrying.** On 2026-08-18
-  a screenshot of HD's Talon's Junction showed a quarter of the circuit smeared
-  into horizontal streaks. Two of `.rcsmodel`'s readings were *solving* for
-  something the file states: a chunk's `+0x58` points at a **vertex-attribute
-  declaration** giving the stride, and per attribute a `~crc32` name, an RSX
-  type and a byte offset. The texture coordinate was being read from the last
-  four bytes of a vertex, which on the commonest layout is `lightmapUV`.
-  `docs/formats/rcsmodel.md`. **The trap that cost the first sweep**: `+0x58` is
-  the index count on a `LAYOUT_INLINE` chunk, so a disc-wide sweep that does not
-  gate on the `+0x06` layout byte comes back as convincing noise - 606
-  declarations with a stride of zero, type codes spread over all sixteen values.
-  **The lesson worth more than the fix**: the retired reading had a
-  texel-density discriminator that really did separate two groups, and a sweep
-  of every header byte that really did find no field separating them. Both were
-  correct and both were about the wrong thing - the sweep was run against labels
-  the discriminator produced, so it could not find the field one word away from
-  the bytes it swept. When a heuristic stands in for a missing field, check the
-  field is missing.
+- **Status per title:** [`docs/overview/status.md`](docs/overview/status.md) (built vs. read vs. verified).
+- **The disc images are in `data/images/`** (Pulse PSP USA/EU and PS2 EU, Pure PSP USA/EU, HD PS3 EU, 2048 and Omega packages with patches); hashes in [`source-images.md`](docs/reverse-engineering/source-images.md). Sessions have believed them lost and verified nothing: `/bin/ls -la data/images/` before concluding a ground-truth test "cannot run". `rg`/`fd` return nothing under `data/` and a spawned agent's worktree has no `data/` (use `--no-ignore`, `just link-data`; CLAUDE.md "Data and images"). Plain `ls` may be aliased (`ls -la` failing with `command not found: -la` is not a broken argument).
+- **Derived evidence under `data/` (`data/traces/`, `data/shots/`, `data/cache/`) is not durable; the committed `verification/scenarios/*.inputs` and scripts that regenerate it are.** A 2026-07-29 pass found reference traces gone while docs and `wall.rs` cited them. A test that needs a capture prints the regenerating command and returns early without `OAG_REQUIRE_GAME_DATA=1`. `data/traces/` is currently populated here; `ls` it rather than trusting this line. `talons-junction-time-trial-lap.csv` and `-omega.csv` are different files.
+- **Four suite numbers look green and are not; read all four before believing any red count** (one mistake, trusted without the check that asks "did the thing I think I measured run"):
+  1. **A truncated run reads as a better tree and hides what follows**: `just test-data` must run with `--no-fail-fast` (the `justfile` does; a 2026-09-02 run stopped at 138 of 3,300 after two early `oag-formats` reds).
+  2. **`0 skipped` is not evidence any data was exercised**: nextest counts a test that early-returns on a missing file as passed.
+  3. **A filter can select a different set than you meant and report a confident green.** `-E 'test(...)'` matches a test's name and module path, not its binary: `test(race_finish)` selected one unrelated passing test, and a "re-run of the failures" came back 39 of 39 green. Re-run a ground-truth failure with `test(/^race_finish_ground_truth::/)` (module path) and keep `--run-ignored all` (without it an exact-name filter reports `0 tests run: 0 passed` as success). **Run `cargo nextest list` on the filter before trusting the run.**
+  4. **A red count means nothing without the variable's state attached**: the same tree gave 6 failed plain and 17 failed under `OAG_REQUIRE_GAME_DATA=1` (the extra reds were missing captures and DLC packs turned from silent passes into failures). Always say which one a number means.
+- **There is no inherited red in `test-data`.** Do not hand a member "expect one inherited failure". A red ground-truth test usually encodes a real disagreement: understand why before making it green. Two 2026-09-02 reds were premise expiry (a test whose assumption stopped being true after a verified improvement): the disc gives a destroyed craft "Ship destroyed" instead of a place (`0x08a82dfc`, 75), so `race_finish_ground_truth` branches on which ending happened; `ace` opponents now shoot each other, so `difficulty_ground_truth` prints wrecks instead of asserting none. **Still open, not closed**: the bounce-in-place stall (a craft frozen near one point with speed flicking 0-13 never trips the dwell counter, e.g. `05_Track` novice; `docs/ghidra/functions/psp-pulse-usa/grid.md`); `stall_rescue_ground_truth` is scoped to the sustained-stall claim that holds, and the dwell counter is pinned by `crates/raceplay/src/tests/respawn.rs::a_stopped_opponent_is_flagged_after_the_dwell`.
+- **A red that moves with load, passes alone and resists diagnosis is a shared-path race before it is a starvation story**: two `ps2_source_ground_truth` transcode tests shared one scratch directory and nextest's parallelism raced them (four investigations; `transcode_scratch`'s doc comment). `oag-disc::ground_truth listing_matches_chdman_and_the_reference_iso` extracts a PSP ISO into `/tmp/oag-ground-truth.iso`; a full `/tmp` tmpfs fails it as `chdman extractdvd failed`, which reads like a bad invocation. Free `/tmp`; do not hunt a disc bug.
+- **Do not "simplify" `Cargo.toml`'s per-crate `opt-level` lines or `.config/nextest.toml`'s priorities**: the lines look redundant next to the `"*"` glob (`[profile.dev.package."*"]` never matched a workspace member) and the priorities look cosmetic, and together they are worth most of the suite's speed ([workspace-layout.md](docs/architecture/workspace-layout.md#build-profiles)). `just test-data` runs `scripts/check-test-budget.py` over its own log; when it fires, re-profile the tail (CLAUDE.md "The test-data suite").
+- **Check `git status` before assuming the tree is clean** (a milestone once sat uncommitted for a day). Re-measure gate counts rather than trusting a number in a file.
+- **Rendering fidelity gaps are mostly not bugs**: bloom, grading and several authored light classes are tracked on the roadmap; do not guess-fix from a screenshot. Two counter-examples of the other kind, where the disc authored it and nothing read it:
+  - **The light rig.** HD authors a sun direction, sun colour and ambient in `track.envsettings` ([`envsettings.md`](docs/formats/envsettings.md)); `mesh.wgsl`'s two invented directions were a stand-in. Traps: `"Lighting.Sky colour"=128 128 128 0` is a byte quadruple (only the missing decimal point says so), and `Sun direction` is not a unit vector on most circuits (four degenerate). Magnitudes are authored for a linear HDR pipeline with a tonemapper, so hue is drawn and scale is not; that is evidence ADR-0020's gamma-authoritative model is wrong *for HD*, recorded on the page and not acted on until a running-original reference frame exists.
+  - **The vertex attribute declaration.** A chunk's `+0x58` points at a declaration giving stride, and per attribute a `~crc32` name, RSX type and byte offset; the texture coordinate was being read from the last four bytes, which on the commonest layout is `lightmapUV` (HD's Talon's Junction smeared into streaks, 2026-08-18; `docs/formats/rcsmodel.md`). **Trap**: `+0x58` is the index count on a `LAYOUT_INLINE` chunk, so a disc-wide sweep that does not gate on the `+0x06` layout byte returns convincing noise. **Lesson**: a sweep run against labels a heuristic produced cannot find the field one word away; when a heuristic stands in for a missing field, check the field is missing.
 
 ## Where the project stands
 
-### The 2026-08-18 review's findings
+Milestones M4 (shield/energy, Zone's ending, grid, weapons, determinism hash, `Mode::SingleRace`) and M5 (six AI stages, liveries, respawns, mistakes, lap times) are landed; **a summary here ages faster than the row it summarises, so re-read the Open threads rows before trusting any line below.** Evidence lives on the pages, do not requote it:
 
-[`docs/reviews/2026-08-18-code-review.md`](docs/reviews/2026-08-18-code-review.md)
-lists the findings and the headline fixes. The do-now batch, the next-session
-batch and the P2/P3 sweep are all landed, one commit each, full `just` green
-throughout; what was not done is below.
+- Shield, contact damage, Zone: [shield.md](docs/ghidra/functions/psp-pulse-usa/shield.md), [zone-mode.md](docs/ghidra/functions/psp-pulse-usa/zone-mode.md).
+- Grid, weapon fire, pickups, projectiles, Missile: [grid.md](docs/ghidra/functions/psp-pulse-usa/grid.md), [weapon-fire.md](docs/ghidra/functions/psp-pulse-usa/weapon-fire.md), [pickups.md](docs/gameplay/pickups.md), [missile.md](docs/ghidra/functions/psp-pulse-usa/missile.md), [rocket-visuals.md](docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md).
+- A race's end scoreboard (off a captured snapshot, `Race::tick` unchanged): [race-modes.md](docs/gameplay/race-modes.md#what-happens-when-a-race-ends).
+- Player rescue off the circuit (`Race::lost_off_the_track`; deliberately not extended to a human-held slot 0): [ai.md](docs/gameplay/ai.md#and-nothing-recovered-the-player-either). AI stages: [ai.md](docs/gameplay/ai.md).
+- HD reaches the menus and a race: [hd-frontend.md](docs/formats/hd-frontend.md), `crates/game/tests/hd_boot_ground_truth.rs`.
+- Race sound effects off the discs' `.bnk` banks on all three PSP/PS3 titles: [psp-audio.md](docs/formats/psp-audio.md#a-cue-owns-a-run-of-the-command-table).
+- **The start gantry** (`3`, `2`, `1`, `GO`), one page for all four titles: [start-gantry.md](docs/rendering/start-gantry.md). Placed and drawn on Pulse and HD (`oag_render::gantry`, `oag_raceplay::gantry`; `strip_fx350_art` drops HD's borrowed slot-7 art). HD's glyph walk is unwired for playback: the runtime write was located live (`AnimCurve_EvaluateChannels`, [billboards.md](docs/ghidra/functions/ps3-hdfury-eu/billboards.md)) but the authored curve data inside `321go_startfinish.rcsmodel` is undecoded. Pure ships no track-side gantry; 2048 is untried past a first read. Ground truth: `start_gantry*_ground_truth.rs` in `crates/vex`, `crates/hd` and `crates/raceplay`.
+- Physics: force law, angular momentum, contact response and mag-lock hold are recovered and implemented with no fitted stand-in constants left: [docs/physics/](docs/physics/README.md), `engine.md`, `rigid-body.md`, `contact-response.md` under [docs/ghidra/functions/](docs/ghidra/functions/README.md).
 
-**Not done, and why**: S4/S5 (a per-asset `(Archives, &Title)` split and a
-title-probe table - racebox groundwork the review itself grades L/M and puts
-last); S6 (a naming axis on `Title`, waiting on the 2048 corpus that would
-give it shape, per ADR-0022's own rule); I8 (splitting this file - M-sized,
-orthogonal to a findings pass); U3 (physical- vs logical-key bindings -
-investigated and rejected: AZERTY needs physical scancodes throughout, and a
-hybrid mapping some keys physically and some logically would be worse than
-either pure scheme); U4 (a `Vec` resize plus an `Arc<Sound>` drop on the
-audio thread - needs a return channel to fix honestly).
+**Read lap fidelity off the *seeded* comparison, never open-loop.** The original integrates a variable frame duration ([ADR-0007](docs/architecture/adr/0007-fixed-timestep-vs-original.md)): two runs of the original from the same pose are 100 units apart by tick 495, so a long single-seeded comparison measures the emulator's scheduler. The reference lap (`data/traces/talons-junction-clean-lap.csv`) is wall-free for its first 256 ticks; inside it single-seeded position error is 4.6 units at tick 240 and never above 5 (2026-09-30, pinned by `crates/trace/tests/lap_window_ground_truth.rs` and `pad_crossing_ground_truth.rs`; address trail in [engine.md](docs/ghidra/functions/psp-pulse-usa/engine.md#the-raw-steerx-is-on-the-100-scale-too)). The earlier 44.1 was two bugs: the replay harness never armed the speed pads, and the airbrake `drag` term read `steerX` on `-1..=1` where the original holds `+/-100`. **Always pass `--script-lead 2` against a `data/traces/` capture** (three-frame emulator input latency swallows a script's first two states and reads as a two-tick physics wedge). Details: [oag-trace.md](docs/tools/oag-trace.md#reseeding-and-why-a-long-comparison-needs-it), [force-balance-ground-truth.md](docs/physics/force-balance-ground-truth.md). A save-state fixed start was investigated and not adopted ([ppsspp-debugger.md](docs/reverse-engineering/ppsspp-debugger.md#save-states-and-the-input-recording-api-that-may-replace-them)).
 
-**One trap worth keeping**: G3's "validate the chain's first step" check also
-fired on `--reel`, whose state is off-path by construction (the dev/pub reel
-has no screen in the set), and silently turned the flag into a no-op.
-`boot_ground_truth::the_reel_leg_still_runs_its_frame_holds` is the only
-thing keeping that path from rotting, and it is `#[ignore]`d, so `just`
-stayed green throughout. A validity check applied to a state the *operator*
-named rather than a chain led to is a check against the wrong question.
-
-### M4 and M5
-
-M4 (shield/energy, Zone's ending, the grid, weapon pads, the weapon table,
-pickups, projectiles, the race-level determinism hash, weapon-fire dispatch,
-`Mode::SingleRace`) and M5 (six AI stages, per-craft liveries, respawns,
-mistake injection, per-opponent lap times) are both landed. Each has its own
-docs page with the evidence - **do not requote from this file**:
-
-- Shield/energy pool, contact damage, Zone's ending:
-  [shield.md](docs/ghidra/functions/psp-pulse-usa/shield.md),
-  [zone-mode.md](docs/ghidra/functions/psp-pulse-usa/zone-mode.md).
-- The grid, weapon-fire dispatch, pickups, projectiles, the Missile (the
-  first weapon whose whole behaviour - lock, guidance, speed ramp, bounce -
-  is recovered rather than half-invented):
-  [grid.md](docs/ghidra/functions/psp-pulse-usa/grid.md),
-  [weapon-fire.md](docs/ghidra/functions/psp-pulse-usa/weapon-fire.md),
-  [pickups.md](docs/gameplay/pickups.md),
-  [missile.md](docs/ghidra/functions/psp-pulse-usa/missile.md).
-- A race ends and shows a scoreboard, off a captured snapshot rather than a
-  live tick (`Race::tick` itself is unchanged):
-  [race-modes.md](docs/gameplay/race-modes.md#what-happens-when-a-race-ends).
-- The player is recovered when they leave the circuit
-  (`Race::lost_off_the_track`, `PLAYER_RESCUE_HALF_WIDTHS`/`_TICKS`,
-  deliberately not extended to a human-held slot 0):
-  [ai.md](docs/gameplay/ai.md#and-nothing-recovered-the-player-either).
-- Six AI stages, liveries, respawns, mistake injection, per-craft lap times -
-  the AI no longer blocks M5, and **this paragraph is why a summary here ages
-  faster than the row it summarises**: re-read the AI rows under Open threads
-  before trusting this line. [ai.md](docs/gameplay/ai.md).
-- Wipeout HD reaches the menus and starts a race, off a *declared* rather
-  than measured boot chain, with four independent format bugs fixed on the
-  way (`.fnt` byte order, no `.gtf` decode path, a Latin-1 language file, the
-  480x272-authored menu grid at HD's 800 offset):
-  [hd-frontend.md](docs/formats/hd-frontend.md),
-  `crates/game/tests/hd_boot_ground_truth.rs` (13/13).
-- Rocket visuals (`Data\Weapons\Rocket.vex`, not a billboard, with two
-  separately authored explosions), floor-following flight and the km/h fix:
-  [rocket-visuals.md](docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md).
-- Race sound effects on all three titles, off the discs' own `.bnk` banks:
-  six cues on Pulse and Pure, four of the six on HD.
-  [psp-audio.md](docs/formats/psp-audio.md#a-cue-owns-a-run-of-the-command-table).
-- The start gantry's `3`, `2`, `1`, `GO` on all four titles: Pulse walks four
-  per-vertex UV cells across a shared palette staircase (90); Pure ships no
-  track-side gantry at all (85); HD ships four glyph files (plus `fx350.vex`)
-  whose geometry moved to a sibling `.rcsmodel` and whose own five UV cells
-  sit against a *static* material parameter rather than a track (88 for the
-  packaging, 40 for whether it ever changes at runtime); 2048 is a third
-  mechanism again - four separate mesh nodes, each slid on and off screen by
-  its own transform track (90), with no shared UV walk at all, and reaches
-  only two of its own eight glyph files (plus `fx350`) across all 26 circuits
-  the whole package ships. **What held across all three titles with a gantry
-  is a shared three-beat master clock**, not one shared instant: something
-  moves at 6.000 s, `FINAL LAP` enters at 9.333 s and the chequered flag
-  enters at 12.333 s, on Pulse, HD (confirmed directly on HD's own disc) and
-  2048, with a node literally named `polySurface7` carrying the identical
-  closing frame pair on all three. **The gantry is placed and drawn on Pulse
-  and HD** (2026-09-06 and 2026-09-13): the track's own geometry authors the
-  mount, keyed by name (`billboard8`/`321backplate` on Pulse,
-  `billboard8.gtf` on HD), and `oag_render::gantry`/`oag_raceplay::gantry`
-  stand `321Go_StartFinish.vex` on it and play its authored timeline off the
-  race clock. HD's own mount is not Pulse's flat stub - it is 1.9-3.0 units
-  thick, part of a real 3D gate structure - and its model additionally
-  embeds seven mesh nodes of **slot 7's own borrowed `fx350_nomip.gtf` art**;
-  three of them (`polySurface155/156/157`) sit 33 units off the digit
-  board's own display plane and rendered as a stray "Wipeout symbol" logo
-  floating over the open road until `oag_render::gantry::strip_fx350_art`
-  dropped them by texture, matching a player's own report pixel for pixel.
-  HD's glyph *walk* is still unwired for **playback** - its material's
-  `uvOffset`/`uvScale` are a static value on disk, not a keyframe track
-  (88/40) - but 2026-09-17's patched-RPCS3 `Z2` watchpoint pass **located the
-  runtime write live** (`AnimCurve_EvaluateChannels`, off
-  `Billboard_UpdateInstanceUvs`/`Billboard_UpdateAndRender`), same PC on two
-  boots; the authored curve data itself is the remaining gap, likely inside
-  `321go_startfinish.rcsmodel`'s own undecoded bytes
-  (`docs/ghidra/functions/ps3-hdfury-eu/billboards.md`'s 2026-09-17 section;
-  its own prior "eleven unexamined `lwz 0x834(` sites" lead was already dead
-  by 2026-09-15). 2048 is untried past a first-glance read of
-  the same family: four separate mesh nodes, each slid on and off screen by
-  its own transform track (90), with no shared UV walk at all, and reaches
-  only two of its own eight glyph files (plus `fx350`) across all 26
-  circuits the whole package ships.
-  [start-gantry.md](docs/rendering/start-gantry.md), one page for all four
-  titles; `crates/vex/tests/start_gantry_ground_truth.rs` (4/4, Pulse),
-  `start_gantry_pure_ground_truth.rs` (2/2, Pure),
-  `crates/raceplay/tests/start_gantry_report_pure_ground_truth.rs` (1/1, Pure),
-  `crates/hd/tests/start_gantry_hd_ground_truth.rs` (6/6, HD),
-  `crates/raceplay/tests/start_gantry_hd_mount_ground_truth.rs` (3/3, HD),
-  `start_gantry_2048_ground_truth.rs` (9/9, 2048).
-
-**What M5 still wants**: nothing on Zone's explosion - it landed 2026-10-01 (the wreck thread below). Positional audio and the Autopilot
-pickup both landed 2026-08-24; each has a row under Open threads carrying what
-is still unread about it.
-
-The force law, angular-momentum model, contact response and mag-lock
-attitude hold are all recovered at instruction level and implemented, and
-every fitted constant that once stood in for a recovered one has been
-retired (`YAW_DRIVE_CALIBRATION`, `ALIGNMENT_INERTIA`, the `<Misc>`-derived
-box inertia). Evidence: [docs/physics/](docs/physics/README.md) (both
-ground-truth pages and
-[angular-velocity-column.md](docs/physics/angular-velocity-column.md)) and
-[docs/ghidra/functions/](docs/ghidra/functions/README.md) (`engine.md`,
-`rigid-body.md`, `contact-response.md`).
-
-**Read lap fidelity off the *seeded* comparison, never open-loop.** The
-original integrates a variable frame duration
-([ADR-0007](docs/architecture/adr/0007-fixed-timestep-vs-original.md)), so
-two runs of the original itself, from the same pinned start pose, are 100
-units apart by tick 495 - a long single-seeded comparison measures the
-emulator's scheduler, not the force law. The reference lap
-(`data/traces/talons-junction-clean-lap.csv`) is 96.3% wall-free, first
-touching a wall at tick 256. **Inside that clean window single-seeded
-position error is 4.6 units at tick 240 and never above 5** (2026-09-30).
-The 44.1 recorded before was two bugs, not the force law's shape: the
-replay harness never armed the speed pads (the original crosses one at tick
-161), and the airbrake's forward `drag` term read `steerX` on `-1..=1` where
-the original holds it on `+/-100`, 100x weak. Pinned by
-`crates/trace/tests/lap_window_ground_truth.rs` and
-`pad_crossing_ground_truth.rs`; the address trail is in
-[engine.md](docs/ghidra/functions/psp-pulse-usa/engine.md#the-raw-steerx-is-on-the-100-scale-too).
-Full numbers, the
-standing-start scenario's independent cross-check (launch acceleration 32.69
-against a recorded 32.52), and why `grounded` cannot be read as a headline
-(`1.0` on all 3,146 of the original's own ticks) are on
-[oag-trace.md](docs/tools/oag-trace.md#reseeding-and-why-a-long-comparison-needs-it)
-and
-[force-balance-ground-truth.md](docs/physics/force-balance-ground-truth.md).
-**Always pass `--script-lead 2` against a `data/traces/` capture** - the
-emulator's three-frame input latency means a script's first two states never
-reach it, and replaying them anyway reads as a two-tick physics wedge;
-`oag-trace.md` has the mechanism. A save-state fixed start was investigated
-and not adopted (two loads of the same state disagreed by 0.031 units/1.41
-degrees against `--start-heading`'s 0.0022/0.0001, which is what closed the
-roadmap checkbox instead) -
-[ppsspp-debugger.md](docs/reverse-engineering/ppsspp-debugger.md#save-states-and-the-input-recording-api-that-may-replace-them)
-keeps the mechanism documented for a need heading-pinning cannot reach.
+**The 2026-08-18 review** ([findings](docs/reviews/2026-08-18-code-review.md)): all batches landed except S4/S5 (per-asset split, title-probe table), S6 (a `Title` naming axis, waiting on the 2048 corpus per ADR-0022), U3 (physical vs logical key bindings: investigated and rejected, AZERTY needs physical scancodes throughout and a hybrid is worse than either) and U4 (an `Arc<Sound>` drop on the audio thread needs a return channel). **One trap**: G3's "validate the chain's first step" check also fired on `--reel`, whose state is off-path by construction, and silently made the flag a no-op; only `boot_ground_truth::the_reel_leg_still_runs_its_frame_holds` (`#[ignore]`d, so `just` stayed green) guards it. A validity check on a state the operator named is a check against the wrong question.
 
 ## Open threads
 
@@ -820,140 +359,49 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 
 ## Pending maintainer decision: shipped design data in tracked docs
 
-[`handling-stats.md`](docs/formats/handling-stats.md)'s own rule, per
-[ADR-0006](docs/architecture/adr/0006-no-copyrighted-content.md) - "a field name
-is a description of the format, a tuning table is the content itself" - is
-breached in places by earlier passes. `angular-velocity-column.md`'s shipped
-`Turning.amount` has been redacted, but it still quotes the Assegai `Misc` hull
-dimensions in its box-tensor refutation, and `force-balance-ground-truth.md`
-carries XML-side values from the force-law derivations (`accelcap`, an
-`amount`-derived figure, `ride_height`, `Physical.mass`), some of them
-load-bearing in the arithmetic.
+[`handling-stats.md`](docs/formats/handling-stats.md)'s rule per [ADR-0006](docs/architecture/adr/0006-no-copyrighted-content.md) is "a field name is a description of the format, a tuning table is the content itself". Earlier passes breach it in places: `angular-velocity-column.md` still quotes the Assegai `Misc` hull dimensions in its box-tensor refutation, and `force-balance-ground-truth.md` carries XML-side values (`accelcap`, an `amount`-derived figure, `ride_height`, `Physical.mass`), some load-bearing in the arithmetic. (`Turning.amount` there is redacted.)
 
-**Whether to sweep those historically is a maintainer decision, not an
-agent's**, which is why it is flagged rather than done. Git history retains
-everything regardless, so a sweep would clean the distributable snapshot, not
-the past.
-
-**A second instance was resolved the same way, 2026-09-06.** The Shuriken's and
-Repulser's `<Pickupodds>` weights, recovered while establishing that both are
-Eliminator-only (`docs/gameplay/pickups.md`), are the same kind of shipped
-tuning data. Asked directly, the maintainer chose to commit them: eight values
-for two weapons, load-bearing for the claim, rather than the full thirteen-by-four
-table. The historical sweep above stays open and undecided.
-
-**One new instance was resolved by the maintainer rather than flagged,
-2026-08-17.** The `Weapon Pad` ready-state colour cycle - a 6-entry `[r,g,b]`
-keyframe table recovered from `WeaponPad_UpdateRefreshTimer`
-(`docs/ghidra/functions/psp-pulse-usa/pads.md`) - is exactly this kind of
-tuning table. Asked directly, the maintainer chose to commit it
-(`oag_render::weapon_pad::READY_KEYFRAMES`) rather than defer or build a
-runtime BOOT.BIN reader, so it is tracked source now. Recorded here as the
-precedent for the next one of these that comes up: ask, do not assume either
-answer.
+**Whether to sweep those historically is the maintainer's decision, not an agent's.** Git history keeps everything, so a sweep would clean only the distributable snapshot. Two single instances were put to the maintainer and resolved by committing: the Shuriken and Repulser `<Pickupodds>` weights (2026-09-06, eight values, load-bearing for the Eliminator-only claim in `docs/gameplay/pickups.md`) and the Weapon Pad ready-colour keyframes (2026-08-17, `oag_render::weapon_pad::READY_KEYFRAMES`). **Precedent: ask, do not assume either answer.**
 
 ## Scope decisions that look like gaps
 
 | Decision | Why |
 | --- | --- |
-| **The Memory Stick and profile system** | One automatic save slot, the way a modern PC game does it. Most of the disc's boot chain between `Language Selection` and the menus is deliberately out of scope. |
-| **PSP over PS2 where they diverge** | User directive, now policy in [goals.md](docs/overview/goals.md#scope). PS2 stays the corroboration leg for confidence, not the target. |
+| **The Memory Stick and profile system** | One automatic save slot, as a modern PC game does. Most of the boot chain between `Language Selection` and the menus is out of scope. |
+| **PSP over PS2 where they diverge** | User directive, policy in [goals.md](docs/overview/goals.md#scope). PS2 is corroboration for confidence, not the target. |
 | **The collision stun is not armed by track contact** | The original's is gated on a pending impulse the contact path never writes. |
 | **Sweep and prune is not reimplemented** | The original's packing clamps world space rather than rebasing it, so it never drops a genuinely overlapping pair; ours does the same job without the packing. |
-| **The four-corner hover variant** | Selected by `g_game_mode == 6` every frame (`Ship_UpdateHover`). Ported 2026-10-02: the epilogue's bank-to-yaw gain `50.0` (`ShipState::four_corner`). Not ported: the four-probe layout and the downforce's missing groundedness/magstrip factors, see `docs/ghidra/functions/psp-pulse-usa/zone-rest.md`. |
-| **Pure asset work** | No longer deferred as a whole. [ADR-0022](docs/architecture/adr/0022-title-packages.md) opened the format and asset layers on the strength of [`pure-status.md`](docs/formats/pure-status.md)'s measurements; ADR-0009 item 2 still defers Pure *simulation* work behind M4's exit. |
-| **PS3 content** | Still paused (since 2026-08-09), on the toolchain rather than on the research - see [`data/README.md`](data/README.md#the-ps3-image-is-encrypted-and-is-read-that-way). None of `PS3Dec`/`scetool` is installed and there is no RPCS3 install to borrow a decrypted copy from. |
-| **Vita content** | Not paused: all four `eboot.elf` (base + patch v1.04, both regions) are decrypted end to end and imported into Ghidra as of 2026-08-26. The layer the prior entry missed - `eboot.bin` past PFS decryption is still NpDrm-encrypted under its SELF wrapper, a plaintext header and phdrs say nothing about the segments - is solved by `scripts/vita-self-decrypt.py`, which needs only the title's klicensee (itself pure-software recoverable from a zRIF, no F00D/hardware - `scripts/zrif-to-klicensee.py`). See [toolchain.md#vita](docs/reverse-engineering/toolchain.md#vita). Default target: `/2048/eboot-vita-2048-eu-v104.elf` (EU, patch v1.04); naming and RE work itself are the open thread now. |
-| _(shared architectural fact)_ | **HD/Fury and 2048 both ship PSARC, not WAD**, and 2048 arrives as a PKG rather than a disc filesystem. |
-| **A "CPU renderer" switch** | There is nothing to switch. wgpu ships no software rasteriser (`Backend::Noop` draws nothing), so CPU rendering exists only via a system Vulkan implementation such as lavapipe, selected outside the process. |
-| **RENDERER applies on the next launch** | The device is made once at boot and everything hangs off it. Live switching means tearing down the surface, the pipelines and every GPU resource. |
-| **60 Hz over 50 Hz where a title ships both** | User directive, 2026-09-08. The PS2 disc carries two cuts of each movie and the original picks between them on `g_refresh_mode` - the player's own answer to a first-boot 60 Hz question, not a region ([refresh-mode.md](docs/ghidra/functions/ps2-pulse-eu/refresh-mode.md)), so both are legitimate on the one PAL-only pressing. `oag_pulse::movies::LOOSE_MOVIES` lists the `640` cut first. **The switch itself is not reimplemented** and is not expected to be: this engine has no 50 Hz raster to be compatible with. |
+| **The four-corner hover variant** | Selected by `g_game_mode == 6` every frame (`Ship_UpdateHover`). Ported 2026-10-02: the epilogue's bank-to-yaw gain `50.0` (`ShipState::four_corner`). Not ported: the four-probe layout and the downforce's missing groundedness/magstrip factors (`docs/ghidra/functions/psp-pulse-usa/zone-rest.md`). |
+| **Pure asset work** | Not deferred as a whole: [ADR-0022](docs/architecture/adr/0022-title-packages.md) opened its format and asset layers on [`pure-status.md`](docs/formats/pure-status.md)'s measurements. ADR-0009 item 2 still defers Pure *simulation* behind M4's exit. |
+| **PS3 content** | Paused since 2026-08-09 on the toolchain, not the research ([`data/README.md`](data/README.md#the-ps3-image-is-encrypted-and-is-read-that-way)): `PS3Dec`/`scetool` not installed, no RPCS3 install to borrow a decrypted copy from. |
+| **Vita content** | Not paused: all four `eboot.elf` (base + patch v1.04, both regions) are decrypted and in Ghidra (2026-08-26). `eboot.bin` past PFS decryption is still NpDrm-encrypted under its SELF wrapper; `scripts/vita-self-decrypt.py` solves it from the klicensee (recoverable from a zRIF in software, `scripts/zrif-to-klicensee.py`; [toolchain.md#vita](docs/reverse-engineering/toolchain.md#vita)). Default target `/2048/eboot-vita-2048-eu-v104.elf`. |
+| _(shared fact)_ | **HD/Fury and 2048 ship PSARC, not WAD**, and 2048 arrives as a PKG rather than a disc filesystem. |
+| **A "CPU renderer" switch** | Nothing to switch: wgpu has no software rasteriser (`Backend::Noop` draws nothing); CPU rendering is a system Vulkan implementation such as lavapipe, chosen outside the process. |
+| **RENDERER applies on the next launch** | The device is made once at boot and everything hangs off it; live switching means tearing down the surface, pipelines and every GPU resource. |
+| **60 Hz over 50 Hz where a title ships both** | User directive, 2026-09-08. The PS2 disc carries two cuts of each movie, picked on `g_refresh_mode` (the player's own first-boot answer, not a region; [refresh-mode.md](docs/ghidra/functions/ps2-pulse-eu/refresh-mode.md)). `oag_pulse::movies::LOOSE_MOVIES` lists the `640` cut first. The switch is not reimplemented: there is no 50 Hz raster to be compatible with. |
 | **PS2 `.PSS`/`.IPF` through GStreamer** | [ADR-0017](docs/architecture/adr/0017-gstreamer-native-video.md). |
-| **`just play`'s default is not `oag-game`'s default** | `native-video`'s Cargo feature is off by default, so `cargo build`/`cargo test`/CI stay GStreamer-free; `just play` turns it on. |
-| **GStreamer for ATRAC3+** | **Do not retry this.** Extending the `native-video` path to audio was the intended route and it cannot work - see [ADR-0019](docs/architecture/adr/0019-atrac3plus-out-of-process.md). |
-| **Motion blur is built, and the jitter in its tile lookup is load-bearing** | 2026-08-31, replacing a row that said it was designed and had no code: it shipped with the velocity buffer ([ADR-0030](docs/architecture/adr/0030-velocity-buffer-motion-blur.md)), and both questions that row held open are answered - `Rg16Float` *is* multisample-renderable at 4x here, pinned as a tripwire by `rg16float_is_multisample_renderable_at_4x_on_this_adapter`, and the ADR owed was written. **The trap now points the other way.** `fs_reconstruct` offsets its tile lookup by up to half a tile, which reads as noise for its own sake and is not. Take it out and an axis-aligned lattice of squares comes back, 8 % of the viewport height across - 87 px at 1080p, anchored to the window rather than the world, so the scene flows through a stationary grid. Reported from play in a turn, measured at a 2.33x phase-0 peak and fixed to 1.48x; the numbers, the method and the two suspects ruled out instead of assumed are in [motion-blur.md](docs/rendering/motion-blur.md). The squares are that large because the reach cap doubles as the tile edge, so a generous cap makes coarse tiles - the same coupling that made the square tile-max starve the GPU. Still open there and *not* a suspect for this: `SOFT_Z` compares nonlinear 0..1 depths against a constant, which is dimensionally wrong and measured as contributing nothing to the lattice. |
-| **The disc chooser is not a `menu::Menu`** | 2026-08-18. `oag_game::launcher` has rows, a cursor and the same abstract buttons, and it is its own module anyway: it runs before any archive is open, so it has no title, therefore no `MenuSkin` and no disc font. Making it a menu would mean choosing a skin in order to choose which disc the skin comes from. It draws with `font::Atlas::build` and `sprite::Sheet::default`, the disc-free pair the perf overlay already uses. The test for anything else moving out of `menu.rs` is whether a title can be behind it - and everything else can. [menus.md](docs/architecture/menus.md#the-one-screen-that-is-not-a-menu) |
-| **The chooser has no headless capture route** | `--until` matches front-end state-machine names read off the disc's own `Skin.xml` (`capture.rs`), and this screen has none - it exists before a disc does. `--menu-page` is for our menu tree. So `--launcher` is *refused* with `--screenshot`/`--dry-run`/`--race` rather than half-working, and the screen is covered by unit tests plus `crates/game/tests/launcher_ground_truth.rs` instead. **`every_line_fits_on_screen` in `launcher/tests.rs` is the one that earns its keep**: it measures each drawn string in the 5x7 face against the 480-unit grid, and it exists because the first version's footer ran off the right edge where no test could see it. |
-| **`chdman` is not installed in this sandbox; PPSSPP does not need it anyway** | 2026-08-19. `just extract-iso` (and `psp-drive.py preflight`'s own suggested recipe) calls `chdman extractdvd`, and in this sandbox that fails immediately with `command not found` - no `chdman` binary anywhere on the machine, confirmed by a full `find /`. Cost a detour into "live verification is blocked, commit the doc-only half and leave the port uncommitted" before the actual fix was noticed: `ppsspp-debugger.md` already says **PPSSPP v1.20.4 boots a `.chd` directly**, extraction is optional on that version, and the installed `PPSSPPSDL`/`PPSSPPHeadless`/`Xvfb` are all present and work. Pointing the SDL launch straight at `data/images/pulse-psp-usa.chd` (skip the `chdman` line in the docs' own recipe entirely) reached a live, driveable Single Race normally. Check `which PPSSPPSDL PPSSPPHeadless Xvfb` before assuming a live PSP session is unreachable here - the CHD-vs-ISO step is what's actually missing, not the emulator or the display. |
-| **`body+0x50` is live-verified as a craft's world position; `rigid-body.md`'s own `body+0x40..0x70` inertia-tensor table says that range is something else - and a follow-up check sharpened the conflict rather than closing it** | 2026-08-19, found while live-verifying `Weapon_PostBlastImpulse_q`'s port - see the stun row above and [contact-response.md](docs/ghidra/functions/psp-pulse-usa/contact-response.md#weapon_postblastimpulse-0x0886794c-confidence-82). A breakpoint read `body+0x50` off a real craft's confirmed `RigidBody` pointer mid-tick and got a live, track-scale, per-craft value that tracked the craft's actual position - not tensor-shaped data. `rigid-body.md` independently reads `body+0x40..0x70` as one confidence-88 inverse-inertia-tensor block, backed by `Body_Integrate` visibly consuming it every sub-step via `vtfm3.t`/`vscl.t`. **Checked further, not just flagged**: `Body_SetBoxInertia`'s diagonal patch-back writes land at `+0x40`/`+0x54`/`+0x68`, stride `0x14` - exactly what a row-major 4x4 with `0x10`-byte rows at `+0x40`/`+0x50`/`+0x60`/`+0x70` predicts for its own diagonal, which *confirms* the constructor genuinely treats `+0x50` as row 1's base rather than resolving the conflict in the other direction. That makes the runtime finding sharper: an axis-aligned box's row-1 off-diagonal terms should read `0.0` forever after construction, and they visibly do not. Both readings rest on real instruction traces; neither has been withdrawn, and they still cannot both be exactly right about `+0x50` specifically. Flagged with a cross-reference in both docs, reconciled in neither - next step is tracing exactly which quad-words `Body_Integrate`'s `vtfm3.t` addresses (a `.t` transform is 3x3; which three rows from a `+0x40` base is unread) and finding what writes `body+0x50` every tick. A second, smaller thread from the same session, explicitly **not** a finding: `body+0x30` was read at the start line pre-countdown (not a controlled comparison against the mid-race `+0x50` sample) and clustered near `(0, 0.7-0.75, 0)` for all eight craft - as consistent with a parked grid in some local frame as with anything else; `rigid-body.md` already has `Body_Translate` accumulating into `+0x30` the way a real position field would. Needs a same-breakpoint mid-race re-read before it means anything. |
-| **Our AI barrel-rolls and the original's never did** | 2026-09-06, **landed**, and the largest deliberate deviation in the tree - a maintainer directive rather than a fidelity gap. The original reads the roll's tap history out of the human player's pad block and nothing else (confidence 85: the `ship+0x78` early-out at `0x08846be0`, a *single-global* axis edge detector at `0x08ae4cf0`, and a complete arm-site scan), so its opponents never roll; ours do, an `Ace` whenever its energy budget allows and lower tiers less. **Four gates, and the invented two sit on top of the recovered two rather than through them**: airborne (88) and `cost < shield` (90) are untouched; the energy budget is `ShipControls::roll_shield_floor`, a per-pilot number a player retunes in a TOML; the propensity is `Difficulty::roll_appetite`/`roll_caution`. Three pilot axes carry it - `roll_chance` (a probability *per airborne window*, not a rate), `roll_floor`, `roll_airtime` - appended as draws 17-19 and pinned by `every_built_in_pilot_still_draws_what_it_drew_before_the_roll_axes_were_appended`, which is deliberately wider than the guard beside it because draws 8-16 had nothing watching them. **Two things not to quietly reverse**: provocation does *not* feed roll usage (the grudge scales what a driver does to other craft, never what it asks of its own, and wiring it closes the rubber-banding loop this project refuses to port), and the driver asks for a roll on a dedicated `ShipControls::roll_request` rather than synthesising taps on its own steering axis, so the invented intent stays distinguishable from the recovered input path. **What the measurement changed**: the invented `0.20` shield floor `oag_physics` carried as a bare constant was dormant while the AI did not roll, and the first race that exercised it put an aggressive Ace on `09_Track` on **6.5** shield - the hard floor held, what it had done was remove the buffer the walls then ate - so no built-in uses `0.20` any more. Full table and method on [ai.md](docs/gameplay/ai.md), harness in `crates/raceplay/tests/ai_roll_ground_truth.rs`. |
-| **Screen filter tunables have no menu rows, and the PSP presets are uncalibrated** | 2026-09-16, with the feature itself landed - [screen-filters.md](docs/rendering/screen-filters.md), [ADR-0053](docs/architecture/adr/0053-screen-filters-are-loadable-wgsl-after-the-composite.md). A preset's header declares `min`/`max`/`step` per tunable and the loader validates them, but the menu is a static `menu.toml` and regenerating rows off a file's header is a change to that model nobody has needed yet; tuning is copying the built-in into `<config dir>/oag/shaders/` and editing the defaults, which shadows it under the same id. Separately: `psp-3000`'s `0.035`/`0.075`/`0.12` and `psp-lcd`'s `0.4`/`0.04` are starting points from a design discussion and PPSSPP's own defaults, not measurements of a panel - the page says so per number. **Do not add a `_q`-style confidence to them**: nothing on a disc authors a display, so there is no RE claim to score. |
-| Everything else milestone-scoped | Weapons, AI, netcode, the shell: [roadmap](docs/overview/roadmap.md), not this file. |
+| **`just play`'s default is not `oag-game`'s default** | The `native-video` Cargo feature is off by default so `cargo build`/`test`/CI stay GStreamer-free; `just play` turns it on. |
+| **GStreamer for ATRAC3+** | **Do not retry**: it cannot work, see [ADR-0019](docs/architecture/adr/0019-atrac3plus-out-of-process.md). |
+| **Motion blur is built; the jitter in its tile lookup is load-bearing** | Shipped with the velocity buffer ([ADR-0030](docs/architecture/adr/0030-velocity-buffer-motion-blur.md)); `Rg16Float` multisample at 4x is pinned by `rg16float_is_multisample_renderable_at_4x_on_this_adapter`. `fs_reconstruct` offsets its tile lookup by up to half a tile; it reads as noise and is not: without it an axis-aligned lattice of squares (8 % of viewport height, 87 px at 1080p, anchored to the window) comes back (measured 2.33x phase-0 peak, fixed to 1.48x; [motion-blur.md](docs/rendering/motion-blur.md)). The squares are that large because the reach cap doubles as the tile edge. Open there, not a suspect for the lattice: `SOFT_Z` compares nonlinear 0..1 depths against a constant. |
+| **The disc chooser is not a `menu::Menu`** | `oag_game::launcher` runs before any archive is open, so it has no title, `MenuSkin` or disc font; making it a menu would mean choosing a skin to choose which disc the skin comes from. It draws with `font::Atlas::build` and `sprite::Sheet::default`. Test for moving anything else out of `menu.rs`: can a title be behind it? ([menus.md](docs/architecture/menus.md#the-one-screen-that-is-not-a-menu)) |
+| **The chooser has no headless capture route** | `--until` matches state-machine names read off a disc's `Skin.xml` and this screen exists before a disc does; `--launcher` is *refused* with `--screenshot`/`--dry-run`/`--race` rather than half-working. Covered by unit tests and `crates/game/tests/launcher_ground_truth.rs`; `every_line_fits_on_screen` in `launcher/tests.rs` earns its keep (a footer once ran off the edge where no test could see it). |
+| **`body+0x50` is live-verified as a craft's world position; `rigid-body.md` says `body+0x40..0x70` is an inverse-inertia tensor (88)** | Unreconciled, found 2026-08-19 live-verifying `Weapon_PostBlastImpulse_q` ([contact-response.md](docs/ghidra/functions/psp-pulse-usa/contact-response.md#weapon_postblastimpulse-0x0886794c-confidence-82)). A breakpoint read `body+0x50` off a real craft's `RigidBody` mid-tick and got a track-scale per-craft value tracking position; `Body_Integrate` consumes `+0x40..0x70` every sub-step via `vtfm3.t`/`vscl.t`, and `Body_SetBoxInertia`'s diagonal writes at `+0x40`/`+0x54`/`+0x68` (stride `0x14`) confirm `+0x50` is row 1's base of a row-major 4x4. So an axis-aligned box's row-1 off-diagonals should read `0.0` forever, and visibly do not; both traces are real and both cannot be right about `+0x50`. Next: which three rows `vtfm3.t` addresses from a `+0x40` base, and what writes `body+0x50` each tick. Not a finding: `body+0x30` clustered near `(0, 0.7-0.75, 0)` for all eight craft pre-countdown (a parked grid in a local frame explains it; `Body_Translate` accumulates into it); needs a same-breakpoint mid-race re-read. |
+| **Our AI barrel-rolls and the original's never did** | Landed 2026-09-06; the largest deliberate deviation in the tree (maintainer directive). The original reads roll taps only from the human pad block (85: `ship+0x78` early-out at `0x08846be0`, a single-global axis edge detector at `0x08ae4cf0`), so its opponents never roll. Ours do: an `Ace` whenever its energy budget allows, lower tiers less. Four gates, the two invented on top of the two recovered: airborne (88) and `cost < shield` (90) untouched; `ShipControls::roll_shield_floor` (a per-pilot TOML number) and `Difficulty::roll_appetite`/`roll_caution`. Pilot axes `roll_chance` (per airborne window, not a rate), `roll_floor`, `roll_airtime` are draws 17-19, pinned by `every_built_in_pilot_still_draws_what_it_drew_before_the_roll_axes_were_appended`. **Do not quietly reverse**: provocation does not feed roll usage (it would close the rubber-banding loop this project refuses to port), and the driver asks on a dedicated `ShipControls::roll_request`, not synthetic taps on its steering axis. The invented `0.20` shield floor `oag_physics` once carried left an aggressive Ace on `09_Track` at 6.5 shield, so no built-in uses it. Table and method: [ai.md](docs/gameplay/ai.md), `crates/raceplay/tests/ai_roll_ground_truth.rs`. |
+| **Screen filter tunables have no menu rows; the PSP presets are uncalibrated** | [screen-filters.md](docs/rendering/screen-filters.md), [ADR-0053](docs/architecture/adr/0053-screen-filters-are-loadable-wgsl-after-the-composite.md). Headers declare `min`/`max`/`step` and the loader validates them, but the menu is a static `menu.toml`; tuning is copying the built-in into `<config dir>/oag/shaders/` and editing defaults. `psp-3000`'s `0.035`/`0.075`/`0.12` and `psp-lcd`'s `0.4`/`0.04` are design-discussion and PPSSPP-default starting points, not panel measurements. **Do not give them a `_q`-style confidence**: no disc authors a display, so there is no RE claim to score. |
+| Everything else milestone-scoped | [roadmap](docs/overview/roadmap.md), not this file. |
 
 ## Working rules that were learned expensively
 
-**Most of them now live in `docs/`**, because they are properties of the method
-rather than of any pass:
+Most live in `docs/`: [reverse engineering](docs/reverse-engineering/methodology.md#rules-learned-the-expensive-way), [reading a capture](docs/reverse-engineering/verification-protocol.md#reading-a-capture-rules-that-each-cost-a-session), [GhidraMCP bridge quirks](docs/reverse-engineering/toolchain.md#search_instructionss-mnemonic-filter-is-exact-match-not-substring) (`search_instructions`'s `mnemonic` filter is exact-match, so a sweep silently misses underscore-prefixed delay-slot forms) and [measuring a renderer change](docs/rendering/README.md#measuring-a-renderer-change).
 
-- [Reverse engineering](docs/reverse-engineering/methodology.md#rules-learned-the-expensive-way) -
-  decode before reporting, xref counts bound authored instances only, sibling
-  pages go stale, never write a fitted constant in as a recovered one, and the
-  rest.
-- [Reading a capture](docs/reverse-engineering/verification-protocol.md#reading-a-capture-rules-that-each-cost-a-session) -
-  control columns first, unclamped ramps, clean-capture detection, ask the
-  tangent not the index, Left-Up-Forward, and threshold-versus-frame stability.
-- [GhidraMCP bridge quirks](docs/reverse-engineering/toolchain.md#search_instructionss-mnemonic-filter-is-exact-match-not-substring) -
-  `search_instructions`'s `mnemonic` filter is exact-match despite its own
-  description, so a sweep filtered on one mnemonic silently misses every
-  underscore-prefixed delay-slot form of it; `run_script_inline`'s current
-  failure mode.
-- [Measuring a renderer change](docs/rendering/README.md#measuring-a-renderer-change) -
-  aggregates rank broken changes higher, brightness thresholds measure the
-  circuit, measure a screenshot before citing it.
+What stays here concerns working in *this* repository with other writers in it:
 
-What stays here is what is about working in *this* repository, with other
-writers in it at the same time:
-
-- **Editing this file or a `handover/` thread**: verify each cut against the
-  page or evidence it cites before cutting, not after - a fitted number
-  drifting from its source is the usual way this goes wrong. Compress or
-  delete a thread that is closed or stale, never one still carrying open
-  work. Never merge numbers into a new total that does not already appear
-  merged on the page they came from.
-- **`git stash push -- <pathspec>` has the same failure, one level earlier:
-  it captures a listed file's *entire* working-tree diff, not the hunks one
-  writer actually made.** 2026-08-25. A session isolating its own edits into a
-  worktree via `git stash push -u -- <its files>` named `menu.rs` among them;
-  another session was concurrently mid-refactor in that same file, uncommitted.
-  The stash swept both diffs off disk in one move, and popping it in the
-  worktree, then discarding the mixed result down to just the first session's
-  own hunk, left the second session's work recoverable only from the stash
-  commit's blob (`git show <sha>:<path>`) - not restored on disk anywhere, and
-  the main checkout was left with that file's *other* uncommitted edits
-  (test/data files referencing the now-stashed API) pointing at a version of
-  it that no longer matched. **Before stashing a file by pathspec while
-  another session might be touching it, diff it first** (`git diff -- <path>`)
-  and check whether the whole diff is actually yours; if not, this needs a
-  worktree isolating *that session's* edits instead, or a message to them
-  before touching the file at all - not a stash-and-hope.
-- **Do not run `just` or `cargo fmt --all` while anything else is editing.** A
-  gate run taken mid-edit reports failures that do not exist, and `cargo fmt
-  --all` rewrites files another writer holds open. Scope to `-p <crate>`.
-- **A doc two parties are editing wants committing promptly**, not left dirty:
-  concurrent uncommitted edits are indistinguishable from data loss to whoever
-  looks second.
-- **Splitting a large file (`crates/game/src/main.rs`, 4,808 to 430 lines
-  across 18 modules, 2026-08-16) is safest computed as one map from the
-  original applied in a single pass, not carved interactively** - each
-  edit shifts every line number below it, so line-number-anchored edits
-  on later slices corrupt them. Also: `impl` blocks that were
-  private-to-file become `pub(crate)` once the pieces are siblings rather
-  than parent/child, not `pub`.
-- **If two sessions do run at once, the value is in their *disagreement*, not
-  their throughput - and one thing destroys it.** On 2026-08-09 two sessions
-  worked this tree simultaneously; every number in that day's four commits was
-  reproduced by whoever did **not** produce it, and each caught refuted
-  citations the other's sweep had missed, in both directions. What made that
-  work is that neither could see the other's intermediate state, so **a wrong
-  premise had to survive contact with someone who had not formed it** - which
-  is precisely what six days of single-session work could not provide. Two
-  sessions that agree on method up front and split strictly by file reproduce
-  each other's blind spots at twice the cost. So: split by *claim* and re-derive
-  each other's numbers, do not split by directory and trust the reports. And
-  note the same day's counter-example - a spawned subagent went idle four times
-  without ever producing a report, and its one decisive check had to be run by
-  hand. **Parallelism bought nothing that day; independent re-derivation bought
-  everything.** Do not read that session as an argument for more agents.
+- **Editing this file or a `handover/` thread**: verify each cut against the page or evidence it cites before cutting. Compress or delete a thread that is closed or stale, never one still carrying open work. Never merge numbers into a total that does not already appear merged on its source page.
+- **`git stash push -- <pathspec>` captures a file's entire working-tree diff, not just your hunks** (2026-08-25: it swept another session's uncommitted `menu.rs` refactor off disk, recoverable only from the stash commit's blob). Before stashing a file another session may touch, `git diff -- <path>` and check the whole diff is yours; otherwise use a worktree or message them. (Members never stash at all; `member-rules.md`.)
+- **Do not run `just` or `cargo fmt --all` while anything else is editing**: a mid-edit gate reports failures that do not exist and `fmt --all` rewrites files another writer holds open. Scope to `-p <crate>`.
+- **Commit a doc two parties are editing promptly**: concurrent uncommitted edits look like data loss to whoever looks second.
+- **Split a large file as one map from the original applied in a single pass**, not carved interactively (each edit shifts the line numbers below it; `crates/game/src/main.rs`, 4,808 to 430 lines, 2026-08-16). `impl` blocks private-to-file become `pub(crate)` once pieces are siblings, not `pub`.
+- **If two sessions run at once, the value is their disagreement, not their throughput.** On 2026-08-09 every number in four commits was reproduced by whoever did not produce it, and each caught refuted citations the other missed; a spawned subagent went idle four times and produced nothing. Split by *claim* and re-derive each other's numbers; do not split by directory and trust the reports. Not an argument for more agents.
 
 ## Traps that are live
 
