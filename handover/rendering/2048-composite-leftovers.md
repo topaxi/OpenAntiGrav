@@ -39,14 +39,16 @@ Held at 1.15, ours' frame means are 54.9 / 61.4 / 36.7 against the original's
   (Vita3K's SPIR-V by the container's SHA-256).
 - **Empire Climb's track and walls draw flat** in ours; that, not exposure, is
   most of its remaining gap.
-- **The default 2048 race draws its track near-white at tick 1500**, on the
-  binary from before this lane too, so the composite did not cause it. The
-  maintainer (2026-10-26) reads it as a large glass floor not yet drawn right.
-  The same symptom was seen before:
-  [`2048-material-params.md`](../../docs/formats/2048-material-params.md),
-  "Why a 2048 floor reads white": Altima's `track_a_glass_etched` drew opaque
-  until its alpha-over blend (chosen) was routed. Find the material at that
-  frame and read its program's blend and texel handling.
+- **The default 2048 race's near-white track at tick 1500 did not reproduce**
+  (2026-10-26, `w2048-white-floor`, main `9c166f405`): `just play 2048 --race
+  --no-audio --ticks 1500 --screenshot` on a clean profile and on a copy of the
+  maintainer's `settings.toml` both draw Altima's floor as dark grey panelling
+  with bright pads (mean grey 86 over the floor box, rows 450-800 and columns
+  0-1000 of the 1440x816 frame). No material is white. If it shows in a
+  window, the cause is not the floor's materials: capture that frame's
+  settings, resolution and exposure state (the adapting exposure runs per
+  rendered frame, so a slow window may differ from `--ticks`) before reading
+  any program.
 - The Zone race's composites (`0x816a4d80`, `0x816a4d84`): every race of ours
   runs `wo_composite_nocc_fp`.
 - The step runs once per rendered frame at 60 Hz; the original steps per
