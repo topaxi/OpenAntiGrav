@@ -305,6 +305,7 @@ impl Definition {
                 entries,
                 subtitles,
                 meta,
+                parked: Vec::new(),
             });
         }
 

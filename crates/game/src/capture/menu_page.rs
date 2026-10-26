@@ -169,7 +169,15 @@ pub(super) fn menu_page(
     }
 
     let mut model = oag_ui::menu::Menu::new(definition);
-    race_sources::supply(&mut model, title, tracks, teams, race_setup, strings);
+    race_sources::supply(
+        &mut model,
+        title,
+        tracks,
+        teams,
+        race_setup,
+        strings,
+        &settings.race.team,
+    );
     if page == "remix" {
         remix_sources::supply(&mut model, title, tracks, teams, settings, strings);
     }

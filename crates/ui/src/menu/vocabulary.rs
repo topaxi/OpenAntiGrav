@@ -344,6 +344,15 @@ pub enum ValueSource {
 }
 
 impl ValueSource {
+    /// Whether a row on this source is left out of the menu while the source
+    /// offers fewer than two values: a choice the player's discs or the booted
+    /// title leave empty (or with one value, which is no choice). A source
+    /// that is not listed keeps its row, drawn with nothing to step.
+    #[must_use]
+    pub fn hidden_unless_chooseable(self) -> bool {
+        matches!(self, Self::MusicSources | Self::RaceVariant)
+    }
+
     /// The spelling used in the definition file.
     #[must_use]
     pub fn name(self) -> &'static str {

@@ -15,6 +15,7 @@ pub(super) fn supply(
     teams: &[oag_raceplay::catalogue::Team],
     race_setup: &crate::boot::RaceSetup,
     strings: &oag_ui::language::StringTable,
+    team: &str,
 ) {
     model.supply(
         oag_ui::menu::ValueSource::Tracks,
@@ -29,6 +30,10 @@ pub(super) fn supply(
             .iter()
             .map(|team| oag_ui::menu::Choice::labelled(&team.id, strings.get_or_id(&team.id)))
             .collect::<Vec<_>>(),
+    );
+    model.supply(
+        oag_ui::menu::ValueSource::RaceVariant,
+        &variants(title, team),
     );
     model.supply(
         oag_ui::menu::ValueSource::RaceModes,
@@ -59,6 +64,26 @@ pub(super) fn supply(
     );
 }
 
+/// What the VARIANT row offers for `team` (the profile's `race.team`, as the live menus read it), the live menus'
+/// own rule (`session::menus::variant_choices`) without the loyalty gate: the
+/// team's own axis, else the title's hull variants. Empty hides the row.
+fn variants(title: &'static oag_title::Title, team: &str) -> Vec<oag_ui::menu::Choice> {
+    if let Some(axis) = title.race.team_variants_for(team) {
+        return axis
+            .variants
+            .iter()
+            .map(|variant| oag_ui::menu::Choice::labelled(variant.suffix, variant.label))
+            .collect();
+    }
+    title
+        .race
+        .hull_variants
+        .into_iter()
+        .flatten()
+        .map(|variant| oag_ui::menu::Choice::labelled(variant.stem, variant.label))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -85,7 +110,7 @@ mod tests {
             ],
         };
         let mut model = oag_ui::menu::Menu::new(definition);
-        supply(&mut model, title, &[], &[], &setup, &strings);
+        supply(&mut model, title, &[], &[], &setup, &strings, "Assegai");
         model.open("race");
         model
     }

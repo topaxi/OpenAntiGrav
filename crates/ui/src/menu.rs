@@ -504,6 +504,7 @@ impl Entry {
     }
 }
 
+mod hide;
 mod page;
 pub use page::{Page, RowMeta};
 
@@ -718,6 +719,7 @@ impl Menu {
     /// the first nudge of it would persist that as the player's choice.
     pub fn supply(&mut self, source: ValueSource, values: &[Choice]) -> usize {
         let mut filled = 0;
+        self.unhide(source);
         for page in &mut self.definition.pages {
             for entry in &mut page.entries {
                 if let Entry::Choice {
@@ -736,6 +738,9 @@ impl Menu {
                     filled += 1;
                 }
             }
+        }
+        if source.hidden_unless_chooseable() && values.len() < 2 {
+            self.hide(source);
         }
         filled
     }

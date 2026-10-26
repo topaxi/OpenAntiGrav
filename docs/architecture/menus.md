@@ -328,6 +328,18 @@ target = "options"
 
 Six entry kinds: `submenu`, `action`, `choice`, `toggle`, `binding`, `back`.
 
+### A choice with nothing to choose is hidden, not greyed (2026-10-26)
+
+A `choice` row whose `values_from` supply holds fewer than two values is left
+out of the page (`oag_ui::menu::ValueSource::hidden_unless_chooseable`: MUSIC
+SOURCE and the RACE page's VARIANT row). `Menu::supply` re-decides it on every
+call, since VARIANT follows the TEAM row: the row moves out of `Page::entries`
+into `Page::parked` and returns to its old index when the supply grows, so row
+count, scroll window, pad movement and the pointer's regions agree it is gone.
+A cursor on the row moves to the next one (the previous, if it was last).
+Greyed (`disabled_by`) stays for a choice another setting turned off: that row
+tells the player what took it away, a hidden empty one has nothing to tell.
+
 ### One row disabling another
 
 A `choice` or a `toggle` may carry `disabled_by`, naming **another row's setting

@@ -109,15 +109,12 @@ fn a_disabled_row_is_inert_until_the_row_that_disables_it_moves_off_the_value() 
     );
 }
 
-/// **The first source whose answer is routinely nothing.** Monitors and
-/// renderers always hold `default`; languages, circuits and race modes are
-/// never empty on a real disc. `music_sources` is empty on every machine
-/// with one Pulse disc, which is most of them, so the empty case is the
-/// *common* one here rather than a corner - and it has to draw, be walked
-/// past, and refuse to move, without panicking on a `rem_euclid(0)` or an
-/// index into an empty list.
+/// **The first source whose answer is routinely nothing.** `music_sources` is
+/// empty on every machine with one Pulse disc, most of them, so the empty case
+/// is the common one: the row is left out of the page (nothing to choose), and
+/// nothing panics on a `rem_euclid(0)` or an index into an empty list.
 #[test]
-fn a_row_whose_source_has_nothing_is_inert_rather_than_a_panic() {
+fn a_row_whose_source_has_nothing_is_not_shown() {
     let mut menu = Menu::new(built_in());
     assert_eq!(
         menu.supply(ValueSource::MusicSources, &[]),
@@ -125,35 +122,29 @@ fn a_row_whose_source_has_nothing_is_inert_rather_than_a_panic() {
         "the AUDIO page has exactly one such row"
     );
     assert!(menu.open("audio"));
-    let row = menu
-        .page()
-        .entries
-        .iter()
-        .position(|entry| entry.setting() == Some("audio.music_source"))
-        .expect("the music source is on the audio page");
-    for _ in 0..row {
-        press(&mut menu, &[Button::Down]);
-    }
-
-    let entry = &menu.page().entries[row];
-    assert_eq!(entry.value(), None, "an empty row shows no value");
-    assert_eq!(entry.chosen(), None);
-
-    for buttons in [&[Button::Left], &[Button::Right], &[Button::Cross]] {
-        assert!(
-            press(&mut menu, buttons).is_empty(),
-            "an empty row must report no change"
-        );
-    }
-    // And it still draws, label and all, rather than vanishing.
+    assert!(
+        menu.page()
+            .entries
+            .iter()
+            .all(|entry| entry.setting() != Some("audio.music_source")),
+        "the row is hidden"
+    );
     let drawn = list(&menu, &|_| vec!["X"], None);
     assert!(
-        drawn.iter().any(|draw| matches!(
+        !drawn.iter().any(|draw| matches!(
             draw,
             Draw::Text { text, .. } if text == "MUSIC SOURCE"
         )),
-        "the row is drawn"
+        "and not drawn"
     );
+    for buttons in [
+        &[Button::Down],
+        &[Button::Left],
+        &[Button::Right],
+        &[Button::Cross],
+    ] {
+        let _ = press(&mut menu, buttons);
+    }
 }
 
 /// A machine that has both discs gets the three values, and the row keeps

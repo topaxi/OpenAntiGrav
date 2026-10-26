@@ -344,9 +344,11 @@ values_from = "teams"
 disabled_by = { setting = "race.mode", value = "zone" }
 
 # Most teams offer nothing here - `values_from = "race_variant"` is supplied
-# empty for them, the same idiom MUSIC SOURCE uses on a machine with one
-# disc, which draws the row unusable rather than lying about having a
-# choice. Wipeout 2048's five-team roster and Wipeout HD/Fury's twelve are
+# empty for them, and a row with fewer than two values to choose between is
+# not shown at all (`Menu::supply`, `menu/hide.rs`): it comes back when the
+# TEAM row moves to a team that has a choice. Hidden is for a choice the
+# discs leave empty; greyed (`disabled_by`) stays for one another setting
+# turned off. Wipeout 2048's five-team roster and Wipeout HD/Fury's twelve are
 # the ones today whose teams carry more than one selectable directory.
 [[page.entry]]
 kind = "choice"
@@ -1415,7 +1417,8 @@ values = ["0", "25", "50", "75", "90", "100"]
 # The values are supplied at runtime rather than listed here, because what is on
 # offer depends on which discs the player owns: `auto`, `psp` and `ps2` on a
 # machine that has both, and nothing at all on one that has one, where the row
-# draws unusable. `auto` is the booted disc - the PSP release is meant to sound
+# is not shown (fewer than two values is no choice; `Menu::supply`,
+# `menu/hide.rs`). `auto` is the booted disc - the PSP release is meant to sound
 # like the PSP release, compression included.
 #
 # Changing it **seeks rather than restarts**: the playhead is carried across in
