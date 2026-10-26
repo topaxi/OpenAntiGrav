@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pulse]
+updated: 2026-10-26
+summary: "Quake slowdown depth and decay unattributed; take a clean-straight capture before touching oag_physics::slowdown"
+---
+
 # Why a Quake hit feels stronger on the original: what differs, measured
 
 **Status: measured 2026-10-26 (`quake-feel-capture`); the two missing channels wired the same day

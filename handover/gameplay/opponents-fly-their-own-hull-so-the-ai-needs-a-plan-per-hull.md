@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [all]
+updated: 2026-10-13
+summary: "Build offline pretrained speed plans per track, class and team, plus a loader preferring a matching shipped plan"
+---
+
 # Opponents fly their own team's handling, so the AI needs a speed plan per hull
 
 Every opponent on every title flies its own team's `handlingstats.xml` for the race's class

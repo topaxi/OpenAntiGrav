@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [hd, pure]
+updated: 2026-10-19
+summary: "Whether HD's Missile LockedOn toggle is the LeachBeam's threshold reveal or an all-or-nothing pair-add"
+---
+
 # Pure and HD lock on too, and it cost two axes rather than any new recovery
 
 2026-08-26, [lock-sight.md](../../docs/ghidra/functions/psp-pulse-usa/lock-sight.md)

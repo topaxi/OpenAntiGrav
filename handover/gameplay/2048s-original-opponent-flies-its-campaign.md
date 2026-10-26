@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [2048]
+updated: 2026-10-12
+summary: "2048 original opponent: weapon-pad tracking and avoidance unported; Sol and Arena rescue-placement gaps"
+---
+
 # 2048's original opponent flies its campaign: what it does not do yet
 
 2026-10-12, lane `orig-ai-2048`. 2048's opponent is HD's driver plus four laws

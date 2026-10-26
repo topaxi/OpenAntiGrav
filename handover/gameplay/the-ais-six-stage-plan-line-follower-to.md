@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [pulse]
+updated: 2026-08-30
+summary: "Read WeaponAi_Update (0x08851550) to see whether the original dodges incoming fire before building anything"
+---
+
 # The AI's six-stage plan (line-follower to a field of pilots) is complete; what remains unbuilt is the residual
 
 Landed 2026-08-11 through 2026-08-17, all six stages (airbrakes, pilots/archetypes, craft awareness, aggression/provocation/ramming, opponent firing, TOML-authored pilots), each verified against the real disc and each isolated in the world-hash history. Design and full history are on [ai.md](../../docs/gameplay/ai.md) - **do not requote from this file**. Adaptation between races is no longer blocked since per-opponent lap times landed.

@@ -1,4 +1,8 @@
 ---
+status: re-first
+titles: [pure]
+updated: 2026-09-25
+summary: "What selects Pure's Phantom.vex: find the send-side write to DAT_08b174fc+0x90+slot; entry-name leftovers"
 categories: [gameplay, tooling]
 ---
 

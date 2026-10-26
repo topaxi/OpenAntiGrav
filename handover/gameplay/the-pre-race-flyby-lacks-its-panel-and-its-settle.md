@@ -1,4 +1,8 @@
 ---
+status: ready-to-wire
+titles: [pulse]
+updated: 2026-10-21
+summary: "Split scene/frame.rs and give scenery and the gantry's clock Race::motion_tick; optional flyby rise of the pose"
 categories: [rendering, frontend]
 ---
 

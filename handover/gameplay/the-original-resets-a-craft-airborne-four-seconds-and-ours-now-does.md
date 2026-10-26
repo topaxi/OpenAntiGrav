@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [pulse]
+updated: 2026-10-13
+summary: "Reset leftovers: the player's shield charge on reset and the remaining relocation details"
+---
+
 # The original resets a craft airborne for four seconds, and ours now does
 
 2026-09-29. What is left after the sunk-craft port landed (branch

@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [pulse]
+updated: 2026-09-30
+summary: "Campaign medal law implemented; remaining persistence and unread cell attributes still open"
+---
+
 # The Race Campaign is authored, all of it - shape *and* content
 
 2026-09-08. Two passes in one day. The first was archaeology over the disc's

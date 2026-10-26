@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [hd]
+updated: 2026-10-21
+summary: "HD late speed still differs against RPCS3; the AI field on Talon's Junction runs 808 contact ticks"
+---
+
 # HD handling against RPCS3: late speed still differs
 
 2026-10-08, `hd-handling`; 2026-10-09, `hd-pitch-airbrake`, `hd-airbrake`. Results:

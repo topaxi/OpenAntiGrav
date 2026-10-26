@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [pulse]
+updated: 2026-10-20
+summary: "Wire the cage visual and the contact sparks and sound; swap the hull sample order to the original's"
+---
+
 # The collision cage's leftovers
 
 2026-10-20, `wall-contact-miss`. Pulse's collision cage (an invisible elliptical

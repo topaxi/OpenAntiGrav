@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pulse, pure, hd]
+updated: 2026-10-21
+summary: "Same-input number on the 06_Track crest still open; remaining held deviations to switch to the original's laws"
+---
+
 # The held deviations are switched to the original's laws: what is left
 
 2026-10-21, lane `deviations-to-original`. The maintainer's decision (2026-10-20): "Original

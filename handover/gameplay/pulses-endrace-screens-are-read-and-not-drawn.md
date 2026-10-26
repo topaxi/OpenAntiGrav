@@ -1,4 +1,8 @@
 ---
+status: measure
+titles: [pulse]
+updated: 2026-10-02
+summary: "Pulse EndRace screens draw; leftovers on Zone and Eliminator tables, the loyalty award's remaining terms"
 categories: [frontend]
 ---
 

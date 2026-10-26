@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [all]
+updated: 2026-10-20
+summary: "Lobby server: remote runs only Pulse and only max-ticks endings; HD/Omega/2048 memory on a 1 GB host unmeasured"
+---
+
 # Online lobby server: the spike is built, what is left
 
 2026-10-16. The flow, the needs and what was built, with the wire messages, ports, run and

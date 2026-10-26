@@ -1,3 +1,10 @@
+---
+status: parked
+titles: [pulse]
+updated: 2026-10-07
+summary: "Stick shape: Pulse's S-curve as an original value is not adopted; HD stick byte window unchecked on RPCS3"
+---
+
 # The stick is not shaped like the original's
 
 2026-10-07, found by the novice-airbrake lane. The original shapes the steering

@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pulse]
+updated: 2026-10-06
+summary: "Repulser leftovers and Plasma cue timing: chosen cues unmeasured; most player-visible first"
+---
+
 # Weapons: thirteen of thirteen, the Repulser last (2026-10-04), and the dispatch table read whole
 
 **Retitled 2026-09-10 (thread audit note): the title and every index line
@@ -1471,9 +1478,8 @@ holds a Turbo through the countdown, so gating it here would diverge.
 **That evidence was our own build's behaviour, not the original's.** The
 maintainer tested `pulse-psp-eu` directly this session: the free Turbo is
 granted **after** the countdown releases the craft, not at the start line -
-so the original never holds anything to gate in the first place. See
-`handover/frontend/hud-icon-turbo-timing.md` for the full trace (the green-hexagon
-HUD comparison that surfaced this).
+so the original never holds anything to gate in the first place. (The green-hexagon
+HUD comparison that surfaced this is closed; its thread was deleted once it landed.)
 
 **So a blanket countdown weapon gate may now be the correct call**, where it
 was rejected on the reasoning above.
@@ -1481,9 +1487,8 @@ was rejected on the reasoning above.
 **Landed 2026-09-07**: `Race::grant_free_turbo`'s call site moved from
 `Race::start` (tick 0) to the release edge (`world.tick ==
 oag_race::state::COUNTDOWN_TICKS`, i.e. the same tick
-`RaceState::thrust_gated` first reads `false`) - see
-`handover/hud-icon-turbo-timing.md`, now closed, for the exact change and
-its test flips. **Still open here**: check whether any *other*
+`RaceState::thrust_gated` first reads `false`) - (the
+thread that tracked it is closed and deleted). **Still open here**: check whether any *other*
 weapon-during-countdown path still needs a gate, or whether removing the
 early Turbo grant was the whole gap. Not attempted this session - the mine
 drop-rate pass this thread's own body covers is a separate concern from the

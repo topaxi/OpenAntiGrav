@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pulse]
+updated: 2026-10-04
+summary: "Eliminator time to five is 0.9 of the original's; count the opponents' decision cadence live and re-measure"
+---
+
 # A parked-player Eliminator finishes at five, now a little faster than the original's 85 s
 
 2026-10-02, from the `pulse-eliminator` lane. Evidence: `docs/gameplay/race-modes.md` ("Who is

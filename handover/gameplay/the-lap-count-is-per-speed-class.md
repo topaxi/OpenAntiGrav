@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [pure, pulse]
+updated: 2026-09-25
+summary: "Lap count per class settled for Pulse; Pure's VECTOR lap count and further classes still fall back"
+---
+
 # The lap count is per speed class, and three of four classes raced short
 
 2026-09-09. `Mode::SINGLE_RACE_LAPS = 3` was the weakest number in

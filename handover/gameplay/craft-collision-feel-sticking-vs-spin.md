@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pulse]
+updated: 2026-09-25
+summary: "Does craft contact still feel magnetic under weapon fire: sustained pair-ticks 1,032 against 537; judge in play"
+---
+
 # Craft-to-craft collision feel: sticking is a driver bug, near-90° spins are the recovered physics working
 
 2026-09-07. A maintainer playing the game reported craft-to-craft collision

@@ -1,3 +1,10 @@
+---
+status: parked
+titles: [pulse]
+updated: 2026-09-07
+summary: "Batch +0x14 meaning undecoded and nothing load-bearing; look for a consumer in the PS2 or Pure executable"
+---
+
 # Magstrip leftovers, none load-bearing
 
 The overlay question is closed ([track.md](../../docs/formats/track.md)) and one item remains: reproducing the corner tick-frames, only if anyone still cares - the magnification-artefact explanation stands. Pass bit `0x1000`, the magstrip's own animation, its `_magsurface3_1verb` name, and batch `+0x14` are all closed or narrowed below.

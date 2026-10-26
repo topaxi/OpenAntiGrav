@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [2048]
+updated: 2026-10-26
+summary: "What gives 2048's resting grid pose is unrecovered; read the placement from the start position strings"
+---
+
 # 2048's grid pose is not ours' placement: three circuits, three different terms
 
 2026-10-26, lane `2048-queens-offset`. The 2048 compare pairs sit 2 to 8 px off in the **world** and 0 to 2 px in the hull. The hull

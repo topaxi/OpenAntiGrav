@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [hd]
+updated: 2026-10-12
+summary: "HD original opponent: finished branches and Eliminator WhenBehind not exercised live; Fury Eliminator RPCS3 run"
+---
+
 # HD's original opponent flies its campaign: what it does not do yet
 
 2026-10-12, lane `orig-ai-hd`. HD's opponent is Pulse's driver function for

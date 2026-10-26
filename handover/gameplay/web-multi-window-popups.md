@@ -1,4 +1,8 @@
 ---
+status: blocked-hardware
+titles: [all]
+updated: 2026-10-14
+summary: "Web multi-window: wire a popup canvas after desktop multi-window lands; real pad, hidden opener, second monitor, Firefox"
 categories: [frontend, rendering]
 ---
 

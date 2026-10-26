@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [hd]
+updated: 2026-10-26
+summary: "HD medal law per mode partly measured; archive-precedence and RPCS3 questions on the campaign screens open"
+---
+
 # Wipeout HD/Fury's campaign grids now parse, and `Grid Selection`/`Cell Selection` draw
 
 2026-09-14, later the same day. Both screens now draw off the real disc -

@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pulse]
+updated: 2026-10-20
+summary: "Reference lap odd rows' up-axis residual at ticks 1-5; compare initial_state hover seeding with the original"
+---
+
 # Pulse handling after the airbrake scale fix: what is left on the reference lap
 
 Opened 2026-09-30 by the `pulse-handling` lane. The single-seeded reference lap

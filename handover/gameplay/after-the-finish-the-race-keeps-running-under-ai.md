@@ -1,4 +1,8 @@
 ---
+status: re-first
+titles: [pulse]
+updated: 2026-10-04
+summary: "After-finish AI: leftover cases of FUN_08880c04 and other titles' post-finish behaviour still open"
 categories: [rendering, frontend]
 ---
 

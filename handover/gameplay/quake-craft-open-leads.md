@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [hd, pulse]
+updated: 2026-10-26
+summary: "Quake: HD's own cockpit camera path has a recipe and a visible payoff; rear-view camera lift waits on a camera"
+---
+
 # What a Quake does to the craft it reaches: open leads
 
 **Status: wired 2026-10-26 (`quake-wire`), leads left.** Evidence:

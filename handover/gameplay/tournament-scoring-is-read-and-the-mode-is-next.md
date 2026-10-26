@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [pulse]
+updated: 2026-10-08
+summary: "Four RE gaps: DAT_08b30fa0 writer, DAT_08b31158+0xdc meaning, leg-hash resolution; none changes this build"
+---
+
 # Tournament and Head2Head are built; four RE gaps are still open
 
 2026-09-23. The mode this thread's own implementation brief asked for is

@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [pure, hd, 2048, omega]
+updated: 2026-10-19
+summary: "Ranked list of weapon laws inherited from Pulse or HD: the fire law on four titles first, then 2048 LeachBeam"
+---
+
 # Weapon laws this engine inherits from Pulse or HD, ranked for reading
 
 2026-10-19, lane `weapon-lineage`. The matrix is

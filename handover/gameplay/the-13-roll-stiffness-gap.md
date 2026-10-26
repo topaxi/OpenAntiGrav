@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [pulse]
+updated: 2026-09-07
+summary: "The recovered tensor runs the roll oscillator 13 percent stiff against measurement; no next step named"
+---
+
 # The 13 % roll-stiffness gap
 
 The recovered tensor runs the roll oscillator 13 % stiff against measurement. Untouched by the downforce fix by construction (the probes are on the centreline), so it is now the only gap of its kind.

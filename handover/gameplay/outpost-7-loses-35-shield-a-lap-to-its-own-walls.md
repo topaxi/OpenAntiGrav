@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pulse]
+updated: 2026-09-25
+summary: "Outpost 7 corner span is a chosen number: 11 green and 10 red; do not retune the wall response"
+---
+
 # Outpost 7 loses 34-35 shield a lap to a corner no craft can hold at the speed the AI picks
 
 Split out of `an-ai-craft-pays-for-barrel-rolls-it-never-flies.md` on

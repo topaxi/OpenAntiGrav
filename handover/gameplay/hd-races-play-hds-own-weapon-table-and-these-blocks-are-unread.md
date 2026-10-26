@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [hd]
+updated: 2026-10-06
+summary: "Authored but unread HD weapon blocks (LightBarrier, EMP, Detonator, Cannon recharge); which race copy a PS3 loads"
+---
+
 # HD races play HD's own weapon table; these blocks are authored and unread
 
 2026-10-06. The brief's premise ("an HD race most likely fires Pulse's table") was false: `oag_hd::TITLE.weapons` has named HD's own `Data\XML\WeaponStats_Race.xml` and `_Elimination.xml` since 2026-10-03, and they decode with the Pulse roster. `crates/tables/tests/hd_weapons_ground_truth.rs` now pins every shipped copy (HD `DATA00`/`DATA02`/`DATA05`, Omega `data00`) and that a race is served `DATA00`'s. See [weapon-stats.md](../../docs/formats/weapon-stats.md#wipeout-hd-and-fury-their-own-tables-and-which-copy-a-race-reads).
