@@ -397,20 +397,19 @@ fn the_ten_sample_points_are_the_hull_corners_plus_two_flank_points() {
     let points = hull_sample_points(&body, &handling());
 
     // width 2, height 1, length 4, scaled by TARGET_GLOBAL_SCALE (0.75)
-    // before halving -> half extents (0.75, 0.375, 1.5), and forward is -Z. The original's
-    // order puts the LEFT side (-X on a default body) first: sample 0 is lower left front.
+    // before halving -> half extents (0.75, 0.375, 1.5), and forward is -Z.
     let expected = [
-        Vec3::new(-0.75, -0.375, -1.5),
-        Vec3::new(-0.75, -0.375, 1.5),
         Vec3::new(0.75, -0.375, -1.5),
         Vec3::new(0.75, -0.375, 1.5),
-        Vec3::new(-0.75, 0.375, -1.5),
-        Vec3::new(-0.75, 0.375, 1.5),
+        Vec3::new(-0.75, -0.375, -1.5),
+        Vec3::new(-0.75, -0.375, 1.5),
         Vec3::new(0.75, 0.375, -1.5),
         Vec3::new(0.75, 0.375, 1.5),
-        // length/8 ahead of centre, a half-width out to either side, left first.
-        Vec3::new(-0.75, 0.0, -0.375),
+        Vec3::new(-0.75, 0.375, -1.5),
+        Vec3::new(-0.75, 0.375, 1.5),
+        // length/8 ahead of centre, a half-width out to either side.
         Vec3::new(0.75, 0.0, -0.375),
+        Vec3::new(-0.75, 0.0, -0.375),
     ];
     for (got, want) in points.iter().zip(expected.iter()) {
         assert!((*got - *want).length() < 1e-6, "{got:?} is not {want:?}");

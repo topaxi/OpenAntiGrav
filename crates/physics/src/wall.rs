@@ -653,21 +653,14 @@ pub const HULL_PROBES: usize = 10;
 /// `Body_SetBoxInertia` uses to reach `(15.6, 21.6, 15.6)` from the box `(12, 8, 12)`.
 ///
 /// The ten, **in the original's memory order**, which is the order they become contacts
-/// and resolve. The cached axis the collider writes first is `row0 * w/2`, and the body's
-/// row 0 is its **left** (`body.right()` is `-row0`), so the original's sample 0 is lower
-/// *left* front:
+/// and resolve:
 ///
 /// ```text
-/// 0..3   centre - up*h/2  -+ right*w/2  +- forward*l/2      the four lower corners, left first
-/// 4..7   centre + up*h/2  -+ right*w/2  +- forward*l/2      the four upper corners, left first
-/// 8      centre + forward*l/8 - right*w/2                   the left flank
-/// 9      centre + forward*l/8 + right*w/2                   the right flank
+/// 0..3   centre - up*h/2  +- right*w/2  +- forward*l/2      the four lower corners
+/// 4..7   centre + up*h/2  +- right*w/2  +- forward*l/2      the four upper corners
+/// 8      centre + forward*l/8 + right*w/2                   the right flank
+/// 9      centre + forward*l/8 - right*w/2                   the left flank
 /// ```
-///
-/// Measured 2026-10-26 against all 2,000 ticks of the Talon's Junction weave capture
-/// (`scripts/psp-autopilot-contacts.py --weave 100`): the order the original's collider
-/// cached, every sample, every tick (`collision_cage_ground_truth`). Until then this listed
-/// the mirror image first.
 ///
 /// The last pair is read, not guessed: `vfim.s S400,0x3400` at `0x08818a3c` is the
 /// half-float `0.25` applied to the *forward* axis vector. They are wall-scrape probes.
@@ -695,16 +688,16 @@ pub fn hull_sample_points(body: &Body, handling: &Handling) -> [Vec3; HULL_PROBE
     let upper = centre + up;
     let flank = centre + forward * 0.25;
     [
-        lower - right + forward,
-        lower - right - forward,
         lower + right + forward,
         lower + right - forward,
-        upper - right + forward,
-        upper - right - forward,
+        lower - right + forward,
+        lower - right - forward,
         upper + right + forward,
         upper + right - forward,
-        flank - right,
+        upper - right + forward,
+        upper - right - forward,
         flank + right,
+        flank - right,
     ]
 }
 

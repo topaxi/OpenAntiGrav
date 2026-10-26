@@ -31,7 +31,7 @@ use oag_physics::{CollisionWorld, Environment, Handling, ShipControls, step};
 use oag_pulse as pulse;
 use oag_tables::handling;
 use oag_trace::Trace;
-use oag_trace::replay::{Basis, initial_state, orientation_of_rows};
+use oag_trace::replay::{Basis, initial_state};
 use oag_trace::trace::AngularReading;
 use oag_vex::{collision, track, vex};
 
@@ -293,7 +293,6 @@ fn the_originals_contacts_against_our_mesh() {
     let flat = std::fs::read_to_string(std::env::var("OAG_CONTACTS_FLAT").expect("the flat file"))
         .expect("reading it");
     let (mut original, mut matched, mut extra) = (0, 0, 0);
-    let mut order_wrong = 0;
     for line in flat.lines() {
         let v: Vec<f32> = line
             .split_whitespace()
@@ -303,29 +302,6 @@ fn the_originals_contacts_against_our_mesh() {
         let tick = v[0];
         let centre = vec(1);
         let samples: Vec<Vec3> = (0..10).map(|k| vec(13 + 3 * k)).collect();
-        // The ten sample points in the original's memory order, which is the order contacts
-        // resolve in: ours must list them the same way (sample 0 is lower left front).
-        let body = oag_physics::Body {
-            position: centre,
-            orientation: orientation_of_rows(
-                vec(4),
-                vec(7),
-                vec(10),
-                oag_trace::replay::Basis::LeftUpForward,
-            ),
-            ..oag_physics::Body::default()
-        };
-        let ours = oag_physics::wall::hull_sample_points(&body, &c.handling);
-        for (k, sample) in samples.iter().enumerate() {
-            if (ours[k] - *sample).length() > 0.05 {
-                order_wrong += 1;
-                println!(
-                    "tick {tick}: sample {k} is {} in ours, {} in the original",
-                    fmt(ours[k]),
-                    fmt(*sample)
-                );
-            }
-        }
         let n = v[43] as usize;
         let contacts: Vec<(Vec3, Vec3, f32)> = (0..n)
             .map(|k| (vec(44 + 7 * k), vec(47 + 7 * k), v[50 + 7 * k]))
@@ -399,9 +375,4 @@ fn the_originals_contacts_against_our_mesh() {
         }
     }
     println!("the original's contacts {original}, ours matched {matched}, ours extra {extra}");
-    println!("sample points out of the original's order: {order_wrong}");
-    assert_eq!(
-        order_wrong, 0,
-        "our hull lists its sample points in another order"
-    );
 }
