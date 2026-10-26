@@ -67,6 +67,71 @@ layout, `WADS2.WAD` rather than `Data.wad`), so this is PSP-only for now.
 
 Implemented in [`oag_livery::entry::ship_entry_name`](../../../../crates/livery/src/entry.rs).
 
+### The team's paint is in the file, so mode 6 needs no skin to show it (2026-10-26)
+
+`case 6` sets `local_40 = 0`: it applies no `PI_ModelSkin` (`Skin_ApplyToModel`,
+[`ship-skin.md`](ship-skin.md)), so there is no `Alternative` or `Eliminator` livery on a Zone hull.
+That is a different thing from the team's own paint, which is **embedded in each team's
+`Zone.vex`** (the `.vex` texture block, `docs/formats/vex.md`). Measured off `pulse-psp-usa.chd`
+`Data.wad`: every `Zone.vex` has a 0xbc80-byte texture block, and the eight blocks differ; so do the
+eight `Zone_FE.vex` blocks (0xb0c0 bytes each), the front-end twin `Team Selection` previews.
+
+| Team | `Zone.vex` texture block, md5 prefix | `Zone_FE.vex` texture block, md5 prefix |
+| --- | --- | --- |
+| AG_Systems | `af8099bae0` | `71126358fa` |
+| Assegai | `b81c6670c7` | `4755a09827` |
+| EGX | `e83ad720cf` | `6c07eb24b9` |
+| Feisar | `9941a06a59` | `261bce7e20` |
+| Goteki | `62eebd3ddf` | `a2268fcae4` |
+| Piranha | `62e616cd14` | `b1730f92c3` |
+| Qirex | `1138de641a` | `99b3a19acb` |
+| Triakis | `f9d31c9704` | `0247acf9c2` |
+
+`oag-view --mesh 'Data\Ships\<Team>\Zone.vex'` draws one hull in each team's own colours: Feisar
+blue and white, Triakis green and white, Goteki yellow with magenta. So the two statements both hold:
+the Zone hull carries **no skin** and its **livery varies by team**, and the team the player picks is
+the paint on the hull the race flies. Confidence 90 (file contents plus a render; the loader's use of
+the embedded block is the ordinary `Vex_LoadModel` path every hull takes).
+
+## `Team Selection` runs in Zone, and the picked team is the race's team (2026-10-26)
+
+**Pulse does not skip the team step in Zone.** Four functions agree, all read in Ghidra on
+`BOOT.BIN` (decompilation only, so confidence 84 on the rubric's cap):
+
+- `TeamSelection_OnEnter` (`0x088e9c00`) seeds the screen's `+0xd8` with `g_game_mode` (`0` when
+  `g_debug_mode_override` is set) on the race-box path - the same value `Ship_LoadModel` switches on.
+- `TeamSelection_Update` (`0x088eab14`) branches on that value. In **mode 6**:
+  - the `skin` widget (`0x08a84550`, the livery cycler with its two arrows as children) is hidden and
+    the `skin fixed` widget (`0x08a84640`) is shown, its text set to the literal at `0x08a8464c`,
+    `Zone` (the XML's own default text is `Zone Model`);
+  - the team's child node named `Zone` (a `PI_TeamModel name="Zone"`) is looked up and handed to the
+    preview loader, which is the `Zone_FE.vex` the lobby template `%s\%s_FE.vex` builds;
+  - **the four rating bars are forced to `10`** (`Speed`, `Thrust`, `Handling` and `Shield` each read
+    `10` where every other mode reads the team's record at `+0xb4`/`+0xb8`/`+0xbc`/`+0xc0`): the
+    craft is one shared hull, so the team's own ratings say nothing about it;
+  - the `Loyalty` bar still reads **the picked team's** record (`FUN_08808664(DAT_08b31774, team + 0x74)`,
+    `+8`), in every mode.
+  Modes `8` and `0x12` (Eliminator) take the same shape with `Eliminator` as the fixed text, the
+  team's `Normal` model and the `Eliminator` skin; every other mode shows the `skin` cycler and hides
+  `skin fixed`.
+- `Zone_Create` (`0x0882eee4`) reads `*(0x08b30f90 + 0xbc)` - `g_player_team_definition`
+  (`0x08b3104c`, [`grid.md`](grid.md)) - and passes its name (`+0x74`) to the common race setup
+  `0x0882821c`, exactly as `TimeTrial_Construct`, `Elimination_Construct` and the rest do. Nothing in
+  `Zone_Create` substitutes a Zone ship directory for the team: the directory is chosen later, by
+  `Ship_LoadModel` from the craft's team. The global's writer was not traced here; it is the same one
+  every mode reads.
+  `Race_ComputeLoyaltyAward` (`0x0880ac50`) credits the same global, with mode 6 in its default
+  branch: **a Zone race banks `laps * 10 + perfect laps * 20 + kills * 15 + zones * 10 + perfect zones * 20`
+  (x2 for a suggested ship) to the picked team**, the figures `crates/game`'s `loyalty_award` carries.
+
+So the original lets the player pick the team for a Zone race and credits that team with the
+loyalty the race earns; the hull it flies is the shared Zone hull in that team's paint. The decompile
+is static: no live Zone `Team Selection` capture was taken.
+
+Other titles: Pure's own chain skips the team step in Zone (`docs/formats/race-setup.md`, "Pure
+differs in shape", confidence 94 - checked, differs). HD, 2048 and Omega: not read for their
+`Team Selection` in Zone.
+
 ## A speed pad is worth 100 points
 
 `Zone_Update` (`0x0882f5cc`) consumes a flag that only `Ship_ApplySpeedupPad`

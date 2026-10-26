@@ -309,13 +309,16 @@ team and craft are picked it:
    [handling-stats.md](../../../formats/handling-stats.md) documents; this
    is a display-rating record, not the physics tuning block, and its own
    source file/struct was not located,
-2. distinguishes three variant classes by comparing the resolved skin id
-   against `6`, `8`/`0x12`, or neither - the `6` branch wires the fixed
-   skin flag against the literal string `"Eliminator"`, the `8`/`0x12`
-   branch against `"Normal"` (Eliminator mode itself does not exist in this
-   project yet - see `docs/gameplay/race-modes.md` - but the disc's own
-   Eliminator-variant livery selection is wired here, in code, for whenever
-   that mode is picked up), and
+2. distinguishes three variant classes by comparing the screen's mode
+   (`+0xd8`, seeded from `g_game_mode` by `TeamSelection_OnEnter`) against
+   `6`, `8`/`0x12`, or neither. Corrected 2026-10-26: the first draft of
+   this page had the strings swapped. **Mode `6` (Zone)** hides the `skin`
+   cycler, shows `skin fixed` with the literal `Zone` (`0x08a8464c`), forces
+   the four rating bars to `10` and previews the team's `Zone` model;
+   **modes `8`/`0x12` (Eliminator)** show `skin fixed` as `Eliminator`, with
+   the team's `Normal` model under the `Eliminator` skin
+   ([`zone-mode.md`](zone-mode.md), [`ship-skin.md`](ship-skin.md)); every
+   other mode shows the `skin` cycler, and
 3. picks `"ER_SUG_SHIP"` vs `"ER_FOR_SHIP"` help text depending on whether
    the current craft appears on a per-team suggestion/forced-ship list
    (`FUN_08973424`), which is a live mechanism `race-setup.md` did not
