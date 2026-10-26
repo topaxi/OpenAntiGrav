@@ -539,6 +539,14 @@ craft, and no title's executable was read to differ.
 static; the live run above logged state, not cues, and it has not been heard).
 Pinned by `cancelling_with_time_left_says_disengaging_and_the_last_second_does_not`.
 
+**Known one-tick difference, not fixed here.** The timer zeroes on the press tick, as
+the original's does on its frame 22, and the controls are the person's on the next tick
+(`the_craft_is_handed_back_on_the_tick_after_the_absorb`). But `Race::autopilot_engine_flags`
+reads the timer inside `step_player`, which runs after `spend_pickup`, so ours drops the
+x1.2 and uncapped engine bits on the press tick, where the original's frame 22 still read
+`0xd` and dropped them on frame 23. The old fire-cancel had the same one-tick shape. In the
+trace below `flown` is read after the tick, so the absorb row already reads `false`.
+
 Disc-backed trace, `crates/raceplay/tests/autopilot_cancel_ground_truth.rs` on Pulse
 (Pure's reads the same up to the last two rows, where its timer runs on):
 
