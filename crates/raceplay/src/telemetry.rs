@@ -208,6 +208,7 @@ impl Race {
                 (ship.autopilot_timer > 0.0).then_some(oag_tables::weapons::Weapon::Autopilot)
             }),
             sub_weapon: self.sub_weapon(slot),
+            campaign_event: self.view.campaign_event,
             // The reticle, whatever it is doing. `Sight::visible` is what
             // decides whether anything reaches the screen, so this is passed
             // unconditionally rather than gated here - the brackets are watched

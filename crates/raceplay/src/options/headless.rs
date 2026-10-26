@@ -46,6 +46,8 @@ impl Setup {
             people: 1,
             #[cfg(feature = "view")]
             trail_sparks: false,
+            #[cfg(feature = "view")]
+            campaign_event: false,
             seed,
             // An empty track, spelled out because `AiTrack` deliberately has
             // no `Default`: a track is something a disc authors, and a type

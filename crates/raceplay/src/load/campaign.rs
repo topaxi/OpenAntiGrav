@@ -257,6 +257,11 @@ pub fn load_event(options: &Options, event_name: &str) -> Result<Loaded> {
             .report
             .push("sfx: this race is a campaign event: its start plays the event pair".to_string());
     }
+    // The HUD binds the current `SP.xml` event at `hud+4`; this is what says one exists.
+    #[cfg(feature = "view")]
+    {
+        loaded.setup.campaign_event = true;
+    }
     loaded.campaign_2048_event = Some(Campaign2048Progress {
         name: event.name.clone(),
         objectives: oag_2048::campaign::event_objectives(&doc, &event),

@@ -41,6 +41,8 @@ impl Race {
             people,
             #[cfg(feature = "view")]
             trail_sparks,
+            #[cfg(feature = "view")]
+            campaign_event,
             seed,
             zone,
             ai,
@@ -825,6 +827,7 @@ impl Race {
                 ps2_trail,
                 hull_reach: [0.0; MAX_SHIPS],
                 trail_sparks,
+                campaign_event,
                 trail_inside: [0; MAX_SHIPS],
                 hd_flame: [exhaust::hd::Flame::new(); MAX_SHIPS],
                 hd_sprite: [exhaust::hd::Sprite::new(); MAX_SHIPS],

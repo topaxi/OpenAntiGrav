@@ -1028,6 +1028,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
             people: options.people_flying(),
             #[cfg(feature = "view")]
             trail_sparks: options.trail_sparks,
+            #[cfg(feature = "view")]
+            campaign_event: false,
             seed: options.seed.unwrap_or(SEED),
             zone,
             foreign: track.strip_prefix("foreign:").map(str::to_string),

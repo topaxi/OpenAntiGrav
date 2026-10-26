@@ -189,6 +189,8 @@ pub struct RaceView {
     pub(super) hull_reach: [f32; MAX_SHIPS],
     /// `--trail-sparks`: see [`Race::force_trail_sparks`].
     pub(super) trail_sparks: bool,
+    /// [`Setup::campaign_event`]: what the HUD's `RaceXPTxt` and `ObjectiveTxt` ask.
+    pub(super) campaign_event: bool,
     /// Who is inside whose trail, one bit per intruder; level, not edge.
     pub(super) trail_inside: [u8; MAX_SHIPS],
     pub(super) hd_flame: [exhaust::hd::Flame; MAX_SHIPS],

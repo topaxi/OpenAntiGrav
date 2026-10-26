@@ -18,6 +18,7 @@ mod autopilot;
 mod between_ticks;
 mod bindless;
 mod camera;
+mod campaign_event;
 mod cannon_draw;
 mod catch_up;
 mod correction;
@@ -253,6 +254,7 @@ fn setup(handling: Handling) -> Setup {
         slot_teams: Vec::new(),
         sight: Sighting::default(),
         trail_sparks: false,
+        campaign_event: false,
         spark_anchors: Vec::new(),
         collision: CollisionWorld::new(),
         handling,
