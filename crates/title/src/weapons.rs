@@ -72,6 +72,27 @@ pub enum QuakeHit {
         /// Where this came from.
         origin: crate::Origin,
     },
+    /// [`Self::WaveHeight`]'s gate with the cockpit eye held level: the hit,
+    /// the mine trip and the smoothed height are the same, only the eye stays
+    /// where the hull puts it. Wipeout Pure, whose road does not lift under a
+    /// Quake either.
+    WaveHeightEyeLevel {
+        /// Where the gate came from, as [`Self::WaveHeight`]'s `origin`.
+        origin: crate::Origin,
+        /// Where the level eye came from.
+        eye_origin: crate::Origin,
+    },
+}
+
+impl QuakeHit {
+    /// Whether the cockpit eye rises by the craft's smoothed wave height.
+    ///
+    /// Read by the camera alone: the simulation keeps computing the height
+    /// either way, because the hit gate and a laid mine's trip read it.
+    #[must_use]
+    pub const fn lifts_cockpit_eye(self) -> bool {
+        matches!(self, Self::WaveHeight { .. })
+    }
 }
 
 /// When a locked LeachBeam transfers `damage` and `repair`.

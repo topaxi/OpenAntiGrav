@@ -43,7 +43,8 @@ impl Race {
     /// the same "this tick, not last tick's stale reading" rule every other
     /// per-craft weapon update in this module follows.
     pub(crate) fn advance_quake(&mut self) {
-        let oag_title::weapons::QuakeHit::WaveHeight { .. } = self.sim.quake_hit;
+        let (oag_title::weapons::QuakeHit::WaveHeight { .. }
+        | oag_title::weapons::QuakeHit::WaveHeightEyeLevel { .. }) = self.sim.quake_hit;
         let dt = self.sim.dt;
         let length = self
             .sim

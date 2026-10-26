@@ -225,13 +225,21 @@ impl Race {
             // Rigid, so there is no per-tick state to advance and nothing to
             // snap: the cockpit is bolted to the hull. The roll phase rides
             // along so the cockpit view rolls with the manoeuvre too - see
-            // `oag_render::camera::internal::view`.
+            // `oag_render::camera::internal::view`. A Quake's smoothed wave
+            // height lifts the eye only where the title's law says it does -
+            // see `oag_title::weapons::QuakeHit::lifts_cockpit_eye`; the
+            // height itself is computed either way, for the hit gate.
+            let quake_lift = if self.sim.quake_hit.lifts_cockpit_eye() {
+                self.ship().quake_lift
+            } else {
+                0.0
+            };
             oag_render::camera::internal::view(
                 target,
                 &self.view.internal_params,
                 self.ship().physics.roll_phase,
                 self.ship().physics.camera_lean,
-                self.ship().quake_lift,
+                quake_lift,
             )
         } else {
             self.view.camera.view(target, &self.view.chase_params)

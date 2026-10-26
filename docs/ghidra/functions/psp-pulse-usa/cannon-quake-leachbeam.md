@@ -3506,8 +3506,14 @@ complete field sweep, not a live read of the chase eye).
   `Quake_Impact_Rumble.xml` and `Quake_Incoming_Rumble.xml` (strings at
   `0x007a51e8`, `0x007a53a8`, `0x007a5548` in the EU `EBOOT.elf`). A player who
   remembers the craft reacting physically may be remembering HD's rumble and camera.
-- **Pure: not checked** in this pass ([psp-pure-usa/quake.md](../psp-pure-usa/quake.md)
-  has no road lift, so a camera lift there would have nothing to follow).
+- **Pure: checked, differs (chosen, 2026-10-26, lane `pure-no-quake-lift`).** The maintainer: "in
+  Pure this does not exist" ([psp-pure-usa/quake.md](../psp-pure-usa/quake.md) has no road lift,
+  so a camera lift there would have nothing to follow). Pure's own camera path is **unread**, so
+  the level eye is a **chosen** label with no confidence score, not a measurement: Pure's
+  `Weapons::quake_hit` is `QuakeHit::WaveHeightEyeLevel`, the same smoothed-height gate (the
+  hit and the mine trip, inherited from Pulse) with `Origin::Chosen` on the eye. The height
+  `Ship::quake_lift` is still computed and hashed; only `oag_raceplay`'s cockpit rig reads
+  `QuakeHit::lifts_cockpit_eye` and passes `0.0`.
 
 ### Wired 2026-10-26 (quake-wire lane)
 

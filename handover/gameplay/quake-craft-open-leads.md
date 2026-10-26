@@ -10,7 +10,9 @@ flat `radius` test; a laid mine trips on the raw height `> 0.1`; the cockpit eye
 along the ship's up (`oag_render::camera::internal::eye`). Per title as
 `oag_title::weapons::Weapons::quake_hit` (`QuakeHit::WaveHeight`, Pulse measured, the rest
 inherited, see the "Checked axes" row in `docs/gameplay/weapon-lineage.md`). No kick and no
-body ride: the original does neither.
+body ride: the original does neither. **Pure holds the eye level** (2026-10-26,
+`pure-no-quake-lift`; `QuakeHit::WaveHeightEyeLevel`, the maintainer's rule "in Pure this does
+not exist", chosen) over the same inherited gate.
 
 ## Open
 
@@ -27,7 +29,9 @@ body ride: the original does neither.
    smoothed flat amplitude is unread. Recipe: in the EU `EBOOT.elf`, find the `QUAKEHIT` cue's
    caller (string at `0x00782678`) and look beside it for a per-craft `+= (x - y) * 8.0 * dt`;
    then find that field's camera readers. Until then HD inherits Pulse's law.
-5. **Pure** was not checked for the camera lift; Pure has no road lift, so likely none.
+5. ~~**Pure** camera lift~~ - closed 2026-10-26: held level, **chosen**. Pure's own camera path is
+   still unread; if it is ever read and rises, flip `crates/pure`'s `quake_hit` back to
+   `WaveHeight` with the measured origin.
 6. **`QuakeStats::radius`** is copied by the original into the firing record's `+0x190` at
    fire time and that copy's reader is unidentified (recipe on the evidence page). Nothing in
    ours reads it now.
