@@ -183,10 +183,7 @@ fn one_tap_on_a_tile_opens_its_campaign() {
     let Some(eu) = package("PCSF00007") else {
         return;
     };
-    for (tile, at) in [
-        ("FE_RC_HD", (477.0, 162.0)),
-        ("FE_RC_FURY", (659.0, 162.0)),
-    ] {
+    for (tile, at) in [("FE_RC_HD", (477.0, 162.0)), ("FE_RC_FURY", (659.0, 162.0))] {
         let (mut frontend, mut input) = on_the_grid(&eu);
         let tap = Pointer {
             at: Some(at),
