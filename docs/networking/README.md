@@ -970,7 +970,6 @@ needed a second BACK; `Session::handle_picker`'s `joining` branch, LAN and onlin
 **Not covered:** two physical machines (one network, a real broadcast), a firewall in the way, IPv6, a
 different pressing of the same title live (the tick-0 refusal is a loopback test), more than two people,
 a human at the keys, Android and iOS, the web (the rows decline there).
-||||||| c83eaf38e
 
 ## Running a server on another machine
 
