@@ -48,8 +48,9 @@
 //! the `previous_position` argument here could confound, but a corner probe
 //! alone reproduces the same tick with no swept contact anywhere near it.
 //! Instrumented at the first-contact tick (`firing_probe_index` below): index
-//! **2** (`lower - right + forward`) on the standing start, index **1**
-//! (`lower + right - forward`) on the lap - both in `hull_sample_points`'s
+//! **0** (`lower - right + forward`) on the standing start, index **3**
+//! (`lower + right - forward`) on the lap (2 and 1 before 2026-10-26, when
+//! `hull_sample_points` took the original's order, left first) - both in its
 //! 0..3 range, on opposite sides of the hull as expected for opposite walls,
 //! and neither the flank pair (8/9) that the `0.75` scale shrank furthest in
 //! absolute terms. So the residual is not a probe-identity change the box

@@ -2241,3 +2241,46 @@ impulse, a steer-away yaw torque and a body-local point rate. Omega and 2048 inh
 and 2048 holds the point rate. The collision cage keeps this page's Pulse law on every
 title. Evidence:
 [ps3-hdfury-eu/wall-response.md](../ps3-hdfury-eu/wall-response.md).
+
+## Live, 2026-10-26: a craft-to-craft contact sparks both hulls, and the dispatch has no distance gate
+
+Lane `collision-cages-and-contact-sparks`, on `data/saves/pulse-psp/race-talons-venom-alongside.ppst`
+(the `pulse-psp-race/talons-boost` compare pair: the player 9.9 units behind EGX, Talon's Junction,
+Single Race, weapons off). `scripts/psp-contact-fx-read.py` loads the state, runs the player's ticks to
+race clock 39.3429 as the pair script does, logs every `ShipCollisionFx_Trigger` call (`0x089246b4`) in
+the last 0.6 s and tests each call's instance gate (`instance + 100`) against the world clock
+(`*(g_ingame + 0x40)`, the clock the trigger reads).
+
+- **A pair contact reaches `Ship_DispatchCollisionFx` for both bodies.** Two spawns of
+  `WO_SHIP_COLL_SPARK_DAMAGE` on the one tick (race clock 39.2598, five ticks before the frame): the
+  player's locator 2 and the craft ahead's locator 0, each `kind 0, damaged 1`, `f12 = 0.1619`, so the
+  `intensity * 2 + 0.4` severity is **0.724** (`|p| = 12.95`). Their gate stamps read equal to the float,
+  the signature of one ring record dispatched on two bodies (`Body_RecordPairContact`, above). Four older
+  equal-stamp pairs sit on other craft (`4`/`7`, `5`/`7`, `2`/`3`), one pair per contact. Confidence 80
+  (one state, one tick; the second hull of the pair is read off the equal stamp and the call log, not
+  off a captured ring).
+- **The grid slot is not our field row.** `g_race_manager + 0x78 + 4 i` lists the player at slot 7 here;
+  a pair's `field.csv` lists the player first. The reader maps by team name.
+- **The `(0, 10000)` test at `0x08842614`-`0x0884262c` is not a camera distance.** The page above read
+  it as the squared distance to a stored camera position. Here the call's hulls are the player's (9.9
+  units from the camera) and the craft ahead, and the next call in the log is on a craft 291 units down
+  the tunnel (`talons-boost`'s other fresh stamps are on craft 140 to 460 units off). The value is
+  `vdot.t S220, C200, C210` of two quads (`0x088425f4`), not identified. `Ship_DispatchCollisionFx`
+  itself has no distance test (decompiled again 2026-10-26). Ours applies no gate.
+- **A cage contact is the no-damage variant.** The cage's contact record carries friction `0`
+  ([collision-cage.md](collision-cage.md)), `Ship_DispatchCollisionFx`'s `damaged` is `friction > 0`
+  (`0x0883df38`), so a cage contact spawns `WO_SHIP_COLL_SPARK_NODAMAGE` through the same ring loop,
+  past the shield branch (`0x0884255c`) and with no `Ship_Damage` (that call is behind the same friction
+  test, `0x08842648`). Static; no live cage spark caught.
+- **Ported:** `oag_raceplay::Race::throw_contact_spark` (the locator nearest the contact, the locator's
+  0.8 s gate shared with a weapon hit, severity `intensity * 2 + 0.4`, the `.COLLISIONS` cue inside the
+  gate, nothing for a shielded craft), called for both hulls of every `oag_physics::pair` contact (the
+  contact point is the box-centre midpoint, `PairContact::point`) and for every `oag_physics::cage`
+  corner (`CageResponse::resolved`, `Trigger::CollisionSparkNoDamage`). Pulse only, where a hull's
+  `Ship Collision Fx` locators are read (`hit_sparks::anchors`). Tests: `tests::hit_sparks` (pair, cage,
+  shield, gate) and `cage_sparks_ground_truth` (de Konstruct Black's Ace field: 3 to 8 cage sparks per
+  race with the cage, none without).
+- **Against the other titles.** HD: checked, differs: its dispatch is reached through a reaction table
+  and its pair and cage contact paths are unread ([ps3-hdfury-eu/ship-collision-fx.md](../ps3-hdfury-eu/ship-collision-fx.md));
+  it runs no cage. Pure: the cage is off by its data and `Ship_Damage` is unread. 2048 and Omega: not
+  wired, no locators read and no cage; not checkable from the PSP side.
