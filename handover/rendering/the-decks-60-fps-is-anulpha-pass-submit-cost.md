@@ -1,6 +1,6 @@
 ---
 status: measure
-titles: [hd]
+titles: [pulse, hd]
 updated: 2026-10-26
 summary: "Deck 60 fps / 8 ms CPU row is HD Anulpha Pass: 5 ms submit in wgpu-core texture tracking of the binding-array group; cut it to hold 90"
 categories: [rendering, tooling]
@@ -18,9 +18,11 @@ total 9.4. Frames over 11.1 ms alternate one and two vblanks at 90 Hz: 60 fps, s
 
 Native on the same Deck (433c4a0-equivalent build, maintainer's settings copy, autopilot,
 `--race --track 'Data\Environments\15_Anulpha_Pass\track.vex' --mode single_race`): submit 5.0
-to 5.3 ms, total 7.5 to 7.8, still 90 fps. On `--race`'s default circuit submit is 2.5, total 5.1.
+to 5.3 ms, total 7.5 to 7.8, still 90 fps. **A floor, not the racing cost**: ticks read 0.06 ms
+and compose 0.01 (default circuit 0.21 and 0.16), so the craft was probably held on the grid
+with motion blur skipped; get a moving race before taking a before number. On `--race`'s default circuit submit is 2.5, total 5.1.
 The 6.6 ms present wait is normal under gamescope (also at a flat 90). Fullscreen queue depth
-does not matter there (gamescope's WSI keeps three images either way: byte-identical frame logs).
+does not matter there (gamescope's WSI keeps three images either way: frame logs within 0.1 ms).
 
 `perf record -g --call-graph fp -F 999` of the frame thread on Anulpha Pass (Deck): the top
 self entries are wgpu-core's `TextureUsageScope::merge_single` 5.2 %,
@@ -39,6 +41,7 @@ Pass's track has 593 material slots.
   adds per tick (weapons, AI, sound cues). Not measured.
 - Pulse's post-chain step (any one of SMAA, medium blur or `psp-3000` off removes the same 1 ms
   of submit): look in `oag-post` (intermediate targets, init actions).
+- Whether a paused scene needs re-recording at all (render bundles or a held scene). Not attempted.
 
 ## Next Steps
 

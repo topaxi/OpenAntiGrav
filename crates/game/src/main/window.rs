@@ -505,7 +505,8 @@ pub(crate) fn seat_present_modes() -> &'static [wgpu::PresentMode] {
 /// half-rate cliff, so a second queued frame only adds latency there, and
 /// `Immediate` never waits on an image in a window. **Chosen, not measured**: no
 /// input-to-photon number backs the frame this saves yet. A fullscreen window
-/// queues at least two whatever this says ([`queued_frames`], measured).
+/// queues at least two whatever this says ([`queued_frames`]; chosen from issue 7's overlay,
+/// not measured).
 pub(crate) fn frame_latency(vsync: perf::Vsync, mode: wgpu::PresentMode) -> u32 {
     match (vsync, mode) {
         (perf::Vsync::Smooth, _) | (_, wgpu::PresentMode::Mailbox) => 2,
@@ -518,13 +519,15 @@ pub(crate) fn frame_latency(vsync: perf::Vsync, mode: wgpu::PresentMode) -> u32 
 ///
 /// **A fullscreen surface needs a third image.** One frame queued is a swapchain of two
 /// images, and a display scanning a fullscreen surface out directly (macOS direct-to-display,
-/// gamescope, an X11 or Wayland unredirected window) keeps the shown image until the next one
+/// likely an unredirected X11 or Wayland window) keeps the shown image until the next one
 /// replaces it at a vblank. With two images the frame after next cannot be acquired until
 /// then, so a frame that takes longer than one refresh waits for the following vblank and the
 /// rate falls to an integer fraction of the refresh: GitHub issue 7, a 120 Hz Mac at 40 fps
 /// fullscreen and 102 fps windowed, vsync off, the same GPU time (8.85 ms in `PRESENT`
 /// fullscreen against 5.09 ms windowed). A compositor copying a window's image lets it go at
-/// once, which is why one frame was enough there. `docs/rendering/frame-pacing.md`.
+/// once, which is why one frame was enough there. **Chosen, not measured**: the reading fits the
+/// reporter's overlay, but no run here has shown the rate come back (gamescope keeps three
+/// images either way). `docs/rendering/frame-pacing.md`.
 pub(crate) fn queued_frames(windowed: u32, fullscreen: bool) -> u32 {
     if fullscreen { windowed.max(2) } else { windowed }
 }
