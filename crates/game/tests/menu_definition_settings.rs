@@ -1098,3 +1098,37 @@ fn head_to_head_greys_weapons_ai_difficulty_and_kills() {
         "the MODE row offers it"
     );
 }
+
+/// **The maintainer's report, 2026-10-26**: "when doing a zone race, I'm no longer able to select
+/// my team". Both TEAM rows (the RACE page's and RACE REMIX's) are live in Zone: the team is the
+/// one the race and its loyalty credit use, and on some titles the paint on the shared hull. The
+/// VARIANT rows stay greyed there - the hull has no variant to pick - which is the mode turning a
+/// row off, not the hide rule's "nothing to choose".
+#[test]
+fn zone_leaves_the_team_rows_live_and_greys_the_variant_rows() {
+    let definition = built_in();
+    let zone = Value::Text("zone".to_string());
+    for (page, team, variant) in [
+        ("race", "race.team", "race.variant"),
+        ("remix", "remix.team", "remix.variant"),
+    ] {
+        let row = |setting: &str| {
+            definition
+                .pages
+                .iter()
+                .filter(|candidate| candidate.id == page)
+                .flat_map(|candidate| candidate.entries.iter())
+                .find(|entry| entry.setting() == Some(setting))
+                .unwrap_or_else(|| panic!("the {page} page has no {setting} row"))
+        };
+        assert!(
+            row(team).disabled_by().is_none(),
+            "{page}: TEAM is live in Zone"
+        );
+        let condition = row(variant).disabled_by().expect("VARIANT has a condition");
+        assert!(
+            condition.values.contains(&zone),
+            "{page}: VARIANT greys in Zone"
+        );
+    }
+}

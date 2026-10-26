@@ -591,3 +591,68 @@ fn an_eliminator_race_forces_the_plain_hull_and_the_eliminator_skin_on_every_cra
         "the picked skin is overridden"
     );
 }
+
+/// A hash of every texel the hull carries, so two hulls can be told apart by paint alone.
+fn paint(hull: &oag_mesh::mesh::Model) -> u64 {
+    use oag_mesh::mesh::Texels;
+    let mut hash = 0xcbf2_9ce4_8422_2325_u64;
+    let mut mix = |bytes: &[u8]| {
+        for byte in bytes {
+            hash = (hash ^ u64::from(*byte)).wrapping_mul(0x0100_0000_01b3);
+        }
+    };
+    for texture in hull.textures.iter().flatten() {
+        match &texture.texels {
+            Texels::Rgba8(bytes) => mix(bytes),
+            Texels::Chain(levels) => levels.iter().for_each(|level| mix(level)),
+            _ => {}
+        }
+    }
+    hash
+}
+
+/// **The maintainer's report, 2026-10-26**: "when doing a zone race, I'm no longer able to select
+/// my team ... the team matters for loyalty". The team a Zone race is launched with is the one
+/// slot 0 flies (`Zone_Create` hands the picked team's name to the same race setup every mode
+/// uses, `zone-mode.md`), on the Zone hull every team shares, in that team's own paint - the
+/// eight `Zone.vex` texture blocks differ. Fails on a Zone load that falls back to one team's
+/// hull whatever was picked, which is also what would send the loyalty credit to the wrong team.
+#[test]
+#[ignore = "needs a disc image"]
+fn a_zone_race_flies_the_picked_team_in_its_own_paint() {
+    let Some(image) = image() else {
+        return;
+    };
+    let mut archives = oag_pulse::open(&image.display().to_string()).expect("mounting the disc");
+    let blob = archives
+        .read_name(oag_pulse::names::GAME_PLUGIN_DEFINITION)
+        .expect("the game plugin definition");
+    let definition = oag_tables::fexml::expand(&blob).expect("expanding it");
+    let teams = oag_raceplay::catalogue::teams(&definition);
+    let first = teams.first().expect("a team").id.clone();
+    let last = teams.last().expect("a team").id.clone();
+    assert_ne!(first, last);
+
+    let fly = |team: &str| {
+        let loaded = race::load(&race::Options {
+            source: image.display().to_string(),
+            class: "VENOM".to_string(),
+            mode: oag_race::Mode::Zone,
+            team: Some(team.to_string()),
+            opponent_teams: Vec::new(),
+            ..race::Options::default()
+        })
+        .expect("loading the zone race");
+        assert_eq!(loaded.liveries[0].team, team, "slot 0 is the picked team");
+        let hull = &loaded.liveries[0].hull;
+        (hull.vertices.len(), hull.indices.len(), paint(hull))
+    };
+    let (vertices_a, indices_a, paint_a) = fly(&first);
+    let (vertices_b, indices_b, paint_b) = fly(&last);
+    assert_eq!(
+        (vertices_a, indices_a),
+        (vertices_b, indices_b),
+        "one shared Zone hull"
+    );
+    assert_ne!(paint_a, paint_b, "{first} and {last} wear their own paint");
+}

@@ -953,3 +953,148 @@ fn a_team_step_keeps_the_model_row_only_on_the_across_layout() {
     assert_eq!(list.step_entry(1), Some(Event::Moved));
     assert_eq!(list.variant().map(|(id, _)| id.as_str()), Some(""));
 }
+
+/// Pulse's `Team Selection` in miniature: the `skin` cycler with its two arrows, and the `skin
+/// fixed` label the original shows in their place in Zone and in an Eliminator race
+/// (`TeamSelection_Update`, `docs/ghidra/functions/psp-pulse-usa/zone-mode.md`).
+const SKIN_ROW_XML: &str = r#"
+<Screen name="Top">
+<Screen type="TeamSelection" name="Team Selection">
+<LeftLayer transition="0">
+<Text name="skin" String="Alternative" x="15" y="26" color="0xffffffff">
+<Image name="skin left arrow" x="-2" y="29" width="12" height="10" src="a.mip"></Image>
+<Image name="skin right arrow" x="135" y="29" width="12" height="10" src="a.mip"></Image>
+</Text>
+<Text name="skin fixed" String="Zone Model" x="0" y="26" color="0xffffffff"></Text>
+</LeftLayer>
+</Screen>
+</Screen>
+"#;
+
+fn skin_row_picker(fixed: bool) -> (Picker, Layout) {
+    let entry = Entry {
+        id: "Assegai".into(),
+        label: "ASSEGAI".into(),
+        details: Details::Ship {
+            loyalty: None,
+            logo: None,
+            models: Vec::new(),
+            rating: None,
+            variants: vec![("Zone".into(), "Zone".into())],
+            stats: Vec::new(),
+        },
+    };
+    let picker = Picker::new(Kind::Ship, vec![entry], None, None).with_fixed_livery(fixed);
+    let layout = Layout::read(
+        &Screens::from_xml(SKIN_ROW_XML),
+        Kind::Ship,
+        &strings(),
+        FaceScales::default(),
+        PSP,
+    )
+    .expect("the skin row screen reads");
+    (picker, layout)
+}
+
+/// The livery's label and the arrows beside it, as drawn: the `x` of every `Draw::Text` that is
+/// the label, and the number of arrow sprites.
+fn drawn_livery(picker: &Picker, layout: &Layout) -> (Vec<f32>, usize) {
+    let placed = oag_ui::frontend::Placed {
+        x: 0,
+        y: 0,
+        width: 12,
+        height: 10,
+        quad_extent: None,
+        quad_centre: None,
+        blend: None,
+    };
+    let layers = draw_list(
+        picker,
+        layout,
+        &pulse_skin(),
+        &Frame::default(),
+        None,
+        false,
+        &|_| Some(placed),
+        &|text| text.len() as f32 * 8.0,
+    );
+    let labels = layers
+        .body
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::Text { text, x, .. } if text == "Zone" => Some(*x),
+            _ => None,
+        })
+        .collect();
+    let arrows = layers
+        .body
+        .iter()
+        .filter(|draw| matches!(draw, Draw::Sprite { .. }))
+        .count();
+    (labels, arrows)
+}
+
+/// In Zone the cycler and its arrows are not drawn and the label is the `skin fixed` widget's, at
+/// its own x; the cycler row of every other mode draws the `skin` widget and both arrows.
+#[test]
+fn a_fixed_livery_is_drawn_as_the_skin_fixed_label_with_no_arrows() {
+    let (picker, layout) = skin_row_picker(true);
+    let scale = layout.scale[0];
+    let (labels, arrows) = drawn_livery(&picker, &layout);
+    assert_eq!(arrows, 0, "no arrow beside a livery the mode picks");
+    assert_eq!(labels.len(), 1, "one label: {labels:?}");
+    let (cycler, cycler_arrows) = drawn_livery(&skin_row_picker(false).0, &layout);
+    assert_eq!(cycler_arrows, 2, "the cycler keeps both arrows");
+    assert_eq!(
+        cycler.len(),
+        1,
+        "the cycler draws the label once: {cycler:?}"
+    );
+    // `skin fixed` sits at x = 0 and `skin` at x = 15 of the same layer.
+    assert!(
+        (cycler[0] - labels[0] - 15.0 * scale).abs() < 1e-3,
+        "fixed {labels:?} against cycler {cycler:?}"
+    );
+}
+
+/// And the arrows are not pointer targets either, even on a row with more than one livery.
+#[test]
+fn a_fixed_livery_offers_no_arrow_to_press() {
+    let (_, layout) = skin_row_picker(true);
+    let entry = |variants: usize| Entry {
+        id: "Assegai".into(),
+        label: "ASSEGAI".into(),
+        details: Details::Ship {
+            loyalty: None,
+            logo: None,
+            models: Vec::new(),
+            rating: None,
+            variants: (0..variants)
+                .map(|index| (index.to_string(), index.to_string()))
+                .collect(),
+            stats: Vec::new(),
+        },
+    };
+    let placed = oag_ui::frontend::Placed {
+        x: 0,
+        y: 0,
+        width: 12,
+        height: 10,
+        quad_extent: None,
+        quad_centre: None,
+        blend: None,
+    };
+    for (fixed, expected) in [(false, 2), (true, 0)] {
+        let picker = Picker::new(Kind::Ship, vec![entry(3)], None, None).with_fixed_livery(fixed);
+        let arrows = pointer::targets(&picker, &layout, &pulse_skin(), &|_| Some(placed))
+            .into_iter()
+            .filter(|target| {
+                matches!(
+                    target.what,
+                    pointer::What::PreviousVariant | pointer::What::NextVariant
+                )
+            })
+            .count();
+        assert_eq!(arrows, expected, "fixed {fixed}");
+    }
+}

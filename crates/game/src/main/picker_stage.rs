@@ -51,6 +51,9 @@ pub(crate) enum PreviewSource {
         /// The craft file this entry previews instead of the title's own, where the race
         /// flies another hull: a Zone race's (`oag_game::preview::zone_hull_file`).
         hull_file: Option<String>,
+        /// The whole entry, for a Zone hull kept outside the team's directory
+        /// (`oag_game::preview::zone_race_hull_entry`), which beats the two above.
+        zone_entry: Option<String>,
     },
 }
 
@@ -85,6 +88,10 @@ impl PreviewSource {
             Self::Track {
                 location, reversed, ..
             } => oag_game::preview::track_entry(front_end?, location, *reversed),
+            Self::Ship {
+                zone_entry: Some(entry),
+                ..
+            } => Some(entry.clone()),
             Self::Ship {
                 location,
                 hull_file,
@@ -398,6 +405,7 @@ impl PickerStage {
                     skins: Vec::new(),
                     join: None,
                     hull_file: None,
+                    zone_entry: None,
                 }
                 .entry_name(self.previews.ship_hull, self.previews.front_end)
             }
@@ -590,6 +598,7 @@ mod tests {
             skins: Vec::new(),
             join: None,
             hull_file: None,
+            zone_entry: None,
         };
         assert_eq!(source.entry_name(None, None).as_deref(),
             Some(r"Data\Ships\Feisar\ship_FE.vex"));
@@ -604,6 +613,7 @@ mod tests {
             skins: Vec::new(),
             join: None,
             hull_file: zone,
+            zone_entry: None,
         };
         assert_eq!(
             source.entry_name(None, None).as_deref(),
@@ -628,11 +638,45 @@ mod tests {
             skins: Vec::new(),
             join: None,
             hull_file: None,
+            zone_entry: None,
         };
         assert_eq!(
             source.entry_name(Some("ship.vex"), None).as_deref(),
             Some(r"Data\Ships\Feisar_c1\ship.vex")
         );
+    }
+
+    /// A Zone race on HD or Omega previews the hull the race flies, kept outside the team's own
+    /// directory, whichever team is picked: not the team's race hull. Fails on a screen that
+    /// names `<team>\ship.vex` in Zone.
+    #[test]
+    fn a_zone_race_previews_the_shared_hull_where_the_title_keeps_it_outside_the_team() {
+        for title in [oag_hd::TITLE, oag_omega::TITLE] {
+            let entry = |team: &str, mode| oag_game::preview::zone_race_hull_entry(title, team, mode);
+            let zone = entry("Assegai", oag_race::Mode::Zone).expect("a Zone hull entry");
+            assert_eq!(entry("Feisar", oag_race::Mode::Zone), Some(zone.clone()), "{}", title.name);
+            assert_eq!(entry("Assegai", oag_race::Mode::TimeTrial), None, "{}", title.name);
+            let source = PreviewSource::Ship {
+                location: r"Data\Ships\Assegai".to_string(),
+                skins: Vec::new(),
+                join: None,
+                hull_file: None,
+                zone_entry: Some(zone.clone()),
+            };
+            assert_eq!(
+                source.entry_name(Some("ship.vex"), None).as_deref(),
+                Some(zone.as_str())
+            );
+        }
+        // Pulse's Zone hull is a file in the team's own directory, and Pure draws no mesh.
+        for title in [oag_pulse::TITLE, oag_pure::TITLE] {
+            assert_eq!(
+                oag_game::preview::zone_race_hull_entry(title, "Feisar", oag_race::Mode::Zone),
+                None,
+                "{}",
+                title.name
+            );
+        }
     }
 
     /// `zone` steers the still chain, not the mesh name: a Zone run previews

@@ -131,7 +131,12 @@ pub fn targets(
     }
     let screen = &layout.screen;
     let mut out = Vec::new();
-    let variants = picker.variants().len();
+    // A livery the mode fixes has no arrows to press: they are not drawn either.
+    let variants = if picker.fixed_livery() {
+        0
+    } else {
+        picker.variants().len()
+    };
     for image in &screen.images {
         let what = match image.name.as_deref() {
             Some("up arrow") => What::Previous,

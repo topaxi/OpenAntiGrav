@@ -30,6 +30,8 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
         hull: ships::ZONE_HULL,
         boost: ships::ZONE_BOOST,
     },
+    // Measured: `Team Selection` runs in Zone - `zone-mode.md`, "`Team Selection` runs in Zone".
+    zone_team_step: oag_title::ZoneTeamStep::OfferedAtFullRatings,
     // The one title with a standalone plume: `%s\%sboost.vex`, recovered at
     // `docs/ghidra/functions/psp-pulse-usa/exhaust.md`. `ships::BOOST` stays
     // where it is - see that constant's own doc comment - this just reads it
@@ -302,7 +304,8 @@ pub mod ships {
     /// `docs/ghidra/functions/psp-pulse-usa/zone-mode.md`), and only that case
     /// builds the `%s\Zone.vex` path. Every team's `Zone.vex` decodes to the
     /// same 1213 vertices / 1149 triangles / 8 meshes, so the hull itself is
-    /// shared - only the livery painted on it still varies by team.
+    /// shared - only the livery painted on it still varies by team: each file embeds its own
+    /// texture block (measured, `zone-mode.md`), and `case 6` applies no `PI_ModelSkin`.
     pub const ZONE_HULL: &str = "Zone";
 
     /// The `PI_ModelSkin` an Eliminator race forces on every craft: `Ship_LoadModel`'s

@@ -493,8 +493,15 @@ ratings and its livery. Each picker writes the setting the row used to, so
 the circuit picked is the one the race loads and the one RECORDS looks up.
 A stored circuit the mode's list does not hold - a race circuit after MODE
 moved to Zone - lands the screen on its first entry and writes that, so a
-confirm without moving launches what is on screen. Zone skips Ship Select,
-since the mode forces the Zone hull. Back from Track Select is the RACE
+confirm without moving launches what is on screen. **Zone goes through Ship
+Select too** (2026-10-26): the team is the one the race and its loyalty credit
+use, and on Pulse the paint on the shared Zone hull. The original's
+`Team Selection` runs in Zone with the livery cycler replaced by a fixed `Zone`
+label and the four rating bars forced to 10
+(`docs/ghidra/functions/psp-pulse-usa/zone-mode.md`); the screen draws both, the
+preview is the team's own `Zone_FE.vex`, and the label has no arrows to press.
+`oag_title::ZoneTeamStep` is the per-title answer: Pure's own chain has no team
+step in Zone and keeps skipping it. Back from Track Select is the RACE
 page; back from Ship Select is Track Select. A title that authors neither
 screen (`oag_title::FrontEnd::race_box` is `None` - Pure, HD, 2048 today)
 keeps all three rows and launches from `START` as before.

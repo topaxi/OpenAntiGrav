@@ -30,8 +30,10 @@ use oag_race::Mode;
 /// the Zone selector (see `docs/ghidra/functions/psp-pulse-usa/zone-mode.md`),
 /// and only that case builds the `%s\Zone.vex` path. Every team's `Zone.vex`
 /// decodes to the same 1213 vertices / 1149 triangles / 8 meshes, so the hull
-/// itself is shared there - only the livery painted on it still varies by team.
-/// On the other two there is no per-team Zone hull to share.
+/// itself is shared there - only the livery painted on it still varies by team, and that paint is
+/// the texture block embedded in each team's own `Zone.vex` (the eight blocks differ, measured in
+/// `zone-mode.md`), not a `PI_ModelSkin`: mode 6 applies none. On the other two there is no
+/// per-team Zone hull to share.
 ///
 /// **`hull_variant` is Pulse's Normal/Concept axis, and only applies here.**
 /// `oag_title::race::HullVariant::stem` names a file inside the *same*

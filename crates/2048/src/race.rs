@@ -53,6 +53,8 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
         ship: ZONE_SHIP,
         livery_key: "zoneship_zone",
     },
+    // Not measured: 2048 inherits HD's rule through Omega, which inherits Pulse's.
+    zone_team_step: oag_title::ZoneTeamStep::Offered,
     // Unread: this title's own boost-plume path (if it authors a standalone
     // one at all, off either roster) has not been searched for. `None` here
     // is silence, not the measured absence Pure's own row records.

@@ -131,6 +131,31 @@ pub fn zone_hull_file(title: &oag_title::Title, mode: oag_race::Mode) -> Option<
         .map(|hull| format!("{hull}_FE.vex"))
 }
 
+/// The entry a Zone race's Ship Select previews for `team` on a title that keeps its Zone hull
+/// outside the team's own directory ([`oag_title::ZoneCraft::OwnShip`], `OwnShipAt`) and previews
+/// the race hull itself ([`draws_hull`]): the hull the race flies, `None` for any other mode, any
+/// other title and any other Zone craft.
+///
+/// Without it HD's and Omega's screen drew the team's own race hull in Zone, a craft the race
+/// does not fly. The Zone hull is shared geometry, so every team previews the same model; Omega's
+/// and 2048's per-team paint on it (`oag_livery`'s `zone_livery`) is not applied here, so those
+/// two preview the hull's default livery.
+#[must_use]
+pub fn zone_race_hull_entry(
+    title: &oag_title::Title,
+    team: &str,
+    mode: oag_race::Mode,
+) -> Option<String> {
+    let outside_the_team = matches!(
+        title.race.zone_craft,
+        oag_title::ZoneCraft::OwnShip(_) | oag_title::ZoneCraft::OwnShipAt { .. }
+    );
+    (mode == oag_race::Mode::Zone
+        && outside_the_team
+        && draws_hull(title, oag_ui_screens::picker::Kind::Ship))
+    .then(|| oag_livery::entry::ship_entry_name(title.race.ships_for(team), team, mode, None))
+}
+
 /// The orbit a capture frames a preview with: the fixed hull pose, or the
 /// turntable at its first tick.
 #[must_use]

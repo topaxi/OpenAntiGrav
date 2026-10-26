@@ -11,10 +11,12 @@
 //! authors neither screen (`Shell::track_select` is `None`) launches from
 //! START exactly as before.
 //!
-//! **Zone skips the ship picker.** The mode forces the shared Zone hull
-//! whatever team is set - see `oag_raceplay::ship_entry_name` - and the
-//! RACE page already greys its TEAM row for the same reason, so a picker
-//! there would offer a choice the race ignores.
+//! **Zone goes through the ship picker too**, on a title whose own front end does
+//! ([`skips_team_step`]). The mode forces the shared Zone hull whatever team is
+//! picked - see `oag_raceplay::ship_entry_name` - but the team is still the one the
+//! race and its loyalty credit use, and on Pulse it is the paint on that hull: the
+//! original's `Team Selection` runs in Zone with the livery cycler replaced by a
+//! fixed `Zone` label (`docs/ghidra/functions/psp-pulse-usa/zone-mode.md`).
 
 use std::sync::{Arc, Mutex};
 
@@ -28,6 +30,18 @@ use crate::stage::Stage;
 
 use super::Session;
 
+/// Whether a `mode` race on `title` launches without the ship picker: Zone on a title whose own
+/// chain has no team step in it (`oag_title::RaceDefaults::zone_team_step`, Pure's).
+pub(crate) fn skips_team_step(title: &oag_title::Title, mode: oag_race::Mode) -> bool {
+    mode == oag_race::Mode::Zone && !title.race.zone_team_step.offered()
+}
+
+#[cfg(test)]
+#[path = "picker/tests.rs"]
+mod tests;
+
+#[path = "picker/livery.rs"]
+mod livery;
 #[path = "picker/seat.rs"]
 mod seat;
 pub(crate) use seat::SeatChoice;
@@ -248,22 +262,24 @@ impl Session {
                 let stats = details
                     .map(|team| team.variant_stats(join, variants.iter().map(|(id, _)| id.as_str())))
                     .unwrap_or_default();
-                let models = details
-                    .map(|team| team.hex_cells(join, variants.iter().map(|(id, _)| id.as_str())))
-                    .unwrap_or_default();
+                // Zone's one hull is not any of the team's own models, and the grid's thumbnails
+                // are theirs: see `oag_game::livery_row::zone_model_cells`.
+                let zone_entry = oag_game::preview::zone_race_hull_entry(title, &choice.value, mode);
+                let models = if zone_entry.is_some() {
+                    oag_game::livery_row::zone_model_cells()
+                } else {
+                    details
+                        .map(|team| {
+                            team.hex_cells(join, variants.iter().map(|(id, _)| id.as_str()))
+                        })
+                        .unwrap_or_default()
+                };
                 (
                     Entry {
                         id: choice.value.clone(),
                         label: choice.label.clone(),
                         details: Details::Ship {
-                            rating: details.and_then(|team| team.rating).map(|rating| {
-                                picker::Rating {
-                                    speed: rating.speed,
-                                    thrust: rating.thrust,
-                                    handling: rating.handling,
-                                    shield: rating.shield,
-                                }
-                            }),
+                            rating: oag_game::livery_row::ship_rating(title, details, mode),
                             variants,
                             stats,
                             models,
@@ -280,6 +296,7 @@ impl Session {
                         skins,
                         join: title.race.team_variants_for(&choice.value).map(|v| v.join),
                         hull_file: oag_game::preview::zone_hull_file(title, mode),
+                        zone_entry,
                     },
                 )
             })
@@ -319,7 +336,8 @@ impl Session {
             entries,
             Some(team_id.as_str()),
             Some(livery.as_str()),
-        );
+        )
+        .with_fixed_livery(oag_game::livery_row::fixed_row(title, mode));
         // HD's screen lays the teams out across - see
         // `Picker::with_entries_across`.
         let model = if layout.hd.is_some() {
@@ -339,12 +357,12 @@ impl Session {
                 self.resupply_race_variant();
             }
             // What the screen opened on is what a bare Confirm races.
-            if axis == LiveryAxis::Variant
-                && let Some((id, _)) = model.variant()
-                && !self.settings.race.variant_chosen
-            {
-                self.settings.race.variant = id.clone();
-            }
+            livery::opened(
+                &mut self.settings.race,
+                axis,
+                model.variant().map(|(id, _)| id.as_str()),
+                model.fixed_livery(),
+            );
         }
         let seat_info = self.seat_of_picker(seat);
         let shared = pair.is_some();
@@ -576,19 +594,11 @@ impl Session {
                 if let Some(entry) = picker.model.selected() {
                     let team = entry.id.clone();
                     let axis = picker.livery_axis;
+                    let fixed = picker.model.fixed_livery();
                     picker.refresh_preview(&self.gpu);
                     self.settings.race.team = team;
-                    // Wipeout HD/Fury's screen keeps the model row across a
-                    // team step (`Picker::land_on`); every other picker
-                    // restarts the livery.
                     let kept = picker.model.variant().map(|(id, _)| id.clone());
-                    match (axis, kept) {
-                        (LiveryAxis::Skin, _) => self.settings.race.skin = String::new(),
-                        (LiveryAxis::Variant, Some(id)) if layout_is_hd => {
-                            self.settings.race.variant = id;
-                        }
-                        (LiveryAxis::Variant, _) => self.settings.race.variant = String::new(),
-                    }
+                    livery::stepped(&mut self.settings.race, axis, kept, layout_is_hd, fixed);
                     self.resupply_race_variant();
                 }
             }
@@ -611,18 +621,22 @@ impl Session {
                 if let Some(id) = chosen {
                     self.speak_name(Kind::Track, &id);
                 }
-                let zone = self.race_mode() == oag_race::Mode::Zone;
-                if zone || !self.open_ship_picker() {
+                let skipped = self
+                    .shell
+                    .as_ref()
+                    .is_some_and(|shell| skips_team_step(shell.title, self.race_mode()));
+                if skipped || !self.open_ship_picker() {
                     self.launch_from_settings();
                 }
             }
             (Kind::Ship, Event::Confirmed) => {
                 let chosen = picker.model.selected().map(|entry| entry.id.clone());
+                let fixed = picker.model.fixed_livery();
                 stage.picker = None;
                 if let Some(id) = chosen {
                     self.speak_name(Kind::Ship, &id);
                 }
-                self.settings.race.variant_chosen = true;
+                livery::confirmed(&mut self.settings.race, fixed);
                 // A campaign cell already built `self.race_options` in full
                 // (`Session::launch_campaign_cell`) - `launch_from_settings`
                 // would overwrite the cell's own track/mode/class with

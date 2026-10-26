@@ -62,6 +62,7 @@ const TITLE: &Title = &Title {
             hull: "Zone",
             boost: "Zoneboost",
         },
+        zone_team_step: oag_title::ZoneTeamStep::Offered,
         // Unread here too: resolving archives has nothing to do with which
         // boost model a race would load.
         boost: None,

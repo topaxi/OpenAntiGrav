@@ -88,6 +88,8 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
         ship: ZONE_SHIP,
         livery_key: "zoneship_team",
     },
+    // Not measured: Omega's `Team Selection` (HD's) was not read in Zone, so Pulse's rule.
+    zone_team_step: oag_title::ZoneTeamStep::Offered,
     // Not searched for: `None` is silence, not a finding.
     boost: None,
     sounds: SOUND_BANKS,

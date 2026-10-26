@@ -65,6 +65,8 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // here too.
     zone: oag_title::ZoneCircuit::Separate(ZONE_TRACKS, false),
     zone_craft: oag_title::ZoneCraft::OwnShip(ZONE_TEAM),
+    // Measured: Pure's own chain has no team step in Zone (`docs/formats/race-setup.md`).
+    zone_team_step: oag_title::ZoneTeamStep::Skipped,
     // Measured absent, not merely unfound: Pure's own executable composes no
     // boost-plume path template and no candidate name resolves against
     // `Data.wad` on either pressing, at confidence 93 -

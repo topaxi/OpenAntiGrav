@@ -103,3 +103,55 @@ fn the_variant_row_is_cut_by_the_hull_gate() {
     records.record_loyalty(T, "Plain", 25_000);
     assert_eq!(gated_variant_choices(T, "Plain", &teams, &records).len(), 2);
 }
+
+/// The row is the mode's own in Zone and in an Eliminator race, where the screen shows its `skin
+/// fixed` label in place of the cycler, and the player's own in every other mode.
+#[test]
+fn the_row_is_fixed_in_zone_and_an_eliminator_race_only() {
+    for mode in Mode::ALL {
+        let forced = matches!(mode, Mode::Zone | Mode::Eliminator);
+        assert_eq!(fixed_row(T, mode), forced, "Pulse {mode:?}");
+    }
+    // HD has no mode-forced skin (`eliminator_skin` is `None`), so only Zone fixes its row.
+    assert!(fixed_row(oag_hd::TITLE, Mode::Zone));
+    assert!(!fixed_row(oag_hd::TITLE, Mode::Eliminator));
+}
+
+const RATED: &str = r#"<Plugin>
+<PI_Team name="Assegai"><Values type="Race" location="Data\Ships\Assegai"></Values>
+<FE speed="8" thrust="8" handling="9" shield="7"/></PI_Team>
+<PI_Team name="Unrated"><Values type="Race" location="Data\Ships\Unrated"></Values></PI_Team>
+</Plugin>"#;
+
+/// Pulse's `TeamSelection_Update` forces the four bars to 10 in mode 6 whatever the team's record
+/// says (`zone-mode.md`): the craft is one shared hull. A team with no authored ratings reads full
+/// too, and every other mode shows the team's own.
+#[test]
+fn zone_forces_every_rating_bar_full_on_pulse_alone() {
+    let teams = catalogue::teams(RATED);
+    let assegai = teams.iter().find(|team| team.id == "Assegai");
+    let unrated = teams.iter().find(|team| team.id == "Unrated");
+    let full = Rating {
+        speed: 10,
+        thrust: 10,
+        handling: 10,
+        shield: 10,
+    };
+    assert_eq!(ship_rating(T, assegai, Mode::Zone), Some(full));
+    assert_eq!(ship_rating(T, unrated, Mode::Zone), Some(full));
+    assert_eq!(
+        ship_rating(T, assegai, Mode::TimeTrial),
+        Some(Rating {
+            speed: 8,
+            thrust: 8,
+            handling: 9,
+            shield: 7
+        })
+    );
+    assert_eq!(ship_rating(T, unrated, Mode::TimeTrial), None);
+    // HD's Zone screen was not read, so its team's own ratings stand there.
+    assert_eq!(
+        ship_rating(oag_hd::TITLE, assegai, Mode::Zone),
+        ship_rating(oag_hd::TITLE, assegai, Mode::TimeTrial)
+    );
+}

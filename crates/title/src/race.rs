@@ -160,6 +160,9 @@ pub struct RaceDefaults {
     pub zone: ZoneCircuit,
     /// Where this title keeps the craft a Zone race flies. See [`ZoneCraft`].
     pub zone_craft: ZoneCraft,
+    /// Whether a Zone race goes through this title's team step, and what it shows there. See
+    /// [`ZoneTeamStep`].
+    pub zone_team_step: ZoneTeamStep,
     /// The non-Zone boost plume's model stem, under [`Self::ship_dir`] beside
     /// the hull - `Some("shipboost")` on Pulse, `None` where this title's own
     /// executable names no such standalone model.
@@ -560,6 +563,52 @@ impl RaceDefaults {
     }
 }
 
+/// Whether a Zone race goes through a title's team step (Ship Select, the RACE page's TEAM row)
+/// like any other mode, and what that step shows.
+///
+/// **Why it matters though every craft flies one Zone hull**: the team is the one the race and
+/// its loyalty credit use (`Race_ComputeLoyaltyAward` banks a Zone race's award to it), and on a
+/// title whose Zone hull is shared geometry in a per-team paint ([`ZoneCraft::ModelsInTeam`],
+/// [`ZoneCraft::OwnShipAt`]) it is the paint too.
+///
+/// | Title | Value | Source |
+/// | --- | --- | --- |
+/// | Pulse | [`Self::OfferedAtFullRatings`] | measured: `TeamSelection_Update`'s mode-6 branch, 84 |
+/// | Pure | [`Self::Skipped`] | measured: its own chain, 94 |
+/// | HD/Fury, 2048, Omega | [`Self::Offered`] | not measured: Pulse's rule, minus the ratings |
+///
+/// Pulse's `Team Selection` runs in Zone with the livery cycler replaced by a fixed `Zone`
+/// label, the team list and the Loyalty bar intact, and the four rating bars forced to 10
+/// (`docs/ghidra/functions/psp-pulse-usa/zone-mode.md`). Pure's own chain goes
+/// `Zone Track Selection` straight to `Launch Game` with no team step
+/// (`docs/formats/race-setup.md`, "Pure differs in shape"). The other three were not read in
+/// Zone, so they take Pulse's rule (the maintainer, 2026-10-26: "the team matters for loyalty")
+/// without its ratings, which are one more measured fact about one title's screen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ZoneTeamStep {
+    /// A Zone race launches on the team already stored: no ship screen, no live TEAM row.
+    Skipped,
+    /// The team step runs as in any mode and shows the team's own ratings.
+    Offered,
+    /// The team step runs as in any mode, and every rating bar reads full: the craft is one
+    /// shared hull, so the team's own ratings say nothing about it.
+    OfferedAtFullRatings,
+}
+
+impl ZoneTeamStep {
+    /// Whether the player picks the team for a Zone race.
+    #[must_use]
+    pub const fn offered(self) -> bool {
+        !matches!(self, Self::Skipped)
+    }
+
+    /// Whether the rating bars read full in a Zone race.
+    #[must_use]
+    pub const fn full_ratings(self) -> bool {
+        matches!(self, Self::OfferedAtFullRatings)
+    }
+}
+
 /// Where a title keeps the hull a Zone race flies.
 ///
 /// The companion of [`ZoneCircuit`], and it splits the corpus the same way -
@@ -612,7 +661,8 @@ pub enum ZoneCraft {
     ///
     /// The hull is shared geometry with a per-team paint: all eight teams'
     /// `Zone.vex` decode to the same 1213 vertices / 1149 triangles, so the team
-    /// still chooses the livery and no longer chooses the shape.
+    /// still chooses the livery and no longer chooses the shape. The paint is the texture
+    /// block each file embeds; the eight differ (`zone-mode.md`).
     ModelsInTeam {
         /// Model stem for the hull, in place of the usual one.
         hull: &'static str,
