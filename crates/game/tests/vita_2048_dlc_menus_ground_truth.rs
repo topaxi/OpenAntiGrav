@@ -437,7 +437,7 @@ fn medals_earned_on_one_grid_open_the_next() {
         .tiers
         .iter()
         .flat_map(|tier| &tier.grids)
-        .find_map(|grid| Some((grid, grid.unlock_grid.as_deref()?)).filter(|_| grid.locked))
+        .find_map(|grid| grid.locked.then_some((grid, grid.unlock_grid.as_deref()?)))
         .expect("a grid that waits on another");
     let behind = cells
         .iter()
