@@ -3234,6 +3234,7 @@ dependencies = [
  "oag-testdata",
  "oag-texture",
  "oag-vex",
+ "oag-weapons",
  "pollster",
  "wgpu",
 ]

@@ -20,6 +20,7 @@ oag-fx.workspace = true
 oag-mesh.workspace = true
 oag-pulse.workspace = true
 oag-race.workspace = true
+oag-weapons.workspace = true
 anyhow.workspace = true
 bytemuck = { workspace = true, features = ["derive"] }
 wgpu.workspace = true
