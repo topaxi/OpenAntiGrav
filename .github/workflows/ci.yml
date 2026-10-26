@@ -133,7 +133,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Install libpipewire and ALSA
         run: sudo apt-get update && sudo apt-get install -y libpipewire-0.3-dev libasound2-dev libudev-dev libclang-dev pkg-config
-      - uses: browser-actions/setup-chrome@v1
+      - uses: browser-actions/setup-chrome@v2
         id: chrome
         with:
           chrome-version: ${{ matrix.chrome }}
