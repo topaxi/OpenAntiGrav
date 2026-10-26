@@ -35,6 +35,7 @@ mod hd_chevron_pulse_ground_truth;
 mod hd_chevron_pulse_lit_path;
 mod hd_emissive_glow_ground_truth;
 mod hd_emissive_lit_path;
+mod hd_flame_encoded_tap;
 mod hd_gantry_curve_replay_ground_truth;
 mod hd_holo_billboard_ground_truth;
 mod hd_holo_billboard_lit_path;

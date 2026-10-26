@@ -9,7 +9,7 @@ import package::glow::{glow_first, glow_pad, glow_second};
 import package::holo::{holo_billboard};
 import package::hull_normal::{hull_normal};
 import package::pad::{pad_normal};
-import oag_shaders::target::{decode, linear_out};
+import oag_shaders::target::{decode, encoded_out, linear_out};
 import package::shading_modes::{colour_is_light, nova_prelit};
 import package::shadow::{receives_shadow, sun_occlusion};
 import package::texture_lod::{MATERIAL_ALBEDO, MATERIAL_FIFTH_MAP, MATERIAL_LIGHTMAP, MATERIAL_PAD_MASK, MATERIAL_SIXTH_MAP, MATERIAL_WAVE_MAP, material_lod_bias, material_sample, sample_at_slope_level, texlod_bias, texlod_slope};
@@ -1094,18 +1094,22 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
             albedo_sampler,
             vec2<f32>(in.texcoord.x * 2.0, in.texcoord.y * 2.0 + flame_noise),
         );
-        let flame_rgb = flame_texel.rgb * flame_colour_scale * scene.light.output_scale;
-        // **Not decoded on the linear target, on purpose - and this is a change
-        // of mind recorded in place.** The decode used to sit here on the "what a
-        // sampler hands back is authored-space" argument, but the flame's own
-        // program is read instruction by instruction and applies no transfer
-        // function anywhere: the original multiplies the raw sample into a
-        // target the exposure resolve then scales, `ADD_SAT`s and presents with
-        // no gamma arithmetic (renderer.md, "no `1/2.2` ... exists anywhere in
-        // it"). Decoding here dimmed the flame's mid-tones by up to a third
-        // against that arithmetic - the same divergence the HD trail's path had,
-        // fixed the same day. See
-        // docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md.
+        // **The colour tap is sRGB-decoded on fetch on HD's race target; the noise
+        // tap's alpha is not.** Unit 0 of all five flame draws carries gamma nibble 7
+        // (`SET_TEXTURE_ADDRESS` `0x60710101`, bits 20-23: RGB decoded, alpha raw) on
+        // three live RPCS3 frames over two sessions (engine-trail.md, "The flame's
+        // colour tap is decoded on fetch"), and the packer encodes the program's
+        // output before the blend, so the console adds `enc(dec(t) * k / 2)`. This
+        // replaces an earlier choice, made before that read and before the encoded
+        // store, to use the raw texel as light: on the encoded store that drew the
+        // rest flame white and clipped where the original's is blue.
+        //
+        // Gated on `encoded_out`, which only HD's measured store sets
+        // (`Looks::blends_encoded`): the decode is the unit's nibble, read on HD
+        // alone, and it rides that switch so Omega's and 2048's flames (their units
+        // unread) draw as they did.
+        let flame_tap = mix(flame_texel.rgb, decode(flame_texel.rgb), encoded_out * linear_out);
+        let flame_rgb = flame_tap * flame_colour_scale * scene.light.output_scale;
         flame = vec4<f32>(flame_rgb, flame_alpha * in.colour.a);
     }
 
