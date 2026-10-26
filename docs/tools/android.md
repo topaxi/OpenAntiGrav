@@ -240,9 +240,9 @@ pass.
 | Control | Where | Button |
 | --- | --- | --- |
 | steering stick | a finger landing in the left 40% below the top strip is the stick; where it landed is centre, 16% of the window height is full lock (20% in Easy); X steers, Y pitches | stick axes |
-| FIRE | top of the right column, a pill 0.36 wide (over GO's core) and 0.18 of the height tall, a crosshair | `Square` |
-| GO | the column's middle, mid-height, largest (a 0.36 square core; in Standard with the zones on a 0.14 brake wing either side, 0.64 wide), a rounded rectangle | `Cross` (thrust), plus `L`/`R` in its side wings |
-| ABSORB | below GO with a 0.03 gap, 0.36 wide (under GO's core) and 0.11 tall (the thinnest), a shield; in Easy with the zones off it is the right half of the bar (labelled `ABSORB`) | `Circle` |
+| FIRE | top of the right column, a pill 0.25 wide (over GO's core) and 0.18 of the height tall, a crosshair | `Square` |
+| GO | the column's middle, centred at 0.52 of the height, largest (a core 0.25 wide and 0.305 tall; in Standard with the zones on a 0.14 brake wing either side, 0.53 wide), a rounded rectangle | `Cross` (thrust), plus `L`/`R` in its side wings |
+| ABSORB | below GO with a 0.03 gap, 0.25 wide (under GO's core) and 0.11 tall (the thinnest), a shield; in Easy with the zones off it is the right half of the bar (0.18 wide, labelled `ABSORB`) | `Circle` |
 | BRAKE L, BRAKE R | **only Standard with GO's brake zones off**: BRAKE L upper left, BRAKE R in the thumb's arc left of GO (0.17), a side arrow and `L`/`R`; otherwise neither is drawn nor hit-tested | `L`, `R` (airbrakes) |
 | BRAKE (bar half) | **only Easy with the zones off**: the left half of the bar under GO | the airbrake axes, no button |
 | PAUSE, VIEW | top-left corner (0.13), beside BRAKE L in Standard with the zones off; pause bars (a play triangle while paused) and a camera | `Start` (pause), `Select` (camera cycle) |
@@ -281,7 +281,7 @@ analogue `airbrake_left`/`right` axes.
   holds for Easy's band, whose side still comes from `novice_airbrakes(pull, stick_x)`. A finger dragged
   from a wing onto ABSORB or FIRE (both sit over the core) presses it and loses the brake.
 - **Standard's brake wings** (since 2026-10-25, see below) are full height, each 0.14 of the window
-  height beside GO's 0.36 core (`GO_WING`, `GO_ZONE_SIDE` = 22% of GO's width); still analogue, and the
+  height beside GO's 0.25 core (`GO_WING`, `GO_ZONE_SIDE` = 26% of GO's width, always 0.14 of the window height); still analogue, and the
   pull reads **full at 85% of the way out** (`GO_FULL_DEPTH`).
 - **Easy** keeps GO and the right column, and mimics the original's novice scheme
   (`oag_gameplay::controls::novice_airbrakes`, measured, `input-bindings.md`) without being
@@ -301,7 +301,7 @@ analogue `airbrake_left`/`right` axes.
   `novice_airbrakes(pull, stick_x)` unchanged, so it brakes the side the other thumb is steering
   (stick below -0.1 left, above +0.1 right) and **both when centred**. Each side is the larger of the
   stick's rim and the band. With GO BRAKE ZONES **off** there is no band: the bar under GO is split,
-  one row exactly GO's width in two equal halves with a divider, BRAKE (left) and ABSORB (right), each labelled with its word, and BRAKE pulls 1.0 the same way (the maintainer's
+  one row `EASY_BAR_W` (0.36) wide, right-aligned with GO, in two equal halves with a divider, BRAKE (left) and ABSORB (right), each labelled with its word, and BRAKE pulls 1.0 the same way (the maintainer's
   decision: separate BRAKE L/R buttons are hard on a phone). A pull is amber-lit inside GO's own outline.
 - **Under the simulation's own Novice scheme** (`[controls] scheme`) the sim reads only `airbrake_right`
   and sides it off the steering, ignoring `airbrake_left`; Easy then puts `max(left, right)` on
@@ -314,13 +314,34 @@ analogue `airbrake_left`/`right` axes.
 **Side wings (2026-10-25, chosen, not measured; the maintainer: L/R "on the left and right side of
 the GO button, so that fire and absorb are not accidentally triggered").** The brake corners in GO's
 bottom half made a full pull a slide *down*, toward ABSORB, and a thumb resting low on GO braked.
-GO is now a 0.36 core with a 0.14 wing on each side, the left wing `L` and the right `R` at any
+GO is now a 0.36 core (narrowed since, see "GO's size" below) with a 0.14 wing on each side, the left wing `L` and the right `R` at any
 height, the pull rising with the slide *outward* and the height ignored. FIRE and ABSORB keep the
 core's width and sit over it, and nothing is beside GO (its right edge is the safe margin), so no
 braking slide crosses either: `a_full_brake_on_either_side_never_reaches_fire_or_absorb` holds it.
-GO widens only in Standard with the zones on; Easy and the zones-off layout keep the 0.36 square.
+GO widens only in Standard with the zones on; Easy and the zones-off layout keep the bare core.
 Each wing draws an outward arrow over its letter, and the lit patch widens from the outer edge. The
 paragraph below is the corner design this replaced.
+
+**GO's size (2026-10-26, touch-go-size lane, chosen, not measured; the maintainer: "reduce the width
+of the GO button by maybe 25%-33% and the height by 10% - 20%", then "the brake zones should not keep the
+proportions, only the height should be reduced there").** GO's core went from a 0.36 square to
+`GO_CORE_W` 0.25 wide (-31%) by `GO_CORE_H` 0.305 tall (-15%), about 17 by 20 mm on a 6.2 in phone;
+the former `GO_CORE` is split in two because the core is no longer square. The brake wings keep
+their 0.14 (`GO_WING`, unchanged), so with the zones on GO is 0.53 wide against 0.64 and `GO_ZONE_SIDE`,
+the wings' share of GO's width, rose from 22% to 26% while the wing is the same 0.14 of the height and
+the pull ramps over the same distance (full at 85% of it). All of GO, wings included, is 15% lower.
+GO's centre stays at 0.52 of the height (it moved from `go_y` 0.34 to a derived one), so the thumb's
+resting place is the same; FIRE and ABSORB are the core's width and follow it, 0.25 wide, FIRE sitting
+0.0275 lower and ABSORB 0.0275 higher than before. Easy's BRAKE band keeps its 40% share of GO's height
+(0.122 tall now, full pull over 0.104). Easy with the zones off is the one place a narrower GO cannot
+set the width of what sits under it: the bar's halves carry the words `BRAKE` and `ABSORB` (about 0.13
+wide each), so the bar keeps the 0.36 it had (`EASY_BAR_W`), right-aligned with GO and reaching 0.11
+left of it. The double chevron is sized off the core (`GO_CHEVRON`, 0.28 of its width, so it is one
+size in every layout: 76 px at 2340x1080 against 117) and kept; in Easy with the zones on the word
+`GO` moved up (0.44 of GO's height against 0.51) to sit between the chevrons and the band's divider.
+Still checked at 2340x1080 for Standard and Easy, zones on and off: nothing overlaps, and the bar
+that used to cross the HUD's shield meter at the bottom right now ends above it (0.8125 of the height
+against 0.84).
 
 **Dynamic GO (2026-10-07, touch-go lane, chosen, not measured; analogue since the touch-design lane).** The finger's
 position *within* GO, tracked while it is held, adds an airbrake: the bottom half of
@@ -342,7 +363,7 @@ on a control is that control's finger (controls win over the floating stick, whi
 the upper-left brake buttons need).
 
 **Design pass (2026-10-07, touch-design lane, chosen, not measured).** Sizes are
-fractions of the window's height (GO 0.36, about 24 mm on a 6.2 in phone; FIRE 0.20,
+fractions of the window's height (GO 0.36 then, 0.25 by 0.305 since 2026-10-26, see below; FIRE 0.20,
 ABSORB and the brakes 0.17, PAUSE and VIEW 0.13, each with a 0.025h touch slop on every
 side), so a button is one physical size on every phone. Everything stays 0.05h in from
 the left and right and 0.03h from the top and bottom; the cutout itself is **not

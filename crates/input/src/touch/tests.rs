@@ -334,7 +334,9 @@ fn the_column_is_fire_go_absorb_top_to_bottom_and_absorb_is_the_thinnest() {
         fire.y + fire.h <= go.y && go.y + go.h < absorb.y,
         "a gap each side of GO"
     );
-    assert!(absorb.h < fire.h && absorb.w == fire.w && (absorb.w - GO_CORE * SIZE.1).abs() < 0.01);
+    assert!(
+        absorb.h < fire.h && absorb.w == fire.w && (absorb.w - GO_CORE_W * SIZE.1).abs() < 0.01
+    );
 }
 
 #[test]
@@ -451,7 +453,15 @@ fn easy_with_the_zone_off_splits_the_bar_into_brake_and_absorb() {
     assert!(brake.x + brake.w <= absorb.x && brake.y == absorb.y);
     let go = go_rect(SIZE, EASY_OFF);
     assert!((brake.w - absorb.w).abs() < 1e-3, "equal halves");
-    assert!((brake.x - go.x).abs() < 1e-3 && (absorb.x + absorb.w - (go.x + go.w)).abs() < 1e-3);
+    assert!(
+        (brake.w + absorb.w - EASY_BAR_W * SIZE.1).abs() < 1e-3,
+        "the bar is as wide as its words need, not as wide as the narrower GO"
+    );
+    assert!(
+        (absorb.x + absorb.w - (go.x + go.w)).abs() < 1e-3,
+        "right-aligned with GO"
+    );
+    assert!(brake.x < go.x, "the bar reaches left past GO");
     // GO is thrust alone in the zone-off mode.
     let mut touches = easy(false);
     touches.down(1, go_at(0.5, 0.97), SIZE);
@@ -610,4 +620,119 @@ fn easys_band_pull_carries_on_past_gos_bottom_and_still_picks_the_steered_side()
     assert_eq!(reading.airbrake_right, 0.0);
     touches.moved(1, go_at(0.5, 0.1), SIZE);
     assert_eq!(touches.brake_pull(), 0.0, "back above the band");
+}
+
+fn rect_of(setup: Setup, control: Control) -> Rect {
+    layout_for(SIZE, setup)
+        .into_iter()
+        .find(|(c, _)| *c == control)
+        .expect("on screen")
+        .1
+}
+
+/// The sizes before 2026-10-26: GO a 0.36 square, wings 0.14 each side.
+const OLD_GO: f32 = 0.36;
+
+#[test]
+fn go_is_30_percent_narrower_and_15_percent_lower_in_every_layout() {
+    let setups = [
+        STANDARD,
+        Setup::new(Scheme::Standard, false),
+        EASY_OFF,
+        EASY_ZONES,
+    ];
+    for setup in setups {
+        let go = go_rect(SIZE, setup);
+        assert!((go.h - GO_CORE_H * SIZE.1).abs() < 0.01, "{setup:?} height");
+        let drop = 1.0 - go.h / (OLD_GO * SIZE.1);
+        assert!(
+            (0.10..=0.20).contains(&drop),
+            "{setup:?} height drop {drop}"
+        );
+    }
+    let drop = 1.0 - GO_CORE_W / OLD_GO;
+    assert!((0.25..=0.33).contains(&drop), "core width drop {drop}");
+    for setup in setups
+        .into_iter()
+        .filter(|s| !(s.scheme == Scheme::Standard && s.zones))
+    {
+        let go = go_rect(SIZE, setup);
+        assert!((go.w - GO_CORE_W * SIZE.1).abs() < 0.01, "{setup:?} width");
+    }
+}
+
+#[test]
+fn the_brake_wings_keep_their_width_while_the_core_narrows() {
+    assert_eq!(
+        GO_WING, 0.14,
+        "the wing is a thumb's reach, not a share of GO"
+    );
+    let go = go_rect(SIZE, STANDARD);
+    assert!((go.w - (GO_CORE_W + 2.0 * GO_WING) * SIZE.1).abs() < 0.01);
+    assert!(
+        (go.w * GO_ZONE_SIDE - GO_WING * SIZE.1).abs() < 0.01,
+        "a wing is {} px, was {} px",
+        go.w * GO_ZONE_SIDE,
+        0.14 * SIZE.1
+    );
+    let wing = GO_WING * SIZE.1;
+    let pull = |x: f32| {
+        let mut touches = live();
+        touches.down(1, (x, go.y + go.h / 2.0), SIZE);
+        touches.reading(SIZE).airbrake_left
+    };
+    assert!(pull(go.x + wing) < 1e-4, "zero at the wing's inner edge");
+    assert!((pull(go.x + wing * (1.0 - GO_FULL_DEPTH)) - 1.0).abs() < 1e-4);
+    assert!((pull(go.x) - 1.0).abs() < 1e-4);
+    let half = pull(go.x + wing * 0.5);
+    assert!(half > 0.4 && half < 0.7, "{half}");
+}
+
+#[test]
+fn go_keeps_its_centre_and_the_column_stays_in_the_window() {
+    for setup in [STANDARD, EASY_OFF] {
+        let go = go_rect(SIZE, setup);
+        assert!((go.centre().1 - 0.52 * SIZE.1).abs() < 0.01, "{setup:?}");
+    }
+    let fire = rect_of(STANDARD, Control::Fire);
+    let absorb = rect_of(STANDARD, Control::Absorb);
+    let go = go_rect(SIZE, STANDARD);
+    assert!(
+        (go.y - (fire.y + fire.h) - 0.02 * SIZE.1).abs() < 0.01,
+        "FIRE gap"
+    );
+    assert!(
+        (absorb.y - (go.y + go.h) - 0.03 * SIZE.1).abs() < 0.01,
+        "ABSORB gap"
+    );
+    assert!(
+        fire.y >= 0.14 * SIZE.1 && absorb.y + absorb.h <= 0.84 * SIZE.1,
+        "the column is no nearer the corner readouts than it was"
+    );
+}
+
+#[test]
+fn the_separate_brake_beside_go_stays_centred_on_it() {
+    let off = Setup::new(Scheme::Standard, false);
+    let go = go_rect(SIZE, off);
+    let brake = rect_of(off, Control::AirbrakeRight);
+    assert!((brake.centre().1 - go.centre().1).abs() < 0.01);
+    assert!(brake.x + brake.w < go.x, "left of GO");
+}
+
+#[test]
+fn the_easy_bar_halves_are_thumb_sized_and_clear_of_go() {
+    let go = go_rect(SIZE, EASY_OFF);
+    for control in [Control::Brake, Control::Absorb] {
+        let r = rect_of(EASY_OFF, control);
+        assert!(r.w >= 0.16 * SIZE.1 && r.h >= 0.11 * SIZE.1, "{control:?}");
+        assert!(r.y >= go.y + go.h, "{control:?} under GO");
+        assert!(
+            r.x + r.w <= SIZE.0 - SAFE_X * SIZE.1 + 0.01,
+            "{control:?} margin"
+        );
+    }
+    let mut touches = easy(false);
+    touches.down(1, spot(EASY_OFF, Control::Brake), SIZE);
+    assert!(touches.is_down(Control::Brake) && !touches.is_down(Control::Accelerate));
 }

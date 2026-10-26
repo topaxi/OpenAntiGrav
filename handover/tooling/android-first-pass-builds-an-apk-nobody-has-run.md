@@ -37,6 +37,12 @@ manifest and `cache/<image>` rows in `just push-data`.
   mirror). **Touch-design lane, 2026-10-07:** round translucent buttons with vector
   glyphs, edge/corner layout, `touch_opacity` setting, `--touch-overlay` capture pose,
   overlay gated on the race drawing; checked in captures at 2340x1080, not on the S24.
+  **Touch-go-size lane, 2026-10-26** (maintainer: GO about 30% narrower, 15% lower, brake
+  wings unchanged): GO's core is 0.25 by 0.305 of the height, wings still 0.14, FIRE and
+  ABSORB follow the core, Easy's zones-off bar keeps 0.36 for its words, the chevron is
+  smaller. Captured at 2340x1080 for Standard and Easy, zones on and off; **not yet felt on
+  the S24** - check GO is still easy to hold with the thumb resting, and that the
+  narrower FIRE (0.25) and Easy's bar halves (0.18 by 0.11) are still easy to hit.
   **Pad triggers,
   right stick and hat** are not delivered by winit 0.30 (read `MotionEvent` axes via
   `android-activity` or move to GameActivity); no haptics.

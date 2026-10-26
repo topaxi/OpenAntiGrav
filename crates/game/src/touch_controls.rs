@@ -55,6 +55,15 @@ const LABEL_SCALE: f32 = 1.0;
 const LABEL_HEIGHT: f32 = 8.0;
 /// GO's corner radius as a share of its side.
 const GO_ROUND: f32 = 0.30;
+/// The width of GO's double chevron as a share of GO's core width, wings not
+/// counted so it is the same size in every layout. Chosen, not measured: it was
+/// 0.30 of GO's shorter side (0.108 of the height) before the core narrowed,
+/// and is 0.07 now so the glyph stays clear of the word below it.
+const GO_CHEVRON: f32 = 0.28;
+/// Where GO's word starts, as a share of GO's height: Easy's band takes the
+/// bottom 40%, so the word moves up to sit between the chevron and the band's
+/// divider; elsewhere it sits in the lower middle.
+const GO_WORD_AT: (f32, f32) = (0.44, 0.62);
 /// A quarter turn, for the side arrows.
 const QUARTER: f32 = std::f32::consts::FRAC_PI_2;
 
@@ -213,8 +222,8 @@ fn go_band(art: &Art, touches: &Touches, body: Rounded, opacity: f32, out: &mut 
 }
 
 /// The glyph for `control`, centred in `rect`. GO's stays in its upper part
-/// so Easy's lower band keeps its word; only GO and the airbrakes carry a
-/// word.
+/// so Easy's lower band keeps its word, and is sized off GO's core so a wing
+/// does not grow it; only GO and the airbrakes carry a word.
 fn glyph(
     art: &Art,
     control: Control,
@@ -233,7 +242,8 @@ fn glyph(
     };
     match control {
         Control::Accelerate => {
-            let g = u * 0.30;
+            let core = h * touch::GO_CORE_W / touch::GO_CORE_H;
+            let g = core.min(w) * GO_CHEVRON;
             let top = y + h * 0.07;
             for k in 0..2 {
                 shape::sprite(
@@ -553,10 +563,10 @@ pub fn draw(
         );
         glyph(art, control, rect, paused, opacity, &mut out);
         if control == Control::Accelerate {
-            let at = match (zones, easy) {
-                (true, true) => 0.51,
-                (true, false) => 0.62,
-                _ => 0.62,
+            let at = if zones && easy {
+                GO_WORD_AT.0
+            } else {
+                GO_WORD_AT.1
             };
             out.push(text(
                 rect[0] + rect[2] / 2.0,
