@@ -2,7 +2,7 @@
 status: measure
 titles: [hd]
 updated: 2026-10-26
-summary: "HD render error by 120 px tile on 13 pairs: ceiling rim highlights lead the bias; scenery, HUD and wall are not yet lanes"
+summary: "HD render error by 120 px tile on 13 pairs: ceiling light beams and rims lead the bias; scenery, HUD and wall are not lanes yet"
 ---
 
 # HD/Fury render gaps ranked by pixel impact
@@ -37,68 +37,99 @@ already recorded in [hds-frame-was-too-bright-and-too-bloomy.md](hds-frame-was-t
 65% of the raw error survives the sigma-7 blur, so most of it is low frequency.
 Sharpness is not the gap: ours-over-theirs gradient is 0.98 to 1.06 per block.
 
-**Ranked table.** Ranked by low-frequency share, the part a lane can fix. Raw
-share of all 13-pair error in brackets. "Low err/tile" is the low-frequency
-error per tile summed over the 13 pairs, in thousands.
+**Ranked table.** Ranked by low-frequency share, the part a lane can fix.
+Raw share of all 13-pair error in brackets. Low impact is low share times the
+total low error (about 153 M, the sum of per-pixel error over 13 pairs at
+0-255). "Low err/px" is the mean per-pixel low-frequency error in its block.
+"Top 3 pairs" are the three with the most raw error in the block.
 
-| # | Block (120 px tiles) | Low-freq share | Raw share | Low err/tile | Luma bias | Covered by |
-|---|---|---|---|---|---|---|
-| 1 | Centre scenery and gate (tx 6-12, ty 1-4) | 21.8% | [21.6%] | 108 | +2.7 | position bucket: content changes per circuit; partly [hd-glow-mask.md](../../docs/rendering/hd-glow-mask.md); not a lane yet |
-| 2 | Tiles containing HUD (LAP, shield, RECORD, bottom gauges) | 18.8% | [16.7%] | 79 | +2.4 | tiles include track and wall behind the HUD, so the HUD-only share is unmeasured; [hd-hud.md](../../docs/formats/hd-hud.md) |
-| 3 | Left wall and stands (tx 0-5, ty 1-4) | 17.1% | [17.5%] | 84 | +0.6 | position bucket; the FX-350 advert is a timed board, see [hd-glow-mask.md](../../docs/rendering/hd-glow-mask.md) ("Still open on the board") |
-| 4 | Track left and right (tx 0-5 or 10-15, ty 5-6) | 11.2% | [11.7%] | 55 | +2.3 | [hds-frame-was-too-bright-and-too-bloomy.md](hds-frame-was-too-bright-and-too-bloomy.md) (blown lightmap); crops match closely |
-| 5 | **Ceiling and light shafts (tx 9-12, ty 0-1)** | 9.6% | [8.3%] | **142** | **+6.3** | **new lane candidate**: white rim highlights on ramp edges; see Next Steps 1 |
-| 6 | Craft hull (tx 6-9, ty 5-6) | 7.8% | [10.3%] | 58 | +1.0 | [hds-engine-light-washes-the-hull-on-boost.md](hds-engine-light-washes-the-hull-on-boost.md); half its error is high frequency (low/raw 0.50) |
-| 7 | Other scenery (tx 0-15, ty 2-4, outside 1-3) | 7.3% | [7.3%] | 96 | +1.7 | position bucket |
-| 8 | Other sky and track (rest of rows 0-1 and 5-8) | 6.5% | [6.5%] | 57-86 | +1.0 | position bucket |
+| # | Block (120 px tiles) | Low share (impact) | Raw share | Low err/px | Luma bias | Top 3 pairs | Covered by |
+|---|---|---|---|---|---|---|---|
+| 1 | Centre scenery and gate (tx 6-12, ty 1-4) | 21.8% (33 M) | [21.6%] | 7.5 | +2.7 | amphiseum, metropia, ubermall | position bucket: content changes per circuit; partly [hd-glow-mask.md](../../docs/rendering/hd-glow-mask.md); not a lane yet |
+| 2 | Tiles containing HUD (LAP, shield, RECORD, bottom gauges) | 18.8% (29 M) | [16.7%] | 5.5 | +2.4 | amphiseum, vineta-k, anulpha | tiles include track and wall behind the HUD, so the HUD-only share is unmeasured; [hd-hud.md](../../docs/formats/hd-hud.md) |
+| 3 | Left wall and stands (tx 0-5, ty 1-4) | 17.1% (26 M) | [17.5%] | 5.9 | +0.6 | sol-2, modesto-heights, sebenco-climb | position bucket; the FX-350 advert is a timed board, see [hd-glow-mask.md](../../docs/rendering/hd-glow-mask.md) ("Still open on the board") |
+| 4 | Track left and right (tx 0-5 or 10-15, ty 5-6) | 11.2% (17 M) | [11.7%] | 3.8 | +2.3 | moa-therma, anulpha, sol-2 | [hds-frame-was-too-bright-and-too-bloomy.md](hds-frame-was-too-bright-and-too-bloomy.md) (blown lightmap); crops match closely |
+| 5 | **Ceiling and light shafts (tx 9-12, ty 0-1)** | 9.6% (15 M) | [8.3%] | **9.9** | **+6.3** | vineta-k, amphiseum, modesto-heights | **new lane candidate, cause split**: see Next Steps 1 |
+| 6 | Craft hull and plume (tx 6-9, ty 5-8) | 7.8% (12 M) | [10.3%] | 4.0 | +1.0 | ubermall, moa-therma, anulpha | [hds-engine-light-washes-the-hull-on-boost.md](hds-engine-light-washes-the-hull-on-boost.md); half its error is high frequency (low/raw 0.50) |
+| 7 | Other scenery (tx 0-15, ty 2-4, outside 1-3) | 7.3% (11 M) | [7.3%] | 6.7 | +1.7 | position bucket | position bucket |
+| 8 | Other sky and track (rest of rows 0-1 and 5-8) | 6.5% (10 M) | [6.5%] | 3.9-6.0 | +1.0 | position bucket | position bucket |
 
-Row 5 has the highest error per tile of any block (142 against 55 to 108 for
-the others) and the largest luma bias. It is the first lane candidate, not the
-largest block.
+Row 5 has the highest error per pixel of any block and the largest luma bias.
+It is the first lane candidate, not the largest block. Rows 1 to 3 are big
+because they are big, and their content differs on each circuit.
 
 **Luma bias by tile.** Top row, columns 6-15: ours brighter by +6 to +12. Row 1,
 columns 6-12: +3 to +13. Rows 2-4: +2 to +5. Left columns of rows 0 to 3 and
-the lower rows: near zero, some darker. The top-right bias is the largest
-single bias on the frame.
+the lower rows: near zero, some darker. Per pair, row 5's bias runs from +16.1
+(the-amphiseum) and +14.9 (vineta-k) down to +0.1 (anulpha-pass). The top-right
+bias is strongest on the Amphiseum and Vineta K pairs.
+
+**Row 5 cause is split (checked on crops, 2026-10-26).** Not one rim-highlight
+cause. What the crops show:
+
+- `the-amphiseum`: ours draws brighter additive light beams from the ceiling
+  lights (diagonal white shafts through the trusses); the original's beams are
+  dimmer. The light-cone material was fixed on this circuit earlier
+  ([hd-accuracy-pass-2026-10-05.md](hd-accuracy-pass-2026-10-05.md), `dc_lightcone`);
+  what remains is unmeasured.
+- `vineta-k`: white highlight lines on the ramp edges against the ceiling and
+  building ledges, present in ours and not in the original. This is the one
+  crop that fits the stand-in specular in
+  [hd-lit-billboard-specular-and-gantry-leftovers.md](hd-lit-billboard-specular-and-gantry-leftovers.md),
+  and it is not yet checked.
+- `talons`: scattered small particle sprites in the sky, in different places
+  in ours. Position, not brightness: a particle timing or capture moment
+  difference, not a material.
+- `anulpha-pass`: a bright glow column on the right pillar in ours, dim in the
+  original. Unexplained.
 
 **Capture mismatch, do not lane these.**
 
 - `talons` (heading drift 1.72 deg, camera 0.29 units, race clock -7.2 s): kept
   in the totals, but dropping it moves every block share by under one point.
-  Its scenery error is partly pose.
+  Its scenery error is partly pose, and its sky particles are not in the same
+  places.
 - `talons-assegai-c1` (0.54 deg, clock -2.3 s): same; marginal.
 - `talons-pack` (`hd-race/`): excluded, see Set.
-- Advert timing on the left wall (table row 3): one pair's FX-350 text is absent in
-  ours. Check the board's own timeline before reading it as a missing decal.
+- Race clock drift on the 11 other pairs runs from +0.13 to -1.42 s (three
+  positive). The largest offsets, `moa-therma` and `modesto-heights` at about
+  -1.4 s, are also the pairs most likely to catch a timed board in a different
+  state. That is why the advert on the left wall (row 3) is not read as a
+  missing decal: on `vineta-k` the FX-350 text is absent in ours.
 - HUD digits: on `vineta-k` the lap clock reads 0.13.7 in both frames; on
   `the-amphiseum` it reads 0.13.6 in both. The HUD row still needs a HUD-only
   mask before it is a lane.
-- Race clock drift on the other 11 pairs runs -0.1 to -1.4 s, and ship and camera
-  heading within 0.2 deg. Pose is close enough for a per-block read; not for
-  per-object claims.
+- Ship and camera heading are within 0.2 deg on the 11 other pairs; pose is
+  close enough for a per-block read, not for per-object claims.
+- No other craft appear in these Time Trial pairs. The plume cannot be split
+  from the hull at 120 px, so it sits inside row 6.
 
 ## Next Steps
 
-1. **Lane `hd-ceiling-rim-highlights`** (ready-to-wire, the stand-in specular
-   thread [hd-lit-billboard-specular-and-gantry-leftovers.md](hd-lit-billboard-specular-and-gantry-leftovers.md)
-   is the first place to look). Claim: HD's no-LG2 ceiling and ramp materials
-   draw white rim highlights the original does not, and they cause most of
-   the ceiling row's +6.3 luma bias (table row 5). Verify first with one ablation on `vineta-k`
-   and `the-amphiseum` (NO_SPECULAR on the ceiling families only, before any
-   change to the shared shader). Acceptance region: tiles tx 9-12, ty 0-1 on
-   the 13 pairs, low-frequency error down and luma bias down to within +2; the
-   craft block and track block unchanged within noise; `vineta-k` crop shows
-   no white rim on the ramp edges.
+1. **Measure first, then lane: ceiling light beams and glow (row 5).** Claim:
+   ours draws the ceiling's additive light beams and glow brighter than the
+   original on Amphiseum and Vineta K, and that is most of row 5's +6.3 luma
+   bias. The rim highlights on Vineta K's ramp edges are a second candidate
+   (the stand-in specular in
+   [hd-lit-billboard-specular-and-gantry-leftovers.md](hd-lit-billboard-specular-and-gantry-leftovers.md),
+   ready-to-wire) and are not yet separated from the beams. Method: one
+   per-draw ablation on `the-amphiseum` and `vineta-k` (skip the additive
+   light-shaft draws; then skip the no-LG2 specular on the ceiling families),
+   and compare row 5's luma bias after each. Acceptance region: tiles tx 9-12,
+   ty 0-1 on those two pairs, luma bias within +2, with the craft and track
+   blocks unchanged within noise. If the beams account for the bias, the lane
+   is the light-shaft material; if the rims do, it is the specular lane.
 2. **Measure, not a lane: HUD-only share.** Claim: the HUD's own pixels carry
-   under 5% of the 13-pair error, so the HUD row is an estimate artifact. Method:
-   mask the HUD layout rects from [hd-hud.md](../../docs/formats/hd-hud.md) and
-   take the low-frequency error inside the mask over the 13 pairs. Acceptance:
-   a single number in this thread. If it is above 10%, open a HUD text-alpha lane.
-3. **Measure, not a lane: left wall and centre gate.** Claim: blocks 1 and 3
+   under 5% of the 13-pair error, so the HUD row is an estimate artifact.
+   Method: mask the HUD layout rects from
+   [hd-hud.md](../../docs/formats/hd-hud.md) and take the low-frequency error
+   inside the mask over the 13 pairs. Acceptance: one number in this thread.
+   If it is above 10%, open a HUD text-alpha lane.
+3. **Measure, not a lane: left wall and centre gate.** Claim: rows 1 and 3
    (39% of low-frequency error together) are many draws, not one. Method: a
-   per-draw ablation on two circuits, the same moment, from the existing
-   capture tooling. Acceptance: one or two named draws explain at least half
-   the block's low-frequency error on both circuits. Only then name a lane.
+   per-draw ablation on two circuits at the same moment. Acceptance: one or two
+   named draws explain at least half the block's low-frequency error on both
+   circuits. Only then name a lane.
 
 ## Later
 
@@ -106,4 +137,6 @@ single bias on the frame.
   before calling it a missing decal.
 - Craft hull high-frequency error (table row 6, low/raw 0.50): AA or texture
   detail; not a lane until the hull's own draws are checked.
+- The `anulpha-pass` pillar glow (row 5) and the `talons` sky particles: one
+  circuit each, not yet explained.
 - Refresh this table after any HD lane merges (same method, same 13 pairs).
