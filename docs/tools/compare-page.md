@@ -688,6 +688,13 @@ board shows the original's phase and not the one the race clock gives. The same 
 handed, and a grab taken at once was 0.1 to 0.3 s older than the RAM it is paired with (HUD lap clock `0.21.0` against RAM `21.2`; about one tick with the wait). Any other capture of a
 paused RPCS3 frame next to a RAM read has the same lag. [hd-glow-mask.md](../rendering/hd-glow-mask.md).
 
+**The gantry pin takes the presented lag too (2026-10-27, `hd-go-banner`).** The pair script already ran ours `HUD_LAG_TICKS` (3) ticks short of RAM's lap clock but passed the gantry node's raw RAM time, so
+the pin sat 0.05 s ahead of the picture. The GO board's pulse has a 0.6 s period and the pins of Tech de Ra (4.3687) and Modesto Heights (4.9670) are one period apart, both on the pulse's rising
+edge: ours drew the glyph, the original (a frame older) had not. `compare_env.gantry_pin(gantry_s, lag_ticks)` is the pin the script and `compare-rerender-ours.py` (an HD pair's recorded
+`original.gantry_seconds` and `presented_lag.hud_clock_ticks`) now use; `python3 scripts/compare_env.py selftest` pins the arithmetic. Banner box mean abs grey: Tech de Ra `720,240 370x100` 22.28 to 4.79,
+Modesto Heights `800,260 500x80` 8.33 to 1.76; whole frame over the 13 HD pairs, 11 down (Sol 2 8.46 to 7.35, Moa 10.19 to 9.37, Chenghou 5.48 to 4.63), Anulpha level, Metropia 7.75 to 7.93.
+The GO glyph is the race manager's board, **not** `nr_twinblend`: `OAG_SKIP_MATERIAL=nr_twinblend` leaves it drawn (only the red AG square above-left of it moves, 740..874 x 39..226).
+
 `just compare-rerender` re-makes a race pair only if the emulator is in the state it was made from: restore the state with
 `--pause` first (the capture lets the game run for 0.12 s, so a second rerender needs another restore). Measured drifts between two
 captures of one state: PSP 15 to 90 units (the CPU stops a few ticks after the load; two direct runs agreed exactly, a rerender did not),

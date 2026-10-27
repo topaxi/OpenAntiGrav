@@ -111,6 +111,18 @@ def exposure_hold_flags(ours):
     return ["--hold-exposure", str(ours["exposure_hold"])] if "exposure_hold" in ours else []
 
 
+def gantry_pin(gantry_s, lag_ticks):
+    """The `--gantry-seconds` value for a picture that lags RAM by `lag_ticks`.
+
+    The gantry node's time is read from RAM in the same pause as the HUD clock; the RSX had presented a frame
+    `lag_ticks` older (`HUD clock text vs RAM`, 3 ticks on HD). Ours already runs `--ticks` less that lag, so the
+    board's pin takes it too: the GO board pulses with a 0.6 s period (swept in ours), so an
+    uncorrected pin sat on its rising edge (Tech de Ra 4.3687, Modesto Heights 4.9670) and drew the glyph the
+    original had not yet drawn. `None` (no windowed node: the board is gone) stays `None`.
+    """
+    return None if gantry_s is None else gantry_s - lag_ticks / 60
+
+
 def tenths_matched_ticks(clock):
     """Ticks after GO whose clock shows the same tenth as the original's `clock` seconds.
 
@@ -721,6 +733,11 @@ def main():
         print(ppsspp_ini(platform(sys.argv[2])), end="")
     elif cmd == "manifest":
         manifest(sys.argv[2], sys.argv[3:])
+    elif cmd == "selftest":
+        assert gantry_pin(None, 3) is None
+        assert abs(gantry_pin(4.368715286254883, 3) - 4.318715) < 1e-5
+        assert gantry_pin(5.0, 0) == 5.0
+        print("compare_env selftest ok")
     elif cmd == "missing-safe-area":
         sys.exit(1 if missing_safe_area(sys.argv[2:]) else 0)
     else:
