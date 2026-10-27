@@ -188,6 +188,7 @@ pub const TITLE: &Title = &Title {
         selection_strings: false,
         screen_archive: None,
         grid_archive: None,
+        fury_card_gain: Some(1.0),
         origin: oag_title::Origin::InheritedFrom("Wipeout HD"),
     },
     pressings: None,

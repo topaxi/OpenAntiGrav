@@ -464,8 +464,10 @@ fn load_hd(
         &xml,
         &screens,
         selection_layout.is_some(),
-        oag_hd::campaign::SCREEN_ENTRY,
-        crate::flyer::FURY_GAIN,
+        title
+            .campaign
+            .fury_card_gain
+            .unwrap_or(crate::flyer::FURY_GAIN),
     );
     // `Cell Selection`'s own `Confirm`/`Back` legend, off the shared
     // front-end root - see [`read_footer`]'s own doc. `Cell Help` and the
@@ -663,7 +665,7 @@ fn read_omega_texture(archives: &mut oag_assets::Archives, path: &str) -> Result
 /// Every flyer card the campaign screens show, decoded: the base campaign's
 /// eight, Fury's eight and (where `Campaign Selection` exists) its two cards,
 /// each with the window of its camera's image it shows. `None`, logged, when
-/// `screen_entry`'s XML authors no `<Flyer name="FlyerModel">`; a card that
+/// the screen's XML authors no `<Flyer name="FlyerModel">`; a card that
 /// will not decode is left out and says so in [`crate::flyer::Flyers::report`].
 fn load_flyers(
     archives: &mut oag_assets::Archives,
@@ -671,7 +673,6 @@ fn load_flyers(
     xml: &str,
     screens: &oag_ui::screen::Screens,
     has_selection: bool,
-    screen_entry: &str,
     fury_gain: f32,
 ) -> Option<crate::flyer::Flyers> {
     // Every card: the base campaign's eight, Fury's eight and the two
@@ -734,8 +735,7 @@ fn load_flyers(
         }
     } else {
         log::warn!(
-            "{} authors no <Flyer name=\"FlyerModel\"> - Grid Selection draws no flyer",
-            screen_entry
+            "the campaign screen authors no <Flyer name=\"FlyerModel\"> - Grid Selection draws no flyer"
         );
     }
     flyers
@@ -870,8 +870,10 @@ fn load_omega(
         &xml,
         &screens,
         selection_layout.is_some(),
-        oag_omega::campaign::SCREEN_ENTRY,
-        oag_omega::campaign::FURY_CARD_GAIN,
+        title
+            .campaign
+            .fury_card_gain
+            .unwrap_or(crate::flyer::FURY_GAIN),
     );
     // See [`load_hd`]'s own identical call - Omega's front end is HD's
     // `PI001` plugin carried forward, at the same relative root path.

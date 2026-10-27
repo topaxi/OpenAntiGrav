@@ -1195,7 +1195,7 @@ the helpers both share (`load_flyers`, `push_card_art`; Omega's reader falls bac
 last, which is why `FURY_GRID_RANGE` 8..16 still holds), so `--menu-page cell-select`/`grid-select` land on
 Fury's first grid. The PS4 flyer models go through `oag_game::preview::psp2_scene::model_named` (the PS4
 `.rcsmodel` joined to its `.vex`, as the selection screens do); `Flyers::load` was scoped there on purpose, so
-no other caller changed. Fury's card texels take gain `oag_omega::campaign::FURY_CARD_GAIN` 1.0, not HD's 2.0
+no other caller changed. Fury's card texels take gain `Campaign::fury_card_gain` 1.0, not HD's 2.0
 (**fitted** off one shadPS4 frame: red field 0x40 against 0x80 at 2.0).
 Pairs (`omega/menu-cell-select`, `omega/menu-grid-select`; mean grey / RMSE / edge NCC): cell 129.0 / 0.658 /
 0.10 to 13.4 / 0.191 / 0.33; grid 55.0 / 0.397 / 0.27 to 40.9 / 0.333 / 0.25. HD's pairs unchanged (16.7, 15.0).

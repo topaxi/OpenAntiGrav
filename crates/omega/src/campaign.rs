@@ -43,11 +43,3 @@ pub const SCREEN_ENTRY: &str = r"Data\Plugins\Frontend\Gui\CellMode_Definition.x
 /// 1920x1080 grid for the rest of this title's front end
 /// (`crate::frontend::MENU_SKIN::space`).
 pub const AUTHORED_GRID: [f32; 2] = [1920.0, 1080.0];
-
-/// The factor Fury's flyer cards' texels are multiplied by (`oag_game::flyer::FURY_GAIN`
-/// is 2.0 on HD, where the PS3 materials double them). **Fitted, not read off a
-/// shader**: at HD's 2.0 the back card's red field drew 0x80 where the shadPS4
-/// frame of `09_Blitzed`'s `Cell Selection` reads 0x40 and the stripe red 255
-/// against 200, so the PS4 build takes the texels as they are. One frame, one
-/// card.
-pub const FURY_CARD_GAIN: f32 = 1.0;
