@@ -679,14 +679,16 @@ impl Scene {
                 continue;
             }
             let state = race.shield_of(slot);
+            // The swell at the draw alpha (`Race::shield_scale_of`).
+            let scale = Mat4::from_scale(Vec3::splat(race.shield_scale_of(slot)));
             // The previous pose composed with *this* frame's swell: the
             // shell's velocity is its craft's, and folding the swell delta
             // in would smear a stationary shell for growing.
             shell.write(
                 queue,
                 view_projection,
-                race.ship_model_matrix_of(slot) * Mat4::from_scale(Vec3::splat(state.scale())),
-                prev_vp * prev.ship(slot, race) * Mat4::from_scale(Vec3::splat(state.scale())),
+                race.ship_model_matrix_of(slot) * scale,
+                prev_vp * prev.ship(slot, race) * scale,
             );
             shell.tint(queue, state.shell_colour(), recoloured);
             // The authored `u` scroll, on the global clock (shield-pickup.md).
@@ -699,11 +701,14 @@ impl Scene {
             && cockpit_shield_visible(race)
         {
             let state = race.shield_of(0);
+            // `ShipShield::cockpit_scale` at the draw alpha's swell.
+            let scale = race.shield_scale_of(0) * oag_render::shield::COCKPIT_SCALE;
+            let scale = Mat4::from_scale(Vec3::splat(scale));
             sphere.write(
                 queue,
                 view_projection,
-                race.ship_model_matrix_of(0) * Mat4::from_scale(Vec3::splat(state.cockpit_scale())),
-                prev_vp * prev.ship(0, race) * Mat4::from_scale(Vec3::splat(state.cockpit_scale())),
+                race.ship_model_matrix_of(0) * scale,
+                prev_vp * prev.ship(0, race) * scale,
             );
             sphere.tint(queue, state.colour(), recoloured);
         }

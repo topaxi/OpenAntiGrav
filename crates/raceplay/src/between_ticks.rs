@@ -193,6 +193,10 @@ struct ShipPose {
     /// and the model's yaw, the body neither.
     position: Vec3,
     orientation: Quat,
+    /// The per-tick scalars drawn on the hull: the airbrake flaps' levels and
+    /// the shield shell's swell.
+    flaps: [f32; 2],
+    shield_swell: f32,
     key: ShipKey,
 }
 
@@ -350,6 +354,8 @@ impl Race {
                     model: self.drawn_model(slot),
                     position: self.drawn_position(slot),
                     orientation: ship.physics.body.orientation,
+                    flaps: self.view.flaps[slot],
+                    shield_swell: self.view.shield[slot].swell(),
                     key: self.ship_key(slot),
                 }
             }),
@@ -492,6 +498,34 @@ impl Race {
             position: self.nozzle_of(slot)?,
             alpha: self.world_alpha().unwrap_or(1.0),
         })
+    }
+
+    /// The craft in `slot`'s airbrake flap levels (`0..=100`) at the draw alpha:
+    /// the flaps swing between ticks with the hull they hang on.
+    pub(super) fn flaps_between(&self, slot: usize) -> [f32; 2] {
+        let current = self.view.flaps[slot];
+        match (self.ship_alpha(slot), &self.view.poses.previous) {
+            (Some(alpha), Some(previous)) => {
+                let from = previous.ships[slot].flaps;
+                [0, 1].map(|i| from[i] + (current[i] - from[i]) * alpha)
+            }
+            _ => current,
+        }
+    }
+
+    /// The scale the craft in `slot`'s shield shell is drawn at: the swell at
+    /// the draw alpha plus this tick's flicker, which stays stepped (the
+    /// original's flicker is a per-frame random draw, discrete).
+    #[must_use]
+    pub fn shield_scale_of(&self, slot: usize) -> f32 {
+        let state = &self.view.shield[slot];
+        match (self.ship_alpha(slot), &self.view.poses.previous) {
+            (Some(alpha), Some(previous)) => {
+                let from = previous.ships[slot].shield_swell;
+                state.scale() - (state.swell() - from) * (1.0 - alpha)
+            }
+            _ => state.scale(),
+        }
     }
 
     /// One live projectile's model matrix at the draw alpha, `current` being

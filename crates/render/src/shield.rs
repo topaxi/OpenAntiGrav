@@ -433,6 +433,13 @@ impl ShipShield {
         self.active
     }
 
+    /// The impact swell alone, without the flicker [`Self::scale`] adds: the
+    /// part a frame drawn between two ticks blends.
+    #[must_use]
+    pub fn swell(&self) -> f32 {
+        self.swell
+    }
+
     /// The uniform scale the shell is drawn at, on top of the craft's own matrix.
     ///
     /// `swell + 0.012 + n * 0.012`. Near `1.024` at rest and near `1.124` on the

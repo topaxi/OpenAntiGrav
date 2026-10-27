@@ -85,6 +85,14 @@ Code: `crates/raceplay/src/between_ticks.rs`. Tests: its unit tests in
   grid units against a 1.8-unit step a tick in
   `tests::weapons::a_locked_reticle_follows_its_target_between_ticks`. At alpha
   `1.0`, or with no target on screen, the reticle is the tick's untouched.
+- **The per-tick scalars on the hull blend too** (2026-10-27): the airbrake
+  flaps' levels (`Race::airbrake_flaps_of` through `flaps_between`), the shield
+  shell's and cockpit sphere's swell (`Race::shield_scale_of`; the shell's
+  flicker is a per-frame random draw in the original and stays stepped) and
+  the HD sprite flare's nozzle axis (`Race::hd_sprite_quad` reads
+  `Race::body_between`). The previous tick's flap levels and swell ride in the
+  craft's captured pose. The cannon muzzle flash stays stepped: a flash, drawn
+  for a tick where it fires.
 - **Particles move between ticks on the GPU** (2026-10-27). Every `.pob`
   particle (`oag_fx::psys`: the stage's effects, the collision sparks, the
   scenery effects, Omega's heat haze) keeps where its pool's last advance found
@@ -180,5 +188,3 @@ they did. See that page's "Blur length" section.
 ## Open
 
 - The mist overlay's zoom and scroll step per tick (see above).
-- The HD sprite flare's nozzle axis reads the body's forward at the tick, not
-  the drawn hull's.
