@@ -186,7 +186,9 @@ What replaced them, read off `NEWGUI/Definition.xml`'s root screen
   package - a matching 2048x2048 PVRTC-II sheet of HD/Fury circuit wordmarks
   and bronze/silver/gold medal hexagons, feeding exactly the
   `FE3DCanvas_Add{HD,Fury}CampaignEventButtons` widgets that page
-  documents). Whether `FE3DCanvas` *also* renders a real 3D backdrop model
+  documents). *(2026-10-27: it draws a procedural triangle-lattice mesh behind every page, see
+  [canvas3d-lattice.md](../ghidra/functions/vita-2048-eu-v104/canvas3d-lattice.md); the line law is
+  unread.)* Whether `FE3DCanvas` *also* renders a real 3D backdrop model
   underneath - hardcoded in the executable rather than XML-declared, since
   no background-map asset with an obvious name turned up in either package
   - is unmeasured; what is measured is that its icon/label layer is a
