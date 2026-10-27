@@ -495,3 +495,28 @@ HD: **checked, differs** (no `Canvas3D`).
 | --- | --- | --- |
 | `0x812e4a04` | `Math_BuildEulerRotation` | 85 |
 | `0x8151d3f4` | `g_pCanvas3DInstance` | 70 |
+
+## The atlas descriptor decoded: the format is the file's, the ink is not in it (2026-10-27)
+
+Read live (Vita3K 0.2.1, headless, title screen), every 16-byte `SceGxmTexture` whose data word is
+`0x71492020`: 606 copies `82721600 030b000b 71492020 80000000` and 139 with control word 0 `82721601`
+(bit 0 differs, purpose unread). One more, `40001000 828de66c 71492020 402aaab0`, is not a texture
+descriptor of this atlas. Layout read against Vita3K's `SceGxmTexture` (read for behaviour, decode handwritten).
+Confidence 85 for the decode, since it matches the file on size and mip count.
+
+- **`0x82721600` is control word 0 (sampler state), not a format word.** The format is
+  `base_format` of word 1 (`0x03`, bits 24-28) with `format0` (word 0 bit 31, set): `0x83` = `PVRTII4BPP`, type 0
+  (swizzled), swizzle `ABGR` (word 3 bits 12-14 = 0). That is exactly the file header's `0x83000000`, `0x0` type.
+  Word 1 low half gives 2048 x 2048 (`2^0xb` both), word 0 `mip_count` 9 (ten levels, the file's `0x0a`).
+- Sampler: addressing 0 (repeat) both axes, `mip_filter` 1, `min_filter` 1, `mag_filter` 1 (trilinear),
+  `gamma_mode` 0, `lod_bias` raw 19. Vita3K maps raw to `(raw - 31) / 8` = **-1.5** (sharper).
+- **So no format or gamma difference exists**, and a texel under the game's format is the file's texel.
+  The lattice's own LOD is `log2(~1.72 texels per pixel) = 0.78` (the earlier fit's lod, which is thus derived);
+  with the bias, `lod = max(0, 0.78 - 1.5) = 0`: mip 0, ink 1.0.
+- Live-matrix sim at lod 0 (offset 0, phase already in the matrix): title boxes 2.61/1.80/2.35
+  against white 2.43/1.68/2.20, game mode 2.40/2.39 against 2.25/2.22. **Loses to white.** At ink 0.5 it scores 0.5-0.65.
+
+Verdict: the descriptor does not tell the GPU to read half ink; it says the opposite (mip 0, no blur). The half ink
+is still unexplained (confidence 75 it is not in the texture state): what is left is a layer drawn over the canvas by another item,
+or the pass's output blend, neither read. Not wired. Omega: canvasTexture.gnf, **not checkable** (no readout), the same
+item ships.
