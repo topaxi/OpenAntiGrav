@@ -57,6 +57,9 @@ pub struct Pointer {
     /// The secondary button went down this tick. Read as "back" wherever a
     /// screen has a back, which is what circle means on the same screens.
     pub back: bool,
+    /// The middle button went down this tick. **Ours**: read as "reset this row to its
+    /// default" on a settings page, and nothing elsewhere.
+    pub reset: bool,
     /// Wheel detents this tick, positive toward the player - the direction a
     /// list moves *down* by, matching every desktop's own convention.
     pub scroll: i32,
@@ -94,6 +97,7 @@ impl Pointer {
         !self.moved
             && !self.clicked
             && !self.back
+            && !self.reset
             && self.scroll == 0
             && self.drag == (0.0, 0.0)
             && !self.pressed

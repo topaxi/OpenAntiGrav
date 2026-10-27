@@ -68,6 +68,9 @@ pub enum Part {
     StepBack,
     /// A step arrow pointing forward: move the row's value one step on.
     StepForward,
+    /// The reset mark on the selected row: put its value back on the default. Only laid
+    /// out on a row that is off its default, so a tap on it always does something.
+    Reset,
 }
 
 /// One rect a pointer can land on, and the row and part it belongs to.
@@ -94,10 +97,22 @@ pub fn regions(
     measure: &dyn Fn(&str) -> f32,
 ) -> Vec<Region> {
     let page = menu.page();
-    match skin.strip().filter(|_| strip::suits(page)) {
+    let mut out = match skin.strip().filter(|_| strip::suits(page)) {
         Some(strip) => strip::regions(menu, skin, strip, measure, frame),
         None => super::rows::regions(menu, skin, frame),
+    };
+    // The footer's reset prompt, drawn by whoever draws the footer, while the row is off default.
+    if let Some(rect) = menu
+        .reset_rect
+        .filter(|_| !menu.reset_inline && menu.reset_offered().is_some())
+    {
+        out.push(Region {
+            row: menu.selected(),
+            part: Part::Reset,
+            rect,
+        });
     }
+    out
 }
 
 /// The region under `at`, if any. The first in list order wins, which
@@ -112,7 +127,7 @@ pub fn hit(regions: &[Region], at: (f32, f32)) -> Option<Region> {
         .filter(|region| contains(region.rect, at))
         .max_by_key(|region| match region.part {
             Part::Row => 0,
-            Part::StepBack | Part::StepForward => 1,
+            Part::StepBack | Part::StepForward | Part::Reset => 1,
         })
 }
 
@@ -177,7 +192,16 @@ impl Menu {
                 Part::Row => out.extend(self.activate()),
                 Part::StepBack => out.extend(self.adjust(-1)),
                 Part::StepForward => out.extend(self.adjust(1)),
+                Part::Reset => out.extend(self.reset()),
             }
+        }
+
+        // The middle button resets the row under the pointer, else the one the cursor is on.
+        if pointer.reset {
+            if let Some(region) = hit {
+                self.move_cursor(page, region.row);
+            }
+            out.extend(self.reset());
         }
 
         if pointer.back {

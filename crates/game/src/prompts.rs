@@ -140,3 +140,38 @@ pub fn forced_family(style: PromptStyle) -> Option<PromptFamily> {
 
 #[cfg(test)]
 mod tests;
+
+/// The footer's reset prompt (the title's `Square` glyph and `RESET TO DEFAULT`) while the
+/// selected row is off its default, drawn the way `Confirm` is so the prompt system redraws
+/// the glyph for the device in use, and the rect it occupies for a tap. `None` when there is
+/// nothing to reset or the source's legend authors no `Confirm` to model it on. Shared by
+/// the live menu stage and `--menu-page`.
+///
+/// A title whose glyphs are unread has no stand-in to redraw, so its prompt names the keys
+/// bound to the button after the words instead (`bindings`, the same lookup the Controls page
+/// reads) - the device-aware glyph waits on that title's `Prompts` table being measured.
+#[must_use]
+pub fn reset_prompt(
+    menu: &oag_ui::menu::Menu,
+    legend: Option<&oag_ui_screens::campaign::footer::NavigationLegend>,
+    bindings: &dyn Fn(Button) -> Vec<&'static str>,
+    measure: &dyn Fn(&str) -> f32,
+) -> Option<(Vec<oag_ui::frontend::Draw>, [f32; 4])> {
+    if menu.is_reset_inline() {
+        return None;
+    }
+    let mut word = menu.reset_offered()?.to_string();
+    let glyph = menu.reset_glyph();
+    if glyph.is_none() {
+        let keys = bindings(Button::Square).join(" / ");
+        if !keys.is_empty() {
+            word = format!("{word} ({keys})");
+        }
+    }
+    legend?.reset_prompt(
+        glyph,
+        &word,
+        &oag_ui_screens::picker::FaceScales::default(),
+        measure,
+    )
+}

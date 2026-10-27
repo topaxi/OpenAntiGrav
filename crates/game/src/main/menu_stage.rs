@@ -895,9 +895,25 @@ impl MenuStage {
         } else {
             list
         };
-        // The footer's own draws, skipped mid-transition too - see `footer.rs`.
+        // The footer's own draws, skipped mid-transition too - see `footer.rs`. The reset
+        // prompt's rect goes back to the menu for the next pointer tick.
+        let reset = if self.change.is_none() {
+            let measure = |text: &str| font::measure(&self.default_atlas, text);
+            oag_game::prompts::reset_prompt(
+                &self.menu,
+                self.nav_legend.as_ref(),
+                bound_keys,
+                &measure,
+            )
+        } else {
+            None
+        };
+        self.menu
+            .set_reset_rect(reset.as_ref().map(|(_, rect)| *rect));
         let (list, ticker_clip) = if self.change.is_none() {
-            self.footer_overlay(list, ticker_tips)
+            let (mut list, clip) = self.footer_overlay(list, ticker_tips);
+            list.extend(reset.into_iter().flat_map(|(draws, _)| draws));
+            (list, clip)
         } else {
             (list, None)
         };

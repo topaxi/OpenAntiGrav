@@ -15,6 +15,7 @@ mod hide;
 mod nav;
 mod navigation;
 mod pointer;
+mod reset;
 mod reveal;
 mod rows;
 mod settings;

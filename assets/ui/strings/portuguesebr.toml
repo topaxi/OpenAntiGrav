@@ -294,3 +294,5 @@ OAG_PAUSE_OWNED = { text = "JOGADOR %s PAUSOU - QUALQUER UM PODE RETOMAR EM %s",
 OAG_PAUSE_OPEN = { text = "JOGADOR %s PAUSOU - QUALQUER UM PODE RETOMAR", human = false }
 OAG_PAUSE_OPEN_UNOWNED = { text = "PAUSADO - QUALQUER UM PODE RETOMAR", human = false }
 OAG_COUNTDOWN_GO = { text = "VAI", human = false }
+
+OAG_MENU_RESET_TO_DEFAULT = { text = "RESTAURAR O PADRÃO", human = false }

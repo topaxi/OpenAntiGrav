@@ -400,3 +400,5 @@ ids = [
     # The resume countdown's last word, new 2026-10-14; no translation pass yet.
     "OAG_COUNTDOWN_GO",
 ]
+
+OAG_MENU_RESET_TO_DEFAULT = { text = "RESTAURER LA VALEUR PAR DÉFAUT", human = false }

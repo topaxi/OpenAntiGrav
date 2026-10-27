@@ -287,6 +287,13 @@ pub(super) fn menu_page(
     for (key, value) in crate::settings::menu_seeds(settings, anisotropy, title, platform) {
         model.seed(key, &value);
     }
+    crate::settings::supply_reset(
+        &mut model,
+        title,
+        platform,
+        strings,
+        nav_legend.is_some_and(|legend| legend.can_model_reset_prompt()),
+    );
     // The AI PILOTS page's own three sources. Read off the player's real
     // pilot directory rather than invented, for the reason the circuits above
     // are read off the disc: a `PILOT` row showing nothing and one showing
@@ -399,7 +406,7 @@ pub(super) fn menu_page(
     // `model.depth()` is always `1` regardless of which page was named.
     // See `crate::main::menu_stage::MenuStage::render`'s own call site,
     // which this mirrors, for the live session's own gate.
-    let nav_legend_draws: Vec<oag_ui::frontend::Draw> =
+    let mut nav_legend_draws: Vec<oag_ui::frontend::Draw> =
         nav_legend.map_or_else(Vec::new, |legend| {
             legend.draw_gated(
                 &oag_ui_screens::picker::FaceScales::default(),
@@ -407,6 +414,17 @@ pub(super) fn menu_page(
                 model.depth() > 1,
             )
         });
+    // The reset prompt, as the live footer draws it (`MenuStage::footer_overlay`).
+    nav_legend_draws.extend(
+        crate::prompts::reset_prompt(
+            &model,
+            nav_legend,
+            &|button| settings.controls.live_bindings().names_for(button),
+            default_measure,
+        )
+        .map(|(draws, _)| draws)
+        .unwrap_or_default(),
+    );
     // The footer's own scrolling tip ticker, frozen at `elapsed = 0.0` - a
     // still has no clock of its own to animate the scroll with, so this
     // shows whichever tip the rotation starts on rather than one mid-scroll.

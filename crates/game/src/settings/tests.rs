@@ -1160,3 +1160,137 @@ fn the_cpu_governor_is_on_by_default_and_for_a_file_that_omits_it() {
     let (loaded, _) = load_text("[graphics]\nanisotropy = \"4x\"\n");
     assert!(loaded.graphics.cpu_governor);
 }
+
+/// What a row's reset goes back to is what a first run writes: the menus' defaults are read
+/// off the loader's own fresh settings, per `(title, platform)`, never a table kept beside it.
+#[test]
+fn the_reset_defaults_are_what_a_first_run_loads() {
+    use std::sync::atomic::{AtomicU32, Ordering};
+    static NEXT: AtomicU32 = AtomicU32::new(0);
+    let dir = std::env::temp_dir().join(format!(
+        "oag-settings-first-run-{}-{}",
+        std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    ));
+    let loaded = load_from(&dir.join("settings.toml")).expect("a missing file loads defaults");
+    std::fs::remove_dir_all(&dir).ok();
+    let shown = |seeds: Vec<(&'static str, oag_ui::menu::Value)>| -> Vec<(&'static str, String)> {
+        seeds
+            .into_iter()
+            .map(|(k, v)| (k, format!("{v:?}")))
+            .collect()
+    };
+    for (title, platform) in known_profiles() {
+        assert_eq!(
+            shown(default_seeds(title, platform)),
+            shown(menu_seeds(
+                &loaded,
+                loaded.graphics.anisotropy,
+                title,
+                platform
+            )),
+            "{} on {platform:?}",
+            title.name
+        );
+    }
+}
+
+/// Square on every value row of the shipped menus, on every title, puts the row on the value a
+/// first run holds - and the rows that cannot (a list read off the disc, a disabled row) stay
+/// put. The sweep has to reach real rows, or it proves nothing.
+#[test]
+fn square_on_every_shipped_value_row_restores_the_first_run_value() {
+    use oag_core::buttons::{Button, Input};
+    use oag_ui::menu::{Definition, Menu, MenuEvent};
+    let strings = oag_ui::language::StringTable::default();
+    let mut restored = 0;
+    for (title, platform) in known_profiles() {
+        let defaults = default_seeds(title, platform);
+        let definition = Definition::built_in(&strings).expect("the built-in menu parses");
+        let pages: Vec<String> = definition.pages.iter().map(|p| p.id.clone()).collect();
+        for page in pages {
+            let mut menu = Menu::new(definition.clone());
+            supply_reset(&mut menu, title, platform, &strings, true);
+            for (key, value) in &defaults {
+                menu.seed(key, value);
+            }
+            assert!(menu.open(&page));
+            for row in 0..menu.page().entries.len() {
+                let entry = &menu.page().entries[row];
+                let Some(setting) = entry.setting().map(str::to_string) else {
+                    continue;
+                };
+                let Some(default) = defaults.iter().find(|(k, _)| *k == setting).map(|(_, v)| v)
+                else {
+                    continue;
+                };
+                // Walk the cursor to the row, step it once off the default, then reset.
+                while menu.selected() != row {
+                    press(&mut menu, Button::Down);
+                }
+                if menu.is_disabled(&menu.page().entries[row].clone()) {
+                    continue;
+                }
+                let moved = press(&mut menu, Button::Right);
+                if moved.is_empty() || !menu.can_reset() {
+                    continue;
+                }
+                let events = press(&mut menu, Button::Square);
+                assert_eq!(
+                    events,
+                    vec![MenuEvent::Changed {
+                        setting: setting.clone(),
+                        value: default.clone(),
+                    }],
+                    "{} on {platform:?}, page {page}, row {setting}",
+                    title.name
+                );
+                restored += 1;
+            }
+        }
+    }
+    assert!(restored > 100, "the sweep reached only {restored} rows");
+
+    fn press(menu: &mut Menu, button: Button) -> Vec<MenuEvent> {
+        let mut input = Input::new();
+        input.begin_frame(1 << button.index());
+        menu.update(&mut input)
+    }
+}
+
+/// The footer offers the reset prompt exactly while the selected row is off its default, and
+/// never on a row that holds no value; a title with no glyph names the keys instead.
+#[test]
+fn the_reset_prompt_is_offered_only_off_default() {
+    use oag_core::buttons::{Button, Input};
+    use oag_ui::menu::{Definition, Menu, Value};
+    let strings = oag_ui::language::StringTable::default();
+    let mut menu = Menu::new(Definition::built_in(&strings).expect("parses"));
+    supply_reset(
+        &mut menu,
+        oag_pulse::TITLE,
+        oag_disc::Platform::Psp,
+        &strings,
+        true,
+    );
+    for (key, value) in default_seeds(oag_pulse::TITLE, oag_disc::Platform::Psp) {
+        menu.seed(key, &value);
+    }
+    assert!(menu.open("audio"));
+    assert!(menu.reset_offered().is_none(), "nothing is off default yet");
+    menu.seed("audio.music_volume", &Value::Text("50".to_string()));
+    assert!(menu.reset_offered().is_some());
+    assert_eq!(menu.reset_glyph(), Some('δ'), "Pulse's Square stand-in");
+    let mut input = Input::new();
+    input.begin_frame(1 << Button::Square.index());
+    menu.update(&mut input);
+    assert!(menu.reset_offered().is_none(), "back on its default");
+    supply_reset(
+        &mut menu,
+        oag_omega::TITLE,
+        oag_disc::Platform::Ps4,
+        &strings,
+        true,
+    );
+    assert_eq!(menu.reset_glyph(), None, "Omega's glyphs are unread");
+}

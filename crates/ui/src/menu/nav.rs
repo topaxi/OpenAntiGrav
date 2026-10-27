@@ -57,6 +57,14 @@ impl Log {
     }
 }
 
+/// Where a reset moves a row to.
+enum Reset {
+    /// A choice row's index.
+    Choice(usize),
+    /// A toggle row's state.
+    Toggle(bool),
+}
+
 /// The direction a value stepped in.
 fn step_dir(step: i32) -> Dir {
     if step < 0 { Dir::Left } else { Dir::Right }
@@ -116,6 +124,169 @@ impl Menu {
             }
             _ => None,
         }
+    }
+
+    /// Records what `setting` is set to on a fresh install, for [`Self::reset`] to go back to.
+    ///
+    /// Supplied by whoever owns the settings, next to [`Self::seed`] and from the same
+    /// source the settings loader fills a new file from, so the menus keep no table of
+    /// their own. A value is matched the way `seed` matches one: text against a choice
+    /// row's stored value, a flag against a toggle.
+    pub fn set_default(&mut self, setting: &str, value: Value) {
+        match self.defaults.iter_mut().find(|(key, _)| key == setting) {
+            Some(held) => held.1 = value,
+            None => self.defaults.push((setting.to_string(), value)),
+        }
+    }
+
+    /// The words of the reset prompt the footer draws while the selected row is off its
+    /// default ("RESET TO DEFAULT"). Supplied from the string table; empty offers none.
+    pub fn set_reset_label(&mut self, label: &str) {
+        label.clone_into(&mut self.reset_label);
+    }
+
+    /// The codepoint the title's faces draw as the reset button (its `Square` stand-in), which
+    /// the prompt system redraws for the device in use. `None` where the title's glyphs are
+    /// unread: the footer then shows the words alone.
+    pub fn set_reset_glyph(&mut self, glyph: Option<char>) {
+        self.reset_glyph = glyph;
+    }
+
+    /// See [`Self::set_reset_glyph`].
+    #[must_use]
+    pub fn reset_glyph(&self) -> Option<char> {
+        self.reset_glyph
+    }
+
+    /// The reset prompt's words, when the footer should show it: the selected row is off its
+    /// default and a label was supplied.
+    #[must_use]
+    pub fn reset_offered(&self) -> Option<&str> {
+        (!self.reset_label.is_empty() && self.can_reset()).then_some(self.reset_label.as_str())
+    }
+
+    /// Draw the reset hint as a line under the rows instead of a footer prompt: for a source
+    /// whose footer authors no `Confirm` to model a prompt on. Set where the menu is built.
+    pub fn set_reset_inline(&mut self, inline: bool) {
+        self.reset_inline = inline;
+    }
+
+    /// Whether the hint is the inline line, not a footer prompt.
+    #[must_use]
+    pub fn is_reset_inline(&self) -> bool {
+        self.reset_inline
+    }
+
+    /// The reset hint's text as the inline line draws it: the words and the keys bound to
+    /// the reset button, while the row is off its default and no warning or restart note
+    /// holds the line under the rows. `None` unless [`Self::set_reset_inline`].
+    pub(super) fn reset_hint(
+        &self,
+        bindings: &dyn Fn(super::Button) -> Vec<&'static str>,
+    ) -> Option<String> {
+        if !self.reset_inline || self.line_is_noted() {
+            return None;
+        }
+        let word = self.reset_offered()?;
+        let keys = bindings(super::Button::Square).join(" / ");
+        Some(if keys.is_empty() {
+            word.to_string()
+        } else {
+            format!("{word} ({keys})")
+        })
+    }
+
+    /// Whether a row on screen has a note that takes the line under the rows.
+    fn line_is_noted(&self) -> bool {
+        let first = self.scroll();
+        self.page()
+            .entries
+            .iter()
+            .skip(first)
+            .take(self.visible_rows())
+            .any(|entry| {
+                self.warning(entry).is_some()
+                    || self.restart_note(entry).is_some()
+                    || self.unavailable(entry).is_some()
+            })
+    }
+
+    /// Where the footer drew the reset prompt, `[x, y, width, height]` in the page's grid, so a
+    /// click or a tap on it resets the row. Told after each draw by whoever draws the footer,
+    /// and used by the next pointer tick.
+    pub fn set_reset_rect(&mut self, rect: Option<[f32; 4]>) {
+        self.reset_rect = rect;
+    }
+
+    /// Where the selected row's value would go on a reset: `None` for a row that holds no
+    /// value, is disabled or pinned, has no recorded default, is already at it, or does
+    /// not offer it (a list read off the disc may lack the default).
+    fn reset_target(&self) -> Option<Reset> {
+        if self.selected_is_disabled() {
+            return None;
+        }
+        let entry = self.page().entries.get(self.cursor[self.current()])?;
+        let setting = entry.setting()?;
+        let default = &self.defaults.iter().find(|(key, _)| key == setting)?.1;
+        match (entry, default) {
+            (
+                Entry::Choice {
+                    values, current, ..
+                },
+                Value::Text(text),
+            ) => {
+                let at = values.iter().position(|v| &v.value == text)?;
+                (at != *current).then_some(Reset::Choice(at))
+            }
+            (Entry::Toggle { on, .. }, Value::Flag(flag)) => {
+                (flag != on).then_some(Reset::Toggle(*flag))
+            }
+            _ => None,
+        }
+    }
+
+    /// Whether [`Self::reset`] would change the selected row. What a reset affordance asks
+    /// before it shows itself.
+    #[must_use]
+    pub fn can_reset(&self) -> bool {
+        self.reset_target().is_some()
+    }
+
+    /// Puts the selected row back on its default, reporting it as any other edit so the
+    /// owner applies and persists it the same way. Nothing on a row that holds no value,
+    /// is disabled, or is already there.
+    pub(super) fn reset(&mut self) -> Option<MenuEvent> {
+        let target = self.reset_target()?;
+        let page = self.current();
+        let row = self.cursor[page];
+        let entry = self.definition.pages[page].entries.get_mut(row)?;
+        let event = match (entry, target) {
+            (
+                Entry::Choice {
+                    setting,
+                    values,
+                    current,
+                    ..
+                },
+                Reset::Choice(at),
+            ) => {
+                *current = at;
+                MenuEvent::Changed {
+                    setting: setting.clone(),
+                    value: Value::Text(values[at].value.clone()),
+                }
+            }
+            (Entry::Toggle { setting, on, .. }, Reset::Toggle(flag)) => {
+                *on = flag;
+                MenuEvent::Changed {
+                    setting: setting.clone(),
+                    value: Value::Flag(flag),
+                }
+            }
+            _ => return None,
+        };
+        self.nav.push(Nav::Stepped(None));
+        Some(event)
     }
 
     /// Activates the selected row.

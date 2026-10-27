@@ -695,6 +695,81 @@ fn migrate(table: &mut toml::Table) {
     }
 }
 
+/// The settings a first run starts from: every default, a render profile row per known
+/// `(title, platform)`, and the web build's first-run choices.
+///
+/// What [`load`] writes to a missing file, and so what a row's reset goes back to
+/// ([`default_seeds`]): one definition of "the default", never a second table.
+#[must_use]
+pub fn fresh() -> Settings {
+    #[allow(unused_mut)]
+    let mut settings = Settings::default();
+    ensure_known_titles(&mut settings);
+    #[cfg(target_arch = "wasm32")]
+    web::first_run(&mut settings);
+    settings
+}
+
+/// What every menu row reads on a fresh install, for the open source: [`menu_seeds`] over
+/// [`fresh`]. The values a row's reset puts back.
+#[must_use]
+pub fn default_seeds(
+    title: &oag_title::Title,
+    platform: oag_disc::Platform,
+) -> Vec<(&'static str, oag_ui::menu::Value)> {
+    let settings = fresh();
+    menu_seeds(&settings, settings.graphics.anisotropy, title, platform)
+}
+
+/// What Wipeout 2048's settings panels hold on a fresh install, read off [`fresh`] and put in
+/// the panels' own terms (list indices, percentages). The inverse of the mapping
+/// `main/session/frame.rs` applies when a panel moves.
+#[must_use]
+pub fn option_defaults() -> oag_ui::frontend::OptionDefaults {
+    use oag_display::display::CameraView;
+    use oag_physics::pilot_assist::Level;
+    let settings = fresh();
+    oag_ui::frontend::OptionDefaults {
+        camera: match settings.graphics.camera_view {
+            CameraView::Close => 0,
+            CameraView::Far => 1,
+            CameraView::Internal => 2,
+        },
+        pilot: match settings.controls.pilot_assist {
+            Level::Off => 0,
+            Level::Normal => 1,
+            Level::Extreme => 2,
+        },
+        music: settings.audio.music_volume.percent(),
+        sfx: settings.audio.sfx_volume.percent(),
+    }
+}
+
+/// Tells `model` what a fresh install holds on every row and what to call the reset hint,
+/// which is all its reset button needs ([`oag_ui::menu::Menu::set_default`]). Both the live
+/// menus and `--menu-page` call it after seeding.
+pub fn supply_reset(
+    model: &mut oag_ui::menu::Menu,
+    title: &oag_title::Title,
+    platform: oag_disc::Platform,
+    strings: &oag_ui::language::StringTable,
+    has_footer_legend: bool,
+) {
+    model.set_reset_inline(!has_footer_legend);
+    for (key, value) in default_seeds(title, platform) {
+        model.set_default(key, value);
+    }
+    model.set_reset_glyph(
+        title
+            .prompts
+            .glyphs
+            .iter()
+            .find(|(_, prompt)| *prompt == oag_title::prompts::Prompt::Square)
+            .map(|&(stand_in, _)| stand_in),
+    );
+    model.set_reset_label(strings.get_or_fallback("OAG_MENU_RESET_TO_DEFAULT", "RESET TO DEFAULT"));
+}
+
 /// Loads settings from [`path`], creating the file - or filling in whatever
 /// keys it is missing - with defaults.
 ///
@@ -766,13 +841,9 @@ fn load_from(path: &std::path::Path) -> Result<Settings> {
                 }
             }
         }
-        None => Settings::default(),
+        None => fresh(),
     };
     ensure_known_titles(&mut settings);
-    #[cfg(target_arch = "wasm32")]
-    if on_disk.is_none() {
-        web::first_run(&mut settings);
-    }
 
     let canonical = format!(
         "{HEADER}{}",

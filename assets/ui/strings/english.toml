@@ -473,3 +473,7 @@ OAG_PAUSE_OPEN_UNOWNED = { text = "PAUSED - ANYONE CAN RESUME", human = false }
 # no countdown art - `crates/game/src/pause.rs`. The digits are numerals and need
 # no string. **Chosen, not measured**.
 OAG_COUNTDOWN_GO = { text = "GO", human = false }
+
+# The hint under a settings page's rows while the selected row is off its default,
+# also what a click or a tap on it does. Ours, in no original.
+OAG_MENU_RESET_TO_DEFAULT = { text = "RESET TO DEFAULT", human = false }

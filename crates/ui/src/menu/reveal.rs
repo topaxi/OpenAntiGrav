@@ -170,6 +170,9 @@ impl Menu {
         if input.take(Button::Cross) || input.take(Button::Start) {
             out.extend(self.activate());
         }
+        if input.take(Button::Square) {
+            out.extend(self.reset());
+        }
         if input.take(Button::Circle) {
             out.extend(self.back());
         }

@@ -280,6 +280,9 @@ impl Stage {
                 });
             }
         }
+        loaded
+            .frontend
+            .set_option_defaults(crate::settings::option_defaults());
         let mut stage = FrontendStage {
             renderer,
             frontend: loaded.frontend,

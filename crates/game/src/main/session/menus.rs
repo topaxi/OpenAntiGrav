@@ -355,6 +355,16 @@ impl Session {
             &oag_game::mods::choices(&shell.mods, &shell.strings),
         );
         self.seed_menu(&mut model, shell.title, shell.platform);
+        settings::supply_reset(
+            &mut model,
+            shell.title,
+            shell.platform,
+            &shell.strings,
+            shell
+                .nav_legend
+                .as_ref()
+                .is_some_and(|legend| legend.can_model_reset_prompt()),
+        );
         // What the row is set to comes from the settings file, above; what the
         // game is *drawing with* can only come from here, and the RENDERER row's
         // restart note is the difference between the two. Told every time the

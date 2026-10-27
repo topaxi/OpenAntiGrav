@@ -575,6 +575,17 @@ pub struct Menu {
     /// The navigation sounds this menu has called for since the caller last
     /// drained them with [`Self::take_nav`].
     nav: nav::Log,
+    /// What each setting is set to on a fresh install, supplied by whoever owns
+    /// the settings. See [`Self::set_default`].
+    defaults: Vec<(String, Value)>,
+    /// The words of the footer's reset prompt. See [`Self::set_reset_label`].
+    reset_label: String,
+    /// Where that prompt was drawn. See [`Self::set_reset_rect`].
+    reset_rect: Option<[f32; 4]>,
+    /// The title's stand-in codepoint for the reset button. See [`Self::set_reset_glyph`].
+    reset_glyph: Option<char>,
+    /// Whether the hint is a line under the rows. See [`Self::set_reset_inline`].
+    reset_inline: bool,
 }
 
 /// How many rows a page shows before the caller says otherwise.
@@ -612,6 +623,11 @@ impl Menu {
             arrival: Some(0),
             scroller: pointer::Scroller::default(),
             nav: nav::Log::default(),
+            defaults: Vec::new(),
+            reset_label: String::new(),
+            reset_rect: None,
+            reset_glyph: None,
+            reset_inline: false,
         }
     }
 
@@ -899,6 +915,9 @@ impl Menu {
 
         if input.take(Button::Cross) || input.take(Button::Start) {
             out.extend(self.activate());
+        }
+        if input.take(Button::Square) {
+            out.extend(self.reset());
         }
         if input.take(Button::Circle) {
             out.extend(self.back());
