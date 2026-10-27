@@ -20,13 +20,20 @@ code. It supersedes the HD lead "Main Menu and Racebox setup are our own tree" w
 
 Ranked by visible area on the 1920x1080 frame (read off the pair images, each pair run twice).
 
-1. **Omega Campaign cell and grid: Fury's card draws since 2026-10-27 (`omega-fury-cell`); leftovers.** Cell pair mean
-   grey 129.0 to 13.4, grid 55.0 to 40.9 (`docs/ui/campaign-screens.md`, "Omega: Fury's cards draw"). Open: the card
-   shell's outline and reflection (`00_flyer.rcsmodel` is rejected by `flyer::shell`'s PS3 chunk reader), the white box
-   where the wordmark (cell) and hexagon logo (grid) belong (second alpha texture of the PS4 material), the sponsors
-   strip and the red edge stripes, `17_TRACK` unresolved to `TALON'S JUNCTION`, and the Omega `Campaign Selection`
-   chooser (three-way: 2048, HD, Fury; `campaign-select` still refuses). Pair each of Omega's other two campaigns against
-   its own original frame when one is captured. The maintainer's recall that only Fury draws the red rect held: HD's grids on Omega draw no red.
+1. **Omega Campaign cell and grid: the Fury card is whole since 2026-10-27 (`omega-flyer-shell`); what is left is pose and chooser.**
+   Shell, hexagon logo, sponsors, translucent arrows, wordmark, edge stripes and `TALON'S JUNCTION` draw
+   (`docs/ui/campaign-screens.md`, "Shell, art and track name"). Pair numbers: cell 13.4 to 12.7, grid 40.9 to 42.9 (the card is now
+   right but sits in the wrong place: it is 83 per cent of the grid's grey error). **Open**: (a) the grid card's pose and size on Omega
+   (original x 816-1628, y 150-700 with previous and next arrows; ours 747-1688, 200-880, HD's `GRID_POSE`; read Omega's own `<Flyer>`
+   widget numbers first); (b) the backdrop (ghost tower against blurred streaks); (c) cell: `CHOOSE RACE` and the unlock line dark
+   where the original is grey, the selected hex's white outline, the missing `RECORDS` prompt; (d) the Omega `Campaign Selection`
+   chooser (three-way: 2048, HD, Fury; `campaign-select` still refuses); (e) **a PS4-wide lead found on the way**: the PS4 build
+   leaves every vertex's coverage channel at 0 (red), so any blended or alpha-tested PS4 draw whose coverage is a texture's alpha
+   reads red instead (`mesh::rcs::psp2` `slots`; fixed for the flyer cards only in `psp2_scene::alpha_from_the_picture`): census
+   Omega's circuits and hulls (and 2048's Vita models, which share the builder: checked, applies, not wired) for draws it changes before
+   flipping the builder's default; the dark grey hull silhouette on Omega's base-campaign grid card (`grid-select-hd`) is unchecked against an original; (f) `Track Select` on Omega still lists
+   `NN_Track` ids (`CircuitNames::choose` needs one copy naming all 38; the table names only some). Pair each of Omega's other two
+   campaigns against its own original frame when one is captured.
 2. **Omega Ship Select: hull and logo** (34 grey). Ours draws the hull about twice the original's size in another livery
    (dark teal and yellow against pale blue and yellow) and a ringed Feisar logo against the flat one; the cursor starts on
    the top hex where the original's fresh profile lands on the first unlocked craft.

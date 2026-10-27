@@ -1199,12 +1199,54 @@ no other caller changed. Fury's card texels take gain `Campaign::fury_card_gain`
 (**fitted** off one shadPS4 frame: red field 0x40 against 0x80 at 2.0).
 Pairs (`omega/menu-cell-select`, `omega/menu-grid-select`; mean grey / RMSE / edge NCC): cell 129.0 / 0.658 /
 0.10 to 13.4 / 0.191 / 0.33; grid 55.0 / 0.397 / 0.27 to 40.9 / 0.333 / 0.25. HD's pairs unchanged (16.7, 15.0).
-**Left open**: the card shell's outline and reflection (`00_flyer.rcsmodel` is a PS4 container the chunk
-reader of `flyer::shell` rejects: `reading the shell's chunks: version 0xedad5cca`, cards are plain
-rectangles); a white box where the `blitzed` wordmark (cell) and the hexagon logo (grid) belong, an
-alpha-masked quad whose second texture the PS4 build does not apply; the sponsors strip; the red stripes on
-the cell card's right edge; the track name reads `17_TRACK` (Omega resolves no circuit names, as on `Track
-Select`). **`campaign-select` still refuses on Omega on purpose**: its chooser lists three campaigns (2048,
+**Shell, art and track name (2026-10-27, `omega-flyer-shell`).** Four things were wrong, all PS4-side:
+
+1. **The shell**: `flyer::shell` read `00_flyer.rcsmodel` through the PS3 chunk reader (`version 0xedad5cca`) and every card was a
+   plain rectangle with no reflection. It now branches on the container (`Shell::load_psp2`): the PS4 file's mesh objects
+   `cardShape` (front face `z > 0`: 25 triangles, 102.4 by 66.6 units, as HD's) and `card_reflectShape`, and the fade from the
+   reflection's `VertexColour1` alpha (`0x4c` at the card's edge, `0x26`, `0`; `oag_rcs::rcsmodel::psp2::SubMesh::colours`, read
+   through the record's own declaration, type nibble 11; confidence 90, identical to HD's chunk values). Chamfered corner, notches
+   and the fading reflection draw. Pinned by `omega_cards_take_the_ps4_shell`.
+2. **The white boxes (hexagon logo on the grid, arrows and sponsors strip)**: not a missing second texture. `simpletextureandtexturealpha`
+   binds one sampler (`Texture1`, `0x3bdc0403`; the material file's strings name only that) and the alpha is that texture's own
+   (`blitzed_grid.gnf` is white with the hexagons in its alpha, mean alpha 24). The PS4 build leaves a vertex's coverage channel at
+   `0`, which `shade.wesl` reads as the **red** channel (`slots::alpha_channel`; `slots::DEFAULT` is channel 3), so a white texture
+   drew a solid white box. Found by tinting the texture's colour: red turned the box solid red, blue made the arrows vanish. Fixed for
+   the flyer cards only (`psp2_scene::alpha_from_the_picture`); the circuits' and hulls' blended and alpha-tested PS4 draws keep
+   channel 0 until measured - **a lead**, not changed here: every PS4 model whose coverage is a texture's alpha currently reads
+   its red channel (open as a census lead in the front-end handover thread on the menu pairs).
+3. **The cell's wordmark and edge stripes**: the back (`flyer_Back.vex`) is the base campaign's `basicalpha` and `scrollingalpha`. HD
+   binds them swatch first, elements atlas second, alpha from the atlas's red channel, unlit (`slots` `0xc4`; probed on
+   `09_Blitzed`). Omega ships the same material names and textures with the samplers listed the other way round
+   (atlas hash `0xa8262b61`, picture the other), so the build's pick (first in address order, the atlas) drew a white strip with dark
+   blocks. `psp2_scene::coverage_from_the_atlas` takes HD's binding for those two names (**inherited from HD by material name, not
+   measured on PS4**; the `scrollingalpha` scroll parameter is not played, as on HD's path). Pinned by
+   `omega_card_materials_read_their_coverage_channels`.
+4. **The TRACK row**: Omega's `entries.xml` names `17_TRACK`/`18_TRACK` (and the Zone and 2048 circuits) but not the other
+   `NN_Track` ids, so `CircuitNames::choose` (one copy must name all 38) leaves the list empty and the row showed the id. The cell
+   now falls back to the served table, case folded, per id (`hd_track_line`; HD resolves through `CircuitNames` first and is
+   unchanged). `Track Select` still lists ids on Omega (a separate lead: a partial name list there would mix names and ids).
+
+Pairs (mean grey / RMSE / edge NCC): `omega/menu-cell-select` 13.4 / 0.191 / 0.33 to **12.7 / 0.185 / 0.35**;
+`omega/menu-grid-select` 40.9 / 0.333 / 0.25 to **42.9 / 0.333 / 0.21** - **worse by the number, better to the eye**: the card now draws
+whole (hexagons, sponsors, translucent arrows, reflection), and the reflection and the correct art add contrast where the card sits in
+the wrong place. HD's pairs are byte-identical (`hd/menu-cell-select` 16.7, `hd/menu-grid-select` 15.0). **What still differs on the
+grid**: the card's pose and size. The original's card spans x 816-1628, y 150-700 of the 1920 by 1080 frame with the previous
+and next grid arrows beside it; ours spans 747-1688, 200-880 (the same pose as ours on HD, `GRID_POSE`, a chosen pose not pinned to frames). The card
+region is 83 per cent of the absolute grey error (mean error 81 inside, 11.7 in the left column, 19 in the header strip) and the
+backdrop (ghost tower against blurred streaks) is the rest. The four claimed items could not reach the target 25 on their own: the
+white box was 0.5 per cent of the frame. On the cell: `CHOOSE RACE` and `12 MORE POINTS` draw dark where the original draws grey,
+no white outline on the selected hex, and the `RECORDS` prompt is missing.
+Lineage, 2048's Fury DLC: **checked, differs**: `00_flyer.rcsmodel`, `09_Blitzed/flyer*.rcsmodel` and the Blitzed textures are
+absent from the 2048 base and patch sources of both regions (`oag_2048::open`; the two DLC packs were not opened separately),
+and the Vita path never reads `SubMesh::colours` (its own declaration is PS4-only). The coverage-channel default of point 2 lives in
+the psp2 builder both containers share, so it applies to Vita models too: **checked, applies, not wired** (2048 draws no flyer
+cards; the census of its alpha-tested and blended draws is the lead in the front-end thread). The slot guard of point 3 was run
+over all 16 grids' fronts and backs (`omega_card_materials_read_their_coverage_channels`): it never skipped.
+The base campaign's own cards on Omega (`--menu-page cell-select-hd`, `grid-select-hd`, the `01_Uplift` card) now draw their
+wordmark, edge stripes and sponsors strip through the same two rules; read once, **not compared with an original frame**: a large
+dark grey hull silhouette crosses the grid card, unverified against HD's own base card.
+**`campaign-select` still refuses on Omega on purpose**: its chooser lists three campaigns (2048,
 HD, Fury), our `CampaignSelection` models HD's two and drew raw widgets, so `load_omega` keeps
 `selection_layout: None` and a live session opens on `Grid Selection` over every grid as before.
 HD's own base campaign on Omega (`cell-select-hd`) draws a grey card where the original's would sit and no
@@ -1213,8 +1255,7 @@ red: the red back is Fury's art. Lineage, 2048's Fury DLC: **checked, differs**.
 the Vita DLC packs carry `Data/FE/Flyers/09_Blitzed/flyer_back.*` was not censused.
 Fitted gain evidence: the grid card's red body reads 198 in ours and 197 in the shadPS4 frame (HD's 2.0 gave 255); the cell
 field reads 0x40 in the frame (confidence 65, one card, same-pose samples were not available). `hide_effects` was
-rendered off once: no white discs or bars appear and the sponsors strip stays missing, so the effects' slot mapping
-is not what hides it. The live session (Omega RACE CAMPAIGN) now draws cards on every grid; **not walked live**.
+rendered off once, before the coverage-channel fix above: no white discs or bars appeared and the sponsors strip stayed missing (it was drawn with its alpha read from the red channel, see point 2). The live session (Omega RACE CAMPAIGN) now draws cards on every grid; **not walked live**.
 `omegas_campaign_carries_fury_s_layout_and_every_card` (`omega_campaign_screens_ground_truth.rs`) fails if the layout read, the card
 loader or the PS4 dispatch is dropped.
 

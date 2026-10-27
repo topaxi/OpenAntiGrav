@@ -74,6 +74,18 @@ fn the_circuit_name_fold_wins_over_the_raw_id() {
     assert_eq!(hd_track_line(&cell, &names, &strings), "16_Track");
 }
 
+/// Omega's table names `17_TRACK` but not every circuit, so no copy names all 38 and
+/// `CircuitNames` is empty; the cell reads its circuit off the served table, case folded.
+#[test]
+fn a_circuit_the_served_table_names_reads_its_name_when_no_copy_names_them_all() {
+    let cell = cell(Mode::Race, Some("17_Track"));
+    let strings = StringTable::from_xml(
+        r#"<entries><entry id="17_TRACK" string="TALON'S JUNCTION"></entry></entries>"#,
+    );
+    let names = CircuitNames::default();
+    assert_eq!(hd_track_line(&cell, &names, &strings), "TALON'S JUNCTION");
+}
+
 #[test]
 fn difficulty_button_rect_is_none_when_the_widget_is_not_on_the_screen() {
     let screen = Screen::default();

@@ -462,6 +462,11 @@ pub struct SubMesh {
     /// title's mesh path samples a tangent-space normal map, so this is
     /// carried for a future consumer rather than drawn with today.
     pub tangents: Vec<[f32; 4]>,
+    /// `VertexColour1`, one RGBA per vertex, from the record's own declaration.
+    ///
+    /// Empty on a Vita submesh and on a PS4 one whose declaration names none (only the PS4
+    /// flyer shell's reflection is measured to carry one).
+    pub colours: Vec<[u8; 4]>,
     /// Bytes per vertex, derived from the buffer's own length rather than read
     /// from a field - see [`Model::parse`].
     pub stride: usize,
@@ -900,6 +905,18 @@ fn one(
             ]));
         }
     }
+    let mut colours = Vec::new();
+    if let Some(off) = own
+        .and_then(|decl| decl.vertex_colour1())
+        .map(|attr| usize::from(attr.offset))
+        && stride >= off + 4
+    {
+        colours.reserve_exact(vertex_count);
+        for v in 0..vertex_count {
+            let at = vertex_at + v * stride + off;
+            colours.push([file[at], file[at + 1], file[at + 2], file[at + 3]]);
+        }
+    }
     Some(SubMesh {
         record,
         mesh: None,
@@ -913,6 +930,7 @@ fn one(
         bars_blend_texcoords,
         non_finite_texcoords,
         tangents,
+        colours,
         stride,
     })
 }
