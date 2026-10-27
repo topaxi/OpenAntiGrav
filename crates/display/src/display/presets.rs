@@ -21,7 +21,7 @@ const MIN_HEIGHT: u32 = 360;
 /// `value` times `num / den`, rounded to the nearest even number.
 fn scaled(value: u32, (num, den): (u32, u32)) -> u32 {
     let half = (value as u64 * num as u64 * 2 + den as u64) / (den as u64 * 2);
-    ((half as u32 + 1) / 2 * 2).max(2)
+    ((half as u32).div_ceil(2) * 2).max(2)
 }
 
 fn derive(native: Size, fractions: &[(u32, u32)]) -> Vec<Size> {
