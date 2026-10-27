@@ -2,7 +2,7 @@
 status: measure
 titles: [2048]
 updated: 2026-10-27
-summary: "2048 untextured or flat meshes: Vita UV declaration lookup (zeroed or missing Uv1, likeliest for Empire Climb); Zone road flat by design; DLC exits unknown"
+summary: "2048 flat or untextured meshes: Vita UV lookup leaves texcoords empty or zeroed (likeliest, Empire Climb); Zone road flat by design"
 size: M (35)
 difficulty: medium (35)
 ---
