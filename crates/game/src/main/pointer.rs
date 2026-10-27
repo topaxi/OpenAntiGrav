@@ -72,6 +72,7 @@ pub(crate) struct Window {
     moved: bool,
     clicked: bool,
     back: bool,
+    reset: bool,
     /// Wheel detents since the last take, with the fractional remainder of
     /// a smooth scroll carried forward so it is not thrown away.
     scroll: f64,
@@ -130,6 +131,7 @@ impl Window {
         match button {
             MouseButton::Left => self.clicked = true,
             MouseButton::Right => self.back = true,
+            MouseButton::Middle => self.reset = true,
             _ => {}
         }
     }
@@ -226,6 +228,7 @@ impl Window {
     pub(crate) fn release(&mut self) {
         self.clicked = false;
         self.back = false;
+        self.reset = false;
         self.scroll = 0.0;
         // A finger down when focus went is lifted, so nothing stays held.
         if self.finger.take().is_some() {
@@ -261,6 +264,7 @@ impl Window {
             moved: self.moved,
             clicked: self.clicked,
             back: self.back,
+            reset: self.reset,
             scroll: whole as i32,
             drag: std::mem::take(&mut self.drag),
             press_at: self.pressed.then_some(self.touch_origin),
@@ -270,6 +274,7 @@ impl Window {
         self.moved = false;
         self.clicked = false;
         self.back = false;
+        self.reset = false;
         if std::mem::take(&mut self.lifted) {
             self.at = None;
             self.moved = true;

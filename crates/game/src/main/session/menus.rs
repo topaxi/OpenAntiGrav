@@ -355,6 +355,7 @@ impl Session {
             &oag_game::mods::choices(&shell.mods, &shell.strings),
         );
         self.seed_menu(&mut model, shell.title, shell.platform);
+        Self::seed_menu_defaults(&mut model, shell.title, shell.platform);
         // What the row is set to comes from the settings file, above; what the
         // game is *drawing with* can only come from here, and the RENDERER row's
         // restart note is the difference between the two. Told every time the
@@ -619,6 +620,19 @@ impl Session {
             if !model.seed(key, &value) && !dropped && !untouched {
                 warn!("nothing in the menus edits {key}");
             }
+        }
+    }
+
+    /// Tells the menus what a fresh install holds on every row, for the reset button
+    /// ([`menu::Menu::set_default`]). From `settings::default_seeds`, which is the loader's
+    /// own fresh file, so there is no table of defaults kept beside it.
+    fn seed_menu_defaults(
+        model: &mut menu::Menu,
+        title: &'static oag_title::Title,
+        platform: oag_disc::Platform,
+    ) {
+        for (key, value) in settings::default_seeds(title, platform) {
+            model.set_default(key, value);
         }
     }
 

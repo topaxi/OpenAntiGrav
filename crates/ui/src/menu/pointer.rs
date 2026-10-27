@@ -68,6 +68,9 @@ pub enum Part {
     StepBack,
     /// A step arrow pointing forward: move the row's value one step on.
     StepForward,
+    /// The reset mark on the selected row: put its value back on the default. Only laid
+    /// out on a row that is off its default, so a tap on it always does something.
+    Reset,
 }
 
 /// One rect a pointer can land on, and the row and part it belongs to.
@@ -112,7 +115,7 @@ pub fn hit(regions: &[Region], at: (f32, f32)) -> Option<Region> {
         .filter(|region| contains(region.rect, at))
         .max_by_key(|region| match region.part {
             Part::Row => 0,
-            Part::StepBack | Part::StepForward => 1,
+            Part::StepBack | Part::StepForward | Part::Reset => 1,
         })
 }
 
@@ -177,7 +180,16 @@ impl Menu {
                 Part::Row => out.extend(self.activate()),
                 Part::StepBack => out.extend(self.adjust(-1)),
                 Part::StepForward => out.extend(self.adjust(1)),
+                Part::Reset => out.extend(self.reset()),
             }
+        }
+
+        // The middle button resets the row under the pointer, else the one the cursor is on.
+        if pointer.reset {
+            if let Some(region) = hit {
+                self.move_cursor(page, region.row);
+            }
+            out.extend(self.reset());
         }
 
         if pointer.back {

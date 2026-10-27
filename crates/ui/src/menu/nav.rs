@@ -57,6 +57,14 @@ impl Log {
     }
 }
 
+/// Where a reset moves a row to.
+enum Reset {
+    /// A choice row's index.
+    Choice(usize),
+    /// A toggle row's state.
+    Toggle(bool),
+}
+
 /// The direction a value stepped in.
 fn step_dir(step: i32) -> Dir {
     if step < 0 { Dir::Left } else { Dir::Right }
@@ -116,6 +124,85 @@ impl Menu {
             }
             _ => None,
         }
+    }
+
+    /// Records what `setting` is set to on a fresh install, for [`Self::reset`] to go back to.
+    ///
+    /// Supplied by whoever owns the settings, next to [`Self::seed`] and from the same
+    /// source the settings loader fills a new file from, so the menus keep no table of
+    /// their own. A value is matched the way `seed` matches one: text against a choice
+    /// row's stored value, a flag against a toggle.
+    pub fn set_default(&mut self, setting: &str, value: Value) {
+        match self.defaults.iter_mut().find(|(key, _)| key == setting) {
+            Some(held) => held.1 = value,
+            None => self.defaults.push((setting.to_string(), value)),
+        }
+    }
+
+    /// Where the selected row's value would go on a reset: `None` for a row that holds no
+    /// value, is disabled or pinned, has no recorded default, is already at it, or does
+    /// not offer it (a list read off the disc may lack the default).
+    fn reset_target(&self) -> Option<Reset> {
+        if self.selected_is_disabled() {
+            return None;
+        }
+        let entry = self.page().entries.get(self.cursor[self.current()])?;
+        let setting = entry.setting()?;
+        let default = &self.defaults.iter().find(|(key, _)| key == setting)?.1;
+        match (entry, default) {
+            (Entry::Choice { values, current, .. }, Value::Text(text)) => {
+                let at = values.iter().position(|v| &v.value == text)?;
+                (at != *current).then_some(Reset::Choice(at))
+            }
+            (Entry::Toggle { on, .. }, Value::Flag(flag)) => {
+                (flag != on).then_some(Reset::Toggle(*flag))
+            }
+            _ => None,
+        }
+    }
+
+    /// Whether [`Self::reset`] would change the selected row. What a reset affordance asks
+    /// before it shows itself.
+    #[must_use]
+    pub fn can_reset(&self) -> bool {
+        self.reset_target().is_some()
+    }
+
+    /// Puts the selected row back on its default, reporting it as any other edit so the
+    /// owner applies and persists it the same way. Nothing on a row that holds no value,
+    /// is disabled, or is already there.
+    pub(super) fn reset(&mut self) -> Option<MenuEvent> {
+        let target = self.reset_target()?;
+        let page = self.current();
+        let row = self.cursor[page];
+        let entry = self.definition.pages[page].entries.get_mut(row)?;
+        let event = match (entry, target) {
+            (
+                Entry::Choice {
+                    setting,
+                    values,
+                    current,
+                    ..
+                },
+                Reset::Choice(at),
+            ) => {
+                *current = at;
+                MenuEvent::Changed {
+                    setting: setting.clone(),
+                    value: Value::Text(values[at].value.clone()),
+                }
+            }
+            (Entry::Toggle { setting, on, .. }, Reset::Toggle(flag)) => {
+                *on = flag;
+                MenuEvent::Changed {
+                    setting: setting.clone(),
+                    value: Value::Flag(flag),
+                }
+            }
+            _ => return None,
+        };
+        self.nav.push(Nav::Stepped(None));
+        Some(event)
     }
 
     /// Activates the selected row.

@@ -575,6 +575,9 @@ pub struct Menu {
     /// The navigation sounds this menu has called for since the caller last
     /// drained them with [`Self::take_nav`].
     nav: nav::Log,
+    /// What each setting is set to on a fresh install, supplied by whoever owns
+    /// the settings. See [`Self::set_default`].
+    defaults: Vec<(String, Value)>,
 }
 
 /// How many rows a page shows before the caller says otherwise.
@@ -612,6 +615,7 @@ impl Menu {
             arrival: Some(0),
             scroller: pointer::Scroller::default(),
             nav: nav::Log::default(),
+            defaults: Vec::new(),
         }
     }
 
@@ -899,6 +903,9 @@ impl Menu {
 
         if input.take(Button::Cross) || input.take(Button::Start) {
             out.extend(self.activate());
+        }
+        if input.take(Button::Square) {
+            out.extend(self.reset());
         }
         if input.take(Button::Circle) {
             out.extend(self.back());

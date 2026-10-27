@@ -695,6 +695,32 @@ fn migrate(table: &mut toml::Table) {
     }
 }
 
+/// The settings a first run starts from: every default, a render profile row per known
+/// `(title, platform)`, and the web build's first-run choices.
+///
+/// What [`load`] writes to a missing file, and so what a row's reset goes back to
+/// ([`default_seeds`]): one definition of "the default", never a second table.
+#[must_use]
+pub fn fresh() -> Settings {
+    #[allow(unused_mut)]
+    let mut settings = Settings::default();
+    ensure_known_titles(&mut settings);
+    #[cfg(target_arch = "wasm32")]
+    web::first_run(&mut settings);
+    settings
+}
+
+/// What every menu row reads on a fresh install, for the open source: [`menu_seeds`] over
+/// [`fresh`]. The values a row's reset puts back.
+#[must_use]
+pub fn default_seeds(
+    title: &oag_title::Title,
+    platform: oag_disc::Platform,
+) -> Vec<(&'static str, oag_ui::menu::Value)> {
+    let settings = fresh();
+    menu_seeds(&settings, settings.graphics.anisotropy, title, platform)
+}
+
 /// Loads settings from [`path`], creating the file - or filling in whatever
 /// keys it is missing - with defaults.
 ///
@@ -766,13 +792,9 @@ fn load_from(path: &std::path::Path) -> Result<Settings> {
                 }
             }
         }
-        None => Settings::default(),
+        None => fresh(),
     };
     ensure_known_titles(&mut settings);
-    #[cfg(target_arch = "wasm32")]
-    if on_disk.is_none() {
-        web::first_run(&mut settings);
-    }
 
     let canonical = format!(
         "{HEADER}{}",
