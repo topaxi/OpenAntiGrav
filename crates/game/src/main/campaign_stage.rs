@@ -278,7 +278,7 @@ impl CampaignStage {
             Screen::Grid(model) => model
                 .selected()
                 .and_then(|grid| grid.flyer_name.as_deref())
-                .map(oag_game::flyer::Flyers::grid_show)
+                .map(|name| flyers.grid_show(name))
                 .into_iter()
                 .collect(),
             Screen::Selection(model) => flyers.selection_shows(model.selected()),

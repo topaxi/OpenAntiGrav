@@ -189,6 +189,13 @@ pub const TITLE: &Title = &Title {
         screen_archive: None,
         grid_archive: None,
         fury_card_gain: Some(1.0),
+        // Measured off one shadPS4 `Grid Selection` frame (card edges x 816-1628, top
+        // 151 to 224, bottom 675 to 702 of 1920 by 1080), chosen, not read: HD's
+        // `Flyer_Item` pose is unread native code, and Omega's own is not found.
+        grid_card_pose: Some(oag_title::campaign::CardPose {
+            yaw: -0.25,
+            offset: [29.0, 13.3, -129.0],
+        }),
         origin: oag_title::Origin::InheritedFrom("Wipeout HD"),
     },
     pressings: None,

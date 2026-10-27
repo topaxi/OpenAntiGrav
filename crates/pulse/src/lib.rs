@@ -118,6 +118,7 @@ pub const TITLE: &Title = &Title {
         screen_archive: None,
         grid_archive: None,
         fury_card_gain: None,
+        grid_card_pose: None,
         origin: oag_title::Origin::Measured,
     },
     pressings: None,

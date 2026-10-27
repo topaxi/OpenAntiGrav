@@ -99,6 +99,27 @@ fn omegas_campaign_carries_fury_s_layout_and_every_card() {
     let fury = &campaign.grids[oag_hd::campaign::FURY_GRID_RANGE];
     assert_eq!(fury.len(), 8);
     assert_eq!(fury[0].flyer_name.as_deref(), Some("09_Blitzed"));
+    // The card stands where the shadPS4 frame has it (x 816-1628, y 151-702 of 1920 by 1080,
+    // measured off `omega/menu-grid-select`), not at HD's `GRID_POSE` (x 747-1688).
+    let show = flyers.grid_show("09_Blitzed");
+    assert_eq!(
+        show.pose.offset,
+        oag_omega::TITLE.campaign.grid_card_pose.unwrap().offset
+    );
+    let [x, y, width, height] = flyers
+        .card_rect(&show, oag_display::space::Space::HD)
+        .expect("the card is loaded");
+    for (got, want) in [
+        (x, 816.0),
+        (y, 151.0),
+        (x + width, 1628.0),
+        (y + height, 702.0),
+    ] {
+        assert!(
+            (got - want).abs() < 25.0,
+            "card edge {got} against the frame's {want}"
+        );
+    }
 }
 
 /// The PS4 `00_flyer.rcsmodel` is the card's shell: its outline and the reflection's fade

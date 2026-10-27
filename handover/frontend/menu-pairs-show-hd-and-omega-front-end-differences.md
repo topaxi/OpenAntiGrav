@@ -23,9 +23,8 @@ Ranked by visible area on the 1920x1080 frame (read off the pair images, each pa
 1. **Omega Campaign cell and grid: the Fury card is whole since 2026-10-27 (`omega-flyer-shell`); what is left is pose and chooser.**
    Shell, hexagon logo, sponsors, translucent arrows, wordmark, edge stripes and `TALON'S JUNCTION` draw
    (`docs/ui/campaign-screens.md`, "Shell, art and track name"). Pair numbers: cell 13.4 to 12.7, grid 40.9 to 42.9 (the card is now
-   right but sits in the wrong place: it is 83 per cent of the grid's grey error). **Open**: (a) the grid card's pose and size on Omega
-   (original x 816-1628, y 150-700 with previous and next arrows; ours 747-1688, 200-880, HD's `GRID_POSE`; read Omega's own `<Flyer>`
-   widget numbers first); (b) the backdrop (ghost tower against blurred streaks); (c) cell: `CHOOSE RACE` and the unlock line dark
+   right but sits in the wrong place: it is 83 per cent of the grid's grey error). **Open**: (a) ~~the grid card's pose and size on Omega~~ (done 2026-10-27, `omega-grid-card-pose`: grid 42.9 to 16.4; the pose is
+   measured off the frame and chosen, `Title.campaign.grid_card_pose`; Omega's own `<Flyer>` widget numbers still uncompared with HD's); (b) the backdrop (ghost tower against blurred streaks); (c) cell: `CHOOSE RACE` and the unlock line dark
    where the original is grey, the selected hex's white outline, the missing `RECORDS` prompt; (d) the Omega `Campaign Selection`
    chooser (three-way: 2048, HD, Fury; `campaign-select` still refuses); (e) **a PS4-wide lead found on the way**: the PS4 build
    leaves every vertex's coverage channel at 0 (red), so any blended or alpha-tested PS4 draw whose coverage is a texture's alpha

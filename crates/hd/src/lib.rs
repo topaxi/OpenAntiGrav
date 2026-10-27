@@ -221,6 +221,7 @@ pub const TITLE: &Title = &Title {
         screen_archive: Some(campaign::SELECTION_SCREEN_ARCHIVE),
         grid_archive: Some(campaign::GRID_ARCHIVE),
         fury_card_gain: None,
+        grid_card_pose: None,
         origin: oag_title::Origin::Measured,
     },
     pressings: None,
