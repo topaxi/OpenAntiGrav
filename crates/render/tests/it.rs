@@ -84,6 +84,7 @@ mod msaa_load_keeps_view;
 mod msaa_resolve;
 mod msaa_resolve_viewport;
 mod node_anim_pipeline;
+mod omega_normal_map_ground_truth;
 mod omega_nova_prelit;
 mod omega_pvs_placement_ground_truth;
 mod omega_transparency_ground_truth;

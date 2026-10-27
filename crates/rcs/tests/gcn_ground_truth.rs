@@ -115,6 +115,16 @@ impl Survey {
             Stage::Other(_) => self.other_stage += 1,
         }
         self.instructions += p.instructions.len();
+        // `Program::signed_textures` places every `2x - 1` sample's T# through the header's
+        // usage records; one it cannot place is a record kind this reading does not know.
+        if p.stage == Stage::Pixel {
+            assert_eq!(
+                p.signed_textures().unresolved,
+                0,
+                "a pixel program at {:#x} signs a texture no usage record places",
+                p.at
+            );
+        }
         let mut pro = false;
         for i in &p.instructions {
             pro |= i.encoding == Encoding::Vop3p

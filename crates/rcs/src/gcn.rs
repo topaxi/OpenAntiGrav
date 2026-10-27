@@ -46,6 +46,9 @@
 
 pub mod isa;
 mod opcodes;
+mod sample;
+
+pub use sample::{SignedSamplers, SignedTextures, signed_samplers};
 
 use core::fmt;
 use core::ops::Range;
@@ -185,6 +188,40 @@ pub struct Program<'a> {
     pub reflection: Result<Reflection>,
     /// The vertex inputs' fetch table; empty on a program that is not a vertex program.
     pub vertex_inputs: Result<Vec<VertexInput>>,
+    /// The header's input-usage records (`+0x4c`, the count at `+0x38` less one): where each
+    /// resource, sampler and table pointer sits. See [`Usage`].
+    pub usage: Vec<Usage>,
+}
+
+/// One input-usage record of the `Shdr` header, four bytes.
+///
+/// `kind` 0 is a texture (T#), 1 a sampler (S#), 2 a constant buffer, `0x13` a pointer to the
+/// resource table (a texture's dword offset in it is eight times its `slot`), `0x1b` a pointer
+/// to an extended-user-data table. `slot` is the API slot, the one the reflection's resource and
+/// sampler records carry. `register` is the first SGPR of an inline one; of an
+/// extended-table one it is `16` plus the dword offset into that table ([`Usage::TABLE_BASE`]).
+/// Read off `Diffuse_Normal_Specular`'s and `Mageffect08_LH_1`'s programs against their `s_load`
+/// offsets and the reflection (`docs/formats/gcn.md`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Usage {
+    pub kind: u8,
+    pub slot: u8,
+    pub register: u8,
+    /// Unread; `3` on a texture.
+    pub flags: u8,
+}
+
+impl Usage {
+    /// The record kind that opens the header's fixed tail (`0f 00 10 00`, `11 00 12 00`, ...).
+    pub const TAIL: u8 = 0x0f;
+    /// Kind: a texture descriptor (T#).
+    pub const TEXTURE: u8 = 0;
+    /// Kind: a pointer to the resource table, T# at eight dwords a slot.
+    pub const RESOURCE_TABLE: u8 = 0x13;
+    /// Kind: a pointer to an extended-user-data table.
+    pub const EXTENDED_TABLE: u8 = 0x1b;
+    /// A table resource's `register` less its dword offset in the table.
+    pub const TABLE_BASE: u32 = 16;
 }
 
 /// Why a `Shdr` tag is not a program this reader accepts.
@@ -270,6 +307,24 @@ pub fn scan(file: &[u8]) -> Vec<(usize, Result<Program<'_>>)> {
         .collect()
 }
 
+/// The header's usage records: from `+0x4c`, four bytes each, up to the first record of kind
+/// [`Usage::TAIL`] (the fixed pixel-input tail every program ends its header with) or the code.
+fn usage(file: &[u8], at: usize, code_at: usize) -> Vec<Usage> {
+    let records = file.get(at + 0x4c..code_at).unwrap_or_default();
+    records
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|&[kind, slot, register, flags]| Usage {
+            kind,
+            slot,
+            register,
+            flags,
+        })
+        .take_while(|u| u.kind != Usage::TAIL)
+        .collect()
+}
+
 impl<'a> Program<'a> {
     /// Parses the program whose `Shdr` tag is at byte `at` of `file`.
     ///
@@ -334,6 +389,7 @@ impl<'a> Program<'a> {
             instructions,
             reflection,
             vertex_inputs,
+            usage: usage(file, at, code_at),
         })
     }
 
