@@ -466,7 +466,15 @@ pub(super) fn body(
             } => Some((*total).min(100) as u8),
             _ => None,
         };
-        stat_bar(block, (loyalty, None), layout, extra, frame, sprites, &mut out);
+        stat_bar(
+            block,
+            (loyalty, None),
+            layout,
+            extra,
+            frame,
+            sprites,
+            &mut out,
+        );
     }
     out
 }

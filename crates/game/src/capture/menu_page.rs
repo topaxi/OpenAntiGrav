@@ -810,7 +810,8 @@ pub(super) fn picker_page(
                             id: team.id.clone(),
                             label: team.label(strings).to_string(),
                             details: Details::Ship {
-                                loyalty: shows_loyalty.then(|| saved.loyalty_total(title, &team.id)),
+                                loyalty: shows_loyalty
+                                    .then(|| saved.loyalty_total(title, &team.id)),
                                 rating: crate::livery_row::ship_rating(title, Some(team), mode),
                                 variants,
                                 stats,
