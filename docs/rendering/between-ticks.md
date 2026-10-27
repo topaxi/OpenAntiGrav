@@ -71,6 +71,20 @@ Code: `crates/raceplay/src/between_ticks.rs`. Tests: its unit tests in
   sample (the flyby, the cosmetic ticks) draws the ring as recorded with only
   the head moved. Unit tests: the ribbon and the tube are continuous across a
   tick (`exhaust::ribbon::tests`).
+- **The lock-on reticle follows its target as drawn** (2026-10-27,
+  `Race::drawn_sight`). The reticle's law (`oag_race::sight::Sight::follow`)
+  still runs once a tick off the tick's camera and target, and the lock stays
+  the simulation's (`RaceSim::locks`). Each tick keeps which craft the reticle
+  followed and where the tick projected it; a draw between ticks projects that
+  craft again with the blended camera and the blended body
+  (`Race::body_between`) and moves the whole reticle by the difference
+  (`Sight::shifted`, a draw-only copy). A locked reticle, whose centre is the
+  target's projection, so sits on the craft as drawn; the law's own chase while
+  it seeks still steps per tick, and the law's one-tick lead (`2 * new - old`)
+  leaves a jump across the tick of the projection's second difference, 0.002
+  grid units against a 1.8-unit step a tick in
+  `tests::weapons::a_locked_reticle_follows_its_target_between_ticks`. At alpha
+  `1.0`, or with no target on screen, the reticle is the tick's untouched.
 - **Particles move between ticks on the GPU** (2026-10-27). Every `.pob`
   particle (`oag_fx::psys`: the stage's effects, the collision sparks, the
   scenery effects, Omega's heat haze) keeps where its pool's last advance found
@@ -168,7 +182,3 @@ they did. See that page's "Blur length" section.
 - The mist overlay's zoom and scroll step per tick (see above).
 - The HD sprite flare's nozzle axis reads the body's forward at the tick, not
   the drawn hull's.
-- The lock-on reticle is projected inside the tick (`Race::update_sight`, a
-  stateful tracker), so it sits on the target as the tick left it while the
-  target and camera are drawn between ticks: off by a fraction of the
-  target's per-tick screen motion.

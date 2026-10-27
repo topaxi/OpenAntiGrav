@@ -768,6 +768,20 @@ impl Sight {
         }
     }
 
+    /// This reticle moved `by` grid units on screen, for a frame drawn between
+    /// two ticks: the brackets and the inner box keep where they sit against
+    /// the target while the target moves under the drawn camera. Draw-only:
+    /// the lock state ([`Self::hash_lock`]'s fields but the centre) is
+    /// untouched, and the copy is never stepped.
+    #[must_use]
+    pub fn shifted(&self, by: [f32; 2]) -> Self {
+        let by = self.law_of(by);
+        let mut out = *self;
+        out.centre = [self.centre[0] + by[0], self.centre[1] + by[1]];
+        out.target = self.target.map(|at| [at[0] + by[0], at[1] + by[1]]);
+        out
+    }
+
     /// The smoothed centre the brackets are drawn around.
     #[must_use]
     pub fn centre(&self) -> [f32; 2] {

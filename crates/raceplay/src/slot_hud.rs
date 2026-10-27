@@ -48,6 +48,8 @@ pub(super) struct SlotHud {
     pub(super) sight: sight::Sight,
     /// What [`Self::sight`] said last tick.
     pub(super) sight_state: sight::State,
+    /// `RaceView::sight_aim` for this slot's reticle.
+    pub(super) sight_aim: Option<(u8, sight::Projected)>,
     /// This view's HUD message lines. One per slot so that each person's own
     /// perfect-lap, lap-record and final-lap lines show in their own view; a
     /// slot nobody flies never has one raised. Render-side, out of the hash.
