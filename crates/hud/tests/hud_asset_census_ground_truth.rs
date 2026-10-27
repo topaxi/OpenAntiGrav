@@ -381,8 +381,8 @@ enum State {
     /// Only a `hud/` model or material names it (a byte match, not a parse).
     ByModel,
     /// No layout or declaration names it, but a crate's source spells its file name.
-    /// A heuristic: the team grid's `teamgrid\Speed.gtf` names a HUD texture's stem too
-    /// (counted from 2026-10-27).
+    /// A heuristic: the team grid's `teamgrid\Speed.gtf` also spells the stem of
+    /// `hud/Textures/speed` (2048's; counted from 2026-10-27).
     NamedByCode,
     /// Nothing names it.
     Unreferenced,

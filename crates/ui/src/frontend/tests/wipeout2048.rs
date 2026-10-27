@@ -294,9 +294,12 @@ fn a_tap_on_a_team_cell_selects_its_team_and_craft() {
     // Column 2 (Qirex), row 3 (prototype): x 16 + 2 * 82, y 158 + 3 * 67.
     assert!(frontend.pointer(&click((190.0, 370.0))));
     assert_eq!(frontend.team_choice(), Some(("Qirex2048", "4")));
-    // The first column's badge strip picks the team and keeps the craft.
+    // The badge strip is not a button in the original's update.
     assert!(frontend.pointer(&click((50.0, 120.0))));
-    assert_eq!(frontend.team_choice(), Some(("Feisar2048", "4")));
+    assert_eq!(frontend.team_choice(), Some(("Qirex2048", "4")));
+    // The seam between two cells: the later cell wins the overlap.
+    assert!(frontend.pointer(&click((98.5, 160.0))));
+    assert_eq!(frontend.team_choice(), Some(("AG_Systems2048", "3")));
 }
 
 #[test]

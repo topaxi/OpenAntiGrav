@@ -3,6 +3,8 @@
 //!
 //! # The grid is `TouchTeamGrid_Item.cpp`'s, read in Ghidra
 //!
+//! Evidence page: `docs/ghidra/functions/vita-2048-eu-v104/team-grid.md`.
+//!
 //! The XML authors only `TouchTeamGrid`'s anchor `(16, 94)`; the grid is
 //! native code (`/2048/eboot-vita-2048-eu-v104.elf`, vtable `0x8150edc8`).
 //! What is read off it (confidence 85, decompiled, not a trace):
@@ -57,8 +59,7 @@
 //!
 //! Left/Right moves the cursor along the columns; Up/Down along the rows;
 //! Circle leaves the way `select_button`'s own tick does
-//! (`redirect="PreviousScreen"`). Pointer: a click on a cell or on a team's
-//! badge selects it outright; a click outside is a no-op the same way the
+//! (`redirect="PreviousScreen"`). Pointer: a click on a cell selects it outright; a click outside is a no-op the same way the
 //! touch grids elsewhere in this crate treat one.
 //!
 //! # What feeds the campaign launch
@@ -198,6 +199,14 @@ fn badge_rect(column: usize) -> [f32; 4] {
     [GRID_X + column as f32 * PITCH_X, GRID_Y, CELL_W, BADGE_H]
 }
 
+/// A cell's hit area: the original tests `83 x 68` on the 82x67 pitch
+/// (`FUN_8110772e`), so the cells tile with no dead strip and the
+/// later cell wins the one-unit overlap, as the update's loop does.
+fn hit_rect(column: usize, row: usize) -> [f32; 4] {
+    let [x, y, ..] = cell_rect(column, row);
+    [x, y, PITCH_X + 1.0, PITCH_Y + 1.0]
+}
+
 impl Frontend {
     /// The team and craft slot the player has moved to, once they have moved
     /// off the screen's own starting point - see the module docs for why
@@ -237,7 +246,7 @@ impl Frontend {
             row = (row + ROWS - 1) % ROWS;
             moved = true;
         }
-        if moved {
+        if moved && !self.team_cell_locked(team_of(column), ROW_CRAFT[row]) {
             let (team, craft) = (team_of(column), ROW_CRAFT[row]);
             self.touch.team_choice = Some((team, craft));
             self.notes.push(format!(
@@ -252,7 +261,7 @@ impl Frontend {
     }
 
     /// The pointer on the team screen - a click on a cell selects its team
-    /// and craft, a click on a badge selects the team. Returns whether the
+    /// and craft. Returns whether the
     /// screen was on to take the click at all, the same contract
     /// [`Self::touch_pointer`] carries.
     pub(super) fn team_pointer(&mut self, pointer: &Pointer) -> bool {
@@ -265,24 +274,20 @@ impl Frontend {
         if !pointer.clicked {
             return true;
         }
-        let craft = self.touch.team_choice.unwrap_or_else(start).1;
         let cell = (0..TEAM_COLUMNS.len())
             .flat_map(|column| (0..ROWS).map(move |row| (column, row)))
-            .find(|&(column, row)| contains(cell_rect(column, row), at));
+            .filter(|&(column, row)| contains(hit_rect(column, row), at))
+            .last();
         if let Some((column, row)) = cell {
             let (team, craft) = (team_of(column), ROW_CRAFT[row]);
-            self.touch.team_choice = Some((team, craft));
-            self.notes
-                .push(format!("team: {} tapped", NATIVE_TEAMS[team]));
-            self.notes
-                .push(format!("team: {} tapped", SHIP_TYPES[craft]));
-        } else if let Some(column) =
-            (0..TEAM_COLUMNS.len()).find(|&column| contains(badge_rect(column), at))
-        {
-            let team = team_of(column);
-            self.touch.team_choice = Some((team, craft));
-            self.notes
-                .push(format!("team: {} tapped", NATIVE_TEAMS[team]));
+            // The original ignores a tap on a locked cell.
+            if !self.team_cell_locked(team, craft) {
+                self.touch.team_choice = Some((team, craft));
+                self.notes
+                    .push(format!("team: {} tapped", NATIVE_TEAMS[team]));
+                self.notes
+                    .push(format!("team: {} tapped", SHIP_TYPES[craft]));
+            }
         }
         true
     }

@@ -196,9 +196,10 @@ shape, not by screen, and would have mis-fired on `Team`'s own
   **Resolved 2026-10-27 (`2048-team-grid`): `TouchTeamGrid`'s `teamgrid/` art
   draws** (badges, craft icons, cell colours, Feisar Speed ringed; layout
   and order read from `TouchTeamGrid_Item.cpp` in Ghidra, see
-  `frontend::team`'s module doc). Open on `team`: the padlock rule (ship
-  record `+0x40` rank and the save's unlock count, `FUN_812d16f6` over
-  `DAT_81967280`, `/2048/eboot-vita-2048-eu-v104.elf`), the `NEW` badge, the
+  `frontend::team`'s module doc). Evidence: `docs/ghidra/functions/vita-2048-eu-v104/team-grid.md`. Open on `team`: the padlock rule
+  (`FUN_812d16f6` over `DAT_81967280`, hypothesis only, the record's source and the save's unlock
+  count untraced), the HD/Fury campaign mode's 4x3 grid (`FUN_81106a46`; ours draws the 2048 grid
+  there), Omega's use of the item (same class and art ship, no `Team_Definition.xml`), the `NEW` badge, the
   `TeamInfo` statistics table (`FE` ratings are in `HandlingStats/<team>/<n>/handlingstats.xml`
   `<FE speed handling shield firepower>`, n 1..4 = fighter, agility, speed,
   prototype; position and bar law in `TeamInfo_Item.cpp` at `0x813ceab0`
