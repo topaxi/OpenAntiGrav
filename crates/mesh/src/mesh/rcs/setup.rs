@@ -242,6 +242,17 @@ pub(super) fn material_setup(
     );
     super::mag_wave::merge(&mut mag_emissive, twin.wipe);
     super::mag_wave::merge(&mut wave_maps, twin.bars);
+    // `dc_hologramwithstatic` binds its static third and writes one entry.
+    let statics = super::static_hologram::static_hologram(
+        model,
+        &material_variants,
+        textures,
+        &mut material_slots,
+        (&mut skins, &mut seconds),
+        &mut emissive,
+        report,
+    );
+    super::mag_wave::merge(&mut mag_emissive, statics);
     // A hull's normal map rides the same third binding, and its materials are
     // none of the families above.
     let (hull_maps, mut material_tangent) =

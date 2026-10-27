@@ -556,7 +556,28 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     if mask_entry != 0u && emissives.scale[mask_entry].z > 4.5 && emissives.scale[mask_entry].z < 5.5 {
         picture = vec4<f32>(picture.rgb * material_sample(MATERIAL_LIGHTMAP, in.lightmap_texcoord.xy).a, picture.a);
     }
-    let coverage = select(first, second, (in.slots & 4u) != 0u);
+    // **HD's `dc_hologramwithstatic`** (`Emissive::program` mode 7,
+    // `oag_mesh::mesh::rcs::static_hologram`):
+    //
+    //     colour = advert(u + S time, v) + static(u, v + V time)
+    //     alpha  = scan(u, v).x * K
+    //
+    // the advert second, the static third (`MATERIAL_PAD_MASK`), the scanline mask first;
+    // `S`, `V` and `K` the entry's tint `x`, `y`, `z`. **All three units are sRGB-decoded on
+    // fetch**, read live (RPCS3, Amphiseum time trial start, draw 700: `SET_TEXTURE_ADDRESS`
+    // `0x60710101` on units 0, 1 and 2, gamma nibble 7), so the mask's red is decoded too;
+    // the colour sum, halved by the program's closing `/2` (`scene.light.output_scale`), is put
+    // back in the domain `picture` is decoded from below.
+    var coverage = select(first, second, (in.slots & 4u) != 0u);
+    if twin_entry != 0u && emissives.scale[twin_entry].z > 6.5 && emissives.scale[twin_entry].z < 7.5 {
+        let holo = emissives.tint_offset[twin_entry];
+        let advert = material_sample(MATERIAL_LIGHTMAP, vec2<f32>(in.texcoord.x + holo.x * scene.time.x, in.texcoord.y));
+        let noise = material_sample(MATERIAL_PAD_MASK, vec2<f32>(in.texcoord.x, in.texcoord.y + holo.y * scene.time.x));
+        let linear = scene.light.output_scale * (decode(advert.rgb) + decode(noise.rgb));
+        let gamma = select(1.0 / 2.2, 0.5, square_decode > 0.5);
+        picture = vec4<f32>(pow(max(linear, vec3<f32>(0.0)), vec3<f32>(gamma)), picture.a);
+        coverage = vec4<f32>(decode(vec3<f32>(first.r)).r * holo.z);
+    }
     let texel = vec4<f32>(picture.rgb, coverage[(in.slots >> 3u) & 3u]);
 
     // **The glass sheen's combine**, block #7 of `etched_glass_tech`
