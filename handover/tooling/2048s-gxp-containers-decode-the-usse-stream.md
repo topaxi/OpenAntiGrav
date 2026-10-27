@@ -1,11 +1,11 @@
 ---
 status: re-first
 titles: [2048, omega]
-updated: 2026-09-25
-summary: "USSE instruction stream semantics are the harder half still open; opcode field located"
+updated: 2026-10-27
+summary: "USSE stream is classified and listed (scripts/vita-usse.py, oag_rcs::gxp::usse); ldst/sop2m and the name binding stay open"
 ---
 
-# 2048's GXP containers decode; the USSE stream's opcode field is located, semantics do not
+# 2048's GXP containers decode and the USSE stream is listed; ldst and sop2m and the name binding are open
 
 `docs/rendering/shadows.md` was blocked on tooling rather than on evidence:
 this repository had a PS3 fragment-microcode decoder and no Vita equivalent,
@@ -16,8 +16,11 @@ done - [`docs/formats/gxp.md`](../../docs/formats/gxp.md),
 decoding over 22,056 files**, header, code extents, tables and the parameter
 table with its names.
 
-The instruction stream is **located, its opcode field is now found too, and
-no opcode is named** - the last of those is where this stops being
+**2026-10-27: the stream is read** (`scripts/vita-usse.py`, `oag_rcs::gxp::usse`; all 5,883,746
+words classified, 97,799 of 97,899 programs listed, the 178 eboot programs in full; Canvas3D's
+lattice shaders read, `fc01_dummy`'s fog corrected: [gxp.md](../../docs/formats/gxp.md#the-instruction-stream)).
+What follows is the 2026-09 state. The instruction stream was **located, its opcode field found, and
+no opcode named** - the last of those is where this stops being
 comparable to the PS3 side. **2026-09-04**: `scripts/vita-gxp.py opcodes`
 swept both regions' full corpus (323,937 programs, 19.3M instructions) and
 found the primary and secondary op1 field is a **variable-width prefix, not
@@ -48,7 +51,7 @@ both together.
 
 ## Open
 
-- **The USSE instruction stream.** Both programs' extents close on their own
+- ~~**The USSE instruction stream.**~~ **Read 2026-10-27**, see the top. `ldst` (288 words) and `sop2m` (28) in 100 programs are refused by name; `tst`'s sign/zero fields and `branch`'s offset unit are raw. Older text: both programs' extents close on their own
   declared counts and the width is fixed at 8 bytes by `+0x74` agreeing with
   `+0x40 + 8 * +0x3c` on all 97,899. **2026-09-04**: the op1 field's *bit
   position* is now found (top 5 bits, both primary and secondary; secondary's
@@ -83,7 +86,7 @@ both together.
   parsed. Parsing it, or reading the ARM `MOVW`/`MOVT` pairs that materialise
   the two addresses in the registration code, is the way to a real binding.
   Untried.
-- **The literal record.** An 8-byte record reads as `(u32 index, 4 raw bytes)`
+- ~~**The literal record.**~~ Resolved 2026-10-27 (word index plus value bits, f32 or f16 pair by use; gxp.md). An 8-byte record read as `(u32 index, 4 raw bytes)`
   with the bytes being `f32` in vertex programs and a pair of `f16` in
   fragment ones - on three records read by hand. Confidence 45, so the tool
   exposes a count and a span and no values. `0x3dc6` (log2 e) and `0x3c00`
@@ -95,7 +98,7 @@ both together.
 
 ## Next Steps
 
-1. ~~**Decode the USSE stream**, on the model of `scripts/ps3-microcode.py`.~~
+1. ~~**Decode the USSE stream**, on the model of `scripts/ps3-microcode.py`.~~ **Done 2026-10-27.**
    **The opcode field's location is done, 2026-09-04**: a variable-width
    prefix, 5-6+ bits depending on the instruction, both primary and
    secondary, plus secondary's end bit at bit 50 - see above. **What's left
@@ -104,7 +107,7 @@ both together.
    (17.4M primary / 2.0M secondary instructions, both regions); `Vita3K`'s
    own USSE translator remains the external corroboration to check a reading
    against, never to transcribe from, per the license reasoning above.
-2. **Then read `track_proximity_shadow_fp`** and settle what 2048 actually
+2. **Read `track_proximity_shadow_fp`** (the listing exists now: `scripts/vita-usse.py disasm`) and settle what 2048 actually
    draws for a ship shadow. The container half already narrowed it: it binds
    no parameter whose name contains "shadow", so whatever it does it does not
    sample a named shadow texture.

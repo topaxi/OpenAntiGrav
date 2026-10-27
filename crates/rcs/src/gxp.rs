@@ -622,5 +622,7 @@ pub fn programs(data: &[u8]) -> Vec<(usize, Result<Program>)> {
     out
 }
 
+pub mod usse;
+
 #[cfg(test)]
 mod tests;

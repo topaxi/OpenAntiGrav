@@ -74,7 +74,12 @@ and probes. Its 6,349 submeshes:
 
 **What is drawn, and what is chosen, not measured:**
 
-- **`fc01_dummy` draws a flat fog colour (2026-10-19).** Its fragment program is a
+- **Revised 2026-10-27: not flat.** The instruction listing ([gxp.md](gxp.md#the-instruction-stream)) reads
+  the setup op as `-fogColour + 0`, not a clamp, so the pixel is `fogColour * (1 - f)` with `f` the vertex
+  program's exponential-squared fog visibility (1 near, 0 far): black near, `fogColour` in the distance.
+  The paragraph below is the 2026-10-19 reading and is wrong on this point; the renderer's `FOG_FLAT`
+  draw has not been re-read against it.
+- **`fc01_dummy` draws a flat fog colour (2026-10-19, corrected above).** Its fragment program is a
   phase marker, two arithmetic instructions and a closing scale, in two
   variants that differ in one swizzle (which component of the interpolant
   multiplies; 1 and 8 copies per package, byte-identical across `data`,

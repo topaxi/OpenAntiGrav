@@ -1,13 +1,15 @@
-# The pale triangle lattice behind every 2048 page is `3dCanvas_Item`'s procedural mesh
+# The pale triangle lattice behind every 2048 page is `3dCanvas_Item`'s procedural mesh, textured from the canvas atlas
 
 Functions in `eboot.elf` (Wipeout 2048, Vita, `PCSF00007` patch v1.04), image base `0x81000000`,
 Ghidra program `/2048/eboot-vita-2048-eu-v104.elf`. 2026-10-27, lane `2048-backdrop-re`.
 
 Question: `2048/menu-*` reference captures draw a pale triangle lattice (horizontal-line period about
 47.8 px, side about 55 px, 60-degree diagonals, line grey 233-245 on 255) behind every page; ours is
-flat white. No disc texture is the lattice (previous lane, base `data.psarc` 722 FE entries) and the
-patch archives hold none either: the `data1`/`data2.psarc` `data/FE/` entries are demo upsells, HD
-track icons, team-grid HD icons, `canvasTextureHD.gxt` and the `gamemodechoice` pair, none a lattice.
+flat white. **No whole disc texture is the lattice** (previous lane, base `data.psarc` 722 FE entries; the
+`data1`/`data2.psarc` `data/FE/` entries are demo upsells, HD track icons, team-grid HD icons,
+`canvasTextureHD.gxt` and the `gamemodechoice` pair) **but the lattice is a region of one sheet**:
+`canvasTexture.gxt` carries an outlined triangle pair in its top-left corner, and the mesh's uvs point
+at it (below, 2026-10-27).
 `NEWGUI` XML names no backdrop (`ScreenClear` appears only in `Demo_Definition.xml` and
 `LegacyInGame_Definition.xml`).
 
@@ -31,19 +33,142 @@ model"; this answers it: it renders a procedural triangle-cell mesh, and the cam
 
 `DAT_8151d3f4` is `g_pCanvas3DInstance` (confidence 70, data row below).
 
-### Mesh law (read, confidence 65, one decompile of `0x81073cb8`)
+### Mesh law (read, confidence 75; rewritten 2026-10-27 after the shaders were decoded)
 
-- Grid of 90 columns (`< 0x5a`) by 32 rows (`< 0x20`) of cells; each cell is 6 vertices of 36 bytes
-  and 18 indices (six triangles), `bVar6` alternates per column and per row.
-- Cell centre: `x = col * 0.5`, `y = row * 0.8660254` (`DAT_81732ab4`, `DAT_81732ab8`). Because the
-  row step is sqrt(3)/2 and the half-column step is 0.5, adjacent cells are triangles of side 1.0
-  alternating up and down: `DAT_81732c20..` = (-0.5,-0.4330127), (0,+0.4330127), (+0.5,-0.4330127)
-  for one parity and `DAT_81732c38..` the mirrored set for the other (`0xbeddb3d7` =
-  -0.4330127, `0x3f000000` = 0.5). Those are the three corner offsets added to each cell centre.
-- Vertices 3..5 of each cell repeat the corners with a `-1.0` marker in the `offsetIndices` stream,
-  and the index list `(0,1,2)(0,2,3)(3,2,5)(0,1,4)(1,2,5)(1,5,4)`-style pairs the inner triangle with
-  an outer ring: a filled triangle plus an edge band. Its width is not a constant in this function;
-  it comes from the vertex shader through `posOffset`/`sampleOffsets`.
+- Grid of 90 columns (`< 0x5a`) by 32 rows (`< 0x20`) of cells; each cell is 6 vertices of 36
+  bytes and 18 indices, `bVar6` alternating per column and per row. Vertex layout, 9 floats: `position`
+  xyz at `+0`, `texCoord` (atlas uv) at `+0x0c`, `texCoord2` (the cell's texel in the cell textures)
+  at `+0x14`, `offsetIndices` at `+0x1c`.
+- Cell centre: `x = col * 0.5`, `y = row * 0.8660254` (`DAT_81732ab4`, `DAT_81732ab8`). Adjacent cells
+  are equilateral triangles of side 1.0, alternating apex-up and apex-down, with `y` pointing down the
+  screen. Corner offsets for one parity: (-0.5, +0.4330127), (+0.5, +0.4330127), (0, -0.4330127)
+  (`DAT_81732c38..`, apex up); the other: (-0.5, -0.4330127), (0, +0.4330127), (+0.5, -0.4330127)
+  (`DAT_81732c20..`).
+- Vertices 0 to 2 are the triangle's corners at `z = 0`. Vertices 3 to 5 repeat them at **`z = -1.0`**
+  (the `0xbf800000` stores; the earlier reading took it for an `offsetIndices` marker): a skirt, not
+  an edge band. `offsetIndices` is the corner number: 0, 1, 2 on one parity and 3, 4, 5 on the other,
+  in both components, copied onto the skirt vertices.
+- **The atlas triangle each parity maps to** (`texCoord`, floats at `DAT_81732ac0..aec`, times 2048):
+  apex-up cells take (14, 122), (107, 122), (60, 40); apex-down cells take (60, 40), (107, 122),
+  (155, 40). Both triangles lie in the top-left corner of `canvasTexture.gxt`'s 2048 x 2048 sheet.
+  Corner and atlas vertex correspond (bottom-left to bottom-left, apex to apex).
+- `texCoord2` is the cell's texel in the 512 x 128 cell textures: `(col + 0.5) / 512`,
+  `(row + 0.5) / 128` (`DAT_8173298c`, `DAT_81732990`), so each cell reads one texel of `canvasTex`
+  and `canvasTex2`.
+
+## What the shaders compute (decoded 2026-10-27, lane `gxp-usse-decoder`)
+
+`Canvas3D_vp` is program #16 of the patch eboot's 67 embedded programs (84 primary, 4 secondary
+instructions) and `Canvas3D_fp` #46 (7 primary). Both list in full with `python3
+scripts/vita-usse.py disasm <patch eboot.elf> 16` and `... 46` (decoder and checks:
+[gxp.md](../../../formats/gxp.md#the-instruction-stream)). The base build's vertex program is #25 (`0x51899c`, 88 + 2 instructions) and was not read line by
+line; the v1.04 patch's is read here.
+
+**Register map (confidence 85, measured from the parameter table and the container table).**
+Vertex inputs `position` `pa0..3`, `texCoord` `pa4..7`, `texCoord2` `pa8..11`, `offsetIndices` `pa12`.
+Uniforms: `worldViewProj` `sa0..15` (column-major, four rows), `texCoord2offset` `sa16..17`,
+`posOffset` `sa18..20`, `sampleOffsets` `sa22..93` (36 vec2). The sampler descriptors follow at `sa94`
+(`canvasTex`) and `sa98` (`canvasTex2`); `sa102..109` are the program's literal words; the secondary
+program zeroes the three lod registers `sa110`, `sa112`, `sa114`.
+
+**Vertex program (confidence 70 on the whole, 85 per instruction):**
+
+1. `o4.xy = texCoord2 + texCoord2offset`: the cell's texel plus a CPU offset.
+2. Two **vertex-texture fetches** at lod 0: `canvasTex(o4)` into `r4..r7` (the cell's colour and a
+   height in alpha) and `canvasTex2(o4)` into `r0..r3`.
+3. `o2.xy = position.xy + posOffset.xy` and **height `h = position.z + posOffset.z + canvasTex(o4).a`**.
+4. **Atlas uv `o8.xy = texCoord.xy + canvasTex2(o4).xy`**: `canvasTex2` is a per-cell uv shift, zero
+   until a page writes one, so by default each cell shows the atlas triangle the mesh gave it.
+5. Six more fetches around the vertex, `canvasTex(o4 + sampleOffsets[6 * offsetIndices.x + k])` for
+   `k = 0..5` (the index is built as `offsetIndices.x * 6 + {3, 1, 4, 2, 5, 0}` from the literals).
+   Their alphas give an occlusion term **`s = (1/6) * sum_k max(alpha_k - h, 0)`** (confidence 60: the
+   register allocation of the six fetches was followed by hand, one chain, not executed).
+6. **Vertex colour `= ((1 - s) * canvasTex(o4).rgb, 1)`**, out as the varying `o4..o7`.
+7. `gl_Position = worldViewProj * (o2.x, o2.y, h, 1)`.
+
+**The six offsets per corner** (`DAT_81732994..`, set in `Canvas3D_InitStatics`, 72 floats; shown in
+cell-texel units, `u` in 1/512 and `v` in 1/128). They are the cells that share the vertex:
+
+| `offsetIndices.x` | the six `(du, dv)` |
+| --- | --- |
+| 0 | (0,0) (-1,0) (-2,0) (0,1) (-1,1) (-2,1) |
+| 1 | (0,0) (1,0) (2,0) (0,1) (1,1) (2,1) |
+| 2 | (-1,0) (0,0) (1,0) (-1,-1) (0,-1) (1,-1) |
+| 3 | (0,0) (-1,0) (-2,0) (0,-1) (-1,-1) (-2,-1) |
+| 4 | (-1,0) (0,0) (1,0) (-1,1) (0,1) (1,1) |
+| 5 | (0,0) (1,0) (2,0) (0,-1) (1,-1) (2,-1) |
+
+**Fragment program (confidence 70; the register roles `pa0` = interpolated vertex colour and `pa2` =
+the `tex` texel are inferred from the order of the varyings, not measured).** With `c` the vertex
+colour and `t` the sample of `tex` at `o8`:
+
+```text
+out.rgb = t.rgb * ((1 - t.a) * min(c.rgb + 0.005, 1) + t.a)        out.a = 1
+```
+
+where `0.005` is the literal pair `(0x1d1f, 0x1d1f)` and `1` the constant ROM's `c15.y`. The program
+declares one sampler, `tex`, bound by `Canvas3D_Draw` as fragment texture 0 to the canvas atlas
+resource: **`DAT_81732674` is loaded from `"Data/FE/NewImages/canvasTexture.gxt"` in `FUN_81071300`**
+(the single caller of the mesh builder, `0x81071300`), and `DAT_81732678` is written only by the
+HD / Fury campaign button builders; the draw uses `...678` when it is loaded and `...674` otherwise,
+so the default backdrop is `canvasTexture.gxt`, and the two cell textures as **vertex** textures 0 and 1.
+
+### The lattice law (what is drawn)
+
+**The lines are not computed. They are pixels of the canvas atlas.** The default cell is white with
+alpha 0 (`canvasTex` is filled `0xffffff`), so `h = posOffset.z`, `s = 0`, the vertex colour is white
+and `c' = 1`: the pixel is `t.rgb`, the atlas texel, whatever the line width or grey. The two UV
+triangles above cover the top-left of `canvasTexture.gxt` (2048 x 2048, PVRTC-II, base
+`data/FE/NewImages/`), where the sheet holds a pair of outlined equilateral triangles (apex up and apex
+down, side 93 to 95 px) drawn in light grey on white:
+
+- measured in the decoded sheet: the line **core is grey 222 (RGB 222, 222, 222, alpha 0), about 2 px
+  wide, with 4 to 5 px of falloff** (234, 242, 249 at 1 px steps), on white (255, 255, 255, alpha 0)
+  inside; outside the lines alpha is 0 to 17 on a 255 base, so `t.a` is below 7 % and the blend term
+  above is within 7 % of 1 times white-ish rgb;
+- the captures' **line grey 233 to 245 on 255** is lighter than the sheet's 222 core, which a
+  minified draw explains (the atlas triangle is 93 to 95 px on a side and the screen cell about
+  55 px, so a 2 px core is about a pixel and mixes with the white around it). That is the only
+  consistency check between the sheet and the captures, and it is weak: a pixel comparison on a ported
+  draw is the proof. (The period and side in the captures come from the mesh and the camera, not
+  from the sheet, so they are not evidence for it.)
+
+So **the port draws the mesh above with `tex = canvasTexture.gxt`** (`canvasTextureHD.gxt` where the HD resource is loaded; **its top-left carries the same pair,
+bit for bit in the measured 170 x 105 px region**, so the lattice is the same on either sheet) at the uv triangles above, vertex colour white, alpha 1, behind everything,
+and takes the line grey and width from the sheet. **No constant is invented and no stand-in is
+needed.** The earlier note that "no disc texture is the lattice" looked at whole entries; the
+lattice is a 94 x 82 px region of one sheet.
+
+**Camera and offsets, read 2026-10-27** (item reset `FUN_81070c0c`, confidence 70): `posOffset` (item
+`+0xc4..+0xcc`) = (0, 0, 0), `texCoord2offset` (`+0xd0`, `+0xd4`) = (0, 0), camera fields
+`+0xb8` = 27.1976 (`0x41d94d21`), `+0xbc` = 0.39549 (`0x3eca81dc`), `+0xc0` = 8.0 (`0x41000000`), and
+two floats at `+0x5ed18` = 5.0, `+0x5ed1c` = 17.0 (probably zoom limits, unread). The view is an
+orthographic window of half-width `+0xc0` (`0.5555556` of it vertically) around the pan, so the
+default shows 16 units across: **60 px per unit at 960 px, against the captures' 55.2** (side 55.2
+and period 47.8 px, an effective half-width of about 8.7). That is an 8 % difference the defaults do
+not explain; either a page changes `+0xc0` (it sits inside 5 to 17) or the viewport is not the full
+width. Not resolved here and not to be fitted: the wire lane finds the writer of `+0xc0` first.
+
+What stays open:
+
+1. The writers of the camera fields after the reset (the `TouchScroll` view, a page zoom): they
+   decide the phase and the 8 % scale difference above.
+2. The skirt triangles (vertices 3 to 5 at `z = -1`) shade to `(1 - s)` with `s` up to 1 (black) when
+   their `h` is below their neighbours' alphas; the reference frames show no such triangle, which
+   fits an orthographic view straight down the `z` axis (a vertical wall has no area). Draw the top
+   triangles only unless a camera tilt is found.
+3. Painted cells (`canvasTex` alpha above 0, `canvasTex2` uv shifts): written by the campaign labels,
+   not part of the default backdrop. The cell textures are 512 x 128, linear, `0xffffff` per
+   texel in `A8B8G8R8` order, so default alpha is 0 and the default `canvasTex2` shift is 0.
+4. Who sets bit `0x80` at `canvas+0x30` (which pages draw the lattice).
+
+Confidences: the register map 85; the vertex program's per-instruction listing 85, its reading as an
+occlusion shade 60; the fragment formula 70; the lattice-from-atlas law 85 (the texture load is read,
+the sheet measured on both atlases, the uv-to-triangle correspondence a decompile); the camera
+defaults 70; the screen grey consistency is arithmetic, not a capture comparison.
+
+**The 2048 lattice thread is ready to wire** (a ready-to-wire thread in CLAUDE.md's sense) on the law,
+the mesh, the uvs and the grey, with the camera's runtime writer as its first step.
 
 ### When it draws (confidence 70)
 
@@ -55,40 +180,20 @@ It is not tied to a page: `BootFlowCanvas_Item`'s own draw slot is a bare `bx lr
 front end, which matches "every page" in the captures. What sets bit `0x80`, and which pages clear
 it (the race HUD, the title movie), is unread.
 
-## What is not read
+## What is still open
 
-1. **The line law.** Whether the 1 px lines are the ring band of the mesh or a fragment-shader edge
-   function, their grey and their width are in `Canvas3D_vp` (`0x815270dc`) and `Canvas3D_fp`
-   (`0x8152a32c`). `scripts/vita-gxp.py` reads only the GXP container, not the instructions, so
-   this stays unread. `White2048` (`0xffe1e4eb`, `NEWGUI/Skin.xml`) is near the measured 233-245 but
-   no read path from it to this draw exists: do not adopt it.
-2. **The camera.** `Canvas3D_BuildWorldViewProj` takes `+0xb8/+0xbc/+0xc0` of the item (probably pan
-   x, pan y, half-width in canvas units). The measured 55.2 px per unit (47.8 / 0.866) implies a
-   half-width of about 8.7 units at 960 px, and 5/9 vs 544/960 = 0.5667 shows the aspect is a
-   constant, not derived from the display. Default values and whether a page scrolls it (the
-   `TouchScroll` view in `newFEshell`) are unread, so lattice phase is unknown.
-3. The role of the second 512x128 texture (`canvasTex2`, zero-filled) and the per-cell colour
-   texture (`canvasTex`, filled `0xffffff`): cell colours are all white at start; the labels and
-   highlight states change them.
-
-## Consequence for the port
-
-No lattice is wired. Drawing the pattern needs the line width and grey (shader) and the camera
-default (item fields) and any stand-in would be tuned by eye to the capture, which CLAUDE.md
-forbids. `crates/ui` keeps its flat white and this page is the next-address list:
-
-1. Decode the `Canvas3D_vp`/`Canvas3D_fp` instructions (a Vita GXP disassembler is not in
-   `scripts/vita-gxp.py`) or capture the lattice with a Vita3K shader dump.
-2. Read the item's camera fields (`param_1+0xb8..0xc0`) where the item is created and from the
-   `TouchScroll` handler, to get default phase and the scroll law.
-3. Read who sets bit `0x80` at `canvas+0x30`.
+The camera writers (item 1 above), the second cell texture's writers, and the lattice's visibility
+bit are the unread parts; the line law is **read**.
 
 ## HD / Omega cross-check (CLAUDE.md)
 
-- **Omega: checked, applies, not wired.** The PS4 `eboot.bin` (`/omega/eboot-ps4-omega-eu.bin`)
+- **Omega: checked, applies, not wired. The GCN program is the open half.** The PS4 `eboot.bin` (`/omega/eboot-ps4-omega-eu.bin`)
   carries `Canvas3D_fp`/`Canvas3D_vp` (`0x0181aa64`, `0x0181aa70`), `3dCanvas_Item.cpp`
   (`0x0181aa22`) and `FE3DCanvas` (`0x0181aa59`): the same item ships, so Omega's 2048 campaign
-  branch draws the same mesh. Omega's HD-derived pages sit on the same shell. Not compared with a
+  branch draws the same mesh. Omega's HD-derived pages sit on the same shell. The USSE decoder does not apply to Omega's shaders (GCN `.sb`, a different instruction set:
+  **checked, differs**), so Omega's `Canvas3D` programs are unread; the mesh and the atlas law above
+  are the same item's CPU side and sprite, and the atlas the same sheet's PS4 `.gnf` sibling (unchecked).
+  Not compared with a
   capture (shadPS4 race shots are untrusted per the lane notes; menu pairs were not taken).
 - **HD: checked, differs.** `/hdfury/EBOOT-ps3-hdfury-eu.elf` has no `Canvas3D` string; HD's
   front-end backdrop is not this mesh.

@@ -1,14 +1,17 @@
 # `.gxp` - SceGxm shader programs (Wipeout 2048)
 
-Status: **container understood**. Wipeout 2048, PS Vita.
+Status: **container understood; instruction stream classified and, for 21 of
+its 23 used classes, listed** (2026-10-27). Wipeout 2048, PS Vita.
 
 Every shader program the game runs is a `GXP\0` container, and there is no
 `.gxp` file on the disc: they are embedded, in the executable and inside
 `.rcsmaterial` files. **97,899 of 97,899 of them decode** - header, code
 extents, the literal/uniform/container tables, and the parameter table with
 its **names** - swept across both eboots and all three `.psarc` packages,
-22,056 files. The GPU bytecode inside is located exactly and **not decoded**;
-see [What is not read: the bytecode](#what-is-not-read-the-bytecode).
+22,056 files. The GPU bytecode inside is classified word by word and listed
+operand by operand for **97,799 of the 97,899 programs** (the other 100 hold a
+load/store or an 8-bit packed multiply that is refused by name); see
+[The instruction stream](#the-instruction-stream).
 
 Two readings are stacked here and they agree:
 
@@ -295,20 +298,184 @@ eboots rather than the `.rcsmaterial` files it would be natural to sample:
 *a field that is constant over a sample is not a constant.* The 111-against-67
 split between the two builds is the same lesson at file scale.
 
-## What is *not* read: the bytecode
+## The instruction stream
 
-The instruction stream is PowerVR SGX543 USSE, and nothing here decodes it.
-Its **extent** is now exact - both programs close on their own declared
-counts, at 8 bytes an instruction - and its **content** is handed back as
-bytes. So a program's **declared interface** is recoverable - its uniforms,
-samplers, attributes, their types and component counts - and **what it
-computes is not**. Every claim on this page and in
-[effectsettings.md](effectsettings.md) about a shader's *arithmetic* is
-therefore either absent or explicitly marked as unrecovered.
+2026-10-27, lane `gxp-usse-decoder`. The stream is PowerVR SGX543 USSE code,
+one 64-bit little-endian word per instruction, in two blocks per program: the
+**primary** program (per vertex or per pixel) and the **secondary** program
+(per draw call, run before it, writing the uniform registers). Its extent has
+been exact since the container work; its **content** is now read.
 
-This is where the PS3 pair still goes further:
-`oag_rcs::rcsmaterial::fragment` decodes RSX microcode, 37,461 of 37,461
-blocks. Doing the same for USSE is the open thread.
+```sh
+python3 scripts/vita-usse.py disasm <eboot.elf|psarc[:entry]> <program index>
+python3 scripts/vita-usse.py census <source> [...]
+```
+
+`oag_rcs::gxp::usse` (`crates/rcs/src/gxp/usse.rs`) is the Rust half: it names
+the class of a word and says whether the listing reads its operands. The
+listing itself is Python (`scripts/vita-usse.py`), the way
+`scripts/ps3-microcode.py` is the reference for the PS3 half: nothing at
+runtime consumes operands yet, and the census needs only classes. Operand
+decode belongs in Rust when a renderer needs a shader's arithmetic.
+
+### Classes (confidence 90)
+
+A word's class is the first of **35 ordered layouts** whose fixed bits it
+carries (the short-opcode classes are prefixes of the long ones, so order
+matters). Every layout is 64 characters: fixed bits and named fields. Names
+and listing syntax are ours.
+
+**Census** (`crates/rcs/tests/gxp_ground_truth.rs`, over the same 97,899
+programs and 22,056 files as the container; **5,883,746 words** in both
+blocks, every one matching a layout; the 178 eboot programs - 111 base, 67
+patch - included, and the Rust and Python censuses agree on every count):
+
+| Class | Words | What it is | Listed |
+| --- | ---: | --- | --- |
+| `nmad32` + `nmad16` | 648,251 + 1,529,291 | vector add, multiply, min, max, fract, dot, derivative (f32 / f16) | yes |
+| `pck` | 1,004,731 | pack / unpack between f32, f16, 8 and 16-bit integers, c10 | yes |
+| `comp` | 706,227 | reciprocal, reciprocal square root, log2, exp2 | yes |
+| `mad` | 705,429 | 3- and 4-vector multiply-add through the internal registers | yes |
+| `mad2` | 532,342 | multiply-add, three sources (f32 / f16) | yes |
+| `mov` | 302,346 | move, conditional move | yes |
+| `bw` | 128,062 | and, or, xor, shifts, rotate (also the immediate load) | yes |
+| `phase` | 98,654 | phase boundary (texture / feedback scheduling) | yes |
+| `spec` | 90,417 | special marker | yes |
+| `dp` | 61,957 | 3- and 4-component dot product | yes |
+| `nop` | 47,565 | no-op | yes |
+| `slsi` | 13,174 | sets the repeat increments of the next instructions | yes |
+| `smp` | 11,762 | texture sample | yes |
+| `tst` | 2,305 | test (sets a predicate) | yes, **sign / zero / combine fields raw** |
+| `kill` | 753 | discard pixel | yes |
+| `ldst` | 288 | load / store | **refused by name** |
+| `imad32` | 144 | 16 x 16 to 32-bit integer multiply-add | yes |
+| `sop2m` | 28 | two-source op with a mask | **refused by name** |
+| `imad16` | 13 | 16-bit integer multiply-add | yes |
+| `branch` | 3 | branch | yes, **raw offset** |
+| `imad32x2` | 2 | 32-bit integer multiply-add | yes |
+| `depthf` | 2 | depth feedback | yes |
+
+Twelve of the 35 layouts never occur (`dual`, `sop2`, `sop3`, `imad8`,
+`imad8x2`, `tstmsk`, `sbo`, `limm` and the four illegal opcodes); the test pins
+that, so a corpus that grows one fails by name. **Zero words are unclassified**
+(`seen.unclassified == 0`). Operands are listed for 5,883,430 of the
+5,883,746 words (99.995%); 316 words in 100 programs are `ldst` or `sop2m` and
+are refused by name. **The 178 eboot programs are listed in full**
+(`census` on the two executables: 178 of 178; the brief's 111 + 67). The
+`rcsmaterial` corpus is listed for 97,621 of 97,721 programs.
+
+The earlier sweep on this page (323,937 programs, 17,377,433 primary words)
+used a different source set, base and patch archives counted separately;
+the numbers above are the 97,899 of the container census.
+
+### How the layouts were established, and what they were checked against
+
+The field maps and the operand semantics were taken from a reading of Vita3K's
+USSE translator (GPL-2.0-or-later: read for facts about the hardware's
+encodings; the tables here are re-expressed as masks, values and `(name,
+lowest bit, width)` field lists under our own names, the listing code and its
+syntax are handwritten, and mnemonics are ours) and from public SGX documentation. The
+listing is then **checked against the emulator's own disassembly logs**:
+a scratch harness (not landed, since it has to parse that emulator's own text) decodes every
+distinct line of 589 `.dsm` logs (4,765 (word, text) lines, written by Vita3K runs of 2048's menus and
+races; 552 programs have both log and container) and compares mnemonic and
+operands:
+
+| Class | Lines agreeing | Differing |
+| --- | ---: | --- |
+| `nmad` | 2,215 | 0 |
+| `mad2` | 908 | 0 |
+| `pck` | 557 | 5 (repeat steps) |
+| `mov` | 282 | 29 (repeat steps) |
+| `comp` | 249 | 0 |
+| `mad` | 205 | 0 |
+| `bw` | 115 | 13 (repeat steps) |
+| `smp` | 96 | 6 (the log prints the lod operand as `INVALID`) |
+| `dp`, `imad16`, `slsi`, `tst`, `kill`, `depthf`, `phase`, `spec`, `nop` | 33, 6, 19, 14, 4, 1, 2, 4, 2 | 0 |
+
+Every non-repeating line of every sampled class agrees; the remaining
+differences are the log printing one line per repeat step with register
+numbers stepped (that is how the repeat count was confirmed: a program whose log is longer
+than its block differs by repeated words). `slsi`, `kill`, `tst` and `spec` are compared on decode success
+and mnemonic only, and **`imad32`, `imad32x2`, the integer forms of `tst`, and
+`branch` have no log line to check against** (and the never-occurring `limm` is not listed at all) (confidence 60 on those operands,
+90 on the others). Classes `ldst` and `sop2m` are the open part.
+
+**Register naming and the constant bank (confidence 85).** `pa` primary
+attributes (vertex inputs, or iterated varyings / sampled texels in a pixel
+program), `sa` secondary attributes (uniforms and the sampler descriptors),
+`r` temporaries, `o` outputs, `i` the internal registers, `c` a hardware
+constant ROM (`c0.x` = 0, `c15.y` in f16 = 1.0). Vectors of f16 occupy
+register *pairs*, so `pa2.xyzw` in f16 is words `pa2` and `pa3`; the number
+printed is the 32-bit word. A uniform's `resource` field in the parameter
+table **is its `sa` register**: on the composite program (blob #77) the
+parameters read `bloomFactor` 0, `accumFactor` 2, `screenTintColour` 4,
+`zoneEdgeColour` 6, and the code uses `sa6.xyzw` as a colour multiplier of the
+edge strength and `sa4.xyzw` as the closing add.
+
+**The literal record resolved (confidence 75; was 45).** An 8-byte record is
+`(u32 word index, u32 value bits)`: the word is placed in the secondary
+attribute file at that index within its container, and the value is read as
+`f32` or as a pair of `f16` by whichever instruction uses it. On Canvas3D's
+vertex program the records (indices 8 to 15) are `0`, `5.0`, `2.0`, `4.0`,
+`1.0`, `3.0`, `1/6` as two f16 and `6.0`, which the code uses as the
+permutation `v * 6 + {3, 1, 4, 2, 5, 0}` and an f16 `1/6` weight; on its
+fragment program, `(1.0, 0.0)` and `0.005` as two f16. That is the 8-byte
+record the container work found, and it is why the vertex program's constants
+read as nonsense under a per-program-type f32 or f16 rule.
+
+### The cross-checks (acceptance 4)
+
+- **Blob #77 (`zoneEdgeColour`, base eboot, `wo_composite`)** lists as a
+  three-tap edge detector: two differences of three `mainTex` taps, absolute
+  values summed (`abs(a - b) + abs(a - c)`), dotted with a constant vector
+  (from the constant ROM), scaled by `sa6` (`zoneEdgeColour`) plus a bias, clamped
+  to `[0, 1]`, and blended; `screenTintColour` (`sa4`) is a final add. That
+  agrees with the page's earlier reading that `zoneEdgeColour` is the Zone
+  grade's own colour and `screenTintColour` is not.
+- **`fc01_dummy`'s fragment program** (see
+  [`2048-material-params.md`](2048-material-params.md)) lists as
+  `sa2 = -fogColour + 0` in the secondary program and
+  `out = pa0.x * sa2 + sa0 = fogColour * (1 - pa0.x)`, then alpha 1.0.
+  **That corrects the 2026-10-19 reading** ("clamps the negated `fogColour`
+  at zero, so the pixel is `fogColour` whatever the interpolant holds"): the
+  op is an add (`op2 = 1`, which the oracle confirms as an add on 2,215 other
+  words), not a max (`op2 = 6`). The interpolant is the vertex program's
+  exponential-squared fog visibility: `o4.x = min(sa36.x, exp2(-(sa32.w *
+  z)^2 * sa36.z))` with `z` the view depth (clip `w`), 1 near and 0 far. So the road is **black near and
+  `fogColour` far**, not flat `fogColour`. Confidence 85 on the arithmetic
+  (the operand decode agrees with the oracle), 60 on the interpretation of the
+  vertex output as a fog visibility. No renderer is changed here; the owner of
+  the 2048 material path should re-read what `psp2::FOG_FLAT` draws.
+
+### Canvas3D's lattice shaders
+
+Decoded and explained on
+[`canvas3d-lattice.md`](../ghidra/functions/vita-2048-eu-v104/canvas3d-lattice.md).
+
+### Omega cross-check
+
+**Checked, differs.** Omega's programs are PS4 GCN (`.sb`), not USSE; none of
+this decoder applies. Its eboot carries `Canvas3D_vp`/`Canvas3D_fp` as the
+lattice page records, so the GCN half of the same law is the open work on
+that title. 2048's DLC and Omega's re-shipped `.rcsmaterial` programs differ
+only in this instruction set, so a law read here (the fog visibility above) is
+checked against Omega's own program, never assumed.
+
+### What is still unread
+
+- `ldst` (288 words) and `sop2m` (28): refused by name, in 100 programs.
+- `tst`'s sign, zero and combine fields are kept raw; `branch`'s offset unit.
+- The unread header words and the per-program name binding on this page's
+  earlier lists are unchanged.
+- The `smp` `lod` and `fconv` fields are listed raw (`lod2` is the only mode
+  the sampled programs use with a lod register); the gather and info modes
+  never occur in the corpus.
+
+### History: the opcode field was located first (2026-09-04)
+
+What follows is the earlier derivation and its trap, kept because the trap
+generalises. It is **superseded** where it says nothing is named.
 
 ### The opcode field is located, corpus-wide - nothing is named yet
 
@@ -368,8 +535,8 @@ source** - see the license note below:
   bit position moves with the instruction format cannot show up as one clean
   bit across every format at once.
 
-**Naming an opcode is still not attempted, and the oracle rule changed
-(maintainer, 2026-10-19).** The two findings above were derived from the bytes
+**Naming an opcode was not attempted then (superseded 2026-10-27), and the oracle rule
+changed (maintainer, 2026-10-19).** The two findings above were derived from the bytes
 and checked afterward against Vita3K's USSE decoder. The maintainer has since
 approved reading Vita3K's frames, its behaviour, the `.dsm` shader logs it
 writes and its source code as evidence. Everything that lands here is
@@ -385,7 +552,7 @@ logs of neighbouring programs, in
 
 Two smaller things are also left unread on purpose:
 
-- **The literal record's interpretation.** An 8-byte record reads as
+- **The literal record's interpretation (resolved above, 2026-10-27).** An 8-byte record reads as
   `(u32 index, 4 raw bytes)` with the bytes being `f32` in vertex programs and
   a pair of `f16` in fragment ones, on three records read by hand.
   Confidence: **45**, so the tool exposes a count and a span and no values.
@@ -538,7 +705,8 @@ Zone-driven is not established**.
 
 That is a narrower result than the name "composite grade" suggests, and it is
 recorded that way deliberately: an *edge* colour is not a full-screen tint,
-and what the shader does with it is in the bytecode this page does not read.
+and what the shader does with it is in the bytecode, listed under
+[The instruction stream](#the-instruction-stream).
 
 ## What this settles for 2048's shadows
 
@@ -566,6 +734,13 @@ read neither. With the container decoded:
   colour with a select and an alpha, not a lookup.
 - **`track_proximity_shadow_fp` binds no parameter whose name contains
   "shadow".** Whatever it draws, it does not sample a named shadow texture.
+
+## Sources for the instruction stream
+
+Read, never copied (landed code and text are handwritten): Vita3K's USSE
+translator (`vita3k/shader`: the instruction layouts, register banks, the
+constant ROM and operand semantics) and its shader logs (`.dsm`) as the
+oracle. No other documentation of the instruction set was used.
 
 ## Related
 
