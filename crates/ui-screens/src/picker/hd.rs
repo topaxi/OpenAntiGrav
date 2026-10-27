@@ -450,7 +450,18 @@ pub(super) fn body(
         );
     }
     if let Some(block) = find_block(screen, LOYALTY_BLOCK) {
-        stat_bar(block, (None, None), layout, extra, frame, sprites, &mut out);
+        // The running loyalty total on the stat bars' own 0..100 scale.
+        // **Only the empty total is measured** (`000` on a fresh profile,
+        // the nobble at the bar's left end); how a larger total scales
+        // onto the bar and its three digits is chosen, not measured.
+        let loyalty = match &entry.details {
+            Details::Ship {
+                loyalty: Some(total),
+                ..
+            } => Some((*total).min(100) as u8),
+            _ => None,
+        };
+        stat_bar(block, (loyalty, None), layout, extra, frame, sprites, &mut out);
     }
     out
 }

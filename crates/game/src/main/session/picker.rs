@@ -230,7 +230,10 @@ impl Session {
         };
         let title = shell.title;
         let gates = unlock::gates_variants(title);
-        let records = if gates {
+        // HD's own ship screen prints the running loyalty total, which no
+        // other title that gates nothing shows.
+        let shows_loyalty = gates || layout.hd.is_some();
+        let records = if shows_loyalty {
             records::load()
         } else {
             records::Store::default()
@@ -284,7 +287,7 @@ impl Session {
                             stats,
                             models,
                             logo: details.map(|team| picker::hd::logo_src(&team.location)),
-                            loyalty: gates
+                            loyalty: shows_loyalty
                                 .then(|| records.loyalty_total(title, &choice.value)),
                         },
                     },
