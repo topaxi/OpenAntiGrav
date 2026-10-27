@@ -102,8 +102,24 @@ bound once per pass cuts wgpu's per-bind merge and init checks even with ordinar
 bundles (lane 2) and unifies HD's and the psp2 path's layouts. Pass the per-draw entry as a uniform
 dynamic offset (uniform index, works everywhere) rather than `first_instance` (non-uniform index,
 +6.5-16 % GPU on ANV and NVIDIA, patchy on WebGL). About 3-5 days; indirect becomes a small step on
-top of `park/indirect-depth-prepass` afterwards. Check first whether wgpu 30 exposes a per-draw index the
-shader compiler treats as uniform.
+top of `park/indirect-depth-prepass` afterwards.
+
+**Checked in the wgpu 30.0.1 / naga 30.0.1 sources (2026-10-27):**
+- `Features::SHADER_DRAW_INDEX` exists (`@builtin(draw_index)`, `enable draw_index;`): Vulkan and GLES only,
+  not DX12 or Metal yet, native only. But naga's uniformity analysis treats every builtin argument except
+  the workgroup ones as non-uniform (`valid/analyzer.rs`, `Expression::FunctionArgument`), so indexing a
+  binding array with it still gets the SPIR-V `NonUniform` decoration. It is no fix for the GPU penalty, and
+  a fragment shader receives any per-draw index as a flat varying, which is non-uniform anyway.
+- `Features::IMMEDIATES` (push constants, `var<immediate>`, `RenderPass::set_immediates`): DX12, Vulkan,
+  Metal, OpenGL (emulated with uniforms); WebGPU is a proposal, not in browsers yet. A material index read
+  from an immediate is a uniform load, so no `NonUniform` and no penalty, and `set_immediates` touches no
+  tracked resource. **This is the per-draw index to use** with ordinary draws; the web build falls back to a
+  uniform dynamic offset.
+- Indirect stays non-uniform either way (no per-draw immediates inside one multi-draw), so the colour passes
+  on indirect still need the per-material bucketing.
+- `Features::MULTI_DRAW_INDIRECT_COUNT` (DX12, Vulkan 1.2+) also guarantees `multi_draw_indexed_indirect` is
+  not emulated as a series of `draw_indexed_indirect`; without it a backend may emulate it. Check the Deck's
+  adapter reports it before trusting a multi-draw number.
 
 ## Next Steps
 
