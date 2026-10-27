@@ -623,3 +623,25 @@ runs.
 (`oag_gpu::split_finish::wanted`); the S24 (253, 653, 730, 1024) runs one encoder, the Deck and a
 desktop Zen (1024 on every core) keep the split. `OAG_SPLIT_FINISH=0`/`1` still overrides. On the
 S24 that is exactly the `OAG_SPLIT_FINISH=0` row above.
+
+## Between-ticks drawing on the Deck (2026-10-27, `deck-between-ticks-measure`)
+
+Claim: the between-ticks drawing (`85e7f2b5d`) plus the mist blend (`2fd6f966d`) add no CPU to the
+Deck's frame thread. **True.** `e9baf8c42` (`85e7f2b5d^1`) against `1a7e06314`, znver2 container
+builds, HD/Fury Anulpha Pass (`--track 'Data\Environments\15_Anulpha_Pass\track.vex' --mode
+single_race`), `--race --autopilot --no-intro --no-audio --frame-log --seed 1 --script 40:quit`,
+unlocked (`vsync = "off"`, `frame_limit = "unlimited"`, `ENABLE_GAMESCOPE_WSI=0`), gaming-mode
+gamescope on `:1`, surface 1280x800. Four runs per build interleaved old, new, old, new, 25 s
+rest between, Deck load 0.5 to 1.4, on AC. First four lines dropped, median per run, then the
+median of the four runs (range of the four in brackets), ms per frame:
+
+| Build | scene | compose | submit | present | total | CPU row |
+| --- | --- | --- | --- | --- | --- | --- |
+| `e9baf8c42` before | 2.80 (2.77-2.83) | 0.21 | 3.43 (3.36-3.46) | 0.18 | 7.34 (7.21-7.44) | 7.36 (7.25-7.44) |
+| `1a7e06314` after | 2.82 (2.81-2.83) | 0.21 | 3.42 (3.42-3.45) | 0.18 | 7.42 (7.33-7.42) | 7.45 (7.39-7.45) |
+
+The differences (`scene` +0.02, `submit` -0.01, `total` +0.08, CPU row +0.09) sit inside the old
+build's own spread (0.23 ms on `total`, which drifted down from 7.44 to 7.21 over its four runs,
+so the Deck warmed or settled during the sequence). `ticks` 0.40 against 0.43. Both builds hold
+about 117 fps unlocked. Every Deck core reports `cpu_capacity` 1024 (read from sysfs; the log
+does not name the path), so both builds take the split encoder finish.
