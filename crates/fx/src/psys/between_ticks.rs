@@ -82,17 +82,20 @@ impl System {
     /// [`System::advance`] runs it first, so `before` is the position the tick
     /// started from; the race runs it on every pool at the start of every tick
     /// path, so a pool that tick path does not advance has no stale move.
+    ///
+    /// Live particles only: a spawn sets its own `before`.
     pub fn hold_still(&mut self) {
-        for particle in &mut self.particles {
+        for particle in self.particles.iter_mut().filter(|p| p.alive()) {
             particle.before = particle.position;
         }
     }
 }
 
 impl Stage {
-    /// [`System::hold_still`] on every instance.
+    /// [`System::hold_still`] on every instance that holds anything; an idle
+    /// one has no live particle to hold.
     pub fn hold_still(&mut self) {
-        for instance in &mut self.instances {
+        for instance in self.instances.iter_mut().filter(|i| i.busy()) {
             instance.system.hold_still();
         }
     }

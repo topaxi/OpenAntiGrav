@@ -160,6 +160,17 @@ pub struct Sample {
     pub up: Vec3,
 }
 
+/// One ring of the extruded tube, the attributes its three fins share.
+#[derive(Debug, Clone, Copy, Default)]
+struct Ring {
+    position: Vec3,
+    up: Vec3,
+    tangent: Vec3,
+    side: Vec3,
+    colour: [f32; 4],
+    u: f32,
+}
+
 /// One craft's trail state: the ring plus the wrapping scroll phase.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Tube {
@@ -384,28 +395,38 @@ impl Tube {
         };
         let head_u = u_head(speed01);
 
-        // Per-ring attributes, shared by the three fins, at each ring's age.
-        let ring_u = |age: f32| head_u * (1.0 - age * U_FALLOFF_PER_RING) + phase;
-        let ring_alpha = |age: f32| {
-            let attack = (age * ALPHA_ATTACK_PER_RING).min(1.0);
-            let fall = 1.0 - age / SAMPLES as f32;
-            brightness * attack * fall
-        };
-        let ring_tint = |age: f32| tint_at_age(age, red_mix);
+        // Per-ring attributes, shared by the three fins, at each ring's age:
+        // computed once a ring rather than once a corner, and the tangent
+        // once rather than twice per segment per fin.
+        //
         // The segment tangent: central difference inside the ring, one-sided
         // at its ends, matching the dumped normals' behaviour where samples
         // bunch up (they go degenerate rather than flip). Between ticks the
         // head can sit on the next ring (a zero-length first segment as the
         // tick turns), so its tangent then reaches one ring further.
         let last = points.len() - 1;
-        let tangent = |k: usize| {
+        let mut rings = [Ring::default(); SAMPLES + 1];
+        for (k, ring) in rings.iter_mut().enumerate().take(points.len()) {
+            let (sample, age) = points[k];
             let ahead = points[k.saturating_sub(1)].0.position;
             let behind = points[(k + 1).min(last)].0.position;
-            if between && k == 0 && (ahead - behind).length_squared() < 1e-12 {
-                return (ahead - points[2.min(last)].0.position).normalize_or_zero();
-            }
-            (ahead - behind).normalize_or_zero()
-        };
+            let tangent = if between && k == 0 && (ahead - behind).length_squared() < 1e-12 {
+                (ahead - points[2.min(last)].0.position).normalize_or_zero()
+            } else {
+                (ahead - behind).normalize_or_zero()
+            };
+            let attack = (age * ALPHA_ATTACK_PER_RING).min(1.0);
+            let fall = 1.0 - age / SAMPLES as f32;
+            let tint = tint_at_age(age, red_mix);
+            *ring = Ring {
+                position: sample.position,
+                up: sample.up,
+                tangent,
+                side: tangent.cross(sample.up),
+                colour: [tint[0], tint[1], tint[2], brightness * attack * fall],
+                u: head_u * (1.0 - age * U_FALLOFF_PER_RING) + phase,
+            };
+        }
 
         out.reserve(MAX_VERTICES_PER_CRAFT);
         for fin in 0..FINS {
@@ -424,32 +445,29 @@ impl Tube {
             // three decimals.
             let angle = fin as f32 * FIN_STEP;
             let (sin, cos) = angle.sin_cos();
-            for k in 0..last {
-                let corner = |k: usize, edge: f32| {
-                    let (s, age) = &points[k];
-                    let age = *age;
-                    let d = tangent(k);
-                    // Rodrigues' rotation of `up` about `d`, then the edge
-                    // offset along it.
-                    let side = d.cross(s.up);
-                    let fin_dir = (s.up * cos + side * sin).normalize_or_zero();
-                    let tint = ring_tint(age);
-                    GpuVertex {
-                        position: (s.position + fin_dir * (edge * FIN_HALF_WIDTH)).to_array(),
-                        // `cross(back, fin) = cross(fin, forward)`, the
-                        // dumped orientation - see the fin comment above.
-                        normal: fin_dir.cross(d).to_array(),
-                        colour: [tint[0], tint[1], tint[2], ring_alpha(age)],
-                        texcoord: [ring_u(age), (edge + 1.0) * 0.5],
-                        lit: red_mix,
-                        ..bytemuck::Zeroable::zeroed()
-                    }
+            // Both edges of ring `k` for this fin.
+            let edges = |ring: &Ring| {
+                // Rodrigues' rotation of `up` about the tangent, then the
+                // edge offset along it.
+                let fin_dir = (ring.up * cos + ring.side * sin).normalize_or_zero();
+                // `cross(back, fin) = cross(fin, forward)`, the dumped
+                // orientation - see the fin comment above.
+                let normal = fin_dir.cross(ring.tangent).to_array();
+                let edge = |edge: f32| GpuVertex {
+                    position: (ring.position + fin_dir * (edge * FIN_HALF_WIDTH)).to_array(),
+                    normal,
+                    colour: ring.colour,
+                    texcoord: [ring.u, (edge + 1.0) * 0.5],
+                    lit: red_mix,
+                    ..bytemuck::Zeroable::zeroed()
                 };
-                let a0 = corner(k, -1.0);
-                let a1 = corner(k, 1.0);
-                let b0 = corner(k + 1, -1.0);
-                let b1 = corner(k + 1, 1.0);
+                (edge(-1.0), edge(1.0))
+            };
+            let (mut a0, mut a1) = edges(&rings[0]);
+            for ring in &rings[1..=last] {
+                let (b0, b1) = edges(ring);
                 out.extend_from_slice(&[a0, a1, b0, a1, b1, b0]);
+                (a0, a1) = (b0, b1);
             }
         }
     }
