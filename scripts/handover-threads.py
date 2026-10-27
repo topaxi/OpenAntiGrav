@@ -11,6 +11,7 @@ Every thread under `handover/<category>/` opens with a frontmatter block:
     categories: [rendering]      # optional: extra categories, on top of the directory
     size: M (70)                 # optional: effort for one member, one of SIZES, confidence 0-100
     difficulty: medium (50)      # optional: how settled the path is, one of DIFFICULTIES, confidence 0-100
+    kind: debt                   # optional: one of KINDS
     ---
 
 `status` is one of STATUSES, `titles` a list from TITLES (or `all`),
@@ -21,7 +22,7 @@ without them is listed with `?`.
 `scripts/check-handover-size.py` (`just check-handover`) refuses a thread
 whose block is missing or invalid; this module owns the parser and the rules.
 
-    python3 -I scripts/handover-threads.py [--status S] [--title T] [--category C] [--size Z] [--difficulty D] [--counts|--paths]
+    python3 -I scripts/handover-threads.py [--status S] [--title T] [--category C] [--size Z] [--difficulty D] [--kind K] [--counts|--paths]
 
 Standard library only.
 """
@@ -52,7 +53,10 @@ SIZES = ("XS", "S", "M", "L", "XL")
 #: How settled the path is: easy (known steps), medium (a few unknowns), hard (an unread law, a design question,
 #: or a risk of a negative result).
 DIFFICULTIES = ("easy", "medium", "hard")
-KEYS = ("status", "titles", "updated", "summary", "categories", "size", "difficulty")
+#: What a thread is, when it is not new work: `debt` is something already built that has to be paid back (a
+#: shortcut, a workaround, a stand-in, a ratchet's frozen list).
+KINDS = ("debt",)
+KEYS = ("status", "titles", "updated", "summary", "categories", "size", "difficulty", "kind")
 REQUIRED = ("status", "titles", "updated", "summary")
 SUMMARY_MAX = 150
 
@@ -150,6 +154,8 @@ def parse(path: Path) -> tuple[dict | None, list[str]]:
             if confidence > 100:
                 errors.append(f"{key} confidence {confidence} is over 100")
             fields[key + "_confidence"] = confidence
+    if "kind" in fields and fields["kind"] not in KINDS:
+        errors.append(f"kind `{fields['kind']}` is not one of {', '.join(KINDS)}")
     cats = fields.get("categories", [])
     if not isinstance(cats, list) or any(c not in CATEGORIES for c in cats):
         errors.append(f"`categories` must be a list from {', '.join(CATEGORIES)}")
@@ -171,6 +177,7 @@ def main() -> int:
     ap.add_argument("--category", choices=CATEGORIES, help="directory or extra category")
     ap.add_argument("--size", choices=SIZES)
     ap.add_argument("--difficulty", choices=DIFFICULTIES)
+    ap.add_argument("--kind", choices=KINDS)
     ap.add_argument("--counts", action="store_true", help="print the count per status")
     ap.add_argument("--paths", action="store_true", help="print only the paths, one per line (for shuf)")
     args = ap.parse_args()
@@ -193,6 +200,8 @@ def main() -> int:
             continue
         if args.difficulty and fields.get("difficulty") != args.difficulty:
             continue
+        if args.kind and fields.get("kind") != args.kind:
+            continue
         rows.append((path, fields))
 
     if args.counts:
@@ -210,7 +219,8 @@ def main() -> int:
     for path, f in rows:
         titles = ",".join(f["titles"])
         sizing = "/".join(_estimate(f, key) for key in ("size", "difficulty"))
-        print(f"{f['status']:<18} {titles:<12} {sizing:<18} {f['updated']} {path.relative_to(ROOT)}")
+        kind = f" [{f['kind']}]" if "kind" in f else ""
+        print(f"{f['status']:<18} {titles:<12} {sizing:<18} {f['updated']} {path.relative_to(ROOT)}{kind}")
         print(f"    {f['summary']}")
     print(f"{len(rows)} threads", file=sys.stderr)
     return 1 if bad else 0
