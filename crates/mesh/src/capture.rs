@@ -184,6 +184,7 @@ pub fn capture_pixels_from(
         emissive_buffer: _,
         stamp_pipeline: _,
         prepass: _,
+        culled: _,
     } = build(
         &device,
         &queue,

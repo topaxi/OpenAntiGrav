@@ -27,6 +27,9 @@ pub(super) struct Drawable {
     /// `oag_vex::vex::Batch::alpha_test_reference`. Empty on anything but a
     /// `.vex` model.
     cutout_pipelines: Vec<(f32, wgpu::RenderPipeline)>,
+    /// The same four with back faces culled, for the draws that ask - see
+    /// `mesh_render::Built::culled`.
+    culled: Option<mesh_render::SolidSet>,
     blend_pipeline: [wgpu::RenderPipeline; 2],
     /// The other two recovered transparent blend classes. Selected per draw
     /// call, because a single model mixes them - see
@@ -236,6 +239,7 @@ impl Drawable {
             prepass,
             alpha_test_pipeline,
             cutout_pipelines,
+            culled,
             blend_pipeline,
             additive_pipeline,
             unblended_pipeline,
@@ -362,6 +366,7 @@ impl Drawable {
             pipeline,
             alpha_test_pipeline,
             cutout_pipelines,
+            culled,
             blend_pipeline,
             additive_pipeline,
             unblended_pipeline,

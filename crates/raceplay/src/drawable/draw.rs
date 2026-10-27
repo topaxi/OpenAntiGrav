@@ -48,6 +48,40 @@ impl Drawable {
     /// bounds. A diagnostic for comparing a frame's draw list against a
     /// capture of the original (`docs/reverse-engineering/rpcs3-capture.md`);
     /// off, it is one environment read per draw.
+    /// Whether `draw` goes through the culling twin: it asks for back-face
+    /// culling and this drawable built one (`mesh_render::Built::culled`).
+    fn wants_cull(&self, draw: &DrawCall) -> bool {
+        draw.culled && self.culled.is_some()
+    }
+
+    /// The opaque pipeline, prepass, default cutout pipeline and per-reference
+    /// cutout pipelines for one cull mode.
+    #[allow(clippy::type_complexity)]
+    fn solid(
+        &self,
+        culled: bool,
+    ) -> (
+        &wgpu::RenderPipeline,
+        Option<&mesh_render::Prepass>,
+        &wgpu::RenderPipeline,
+        &[(f32, wgpu::RenderPipeline)],
+    ) {
+        match &self.culled {
+            Some(set) if culled => (
+                &set.pipeline,
+                set.prepass.as_ref(),
+                &set.alpha_test_pipeline,
+                &set.cutout_pipelines,
+            ),
+            _ => (
+                &self.pipeline,
+                self.prepass.as_ref(),
+                &self.alpha_test_pipeline,
+                &self.cutout_pipelines,
+            ),
+        }
+    }
+
     fn trace_draw(&self, list: &str, draw: &DrawCall) {
         use std::io::Write;
         static PATH: std::sync::OnceLock<Option<std::path::PathBuf>> = std::sync::OnceLock::new();
@@ -237,8 +271,25 @@ impl Drawable {
             pass.set_bind_group(1, &self.textures[0], &[]);
             last_bound = Some(0);
         }
-        let mut draw_one = |pass: &mut wgpu::RenderPass<'_>, index: u32, reversed: bool| {
+        // Which cull mode the opaque pipeline in force has, so a draw that
+        // wants the other one switches it and the rest do not - see
+        // `Self::solid`.
+        let mut draw_one = |pass: &mut wgpu::RenderPass<'_>,
+                            index: u32,
+                            reversed: bool,
+                            shade: bool,
+                            culling: &mut bool| {
             let draw = &opaque_draws[index as usize];
+            let want = self.wants_cull(draw);
+            if want != *culling {
+                *culling = want;
+                oag_gpu::perfprobe::pipeline_set();
+                let (opaque, prepass, ..) = self.solid(want);
+                pass.set_pipeline(match prepass {
+                    Some(prepass) if shade => &prepass.shade,
+                    _ => opaque,
+                });
+            }
             let slot = draw
                 .texture
                 .map_or(0, |t| t + 1)
@@ -281,25 +332,37 @@ impl Drawable {
             // untouched.
             Some(prepass) if !shown.is_empty() => {
                 pass.set_pipeline(&prepass.depth);
+                // The depth half culls exactly as the shaded half does: a
+                // slab drawn two-sided into depth would hold back what the
+                // culled shading shows behind it.
+                let mut depth_culling = false;
                 for &index in depth_order.iter() {
                     let draw = &opaque_draws[index as usize];
+                    let want = self.wants_cull(draw);
+                    if want != depth_culling {
+                        depth_culling = want;
+                        let (_, twin, ..) = self.solid(want);
+                        pass.set_pipeline(&twin.unwrap_or(prepass).depth);
+                    }
                     pass.draw_indexed(draw.range.clone(), 0, 0..1);
                 }
                 pass.set_pipeline(&prepass.shade);
+                let mut culling = false;
                 let reversed = self.reversed_indices.as_ref();
                 if let Some(reversed) = reversed {
                     pass.set_index_buffer(reversed.slice(..), wgpu::IndexFormat::Uint32);
                 }
                 for &index in shown.iter().rev() {
-                    draw_one(pass, index, reversed.is_some());
+                    draw_one(pass, index, reversed.is_some(), true, &mut culling);
                 }
                 if reversed.is_some() {
                     pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
                 }
             }
             _ => {
+                let mut culling = false;
                 for &index in shown.iter() {
-                    draw_one(pass, index, false);
+                    draw_one(pass, index, false, false, &mut culling);
                 }
             }
         }
@@ -314,10 +377,14 @@ impl Drawable {
         // recovered, which painted a 3/255 texel solid rather than discarding
         // it. See `oag_vex::vex::Batch::alpha_test_reference` and
         // `mesh_render::cutout`.
-        let cutouts = mesh_render::CutoutPipelines {
-            default: &self.alpha_test_pipeline,
-            by_reference: &self.cutout_pipelines,
+        let cutouts = |culled: bool| {
+            let (_, _, default, by_reference) = self.solid(culled);
+            mesh_render::CutoutPipelines {
+                default,
+                by_reference,
+            }
         };
+        let (plain_cutouts, culled_cutouts) = (cutouts(false), cutouts(true));
         let mut cutout_set: Option<&wgpu::RenderPipeline> = None;
         for (index, draw) in (if solid {
             &self.model.alpha_tested_draws[..]
@@ -345,7 +412,11 @@ impl Drawable {
             self.trace_draw("cutout", draw);
             // Switched only when the reference changes, so a model naming one
             // (or none) still pays for a single `set_pipeline`.
-            let cutout = cutouts.select(draw);
+            let cutout = if self.wants_cull(draw) {
+                culled_cutouts.select(draw)
+            } else {
+                plain_cutouts.select(draw)
+            };
             if !cutout_set.is_some_and(|set| std::ptr::eq(set, cutout)) {
                 oag_gpu::perfprobe::pipeline_set();
                 pass.set_pipeline(cutout);

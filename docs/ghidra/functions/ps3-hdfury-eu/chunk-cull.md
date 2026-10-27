@@ -71,10 +71,14 @@ wholly outside one of the six planes). Draws are joined to surfaces by the surfa
 
 ## 2048 / Omega
 
-Not checkable on the evidence axis: no 2048 or Omega draw list exists (shadPS4 gives no memory readout). The state word is
-the shared `.rcsmodel` material record; whether Omega's and 2048's tracks carry bit 4 and whether they too draw back faces
-away is a census this lane did not run (**checked, applies by format, not wired**; a reader census of bit 4 on their
-materials is the next step, named in the thread).
+Same word, no draw list: **checked, applies, not wired.** The state word is the shared `.rcsmodel` material record (Vita
+header `+0x12`, PS4 `+0x22`; the same 17 values as HD's). Census of state bit 4 (2026-10-27, `oag-rcs`
+`hd_lineage_blend_ground_truth::state_bit_4_census_on_omega_and_2048`): Omega's five base archives 4,751 of 4,918, 5,804 of
+5,871, 8,503 of 8,565, 286 of 289 and 13,568 of 13,722 materials; 2048 22,483 of 22,994 (97 to 99 percent, HD's 1,523 of
+1,531 matched surfaces is the same shape). No 2048 or Omega draw list exists (shadPS4 gives no memory readout, and its race
+shots are untrusted), so that these titles' tracks cull on the bit is read off the format, not measured: `Looks::unread`
+leaves `honour_render_state` off for both and the `psp2` builder does not fill `material_state`. Wiring is a title rule plus
+that builder, open in the thread.
 
 ## Names applied
 

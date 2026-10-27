@@ -88,3 +88,63 @@ fn vineta_k_sea_sheet_is_behind_the_glass_not_in_the_main_view() {
         "no sea-sheet vertex in the main view"
     );
 }
+
+/// Counter-clockwise and clockwise triangles of the draws `model` holds for
+/// `chunk`, seen from `eye` (right-handed: a triangle is counter-clockwise when
+/// the eye is on the side its `(b - a) x (c - a)` normal points to).
+fn facing(model: &mesh::Model, chunk: u32, eye: [f32; 3]) -> (usize, usize) {
+    let mut front = 0;
+    let mut back = 0;
+    for draw in model
+        .draws
+        .iter()
+        .chain(&model.alpha_tested_draws)
+        .chain(&model.transparent_draws)
+        .filter(|draw| draw.chunk == Some(chunk))
+    {
+        for triangle in model.indices[draw.range.start as usize..draw.range.end as usize].chunks(3)
+        {
+            let [a, b, c] = [0, 1, 2].map(|i| model.vertices[triangle[i] as usize].position);
+            let ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+            let ac = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+            let normal = [
+                ab[1] * ac[2] - ab[2] * ac[1],
+                ab[2] * ac[0] - ab[0] * ac[2],
+                ab[0] * ac[1] - ab[1] * ac[0],
+            ];
+            let to_eye = [eye[0] - a[0], eye[1] - a[1], eye[2] - a[2]];
+            let side = normal[0] * to_eye[0] + normal[1] * to_eye[1] + normal[2] * to_eye[2];
+            if side > 0.0 {
+                front += 1;
+            } else {
+                back += 1;
+            }
+        }
+    }
+    (front, back)
+}
+
+/// The law behind per-material back-face culling (state bit 4,
+/// `docs/ghidra/functions/ps3-hdfury-eu/chunk-cull.md`): Vineta K's chunk 1556,
+/// the navy slab the original does not draw at the start grid, has only
+/// clockwise triangles from the eye of that capture (`45.63, 40.12, -94.99`,
+/// two surfaces of 20 triangles), so a culling draw shows nothing of it. The
+/// controls keep the sign convention honest: chunk 1557 is 56 counter-clockwise
+/// triangles from the same eye, chunks 1554 and 1555 are 12 and 12.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn vineta_ks_wall_top_slab_has_no_front_facing_triangle_from_the_start_grid() {
+    let Some((model, _)) = build("/data/environments/01_vineta_k/track.vex") else {
+        return;
+    };
+    let eye = [45.63, 40.12, -94.99];
+    assert_eq!(facing(&model, 1556, eye), (0, 40), "chunk 1556 faces away");
+    assert_eq!(facing(&model, 1557, eye), (56, 0), "control: 1557 faces it");
+    for chunk in [1554, 1555] {
+        assert_eq!(
+            facing(&model, chunk, eye),
+            (12, 12),
+            "control: chunk {chunk}"
+        );
+    }
+}

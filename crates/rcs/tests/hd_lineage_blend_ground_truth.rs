@@ -151,3 +151,62 @@ fn the_inherited_table_is_hds_pair_for_every_blended_name_the_two_titles_share()
     assert_eq!(table, derived);
     assert!(table.len() >= 60, "{} rows", table.len());
 }
+
+/// `(materials with a state word, of them with state bit 4 set)` over every `.rcsmodel` of a `psp2`
+/// archive, and over HD's own models.
+fn cull_census(path: &Path) -> (usize, usize) {
+    let mut archive = oag_assets::psarc::Archive::open_file(path).expect("the archive opens");
+    let models: Vec<String> = archive
+        .paths()
+        .iter()
+        .filter(|p| p.to_ascii_lowercase().ends_with(".rcsmodel"))
+        .cloned()
+        .collect();
+    let (mut with_state, mut culling) = (0, 0);
+    for model in models {
+        let Ok(blob) = archive.read_path(&model) else {
+            continue;
+        };
+        let Ok(parsed) = psp2::parse(&blob) else {
+            continue;
+        };
+        for state in parsed.materials.iter().filter_map(|m| m.state) {
+            with_state += 1;
+            culling += usize::from(state & 0x10 != 0);
+        }
+    }
+    (with_state, culling)
+}
+
+/// Material state bit 4 is back-face culling on HD (`chunk-cull.md`). The same word on Omega's and
+/// 2048's materials: how many carry it. Measured 2026-10-27: 97 to 99 percent of every archive's materials carry it, as on HD (1,523 of
+/// 1,531 matched surfaces).
+#[test]
+#[ignore = "needs the Omega and 2048 extractions"]
+fn state_bit_4_census_on_omega_and_2048() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/extracted");
+    let sources = [
+        ("omega 0", root.join("ps4/omega-eu/uroot/data00.psarc")),
+        ("omega 1", root.join("ps4/omega-eu/uroot/data01.psarc")),
+        ("omega 2", root.join("ps4/omega-eu/uroot/data02.psarc")),
+        ("omega 3", root.join("ps4/omega-eu/uroot/data03.psarc")),
+        ("omega 4", root.join("ps4/omega-eu/uroot/data04.psarc")),
+        ("2048", root.join("vita/PCSF00007/base/PSP2/data.psarc")),
+    ];
+    if sources.iter().any(|(_, p)| !p.exists()) {
+        assert!(
+            std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+            "OAG_REQUIRE_GAME_DATA is set but an extraction is missing"
+        );
+        return;
+    }
+    for (label, path) in &sources {
+        let (with_state, culling) = cull_census(path);
+        println!("CENSUS {label}: {with_state} materials with a state word, {culling} with bit 4");
+        assert!(with_state > 0, "{label}: no state word read");
+        assert!(
+            culling * 100 >= with_state * 95,
+            "{label}: bit 4 is the rule, not the exception"
+        );
+    }
+}
