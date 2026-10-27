@@ -43,11 +43,13 @@ use oag_rcs::rcsmaterial::name_hash;
 use oag_rcs::rcsmodel::psp2::lighting_only;
 
 mod glow;
+mod normal_map;
 pub mod placement;
 mod static_hologram;
 mod transparency;
 mod twin_blend;
 
+pub use normal_map::Census as NormalMapCensus;
 pub use twin_blend::INHERITED_RATE as TWIN_BLEND_RATE;
 
 pub use placement::Animation;
@@ -83,14 +85,16 @@ pub struct Report {
     /// attribute present", not "was the value good" - naming it
     /// `authored_tangents` would have implied the latter.
     ///
-    /// **Decoded and counted, not yet drawn with.** Nothing in this title's
-    /// mesh path samples a tangent-space normal map, so there is no visual
-    /// difference between a model with this at `0` and one with it equal to
-    /// [`Self::submeshes`]' own vertex total - see
+    /// **Drawn with on a PS4 model only** ([`Self::normal_maps`]). Nothing in 2048's
+    /// mesh path samples a tangent-space normal map (its programs are unread GXP), so
+    /// there is no visual difference between a Vita model with this at `0` and one with
+    /// it equal to [`Self::submeshes`]' own vertex total - see
     /// `docs/formats/2048-rcsmodel.md#tangent-is-cracked-too-at-a-lower-confidence`
     /// for why this is reported anyway (confidence 76, not yet wired into a
     /// consumer) rather than silently dropped on the way from `oag_rcs`.
     pub decoded_tangents: usize,
+    /// What the PS4 normal-map binding found - see `normal_map`. All zero on a Vita model.
+    pub normal_maps: NormalMapCensus,
     /// How many materials this model's own table names, whether or not this
     /// build could bind one to a draw - see [`psp2::material`]. `0` for a
     /// model with no readable table, which is not the same state as a model
@@ -263,11 +267,13 @@ impl Report {
         };
         let tangents = if self.decoded_tangents == 0 {
             String::new()
-        } else {
+        } else if self.normal_maps.submeshes == 0 {
             format!(
                 "; {} tangent(s) decoded, unused (no normal-map consumer yet)",
                 self.decoded_tangents
             )
+        } else {
+            self.normal_maps.describe()
         };
         let see_through = if self.blended_draws + self.cutout_draws == 0 {
             String::new()
@@ -503,6 +509,7 @@ fn build_planned(
     let decoded = psp2::parse(model_blob)
         .map_err(|e| anyhow::anyhow!("{label}: the .rcsmodel beside it: {e}"))?;
     let plan = planner(&decoded.scene);
+    let ps4 = psp2::is_ps4(model_blob);
 
     let mut model = Model::none(label);
     let mut report = Report {
@@ -527,6 +534,8 @@ fn build_planned(
         &mut *textures,
         &mut report,
     );
+    // A PS4 submesh with a tangent reads a normal map, bound third.
+    let normals = normal_map::plan(&decoded, ps4, &twin, &mut *textures, &mut report);
     model.emissive = glow.emissive.clone();
     model.anim_tracks = glow.tracks.clone();
     // Every draw is pushed in submesh order below, and `bind_textures`
@@ -644,8 +653,7 @@ fn build_planned(
                     .to_array()
             };
             report.authored_normals += usize::from(normal != [0.0; 3]);
-            // Decoded but not sampled by anything yet - see
-            // `Report::decoded_tangents`.
+            // Counted for `Report::decoded_tangents`; drawn only where `normals` bound a map.
             report.decoded_tangents += usize::from(submesh.tangents.get(i).is_some());
             // The file's own diffuse coordinate where the submesh's
             // declaration names one (`psp2::SubMesh::texcoords`), the
@@ -687,7 +695,7 @@ fn build_planned(
                 specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
                 glow: 0.0,
                 texcoord2,
-                tangent: 0,
+                tangent: normals.tangent(submesh.material, submesh.tangents.get(i), &to_world),
             });
         }
         if !place.hidden {
@@ -755,10 +763,9 @@ fn build_planned(
     super::face_normals(&mut model);
     finish_bounds(&mut model);
 
-    let ps4 = psp2::is_ps4(model_blob);
     bind_textures(
         &decoded,
-        (&glow, &twin),
+        (&glow, &twin, &normals),
         &mut model,
         &mut report,
         textures,
@@ -778,7 +785,7 @@ fn build_planned(
 /// missing archive entry costs one lookup rather than one per submesh.
 fn bind_textures(
     decoded: &psp2::Model,
-    (glow, twin): (&glow::Plan, &twin_blend::Plan),
+    (glow, twin, normals): (&glow::Plan, &twin_blend::Plan, &normal_map::Plan),
     model: &mut Model,
     report: &mut Report,
     textures: Textures<'_>,
@@ -855,9 +862,16 @@ fn bind_textures(
             // Positionally beside the diffuse, as `Model::lightmaps` is
             // defined; left empty for a model no material of which names one,
             // which is every Vita model.
-            if twin.any() {
+            if twin.any() || normals.any() {
                 debug_assert_eq!(model.pad_masks.len(), at);
-                model.pad_masks.push(twin_here.map(|t| t.wipe.clone()));
+                model.pad_masks.push(
+                    twin_here
+                        .map(|t| t.wipe.clone())
+                        .or_else(|| normals.of(Some(index)).cloned()),
+                );
+            }
+            if twin.any() {
+                debug_assert_eq!(model.wave_maps.len(), at);
                 model.wave_maps.push(twin_here.and_then(|t| t.bars.clone()));
             }
             if glow.has_layers()

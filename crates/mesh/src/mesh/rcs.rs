@@ -479,7 +479,6 @@ fn baked_tangent(bytes: [u8; 4], to_world: &Mat4, frame: TangentFrame) -> u32 {
         decoded(bytes[1]),
         decoded(bytes[2]),
     ));
-    let pack = |v: f32| ((v.clamp(-1.0, 1.0) * 0.5 + 0.5) * 255.0).round() as u8;
     // The bitangent's scale as the vertex program computes it, then `(scale + 1) / 2` so the
     // shader's `2w - 1` returns it: signed is `2w - 1` (0 -> -1, 1 -> 1), raw is `w` itself.
     let w = f32::from(bytes[3]) / 255.0;
@@ -487,6 +486,17 @@ fn baked_tangent(bytes: [u8; 4], to_world: &Mat4, frame: TangentFrame) -> u32 {
         TangentFrame::Signed => w * 2.0 - 1.0,
         _ => w,
     };
+    pack_tangent(t, scale)
+}
+
+/// `GpuVertex::tangent` for a world-space tangent `t` and a bitangent scale `scale` in
+/// `-1..=1`: each component as `(v + 1) / 2` in a byte, the scale in the fourth, so the
+/// shader's `2b - 1` returns it. A scale of exactly `+-1` is byte 255 or 0.
+///
+/// The one packing both containers use: `baked_tangent` (HD, bytes in the file) and
+/// `psp2::normal_map` (Omega, signed bytes decoded to `+-1`).
+fn pack_tangent(t: Vec3, scale: f32) -> u32 {
+    let pack = |v: f32| ((v.clamp(-1.0, 1.0) * 0.5 + 0.5) * 255.0).round() as u8;
     u32::from_le_bytes([pack(t.x), pack(t.y), pack(t.z), pack(scale)])
 }
 

@@ -40,6 +40,8 @@ Shdr header (offsets from the tag)
 +0x00  "Shdr"
 +0x10  u32  low 24 bits: bytes from the code's start to the footer's end
 +0x18  u32  the code's start, relative to +0x10
++0x4c  input-usage records, 4 bytes each (u8 kind, u8 API slot, u8 register, u8 flags),
+       up to the first record of kind 0x0f (the fixed tail 0f 11 13 15) - see below
 +0x38  to the code, on a vertex program: input-usage records of varying length,
        one 4-byte record per vertex input (u8 slot, u8 first VGPR, u8 size, u8 0),
        then exports. The rest of the header is unread.
@@ -81,6 +83,26 @@ so the reader finds the input records as the one run whose slot bytes are the
 reflection's input slots in order. Checked: on Tech de Ra's track program,
 `position` lands in `v4..v6`, and those registers are exactly what the `world` and
 then `viewProj` multiply reads before `exp pos0`.
+
+## Input-usage records, and which texture a program decodes as a normal map
+
+2026-10-27, `omega-normal-map`. The header holds, from `+0x4c`, four-byte records `(kind, API slot, register, flags)`, read
+against the `s_load` offsets and the reflection of `Diffuse_Normal_Specular` and `Mageffect08_LH_1`
+(`oag_rcs::gcn::Usage`). Kind 0 is a texture (T#) at the SGPR `register` (inline in the user data), 1 a sampler (S#), 2 a
+constant buffer, `0x13` a pointer to the **resource table** (the T# of API slot `k` is `s_load_dwordx8 ..., k * 8` dwords from
+it), `0x1b` a pointer to an **extended-user-data table** (a kind-0 record there has `register = 16 + dword offset`). The list
+ends at the first record of kind `0x0f`, the start of a fixed tail. Confidence 85: every `2x - 1` sample over all
+nine archives places (0 unplaced, asserted per archive in `gcn_ground_truth`).
+
+**A normal map is a texture sampled and then decoded `v_mad_f32 d, 2.0, x, -1.0`.** `Program::signed_textures` follows each
+`image_sample`'s destination to such an instruction and names the API slot of its T#; `signed_samplers` runs it over a
+material file (the reflection's resource name without its `Texture` suffix is the sampler name an instance hashes) and
+intersects across the programs that sign anything but `shadowMap`. A signed sampler is not always a normal map (a diffuse
+scaled for a reflection, a detail map), so the mesh keeps only what the instance binds that is neither diffuse nor lightmap
+(`psp2::normal_map::choose`); several left are named ambiguous. The numbers are in
+[hd-track-tone.md](../rendering/hd-track-tone.md), "Omega's normal maps are bound". **2048 (Vita): checked, differs** - the
+programs are GXP/USSE and no operand is read ([gxp.md](gxp.md)), so no equivalent rule exists and 2048's own circuits stay
+unbound.
 
 ## Census
 
@@ -161,4 +183,4 @@ so none of the three answers above can be read on a 2048 program by this decoder
 
 - What the unlisted Pro opcodes are, and what selects `_1` against `_2`.
 - The `+0x14` reflection records and the stage-4 layout (eboot only).
-- Which header word, if any, counts the input-usage records.
+- What kinds `0x0f`, `0x11`, `0x13` (second, no flags) and `0x15` of the header's tail are, and the flags byte of a usage record.

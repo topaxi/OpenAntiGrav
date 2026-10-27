@@ -1939,9 +1939,49 @@ that fetches a four-component `tangent`, on all nine archives, reads its `w` raw
 nibble `0xe`, the same as `normal`'s), and `w` is exactly -127 or +127 on every vertex of three track models measured
 (Tech de Ra 750,030 / 130,064; Modesto Heights 608,880 / 170,776; Sol 2 163,661 / 203,005; none 0). So on Omega the
 bitangent is always ±1, **on every circuit, Sol 2 and Vineta K included**, where HD's raw compiles drop it for `w = 0`.
-Confidence 85 (program read on every file, data on three circuits). **Reader wired** (`omega-tangent-hologram`): `psp2` now reads type `0xe` through the record's own declaration (36.4M vertices over the five base archives, `|w| = 1` on all, `omega_declaration_ground_truth`; the Vita's type `5` path is unchanged). **Not drawn**: the `psp2` mesh route binds no normal map at all (`tangent: 0` on every vertex), and no PS4 rule says which sampler is the normal map (a census of tangent-carrying submeshes shows `Normal`, `NormalMap`, `NormalTexture` and unnamed `Texture1,Texture2` pairs); see the handover thread. **2048: not checkable by a reader** (`oag_rcs::gxp::usse` reads no
+Confidence 85 (program read on every file, data on three circuits). **Reader wired** (`omega-tangent-hologram`): `psp2` now reads type `0xe` through the record's own declaration (36.4M vertices over the five base archives, `|w| = 1` on all, `omega_declaration_ground_truth`; the Vita's type `5` path is unchanged). **Drawn** (2026-10-27, `omega-normal-map`): see "Omega's normal maps are bound" below. **2048: not checkable by a reader** (`oag_rcs::gxp::usse` reads no
 operands); its track `w` reads mostly ±1 on Anulpha DLC but mixed (±64, ±1) on Altima through a confidence-76
-tangent reader, so nothing is concluded for 2048.
+tangent reader, so nothing is concluded for 2048, and a Vita build neither binds a map nor writes a tangent
+(`a_2048_circuit_stays_unbound`).
+
+### Omega's normal maps are bound (2026-10-27, `omega-normal-map`)
+
+**Claim: every tangent-carrying Omega submesh on the `psp2` route draws with its normal map bound and its tangent frame signed.
+True for 24,590 of 25,977 (94.7 %); the other 1,387 are named, never silently skipped.** Confidence 85 (the sampler is read off
+the programs, every `2x - 1` sample placed; the picture is judged by direction only, shadPS4 shots being untrusted for tone).
+
+- **The sampler comes from the pixel programs.** A normal map is `2x - 1`: the sample's destination feeds
+  `v_mad_f32 d, 2.0, x, -1.0`. `oag_rcs::gcn::Program::signed_textures` finds those samples and places each T# through the
+  header's usage records ([gcn.md](../formats/gcn.md), "Input-usage records"). `signed_samplers` runs it over a material file and
+  keeps the samplers **every** program that signs one signs (the light and shadow variants add a stray second one: `Tree_wind` signs
+  its normal map in 9 of 9 programs and its diffuse in 2). `oag_rcs::rcsmodel::psp2::normal_map::choose` then keeps what the
+  material instance binds that is neither its diffuse nor its lightmap (`shadowMap` is signed too and no instance binds it).
+- **The frame is HD's, signed.** The vertex program (`Diffuse_Normal_Specular`, `data02`, `@0x3aa4`, exports read register by
+  register) emits `T = world * tangent.xyz` (`param5`), `N = world * normal` (`param4`) and `B = cross(N, T) * (worldScaleInv * w)`
+  (`param2`); the pixel program mixes `N = nx*attr5 + ny*attr2 + nz*attr4` from `2x - 1` of the map. That is `hull_normal.wesl`'s
+  `nx T + ny B + nz N0` with `B = cross(N0, T) * s` and `s = w = ±1`, no y flip, so the shader is unchanged. `w` packs as byte 0 or
+  255 (`pack_tangent`, shared with HD's `baked_tangent`, whose arithmetic is untouched) and the shader's `2w - 1` returns it. The
+  tangent is turned by the node matrix and renormalised (Omega's skeletons scale non-uniformly); the map is the third binding
+  (`Model::pad_masks`), unorm like HD's.
+- **Census** (`omega_normal_map_ground_truth`, every `track.final.rcsmodel` of the base and patch archives, the five 2048
+  re-ships among them): 24,590 bound; **771 ambiguous** (a material that blends two normal maps - `DC_Rocks`,
+  `Road_AlphaSpec_Normal_Emissive_panelmap1_mask`, `reflectplane_DC_SeaWater` - whose tangent frame belongs to which is not
+  read, so none is bound); **413 with none signed** (the program samples no normal map though the model carries a tangent:
+  `m_Diffuse_Normal_ConstantSpecular` samples one alpha texture; `ds_booth_glass`, `reflectplane_*`); **203 unread** (the
+  normal map file is not in the archives or will not decode: `environments2048/shared/objectlibrary/materials/DiffuseNormal`);
+  0 with the third binding held by another family; 0 signed samples the usage records could not place. A cut after the first
+  census took the ambiguous count from 2,801 to 771 (intersection across programs instead of union).
+- **Direction check, not a tone metric** (`vineta-k` and `anulpha-pass` of the Omega page, ours re-rendered on scratch copies
+  and read against `theirs.png` at 2x): Anulpha Pass's blue girder struts gain a lit bevel along their upper-left edges where
+  the original has one and the banded dark rim before is gone; Vineta K's strut rims gain the same highlight direction.
+  No frame was scored (mean grey 41.04 -> 40.85 and 48.19 -> 48.16 are not evidence, the scenery lighting being unread).
+- **2048: not checkable by a reader, differs in wiring.** The Vita programs are GXP/USSE and no operand is read
+  ([gxp.md](../formats/gxp.md)), so no sampler rule exists for 2048's own circuits and `psp2` binds nothing on a Vita build
+  (the build gates on `psp2::is_ps4`). The 2048 circuits Omega re-ships (`environments2048/*`) ride Omega's programs and are
+  counted above.
+- **Not wired:** the `_1`/`_2` Pro compiles name `v_fma_mix`-style decodes this resolver does not read (no model names them);
+  which of two normal maps a blending material's frame belongs to; HD's `hull_normal` `|s| < 0.01` snap does not matter
+  here (`|w| = 1`).
 
 ## HD's scenery clock is the global node clock, free-running through the START RACE wait (2026-10-27, `hd-scenery-clock`)
 
