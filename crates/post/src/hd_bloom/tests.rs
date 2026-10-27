@@ -389,18 +389,18 @@ fn the_encode_pass_honours_the_scenes_own_offset() {
     );
 }
 
-/// The luminance reduction is an exact linear mean whose result is read as
-/// encoded bytes, whatever the level sizes.
+/// The luminance reduction is an exact mean of the encoded texels, whatever the
+/// level sizes (the maintainer's choice of 2026-10-27: RPCS3 reads the original
+/// that way; `docs/rendering/hd-track-tone.md`, "Decide the adaptation law").
 ///
 /// Half of an 80x76 scene is linear 0 and half 0.4, so the ladder's odd levels
-/// (20x19, 10x10, 5x5, 3x3, 2x2) must still return 0.2 and the readback encodes
-/// it: `adapted = 0.2^(1/2.2)`. The resolve's exposure `max - adapted * boost`
-/// turns that into the right half's byte (203). A mean of the *linear* scene
-/// (0.2), a mean taken after encoding each texel (0.33) or a ladder that
-/// dropped a row or column (205 on the edge-duplicating one) all land more than
-/// the tolerance away. See `renderer.md`, "The adaptation reads encoded bytes".
+/// (20x19, 10x10, 5x5, 3x3, 2x2) must still return the mean of 0 and
+/// `0.4^(1/2.2)`: `adapted = 0.4^(1/2.2) / 2`. The resolve's exposure
+/// `max - adapted * boost` turns that into the right half's byte. The encode of
+/// the linear mean (`0.2^(1/2.2)`) or a ladder that dropped a row or column
+/// land more than the tolerance away.
 #[test]
-fn the_adaptation_is_the_encoded_linear_mean() {
+fn the_adaptation_is_the_encoded_mean() {
     let instance = wgpu::Instance::default();
     let adapters = oag_gpu::test_adapter::ordered(&instance);
     if adapters.is_empty() {
@@ -514,12 +514,12 @@ fn the_adaptation_is_the_encoded_linear_mean() {
     readback.unmap();
 
     let stored = 0.399_902_3f64;
-    let adapted = (stored / 2.0).powf(1.0 / 2.2);
+    let adapted = stored.powf(1.0 / 2.2) / 2.0;
     let scale = 2.0 - adapted;
     let want = (stored * scale).min(1.0).powf(1.0 / 2.2) * 255.0;
     assert!(
         (got - want).abs() <= 2.5,
-        "the right half resolved to byte {got}, the encoded linear mean predicts {want:.1}"
+        "the right half resolved to byte {got}, the encoded mean predicts {want:.1}"
     );
 }
 

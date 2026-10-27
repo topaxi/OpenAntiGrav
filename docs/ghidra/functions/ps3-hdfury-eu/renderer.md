@@ -7945,6 +7945,11 @@ at steady state). The stock-config artefact: measured on one pose, three boots, 
 
 ## The adaptation is the encoded linear mean, and ours read a biased one (2026-10-09, `hd-bloom-adapt`)
 
+**Superseded in ours 2026-10-27 (maintainer's choice):** ours now averages the *encoded* texels, as RPCS3's readback of the original
+shows (`docs/rendering/hd-track-tone.md`, "Decide the adaptation law" and "The deficit is the fade, not a gate constant"). This
+section's static read is unchanged and still says the console takes the linear mean; which one a real PS3 does is open. The test
+it names is now `the_adaptation_is_the_encoded_mean`.
+
 **Qualified 2026-10-21 (`hd-track-tone`, [`hd-track-tone.md`](../../../rendering/hd-track-tone.md)).** The PPU's readback was read live
 (`FunkLayer + 0x25c`, `0xc50ee0`) on three circuits at `Resolution Scale 100`: 0.224, 0.266 and 0.382, the mean of the *encoded*
 per-pixel luma of the scene target (0.227, 0.271, 0.379), not this section's encode of the linear mean (0.322, 0.329, 0.449). At
