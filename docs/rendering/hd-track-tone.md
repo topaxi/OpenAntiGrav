@@ -1553,6 +1553,32 @@ wire once the original's draw rule for such a chunk is known; see the `hd-fideli
 **2048 / Omega:** not checkable here. The finding names an HD chunk of Vineta K; 2048 and Omega ship Vineta K as a re-cooked
 model with their own chunk order, and no draw capture of either exists (Omega's shadPS4 shows no memory readout).
 
+### Resolved: the original culls back faces per triangle, ours culls none (2026-10-27, `hd-chunk-drop-re`)
+
+**The rule R is not a chunk rule.** Reading `Scene_SortAndLightVisibleChunks`, the B4 consumer `FUN_00400a00` and the draw
+dispatch `0x005d7590` found no per-record drop ([chunk-cull.md](../ghidra/functions/ps3-hdfury-eu/chunk-cull.md)). The draw
+of a described chunk is written by the SPU `EdgeGeom` job with the **surviving** triangles, and a surface whose triangles
+all die issues no draw. Material state bit 4 is the cull enable (the draw's `cull` register agrees on 1,531 of 1,531
+matched surfaces), the front face is CCW, and chunk 1556's 40 triangles are all clockwise from the start-grid eye. The
+"index-count anomaly" above (44 of 342) is the same law: the draw's count is `3 x` the counter-clockwise triangles in the
+frustum, matching 1,139 of 1,523 culling surfaces. 29 of the 30 census exceptions have no surviving triangle (18 all
+outside the frustum, 8 all clockwise, 3 mixed); the Amphiseum's additive `lightbarrierpanel_new_additive` does not fit
+(open). Confidence 85 for 1556, 75 for the count law.
+
+**Scored on three pairs** (a local edit, not committed: the track `Drawable` built with `cull_back = true`, blanket rather
+than per material; pairs re-rendered on copies, baseline and edit from the same tree). Blur sigma 7, mean abs RGB:
+
+| Pair | Pool core `330,515 150x30` (original 71.2, 61.2, 52.0) | Footprint `0,470 801x143` error | Full-frame error | rmse | edge |
+| --- | --- | --- | ---: | --- | --- |
+| `hd/vineta-k` | 21.9, 29.2, 38.6 -> **73.1, 63.4, 54.1** (error 34.3 -> 3.6) | 7.96 -> 5.55 | 4.94 -> 4.75 | 0.0618 -> 0.0598 | 0.422 -> 0.426 |
+| `hd/the-amphiseum` | | | 5.91 -> 5.65 | 0.0674 -> 0.0635 | 0.409 -> 0.413 |
+| `hd/sebenco-climb` | | | 4.30 -> 4.18 | 0.0639 -> 0.0624 | 0.394 -> 0.397 |
+
+Nothing vanished (the winding convention is wgpu's default, CCW front, `Face::Back`), the pool and the wall top match the
+original, and the Amphiseum's dome and the lines over the sky read closer. Pixels more than 2 grey levels better against
+worse: 39,674 / 2,674 (Vineta K), 44,833 / 24,921 (Amphiseum), 17,323 / 5,187 (Sebenco); the Amphiseum's worse pixels were
+not traced beyond its top band, where the dome and the lines over it read closer to the original.
+
 ||||||| 43802148e
 
 

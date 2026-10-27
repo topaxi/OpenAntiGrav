@@ -805,3 +805,4 @@
 0x002fb8a0	function	MusicManager_PlaySongFromPlaylist	80	now-playing.md
 0x002fae68	function	MusicManager_Hold	75	now-playing.md
 0x002fae30	function	MusicManager_ClearHold	75	now-playing.md
+0x005d7590	function	RenderOps_DrawChunkSurface	80	chunk-cull.md
