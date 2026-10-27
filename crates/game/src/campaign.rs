@@ -611,6 +611,9 @@ pub fn hd_data06_strings(
         .unwrap_or_default()
 }
 
+/// How a campaign texture is read off the archives: the bytes, or why not.
+type TextureReader<'a> = &'a dyn Fn(&mut oag_assets::Archives, &str) -> Result<Vec<u8>, String>;
+
 /// Each grid's own `Logo.gtf` (the unlock box under the card names it by
 /// grid, see `oag_ui_screens::campaign::hd`'s `UnlockBox`, keyed by the spelling
 /// the screen's `flyerlogo` widget authors) and `Cell Selection`'s emblem art,
@@ -622,7 +625,7 @@ fn push_card_art(
     grids: &[Grid],
     tracks: &[oag_raceplay::catalogue::Track],
     blobs: &mut Vec<(String, Vec<u8>)>,
-    read: &dyn Fn(&mut oag_assets::Archives, &str) -> Result<Vec<u8>, String>,
+    read: TextureReader<'_>,
 ) -> std::collections::HashMap<String, String> {
     for name in grids.iter().filter_map(|grid| grid.flyer_name.as_deref()) {
         let entry = oag_ui_screens::campaign::flyer::logo_entry(name);
@@ -811,6 +814,11 @@ fn hd_selection_screens(
 /// will not decode either (`docs/formats/gnf.md`'s "Tiling" section) still
 /// leaves the widget it was for undrawn rather than failing the whole screen
 /// load.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the same eight facts load_hd reads: the title, the archives, the strings, the faces, \
+              the grid, the base sheet, the globals and the circuits"
+)]
 fn load_omega(
     title: &oag_title::Title,
     archives: &mut oag_assets::Archives,

@@ -30,7 +30,7 @@ pub(super) fn push_blobs(
     grids: &[Grid],
     circuit_emblems: &HashMap<String, String>,
     blobs: &mut Vec<(String, Vec<u8>)>,
-    read: &dyn Fn(&mut oag_assets::Archives, &str) -> Result<Vec<u8>, String>,
+    read: super::TextureReader<'_>,
 ) {
     let mut sources = cell_emblems::sheet_sources();
     sources.extend(
