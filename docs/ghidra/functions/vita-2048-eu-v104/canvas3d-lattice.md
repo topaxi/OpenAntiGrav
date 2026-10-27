@@ -180,14 +180,71 @@ It is not tied to a page: `BootFlowCanvas_Item`'s own draw slot is a bare `bx lr
 front end, which matches "every page" in the captures. What sets bit `0x80`, and which pages clear
 it (the race HUD, the title movie), is unread.
 
-## What is still open
+## Camera writers and the mesh window (read 2026-10-27, lane `2048-lattice`)
 
-The camera writers (item 1 above), the second cell texture's writers, and the lattice's visibility
-bit are the unread parts; the line law is **read**.
+Confidence 75 on the readings, 60 on what they say about the page's actual camera.
+
+| Address | What | Conf |
+| --- | --- | --- |
+| `0x81070c0c` | The item reset: pan `+0xb8/+0xbc` = 27.1976 / 0.39549, half-width `+0xc0` = 8.0, limits `+0x5ed18/1c` = 5.0 / 17.0 (read earlier), then `Canvas3D_BuildWorldViewProj` and `FUN_8107369a`. | 75 |
+| `0x81072220` | Per-frame item update. The **pan writer**: a touch drag (`+0x5ed10/14` is the last touch) subtracts `delta * (+0x5e0a8/ac)` from `+0xb8` and adds it to `+0xbc`. No drag, no write. | 70 |
+| `0x810f285c`, `0x81101c34` | The **half-width writers**: a two-finger pinch adds `-(finger distance now - before) * 0.03` to `+0xc0` and clamps it to `[+0x5ed18, +0x5ed1c]` = 5.0 to 17.0. Both are the campaign event-card pages' touch code. | 75 |
+| `0x8107369a` | After every camera change: unprojects the screen centre and corner through the inverse of `+0x5ec90`, then sets **where the 90 x 32 mesh window sits**: `+0xc4/+0xc8` (`posOffset`) = `(col0 * 0.5, row0 * 0.866)`, `+0xd0/+0xd4` (`texCoord2offset`) = `(col0, row0)` cell texels, with `col0, row0` the window's first cell, centred on the camera (`- 22.5` and `- 13.86`, half the mesh's 45 x 16 units) and nudged so that `col0 + row0` is even. | 70 |
+
+So the mesh is a window over an unbounded lattice that follows the camera: the picture is the plane
+lattice, whatever the pan, and **a page nobody touched sits on the reset camera**. No code outside the
+touch paths writes the camera. The first reading above ("the default shows only a third of the mesh")
+was wrong for that reason: the mesh moves with the camera.
+
+The cell type is read: the window's first cell has `col0 + row0` even and takes the apex-up atlas
+triangle, and the type alternates per column and per row, so **a cell is apex-up when `col + row` is
+even**.
+
+### Built, not merged (2026-10-27)
+
+The draw below was built and measured, then held back: it scored further from the captures than
+plain white in every empty area measured (the scale and the line grey below). It is described here as
+built so the next attempt starts from it.
+
+
+`oag_ui::frontend::canvas_lattice`: `bake` renders one tile (one unit wide, two rows tall, 112 x 194
+texels, **chosen** resolution) off the atlas's decoded RGBA by the mesh's own corner-to-atlas-triangle
+carry, `Frontend::canvas_lattice` tiles it over the screen with the reset camera (`x` scale `960 / 16`
+= 60 px per unit, `y` scale `544 / (16 * 5/9)` = 61.2), and `oag_game::boot::sprites` bakes the tile
+into the sprite sheet at load (`TILE`), the atlas itself never entering the sheet. Drawn on the title
+screen and the game mode page only: those are the 2048 pages the reference captures show with the sharp
+lattice. **The home, team, extras, options and profile pages show a blurred ship and a blurred pattern
+instead**, which is another effect (unread; possibly a blur of this canvas).
+
+Measured against the reference captures (960 x 544, title screen box x 20..110, y 20..430):
+
+| | reference | ours |
+| --- | --- | --- |
+| horizontal line period | 47.75 px | 53.0 px |
+| line nearest the centre | row 272 | row 275 |
+| darkest line grey (of 255) | 233 | 202 |
+| line ink (sum of 255 - v across one line) | about 30 | about 83 |
+
+**The claim does not come out true at the reset camera.** The period is the defaults' 53 px (the
+`y` window is `5/9` of the width, so 61.2 px per unit, times 0.866) against the capture's 47.75 px, an
+unexplained 10 %: the capture's lattice is about 55.2 px per unit both ways, which would need a
+half-width of about 8.7 and a window height of 0.567 of it, not the `0.5556` the code carries. Nothing
+that writes `+0xc0` or the aspect constant runs without a pinch, so the cause is either a reading of
+the projection matrix (`+0x5ebd0..+0x5ec10` come from `FUN_812e4a04`, unread) or the capture's own
+state (Vita3K touch emulation). Not fitted. The phase at the centre is 3 px off (2.3 px predicted from
+the pan), inside the 2 px bar only if the scale were right. The lines are lighter in the capture
+(core 233 to 240, ink a third of ours): the sampling filter of the original's draw (Vita3K's) is not
+known, and the bake's bilinear tap is a choice. Edge NCC against the capture is about 0 at the 10 % scale
+gap, so no shift was measurable.
+
+What stays open: the projection's own matrix (the 10 %), the blur behind the home and team pages, the
+second cell texture's writers (painted cells, the campaign map's lattice), and **who sets bit `0x80`
+at `canvas+0x30`** (`FUN_8103da80` draws the canvas only when it is set; nothing in the camera sweep
+writes it, so the page set above is read off the captures, not off that bit).
 
 ## HD / Omega cross-check (CLAUDE.md)
 
-- **Omega: checked, applies, not wired. The GCN program is the open half.** The PS4 `eboot.bin` (`/omega/eboot-ps4-omega-eu.bin`)
+- **Omega: checked, applies, not wired. The GCN program is the open half.** `canvasTexture.gnf` ships in `data00.psarc` (4,194,560 bytes, `Data/fe/NewImages/`) and again in the patch's `data08.psarc` (5,597,440 bytes); its triangle region was not decoded. The PS4 `eboot.bin` (`/omega/eboot-ps4-omega-eu.bin`)
   carries `Canvas3D_fp`/`Canvas3D_vp` (`0x0181aa64`, `0x0181aa70`), `3dCanvas_Item.cpp`
   (`0x0181aa22`) and `FE3DCanvas` (`0x0181aa59`): the same item ships, so Omega's 2048 campaign
   branch draws the same mesh. Omega's HD-derived pages sit on the same shell. The USSE decoder does not apply to Omega's shaders (GCN `.sb`, a different instruction set:
