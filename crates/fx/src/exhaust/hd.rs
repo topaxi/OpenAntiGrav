@@ -122,7 +122,13 @@ pub const CLASSIC_TINT_TAIL: [f32; 3] = [1.0, 127.0 / 255.0, 1.0];
 /// `red_mix` (1.0 Fury, 0.0 classic).
 #[must_use]
 pub fn tint_at(k: usize, red_mix: f32) -> [f32; 3] {
-    let t = (k as f32 / TINT_FADE_RINGS).min(1.0);
+    tint_at_age(k as f32, red_mix)
+}
+
+/// [`tint_at`] at a fractional ring age, for a tube drawn between ticks.
+#[must_use]
+pub fn tint_at_age(age: f32, red_mix: f32) -> [f32; 3] {
+    let t = (age / TINT_FADE_RINGS).min(1.0);
     let mut out = [0.0; 3];
     for c in 0..3 {
         let classic = CLASSIC_TINT_HEAD[c] + (CLASSIC_TINT_TAIL[c] - CLASSIC_TINT_HEAD[c]) * t;
@@ -154,6 +160,17 @@ pub struct Sample {
     pub up: Vec3,
 }
 
+/// One ring of the extruded tube, the attributes its three fins share.
+#[derive(Debug, Clone, Copy, Default)]
+struct Ring {
+    position: Vec3,
+    up: Vec3,
+    tangent: Vec3,
+    side: Vec3,
+    colour: [f32; 4],
+    u: f32,
+}
+
 /// One craft's trail state: the ring plus the wrapping scroll phase.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Tube {
@@ -175,6 +192,11 @@ pub struct Tube {
     /// Measured and read 2026-08-24;
     /// `docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`.
     phase: f32,
+    /// The sample the last push overwrote, and the phase step it took: what a
+    /// frame drawn between ticks reads the tail and the scroll back to
+    /// ([`super::ribbon`]).
+    dropped: Option<Sample>,
+    phase_step: f32,
 }
 
 impl Default for Tube {
@@ -194,6 +216,8 @@ impl Tube {
             len: 0,
             write: 0,
             phase: 0.0,
+            dropped: None,
+            phase_step: 0.0,
         }
     }
 
@@ -215,11 +239,13 @@ impl Tube {
         if self.len == 0 {
             self.ring = [Sample { position, up }; SAMPLES];
         }
+        self.dropped = Some(self.ring[self.write]);
         self.ring[self.write] = Sample { position, up };
         self.write = (self.write + 1) % SAMPLES;
         self.len = (self.len + 1).min(SAMPLES);
         let delta = SCROLL_DELTA.0 + (SCROLL_DELTA.1 - SCROLL_DELTA.0) * speed01;
         self.phase = (self.phase + delta).rem_euclid(1.0);
+        self.phase_step = delta;
     }
 
     /// Forgets the history so the next push re-seeds the ring at the new pose,
@@ -233,6 +259,7 @@ impl Tube {
     pub fn clear(&mut self) {
         self.len = 0;
         self.write = 0;
+        self.dropped = None;
     }
 
     /// Whether the ring has been seeded at all.
@@ -311,7 +338,7 @@ impl Tube {
         best
     }
 
-    /// Extrudes the tube: 53 segments x 3 fins x 6 vertices = 954, the
+    /// Extrudes the tube: 53 segments x 3 fins x 6 vertices = 954 at a tick, the
     /// original's own index count.
     ///
     /// `brightness` is `intensity * speed_ramp` (see
@@ -330,12 +357,14 @@ impl Tube {
 
     /// [`Self::vertices`], appended to a list the caller owns - the form the
     /// renderer uses, for the reason
-    /// [`crate::exhaust::Exhaust::extend_trail_vertices`] gives. `head` stands
-    /// in for the newest sample's position on the same terms as that one's.
+    /// [`crate::exhaust::Exhaust::extend_trail_vertices`] gives. `head` is the
+    /// drawn nozzle on the same terms as that one's: between ticks every ring
+    /// is drawn at its fractional age and the scroll phase a share of its last
+    /// step back ([`super::ribbon`]).
     pub fn extend_vertices(
         &self,
         out: &mut Vec<GpuVertex>,
-        head: Option<Vec3>,
+        head: Option<super::TrailHead>,
         brightness: f32,
         speed01: f32,
         red_mix: f32,
@@ -343,30 +372,63 @@ impl Tube {
         if !self.ready() {
             return;
         }
-        let mut samples = self.samples();
-        if let Some(head) = head {
-            samples[0].position = head;
-        }
+        let ring = self.samples();
+        let mut points = [(ring[0], 0.0); SAMPLES + 1];
+        let count = super::ribbon::aged(
+            &ring,
+            self.dropped,
+            head,
+            |sample, position| Sample { position, ..sample },
+            |a, b, t| Sample {
+                position: a.position.lerp(b.position, t),
+                up: a.up.lerp(b.up, t),
+            },
+            &mut points,
+        );
+        let points = &points[..count];
+        let between = head.is_some_and(|head| head.alpha < 1.0);
+        let phase = match head {
+            Some(head) if between => {
+                (self.phase - self.phase_step * (1.0 - head.alpha)).rem_euclid(1.0)
+            }
+            _ => self.phase,
+        };
         let head_u = u_head(speed01);
 
-        // Per-ring attributes, shared by the three fins.
-        let ring_u = |k: usize| head_u * (1.0 - k as f32 * U_FALLOFF_PER_RING) + self.phase;
-        let ring_alpha = |k: usize| {
-            let attack = (k as f32 * ALPHA_ATTACK_PER_RING).min(1.0);
-            let fall = 1.0 - k as f32 / SAMPLES as f32;
-            brightness * attack * fall
-        };
-        let ring_tint = |k: usize| tint_at(k, red_mix);
+        // Per-ring attributes, shared by the three fins, at each ring's age:
+        // computed once a ring rather than once a corner, and the tangent
+        // once rather than twice per segment per fin.
+        //
         // The segment tangent: central difference inside the ring, one-sided
         // at its ends, matching the dumped normals' behaviour where samples
-        // bunch up (they go degenerate rather than flip).
-        let tangent = |k: usize| {
-            let ahead = &samples[k.saturating_sub(1)];
-            let behind = &samples[(k + 1).min(SAMPLES - 1)];
-            (ahead.position - behind.position).normalize_or_zero()
-        };
+        // bunch up (they go degenerate rather than flip). Between ticks the
+        // head can sit on the next ring (a zero-length first segment as the
+        // tick turns), so its tangent then reaches one ring further.
+        let last = points.len() - 1;
+        let mut rings = [Ring::default(); SAMPLES + 1];
+        for (k, ring) in rings.iter_mut().enumerate().take(points.len()) {
+            let (sample, age) = points[k];
+            let ahead = points[k.saturating_sub(1)].0.position;
+            let behind = points[(k + 1).min(last)].0.position;
+            let tangent = if between && k == 0 && (ahead - behind).length_squared() < 1e-12 {
+                (ahead - points[2.min(last)].0.position).normalize_or_zero()
+            } else {
+                (ahead - behind).normalize_or_zero()
+            };
+            let attack = (age * ALPHA_ATTACK_PER_RING).min(1.0);
+            let fall = 1.0 - age / SAMPLES as f32;
+            let tint = tint_at_age(age, red_mix);
+            *ring = Ring {
+                position: sample.position,
+                up: sample.up,
+                tangent,
+                side: tangent.cross(sample.up),
+                colour: [tint[0], tint[1], tint[2], brightness * attack * fall],
+                u: head_u * (1.0 - age * U_FALLOFF_PER_RING) + phase,
+            };
+        }
 
-        out.reserve(VERTICES_PER_CRAFT);
+        out.reserve(MAX_VERTICES_PER_CRAFT);
         for fin in 0..FINS {
             // Fins at 0, 60 and 120 degrees from the sample's up, rotating
             // toward `side` - as *lines* the same set as "up and +-60", but
@@ -383,31 +445,29 @@ impl Tube {
             // three decimals.
             let angle = fin as f32 * FIN_STEP;
             let (sin, cos) = angle.sin_cos();
-            for k in 0..SAMPLES - 1 {
-                let corner = |k: usize, edge: f32| {
-                    let s = &samples[k];
-                    let d = tangent(k);
-                    // Rodrigues' rotation of `up` about `d`, then the edge
-                    // offset along it.
-                    let side = d.cross(s.up);
-                    let fin_dir = (s.up * cos + side * sin).normalize_or_zero();
-                    let tint = ring_tint(k);
-                    GpuVertex {
-                        position: (s.position + fin_dir * (edge * FIN_HALF_WIDTH)).to_array(),
-                        // `cross(back, fin) = cross(fin, forward)`, the
-                        // dumped orientation - see the fin comment above.
-                        normal: fin_dir.cross(d).to_array(),
-                        colour: [tint[0], tint[1], tint[2], ring_alpha(k)],
-                        texcoord: [ring_u(k), (edge + 1.0) * 0.5],
-                        lit: red_mix,
-                        ..bytemuck::Zeroable::zeroed()
-                    }
+            // Both edges of ring `k` for this fin.
+            let edges = |ring: &Ring| {
+                // Rodrigues' rotation of `up` about the tangent, then the
+                // edge offset along it.
+                let fin_dir = (ring.up * cos + ring.side * sin).normalize_or_zero();
+                // `cross(back, fin) = cross(fin, forward)`, the dumped
+                // orientation - see the fin comment above.
+                let normal = fin_dir.cross(ring.tangent).to_array();
+                let edge = |edge: f32| GpuVertex {
+                    position: (ring.position + fin_dir * (edge * FIN_HALF_WIDTH)).to_array(),
+                    normal,
+                    colour: ring.colour,
+                    texcoord: [ring.u, (edge + 1.0) * 0.5],
+                    lit: red_mix,
+                    ..bytemuck::Zeroable::zeroed()
                 };
-                let a0 = corner(k, -1.0);
-                let a1 = corner(k, 1.0);
-                let b0 = corner(k + 1, -1.0);
-                let b1 = corner(k + 1, 1.0);
+                (edge(-1.0), edge(1.0))
+            };
+            let (mut a0, mut a1) = edges(&rings[0]);
+            for ring in &rings[1..=last] {
+                let (b0, b1) = edges(ring);
                 out.extend_from_slice(&[a0, a1, b0, a1, b1, b0]);
+                (a0, a1) = (b0, b1);
             }
         }
     }
@@ -467,8 +527,12 @@ pub fn speed_ramp(speed_kmh: f32) -> f32 {
     ((speed_kmh * SPEED_FIELD_GAIN - 100.0) / 500.0).clamp(0.0, 1.0)
 }
 
-/// One craft's vertex budget: 53 segments x 3 fins x 6 vertices.
+/// One craft's vertex count at a tick: 53 segments x 3 fins x 6 vertices.
 pub const VERTICES_PER_CRAFT: usize = (SAMPLES - 1) * FINS * 6;
+
+/// One craft's vertex budget: [`VERTICES_PER_CRAFT`] plus the one segment a
+/// frame drawn between ticks adds at the tail ([`super::ribbon`]).
+pub const MAX_VERTICES_PER_CRAFT: usize = SAMPLES * FINS * 6;
 
 /// `Thrust Chase Rate`: the flame's lag filters step by this per 120 Hz
 /// substep - `EngineFlare_Update` runs `dt * 60` substeps of two filters, and

@@ -64,34 +64,89 @@ impl Race {
             self.view.sight.set_held(held);
         }
         let target = self.sight_target(primary);
+        let screen = self.view.sight.screen();
         let projected = target.and_then(|slot| {
             let world = self.sim.world.ships[slot as usize].physics.body.position;
-            // **The title's own virtual screen, not the window's.** The original
-            // projects into 480x272 because that *is* its screen; this engine
-            // letterboxes the same rectangle into whatever the window is, so
-            // the two agree exactly at the authored shape and drift a little as
-            // the display aspect is taken away from it. **Ours**, and the
-            // alternative - projecting at the window aspect - would put the
-            // reticle off the craft on an authored-size capture, which is the
-            // frame every comparison against the original is taken at.
-            //
-            // Off the reticle rather than off a constant, because Wipeout HD
-            // authors its HUD in 1920x1080 and the PSP titles in 480x272.
-            let screen = self.view.sight.screen();
-            let aspect = screen[0] / screen[1];
-            let view = self.view();
-            // The far plane is irrelevant here - the reticle's own 250-unit
-            // range test runs in eye space, before the projection - so this
-            // takes a value large enough never to clip a craft the sight would
-            // otherwise draw.
-            let projection = self.projection(aspect, SIGHT_FAR, self.view.sight_fov);
-            sight::project(view, projection * view, world, screen)
+            self.project_for_sight(world, screen)
         });
+        self.view.sight_aim = target.zip(projected);
         // The lock is the simulation's ([`Race::advance_locks`]); this reticle
         // only puts the brackets on the craft and follows it.
         let locked = self.sim.locks[primary].locked();
         self.view.sight_state = self.view.sight.follow(self.sim.dt, projected, locked);
         self.update_viewed_sights();
+    }
+
+    #[cfg(feature = "view")]
+    /// Where `world` lands on a reticle's `screen`, through the camera being
+    /// drawn (at the tick inside a tick, blended inside a draw).
+    ///
+    /// **The title's own virtual screen, not the window's.** The original
+    /// projects into 480x272 because that *is* its screen; this engine
+    /// letterboxes the same rectangle into whatever the window is, so the two
+    /// agree exactly at the authored shape and drift a little as the display
+    /// aspect is taken away from it. **Ours**, and the alternative - projecting
+    /// at the window aspect - would put the reticle off the craft on an
+    /// authored-size capture, which is the frame every comparison against the
+    /// original is taken at. Off the reticle rather than off a constant,
+    /// because Wipeout HD authors its HUD in 1920x1080 and the PSP titles in
+    /// 480x272.
+    ///
+    /// The far plane is irrelevant here - the reticle's own 250-unit range test
+    /// runs in eye space, before the projection - so this takes a value large
+    /// enough never to clip a craft the sight would otherwise draw.
+    pub(crate) fn project_for_sight(
+        &self,
+        world: Vec3,
+        screen: [f32; 2],
+    ) -> Option<sight::Projected> {
+        let view = self.view();
+        let projection = self.projection(screen[0] / screen[1], SIGHT_FAR, self.view.sight_fov);
+        sight::project(view, projection * view, world, screen)
+    }
+
+    #[cfg(feature = "view")]
+    /// `slot`'s reticle as this draw shows it.
+    ///
+    /// The reticle's law runs once a tick ([`Self::update_sight`]) off the
+    /// tick's camera and target. A frame drawn between two ticks draws the
+    /// camera and the target craft blended, so the reticle is moved by how far
+    /// the target's projection moved between the tick's and this draw's: the
+    /// brackets keep their place against the craft as drawn, and a locked
+    /// reticle, whose centre is the target's projection, sits on it exactly.
+    /// The law's own chase (the centre closing on the target while it seeks)
+    /// still steps per tick. At the tick, or with no target on screen, it is
+    /// the tick's reticle untouched.
+    #[must_use]
+    pub fn drawn_sight(&self, slot: usize) -> sight::Sight {
+        let primary = slot == self.player_slot();
+        let (sight, aim) = if primary {
+            (self.view.sight, self.view.sight_aim)
+        } else {
+            (self.view.huds[slot].sight, self.view.huds[slot].sight_aim)
+        };
+        let Some((target, at_tick)) = aim.filter(|_| self.draw_alpha() < 1.0) else {
+            return sight;
+        };
+        let drawing = self.extra_viewpoint();
+        if primary {
+            self.reset_viewpoint();
+        } else {
+            self.set_viewpoint(slot);
+        }
+        let world = self.body_between(usize::from(target)).position;
+        let drawn = self.project_for_sight(world, sight.screen());
+        match drawing {
+            Some(extra) => self.set_viewpoint(extra),
+            None => self.reset_viewpoint(),
+        }
+        match drawn {
+            Some(drawn) => sight.shifted([
+                drawn.screen[0] - at_tick.screen[0],
+                drawn.screen[1] - at_tick.screen[1],
+            ]),
+            None => sight,
+        }
     }
 
     #[cfg(feature = "view")]
@@ -125,15 +180,13 @@ impl Race {
             self.set_viewpoint(slot);
             let projected = target.and_then(|target| {
                 let world = self.sim.world.ships[target as usize].physics.body.position;
-                let view = self.view();
-                let projection =
-                    self.projection(screen[0] / screen[1], SIGHT_FAR, self.view.sight_fov);
-                sight::project(view, projection * view, world, screen)
+                self.project_for_sight(world, screen)
             });
             self.reset_viewpoint();
             let dt = self.sim.dt;
             let locked = self.sim.locks[slot].locked();
             let hud = &mut self.view.huds[slot];
+            hud.sight_aim = target.zip(projected);
             hud.sight_state = hud.sight.follow(dt, projected, locked);
         }
     }

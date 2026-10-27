@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-10-27
-summary: "Trail ribbons, particles, reticle and per-tick scalars still step at 60 Hz; maintainer priority; particles via the GPU, no Deck CPU cost"
+summary: "Trails, particles, reticle, flaps, swell, flare axis landed 2026-10-27; open: Deck CPU re-measure, a 240 Hz look, mist, extrapolation"
 ---
 
 # Drawing between ticks: what is still stepped
@@ -18,35 +18,34 @@ motion blur measures per drawn frame now, see
 
 ## Open
 
-1. **The trail ribbons' bodies step per tick.** Only the newest sample of the
-   PSP ribbon (`oag_fx::exhaust::Exhaust::extend_trail_vertices`) and the HD
-   tube (`oag_fx::exhaust::hd::Tube::extend_vertices`) follows the drawn
-   nozzle. Each tick every older sample moves one index down the ring, so its
-   stretch (`trail_stretch(k)`), taper, fade and `u` step with it: a small
-   shuffle along the ribbon at 60 Hz. Fix: build the ring at a fractional age
-   (sample `k` at age `k - 1 + alpha`, the drawn nozzle at age 0), which
-   changes the segment count by one at the tail, so check the trail
-   pipeline's vertex budget (`MAX_TRAIL_VERTICES`).
-2. **Particles advance per tick and draw where the tick left them**:
-   `psys::Stage` (every `.pob` effect, rocket flares, sparks, wreck fire,
-   damage smoke), mist, clouds. Spawns are discrete in the originals and stay
-   so; continuous particle motion could draw at `position + velocity * (alpha
-   - 1) * dt` if the stage kept velocities. Not started.
-3. **Smaller per-tick reads in the draw**: the HD sprite flare's nozzle axis
-   (`Race::hd_sprite_quad`, `-body.forward()`), the cannon muzzle flash
-   (`cannon_muzzle_matrix`, a flash and so arguably stepped), the airbrake
-   flap angles (`Race::airbrake_flaps`), the shield shell's swell. Each is
-   a scalar or an axis a tick old; none has been seen to judder.
-4. **The lock-on reticle is projected in the tick** (`Race::update_sight`
-   runs from `Race::tick` and feeds a stateful tracker,
-   `oag_race::sight`), so it draws where the tick left the target while the
-   target and the camera are drawn between ticks. Projecting the target at
-   draw time needs the tracker split from its projection.
-5. **Seen only headlessly.** The 240 Hz proof is the ground truth test and a
-   `--draw-alpha` sequence; nobody has watched a windowed race on a 144 or
-   240 Hz panel since. A player's look at one (`just play`, frame limit 240)
-   is the check this thread cannot do from a member's Xvfb at 5-7 fps.
-6. **Optional, off by default: extrapolate the local craft and chase camera**
+Landed 2026-10-27 (`between-ticks` lane; how each works is on
+`docs/rendering/between-ticks.md`): trail ribbon bodies at fractional ages
+(old item 1), particles on the GPU (old item 2), the HD sprite flare axis,
+airbrake flaps and shield swell (old item 3; the cannon muzzle flash stays a
+stepped flash), the lock-on reticle moved to its target as drawn (old item 4).
+Captures at alpha 1 hash identically before and after (seven fixed races,
+Pulse PSP and HD Anulpha Pass, rockets and cannon included).
+
+1. **The Deck re-measure is owed (maintainer).** This host measured no rise:
+   `frame-phases` on HD Anulpha Pass, moving race, eight interleaved 14 s
+   pairs at load 6.8 to 12, median `scene` 0.633 -> 0.611 ms and `total`
+   1.791 -> 1.771 ms (the HD tube now builds each ring once, which paid for
+   the rest; one pair's after run caught a load spike, the medians absorb it). The Deck is CPU bound and was not available to the lane: run
+   the recipe in `the-decks-60-fps-is-anulpha-pass-submit-cost.md` in this
+   directory, main against this merge, and record both totals here.
+2. **Seen only headlessly.** The proof is unit tests and `--draw-alpha`
+   sequences; nobody has watched a windowed race on a 144 or 240 Hz panel
+   since. A player's look at one (`just play`, frame limit 240), chase view
+   and cockpit, is the check a member's Xvfb at 5-7 fps cannot do. Ten
+   minutes, maintainer.
+3. **The mist overlay still steps** (`oag_fx::mist::Layers::step`, a
+   screen-space zoom whose wrap re-rolls its texture offsets). A blend of its
+   12 UVs needs a snap on the wrap tick. Small; nobody has seen it judder.
+4. **What still steps inside the blended items, by choice**: a particle's
+   size, colour, sprite frame and roll; the weather's rain and snow (field
+   coordinates placed with the drawn camera); the reticle's own chase while
+   it seeks (it steps per tick; a locked reticle sits on the drawn target).
+5. **Optional, off by default: extrapolate the local craft and chase camera**
    (maintainer, 2026-10-13). Interpolation draws up to one tick (16.7 ms)
    late; drawing the player's own craft and the chase camera *past* the
    current tick by the same alpha wins that back. It overshoots on contact, so
@@ -62,7 +61,8 @@ motion blur measures per drawn frame now, see
    (`vk-amd-anti-lag-is-the-next-latency-lever.md` in this directory): the
    frame acquires its image before it reads the clock, so the alpha an
    extrapolation would draw at already describes the moment after the
-   acquire's wait.
+   acquire's wait. The particle shift, trail ages and reticle offset would
+   need the same `t > 1` treatment.
 
 ## Cost on a CPU-bound target (2026-10-27, the Steam Deck)
 
@@ -87,17 +87,14 @@ recipe in `the-decks-60-fps-is-anulpha-pass-submit-cost.md` in this directory) w
 
 ## Next Steps
 
-1. Watch a windowed race at the 240 limit on a high-refresh panel, chase view
-   and cockpit, and note anything that still steps. Ten minutes, maintainer.
-2. Fractional-age trail rings (item 1), with a unit test that the ribbon is
-   continuous in alpha across a tick boundary. Two to three hours.
-3. Particle positions between ticks (item 2), in the vertex shader (see "Cost on
-   a CPU-bound target"). Half a day.
-4. The reticle split (item 4) and the per-tick scalars (item 3). Two to three hours together.
-5. Local-craft and chase-camera extrapolation (item 6), behind an off-by-default
-   setting, with a test that a contact tick never extrapolates. After the
-   acquire hoist lands and an input-to-photon number exists to judge it by.
-   Half a day to a day.
+1. Deck `frame-phases` re-measure, main against this merge (item 1). Twenty
+   minutes, maintainer.
+2. Watch a windowed race at the 240 limit on a high-refresh panel (item 2).
+   Ten minutes, maintainer.
+3. Mist UV blend with a wrap snap (item 3). One to two hours.
+4. Local-craft and chase-camera extrapolation (item 5), behind an off-by-default
+   setting, with a test that a contact tick never extrapolates. Half a day to
+   a day.
 
 ## Survey (2026-10-13), for reference
 
@@ -113,14 +110,14 @@ what happened to it. "Landed" means it draws between ticks now.
 | Craft respawn, active | `sim.respawns`, `ships[].active` | snap keys | discrete | snaps |
 | Blob shadow ray | body pose | `Race::shadow_placements` | continuous | landed (`body_between`) |
 | Exhaust flare sprite, HD sprite position | `nozzle_of` | exhaust gather | continuous | landed (nozzle on the blended hull) |
-| PSP ribbon, HD tube | samples pushed per tick | `extend_trail_vertices`, `Tube::extend_vertices` | per-tick history | head landed, body open (item 1) |
+| PSP ribbon, HD tube | samples pushed per tick | `extend_trail_vertices`, `Tube::extend_vertices` | per-tick history | landed (fractional ages) |
 | HD engine lights | `nozzle_local_of` on the hull | `hd_engine_lights` | continuous | landed |
 | Projectile bodies and billboards, HD rocket lights | `world.projectiles` | `*_model_matrices`, `projectile_sprites`, `hd_weapon_lights` | continuous | landed |
 | Replay ghost | `ghost_pose` (now, before) | `scene/ghost.rs` | continuous | landed |
 | Animation clock | `World::tick / 60` | `Race::clock_seconds` | continuous | landed |
 | Motion blur's previous pose | `MotionState` | `prev_mvp` | per frame | landed (per drawn frame) |
-| Lock-on reticle | `update_sight` in the tick | HUD | continuous | open (item 4) |
-| Airbrake flaps, shield swell, HD sprite axis, cannon flash | per tick | various | small scalars | open (item 3) |
-| Particles, sparks, smoke, mist, clouds | `stage.advance` | `upload_particles` and siblings | spawn discrete, motion continuous | open (item 2) |
+| Lock-on reticle | `update_sight` in the tick | HUD | continuous | landed (`Race::drawn_sight`) |
+| Airbrake flaps, shield swell, HD sprite axis, cannon flash | per tick | various | small scalars | landed; the flash stays stepped |
+| Particles, sparks, smoke, mist, clouds | `stage.advance` | `upload_particles` and siblings | spawn discrete, motion continuous | landed on the GPU; mist open, clouds static |
 | HUD numbers, messages, sprite frames, countdown | per tick | HUD | discrete | stepped, correct |
 

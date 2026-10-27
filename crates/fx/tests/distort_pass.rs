@@ -104,7 +104,7 @@ fn draw(gpu: &Gpu, quads: &[Quad], occluder: f32) -> Vec<[f32; 2]> {
         .collect();
     pipeline.sync_sheet(queue, &sheet);
     let projection = perspective(std::f32::consts::FRAC_PI_2, 1.0, NEAR, FAR);
-    pipeline.upload(queue, &projection.to_cols_array_2d(), &[], &[]);
+    pipeline.upload(queue, &projection.to_cols_array_2d(), 1.0, &[], &[]);
     pipeline.upload_distort(queue, &vertices);
 
     let depth = device.create_texture(&wgpu::TextureDescriptor {

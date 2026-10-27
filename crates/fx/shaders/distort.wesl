@@ -24,12 +24,16 @@ import oag_shaders::scene_vertex::Uniforms;
 @group(0) @binding(2) var sheet_sampler: sampler;
 
 // The three attributes the program reads of `GpuVertex`: position, colour and
-// texture coordinate. The normal and the rest are not consumed, and a vertex
-// state that declares an attribute its shader ignores is a validation warning.
+// texture coordinate, plus the particle's tick move `psys.wesl` reads too (see
+// `psys/between_ticks.rs`). The normal and the rest are not consumed, and a
+// vertex state that declares an attribute its shader ignores is a validation
+// warning.
 struct VertexInput {
     @location(0) position: vec3<f32>,
     @location(2) colour: vec4<f32>,
     @location(3) texcoord: vec2<f32>,
+    @location(5) shift_xy: vec2<f32>,
+    @location(6) shift_z: f32,
 };
 
 struct VertexOutput {
@@ -42,7 +46,9 @@ struct VertexOutput {
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
     var out: VertexOutput;
-    out.clip = uniforms.view_projection * vec4<f32>(in.position, 1.0);
+    // Drawn between ticks the way `psys.wesl` draws its particle.
+    let position = in.position + vec3<f32>(in.shift_xy, in.shift_z) * uniforms.model[0].w;
+    out.clip = uniforms.view_projection * vec4<f32>(position, 1.0);
     out.colour = in.colour;
     out.texcoord = in.texcoord;
     out.fade = 2.0 / pow(max(abs(out.clip.w), 1e-4), 0.75);

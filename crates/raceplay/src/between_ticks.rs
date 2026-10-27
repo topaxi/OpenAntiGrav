@@ -19,11 +19,12 @@
 //! blob shadow's ray). Then what
 //! moves on its own: every projectile's body and billboard
 //! ([`Race::projectile_between`]), the replay ghost
-//! ([`Race::ghost_draw_matrix`]), the newest sample of each engine trail
-//! ([`Race::trail_head_of`], so the ribbon leaves the hull as drawn), and the
+//! ([`Race::ghost_draw_matrix`]), each engine trail ([`Race::trail_head_of`]:
+//! the nozzle as drawn, the older samples at fractional ages), and the
 //! animation clock texture scroll and `Anim Transform` nodes ride
 //! ([`Race::clock_seconds`]). What the originals step - HUD numbers, sprite
-//! frames, particle spawns and the particles themselves - stays stepped.
+//! frames, particle spawns - stays stepped. Particles move on the GPU
+//! (`oag_fx::psys`'s `between_ticks`).
 //!
 //! # Captured in the tick, not at render time
 //!
@@ -192,6 +193,10 @@ struct ShipPose {
     /// and the model's yaw, the body neither.
     position: Vec3,
     orientation: Quat,
+    /// The per-tick scalars drawn on the hull: the airbrake flaps' levels and
+    /// the shield shell's swell.
+    flaps: [f32; 2],
+    shield_swell: f32,
     key: ShipKey,
 }
 
@@ -273,6 +278,7 @@ impl Race {
     /// the next tick runs. For a race taken back out from behind the menus,
     /// whose last tick is long past.
     pub fn settle_poses(&mut self) {
+        self.hold_particles_still();
         self.view.poses.previous = None;
         self.view.poses.projectiles.clear();
         self.view.poses.generations = PoseGenerations {
@@ -328,6 +334,7 @@ impl Race {
     /// moves them: the first thing every tick path does.
     pub(super) fn capture_poses(&mut self) {
         self.view.poses.alpha = 1.0;
+        self.hold_particles_still();
         self.view.poses.generations = PoseGenerations {
             current: next_generation(),
             previous: self.view.poses.generations.current,
@@ -347,6 +354,8 @@ impl Race {
                     model: self.drawn_model(slot),
                     position: self.drawn_position(slot),
                     orientation: ship.physics.body.orientation,
+                    flaps: self.view.flaps[slot],
+                    shield_swell: self.view.shield[slot].swell(),
                     key: self.ship_key(slot),
                 }
             }),
@@ -478,10 +487,45 @@ impl Race {
     /// nozzle as this draw places the hull, while that is between ticks, and
     /// `None` when the hull is drawn at this tick and the recorded sample is
     /// already where the nozzle is. See `oag_fx::exhaust::Exhaust::extend_trail_vertices`.
+    ///
+    /// Its alpha reads the older samples at fractional ages, and is `1.0` (the
+    /// ring as recorded) unless the last tick path stepped the world, the one
+    /// path that pushes a trail sample: a flyby or cosmetic tick pushes none.
     #[must_use]
-    pub fn trail_head_of(&self, slot: usize) -> Option<Vec3> {
+    pub fn trail_head_of(&self, slot: usize) -> Option<oag_fx::exhaust::TrailHead> {
         self.ship_alpha(slot)?;
-        self.nozzle_of(slot)
+        Some(oag_fx::exhaust::TrailHead {
+            position: self.nozzle_of(slot)?,
+            alpha: self.world_alpha().unwrap_or(1.0),
+        })
+    }
+
+    /// The craft in `slot`'s airbrake flap levels (`0..=100`) at the draw alpha:
+    /// the flaps swing between ticks with the hull they hang on.
+    pub(super) fn flaps_between(&self, slot: usize) -> [f32; 2] {
+        let current = self.view.flaps[slot];
+        match (self.ship_alpha(slot), &self.view.poses.previous) {
+            (Some(alpha), Some(previous)) => {
+                let from = previous.ships[slot].flaps;
+                [0, 1].map(|i| from[i] + (current[i] - from[i]) * alpha)
+            }
+            _ => current,
+        }
+    }
+
+    /// The scale the craft in `slot`'s shield shell is drawn at: the swell at
+    /// the draw alpha plus this tick's flicker, which stays stepped (the
+    /// original's flicker is a per-frame random draw, discrete).
+    #[must_use]
+    pub fn shield_scale_of(&self, slot: usize) -> f32 {
+        let state = &self.view.shield[slot];
+        match (self.ship_alpha(slot), &self.view.poses.previous) {
+            (Some(alpha), Some(previous)) => {
+                let from = previous.ships[slot].shield_swell;
+                state.scale() - (state.swell() - from) * (1.0 - alpha)
+            }
+            _ => state.scale(),
+        }
     }
 
     /// One live projectile's model matrix at the draw alpha, `current` being

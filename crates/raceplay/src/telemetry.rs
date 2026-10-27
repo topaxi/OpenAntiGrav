@@ -214,7 +214,7 @@ impl Race {
             // unconditionally rather than gated here - the brackets are watched
             // opening again after a target is lost, which a gate on "has a
             // target" would cut off.
-            sight: Some(if primary { self.view.sight } else { hud.sight }),
+            sight: Some(self.drawn_sight(slot)),
             shield_flashing: hud.shield_flash_timer > 0.0,
             shield_absorbing: self.absorb_window_active(slot),
             shield_blink_phase: hud.shield_blink_timer,

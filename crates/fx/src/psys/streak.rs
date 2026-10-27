@@ -60,6 +60,7 @@
 
 use oag_core::math::Vec3;
 
+use super::between_ticks::set_shift;
 use super::{Effect, EmitterSpec, Particle, quad, sprite};
 use oag_mesh::mesh::GpuVertex;
 
@@ -133,8 +134,43 @@ impl StreakDraw {
 /// the along-coordinate into the capped `v`.
 const CAPPED: f32 = 2.0;
 
-/// Appends one streak particle's six vertices to `out`.
+/// Appends one streak particle's six vertices to `out`, each carrying its
+/// tick move for the vertex shader ([`super::between_ticks`]).
+///
+/// The head moves with the particle. The tail is the previous tick's position
+/// and moves the same way, except under `from_spawn`, where it is the spawn
+/// point and stays put; a vertex between the two ends takes its share of each
+/// by where it lies along the streak.
 pub(super) fn extend(
+    out: &mut Vec<GpuVertex>,
+    spec: &EmitterSpec,
+    particle: &Particle,
+    half: f32,
+    rgba: [f32; 4],
+    right: Vec3,
+    up: Vec3,
+) {
+    let start = out.len();
+    extend_at_tick(out, spec, particle, half, rgba, right, up);
+    let head = particle.shift();
+    let from_spawn = matches!(spec.render, super::Render::Streak { from_spawn: true });
+    let along = particle.position - particle.origin;
+    let length2 = along.length_squared();
+    for vertex in &mut out[start..] {
+        let shift = if from_spawn && length2 > 1e-12 {
+            let at = (Vec3::from(vertex.position) - particle.origin).dot(along) / length2;
+            head * at.clamp(0.0, 1.0)
+        } else if from_spawn {
+            Vec3::ZERO
+        } else {
+            head
+        };
+        set_shift(vertex, shift);
+    }
+}
+
+/// [`extend`]'s six vertices at the tick, with no move.
+fn extend_at_tick(
     out: &mut Vec<GpuVertex>,
     spec: &EmitterSpec,
     particle: &Particle,

@@ -437,6 +437,10 @@ pub struct RaceView {
     pub(super) sight_screens: ([f32; 2], Option<[f32; 2]>),
     /// What [`Self::sight`] said last tick, which is what the tone plays off.
     pub(super) sight_state: sight::State,
+    /// The craft [`Self::sight`] followed last tick and where the tick
+    /// projected it: what `Race::drawn_sight` measures a draw between ticks
+    /// against.
+    pub(super) sight_aim: Option<(u8, sight::Projected)>,
     /// The field-of-view setting the picture is being drawn at.
     ///
     /// A setter for the same reason [`Race::set_boost_fov_kick`] is one - it is

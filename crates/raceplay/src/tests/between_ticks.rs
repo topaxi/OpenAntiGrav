@@ -293,7 +293,11 @@ fn the_trail_head_follows_the_drawn_nozzle_and_only_between_ticks() {
         "a tick-exact draw keeps the sample"
     );
     race.set_draw_alpha(0.5);
-    assert_eq!(race.trail_head_of(0), race.nozzle_of(0));
+    assert_eq!(
+        race.trail_head_of(0).map(|head| head.position),
+        race.nozzle_of(0)
+    );
+    assert_eq!(race.trail_head_of(0).map(|head| head.alpha), Some(0.5));
     assert_ne!(
         race.nozzle_of(0),
         Some(
@@ -369,4 +373,46 @@ fn the_body_a_blob_shadow_casts_from_is_the_drawn_one() {
         "cast from {drawn}, not a quarter of {before} -> {after}"
     );
     assert!(drawn.abs_diff_eq(translation(race.ship_model_matrix_of(0)), 1e-4));
+}
+
+/// The airbrake flaps and the shield shell's swell are drawn between their
+/// last two ticks' values, and at alpha 1 are the tick's exactly.
+#[test]
+fn the_flaps_and_the_shield_swell_move_between_ticks() {
+    let mut race = gliding_race();
+    race.view.flaps[0] = [20.0, 40.0];
+    race.view.shield[0].activate();
+    // What the tick captures as its previous pose, before it steps anything.
+    let before_swell = race.view.shield[0].swell();
+    race.tick(&PlayerInputs::none());
+    // What this tick moved them to: the flaps out, a hit landing on the shell.
+    race.view.flaps[0] = [60.0, 0.0];
+    race.view.shield[0].hit();
+    let state = race.view.shield[0];
+    assert_ne!(
+        before_swell,
+        state.swell(),
+        "the hit did not swell the shell"
+    );
+
+    let at_tick = race.airbrake_flaps_of(0);
+    assert_eq!(race.shield_scale_of(0), state.scale());
+    for alpha in [0.0f32, 0.25, 0.5, 0.75] {
+        race.set_draw_alpha(alpha);
+        let levels = race.flaps_between(0);
+        assert!(
+            (levels[0] - (20.0 + 40.0 * alpha)).abs() < 1e-4,
+            "{alpha}: {levels:?}"
+        );
+        assert!(
+            (levels[1] - (40.0 - 40.0 * alpha)).abs() < 1e-4,
+            "{alpha}: {levels:?}"
+        );
+        let swell = before_swell + (state.swell() - before_swell) * alpha;
+        let expected = state.scale() - state.swell() + swell;
+        assert!((race.shield_scale_of(0) - expected).abs() < 1e-5, "{alpha}");
+    }
+    race.set_draw_alpha(1.0);
+    assert_eq!(race.airbrake_flaps_of(0), at_tick);
+    assert_eq!(race.shield_scale_of(0).to_bits(), state.scale().to_bits());
 }

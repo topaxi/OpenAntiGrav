@@ -577,7 +577,8 @@ impl Race {
         let camera = self.view();
         let forward = -Vec3::new(camera.x_axis.z, camera.y_axis.z, camera.z_axis.z);
         let eye = camera.inverse().w_axis.truncate();
-        let nozzle_axis = -self.sim.world.ships[slot].physics.body.forward();
+        // The hull's axis as this draw places it (`Race::body_between`).
+        let nozzle_axis = -self.body_between(slot).forward();
         let sprite = &self.view.hd_sprite[slot];
         let Some(fade) = sprite.fade(
             (nozzle - eye).length(),

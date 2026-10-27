@@ -72,7 +72,8 @@ pub enum Edge {
 pub struct Lens {
     effect: Option<Effect>,
     base: Option<Base>,
-    pool: System,
+    /// Boxed: a pool is some 25 KB, and a `Race` is moved by value.
+    pool: Box<System>,
     rng: Rng,
     /// The smoothed per-emission count (`node+0x45c`) and its target.
     count: f32,
@@ -104,7 +105,7 @@ impl Lens {
                 drag: spec.drag_per_tick,
                 speed: spec.speed_per_tick,
             });
-        let mut pool = System::new();
+        let mut pool = Box::new(System::new());
         if let Some(effect) = &effect {
             pool.ignite(effect, Vec3::ZERO, 1.0);
         }

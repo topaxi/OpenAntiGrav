@@ -29,7 +29,9 @@ pub(super) struct ContactFx {
     ///
     /// Here rather than in `World`, for the same reason [`RaceView::exhaust`] is -
     /// see `oag_fx::psys`'s module doc comment.
-    pub(super) sparks: psys::System,
+    ///
+    /// Boxed: a pool is some 25 KB, and a `Race` is moved by value.
+    pub(super) sparks: Box<psys::System>,
     /// How many bursts the *trigger* has fired, whether or not an effect
     /// was loaded to play them.
     ///
@@ -104,7 +106,7 @@ impl ContactFx {
         Self {
             shake: oag_render::camera::shake::Shake::new(),
             shake_rng: Rng::new(SHAKE_SEED),
-            sparks: psys::System::new(),
+            sparks: Box::new(psys::System::new()),
             ignitions: 0,
             rng: Rng::new(SPARKS_SEED),
             // No sync frame to be mid-scrape on, so the first tick's contact -

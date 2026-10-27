@@ -6,6 +6,9 @@ use oag_core::math::Vec3;
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(super) struct Particle {
     pub(super) position: Vec3,
+    /// Where the last tick this particle's pool advanced found it - see
+    /// [`super::between_ticks`].
+    pub(super) before: Vec3,
     pub(super) velocity: Vec3,
     /// The streak's other end: the spawn point under
     /// [`super::Render::Streak::from_spawn`], the previous tick's position
@@ -56,6 +59,7 @@ pub(super) struct Particle {
 impl Particle {
     pub(super) const DEAD: Self = Self {
         position: Vec3::ZERO,
+        before: Vec3::ZERO,
         velocity: Vec3::ZERO,
         origin: Vec3::ZERO,
         life: 0.0,

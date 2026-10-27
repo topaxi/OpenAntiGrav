@@ -28,7 +28,7 @@
 //   share of the half-length; `0.5` collapses the profile to the plain
 //   radial falloff a round billboard wants.
 
-import oag_shaders::scene_vertex::{Uniforms, VertexInput};
+import oag_shaders::scene_vertex::Uniforms;
 import oag_shaders::target::{linear_out, gamma_to_target, target_out};
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
@@ -44,10 +44,32 @@ struct VertexOutput {
     @location(4) cell_v: vec2<f32>,
 };
 
+// `scene_vertex::VertexInput` plus the particle's tick move, in two slots a
+// particle has no other use for (`GpuVertex::lightmap_texcoord` and
+// `sun_mask`): see `psys/between_ticks.rs`.
+struct ParticleInput {
+    @location(0) position: vec3<f32>,
+    @location(1) normal: vec3<f32>,
+    @location(2) colour: vec4<f32>,
+    @location(3) texcoord: vec2<f32>,
+    @location(4) lit: f32,
+    @location(5) shift_xy: vec2<f32>,
+    @location(6) shift_z: f32,
+};
+
+// Where a particle draws between two ticks: back along its last tick's move
+// by `1 - draw_alpha`. The draw alpha minus one rides in the unused model
+// matrix's first column, `w`; at a tick exactly it is 0 and the vertex lands
+// where the CPU put it.
+fn between_ticks(position: vec3<f32>, shift_xy: vec2<f32>, shift_z: f32) -> vec3<f32> {
+    return position + vec3<f32>(shift_xy, shift_z) * uniforms.model[0].w;
+}
+
 @vertex
-fn vs_main(in: VertexInput) -> VertexOutput {
+fn vs_main(in: ParticleInput) -> VertexOutput {
     var out: VertexOutput;
-    out.clip = uniforms.view_projection * vec4<f32>(in.position, 1.0);
+    let position = between_ticks(in.position, in.shift_xy, in.shift_z);
+    out.clip = uniforms.view_projection * vec4<f32>(position, 1.0);
     out.colour = in.colour;
     out.texcoord = in.texcoord;
     out.cap = in.lit;

@@ -742,6 +742,7 @@ impl System {
     /// emitter-node frame") - and is what every caller but the collision
     /// sparks passes.
     pub fn advance(&mut self, effect: &Effect, dt: f32, anchor: Vec3, up: Vec3, rng: &mut Rng) {
+        self.hold_still();
         let dt_ticks = dt * TICK_HZ;
         let moved = anchor - self.anchor;
         self.anchor = anchor;
@@ -937,6 +938,7 @@ impl System {
 
         let mut particle = Particle {
             position: anchor,
+            before: anchor,
             velocity: direction * speed + inherited,
             origin: anchor,
             life,
@@ -1480,10 +1482,10 @@ mod frame;
 mod pipeline;
 pub use pipeline::{BLEND, BLEND_ALPHA_OVER, Drawer, Drawn, MAX_VERTICES, Pipeline};
 
+mod between_ticks;
+mod particle;
 mod release;
 mod riding;
-
-mod particle;
 use particle::{Particle, expendable_slot};
 mod quad;
 use quad::{billboard, quad};

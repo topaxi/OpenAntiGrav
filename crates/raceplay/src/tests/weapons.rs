@@ -875,3 +875,72 @@ fn rear_and_forward_table() -> oag_tables::weapons::WeaponStats {
     )
     .expect("the fixture table must parse")
 }
+
+/// Drawn between two ticks, a locked reticle sits on the target craft as the
+/// draw places it and moves on every frame: continuous across a tick to within
+/// the law's own one-tick lead, the tick's reticle bit for bit at alpha 1.
+#[test]
+fn a_locked_reticle_follows_its_target_between_ticks() {
+    let mut race = race_with_a_grid();
+    race.sim.weapons = Some(one_missile_table());
+    // Past the countdown, which holds every craft still.
+    for _ in 0..oag_race::COUNTDOWN_TICKS {
+        race.tick(&PlayerInputs::none());
+    }
+    let body = race.sim.world.ships[0].physics.body;
+    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
+    race.sim.world.ships[1].physics.body.position = body.position + body.forward() * 60.0;
+    // The target flying down the nose at the player's own velocity until the
+    // lock is taken, then the player's craft turning, so the chase camera
+    // swings and the target slides on screen. Velocities only: a pose set
+    // between ticks is not motion between ticks.
+    let tick = |race: &mut Race, turn: f32| {
+        let velocity = race.sim.world.ships[0].physics.body.linear_velocity;
+        race.sim.world.ships[1].physics.body.linear_velocity = velocity;
+        race.sim.world.ships[0].physics.body.angular_velocity = Vec3::Y * turn;
+        race.tick(&PlayerInputs::none());
+    };
+    for _ in 0..70 {
+        tick(&mut race, 0.0);
+    }
+    for _ in 0..8 {
+        tick(&mut race, 0.6);
+    }
+    assert!(race.sight().locked(), "the reticle never locked");
+    let aim = |race: &mut Race, alpha: f32| {
+        race.set_draw_alpha(alpha);
+        let drawn = race.drawn_sight(0);
+        assert_eq!(
+            drawn.centre(),
+            drawn.aim().expect("aim"),
+            "a locked reticle is on its aim"
+        );
+        drawn.aim().expect("aim")
+    };
+
+    race.set_draw_alpha(1.0);
+    assert_eq!(race.drawn_sight(0), *race.sight());
+    let before = aim(&mut race, 0.9999);
+    let quarter = aim(&mut race, 0.25);
+    let three_quarters = aim(&mut race, 0.75);
+    race.set_draw_alpha(1.0);
+    tick(&mut race, 0.6);
+    let stepped = race.sight().aim().expect("aim");
+    let after = aim(&mut race, 0.0001);
+    race.set_draw_alpha(1.0);
+
+    let step = (stepped[0] - before[0]).abs();
+    assert!(
+        step > 0.5,
+        "the target slid {step} a tick, too little to tell"
+    );
+    let jump = (after[0] - before[0]).abs();
+    assert!(
+        jump < step * 0.2,
+        "jumped {jump} across the tick against a step of {step}"
+    );
+    assert!(
+        (quarter[0] - three_quarters[0]).abs() > step * 0.3,
+        "it does not move between the ticks"
+    );
+}

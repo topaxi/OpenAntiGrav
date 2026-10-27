@@ -164,6 +164,11 @@ impl SceneryFx {
         self.weather.advance(effects, dt, camera, section);
     }
 
+    /// [`psys::Stage::hold_still`] on the pool, at the start of a tick path.
+    pub fn hold_still(&mut self) {
+        self.stage.hold_still();
+    }
+
     /// The pool, for the renderer and for tests.
     #[must_use]
     pub fn stage(&self) -> &psys::Stage {

@@ -399,6 +399,9 @@ pub struct Exhaust {
     trail_back: [Vec3; TRAIL_SAMPLES],
     trail_len: usize,
     trail_write: usize,
+    /// The sample the last push overwrote, once the ring was full: the tail a
+    /// frame drawn between ticks reaches back to ([`ribbon`]).
+    trail_dropped: Option<(Vec3, Vec3)>,
     /// Per-layer texture scroll, wrapped to `[0, 1)` as the original wraps it.
     scroll: [[f32; 2]; LAYERS],
 }
@@ -427,6 +430,7 @@ impl Exhaust {
             trail_back: [Vec3::ZERO; TRAIL_SAMPLES],
             trail_len: 0,
             trail_write: 0,
+            trail_dropped: None,
             scroll: [[0.0; 2]; LAYERS],
         }
     }
@@ -519,6 +523,12 @@ impl Exhaust {
     /// need to know where the ship is, and keeping it that way is what lets every
     /// ramp be unit-tested without a pose.
     pub fn push_trail(&mut self, nozzle: Vec3, back: Vec3) {
+        self.trail_dropped = (self.trail_len >= TRAIL_SAMPLES).then(|| {
+            (
+                self.trail[self.trail_write],
+                self.trail_back[self.trail_write],
+            )
+        });
         self.trail[self.trail_write] = nozzle;
         self.trail_back[self.trail_write] = back;
         self.trail_write = (self.trail_write + 1) % TRAIL_SAMPLES;
@@ -532,6 +542,7 @@ impl Exhaust {
     pub fn clear_trail(&mut self) {
         self.trail_len = 0;
         self.trail_write = 0;
+        self.trail_dropped = None;
     }
 
     /// Whether the ribbon is drawable.
@@ -578,85 +589,6 @@ impl Exhaust {
         let mut out = Vec::with_capacity(TRAIL_VERTICES_PER_CRAFT);
         self.extend_trail_vertices(&mut out, None, right, up, law);
         out
-    }
-
-    /// [`Self::trail_vertices`], appended to a list the caller owns.
-    ///
-    /// The form the renderer uses, because a fixed 648 vertices per craft
-    /// returned by value is a 36 KiB allocation per craft per frame - eight of
-    /// them on a full grid, and none of them living past the upload. See
-    /// `race::Scene::scratch`.
-    ///
-    /// `head`, when given, stands in for the newest sample's position: the
-    /// nozzle where a frame drawn between two ticks puts it, so the ribbon
-    /// leaves the hull as drawn rather than a fraction of a tick ahead of it.
-    /// `None` draws the samples as recorded.
-    pub fn extend_trail_vertices(
-        &self,
-        out: &mut Vec<GpuVertex>,
-        head: Option<Vec3>,
-        right: Vec3,
-        up: Vec3,
-        law: TrailLaw,
-    ) {
-        if !self.trail_ready() {
-            return;
-        }
-        let (ramps, first_layer, glow_stamp) = match law {
-            TrailLaw::Ramped => (self.layer_alphas(), 0, true),
-            TrailLaw::Baked => ([PS2_GS_COLOUR_SCALE; LAYERS], PS2_FIRST_LAYER, false),
-        };
-        let mut samples: Vec<(Vec3, Vec3)> = self.trail_samples().collect();
-        if let (Some(head), Some(newest)) = (head, samples.first_mut()) {
-            newest.0 = head;
-        }
-        let width_scale = self.intensity * TRAIL_WIDTH_GAIN + TRAIL_WIDTH_BASE;
-
-        out.reserve(TRAIL_VERTICES_PER_CRAFT);
-        // The rim, in `Trail_DrawRibbon`'s own order. The fifth entry closes
-        // the tube; `v` runs 0..1 once around it in quarters.
-        let rim = [up, right, -up, -right, up];
-        for layer in first_layer..LAYERS {
-            let ramp = ramps[layer];
-            let base_width = LAYER_WIDTH[layer] * width_scale;
-            let colour = LAYER_COLOUR[layer];
-            // The texture scale and scroll are baked into the texcoords rather
-            // than set as pipeline state, because all three layers share one
-            // draw. `sceGuTexScale(su, 1.0)` plus `sceGuTexOffset(u, v)` is the
-            // same thing: tile `su` times along the ribbon, shifted. The bake
-            // steps `u` by `TRAIL_FADE_STEP` per sample, not by `1/(n-1)`.
-            let su = LAYER_TEX_SCALE_U[layer];
-            let [ou, ov] = self.scroll[layer];
-            for k in 0..samples.len() - 1 {
-                let (a, back_a) = samples[k];
-                let (b, back_b) = samples[k + 1];
-                let pa = a + back_a * trail_stretch(k);
-                let pb = b + back_b * trail_stretch(k + 1);
-                let wa = base_width * trail_taper(k);
-                let wb = base_width * trail_taper(k + 1);
-                let fade_a = ramp * trail_fade(k);
-                let fade_b = ramp * trail_fade(k + 1);
-                let ca = [colour[0] * fade_a, colour[1] * fade_a, colour[2] * fade_a];
-                let cb = [colour[0] * fade_b, colour[1] * fade_b, colour[2] * fade_b];
-                // One stencil byte per segment, not interpolated: [`trail_stencil`].
-                let glow = if glow_stamp {
-                    trail_stencil(self.intensity, k)
-                } else {
-                    0.0
-                };
-                let ua = k as f32 * TRAIL_FADE_STEP * TEXCOORD_U16_GAIN * su + ou;
-                let ub = (k + 1) as f32 * TRAIL_FADE_STEP * TEXCOORD_U16_GAIN * su + ou;
-                for fin in 0..TRAIL_FINS {
-                    let va = fin as f32 * 0.25 * TEXCOORD_U16_GAIN + ov;
-                    let vb = (fin + 1) as f32 * 0.25 * TEXCOORD_U16_GAIN + ov;
-                    let a0 = rib_vertex(pa + rim[fin] * wa, ca, ua, va, glow);
-                    let a1 = rib_vertex(pa + rim[fin + 1] * wa, ca, ua, vb, glow);
-                    let b0 = rib_vertex(pb + rim[fin] * wb, cb, ub, va, glow);
-                    let b1 = rib_vertex(pb + rim[fin + 1] * wb, cb, ub, vb, glow);
-                    out.extend_from_slice(&[a0, a1, b0, a1, b1, b0]);
-                }
-            }
-        }
     }
 
     /// Sets the intensity straight to where a steady state at this thrust and
@@ -856,7 +788,13 @@ fn range(rng: &mut Rng, (lo, hi): (f32, f32)) -> f32 {
 /// `150,080`.
 #[must_use]
 pub fn trail_stretch(sample: usize) -> f32 {
-    let t = sample as f32 * SUBSTEP_DT;
+    trail_stretch_at(sample as f32)
+}
+
+/// [`trail_stretch`] at a fractional age, for a ring drawn between ticks.
+#[must_use]
+pub fn trail_stretch_at(age: f32) -> f32 {
+    let t = age * SUBSTEP_DT;
     let w = -(1.0 / TRAIL_EASE) * ((-t / TRAIL_EASE).exp() - 1.0);
     w * TRAIL_DIRECTION_SCALE * CRAFT_ROW_SCALE
 }
@@ -869,7 +807,13 @@ pub fn trail_stretch(sample: usize) -> f32 {
 /// curve is under `0.05` by sample 6 of 10.
 #[must_use]
 pub fn trail_fade(sample: usize) -> f32 {
-    (1.0 - TRAIL_FADE_STEP * sample as f32)
+    trail_fade_at(sample as f32)
+}
+
+/// [`trail_fade`] at a fractional age.
+#[must_use]
+pub fn trail_fade_at(age: f32) -> f32 {
+    (1.0 - TRAIL_FADE_STEP * age)
         .max(0.0)
         .powf(1.0 / TRAIL_FADE_SHAPE)
 }
@@ -895,7 +839,13 @@ pub fn trail_fade(sample: usize) -> f32 {
 /// the position occupies the other three.
 #[must_use]
 pub fn trail_taper(sample: usize) -> f32 {
-    (TRAIL_HEAD_TAPER + TRAIL_TAPER_RATE * sample as f32 * SUBSTEP_DT).max(0.0)
+    trail_taper_at(sample as f32)
+}
+
+/// [`trail_taper`] at a fractional age.
+#[must_use]
+pub fn trail_taper_at(age: f32) -> f32 {
+    (TRAIL_HEAD_TAPER + TRAIL_TAPER_RATE * age * SUBSTEP_DT).max(0.0)
 }
 
 /// One ribbon vertex: the rgb already carries `authored colour x ramp x fade`,
@@ -1078,18 +1028,22 @@ pub const MAX_VERTICES: usize = MAX_SPRITES * 6;
 /// puffs and three blast puffs.
 const _: () = assert!(MAX_SPRITES >= MAX_TRAILS + (1 + 8 + 3) * 128);
 
-/// One craft's ribbon: three layers of `TRAIL_SAMPLES - 1` segments, each a
-/// four-quad diamond tube.
+/// One craft's ribbon at a tick: three layers of `TRAIL_SAMPLES - 1` segments,
+/// each a four-quad diamond tube.
 pub const TRAIL_VERTICES_PER_CRAFT: usize = LAYERS * (TRAIL_SAMPLES - 1) * TRAIL_FINS * 6;
 
+/// [`TRAIL_VERTICES_PER_CRAFT`] plus the one segment per layer a frame drawn
+/// between ticks adds at the tail ([`ribbon`]).
+pub const TRAIL_MAX_VERTICES_PER_CRAFT: usize = LAYERS * TRAIL_SAMPLES * TRAIL_FINS * 6;
+
 /// The ribbon's vertex budget: the larger of the PSP ribbon's
-/// [`TRAIL_VERTICES_PER_CRAFT`] and HD's [`hd::VERTICES_PER_CRAFT`], for every
+/// [`TRAIL_MAX_VERTICES_PER_CRAFT`] and HD's [`hd::MAX_VERTICES_PER_CRAFT`], for every
 /// craft on the grid - all eight trail at once and they share one buffer.
 pub const MAX_TRAIL_VERTICES: usize = MAX_TRAILS
-    * if TRAIL_VERTICES_PER_CRAFT > hd::VERTICES_PER_CRAFT {
-        TRAIL_VERTICES_PER_CRAFT
+    * if TRAIL_MAX_VERTICES_PER_CRAFT > hd::MAX_VERTICES_PER_CRAFT {
+        TRAIL_MAX_VERTICES_PER_CRAFT
     } else {
-        hd::VERTICES_PER_CRAFT
+        hd::MAX_VERTICES_PER_CRAFT
     };
 
 /// The flare's draw pipeline: the first blended, depth-tested pipeline in this
@@ -1110,6 +1064,8 @@ pub const MAX_TRAIL_VERTICES: usize = MAX_TRAILS
 /// and the same 128-byte uniform block so
 /// [`oag_mesh::mesh_render::UNIFORMS_SIZE`] describes both.
 pub mod hd;
+mod ribbon;
+pub use ribbon::TrailHead;
 mod law;
 pub use law::{PS2_FIRST_LAYER, PS2_GS_COLOUR_SCALE, TrailLaw};
 mod texture;

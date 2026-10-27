@@ -44,7 +44,7 @@ Code: `crates/raceplay/src/between_ticks.rs`. Tests: its unit tests in
   | `Race::body_between` | the blob shadow's ray, which reads the body's own pose (no barrel roll, no model yaw) |
   | `Race::projectile_between` (inside the weapon model matrices) and the billboard fallback | every live projectile body, HD's rocket point lights |
   | `Race::ghost_draw_matrix` | the replay ghost |
-  | `Race::trail_head_of` | the newest sample of the PSP ribbon and the HD tube, so the trail leaves the hull as drawn |
+  | `Race::trail_head_of` | the PSP ribbon and the HD tube: the nozzle as drawn at age 0, every older sample at its fractional age (below) |
   | `Race::clock_seconds` | texture scroll, `Anim Transform` nodes, the flame surface's scroll |
 
   Positions lerp, rotations slerp along the shorter arc (glam's `Quat::slerp`),
@@ -58,9 +58,64 @@ Code: `crates/raceplay/src/between_ticks.rs`. Tests: its unit tests in
   whose blend `Race::ship_swept_from` says is skipped. At alpha `1.0` it is the tick's gather
   untouched. See "Chosen, not measured" below and
   [split-screen.md](split-screen.md#cost) for the size of the difference.
+- **The trail rings are read at fractional ages** (2026-10-27,
+  `crates/fx/src/exhaust/ribbon.rs`). Sample `k` of the PSP ribbon and the HD
+  tube is drawn at age `k - 1 + alpha` with the drawn nozzle at age 0, so its
+  stretch, taper, fade, tint, texture coordinate and glow byte follow the age
+  rather than the index; the scroll phases go back a share of their last step.
+  The tail reaches its fixed age through the sample the last push dropped off
+  the ring, kept beside it (the ring, and `Tube::nearest` the trail-hit test
+  reads, are unchanged); that is one segment more between ticks, inside the
+  trail buffer's budget. At alpha `1.0` the ages are the indices and the
+  ribbon is the recorded one, byte for byte. A tick path that pushes no
+  sample (the flyby, the cosmetic ticks) draws the ring as recorded with only
+  the head moved. Unit tests: the ribbon and the tube are continuous across a
+  tick (`exhaust::ribbon::tests`).
+- **The lock-on reticle follows its target as drawn** (2026-10-27,
+  `Race::drawn_sight`). The reticle's law (`oag_race::sight::Sight::follow`)
+  still runs once a tick off the tick's camera and target, and the lock stays
+  the simulation's (`RaceSim::locks`). Each tick keeps which craft the reticle
+  followed and where the tick projected it; a draw between ticks projects that
+  craft again with the blended camera and the blended body
+  (`Race::body_between`) and moves the whole reticle by the difference
+  (`Sight::shifted`, a draw-only copy). A locked reticle, whose centre is the
+  target's projection, so sits on the craft as drawn; the law's own chase while
+  it seeks still steps per tick, and the law's one-tick lead (`2 * new - old`)
+  leaves a jump across the tick of the projection's second difference, 0.002
+  grid units against a 1.8-unit step a tick in
+  `tests::weapons::a_locked_reticle_follows_its_target_between_ticks`. At alpha
+  `1.0`, or with no target on screen, the reticle is the tick's untouched.
+- **The per-tick scalars on the hull blend too** (2026-10-27): the airbrake
+  flaps' levels (`Race::airbrake_flaps_of` through `flaps_between`), the shield
+  shell's and cockpit sphere's swell (`Race::shield_scale_of`; the shell's
+  flicker is a per-frame random draw in the original and stays stepped) and
+  the HD sprite flare's nozzle axis (`Race::hd_sprite_quad` reads
+  `Race::body_between`). The previous tick's flap levels and swell ride in the
+  craft's captured pose. The cannon muzzle flash stays stepped: a flash, drawn
+  for a tick where it fires.
+- **Particles move between ticks on the GPU** (2026-10-27). Every `.pob`
+  particle (`oag_fx::psys`: the stage's effects, the collision sparks, the
+  scenery effects, Omega's heat haze) keeps where its pool's last advance found
+  it, and each vertex of its quad carries that tick's move in two slots a
+  particle has no other use for. The vertex shader draws at
+  `position + move * (draw_alpha - 1)`, the alpha in the particle uniform
+  block, so the CPU writes the same vertices a frame as before and moves
+  nothing per frame (`crates/fx/src/psys/between_ticks.rs`). A particle born
+  this tick draws at its spawn point at every alpha and one that died this tick
+  is gone: spawns and deaths stay discrete. Every tick path first zeroes every
+  pool's move (`Race::hold_particles_still`), so a pool the path does not
+  advance (the flyby, the cosmetic ticks) draws still rather than replaying a
+  stale move. A move past 64 units draws where it lands. A `from_spawn` streak's
+  tail stays on its spawn point. Size, colour, sprite frame and roll still step
+  per tick.
 - **Stays stepped**, because it is discrete in the originals too: HUD numbers,
-  message lines, sprite frames, particle spawns and the particles themselves,
-  flashes and washes, the shield's flicker, the cannon muzzle flash.
+  message lines, sprite frames, particle spawns, flashes and washes, the
+  shield's flicker, the cannon muzzle flash. Also stepped, by choice: the
+  weather's rain and snow fields (field coordinates placed with the drawn
+  camera, so they draw with no move), the mist overlay (a screen-space zoom
+  whose wrap re-rolls its texture offsets, so a blend needs a snap on the wrap
+  tick; open) and the cloud sprites, which never move (only their roll phase
+  steps, by at most 0.002 rad a tick, invisible).
 
 ## Discontinuities draw where they land
 
@@ -132,16 +187,4 @@ they did. See that page's "Blur length" section.
 
 ## Open
 
-- The PSP ribbon's and the HD tube's older samples are still placed per tick:
-  each tick, every recorded sample moves one index down the ring, and its
-  stretch, taper, fade and texture coordinate step with it. Only the head
-  follows the drawn nozzle. Drawing the ring at a fractional age would make
-  the whole ribbon continuous.
-- Particles (`psys::Stage`), sparks, smoke, mist and clouds advance per tick
-  and are drawn where the tick left them.
-- The HD sprite flare's nozzle axis reads the body's forward at the tick, not
-  the drawn hull's.
-- The lock-on reticle is projected inside the tick (`Race::update_sight`, a
-  stateful tracker), so it sits on the target as the tick left it while the
-  target and camera are drawn between ticks: off by a fraction of the
-  target's per-tick screen motion.
+- The mist overlay's zoom and scroll step per tick (see above).

@@ -64,7 +64,8 @@ pub struct Weather {
     mask: u64,
     effect: Option<Arc<Effect>>,
     resolved: bool,
-    pool: System,
+    /// Boxed: a pool is some 25 KB, and a `Race` is moved by value.
+    pool: Box<System>,
     /// The sections published last frame and this frame, `DAT_08ab10a4` and
     /// `DAT_08ab10a0`.
     sections: (i32, i32),
@@ -110,7 +111,7 @@ impl Weather {
             mask,
             effect: None,
             resolved: false,
-            pool: System::new(),
+            pool: Box::new(System::new()),
             sections: (-1, -1),
             anchored: false,
             anchor: Frame::IDENTITY,

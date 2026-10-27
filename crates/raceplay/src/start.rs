@@ -930,6 +930,7 @@ impl Race {
                 sight_screens: (sight.view_screen, sight.columns_screen),
                 sight: sight.view_sight(),
                 sight_state: sight::State::Absent,
+                sight_aim: None,
                 sight_fov: oag_display::display::Fov::AUTHORED,
                 model_detail: oag_mesh::mesh::ModelDetail::default(),
                 texture_detail: oag_mesh::mesh_render::TextureDetail::default(),

@@ -43,7 +43,8 @@ impl Race {
     /// zero for every other.
     #[must_use]
     pub fn airbrake_flaps_of(&self, slot: usize) -> [f32; 2] {
-        self.view.flaps[slot].map(|level| self.view.flap_graphics.amount * level / 100.0)
+        self.flaps_between(slot)
+            .map(|level| self.view.flap_graphics.amount * level / 100.0)
     }
 
     /// The team id the craft in `slot` flies, when the grid named one.
