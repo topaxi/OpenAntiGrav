@@ -434,34 +434,140 @@ fn a_notice_is_one_row_above_the_legend_in_its_word_face() {
     );
 }
 
-/// The reset prompt is drawn in `Confirm`'s own manner: the title's `Square` stand-in in the
-/// glyph's face, the words in the word's, on a line above, inside the screen, and with a tap
-/// rect over both. Without the glyph the words stand alone.
+fn text_x_and_extent(draw: &Draw, measure: &dyn Fn(&str) -> f32) -> (f32, f32) {
+    match draw {
+        Draw::Text { x, text, scale, .. } | Draw::FacedText { x, text, scale, .. } => {
+            (*x, *x + measure(text) * scale)
+        }
+        other => panic!("expected a text, got {other:?}"),
+    }
+}
+
+/// The reset prompt is one more entry on `Confirm`'s own row: the title's `Square` stand-in in
+/// the glyph's face, the words in the word's, on `Confirm`'s baselines and in its faces, inside
+/// the screen, clear of every authored prompt (`Back` too, which a root page does not draw),
+/// with a tap rect over both. Without the glyph the words stand alone.
 #[test]
-fn the_reset_prompt_is_modelled_on_confirm_and_stays_on_screen() {
+fn the_reset_prompt_shares_confirms_row_and_stays_clear_of_every_prompt() {
     let root = parse(XML);
     let strings = StringTable::from_xml(ENTRIES);
     let legend = NavigationLegend::read(&root, &globals(), &strings).expect("controller");
     assert!(legend.can_model_reset_prompt());
+    let measure = |text: &str| text.chars().count() as f32 * 6.0;
     let (draws, rect) = legend
         .reset_prompt(
             Some('δ'),
             "RESET TO DEFAULT",
             &FaceScales::default(),
-            &|text| text.chars().count() as f32 * 6.0,
+            &measure,
+            480.0,
+            &[],
         )
         .expect("the fixture's legend has a Confirm pair");
     let texts: Vec<&str> = draws.iter().map(|draw| text_and_y(draw).0).collect();
     assert_eq!(texts, ["δ", "RESET TO DEFAULT"]);
     for draw in &draws {
-        assert!(text_and_y(draw).1 < 252.0, "above Confirm's row");
+        assert!(
+            (text_and_y(draw).1 - 252.0).abs() < f32::EPSILON,
+            "on Confirm's baseline"
+        );
     }
     assert!(
         rect[0] >= 0.0 && rect[0] + rect[2] <= 480.0,
         "{rect:?} inside the 480 screen"
     );
+    let (first, last) = (
+        text_x_and_extent(&draws[0], &measure),
+        text_x_and_extent(&draws[1], &measure),
+    );
+    assert!(first.0 < last.0, "glyph then word");
+    assert!(
+        (rect[0] - first.0).abs() < 0.01 && (rect[0] + rect[2] - last.1).abs() < 0.01,
+        "the tap rect {rect:?} covers the drawn glyph and word"
+    );
+    // Pulse's footer has no room after `Back`, so it goes before `Confirm`'s glyph (x=348),
+    // and so never lands on `Back`, which sits from x=415.
+    assert!(last.1 <= 348.0, "ends before Confirm: {last:?}");
     let (words_only, _) = legend
-        .reset_prompt(None, "RESET", &FaceScales::default(), &|_| 30.0)
+        .reset_prompt(None, "RESET", &FaceScales::default(), &|_| 30.0, 480.0, &[])
         .expect("words alone");
     assert_eq!(words_only.len(), 1);
+}
+
+/// On a wide footer the prompt follows the legend's order, after the last authored prompt, with
+/// the legend's own spacing, and still inside the page.
+#[test]
+fn the_reset_prompt_goes_after_back_where_the_footer_has_room() {
+    let root = parse(XML);
+    let strings = StringTable::from_xml(ENTRIES);
+    let legend = NavigationLegend::read(&root, &globals(), &strings).expect("controller");
+    let measure = |text: &str| text.chars().count() as f32 * 6.0;
+    let (draws, rect) = legend
+        .reset_prompt(None, "RESET", &FaceScales::default(), &measure, 960.0, &[])
+        .expect("a Confirm pair");
+    // Back's word starts at 435 and ends 24 on: the prompt starts after it by the 6 the legend
+    // leaves between Confirm's word and Back's glyph.
+    assert!((rect[0] - (435.0 + 24.0 + 6.0)).abs() < 0.01, "{rect:?}");
+    assert!(rect[0] + rect[2] <= 960.0);
+    assert_eq!(draws.len(), 1);
+}
+
+/// No `Confirm` pair, nothing to model the prompt on.
+#[test]
+fn the_reset_prompt_needs_a_confirm_pair() {
+    assert!(
+        NavigationLegend::default()
+            .reset_prompt(None, "RESET", &FaceScales::default(), &|_| 30.0, 480.0, &[])
+            .is_none()
+    );
+}
+
+/// A mark the frame draws beside the legend closes the gap it covers; with no gap left on the
+/// row the prompt takes the line above rather than draw over the mark. A strip behind the
+/// legend is its own backdrop and blocks nothing.
+#[test]
+fn the_reset_prompt_keeps_clear_of_the_frames_own_marks() {
+    let root = parse(XML);
+    let strings = StringTable::from_xml(ENTRIES);
+    let legend = NavigationLegend::read(&root, &globals(), &strings).expect("controller");
+    let measure = |text: &str| text.chars().count() as f32 * 6.0;
+    let prompt = |blocked: &[[f32; 4]]| {
+        legend
+            .reset_prompt(
+                None,
+                "RESET TO DEFAULT",
+                &FaceScales::default(),
+                &measure,
+                480.0,
+                blocked,
+            )
+            .expect("a Confirm pair")
+            .1
+    };
+    let strip = [80.0, 236.0, 380.0, 32.0];
+    let free = prompt(&[strip]);
+    assert!(
+        (free[1] - 252.0).abs() < f32::EPSILON,
+        "a backdrop strip leaves the row: {free:?}"
+    );
+    let mark = [100.0, 250.0, 150.0, 12.0];
+    let lifted = prompt(&[mark]);
+    assert!(
+        lifted[1] < 252.0,
+        "no gap beside the mark holds it: {lifted:?}"
+    );
+    assert!(lifted[0] >= 0.0 && lifted[0] + lifted[2] <= 480.0);
+}
+
+/// The glyph half of a pair is told by the widget's own name, not by its idstring: Pure's
+/// button string is not called `*_BUTTON`, and a legend that missed it had no pair to model the
+/// reset prompt on.
+#[test]
+fn a_button_half_is_known_by_its_widget_name_not_its_idstring() {
+    let xml = XML.replace("FE_CONFIRM_BUTTON", "FE_CONFIRM_ICON");
+    let root = parse(&xml);
+    let entries = ENTRIES.replace("FE_CONFIRM_BUTTON", "FE_CONFIRM_ICON");
+    let strings = StringTable::from_xml(&entries);
+    let legend = NavigationLegend::read(&root, &globals(), &strings).expect("controller");
+    assert!(legend.can_model_reset_prompt());
 }

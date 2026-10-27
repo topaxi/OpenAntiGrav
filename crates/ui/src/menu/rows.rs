@@ -253,17 +253,6 @@ fn draw_list_rows(
             text: format!("! {message}"),
             wrap_width: None,
         });
-    } else if let Some(hint) = menu.reset_hint(bindings) {
-        out.push(Draw::Text {
-            x: list.x + (numbers.marker_offset.0 + numbers.arrow_size) * sx,
-            y: list.y + shown as f32 * list.pitch + skin.message_gap(),
-            scale: row_scale * skin.message_scale(),
-            color: skin.selected(),
-            border: None,
-            align: Align::Left,
-            text: hint,
-            wrap_width: None,
-        });
     }
 
     out
@@ -473,17 +462,6 @@ fn draw_text_rows(
             text: format!("! {message}"),
             wrap_width: None,
         });
-    } else if let Some(hint) = menu.reset_hint(bindings) {
-        out.push(Draw::Text {
-            x: margin_x,
-            y: first_row_y + shown as f32 * row_height + skin.message_gap(),
-            scale: row_scale * skin.message_scale(),
-            color: skin.selected(),
-            border: None,
-            align: Align::Left,
-            text: hint,
-            wrap_width: None,
-        });
     }
 
     out
@@ -672,17 +650,6 @@ pub(super) fn regions(
                 }
             }
         }
-        let shown = visible.min(page.entries.len().saturating_sub(first));
-        reset_region(
-            menu,
-            [
-                layout.label_x,
-                layout.first_y + shown as f32 * layout.pitch + skin.message_gap(),
-                right - layout.label_x,
-                layout.pitch,
-            ],
-            &mut out,
-        );
         return out;
     }
     match (skin.blocks(), skin.list(), frame.blocks) {
@@ -727,17 +694,6 @@ pub(super) fn regions(
                     });
                 }
             }
-            let shown = visible.min(page.entries.len().saturating_sub(first));
-            reset_region(
-                menu,
-                [
-                    list.x + (numbers.marker_offset.0 + numbers.arrow_size) * sx,
-                    list.y + shown as f32 * list.pitch + skin.message_gap(),
-                    (skin.value_right() - list.x).max(0.0),
-                    list.pitch,
-                ],
-                &mut out,
-            );
         }
         _ => {
             let margin_x = skin.menu_x();
@@ -756,30 +712,7 @@ pub(super) fn regions(
                     rect: [left, y, width, row_height],
                 });
             }
-            let shown = visible.min(page.entries.len().saturating_sub(first));
-            reset_region(
-                menu,
-                [
-                    margin_x,
-                    first_row_y + shown as f32 * row_height + skin.message_gap(),
-                    width,
-                    row_height,
-                ],
-                &mut out,
-            );
         }
     }
     out
-}
-
-/// The reset hint's own target, on the line under the rows, while the hint is drawn.
-/// The hint belongs to the selected row, so the region names it.
-fn reset_region(menu: &Menu, rect: [f32; 4], out: &mut Vec<super::pointer::Region>) {
-    if menu.reset_hint(&|_| Vec::new()).is_some() {
-        out.push(super::pointer::Region {
-            row: menu.selected(),
-            part: super::pointer::Part::Reset,
-            rect,
-        });
-    }
 }

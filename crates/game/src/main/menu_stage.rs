@@ -904,6 +904,8 @@ impl MenuStage {
                 self.nav_legend.as_ref(),
                 bound_keys,
                 &measure,
+                self.skin.space().size.0,
+                &self.frame.mark_rects(),
             )
         } else {
             None

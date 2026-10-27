@@ -1210,7 +1210,7 @@ fn square_on_every_shipped_value_row_restores_the_first_run_value() {
         let pages: Vec<String> = definition.pages.iter().map(|p| p.id.clone()).collect();
         for page in pages {
             let mut menu = Menu::new(definition.clone());
-            supply_reset(&mut menu, title, platform, &strings, true);
+            supply_reset(&mut menu, title, platform, &strings);
             for (key, value) in &defaults {
                 menu.seed(key, value);
             }
@@ -1271,7 +1271,6 @@ fn the_reset_prompt_is_offered_only_off_default() {
         oag_pulse::TITLE,
         oag_disc::Platform::Psp,
         &strings,
-        true,
     );
     for (key, value) in default_seeds(oag_pulse::TITLE, oag_disc::Platform::Psp) {
         menu.seed(key, &value);
@@ -1290,7 +1289,63 @@ fn the_reset_prompt_is_offered_only_off_default() {
         oag_omega::TITLE,
         oag_disc::Platform::Ps4,
         &strings,
-        true,
     );
     assert_eq!(menu.reset_glyph(), None, "Omega's glyphs are unread");
+}
+
+/// The footer's reset prompt, as `MenuStage` and `--menu-page` ask for it: nothing while the
+/// row is at its default (so the legend shows no gap), and while it is off, one entry on
+/// `Confirm`'s own row with a tap rect over it, inside the page.
+#[test]
+fn the_reset_prompt_sits_on_confirms_row_and_only_off_default() {
+    use oag_ui::menu::{Definition, Menu, Value};
+    let xml = r#"<Screen><NavigationController name="NavigationController">
+<Text name="ControlTextConfirmButton"><Values idstring="FE_CONFIRM_BUTTON" font="small" x="348" y="252" color="0xffffffff"></Values></Text>
+<Text name="ControlTextConfirm"><Values idstring="FE_CONFIRM" x="368" y="252" color="0xffffffff"></Values></Text>
+<Text name="ControlTextBackButton"><Values idstring="FE_BACK_BUTTON" font="small" x="415" y="252" color="0xffffffff"></Values></Text>
+<Text name="ControlTextBack"><Values idstring="FE_BACK" x="435" y="252" color="0xffffffff"></Values></Text>
+</NavigationController></Screen>"#;
+    let strings = oag_ui::language::StringTable::default();
+    let legend = oag_ui_screens::campaign::footer::NavigationLegend::read(
+        &oag_tables::fexml::parse(xml),
+        &std::collections::HashMap::new(),
+        &strings,
+    )
+    .expect("a controller");
+    let mut menu = Menu::new(Definition::built_in(&strings).expect("parses"));
+    supply_reset(
+        &mut menu,
+        oag_pulse::TITLE,
+        oag_disc::Platform::Psp,
+        &strings,
+    );
+    for (key, value) in default_seeds(oag_pulse::TITLE, oag_disc::Platform::Psp) {
+        menu.seed(key, &value);
+    }
+    assert!(menu.open("audio"));
+    let ask = |menu: &Menu| {
+        crate::prompts::reset_prompt(
+            menu,
+            Some(&legend),
+            &|_| Vec::new(),
+            &|text| text.chars().count() as f32 * 6.0,
+            480.0,
+            &[],
+        )
+    };
+    assert!(ask(&menu).is_none(), "at default the prompt is hidden");
+    menu.seed("audio.music_volume", &Value::Text("50".to_string()));
+    let (draws, rect) = ask(&menu).expect("off default it is offered");
+    for draw in &draws {
+        let (oag_ui::frontend::Draw::Text { y, .. } | oag_ui::frontend::Draw::FacedText { y, .. }) =
+            draw
+        else {
+            panic!("a text draw");
+        };
+        assert!(
+            (y - 252.0).abs() < f32::EPSILON,
+            "Confirm's row, not above it"
+        );
+    }
+    assert!(rect[0] >= 0.0 && rect[0] + rect[2] <= 480.0, "{rect:?}");
 }

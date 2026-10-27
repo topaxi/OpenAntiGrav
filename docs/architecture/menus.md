@@ -2024,18 +2024,29 @@ the bindings and the hint are chosen.
 - **Mouse**: the middle button (`Pointer::reset`, from `oag_game::main::pointer`) resets the
   row under the pointer, else the selected one. The secondary button stays "back".
 - **Finger, and the mouse without a middle button**: a footer prompt, `RESET TO DEFAULT`,
-  drawn in `Confirm`'s manner (`NavigationLegend::reset_prompt`: the title's `Square`
-  stand-in in the button face, the words in the word face, on a line above `Confirm`,
-  ending where the legend's rightmost word ends) and a tap target
-  (`pointer::Part::Reset`, over the rect the footer reported through
-  `Menu::set_reset_rect`). Being a stand-in codepoint it goes through the button-prompt
-  system, so it shows the glyph of the device in use ([button-prompts.md](../ui/button-prompts.md)).
-  It is offered only while the selected row is off its default. A title whose `Prompts`
+  one more entry on the legend's own row, in `Confirm`'s manner
+  (`NavigationLegend::reset_prompt`: the title's `Square` stand-in in the button face, the
+  words in the word face, on `Confirm`'s baselines, with the legend's own spacing) and a tap
+  target (`pointer::Part::Reset`, over the rect the footer reported through
+  `Menu::set_reset_rect`, which is the drawn prompt's). Being a stand-in codepoint it goes
+  through the button-prompt system, so it shows the glyph of the device in use
+  ([button-prompts.md](../ui/button-prompts.md)). It is offered only while the selected row is
+  off its default, and the legend's other prompts never move for it. A title whose `Prompts`
   table is unread (Pure, Omega, 2048) has no stand-in to redraw: the words name the bound
   keys instead (`RESET TO DEFAULT (C)`), and the device-aware glyph waits on that table being
-  measured. A source whose legend has no `Confirm` pair to model it on (Pure's) draws the
-  same words as a line under the rows, aligned to the label column (`Menu::set_reset_inline`).
-  The line above `Confirm` and its height are **chosen, not measured**.
+  measured.
+  **Placement is our addition, chosen, not measured.** The originals order their prompts
+  `Confirm`, then `Back` (Pulse authors `Back`'s glyph at x=415 of 480), so the prompt follows
+  them: after the last authored prompt when that leaves room before the right margin, else
+  before the first. It lies against every authored prompt, `Back` included although a root
+  page does not draw it, so it takes no prompt's slot and does not move when a page gains
+  `Back`. What the frame draws beside the legend (`Frame::mark_rects`) closes the gap it
+  covers. Result: HD and Omega after `Back`; Pulse before `Confirm`; Pure, whose row holds
+  the `W:P` mark, `Confirm` and `Back` and nothing wide enough, on the line above `Confirm`,
+  from its x. 2048's front end has no footer legend (its settings panels keep their own hint
+  under the widget, `Frontend::panel_reset_rect`), and a source with none draws no prompt;
+  Square and the middle button still reset. A legend's glyph half is told by its widget name
+  (`ControlText*Button`), not its idstring, which is how Pure's and Omega's pairs are found.
 - **Where the default comes from**: `oag_game::settings::default_seeds`, which is
   `menu_seeds` over `settings::fresh()`, the very settings a first run loads (a render
   profile row per known title and platform included, so per-title defaults such as

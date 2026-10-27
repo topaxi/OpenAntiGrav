@@ -360,10 +360,6 @@ impl Session {
             shell.title,
             shell.platform,
             &shell.strings,
-            shell
-                .nav_legend
-                .as_ref()
-                .is_some_and(|legend| legend.can_model_reset_prompt()),
         );
         // What the row is set to comes from the settings file, above; what the
         // game is *drawing with* can only come from here, and the RENDERER row's
