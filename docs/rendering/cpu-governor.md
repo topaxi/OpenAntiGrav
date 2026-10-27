@@ -14,7 +14,7 @@ unlimited loop).
 - **Knobs** (`session/cpu_governor.rs`): `shadows mapped` down to the title's authored tier
   (`original`, or `off` where the title authors none), then `model_detail` `maximum` to `high` to
   `original`. Nothing goes below what a title authors, so a default profile has no steps.
-- **Setting:** `graphics.cpu_governor` (CPU GOVERNOR on the advanced graphics page), **on by default** (since the unlocked Deck measurement below; a profile with no extras has nothing to shed, and a race that holds its target never moves a knob).
+- **Setting:** `graphics.cpu_governor` (CPU GOVERNOR on the advanced graphics page), **off by default** by maintainer decision, pending more knobs or cases with stronger impact (the unlocked measurement below recommends on).
 - **Log:** one `cpu governor:` info line per change (what, CPU and GPU ms, budget); `--frame-log`
   lines end in `governor=N`.
 
