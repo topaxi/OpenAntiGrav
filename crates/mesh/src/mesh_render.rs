@@ -74,6 +74,20 @@ pub mod zone;
 mod device;
 pub use device::{device_descriptor, optional_features, required_limits};
 
+/// The pipelines that draw [`Model::draws`] and [`Model::alpha_tested_draws`]
+/// for one cull mode.
+#[derive(Debug, Clone)]
+pub struct SolidSet {
+    /// Opaque pass, as [`Built::pipeline`].
+    pub pipeline: wgpu::RenderPipeline,
+    /// As [`Built::prepass`].
+    pub prepass: Option<Prepass>,
+    /// As [`Built::alpha_test_pipeline`].
+    pub alpha_test_pipeline: wgpu::RenderPipeline,
+    /// As [`Built::cutout_pipelines`].
+    pub cutout_pipelines: Vec<(f32, wgpu::RenderPipeline)>,
+}
+
 /// Everything [`build`] hands back: geometry, texture bindings, and the three
 /// pipelines a `Model` draws through.
 #[derive(Debug)]
@@ -100,6 +114,14 @@ pub struct Built {
     /// measured cost, and [`CutoutPipelines::select`] for the pick. Empty for
     /// a model built from anything but a `.vex`.
     pub cutout_pipelines: Vec<(f32, wgpu::RenderPipeline)>,
+    /// The same opaque, prepass and cutout pipelines with back faces culled,
+    /// for a draw whose [`crate::mesh::DrawCall::culled`] is set. `Some` only
+    /// for a model that records material state and has such a draw, built by a
+    /// caller that did not ask for [`build_with`]'s model-wide `cull_back`
+    /// (HD's track, whose materials author the cull in state bit 4 - see
+    /// [`crate::mesh::render_state::STATE_CULL`]). The pipelines above stay
+    /// two-sided, for the draws that are not culled.
+    pub culled: Option<SolidSet>,
     /// Blended pass: depth write off, the `blend` the caller passed to
     /// [`build`] - [`TRANSPARENT_BLEND`] for ordinary scene geometry. Draws
     /// [`Model::transparent_draws`] last, as a third `set_pipeline` in the
@@ -575,114 +597,23 @@ pub fn build_with(
     // when [`Velocity::Write`] adds one, takes this surface's real screen
     // motion - this pipeline writes depth.
     let fragment_entry = velocity.entry("fs_main", "fs_main_velocity");
-    let pipeline = pipeline_cache::cached_pipeline(
-        shader,
-        "vs_main",
-        &vertex_buffers,
-        fragment_entry,
-        &targets,
-        primitive,
-        Some(depth_stencil.clone()),
-        multisample,
-        constants,
-        || {
-            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some("mesh"),
-                layout: Some(&pipeline_layout),
-                vertex: wgpu::VertexState {
-                    module: shader,
-                    entry_point: Some("vs_main"),
-                    buffers: &vertex_buffers,
-                    compilation_options: Default::default(),
-                },
-                fragment: Some(wgpu::FragmentState {
-                    module: shader,
-                    entry_point: Some(fragment_entry),
-                    targets: &targets,
-                    compilation_options: wgpu::PipelineCompilationOptions {
-                        constants,
-                        ..Default::default()
-                    },
-                }),
-                primitive,
-                depth_stencil: Some(depth_stencil.clone()),
-                multisample,
-                multiview_mask: None,
-                cache: None,
-            })
-        },
-    );
-
-    let prepass = prepass.then(|| {
-        prepass::pipelines(&prepass::Shared {
-            device,
-            shader,
-            layout: &pipeline_layout,
-            vertex_buffers: &vertex_buffers,
-            constants,
-            velocity,
-            targets: &targets,
-            fragment_entry,
-            primitive,
-            multisample,
-        })
-    });
-
-    // Second pipeline for `Model::alpha_tested_draws`: same shader module,
-    // bind group layouts, vertex layout and depth state as the opaque
-    // pipeline (a cutout is meant to occlude and be occluded exactly like
-    // opaque geometry), except the fragment shader discards pixels below a
-    // threshold instead of always returning alpha 1.0.
-    //
-    // Alpha is the bloom's glow mask - see [`GlowMask`]. A cutout writes
-    // depth like the opaque pipeline, so it writes real velocity too - same
-    // `targets` as the opaque pipeline above, reused rather than rebuilt.
-    let cutout_fragment_entry = velocity.entry("fs_main_alpha_test", "fs_main_alpha_test_velocity");
-    // **HD's alpha-tested draws leave the mask alone**: every one of a live
-    // Metropia frame's 32 draws with the alpha test on has the colour mask's
-    // alpha bit clear (`docs/rendering/hd-glow-mask.md`), whatever its program
-    // computes. Every other rule keeps the opaque pipeline's targets.
-    let cutout_targets = if glow == GlowMask::StampedByProgram {
-        velocity_targets(
-            wgpu::ColorTargetState {
-                format,
-                blend: None,
-                write_mask: glow.blend_writes(),
-            },
-            velocity.target(false),
-        )
-    } else {
-        targets.clone()
-    };
-    let make_cutout = |label: &str, reference: Option<f32>| {
-        // A per-batch reference overrides the model-level one already in
-        // `constants`; `wgpu` rejects a duplicate key, so it replaces rather
-        // than shadows.
-        let mut constants = constants.to_vec();
-        if let Some(reference) = reference {
-            constants.retain(|(name, _)| *name != "alpha_test_ref");
-            constants.push(("alpha_test_ref", f64::from(reference)));
-        }
-        let depth_stencil = wgpu::DepthStencilState {
-            format: DEPTH_FORMAT,
-            depth_write_enabled: Some(depth_write),
-            depth_compare: Some(cutout::depth_compare(reference, depth_compare)),
-            stencil: Default::default(),
-            bias: Default::default(),
-        };
-        pipeline_cache::cached_pipeline(
+    // The opaque pipeline, its depth prepass and the cutout pipelines, built
+    // for one cull mode so a model whose draws mix single- and double-sided
+    // (HD's track, from material state bit 4) gets a culling twin of each.
+    let solid_set = |primitive: wgpu::PrimitiveState| {
+        let pipeline = pipeline_cache::cached_pipeline(
             shader,
             "vs_main",
             &vertex_buffers,
-            cutout_fragment_entry,
-            &cutout_targets,
+            fragment_entry,
+            &targets,
             primitive,
             Some(depth_stencil.clone()),
             multisample,
-            &constants,
+            constants,
             || {
                 device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                    label: Some(label),
+                    label: Some("mesh"),
                     layout: Some(&pipeline_layout),
                     vertex: wgpu::VertexState {
                         module: shader,
@@ -692,10 +623,10 @@ pub fn build_with(
                     },
                     fragment: Some(wgpu::FragmentState {
                         module: shader,
-                        entry_point: Some(cutout_fragment_entry),
-                        targets: &cutout_targets,
+                        entry_point: Some(fragment_entry),
+                        targets: &targets,
                         compilation_options: wgpu::PipelineCompilationOptions {
-                            constants: &constants,
+                            constants,
                             ..Default::default()
                         },
                     }),
@@ -706,11 +637,138 @@ pub fn build_with(
                     cache: None,
                 })
             },
-        )
+        );
+
+        let prepass = prepass.then(|| {
+            prepass::pipelines(&prepass::Shared {
+                device,
+                shader,
+                layout: &pipeline_layout,
+                vertex_buffers: &vertex_buffers,
+                constants,
+                velocity,
+                targets: &targets,
+                fragment_entry,
+                primitive,
+                multisample,
+            })
+        });
+
+        // Second pipeline for `Model::alpha_tested_draws`: same shader module,
+        // bind group layouts, vertex layout and depth state as the opaque
+        // pipeline (a cutout is meant to occlude and be occluded exactly like
+        // opaque geometry), except the fragment shader discards pixels below a
+        // threshold instead of always returning alpha 1.0.
+        //
+        // Alpha is the bloom's glow mask - see [`GlowMask`]. A cutout writes
+        // depth like the opaque pipeline, so it writes real velocity too - same
+        // `targets` as the opaque pipeline above, reused rather than rebuilt.
+        let cutout_fragment_entry =
+            velocity.entry("fs_main_alpha_test", "fs_main_alpha_test_velocity");
+        // **HD's alpha-tested draws leave the mask alone**: every one of a live
+        // Metropia frame's 32 draws with the alpha test on has the colour mask's
+        // alpha bit clear (`docs/rendering/hd-glow-mask.md`), whatever its program
+        // computes. Every other rule keeps the opaque pipeline's targets.
+        let cutout_targets = if glow == GlowMask::StampedByProgram {
+            velocity_targets(
+                wgpu::ColorTargetState {
+                    format,
+                    blend: None,
+                    write_mask: glow.blend_writes(),
+                },
+                velocity.target(false),
+            )
+        } else {
+            targets.clone()
+        };
+        let make_cutout = |label: &str, reference: Option<f32>| {
+            // A per-batch reference overrides the model-level one already in
+            // `constants`; `wgpu` rejects a duplicate key, so it replaces rather
+            // than shadows.
+            let mut constants = constants.to_vec();
+            if let Some(reference) = reference {
+                constants.retain(|(name, _)| *name != "alpha_test_ref");
+                constants.push(("alpha_test_ref", f64::from(reference)));
+            }
+            let depth_stencil = wgpu::DepthStencilState {
+                format: DEPTH_FORMAT,
+                depth_write_enabled: Some(depth_write),
+                depth_compare: Some(cutout::depth_compare(reference, depth_compare)),
+                stencil: Default::default(),
+                bias: Default::default(),
+            };
+            pipeline_cache::cached_pipeline(
+                shader,
+                "vs_main",
+                &vertex_buffers,
+                cutout_fragment_entry,
+                &cutout_targets,
+                primitive,
+                Some(depth_stencil.clone()),
+                multisample,
+                &constants,
+                || {
+                    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                        label: Some(label),
+                        layout: Some(&pipeline_layout),
+                        vertex: wgpu::VertexState {
+                            module: shader,
+                            entry_point: Some("vs_main"),
+                            buffers: &vertex_buffers,
+                            compilation_options: Default::default(),
+                        },
+                        fragment: Some(wgpu::FragmentState {
+                            module: shader,
+                            entry_point: Some(cutout_fragment_entry),
+                            targets: &cutout_targets,
+                            compilation_options: wgpu::PipelineCompilationOptions {
+                                constants: &constants,
+                                ..Default::default()
+                            },
+                        }),
+                        primitive,
+                        depth_stencil: Some(depth_stencil.clone()),
+                        multisample,
+                        multiview_mask: None,
+                        cache: None,
+                    })
+                },
+            )
+        };
+        let alpha_test_pipeline = make_cutout("mesh alpha test", None);
+        let cutout_pipelines = cutout::pipelines(&model.alpha_tested_draws, |label, reference| {
+            make_cutout(label, Some(reference))
+        });
+
+        SolidSet {
+            pipeline,
+            prepass,
+            alpha_test_pipeline,
+            cutout_pipelines,
+        }
     };
-    let alpha_test_pipeline = make_cutout("mesh alpha test", None);
-    let cutout_pipelines = cutout::pipelines(&model.alpha_tested_draws, |label, reference| {
-        make_cutout(label, Some(reference))
+    // Whether the draws decide for themselves: a PS3 model (it records material
+    // state) whose opaque or cutout draws carry `culled`, on a caller that did
+    // not ask for every draw culled. Pulse's `.vex` models carry `culled` and
+    // no material state, and stay on the model-wide `cull_back`.
+    let per_draw_cull = !cull_back
+        && !model.material_state.is_empty()
+        && model
+            .draws
+            .iter()
+            .chain(&model.alpha_tested_draws)
+            .any(|draw| draw.culled);
+    let SolidSet {
+        pipeline,
+        prepass,
+        alpha_test_pipeline,
+        cutout_pipelines,
+    } = solid_set(primitive);
+    let culled = per_draw_cull.then(|| {
+        solid_set(wgpu::PrimitiveState {
+            cull_mode: Some(wgpu::Face::Back),
+            ..primitive
+        })
     });
 
     // Third pipeline for `Model::transparent_draws` (list B): same shader
@@ -1088,6 +1146,7 @@ pub fn build_with(
         pipeline,
         alpha_test_pipeline,
         cutout_pipelines,
+        culled,
         blend_pipeline,
         additive_pipeline,
         unblended_pipeline,

@@ -315,3 +315,26 @@ fn lit_by_compiles_the_nova_curve_out_only_under_a_rig_that_never_takes_it() {
         "closed with its scope"
     );
 }
+
+/// A PS3 model whose draw carries `culled` gets the culling twin of the opaque,
+/// prepass and cutout pipelines; a model without material state (Pulse's
+/// `.vex`, which authors `culled` on most batches) and one with no culled draw
+/// do not, so those stay on the model-wide `cull_back` and nothing else changes.
+#[test]
+fn only_a_model_with_state_and_a_culled_draw_builds_the_culling_twin() {
+    let Some((device, queue)) = device() else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let mut model = triangle_model();
+    assert!(build_once(&device, &queue, &model).culled.is_none());
+    model.draws[0].culled = true;
+    assert!(
+        build_once(&device, &queue, &model).culled.is_none(),
+        "no material state: a `.vex` model keeps the model-wide switch"
+    );
+    model.material_state = vec![0x10];
+    assert!(build_once(&device, &queue, &model).culled.is_some());
+    model.draws[0].culled = false;
+    assert!(build_once(&device, &queue, &model).culled.is_none());
+}

@@ -28,6 +28,12 @@ use super::Model;
 /// The state bit that turns the depth write on (`Rsx_SetDepthMask`).
 pub const STATE_DEPTH_WRITE: u32 = 0x04;
 
+/// The state bit that turns back-face culling on (`SET_CULL_FACE_ENABLE`; the
+/// front face is counter-clockwise). All 1,531 uniquely matched surfaces of six
+/// circuits agree with the draw's own cull register
+/// (`docs/ghidra/functions/ps3-hdfury-eu/chunk-cull.md`).
+pub const STATE_CULL: u32 = 0x10;
+
 /// The state bit that selects the alpha-to-coverage path.
 pub const STATE_COVERAGE: u32 = 0x80;
 
@@ -48,7 +54,10 @@ impl Model {
             .unwrap_or(0)
     }
 
-    /// Applies the render-state bits a title's rule honours: every blended draw
+    /// Applies the render-state bits a title's rule honours: every draw of a
+    /// material carrying [`STATE_CULL`] is back-face culled (in all three
+    /// lists, after the move below, so a moved tree keeps it; a draw already
+    /// culled stays so), every blended draw
     /// whose material carries [`STATE_COVERAGE`] leaves the blended list for
     /// the cutout list, unblended, at [`COVERAGE_REFERENCE`], and every
     /// blended draw left whose material carries [`STATE_DEPTH_WRITE`] writes
@@ -73,6 +82,16 @@ impl Model {
                 draw.alpha_test_ref = Some(COVERAGE_REFERENCE);
                 draw
             }));
+        let states = &self.material_state;
+        for draw in self
+            .draws
+            .iter_mut()
+            .chain(&mut self.alpha_tested_draws)
+            .chain(&mut self.transparent_draws)
+        {
+            let state = draw.texture.and_then(|slot| states.get(slot)).copied();
+            draw.culled |= state.is_some_and(|state| state & STATE_CULL != 0);
+        }
         moved
     }
 }
@@ -153,5 +172,27 @@ mod tests {
             .map(|d| d.writes_depth)
             .collect();
         assert_eq!(writes, [false, true]);
+    }
+
+    /// State bit 4 culls back faces, in all three lists and on a tree moved
+    /// to the cutouts; a material with the bit clear stays double-sided, and
+    /// a draw the loader already marked culled keeps it.
+    #[test]
+    fn state_bit_4_culls_every_list_and_a_clear_bit_stays_two_sided() {
+        let mut model = Model::none("hd");
+        model.material_state = vec![0x10, 0x00, 0xb0];
+        model.draws = vec![blended(0, 0), blended(1, 3)];
+        model.alpha_tested_draws = vec![blended(0, 6), blended(1, 9)];
+        model.transparent_draws = vec![blended(0, 12), blended(1, 15), blended(2, 18)];
+        model.draws[1].culled = true;
+        model.honour_render_state();
+        let culled = |list: &[DrawCall]| list.iter().map(|d| d.culled).collect::<Vec<_>>();
+        assert_eq!(culled(&model.draws), [true, true]);
+        assert_eq!(culled(&model.transparent_draws), [true, false]);
+        assert_eq!(
+            culled(&model.alpha_tested_draws),
+            [true, false, true],
+            "the 0xb0 tree moved to the cutouts, culled"
+        );
     }
 }
