@@ -658,6 +658,34 @@ capture each; Talon's and Tech de Ra are not brighter and do not move). The brig
 reads as a lifted, flatter tone on those circuits: an open lead, see the exposure adaptation law above ("Decide the
 adaptation law") as the first candidate.
 
+### The dark-end lift is the final encode (2026-10-27, `hd-brightness`)
+
+**Claim**: "ours is 11-18 % brighter with coarse contrast 0.90 on Vineta K, Sebenco Climb and The Amphiseum, not on Talon's and Tech de Ra, because of X." **Half true: it is not an exposure gain, and X is the final encode curve.**
+
+Method: ours re-rendered from scratch copies of the cold pairs (all captured at Resolution Scale 100, so not the scale-150 artefact), same box picker and metrics as above. Falsifier written first: a global exposure or adaptation error scales the whole frame, so whole-frame luma would move with the near-box luma.
+
+1. **It is a dark-end lift, not a gain.** Whole-frame luma ours/original is 1.000, 1.017, 1.029, 1.019, 1.017 (Vineta K, Sebenco, Amphiseum, Talon's, Tech de Ra). A 6x8 tile grid on Vineta K reads 0.93 to 1.08 everywhere except the shadowed left wall tiles (original mean 16 to 35), at 1.2 to 1.45. Binned by the original's blurred linear luma, ours minus original is +2 to +7e-3 below 0.04 and about 0 or negative above 0.08, with ratios 1.2 to 2.5 under 0.01. Coarse contrast 0.90 is the same fact: lifted blacks shrink the std. The split is box content: Talon's has 1 to 2 % of pixels under 0.005 where Vineta K has 17 %, and Tech de Ra has two boxes (its bins still read +2 to +6e-3).
+2. **Falsified: the adaptation law (suspect 1).** Encoded ladder mean (`fs_reduce_first` encodes, `fs_adapt` drops its `pow`): near-box luma 1.182 -> 1.184 (Vineta K), whole frame +0.00 to +0.03 (slightly brighter, as the fade predicts). Share 0.
+3. **Bloom is not it.** `+ bloom` zeroed: dark bins (original under 0.02) move by under 1e-3 to 2e-3 (Vineta K 4.2 -> 3.1e-3 at 0.005); near-box luma 1.182 -> 1.157. Share under 15 %. Bloom removal does cut the bright end (Vineta K whole frame 0.88), so the bloom there is right.
+4. **The cause: `fs_encode` ends `pow(resolved, 1/2.2)`.** The original's resolve writes through the ROP's sRGB encode (the shader's own comment: "approximated by one `1/2.2` curve"). At linear 0.01 the two curves give 31 and 25 levels, at 0.1 they agree. Swapped for the exact sRGB encode (local edit, patch kept in scratch; not committed):
+
+| Pair | near-box luma | coarse | whole-frame luma | dark (orig < 60) mean diff |
+| --- | --- | --- | --- | --- |
+| Vineta K | 1.182 -> 0.948 | 0.904 -> 1.009 | 1.000 -> 0.970 | +4.4 -> -0.8 |
+| Sebenco Climb | 1.177 -> 0.955 | 0.972 -> 1.053 | 1.017 -> 0.986 | +3.3 -> -2.0 |
+| The Amphiseum | 1.109 -> 0.997 | 0.902 -> 0.994 | 1.029 -> 0.992 | +5.6 -> +0.9 |
+| Talon's | 1.012 -> 0.981 | 1.000 -> 1.078 | 1.019 -> 1.003 | +3.1 -> -1.8 |
+| Tech de Ra | 1.011 -> 1.017 | 1.057 -> 1.083 | 1.017 -> 0.996 | +3.4 -> -1.5 |
+
+   The transfer curve by bin goes to 0.97 to 1.01 on Vineta K from 0.002 to 0.16. Across all 13 `hd/*` pairs the dark mean diff goes from +3.1..+8.8 to -2.0..+1.8, except Moa Therma (+8.8 -> +5.0, other content). Confidence 75: one render per pair (deterministic), ROP sRGB is the console's documented behaviour, no console frame at the dark end.
+5. **Costs, honest.** Whole-frame rmse rises 1 to 3 % (Vineta K 0.0616 -> 0.0624) and Anulpha's mean luma falls 0.966 -> 0.913: the lift had been hiding the known bloom deficit (see "Before the resolve, the floor matches"), now unmasked. Fine band over the original reads 1.09 to 1.27 at `-1.5` once the brightness is right, so the "`-0.75` fit was brightness" reading above is **reopened**: re-judge the bias after the encode lands. Amphiseum keeps +1 to +5e-3 under 0.04 (its own content, hologram board).
+
+**Ready to wire**: replace the final `pow(resolved, vec3(1/2.2))` in `fs_encode` (`crates/post/shaders/hd_bloom.wesl`) with the sRGB encode. Not wired here: a 7-line function, not a read value, and the rmse rise needs the maintainer's call. Material decode/packer pairs stay 2.2 and cancel; an exact-sRGB packer is a separate lead.
+
+**Moa Therma's road** (box 560,620 800x460): ours has stronger grime than the original (coarse contrast 1.37, near-box luma 1.03). Bias 0 against -1.5 leaves coarse at 1.36 and moves only the fine band (1.06 -> 0.94), so it is not the LOD bias. It is content-level (normal or lightmap strength), the opposite sign of the dark lift above; not chased here. Not checked: Moa's vertex program kind (`2w - 1` or raw).
+
+**Omega/2048**: `hd_bloom` is HD's; Omega has its own `omega_tonemap`. Not checked for Omega's own tonemap end curve (open, one grep and a render); 2048 not checkable (no HD-style resolve measured).
+
 ## The reflection map is the sky, and Moa Therma's glass reads it (2026-10-21, `hd-one-pair-moa`)
 
 **Target**: the HD pair with the largest difference, `hd/moa-therma` (cold original, 1920x1080, Resolution Scale 100; mean grey 15.05

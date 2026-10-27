@@ -132,10 +132,7 @@ one), or the sky map as a layer beside the probes (different sizes today, 512x25
 - **`m_diffuse_normal_constantspecular`'s normal alpha**: the RGB is a normal map
   (`docs/formats/rcsmaterial.md`); what its alpha carries is unread.
 
-- **Ours is 11-18 % brighter with flatter coarse contrast (0.90) on Vineta K, Sebenco Climb and The Amphiseum** (2026-10-27,
-  lead; `docs/rendering/hd-track-tone.md`, "The 0.5-level gap is ours being brighter"). Talon's and Tech de Ra are not. With
-  the brightness divided out, the `-1.5` bias matches the original's detail, so this explains the -0.75 fit. First candidate:
-  the exposure adaptation law (encoded vs linear mean, above). Size M (30), difficulty medium (35).
+- **Ours is 11-18 % brighter: READY TO WIRE** (2026-10-27, `hd-brightness`; `docs/rendering/hd-track-tone.md`, "The dark-end lift is the final encode"). Cause: `fs_encode` ends on `pow(x, 1/2.2)` where the original's ROP writes the true sRGB curve. Change: swap that one line for an sRGB encode (linear segment below 0.0031308, else `1.055 * x^(1/2.4) - 0.055`). Dark-end (original luma < 60) mean diff on 13 pairs goes from +3..+9 to -2..+1 (Moa +5, Modesto +1.8 stay); box luma 1.18/1.18/1.11 -> 0.95/0.96/1.00. Held on purpose: whole-frame rmse rises 1-3 % because the lift had masked the open bloom deficit (Anulpha mean luma 0.97 -> 0.91), and the `-1.5` bias then reads sharp (fine 1.27) so the crispness call needs a re-check after it lands. The adaptation-law patch does not move it. Size S (15), difficulty low (80).
 
 ## Later, not queued
 
