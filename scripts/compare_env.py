@@ -17,7 +17,9 @@ import datetime
 import hashlib
 import json
 import math
+import os
 import re
+import struct
 import subprocess
 import sys
 import tomllib
@@ -133,11 +135,82 @@ def settings_path(profile_dir):
     return profile_dir / "cfg" / "oag" / "settings.toml"
 
 
-def write_ours_settings(plat, profile_dir):
+SAVE_RECORD_NAME = "Safe Area Setting"
+
+
+def parse_safe_area(data):
+    """The `Safe Area Setting` percent out of an HD save's `DATA.BIN` bytes, or None.
+
+    Every option record is a 0x40-byte name field, then a u32 value length (the string and its NUL), a u32 0x40 (the
+    value field's size), a runtime pointer and the value as a string at name+0x60: `96%` or `96` (docs/formats/hd-hud.md,
+    "The whole HUD is drawn at the Safe Area Setting"). A record that does not have that shape reads as None."""
+    at = data.find(SAVE_RECORD_NAME.encode() + b"\0")
+    if at < 0 or at + 0x60 + 8 > len(data):
+        return None
+    length, field = struct.unpack_from(">II", data, at + 0x44)
+    if field != 0x40 or not 2 <= length <= 8:
+        return None
+    m = re.fullmatch(rb"(\d{1,3})%?\0*", data[at + 0x60:at + 0x60 + length])
+    return int(m.group(1)) if m else None
+
+
+def hd_save_file(config_home=None):
+    """The HD save the running RPCS3 reads: `<config>/rpcs3/dev_hdd0/home/*/savedata/BCES00664-AUTO-/DATA.BIN` under the
+    private `XDG_CONFIG_HOME` the pair script runs in (else `~/.config`)."""
+    home = Path(config_home or os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
+    found = sorted((home / "rpcs3/dev_hdd0/home").glob("*/savedata/BCES00664-AUTO-/DATA.BIN"))
+    return found[0] if found else None
+
+
+def read_hd_safe_area(config_home=None):
+    """`original.safe_area` for a pair taken on HD: `{"percent", "source", "file_sha256_12", "file_mtime"}` read off the
+    save the capture's RPCS3 ran with, or None when there is no save or no readable record. A cold-booted pair (the menus)
+    is exactly the save's value; a pair that restores a save state carries the RAM of the state, which may differ from
+    the file (the option is read at boot), so a caller on that path says so in `source`."""
+    path = hd_save_file(config_home)
+    if path is None:
+        return None
+    data = path.read_bytes()
+    percent = parse_safe_area(data)
+    if percent is None:
+        return None
+    return {"percent": percent, "source": "save file", "file_sha256_12": hashlib.sha256(data).hexdigest()[:12],
+            "file_mtime": datetime.datetime.fromtimestamp(path.stat().st_mtime).astimezone().isoformat(timespec="seconds")}
+
+
+def record_safe_area(pair, recorded=None, restored_state=False):
+    """Record the Safe Area the original ran at into `pair.rec["original"]["safe_area"]` for a platform whose profile
+    pins one (`hud_safe_area`), and check it is there. `recorded` defaults to `read_hd_safe_area()`. Returns the percent
+    ours is drawn at: the recorded value, else the profile's pin (the pair then carries a caveat saying so)."""
+    pin = pair.plat["ours"].get("hud_safe_area")
+    if pin is None:
+        return None
+    recorded = recorded or read_hd_safe_area()
+    if recorded and restored_state:
+        recorded = dict(recorded, source="save file at capture time; the restored save state carries its own RAM, "
+                                         "which the file may not match")
+    if recorded:
+        pair.rec["original"]["safe_area"] = recorded
+    pair.check("original Safe Area Setting recorded", bool(recorded),
+               "%s%%, %s" % (recorded["percent"], recorded["source"]) if recorded else
+               "none read: ours falls back to the profile's %d%%" % pin)
+    return recorded["percent"] if recorded else pin
+
+
+def recorded_safe_area(rec):
+    """The percent a stored pair's original ran at (`original.safe_area.percent`), or None."""
+    return ((rec.get("original") or {}).get("safe_area") or {}).get("percent")
+
+
+def write_ours_settings(plat, profile_dir, safe_area=None):
     """Write the private settings.toml: the keys with no command-line flag (shadows `original`,
     boost fov kick, fov percent, aspect, brightness/gamma), plus the rest, so the file the run
-    rewrites can be read back and compared."""
-    o = plat["ours"]
+    rewrites can be read back and compared. `safe_area` (percent) is the pair's own recorded
+    original value and overrides the profile's `hud_safe_area` pin, which stays the fallback."""
+    o = dict(plat["ours"])
+    if safe_area is not None and "hud_safe_area" in o:
+        o["hud_safe_area"] = int(safe_area)
+    plat = dict(plat, ours=o)
     for sub in ("cfg/oag", "data", "state"):
         (profile_dir / sub).mkdir(parents=True, exist_ok=True)
     text = ("[display]\naspect = \"%s\"\nbrightness = %d\ngamma = %d\n\n"
@@ -156,10 +229,13 @@ def write_ours_settings(plat, profile_dir):
     settings_path(profile_dir).write_text(text)
 
 
-def read_back(plat, profile_dir):
-    """What ours ran with, read out of the settings file the run rewrote, and the mismatches."""
+def read_back(plat, profile_dir, safe_area=None):
+    """What ours ran with, read out of the settings file the run rewrote, and the mismatches. A platform that pins a
+    `hud_safe_area` has it read back too, against the pair's own `safe_area` when given, else the pin."""
     doc = tomllib.loads(settings_path(profile_dir).read_text())
-    o = plat["ours"]
+    o = dict(plat["ours"])
+    if safe_area is not None and "hud_safe_area" in o:
+        o["hud_safe_area"] = int(safe_area)
     rp = doc.get("render_profiles", {}).get(plat["profile_key"], {})
     got = {"aspect": doc["display"]["aspect"], "brightness": doc["display"]["brightness"],
            "gamma": doc["display"]["gamma"], "anisotropy": doc["graphics"]["anisotropy"],
@@ -167,6 +243,8 @@ def read_back(plat, profile_dir):
     for k in ("render_scale", "reconstruction", "msaa", "motion_blur", "shadows", "model_detail",
               "texture_detail", "trail_order", "screen_filter"):
         got[k] = rp.get(k)
+    if "hud_safe_area" in o:
+        got["hud_safe_area"] = doc["graphics"].get("hud_safe_area")
     want = dict(o, aspect=plat["aspect"])
     bad = ["ours setting %s is %r, the profile says %r" % (k, got[k], want[k])
            for k in got if got[k] != want[k]]
@@ -490,6 +568,10 @@ def environment_text(plat, rec):
     if "exposure_hold" in o:
         bits.append("exposure held at %s on ours (Vita3K never reads the original's gate back, so its exposure never "
                     "leaves %s; a Vita and ours in play adapt)" % (o["exposure_hold"], o["exposure_hold"]))
+    if "hud_safe_area" in o:
+        got = recorded_safe_area(rec)
+        bits.append("Safe Area %s%% on both sides (%s)" % ((got, rec["original"]["safe_area"]["source"]) if got is not None
+                    else (o["hud_safe_area"], "the profile's pin: no value recorded for this pair")))
     ov = rec.get("overlap") or {}
     if "edge_ncc" in ov:
         bits.append("overlap: edge correlation %.2f, RMSE %.3f" % (ov["edge_ncc"], ov["rmse"]))
@@ -543,6 +625,9 @@ def environment_fields(rec):
     if "--hold-exposure" in flags[:-1]:
         f["ours_exposure"] = ("exposure held at %s (a comparison switch: the original under its emulator never adapts; "
                               "in play ours does)" % flags[flags.index("--hold-exposure") + 1])
+    sa = rec.get("original", {}).get("safe_area")
+    if sa:
+        f["safe_area"] = "%s%% (%s)" % (sa["percent"], sa["source"])
     ov = rec.get("overlap") or {}
     for key, _, fmt, _ in METRICS:
         if key in ov:
@@ -568,6 +653,19 @@ def refuse_pair(pj, why):
     sys.exit("compare_env: %s: %s" % (pj, why))
 
 
+def missing_safe_area(dirs):
+    """The pairs under `dirs` whose profile pins a `hud_safe_area` and whose `pair.json` records no `original.safe_area`;
+    each is printed. `python3 scripts/compare_env.py missing-safe-area DIR...` exits 1 when there are any."""
+    out = []
+    for d in dirs:
+        for pj in sorted(Path(d).rglob("pair.json")):
+            rec = json.loads(pj.read_text())
+            if "hud_safe_area" in platform(rec["profile"])["ours"] and recorded_safe_area(rec) is None:
+                out.append(pj)
+                print("no original.safe_area: %s" % pj)
+    return out
+
+
 def manifest(out_path, dirs):
     """A page manifest with one entry per non-refused `pair.json` under `dirs`, paths relative to it."""
     out = Path(out_path).resolve()
@@ -579,6 +677,9 @@ def manifest(out_path, dirs):
                 print("skipped (refused): %s" % pj, file=sys.stderr)
                 continue
             plat = platform(rec["profile"])
+            if "hud_safe_area" in plat["ours"] and recorded_safe_area(rec) is None:
+                print("WARNING no original.safe_area on %s: drawn at the profile's %d%%" % (pj, plat["ours"]["hud_safe_area"]),
+                      file=sys.stderr)
             # Resolved like `out`: in a worktree `data/` is a symlink into the main checkout, and
             # relpath from an unresolved pair to a resolved manifest names the worktree, which is
             # reaped after its merge.
@@ -620,6 +721,8 @@ def main():
         print(ppsspp_ini(platform(sys.argv[2])), end="")
     elif cmd == "manifest":
         manifest(sys.argv[2], sys.argv[3:])
+    elif cmd == "missing-safe-area":
+        sys.exit(1 if missing_safe_area(sys.argv[2:]) else 0)
     else:
         sys.exit(__doc__)
 

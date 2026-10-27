@@ -71,7 +71,10 @@ WALK = [
     "cross:6",
     {"id": "ship-select", "title": "Ship Select, Feisar", "screen": "Team Selection", "page": "ship-select",
      "drawn_from": "xml", "xml": "Team_Selection_Definition.xml",
-     "selection": {"original": "Feisar", "ours": "Feisar"}, "race": {"team": "Feisar"}},
+     "selection": {"original": "Feisar", "ours": "Feisar"},
+     # the original shows the classic hull (070/100/080/080): `variant_chosen` stops ours opening on concept1, the
+     # default of a profile that never picked a model
+     "race": {"team": "Feisar", "variant_chosen": True}},
     "circle:5", "circle:5", "circle:5",
     "right", "right",
     "cross:5",
@@ -153,7 +156,8 @@ def main():
         pair.rec["original"]["captured_at"] = shot["at"]
         pair.rec["original"]["capture_path"] = "cold boot, walked (no savestate)"
         profile = pdir / "ours-profile" / "profile"
-        ce.write_ours_settings(plat, profile)
+        safe_area = ce.record_safe_area(pair)
+        ce.write_ours_settings(plat, profile, safe_area)
         cm.extra_settings(profile, args.front_end_style, item.get("race"))
         pair.rec["original"]["selection_basis"] = "read by eye from the frame; the cursor is where the walk's taps left it"
         args.accept_provenance = list(args.accept_provenance)
@@ -164,7 +168,8 @@ def main():
                          drawn_from=item["drawn_from"], xml_file=item["xml"], screen_seen=shot["screen"],
                          screen_wanted=item["screen"], profile_dir=profile, size=ce.size_text(plat),
                          front_end_style=args.front_end_style, language="English", original_language=language.split(" ")[0],
-                         selection=item["selection"], extra_args=item.get("args", []))
+                         selection=item["selection"], extra_args=item.get("args", []),
+                         race=item.get("race"), safe_area=safe_area)
             pair.finish()
         except SystemExit as exc:
             if exc.code == 3:

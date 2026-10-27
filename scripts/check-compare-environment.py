@@ -89,6 +89,45 @@ def check_menu_route(root):
     assert not (root / "gap-x" / "ours.png").exists()
 
 
+def check_safe_area(root):
+    """The Safe Area record: a save's `DATA.BIN` record parses (`96%` and the bare `96` spellings, any other shape is
+    None), an HD pair without a recorded value fails its check, ours' settings take the pair's value over the profile's
+    pin, and `missing-safe-area` names a stored HD pair that records none."""
+    def record(value, length=None):
+        body = value + b"\0"
+        blob = bytearray(b"\0" * 0x20 + b"Safe Area Setting\0" + b"\0" * 0x100)
+        at = 0x20
+        blob[at + 0x44:at + 0x4c] = (length or len(body)).to_bytes(4, "big") + (0x40).to_bytes(4, "big")
+        blob[at + 0x60:at + 0x60 + len(body)] = body
+        return bytes(blob)
+    assert ce.parse_safe_area(record(b"96%")) == 96 and ce.parse_safe_area(record(b"90")) == 90
+    assert ce.parse_safe_area(record(b"ab%")) is None and ce.parse_safe_area(b"no record here") is None
+    plat = ce.platform("hd-fury")
+    pdir = root / "hd-pair"
+    pdir.mkdir()
+    pair = ce.Pair("hd-fury", pdir)
+    assert ce.record_safe_area(pair, {"percent": 84, "source": "save file"}) == 84
+    assert pair.rec["original"]["safe_area"]["percent"] == 84 and not pair.failed()
+    bare = ce.Pair("hd-fury", root / "hd-bare")
+    ce.read_hd_safe_area = lambda config_home=None: None
+    assert ce.record_safe_area(bare) == plat["ours"]["hud_safe_area"] and bare.failed(), "an HD pair with no value must fail"
+    ce.write_ours_settings(plat, root / "prof", 84)
+    assert tomllib_load(ce.settings_path(root / "prof"))["graphics"]["hud_safe_area"] == 84
+    ce.write_ours_settings(plat, root / "prof2")
+    assert tomllib_load(ce.settings_path(root / "prof2"))["graphics"]["hud_safe_area"] == plat["ours"]["hud_safe_area"]
+    assert "Safe Area 84% on both sides (save file)" in ce.environment_text(plat, pair.rec)
+    stored = root / "stored" / "p"
+    stored.mkdir(parents=True)
+    (stored / "pair.json").write_text(json.dumps({"profile": "hd-fury", "original": {}, "ours": {}}))
+    assert ce.missing_safe_area([root / "stored"]) == [stored / "pair.json"]
+    assert not ce.missing_safe_area([root / "stored" / "nothing"])
+
+
+def tomllib_load(path):
+    import tomllib
+    return tomllib.loads(Path(path).read_text())
+
+
 def main():
     import tomllib
     with tempfile.TemporaryDirectory() as t:
@@ -125,6 +164,8 @@ def main():
             raise AssertionError("a pair without meta was not refused")
     with tempfile.TemporaryDirectory() as t:
         check_menu_route(Path(t))
+    with tempfile.TemporaryDirectory() as t:
+        check_safe_area(Path(t))
     print("compare environment: round trip ok")
 
 
