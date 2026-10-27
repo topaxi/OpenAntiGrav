@@ -321,6 +321,12 @@ pub(super) fn text_for(
         // the player is not in yet.
         "Zone" => (readout.zone > 0).then(|| readout.zone.to_string()),
         "Score" => (readout.zone > 0).then(|| readout.score.to_string()),
+        // 2048's pickup grant announcement: the weapon's name over the icon while it is up.
+        super::dialect_2048::PICKUP_TEXT_2048 => readout
+            .pickup
+            .filter(|_| readout.pickup_announcing)
+            .and_then(super::dialect_2048::pickup_caption_id)
+            .map(|id| strings.get_or_id(id).to_string()),
 
         // HD/Fury's zone ladder: the name of the rung the race is on, beside the
         // current row of [`zone_plus`]'s list.
@@ -941,7 +947,7 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
     // rather than allow-listed, because *which* icon is live changes with what
     // the craft is holding - see `pickup_sprites`.
     if let Some(weapon) = readout.pickup {
-        for sprite in pickup_sprites(cx.layout, weapon, cx.art) {
+        for sprite in pickup_sprites(cx.layout, weapon, cx.art, readout.pickup_announcing) {
             frame.sprites.extend(sprite_draw(&sprite, cx.sheet));
         }
         frame.sprites.extend(pickup_model_draws(cx, weapon));

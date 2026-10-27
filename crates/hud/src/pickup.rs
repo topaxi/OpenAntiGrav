@@ -43,9 +43,12 @@ pub(super) fn pickup_sprites(
     layout: &Layout,
     weapon: oag_tables::weapons::Weapon,
     art: &oag_title::HudArt,
+    announcing: bool,
 ) -> Vec<Sprite> {
     if let Some(uv_table) = art.pickup_icon_uv {
-        return super::dialect_2048::pickup_sprites_uv_rewrite(layout, weapon, uv_table);
+        return super::dialect_2048::pickup_sprites_uv_rewrite(
+            layout, weapon, uv_table, announcing,
+        );
     }
     let icon = pickup_icon_name(weapon);
     let backdrop = (!art.always_on.contains(&PICKUP_BACKGROUND)).then_some(PICKUP_BACKGROUND);

@@ -77,3 +77,33 @@ fn with_one_view_no_other_slots_bars_move() {
     race.tick(&PlayerInputs::none());
     assert!(!race.readout_for(1).shield_flashing);
 }
+
+/// 2048's pickup grant announcement ([`oag_hud::Readout::pickup_announcing`]) is up for one
+/// second after the held weapon changes (`Hud_UpdatePickupIcon`'s `1.0` at `hud+0x228`), not
+/// before a grant, and re-arms on a new grant of the same weapon after the slot was empty.
+#[test]
+fn a_grant_announces_for_one_second_and_a_regrant_announces_again() {
+    use oag_tables::weapons::Weapon;
+    let mut race = race_with_a_grid();
+    let ticks_up = |race: &mut Race| {
+        let mut up = 0;
+        for _ in 0..90 {
+            race.tick(&PlayerInputs::none());
+            up += u32::from(race.readout().pickup_announcing);
+        }
+        up
+    };
+    assert_eq!(ticks_up(&mut race), 0, "nothing held, nothing announced");
+
+    let slot = race.player_slot();
+    race.sim.world.ships[slot].pickup.weapon = Some(Weapon::Missile);
+    let up = ticks_up(&mut race);
+    assert!((59..=60).contains(&up), "a second at 60 Hz, got {up} ticks");
+    assert!(!race.readout().pickup_announcing);
+
+    race.sim.world.ships[slot].pickup.weapon = None;
+    race.tick(&PlayerInputs::none());
+    race.sim.world.ships[slot].pickup.weapon = Some(Weapon::Missile);
+    race.tick(&PlayerInputs::none());
+    assert!(race.readout().pickup_announcing);
+}

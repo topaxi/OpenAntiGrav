@@ -116,12 +116,11 @@ pub(super) const PICKUP_BG_FRAME_2048: &str = "PickupBgFrame";
 /// `PickupIcon` widget, UV rewritten per weapon from `art.pickup_icon_uv`,
 /// drawn centred inside [`PICKUP_BG_FRAME_2048`]'s own authored rect.
 ///
-/// **The held state only.** The frames show the icon at a *second*,
-/// top-centre position once, with a caption, the instant a pickup is
-/// granted (`docs/formats/2048-hud.md`'s "The pickup slot") - that
-/// announcement has no state to key off yet (`Readout` carries no
-/// time-since-grant), so this draws only the steady held state, which is
-/// what a race shows the rest of the time a pickup is carried.
+/// **While [`Readout::pickup_announcing`] the icon is the grant announcement**: `PickupIcon` at
+/// its own authored top-centre rect with no frame (`Hud_UpdatePickupIcon` keeps `PickupBgFrame`
+/// at zero size until the announcement ends), the caption being [`pickup_caption_id`]. The
+/// original then flies the icon to the slot over a few frames and scales it; this build snaps
+/// it there, so those frames are unmatched.
 ///
 /// **The destination rect is measured, not decompiled.** `Hud_UpdatePickupIcon`
 /// (`docs/ghidra/functions/vita-2048-eu-v104/pickup-icon-uv-table.md`) never
@@ -134,7 +133,18 @@ pub(super) fn pickup_sprites_uv_rewrite(
     layout: &Layout,
     weapon: oag_tables::weapons::Weapon,
     uv_table: [Option<[u16; 4]>; 14],
+    announcing: bool,
 ) -> Vec<Sprite> {
+    if announcing {
+        return match (uv_table[weapon as usize], layout.sprite(PICKUP_ICON_2048)) {
+            (Some(uv), Some(icon)) => {
+                let mut icon = icon.clone();
+                icon.uv = uv.map(f32::from);
+                vec![icon]
+            }
+            _ => Vec::new(),
+        };
+    }
     let frame = layout.sprite(PICKUP_BG_FRAME_2048);
 
     let mut sprites = Vec::new();
@@ -156,6 +166,30 @@ pub(super) fn pickup_sprites_uv_rewrite(
         sprites.push(icon);
     }
     sprites
+}
+
+/// The widget that names the weapon during the grant announcement.
+pub(super) const PICKUP_TEXT_2048: &str = "PickupText";
+
+/// The string id `Hud_UpdatePickupIcon` (`0x81194f9c`, its `switch` on the held id) writes into
+/// `PickupText`, for the weapons it has a case for. Cannon, Turbo and Bomb and Mine are in this
+/// title's own id order there, not [`oag_tables::weapons::Weapon::ALL`]'s.
+pub(super) const fn pickup_caption_id(weapon: oag_tables::weapons::Weapon) -> Option<&'static str> {
+    use oag_tables::weapons::Weapon;
+    Some(match weapon {
+        Weapon::Rocket => "FE_ROCKETS",
+        Weapon::Missile => "FE_MISSILE",
+        Weapon::Quake => "FE_QUAKE",
+        Weapon::Turbo => "FE_TURBO",
+        Weapon::Shield => "FE_SHIELD",
+        Weapon::Autopilot => "FE_AUTOPILOT",
+        Weapon::Plasma => "FE_PLASMA",
+        Weapon::Mine => "FE_MINES",
+        Weapon::Bomb => "FE_BOMB",
+        Weapon::Cannon => "FE_CANNON",
+        Weapon::LeachBeam => "FE_LEECHBEAM",
+        Weapon::Repulser | Weapon::Shuriken | Weapon::Disruptor => return None,
+    })
 }
 
 /// What one `SpeedBarN` segment is worth: the `0x430c0000` (140.0) that

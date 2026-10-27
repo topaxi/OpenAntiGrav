@@ -183,8 +183,12 @@ The base `Zone_HUD.xml` authors `ZoneNumber` top left, which no frame shows. A n
 (`43-tt-start-14.png`) matches `SpeedLap_TimeTrial_HUD.xml` (`TARGET`, `XP`, no shield) rather than
 `TimeTrial_HUD_HD.xml` (which loads `HUD_damage_indicator.xml`, `HUD_pickups.xml` and no `XP`), so the native
 events keep the base `2048_hud\` files and the HD Campaign's TT, Speed Lap, Zone and Elimination events read the
-`_HD` ones. **Checked, applies, not wired** - ours has no HD-campaign launch yet (`--track` on a DLC circuit is the
-only way in), so nothing selects them.
+`_HD` ones. **Wired 2026-10-27**: the HD and Fury cells launched from the campaign map read
+`oag_2048::hud::HD_CAMPAIGN` (`AddOn::hud`). `SPTimeTrialRaceManager_Construct` (`0x81183e50`, decompiled again) has one
+literal, `TimeTrial_HUD_HD.xml`, and no branch between modes 5 and 10, so Speed Lap reads it too (80); no code names
+`SpeedLap_HUD_HD.xml`. A campaign Race stays on `2048_hud\Arcade_HUD.xml`, and Tournament (mode 4, `Arcade_HUD_HD.xml`)
+draws the Race file because `HudLayouts` has one `arcade` row. Zone Battle has no `oag_race::Mode`. **Omega: checked,
+differs**: `SPZoneRaceManager_Construct` (`0x012b4d3f`) loads the bare `Zone_HUD.xml`.
 
 ### Names
 

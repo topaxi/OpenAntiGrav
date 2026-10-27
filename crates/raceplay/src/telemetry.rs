@@ -132,6 +132,7 @@ impl Race {
         // lap counter holds at the target, the clocks at the moment they finished,
         // and a standing line says so. See `Self::finished_view`.
         let finished = self.finished_view(slot);
+        let held = self.held_for_hud(slot);
         let mut readout = oag_hud::Readout {
             speed_kmh: ship.physics.body.linear_velocity.length() * oag_fx::exhaust::SPEED_TO_KMH,
             // The ship's own pool, which wall contact spends and absorbing a
@@ -204,9 +205,7 @@ impl Race {
             // `PlayerStatus_Update` forces the icon id to the Autopilot's while the
             // running bit is set and the held id maps to none. The timer under it is
             // `Self::sub_weapon`.
-            pickup: ship.pickup.weapon.or_else(|| {
-                (ship.autopilot_timer > 0.0).then_some(oag_tables::weapons::Weapon::Autopilot)
-            }),
+            pickup: held,
             sub_weapon: self.sub_weapon(slot),
             campaign_event: self.view.campaign_event,
             // The reticle, whatever it is doing. `Sight::visible` is what
@@ -221,6 +220,7 @@ impl Race {
             shield_flashing_whole: hud.shield_flash_timer_whole > 0.0,
             shield_blink_phase_whole: hud.shield_blink_timer_whole,
             energy_bar_delay_fraction: hud.energy_bar_delay_fraction,
+            pickup_announcing: hud.pickup_announce_left > 0.0,
             thrust_chase_percent: hud.thrust_chase_percent,
             thrust_percent: ship.physics.thrust.max(0.0),
             pilot_assist: self.pilot_assist_shown(slot),

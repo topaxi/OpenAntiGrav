@@ -39,6 +39,11 @@ pub(super) struct SlotHud {
     /// 2048's `ThrustBar` chase in percent
     /// ([`oag_hud::Readout::thrust_chase_percent`]).
     pub(super) thrust_chase_percent: f32,
+    /// 2048's `hud+0x230`: the held weapon the pickup icon last showed, `None` for nothing.
+    pub(super) pickup_held_prev: Option<oag_tables::weapons::Weapon>,
+    /// 2048's `hud+0x228`: seconds of the grant announcement left
+    /// ([`oag_hud::Readout::pickup_announcing`]).
+    pub(super) pickup_announce_left: f32,
     /// Pilot Assist's HUD indicator timers, off this slot's own assist state.
     pub(super) assist_indicator: oag_hud::assist::Indicator,
     /// The reticle of a split-screen view on a slot that is not the primary.
@@ -69,6 +74,10 @@ const THRUST_CHASE_RISE_PER_SECOND: f32 = 140.0;
 /// 2048's `ThrustBar` fall rate, percent per second: the bare `dt * 100`.
 const THRUST_CHASE_FALL_PER_SECOND: f32 = 100.0;
 
+/// How long the pickup grant announcement stays up: `Hud_UpdatePickupIcon`'s `1.0` stored at
+/// `hud+0x228` when the held weapon changes (`0x3f800000`).
+pub(super) const PICKUP_ANNOUNCE_SECONDS: f32 = 1.0;
+
 impl SlotHud {
     /// One tick of every bar, in the order the original's update runs them:
     /// the flash, then the blink that reads it, HD's twin of the pair, 2048's
@@ -88,6 +97,7 @@ impl SlotHud {
         fraction: f32,
         thrust: f32,
         absorbing: bool,
+        held: Option<oag_tables::weapons::Weapon>,
         dt: f32,
     ) {
         let (timer, prev) =
@@ -113,6 +123,8 @@ impl SlotHud {
         self.energy_bar_delay_fraction +=
             (fraction - self.energy_bar_delay_fraction) * ENERGY_BAR_DELAY_RATE;
 
+        self.advance_pickup_announcement(held, dt);
+
         let tick = 1.0 / 60.0;
         let value = self.thrust_chase_percent;
         self.thrust_chase_percent = if value < thrust {
@@ -123,7 +135,36 @@ impl SlotHud {
     }
 }
 
+impl SlotHud {
+    /// One frame of `Hud_UpdatePickupIcon`'s announcement timer: a change of the held weapon to
+    /// a new one arms it, the same frame takes `dt` off, and nothing held clears the memory so
+    /// the next grant announces even if it is the same weapon again.
+    fn advance_pickup_announcement(&mut self, held: Option<oag_tables::weapons::Weapon>, dt: f32) {
+        if held != self.pickup_held_prev {
+            self.pickup_held_prev = held;
+            if held.is_some() {
+                self.pickup_announce_left = PICKUP_ANNOUNCE_SECONDS;
+            }
+        }
+        self.pickup_announce_left = if held.is_some() {
+            (self.pickup_announce_left - dt).max(0.0)
+        } else {
+            0.0
+        };
+    }
+}
+
 impl Race {
+    /// The weapon `slot`'s pickup icon shows: the one held, or a running Autopilot's when
+    /// nothing is held (`PlayerStatus_Update` forces the icon id to the Autopilot's while its
+    /// running bit is set and the held id maps to none).
+    pub(super) fn held_for_hud(&self, slot: usize) -> Option<oag_tables::weapons::Weapon> {
+        let ship = &self.sim.world.ships[slot];
+        ship.pickup.weapon.or_else(|| {
+            (ship.autopilot_timer > 0.0).then_some(oag_tables::weapons::Weapon::Autopilot)
+        })
+    }
+
     /// One tick of the HUD bars of every slot a view is drawn for: the primary
     /// always, and with a split the other viewed slots too.
     ///
@@ -144,10 +185,11 @@ impl Race {
             let fraction = oag_hud::shield_fraction(pool, max);
             let thrust = ship.physics.thrust.clamp(0.0, 100.0);
             let absorbing = self.absorb_window_active(slot);
+            let held = self.held_for_hud(slot);
             let acting = ship.physics.pilot_assist.acting;
             let (shown, dt) = (self.pilot_assist_shown(slot), self.sim.dt);
             let hud = &mut self.view.huds[slot];
-            hud.advance(percent, fraction, thrust, absorbing, dt);
+            hud.advance(percent, fraction, thrust, absorbing, held, dt);
             hud.assist_indicator.advance(shown, acting, dt);
         }
     }

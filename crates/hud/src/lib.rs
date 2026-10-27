@@ -707,6 +707,14 @@ pub struct Readout {
     /// this at the shield's own pre-load value avoids a false catch-up
     /// animation from an assumed "full" start that never happened.
     pub energy_bar_delay_fraction: f32,
+    /// 2048's pickup grant announcement is up: for the first second after the held weapon
+    /// changes, `PickupIcon` sits at its authored top-centre rect with `PickupText` naming the
+    /// weapon, and `PickupBgFrame` is not drawn yet. `Hud_UpdatePickupIcon` (`0x81194f9c`) sets
+    /// the `1.0` timer at `hud+0x228` on a change of the held id, takes `dt` off it each frame
+    /// and shows the caption while it is above zero. Ported by `SlotHud::advance`; `false` on
+    /// [`Self::blank`], and drawn only by a title whose art carries
+    /// [`oag_title::HudArt::pickup_icon_uv`].
+    pub pickup_announcing: bool,
     /// 2048's `ThrustBar` fill, in percent: the HUD's own chase toward the
     /// ship's thrust level, `Hud_Update` (`0x81195cdc`, dirty bit `0x80`).
     ///
