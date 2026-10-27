@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd]
 updated: 2026-10-27
-summary: "HD fidelity queue: original Bomb picture (no look-back), unlit taps of Missile/Leach/Plasma, scenery items, Moa pair, exposure, LOD"
+summary: "HD fidelity queue: Bomb picture, unlit weapon taps, scenery items (booth glass wired), the scenery clock offset, Tech de Ra slot 384, exposure, LOD"
 ---
 
 # HD fidelity lanes queued behind the cold originals
@@ -154,7 +154,9 @@ section above or the doc page it names). At most one lane in `crates/mesh` at a 
    original: the scenery clock below), and the left-hand steps behind the crowd are slot 349 (`diffuse`, `steps1.gtf`, no lightmap)
    at +18 luma over 9,812 px (0.17 M). Also found on Tech de Ra: warm highlights along the pit box's top edge (slot 408,
    `track_surface` with `ds_pit_box_cs.gtf`, exponent 50.5) that the original does not show, box `1050,735 400x40` 12.9 grey,
-   gone with `OAG_ALBEDO_ONLY=1`, so a light term (about 0.2 M). Slots are `hd_material_probe_dump` ordinals; the bisection is
+   gone with `OAG_ALBEDO_ONLY=1`, so a light term (about 0.2 M); and **the near-left wall below the left pylon, slot 384**
+   (`diffuse_normal_specular_emmissive`, `ds_sf_cs.gtf`), a yellow wash over the original's: box `480,600 240x120` 13.1 grey,
+   luma +10.3, the slot's mask 131,478 px at 6.8 (0.90 M, as large as the glass road; its program is unread). Slots are `hd_material_probe_dump` ordinals; the bisection is
    `OAG_SKIP_SLOT` halving on one pixel.
 3. **Additive source strength** (mesh): Talon's grill source about 1.5x the original's, and Amphiseum's hologram
    stand-in about 70 grey over; then Chenghou's `glass_2nduv_reflect_glow` (reflection plus glow 4 grey over) and

@@ -339,6 +339,18 @@ fn draw(
     scene: Scene,
     coverage: Option<u8>,
 ) -> [u8; 4] {
+    draw_with_sky(device, queue, model, scene, coverage, None)
+}
+
+/// [`draw`], with the circuit's sky reflection map bound.
+fn draw_with_sky(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    model: &Model,
+    scene: Scene,
+    coverage: Option<u8>,
+    sky_probe: Option<&wgpu::TextureView>,
+) -> [u8; 4] {
     let coverage_view = coverage.map(|value| {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("coverage"),
@@ -384,6 +396,7 @@ fn draw(
         &mesh_render::zone::StageArt::NONE,
         ShadowMaps {
             coverage: coverage_view.as_ref(),
+            sky_probe,
             ..ShadowMaps::NONE
         },
         ShadowReceiver::Both,
@@ -397,7 +410,12 @@ fn draw(
         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
-    queue.write_buffer(&uniform_buffer, 0, &uniforms());
+    let mut bytes = uniforms();
+    if sky_probe.is_some() {
+        // `env_gain`, the sixth float after the two matrices: what `probe_tint` scales the sky by.
+        bytes[148..152].copy_from_slice(&1.0f32.to_le_bytes());
+    }
+    queue.write_buffer(&uniform_buffer, 0, &bytes);
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("glow uniforms"),
         layout: &built.pipeline.get_bind_group_layout(0),
@@ -576,4 +594,48 @@ fn the_glass_sheen_carries_the_programs_output_scale() {
         checked += 1;
     }
     assert!(checked > 0, "every channel saturated: {full:?}");
+}
+
+/// `ds_booth_glass` (`docs/rendering/hd-track-tone.md`, "`ds_booth_glass` reflects the sky through its
+/// normal map's alpha"): its window-glass entry carries `tint.z` 2, and the shader weights the sky
+/// reflection by the picture's alpha `a`, where `tint.z` 1 (the pane, `glass_2nduv_reflect_glow`)
+/// weights it by `1 - a`. On a black picture with `a` a quarter, the gated glass must read the
+/// sky a third as bright as the `1 - a` one, and not black. Dropping the `tint.z` 2 branch in
+/// `shade.wesl` reads it as `1 - a` and fails this.
+#[test]
+fn the_booth_glass_reflects_the_sky_by_its_alpha_not_its_complement() {
+    let instance = wgpu::Instance::default();
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device");
+    let (width, height) = oag_mesh::mesh::sky_paraboloid::SIZE;
+    let grey = vec![160u8; (width * height * 4) as usize];
+    let sky = mesh_render::upload_sky_probe(&device, &queue, &grey);
+    let glass = |gate: f32| {
+        let mut model = model(slots::DEFAULT | (1 << slots::MATERIAL_SHIFT));
+        model.textures = vec![Some(texture("black, a quarter alpha", [0, 0, 0, 64]))];
+        model.emissive = vec![oag_mesh::mesh::Emissive {
+            tint: [1.0, 0.0, gate],
+            offset: 0.0,
+            scale: 1.0,
+            rate: oag_mesh::mesh::WINDOW_REFLECTION_RATE,
+            program: [0.0; 2],
+        }];
+        model
+    };
+    let by_alpha = draw_with_sky(&device, &queue, &glass(2.0), rig(SUN), None, Some(&sky));
+    let by_clear = draw_with_sky(&device, &queue, &glass(1.0), rig(SUN), None, Some(&sky));
+    let decode = |v: u8| (f32::from(v) / 255.0).powf(2.2);
+    let (a, c) = (decode(by_alpha[1]), decode(by_clear[1]));
+    assert!(a > 0.0, "the gated glass reads black: {by_alpha:?}");
+    assert!(
+        c < 0.99 && (a / c - 64.0 / 191.0).abs() < 0.08,
+        "gated {by_alpha:?} against 1 - a {by_clear:?}: ratio {} where {} is the law",
+        a / c,
+        64.0 / 191.0
+    );
 }
