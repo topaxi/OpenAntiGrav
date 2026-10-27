@@ -564,6 +564,63 @@ profile already draws ours with `--anisotropy off`, which is the same. The shipp
 the original. Reported, not wired.
 
 
+## Texture crispness: ours is 10-20 % soft in the near fine band, and the original's `-1.5` bias is the cause (2026-10-27, `texture-crispness`)
+
+**Claim (maintainer: "ours look washed out in all HD shots"): ours is blurrier than the original on the cold HD pairs. Result: true, a modest
+gap, concentrated in near surfaces; the named cause is the held-off `material_lod_bias`. Confidence 75** (5 pairs ablated, 2 metrics, one
+RPCS3 capture per pair, no second boot of the original).
+
+**The metric matters, and the first two were wrong.** On the 13 cold pairs (`data/reference/compare-page/hd/*`, 1920x1080, Resolution Scale
+100), per-tile Laplacian variance says ours is 2.1-3.7x *sharper* than the original: it counts polygon silhouettes, which ours draws harder
+(why the original's edges are softer was not investigated). Median |Laplacian| (edge-robust) says 0.78-1.00x. The metric used for every number
+below is `scripts/texture-sharpness.py`: boxes 120x72 with the 99.5th-percentile Sobel under 160 in both images (no hull, HUD or silhouette),
+band energy = std of a difference-of-Gaussian band (fine 0.7-1.4 px, mid 1.4-2.8 px), median ratio ours/original, split at mid-frame into near
+(lower) and far (upper). Written down before the captures: false if the median fine and mid ratios were at least 0.95 near and far.
+
+| ablation (ours, 5 pairs, 90 boxes pooled) | fine near | fine far | mid near | mid far |
+| --- | --- | --- | --- | --- |
+| baseline (bias 0, `--anisotropy off`, shipped pair profile) | 0.81 | 0.98 | 0.88 | 0.94 |
+| `material_lod_bias` -0.75 | 1.00 | 1.10 | 0.95 | 0.99 |
+| `material_lod_bias` -1.0 | 1.06 | 1.14 | 0.96 | 1.00 |
+| `material_lod_bias` -1.5 (the filter word's value) | 1.11 | 1.19 | 0.98 | 1.00 |
+| `--anisotropy 16x`, bias 0 | 1.05 | 1.19 | 0.96 | 1.03 |
+| `--render-scale 200` | 0.81 | 0.98 | 0.88 | 0.94 |
+
+Pairs: Tech de Ra, Vineta K, the Amphiseum, Sebenco Climb, Talon's. Per pair the baseline near fine ratio is 0.73 (Amphiseum), 0.81 (Vineta K), 0.84
+(Sebenco), 0.86 (Tech de Ra, 2 boxes), 1.10 (Talon's); only Tech de Ra does not move with any ablation (its edge-free boxes are glass and
+unlit wall). Ours re-rendered with the current build reproduces the stored `ours.png` (same mean grey and RMSE) before each variant.
+
+- **(a) mip selection: the cause.** The near/far pattern (near soft, far fine) is what a missing negative bias predicts, and the bias lifts the
+  near fine band from 0.81 to 1.0-1.1. A crop (Vineta K, the grass-textured kerb) shows the original's grass blades and ours softened at bias 0, then
+  matched at -0.75; at -1.5 ours is crisper than the original in the fine band. The filter word's `-1.5` therefore over-corrects slightly in
+  our sampler: best fit is between -0.75 and -1.0 (mid band reaches 0.96 only near -1.0). Not understood: whether RPCS3's own LOD computation or
+  our `textureSampleBias` with derivative scaling accounts for the 0.5 level; **one capture each, not a measured law**.
+- **(b) our mip chain:** unchanged from the section above (authored GTF chain, read from code); not re-measured.
+- **(c) anisotropy:** `16x` reaches the same sharpness without the bias and goes beyond the original on grazing floors; the original asks for none
+  (control word anisotropy 0, RPCS3 override 0). The shipped default is `16x`, so the player build already gets most of this; the **pair profile**
+  (`off`) is what looks soft. A player-facing fix is the bias; the pair profile is a measurement setting.
+- **(d) decode/premultiply:** no evidence of one: broadband contrast ratio is 0.90-1.00 and far fine ratio about 1.0 at bias 0, so the decode
+  keeps the amplitude the far boxes show.
+- **(e) render scale:** `--render-scale 200` gives a byte-identical frame to the baseline in the pair path (the flag is overridden or
+  pinned there; not investigated), so supersampling is unmeasured. Post is off in the profile (`--screen-filter off`, `--msaa off`).
+- **(f) the original is not upscaled:** horizontal against vertical median gradient is the same in both (0.48-0.68 original, 0.51-0.68 ours on
+  five pairs), so RPCS3's frame is not a narrower render stretched wide.
+- **(g) the compare page:** the metric reads the raw PNGs, not `side.png`.
+
+**Not blur, but part of "washed out".** On the Vineta K crop the original has a warm light pool on the kerb top that ours lacks, and on Tech de
+Ra the glass road grid is absent (the section above): missing content, not sharpness, and the bias does not bring either back.
+
+**Whole-frame cost:** the pair script's mean-grey difference rises with bias -1.5 on every ablated pair (Tech de Ra 7.15 to 7.43, Sebenco 7.21 to
+7.42, Talon's 5.72 to 5.77), at -0.75 by 0.05 or less on four of five; that is what held the rule off in the section above.
+
+**Pulse and Pure** (same band metric rescaled for 480x272, PPSSPP software renderer): Pulse's two race pairs read fine 1.04 and 0.99, mid 1.01
+and 1.00; Pure's Modesto 0.99 and 0.94 (Blue Ridge, Chenghou, Vineta have 1-4 boxes, 0.98-1.39, too few to read). No gap, so the cause does not
+apply; the maintainer's impression there is the simpler textures.
+
+**Left.** Wire a bias of -0.75 to -1.0 through `Looks::material_lod_bias` (`crates/title/src/effects.rs`; `MATERIAL_LOD_BIAS` is one value
+from the filter word, -1.5) for HD, gated by a rescore of the 13 pairs; `crates/mesh` is where the shader reads it.
+
+
 ## The reflection map is the sky, and Moa Therma's glass reads it (2026-10-21, `hd-one-pair-moa`)
 
 **Target**: the HD pair with the largest difference, `hd/moa-therma` (cold original, 1920x1080, Resolution Scale 100; mean grey 15.05
