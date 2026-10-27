@@ -59,9 +59,9 @@ renderer or UI code changed. The campaign pair (map plus event card pages 0 and 
 2048's map and card show no difficulty control, so there was none to match. Ranked by the share of pixels that differ by more than
 40 grey:
 
-1. **Select Team** (56.7 %): ours is two rows of labelled buttons and a `FE_SKIN_*` list (chosen stand-ins); the original is a 5x4 grid
-   of locked hexagons under five team badges, a hull turntable and the statistics table. Needs the grid, hull and table drawn from
-   `Team_Definition.xml` and the ship models (the screen's `<Model>` preview is not drawn, see `2048-frontend.md`).
+1. **Select Team** (was 56.7 %, mean grey 94.9; 2026-10-27 `2048-team-grid`: 38.3): the grid, badges, cursor cell, header square and
+   confirm tick now draw from the disc (`TouchTeamGrid` read in Ghidra). Still differs: the 19 locked cells (rule needs the save and the
+   ship record's rank, `FUN_812d16f6`), the statistics table, the `FE_SHIP_STATS_TUT` bubble and the hull `<Model>` preview.
 2. **Game Mode** (19.3 %): the RACEBOX / REMIX / MULTIPLAYER column (`oag-extras` rows) and the check mark are ours alone; the
    original's header icon and underline are missing, Single Player is ringed on entry in ours, the rows sit about 14 px lower.
 3. **Campaign map** (12.6 %): the `A.G.R.C 2048` banner, `TOUCH TO START` tag, home button, three badges, corner buttons, scroll

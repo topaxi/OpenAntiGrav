@@ -233,6 +233,76 @@ fn the_pad_walks_right_to_the_tick_and_a_network_mode_is_refused_by_note() {
 }
 
 #[test]
+fn the_team_grid_is_five_columns_by_four_rows_with_the_cursor_on_feisar_speed() {
+    let mut frontend = boot(0);
+    let mut input = Input::new();
+    reach_the_grid(&mut frontend, &mut input);
+    press(&mut frontend, &mut input, Button::Cross);
+    press(&mut frontend, &mut input, Button::Cross);
+    press(&mut frontend, &mut input, Button::Triangle);
+    press(&mut frontend, &mut input, Button::Cross);
+    assert!(frontend.machine().is(w2048::TEAM));
+    let cells = |frontend: &Frontend| -> Vec<[f32; 4]> {
+        frontend
+            .draw_list()
+            .iter()
+            .filter_map(|draw| match draw {
+                Draw::Fill { rect, color } if rect[2] == 80.0 && rect[3] == 65.0 => {
+                    Some([rect[0], rect[1], color[0], color[1]])
+                }
+                _ => None,
+            })
+            .collect()
+    };
+    let drawn = cells(&frontend);
+    assert_eq!(drawn.len(), 20, "5 x 4 cells: {drawn:?}");
+    let first = drawn
+        .iter()
+        .find(|cell| cell[0] == 16.0 && cell[1] == 158.0);
+    let second = drawn
+        .iter()
+        .find(|cell| cell[0] == 98.0 && cell[1] == 158.0);
+    assert_ne!(first.map(|c| (c[2], c[3])), second.map(|c| (c[2], c[3])));
+    // Right moves the ring one column: the cell at (98, 158) takes the
+    // colour the first cell had.
+    let ring = first.map(|c| (c[2], c[3]));
+    press(&mut frontend, &mut input, Button::Right);
+    let moved = cells(&frontend);
+    let now = moved
+        .iter()
+        .find(|cell| cell[0] == 98.0 && cell[1] == 158.0)
+        .map(|c| (c[2], c[3]));
+    assert_eq!(now, ring);
+}
+
+#[test]
+fn a_tap_on_a_team_cell_selects_its_team_and_craft() {
+    let mut frontend = boot(0);
+    let mut input = Input::new();
+    reach_the_grid(&mut frontend, &mut input);
+    press(&mut frontend, &mut input, Button::Cross);
+    press(&mut frontend, &mut input, Button::Cross);
+    press(&mut frontend, &mut input, Button::Triangle);
+    press(&mut frontend, &mut input, Button::Cross);
+    assert!(frontend.machine().is(w2048::TEAM));
+    let click = |at| Pointer {
+        at: Some(at),
+        moved: true,
+        clicked: true,
+        ..Pointer::default()
+    };
+    // Column 2 (Qirex), row 3 (prototype): x 16 + 2 * 82, y 158 + 3 * 67.
+    assert!(frontend.pointer(&click((190.0, 370.0))));
+    assert_eq!(frontend.team_choice(), Some(("Qirex2048", "4")));
+    // The badge strip is not a button in the original's update.
+    assert!(frontend.pointer(&click((50.0, 120.0))));
+    assert_eq!(frontend.team_choice(), Some(("Qirex2048", "4")));
+    // The seam between two cells: the later cell wins the overlap.
+    assert!(frontend.pointer(&click((98.5, 160.0))));
+    assert_eq!(frontend.team_choice(), Some(("AG_Systems2048", "3")));
+}
+
+#[test]
 fn the_shell_reaches_home_and_home_leads_to_team_and_back() {
     let mut frontend = boot(0);
     let mut input = Input::new();

@@ -633,11 +633,9 @@ pub fn load_shell(
             ]
         })
         .unwrap_or_default();
-    // The campaign map's own hex tile art and its four mode icons - named
-    // by no screen either, the same "executable draws it, not a widget"
-    // shape the menu blocks are already in. See
-    // `oag_ui::frontend::campaign_map::HEX_FILLED`'s own doc comment for why
-    // these decode but are not authored anywhere in `NEWGUI/*.xml`.
+    // The campaign map's hex art, its four mode icons and the team grid's
+    // `teamgrid/` art: named by no screen, drawn by the executable (see
+    // `oag_ui::frontend::campaign_map::HEX_FILLED`).
     if front_end.touch.is_some() {
         block_textures.extend([
             oag_ui::frontend::HEX_FILLED,
@@ -648,6 +646,7 @@ pub fn load_shell(
             oag_ui::frontend::EventIcon::Zone.texture_name(),
             oag_ui::frontend::EventIcon::Elimination.texture_name(),
         ]);
+        block_textures.extend(oag_ui::frontend::team_grid_textures());
         block_textures.extend(campaign2048::card_textures(&campaign_events));
         block_textures.extend(tiers2048::card_textures(&tiers));
     }
