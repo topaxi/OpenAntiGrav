@@ -27,10 +27,10 @@ Captures at alpha 1 hash identically before and after (seven fixed races,
 Pulse PSP and HD Anulpha Pass, rockets and cannon included).
 
 1. **The Deck re-measure is owed (maintainer).** This host measured no rise:
-   `frame-phases` on HD Anulpha Pass, moving race, seven interleaved 14 s
-   pairs at load 6.8 to 12, median `scene` 0.632 -> 0.596 ms and `total`
-   1.781 -> 1.767 ms (the HD tube now builds each ring once, which paid for
-   the rest). The Deck is CPU bound and was not available to the lane: run
+   `frame-phases` on HD Anulpha Pass, moving race, eight interleaved 14 s
+   pairs at load 6.8 to 12, median `scene` 0.633 -> 0.611 ms and `total`
+   1.791 -> 1.771 ms (the HD tube now builds each ring once, which paid for
+   the rest; one pair's after run caught a load spike, the medians absorb it). The Deck is CPU bound and was not available to the lane: run
    the recipe in `the-decks-60-fps-is-anulpha-pass-submit-cost.md` in this
    directory, main against this merge, and record both totals here.
 2. **Seen only headlessly.** The proof is unit tests and `--draw-alpha`
