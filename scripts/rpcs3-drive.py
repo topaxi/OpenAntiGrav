@@ -1763,6 +1763,11 @@ def cmd_capture(args):
                             rpcs3_hd_field.Mem(session.open_mem()))
                     except Exception as error:  # noqa: BLE001 - the phase is a bonus
                         print("  %s: no gantry time (%s)" % (stem, error), flush=True)
+                    try:
+                        # The scenery's animation clock in the same pause (`world_clock_offset_s` of the pair).
+                        ship_pose["scenery_clock"] = rpcs3_hd_field.scenery_clock(rpcs3_hd_field.Mem(session.open_mem()))
+                    except Exception as error:  # noqa: BLE001 - the phase is a bonus
+                        print("  %s: no scenery clock (%s)" % (stem, error), flush=True)
                     if args.field:
                         # every craft of the field and the HUD's record, in the same pause (`rpcs3_hd_field`)
                         import rpcs3_hd_field

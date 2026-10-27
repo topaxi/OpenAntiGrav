@@ -120,7 +120,7 @@ one), or the sky map as a layer beside the probes (different sizes today, 512x25
   `oag_rcs`'s decode of the same chunk.
 - ~~**The chevron's emissive pulse**~~ **wired** (2026-10-22, `hd-texture-slots`, item 2 above); what is left is the
   clock its curve runs on.
-- **HD's scenery clock** (2026-10-27, `hd-tech-de-ra-2`; one measurement, several symptoms): ours runs every world mesh on the race
+- **HD's scenery clock** (**measured 2026-10-27, `hd-scenery-clock`: global node clock, per capture; `rpcs3-hd-pair.py` now records `world_clock_offset_s`; open: re-make the 13 cold pairs with it, Modesto's airship and Anulpha's chevron unscored; docs/rendering/hd-track-tone.md, "HD's scenery clock"**; earlier text, `hd-tech-de-ra-2`; one measurement, several symptoms): ours runs every world mesh on the race
   tick over 60 (`Race::world_clock_seconds`, HD pairs record no `--world-clock-offset`), the original on a clock whose offset over the
   HUD clock is unread. On `hd/tech-de-ra` the camera droid sits over the left wall in the original (box `400,400 120x120`, 24 grey,
   luma -23) and over the right-hand stands in ours (+15 there); the `nr_twinblend` GO banner shows another phase of its wipe; on

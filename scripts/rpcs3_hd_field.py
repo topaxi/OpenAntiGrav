@@ -146,3 +146,40 @@ def gantry_seconds(m, lo=0x30000000, hi=0x36000000, chunk=0x100000):
                     seen[t] = seen.get(t, 0) + 1
             at = block.find(needle, at + 4)
     return max(seen, key=seen.get) if seen else None
+
+
+STAMP_OFFSET = 0x15C
+#: The first second the global clock can read outside every gantry window; below it a gantry node could pass for scenery.
+GANTRY_WINDOW_END = max(b for _, b in GANTRY_WINDOWS)
+
+
+def scenery_clock(m, lo=0x30000000, hi=0x36000000, chunk=0x100000):
+    """The time the scenery's animation nodes run on, read out of RAM in the same pause as the frame.
+
+    Every `MeshImporter` that moves is advanced from one global clock (`MeshImporter_AdvanceTime`,
+    `docs/ghidra/functions/ps3-hdfury-eu/gantry-clock.md`): its time (`+0xc0`) equals its last stamp (`+0x15c`), the
+    global clock, because it was set to 0 when that clock read 0. Returns `{"time_s", "nodes", "total"}`, the most common
+    time among nodes whose time and stamp agree and sit past the gantry windows (the gantry's own nodes are reset into a
+    window), or `None` when none do. The clock keeps running through the pre-race wait, so `time_s - lap clock` is the
+    per-capture `world_clock_offset_s`.
+    """
+    needle = struct.pack(">I", MESH_IMPORTER_VTABLE)
+    seen, total = {}, 0
+    for base in range(lo, hi, chunk):
+        try:
+            block = m.rd(base, chunk)
+        except OSError:
+            continue
+        at = block.find(needle)
+        while at >= 0:
+            if at % 4 == 0 and at + STAMP_OFFSET + 4 <= len(block):
+                total += 1
+                (t,) = struct.unpack(">f", block[at + TIME_OFFSET:at + TIME_OFFSET + 4])
+                (stamp,) = struct.unpack(">f", block[at + STAMP_OFFSET:at + STAMP_OFFSET + 4])
+                if t > GANTRY_WINDOW_END and abs(t - stamp) < 0.03:
+                    seen[t] = seen.get(t, 0) + 1
+            at = block.find(needle, at + 4)
+    if not seen:
+        return None
+    best = max(seen, key=seen.get)
+    return {"time_s": best, "nodes": seen[best], "total": total}
