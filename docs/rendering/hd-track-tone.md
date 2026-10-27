@@ -9,7 +9,7 @@ changed.** What landed is two reproducible probes
 | Claim | Verdict |
 | --- | --- |
 | **A**: one missing or misapplied input of the lit track material makes HD's track too dark and too blue, and one cause explains the floor, the blue areas and the hexagon panel | **Three parts.** *Too dark*: **false**; the floor is not short of a material input (before the resolve it matches the original within 3 %), the gap is the original's exposure resolve, which at the profile's `Resolution Scale 150` is an emulator artefact. *Too blue*: **true in ours, cause open**, and it is not the exposure: the left wall is cyan before any resolve, and the blue floor on the right is an animated plasma pulse. *One cause*: **false**; the hexagon panel is a third thing |
-| **B**: HD's floor, wall and glass-road draws request anisotropic filtering, and with which filter and LOD bias | **The profile's `off` matches what HD requests**: max anisotropy field 0 on every bind of two circuits. The filter is trilinear with a `-1.5` LOD bias on material textures: **true as the request** (2026-10-21, `hd-lod-bias`), **wired but held off**, because ours already matches the stored frames' sharpness without it and the bias makes every pair worse (see "The LOD bias, wired and held") |
+| **B**: HD's floor, wall and glass-road draws request anisotropic filtering, and with which filter and LOD bias | **The profile's `off` matches what HD requests**: max anisotropy field 0 on every bind of two circuits. The filter is trilinear with a `-1.5` LOD bias on material textures: **true as the request** (2026-10-21, `hd-lod-bias`), **wired and on by default since 2026-10-27** (it was held off while the stored frames' mean grey rose; "Texture crispness" shows that is added detail) |
 
 ## Claim A
 
@@ -211,8 +211,8 @@ anisotropy override.
 
 - **Ours** samples HD materials with a LOD bias of 0 (the texture-detail slope
   law is the PSP's). The original's -1.5 reads sharper on a distant floor and
-  shimmers more. **Wired and held off (2026-10-21, `hd-lod-bias`)**, see "The LOD
-  bias, wired and held" below.
+  shimmers more. **Wired 2026-10-21 (`hd-lod-bias`), on by default since 2026-10-27** (`hd-texture-bias`), see
+  "Texture crispness" below.
 - Also read: the albedo unit's address word carries gamma nibble 7 and the
   normal and lightmap units 0 (so the lightmap is raw, as `shade.wesl` reads it);
   `ds_booth_glass`'s albedo carries 0.
@@ -273,7 +273,7 @@ seconds apart starting five seconds after the walk returned, then one frame of R
    mask, `emask.a * colour * wave`) and its `+ emask.rgb` diffuse term stay
    open and are not lighting; the phase, the blocker and the routes are in
    "The chevron panel draws black" below (2026-10-22).
-4. ~~**HD's `-1.5` LOD bias** on material textures~~ **wired, held off, below**.
+4. ~~**HD's `-1.5` LOD bias** on material textures~~ **wired and on, "Texture crispness" below**.
 
 ## The blue cast (2026-10-21, later, `hd-blue-tone`)
 
@@ -617,8 +617,27 @@ Ra the glass road grid is absent (the section above): missing content, not sharp
 and 1.00; Pure's Modesto 0.99 and 0.94 (Blue Ridge, Chenghou, Vineta have 1-4 boxes, 0.98-1.39, too few to read). No gap, so the cause does not
 apply; the maintainer's impression there is the simpler textures.
 
-**Left.** Wire a bias of -0.75 to -1.0 through `Looks::material_lod_bias` (`crates/title/src/effects.rs`; `MATERIAL_LOD_BIAS` is one value
-from the filter word, -1.5) for HD, gated by a rescore of the 13 pairs; `crates/mesh` is where the shader reads it.
+**Landed (2026-10-27, `hd-texture-bias`).** HD applies the filter word's own `-1.5` (`Looks::material_lod_bias`, `Platforms::Any`,
+`Origin::Measured`). **The request is read off the original (the filter word); choosing it over the -0.75 fit to RPCS3 is the maintainer's
+decision**, made after comparing full frames at -0.75 and -1.5 against the original; it is not a fitted value. It reaches only circuit
+materials: `material_lod_levels()` is read once, in `oag_raceplay::load::geometry::track_model`, and set on the track and behind-glass
+models (`Model::material_lod_bias`), so the HUD, shadow and sky samplers never see it. Nothing else gates it (no setting).
+
+Re-render of the 13 cold race pairs (`compare-rerender-ours --only hd/`, into a scratch copy), band metric from `scripts/texture-sharpness.py`:
+median over pairs of the per-pair ratio ours/original, **fine near 1.11, fine far 1.16, mid near 0.97, mid far 1.02** (before: 0.81 near, 0.98
+far on five pairs). Per pair fine near: anulpha 1.06, chenghou 1.12, metropia 1.11, moa 1.06, modesto 1.11, sebenco 1.18, sol-2 1.04, talons
+1.17, talons-assegai 1.19, tech-de-ra 0.86 (2 boxes, glass and unlit wall), amphiseum 1.09, ubermall 1.23, vineta-k 1.13; far 1.03-1.38.
+Mean grey difference to the original, summed over the 13: up 0.05-0.33 on twelve pairs (detail, not error), **ubermall +0.77** the one over
+0.5: looked at, the frames match; the overhead hologram boards (ours show a logo where the original shows "GO") dominate that pair, which is
+the hologram lane's, not the bias's. Its mean grey went 9.11 to 9.88. Closing summary: `18 pair(s) ... 0 better, 13 worse, 5 same (the five
+menus); hd summed mean grey 141.3 -> 144.3 (+3.0)`.
+
+**Omega and 2048 (checked, applies, not wired).** Both leave `material_lod_bias` at `Rule::UNREAD` (`Looks::unread`). The `0x02063e80` word is an
+RSX register; no bias request was read from 2048's Vita sampler states or Omega's GNM samplers, so HD's measurement is not carried over. Reading
+those sampler states is the open step, not a one-line rule.
+
+**Left.** The 0.5-level gap against the RPCS3 fit (-0.75 fits, the word says -1.5): RPCS3's LOD computation or our `textureSampleBias` with
+derivative scaling; the warm light pool on the Vineta K kerb and the Tech de Ra glass grid (missing content, not blur).
 
 
 ## The reflection map is the sky, and Moa Therma's glass reads it (2026-10-21, `hd-one-pair-moa`)

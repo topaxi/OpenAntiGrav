@@ -131,16 +131,19 @@ pub const LOOKS: &Looks = &Looks {
         on: Platforms::Any,
         origin: Origin::Measured,
     },
-    // **Held off, though the request is measured**: the RSX texture filter word
-    // `0x02063e80` on 2,619 + 3,935 binds of Anulpha Pass and The Amphiseum is
-    // trilinear with a `-1.5` bias, but drawing ours with it moved the grey
-    // difference to the stored RPCS3 frames up on all 13 pairs and the
-    // per-region RMSE up on most regions, ours already as sharp as theirs without
-    // it. `docs/rendering/hd-track-tone.md`, "Claim B: the sampler". Turning it on
-    // is `Platforms::Any` with `Origin::Measured` here. Re-judged on the cold
-    // scale-100 originals (2026-10-22): 12 of 13 pairs' mean grey up, 8 by over 0.2,
-    // so still held (same section, "Re-judged on the cold originals").
-    material_lod_bias: Rule::UNREAD,
+    // The RSX texture filter word `0x02063e80` on 2,619 + 3,935 binds of Anulpha
+    // Pass and The Amphiseum is trilinear with a `-1.5` bias: the request is read
+    // off the original. Applied everywhere on the maintainer's decision
+    // (2026-10-27, after comparing full frames at -0.75 and -1.5): the game's own
+    // value, not the -0.75 fit to RPCS3, which closed the near fine-band gap to
+    // 1.00 where -1.5 reads 1.11. Held off before this because the stored RPCS3
+    // frames' mean grey rose; that is added detail (`docs/rendering/hd-track-tone.md`,
+    // "Texture crispness"). The number is the filter word's, the choice of it over
+    // the RPCS3 fit is the maintainer's.
+    material_lod_bias: Rule {
+        on: Platforms::Any,
+        origin: Origin::Measured,
+    },
     // State bit 7 is the alpha-to-coverage path (blend and alpha test off,
     // depth written): all 31 `cf_tree` draws (`0xbd`) of a live Moa Therma race
     // frame are issued that way. Bit 2 on a blended state writes depth: the
@@ -200,21 +203,16 @@ mod tests {
         assert!(!Looks::unread(SHIELD).blends_encoded.applies_everywhere());
     }
 
-    /// The material LOD bias is held off on HD (the stored RPCS3 frames do not
-    /// ask for it) and a title whose rule applies gets exactly the measured
-    /// `-1.5` into the track model - the one number `oag_raceplay::load` reads.
+    /// HD samples its circuit materials with the filter word's `-1.5` bias
+    /// (the maintainer chose it over the -0.75 RPCS3 fit); a title with no
+    /// reading of its own gets the sampler's own selection.
     #[test]
-    fn the_material_lod_bias_follows_its_rule() {
-        assert_eq!(LOOKS.material_lod_levels(), 0.0);
-        let applied = Looks {
-            material_lod_bias: Rule {
-                on: Platforms::Any,
-                origin: Origin::Measured,
-            },
-            ..Looks::unread(SHIELD)
-        };
-        assert_eq!(applied.material_lod_levels(), oag_title::MATERIAL_LOD_BIAS);
+    fn hd_applies_the_material_lod_bias_and_an_unread_title_does_not() {
+        assert!(LOOKS.material_lod_bias.applies_everywhere());
+        assert_eq!(LOOKS.material_lod_levels(), -1.5);
+        assert_eq!(LOOKS.material_lod_levels(), oag_title::MATERIAL_LOD_BIAS);
         assert_eq!(oag_title::MATERIAL_LOD_BIAS, -384.0 / 256.0);
+        assert_eq!(Looks::unread(SHIELD).material_lod_levels(), 0.0);
     }
 
     /// The five names no archive of HD's disc carries
