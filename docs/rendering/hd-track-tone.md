@@ -1696,25 +1696,34 @@ are the census made visible, not a counter-example: applying the sign to a raw c
 original does not have. **The wiring must read the sign from the vertex program, never from the circuit name.**
 Modesto's changed pixels (18,227 px at x 1578 to 1920, y 435 to 707) go 33.4 -> 6.5; Tech de Ra's wall 24.1 -> 4.8.
 
-### Ready to wire (confidence 80 for the law on the four original circuits)
+### Wired (2026-10-27, `hd-bitangent-sign`)
 
-1. `oag_rcs::rcsmaterial::vertex`: a reader answering "does this vertex block take the tangent's `w` as `2w - 1`
-   (a `MAD` of `v[tangent]` by 2 and -1 whose `.w` multiplies the bitangent) or raw (`v[tangent].wwww`)".
-2. `crates/mesh/src/mesh/rcs/hull_normal.rs` (`hull_normal`, called from `rcs/setup.rs:248`, which fills
-   `material_tangent`) records it per material slot beside the tangent flag. It runs **before** `pad_ne`
-   (`rcs/pads.rs:185` and `:337`) with only the magstrip table as the claimed third binding, which is why slot 384
-   carries a tangent although `pad_ne` later binds its `_ne` file there; the `pad_ne` slots need no second site.
-3. `crates/mesh/src/mesh/rcs.rs` `baked_tangent` (line 472): bake the `w` byte as the bitangent scale in unorm
-   (`(scale + 1) / 2`: signed -> 0 or 255, raw -> 128 or 255; a raw `w = 0` then decodes to +0.004, not 0, an error
-   of 0.4 % of `ny` that is accepted, or carry the sign in a per-draw value instead) and `crates/mesh/shaders/hull_normal.wesl` line 19
-   reads `cross(n, t) * (tangent.w * 2.0 - 1.0)`; there is no free `slots` bit (0 to 31 are used), which is why
-   the scale rides the byte. Check the ship hulls' vertex programs with the same reader first: their raw-`w`
-   reading in `hull_normal.wesl` was measured on hulls and must not change by default.
-4. `pad.wesl` `pad_normal` (the derived frame, no authored tangent) keeps `nx*T + nz*N` for raw circuits and
-   gains `ny * cross(N, T) * handedness` for signed ones only if a chunk without an authored tangent exists
-   there (not checked; slot 384's chunks do carry one, the shader's tangent branch is live on them).
-5. Test: a ground-truth census of the table above (`rcsmaterial` files of the four circuits and Zone read
-   signed, the eight numbered circuits raw), and the Tech de Ra box above as a score bound.
+**Where the sign is read from: each material's resolved vertex block's instruction stream** (confidence 90: the
+census read every block of every file and none was left over; the reader reproduces it on the disc).
+`oag_rcs::rcsmaterial::vertex::Program::bitangent_is_signed(tangent_hash)`: the block declares the `tangent`
+attribute and no instruction reads that input register with a `.wwww` swizzle (the raw compile's
+`MUL o[TC0].xyz, B, v[t].wwww`). Never the circuit's name.
+
+- `mesh::rcs::hull_normal::hull_normal` classifies the slots it marks (`TangentFrame::Raw` or `Signed`) beside the
+  tangent flag; `Model::material_tangent` is now `Vec<TangentFrame>` (`Absent`, `Raw`, `Signed`), `Surface::tangent`
+  likewise. The `pad_ne` slots need no second site (they already carry a tangent through this path).
+- `mesh::rcs::baked_tangent` bakes `w` as the scale `(scale + 1) / 2` (signed: `2w - 1`; raw: `w`), and
+  `hull_normal.wesl` reads `2w - 1` back, snapping `|s| < 0.01` to 0 so a raw `w = 0` (byte 128) stays no bitangent.
+- Tests: `crates/rcs/tests/hd_bitangent_sign_ground_truth.rs` (Tech de Ra and Modesto Heights read signed on every
+  tangent-reading block; `12_sol_2` and `01_vineta_k` read raw), `hd_hull_normal_lit_path` (scale -1 tilts against
+  `B`).
+
+Result, ours re-rendered on scratch copies of the twelve HD race pairs (frame mean abs RGB against the original;
+before is `b222a0ef2`): Tech de Ra 7.474 -> 7.062 (the box `480,600 240x120`, unblurred, 16.16 -> 5.89), Modesto
+Heights 9.129 -> 8.085, Talon's 5.993 -> 5.983, Amphiseum 8.767 -> 8.736. The raw circuits are **byte-identical**
+in score to three decimals (Vineta K, Sol 2, Anulpha Pass, Chenghou, Metropia, Moa Therma, Sebenco Climb,
+Ubermall): the regression the unconditional edit caused is gone. No pair moved by more than 0.6 mean grey.
+
+**Ship hulls:** the same reader over `DATA02`'s `assegai`, `feisar`, `qirex`, `piranha`, `goteki` and `triakis` finds
+every tangent-reading block **raw** (0 signed of 42), so `hull_normal.wesl`'s raw-`w` reading on hulls stays right
+and nothing changed for them. The other ship directories were not named by this sweep (confidence 70 for "all
+hulls raw"). **`pad_normal`** (derived frame, no authored tangent) is untouched: slot 384's chunks carry a tangent
+and take the tangent branch, and no chunk without one was checked.
 
 **Not measured here:** the original's live fragment or vertex program on a slot-384 draw (`ps3-fp-live.py`): the
 law is a static read of both programs plus the pixel score, so the cause is confidence 80, the census 90 (every
@@ -1724,6 +1733,9 @@ block of every file read).
 ([rcsmaterial.md](../formats/rcsmaterial.md), "The light-bar family") and 2048 shares its asset lineage (CLAUDE.md,
 the 2048/Omega note; not re-listed here);
 both compile their shaders again (GNM and Vita GXP), so the RSX reading **does not transfer** and a per-compile
-split like this one may or may not exist there. **Not checkable in this lane:** the answer is in their vertex
-shaders (Omega's `eboot.bin` is in Ghidra, `docs/ghidra/functions/ps4-omega-eu/`; 2048's GXP, `gxp.md`), and a
-live value needs a shadPS4 or Vita3K capture. Named open in the HD fidelity thread.
+split like this one may or may not exist there. **Checked, not answerable by the reader** (`hd-bitangent-sign`):
+`oag_rcs::gxp::usse` classifies instruction words only and reads no operands (`scripts/vita-usse.py` reads some), so
+neither the `2w - 1` scale nor a raw `w` can be told on a 2048 shader today, and Omega's GNM shaders have no reader. this
+wiring is HD's RSX vertex blocks only, so 2048 and Omega keep the raw `w`. Open: read the
+tangent's `.w` use in 2048's vertex GXP with `vita-usse.py`, and Omega's in `eboot.bin`/shadPS4; named in the HD
+fidelity thread.

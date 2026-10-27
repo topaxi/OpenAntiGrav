@@ -116,8 +116,9 @@ pub struct Model {
     pub material_quake: Vec<bool>,
     /// Per material slot: whether its chunks carry the authored `tangent`
     /// ([`GpuVertex::tangent`]), because the material's program reads a normal
-    /// map bound third - see `rcs::hull_normal`.
-    pub material_tangent: Vec<bool>,
+    /// map bound third - see `rcs::hull_normal` - and how its vertex program scales
+    /// the bitangent.
+    pub material_tangent: Vec<TangentFrame>,
     /// Which shader variant each material slot resolves to, positionally
     /// beside [`Self::textures`], or `None` where the material could not be
     /// read or ships no row for the key.
@@ -335,7 +336,9 @@ mod anim_track;
 pub use anim_track::AnimTrack;
 
 mod vertex;
-pub use vertex::{DEFAULT_SPECULAR_EXPONENT, GpuVertex, NO_SPECULAR, factor_sun_mask, slots};
+pub use vertex::{
+    DEFAULT_SPECULAR_EXPONENT, GpuVertex, NO_SPECULAR, TangentFrame, factor_sun_mask, slots,
+};
 
 mod anim_node;
 pub use anim_node::{AnimNode, Motion, NODE_ANIM_LIMIT};
