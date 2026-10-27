@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-10-27
-summary: "BallisticNG path is behind the off-by-default ballisticng feature; atlas, sky and jumps from BallisticNG tracks are open; Unity formats no real file exercises are untested"
+summary: "BallisticNG path behind the off-by-default ballisticng feature; atlas, sky, jumps open; untested Unity formats"
 ---
 
 # Unity content support: the reader, the BallisticNG layer and a raceable foreign track have landed
