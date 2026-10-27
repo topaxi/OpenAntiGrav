@@ -1150,3 +1150,13 @@ fn a_clean_file_is_still_rewritten() {
     let (_, after) = load_text("[graphics]\nanisotropy = \"4x\"\n");
     assert!(after.contains("[render_profiles"), "{after}");
 }
+
+/// The CPU governor is on by default, and a file with no `cpu_governor` key reads as on
+/// (`docs/rendering/cpu-governor.md`: unlocked on the Deck it is +3.7 % fps on HD and +10 % on
+/// Pulse, and it never acts in a race that holds its target).
+#[test]
+fn the_cpu_governor_is_on_by_default_and_for_a_file_that_omits_it() {
+    assert!(Settings::default().graphics.cpu_governor);
+    let (loaded, _) = load_text("[graphics]\nanisotropy = \"4x\"\n");
+    assert!(loaded.graphics.cpu_governor);
+}

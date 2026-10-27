@@ -398,11 +398,11 @@ fn default_frustum_culling() -> bool {
 
 /// See [`Graphics::cpu_governor`].
 ///
-/// **Off by default**: on the Steam Deck it stepped three extras down and saved 0.25 ms of a
-/// 7.5 ms frame, no p99 change (`docs/rendering/cpu-governor.md`), which is not a win a player
-/// should have their chosen tiers traded for unasked.
+/// **On by default**: with the frame rate unlocked on the Steam Deck it shed three extras and
+/// gained 3.7 % fps and 0.4 ms of p99 on HD, 10 % fps on Pulse. It never acts in a race that
+/// holds its target (`docs/rendering/cpu-governor.md`), and a default profile has nothing to shed.
 fn default_cpu_governor() -> bool {
-    false
+    true
 }
 
 /// See [`Graphics::pvs_culling`]: on, having cleared the screenshot comparison.
