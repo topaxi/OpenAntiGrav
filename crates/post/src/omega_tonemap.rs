@@ -15,16 +15,15 @@
 //! 2. the coefficient step: the mean of the last `round(time * 60)` frames'
 //!    luma, `LAvg` stepped toward it by at most `response / 60`, the Hermite
 //!    cubic and the exposure;
-//! 3. per pixel and per channel, `y = cubic(clamp(exposure * c, 0, t1))`.
+//! 3. per pixel and per channel, `y = cubic(clamp(exposure * c, 0, t1))`;
+//! 4. the display's encode of `y`: the piecewise sRGB curve
+//!    ([`law::scanout_encode`]). The executable scans out an `A2R10G10B10`
+//!    UNORM buffer (`0x88060000`, gamma 1.0) filled by a plain copy, so the
+//!    video out encodes; shadPS4 0.20, which captured the reference frames,
+//!    applies this curve to that format.
 //!
 //! What is **not** the disc's, stated rather than hidden:
 //!
-//! - **The display encode.** The curve's `[0, 1]` is taken as linear light and
-//!   encoded with the `pow(1/2.2)` every linear target here ends on
-//!   ([ADR-0026](../../../../docs/architecture/adr/0026-hd-authored-lighting-is-linear.md)).
-//!   The original's scanout format was not read; that its HDR twin ends at
-//!   40.0 (forty times paper white) is why linear is the reading. **Chosen,
-//!   not measured.**
 //! - **Per pixel, not per sample.** The original curves each MSAA sample and
 //!   then averages; this chain curves the already resolved scene. The two
 //!   differ only along edges.

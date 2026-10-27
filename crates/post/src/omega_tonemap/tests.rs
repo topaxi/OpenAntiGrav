@@ -2,7 +2,7 @@
 //! own microcode produced, and the chain drawn on a real device against the
 //! law.
 
-use super::law::{Curve, Params, adapt};
+use super::law::{Curve, Params, adapt, scanout_encode};
 use super::*;
 
 fn params() -> Params {
@@ -75,6 +75,28 @@ fn the_curve_runs_from_black_to_white_across_its_window() {
     close(curve.map(curve.t1 / curve.exposure), 1.0, "shoulder");
     // Past the window the clamp holds it at white.
     close(curve.map(100.0), 1.0, "past the shoulder");
+}
+
+/// The scanout encode is the piecewise sRGB curve: linear below `0.0031308`,
+/// the 2.4 power above, and continuous where the two meet.
+#[test]
+fn the_scanout_encode_is_the_piecewise_srgb_curve() {
+    close(scanout_encode(0.0), 0.0, "black");
+    close(scanout_encode(1.0), 1.0, "white");
+    close(scanout_encode(0.002), 0.002 * 12.92, "the linear toe");
+    for (linear, encoded) in [(0.005, 0.061_2), (0.214, 0.500_1)] {
+        let got = scanout_encode(linear);
+        assert!(
+            (got - encoded).abs() < 1e-3,
+            "{linear} encodes to {got}, not {encoded}"
+        );
+    }
+    let below = scanout_encode(0.003_130_8);
+    let above = scanout_encode(0.003_130_9);
+    assert!(
+        (above - below).abs() < 1e-4,
+        "{below} and {above} meet at the knee"
+    );
 }
 
 #[test]
@@ -175,7 +197,9 @@ fn the_chain_draws_the_law_on_a_real_device() {
         view_formats: &[],
     });
     let out_view = out.create_view(&Default::default());
-    let colour = [0.5_f32, 0.25, 0.1];
+    // Blue is dark enough that the scanout's sRGB encode and a 2.2 power part by
+    // several levels, so the chain is held to the encode and not only the curve.
+    let colour = [0.5_f32, 0.25, 0.004];
     let mut encoder = device.create_command_encoder(&Default::default());
     encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
         label: Some("scene"),
@@ -211,7 +235,7 @@ fn the_chain_draws_the_law_on_a_real_device() {
 
     let luma: f32 = colour.iter().zip(law::LUMA).map(|(c, w)| c * w).sum();
     let curve = Curve::fit(&p, luma);
-    let encode = |v: f32| (v.clamp(0.0, 1.0).powf(1.0 / 2.2) * 255.0).round() as i32;
+    let encode = |v: f32| (scanout_encode(v) * 255.0).round() as i32;
     for (channel, c) in colour.iter().enumerate() {
         let want = encode(curve.map(*c));
         let got = i32::from(pixel[channel]);
@@ -220,6 +244,12 @@ fn the_chain_draws_the_law_on_a_real_device() {
             "channel {channel}: drew {got}, the law says {want}"
         );
     }
+    let power = (curve.map(colour[2]).clamp(0.0, 1.0).powf(1.0 / 2.2) * 255.0).round() as i32;
+    assert!(
+        (i32::from(pixel[2]) - power).abs() > 4,
+        "blue {} is the 2.2 power's {power}, not the scanout encode",
+        pixel[2]
+    );
     // And it is not the plain encode: the curve did something here.
     let plain = encode(colour[0]);
     assert!(

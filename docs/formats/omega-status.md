@@ -720,7 +720,14 @@ Measured, by false-colour probes written straight to the target:
 - Lit patches differ too: original road top decile (169, 160, 157), ours (242-248, 165-207, 83-149) - the
   12 / 6.8 / 3.2 sun saturates per channel in ours and the original's lit road is near neutral.
 
-**Next:** find why the original's low end is that dark on Vineta K and not on Anulpha: the per-circuit
+**2026-10-27, `omega-display-encode`:** the encode is read. The scanout is `A2R10G10B10` UNORM, filled by a
+plain copy, and the video out encodes it (on shadPS4, which captured these frames, with the piecewise sRGB
+curve). That curve is now wired, and it is **not** the separating term: Vineta 46.69 to 48.19, Anulpha
+38.92 to 41.04. The evidence and the terms the frames point at (Vineta's blown-out sky and the bloom after
+the curve, the canopy's shadow coverage, Anulpha's chevrons) are in
+[tonemap.md](../ghidra/functions/ps4-omega-eu/tonemap.md), "The output encode".
+
+**Next (as written before the encode was read):** find why the original's low end is that dark on Vineta K and not on Anulpha: the per-circuit
 `Tonemap.*` curve (`Start angle` -6.93, `End angle` -12.06, source end 1.506 here), the scanout encode of the
 resolve (`FUN_017864a0` curve resolve versus the compute resolve), and the unwired shadow-light factor. Read
 `tonemap.md`'s "Resolve" row against a captured Anulpha frame before touching the encode.
