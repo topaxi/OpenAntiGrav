@@ -52,6 +52,7 @@ summary: "One line, at most 150 characters, saying what is OPEN, not what landed
 categories: [rendering] # optional: extra categories on top of the directory
 size: M (70)            # optional: XS | S | M | L | XL, effort for one member; (confidence 0-100) optional
 difficulty: medium (50) # optional: easy | medium | hard, how settled the path is; (confidence 0-100) optional
+kind: debt              # optional: debt = something already built that has to be paid back
 ---
 ```
 
@@ -66,8 +67,9 @@ difficulty: medium (50) # optional: easy | medium | hard, how settled the path i
 
 - **size**: XS under an hour, S a few hours, M half a day, L a day, XL more than a day (split the thread).
 - **difficulty**: easy (the steps are known), medium (a few unknowns), hard (an unread law, a design question, or a likely negative result).
+- **kind: debt**: the thread is about paying back something already in the tree (a shortcut, a workaround, a stand-in, a frozen ratchet list), not new work. `just threads --kind debt` lists them.
 
-List them with `just threads [--status S] [--title T] [--category C] [--size Z] [--difficulty D]` (`--counts` prints the tally). "What is ready to wire for Pulse?" is `just threads --status ready-to-wire --title pulse`. `just check-handover` refuses a thread with missing or invalid frontmatter, a status, size or difficulty outside its set, or a summary over 150 characters.
+List them with `just threads [--status S] [--title T] [--category C] [--size Z] [--difficulty D] [--kind debt]` (`--counts` prints the tally). "What is ready to wire for Pulse?" is `just threads --status ready-to-wire --title pulse`. `just check-handover` refuses a thread with missing or invalid frontmatter, a status, size or difficulty outside its set, or a summary over 150 characters.
 
 Counts when this section was written (re-run `just threads --counts`, do not trust these):
 
