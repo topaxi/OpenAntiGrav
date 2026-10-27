@@ -49,14 +49,14 @@
 //!   stage.** The exposure is the `scale` of the resolve above (1.0 on every
 //!   frame measured); the original writes the result through the surface's
 //!   sRGB encode (`SET_SHADER_PACKER` is 1 on the scene and ladder draws,
-//!   0 on the swap buffer). `pow(1/2.2)` here is the project's single-curve
-//!   approximation of that encode, nothing more.
-//! - **The adaptation averages the encoded luminance.** The ladder halves the
-//!   linear scene; the PPU then reads the bytes left in the last level, which
-//!   the ROP wrote through the sRGB encode, so `adapted` is a luma of encoded
-//!   texels (`fs_adapt` encodes each texel once, never the mean again). See
-//!   renderer.md, "The adaptation is the encoded linear mean" (ours averages the
-//!   encoded texels since 2026-10-27, the maintainer's choice; hd-track-tone.md).
+//!   0 on the swap buffer). `fs_encode` applies the sRGB curve (2026-10-27,
+//!   `hd-srgb-encode`).
+//! - **The adaptation averages encoded texels.** The first reduce encodes each
+//!   texel and the ladder averages those values, so `adapted` is the luma of
+//!   the mean of encoded texels, as RPCS3's readback of the original shows
+//!   (the maintainer's choice of 2026-10-27; hd-track-tone.md, "Decide the
+//!   adaptation law"). The static read in renderer.md, "The adaptation is the
+//!   encoded linear mean", says the console averages linear values; open.
 //!
 //! # Why the chain owns the scene target
 //!
