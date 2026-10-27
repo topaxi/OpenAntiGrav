@@ -56,7 +56,7 @@ fn advanced(pulse_like: bool) -> Vec<&'static str> {
     if pulse_like {
         rows.push("graphics.boost_zoom");
     }
-    rows.extend(["graphics.perf_overlay", "back"]);
+    rows.extend(["graphics.cpu_governor", "graphics.perf_overlay", "back"]);
     rows
 }
 
