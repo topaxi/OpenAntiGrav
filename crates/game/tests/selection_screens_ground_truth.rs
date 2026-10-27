@@ -690,6 +690,25 @@ fn hd_reads_its_own_team_selection() {
         .get(r"Data\Ships\Feisar\FE\thumb0.gtf")
         .expect("Feisar thumb0");
     assert_eq!((classic.width, classic.height), (126, 64));
+
+    // The authored chrome: the three `corner="true"` brackets draw their
+    // marks, the five `ArrowColor` blocks their arrow, and both textures are
+    // on the sheet (without them `cell_brackets::draws` returns nothing).
+    assert_eq!(ship.screen.brackets.iter().filter(|b| b.corner).count(), 3);
+    assert_eq!(
+        ship.screen
+            .blocks
+            .iter()
+            .filter(|block| block.arrow_color.is_some() && !block.selectable)
+            .count(),
+        5
+    );
+    for src in [
+        oag_ui_screens::campaign::hd::cell_brackets::SRC,
+        oag_ui_screens::picker::hd::BLOCK_ARROW_SRC,
+    ] {
+        assert!(shell.sprites.get(src).is_some(), "{src}");
+    }
 }
 
 /// Wipeout HD/Fury: `Track Creation` reads off `DATA06`'s own
@@ -749,9 +768,12 @@ fn hd_reads_its_own_track_creation() {
     for src in [
         oag_ui_screens::picker::hd::hex::HEX_SRC,
         oag_ui_screens::picker::hd::hex::OUTLINE_SRC,
+        oag_ui_screens::campaign::hd::cell_brackets::SRC,
+        oag_ui_screens::picker::hd::BLOCK_ARROW_SRC,
     ] {
         assert!(shell.sprites.get(src).is_some(), "{src} is on the sheet");
     }
+    assert_eq!(track.screen.brackets.iter().filter(|b| b.corner).count(), 3);
     assert!(!shell.tracks.is_empty());
     for track in &shell.tracks {
         let src = oag_ui_screens::picker::hd::track::grid_icon_src(&track.location);

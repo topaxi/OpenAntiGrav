@@ -3679,6 +3679,32 @@ Screenshots are under `h*.png`
 cursor's visibility on HD, the 8th Results row overlapping the footer bar,
 and whether HD's original has a ship screen on the campaign path.
 
+## Wipeout HD/Fury and Omega: Ship Select and Track Select chrome, 2026-10-27
+
+Lane `hd-select-chrome`, against `hd/menu-ship-select` and `hd/menu-track-select`
+(RPCS3, Safe Area 96 %). Mean grey 10.63 -> 10.63 and 12.39 -> 12.37: the items
+are a few hundred pixels each, so the figure barely moves; each was read at 8x
+against the original at its box.
+
+| Element | Where it comes from | Result |
+| --- | --- | --- |
+| Panel corner marks | `<Bracket corner="true">` (`Colour` `HD_Grey`), `cell_brackets::draws` | drawn on both screens. **`corner2.gtf`'s own corner is bottom-left**: the shared draw had it top-left, which drew every top mark turned over on Cell Selection too (found on Ship Select at 8x; fixed for all three screens, `cell_brackets` doc) |
+| `▸` before SPEED/THRUST/HANDLING/SHIELD/LOYALTY and the RECORDS header | `arrowcolor` on an `unselectable` block, drawn in `NonSelectable_Arrow_HD.gtf` 21 units in, centred | drawn. **Art chosen from the file's name, place measured** (one frame, pixel-level match); the executable's draw for an unselectable block is unread (`Block_MakeSelectable` is the 32x32 `HD_options_arrow` selectable path) |
+| LOYALTY value | `Slide_4`/`Nobble_4`/`Label_4` and the records store's team total | `000` and the nobble at the bar's left end on a fresh profile (measured). A non-zero total's scale onto the bar and its digits is chosen (the stat bars' 0..100) |
+| `CIRCUIT LENGTH`/`RACE DISTANCE` `4.4KM`/`13.2KM` | measured off the circuit's own spline | already drawn: the pair recorded `race.track = 01_Vineta_K` (the environment directory) where HD's circuit id is `01_Track`, so the capture selected no circuit and kept the dash. `scripts/rpcs3-hd-menu-pair.py` fixed; a pair recorded before needs `ours.race.track` set to `01_Track` |
+
+Not done, with where it was looked for: the page `Squares` (empty `<Item>` in
+both files, filled by screen code that was not read); the circuit thumbnail is
+the `FlyByMovie` (`Loading_Icon.bik` authored, the environment's
+`fe/preview.bik` by code), which needs a streaming Bink widget in the picker;
+the `UnlockNobble0..4` hearts (two dim hearts beside `000` on Feisar) need the
+unlock thresholds scaled onto the bar; the `middle="true"` marks.
+
+Omega: **ported**. Its Ship Select goes through the same `picker::hd` path and
+shows the corner marks, the arrow and `000` on a `--menu-page ship-select`
+frame (`omega_reads_its_own_team_selection` still passes); no RPCS3-equivalent
+Omega frame of this screen was compared.
+
 ## Wipeout HD/Fury: `Team Selection`, 2026-09-29
 
 **The original shows a ship screen between `Cell Selection` and the race,
@@ -4191,11 +4217,11 @@ Ubermall, Sol 2, Talon's Junction, The Amphiseum, Modesto Heights, Tech De Ra);
 | RECORDS heading, header row, 3x4 cells | from (160,744) | yes: `PERSONAL`/`FRIENDS`/`GLOBAL` and `---` |
 | `ReverseIcon1..3` + `FE_REVERSE` text | (860,175) | yes, on a reverse circuit only (**chosen**: no frame has the cursor on the second row) |
 | `Infinity` | (1080,705) | yes, where the race has no lap count |
-| `Bracket` x3 | (160,170) 680x242 / (160,452) 680x230 / (856,170) 900x565 | rects only, for layout and pointer |
+| `Bracket` x3 | (160,170) 680x242 / (160,452) 680x230 / (856,170) 900x565 | yes (2026-10-27, `hd-select-chrome`): corner marks via `cell_brackets::draws`, plus the rects for layout and pointer. The `middle="true"` marks of Ship Select's frame stay open (art not found) |
 | `FlyByMovie` (`preview.bik`, Bink) | (660,360) 260x170 | no |
 | `Model name="TrackModel"` | `OriginX=1308 OriginY=440 z=-180` | yes (2026-10-09, `hd-track-model`): the circuit's own scene, see "The circuit model, drawn" |
 | `TrackHexSelection` | (210,500), 9x2 | yes (2026-10-08, `hd-track-select`): a circuit per column, forward and reverse rows - see "The hex grid" below |
-| `Squares` page dots, `Padlock`, `Unlockcondition`, `furyship1..3` | - | no |
+| `Squares` page dots, `Padlock`, `Unlockcondition`, `furyship1..3` | - | no (`Squares` is an empty `<Item>` the XML comments as a dummy for the screen code to read; count, art and colours are in code, unread) |
 
 The numbers above use the circuit's own spline for the length
 (`oag_raceplay::circuit_length`, measured on a worker); the lap count is the
