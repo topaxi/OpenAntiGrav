@@ -231,3 +231,11 @@
 0x812e4a04	function	Math_BuildEulerRotation	85	canvas3d-lattice.md
 0x81074280	function	Canvas3D_Draw	70	canvas3d-lattice.md
 0x8151d3f4	data	g_pCanvas3DInstance	70	canvas3d-lattice.md
+0x81070c0c	function	Canvas3D_ResetCamera	85	canvas3d-lattice.md
+0x8107369a	function	Canvas3D_PlaceMeshWindow	80	canvas3d-lattice.md
+0x81072220	function	Canvas3D_Update	70	canvas3d-lattice.md
+0x81071794	function	Canvas3D_UpdateCellHeights	60	canvas3d-lattice.md
+0x813cff48	function	TouchScroll_Create	80	canvas3d-lattice.md
+0x811035a8	function	TouchScroll_ParseValues	85	canvas3d-lattice.md
+0x81103b46	function	TouchScroll_Update	70	canvas3d-lattice.md
+0x811042ae	function	TouchScroll_SetScroll	65	canvas3d-lattice.md
