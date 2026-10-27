@@ -27,9 +27,10 @@ difficulty: medium (40)
    not run HD's mode 7 today. Evidence: hd-track-tone.md, "The Amphiseum hologram board", Omega paragraph. Before
    porting, settle whether HD's `/2` is HD's `output_scale` (that section's "The `/2`") so Omega's port drops exactly
    that and nothing else.
-3. **The 1.07 composite** (post, `oag_post::omega_tonemap`). The patch moves `ScreenTint` outside the vignette and
-   multiplies a new `ColorScale` (float3) in. Its value is unread: find the writer in the **patch** eboot (Ghidra's
-   `/omega/...` program is the base build; import or diff the patch's). Evidence:
+3. **The 1.07 composite** (post, `oag_post::omega_tonemap`). **Ready to wire with `ColorScale = (1, 1, 1)`** (the
+   patch's source global is initialised `(1,1,1,1)` and rests there; confidence 65; only a fade drives it lower, gate and
+   trigger unread). The patch moves `ScreenTint` outside the vignette and multiplies `ColorScale` in. Evidence:
+   [colorscale.md](../../docs/ghidra/functions/ps4-omega-eu/colorscale.md),
    [tonemap.md](../../docs/ghidra/functions/ps4-omega-eu/tonemap.md), "Read with the decoder". Only matters once
    bloom, tint and vignette are drawn at all.
 

@@ -74,6 +74,7 @@ unnamed rather than forced.
   `MusicManager_Construct` directly into `Game_Main` rather than keeping them
   as separate functions the way `vita-2048-eu-v104` and `ps3-hdfury-eu` both
   do.
+- [colorscale.md](colorscale.md) - the 1.07 composite's `ColorScale`: handle, source global, rests at (1,1,1); gate unread.
 - [endrace-loyalty.md](endrace-loyalty.md) - 1 function: the loyalty award, HD's law repeated.
 - [weapons.md](weapons.md) - 30 functions: nine weapon-manager constructors
   transferred from `ps3-hdfury-eu/weapons.md` by `.cpp` tag (plus the finding
