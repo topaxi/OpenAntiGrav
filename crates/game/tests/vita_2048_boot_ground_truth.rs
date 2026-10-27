@@ -619,6 +619,66 @@ fn the_team_screen_draws_the_grids_badges_and_craft_icons() {
     );
 }
 
+/// The Select Team panel's four rows read `<FE>` of the disc's own
+/// `HandlingStats/feisar2048/3/handlingstats.xml` (8, 7, 4, 6): the orange cells
+/// of each row and the number at its right, with the two header icons and the
+/// two ability icons above them. Dropping the loader or the panel's draw fails
+/// this.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn the_team_panel_draws_feisar_speeds_ratings_off_the_disc() {
+    let Some(source) = source() else { return };
+    let loaded = boot::load(&options(&source)).expect("the whole boot");
+    assert!(
+        loaded
+            .report
+            .iter()
+            .any(|line| line.contains("team panel: 20 of 20 craft ratings read")),
+        "{:#?}",
+        loaded.report
+    );
+    let mut frontend = loaded.frontend;
+    drive_to_home(&mut frontend);
+    let mut input = Input::new();
+    press_release(&mut frontend, &mut input, Button::Cross);
+    assert!(frontend.machine().is(w2048::TEAM));
+    let list = frontend.draw_list();
+    let orange = |color: &[f32; 4]| color[0] > 0.8 && color[1] < 0.4 && color[3] == 1.0;
+    let mut filled = [0usize; 4];
+    let mut empty = 0;
+    for draw in &list {
+        if let frontend::Draw::Fill { rect, color } = draw
+            && rect[2] == 22.0
+            && rect[3] == 27.0
+        {
+            let row = ((rect[1] - 307.0) / 30.0) as usize;
+            if orange(color) {
+                filled[row] += 1;
+            } else {
+                empty += 1;
+            }
+        }
+    }
+    assert_eq!(filled, [8, 7, 4, 6], "orange cells per row");
+    assert_eq!(
+        empty, 40,
+        "all ten cells of a row are drawn grey, the filled ones over them"
+    );
+    let numbers: Vec<&str> = list
+        .iter()
+        .filter_map(|draw| match draw {
+            frontend::Draw::Text { x, text, .. } if *x == 910.0 => Some(text.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(numbers, ["8", "7", "4", "6"]);
+    let icons = list
+        .iter()
+        .filter(|draw| matches!(draw, frontend::Draw::Sprite { rect, .. } if rect[2] == 64.0 && rect[3] == 64.0))
+        .count();
+    assert_eq!(icons, 4, "team, class and the two ability icons");
+}
+
 /// `Home`'s second tile is `FE_COMMUNITY`, which redirects to
 /// `communityAdhocCheck` rather than to `community` itself - a real screen
 /// this build now loads and draws, refusing by note like `GameModeChoice`'s

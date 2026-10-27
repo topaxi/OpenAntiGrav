@@ -52,8 +52,8 @@
 //!   still reach no setting.
 //! - **The `<Model name="ShipModel">` hull preview.** No 2D front-end to
 //!   3D mesh seam exists for 2048 yet; see the handover thread.
-//! - **The statistics table and the tutorial bubble** (`TeamInfo`,
-//!   `FE_SHIP_STATS_TUT`): open, see the handover thread.
+//! - **The tutorial bubble** (`FE_SHIP_STATS_TUT`): open, see the handover
+//!   thread. The statistics panel beside the grid is [`super::team_info`].
 //!
 //! # Controls
 //!
@@ -105,7 +105,7 @@ const ROWS: usize = 4;
 
 /// The columns, left to right, as `NATIVE_TEAMS` names them: the order
 /// `FUN_81105710` loads the badge textures in.
-const TEAM_COLUMNS: [&str; 5] = [
+pub(super) const TEAM_COLUMNS: [&str; 5] = [
     "Feisar2048",
     "AG_Systems2048",
     "Qirex2048",
@@ -347,6 +347,7 @@ impl Frontend {
                 }
             }
         }
+        self.draw_team_info(team, craft, out);
         // The confirm tick is the one authored button with an icon; `ar_view`
         // and the two `replay_unlock` hotspots are not drawn in the original
         // frame (the latter author `Colour="0x00000000"`).

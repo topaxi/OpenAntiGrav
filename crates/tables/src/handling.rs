@@ -391,7 +391,8 @@ impl Zone {
     }
 }
 
-/// The four bars on the ship-select screen. `<FE speed thrust handling shield/>`.
+/// The bars on the ship-select screen. `<FE speed thrust handling shield/>`, and on 2048 a
+/// fifth `firepower`.
 ///
 /// **Presentation only**: nothing in the simulation may read them.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -400,6 +401,8 @@ pub struct Fe {
     pub thrust: f32,
     pub handling: f32,
     pub shield: f32,
+    /// 2048's fifth bar (`RC_FIREPOWER`); `None` where the file authors four (Pulse, HD).
+    pub firepower: Option<f32>,
 }
 
 impl Fe {
@@ -412,6 +415,7 @@ impl Fe {
             thrust: number(node, e, "thrust")?,
             handling: number(node, e, "handling")?,
             shield: number(node, e, "shield")?,
+            firepower: optional_number(node, e, "firepower")?,
         })
     }
 }

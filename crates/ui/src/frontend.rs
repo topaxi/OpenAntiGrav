@@ -100,6 +100,7 @@ mod event_card;
 mod faces;
 mod options2048;
 mod team;
+mod team_info;
 mod touch;
 mod wipeout2048;
 pub use campaign_map::{
@@ -123,6 +124,7 @@ pub(crate) use faces::{font_line_height, lighten};
 pub use oag_pulse::frontend::{FINISH_FRAME, HOLD_SECONDS, PAUSE_FRAMES, states};
 use oag_pure::frontend::states as pure_states;
 pub use team::team_grid_textures;
+pub use team_info::{TeamRating, team_info_textures};
 pub use touch::{EXTRA_TILES, ExtraTile, Launch, TouchState, cursor_ring};
 
 /// How long `Developer Publisher Screen` takes, as the reel's own length.
