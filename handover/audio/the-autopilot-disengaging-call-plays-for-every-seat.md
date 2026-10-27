@@ -3,6 +3,7 @@ status: ready-to-wire
 titles: [all]
 updated: 2026-10-21
 summary: "Route Cue::Message and is_player by the listening seat for two local seats on one machine"
+difficulty: easy (30)
 ---
 
 # The Autopilot's "disengaging" call plays for every seat

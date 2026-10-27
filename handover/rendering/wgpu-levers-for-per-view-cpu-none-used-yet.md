@@ -4,6 +4,7 @@ titles: [all]
 updated: 2026-10-16
 summary: "Render bundles for the circuit and static scenery and the remaining wgpu levers, judged on the finish probe span"
 categories: [rendering]
+difficulty: medium (35)
 ---
 
 # wgpu levers for the per-view CPU: none of them is used yet

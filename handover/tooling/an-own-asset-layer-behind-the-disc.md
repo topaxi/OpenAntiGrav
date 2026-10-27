@@ -3,6 +3,8 @@ status: ready-to-wire
 titles: [all]
 updated: 2026-10-11
 summary: "Record active mods in the replay header; override forms beyond a loose name (hash, archive-addressed)"
+size: S (45)
+difficulty: medium (35)
 ---
 
 # Asset layers: what is left after the fallback and the override landed

@@ -3,6 +3,7 @@ status: ready-to-wire
 titles: [all]
 updated: 2026-10-21
 summary: "test-data suite was 470 s over the 450 s ceiling; wrap independent races in in_parallel, speed plan learning, 2048 sweeps"
+difficulty: medium (35)
 ---
 
 # test-data's tail is now real decode and simulation sweeps

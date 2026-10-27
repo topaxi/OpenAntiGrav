@@ -3,6 +3,7 @@ status: ready-to-wire
 titles: [all]
 updated: 2026-09-25
 summary: "ASTC encoder not wired: Apple Silicon takes the CPU-decode fallback; pick astcenc or a Rust encoder and a cache"
+difficulty: hard (40)
 ---
 
 # Texture compression only covers BC; ASTC is the unimplemented other half

@@ -3,6 +3,7 @@ status: ready-to-wire
 titles: [all]
 updated: 2026-10-12
 summary: "Mods: enable and disable on the MODS page; tracks, craft and pilots read from a mod"
+difficulty: medium (30)
 ---
 
 # Mods and the main menu: what stays open

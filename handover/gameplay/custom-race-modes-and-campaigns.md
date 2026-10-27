@@ -3,6 +3,8 @@ status: ready-to-wire
 titles: [all]
 updated: 2026-10-14
 summary: "Design only: refactor lap modes into data rules, mod-declared modes and campaign.tosd, drag race example"
+size: XL (20)
+difficulty: hard (35)
 ---
 
 # Custom race modes and custom campaigns: what is needed

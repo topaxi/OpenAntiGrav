@@ -3,6 +3,7 @@ status: ready-to-wire
 titles: [omega]
 updated: 2026-10-02
 summary: "Three sink-less load routes keep every texture on the CPU; name the refused .gnf on amphiseum and modesto_heights"
+difficulty: medium (30)
 ---
 
 # The Omega race peak no longer holds every texture on the CPU before any is uploaded

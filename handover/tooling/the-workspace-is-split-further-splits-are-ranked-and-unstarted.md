@@ -3,6 +3,8 @@ status: ready-to-wire
 titles: [all]
 updated: 2026-10-05
 summary: "Split oag-raceplay load and scene, a profile crate and a boot cluster from oag-game; measure Race coupling first"
+size: M (35)
+difficulty: medium (30)
 ---
 
 # The workspace is split into 41 crates; the next three splits are ranked and unstarted

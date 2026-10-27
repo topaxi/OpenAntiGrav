@@ -3,6 +3,7 @@ status: ready-to-wire
 titles: [2048]
 updated: 2026-09-04
 summary: "Run auto-analysis on the three other imported 2048 programs; data/keys is not durable across machines"
+difficulty: easy (30)
 ---
 
 # 2048's four Vita eboots are decrypted and imported; loose ends from getting there

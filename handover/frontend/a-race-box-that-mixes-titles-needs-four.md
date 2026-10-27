@@ -3,6 +3,7 @@ status: ready-to-wire
 titles: [all]
 updated: 2026-10-13
 summary: "Race box rows off the title: a WEAPONS on/off row is absent; the rest of the numbered list still hardcoded"
+difficulty: easy (35)
 ---
 
 # A race box that mixes titles needs four rows off the title, not one flow

@@ -3,6 +3,7 @@ status: ready-to-wire
 titles: [all]
 updated: 2026-09-25
 summary: "Seed the projectile's born normal from the firing craft's up; needs a hashed-layout signature change and reference regen"
+difficulty: medium (35)
 ---
 
 # A projectile decided wall from floor by angle; the surface class was there all along

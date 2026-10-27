@@ -4,6 +4,7 @@ titles: [hd]
 updated: 2026-10-12
 summary: "Zone Battle and Detonator need Modes before their start boards draw; Zone release 210/190 tick question unmeasured"
 categories: [rendering, gameplay]
+difficulty: medium (30)
 ---
 
 # HD's Zone Battle and Detonator start boards are measured and not drawn

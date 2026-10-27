@@ -4,6 +4,8 @@ titles: [all]
 updated: 2026-10-27
 summary: "CPU-bound devices: GPU-driven draws, bundles, GPU particles/trails/shadow rays; governor landed on by default, self-check open"
 categories: [rendering, tooling]
+size: XL (35)
+difficulty: medium (30)
 ---
 
 # CPU-bound devices: move work to the GPU, and govern the CPU

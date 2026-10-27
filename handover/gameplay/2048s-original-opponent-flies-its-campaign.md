@@ -3,6 +3,7 @@ status: ready-to-wire
 titles: [2048]
 updated: 2026-10-12
 summary: "2048 original opponent: weapon-pad tracking and avoidance unported; Sol and Arena rescue-placement gaps"
+difficulty: hard (30)
 ---
 
 # 2048's original opponent flies its campaign: what it does not do yet

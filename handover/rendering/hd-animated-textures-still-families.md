@@ -3,6 +3,7 @@ status: ready-to-wire
 titles: [hd]
 updated: 2026-10-26
 summary: "No frame of an HD scrolled surface in motion; wire named still families; clock_rate reads literal rates (nr_twinblend wired on HD, 2048, Omega)"
+difficulty: medium (30)
 ---
 
 # HD animates a texture in two ways now; the rest of its shader families still draw still

@@ -3,6 +3,7 @@ status: ready-to-wire
 titles: [2048, omega]
 updated: 2026-10-19
 summary: "Mapped shadow tier: a craft's own shadow does not reach the road; the original tier on 2048 and Omega is Unbuilt"
+difficulty: hard (35)
 ---
 
 # All four shadow tiers draw; `mapped` has one named gap and 2048 has none of it

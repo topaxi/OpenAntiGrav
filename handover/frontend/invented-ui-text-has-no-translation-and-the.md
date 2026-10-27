@@ -3,6 +3,7 @@ status: ready-to-wire
 titles: [all]
 updated: 2026-10-09
 summary: "Invented UI text: more languages need their untranslated ids converted; a fluent speaker's pass"
+difficulty: medium (30)
 ---
 
 # Invented UI text has no translation - all four sources are wired, but nothing is translated yet

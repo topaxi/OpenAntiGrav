@@ -3,6 +3,8 @@ status: ready-to-wire
 titles: [all]
 updated: 2026-10-06
 summary: "Wire prompts into the HUD and pause overlay; Pure and Omega glyph tables; live Steam Deck check"
+size: S (50)
+difficulty: easy (35)
 ---
 
 # Button prompts: what is left after the first landing

@@ -3,6 +3,7 @@ status: ready-to-wire
 titles: [omega]
 updated: 2026-10-05
 summary: "Decode the 11 eight-channel ATRAC9 songs and read the track base parameters that set the mix level"
+difficulty: medium (35)
 ---
 
 # Omega music plays 17 of 29 songs; eight-channel songs and the mix level are open

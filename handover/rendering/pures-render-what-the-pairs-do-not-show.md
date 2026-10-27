@@ -3,6 +3,7 @@ status: ready-to-wire
 titles: [pure, pulse]
 updated: 2026-10-26
 summary: "Pure render: canopy, sky, effect names, flare, chrome-map pass and bloom closed; 250 light scale, Modesto light, HUD open"
+difficulty: medium (30)
 ---
 
 # Pure's render: what the pairs still show, ranked

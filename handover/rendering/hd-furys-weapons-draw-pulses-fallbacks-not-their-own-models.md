@@ -3,6 +3,7 @@ status: ready-to-wire
 titles: [hd]
 updated: 2026-10-12
 summary: "HD weapon visuals still on Pulse fallbacks in part: the Plasma explosion's remaining three things and other weapons"
+difficulty: medium (30)
 ---
 
 # HD/Fury's weapons draw Pulse's fallbacks, not their own models and effects

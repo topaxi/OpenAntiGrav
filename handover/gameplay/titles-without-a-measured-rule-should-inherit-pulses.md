@@ -3,6 +3,7 @@ status: ready-to-wire
 titles: [pure, 2048, omega]
 updated: 2026-10-04
 summary: "Wreck effects, hit sparks and absorb burst are Pulse-only; each title's locator names first; Pure VECTOR laps"
+difficulty: medium (30)
 ---
 
 # Where a title still runs a chosen rule while Pulse has a recovered one

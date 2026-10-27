@@ -3,6 +3,7 @@ status: ready-to-wire
 titles: [hd]
 updated: 2026-10-27
 summary: "HD fidelity queue: Bomb picture, unlit weapon taps, scenery items (booth glass wired), the scenery clock offset, Tech de Ra slot 384, exposure, LOD"
+difficulty: medium (35)
 ---
 
 # HD fidelity lanes queued behind the cold originals
