@@ -48,8 +48,9 @@ What is already established, do not re-derive:
   - ~~The scanout format (sRGB or UNORM) is unread~~ **Closed 2026-10-27
     (`omega-display-encode`)**: `A2R10G10B10` UNORM, a plain copy, the video out
     encodes; wired as the piecewise sRGB curve (`tonemap.md`, "The output
-    encode"). It is not what separates Vineta K from Anulpha Pass: the sky and
-    bloom, Vineta's shadow coverage and Anulpha's chevrons are (same section).
+    encode"). It is not what separates Vineta K from Anulpha Pass: the frames
+    point at the sky and bloom, Vineta's shadow coverage and Anulpha's chevrons,
+    unmeasured (same section).
   - Which level of the 256x256 luma chain the coefficient pass samples, and what
     image the chain starts from (`ToneMap_UpdateCoefficients`, `0x0178c490`).
   - The Pro checkerboard resolve `0x19685a0` (same `m_abcd` constants), unread.

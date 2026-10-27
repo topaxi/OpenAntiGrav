@@ -133,16 +133,17 @@ its four siblings was not traced).
 ## The output encode (2026-10-27, `omega-display-encode`)
 
 **The curve's `[0, 1]` reaches the display as linear light, and the video out
-encodes it.** Nothing between the composite and the screen applies a curve on
-the GPU. Confidence **72** that this is what a base PS4 does, and **85** that it
-is what the reference frames show, because the emulator that captured them was
-read too. Static reading, no PS4 watched.
+encodes it.** On the copy branch below (composite and scanout formats equal),
+nothing between the composite and the screen applies a curve on the GPU.
+Confidence **72** that this is what a base PS4 does, and **80** that it is what
+the reference frames show, because the emulator that captured them was read too
+(still a static read, so under this page's cap of 84). No PS4 watched.
 
 | Step | Address | What |
 | --- | --- | --- |
 | Scanout buffers | `FUN_016134d0`, call to `sceVideoOutSetBufferAttribute` | Pixel format `0x88060000` (`A2R10G10B10`, **not** the `_SRGB` variant `0x88000000`), or `0x88740000` (`A2R10G10B10_BT2020_PQ`) when `sceVideoOutGetDeviceCapabilityInfo_` reports HDR (that bit also sets `DAT_02133c48`, the HDR flag `ToneMap_ApplyEnvSettings` reads). Then `sceVideoOutColorSettingsSetGamma_(1.0)` and `sceVideoOutAdjustColor_`, the only call sites of either. |
 | Scanout render targets | same function, two `FUN_01217e20(..., 0xf2e009, ...)` builds | Data format `0xf2e009`: surface format `0x09` (`2_10_10_10`), channel type `0x0` (**UNORM**; sRGB would be `0x9`), swizzle `0xf2e` (B, G, R, A). The same field split reads this page's other two formats correctly: `0x204702` is `R16F` and `0xfac70e` is `RGBA32F`. So the colour unit stores the values the shader exports, with no sRGB encode on write. |
-| SDR copy to scanout | `FUN_01629ce0` to `FUN_0122d760` to `FUN_0122d670` | When the composite target is not the scanout buffer and the two formats match, `FUN_0122d670` draws one full-screen pass with the program at `0x0193f060` (empty on disc, filled at load). The blob pointer beside it, `0x0193f050`, is `0x017e39e0`. Its code is `image_load_mip` of `texture` at `position`, two `v_cvt_pkrtz_f16_f32`, one `exp mrt0` and `s_endpgm`, with **no arithmetic**: a copy. The pairing of `0x0193f050` with the handle is read from the layout (blob pointer, then handle 16 bytes on), confidence 65. When the formats differ, `FUN_01794290` picks a conversion program by the destination's format byte (not read). |
+| SDR copy to scanout | `FUN_01629ce0` to `FUN_0122d760` to `FUN_0122d670` | When the composite target is not the scanout buffer and the two formats match, `FUN_0122d670` draws one full-screen pass with the program at `0x0193f060` (empty on disc, filled at load). The blob pointer beside it, `0x0193f050`, is `0x017e39e0`. Its code is `image_load_mip` of `texture` at `position`, two `v_cvt_pkrtz_f16_f32`, one `exp mrt0` and `s_endpgm`, with **no arithmetic**: a copy. The pairing of `0x0193f050` with the handle is read from the layout (blob pointer, then handle 16 bytes on), confidence 65. When the formats differ, `FUN_01794290` picks a conversion program by the destination's format byte (not read). That the compared word (`+0x1c` of the second 32-byte block) is the format is inferred from that branch, and the composite target's own format is not read: `0xf2e009` appears as an immediate only in the scanout builds (four sites, all in `FUN_016134d0`). |
 | HDR | same branch, `DAT_02133c48` set | A `pal` program with the single constant `250.0` (`0x437a0000`) writes the PQ buffer. With the curve's HDR end at `40.0` (`ToneMap_ApplyEnvSettings`), `40 * 250 = 10000`, PQ's ceiling in nits. This reads as "curve output 1.0 is 250 nits of linear light", which corroborates the linear reading (the HDR blob itself was not disassembled). |
 
 **What the reference frames went through.** Every `omega/*` original was
@@ -152,10 +153,12 @@ swapchain, and its post-process pass (`post_process.frag`) applies, for a
 non-HDR frame, `a * pow(rgb, 1 / (2.4 + 1 - gamma)) - b` with `a = 1.055`,
 `b = 0.055`, below `0.0031308` the line `12.92 * rgb / gamma`. `gamma` is what
 the game passed to `sceVideoOutAdjustColor` (`video_out.cpp`), 1.0 here, so the
-encode is exactly the piecewise sRGB curve. That code path is unchanged since
-December 2024 (shadPS4 `8a409d86d`). The one later change, `473633c31`
-(2026-09-02), adds a decode for the `_SRGB` 10-bit format only, which this game
-does not use. So the captured picture is `sRGB_OETF(composite)`. What a real
+encode is exactly the piecewise sRGB curve. Read on the shadPS4 snapshot `a5d307ee7`
+(2026-09-14). In it, that path is unchanged since December 2024 (`8a409d86d`).
+The one later change, `473633c31` (2026-09-02), adds a decode for the `_SRGB`
+10-bit format only, which this game does not use. The swapchain code's last
+change is April 2026. The installed 0.20 binary was built on 2026-10-16, so it
+is later than the snapshot read; the commits in between were not read. So the captured picture is `sRGB_OETF(composite)`. What a real
 PS4's video out does with `0x88060000` is not watched. The SDK pairs this format
 with an `_SRGB` twin, and the game sets a gamma for it, so a display-side
 encode is the reading. That a real PS4 matches shadPS4 here is the 72 above.
@@ -179,16 +182,19 @@ the difference of the box means of grey):
 
 The encode darkens what is already dark, and both pairs lose a little because
 ours is darker than the original over most of each frame. A per-pixel transfer
-curve (median original grey for each 16-level band of ours) agrees between the
-two pairs within about 10 grey from 32 to 79, a little above the identity on
-both. So no display curve is what separates them. The 2026-10-27 identity probe fixed Vineta's boxes and made both
+curve (median original grey for each 16-level band of ours) shows why no display
+curve can fix both pairs. Where ours reads 96-111, Vineta's original median is
+65.5 and Anulpha's is 120.3, so a curve would have to pull the same value down on
+one pair and up on the other. (The frames are not pixel-aligned, Anulpha's camera
+pitch differs, so the medians are rough.) The 2026-10-27 identity probe fixed Vineta's boxes and made both
 whole frames worse; that is the signature of a spatial term, not a curve. What
-the frames show instead, at the same ship and grid slot:
+the frames show instead, at the same ship and grid slot. These are **leads, not
+measured causes**:
 
 - **Vineta K's sky** is blown out to white in the original, and a mid-grey
   cloud picture in ours. The original adds its bloom after the curve, and
-  this renderer does not draw Omega's bloom (module docs). A brighter sky also
-  raises `LAvg` and lowers the exposure for the whole frame. Ours, read off a
+  this renderer does not draw Omega's bloom (module docs). A brighter sky would
+  also raise `LAvg` and lower the exposure for the whole frame (not measured). Ours, read off a
   probe pixel: `LAvg` 0.196, exposure 1.25, `t1` 1.506 on Vineta K; 0.149, 1.32
   and 1.0 on Anulpha Pass.
 - **Vineta K's shadow coverage.** The canopy shadows most of the road in the

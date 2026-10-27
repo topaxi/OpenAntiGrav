@@ -723,7 +723,7 @@ Measured, by false-colour probes written straight to the target:
 **2026-10-27, `omega-display-encode`:** the encode is read. The scanout is `A2R10G10B10` UNORM, filled by a
 plain copy, and the video out encodes it (on shadPS4, which captured these frames, with the piecewise sRGB
 curve). That curve is now wired, and it is **not** the separating term: Vineta 46.69 to 48.19, Anulpha
-38.92 to 41.04. The evidence and the terms the frames point at (Vineta's blown-out sky and the bloom after
+38.92 to 41.04. The evidence and the unmeasured leads the frames point at (Vineta's blown-out sky and the bloom after
 the curve, the canopy's shadow coverage, Anulpha's chevrons) are in
 [tonemap.md](../ghidra/functions/ps4-omega-eu/tonemap.md), "The output encode".
 
