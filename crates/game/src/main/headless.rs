@@ -15,7 +15,7 @@ use oag_raceplay as race;
 use oag_ui::frontend::EarnedTier;
 use oag_ui::strings;
 
-use winit::event_loop::{ControlFlow, EventLoop};
+use winit::event_loop::ControlFlow;
 
 use crate::app::App;
 use crate::args::{
@@ -800,7 +800,7 @@ pub(crate) fn run_race(
 
     let give = give_weapon(cli.give.as_deref())?;
 
-    let event_loop = EventLoop::new()?;
+    let event_loop = crate::new_event_loop()?;
     // Poll rather than Wait: the simulation runs whether or not input arrives.
     event_loop.set_control_flow(ControlFlow::Poll);
     // Read before `loaded` is moved into the app below.

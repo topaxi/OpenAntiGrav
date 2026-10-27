@@ -73,6 +73,27 @@ offered.
 
 `just launch-android` starts the app and follows `adb logcat -s oag` (cleared first, so only this run's lines); `--stop` forces a cold start, `--no-logs` only launches.
 
+**A run without touch: the launch file.** Android hands a NativeActivity no command
+line, so the app reads one from `files/oag-args.txt` at launch and deletes it
+(`oag_mobile::android::take_launch_args`). One argument a line; a line
+`OAG_NAME=value` sets that environment variable instead (`OAG_SPLIT_FINISH=0`). It is
+read in every build, release included, because a measurement needs a release build. The
+directory is app-private from Android 11; on Android 8 to 10 an app holding the storage
+permission could also write the file. `adb` writes it:
+
+```sh
+F=/sdcard/Android/data/org.openantigrav.game/files
+printf '%s\n' $F/data/oag/images/hdfury-ps3-eu-dec.iso --race --autopilot \
+    --frame-log --script 40:quit > /tmp/args && adb push /tmp/args $F/oag-args.txt
+adb shell am start -n org.openantigrav.game/android.app.NativeActivity
+```
+
+`scripts/android-race-phases.sh --serial S --out FILE` does that for a scripted HD
+Vineta K race and saves the run's logcat with the battery temperature before and
+after; `--cool 270` waits for the phone to cool to 27.0 C first, so interleaved runs
+start alike. The `frame-phases` and `frame-log` lines reach logcat (tag `oag`) as on
+the desktop.
+
 `just logcat-android` follows the same log without launching anything (`--clear`, `--dump` to print and exit, `-- ARGS` for another filter).
 
 All four recipes talk to one device. `--serial S` or `$ANDROID_SERIAL` names it; with

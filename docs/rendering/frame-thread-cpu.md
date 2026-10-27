@@ -554,3 +554,72 @@ Per race: `PREFIX="perf record -g --call-graph fp -D 15000 -F 999 -o X.data" dec
 30 --no-intro [--track 'Data\Environments\15_Anulpha_Pass\track.vex' --mode single_race]` (`SRC=pulse-psp-eu.chd`
 for Pulse), under `flock -o ~/.cache/oag/deck.lock`, then `perf script -F tid,ip,sym`, one frame-thread
 `tid`, and a count of samples per direct callee of `prepare_view`. Files on the Deck were removed.
+
+## The reported phone regression, 2026-10-22 against 2026-10-27 (`android-cpu-regression`)
+
+The maintainer read the S24's perf meter `CPU` at about 9 ms on a 2026-10-22 build and 12 to 13 ms
+on one of 2026-10-27 (before `between-ticks`), from the pre-race flyby on. The phone's own log names
+the two builds, `e5c996527` and `78275344a`, both on HD/Fury Vineta K with the phone's settings
+(HD: `fsr1`, motion blur `medium` at half resolution, shadows `original`, `target_fps` 60,
+`frame_limit` 120, `cpu_governor` on). **Not reproduced; on the Deck the newer build is faster.**
+
+**Steam Deck**, unlocked (`vsync = "off"`, `frame_limit = "unlimited"`, `ENABLE_GAMESCOPE_WSI=0`),
+native gaming-mode gamescope, znver2 container builds (`build-appimage.sh --container --target-cpu
+znver2`), HD Vineta K, `--race --autopilot --no-audio --frame-log --seed 1 --track
+'Data\Environments\01_Vineta_K\track.vex' --mode single_race --script 30:quit` (racing adds
+`--no-intro`), three interleaved rounds, first four lines dropped, medians, Deck load 1 to 2.
+`total` ms per frame, three runs each:
+
+| Scene | `e5c996527` (10-22) | `905e2feab` (main 10-27 plus the launch file) |
+| --- | --- | --- |
+| flyby, maintainer's Deck settings | 7.14, 7.22, 7.20 | 5.59, 5.52, 5.56 |
+| racing, maintainer's Deck settings | 9.53, 9.55, 9.42 | 7.85, 7.65, 7.75 |
+| flyby, the S24's HD profile at render scale 200 (GPU-bound, 68 to 71 fps) | 7.02, 7.07, 7.00 | 5.51, 5.51, 5.55 |
+| racing, the same | 10.85, 10.88, 10.96 | 8.17, 8.32, 8.24 |
+
+The phase that moved is `submit`, 5.0 to 5.8 ms down to 3.2 to 3.6: the `deck-anulpha-submit`
+section above. `scene` and `ticks` hold within 0.15 ms.
+
+**S24**, the same race through the launch file (`docs/tools/android.md`), 40 s, each run from a
+battery at 27.0 C (it reads 29.5 to 30 C at the end), `--no-audio`. CPU row (`cpu_ms - present_ms`,
+what the meter draws), median per run: main with the split finish 7.94 and 10.03, main with
+`OAG_SPLIT_FINISH=0` 9.00 and 9.13, `e5c996527` 8.58 (one run; the maintainer needed the phone
+back). The phone is GPU-bound in this scene (about 57 fps, `present` 8 to 12 ms) and the dynamic
+resolution settled alike on both builds (GPU 8.7 against 9.1 ms). Within one split-finish run
+`submit` swings between 3.5 and 7.7 ms from second to second, where without the split it holds at
+about 6.4; the means agree. That looks like the finishing thread landing on different core classes
+(the S24 reports `cpu_capacity` 253 on four cores, 653 on three, 730 on two, 1024 on one; the Deck
+and a desktop Zen report 1024 on every core), but it is not a cost on this evidence. Nor is it a pacing cost:
+the per-second `p99_ms` after the first four lines has a median of 19.41 and 18.77 ms with the split
+and 18.64 and 18.54 without (worst 32.4, 21.6 against 21.5, 21.8; the old build's one run 19.94, worst
+31.4).
+
+The `acquire waited` figures in the maintainer's own log are 0.08 to 0.12 ms on both builds, so no
+wait moved into the frame thread's accounting either. This host was not used: at load 20 to 60 the
+same binary read 2.1 to 5.2 ms `total`.
+
+### The maintainer's scene: the split finish costs the phone about 1 ms
+
+The maintainer's scene was the HD campaign's first event (single race, Vineta K, Venom, weapons
+on), read during the flyby and the first seconds after GO. Reached on the phone by taps from the
+disc picker through RACE CAMPAIGN, the HD card, event 1 and Ship Select (Mirage on both builds),
+`--frame-log` through the launch file, sound on, every run from a battery at 28.7 C, interleaved.
+CPU row median over the first 20 race seconds (the flyby) and the 25 after:
+
+| Run | flyby CPU row | flyby `scene` | flyby `submit` | after GO CPU row |
+| --- | --- | --- | --- | --- |
+| `e5c996527`, two runs | 9.82, 9.78 | 2.25, 2.27 | 7.27, 7.20 | 9.54, 9.59 |
+| main, split finish on, two runs | 10.72, 10.72 | 3.33, 3.35 | 7.02, 7.06 | 8.70, 9.41 |
+| main, `OAG_SPLIT_FINISH=0` | 9.72 | 2.46 | 6.81 | 8.81 |
+
+The frame thread's `total` is 18.5 to 19.4 ms in every run; the phone is GPU-bound (50 to 53 fps in
+the flyby) and the meter's CPU row is `cpu_ms - present_ms`, so time the split adds to `scene`
+shows up as CPU while `present` shrinks. On the S24 the split adds about 1 ms of recording and
+saves no `submit`, where on the Deck it saved 1 ms of `submit`. That is the measurable part of the
+report; the rest of the 9 against 12 to 13 did not reproduce in interleaved, temperature-matched
+runs.
+
+**Fix:** the split is on only where every core reports the same `cpu_capacity`
+(`oag_gpu::split_finish::wanted`); the S24 (253, 653, 730, 1024) runs one encoder, the Deck and a
+desktop Zen (1024 on every core) keep the split. `OAG_SPLIT_FINISH=0`/`1` still overrides. On the
+S24 that is exactly the `OAG_SPLIT_FINISH=0` row above.
