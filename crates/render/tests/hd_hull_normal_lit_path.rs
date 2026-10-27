@@ -32,7 +32,8 @@ fn texture(label: &str, rgba: [u8; 4]) -> Arc<ModelTexture> {
 }
 
 /// The authored tangent `+x`: `2b - 1` of `(255, 128, 128)` is `(1, 0.004, 0.004)`;
-/// `w` is the byte that multiplies the binormal.
+/// `w` is the baked bitangent scale `(scale + 1) / 2`: 255 is +1, 128 is 0 (a raw `w = 0`), 0 is -1
+/// (a signed compile's `w = 0`).
 fn tangent(w: u8) -> u32 {
     u32::from_le_bytes([255, 128, 128, w])
 }
@@ -151,12 +152,18 @@ fn a_hull_reads_its_normal_map_through_the_authored_tangent_frame() {
         "a map tilted away from the light along T must light the hull less: {away:?}"
     );
 
-    // **The map's green goes through `B = cross(N, T) * w`**: with `w = 255`
-    // a tilt along `+y` faces the light; with `w = 0` the binormal is the zero
-    // vector and the same tilt changes nothing.
+    // **The map's green goes through `B = cross(N, T) * scale`**: with scale +1 (`w = 255`)
+    // a tilt along `+y` faces the light; with scale 0 (byte 128) the binormal is the zero
+    // vector and the same tilt changes nothing; with scale -1 (byte 0, the signed compile's
+    // `w = 0`) it tilts the other way.
     let tilted_y = [128, 230, 200, 255];
     let with_b = lit(tilted_y, tangent(255));
-    let without_b = lit(tilted_y, tangent(0));
+    let without_b = lit(tilted_y, tangent(128));
+    let reversed = lit(tilted_y, tangent(0));
+    assert!(
+        luma(reversed) + 8.0 < luma(flat_px),
+        "scale -1 must tilt the normal against B: {reversed:?} against {flat_px:?}"
+    );
     assert!(
         luma(with_b) > luma(flat_px) + 8.0,
         "w = 1 must let the map's green tilt the normal along B: {with_b:?} against {flat_px:?}"

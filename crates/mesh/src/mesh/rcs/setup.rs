@@ -33,7 +33,7 @@ pub(super) struct MaterialSetup {
     pub(super) material_quake: Vec<bool>,
     /// Per material slot: whether the hull's chunks carry their tangent - see
     /// [`super::hull_normal`].
-    pub(super) material_tangent: Vec<bool>,
+    pub(super) material_tangent: Vec<crate::mesh::TangentFrame>,
     pub(super) emissive: Vec<crate::mesh::Emissive>,
     pub(super) alpha_test_ref: Option<f32>,
     /// The magstrip emissive pictures and waves - see [`super::mag_wave`].
@@ -258,7 +258,9 @@ pub(super) fn material_setup(
     let (hull_maps, mut material_tangent) =
         super::hull_normal::hull_normal(model, &material_variants, textures, &mag_emissive, report);
     for (tangent, snow) in material_tangent.iter_mut().zip(&snow.tangent) {
-        *tangent |= snow;
+        if *snow && !tangent.carried() {
+            *tangent = crate::mesh::TangentFrame::Raw;
+        }
     }
     super::mag_wave::merge(&mut mag_emissive, hull_maps);
     // Water reads its picture as a normal map and has none to paint.

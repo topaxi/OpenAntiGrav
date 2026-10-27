@@ -33,7 +33,7 @@ use oag_core::math::{Mat4, Vec3};
 use oag_rcs::rcsmodel;
 use oag_vex::vex;
 
-use super::{Bounds, DrawCall, GpuVertex, Model, TextureSlots, anim_node, slots};
+use super::{Bounds, DrawCall, GpuVertex, Model, TangentFrame, TextureSlots, anim_node, slots};
 
 /// How far a dequantised point may miss the authored box face by, in world
 /// units, before a stride is rejected.
@@ -318,7 +318,7 @@ fn surface(model: &rcsmodel::Model, mesh: &rcsmodel::Mesh, tables: &Model) -> Su
         glow: material_glow.get(slot).copied().unwrap_or(0.0),
         colour_factor: material_colour_factor.get(slot).copied().unwrap_or(false),
         quake: material_quake.get(slot).copied().unwrap_or(false),
-        tangent: material_tangent.get(slot).copied().unwrap_or(false),
+        tangent: material_tangent.get(slot).copied().unwrap_or_default(),
         anim,
     }
 }
@@ -417,7 +417,7 @@ struct Surface {
     quake: bool,
     /// Whether the chunk's vertices carry their authored `tangent` - see
     /// `GpuVertex::tangent` and [`hull_normal`].
-    tangent: bool,
+    tangent: TangentFrame,
     /// The blend equation the material authors, or `None` for the opaque pass.
     ///
     /// The state itself rather than a `vex::BlendClass`, because a PS3 material
@@ -466,11 +466,13 @@ fn authored(normals: &[[f32; 3]]) -> usize {
 /// A tangent's four authored bytes, turned by the node transform the vertex
 /// positions went through and packed again (`GpuVertex::tangent`).
 ///
-/// The bytes are `2b - 1` on `xyz` and a raw `w`. A rigid node transform
+/// The bytes are `2b - 1` on `xyz` and a raw `w`, which is baked as the bitangent's scale
+/// (`TangentFrame`). A raw `w = 0` bakes to byte 128, which the shader reads as +0.004 (0.4 % of
+/// `ny`; accepted, `docs/rendering/hd-track-tone.md`). A rigid node transform
 /// leaves their length alone, so nothing is renormalised, and the identity
 /// (every ship hull measured) returns the file's own bytes exactly. Never `0`:
 /// a unit vector has no all-zero encoding, which is the shader's "no tangent".
-fn baked_tangent(bytes: [u8; 4], to_world: &Mat4) -> u32 {
+fn baked_tangent(bytes: [u8; 4], to_world: &Mat4, frame: TangentFrame) -> u32 {
     let decoded = |b: u8| f32::from(b) / 255.0 * 2.0 - 1.0;
     let t = to_world.transform_vector3(Vec3::new(
         decoded(bytes[0]),
@@ -478,7 +480,14 @@ fn baked_tangent(bytes: [u8; 4], to_world: &Mat4) -> u32 {
         decoded(bytes[2]),
     ));
     let pack = |v: f32| ((v.clamp(-1.0, 1.0) * 0.5 + 0.5) * 255.0).round() as u8;
-    u32::from_le_bytes([pack(t.x), pack(t.y), pack(t.z), bytes[3]])
+    // The bitangent's scale as the vertex program computes it, then `(scale + 1) / 2` so the
+    // shader's `2w - 1` returns it: signed is `2w - 1` (0 -> -1, 1 -> 1), raw is `w` itself.
+    let w = f32::from(bytes[3]) / 255.0;
+    let scale = match frame {
+        TangentFrame::Signed => w * 2.0 - 1.0,
+        _ => w,
+    };
+    u32::from_le_bytes([pack(t.x), pack(t.y), pack(t.z), pack(scale)])
 }
 
 /// Appends one submesh's geometry to a model, as its own draw call.
@@ -597,8 +606,8 @@ fn emit(
             quake: f32::from(u8::from(surface.quake)),
             tangent: tangents
                 .and_then(|t| t.get(k))
-                .filter(|_| surface.tangent)
-                .map_or(0, |&bytes| baked_tangent(bytes, &to_world)),
+                .filter(|_| surface.tangent.carried())
+                .map_or(0, |&bytes| baked_tangent(bytes, &to_world, surface.tangent)),
             texcoord2: texcoords2
                 .and_then(|t| t.get(k))
                 .map_or([0.0, 0.0], |&[u, v]| [finite(u), finite(v)]),
@@ -944,7 +953,7 @@ fn build_with_options(
                     (mesh, model_blob, submesh, stride),
                     (texcoords, lightmap_texcoords, texcoords2),
                 );
-                let tangents = if surface.tangent {
+                let tangents = if surface.tangent.carried() {
                     mesh.tangents(model_blob, submesh, stride).ok().flatten()
                 } else {
                     None

@@ -496,7 +496,7 @@ pub(super) fn emit_chunk(
             );
             // The authored tangent, where the material reads a normal map (`hull_normal`); the
             // circuits' road and walls are world-pass chunks and carried none until this read it.
-            let tangents = if surface.tangent {
+            let tangents = if surface.tangent.carried() {
                 mesh.tangents(model_blob, submesh, stride).ok().flatten()
             } else {
                 None
