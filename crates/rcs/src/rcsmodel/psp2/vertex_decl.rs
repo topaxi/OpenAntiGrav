@@ -14,12 +14,14 @@
 //!
 //! **By anchoring on the `position` hash and scanning the whole CPU
 //! section**, the way this reading was *discovered*
-//! (`crates/game/examples/vita_rcsmodel_rosetta.rs`) - not through a
-//! per-submesh pointer. A submesh record does carry a word at `+0x28` that
-//! is a valid declaration offset on some files (the ship this reading was
-//! built against among them), but it resolves for only 14.2% of the
-//! corpus's submeshes where the anchor scan resolves 92.5% - so it is a
-//! real but unreliable field, not the mechanism this reading uses. Instead
+//! (`crates/game/examples/vita_rcsmodel_rosetta.rs`), then keyed by stride.
+//! A Vita submesh record's `u32` at `+0x28` is the offset of its own
+//! declaration's header, and **resolves on every one of the 276,239 submeshes
+//! of the base, DLC and patch archives** with the declared stride equal to the
+//! buffer-derived one (`crates/rcs/tests/psp2_flat_census_ground_truth.rs`;
+//! an earlier 14.2% figure is not reproduced). The stride map was kept
+//! because it predates that measurement, and it picks a different diffuse
+//! attribute from the record's own on 28.5% of submeshes.
 //! [`find_by_stride`] builds one map per file, keyed by the header's own
 //! stride, and [`super::submeshes`] looks a submesh's already-measured
 //! stride up in it directly.
@@ -44,7 +46,8 @@
 //! only if its own declaration carries `lightmapUV`: 856 submeshes both, 2,330
 //! neither, **0 in either off-diagonal cell** - two independently read fields
 //! agreeing on every submesh, which a wrong pointer offset cannot do. The
-//! Vita's `u32` at the same offset resolves for 14.2 % and is left alone.
+//! Vita's `u32` at the same offset resolves on every submesh too and is read
+//! for `barsUV_blendUV` only; the diffuse lookup is still by stride.
 
 use std::collections::HashMap;
 

@@ -330,13 +330,16 @@ chance level. The two decodings even agree on which 16 of 1,432 vertices
 leave `[0, 1]` - `unorm16` cannot represent that at all, since a road texture
 tiles.
 
-**Found through a stride map, not a per-submesh pointer.** A submesh record
-does carry a word at `+0x28` that is a valid declaration offset on some
-files - the craft this reading was built against among them - but it
-resolves for only 14.2% of the corpus's submeshes, where anchoring on
-`position` per file and keying by stride (`psp2::vertex_decl::find_by_stride`)
-resolves 92.5%. The reproducer is `crates/game/examples/vita_rcsmodel_uv_oracle.rs`;
-the decode is `oag_rcs::rcsmodel::psp2::unpack_texcoord`.
+**Found through a stride map first; the per-submesh pointer was measured wrong and is
+exact.** This reading was built on a stride map (`psp2::vertex_decl::find_by_stride`,
+92.5% of submeshes resolve a `Uv1`) because the record's word at `+0x28` was believed
+to resolve for only 14.2% of the corpus. **That figure is retracted (2026-10-27; not reproduced, the old method is unknown):** the
+`u32` at `+0x28` is a declaration header's offset within the CPU section on **276,239 of
+276,239** Vita submeshes (base, both DLC and both patch archives), with the declared
+stride equal to the buffer-derived one on every one. See
+[the flat-submesh census](#the-flat-submesh-census-and-the-record-pointer). The reproducer
+for the decode is `crates/game/examples/vita_rcsmodel_uv_oracle.rs`; the decode is
+`oag_rcs::rcsmodel::psp2::unpack_texcoord`.
 
 **Confidence 96** on the decode, on the same basis as the normal. What is
 not decoded: `lightmapUV`'s content (offset placed via the same declaration,
@@ -571,6 +574,120 @@ Omega's Feisar and Qirex hulls agree with 2048's ports on submeshes,
 triangles and materials. The node table is read on PS4 with 8-byte pointers
 ([`2048-animation.md`](2048-animation.md#the-models-node-table)). Evidence and
 counts: [omega-status.md](omega-status.md#racing-a-race-starts-on-this-titles-own-data).
+
+## The flat-submesh census, and the record pointer
+
+Measured 2026-10-27 (`2048-flat-census`), `crates/rcs/tests/psp2_flat_census_ground_truth.rs`
+(15 tests, one per archive, counts pinned). Census: **1,174 Vita `.rcsmodel` entries**
+(base 953, DLC1 20, DLC2 20, patch v1.04 `data1` 7 and `data2` 174; listed from each
+archive's own path table) holding **276,239 submeshes**, and Omega's five base archives
+plus four patch archives (**1,272 entries, 239,108 submeshes**; `data09` holds none).
+
+**The record pointer.** The `u32` at record `+0x28` is a relocation site of the CPU
+section's own table (table 0, pointers into section B; `submeshes` walks table 1) on all
+276,239, and, linked at base 0, the offset of the submesh's own declaration header. Resolves on **276,239 of 276,239**, stride agrees on all.
+Control group, independent of the pointer's own arithmetic: a submesh's material binds a
+`lightmap` sampler (`Material::sampler(LIGHTMAP_SAMPLER)`, the Vita's `lightmap` field is
+not read) **if and only if** its own declaration carries `lightmapUV`: 74,613
+submeshes have both, 201,626 neither, **0 in either off-diagonal cell** (every archive
+separately). A second check: 0 Vita submeshes whose own declaration names no diffuse
+coordinate while the material names a `DiffuseTexture`/`DiffuseAlphaMap`/`DiffuseMap`
+sampler. (Omega has 235 such in `data00` and 432 in `data04`, unexplained and not a Vita
+fact; the pins record them.)
+**Confidence 95** that the pointer is the record's own declaration. The older 14.2%
+figure is not reproduced: `find_by_header` resolves all of them today.
+
+**The stride map picks a different attribute from the record's own on 78,685 of 276,239
+Vita submeshes (28.5%)**, by `Uv1` offset or by the declaration lacking one. The layouts
+show how: the stride map's "first declaration of this stride that names `Uv1`" reads
+`Uv1` at `@20` of a layout whose own declaration is `7a3f521c:2x8@16`, `1aaf7631:4x4@20`
+(the diffuse set is named `7a3f521c`, `Uv1` is absent, and `@20` is the vertex colour
+bytes), or `lightmapUV@20` (1,763 of Empire Climb's `track.rcsmodel` submeshes read the
+lightmap coordinate as the diffuse one, 2,099 the vertex colour). Diffuse sets seen under other hashes: `7a3f521c`,
+`db7b4546`, `a1142f57`, `2de13574`, `e33603a6`; and 2,291 base submeshes carry the diffuse
+set as a **float pair** (`2x9`), which `unpack_texcoord` does not decode.
+
+**Per archive, today's reader (stride map).** "Flat" is empty (no `Uv1` in the chosen
+declaration) plus all-zero texcoords. "Fixed" is a flat submesh whose own declaration reads
+a non-zero coordinate.
+
+| Archive | Submeshes | Flat submeshes | Flat triangles | Disagree | Flat and fixed (tris) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| base `data.psarc` | 170,164 | 36,441 | 5,002,875 | 56,948 | 10,659 (1,186,570) |
+| DLC1 | 53,440 | 1,067 | 82,198 | 4,103 | 689 (43,075) |
+| DLC2 | 23,932 | 1,190 | 946,457 | 3,096 | 470 (61,568) |
+| patch `data1` | 10,410 | 2,978 | 555,137 | 6,090 | 8 (270) |
+| patch `data2` | 18,293 | 8,083 | 843,060 | 8,448 | 5,688 (564,951) |
+
+**Per circuit, base archive, without the Zone model** (a directory's `trackZone.rcsmodel` is
+flat colour by design and was inflating every directory total; the rows are `track`,
+`skycube` and the start-grid parts, pinned by `base_circuits_without_zone_are_pinned`).
+Flat = empty plus all-zero; share is of the row's triangles:
+
+| Circuit | Triangles | Empty | All-zero | Flat share | Partly zero |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| bridge | 600,577 | 511,281 | 0 | **85%** | 6,488 |
+| tower (Empire Climb) | 486,724 | 75,035 | 1,449 | 16% | 209,561 |
+| sol | 272,600 | 38,476 | 0 | 14% | 44,708 |
+| park | 381,069 | 48,429 | 0 | 13% | 24,331 |
+| subway | 663,407 | 63,867 | 32 | 10% | 70,607 |
+| arena | 399,934 | 32,658 | 858 | 8% | 10,341 |
+| altima | 434,182 | 33,258 | 0 | 8% | 101,577 |
+| cathedral | 449,440 | 30,417 | 0 | 7% | 43,860 |
+| square | 510,592 | 18,427 | 0 | 4% | 21,375 |
+| mall | 506,303 | 15,365 | 0 | 3% | 55,027 |
+
+Patch v1.04 `data2` replaces `bridge` (580,679 triangles, 492,143 empty) and `park`
+(365,249; 33,089 empty) main models, so a patched install draws those; `tower`'s
+`track.rcsmodel` is unpatched. Bridge's flat set is nearly all of its triangles on both
+base and patch: see the Omega paragraph for why that is authored.
+
+**Empire Climb, `track.rcsmodel` (what a normal race loads)**, 4,957 submeshes, 470,840
+triangles, pinned by `empire_climb_is_pinned`:
+
+| Class | Submeshes | Triangles |
+| --- | ---: | ---: |
+| empty `Uv1` (reader draws the origin texel) | 685 | 59,631 |
+| all-zero texcoords | 78 | 1,449 |
+| flat total | 763 | 61,080 (13%) |
+| partly zero | 1,760 | 209,561 |
+| with a non-finite coordinate substituted | 1,456 | 184,902 |
+| reader's declaration differs from the record's own | 4,477 | 390,244 (83%) |
+| of those: the reader's offset lands on the lightmap, a vertex colour, a tangent or no attribute | 3,897 | 353,130 (75%) |
+| of those: lands on another non-lightmap two-component attribute | 0 | 0 |
+| of those: the reader found no `Uv1` (counted as empty above) | 580 | 37,114 |
+| own declaration: no diffuse coordinate at all | 22 | not pinned |
+| own declaration: float-pair diffuse (not decoded) | 139 | 25,125 |
+| flat today and a real coordinate through the own declaration | 658 | 38,563 |
+
+So on a normal Empire Climb race the flat submeshes are 13% of the triangles, and the
+larger measured defect is that **75% of the triangles (3,897 submeshes) read a "diffuse"
+coordinate out of the lightmap coordinate, a vertex colour or a tangent**, wrong whichever
+attribute the diffuse one is (this count does not depend on the confidence-70 fallback;
+all 3,897 are cases where the record's own declaration puts something else at that offset).
+The remaining 580 differing submeshes are the ones the reader draws flat. The Zone circuit `trackZone.rcsmodel` in the same directory is 10,386 submeshes and
+981,368 triangles of the 15,512 and 1,468,092 the directory tallies.
+
+**Omega answers the same census, and it is not near zero.** Its reader already uses the
+record's pointer (8 bytes), so nothing disagrees (0 of 239,108), but a submesh whose own
+declaration names no diffuse coordinate is authored flat: 14,670 of `data00`'s 38,362,
+36,644 of `data04`'s 108,417, and Omega's `environments2048/bridge` has 5,828 of 11,795
+with no coordinate, where 2048's Vita `bridge` has 5,809 flat in the same circuit and 5,652
+whose own declaration names none (file-to-file: Omega's `bridge` main model against Vita `bridge`, both with the Zone model
+kept apart; **checked, applies**: the authored-flat set is the same on both titles, so it
+is not a reader fault). Flat 2048 triangles that the pointer cannot
+rescue are authored; 10,659 base submeshes (1,186,570 triangles) it can.
+
+**Ready to wire, with what is still unproven.** Reading `Uv1` through the record's own
+pointer (Vita `u32`, as `Declarations::of_record` already does for `bars_blend`) fixes
+every case above where the own declaration names a half-pair diffuse set. It needs the
+same "first non-lightmap two-component half" rule `own_diffuse_texcoord` applies, with the
+Vita half type nibble (8) instead of the PS4's (1): `own_diffuse_texcoord` is currently
+PS4-typed and returns `None` on a Vita `7a3f521c:2x8`. Unproven: that the first such
+attribute is always the diffuse one (the lightmap control group does not tell diffuse from
+`Uv2`), and the 2,291 float-pair submeshes need a decode or a refusal by name. Confidence
+**85** on "resolving per record fixes the flat and wrong-attribute draws", **70** on the
+fallback attribute choice. Judge the wiring against an original Empire Climb frame.
 
 ## What is not decoded
 

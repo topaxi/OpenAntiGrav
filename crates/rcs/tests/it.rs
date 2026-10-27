@@ -27,6 +27,7 @@ mod omega_nodes_ground_truth;
 mod points2_ground_truth;
 mod psp2_animation_ground_truth;
 mod psp2_engine_trail_ground_truth;
+mod psp2_flat_census_ground_truth;
 mod psp2_material_param_ground_truth;
 mod psp2_pvs_ground_truth;
 mod psp2_rcsmodel_ground_truth;

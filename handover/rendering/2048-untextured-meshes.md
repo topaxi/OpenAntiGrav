@@ -1,8 +1,8 @@
 ---
-status: measure
+status: ready-to-wire
 titles: [2048]
 updated: 2026-10-27
-summary: "2048 flat or untextured meshes: Vita UV lookup leaves texcoords empty or zeroed (likeliest, Empire Climb); Zone road flat by design"
+summary: "2048 flat meshes: Vita +0x28 decl pointer resolves 100%; stride map reads wrong attribute on 75% of Empire Climb tris; wire it"
 size: M (35)
 difficulty: medium (35)
 ---
@@ -153,30 +153,38 @@ wrong picture, so each fix is judged against the original frame, not a green tes
 
 ## Open
 
+Census done 2026-10-27 (`2048-flat-census`; numbers and evidence in
+`docs/formats/2048-rcsmodel.md`, "The flat-submesh census, and the record pointer";
+test `crates/rcs/tests/psp2_flat_census_ground_truth.rs`).
+
 1. **Mode confirmed 2026-10-27: Empire Climb (`tower`), normal race** (maintainer).
    So cause 1, not cause 2. Cause 2 stays by design; cause 3 is still open.
-2. **Census (counts only, no behaviour change).** In `psp2::build` and
-   `bind_textures`, add to `psp2::Report`:
-   - per submesh: empty texcoords (path a), all-zero texcoords (the flat case),
-     and partly zeroed (path b), each with its triangle count, so the flat area
-     is quoted rather than a count;
-   - the four `bind_textures` exits as separate counters, with one debug line per
-     unresolved submesh giving its path, reason and triangles;
-   - on the 14.2% of submeshes where the Vita record pointer does resolve, the
-     number where the stride map's declaration disagrees with it.
-   Run each 2048 circuit headless (see the top of this thread) and read the
-   counters.
-3. **Rank by area, not count.** 19 draws can be a whole road or a few props. The
-   census above logs triangles, so quote area before choosing the fix.
-4. **Fix cause 1 by resolving the Vita declaration per submesh.** Start from the
-   PS4 `of_record` path in `crates/rcs/src/rcsmodel/psp2.rs` and the section-B
-   records. Measure the Vita pointer's relocation before assuming it works: the
-   relocation idea is HD-derived and unmeasured on 2048. This is RE, not a wire,
-   until the relocation is measured.
-5. **Omega per-material census** (see Omega comparison).
+2. ~~Census.~~ **Done as a test, not as `Report` counters** (no draw behaviour or
+   `psp2::Report` change). Empire Climb `track.rcsmodel` (4,957 submeshes, 470,840
+   triangles): flat (empty + all-zero) 763 submeshes / 61,080 triangles (13%); partly
+   zeroed 1,760 / 209,561; **on 3,897 submeshes / 353,130 triangles (75%) the reader's
+   offset lands on the record's own lightmap, vertex colour, tangent or nothing**
+   (wrong whichever attribute is the diffuse one; 4,477 / 390,244 differ in all); 658 / 38,563 of the flat ones read a real coordinate through
+   the own declaration. Per circuit without the Zone model, flat share of triangles: bridge 85%
+   (authored: Omega's bridge matches), tower 16%, sol 14%, park 13%, subway 10%.
+3. ~~Rank by area.~~ Done above. The bigger defect than the flat 13% is the wrong
+   attribute on 75% of the triangles (lightmap UV, vertex colour or tangent as diffuse UV).
+4. ~~Measure the Vita pointer.~~ **It resolves on 276,239 of 276,239 Vita submeshes**
+   (base, DLC1/2, patch data1/2), stride agreeing on all; lightmap control group 0
+   off-diagonal. The 14.2% was a wrong measurement. **Ready to wire**: read the diffuse
+   set through the record's own declaration (`Declarations::of_record` already does for
+   `bars_blend`), with `own_diffuse_texcoord` given the Vita half type (8; it is
+   PS4-typed today). Open inside the wiring: 2,291 base submeshes carry a float-pair
+   (`2x9`) diffuse set that `unpack_texcoord` does not decode (decode it or refuse by
+   name); the "first non-lightmap two-component half" fallback is confidence 70.
+   Judge against an original Empire Climb frame.
+5. **Omega per-material census**: Omega's flat set is authored (its pointer is used
+   already; `environments2048/bridge` 5,828 of 11,795 submeshes have no coordinate vs
+   2048's 5,809 flat). 235 (`data00`) and 432 (`data04`) Omega submeshes have a diffuse-
+   family sampler but a coordinate-less declaration: unexplained.
 
 ## Next Steps
 
-1. A lane runs the cause 1 census above (Open item 2) and reports, per circuit,
-   the flat-submesh count and its triangles, Empire Climb first.
-2. Then fix cause 1 (Open item 4), judged against an original Empire Climb frame.
+1. Wire item 4 (lane `oag-wire`), reading `Uv1` and the fallback through the own
+   declaration for the Vita, scoped to the 2048 reader; check the Empire Climb frame.
+2. Then cause 3 (the four `bind_textures` exits, still not logged).
