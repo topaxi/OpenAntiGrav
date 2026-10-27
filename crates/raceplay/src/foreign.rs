@@ -20,7 +20,6 @@ pub mod choice;
 mod frame;
 #[cfg(feature = "ballisticng")]
 mod map;
-#[cfg(feature = "ballisticng")]
 pub mod survey;
 
 use std::path::Path;

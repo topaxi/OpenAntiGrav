@@ -50,10 +50,9 @@ are committed fixtures (`just blender-fixtures`), read by `crates/trackfile/test
 
 ## Open
 
-- **RACE REMIX's CUSTOM title is behind the off-by-default `ballisticng` feature (maintainer, 2026-10-27)**, so in
-  every shipped build an own-format track has no menu route: `oag-game --track-file <manifest>` is the only way to
-  race one. The picker (own-format files first, then Workshop) returns when a build enables the feature, or when the
-  own-format rows are split from the Workshop ones and offered on their own - undecided, the maintainer's call.
+- **Closed 2026-10-27 (`own-tracks-row`):** RACE REMIX's CUSTOM title lists own-format tracks in every build
+  (one title; the off-by-default `ballisticng` feature only adds the Workshop rows). Test:
+  `custom_tracks::tests::an_own_format_track_is_listed_raceable_and_starts_a_race_whatever_the_features`.
 
 - Add-on follow-ups (`docs/tools/blender.md`, "Open"): banking and per-point width on the curve; multi-path and
   junction authoring beyond the scene property the importer writes.

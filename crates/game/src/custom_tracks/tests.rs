@@ -233,6 +233,38 @@ fn a_begun_scan_survives_through_the_cache_file_it_was_given() {
     std::fs::remove_dir_all(file.parent().unwrap()).ok();
 }
 
+/// The menu path for an own-format track, in a build without the `ballisticng`
+/// feature: the scan lists the file, settles it raceable, and the options it
+/// sets reach the same catalogue entry `--track-file` builds.
+#[test]
+fn an_own_format_track_is_listed_raceable_and_starts_a_race_whatever_the_features() {
+    let dir = lone_fixture("menu-path");
+    let mut scan = Scan::new(std::slice::from_ref(&dir), &[], None);
+    scan.begin();
+    finish(&mut scan);
+    let strings = StringTable::default();
+    let rows = scan.choices(&strings);
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].label, "FIXTURE OCTAGON (TRACK FILE)");
+    assert!(rows[0].unavailable.is_none());
+    let path = scan
+        .raceable(&rows[0].value)
+        .expect("raceable")
+        .to_path_buf();
+    let mut options = oag_raceplay::Options::default();
+    apply(&mut options, &path);
+    let entry = oag_raceplay::foreign::entry(options.foreign_track.as_deref().unwrap())
+        .expect("the race's catalogue entry");
+    assert_eq!(entry.foreign.as_deref(), Some(path.as_path()));
+    std::fs::remove_dir_all(dir).ok();
+}
+
+#[cfg(not(feature = "ballisticng"))]
+#[test]
+fn without_the_feature_discover_looks_for_no_workshop_directory() {
+    assert!(super::workshop_search_path().is_empty());
+}
+
 #[test]
 fn applying_a_custom_track_clears_what_an_earlier_launch_left() {
     let mut options = oag_raceplay::Options {
@@ -249,6 +281,7 @@ fn applying_a_custom_track_clears_what_an_earlier_launch_left() {
     assert_eq!(options.craft_source, None);
 }
 
+#[cfg(feature = "ballisticng")]
 mod disc {
     use super::*;
 
