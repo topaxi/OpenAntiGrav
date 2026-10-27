@@ -554,3 +554,46 @@ Per race: `PREFIX="perf record -g --call-graph fp -D 15000 -F 999 -o X.data" dec
 30 --no-intro [--track 'Data\Environments\15_Anulpha_Pass\track.vex' --mode single_race]` (`SRC=pulse-psp-eu.chd`
 for Pulse), under `flock -o ~/.cache/oag/deck.lock`, then `perf script -F tid,ip,sym`, one frame-thread
 `tid`, and a count of samples per direct callee of `prepare_view`. Files on the Deck were removed.
+
+## The reported phone regression, 2026-10-22 against 2026-10-27 (`android-cpu-regression`)
+
+The maintainer read the S24's perf meter `CPU` at about 9 ms on a 2026-10-22 build and 12 to 13 ms
+on one of 2026-10-27 (before `between-ticks`), from the pre-race flyby on. The phone's own log names
+the two builds, `e5c996527` and `78275344a`, both on HD/Fury Vineta K with the phone's settings
+(HD: `fsr1`, motion blur `medium` at half resolution, shadows `original`, `target_fps` 60,
+`frame_limit` 120, `cpu_governor` on). **Not reproduced; on the Deck the newer build is faster.**
+
+**Steam Deck**, unlocked (`vsync = "off"`, `frame_limit = "unlimited"`, `ENABLE_GAMESCOPE_WSI=0`),
+native gaming-mode gamescope, znver2 container builds (`build-appimage.sh --container --target-cpu
+znver2`), HD Vineta K, `--race --autopilot --no-audio --frame-log --seed 1 --track
+'Data\Environments\01_Vineta_K\track.vex' --mode single_race --script 30:quit` (racing adds
+`--no-intro`), three interleaved rounds, first four lines dropped, medians, Deck load 1 to 2.
+`total` ms per frame, three runs each:
+
+| Scene | `e5c996527` (10-22) | `905e2feab` (main 10-27 plus the launch file) |
+| --- | --- | --- |
+| flyby, maintainer's Deck settings | 7.14, 7.22, 7.20 | 5.59, 5.52, 5.56 |
+| racing, maintainer's Deck settings | 9.53, 9.55, 9.42 | 7.85, 7.65, 7.75 |
+| flyby, the S24's HD profile at render scale 200 (GPU-bound, 68 to 71 fps) | 7.02, 7.07, 7.00 | 5.51, 5.51, 5.55 |
+| racing, the same | 10.85, 10.88, 10.96 | 8.17, 8.32, 8.24 |
+
+The phase that moved is `submit`, 5.0 to 5.8 ms down to 3.2 to 3.6: the `deck-anulpha-submit`
+section above. `scene` and `ticks` hold within 0.15 ms.
+
+**S24**, the same race through the launch file (`docs/tools/android.md`), 40 s, each run from a
+battery at 27.0 C (it reads 29.5 to 30 C at the end), `--no-audio`. CPU row (`cpu_ms - present_ms`,
+what the meter draws), median per run: main with the split finish 7.94 and 10.03, main with
+`OAG_SPLIT_FINISH=0` 9.00 and 9.13, `e5c996527` 8.58 (one run; the maintainer needed the phone
+back). The phone is GPU-bound in this scene (about 57 fps, `present` 8 to 12 ms) and the dynamic
+resolution settled alike on both builds (GPU 8.7 against 9.1 ms). Within one split-finish run
+`submit` swings between 3.5 and 7.7 ms from second to second, where without the split it holds at
+about 6.4; the means agree. That looks like the finishing thread landing on different core classes
+(the S24 reports `cpu_capacity` 253 on four cores, 653 on three, 730 on two, 1024 on one; the Deck
+and a desktop Zen report 1024 on every core), but it is not a cost on this evidence.
+
+The `acquire waited` figures in the maintainer's own log are 0.08 to 0.12 ms on both builds, so no
+wait moved into the frame thread's accounting either. This host was not used: at load 20 to 60 the
+same binary read 2.1 to 5.2 ms `total`.
+
+What is left is the phone in the maintainer's own scene (menus, touch, sound) and a thermally
+matched A/B there.
