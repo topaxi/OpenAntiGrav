@@ -1390,3 +1390,60 @@ The Modesto banners lose some saturation (right box 35.1 to 24.7) but are not th
   taps raw where the console decodes them.
 - `oag_post::hd_zoom` reads the chain's quarter-res copy, which is decoded, so it needed no
   change; it is not exercised by any of the 13 pairs.
+
+## Vineta K's warm light pool on the wall top: ours draws a second, lightmap-less copy over it (2026-10-27, `vineta-warm-pool`)
+
+**Claim (the maintainer, from the compare page):** on `hd/vineta-k` the original shows a warm, orange-white pool of light on the
+top of the dark wall left of the craft; ours has only a thin orange line. **Result:** the pool is in our data and our slot
+392 draws it. A second chunk, slot **633**, covers it with the unlit-by-lightmap navy of the same wall. The original does not
+draw that chunk at this camera (confidence 70, one boot, see below). Why it does not is open.
+
+**Size (the pair's `theirs.png` against `ours.png`, blur sigma 7, mean abs RGB):**
+
+| Box (1920x1080 frame) | Pixels | Original mean RGB | Ours mean RGB | Luma gap |
+| --- | ---: | --- | --- | ---: |
+| pool core `330,515 150x30` | 4,500 | 79.5, 67.1, 56.3 | 21.4, 28.8, 39.4 | +37.7 |
+| slot 633's footprint (`0,470` to `801,613`) | 17,254 | err 18.3 | | area x error 0.315 M |
+| the same footprint with slot 633 skipped | 17,254 | err 5.2 | | 0.090 M |
+
+With `OAG_SKIP_SLOT=633` the pool core reads 81.7, 69.3, 58.1 against the original's 79.5, 67.1, 56.3. Over the footprint
+the skipped render is closer to the original in 15,345 px and worse in 134 px, so the original shows no part of 633 from
+this camera. The residual 0.09 M is the pool's own shape and the wall's grain.
+
+**Method, and what each step showed (confidence 95 for the ours-side attribution):**
+
+1. `OAG_TINT_MATERIALS=1` at the pair's camera, then `OAG_SKIP_SLOT` on the dominant slots of the box: skipping 392 darkens the
+   box a little (the pool is not slot 392 alone being painted over), skipping **633** brings the pool back. With
+   `OAG_ONLY_SLOT=392` the whole wall, its top and the warm pool are drawn; with `OAG_ONLY_SLOT=633` only a thin navy strip along
+   the wall's top face is drawn. The thin orange line in ours is slot 392 showing at the strip's edge.
+2. Slot 633 is `diffuse_normal_specular_emmissive` with `ds_wall_cs.gtf`, the same material and texture as 392, but its role is
+   `lit_default` (no lightmap) where 392's is `lightmap|no_ambient` (`hd_material_probe_dump`). It is one chunk (index 1556 of the
+   `.rcsmodel`): 24 vertices, 60 indices, `render_flags` 0 (392's chunks carry bit 0, "track"), world-space bias
+   `(11.38, 38.44, -83.27)`. Its `+0x30` hash `debc5798` matches **no** `.vex` node (the neighbouring wall chunk 1038, slot 392,
+   hash `35f10d84`, does). It belongs to a small unreferenced cluster, chunks 1554 to 1557 (slots 779, 633/634, 481), all
+   `render_flags` 0, 35 to 47 units from the start line.
+3. **The original's draw list, one cold boot, the start grid** (`rpcs3-drive.py serve`, `hd-draw-dump.py`, `HOOK_TGT=1920000`):
+   666 draws on the scene target. A draw's `c[467]` is its chunk's bias and its index count is the chunk's, and that key finds
+   known chunks: slot 392's chunk 1038 (bias `(-48.89, 36.64, -85.16)`, 768 indices) is draw 145 and again draw 672 (a second
+   pass with a fourth sampler). No draw has chunk 1556's bias: the nearest scene draw is 17 units away, and no 60-index draw
+   sits near it. Falsifier written beforehand: a 60-index draw at that bias binding `ds_wall_cs` would have killed the claim.
+
+**What is not known.**
+
+- *Why* the original skips the chunk. Candidates, none measured: the engine draws only chunks a node reaches plus a set of
+  special materials (of 2,081 unreferenced chunks, 30 matched a scene draw in this dump, all glow, billboard, glass or sea
+  materials; no `diffuse_normal_specular_emmissive` one); a PVS cell that excludes it; a mode-gated piece (the `+0x06` bits 9 and
+  10 table in rcsmodel.md); or a depth test our pass resolves the other way. The speed pads are the counter-example that
+  unreferenced chunks *are* drawn (pads.md), so "unreferenced is not drawn" is false as a rule.
+- The match key works for draws whose chunk position is a world bias; a node-local chunk is not found by it, so the
+  referenced chunks of the frame (14 of 389 matched) say nothing and only the unreferenced count above is usable.
+- One boot, one pose (the start grid, a different ship from the pair's `harimau classic`, the account having it locked).
+  The chunk is 36 units from the start line and the same area is in view in both, but a second boot and a mid-lap
+  pose have not been taken. Confidence in "not drawn there": 70.
+- The Tech de Ra glass grid is not this cause (a glass family, `glass_reflect`, not a wall copy); it is not examined here.
+
+**Not wired.** Skipping 633 would match this picture and would be tuning to it: the rule has to be the engine's. Ready to
+wire once the original's draw rule for such a chunk is known; see the `hd-fidelity` thread.
+
+**2048 / Omega:** not checkable here. The finding names an HD chunk of Vineta K; 2048 and Omega ship Vineta K as a re-cooked
+model with their own chunk order, and no draw capture of either exists (Omega's shadPS4 shows no memory readout).
