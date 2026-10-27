@@ -39,9 +39,19 @@ def log(msg):
     print("[menu-pair] " + msg, file=sys.stderr, flush=True)
 
 
-def extra_settings(profile_dir, front_end_style=None, race=None):
-    """Append the keys a menu still needs to ours' private `settings.toml`: the front-end styling (HD or FURY) and the
-    race selection a picker highlights (`race.team`, `race.track`, `race.mode`, `race.variant_chosen`: strings or booleans). `ce.write_ours_settings` wrote the
+#: A debug build unlocks everything unless its profile says otherwise; the original's fresh profile has the locks.
+LOCKED_DEV = "[dev]\nunlock_everything = false\n"
+
+
+def profile_is_locked(profile_dir):
+    """Whether the profile's settings carry `[dev] unlock_everything = false`."""
+    path = ce.settings_path(profile_dir)
+    return path.exists() and LOCKED_DEV in path.read_text()
+
+
+def extra_settings(profile_dir, front_end_style=None, race=None, locked=False):
+    """Append the keys a menu still needs to ours' private `settings.toml`: the front-end styling (HD or FURY), the
+    `[dev]` locks (`locked`) and the race selection a picker highlights (`race.team`, `race.track`, `race.mode`, `race.variant_chosen`: strings or booleans). `ce.write_ours_settings` wrote the
     render profile; the game rewrites the file on its first run and keeps these values."""
     path = ce.settings_path(profile_dir)
     text = path.read_text()
@@ -49,6 +59,8 @@ def extra_settings(profile_dir, front_end_style=None, race=None):
         text = text.replace("[display]\n", '[display]\nfront_end_style = "%s"\n' % front_end_style, 1)
     if race:
         text += "\n[race]\n" + "".join("%s = %s\n" % (k, json.dumps(v)) for k, v in race.items())
+    if locked:
+        text += "\n" + LOCKED_DEV
     path.write_text(text)
 
 
@@ -101,6 +113,9 @@ def menu_pair(pair, *, theirs_png, oag_game, image, page, drawn_from, xml_file, 
     # What `extra_settings` put in ours' profile, kept so a re-render (`compare-rerender-ours.py`) can put it back.
     if race:
         pair.rec["ours"]["race"] = dict(race)
+    # Likewise the locks: a re-render without them draws every circuit and team open (Pure's pickers listed four leagues).
+    if profile_is_locked(profile_dir):
+        pair.rec["ours"]["unlock_everything"] = False
     pair.rec["ours"]["selection"] = selection["ours"]
     pair.rec["ours"]["page"] = page
     if route:
