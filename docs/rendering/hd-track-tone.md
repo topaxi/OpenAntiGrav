@@ -1287,12 +1287,13 @@ The Modesto banners lose some saturation (right box 35.1 to 24.7) but are not th
 
 ### What is left, and why the two worse pairs do not argue against the law
 
-- **Amphiseum (+0.42)** is one surface: `hologram.rcsmaterial`, the board over the start
-  gantry. With it skipped (`OAG_SKIP_MATERIAL=hologram`) the box reads `63.5, 82.2, 90.8`
-  against the original's `54.1, 77.1, 89.8`. Ours draws it through the generic emissive
-  stand-in (its program is unread, rcsmaterial.md, "Pixels are small") and it was already
-  +70 grey too bright before this change; an encoded add of a too-strong source lifts more.
-  Next: read `hologram`'s fragment program.
+- **Amphiseum (+0.42)** is one surface, **not `hologram.rcsmaterial`** (corrected 2026-10-27):
+  the board over the start gantry is `dc_hologramwithstatic.rcsmaterial` (slot 637). The
+  2026-10-22 bisect used `OAG_SKIP_MATERIAL=hologram`, a substring needle that also dropped
+  `dc_hologramwithstatic`, `dc_hologramwithstatic2` and the `hologramscanlines` texture's
+  slot; `OAG_SKIP_MATERIAL=materials/hologram.rcsmaterial` moves nothing in the box. Wired
+  since: see "The Amphiseum hologram board" below.
+
 - **Talon's (+0.18) and its Assegai pair (+0.11)**: the grill's source is still about 1.5x
   the original's after the decode. The phase of the scanlines (they move with the clock) and
   the second layer's scroll are the candidates.
@@ -1314,3 +1315,53 @@ The Modesto banners lose some saturation (right box 35.1 to 24.7) but are not th
   taps raw where the console decodes them.
 - `oag_post::hd_zoom` reads the chain's quarter-res copy, which is decoded, so it needed no
   change; it is not exercised by any of the 13 pairs.
+
+## The Amphiseum hologram board
+
+`dc_hologramwithstatic.rcsmaterial` (slot 637 of `amphiseum/track.vex`, `SRC_ALPHA`/`ONE`,
+authored pair `770`/`1`; the quad over the start gantry, advert `advert_a`). Its program is
+read live and wired (2026-10-27, `hd-hologram-board`):
+
+- **Program** (fragment block #3 `@0x1530` of the material, `scripts/ps3-microcode.py fp-file`;
+  vertex block #3 `@0x13a0` writes one pair, `TC4.xy = v[2].xy`, and `TC1.xyz = c[208].x = 0`).
+  With `t` the engine clock and `(u, v)` the diffuse pair:
+  `colour = fog(advert(u + S t, v) + static(u, v + V t)) / 2`, `alpha = scan(u, v).x * K`.
+  `S = 1.0` (`0x31182e0d`), `V = 4.5384` (`0xb6573513`), `K = 0.73802` (`0xeedee991`) are the
+  record's own numbers, read, not typed. Units: 0 `dc_scanlines` (`0x05dff912`, 128x128 DXT1),
+  1 `advert_a` (`0x3bdc0403`, 512x256 DXT45), 2 `dc_gradient_horizontal` (`0xdba0a35a`,
+  128x128 DXT1).
+- **Read live** (RPCS3, Amphiseum Time Trial start save, `scripts/hd-draw-dump.py`, draw 700 of
+  the dump, fragment program `0x7bd200`): the live program is block #3 with the engine's `time`
+  (`79.8857` at the pause), the fog colour (`0.0118, 0.0118, 0.0196`) and density (`0.0015`)
+  patched in; blend `SrcAlpha`/`One`, depth test `LEQUAL`, **`SET_TEXTURE_ADDRESS` `0x60710101`
+  on units 0, 1 and 2: gamma nibble 7, all three decoded on fetch**, so the mask's red is
+  decoded too. Confidence 88 (one frame, one draw).
+- **Arithmetic cross-check**: the mean of `decode(scan.r) * K` over the texture is `0.185`
+  and the mean of `encode(0.5 (decode(advert) + decode(static)))` is `0.32, 0.49, 0.50`, so
+  the board's expected mean lift on a quad it covers is `+15, +23, +24` (0-255, encoded
+  add); ours lifts the box by `+13.4, +22.8, +23.5` over the board skipped (slot 637,
+  `OAG_SKIP_SLOT=637`).
+- **Measured** (box `840,0 240x120` of `hd/the-amphiseum`, mean grey 0-255; theirs `54.1, 77.1,
+  89.8` = 73.7): before `139.6, 170.3, 181.9` = 163.9 (mean of per-pixel |difference| 90.5);
+  after `75.5, 103.5, 112.5` = 97.2 (**26.2**, difference of means +23.5); the whole board
+  skipped (`OAG_SKIP_SLOT=637`) `62.1, 80.7, 89.0` = 77.3 (19.0, +3.6). The pair's whole-frame
+  mean grey 9.61 to 8.59; the other 17 HD pairs byte-identical. **The brief's bar (within 10)
+  is not met**, and skipping the board still scores better on the box, because the scene
+  behind the board is about 20-25 grey brighter in ours than in the original (the board
+  itself matches its own arithmetic above); the picture, read by eye, shows the original's
+  faint scanline-striped rings. The next lead is the pillar and wall behind it.
+- **Wired** as glow-table mode 7 (`PROGRAM_STATIC_HOLOGRAM`, `mesh::rcs::static_hologram`),
+  keyed on the family name and the block's declared samplers and parameters, so
+  `dc_hologramwithstatic2` (a different program) keeps the generic reading. Pinned by
+  `hd_static_hologram_ground_truth` (disc-backed) and `hd_static_hologram_lit_path` (the
+  shader, no game content). Ours had added the advert to the scanlines' colour at full
+  strength with no alpha mask and no `/2`.
+- **Candidate for the grill's 1.5x** (not checked): the unlit `plain` path of `shade.wesl`
+  applies no `scene.light.output_scale`, so an unlit program ending in `/2` that is not wired
+  by hand draws twice as strong in linear terms. This program takes the scale explicitly.
+
+**Omega and 2048:** Omega ships `dc_hologramwithstatic_1.rcsmaterial` (and `..2_1`) beside
+the same Amphiseum layout: **checked, applies in name, not wired** (a PS4 GCN program, unread).
+2048's DLC1 ships only `hologram.rcsmaterial` for Amphiseum and Modesto Heights: **checked,
+differs** (no `dc_hologramwithstatic`). `hologram.rcsmaterial` itself (slots 604-624 on Amphiseum) adds nothing to the start frame's
+box (skipping it changes the frame by 0.04 mean grey) and its program stays unread.
