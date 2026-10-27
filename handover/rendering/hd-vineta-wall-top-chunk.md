@@ -2,7 +2,7 @@
 status: measure
 titles: [hd]
 updated: 2026-10-27
-summary: "Vineta K wall-top pool: unreferenced chunk 1556 (slot 633) covers slot 392; the original draws no such chunk, rule unknown"
+summary: "Vineta K chunk 1556 (slot 633) covers the wall-top pool; PVS, frustum, flags, material all refuted; read bucket B1/B4 consumers"
 difficulty: medium (40)
 ---
 
@@ -12,16 +12,18 @@ Evidence and numbers: `docs/rendering/hd-track-tone.md`, "Vineta K's warm light 
 
 ## Open
 
-- Why the original does not draw `.rcsmodel` chunk 1556 (slot 633, `diffuse_normal_specular_emmissive`, `lit_default`, flags 0,
-  hash matching no `.vex` node). Lead: ours draws every unreferenced chunk, the original drew 30 of 2,081 in one frame (glow,
-  billboard, glass, sea). Candidates: PVS cell, mode-gated bit (`+0x06` bits 9 and 10), engine draw filter on unreferenced
-  chunks, depth order. Read `Pvs_*` and the per-chunk record consumers in Ghidra (`/hdfury/EBOOT-ps3-hdfury-eu.elf`).
-- Chunks 1554 to 1557 (slots 779, 633, 634, 481) are the same cluster; check them in the same pass.
-- Second boot, and a mid-lap pose, for the draw-list absence (one boot so far).
+- Why the original draws neither surface of chunk 1556 (slot 633) at the start grid. Done 2026-10-27 (`hd-unreferenced-chunks`,
+  `docs/rendering/hd-track-tone.md`): the per-surface `c[467]` key, the original's one PVS cell (bit set), the frustum (centred),
+  flags, material family and bounds entry all fail to separate it from the drawn chunks 1554, 1555, 1557 beside it; about 95 % of
+  PVS+box-eligible orphans are drawn across seven lists, leaving ~30 unexplained exceptions with no common field.
+- Chunks 1554 to 1557 are the same cluster; 1554, 1555 and 1557 are drawn, 1556 is not.
+- A second boot and a mid-lap pose for the draw-list absence (one boot so far; not needed by the census).
 
 ## Next Steps
 
-1. Census every circuit: unreferenced, flags-0 chunks on non-pad, non-glow materials, and whether the original's draw list
-   (`hd-draw-dump.py`, bias key on `c[467]`) ever contains one.
-2. Once the rule is named, wire it in the scene's unreferenced pass (`crates/mesh/src/mesh/rcs/pads.rs` area), not a slot skip.
-   Size: about 0.23 M area x error on this pair; wiring is small once the rule is known (confidence 60).
+1. Read the **consumer of bucket B1** (`Scene_SortAndLightVisibleChunks` `0x003fdae8` routes flag bits 4 and 5 clear to B1; its
+   consumer is unresolved in `zone-effectsettings-loader.md`) and the B4 consumer `FUN_00400a00`; look for a per-record test
+   the submit loop (`0x003fab50`) does not make. Name only at 70 or more.
+2. If a per-record test is found, express it over data (material record field, surface field) and census the ~30 exceptions
+   against it; wire in the scene's unreferenced pass (`crates/mesh/src/mesh/rcs/pads.rs` area), not a slot skip.
+3. Otherwise capture a second Vineta K frame at the pair's exact camera (`c[465]` holds the eye in the dump) and list again.

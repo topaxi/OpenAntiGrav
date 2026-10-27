@@ -1461,6 +1461,64 @@ this camera. The residual 0.09 M is the pool's own shape and the wall's grain.
   pose have not been taken. Confidence in "not drawn there": 70.
 - The Tech de Ra glass grid is not this cause (a glass family, `glass_reflect`, not a wall copy); it is not examined here.
 
+**Census of "unreferenced" chunks against seven original draw lists (2026-10-27, `hd-unreferenced-chunks`; supersedes the
+"30 of 2,081" count above).** No new boot: the draw lists already dumped for Vineta K, The Amphiseum, Talon's Junction (two
+frames), Sebenco Climb, Sol 2 and Tech De Ra were re-listed with `scripts/rsx-draw-list.py <dir> <stem> --const 467 --const 256
+--const 257 --const 258 --const 259 --const 465` and joined to each circuit's `.rcsmodel`, `.vex` and `.pvs`.
+
+1. **The `c[467]` key was per chunk, and it is per surface.** A multi-surface chunk draws each surface with that surface's own
+   `Mesh::bias` in `c[467]`. Chunk 1038 of Vineta K has five surfaces; draw 144 is its first (bias `-48.14, 35.90, -129.03`)
+   and draw 145 its second (`-48.89, 36.64, -85.16`), which the section above read as a bias of the chunk. Chunk 1556 has two
+   surfaces (60 + 60 indices) at `(11.38, 38.44, -83.27)` and `(11.44, 38.16, -130.35)`; **neither is in the dump** (tolerance
+   0.05), so the absence now rests on both surfaces and on the texture key (no draw binds `ds_wall_cs` near it).
+   Confidence in "chunk 1556 is not drawn at the start grid": 80 (one boot, one pose; both keys agree).
+2. **The frame's camera and view-projection are in the dump.** In a scene draw `c[465]` is the eye (Vineta K dump:
+   `45.63, 40.12, -94.99`, 6 units from the pair's camera) and `c[256..259]` the model-view-projection as four columns (132 distinct values on Vineta K; on a world-baked
+   draw such as draw 144 it is the view-projection, and the eye projects to clip `0,0,-1.08,0`; `c[260..263]` is the 75-degree second-target projection). Confidence 85.
+3. **The original's single PVS cell is recoverable and the law holds on six circuits.** The cell whose bitmap has the most of a
+   frame's matched chunks set: Vineta K cell 104 (or 376) holds 387 of 388, Amphiseum 340/344, Talon's 196/197 and 151/152,
+   Sebenco 354/354, Sol 2 438/438, Tech De Ra 175/175. Chunk 1556's bit is set in cells 99 to 108, 375 and 376 (33 of 472 cells),
+   so **the PVS does not drop 1556 at the start grid**. Confidence 90.
+4. **The frustum does not drop it either.** `Visibility_FrustumCullChunks` boxes a world-space chunk with its render record's
+   `+0x20` (centre) and `+0x30` (half extent); chunk 1556's is centre `11.39, 38.41, -106.82`, half extent `35.12, 0.30, 25.68`,
+   and projects to ndc `(0.18, 0.08)` of the dump's own view-projection: dead centre of the frame. Confidence 85.
+5. **No material, flag or record field separates it.** Orphan chunks (no `Mesh` node names the hash) are the normal state:
+   1,557 of 1,811 on Vineta K. Over the six lists, a chunk that passes the cell bitmap and the box test is drawn in
+   about 95 % of cases (Vineta K 252 of 272, Amphiseum 187 of 191, Talon's 147 of 153 and 151 of 175, Sebenco 354 of 476, Sol 2
+   297 of 317, Tech De Ra 84 of 86; the box test is rough, 0 to 153 matched chunks per list fall outside it, so read these as a
+   bound). The family of 1556, `diffuse_normal_specular_emmissive`, is drawn in 8 of 9 orphan candidates. Its
+   record is all zero beyond the bounds (flags 0, like the drawn 1554, 1555, 1557 around it), its bounds block entry is
+   ordinary (`11.43, 38.19, -106.63, r 43.4`), and `Scene_SubmitVisibleChunks` (`0x003fab50`) appends every surface of
+   every chunk whose bit is set to the bucket of `g_MaterialDrawClass[material]`, with no other test.
+6. **What remains is a short list of exceptions, not a rule.** Eligible (cell bit set, box inside) orphans with no draw: 4 on Vineta
+   K (1556, the glass 628 and the two 15,756-index `lambertzeroalpha` 619 and 636 of the x = 105 booth row), 4 Amphiseum, 8 Talon's
+   (two frames), 4 Sebenco, 8 Sol 2, 2 Tech De Ra. Materials: `jd_simplespecular`, `loopmaterial`, `cf_alpha4glow`, `clouds`,
+   `uv_anim_diffuse_alpha`, glass, `nr_crowd_bustle`, `diffuse_normal_specular_emmissive`. No shared flag, family, surface count or
+   size; several are probably drawn by a path the `c[467]` key does not see (a second view, a conditional pass).
+
+**Refuted as R for 1556:** (a) the cell bitmap (bit set at the original's own cell); (b) the frustum (centred in view);
+(c) "only special materials are drawn when unreferenced" (orphans on `jd_simplespecular`, `lambertzeroalpha`,
+`diffuse_specular`, `diffuse_normal_specular_emmissive` and 1557 beside it are drawn; the old "30 drawn" came from a key that also
+required a draw's index count to equal the surface's, and a draw's `idx` rarely does: on the surfaces with a unique bias, the
+list's `idx` equals the file's `index_count` for only 44 of 342 matched on Vineta K, 66 of 275 on Talon's, 94 of 337 on Sebenco,
+and 1557 is 168 in the file against 120 in draw 127, 1554 and 1555 72 each against two draws of 36. Each of those chunks has one
+submesh with one format word, so no submesh field pairs the short draws; whether the engine draws a sub-range or
+`rsx-draw-list.py`'s batch sum undercounts is **open**, and it does not touch the absence of 1556, which is keyed on bias
+and texture alone); (d) a render flag
+(1554 to 1557 are all flags 0, the first, second and fourth drawn); (e) the chunk's bounds block entry.
+
+**Not found, and the next read.** Rule R for 1556 is open at confidence 30. What is left in the executable: the **consumer
+of bucket B1** (`Scene_SortAndLightVisibleChunks`, `0x003fdae8`: a record with flag bits 4 and 5 clear goes to B1, and
+[zone-effectsettings-loader.md](../ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md) leaves B1's consumer
+unresolved; every flag-0 chunk, 1556 included, passes through it), then the **B4 consumer `FUN_00400a00`** (opaque materials,
+`(material + 0x10 & 1) == 0`). A per-record test there that the submit loop does not make is where an absent draw would be
+decided. Also open: a second Vineta K boot and a mid-lap pose (not taken; the census above needed none), and the
+possibility that the original draws the slab in a later frame (the start grid draws once per dump).
+
+**2048 / Omega: not checkable here.** The finding is an HD chunk of Vineta K's `.rcsmodel` with a draw list from RPCS3; 2048
+and Omega ship Vineta K re-cooked with their own mesh-object order and PVS dialect (mesh objects, not chunks), and no 2048
+or Omega draw list exists (shadPS4 gives no memory readout).
+
 **Not wired.** Skipping 633 would match this picture and would be tuning to it: the rule has to be the engine's. Ready to
 wire once the original's draw rule for such a chunk is known; see the `hd-fidelity` thread.
 
