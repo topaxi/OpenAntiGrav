@@ -307,5 +307,11 @@ fn fs_encode(in: VertexOutput) -> @location(0) vec4<f32> {
             constants.tone_darkening_clamp,
         );
     let resolved = clamp(scene * scale + bloom, vec3<f32>(0.0), vec3<f32>(1.0));
-    return vec4<f32>(pow(resolved, vec3<f32>(1.0 / 2.2)), 1.0);
+    return vec4<f32>(srgb_encode(resolved), 1.0);
+}
+
+fn srgb_encode(c: vec3<f32>) -> vec3<f32> {
+    let lo = c * 12.92;
+    let hi = 1.055 * pow(max(c, vec3<f32>(1e-6)), vec3<f32>(1.0 / 2.4)) - vec3<f32>(0.055);
+    return select(hi, lo, c <= vec3<f32>(0.0031308));
 }
