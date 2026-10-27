@@ -385,6 +385,8 @@ impl Pending {
         } else {
             definition.drop_settings(&settings::web::WEB_ONLY_ROWS);
         }
+        // A phone's window is the whole panel: its monitor, mode and size rows have no choice.
+        definition.drop_settings(settings::platform::hidden_rows(oag_mobile::MOBILE));
         // Only a touchscreen has an overlay to set up.
         if !oag_game::touch_controls::available() {
             definition.drop_touch_controls();

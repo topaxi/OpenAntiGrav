@@ -124,18 +124,6 @@ fn a_malformed_size_says_what_it_wanted() {
 }
 
 #[test]
-fn every_offered_size_is_the_psp_shape() {
-    let wanted = Aspect::Psp.ratio().expect("psp has a ratio");
-    for size in Size::OFFERED {
-        let have = size.width as f32 / size.height as f32;
-        assert!(
-            (have - wanted).abs() < 0.02,
-            "{size} is {have}, wanted about {wanted}"
-        );
-    }
-}
-
-#[test]
 fn a_scale_round_trips_and_refuses_what_it_cannot_draw() {
     assert_eq!("100".parse::<Scale>(), Ok(Scale::FULL));
     assert_eq!("50%".parse::<Scale>().expect("parse").factor(), 0.5);

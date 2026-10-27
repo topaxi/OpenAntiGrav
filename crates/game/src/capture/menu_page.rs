@@ -193,6 +193,23 @@ pub(super) fn menu_page(
             .map(|language| oag_ui::menu::Choice::labelled(&language.name, &language.native_name))
             .collect::<Vec<_>>(),
     );
+    // No monitor either, so the size rows hold `native` and the saved sizes only.
+    let (window_sizes, fullscreen_resolutions) =
+        crate::settings::platform::size_choices(None, &settings.display);
+    model.supply(
+        oag_ui::menu::ValueSource::WindowSizes,
+        &window_sizes
+            .iter()
+            .map(oag_ui::menu::Choice::plain)
+            .collect::<Vec<_>>(),
+    );
+    model.supply(
+        oag_ui::menu::ValueSource::FullscreenResolutions,
+        &fullscreen_resolutions
+            .iter()
+            .map(oag_ui::menu::Choice::plain)
+            .collect::<Vec<_>>(),
+    );
     // No window here, so no screens to enumerate: the list is `default` plus
     // whatever the settings already name. That is enough for the row to draw
     // the player's own value, which is all `--menu-page` is for, and it does

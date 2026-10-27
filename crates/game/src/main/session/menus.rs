@@ -266,6 +266,13 @@ impl Session {
                 .unwrap_or("GAMESCOPE SHOWS ONE DISPLAY"),
         );
         model.supply(menu::ValueSource::Monitors, &monitors);
+        let (window_sizes, fullscreen_resolutions) = settings::platform::size_choices(
+            crate::window::native_size(&self.gpu.output.window),
+            &self.settings.display,
+        );
+        let plain = |texts: &[String]| texts.iter().map(menu::Choice::plain).collect::<Vec<_>>();
+        model.supply(menu::ValueSource::WindowSizes, &plain(&window_sizes));
+        model.supply(menu::ValueSource::FullscreenResolutions, &plain(&fullscreen_resolutions));
         // Kept from startup rather than enumerated, unlike the monitors above,
         // and the difference is what a fresh answer would be worth. A screen
         // plugged in now can be used now; an adapter plugged in now cannot,
@@ -599,7 +606,9 @@ impl Session {
                 value
             };
             // Rows this platform drops (`prepare.rs`) are not a gap.
-            let dropped = if cfg!(target_arch = "wasm32") {
+            let dropped = if settings::platform::hidden_rows(oag_mobile::MOBILE).contains(&key) {
+                true
+            } else if cfg!(target_arch = "wasm32") {
                 settings::web::HIDDEN_ROWS.contains(&key) || key == "display.window_size"
             } else {
                 settings::web::WEB_ONLY_ROWS.contains(&key)
