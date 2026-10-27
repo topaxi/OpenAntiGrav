@@ -241,6 +241,19 @@ def main():
               "what": "HUD clock text vs RAM; the picture is not corrected (the RSX presented the paused frame), per-tick picture lag not measured"})
     gantry = ship.get("gantry_seconds")
     pair.rec["original"]["gantry_seconds"] = gantry
+    world = ship.get("scenery_clock")
+    ours_world_offset = None
+    if world is not None and clock is not None:
+        # Scenery animation time less the HUD lap clock, both read in the pause (the clock runs through the wait at START RACE, so
+        # it is per capture). Ours runs `ticks / 60`, which already holds the countdown, so its flag drops `GO_TICK / 60`.
+        offset = world["time_s"] - clock
+        pair.rec["original"]["world_clock_offset_s"] = offset
+        pair.rec["original"]["world_clock_s"] = world["time_s"]
+        pair.rec["original"]["world_clock_note"] = ("scenery MeshImporter nodes' animation time (+0xc0) less the lap clock, the most "
+                                                    "common value (%d of %d nodes), RAM, same pause as the frame" % (world["nodes"], world["total"]))
+        ours_world_offset = offset - GO_TICK / 60 if not (args.field or args.zone) else world["time_s"]
+        pair.rec["ours"]["world_clock_offset_s"] = ours_world_offset
+    pair.check("the scenery's animation clock was read", world is not None, "%s" % (world,))
     pair.rec["ours"]["ticks"] = args.ours_ticks
     pair.rec["ours"]["race_clock_s"] = (args.ours_ticks - GO_TICK) / 60
     if clock is not None and not args.field and not args.zone:
@@ -273,6 +286,8 @@ def main():
     # does not give it. A board past its windows (the node reads outside every one) keeps ours' own.
     if gantry is not None:
         flags += ["--gantry-seconds", "%.6f" % gantry]
+    if ours_world_offset is not None:
+        flags += ["--world-clock-offset", "%.3f" % ours_world_offset]
     field_flags = []
     if args.zone:
         zbits = args.zone.split(",")

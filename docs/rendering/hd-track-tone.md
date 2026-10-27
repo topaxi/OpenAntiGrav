@@ -1727,3 +1727,27 @@ both compile their shaders again (GNM and Vita GXP), so the RSX reading **does n
 split like this one may or may not exist there. **Not checkable in this lane:** the answer is in their vertex
 shaders (Omega's `eboot.bin` is in Ghidra, `docs/ghidra/functions/ps4-omega-eu/`; 2048's GXP, `gxp.md`), and a
 live value needs a shadPS4 or Vita3K capture. Named open in the HD fidelity thread.
+
+## HD's scenery clock is the global node clock, free-running through the START RACE wait (2026-10-27, `hd-scenery-clock`)
+
+**Claim**: the original's scenery animation time at a cold HD pair's capture is read from RAM, and recorded as
+`world_clock_offset_s`, ours places the Tech de Ra droid where the original does. **True on one circuit, offset law
+measured on two** (confidence 85 for the law, 70 for "starts at world load": inferred from three reads, no writer located).
+
+- **The input.** `MeshImporter_AdvanceTime` (`0x002be9c0`, `docs/ghidra/functions/ps3-hdfury-eu/gantry-clock.md`) adds
+  `clock+0x44 - node+0x15c` to `node+0xc0` every frame; the clock object is behind the global at `0x009389b4`
+  (TOC `0x008ad4d8` slot `+0x645c`). Live (RPCS3, no pause, `scripts/rpcs3-hd-world-clock.py`): of 1,222 nodes on Tech de Ra
+  about 230 have time equal to stamp to the millisecond (`time - stamp = 0`), so scenery time **is** the global clock;
+  the gantry's 19 nodes are the ones reset (`time - stamp = -121.83` at the press of START RACE). The writer of `clock+0x44`
+  is not located.
+- **It is not the HUD clock plus a constant.** It runs from the world load, through the intro wait at `START RACE`, and
+  is not reset by `Restart Race` or by the start. Tech de Ra: 249.05 s over the lap clock on one capture, 277.32 s on
+  the next (same boot, a longer wait); Sebenco Climb, a fresh boot: 39.35 s. So the offset is **per capture**, read in
+  the pause beside the frame (`rpcs3_hd_field.scenery_clock`, recorded by `rpcs3-hd-pair.py` as
+  `original.world_clock_offset_s`; ours' flag is the offset less `GO_TICK / 60`, `ours.world_clock_offset_s`).
+- **Result** (ours with and without the flag, same pose; mean abs grey difference to the original): Tech de Ra, droid box
+  `400,400 120x120` 22.18 to 12.22, frame 22.12 to 8.95 (the droid sits over the left wall as the original's does);
+  Sebenco Climb airship-box `1300,0 220x240` 34.25 to 22.05, frame 22.84 to 10.63. The stored pairs cannot be fixed
+  from RAM afterwards: their capture waits are unrecorded, so they must be re-made cold with this script.
+- **Omega / 2048**: not checked. Omega's front end and tables are HD's, but its `MeshImporter` advance was not located
+  in its eboot (`eboot.elf` in Ghidra); open.
