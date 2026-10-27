@@ -633,11 +633,11 @@ pub fn load_shell(
             ]
         })
         .unwrap_or_default();
-    // The campaign map's own hex tile art and its four mode icons - named
-    // by no screen either, the same "executable draws it, not a widget"
-    // shape the menu blocks are already in. See
-    // `oag_ui::frontend::campaign_map::HEX_FILLED`'s own doc comment for why
-    // these decode but are not authored anywhere in `NEWGUI/*.xml`.
+    // The campaign map's hex tile art, its four mode icons and the team
+    // grid's `teamgrid/` art - named by no screen either, the "executable
+    // draws it, not a widget" shape the menu blocks are in. See
+    // `oag_ui::frontend::campaign_map::HEX_FILLED` for why they are not
+    // authored anywhere in `NEWGUI/*.xml`.
     if front_end.touch.is_some() {
         block_textures.extend([
             oag_ui::frontend::HEX_FILLED,
