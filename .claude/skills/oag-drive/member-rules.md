@@ -62,7 +62,7 @@ Recipes: `docs/reverse-engineering/emulator-recipes.md`.
 
   Both run every check in full and the tests of the packages you changed plus their dependents. **Quote the printed `affected:` selection in your report.** A change to `oag-core`, a simulation crate, `Cargo.lock`, the toolchain, the `justfile`, `.config/` or a `build.rs` selects the full suite by itself; that is expected. The lead runs the full pair per merge batch; run it yourself only if the brief says so.
 
-  **Notebook (Intel iGPU + 8 GB NVIDIA): run `test-data` on the iGPU** by adding `VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/intel_icd.json` to the `env` (the NVIDIA card fails HD weapon-scene tests with `wgpu error: Out of Memory`). Time ceilings are the desktop's: on the notebook a red that is only `check-test-budget` time is green.
+  **Which GPU the tests run on.** Use the discrete GPU by default. Switch `test-data` to the integrated GPU only on a machine whose discrete GPU can run out of memory instead of spilling into system memory (NVIDIA on Linux does; AMD on Linux spills automatically), by adding that GPU's Vulkan ICD to the `env` (e.g. `VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/intel_icd.json`). The tell is `wgpu error: Out of Memory` in the HD weapon-scene tests. Time ceilings are judged on the full-size machine: on a smaller one a red that is only `check-test-budget` time is green.
 
   **wgpu's GL backend is best effort** (maintainer, 2026-10-15). It must never block the default backends (Vulkan, Metal, Dx12, WebGPU): switch a feature GL cannot do off on GL and name it in the loader report. Do not gate on a GL run; if GL breaks, say so and move on.
 
