@@ -73,7 +73,7 @@ fn amphiseums_board_binds_hds_mode_7_with_the_records_own_rates() {
     }
     let models: Vec<String> = archives
         .iter()
-        .flat_map(|a| a.paths().iter().cloned().collect::<Vec<_>>())
+        .flat_map(|a| a.paths().to_vec())
         .filter(|p| {
             let l = p.to_ascii_lowercase();
             l.contains("amphiseum") && l.ends_with("track.final.rcsmodel")

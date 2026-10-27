@@ -14,7 +14,7 @@ difficulty: medium (40)
 
 ## Open
 
-1. **Omega tangent frame** (mesh, `oag_rcs::rcsmodel::psp2`). Omega's tangent is four signed bytes, type nibble `0xe`
+1. **Omega tangent frame** (reader DONE 2026-10-27: `psp2` reads type `0xe`, `|w| = 1` on 36.4M vertices; **left open: the draw**. The `psp2` route has no normal-map binding at all and no PS4 normal-sampler rule. Census: tangent-carrying submeshes name `Normal`, `NormalMap`, `NormalTexture` or unnamed `Texture1,Texture2` (diffuse_normal_specular, weapon_pads). Next: read from the GCN pixel program which sampler is decoded `2x-1` and feeds N, bind it third, pack `s = w = +-1` as bytes 0/255 through a pack helper shared with `baked_tangent`; PS4 only, 2048 stays unbound. Omega pairs on the compare page are only Anulpha and Vineta K.) (mesh, `oag_rcs::rcsmodel::psp2`). Omega's tangent is four signed bytes, type nibble `0xe`
    (the same as `normal`'s), and `w` is exactly ±127 on every vertex measured; every Omega vertex program reads `w`
    raw. `psp2.rs`'s tangent reader accepts only the Vita's type `5`, so **no PS4 tangent is read** and Omega's
    tangent-space normal maps draw without a frame. Wire: accept type `14` on a PS4 file (signed bytes, `/127`), bake
@@ -22,7 +22,7 @@ difficulty: medium (40)
    [hd-track-tone.md](../../docs/rendering/hd-track-tone.md), "Tech de Ra's near-left wall", Omega paragraph. Check
    against an Omega frame of Tech de Ra (shadPS4 race shots are untrusted for tone, so judge the bump's direction,
    not brightness).
-2. **Amphiseum hologram board on Omega** (mesh). Same law, units and constants as HD's mode 7
+2. **DONE 2026-10-27** - **Amphiseum hologram board on Omega** (mesh). Same law, units and constants as HD's mode 7
    (`PROGRAM_STATIC_HOLOGRAM`), **without the `/2`**; Omega's draw goes through the `psp2` material route, which does
    not run HD's mode 7 today. Evidence: hd-track-tone.md, "The Amphiseum hologram board", Omega paragraph. Before
    porting, settle whether HD's `/2` is HD's `output_scale` (that section's "The `/2`") so Omega's port drops exactly

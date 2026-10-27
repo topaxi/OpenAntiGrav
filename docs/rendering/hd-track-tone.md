@@ -1727,7 +1727,7 @@ read live and wired (2026-10-27, `hd-hologram-board`):
   above is the check that the whole chain lands at the original's strength. Why that gain
   exists, and whether it is the grill's 1.5x, is not resolved here.
 
-**Omega: checked, applies, not wired, minus the `/2`** (2026-10-27, `gcn-operand-decoder`, read with `oag_rcs::gcn`,
+**Omega: ported, minus the `/2`** (wired 2026-10-27, `omega-tangent-hologram`: `mesh::rcs::psp2::static_hologram`, riding `twin_blend`'s bindings; the `/2` is HD's `output_scale`, set to 0.5 only where `lit_output_halved` applies, so Omega's scene scale 1.0 drops exactly it, no shader change; the units' gamma is inherited from HD, not measured on Omega; ground truth `psp2_static_hologram_ground_truth`, shader pinned at both scales in `hd_static_hologram_lit_path`; no Omega Amphiseum reference frame exists, ours changes only inside the board's box) (read 2026-10-27, `gcn-operand-decoder`, read with `oag_rcs::gcn`,
 [gcn.md](../formats/gcn.md)). Amphiseum's `track.final.rcsmodel` (`data02`) names the **plain**
 `dc_hologramwithstatic.rcsmaterial`; the `_1`/`_2` files beside it are the PS4 Pro compiles (gcn.md). The file ships in
 `data02` (base) and in the patch's `data05` and `data08`; the patch's two copies hold identical programs, and `data08`'s is
@@ -1884,9 +1884,7 @@ that fetches a four-component `tangent`, on all nine archives, reads its `w` raw
 nibble `0xe`, the same as `normal`'s), and `w` is exactly -127 or +127 on every vertex of three track models measured
 (Tech de Ra 750,030 / 130,064; Modesto Heights 608,880 / 170,776; Sol 2 163,661 / 203,005; none 0). So on Omega the
 bitangent is always ±1, **on every circuit, Sol 2 and Vineta K included**, where HD's raw compiles drop it for `w = 0`.
-Confidence 85 (program read on every file, data on three circuits). **Not wired**: `oag_rcs::rcsmodel::psp2` accepts
-only the Vita's tangent type (`5`), so no PS4 tangent is read today and Omega's tangent-space normal maps draw without
-a frame; follow-up in the HD fidelity thread. **2048: not checkable by a reader** (`oag_rcs::gxp::usse` reads no
+Confidence 85 (program read on every file, data on three circuits). **Reader wired** (`omega-tangent-hologram`): `psp2` now reads type `0xe` through the record's own declaration (36.4M vertices over the five base archives, `|w| = 1` on all, `omega_declaration_ground_truth`; the Vita's type `5` path is unchanged). **Not drawn**: the `psp2` mesh route binds no normal map at all (`tangent: 0` on every vertex), and no PS4 rule says which sampler is the normal map (a census of tangent-carrying submeshes shows `Normal`, `NormalMap`, `NormalTexture` and unnamed `Texture1,Texture2` pairs); see the handover thread. **2048: not checkable by a reader** (`oag_rcs::gxp::usse` reads no
 operands); its track `w` reads mostly ±1 on Anulpha DLC but mixed (±64, ±1) on Altima through a confidence-76
 tangent reader, so nothing is concluded for 2048.
 
