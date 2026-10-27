@@ -55,7 +55,8 @@
 //!   linear scene; the PPU then reads the bytes left in the last level, which
 //!   the ROP wrote through the sRGB encode, so `adapted` is a luma of encoded
 //!   texels (`fs_adapt` encodes each texel once, never the mean again). See
-//!   renderer.md, "The adaptation is the encoded linear mean".
+//!   renderer.md, "The adaptation is the encoded linear mean" (ours averages the
+//!   encoded texels since 2026-10-27, the maintainer's choice; hd-track-tone.md).
 //!
 //! # Why the chain owns the scene target
 //!
