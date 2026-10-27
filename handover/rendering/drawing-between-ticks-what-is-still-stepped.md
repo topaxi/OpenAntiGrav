@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-10-27
-summary: "Trails, particles, reticle, flaps, swell, flare axis, mist landed 2026-10-27; open: Deck CPU re-measure, a 240 Hz look, extrapolation"
+summary: "Trails, particles, reticle, flaps, swell, flare axis, mist landed 2026-10-27; Deck CPU re-measured, no rise; open: a 240 Hz look, extrapolation"
 ---
 
 # Drawing between ticks: what is still stepped
@@ -26,13 +26,11 @@ stepped flash), the lock-on reticle moved to its target as drawn (old item 4).
 Captures at alpha 1 hash identically before and after (seven fixed races,
 Pulse PSP and HD Anulpha Pass, rockets and cannon included).
 
-1. **The Deck re-measure is owed (maintainer).** This host measured no rise:
-   `frame-phases` on HD Anulpha Pass, moving race, eight interleaved 14 s
-   pairs at load 6.8 to 12, median `scene` 0.633 -> 0.611 ms and `total`
-   1.791 -> 1.771 ms (the HD tube now builds each ring once, which paid for
-   the rest; one pair's after run caught a load spike, the medians absorb it). The Deck is CPU bound and was not available to the lane: run
-   the recipe in `the-decks-60-fps-is-anulpha-pass-submit-cost.md` in this
-   directory, main against this merge, and record both totals here.
+1. ~~The Deck re-measure~~ **Closed 2026-10-27 (`deck-between-ticks-measure`): no rise.** HD Anulpha
+   Pass, moving race, unlocked, four interleaved runs each of `e9baf8c42` (`85e7f2b5d^1`) and
+   `1a7e06314`: `total` 7.34 -> 7.42 ms, `scene` 2.80 -> 2.82, `submit` 3.43 -> 3.42, CPU row
+   7.36 -> 7.45; the old build's own spread is 0.23 ms on `total`. Table in
+   `docs/rendering/frame-thread-cpu.md`, "Between-ticks drawing on the Deck".
 2. **Seen only headlessly.** The proof is unit tests and `--draw-alpha`
    sequences; nobody has watched a windowed race on a 144 or 240 Hz panel
    since. A player's look at one (`just play`, frame limit 240), chase view
@@ -86,11 +84,9 @@ recipe in `the-decks-60-fps-is-anulpha-pass-submit-cost.md` in this directory) w
 
 ## Next Steps
 
-1. Deck `frame-phases` re-measure, main against this merge (item 1). Twenty
-   minutes, maintainer.
-2. Watch a windowed race at the 240 limit on a high-refresh panel (item 2).
+1. Watch a windowed race at the 240 limit on a high-refresh panel (item 2).
    Ten minutes, maintainer.
-3. Local-craft and chase-camera extrapolation (item 5), behind an off-by-default
+2. Local-craft and chase-camera extrapolation (item 5), behind an off-by-default
    setting, with a test that a contact tick never extrapolates. Half a day to
    a day.
 
