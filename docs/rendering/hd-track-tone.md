@@ -1466,66 +1466,115 @@ wire once the original's draw rule for such a chunk is known; see the `hd-fideli
 
 **2048 / Omega:** not checkable here. The finding names an HD chunk of Vineta K; 2048 and Omega ship Vineta K as a re-cooked
 model with their own chunk order, and no draw capture of either exists (Omega's shadPS4 shows no memory readout).
+## Tech de Ra's near-left wall (slot 384): the wash is a bitangent sign (2026-10-27, `tech-de-ra-wash`)
 
-||||||| 43802148e
+**Claim brought to this lane:** "slot 384 on `hd/tech-de-ra` (`diffuse_normal_specular_emmissive`, `ds_sf_cs.gtf`) draws
+a yellow wash over the original because our generic path does X where its program does Y."
+**Verdict: true, with a different X than the brief supposed.** It is not a light term and not the emissive term:
+it is the **normal**. Ours drops the normal map's `ny` on this slot where the original's vertex program keeps it.
+Falsifier written first: if the wash were the emissive add, `OAG_ALBEDO_ONLY` plus a zeroed `_ne.a * W` would
+remove it; if a light term, a zeroed specular or sun term would. Neither did (below); the sign flip did.
 
+### What the slot draws
 
-## The Amphiseum hologram board
+Slot 384 (`hd_material_probe_dump` ordinal; `lightmap|no_ambient`, specular exponent 32) resolves to the file's
+**fragment block #7 at `0x5860`, vertex block #7 at `0x5640`** (the lightmapped variant with no shadow tap;
+`scripts/ps3-microcode.py fp-file|vp-file`). Static read of the fragment program (register trace in the
+`pads.md` "Speedup" law, the same shape):
 
-`dc_hologramwithstatic.rcsmaterial` (slot 637 of `amphiseum/track.vex`, `SRC_ALPHA`/`ONE`,
-authored pair `770`/`1`; the quad over the start gantry, advert `advert_a`). Its program is
-read live and wired (2026-10-27, `hd-hologram-board`):
+```text
+N      = nx*TC5 + ny*TC2 + nz*TC3        _ne.rgb*2-1; TC5 tangent, TC2 bitangent, TC3 vertex normal
+lit    = pow(lightmap.rgb, C(0x002c73e8)) * C(0x8670f0be) + lightmap.a * (N.L) * C(0x2dba643d)
+spec   = (sat(N.Hhat))^32 * sat(8 N.L) * lightmap.a * sun.w * sun.rgb * diffuse.a
+colour = diffuse.rgb * lit + _ne.a * C(0x7611a2d8) + spec
+out    = (TC1.xyz + fog(colour)) / 2     @0x4f `ADD /2`; TC0.xyz and TC1.xyz are 0 in this variant's
+                                         vertex program (no vertex light), so out = fog(colour) / 2
+```
 
-- **Program** (fragment block #3 `@0x1530` of the material, `scripts/ps3-microcode.py fp-file`;
-  vertex block #3 `@0x13a0` writes one pair, `TC4.xy = v[2].xy`, and `TC1.xyz = c[208].x = 0`).
-  With `t` the engine clock and `(u, v)` the diffuse pair:
-  `colour = fog(advert(u + S t, v) + static(u, v + V t)) / 2`, `alpha = scan(u, v).x * K`.
-  `S = 1.0` (`0x31182e0d`), `V = 4.5384` (`0xb6573513`), `K = 0.73802` (`0xeedee991`) are the
-  record's own numbers, read, not typed. Units: 0 `dc_scanlines` (`0x05dff912`, 128x128 DXT1),
-  1 `advert_a` (`0x3bdc0403`, 512x256 DXT45), 2 `dc_gradient_horizontal` (`0xdba0a35a`,
-  128x128 DXT1).
-- **Read live** (RPCS3, Amphiseum Time Trial start save, `scripts/hd-draw-dump.py`, draw 700 of
-  the dump, fragment program `0x7bd200`): the live program is block #3 with the engine's `time`
-  (`79.8857` at the pause), the fog colour (`0.0118, 0.0118, 0.0196`) and density (`0.0015`)
-  patched in; blend `SrcAlpha`/`One`, depth test `LEQUAL`, **`SET_TEXTURE_ADDRESS` `0x60710101`
-  on units 0, 1 and 2: gamma nibble 7, all three decoded on fetch**, so the mask's red is
-  decoded too. Confidence 88 (one frame, one draw).
-- **Arithmetic self-check** (ours against the program's own law, not against the original):
-  the mean of `decode(scan.r) * K` over the texture is `0.185` and the mean of
-  `encode(0.5 (decode(advert) + decode(static)))` is `0.32, 0.49, 0.50`, so the expected lift
-  is `+15, +23, +24` (0-255, encoded add); ours lifts the box by `+13.4, +22.8, +23.5` over
-  the board skipped (`OAG_SKIP_SLOT=637`).
-- **Strength against the original** (the scan mask does not scroll, so its stripes read the
-  board's strength): per column of `x 880-1060, y 5-95`, the standard deviation of the
-  picture minus its 12-row vertical moving average, mean grey: theirs `18.3`, ours `17.4`,
-  the board skipped `14.1` (the scene's own floor), the old stand-in `34.7`. The board's
-  own stripe energy, `sqrt(a^2 - 14.1^2)`, is `11.7` theirs against `10.2` ours: **ratio
-  0.87**, so the board is not 1.4-2x too strong.
-- **Measured** (box `840,0 240x120` of `hd/the-amphiseum`, mean grey 0-255; theirs `54.1, 77.1,
-  89.8` = 73.7): before `139.6, 170.3, 181.9` = 163.9 (mean of per-pixel |difference| 90.5);
-  after `75.5, 103.5, 112.5` = 97.2 (**26.2**, difference of means +23.5); the whole board
-  skipped (`OAG_SKIP_SLOT=637`) `62.1, 80.7, 89.0` = 77.3 (19.0, +3.6). The pair's whole-frame
-  mean grey 9.61 to 8.59; the other 17 HD pairs unchanged (`ours.png` identical, `cmp`). **The brief's bar (within 10)
-  is not met**, and skipping the board still scores better on the box, because the board's
-  strength now matches the original's (stripe ratio above) while the scene behind it is about
-  20-25 grey brighter in ours (by subtraction: ours without the board `62, 81, 89` against
-  theirs with it `54, 77, 90`); the picture, read by eye, shows the original's
-  faint scanline-striped rings. The next lead is the pillar and wall behind it.
-- **Wired** as glow-table mode 7 (`PROGRAM_STATIC_HOLOGRAM`, `mesh::rcs::static_hologram`),
-  keyed on the family name and the block's declared samplers and parameters, so
-  `dc_hologramwithstatic2` (a different program) keeps the generic reading. Pinned by
-  `hd_static_hologram_ground_truth` (disc-backed) and `hd_static_hologram_lit_path` (the
-  shader, no game content). Ours had added the advert to the scanlines' colour at full
-  strength with no alpha mask and no `/2`.
-- **The `/2`**: this program multiplies `scene.light.output_scale` into the colour sum
-  explicitly. A constant-colour probe through this unlit path gave an unexplained gain of
-  about 1.43 on the added value (0.2 to +0.287, 0.4 to +0.57, blend alpha 1); the stripe ratio
-  above is the check that the whole chain lands at the original's strength. Why that gain
-  exists, and whether it is the grill's 1.5x, is not resolved here.
+Every term is already in `shade.wesl`'s authored path; the slot's inputs match except `N`.
 
-**Omega and 2048:** Omega ships `dc_hologramwithstatic_1.rcsmaterial` (and `..2_1`) beside
-the same Amphiseum layout: **checked, applies in name, not wired** (a PS4 GCN program, unread).
-2048's DLC1 ships only `hologram.rcsmaterial` for Amphiseum and Modesto Heights: **checked,
-differs** (no `dc_hologramwithstatic`). `hologram.rcsmaterial` itself (slots 604-624 on Amphiseum) adds nothing to the start frame's
-box (skipping it changes the frame by 0.04 mean grey) and its program stays unread.
+### The vertex program's bitangent
 
+Vertex block #7 (`0x5640`) decodes the tangent attribute `0xdbe5f417` as `MAD R1, v[2], 2, -1` on **all four
+components** and writes `o[TC2].xyz = cross(N0, T) * R1.w` (instructions 6, 12, 21): the bitangent's scale is
+**`2w - 1`, so `w = 0` gives -1**, not 0. `shade.wesl`'s tangent branch (`hull_normal(...)`) and `pad.wesl`'s
+`pad_normal` use the raw `w` (0 or 1), which leaves a `w = 0` vertex with **no bitangent**, so `ny` never reaches
+`N` and the bump loses its second axis: the wall reads smoother and brighter than the original's grain.
+
+**Another compile of the same family reads `w` raw.** `12_sol_2`'s copy of the material (vertex block #7 at
+`0x5420`) ends `MUL o[TC0].xyz, B, v[2].wwww`: raw `w`, so `w = 0` is no bitangent. That is the compile
+`pads.md` measured ("`w` is 0 on 232 of 232 vertices ... `B` is the zero vector"); it is right **for it**.
+
+**Census** (`just psarc cat` of each circuit's `diffuse_normal_specular_emmissive`, `track_surface` and
+`weapon_pads`, every vertex block that reads `0xdbe5f417`, `ps3-microcode.py vp-file`; every block of every file
+classified, none left over; one file is uniformly one convention):
+
+| Compile | Circuits (files read) | Tangent blocks | Bitangent scale |
+| --- | --- | --- | --- |
+| signed | Amphiseum, Modesto Heights, Talon's Junction, Tech de Ra (3 files each: 46 to 72 blocks), Zone 1 to 4 (`weapon_pads`, 28 each) | **all signed, 0 raw** (a full read of the tangent with a negated constant, as a `MAD` or a `MUL` then `ADD`, and no `.wwww`) | `2w - 1` |
+| raw | Vineta K, `02_track`, `03_track`, Chenghou, Sebenco Climb, Ubermall, Sol 2, Anulpha Pass (2 files each: 40 to 136 blocks) | **all raw, 0 signed** (`v[tangent].wwww`) | `w` |
+
+So it is a property of the circuit's own material file, and the four original-game circuits plus Zone are the
+signed ones. **`pads.md`'s "bitangent is the zero vector" holds for Sol 2 and is wrong for Talon's pads** (it
+noted Talon's program was "a different compile" but read only the alpha-gated `MAD`, not this scale).
+
+### The local try (uncommitted shader edit, box and frame scored)
+
+Scratch copy of `hd/tech-de-ra`, re-rendered with the main-tree build plus one local edit: in `shade.wesl`'s tangent
+branch, `hull_normal(.., vec4(in.tangent.xyz, in.tangent.w * 2 - 1))` for `pad_ne` slots and track receivers
+(`receives_shadow == 2`). Box `480,600 240x120`, blur sigma 7, mean abs RGB difference (the handover's metric):
+
+| | box abs | box luma ours-theirs | slot 384 mask (137,866 px) mean abs | area x error | frame |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| main today | 13.08 | +10.30 | 6.65 | 0.917 M | 4.205 |
+| signed bitangent | **2.74** | **-1.81** | **3.68** | **0.507 M** | 4.205 -> 3.840 |
+
+Box mean RGB 143.1, 128.7, 114.7 -> 131.1, 115.8, 103.3 against the original's 133.2, 117.6, 104.9. Two renders of
+the edited tree are byte-identical in score (the render is deterministic; the original frame is one capture).
+
+**Terms ruled out** on the same box (each a local toggle on slot 384, one render): the specular off gives luma
+-6.66 (so the specular carries +17 of the box; with the sign fixed its share is whatever the normal change leaves);
+`_ne.a * W` off gives R -23, G -13, B 0 (the yellow of the glow is right); unsaturated `N.L` in the sun term and
+no vertex light change nothing measurable. `OAG_ALBEDO_ONLY` removes the light and the glow together and so cannot
+separate them; the per-term toggles do.
+
+### Other pairs, and why the change is per file
+
+The same edit applied to every circuit, frame mean abs RGB, before to after: Modesto Heights 9.004 -> 7.975,
+Talon's 6.011 -> 6.002, Tech de Ra 7.187 -> 6.767, Amphiseum 9.623 -> 9.594 (the four signed circuits, all
+better or level); **Vineta K 7.471 -> 8.767 and Sol 2 7.058 -> 9.192 (raw circuits, worse)**. The two regressions
+are the census made visible, not a counter-example: applying the sign to a raw compile adds a bitangent the
+original does not have. **The wiring must read the sign from the vertex program, never from the circuit name.**
+Modesto's changed pixels (18,227 px at x 1578 to 1920, y 435 to 707) go 33.4 -> 6.5; Tech de Ra's wall 24.1 -> 4.8.
+
+### Ready to wire (confidence 80 for the law on the four original circuits)
+
+1. `oag_rcs::rcsmaterial::vertex`: a reader answering "does this vertex block take the tangent's `w` as `2w - 1`
+   (a `MAD` of `v[tangent]` by 2 and -1 whose `.w` multiplies the bitangent) or raw (`v[tangent].wwww`)".
+2. `crates/mesh/src/mesh/rcs/hull_normal.rs` (`hull_normal`, called from `rcs/setup.rs:248`, which fills
+   `material_tangent`) records it per material slot beside the tangent flag. It runs **before** `pad_ne`
+   (`rcs/pads.rs:185` and `:337`) with only the magstrip table as the claimed third binding, which is why slot 384
+   carries a tangent although `pad_ne` later binds its `_ne` file there; the `pad_ne` slots need no second site.
+3. `crates/mesh/src/mesh/rcs.rs` `baked_tangent` (line 472): bake the `w` byte as the bitangent scale in unorm
+   (`(scale + 1) / 2`: signed -> 0 or 255, raw -> 128 or 255; a raw `w = 0` then decodes to +0.004, not 0, an error
+   of 0.4 % of `ny` that is accepted, or carry the sign in a per-draw value instead) and `crates/mesh/shaders/hull_normal.wesl` line 19
+   reads `cross(n, t) * (tangent.w * 2.0 - 1.0)`; there is no free `slots` bit (0 to 31 are used), which is why
+   the scale rides the byte. Check the ship hulls' vertex programs with the same reader first: their raw-`w`
+   reading in `hull_normal.wesl` was measured on hulls and must not change by default.
+4. `pad.wesl` `pad_normal` (the derived frame, no authored tangent) keeps `nx*T + nz*N` for raw circuits and
+   gains `ny * cross(N, T) * handedness` for signed ones only if a chunk without an authored tangent exists
+   there (not checked; slot 384's chunks do carry one, the shader's tangent branch is live on them).
+5. Test: a ground-truth census of the table above (`rcsmaterial` files of the four circuits and Zone read
+   signed, the eight numbered circuits raw), and the Tech de Ra box above as a score bound.
+
+**Not measured here:** the original's live fragment or vertex program on a slot-384 draw (`ps3-fp-live.py`): the
+law is a static read of both programs plus the pixel score, so the cause is confidence 80, the census 90 (every
+block of every file read).
+
+**Omega and 2048 (CLAUDE.md check):** Omega ships the family in `data00` to `data02`
+([rcsmaterial.md](../formats/rcsmaterial.md), "The light-bar family") and 2048 shares its asset lineage (CLAUDE.md,
+the 2048/Omega note; not re-listed here);
+both compile their shaders again (GNM and Vita GXP), so the RSX reading **does not transfer** and a per-compile
+split like this one may or may not exist there. **Not checkable in this lane:** the answer is in their vertex
+shaders (Omega's `eboot.bin` is in Ghidra, `docs/ghidra/functions/ps4-omega-eu/`; 2048's GXP, `gxp.md`), and a
+live value needs a shadPS4 or Vita3K capture. Named open in the HD fidelity thread.

@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd]
 updated: 2026-10-27
-summary: "HD fidelity queue: Bomb picture, weapon taps, Tech de Ra slot 384, scene behind Amphiseum's board, scenery clock, exposure, LOD"
+summary: "HD fidelity queue: Tech de Ra slot 384 ready (bitangent sign), Bomb, weapon taps, Amphiseum scene, scenery clock, exposure"
 difficulty: medium (35)
 ---
 
@@ -169,7 +169,7 @@ section above or the doc page it names). At most one lane in `crates/mesh` at a 
    `track_surface` with `ds_pit_box_cs.gtf`, exponent 50.5) that the original does not show, box `1050,735 400x40` 12.9 grey,
    gone with `OAG_ALBEDO_ONLY=1`, so a light term (about 0.2 M); and **the near-left wall below the left pylon, slot 384**
    (`diffuse_normal_specular_emmissive`, `ds_sf_cs.gtf`), a yellow wash over the original's: box `480,600 240x120` 13.1 grey,
-   luma +10.3, the slot's mask 131,478 px at 6.8 (0.90 M, as large as the glass road; its program is unread). Slots are `hd_material_probe_dump` ordinals; the bisection is
+   luma +10.3, the slot's mask 131,478 px at 6.8 (0.90 M, as large as the glass road). **READY TO WIRE (2026-10-27, `tech-de-ra-wash`): the cause is the bitangent's sign, not a light or glow term.** The original's vertex program scales `B` by `2w - 1` (`w = 0` gives -1) in the four original circuits' compile (Amphiseum, Modesto, Talon's, Tech de Ra, Zone 1 to 4); ours uses raw `w` and drops `ny`. The eight numbered circuits' compile is raw and right. A local edit in `shade.wesl`'s tangent branch (`in.tangent.w * 2 - 1` for `pad_ne` slots and track receivers) took the box 13.08 -> 2.74 (luma +10.3 -> -1.81), the slot's mask 0.917 -> 0.507 M, the Tech de Ra frame 4.205 -> 3.840, Modesto 9.004 -> 7.975 (but Vineta K and Sol 2 worse, because they are raw: **read the sign off the vertex program, never the circuit**). The exact change, the census and the ruled-out terms are in [hd-track-tone.md](../../docs/rendering/hd-track-tone.md), "Tech de Ra's near-left wall"; the hulls' own vertex programs are to be read with the same reader before `hull_normal.wesl` changes, and Omega/2048's shaders are an open check. Slots are `hd_material_probe_dump` ordinals; the bisection is
    `OAG_SKIP_SLOT` halving on one pixel.
 3. **Additive source strength** (mesh): Talon's grill source about 1.5x the original's, (~~Amphiseum's hologram
    stand-in about 70 grey over~~, wired 2026-10-27); then Chenghou's `glass_2nduv_reflect_glow` (reflection plus glow 4 grey over) and
