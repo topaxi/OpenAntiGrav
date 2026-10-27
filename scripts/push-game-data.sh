@@ -11,8 +11,8 @@
 # `<XDG_DATA_HOME>/oag/{images,dlc,extracted/vita,extracted/ps4,keys}` - on the
 # Deck the remote user's XDG_DATA_HOME, on Android the app's files dir
 # (/sdcard/Android/data/org.openantigrav.game/files/data, which the app sets as
-# its XDG_DATA_HOME). The binaries go over with `just deploy-deck` /
-# `just deploy-android`, which copy no game data.
+# its XDG_DATA_HOME). The binaries go over with `just deploy deck` /
+# `just deploy android`, which copy no game data.
 #
 # Usage:
 #   scripts/push-game-data.sh deck [user@host] [--dry-run] [PATTERN...]

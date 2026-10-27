@@ -117,7 +117,7 @@ the build's own two halves as the `race-build` thread timed them. It is
 performance overlay it keeps the frames a load stalls, because those are the
 ones a player sees freeze.
 
-On a Steam Deck, after `just deploy-deck` (see
+On a Steam Deck, after `just deploy deck` (see
 [packaging](../tools/packaging.md#running-it-on-a-steam-deck)), from a Desktop
 Mode terminal:
 

@@ -702,17 +702,14 @@ appimage-deck *ARGS:
 install-desktop-file *ARGS:
     ./scripts/install-desktop-file.sh "$@"
 
-# Build the portable AppImage and copy it onto the Steam Deck (or any host
-# reachable over ssh); no game data - that is `just push-data deck`. See
-# docs/tools/packaging.md#steam-deck and scripts/deploy-to-deck.sh
-deploy-deck *ARGS:
-    ./scripts/deploy-to-deck.sh "$@"
-
-# Build the APK and `adb install -r` it; no game data - that is
-# `just push-data android`. See docs/tools/android.md and
-# scripts/deploy-to-android.sh
-deploy-android *ARGS:
-    ./scripts/deploy-to-android.sh "$@"
+# Build and put the game on a device: `just deploy android|deck [REV | FILE] [args]`.
+# No REV builds this checkout; a git rev builds in a temporary worktree (removed after, artifact kept in data/deploy-builds);
+# an .apk / .AppImage is deployed as is. Android installs with `adb install -r -d`
+# (a downgrade keeps the app's data); deck copies the portable AppImage over ssh
+# (`user@host` as an argument). No game data - that is `just push-data`. See
+# scripts/deploy.sh, docs/tools/android.md and docs/tools/packaging.md#steam-deck
+deploy TARGET *ARGS:
+    ./scripts/deploy.sh {{TARGET}} {{ARGS}}
 
 # Start the app on an adb device (asks which when several are connected) and
 # follow its log; --no-logs, --stop (cold start), --serial S. See

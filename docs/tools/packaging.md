@@ -515,7 +515,7 @@ Two structural points, because both are easy to get wrong later:
 
 ## Running it on a Steam Deck
 
-`just deploy-deck` (`scripts/deploy-to-deck.sh`) builds
+`just deploy deck` (`scripts/deploy-to-deck.sh`) builds
 `just appimage-portable` and rsyncs (falling back to `scp` if the remote has no
 rsync) the AppImage onto the Deck's `~/Desktop`. It copies no game data.
 
@@ -542,10 +542,10 @@ launcher: `ps4_search_path()` in `crates/source/src/source.rs` offers it only
 when `extracted/ps4/omega-eu-patch/uroot/data09.psarc` exists.
 
 ```sh
-just deploy-deck                    # deck@steamdeck, or $OAG_DECK_HOST
-just deploy-deck user@host          # a different target
-just deploy-deck --dry-run          # show the plan, change nothing
-just deploy-deck --skip-build       # sync an AppImage already built
+just deploy deck                    # deck@steamdeck, or $OAG_DECK_HOST
+just deploy deck user@host          # a different target
+just deploy deck --dry-run          # show the plan, change nothing
+just deploy deck --skip-build       # sync an AppImage already built
 just push-data deck                 # pick game data, see what is there
 just push-data deck user@host 'images/pulse-*' 'dlc/*'   # no picker
 just push-data deck --dry-run       # pick, then only list what would go
@@ -559,7 +559,7 @@ the same steps by hand, in Desktop Mode:
    `OpenAntiGrav-x86_64-portable.AppImage`, and your own disc image (named
    `pulse-psp-eu.chd`, or anything ending `.chd`/`.iso`).
 2. `chmod +x OpenAntiGrav-x86_64-portable.AppImage`, which plain `scp` does not
-   preserve (`just deploy-deck` does this explicitly either way).
+   preserve (`just deploy deck` does this explicitly either way).
 3. Run it from a terminal the first time, so its output is visible:
    `./OpenAntiGrav-x86_64-portable.AppImage`. Expect the archive report, then
    the intro.
@@ -785,7 +785,7 @@ A rolling pre-release, rebuilt from `main` once a day by
 - **The Android APK is included** (2026-10-07), signed with the repository's stored
   sideload key (secrets `OAG_APK_KEYSTORE_B64` and `OAG_APK_KEYSTORE_PASS`; today the
   maintainer's local `~/.android/oag-debug.keystore`), so it installs over a local
-  `just deploy-android` build and the reverse, with no uninstall. Without the secret
+  `just deploy android` build and the reverse, with no uninstall. Without the secret
   the job falls back to a throwaway key. Its `versionCode` is the build's UTC time as
   `yydddHH`, the same rule `scripts/build-apk.sh` uses locally, so whichever APK was
   built later always installs; a run number would not do that, since local builds

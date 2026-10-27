@@ -37,7 +37,7 @@ if [ -z "$version" ]; then
     version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
 fi
 # What `oag-game --version` prints on desktop, so the installed app reports the
-# same thing (`just deploy-android` reads it back off the device).
+# same thing (`just deploy android` reads it back off the device).
 version_name="$version ($(git -C "$root" rev-parse --short=7 HEAD 2>/dev/null || echo unknown))"
 
 sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"

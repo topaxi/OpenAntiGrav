@@ -41,7 +41,7 @@ pick_adb_device
 adb() { command adb "${adb_args[@]}" "$@"; }
 
 [[ -n "$(adb shell pm list packages --user 0 "$package" | tr -d '\r')" ]] \
-    || die "$package is not installed on this device; run 'just deploy-android' first"
+    || die "$package is not installed on this device; run 'just deploy android' first"
 
 echo "device: $(adb shell getprop ro.product.model | tr -d '\r') ($(adb get-serialno))"
 (( stop_first )) && adb shell am force-stop "$package"

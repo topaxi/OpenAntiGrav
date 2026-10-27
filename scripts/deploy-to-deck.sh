@@ -12,12 +12,14 @@
 # so a fresh Deck needs nothing set to find them.
 #
 # Usage:
-#   scripts/deploy-to-deck.sh [host] [--skip-build] [--dry-run] [--scp]
+#   scripts/deploy-to-deck.sh [host] [--skip-build] [--appimage FILE]
+#                             [--dry-run] [--scp]
 #
 #   host          user@host to deploy to. Default: $OAG_DECK_HOST or
 #                 deck@steamdeck.
 #   --skip-build  Don't rebuild; sync whatever is already in data/appimage/
 #                 OpenAntiGrav-x86_64-portable.AppImage.
+#   --appimage F  Copy this AppImage; build nothing.
 #   --dry-run     Pass --dry-run to rsync, or print what scp would copy.
 #                 Touches nothing, locally or on the remote, beyond the ssh
 #                 probes needed to resolve paths.
@@ -40,6 +42,8 @@ die()  { echo "error: $*" >&2; exit 1; }
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --skip-build) skip_build=1; shift ;;
+        --appimage)   [[ $# -ge 2 ]] || die "--appimage needs a value"
+                      appimage="$2"; skip_build=1; shift 2 ;;
         --dry-run)    dry_run=1; shift ;;
         --scp)        force_scp=1; shift ;;
         -h|--help) awk 'NR>2 && /^#/ {sub(/^# ?/,""); print; next} NR>2 {exit}' \

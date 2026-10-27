@@ -89,9 +89,9 @@ manifest and `cache/<image>` rows in `just push-data`.
 
 ## Next Steps
 
-1. `just deploy-android`, then `just push-data android 'images/pulse-psp-eu.chd' 'cache/pulse-psp-eu.chd'` (the cache row converts first if it has to), launch, read the log.
+1. `just deploy android`, then `just push-data android 'images/pulse-psp-eu.chd' 'cache/pulse-psp-eu.chd'` (the cache row converts first if it has to), launch, read the log.
 2. Fix what the first run shows, in the order above.
-3. Install on the S24 and drive a race by touch: `just deploy-android` (pick
+3. Install on the S24 and drive a race by touch: `just deploy android` (pick
    R3CX707JA9T), launch, Racebox, Start. Note thumb reach and which HUD readouts the
    buttons hide, then tune `oag_input::touch::layout`.
 4. Pair a Bluetooth pad and check A/B/X/Y/shoulders/Start/Select and the left stick.

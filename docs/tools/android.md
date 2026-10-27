@@ -61,7 +61,7 @@ manifest, one library and the signature, nothing else.
 4. Launch "OpenAntiGrav". Logs: `adb logcat -s oag`, and the same lines with
    timestamps in `files/state/oag/logs/oag-game.log` (`adb pull`).
 
-From a checkout, `just deploy-android` does step 2 (it builds the APK first, arm64 only when the picked device is arm64 - the x86_64 library is for Waydroid alone;
+From a checkout, `just deploy android` does step 2 (it builds the APK first, arm64 only when the picked device is arm64 - the x86_64 library is for Waydroid alone;
 `--skip-build`, `--serial S`, `--dry-run`), and `just push-data android` does
 step 3: an fzf multiselect over every disc image, DLC zip, unpacked 2048 or
 Omega package and Pure's DLC key table, each row marked `on device`, `partial`
@@ -83,7 +83,7 @@ fzf - and refuse with the list of serials when not run from a terminal
 
 An installed app signed with another key (built elsewhere, or before the key moved
 out of `target/`) cannot be updated in place: `adb install -r` fails with
-`INSTALL_FAILED_UPDATE_INCOMPATIBLE`. `just deploy-android` then offers to
+`INSTALL_FAILED_UPDATE_INCOMPATIBLE`. `just deploy android` then offers to
 reinstall, keeping the app's data: everything the app writes lives under
 `/sdcard/Android/data/org.openantigrav.game`, which it moves aside on the device,
 then uninstalls, installs, starts the app once and copies the kept files back in.

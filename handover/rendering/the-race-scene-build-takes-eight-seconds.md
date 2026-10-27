@@ -30,7 +30,7 @@ layout are in
   cached pipeline is handed to a drawable it does not fit.
 - **The Steam Deck is unmeasured.** It is where the report came from, and it
   is the only thing left open on this thread - the desktop build time below
-  is fixed. After `just deploy-deck`, from a Desktop Mode terminal:
+  is fixed. After `just deploy deck`, from a Desktop Mode terminal:
   `~/Desktop/OpenAntiGrav-x86_64-portable.AppImage ~/.local/share/oag/images/pulse-psp-eu.chd --no-audio --measure-race-load 2`,
   and again with `~/.local/share/oag/images/hdfury-ps3-eu-dec.iso`. Record the
   printed tables on the doc page; delete this thread once they land, the

@@ -11,18 +11,20 @@
 # `adb install -r` keeps it.
 #
 # Usage:
-#   scripts/deploy-to-android.sh [--serial S] [--skip-build] [--reinstall]
-#                                [--dry-run]
+#   scripts/deploy-to-android.sh [--serial S] [--skip-build] [--apk FILE]
+#                                [--reinstall] [--dry-run]
 #
 #   --serial S    adb device serial (`adb devices`). Default: $ANDROID_SERIAL,
 #                 the only connected device, or - with more than one - a
 #                 picker asking which (scripts/adb-pick-device.sh).
 #   --skip-build  Don't rebuild; install the newest APK already in target/apk/.
+#   --apk FILE    Install this APK; build nothing. An older version than the
+#                 installed one (a downgrade) takes the reinstall path below.
 #   --reinstall   If the installed app was signed with another key, uninstall
 #                 it and install this one without asking (see below).
 #   --dry-run     Print what would be built and installed; touch nothing.
 #
-# An APK signed with a different key (one built on another machine, or before
+# An APK signed with a different key, or older than the installed one, (one built on another machine, or before
 # the key moved to ~/.android/oag-debug.keystore) cannot be updated in place:
 # Android answers INSTALL_FAILED_UPDATE_INCOMPATIBLE. The script then offers to
 # reinstall, keeping the app's data: everything the app writes (images, caches,
@@ -38,6 +40,7 @@ project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 package="org.openantigrav.game"
 
 skip_build=0
+given_apk=""
 reinstall=0
 dry_run=0
 adb_args=()
@@ -50,6 +53,8 @@ while [[ $# -gt 0 ]]; do
         --serial)     [[ $# -ge 2 ]] || die "--serial needs a value"
                       adb_args=(-s "$2"); shift 2 ;;
         --skip-build) skip_build=1; shift ;;
+        --apk)        [[ $# -ge 2 ]] || die "--apk needs a value"
+                      given_apk="$2"; skip_build=1; shift 2 ;;
         --reinstall)  reinstall=1; shift ;;
         --dry-run)    dry_run=1; shift ;;
         -h|--help) awk 'NR>2 && /^#/ {sub(/^# ?/,""); print; next} NR>2 {exit}' \
@@ -70,7 +75,10 @@ adb get-state >/dev/null 2>&1 \
 echo "device: $(adb shell getprop ro.product.model | tr -d '\r') ($(adb get-serialno))"
 
 apk=""
-if (( skip_build )); then
+if [[ -n $given_apk ]]; then
+    [[ -f $given_apk ]] || die "$given_apk not found"
+    apk="$given_apk"
+elif (( skip_build )); then
     apk="$(ls -t "$project_root"/target/apk/OpenAntiGrav-*-android-arm64.apk 2>/dev/null | head -n1 || true)"
     [[ -n $apk ]] || die "no APK in target/apk/. Run 'just apk' first, or drop --skip-build."
 elif (( dry_run )); then
@@ -128,23 +136,24 @@ reinstall_keeping_data() {
         echo "moved the app's data to $keep"
     fi
     adb uninstall "$package" >/dev/null || die "adb uninstall failed; the app's data is in $keep on the device"
-    adb install "$apk" || die "install failed after uninstalling; the app's data is in $keep on the device - re-run 'just deploy-android --skip-build' and it is copied back"
+    adb install "$apk" || die "install failed after uninstalling; the app's data is in $keep on the device - re-run 'just deploy android --skip-build' and it is copied back"
 }
 
 step "Installing ${apk:-the APK}"
 if (( dry_run )); then
     echo "would run: adb install -r ${apk:-<built apk>}"
-elif ! out="$(adb install -r "$apk" 2>&1)"; then
+elif ! out="$(adb install -r -d "$apk" 2>&1)"; then
     echo "$out" | grep -v -e 'absl::InitializeLog' -e '^I0000' >&2
-    grep -q INSTALL_FAILED_UPDATE_INCOMPATIBLE <<< "$out" || die "adb install failed - see above"
+    grep -q -e INSTALL_FAILED_UPDATE_INCOMPATIBLE -e INSTALL_FAILED_VERSION_DOWNGRADE <<< "$out" \
+        || die "adb install failed - see above"
     echo >&2
-    echo "The app on the device was signed with another key, so it cannot be updated in place." >&2
+    echo "The installed app has another signing key or a newer version, so it cannot be updated in place." >&2
     if (( ! reinstall )); then
         [[ -t 0 ]] || die "pass --reinstall to uninstall it and install this one (its data is kept)"
         read -r -p "Uninstall it and install this one, keeping its data? [Y/n] " answer
         [[ -z $answer || $answer == [yY]* ]] || die "left the installed app as it was"
     fi
-    step "Reinstalling (signature changed), keeping the app's data"
+    step "Reinstalling (signature or version changed), keeping the app's data"
     reinstall_keeping_data
 else
     echo "$out" | grep -v -e 'absl::InitializeLog' -e '^I0000'
