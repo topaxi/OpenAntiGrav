@@ -114,6 +114,9 @@ HD only; the screenshots were also compared on Pure.
 unlocked: `vsync = "off"`, the frame limit off or far above the panel, and gamescope's own framerate
 limit not applied. Capped at the panel's 90 Hz, fps and p99 hold at the cap whatever the CPU does
 (`cpu-governor.md`: p99 11.2 ms either way). A capped run is a second check, that the race still holds 90.
+Under gamescope our settings are not enough: with `ENABLE_GAMESCOPE_WSI=1` (Steam's default) a race
+with vsync off and no limit still presents at 90.0 fps, because gamescope's WSI holds the image. Launch
+with `ENABLE_GAMESCOPE_WSI=0` for an unlocked run (`governor-unlocked`, 2026-10-27).
 
 Measured on the Deck itself: release AppImage (`just appimage-deck`, znver2, `perf-probe`), run
 extracted, native under the Deck's gamescope on `DISPLAY=:1` with the environment copied from
