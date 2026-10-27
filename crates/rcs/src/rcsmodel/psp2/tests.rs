@@ -436,6 +436,39 @@ fn a_ps4_material_lists_its_diffuse_texture_first() {
     assert_eq!(materials[0].diffuse_texture(), Some("data/tex/diffuse.gnf"));
 }
 
+/// `cf_chevron_pulse_displacement2out` (Anulpha Pass's grid floor and walls) opens on a
+/// displacement map and names its colour `Diffuse_Specular`: the name picks it, where
+/// by order the draw had no picture and drew white.
+#[test]
+fn a_diffuse_specular_sampler_is_the_colour_of_a_displacement_material() {
+    use crate::rcsmaterial::name_hash;
+    assert_eq!(name_hash("Diffuse_Specular"), 0x28e9_81a4);
+    let mut cpu = vec![0u8; 0x400];
+    let name = put_str(&mut cpu, 0x300, "data/materials/chevron.rcsmaterial");
+    let displacement = put_str(&mut cpu, 0x330, "data/tex/displacement.gnf");
+    let colour = put_str(&mut cpu, 0x350, "data/tex/sc.gnf");
+    cpu[0x08..0x10].copy_from_slice(&(name as u64).to_le_bytes());
+    put_sampler(&mut cpu, 0x20, 0xdead_beef, displacement);
+    put_sampler(
+        &mut cpu,
+        0x20 + PS4_SAMPLER_STRIDE,
+        name_hash("Diffuse_Specular"),
+        colour,
+    );
+    let mut materials = material::read_ps4(&cpu);
+    // By order the displacement map is first.
+    assert_eq!(
+        materials[0].diffuse_texture(),
+        Some("data/tex/displacement.gnf")
+    );
+    // The sampler table, as the header's own table records it.
+    materials[0].samplers = vec![
+        (0xdead_beef, "data/tex/displacement.gnf".to_string()),
+        (name_hash("Diffuse_Specular"), "data/tex/sc.gnf".to_string()),
+    ];
+    assert_eq!(materials[0].diffuse_texture(), Some("data/tex/sc.gnf"));
+}
+
 /// Two materials are two entries in ascending address order, and each one's
 /// scan stops at the next one's name pointer - a texture belongs to the
 /// material above it, never the one below.
