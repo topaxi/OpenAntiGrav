@@ -6,7 +6,7 @@ const SIZE: (u32, u32) = (512, 272);
 /// or `None` with no adapter to run on.
 fn glow_at(stamps: &Stamps<'_>, probes: &[(u32, u32)]) -> Option<Vec<u8>> {
     let instance = wgpu::Instance::default();
-    let adapter = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::PRIMARY))
+    let adapter = oag_gpu::test_adapter::ordered(&instance)
         .into_iter()
         .next()?;
     let (device, queue) =

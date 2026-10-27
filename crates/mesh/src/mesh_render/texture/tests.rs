@@ -12,9 +12,7 @@ use crate::mesh::BlockFormat;
 /// or trimmed here. `None` without an adapter.
 fn small_device(limit: u32, blocks: bool) -> Option<(wgpu::Device, wgpu::Queue)> {
     let instance = wgpu::Instance::default();
-    let adapter =
-        pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
-            .ok()?;
+    let adapter = oag_gpu::test_adapter::request(&instance)?;
     let features = if blocks {
         adapter.features() & wgpu::Features::TEXTURE_COMPRESSION_BC
     } else {
@@ -127,9 +125,7 @@ fn blocks_over_the_limit_go_up_as_blocks_from_the_level_that_fits() {
 #[test]
 fn the_device_descriptor_asks_for_the_adapters_own_texture_limit() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) =
-        pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
-    else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         return;
     };
     let descriptor = crate::mesh_render::device_descriptor("limits", &adapter);

@@ -123,11 +123,7 @@ fn added(buffer: &[u32], x: u32, y: u32) -> f32 {
 #[ignore = "needs a GPU adapter"]
 fn the_ps2_bloom_adds_what_the_gs_arithmetic_says_it_adds() {
     let instance = wgpu::Instance::default();
-    let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-        compatible_surface: None,
-        ..Default::default()
-    }))
-    .expect("no GPU adapter available");
+    let adapter = oag_gpu::test_adapter::request(&instance).expect("no GPU adapter available");
     let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
         label: Some("ps2 bloom gain test"),
         ..Default::default()

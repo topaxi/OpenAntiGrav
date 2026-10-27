@@ -133,7 +133,7 @@ fn model(wave: bool) -> Model {
 #[test]
 fn the_wave_moves_with_the_clock_and_repeats_each_second() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };
@@ -185,7 +185,7 @@ fn the_wave_moves_with_the_clock_and_repeats_each_second() {
 #[test]
 fn a_zone_race_draws_the_strip_without_its_wave() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };

@@ -182,7 +182,7 @@ fn hds_clock_is_found_on_the_loader_path_a_race_really_takes() {
         return;
     };
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };

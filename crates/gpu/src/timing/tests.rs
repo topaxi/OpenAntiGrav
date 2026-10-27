@@ -66,7 +66,7 @@ fn what_is_asked_for_is_what_was_probed() {
 #[test]
 fn every_adapter_reports_what_it_can_be_timed_with() {
     let instance = wgpu::Instance::default();
-    let adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::PRIMARY));
+    let adapters = crate::test_adapter::ordered(&instance);
     if adapters.is_empty() {
         eprintln!("no GPU adapter: skipping");
         return;
@@ -103,7 +103,7 @@ fn every_adapter_reports_what_it_can_be_timed_with() {
 #[test]
 fn a_timestamp_pair_resolves_to_a_forward_going_duration() {
     let instance = wgpu::Instance::default();
-    let adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::PRIMARY));
+    let adapters = crate::test_adapter::ordered(&instance);
     if adapters.is_empty() {
         eprintln!("no GPU adapter: skipping");
         return;

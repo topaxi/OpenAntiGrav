@@ -136,9 +136,7 @@ fn an_empty_model_captures_a_frame_instead_of_panicking() {
     // missing adapter as an error - indistinguishable, from the test's
     // side, from the guard not working.
     let instance = wgpu::Instance::default();
-    if pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
-        .is_err()
-    {
+    if oag_gpu::test_adapter::request(&instance).is_none() {
         eprintln!("no GPU adapter: skipping");
         return;
     }

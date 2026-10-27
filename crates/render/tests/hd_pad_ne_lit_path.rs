@@ -118,7 +118,7 @@ fn luma(px: [u8; 4]) -> f32 {
 #[test]
 fn the_pad_program_reads_its_mask_as_a_normal_and_as_light_bars_and_keeps_the_lightmap() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };

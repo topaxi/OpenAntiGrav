@@ -17,7 +17,7 @@ const TABLE: &Prompts = &Prompts {
 fn render_text(substitution: Substitution) -> Option<Vec<u8>> {
     const SIDE: u32 = 24;
     let instance = wgpu::Instance::default();
-    let adapter = pollster::block_on(instance.request_adapter(&Default::default())).ok()?;
+    let adapter = oag_gpu::test_adapter::request(&instance)?;
     let (device, queue) = pollster::block_on(adapter.request_device(&Default::default())).ok()?;
     let format = wgpu::TextureFormat::Rgba8Unorm;
     let mut renderer = Renderer::new(

@@ -101,7 +101,7 @@ fn a_lit_segment_is_the_full_tint_and_an_unlit_one_is_transparent_black() {
 #[test]
 fn write_vis_blanks_on_no_tint_or_no_bands() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };

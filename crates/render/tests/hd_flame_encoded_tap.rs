@@ -128,7 +128,7 @@ fn model(grey: u8) -> Model {
 #[test]
 fn on_hds_encoded_store_the_colour_tap_is_decoded_and_elsewhere_it_is_not() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };

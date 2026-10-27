@@ -172,7 +172,7 @@ fn stored(device: &wgpu::Device, queue: &wgpu::Queue, grey: u8) -> f32 {
 #[test]
 fn hds_trail_taps_are_decoded_before_the_encoded_store() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };

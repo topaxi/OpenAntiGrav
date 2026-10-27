@@ -125,7 +125,7 @@ fn model(emask: [u8; 4], wave: u8) -> Model {
 #[test]
 fn the_emask_and_the_swept_outline_reach_the_pixel() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };

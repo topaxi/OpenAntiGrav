@@ -129,7 +129,7 @@ fn entry(k: f32, rate: f32) -> Emissive {
 #[test]
 fn the_cone_saturates_its_colour_and_skips_a_predicated_ramp() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };

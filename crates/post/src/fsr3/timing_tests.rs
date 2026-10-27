@@ -21,7 +21,7 @@ use oag_gpu::timing::{PassTimer, Timing};
 #[test]
 fn both_halves_of_the_chain_read_back_naming_their_own_frame() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no adapter; skipping");
         return;
     };

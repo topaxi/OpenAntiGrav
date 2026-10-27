@@ -188,7 +188,7 @@ fn distinct_colours(rgba: &[u8]) -> usize {
 fn drawn_cards(source: &str, tag: &str) -> Option<Vec<(u32, usize)>> {
     let image = oag_testdata::image(source)?;
     let instance = wgpu::Instance::default();
-    let adapter = pollster::block_on(instance.request_adapter(&Default::default())).ok()?;
+    let adapter = oag_gpu::test_adapter::request(&instance)?;
     let (device, queue) = pollster::block_on(
         adapter.request_device(&mesh_render::device_descriptor("advert test", &adapter)),
     )
@@ -519,7 +519,7 @@ fn hd_gantry_card_holds_565_levels_of_linear_light() {
         return;
     };
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         return;
     };
     let Ok((device, queue)) = pollster::block_on(
@@ -613,7 +613,7 @@ fn pulse_ps2_loads_slot_8_as_a_clocked_card() {
 fn gantry_card_at(source: &str, seconds: &[f32]) -> Option<Vec<Vec<u8>>> {
     let loaded = pulse_race(source)?;
     let instance = wgpu::Instance::default();
-    let adapter = pollster::block_on(instance.request_adapter(&Default::default())).ok()?;
+    let adapter = oag_gpu::test_adapter::request(&instance)?;
     let (device, queue) = pollster::block_on(adapter.request_device(
         &mesh_render::device_descriptor("gantry card test", &adapter),
     ))
@@ -803,7 +803,7 @@ fn the_zone_board_card_is_assembling_mid_clock() {
         return;
     };
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         return;
     };
     let Ok((device, queue)) = pollster::block_on(

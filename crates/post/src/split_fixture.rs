@@ -5,7 +5,7 @@ pub(crate) const SIZE: (u32, u32) = (64, 64);
 
 pub(crate) fn device() -> Option<(wgpu::Device, wgpu::Queue)> {
     let instance = wgpu::Instance::default();
-    let adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::PRIMARY));
+    let adapters = oag_gpu::test_adapter::ordered(&instance);
     let Some(adapter) = adapters.first() else {
         eprintln!("no GPU adapter: skipping");
         return None;

@@ -188,7 +188,7 @@ fn a_pointer_press_skips_the_flyby_when_the_lock_lifts_and_not_before() {
 /// What `progress` draws over a flat mid-grey 480x272 target: RGBA, or `None` with no adapter.
 fn pixels(panel: oag_raceplay::track_panel::Assets, progress: Progress) -> Option<Vec<u8>> {
     let instance = wgpu::Instance::default();
-    let adapter = pollster::block_on(instance.request_adapter(&Default::default())).ok()?;
+    let adapter = oag_gpu::test_adapter::request(&instance)?;
     let (device, queue) = pollster::block_on(adapter.request_device(&Default::default())).ok()?;
     let format = wgpu::TextureFormat::Rgba8Unorm;
     let (width, height) = (480u32, 272u32);

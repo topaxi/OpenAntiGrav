@@ -199,7 +199,7 @@ fn params() -> Params {
 /// pixel and centre pixel (red). `None` with no adapter.
 fn resolve(frames: &[Option<Frame>]) -> Option<(u8, u8)> {
     let instance = wgpu::Instance::default();
-    let adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::PRIMARY));
+    let adapters = oag_gpu::test_adapter::ordered(&instance);
     let adapter = adapters.first()?;
     let (device, queue) = pollster::block_on(adapter.request_device(&Default::default())).ok()?;
     let format = wgpu::TextureFormat::Rgba8Unorm;

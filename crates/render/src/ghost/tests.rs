@@ -57,7 +57,7 @@ fn the_static_offsets_are_hundredths_below_one() {
 #[test]
 fn the_three_passes_build_against_a_race_target() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         return;
     };
     let Ok((device, queue)) =

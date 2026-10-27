@@ -32,11 +32,7 @@ const SIZE: u32 = 64;
 #[ignore = "needs a GPU adapter"]
 fn the_exhaust_pipeline_builds_and_draws_on_a_real_device() {
     let instance = wgpu::Instance::default();
-    let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-        compatible_surface: None,
-        ..Default::default()
-    }))
-    .expect("no GPU adapter available");
+    let adapter = oag_gpu::test_adapter::request(&instance).expect("no GPU adapter available");
     let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
         label: Some("exhaust pipeline test"),
         ..Default::default()

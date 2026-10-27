@@ -171,7 +171,7 @@ fn read_pixel(
 #[test]
 fn the_chain_draws_the_law_on_a_real_device() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };
@@ -270,7 +270,7 @@ fn the_chain_draws_the_law_on_a_real_device() {
 #[test]
 fn the_composite_moves_the_scene_sample_by_the_offset_texture() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };

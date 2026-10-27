@@ -177,7 +177,7 @@ fn centroid_row(pixels: &[[u8; 4]], lo: u32, hi: u32) -> Option<f32> {
 #[test]
 fn the_quake_lifts_marked_surfaces_by_the_staticquake_law_and_nothing_else() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };

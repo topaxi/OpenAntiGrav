@@ -156,7 +156,7 @@ fn model_with(
 #[test]
 fn the_billboard_is_an_overlay_of_the_advert_layer_product_under_the_scanlines() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };
@@ -214,7 +214,7 @@ fn the_billboard_is_an_overlay_of_the_advert_layer_product_under_the_scanlines()
 #[test]
 fn on_the_race_target_the_taps_are_decoded_before_the_overlay() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };
@@ -251,7 +251,7 @@ fn holo_finish() -> Emissive {
 #[test]
 fn scanlinebillboards_tint_desaturation_and_alpha_boost_reach_the_colour() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };
@@ -336,7 +336,7 @@ fn halves() -> Arc<ModelTexture> {
 #[test]
 fn the_tints_scale_moves_the_layer_coordinate_and_unity_leaves_it() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };

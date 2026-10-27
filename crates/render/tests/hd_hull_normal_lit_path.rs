@@ -97,7 +97,7 @@ fn luma(px: [u8; 4]) -> f32 {
 #[test]
 fn a_hull_reads_its_normal_map_through_the_authored_tangent_frame() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };

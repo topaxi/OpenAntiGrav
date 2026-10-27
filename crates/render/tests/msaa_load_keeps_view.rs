@@ -28,7 +28,7 @@ fn fs_main() -> @location(0) vec4<f32> {
 #[test]
 fn a_loading_multisample_pass_keeps_the_view_drawn_before_it() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };

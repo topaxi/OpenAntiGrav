@@ -89,7 +89,7 @@ const BIAS: f32 = 0.001;
 #[test]
 fn a_wing_shadows_the_fuselage_under_it_and_the_rest_of_the_hull_is_lit() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };

@@ -361,11 +361,7 @@ fn render_and_resolve(
 #[ignore = "needs a GPU adapter"]
 fn msaa_4x_resolves_a_triangle_onto_a_single_sample_target() {
     let instance = wgpu::Instance::default();
-    let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-        compatible_surface: None,
-        ..Default::default()
-    }))
-    .expect("no GPU adapter available");
+    let adapter = oag_gpu::test_adapter::request(&instance).expect("no GPU adapter available");
     let features = adapter.get_texture_format_features(FORMAT);
     assert!(
         features.flags.sample_count_supported(4)
@@ -441,11 +437,7 @@ fn msaa_4x_resolves_a_triangle_onto_a_single_sample_target() {
 #[ignore = "needs a GPU adapter"]
 fn msaa_2x_fails_validation_without_the_adapter_specific_format_features_device_feature() {
     let instance = wgpu::Instance::default();
-    let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-        compatible_surface: None,
-        ..Default::default()
-    }))
-    .expect("no GPU adapter available");
+    let adapter = oag_gpu::test_adapter::request(&instance).expect("no GPU adapter available");
     let features = adapter.get_texture_format_features(FORMAT);
     let adapter_reports_2x_supported = features.flags.sample_count_supported(2)
         && features

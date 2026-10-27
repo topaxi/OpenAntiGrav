@@ -42,7 +42,7 @@ fn dispatch(render: (u32, u32), upscale: (u32, u32)) -> Dispatch {
 #[test]
 fn the_bind_groups_are_built_once_and_not_once_a_frame() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no adapter; skipping");
         return;
     };

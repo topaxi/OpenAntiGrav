@@ -31,7 +31,7 @@ use oag_display::display::{Brightness, Gamma, Reconstruction};
 #[test]
 fn fsr3_skips_the_spatial_anti_aliasing_pass_rather_than_discarding_it() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no adapter; skipping");
         return;
     };
@@ -157,7 +157,7 @@ fn fsr3_skips_the_spatial_anti_aliasing_pass_rather_than_discarding_it() {
 #[test]
 fn a_split_resolves_each_view_with_a_chain_of_its_own() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no adapter; skipping");
         return;
     };

@@ -107,7 +107,7 @@ fn releasing_a_model_keeps_its_slots_and_frees_its_texels() {
 #[test]
 fn releasing_texels_keeps_an_uploaded_texture_s_view() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         return;
     };
     let Ok((device, queue)) =

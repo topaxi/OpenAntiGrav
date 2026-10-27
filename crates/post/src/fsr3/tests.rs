@@ -189,7 +189,7 @@ fn the_pass_list_is_upstream_s_dispatch_order() {
 #[test]
 fn every_ported_pass_builds_and_dispatches_on_a_real_device() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no adapter; skipping");
         return;
     };
@@ -821,7 +821,7 @@ fn the_multisampled_build_binds_a_multisampled_scene() {
     // Only the two scene attachments are ever multisampled: everything after
     // `prepare_inputs` reads a target this port wrote itself.
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no adapter; skipping");
         return;
     };
@@ -884,7 +884,7 @@ fn the_multisampled_build_binds_a_multisampled_scene() {
 #[test]
 fn the_intermediates_are_allocated_at_the_ceiling_and_the_cost_is_reportable() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no adapter; skipping");
         return;
     };
@@ -946,7 +946,7 @@ on_both_formats! {
 #[test]
 fn a_device_that_can_store_upstream_s_formats_is_given_them_and_holds_less() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no adapter; skipping");
         return;
     };

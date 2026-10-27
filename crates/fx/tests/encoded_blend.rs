@@ -37,7 +37,7 @@ fn half_to_f32(bits: u16) -> f32 {
 /// `store` and returns the first texel's RGB.
 fn flash_over(store: SceneStore) -> Option<[f32; 3]> {
     let instance = wgpu::Instance::default();
-    let adapter = pollster::block_on(instance.request_adapter(&Default::default())).ok()?;
+    let adapter = oag_gpu::test_adapter::request(&instance)?;
     let (device, queue) =
         pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).ok()?;
     device.on_uncaptured_error(std::sync::Arc::new(|e| panic!("wgpu validation: {e}")));
