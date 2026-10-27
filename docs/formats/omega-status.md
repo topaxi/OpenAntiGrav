@@ -236,7 +236,8 @@ sibling `.rcsmodel` which container it is - scoped to the circuit screen, so `pr
 `FrontEndConstantFranelBlend.rcsmaterial` (`_1`, `_2` and `cf_FEtracks*` files sit in the same
 folders and no model, `.vex` or material names them), which carries no texture: there is no
 `fe_grad`. Its pixel shader reads, per pixel, **confidence 80** (a hand-built GCN decoder over
-one shader, member order from the file's own reflection table, no emulator run):
+one shader, member order from the file's own reflection table, no emulator run; since 2026-10-27 the
+lines below are reproduced by `oag_rcs::gcn`, [gcn.md](gcn.md), and held by `gcn_ground_truth`):
 
 ```text
 refl  = ReflectivityMin + ReflectivityScale * (1 - N.V)^ReflectivityPower

@@ -208,6 +208,39 @@ ends on a square root
 `oag_post::wo_composite`, which this change does not touch. Whether the Vita's
 display adds an encode of its own after that is not read here.
 
+## Read with the decoder: the patch keeps the curve, and changes the composite (2026-10-27, `gcn-operand-decoder`)
+
+The programs above were first read with a scratch disassembler on the **base** eboot. `oag_rcs::gcn`
+([gcn.md](../../../formats/gcn.md)) now decodes every program in both `uroot/eboot.bin`s (base 203, patch 1.07 213,
+0 refused), and finds them by their reflection's own constant names rather than by address:
+
+| Program | Base `Shdr` | Patch `Shdr` | Base against patch |
+| --- | --- | --- | --- |
+| `pal_ToneMapCoefficientsFilter_fp` (constants `a0L_b0L_dLAvgMax_cL` ...) | `0x9657d4`, 125 instructions | `0x9dbdb4`, 125 | **identical**, every line |
+| curve resolve (`m_abcd`, `m_LAvgt0t1Exposure`) | `0x968b84`, 105 | `0x9df104`, 105 | **identical**, every line |
+| race composite (`BloomScale_abVignette`, `ScreenTint_Aspect`, motion blur, `wh_whInv`, `uvOrigo`) | `0x954e64`, 133 | `0x9c9f94`, 135 | **differs** |
+
+(file offsets of the `Shdr` tag in each `eboot.bin`.) The resolve reads as quoted above: `s_buffer_load_dwordx8 s[8:15]`
+(`m_abcd` then `m_LAvgt0t1Exposure`), `v_mul_f32 v0, s15, v0` (`E * c`), `v_min_f32 v0, s14, v0` (`t1`),
+`v_max_f32 v0, s13, v0` (`t0`), then `v_mad_f32` / `v_mad_f32` / `v_mad_f32` with `s11`, `s9`, `s8` (`a + x (b + x (c + d x))`,
+`c` in a register), three channels each, per fragment. **So the end curve the running game applies is this cubic Hermite,
+confidence 82** (read on the patch's own program, which is what runs; the curve's derivation stays at the 80 above).
+
+**The patch's composite differs in two ways** (both motion-blur composites, `0x9c94b4` and `0x9c9f94`; the two
+non-motion-blur ones already had a `cAccum_ColorScale`):
+
+```text
+base:   out.rgb = vignette * (Frame + LowResAdditive + BloomScale * Bloom + ScreenTint.rgb)
+patch:  out.rgb = ColorScale.rgb * vignette * (Frame + LowResAdditive + BloomScale * Bloom) + ScreenTint.rgb
+```
+
+read off the tails: base `v_add_f32 v0, s16, v14` (tint added) then `v_mul_f32 v0, v2, v0` (vignette); patch
+`v_mul_f32 v3, s4, v4` (`ColorScale.r * vignette`, `ColorScale` the new member at dword 24, three floats) then
+`v_mad_f32 v3, v3, v14, s16` (`* sum + tint`). Confidence 80 for the shader law. **The value of `ColorScale` is not
+read**: its CPU writer is in the patch's eboot, whose functions this page's addresses do not cover (they are the base
+build's). **Not wired**: `oag_post::omega_tonemap` draws the curve and the composite's distortion offset, not its bloom,
+tint or vignette (its module docs), so neither form is drawn; the follow-up is in the HD fidelity handover thread.
+
 ## Not live, recorded so nobody chases them
 
 - **`wo_composite_nocc_fp`** (`0x01959910`): `c = alpha.rgb + (1 - alpha.a) * main`,
