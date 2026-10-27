@@ -11,9 +11,16 @@
 //!
 //! Opt-in per frame: a [`split`] on a thread with no open [`Frame`] does nothing, so a
 //! capture, a test or a split screen's view thread records into its one encoder as before.
-//! `OAG_SPLIT_FINISH=0` turns it off (an A/B switch for benches, nothing a player sets). In a
-//! browser there are no threads to hand an encoder to, and a split encoder is finished where
-//! it is split.
+//! In a browser there are no threads to hand an encoder to, and a split encoder is finished
+//! where it is split.
+//!
+//! **Only on uniform cores, by default.** On a CPU whose cores differ in capacity (a phone's
+//! big.LITTLE, a hybrid desktop part) the split made the frame thread slower: on a Galaxy S24
+//! the HD flyby's recording rose by about 1 ms and `submit` did not fall
+//! (`docs/rendering/frame-thread-cpu.md`, "The reported phone regression"). So the split is on
+//! where every core reports the same `cpu_capacity` (the Steam Deck, a desktop Zen) or where
+//! the capacities cannot be read, and off otherwise. `OAG_SPLIT_FINISH=0` or `=1` overrides
+//! the probe (an A/B switch for benches, nothing a player sets).
 
 use std::cell::RefCell;
 
@@ -51,11 +58,10 @@ pub struct Frame {
 }
 
 impl Frame {
-    /// Opens a frame on this thread, unless `OAG_SPLIT_FINISH=0`.
+    /// Opens a frame on this thread when [`wanted`] says this machine gains from the split.
     pub fn begin() -> Self {
         static WANTED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-        let wanted =
-            *WANTED.get_or_init(|| std::env::var("OAG_SPLIT_FINISH").map_or(true, |v| v != "0"));
+        let wanted = *WANTED.get_or_init(wanted);
         if wanted {
             OPEN.with(|open| *open.borrow_mut() = Some(Vec::new()));
         }
@@ -84,6 +90,41 @@ impl Frame {
 impl Drop for Frame {
     fn drop(&mut self) {
         OPEN.with(|open| open.borrow_mut().take());
+    }
+}
+
+/// Whether frames split their encoder: `OAG_SPLIT_FINISH` when set (`0` off, anything else
+/// on), otherwise [`uniform_cores`] over this machine's core capacities.
+#[must_use]
+pub fn wanted() -> bool {
+    match std::env::var("OAG_SPLIT_FINISH") {
+        Ok(value) => value != "0",
+        Err(_) => uniform_cores(&core_capacities()),
+    }
+}
+
+/// True when every core has the same capacity, or none could be read.
+#[must_use]
+pub fn uniform_cores(capacities: &[u32]) -> bool {
+    capacities.windows(2).all(|pair| pair[0] == pair[1])
+}
+
+/// Each core's scheduler capacity (`/sys/devices/system/cpu/cpu<N>/cpu_capacity`, 1024 for the
+/// fastest), in core order; empty where the kernel does not report it or on another OS.
+fn core_capacities() -> Vec<u32> {
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    {
+        (0..)
+            .map(|core| {
+                std::fs::read_to_string(format!("/sys/devices/system/cpu/cpu{core}/cpu_capacity"))
+            })
+            .take_while(Result::is_ok)
+            .filter_map(|text| text.ok()?.trim().parse().ok())
+            .collect()
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
+    {
+        Vec::new()
     }
 }
 
@@ -196,6 +237,16 @@ mod tests {
             .expect("a mapped buffer reads")
             .to_vec();
         assert_eq!(bytes, [0, 0, 0, 0, 1, 1, 1, 1]);
+    }
+
+    /// The S24's capacities split nothing; the Deck's and unreadable ones split.
+    #[test]
+    fn only_uniform_cores_split() {
+        let s24 = [253, 253, 253, 253, 653, 653, 653, 730, 730, 1024];
+        assert!(!uniform_cores(&s24));
+        assert!(uniform_cores(&[1024; 8]));
+        assert!(uniform_cores(&[]));
+        assert!(uniform_cores(&[512]));
     }
 
     /// With no frame open on this thread a split leaves the encoder alone.

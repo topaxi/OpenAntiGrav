@@ -598,5 +598,28 @@ The `acquire waited` figures in the maintainer's own log are 0.08 to 0.12 ms on 
 wait moved into the frame thread's accounting either. This host was not used: at load 20 to 60 the
 same binary read 2.1 to 5.2 ms `total`.
 
-What is left is the phone in the maintainer's own scene (menus, touch, sound) and a thermally
-matched A/B there.
+### The maintainer's scene: the split finish costs the phone about 1 ms
+
+The maintainer's scene was the HD campaign's first event (single race, Vineta K, Venom, weapons
+on), read during the flyby and the first seconds after GO. Reached on the phone by taps from the
+disc picker through RACE CAMPAIGN, the HD card, event 1 and Ship Select (Mirage on both builds),
+`--frame-log` through the launch file, sound on, every run from a battery at 28.7 C, interleaved.
+CPU row median over the first 20 race seconds (the flyby) and the 25 after:
+
+| Run | flyby CPU row | flyby `scene` | flyby `submit` | after GO CPU row |
+| --- | --- | --- | --- | --- |
+| `e5c996527`, two runs | 9.82, 9.78 | 2.25, 2.27 | 7.27, 7.20 | 9.54, 9.59 |
+| main, split finish on, two runs | 10.72, 10.72 | 3.33, 3.35 | 7.02, 7.06 | 8.70, 9.41 |
+| main, `OAG_SPLIT_FINISH=0` | 9.72 | 2.46 | 6.81 | 8.81 |
+
+The frame thread's `total` is 18.5 to 19.4 ms in every run; the phone is GPU-bound (50 to 53 fps in
+the flyby) and the meter's CPU row is `cpu_ms - present_ms`, so time the split adds to `scene`
+shows up as CPU while `present` shrinks. On the S24 the split adds about 1 ms of recording and
+saves no `submit`, where on the Deck it saved 1 ms of `submit`. That is the measurable part of the
+report; the rest of the 9 against 12 to 13 did not reproduce in interleaved, temperature-matched
+runs.
+
+**Fix:** the split is on only where every core reports the same `cpu_capacity`
+(`oag_gpu::split_finish::wanted`); the S24 (253, 653, 730, 1024) runs one encoder, the Deck and a
+desktop Zen (1024 on every core) keep the split. `OAG_SPLIT_FINISH=0`/`1` still overrides. On the
+S24 that is exactly the `OAG_SPLIT_FINISH=0` row above.
