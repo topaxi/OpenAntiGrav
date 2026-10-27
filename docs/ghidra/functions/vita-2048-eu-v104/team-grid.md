@@ -178,7 +178,8 @@ degrees: confidence about 50, fitted by eye, not verified** (the frame's hull
 length and position agree). **Chosen:** the far plane, drawing over the 2-D
 list (nothing the hull covers is drawn over it on the frame), the model's own
 default `Textures_1` livery (yellow: the original is teal; the same open
-livery question as the 2048 race pair), the loader running on the frame
+livery question as the 2048 race pair; the hull box's dominant saturated colour is (160,128,0) here and
+(32,224,224) in the frame, a yellow-to-cyan turn a red/blue swap in the livery decode would make: a lead, untested), the loader running on the frame
 thread. Not drawn: the touch turntable, the screen's slide-in. Frame check:
 the silhouette sits on the original's (nose at about (490, 195), tail at
 (865, 110)).

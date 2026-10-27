@@ -207,7 +207,10 @@ shape, not by screen, and would have mis-fired on `Team`'s own
   prototype's scrolling description (`PI_TeamModel`'s `description` id is on disc; the marquee and its
   scrollbar are not drawn, so a prototype shows no rows), the ability icons' touch tooltips, the count-up
   and slide-in, the lighter second word of the header, the hull's livery (ours is the model's own
-  `Textures_1`, yellow; the original frame is teal - the same open livery question as the 2048 race pair),
+  `Textures_1`, yellow; the original frame is teal - the same open livery question as the 2048 race pair;
+  lead, not tested: the dominant saturated colours of the hull box are (160,128,0) ours and (32,224,224)
+  theirs, which is a yellow-to-cyan hue turn a red/blue channel swap in the Vita livery decode would make; not
+  changed here because the decoder is shared by every 2048 texture),
   the touch turntable, and loading the hull on the frame thread (about 80 ms a step).
   Still open from this pass: the
   `<Model>` ship preview on `profile` is not drawn (`team`'s is, see above); the skin list

@@ -66,6 +66,8 @@ pub fn matrices(origin: (f32, f32), space: Space) -> (Mat4, Mat4) {
 /// The hull on its way to the screen: opens the source on first use and keeps the
 /// one model the cursor is on.
 pub struct TeamHull {
+    /// Entries that would not read or build: never asked for again.
+    failed: Vec<String>,
     source: String,
     dlc: Vec<PathBuf>,
     /// The title's native ship directory (`title.race.ship_dir`).
@@ -99,6 +101,7 @@ impl TeamHull {
             dlc,
             ship_dir,
             origin,
+            failed: Vec::new(),
             archives: None,
             gave_up: false,
             shown: None,
@@ -107,7 +110,13 @@ impl TeamHull {
 
     fn load(&mut self, entry: &str) -> Result<oag_mesh::mesh::Model> {
         if self.archives.is_none() {
-            self.archives = Some(crate::preview::open_archives(&self.source, &self.dlc)?);
+            match crate::preview::open_archives(&self.source, &self.dlc) {
+                Ok(archives) => self.archives = Some(archives),
+                Err(error) => {
+                    self.gave_up = true;
+                    return Err(error);
+                }
+            }
         }
         let archives = self.archives.as_mut().expect("opened above");
         crate::preview::psp2_scene::model(archives, entry)
@@ -130,19 +139,21 @@ impl TeamHull {
         space: Space,
         (team, suffix): (&str, &str),
     ) {
-        if self.gave_up {
-            return;
-        }
         let entry = entry(self.ship_dir, team, suffix);
         if self.shown.as_ref().is_none_or(|(held, _)| *held != entry) {
+            // A craft that will not load draws no hull, not the previous craft's.
+            self.shown = None;
+            if self.gave_up || self.failed.contains(&entry) {
+                return;
+            }
             let built = self.load(&entry).and_then(|model| {
                 Preview::new(device, queue, format, Anisotropy::default(), model)
             });
             match built {
                 Ok(preview) => self.shown = Some((entry, preview)),
                 Err(error) => {
-                    log::warn!("{error:#} - the Select Team screen draws no hull");
-                    self.gave_up = true;
+                    log::warn!("{error:#} - the Select Team screen draws no hull for it");
+                    self.failed.push(entry);
                     return;
                 }
             }
@@ -162,5 +173,36 @@ impl TeamHull {
                 0.0,
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_authored_origin_lands_the_hull_at_the_frames_centre() {
+        let space = Space {
+            size: (960.0, 544.0),
+            display_aspect: 960.0 / 544.0,
+        };
+        let (view_projection, model) = matrices((1400.0, 264.0), space);
+        let clip = view_projection * model * oag_core::math::Vec4::new(0.0, 0.0, 0.0, 1.0);
+        let at = (
+            (clip.x / clip.w * 0.5 + 0.5) * space.size.0,
+            (0.5 - clip.y / clip.w * 0.5) * space.size.1,
+        );
+        assert!(
+            (at.0 - 700.0).abs() < 1.0 && (at.1 - 132.0).abs() < 1.0,
+            "{at:?}"
+        );
+    }
+
+    #[test]
+    fn the_entry_is_the_lod_hull_of_the_craft() {
+        assert_eq!(
+            entry(r"Data\art\published\Ships", "Feisar2048", "3"),
+            r"Data\art\published\Ships\Feisar2048\3\Ship_LOD.vex"
+        );
     }
 }

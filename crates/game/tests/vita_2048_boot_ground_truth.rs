@@ -682,6 +682,114 @@ fn the_team_panel_draws_feisar_speeds_ratings_off_the_disc() {
     assert_eq!(icons, 4, "team, class and the two ability icons");
 }
 
+/// Every craft's Select Team hull (`<ship dir>/<team>/<n>/Ship_LOD.vex`, the file
+/// the screen's own update names) builds into a hull-sized, textured mesh.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn every_select_team_hull_builds_with_its_textures() {
+    let Some(source) = source() else { return };
+    let (_shell, mut archives, title) =
+        boot::load_shell(&options(&source)).expect("2048's front end walks");
+    let roster = title.race.team_variants.expect("2048's native roster");
+    let touch = title.front_end.and_then(|front_end| front_end.touch);
+    assert_eq!(touch.map(|t| t.team_model_origin), Some((1400.0, 264.0)));
+    let mut hulls = 0;
+    for team in roster.teams {
+        for variant in roster.variants {
+            let entry = oag_game::team_hull::entry(title.race.ship_dir, team, variant.suffix);
+            let model = oag_game::preview::psp2_scene::model(&mut archives, &entry)
+                .unwrap_or_else(|e| panic!("{entry}: {e:#}"));
+            assert!(model.indices.len() / 3 > 3_000, "{entry} is a hull");
+            assert!(
+                model.textures.iter().flatten().count() > 0,
+                "{entry} is textured"
+            );
+            hulls += 1;
+        }
+    }
+    assert_eq!(hulls, 20);
+}
+
+/// The RGBA bytes of a PNG this project's own writer made (stored deflate blocks, no
+/// filtering), `960 x 544`.
+fn pixels_of(png: &[u8]) -> Vec<u8> {
+    let mut at = 8;
+    let mut zlib = Vec::new();
+    while at + 8 <= png.len() {
+        let len = u32::from_be_bytes(png[at..at + 4].try_into().unwrap()) as usize;
+        if &png[at + 4..at + 8] == b"IDAT" {
+            zlib.extend_from_slice(&png[at + 8..at + 8 + len]);
+        }
+        at += 12 + len;
+    }
+    let mut raw = Vec::new();
+    let mut at = 2;
+    loop {
+        let last = zlib[at] & 1 == 1;
+        let len = usize::from(u16::from_le_bytes([zlib[at + 1], zlib[at + 2]]));
+        raw.extend_from_slice(&zlib[at + 5..at + 5 + len]);
+        at += 5 + len;
+        if last {
+            break;
+        }
+    }
+    let stride = 1 + 960 * 4;
+    assert_eq!(raw.len(), stride * 544, "an RGBA PNG of the frame's size");
+    raw.chunks_exact(stride)
+        .flat_map(|row| row[1..].iter().copied())
+        .collect()
+}
+
+/// The headless capture of the Select Team screen carries the hull at the widget's
+/// origin, (700, 132) of the 960 x 544 frame: white backdrop there without it.
+/// Dropping `capture.rs`'s hull pass or `team_hull` fails this.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/ and a GPU adapter"]
+fn the_select_team_capture_draws_the_hull_at_the_widgets_origin() {
+    let Some(source) = source() else { return };
+    let scratch = std::env::temp_dir().join(format!("oag-team-hull-{}", std::process::id()));
+    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
+    let out = scratch.join("team.png");
+    let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
+        .arg(&source)
+        .args([
+            "--until",
+            "team",
+            "--press",
+            "start,cross,cross,triangle,cross",
+        ])
+        .args([
+            "--ticks",
+            "40",
+            "--no-audio",
+            "--no-video",
+            "--size",
+            "960x544",
+        ])
+        .arg("--screenshot")
+        .arg(&out)
+        .env("XDG_CONFIG_HOME", scratch.join("config"))
+        .env("XDG_DATA_HOME", scratch.join("data"))
+        .env("XDG_STATE_HOME", scratch.join("state"))
+        .status()
+        .expect("running oag-game");
+    assert!(status.success(), "oag-game --until team");
+    let pixels = pixels_of(&std::fs::read(&out).expect("reading the screenshot"));
+    std::fs::remove_dir_all(&scratch).ok();
+    let darkest = (-6i32..=6)
+        .flat_map(|dy| (-6i32..=6).map(move |dx| (dx, dy)))
+        .map(|(dx, dy)| {
+            let at = ((132 + dy) as usize * 960 + (700 + dx) as usize) * 4;
+            pixels[at].min(pixels[at + 1]).min(pixels[at + 2])
+        })
+        .min()
+        .expect("a neighbourhood");
+    assert!(
+        darkest < 200,
+        "the hull covers the widget's origin: darkest channel {darkest}"
+    );
+}
+
 /// `Home`'s second tile is `FE_COMMUNITY`, which redirects to
 /// `communityAdhocCheck` rather than to `community` itself - a real screen
 /// this build now loads and draws, refusing by note like `GameModeChoice`'s
