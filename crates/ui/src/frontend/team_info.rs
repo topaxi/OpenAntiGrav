@@ -57,9 +57,7 @@
 //! **Omega: checked, applies, not wired.** `eboot.bin` carries the same item
 //! class; no `Team_Definition.xml` ships there, so no screen instantiates it.
 
-use oag_2048::race::{NATIVE_TEAMS, SHIP_TYPE_LABELS, SHIP_TYPES};
-
-use super::team::TEAM_COLUMNS;
+use super::team::{NATIVE_TEAMS, SHIP_TYPE_LABELS, SHIP_TYPES, TEAM_COLUMNS};
 use super::*;
 
 /// `<TeamInfo>`'s authored anchor in `Team_Definition.xml`.

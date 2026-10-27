@@ -11,7 +11,6 @@
 //! 3 there). Read off the disc, never transcribed: a craft whose `<FE>` is missing
 //! gets no rows and a report line, never a zero bar.
 
-use oag_2048::race::{NATIVE_TEAMS, SHIP_TYPES};
 use oag_tables::fexml::{self, Node};
 use oag_ui::frontend::TeamRating;
 
@@ -21,19 +20,24 @@ const MODELS: [&str; 4] = ["combat", "agility", "speed", "prototype"];
 
 /// Every native craft's rating, in `NATIVE_TEAMS` then craft order. Empty off 2048
 /// (`touch` is false there), whose roster has no such teams.
-pub fn load(touch: bool, documents: &[String], report: &mut Vec<String>) -> Vec<TeamRating> {
-    if !touch {
+pub fn load(
+    title: &oag_title::Title,
+    touch: bool,
+    documents: &[String],
+    report: &mut Vec<String>,
+) -> Vec<TeamRating> {
+    let Some(roster) = title.race.team_variants.filter(|_| touch) else {
         return Vec::new();
-    }
+    };
     let roots: Vec<Node> = documents.iter().map(|xml| fexml::parse(xml)).collect();
     let mut ratings = Vec::new();
-    for team in NATIVE_TEAMS {
+    for team in roster.teams.iter().copied() {
         for (craft, model) in MODELS.iter().enumerate() {
             match read(&roots, team, model) {
                 Some(rows) => ratings.push(TeamRating { team, craft, rows }),
                 None => report.push(format!(
                     "team panel: {team} {} has no <FE>",
-                    SHIP_TYPES[craft]
+                    roster.variants[craft].label
                 )),
             }
         }
@@ -41,7 +45,7 @@ pub fn load(touch: bool, documents: &[String], report: &mut Vec<String>) -> Vec<
     report.push(format!(
         "team panel: {} of {} craft ratings read",
         ratings.len(),
-        NATIVE_TEAMS.len() * MODELS.len()
+        roster.teams.len() * MODELS.len()
     ));
     ratings
 }

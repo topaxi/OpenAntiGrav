@@ -84,7 +84,7 @@
 //! a follow-up rather than guessed at.
 
 use oag_2048::frontend::states as w2048;
-use oag_2048::race::{NATIVE_TEAMS, SHIP_TYPES, TEAM_VARIANTS};
+pub(super) use oag_2048::race::{NATIVE_TEAMS, SHIP_TYPE_LABELS, SHIP_TYPES, TEAM_VARIANTS};
 
 use crate::pointer::{Pointer, contains};
 

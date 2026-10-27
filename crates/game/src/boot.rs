@@ -596,7 +596,8 @@ pub fn load_shell(
         ],
         &mut report,
     );
-    let team_ratings = team_ratings2048::load(front_end.touch.is_some(), &documents, &mut report);
+    let team_ratings =
+        team_ratings2048::load(title, front_end.touch.is_some(), &documents, &mut report);
     let tracks = load_tracks(&mut archives, definition, &documents, &mut report);
     let zone_tracks = load_zone_tracks(&mut archives, title.race.zone, &documents, &mut report);
     let teams = load_teams(
