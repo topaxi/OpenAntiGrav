@@ -56,9 +56,10 @@ against 1.7 to 2.4), so the draw stays held back: it needs the ink.
 
 ## Next Steps
 
-1. **The ink (half).** Not in memory. Candidates: Vita3K's host-side PVRTC-II decode or sampling of the
-   atlas (the descriptor's word 1 reads `0x82721600` against the file's `0x83000000`; decode the packing), or
-   a layer drawn after the canvas. Ask the maintainer how to compare, since the capture itself may carry it.
+1. **The ink (half).** Not in memory and not in the texture state: the descriptor decodes to the file's
+   `PVRTII4BPP` (the `0x82721600` is control word 0, sampler state: trilinear, mip count 10, LOD bias -1.5, so mip 0), see
+   `canvas3d-lattice.md` "The atlas descriptor decoded". Left: a layer drawn after the canvas, or the pass's output
+   blend (neither read), or the capture itself. Ask the maintainer how to compare.
 2. **Who writes (-3000, -1500).** Candidates `FUN_810efc4a` (`0x810effcc`) and `FUN_810efff6` (`0x810f032a`), the campaign
    map's centring of the first event. Pin the call (a breadcrumb patch in `0x811042ae`, storing LR where
    `TouchScroll_Update` does not decay it), then derive the phase from the page's own node positions, not a
