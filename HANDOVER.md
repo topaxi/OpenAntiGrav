@@ -50,8 +50,8 @@ titles: [pulse, hd]     # from pulse, pure, hd, 2048, omega; or [all]
 updated: 2026-10-26     # newest date in the file
 summary: "One line, at most 150 characters, saying what is OPEN, not what landed."
 categories: [rendering] # optional: extra categories on top of the directory
-size: M                 # optional: XS | S | M | L | XL, effort for one member
-difficulty: medium      # optional: easy | medium | hard, how settled the path is
+size: M (70)            # optional: XS | S | M | L | XL, effort for one member; (confidence 0-100) optional
+difficulty: medium (50) # optional: easy | medium | hard, how settled the path is; (confidence 0-100) optional
 ---
 ```
 
@@ -62,7 +62,7 @@ difficulty: medium      # optional: easy | medium | hard, how settled the path i
 - **blocked-hardware**: the next step needs a device or a machine beyond the workstation (Steam Deck, S24, a Mac, iOS, a second monitor); a lane runs it when the maintainer offers the device.
 - **parked**: nothing scoped; revisit on demand.
 
-`size` and `difficulty` are optional estimates for drawing lanes; add them when writing or updating a thread if you can judge them, and leave them out rather than guess.
+`size` and `difficulty` are optional estimates for drawing lanes; add them when writing or updating a thread if you can judge them, and leave them out rather than guess. The number in parentheses is your confidence on the [rubric](docs/reverse-engineering/confidence-rubric.md)'s 0-100 scale; an estimate inferred rather than stated in the thread (a sweep, a guess from the summary) carries a low one.
 
 - **size**: XS under an hour, S a few hours, M half a day, L a day, XL more than a day (split the thread).
 - **difficulty**: easy (the steps are known), medium (a few unknowns), hard (an unread law, a design question, or a likely negative result).
