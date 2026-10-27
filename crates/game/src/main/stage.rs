@@ -688,6 +688,8 @@ impl Stage {
             // Nothing has been tried yet, so nothing has failed yet - see
             // `RaceStage::endrace_unavailable`.
             endrace_unavailable: false,
+            endrace_prefetch: None,
+            endrace_prefetch_started: false,
             earned_medal: None,
         }))
     }

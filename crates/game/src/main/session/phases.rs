@@ -41,6 +41,10 @@ pub(crate) struct PhaseClock {
     last: Option<Instant>,
     sums: [f32; 9],
     frames: u32,
+    /// This frame's own marks, for the spike line.
+    frame: [f32; 9],
+    /// `OAG_PHASE_SPIKE_MS`: a frame whose phases total more than this prints its own line.
+    spike_ms: Option<f32>,
 }
 
 impl PhaseClock {
@@ -50,6 +54,10 @@ impl PhaseClock {
             last: None,
             sums: [0.0; 9],
             frames: 0,
+            frame: [0.0; 9],
+            spike_ms: std::env::var("OAG_PHASE_SPIKE_MS")
+                .ok()
+                .and_then(|text| text.parse().ok()),
         }
     }
 
@@ -57,6 +65,7 @@ impl PhaseClock {
     pub(crate) fn begin(&mut self) {
         if self.enabled {
             self.last = Some(Instant::now());
+            self.frame = [0.0; 9];
         }
     }
 
@@ -67,15 +76,34 @@ impl PhaseClock {
         }
         let now = Instant::now();
         if let Some(last) = self.last.replace(now) {
-            self.sums[phase as usize] += now.duration_since(last).as_secs_f32();
+            let seconds = now.duration_since(last).as_secs_f32();
+            self.sums[phase as usize] += seconds;
+            self.frame[phase as usize] += seconds;
         }
     }
 
-    /// Counts a finished frame.
-    pub(crate) fn end_frame(&mut self) {
-        if self.enabled {
-            self.frames += 1;
+    /// Counts a finished frame. `tick` labels the spike line, when this frame earns one.
+    pub(crate) fn end_frame(&mut self, tick: u64) {
+        if !self.enabled {
+            return;
         }
+        self.frames += 1;
+        if let Some(line) = self.spike_line(tick) {
+            println!("{line}");
+        }
+    }
+
+    /// This frame's own phases as one line, when their total passes `OAG_PHASE_SPIKE_MS`.
+    fn spike_line(&self, tick: u64) -> Option<String> {
+        let total: f32 = self.frame.iter().sum::<f32>() * 1000.0;
+        if !self.spike_ms.is_some_and(|limit| total > limit) {
+            return None;
+        }
+        let mut line = format!("frame-spike tick={tick}");
+        for (name, seconds) in NAMES.iter().zip(self.frame) {
+            line.push_str(&format!(" {name}={:.2}", seconds * 1000.0));
+        }
+        Some(format!("{line} total={total:.2}"))
     }
 
     /// The mean milliseconds per frame of each phase since the last call, as `name=ms` fields,
@@ -94,5 +122,30 @@ impl PhaseClock {
         self.sums = [0.0; 9];
         self.frames = 0;
         Some(line)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_frame_over_the_spike_limit_prints_its_own_phases_and_one_under_prints_nothing() {
+        let mut clock = PhaseClock::new(true);
+        clock.spike_ms = Some(10.0);
+        clock.frame[Phase::Prep as usize] = 0.0125;
+        clock.frame[Phase::Scene as usize] = 0.0005;
+        assert_eq!(
+            clock.spike_line(6957).as_deref(),
+            Some(
+                "frame-spike tick=6957 ticks=0.00 prep=12.50 setup=0.00 scene=0.50 \
+                 compose=0.00 overlay=0.00 submit=0.00 readback=0.00 present=0.00 total=13.00"
+            )
+        );
+        clock.frame = [0.001; 9];
+        assert_eq!(clock.spike_line(1), None);
+        clock.spike_ms = None;
+        clock.frame[Phase::Prep as usize] = 1.0;
+        assert_eq!(clock.spike_line(1), None);
     }
 }

@@ -645,3 +645,64 @@ build's own spread (0.23 ms on `total`, which drifted down from 7.44 to 7.21 ove
 so the Deck warmed or settled during the sequence). `ticks` 0.40 against 0.43. Both builds hold
 about 117 fps unlocked. Every Deck core reports `cpu_capacity` 1024 (read from sysfs; the log
 does not name the path), so both builds take the split encoder finish.
+
+## The finish frame (2026-10-28, `finish-stutter`)
+
+The maintainer reported a stutter when crossing the finish line on a Steam Deck (Pulse PSP,
+CPU bound, 90 Hz). **Cause, measured on the desktop: `Session::build_endrace` ran on the frame
+that crosses the line.** It opened the disc image again (`open_source`), read
+`EndRace_Definition.xml` and the sprite sheet (`oag_game::endrace::load`), uploaded the sprites
+(`Renderer::new`) and, in a campaign cell, built the trophy previews (`Preview::new`). None of it
+depends on how the race went. The frame's `prep` phase carried all of it.
+
+`--race` never shows this (no shell, so no EndRace flow is built). The runs below go through the
+menus: headless gamescope on the RX 7800 XT, release build with line tables, Pulse
+PSP EU, `--autopilot --no-audio --no-intro`, vsync off and `frame_limit = "unlimited"`,
+`OAG_PHASE_SPIKE_MS=0` (a new switch: it prints one `frame-spike` line per frame with that
+frame's own phases and the race tick; `frame-phases` only averages a second).
+
+```sh
+OAG_PHASE_SPIKE_MS=0 gamescope --backend headless -W 1280 -H 800 -w 1280 -h 800 -r 60 -- \
+  oag-game data/images/pulse-psp-eu.chd --autopilot --no-audio --no-intro --frame-log \
+  --script "3:start,6:start,12:cross,18:cross,24:cross,32:cross,40:cross,48:cross,150:quit"   # Single Race, campaign cell
+# Time Trial through RACEBOX (the race page opens on MODE = Time Trial):
+#   --script "3:start,6:start,10:down,14:cross,20:down,22:down,24:down,26:down,28:down,32:cross,40:cross,48:cross,200:quit"
+```
+
+The finishing frame is the first `frame-spike` line after `race finished` in the log. Steady
+frames before it total 1.1 to 1.7 ms. Load average 0.4 to 1.4 for every run below.
+
+| Race | Before: finishing frame (`total`, of which `prep`) | After |
+| --- | --- | --- |
+| Single Race (campaign cell, with trophy) | 125, 63, 85, 78 ms (`prep` 61 to 125) | 3.15, 3.20, 2.94, 2.87 ms (`prep` 0.7) |
+| Time Trial (RACEBOX, no trophy) | 51.2, 51.3, 51.6 ms (`prep` 50) | 1.87, 1.67, 1.67 ms (`prep` 0.4) |
+
+Frames over 11.1 ms (the Deck's 90 Hz budget) in the window from 90 frames before to 240 after
+the finish: **1 before, 0 after**, every run. Where the before time went on the finishing frame
+(Single Race, one instrumented run): 6 ms gathering inputs, 44 ms `open_source`, 4 ms reading the
+screens, 2 ms `Renderer::new`, 69 ms trophy `Preview::new`. Time Trial: 44 ms disc open, 4 ms
+screens. Both scale with the CPU: expect several times that on the Deck.
+
+**The fix.** `Session::start_endrace_prefetch` starts an `oag-thread` task on the race's first
+frame (`session/endrace_prefetch.rs`). It does the disc open, the screen read, `Renderer::new`
+and, for a campaign cell, the three trophy previews, and returns an `EndRacePrep`. The finishing
+frame only joins it (`take_endrace_prep`) and assembles `EndRaceRuntime` with the results. If the
+worker has not finished the frame skips and retries (the race draws its scoreboard meanwhile); if
+it panicked or never started the build runs inline as before, so nothing is lost, only slower.
+The screens render as before (checked with screenshots of Race End Photo, Results, Rewards and the
+menu against the old binary, Single Race). A structural test
+(`the_finishing_frame_reads_no_disc_and_builds_no_gpu_resource`) fails if `build_endrace` calls
+any of those again.
+
+**Not the cause, measured.** The result capture (`records::save`, ghost save, tournament fold)
+costs 0.12 to 0.14 ms on the finishing frame and a ghost write 0.5 to 0.6 ms at a lap crossing;
+the two loyalty saves in `build_endrace` are the same kind of write (`std::fs::write`, no fsync).
+They stay on the frame thread. `ticks` is 0.2 to 1.5 ms across the finish.
+
+**Limits.** (1) `--no-audio` is the null output backend: the mixer, cues and music fetch still
+run, and the frame thread's `ticks` phase shows no spike, so the audio work on the frame thread is
+not the cause here. A real device's callback thread competing with the new worker was not
+measured. (2) The worker builds the screens in the language live when the race starts (as a parked
+race's HUD already does); a LANGUAGE change from the pause menu shows at the next race. (3) The
+worker costs one thread's time early in the race (about 100 ms of CPU on this host, more on the
+Deck). (4) The Deck was not touched; the command to re-measure there is in the lane report.

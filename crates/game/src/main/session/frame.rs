@@ -1002,6 +1002,7 @@ impl Session {
         // is not decoration: without it a source whose screens do not read
         // reopened its disc image once a frame and warned once a frame.
         self.phases.mark(super::phases::Phase::Ticks);
+        self.start_endrace_prefetch();
         self.build_endrace();
 
         self.begin_scene_frame();
@@ -1010,7 +1011,11 @@ impl Session {
         // The further windows of a `--windows` run, once window 1's frame is submitted: each
         // seat is its own submission. A no-op with one window.
         self.draw_screens();
-        self.phases.end_frame();
+        let tick = match &self.stage {
+            Stage::Race(stage) => stage.race.sim.world.tick,
+            _ => 0,
+        };
+        self.phases.end_frame(tick);
         if let Some(summary) = self.frame_timing.end_frame(web_time::Instant::now()) {
             log::debug!(
                 "frame timing: {} frame(s), acquire waited {:.2} ms, input sampled {:.2} ms \
