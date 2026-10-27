@@ -1208,8 +1208,15 @@ Select`). **`campaign-select` still refuses on Omega on purpose**: its chooser l
 HD, Fury), our `CampaignSelection` models HD's two and drew raw widgets, so `load_omega` keeps
 `selection_layout: None` and a live session opens on `Grid Selection` over every grid as before.
 HD's own base campaign on Omega (`cell-select-hd`) draws a grey card where the original's would sit and no
-red: the red back is Fury's art. Lineage: 2048's Fury DLC campaign, **checked, not wired**: it re-ships HD
-content through 2048's own touch front end (`Grid Selection 2048`, no `FlyerSelection` cards), so none of this applies.
+red: the red back is Fury's art. Lineage, 2048's Fury DLC: **checked, differs**. 2048 ships no `CellMode_Definition.xml` and no `FlyerSelection` screen
+(its campaign is the touch map, `docs/formats/2048-frontend.md`); the screen shape here is Omega's own, which keeps HD's. Whether
+the Vita DLC packs carry `Data/FE/Flyers/09_Blitzed/flyer_back.*` was not censused.
+Fitted gain evidence: the grid card's red body reads 198 in ours and 197 in the shadPS4 frame (HD's 2.0 gave 255); the cell
+field reads 0x40 in the frame (confidence 65, one card, same-pose samples were not available). `hide_effects` was
+rendered off once: no white discs or bars appear and the sponsors strip stays missing, so the effects' slot mapping
+is not what hides it. The live session (Omega RACE CAMPAIGN) now draws cards on every grid; **not walked live**.
+`omegas_campaign_carries_fury_s_layout_and_every_card` (`omega_campaign_screens_ground_truth.rs`) fails if the layout read, the card
+loader or the PS4 dispatch is dropped.
 
 **The unlock box and points figures were corrected on the same frames**, see the
 paragraphs under the screen's widget table above.
