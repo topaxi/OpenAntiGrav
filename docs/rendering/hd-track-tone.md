@@ -1393,7 +1393,8 @@ N      = nx*TC5 + ny*TC2 + nz*TC3        _ne.rgb*2-1; TC5 tangent, TC2 bitangent
 lit    = pow(lightmap.rgb, C(0x002c73e8)) * C(0x8670f0be) + lightmap.a * (N.L) * C(0x2dba643d)
 spec   = (sat(N.Hhat))^32 * sat(8 N.L) * lightmap.a * sun.w * sun.rgb * diffuse.a
 colour = diffuse.rgb * lit + _ne.a * C(0x7611a2d8) + spec
-out    = fog(colour)            TC0.xyz and TC1.xyz are 0 in this variant's vertex program (no vertex light)
+out    = (TC1.xyz + fog(colour)) / 2     @0x4f `ADD /2`; TC0.xyz and TC1.xyz are 0 in this variant's
+                                         vertex program (no vertex light), so out = fog(colour) / 2
 ```
 
 Every term is already in `shade.wesl`'s authored path; the slot's inputs match except `N`.
@@ -1411,13 +1412,13 @@ components** and writes `o[TC2].xyz = cross(N0, T) * R1.w` (instructions 6, 12, 
 `pads.md` measured ("`w` is 0 on 232 of 232 vertices ... `B` is the zero vector"); it is right **for it**.
 
 **Census** (`just psarc cat` of each circuit's `diffuse_normal_specular_emmissive`, `track_surface` and
-`weapon_pads`, every vertex block that reads `0xdbe5f417`, `ps3-microcode.py vp-file`; one file is uniformly one
-convention):
+`weapon_pads`, every vertex block that reads `0xdbe5f417`, `ps3-microcode.py vp-file`; every block of every file
+classified, none left over; one file is uniformly one convention):
 
-| Compile | Circuits (files read) | Tangent blocks, raw `w` | Bitangent scale |
-| --- | --- | ---: | --- |
-| signed | Amphiseum, Modesto Heights, Talon's Junction, Tech de Ra (3 files each, 46 to 72 blocks), Zone 1 to 4 (`weapon_pads`, 28) | **0** of every block | `2w - 1` |
-| raw | Vineta K, `02_track`, `03_track`, Chenghou, Sebenco Climb, Ubermall, Sol 2, Anulpha Pass (2 files each, 40 to 136 blocks) | **all** of every block | `w` |
+| Compile | Circuits (files read) | Tangent blocks | Bitangent scale |
+| --- | --- | --- | --- |
+| signed | Amphiseum, Modesto Heights, Talon's Junction, Tech de Ra (3 files each: 46 to 72 blocks), Zone 1 to 4 (`weapon_pads`, 28 each) | **all signed, 0 raw** (a full read of the tangent with a negated constant, as a `MAD` or a `MUL` then `ADD`, and no `.wwww`) | `2w - 1` |
+| raw | Vineta K, `02_track`, `03_track`, Chenghou, Sebenco Climb, Ubermall, Sol 2, Anulpha Pass (2 files each: 40 to 136 blocks) | **all raw, 0 signed** (`v[tangent].wwww`) | `w` |
 
 So it is a property of the circuit's own material file, and the four original-game circuits plus Zone are the
 signed ones. **`pads.md`'s "bitangent is the zero vector" holds for Sol 2 and is wrong for Talon's pads** (it
@@ -1456,10 +1457,13 @@ Modesto's changed pixels (18,227 px at x 1578 to 1920, y 435 to 707) go 33.4 -> 
 
 1. `oag_rcs::rcsmaterial::vertex`: a reader answering "does this vertex block take the tangent's `w` as `2w - 1`
    (a `MAD` of `v[tangent]` by 2 and -1 whose `.w` multiplies the bitangent) or raw (`v[tangent].wwww`)".
-2. `crates/mesh/src/mesh/rcs/hull_normal.rs` (`hull_normal`, which fills `material_tangent`) and
-   `pad_ne.rs` record it per material slot beside the tangent flag.
+2. `crates/mesh/src/mesh/rcs/hull_normal.rs` (`hull_normal`, called from `rcs/setup.rs:248`, which fills
+   `material_tangent`) records it per material slot beside the tangent flag. It runs **before** `pad_ne`
+   (`rcs/pads.rs:185` and `:337`) with only the magstrip table as the claimed third binding, which is why slot 384
+   carries a tangent although `pad_ne` later binds its `_ne` file there; the `pad_ne` slots need no second site.
 3. `crates/mesh/src/mesh/rcs.rs` `baked_tangent` (line 472): bake the `w` byte as the bitangent scale in unorm
-   (`(scale + 1) / 2`: signed -> 0 or 255, raw -> 128 or 255) and `crates/mesh/shaders/hull_normal.wesl` line 19
+   (`(scale + 1) / 2`: signed -> 0 or 255, raw -> 128 or 255; a raw `w = 0` then decodes to +0.004, not 0, an error
+   of 0.4 % of `ny` that is accepted, or carry the sign in a per-draw value instead) and `crates/mesh/shaders/hull_normal.wesl` line 19
    reads `cross(n, t) * (tangent.w * 2.0 - 1.0)`; there is no free `slots` bit (0 to 31 are used), which is why
    the scale rides the byte. Check the ship hulls' vertex programs with the same reader first: their raw-`w`
    reading in `hull_normal.wesl` was measured on hulls and must not change by default.
@@ -1474,7 +1478,8 @@ law is a static read of both programs plus the pixel score, so the cause is conf
 block of every file read).
 
 **Omega and 2048 (CLAUDE.md check):** Omega ships the family in `data00` to `data02`
-([rcsmaterial.md](../formats/rcsmaterial.md), "The light-bar family") and 2048 re-ships the original circuits;
+([rcsmaterial.md](../formats/rcsmaterial.md), "The light-bar family") and 2048 shares its asset lineage (CLAUDE.md,
+the 2048/Omega note; not re-listed here);
 both compile their shaders again (GNM and Vita GXP), so the RSX reading **does not transfer** and a per-compile
 split like this one may or may not exist there. **Not checkable in this lane:** the answer is in their vertex
 shaders (Omega's `eboot.bin` is in Ghidra, `docs/ghidra/functions/ps4-omega-eu/`; 2048's GXP, `gxp.md`), and a
