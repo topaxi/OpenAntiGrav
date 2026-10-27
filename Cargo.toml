@@ -229,7 +229,7 @@ lzma-rs-perf-exp = "=0.2.1"
 
 # `scalar-math` disables SIMD. Vectorised paths are free to reassociate and to
 # differ between targets; the simulation must not. See docs/architecture/adr/0002.
-glam = { version = "0.33", default-features = false, features = [
+glam = { version = "0.34", default-features = false, features = [
   "std",
   "scalar-math",
 ] }
