@@ -84,6 +84,7 @@ every submesh record reachable from exactly one mesh object.
 
 ## Open
 
+- **`fc01_dummy` is not flat fog (2026-10-27, [gxp.md](../../docs/formats/gxp.md#the-instruction-stream)).** The instruction listing reads its fragment program as `fogColour * (1 - f)`, `f` the vertex program's exponential-squared fog visibility (1 near, 0 far): black near, `fogColour` far, not `fogColour` everywhere. The `psp2::FOG_FLAT` draw (`oag_mesh`, `oag_raceplay::load`) was written from the 2026-10-19 reading and has not been re-read against it. Confidence 85 on the arithmetic, 60 on `f` meaning visibility; the constants (`sa32.w`, `sa36.x`, `sa36.z`) come from the material's uniform image, unread. Omega: not checkable until its GCN program is read.
 - **The Zone circuit's picture has not been judged against the original.** No
   Vita3K capture of a Zone race exists in this tree and none was taken. What is
   drawn: the eight `Zone_ColourN` colours unlit (**chosen, not measured**: lit

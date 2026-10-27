@@ -65,7 +65,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use oag_rcs::gxp::{self, Category, Error, Program};
+use oag_rcs::gxp::{self, Category, Error, Program, usse};
 
 /// The executable and the three packages, in sweep order.
 const SOURCES: [&str; 5] = [
@@ -133,8 +133,8 @@ struct Survey {
     samplers: BTreeMap<String, usize>,
 }
 
-/// Walks every source, handing each decoded program to `check`.
-fn survey(check: &mut impl FnMut(&str, &Program)) -> Survey {
+/// Walks every source, handing each decoded program and its bytes to `check`.
+fn survey(check: &mut impl FnMut(&str, &Program, &[u8])) -> Survey {
     let mut out = Survey::default();
     for name in SOURCES {
         let Some(path) = source(name) else { continue };
@@ -159,7 +159,12 @@ fn survey(check: &mut impl FnMut(&str, &Program)) -> Survey {
     out
 }
 
-fn sweep(out: &mut Survey, label: &str, blob: &[u8], check: &mut impl FnMut(&str, &Program)) {
+fn sweep(
+    out: &mut Survey,
+    label: &str,
+    blob: &[u8],
+    check: &mut impl FnMut(&str, &Program, &[u8]),
+) {
     let found = gxp::programs(blob);
     if found.iter().any(|(_, p)| p.is_ok()) {
         out.carrying += 1;
@@ -182,7 +187,7 @@ fn sweep(out: &mut Survey, label: &str, blob: &[u8], check: &mut impl FnMut(&str
                         *out.samplers.entry(p.name.clone()).or_default() += 1;
                     }
                 }
-                check(label, &program);
+                check(label, &program, &blob[at..at + program.size]);
             }
         }
     }
@@ -194,6 +199,14 @@ struct Collected {
     versions: BTreeMap<(u8, u8), usize>,
     disagreed: Vec<String>,
     wide_shadow_maps: usize,
+    /// Instruction words per class, over both code blocks of every program.
+    classes: BTreeMap<usse::Class, usize>,
+    /// Words no layout matches.
+    unclassified: usize,
+    /// Programs with every word classified.
+    fully_classified: usize,
+    /// Of those, the ones embedded in either executable.
+    eboot_classified: usize,
 }
 
 /// Every claim below over **one** walk of the corpus, which reads every entry
@@ -203,7 +216,20 @@ struct Collected {
 #[ignore = "needs the extracted 2048 packages in data/extracted/vita/"]
 fn the_gxp_corpus_decodes_closes_and_declares_what_it_binds() {
     let mut seen = Collected::default();
-    let survey = survey(&mut |label, program| {
+    let survey = survey(&mut |label, program, bytes| {
+        let mut closed = true;
+        for block in [&program.secondary, &program.primary] {
+            for word in usse::words(bytes, block) {
+                if let Some(class) = usse::classify(word) {
+                    *seen.classes.entry(class).or_default() += 1;
+                } else {
+                    seen.unclassified += 1;
+                    closed = false;
+                }
+            }
+        }
+        seen.fully_classified += usize::from(closed);
+        seen.eboot_classified += usize::from(closed && label.ends_with("eboot.elf"));
         *seen.versions.entry(program.version).or_default() += 1;
         let attributes = program
             .parameters
@@ -226,6 +252,7 @@ fn the_gxp_corpus_decodes_closes_and_declares_what_it_binds() {
     the_only_unaccounted_bytes_are_alignment_padding(&survey);
     the_fragment_bit_agrees_with_what_each_program_declares(&seen);
     the_shadow_term_is_a_single_channel_sampler_beside_the_lightmap(&survey, &seen);
+    every_instruction_word_belongs_to_a_class(&seen);
 }
 
 /// Every container on the disc decodes, and every closure check holds.
@@ -324,3 +351,79 @@ const SHADOW_MAP_BINDINGS: usize = 1_799;
 
 /// Fragment programs binding `lightmap`, for scale.
 const LIGHTMAP_BINDINGS: usize = 4_467;
+
+/// Every instruction word of every program matches a layout, and the class
+/// counts are pinned.
+///
+/// This is the class census of the USSE stream, not its operand decode:
+/// `scripts/vita-usse.py census` reads operands for the classes
+/// [`usse::Class::operands_read`] names and must agree with these counts
+/// (its "nmad" is [`usse::Class::Nmad32`] plus [`usse::Class::Nmad16`]).
+/// The classes the corpus never uses (the three illegal layouts, the 8-bit
+/// and 32-bit integer multiply-adds with a second-source form, and the
+/// others absent below) are asserted absent, so a corpus that grows one fails
+/// here.
+fn every_instruction_word_belongs_to_a_class(seen: &Collected) {
+    assert_eq!(seen.unclassified, 0, "words no layout matches");
+    assert_eq!(seen.fully_classified, PROGRAMS);
+    assert_eq!(
+        seen.eboot_classified,
+        BASE_EBOOT_PROGRAMS + PATCH_EBOOT_PROGRAMS,
+        "the executables' own programs"
+    );
+    let counts: Vec<(&str, usize)> = seen.classes.iter().map(|(c, n)| (c.name(), *n)).collect();
+    for (name, want) in CLASS_COUNTS {
+        let got = counts
+            .iter()
+            .find(|(n, _)| *n == name)
+            .map_or(0, |(_, n)| *n);
+        assert_eq!(got, want, "class {name}");
+    }
+    assert_eq!(
+        seen.classes.len(),
+        CLASS_COUNTS.len(),
+        "classes seen: {counts:?}"
+    );
+    let listed: usize = seen
+        .classes
+        .iter()
+        .filter(|(c, _)| c.operands_read())
+        .map(|(_, n)| n)
+        .sum();
+    let total: usize = seen.classes.values().sum();
+    assert_eq!(total, INSTRUCTIONS);
+    assert_eq!(total - listed, UNREAD_OPERANDS);
+}
+
+/// Instruction words in the corpus, both blocks of every program.
+const INSTRUCTIONS: usize = 5883746;
+
+/// Words in a class whose operands `scripts/vita-usse.py` does not read.
+const UNREAD_OPERANDS: usize = 316;
+
+/// Words per class.
+const CLASS_COUNTS: [(&str, usize); 23] = [
+    ("nmad16", 1529291),
+    ("pck", 1004731),
+    ("comp", 706227),
+    ("mad", 705429),
+    ("nmad32", 648251),
+    ("mad2", 532342),
+    ("mov", 302346),
+    ("bw", 128062),
+    ("phase", 98654),
+    ("spec", 90417),
+    ("dp", 61957),
+    ("nop", 47565),
+    ("slsi", 13174),
+    ("smp", 11762),
+    ("tst", 2305),
+    ("kill", 753),
+    ("ldst", 288),
+    ("imad32", 144),
+    ("sop2m", 28),
+    ("imad16", 13),
+    ("branch", 3),
+    ("imad32x2", 2),
+    ("depthf", 2),
+];
