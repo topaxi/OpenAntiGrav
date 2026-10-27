@@ -520,3 +520,34 @@ Verdict: the descriptor does not tell the GPU to read half ink; it says the oppo
 is still unexplained (confidence 75 it is not in the texture state): what is left is a layer drawn over the canvas by another item,
 or the pass's output blend, neither read. Not wired. Omega: canvasTexture.gnf, **not checkable** (no readout), the same
 item ships.
+
+## Wired (2026-10-27, lane `lattice-final`): full ink as read; the capture shows about half, see part 2
+
+The maintainer's decision: draw the lattice now at the texture's own ink. `oag_ui::frontend::canvas_lattice`
+bakes **one 960 x 544 picture** at load (the camera is fixed on these pages): for each screen pixel centre it
+inverts the tilted matrix back to the lattice plane (`x' = cos(0.1)/8 * x - sin(0.1) sin(0.45)/8 * y + t0`,
+`y' = -cos(0.45)/(8 * 5/9) * y + t1`, translation row `(-9.56032, 4.65163)` read live at the title), picks the
+cell and its atlas triangle (the branch's `atlas_at`) and reads `canvasTexture.gxt` at mip 0 bilinear. It is
+inserted over the white clear on the title screen and the game mode page only (`wipeout2048.rs`). The branch
+`2048-lattice`'s axis-aligned tile draw is gone. Scale (59.7 x 55.1 px/unit, row period 47.72), shear and the
+phase come from the matrix, not a fit; a unit test pins the scales.
+
+Measured against the Vita3K captures (`2048/menu-title` via `--until TitleScreen --press start
+--press-until-reached --ticks 424`, `2048/menu-game-mode` via `--press start,cross,cross,cross --original-menu`),
+960 x 544:
+
+| Measure | Title | Game mode |
+| --- | --- | --- |
+| Best shift of the edge map (ours against capture, empty box, +-6 px) | (0, 0) | (0, 0) |
+| Edge NCC in the empty box at shift 0 | 0.939 | 0.937 |
+| Line profile across row 271/272, columns 20..200: capture / ours | 253 -> 240 / 253 -> 220 | same |
+| Mean grey difference, white plate before / now, empty boxes | 2.43/2.52, 1.68/1.70, 2.20/2.25 | 2.25/2.31, 2.22/2.32 |
+| Whole frame mean abs grey difference (ours with lattice) | 5.39 | 7.68 |
+
+The period, phase and line angles land (shift 0, row 271/272 on the same rows in both). The ink is the open
+part: our lines dip to 220 where the capture's dip to 240, so the empty boxes score 0.04 to 0.10 worse than
+plain white, as the thread predicted. Part 2 looks for what halves the ink.
+
+Omega: **checked, applies, not wired.** `canvasTexture.gnf` ships and the reset angles are the same
+(`0x018086ec`); Omega's front end is HD's, so whether its pages draw a `Canvas3D` was not read.
+HD: **checked, differs** (no `Canvas3D`).

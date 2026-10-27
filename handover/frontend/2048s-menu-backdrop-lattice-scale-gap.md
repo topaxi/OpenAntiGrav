@@ -2,7 +2,7 @@
 status: re-first
 titles: [2048]
 updated: 2026-10-27
-summary: "2048 lattice: live read explains the phase (scroll at (-3000, -1500)); the half ink is not game state; draw held back"
+summary: "2048 lattice wired on the title and game mode pages from the tilted matrix at full ink (lane lattice-final); the capture shows about half ink, open"
 ---
 
 # 2048's menu backdrop lattice: draw held back on a phase offset and an ink factor
@@ -17,6 +17,10 @@ Law, camera writers (pinch and drag only) and measurements:
 [`canvas3d-lattice.md`](../../docs/ghidra/functions/vita-2048-eu-v104/canvas3d-lattice.md).
 
 ## Open
+
+2026-10-27, lane `lattice-final`, part 1: **wired** (not held back any more). A 960 x 544 picture baked from the tilted
+matrix and the live translation, shift (0, 0), edge NCC 0.94, at full ink; see `canvas3d-lattice.md`, "Wired". The
+bullets below that talk about holding the draw back or the branch `2048-lattice` are history.
 
 Read 2026-10-27 (lane `lattice-scale`, [`canvas3d-lattice.md`](../../docs/ghidra/functions/vita-2048-eu-v104/canvas3d-lattice.md),
 "The camera is tilted"): the scale gap is the camera's tilt (`-0.45` and `-0.1` rad Euler angles at the

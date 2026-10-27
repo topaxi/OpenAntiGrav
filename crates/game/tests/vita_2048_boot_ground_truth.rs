@@ -324,6 +324,40 @@ fn the_campaign_map_draws_the_discs_own_hex_tiles_not_flat_squares() {
     );
 }
 
+/// The pale triangle lattice is one picture baked off `canvasTexture.gxt` with
+/// the tilted camera and laid over the title screen and the game mode page.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn the_title_and_game_mode_pages_draw_the_baked_canvas_lattice() {
+    use oag_ui::frontend::canvas_lattice;
+    let Some(source) = source() else { return };
+    let loaded = boot::load(&options(&source)).expect("the whole boot");
+    let mut frontend = loaded.frontend;
+    let lattice = |frontend: &frontend::Frontend| {
+        frontend
+            .draw_list()
+            .into_iter()
+            .filter(|draw| {
+                matches!(draw, frontend::Draw::Sprite { uv, .. }
+                    if (uv[2], uv[3])
+                        == (canvas_lattice::VIEWPORT[0] as f32, canvas_lattice::VIEWPORT[1] as f32))
+            })
+            .count()
+    };
+    assert!(drive_until(
+        &mut frontend,
+        &[Button::Cross],
+        w2048::TITLE_SCREEN
+    ));
+    assert_eq!(lattice(&frontend), 1, "one lattice on the title screen");
+    assert!(drive_until(
+        &mut frontend,
+        &[Button::Cross],
+        w2048::GAME_MODE_CHOICE
+    ));
+    assert_eq!(lattice(&frontend), 1, "one lattice on the game mode page");
+}
+
 /// A network mode cannot be confirmed here, and says so.
 #[test]
 #[ignore = "needs the extracted package under data/extracted/vita/"]
@@ -837,9 +871,11 @@ fn the_title_capture_settles_on_the_logo_and_the_prompt() {
             .min()
             .expect("a region")
     };
+    // White under the pale lattice, whose lines dip to about 203 at the
+    // atlas's own ink (the capture's reach 233).
     let backdrop = darkest(0, 960, 0, 100);
     assert!(
-        backdrop >= 250,
+        backdrop >= 195,
         "the title's white backdrop, not a race or a loading screen: darkest channel {backdrop}"
     );
     let logo = darkest(130, 830, 130, 290);

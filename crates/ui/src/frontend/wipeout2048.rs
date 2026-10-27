@@ -234,6 +234,9 @@ impl Frontend {
             w2048::BOOT_STUDIO_LOGO | w2048::TITLE_SCREEN => {
                 let mut out = self.draw_screen_at(current, self.on_screen_for);
                 out.insert(1, white);
+                if current == w2048::TITLE_SCREEN {
+                    self.insert_lattice(&mut out);
+                }
                 out
             }
             w2048::GAME_MODE_CHOICE
@@ -247,6 +250,9 @@ impl Frontend {
             | w2048::EXTRAS_CREDITS => {
                 let mut out = self.draw_screen_at(current, self.on_screen_for);
                 out.insert(1, white);
+                if current == w2048::GAME_MODE_CHOICE {
+                    self.insert_lattice(&mut out);
+                }
                 self.draw_touch(current, &mut out);
                 out
             }

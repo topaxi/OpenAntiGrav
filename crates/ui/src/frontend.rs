@@ -96,6 +96,7 @@ use oag_hd::frontend::states as hd_states;
 /// the map the grids lead to. See each module's own docs.
 mod campaign_map;
 mod campaign_tiers;
+pub mod canvas_lattice;
 mod event_card;
 mod faces;
 mod mode_grid;
