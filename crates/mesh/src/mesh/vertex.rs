@@ -152,13 +152,39 @@ pub struct GpuVertex {
     /// Last, for the reason [`Self::lightmap_texcoord`] gives.
     pub quake: f32,
     /// The authored `tangent` of a hull whose material reads a texture as a
-    /// tangent-space normal, as the four raw bytes the file holds
-    /// (`Unorm8x4` on the wire): `xyz` is `2b - 1` and `w` multiplies the
-    /// binormal `cross(N, T)`. `0` - which no unit vector encodes - on every
+    /// tangent-space normal, as the file holds it
+    /// (`Unorm8x4` on the wire): `xyz` is `2b - 1`; `w` is the **baked bitangent
+    /// scale** `(scale + 1) / 2`, read back as `2w - 1` (see [`TangentFrame`]). `0` - which no unit vector encodes - on every
     /// other vertex, which is what switches the shader's hull normal map off.
     /// See `mesh::rcs::hull_normal`. Last, for the reason
     /// [`Self::lightmap_texcoord`] gives.
     pub tangent: u32,
+}
+
+/// Whether a material's chunks carry their authored `tangent`, and how its vertex program
+/// scales the bitangent by the tangent's fourth byte `w`.
+///
+/// Read per material off the vertex program (`oag_rcs::rcsmaterial::vertex::Program::
+/// bitangent_is_signed`), never off the circuit: the original's compile of one circuit family
+/// scales `B` by `2w - 1` and another's by the raw `w`
+/// (`docs/rendering/hd-track-tone.md`, "Tech de Ra's near-left wall").
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TangentFrame {
+    /// No tangent: the vertices carry `0`, the shader's off switch.
+    #[default]
+    Absent,
+    /// `B = cross(N0, T) * w`: a `w = 0` vertex has no bitangent.
+    Raw,
+    /// `B = cross(N0, T) * (2w - 1)`: a `w = 0` vertex has `-cross(N0, T)`.
+    Signed,
+}
+
+impl TangentFrame {
+    /// Whether the material's chunks carry the authored tangent at all.
+    #[must_use]
+    pub fn carried(self) -> bool {
+        self != Self::Absent
+    }
 }
 
 /// [`GpuVertex::specular_exponent`]'s fallback - every title but Wipeout HD,

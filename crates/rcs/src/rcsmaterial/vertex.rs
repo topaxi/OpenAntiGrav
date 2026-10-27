@@ -371,6 +371,30 @@ impl Program {
             .collect()
     }
 
+    /// Whether this program scales the bitangent by `2w - 1` rather than by the raw `w`
+    /// of attribute `hash` (the `tangent`).
+    ///
+    /// The raw compile multiplies by the broadcast lane, `MUL o[TC0].xyz, B, v[t].wwww`; the
+    /// signed compile reads the whole attribute through `MAD ..., 2, -1` and never broadcasts
+    /// `.w` from the input. So: the block declares the attribute and no instruction reads that
+    /// input register with a `.wwww` swizzle. `false` for an attribute the block does not
+    /// declare, which leaves `w` raw.
+    /// `docs/rendering/hd-track-tone.md`, "Tech de Ra's near-left wall".
+    #[must_use]
+    pub fn bitangent_is_signed(&self, hash: u32) -> bool {
+        let Some(slot) = self.attribute_slot(hash) else {
+            return false;
+        };
+        !self.instructions.iter().any(|i| {
+            i.vec_op != 0
+                && u32::from(i.input) == slot
+                && source_slots(i.vec_op).iter().any(|&n| {
+                    let source = i.sources[n];
+                    source & 3 == SOURCE_INPUT && (source >> 8) & 0xff == 0xff
+                })
+        })
+    }
+
     /// Whether this program writes the **negated** attribute `hash` into an
     /// output texture coordinate - the `v = 1 - v` flip the module documents.
     ///

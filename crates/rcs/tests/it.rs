@@ -13,6 +13,7 @@ mod rcsmodel_common;
 
 mod coverage_ground_truth;
 mod gxp_ground_truth;
+mod hd_bitangent_sign_ground_truth;
 mod hd_gantry_curve_ground_truth;
 mod hd_lineage_blend_ground_truth;
 mod hd_pvs_ground_truth;

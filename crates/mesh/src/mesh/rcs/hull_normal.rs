@@ -6,12 +6,12 @@
 //!
 //! ```text
 //! N = (2 t.x - 1) T + (2 t.y - 1) B + (2 t.z - 1) N0         then normalised
-//! B = cross(N0, T) * T.w                                     the vertex program
+//! B = cross(N0, T) * T.w   or   cross(N0, T) * (2 T.w - 1)   the vertex program, per compile
 //! ```
 //!
 //! with `T` the chunk's authored `tangent` attribute (`2b - 1` on its first
-//! three bytes, the fourth byte `w` the factor on `B`) and `N0` the vertex
-//! normal. The normalised `N` then feeds every term the program lights with:
+//! three bytes, the fourth byte `w` the factor on `B`, raw or as `2w - 1` by the compile: the
+//! material's vertex program decides, [`TangentFrame`]) and `N0` the vertex normal. The normalised `N` then feeds every term the program lights with:
 //! the sun's `N.L`, the specular's `N.H`, the probe lookups. Plain RGB, not
 //! DXT5nm. `docs/rendering/hd-ship-materials.md`, "Hull normal maps".
 //!
@@ -32,7 +32,7 @@ use std::sync::Arc;
 
 use oag_rcs::{rcsmaterial, rcsmodel};
 
-use crate::mesh::{ModelTexture, TextureSlots};
+use crate::mesh::{ModelTexture, TangentFrame, TextureSlots};
 
 use super::skin::decode_texture;
 use super::{Report, Textures};
@@ -41,16 +41,16 @@ use super::{Report, Textures};
 const NORMAL_UNIT: u32 = 1;
 
 /// Binds each ship hull material's normal map and returns, per material slot,
-/// whether its chunks carry the tangent.
+/// whether its chunks carry the tangent and how the vertex program scales the bitangent.
 pub(super) fn hull_normal(
     model: &rcsmodel::Model,
     variants: &[Option<rcsmaterial::Variant>],
     textures: Textures<'_>,
     third: &TextureSlots,
     report: &mut Report,
-) -> (TextureSlots, Vec<bool>) {
+) -> (TextureSlots, Vec<TangentFrame>) {
     let mut maps: TextureSlots = vec![None; model.materials.len()];
-    let mut marked = vec![false; model.materials.len()];
+    let mut marked = vec![TangentFrame::Absent; model.materials.len()];
     let mut decoded: std::collections::HashMap<String, Option<Arc<ModelTexture>>> =
         Default::default();
     for (slot, material) in model.materials.iter().enumerate() {
@@ -105,7 +105,14 @@ pub(super) fn hull_normal(
             continue;
         };
         maps[slot] = Some(texture);
-        marked[slot] = true;
+        // The vertex program says how it scales the bitangent: `2w - 1` or the raw `w`.
+        marked[slot] = if rcsmaterial::vertex::Program::of(&blob, variant.vertex)
+            .is_some_and(|p| p.bitangent_is_signed(rcsmodel::vertex_decl::TANGENT_HASH))
+        {
+            TangentFrame::Signed
+        } else {
+            TangentFrame::Raw
+        };
         report.hull_normal_bound += 1;
     }
     (maps, marked)

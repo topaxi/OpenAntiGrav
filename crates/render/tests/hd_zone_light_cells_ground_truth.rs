@@ -118,7 +118,7 @@ fn the_zone_hulls_paint_binds_its_normal_map_and_its_chunks_carry_the_tangent() 
         .material_tangent
         .iter()
         .enumerate()
-        .filter(|(_, on)| **on)
+        .filter(|(_, on)| on.carried())
         .map(|(slot, _)| slot)
         .collect();
     assert!(!marked.is_empty(), "a material takes the tangent");

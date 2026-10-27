@@ -130,7 +130,7 @@ fn modesto_heights_road_carries_its_authored_tangent() {
         return;
     };
     assert!(
-        model.material_tangent.iter().any(|marked| *marked),
+        model.material_tangent.iter().any(|marked| marked.carried()),
         "no circuit material reads a normal map"
     );
     let with_tangent = model.vertices.iter().filter(|v| v.tangent != 0).count();
