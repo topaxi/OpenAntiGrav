@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-10-27
-summary: "Perf plan for CPU-bound devices: GPU-driven draws, bundles, GPU particles/trails/shadow rays with CPU fallback, a CPU governor"
+summary: "CPU-bound devices: GPU-driven draws, bundles, GPU particles/trails/shadow rays; governor landed on, step self-check open"
 categories: [rendering, tooling]
 ---
 
@@ -71,7 +71,22 @@ resolution controller (`crates/present/src/drs`), which does nothing while the G
   (`crates/game/src/adapter.rs`, `InstanceDescriptor::new_without_display_handle`) does not read
   `WGPU_VALIDATION_INDIRECT_CALL`, so the A/B needs a local build that clears the flag, not an env var.
 
+## Open: the governor does not undo a step that saved nothing (2026-10-27, `governor-unlocked`)
+
+`oag_present::governor` records what each shed saved (`saving`, `governor.rs` around line 179) but uses it only
+to decide when a restore fits (line 202). It never reverts a step whose saving was about zero, and it keeps
+shedding the next knob. The maintainer wants a step that did not help on this device undone and skipped for
+the rest of the session. The Deck logs show the need: on HD Anulpha (unlocked, limit 165) the sequence
+`shadows original` (CPU 7.35 ms), `model detail high` (6.55), `model detail original` (6.87 to 6.90)
+reads CPU 7.2 ms at level 2 against 6.9 at level 1, so the third step bought nothing, and the knob table in
+`docs/rendering/cpu-governor.md` already measures `lod`/`texture_detail` as no saving. To build: when the
+cooldown ends and the measured saving is under a floor (chosen, for example 0.05 ms or 1 % of the period,
+above the 0.1 ms run-to-run noise), restore that level and mark the knob skipped until the session ends
+(a `[bool; MAX_LEVEL]`), so the next shed jumps over it; tests on the state machine. Measure with
+`ab.sh 3 60 anulpha` as in the doc: the Deck, `ENABLE_GAMESCOPE_WSI=0`, `vsync off`, `frame_limit 165`,
+governor on against off; the target is the same fps with fewer knobs stepped down.
+
 ## Next Steps
 
-1. Lane 6 (governor) started 2026-10-27 alongside the last lane of that drive.
+1. Lane 6 (governor) landed and is on by default; its self-check is the open item above.
 2. Lanes 1 to 5 open the next drive in order, each with its Deck before/after.
