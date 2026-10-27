@@ -103,9 +103,11 @@ fn the_ceiling_panes_show_the_teal_behind_the_glass() {
     let teal = (62..194)
         .flat_map(|y| (640..958).map(move |x| (x, y)))
         .map(|(x, y)| frame[y * SIZE.0 + x])
-        .filter(|&[r, g, b]| r < 33 && (33..102).contains(&g) && (33..102).contains(&b))
+        .filter(|&[r, g, b]| r < 33 && (20..102).contains(&g) && (20..102).contains(&b))
         .filter(|&[_, g, b]| g.abs_diff(b) < 15)
         .count();
+    // The window's floor moved 33 -> 20 on 2026-10-27 with HD's sRGB final encode: the same pane
+    // reads (3, 29, 29) at the median, 34,873 of 41,976 inside it.
     // Teal pixels of 41,976: 33,430 with the target, 3,387 with the glass
     // drawn over our own frame (two blended passes, before 2026-10-07), 116
     // with the target left unbound (the black placeholder).
