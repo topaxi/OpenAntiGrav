@@ -91,7 +91,7 @@ fn pack_writes_zstd_for_text_and_stores_what_is_already_compressed() {
     };
     assert_eq!(method(&mut zip, "menu.toml"), CompressionMethod::Zstd);
     assert_eq!(method(&mut zip, "icon.png"), CompressionMethod::Stored);
-    assert_eq!(zip.by_index(0).unwrap().name(), MANIFEST);
+    assert_eq!(zip.by_index(0).unwrap().name().unwrap(), MANIFEST);
 }
 
 #[test]

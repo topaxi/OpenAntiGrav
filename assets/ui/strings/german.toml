@@ -199,6 +199,7 @@ OAG_GRAPHICS_CAMERA_VIEW = { text = "KAMERAANSICHT", human = false }
 OAG_GRAPHICS_FIELD_OF_VIEW = { text = "SICHTFELD", human = false }
 OAG_GRAPHICS_BOOST_FOV_KICK = { text = "SICHTFELD-RUCK BEI BOOST", human = false }
 OAG_GRAPHICS_BOOST_ZOOM = { text = "BOOST-ZOOM", human = false }
+OAG_GRAPHICS_CPU_GOVERNOR = { text = "CPU-REGLER", human = false }
 OAG_GRAPHICS_PERFORMANCE_OVERLAY = { text = "LEISTUNGSANZEIGE", human = false }
 OAG_GRAPHICS_ADVANCED = { text = "ERWEITERT", human = false }
 OAG_AUDIO_MUSIC_VOLUME = { text = "MUSIKLAUTSTÄRKE", human = false }

@@ -110,6 +110,11 @@ HD only; the screenshots were also compared on Pure.
 
 ## On the Steam Deck (2026-10-21, `deck-read`)
 
+**Measure unlocked (maintainer, 2026-10-27).** A CPU change on the Deck is judged with the frame rate
+unlocked: `vsync = "off"`, the frame limit off or far above the panel, and gamescope's own framerate
+limit not applied. Capped at the panel's 90 Hz, fps and p99 hold at the cap whatever the CPU does
+(`cpu-governor.md`: p99 11.2 ms either way). A capped run is a second check, that the race still holds 90.
+
 Measured on the Deck itself: release AppImage (`just appimage-deck`, znver2, `perf-probe`), run
 extracted, native under the Deck's gamescope on `DISPLAY=:1` with the environment copied from
 Steam's process, `--no-audio --frame-log --race --autopilot`, a private `XDG_*` tree holding a
@@ -381,3 +386,78 @@ Measured and dropped:
 The binding-array and buffer counts come from `perf-probe` (`array_binds` on the `perf frame`
 line) and from a local probe in a copy of wgpu-core (not committed). The probe counted usage
 scopes and the tracker sizes at `Queue::submit`.
+
+## Indirect multi-draw on the Deck: measured and dropped (2026-10-27, `gpu-driven-submit`)
+
+Step 1 of the GPU-driven plan put HD's prepass depth half on one `multi_draw_indexed_indirect`
+per view (commit `14bd57567`, reverted by `016546310`).
+
+- **How it worked.** The circuit's opaque list was culled once in `Scene::prepare_view`.
+- **What the list held.** That view's indirect arguments went into its own region of one
+  buffer.
+- **The depth half.** It is one pipeline with no texture read, so its 505 draws on Anulpha
+  (tick 1500) became one call.
+- **Path choice.** Vulkan and Dx12 took the indirect path; `OAG_INDIRECT=0` kept the per-draw
+  path.
+- **Pictures.** HD Anulpha (ticks 300 and 1500), the HD default and the Pulse default were
+  byte-identical across the base build, the new path and the fallback.
+
+**Why only the depth half.** The shaded draws read their material slot from an immediate
+(`mesh_render::bindless`), and an immediate cannot change inside one multi-draw. Carrying the
+slot per draw makes the texture-array index non-uniform. The bindless lane measured that at
+6.5 to 16% more GPU time on ANV and NVIDIA.
+
+**A standalone wgpu 30 program** (RX 7800 XT, RADV, load 13 to 25, 500 draws in one pass, indirect
+validation on) put `finish` at 31 to 48 us with `draw_indexed` against 12 to 26 us with one
+multi-draw, and `queue.submit` at 17 to 24 us against 18 to 28 us. So on paper this was a small net
+win.
+
+**The Deck says otherwise**: two runs each, 60 s, interleaved, the race and settings of the
+section above, Deck load 1.2 to 2.4. Ms per frame:
+
+| Run | ticks | scene | submit | total | fps | p99 |
+| --- | --- | --- | --- | --- | --- | --- |
+| base, split finish on (the default) | 0.56 / 0.50 | 2.98 / 2.86 | 3.14 / 3.15 | 7.76 / 7.58 | 89.9 / 89.9 | 11.67 / 11.61 |
+| indirect, split finish on | 0.65 / 0.60 | 2.97 / 3.05 | 3.26 / 3.24 | 7.94 / 7.98 | 89.9 / 88.5 | 11.72 / 12.60 |
+| base, vsync off, frame limit unlimited | 0.66 / 0.64 | 3.01 / 3.08 | 3.13 / 3.12 | 7.86 / 7.90 | 89.9 / 89.9 | 11.63 / 11.75 |
+| indirect, vsync off, frame limit unlimited | 0.64 / 0.59 | 3.05 / 3.08 | 3.28 / 3.21 | 8.03 / 7.96 | 89.9 / 89.9 | 11.67 / 11.86 |
+| base, `OAG_SPLIT_FINISH=0` (40 s) | 0.61 / 0.62 | 3.04 / 3.06 | 4.53 / 4.49 | 9.19 / 9.18 | 87.1 / 86.1 | 13.87 / 14.72 |
+| indirect, `OAG_SPLIT_FINISH=0` (40 s) | 0.60 / 0.60 | 3.01 / 3.04 | 4.41 / 4.41 | 9.04 / 9.07 | 86.8 / 86.8 | 14.11 / 14.01 |
+
+On one encoder it saves the 0.1 ms the bench predicts. With the split finish, which is what
+ships, the race pass is finished on the worker, so the per-draw validation it saves comes off the
+worker. Meanwhile wgpu's indirect-argument validation adds work on the frame thread: one
+`StagingBuffer` and one source bind group per pass that carries indirect draws, every frame
+(`wgpu-core` `indirect_validation/draw.rs`), freed later. The frame thread loses about 0.1 ms.
+
+**The unlocked rows are not unlocked.** With `vsync = "off"` and `frame_limit = "unlimited"`,
+gaming-mode gamescope still paced the Mailbox swapchain at 11.11 ms (`Swapchain received new
+refresh cycle`), so fps stayed at 90. Compare the phase times; an unlocked fps on the Deck needs
+another gamescope setting, not found here.
+
+**What this means for any lever that cuts `finish` work in the race or shadow passes** (more
+indirect draws, render bundles): it saves worker time, and the Deck's frame does not get
+shorter unless the frame thread also gets cheaper. Profile of the base build (`perf record -g
+--call-graph fp -D 15000 -F 999`, 30 s Anulpha, split by `--tid`). Ms per frame, 8.2 ms on the
+frame thread in all:
+
+| Where | ms per frame |
+| --- | --- |
+| frame thread, `Scene::prepare_view` | 3.4 |
+| frame thread, `queue.submit` | 1.25 |
+| ... of which `maintain`, dropping the finished encoders (`EncoderInFlight`, wgpu-hal `reset_all` 0.55, `destroy_buffer` 0.13) | 0.8 |
+| frame thread, `finish` of its own parts (the post chain) | 1.0 |
+| frame thread, `queue.write_buffer` | 0.63 |
+| frame thread, `submit` phase waiting on the worker (3.5 ms phase less 2.3 ms on CPU) | about 1.2 |
+| `oag-finish` worker, almost all `encode_render_pass` | 4.4 |
+
+The frame thread does wait on the worker, but cutting the worker's race-pass work by 0.15 ms
+did not shorten the wait measurably. Its own work is the larger lever:
+
+- the encoder drop in `maintain` (fewer encoders a frame means fewer `reset_all` calls);
+- `prepare_view` (`probes::mix` alone is 0.5 ms);
+- the post chain's passes;
+- the 51 `write_buffer` calls a frame.
+
+A fourth upstreamable wgpu-core change: pool indirect validation's staging buffer and source
+bind group across frames instead of making them per pass.

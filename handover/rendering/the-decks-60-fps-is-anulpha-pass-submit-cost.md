@@ -21,6 +21,11 @@ The Deck now holds 90 on a moving Anulpha race, with the maintainer's settings. 
 - Further `submit` levers, from the doc section: post-chain pass count (10 bloom downsample, 7
   motion blur passes a frame), shared 1x1 fallback textures (1,276 of 1,863 live textures),
   a third split point.
+- The frame thread's `maintain` drops each frame's finished encoders for 0.8 ms (wgpu-hal
+  Vulkan `reset_all` 0.55, `destroy_buffer` 0.13; profile in the doc section "Indirect
+  multi-draw on the Deck"). Fewer encoders a frame, or reusing them, is a frame-thread lever.
+  Per-draw `finish` cuts in the race pass are not, because the split finish runs them on the
+  worker.
 - Upstreamable wgpu-core changes (init actions for initialised textures, sparse usage scopes,
   no re-merge of a bound group): a patch to propose upstream, not a fork.
 - Ticks of 1.0 ms in a human-flown race: matches the autopilot's 0.9 before the trail-hit cut.

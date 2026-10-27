@@ -694,6 +694,7 @@ impl Session {
         frame_seconds: Option<f32>,
         drs_limits: drs::Limits,
     ) {
+        self.governor_gpu = Some(cost.total());
         let shed = self.drs.blur_shed();
         if let Some(extent) = self.drs.record(cost, frame_seconds, drs_limits) {
             // **The reserve is printed beside the costs**, because

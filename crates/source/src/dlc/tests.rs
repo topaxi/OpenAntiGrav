@@ -25,7 +25,7 @@ fn zip_of(members: &[(&str, Vec<u8>)]) -> Vec<u8> {
     let mut buffer = std::io::Cursor::new(Vec::new());
     {
         let mut writer = zip::ZipWriter::new(&mut buffer);
-        let options: zip::write::FileOptions<'_, ()> =
+        let options: zip::write::SimpleFileOptions =
             zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
         for (name, bytes) in members {
             writer.start_file(*name, options).unwrap();

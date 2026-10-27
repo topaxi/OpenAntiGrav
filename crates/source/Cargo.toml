@@ -25,7 +25,7 @@ dirs = "7"
 # so the asset layer only ever opens a `PACKn.edat` off disk and no gameplay
 # crate acquires a decompressor. Deflate only - the packs are torrentzipped, and
 # bzip2/zstd/aes would be dependencies for formats that cannot appear here.
-zip = { version = "8", default-features = false, features = ["deflate"] }
+zip = { version = "9.0.5", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
 oag-tables.workspace = true

@@ -325,7 +325,7 @@ impl Session {
         let pvs_culling = self.pvs_culling();
         // Read before `self.stage` is borrowed mutably below, for the same
         // reason `pvs_culling` is.
-        let render_profile = self.render_profile();
+        let render_profile = self.governed_profile();
         // Diagnostic only, and read before the match for the same reason
         // `pvs_culling` is: whether this is the frame `race_ready_at` is still
         // waiting on. Splits `Session::race_ready_at`'s single "since the scene
@@ -1043,6 +1043,7 @@ impl Session {
         if frame_seconds.is_some() {
             self.present_cost.record(present_seconds);
         }
+        self.last_present_seconds = present_seconds;
         // `--frame-log`'s once-a-second line, on every stage.
         self.dev_log(has_scene.then(|| self.framebuffer.extent()));
         // The third and last diagnostic timestamp - see `Session::race_ready_at`.

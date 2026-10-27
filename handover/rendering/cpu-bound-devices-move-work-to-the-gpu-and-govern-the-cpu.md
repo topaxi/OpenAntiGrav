@@ -35,9 +35,32 @@ resolution controller (`crates/present/src/drs`), which does nothing while the G
 1. **GPU-driven drawing** (opus). Indirect multi-draw per pass with a compute pass culling (PVS, frustum,
    LOD) into the draw list; per-draw state in storage buffers so one bind per pass replaces per-draw
    rebinding. The biggest lever on the measured cost. Fallback: today's per-draw path.
+   **Step 1 measured and dropped (2026-10-27, `gpu-driven-submit`)**, numbers in
+   `docs/rendering/frame-thread-cpu.md` ("Indirect multi-draw on the Deck"):
+   - HD's prepass depth half as one indirect multi-draw (505 draws on Anulpha) gave the same
+     picture, byte for byte.
+   - On the Deck with the split finish, submit got worse, 3.14 to 3.25 ms. With
+     `OAG_SPLIT_FINISH=0` it got better, 4.51 to 4.41.
+   - Why: the saving lands on the finish worker, and wgpu's indirect validation adds a staging
+     buffer and a bind group per pass on the frame thread.
+   - The shaded draws cannot go indirect without a non-uniform material index, which costs
+     6.5 to 16% GPU on ANV and NVIDIA.
+   - So per-draw `finish` cuts in the race and shadow passes do not move the Deck. The frame
+     thread's own work does: encoder drops in `maintain` (0.8 ms), `prepare_view` (3.4 ms), the
+     post chain and the `write_buffer` calls.
+   - **Parked, not dropped** (maintainer): the working implementation (feature check, `OAG_INDIRECT`
+     switch, tests, byte-identical proof) is on the pushed branch `park/indirect-depth-prepass`,
+     rebased on main at the time. Later steps (compute culling, colour passes) start from it.
+   - **Re-measure on Omega** (maintainer's idea, unmeasured): Omega's PS4 scenes may carry many more
+     draws per pass than HD's, where the per-draw saving could outweigh the indirect validation's
+     fixed per-pass cost again. First count draws per pass on an Omega race (the perf overlay's
+     DRAWS line), then A/B the parked branch there, on the workstation and the Deck where Omega runs.
 2. **Render bundles for static scenery and the circuit** (sonnet). Record once, replay per frame
    (`wgpu-levers-for-per-view-cpu-none-used-yet.md` in this directory). Measure against lane 1: if lane 1
    already removes the cost, close this one with its number.
+   **Expect lane 1's result**: a bundle also cuts the race pass's `finish`, which the split finish
+   already moved to the worker. Before building it, check on the Deck whether the frame thread
+   waits on that worker for the race pass (`perf --tid`, the recipe in the doc section above).
 3. **Particles on the GPU** (sonnet). Particle state in a storage buffer, advanced or extrapolated in the
    vertex shader (or compute) with one alpha uniform, so `.pob` effects, mist and clouds also draw between
    ticks. Shares its design with item 2 of `drawing-between-ticks-what-is-still-stepped.md`; land them

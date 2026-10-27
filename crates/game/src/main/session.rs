@@ -21,6 +21,8 @@ use crate::{race_stage::RaceStage, stage::Stage};
 
 #[path = "session/apply.rs"]
 mod apply;
+#[path = "session/cpu_governor.rs"]
+mod cpu_governor;
 #[path = "session/campaign.rs"]
 mod campaign;
 #[path = "session/draw.rs"]
@@ -73,15 +75,15 @@ mod join;
 #[cfg(not(target_arch = "wasm32"))]
 #[path = "session/lan.rs"]
 mod lan;
+#[cfg(target_arch = "wasm32")]
+#[path = "session/lan_web.rs"]
+mod lan;
 #[cfg(not(target_arch = "wasm32"))]
 #[path = "session/online.rs"]
 mod online;
 #[cfg(target_arch = "wasm32")]
 #[path = "session/online_web.rs"]
 mod online;
-#[cfg(target_arch = "wasm32")]
-#[path = "session/lan_web.rs"]
-mod lan;
 #[path = "session/multiplayer.rs"]
 mod multiplayer;
 #[path = "session/seat_assign.rs"]
@@ -295,6 +297,15 @@ pub(crate) struct Session {
     /// happens inside the frame rather than in the limiter's own sleep, so
     /// without this a vsync-bound run reads as CPU-bound.
     pub(crate) present_cost: perf::Meter,
+    /// The CPU governor (`oag_present::governor`): the live level of this project's own
+    /// CPU-heavy extras held down, as a runtime override ([`Session::governed_profile`]).
+    pub(crate) governor: oag_present::governor::Governor,
+    /// The newest whole-frame GPU time the resolution controller was fed, in seconds: the
+    /// governor's "is the GPU the bound side" reading.
+    pub(crate) governor_gpu: Option<f32>,
+    /// The last frame's swapchain acquire plus `present` time, in seconds, so the governor
+    /// reads CPU time without the wait.
+    pub(crate) last_present_seconds: f32,
     /// Where each window frame's input sample sat against its swapchain
     /// acquire, summed a second at a time and logged at `debug`. See
     /// [`frame_timing`].
