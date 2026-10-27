@@ -200,47 +200,15 @@ The cell type is read: the window's first cell has `col0 + row0` even and takes 
 triangle, and the type alternates per column and per row, so **a cell is apex-up when `col + row` is
 even**.
 
-### Built, not merged (2026-10-27)
+### The first draw, and why it was wrong (2026-10-27)
 
-The draw below was built and measured, then held back: it scored further from the captures than
-plain white in every empty area measured (the scale and the line grey below). It is described here as
-built so the next attempt starts from it.
-
-
-`oag_ui::frontend::canvas_lattice`: `bake` renders one tile (one unit wide, two rows tall, 112 x 194
-texels, **chosen** resolution) off the atlas's decoded RGBA by the mesh's own corner-to-atlas-triangle
-carry, `Frontend::canvas_lattice` tiles it over the screen with the reset camera (`x` scale `960 / 16`
-= 60 px per unit, `y` scale `544 / (16 * 5/9)` = 61.2), and `oag_game::boot::sprites` bakes the tile
-into the sprite sheet at load (`TILE`), the atlas itself never entering the sheet. Drawn on the title
-screen and the game mode page only: those are the 2048 pages the reference captures show with the sharp
-lattice. **The home, team, extras, options and profile pages show a blurred ship and a blurred pattern
-instead**, which is another effect (unread; possibly a blur of this canvas).
-
-Measured against the reference captures (960 x 544, title screen box x 20..110, y 20..430):
-
-| | reference | ours |
-| --- | --- | --- |
-| horizontal line period | 47.75 px | 53.0 px |
-| line nearest the centre | row 272 | row 275 |
-| darkest line grey (of 255) | 233 | 202 |
-| line ink (sum of 255 - v across one line) | about 30 | about 83 |
-
-**The claim does not come out true at the reset camera.** The period is the defaults' 53 px (the
-`y` window is `5/9` of the width, so 61.2 px per unit, times 0.866) against the capture's 47.75 px, an
-unexplained 10 %: the capture's lattice is about 55.2 px per unit both ways, which would need a
-half-width of about 8.7 and a window height of 0.567 of it, not the `0.5556` the code carries. Nothing
-that writes `+0xc0` or the aspect constant runs without a pinch, so the cause is either a reading of
-the projection matrix (`+0x5ebd0..+0x5ec10` come from `FUN_812e4a04`, unread) or the capture's own
-state (Vita3K touch emulation). Not fitted. The phase at the centre is 3 px off (2.3 px predicted from
-the pan), inside the 2 px bar only if the scale were right. The lines are lighter in the capture
-(core 233 to 240, ink a third of ours): the sampling filter of the original's draw (Vita3K's) is not
-known, and the bake's bilinear tap is a choice. Edge NCC against the capture is about 0 at the 10 % scale
-gap, so no shift was measurable.
-
-What stays open: the projection's own matrix (the 10 %), the blur behind the home and team pages, the
-second cell texture's writers (painted cells, the campaign map's lattice), and **who sets bit `0x80`
-at `canvas+0x30`** (`FUN_8103da80` draws the canvas only when it is set; nothing in the camera sweep
-writes it, so the page set above is read off the captures, not off that bit).
+The branch `2048-lattice` drew one axis-aligned tile with the reset camera (60 x 61.2 px per unit, no
+shear): period 53.0 px against the capture's 47.75, darkest line 202 against 233. It was held back and
+is gone; the matrix below replaced it and "Wired" at the end of this page is what is drawn now. The
+open items it listed that are still open: the blur behind the home and team pages, the second cell
+texture's writers (painted cells, the campaign map's lattice) and **who sets bit `0x80` at
+`canvas+0x30`** (`FUN_8103da80` draws the canvas only when it is set; the page set is read off the
+captures).
 
 ## The camera is tilted: the 10 % is read (2026-10-27, lane `lattice-scale`)
 
@@ -521,33 +489,73 @@ is still unexplained (confidence 75 it is not in the texture state): what is lef
 or the pass's output blend, neither read. Not wired. Omega: canvasTexture.gnf, **not checkable** (no readout), the same
 item ships.
 
-## Wired (2026-10-27, lane `lattice-final`): full ink as read; the capture shows about half, see part 2
+## Wired (2026-10-27, lane `lattice-final`): the tilted matrix, then the game's composite
 
-The maintainer's decision: draw the lattice now at the texture's own ink. `oag_ui::frontend::canvas_lattice`
-bakes **one 960 x 544 picture** at load (the camera is fixed on these pages): for each screen pixel centre it
-inverts the tilted matrix back to the lattice plane (`x' = cos(0.1)/8 * x - sin(0.1) sin(0.45)/8 * y + t0`,
-`y' = -cos(0.45)/(8 * 5/9) * y + t1`, translation row `(-9.56032, 4.65163)` read live at the title), picks the
-cell and its atlas triangle (the branch's `atlas_at`) and reads `canvasTexture.gxt` at mip 0 bilinear. It is
-inserted over the white clear on the title screen and the game mode page only (`wipeout2048.rs`). The branch
-`2048-lattice`'s axis-aligned tile draw is gone. Scale (59.7 x 55.1 px/unit, row period 47.72), shear and the
-phase come from the matrix, not a fit; a unit test pins the scales.
+**Part 1: full ink as read.** `oag_ui::frontend::canvas_lattice` bakes **one 960 x 544 picture** at
+load (the camera is fixed on these pages): for each screen pixel centre it inverts the tilted matrix
+back to the lattice plane (`x' = cos(0.1)/8 * x - sin(0.1) sin(0.45)/8 * y + t0`,
+`y' = -cos(0.45)/(8 * 5/9) * y + t1`, translation row `(-9.56032, 4.65163)` read live at the title),
+picks the cell and its atlas triangle and reads `canvasTexture.gxt` at mip 0 bilinear. It is inserted
+over the white clear on the title screen and the game mode page only (`wipeout2048.rs`). Scale (59.7 x
+55.1 px/unit, row period 47.72), shear and phase come from the matrix, not a fit; a unit test pins the
+scales. With the atlas's own ink it matched the capture's period and phase (best edge shift (0, 0),
+edge NCC 0.94 in the empty box) but its lines dipped to 220 where the capture's dip to 240, so the
+empty boxes scored 0.04 to 0.10 worse than plain white (2.52 / 1.70 / 2.25 / 2.31 / 2.32 against white's
+2.43 / 1.68 / 2.20 / 2.25 / 2.22).
 
-Measured against the Vita3K captures (`2048/menu-title` via `--until TitleScreen --press start
---press-until-reached --ticks 424`, `2048/menu-game-mode` via `--press start,cross,cross,cross --original-menu`),
-960 x 544:
+**Part 2: the half ink is the game's own composite pass (measured 2026-10-27, RenderDoc on Vita3K,
+confidence 85 for the law, 40 for which composite program runs).** Method:
+[`vita3k-capture.md`](../../../reverse-engineering/vita3k-capture.md), "RenderDoc: the passes of one
+frame". At the settled title, one frame is 8 render passes, in order:
 
-| Measure | Title | Game mode |
+| Pass | Target | Draw |
 | --- | --- | --- |
-| Best shift of the edge map (ours against capture, empty box, +-6 px) | (0, 0) | (0, 0) |
-| Edge NCC in the empty box at shift 0 | 0.939 | 0.937 |
-| Line profile across row 271/272, columns 20..200: capture / ours | 253 -> 240 / 253 -> 220 | same |
-| Mean grey difference, white plate before / now, empty boxes | 2.43/2.52, 1.68/1.70, 2.20/2.25 | 2.25/2.31, 2.22/2.32 |
-| Whole frame mean abs grey difference (ours with lattice) | 5.39 | 7.68 |
+| 1 | scene, 960 x 544 `R16G16B16A16_FLOAT` | clear white (3 indices), then **the canvas mesh** (60,480 indices): opaque (no blend), samples `canvasTexture` as a host `R8G8B8A8_UNORM` 2048 x 2048 with 10 mips, sampler LOD bias -1.5 |
+| 2 | 480 x 272 `R8G8B8A8_UNORM` | clear |
+| 3 | 240 x 136 | downsample of the scene, then two blur passes (the bloom chain) |
+| 4 | final, 960 x 544 `R8G8B8A8_UNORM` | **composite**: samples `mainTex` (the scene) and `bloomTex` (the blurred 240 x 136), no blend, one 288-index draw |
+| 5 | same | the page's UI sprites (Title_Screen, the prompt, the legal line) alpha-blended (src alpha, one minus src alpha) over the composite |
+| 6 | swapchain `B8G8R8A8_UNORM` | one 4-vertex draw with push constants: Vita3K's own scanout (Bilinear filter), no colour change |
 
-The period, phase and line angles land (shift 0, row 271/272 on the same rows in both). The ink is the open
-part: our lines dip to 220 where the capture's dip to 240, so the empty boxes score 0.04 to 0.10 worse than
-plain white, as the thread predicted. Part 2 looks for what halves the ink.
+The canvas draws **at full ink into the float scene** (the scene's saved values reproduce our part-1
+profile row for row: 252, 231, 219, 248 across the line at row 271/272). The composite turns it into
+the capture's (253, 241, 240, 252). The bloom target is **all zero** on these pages, so the whole
+difference is the composite's transfer on the scene: regressing the final on the scene over the
+empty box gives a **2 x 2 kernel of weights 0.75 / 0.25 on each axis** (a quarter-pixel resample,
+rms 0.17 of 255 with a 7 x 7 free kernel) and, on the resampled scene, **`out = sqrt(scene)`**
+(`out = 0.9975 sqrt(scene) + 0.0026`, rms 0.17; the straight line `0.514 scene + 0.486` is 0.18 and
+the slope of `sqrt` at white is 0.5). A line at 0.86 comes out at 0.93: the ink is halved at the line
+and by `sqrt` less than half deeper in. This is the square-root encode `exposure.md` reads at the end
+of `wo_composite_nocc_fp` (`out = sqrt(e L / (1 + L) + BloomFactor bloom) v + screenTint`); the canvas
+program writes the atlas colour unsquared, where the lit programs write gamma-2 (`exposure.md`), so
+the encode lifts it. White (1.0) is a fixed point of both the encode and the clear, so only the lines
+change. Which composite program the front end binds (`wo_composite_notonemap_fp` or the front-end
+branch's) and its uniform values are **not read**: the fragment program's constants sit behind a
+buffer pointer (`buffer_addresses`) RenderDoc did not resolve. The law is therefore the measured
+transfer, applied in the bake: `composite_encode` (`sqrt` per channel) and a 0.25 px sample offset.
+
+Not a translucent layer, not a blend, not the texture: the XML draws nothing over the canvas
+(TitleScreen is `Intro_Definition_EU.xml`, with the title image, the prompt and the legal line;
+`GameModeChoice` is `Definition.xml`'s tile screen; no `Title_Definition.xml` ships), the atlas
+Vita3K hands the GPU is the disc's (decoded host-side to RGBA8 with 10 mips), and the canvas draw has
+no blend state. The page's own UI draws after the composite, so text and logos are not encoded.
+
+After the encode, against the same captures (960 x 544; the empty boxes' mean grey difference, white
+before):
+
+| Box | white | part 1 (full ink) | part 2 (composite) |
+| --- | --- | --- | --- |
+| title (0, 20, 960 x 110) | 2.43 | 2.52 | 0.40 |
+| title (0, 515, 960 x 29) | 1.68 | 1.70 | 0.32 |
+| title (0, 140, 110 x 200) | 2.20 | 2.25 | 0.35 |
+| game mode (0, 100, 215 x 440) | 2.25 | 2.31 | 0.37 |
+| game mode (740, 100, 220 x 440) | 2.22 | 2.32 | 0.39 |
+
+Edge NCC in the empty box 0.949 (title) and 0.953 (game mode), best shift (0, 0); the line profile at
+row 271/272 is 253, 238, 239, 252 against the capture's 253, 241, 240, 252; the whole frame's mean
+grey difference falls 5.39 to 3.71 (title) and 7.68 to 6.27 (game mode).
 
 Omega: **checked, applies, not wired.** `canvasTexture.gnf` ships and the reset angles are the same
-(`0x018086ec`); Omega's front end is HD's, so whether its pages draw a `Canvas3D` was not read.
-HD: **checked, differs** (no `Canvas3D`).
+(`0x018086ec`); Omega's front end is HD's and its composite is `ps4-omega-eu/tonemap.md`'s, so
+whether its pages draw a `Canvas3D` and through which encode was not read (shadPS4 has no memory
+readout; a RenderDoc pass table of an Omega frame is the way). HD: **checked, differs** (no `Canvas3D`).
