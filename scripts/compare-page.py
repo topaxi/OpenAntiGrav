@@ -227,7 +227,11 @@ def normalise(entry: dict, base: Path, img: Path) -> dict:
     for slot, src in srcs.items():
         out = img / f"{entry['id']}-{slot}-{key}.png"
         files[slot] = out
-        crop = trimmed_geometry(src) if slot == "original" else None
+        # A letterbox is a capture's frame around a picture of another aspect. An original the same size as ours is
+        # a full frame however dark its edges are (HD's menus are black outside their safe area), and trimming it
+        # rescaled it against ours.
+        same_size = slot == "original" and "ours" in srcs and dims(src) == dims(srcs["ours"])
+        crop = trimmed_geometry(src) if slot == "original" and not same_size else None
         if out.exists():
             continue
         args = [str(src) + "[0]"]
