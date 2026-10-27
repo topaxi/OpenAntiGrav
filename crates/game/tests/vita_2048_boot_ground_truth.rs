@@ -945,6 +945,34 @@ fn options_camera_is_reached_directly_from_home_and_the_choice_cycles() {
         Some(1),
         "one Right off the default index (0, OPT_CLOSE) lands on OPT_FAR (1)"
     );
+    // Square (and a tap on the hint under the list) puts it back on what a first run holds.
+    frontend.set_option_defaults(oag_game::settings::option_defaults());
+    let hint = frontend
+        .panel_reset_rect()
+        .expect("the camera is off its default, so the hint is shown");
+    press_release(&mut frontend, &mut input, Button::Square);
+    assert_eq!(
+        frontend.camera_choice(),
+        Some(0),
+        "the default is OPT_CLOSE"
+    );
+    assert_eq!(frontend.panel_reset_rect(), None, "nothing left to reset");
+    press_release(&mut frontend, &mut input, Button::Square);
+    assert_eq!(
+        frontend.camera_choice(),
+        Some(0),
+        "a second press is a no-op"
+    );
+    press_release(&mut frontend, &mut input, Button::Right);
+    assert_eq!(frontend.camera_choice(), Some(1));
+    let tap = oag_ui::pointer::Pointer {
+        at: Some((hint[0] + 2.0, hint[1] + 2.0)),
+        moved: true,
+        clicked: true,
+        ..oag_ui::pointer::Pointer::default()
+    };
+    frontend.pointer(&tap);
+    assert_eq!(frontend.camera_choice(), Some(0), "the tap resets too");
     press_release(&mut frontend, &mut input, Button::Circle);
     assert!(
         frontend.machine().is(w2048::OPTIONS),

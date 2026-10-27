@@ -2010,6 +2010,46 @@ track. A physics test must not depend on menu navigation, and a capture harness
 is not a shell. `--menu-page <id>` draws one page with `--screenshot` for
 looking at a layout without walking to it.
 
+## Reset to default (ours, in no original)
+
+One press resets the selected value row (a choice or a toggle) to what a first run
+holds. **Ours**: none of the original front ends has it, so nothing here is measured;
+the bindings and the hint are chosen.
+
+- **Pad and keyboard**: `Button::Square` (pad west button, `C` by default), taken in
+  `Menu::update` and in the revealed-rows path. It is the same abstract button the
+  Controls page already lists, so it is rebindable there like the others, and the hint
+  names the keys bound to it. No new key was added: `keys::candidates` is a closed set
+  of eighteen and a nineteenth would change the rebinding permutation's size.
+- **Mouse**: the middle button (`Pointer::reset`, from `oag_game::main::pointer`) resets the
+  row under the pointer, else the selected one. The secondary button stays "back".
+- **Finger, and the mouse without a middle button**: the hint line under the rows
+  (`RESET TO DEFAULT (C)`, `OAG_MENU_RESET_TO_DEFAULT`) is a tap target
+  (`pointer::Part::Reset`, laid out in `rows::regions` in all three layouts: Pulse and
+  Pure's text rows, the settings layout, HD and Omega's list rows). It is drawn, and
+  hit, only while the selected row is off its default and no warning or restart note
+  holds that line.
+- **Where the default comes from**: `oag_game::settings::default_seeds`, which is
+  `menu_seeds` over `settings::fresh()`, the very settings a first run loads (a render
+  profile row per known title and platform included, so per-title defaults such as
+  shadows and the screen filter come out right). The game hands them to the menu with
+  `settings::supply_reset` next to `seed`, and `Menu::set_default` keeps them; the menu
+  holds no table of its own. `the_reset_defaults_are_what_a_first_run_loads` pins the
+  two together for every title and platform.
+- **What does nothing**: action, submenu, back and binding rows; a disabled or pinned
+  row; a row already on its default; a default the row does not offer (a list read
+  off the disc that lacks it, or an unset race pick, which is the empty string).
+- **Persistence**: the reset reports `MenuEvent::Changed`, the event an ordinary step
+  reports, so `apply_setting` applies it and the settings file is written on that press
+  like any other edit.
+- **Wipeout 2048's own options panels** (camera, pilot assist, the two volumes) are not
+  this menu tree: `oag_ui::frontend::options2048`. Square resets the focused control
+  there, and a hint under the widget is the tap target (`Frontend::panel_reset_rect`).
+  The defaults come from `settings::option_defaults`, read off `fresh()` in the
+  panels' terms. Omega and HD reach settings through this tree, so they are covered by
+  the rows above. **Checked against Omega**: the same menu rows and the same wiring.
+  2048's panels have no Omega counterpart (Omega's front end is HD's).
+
 ## Persistence
 
 `settings.toml` holds `[display]`, `[graphics]`, `[race]` (class, team, circuit

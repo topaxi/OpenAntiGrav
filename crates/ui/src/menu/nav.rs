@@ -139,6 +139,46 @@ impl Menu {
         }
     }
 
+    /// The words of the hint drawn under the rows while the selected row is off its default
+    /// ("RESET TO DEFAULT"), which is also the pointer's and the finger's target for a
+    /// reset. Supplied from the string table; empty draws no hint.
+    pub fn set_reset_label(&mut self, label: &str) {
+        label.clone_into(&mut self.reset_label);
+    }
+
+    /// The reset hint's text for the selected row, when there is one to show: the label
+    /// and the keys bound to the reset button, while the row is off its default and no
+    /// warning or restart note holds the line under the rows (those win it).
+    pub(super) fn reset_hint(
+        &self,
+        bindings: &dyn Fn(super::Button) -> Vec<&'static str>,
+    ) -> Option<String> {
+        if self.reset_label.is_empty() || !self.can_reset() || self.line_is_noted() {
+            return None;
+        }
+        let keys = bindings(super::Button::Square).join(" / ");
+        Some(if keys.is_empty() {
+            self.reset_label.clone()
+        } else {
+            format!("{} ({keys})", self.reset_label)
+        })
+    }
+
+    /// Whether a row on screen has a note that takes the line under the rows.
+    fn line_is_noted(&self) -> bool {
+        let first = self.scroll();
+        self.page()
+            .entries
+            .iter()
+            .skip(first)
+            .take(self.visible_rows())
+            .any(|entry| {
+                self.warning(entry).is_some()
+                    || self.restart_note(entry).is_some()
+                    || self.unavailable(entry).is_some()
+            })
+    }
+
     /// Where the selected row's value would go on a reset: `None` for a row that holds no
     /// value, is disabled or pinned, has no recorded default, is already at it, or does
     /// not offer it (a list read off the disc may lack the default).
@@ -150,7 +190,12 @@ impl Menu {
         let setting = entry.setting()?;
         let default = &self.defaults.iter().find(|(key, _)| key == setting)?.1;
         match (entry, default) {
-            (Entry::Choice { values, current, .. }, Value::Text(text)) => {
+            (
+                Entry::Choice {
+                    values, current, ..
+                },
+                Value::Text(text),
+            ) => {
                 let at = values.iter().position(|v| &v.value == text)?;
                 (at != *current).then_some(Reset::Choice(at))
             }

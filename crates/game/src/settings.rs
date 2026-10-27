@@ -721,6 +721,45 @@ pub fn default_seeds(
     menu_seeds(&settings, settings.graphics.anisotropy, title, platform)
 }
 
+/// What Wipeout 2048's settings panels hold on a fresh install, read off [`fresh`] and put in
+/// the panels' own terms (list indices, percentages). The inverse of the mapping
+/// `main/session/frame.rs` applies when a panel moves.
+#[must_use]
+pub fn option_defaults() -> oag_ui::frontend::OptionDefaults {
+    use oag_display::display::CameraView;
+    use oag_physics::pilot_assist::Level;
+    let settings = fresh();
+    oag_ui::frontend::OptionDefaults {
+        camera: match settings.graphics.camera_view {
+            CameraView::Close => 0,
+            CameraView::Far => 1,
+            CameraView::Internal => 2,
+        },
+        pilot: match settings.controls.pilot_assist {
+            Level::Off => 0,
+            Level::Normal => 1,
+            Level::Extreme => 2,
+        },
+        music: settings.audio.music_volume.percent(),
+        sfx: settings.audio.sfx_volume.percent(),
+    }
+}
+
+/// Tells `model` what a fresh install holds on every row and what to call the reset hint,
+/// which is all its reset button needs ([`oag_ui::menu::Menu::set_default`]). Both the live
+/// menus and `--menu-page` call it after seeding.
+pub fn supply_reset(
+    model: &mut oag_ui::menu::Menu,
+    title: &oag_title::Title,
+    platform: oag_disc::Platform,
+    strings: &oag_ui::language::StringTable,
+) {
+    for (key, value) in default_seeds(title, platform) {
+        model.set_default(key, value);
+    }
+    model.set_reset_label(strings.get_or_fallback("OAG_MENU_RESET_TO_DEFAULT", "RESET TO DEFAULT"));
+}
+
 /// Loads settings from [`path`], creating the file - or filling in whatever
 /// keys it is missing - with defaults.
 ///

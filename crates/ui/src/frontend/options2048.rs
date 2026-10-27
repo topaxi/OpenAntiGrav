@@ -70,6 +70,31 @@ const CONTROLS_ENTRIES: [&str; 3] = ["FE_CTRL_WIPEOUT", "FE_CTRL_RACER", "FE_CTR
 
 const VOLUME_STEP: i32 = 10;
 
+/// What the settings panels' controls hold on a fresh install, as the panels read them: the
+/// list index for camera and pilot assist, a percentage for each volume.
+///
+/// **Supplied by the composition root** from the settings loader's own fresh file, so a
+/// reset goes back to what a first run writes and the panels keep no table of defaults.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OptionDefaults {
+    /// `CameraP1`'s index in [`CAMERA_ENTRIES`] order.
+    pub camera: u8,
+    /// `Pilot Assist`'s index in [`PILOT_ENTRIES`] order.
+    pub pilot: u8,
+    /// `Music Volume`, `0..=100`.
+    pub music: u32,
+    /// `SFX Volume`, `0..=100`.
+    pub sfx: u32,
+}
+
+/// Where a panel reset moves a control to.
+enum PanelReset {
+    Camera(u8),
+    Pilot(u8),
+    Music(u32),
+    Sfx(u32),
+}
+
 impl Frontend {
     /// `OptionsCamera`'s own choice, once the player has moved it - `0`
     /// close, `1` far, `2` internal, `CameraP1`'s own entry order. `None`
@@ -98,7 +123,86 @@ impl Frontend {
         self.touch.sfx_choice
     }
 
+    /// Tells the settings panels what a fresh install holds, for their reset. Until it is
+    /// called a panel has nothing to reset to and offers no reset.
+    pub fn set_option_defaults(&mut self, defaults: OptionDefaults) {
+        self.touch.option_defaults = Some(defaults);
+    }
+
+    /// What the focused control on `current` would be reset to, when it differs from what
+    /// it holds now. `OptionsControls` edits no setting and has nothing to reset.
+    fn panel_reset_target(&self, current: &str) -> Option<PanelReset> {
+        let defaults = self.touch.option_defaults?;
+        match current {
+            w2048::OPTIONS_CAMERA => {
+                let held = self.touch.camera_choice.unwrap_or(CAMERA_DEFAULT_INDEX);
+                (held != defaults.camera).then_some(PanelReset::Camera(defaults.camera))
+            }
+            w2048::OPTIONS_PILOT => {
+                let held = self.touch.pilot_choice.unwrap_or(PILOT_DEFAULT_INDEX);
+                (held != defaults.pilot).then_some(PanelReset::Pilot(defaults.pilot))
+            }
+            w2048::OPTIONS_AUDIO if self.touch.audio_slider == 0 => {
+                let held = self.touch.music_choice.unwrap_or(100);
+                (held != defaults.music).then_some(PanelReset::Music(defaults.music))
+            }
+            w2048::OPTIONS_AUDIO => {
+                let held = self.touch.sfx_choice.unwrap_or(100);
+                (held != defaults.sfx).then_some(PanelReset::Sfx(defaults.sfx))
+            }
+            _ => None,
+        }
+    }
+
+    /// Puts the focused control on `current` back on its default, which the composition
+    /// root then applies the way it applies any other move of the control.
+    fn reset_panel(&mut self, current: &str) {
+        match self.panel_reset_target(current) {
+            Some(PanelReset::Camera(index)) => self.touch.camera_choice = Some(index),
+            Some(PanelReset::Pilot(index)) => self.touch.pilot_choice = Some(index),
+            Some(PanelReset::Music(percent)) => self.touch.music_choice = Some(percent),
+            Some(PanelReset::Sfx(percent)) => self.touch.sfx_choice = Some(percent),
+            None => return,
+        }
+        self.notes.push(format!("{current}: reset to default"));
+    }
+
+    /// The widget a panel's pointer targets are laid against: its list, else the focused slider.
+    fn panel_widget_rect(&self, current: &str) -> Option<[f32; 4]> {
+        let screen = self.screens.by_name(current)?;
+        screen
+            .touch_lists
+            .first()
+            .map(|list| [list.x, list.y, list.width, list.height])
+            .or_else(|| {
+                let focused = self.touch.audio_slider;
+                screen
+                    .touch_sliders
+                    .get(focused)
+                    .or_else(|| screen.touch_sliders.first())
+                    .map(|slider| [slider.x, slider.y, slider.width, slider.height])
+            })
+    }
+
+    /// Where the focused settings panel's reset hint sits and is hit - just under its
+    /// widget - while the control is off its default; `None` otherwise. The same rect a tap
+    /// is tested against, so a test or a capture finds the target where the player sees it.
+    #[must_use]
+    pub fn panel_reset_rect(&self) -> Option<[f32; 4]> {
+        self.reset_rect_on(self.machine.current()?)
+    }
+
+    fn reset_rect_on(&self, current: &str) -> Option<[f32; 4]> {
+        self.panel_reset_target(current)?;
+        let [x, y, width, height] = self.panel_widget_rect(current)?;
+        Some([x, y + height + 6.0, width, 28.0])
+    }
+
     pub(super) fn update_options_panel(&mut self, input: &mut Input, current: &str) {
+        if input.is_pressed(Button::Square) {
+            input.consume_press(Button::Square);
+            self.reset_panel(current);
+        }
         let step = if input.is_pressed(Button::Right) {
             input.consume_press(Button::Right);
             1i32
@@ -188,6 +292,13 @@ impl Frontend {
         let Some(at) = pointer.at else {
             return true;
         };
+        if self
+            .reset_rect_on(&current)
+            .is_some_and(|rect| contains(rect, at))
+        {
+            self.reset_panel(&current);
+            return true;
+        }
         let widget_rect = self.screens.by_name(&current).and_then(|screen| {
             screen
                 .touch_lists
@@ -265,6 +376,21 @@ impl Frontend {
                 }
             }
             _ => {}
+        }
+        if let Some(rect) = self.reset_rect_on(current) {
+            out.push(Draw::Text {
+                x: rect[0] + rect[2] * 0.5,
+                y: rect[1],
+                scale: 0.5,
+                color: [1.0, 1.0, 1.0, 1.0],
+                border: None,
+                align: Align::Centre,
+                text: self
+                    .strings
+                    .get_or_fallback("OAG_MENU_RESET_TO_DEFAULT", "RESET TO DEFAULT")
+                    .to_string(),
+                wrap_width: Some(rect[2]),
+            });
         }
     }
 

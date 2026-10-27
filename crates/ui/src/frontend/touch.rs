@@ -195,6 +195,8 @@ pub struct TouchState {
     pub controls_index: usize,
     /// `OptionsPilot`'s own choice - see [`Frontend::pilot_choice`].
     pub pilot_choice: Option<u8>,
+    /// What those controls hold on a fresh install - see [`Frontend::set_option_defaults`].
+    pub option_defaults: Option<super::options2048::OptionDefaults>,
 }
 
 /// What a tap on a tile does.

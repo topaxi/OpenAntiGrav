@@ -578,6 +578,9 @@ pub struct Menu {
     /// What each setting is set to on a fresh install, supplied by whoever owns
     /// the settings. See [`Self::set_default`].
     defaults: Vec<(String, Value)>,
+    /// The words of the reset hint under the rows. Empty draws no hint and lays out no
+    /// reset target. See [`Self::set_reset_label`].
+    reset_label: String,
 }
 
 /// How many rows a page shows before the caller says otherwise.
@@ -616,6 +619,7 @@ impl Menu {
             scroller: pointer::Scroller::default(),
             nav: nav::Log::default(),
             defaults: Vec::new(),
+            reset_label: String::new(),
         }
     }
 

@@ -2,9 +2,9 @@
 //! otherwise silent.
 
 use super::*;
-use crate::pointer::Pointer;
 use crate::menu::nav::Nav;
 use crate::menu::pointer;
+use crate::pointer::Pointer;
 
 fn options_menu() -> Menu {
     let mut menu = Menu::new(fixture());
@@ -54,7 +54,11 @@ fn square_on_a_row_already_at_its_default_does_nothing() {
     assert!(menu.seed("graphics.anisotropy", &Value::Text("4x".to_string())));
     assert!(!menu.can_reset());
     assert!(press(&mut menu, &[Button::Square]).is_empty());
-    assert!(menu.take_nav().iter().all(|nav| !matches!(nav, Nav::Stepped(_))));
+    assert!(
+        menu.take_nav()
+            .iter()
+            .all(|nav| !matches!(nav, Nav::Stepped(_)))
+    );
 }
 
 #[test]
