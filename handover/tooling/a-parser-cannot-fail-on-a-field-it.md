@@ -3,6 +3,7 @@ status: ready-to-wire
 titles: [all]
 updated: 2026-09-16
 summary: "Parser coverage: 115 surfaces with no solvable stride, rcsmaterial variant table is the next coverage target"
+difficulty: medium (30)
 ---
 
 # A parser cannot fail on a field it does not know about, so coverage is now measured

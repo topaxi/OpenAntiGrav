@@ -3,6 +3,7 @@ status: ready-to-wire
 titles: [all]
 updated: 2026-10-27
 summary: "Track format: visual meshes, materials and sky as optional records; non-Pulse hosts; picker preview"
+difficulty: medium (30)
 ---
 
 # An own track format, with BallisticNG and the originals as importers into it

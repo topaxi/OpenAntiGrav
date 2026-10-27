@@ -3,6 +3,7 @@ status: ready-to-wire
 titles: [hd, pulse]
 updated: 2026-10-12
 summary: "Emulator states: RPCS3 only for HD EU; wire a restored state into Session; PPSSPP guard; replace sleeps"
+difficulty: easy (35)
 ---
 
 # Emulator tooling: attach mode and RPCS3 states landed, five loose ends

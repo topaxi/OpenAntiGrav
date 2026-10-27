@@ -3,6 +3,8 @@ status: ready-to-wire
 titles: [all]
 updated: 2026-10-13
 summary: "Build offline pretrained speed plans per track, class and team, plus a loader preferring a matching shipped plan"
+size: XL (40)
+difficulty: medium (35)
 ---
 
 # Opponents fly their own team's handling, so the AI needs a speed plan per hull

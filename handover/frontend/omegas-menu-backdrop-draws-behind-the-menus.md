@@ -4,6 +4,7 @@ titles: [omega]
 updated: 2026-10-09
 summary: "Omega backdrop under the end-of-race screens, HD's own style and two unread passes; unvalidated against the original"
 categories: [frontend, rendering]
+difficulty: hard (30)
 ---
 
 # Omega's menu backdrop draws behind the menus, the campaign stills and the live campaign stage; the end-of-race screens, HD's own HD style, and two unread passes are open

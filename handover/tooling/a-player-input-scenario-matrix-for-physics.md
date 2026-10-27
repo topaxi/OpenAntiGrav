@@ -3,6 +3,7 @@ status: ready-to-wire
 titles: [all]
 updated: 2026-10-21
 summary: "Script nine gestures with mirrors on Pulse PSP's Talon's Junction and add the first-divergent-tick grid to oag-trace"
+difficulty: medium (30)
 ---
 
 # A player-input scenario matrix for physics, proposed and deferred

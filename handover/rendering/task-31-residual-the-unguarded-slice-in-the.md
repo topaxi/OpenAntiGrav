@@ -3,6 +3,7 @@ status: ready-to-wire
 titles: [all]
 updated: 2026-09-10
 summary: "Add test coverage for the orbit guard in crates/view/src/orbit.rs; needs a window"
+difficulty: easy (35)
 ---
 
 # Task #31 residual: the unguarded `slice(..)` in the race's draw path

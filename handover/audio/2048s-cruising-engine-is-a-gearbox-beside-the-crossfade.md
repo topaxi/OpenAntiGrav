@@ -3,6 +3,7 @@ status: ready-to-wire
 titles: [2048]
 updated: 2026-10-05
 summary: "Port 2048's engine gearbox cues (251 of 254 resolve) beside the crossfade; channel and level checks open"
+difficulty: medium (35)
 ---
 
 # 2048's cruising engine is a gearbox beside the crossfade

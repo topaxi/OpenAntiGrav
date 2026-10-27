@@ -3,6 +3,8 @@ status: ready-to-wire
 titles: [pure]
 updated: 2026-10-21
 summary: "Make the pitch-alignment gate a title axis before enabling; teach the driver Pure's bank-to-yaw 50 and measure"
+size: S (40)
+difficulty: medium (35)
 ---
 
 # Pure's measured craft laws: what still waits for our AI

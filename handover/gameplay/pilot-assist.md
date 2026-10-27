@@ -3,6 +3,8 @@ status: ready-to-wire
 titles: [all]
 updated: 2026-10-11
 summary: "Pilot Assist: fold two corridor scans into one and time on the S24; read 2048's SetStrength caller for Normal's multiplier"
+size: S (45)
+difficulty: medium (30)
 ---
 
 # Pilot Assist: what is left after the three levels

@@ -3,6 +3,8 @@ status: ready-to-wire
 titles: [all]
 updated: 2026-10-13
 summary: "Sweep the recovered driver on classes with no tables (Super Phantom, modded); chosen borrow rule; nothing started"
+size: L (45)
+difficulty: medium (35)
 ---
 
 # The original driver may fly classes it has no tables for

@@ -3,6 +3,7 @@ status: ready-to-wire
 titles: [all]
 updated: 2026-10-25
 summary: "Drop a full-size pass from the half-resolution blur path and measure on the Deck at 4K; DRS thresholds next"
+difficulty: hard (30)
 ---
 
 # The blur rung is built; its cost floor and its thresholds are next

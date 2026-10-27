@@ -3,6 +3,7 @@ status: ready-to-wire
 titles: [all]
 updated: 2026-10-19
 summary: "Skip the launch music fetch on a race_cache hit; re-time the web boot; Omega re-plans per track"
+difficulty: easy (35)
 ---
 
 # Music runs off the frame thread; what is left

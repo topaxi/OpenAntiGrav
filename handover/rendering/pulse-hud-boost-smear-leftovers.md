@@ -4,6 +4,7 @@ titles: [pulse, pure]
 updated: 2026-10-21
 summary: "Pulse boost HUD: 3D widget copy loop, text copy direction table by widget+0x172, PS2 glow and Pure unwired"
 categories: [rendering]
+difficulty: hard (30)
 ---
 
 # Pulse's boost HUD: the copies and the glow are wired; the 3D widgets, the PS2 glow and Pure are not

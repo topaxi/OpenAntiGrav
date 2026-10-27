@@ -3,6 +3,7 @@ status: ready-to-wire
 titles: [2048]
 updated: 2026-10-27
 summary: "2048 front end DLC campaigns wired; Select Team panel and hull drawn; DLC circuit card names and further screens still open"
+difficulty: hard (30)
 ---
 
 # 2048's front end is read and not wired

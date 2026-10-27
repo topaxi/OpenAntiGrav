@@ -3,6 +3,7 @@ status: ready-to-wire
 titles: [all]
 updated: 2026-10-06
 summary: "Split the 828-line lit_texel function and fold FSR 3 per-pass helpers into common.wesl, with the capture harness"
+difficulty: medium (35)
 ---
 
 # WESL shaders: follow-ups after build-time validation

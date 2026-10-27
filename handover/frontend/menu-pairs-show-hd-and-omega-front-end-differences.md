@@ -4,6 +4,7 @@ titles: [hd, omega, 2048, pulse, pure]
 updated: 2026-10-27
 categories: [frontend, rendering]
 summary: "Menu pairs HD 5, Omega 4, 2048 7, Pulse 5, Pure 8 on the compare page; ranked differences, Omega campaign selector, XML main/racebox/options gaps"
+difficulty: medium (30)
 ---
 
 # Menu pairs show HD's and Omega's front-end differences, ranked by visible area

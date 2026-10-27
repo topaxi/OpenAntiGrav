@@ -3,6 +3,8 @@ status: ready-to-wire
 titles: [all]
 updated: 2026-10-06
 summary: "Rate-limit the per-frame stutter warn on software Vulkan; a few lines more next time loader_log is touched"
+size: XS (45)
+difficulty: easy (40)
 ---
 
 # The default log is quiet now; two things in it are still not right

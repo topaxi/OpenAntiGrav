@@ -3,6 +3,7 @@ status: ready-to-wire
 titles: [pulse]
 updated: 2026-09-25
 summary: "Remove the skip-on-missing path for tracked traces so absence breaks the build; fix docs that cite gone captures"
+difficulty: easy (35)
 ---
 
 # Five reference traces are missing here, and the silent skip is why nobody noticed

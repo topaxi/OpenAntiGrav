@@ -3,6 +3,7 @@ status: ready-to-wire
 titles: [all]
 updated: 2026-10-16
 summary: "HUD halo about 43 percent closed and the blend underived; hud_scale settings row unbuilt"
+difficulty: hard (30)
 ---
 
 # HUD legibility and HUD skins across titles

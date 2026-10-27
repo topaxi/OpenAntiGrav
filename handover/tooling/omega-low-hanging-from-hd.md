@@ -3,6 +3,7 @@ status: ready-to-wire
 titles: [omega]
 updated: 2026-10-26
 summary: "Omega adverts: reader landed, pass off until PS4 material curves are read; plume flags, hit-effect triggers, Looks, shadows still open"
+difficulty: hard (35)
 ---
 
 # Omega lacks HD's adverts, plume flags and hit effects: what is left of the wiring list

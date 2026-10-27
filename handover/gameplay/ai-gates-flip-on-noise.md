@@ -3,6 +3,8 @@ status: ready-to-wire
 titles: [all]
 updated: 2026-10-20
 summary: "Convert the remaining single-run AI gates to distribution judging; give tests/perturb a shared home"
+size: L (45)
+difficulty: medium (40)
 ---
 
 # Our AI's disc-backed gates flip on noise

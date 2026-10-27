@@ -3,6 +3,8 @@ status: ready-to-wire
 titles: [all]
 updated: 2026-10-12
 summary: "Census BallisticNG .csf craft, then an ADR for the craft format and oag-craftfile; design only so far"
+size: XL (20)
+difficulty: hard (35)
 ---
 
 # An own craft format, with the originals and BallisticNG as importers into it

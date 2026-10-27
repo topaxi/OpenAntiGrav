@@ -3,6 +3,8 @@ status: ready-to-wire
 titles: [hd]
 updated: 2026-10-21
 summary: "HD late speed still differs against RPCS3; the AI field on Talon's Junction runs 808 contact ticks"
+size: M (40)
+difficulty: medium (40)
 ---
 
 # HD handling against RPCS3: late speed still differs

@@ -3,6 +3,8 @@ status: ready-to-wire
 titles: [all]
 updated: 2026-10-12
 summary: "AI pace: 2048 sol never laps (ResetZone loop), 06 and others still slow; find where the craft leaves the road"
+size: M (40)
+difficulty: medium (40)
 ---
 
 # AI pace: the plan's floors are gone where a better plan wins; sol, 06 and the rest are still slow

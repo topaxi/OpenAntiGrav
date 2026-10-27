@@ -4,6 +4,7 @@ titles: [hd]
 updated: 2026-10-26
 summary: "no-dot-power specular landed 2026-10-26; tv_glow.gtf second texture and the Omega card route are open"
 categories: [rendering]
+difficulty: medium (30)
 ---
 
 # HD: lit materials with no `pow` chain still draw the stand-in specular; the card's remaining leftovers
