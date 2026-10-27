@@ -30,7 +30,7 @@ impl super::super::Scene {
         let mut pipeline = self.sparks.borrow_mut();
         // The effects' own sprites - a no-op after the first frame of a race.
         pipeline.sync_sheet(queue, race.view.effects.sheet());
-        pipeline.upload(queue, vp, additive, alpha);
+        pipeline.upload(queue, vp, race.draw_alpha(), additive, alpha);
         let mut distort = Vec::new();
         race.extend_distort_vertices(&mut distort, right, up);
         pipeline.upload_distort(queue, &distort);

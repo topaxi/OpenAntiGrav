@@ -180,6 +180,7 @@ impl System {
             if particle.alive() {
                 particle.position = anchor.to_world(particle.position, depth);
                 particle.origin = anchor.to_world(particle.origin, depth);
+                particle.before = particle.position;
             }
         }
         world

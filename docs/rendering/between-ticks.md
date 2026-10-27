@@ -58,9 +58,29 @@ Code: `crates/raceplay/src/between_ticks.rs`. Tests: its unit tests in
   whose blend `Race::ship_swept_from` says is skipped. At alpha `1.0` it is the tick's gather
   untouched. See "Chosen, not measured" below and
   [split-screen.md](split-screen.md#cost) for the size of the difference.
+- **Particles move between ticks on the GPU** (2026-10-27). Every `.pob`
+  particle (`oag_fx::psys`: the stage's effects, the collision sparks, the
+  scenery effects, Omega's heat haze) keeps where its pool's last advance found
+  it, and each vertex of its quad carries that tick's move in two slots a
+  particle has no other use for. The vertex shader draws at
+  `position + move * (draw_alpha - 1)`, the alpha in the particle uniform
+  block, so the CPU writes the same vertices a frame as before and moves
+  nothing per frame (`crates/fx/src/psys/between_ticks.rs`). A particle born
+  this tick draws at its spawn point at every alpha and one that died this tick
+  is gone: spawns and deaths stay discrete. Every tick path first zeroes every
+  pool's move (`Race::hold_particles_still`), so a pool the path does not
+  advance (the flyby, the cosmetic ticks) draws still rather than replaying a
+  stale move. A move past 64 units draws where it lands. A `from_spawn` streak's
+  tail stays on its spawn point. Size, colour, sprite frame and roll still step
+  per tick.
 - **Stays stepped**, because it is discrete in the originals too: HUD numbers,
-  message lines, sprite frames, particle spawns and the particles themselves,
-  flashes and washes, the shield's flicker, the cannon muzzle flash.
+  message lines, sprite frames, particle spawns, flashes and washes, the
+  shield's flicker, the cannon muzzle flash. Also stepped, by choice: the
+  weather's rain and snow fields (field coordinates placed with the drawn
+  camera, so they draw with no move), the mist overlay (a screen-space zoom
+  whose wrap re-rolls its texture offsets, so a blend needs a snap on the wrap
+  tick; open) and the cloud sprites, which never move (only their roll phase
+  steps, by at most 0.002 rad a tick, invisible).
 
 ## Discontinuities draw where they land
 
@@ -137,8 +157,7 @@ they did. See that page's "Blur length" section.
   stretch, taper, fade and texture coordinate step with it. Only the head
   follows the drawn nozzle. Drawing the ring at a fractional age would make
   the whole ribbon continuous.
-- Particles (`psys::Stage`), sparks, smoke, mist and clouds advance per tick
-  and are drawn where the tick left them.
+- The mist overlay's zoom and scroll step per tick (see above).
 - The HD sprite flare's nozzle axis reads the body's forward at the tick, not
   the drawn hull's.
 - The lock-on reticle is projected inside the tick (`Race::update_sight`, a

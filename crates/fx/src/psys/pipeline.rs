@@ -53,6 +53,22 @@ pub const BLEND_ALPHA_OVER: wgpu::BlendState = wgpu::BlendState {
 /// tail of the last quads and reads as an explosion that never happened.
 pub const MAX_VERTICES: usize = MAX_INSTANCES * MAX_PARTICLES * 6;
 
+/// The particle's tick move, `psys.wesl`'s locations 5 and 6: the bytes of
+/// `GpuVertex::lightmap_texcoord` and `sun_mask`, which carry it on this
+/// pipeline alone (`super::between_ticks`).
+const SHIFT_ATTRIBUTES: [wgpu::VertexAttribute; 2] = [
+    wgpu::VertexAttribute {
+        format: wgpu::VertexFormat::Float32x2,
+        offset: std::mem::offset_of!(GpuVertex, lightmap_texcoord) as u64,
+        shader_location: 5,
+    },
+    wgpu::VertexAttribute {
+        format: wgpu::VertexFormat::Float32,
+        offset: std::mem::offset_of!(GpuVertex, sun_mask) as u64,
+        shader_location: 6,
+    },
+];
+
 /// What the last uploads left to draw, as a value: a split screen records its views at once, so
 /// each view keeps its own while a later view's upload refills the pipeline.
 #[derive(Clone, Copy, Debug, Default)]
@@ -178,10 +194,15 @@ impl Pipeline {
                     buffers: &[Some(wgpu::VertexBufferLayout {
                         array_stride: std::mem::size_of::<GpuVertex>() as u64,
                         step_mode: wgpu::VertexStepMode::Vertex,
-                        attributes: &wgpu::vertex_attr_array![
-                            0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2,
-                            4 => Float32
-                        ],
+                        attributes: &{
+                            let mut attributes = wgpu::vertex_attr_array![
+                                0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2,
+                                4 => Float32
+                            ]
+                            .to_vec();
+                            attributes.extend(SHIFT_ATTRIBUTES);
+                            attributes
+                        },
                     })],
                     compilation_options: Default::default(),
                 },
@@ -357,16 +378,23 @@ impl Pipeline {
     ///
     /// Takes `&mut self` only for the vertex counts; the writes go through
     /// `queue`, the same split [`crate::exhaust::Pipeline::upload`] uses.
+    ///
+    /// `draw_alpha` is how far between the last two ticks the frame draws,
+    /// `1.0` at a tick: the vertex shader moves each particle back along its
+    /// last tick's move by `1 - draw_alpha` ([`super::between_ticks`]). It
+    /// rides in the model matrix's first column, `w`, which no particle
+    /// shader otherwise reads.
     pub fn upload(
         &mut self,
         queue: &dyn oag_gpu::writes::Writes,
         view_projection: &[[f32; 4]; 4],
+        draw_alpha: f32,
         additive: &[GpuVertex],
         alpha_over: &[GpuVertex],
     ) {
         let mut block = [[0.0f32; 4]; 8];
         block[..4].copy_from_slice(view_projection);
-        block[4] = [1.0, 0.0, 0.0, 0.0];
+        block[4] = [1.0, 0.0, 0.0, draw_alpha - 1.0];
         block[5] = [0.0, 1.0, 0.0, 0.0];
         block[6] = [0.0, 0.0, 1.0, 0.0];
         block[7] = [0.0, 0.0, 0.0, 1.0];

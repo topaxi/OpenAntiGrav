@@ -4,6 +4,7 @@ use oag_core::math::Vec3;
 
 use oag_mesh::mesh::GpuVertex;
 
+use super::between_ticks::set_shift;
 use super::{EmitterSpec, Particle, sprite};
 
 /// Six vertices - two triangles - for one camera-facing quad.
@@ -37,6 +38,9 @@ pub(super) fn quad(
 /// onto its sprite's cell of the sheet if it has one - what a billboard
 /// emitter draws, shared by every blend class.
 ///
+/// Every corner carries the particle's tick move for the vertex shader, see
+/// [`super::between_ticks`].
+///
 /// `cap = 0.5` collapses the shader's cap/cross profile to the plain radial
 /// falloff a round sprite wants.
 #[allow(clippy::too_many_arguments)]
@@ -56,6 +60,10 @@ pub(super) fn billboard(
     };
     if let Some(rect) = spec.sheet_rect {
         sprite::map_to_cell(&mut corners, spec.atlas.cell(rect, particle.frame));
+    }
+    let shift = particle.shift();
+    for corner in &mut corners {
+        set_shift(corner, shift);
     }
     corners
 }

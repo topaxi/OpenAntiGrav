@@ -5,6 +5,20 @@
 use super::*;
 
 impl Race {
+    /// Forgets every particle pool's last tick of motion
+    /// (`oag_fx::psys::System::hold_still`), at the start of every tick path:
+    /// a pool the path then advances takes this tick's move, and one it does
+    /// not draws still between the ticks rather than replaying a stale move.
+    /// The weather's fields need none: they draw with no move at all.
+    pub(crate) fn hold_particles_still(&mut self) {
+        self.view.stage.hold_still();
+        self.view.contact.sparks.hold_still();
+        for fx in self.view.viewpoints.contact.iter_mut().flatten() {
+            fx.sparks.hold_still();
+        }
+        self.view.scenery_fx.hold_still();
+    }
+
     /// The collision sparks' geometry this frame, split by blend class.
     ///
     /// The pool and the effect it plays are handed out together because

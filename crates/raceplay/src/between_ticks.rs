@@ -273,6 +273,7 @@ impl Race {
     /// the next tick runs. For a race taken back out from behind the menus,
     /// whose last tick is long past.
     pub fn settle_poses(&mut self) {
+        self.hold_particles_still();
         self.view.poses.previous = None;
         self.view.poses.projectiles.clear();
         self.view.poses.generations = PoseGenerations {
@@ -328,6 +329,7 @@ impl Race {
     /// moves them: the first thing every tick path does.
     pub(super) fn capture_poses(&mut self) {
         self.view.poses.alpha = 1.0;
+        self.hold_particles_still();
         self.view.poses.generations = PoseGenerations {
             current: next_generation(),
             previous: self.view.poses.generations.current,

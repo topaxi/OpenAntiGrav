@@ -89,6 +89,8 @@ impl Distort {
                             offset: std::mem::offset_of!(GpuVertex, texcoord) as u64,
                             shader_location: 3,
                         },
+                        super::SHIFT_ATTRIBUTES[0],
+                        super::SHIFT_ATTRIBUTES[1],
                     ],
                 })],
                 compilation_options: Default::default(),
