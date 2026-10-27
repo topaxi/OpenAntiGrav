@@ -342,6 +342,43 @@ const LOYALTY_BLOCK: &str = "Slide_4";
 /// [`TeamScreen::bonus`].
 const BONUS_GLOBAL: &str = "FEGlobals->HD_Blue";
 
+/// The small marker an `unselectable` block that authors `ArrowColor` shows
+/// at its left: the art `Info1 Arrow` names too, here tinted by the block's
+/// own `ArrowColor`. Neither the executable's draw of it (`Block_MakeSelectable`
+/// is the selectable path and makes the 32 by 32 `HD_options_arrow`) nor its
+/// art is read: **the art is chosen from the file's name, the place measured**
+/// off an RPCS3 frame of `SPEED` (about 21 units in, centred on the box).
+pub const BLOCK_ARROW_SRC: &str = r"Data\FE\Images\NonSelectable_Arrow_HD.gtf";
+const BLOCK_ARROW_INSET: f32 = 21.0;
+
+/// [`BLOCK_ARROW_SRC`] on `block`, when it is `unselectable` and tints one.
+pub(crate) fn block_arrow(
+    block: &BlockWidget,
+    sprites: &dyn Fn(&str) -> Option<Placed>,
+    out: &mut Vec<Draw>,
+) {
+    if block.selectable {
+        return;
+    }
+    let Some(tint) = block.arrow_color else {
+        return;
+    };
+    let Some(placed) = sprites(BLOCK_ARROW_SRC) else {
+        return;
+    };
+    let (width, height) = (placed.width as f32, placed.height as f32);
+    out.push(Draw::Sprite {
+        rect: [
+            block.x + BLOCK_ARROW_INSET,
+            block.y + (block.height - height) / 2.0,
+            width,
+            height,
+        ],
+        uv: [placed.x as f32, placed.y as f32, width, height],
+        color: argb_to_rgba(tint),
+    });
+}
+
 /// The body of the screen - see the module doc for what is and is not here.
 pub(super) fn body(
     picker: &Picker,
@@ -543,6 +580,7 @@ fn stat_bar(
             _ => oag_ui::menu::block::draw(&whole, &art, (1.0, 1.0), out),
         }
     }
+    block_arrow(block, sprites, out);
     if let Some(label) = find_text(&layout.screen, name) {
         let content = label.string.clone().unwrap_or_default();
         let mut positioned = label.clone();

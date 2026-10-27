@@ -467,7 +467,7 @@ pub(in crate::picker) fn body(
             ));
         }
     }
-    records(screen, layout, frame, &extra.row_labels, &mut out);
+    records(screen, layout, frame, &extra.row_labels, sprites, &mut out);
     out
 }
 
@@ -476,6 +476,7 @@ fn records(
     layout: &Layout,
     frame: &Frame,
     row_labels: &[String; 3],
+    sprites: &dyn Fn(&str) -> Option<Placed>,
     out: &mut Vec<Draw>,
 ) {
     for block in &screen.blocks {
@@ -490,6 +491,7 @@ fn records(
             };
             oag_ui::menu::block::draw(&whole, &art, (1.0, 1.0), out);
         }
+        super::block_arrow(block, sprites, out);
         let name = block.name.as_deref().unwrap_or("");
         let label = match name
             .strip_prefix("Record.")

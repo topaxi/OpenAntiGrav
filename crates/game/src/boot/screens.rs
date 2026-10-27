@@ -161,6 +161,7 @@ pub(super) fn team_logos(team_box: bool, teams: &[oag_raceplay::catalogue::Team]
         })
     }));
     out.push(oag_ui_screens::picker::hd::hex::OUTLINE_SRC.to_string());
+    out.push(oag_ui_screens::picker::hd::BLOCK_ARROW_SRC.to_string());
     out.push(oag_ui_screens::campaign::hd::cell_brackets::SRC.to_string());
     out.sort_unstable();
     out.dedup();
