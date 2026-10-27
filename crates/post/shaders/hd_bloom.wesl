@@ -190,10 +190,16 @@ fn reduce_sum(pixel: vec2<i32>, first: bool) -> vec4<f32> {
         if (at.x <= last.x && at.y <= last.y) {
             let texel = textureLoad(source_tex, at, 0);
             var share = texel.a;
+            var value = texel.rgb;
             if (first) {
                 share = 1.0;
+                // The adaptation averages encoded values: RPCS3's readback of the
+                // original is the mean of the encoded per-pixel luma, not the
+                // encode of the linear mean (docs/rendering/hd-track-tone.md,
+                // "Decide the adaptation law"; maintainer's choice 2026-10-27).
+                value = pow(clamp(value, vec3<f32>(0.0), vec3<f32>(1.0)), vec3<f32>(1.0 / 2.2));
             }
-            rgb = rgb + texel.rgb * share;
+            rgb = rgb + value * share;
             weight = weight + share;
         }
     }
@@ -226,9 +232,9 @@ override rate_override: f32 = 0.0;
 @fragment
 fn fs_adapt(in: VertexOutput) -> @location(0) vec4<f32> {
     // The CPU half of FUN_003b4690's readback: every texel the ladder left
-    // (it stops when either side reaches 1), each read as the encoded byte the
-    // original's 8-bit surface holds, summed and divided by the count. No
-    // decode anywhere between those bytes and the luma.
+    // (it stops when either side reaches 1), already encoded by the first
+    // reduce, summed and divided by the count. No decode anywhere between
+    // those values and the luma.
     let dims = vec2<f32>(textureDimensions(source_tex));
     let count = vec2<i32>(max(round(dims * constants.uv_scale), vec2<f32>(1.0)));
     var rgb = vec3<f32>(0.0);
@@ -236,9 +242,7 @@ fn fs_adapt(in: VertexOutput) -> @location(0) vec4<f32> {
     for (var y = 0; y < count.y; y = y + 1) {
         for (var x = 0; x < count.x; x = x + 1) {
             let texel = textureLoad(source_tex, vec2<i32>(x, y), 0);
-            rgb = rgb
-                + pow(clamp(texel.rgb, vec3<f32>(0.0), vec3<f32>(1.0)), vec3<f32>(1.0 / 2.2))
-                    * texel.a;
+            rgb = rgb + texel.rgb * texel.a;
             weight = weight + texel.a;
         }
     }

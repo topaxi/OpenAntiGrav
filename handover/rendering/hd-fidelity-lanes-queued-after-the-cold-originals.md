@@ -102,14 +102,13 @@ one), or the sky map as a layer beside the probes (different sizes today, 512x25
   are the authored ones (alpha 0.5, exponent 1.0, frame 1.0 times the fade, blur steps 1/270 and 1/480), so there is no constant to wire. The gap is
   ours' fade: `adapted` is the encode of the linear ladder mean (fade about 0.04), the original's is the mean of the encoded values (fade 0.33 to 0.39).
   Feeding the encoded mean (local two-line variant, not committed) moves Anulpha's bloom from 0.19 to 0.93 of a plain-formula prediction, whole-frame luma 0.913 to 0.971,
-  Vineta K 0.970 to 0.996, Ubermall unchanged. **Next (ready to wire once the maintainer settles open item 2 below, emulator against console):** wire the encoded-mean
-  adaptation, re-make the stored `hd/*` originals at scale 100 first, then re-score. The rest of Anulpha's 0.029 is the alpha term (ours' glow-mask coverage; the
+  Vineta K 0.970 to 0.996, Ubermall unchanged. **Wired 2026-10-27** (the maintainer chose the encoded mean, as RPCS3 shows the original); re-score once the `hd/*` originals are re-made at scale 100. The rest of Anulpha's 0.029 is the alpha term (ours' glow-mask coverage; the
   original's own mask with 0.5 reproduces its board glow). The cyan top lights (original G 82, ours 61) are scene source, striped in ours, not bloom.
 - **HD's exposure adaptation law** (`docs/rendering/hd-track-tone.md`, "Decide the adaptation law"): the
   live readback matches the mean of the *encoded* per-pixel luma within 1.3 % on three circuits, ours
   encodes the linear mean (15-43 % high). The patch is six lines in `crates/post/shaders/hd_bloom.wesl`
-  (`fs_reduce_first` returns the encoded value, `fs_adapt` drops its `pow`); held until judged on the
-  cold originals, and the static read of `FUN_003b4690` says linear, so the console's rule is still open.
+  (`fs_reduce_first` returns the encoded value, `fs_adapt` drops its `pow`); **wired 2026-10-27 on the maintainer's choice**. Still open: the static read of
+  `FUN_003b4690` says linear, so whether a console (not RPCS3) averages encoded values is unconfirmed.
 - **HD's `-1.5` material LOD bias is on** (2026-10-27, `hd-texture-bias`; `docs/rendering/hd-track-tone.md`, "Texture crispness"). What is left
   of it: the 0.5-level gap against the RPCS3 fit (-0.75 matched, the filter word says -1.5; RPCS3's LOD computation or our
   `textureSampleBias` with derivative scaling), the warm light pool on the Vineta K kerb, and the Tech de Ra glass grid (missing content,
