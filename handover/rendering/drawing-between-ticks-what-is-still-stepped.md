@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-10-27
-summary: "Trails, particles, reticle, flaps, swell, flare axis landed 2026-10-27; open: Deck CPU re-measure, a 240 Hz look, mist, extrapolation"
+summary: "Trails, particles, reticle, flaps, swell, flare axis, mist landed 2026-10-27; open: Deck CPU re-measure, a 240 Hz look, extrapolation"
 ---
 
 # Drawing between ticks: what is still stepped
@@ -38,9 +38,8 @@ Pulse PSP and HD Anulpha Pass, rockets and cannon included).
    since. A player's look at one (`just play`, frame limit 240), chase view
    and cockpit, is the check a member's Xvfb at 5-7 fps cannot do. Ten
    minutes, maintainer.
-3. **The mist overlay still steps** (`oag_fx::mist::Layers::step`, a
-   screen-space zoom whose wrap re-rolls its texture offsets). A blend of its
-   12 UVs needs a snap on the wrap tick. Small; nobody has seen it judder.
+3. **The mist overlay landed 2026-10-27** (`oag_fx::mist::Layers`, blended with a
+   snap on a re-roll; `docs/rendering/between-ticks.md`, "The mist overlay").
 4. **What still steps inside the blended items, by choice**: a particle's
    size, colour, sprite frame and roll; the weather's rain and snow (field
    coordinates placed with the drawn camera); the reticle's own chase while
@@ -91,8 +90,7 @@ recipe in `the-decks-60-fps-is-anulpha-pass-submit-cost.md` in this directory) w
    minutes, maintainer.
 2. Watch a windowed race at the 240 limit on a high-refresh panel (item 2).
    Ten minutes, maintainer.
-3. Mist UV blend with a wrap snap (item 3). One to two hours.
-4. Local-craft and chase-camera extrapolation (item 5), behind an off-by-default
+3. Local-craft and chase-camera extrapolation (item 5), behind an off-by-default
    setting, with a test that a contact tick never extrapolates. Half a day to
    a day.
 
@@ -118,6 +116,6 @@ what happened to it. "Landed" means it draws between ticks now.
 | Motion blur's previous pose | `MotionState` | `prev_mvp` | per frame | landed (per drawn frame) |
 | Lock-on reticle | `update_sight` in the tick | HUD | continuous | landed (`Race::drawn_sight`) |
 | Airbrake flaps, shield swell, HD sprite axis, cannon flash | per tick | various | small scalars | landed; the flash stays stepped |
-| Particles, sparks, smoke, mist, clouds | `stage.advance` | `upload_particles` and siblings | spawn discrete, motion continuous | landed on the GPU; mist open, clouds static |
+| Particles, sparks, smoke, mist, clouds | `stage.advance` | `upload_particles` and siblings | spawn discrete, motion continuous | landed on the GPU, mist blended on the CPU with a re-roll snap; clouds static |
 | HUD numbers, messages, sprite frames, countdown | per tick | HUD | discrete | stepped, correct |
 

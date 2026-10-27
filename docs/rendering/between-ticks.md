@@ -112,9 +112,7 @@ Code: `crates/raceplay/src/between_ticks.rs`. Tests: its unit tests in
   message lines, sprite frames, particle spawns, flashes and washes, the
   shield's flicker, the cannon muzzle flash. Also stepped, by choice: the
   weather's rain and snow fields (field coordinates placed with the drawn
-  camera, so they draw with no move), the mist overlay (a screen-space zoom
-  whose wrap re-rolls its texture offsets, so a blend needs a snap on the wrap
-  tick; open) and the cloud sprites, which never move (only their roll phase
+  camera, so they draw with no move), and the cloud sprites, which never move (only their roll phase
   steps, by at most 0.002 rad a tick, invisible).
 
 ## Discontinuities draw where they land
@@ -185,6 +183,16 @@ drawn frame now, so its shutter is a fraction of the real frame delta; frames
 drawn at a tick exactly (captures, a paused race) still measure one tick, as
 they did. See that page's "Blur length" section.
 
-## Open
+## The mist overlay
 
-- The mist overlay's zoom and scroll step per tick (see above).
+`oag_fx::mist::Layers` keeps the previous tick's quads (UV rectangle, alpha, roll)
+and `Layers::quads`/`alphas` blend to the current ones by the draw alpha; the
+step itself stays per tick. The `% 1.0` that wraps a layer's offset is undone by
+moving the old offset a whole texture over, so the blend never sweeps the
+texture. A layer snaps (draws the current tick) when it re-rolled its offsets, or
+when a tick's scroll moved more than 0.25 (a camera cut); `Layers::hold` clears
+the blend on a tick that does not step. On Fort Gale (reversed) over 1,500
+ticks each layer re-rolled about every 28 ticks (53 and 50 times), at a layer
+alpha of at most 0.026 of the authored 0.3, and the largest scroll step was
+0.059. Alpha-1 captures on Fort Gale and on a circuit without mist hash
+identically before and after.

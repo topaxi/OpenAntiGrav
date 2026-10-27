@@ -230,7 +230,7 @@ mod race {
         let weather = race.scenery_fx().weather();
         let mist = weather.mist().expect("Fort Gale authors the mist");
         assert!((mist.opacity() - 0.3).abs() < 1e-6, "{}", mist.opacity());
-        assert!(mist.vertices(0.6249).is_some());
+        assert!(mist.vertices(0.6249, 1.0).is_some());
 
         let loaded = load(r"07_Track\track.vex").expect("image");
         let mut race = race::Race::start(loaded.setup);
