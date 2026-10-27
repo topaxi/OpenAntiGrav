@@ -21,6 +21,7 @@ use oag_ui::frontend::{Align, Draw};
 mod backdrop;
 mod face;
 mod hud_scale;
+pub mod inset;
 mod quad;
 mod resources;
 mod scene;
@@ -180,6 +181,9 @@ pub struct Renderer {
     /// as. [`Space::PSP`] until someone says otherwise, which is what every
     /// caller that draws our own layouts - the loading screen, the menus, the HUD.
     space: Space,
+    /// The scale the widgets of a list are drawn at about the grid's centre: a title's
+    /// `Safe Area Setting` on its front end, `1.0` everywhere else. See [`inset`].
+    inset: f32,
     /// How a raster HUD is stretched - see [`hud_scale`].
     hud: HudStretch,
 }
@@ -201,6 +205,18 @@ impl Renderer {
     /// screen or the menus, whose rects this project authors at 480x272.
     pub fn set_space(&mut self, space: Space) {
         self.space = space;
+    }
+
+    /// Draws every widget of the lists it is given at `scale` about the grid's centre; the
+    /// pictures behind them are not moved. `1.0` (the default) draws as authored. See [`inset`].
+    pub fn set_inset(&mut self, scale: f32) {
+        self.inset = scale;
+    }
+
+    /// The scale set by [`Self::set_inset`].
+    #[must_use]
+    pub fn inset(&self) -> f32 {
+        self.inset
     }
 
     /// Builds the pipelines for a target of `format`.
@@ -435,6 +451,7 @@ impl Renderer {
             target_format: format,
             quads: Vec::new(),
             space: Space::PSP,
+            inset: 1.0,
             hud: HudStretch::default(),
         })
     }
@@ -645,7 +662,28 @@ impl Renderer {
         let mut scene_at = None;
         let scissors = std::mem::take(&mut self.scissors);
         let mut segments: Vec<(u32, [u32; 4])> = Vec::new();
+        let inset = inset::placement(self.space, self.inset);
+        // A marquee row's clip is two x positions in the grid, moved with the row.
+        let clip = clip.map(|(at, left, right)| match &inset {
+            Some(p) => (
+                at,
+                left * p.scale + p.offset[0],
+                right * p.scale + p.offset[0],
+            ),
+            None => (at, left, right),
+        });
+        let space = self.space;
+        // Moved ahead of the loop so a backdrop, which the loop borrows past its own turn, is
+        // the list's and not a copy.
+        let moved: Vec<Option<Draw>> = match &inset {
+            Some(at) => list
+                .iter()
+                .map(|draw| inset::inset(draw, at, space))
+                .collect(),
+            None => Vec::new(),
+        };
         for (index, draw) in list.iter().enumerate() {
+            let draw = moved.get(index).and_then(Option::as_ref).unwrap_or(draw);
             // Where this draw's quads begin is where a view's scissor does.
             while let Some(&(at, rect)) = scissors.get(segments.len()) {
                 if at > index {

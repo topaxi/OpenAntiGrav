@@ -3934,7 +3934,9 @@ Game Options carry `Screen Size` / `Safe Area Setting`, and the RPCS3 profile
 the frame came from is the maintainer's save, so the scale may be that
 setting rather than the default. A fresh-profile boot with the setting at its
 default is the measurement that settles it; until then nothing here is
-inset. Not the offset's origin either: a pure safe-area scale about the
+inset. **Superseded 2026-10-27**: on the 96 save the inset is centred, 0.96, and ours now draws it
+(`docs/formats/hd-frontend.md`, "The front end is drawn inside the safe area"); the 0.904 and the (+150, -8)
+offset above came from a single frame with an uncentred reading. Not the offset's origin either: a pure safe-area scale about the
 centre would not move the centre, and this one does.
 
 ### The hex grid, 2026-10-08 (`hd-track-select`)

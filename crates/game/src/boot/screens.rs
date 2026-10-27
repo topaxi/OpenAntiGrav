@@ -399,6 +399,8 @@ pub(super) fn selection_layouts(
     font: &oag_ui::font::Atlas,
     menu_font: Option<&oag_ui::font::Atlas>,
     native_default: bool,
+    // `MenuSkin::default_face_is_row_face`: HD's rows are the `default` face, ratio 1.
+    default_is_row_face: bool,
     space: oag_display::space::Space,
     borrows_ps2_split: bool,
     ship_pose: Option<oag_title::ShipPose>,
@@ -410,7 +412,11 @@ pub(super) fn selection_layouts(
 ) {
     let faces = oag_ui_screens::picker::FaceScales {
         default: menu_font.map_or(
-            oag_ui_screens::picker::FaceScales::default().default,
+            if default_is_row_face {
+                1.0
+            } else {
+                oag_ui_screens::picker::FaceScales::default().default
+            },
             |menu| font.line_height / menu.line_height,
         ),
         native_default,

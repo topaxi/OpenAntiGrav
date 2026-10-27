@@ -478,7 +478,7 @@ impl Session {
                     stage.update(self.controls.buttons_mut());
                     // The chooser draws in the PSP's grid, having no source
                     // to take one from - see `Stage::launcher`.
-                    stage.pointer(&pointer::in_grid(pointer, Space::PSP, rect));
+                    stage.pointer(&pointer::in_grid(pointer, Space::PSP, rect, 1.0));
                 }
                 Stage::Loading(stage) => {
                     stage.screen.set_load_stage(progress.load_stage);
@@ -490,7 +490,7 @@ impl Session {
                     // The language picker takes the pointer itself; every
                     // other screen in the chain waits for a button and
                     // reads a click as one. See `session::pointer`.
-                    let grid = pointer::in_grid(pointer, stage.frontend.space(), rect);
+                    let grid = pointer::in_grid(pointer, stage.frontend.space(), rect, 1.0);
                     if !stage.frontend.pointer(&grid) {
                         pointer::press_for_click(&mut self.controls, &grid);
                     }
@@ -558,7 +558,7 @@ impl Session {
                     // picture. Confirming may hand the window to a loading
                     // screen, so the catch-up loop stops the same way it does
                     // for a race the menu just started.
-                    let grid = pointer::in_grid(pointer, stage.skin.space(), rect);
+                    let grid = pointer::in_grid(pointer, stage.skin.space(), rect, stage.renderer.inset());
                     if stage.picker.is_some() {
                         self.tick_picker(&grid);
                         if !matches!(self.stage, Stage::Menu(_)) {
@@ -787,7 +787,7 @@ impl Session {
                         if windowed {
                             self.controls.fold_presses(&END_SCREEN_BUTTONS);
                         }
-                        let grid = pointer::in_grid(pointer, space, rect);
+                        let grid = pointer::in_grid(pointer, space, rect, 1.0);
                         let grid = if windowed {
                             pointer::end_screen_pointer(grid, space, &seat_pointers)
                         } else {

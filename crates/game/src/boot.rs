@@ -833,6 +833,7 @@ pub fn load_shell(
         &font,
         menu_font.as_ref(),
         fonts::default_in_own_slot(menu_skin),
+        menu_skin.default_face_is_row_face,
         space,
         title
             .front_end

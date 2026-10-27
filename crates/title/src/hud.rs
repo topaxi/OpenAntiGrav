@@ -880,6 +880,16 @@ pub struct HudSway {
     pub x_per_lean: i16,
 }
 
+impl HudArt {
+    /// The scale this title's `Safe Area Setting` draws its HUD and its front end at, for the
+    /// player's `percent` (`None`: the title's default): `1.0` where the title has no such
+    /// option. See [`SafeArea`].
+    #[must_use]
+    pub fn safe_area_scale(&self, percent: Option<u8>) -> f32 {
+        self.safe_area.map_or(1.0, |area| area.value.scale(percent))
+    }
+}
+
 /// A title's `Safe Area Setting`: a slider in percent whose value is how much of the screen the
 /// HUD uses, the whole HUD drawn at `percent / 100` about the screen's centre.
 ///

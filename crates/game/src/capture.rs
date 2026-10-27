@@ -1076,6 +1076,15 @@ pub fn run(
     };
     let mut renderer = Renderer::new(&device, &queue, format, video_format, face, &sprites)?;
     renderer.set_space(space);
+    // A menu page is drawn inside the title's `Safe Area Setting`, as the live menus are
+    // (`main::session::menus`); a boot screen is not.
+    if options.menu_page.is_some() {
+        renderer.set_inset(
+            title
+                .hud_art
+                .safe_area_scale(options.settings.graphics.hud_safe_area),
+        );
+    }
     if let Some(assets) = &fury_backdrop {
         assets.install(&mut renderer, &device, &queue);
     }

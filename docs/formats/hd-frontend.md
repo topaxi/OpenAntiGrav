@@ -2446,6 +2446,8 @@ none has been taken yet:**
     range 80-100 step 2, and the save the HUD pairs came from holds 96, which draws the HUD at
     about 0.96 ([hd-hud.md](hd-hud.md#the-whole-hud-is-drawn-at-the-safe-area-setting-hd-hud-leftovers-2026-10-21));
     the front end's 0.904 is what 90 would give but is still not read off a fresh profile.
+    **Answered 2026-10-27 (`hd-fe-safe-frame`)**: the front end is drawn at the same `Safe Area Setting`
+    as the HUD, see [the front end is drawn inside the safe area](#the-front-end-is-drawn-inside-the-safe-area).
 
 **Not attempted here:**
 
@@ -2479,3 +2481,32 @@ crate existed. What consumes the page today:
 
 [ADR-0022]: ../architecture/adr/0022-title-packages.md
 [ADR-0023]: ../architecture/adr/0023-boot-sequence-as-title-data.md
+
+## The front end is drawn inside the safe area
+
+**2026-10-27, `hd-fe-safe-frame`.** HD's front-end widgets are drawn at `Safe Area Setting / 100` about
+the centre of the 1920x1080 grid; the picture behind them (the Fury backdrop, the scene backdrop,
+movies, the page's full-grid clear) is not. Measured on the three 1920x1080 RPCS3 pairs (Ship Select,
+Track Select, Campaign Select) on the save the HUD pairs came from (setting 96): the title rule and
+footer rule span x 192..1728 where the authored layout spans 160..1760 (1536/1600 = 0.96), the title
+text at y 76 and the footer rule at y 990 where unscaled they sit at 56 and 1010 (centred on 540).
+**Confidence 85**: three pages, one save value, extents agree to a pixel after the change
+(`ink` extent 191..1728 on ours), the same value the HUD reads (maintainer: "the HUD also draws in a
+safe area, it probably shares the same value"). The consumer in the executable was not read, so the
+link to the slider rests on the value 96 matching on the same save, not on an address.
+
+Ours: `oag_game::render::inset` (one `Renderer::set_inset`, applied per draw in `render_with`,
+`MenuStage` and the headless menu-page capture), the scale from `HudArt::safe_area_scale`
+(`[graphics] hud_safe_area`, default 90 = the disc's), pointer hits moved back out in
+`session::pointer::in_grid`. The `Flyer` cards (campaign cards) obey it too (`obeySafeZone="true"`
+on the widget); the scene `.vex` (`obeySafeZone="false"`) and the `.bik` (`ignoreSafeZoneFullscreen`)
+do not. Boot screens, loading and the end-of-race screens are **not** inset (unmeasured).
+
+**Row text.** A selection screen's `font="default"` rows were drawn at 13/22 (Pulse's `default` over
+`menu`) of their authored size on HD because HD loads no `menu`-role face; the ratio is 1 there
+(`MenuSkin::default_face_is_row_face`, HD and Omega true, Pure false: Pure's pair got worse, 7.83 to
+8.09, with 1.0). Ship Select stat labels and the Track Select records table now draw at the authored size.
+
+Omega: **checked, differs**: Omega's original is 1:1 (`omega/menu-ship-select` theirs spans x 159..1760,
+as ours does) and authors no `Safe Area Setting` slider, so `safe_area` is `None` and nothing moves.
+The row-text fix applies to Omega's picker by the same skin flag (HD's dialect), untested against a pair.

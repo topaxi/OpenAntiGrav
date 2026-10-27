@@ -40,15 +40,25 @@ use crate::menu_stage::MenuStage;
 
 /// `pointer`, with its position moved from window pixels into `space`'s
 /// grid through the aspect rectangle `rect` every stage draws into.
-pub(super) fn in_grid(pointer: Pointer, space: Space, rect: (f32, f32, f32, f32)) -> Pointer {
+///
+/// `inset` is the scale the stage draws its widgets at about the grid's centre
+/// (`Renderer::inset`, `1.0` for a stage drawn as authored): a point is moved back out of it
+/// so a click lands on the widget drawn under it, and a drag, being a distance, is divided.
+pub(super) fn in_grid(
+    pointer: Pointer,
+    space: Space,
+    rect: (f32, f32, f32, f32),
+    inset: f32,
+) -> Pointer {
+    let out = |at| oag_game::render::inset::uninset(to_grid(space, rect, at), inset, space);
     // A drag is a distance, so it is the difference of two mapped points
     // rather than a point: the letterbox offset cancels.
     let origin = to_grid(space, rect, (0.0, 0.0));
     let tip = to_grid(space, rect, pointer.drag);
     Pointer {
-        at: pointer.at.map(|at| to_grid(space, rect, at)),
-        press_at: pointer.press_at.map(|at| to_grid(space, rect, at)),
-        drag: (tip.0 - origin.0, tip.1 - origin.1),
+        at: pointer.at.map(out),
+        press_at: pointer.press_at.map(out),
+        drag: ((tip.0 - origin.0) / inset, (tip.1 - origin.1) / inset),
         ..pointer
     }
 }
@@ -68,7 +78,7 @@ pub(super) fn end_screen_pointer(
     }
     seats
         .iter()
-        .map(|&(pointer, rect)| in_grid(pointer, space, rect))
+        .map(|&(pointer, rect)| in_grid(pointer, space, rect, 1.0))
         .find(|pointer| !pointer.is_idle())
         .unwrap_or(first)
 }

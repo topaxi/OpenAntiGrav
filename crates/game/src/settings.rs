@@ -457,12 +457,13 @@ pub struct Graphics {
     /// See [`oag_display::display::HudScale`] and `docs/ui/hud-skins.md`.
     #[serde(default)]
     pub hud_scale: oag_display::display::HudScale,
-    /// How much of the screen the HUD uses, in percent: the title's own `Safe Area Setting`.
+    /// How much of the screen the HUD and the front-end pages use, in percent: the title's own
+    /// `Safe Area Setting`. One value for both (maintainer, 2026-10-27).
     ///
     /// **Read only by a title that has the option** (`oag_title::HudArt::safe_area`, HD alone);
     /// the HUD is drawn at `percent / 100` about the centre of the screen, the value held to the
     /// title's slider (HD: 80 to 100 in steps of 2). Absent means the title's own default (HD:
-    /// 90). Taken when a race loads. No menu row: a one-line settings-file choice, the way
+    /// 90). Taken when a race loads or the menus open. No menu row: a one-line settings-file choice, the way
     /// [`Self::hud_scale`] is. See `docs/formats/hd-hud.md`.
     #[serde(default)]
     pub hud_safe_area: Option<u8>,
