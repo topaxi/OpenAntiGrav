@@ -153,9 +153,8 @@ wrong picture, so each fix is judged against the original frame, not a green tes
 
 ## Open
 
-1. **Confirm the mode first.** Ask the maintainer which mode and circuit showed
-   the untextured meshes. Zone race means cause 2 (by design). Empire Climb
-   (`tower`) means cause 1.
+1. **Mode confirmed 2026-10-27: Empire Climb (`tower`), normal race** (maintainer).
+   So cause 1, not cause 2. Cause 2 stays by design; cause 3 is still open.
 2. **Census (counts only, no behaviour change).** In `psp2::build` and
    `bind_textures`, add to `psp2::Report`:
    - per submesh: empty texcoords (path a), all-zero texcoords (the flat case),
@@ -178,9 +177,6 @@ wrong picture, so each fix is judged against the original frame, not a green tes
 
 ## Next Steps
 
-1. Ask the maintainer for the mode and circuit of the untextured meshes (one
-   question, no code).
-2. If Empire Climb or another base circuit: a lane runs the cause 1 census above
-   and reports, per circuit, the flat-submesh count and its triangles.
-3. If Zone race: close this thread as by design, and write the Vita flat-colour
-   law into `2048-material-params.md` if it is not already there.
+1. A lane runs the cause 1 census above (Open item 2) and reports, per circuit,
+   the flat-submesh count and its triangles, Empire Climb first.
+2. Then fix cause 1 (Open item 4), judged against an original Empire Climb frame.
