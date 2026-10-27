@@ -14,7 +14,7 @@ unlimited loop).
 - **Knobs** (`session/cpu_governor.rs`): `shadows mapped` down to the title's authored tier
   (`original`, or `off` where the title authors none), then `model_detail` `maximum` to `high` to
   `original`. Nothing goes below what a title authors, so a default profile has no steps.
-- **Setting:** `graphics.cpu_governor` (CPU GOVERNOR on the advanced graphics page), **off by default** by maintainer decision, pending more knobs or cases with stronger impact (the unlocked measurement below recommends on).
+- **Setting:** `graphics.cpu_governor` (CPU GOVERNOR on the advanced graphics page), **on by default** (maintainer decision 2026-10-27, from the unlocked Deck numbers below).
 - **Log:** one `cpu governor:` info line per change (what, CPU and GPU ms, budget); `--frame-log`
   lines end in `governor=N`.
 
@@ -103,10 +103,9 @@ At limit 500 it steps the same three knobs and fps goes 299.7 to 328.9 (+10 %), 
 90.0 fps, p99 11.19 to 11.24 ms, CPU row 6.8 against 6.7, and `governor=0` with no change line in either on run.
 Nothing was shed, so nothing visible was lost where the race holds its target.
 
-**Verdict: recommend default on; the default stays off by maintainer decision** until there are more
-knobs or cases with stronger impact. fps and mean p99 improve beyond run-to-run noise when the frame rate is
-unlocked (HD +3.7 %, Pulse +10 % where the CPU is over budget), and in a capped race that holds its target the
-governor never acts. A settings copy with no `cpu_governor` key stays off. The earlier "0.25 ms is not worth trading tiers" reading was a capped
+**Verdict: default on (maintainer decision 2026-10-27, unlocked Deck numbers).** fps and mean p99 improve beyond
+run-to-run noise when the frame rate is unlocked (HD +3.7 %, Pulse +10 % where the CPU is over budget), and in a
+capped race that holds its target the governor never acts. A settings file with no `cpu_governor` key reads as on. The earlier "0.25 ms is not worth trading tiers" reading was a capped
 measurement; the same 0.25 ms is 3.7 % of frame time once the cap is gone. The cost is real: when it acts it
 trades the player's own shadow map and model detail tiers for a few percent, which is why a profile without
 extras, and a race at its target, are untouched.

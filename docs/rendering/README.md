@@ -70,8 +70,8 @@
   redundant per-frame uploads were removed (byte-identical) - see
   [`frame-thread-cpu.md`](frame-thread-cpu.md)
 - **A CPU governor beside DRS** (2026-10-27, Steam Deck): sheds this project's own shadow map and
-  model detail when the CPU alone is over the frame budget; off by default; the unlocked
-  Deck run recommends on (HD +3.7 % fps, Pulse +10 %, inert at a held target) - see [`cpu-governor.md`](cpu-governor.md)
+  model detail when the CPU alone is over the frame budget; on by default (maintainer, 2026-10-27; unlocked
+  Deck run: HD +3.7 % fps, Pulse +10 %, inert at a held target) - see [`cpu-governor.md`](cpu-governor.md)
 - **Fullscreen queues a third image** (2026-10-26): a two-image swapchain (vsync `off`/`on`
   queued one frame) ran a 120 Hz Mac at 40 fps fullscreen against 102 windowed, the wait in
   `PRESENT`; a fullscreen surface now queues at least two frames - see

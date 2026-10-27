@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-10-27
-summary: "CPU-bound devices: GPU-driven draws, bundles, GPU particles/trails/shadow rays; governor landed off (on recommended), self-check open"
+summary: "CPU-bound devices: GPU-driven draws, bundles, GPU particles/trails/shadow rays; governor landed on by default, self-check open"
 categories: [rendering, tooling]
 ---
 
@@ -88,5 +88,5 @@ governor on against off; the target is the same fps with fewer knobs stepped dow
 
 ## Next Steps
 
-1. Lane 6 (governor) landed, off by default (maintainer: until stronger knobs); its self-check is the open item above.
+1. Lane 6 (governor) landed, on by default (maintainer, 2026-10-27); its self-check is the open item above.
 2. Lanes 1 to 5 open the next drive in order, each with its Deck before/after.
