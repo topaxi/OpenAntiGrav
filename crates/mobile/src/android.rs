@@ -87,7 +87,9 @@ pub fn take_launch_args() -> Vec<String> {
         match line.split_once('=') {
             Some((name, value))
                 if name.starts_with("OAG_")
-                    && name.bytes().all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'_') =>
+                    && name
+                        .bytes()
+                        .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'_') =>
             {
                 // SAFETY: called from `android_main` before any thread of ours exists.
                 unsafe { std::env::set_var(name, value) };
