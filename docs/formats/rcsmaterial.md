@@ -2280,6 +2280,48 @@ frame at the lead's matched pose is byte-identical before and after. Test:
 Zone variant's own grid-alpha glow term and paraboloid reflection are not drawn (as off Zone); whether the
 Zone floor's alpha (`@0x82 MOV H0.w`, a literal the decoder prints as 0) means anything for a blended pass.
 
+## Talon's race-pair road decals: the teal fill is the wave's phase, and the engine `time` at the capture is unread (2026-10-27, `hd-talons-road-decals`)
+
+**Claim (not met, cause found):** on `hd-race/talons-pack` the large arrow and strip panels on the road draw as filled
+translucent teal where the original draws thin white outlines over the dark hex road. **Which draws.** A skip sweep
+(`OAG_SKIP_SLOT`, the whole frame's luma change per slot): slot **330** `mag_effect_loop_opaque` (centre strips: 48.3
+change in the centre box) and slot **422** `mageffectloop` (the blended pass; 40.2 in the lower-left box), both on
+`mag_emiss_floor_seethru_talons.gtf` (1024x512 DXT1: the panels' bluish-grey fill, black outside, alpha 255 but for 0.3 %
+of texels), `glass_etched_tech.gtf` (the grid: panel outlines and hexagons) and `ds_mag_wave_c.gtf`. No other slot of 0-439
+moves either box by more than 0.1. The program is the one the page already wires (block `@0x6ae0` / `@0x6b20`:
+`light * grid * (ramp + c) + (grid + ramp) * d`, `d = e / (1 - m * Colour)`, `m` the wave when `e.a = 1`).
+
+**The teal is the dodge term.** Drawing `(grid + ramp) * d` alone shows all of it; the light term alone is a grey fill.
+At the pair's instant ours has `e.a = 1` and the wave's green channel at 1 over every panel (the wave texture is dark
+except one bright horizontal band, about 10 % of its height, and `uv * 0.2 + time` puts that band over the whole panel at
+`time = 0`), so `d.g = e.g / max(1 - 1, 0.05)` is the divisor floor and the panels glow. Ours' `time` is the race clock
+(0 at `--ticks 0`); the original's is **engine parameter 0**, the frame context's global seconds clock
+(`engine-trail.md`, "The draw state's two non-material constants": it ran 48.97 to 119.37 in one session, and the two HD
+ship frames in `hd-ship-materials.md` read 186.4 and 712.7), not the race clock. Only its fraction matters (the wave repeats
+once a second). **Sweep** (`--anim-seconds t`, which also moves the other scenery clocks; mean abs grey difference to
+`theirs.png`; boxes A `640,730 120x120` inside the lower-left panel, B `940,300 100x180` on the centre strip, B holds the
+original's purple lightning): whole frame 46.63 (t 0.0), 46.80 (0.1), 46.48 (0.2), 46.10 (0.3 to 0.5), 46.19 (0.6), 46.27
+(0.7), 46.26 (0.8), 46.44 (0.9); mean luma of B, ours minus theirs, +16.3, +15.6, +7.2, +2.3, +1.0, +0.6, -0.2, -0.5, -0.4,
++9.5 over the same steps; mean luma of A, ours minus theirs, 58.6 at 0.0 and 48.3 to 53.0 from 0.3 on. From about 0.3 to 0.8 the
+teal is gone; the panel still draws as a grey translucent fill (term A) lighter than the original's near-transparent
+interior and without its bright outline, so **phase explains the colour and not the whole picture** (the whole-frame number
+moves 0.5 at best). A phase is not committed: picking the fraction that matches would be fitting the picture.
+
+**What is unread, and where.** The original's `time` at the capture. Its storage is the static vec4 at guest
+`0x00c50c20`: entry 0 of the engine parameter table (`hash 0x906b67ba`, kind `0xc000`, value pointer `+0x18`) reads
+`0x00c50c20` in every copy of the table in `hd-race-talons-venom-pack.SAVESTAT` (38 hits; the other entries' value pointers
+are `0xc490c0`, `0xc49000`, ...). The pair's capture does not record it. **To close it:** at the pair's stop run
+`rpcs3-drive.py capture --region 0xc50c20:16` (a `<chain>:<len>` region, `docs/reverse-engineering/rpcs3-capture.md`), read
+the four equal big-endian floats `T`, and pass ours `--world-clock-offset (T - race_clock_s)` (that flag moves only the world
+meshes' clock, which `scene.time` follows). The savestate itself was not decoded offline: its RAM image is not linear in file
+offsets here (a `0x44444444` fill pattern reads as 785.07 as a float and is not the clock; `.rodata` strings are absent).
+Unread besides: the paraboloid reflection term (unit 2, the program adds it scaled by `grid`), and the panel's bright outline,
+which the original shows at full white and ours draws faint.
+
+**Omega / 2048:** checked, not wired. `2048-material-params.md` lists `mageffect08` as a `time`-only material; Omega's own
+wave program is not wired (`omega-status.md`), so the same mechanism (a global seconds clock into a one-second wave) would
+apply there and the same unread-clock question follows it. The loop pair on Omega's Talon's Junction was not opened.
+
 ## Omega and 2048 draw their see-through materials off the state word (2026-10-05, `transparent-floors`)
 
 Omega and 2048 authored HD's state word on every material (PS4 header `+0x22`, Vita `+0x12`; evidence
