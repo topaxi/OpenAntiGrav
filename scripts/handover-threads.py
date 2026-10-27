@@ -9,14 +9,18 @@ Every thread under `handover/<category>/` opens with a frontmatter block:
     updated: 2026-10-26
     summary: "One line, at most 150 characters, saying what is OPEN."
     categories: [rendering]      # optional: extra categories, on top of the directory
+    size: M                      # optional: effort for one member, one of SIZES
+    difficulty: medium           # optional: how settled the path is, one of DIFFICULTIES
     ---
 
 `status` is one of STATUSES, `titles` a list from TITLES (or `all`),
 `updated` an ISO date, `summary` one line of at most 150 characters.
+`size` and `difficulty` are optional estimates; a thread without them is
+listed with `?`.
 `scripts/check-handover-size.py` (`just check-handover`) refuses a thread
 whose block is missing or invalid; this module owns the parser and the rules.
 
-    python3 -I scripts/handover-threads.py [--status S] [--title T] [--category C] [--counts|--paths]
+    python3 -I scripts/handover-threads.py [--status S] [--title T] [--category C] [--size Z] [--difficulty D] [--counts|--paths]
 
 Standard library only.
 """
@@ -42,7 +46,12 @@ STATUSES = (
 )
 TITLES = ("pulse", "pure", "hd", "2048", "omega", "all")
 CATEGORIES = ("rendering", "gameplay", "frontend", "tooling", "audio")
-KEYS = ("status", "titles", "updated", "summary", "categories")
+#: Effort for one member: XS under an hour, S a few hours, M half a day, L a day, XL more than a day (split it).
+SIZES = ("XS", "S", "M", "L", "XL")
+#: How settled the path is: easy (known steps), medium (a few unknowns), hard (an unread law, a design question,
+#: or a risk of a negative result).
+DIFFICULTIES = ("easy", "medium", "hard")
+KEYS = ("status", "titles", "updated", "summary", "categories", "size", "difficulty")
 REQUIRED = ("status", "titles", "updated", "summary")
 SUMMARY_MAX = 150
 
@@ -125,6 +134,10 @@ def parse(path: Path) -> tuple[dict | None, list[str]]:
         errors.append("`summary` is empty")
     elif len(summary) > SUMMARY_MAX:
         errors.append(f"`summary` is {len(summary)} characters, over {SUMMARY_MAX}")
+    if "size" in fields and fields["size"] not in SIZES:
+        errors.append(f"size `{fields['size']}` is not one of {', '.join(SIZES)}")
+    if "difficulty" in fields and fields["difficulty"] not in DIFFICULTIES:
+        errors.append(f"difficulty `{fields['difficulty']}` is not one of {', '.join(DIFFICULTIES)}")
     cats = fields.get("categories", [])
     if not isinstance(cats, list) or any(c not in CATEGORIES for c in cats):
         errors.append(f"`categories` must be a list from {', '.join(CATEGORIES)}")
@@ -144,6 +157,8 @@ def main() -> int:
     ap.add_argument("--status", choices=STATUSES)
     ap.add_argument("--title", choices=TITLES, help="threads naming this title (or `all`)")
     ap.add_argument("--category", choices=CATEGORIES, help="directory or extra category")
+    ap.add_argument("--size", choices=SIZES)
+    ap.add_argument("--difficulty", choices=DIFFICULTIES)
     ap.add_argument("--counts", action="store_true", help="print the count per status")
     ap.add_argument("--paths", action="store_true", help="print only the paths, one per line (for shuf)")
     args = ap.parse_args()
@@ -162,6 +177,10 @@ def main() -> int:
             continue
         if args.category and args.category not in categories_of(path, fields):
             continue
+        if args.size and fields.get("size") != args.size:
+            continue
+        if args.difficulty and fields.get("difficulty") != args.difficulty:
+            continue
         rows.append((path, fields))
 
     if args.counts:
@@ -178,7 +197,8 @@ def main() -> int:
         return 1 if bad else 0
     for path, f in rows:
         titles = ",".join(f["titles"])
-        print(f"{f['status']:<18} {titles:<12} {f['updated']} {path.relative_to(ROOT)}")
+        sizing = "%s/%s" % (f.get("size", "?"), f.get("difficulty", "?"))
+        print(f"{f['status']:<18} {titles:<12} {sizing:<9} {f['updated']} {path.relative_to(ROOT)}")
         print(f"    {f['summary']}")
     print(f"{len(rows)} threads", file=sys.stderr)
     return 1 if bad else 0

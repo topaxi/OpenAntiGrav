@@ -2,6 +2,8 @@
 status: re-first
 titles: [all]
 updated: 2026-10-27
+size: L
+difficulty: medium
 summary: "Offer the safe area (screen size) as a menu setting: HD's own Screen Size slider first, find Pulse PS2's, a shared invented screen elsewhere"
 ---
 

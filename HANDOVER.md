@@ -50,6 +50,8 @@ titles: [pulse, hd]     # from pulse, pure, hd, 2048, omega; or [all]
 updated: 2026-10-26     # newest date in the file
 summary: "One line, at most 150 characters, saying what is OPEN, not what landed."
 categories: [rendering] # optional: extra categories on top of the directory
+size: M                 # optional: XS | S | M | L | XL, effort for one member
+difficulty: medium      # optional: easy | medium | hard, how settled the path is
 ---
 ```
 
@@ -60,7 +62,12 @@ categories: [rendering] # optional: extra categories on top of the directory
 - **blocked-hardware**: the next step needs a device or a machine beyond the workstation (Steam Deck, S24, a Mac, iOS, a second monitor); a lane runs it when the maintainer offers the device.
 - **parked**: nothing scoped; revisit on demand.
 
-List them with `just threads [--status S] [--title T] [--category C]` (`--counts` prints the tally). "What is ready to wire for Pulse?" is `just threads --status ready-to-wire --title pulse`. `just check-handover` refuses a thread with missing or invalid frontmatter, a status outside the set, or a summary over 150 characters.
+`size` and `difficulty` are optional estimates for drawing lanes; add them when writing or updating a thread if you can judge them, and leave them out rather than guess.
+
+- **size**: XS under an hour, S a few hours, M half a day, L a day, XL more than a day (split the thread).
+- **difficulty**: easy (the steps are known), medium (a few unknowns), hard (an unread law, a design question, or a likely negative result).
+
+List them with `just threads [--status S] [--title T] [--category C] [--size Z] [--difficulty D]` (`--counts` prints the tally). "What is ready to wire for Pulse?" is `just threads --status ready-to-wire --title pulse`. `just check-handover` refuses a thread with missing or invalid frontmatter, a status, size or difficulty outside its set, or a summary over 150 characters.
 
 Counts when this section was written (re-run `just threads --counts`, do not trust these):
 
