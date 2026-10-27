@@ -401,6 +401,12 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) overlay: bool,
 
+    /// With `--screenshot`: leave out what this build adds to the disc's own front end
+    /// (2048's RACEBOX, REMIX and MULTIPLAYER tiles on `GameModeChoice`), so a frame can be
+    /// compared against a capture of the original's menu definition. A player always has them.
+    #[arg(long)]
+    pub(crate) original_menu: bool,
+
     /// `--menu`, `--menu-page`, `--menu-anim-phase`, `--menu-picker-seconds`
     /// and `--menu-prompt` - see [`extra::MenuArgs`].
     #[command(flatten)]

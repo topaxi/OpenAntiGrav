@@ -213,15 +213,13 @@ fn the_pad_chooses_and_confirms_a_mode_with_one_press() {
 }
 
 #[test]
-fn the_pad_walks_right_to_the_tick_and_a_network_mode_is_refused_by_note() {
+fn the_pad_walks_right_to_a_network_mode_which_is_refused_by_note() {
     let mut frontend = boot(0);
     let mut input = Input::new();
     reach_the_grid(&mut frontend, &mut input);
     press(&mut frontend, &mut input, Button::Right);
     press(&mut frontend, &mut input, Button::Cross);
     assert_eq!(frontend.chosen_mode(), Some("FE_MP_CAMPAIGN"));
-    press(&mut frontend, &mut input, Button::Right);
-    press(&mut frontend, &mut input, Button::Cross);
     assert!(frontend.machine().is(w2048::GAME_MODE_CHOICE));
     let notes = frontend.take_notes();
     assert!(
@@ -454,24 +452,35 @@ fn a_click_on_a_tile_is_the_tap_and_a_click_elsewhere_is_nothing() {
     assert!(frontend.machine().is(w2048::NEW_FE_SHELL));
 }
 
+/// Whether a ring (four fills outset 4 units) is drawn round the tile at `(x, y)`.
+fn ringed(frontend: &Frontend, x: f32, y: f32) -> bool {
+    frontend.draw_list().iter().any(|draw| {
+        matches!(
+            draw,
+            Draw::Fill { rect, .. } if (rect[0] - (x - 4.0)).abs() < 0.01 && (rect[1] - (y - 4.0)).abs() < 0.01
+        )
+    })
+}
+
+/// The original's grids draw no focus on entry and none under a finger: the ring
+/// is this build's own, for a pad, and shows only once the pad has moved.
 #[test]
-fn a_hover_moves_the_cursor_without_choosing() {
+fn a_hover_moves_the_cursor_without_choosing_and_the_ring_waits_for_the_pad() {
     let mut frontend = boot(0);
     let mut input = Input::new();
     reach_the_grid(&mut frontend, &mut input);
+    assert!(!ringed(&frontend, 167.0, 190.0), "no ring on entry");
     let hover = Pointer {
-        at: Some((850.0, 470.0)),
+        at: Some((400.0, 250.0)),
         moved: true,
         ..Pointer::default()
     };
     assert!(frontend.pointer(&hover));
     assert_eq!(frontend.chosen_mode(), None);
-    // The ring is on the tick now: a fill at the tick's own rect, outset.
-    let list = frontend.draw_list();
-    assert!(list.iter().any(|draw| matches!(
-        draw,
-        Draw::Fill { rect, .. } if (rect[0] - 818.0).abs() < 0.01 && (rect[1] - 428.0).abs() < 0.01
-    )));
+    assert!(!ringed(&frontend, 329.0, 190.0), "a hover draws no ring");
+    // The cursor is on the second tile; a pad step back lands on the first.
+    press(&mut frontend, &mut input, Button::Left);
+    assert!(ringed(&frontend, 167.0, 190.0));
 }
 
 #[test]
@@ -610,9 +619,9 @@ fn the_extra_tiles_come_after_the_authored_ones_and_launch_this_builds_pages() {
     ]);
     let mut input = Input::new();
     reach_the_grid(&mut frontend, &mut input);
-    // Three authored buttons, then the two extras: right four times lands
-    // on REMIX.
-    for _ in 0..4 {
+    // The two authored buttons (the tick is hidden), then the two extras:
+    // right three times lands on REMIX.
+    for _ in 0..3 {
         press(&mut frontend, &mut input, Button::Right);
     }
     let list = frontend.draw_list();
@@ -644,7 +653,7 @@ fn the_multiplayer_tile_is_the_third_extra_and_launches_its_page() {
     );
     let mut input = Input::new();
     reach_the_grid(&mut frontend, &mut input);
-    for _ in 0..5 {
+    for _ in 0..4 {
         press(&mut frontend, &mut input, Button::Right);
     }
     let list = frontend.draw_list();
