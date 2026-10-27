@@ -437,6 +437,14 @@ impl Session {
         // same direction is exactly what made this invisible until a 1920-wide
         // source arrived.
         renderer.set_space(skin.space());
+        // The front end's widgets are drawn inside the title's `Safe Area Setting`, as the
+        // original's are (`oag_game::render::inset`); `1.0` on a title without one.
+        renderer.set_inset(
+            shell
+                .title
+                .hud_art
+                .safe_area_scale(self.settings.graphics.hud_safe_area),
+        );
         // The screen title's own face, when this title names a role for it -
         // mirrors `rows_face` above, one widget over. On both PSP titles,
         // whose chrome names no `Title` role, this slot instead carries the

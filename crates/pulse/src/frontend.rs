@@ -162,6 +162,7 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     // it, see `body_font`.
     title_font: Some("Title"),
     body_font: Some("Default"),
+    default_face_is_row_face: false,
     // `MainMenu_Definition.xml`'s menu widget, `y="32"`.
     first_row_y: Some(32.0),
     // Measured, not authored - see the field's own docs for the four menus this
@@ -298,6 +299,7 @@ pub const PS2_MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     title_scale: 0.8,
     title_font: None,
     body_font: None,
+    default_face_is_row_face: false,
     first_row_y: Some(53.0),
     row_extra_leading: Some(17.0),
     menu_font: Some("menu"),

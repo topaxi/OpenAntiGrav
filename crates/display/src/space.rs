@@ -144,9 +144,10 @@ impl Space {
     /// `<BackgroundAnim>` whose origin is `(960, 540)`, and a legal line at
     /// `y="972"`. Square, unlike the PS2's: 1920x1080 is already 16:9 as a pixel
     /// grid, so the two numbers agree where the PS2's disagree by 7%. What is
-    /// *not* pinned is whether a safe-zone transform insets this before it is
-    /// presented - `obeySafeZone` and `ignoreSafeZoneFullscreen` are real
-    /// per-widget attributes on this disc, and nothing here applies them.
+    /// *not* a property of this grid is the safe-zone inset: HD's front-end
+    /// widgets (not the backdrop or movies) are drawn at the `Safe Area Setting`
+    /// about its centre, applied by `oag_game::render::inset`, and
+    /// `obeySafeZone`/`ignoreSafeZoneFullscreen` are the per-widget switches.
     pub const HD: Self = Self {
         size: (1920.0, 1080.0),
         display_aspect: 16.0 / 9.0,

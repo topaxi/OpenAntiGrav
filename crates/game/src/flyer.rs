@@ -614,6 +614,7 @@ impl Flyers {
         viewport: (f32, f32, f32, f32),
         target_size: (u32, u32),
         space: Space,
+        inset: f32,
         show: &Show,
     ) {
         let key = show.key();
@@ -628,6 +629,9 @@ impl Flyers {
         let Some((view_projection, model)) = self.matrices(show, space) else {
             return;
         };
+        // The card obeys the safe zone (`obeySafeZone="true"` on the widget): its picture is
+        // drawn at `inset` about the middle of the screen, as the widgets over it are.
+        let view_projection = Mat4::from_scale(Vec3::new(inset, inset, 1.0)) * view_projection;
         let mut cards = self.cards.borrow_mut();
         let Some(card) = cards.get_mut(&key) else {
             return;
@@ -700,6 +704,7 @@ pub fn render_list(
             viewport,
             target_size,
             space,
+            renderer.inset(),
             show,
         );
     }

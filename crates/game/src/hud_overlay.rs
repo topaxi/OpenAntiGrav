@@ -249,10 +249,7 @@ impl Overlay {
             split: assets.split.clone(),
             split_columns: assets.split_columns.clone(),
             split_hud: assets.split_hud.clone(),
-            safe_area_scale: assets
-                .art
-                .safe_area
-                .map_or(1.0, |area| area.value.scale(None)),
+            safe_area_scale: assets.art.safe_area_scale(None),
             hud_shown: true,
         }))
     }
@@ -268,10 +265,7 @@ impl Overlay {
     /// no `Safe Area Setting` keeps its HUD at full size whatever this says.
     #[must_use]
     pub fn with_safe_area(mut self, percent: Option<u8>) -> Self {
-        self.safe_area_scale = self
-            .art
-            .safe_area
-            .map_or(1.0, |area| area.value.scale(percent));
+        self.safe_area_scale = self.art.safe_area_scale(percent);
         self
     }
 

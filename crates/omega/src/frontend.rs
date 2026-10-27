@@ -58,6 +58,7 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     // color="FEGlobals->HD_Grey">`.
     title_font: Some("Title"),
     body_font: None,
+    default_face_is_row_face: true,
     // Not authored, on HD's own terms: Omega's main menu is the same
     // `<HorizMenu>` idiom HD's is (see `strip` below), so there is no
     // vertical `<Menu>` first row to converge on either.

@@ -212,6 +212,13 @@ pub struct MenuSkin {
     /// the `menu` face or the same one as its title (HD, Pure, 2048, Omega),
     /// which needs no second face.
     pub body_font: Option<&'static str>,
+    /// Whether a selection screen's `font="default"` rows are drawn at their authored scale in
+    /// the one face this title has (`true`: HD and Omega, which load no `menu`-role face, so the
+    /// rows' face is the `default` face and the ratio of the two is 1), or as the `menu` face
+    /// scaled by Pulse's `default` over `menu` ratio (`false`: Pulse's measured 13/22, and Pure,
+    /// whose capture it matches). `true` is **measured on HD only**: the Ship Select and Track
+    /// Select stat and record rows were 0.59 of the original's size with the Pulse ratio.
+    pub default_face_is_row_face: bool,
     /// Top of the first row, in the layer the rows are drawn in.
     ///
     /// Authored per *screen* rather than in `FEGlobals` - Pulse's `Main Menu`
@@ -646,6 +653,7 @@ mod tests {
         title_scale: 1.0,
         title_font: Some("Title"),
         body_font: Some("Default"),
+        default_face_is_row_face: false,
         first_row_y: Some(32.0),
         row_extra_leading: Some(6.0),
         menu_font: Some("menu"),
