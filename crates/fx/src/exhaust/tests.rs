@@ -312,8 +312,8 @@ fn the_ribbon_waits_for_a_full_ring() {
     // which is what makes the eighth craft's ribbon reach the screen rather
     // than being clipped off by `Pipeline::upload`'s `min`. HD's tube is the
     // larger of the two shapes today (954 against 648), so the budget is its.
-    const { assert!(MAX_TRAIL_VERTICES >= MAX_TRAILS * TRAIL_VERTICES_PER_CRAFT) };
-    assert_eq!(MAX_TRAIL_VERTICES, MAX_TRAILS * hd::VERTICES_PER_CRAFT);
+    const { assert!(MAX_TRAIL_VERTICES >= MAX_TRAILS * TRAIL_MAX_VERTICES_PER_CRAFT) };
+    assert_eq!(MAX_TRAIL_VERTICES, MAX_TRAILS * hd::MAX_VERTICES_PER_CRAFT);
 }
 
 /// A respawn must not leave a ribbon stretched across the track.
@@ -581,8 +581,9 @@ fn the_ribbon_stamps_one_truncated_byte_per_segment() {
     assert_eq!(byte(0.162, 0), 18.0);
 }
 
-/// A frame drawn between two ticks hands in the nozzle as it draws it: the
-/// newest sample moves there and every older segment stays as recorded.
+/// A head at alpha `1.0` (a hull drawn between ticks whose tick path pushed no
+/// sample) moves the newest sample alone: every older segment stays as
+/// recorded. Below `1.0` the ring reads fractional ages, see `ribbon/tests.rs`.
 #[test]
 fn a_head_moves_only_the_newest_sample() {
     let mut e = Exhaust::new();
@@ -591,6 +592,10 @@ fn a_head_moves_only_the_newest_sample() {
     }
     let positions = |head: Option<Vec3>| {
         let mut out = Vec::new();
+        let head = head.map(|position| TrailHead {
+            position,
+            alpha: 1.0,
+        });
         e.extend_trail_vertices(&mut out, head, Vec3::X, Vec3::Y, TrailLaw::Ramped);
         out.iter().map(|v| v.position).collect::<Vec<_>>()
     };

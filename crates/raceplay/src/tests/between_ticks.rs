@@ -293,7 +293,11 @@ fn the_trail_head_follows_the_drawn_nozzle_and_only_between_ticks() {
         "a tick-exact draw keeps the sample"
     );
     race.set_draw_alpha(0.5);
-    assert_eq!(race.trail_head_of(0), race.nozzle_of(0));
+    assert_eq!(
+        race.trail_head_of(0).map(|head| head.position),
+        race.nozzle_of(0)
+    );
+    assert_eq!(race.trail_head_of(0).map(|head| head.alpha), Some(0.5));
     assert_ne!(
         race.nozzle_of(0),
         Some(

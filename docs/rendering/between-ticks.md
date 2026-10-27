@@ -44,7 +44,7 @@ Code: `crates/raceplay/src/between_ticks.rs`. Tests: its unit tests in
   | `Race::body_between` | the blob shadow's ray, which reads the body's own pose (no barrel roll, no model yaw) |
   | `Race::projectile_between` (inside the weapon model matrices) and the billboard fallback | every live projectile body, HD's rocket point lights |
   | `Race::ghost_draw_matrix` | the replay ghost |
-  | `Race::trail_head_of` | the newest sample of the PSP ribbon and the HD tube, so the trail leaves the hull as drawn |
+  | `Race::trail_head_of` | the PSP ribbon and the HD tube: the nozzle as drawn at age 0, every older sample at its fractional age (below) |
   | `Race::clock_seconds` | texture scroll, `Anim Transform` nodes, the flame surface's scroll |
 
   Positions lerp, rotations slerp along the shorter arc (glam's `Quat::slerp`),
@@ -58,6 +58,19 @@ Code: `crates/raceplay/src/between_ticks.rs`. Tests: its unit tests in
   whose blend `Race::ship_swept_from` says is skipped. At alpha `1.0` it is the tick's gather
   untouched. See "Chosen, not measured" below and
   [split-screen.md](split-screen.md#cost) for the size of the difference.
+- **The trail rings are read at fractional ages** (2026-10-27,
+  `crates/fx/src/exhaust/ribbon.rs`). Sample `k` of the PSP ribbon and the HD
+  tube is drawn at age `k - 1 + alpha` with the drawn nozzle at age 0, so its
+  stretch, taper, fade, tint, texture coordinate and glow byte follow the age
+  rather than the index; the scroll phases go back a share of their last step.
+  The tail reaches its fixed age through the sample the last push dropped off
+  the ring, kept beside it (the ring, and `Tube::nearest` the trail-hit test
+  reads, are unchanged); that is one segment more between ticks, inside the
+  trail buffer's budget. At alpha `1.0` the ages are the indices and the
+  ribbon is the recorded one, byte for byte. A tick path that pushes no
+  sample (the flyby, the cosmetic ticks) draws the ring as recorded with only
+  the head moved. Unit tests: the ribbon and the tube are continuous across a
+  tick (`exhaust::ribbon::tests`).
 - **Particles move between ticks on the GPU** (2026-10-27). Every `.pob`
   particle (`oag_fx::psys`: the stage's effects, the collision sparks, the
   scenery effects, Omega's heat haze) keeps where its pool's last advance found
@@ -152,11 +165,6 @@ they did. See that page's "Blur length" section.
 
 ## Open
 
-- The PSP ribbon's and the HD tube's older samples are still placed per tick:
-  each tick, every recorded sample moves one index down the ring, and its
-  stretch, taper, fade and texture coordinate step with it. Only the head
-  follows the drawn nozzle. Drawing the ring at a fractional age would make
-  the whole ribbon continuous.
 - The mist overlay's zoom and scroll step per tick (see above).
 - The HD sprite flare's nozzle axis reads the body's forward at the tick, not
   the drawn hull's.
