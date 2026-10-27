@@ -679,9 +679,31 @@ their mode** - never a circuit id that resolves to nothing. Grids 16-18 lack
   `Main Menu`, **not** `Cell Selection` as on HD.
 - **Omega draws Fury's flyer cards since 2026-10-27, and has no `Campaign Selection`**: `load_omega` keeps `selection_layout: None` (its chooser is three-way, 2048/HD/Fury, unmodelled) and reads `grid_layout_fury` and the cards; `RACE CAMPAIGN` opens `Grid Selection` directly, `Event 01/16`. See `docs/ui/campaign-screens.md`, "Omega: Fury's cards draw".
 - **Not Omega's to fix here, seen on the walk:** (the HUD absence seen here was
-  fixed 2026-10-06, `omega-hud`), 793 of the
-  circuit's materials are unresolved (white surfaces on `08_Track`), and the
+  fixed 2026-10-06, `omega-hud`), (the 793 unresolved materials of `08_Track` quoted here
+  were not re-measured; Anulpha's 81 were fixed 2026-10-27, below), and the
   menu backdrop is white.
+
+### Anulpha Pass's grid floor and walls drew white: `Diffuse_Specular` is a colour sampler (2026-10-27, `omega-track-lit`)
+
+The road and side walls of Anulpha's start grid read near-white with no panel detail (pair
+`omega/anulpha-pass`, mean grey difference 61.50). Cause, by probe (the lit terms replaced one at
+a time in `shade.wesl`): those draws were **unresolved**, so they bound the white albedo and the
+black lightmap placeholder, and the sun alone saturated them. The material is
+`cf_chevron_pulse_displacement2out` (floor, wall and lead-in variants, 81 draws): its sampler
+list opens on `*_displacement_df2.gnf`, which decodes to nothing, and its colour sampler is named
+`Diffuse_Specular` (hash `0x28e981a4`, read from the file's own `Diffuse_SpecularSampler`
+reflection string; the others are `Emiss_Mask`, `Normal`, `Wave`, `lightmap`). The diffuse pick
+([`oag_rcs::rcsmodel::psp2::material::DIFFUSE_SPECULAR_SAMPLER_NAMES`]) now names it. Result:
+mean grey difference **61.50 to 38.92**, RMSE 0.329 to 0.242, edge NCC 0.23 to 0.24. The lightmap
+(UVs 0..1, atlases decode) and Omega's Nova prelit were never the fault; the PS4 red-channel
+coverage lead is **not** the cause here (checked: a lightmap's channels sample correctly).
+
+**Still open:** the chevron's own program (emask, `Wave`, `Colour`, swept by `offset`) is not
+wired for PS4 materials as it is for HD's `cf_chevron_pulse` (`mesh::rcs::chevron_pulse`), so
+the chevrons draw as a bright cyan albedo where the original's frame shows the road plain; the
+road reads purple-blue against the original's grey-teal. 2048: the Vita sampler table is not
+read (`Material::samplers` is PS4-only), so whether 2048's displacement circuits carry
+`Diffuse_Specular` is **not checked** here.
 
 ## Racing: a race starts, on this title's own data
 
