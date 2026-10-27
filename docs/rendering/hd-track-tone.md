@@ -1371,3 +1371,111 @@ The Modesto banners lose some saturation (right box 35.1 to 24.7) but are not th
   taps raw where the console decodes them.
 - `oag_post::hd_zoom` reads the chain's quarter-res copy, which is decoded, so it needed no
   change; it is not exercised by any of the 13 pairs.
+
+## Tech de Ra's near-left wall (slot 384): the wash is a bitangent sign (2026-10-27, `tech-de-ra-wash`)
+
+**Claim brought to this lane:** "slot 384 on `hd/tech-de-ra` (`diffuse_normal_specular_emmissive`, `ds_sf_cs.gtf`) draws
+a yellow wash over the original because our generic path does X where its program does Y."
+**Verdict: true, with a different X than the brief supposed.** It is not a light term and not the emissive term:
+it is the **normal**. Ours drops the normal map's `ny` on this slot where the original's vertex program keeps it.
+Falsifier written first: if the wash were the emissive add, `OAG_ALBEDO_ONLY` plus a zeroed `_ne.a * W` would
+remove it; if a light term, a zeroed specular or sun term would. Neither did (below); the sign flip did.
+
+### What the slot draws
+
+Slot 384 (`hd_material_probe_dump` ordinal; `lightmap|no_ambient`, specular exponent 32) resolves to the file's
+**fragment block #7 at `0x5860`, vertex block #7 at `0x5640`** (the lightmapped variant with no shadow tap;
+`scripts/ps3-microcode.py fp-file|vp-file`). Static read of the fragment program (register trace in the
+`pads.md` "Speedup" law, the same shape):
+
+```text
+N      = nx*TC5 + ny*TC2 + nz*TC3        _ne.rgb*2-1; TC5 tangent, TC2 bitangent, TC3 vertex normal
+lit    = pow(lightmap.rgb, C(0x002c73e8)) * C(0x8670f0be) + lightmap.a * (N.L) * C(0x2dba643d)
+spec   = (sat(N.Hhat))^32 * sat(8 N.L) * lightmap.a * sun.w * sun.rgb * diffuse.a
+colour = diffuse.rgb * lit + _ne.a * C(0x7611a2d8) + spec
+out    = fog(colour)            TC0.xyz and TC1.xyz are 0 in this variant's vertex program (no vertex light)
+```
+
+Every term is already in `shade.wesl`'s authored path; the slot's inputs match except `N`.
+
+### The vertex program's bitangent
+
+Vertex block #7 (`0x5640`) decodes the tangent attribute `0xdbe5f417` as `MAD R1, v[2], 2, -1` on **all four
+components** and writes `o[TC2].xyz = cross(N0, T) * R1.w` (instructions 6, 12, 21): the bitangent's scale is
+**`2w - 1`, so `w = 0` gives -1**, not 0. `shade.wesl`'s tangent branch (`hull_normal(...)`) and `pad.wesl`'s
+`pad_normal` use the raw `w` (0 or 1), which leaves a `w = 0` vertex with **no bitangent**, so `ny` never reaches
+`N` and the bump loses its second axis: the wall reads smoother and brighter than the original's grain.
+
+**Another compile of the same family reads `w` raw.** `12_sol_2`'s copy of the material (vertex block #7 at
+`0x5420`) ends `MUL o[TC0].xyz, B, v[2].wwww`: raw `w`, so `w = 0` is no bitangent. That is the compile
+`pads.md` measured ("`w` is 0 on 232 of 232 vertices ... `B` is the zero vector"); it is right **for it**.
+
+**Census** (`just psarc cat` of each circuit's `diffuse_normal_specular_emmissive`, `track_surface` and
+`weapon_pads`, every vertex block that reads `0xdbe5f417`, `ps3-microcode.py vp-file`; one file is uniformly one
+convention):
+
+| Compile | Circuits (files read) | Tangent blocks, raw `w` | Bitangent scale |
+| --- | --- | ---: | --- |
+| signed | Amphiseum, Modesto Heights, Talon's Junction, Tech de Ra (3 files each, 46 to 72 blocks), Zone 1 to 4 (`weapon_pads`, 28) | **0** of every block | `2w - 1` |
+| raw | Vineta K, `02_track`, `03_track`, Chenghou, Sebenco Climb, Ubermall, Sol 2, Anulpha Pass (2 files each, 40 to 136 blocks) | **all** of every block | `w` |
+
+So it is a property of the circuit's own material file, and the four original-game circuits plus Zone are the
+signed ones. **`pads.md`'s "bitangent is the zero vector" holds for Sol 2 and is wrong for Talon's pads** (it
+noted Talon's program was "a different compile" but read only the alpha-gated `MAD`, not this scale).
+
+### The local try (uncommitted shader edit, box and frame scored)
+
+Scratch copy of `hd/tech-de-ra`, re-rendered with the main-tree build plus one local edit: in `shade.wesl`'s tangent
+branch, `hull_normal(.., vec4(in.tangent.xyz, in.tangent.w * 2 - 1))` for `pad_ne` slots and track receivers
+(`receives_shadow == 2`). Box `480,600 240x120`, blur sigma 7, mean abs RGB difference (the handover's metric):
+
+| | box abs | box luma ours-theirs | slot 384 mask (137,866 px) mean abs | area x error | frame |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| main today | 13.08 | +10.30 | 6.65 | 0.917 M | 4.205 |
+| signed bitangent | **2.74** | **-1.81** | **3.68** | **0.507 M** | 4.205 -> 3.840 |
+
+Box mean RGB 143.1, 128.7, 114.7 -> 131.1, 115.8, 103.3 against the original's 133.2, 117.6, 104.9. Two renders of
+the edited tree are byte-identical in score (the render is deterministic; the original frame is one capture).
+
+**Terms ruled out** on the same box (each a local toggle on slot 384, one render): the specular off gives luma
+-6.66 (so the specular carries +17 of the box; with the sign fixed its share is whatever the normal change leaves);
+`_ne.a * W` off gives R -23, G -13, B 0 (the yellow of the glow is right); unsaturated `N.L` in the sun term and
+no vertex light change nothing measurable. `OAG_ALBEDO_ONLY` removes the light and the glow together and so cannot
+separate them; the per-term toggles do.
+
+### Other pairs, and why the change is per file
+
+The same edit applied to every circuit, frame mean abs RGB, before to after: Modesto Heights 9.004 -> 7.975,
+Talon's 6.011 -> 6.002, Tech de Ra 7.187 -> 6.767, Amphiseum 9.623 -> 9.594 (the four signed circuits, all
+better or level); **Vineta K 7.471 -> 8.767 and Sol 2 7.058 -> 9.192 (raw circuits, worse)**. The two regressions
+are the census made visible, not a counter-example: applying the sign to a raw compile adds a bitangent the
+original does not have. **The wiring must read the sign from the vertex program, never from the circuit name.**
+Modesto's changed pixels (18,227 px at x 1578 to 1920, y 435 to 707) go 33.4 -> 6.5; Tech de Ra's wall 24.1 -> 4.8.
+
+### Ready to wire (confidence 80 for the law on the four original circuits)
+
+1. `oag_rcs::rcsmaterial::vertex`: a reader answering "does this vertex block take the tangent's `w` as `2w - 1`
+   (a `MAD` of `v[tangent]` by 2 and -1 whose `.w` multiplies the bitangent) or raw (`v[tangent].wwww`)".
+2. `crates/mesh/src/mesh/rcs/hull_normal.rs` (`hull_normal`, which fills `material_tangent`) and
+   `pad_ne.rs` record it per material slot beside the tangent flag.
+3. `crates/mesh/src/mesh/rcs.rs` `baked_tangent` (line 472): bake the `w` byte as the bitangent scale in unorm
+   (`(scale + 1) / 2`: signed -> 0 or 255, raw -> 128 or 255) and `crates/mesh/shaders/hull_normal.wesl` line 19
+   reads `cross(n, t) * (tangent.w * 2.0 - 1.0)`; there is no free `slots` bit (0 to 31 are used), which is why
+   the scale rides the byte. Check the ship hulls' vertex programs with the same reader first: their raw-`w`
+   reading in `hull_normal.wesl` was measured on hulls and must not change by default.
+4. `pad.wesl` `pad_normal` (the derived frame, no authored tangent) keeps `nx*T + nz*N` for raw circuits and
+   gains `ny * cross(N, T) * handedness` for signed ones only if a chunk without an authored tangent exists
+   there (not checked; slot 384's chunks do carry one, the shader's tangent branch is live on them).
+5. Test: a ground-truth census of the table above (`rcsmaterial` files of the four circuits and Zone read
+   signed, the eight numbered circuits raw), and the Tech de Ra box above as a score bound.
+
+**Not measured here:** the original's live fragment or vertex program on a slot-384 draw (`ps3-fp-live.py`): the
+law is a static read of both programs plus the pixel score, so the cause is confidence 80, the census 90 (every
+block of every file read).
+
+**Omega and 2048 (CLAUDE.md check):** Omega ships the family in `data00` to `data02`
+([rcsmaterial.md](../formats/rcsmaterial.md), "The light-bar family") and 2048 re-ships the original circuits;
+both compile their shaders again (GNM and Vita GXP), so the RSX reading **does not transfer** and a per-compile
+split like this one may or may not exist there. **Not checkable in this lane:** the answer is in their vertex
+shaders (Omega's `eboot.bin` is in Ghidra, `docs/ghidra/functions/ps4-omega-eu/`; 2048's GXP, `gxp.md`), and a
+live value needs a shadPS4 or Vita3K capture. Named open in the HD fidelity thread.
