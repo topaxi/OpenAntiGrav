@@ -147,6 +147,10 @@ web = []
 # `oag_android` example below exist, so a desktop `--all-targets` neither builds
 # nor links a second copy of the binary.
 android = []
+# BallisticNG Workshop tracks (`--ballisticng-track`, RACE REMIX's CUSTOM title).
+# Off by default and enabled by no build (maintainer, 2026-10-27: it does not
+# render enough to ship); `just lint` builds it so it does not rot.
+ballisticng = ["oag-raceplay/ballisticng"]
 native-video = ["dep:gstreamer", "dep:gstreamer-app", "dep:gstreamer-video"]
 # See `oag-render`'s feature of the same name. Off by default.
 perf-probe = ["oag-render/perf-probe", "oag-raceplay/perf-probe"]

@@ -7,6 +7,13 @@ a `.wtrk` track item into typed structs and decodes whole textures. It **maps
 nothing into this engine**; that is the consumer's choice and is on the page's
 second half, labelled **chosen, not measured**.
 
+> **Off in every build (maintainer, 2026-10-27).** The `ballisticng` cargo feature
+> (`oag-raceplay`, forwarded by `oag-game`) gates the importer, the CUSTOM title and `--ballisticng-track`. It is
+> off by default and enabled by no build (desktop, AppImage, nightly, web, Android, server): the foreign tracks
+> do not render enough to ship. `oag-ballisticng` and `oag-unity` stay workspace crates, built and tested on
+> their own. To use this page: `cargo run -p oag-game --features ballisticng`. `just check-ballisticng`
+> builds and tests it so it does not rot.
+
 **Labels:** *measured* = read out of the files and checked against a second
 source or an exact count; *inferred* = consistent with names and counts, no
 second source; *chosen* = a decision, never a measurement.
@@ -173,11 +180,11 @@ of them lap.**
 
 ## How to race one
 
-1. From a checkout with the Workshop content linked at `data/ballisticng/workshop-473770`: RACE REMIX, TRACK
+1. In a build with the `ballisticng` feature, from a checkout with the Workshop content linked at `data/ballisticng/workshop-473770`: RACE REMIX, TRACK
    TITLE `CUSTOM`, TRACK `<name> (WORKSHOP)`, CRAFT TITLE the host whose ship and physics to use, START.
    The scan reads every item (about 22 s in a debug build) and lists a file that will not load dimmed with
    the reason. See [menus.md](../architecture/menus.md#race-remix-custom-tracks).
-2. Or `oag-game --ballisticng-track "<name>"` (a path, or a name matched against the same list), `--race` to skip
+2. Or (same build) `oag-game --ballisticng-track "<name>"` (a path, or a name matched against the same list), `--race` to skip
    the front end. Both routes build the same race.
 
 ## Not covered

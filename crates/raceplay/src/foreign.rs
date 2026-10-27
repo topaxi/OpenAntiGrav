@@ -14,14 +14,17 @@
 //! start slot; the simulation reads them like a disc circuit's and learns nothing
 //! of where they came from.
 
+#[cfg(feature = "ballisticng")]
 pub mod choice;
+#[cfg(feature = "ballisticng")]
 mod frame;
+#[cfg(feature = "ballisticng")]
 mod map;
+#[cfg(feature = "ballisticng")]
 pub mod survey;
 
 use std::path::Path;
 
-use anyhow::Context;
 use oag_trackfile::Track;
 
 /// Reads the `.wtrk` at `path` and maps it.
@@ -30,8 +33,10 @@ use oag_trackfile::Track;
 ///
 /// A file the wrapper or the Unity reader refuses, a track class the content
 /// layer refuses, or a track with no lap loop. The message names which.
+#[cfg(feature = "ballisticng")]
 pub fn read(path: &Path) -> anyhow::Result<Track> {
-    let file = std::fs::read(path).with_context(|| format!("reading {}", path.display()))?;
+    let file =
+        std::fs::read(path).map_err(|e| anyhow::anyhow!("reading {}: {e}", path.display()))?;
     let wtrk = oag_ballisticng::wtrk::Wtrk::parse(&file)
         .map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))?;
     let bundle = oag_unity::bundle::Bundle::parse(wtrk.bundle(&file))
@@ -59,9 +64,14 @@ pub fn is_track_file(path: &Path) -> bool {
 /// As [`read`] for a `.wtrk`, and as [`oag_trackfile::read`] for a manifest.
 pub fn read_any(path: &Path) -> anyhow::Result<(Track, Vec<String>)> {
     if !is_track_file(path) {
-        let track = read(path)?;
-        let report = track.notes.clone();
-        return Ok((track, report));
+        #[cfg(feature = "ballisticng")]
+        {
+            let track = read(path)?;
+            let report = track.notes.clone();
+            return Ok((track, report));
+        }
+        #[cfg(not(feature = "ballisticng"))]
+        return Err(no_workshop_support(path));
     }
     let loaded =
         oag_trackfile::read(path).map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))?;
@@ -97,11 +107,7 @@ pub fn entry(path: &Path) -> anyhow::Result<crate::catalogue::Track> {
             .track
             .id
     } else {
-        let file = std::fs::read(path).with_context(|| format!("reading {}", path.display()))?;
-        oag_ballisticng::wtrk::Wtrk::parse(&file)
-            .map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))?
-            .workshop_id
-            .to_string()
+        workshop_id(path)?
     };
     Ok(crate::catalogue::Track {
         id: format!("foreign:{id}"),
@@ -112,4 +118,30 @@ pub fn entry(path: &Path) -> anyhow::Result<crate::catalogue::Track> {
         sound_register: None,
         foreign: Some(path.to_path_buf()),
     })
+}
+
+/// The Workshop id a `.wtrk` carries, which keys its records and ghosts.
+#[cfg(feature = "ballisticng")]
+fn workshop_id(path: &Path) -> anyhow::Result<String> {
+    let file =
+        std::fs::read(path).map_err(|e| anyhow::anyhow!("reading {}: {e}", path.display()))?;
+    Ok(oag_ballisticng::wtrk::Wtrk::parse(&file)
+        .map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))?
+        .workshop_id
+        .to_string())
+}
+
+#[cfg(not(feature = "ballisticng"))]
+fn workshop_id(path: &Path) -> anyhow::Result<String> {
+    Err(no_workshop_support(path))
+}
+
+/// The refusal for a `.wtrk` in a build without the `ballisticng` feature.
+#[cfg(not(feature = "ballisticng"))]
+fn no_workshop_support(path: &Path) -> anyhow::Error {
+    anyhow::anyhow!(
+        "{}: Workshop tracks (.wtrk) need a build with the `ballisticng` feature, which no \
+         shipped build enables",
+        path.display()
+    )
 }

@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-10-12
+updated: 2026-10-27
 summary: "Track format: visual meshes, materials and sky as optional records; non-Pulse hosts; picker preview"
 ---
 
@@ -49,6 +49,11 @@ are committed fixtures (`just blender-fixtures`), read by `crates/trackfile/test
 `trackfile_ground_truth` cases.
 
 ## Open
+
+- **RACE REMIX's CUSTOM title is behind the off-by-default `ballisticng` feature (maintainer, 2026-10-27)**, so in
+  every shipped build an own-format track has no menu route: `oag-game --track-file <manifest>` is the only way to
+  race one. The picker (own-format files first, then Workshop) returns when a build enables the feature, or when the
+  own-format rows are split from the Workshop ones and offered on their own - undecided, the maintainer's call.
 
 - Add-on follow-ups (`docs/tools/blender.md`, "Open"): banking and per-point width on the curve; multi-path and
   junction authoring beyond the scene property the importer writes.

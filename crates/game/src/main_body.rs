@@ -422,7 +422,8 @@ fn run(cli: Cli) -> Result<()> {
     // until a window has been open for a while. See `crate::prepare`.
     // A foreign track that cannot be found is a refusal, never the disc's
     // default circuit raced instead.
-    let foreign_entry = cli
+    #[cfg(feature = "ballisticng")]
+    let workshop_track = cli
         .ballisticng_track
         .as_deref()
         .map(|name| {
@@ -439,7 +440,10 @@ fn run(cli: Cli) -> Result<()> {
                 )
             })
         })
-        .transpose()?
+        .transpose()?;
+    #[cfg(not(feature = "ballisticng"))]
+    let workshop_track: Option<std::path::PathBuf> = None;
+    let foreign_entry = workshop_track
         .or_else(|| cli.track_file.clone())
         .map(|path| race::foreign::entry(&path))
         .transpose()?;

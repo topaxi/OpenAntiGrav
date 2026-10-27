@@ -271,6 +271,13 @@ empty grid. Campaign launches clear it.
 
 ## RACE REMIX: CUSTOM tracks
 
+> **Off in every build (maintainer, 2026-10-27).** The `ballisticng` cargo feature
+> (`oag-raceplay`, forwarded by `oag-game`) gates the importer, the CUSTOM title and `--ballisticng-track`. It is
+> off by default and enabled by no build (desktop, AppImage, nightly, web, Android, server): the foreign tracks
+> do not render enough to ship. `oag-ballisticng` and `oag-unity` stay workspace crates, built and tested on
+> their own. To use this section: `cargo run -p oag-game --features ballisticng`. `just check-ballisticng`
+> builds and tests it so it does not rot.
+
 TRACK TITLE offers **CUSTOM** (`OAG_REMIX_CUSTOM`) after the titles this machine can open, whenever
 the track directories hold at least one file; none found, no entry. Choosing it fills TRACK with those
 files (`oag_game::custom_tracks`, drawn the same by the live session and `--menu-page remix`). The race
@@ -287,6 +294,12 @@ is flown on the **CRAFT TITLE** row's source, ship and physics, exactly as `--ba
   column's width on Pulse and Pure (28 characters; HD's value boxes are about 20 wide, so a long name there runs past its box's right edge over nothing). An author is printed `BY AUTHOR` when a file
   names one; **neither format carries one today** (a `.wtrk` holds the Workshop title, tags and
   description, the author is a Steam account), so none is shown. There is no preview yet.
+- **The survey is lazy and cached.** Finding the files is a directory read at start-up (it decides
+  whether CUSTOM is offered). Reading them (`custom_tracks::Scan::begin`) starts only once RACE REMIX is on
+  screen with CUSTOM chosen, never while a race runs or is suspended behind its pause menu, and keeps
+  what each file said in `<cache dir>/oag/custom-tracks/survey.toml` (`data/cache/custom-tracks` in a
+  checkout), keyed by path and modification time, so an untouched file is not decoded twice across runs.
+  Before this it ran at app start and cost 22% of the profile samples in a race (workstation, 2026-10-27).
 - **Every file is read as a race reads it** (`oag_raceplay::foreign::survey`), on a thread
   (`oag_thread::Task`): the 32 Workshop items here take about 22 s in a debug build. Until it is done
   the rows are the file names, dimmed, reason "still checking this file", and START refuses them.

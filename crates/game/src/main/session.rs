@@ -75,15 +75,15 @@ mod join;
 #[cfg(not(target_arch = "wasm32"))]
 #[path = "session/lan.rs"]
 mod lan;
+#[cfg(target_arch = "wasm32")]
+#[path = "session/lan_web.rs"]
+mod lan;
 #[cfg(not(target_arch = "wasm32"))]
 #[path = "session/online.rs"]
 mod online;
 #[cfg(target_arch = "wasm32")]
 #[path = "session/online_web.rs"]
 mod online;
-#[cfg(target_arch = "wasm32")]
-#[path = "session/lan_web.rs"]
-mod lan;
 #[path = "session/multiplayer.rs"]
 mod multiplayer;
 #[path = "session/seat_assign.rs"]
@@ -537,6 +537,7 @@ pub(crate) struct Session {
     /// `oag_game::launcher::{survey, distinct_titles}`.
     pub(crate) titles: Vec<oag_game::launcher::Candidate>,
     /// RACE REMIX's CUSTOM tracks. See [`oag_game::custom_tracks`].
+    #[cfg(feature = "ballisticng")]
     pub(crate) custom_tracks: oag_game::custom_tracks::Scan,
     /// What the loading screen draws, kept for the *second* time it goes up.
     ///

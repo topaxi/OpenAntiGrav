@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-10-11
-summary: "Foreign-track picker row, atlas and sky from BallisticNG tracks; Unity formats no real file exercises are untested"
+updated: 2026-10-27
+summary: "BallisticNG path behind the off-by-default ballisticng feature; atlas, sky, jumps open; untested Unity formats"
 ---
 
 # Unity content support: the reader, the BallisticNG layer and a raceable foreign track have landed
@@ -27,12 +27,18 @@ summary: "Foreign-track picker row, atlas and sky from BallisticNG tracks; Unity
 
 ## Open
 
+- **The whole path is behind the off-by-default `ballisticng` feature (maintainer, 2026-10-27)**: the importer,
+  `--ballisticng-track`, RACE REMIX's CUSTOM title (own-format files included; `--track-file` still works in every
+  build) and the custom-track survey. Reopen by enabling it in a shipped build once foreign tracks render enough
+  (atlas, sky, scenery below). `just check-ballisticng` keeps it compiling and its survey tests running. With it on
+  the survey is lazy (first CUSTOM open, never in a race) and cached by path and mtime. The disc-backed `foreign_*`
+  ground-truth tests are compiled only with the feature: `cargo nextest run -p oag-raceplay --features ballisticng
+  --run-ignored only -E 'test(foreign)'`; `just test-data` does not pass the feature, so it does not run them.
+
 - **Not exercised by any real file, so untested against Unity** (the format page scores each): meshes with more than one
   vertex stream, non-float channels, triangle strips and `Float16`, vertex format ids of 3 or more on engines before 2019,
   compressed meshes, SerializedFile versions 18 to 21, bundles with the info at the end, crunched textures. Audio
   (78 `.resource` streams) is not read.
-- Foreign tracks have no menu row (the `catalogue::Track::foreign` field exists, nothing builds a list from
-  `oag_source::ballisticng::tracks()`); the front-end row needs `string_id` text and pointer support.
 - The track atlas, sky, fog, lights and scenery are not drawn; the floor and wall are flat-shaded collision. Floor UVs
   need the `TrackFloor`/`TrackWall` mesh pointers (kept unread), checked equal to `FloorVertices` first.
 - Jumps: Lion's Den crosses two gaps (111 and 141 units) by rescue. The original uses `ModJumpZone` push; unmapped.
@@ -44,8 +50,7 @@ summary: "Foreign-track picker row, atlas and sky from BallisticNG tracks; Unity
 
 ## Next Steps
 
-1. A foreign-track row in the track picker (strings, pointer support) reading `oag_source::ballisticng::tracks()`.
-2. Draw the atlas: keep `TrackFloor`/`TrackWall` pointers, check mesh positions equal the arrays, take UVs, decode the
+1. Draw the atlas: keep `TrackFloor`/`TrackWall` pointers, check mesh positions equal the arrays, take UVs, decode the
    atlas through `oag_ballisticng::texture`. Then scenery meshes.
-3. Map `ModJumpZone` and read what the 12 respawn-dependent tracks need.
-4. Ships: Cliffhawk's meshes and liveries, hull from a disc ship's handling at first (labelled chosen).
+2. Map `ModJumpZone` and read what the 12 respawn-dependent tracks need.
+3. Ships: Cliffhawk's meshes and liveries, hull from a disc ship's handling at first (labelled chosen).
