@@ -35,7 +35,8 @@ pub(super) struct Twin {
     pub first: String,
     pub second: Arc<ModelTexture>,
     pub wipe: Arc<ModelTexture>,
-    pub bars: Arc<ModelTexture>,
+    /// The bars' mask; `None` for the static hologram, which rides the same bindings without one.
+    pub bars: Option<Arc<ModelTexture>>,
 }
 
 /// Per material, the twin it binds.
@@ -47,6 +48,11 @@ pub(super) struct Plan {
 impl Plan {
     pub fn of(&self, material: Option<usize>) -> Option<&Twin> {
         self.twins.get(material?)?.as_ref()
+    }
+
+    /// Files `twin` under material `index`, which the plan must already span.
+    pub(super) fn admit(&mut self, index: usize, twin: Twin) {
+        self.twins[index] = Some(twin);
     }
 
     pub fn any(&self) -> bool {
@@ -128,7 +134,7 @@ pub(super) fn plan(
             first: paths[0].to_string(),
             second,
             wipe,
-            bars,
+            bars: Some(bars),
         });
         report.twin_blend_materials += 1;
     }

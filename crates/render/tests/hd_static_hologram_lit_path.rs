@@ -152,6 +152,22 @@ fn the_advert_and_the_static_add_and_the_scan_mask_is_the_alpha() {
         masked[0] < 4 && masked[1] < 4,
         "a black scan mask is an alpha of zero, so nothing draws: {masked:?}"
     );
+    // HD's program ends on a `/2` that the shader carries as `Light::output_scale` (0.5 on HD,
+    // 1.0 on a title that leaves `lit_output_halved` unread, Omega's hologram among them), so
+    // the same picture lands darker at 0.5 and nothing else moves.
+    let halved = {
+        let mut scene = Scene::off();
+        scene.light.enabled = 1.0;
+        scene.light.direction = [0.0, 0.0, 1.0];
+        scene.light.sun = [0.6, 0.6, 0.6];
+        scene.light = scene.light.with_output_scale(0.5);
+        scene.fog.camera = [0.0, 0.0, 100.5];
+        draw(&device, &queue, &model(255, PROGRAM_STATIC_HOLOGRAM), scene)
+    };
+    assert!(
+        halved[0] + 30 < lit[0] && halved[1] + 30 < lit[1] && halved[0] > 64 && halved[2] < 4,
+        "a halved output scale darkens the board: {halved:?} against {lit:?}"
+    );
     let plain = at(&model(255, 0.0));
     assert!(
         plain[2] > 128 && plain[0] > 128 && plain[1] > 128,
