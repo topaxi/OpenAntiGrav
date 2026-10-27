@@ -266,7 +266,7 @@ geometry. **Guess, not measured:** the no-LG2 stand-in specular in
    each mask's error halved, no worse on `ubermall`, `anulpha-pass`, `chenghou-project`. Unread: the two
    fragment blocks (`ds_booth_glass` unit table is in `hd-track-tone.md`, rows `#102` and `#76`; its albedo
    carries gamma nibble 0). Covered by the existing queue thread; this gives it an order.
-3. **Vineta K ledge strips and the no-LG2 specular: wire lane, small.** Claim: `and_concretestrip` and
+3. **~~Vineta K ledge strips and the no-LG2 specular~~ (measured closed 2026-10-27, `hd-tech-de-ra-2`: the box below reads luma -1.4, the specular went with `hd-top-right-band`): wire lane, small.** Claim: `and_concretestrip` and
    `and_solidwhite` read +32 and +14 luma on Vineta K's right building because they draw a stand-in specular
    (a guess until the family's `LG2` census, recipe in the specular thread, is run). Acceptance: Vineta K box
    x 1300-1920, y 0-540, bias from +21 to within +8, craft and track blocks unchanged. Only 1.5 M sits inside

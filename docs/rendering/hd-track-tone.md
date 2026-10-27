@@ -752,7 +752,17 @@ glass is the sky at about 7 % before the store's encode, which reads as the orig
 
 **Wired** (`mesh::rcs::window_glass`, row `ds_booth_glass`, mode `Gated`, `tint` `[1, 0, 2]`; `skin`'s `AlphaUse::Gate` builds the
 picture as the constant with the map's alpha; `shade.wesl` weights the reflection by `a` when `tint.z` is 2). **Left out, named**: the
-normal map's tilt, as on every glass family here. Test: `hd_sky_reflection_ground_truth::tech_de_ras_booth_glass_reflects_the_sky_through_its_normal_maps_alpha`.
+normal map's tilt, as on every glass family here. Tests: `hd_sky_reflection_ground_truth::tech_de_ras_booth_glass_reflects_the_sky_through_its_normal_maps_alpha`
+(the tag and the picture) and `hd_shadowed_track_redraw::the_booth_glass_reflects_the_sky_by_its_alpha_not_its_complement` (the
+shader weights by `a`, not `1 - a`).
+
+Fixed boxes (blur-7 mean abs RGB, luma bias), reproducible from `theirs.png` and `ours.png` alone:
+
+| Pair, box | before | after |
+| --- | ---: | ---: |
+| `hd/tech-de-ra`, the booth behind the right-hand railing, `1700,355 220x40` | 21.18, -21.61 | 7.01, +4.57 |
+| `hd/modesto-heights`, the pit arch glass, `146,360 300x90` | 15.23, -12.93 | 3.42, +3.18 |
+| `hd/sebenco-climb`, the pit arch glass, `180,200 300x90` | 22.22, -20.47 | 6.24, -0.45 |
 
 **Measured** on the 13 cold pairs (blur sigma 7, mean absolute RGB, and signed luma `ours - theirs`; "changed" is the pixels the change
 moved by more than 4):
