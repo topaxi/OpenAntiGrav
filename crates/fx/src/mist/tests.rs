@@ -138,7 +138,7 @@ fn the_uv_extents_match_the_live_vertices() {
     };
     layers.step(&FORT_GALE, &motion, 0.3, &mut rng);
     assert!((layers.t[0] - 0.684).abs() < 1e-4);
-    let quad = layers.quads(FORT_GALE.display_scale * 0.6249)[0];
+    let quad = layers.quads(FORT_GALE.display_scale * 0.6249, 1.0)[0];
     let u_extent = quad[2][0] - quad[0][0];
     let v_extent = quad[1][1] - quad[0][1];
     assert!((u_extent - 1.060).abs() < 1e-3, "{u_extent}");
@@ -166,7 +166,7 @@ fn the_layers_crossfade_half_a_phase_apart() {
         layers.alpha
     );
     // The GE gets bytes: 0.24 * 255 = 61.2, truncated to 61.
-    assert_eq!(layers.alphas()[1], 61.0 / 255.0);
+    assert_eq!(layers.alphas(1.0)[1], 61.0 / 255.0);
 }
 
 #[test]
@@ -213,7 +213,7 @@ fn a_turn_scrolls_the_texture_and_a_roll_turns_it() {
     };
     rolled.step(&FORT_GALE, &roll, 0.3, &mut rng.clone());
     assert_eq!(rolled.rect, still.rect);
-    assert_ne!(rolled.quads(0.5), still.quads(0.5));
+    assert_ne!(rolled.quads(0.5, 1.0), still.quads(0.5, 1.0));
 }
 
 #[test]
@@ -225,4 +225,104 @@ fn the_first_corner_is_the_bottom_right() {
     assert_eq!(vertices[5].position, [-1.0, 1.0]);
     assert_eq!(vertices[5].texcoord, [1.0, 1.0]);
     assert_eq!(vertices[6].alpha, 0.5);
+}
+
+fn two_ticks(second: Motion) -> Layers {
+    let mut rng = Rng::new(5);
+    let mut layers = Layers::new(&mut rng);
+    let first = Motion {
+        dz: 0.1 / ZOOM_RATE,
+        dx: 0.001,
+        roll: 0.1,
+        ..Motion::default()
+    };
+    layers.step(&FORT_GALE, &first, 0.3, &mut rng);
+    layers.step(&FORT_GALE, &second, 0.3, &mut rng);
+    layers
+}
+
+#[test]
+fn a_blend_moves_continuously_and_alpha_one_is_the_tick() {
+    let layers = two_ticks(Motion {
+        dz: 0.02 / ZOOM_RATE,
+        dx: 0.002,
+        roll: 0.15,
+        ..Motion::default()
+    });
+    let scale = 0.5;
+    let tick = layers.quads(scale, 1.0);
+    let (rects, alpha, roll) = layers.blended(1.0);
+    assert_eq!(
+        (rects, alpha, roll),
+        (layers.rect, layers.alpha, layers.roll)
+    );
+    assert_eq!(
+        layers.alphas(1.0),
+        layers.alpha.map(|a| (a * 255.0) as u8 as f32 / 255.0)
+    );
+    let start = layers.quads(scale, 0.0);
+    assert_ne!(start, tick, "the previous tick differs from this one");
+    let mut last = start;
+    for step in 1..=8 {
+        let at = layers.quads(scale, step as f32 / 8.0);
+        for layer in 0..2 {
+            for corner in 0..4 {
+                for axis in 0..2 {
+                    let jump = (at[layer][corner][axis] - last[layer][corner][axis]).abs();
+                    assert!(jump < 0.02, "layer {layer} jumped {jump} at {step}/8");
+                }
+            }
+        }
+        last = at;
+    }
+    assert_eq!(last, tick);
+}
+
+#[test]
+fn a_blend_across_the_modulo_does_not_sweep_the_texture() {
+    let mut rng = Rng::new(6);
+    let mut layers = Layers::new(&mut rng);
+    layers.scroll[0][0] = 0.9995;
+    layers.step(&FORT_GALE, &Motion::default(), 0.3, &mut rng);
+    let walk = Motion {
+        dx: 0.5,
+        ..Motion::default()
+    };
+    layers.step(&FORT_GALE, &walk, 0.3, &mut rng);
+    let before = layers.before.unwrap().rect[0].u0;
+    assert!(
+        (layers.rect[0].u0 - before).abs() > 0.5,
+        "the wrap happened"
+    );
+    let (mid, ..) = layers.blended(0.5);
+    let near = before + (layers.rect[0].u0 - before).round();
+    let travelled = (mid[0].u0 - near).abs();
+    assert!(travelled < 0.1, "swept {travelled}");
+}
+
+#[test]
+fn a_re_rolling_layer_snaps_and_the_other_keeps_blending() {
+    let layers = two_ticks(Motion {
+        dz: 0.45 / ZOOM_RATE,
+        ..Motion::default()
+    });
+    assert_eq!(layers.snapped, [false, true]);
+    let (half, ..) = layers.blended(0.5);
+    assert_eq!(half[1], layers.rect[1], "the re-roll draws where it lands");
+    assert_ne!(half[0], layers.rect[0]);
+    let low = layers.alphas(0.0);
+    assert_eq!(low[1], layers.alphas(1.0)[1]);
+}
+
+#[test]
+fn a_camera_jump_or_a_hold_draws_the_tick() {
+    let jump = two_ticks(Motion {
+        dx: 400.0,
+        ..Motion::default()
+    });
+    assert_eq!(jump.snapped, [true, true], "a cut draws where it lands");
+    let mut held = two_ticks(Motion::default());
+    held.hold();
+    assert_eq!(held.quads(0.5, 0.0), held.quads(0.5, 1.0));
+    assert_eq!(held.alphas(0.25), held.alphas(1.0));
 }

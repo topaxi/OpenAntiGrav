@@ -15,7 +15,8 @@
 //!   move, scrolls by the sideways and vertical moves and the turn, and fades
 //!   `tri(t) * opacity` (85, the UV extents and the alpha live-checked to four
 //!   places).
-//! - **[`Layers::quads`]** gives the two screen quads' texture coordinates,
+//! - **[`Layers::quads`]** (between ticks: blended from the last tick's state,
+//!   snapping where a layer re-rolls) gives the two screen quads' texture coordinates,
 //!   rotated by the roll and scaled by `DisplayScale * tan(fov / 2)`.
 //! - **[`Pipeline`]** draws them additively, depth test off, the bloom's glow
 //!   mask untouched, after the world and before the HUD - the render queue's
@@ -171,7 +172,27 @@ pub struct Layers {
     rect: [Rect; 2],
     alpha: [f32; 2],
     roll: f32,
+    /// What [`Layers::step`] started from: the previous tick's quads, for
+    /// [`Layers::quads`] and [`Layers::alphas`] to blend from. `None` until a
+    /// step has run and after [`Layers::hold`].
+    before: Option<Before>,
+    /// Layers whose blend is skipped this tick: the zoom wrapped and
+    /// re-rolled its offsets, or the camera jumped.
+    snapped: [bool; 2],
 }
+
+/// The part of a [`Layers`] that is drawn, as the last step began with it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Before {
+    rect: [Rect; 2],
+    alpha: [f32; 2],
+    roll: f32,
+}
+
+/// The largest scroll step in one tick a blend crosses; a bigger one is a
+/// camera jump (a cut moves the scroll by an arbitrary amount) and draws where it
+/// lands. A drive's own step is well under a hundredth.
+const BLEND_LIMIT: f32 = 0.25;
 
 impl Layers {
     /// As `WeatherMist_Construct` leaves them: layer 1 half a phase and half
@@ -193,16 +214,52 @@ impl Layers {
             rect: [Rect::default(); 2],
             alpha: [0.0, 0.0],
             roll: 0.0,
+            before: None,
+            snapped: [false; 2],
         }
+    }
+
+    /// A tick that does not step the layers (opacity at zero, the first
+    /// frame): the next draw shows the current state at every alpha, and the
+    /// first step after it does not blend from a stale one.
+    pub fn hold(&mut self) {
+        self.before = None;
     }
 
     /// One frame of both layers, `WeatherMist_UpdateLayer` for layer 0 then 1.
     /// The original steps only while the opacity is above zero.
     pub fn step(&mut self, config: &Config, motion: &Motion, opacity: f32, rng: &mut Rng) {
+        let before = Before {
+            rect: self.rect,
+            alpha: self.alpha,
+            roll: self.roll,
+        };
+        let rolls = self.offset;
+        let ts = self.t;
+        let drift = |layers: &Self| {
+            [0, 1].map(|layer| {
+                let [su, sv] = layers.scroll[layer];
+                let [tu, tv] = layers.turn[layer];
+                [su + tu, sv + tv]
+            })
+        };
+        let drift_before = drift(self);
         for layer in 0..2 {
             self.step_layer(layer, config, motion, opacity, rng);
         }
         self.roll = motion.roll;
+        let drift_after = drift(self);
+        let mut snapped = [false; 2];
+        for (layer, snap) in snapped.iter_mut().enumerate() {
+            let rerolled =
+                rolls[layer] != self.offset[layer] || (ts[layer] - self.t[layer]).abs() > 0.5;
+            let jumped = (0..2).any(|axis| {
+                (drift_after[layer][axis] - drift_before[layer][axis]).abs() > BLEND_LIMIT
+            });
+            *snap = rerolled || jumped;
+        }
+        self.snapped = snapped;
+        self.before = Some(before);
     }
 
     fn step_layer(
@@ -246,20 +303,59 @@ impl Layers {
         };
     }
 
+    /// The layers drawn `draw_alpha` of the way from the previous tick's
+    /// state to the current one: `1.0` is the current state, bit for bit.
+    /// A layer that re-rolled its offsets or jumped draws the current state
+    /// at every alpha, as does every layer after [`Self::hold`].
+    fn blended(&self, draw_alpha: f32) -> ([Rect; 2], [f32; 2], f32) {
+        let Some(before) = self.before.filter(|_| draw_alpha < 1.0) else {
+            return (self.rect, self.alpha, self.roll);
+        };
+        let mut rect = self.rect;
+        let mut alpha = self.alpha;
+        for layer in 0..2 {
+            if self.snapped[layer] {
+                continue;
+            }
+            let (old, new) = (before.rect[layer], self.rect[layer]);
+            // The offset is taken `% 1.0`, which the repeating texture hides
+            // but a blend would sweep across: move the old one a whole
+            // texture over so it is the nearer copy.
+            let shift_u = (new.u0 - old.u0).round();
+            let shift_v = (new.v0 - old.v0).round();
+            let from = |old: f32, shift: f32| old + shift;
+            let mix = |a: f32, b: f32| a + (b - a) * draw_alpha;
+            rect[layer] = Rect {
+                u0: mix(from(old.u0, shift_u), new.u0),
+                v0: mix(from(old.v0, shift_v), new.v0),
+                u1: mix(from(old.u1, shift_u), new.u1),
+                v1: mix(from(old.v1, shift_v), new.v1),
+            };
+            alpha[layer] =
+                before.alpha[layer] + (self.alpha[layer] - before.alpha[layer]) * draw_alpha;
+        }
+        let roll = before.roll + wrap(self.roll - before.roll) * draw_alpha;
+        (rect, alpha, roll)
+    }
+
     /// Each layer's colour alpha as the draw hands it to the GE: the float
-    /// truncated to a byte, then back to `0..=1`.
+    /// truncated to a byte, then back to `0..=1`. `draw_alpha` is the frame's
+    /// place between ticks, see [`Self::blended`].
     #[must_use]
-    pub fn alphas(&self) -> [f32; 2] {
-        self.alpha.map(|alpha| (alpha * 255.0) as u8 as f32 / 255.0)
+    pub fn alphas(&self, draw_alpha: f32) -> [f32; 2] {
+        self.blended(draw_alpha)
+            .1
+            .map(|alpha| (alpha * 255.0) as u8 as f32 / 255.0)
     }
 
     /// The two quads' texture coordinates at the clip-space corners
     /// [`CORNERS`], each rotated by the roll about its own centre and scaled
     /// by `scale` (`DisplayScale * tan(fov / 2)`) about it.
     #[must_use]
-    pub fn quads(&self, scale: f32) -> [[[f32; 2]; 4]; 2] {
-        let (sin, cos) = self.roll.sin_cos();
-        self.rect.map(|rect| {
+    pub fn quads(&self, scale: f32, draw_alpha: f32) -> [[[f32; 2]; 4]; 2] {
+        let (rects, _, roll) = self.blended(draw_alpha);
+        let (sin, cos) = roll.sin_cos();
+        rects.map(|rect| {
             let centre = [(rect.u0 + rect.u1) * 0.5, (rect.v0 + rect.v1) * 0.5];
             let corners = [
                 [rect.u0, rect.v0],

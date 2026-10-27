@@ -102,12 +102,10 @@ impl Mist {
         for _ in 0..(dt / STEP) as u32 {
             self.opacity += (self.target - self.opacity) * EASE;
         }
-        let Some(previous) = previous else {
+        let Some(previous) = previous.filter(|_| self.opacity > 0.0) else {
+            self.layers.hold();
             return;
         };
-        if self.opacity <= 0.0 {
-            return;
-        }
         let drift = -wind_modifier * self.drift_mult;
         let motion = Motion::between(&previous, &camera, drift, dt);
         self.layers
@@ -117,12 +115,15 @@ impl Mist {
     /// This frame's two quads, or `None` while the opacity is not above zero.
     /// `tan_half_fov` is the drawn camera's vertical half-angle tangent.
     #[must_use]
-    pub fn vertices(&self, tan_half_fov: f32) -> Option<[mist::Vertex; 12]> {
+    /// `draw_alpha` is the frame's place between ticks (`1.0` is this tick).
+    pub fn vertices(&self, tan_half_fov: f32, draw_alpha: f32) -> Option<[mist::Vertex; 12]> {
         if self.opacity <= 0.0 {
             return None;
         }
-        let quads = self.layers.quads(self.layout.display_scale * tan_half_fov);
-        Some(mist::vertices(&quads, self.layers.alphas()))
+        let quads = self
+            .layers
+            .quads(self.layout.display_scale * tan_half_fov, draw_alpha);
+        Some(mist::vertices(&quads, self.layers.alphas(draw_alpha)))
     }
 }
 
@@ -169,7 +170,7 @@ mod tests {
             mist.advance(1.0 / 60.0, Some(camera), camera, Vec3::ZERO);
         }
         assert_eq!(mist.opacity(), 0.3);
-        assert!(mist.vertices(0.6249).is_some());
+        assert!(mist.vertices(0.6249, 1.0).is_some());
     }
 
     #[test]
