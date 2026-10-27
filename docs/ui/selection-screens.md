@@ -235,6 +235,46 @@ for Assegai), turning once every twelve seconds seen slightly from above -
 the period and the pitch are this build's own readings of two frames a
 second apart, not recovered numbers.
 
+**The airbrake flaps are seated from the race hull (2026-10-27, picker-flaps).**
+A Pulse `ship_FE.vex` (PSP and PS2, all twelve teams, `Zone_FE.vex` too) hangs
+`AirBrake_Left`/`AirBrake_Right` straight under its turntable `Anim Transform`
+with **no locator `Transform` above them**, unlike `Ship.vex`/`Zone.vex`
+(`locator2` / `locator3` over each flap). The builder therefore had no hinge to
+bake, and a PSP flap, authored in hinge space, drew at the model origin, in the
+middle of the hull: Ship Select showed two stray flaps mid-craft while the race
+was right (confidence 95 for the file facts: no locator in any FE hull, and the
+PSP/PS2 split below, both read off every team's tree and vertex bounds). Measured on every team of both pressings (the four DLC teams
+included): carried through the race hull's hinge, each FE flap vertex lands
+within 0.0014 model units of a vertex of the race hull's flaps (`Feisar` and `Triakis` carry
+an `underbrake_flash` the FE hull keeps as a separate, already placed node, so
+the FE flap is a subset). Some PS2 files (Goteki, Feisar, EGX, Triakis,
+Harimau, Icaras, and every `Zone_FE.vex`) already hold the flap in model space;
+moving those again threw them 2 to 6 units off, so `Model::seat_flaps_on`
+(`oag-mesh`) picks, per flap, the placement whose centroid is nearer the race
+flap's, and an already placed flap only adopts the race hinge. How the original
+seats its front-end flaps is **not recovered**: reading the hinge off the race
+hull is chosen, with the vertex agreement as its evidence, not a measured law.
+
+The one path: `oag_game::preview::variant::model_or_default` (live
+`PickerStage::load_preview` and the headless `--menu-page` capture both call it)
+takes the race hull's entry (`oag_game::preview::race_hull_entry`, the race's own
+`oag_livery::entry::ship_entry_name`) and calls `preview::seat_flaps`, which
+reads that model's `Flap` hinges. Nothing in the preview places a flap on its
+own, and the flap swing (`Flap::swung`, `Flap::seat`) shares one vertex
+transform. Pinned by `picker_flaps_ground_truth` (`oag-game`; every team, time
+trial and Zone, both pressings). The same read found PS2's Triakis race hull
+names its flaps `andy_ship:AirBrake_right`/`_left`, which `Flap::collect` did not
+match, so that craft's race flaps never deflected; the namespace is stripped now.
+HD's Icaras hull names them `Ship:AirBrake_Left`/`_Right` the same way, so its race
+flaps were missing too and now deflect (checked on a held-airbrake HD race frame);
+PSP Pulse and Pure have no namespaced flap node, so those two are the only models
+the strip changes. Whether a node or flag marks which PS2 files hold the flap
+already placed was not checked; the centroid comparison is the recorded fallback.
+Other titles: Pure's picker draws a pre-rendered sprite (no mesh, no flaps);
+HD, Omega and 2048 draw the race hull (`draws_hull`) through the same race
+loader, so they carry no front-end twin to seat. HD and Omega checked by
+capture, 2048 not captured here (the dumped `.pkg` is PFS-encrypted).
+
 ### The craft's swap on HD/Fury, measured 2026-10-10 (hd-ship-select-anim)
 
 Pulse's `ship_FE.vex` turns on a turntable (above). **HD/Fury's does not**:

@@ -54,6 +54,9 @@ pub(crate) enum PreviewSource {
         /// The whole entry, for a Zone hull kept outside the team's directory
         /// (`oag_game::preview::zone_race_hull_entry`), which beats the two above.
         zone_entry: Option<String>,
+        /// The race hull this front-end hull's flaps are seated from
+        /// (`oag_game::preview::race_hull_entry`); `None` where the title draws the race hull.
+        race_hull: Option<String>,
     },
 }
 
@@ -406,6 +409,7 @@ impl PickerStage {
                     join: None,
                     hull_file: None,
                     zone_entry: None,
+                    race_hull: None,
                 }
                 .entry_name(self.previews.ship_hull, self.previews.front_end)
             }
@@ -416,7 +420,16 @@ impl PickerStage {
                 .with_context(|| format!("{name} did not resolve as a preview mesh"))?
         } else {
             let entry = variant_name.as_deref().unwrap_or(&name);
-            oag_game::preview::variant::model_or_default(&mut self.archives, entry, Some(&name))
+            let race_hull = match &source {
+                PreviewSource::Ship { race_hull, .. } => race_hull.as_deref(),
+                PreviewSource::Track { .. } => None,
+            };
+            oag_game::preview::variant::model_or_default(
+                &mut self.archives,
+                entry,
+                Some(&name),
+                race_hull,
+            )
                 .with_context(|| format!("{entry} did not resolve as a preview mesh"))?
                 .0
         };
@@ -599,6 +612,7 @@ mod tests {
             join: None,
             hull_file: None,
             zone_entry: None,
+            race_hull: None,
         };
         assert_eq!(source.entry_name(None, None).as_deref(),
             Some(r"Data\Ships\Feisar\ship_FE.vex"));
@@ -614,6 +628,7 @@ mod tests {
             join: None,
             hull_file: zone,
             zone_entry: None,
+            race_hull: None,
         };
         assert_eq!(
             source.entry_name(None, None).as_deref(),
@@ -639,6 +654,7 @@ mod tests {
             join: None,
             hull_file: None,
             zone_entry: None,
+            race_hull: None,
         };
         assert_eq!(
             source.entry_name(Some("ship.vex"), None).as_deref(),
@@ -662,6 +678,7 @@ mod tests {
                 join: None,
                 hull_file: None,
                 zone_entry: Some(zone.clone()),
+                race_hull: None,
             };
             assert_eq!(
                 source.entry_name(Some("ship.vex"), None).as_deref(),

@@ -901,6 +901,12 @@ pub(super) fn picker_page(
             entry: variant_entry.clone().unwrap_or_else(|| entry.clone()),
             fallback: variant_entry.is_some().then(|| entry.clone()),
             skin: skin_entry,
+            race_hull: match kind {
+                Kind::Ship => teams
+                    .get(picker.index())
+                    .and_then(|team| crate::preview::race_hull_entry(title, &team.id, mode)),
+                Kind::Track => None,
+            },
             rect: layout.preview,
             kind,
             // Filled in by the caller, which already has `picker_stills`'s own

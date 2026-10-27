@@ -300,6 +300,7 @@ impl Session {
                         join: title.race.team_variants_for(&choice.value).map(|v| v.join),
                         hull_file: oag_game::preview::zone_hull_file(title, mode),
                         zone_entry,
+                        race_hull: oag_game::preview::race_hull_entry(title, &choice.value, mode),
                     },
                 )
             })

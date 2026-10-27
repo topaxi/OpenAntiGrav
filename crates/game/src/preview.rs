@@ -117,6 +117,48 @@ pub fn ship_entry(title: &oag_title::Title, location: &str, mode: oag_race::Mode
     )
 }
 
+/// The hull the race flies for `team` in `mode`, on a title whose Ship Select draws a front-end
+/// twin of it (`ship_FE.vex`, [`draws_hull`] false): the file the twin's airbrake flaps are seated
+/// from ([`seat_flaps`]). Named by the race's own entry rule, [`oag_livery::entry::ship_entry_name`].
+#[must_use]
+pub fn race_hull_entry(
+    title: &oag_title::Title,
+    team: &str,
+    mode: oag_race::Mode,
+) -> Option<String> {
+    (!draws_hull(title, oag_ui_screens::picker::Kind::Ship))
+        .then(|| oag_livery::entry::ship_entry_name(title.race.ships_for(team), team, mode, None))
+}
+
+/// Seats a front-end hull's airbrake flaps where `race_entry`'s model has them at rest.
+///
+/// A Pulse `ship_FE.vex` authors each flap with no locator above it, so its flap vertices are in
+/// hinge space and, unplaced, draw at the model origin, mid-hull. The race hull carries the
+/// locators, and the two agree vertex for vertex once the race hinge is applied. This reads the
+/// race model's hinges and gives them to [`Model::seat_flaps_on`]; nothing about the placement is
+/// this crate's own. A race hull that will not read leaves the flaps unseated and says so.
+pub fn seat_flaps(archives: &mut oag_assets::Archives, race_entry: &str, model: &mut Model) {
+    let race = archives
+        .read_name(race_entry)
+        .map_err(|error| format!("{error:#}"))
+        .and_then(|blob| {
+            oag_mesh::mesh::build(race_entry, &blob).map_err(|error| format!("{error:#}"))
+        });
+    match race {
+        Ok(race) => {
+            let seated = model.seat_flaps_on(&race);
+            log::debug!(
+                "preview {}: {seated} flap(s) seated on {race_entry}",
+                model.label
+            );
+        }
+        Err(error) => log::warn!(
+            "preview {}: its airbrake flaps stay at the model origin, {race_entry} did not load: {error}",
+            model.label
+        ),
+    }
+}
+
 /// The front-end craft file a Zone race previews, `<hull>_FE.vex`, or `None` outside Zone and for a
 /// title whose Zone craft is not a file in the team's own directory ([`oag_title::ZoneCraft`]).
 ///
