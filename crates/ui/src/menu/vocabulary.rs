@@ -182,6 +182,12 @@ pub enum ValueSource {
     /// offering something that cannot be selected. `default` is always first,
     /// so there is a way back from a screen that has since been unplugged.
     Monitors,
+    /// The window sizes this screen's own shape suggests, plus the saved one if it is not among
+    /// them. Supplied because the list depends on the monitor the window is on.
+    WindowSizes,
+    /// `native` and smaller sizes in the screen's own shape; supplied for the same reason as
+    /// [`Self::WindowSizes`].
+    FullscreenResolutions,
     /// The race modes, labelled from the disc's own string table.
     ///
     /// The list itself is fixed - it is `oag_race::Mode::ALL` - so unlike the
@@ -360,6 +366,8 @@ impl ValueSource {
             Self::Languages => "languages",
             Self::Tracks => "tracks",
             Self::Monitors => "monitors",
+            Self::WindowSizes => "window_sizes",
+            Self::FullscreenResolutions => "fullscreen_resolutions",
             Self::Renderers => "renderers",
             Self::RaceModes => "race_modes",
             Self::MusicSources => "music_sources",
@@ -393,6 +401,8 @@ impl ValueSource {
             "languages" => Some(Self::Languages),
             "tracks" => Some(Self::Tracks),
             "monitors" => Some(Self::Monitors),
+            "window_sizes" => Some(Self::WindowSizes),
+            "fullscreen_resolutions" => Some(Self::FullscreenResolutions),
             "renderers" => Some(Self::Renderers),
             "race_modes" => Some(Self::RaceModes),
             "music_sources" => Some(Self::MusicSources),

@@ -49,3 +49,39 @@ fn the_web_and_the_desktop_each_drop_the_rows_they_cannot_have() {
     assert!(!has(&desktop, "display.canvas_size"));
     assert!(has(&desktop, "display.window_size") && has(&desktop, "display.vsync"));
 }
+
+/// A phone drops the window rows, keeps the resolution row, and the kept row is not greyed by
+/// the dropped WINDOW MODE row it names in `disabled_by`.
+#[test]
+fn a_phone_drops_the_window_rows_and_keeps_fullscreen_resolution_enabled() {
+    let has = |definition: &Definition, setting: &str| {
+        definition.pages.iter().any(|page| {
+            page.entries
+                .iter()
+                .any(|entry| entry.setting() == Some(setting))
+        })
+    };
+    let mut phone = built_in();
+    phone.drop_settings(oag_game::settings::platform::hidden_rows(true));
+    for row in oag_game::settings::platform::MOBILE_HIDDEN_ROWS {
+        assert!(!has(&phone, row), "{row} is dropped");
+    }
+    assert!(has(&phone, "display.fullscreen_resolution"));
+    let mut menu = Menu::new(phone);
+    menu.supply(
+        ValueSource::FullscreenResolutions,
+        &[Choice::plain("native"), Choice::plain("1170x540")],
+    );
+    let entry = menu
+        .definition()
+        .pages
+        .iter()
+        .flat_map(|page| page.entries.iter())
+        .find(|entry| entry.setting() == Some("display.fullscreen_resolution"))
+        .expect("the row")
+        .clone();
+    assert!(
+        !menu.is_disabled(&entry),
+        "nothing greys the row once its controller is gone"
+    );
+}

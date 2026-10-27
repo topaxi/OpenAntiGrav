@@ -63,6 +63,7 @@ use oag_mesh::mesh_render::Anisotropy;
 
 mod controls;
 mod online;
+pub mod platform;
 mod race;
 mod render_profile;
 mod rescue;
@@ -375,7 +376,7 @@ impl Default for Display {
     fn default() -> Self {
         Self {
             monitor: Default::default(),
-            window_mode: Default::default(),
+            window_mode: platform::default_window_mode(oag_mobile::MOBILE),
             window_size: Default::default(),
             fullscreen_resolution: Default::default(),
             canvas_size: default_canvas_size(),
