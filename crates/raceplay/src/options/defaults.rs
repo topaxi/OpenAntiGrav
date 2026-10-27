@@ -39,6 +39,7 @@ impl Default for Options {
             mode: Mode::default(),
             language: None,
             hud_style: None,
+            add_on_campaign: None,
             eliminator_kill_target: None,
             laps_override: None,
             weapons_override: None,

@@ -457,7 +457,7 @@ impl Session {
         // A title whose own chain has no team step in Zone launches without the screen, as the
         // RACE page's own launch does (`Session::handle_picker`). So does a campaign that flies
         // its own craft: the screen lists the native roster, which that craft is not on.
-        let skipped = self.campaign_craft.is_some()
+        let skipped = self.campaign_add_on.is_some()
             || self
                 .shell
                 .as_ref()
@@ -481,8 +481,9 @@ impl Session {
             self.apply_race_team(&mut race_options);
             // A downloadable campaign flies its own roster's craft: the team
             // the player picked is a native one, which is not on it.
-            if let Some(team) = self.campaign_craft.take() {
-                race_options.team = Some(team.to_string());
+            if let Some(add_on) = self.campaign_add_on.take() {
+                race_options.team = Some(add_on.default_team.to_string());
+                race_options.add_on_campaign = Some(add_on.campaign.to_string());
                 race_options.hull_variant = None;
                 race_options.skin = None;
             }

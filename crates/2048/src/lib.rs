@@ -430,6 +430,7 @@ const ADD_ONS: &[oag_title::AddOn] = &[
         campaign: "HD",
         tile: "FE_RC_HD",
         default_team: "Feisar",
+        hud: hud::HD_CAMPAIGN,
         nodes: campaign::tier::NODES,
     },
     oag_title::AddOn {
@@ -439,6 +440,7 @@ const ADD_ONS: &[oag_title::AddOn] = &[
         campaign: "Fury",
         tile: "FE_RC_FURY",
         default_team: "Feisar",
+        hud: hud::HD_CAMPAIGN,
         nodes: campaign::tier::NODES,
     },
 ];

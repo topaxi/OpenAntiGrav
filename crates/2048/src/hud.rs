@@ -54,6 +54,28 @@ pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
     skins: &[],
 };
 
+/// The layouts the HD and Fury Campaigns' events read ([`oag_title::AddOn::hud`]): the
+/// single-player race managers' `_HD` files for the modes the campaigns race.
+///
+/// **Measured** off the constructors (`race-hud-selection.md`, "The race managers, and which
+/// layout each loads", confidence 90 per literal): `SPTimeTrialRaceManager_Construct` loads
+/// `TimeTrial_HUD_HD.xml` for modes 5 and 10 with no branch, so a campaign **Speed Lap reads it
+/// too** (no constructor names `SpeedLap_HUD_HD.xml`; confidence 80). `SPZone` loads
+/// `Zone_HUD_HD.xml` and `SPElimination` `Elimination_HUD_HD.xml`. **A Race keeps the native
+/// `Arcade_HUD.xml`**: only `SPTournament` loads `Arcade_HUD_HD.xml` (one extra include, the
+/// multiplayer weapon icons), which [`oag_title::HudLayouts`] cannot say apart from a Race, so a
+/// campaign Tournament draws the Race file here. Zone Battle has no [`oag_race::Mode`].
+pub const HD_CAMPAIGN: &oag_title::HudLayouts = &oag_title::HudLayouts {
+    arcade: skins::played::ARCADE,
+    time_trial: skins::campaign::TIME_TRIAL,
+    speed_lap: skins::campaign::TIME_TRIAL,
+    zone: skins::campaign::ZONE,
+    elimination: skins::campaign::ELIMINATION,
+    split: None,
+    split_layout: Some(r"Data\XML\SplitHud_2048.toml"),
+    skins: &[],
+};
+
 /// How 2048's HUD sprites reach the screen, as [`oag_title::Title::hud_art`]
 /// carries it.
 pub const ART: &oag_title::HudArt = &oag_title::HudArt {
@@ -448,6 +470,16 @@ pub mod skins {
         pub const SPEED_LAP: &str = TIME_TRIAL;
         /// Zone.
         pub const ZONE: &str = r"Data\XML\Zone_HUD.xml";
+    }
+
+    /// The HD and Fury Campaigns' modes (`SP*RaceManager_Construct`), under [`PLAYED`].
+    pub mod campaign {
+        /// Time trial, and Speed Lap with it.
+        pub const TIME_TRIAL: &str = r"Data\XML\2048_hud\TimeTrial_HUD_HD.xml";
+        /// Zone.
+        pub const ZONE: &str = r"Data\XML\2048_hud\Zone_HUD_HD.xml";
+        /// Eliminator.
+        pub const ELIMINATION: &str = r"Data\XML\2048_hud\Elimination_HUD_HD.xml";
     }
 
     /// [`PLAYED`]'s paths - what [`LAYOUTS`](super::LAYOUTS) reads.

@@ -17,11 +17,29 @@ mod model_raster;
 pub(super) fn hud_roots(
     title: &'static oag_title::Title,
     style: Option<&str>,
+    add_on_campaign: Option<&str>,
     report: &mut Vec<String>,
 ) -> (
     &'static oag_title::HudLayouts,
     Option<&'static oag_title::HudSkin>,
 ) {
+    // A downloadable campaign's own race managers load their own files, ahead of any skin.
+    if let Some(campaign) = add_on_campaign {
+        match title
+            .archives
+            .add_ons
+            .iter()
+            .find(|add_on| add_on.campaign == campaign)
+        {
+            Some(add_on) => {
+                report.push(format!("HUD: the {campaign} campaign's layouts"));
+                return (add_on.hud, None);
+            }
+            None => report.push(format!(
+                "HUD: this title has no {campaign:?} campaign; its own layouts are drawn"
+            )),
+        }
+    }
     let Some(default) = title.hud.default_skin() else {
         return (title.hud, None);
     };
@@ -128,7 +146,8 @@ pub(super) struct SplitViews {
 /// nothing has been chosen yet, resolved the same way everywhere else a
 /// chosen language is resolved, through [`oag_ui::language::load::chosen_language`].
 ///
-/// `style` is `race::Options::hud_style`, resolved by [`hud_roots`].
+/// `style` is `race::Options::hud_style` and `add_on_campaign` is
+/// `race::Options::add_on_campaign`, both resolved by [`hud_roots`].
 #[expect(clippy::too_many_arguments, reason = "one load's worth of context")]
 pub(super) fn load_hud(
     archives: &mut oag_assets::Archives,
@@ -137,10 +156,11 @@ pub(super) fn load_hud(
     language_plugins: &[&str],
     preferred_language: Option<&str>,
     style: Option<&str>,
+    add_on_campaign: Option<&str>,
     views: SplitViews,
     report: &mut Vec<String>,
 ) -> oag_hud::Assets {
-    let (hud, skin) = hud_roots(title, style, report);
+    let (hud, skin) = hud_roots(title, style, add_on_campaign, report);
     let entry = hud_layout_for(hud, mode, views.people);
     // **Through `compose`, on every title.** A Pulse or Pure layout includes
     // nothing and composes to itself, so this is the same read it always was

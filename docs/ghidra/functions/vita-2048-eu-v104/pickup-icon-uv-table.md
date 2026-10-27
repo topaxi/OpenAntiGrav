@@ -64,6 +64,22 @@ Reads the held weapon's internal id from `*(int*)(*(int*)(param_1+0xc)+0x58)` an
   the counterpart to `oag_2048::hud::ALWAYS_ON`'s doc comment noting
   `PickupBgFrame` is absent whenever nothing is held.
 
+### The grant announcement (2026-10-27, `2048-hud-state`)
+
+**Confidence: 75** on the timer, **60** on the fly that follows. The same function, second decompile:
+
+- On a held-id change it writes `1.0` (`0x3f800000`) into `hud+0x228`, resets `hud+0x21c` and puts `PickupParent`
+  back at its cached bind-time `x`/`y` (`+0x204`/`+0x208`), the authored top-centre rect.
+- Every frame it takes `dt` off `hud+0x228` (clamped at zero). **While it is above zero** `PickupText` is shown and
+  written with the `FE_*` caption of the `switch` above, and nothing moves.
+- At zero the caption hides and `PickupParent` moves toward the slot (`hud+0x20c`/`+0x210`) at `dt * 1800.0`
+  (`0x44e10000`), `PickupBgFrame`'s size following the fly progress `hud+0x218`. So the frame is not drawn during the
+  announcement and the icon only reaches the slot afterwards.
+- A frame with nothing held clears the memory (`hud+0x230 = 0`), so the next grant announces again.
+
+Ours: `SlotHud::advance` keeps the timer (`Readout::pickup_announcing`); the fly and the scale ramp are not drawn, the
+icon snaps to the slot at the end of the second. Frame `35-w-2.png` (icon top-centre, `MISSILE`) is what it matches.
+
 ## `g_pickup_icon_uv_table` - `0x81489070`
 
 **Named here and in `names.tsv`; not live-renamed in Ghidra.** This session's

@@ -56,9 +56,9 @@ impl Session {
         };
         debug!("Launch 2048: starting {} cell {name:?}", tier.add_on.campaign);
         let cell = cell.clone();
-        self.campaign_craft = Some(tier.add_on.default_team);
+        self.campaign_add_on = Some(tier.add_on);
         self.launch_campaign_cell(cell, None);
-        self.campaign_craft = None;
+        self.campaign_add_on = None;
     }
 
     fn push_page(&mut self, id: &str) {

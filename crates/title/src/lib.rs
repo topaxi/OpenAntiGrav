@@ -851,6 +851,9 @@ pub struct AddOn {
     /// The team the campaign flies when the player's own pick is not on its
     /// roster: the id Select Team opens on in that campaign.
     pub default_team: &'static str,
+    /// The HUD layouts the campaign's events read in place of [`Title::hud`]: the title's
+    /// race managers load other files for a downloadable campaign's modes.
+    pub hud: &'static HudLayouts,
     /// Where the campaign's cells sit on the campaign map.
     pub nodes: NodeMap,
 }

@@ -139,3 +139,38 @@ fn the_pack_copy_sets_the_exposure_held_for_a_comparison(loaded: &oag_raceplay::
         loaded.report
     );
 }
+
+/// The HD Campaign's Zone event reads `Zone_HUD_HD.xml`, which authors the `SCORE` readout top
+/// centre and `SpeedClass`/`Zone Txt`/`ZonePlus0` bottom left (the original's frames
+/// `67-zone-grid`/`68-zone-5`); the native `Zone_HUD.xml` authors none of them. Fails if
+/// `Options::add_on_campaign` stops selecting the layout.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn the_hd_campaigns_zone_reads_its_hd_layout() {
+    let Some(source) = source() else { return };
+    let load = |campaign: Option<&str>| {
+        oag_raceplay::load(&oag_raceplay::Options {
+            track: Some(VINETA_K.to_string()),
+            team: Some("Feisar".to_string()),
+            mode: oag_race::Mode::Zone,
+            add_on_campaign: campaign.map(str::to_string),
+            ..options(&source)
+        })
+        .expect("the DLC circuit loads")
+    };
+    let authored = |loaded: &oag_raceplay::Loaded| {
+        let layout = loaded.hud.context().expect("the layout parses").layout;
+        ["Score", "SpeedClass", "Zone Txt", "ZonePlus0"].map(|name| layout.label(name).is_some())
+    };
+    let native = load(None);
+    assert_eq!(authored(&native), [false; 4], "{:#?}", native.report);
+    let hd = load(Some("HD"));
+    assert!(
+        hd.report
+            .iter()
+            .any(|line| line.contains("Zone_HUD_HD.xml")),
+        "{:#?}",
+        hd.report
+    );
+    assert_eq!(authored(&hd), [true; 4], "{:#?}", hd.report);
+}

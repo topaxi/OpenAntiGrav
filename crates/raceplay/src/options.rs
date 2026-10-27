@@ -195,6 +195,11 @@ pub struct Options {
     /// title's list does not hold draws the default skin and says so in the loader report.
     /// Presentation only: nothing the simulation, a replay or a net message carries.
     pub hud_style: Option<String>,
+    /// The `Campaign=` value of the downloadable campaign this race is an event of
+    /// ([`oag_title::AddOn::campaign`]), or `None` for every other race. The HUD then reads
+    /// that package's [`oag_title::AddOn::hud`] in place of the title's own, for the modes it
+    /// lists. Set by the campaign map's cell launch (`Session::launch_tier_cell`).
+    pub add_on_campaign: Option<String>,
     /// The kill count that ends an Eliminator event, or `None` for
     /// [`Mode::ELIMINATOR_KILL_TARGET_DEFAULT`].
     ///

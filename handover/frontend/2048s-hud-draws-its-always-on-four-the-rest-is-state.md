@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [2048]
-updated: 2026-10-26
-summary: "2048 HUD state-gated elements unwired; _HD layouts for the HD and Fury campaigns' modes are next"
+updated: 2026-10-27
+summary: "2048 HUD: _HD campaign layouts and the pickup grant announcement wired; class name, fly tween, Tournament file, unseen states open"
 difficulty: easy (30)
 ---
 
@@ -29,18 +29,11 @@ PSP's grid, twice the size, right-hand column off screen.
 
 ## Open
 
-- **The HD and Fury Campaigns' Time Trial, Speed Lap, Zone, Elimination and Zone Battle events read `_HD` layouts
-  (`2048-dlc-hud`, 2026-10-26).** The single-player race managers (`SPTimeTrial`, `SPZone`, `SPElimination`, `SPNitro`,
-  `SPTournament`) load `TimeTrial_HUD_HD.xml`, `Zone_HUD_HD.xml`, `Elimination_HUD_HD.xml`, `ZoneBattle_HUD_HD.xml` and
-  `Arcade_HUD_HD.xml` for the HD-lineage mode ids (below `0x17`); 2048's own events carry a CRC id and keep the base
-  `2048_hud\` files. `Zone_HUD_HD.xml` is the layout of the HD-campaign Vineta K Zone frames (it authors `SCORE` at the
-  top centre and `VENOM` / `ZONE` / the number bottom left, the text this page's Zone bullet below could not place). The
-  Race event is the same `Arcade_HUD.xml` as a native one. **Unwired, because ours has no HD-campaign launch to select
-  them with**: when `2048-dlc-menus` lands one, point a campaign `HudLayouts` at these roots and route the mode through
-  it, then compare a Zone and a Time Trial pair. The table is in
-  [race-hud-selection.md](../../docs/ghidra/functions/vita-2048-eu-v104/race-hud-selection.md). The Race event's `XP` and
-  `OBJECTIVE` lines are done (`Setup::campaign_event`, set by `load_event`): a launch that is not `load_event` draws
-  neither, which is the DLC campaigns' own rule.
+- **~~HD and Fury `_HD` layouts~~ wired 2026-10-27 (`2048-hud-state`)**: `AddOn::hud`, `Options::add_on_campaign`,
+  `--add-on-campaign`. Left: the class name above `ZONE` (`HudArt::zone_speed_classes` is `None` for 2048; the
+  zone-to-class law and string ids are unread, compare `67-zone-grid.png` and `68-zone-5.png`), a campaign Tournament's
+  `Arcade_HUD_HD.xml` (`HudLayouts` has one `arcade` row), Zone Battle (no `Mode`). The Race event's `XP` and
+  `OBJECTIVE` lines are done (`Setup::campaign_event`).
 - **Seen in both 2048 pair originals and drawn by no widget of ours:** the white ring round the hull at the grid and the
   key-shaped icon left of the speed bar. Neither has been matched to a widget of the `2048_hud` set; `TOTAL` reads
   `0.00.00` in the original and `0.00.0` in ours. The `XP` caption draws without its value (`RaceXP`, a per-race tally
@@ -74,11 +67,8 @@ PSP's grid, twice the size, right-hand column off screen.
   authored green-at-half-alpha and `EnergyBarDelay` its authored opaque
   white; why the original reads both white (with a red flash on the delay
   layer) is still genuinely open.
-- **The pickup grant announcement.** The held state is wired (below);
-  the frames also show `PickupIcon` at a *second*, top-centre position
-  once, with the `PickupText` caption, the instant a pickup is granted -
-  unwired, because `Readout` carries no time-since-grant state to key it
-  off. Needs a new readout field, not just a draw-side change.
+- **The pickup grant announcement is wired 2026-10-27** (one second, `Readout::pickup_announcing`). Open: the fly to
+  the slot and the scale ramp that follow (`pickup-icon-uv-table.md`, "The grant announcement"), the snap is ours.
 - **Wired 2026-10-05**: the speed fills, `PilotAssist`'s draw and
   `ZoneLight0`-`9` - see `2048-hud.md` and `pickup-icon-uv-table.md`. Still
   open from them: `ThrustBar`'s true target (ShipCTRL `+0x578`, per-class

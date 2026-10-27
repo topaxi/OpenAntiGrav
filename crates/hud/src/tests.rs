@@ -496,16 +496,16 @@ fn the_pickup_widgets_are_drawn_only_for_what_is_held() {
     use oag_tables::weapons::Weapon;
     let layout = Layout::from_xml(SAMPLE);
 
-    let empty = pickup_sprites(&layout, Weapon::Turbo, oag_pulse::hud::ART);
+    let empty = pickup_sprites(&layout, Weapon::Turbo, oag_pulse::hud::ART, false);
     assert_eq!(empty.len(), 2, "the fixture must author both widgets");
 
-    let names: Vec<String> = pickup_sprites(&layout, Weapon::Turbo, oag_pulse::hud::ART)
+    let names: Vec<String> = pickup_sprites(&layout, Weapon::Turbo, oag_pulse::hud::ART, false)
         .iter()
         .map(|s| s.name.clone())
         .collect();
     assert_eq!(names, ["PickupBackground", "TurboIcon"]);
 
-    let rocket: Vec<String> = pickup_sprites(&layout, Weapon::Rocket, oag_pulse::hud::ART)
+    let rocket: Vec<String> = pickup_sprites(&layout, Weapon::Rocket, oag_pulse::hud::ART, false)
         .iter()
         .map(|s| s.name.clone())
         .collect();
@@ -514,7 +514,7 @@ fn the_pickup_widgets_are_drawn_only_for_what_is_held() {
     // A weapon whose icon this layout does not author draws the backdrop and
     // no icon, rather than nothing or a panic: a layout carrying one and not
     // the other is the case that would otherwise crash a race.
-    let absent = pickup_sprites(&layout, Weapon::Quake, oag_pulse::hud::ART);
+    let absent = pickup_sprites(&layout, Weapon::Quake, oag_pulse::hud::ART, false);
     assert_eq!(absent.len(), 1);
     assert_eq!(absent[0].name, "PickupBackground");
 }
@@ -545,7 +545,7 @@ fn the_pickup_backdrop_takes_its_weapons_own_colour_and_the_icon_keeps_its_autho
         "and that colour is white"
     );
 
-    let drawn = pickup_sprites(&layout, Weapon::Turbo, oag_pulse::hud::ART);
+    let drawn = pickup_sprites(&layout, Weapon::Turbo, oag_pulse::hud::ART, false);
     assert_ne!(
         drawn[0].color, authored.color,
         "the backdrop must not keep the authored white"
@@ -595,7 +595,7 @@ fn the_2048_pickup_icon_is_uv_rewritten_and_recentred_in_its_frame() {
     use oag_tables::weapons::Weapon;
     let layout = Layout::from_xml(SAMPLE_2048_PICKUP);
 
-    let drawn = pickup_sprites(&layout, Weapon::Rocket, oag_2048::hud::ART);
+    let drawn = pickup_sprites(&layout, Weapon::Rocket, oag_2048::hud::ART, false);
     assert_eq!(drawn.len(), 2, "the fixture must author both widgets");
     assert_eq!(drawn[0].name, "PickupBgFrame");
     assert_eq!(drawn[1].name, "PickupIcon");
@@ -616,9 +616,43 @@ fn the_2048_pickup_icon_is_uv_rewritten_and_recentred_in_its_frame() {
     // same "draw what is held, nothing invented for what is not" rule
     // `the_pickup_widgets_are_drawn_only_for_what_is_held` already covers
     // for Pulse's dialect.
-    let unimplemented = pickup_sprites(&layout, Weapon::Repulser, oag_2048::hud::ART);
+    let unimplemented = pickup_sprites(&layout, Weapon::Repulser, oag_2048::hud::ART, false);
     assert_eq!(unimplemented.len(), 1);
     assert_eq!(unimplemented[0].name, "PickupBgFrame");
+}
+
+/// The grant announcement: while it is up the icon sits at its authored top-centre rect with no
+/// frame, `PickupText` names the weapon, and after it the held state is what `the_2048_pickup_icon_is_uv_rewritten...`
+/// pins. Fails if `Readout::pickup_announcing` stops reaching the sprites or the caption.
+#[test]
+fn the_2048_grant_announcement_is_the_icon_at_its_authored_rect_with_a_caption() {
+    use oag_tables::weapons::Weapon;
+    let layout = Layout::from_xml(SAMPLE_2048_PICKUP);
+    let announced = pickup_sprites(&layout, Weapon::Rocket, oag_2048::hud::ART, true);
+    assert_eq!(announced.len(), 1, "no PickupBgFrame while announcing");
+    assert_eq!(announced[0].name, "PickupIcon");
+    assert_eq!(announced[0].uv, [203.0, 201.0, 85.0, 86.0]);
+    assert_eq!(
+        announced[0].rect,
+        layout.sprite("PickupIcon").expect("authored").rect
+    );
+
+    let caption_layout = Layout::from_xml(
+        r#"<Screen><Screen name="HUD"><Text name="PickupText"><Values font="HUD" x="480" y="60"/></Text></Screen></Screen>"#,
+    );
+    let caption = caption_layout
+        .label("PickupText")
+        .expect("authored")
+        .clone();
+    let strings = oag_ui::language::StringTable::default();
+    let text = |readout: &Readout| {
+        super::draw::text_for(&caption, readout, &strings, true, false, None, true, false)
+    };
+    let mut readout = Readout::blank();
+    readout.pickup = Some(Weapon::Missile);
+    assert_eq!(text(&readout), None, "nothing before the announcement");
+    readout.pickup_announcing = true;
+    assert_eq!(text(&readout).as_deref(), Some("FE_MISSILE"));
 }
 
 /// **A weapon `PICKUP_COLOURS` has not measured falls back to
@@ -638,7 +672,7 @@ fn a_weapon_with_no_measured_colour_falls_back_to_the_single_substitute() {
         "this test is asserting the fallback path, which only fires when this is None"
     );
 
-    let drawn = pickup_sprites(&layout, Weapon::Bomb, oag_pulse::hud::ART);
+    let drawn = pickup_sprites(&layout, Weapon::Bomb, oag_pulse::hud::ART, false);
     // `HudBGColour` is `0x40000000` - a quarter-alpha black.
     assert_eq!(drawn[0].color[3], 0x40 as f32 / 255.0);
     assert_eq!(drawn[0].color[0..3], [0.0, 0.0, 0.0]);
