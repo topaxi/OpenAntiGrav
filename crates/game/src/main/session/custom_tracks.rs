@@ -82,17 +82,20 @@ impl Session {
 
     /// Called once a frame. Starts reading the custom tracks the first time the
     /// RACE REMIX page shows CUSTOM, and never while a race is running or
-    /// suspended behind its pause menu; when the read has just finished and the
+    /// suspended behind its pause menu (a survey under way waits until the menus are back); when the read has just finished and the
     /// TRACK row is showing it, hands the row its checked list.
     #[cfg(feature = "ballisticng")]
     pub(crate) fn poll_custom_tracks(&mut self) {
         use oag_game::custom_tracks::CUSTOM;
+        let in_menus = matches!(&self.stage, crate::stage::Stage::Menu(_));
         let on_remix_page = matches!(
             &self.stage,
             crate::stage::Stage::Menu(stage) if stage.menu.page().id == "remix"
         );
+        let racing = !in_menus || self.suspended_race.is_some();
+        self.custom_tracks.hold(racing);
         if on_remix_page
-            && self.suspended_race.is_none()
+            && !racing
             && self.settings.remix.track_title == CUSTOM
         {
             self.custom_tracks.begin();

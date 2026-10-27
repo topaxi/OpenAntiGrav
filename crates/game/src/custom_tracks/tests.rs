@@ -20,6 +20,7 @@ fn scanned(listings: Vec<Listing>) -> Scan {
         task: None,
         begun: true,
         cache_file: None,
+        held: Default::default(),
     }
 }
 
@@ -80,6 +81,8 @@ fn files_still_being_read_are_rows_that_cannot_start() {
     assert!(scan.raceable("/tracks/lion.wtrk").is_err());
 }
 
+static NOT_HELD: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 fn fixture() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../trackfile/tests/fixtures/oval.track.toml")
 }
@@ -138,6 +141,21 @@ fn nothing_is_read_until_the_scan_is_begun() {
 }
 
 #[test]
+fn a_held_scan_reads_nothing_until_released() {
+    let dir = lone_fixture("held");
+    let mut scan = Scan::new(std::slice::from_ref(&dir), &[], None);
+    scan.hold(true);
+    scan.begin();
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    assert!(!scan.poll(), "a held survey does not get through its file");
+    assert!(!scan.is_settled());
+    scan.hold(false);
+    finish(&mut scan);
+    assert_eq!(scan.listings[0].title, "Fixture Octagon");
+    std::fs::remove_dir_all(dir).ok();
+}
+
+#[test]
 fn a_scan_with_no_files_is_settled_and_never_starts_a_thread() {
     let mut scan = Scan::new(&[], &[], None);
     assert!(scan.is_empty() && scan.is_settled());
@@ -151,7 +169,7 @@ fn the_cache_is_used_while_path_and_modification_time_match_and_dropped_when_eit
     let file = cache::file_in(&dir);
     let files = [fixture()];
 
-    let first = cache::survey(&files, Some(&file));
+    let first = cache::survey(&files, Some(&file), &NOT_HELD);
     assert_eq!(first[0].title, "Fixture Octagon");
     let text = std::fs::read_to_string(&file).expect("the survey wrote its cache");
     assert!(text.contains("Fixture Octagon"));
@@ -160,7 +178,7 @@ fn the_cache_is_used_while_path_and_modification_time_match_and_dropped_when_eit
     // cache says and seeing the change come back.
     std::fs::write(&file, text.replace("Fixture Octagon", "From The Cache")).unwrap();
     assert_eq!(
-        cache::survey(&files, Some(&file))[0].title,
+        cache::survey(&files, Some(&file), &NOT_HELD)[0].title,
         "From The Cache"
     );
 
@@ -179,24 +197,27 @@ fn the_cache_is_used_while_path_and_modification_time_match_and_dropped_when_eit
         .join("\n");
     std::fs::write(&file, moved).unwrap();
     assert_eq!(
-        cache::survey(&files, Some(&file))[0].title,
+        cache::survey(&files, Some(&file), &NOT_HELD)[0].title,
         "Fixture Octagon"
     );
 
     // A cache from another revision, or one that is not TOML, is not trusted.
     std::fs::write(&file, "revision = 0\n").unwrap();
     assert_eq!(
-        cache::survey(&files, Some(&file))[0].title,
+        cache::survey(&files, Some(&file), &NOT_HELD)[0].title,
         "Fixture Octagon"
     );
     std::fs::write(&file, "not toml [").unwrap();
     assert_eq!(
-        cache::survey(&files, Some(&file))[0].title,
+        cache::survey(&files, Some(&file), &NOT_HELD)[0].title,
         "Fixture Octagon"
     );
 
     // With no cache file every file is read.
-    assert_eq!(cache::survey(&files, None)[0].title, "Fixture Octagon");
+    assert_eq!(
+        cache::survey(&files, None, &NOT_HELD)[0].title,
+        "Fixture Octagon"
+    );
     std::fs::remove_dir_all(dir).ok();
 }
 

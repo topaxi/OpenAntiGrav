@@ -21,11 +21,20 @@
 //! hidden and never raced instead of another.
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use oag_raceplay::foreign::survey::Listing;
 use oag_thread::Task;
 use oag_ui::language::StringTable;
 use oag_ui::menu::Choice;
+
+impl Drop for Scan {
+    /// A held thread would otherwise wait for a release that never comes.
+    fn drop(&mut self) {
+        self.hold(false);
+    }
+}
 
 /// The TRACK TITLE value that means "the player's own tracks".
 pub const CUSTOM: &str = "CUSTOM";
@@ -40,6 +49,8 @@ pub struct Scan {
     begun: bool,
     /// Where the survey keeps what it read, or none.
     cache_file: Option<PathBuf>,
+    /// While set the thread reads no further file ([`Scan::hold`]).
+    held: Arc<AtomicBool>,
 }
 
 impl Scan {
@@ -65,7 +76,15 @@ impl Scan {
             task: None,
             begun: false,
             cache_file,
+            held: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    /// Pauses the reading (`true`) or lets it go on (`false`). The thread stops
+    /// before its next file, so a race that starts while a survey is running is
+    /// never decoding LZMA beside it; the file in hand is finished first.
+    pub fn hold(&self, held: bool) {
+        self.held.store(held, Ordering::Relaxed);
     }
 
     /// Starts reading the files on a thread of their own, once. A later call is
@@ -77,8 +96,9 @@ impl Scan {
         self.begun = true;
         let files = self.files.clone();
         let cache_file = self.cache_file.clone();
+        let held = Arc::clone(&self.held);
         self.task = Some(Task::spawn("oag-custom-tracks", move || {
-            cache::survey(&files, cache_file.as_deref())
+            cache::survey(&files, cache_file.as_deref(), &held)
         }));
     }
 

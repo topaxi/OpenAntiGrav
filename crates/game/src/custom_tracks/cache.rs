@@ -9,6 +9,7 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::UNIX_EPOCH;
 
 use oag_raceplay::foreign::survey::{self, Kind, Listing};
@@ -100,13 +101,21 @@ fn to_entry(listing: &Listing, (secs, nanos): (u64, u32)) -> Entry {
 
 /// A [`survey::listing`] of every file in `files`, in their order, reusing the
 /// cache for each file whose path and modification time are unchanged, then
-/// writing the cache back. With no `cache_file` every file is read.
-pub(super) fn survey(files: &[PathBuf], cache_file: Option<&Path>) -> Vec<Listing> {
+/// writing the cache back. With no `cache_file` every file is read. Waits
+/// before each file while `held` is set.
+pub(super) fn survey(
+    files: &[PathBuf],
+    cache_file: Option<&Path>,
+    held: &AtomicBool,
+) -> Vec<Listing> {
     let mut known = cache_file.map(load).unwrap_or_default();
     let mut kept = Vec::with_capacity(files.len());
     let listings = files
         .iter()
         .map(|path| {
+            while held.load(Ordering::Relaxed) {
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
             let stamp = stamp(path);
             let key = path.display().to_string();
             let hit = known
