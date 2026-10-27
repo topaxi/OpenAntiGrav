@@ -25,7 +25,7 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use oag_rcs::gcn::{self, Detail, Encoding, Program, Stage};
+use oag_rcs::gcn::{self, Detail, Encoding, Operand, Program, Stage};
 
 fn path(rel: &str) -> Option<PathBuf> {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -64,6 +64,10 @@ struct Survey {
     /// Reflections and vertex-input tables that do not close, by error kind.
     reflection: BTreeMap<String, usize>,
     vertex_inputs: BTreeMap<String, usize>,
+    /// Vertex programs fetching a four-component `tangent`, by the first instruction that
+    /// reads its `w` and whether that instruction applies `2w - 1` (a multiply-add with the
+    /// inline 2.0 and -1.0): HD's two compiles split on exactly this.
+    tangent_w: BTreeMap<String, usize>,
 }
 
 /// An error's kind: its message with the numbers taken out.
@@ -130,8 +134,37 @@ impl Survey {
         if let Err(e) = &p.vertex_inputs {
             *self.vertex_inputs.entry(kind(e)).or_default() += 1;
         }
+        if let Some(reader) = tangent_w_reader(p) {
+            *self.tangent_w.entry(reader).or_default() += 1;
+        }
         pro || unknown
     }
+}
+
+/// The first instruction reading a fetched tangent's `w`, named with whether it is `2w - 1`.
+fn tangent_w_reader(p: &Program<'_>) -> Option<String> {
+    let (input, _) = p.input_named("tangent")?;
+    if input.size < 4 {
+        return Some("w not fetched".to_string());
+    }
+    let w = input.vgpr + 3;
+    let reads = |op: &Operand| matches!(*op, Operand::Vgpr { first, count } if (first..first + count).contains(&w));
+    let first = p
+        .instructions
+        .iter()
+        .find(|i| i.src.iter().flatten().any(reads))?;
+    let two = first
+        .src
+        .iter()
+        .flatten()
+        .any(|s| *s == Operand::Float(2.0));
+    let minus_one = first
+        .src
+        .iter()
+        .flatten()
+        .any(|s| *s == Operand::Float(-1.0));
+    let law = if two && minus_one { "2w-1" } else { "raw" };
+    Some(format!("{} {law}", first.name.unwrap_or("?")))
 }
 
 fn sweep(rel: &str) -> Option<Survey> {
@@ -154,6 +187,20 @@ fn sweep(rel: &str) -> Option<Survey> {
 
 fn holds(rel: &str, expected: &str) {
     let Some(s) = sweep(rel) else { return };
+    assert!(
+        s.refused.is_empty(),
+        "{rel}: refused programs {:?}",
+        s.refused
+    );
+    assert_eq!(
+        s.plain_pro_or_unknown, 0,
+        "{rel}: a plain-named material has a PS4 Pro word or an unlisted opcode"
+    );
+    assert!(
+        !s.tangent_w.keys().any(|k| k.ends_with("2w-1")),
+        "{rel}: a vertex program applies 2w - 1 to the tangent's w: {:?}",
+        s.tangent_w
+    );
     assert_eq!(format!("{s:?}"), expected, "{rel}");
 }
 
@@ -170,47 +217,47 @@ macro_rules! archive {
 archive!(
     base_data00,
     "omega-eu/uroot/data00.psarc",
-    "Survey { files: 2993, tags: 138837, pixel: 31332, vertex: 107505, other_stage: 0, instructions: 16862339, pro_programs: 83658, plain_files: 991, plain_pro_or_unknown: 0, refused: {}, unknown: {\"VOP1 84\": 6162, \"VOP1 85\": 3712, \"VOP1 86\": 158803, \"VOP1 87\": 4424, \"VOP1 88\": 68246, \"VOP1 91\": 3120, \"VOP2 50\": 13722, \"VOP2 51\": 6983, \"VOP2 53\": 546590, \"VOP2 55\": 32, \"VOP2 57\": 157748, \"VOP2 58\": 191566, \"VOPC 201\": 2888, \"VOPC 203\": 550, \"VOPC 204\": 80, \"VOPC 206\": 64}, reflection: {}, vertex_inputs: {} }"
+    "Survey { files: 2993, tags: 138837, pixel: 31332, vertex: 107505, other_stage: 0, instructions: 16862339, pro_programs: 83658, plain_files: 991, plain_pro_or_unknown: 0, refused: {}, unknown: {\"VOP1 84\": 6162, \"VOP1 85\": 3712, \"VOP1 86\": 158803, \"VOP1 87\": 4424, \"VOP1 88\": 68246, \"VOP1 91\": 3120, \"VOP2 50\": 13722, \"VOP2 51\": 6983, \"VOP2 53\": 546590, \"VOP2 55\": 32, \"VOP2 57\": 157748, \"VOP2 58\": 191566, \"VOPC 201\": 2888, \"VOPC 203\": 550, \"VOPC 204\": 80, \"VOPC 206\": 64}, reflection: {}, vertex_inputs: {}, tangent_w: {\"v_mad_mix_f32 raw\": 7282, \"v_mad_mixhi_f16 raw\": 16, \"v_mad_mixlo_f16 raw\": 24, \"v_mul_f32 raw\": 10879, \"w not fetched\": 1695} }"
 );
 archive!(
     base_data01,
     "omega-eu/uroot/data01.psarc",
-    "Survey { files: 1601, tags: 152141, pixel: 30731, vertex: 121410, other_stage: 0, instructions: 19406731, pro_programs: 94424, plain_files: 530, plain_pro_or_unknown: 0, refused: {}, unknown: {\"VOP1 84\": 4486, \"VOP1 86\": 177967, \"VOP1 87\": 3834, \"VOP1 88\": 77275, \"VOP1 91\": 2036, \"VOP2 50\": 12398, \"VOP2 51\": 2883, \"VOP2 53\": 590849, \"VOP2 56\": 8, \"VOP2 57\": 174496, \"VOP2 58\": 212835, \"VOPC 201\": 2064, \"VOPC 203\": 1374}, reflection: {}, vertex_inputs: {} }"
+    "Survey { files: 1601, tags: 152141, pixel: 30731, vertex: 121410, other_stage: 0, instructions: 19406731, pro_programs: 94424, plain_files: 530, plain_pro_or_unknown: 0, refused: {}, unknown: {\"VOP1 84\": 4486, \"VOP1 86\": 177967, \"VOP1 87\": 3834, \"VOP1 88\": 77275, \"VOP1 91\": 2036, \"VOP2 50\": 12398, \"VOP2 51\": 2883, \"VOP2 53\": 590849, \"VOP2 56\": 8, \"VOP2 57\": 174496, \"VOP2 58\": 212835, \"VOPC 201\": 2064, \"VOPC 203\": 1374}, reflection: {}, vertex_inputs: {}, tangent_w: {\"v_mad_mix_f32 raw\": 13392, \"v_mad_mixhi_f16 raw\": 10, \"v_mad_mixlo_f16 raw\": 30, \"v_mul_f32 raw\": 16760, \"w not fetched\": 630} }"
 );
 archive!(
     base_data02,
     "omega-eu/uroot/data02.psarc",
-    "Survey { files: 2549, tags: 240668, pixel: 49385, vertex: 191283, other_stage: 0, instructions: 31015298, pro_programs: 149718, plain_files: 849, plain_pro_or_unknown: 0, refused: {}, unknown: {\"VOP1 84\": 8957, \"VOP1 85\": 10296, \"VOP1 86\": 283613, \"VOP1 87\": 6989, \"VOP1 88\": 122732, \"VOP1 91\": 3604, \"VOP2 50\": 22898, \"VOP2 51\": 5913, \"VOP2 53\": 939264, \"VOP2 55\": 10, \"VOP2 57\": 270277, \"VOP2 58\": 328951, \"VOPC 201\": 5388, \"VOPC 203\": 2426}, reflection: {}, vertex_inputs: {} }"
+    "Survey { files: 2549, tags: 240668, pixel: 49385, vertex: 191283, other_stage: 0, instructions: 31015298, pro_programs: 149718, plain_files: 849, plain_pro_or_unknown: 0, refused: {}, unknown: {\"VOP1 84\": 8957, \"VOP1 85\": 10296, \"VOP1 86\": 283613, \"VOP1 87\": 6989, \"VOP1 88\": 122732, \"VOP1 91\": 3604, \"VOP2 50\": 22898, \"VOP2 51\": 5913, \"VOP2 53\": 939264, \"VOP2 55\": 10, \"VOP2 57\": 270277, \"VOP2 58\": 328951, \"VOPC 201\": 5388, \"VOPC 203\": 2426}, reflection: {}, vertex_inputs: {}, tangent_w: {\"v_mad_mix_f32 raw\": 20238, \"v_mul_f32 raw\": 25242, \"w not fetched\": 990} }"
 );
 archive!(
     base_data03,
     "omega-eu/uroot/data03.psarc",
-    "Survey { files: 0, tags: 0, pixel: 0, vertex: 0, other_stage: 0, instructions: 0, pro_programs: 0, plain_files: 0, plain_pro_or_unknown: 0, refused: {}, unknown: {}, reflection: {}, vertex_inputs: {} }"
+    "Survey { files: 0, tags: 0, pixel: 0, vertex: 0, other_stage: 0, instructions: 0, pro_programs: 0, plain_files: 0, plain_pro_or_unknown: 0, refused: {}, unknown: {}, reflection: {}, vertex_inputs: {}, tangent_w: {} }"
 );
 archive!(
     base_data04,
     "omega-eu/uroot/data04.psarc",
-    "Survey { files: 768, tags: 66112, pixel: 11314, vertex: 54798, other_stage: 0, instructions: 8168620, pro_programs: 40486, plain_files: 256, plain_pro_or_unknown: 0, refused: {}, unknown: {\"VOP1 84\": 1398, \"VOP1 85\": 2738, \"VOP1 86\": 80438, \"VOP1 87\": 1364, \"VOP1 88\": 34510, \"VOP1 91\": 226, \"VOP2 50\": 5572, \"VOP2 51\": 1706, \"VOP2 53\": 275328, \"VOP2 57\": 78840, \"VOP2 58\": 99072, \"VOPC 201\": 80, \"VOPC 203\": 392, \"VOPC 204\": 80}, reflection: {}, vertex_inputs: {} }"
+    "Survey { files: 768, tags: 66112, pixel: 11314, vertex: 54798, other_stage: 0, instructions: 8168620, pro_programs: 40486, plain_files: 256, plain_pro_or_unknown: 0, refused: {}, unknown: {\"VOP1 84\": 1398, \"VOP1 85\": 2738, \"VOP1 86\": 80438, \"VOP1 87\": 1364, \"VOP1 88\": 34510, \"VOP1 91\": 226, \"VOP2 50\": 5572, \"VOP2 51\": 1706, \"VOP2 53\": 275328, \"VOP2 57\": 78840, \"VOP2 58\": 99072, \"VOPC 201\": 80, \"VOPC 203\": 392, \"VOPC 204\": 80}, reflection: {}, vertex_inputs: {}, tangent_w: {\"v_mad_mix_f32 raw\": 3220, \"v_mul_f32 raw\": 4025} }"
 );
 archive!(
     patch_data05,
     "omega-eu-patch/uroot/data05.psarc",
-    "Survey { files: 7912, tags: 597755, pixel: 122752, vertex: 475003, other_stage: 0, instructions: 76459359, pro_programs: 368274, plain_files: 2627, plain_pro_or_unknown: 0, refused: {}, unknown: {\"VOP1 84\": 21003, \"VOP1 85\": 16746, \"VOP1 86\": 775470, \"VOP1 87\": 251696, \"VOP1 88\": 537848, \"VOP1 91\": 7434, \"VOP2 50\": 50542, \"VOP2 51\": 33801, \"VOP2 53\": 2657704, \"VOP2 55\": 644, \"VOP2 57\": 747456, \"VOP2 58\": 824492, \"VOPC 201\": 10420, \"VOPC 203\": 4742, \"VOPC 204\": 160, \"VOPC 206\": 64}, reflection: {}, vertex_inputs: {} }"
+    "Survey { files: 7912, tags: 597755, pixel: 122752, vertex: 475003, other_stage: 0, instructions: 76459359, pro_programs: 368274, plain_files: 2627, plain_pro_or_unknown: 0, refused: {}, unknown: {\"VOP1 84\": 21003, \"VOP1 85\": 16746, \"VOP1 86\": 775470, \"VOP1 87\": 251696, \"VOP1 88\": 537848, \"VOP1 91\": 7434, \"VOP2 50\": 50542, \"VOP2 51\": 33801, \"VOP2 53\": 2657704, \"VOP2 55\": 644, \"VOP2 57\": 747456, \"VOP2 58\": 824492, \"VOPC 201\": 10420, \"VOPC 203\": 4742, \"VOPC 204\": 160, \"VOPC 206\": 64}, reflection: {}, vertex_inputs: {}, tangent_w: {\"v_mad_mix_f32 raw\": 44132, \"v_mad_mixhi_f16 raw\": 22, \"v_mad_mixlo_f16 raw\": 58, \"v_mul_f32 raw\": 56906, \"w not fetched\": 3315} }"
 );
 archive!(
     patch_data07,
     "omega-eu-patch/uroot/data07.psarc",
-    "Survey { files: 0, tags: 0, pixel: 0, vertex: 0, other_stage: 0, instructions: 0, pro_programs: 0, plain_files: 0, plain_pro_or_unknown: 0, refused: {}, unknown: {}, reflection: {}, vertex_inputs: {} }"
+    "Survey { files: 0, tags: 0, pixel: 0, vertex: 0, other_stage: 0, instructions: 0, pro_programs: 0, plain_files: 0, plain_pro_or_unknown: 0, refused: {}, unknown: {}, reflection: {}, vertex_inputs: {}, tangent_w: {} }"
 );
 archive!(
     patch_data08,
     "omega-eu-patch/uroot/data08.psarc",
-    "Survey { files: 7874, tags: 589851, pixel: 121403, vertex: 468448, other_stage: 0, instructions: 75911790, pro_programs: 363258, plain_files: 2615, plain_pro_or_unknown: 0, refused: {}, unknown: {\"VOP1 84\": 20943, \"VOP1 85\": 6450, \"VOP1 86\": 765587, \"VOP1 87\": 251533, \"VOP1 88\": 533624, \"VOP1 91\": 7452, \"VOP2 50\": 42696, \"VOP2 51\": 33830, \"VOP2 53\": 2636839, \"VOP2 55\": 674, \"VOP2 56\": 4, \"VOP2 57\": 689156, \"VOP2 58\": 737620, \"VOPC 201\": 10344, \"VOPC 203\": 4742, \"VOPC 204\": 160, \"VOPC 206\": 64}, reflection: {}, vertex_inputs: {} }"
+    "Survey { files: 7874, tags: 589851, pixel: 121403, vertex: 468448, other_stage: 0, instructions: 75911790, pro_programs: 363258, plain_files: 2615, plain_pro_or_unknown: 0, refused: {}, unknown: {\"VOP1 84\": 20943, \"VOP1 85\": 6450, \"VOP1 86\": 765587, \"VOP1 87\": 251533, \"VOP1 88\": 533624, \"VOP1 91\": 7452, \"VOP2 50\": 42696, \"VOP2 51\": 33830, \"VOP2 53\": 2636839, \"VOP2 55\": 674, \"VOP2 56\": 4, \"VOP2 57\": 689156, \"VOP2 58\": 737620, \"VOPC 201\": 10344, \"VOPC 203\": 4742, \"VOPC 204\": 160, \"VOPC 206\": 64}, reflection: {}, vertex_inputs: {}, tangent_w: {\"v_mad_mix_f32 raw\": 44092, \"v_mad_mixhi_f16 raw\": 40, \"v_mad_mixlo_f16 raw\": 40, \"v_mul_f32 raw\": 57006, \"w not fetched\": 3315} }"
 );
 archive!(
     patch_data09,
     "omega-eu-patch/uroot/data09.psarc",
-    "Survey { files: 0, tags: 0, pixel: 0, vertex: 0, other_stage: 0, instructions: 0, pro_programs: 0, plain_files: 0, plain_pro_or_unknown: 0, refused: {}, unknown: {}, reflection: {}, vertex_inputs: {} }"
+    "Survey { files: 0, tags: 0, pixel: 0, vertex: 0, other_stage: 0, instructions: 0, pro_programs: 0, plain_files: 0, plain_pro_or_unknown: 0, refused: {}, unknown: {}, reflection: {}, vertex_inputs: {}, tangent_w: {} }"
 );
 
 fn eboot(rel: &str, expected: &str) {
@@ -229,7 +276,7 @@ fn eboot(rel: &str, expected: &str) {
 fn base_eboot() {
     eboot(
         "omega-eu/uroot/eboot.bin",
-        "Survey { files: 1, tags: 203, pixel: 134, vertex: 57, other_stage: 12, instructions: 9911, pro_programs: 3, plain_files: 0, plain_pro_or_unknown: 0, refused: {}, unknown: {}, reflection: {\"reflection: an unread header word is not zero\": 8, \"the reflection of a stage-4 program is unread\": 12}, vertex_inputs: {\"N runs in the vertex header match the input slots\": 4} }",
+        "Survey { files: 1, tags: 203, pixel: 134, vertex: 57, other_stage: 12, instructions: 9911, pro_programs: 3, plain_files: 0, plain_pro_or_unknown: 0, refused: {}, unknown: {}, reflection: {\"reflection: an unread header word is not zero\": 8, \"the reflection of a stage-4 program is unread\": 12}, vertex_inputs: {\"N runs in the vertex header match the input slots\": 4}, tangent_w: {} }",
     );
 }
 
@@ -238,7 +285,7 @@ fn base_eboot() {
 fn patch_eboot() {
     eboot(
         "omega-eu-patch/uroot/eboot.bin",
-        "Survey { files: 1, tags: 213, pixel: 140, vertex: 61, other_stage: 12, instructions: 10462, pro_programs: 3, plain_files: 0, plain_pro_or_unknown: 0, refused: {}, unknown: {}, reflection: {\"reflection: an unread header word is not zero\": 9, \"the reflection of a stage-4 program is unread\": 12}, vertex_inputs: {\"N runs in the vertex header match the input slots\": 4} }",
+        "Survey { files: 1, tags: 213, pixel: 140, vertex: 61, other_stage: 12, instructions: 10462, pro_programs: 3, plain_files: 0, plain_pro_or_unknown: 0, refused: {}, unknown: {}, reflection: {\"reflection: an unread header word is not zero\": 9, \"the reflection of a stage-4 program is unread\": 12}, vertex_inputs: {\"N runs in the vertex header match the input slots\": 4}, tangent_w: {} }",
     );
 }
 
