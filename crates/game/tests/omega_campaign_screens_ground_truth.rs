@@ -100,3 +100,82 @@ fn omegas_campaign_carries_fury_s_layout_and_every_card() {
     assert_eq!(fury.len(), 8);
     assert_eq!(fury[0].flyer_name.as_deref(), Some("09_Blitzed"));
 }
+
+/// The PS4 `00_flyer.rcsmodel` is the card's shell: its outline and the reflection's fade
+/// come off the PS4 container (`flyer::shell`'s `load_psp2`), where the PS3 chunk reader
+/// refused it and every card was a plain rectangle.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn omega_cards_take_the_ps4_shell() {
+    let Some(omega) = oag_testdata::exact("data/extracted/ps4") else {
+        return;
+    };
+    let mut archives = oag_omega::open(&omega.display().to_string()).expect("open omega");
+    let shell = oag_game::flyer::Shell::load(&mut archives).expect("the PS4 shell reads");
+    assert_eq!(
+        shell.outline.len(),
+        25,
+        "twenty-five front triangles, as HD's"
+    );
+    assert!(
+        (shell.half_size[0] - 51.2).abs() < 0.01,
+        "{:?}",
+        shell.half_size
+    );
+    assert!(
+        (shell.half_size[1] - 33.3).abs() < 0.1,
+        "{:?}",
+        shell.half_size
+    );
+    assert!(
+        (shell.fade.top_alpha - 76.0 / 255.0).abs() < 1e-6,
+        "0x4c at the edge"
+    );
+}
+
+/// The card materials read their coverage the way HD does: `simpletextureandtexturealpha`
+/// from the picture's own alpha, `basicalpha` and `scrollingalpha` from the red channel of
+/// the elements atlas (bound second) - read off the red channel or unbound they draw the
+/// white boxes and dark blocks Omega's cards had.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn omega_card_materials_read_their_coverage_channels() {
+    use oag_mesh::mesh::slots;
+    let Some(omega) = oag_testdata::exact("data/extracted/ps4") else {
+        return;
+    };
+    let mut archives = oag_omega::open(&omega.display().to_string()).expect("open omega");
+    let channel = |slots: u32| (slots >> 3) & 3;
+    let (front, _) = oag_game::preview::psp2_scene::model_named(
+        &mut archives,
+        "Data/FE/Flyers/09_Blitzed/flyer.vex",
+    )
+    .expect("the Fury front");
+    assert!(
+        front
+            .vertices
+            .iter()
+            .all(|v| channel(v.slots) == 3 || v.slots & slots::ALPHA_FROM_SECOND != 0),
+        "every front vertex reads the picture's alpha"
+    );
+    let (back, _) = oag_game::preview::psp2_scene::model_named(
+        &mut archives,
+        "Data/FE/Flyers/09_Blitzed/flyer_Back.vex",
+    )
+    .expect("the Fury back");
+    let from_atlas: Vec<_> = back
+        .vertices
+        .iter()
+        .filter(|v| v.slots & slots::ALPHA_FROM_SECOND != 0)
+        .collect();
+    assert!(
+        !from_atlas.is_empty(),
+        "the wordmark and the stripes read an atlas"
+    );
+    assert!(from_atlas.iter().all(|v| channel(v.slots) == 0));
+    assert_eq!(
+        back.lightmaps.iter().filter(|l| l.is_some()).count(),
+        2,
+        "scrollingalpha and basicalpha each bind their atlas"
+    );
+}

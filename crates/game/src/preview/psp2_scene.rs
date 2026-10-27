@@ -85,7 +85,7 @@ pub fn model_named(
 /// the alpha is that texture's own (`blitzed_grid.gnf` is white with the hexagons in its
 /// alpha: read from red it draws a solid white box). Scoped to the flyer cards on
 /// purpose, like [`model_named`]: the circuits' and hulls' blended draws keep the channel they
-/// had until measured (`handover/frontend/`, the PS4 coverage-channel lead).
+/// had until measured (a census lead, not measured).
 fn alpha_from_the_picture(model: &mut Model) {
     use mesh::slots;
     for vertex in &mut model.vertices {

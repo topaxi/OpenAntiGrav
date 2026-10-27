@@ -757,7 +757,11 @@ fn hd_track_line(cell: &Cell, circuit_names: &CircuitNames, strings: &StringTabl
     // empty; the cell reads its own circuit off the served table, case folded, as `choose` does.
     circuit_names
         .get(id)
-        .or_else(|| strings.find_ignoring_case(id).filter(|name| !name.is_empty()))
+        .or_else(|| {
+            strings
+                .find_ignoring_case(id)
+                .filter(|name| !name.is_empty())
+        })
         .unwrap_or_else(|| strings.get_or_id(id))
         .to_string()
 }
