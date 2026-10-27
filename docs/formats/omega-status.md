@@ -677,13 +677,98 @@ their mode** - never a circuit id that resolves to nothing. Grids 16-18 lack
   the screens a finished race (autopilot, 3 laps of `01_Track`, about 7,000
   ticks) shows the built-in results table and the next confirm returns to
   `Main Menu`, **not** `Cell Selection` as on HD.
-- **Omega has no `Campaign Selection` screen and no flyer cards in this build** (`load_omega` passes `selection_layout:
-  None, grid_layout_fury: None, flyers: None`; `RACE CAMPAIGN` opens `Grid
-  Selection` directly, `Event 01/16`); the flyer-card work drew them for HD only.
+- **Omega draws Fury's flyer cards since 2026-10-27, and has no `Campaign Selection`**: `load_omega` keeps `selection_layout: None` (its chooser is three-way, 2048/HD/Fury, unmodelled) and reads `grid_layout_fury` and the cards; `RACE CAMPAIGN` opens `Grid Selection` directly, `Event 01/16`. See `docs/ui/campaign-screens.md`, "Omega: Fury's cards draw".
 - **Not Omega's to fix here, seen on the walk:** (the HUD absence seen here was
-  fixed 2026-10-06, `omega-hud`), 793 of the
-  circuit's materials are unresolved (white surfaces on `08_Track`), and the
+  fixed 2026-10-06, `omega-hud`), (the 793 unresolved materials of `08_Track` quoted here
+  were not re-measured; Anulpha's 81 were fixed 2026-10-27, below), and the
   menu backdrop is white.
+
+### Anulpha Pass's grid floor and walls drew white: `Diffuse_Specular` is a colour sampler (2026-10-27, `omega-track-lit`)
+
+The road and side walls of Anulpha's start grid read near-white with no panel detail (pair
+`omega/anulpha-pass`, mean grey difference 61.50). Cause, by probe (the lit terms replaced one at
+a time in `shade.wesl`): those draws were **unresolved**, so they bound the white albedo and the
+black lightmap placeholder, and the sun alone saturated them. The material is
+`cf_chevron_pulse_displacement2out` (floor, wall and lead-in variants, 81 draws): its sampler
+list opens on `*_displacement_df2.gnf`, which decodes to nothing, and its colour sampler is named
+`Diffuse_Specular` (hash `0x28e981a4`, read from the file's own `Diffuse_SpecularSampler`
+reflection string; the others are `Emiss_Mask`, `Normal`, `Wave`, `lightmap`). The diffuse pick
+([`oag_rcs::rcsmodel::psp2::material::DIFFUSE_SPECULAR_SAMPLER_NAMES`]) now names it. Result:
+mean grey difference **61.50 to 38.92**, RMSE 0.329 to 0.242, edge NCC 0.23 to 0.24. The lightmap
+(UVs 0..1, atlases decode) and Omega's Nova prelit were never the fault; the PS4 red-channel
+coverage lead is **not** the cause here (checked: a lightmap's channels sample correctly).
+
+### Anulpha Pass's chevron floor: HD's law by matching hashes drew it worse, the original draws it flat (2026-10-27, `omega-chevron-pulse`, negative result)
+
+`cf_chevron_pulse_displacement2out` (33 materials in Omega's two Anulpha models, `data01.psarc`) declares
+HD's chevron program's names exactly: emask sampler `0x1202d8df` (`ds_floorchevron_emask.gnf`), wave
+`0x85c9fd48` (`ds_wave_c.gnf`), `Colour` `0x02ab9f07` (0, 1.49, 0), `k` `0x220cf0e6` (0.2), `offset`
+`0xa6f5352f` (0.0139 forward, 1.0 reversed), and no `time`. The GCN is unread, so the trial
+**inherited the program from HD by matching hashes** (a `psp2::chevron` module, **tried and not merged**, sharing `mesh::rcs::chevron_pulse`'s entry,
+`slots::LIT_ALPHA` and the fifth and sixth bindings). The offset is held at the authored value (the PS4
+material curves are unread), so nothing sweeps; HD's own offset runs on the scenery clock, chosen not measured.
+
+The textures, read as pictures: `ds_floorchevron_sc` RGB holds the bright cyan circuit chevrons (the
+"solid cyan bars" the generic reading drew), its alpha is brushed grey metal and **black under the chevrons**;
+the emask RGB is a dim blue circuit, its alpha a white hex outline of the chevrons.
+
+Result on pair `omega/anulpha-pass` (whole-frame mean grey difference, tool's metric): **41.04 before, 48.68 after.**
+The road tiles' colour now matches (box centre (151, 204, 212) against theirs (142, 192, 197); it was (66, 26, 98)),
+but the walls and road read too bright and green outline glows show on every chevron. **The original is flat:**
+in `frame00`, `frame03` and `frame06` the whole road is one grey-teal and the walls are one dark teal (22, 39, 42),
+with no chevron, no circuit, no hex panel, so it is not a phase of the pulse. HD's original of the same circuit
+does show the chevrons and the wall panels. HD's law cannot give a flat road at any phase (`sc.a` is 0 inside the
+chevrons), so Omega's program does something else with these samplers, or the emulator capture does not sample them:
+**unknown**. Next: read the GCN of this program (it is not a file in the archives; the model's GPU section or `eboot.bin`),
+or find another `*_displacement2out` surface in a shadPS4 frame.
+
+Checked: `omega/vineta-k` 48.19, unchanged (no material of the family); HD pairs `hd/anulpha-pass`, `hd/talons`,
+`hd-race/talons-pack` and the 2048 Vita pairs byte-identical to a build of `93e01ff43`.
+**2048: checked, applies, not wired visually.** Vita's base `data.psarc` ships `cf_chevron_pulse` (16 materials in 2
+models) and `dlc1` 30, with the same names; the take-condition admits them and no 2048 pair shows them, so the draw is
+unseen. 2048's Vita materials carry a readable GXP program, which is the cheaper place to read the law than Omega's GCN.
+
+### Vineta K's shadows: the lightmap is right, the display encode is the lead (2026-10-27, `omega-vineta-shadow`, negative result)
+
+Pair `omega/vineta-k` draws the shadowed road and wall about 65 and 52 grey too bright (boxes x 700-1300,
+y 420-560 and x 1100-1900, y 340-520 of the 1920x1080 frame; original 31.3 and 38.1, ours 96.3 and 90.5).
+Measured, by false-colour probes written straight to the target:
+
+- **The channel hypothesis is false.** Road and wall draws bind a real `-lmap.gnf` (`nova_mesh_combine_TSF1`
+  and kin, BC7, 2048x2048). Its rgb is a flat grey (about 0.5, channels equal) and its alpha is a binary
+  sun-shadow mask with the roof's outline; decoded alpha on screen follows the arches. No PS4-wide channel swap
+  is needed; the sun mask is `lightmap.a` as on HD. Vineta K's road materials carry no `VertexColour1`.
+- **Ours holds a flat ambient floor the original does not show.** Shadowed half of the road box: ours rgb
+  (45, 48, 56), original (6, 5, 3). Prelit alone (`2.0 * 0.5^2.5`, bias 0) already reads 68 in the road box.
+  An sRGB decode of the lightmap, or gating prelit by the alpha mask, does not close it (road 54, 54).
+- **The display encode does.** Replacing `oag_post::omega_tonemap`'s final `pow(1/2.2)` (recorded above as
+  "chosen, not measured") with the identity: road diff 65.0 to 15.3, wall 52.4 to 0.2, shadowed halves
+  (7, 8, 11) and (8, 8, 17) against (6, 5, 3) and (17, 15, 11). **But it is not landed**: whole frame 46.69 to
+  59.04 and `omega/anulpha-pass` 38.92 to 59.68 (its original is pale and flat, ours goes darker still), so the
+  gamma is not globally wrong. Scaling the exposure by 0.35 instead gives road 27.1 and wall 16.6, which no
+  adaptive exposure can reach (`(a + b L) / L` is at least `b` = 0.498).
+- Lit patches differ too: original road top decile (169, 160, 157), ours (242-248, 165-207, 83-149) - the
+  12 / 6.8 / 3.2 sun saturates per channel in ours and the original's lit road is near neutral.
+
+**2026-10-27, `omega-display-encode`:** the encode is read. The scanout is `A2R10G10B10` UNORM, filled by a
+plain copy, and the video out encodes it (on shadPS4, which captured these frames, with the piecewise sRGB
+curve). That curve is now wired, and it is **not** the separating term: Vineta 46.69 to 48.19, Anulpha
+38.92 to 41.04. The evidence and the unmeasured leads the frames point at (Vineta's blown-out sky and the bloom after
+the curve, the canopy's shadow coverage, Anulpha's chevrons) are in
+[tonemap.md](../ghidra/functions/ps4-omega-eu/tonemap.md), "The output encode".
+
+**Next (as written before the encode was read):** find why the original's low end is that dark on Vineta K and not on Anulpha: the per-circuit
+`Tonemap.*` curve (`Start angle` -6.93, `End angle` -12.06, source end 1.506 here), the scanout encode of the
+resolve (`FUN_017864a0` curve resolve versus the compute resolve), and the unwired shadow-light factor. Read
+`tonemap.md`'s "Resolve" row against a captured Anulpha frame before touching the encode.
+2048: not checked (`Material::samplers` is PS4-only; the Vita lightmaps were not probed).
+
+**Still open:** the chevron's own program (emask, `Wave`, `Colour`, swept by `offset`) is not
+wired for PS4 materials as it is for HD's `cf_chevron_pulse` (`mesh::rcs::chevron_pulse`), so
+the chevrons draw as a bright cyan albedo where the original's frame shows the road plain; the
+road reads purple-blue against the original's grey-teal. 2048: the Vita sampler table is not
+read (`Material::samplers` is PS4-only), so whether 2048's displacement circuits carry
+`Diffuse_Specular` is **not checked** here.
 
 ## Racing: a race starts, on this title's own data
 

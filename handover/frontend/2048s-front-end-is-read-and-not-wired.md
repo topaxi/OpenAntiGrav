@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [2048]
-updated: 2026-10-26
-summary: "2048 front end DLC campaigns wired; DLC circuit card names and further screens still open"
+updated: 2026-10-27
+summary: "2048 front end DLC campaigns wired; Select Team panel and hull drawn; DLC circuit card names and further screens still open"
 ---
 
 # 2048's front end is read and not wired
@@ -193,11 +193,28 @@ shape, not by screen, and would have mis-fired on `Team`'s own
   `variant`, so `boot::roster::load_teams`'s craft-slot fallback and
   `session::placeholder::raceable_teams`'s stand-in are now only what a
   player gets before ever opening `Home` - not for the rest of the session.
-  Still open from this pass: `TouchTeamGrid`'s own `teamgrid/` icon set is
-  not wired into the sprite sheet (drawn as labelled tiles instead); the
-  `<Model>` ship previews on `team` and `profile` are not drawn (no
-  renderer seam from a 2D front-end screen to a 3D mesh); the skin list
-  draws and cycles and is not wired to `race::Options::skin` (no measured
+  **Resolved 2026-10-27 (`2048-team-grid`): `TouchTeamGrid`'s `teamgrid/` art
+  draws** (badges, craft icons, cell colours, Feisar Speed ringed; layout
+  and order read from `TouchTeamGrid_Item.cpp` in Ghidra, see
+  `frontend::team`'s module doc). Evidence: `docs/ghidra/functions/vita-2048-eu-v104/team-grid.md`. Open on `team`: the padlock rule
+  (`FUN_812d16f6` over `DAT_81967280`, hypothesis only, the record's source and the save's unlock
+  count untraced), the HD/Fury campaign mode's 4x3 grid (`FUN_81106a46`; ours draws the 2048 grid
+  there), Omega's use of the item (same class and art ship, no `Team_Definition.xml`), the `NEW` badge
+  and the `FE_SHIP_STATS_TUT` bubble.
+  **Resolved 2026-10-27 (`2048-team-table`): the statistics panel and the hull draw**
+  (rows, 10-cell bars, numbers, header, ability icons, and the `ShipModel` hull through
+  `oag_game::team_hull`; see `team-grid.md`, "The statistics panel" and "The hull"). Open on it: the
+  prototype's scrolling description (`PI_TeamModel`'s `description` id is on disc; the marquee and its
+  scrollbar are not drawn, so a prototype shows no rows), the ability icons' touch tooltips, the count-up
+  and slide-in, the lighter second word of the header, the hull's livery (ours is the model's own
+  `Textures_1`, yellow; the original frame is teal - the same open livery question as the 2048 race pair;
+  lead, not tested: the dominant saturated colours of the hull box are (160,128,0) ours and (32,224,224)
+  theirs, which is a yellow-to-cyan hue turn a red/blue channel swap in the Vita livery decode would make; not
+  changed here because the decoder is shared by every 2048 texture),
+  the touch turntable, and loading the hull on the frame thread (about 80 ms a step).
+  Still open from this pass: the
+  `<Model>` ship preview on `profile` is not drawn (`team`'s is, see above); the skin list
+  is no longer drawn on `team` (authored transparent, absent from the capture) and is not wired to `race::Options::skin` (no measured
   `1`/`2`/`3` -> `PI_ModelSkin` mapping); Options' Controls/Pilot lists draw
   and cycle and reach no setting this build has; the Options picker's
   starting value is this build's own default, not `CameraP1`'s authored one

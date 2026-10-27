@@ -354,6 +354,7 @@ impl Session {
                     &mut encoder,
                     ui_target,
                     rect,
+                    self.framebuffer.output_size(),
                     self.backdrop.as_mut(),
                 )?;
                 (None, stage.video_label())

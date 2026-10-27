@@ -94,8 +94,18 @@ pub struct MainRow {
     pub subtitle: Wording,
 }
 
+/// A flyer card's pose in front of its widget's camera: where its centre is and
+/// how far it is turned. See `oag_game::flyer::Pose`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CardPose {
+    /// Turn about the card's vertical axis, radians; negative brings its right edge forward.
+    pub yaw: f32,
+    /// `(x right, y up, z)` of the card's centre, `z` negative in front of the camera.
+    pub offset: [f32; 3],
+}
+
 /// What a title's campaign is, with where each answer came from.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Campaign {
     /// The reader and draw list.
     pub dialect: CampaignDialect,
@@ -148,6 +158,15 @@ pub struct Campaign {
     /// `DATA02`'s older copy carries one flat set, equal to the hard rung.
     /// `None` reads every grid by precedence.
     pub grid_archive: Option<&'static str>,
+    /// The factor Fury's flyer card texels are multiplied by where it is not
+    /// `oag_game::flyer::FURY_GAIN` (HD's 2.0, where the PS3 materials double them).
+    /// Omega: 1.0, fitted off one shadPS4 frame (red field 0x40 against 0x80 at 2.0), not read off a shader.
+    pub fury_card_gain: Option<f32>,
+    /// Where `Grid Selection`'s flyer card stands where it is not
+    /// `oag_game::flyer::GRID_POSE` (HD's, fitted to RPCS3 frames). Omega:
+    /// measured off one shadPS4 frame and chosen, its own camera constants
+    /// unread (`docs/ui/campaign-screens.md`).
+    pub grid_card_pose: Option<CardPose>,
     /// Where the dialect, grids file, selection flag, screen archive and grid
     /// archive came from.
     pub origin: Origin,

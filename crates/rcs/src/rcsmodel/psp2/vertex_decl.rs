@@ -74,6 +74,8 @@ pub const NORMAL_HASH: u32 = 0xde7a_971b;
 pub const TANGENT_HASH: u32 = 0xdbe5_f417;
 /// `~crc32("Uv1")` - the diffuse texture coordinate.
 pub const UV1_HASH: u32 = 0x4272_14fc;
+/// `~crc32("VertexColour1")`: four normalised bytes per vertex (type nibble 11 on PS4).
+pub const VERTEX_COLOUR1_HASH: u32 = 0x7493_d450;
 /// `~crc32("lightmapUV")`.
 pub const LIGHTMAP_HASH: u32 = 0x26a7_b665;
 
@@ -86,6 +88,10 @@ pub const BARS_BLEND_HASH: u32 = 0x0e7e_a5a8;
 /// `tech_de_ra`, which also carries two `f32` pairs (`0`) that are not
 /// coordinates of the diffuse or lightmap sets.
 pub const PS4_HALF2: u8 = 1;
+
+/// The type nibble of `VertexColour1` on the PS4 flyer shell's reflection (`00_flyer`'s
+/// `card_reflectShape`: `ff ff ff` and an alpha of `0x4c`, `0x26` or `0`).
+pub const PS4_UBYTE4_NORM: u8 = 11;
 
 /// One attribute of a vertex, as the declaration spells it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -134,6 +140,14 @@ impl VertexDecl {
     #[must_use]
     pub fn lightmap_texcoord(&self) -> Option<&Attribute> {
         self.attribute(LIGHTMAP_HASH)
+    }
+
+    /// `VertexColour1`, four normalised bytes. Only sound on a declaration reached through the
+    /// record's own pointer.
+    #[must_use]
+    pub fn vertex_colour1(&self) -> Option<&Attribute> {
+        self.attribute(VERTEX_COLOUR1_HASH)
+            .filter(|a| a.components == 4 && a.gxm_type == PS4_UBYTE4_NORM)
     }
 
     /// The `nr_twinblend` pair attribute, four halves. Only sound on a declaration reached

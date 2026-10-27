@@ -1,7 +1,7 @@
 ---
 status: measure
 titles: [hd, 2048]
-updated: 2026-10-19
+updated: 2026-10-27
 summary: "Whether HD and 2048 tone-map an HDR target: one RPCS3 session for the curve test and regional measurement"
 ---
 
@@ -45,9 +45,12 @@ What is already established, do not re-derive:
     (`omega-pink-road-sun`)**: not the curve and not the light, an undecodable
     first sampler (`omega-status.md`, "Altima's road drew flat pink"). The 3.08 %
     still clipped at tick 600 was that road.
-  - The scanout format (sRGB or UNORM) is unread, so the final `pow(1/2.2)` is
-    chosen. Next address: the SDR copy `FUN_0122d760` called from `FUN_01629ce0`,
-    and the display buffer's creation.
+  - ~~The scanout format (sRGB or UNORM) is unread~~ **Closed 2026-10-27
+    (`omega-display-encode`)**: `A2R10G10B10` UNORM, a plain copy, the video out
+    encodes; wired as the piecewise sRGB curve (`tonemap.md`, "The output
+    encode"). It is not what separates Vineta K from Anulpha Pass: the frames
+    point at the sky and bloom, Vineta's shadow coverage and Anulpha's chevrons,
+    unmeasured (same section).
   - Which level of the 256x256 luma chain the coefficient pass samples, and what
     image the chain starts from (`ToneMap_UpdateCoefficients`, `0x0178c490`).
   - The Pro checkerboard resolve `0x19685a0` (same `m_abcd` constants), unread.

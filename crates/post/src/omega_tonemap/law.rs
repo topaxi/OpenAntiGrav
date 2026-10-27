@@ -144,3 +144,21 @@ impl Curve {
 
 /// Rec.601 luma, `pal_LuminanceFilter_fp`'s own three constants.
 pub const LUMA: [f32; 3] = [0.299, 0.587, 0.114];
+
+/// The display's encode of the curve's linear `[0, 1]`: the piecewise sRGB curve.
+///
+/// The executable registers its scanout buffers as `A2R10G10B10`
+/// (`0x88060000`, not the `_SRGB` variant) with gamma 1.0, renders them as a
+/// UNORM `2_10_10_10` target (`0xf2e009`) and fills them with a plain copy, so
+/// no encode happens on the GPU: the video out applies it. shadPS4 0.20, which
+/// captured every reference frame, applies exactly this curve to that format.
+/// See `docs/ghidra/functions/ps4-omega-eu/tonemap.md`, "The output encode".
+#[must_use]
+pub fn scanout_encode(linear: f32) -> f32 {
+    let c = linear.clamp(0.0, 1.0);
+    if c <= 0.003_130_8 {
+        c * 12.92
+    } else {
+        1.055 * c.powf(1.0 / 2.4) - 0.055
+    }
+}

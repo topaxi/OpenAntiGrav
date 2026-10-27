@@ -48,14 +48,7 @@ pub(super) struct PreviewRequest {
 /// The source a capture's race options name, opened with its packs, for the
 /// selection screens' own reads.
 pub(super) fn open_for_previews(race: &oag_raceplay::Options) -> Result<oag_assets::Archives> {
-    let (packs, pure_packs, problems) = oag_source::dlc::packs_from_defaults(
-        &race.dlc,
-        &oag_source::cache::default_dlc_cache_dir(),
-    );
-    for problem in problems {
-        log::warn!("{problem}");
-    }
-    Ok(oag_source::title::open_source(&race.source, packs, pure_packs)?.archives)
+    crate::preview::open_archives(&race.source, &race.dlc)
 }
 
 /// The selection screen's preview mesh, over the finished draw list - the

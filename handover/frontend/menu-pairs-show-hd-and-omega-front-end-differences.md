@@ -20,14 +20,19 @@ code. It supersedes the HD lead "Main Menu and Racebox setup are our own tree" w
 
 Ranked by visible area on the 1920x1080 frame (read off the pair images, each pair run twice).
 
-1. **Omega Campaign cell and grid: no flyer card, wrong grid** (largest: mean grey difference 129 and 55). The original's
-   dark-red panel (cell) and red flyer (grid) cover 60 to 80 % of the frame; ours is a white page with the ghosted backdrop
-   tower. Ours also draws Omega's own first grid (18 points, `01_TRACK` unresolved) for `grid-select` and `grid-select-hd`,
-   neither of the original's three campaigns (2048 Cup, HD, Fury), and `campaign-select` refuses on Omega. Needs: the
-   Omega campaign selector and the flyer card on Omega's source (HD's cards draw on HD).
-   **Do not confuse the HD and Fury campaigns**: the maintainer recalls (2026-10-26, from play, unverified) that only the
-   Fury campaign draws the red background rect; HD's does not. Check which campaign the original frame shows before
-   matching a panel, and pair each of Omega's three campaigns against its own original frame.
+1. **Omega Campaign cell and grid: the Fury card is whole since 2026-10-27 (`omega-flyer-shell`); what is left is pose and chooser.**
+   Shell, hexagon logo, sponsors, translucent arrows, wordmark, edge stripes and `TALON'S JUNCTION` draw
+   (`docs/ui/campaign-screens.md`, "Shell, art and track name"). Pair numbers: cell 13.4 to 12.7, grid 40.9 to 42.9 (the card is now
+   right but sits in the wrong place: it is 83 per cent of the grid's grey error). **Open**: (a) ~~the grid card's pose and size on Omega~~ (done 2026-10-27, `omega-grid-card-pose`: grid 42.9 to 16.4; the pose is
+   measured off the frame and chosen, `Title.campaign.grid_card_pose`; Omega's own `<Flyer>` widget numbers still uncompared with HD's); (b) the backdrop (ghost tower against blurred streaks); (c) cell: `CHOOSE RACE` and the unlock line dark
+   where the original is grey, the selected hex's white outline, the missing `RECORDS` prompt; (d) the Omega `Campaign Selection`
+   chooser (three-way: 2048, HD, Fury; `campaign-select` still refuses); (e) **a PS4-wide lead found on the way**: the PS4 build
+   leaves every vertex's coverage channel at 0 (red), so any blended or alpha-tested PS4 draw whose coverage is a texture's alpha
+   reads red instead (`mesh::rcs::psp2` `slots`; fixed for the flyer cards only in `psp2_scene::alpha_from_the_picture`): census
+   Omega's circuits and hulls (and 2048's Vita models, which share the builder: checked, applies, not wired) for draws it changes before
+   flipping the builder's default; the dark grey hull silhouette on Omega's base-campaign grid card (`grid-select-hd`) is unchecked against an original; (f) `Track Select` on Omega still lists
+   `NN_Track` ids (`CircuitNames::choose` needs one copy naming all 38; the table names only some). Pair each of Omega's other two
+   campaigns against its own original frame when one is captured.
 2. **Omega Ship Select: hull and logo** (34 grey). Ours draws the hull about twice the original's size in another livery
    (dark teal and yellow against pale blue and yellow) and a ringed Feisar logo against the flat one; the cursor starts on
    the top hex where the original's fresh profile lands on the first unlocked craft.
@@ -60,9 +65,9 @@ renderer or UI code changed. The campaign pair (map plus event card pages 0 and 
 2048's map and card show no difficulty control, so there was none to match. Ranked by the share of pixels that differ by more than
 40 grey:
 
-1. **Select Team** (56.7 %): ours is two rows of labelled buttons and a `FE_SKIN_*` list (chosen stand-ins); the original is a 5x4 grid
-   of locked hexagons under five team badges, a hull turntable and the statistics table. Needs the grid, hull and table drawn from
-   `Team_Definition.xml` and the ship models (the screen's `<Model>` preview is not drawn, see `2048-frontend.md`).
+1. **Select Team** (was 56.7 %, mean grey 94.9; 2026-10-27 `2048-team-grid`: 38.3): the grid, badges, cursor cell, header square and
+   confirm tick now draw from the disc (`TouchTeamGrid` read in Ghidra). Still differs: the 19 locked cells (rule needs the save and the
+   ship record's rank, `FUN_812d16f6`), the statistics table, the `FE_SHIP_STATS_TUT` bubble and the hull `<Model>` preview.
 2. **Game Mode** (19.3 %): the RACEBOX / REMIX / MULTIPLAYER column (`oag-extras` rows) and the check mark are ours alone; the
    original's header icon and underline are missing, Single Player is ringed on entry in ours, the rows sit about 14 px lower.
 3. **Campaign map** (12.6 %): the `A.G.R.C 2048` banner, `TOUCH TO START` tag, home button, three badges, corner buttons, scroll

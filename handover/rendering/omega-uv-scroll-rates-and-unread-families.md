@@ -1,7 +1,7 @@
 ---
 status: re-first
 titles: [omega, 2048]
-updated: 2026-10-06
+updated: 2026-10-27
 summary: "Omega scroll rates and sign are chosen; read a scroll shader's GCN; several families have no consumer read"
 ---
 
@@ -41,6 +41,8 @@ camera diff, `sign_diff.png`).
   was compared with a recording of the original.
 
 ## Next Steps
+
+0. (2026-10-27, `omega-chevron-pulse`) Read the real program of `cf_chevron_pulse_displacement2out`: Omega's original draws the family flat, HD's law (tried by matching hashes, not merged) draws it worse on `omega/anulpha-pass` (41.04 to 48.68). Start from 2048's Vita `cf_chevron_pulse` GXP (`scripts/vita-gxp.py`), then Omega's GCN. See `docs/formats/omega-status.md`, "Anulpha Pass's chevron floor".
 
 1. Read a scroll shader's GCN (the Omega eboot is `ps4-omega-eu`) to settle
    `TimeScaler` versus `time` and the sign, which would measure the rates for

@@ -378,6 +378,7 @@ impl Material {
             |path: &&str| Some(*path) != self.lightmap.as_deref() && !refused_paths.contains(path);
         DIFFUSE_SAMPLER_NAMES
             .iter()
+            .chain(&DIFFUSE_SPECULAR_SAMPLER_NAMES)
             .find_map(|name| self.sampler(crate::rcsmaterial::name_hash(name)))
             .filter(allowed)
             .or_else(|| self.textures.iter().map(String::as_str).find(allowed))
@@ -389,6 +390,16 @@ impl Material {
 /// sampler entries of Omega's circuit models; `DiffuseTexture` and
 /// `DiffuseAlphaMap` are the ones a glow layer already names).
 pub const DIFFUSE_SAMPLER_NAMES: [&str; 3] = ["DiffuseTexture", "DiffuseAlphaMap", "DiffuseMap"];
+
+/// The colour sampler of the `*_displacement2out` family (`cf_chevron_pulse_displacement2out`
+/// and kin: Anulpha Pass's start-grid floor and walls), tried after [`DIFFUSE_SAMPLER_NAMES`]
+/// and only by [`Material::diffuse_texture_without`]. Their sampler list opens on a
+/// displacement map that decodes to nothing, so by order the draw had no picture and drew
+/// white; the material file's own reflection strings name `Diffuse_SpecularSampler` (the
+/// colour, specular in its alpha), and `name_hash("Diffuse_Specular")` is `0x28e9_81a4`,
+/// the hash the sampler table carries. Kept out of [`DIFFUSE_SAMPLER_NAMES`] because the
+/// glow-layer reader shares that list and this lane measured no glow law for these.
+pub const DIFFUSE_SPECULAR_SAMPLER_NAMES: [&str; 1] = ["Diffuse_Specular"];
 
 /// The sampler entries (`kind == 0x12`) of the material header at
 /// `header_at`: name hash and the `.gxt` path at `+0x10`.

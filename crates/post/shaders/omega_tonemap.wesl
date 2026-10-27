@@ -142,9 +142,8 @@ fn cs_coefficients() {
 @group(1) @binding(0) var<storage, read> curve: State;
 @group(2) @binding(0) var distortion_tex: texture_2d<f32>;
 
-// The curve resolve, per channel, then the display encode every linear
-// target in this crate ends on (ADR-0026's stand-in): the curve's [0, 1] is
-// taken as linear light, which is what its HDR twin's 0..40 range implies.
+// The curve resolve, per channel, then the video out's encode of its linear
+// [0, 1] (`scanout_encode` below).
 @fragment
 fn fs_apply(in: VertexOutput) -> @location(0) vec4<f32> {
     // wo_composite*: `uv' = uv + 0.0100021 * (Aspect * d.x, d.y)` with `d` the
@@ -161,5 +160,17 @@ fn fs_apply(in: VertexOutput) -> @location(0) vec4<f32> {
     let x = clamp(c * w.z, vec3<f32>(w.x), vec3<f32>(w.y));
     let k = curve.abcd;
     let y = k.x + x * (k.y + x * (k.z + k.w * x));
-    return vec4<f32>(pow(clamp(y, vec3<f32>(0.0), vec3<f32>(1.0)), vec3<f32>(1.0 / 2.2)), 1.0);
+    return vec4<f32>(scanout_encode(clamp(y, vec3<f32>(0.0), vec3<f32>(1.0))), 1.0);
+}
+
+// The video-out encode of the curve's linear [0, 1]: the scanout buffer is
+// `A2R10G10B10` UNORM (`0x88060000`, `sceVideoOutSetBufferAttribute` in
+// `FUN_016134d0`, gamma 1.0), written by a plain copy, so the encode is the
+// display's: the piecewise sRGB curve - tonemap.md, "The output encode".
+fn scanout_encode(c: vec3<f32>) -> vec3<f32> {
+    return select(
+        1.055 * pow(c, vec3<f32>(1.0 / 2.4)) - vec3<f32>(0.055),
+        c * 12.92,
+        c <= vec3<f32>(0.0031308),
+    );
 }

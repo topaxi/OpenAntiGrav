@@ -447,7 +447,7 @@ pub(super) fn campaign_page(
     let shot = campaign.flyers.and_then(|flyers| {
         let shows = match (flyer_name, selected_campaign) {
             (Some(name), _) if cell_page => vec![crate::flyer::Flyers::cell_show(&name)],
-            (Some(name), _) => vec![crate::flyer::Flyers::grid_show(&name)],
+            (Some(name), _) => vec![flyers.grid_show(&name)],
             (None, Some(selected)) => flyers.selection_shows(selected),
             (None, None) => return None,
         };

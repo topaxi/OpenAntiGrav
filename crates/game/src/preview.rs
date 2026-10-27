@@ -531,6 +531,21 @@ fn ps3_model(
     Ok((model, textures))
 }
 
+/// The source named by `source`, opened with `dlc`'s packs and the default cache, for a
+/// screen that reads its own meshes (a capture's previews, the Select Team hull).
+///
+/// # Errors
+///
+/// The source will not open.
+pub fn open_archives(source: &str, dlc: &[std::path::PathBuf]) -> Result<oag_assets::Archives> {
+    let (packs, pure_packs, problems) =
+        oag_source::dlc::packs_from_defaults(dlc, &oag_source::cache::default_dlc_cache_dir());
+    for problem in problems {
+        log::warn!("{problem}");
+    }
+    Ok(oag_source::title::open_source(source, packs, pure_packs)?.archives)
+}
+
 /// Paints the skin file `entry` onto a preview `model` built from
 /// `model_name`, the same swap a race makes - the PSP's four-block upload or
 /// the PS2's whole-atlas sibling, whichever the hull's own slots call for.

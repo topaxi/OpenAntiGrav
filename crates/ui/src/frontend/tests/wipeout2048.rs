@@ -233,6 +233,174 @@ fn the_pad_walks_right_to_the_tick_and_a_network_mode_is_refused_by_note() {
 }
 
 #[test]
+fn the_team_grid_is_five_columns_by_four_rows_with_the_cursor_on_feisar_speed() {
+    let mut frontend = boot(0);
+    let mut input = Input::new();
+    reach_the_grid(&mut frontend, &mut input);
+    press(&mut frontend, &mut input, Button::Cross);
+    press(&mut frontend, &mut input, Button::Cross);
+    press(&mut frontend, &mut input, Button::Triangle);
+    press(&mut frontend, &mut input, Button::Cross);
+    assert!(frontend.machine().is(w2048::TEAM));
+    let cells = |frontend: &Frontend| -> Vec<[f32; 4]> {
+        frontend
+            .draw_list()
+            .iter()
+            .filter_map(|draw| match draw {
+                Draw::Fill { rect, color } if rect[2] == 80.0 && rect[3] == 65.0 => {
+                    Some([rect[0], rect[1], color[0], color[1]])
+                }
+                _ => None,
+            })
+            .collect()
+    };
+    let drawn = cells(&frontend);
+    assert_eq!(drawn.len(), 20, "5 x 4 cells: {drawn:?}");
+    let first = drawn
+        .iter()
+        .find(|cell| cell[0] == 16.0 && cell[1] == 158.0);
+    let second = drawn
+        .iter()
+        .find(|cell| cell[0] == 98.0 && cell[1] == 158.0);
+    assert_ne!(first.map(|c| (c[2], c[3])), second.map(|c| (c[2], c[3])));
+    // Right moves the ring one column: the cell at (98, 158) takes the
+    // colour the first cell had.
+    let ring = first.map(|c| (c[2], c[3]));
+    press(&mut frontend, &mut input, Button::Right);
+    let moved = cells(&frontend);
+    let now = moved
+        .iter()
+        .find(|cell| cell[0] == 98.0 && cell[1] == 158.0)
+        .map(|c| (c[2], c[3]));
+    assert_eq!(now, ring);
+}
+
+/// The Select Team screen, entered the way the grid tests do, with `ratings`
+/// injected.
+fn team_screen(ratings: Vec<TeamRating>) -> (Frontend, Input) {
+    let mut frontend = boot(0);
+    frontend.set_team_ratings(ratings);
+    let mut input = Input::new();
+    reach_the_grid(&mut frontend, &mut input);
+    press(&mut frontend, &mut input, Button::Cross);
+    press(&mut frontend, &mut input, Button::Cross);
+    press(&mut frontend, &mut input, Button::Triangle);
+    press(&mut frontend, &mut input, Button::Cross);
+    assert!(frontend.machine().is(w2048::TEAM));
+    (frontend, input)
+}
+
+/// `(orange cells per row, numbers drawn)` of the panel's rows in `list`.
+fn panel_rows(list: &[Draw]) -> ([usize; 4], Vec<String>) {
+    let mut filled = [0; 4];
+    let mut numbers = Vec::new();
+    for draw in list {
+        match draw {
+            Draw::Fill { rect, color }
+                if rect[2] == 22.0 && rect[3] == 27.0 && color[0] > 0.8 && color[1] < 0.4 =>
+            {
+                filled[((rect[1] - 307.0) / 30.0) as usize] += 1;
+            }
+            Draw::Text { x, text, .. } if *x == 910.0 => numbers.push(text.clone()),
+            _ => {}
+        }
+    }
+    (filled, numbers)
+}
+
+#[test]
+fn the_team_panel_fills_one_orange_cell_per_rating_point_and_prints_the_number() {
+    let rating = |craft, rows| TeamRating {
+        team: "Feisar2048",
+        craft,
+        rows,
+    };
+    let (mut frontend, mut input) = team_screen(vec![
+        rating(2, [8.0, 7.0, 4.0, 6.0]),
+        rating(1, [0.0, 10.0, 11.0, 1.0]),
+    ]);
+    let (filled, numbers) = panel_rows(&frontend.draw_list());
+    assert_eq!(filled, [8, 7, 4, 6], "Feisar Speed's four rows");
+    assert_eq!(numbers, ["8", "7", "4", "6"]);
+    // Agility is two rows down; a rating of 0 or 11 prints `--` (0x81453e54).
+    press(&mut frontend, &mut input, Button::Down);
+    press(&mut frontend, &mut input, Button::Down);
+    let (filled, numbers) = panel_rows(&frontend.draw_list());
+    assert_eq!(filled, [0, 10, 10, 1], "11 fills all ten");
+    assert_eq!(numbers, ["--", "10", "--", "1"]);
+}
+
+#[test]
+fn a_craft_with_no_rating_or_a_prototype_draws_no_rows() {
+    let (mut frontend, mut input) = team_screen(Vec::new());
+    assert_eq!(panel_rows(&frontend.draw_list()), ([0; 4], Vec::new()));
+    // The prototype row shows a description in the original, not bars.
+    let rating = |craft| TeamRating {
+        team: "Feisar2048",
+        craft,
+        rows: [5.0; 4],
+    };
+    frontend.set_team_ratings((0..4).map(rating).collect());
+    assert_eq!(
+        panel_rows(&frontend.draw_list()).0,
+        [5; 4],
+        "Feisar Speed has rows"
+    );
+    for _ in 0..3 {
+        press(&mut frontend, &mut input, Button::Down);
+    }
+    assert_eq!(
+        panel_rows(&frontend.draw_list()),
+        ([0; 4], Vec::new()),
+        "prototype"
+    );
+}
+
+#[test]
+fn the_team_screen_names_the_craft_whose_hull_it_shows() {
+    let (mut frontend, mut input) = team_screen(Vec::new());
+    assert_eq!(
+        frontend.team_hull(),
+        Some(("Feisar2048", "3")),
+        "Feisar Speed"
+    );
+    press(&mut frontend, &mut input, Button::Right);
+    assert_eq!(frontend.team_hull(), Some(("AG_Systems2048", "3")));
+    assert_eq!(
+        boot(0).team_hull(),
+        None,
+        "only the Select Team screen has one"
+    );
+}
+
+#[test]
+fn a_tap_on_a_team_cell_selects_its_team_and_craft() {
+    let mut frontend = boot(0);
+    let mut input = Input::new();
+    reach_the_grid(&mut frontend, &mut input);
+    press(&mut frontend, &mut input, Button::Cross);
+    press(&mut frontend, &mut input, Button::Cross);
+    press(&mut frontend, &mut input, Button::Triangle);
+    press(&mut frontend, &mut input, Button::Cross);
+    assert!(frontend.machine().is(w2048::TEAM));
+    let click = |at| Pointer {
+        at: Some(at),
+        moved: true,
+        clicked: true,
+        ..Pointer::default()
+    };
+    // Column 2 (Qirex), row 3 (prototype): x 16 + 2 * 82, y 158 + 3 * 67.
+    assert!(frontend.pointer(&click((190.0, 370.0))));
+    assert_eq!(frontend.team_choice(), Some(("Qirex2048", "4")));
+    // The badge strip is not a button in the original's update.
+    assert!(frontend.pointer(&click((50.0, 120.0))));
+    assert_eq!(frontend.team_choice(), Some(("Qirex2048", "4")));
+    // The seam between two cells: the later cell wins the overlap.
+    assert!(frontend.pointer(&click((98.5, 160.0))));
+    assert_eq!(frontend.team_choice(), Some(("AG_Systems2048", "3")));
+}
+
+#[test]
 fn the_shell_reaches_home_and_home_leads_to_team_and_back() {
     let mut frontend = boot(0);
     let mut input = Input::new();

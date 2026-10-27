@@ -68,6 +68,10 @@ def rerender(pj, binary):
     flags = (rec.get("ours") or {}).get("flags")
     if not flags:
         return "skipped: no recorded ours.flags"
+    # Pairs recorded with their own `--screenshot <path>` would meet the one appended below twice (a clap error).
+    while "--screenshot" in flags:
+        at = flags.index("--screenshot")
+        del flags[at:at + 2]
     flags, problems = resolve_flags(flags, pair_dir)
     # The HD and PS2 pair scripts record the run length beside the flags (`ours.ticks`), not in them; without it the
     # frame is tick 0 (a clock of 0.00.0, no GO board).
