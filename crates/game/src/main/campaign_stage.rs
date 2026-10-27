@@ -144,6 +144,10 @@ pub(crate) struct CampaignStage {
     /// the original ticker is not observed to restart on a screen change
     /// (see `docs/ui/campaign-screens.md`), so this build keeps it running.
     ticker_elapsed: f32,
+    /// `Campaign Selection`'s two cards turning toward the selection, stepped
+    /// by [`Self::tick_cards`]; `None` off that screen, where a card is drawn
+    /// settled.
+    card_swing: Option<oag_game::flyer::CardSwing>,
     /// Kept for the render pass, which needs to resolve a per-cell idstring
     /// (`MSC_EVENT_SR` and friends) that neither screen's own `Layout::read`
     /// pass can, since which one applies depends on the selected cell's
@@ -251,6 +255,7 @@ impl CampaignStage {
             nav_legend,
             ticker,
             ticker_elapsed: 0.0,
+            card_swing: None,
             strings,
             sprites,
             screen,
@@ -281,7 +286,10 @@ impl CampaignStage {
                 .map(|name| flyers.grid_show(name))
                 .into_iter()
                 .collect(),
-            Screen::Selection(model) => flyers.selection_shows(model.selected()),
+            Screen::Selection(model) => match &self.card_swing {
+                Some(swing) => flyers.swing_shows(swing),
+                None => flyers.selection_shows(model.selected()),
+            },
             Screen::Cell { which, .. } => self
                 .grids
                 .get(*which)
@@ -299,6 +307,20 @@ impl CampaignStage {
         self.flyers
             .as_ref()?
             .card_rect(&show, oag_display::space::Space::HD)
+    }
+
+    /// Turns `Campaign Selection`'s cards toward the selection, `dt` seconds
+    /// further; called once a frame beside [`Self::tick_ticker`].
+    pub(crate) fn tick_cards(&mut self, dt: f32) {
+        let (Some(flyers), Screen::Selection(model)) = (&self.flyers, &self.screen) else {
+            self.card_swing = None;
+            return;
+        };
+        let selected = model.selected();
+        let swing = self
+            .card_swing
+            .get_or_insert_with(|| flyers.swing_settled(selected));
+        flyers.step_swing(swing, selected, dt);
     }
 
     /// Advances the ticker's own clock - called once a frame from

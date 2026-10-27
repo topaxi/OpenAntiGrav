@@ -2347,6 +2347,15 @@ has Fury selected, so Fury's unfocused look (the same factor is applied) is **un
 Pair `hd/menu-campaign-select` (mean absolute grey difference): whole frame 28.2 to 9.4; the `HD` card box
 `(1100,220,580,700)` 101.6 to 16.9; its reflection `(1100,900,580,180)` 53.0 to 9.6; Fury's box `(240,215,800,710)`
 9.4 to 8.6.
+**The swing is wired, 2026-10-27.** `0x00214238` calls `0x002137c0` each frame, which moves the widget's six placement
+floats (`+0xac..+0xc0`) toward the target state's by `dt * rate`; on a selection change the rate is set to
+`|current - target| * 5.0` (the literal at `0x008afdb4`), so every swing takes `0.2` s at constant speed, and a value
+within `0.05` (`0x008afd50`) of its target is set to it (confidence 85). Only `RotY` differs between the two authored
+states, so `oag_game::flyer::CardSwing` animates the yaw alone and `campaign_pose_at` redoes the pivot composition each
+frame; `CampaignStage::tick_cards` steps it from `MenuStage::tick`, and `--menu-page` stills draw it settled. The colour
+write (`0x001d33f0`, then `0x002c32c8` down the card's nodes) has no ramp in these functions, so the tint changes at once
+here; the maintainer sees the dimming animate on the original, which would sit in a callee of `0x002c32c8`
+(`0x00685f38`, unread). Not watched live: the unit test steps the swing at 60 Hz (12 frames), no windowed session was run.
 **Omega: checked, applies, not wired.** Omega's executable (`/omega/eboot-ps4-omega-eu.bin`) carries the same
 `HDCampaignFlyerModel`/`FuryCampaignFlyerModel` strings plus `2048CampaignFlyerModel`, and `mov esi, 0xff505050`
 five times in each of `FUN_0151fb60` and `FUN_01520a10` (not decompiled to say which is the screen's update, so
