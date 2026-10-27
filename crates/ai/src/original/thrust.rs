@@ -8,6 +8,7 @@
 //! `AIRaceStats_<class>.xml` ([`ClassRace`]); the literals below are the
 //! executable's own code constants, cited to the same page.
 
+use oag_core::math::FloatExt;
 use oag_tables::ai_race_stats::ClassRace;
 
 /// One entry of the racer table, as the thrust law reads it.
@@ -65,10 +66,6 @@ fn row(place: u8) -> usize {
     usize::from(place.clamp(1, 8)) - 1
 }
 
-fn lerp(a: f32, b: f32, t: f32) -> f32 {
-    a * (1.0 - t) + t * b
-}
-
 /// `AI_ComputeOpponentThrust`, after `Ai_UpdateSpreadWander` has refreshed
 /// the driven racer's [`Racer::spread`].
 ///
@@ -83,7 +80,7 @@ pub fn opponent_thrust(table: &ClassRace, input: &ThrustInput<'_>) -> Thrust {
     let (lo, hi, base) = if s < 2.0 { (0, 1, 1.0) } else { (1, 2, 2.0) };
     let t = s - base;
     let (offset, multiplier) = thrust_table.skill_terms(s);
-    let spread_mul = lerp(table.spread_multiplier[lo], table.spread_multiplier[hi], t);
+    let spread_mul = table.spread_multiplier[lo].lerp(table.spread_multiplier[hi], t);
 
     let me = input.racers[input.own];
     let player = input.racers[input.player];

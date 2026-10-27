@@ -18,7 +18,7 @@
 //! - No `HashMap` iteration feeding arithmetic. Iteration order is not stable.
 //! - No wall-clock time or OS entropy. Use [`crate::tick`] and [`crate::rng`].
 
-pub use glam::{Mat3, Mat4, Quat, Vec2, Vec3, Vec4, mat3, mat4, quat, vec2, vec3, vec4};
+pub use glam::{FloatExt, Mat3, Mat4, Quat, Vec2, Vec3, Vec4, mat3, mat4, quat, vec2, vec3, vec4};
 
 /// How many km/h one world unit per second is.
 ///
