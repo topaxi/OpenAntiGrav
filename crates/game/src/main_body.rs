@@ -202,7 +202,14 @@ fn main() -> Result<()> {
 fn android_main(app: winit::platform::android::activity::AndroidApp) {
     oag_mobile::android::prepare(app);
     init_logging();
-    let result = run(Cli::parse_from(["oag-game"]));
+    let args = oag_mobile::android::take_launch_args();
+    if !args.is_empty() {
+        log::info!("launch arguments from {}: {args:?}", oag_mobile::android::LAUNCH_ARGS_FILE);
+    }
+    let result = match Cli::try_parse_from(std::iter::once("oag-game".to_owned()).chain(args)) {
+        Ok(cli) => run(cli),
+        Err(why) => Err(anyhow::anyhow!("launch arguments: {why}")),
+    };
     oag_log::flush();
     if let Err(why) = result {
         log::error!("oag-game exited: {why:#}");

@@ -59,3 +59,41 @@ pub fn event_loop() -> Result<EventLoop<()>, String> {
         .build()
         .map_err(|why| why.to_string())
 }
+
+/// The name of the one-shot launch arguments file in the app's files directory.
+pub const LAUNCH_ARGS_FILE: &str = "oag-args.txt";
+
+/// Takes the command line a developer left for this launch from [`LAUNCH_ARGS_FILE`] in the
+/// working directory [`prepare`] set, and deletes the file so the next launch from the home
+/// screen is a normal one.
+///
+/// Android gives a NativeActivity no command line and no environment. This is how a
+/// measurement run starts a race without touch: `adb shell` writes the file (the directory
+/// is app-private, so only adb or the app can), then `am start` launches. One argument a
+/// line; blank lines are skipped. A line `OAG_NAME=value` (an upper-case `OAG_` name) sets
+/// that environment variable instead, for the A/B switches the desktop reads from the
+/// environment (`OAG_SPLIT_FINISH=0`). No file, an empty list. See docs/tools/android.md.
+///
+/// Call right after [`prepare`], before any thread of ours exists.
+#[allow(unsafe_code)] // `set_var`, see below
+#[must_use]
+pub fn take_launch_args() -> Vec<String> {
+    let Ok(text) = std::fs::read_to_string(LAUNCH_ARGS_FILE) else {
+        return Vec::new();
+    };
+    let _ = std::fs::remove_file(LAUNCH_ARGS_FILE);
+    let mut args = Vec::new();
+    for line in text.lines().map(str::trim).filter(|line| !line.is_empty()) {
+        match line.split_once('=') {
+            Some((name, value))
+                if name.starts_with("OAG_")
+                    && name.bytes().all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'_') =>
+            {
+                // SAFETY: called from `android_main` before any thread of ours exists.
+                unsafe { std::env::set_var(name, value) };
+            }
+            _ => args.push(line.to_owned()),
+        }
+    }
+    args
+}
