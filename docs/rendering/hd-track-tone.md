@@ -700,8 +700,8 @@ GDB read of the scene target `0x40cc0000`, 1280x720 `A8R8G8B8`, byte 0 is alpha)
   boards (GO and the two side cards), the sign letters and the far red billboards, and about 0.5 on the sky strips. So the panels'
   halo is the gate's **frame term** (`frame.rgb * lum * fade`), exactly what ours also feeds them. The mask is not what is missing.
 - The adapted luminance matches: the scene target's encoded-mean luma is 0.2236 (fade `1 - 12 * 0.25 * 0.2236 = 0.329`); ours' render
-  with the bloom off reads 0.2268 (fade 0.320). The fade is not the cause either (the adaptation patch in "Decide the adaptation law"
-  does not move it).
+  with the bloom off reads 0.2268 (fade 0.320). The "fade is not the cause either" this line first claimed is **wrong**: 0.320 is
+  the fade the original's law gives ours' scene, not the fade our shader computes (0.04); see "The deficit is the fade" below.
 
 **What ours does, ablated** (local env knobs on the `Constants` the gate and blur read; uncommitted, a scale on the authored
 `alpha_contribution` (0.5), `frame_contribution` (1.0), blur step; the authored block is `0.5 / 1.0 / exponent 1.0 / size 1.0 / boost 12`,
@@ -740,6 +740,61 @@ Then wire the circuit's own values. **Talon's grill 1.5x** was not measured here
 
 **Omega/2048:** Omega's `Tonemap` block (no `HDR and Bloom`) and 2048's `wo_composite` never reach `hd_bloom.wesl`; **not checkable**
 here (no HD-style gate read for either). Changed: nothing (measure-only lane).
+
+## The deficit is the fade, not a gate constant (2026-10-27, `hd-bloom-gate-read`)
+
+**Claim tested:** "the original's live bloom gate constants on Anulpha differ from the authored ones, and wiring them closes the gap".
+**Result: false, and the gap is found.** Confidence 80 (one cold boot of the original for the constants, two pauses of it for the frames,
+three circuits re-rendered in ours; the console's own ladder behaviour is not measured).
+
+**Live gate, read.** Cold boot of Anulpha Pass at Resolution Scale 100 (no savestate), `Write Color Buffers` on, a full frame dump
+(`HOOK_LIGHT=1 HOOK_NO_HEADS=1 HOOK_NEED_SCREEN=1 hd-draw-dump.py`, 560 draws; the 31-draw stall of the restored-state dumps came from the
+dump not being seeded with the command ring, now the script's default). The gate (draw 499, program `FunkLayerBloomGate_fp` on `0x2240000`) disassembled
+with `ps3-fp-live.py`, constants as patched:
+
+| Constant | Live | Authored / law |
+| --- | ---: | --- |
+| luminance weights | `(0.9, 1.77, 0.33)` | inline, as read |
+| frame exponent | 1.0 | `Bloom from frame exponent` 1.0 |
+| frame coefficient | **0.385856** | `frame contribution 1.0 * fade`; fade `1 - min(adapted * 12 * 0.25, 1)` gives `adapted = 0.2047` |
+| alpha coefficient | 0.5 | `Bloom from alpha contribution` 0.5 |
+| `contribution.w` | 0 | hard-coded, as read |
+| vertical / horizontal blur step | `0.0037037` / `0.00208333` | `1/270` and `1/480` at size 1.0 |
+| blur weights, normaliser | `1, 0.8, 0.5, 0.2, 0.1`, `0.238095` | as read |
+
+The settings singleton (`*0x8b6fb4 + 0x52c`) reads `0.025, 1.0, 1.0, 0.5, 12, 20, 3, 4`, `Bloom feedback` 0, sizes 1.0: the authored block, unchanged.
+So **no constant differs from what `oag_post::hd_bloom` already uses**; the only live value that moves is the fade, as documented.
+The restored state's fade read 0.3278 earlier; this boot's 0.3859 is the same quantity at another point of the adaptation (rate 0.025 a frame).
+
+**Where the x4 is.** The scene target (`0x40cc0000`, alpha is the glow mask) and the swap-buffer screenshot were taken at one pause, with the
+window resized to 1280x720 so the two are 1:1 (`import -crop 1280x720`), twice. A plain numpy chain (4x4 box to the quarter buffer, the gate
+above, the nine-tap blurs at 2/3 texel, bilinear back up) run on the original's own scene predicts a bloom the original's frame (decoded final minus decoded scene, per
+80x160 block, HUD rows left out) delivers at **0.85 of the prediction** (median over 19 and 20 mask-free blocks, IQR 0.72 to 0.98; both pauses).
+The same chain on ours' bloom-off Anulpha frame (fade 0.320 assumed, frame term only) against ours' shipped render delivers **0.19** (23 blocks, IQR 0.18 to
+0.19): a uniform scalar, the tight spread says a gain and not a shape. A fade of 0.04 against 0.32 is that 0.19 to within the sim's accuracy.
+`oag_post::hd_bloom`'s `adapted` is the luma of the encode of the **linear** mean of the ladder (0.32 on Anulpha, fade about 0.04), where the original's readback
+is the mean of the **encoded** per-pixel luma (0.224 against the scene's own 0.227, "What the original's exposure is"; this boot: encoded-mean luma 0.2097, fade-implied 0.2047).
+
+**The A/B.** Falsifier written first: with the adaptation fed the encoded mean (the doc's "Trying it" variant: `fs_reduce_first` encodes the quarter copy, `fs_adapt` no longer does;
+local, **not committed**), Anulpha's ours/sim has to move from 0.19 to about 0.8, and Vineta K and Ubermall (whose two laws both saturate near fade 0) must not move. Rendered on scratch copies of the three stored pairs:
+
+| Pair (originals at scale 150) | ours/sim | whole-frame luma, ours / original: shipped | encoded-mean adaptation | mean grey diff, shipped to variant |
+| --- | ---: | ---: | ---: | --- |
+| anulpha-pass | 0.19 to **0.93** | 0.913 | **0.971** | 9.40 to 6.75 (rmse 0.073 to 0.062) |
+| vineta-k | not run | 0.970 | **0.996** | 6.61 to 5.72 (0.060 to 0.058) |
+| ubermall | not run | 0.994 | 0.995 | 10.21 to 10.21 (unchanged, fade already saturated) |
+
+The prediction held on all three. Vineta K moves toward 1, Ubermall stays inside 0.01, and the earlier "global gain overshoots" result is explained: a gain acts on the circuits whose fade is already near 0 (Ubermall), the fade law acts only where `adapted * boost * 0.25 < 1`.
+
+**Left, named:**
+
+- **Not wired.** The adaptation's input law (linear-filtered ladder as the hardware's gamma nibble 7 and ROP encode imply, against the encoded mean RPCS3 shows) is "Decide the adaptation law" above, open item 2: RPCS3 may decode after filtering where the console filters in linear light. The variant is the whole change (two lines in `hd_bloom.wesl`); the maintainer's choice is the original as RPCS3 shows it or the console's static read. The profile that made the earlier trial's comparison unfair (originals at 150) is retired for new captures, but the thirteen stored `hd/*` originals still carry it.
+- **Anulpha still 0.029 low in luma with the variant** (0.971, `x4 on both terms` gave 1.002): the remaining part is the alpha term. The original's own mask with authored 0.5 reproduces the original's board glow (eff/sim 0.9 on HUD-free blocks), so the constant is right and the shortfall is ours' mask coverage (`hd-glow-mask.md`), the GO letters (original 167/175/179, ours 112/131/134).
+- **The top cyan lights** (original G 82, ours 61) are scene source, striped in ours, not bloom; not chased.
+- The gate's bias and subtractive clamp slots read 0 and the clamp is the `contribution.w` factor above; the resolve program (`downsamplescaleaddfeedback_fp`) could not be read live, its program address is reused by the HUD's draws and the dump keeps the last patch. Its `scale` / `scaleAdd` stay the static read (1.0), consistent with the 0.85 above. The bloom buffers themselves are not readable (a VRAM read of `0x42240000` is noise; the RSX keeps them on the host side).
+- One cold boot read; the second sighting of the fade is the restored-state value. A second circuit's gate was not read (Metropia's singleton was: `exponent 3.0, alpha 2.5, frame 1.0`, equal to authored).
+
+**Omega / 2048:** Omega authors a `Tonemap` block and no `HDR and Bloom`, so it has no gate and no fade (**checked, differs**; `oag_post::omega_tonemap`). 2048's `wo_composite` has no HD gate either (**checked, differs**). Changed: nothing in the renderer; `scripts/hd-draw-dump.py` seeds the command ring.
 
 ## The reflection map is the sky, and Moa Therma's glass reads it (2026-10-21, `hd-one-pair-moa`)
 

@@ -98,11 +98,13 @@ one), or the sky map as a layer beside the probes (different sizes today, 512x25
   block is read, one per commit with all 13 pairs re-judged. Metropia's `glass_2nduv_reflect_glow` resolves to block `@0x18350`,
   assumed Chenghou's law, unread. The glass normal maps are the shared omission. The tint is `ProbeTint::SCENERY` (`{1, 1, 1, 0}`, read on Moa's glass only); a second circuit's
   read would settle whether it is per circuit. The producer program itself is still undecoded.
-- **HD bloom deficit on Anulpha** (2026-10-27, `hd-bloom-deficit`; hd-track-tone.md, "Anulpha's missing start-grid glow"): the start grid's
-  floor panels have glow-mask alpha 0 on the original, so the halo is the frame term, and Anulpha's shipped bloom supplies a third of the
-  original's (whole-frame luma 0.911; x4 on both gate terms 1.002, floor panels and lane within 3 grey). A global gain is falsified
-  (Vineta K and Ubermall overshoot at x2). Next: read Anulpha's live gate/blur constants from a draw dump and compare with its authored
-  `0.5 / 1.0 / 1.0 / 1.0 / 12`; the cyan top lights are scene source, not bloom. Nothing wired.
+- **HD bloom deficit on Anulpha** (2026-10-27, `hd-bloom-deficit` then `hd-bloom-gate-read`; hd-track-tone.md, "The deficit is the fade, not a gate constant"): the live gate constants
+  are the authored ones (alpha 0.5, exponent 1.0, frame 1.0 times the fade, blur steps 1/270 and 1/480), so there is no constant to wire. The gap is
+  ours' fade: `adapted` is the encode of the linear ladder mean (fade about 0.04), the original's is the mean of the encoded values (fade 0.33 to 0.39).
+  Feeding the encoded mean (local two-line variant, not committed) moves Anulpha's bloom from 0.19 to 0.93 of a plain-formula prediction, whole-frame luma 0.913 to 0.971,
+  Vineta K 0.970 to 0.996, Ubermall unchanged. **Next (ready to wire once the maintainer settles open item 2 below, emulator against console):** wire the encoded-mean
+  adaptation, re-make the stored `hd/*` originals at scale 100 first, then re-score. The rest of Anulpha's 0.029 is the alpha term (ours' glow-mask coverage; the
+  original's own mask with 0.5 reproduces its board glow). The cyan top lights (original G 82, ours 61) are scene source, striped in ours, not bloom.
 - **HD's exposure adaptation law** (`docs/rendering/hd-track-tone.md`, "Decide the adaptation law"): the
   live readback matches the mean of the *encoded* per-pixel luma within 1.3 % on three circuits, ours
   encodes the linear mean (15-43 % high). The patch is six lines in `crates/post/shaders/hd_bloom.wesl`
