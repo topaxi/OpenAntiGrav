@@ -121,6 +121,13 @@ def check_safe_area(root):
     (stored / "pair.json").write_text(json.dumps({"profile": "hd-fury", "original": {}, "ours": {}}))
     assert ce.missing_safe_area([root / "stored"]) == [stored / "pair.json"]
     assert not ce.missing_safe_area([root / "stored" / "nothing"])
+    # a menu pair whose profile locked the build keeps the locks and the race selection for a re-render
+    locked = root / "locked"
+    ce.write_ours_settings(ce.platform("pure-psp"), locked)
+    assert not cm.profile_is_locked(locked)
+    cm.extra_settings(locked, race={"track": "01_vineta_k"}, locked=True)
+    doc = tomllib_load(ce.settings_path(locked))
+    assert cm.profile_is_locked(locked) and doc["dev"]["unlock_everything"] is False and doc["race"]["track"] == "01_vineta_k"
 
 
 def tomllib_load(path):

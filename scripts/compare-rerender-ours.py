@@ -116,7 +116,8 @@ def rerender(pj, binary):
         if rec.get("kind") == "menu":
             style = rec["ours"].get("front_end_style")
             # a pair records prose for a title with no styling choice ("the disc's own"): only HD's two values are a setting
-            cm.extra_settings(tmp / "profile", style if style in ("HD", "FURY") else None, rec["ours"].get("race"))
+            cm.extra_settings(tmp / "profile", style if style in ("HD", "FURY") else None, rec["ours"].get("race"),
+                              locked=rec["ours"].get("unlock_everything") is False)
         if "hud_safe_area" in plat["ours"]:
             rec["ours"]["safe_area_basis"] = ("the pair's recorded original value, %d%%" % safe_area if safe_area is not None
                                              else "no value recorded for this pair: the profile's %d%%" % plat["ours"]["hud_safe_area"])

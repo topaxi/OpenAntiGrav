@@ -259,12 +259,9 @@ def prepare_profile(plat, profile, title_name, difficulty, race=None):
     fresh profile does not), `race` (the pickers' cursor: the team the original's fresh list rests on, where it is not ours' default) and
     the campaign difficulty row of `records.toml` (none for a title with no such control), written and read back by the run."""
     ce.write_ours_settings(plat, profile)
-    path = ce.settings_path(profile)
-    path.write_text(path.read_text() + "\n[dev]\nunlock_everything = false\n")
-    if race:
-        cm.extra_settings(profile, race=race)
+    cm.extra_settings(profile, race=race, locked=True)
     if difficulty:
-        (path.parent / "records.toml").write_text('[[campaign_difficulty]]\ntitle = "%s"\ndifficulty = "%s"\n' % (title_name.lower(), difficulty))
+        (ce.settings_path(profile).parent / "records.toml").write_text('[[campaign_difficulty]]\ntitle = "%s"\ndifficulty = "%s"\n' % (title_name.lower(), difficulty))
 
 
 def build_pairs(args, seen, out, plat, walk):
