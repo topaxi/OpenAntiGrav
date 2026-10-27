@@ -152,6 +152,7 @@ impl Pending {
                 .hud_style
                 .clone()
                 .or_else(|| self.settings.display.hud_style_choice()),
+            add_on_campaign: self.cli.add_on_campaign.clone(),
             dlc: self.dlc.clone(),
             // Passed straight through, `None` included: `race::load` resolves an
             // unnamed circuit from the title it opened, which is the only place

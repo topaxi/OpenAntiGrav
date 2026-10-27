@@ -217,7 +217,7 @@ fn a_hud_style_picks_the_skins_roots_by_mode() {
         ("2097", "/data/xml/2097_hud/"),
         ("wip3out", "/data/xml/wo3_hud/"),
     ] {
-        let (hud, skin) = hud_roots(oag_hd::TITLE, Some(style), &mut report);
+        let (hud, skin) = hud_roots(oag_hd::TITLE, Some(style), None, &mut report);
         assert!(skin.expect("a skin").font_role.is_some());
         for mode in [
             Mode::SingleRace,
@@ -238,7 +238,7 @@ fn a_hud_style_picks_the_skins_roots_by_mode() {
         ("2097", r"Data\XML\2097_HUD\"),
         ("WIP3OUT", r"Data\XML\wo3_HUD\"),
     ] {
-        let (hud, _) = hud_roots(oag_omega::TITLE, Some(style), &mut report);
+        let (hud, _) = hud_roots(oag_omega::TITLE, Some(style), None, &mut report);
         for mode in Mode::ALL {
             assert!(
                 hud_layout(hud, mode).starts_with(dir),
@@ -249,7 +249,7 @@ fn a_hud_style_picks_the_skins_roots_by_mode() {
 
     // No name, or the list's own default: the title's roots, no font slot.
     for style in [None, Some(""), Some("HD")] {
-        let (hud, skin) = hud_roots(oag_hd::TITLE, style, &mut report);
+        let (hud, skin) = hud_roots(oag_hd::TITLE, style, None, &mut report);
         assert_eq!(
             hud_layout(hud, Mode::SingleRace),
             "/data/xml/arcade_hud.xml"
@@ -259,7 +259,7 @@ fn a_hud_style_picks_the_skins_roots_by_mode() {
 
     // An unknown name draws the default and is reported; a title with no list does neither.
     let mut report = Vec::new();
-    let (hud, _) = hud_roots(oag_hd::TITLE, Some("nonsense"), &mut report);
+    let (hud, _) = hud_roots(oag_hd::TITLE, Some("nonsense"), None, &mut report);
     assert_eq!(
         hud_layout(hud, Mode::SingleRace),
         "/data/xml/arcade_hud.xml"
@@ -270,10 +270,54 @@ fn a_hud_style_picks_the_skins_roots_by_mode() {
             .any(|line| line.contains("not in this title's list"))
     );
     let mut report = Vec::new();
-    let (hud, skin) = hud_roots(oag_pulse::TITLE, Some("2097"), &mut report);
+    let (hud, skin) = hud_roots(oag_pulse::TITLE, Some("2097"), None, &mut report);
     assert!(skin.is_none() && report.is_empty());
     assert_eq!(
         hud_layout(hud, Mode::SingleRace),
         hud_layout(oag_pulse::TITLE.hud, Mode::SingleRace)
+    );
+}
+
+/// A downloadable campaign's events read that package's `_HD` layouts for Time Trial, Speed Lap,
+/// Zone and Elimination, and keep the native Race file; a race that is no campaign event reads
+/// the title's own. Fails if `Options::add_on_campaign` stops reaching `hud_roots`.
+#[test]
+fn an_add_on_campaign_picks_its_own_layouts_by_mode() {
+    for campaign in ["HD", "Fury"] {
+        let mut report = Vec::new();
+        let (hud, skin) = hud_roots(oag_2048::TITLE, None, Some(campaign), &mut report);
+        assert!(skin.is_none());
+        for (mode, file) in [
+            (Mode::TimeTrial, "TimeTrial_HUD_HD.xml"),
+            (Mode::SpeedLap, "TimeTrial_HUD_HD.xml"),
+            (Mode::Zone, "Zone_HUD_HD.xml"),
+            (Mode::Eliminator, "Elimination_HUD_HD.xml"),
+        ] {
+            assert_eq!(
+                hud_layout(hud, mode),
+                format!(r"Data\XML\2048_hud\{file}"),
+                "{campaign} {mode:?}"
+            );
+        }
+        assert_eq!(
+            hud_layout(hud, Mode::SingleRace),
+            hud_layout(oag_2048::TITLE.hud, Mode::SingleRace)
+        );
+    }
+    let (hud, _) = hud_roots(oag_2048::TITLE, None, None, &mut Vec::new());
+    assert_eq!(
+        hud_layout(hud, Mode::Zone),
+        r"Data\XML\2048_hud\Zone_HUD.xml"
+    );
+    let mut report = Vec::new();
+    let (hud, _) = hud_roots(oag_pulse::TITLE, None, Some("HD"), &mut report);
+    assert_eq!(
+        hud_layout(hud, Mode::Zone),
+        hud_layout(oag_pulse::TITLE.hud, Mode::Zone)
+    );
+    assert!(
+        report
+            .iter()
+            .any(|line| line.contains("no \"HD\" campaign"))
     );
 }

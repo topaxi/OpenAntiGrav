@@ -941,6 +941,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         language_plugins,
         options.language.as_deref(),
         options.hud_style.as_deref(),
+        options.add_on_campaign.as_deref(),
         crate::hud::SplitViews {
             count: options.views,
             people: usize::from(options.people_flying()),

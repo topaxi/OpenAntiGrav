@@ -604,7 +604,7 @@ impl App {
             pure_classic_entries: std::collections::BTreeMap::new(),
             campaign_difficulty: None,
             campaign_ai_skill_scale: None,
-            campaign_craft: None,
+            campaign_add_on: None,
             tournament: None,
             awaiting_binding: None,
             // A load failure here is not fatal - it is the same "corrupt

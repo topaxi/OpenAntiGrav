@@ -448,6 +448,11 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) hud_style: Option<String>,
 
+    /// Race as a downloadable campaign's event (`HD` or `Fury` on Wipeout 2048): the HUD reads
+    /// that campaign's own layouts for the mode. What a cell launched from the campaign map sets.
+    #[arg(long)]
+    pub(crate) add_on_campaign: Option<String>,
+
     /// The track's `.vex` entry name, for either way into a race. The same name
     /// on both **Pulse** releases, PSP and PS2.
     ///
