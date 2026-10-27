@@ -369,6 +369,9 @@ pub struct Flyers {
     cards: RefCell<HashMap<String, Preview>>,
     /// The rectangle of each card, by `FlyerName`.
     placed: HashMap<String, Placement>,
+    /// Where `Grid Selection`'s card stands: [`GRID_POSE`] unless the title's
+    /// own pose says otherwise.
+    pub grid_pose: Pose,
     /// Set by whoever opens the campaign, from the session's own setting.
     pub anisotropy: Anisotropy,
     /// One line per card that would not read, for the loader's log.
@@ -492,6 +495,7 @@ impl Flyers {
             waiting: RefCell::new(waiting),
             cards: RefCell::new(HashMap::new()),
             placed,
+            grid_pose: GRID_POSE,
             anisotropy: Anisotropy::default(),
             report,
         }
@@ -499,12 +503,12 @@ impl Flyers {
 
     /// The card `Grid Selection` shows for the flyer named `flyer`.
     #[must_use]
-    pub fn grid_show(flyer: &str) -> Show {
+    pub fn grid_show(&self, flyer: &str) -> Show {
         Show {
             flyer: flyer.to_string(),
             side: Side::Front,
             widget: flyer::GRID_WIDGET.to_string(),
-            pose: GRID_POSE,
+            pose: self.grid_pose,
         }
     }
 

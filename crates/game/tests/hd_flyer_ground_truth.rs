@@ -124,15 +124,9 @@ fn every_card_of_both_campaigns_decodes_and_every_grid_has_a_logo() {
     let flyers = oag_game::flyer::Flyers::load(&mut archives, vec![widget], &cards);
     assert!(flyers.report.is_empty(), "{:?}", flyers.report);
     for name in &names {
-        assert!(
-            flyers.has(&oag_game::flyer::Flyers::grid_show(name)),
-            "{name} did not decode"
-        );
+        assert!(flyers.has(&flyers.grid_show(name)), "{name} did not decode");
         let [x, y, width, height] = flyers
-            .card_rect(
-                &oag_game::flyer::Flyers::grid_show(name),
-                oag_display::space::Space::HD,
-            )
+            .card_rect(&flyers.grid_show(name), oag_display::space::Space::HD)
             .unwrap_or_else(|| panic!("{name} has no rectangle"));
         assert!(
             width > 400.0 && height > 300.0,

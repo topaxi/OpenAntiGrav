@@ -1237,6 +1237,17 @@ region is 83 per cent of the absolute grey error (mean error 81 inside, 11.7 in 
 backdrop (ghost tower against blurred streaks) is the rest. The four claimed items could not reach the target 25 on their own: the
 white box was 0.5 per cent of the frame. On the cell: `CHOOSE RACE` and `12 MORE POINTS` draw dark where the original draws grey,
 no white outline on the selected hex, and the `RECORDS` prompt is missing.
+**Omega's grid card pose (2026-10-27, `omega-grid-card-pose`).** `Title.campaign.grid_card_pose` (`oag_title::campaign::CardPose`;
+`None` everywhere but Omega, where `Flyers::grid_pose` stays `GRID_POSE`): yaw -0.25, centre `[29.0, 13.3, -129.0]`. **Measured off the
+one shadPS4 frame and chosen, no confidence score, not read from data**: the original's card edges are x 816 and 1627, top edge from
+y 224 (left, extrapolated past the chamfer) to 151 (right), bottom from 675 to 702; the two edge heights (451 and 551 px) give the
+two edges' depths 146 and 119.5 units at `FOV_Y` 1.0, and both edges agree on a centre 13.5 units above the axis; the yaw and
+distance were then tuned over three renders (-0.23/-0.25/-0.27: mean grey 16.7/16.4/16.8). Omega's own `<Flyer>` widget numbers were not
+compared with HD's (the XML is not extracted here), and the executable's pose code is the same unread native code as HD's
+(`Flyer_Item`), so the address is still unknown. The pointer target follows (`card_rect` projects `Show::pose`). Pair
+`omega/menu-grid-select` mean grey **42.88 to 16.40**, RMSE 0.333 to 0.165, edge 0.21 to 0.26; `omega/menu-cell-select` 12.68 unchanged;
+HD's two pairs byte-identical. Pinned by `omegas_campaign_carries_fury_s_layout_and_every_card` (card rectangle within 25 px of the
+frame's). Still differs: backdrop (ghost tower against blurred streaks), left text block (mixed-case `Event 01/08`), `impact` box's dotted frame.
 Lineage, 2048's Fury DLC: **checked, differs**: `00_flyer.rcsmodel`, `09_Blitzed/flyer*.rcsmodel` and the Blitzed textures are
 absent from the 2048 base and patch sources of both regions (`oag_2048::open`; the two DLC packs were not opened separately),
 and the Vita path never reads `SubMesh::colours` (its own declaration is PS4-only). The coverage-channel default of point 2 lives in

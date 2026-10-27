@@ -468,6 +468,7 @@ fn load_hd(
             .campaign
             .fury_card_gain
             .unwrap_or(crate::flyer::FURY_GAIN),
+        title.campaign.grid_card_pose,
     );
     // `Cell Selection`'s own `Confirm`/`Back` legend, off the shared
     // front-end root - see [`read_footer`]'s own doc. `Cell Help` and the
@@ -674,6 +675,7 @@ fn load_flyers(
     screens: &oag_ui::screen::Screens,
     has_selection: bool,
     fury_gain: f32,
+    grid_pose: Option<oag_title::campaign::CardPose>,
 ) -> Option<crate::flyer::Flyers> {
     // Every card: the base campaign's eight, Fury's eight and the two
     // `Campaign Selection` cards, each with the window of its camera's image
@@ -728,7 +730,16 @@ fn load_flyers(
     let flyers = widgets
         .iter()
         .any(|widget| widget.name == oag_ui_screens::campaign::flyer::GRID_WIDGET)
-        .then(|| crate::flyer::Flyers::load(archives, widgets, &cards));
+        .then(|| {
+            let mut flyers = crate::flyer::Flyers::load(archives, widgets, &cards);
+            if let Some(pose) = grid_pose {
+                flyers.grid_pose = crate::flyer::Pose {
+                    yaw: pose.yaw,
+                    offset: pose.offset,
+                };
+            }
+            flyers
+        });
     if let Some(flyers) = &flyers {
         for line in &flyers.report {
             log::warn!("{line}");
@@ -874,6 +885,7 @@ fn load_omega(
             .campaign
             .fury_card_gain
             .unwrap_or(crate::flyer::FURY_GAIN),
+        title.campaign.grid_card_pose,
     );
     // See [`load_hd`]'s own identical call - Omega's front end is HD's
     // `PI001` plugin carried forward, at the same relative root path.
