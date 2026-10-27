@@ -1643,14 +1643,17 @@ read live and wired (2026-10-27, `hd-hologram-board`):
 
 **Omega: checked, applies, not wired, minus the `/2`** (2026-10-27, `gcn-operand-decoder`, read with `oag_rcs::gcn`,
 [gcn.md](../formats/gcn.md)). Amphiseum's `track.final.rcsmodel` (`data02`) names the **plain**
-`dc_hologramwithstatic.rcsmaterial`; the `_1`/`_2` files beside it are the PS4 Pro compiles (gcn.md). Its 8 pixel variants
-(69 instructions; Shdr `@0x32c4` of the `data02` copy, decoded text identical in program content across `data02`, `data05`
-and `data08`) read, with the units named by the program's own reflection and the constants loaded `time`@dw0, `Speed`@1,
-`Alpha`@2, `Speed2`@3:
+`dc_hologramwithstatic.rcsmaterial`; the `_1`/`_2` files beside it are the PS4 Pro compiles (gcn.md). The file ships in
+`data02` (base) and in the patch's `data05` and `data08`; the patch's two copies hold identical programs, and `data08`'s is
+the one this project loads (`oag_omega::EXTRA_CANDIDATES` searches the patch first, a chosen order, [omega-status.md](../formats/omega-status.md)).
+Its 8 pixel variants (77 instructions in the patch, Shdr `@0x33a4` of the `data08` copy; 69 in `data02`, `@0x32c4`) carry
+**the same colour and alpha arithmetic instruction for instruction**; the patch's 8 extra instructions only rewrite the
+`mrt2` export (a 2D screen-space vector rescaled by `0.25 / sqrt(max(len^2, 0.0625))`, not the colour). With the units
+named by the program's own reflection and the constants loaded `time`@dw0, `Speed`@1, `Alpha`@2, `Speed2`@3:
 
 ```text
 A      = Texture1(u + time * Speed, v).rgb           image_sample after v_mad_f32 v2, s24, v0(=Speed), v5(=u)
-C      = TextureGradient(u, v + time * Speed2).rgb   v_mad_f32 v7, s24, v9(=Speed2), v6(=v)
+C      = TextureGradient(u, v + time * Speed2).rgb   v_mac_f32 v6(=v), s24, v7(=Speed2)  (data02: v_mad_f32 v7, s24, v9, v6)
 alpha  = AlphaMask(u, v).x * Alpha                   dmask:0x1 sample, v_mul_f32 v10, s26, v10
 colour = lerp(fogColour, A + C, fog)                 v_add_f32 x3, then v_mad/v_mac with s28..s30
 ```

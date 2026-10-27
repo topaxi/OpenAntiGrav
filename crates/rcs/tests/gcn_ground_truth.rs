@@ -269,6 +269,34 @@ fn eboot(rel: &str, expected: &str) {
     };
     s.add(&bytes, false);
     assert_eq!(format!("{s:?}"), expected, "{rel}");
+    tone_curve_lines(&bytes);
+}
+
+/// `tonemap.md`'s curve resolve, held in both eboots (base and the 1.07 patch decode it
+/// identically): `x = max(min(E * c, t1), t0)`, then `a + x (b + x (c + d x))`, per channel.
+fn tone_curve_lines(eboot: &[u8]) {
+    let resolve = gcn::scan(eboot)
+        .into_iter()
+        .filter_map(|(_, p)| p.ok())
+        .find(|p| {
+            p.reflection
+                .as_ref()
+                .is_ok_and(|r| r.constants.iter().any(|c| c.name == "m_LAvgt0t1Exposure"))
+        })
+        .expect("the curve resolve ships");
+    assert_eq!(resolve.instructions.len(), 105);
+    contains_in_order(
+        &resolve.to_string(),
+        &[
+            "s_buffer_load_dwordx8 s[8:15], s[8:11], 0x0",
+            "v_mul_f32 v0, s15, v0",
+            "v_min_f32 v0, s14, v0",
+            "v_max_f32 v0, s13, v0",
+            "v_mad_f32 v6, v0, s11, v4",
+            "v_mad_f32 v6, v6, v0, s9",
+            "v_mad_f32 v0, v0, v6, s8",
+        ],
+    );
 }
 
 #[test]
