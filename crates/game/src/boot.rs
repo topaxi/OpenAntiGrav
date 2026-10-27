@@ -300,6 +300,8 @@ pub struct Shell {
     /// This build's own tiles on 2048's mode grid, see
     /// [`campaign2048::extra_tiles`]. Empty on every other title.
     pub extra_tiles: Vec<oag_ui::frontend::ExtraTile>,
+    /// The Select Team panel's `<FE>` rows, see [`team_ratings2048`].
+    pub team_ratings: Vec<oag_ui::frontend::TeamRating>,
     /// The campaigns of 2048's mounted packages, see [`tiers2048::load`].
     pub tiers: Vec<oag_ui::frontend::Tier>,
     /// The screens this boot walks, in the title's own order, already filtered
@@ -594,6 +596,8 @@ pub fn load_shell(
         ],
         &mut report,
     );
+    let team_ratings =
+        team_ratings2048::load(title, front_end.touch.is_some(), &documents, &mut report);
     let tracks = load_tracks(&mut archives, definition, &documents, &mut report);
     let zone_tracks = load_zone_tracks(&mut archives, title.race.zone, &documents, &mut report);
     let teams = load_teams(
@@ -647,6 +651,7 @@ pub fn load_shell(
             oag_ui::frontend::EventIcon::Elimination.texture_name(),
         ]);
         block_textures.extend(oag_ui::frontend::team_grid_textures());
+        block_textures.extend(oag_ui::frontend::team_info_textures());
         block_textures.extend(campaign2048::card_textures(&campaign_events));
         block_textures.extend(tiers2048::card_textures(&tiers));
     }
@@ -871,6 +876,7 @@ pub fn load_shell(
             face_scales,
             campaign_events,
             extra_tiles,
+            team_ratings,
             tiers,
             walked,
             movie_name,
@@ -1191,6 +1197,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         face_scales,
         campaign_events,
         extra_tiles,
+        team_ratings,
         tiers,
         walked,
         movie_name: _,
@@ -1211,17 +1218,8 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
     // the sequence takes one of them by value. See `Boot::languages`.
     let offered = languages.clone();
 
-    // Every image `sprites` actually decoded - every `Image`/`TouchButton`
-    // icon a screen spells, **plus** the menu blocks' own nine-patch and the
-    // campaign map's hex tile/mode-icon art, neither named by any screen
-    // (`sprites::load`'s own `extra` list). `Sheet::entries` is already
-    // exactly this set, so reading it directly is both simpler and more
-    // complete than the screen-only walk this replaced: that walk never
-    // surfaced an `extra` name at all, which stayed harmless while nothing
-    // read one back out of `Frontend::placements` - `sprites::block_art`
-    // gets its own `BlockArt` straight from `sprites` instead - until
-    // `oag_ui::frontend::campaign_map::Frontend::placed` became the first
-    // caller that does (2026-09-27).
+    // Every image `sprites` decoded: the screens' own plus the `extra` names (menu blocks, the
+    // campaign map's and team panel's art) that `Frontend::placed` reads back.
     let placements = sprites.entries().to_vec();
     // Both movies described the same way, each from its own container: the cached
     // frame count when there is a cache and the demuxed one when there is not,
@@ -1284,6 +1282,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         frontend.set_extra_tiles(extra_tiles);
     }
     frontend.set_tiers(tiers);
+    frontend.set_team_ratings(team_ratings);
 
     // **Before `set_backdrop`, which bakes a rect out of it.** The PS2's `Skin.xml`
     // places widgets in a 640x448 grid rather than the PSP's 480x272, so every widget
@@ -1642,6 +1641,7 @@ pub mod tiers2048;
 pub use screens::RaceSetup;
 pub(crate) mod sprites;
 mod steps;
+mod team_ratings2048;
 
 use fonts::load_font;
 pub use movies::{DEFAULT_BOOT_MOVIE, DEVPUB_REEL, EntryRef};

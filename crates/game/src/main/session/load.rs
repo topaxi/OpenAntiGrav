@@ -319,6 +319,8 @@ impl Session {
         // all three places is what kept the PS2's 640x448 mismatch invisible for
         // as long as it was.
         let space = loaded.frontend.space();
+        let touch = loaded.title.front_end.and_then(|front_end| front_end.touch);
+        let ship_dir = loaded.title.race.ship_dir;
         (self.backdrop, self.backdrop_shape) = match loaded.backdrop.take() {
             Some(movie) => {
                 let shape = BackdropShape {
@@ -345,7 +347,18 @@ impl Session {
         // Building the front end spawns the intro's decode thread and uploads a
         // sprite sheet; that is a load, and a load is not a frame time.
         self.stalled = true;
+        let hull = self.race_options.as_ref().zip(touch).map(|(options, touch)| {
+            oag_game::team_hull::TeamHull::new(
+                options.source.clone(),
+                options.dlc.clone(),
+                ship_dir,
+                touch.team_model_origin,
+            )
+        });
         self.stage = Stage::frontend(&self.gpu, loaded, video_format, trace, &mut self.audio)?;
+        if let Stage::Frontend(stage) = &mut self.stage {
+            stage.team_hull = hull;
+        }
         Ok(())
     }
 

@@ -53,6 +53,8 @@ pub(crate) struct FrontendStage {
     /// picture the intro had since overwritten.
     pub(crate) backdrop_in_planes: bool,
     pub(crate) trace: bool,
+    /// The Select Team hull, on a title whose touch front end places one.
+    pub(crate) team_hull: Option<oag_game::team_hull::TeamHull>,
 }
 
 /// One boot movie, waiting for the screen that plays it.
@@ -104,6 +106,7 @@ impl FrontendStage {
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         viewport: (f32, f32, f32, f32),
+        target_size: (u32, u32),
         backdrop: Option<&mut movie::Feed>,
     ) -> Result<()> {
         let mut list = self.frontend.draw_list();
@@ -118,6 +121,19 @@ impl FrontendStage {
             viewport,
             None,
         );
+        if let (Some(hull), Some(craft)) = (self.team_hull.as_mut(), self.frontend.team_hull()) {
+            hull.draw(
+                &gpu.device,
+                &gpu.queue,
+                gpu.output.config.format,
+                encoder,
+                view,
+                viewport,
+                target_size,
+                self.frontend.space(),
+                craft,
+            );
+        }
         Ok(())
     }
 

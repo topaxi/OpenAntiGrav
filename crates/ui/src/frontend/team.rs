@@ -50,10 +50,10 @@
 //!   `ArrowTouchOnly`; the original frame shows no list at all, so none is
 //!   drawn (the labelled `FE_SKIN_*` stand-in is gone). Its three values
 //!   still reach no setting.
-//! - **The `<Model name="ShipModel">` hull preview.** No 2D front-end to
-//!   3D mesh seam exists for 2048 yet; see the handover thread.
-//! - **The statistics table and the tutorial bubble** (`TeamInfo`,
-//!   `FE_SHIP_STATS_TUT`): open, see the handover thread.
+//! - **The `<Model name="ShipModel">` hull** is the composition root's:
+//!   [`Frontend::team_hull`] names the craft, `oag_game::team_hull` draws it.
+//! - **The tutorial bubble** (`FE_SHIP_STATS_TUT`): open, see the handover
+//!   thread. The statistics panel beside the grid is [`super::team_info`].
 //!
 //! # Controls
 //!
@@ -84,7 +84,7 @@
 //! a follow-up rather than guessed at.
 
 use oag_2048::frontend::states as w2048;
-use oag_2048::race::{NATIVE_TEAMS, SHIP_TYPES, TEAM_VARIANTS};
+pub(super) use oag_2048::race::{NATIVE_TEAMS, SHIP_TYPE_LABELS, SHIP_TYPES, TEAM_VARIANTS};
 
 use crate::pointer::{Pointer, contains};
 
@@ -105,7 +105,7 @@ const ROWS: usize = 4;
 
 /// The columns, left to right, as `NATIVE_TEAMS` names them: the order
 /// `FUN_81105710` loads the badge textures in.
-const TEAM_COLUMNS: [&str; 5] = [
+pub(super) const TEAM_COLUMNS: [&str; 5] = [
     "Feisar2048",
     "AG_Systems2048",
     "Qirex2048",
@@ -214,6 +214,19 @@ impl Frontend {
     #[must_use]
     pub fn team_choice(&self) -> Option<(&'static str, &'static str)> {
         let (team, craft) = self.touch.team_choice?;
+        Some((NATIVE_TEAMS[team], TEAM_VARIANTS.variants[craft].suffix))
+    }
+
+    /// The craft whose hull the Select Team screen shows, `(team, craft suffix)`:
+    /// `Some` only on that screen. The drawing is the composition root's
+    /// (`oag_game::team_hull`); the simulation-free front end only names the
+    /// craft the cursor is on.
+    #[must_use]
+    pub fn team_hull(&self) -> Option<(&'static str, &'static str)> {
+        if !self.machine.is(w2048::TEAM) {
+            return None;
+        }
+        let (team, craft) = self.touch.team_choice.unwrap_or_else(start);
         Some((NATIVE_TEAMS[team], TEAM_VARIANTS.variants[craft].suffix))
     }
 
@@ -347,6 +360,7 @@ impl Frontend {
                 }
             }
         }
+        self.draw_team_info(team, craft, out);
         // The confirm tick is the one authored button with an icon; `ar_view`
         // and the two `replay_unlock` hotspots are not drawn in the original
         // frame (the latter author `Colour="0x00000000"`).

@@ -166,6 +166,9 @@ pub struct TouchState {
     /// player moves off the screen's own starting point - see
     /// [`Frontend::team_choice`]'s own doc for why that is the contract.
     pub team_choice: Option<(usize, usize)>,
+    /// Every craft's `<FE>` ratings for the Select Team panel - see
+    /// [`Frontend::set_team_ratings`]. Empty draws no rows.
+    pub team_ratings: Vec<super::team_info::TeamRating>,
     /// `OptionsCamera`'s own choice - see [`Frontend::camera_choice`].
     pub camera_choice: Option<u8>,
     /// `OptionsAudio`'s `Music Volume` - see [`Frontend::music_choice`].

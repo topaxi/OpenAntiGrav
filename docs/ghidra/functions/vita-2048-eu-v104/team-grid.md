@@ -10,7 +10,8 @@ renaming bar or unnecessary for the wiring), so nothing is added to
 `names.tsv`; the addresses below are Ghidra's own `FUN_` names.
 
 Wired in `crates/ui/src/frontend/team.rs`; the pair `2048/menu-team` went from
-mean grey 94.9 to 38.3. Everything here was read from a decompile, not traced
+mean grey 94.9 to 38.3, and with the statistics panel and the hull
+(`team_info.rs`, `oag_game::team_hull`, below) to 27.3. Everything here was read from a decompile, not traced
 live: confidence is per row.
 
 ## The class
@@ -114,15 +115,74 @@ When `g_bDlc2Mounted`, a rect `(x, y, 2*202 + 2, 80)` at the anchor flips
 resets the selection cache. Confidence 60: the flag's effect on the draw
 was not followed.
 
-## The statistics table (not read)
+## The statistics panel (`TeamInfo`, read 2026-10-27)
 
-`TeamInfo` (`Frontend/Items/TeamInfo_Item.cpp`, `0x813ceab0`) draws the panel
-and the `FE_SHIP_STATS_TUT` bubble; its code was not read. The numbers it
-shows are on disc: `HandlingStats/<team>/<n>/handlingstats.xml` carries
-`<FE speed thrust handling shield firepower>` and `feisar2048/3` reads
-`8 8 7 4 6`, the frame's SPEED 8, HANDLING 7, HEALTH 4, FIREPOWER 6 (n 1..4 =
-fighter, agility, speed, prototype). Confidence 80 that the table reads these;
-the bar law (10 cells) is not read.
+`Frontend/Items/TeamInfo_Item.cpp` (string `0x81474f78` names the widget
+`teamscreeninfo`; `Team_Definition.xml` authors only `x=16 y=307`). Vtable
+`0x8150e4ac`: slot 3 update `0x810e1bc0` (counts the four displayed values up
+0.5 a tick toward their targets), 7 draw `0x810e0bf6`, 11 enter `0x810e06f4`
+(zeroes the values), 14 constructor `0x813ceab0`, 15 loader `0x810e05e4`.
+Everything below is at rest and drawn by `crates/ui/src/frontend/team_info.rs`
+(module doc lists the same numbers). The screen's own update is `0x8113a3b0`
+(not a function in the database until 2026-10-27; created, not renamed).
+
+| What | Value | Where read | Confidence |
+| --- | --- | --- | --- |
+| Colours | rows `Transparent2048` (`0xc0ffffff`, 75 % white), labels and numbers `Blue2048`, filled cells `Orange2048`; the register each call passes (`r10`, `r9`, `[sp+0x20]` of `0x810e19d6`) | disassembly of `0x810e0bf6`..`0x810e19f0` | 85 |
+| Empty cell | `FUN_8105bc14(1.0, 0x808080, 0xff808080)`: grey 128 | `0x810e071a` | 90 |
+| Row | `x = 16 + 416`, `y = 307 + 30 n`, 512 x 27 | `0x810e0bf6` (`+ 416.0`, `+ 0x1e`), `0x810e071a` (`+ 27`) | 90 (frame: first row at 307, cells at 632) |
+| Cells | ten, at `x + 200 + 25 i`, 22 wide; filled when `rating - i - 0.5 > 0`, alpha `clamp(2 * (rating - i - 0.5))` | `0x810e071a` | 90 |
+| Label | `(x + 9, y + 5)`, `NEOSANS_BOLD` at `0.7` (`0x3f333333`) | `0x810e071a` | 85 |
+| Number | `%d` (`0x81453e50`), `--` (`0x81453e54`) for 0 and 11, centred at `x + 478` | `0x810e071a` | 85 |
+| Rows | `RC_SPEED`, `RC_HANDLING`, `RC_HEALTH`, `RC_FIREPOWER` (`RC_SHIELD`, `RC_THRUST` when `DAT_8153fee8 == 1`, the HD mode) | `0x810e19f0`.. | 90 |
+| Header | band `(526, 263)` 418 x 44, team icon `(462, 253)` 64 x 64, class icon 40 left of it, text `(546, 268)` at 0.82 | `0x810e0bf6`, `0x81061808`, frame (band left edge 526, text 546) | 75 |
+| Ability icons | 64 x 64 centred at `(886, 224)` and 80 to the left | `0x810614aa`, call at `0x810e1976` (`+ 870`, `- 83`) | 85 |
+
+**Where the numbers come from.** Not `HandlingStats/<team>/<n>/handlingstats.xml`
+(an earlier reading of this page): the screen's update (`0x8113a3b0`) passes the
+ship record's `+0x1c4`, `+0x1cc`, `+0x1d0` and `+0x1d8` to the panel, and that
+record is the plugin's `PI_TeamModel` (`+0x1b0` is its `modellocation`,
+`"%s/ship_lod.vex"`; `+0x1ac` its `texturelocation`). `Data\Plugins\teams\Definition.xml`
+authors `<FE speed thrust handling shield length firepower description>` on
+each, which puts them at `+0x1c4`, `+0x1c8`, `+0x1cc`, `+0x1d0`, `+0x1d4`,
+`+0x1d8`: speed, handling, shield (the HEALTH row) and firepower are rows 1 to
+4 (`+0x1c8`, `thrust`, is the HD mode's fourth). Feisar Speed is 8, 7, 4, 6 in
+both files, which is why the first reading looked right; **Feisar Fighter is
+speed 5 here and 3 in `HandlingStats`**, so the files disagree. Confidence 85
+(the offsets fit the attribute order and the `+0x1b0` path; the frame checks
+one craft). `description` is the string id of the marquee a prototype shows in
+place of the rows (`strcmp(craft, "prototype") == 0` selects that branch of
+`0x810e0bf6`); it is on disc and not drawn.
+
+**Not drawn:** the prototype's description marquee and scrollbar, the
+`FE_SHIP_STATS_TUT` bubble, the count-up and the slide-in, the lighter face of
+the header's second word (one face here), the ability icons' touch tooltips
+(`Ship_Select_No_*`), and `RB_LOCKED` (the locked-craft panel: needs the lock
+rule above). Pair `2048/menu-team`, the panel box `(430, 262, 515, 163)`: mean
+grey 58.4 to 10.6.
+
+## The hull (`<Model name="ShipModel">`, drawn 2026-10-27)
+
+`oag_game::team_hull` draws it through `Preview::draw_matrices`, the pass every
+menu mesh uses (HD and Omega Ship Select go through the same `Preview`).
+**Authored** (`Team_Definition.xml`): `OriginX=1400 OriginY=264`, `x=y=0`,
+`z=-25`, `nearZ=1`. The origin is a point of a grid twice the screen's:
+(700, 132) of 960 x 544, which is where the original frame puts the hull's
+centre. **Read off `0x8113a3b0`**: the file is `"%s/ship_lod.vex"` of the
+craft's `modellocation` (`Data\art\published\Ships\<team>\<n>\Ship_LOD.vex`, 5,000
+to 10,000 triangles, 80 ms to build on this machine); the rotation fields
+(`+0xb4`, `+0xb8`) start at 1.57 and -1.57 and ease at 1/6 a tick toward
+`0.546` and `-0.932` (plus a touch-gyro term), so those are the rest pose
+(confidence 75); `+0xd8` is set to `40.0`, **read as the field of view in
+degrees: confidence about 50, fitted by eye, not verified** (the frame's hull
+length and position agree). **Chosen:** the far plane, drawing over the 2-D
+list (nothing the hull covers is drawn over it on the frame), the model's own
+default `Textures_1` livery (yellow: the original is teal; the same open
+livery question as the 2048 race pair; the hull box's dominant saturated colour is (160,128,0) here and
+(32,224,224) in the frame, a yellow-to-cyan turn a red/blue swap in the livery decode would make: a lead, untested), the loader running on the frame
+thread. Not drawn: the touch turntable, the screen's slide-in. Frame check:
+the silhouette sits on the original's (nose at about (490, 195), tail at
+(865, 110)).
 
 ## Omega and HD
 
@@ -132,6 +192,14 @@ the bar law (10 cells) is not read.
   files here plus `_vr` variants in the patch's `data08`). No
   `Team_Definition.xml` exists in any Omega archive, so whether Omega's HD-derived
   front end instantiates this item was not traced.
+- **The statistics panel on Omega: checked, applies, not wired.** `eboot.bin`
+  names `C:\WOPS4\Wipeout\Code\Frontend\Items\TeamInfo_Item.cpp` (`0x0181fd8e`)
+  and `RC_FIREPOWER` (`0x01827600`), and `data00.psarc`'s
+  `Data/plugins/teams/Definition.xml` authors the same `<FE speed thrust handling
+  shield length firepower description>` on `Feisar2048`'s four `PI_TeamModel`s
+  (speed 8, 8, 7, 4, 3.8, 6) and 20 `firepower=` rows in all. Its screens
+  author no `team` screen to place the item, so nothing instantiates it; the
+  draw's numbers were not compared against Omega's own code.
 - **HD/Fury campaign mode** (`[0x1b8] == 1`, draw `FUN_81106a46`): 4 columns by
   3 rows of 100 x 82 cells from `teamgrid/hd/`, 12 teams. Ours still draws the
   2048 grid there. Open.

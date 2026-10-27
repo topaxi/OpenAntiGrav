@@ -619,6 +619,177 @@ fn the_team_screen_draws_the_grids_badges_and_craft_icons() {
     );
 }
 
+/// The Select Team panel's four rows read `<FE>` of the disc's own
+/// `PI_TeamModel name="speed"` of `Feisar2048` in `Plugins/teams/Definition.xml` (8, 7, 4, 6): the orange cells
+/// of each row and the number at its right, with the two header icons and the
+/// two ability icons above them. Dropping the loader or the panel's draw fails
+/// this.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn the_team_panel_draws_feisar_speeds_ratings_off_the_disc() {
+    let Some(source) = source() else { return };
+    let loaded = boot::load(&options(&source)).expect("the whole boot");
+    assert!(
+        loaded
+            .report
+            .iter()
+            .any(|line| line.contains("team panel: 20 of 20 craft ratings read")),
+        "{:#?}",
+        loaded.report
+    );
+    let mut frontend = loaded.frontend;
+    drive_to_home(&mut frontend);
+    let mut input = Input::new();
+    press_release(&mut frontend, &mut input, Button::Cross);
+    assert!(frontend.machine().is(w2048::TEAM));
+    let list = frontend.draw_list();
+    let orange = |color: &[f32; 4]| color[0] > 0.8 && color[1] < 0.4 && color[3] == 1.0;
+    let mut filled = [0usize; 4];
+    let mut empty = 0;
+    for draw in &list {
+        if let frontend::Draw::Fill { rect, color } = draw
+            && rect[2] == 22.0
+            && rect[3] == 27.0
+        {
+            let row = ((rect[1] - 307.0) / 30.0) as usize;
+            if orange(color) {
+                filled[row] += 1;
+            } else {
+                empty += 1;
+            }
+        }
+    }
+    assert_eq!(filled, [8, 7, 4, 6], "orange cells per row");
+    assert_eq!(
+        empty, 40,
+        "all ten cells of a row are drawn grey, the filled ones over them"
+    );
+    let numbers: Vec<&str> = list
+        .iter()
+        .filter_map(|draw| match draw {
+            frontend::Draw::Text { x, text, .. } if *x == 910.0 => Some(text.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(numbers, ["8", "7", "4", "6"]);
+    let icons = list
+        .iter()
+        .filter(|draw| {
+            matches!(draw, frontend::Draw::Sprite { rect, .. }
+                if rect[2] == 64.0 && rect[3] == 64.0 && (rect[1] == 253.0 || rect[1] == 192.0))
+        })
+        .count();
+    assert_eq!(icons, 4, "team, class and the two ability icons");
+}
+
+/// Every craft's Select Team hull (`<ship dir>/<team>/<n>/Ship_LOD.vex`, the file
+/// the screen's own update names) builds into a hull-sized, textured mesh.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn every_select_team_hull_builds_with_its_textures() {
+    let Some(source) = source() else { return };
+    let (_shell, mut archives, title) =
+        boot::load_shell(&options(&source)).expect("2048's front end walks");
+    let roster = title.race.team_variants.expect("2048's native roster");
+    let touch = title.front_end.and_then(|front_end| front_end.touch);
+    assert_eq!(touch.map(|t| t.team_model_origin), Some((1400.0, 264.0)));
+    let mut hulls = 0;
+    for team in roster.teams {
+        for variant in roster.variants {
+            let entry = oag_game::team_hull::entry(title.race.ship_dir, team, variant.suffix);
+            let model = oag_game::preview::psp2_scene::model(&mut archives, &entry)
+                .unwrap_or_else(|e| panic!("{entry}: {e:#}"));
+            assert!(model.indices.len() / 3 > 3_000, "{entry} is a hull");
+            assert!(
+                model.textures.iter().flatten().count() > 0,
+                "{entry} is textured"
+            );
+            hulls += 1;
+        }
+    }
+    assert_eq!(hulls, 20);
+}
+
+/// The RGBA bytes of a PNG this project's own writer made (stored deflate blocks, no
+/// filtering), `960 x 544`.
+fn pixels_of(png: &[u8]) -> Vec<u8> {
+    let mut at = 8;
+    let mut zlib = Vec::new();
+    while at + 8 <= png.len() {
+        let len = u32::from_be_bytes(png[at..at + 4].try_into().unwrap()) as usize;
+        if &png[at + 4..at + 8] == b"IDAT" {
+            zlib.extend_from_slice(&png[at + 8..at + 8 + len]);
+        }
+        at += 12 + len;
+    }
+    let mut raw = Vec::new();
+    let mut at = 2;
+    loop {
+        let last = zlib[at] & 1 == 1;
+        let len = usize::from(u16::from_le_bytes([zlib[at + 1], zlib[at + 2]]));
+        raw.extend_from_slice(&zlib[at + 5..at + 5 + len]);
+        at += 5 + len;
+        if last {
+            break;
+        }
+    }
+    let stride = 1 + 960 * 4;
+    assert_eq!(raw.len(), stride * 544, "an RGBA PNG of the frame's size");
+    raw.chunks_exact(stride)
+        .flat_map(|row| row[1..].iter().copied())
+        .collect()
+}
+
+/// The headless capture of the Select Team screen carries the hull at the widget's
+/// origin, (700, 132) of the 960 x 544 frame: white backdrop there without it.
+/// Dropping `capture.rs`'s hull pass or `team_hull` fails this.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/ and a GPU adapter"]
+fn the_select_team_capture_draws_the_hull_at_the_widgets_origin() {
+    let Some(source) = source() else { return };
+    let scratch = std::env::temp_dir().join(format!("oag-team-hull-{}", std::process::id()));
+    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
+    let out = scratch.join("team.png");
+    let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
+        .arg(&source)
+        .args([
+            "--until",
+            "team",
+            "--press",
+            "start,cross,cross,triangle,cross",
+        ])
+        .args([
+            "--ticks",
+            "40",
+            "--no-audio",
+            "--no-video",
+            "--size",
+            "960x544",
+        ])
+        .arg("--screenshot")
+        .arg(&out)
+        .env("XDG_CONFIG_HOME", scratch.join("config"))
+        .env("XDG_DATA_HOME", scratch.join("data"))
+        .env("XDG_STATE_HOME", scratch.join("state"))
+        .status()
+        .expect("running oag-game");
+    assert!(status.success(), "oag-game --until team");
+    let pixels = pixels_of(&std::fs::read(&out).expect("reading the screenshot"));
+    std::fs::remove_dir_all(&scratch).ok();
+    let darkest = (-6i32..=6)
+        .flat_map(|dy| (-6i32..=6).map(move |dx| (dx, dy)))
+        .map(|(dx, dy)| {
+            let at = ((132 + dy) as usize * 960 + (700 + dx) as usize) * 4;
+            pixels[at].min(pixels[at + 1]).min(pixels[at + 2])
+        })
+        .min()
+        .expect("a neighbourhood");
+    assert!(
+        darkest < 200,
+        "the hull covers the widget's origin: darkest channel {darkest}"
+    );
+}
+
 /// `Home`'s second tile is `FE_COMMUNITY`, which redirects to
 /// `communityAdhocCheck` rather than to `community` itself - a real screen
 /// this build now loads and draws, refusing by note like `GameModeChoice`'s

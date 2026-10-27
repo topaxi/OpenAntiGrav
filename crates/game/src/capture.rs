@@ -1157,6 +1157,29 @@ pub fn run(
             options.anisotropy,
         );
     }
+    if let (Some(race), Some(craft), Some(touch)) = (
+        &options.race,
+        frontend.team_hull(),
+        title.front_end.and_then(|front_end| front_end.touch),
+    ) {
+        crate::team_hull::TeamHull::new(
+            race.source.clone(),
+            race.dlc.clone(),
+            title.race.ship_dir,
+            touch.team_model_origin,
+        )
+        .draw(
+            &device,
+            &queue,
+            format,
+            &mut encoder,
+            drawn,
+            oag_display::display::viewport((width, height), options.settings.display.aspect),
+            (width, height),
+            space,
+            craft,
+        );
+    }
     if let Some(presented) = presented {
         presented.composite(&device, &queue, &mut encoder, &view);
     }
