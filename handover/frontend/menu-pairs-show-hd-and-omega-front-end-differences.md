@@ -30,7 +30,8 @@ Ranked by visible area on the 1920x1080 frame (read off the pair images, each pa
    chooser (three-way: 2048, HD, Fury; `campaign-select` still refuses); (e) **a PS4-wide lead found on the way**: the PS4 build
    leaves every vertex's coverage channel at 0 (red), so any blended or alpha-tested PS4 draw whose coverage is a texture's alpha
    reads red instead (`mesh::rcs::psp2` `slots`; fixed for the flyer cards only in `psp2_scene::alpha_from_the_picture`): census
-   Omega's circuits and hulls for draws it changes before flipping the builder's default; (f) `Track Select` on Omega still lists
+   Omega's circuits and hulls (and 2048's Vita models, which share the builder: checked, applies, not wired) for draws it changes before
+   flipping the builder's default; the dark grey hull silhouette on Omega's base-campaign grid card (`grid-select-hd`) is unchecked against an original; (f) `Track Select` on Omega still lists
    `NN_Track` ids (`CircuitNames::choose` needs one copy naming all 38; the table names only some). Pair each of Omega's other two
    campaigns against its own original frame when one is captured.
 2. **Omega Ship Select: hull and logo** (34 grey). Ours draws the hull about twice the original's size in another livery

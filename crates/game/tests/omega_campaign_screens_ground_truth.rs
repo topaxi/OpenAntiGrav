@@ -136,7 +136,8 @@ fn omega_cards_take_the_ps4_shell() {
 /// The card materials read their coverage the way HD does: `simpletextureandtexturealpha`
 /// from the picture's own alpha, `basicalpha` and `scrollingalpha` from the red channel of
 /// the elements atlas (bound second) - read off the red channel or unbound they draw the
-/// white boxes and dark blocks Omega's cards had.
+/// white boxes and dark blocks Omega's cards had. Walks every card of every grid, front and
+/// back: the slot guard must never skip one.
 #[test]
 #[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
 fn omega_card_materials_read_their_coverage_channels() {
@@ -145,37 +146,89 @@ fn omega_card_materials_read_their_coverage_channels() {
         return;
     };
     let mut archives = oag_omega::open(&omega.display().to_string()).expect("open omega");
+    let base = oag_hud::sprite::Sheet::build(&[], &mut Vec::new());
+    let campaign = oag_game::campaign::load(
+        &mut archives,
+        &oag_ui::language::StringTable::default(),
+        oag_ui_screens::picker::FaceScales::default(),
+        [1920.0, 1080.0],
+        &base,
+        &[],
+        oag_omega::TITLE,
+        &[],
+    )
+    .expect("the campaign loads");
     let channel = |slots: u32| (slots >> 3) & 3;
-    let (front, _) = oag_game::preview::psp2_scene::model_named(
-        &mut archives,
-        "Data/FE/Flyers/09_Blitzed/flyer.vex",
-    )
-    .expect("the Fury front");
-    assert!(
-        front
-            .vertices
-            .iter()
-            .all(|v| channel(v.slots) == 3 || v.slots & slots::ALPHA_FROM_SECOND != 0),
-        "every front vertex reads the picture's alpha"
-    );
-    let (back, _) = oag_game::preview::psp2_scene::model_named(
-        &mut archives,
-        "Data/FE/Flyers/09_Blitzed/flyer_Back.vex",
-    )
-    .expect("the Fury back");
-    let from_atlas: Vec<_> = back
-        .vertices
+    let mut flyers: Vec<&str> = campaign
+        .grids
         .iter()
-        .filter(|v| v.slots & slots::ALPHA_FROM_SECOND != 0)
+        .filter_map(|grid| grid.flyer_name.as_deref())
         .collect();
-    assert!(
-        !from_atlas.is_empty(),
-        "the wordmark and the stripes read an atlas"
-    );
-    assert!(from_atlas.iter().all(|v| channel(v.slots) == 0));
-    assert_eq!(
-        back.lightmaps.iter().filter(|l| l.is_some()).count(),
-        2,
-        "scrollingalpha and basicalpha each bind their atlas"
-    );
+    flyers.sort_unstable();
+    flyers.dedup();
+    assert!(flyers.len() >= 16, "{flyers:?}");
+    let mut atlas_draws = 0;
+    for flyer in flyers {
+        let front = format!("Data/FE/Flyers/{flyer}/flyer.vex");
+        let (model, _) = oag_game::preview::psp2_scene::model_named(&mut archives, &front)
+            .unwrap_or_else(|e| panic!("{front}: {e:#}"));
+        assert!(
+            model
+                .vertices
+                .iter()
+                .all(|v| channel(v.slots) == 3 || v.slots & slots::ALPHA_FROM_SECOND != 0),
+            "{front}: every vertex reads the picture's alpha or an atlas"
+        );
+        let back = format!("Data/FE/Flyers/{flyer}/flyer_Back.vex");
+        let (model, _) = oag_game::preview::psp2_scene::model_named(&mut archives, &back)
+            .unwrap_or_else(|e| panic!("{back}: {e:#}"));
+        let atlas_slots: std::collections::BTreeSet<usize> = model
+            .draws
+            .iter()
+            .chain(&model.alpha_tested_draws)
+            .chain(&model.transparent_draws)
+            .filter(|draw| {
+                let first = model.indices[draw.range.start as usize] as usize;
+                model.vertices[first].slots & slots::ALPHA_FROM_SECOND != 0
+            })
+            .filter_map(|draw| draw.texture)
+            .collect();
+        let geometry = archives
+            .read_name(&back.replace(".vex", ".rcsmodel"))
+            .expect("the back's geometry");
+        let parsed = oag_rcs::rcsmodel::psp2::parse(&geometry).expect("the back parses");
+        let mut owners: Vec<usize> = parsed
+            .submeshes
+            .iter()
+            .filter_map(|sub| sub.material)
+            .collect();
+        owners.sort_unstable();
+        owners.dedup();
+        let wanted = owners
+            .iter()
+            .filter(|&&m| {
+                let name = parsed.materials[m].name.as_str();
+                (name.ends_with("/basicalpha.rcsmaterial")
+                    || name.ends_with("/scrollingalpha.rcsmaterial"))
+                    && parsed.materials[m].sampler(0xa826_2b61).is_some()
+            })
+            .count();
+        assert!(wanted >= 2, "{back}: {wanted}");
+        assert_eq!(
+            atlas_slots.len(),
+            wanted,
+            "{back}: every basicalpha and scrollingalpha material binds its atlas (the slot guard skipped one)"
+        );
+        for slot in atlas_slots {
+            let atlas = model.lightmaps.get(slot).and_then(Option::as_ref);
+            let picture = model.textures[slot].as_ref().expect("a picture");
+            assert!(
+                atlas.is_some_and(|t| t.label != picture.label),
+                "{back}: slot {slot} binds an atlas second, apart from its picture {}",
+                picture.label
+            );
+            atlas_draws += 1;
+        }
+    }
+    assert!(atlas_draws >= 32);
 }

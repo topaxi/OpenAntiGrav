@@ -97,7 +97,7 @@ fn alpha_from_the_picture(model: &mut Model) {
 
 /// The `.gnf` sampler hash of the elements atlas on `basicalpha` and `scrollingalpha`:
 /// the coverage, where the other sampler is the picture.
-const ELEMENTS_SAMPLER: u32 = 2_821_073_761;
+const ELEMENTS_SAMPLER: u32 = 0xa826_2b61;
 
 /// Binds the **base campaign's card materials** the way HD reads them: `basicalpha` and
 /// `scrollingalpha` take their colour from one sampler and their coverage from the red
@@ -130,7 +130,6 @@ fn coverage_from_the_atlas(
         let blob = archives.read_name(path).ok()?;
         mesh::ModelTexture::from_gnf(path, &blob).map(std::sync::Arc::new)
     };
-    model.lightmaps.resize(model.textures.len(), None);
     for (slot, &index) in materials.iter().enumerate() {
         let material = &decoded.materials[index];
         let name = material.name.as_str();
@@ -151,9 +150,23 @@ fn coverage_from_the_atlas(
         let (Some(picture_texture), Some(atlas_texture)) = (read(picture), read(atlas)) else {
             continue;
         };
-        if slot >= model.textures.len() {
+        // The build pushes a slot only for a material whose texture resolved, so one that did
+        // not shifts every later slot: bind only where the slot holds this material's own picture
+        // or atlas.
+        let holds = |path: &str| {
+            model
+                .textures
+                .get(slot)
+                .and_then(Option::as_ref)
+                .is_some_and(|texture| texture.label.eq_ignore_ascii_case(path))
+        };
+        if !(holds(picture) || holds(atlas)) {
+            log::warn!(
+                "card model: material {index} does not own texture slot {slot}; left as built"
+            );
             continue;
         }
+        model.lightmaps.resize(model.textures.len(), None);
         model.textures[slot] = Some(picture_texture);
         model.lightmaps[slot] = Some(atlas_texture);
         for draw in model
