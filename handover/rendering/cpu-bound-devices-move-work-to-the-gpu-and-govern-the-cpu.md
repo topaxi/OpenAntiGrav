@@ -32,6 +32,13 @@ resolution controller (`crates/present/src/drs`), which does nothing while the G
 
 ## Lanes, in order
 
+**Order amended 2026-10-27 (`prepare-view-breakdown`).** On the Deck, `prepare_view` (3.45 ms of 8.2) is
+uniform builds and CPU image blends, not culling: culling, LOD and sorting are under 0.05 ms on Anulpha,
+HD default and Pulse (`docs/rendering/frame-thread-cpu.md`, "What prepare_view spends on the Deck").
+Before lane 1 step 2 (compute culling), do two CPU lanes: the hull environment-probe blend (about
+0.9 ms on Anulpha) and scenery animation sampling (0.3 to 0.4 ms, every title). Measure with the
+frame-thread profile recipe in that section.
+
 1. **GPU-driven drawing** (opus). Indirect multi-draw per pass with a compute pass culling (PVS, frustum,
    LOD) into the draw list; per-draw state in storage buffers so one bind per pass replaces per-draw
    rebinding. The biggest lever on the measured cost. Fallback: today's per-draw path.
