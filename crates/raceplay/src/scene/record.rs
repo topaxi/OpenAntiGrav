@@ -133,6 +133,9 @@ pub(super) struct ViewPass<'a> {
     pub(super) ghost: Option<(oag_render::ghost::Hull<'a>, oag_render::ghost::Fade)>,
     /// What the prepare already drew (the behind-the-glass target), counted in.
     pub(super) stats: SceneStats,
+    /// The circuit's opaque list, gathered and written as an indirect list by the prepare
+    /// where the track draws its prepass depth half indirect (`Drawable::prepare_solid`).
+    pub(super) track_solid: Option<crate::drawable::Prepared>,
     /// The camera lens's own screen motion (its shake and its field of view), for the blur
     /// after the pass - see `Race::lens_screen_motion`.
     pub(super) blur_lens: Mat4,
@@ -389,7 +392,11 @@ impl Recorder<'_> {
             match stage {
                 TrackStage::Solid => {
                     oag_gpu::perfprobe::marks::mark(render, "track solid");
-                    let order = opaque_order(self.track, pass.eye);
+                    // A prepared list carries its own order; the per-draw path sorts here.
+                    let order = match pass.track_solid {
+                        Some(_) => Vec::new(),
+                        None => opaque_order(self.track, pass.eye),
+                    };
                     stats.add(self.track.draw_lists(
                         render,
                         block,
@@ -399,6 +406,7 @@ impl Recorder<'_> {
                         frustum,
                         Lists::Solid {
                             order: Some(&order),
+                            prepared: pass.track_solid.as_ref(),
                         },
                     ));
                 }
@@ -563,7 +571,7 @@ pub(crate) fn track_blended<'a>(depth_plane: [f32; 4]) -> Lists<'a> {
 /// nearer batch. The prepass took that to 32.4 ms with the original's picture back; the shading
 /// that follows keeps the model's own order. `sort_by` is stable, so equal keys keep the model's
 /// order. Per view, from its own eye, while the view records.
-fn opaque_order(track: &Drawable, eye: Vec3) -> Vec<(f32, u32)> {
+pub(super) fn opaque_order(track: &Drawable, eye: Vec3) -> Vec<(f32, u32)> {
     let mut order: Vec<(f32, u32)> = track
         .opaque_draws()
         .iter()

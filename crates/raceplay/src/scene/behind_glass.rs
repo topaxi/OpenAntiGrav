@@ -346,7 +346,10 @@ impl Target {
         });
         let groups = || self.alternate.iter().chain(&self.primary);
         let mut stats = SceneStats::default();
-        let solid = Lists::Solid { order: None };
+        let solid = Lists::Solid {
+            order: None,
+            prepared: None,
+        };
         for group in groups() {
             stats.add(group.draw_lists(&mut pass, block, None, set, chunks, frustum, solid));
         }
