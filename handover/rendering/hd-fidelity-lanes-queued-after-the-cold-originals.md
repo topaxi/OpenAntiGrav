@@ -95,11 +95,10 @@ one), or the sky map as a layer beside the probes (different sizes today, 512x25
   encodes the linear mean (15-43 % high). The patch is six lines in `crates/post/shaders/hd_bloom.wesl`
   (`fs_reduce_first` returns the encoded value, `fs_adapt` drops its `pow`); held until judged on the
   cold originals, and the static read of `FUN_003b4690` says linear, so the console's rule is still open.
-- **HD's `-1.5` material LOD bias** (`material_lod_bias: Rule::UNREAD`): **re-judged 2026-10-22 on the cold originals, still held off**
-  (`docs/rendering/hd-track-tone.md`, "Re-judged on the cold originals"): 12 of 13 pairs' mean grey up, 8 by over 0.2, the Modesto
-  tower box 3.2x the original's Laplacian variance already. It does bring back the glass grid's lines (the section's blurred metric
-  0.0304 to 0.0410 against 0.0379). **Open: a bias on the glass sheen's grid tap alone** (a chosen scope), and whether RPCS3 applies
-  the filter word's bias at all. Anisotropy: the original asks for none, the pair profile draws ours with none, the default is 16x.
+- **HD's `-1.5` material LOD bias is on** (2026-10-27, `hd-texture-bias`; `docs/rendering/hd-track-tone.md`, "Texture crispness"). What is left
+  of it: the 0.5-level gap against the RPCS3 fit (-0.75 matched, the filter word says -1.5; RPCS3's LOD computation or our
+  `textureSampleBias` with derivative scaling), the warm light pool on the Vineta K kerb, and the Tech de Ra glass grid (missing content,
+  not blur). Open: a bias on the glass sheen's grid tap alone. Anisotropy: the original asks for none, the default is 16x.
 - **Glass road mid and far brightness** (Tech de Ra, Talon's): the original's pixel implies the facing
   ramp read at `u` about 0.36-0.5 where ours reads 0.10-0.20. Next: dump draw 354's vertex constant
   `c[209]` (`eyePositionWorldSpace`, `0x3466fc0e`) at the cold pair's tick against our view eye, then
