@@ -869,7 +869,8 @@ by asking why a lightmap control group was not exact.
   with the stride the declaration states equal to the buffer-derived one, on all
   226,381 submeshes of the five base archives
   (`crates/rcs/tests/omega_declaration_ground_truth.rs`). The Vita's `u32` at the
-  same offset resolves for 14.2 % and is left alone. Keyed by stride, one
+  same offset resolves on every Vita submesh too (retracted 2026-10-27: the 14.2 % was
+  a wrong measurement, see [2048-rcsmodel.md](2048-rcsmodel.md#the-flat-submesh-census-and-the-record-pointer)). Keyed by stride, one
   declaration stood for every chunk of that stride, and `tech_de_ra` has 43
   layouts over 8 strides: 285 of its 3,186 submeshes read the diffuse coordinate
   out of a tangent or colour set, and the reversed circuit decoded 218,672
