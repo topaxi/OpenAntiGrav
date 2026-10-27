@@ -34,6 +34,8 @@ pub static TEXTURE_BINDS_REDUNDANT: AtomicU64 = AtomicU64::new(0);
 pub static PIPELINE_SETS: AtomicU64 = AtomicU64::new(0);
 pub static ARRAY_BINDS: AtomicU64 = AtomicU64::new(0);
 pub static ARRAY_ELEMENTS: AtomicU64 = AtomicU64::new(0);
+pub static INDIRECT_CALLS: AtomicU64 = AtomicU64::new(0);
+pub static INDIRECT_DRAWS: AtomicU64 = AtomicU64::new(0);
 pub static WRITE_BUFFERS: AtomicU64 = AtomicU64::new(0);
 pub static WRITE_BUFFER_BYTES: AtomicU64 = AtomicU64::new(0);
 
@@ -109,6 +111,8 @@ pub fn reset() {
         &PIPELINE_SETS,
         &ARRAY_BINDS,
         &ARRAY_ELEMENTS,
+        &INDIRECT_CALLS,
+        &INDIRECT_DRAWS,
         &WRITE_BUFFERS,
         &WRITE_BUFFER_BYTES,
     ] {
@@ -124,7 +128,7 @@ pub fn report_frame(frame: u64) {
     println!(
         "perf frame {frame}: allocs {} ({} KiB)  bind_groups {}  texture_views {}  \
          tex_binds {} (redundant {})  array_binds {} ({} elements)  pipeline_sets {}  \
-         write_buffer {} ({} KiB)",
+         indirect {} ({} draws)  write_buffer {} ({} KiB)",
         ALLOCS.load(Relaxed),
         ALLOC_BYTES.load(Relaxed) / 1024,
         BIND_GROUPS.load(Relaxed),
@@ -134,6 +138,8 @@ pub fn report_frame(frame: u64) {
         ARRAY_BINDS.load(Relaxed),
         ARRAY_ELEMENTS.load(Relaxed),
         PIPELINE_SETS.load(Relaxed),
+        INDIRECT_CALLS.load(Relaxed),
+        INDIRECT_DRAWS.load(Relaxed),
         WRITE_BUFFERS.load(Relaxed),
         WRITE_BUFFER_BYTES.load(Relaxed) / 1024,
     );
@@ -269,6 +275,16 @@ pub fn array_bind(elements: usize) {
     if counting() {
         ARRAY_BINDS.fetch_add(1, Relaxed);
         ARRAY_ELEMENTS.fetch_add(elements as u64, Relaxed);
+    }
+}
+
+/// Records one `multi_draw_indexed_indirect` carrying `draws` draws, each of which would
+/// otherwise be a `draw_indexed` wgpu validates on its own.
+#[inline]
+pub fn indirect_draws(draws: u32) {
+    if counting() {
+        INDIRECT_CALLS.fetch_add(1, Relaxed);
+        INDIRECT_DRAWS.fetch_add(u64::from(draws), Relaxed);
     }
 }
 

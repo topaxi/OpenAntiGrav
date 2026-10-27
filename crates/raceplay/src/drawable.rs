@@ -53,6 +53,9 @@ pub(super) struct Drawable {
     /// own vertices untouched, for the prepass's shaded half - see
     /// `draw_lists`. `None` without a prepass.
     reversed_indices: Option<wgpu::Buffer>,
+    /// The prepass depth half's per-view indirect lists, where the device takes that path -
+    /// see `mesh_render::indirect` and [`Self::prepare_solid`]. `None` without a prepass.
+    indirect: Option<mesh_render::indirect::Args>,
     /// The alpha-only glow-mask stamp for blended batches - see
     /// `mesh_render::Built::stamp_pipeline` and [`Self::draw_stamps`].
     stamp_pipeline: Option<mesh_render::Stamp>,
@@ -365,6 +368,21 @@ impl Drawable {
         if oag_gpu::deferred_upload::active() {
             mesh_render::deferred::defer_geometry(&vertices, &indices, &model);
         }
+        let indirect = prepass
+            .as_ref()
+            .filter(|_| mesh_render::indirect::wanted(device))
+            .map(|_| {
+                log::info!(
+                    "{}: prepass depth half as indirect multi-draws",
+                    model.label
+                );
+                mesh_render::indirect::Args::new(
+                    device,
+                    "prepass depth draws",
+                    SceneBlocks::VIEWS,
+                    model.draws.len(),
+                )
+            });
         Ok(Self {
             opaque_ranges,
             moving,
@@ -409,6 +427,7 @@ impl Drawable {
             zone_rebind: std::sync::Arc::new(zone_rebind),
             ripple: std::sync::Mutex::new(None),
             pad_glow: std::sync::Mutex::default(),
+            indirect,
         })
     }
 
@@ -1427,6 +1446,8 @@ mod tests {
 }
 
 pub(super) mod draw;
+mod prepared;
+pub(crate) use prepared::Prepared;
 mod occlusion;
 mod overlay;
 mod ripple;
