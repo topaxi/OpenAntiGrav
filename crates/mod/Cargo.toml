@@ -15,13 +15,13 @@ semver = "1"
 serde.workspace = true
 thiserror.workspace = true
 toml.workspace = true
-zip = { version = "8", default-features = false, features = ["deflate"] }
+zip = { version = "9.0.5", default-features = false, features = ["deflate"] }
 
 # zstd is a C library; the web build has no use for a mod search path and no
 # compiler for it, so the method is native-only. A zstd entry in a mod read on
 # the web is refused by name (zip's own "unsupported method").
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-zip = { version = "8", default-features = false, features = ["deflate", "zstd"] }
+zip = { version = "9.0.5", default-features = false, features = ["deflate", "zstd"] }
 
 [lints]
 workspace = true

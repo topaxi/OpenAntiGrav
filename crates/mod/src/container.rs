@@ -99,9 +99,16 @@ impl Container {
         })?;
         let entries: Vec<String> = archive
             .file_names()
-            .filter(|name| !name.ends_with('/'))
-            .map(str::to_string)
-            .collect();
+            .filter_map(|name| match name {
+                Ok(name) if name.ends_with('/') => None,
+                Ok(name) => Some(Ok(name.into_owned())),
+                Err(source) => Some(Err(source)),
+            })
+            .collect::<Result<_, _>>()
+            .map_err(|source| Error::Zip {
+                origin: label.clone(),
+                source,
+            })?;
         let prefix = wrapper(&entries);
         let origin = if path
             .extension()

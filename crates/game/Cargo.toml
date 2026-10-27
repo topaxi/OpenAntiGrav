@@ -160,7 +160,7 @@ workspace = true
 [dev-dependencies]
 oag-testdata.workspace = true
 oag-pob.workspace = true
-zip = { version = "8", default-features = false, features = ["deflate"] }
+zip = { version = "9.0.5", default-features = false, features = ["deflate"] }
 oag-weapons.workspace = true
 
 # The Android entry point: the binary's own body again (`src/android.rs`
