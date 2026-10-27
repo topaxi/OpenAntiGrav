@@ -433,3 +433,35 @@ fn a_notice_is_one_row_above_the_legend_in_its_word_face() {
             .is_none()
     );
 }
+
+/// The reset prompt is drawn in `Confirm`'s own manner: the title's `Square` stand-in in the
+/// glyph's face, the words in the word's, on a line above, inside the screen, and with a tap
+/// rect over both. Without the glyph the words stand alone.
+#[test]
+fn the_reset_prompt_is_modelled_on_confirm_and_stays_on_screen() {
+    let root = parse(XML);
+    let strings = StringTable::from_xml(ENTRIES);
+    let legend = NavigationLegend::read(&root, &globals(), &strings).expect("controller");
+    assert!(legend.can_model_reset_prompt());
+    let (draws, rect) = legend
+        .reset_prompt(
+            Some('δ'),
+            "RESET TO DEFAULT",
+            &FaceScales::default(),
+            &|text| text.chars().count() as f32 * 6.0,
+        )
+        .expect("the fixture's legend has a Confirm pair");
+    let texts: Vec<&str> = draws.iter().map(|draw| text_and_y(draw).0).collect();
+    assert_eq!(texts, ["δ", "RESET TO DEFAULT"]);
+    for draw in &draws {
+        assert!(text_and_y(draw).1 < 252.0, "above Confirm's row");
+    }
+    assert!(
+        rect[0] >= 0.0 && rect[0] + rect[2] <= 480.0,
+        "{rect:?} inside the 480 screen"
+    );
+    let (words_only, _) = legend
+        .reset_prompt(None, "RESET", &FaceScales::default(), &|_| 30.0)
+        .expect("words alone");
+    assert_eq!(words_only.len(), 1);
+}

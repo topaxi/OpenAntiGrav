@@ -753,10 +753,20 @@ pub fn supply_reset(
     title: &oag_title::Title,
     platform: oag_disc::Platform,
     strings: &oag_ui::language::StringTable,
+    has_footer_legend: bool,
 ) {
+    model.set_reset_inline(!has_footer_legend);
     for (key, value) in default_seeds(title, platform) {
         model.set_default(key, value);
     }
+    model.set_reset_glyph(
+        title
+            .prompts
+            .glyphs
+            .iter()
+            .find(|(_, prompt)| *prompt == oag_title::prompts::Prompt::Square)
+            .map(|&(stand_in, _)| stand_in),
+    );
     model.set_reset_label(strings.get_or_fallback("OAG_MENU_RESET_TO_DEFAULT", "RESET TO DEFAULT"));
 }
 

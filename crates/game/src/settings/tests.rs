@@ -1210,7 +1210,7 @@ fn square_on_every_shipped_value_row_restores_the_first_run_value() {
         let pages: Vec<String> = definition.pages.iter().map(|p| p.id.clone()).collect();
         for page in pages {
             let mut menu = Menu::new(definition.clone());
-            supply_reset(&mut menu, title, platform, &strings);
+            supply_reset(&mut menu, title, platform, &strings, true);
             for (key, value) in &defaults {
                 menu.seed(key, value);
             }
@@ -1256,4 +1256,41 @@ fn square_on_every_shipped_value_row_restores_the_first_run_value() {
         input.begin_frame(1 << button.index());
         menu.update(&mut input)
     }
+}
+
+/// The footer offers the reset prompt exactly while the selected row is off its default, and
+/// never on a row that holds no value; a title with no glyph names the keys instead.
+#[test]
+fn the_reset_prompt_is_offered_only_off_default() {
+    use oag_core::buttons::{Button, Input};
+    use oag_ui::menu::{Definition, Menu, Value};
+    let strings = oag_ui::language::StringTable::default();
+    let mut menu = Menu::new(Definition::built_in(&strings).expect("parses"));
+    supply_reset(
+        &mut menu,
+        oag_pulse::TITLE,
+        oag_disc::Platform::Psp,
+        &strings,
+        true,
+    );
+    for (key, value) in default_seeds(oag_pulse::TITLE, oag_disc::Platform::Psp) {
+        menu.seed(key, &value);
+    }
+    assert!(menu.open("audio"));
+    assert!(menu.reset_offered().is_none(), "nothing is off default yet");
+    menu.seed("audio.music_volume", &Value::Text("50".to_string()));
+    assert!(menu.reset_offered().is_some());
+    assert_eq!(menu.reset_glyph(), Some('δ'), "Pulse's Square stand-in");
+    let mut input = Input::new();
+    input.begin_frame(1 << Button::Square.index());
+    menu.update(&mut input);
+    assert!(menu.reset_offered().is_none(), "back on its default");
+    supply_reset(
+        &mut menu,
+        oag_omega::TITLE,
+        oag_disc::Platform::Ps4,
+        &strings,
+        true,
+    );
+    assert_eq!(menu.reset_glyph(), None, "Omega's glyphs are unread");
 }

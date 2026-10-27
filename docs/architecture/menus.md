@@ -2023,12 +2023,19 @@ the bindings and the hint are chosen.
   of eighteen and a nineteenth would change the rebinding permutation's size.
 - **Mouse**: the middle button (`Pointer::reset`, from `oag_game::main::pointer`) resets the
   row under the pointer, else the selected one. The secondary button stays "back".
-- **Finger, and the mouse without a middle button**: the hint line under the rows
-  (`RESET TO DEFAULT (C)`, `OAG_MENU_RESET_TO_DEFAULT`) is a tap target
-  (`pointer::Part::Reset`, laid out in `rows::regions` in all three layouts: Pulse and
-  Pure's text rows, the settings layout, HD and Omega's list rows). It is drawn, and
-  hit, only while the selected row is off its default and no warning or restart note
-  holds that line.
+- **Finger, and the mouse without a middle button**: a footer prompt, `RESET TO DEFAULT`,
+  drawn in `Confirm`'s manner (`NavigationLegend::reset_prompt`: the title's `Square`
+  stand-in in the button face, the words in the word face, on a line above `Confirm`,
+  ending where the legend's rightmost word ends) and a tap target
+  (`pointer::Part::Reset`, over the rect the footer reported through
+  `Menu::set_reset_rect`). Being a stand-in codepoint it goes through the button-prompt
+  system, so it shows the glyph of the device in use ([button-prompts.md](../ui/button-prompts.md)).
+  It is offered only while the selected row is off its default. A title whose `Prompts`
+  table is unread (Pure, Omega, 2048) has no stand-in to redraw: the words name the bound
+  keys instead (`RESET TO DEFAULT (C)`), and the device-aware glyph waits on that table being
+  measured. A source whose legend has no `Confirm` pair to model it on (Pure's) draws the
+  same words as a line under the rows, aligned to the label column (`Menu::set_reset_inline`).
+  The line above `Confirm` and its height are **chosen, not measured**.
 - **Where the default comes from**: `oag_game::settings::default_seeds`, which is
   `menu_seeds` over `settings::fresh()`, the very settings a first run loads (a render
   profile row per known title and platform included, so per-title defaults such as

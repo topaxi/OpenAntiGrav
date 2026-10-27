@@ -210,6 +210,12 @@ enum PromptKind {
 /// the screen's own grid units. Chosen, not measured.
 const NOTICE_LIFT: f32 = 56.0;
 
+/// How far above `Confirm`'s row [`NavigationLegend::reset_prompt`] sits, as a fraction of that
+/// row's y (the footer's grid differs per title), and how tall its tap target is in grid units.
+/// Chosen, not measured.
+const RESET_LIFT: f32 = 0.13;
+const RESET_HEIGHT: f32 = 20.0;
+
 /// One `NavigationController` prompt - an icon glyph and its label, both
 /// resolved through the string table already.
 #[derive(Debug, Clone)]
@@ -240,6 +246,8 @@ struct Prompt {
     /// shrinks its scale to fit, rather than let it run past this bound the
     /// way it otherwise would into whatever sits to its own left.
     left_bound: Option<f32>,
+    /// Whether this is the button glyph half of a `Confirm`/`Back` pair, not its word.
+    glyph: bool,
 }
 
 /// `Confirm`/`Back`, off a `<NavigationController name="NavigationController">`
@@ -351,6 +359,7 @@ impl NavigationLegend {
                     scale: number(globals, text, "scale").unwrap_or(1.0),
                     align_right_to: None,
                     left_bound: None,
+                    glyph: idstring.ends_with("_BUTTON"),
                 },
             ));
         }
@@ -384,6 +393,7 @@ impl NavigationLegend {
                         scale: number(globals, text, "scale").unwrap_or(1.0),
                         align_right_to: None,
                         left_bound: None,
+                        glyph: key.ends_with("_BUTTON"),
                     },
                 ));
             }
@@ -545,6 +555,92 @@ impl NavigationLegend {
             },
             prompt.text.clone(),
         )
+    }
+
+    /// Whether [`Self::reset_prompt`] has a `Confirm` glyph and word to model itself on.
+    #[must_use]
+    pub fn can_model_reset_prompt(&self) -> bool {
+        let has = |glyph: bool| {
+            self.prompts
+                .iter()
+                .any(|prompt| prompt.kind == PromptKind::Confirm && prompt.glyph == glyph)
+        };
+        has(true) && has(false)
+    }
+
+    /// A third prompt in the legend's own manner: `glyph` (a title's stand-in codepoint for the
+    /// button, which the prompt system redraws for the device in use) and `word`, on a line
+    /// above `Confirm`, starting at the leftmost prompt's x, the glyph and the word spaced as
+    /// `Confirm`'s own are. With the rect it occupies, for a tap. `None` when the legend has no
+    /// `Confirm` to take its faces and colours from.
+    ///
+    /// **The line is chosen, not measured**: the disc authors no such prompt, and the
+    /// footer's own row holds `Confirm` and `Back` already.
+    #[must_use]
+    pub fn reset_prompt(
+        &self,
+        glyph: Option<char>,
+        word: &str,
+        faces: &FaceScales,
+        measure: &dyn Fn(&str) -> f32,
+    ) -> Option<(Vec<Draw>, [f32; 4])> {
+        let find = |glyph: bool| {
+            self.prompts
+                .iter()
+                .find(|prompt| prompt.kind == PromptKind::Confirm && prompt.glyph == glyph)
+        };
+        let (button, label) = (find(true)?, find(false)?);
+        let left = self
+            .prompts
+            .iter()
+            .filter(|prompt| prompt.kind != PromptKind::Navigation)
+            .map(|prompt| prompt.x)
+            .fold(f32::MAX, f32::min);
+        let y = label.y * (1.0 - RESET_LIFT);
+        let gap = (label.x - button.x).max(0.0);
+        let word_width = measure(word) * face_scale(faces, &label.font) * label.scale;
+        let total = if glyph.is_some() { gap } else { 0.0 } + word_width;
+        // End where the rightmost word of the legend ends, so a long line grows leftwards
+        // rather than off the screen; never right of where `Confirm`'s glyph starts.
+        let right = self
+            .prompts
+            .iter()
+            .filter(|prompt| prompt.kind != PromptKind::Navigation && !prompt.glyph)
+            .map(|prompt| {
+                prompt.align_right_to.unwrap_or_else(|| {
+                    prompt.x
+                        + measure(&prompt.text) * face_scale(faces, &prompt.font) * prompt.scale
+                })
+            })
+            .fold(left, f32::max);
+        let left = left.min(right - total).max(0.0);
+        let mut out = Vec::new();
+        let mut word_x = left;
+        if let Some(glyph) = glyph {
+            out.push(Self::draw_prompt(
+                &Prompt {
+                    text: glyph.to_string(),
+                    x: left,
+                    y,
+                    align_right_to: None,
+                    left_bound: None,
+                    ..button.clone()
+                },
+                faces,
+                measure,
+            ));
+            word_x += gap;
+        }
+        let word_prompt = Prompt {
+            text: word.to_string(),
+            x: word_x,
+            y,
+            align_right_to: None,
+            left_bound: None,
+            ..label.clone()
+        };
+        out.push(Self::draw_prompt(&word_prompt, faces, measure));
+        Some((out, [left, y, (word_x - left) + word_width, RESET_HEIGHT]))
     }
 
     /// `text` as one line in the legend's own word face (not its button glyphs) and colour, a row above the

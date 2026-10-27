@@ -97,10 +97,22 @@ pub fn regions(
     measure: &dyn Fn(&str) -> f32,
 ) -> Vec<Region> {
     let page = menu.page();
-    match skin.strip().filter(|_| strip::suits(page)) {
+    let mut out = match skin.strip().filter(|_| strip::suits(page)) {
         Some(strip) => strip::regions(menu, skin, strip, measure, frame),
         None => super::rows::regions(menu, skin, frame),
+    };
+    // The footer's reset prompt, drawn by whoever draws the footer, while the row is off default.
+    if let Some(rect) = menu
+        .reset_rect
+        .filter(|_| !menu.reset_inline && menu.reset_offered().is_some())
+    {
+        out.push(Region {
+            row: menu.selected(),
+            part: Part::Reset,
+            rect,
+        });
     }
+    out
 }
 
 /// The region under `at`, if any. The first in list order wins, which

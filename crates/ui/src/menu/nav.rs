@@ -139,28 +139,60 @@ impl Menu {
         }
     }
 
-    /// The words of the hint drawn under the rows while the selected row is off its default
-    /// ("RESET TO DEFAULT"), which is also the pointer's and the finger's target for a
-    /// reset. Supplied from the string table; empty draws no hint.
+    /// The words of the reset prompt the footer draws while the selected row is off its
+    /// default ("RESET TO DEFAULT"). Supplied from the string table; empty offers none.
     pub fn set_reset_label(&mut self, label: &str) {
         label.clone_into(&mut self.reset_label);
     }
 
-    /// The reset hint's text for the selected row, when there is one to show: the label
-    /// and the keys bound to the reset button, while the row is off its default and no
-    /// warning or restart note holds the line under the rows (those win it).
+    /// The codepoint the title's faces draw as the reset button (its `Square` stand-in), which
+    /// the prompt system redraws for the device in use. `None` where the title's glyphs are
+    /// unread: the footer then shows the words alone.
+    pub fn set_reset_glyph(&mut self, glyph: Option<char>) {
+        self.reset_glyph = glyph;
+    }
+
+    /// See [`Self::set_reset_glyph`].
+    #[must_use]
+    pub fn reset_glyph(&self) -> Option<char> {
+        self.reset_glyph
+    }
+
+    /// The reset prompt's words, when the footer should show it: the selected row is off its
+    /// default and a label was supplied.
+    #[must_use]
+    pub fn reset_offered(&self) -> Option<&str> {
+        (!self.reset_label.is_empty() && self.can_reset()).then_some(self.reset_label.as_str())
+    }
+
+    /// Draw the reset hint as a line under the rows instead of a footer prompt: for a source
+    /// whose footer authors no `Confirm` to model a prompt on. Set where the menu is built.
+    pub fn set_reset_inline(&mut self, inline: bool) {
+        self.reset_inline = inline;
+    }
+
+    /// Whether the hint is the inline line, not a footer prompt.
+    #[must_use]
+    pub fn is_reset_inline(&self) -> bool {
+        self.reset_inline
+    }
+
+    /// The reset hint's text as the inline line draws it: the words and the keys bound to
+    /// the reset button, while the row is off its default and no warning or restart note
+    /// holds the line under the rows. `None` unless [`Self::set_reset_inline`].
     pub(super) fn reset_hint(
         &self,
         bindings: &dyn Fn(super::Button) -> Vec<&'static str>,
     ) -> Option<String> {
-        if self.reset_label.is_empty() || !self.can_reset() || self.line_is_noted() {
+        if !self.reset_inline || self.line_is_noted() {
             return None;
         }
+        let word = self.reset_offered()?;
         let keys = bindings(super::Button::Square).join(" / ");
         Some(if keys.is_empty() {
-            self.reset_label.clone()
+            word.to_string()
         } else {
-            format!("{} ({keys})", self.reset_label)
+            format!("{word} ({keys})")
         })
     }
 
@@ -177,6 +209,13 @@ impl Menu {
                     || self.restart_note(entry).is_some()
                     || self.unavailable(entry).is_some()
             })
+    }
+
+    /// Where the footer drew the reset prompt, `[x, y, width, height]` in the page's grid, so a
+    /// click or a tap on it resets the row. Told after each draw by whoever draws the footer,
+    /// and used by the next pointer tick.
+    pub fn set_reset_rect(&mut self, rect: Option<[f32; 4]>) {
+        self.reset_rect = rect;
     }
 
     /// Where the selected row's value would go on a reset: `None` for a row that holds no
