@@ -2,7 +2,7 @@
 status: re-first
 titles: [2048]
 updated: 2026-10-27
-summary: "2048 lattice: scale read (camera tilt, executed matrix); phase offset and a half-ink factor measured not read; draw held back"
+summary: "2048 lattice: phase (0.40, 0.50) and half ink ruled out on every static path; needs a live readout of the canvas fields; draw held back"
 ---
 
 # 2048's menu backdrop lattice: draw held back on a phase offset and an ink factor
@@ -40,11 +40,18 @@ wrong scale); redo it from the matrix, do not patch it.
   `canvasTex2` shifts).
 - Omega ships `canvasTexture.gnf` and the same reset angles (`0x018086ec`); its GCN programs are unread.
 
+2026-10-27, lane `lattice-wire`: every static source of the phase and the grey was read and ruled out
+(mesh window, parity, reset, stick tilt, parent `FeShellTouchScroll` scroll with `strcasecmp`
+attributes, taps, cell height, viewports, the draw's opaque fragment variant, page overlays): table in
+`canvas3d-lattice.md`, "Phase and grey: every static path reads zero". A draw from the read state scores
+6.1 against white's 1.7 to 2.4, so nothing was wired.
+
 ## Next Steps
 
-1. Find the offset: read `FUN_8107369a` (the window placement) and `Canvas3D_BuildLatticeMesh`'s cell
-   origin against the executed matrix, 30 to 60 minutes.
-2. Find the 0.5: the blend state in `Canvas3D_Draw` (`0x81074280`) and the front-end background item
-   drawn over it, 30 minutes.
-3. Then build the draw from the matrix (sheared bands or a baked inverse projection) and re-measure in
+1. Live readout at the title in Vita3K (an emulator lane, `vita3k-mem.py`): canvas `*(0x8151d3f4)`
+   `+0xac..+0xe0`, `+0x5ec90`, parent TouchScroll `+0xa0/+0xa4`, one `canvasTex` texel `*(0x8151d3ec)`.
+   Equal to the reset: the offset and half ink are Vita3K's draw, wire the reset camera with authored
+   ink and re-take the pair's judgement on a different basis (ask the maintainer). Different: watchpoint
+   the moved field. 1 to 2 hours.
+2. Then build the draw from the matrix (sheared bands or a baked inverse projection) and re-measure in
    the five boxes.

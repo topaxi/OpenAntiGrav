@@ -320,6 +320,71 @@ the reset); the `Ry * Rx` order, 80 (the executed matrix); the screen scale and 
 capture on three counts); the residual offset, 70; the 0.5 ink factor, 60 as a number and 40 as
 "a translucent white layer".
 
+## Phase and grey: every static path reads zero (2026-10-27, lane `lattice-wire`)
+
+The capture's lattice sits at a world offset of **(0.40, 0.50)** from the executed matrix (re-fitted on
+a 0.01-unit grid: edge NCC 0.938 title top box, 0.934 title left, 0.884 and 0.938 game mode left and
+right, all at the same offset; the title's bottom strip gives (0.90, 1.36), the same offset plus the
+lattice vector (0.5, 0.866)). Screen: 22.6 px right, 27.6 px down. **Nothing read below produces
+it.** Each candidate, with where it was ruled out:
+
+| Candidate | Read at | Result | Conf |
+| --- | --- | --- | --- |
+| Mesh window | `Canvas3D_PlaceMeshWindow` `0x8107369a` | `posOffset = (col0 * 0.5, row0 * 0.866)`, `posOffset.z = 0`, `texCoord2offset = (col0/512, row0/128)`; the nudge makes `col0 + row0` even, so the offset is always a lattice vector: no phase | 80 |
+| Mesh parity | `Canvas3D_BuildLatticeMesh` `0x81073cb8` | `bVar6` starts true, toggles per column and once per row (`0x81073cb8` lines at the loop ends): apex-up iff `col + row` even, as modelled | 85 |
+| Camera reset | `Canvas3D_ResetCamera` `0x81070c0c` (disassembled) | the values above, `+0xa0..+0xa8 = 0`, then zeroes the parent TouchScroll's position and the canvas's last-touch fields `+0x5ed10/+0x5ed14` | 85 |
+| Stick tilt | `Canvas3D_Update` `0x81072220` | every frame `+0xd8 += 1.8 dt (0.2 * pad[+0x5c60] - +0xd8)`, `+0xdc += 1.8 dt (-0.2 * pad[+0x5c5c] - +0xdc)`, `+0xe0` decays; `pad = 0x8122d664(DAT_818b9ea8, 0)`, the fields are the deadzone-clamped analog stick (`0x8122c20c`, `0x8122c6ca..`). A stick parallax, zero at rest. Fitting both extra angles against the capture with no offset reaches NCC 0.54 (against 0.938 for the plain offset), and an `x` tilt would move the 47.75 px row period: ruled out | 75 |
+| Pan by scroll | `Canvas3D_Update` and `TouchScroll_Update` `0x81103b46` | the pan follows the parent TouchScroll's position (`+0xa0/+0xa4`, getters at vtable `+0x5c/+0x60` = `0x813d0078`, `0x813d0080`): `pan.x -= (dx / 960) * span.x`, `pan.y += (dy / 544) * span.y`, with `span` = (16.5112, 9.8716) (`+0x5e0a8/ac`, Unicorn run of `0x8107086c` then `0x8107369a`). The canvas's parent is `FeShellTouchScroll` (`viewWidth 960`, `MaxScrollX 960`, `maxscrolly 544`); `TouchScroll_ParseValues` `0x811035a8` compares names with `SceLibc_184C4B07` = **`strcasecmp`** (vitasdk NID db), so the lower-case spellings parse, the range equals the view, and `TouchScroll_Update` pins the position at (0, 0). A 272 px centring (the case-sensitive reading) would land 6 px off anyway | 80 |
+| Taps | `scripts/vita3k-2048-menu-pair.py` `PLAN` | the title and game mode shots are taken before the walk's first tap (keys only), so no drag moved the pan | 90 |
+| Cell height | `Canvas3D_Ctor` `0x81070da0` | `canvasTex` is `U8U8U8U8_ABGR` (`0x0c000000`) filled `0x00ffffff`: alpha 0, `h = 0`; `canvasTex2` (`0x1b000000`, 8 bytes a texel) is zeroed: no uv shift. `Canvas3D_UpdateCellHeights` `0x81071794` raises cells only in a ripple (`+0x5ed24`) or around a music-spectrum centre (`+0x5ed40`, `DAT_818c3d58`), radial, not uniform | 70 |
+| Viewport | `sceGxmSetViewport` (`0x813f2340`), callers `0x81036462`, `0x8103659e`, `0x81036670`, `0x8103f11e`, `0x8103f5a4` | all `(x0 + w/2, w/2, y0 + h/2, -h/2)` with `x0 = y0 = 0` on one player; the scene target `DAT_816ae82c` is the display size. Flipping either axis in the fit drops NCC to 0.34 or keeps an offset | 80 |
+
+**Grey.** `Canvas3D_Draw` selects its fragment program from `DAT_8151d408 + iVar9` with
+`iVar9` in {0, 8, 16, 24, 32, 40} (format and MSAA variants); the blended variants are at
+`+0x40c`, `+0x414`, ... (`Canvas3D_LoadShaders` creates them with a blend info `0x0f, 0x11, 0x54, 0x54`)
+and the draw never picks them: **the canvas draws opaque** (confidence 85). `Canvas3D_Draw` clears colour
+to 0 and depth to 1 first (`0x812f60c2`), sets depth func `LESS_EQUAL` (`0xc00000`). The
+`GameModeChoice` page XML has no full-screen item over it, and the parent TouchScroll's draw
+(`0x811038da`) draws only its scroll bars. So nothing read halves the ink either.
+
+**What a draw from the read state scores** (numpy render, executed matrix, atlas level 0, mean absolute
+grey difference in the five boxes, white first: 2.43, 1.68, 2.20, 2.25, 2.22):
+
+| Draw | title top | title bottom | title left | game left | game right |
+| --- | --- | --- | --- | --- | --- |
+| read state (offset 0, ink as authored) | 6.08 | 6.43 | 6.12 | 6.24 | 6.22 |
+| offset 0, ink x 0.5 | 4.08 | 3.87 | 3.99 | 4.07 | 4.04 |
+| offset (0.40, 0.50), ink as authored | 2.76 | 1.82 | 2.54 | 2.58 | 2.56 |
+| offset (0.40, 0.50), ink x 0.5 | 0.92 | 0.57 | 0.83 | 0.87 | 0.86 |
+
+So the draw stays held back: from the code it is 2.5 to 4 times further from the capture than white.
+**The two numbers are a property of the captured run, not of any path read statically.** The next
+step needs a live readout from a run of the original, which this lane was not allowed: at the title,
+read the canvas singleton `*(0x8151d3f4)` fields `+0xac..+0xe0` (angles, stick offsets, pan, half-width,
+`posOffset`), `+0x5ec90` (the uploaded matrix), the parent TouchScroll's `+0xa0/+0xa4`, and one
+`canvasTex` texel (`*(0x8151d3ec)`). If those equal the reset values, the offset and the half ink come
+from the emulator's draw (a Vita3K vertex-texture or sampling difference) and the reset camera with the
+authored ink is the faithful draw; if they differ, the writer is found by a watchpoint on the field
+that moved.
+
+Confidences: each row as listed; "no static path gives the phase" 75 (the music and ripple height paths
+were read, not executed); the TouchScroll chain 80.
+
+| Address | Name | Conf |
+| --- | --- | --- |
+| `0x81070c0c` | `Canvas3D_ResetCamera` | 85 |
+| `0x8107369a` | `Canvas3D_PlaceMeshWindow` | 80 |
+| `0x81072220` | `Canvas3D_Update` | 70 |
+| `0x81071794` | `Canvas3D_UpdateCellHeights` | 60 |
+| `0x813cff48` | `TouchScroll_Create` | 80 |
+| `0x811035a8` | `TouchScroll_ParseValues` | 85 |
+| `0x81103b46` | `TouchScroll_Update` | 70 |
+| `0x811042ae` | `TouchScroll_SetScroll` | 65 |
+
+Omega: **checked, applies, not wired.** `eboot.bin` carries `TouchScroll_Item.cpp`, `FeShellTouchScroll`,
+`MaxScrollY` and `autoScrollSpeed`: the same scroll item and the same shell parent ship; the GCN draw and
+the update were not read.
+
 ## HD / Omega cross-check (CLAUDE.md)
 
 - **Omega: checked, applies, not wired. The GCN program is the open half.** `canvasTexture.gnf` ships in `data00.psarc` (4,194,560 bytes, `Data/fe/NewImages/`) and again in the patch's `data08.psarc` (5,597,440 bytes); its triangle region was not decoded. The PS4 `eboot.bin` (`/omega/eboot-ps4-omega-eu.bin`)
