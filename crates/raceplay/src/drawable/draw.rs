@@ -14,7 +14,14 @@ pub(crate) enum Lists<'a> {
     /// down in, as `(key, index)` pairs into [`Drawable::opaque_draws`]. The
     /// shading always keeps the model's own order, which is what keeps the
     /// picture the original's; without a prepass `order` is ignored.
-    Solid { order: Option<&'a [(f32, u32)]> },
+    ///
+    /// `prepared`, when given, is what [`Drawable::prepare_solid`] already gathered for this
+    /// view: the draw uses its lists instead of culling again, and its depth half goes out
+    /// as one indirect multi-draw where the drawable has [`Drawable::draws_indirect`].
+    Solid {
+        order: Option<&'a [(f32, u32)]>,
+        prepared: Option<&'a Prepared>,
+    },
     /// The blended list and the glow stamps over it. `depth_plane`, when given, is
     /// the fourth row of the view's view-projection matrix and puts list-B meshes
     /// in the original's back-to-front order ([`oag_mesh::mesh::Model::blended_order`]);
@@ -23,7 +30,16 @@ pub(crate) enum Lists<'a> {
 }
 
 /// [`Lists::Solid`]'s `order`.
-type SolidOrder<'a> = Option<&'a [(f32, u32)]>;
+pub(super) type SolidOrder<'a> = Option<&'a [(f32, u32)]>;
+
+/// What [`Drawable::draw_lists_into`] culls with: the placement table, the two PVS tiers and the
+/// frustum.
+pub(super) type Culling<'a> = (
+    Option<&'a DrawSections>,
+    Option<&'a VisibleSet>,
+    Option<&'a ChunkSet>,
+    Option<&'a Frustum>,
+);
 
 /// The scratch [`Drawable::draw_lists`] gathers its opaque draws into, one per thread: the
 /// views of a split record on threads of their own, and two of them can draw one drawable at
@@ -31,11 +47,11 @@ type SolidOrder<'a> = Option<&'a [(f32, u32)]>;
 #[derive(Debug, Default)]
 pub(crate) struct Shown {
     /// What this frame shows, in the model's order.
-    natural: Vec<u32>,
+    pub(super) natural: Vec<u32>,
     /// The same, in the prepass's order.
-    depth: Vec<u32>,
+    pub(super) depth: Vec<u32>,
     /// Per draw, whether it is in `natural`.
-    flags: Vec<bool>,
+    pub(super) flags: Vec<bool>,
 }
 
 thread_local! {
@@ -48,7 +64,7 @@ impl Drawable {
     /// bounds. A diagnostic for comparing a frame's draw list against a
     /// capture of the original (`docs/reverse-engineering/rpcs3-capture.md`);
     /// off, it is one environment read per draw.
-    fn trace_draw(&self, list: &str, draw: &DrawCall) {
+    pub(super) fn trace_draw(&self, list: &str, draw: &DrawCall) {
         use std::io::Write;
         static PATH: std::sync::OnceLock<Option<std::path::PathBuf>> = std::sync::OnceLock::new();
         let Some(path) = PATH.get_or_init(|| std::env::var_os("OAG_DRAW_DUMP").map(Into::into))
@@ -121,9 +137,9 @@ impl Drawable {
             Lists::Blended { depth_plane } => depth_plane,
             Lists::All | Lists::Solid { .. } => None,
         };
-        let order = match lists {
-            Lists::Solid { order } => order,
-            Lists::All | Lists::Blended { .. } => None,
+        let (order, prepared) = match lists {
+            Lists::Solid { order, prepared } => (order, prepared),
+            Lists::All | Lists::Blended { .. } => (None, None),
         };
         if self.model.indices.is_empty() {
             return SceneStats::default();
@@ -138,6 +154,7 @@ impl Drawable {
                 frustum,
                 (order, depth_plane),
                 (solid, blended),
+                prepared,
                 shown,
             )
         })
@@ -155,9 +172,9 @@ impl Drawable {
         frustum: Option<&Frustum>,
         (order, depth_plane): (SolidOrder<'_>, Option<[f32; 4]>),
         (solid, blended): (bool, bool),
+        prepared: Option<&Prepared>,
         shown: &mut Shown,
     ) -> SceneStats {
-        let mut stats = SceneStats::default();
         let none: &[DrawCall] = &[];
         let mut binds = oag_gpu::perfprobe::Binds::default();
         let mut last_bound: Option<usize> = None;
@@ -165,11 +182,21 @@ impl Drawable {
         // the first tier always allows. That is the ship and the collision
         // overlay, and any track whose sections did not decode.
         let empty: &[u64] = &[];
-        let (opaque, alpha_tested, transparent) = match sections {
-            Some(s) => (&s.opaque[..], &s.alpha_tested[..], &s.transparent[..]),
-            None => (empty, empty, empty),
+        let (alpha_tested, transparent) = match sections {
+            Some(s) => (&s.alpha_tested[..], &s.transparent[..]),
+            None => (empty, empty),
         };
         let shows = self.shows(block);
+        // The draws this frame shows, gathered first because a prepass walks them twice -
+        // the second time backwards: what `prepared` already holds, or gathered here.
+        let (lists, mut stats, indirect) = match prepared.filter(|_| solid) {
+            Some(prepared) => (&prepared.shown, prepared.stats, prepared.indirect),
+            None => {
+                let culling = (sections, set, chunks, frustum);
+                let stats = self.gather_opaque(&shows, culling, order, solid, shown);
+                (&*shown, stats, None)
+            }
+        };
         oag_gpu::perfprobe::pipeline_set();
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &self.uniform_bind, &self.uniform_offset(block));
@@ -183,48 +210,11 @@ impl Drawable {
         pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
         // Slot 0 is the white fallback, so a texture index of n binds slot n + 1.
         let opaque_draws = if solid { &self.model.draws[..] } else { none };
-        // The draws this frame shows, in the model's order, gathered first
-        // because a prepass walks them twice - the second time backwards.
         let Shown {
             natural: shown,
             depth: depth_order,
-            flags,
-        } = shown;
-        shown.clear();
-        for (index, draw) in opaque_draws.iter().enumerate() {
-            // A tier the switch has off is not culled, it is not there.
-            if !shows.draw(draw) {
-                continue;
-            }
-            if !visible(draw, DrawSections::at(opaque, index), set, chunks, frustum) {
-                stats.draws_culled += 1;
-                continue;
-            }
-            stats.draws_submitted += 1;
-            stats.triangles += (draw.range.end - draw.range.start) / 3;
-            self.trace_draw("opaque", draw);
-            shown.push(index as u32);
-        }
-        // The prepass's own order: `order` where given, filtered to what is
-        // shown. Depth under `Less` is the nearest surface whatever the order
-        // it arrives in, so nearest first only lets the depth test reject
-        // sooner - it cannot change a pixel.
-        depth_order.clear();
-        if let Some(order) = order.filter(|_| self.prepass.is_some()) {
-            flags.clear();
-            flags.resize(opaque_draws.len(), false);
-            for &index in shown.iter() {
-                flags[index as usize] = true;
-            }
-            depth_order.extend(
-                order
-                    .iter()
-                    .map(|&(_, index)| index)
-                    .filter(|&index| flags.get(index as usize).copied().unwrap_or(false)),
-            );
-        } else {
-            depth_order.extend_from_slice(shown);
-        }
+            ..
+        } = lists;
         // `reversed`: draw from `reversed_indices`, where a range `s..e` of
         // the model's own sits at `n - e..n - s`.
         let index_count = self.model.indices.len() as u32;
@@ -281,9 +271,22 @@ impl Drawable {
             // untouched.
             Some(prepass) if !shown.is_empty() => {
                 pass.set_pipeline(&prepass.depth);
-                for &index in depth_order.iter() {
-                    let draw = &opaque_draws[index as usize];
-                    pass.draw_indexed(draw.range.clone(), 0, 0..1);
+                match (&self.indirect, indirect) {
+                    // The same draws in the same order, from the list `prepare_solid` wrote.
+                    (Some(args), Some(count)) => {
+                        oag_gpu::perfprobe::indirect_draws(count);
+                        pass.multi_draw_indexed_indirect(
+                            args.buffer(),
+                            args.offset(block.index()),
+                            count,
+                        );
+                    }
+                    _ => {
+                        for &index in depth_order.iter() {
+                            let draw = &opaque_draws[index as usize];
+                            pass.draw_indexed(draw.range.clone(), 0, 0..1);
+                        }
+                    }
                 }
                 pass.set_pipeline(&prepass.shade);
                 let reversed = self.reversed_indices.as_ref();
