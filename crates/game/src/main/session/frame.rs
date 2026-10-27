@@ -1043,7 +1043,9 @@ impl Session {
         // texture recorded nothing on `present_cost`, and recording it here
         // would leave the two meters averaging different sets of frames.
         if frame_seconds.is_some() && presented {
-            self.cpu_cost.record(acquire_start.elapsed().as_secs_f32());
+            let cpu_seconds = acquire_start.elapsed().as_secs_f32();
+            self.cpu_cost.record(cpu_seconds);
+            self.feed_governor((cpu_seconds - self.last_present_seconds).max(0.0));
         }
         Ok(())
     }

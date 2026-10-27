@@ -176,6 +176,7 @@ impl Session {
                 window,
                 surface,
                 render,
+                governor: self.governor.level(),
             })
         );
     }

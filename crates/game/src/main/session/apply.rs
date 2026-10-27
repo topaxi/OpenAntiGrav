@@ -622,6 +622,17 @@ impl Session {
                     return;
                 }
             },
+            "graphics.cpu_governor" => match text.as_str() {
+                "on" => self.settings.graphics.cpu_governor = true,
+                "off" => {
+                    self.settings.graphics.cpu_governor = false;
+                    self.governor.reset();
+                }
+                _ => {
+                    warn!("ignoring {setting} = {text:?}: expected on or off");
+                    return;
+                }
+            },
             // Applied to the race already running, unlike the two rows above:
             // the original binds this to a button precisely so it can be changed
             // while flying, and a row that deferred it to the next race would be

@@ -1385,6 +1385,16 @@ restart_required = "TAKES EFFECT THE NEXT TIME A RACE STARTS"
 # every stage from the next frame, into the offscreen target and so at the
 # render scale - which is why it is on this page and not DISPLAY. See
 # `crates/game/src/perf.rs`.
+# This project's own CPU-heavy extras (shadow map, extended model detail) step down while
+# the frame thread, not the GPU, is over its frame budget, and come back when it has room.
+# Never changes a saved row. See `oag_present::governor`.
+[[page.entry]]
+kind = "choice"
+label = "CPU GOVERNOR"
+string_id = "OAG_GRAPHICS_CPU_GOVERNOR"
+setting = "graphics.cpu_governor"
+values = ["off", "on"]
+
 [[page.entry]]
 kind = "choice"
 label = "PERFORMANCE OVERLAY"
