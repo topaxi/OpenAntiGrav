@@ -110,6 +110,10 @@ just play --race --screenshot /tmp/race.png --ticks 45 --hold cross
 
 # Or through the menus, which is the same picture reached the way a player does.
 just play --screenshot /tmp/launch.png --until "Launch Game" --press start,cross --ticks 60
+
+# A screen the press itself leaves (2048's TitleScreen: only a press ends the intro movie)
+# stays pressed-free once reached, so the remaining ticks settle it.
+just play 2048 --screenshot /tmp/title.png --until TitleScreen --press start --press-until-reached --ticks 424
 ```
 
 A race opens, in a window, with the circuit's own camera animation (Pulse on a PSP disc;

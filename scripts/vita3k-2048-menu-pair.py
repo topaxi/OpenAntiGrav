@@ -140,10 +140,11 @@ PAUSE_PLAN = PLAN.split(",tap:940x240")[0] + ",tap:" + CHECK + ",wait:3,tap:" + 
 #: One entry per screen the walk photographs. `screen` is read by eye off the frame (Vita3K has no screen log) and is the name the
 #: XML gives it; `route` is ours' oag-game arguments, `None` where ours has no XML-driven still (a gap, with `why`).
 WALK = [
-    {"id": "title", "title": "Title screen", "screen": "TitleScreen", "route": ["--until", "TitleScreen", "--press", "start"],
+    {"id": "title", "title": "Title screen", "screen": "TitleScreen",
+     "route": ["--until", "TitleScreen", "--press", "start", "--press-until-reached", "--ticks", "424"],
      "xml": "Title_Definition.xml / Skin.xml TitleScreen",
-     "selection": {"original": "PRESS ANY BUTTON TO START, settled", "ours": "entry tick of TitleScreen", "matched": False,
-                   "why": "ours stops on the tick TitleScreen is entered (`--ticks` after `--until` does not advance it), before the logo and the prompt appear"}},
+     "selection": {"original": "PRESS ANY BUTTON TO START, settled, prompt dim in its pulse", "ours": "TitleScreen settled, 424 ticks in (the prompt's pulse phase is chosen to the capture's dim end, not measured)",
+                   "matched": True}},
     {"id": "psn", "title": "PSN prompt", "screen": "Boot Connect", "route": None, "xml": "the Vita system's own dialog",
      "why": "the dialog is the system's, not a screen of the game's XML"},
     # `--original-menu` leaves out this build's RACEBOX, REMIX and MULTIPLAYER tiles; a player keeps them.

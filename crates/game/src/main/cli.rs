@@ -384,6 +384,17 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) press: Option<String>,
 
+    /// With `--press` and `--until`, stop pressing once the `--until` state is
+    /// current, so the remaining `--ticks` run on that screen untouched.
+    ///
+    /// Without it the buttons keep pulsing after the state is reached, which
+    /// is what `--until Home --press ... --ticks 40` relies on. A screen that
+    /// a button press leaves (2048's `TitleScreen`, whose intro movie only a
+    /// press ends) needs this to be captured settled: `--until TitleScreen
+    /// --press start --press-until-reached --ticks 300`.
+    #[arg(long, requires_all = ["until", "press"])]
+    pub(crate) press_until_reached: bool,
+
     /// Control scheme: `veteran` or `novice`.
     ///
     /// Overrides `[controls] scheme` for this run without writing it back. The

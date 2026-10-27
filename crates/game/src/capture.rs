@@ -79,6 +79,8 @@ pub struct Options {
     /// needs two presses - skip the intro, then pick a language - needs the
     /// button to be let go of in between.
     pub pressed: u32,
+    /// `--press-until-reached`: `pressed` stops once the `--until` state is current.
+    pub press_until_reached: bool,
     /// Which control scheme the race this hands off to is driven with.
     pub scheme: oag_gameplay::ControlScheme,
     /// Print exits as well as entries.
@@ -331,6 +333,7 @@ pub fn run(
 
         let pressed = match card.as_mut() {
             Some(card) => card.step(&mut frontend, options.pressed)?,
+            None if options.press_until_reached && reached => 0,
             None => options.pressed,
         };
         let pulse = if ticks.is_multiple_of(2) { pressed } else { 0 };
