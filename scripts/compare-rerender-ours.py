@@ -41,7 +41,6 @@ import compare_env as ce  # noqa: E402
 import compare_menu as cm  # noqa: E402
 
 BINARY = ROOT / "target/debug/oag-game"
-MANIFESTS = ("fresh.toml", "race-shots.toml", "zone.toml", "pure.toml", "2048.toml", "omega.toml")
 #: A recorded path that no longer exists: a lane's scratch directory or a reaped worktree.
 STALE = re.compile(r"\{scratch\}/|OpenAntiGrav-worktrees/|/data/scratch/")
 
@@ -220,10 +219,9 @@ def summary():
 
 
 def rewrite_manifests(d):
-    for name in MANIFESTS:
-        toml = d / name
-        if not toml.exists():
-            continue
+    """Every page manifest in `d`, so no page row keeps a score from before the re-render (a fixed list once left the
+    `menus*.toml` rows at their old numbers)."""
+    for toml in sorted(d.glob("*.toml")):
         dirs = [str((toml.parent / e["original"]).parent) for e in tomllib.loads(toml.read_text()).get("entry", [])]
         if dirs:
             ce.manifest(toml, dirs)
