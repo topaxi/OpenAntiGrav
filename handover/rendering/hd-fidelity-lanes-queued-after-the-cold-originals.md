@@ -124,6 +124,11 @@ one), or the sky map as a layer beside the probes (different sizes today, 512x25
 - **`m_diffuse_normal_constantspecular`'s normal alpha**: the RGB is a normal map
   (`docs/formats/rcsmaterial.md`); what its alpha carries is unread.
 
+- **Ours is 11-18 % brighter with flatter coarse contrast (0.90) on Vineta K, Sebenco Climb and The Amphiseum** (2026-10-27,
+  lead; `docs/rendering/hd-track-tone.md`, "The 0.5-level gap is ours being brighter"). Talon's and Tech de Ra are not. With
+  the brightness divided out, the `-1.5` bias matches the original's detail, so this explains the -0.75 fit. First candidate:
+  the exposure adaptation law (encoded vs linear mean, above). Size M (30), difficulty medium (35).
+
 ## Later, not queued
 
 - **Pure's trail queue position**: Pulse PSP queues the trail at `0x4d000000` before list B

@@ -636,9 +636,27 @@ menus); hd summed mean grey 141.3 -> 144.3 (+3.0)`.
 RSX register; no bias request was read from 2048's Vita sampler states or Omega's GNM samplers, so HD's measurement is not carried over. Reading
 those sampler states is the open step, not a one-line rule.
 
-**Left.** The 0.5-level gap against the RPCS3 fit (-0.75 fits, the word says -1.5): RPCS3's LOD computation or our `textureSampleBias` with
+**Left (likely explained below, "The 0.5-level gap is ours being brighter").** The 0.5-level gap against the RPCS3 fit (-0.75 fits, the word says -1.5): RPCS3's LOD computation or our `textureSampleBias` with
 derivative scaling; the warm light pool on the Vineta K kerb and the Tech de Ra glass grid (missing content, not blur).
 
+### The 0.5-level gap is ours being brighter (2026-10-27, lead)
+
+The band ratio is an absolute std, so a brighter surface reads as more detail. On the same five ablated pairs, near boxes,
+ours/original (`scripts/texture-sharpness.py` boxes, medians):
+
+| Pair | mean luma | coarse contrast (blur 4 std) | fine at -1.5 | fine at -1.5 over mean luma |
+| --- | --- | --- | --- | --- |
+| Vineta K | 1.18 | 0.90 | 1.13 | 0.94 |
+| Sebenco Climb | 1.18 | 0.97 | 1.18 | 1.01 |
+| The Amphiseum | 1.11 | 0.90 | 1.09 | 0.93 |
+| Talon's Junction | 1.01 | 1.00 | 1.17 | 1.15 |
+| Tech de Ra (2 boxes) | 1.01 | 1.06 | 0.86 | 0.85 |
+
+With brightness divided out, `-1.5` lands at 0.93 to 1.01 on the three circuits where ours is 11 to 18 % brighter, so the
+`-0.75` fit was ours' extra brightness standing in for detail, not an RPCS3 LOD difference (confidence 60: five pairs, one
+capture each; Talon's and Tech de Ra are not brighter and do not move). The brightness itself, with coarse contrast at 0.90,
+reads as a lifted, flatter tone on those circuits: an open lead, see the exposure adaptation law above ("Decide the
+adaptation law") as the first candidate.
 
 ## The reflection map is the sky, and Moa Therma's glass reads it (2026-10-21, `hd-one-pair-moa`)
 
