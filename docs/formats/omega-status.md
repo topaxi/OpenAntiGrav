@@ -698,6 +698,34 @@ mean grey difference **61.50 to 38.92**, RMSE 0.329 to 0.242, edge NCC 0.23 to 0
 (UVs 0..1, atlases decode) and Omega's Nova prelit were never the fault; the PS4 red-channel
 coverage lead is **not** the cause here (checked: a lightmap's channels sample correctly).
 
+### Vineta K's shadows: the lightmap is right, the display encode is the lead (2026-10-27, `omega-vineta-shadow`, negative result)
+
+Pair `omega/vineta-k` draws the shadowed road and wall about 65 and 52 grey too bright (boxes x 700-1300,
+y 420-560 and x 1100-1900, y 340-520 of the 1920x1080 frame; original 31.3 and 38.1, ours 96.3 and 90.5).
+Measured, by false-colour probes written straight to the target:
+
+- **The channel hypothesis is false.** Road and wall draws bind a real `-lmap.gnf` (`nova_mesh_combine_TSF1`
+  and kin, BC7, 2048x2048). Its rgb is a flat grey (about 0.5, channels equal) and its alpha is a binary
+  sun-shadow mask with the roof's outline; decoded alpha on screen follows the arches. No PS4-wide channel swap
+  is needed; the sun mask is `lightmap.a` as on HD. Vineta K's road materials carry no `VertexColour1`.
+- **Ours holds a flat ambient floor the original does not show.** Shadowed half of the road box: ours rgb
+  (45, 48, 56), original (6, 5, 3). Prelit alone (`2.0 * 0.5^2.5`, bias 0) already reads 68 in the road box.
+  An sRGB decode of the lightmap, or gating prelit by the alpha mask, does not close it (road 54, 54).
+- **The display encode does.** Replacing `oag_post::omega_tonemap`'s final `pow(1/2.2)` (recorded above as
+  "chosen, not measured") with the identity: road diff 65.0 to 15.3, wall 52.4 to 0.2, shadowed halves
+  (7, 8, 11) and (8, 8, 17) against (6, 5, 3) and (17, 15, 11). **But it is not landed**: whole frame 46.69 to
+  59.04 and `omega/anulpha-pass` 38.92 to 59.68 (its original is pale and flat, ours goes darker still), so the
+  gamma is not globally wrong. Scaling the exposure by 0.35 instead gives road 27.1 and wall 16.6, which no
+  adaptive exposure can reach (`(a + b L) / L` is at least `b` = 0.498).
+- Lit patches differ too: original road top decile (169, 160, 157), ours (242-248, 165-207, 83-149) - the
+  12 / 6.8 / 3.2 sun saturates per channel in ours and the original's lit road is near neutral.
+
+**Next:** find why the original's low end is that dark on Vineta K and not on Anulpha: the per-circuit
+`Tonemap.*` curve (`Start angle` -6.93, `End angle` -12.06, source end 1.506 here), the scanout encode of the
+resolve (`FUN_017864a0` curve resolve versus the compute resolve), and the unwired shadow-light factor. Read
+`tonemap.md`'s "Resolve" row against a captured Anulpha frame before touching the encode.
+2048: not checked (`Material::samplers` is PS4-only; the Vita lightmaps were not probed).
+
 **Still open:** the chevron's own program (emask, `Wave`, `Colour`, swept by `offset`) is not
 wired for PS4 materials as it is for HD's `cf_chevron_pulse` (`mesh::rcs::chevron_pulse`), so
 the chevrons draw as a bright cyan albedo where the original's frame shows the road plain; the
