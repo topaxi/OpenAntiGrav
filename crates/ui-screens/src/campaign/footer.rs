@@ -210,10 +210,8 @@ enum PromptKind {
 /// the screen's own grid units. Chosen, not measured.
 const NOTICE_LIFT: f32 = 56.0;
 
-/// How far above `Confirm`'s row [`NavigationLegend::reset_prompt`] sits, as a fraction of that
-/// row's y (the footer's grid differs per title), and how tall its tap target is in grid units.
-/// Chosen, not measured.
-const RESET_LIFT: f32 = 0.13;
+/// How tall [`NavigationLegend::reset_prompt`]'s tap target is, in grid units. Chosen, not
+/// measured.
 const RESET_HEIGHT: f32 = 20.0;
 
 /// One `NavigationController` prompt - an icon glyph and its label, both
@@ -359,7 +357,9 @@ impl NavigationLegend {
                     scale: number(globals, text, "scale").unwrap_or(1.0),
                     align_right_to: None,
                     left_bound: None,
-                    glyph: idstring.ends_with("_BUTTON"),
+                    glyph: text
+                        .attr("name")
+                        .is_some_and(|name| name.ends_with("Button")),
                 },
             ));
         }
@@ -568,14 +568,44 @@ impl NavigationLegend {
         has(true) && has(false)
     }
 
-    /// A third prompt in the legend's own manner: `glyph` (a title's stand-in codepoint for the
-    /// button, which the prompt system redraws for the device in use) and `word`, on a line
-    /// above `Confirm`, starting at the leftmost prompt's x, the glyph and the word spaced as
-    /// `Confirm`'s own are. With the rect it occupies, for a tap. `None` when the legend has no
+    /// The span each authored prompt covers on the footer row, `(start, end)` in grid units,
+    /// every kind included and `Back` too whether or not the page shows it. A glyph is as wide
+    /// as the distance to its word, which is all this has to go on: `measure` reads the word
+    /// face, not the button face.
+    fn prompt_spans(
+        &self,
+        faces: &FaceScales,
+        measure: &dyn Fn(&str) -> f32,
+        glyph_width: f32,
+    ) -> Vec<(f32, f32)> {
+        self.prompts
+            .iter()
+            .map(|prompt| {
+                if prompt.glyph {
+                    return (prompt.x, prompt.x + glyph_width);
+                }
+                let width = measure(&prompt.text) * face_scale(faces, &prompt.font) * prompt.scale;
+                match prompt.align_right_to {
+                    Some(end) => (end - width, end),
+                    None => (prompt.x, prompt.x + width),
+                }
+            })
+            .collect()
+    }
+
+    /// One more prompt on the footer's own row, in the legend's manner: `glyph` (a title's
+    /// stand-in codepoint for the button, which the prompt system redraws for the device in
+    /// use) and `word`, on `Confirm`'s baseline with the legend's own spacing. With the rect
+    /// it occupies, for a tap. `width` is the page's grid width. `None` when the legend has no
     /// `Confirm` to take its faces and colours from.
     ///
-    /// **The line is chosen, not measured**: the disc authors no such prompt, and the
-    /// footer's own row holds `Confirm` and `Back` already.
+    /// **Where it goes is chosen, not measured**, the disc authors no such prompt. It follows
+    /// the originals' order (`Confirm`, then `Back`) and goes after the last authored prompt
+    /// when it fits before the right margin, else before the first. It lies against every
+    /// authored prompt, `Back` included although a root page does not draw it, so it never
+    /// takes `Back`'s place and does not move when a page gains one. `blocked` is what else
+    /// the page draws near the footer, so the prompt keeps clear of it. Where neither side of
+    /// the row has a gap that holds it, it takes the line above.
     #[must_use]
     pub fn reset_prompt(
         &self,
@@ -583,6 +613,8 @@ impl NavigationLegend {
         word: &str,
         faces: &FaceScales,
         measure: &dyn Fn(&str) -> f32,
+        width: f32,
+        blocked: &[[f32; 4]],
     ) -> Option<(Vec<Draw>, [f32; 4])> {
         let find = |glyph: bool| {
             self.prompts
@@ -590,38 +622,75 @@ impl NavigationLegend {
                 .find(|prompt| prompt.kind == PromptKind::Confirm && prompt.glyph == glyph)
         };
         let (button, label) = (find(true)?, find(false)?);
-        let left = self
-            .prompts
-            .iter()
-            .filter(|prompt| prompt.kind != PromptKind::Navigation)
-            .map(|prompt| prompt.x)
-            .fold(f32::MAX, f32::min);
-        let y = label.y * (1.0 - RESET_LIFT);
         let gap = (label.x - button.x).max(0.0);
-        let word_width = measure(word) * face_scale(faces, &label.font) * label.scale;
-        let total = if glyph.is_some() { gap } else { 0.0 } + word_width;
-        // End where the rightmost word of the legend ends, so a long line grows leftwards
-        // rather than off the screen; never right of where `Confirm`'s glyph starts.
-        let right = self
-            .prompts
+        let spans = self.prompt_spans(faces, measure, gap);
+        let first = spans.iter().map(|span| span.0).fold(f32::MAX, f32::min);
+        let last = spans.iter().map(|span| span.1).fold(f32::MIN, f32::max);
+        let margin = first.min(width - last).max(0.0);
+        // The spacing between two of the legend's own prompts: from `Confirm`'s word to
+        // whatever starts after it, else from what ends before its glyph.
+        let confirm_end = label.align_right_to.unwrap_or_else(|| {
+            label.x + measure(&label.text) * face_scale(faces, &label.font) * label.scale
+        });
+        let spacing = spans
             .iter()
-            .filter(|prompt| prompt.kind != PromptKind::Navigation && !prompt.glyph)
-            .map(|prompt| {
-                prompt.align_right_to.unwrap_or_else(|| {
-                    prompt.x
-                        + measure(&prompt.text) * face_scale(faces, &prompt.font) * prompt.scale
-                })
+            .map(|span| span.0 - confirm_end)
+            .filter(|space| *space > 0.0)
+            .fold(f32::MAX, f32::min);
+        let spacing = if spacing < f32::MAX {
+            spacing
+        } else {
+            spans
+                .iter()
+                .map(|span| button.x - span.1)
+                .filter(|space| *space > 0.0)
+                .fold(f32::MAX, f32::min)
+        };
+        let spacing = if spacing < f32::MAX { spacing } else { 12.0 };
+        let word_scale = face_scale(faces, &label.font) * label.scale;
+        let word_width = measure(word) * word_scale;
+        let lead = if glyph.is_some() { gap } else { 0.0 };
+        let total = lead + word_width;
+        let y = button.y.min(label.y);
+        // What else the page draws on this row (Pure's `W:P` mark sits beside its `Confirm`)
+        // closes the gaps it covers: the free run after the last prompt ends at the first
+        // such mark, the one before the first prompt starts at the last.
+        let row: Vec<&[f32; 4]> = blocked
+            .iter()
+            .filter(|rect| {
+                // Only what is beside the legend: a strip behind it is its own backdrop.
+                rect[1] < y + RESET_HEIGHT
+                    && rect[1] + rect[3] > y
+                    && (rect[0] + rect[2] <= first || rect[0] >= last)
             })
-            .fold(left, f32::max);
-        let left = left.min(right - total).max(0.0);
+            .collect();
+        let after = last + spacing;
+        let end = row
+            .iter()
+            .filter(|rect| rect[0] >= last)
+            .map(|rect| rect[0] - spacing)
+            .fold(width - margin, f32::min);
+        let start = row
+            .iter()
+            .filter(|rect| rect[0] + rect[2] <= first)
+            .map(|rect| rect[0] + rect[2] + spacing)
+            .fold(margin, f32::max);
+        let (left, lift) = if end - after >= total {
+            (after, 0.0)
+        } else if first - spacing - start >= total {
+            (first - spacing - total, 0.0)
+        } else {
+            // No gap on the row holds it (Pure's is full): one line up, from the first
+            // prompt's x, where the frame draws nothing.
+            (first, RESET_HEIGHT)
+        };
         let mut out = Vec::new();
-        let mut word_x = left;
         if let Some(glyph) = glyph {
             out.push(Self::draw_prompt(
                 &Prompt {
                     text: glyph.to_string(),
                     x: left,
-                    y,
+                    y: button.y - lift,
                     align_right_to: None,
                     left_bound: None,
                     ..button.clone()
@@ -629,18 +698,20 @@ impl NavigationLegend {
                 faces,
                 measure,
             ));
-            word_x += gap;
         }
-        let word_prompt = Prompt {
-            text: word.to_string(),
-            x: word_x,
-            y,
-            align_right_to: None,
-            left_bound: None,
-            ..label.clone()
-        };
-        out.push(Self::draw_prompt(&word_prompt, faces, measure));
-        Some((out, [left, y, (word_x - left) + word_width, RESET_HEIGHT]))
+        out.push(Self::draw_prompt(
+            &Prompt {
+                text: word.to_string(),
+                x: left + lead,
+                y: label.y - lift,
+                align_right_to: None,
+                left_bound: None,
+                ..label.clone()
+            },
+            faces,
+            measure,
+        ));
+        Some((out, [left, y - lift, total, RESET_HEIGHT]))
     }
 
     /// `text` as one line in the legend's own word face (not its button glyphs) and colour, a row above the

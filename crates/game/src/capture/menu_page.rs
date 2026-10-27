@@ -287,13 +287,7 @@ pub(super) fn menu_page(
     for (key, value) in crate::settings::menu_seeds(settings, anisotropy, title, platform) {
         model.seed(key, &value);
     }
-    crate::settings::supply_reset(
-        &mut model,
-        title,
-        platform,
-        strings,
-        nav_legend.is_some_and(|legend| legend.can_model_reset_prompt()),
-    );
+    crate::settings::supply_reset(&mut model, title, platform, strings);
     // The AI PILOTS page's own three sources. Read off the player's real
     // pilot directory rather than invented, for the reason the circuits above
     // are read off the disc: a `PILOT` row showing nothing and one showing
@@ -421,6 +415,8 @@ pub(super) fn menu_page(
             nav_legend,
             &|button| settings.controls.live_bindings().names_for(button),
             default_measure,
+            skin.space().size.0,
+            &frame.mark_rects(),
         )
         .map(|(draws, _)| draws)
         .unwrap_or_default(),

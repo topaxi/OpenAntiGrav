@@ -584,8 +584,6 @@ pub struct Menu {
     reset_rect: Option<[f32; 4]>,
     /// The title's stand-in codepoint for the reset button. See [`Self::set_reset_glyph`].
     reset_glyph: Option<char>,
-    /// Whether the hint is a line under the rows. See [`Self::set_reset_inline`].
-    reset_inline: bool,
 }
 
 /// How many rows a page shows before the caller says otherwise.
@@ -627,7 +625,6 @@ impl Menu {
             reset_label: String::new(),
             reset_rect: None,
             reset_glyph: None,
-            reset_inline: false,
         }
     }
 

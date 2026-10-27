@@ -102,10 +102,7 @@ pub fn regions(
         None => super::rows::regions(menu, skin, frame),
     };
     // The footer's reset prompt, drawn by whoever draws the footer, while the row is off default.
-    if let Some(rect) = menu
-        .reset_rect
-        .filter(|_| !menu.reset_inline && menu.reset_offered().is_some())
-    {
+    if let Some(rect) = menu.reset_rect.filter(|_| menu.reset_offered().is_some()) {
         out.push(Region {
             row: menu.selected(),
             part: Part::Reset,

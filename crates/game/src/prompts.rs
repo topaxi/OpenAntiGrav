@@ -156,10 +156,9 @@ pub fn reset_prompt(
     legend: Option<&oag_ui_screens::campaign::footer::NavigationLegend>,
     bindings: &dyn Fn(Button) -> Vec<&'static str>,
     measure: &dyn Fn(&str) -> f32,
+    width: f32,
+    blocked: &[[f32; 4]],
 ) -> Option<(Vec<oag_ui::frontend::Draw>, [f32; 4])> {
-    if menu.is_reset_inline() {
-        return None;
-    }
     let mut word = menu.reset_offered()?.to_string();
     let glyph = menu.reset_glyph();
     if glyph.is_none() {
@@ -173,5 +172,7 @@ pub fn reset_prompt(
         &word,
         &oag_ui_screens::picker::FaceScales::default(),
         measure,
+        width,
+        blocked,
     )
 }

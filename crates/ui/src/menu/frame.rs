@@ -87,6 +87,19 @@ pub struct Frame {
 }
 
 impl Frame {
+    /// The rect of every sprite and fill among the marks, `[x, y, w, h]` in the page's grid:
+    /// where the frame has drawn something a prompt added to the footer must not cover.
+    #[must_use]
+    pub fn mark_rects(&self) -> Vec<[f32; 4]> {
+        self.marks
+            .iter()
+            .filter_map(|mark| match mark {
+                Draw::Sprite { rect, .. } | Draw::Fill { rect, .. } => Some(*rect),
+                _ => None,
+            })
+            .collect()
+    }
+
     /// Whether this title draws any frame at all.
     #[must_use]
     pub fn is_empty(&self) -> bool {
