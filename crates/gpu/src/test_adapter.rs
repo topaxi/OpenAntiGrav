@@ -96,14 +96,12 @@ fn rank(infos: &[Candidate], overridden: Option<&str>) -> Vec<usize> {
     let spills_badly = order.first().is_some_and(|&i| {
         infos[i].vendor == NO_SPILL_VENDOR && infos[i].device_type == wgpu::DeviceType::DiscreteGpu
     });
-    if cfg!(target_os = "linux") && spills_badly {
-        if let Some(pos) = order
-            .iter()
-            .position(|&i| infos[i].device_type == wgpu::DeviceType::IntegratedGpu)
-        {
-            let integrated = order.remove(pos);
-            order.insert(0, integrated);
-        }
+    let integrated = order
+        .iter()
+        .position(|&i| infos[i].device_type == wgpu::DeviceType::IntegratedGpu);
+    if let (true, true, Some(pos)) = (cfg!(target_os = "linux"), spills_badly, integrated) {
+        let integrated = order.remove(pos);
+        order.insert(0, integrated);
     }
     if let Some(wanted) = overridden {
         let wanted_lower = wanted.to_lowercase();
