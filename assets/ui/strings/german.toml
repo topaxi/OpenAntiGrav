@@ -19,58 +19,58 @@
 
 [strings]
 
-OAG_MENU_MAIN_TITLE = { text = "OPENANTIGRAV", human = false }
+OAG_MENU_MAIN_TITLE = { text = "OPENANTIGRAV", human = true }
 OAG_MENU_RACE_CAMPAIGN = { text = "RENNKAMPAGNE", human = false }
 OAG_MENU_RACE_CAMPAIGN_SUBTITLE = { text = "Der Story-Modus: Arbeite dich im Turnierraster nach oben", human = false }
 OAG_MENU_RACEBOX = { text = "RENNBOX", human = false }
 OAG_MENU_RACEBOX_SUBTITLE = { text = "Stelle dein eigenes Rennen zusammen", human = false }
 OAG_MENU_REMIX = { text = "REMIX", human = false }
-OAG_MENU_REMIX_SUBTITLE = { text = "Kombiniere Strecken und Schiffe aus allen Titeln, die du besitzt", human = false }
-OAG_MENU_MULTIPLAYER = { text = "MEHRSPIELER", human = false }
+OAG_MENU_REMIX_SUBTITLE = { text = "Kombiniere Strecken und Schiffe aus allen Titeln, die du besitzt", human = true }
+OAG_MENU_MULTIPLAYER = { text = "MEHRSPIELER", human = true }
 OAG_MENU_MULTIPLAYER_SUBTITLE = { text = "Fahre mit anderen Spielern, an diesem Gerät und später über ein Netzwerk", human = false }
 OAG_MENU_MULTIPLAYER_SHARING = { text = "MEHRSPIELER UND TEILEN", human = false }
 OAG_MENU_MULTIPLAYER_SHARING_HELP = { text = "Online oder über Ad Hoc fahren und Daten teilen", human = false }
-OAG_MP_PAGE_TITLE = { text = "MEHRSPIELER", human = false }
+OAG_MP_PAGE_TITLE = { text = "MEHRSPIELER", human = true }
 OAG_MP_LOCAL = { text = "LOKALER MEHRSPIELER", human = false }
-OAG_MP_LOCAL_SUBTITLE = { text = "Bis zu acht Spieler an diesem Gerät, auf einem Bildschirm oder in mehreren Fenstern", human = false }
-OAG_MP_LAN = { text = "LAN", human = false }
-OAG_MP_ONLINE = { text = "ONLINE", human = false }
+OAG_MP_LOCAL_SUBTITLE = { text = "Bis zu acht Spieler an diesem Gerät, auf einem Bildschirm oder in mehreren Fenstern", human = true }
+OAG_MP_LAN = { text = "LAN", human = true }
+OAG_MP_ONLINE = { text = "ONLINE", human = true }
 OAG_MP_ONLINE_SUBTITLE = { text = "Online-Rennen über eine Lobby im Internet", human = false }
-OAG_ONLINE_PAGE_TITLE = { text = "ONLINE", human = false }
-OAG_ONLINE_CREATE = { text = "SPIEL ERSTELLEN", human = false }
+OAG_ONLINE_PAGE_TITLE = { text = "ONLINE", human = true }
+OAG_ONLINE_CREATE = { text = "SPIEL ERSTELLEN", human = true }
 OAG_ONLINE_CREATE_SUBTITLE = { text = "Das Rennen wählen und auf die anderen warten", human = false }
-OAG_ONLINE_JOIN = { text = "SPIEL BEITRETEN", human = false }
-OAG_ONLINE_JOIN_SUBTITLE = { text = "Einen Raum der Lobby wählen", human = false }
-OAG_ONLINE_ADDRESS_TITLE = { text = "LOBBY-ADRESSE", human = false }
-OAG_ONLINE_ADDRESS_HINT = { text = "DIE ADRESSE DES SERVERS, z. B. race.example.org", human = false }
+OAG_ONLINE_JOIN = { text = "SPIEL BEITRETEN", human = true }
+OAG_ONLINE_JOIN_SUBTITLE = { text = "Einen Raum der Lobby wählen", human = true }
+OAG_ONLINE_ADDRESS_TITLE = { text = "LOBBY-ADRESSE", human = true }
+OAG_ONLINE_ADDRESS_HINT = { text = "DIE ADRESSE DES SERVERS, z. B. race.example.org", human = true }
 OAG_ONLINE_HASH_TITLE = { text = "LOBBY-ZERTIFIKAT", human = false }
 OAG_ONLINE_HASH_HINT = { text = "DIE 64 ZIFFERN VOM BETREIBER DES SERVERS", human = false }
-OAG_ONLINE_NAME_TITLE = { text = "DEIN NAME", human = false }
-OAG_ONLINE_NAME_HINT = { text = "SO SEHEN DICH DIE ANDEREN", human = false }
-OAG_ONLINE_CONNECTING = { text = "VERBINDE...", human = false }
-OAG_ONLINE_FAILED = { text = "VERBINDUNG FEHLGESCHLAGEN", human = false }
-OAG_ONLINE_LOST = { text = "DIE LOBBY WURDE GESCHLOSSEN", human = false }
-OAG_ONLINE_LIST_TITLE = { text = "ONLINE-SPIELE", human = false }
-OAG_ONLINE_LIST_HINT = { text = "SPIEL WÄHLEN ODER EINES ERSTELLEN", human = false }
-OAG_ONLINE_CREATE_ROW = { text = "SPIEL ERSTELLEN", human = false }
+OAG_ONLINE_NAME_TITLE = { text = "DEIN NAME", human = true }
+OAG_ONLINE_NAME_HINT = { text = "SO SEHEN DICH DIE ANDEREN", human = true }
+OAG_ONLINE_CONNECTING = { text = "VERBINDE...", human = true }
+OAG_ONLINE_FAILED = { text = "VERBINDUNG FEHLGESCHLAGEN", human = true }
+OAG_ONLINE_LOST = { text = "DIE LOBBY WURDE GESCHLOSSEN", human = true }
+OAG_ONLINE_LIST_TITLE = { text = "ONLINE-SPIELE", human = true }
+OAG_ONLINE_LIST_HINT = { text = "SPIEL WÄHLEN ODER EINES ERSTELLEN", human = true }
+OAG_ONLINE_CREATE_ROW = { text = "SPIEL ERSTELLEN", human = true }
 OAG_ONLINE_DEFAULT_TRACK = { text = "STANDARDSTRECKE", human = false }
-OAG_ONLINE_ROW_CLOSED = { text = "NICHT BEITRETBAR: VOLL, GESTARTET ODER ANDERER TITEL, ANDERE VERSION ODER MODS", human = false }
-OAG_ONLINE_ROOM_TITLE = { text = "SPIEL-LOBBY", human = false }
-OAG_ONLINE_ROOM_HINT = { text = "DER HOST STARTET DAS RENNEN", human = false }
-OAG_ONLINE_ROOM_HINT_OWNER = { text = "START DRÜCKEN, WENN ALLE BEREIT SIND", human = false }
+OAG_ONLINE_ROW_CLOSED = { text = "NICHT BEITRETBAR: VOLL, GESTARTET ODER ANDERER TITEL, ANDERE VERSION ODER MODS", human = true }
+OAG_ONLINE_ROOM_TITLE = { text = "SPIEL-LOBBY", human = true }
+OAG_ONLINE_ROOM_HINT = { text = "DER HOST STARTET DAS RENNEN", human = true }
+OAG_ONLINE_ROOM_HINT_OWNER = { text = "START DRÜCKEN, WENN ALLE BEREIT SIND", human = true }
 OAG_ONLINE_HOST = { text = "HOST", human = false }
-OAG_ONLINE_READY = { text = "BEREIT", human = false }
+OAG_ONLINE_READY = { text = "BEREIT", human = true }
 OAG_ONLINE_PICKING = { text = "WÄHLT", human = false }
 OAG_ONLINE_ROOM_SETTINGS = { text = "RAUMEINSTELLUNGEN", human = false }
-OAG_ONLINE_MAX_PLAYERS = { text = "MAX. SPIELER", human = false }
-OAG_ONLINE_LAPS = { text = "RUNDEN", human = false }
+OAG_ONLINE_MAX_PLAYERS = { text = "MAX. SPIELER", human = true }
+OAG_ONLINE_LAPS = { text = "RUNDEN", human = true }
 OAG_ONLINE_LAPS_OWN = { text = "STANDARD DES MODUS", human = false }
-OAG_ONLINE_BARREL_ROLLS = { text = "FASSROLLEN", human = false }
+OAG_ONLINE_BARREL_ROLLS = { text = "FASSROLLEN", human = true }
 OAG_ONLINE_PILOT_ASSIST = { text = "PILOTENASSISTENT ERLAUBT", human = false }
 OAG_ONLINE_ZONE_TARGET = { text = "ZONENZIEL", human = false }
-OAG_ONLINE_WEAPONS = { text = "WAFFEN", human = false }
-OAG_ONLINE_ON = { text = "AN", human = false }
-OAG_ONLINE_OFF = { text = "AUS", human = false }
+OAG_ONLINE_WEAPONS = { text = "WAFFEN", human = true }
+OAG_ONLINE_ON = { text = "AN", human = true }
+OAG_ONLINE_OFF = { text = "AUS", human = true }
 OAG_ONLINE_ZONE_NONE = { text = "KEINES", human = false }
 OAG_ONLINE_QUEUED = { text = "EIN ANDERES SPIEL LÄUFT: DU BIST NUMMER %d IN DER WARTESCHLANGE", human = false }
 OAG_ONLINE_COUNTDOWN = { text = "DAS RENNEN STARTET IN %d", human = false }
