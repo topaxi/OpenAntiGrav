@@ -28,7 +28,7 @@ model"; this answers it: it renders a procedural triangle-cell mesh, and the cam
 | `0x810733dc` | `Canvas3D_LoadShaders` | 75 | Looks up `Canvas3D_vp` / `Canvas3D_fp` (strings), uniforms `worldViewProj`, `canvasTex`, `canvasTex2`, `sampleOffsets`, `texCoord2offset`, `posOffset`, attributes `position`, `texCoord`, `texCoord2`, `offsetIndices`. |
 | `0x810744e4` | `Canvas3D_InitStatics` | 70 | One-time statics: cell spacing `DAT_81732ab4` = `0x3f000000` (0.5) and `DAT_81732ab8` = `0x3f5db3d7` (0.8660254 = sqrt(3)/2), texcoord steps `DAT_8173298c` = `0x3b000000`, `DAT_81732990` = `0x3c000000`, the sample-offset table `DAT_81732994..`, Canvas3D shader registration. |
 | `0x81073cb8` | `Canvas3D_BuildLatticeMesh` | 65 | Writes the mesh (below). Single call site (`FUN_81071300` at `0x81071406`). |
-| `0x8107086c` | `Canvas3D_BuildWorldViewProj` | 55 | Builds the canvas camera matrix (`param_1+0x5ec90`) from the item's camera fields `+0xb8/+0xbc/+0xc0`; the `0.5555556` (5/9) factor is the height/width ratio of the orthographic window. |
+| `0x8107086c` | `Canvas3D_BuildWorldViewProj` | 80 | Builds the canvas camera matrix (`param_1+0x5ec90`): view (flip `y`, translate by the pan and `-half-width`), a rotation from the Euler angles `+0xac..+0xb4`, then an orthographic window of half-width `+0xc0` and `5/9` of it vertically. Executed 2026-10-27, see "The camera is tilted" below. |
 | `0x81074280` | `Canvas3D_Draw` | 70 | Binds `Canvas3D_vp/fp`, both cell textures, uploads `worldViewProj` (`+0x5ec90`), `sampleOffsets`, `texCoord2offset` (`+0xd0`), `posOffset` (`+0xc4`), then `sceGxmDraw` (`SceGxm_BC059AFC`) with `DAT_81732828` indices. |
 
 `DAT_8151d3f4` is `g_pCanvas3DInstance` (confidence 70, data row below).
@@ -141,7 +141,7 @@ lattice is a 94 x 82 px region of one sheet.
 
 **Camera and offsets, read 2026-10-27** (item reset `FUN_81070c0c`, confidence 70): `posOffset` (item
 `+0xc4..+0xcc`) = (0, 0, 0), `texCoord2offset` (`+0xd0`, `+0xd4`) = (0, 0), camera fields
-`+0xb8` = 27.1976 (`0x41d94d21`), `+0xbc` = 0.39549 (`0x3eca81dc`), `+0xc0` = 8.0 (`0x41000000`), and
+`+0xb8` = 27.1627 (`0x41d94d21`; this page first wrote 27.1976, an arithmetic slip), `+0xbc` = 0.39549 (`0x3eca81dc`), `+0xc0` = 8.0 (`0x41000000`), and
 two floats at `+0x5ed18` = 5.0, `+0x5ed1c` = 17.0 (probably zoom limits, unread). The view is an
 orthographic window of half-width `+0xc0` (`0.5555556` of it vertically) around the pan, so the
 default shows 16 units across: **60 px per unit at 960 px, against the captures' 55.2** (side 55.2
@@ -186,7 +186,7 @@ Confidence 75 on the readings, 60 on what they say about the page's actual camer
 
 | Address | What | Conf |
 | --- | --- | --- |
-| `0x81070c0c` | The item reset: pan `+0xb8/+0xbc` = 27.1976 / 0.39549, half-width `+0xc0` = 8.0, limits `+0x5ed18/1c` = 5.0 / 17.0 (read earlier), then `Canvas3D_BuildWorldViewProj` and `FUN_8107369a`. | 75 |
+| `0x81070c0c` | The item reset: pan `+0xb8/+0xbc` = 27.1627 / 0.39552, half-width `+0xc0` = 8.0, limits `+0x5ed18/1c` = 5.0 / 17.0 (read earlier), then `Canvas3D_BuildWorldViewProj` and `FUN_8107369a`. | 75 |
 | `0x81072220` | Per-frame item update. The **pan writer**: a touch drag (`+0x5ed10/14` is the last touch) subtracts `delta * (+0x5e0a8/ac)` from `+0xb8` and adds it to `+0xbc`. No drag, no write. | 70 |
 | `0x810f285c`, `0x81101c34` | The **half-width writers**: a two-finger pinch adds `-(finger distance now - before) * 0.03` to `+0xc0` and clamps it to `[+0x5ed18, +0x5ed1c]` = 5.0 to 17.0. Both are the campaign event-card pages' touch code. | 75 |
 | `0x8107369a` | After every camera change: unprojects the screen centre and corner through the inverse of `+0x5ec90`, then sets **where the 90 x 32 mesh window sits**: `+0xc4/+0xc8` (`posOffset`) = `(col0 * 0.5, row0 * 0.866)`, `+0xd0/+0xd4` (`texCoord2offset`) = `(col0, row0)` cell texels, with `col0, row0` the window's first cell, centred on the camera (`- 22.5` and `- 13.86`, half the mesh's 45 x 16 units) and nudged so that `col0 + row0` is even. | 70 |
@@ -242,6 +242,84 @@ second cell texture's writers (painted cells, the campaign map's lattice), and *
 at `canvas+0x30`** (`FUN_8103da80` draws the canvas only when it is set; nothing in the camera sweep
 writes it, so the page set above is read off the captures, not off that bit).
 
+## The camera is tilted: the 10 % is read (2026-10-27, lane `lattice-scale`)
+
+**`FUN_812e4a04` (`0x812e4a04`) builds a rotation from three Euler angles; it is not a viewport
+(confidence 85).** It runs the three trig helpers (`0x813efb84`, `0x813efa04`, `0x813ef878`) on its
+`s0..s2` and multiplies the three single-axis matrices. `Canvas3D_BuildWorldViewProj` (`0x8107086c`)
+calls it with `s0 = +0xac + +0xd8`, `s1 = +0xb0 + +0xdc`, `s2 = +0xb4 + +0xe0`, and the item reset
+(`0x81070c0c`) stores `+0xac` = `0xbee66666` = **-0.45 rad** (25.8 degrees), `+0xb0` = `0xbdcccccd` =
+**-0.1 rad** (5.7 degrees), `+0xb4` = 0, `+0xd8..+0xe0` = 0. The page's earlier "straight down the `z`
+axis" reading was wrong: **the canvas camera is orthographic and tilted.**
+
+**The matrix, executed rather than traced (confidence 80).** Unicorn ran `0x8107086c` alone (patch
+`eboot.elf` PT_LOAD segments mapped, VFP on, item buffer filled with the reset values, `0x814e7e50`'s
+identity as the starting matrices; one CPU function, not a game emulator) and stopped at `0x81070c00`.
+Results, row-vector convention (`p' = p * M`):
+
+| Matrix | Rows |
+| --- | --- |
+| `+0x5ebd0` (view) | `diag(1, -1, 1)`, translation row `(-27.1627, -0.39552, -8.0)`: the pan, and `-half-width` as a `z` offset |
+| `+0x5ec10` (rotation) | `(0.995, 0, 0.0998)`, `(0.0434, 0.9004, -0.4328)`, `(-0.0899, 0.4350, 0.8960)` = `Ry(-0.1) * Rx(-0.45)` |
+| `+0x5ec50` (ortho) | `x` 0.125 (= 1/8), `y` 0.225 (= 1/(8 * 5/9)), `z` -0.002, near/far 0.1 / 1000 |
+| `+0x5ec90` (final) | `x' = 0.12438 x - 0.00543 y - 0.01124 z - 3.29062`; `y' = -0.2026 y + 0.09787 z - 0.86307` (`z = 0` plane: `x' * 480 = 59.7 x - 2.61 y + ...`, `y' * 272 = -55.1 y + ...`) |
+
+So the lattice's screen scale is **59.7 px per unit along `x` and 55.1 along `y`** (60 x `cos 0.1`, and
+61.2 x `cos 0.45`), a **row period of 0.866 x 55.1 = 47.72 px against the capture's 47.75**, and a
+**shear of 2.6 px per unit of `y`**. The capture agrees on every count: row spacing 47.75 px (rows
+128, 176, 224, 272, 319, ...), diagonal crossings 29.85 px apart on one row (period 59.7). With the
+executed matrix the lattice lines correlate with the capture at edge NCC 0.87 (game mode left box), 0.88
+(title left box) after a world-plane offset: the scale, the shear and the line angles are no longer
+open.
+
+**Still open, not fitted into any draw:**
+
+1. **A residual phase.** The lattice with the executed matrix lands in the capture only after a
+   world-plane offset of about `(0.40, 0.49)` (screen: 22.6 px right, 27 px up; the same on the title
+   and the game mode pair, so it is not a touch drag in one walk). The 3 px "centre phase" gap noted
+   above came from the wrong scale; this one is the real one. Candidates not yet separated: the
+   mesh's own placement (`posOffset` and the cell origin the builder applies, with the `col0 + row0`
+   parity nudge), the unread writers of the pan that run on the page load, and a lattice point that
+   the vertex program's `h = position.z + canvasTex.a` shifts. Confidence the lattice itself is right
+   (period, angles, shear): 85; the offset is a measurement, 70.
+2. **The ink.** Our atlas-sampled lines carry about 2.1 times the capture's ink (measured across the
+   horizontal line at row 272, columns 20..200: capture 253 -> 240/241 over two rows, simulated 251 ->
+   227/228 over three). A numpy render of the lattice (executed matrix, offset above, atlas levels
+   decoded from the file) scored **mean absolute grey difference against the capture** in the empty
+   boxes (plain white first):
+
+   | Box | white | lattice, ink as authored | lattice, ink x 0.5 |
+   | --- | --- | --- | --- |
+   | title (0, 20, 960 x 110) | 2.43 | 2.51 | 0.54 |
+   | title (0, 515, 960 x 29) | 1.68 | 1.76 | 0.52 |
+   | title (0, 140, 110 x 200) | 2.20 | 2.31 | 0.50 |
+   | game mode (0, 100, 215 x 440) | 2.25 | 2.37 | 0.53 |
+   | game mode (740, 100, 220 x 440) | 2.22 | 2.35 | 0.53 |
+
+   Fitting a single ink factor on the game mode box gives 0.48 at mip level 0 (mean difference 0.33),
+   0.52 at level 0.78 (0.51), 0.56 at level 1.5 (1.15): **the factor is about one half whichever
+   filter, and level 0 fits best**. It is `lattice = 0.5 * white + 0.5 * atlas`, which looks like a
+   translucent white layer over the canvas (a page background item or the draw's own blend), **not a
+   sampling filter**; no part of the shader read above halves the ink (the fragment program is
+   `t.rgb * (...)` with `t.a` under 7 %). The blend source is unread (confidence 40). The atlas
+   itself has ten mip levels (`canvasTexture.gxt`, 2048 x 2048, header byte `+0x38` = 10, the file size
+   matches the full chain), and the authored levels 1 to 3 carry per-line ink 76, 41, 30 against
+   level 0's 99 (atlas texels, across the base edge of the apex-up triangle; PVRTC noise included), so
+   filtering alone cannot make the 0.4 to 0.5 ratio either.
+
+**What this means for the draw.** The branch's tile draw is the wrong projection: it assumed an
+axis-aligned scale (60 x 61.2) and no shear. A draw from the executed matrix needs the lattice sheared
+(per row band, or a per-pixel inverse projection baked at load) and the two open items above. With
+both measured values fed in, the simulated draw beats white in all five boxes (0.5 against 1.7 to 2.4);
+without the ink factor it loses to white (2.3 to 2.6), which is why it stays held back: the offset and
+the 0.5 are measurements of the capture, not recovered laws.
+
+Confidences: `FUN_812e4a04` is a three-angle Euler rotation builder, 85; the tilt angles, 90 (stored
+constants, decoded); the matrix values, 80 (an executed function in isolation, the item fields set from
+the reset); the `Ry * Rx` order, 80 (the executed matrix); the screen scale and period, 85 (matches the
+capture on three counts); the residual offset, 70; the 0.5 ink factor, 60 as a number and 40 as
+"a translucent white layer".
+
 ## HD / Omega cross-check (CLAUDE.md)
 
 - **Omega: checked, applies, not wired. The GCN program is the open half.** `canvasTexture.gnf` ships in `data00.psarc` (4,194,560 bytes, `Data/fe/NewImages/`) and again in the patch's `data08.psarc` (5,597,440 bytes); its triangle region was not decoded. The PS4 `eboot.bin` (`/omega/eboot-ps4-omega-eu.bin`)
@@ -252,6 +330,10 @@ writes it, so the page set above is read off the captures, not off that bit).
   are the same item's CPU side and sprite, and the atlas the same sheet's PS4 `.gnf` sibling (unchecked).
   Not compared with a
   capture (shadPS4 race shots are untrusted per the lane notes; menu pairs were not taken).
+- **Omega camera: checked, applies (2026-10-27).** The reset pair `-0.45`, `-0.1` (`0xbee66666`,
+  `0xbdcccccd`) sits together at `0x018086ec` in `eboot.bin` (one hit for each pattern), next to the
+  `Canvas3D` strings' code, so the tilted camera is the same item's. The GCN draw and the matrix code
+  were not read.
 - **HD: checked, differs.** `/hdfury/EBOOT-ps3-hdfury-eu.elf` has no `Canvas3D` string; HD's
   front-end backdrop is not this mesh.
 
@@ -259,4 +341,5 @@ writes it, so the page set above is read off the captures, not off that bit).
 
 | Address | Name | Conf |
 | --- | --- | --- |
+| `0x812e4a04` | `Math_BuildEulerRotation` | 85 |
 | `0x8151d3f4` | `g_pCanvas3DInstance` | 70 |

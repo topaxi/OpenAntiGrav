@@ -227,6 +227,7 @@
 0x810733dc	function	Canvas3D_LoadShaders	75	canvas3d-lattice.md
 0x810744e4	function	Canvas3D_InitStatics	70	canvas3d-lattice.md
 0x81073cb8	function	Canvas3D_BuildLatticeMesh	65	canvas3d-lattice.md
-0x8107086c	function	Canvas3D_BuildWorldViewProj	55	canvas3d-lattice.md
+0x8107086c	function	Canvas3D_BuildWorldViewProj	80	canvas3d-lattice.md
+0x812e4a04	function	Math_BuildEulerRotation	85	canvas3d-lattice.md
 0x81074280	function	Canvas3D_Draw	70	canvas3d-lattice.md
 0x8151d3f4	data	g_pCanvas3DInstance	70	canvas3d-lattice.md
