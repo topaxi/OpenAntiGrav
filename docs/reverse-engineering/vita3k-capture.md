@@ -298,6 +298,54 @@ different offsets and little-endian; the role-word trick carries over.
 - **Metro Park's Time Trial never finishes loading** (56 %, three boots, with and without a private `HOME` and a dummy audio driver; the log's last line is a missing
   `TrackProfiles/park_Profile.xml` and nothing is opened after it). Events 1 and 2 of the campaign load in 20 to 30 s. Not investigated further.
 
+## RenderDoc: the passes of one frame (2026-10-27, lattice-final)
+
+What Vita3K draws, pass by pass, with every target's format, every blend state and every bound
+texture. It answered "what makes the 2048 lattice about half ink" in one capture
+([canvas3d-lattice.md](../ghidra/functions/vita-2048-eu-v104/canvas3d-lattice.md), "Wired").
+`renderdoc` 1.46 (`renderdoccmd`, `qrenderdoc`; Arch `renderdoc`), Vita3K on Vulkan.
+
+1. Bring the display up as above (`vita3k-drive.py ... display`, own `:9N`), then start Vita3K **through
+   renderdoccmd** instead of directly, with the private profile of the pair scripts:
+
+   ```sh
+   env -u WAYLAND_DISPLAY -u XDG_CONFIG_HOME DISPLAY=:98 SDL_VIDEODRIVER=x11 SDL_VIDEO_DRIVER=x11 \
+       VK_LOADER_LAYERS_DISABLE='*lsfg*' \
+       renderdoccmd capture -c <dir>/title -d <cache dir> vita3k -c <config.yml> -w -r PCSF00007
+   ```
+
+   The game window gets a "Capturing Vulkan. F12, PrtScn to capture" overlay (it lands in
+   `import -window` grabs, and the first lines of the picture; fine for passes, not for pixel
+   comparison against the pairs). The `lsfg` implicit layer printed loader errors in other runs; the
+   disable above keeps it out.
+2. Walk to the state (the intro movie swallows the first `Return`; at the settled title it is about
+   45 s after launch on a loaded machine), then trigger the capture **with a held key, not a tap**:
+   `xdotool windowfocus --sync $W; xdotool keydown F12; sleep 0.3; xdotool keyup F12`. The overlay says
+   `1 Captures saved` and the `.rdc` (about 48 MB) appears in the `-c` directory.
+3. `renderdoccmd convert -f x.rdc -o x.xml -c xml` lists the API calls (about 440 chunks and 11 draws
+   at the title, 770 KB) and is enough to count passes. For targets, blend, textures and shader
+   constants run `scripts/vita3k-rdc-passes.py` inside `qrenderdoc` (above). **The first start of
+   `qrenderdoc` in a fresh `HOME` opens an "Anonymous Analytics" dialog that blocks `--ui-python`**:
+   click the "Do not gather" radio and OK once (`xdotool mousemove 368 517 click 1`, then
+   `mousemove 800 556 click 1` at 1280 x 800); the script runs after that. `--python` runs before
+   the UI and has no `pyrenderdoc`; `--ui-python` does.
+4. A Vita3K frame is **several render passes**: a 960 x 544 `R16G16B16A16_FLOAT` scene target, a bloom
+   chain (480 x 272, 240 x 136), a composite into a 960 x 544 `R8G8B8A8_UNORM` target, the page's UI
+   over it with alpha blending, and the **scanout** pass into the `B8G8R8A8_UNORM` swapchain (one
+   4-vertex draw with push constants, Vita3K's own screen filter, no colour change: the captures'
+   grey is the composite's, not the scanout's). Guest textures reach the GPU as host `RGBA8`
+   (PVRTC-II is decoded on the CPU, with the whole mip chain) and BC2 for DXT.
+5. The game's own fragment programs keep their constants behind a physical-storage-buffer pointer
+   (`buffer_addresses` in the `renderFragInfo` block): RenderDoc's constant view shows the pointer,
+   not the values. A transfer law is therefore read by regression between the saved targets (scene,
+   bloom, composite output), as `canvas3d-lattice.md` does; a constant itself needs the guest
+   memory read (`vita3k-mem.py`).
+6. **`export-textures: true` in Vita3K's config wedged the boot** on the "Sony Computer
+   Entertainment presents" screen (GPU thread spinning, no `textures/export` directory appeared) twice
+   of two; a RenderDoc capture is the working way to get Vita3K's decoded copy of a texture.
+7. `Vita3K` ignores `SIGTERM` when wedged: `kill -9` by pid. A second launch while one is still
+   starting opens a second emulator on the same profile; check `pgrep -a vita3k` before relaunching.
+
 ## What a frame is, legally
 
 A screenshot of the running game is game content, so no frame is committed.

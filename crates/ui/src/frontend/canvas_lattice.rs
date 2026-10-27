@@ -26,9 +26,14 @@
 //!   `(-9.56032, 4.65163)`. It is the reset pan plus the title's
 //!   `FeShellTouchScroll` parent at `(-3000, -1500)` (the canvas pan follows
 //!   it to `78.76, -26.824`); the writer of that scroll is not pinned.
-//! - **Full ink as read, not as captured**: the atlas pixels go in unscaled.
-//!   The Vita3K capture shows the lines at about half that strength; no game
-//!   state explains it.
+//! - **Measured, the game's composite pass**: the canvas draws into a
+//!   16-bit float scene target and the game's front-end composite reads it
+//!   back through a square-root encode (`out = sqrt(scene)`, no exposure,
+//!   no bloom: the bloom target is black on these pages), then samples it at
+//!   a quarter pixel offset. Applied to an atlas line of 0.86 that is 0.93:
+//!   the "about half ink" of the captures. The law is fitted to a RenderDoc
+//!   capture of Vita3K at the title (rms 0.17 of 255); the uniform it comes
+//!   from is not read.
 
 use super::*;
 
@@ -47,6 +52,9 @@ const TILT: [f32; 2] = [-0.45, -0.1];
 /// Half-width of the orthographic window and the height ratio (`5/9`).
 const HALF_WIDTH: f32 = 8.0;
 const HEIGHT_RATIO: f32 = 0.555_555_6;
+/// The composite pass samples the scene at this offset from the pixel centre,
+/// in pixels, on both axes (a 2 x 2 kernel of 0.75 / 0.25 on the capture).
+const COMPOSITE_SAMPLE_OFFSET: f32 = 0.25;
 /// Translation row of the final matrix (`+0x5ec90`), live at the title.
 const TRANSLATION: [f32; 2] = [-9.560_32, 4.651_63];
 
@@ -132,17 +140,23 @@ fn plane_matrix() -> (f32, f32, f32) {
 
 /// The lattice plane point under the centre of screen pixel `(px, py)`.
 fn world_at(px: u32, py: u32) -> [f32; 2] {
+    let offset = COMPOSITE_SAMPLE_OFFSET;
     let (ax, bx, by) = plane_matrix();
     let half = [VIEWPORT[0] as f32 / 2.0, VIEWPORT[1] as f32 / 2.0];
-    let cx = (px as f32 + 0.5 - half[0]) / half[0];
-    let cy = (half[1] - (py as f32 + 0.5)) / half[1];
+    let cx = (px as f32 + 0.5 + offset - half[0]) / half[0];
+    let cy = (half[1] - (py as f32 + 0.5 + offset)) / half[1];
     let y = (cy - TRANSLATION[1]) / by;
     let x = (cx - TRANSLATION[0] - bx * y) / ax;
     [x, y]
 }
 
+/// The composite's square-root encode of one channel (0 to 255 in, out).
+fn composite_encode(channel: f32) -> u8 {
+    ((channel / 255.0).clamp(0.0, 1.0).sqrt() * 255.0).round() as u8
+}
+
 /// The lattice picture at the viewport size, RGBA, alpha opaque, rendered off
-/// the atlas's RGBA at mip 0.
+/// the atlas's RGBA at mip 0 and run through the game's composite encode.
 ///
 /// `None` when the atlas is too small to hold the two triangles.
 #[must_use]
@@ -155,7 +169,7 @@ pub fn bake(atlas: &[u8], width: u32, height: u32) -> Option<Vec<u8>> {
         for px in 0..VIEWPORT[0] {
             let rgb = atlas_at(world_at(px, py))
                 .map_or([255.0; 3], |at| bilinear(atlas, width, height, at));
-            out.extend(rgb.map(|c| c.round().clamp(0.0, 255.0) as u8));
+            out.extend(rgb.map(composite_encode));
             out.push(255);
         }
     }
