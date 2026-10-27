@@ -1,10 +1,10 @@
 ---
-status: ready-to-wire
+status: measure
 titles: [2048]
 updated: 2026-10-27
-summary: "2048 flat meshes: Vita +0x28 decl pointer resolves 100%; stride map reads wrong attribute on 75% of Empire Climb tris; wire it"
-size: M (35)
-difficulty: medium (35)
+summary: "2048 flat meshes: cause 1 wired (Vita reads its record's own declaration); cause 3 (bind_textures exits) and Omega Uv1 type-0 pair open"
+size: S (30)
+difficulty: easy (25)
 ---
 
 # 2048: some meshes draw with no texture
@@ -169,15 +169,13 @@ test `crates/rcs/tests/psp2_flat_census_ground_truth.rs`).
    (authored: Omega's bridge matches), tower 16%, sol 14%, park 13%, subway 10%.
 3. ~~Rank by area.~~ Done above. The bigger defect than the flat 13% is the wrong
    attribute on 75% of the triangles (lightmap UV, vertex colour or tangent as diffuse UV).
-4. ~~Measure the Vita pointer.~~ **It resolves on 276,239 of 276,239 Vita submeshes**
-   (base, DLC1/2, patch data1/2), stride agreeing on all; lightmap control group 0
-   off-diagonal. The 14.2% was a wrong measurement. **Ready to wire**: read the diffuse
-   set through the record's own declaration (`Declarations::of_record` already does for
-   `bars_blend`), with `own_diffuse_texcoord` given the Vita half type (8; it is
-   PS4-typed today). Open inside the wiring: 2,291 base submeshes carry a float-pair
-   (`2x9`) diffuse set that `unpack_texcoord` does not decode (decode it or refuse by
-   name); the "first non-lightmap two-component half" fallback is confidence 70.
-   Judge against an original Empire Climb frame.
+4. ~~Measure the Vita pointer and wire it.~~ **Done 2026-10-27 (`2048-vita-decl`).** The
+   reader takes the diffuse set from the record's own declaration; the stride map is
+   deleted; `2x9` float pairs are decoded; census and Empire Climb numbers are in
+   `docs/formats/2048-rcsmodel.md`, "After the wiring". On a normal Empire Climb race the
+   walls and road draw their textures. The confidence-70 fallback answers for 4,761 of
+   `track.rcsmodel`'s 4,957 submeshes (named `Uv1` is rare on the Vita); it is correct on the
+   rendered frame but has no second oracle.
 5. **Omega per-material census**: Omega's flat set is authored (its pointer is used
    already; `environments2048/bridge` 5,828 of 11,795 submeshes have no coordinate vs
    2048's 5,809 flat). 235 (`data00`) and 432 (`data04`) Omega submeshes have a diffuse-
@@ -185,6 +183,9 @@ test `crates/rcs/tests/psp2_flat_census_ground_truth.rs`).
 
 ## Next Steps
 
-1. Wire item 4 (lane `oag-wire`), reading `Uv1` and the fallback through the own
-   declaration for the Vita, scoped to the 2048 reader; check the Empire Climb frame.
-2. Then cause 3 (the four `bind_textures` exits, still not logged).
+1. Cause 3 (the four `bind_textures` exits, still not logged).
+2. Omega: 23 `data02` submeshes name a `Uv1` of PS4 type `0` (an `f32` pair) that the reader
+   still decodes as halves; decode it and re-pin Omega's renders (one line in
+   `Psp2` `submeshes`, `crates/rcs/src/rcsmodel/psp2.rs`).
+3. Re-render the 2048 compare-page pairs after merge (the lead does); the fix touches every
+   Vita circuit, not only Empire Climb.

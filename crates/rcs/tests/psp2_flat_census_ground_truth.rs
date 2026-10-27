@@ -65,15 +65,12 @@ struct Census {
     non_finite: Area,
     /// The record's own pointer reaches a declaration header of the record's stride.
     resolved: Area,
-    /// Of those, the declaration the reader used (the stride map's) puts `Uv1` elsewhere,
-    /// or lacks it, or the own declaration does.
+    /// Of those, the texcoords the reader returned differ from a fresh decode of the record's
+    /// own diffuse attribute (or the reader read one where the record names none).
+    /// Before 2026-10-27 the Vita reader looked the attribute up by stride and this was 56,948
+    /// of the base archive's 170,164 submeshes (Empire Climb `track.rcsmodel`: 3,897 landed on
+    /// the lightmap coordinate, a vertex colour, a tangent or no attribute).
     disagree: Area,
-    /// Of `disagree`, those where the reader's offset lands in the own declaration on the
-    /// lightmap coordinate, a vertex colour, a tangent or no attribute: wrong whichever
-    /// coordinate turns out to be the diffuse one / on another non-lightmap two-component
-    /// attribute (depends on the fallback choice).
-    disagree_not_a_coordinate: Area,
-    disagree_other_coordinate: Area,
     /// Resolved submeshes whose `+0x28` word is a relocation site of the CPU section's table.
     relocated: usize,
     /// Of those, the own declaration has no `Uv1` at all.
@@ -83,8 +80,15 @@ struct Census {
     /// Of the submeshes the reader draws flat (empty or all-zero), those the own pointer
     /// resolves and reads a non-flat coordinate from.
     flat_fixed: Area,
-    /// Resolved submeshes whose own diffuse attribute is a float pair, which no reader decodes.
+    /// Resolved submeshes whose own diffuse attribute is a float pair (`2x9`), decoded as two
+    /// `f32`s.
     own_float: Area,
+    /// Resolved submeshes whose diffuse attribute is found by the confidence-70 rule (no
+    /// `Uv1` named) rather than by name.
+    own_fallback: Area,
+    /// Resolved submeshes whose own diffuse attribute is of a type the reader does not decode
+    /// (it draws nothing for them).
+    own_undecoded: Area,
     /// Resolved submeshes whose material names a lightmap sampler / whose own declaration
     /// carries `lightmapUV`: both, neither, and the two off-diagonal cells.
     lm_both: usize,
@@ -113,10 +117,8 @@ impl Census {
         self.own_all_zero.plus(o.own_all_zero);
         self.flat_fixed.plus(o.flat_fixed);
         self.own_float.plus(o.own_float);
-        self.disagree_not_a_coordinate
-            .plus(o.disagree_not_a_coordinate);
-        self.disagree_other_coordinate
-            .plus(o.disagree_other_coordinate);
+        self.own_fallback.plus(o.own_fallback);
+        self.own_undecoded.plus(o.own_undecoded);
         self.relocated += o.relocated;
         self.lm_both += o.lm_both;
         self.lm_neither += o.lm_neither;
@@ -133,26 +135,6 @@ impl Census {
         }
     }
 }
-
-/// The diffuse attribute of a declaration known to be the submesh's own: `Uv1` where named,
-/// otherwise the first two-component attribute that is not the lightmap's. `half` is the
-/// container's two-half type nibble; a float pair (`2x9`) is returned as the second value of
-/// the pair so the census can name it as not decoded.
-fn own_diffuse(decl: &vertex_decl::VertexDecl, half: u8) -> Option<vertex_decl::Attribute> {
-    decl.diffuse_texcoord().copied().or_else(|| {
-        decl.attributes
-            .iter()
-            .find(|a| {
-                a.name_hash != vertex_decl::LIGHTMAP_HASH
-                    && a.components == 2
-                    && (a.gxm_type == half || a.gxm_type == FLOAT)
-            })
-            .copied()
-    })
-}
-
-/// The type nibble of an `f32` attribute (the position's `3x9`).
-const FLOAT: u8 = 9;
 
 fn census_of(blob: &[u8], ps4: bool) -> Census {
     let model = psp2::parse(blob).unwrap_or_else(|e| panic!("{e}"));
@@ -172,7 +154,6 @@ fn census_of(blob: &[u8], ps4: bool) -> Census {
         })
         .collect();
     let by_header = vertex_decl::find_by_header(cpu_bytes);
-    let by_stride = vertex_decl::find_by_stride(cpu_bytes);
     for s in &model.submeshes {
         let tris = s.triangle_count();
         out.all.add(tris);
@@ -231,10 +212,15 @@ fn census_of(blob: &[u8], ps4: bool) -> Census {
             })
         });
         let half = if ps4 { vertex_decl::PS4_HALF2 } else { 8 };
-        let own_attr = own_diffuse(own, half);
-        if own_attr.is_some_and(|a| a.gxm_type == FLOAT) {
+        let own_attr = own.own_diffuse_texcoord(half).copied();
+        if own_attr.is_some_and(|a| a.gxm_type == vertex_decl::FLOAT2) {
             out.own_float.add(tris);
-            continue;
+        }
+        if own.diffuse_texcoord_is_fallback(half) {
+            out.own_fallback.add(tris);
+        }
+        if own_attr.is_some_and(|a| a.gxm_type != half && a.gxm_type != vertex_decl::FLOAT2) {
+            out.own_undecoded.add(tris);
         }
         let own_off = own_attr.map(|a| a.offset);
         match (own_attr.is_some(), named_diffuse) {
@@ -242,33 +228,21 @@ fn census_of(blob: &[u8], ps4: bool) -> Census {
             (true, false) => out.own_uv_no_named_diffuse += 1,
             _ => {}
         }
-        let used_off = if ps4 {
-            own_off
+        let width = if !ps4 && own_attr.is_some_and(|a| a.gxm_type == vertex_decl::FLOAT2) {
+            8
         } else {
-            by_stride
-                .get(&s.stride)
-                .and_then(|d| d.diffuse_texcoord())
-                .map(|a| a.offset)
+            4
         };
-        if own_off != used_off {
-            out.disagree.add(tris);
-            let landed = used_off.and_then(|o| own.attributes.iter().find(|a| a.offset == o));
-            if landed
-                .is_some_and(|a| a.components == 2 && a.name_hash != vertex_decl::LIGHTMAP_HASH)
-            {
-                out.disagree_other_coordinate.add(tris);
-            } else if used_off.is_some() {
-                out.disagree_not_a_coordinate.add(tris);
+        let off = own_off.map(usize::from).filter(|&o| s.stride >= o + width);
+        let decoded = ps4
+            || own_attr.is_some_and(|a| a.gxm_type == half || a.gxm_type == vertex_decl::FLOAT2);
+        let Some(off) = off.filter(|_| decoded) else {
+            out.own_empty.add(tris);
+            if !s.texcoords.is_empty() {
+                out.disagree.add(tris);
             }
-        }
-        let Some(off) = own_off.map(usize::from) else {
-            out.own_empty.add(tris);
             continue;
         };
-        if s.stride < off + 4 {
-            out.own_empty.add(tris);
-            continue;
-        }
         // The vertex pointer sits one known gap after the index pointer; the first position
         // read through it must be the decoded one.
         let mut vertex_ptr = None;
@@ -302,9 +276,21 @@ fn census_of(blob: &[u8], ps4: bool) -> Census {
         };
         let mut all_zero = true;
         let mut finite_nonzero = false;
+        let mut differs = s.texcoords.len() != s.positions.len();
         for v in 0..s.positions.len() {
             let a = base + v * s.stride + off;
-            let uv = psp2::unpack_texcoord(blob[a..a + 4].try_into().unwrap());
+            let uv = if width == 8 {
+                let f = |k: usize| f32::from_le_bytes(blob[a + k..a + k + 4].try_into().unwrap());
+                [f(0), f(4)]
+            } else {
+                psp2::unpack_texcoord(blob[a..a + 4].try_into().unwrap())
+            };
+            let expect = if uv[0].is_finite() && uv[1].is_finite() {
+                uv
+            } else {
+                [0.0, 0.0]
+            };
+            differs |= s.texcoords.get(v) != Some(&expect);
             if uv[0].is_finite() && uv[1].is_finite() {
                 if !zero(&uv) {
                     all_zero = false;
@@ -313,6 +299,9 @@ fn census_of(blob: &[u8], ps4: bool) -> Census {
             } else {
                 // A non-finite value becomes the origin in the reader.
             }
+        }
+        if differs {
+            out.disagree.add(tris);
         }
         let own_flat = all_zero && !finite_nonzero;
         if own_flat {
@@ -358,7 +347,7 @@ fn sweep(rel: &str, ps4: bool) -> Option<BTreeMap<String, Census>> {
 
 fn line(c: &Census) -> String {
     format!(
-        "sub {:>6} tri {:>8} | empty {:>5}/{:>7} zero {:>5}/{:>7} partly {:>5}/{:>7} nonfin {:>5}/{:>7} | resolved {:>6} disagree {:>5}/{:>7} own_empty {:>5} own_zero {:>5}/{:>7} fixed {:>5}/{:>7} float {:>5}/{:>7} lm {}/{}/{}/{} nodiffuse_uv {}/{} unloc {}",
+        "sub {:>6} tri {:>8} | empty {:>5}/{:>7} zero {:>5}/{:>7} partly {:>5}/{:>7} nonfin {:>5}/{:>7} | resolved {:>6} disagree {:>5}/{:>7} own_empty {:>5} own_zero {:>5}/{:>7} fixed {:>5}/{:>7} float {:>5}/{:>7} lm {}/{}/{}/{} nodiffuse_uv {}/{} unloc {} fallback {}/{} undecoded {}/{}",
         c.all.submeshes,
         c.all.triangles,
         c.empty.submeshes,
@@ -386,6 +375,10 @@ fn line(c: &Census) -> String {
         c.own_empty_named_diffuse,
         c.own_uv_no_named_diffuse,
         c.unlocated,
+        c.own_fallback.submeshes,
+        c.own_fallback.triangles,
+        c.own_undecoded.submeshes,
+        c.own_undecoded.triangles,
     )
 }
 
@@ -515,18 +508,19 @@ fn empire_climb_is_pinned() {
     };
     assert_eq!(track.all, area(4_957, 470_840));
     assert_eq!(track.resolved, track.all);
-    assert_eq!(track.empty, area(685, 59_631));
-    assert_eq!(track.all_zero, area(78, 1_449));
-    assert_eq!(track.partly_zero, area(1_760, 209_561));
-    assert_eq!(track.non_finite, area(1_456, 184_902));
-    assert_eq!(track.disagree, area(4_477, 390_244));
-    // The rest of `disagree` are the empty ones: the reader found no `Uv1`, the record has one.
-    assert_eq!(track.disagree_not_a_coordinate, NOT_A_COORDINATE);
-    assert_eq!(track.disagree_other_coordinate, OTHER_COORDINATE);
+    // Before the reader took the record's own declaration (2026-10-27): empty 685/59,631,
+    // all-zero 78/1,449, partly-zero 1,760/209,561, non-finite 1,456/184,902, and 3,897
+    // submeshes (353,130 triangles) reading a lightmap, vertex-colour, tangent or no attribute.
+    assert_eq!(track.empty, area(22, 432));
+    assert_eq!(track.all_zero, area(0, 0));
+    assert_eq!(track.partly_zero, area(405, 37_903));
+    assert_eq!(track.non_finite, area(0, 0));
+    assert_eq!(track.disagree, area(0, 0));
     assert_eq!(track.own_empty.submeshes, 22);
     assert_eq!(track.own_float, area(139, 25_125));
-    assert_eq!(track.own_all_zero, area(0, 0));
-    assert_eq!(track.flat_fixed, area(658, 38_563));
+    // The confidence-70 rule (no `Uv1` named) answers for nearly all of them.
+    assert_eq!(track.own_fallback, area(4_761, 443_593));
+    assert_eq!(track.flat_fixed, area(0, 0));
     assert_eq!((track.lm_both, track.lm_neither), (2_206, 2_751));
 }
 
@@ -607,108 +601,99 @@ fn patched_circuits_are_pinned() {
     assert_eq!(got, PATCH_ROWS);
 }
 
-const NOT_A_COORDINATE: Area = Area {
-    submeshes: 3_897,
-    triangles: 353_130,
-};
-const OTHER_COORDINATE: Area = Area {
-    submeshes: 0,
-    triangles: 0,
-};
-
 const BASE_ROWS: &[Row] = &[
     (
         "environments/altima",
         (2979, 434182),
-        (319, 33258),
         (0, 0),
-        (120, 101577),
+        (0, 0),
+        (72, 8161),
     ),
     (
         "environments/arena",
         (3849, 399934),
-        (313, 32658),
-        (4, 858),
-        (157, 10341),
+        (2, 92),
+        (0, 0),
+        (139, 9255),
     ),
     (
         "environments/bridge",
         (5974, 600577),
-        (5220, 511281),
+        (20, 1132),
         (0, 0),
-        (96, 6488),
+        (192, 13828),
     ),
     (
         "environments/cathedral",
         (4995, 449440),
-        (320, 30417),
+        (33, 888),
         (0, 0),
-        (252, 43860),
+        (222, 17646),
     ),
     (
         "environments/mall",
         (7505, 506303),
-        (193, 15365),
+        (15, 256),
         (0, 0),
-        (435, 55027),
+        (354, 24243),
     ),
     (
         "environments/park",
         (5007, 381069),
-        (827, 48429),
+        (4, 77),
         (0, 0),
-        (243, 24331),
+        (242, 24268),
     ),
     (
         "environments/sol",
         (2846, 272600),
-        (597, 38476),
+        (27, 320),
         (0, 0),
-        (93, 44708),
+        (74, 5544),
     ),
     (
         "environments/square",
         (5886, 510592),
-        (212, 18427),
+        (13, 324),
         (0, 0),
-        (521, 21375),
+        (387, 19059),
     ),
     (
         "environments/subway",
         (7403, 663407),
-        (641, 63867),
-        (2, 32),
-        (629, 70607),
+        (8, 174),
+        (0, 0),
+        (533, 31554),
     ),
     (
         "environments/tower",
         (5126, 486724),
-        (853, 75035),
-        (78, 1449),
-        (1760, 209561),
+        (22, 432),
+        (0, 0),
+        (405, 37903),
     ),
 ];
 const PATCH_ROWS: &[Row] = &[
     (
         "environments/arena [zone]",
         (6797, 617816),
-        (303, 13594),
-        (2077, 252220),
-        (765, 39065),
+        (2841, 287036),
+        (0, 0),
+        (11, 1293),
     ),
     (
         "environments/bridge",
         (5753, 580679),
-        (5000, 492143),
+        (20, 1132),
         (0, 0),
-        (96, 6488),
+        (192, 13828),
     ),
     (
         "environments/park",
         (4829, 365249),
-        (650, 33089),
+        (4, 77),
         (0, 0),
-        (243, 24331),
+        (242, 24268),
     ),
 ];
 
@@ -734,34 +719,27 @@ const fn pin(
 vita!(
     vita_base,
     "vita/PCSF00007/base/PSP2/data.psarc",
-    pin(
-        953,
-        170_164,
-        (36_441, 5_002_875),
-        56_948,
-        (10_659, 1_186_570),
-        0
-    )
+    pin(953, 170_164, (46_569, 4_655_125), 0, (0, 0), 0)
 );
 vita!(
     vita_dlc1,
     "vita/PCSF00007/dlc1/PSP2/dlc1.psarc",
-    pin(20, 53_440, (1_067, 82_198), 4_103, (689, 43_075), 0)
+    pin(20, 53_440, (515, 44_926), 0, (0, 0), 0)
 );
 vita!(
     vita_dlc2,
     "vita/PCSF00007/dlc2/PSP2/dlc2.psarc",
-    pin(20, 23_932, (1_190, 946_457), 3_096, (470, 61_568), 0)
+    pin(20, 23_932, (845, 891_166), 0, (0, 0), 0)
 );
 vita!(
     vita_patch_data1,
     "vita/PCSF00007/patch-v104/PSP2/data1.psarc",
-    pin(7, 10_410, (2_978, 555_137), 6_090, (8, 270), 0)
+    pin(7, 10_410, (6_790, 709_683), 0, (0, 0), 0)
 );
 vita!(
     vita_patch_data2,
     "vita/PCSF00007/patch-v104/PSP2/data2.psarc",
-    pin(174, 18_293, (8_083, 843_060), 8_448, (5_688, 564_951), 0)
+    pin(174, 18_293, (2_897, 303_563), 0, (0, 0), 0)
 );
 
 macro_rules! omega {

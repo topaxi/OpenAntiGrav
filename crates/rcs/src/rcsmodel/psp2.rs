@@ -53,11 +53,11 @@
 //! The fourth byte is `0x00` on all 1,504 - genuine padding to a 4-byte
 //! attribute width, not a fourth field. See [`unpack_normal`].
 //!
-//! **The diffuse texture coordinate is two little-endian `f16`s**, at the
-//! offset [`vertex_decl::VertexDecl::diffuse_texcoord`] names -
-//! [`vertex_decl::find_by_stride`] finds every declaration a file carries by
-//! anchoring on the same `position` hash, keyed by stride, and a submesh
-//! looks its own already-measured stride up in that map. **Confidence 96**,
+//! **The diffuse texture coordinate is two little-endian `f16`s** (or, on 2,291
+//! base submeshes, two `f32`s declared `2x9`), at the offset
+//! [`vertex_decl::VertexDecl::own_diffuse_texcoord`] names in the **record's own**
+//! declaration ([`vertex_decl::find_by_header`], reached by the `u32` at
+//! `+0x28`). **Confidence 96** for the half decode,
 //! the same index-exact oracle that settled the normal (1,432 vertices, 9
 //! same-export submeshes across twelve HD-ported circuits): decoded as
 //! `f16`, mean squared distance to Wipeout HD's own diffuse UV at the same
@@ -412,10 +412,9 @@ pub struct SubMesh {
     /// [`vertex_decl::VertexDecl::diffuse_texcoord`]'s offset via
     /// [`unpack_texcoord`].
     ///
-    /// Empty when the file's declaration for this submesh's stride
-    /// ([`vertex_decl::find_by_stride`]) does not name a `Uv1` attribute -
-    /// a real, countable state (92.5% of the corpus's submeshes have one)
-    /// rather than an error, on the same terms as [`Self::normals`].
+    /// Empty when the record's own declaration names no diffuse coordinate this reader
+    /// decodes - a real, countable state rather than an error, on the same terms as
+    /// [`Self::normals`].
     pub texcoords: Vec<[f32; 2]>,
     /// Lightmap texture coordinates, one per vertex, from the submesh's own
     /// declaration's `lightmapUV` ([`vertex_decl::VertexDecl::lightmap_texcoord`]).
@@ -439,16 +438,11 @@ pub struct SubMesh {
     /// How many of [`Self::texcoords`] decoded to a non-finite value and were
     /// substituted with the origin.
     ///
-    /// **A real, measured minority (~21% of decoded vertices corpus-wide),
-    /// not zero.** [`vertex_decl::find_by_stride`] keys one declaration per
-    /// *stride*, and two chunks can share a stride while packing genuinely
-    /// different attributes into it - a chunk whose own layout disagrees
-    /// with the one this file picked for its stride decodes noise at the
-    /// `Uv1` offset. Substituting rather than propagating `NaN`/`Inf` keeps
-    /// this out of a GPU vertex buffer; counting it here rather than
-    /// silently zeroing it is what a caller's report shows instead of a
-    /// hidden regression on the normal, unrelated vertices sharing the same
-    /// buffer. See `docs/formats/2048-rcsmodel.md`.
+    /// Read through the record's own declaration this should be zero; it was ~21% of decoded
+    /// vertices when the coordinate was keyed by stride, which decoded noise from a chunk whose
+    /// layout differed. Substituting rather than propagating `NaN`/`Inf` keeps a bad value out
+    /// of a GPU vertex buffer, and counting it is what a caller's report shows. See
+    /// `docs/formats/2048-rcsmodel.md`.
     pub non_finite_texcoords: usize,
     /// `tangent`, one per vertex, decoded via [`unpack_tangent`] from the
     /// offset [`vertex_decl::VertexDecl::attribute`] gives for
@@ -675,8 +669,6 @@ pub fn parse(file: &[u8]) -> Result<Model> {
 fn submeshes(file: &[u8], cpu: Section, gpu: Section, ps4: bool) -> Result<(Vec<SubMesh>, usize)> {
     let cpu_bytes = &file[cpu.at..cpu.at + cpu.len];
     let declarations = Declarations {
-        by_stride: vertex_decl::find_by_stride(cpu_bytes),
-        // Only a PS4 record's pointer is exact - see `vertex_decl`.
         by_header: vertex_decl::find_by_header(cpu_bytes),
     };
     let mut sites: Vec<usize> = (0..gpu.entries)
@@ -806,38 +798,50 @@ fn one(
             normals.push(unpack_normal([file[at], file[at + 1], file[at + 2]]));
         }
     }
-    let own = ps4
-        .then(|| declarations.of_record(file, cpu, record, stride, true))
-        .flatten();
-    let by_stride = declarations.by_stride.get(&stride);
+    let own = declarations.of_record(file, cpu, record, stride, ps4);
+    let half_type = if ps4 {
+        vertex_decl::PS4_HALF2
+    } else {
+        vertex_decl::VITA_HALF2
+    };
     let mut texcoords = Vec::new();
     let mut non_finite_texcoords = 0usize;
-    // A record's own declaration where it names one, the stride's otherwise -
-    // so a Vita file, and a PS4 record whose pointer does not resolve, read
-    // exactly what they always did.
-    let uv1_offset = match own {
-        Some(decl) => decl.own_diffuse_texcoord(),
-        None => by_stride.and_then(|decl| decl.diffuse_texcoord()),
-    }
-    .map(|attr| usize::from(attr.offset));
-    if let Some(off) = uv1_offset
-        && stride >= off + 4
-    {
-        texcoords.reserve_exact(vertex_count);
-        for v in 0..vertex_count {
-            let at = vertex_at + v * stride + off;
-            let uv = unpack_texcoord([file[at], file[at + 1], file[at + 2], file[at + 3]]);
-            // A submesh whose stride is shared with a differently-laid-out
-            // declaration decodes noise, not a real coordinate - see
-            // `SubMesh::non_finite_texcoords`. Substituted with the origin
-            // rather than left as NaN/Inf, the same "absent, not poisoned"
-            // rule `normals` already follows: this value still reaches a GPU
-            // vertex buffer even on a model this build draws untextured.
-            if uv[0].is_finite() && uv[1].is_finite() {
-                texcoords.push(uv);
-            } else {
-                texcoords.push([0.0, 0.0]);
-                non_finite_texcoords += 1;
+    // The record's own declaration, on both containers. An attribute of a type this reader
+    // does not decode (neither a half pair nor an `f32` pair) draws nothing rather than noise.
+    let diffuse = own
+        .and_then(|decl| decl.own_diffuse_texcoord(half_type))
+        .filter(|attr| {
+            // A PS4 `Uv1` is read as a half pair whatever its type, as it always was: 23
+            // submeshes of `data02` declare it type `0` (an `f32` pair on that container),
+            // which this lane did not touch and Omega's pinned renders depend on.
+            ps4 || attr.gxm_type == half_type || attr.gxm_type == vertex_decl::FLOAT2
+        });
+    if let Some(attr) = diffuse {
+        let off = usize::from(attr.offset);
+        let width = if !ps4 && attr.gxm_type == vertex_decl::FLOAT2 {
+            8
+        } else {
+            4
+        };
+        if stride >= off + width {
+            texcoords.reserve_exact(vertex_count);
+            for v in 0..vertex_count {
+                let at = vertex_at + v * stride + off;
+                let uv = if width == 8 {
+                    [f32_at(file, at), f32_at(file, at + 4)]
+                } else {
+                    unpack_texcoord([file[at], file[at + 1], file[at + 2], file[at + 3]])
+                };
+                // A non-finite value is substituted with the origin rather than left as
+                // NaN/Inf, the same "absent, not poisoned" rule `normals` follows: this
+                // value still reaches a GPU vertex buffer. Counted in
+                // `SubMesh::non_finite_texcoords`.
+                if uv[0].is_finite() && uv[1].is_finite() {
+                    texcoords.push(uv);
+                } else {
+                    texcoords.push([0.0, 0.0]);
+                    non_finite_texcoords += 1;
+                }
             }
         }
     }
@@ -862,13 +866,7 @@ fn one(
         }
     }
     let mut bars_blend_texcoords = Vec::new();
-    let half_type = if ps4 {
-        vertex_decl::PS4_HALF2
-    } else {
-        VITA_HALF
-    };
-    if let Some(off) = declarations
-        .of_record(file, cpu, record, stride, ps4)
+    if let Some(off) = own
         .and_then(|decl| decl.bars_blend())
         .filter(|attr| attr.gxm_type == half_type)
         .map(|attr| usize::from(attr.offset))
@@ -890,7 +888,7 @@ fn one(
     let mut tangents = Vec::new();
     // The Vita's type is `5`; the PS4's is `0xe` (four signed bytes, `w` exactly +-127), and a
     // PS4 declaration is only sound through the record's own pointer.
-    let tangent_offset = if ps4 { own } else { own.or(by_stride) }.and_then(|decl| {
+    let tangent_offset = own.and_then(|decl| {
         let attr = decl.attribute(vertex_decl::TANGENT_HASH)?;
         let wanted = if ps4 { vertex_decl::PS4_SBYTE4_NORM } else { 5 };
         (attr.components == 4 && attr.gxm_type == wanted).then_some(usize::from(attr.offset))
@@ -939,23 +937,15 @@ fn one(
     })
 }
 
-/// The vertex declarations of one file, under the two lookups a submesh can
-/// use.
+/// The vertex declarations of one file.
 struct Declarations {
-    /// One per stride - the Vita's only lookup, and a PS4 record's fallback.
-    by_stride: std::collections::HashMap<usize, vertex_decl::VertexDecl>,
-    /// By the address of the header. Empty for a Vita file.
+    /// By the address of the header, which a record's own pointer holds.
     by_header: std::collections::HashMap<usize, vertex_decl::VertexDecl>,
 }
 
 impl Declarations {
-    /// The declaration a PS4 record points at, or `None` when the pointer does
-    /// not reach one whose stride is the record's own.
-    ///
-    /// The stride check is what keeps this honest: a record whose word at
-    /// [`vertex_decl::PS4_DECLARATION_POINTER`] is something else, on a file
-    /// that has not been measured, falls back to the stride's declaration
-    /// rather than reading a coordinate out of the wrong layout.
+    /// The declaration a record points at, or `None` when the pointer does not reach one whose
+    /// stride is the record's own (then nothing is read from it, never another layout's).
     fn of_record(
         &self,
         file: &[u8],
@@ -980,9 +970,6 @@ impl Declarations {
             .filter(|decl| decl.stride == stride)
     }
 }
-
-/// The type nibble of a Vita `f16` attribute (`Uv1`, `lightmapUV` and `barsUV_blendUV`).
-const VITA_HALF: u8 = 8;
 
 fn f32_at(file: &[u8], at: usize) -> f32 {
     f32::from_le_bytes(file[at..at + 4].try_into().expect("four bytes"))
