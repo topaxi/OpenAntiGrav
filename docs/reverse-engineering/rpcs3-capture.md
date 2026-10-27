@@ -898,6 +898,8 @@ ranges. `place --dump CHAIN:LEN` writes guest memory beside a shot; `place --hoo
         --oag-game <abs>/target/release/oag-game --out <dir> --pose=-839.8,-146.6,215.0 --countdown 35 \
         --dump 0x40000000:0x20000 --dump-attempts 12 --hook scripts/rpcs3_draw_hook.py
 
+**The 31-draw stall (2026-10-27, `hd-bloom-gate-read`).** `hd-draw-dump.py` walked an unseeded ring and stopped at 31 draws on every retry, on a restored state and on a cold boot alike; seeding it with `--dump 0x40000000:0x20000` (now the script's default, `RING_DUMP` changes it) gave a 560-draw frame with 391 fragment programs in 134 s (`HOOK_LIGHT=1 HOOK_NO_HEADS=1 HOOK_NEED_SCREEN=1`, `HOOK_TGT` limits the vertex stages). A fragment program's address is reused between draws (the HUD's `MOV H0, f[COL0]` sat at the resolve's address), so a patched constant is readable only for a program drawn once a frame, as the bloom gate, blurs and downsample are. A render target's bytes (`0x42240000` and its ladder neighbours) read as noise through the stub; the scene target `0x40cc0000` does not. Resize the RPCS3 window to 1280x720 (`xdotool windowsize`) at scale 100 to make a screenshot 1:1 with the swap buffer.
+
 `scripts/rpcs3_draw_hook.py` reads two more knobs (2026-10-21, `hd-hull-colour`). `HOOK_FP_LEN=0x800` dumps each fragment
 program to 2 KiB instead of 1.5 KiB: a hull's `diffuse_with_specular_from_alpha_n` block is `0x740` bytes of code behind a
 header, so the default cut it at instruction `0x60` and its last constants (the exponent at slot `0x58`, the reflectivity at
