@@ -17,6 +17,8 @@
 //! good the opponents are *before* the lights; an easy field that waits for you
 //! is rigged, and the player can feel it.
 
+use oag_core::math::FloatExt;
+
 use crate::pilot::Pilot;
 use crate::{Span, Tuning};
 
@@ -241,16 +243,13 @@ impl Difficulty {
         let lo = lo.tune(measured);
         let hi = hi.tune(measured);
         Tuning {
-            lateral_accel: lerp(lo.lateral_accel, hi.lateral_accel, t),
-            max_turn_rate: lerp(lo.max_turn_rate, hi.max_turn_rate, t),
-            mistake_rate: lerp(lo.mistake_rate, hi.mistake_rate, t),
-            reaction_ticks: lerp(
-                f32::from(lo.reaction_ticks),
-                f32::from(hi.reaction_ticks),
-                t,
-            )
-            .round() as u16,
-            pace_share: lerp(lo.pace_share, hi.pace_share, t),
+            lateral_accel: lo.lateral_accel.lerp_monotonic(hi.lateral_accel, t),
+            max_turn_rate: lo.max_turn_rate.lerp_monotonic(hi.max_turn_rate, t),
+            mistake_rate: lo.mistake_rate.lerp_monotonic(hi.mistake_rate, t),
+            reaction_ticks: f32::from(lo.reaction_ticks)
+                .lerp_monotonic(f32::from(hi.reaction_ticks), t)
+                .round() as u16,
+            pace_share: lo.pace_share.lerp_monotonic(hi.pace_share, t),
             ..*measured
         }
     }
@@ -296,10 +295,6 @@ impl Difficulty {
             ..*pilot
         }
     }
-}
-
-fn lerp(a: f32, b: f32, t: f32) -> f32 {
-    a + (b - a) * t
 }
 
 impl std::fmt::Display for Difficulty {
