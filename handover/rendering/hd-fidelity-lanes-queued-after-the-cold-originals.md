@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd]
 updated: 2026-10-27
-summary: "HD fidelity queue: bitangent sign wired 2026-10-27 (2048/Omega read open), Bomb, weapon taps, Amphiseum scene, scenery clock, exposure"
+summary: "HD fidelity queue: bitangent sign wired 2026-10-27 (Omega read, 2048 open), Bomb, weapon taps, Amphiseum scene, scenery clock, exposure"
 difficulty: medium (35)
 ---
 
@@ -157,7 +157,7 @@ section above or the doc page it names). At most one lane in `crates/mesh` at a 
    `--attempts 4 --delay 0.1` and take `drive.screenshot` before the dump. The bomb lands behind the chase camera:
    holding `triangle`, `r3` or `l3` on the virtual pad in a Time Trial does not turn the view (2026-10-26), so the shot
    needs another camera (a rival's bomb ahead of the player, or the player placed behind the dropped bomb).
-2. **`hd-tech-de-ra`** (opus, mesh). **2026-10-27 (`hd-bitangent-sign`): slot 384's wash is ~~open~~ wired** (bitangent sign per vertex program; hd-track-tone.md, "Wired"). **Still open from it**: the 2048 and Omega vertex-shader read of the tangent's `.w` (the usse reader classifies words only; `vita-usse.py` and Omega's `eboot.bin`), and `pad_normal`'s derived frame for a chunk without an authored tangent. **Done 2026-10-26 for the glow banner only**: the `glow` needle's +30 on Tech de
+2. **`hd-tech-de-ra`** (opus, mesh). **2026-10-27 (`hd-bitangent-sign`): slot 384's wash is ~~open~~ wired** (bitangent sign per vertex program; hd-track-tone.md, "Wired"). **Still open from it**: the 2048 vertex-shader read of the tangent's `.w` (the usse reader classifies words only; `vita-usse.py`); **Omega's is read** (2026-10-27, `gcn-operand-decoder`: raw `w`, stored ±1, so always signed; wiring in `omega-gcn-reads-ready-to-wire.md`), and `pad_normal`'s derived frame for a chunk without an authored tangent. **Done 2026-10-26 for the glow banner only**: the `glow` needle's +30 on Tech de
    Ra was `nr_twinblend` (slot 133, the banner behind the gantry), now drawn by its program (rcsmaterial.md,
    "`nr_twinblend`: two pictures, a scrolling wipe and bars"; mask bias +1.13). **2026-10-27 (`hd-tech-de-ra-2`)**: the
    missing-details census found `ds_booth_glass` (wired). **Measured, not wired (2026-10-27)**, each by area x error on the cold

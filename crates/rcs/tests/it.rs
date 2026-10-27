@@ -12,6 +12,7 @@
 mod rcsmodel_common;
 
 mod coverage_ground_truth;
+mod gcn_ground_truth;
 mod gxp_ground_truth;
 mod hd_bitangent_sign_ground_truth;
 mod hd_gantry_curve_ground_truth;

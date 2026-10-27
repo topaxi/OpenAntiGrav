@@ -685,6 +685,13 @@ Method: ours re-rendered from scratch copies of the cold pairs (all captured at 
 **Moa Therma's road** (box 560,620 800x460): ours has stronger grime than the original (coarse contrast 1.37, near-box luma 1.03). Bias 0 against -1.5 leaves coarse at 1.36 and moves only the fine band (1.06 -> 0.94), so it is not the LOD bias. It is content-level (normal or lightmap strength), the opposite sign of the dark lift above; not chased here. Not checked: Moa's vertex program kind (`2w - 1` or raw).
 
 **Omega/2048**: `fs_encode` runs only for a title that authors `HDR and Bloom` and does not run 2048's `wo_*` chain. Omega's EnvSettings carry a `Tonemap.*` block instead of HD's `HDR and Bloom.*` (`docs/formats/omega-status.md`), so Omega never reaches this pass and keeps its own tonemap end (its output curve is still unread: open). 2048 runs `wo_composite`, also untouched; not checkable (no HD-style resolve measured). Changed: HD only.
+**Omega's end curve: checked, differs** (2026-10-27,
+`gcn-operand-decoder`): the programs, decoded from both eboots, end on the cubic tone curve applied per channel in the MSAA
+resolve, unchanged by the 1.07 patch, and the GPU applies no sRGB-style encode after it; the display encode is the video
+out's ([tonemap.md](../ghidra/functions/ps4-omega-eu/tonemap.md), "Read with the decoder", and "The output encode"). So
+HD's sRGB encode law is HD's alone; `oag_post::omega_tonemap` already ends on the scanout encode. What the patch changes is
+the composite after the curve (a `ColorScale` and the tint's placement, same section), not wired. 2048 not checkable (no
+HD-style resolve measured).
 
 ## Anulpha's missing start-grid glow is the bloom chain's strength, not a material (2026-10-27, `hd-bloom-deficit`)
 
@@ -1720,9 +1727,32 @@ read live and wired (2026-10-27, `hd-hologram-board`):
   above is the check that the whole chain lands at the original's strength. Why that gain
   exists, and whether it is the grill's 1.5x, is not resolved here.
 
-**Omega and 2048:** Omega ships `dc_hologramwithstatic_1.rcsmaterial` (and `..2_1`) beside
-the same Amphiseum layout: **checked, applies in name, not wired** (a PS4 GCN program, unread).
-2048's DLC1 ships only `hologram.rcsmaterial` for Amphiseum and Modesto Heights: **checked,
+**Omega: checked, applies, not wired, minus the `/2`** (2026-10-27, `gcn-operand-decoder`, read with `oag_rcs::gcn`,
+[gcn.md](../formats/gcn.md)). Amphiseum's `track.final.rcsmodel` (`data02`) names the **plain**
+`dc_hologramwithstatic.rcsmaterial`; the `_1`/`_2` files beside it are the PS4 Pro compiles (gcn.md). The file ships in
+`data02` (base) and in the patch's `data05` and `data08`; the patch's two copies hold identical programs, and `data08`'s is
+the one this project loads (`oag_omega::EXTRA_CANDIDATES` searches the patch first, a chosen order, [omega-status.md](../formats/omega-status.md)).
+Its 8 pixel variants (77 instructions in the patch, Shdr `@0x33a4` of the `data08` copy; 69 in `data02`, `@0x32c4`) carry
+**the same colour and alpha arithmetic instruction for instruction**; the patch's 8 extra instructions only rewrite the
+`mrt2` export (a 2D screen-space vector rescaled by `0.25 / sqrt(max(len^2, 0.0625))`, not the colour). With the units
+named by the program's own reflection and the constants loaded `time`@dw0, `Speed`@1, `Alpha`@2, `Speed2`@3:
+
+```text
+A      = Texture1(u + time * Speed, v).rgb           image_sample after v_mad_f32 v2, s24, v0(=Speed), v5(=u)
+C      = TextureGradient(u, v + time * Speed2).rgb   v_mac_f32 v6(=v), s24, v7(=Speed2)  (data02: v_mad_f32 v7, s24, v9, v6)
+alpha  = AlphaMask(u, v).x * Alpha                   dmask:0x1 sample, v_mul_f32 v10, s26, v10
+colour = lerp(fogColour, A + C, fog)                 v_add_f32 x3, then v_mad/v_mac with s28..s30
+```
+
+The model's own material record carries `Speed = 1.0`, `Alpha = 0.73802`, `Speed2 = 4.5384` and the textures `advert_a`,
+`dc_scanlines`, `dc_gradient_horizontal` (`oag_rcs::rcsmodel::psp2` material params): **HD's `S`, `K`, `V` and units
+exactly** (Texture1 = HD unit 1, AlphaMask = unit 0, TextureGradient = unit 2). Which `T#` register is which unit is
+inferred from the resource table's order (slot 0 in user SGPRs, slots 1 and 2 at dwords 0 and 8 of the table, samplers
+1 and 2 at 0x10 and 0x14), confidence 75; the constants and the arithmetic are read, 85. **What differs: no `/2`.**
+HD's program halves the sum where Omega's exports `A + C` to an fp16 target; HD's halving is tied to its
+`output_scale` (above, "The `/2`"), so the port is HD's mode 7 with the halving dropped, not HD's program verbatim.
+The Pro `_1` compile (66 instructions) loads the same four constants and samples the same three units in the same
+order, in `v_mad_mix*` fp16 arithmetic; one scale it applies (`s14`) is not attributed. 2048's DLC1 ships only `hologram.rcsmaterial` for Amphiseum and Modesto Heights: **checked,
 differs** (no `dc_hologramwithstatic`). `hologram.rcsmaterial` itself (slots 604-624 on Amphiseum) adds nothing to the start frame's
 box (skipping it changes the frame by 0.04 mean grey) and its program stays unread.
 
@@ -1843,13 +1873,22 @@ block of every file read).
 **Omega and 2048 (CLAUDE.md check):** Omega ships the family in `data00` to `data02`
 ([rcsmaterial.md](../formats/rcsmaterial.md), "The light-bar family") and 2048 shares its asset lineage (CLAUDE.md,
 the 2048/Omega note; not re-listed here);
-both compile their shaders again (GNM and Vita GXP), so the RSX reading **does not transfer** and a per-compile
-split like this one may or may not exist there. **Checked, not answerable by the reader** (`hd-bitangent-sign`):
-`oag_rcs::gxp::usse` classifies instruction words only and reads no operands (`scripts/vita-usse.py` reads some), so
-neither the `2w - 1` scale nor a raw `w` can be told on a 2048 shader today, and Omega's GNM shaders have no reader. this
-wiring is HD's RSX vertex blocks only, so 2048 and Omega keep the raw `w`. Open: read the
-tangent's `.w` use in 2048's vertex GXP with `vita-usse.py`, and Omega's in `eboot.bin`/shadPS4; named in the HD
-fidelity thread.
+both compile their shaders again (GNM and Vita GXP), so the RSX reading **does not transfer**.
+
+**Omega: checked, differs** (2026-10-27, `gcn-operand-decoder`, [gcn.md](../formats/gcn.md)). **Every** vertex program
+that fetches a four-component `tangent`, on all nine archives, reads its `w` raw: the first instruction touching it is a
+`v_mul_f32` by `worldScaleInv` (plain compiles) or a `v_mad_mix*` (Pro compiles), and **none applies `2w - 1`**
+(`gcn_ground_truth`, the `tangent_w` count; e.g. 101,912 programs in `data05`). On Tech de Ra's track program
+(`Diffuse_Normal_Specular_Emmissive`, `data02`, Shdr `@0x9aa4`) the tangent lands in `v12..v15` and the bitangent is
+`cross(N, T) * (v15 * worldScaleInv)`. **The data carries the sign instead**: Omega's tangent is four signed bytes (type
+nibble `0xe`, the same as `normal`'s), and `w` is exactly -127 or +127 on every vertex of three track models measured
+(Tech de Ra 750,030 / 130,064; Modesto Heights 608,880 / 170,776; Sol 2 163,661 / 203,005; none 0). So on Omega the
+bitangent is always ±1, **on every circuit, Sol 2 and Vineta K included**, where HD's raw compiles drop it for `w = 0`.
+Confidence 85 (program read on every file, data on three circuits). **Not wired**: `oag_rcs::rcsmodel::psp2` accepts
+only the Vita's tangent type (`5`), so no PS4 tangent is read today and Omega's tangent-space normal maps draw without
+a frame; follow-up in the HD fidelity thread. **2048: not checkable by a reader** (`oag_rcs::gxp::usse` reads no
+operands); its track `w` reads mostly ±1 on Anulpha DLC but mixed (±64, ±1) on Altima through a confidence-76
+tangent reader, so nothing is concluded for 2048.
 
 ## HD's scenery clock is the global node clock, free-running through the START RACE wait (2026-10-27, `hd-scenery-clock`)
 
