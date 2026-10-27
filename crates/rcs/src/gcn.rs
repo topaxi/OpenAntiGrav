@@ -310,14 +310,16 @@ pub fn scan(file: &[u8]) -> Vec<(usize, Result<Program<'_>>)> {
 /// The header's usage records: from `+0x4c`, four bytes each, up to the first record of kind
 /// [`Usage::TAIL`] (the fixed pixel-input tail every program ends its header with) or the code.
 fn usage(file: &[u8], at: usize, code_at: usize) -> Vec<Usage> {
-    file.get(at + 0x4c..code_at)
-        .unwrap_or_default()
-        .chunks_exact(4)
-        .map(|b| Usage {
-            kind: b[0],
-            slot: b[1],
-            register: b[2],
-            flags: b[3],
+    let records = file.get(at + 0x4c..code_at).unwrap_or_default();
+    records
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|&[kind, slot, register, flags]| Usage {
+            kind,
+            slot,
+            register,
+            flags,
         })
         .take_while(|u| u.kind != Usage::TAIL)
         .collect()
