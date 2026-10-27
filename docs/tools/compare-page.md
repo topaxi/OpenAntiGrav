@@ -809,7 +809,7 @@ the page shows the same numbers per pair). The most visible difference is read o
 
 | Pair | Ours drawn from | Overlap | Most visible difference |
 | --- | --- | --- | --- |
-| HD Campaign Select | DATA06 `Campaign Selection` | 0.232 / 0.07 / 27.7 | the HD card is white and cyan where the original's is a muted grey-green; the original's gold-medal hexagon icon is missing and `CAMPAIGN MODES` is a larger plain heading |
+| HD Campaign Select | DATA06 `Campaign Selection` | 0.232 / 0.07 / 27.7 | (the HD card's dimmed grey-green is drawn since 2026-10-27, whole frame 28.2 to 9.4); the original's gold-medal hexagon icon is missing and `CAMPAIGN MODES` is a larger plain heading |
 | HD Campaign grid | `grid_00.xml` | 0.196 / 0.10 / 15.0 | the flyer card: the original tilts it with two large arrows and draws the previous and next grid arrows; `EVENT 01/08` is bold capitals there, ours small mixed case |
 | HD Campaign cell | `CellMode_Definition.xml` | 0.189 / 0.10 / 16.7 | closest pair; the selected hex has the white outline in the original, ours is flat grey; the original has a red particle haze right of the card |
 | HD Track Select (Vineta K) | `Track_Selection_Definition.xml` | 0.184 / 0.02 / 21.6 | no circuit photo, no length or distance values (`4.4KM`, `13.2KM` read `-`), the circuit model is smaller and turned differently, the original's red backdrop cloud is much fainter in ours |

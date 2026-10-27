@@ -38,8 +38,9 @@ Ranked by visible area on the 1920x1080 frame (read off the pair images, each pa
    the top hex where the original's fresh profile lands on the first unlocked craft.
 3. **HD Campaign Select, grid and Track Select/Ship Select backdrop** (27.7, 15.0, 21.6, 22.0 grey): the original's red
    particle cloud is much fainter in ours on Track Select, Ship Select and Campaign Select (the known backdrop lead of
-   `hds-front-end-differs-from-the-original-in-eight-ranked`); the HD card on Campaign Select is white and cyan against a muted grey-green, and the gold-medal icon
-   is missing.
+   `hds-front-end-differs-from-the-original-in-eight-ranked`); ~~the HD card on Campaign Select is white and cyan against a muted grey-green~~ (done 2026-10-27, `hd-campaign-card-dim`: whole 28.2 to 9.4; the unfocused card is
+   dimmed by the screen's `0xff505050`, picture factor fitted; Fury's unfocused look unverified, no original frame has HD selected; the dimming may also animate in the original, a ramp not found), and the gold-medal icon
+   is missing. What is left of that pair is the header/footer text sizes, the `GOLD MEDALS` block (~16 % together) and the card x-extent (ours 1107-1678, theirs 1100-1646).
 4. **HD layout offset** (every HD pair): ours' rules sit 27 px left of the original's centre and the page is 4.1 % taller
    (rules 863.5 px apart against 829.5), see the doc's layout paragraph. Omega's columns match exactly and ours is 1.6 %
    shorter. Replaces the earlier "0.904 at (+150, -8)" lead with a measured pair of numbers (confidence 75, one pair of

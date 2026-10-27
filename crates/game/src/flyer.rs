@@ -52,7 +52,7 @@ use oag_mesh::mesh_render::Anisotropy;
 use oag_ui::frontend::Draw;
 use oag_ui_screens::campaign::flyer::{self, FlyerWidget};
 
-use crate::preview::Preview;
+use crate::preview::{CardTint, Preview};
 use crate::render::Renderer;
 
 mod clip;
@@ -198,6 +198,30 @@ pub const BASE_GAIN: f32 = 1.0;
 /// the factor is unread.
 pub const CAMPAIGN_GAIN: f32 = 1.0;
 
+/// The colour multiplier of the focused `Campaign Selection` card: none.
+pub const FOCUSED_TINT: CardTint = CardTint::NONE;
+
+/// What the screen's update (`0x00214238`) hands the unfocused flyer widget's
+/// colour setter (`0x001d33f0`): `0xff505050` against `0xffffffff` on the
+/// focused one, every frame, and the setter writes it as a material instance
+/// parameter. Read in Ghidra, confidence 85; that it multiplies the card's
+/// texels is 60 (the shader that consumes it is unread).
+pub const UNFOCUSED_COLOUR: u32 = 0xff50_5050;
+
+/// What the unfocused card is multiplied by on the frame. The picture's
+/// factor is **chosen, fitted, no confidence**: medians over the panel (texel
+/// white) and the teal stripe on RPCS3's `Campaign Selection` frame give one
+/// factor on both, `(0.596, 0.596, 0.541)`, so it is a plain multiply with no
+/// offset. It is about 1.9 times [`UNFOCUSED_COLOUR`]'s `80 / 255` and warm on
+/// blue; the extra is presumably the light of the card's lit material, which
+/// nothing has found (as on Fury's grid cards). The reflection's is
+/// [`UNFOCUSED_COLOUR`] itself: the frame's reflection under `HD` is about
+/// half of what the picture's factor leaves, which is `80 / 255`.
+pub const UNFOCUSED_TINT: CardTint = CardTint {
+    front: [0.596, 0.596, 0.541],
+    mirror: [80.0 / 255.0; 3],
+};
+
 /// One card to load: a flyer's model, the window of its camera's image it
 /// shows and how much wider than its camera's aspect it is drawn.
 #[derive(Debug, Clone, PartialEq)]
@@ -226,6 +250,9 @@ pub struct Show {
     pub widget: String,
     /// Where it stands.
     pub pose: Pose,
+    /// The colour multiplier the card is drawn with: [`FOCUSED_TINT`] or, for
+    /// the unselected `Campaign Selection` card, [`UNFOCUSED_TINT`].
+    pub tint: CardTint,
 }
 
 impl Show {
@@ -509,6 +536,7 @@ impl Flyers {
             side: Side::Front,
             widget: flyer::GRID_WIDGET.to_string(),
             pose: self.grid_pose,
+            tint: FOCUSED_TINT,
         }
     }
 
@@ -521,6 +549,7 @@ impl Flyers {
             side: Side::Back,
             widget: flyer::GRID_WIDGET.to_string(),
             pose: CELL_POSE,
+            tint: FOCUSED_TINT,
         }
     }
 
@@ -554,6 +583,11 @@ impl Flyers {
                 side: Side::Front,
                 widget: widget.to_string(),
                 pose,
+                tint: if campaign == selected {
+                    FOCUSED_TINT
+                } else {
+                    UNFOCUSED_TINT
+                },
             })
         })
         .collect()
@@ -632,6 +666,7 @@ impl Flyers {
         let Some(card) = cards.get_mut(&key) else {
             return;
         };
+        card.set_tint(queue, show.tint);
         card.draw_matrices(
             device,
             queue,

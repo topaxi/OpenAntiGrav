@@ -2325,6 +2325,33 @@ percent wider than the camera's aspect makes it, so the picture is stretched
 rather than shown wider. The window (`FURY_WINDOW`, 0.321) is Fury's: it
 matches `hd_campaign`'s own geometry at 0.319.
 
+**The unfocused card is dimmed, 2026-10-27 (`hd-campaign-card-dim`).** `CampaignSelection`'s update
+(`0x00214238`, in `/hdfury/EBOOT-ps3-hdfury-eu.elf`) reads `campaignList`'s value every frame and calls the
+widget colour setter (`0x001d33f0`) with `0xffffffff` on the card of the focused entry and `0xff505050` on the
+other (confidence 85). The setter stores the colour at `+0xd4` and as four floats at `+0xf0..+0xfc` (each byte
+times a global scale) and binds them as a material instance parameter, so the card's texels are multiplied by
+it (confidence 60: the consuming shader is unread). The same update moves the cards' pose by a linear approach
+(`0x002137c0`, six floats per card toward their target, speed `|delta|` times a global, settled when all are
+within `DAT_008afd50`), which is the swing between the two selections; the colour is written in one step
+there, with no ramp in this function (the maintainer observes the dimming animating too, so a ramp may sit in
+the material or the setter's callee `0x002c32c8`; not read). The authored `<Flyer>` widgets carry no colour
+attribute, so nothing is playable from the XML: this is code.
+On the frame the factor on the card's texels is **not** `80 / 255`: medians over the panel (white texel) and the
+teal stripe give one factor on both, `(0.596, 0.596, 0.541)`, a pure multiply with no offset (about 1.9 times
+`0x50` and warm on blue; presumably the lit material's light, as on Fury's grid cards). **Chosen, fitted, no
+score**: `UNFOCUSED_TINT.front`. The reflection under the card follows `0x50 / 255` itself (`UNFOCUSED_TINT.mirror`,
+about half the picture's factor, measured on the frame; Fury's focused reflection matches ours undimmed).
+`Show::tint` carries it, set by `selection_shows` from the selection, and `Preview::set_tint` rewrites the
+vertex colours when it changes, so it swaps with the selection. Only the `HD` card is fitted: every original frame
+has Fury selected, so Fury's unfocused look (the same factor is applied) is **unverified**.
+Pair `hd/menu-campaign-select` (mean absolute grey difference): whole frame 28.2 to 9.4; the `HD` card box
+`(1100,220,580,700)` 101.6 to 16.9; its reflection `(1100,900,580,180)` 53.0 to 9.6; Fury's box `(240,215,800,710)`
+9.4 to 8.6.
+**Omega: checked, applies, not wired.** Omega's executable (`/omega/eboot-ps4-omega-eu.bin`) carries the same
+`HDCampaignFlyerModel`/`FuryCampaignFlyerModel` strings plus `2048CampaignFlyerModel`, and `mov esi, 0xff505050`
+five times in each of `FUN_0151fb60` and `FUN_01520a10` (not decompiled to say which is the screen's update, so
+confidence 55 that it is the same dimming). `campaign-select` still refuses on Omega, so nothing is drawn there.
+
 `selection_shows` gives both cards to `flyer::render_list`, between the
 backdrop and the widgets, and `--menu-page campaign-select@1` selects `HD`.
 The selected campaign's `GOLD MEDALS` counter is the only one drawn (an RPCS3
