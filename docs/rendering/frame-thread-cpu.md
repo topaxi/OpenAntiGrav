@@ -461,3 +461,93 @@ did not shorten the wait measurably. Its own work is the larger lever:
 
 A fourth upstreamable wgpu-core change: pool indirect validation's staging buffer and source
 bind group across frames instead of making them per pass.
+
+## What `prepare_view` spends on the Deck (2026-10-27, `prepare-view-breakdown`)
+
+The per-thread profile above puts `Scene::prepare_view` at 3.4 ms of the frame thread's 8.2 ms on
+Anulpha. This section splits it.
+
+**Method.** Release build of `main` (`b7191aa76` code, `-C target-cpu=znver2 -C
+force-frame-pointers=yes`, Debian bookworm container, `perf-probe`), native on the Deck under the
+gaming-mode gamescope, maintainer's settings copy, `--race --autopilot --no-audio --frame-log --seed 1
+--no-intro --script 30:quit`, `perf record -g --call-graph fp -D 15000 -F 999`. Samples are cut to the
+frame thread by `tid`, then every sample whose stack holds `prepare_view` is charged to the function
+called directly from it (inlined frames count, so a name is a source function, not a symbol). Ms
+per frame take the Anulpha run's 8.2 ms of frame-thread CPU as 1,709 frames and use the same frame
+count for the other two runs, which hold 90 fps for the same window. Shares are exact; the ms are
+good to about 0.05. Each row is one run, no repeat. The first-order picture is large enough not to
+need one, but a row under 0.1 ms is noise.
+
+Frame-thread CPU and `prepare_view` in ms per frame:
+
+| Race | frame thread | `prepare_view` | share |
+| --- | --- | --- | --- |
+| HD Anulpha Pass | 8.20 | 3.45 | 42% |
+| HD default circuit | 5.43 | 1.68 | 31% |
+| Pulse default circuit | 4.25 | 1.54 | 36% |
+
+### Ranked table (Anulpha, ms per frame and share of `prepare_view`; the other two titles beside it)
+
+| # | What | Class | Anulpha | HD default | Pulse |
+| --- | --- | --- | --- | --- | --- |
+| 1 | `write_hull_uniforms`: the hull's environment probes blended on the CPU every frame (`probes::mix` 0.45, the `Vec<Arc<Decoded>>`/`Vec` allocations and drops 0.31, texel decode 0.15) | per-object build, allocation | 0.96 (28%) | 0.23 | 0.00 |
+| 2 | `render_shadow_passes`: sun occlusion 0.47, shadow map 0.17 (recording, `realloc`, bind group clones) | shadow-view setup | 0.64 (19%) | 0.23 | 0.00 |
+| 3 | `render` called direct (advert cards, per-drawable `write_uniforms`, `write_buffer`, node animation) | uniform writes | 0.36 (10%) | 0.32 | 0.20 |
+| 4 | Scenery animation sampling: `write_scenery_anims` 0.24, `write_node_anims` 0.10, `write_anims` 0.05 (`AnimTrack::sample` builds a `Vec` of 4x4 matrices) | per-object matrices, allocation | 0.39 (11%) | 0.44 | 0.30 |
+| 5 | `extend_hd_trail_vertices` (HD trail ribbon geometry, `GpuVertex` copies) | vertex building | 0.23 (7%) | 0.04 | 0.01 |
+| 6 | `upload_particles` 0.19 and `upload_ribbons` 0.19 (magstrip wake `Tube::nearest` 0.08) | vertex building, upload | 0.38 (11%) | 0.11 | 0.04 |
+| 7 | `write_zone_vis` | uniform writes | 0.13 (4%) | 0.07 | 0.12 |
+| 8 | `write_absorb_overlays` (Pulse shine: `write_view` `refresh` 0.31, environment texcoords 0.08) | per-object build | 0.00 | 0.00 | 0.57 |
+| 9 | `upload_shadow_geometry` | upload | 0.01 | 0.01 | 0.11 |
+| 10 | Everything else (airbrake deflect, bomb blasts, scene blocks, `Draw` `with_capacity` 0.04) | other | about 0.22 | about 0.16 | about 0.12 |
+
+**Classes that cost almost nothing here:**
+
+- **CPU culling.** `select_lod` is 0.008 ms. The PVS visible-set build is 0.018 ms (Pulse) and
+  below the noise on HD. The frustum is built once.
+- **Sorting.** There is no sort in the frame thread's profile of `prepare_view`; no stack reaches
+  0.005 ms.
+- **Between-ticks blending.** `MotionState::advance` is 0.005 to 0.011 ms. The between-ticks
+  work is in the other rows, not a row of its own.
+
+**Anulpha specific.** Rows 1 and 2 are Anulpha's extra 1.8 ms: the circuit ships baked environment
+probes, so every hull blends two images per frame (the HD default circuit may ship none; not checked),. HD's default
+circuit pays 0.23 ms for the hull uniforms and Pulse none. Row 4 is on every title and is the
+largest on HD default.
+
+**What the stack walk cannot say.** With frame pointers, the walk drops some inlined frames, so the
+split inside a row (`mix` against the `Vec` drops) is good to a few hundredths of a millisecond. It
+sees no GPU time and no wait.
+
+### Verdict for the next drive
+
+**GPU compute culling is not the lane that moves the frame thread.** Culling, LOD selection and
+sorting are under 0.05 ms of the 3.45 in `prepare_view` on all three races. Compute culling would
+remove draws from the render pass's `finish`, which the split finish already runs on the worker, and
+the `gpu-driven-submit` lane showed that a worker saving does not shorten the Deck's frame. The
+frame thread's `prepare_view` is made of uniform builds, uploads and a few CPU image blends, none of
+which a culling pass touches. A CPU-side fix is cheaper and bigger. Top two:
+
+1. **Blend the hull's environment probes on the GPU, or not every frame** (Anulpha-like circuits
+   only, about 0.9 ms, 11% of the frame thread's 8.2). `EnvProbes::write` already skips an unchanged
+   tap set, but the weights move with the craft, so it remixes each craft's two images
+   every frame (decode, `Vec<u8>` accumulate, allocate, `write_texture`). Either upload the
+   two or three source probes once and blend in the hull shader (the weights are a 3 to 4 element
+   uniform), or keep the CPU blend and re-run it only when the weights move by more than a step.
+   The first keeps the picture exact. It is outside `oag-core`'s determinism rules (render side).
+2. **Cache the scenery animation matrices per tick and stop allocating in `AnimTrack::sample`**
+   (every title, 0.30 to 0.44 ms, saves roughly 0.1 to 0.2 ms, 1 to 2% of the frame thread). The
+   clock is the race tick, so at 90 Hz over 60 Hz ticks a third of the frames resample an identical
+   value, and the matrices are built into a fresh `Vec` each call.
+
+Next after those: the sun-occlusion pass recording (0.47 ms on Anulpha, bind group clones and
+`realloc`), and Pulse's `write_view` `refresh` (0.31 ms). Not measured here: whether the mixed
+probe images can be cached across the grid cell, the sun occlusion's own work per craft, and a
+repeat run for noise.
+
+### Commands
+
+Per race: `PREFIX="perf record -g --call-graph fp -D 15000 -F 999 -o X.data" deck_run.sh TAG bin/oag
+30 --no-intro [--track 'Data\Environments\15_Anulpha_Pass\track.vex' --mode single_race]` (`SRC=pulse-psp-eu.chd`
+for Pulse), under `flock -o ~/.cache/oag/deck.lock`, then `perf script -F tid,ip,sym`, one frame-thread
+`tid`, and a count of samples per direct callee of `prepare_view`. Files on the Deck were removed.
