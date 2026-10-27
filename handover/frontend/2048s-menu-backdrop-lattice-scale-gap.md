@@ -1,5 +1,5 @@
 ---
-status: re-first
+status: parked
 titles: [2048]
 updated: 2026-10-27
 summary: "2048 lattice wired on title and game mode; open: other pages' blurred backdrop, composite constants, scroll writer"
@@ -16,6 +16,11 @@ captures: edge shift (0, 0), edge NCC 0.95, the five empty boxes at 0.32 to 0.40
 RenderDoc method: [`vita3k-capture.md`](../../docs/reverse-engineering/vita3k-capture.md).
 
 ## Open
+
+**Parked 2026-10-27 by the maintainer** ("park 2048 home"): the other pages' backdrop, the composite constants
+and the scroll writer all wait until the maintainer reopens the thread. Also seen in the home pair and parked with
+it: our home page lacks the house icon in the top-left square and the underline under `HOME`.
+
 
 - **The other pages' blurred backdrop** (home, team, extras, options, profile). The frame has a bloom chain
   (240 x 136 downsample and two blurs) whose output is black at the title; on those pages it may carry the
