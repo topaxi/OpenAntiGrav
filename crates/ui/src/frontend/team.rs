@@ -277,7 +277,7 @@ impl Frontend {
         let cell = (0..TEAM_COLUMNS.len())
             .flat_map(|column| (0..ROWS).map(move |row| (column, row)))
             .filter(|&(column, row)| contains(hit_rect(column, row), at))
-            .last();
+            .next_back();
         if let Some((column, row)) = cell {
             let (team, craft) = (team_of(column), ROW_CRAFT[row]);
             // The original ignores a tap on a locked cell.
