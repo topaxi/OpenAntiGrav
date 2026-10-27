@@ -1579,7 +1579,37 @@ original, and the Amphiseum's dome and the lines over the sky read closer. Pixel
 worse: 39,674 / 2,674 (Vineta K), 44,833 / 24,921 (Amphiseum), 17,323 / 5,187 (Sebenco); the Amphiseum's worse pixels were
 not traced beyond its top band, where the dome and the lines over it read closer to the original.
 
-||||||| 43802148e
+**Wired per material (2026-10-27, `hd-backface-cull`).** `Model::honour_render_state` (HD's render-state rule) sets
+`DrawCall::culled` from material state bit 4 (`render_state::STATE_CULL`, `0x10`) in all three draw lists, after the
+coverage trees moved to the cutouts. `mesh_render::build` then builds a culling twin (`Built::culled`: opaque, depth
+prepass, shaded half, default and per-reference cutout pipelines with `cull_mode: Some(Face::Back)`) for a model that
+records material state and has a culled opaque or cutout draw, and `Drawable` switches between the two only when a draw's
+flag changes. The blended pipelines already keyed on `culled`. A bit-4-clear material stays two-sided. Pulse's `.vex`
+models carry `culled` and no material state and keep the model-wide `cull_back`, so nothing moved there. The prepass's depth
+half culls exactly as the shaded half (a slab drawn two-sided into depth would hold back the culled shading behind it).
+Shadow passes are unchanged: `shadow/map.rs` and `self_shadow.rs` carry their own measured cull choices. The
+`reversed_indices` buffer reverses triangle order, not the vertices of a triangle, so winding survives.
+
+Re-rendered on copies of the twelve HD race pairs, `before` (bit 4 not honoured) against `after`, same binary, same flags
+(rmse against `theirs.png` / mean grey of ours):
+
+| Pair | rmse before -> after | mean grey before -> after |
+| --- | --- | --- |
+| `vineta-k` | 0.062 -> 0.059 | 7.34 -> 7.12 |
+| `the-amphiseum` | 0.067 -> 0.062 | 8.76 -> 8.13 |
+| `talons` | 0.054 -> 0.048 | 5.76 -> 5.31 |
+| `moa-therma` | 0.069 -> 0.066 | 8.74 -> 8.43 |
+| `modesto-heights` | 0.070 -> 0.068 | 8.05 -> 7.84 |
+| `sebenco-climb` | 0.064 -> 0.062 | 7.42 -> 7.33 |
+| `sol-2` | 0.067 -> 0.066 | 7.12 -> 7.06 |
+| `tech-de-ra`, `metropia`, `ubermall` | 0.059 -> 0.058, 0.069 -> 0.068, 0.080 -> 0.079 | 6.97 -> 6.87, 8.48 -> 8.36, 9.88 -> 9.86 |
+| `anulpha-pass`, `chenghou-project` | unchanged (0.072, 0.042) | 10.21 -> 10.15, 6.55 -> 6.51 |
+
+No pair got worse; the largest mean-grey move is 0.63 (the Amphiseum), the rest 0.45 or less. Read at the pair's size, Vineta K's
+wall top shows the warm pool where the original has it. Ground truth:
+`hd_light_bar_ground_truth::vineta_ks_wall_top_slab_has_no_front_facing_triangle_from_the_start_grid` (chunk 1556 is 0
+counter-clockwise and 40 clockwise from the capture's eye, with chunks 1557 (56/0), 1554 and 1555 (12/12) as controls so a
+flipped sign convention fails). The 18 frustum-only exceptions and the `EdgeGeom` short counts stay open.
 
 
 ## The Amphiseum hologram board

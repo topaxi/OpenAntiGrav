@@ -298,6 +298,7 @@ impl Session {
             emissive_buffer: _,
             stamp_pipeline: _,
             prepass: _,
+            culled: _,
         } = mesh_render::build(
             &device,
             &queue,

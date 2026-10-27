@@ -169,6 +169,7 @@ impl Drawable {
             pipeline: self.pipeline.clone(),
             alpha_test_pipeline: self.alpha_test_pipeline.clone(),
             cutout_pipelines: self.cutout_pipelines.clone(),
+            culled: self.culled.clone(),
             blend_pipeline: self.blend_pipeline.clone(),
             additive_pipeline: self.additive_pipeline.clone(),
             unblended_pipeline: self.unblended_pipeline.clone(),
