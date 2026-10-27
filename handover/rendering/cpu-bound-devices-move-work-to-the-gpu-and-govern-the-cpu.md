@@ -48,6 +48,13 @@ resolution controller (`crates/present/src/drs`), which does nothing while the G
    - So per-draw `finish` cuts in the race and shadow passes do not move the Deck. The frame
      thread's own work does: encoder drops in `maintain` (0.8 ms), `prepare_view` (3.4 ms), the
      post chain and the `write_buffer` calls.
+   - **Parked, not dropped** (maintainer): the working implementation (feature check, `OAG_INDIRECT`
+     switch, tests, byte-identical proof) is on the pushed branch `park/indirect-depth-prepass`,
+     rebased on main at the time. Later steps (compute culling, colour passes) start from it.
+   - **Re-measure on Omega** (maintainer's idea, unmeasured): Omega's PS4 scenes may carry many more
+     draws per pass than HD's, where the per-draw saving could outweigh the indirect validation's
+     fixed per-pass cost again. First count draws per pass on an Omega race (the perf overlay's
+     DRAWS line), then A/B the parked branch there, on the workstation and the Deck where Omega runs.
 2. **Render bundles for static scenery and the circuit** (sonnet). Record once, replay per frame
    (`wgpu-levers-for-per-view-cpu-none-used-yet.md` in this directory). Measure against lane 1: if lane 1
    already removes the cost, close this one with its number.
