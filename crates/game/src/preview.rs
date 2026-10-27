@@ -573,6 +573,10 @@ pub struct Preview {
     /// The circuit model's material, which colours its vertices afresh for
     /// every [`Self::draw_matrices`] - see [`track_model::Ramp`].
     ramp: Option<track_model::Ramp>,
+    /// The model's own vertex colours (RGB) and the multiplier now written
+    /// over them - see [`Self::set_tint`].
+    base_colours: Vec<[f32; 3]>,
+    tint: CardTint,
 }
 
 impl std::fmt::Debug for Preview {
@@ -582,6 +586,24 @@ impl std::fmt::Debug for Preview {
             .field("triangles", &(self.model.indices.len() / 3))
             .finish()
     }
+}
+
+/// A colour multiplier for a [`Preview`]: one for the picture, one for its
+/// reflection.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CardTint {
+    /// The picture's.
+    pub front: [f32; 3],
+    /// The reflection's.
+    pub mirror: [f32; 3],
+}
+
+impl CardTint {
+    /// The model's own colours.
+    pub const NONE: Self = Self {
+        front: [1.0; 3],
+        mirror: [1.0; 3],
+    };
 }
 
 /// Where a grid-space rectangle lands on the target, in pixels: the same
@@ -653,6 +675,11 @@ impl Preview {
                 resource: uniform_buffer.as_entire_binding(),
             }],
         });
+        let base_colours = model
+            .vertices
+            .iter()
+            .map(|vertex| [vertex.colour[0], vertex.colour[1], vertex.colour[2]])
+            .collect();
         Ok(Self {
             model,
             built,
@@ -660,7 +687,36 @@ impl Preview {
             bind_group,
             depth: None,
             ramp: None,
+            base_colours,
+            tint: CardTint::NONE,
         })
+    }
+
+    /// Multiplies every vertex's colour (alpha untouched) by `tint` over the
+    /// model's own, rewriting the vertex buffer only when `tint` changed. A
+    /// no-op on a ramped model, which colours its vertices afresh every draw.
+    pub fn set_tint(&mut self, queue: &wgpu::Queue, tint: CardTint) {
+        if self.ramp.is_some() || self.tint == tint {
+            return;
+        }
+        self.tint = tint;
+        for (vertex, base) in self.model.vertices.iter_mut().zip(&self.base_colours) {
+            // A vertex with alpha under one is a reflection's (`clip::reflect`
+            // fades it from the card's edge); the picture's own are opaque.
+            let by = if vertex.colour[3] < 1.0 {
+                tint.mirror
+            } else {
+                tint.front
+            };
+            for channel in 0..3 {
+                vertex.colour[channel] = base[channel] * by[channel];
+            }
+        }
+        queue.write_buffer(
+            &self.built.vertex_buffer,
+            0,
+            bytemuck::cast_slice(&self.model.vertices),
+        );
     }
 
     /// Gives this preview the circuit model's own material, taken out of the

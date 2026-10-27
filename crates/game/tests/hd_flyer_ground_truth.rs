@@ -231,6 +231,40 @@ fn campaign_selections_cards_land_where_rpcs3_shows_them() {
     near(hd[0], 879.0, "HD's left edge, selected");
 }
 
+/// The unfocused `Campaign Selection` card is dimmed and the focused one is
+/// not, and the dimming follows the selection (`0x00214238` sets `0xffffffff`
+/// on the entry `campaignList` holds and `0xff505050` on the other).
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn campaign_selections_unfocused_card_is_dimmed() {
+    let Some(image) = image() else { return };
+    let mut archives = archives(&image);
+    let xml = screen_xml(&mut archives);
+    let screens = oag_ui::screen::Screens::from_xml(&xml);
+    let widgets = flyer::read(&xml, &screens);
+    let flyers = oag_game::flyer::Flyers::load(&mut archives, widgets, &[]);
+    use oag_game::flyer::{FOCUSED_TINT, UNFOCUSED_TINT};
+    use oag_ui_screens::campaign::selection::Campaign;
+    for (selected, fury, hd) in [
+        (Campaign::Fury, FOCUSED_TINT, UNFOCUSED_TINT),
+        (Campaign::Hd, UNFOCUSED_TINT, FOCUSED_TINT),
+    ] {
+        let tints: Vec<_> = flyers
+            .selection_shows(selected)
+            .into_iter()
+            .map(|show| (show.flyer, show.tint))
+            .collect();
+        assert_eq!(
+            tints,
+            [
+                (flyer::FURY_CAMPAIGN_FLYER.to_string(), fury),
+                (flyer::HD_CAMPAIGN_FLYER.to_string(), hd)
+            ],
+            "{selected:?}"
+        );
+    }
+}
+
 /// The placeholder is the card: 102.4 by 66.6 with a chamfered corner and
 /// notches (the front face covers 6,783.6 square units of the rectangle's
 /// 6,819.8), and its reflection fades from alpha `0x4c` over half the card's

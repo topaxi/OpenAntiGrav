@@ -286,6 +286,7 @@ impl MenuStage {
         )]
         if let Some(campaign) = &mut self.campaign {
             campaign.tick_ticker(dt as f32);
+            campaign.tick_cards(dt as f32);
         }
         // The selected row's own pulse, measured on Pulse - see
         // `oag_title::MenuSkin::selected_pulse_period_secs`. Free-running like
