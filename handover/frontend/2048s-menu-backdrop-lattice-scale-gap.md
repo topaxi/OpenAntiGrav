@@ -2,7 +2,7 @@
 status: re-first
 titles: [2048]
 updated: 2026-10-27
-summary: "2048 lattice: phase (0.40, 0.50) and half ink ruled out on every static path; needs a live readout of the canvas fields; draw held back"
+summary: "2048 lattice: live read explains the phase (scroll at (-3000, -1500)); the half ink is not game state; draw held back"
 ---
 
 # 2048's menu backdrop lattice: draw held back on a phase offset and an ink factor
@@ -46,12 +46,22 @@ attributes, taps, cell height, viewports, the draw's opaque fragment variant, pa
 `canvas3d-lattice.md`, "Phase and grey: every static path reads zero". A draw from the read state scores
 6.1 against white's 1.7 to 2.4, so nothing was wired.
 
+2026-10-27, lane `lattice-live-read` (live read at the title in Vita3K, `canvas3d-lattice.md`, "The live read at the
+title"): **the phase is the game's state.** The parent `FeShellTouchScroll` sits at (-3000, -1500) (it is not
+pinned at (0, 0): that row is struck), the canvas pan follows it to (78.76, -26.824), and the live matrix
+reduces to a lattice offset of (0.4027, 0.4933), the fitted (0.40, 0.50). Two boots and an empty-save boot read
+the same. **The half ink is not game state**: the atlas in guest memory is byte-identical to the disc file,
+`canvasTex` and `canvasTex2` are default. The live matrix with authored ink still loses to white (2.4 to 2.6
+against 1.7 to 2.4), so the draw stays held back: it needs the ink.
+
 ## Next Steps
 
-1. Live readout at the title in Vita3K (an emulator lane, `vita3k-mem.py`): canvas `*(0x8151d3f4)`
-   `+0xac..+0xe0`, `+0x5ec90`, parent TouchScroll `+0xa0/+0xa4`, one `canvasTex` texel `*(0x8151d3ec)`.
-   Equal to the reset: the offset and half ink are Vita3K's draw, wire the reset camera with authored
-   ink and re-take the pair's judgement on a different basis (ask the maintainer). Different: watchpoint
-   the moved field. 1 to 2 hours.
-2. Then build the draw from the matrix (sheared bands or a baked inverse projection) and re-measure in
-   the five boxes.
+1. **The ink (half).** Not in memory. Candidates: Vita3K's host-side PVRTC-II decode or sampling of the
+   atlas (the descriptor's word 1 reads `0x82721600` against the file's `0x83000000`; decode the packing), or
+   a layer drawn after the canvas. Ask the maintainer how to compare, since the capture itself may carry it.
+2. **Who writes (-3000, -1500).** Candidates `FUN_810efc4a` (`0x810effcc`) and `FUN_810efff6` (`0x810f032a`), the campaign
+   map's centring of the first event. Pin the call (a breadcrumb patch in `0x811042ae`, storing LR where
+   `TouchScroll_Update` does not decay it), then derive the phase from the page's own node positions, not a
+   fitted offset.
+3. Then build the draw from the matrix with the live pan (sheared bands or a baked inverse projection) and
+   re-measure in the five boxes.
