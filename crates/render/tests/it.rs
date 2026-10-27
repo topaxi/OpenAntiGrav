@@ -94,6 +94,7 @@ mod ps2_texture_binding_ground_truth;
 mod psp2_airbrake_flaps_ground_truth;
 mod psp2_glow_ground_truth;
 mod psp2_scenery_animation_ground_truth;
+mod psp2_static_hologram_ground_truth;
 mod psp2_texture_dedupe_ground_truth;
 mod psp2_twin_blend_ground_truth;
 mod psp_slope_lod;

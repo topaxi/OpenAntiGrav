@@ -44,6 +44,7 @@ use oag_rcs::rcsmodel::psp2::lighting_only;
 
 mod glow;
 pub mod placement;
+mod static_hologram;
 mod transparency;
 mod twin_blend;
 
@@ -140,6 +141,12 @@ pub struct Report {
     /// `nr_twinblend` materials left as the generic reading drew them: a picture would not
     /// decode, or a submesh carries no `barsUV_blendUV`.
     pub twin_blend_unread: usize,
+    /// `dc_hologramwithstatic` materials drawn by HD's mode 7 without its `/2` - see
+    /// `static_hologram`.
+    pub static_hologram_materials: usize,
+    /// Of that name, the ones left as the generic reading drew them (a picture or a rate
+    /// missing).
+    pub static_hologram_unread: usize,
     /// Submeshes on a placeholder shader (`fc01_dummy`), drawn as the fog colour - see
     /// [`psp2::material::Material::is_placeholder`].
     pub placeholder_submeshes: usize,
@@ -230,6 +237,14 @@ impl Report {
                 self.twin_blend_materials, self.twin_blend_unread
             )
         };
+        let holograms = if self.static_hologram_materials + self.static_hologram_unread == 0 {
+            String::new()
+        } else {
+            format!(
+                "; {} dc_hologramwithstatic material(s) drawn by HD's law without its /2 (units and rates from the material record; the GCN arithmetic read, the units' gamma inherited from HD), {} left as the generic reading",
+                self.static_hologram_materials, self.static_hologram_unread
+            )
+        };
         let zone_colours = if self.zone_colour_submeshes == 0 {
             String::new()
         } else {
@@ -314,7 +329,7 @@ impl Report {
         };
         format!(
             "{} triangle(s) over {} submesh(es), {texture}, {} authored \
-             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{scrolls}{twins}{tangents}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}",
+             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{scrolls}{twins}{holograms}{tangents}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}",
             self.triangles, self.submeshes, self.authored_normals, self.unpaired
         )
     }
@@ -504,7 +519,14 @@ fn build_planned(
     // only where its picture does.
     let mut glow = glow::plan(&decoded.materials, &mut *textures, &mut report);
     // `nr_twinblend` takes one more entry of the same table.
-    let twin = twin_blend::plan(&decoded, &mut glow.emissive, &mut *textures, &mut report);
+    let mut twin = twin_blend::plan(&decoded, &mut glow.emissive, &mut *textures, &mut report);
+    // `dc_hologramwithstatic` rides the same bindings and glow table.
+    static_hologram::plan(
+        &decoded,
+        (&mut twin, &mut glow.emissive),
+        &mut *textures,
+        &mut report,
+    );
     model.emissive = glow.emissive.clone();
     model.anim_tracks = glow.tracks.clone();
     // Every draw is pushed in submesh order below, and `bind_textures`
@@ -836,7 +858,7 @@ fn bind_textures(
             if twin.any() {
                 debug_assert_eq!(model.pad_masks.len(), at);
                 model.pad_masks.push(twin_here.map(|t| t.wipe.clone()));
-                model.wave_maps.push(twin_here.map(|t| t.bars.clone()));
+                model.wave_maps.push(twin_here.and_then(|t| t.bars.clone()));
             }
             if glow.has_layers()
                 || twin.any()

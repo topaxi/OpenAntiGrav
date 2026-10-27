@@ -43,17 +43,17 @@ use super::skin::decode_texture;
 use super::{Report, Textures};
 
 /// The scanline mask, unit 0 (no preimage).
-const SCAN: u32 = 0x05df_f912;
+pub(super) const SCAN: u32 = 0x05df_f912;
 /// The advert, unit 1 (no preimage).
-const ADVERT: u32 = 0x3bdc_0403;
+pub(super) const ADVERT: u32 = 0x3bdc_0403;
 /// The static, unit 2 (no preimage).
-const STATIC: u32 = 0xdba0_a35a;
+pub(super) const STATIC: u32 = 0xdba0_a35a;
 /// `u`'s scroll rate, added to the advert's coordinate.
-const ADVERT_RATE: u32 = 0x3118_2e0d;
+pub(super) const ADVERT_RATE: u32 = 0x3118_2e0d;
 /// `v`'s scroll rate, added to the static's coordinate.
-const STATIC_RATE: u32 = 0xb657_3513;
+pub(super) const STATIC_RATE: u32 = 0xb657_3513;
 /// The scale on the scanline mask that becomes the alpha.
-const ALPHA_SCALE: u32 = 0xeede_e991;
+pub(super) const ALPHA_SCALE: u32 = 0xeede_e991;
 /// The engine clock.
 const TIME: u32 = 0x906b_67ba;
 /// The fog colour, which only the fogged blocks declare.

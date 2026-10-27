@@ -74,7 +74,7 @@
 //! doc for the search, the eighteen candidate offsets it rules out, and the
 //! Ghidra path that stays open.
 //!
-//! **`tangent` decodes too** - the same one-signed-byte-per-component scheme
+//! **`tangent` decodes too** (the Vita's type `5`; the PS4's type `0xe` is the same four signed bytes, `w` exactly +-1 on 36.4M vertices, `omega_declaration_ground_truth`) - the same one-signed-byte-per-component scheme
 //! as `normal`, extended to all four declared bytes (no spare padding byte
 //! this time, since 4 components exactly fill 4 bytes). **Confidence 76,
 //! not `normal`'s 96**: there is no Wipeout HD twin to check content
@@ -887,9 +887,12 @@ fn one(
         }
     }
     let mut tangents = Vec::new();
-    let tangent_offset = own.or(by_stride).and_then(|decl| {
+    // The Vita's type is `5`; the PS4's is `0xe` (four signed bytes, `w` exactly +-127), and a
+    // PS4 declaration is only sound through the record's own pointer.
+    let tangent_offset = if ps4 { own } else { own.or(by_stride) }.and_then(|decl| {
         let attr = decl.attribute(vertex_decl::TANGENT_HASH)?;
-        (attr.components == 4 && attr.gxm_type == 5).then_some(usize::from(attr.offset))
+        let wanted = if ps4 { vertex_decl::PS4_SBYTE4_NORM } else { 5 };
+        (attr.components == 4 && attr.gxm_type == wanted).then_some(usize::from(attr.offset))
     });
     if let Some(off) = tangent_offset
         && stride >= off + 4
