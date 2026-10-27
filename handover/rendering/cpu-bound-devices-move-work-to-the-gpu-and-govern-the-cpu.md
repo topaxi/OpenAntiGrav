@@ -94,6 +94,17 @@ resolution controller (`crates/present/src/drs`), which does nothing while the G
   (`crates/game/src/adapter.rs`, `InstanceDescriptor::new_without_display_handle`) does not read
   `WGPU_VALIDATION_INDIRECT_CALL`, so the A/B needs a local build that clears the flag, not an env var.
 
+## Material data in one buffer, without indirect (maintainer question, 2026-10-27)
+
+Worth deciding on numbers at the next drive: count `set_bind_group` calls per frame on the Deck (Anulpha)
+and their share of the frame thread after the 2026-10-27 cuts. If still large, one material buffer
+bound once per pass cuts wgpu's per-bind merge and init checks even with ordinary draws, eases render
+bundles (lane 2) and unifies HD's and the psp2 path's layouts. Pass the per-draw entry as a uniform
+dynamic offset (uniform index, works everywhere) rather than `first_instance` (non-uniform index,
++6.5-16 % GPU on ANV and NVIDIA, patchy on WebGL). About 3-5 days; indirect becomes a small step on
+top of `park/indirect-depth-prepass` afterwards. Check first whether wgpu 30 exposes a per-draw index the
+shader compiler treats as uniform.
+
 ## Next Steps
 
 1. Lane 6 (governor) started 2026-10-27 alongside the last lane of that drive.
