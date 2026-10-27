@@ -64,6 +64,8 @@ mod hd_snow_rock_ground_truth;
 mod hd_snow_rock_lit_path;
 mod hd_speed_pad_owner_ground_truth;
 mod hd_spu_vertex_light;
+mod hd_static_hologram_ground_truth;
+mod hd_static_hologram_lit_path;
 mod hd_track_surface_ground_truth;
 mod hd_twin_blend_ground_truth;
 mod hd_twin_blend_lit_path;

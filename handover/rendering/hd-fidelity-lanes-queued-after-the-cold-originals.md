@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd]
 updated: 2026-10-27
-summary: "HD fidelity queue: Bomb picture, unlit weapon taps, scenery items (booth glass wired), the scenery clock offset, Tech de Ra slot 384, exposure, LOD"
+summary: "HD fidelity queue: Bomb picture, weapon taps, Tech de Ra slot 384, scene behind Amphiseum's board, scenery clock, exposure, LOD"
 difficulty: medium (35)
 ---
 
@@ -55,10 +55,18 @@ from the craft (mean grey difference); 1-4 done, 5-8 not started. Evidence pages
    of 13 pairs, booth boxes 13-35 grey to 4-7). The rest of the pair's gap is clock phase, not material (see "HD's scenery
    clock" below).
 
-**Amphiseum's `hologram.rcsmaterial` board** (2026-10-22, `hd-blend-space`): drawn through the generic emissive
-stand-in and +70 grey too bright over the start gantry (box `840,0 240x120`); the encoded store lifts it further, which is
-the whole of `hd/the-amphiseum`'s +0.42 (10.09 to 10.51). With the material skipped the box is within 9 grey of the
-original. Next: read its fragment program.
+**~~Amphiseum's hologram board~~** (`hd-hologram-board`, 2026-10-27, wired): the surface is
+`dc_hologramwithstatic.rcsmaterial` (slot 637), not `hologram.rcsmaterial` (the 2026-10-22 needle
+`hologram` was a substring that also matched it). Program read live and wired as glow mode 7
+(hd-track-tone.md, "The Amphiseum hologram board"). Box `840,0 240x120`: per-pixel mean grey
+difference 90.5 to 26.2 (difference of means +90 to +23.5), the pair's whole frame 9.61 to 8.59, the other 17 HD
+pairs unchanged. The bar (within 10) is **not met**: the box now matches the program's own
+arithmetic (+13/+23/+24 lift against the expected +15/+23/+24) and the original's strength (scanline stripe
+energy ratio ours/theirs 0.87) and the picture reads like the
+original's (faint scanline-striped rings), but the box mean grey still sits above the original's
+because **the scene behind the board is about 20-25 grey brighter in ours than in the original**
+(ours with the board skipped reads `62, 81, 89` against theirs `54, 77, 90` with the board
+drawn): next lead is that pillar/wall behind the board, not the material.
 
 **HD's unlit programs read their taps raw** (2026-10-22, `hd-blend-space`; three closed 2026-10-26,
 `hd-render-fidelity`): with the scene stored encoded, a tap the console decodes on fetch (gamma nibble 7 in
@@ -163,8 +171,8 @@ section above or the doc page it names). At most one lane in `crates/mesh` at a 
    (`diffuse_normal_specular_emmissive`, `ds_sf_cs.gtf`), a yellow wash over the original's: box `480,600 240x120` 13.1 grey,
    luma +10.3, the slot's mask 131,478 px at 6.8 (0.90 M, as large as the glass road; its program is unread). Slots are `hd_material_probe_dump` ordinals; the bisection is
    `OAG_SKIP_SLOT` halving on one pixel.
-3. **Additive source strength** (mesh): Talon's grill source about 1.5x the original's, and Amphiseum's hologram
-   stand-in about 70 grey over; then Chenghou's `glass_2nduv_reflect_glow` (reflection plus glow 4 grey over) and
+3. **Additive source strength** (mesh): Talon's grill source about 1.5x the original's, (~~Amphiseum's hologram
+   stand-in about 70 grey over~~, wired 2026-10-27); then Chenghou's `glass_2nduv_reflect_glow` (reflection plus glow 4 grey over) and
    Modesto's `uvanim_diffuse_emissivealpha` LCD banners (program unread).
 4. **Vineta K's water sheets** through `rcs::water` and the sky map (family 4 of the glass lane, not started).
 5. **`hd-render-state-ports`**: Omega and 2048 state bits 7 and 2, real alpha-to-coverage under `--msaa`, Zone's

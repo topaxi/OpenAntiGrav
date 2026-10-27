@@ -1645,7 +1645,8 @@ as `mesh::AnimTrack::Scroll`, the track 2048's plain scroll already is, through
 
 **Read, and still drawn still, each named**:
 
-- `animlights`, `animhexlights`, `dc_hologramwithstatic2`: the scroll is on the
+- `animlights`, `animhexlights`, `dc_hologramwithstatic2` (`dc_hologramwithstatic` itself is
+  read and wired, hd-track-tone.md "The Amphiseum hologram board"): the scroll is on the
   second UV set (`v[8]`) or the material has a second texture the scroll may or
   may not reach. Not measured.
 - `cf_uvanim_emssive_glowtint*`, `cf_uvanim_emssivealpha`, `jd_uvanim_*`,
