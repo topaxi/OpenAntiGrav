@@ -51,6 +51,14 @@ impl Shell {
     ///
     /// The placeholder is missing, will not decode, or lacks either surface.
     pub fn load(archives: &mut oag_assets::Archives) -> Result<Self> {
+        let sibling = oag_mesh::mesh::rcs::sibling_name(ENTRY)
+            .with_context(|| format!("{ENTRY} names no .rcsmodel"))?;
+        let geometry = archives
+            .read_name(&sibling)
+            .with_context(|| format!("reading {sibling}"))?;
+        if oag_mesh::mesh::rcs::psp2::is_psp2(&geometry) {
+            return Self::load_psp2(&geometry);
+        }
         let blob = archives
             .read_name(ENTRY)
             .with_context(|| format!("reading {ENTRY}"))?;
@@ -75,12 +83,12 @@ impl Shell {
                     .as_chunks::<3>()
                     .0
                     .iter()
-                    .map(|triangle| triangle.map(|i| model.vertices[i as usize]))
+                    .map(|triangle| triangle.map(|i| model.vertices[i as usize].position))
                     .collect::<Vec<_>>()
             })
             .with_context(|| format!("the shell has no {name}"))
         };
-        let reflect_alphas = reflect_alphas(archives, &blob, &nodes)?;
+        let reflect_alphas = reflect_alphas(&geometry, &blob, &nodes)?;
         Self::from_surfaces(
             &named("cardShape")?,
             &named("card_reflectShape")?,
@@ -88,20 +96,60 @@ impl Shell {
         )
     }
 
+    /// The PS4 shell: the same two surfaces, found by the mesh objects' own names, with the
+    /// reflection's alpha in `VertexColour1`'s fourth byte. Positions are the file's own
+    /// (the shell is static).
+    fn load_psp2(geometry: &[u8]) -> Result<Self> {
+        let model = oag_rcs::rcsmodel::psp2::parse(geometry).context("reading the PS4 shell")?;
+        let surface = |name: &str| {
+            let submeshes: Vec<_> = model
+                .submeshes
+                .iter()
+                .filter(|sub| {
+                    sub.mesh
+                        .and_then(|mesh| model.scene.meshes.get(mesh))
+                        .is_some_and(|mesh| mesh.name == name)
+                })
+                .collect();
+            anyhow::ensure!(!submeshes.is_empty(), "the shell has no {name}");
+            Ok(submeshes)
+        };
+        let triangles = |submeshes: &[&oag_rcs::rcsmodel::psp2::SubMesh]| {
+            submeshes
+                .iter()
+                .flat_map(|sub| {
+                    sub.indices
+                        .as_chunks::<3>()
+                        .0
+                        .iter()
+                        .map(|t| t.map(|i| sub.positions[usize::from(i)]))
+                })
+                .collect::<Vec<_>>()
+        };
+        let reflect = surface("card_reflectShape")?;
+        let alphas = reflect
+            .iter()
+            .flat_map(|sub| sub.colours.iter().map(|colour| colour[3]));
+        let reflect_alphas = alpha_range(alphas)?;
+        Self::from_surfaces(
+            &triangles(&surface("cardShape")?),
+            &triangles(&reflect),
+            reflect_alphas,
+        )
+    }
+
     fn from_surfaces(
-        card: &[[oag_mesh::mesh::GpuVertex; 3]],
-        reflect: &[[oag_mesh::mesh::GpuVertex; 3]],
+        card: &[[[f32; 3]; 3]],
+        reflect: &[[[f32; 3]; 3]],
         reflect_alphas: (f32, f32),
     ) -> Result<Self> {
-        let front = |triangle: &&[oag_mesh::mesh::GpuVertex; 3]| {
-            triangle.iter().all(|v| v.position[2] > 0.0)
-        };
+        let front = |triangle: &&[[f32; 3]; 3]| triangle.iter().all(|v| v[2] > 0.0);
         let corners = card.iter().flatten();
         let (mut lo, mut hi) = ([f32::MAX; 2], [f32::MIN; 2]);
         for v in corners {
             for k in 0..2 {
-                lo[k] = lo[k].min(v.position[k]);
-                hi[k] = hi[k].max(v.position[k]);
+                lo[k] = lo[k].min(v[k]);
+                hi[k] = hi[k].max(v[k]);
             }
         }
         anyhow::ensure!(hi[0] > lo[0] && hi[1] > lo[1], "cardShape has no extent");
@@ -109,9 +157,7 @@ impl Shell {
         let outline: Vec<[[f32; 2]; 3]> = card
             .iter()
             .filter(front)
-            .map(|triangle| {
-                triangle.map(|v| [v.position[0] - centre[0], v.position[1] - centre[1]])
-            })
+            .map(|triangle| triangle.map(|v| [v[0] - centre[0], v[1] - centre[1]]))
             .collect();
         anyhow::ensure!(!outline.is_empty(), "cardShape has no front face");
 
@@ -119,7 +165,7 @@ impl Shell {
             .iter()
             .flatten()
             .fold((f32::MAX, f32::MIN), |(lo, hi), v| {
-                (lo.min(v.position[1]), hi.max(v.position[1]))
+                (lo.min(v[1]), hi.max(v[1]))
             });
         anyhow::ensure!(reflect_hi > reflect_lo, "card_reflectShape has no extent");
         Ok(Self {
@@ -138,17 +184,8 @@ impl Shell {
 /// top)`, read off the `.rcsmodel`'s `card_reflectShape` chunk - which the
 /// scene builder does not carry (an HD chunk's vertex colour is a baked light
 /// there, and zero).
-fn reflect_alphas(
-    archives: &mut oag_assets::Archives,
-    vex: &[u8],
-    nodes: &[oag_vex::vex::Node],
-) -> Result<(f32, f32)> {
-    let sibling = oag_mesh::mesh::rcs::sibling_name(ENTRY)
-        .with_context(|| format!("{ENTRY} names no .rcsmodel"))?;
-    let geometry = archives
-        .read_name(&sibling)
-        .with_context(|| format!("reading {sibling}"))?;
-    let model = oag_rcs::rcsmodel::Model::parse(&geometry).context("reading the shell's chunks")?;
+fn reflect_alphas(geometry: &[u8], vex: &[u8], nodes: &[oag_vex::vex::Node]) -> Result<(f32, f32)> {
+    let model = oag_rcs::rcsmodel::Model::parse(geometry).context("reading the shell's chunks")?;
     let node = nodes
         .iter()
         .find(|node| node.name.as_deref() == Some("card_reflectShape"))
@@ -168,16 +205,29 @@ fn reflect_alphas(
     let alphas: Vec<u8> = mesh
         .submeshes
         .iter()
-        .map(|submesh| mesh.inline_colours(&geometry, submesh))
+        .map(|submesh| mesh.inline_colours(geometry, submesh))
         .collect::<Result<Vec<_>, _>>()
         .context("reading the reflection's colours")?
         .into_iter()
         .flatten()
         .map(|colour| colour[3])
         .collect();
-    let (lo, hi) = (alphas.iter().min(), alphas.iter().max());
+    alpha_range(alphas)
+}
+
+/// The smallest and largest of the reflection's vertex alphas, as fractions.
+fn alpha_range(alphas: impl IntoIterator<Item = u8>) -> Result<(f32, f32)> {
+    let (lo, hi) =
+        alphas
+            .into_iter()
+            .fold((None, None), |(lo, hi): (Option<u8>, Option<u8>), a| {
+                (
+                    Some(lo.map_or(a, |l| l.min(a))),
+                    Some(hi.map_or(a, |h| h.max(a))),
+                )
+            });
     match (lo, hi) {
-        (Some(&lo), Some(&hi)) => Ok((f32::from(lo) / 255.0, f32::from(hi) / 255.0)),
-        _ => anyhow::bail!("card_reflectShape has no vertex"),
+        (Some(lo), Some(hi)) => Ok((f32::from(lo) / 255.0, f32::from(hi) / 255.0)),
+        _ => anyhow::bail!("card_reflectShape has no vertex colour"),
     }
 }
