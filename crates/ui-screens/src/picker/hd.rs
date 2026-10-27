@@ -386,6 +386,10 @@ pub(super) fn body(
         });
     }
     draw_labels(&extra.labels, &mut out);
+    out.extend(crate::campaign::hd::cell_brackets::draws(
+        &screen.brackets,
+        sprites,
+    ));
     if let Some(grid) = &extra.hex {
         hex::draw(grid, picker, sprites, &mut out);
     }

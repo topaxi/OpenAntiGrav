@@ -67,7 +67,7 @@ WALK = [
     "cross:5",
     {"id": "track-select", "title": "Track Select, Vineta K", "screen": "Track Creation", "page": "track-select",
      "drawn_from": "xml", "xml": "Track_Selection_Definition.xml",
-     "selection": {"original": "Vineta K", "ours": "Vineta K"}, "race": {"track": "01_Vineta_K"}},
+     "selection": {"original": "Vineta K", "ours": "Vineta K"}, "race": {"track": "01_Track"}},
     "cross:6",
     {"id": "ship-select", "title": "Ship Select, Feisar", "screen": "Team Selection", "page": "ship-select",
      "drawn_from": "xml", "xml": "Team_Selection_Definition.xml",

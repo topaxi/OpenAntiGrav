@@ -407,6 +407,10 @@ pub(in crate::picker) fn body(
         }
     }
     draw_labels(&extra.common.labels, &mut out);
+    out.extend(crate::campaign::hd::cell_brackets::draws(
+        &screen.brackets,
+        sprites,
+    ));
     if let Some(grid) = &extra.hex_grid {
         draw_grid(grid, picker, sprites, &mut out);
     }
