@@ -1454,8 +1454,8 @@ frames), Sebenco Climb, Sol 2 and Tech De Ra were re-listed with `scripts/rsx-dr
    0.05), so the absence now rests on both surfaces and on the texture key (no draw binds `ds_wall_cs` near it).
    Confidence in "chunk 1556 is not drawn at the start grid": 80 (one boot, one pose; both keys agree).
 2. **The frame's camera and view-projection are in the dump.** In a scene draw `c[465]` is the eye (Vineta K dump:
-   `45.63, 40.12, -94.99`, 6 units from the pair's camera) and `c[256..259]` the view-projection as four columns (the eye
-   projects to clip `0,0,-1.08,0`; `c[260..263]` is the 75-degree second-target projection). Confidence 85.
+   `45.63, 40.12, -94.99`, 6 units from the pair's camera) and `c[256..259]` the model-view-projection as four columns (132 distinct values on Vineta K; on a world-baked
+   draw such as draw 144 it is the view-projection, and the eye projects to clip `0,0,-1.08,0`; `c[260..263]` is the 75-degree second-target projection). Confidence 85.
 3. **The original's single PVS cell is recoverable and the law holds on six circuits.** The cell whose bitmap has the most of a
    frame's matched chunks set: Vineta K cell 104 (or 376) holds 387 of 388, Amphiseum 340/344, Talon's 196/197 and 151/152,
    Sebenco 354/354, Sol 2 438/438, Tech De Ra 175/175. Chunk 1556's bit is set in cells 99 to 108, 375 and 376 (33 of 472 cells),
@@ -1479,8 +1479,13 @@ frames), Sebenco Climb, Sol 2 and Tech De Ra were re-listed with `scripts/rsx-dr
 
 **Refuted as R for 1556:** (a) the cell bitmap (bit set at the original's own cell); (b) the frustum (centred in view);
 (c) "only special materials are drawn when unreferenced" (orphans on `jd_simplespecular`, `lambertzeroalpha`,
-`diffuse_specular`, `diffuse_normal_specular_emmissive` and 1557 beside it are drawn; the old "30 drawn" came from an index
-filter that rejects a surface drawn in several calls: 1557 is 168 indices in the file and draw 127 has 120); (d) a render flag
+`diffuse_specular`, `diffuse_normal_specular_emmissive` and 1557 beside it are drawn; the old "30 drawn" came from a key that also
+required a draw's index count to equal the surface's, and a draw's `idx` rarely does: on the surfaces with a unique bias, the
+list's `idx` equals the file's `index_count` for only 44 of 342 matched on Vineta K, 66 of 275 on Talon's, 94 of 337 on Sebenco,
+and 1557 is 168 in the file against 120 in draw 127, 1554 and 1555 72 each against two draws of 36. Each of those chunks has one
+submesh with one format word, so no submesh field pairs the short draws; whether the engine draws a sub-range or
+`rsx-draw-list.py`'s batch sum undercounts is **open**, and it does not touch the absence of 1556, which is keyed on bias
+and texture alone); (d) a render flag
 (1554 to 1557 are all flags 0, the first, second and fourth drawn); (e) the chunk's bounds block entry.
 
 **Not found, and the next read.** Rule R for 1556 is open at confidence 30. What is left in the executable: the **consumer
