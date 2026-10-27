@@ -24,8 +24,7 @@ pub fn build(
     vex: &[u8],
     geometry: &[u8],
 ) -> Result<Option<(Model, String)>> {
-    Ok(build_named(archives, entry, vex, geometry)?
-        .map(|(model, report, _)| (model, report)))
+    Ok(build_named(archives, entry, vex, geometry)?.map(|(model, report, _)| (model, report)))
 }
 
 /// [`build`], and the path of each texture the build asked for, in the order it
@@ -65,8 +64,9 @@ pub fn model_named(
         && let Ok(geometry) = archives.read_name(&sibling)
     {
         let vex = archives.read_name(entry)?;
-        if let Some((mut model, report, textures)) = build_named(archives, entry, &vex, &geometry)
-            .with_context(|| format!("decoding the card model {entry}"))?
+        if let Some((mut model, report, textures)) =
+            build_named(archives, entry, &vex, &geometry)
+                .with_context(|| format!("decoding the card model {entry}"))?
         {
             log::debug!("card model {entry}: {report}");
             model.keep_nearest();

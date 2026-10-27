@@ -500,7 +500,8 @@ fn load_hd(
             Err(error) => log::warn!("{src}: {error:#} - the widget it is for draws nothing"),
         }
     }
-    let circuit_emblems = push_card_art(archives, &grids, tracks, &mut blobs, &read_hd_texture_text);
+    let circuit_emblems =
+        push_card_art(archives, &grids, tracks, &mut blobs, &read_hd_texture_text);
     let mut report = Vec::new();
     let sprites = base.extended(&blobs, &mut report);
     oag_raceplay::loader_log::lines(report.iter().map(|line| format!("campaign sprites {line}")));
@@ -646,10 +647,7 @@ fn read_hd_texture_text(
 
 /// Omega's reader for the same paths: the literal HD `.gtf` first, then the
 /// `.gnf` beside it (`crate::boot::sprites::gnf_sibling`).
-fn read_omega_texture(
-    archives: &mut oag_assets::Archives,
-    path: &str,
-) -> Result<Vec<u8>, String> {
+fn read_omega_texture(archives: &mut oag_assets::Archives, path: &str) -> Result<Vec<u8>, String> {
     match archives.read_name(path) {
         Ok(blob) => Ok(blob),
         Err(error) => match crate::boot::sprites::gnf_sibling(archives, path) {
