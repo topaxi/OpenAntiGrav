@@ -648,6 +648,7 @@ pub fn load_shell(
             oag_ui::frontend::EventIcon::Zone.texture_name(),
             oag_ui::frontend::EventIcon::Elimination.texture_name(),
         ]);
+        block_textures.extend(oag_ui::frontend::team_grid_textures());
         block_textures.extend(campaign2048::card_textures(&campaign_events));
         block_textures.extend(tiers2048::card_textures(&tiers));
     }

@@ -584,15 +584,38 @@ fn the_team_screen_cycles_team_and_craft_and_leaves_the_way_it_came() {
     press_release(&mut frontend, &mut input, Button::Down);
     assert_eq!(
         frontend.team_choice(),
-        Some(("Auricom2048", "4")),
-        "one Right off the default team (index 0, AG_Systems2048) lands on \
-         Auricom2048 (index 1); one Down off the default craft slot (index \
-         2, speed, suffix \"3\") lands on prototype (index 3, suffix \"4\")"
+        Some(("AG_Systems2048", "1")),
+        "one Right off the starting cell (column 0 Feisar, row 0 speed) lands \
+         on the second column, AG Systems; one Down on the second row, \
+         fighter (suffix \"1\")"
     );
     press_release(&mut frontend, &mut input, Button::Circle);
     assert!(
         frontend.machine().is(w2048::HOME),
         "select_button's own PreviousScreen returns to Home"
+    );
+}
+
+/// The team screen draws the grid's own art: five team badges and twenty
+/// craft icons (`teamgrid/*.gtf`, named by no widget), not labelled tiles.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn the_team_screen_draws_the_grids_badges_and_craft_icons() {
+    let Some(source) = source() else { return };
+    let loaded = boot::load(&options(&source)).expect("the whole boot");
+    let mut frontend = loaded.frontend;
+    drive_to_home(&mut frontend);
+    let mut input = Input::new();
+    press_release(&mut frontend, &mut input, Button::Cross);
+    assert!(frontend.machine().is(w2048::TEAM));
+    let sprites = frontend
+        .draw_list()
+        .iter()
+        .filter(|draw| matches!(draw, frontend::Draw::Sprite { .. }))
+        .count();
+    assert!(
+        sprites >= 25,
+        "5 badges + 20 craft icons are sprites of the team grid: {sprites}"
     );
 }
 

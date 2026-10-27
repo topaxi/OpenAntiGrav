@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [2048]
-updated: 2026-10-26
+updated: 2026-10-27
 summary: "2048 front end DLC campaigns wired; DLC circuit card names and further screens still open"
 ---
 
@@ -193,11 +193,20 @@ shape, not by screen, and would have mis-fired on `Team`'s own
   `variant`, so `boot::roster::load_teams`'s craft-slot fallback and
   `session::placeholder::raceable_teams`'s stand-in are now only what a
   player gets before ever opening `Home` - not for the rest of the session.
-  Still open from this pass: `TouchTeamGrid`'s own `teamgrid/` icon set is
-  not wired into the sprite sheet (drawn as labelled tiles instead); the
+  **Resolved 2026-10-27 (`2048-team-grid`): `TouchTeamGrid`'s `teamgrid/` art
+  draws** (badges, craft icons, cell colours, Feisar Speed ringed; layout
+  and order read from `TouchTeamGrid_Item.cpp` in Ghidra, see
+  `frontend::team`'s module doc). Open on `team`: the padlock rule (ship
+  record `+0x40` rank and the save's unlock count, `FUN_812d16f6` over
+  `DAT_81967280`, `/2048/eboot-vita-2048-eu-v104.elf`), the `NEW` badge, the
+  `TeamInfo` statistics table (`FE` ratings are in `HandlingStats/<team>/<n>/handlingstats.xml`
+  `<FE speed handling shield firepower>`, n 1..4 = fighter, agility, speed,
+  prototype; position and bar law in `TeamInfo_Item.cpp` at `0x813ceab0`
+  unread) and its `FE_SHIP_STATS_TUT` bubble.
+  Still open from this pass: the
   `<Model>` ship previews on `team` and `profile` are not drawn (no
   renderer seam from a 2D front-end screen to a 3D mesh); the skin list
-  draws and cycles and is not wired to `race::Options::skin` (no measured
+  is no longer drawn on `team` (authored transparent, absent from the capture) and is not wired to `race::Options::skin` (no measured
   `1`/`2`/`3` -> `PI_ModelSkin` mapping); Options' Controls/Pilot lists draw
   and cycle and reach no setting this build has; the Options picker's
   starting value is this build's own default, not `CameraP1`'s authored one

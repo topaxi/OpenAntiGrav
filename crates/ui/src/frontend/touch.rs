@@ -166,9 +166,6 @@ pub struct TouchState {
     /// player moves off the screen's own starting point - see
     /// [`Frontend::team_choice`]'s own doc for why that is the contract.
     pub team_choice: Option<(usize, usize)>,
-    /// `teamskin_touch`'s own highlighted entry. Drawn and cycled; not
-    /// wired to any setting - see `frontend::team`'s module doc.
-    pub skin_index: usize,
     /// `OptionsCamera`'s own choice - see [`Frontend::camera_choice`].
     pub camera_choice: Option<u8>,
     /// `OptionsAudio`'s `Music Volume` - see [`Frontend::music_choice`].
@@ -200,10 +197,10 @@ enum Action {
 /// this build's own, in one shape so the cursor cannot land on one list and
 /// the tap fire on another.
 #[derive(Debug, Clone, PartialEq)]
-struct Tile {
+pub(super) struct Tile {
     rect: [f32; 4],
     /// The icon's texture name, as the widget spells it.
-    src: Option<String>,
+    pub(super) src: Option<String>,
     /// The label, already resolved to text.
     label: Option<String>,
     /// `StringWidthLimit`.
@@ -249,7 +246,7 @@ impl Frontend {
 
     /// Every tile on screen `name`: the authored buttons, then this build's
     /// own on `GameModeChoice`.
-    fn tiles(&self, name: &str) -> Vec<Tile> {
+    pub(super) fn tiles(&self, name: &str) -> Vec<Tile> {
         let Some(screen) = self.screens.by_name(name) else {
             return Vec::new();
         };
@@ -562,7 +559,12 @@ impl Frontend {
     ///
     /// Slotted in under the images rather than appended, since the draw
     /// list is drawn in order and the glyph has to land on top.
-    fn underlay_header_blocks(&self, screen: &Screen, tile: [f32; 4], out: &mut Vec<Draw>) {
+    pub(super) fn underlay_header_blocks(
+        &self,
+        screen: &Screen,
+        tile: [f32; 4],
+        out: &mut Vec<Draw>,
+    ) {
         let white = self
             .screens
             .globals
@@ -587,7 +589,7 @@ impl Frontend {
         out.splice(at..at, blocks);
     }
 
-    fn draw_tile(
+    pub(super) fn draw_tile(
         &self,
         tile: &Tile,
         colour: [f32; 4],
