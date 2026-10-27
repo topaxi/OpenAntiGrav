@@ -18,6 +18,9 @@ pub(super) struct PreviewRequest {
     /// The skin `.dat` to paint it in, when the settings name one the team
     /// declares.
     pub skin: Option<String>,
+    /// The race hull a front-end hull's flaps are seated from - see
+    /// [`crate::preview::race_hull_entry`].
+    pub race_hull: Option<String>,
     /// Where it goes, in the screen's grid - [`oag_ui_screens::picker::Layout::preview`].
     pub rect: [f32; 4],
     pub kind: oag_ui_screens::picker::Kind,
@@ -84,6 +87,7 @@ pub(super) fn draw_preview(
                 &mut archives,
                 &request.entry,
                 request.fallback.as_deref(),
+                request.race_hull.as_deref(),
             )?
             .0
         };

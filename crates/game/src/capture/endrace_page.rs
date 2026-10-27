@@ -324,6 +324,7 @@ fn endrace_page(
                     ship_model: None,
                     entry: trophy.placement.model.src.clone(),
                     fallback: None,
+                    race_hull: None,
                     skin: None,
                     rect: [0.0, 0.0, grid[0], grid[1]],
                     kind: oag_ui_screens::picker::Kind::Ship,

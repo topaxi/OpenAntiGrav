@@ -24,10 +24,27 @@ pub fn variant_location(
 /// team's default hull) when the variant ships no such asset, and saying so
 /// in the log rather than inventing one. Returns the entry name that loaded.
 ///
+/// `race_hull` is the race hull a front-end hull's airbrake flaps are seated from
+/// ([`super::race_hull_entry`], [`super::seat_flaps`]); `None` where the title draws the race
+/// hull itself.
+///
 /// # Errors
 ///
 /// Neither entry loads.
 pub fn model_or_default(
+    archives: &mut oag_assets::Archives,
+    entry: &str,
+    fallback: Option<&str>,
+    race_hull: Option<&str>,
+) -> Result<(Model, String)> {
+    let (mut model, loaded) = load(archives, entry, fallback)?;
+    if let Some(race_hull) = race_hull {
+        super::seat_flaps(archives, race_hull, &mut model);
+    }
+    Ok((model, loaded))
+}
+
+fn load(
     archives: &mut oag_assets::Archives,
     entry: &str,
     fallback: Option<&str>,

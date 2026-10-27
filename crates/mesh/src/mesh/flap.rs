@@ -71,7 +71,10 @@ impl Flap {
         let Some(hinge) = nodes[brake].parent else {
             return;
         };
+        // A Maya namespace (`andy_ship:AirBrake_left`, PS2's Triakis race hull) is not part of
+        // the side.
         let name = nodes[brake].name.as_deref().unwrap_or_default();
+        let name = name.rsplit(':').next().unwrap_or(name);
         let side = if name.eq_ignore_ascii_case("Airbrake_Left") {
             0
         } else if name.eq_ignore_ascii_case("Airbrake_Right") {
@@ -160,18 +163,96 @@ impl Flap {
         let base = vertices.get(span.clone())?;
         let swing = self.deflect(angle);
         out.clear();
-        out.extend(base.iter().map(|v| {
-            let mut out = *v;
-            out.position = swing
-                .transform_point3(Vec3::from_array(v.position))
-                .to_array();
-            out.normal = swing
-                .transform_vector3(Vec3::from_array(v.normal))
-                .to_array();
-            out
-        }));
+        out.extend(base.iter().map(|v| moved(&swing, v)));
         Some(span)
     }
+
+    /// Seats a flap whose vertices are in its hinge's own space: bakes `hinge`
+    /// into them and records it as this flap's hinge, so the flap sits where
+    /// the race model's does at rest and [`Self::swung`] turns it about the
+    /// same pivot.
+    ///
+    /// For a hull whose file carries the flap with no locator above it: every
+    /// Pulse `ship_FE.vex` hangs `AirBrake_Left`/`AirBrake_Right` straight
+    /// under its turntable `Anim Transform`, so the builder had no hinge to
+    /// bake and left the flap at the model origin, mid-hull. Positions and
+    /// normals go through the same [`moved`] a swing uses. A no-op when the
+    /// flap already has a hinge (the race hull's), so a second call cannot
+    /// place it twice.
+    pub fn seat(&mut self, vertices: &mut [GpuVertex], hinge: Mat4) {
+        if self.hinge != Mat4::IDENTITY {
+            return;
+        }
+        let span = self.vertices.start as usize..self.vertices.end as usize;
+        if let Some(own) = vertices.get_mut(span) {
+            for v in own {
+                *v = moved(&hinge, v);
+            }
+        }
+        self.hinge = hinge;
+    }
+}
+
+impl super::Model {
+    /// Gives this model's airbrake flaps `race`'s hinges and rest placement, side for side, and
+    /// says how many sides it did (`0` to `2`).
+    ///
+    /// The front-end hull is the race hull's twin without the hinge locators, so its flaps
+    /// carry no hinge. How their vertices were authored varies: Pulse's PSP files keep each flap
+    /// in its hinge's own space ([`Flap::seat`] carries it through the race hinge, after which
+    /// every vertex is within 2 mm of the race flap's), and some PS2 files already hold the flap
+    /// in model space, where moving it again would throw it off the hull. Which of the two a
+    /// flap is comes from where its centroid lies against the race flap's, before and after
+    /// the hinge; an already placed flap only adopts the hinge, so a swing turns about the right
+    /// pivot. A side either model lacks is left as it is.
+    pub fn seat_flaps_on(&mut self, race: &Self) -> usize {
+        let mut seated = 0;
+        for (own, theirs) in self.airbrakes.iter_mut().zip(&race.airbrakes) {
+            let (Some(own), Some(theirs)) = (own, theirs) else {
+                continue;
+            };
+            if own.hinge != Mat4::IDENTITY {
+                continue;
+            }
+            let (Some(have), Some(want)) = (
+                centroid(&self.vertices, &own.vertices),
+                centroid(&race.vertices, &theirs.vertices),
+            ) else {
+                continue;
+            };
+            if (theirs.hinge.transform_point3(have) - want).length() < (have - want).length() {
+                own.seat(&mut self.vertices, theirs.hinge);
+            } else {
+                own.hinge = theirs.hinge;
+            }
+            seated += 1;
+        }
+        seated
+    }
+}
+
+/// The mean position of `span` of `vertices`, or `None` for an empty or out-of-range span.
+fn centroid(vertices: &[GpuVertex], span: &std::ops::Range<u32>) -> Option<Vec3> {
+    let own = vertices.get(span.start as usize..span.end as usize)?;
+    (!own.is_empty()).then(|| {
+        own.iter()
+            .map(|v| Vec3::from_array(v.position))
+            .sum::<Vec3>()
+            / own.len() as f32
+    })
+}
+
+/// `vertex` with its position and normal carried through `matrix`: the one
+/// transform a swing ([`Flap::swung`]) and a seating ([`Flap::seat`]) share.
+fn moved(matrix: &Mat4, vertex: &GpuVertex) -> GpuVertex {
+    let mut out = *vertex;
+    out.position = matrix
+        .transform_point3(Vec3::from_array(vertex.position))
+        .to_array();
+    out.normal = matrix
+        .transform_vector3(Vec3::from_array(vertex.normal))
+        .to_array();
+    out
 }
 
 #[cfg(test)]
@@ -256,6 +337,62 @@ mod tests {
             (moved_left.y - moved_right.y).abs() < 1e-5
                 && (moved_left.z - moved_right.z).abs() < 1e-5,
             "a mirrored pair must rise and sweep alike: {moved_left:?} and {moved_right:?}"
+        );
+    }
+
+    fn vertex(position: [f32; 3], normal: [f32; 3]) -> GpuVertex {
+        GpuVertex {
+            quake: 0.0,
+            position,
+            normal,
+            colour: [1.0; 4],
+            texcoord: [0.0; 2],
+            lightmap_texcoord: [0.0; 2],
+            lit: 1.0,
+            anim: 0,
+            xform: 0,
+            sun_mask: 1.0,
+            slots: crate::mesh::slots::DEFAULT,
+            specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
+            glow: 0.0,
+            texcoord2: [0.0; 2],
+            tangent: 0,
+        }
+    }
+
+    /// A flap authored in hinge space is carried through the hinge, normal included, and
+    /// remembers the hinge; seating it again moves nothing.
+    #[test]
+    fn seating_carries_the_flap_through_its_hinge_once() {
+        let hinge = Mat4::from_translation(Vec3::new(1.5, -0.5, -6.0)) * Mat4::from_rotation_x(3.0);
+        let mut flap = Flap {
+            vertices: 1..2,
+            hinge: Mat4::IDENTITY,
+        };
+        let mut vertices = vec![
+            vertex([9.0, 9.0, 9.0], [0.0, 1.0, 0.0]),
+            vertex([0.0, 0.0, 1.0], [0.0, 1.0, 0.0]),
+        ];
+        flap.seat(&mut vertices, hinge);
+        let want = hinge.transform_point3(Vec3::new(0.0, 0.0, 1.0));
+        let got = Vec3::from_array(vertices[1].position);
+        assert!((got - want).length() < 1e-5, "{got:?} is not {want:?}");
+        let normal = Vec3::from_array(vertices[1].normal);
+        assert!(
+            normal.y < 0.0,
+            "the 3 rad roll turns the normal over: {normal:?}"
+        );
+        assert_eq!(
+            vertices[0].position,
+            [9.0, 9.0, 9.0],
+            "a vertex outside the span"
+        );
+        assert_eq!(flap.hinge, hinge);
+        let once = vertices[1].position;
+        flap.seat(&mut vertices, hinge);
+        assert_eq!(
+            vertices[1].position, once,
+            "a seated flap is not placed twice"
         );
     }
 }
