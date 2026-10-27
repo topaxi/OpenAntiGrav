@@ -245,6 +245,7 @@ pub(crate) fn run_windowless(
                 camera_jitter: cli.camera_jitter,
                 held: button_mask(cli.hold.as_deref()),
                 pressed: button_mask(cli.press.as_deref()),
+                press_until_reached: cli.press_until_reached,
                 scheme,
                 trace: cli.trace,
                 race: Some(race_options),

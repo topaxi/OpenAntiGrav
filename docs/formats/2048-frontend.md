@@ -882,12 +882,23 @@ two-view race.
 **Reproduce.** With `data/extracted/vita/PCSF00007` in place:
 
 ```sh
-just play 2048 --until TitleScreen --press cross --ticks 1 --screenshot title.png
+just play 2048 --until TitleScreen --press start --press-until-reached --ticks 424 --screenshot title.png
 just play 2048 --until GameModeChoice --press cross --ticks 1 --screenshot grid.png
 just play 2048 --until newFEshell --press cross --ticks 1 --screenshot map.png
 just play 2048 --press cross --ticks 120 --screenshot race.png   # ...taps through to 2048 - Event 1
 just play 2048                                                    # the window: X skips, mouse works
 ```
+
+The title line settles: the intro movie only ends on a press, so `--press` runs until `TitleScreen`
+is current and `--press-until-reached` then stops it (a press on the title leaves it for the demo
+race). Compare pair `2048/menu-title`, 2026-10-27: frame diff 22.9 to 6.2, logo and prompt band
+67.9 to 1.4, the rest the lattice (not drawn yet) and the legal footer. The prompt's pulse is the
+PSP-measured law ([`BOOT_PRESS_START`](../architecture/frontend-boot.md)) reused, period 1.10 s,
+floor 0.42, delay 1.0 s; 2048's own pulse is **not measured** and the pair's 424 ticks is a phase
+**chosen** to the capture's dim end. The footer sits on the original's rows (y 495 to 511 in both)
+but ours is 906 px wide against 833: same glyph height, so the advance (tracking) differs by
+about 8 percent - open. Omega: **checked, differs** in that its front end is HD's, so the title is
+HD's `PI001`, not this one; not compared here.
 
 `crates/game/tests/vita_2048_boot_ground_truth.rs` pins the chain, the
 includes, the grid against `oag_2048::frontend::TOUCH`, the pad walk to the

@@ -789,6 +789,71 @@ fn the_select_team_capture_draws_the_hull_at_the_widgets_origin() {
     );
 }
 
+/// `--press-until-reached` leaves the `--until` state settled: the capture of `TitleScreen` shows the
+/// logo and the pulsing prompt, not the entry tick's footer on white. Dropping the flag's stop in
+/// `capture.rs` leaves the press pulsing, the intro's state moves on or never settles, and the
+/// middle of the frame stays white.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/ and a GPU adapter"]
+fn the_title_capture_settles_on_the_logo_and_the_prompt() {
+    let Some(source) = source() else { return };
+    let scratch = std::env::temp_dir().join(format!("oag-title-settled-{}", std::process::id()));
+    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
+    let out = scratch.join("title.png");
+    let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
+        .arg(&source)
+        .args([
+            "--until",
+            "TitleScreen",
+            "--press",
+            "start",
+            "--press-until-reached",
+        ])
+        .args([
+            "--ticks",
+            "400",
+            "--no-audio",
+            "--no-video",
+            "--size",
+            "960x544",
+        ])
+        .arg("--screenshot")
+        .arg(&out)
+        .env("XDG_CONFIG_HOME", scratch.join("config"))
+        .env("XDG_DATA_HOME", scratch.join("data"))
+        .env("XDG_STATE_HOME", scratch.join("state"))
+        .status()
+        .expect("running oag-game");
+    assert!(status.success(), "oag-game --until TitleScreen");
+    let pixels = pixels_of(&std::fs::read(&out).expect("reading the screenshot"));
+    std::fs::remove_dir_all(&scratch).ok();
+    let darkest = |x0: usize, x1: usize, y0: usize, y1: usize| {
+        (y0..y1)
+            .flat_map(|y| (x0..x1).map(move |x| (x, y)))
+            .map(|(x, y)| {
+                let at = (y * 960 + x) * 4;
+                pixels[at].min(pixels[at + 1]).min(pixels[at + 2])
+            })
+            .min()
+            .expect("a region")
+    };
+    let backdrop = darkest(0, 960, 0, 100);
+    assert!(
+        backdrop >= 250,
+        "the title's white backdrop, not a race or a loading screen: darkest channel {backdrop}"
+    );
+    let logo = darkest(130, 830, 130, 290);
+    assert!(
+        logo < 100,
+        "the navy WIPEOUT 2048 logo is drawn: darkest channel {logo}"
+    );
+    let prompt = darkest(215, 745, 360, 392);
+    assert!(
+        prompt < 245,
+        "the prompt has faded in: darkest channel {prompt}"
+    );
+}
+
 /// `Home`'s second tile is `FE_COMMUNITY`, which redirects to
 /// `communityAdhocCheck` rather than to `community` itself - a real screen
 /// this build now loads and draws, refusing by note like `GameModeChoice`'s

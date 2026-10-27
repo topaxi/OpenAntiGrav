@@ -17,6 +17,8 @@ by the shaders at default state; they only add an occlusion shade and a uv shift
 
 ## Open
 
+- Measured 2026-10-27 on `2048/menu-title` after the title settled: the frame diff is 6.2 grey, of which the lattice is most (the logo band is 1.4, the prompt band's rest is pulse phase and lattice). The legal footer is a separate 22 grey in its band: 906 px wide in ours, 833 in the original at the same glyph height (tracking about 8 percent tighter there); not chased.
+
 - The camera's runtime writers: defaults are read (pan 27.1976 / 0.39549, half-width 8.0, offsets 0)
   and give 60 px per unit at 960 px against the captures' 55.2. Find what writes the half-width
   (`+0xc0`, limits probably 5.0 and 17.0 at `+0x5ed18/1c`) and the pan before drawing; do not fit.
