@@ -698,6 +698,36 @@ mean grey difference **61.50 to 38.92**, RMSE 0.329 to 0.242, edge NCC 0.23 to 0
 (UVs 0..1, atlases decode) and Omega's Nova prelit were never the fault; the PS4 red-channel
 coverage lead is **not** the cause here (checked: a lightmap's channels sample correctly).
 
+### Anulpha Pass's chevron floor: HD's law by matching hashes drew it worse, the original draws it flat (2026-10-27, `omega-chevron-pulse`, negative result)
+
+`cf_chevron_pulse_displacement2out` (33 materials in Omega's two Anulpha models, `data01.psarc`) declares
+HD's chevron program's names exactly: emask sampler `0x1202d8df` (`ds_floorchevron_emask.gnf`), wave
+`0x85c9fd48` (`ds_wave_c.gnf`), `Colour` `0x02ab9f07` (0, 1.49, 0), `k` `0x220cf0e6` (0.2), `offset`
+`0xa6f5352f` (0.0139 forward, 1.0 reversed), and no `time`. The GCN is unread, so the program is
+**inherited from HD by matching hashes** (`psp2::chevron`, sharing `mesh::rcs::chevron_pulse`'s entry,
+`slots::LIT_ALPHA` and the fifth and sixth bindings). The offset is held at the authored value (the PS4
+material curves are unread), so nothing sweeps; HD's own offset runs on the scenery clock, chosen not measured.
+
+The textures, read as pictures: `ds_floorchevron_sc` RGB holds the bright cyan circuit chevrons (the
+"solid cyan bars" the generic reading drew), its alpha is brushed grey metal and **black under the chevrons**;
+the emask RGB is a dim blue circuit, its alpha a white hex outline of the chevrons.
+
+Result on pair `omega/anulpha-pass` (whole-frame mean grey difference, tool's metric): **41.04 before, 48.68 after.**
+The road tiles' colour now matches (box centre (151, 204, 212) against theirs (142, 192, 197); it was (66, 26, 98)),
+but the walls and road read too bright and green outline glows show on every chevron. **The original is flat:**
+in `frame00`, `frame03` and `frame06` the whole road is one grey-teal and the walls are one dark teal (22, 39, 42),
+with no chevron, no circuit, no hex panel, so it is not a phase of the pulse. HD's original of the same circuit
+does show the chevrons and the wall panels. HD's law cannot give a flat road at any phase (`sc.a` is 0 inside the
+chevrons), so Omega's program does something else with these samplers, or the emulator capture does not sample them:
+**unknown**. Next: read the GCN of this program (it is not a file in the archives; the model's GPU section or `eboot.bin`),
+or find another `*_displacement2out` surface in a shadPS4 frame.
+
+Checked: `omega/vineta-k` 48.19, unchanged (no material of the family); HD pairs `hd/anulpha-pass`, `hd/talons`,
+`hd-race/talons-pack` and the 2048 Vita pairs byte-identical to a build of `93e01ff43`.
+**2048: checked, applies, not wired visually.** Vita's base `data.psarc` ships `cf_chevron_pulse` (16 materials in 2
+models) and `dlc1` 30, with the same names; the take-condition admits them and no 2048 pair shows them, so the draw is
+unseen. 2048's Vita materials carry a readable GXP program, which is the cheaper place to read the law than Omega's GCN.
+
 ### Vineta K's shadows: the lightmap is right, the display encode is the lead (2026-10-27, `omega-vineta-shadow`, negative result)
 
 Pair `omega/vineta-k` draws the shadowed road and wall about 65 and 52 grey too bright (boxes x 700-1300,
