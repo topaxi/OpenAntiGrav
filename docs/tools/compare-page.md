@@ -320,8 +320,8 @@ ours is drawn at the value the original ran with. Every HD pair therefore record
 - **A pair without it is reported.** `Pair.finish` fails the check "original Safe Area Setting recorded" on an HD pair that
   has none, `compare_env.py manifest` warns, and `python3 scripts/compare_env.py missing-safe-area DIR...` lists them (exit 1).
 - **Backfill.** Pairs made before this carry no value; `python3 scripts/compare-backfill-safe-area.py DIR [--apply]` sets
-  `{"percent": 96, "source": "RAM read 2026-10-21 (docs/formats/hd-hud.md)"}` on every HD pair that has none (all thirteen HD
-  states and the menus came from the one save).
+  `{"percent": 96, "source": "RAM read 2026-10-21 (docs/formats/hd-hud.md)"}` on every HD pair that has none (all the HD
+  states and the menus came from the one save). Point it at `data/reference/compare-page`: it filters by profile and so covers `hd/` and `hd-race/`.
 
 A menu pair also records what its page was drawn with beyond the profile: `ours.front_end_style` and `ours.race`
 (`race.team`, `race.track`, `race.variant_chosen`). `compare-rerender-ours.py` writes both back into the private settings
@@ -329,6 +329,10 @@ A menu pair also records what its page was drawn with beyond the profile: `ours.
 on concept1, where the original shows Feisar. HD's Ship Select also needs `variant_chosen = true`: a profile that never picked
 a model opens on concept1 (stats 080/085), where the original's classic Feisar reads 070/100/080/080. The Omega menu script records `ours.race` from now on; the 2048-menu and Pulse/Pure
 menu scripts do not yet, so their re-renders still drop their `race` selection (older Omega pairs have none either).
+
+Open, measured the same day: with the pairs at 96 and the right team, the title rules, footer rule, footer prompts and stat bars of
+Ship Select and Track Select sit at 0 +/- 1 px, but ours' header text sits 1 to 2 px **left** of the original's (best shift of ours
+onto theirs +2 px on Ship Select, +1 on Track Select), so the safe area is not what is left to fix there.
 
 ## Capturing a pair per title
 
