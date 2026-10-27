@@ -8,7 +8,8 @@ nothing into this engine**; that is the consumer's choice and is on the page's
 second half, labelled **chosen, not measured**.
 
 > **Off in every build (maintainer, 2026-10-27).** The `ballisticng` cargo feature
-> (`oag-raceplay`, forwarded by `oag-game`) gates the importer, the CUSTOM title and `--ballisticng-track`. It is
+> (`oag-raceplay`, forwarded by `oag-game`) gates the importer, the Workshop rows of the CUSTOM title and `--ballisticng-track`
+> (its own-format `*.track.toml` rows are in every build). It is
 > off by default and enabled by no build (desktop, AppImage, nightly, web, Android, server): the foreign tracks
 > do not render enough to ship. `oag-ballisticng` and `oag-unity` stay workspace crates, built and tested on
 > their own. To use this page: `cargo run -p oag-game --features ballisticng`. `just check-ballisticng`

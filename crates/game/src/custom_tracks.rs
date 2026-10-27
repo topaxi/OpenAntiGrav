@@ -59,7 +59,7 @@ impl Scan {
     pub fn discover() -> Self {
         Self::new(
             &oag_source::tracks::search_path(),
-            &oag_source::ballisticng::search_path(),
+            &workshop_search_path(),
             Some(cache::file_in(
                 &oag_source::cache::default_custom_tracks_cache_dir(),
             )),
@@ -189,6 +189,16 @@ impl Scan {
             },
         }
     }
+}
+
+/// Where BallisticNG Workshop tracks are looked for: nowhere in a build without
+/// the `ballisticng` feature, which cannot read them. Own-format tracks do not
+/// depend on it.
+fn workshop_search_path() -> Vec<PathBuf> {
+    #[cfg(feature = "ballisticng")]
+    return oag_source::ballisticng::search_path();
+    #[cfg(not(feature = "ballisticng"))]
+    return Vec::new();
 }
 
 fn value(path: &Path) -> String {

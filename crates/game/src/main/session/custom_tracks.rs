@@ -16,22 +16,14 @@ impl Session {
         options.foreign_track.clone_from(&self.cli_foreign_track);
     }
 
-    /// Whether `track_title` is the CUSTOM entry. Never, in a build without the
-    /// `ballisticng` feature, which offers none.
+    /// Whether `track_title` is the CUSTOM entry.
     #[allow(clippy::unused_self)]
     pub(super) fn custom_track_selected(&self, track_title: &str) -> bool {
-        #[cfg(feature = "ballisticng")]
-        return track_title == oag_game::custom_tracks::CUSTOM;
-        #[cfg(not(feature = "ballisticng"))]
-        return {
-            let _ = track_title;
-            false
-        };
+        track_title == oag_game::custom_tracks::CUSTOM
     }
 
     /// Sets what racing the TRACK row's custom file needs on `options`, or says
     /// why it cannot be raced.
-    #[cfg(feature = "ballisticng")]
     pub(super) fn apply_custom_track(
         &self,
         options: &mut oag_raceplay::Options,
@@ -41,17 +33,7 @@ impl Session {
         Ok(())
     }
 
-    #[cfg(not(feature = "ballisticng"))]
-    #[allow(clippy::unused_self)]
-    pub(super) fn apply_custom_track(
-        &self,
-        _options: &mut oag_raceplay::Options,
-    ) -> Result<(), String> {
-        Err("custom tracks need a build with the `ballisticng` feature".to_string())
-    }
-
     /// CUSTOM, as TRACK TITLE offers it - none when the scan found no file.
-    #[cfg(feature = "ballisticng")]
     pub(super) fn custom_title_choice(&self) -> Option<Choice> {
         use oag_game::custom_tracks::CUSTOM;
         let strings = oag_ui::strings::project_table(self.settings.language.as_deref());
@@ -59,20 +41,12 @@ impl Session {
             .then(|| Choice::labelled(CUSTOM, self.custom_tracks.title_label(&strings)))
     }
 
-    /// No CUSTOM title without the `ballisticng` feature: no row, dead or not.
-    #[cfg(not(feature = "ballisticng"))]
-    #[allow(clippy::unused_self)]
-    pub(super) fn custom_title_choice(&self) -> Option<Choice> {
-        None
-    }
-
     /// The TRACK row's options for whatever `remix.track_title` names: the
     /// scan's for CUSTOM, a title's own circuits otherwise. `None` when the
     /// title's source will not open, which supplies and settles nothing.
     pub(super) fn remix_track_options(&self) -> Option<Vec<Choice>> {
         let title = &self.settings.remix.track_title;
-        #[cfg(feature = "ballisticng")]
-        if title == oag_game::custom_tracks::CUSTOM {
+            if title == oag_game::custom_tracks::CUSTOM {
             let strings = oag_ui::strings::project_table(self.settings.language.as_deref());
             return Some(self.custom_tracks.choices(&strings));
         }
@@ -84,7 +58,6 @@ impl Session {
     /// RACE REMIX page shows CUSTOM, and never while a race is running or
     /// suspended behind its pause menu (a survey under way waits until the menus are back); when the read has just finished and the
     /// TRACK row is showing it, hands the row its checked list.
-    #[cfg(feature = "ballisticng")]
     pub(crate) fn poll_custom_tracks(&mut self) {
         use oag_game::custom_tracks::CUSTOM;
         let in_menus = matches!(&self.stage, crate::stage::Stage::Menu(_));
@@ -104,8 +77,4 @@ impl Session {
             self.resupply_remix_tracks();
         }
     }
-
-    #[cfg(not(feature = "ballisticng"))]
-    #[allow(clippy::unused_self)]
-    pub(crate) fn poll_custom_tracks(&mut self) {}
 }

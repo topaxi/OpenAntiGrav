@@ -537,7 +537,6 @@ pub(crate) struct Session {
     /// `oag_game::launcher::{survey, distinct_titles}`.
     pub(crate) titles: Vec<oag_game::launcher::Candidate>,
     /// RACE REMIX's CUSTOM tracks. See [`oag_game::custom_tracks`].
-    #[cfg(feature = "ballisticng")]
     pub(crate) custom_tracks: oag_game::custom_tracks::Scan,
     /// What the loading screen draws, kept for the *second* time it goes up.
     ///

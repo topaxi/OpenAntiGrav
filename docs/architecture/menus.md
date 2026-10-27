@@ -271,12 +271,15 @@ empty grid. Campaign launches clear it.
 
 ## RACE REMIX: CUSTOM tracks
 
-> **Off in every build (maintainer, 2026-10-27).** The `ballisticng` cargo feature
-> (`oag-raceplay`, forwarded by `oag-game`) gates the importer, the CUSTOM title and `--ballisticng-track`. It is
-> off by default and enabled by no build (desktop, AppImage, nightly, web, Android, server): the foreign tracks
-> do not render enough to ship. `oag-ballisticng` and `oag-unity` stay workspace crates, built and tested on
-> their own. To use this section: `cargo run -p oag-game --features ballisticng`. `just check-ballisticng`
-> builds and tests it so it does not rot.
+> **Own-format tracks are in every build; Workshop tracks are not (maintainer, 2026-10-27).** CUSTOM is one
+> title holding both kinds. In a default build it lists only the own-format `*.track.toml` files (no
+> `oag-ballisticng` or `oag-unity` is linked; `oag-trackfile` reads them), and the Workshop directories are not
+> even looked at. The off-by-default `ballisticng` cargo feature (`oag-raceplay`, forwarded by `oag-game`) adds the
+> `.wtrk` importer, the Workshop rows and `--ballisticng-track`; no build enables it (the foreign tracks do not
+> render enough to ship). One title rather than two because a player thinks "my tracks", the feature only adds
+> rows to it, and the row, string, pointer route and survey are shared. To get Workshop rows:
+> `cargo run -p oag-game --features ballisticng`. `just check-ballisticng` builds and tests that half so it does
+> not rot.
 
 TRACK TITLE offers **CUSTOM** (`OAG_REMIX_CUSTOM`) after the titles this machine can open, whenever
 the track directories hold at least one file; none found, no entry. Choosing it fills TRACK with those
@@ -289,7 +292,7 @@ is flown on the **CRAFT TITLE** row's source, ship and physics, exactly as `--ba
   `tracks/` beside the program, `<data dir>/oag/tracks`; files in the directory and one level down); then
   BallisticNG content, per base (`$OAG_BALLISTICNG`, `data/ballisticng`, beside the program, `<data dir>/oag/ballisticng`) the files in
   `tracks/`, and the same one and two directories down (Steam's `<item>/<name>.wtrk`, and a base that
-  holds the whole `473770` directory). `.wtrk` only: an own-format track in a BallisticNG base is not listed.
+  holds the whole `473770` directory). `.wtrk` only: an own-format track in a BallisticNG base is not listed. Without the `ballisticng` feature the BallisticNG bases are not searched.
 - **A row** is `NAME (WORKSHOP)` or `NAME (TRACK FILE)`, upper case and cut with `..` to the value
   column's width on Pulse and Pure (28 characters; HD's value boxes are about 20 wide, so a long name there runs past its box's right edge over nothing). An author is printed `BY AUTHOR` when a file
   names one; **neither format carries one today** (a `.wtrk` holds the Workshop title, tags and

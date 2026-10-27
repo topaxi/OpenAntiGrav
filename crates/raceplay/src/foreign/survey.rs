@@ -77,6 +77,7 @@ pub fn listing(path: &Path) -> Listing {
         tags: Vec::new(),
         problem: None,
     };
+    #[cfg(feature = "ballisticng")]
     if kind == Kind::Workshop {
         match std::fs::read(path) {
             Ok(file) => match oag_ballisticng::wtrk::Wtrk::parse(&file) {

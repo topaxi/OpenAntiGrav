@@ -98,10 +98,10 @@ accessors the format needs.)
 
 ## Race it
 
-`oag-game --track-file name.track.toml` works in every build. RACE REMIX's CUSTOM title (the files in a track
-directory: `$OAG_TRACKS`, `data/tracks`, `tracks/` beside the program, `<data dir>/oag/tracks`; TRACK
-`<title> (TRACK FILE)`) is behind the `ballisticng` cargo feature, which no shipped build enables
-([menus.md](../architecture/menus.md#race-remix-custom-tracks)). The race uses the host title's ship, rules and
+`oag-game --track-file name.track.toml` works in every build, and so does RACE REMIX's CUSTOM title (the files in
+a track directory: `$OAG_TRACKS`, `data/tracks`, `tracks/` beside the program, `<data dir>/oag/tracks`; TRACK
+`<title> (TRACK FILE)`; the `ballisticng` feature only adds Workshop rows to it;
+[menus.md](../architecture/menus.md#race-remix-custom-tracks)). The race uses the host title's ship, rules and
 physics, and draws flat-shaded collision. A file that will not read is listed dimmed with the reason.
 
 ## Proof (2026-10-12)

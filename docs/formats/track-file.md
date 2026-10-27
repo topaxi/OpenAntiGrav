@@ -81,8 +81,8 @@ physics; HD, 2048 and Omega as hosts are not exercised (a Pulse image hosted eve
 
 ## How to race one
 
-`oag-game --track-file <manifest>` works in every build. The RACE REMIX route below needs a build with the
-`ballisticng` feature, which no shipped build has (the CUSTOM title is behind it, see
+`oag-game --track-file <manifest>` and the RACE REMIX route below both work in every build, with or without the
+`ballisticng` feature (CUSTOM lists own-format tracks either way; see
 [menus.md](../architecture/menus.md#race-remix-custom-tracks)).
 
 Put the `*.track.toml` and its `.glb` in a track directory (`$OAG_TRACKS`, `data/tracks`, `tracks/` beside the program,
