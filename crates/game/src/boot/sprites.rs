@@ -114,7 +114,7 @@ pub(super) fn load(
     archives: &mut oag_assets::Archives,
     sources: &[&Screens],
     extra: &[&str],
-    bottom_up: &[&str],
+    front_end: &oag_title::FrontEnd,
     report: &mut Vec<String>,
 ) -> oag_hud::sprite::Sheet {
     let mut srcs: Vec<String> = Vec::new();
@@ -137,7 +137,9 @@ pub(super) fn load(
         }
     }
 
-    if srcs.is_empty() {
+    let bottom_up = front_end.bottom_up_gnf;
+    let lattice_atlas = front_end.touch.as_ref().map(|touch| touch.canvas_texture);
+    if srcs.is_empty() && lattice_atlas.is_none() {
         return oag_hud::sprite::Sheet::default();
     }
 
@@ -168,6 +170,10 @@ pub(super) fn load(
                 None => report.push(format!("image {src}: {e}")),
             },
         }
+    }
+
+    if let Some(atlas) = lattice_atlas {
+        reversed.extend(lattice_tile(archives, atlas, report));
     }
 
     let sheet = oag_hud::sprite::Sheet::build_with(&blobs, reversed, report);
@@ -309,4 +315,53 @@ fn is_bottom_up(src: &str, stems: &[&str]) -> bool {
     let leaf = src.rsplit(['\\', '/']).next().unwrap_or(src);
     let stem = leaf.rsplit_once('.').map_or(leaf, |(stem, _)| stem);
     stems.iter().any(|known| known.eq_ignore_ascii_case(stem))
+}
+
+/// 2048's backdrop lattice tile, rendered off its atlas (`canvasTexture.gxt`,
+/// a 2048 x 2048 sheet that never goes into the sprite sheet whole). `None`
+/// with a report line when the atlas is missing or does not decode: the page
+/// then draws without the lattice rather than with a stand-in.
+fn lattice_tile(
+    archives: &mut oag_assets::Archives,
+    atlas: &str,
+    report: &mut Vec<String>,
+) -> Option<oag_hud::sprite::DecodedImage> {
+    use oag_ui::frontend::canvas_lattice as lattice;
+    let blob = match read_front_end_first(archives, atlas) {
+        Ok(blob) => blob,
+        Err(e) => {
+            report.push(format!("lattice atlas {atlas}: {e}"));
+            return None;
+        }
+    };
+    let decoded = oag_texture::gxt::Gxt::parse(&blob).ok().and_then(|gxt| {
+        let texture = gxt.only()?;
+        let rgba = texture.to_rgba(&blob).ok()?;
+        Some((texture.width, texture.height, rgba))
+    });
+    let Some((width, height, rgba)) = decoded else {
+        report.push(format!("lattice atlas {atlas}: did not decode as a .gxt"));
+        return None;
+    };
+    let rgba: Vec<u8> = rgba.into_iter().flatten().collect();
+    let Some(tile) = lattice::bake(&rgba, u32::from(width), u32::from(height)) else {
+        report.push(format!(
+            "lattice atlas {atlas}: {width}x{height} is too small"
+        ));
+        return None;
+    };
+    report.push(format!(
+        "lattice picture baked off {atlas} ({width}x{height}) at {}x{}",
+        lattice::VIEWPORT[0],
+        lattice::VIEWPORT[1]
+    ));
+    Some(oag_hud::sprite::DecodedImage {
+        src: lattice::TILE.to_string(),
+        width: lattice::VIEWPORT[0],
+        height: lattice::VIEWPORT[1],
+        rgba: tile,
+        quad_extent: None,
+        quad_centre: None,
+        blend: None,
+    })
 }
