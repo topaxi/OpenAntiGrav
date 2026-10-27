@@ -589,7 +589,10 @@ resolution settled alike on both builds (GPU 8.7 against 9.1 ms). Within one spl
 `submit` swings between 3.5 and 7.7 ms from second to second, where without the split it holds at
 about 6.4; the means agree. That looks like the finishing thread landing on different core classes
 (the S24 reports `cpu_capacity` 253 on four cores, 653 on three, 730 on two, 1024 on one; the Deck
-and a desktop Zen report 1024 on every core), but it is not a cost on this evidence.
+and a desktop Zen report 1024 on every core), but it is not a cost on this evidence. Nor is it a pacing cost:
+the per-second `p99_ms` after the first four lines has a median of 19.41 and 18.77 ms with the split
+and 18.64 and 18.54 without (worst 32.4, 21.6 against 21.5, 21.8; the old build's one run 19.94, worst
+31.4).
 
 The `acquire waited` figures in the maintainer's own log are 0.08 to 0.12 ms on both builds, so no
 wait moved into the frame thread's accounting either. This host was not used: at load 20 to 60 the

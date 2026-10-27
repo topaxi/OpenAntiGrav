@@ -76,8 +76,10 @@ offered.
 **A run without touch: the launch file.** Android hands a NativeActivity no command
 line, so the app reads one from `files/oag-args.txt` at launch and deletes it
 (`oag_mobile::android::take_launch_args`). One argument a line; a line
-`OAG_NAME=value` sets that environment variable instead (`OAG_SPLIT_FINISH=0`). The
-directory is app-private, so only `adb` or the app can write it:
+`OAG_NAME=value` sets that environment variable instead (`OAG_SPLIT_FINISH=0`). It is
+read in every build, release included, because a measurement needs a release build. The
+directory is app-private from Android 11; on Android 8 to 10 an app holding the storage
+permission could also write the file. `adb` writes it:
 
 ```sh
 F=/sdcard/Android/data/org.openantigrav.game/files

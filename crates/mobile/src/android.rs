@@ -68,8 +68,10 @@ pub const LAUNCH_ARGS_FILE: &str = "oag-args.txt";
 /// screen is a normal one.
 ///
 /// Android gives a NativeActivity no command line and no environment. This is how a
-/// measurement run starts a race without touch: `adb shell` writes the file (the directory
-/// is app-private, so only adb or the app can), then `am start` launches. One argument a
+/// measurement run starts a race without touch: `adb shell` writes the file, then
+/// `am start` launches. Read in every build, because a measurement needs a release one. The
+/// directory is app-private from Android 11; on 8 to 10 an app holding the storage
+/// permission could write the file too. One argument a
 /// line; blank lines are skipped. A line `OAG_NAME=value` (an upper-case `OAG_` name) sets
 /// that environment variable instead, for the A/B switches the desktop reads from the
 /// environment (`OAG_SPLIT_FINISH=0`). No file, an empty list. See docs/tools/android.md.
