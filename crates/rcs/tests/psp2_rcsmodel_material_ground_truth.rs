@@ -64,8 +64,7 @@ fn every_model(mut check: impl FnMut(&str, &psp2::Model)) -> usize {
     files
 }
 
-/// Every `Uv1`-declared submesh decodes a texcoord per vertex, in the same
-/// proportion the census that found the attribute measured.
+/// Every submesh whose own declaration names a diffuse coordinate decodes one per vertex.
 ///
 /// The real confirmation is the index-exact oracle against Wipeout HD's own
 /// diffuse UV (`crates/game/examples/vita_rcsmodel_uv_oracle.rs`, 1,432
@@ -116,26 +115,20 @@ fn texcoords_decode_for_the_same_fraction_the_census_found() {
         100.0 * with_texcoords as f64 / submeshes as f64
     );
     assert_eq!(files, 993, "the three EU packages ship 993 .rcsmodel");
-    // The one-off texture census measured 92.5%; assert the
-    // same order of magnitude rather than the exact figure, so an unrelated
-    // change to submesh acceptance does not make this test flaky.
+    // Read through each record's own declaration, 80.7% of the corpus's submeshes carry a
+    // diffuse coordinate; the rest are Zone models and other geometry whose declaration names
+    // none (`psp2_flat_census_ground_truth` pins the per-archive counts). Before 2026-10-27,
+    // keyed by stride, 92.5% did - but a quarter of those read the wrong attribute, 21% of
+    // vertices decoded noise, and the substituted count was 5.7 million vertices.
     assert!(
-        with_texcoords * 100 >= submeshes * 85,
+        with_texcoords * 100 >= submeshes * 80,
         "only {with_texcoords} of {submeshes} submeshes carry a texcoord"
     );
-    // Every texcoord SubMesh hands out is finite by construction (asserted
-    // above), but not every one is a *real* decode: a stride is shared by
-    // every chunk that declares it, and two chunks can share a stride while
-    // packing genuinely different attributes into it - `find_by_stride`
-    // picks one declaration per stride (preferring one that names `Uv1`),
-    // so a chunk whose own layout disagrees decodes noise at that offset,
-    // substituted with the origin rather than reaching a GPU buffer as
-    // NaN/Inf. Measured at ~21% substituted - asserted as a ceiling well
-    // above that, so an unrelated corpus change does not make this test
-    // flaky, but a regression that poisoned most of a file would still
-    // fail it. See `docs/formats/2048-rcsmodel.md`.
+    // Every texcoord SubMesh hands out is finite by construction (asserted above). Read from
+    // the record's own declaration a non-finite value is rare (520 of 27.3 million vertices);
+    // a regression back to a shared layout would put it at ~21% again.
     assert!(
-        substituted * 100 <= total_vertices * 40,
+        substituted * 10_000 <= total_vertices,
         "{substituted} of {total_vertices} decoded texcoords needed substituting - \
          more than expected"
     );

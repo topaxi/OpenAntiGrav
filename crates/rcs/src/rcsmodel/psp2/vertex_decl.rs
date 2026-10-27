@@ -14,40 +14,37 @@
 //!
 //! **By anchoring on the `position` hash and scanning the whole CPU
 //! section**, the way this reading was *discovered*
-//! (`crates/game/examples/vita_rcsmodel_rosetta.rs`), then keyed by stride.
-//! A Vita submesh record's `u32` at `+0x28` is the offset of its own
-//! declaration's header, and **resolves on every one of the 276,239 submeshes
-//! of the base, DLC and patch archives** with the declared stride equal to the
-//! buffer-derived one (`crates/rcs/tests/psp2_flat_census_ground_truth.rs`;
-//! an earlier 14.2% figure is not reproduced). The stride map was kept
-//! because it predates that measurement, and it picks a different diffuse
-//! attribute from the record's own on 28.5% of submeshes.
-//! [`find_by_stride`] builds one map per file, keyed by the header's own
-//! stride, and [`super::submeshes`] looks a submesh's already-measured
-//! stride up in it directly.
+//! (`crates/game/examples/vita_rcsmodel_rosetta.rs`), then keyed by the
+//! header's own offset ([`find_by_header`]). A submesh record's pointer at
+//! [`PS4_DECLARATION_POINTER`] (a `u32` on the Vita, a 64-bit word on the PS4)
+//! is the offset of its own declaration's header, and **resolves on every one
+//! of the 276,239 submeshes of the Vita base, DLC and patch archives** with the
+//! declared stride equal to the buffer-derived one
+//! (`crates/rcs/tests/psp2_flat_census_ground_truth.rs`; an earlier 14.2%
+//! figure is not reproduced). A per-stride map, which this module used to
+//! build for the Vita, picked a different diffuse attribute from the record's
+//! own on 28.5% of submeshes and read the wrong attribute on three in four of
+//! Empire Climb's: it is gone.
 //!
 //! **Confidence 92**, the same bar HD's identical shape carries: every
 //! declaration found this way restates its own stride at each attribute
 //! record (`+0x04`, big-endian - see the module doc), and only a
 //! self-consistent one is kept.
 //!
-//! # The PS4 keeps the per-submesh pointer, and it is exact there
+//! # The pointer is exact on both containers
 //!
 //! Keyed by stride, one declaration stands for every chunk of that stride, and
-//! on a PS4 circuit that is wrong: `tech_de_ra`'s 3,186 submeshes are 8 strides
-//! and **43 distinct layouts** (stride 24 alone has 18), and the layouts differ
-//! in *where the diffuse coordinate is* and in whether a `lightmapUV` follows
-//! it. A PS4 record holds an 8-byte pointer at [`PS4_DECLARATION_POINTER`] that
-//! is the address of its own declaration's header, and it resolves on **3,186 of
-//! 3,186** submeshes of that circuit with the declared stride equal to the
-//! buffer-derived one on every one. [`find_by_header`] is that lookup.
+//! that is wrong: `tech_de_ra`'s 3,186 submeshes are 8 strides and **43
+//! distinct layouts** (stride 24 alone has 18), and the layouts differ in
+//! *where the diffuse coordinate is* and in whether a `lightmapUV` follows it.
+//! The pointer resolves on **3,186 of 3,186** submeshes of that circuit.
 //!
 //! **Control group.** A submesh's material names a `lightmap` sampler if and
 //! only if its own declaration carries `lightmapUV`: 856 submeshes both, 2,330
 //! neither, **0 in either off-diagonal cell** - two independently read fields
 //! agreeing on every submesh, which a wrong pointer offset cannot do. The
-//! Vita's `u32` at the same offset resolves on every submesh too and is read
-//! for `barsUV_blendUV` only; the diffuse lookup is still by stride.
+//! Vita's `u32` agrees the same way (33,308 both, 136,856 neither on the base
+//! archive, 0 off-diagonal).
 
 use std::collections::HashMap;
 
@@ -91,6 +88,14 @@ pub const BARS_BLEND_HASH: u32 = 0x0e7e_a5a8;
 /// `tech_de_ra`, which also carries two `f32` pairs (`0`) that are not
 /// coordinates of the diffuse or lightmap sets.
 pub const PS4_HALF2: u8 = 1;
+
+/// The type nibble of a Vita (SceGxm) two-component half-float attribute: `Uv1`, `lightmapUV`
+/// and (four of them) `barsUV_blendUV`.
+pub const VITA_HALF2: u8 = 8;
+
+/// The type nibble of an `f32` attribute on the Vita (the position's `3x9`; a diffuse
+/// coordinate declared `2x9` is a float pair, 2,291 base submeshes).
+pub const FLOAT2: u8 = 9;
 
 /// The type nibble of a PS4 `tangent` (and `normal`): four signed bytes, read `/127`.
 pub const PS4_SBYTE4_NORM: u8 = 14;
@@ -166,24 +171,33 @@ impl VertexDecl {
 
     /// The diffuse coordinate of a declaration known to be **this submesh's
     /// own** - `Uv1` where it is named, otherwise the first two-component
-    /// half-float attribute that is not the lightmap's.
+    /// attribute that is not the lightmap's and is a pair of `half`s (the
+    /// container's half type: [`PS4_HALF2`] or [`VITA_HALF2`]) or of `f32`s
+    /// ([`FLOAT2`]).
     ///
     /// **Only sound on a declaration reached through the record's own pointer**
-    /// ([`PS4_DECLARATION_POINTER`]). Keyed by stride, "the first that names a
-    /// `Uv1`" was the best available and [`Self::diffuse_texcoord`] still is
-    /// there; on a PS4 circuit the same stride also carries layouts with no
-    /// `Uv1` at all, where the diffuse set is the file's own `uv1`
-    /// (`0x7a3f521c`), `Uv2` (`0xdb7b4546`) or an unnamed hash sitting first
-    /// and the lightmap's `lightmapUV` after it - HD's own rule, "a
-    /// two-component coordinate that is not `lightmapUV`"
-    /// (`crate::rcsmodel::vertex_decl::VertexDecl::diffuse_texcoord`).
+    /// (`PS4_DECLARATION_POINTER`), on both containers. Where no `Uv1` is
+    /// named, the diffuse set is the file's own `uv1` (`0x7a3f521c`), `Uv2`
+    /// (`0xdb7b4546`) or an unnamed hash, with the lightmap's `lightmapUV`
+    /// after it - HD's own rule, "a two-component coordinate that is not
+    /// `lightmapUV`" (`crate::rcsmodel::vertex_decl::VertexDecl::diffuse_texcoord`);
+    /// **confidence 70**, so [`Self::diffuse_texcoord_is_fallback`] says when
+    /// it is the one answering.
     #[must_use]
-    pub fn own_diffuse_texcoord(&self) -> Option<&Attribute> {
+    pub fn own_diffuse_texcoord(&self, half: u8) -> Option<&Attribute> {
         self.diffuse_texcoord().or_else(|| {
             self.attributes.iter().find(|a| {
-                a.name_hash != LIGHTMAP_HASH && a.components == 2 && a.gxm_type == PS4_HALF2
+                a.name_hash != LIGHTMAP_HASH
+                    && a.components == 2
+                    && (a.gxm_type == half || a.gxm_type == FLOAT2)
             })
         })
+    }
+
+    /// True when [`Self::own_diffuse_texcoord`] answers by the confidence-70 rule, not by name.
+    #[must_use]
+    pub fn diffuse_texcoord_is_fallback(&self, half: u8) -> bool {
+        self.diffuse_texcoord().is_none() && self.own_diffuse_texcoord(half).is_some()
     }
 }
 
@@ -243,29 +257,6 @@ fn scan(cpu_bytes: &[u8]) -> impl Iterator<Item = (usize, VertexDecl)> + '_ {
             let header_at = i.checked_sub(HEADER_LEN)?;
             Some((header_at, parse(cpu_bytes, header_at)?))
         })
-}
-
-/// Every declaration in `cpu_bytes`, keyed by its own stride.
-///
-/// **Not every declaration of a given stride is identical** - two chunks
-/// can share a stride while packing different attributes into it, so the
-/// first one found is not always the useful one. This keeps the first *that
-/// names a `Uv1` attribute* over the first found outright, since that is the
-/// one thing every caller of this map wants; an earlier version that kept
-/// strictly the first declaration measured 27.6% of the corpus's submeshes
-/// resolving a texcoord where this measures 92.5%.
-#[must_use]
-pub fn find_by_stride(cpu_bytes: &[u8]) -> HashMap<usize, VertexDecl> {
-    let mut out: HashMap<usize, VertexDecl> = HashMap::new();
-    for (_, decl) in scan(cpu_bytes) {
-        match out.get(&decl.stride) {
-            Some(existing) if existing.diffuse_texcoord().is_some() => {}
-            _ => {
-                out.insert(decl.stride, decl);
-            }
-        }
-    }
-    out
 }
 
 /// Every declaration in `cpu_bytes`, keyed by the offset of its header - what
