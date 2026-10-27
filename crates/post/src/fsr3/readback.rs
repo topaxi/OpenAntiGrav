@@ -136,7 +136,7 @@ impl Scene {
         let upscale = (render.0 * 2, render.1 * 2);
 
         let instance = wgpu::Instance::default();
-        let adapter = pollster::block_on(instance.request_adapter(&Default::default())).ok()?;
+        let adapter = oag_gpu::test_adapter::request(&instance)?;
         // What the game's own device asks for, so the narrow set has somewhere to run.
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             required_features: adapter.features()

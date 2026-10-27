@@ -37,7 +37,7 @@ fn composited(brightness: Brightness, gamma: Gamma) -> Option<[[u8; 4]; 8]> {
     // What the window surface and every capture target are since ADR-0020.
     let format = wgpu::TextureFormat::Rgba8Unorm;
     let instance = wgpu::Instance::default();
-    let adapter = pollster::block_on(instance.request_adapter(&Default::default())).ok()?;
+    let adapter = oag_gpu::test_adapter::request(&instance)?;
     let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
         label: Some("ui composite test"),
         ..Default::default()
@@ -315,7 +315,7 @@ fn a_ui_only_stage_reaches_the_surface_and_its_own_clear_draws_the_bars() {
 
     let format = wgpu::TextureFormat::Rgba8Unorm;
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         return;
     };
     let Ok((device, queue)) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
@@ -444,7 +444,7 @@ fn a_ui_only_stage_reaches_the_surface_and_its_own_clear_draws_the_bars() {
 #[test]
 fn every_built_in_preset_builds_on_this_device() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter; skipping");
         return;
     };

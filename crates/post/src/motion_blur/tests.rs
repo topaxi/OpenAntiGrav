@@ -70,7 +70,7 @@ fn the_reach_cap_is_floored_for_tiny_viewports() {
 #[test]
 fn rg16float_is_multisample_renderable_at_4x_on_this_adapter() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };
@@ -119,7 +119,7 @@ pub(super) fn f32_to_half(value: f32) -> u16 {
 #[test]
 fn the_chain_smears_what_moved_and_leaves_still_surfaces_sharp() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };
@@ -353,7 +353,7 @@ fn the_chain_smears_what_moved_and_leaves_still_surfaces_sharp() {
 #[test]
 fn a_still_surface_over_a_moving_background_keeps_its_colour() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };
@@ -553,7 +553,7 @@ fn still_block_over_a_moving_background(
 #[test]
 fn the_tile_reduction_finds_motion_in_the_tile_it_belongs_to() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };
@@ -742,7 +742,7 @@ fn the_half_resolution_gather_smears_a_two_pixel_block() {
 
 fn multisampled_chain(half: bool) {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };

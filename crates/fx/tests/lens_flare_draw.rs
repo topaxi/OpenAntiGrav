@@ -19,7 +19,7 @@ const SIZE: u32 = 64;
 /// holds everywhere (1.0 is the sky, 0.0 something against the camera).
 fn flare_over_black(depth: f32) -> Option<Vec<u8>> {
     let instance = wgpu::Instance::default();
-    let adapter = pollster::block_on(instance.request_adapter(&Default::default())).ok()?;
+    let adapter = oag_gpu::test_adapter::request(&instance)?;
     let (device, queue) =
         pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).ok()?;
     device.on_uncaptured_error(std::sync::Arc::new(|e| panic!("wgpu validation: {e}")));

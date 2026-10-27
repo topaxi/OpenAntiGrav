@@ -59,7 +59,7 @@ fn a_rectangle_is_clamped_inside_the_target_it_is_set_on() {
 #[test]
 fn a_moving_tile_edge_does_not_reallocate_the_full_size_targets() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no adapter; skipping");
         return;
     };
@@ -101,7 +101,7 @@ fn a_moving_tile_edge_does_not_reallocate_the_full_size_targets() {
 #[test]
 fn the_chain_smears_inside_a_viewport_smaller_than_its_allocation() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no adapter; skipping");
         return;
     };

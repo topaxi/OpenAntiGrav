@@ -286,6 +286,20 @@ cache): 768 CPU-s before, 254 CPU-s after (152 s and 26 s wall at load averages
 of 90 and 25-36). The static build is `scripts/build-server-portable.sh musl`
 ([networking](../networking/README.md), "Running a server on another machine").
 
+## Which GPU the tests use
+
+Every GPU test gets its adapter from `oag_gpu::test_adapter` (`request` for one,
+`ordered` to walk several), never from `request_adapter` with defaults: that
+takes whichever adapter the driver lists first, which on a machine with an
+integrated and a discrete GPU is usually the integrated one that also draws
+the desktop. The helper prefers the discrete GPU, and puts the integrated one
+first only on Linux when the discrete GPU is a vendor whose driver does not
+spill device memory into system memory (NVIDIA) and so runs out of it in the
+large HD scene tests. `OAG_TEST_ADAPTER=discrete|integrated|<name substring>`
+overrides the choice. The first caller in a process prints the adapter it got
+to stderr (`--no-capture`). A machine with no adapter still skips each test as
+before.
+
 ## Gameplay state
 
 A single `World` struct of plain data, with fixed-size arrays. No ECS. See

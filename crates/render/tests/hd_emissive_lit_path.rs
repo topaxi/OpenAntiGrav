@@ -201,7 +201,7 @@ fn gamma(tint: f32) -> u8 {
 #[test]
 fn the_glow_is_summed_on_the_authored_path_and_not_only_the_stand_in_one() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };

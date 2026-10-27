@@ -59,7 +59,7 @@ fn sharpness_counts_stops_downward_and_off_is_a_zero_lobe() {
 #[test]
 fn both_passes_build_and_draw_on_a_real_device() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };
@@ -137,7 +137,7 @@ fn upscaling_a_hard_edge_keeps_the_edge_and_the_two_flat_sides() {
     const OUT: (u32, u32) = (128, 128);
 
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };
@@ -313,7 +313,7 @@ fn ringing(stops: f32) -> Option<(u8, u8)> {
     const OUT: (u32, u32) = (128, 128);
 
     let instance = wgpu::Instance::default();
-    let adapter = pollster::block_on(instance.request_adapter(&Default::default())).ok()?;
+    let adapter = oag_gpu::test_adapter::request(&instance)?;
     let (device, queue) =
         pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).ok()?;
 

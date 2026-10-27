@@ -57,7 +57,7 @@ fn the_buffers_are_half_the_psp_framebuffer() {
 fn mean_delta(rgb: u8, alpha: u8, hud: Option<u8>) -> Option<f32> {
     const SIZE: (u32, u32) = (512, 272);
     let instance = wgpu::Instance::default();
-    let adapter = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::PRIMARY))
+    let adapter = oag_gpu::test_adapter::ordered(&instance)
         .into_iter()
         .next()?;
     let (device, queue) =
@@ -196,7 +196,7 @@ fn the_composite_adds_over_a_hud_drawn_after_the_bright_pass() {
 fn halves_delta(origin: f32, through_view: Option<(u32, u32)>) -> Option<(f32, f32)> {
     const SIZE: (u32, u32) = (512, 272);
     let instance = wgpu::Instance::default();
-    let adapter = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::PRIMARY))
+    let adapter = oag_gpu::test_adapter::ordered(&instance)
         .into_iter()
         .next()?;
     let (device, queue) =

@@ -159,7 +159,7 @@ fn material(device: &wgpu::Device, queue: &wgpu::Queue, left: u8) -> wgpu::BindG
 #[test]
 fn the_road_under_the_craft_writes_its_own_mask_and_the_far_road_is_culled() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };

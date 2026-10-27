@@ -34,7 +34,7 @@ const LIMIT: u32 = 8192;
 /// Returns `None` with no adapter, so the caller skips.
 fn both_paths(format: wgpu::TextureFormat, input: [f64; 3]) -> Option<([u8; 4], [u8; 4])> {
     let instance = wgpu::Instance::default();
-    let adapter = pollster::block_on(instance.request_adapter(&Default::default())).ok()?;
+    let adapter = oag_gpu::test_adapter::request(&instance)?;
     let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
         label: Some("upscale fsr test"),
         ..Default::default()
@@ -235,7 +235,7 @@ fn turning_the_upscaler_on_does_not_shift_a_flat_colour() {
 /// are - so the caller skips rather than fails there.
 fn graded(input: [f32; 4], brightness: Brightness, gamma: Gamma) -> Option<[u8; 4]> {
     let instance = wgpu::Instance::default();
-    let adapter = pollster::block_on(instance.request_adapter(&Default::default())).ok()?;
+    let adapter = oag_gpu::test_adapter::request(&instance)?;
     let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
         label: Some("upscale grade test"),
         ..Default::default()

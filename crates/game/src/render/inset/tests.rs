@@ -83,7 +83,7 @@ fn a_pointer_lands_on_the_widget_drawn_under_it() {
 #[test]
 fn the_renderer_insets_its_widgets_once_told_to() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };

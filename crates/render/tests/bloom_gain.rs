@@ -87,11 +87,7 @@ fn expected_add(channel: usize, y: u32) -> f32 {
 #[ignore = "needs a GPU adapter"]
 fn the_bloom_adds_what_the_recovered_passes_say_it_adds() {
     let instance = wgpu::Instance::default();
-    let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-        compatible_surface: None,
-        ..Default::default()
-    }))
-    .expect("no GPU adapter available");
+    let adapter = oag_gpu::test_adapter::request(&instance).expect("no GPU adapter available");
     let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
         label: Some("bloom gain test"),
         ..Default::default()

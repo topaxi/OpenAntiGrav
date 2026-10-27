@@ -212,7 +212,7 @@ fn expected(effect: f32) -> u8 {
 #[test]
 fn the_zone_surface_replaces_the_albedo_in_the_right_colour_space() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };
@@ -330,7 +330,7 @@ fn the_zone_surface_replaces_the_albedo_in_the_right_colour_space() {
 #[test]
 fn the_two_rim_summands_carry_their_own_literal_exponents() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };
@@ -418,7 +418,7 @@ fn up_facing_model(albedo: Arc<ModelTexture>) -> Model {
 #[test]
 fn the_visualiser_glow_is_driven_by_the_vis_lookup_and_gated_up_facing() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };
@@ -505,7 +505,7 @@ fn the_visualiser_glow_is_driven_by_the_vis_lookup_and_gated_up_facing() {
 #[test]
 fn the_track_bit_selects_the_track_texture_and_colours_and_its_absence_the_scene_pair() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };
@@ -602,7 +602,7 @@ fn the_track_bit_selects_the_track_texture_and_colours_and_its_absence_the_scene
 #[test]
 fn the_transition_sphere_selects_the_inner_pair_inside_and_the_outer_outside() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };
@@ -698,7 +698,7 @@ fn the_transition_sphere_selects_the_inner_pair_inside_and_the_outer_outside() {
 #[test]
 fn the_transition_sphere_samples_the_inner_texture_inside_and_the_outer_outside() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };

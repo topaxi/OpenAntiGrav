@@ -82,7 +82,7 @@ pub(super) fn livery() -> Livery {
 /// failed) where there is none.
 pub(super) fn test_gpu() -> Option<(wgpu::Device, wgpu::Queue)> {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return None;
     };
@@ -248,7 +248,7 @@ fn a_weapon_pool_of_drawables_shares_one_set_of_gpu_resources() {
 fn adverts_rebound(source: &str) -> Option<(usize, usize, usize)> {
     let image = oag_testdata::image(source)?;
     let instance = wgpu::Instance::default();
-    let adapter = pollster::block_on(instance.request_adapter(&Default::default())).ok()?;
+    let adapter = oag_gpu::test_adapter::request(&instance)?;
     let (device, queue) = pollster::block_on(adapter.request_device(
         &mesh_render::device_descriptor("advert rebind test", &adapter),
     ))

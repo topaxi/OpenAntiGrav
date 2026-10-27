@@ -51,7 +51,7 @@ fn node_at(steps: u32) -> Node {
 /// row by row, or `None` with no adapter.
 fn render(node: &Node) -> Option<Vec<[u8; 4]>> {
     let instance = wgpu::Instance::default();
-    let adapter = pollster::block_on(instance.request_adapter(&Default::default())).ok()?;
+    let adapter = oag_gpu::test_adapter::request(&instance)?;
     let (device, queue) =
         pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).ok()?;
     device.on_uncaptured_error(std::sync::Arc::new(|e| panic!("wgpu validation: {e}")));

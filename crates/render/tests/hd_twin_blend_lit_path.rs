@@ -125,7 +125,7 @@ fn model(wipe: u8, bars: u8, mode: f32) -> Model {
 #[test]
 fn the_wipe_cross_fades_the_two_pictures_under_the_bars() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };

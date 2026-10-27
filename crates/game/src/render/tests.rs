@@ -65,7 +65,7 @@ fn a_zero_sized_window_does_not_divide_by_zero() {
 #[test]
 fn a_translucent_fill_blends_over_whatever_load_kept() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };
@@ -301,7 +301,7 @@ fn to_grid_maps_a_bar_to_a_point_off_the_grid() {
 fn an_outlined_font_draws_its_body_alpha_over_its_outline_alpha() {
     use oag_texture::fnt::{Font, Glyph};
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };
@@ -431,7 +431,7 @@ fn an_outlined_font_draws_its_body_alpha_over_its_outline_alpha() {
 fn a_right_aligned_hud_string_ends_on_its_last_glyphs_ink() {
     use oag_texture::fnt::{Font, Glyph};
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };
@@ -512,7 +512,7 @@ fn a_right_aligned_hud_string_ends_on_its_last_glyphs_ink() {
 fn a_half_unit_glyph_quad_grows_by_half_a_unit_at_any_scale() {
     use oag_texture::fnt::{Font, Glyph};
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };

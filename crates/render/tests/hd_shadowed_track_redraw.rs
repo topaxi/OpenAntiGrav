@@ -156,7 +156,7 @@ fn shadowed(mut scene: Scene, strength: f32) -> Scene {
 #[test]
 fn a_covered_texel_shows_the_road_lit_without_its_sun() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };
@@ -250,7 +250,7 @@ fn covered_fraction(got: [u8; 4], sunlit: [u8; 4], ambient_only: [u8; 4]) -> f32
 #[test]
 fn craft_maps_combine_as_the_originals_redraws_do_and_keep_to_their_box() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };
@@ -530,7 +530,7 @@ fn draw_with_sky(
 #[test]
 fn a_glass_sheen_chunk_is_not_shadowed() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };
@@ -562,7 +562,7 @@ fn a_glass_sheen_chunk_is_not_shadowed() {
 #[test]
 fn the_glass_sheen_carries_the_programs_output_scale() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };
@@ -605,7 +605,7 @@ fn the_glass_sheen_carries_the_programs_output_scale() {
 #[test]
 fn the_booth_glass_reflects_the_sky_by_its_alpha_not_its_complement() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };

@@ -23,7 +23,7 @@ fn run(
     pixels: &[(u32, u32)],
 ) -> Option<Vec<[u8; 4]>> {
     let instance = wgpu::Instance::default();
-    let adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::PRIMARY));
+    let adapters = oag_gpu::test_adapter::ordered(&instance);
     let adapter = adapters.first()?;
     let (device, queue) = pollster::block_on(adapter.request_device(&Default::default())).ok()?;
     let format = wgpu::TextureFormat::Rgba8Unorm;

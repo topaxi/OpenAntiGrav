@@ -140,7 +140,7 @@ fn a_transition_out_of_order_changes_nothing() {
 #[test]
 fn a_bracketed_pass_reads_back_naming_its_own_frame() {
     let instance = wgpu::Instance::default();
-    let adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::PRIMARY));
+    let adapters = crate::test_adapter::ordered(&instance);
     if adapters.is_empty() {
         eprintln!("no GPU adapter: skipping");
         return;
@@ -296,7 +296,7 @@ fn time_a_pass(adapter: &wgpu::Adapter, name: &str) {
 #[test]
 fn a_device_without_the_feature_gets_no_timer() {
     let instance = wgpu::Instance::default();
-    let adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::PRIMARY));
+    let adapters = crate::test_adapter::ordered(&instance);
     let Some(adapter) = adapters.first() else {
         eprintln!("no GPU adapter: skipping");
         return;

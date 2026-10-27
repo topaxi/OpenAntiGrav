@@ -423,7 +423,7 @@ fn band_centre(profile: &[u64]) -> f64 {
 #[test]
 fn the_band_draws_where_the_original_puts_it_at_any_resolution() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };
@@ -549,7 +549,7 @@ fn centre_row_range(centre: f64, width: u32, height: u32) -> std::ops::Range<usi
 #[ignore = "writes a picture rather than asserting anything"]
 fn a_capture_for_eyeballing() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };
@@ -628,7 +628,7 @@ fn the_games_own_glow_strip_reaches_the_shader() {
     );
 
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping the draw");
         return;
     };

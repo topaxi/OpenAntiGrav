@@ -46,7 +46,7 @@ fn a_degenerate_size_cannot_divide_by_zero() {
 #[test]
 fn the_pass_builds_and_draws_on_a_real_device() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };
@@ -104,7 +104,7 @@ fn the_pass_builds_and_draws_on_a_real_device() {
 fn a_flat_colour_is_untouched() {
     const SIZE: u32 = 32;
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };
@@ -208,7 +208,7 @@ fn a_flat_colour_is_untouched() {
 fn a_hard_edge_blends_only_near_the_seam() {
     const SIZE: u32 = 32;
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };

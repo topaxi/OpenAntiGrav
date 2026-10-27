@@ -141,7 +141,7 @@ fn texture(alpha: u8) -> Arc<ModelTexture> {
 #[test]
 fn the_authored_reference_cuts_where_the_material_says_and_not_where_the_default_does() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };

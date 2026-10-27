@@ -48,7 +48,7 @@ fn fs_main() -> @location(0) vec4<f32> {
 #[test]
 fn a_multisample_resolve_covers_the_whole_attachment_and_not_the_viewport() {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };

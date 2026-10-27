@@ -18,7 +18,7 @@ use oag_raceplay::{LoadWorker, Loaded, TextureSink};
 /// `max_texture_dimension_2d` is 8,192 - whatever the adapter could do.
 fn sink() -> Option<TextureSink> {
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return None;
     };
@@ -190,7 +190,7 @@ fn talons_junction_floor_goes_up_whole_on_the_renderers_own_device() {
         return;
     };
     let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };

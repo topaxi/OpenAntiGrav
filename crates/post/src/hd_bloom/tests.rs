@@ -38,7 +38,7 @@ pub(super) fn params() -> Params {
 #[test]
 fn the_chain_reads_back_naming_its_own_frame() {
     let instance = wgpu::Instance::default();
-    let adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::PRIMARY));
+    let adapters = oag_gpu::test_adapter::ordered(&instance);
     if adapters.is_empty() {
         eprintln!("no GPU adapter: skipping");
         return;
@@ -149,7 +149,7 @@ fn time_the_chain(adapter: &wgpu::Adapter, name: &str) {
 #[test]
 fn suppressing_the_glow_dims_the_resolve() {
     let instance = wgpu::Instance::default();
-    let adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::PRIMARY));
+    let adapters = oag_gpu::test_adapter::ordered(&instance);
     if adapters.is_empty() {
         eprintln!("no GPU adapter: skipping");
         return;
@@ -270,7 +270,7 @@ fn resolve_a_white_scene(device: &wgpu::Device, queue: &wgpu::Queue, glow: Glow)
 #[test]
 fn the_encode_pass_honours_the_scenes_own_offset() {
     let instance = wgpu::Instance::default();
-    let adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::PRIMARY));
+    let adapters = oag_gpu::test_adapter::ordered(&instance);
     if adapters.is_empty() {
         eprintln!("no GPU adapter: skipping");
         return;
@@ -402,7 +402,7 @@ fn the_encode_pass_honours_the_scenes_own_offset() {
 #[test]
 fn the_adaptation_is_the_encoded_linear_mean() {
     let instance = wgpu::Instance::default();
-    let adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::PRIMARY));
+    let adapters = oag_gpu::test_adapter::ordered(&instance);
     if adapters.is_empty() {
         eprintln!("no GPU adapter: skipping");
         return;
@@ -649,7 +649,7 @@ fn spill_over_the_edge(device: &wgpu::Device, queue: &wgpu::Queue, reach: (f32, 
 #[test]
 fn a_shorter_reach_spills_less_glow_over_an_edge() {
     let instance = wgpu::Instance::default();
-    let adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::PRIMARY));
+    let adapters = oag_gpu::test_adapter::ordered(&instance);
     if adapters.is_empty() {
         eprintln!("no GPU adapter: skipping");
         return;
@@ -668,7 +668,7 @@ fn a_shorter_reach_spills_less_glow_over_an_edge() {
 /// and returns the centre texel's red byte; `None` with no adapter.
 fn resolve_flat(store: SceneStore, stored: f64) -> Option<u8> {
     let instance = wgpu::Instance::default();
-    let adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::PRIMARY));
+    let adapters = oag_gpu::test_adapter::ordered(&instance);
     let adapter = adapters.first()?;
     let (device, queue) = pollster::block_on(adapter.request_device(&Default::default())).ok()?;
     let format = wgpu::TextureFormat::Rgba8Unorm;
