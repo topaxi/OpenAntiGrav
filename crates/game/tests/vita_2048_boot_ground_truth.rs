@@ -871,11 +871,11 @@ fn the_title_capture_settles_on_the_logo_and_the_prompt() {
             .min()
             .expect("a region")
     };
-    // White under the pale lattice, whose lines dip to about 203 at the
-    // atlas's own ink (the capture's reach 233).
+    // White under the pale lattice, whose lines dip to about 230 once the
+    // game's composite encode is applied (the capture's reach 233).
     let backdrop = darkest(0, 960, 0, 100);
     assert!(
-        backdrop >= 195,
+        backdrop >= 225,
         "the title's white backdrop, not a race or a loading screen: darkest channel {backdrop}"
     );
     let logo = darkest(130, 830, 130, 290);
