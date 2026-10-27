@@ -2,6 +2,7 @@
 # One HD Time Trial original frame from a COLD boot (no savestate), the capture path that keeps the circuit's glass clean:
 #   scripts/rpcs3-hd-cold-pair.sh <lane> <circuit-index> <out-dir> [oag-game]
 # A restored savestate paints garbage on the stand glass (docs/reverse-engineering/rpcs3-capture.md, 2026-10-21 glass study).
+# OAG_HD_CLASSIC=0 picks the other hull of the team (the saved profile unlocks one of them); OAG_HD_TEAM_RIGHTS (default 9, Harimau; Assegai is 7) and OAG_HD_TEAM (our --team name) pick the team.
 # The lane's env.sh should set OAG_RPCS3_GEOMETRY=2200x1300x24 so the 1920x1080 window is not clipped. Writes <out>/theirs.png
 # (and ours.png when the oag-game build knows the flags). The window is resized to the profile's output by rpcs3-hd-pair.py.
 set -uo pipefail
@@ -18,7 +19,7 @@ cd "$repo"
 # (`OAG_HD_KEEP_HULL_SHAKE=1` keeps it). Applied when RPCS3 loads the game, so before the boot below.
 python3 scripts/rpcs3-hd-no-hull-shake.py ${OAG_HD_KEEP_HULL_SHAKE:+--remove} || exit 3
 rm -f "$W/xdg/cache/rpcs3/TTY.log"
-bash scripts/emu-hd-glass-boot.sh "$lane" "$circuit" 9 1 cold-$circuit || exit 3
+bash scripts/emu-hd-glass-boot.sh "$lane" "$circuit" "${OAG_HD_TEAM_RIGHTS:-9}" "${OAG_HD_CLASSIC:-1}" cold-$circuit || exit 3
 export OAG_RPCS3_ATTACH=1
 uv run --with evdev python3 scripts/emu-run.py -- python3 -u scripts/rpcs3-drive.py --log-dir "$W/restart" restart | tail -1
 # The window is placed off-centre by RPCS3 and a 1920 wide resize then runs off the right edge of the Xvfb (a clipped frame the
@@ -28,4 +29,4 @@ win=$(for w in $(DISPLAY=$DISP xdotool search --onlyvisible --name ''); do DISPL
 DISPLAY=$DISP xdotool windowsize "$win" 1920 1080 windowmove "$win" 0 0; sleep 4
 mkdir -p "$out"
 extra=(); [ -n "$game" ] && extra=(--oag-game "$game")
-timeout 400 uv run --with evdev python3 scripts/rpcs3-hd-pair.py --out "$out" --team harimau "${extra[@]}"
+timeout 400 uv run --with evdev python3 scripts/rpcs3-hd-pair.py --out "$out" --team "${OAG_HD_TEAM:-harimau}" "${extra[@]}"
