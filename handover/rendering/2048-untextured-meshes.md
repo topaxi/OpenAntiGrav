@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [2048]
 updated: 2026-10-27
-summary: "2048 flat meshes: Vita +0x28 declaration pointer resolves on 100%; stride map reads lightmap/colour/tangent as diffuse on 75% of Empire Climb tris; wire it"
+summary: "2048 flat meshes: Vita +0x28 decl pointer resolves 100%; stride map reads wrong attribute on 75% of Empire Climb tris; wire it"
 size: M (35)
 difficulty: medium (35)
 ---
