@@ -334,7 +334,7 @@ it.** Each candidate, with where it was ruled out:
 | Mesh parity | `Canvas3D_BuildLatticeMesh` `0x81073cb8` | `bVar6` starts true, toggles per column and once per row (`0x81073cb8` lines at the loop ends): apex-up iff `col + row` even, as modelled | 85 |
 | Camera reset | `Canvas3D_ResetCamera` `0x81070c0c` (disassembled) | the values above, `+0xa0..+0xa8 = 0`, then zeroes the parent TouchScroll's position and the canvas's last-touch fields `+0x5ed10/+0x5ed14` | 85 |
 | Stick tilt | `Canvas3D_Update` `0x81072220` | every frame `+0xd8 += 1.8 dt (0.2 * pad[+0x5c60] - +0xd8)`, `+0xdc += 1.8 dt (-0.2 * pad[+0x5c5c] - +0xdc)`, `+0xe0` decays; `pad = 0x8122d664(DAT_818b9ea8, 0)`, the fields are the deadzone-clamped analog stick (`0x8122c20c`, `0x8122c6ca..`). A stick parallax, zero at rest. Fitting both extra angles against the capture with no offset reaches NCC 0.54 (against 0.938 for the plain offset), and an `x` tilt would move the 47.75 px row period: ruled out | 75 |
-| Pan by scroll | `Canvas3D_Update` and `TouchScroll_Update` `0x81103b46` | the pan follows the parent TouchScroll's position (`+0xa0/+0xa4`, getters at vtable `+0x5c/+0x60` = `0x813d0078`, `0x813d0080`): `pan.x -= (dx / 960) * span.x`, `pan.y += (dy / 544) * span.y`, with `span` = (16.5112, 9.8716) (`+0x5e0a8/ac`, Unicorn run of `0x8107086c` then `0x8107369a`). The canvas's parent is `FeShellTouchScroll` (`viewWidth 960`, `MaxScrollX 960`, `maxscrolly 544`); `TouchScroll_ParseValues` `0x811035a8` compares names with `SceLibc_184C4B07` = **`strcasecmp`** (vitasdk NID db), so the lower-case spellings parse, the range equals the view, and `TouchScroll_Update` pins the position at (0, 0). A 272 px centring (the case-sensitive reading) would land 6 px off anyway | 80 |
+| Pan by scroll | `Canvas3D_Update` and `TouchScroll_Update` `0x81103b46` | the pan follows the parent TouchScroll's position (`+0xa0/+0xa4`, getters at vtable `+0x5c/+0x60` = `0x813d0078`, `0x813d0080`): `pan.x -= (dx / 960) * span.x`, `pan.y += (dy / 544) * span.y`, with `span` = (16.5112, 9.8716) (`+0x5e0a8/ac`, Unicorn run of `0x8107086c` then `0x8107369a`). The canvas's parent is `FeShellTouchScroll` (`viewWidth 960`, `MaxScrollX 960`, `maxscrolly 544`); `TouchScroll_ParseValues` `0x811035a8` compares names with `SceLibc_184C4B07` = **`strcasecmp`** (vitasdk NID db), so the lower-case spellings parse, the range equals the view, and `TouchScroll_Update` pins the position at (0, 0). A 272 px centring (the case-sensitive reading) would land 6 px off anyway. **Struck 2026-10-27 (`lattice-live-read`): the live scroll position at the title is (-3000, -1500), not (0, 0); see the next section** | 80, wrong |
 | Taps | `scripts/vita3k-2048-menu-pair.py` `PLAN` | the title and game mode shots are taken before the walk's first tap (keys only), so no drag moved the pan | 90 |
 | Cell height | `Canvas3D_Ctor` `0x81070da0` | `canvasTex` is `U8U8U8U8_ABGR` (`0x0c000000`) filled `0x00ffffff`: alpha 0, `h = 0`; `canvasTex2` (`0x1b000000`, 8 bytes a texel) is zeroed: no uv shift. `Canvas3D_UpdateCellHeights` `0x81071794` raises cells only in a ripple (`+0x5ed24`) or around a music-spectrum centre (`+0x5ed40`, `DAT_818c3d58`), radial, not uniform | 70 |
 | Viewport | `sceGxmSetViewport` (`0x813f2340`), callers `0x81036462`, `0x8103659e`, `0x81036670`, `0x8103f11e`, `0x8103f5a4` | all `(x0 + w/2, w/2, y0 + h/2, -h/2)` with `x0 = y0 = 0` on one player; the scene target `DAT_816ae82c` is the display size. Flipping either axis in the fit drops NCC to 0.34 or keeps an offset | 80 |
@@ -384,6 +384,93 @@ were read, not executed); the TouchScroll chain 80.
 Omega: **checked, applies, not wired.** `eboot.bin` carries `TouchScroll_Item.cpp`, `FeShellTouchScroll`,
 `MaxScrollY` and `autoScrollSpeed`: the same scroll item and the same shell parent ship; the GCN draw and
 the update were not read.
+
+## The live read at the title: the phase is the game's state, the ink is not (2026-10-27, lane `lattice-live-read`)
+
+Vita3K `0.2.1 4095` (headless, muted, a private pref copy of the pair profile), EU v1.04, read through
+`/proc/<pid>/mem` of a Vita3K started as a child (`scripts/vita3k-mem.py`, guest = host - `0x400000000`),
+the guest stopped with `SIGSTOP` for each read. The state is the settled title ("PRESS ANY BUTTON TO
+START", before any key). The claim was falsifiable: had every field equalled the reset values, the offset
+and the ink would have been Vita3K's drawing.
+
+**Canvas singleton `*(0x8151d3f4)` = `0x85d69510`** (confidence 85, two boots, identical):
+
+| Field | Live | Reset (`Canvas3D_ResetCamera`) |
+| --- | --- | --- |
+| `+0xac`, `+0xb0`, `+0xb4` (angles) | -0.45, -0.1, 0 | same |
+| `+0xd8..+0xe0` (stick tilt) | 0, 0, 0 | same |
+| `+0xb8`, `+0xbc` (pan) | **78.76, -26.824** | 27.1627, 0.3955 |
+| `+0xc0` (half-width) | 8.0 | 8.0 |
+| `+0xc4`, `+0xc8` (`posOffset`) | 55.0, 8.66025 (a lattice vector: 110 x 0.5, 10 x 0.866) | window placement |
+| `+0xd0`, `+0xd4` (`texCoord2offset`) | 110/512, 10/128 | same law |
+| `+0x5ec90` (matrix, translation row) | (-9.56032, 4.65163, -0.94692) | (-3.29062, -0.86307, -0.98078) |
+| `+0x5ed10`, `+0x5ed14` (last scroll) | -3000, -1500 | 0, 0 |
+| `+0x30` | `0x0000f086` (bit `0x80` set: the canvas draws) | |
+
+The rotation and ortho rows equal the executed ones, so the matrix differs only by the pan.
+
+**Parent `FeShellTouchScroll`** (`canvas+8` = `0x820c9e20`, vtable `0x8150ecf0`, getters at `+0x5c/+0x60`
+= `0x813d0078`/`0x813d0080`): **`+0xa0/+0xa4` = (-3000, -1500)**, velocity `+0xa8/+0xac` = 0, view `+0xd4/+0xd8` =
+960 x 544, content bounds (`+0xb4..+0xc0`) (-103.4, 5123.3, 1495.3, 4386.1). Sampled every 0.1 s from the launch
+on two boots: the canvas exists at about 2.2 s with pan (27.1627, 0.3955) and scroll (0, 0), and **in one
+step at about 5.2 s** (about 3 s after the canvas, before any key press) the scroll is (-3000, -1500) and the
+pan (78.76, -26.824) in the same sample. A third boot on an empty `PCSF00007` save gave the same values, so
+the value does not depend on campaign progress.
+
+**The phase is explained, by arithmetic and not by a fit (confidence 85).** `Canvas3D_Update`
+(`0x81072220`) moves the pan by the scroll delta from the last scroll it saw (the reset zeroed it):
+`pan.x -= (dx / 960) * 16.5112` and `pan.y += (dy / 544) * 9.8716` with `d` = (-3000, -1500) gives
+27.1627 + 51.5975 = 78.7602 and 0.3955 - 27.2195 = -26.824, to every printed digit. The world offset
+between the live and the reset matrix solves `A * delta = t_live - t_reset` on the `z = 0` plane
+(`A` = the 2 x 2 of `+0x5ec90`): `delta` = (-51.597, -27.2195). Reduced by the lattice vectors (1, 0) and
+(0.5, 0.866) that is **(0.4027, 0.4933)**; the lane `lattice-wire` fitted **(0.40, 0.50)** to the capture.
+Feeding the live matrix to the same numpy render with no offset, the mean grey difference to the
+`2048/menu-title` and `menu-game-mode` captures in the five boxes, as authored and at ink x 0.5:
+
+| Box | white | live matrix, ink 1.0 | live matrix, ink 0.5 |
+| --- | --- | --- | --- |
+| title top (0, 20, 960 x 110) | 2.43 | 2.61 | 0.65 |
+| title bottom (0, 515, 960 x 29) | 1.68 | 1.80 | 0.57 |
+| title left (0, 140, 110 x 200) | 2.20 | 2.35 | 0.58 |
+| game mode left (0, 100, 215 x 440) | 2.25 | 2.40 | 0.61 |
+| game mode right (740, 100, 220 x 440) | 2.22 | 2.39 | 0.62 |
+
+The offset-0 rows of the table in "Phase and grey" were the reset camera; the live camera needs no offset.
+
+**Who writes (-3000, -1500): not pinned (confidence 55 on the candidates).** It is not a literal (no
+`0xc53b8000` or `0xc4bb8000` word in the patch `eboot.elf`) and not `Canvas3D_ResetCamera` (which writes
+(0, 0) through `TouchScroll_SetScroll` `0x811042ae`, `pos = (p3 - p1, p4 - p2)`). Every caller of
+`TouchScroll_SetScroll` other than the reset passes zeros except two paths of the campaign map page,
+which centre the current event's node on the screen: `FUN_810efc4a` (call `0x810effcc`) and
+`FUN_810efff6` (call `0x810f032a`) both compute the node's screen position through the canvas matrix
+(`+0x5ec90`..`+0x5ecc0`, node fields `+0x2c4/+0x2c8/+0x314/+0x318`, default node `"2048 - Event 1"`) and
+call `SetScroll(sx, sy, 480.0, 272.0)`, i.e. a scroll of `(480 - sx, 272 - sy)`. -3000 and -1500 are round
+for a projected node and the bounds above do not make them a clamp; which call ran, and why the numbers are
+round, is open. So the lattice's phase at the title is **the campaign map's centring of the first event**,
+state the page code computes, not a Vita3K artefact and not the reset camera.
+
+**The ink is not explained (confidence 70 that no game state read causes it).** Read at the same title:
+
+- The atlas sampled by the draw: `DAT_81732674` is a resource record (`0x829b8c30`); 16-byte
+  `SceGxmTexture` descriptors with data pointer `0x71492020` exist in dozens of command-buffer copies, and
+  **the 2,796,208 bytes at `0x71492020` are identical to `canvasTexture.gxt`'s data (offset `0x40`)**. The texture
+  the game hands to the GPU is the disc's, unchanged.
+- `canvasTex` (`*(0x8151d3ec)` = `0x70bc4410`): over the whole 512 x 128 texture two texels only,
+  `ff ff ff 00` (48,120) and `00 00 00 00` (17,416); the 90 x 32 window is all `ff ff ff 00`. Alpha 0, so
+  `h = 0`, `s = 0`, vertex colour white. `canvasTex2` (`*(0x8151d3f0)`) is 65,536 zero texels.
+- The draw is opaque (the static read above), and nothing else moved: the live matrix with the authored ink
+  loses to white (table above).
+
+So the half ink is not in the game's state and not a translucent layer the canvas item holds. What remains
+is outside the memory read: Vita3K's host-side texture decode or filtering of the PVRTC-II atlas (the file
+header says `0x83000000`, `PVRTII4BPP`; the descriptor word 1 reads `0x82721600`, whose packing was not decoded
+and is a lead), or a layer drawn by another item after the canvas. By elimination only: the GPU copy of the
+texture was not reachable. A pair judged on this basis is a question for the maintainer (the lead asks).
+
+Omega: **checked, applies** for the scroll law (the same `TouchScroll_Item.cpp` and shell parent ship); the live
+value is **not checkable** (shadPS4 has no memory readout), and its campaign-map centring was not read.
+HD: **checked, differs** (no `Canvas3D`).
+
 
 ## HD / Omega cross-check (CLAUDE.md)
 
