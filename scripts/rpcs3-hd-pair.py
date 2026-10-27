@@ -175,7 +175,10 @@ def main():
     plat = pair.plat
     size = args.size or ce.size_text(plat)
     scratch = out / "ours-profile"
-    ce.write_ours_settings(plat, scratch / "profile")
+    # The original's Safe Area Setting off the save its RPCS3 reads (taken before ours' profile replaces
+    # `XDG_CONFIG_HOME` below); ours is drawn at it, the profile's pin being the fallback.
+    safe_area = ce.record_safe_area(pair, restored_state=bool(args.state))
+    ce.write_ours_settings(plat, scratch / "profile", safe_area)
     # Whether this lane's RPCS3 draws the hull shake: `scripts/rpcs3-hd-no-hull-shake.py` patches it out, read
     # back from the lane's own patch file rather than trusted from a variable, before ours' profile replaces
     # `XDG_CONFIG_HOME` below.
@@ -334,7 +337,7 @@ def main():
     pair.rec["ours"]["flags"] = [str(c) for c in cmd[2:]]
     run(cmd + ["--ticks", args.ours_ticks, "--screenshot", out / "ours.png"], stdout=subprocess.DEVNULL)
     run(cmd + ["--ticks", args.ours_ticks, "--trace-out", ours_csv], stdout=subprocess.DEVNULL)
-    got, bad = ce.read_back(plat, scratch / "profile")
+    got, bad = ce.read_back(plat, scratch / "profile", safe_area)
     pair.rec["ours"]["settings_readback"] = got
     for b in bad:
         pair.check("ours settings", False, b)

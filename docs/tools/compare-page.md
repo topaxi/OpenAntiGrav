@@ -291,6 +291,45 @@ under `NO_COLOR` or a pipe (`FORCE_COLOR=1` forces it). It does not re-run
 the pair scripts' checks on ours (pose read back from our trace, settings read back): a change that moves our pose
 shows up only in the picture and the scores.
 
+### The Safe Area Setting a pair's original ran at (2026-10-27, `pair-safe-area`)
+
+HD draws its HUD and front end at the player's `Safe Area Setting` ([hd-hud](../formats/hd-hud.md), "The whole HUD is drawn
+at the Safe Area Setting"; the slider is `save="true"`, the disc default 90), so a pair is only structurally comparable when
+ours is drawn at the value the original ran with. Every HD pair therefore records it as `original.safe_area`:
+
+```json
+"safe_area": {"percent": 96, "source": "save file", "file_sha256_12": "a6278b4ef8f5", "file_mtime": "2026-10-21T10:28:40+02:00"}
+```
+
+- **Where it is read.** `compare_env.read_hd_safe_area()` parses the option's record out of the save RPCS3 reads,
+  `<XDG_CONFIG_HOME>/rpcs3/dev_hdd0/home/*/savedata/BCES00664-AUTO-/DATA.BIN` of the capture's private profile. A record is a
+  0x40-byte name field (`Safe Area Setting`), a u32 value length, a u32 0x40, a runtime pointer, and the value as a string at
+  name + 0x60: `96%` in the maintainer's save, a bare `96` (no `%`) in a save an older run wrote. Nine distinct private saves
+  were read on 2026-10-27 and every one holds 96, so the parse is proven against two spellings of one value; a second value
+  is exercised only by a synthetic record in `check-compare-environment.py`. No emulator is started to read it.
+- **Cold-booted pairs** (the menus, `rpcs3-hd-menu-pair.py`) show exactly what the game read at boot. **A pair that restores a
+  save state** (`rpcs3-hd-pair.py --state`) carries the state's own RAM, which the file may not match, so its `source` says
+  so; the live read of the RAM chain (TOC 0x008ad4d8, slot -0x7924(r2), pointer to pointer, +0x104 big-endian float) stays
+  the check for a state taken at another value.
+- **Ours is drawn at it.** The pair scripts and `compare-rerender-ours.py` pass the recorded percent to
+  `compare_env.write_ours_settings(plat, dir, safe_area)`, which overrides the profile's `hud_safe_area` pin (the pin is the
+  fallback); `read_back` compares `graphics.hud_safe_area` against it, and the re-render fails a pair whose rewritten
+  settings file disagrees. A pair with no recorded value keeps the pin, and says so in `ours.safe_area_basis` and in its
+  environment text. Proof the override reaches the picture: the same Ship Select pair at 90 instead of 96 moves its rules by
+  (-6,3) to (8,3) px and mean grey 10.6 to 20.9.
+- **A pair without it is reported.** `Pair.finish` fails the check "original Safe Area Setting recorded" on an HD pair that
+  has none, `compare_env.py manifest` warns, and `python3 scripts/compare_env.py missing-safe-area DIR...` lists them (exit 1).
+- **Backfill.** Pairs made before this carry no value; `python3 scripts/compare-backfill-safe-area.py DIR [--apply]` sets
+  `{"percent": 96, "source": "RAM read 2026-10-21 (docs/formats/hd-hud.md)"}` on every HD pair that has none (all thirteen HD
+  states and the menus came from the one save).
+
+A menu pair also records what its page was drawn with beyond the profile: `ours.front_end_style` and `ours.race`
+(`race.team`, `race.track`, `race.variant_chosen`). `compare-rerender-ours.py` writes both back into the private settings
+(`compare_menu.extra_settings`); before 2026-10-27 it did not, so a re-rendered picker drew the title's first team, Assegai,
+on concept1, where the original shows Feisar. HD's Ship Select also needs `variant_chosen = true`: a profile that never picked
+a model opens on concept1 (stats 080/085), where the original's classic Feisar reads 070/100/080/080. The Omega menu script records `ours.race` from now on; the 2048-menu and Pulse/Pure
+menu scripts do not yet, so their re-renders still drop their `race` selection (older Omega pairs have none either).
+
 ## Capturing a pair per title
 
 Every recipe runs in its own display and data directory, muted, and is stopped by PID. A pair is only a pair when

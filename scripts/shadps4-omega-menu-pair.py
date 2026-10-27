@@ -162,7 +162,7 @@ def main():
             cm.menu_pair(pair, theirs_png=shot["png"], oag_game=args.oag_game, image=ce.MAIN / "data/extracted/ps4", page=item["page"],
                          drawn_from=item["drawn_from"], xml_file=item["xml"], screen_seen=item["screen"], screen_wanted=item["screen"],
                          profile_dir=profile, size=ce.size_text(plat), front_end_style=args.front_end_style or "the disc's own",
-                         language="English", original_language="English", selection=item["selection"], extra_args=item.get("args", []))
+                         language="English", original_language="English", selection=item["selection"], extra_args=item.get("args", []), race=item.get("race"))
             pair.finish()
         except SystemExit as exc:
             if exc.code == 3:

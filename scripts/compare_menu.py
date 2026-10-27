@@ -41,14 +41,14 @@ def log(msg):
 
 def extra_settings(profile_dir, front_end_style=None, race=None):
     """Append the keys a menu still needs to ours' private `settings.toml`: the front-end styling (HD or FURY) and the
-    race selection a picker highlights (`race.team`, `race.track`, `race.mode`). `ce.write_ours_settings` wrote the
+    race selection a picker highlights (`race.team`, `race.track`, `race.mode`, `race.variant_chosen`: strings or booleans). `ce.write_ours_settings` wrote the
     render profile; the game rewrites the file on its first run and keeps these values."""
     path = ce.settings_path(profile_dir)
     text = path.read_text()
     if front_end_style:
         text = text.replace("[display]\n", '[display]\nfront_end_style = "%s"\n' % front_end_style, 1)
     if race:
-        text += "\n[race]\n" + "".join('%s = "%s"\n' % (k, v) for k, v in race.items())
+        text += "\n[race]\n" + "".join("%s = %s\n" % (k, json.dumps(v)) for k, v in race.items())
     path.write_text(text)
 
 
@@ -84,7 +84,7 @@ def render_ours(oag_game, image, plat, page, out_png, profile_dir, size, extra_a
 
 def menu_pair(pair, *, theirs_png, oag_game, image, page, drawn_from, xml_file, screen_seen, screen_wanted,
               profile_dir, size, front_end_style, language, original_language, selection, extra_args=(), notes=(), route=None,
-              screen_source="TTY.log, Switching Screen"):
+              screen_source="TTY.log, Switching Screen", race=None, safe_area=None):
     """Fill `pair` for one front-end screen and check it. `drawn_from` is how ours draws `page` (`DRAWN_FROM`); the
     pair is refused (exit 3 from `Pair.finish`) when it is `menu.toml`, when the screen names differ, when a size is
     off, or when the language or styling differ. `selection` records the highlighted row on both sides; `{"matched": False, "why": ...}` ships the pair with the difference
@@ -98,6 +98,9 @@ def menu_pair(pair, *, theirs_png, oag_game, image, page, drawn_from, xml_file, 
     pair.rec["original"]["selection"] = selection["original"]
     pair.rec["ours"]["language"] = language
     pair.rec["ours"]["front_end_style"] = front_end_style
+    # What `extra_settings` put in ours' profile, kept so a re-render (`compare-rerender-ours.py`) can put it back.
+    if race:
+        pair.rec["ours"]["race"] = dict(race)
     pair.rec["ours"]["selection"] = selection["ours"]
     pair.rec["ours"]["page"] = page
     if route:
@@ -121,7 +124,7 @@ def menu_pair(pair, *, theirs_png, oag_game, image, page, drawn_from, xml_file, 
         return False  # a doomed pair is not rendered; `Pair.finish` names every failed check
     cmd = render_ours(oag_game, image, plat, page, out / "ours.png", profile_dir, size, extra_args, route)
     pair.rec["ours"]["flags"] = [str(c) for c in cmd[2:]]
-    got, bad = ce.read_back(plat, profile_dir)
+    got, bad = ce.read_back(plat, profile_dir, safe_area)
     pair.rec["ours"]["settings_readback"] = got
     for b in bad:
         pair.check("ours settings", False, b)

@@ -38,6 +38,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 import compare_env as ce  # noqa: E402
+import compare_menu as cm  # noqa: E402
 
 BINARY = ROOT / "target/debug/oag-game"
 MANIFESTS = ("fresh.toml", "race-shots.toml", "zone.toml", "pure.toml", "2048.toml", "omega.toml")
@@ -108,7 +109,18 @@ def rerender(pj, binary):
     image = argv[argv.index("--image") + 1] if "--image" in argv else str(ce.MAIN / plat["image"])
     with tempfile.TemporaryDirectory(prefix="oag-ours-") as tmp:
         tmp = Path(tmp)
-        ce.write_ours_settings(plat, tmp / "profile")
+        # The Safe Area the pair's original ran at (`original.safe_area`) overrides the profile's pin; a pair with none
+        # recorded keeps the pin and the record says so. A menu pair's own extras (front-end styling, the race
+        # selection a picker highlights) are put back too: without them a picker draws the title's first team.
+        safe_area = ce.recorded_safe_area(rec)
+        ce.write_ours_settings(plat, tmp / "profile", safe_area)
+        if rec.get("kind") == "menu":
+            style = rec["ours"].get("front_end_style")
+            # a pair records prose for a title with no styling choice ("the disc's own"): only HD's two values are a setting
+            cm.extra_settings(tmp / "profile", style if style in ("HD", "FURY") else None, rec["ours"].get("race"))
+        if "hud_safe_area" in plat["ours"]:
+            rec["ours"]["safe_area_basis"] = ("the pair's recorded original value, %d%%" % safe_area if safe_area is not None
+                                             else "no value recorded for this pair: the profile's %d%%" % plat["ours"]["hud_safe_area"])
         shot = tmp / "ours.png"
         env = dict(os.environ, **ce.ours_env(tmp / "profile"))
         done = subprocess.run([str(binary), image] + flags + ["--screenshot", str(shot)], env=env, cwd=ROOT,
@@ -118,6 +130,11 @@ def rerender(pj, binary):
             return "FAILED (rc %d): %s" % (done.returncode, tail)
         if ce.image_size(shot) != ce.image_size(pair_dir / "theirs.png"):
             return "FAILED: ours is %s, theirs %s" % (ce.image_size(shot), ce.image_size(pair_dir / "theirs.png"))
+        if "hud_safe_area" in plat["ours"]:  # the override reached the run: the file the game rewrote still says it
+            want = safe_area if safe_area is not None else plat["ours"]["hud_safe_area"]
+            got = tomllib.loads(ce.settings_path(tmp / "profile").read_text())["graphics"].get("hud_safe_area")
+            if got != want:
+                return "FAILED: ours ran with hud_safe_area %r, the pair says %r" % (got, want)
         shutil.move(str(shot), pair_dir / "ours.png")
     subprocess.run(["magick", "montage", pair_dir / "theirs.png", pair_dir / "ours.png", "-tile", "2x1",
                     "-geometry", "+2+2", pair_dir / "side.png"], check=True)
