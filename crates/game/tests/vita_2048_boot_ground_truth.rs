@@ -453,8 +453,7 @@ fn ship_model_data_forces_the_player_craft_on_some_events() {
     );
 }
 
-/// This build's two tiles are on the grid, after the authored four and the
-/// tick, and ask for this build's own pages.
+/// This build's two tiles are on the grid, after the authored six, and ask for this build's own pages.
 #[test]
 #[ignore = "needs the extracted package under data/extracted/vita/"]
 fn the_race_box_and_remix_tiles_follow_the_authored_grid() {
@@ -475,9 +474,9 @@ fn the_race_box_and_remix_tiles_follow_the_authored_grid() {
             "{label} is on the grid"
         );
     }
-    // Six tiles, the tick, then the two: seven rights land on RACEBOX.
+    // Six tiles (the tick is hidden), then the two: six rights land on RACEBOX.
     let mut input = Input::new();
-    for _ in 0..7 {
+    for _ in 0..6 {
         input.begin_frame(Button::Right.bit());
         frontend.update(1.0 / 60.0, &mut input, None);
         input.begin_frame(0);

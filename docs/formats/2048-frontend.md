@@ -998,6 +998,36 @@ different tiles needs a test driving per-tick input
 (`crates/game/tests/vita_2048_boot_ground_truth.rs::press_release`), not a
 single `--press` mask.
 
+## `GameModeChoice`'s positions are code, not the file (2026-10-27)
+
+**Confidence 85.** `docs/ghidra/functions/vita-2048-eu-v104/game-mode-choice-layout.md`:
+the screen's constructor overwrites every tile's position from which DLC
+packages are mounted (top row `y=95`, not the patch's authored `110`; one row
+of four at `y=190` with none), hides the tick, hides an unmounted campaign's
+tile, and greys only `multiplayer` and `crossplay`. `adhoc` is always the
+enabled blue. Wired in `crates/ui/src/frontend/mode_grid.rs`; the pair
+`2048/menu-game-mode` fell from 36.2 to 6.4 mean grey (compare shot, `oag-game
+--original-menu`). This corrects the earlier claims that positions are authored
+and that ADHOC greys with the network modes.
+
+Omega: **checked, differs**. Its eboot carries the same class strings, but its
+front end is HD's `<HorizMenu>`, so the screen is not reached (layout law not
+re-read on PS4 code).
+
+## Backdrop lattice: negative result (2026-10-27, member `2048-menu-backdrop`)
+
+The pale triangle-lattice behind every 2048 menu has no disc texture among the
+722 `FE/Images` and `FE/NewImages` entries of the base `data.psarc`:
+`background.gxt` is 32x32 noise; `endrace_bg`, `lobby_border` and `canvasTexture`
+are not it; `NEWGUI/Skin.xml` and `Definition.xml` name no backdrop. The
+patch's `data1.psarc`/`data2.psarc` were not searched. `BootFlowCanvas_Item`'s
+draw slot `0x813c668c` is a bare `bx lr`; `3dCanvas_Item`'s constructor
+`FUN_81070da0` builds a 401x120 cell grid and two 512x128 `sceGxm` textures,
+so the lattice is probably code-generated (confidence ~50, vtable `0x8150ad38`,
+draw unread). Measured off the frame: horizontal line period about 47.8 px,
+60-degree diagonals, line grey 233-245 on 255. It moves the frame metric by
+about 2 grey, so it is not wired.
+
 ## See also
 
 - [hd-frontend](hd-frontend.md) - the reading this page's shape and rigor are
