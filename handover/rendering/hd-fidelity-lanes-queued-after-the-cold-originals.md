@@ -132,7 +132,7 @@ one), or the sky map as a layer beside the probes (different sizes today, 512x25
 - **`m_diffuse_normal_constantspecular`'s normal alpha**: the RGB is a normal map
   (`docs/formats/rcsmaterial.md`); what its alpha carries is unread.
 
-- **Ours is 11-18 % brighter: READY TO WIRE** (2026-10-27, `hd-brightness`; `docs/rendering/hd-track-tone.md`, "The dark-end lift is the final encode"). Cause: `fs_encode` ends on `pow(x, 1/2.2)` where the original's ROP writes the true sRGB curve. Change: swap that one line for an sRGB encode (linear segment below 0.0031308, else `1.055 * x^(1/2.4) - 0.055`). Dark-end (original luma < 60) mean diff on 13 pairs goes from +3..+9 to -2..+1 (Moa +5, Modesto +1.8 stay); box luma 1.18/1.18/1.11 -> 0.95/0.96/1.00. Held on purpose: whole-frame rmse rises 1-3 % because the lift had masked the open bloom deficit (Anulpha mean luma 0.97 -> 0.91), and the `-1.5` bias then reads sharp (fine 1.27) so the crispness call needs a re-check after it lands. The adaptation-law patch does not move it. Size S (15), difficulty low (80).
+- ~~**Ours is 11-18 % brighter**~~ **WIRED** (2026-10-27, `hd-srgb-encode`): `fs_encode` ends on the sRGB curve. Dark-end diff on the 13 pairs is -2.0..+1.8 (Moa +5.0). Open lead from it: whole-frame rmse rose 1-3 % (Vineta K 0.0616 -> 0.0624) and mean luma ratio fell on Anulpha 0.966 -> 0.913 and Vineta K 1.000 -> 0.970, which is the known bloom deficit the lift had masked; chase the bloom level next. The `-1.5` bias reads fine near 1.18-1.27 (Vineta K, Anulpha) at the new encode; the maintainer chose it, re-judge only on request.
 
 ## Later, not queued
 
