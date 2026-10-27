@@ -20,14 +20,13 @@ code. It supersedes the HD lead "Main Menu and Racebox setup are our own tree" w
 
 Ranked by visible area on the 1920x1080 frame (read off the pair images, each pair run twice).
 
-1. **Omega Campaign cell and grid: no flyer card, wrong grid** (largest: mean grey difference 129 and 55). The original's
-   dark-red panel (cell) and red flyer (grid) cover 60 to 80 % of the frame; ours is a white page with the ghosted backdrop
-   tower. Ours also draws Omega's own first grid (18 points, `01_TRACK` unresolved) for `grid-select` and `grid-select-hd`,
-   neither of the original's three campaigns (2048 Cup, HD, Fury), and `campaign-select` refuses on Omega. Needs: the
-   Omega campaign selector and the flyer card on Omega's source (HD's cards draw on HD).
-   **Do not confuse the HD and Fury campaigns**: the maintainer recalls (2026-10-26, from play, unverified) that only the
-   Fury campaign draws the red background rect; HD's does not. Check which campaign the original frame shows before
-   matching a panel, and pair each of Omega's three campaigns against its own original frame.
+1. **Omega Campaign cell and grid: Fury's card draws since 2026-10-27 (`omega-fury-cell`); leftovers.** Cell pair mean
+   grey 129.0 to 13.4, grid 55.0 to 40.9 (`docs/ui/campaign-screens.md`, "Omega: Fury's cards draw"). Open: the card
+   shell's outline and reflection (`00_flyer.rcsmodel` is rejected by `flyer::shell`'s PS3 chunk reader), the white box
+   where the wordmark (cell) and hexagon logo (grid) belong (second alpha texture of the PS4 material), the sponsors
+   strip and the red edge stripes, `17_TRACK` unresolved to `TALON'S JUNCTION`, and the Omega `Campaign Selection`
+   chooser (three-way: 2048, HD, Fury; `campaign-select` still refuses). Pair each of Omega's other two campaigns against
+   its own original frame when one is captured. The maintainer's recall that only Fury draws the red rect held: HD's grids on Omega draw no red.
 2. **Omega Ship Select: hull and logo** (34 grey). Ours draws the hull about twice the original's size in another livery
    (dark teal and yellow against pale blue and yellow) and a ringed Feisar logo against the flat one; the cursor starts on
    the top hex where the original's fresh profile lands on the first unlocked craft.

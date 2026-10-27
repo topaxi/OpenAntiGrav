@@ -677,9 +677,7 @@ their mode** - never a circuit id that resolves to nothing. Grids 16-18 lack
   the screens a finished race (autopilot, 3 laps of `01_Track`, about 7,000
   ticks) shows the built-in results table and the next confirm returns to
   `Main Menu`, **not** `Cell Selection` as on HD.
-- **Omega has no `Campaign Selection` screen and no flyer cards in this build** (`load_omega` passes `selection_layout:
-  None, grid_layout_fury: None, flyers: None`; `RACE CAMPAIGN` opens `Grid
-  Selection` directly, `Event 01/16`); the flyer-card work drew them for HD only.
+- **Omega draws Fury's flyer cards since 2026-10-27, and has no `Campaign Selection`**: `load_omega` keeps `selection_layout: None` (its chooser is three-way, 2048/HD/Fury, unmodelled) and reads `grid_layout_fury` and the cards; `RACE CAMPAIGN` opens `Grid Selection` directly, `Event 01/16`. See `docs/ui/campaign-screens.md`, "Omega: Fury's cards draw".
 - **Not Omega's to fix here, seen on the walk:** (the HUD absence seen here was
   fixed 2026-10-06, `omega-hud`), 793 of the
   circuit's materials are unresolved (white surfaces on `08_Track`), and the

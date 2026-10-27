@@ -465,6 +465,7 @@ fn load_hd(
         &screens,
         selection_layout.is_some(),
         oag_hd::campaign::SCREEN_ENTRY,
+        crate::flyer::FURY_GAIN,
     );
     // `Cell Selection`'s own `Confirm`/`Back` legend, off the shared
     // front-end root - see [`read_footer`]'s own doc. `Cell Help` and the
@@ -670,6 +671,7 @@ fn load_flyers(
     screens: &oag_ui::screen::Screens,
     has_selection: bool,
     screen_entry: &str,
+    fury_gain: f32,
 ) -> Option<crate::flyer::Flyers> {
     // Every card: the base campaign's eight, Fury's eight and the two
     // `Campaign Selection` cards, each with the window of its camera's image
@@ -679,7 +681,7 @@ fn load_flyers(
         let (window, gain) = if is_base(index) {
             (crate::flyer::HD_WINDOW, crate::flyer::BASE_GAIN)
         } else {
-            (crate::flyer::FURY_WINDOW, crate::flyer::FURY_GAIN)
+            (crate::flyer::FURY_WINDOW, fury_gain)
         };
         Some(crate::flyer::CardSpec {
             flyer: grid.flyer_name.clone()?,
@@ -693,7 +695,7 @@ fn load_flyers(
         let gain = if is_base(index) {
             crate::flyer::BASE_GAIN
         } else {
-            crate::flyer::FURY_GAIN
+            fury_gain
         };
         Some(crate::flyer::CardSpec {
             flyer: grid.flyer_name.clone()?,
@@ -844,8 +846,12 @@ fn load_omega(
         oag_omega::campaign::AUTHORED_GRID,
     )
     .context("Cell Selection is not on this screen")?;
-    let (selection_layout, grid_layout_fury) =
-        hd_selection_screens(title, &screens, strings, faces, grid);
+    // `Grid Selection Fury` is read; `Campaign Selection` is not kept. Omega's chooser lists three
+    // campaigns (2048, HD, Fury) where [`oag_ui_screens::campaign::selection`] models HD's two, so
+    // the live session opens on `Grid Selection` as it did before, and `--menu-page
+    // campaign-select` still refuses here.
+    let (_, grid_layout_fury) = hd_selection_screens(title, &screens, strings, faces, grid);
+    let selection_layout: Option<Layout> = None;
 
     let grids = read_grids(
         archives,
@@ -859,6 +865,7 @@ fn load_omega(
         &screens,
         selection_layout.is_some(),
         oag_omega::campaign::SCREEN_ENTRY,
+        oag_omega::campaign::FURY_CARD_GAIN,
     );
     // See [`load_hd`]'s own identical call - Omega's front end is HD's
     // `PI001` plugin carried forward, at the same relative root path.
