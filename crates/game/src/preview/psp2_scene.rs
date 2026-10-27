@@ -70,10 +70,28 @@ pub fn model_named(
         {
             log::debug!("card model {entry}: {report}");
             model.keep_nearest();
+            alpha_from_the_picture(&mut model);
             return Ok((model, textures));
         }
     }
     super::model_named(archives, entry)
+}
+
+/// Reads a card's coverage from its picture's **alpha** channel.
+///
+/// The PS4 build leaves a vertex's coverage channel at `0` (the red channel), which
+/// is not what `simpletextureandtexturealpha` samples: its one sampler is `Texture1` and
+/// the alpha is that texture's own (`blitzed_grid.gnf` is white with the hexagons in its
+/// alpha: read from red it draws a solid white box). Scoped to the flyer cards on
+/// purpose, like [`model_named`]: the circuits' and hulls' blended draws keep the channel they
+/// had until measured (`handover/frontend/`, the PS4 coverage-channel lead).
+fn alpha_from_the_picture(model: &mut Model) {
+    use mesh::slots;
+    for vertex in &mut model.vertices {
+        if (vertex.slots >> 3) & 3 == 0 {
+            vertex.slots |= slots::DEFAULT;
+        }
+    }
 }
 
 /// A selection screen's model, a circuit or a craft's hull: the PS4 scene when
