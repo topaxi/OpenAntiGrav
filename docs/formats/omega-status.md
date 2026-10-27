@@ -703,8 +703,8 @@ coverage lead is **not** the cause here (checked: a lightmap's channels sample c
 `cf_chevron_pulse_displacement2out` (33 materials in Omega's two Anulpha models, `data01.psarc`) declares
 HD's chevron program's names exactly: emask sampler `0x1202d8df` (`ds_floorchevron_emask.gnf`), wave
 `0x85c9fd48` (`ds_wave_c.gnf`), `Colour` `0x02ab9f07` (0, 1.49, 0), `k` `0x220cf0e6` (0.2), `offset`
-`0xa6f5352f` (0.0139 forward, 1.0 reversed), and no `time`. The GCN is unread, so the program is
-**inherited from HD by matching hashes** (`psp2::chevron`, sharing `mesh::rcs::chevron_pulse`'s entry,
+`0xa6f5352f` (0.0139 forward, 1.0 reversed), and no `time`. The GCN is unread, so the trial
+**inherited the program from HD by matching hashes** (a `psp2::chevron` module, **tried and not merged**, sharing `mesh::rcs::chevron_pulse`'s entry,
 `slots::LIT_ALPHA` and the fifth and sixth bindings). The offset is held at the authored value (the PS4
 material curves are unread), so nothing sweeps; HD's own offset runs on the scenery clock, chosen not measured.
 

@@ -42,7 +42,7 @@ camera diff, `sign_diff.png`).
 
 ## Next Steps
 
-0. (2026-10-27, `omega-chevron-pulse`) Read the real program of `cf_chevron_pulse_displacement2out`: Omega's original draws the family flat, HD's law (wired by hashes, `psp2::chevron`) draws it worse on `omega/anulpha-pass` (41.04 to 48.68). Start from 2048's Vita `cf_chevron_pulse` GXP (`scripts/vita-gxp.py`), then Omega's GCN. See `docs/formats/omega-status.md`, "Anulpha Pass's chevron floor".
+0. (2026-10-27, `omega-chevron-pulse`) Read the real program of `cf_chevron_pulse_displacement2out`: Omega's original draws the family flat, HD's law (tried by matching hashes, not merged) draws it worse on `omega/anulpha-pass` (41.04 to 48.68). Start from 2048's Vita `cf_chevron_pulse` GXP (`scripts/vita-gxp.py`), then Omega's GCN. See `docs/formats/omega-status.md`, "Anulpha Pass's chevron floor".
 
 1. Read a scroll shader's GCN (the Omega eboot is `ps4-omega-eu`) to settle
    `TimeScaler` versus `time` and the sign, which would measure the rates for
