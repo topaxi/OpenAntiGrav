@@ -620,7 +620,7 @@ fn the_team_screen_draws_the_grids_badges_and_craft_icons() {
 }
 
 /// The Select Team panel's four rows read `<FE>` of the disc's own
-/// `HandlingStats/feisar2048/3/handlingstats.xml` (8, 7, 4, 6): the orange cells
+/// `PI_TeamModel name="speed"` of `Feisar2048` in `Plugins/teams/Definition.xml` (8, 7, 4, 6): the orange cells
 /// of each row and the number at its right, with the two header icons and the
 /// two ability icons above them. Dropping the loader or the panel's draw fails
 /// this.
@@ -674,7 +674,10 @@ fn the_team_panel_draws_feisar_speeds_ratings_off_the_disc() {
     assert_eq!(numbers, ["8", "7", "4", "6"]);
     let icons = list
         .iter()
-        .filter(|draw| matches!(draw, frontend::Draw::Sprite { rect, .. } if rect[2] == 64.0 && rect[3] == 64.0))
+        .filter(|draw| {
+            matches!(draw, frontend::Draw::Sprite { rect, .. }
+                if rect[2] == 64.0 && rect[3] == 64.0 && (rect[1] == 253.0 || rect[1] == 192.0))
+        })
         .count();
     assert_eq!(icons, 4, "team, class and the two ability icons");
 }

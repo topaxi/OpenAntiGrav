@@ -21,14 +21,16 @@
 //!   `clamp((rating - i - 0.5) * 2)`), else the literal grey `0x808080`
 //!   (`FUN_8105bc14(1.0, 0x808080, 0xff808080)`). A rating of 0 or 11 prints
 //!   `--` (the literals at `0x81453e50`/`0x81453e54`).
-//! - **The numbers** are `<FE>` of `HandlingStats/<team>/<n>/handlingstats.xml`
-//!   (the screen's own update, `0x8113a3b0`, passes the ship record's
-//!   `+0x1c4`, `+0x1cc`, `+0x1d0` and `+0x1d8` to the panel in that row
-//!   order). Row 1 is `speed`, row 2 `handling`, row 3 `shield` and row 4
-//!   `firepower`; in the HD/Fury mode the same call passes `+0x1c8` and
-//!   labels the rows `RC_SHIELD` and `RC_THRUST`, which is where `thrust`
-//!   sits in the record. The frame's 8/7/4/6 on Feisar Speed cannot tell
-//!   `speed` from `thrust` (both 8); the HD labels do.
+//! - **The numbers** are `<FE>` of the craft's `PI_TeamModel` in
+//!   `Data\Plugins\teams\Definition.xml` (`<FE speed thrust handling shield
+//!   length firepower description>`), which is the ship record the screen's
+//!   update (`0x8113a3b0`) hands the panel: it passes `+0x1c4`, `+0x1cc`,
+//!   `+0x1d0` and `+0x1d8` of it, in row order `speed`, `handling`, `shield`
+//!   (the HEALTH label) and `firepower`. In the HD/Fury mode the same call
+//!   passes `+0x1c8` (`thrust`) as the fourth row and labels the rows
+//!   `RC_SHIELD` and `RC_THRUST`. **Not** `HandlingStats`' own `<FE>`, which
+//!   agrees on Feisar Speed (8, 7, 4, 6) and differs elsewhere (Feisar Fighter
+//!   speed 5 against 3).
 //! - **The header**: a `Transparent2048` band `(anchor.x + 510, anchor.y - 44)`
 //!   418 x 44, the team icon (`Icon_Team_*`, 64 x 64) at `(anchor.x + 446,
 //!   anchor.y - 54)`, the craft-class icon (`Icon_Ship_*`, 64 x 64) 40 to its
@@ -191,7 +193,7 @@ fn abilities(team: &str, craft: usize) -> (Option<&'static str>, Option<&'static
 
 impl Frontend {
     /// Gives the Select Team panel its numbers: every craft's `<FE>` row, as
-    /// the composition root read it off the disc. Empty draws no rows (never a
+    /// the composition root read off the disc. Empty draws no rows (never a
     /// zero bar).
     pub fn set_team_ratings(&mut self, ratings: Vec<TeamRating>) {
         self.touch.team_ratings = ratings;

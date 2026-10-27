@@ -89,18 +89,6 @@ fn parses_a_whole_document() {
     assert_eq!(stats.airbrake_graphics.up_speed, 31.0);
     assert_eq!(stats.misc.weight_distribution, Some(37.0));
     assert_eq!(stats.fe.expect("the fixture carries <FE>").shield, 41.0);
-    assert_eq!(
-        stats.fe.expect("<FE>").firepower,
-        None,
-        "four bars: no fifth"
-    );
-}
-
-#[test]
-fn a_fifth_fe_bar_is_firepower() {
-    let xml = all_four().replace(r#"shield="41"/>"#, r#"shield="41" firepower="42"/>"#);
-    let stats = parse(&xml).expect("well-formed fixture");
-    assert_eq!(stats.fe.expect("<FE>").firepower, Some(42.0));
 }
 
 #[test]

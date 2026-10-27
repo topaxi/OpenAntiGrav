@@ -50,8 +50,8 @@
 //!   `ArrowTouchOnly`; the original frame shows no list at all, so none is
 //!   drawn (the labelled `FE_SKIN_*` stand-in is gone). Its three values
 //!   still reach no setting.
-//! - **The `<Model name="ShipModel">` hull preview.** No 2D front-end to
-//!   3D mesh seam exists for 2048 yet; see the handover thread.
+//! - **The `<Model name="ShipModel">` hull** is the composition root's:
+//!   [`Frontend::team_hull`] names the craft, `oag_game::team_hull` draws it.
 //! - **The tutorial bubble** (`FE_SHIP_STATS_TUT`): open, see the handover
 //!   thread. The statistics panel beside the grid is [`super::team_info`].
 //!
@@ -214,6 +214,19 @@ impl Frontend {
     #[must_use]
     pub fn team_choice(&self) -> Option<(&'static str, &'static str)> {
         let (team, craft) = self.touch.team_choice?;
+        Some((NATIVE_TEAMS[team], TEAM_VARIANTS.variants[craft].suffix))
+    }
+
+    /// The craft whose hull the Select Team screen shows, `(team, craft suffix)`:
+    /// `Some` only on that screen. The drawing is the composition root's
+    /// (`oag_game::team_hull`); the simulation-free front end only names the
+    /// craft the cursor is on.
+    #[must_use]
+    pub fn team_hull(&self) -> Option<(&'static str, &'static str)> {
+        if !self.machine.is(w2048::TEAM) {
+            return None;
+        }
+        let (team, craft) = self.touch.team_choice.unwrap_or_else(start);
         Some((NATIVE_TEAMS[team], TEAM_VARIANTS.variants[craft].suffix))
     }
 

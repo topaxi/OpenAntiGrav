@@ -81,6 +81,7 @@ pub mod screen;
 pub mod settings;
 pub mod sound;
 pub mod split_screen;
+pub mod team_hull;
 pub mod track_panel;
 pub mod unlock;
 

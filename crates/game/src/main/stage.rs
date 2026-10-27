@@ -290,6 +290,7 @@ impl Stage {
             held_backdrop: None,
             backdrop_in_planes: false,
             trace,
+            team_hull: None,
         };
         // The boot screen gets no `Enter` event - it is where the machine starts -
         // so its own movie, if it has one, is installed here.
