@@ -331,8 +331,8 @@ leave `[0, 1]` - `unorm16` cannot represent that at all, since a road texture
 tiles.
 
 **Found through a stride map first; the per-submesh pointer was measured wrong and is
-exact.** This reading was built on a stride map (`psp2::vertex_decl::find_by_stride`,
-92.5% of submeshes resolve a `Uv1`) because the record's word at `+0x28` was believed
+exact, and is what the reader uses since 2026-10-27.** This reading was built on a stride
+map (92.5% of submeshes resolved a `Uv1`; removed) because the record's word at `+0x28` was believed
 to resolve for only 14.2% of the corpus. **That figure is retracted (2026-10-27; not reproduced, the old method is unknown):** the
 `u32` at `+0x28` is a declaration header's offset within the CPU section on **276,239 of
 276,239** Vita submeshes (base, both DLC and both patch archives), with the declared
@@ -607,7 +607,15 @@ lightmap coordinate as the diffuse one, 2,099 the vertex colour). Diffuse sets s
 `db7b4546`, `a1142f57`, `2de13574`, `e33603a6`; and 2,291 base submeshes carry the diffuse
 set as a **float pair** (`2x9`), which `unpack_texcoord` does not decode.
 
-**Per archive, today's reader (stride map).** "Flat" is empty (no `Uv1` in the chosen
+**Wired 2026-10-27 (`2048-vita-decl`).** The Vita reader now takes the diffuse set from the
+record's own declaration (`Declarations::of_record`, `VertexDecl::own_diffuse_texcoord(half)`
+with the container's half type: PS4 `1`, Vita `8`), `Uv1` where named, else the first
+two-component attribute that is not `lightmapUV`. The stride map and `find_by_stride` are
+deleted, and tangents read the own declaration too. The tables below are the census
+**before** that change (the reader as it was); the pinned counts in the test are the
+after, given in "After the wiring" at the end of this section.
+
+**Per archive, the reader as it was (stride map), before 2026-10-27.** "Flat" is empty (no `Uv1` in the chosen
 declaration) plus all-zero texcoords. "Fixed" is a flat submesh whose own declaration reads
 a non-zero coordinate.
 
@@ -688,6 +696,64 @@ attribute is always the diffuse one (the lightmap control group does not tell di
 `Uv2`), and the 2,291 float-pair submeshes need a decode or a refusal by name. Confidence
 **85** on "resolving per record fixes the flat and wrong-attribute draws", **70** on the
 fallback attribute choice. Judge the wiring against an original Empire Climb frame.
+
+### After the wiring
+
+Pinned by `psp2_flat_census_ground_truth.rs`; "disagree" now means the texcoords the reader
+returns differ from a fresh decode of the record's own diffuse attribute, and is **0 on every
+archive**. Flat = empty plus all-zero.
+
+| Archive | Flat submeshes before | after | Flat triangles before | after |
+| --- | ---: | ---: | ---: | ---: |
+| base `data.psarc` | 36,441 | 46,569 | 5,002,875 | 4,655,125 |
+| DLC1 | 1,067 | 515 | 82,198 | 44,926 |
+| DLC2 | 1,190 | 845 | 946,457 | 891,166 |
+| patch `data1` | 2,978 | 6,790 | 555,137 | 709,683 |
+| patch `data2` | 8,083 | 2,897 | 843,060 | 303,563 |
+
+The base and `data1` flat counts **rise**: submeshes the stride map drew with a stray
+coordinate (a lightmap coordinate or a vertex colour read as UV, nonzero so not counted flat)
+are now correctly empty, because their own declaration names no diffuse set (46,541 empty on
+the base archive, mostly Zone models and authored-flat geometry, the 4,654,533 triangles of
+which draw flat by design). What fell is the wrong-attribute reading, not the flat count.
+
+| Base circuit, no Zone model | Empty before | after | All-zero before | after | Partly zero before | after |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| tower (Empire Climb) | 853 / 75,035 | 22 / 432 | 78 / 1,449 | 0 | 1,760 / 209,561 | 405 / 37,903 |
+| bridge | 5,220 / 511,281 | 20 / 1,132 | 0 | 0 | 96 / 6,488 | 192 / 13,828 |
+| altima | 319 / 33,258 | 0 | 0 | 0 | 120 / 101,577 | 72 / 8,161 |
+| arena | 313 / 32,658 | 2 / 92 | 4 / 858 | 0 | 157 / 10,341 | 139 / 9,255 |
+| cathedral | 320 / 30,417 | 33 / 888 | 0 | 0 | 252 / 43,860 | 222 / 17,646 |
+| mall | 193 / 15,365 | 15 / 256 | 0 | 0 | 435 / 55,027 | 354 / 24,243 |
+| park | 827 / 48,429 | 4 / 77 | 0 | 0 | 243 / 24,331 | 242 / 24,268 |
+| sol | 597 / 38,476 | 27 / 320 | 0 | 0 | 93 / 44,708 | 74 / 5,544 |
+| square | 212 / 18,427 | 13 / 324 | 0 | 0 | 521 / 21,375 | 387 / 19,059 |
+| subway | 641 / 63,867 | 8 / 174 | 2 / 32 | 0 | 629 / 70,607 | 533 / 31,554 |
+
+(Submeshes / triangles.) Bridge's flat set (5,220 / 511,281 before, 20 / 1,132 after) fell
+with the rest: the "85% flat, authored; Omega's bridge matches" reading in the Omega paragraph
+above came from the stride map's count and is not re-derived here. Recheck it against this
+table before quoting it.
+
+Empire Climb `track.rcsmodel` (4,957 submeshes, 470,840 triangles), after: empty 22 / 432,
+all-zero 0, partly zero 405 / 37,903, non-finite 0 (was 1,456 / 184,902), reader on the
+wrong attribute 0 (was 3,897 / 353,130). Of the 4,957, **4,761 submeshes (443,593 triangles)
+answer by the confidence-70 rule** (no `Uv1` named, first non-lightmap two-component
+attribute), 139 (25,125) read a float pair, and 22 (432) name none. Corpus-wide with
+texcoords: 80.7% of 247,536 submeshes (was 92.5% by the stride map, 27% of those wrong);
+non-finite substituted vertices 520 of 27.3 million (was ~21%).
+
+**The `2x9` float pair is decoded**, as two little-endian `f32`s, on the same terms as the
+half pair: 2,291 base submeshes (349,627 triangles), 356 in DLC1, 289 in DLC2, 36 in `data1`,
+527 in `data2`. Rendered through Empire Climb's float-pair submeshes it draws textured.
+**Omega: 0 float-pair diffuse sets in any archive.** Omega's one analogue is 23 `data02`
+submeshes (164,838 triangles, stride 40) whose named `Uv1` is type nibble `0`, a PS4 `f32`
+pair, read as a half pair as before; left unchanged here (Omega's pinned counts and renders
+depend on it) and named in the thread as a one-line follow-up.
+
+**Lineage, 2048 and Omega: ported.** Omega already read the record's own pointer (0
+disagreements of 239,108); 2048 now does too, through the same `Declarations::of_record`, and
+every Omega pin is unchanged by the wiring.
 
 ## What is not decoded
 
