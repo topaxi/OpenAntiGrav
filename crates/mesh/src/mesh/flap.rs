@@ -200,7 +200,7 @@ impl super::Model {
     /// The front-end hull is the race hull's twin without the hinge locators, so its flaps
     /// carry no hinge. How their vertices were authored varies: Pulse's PSP files keep each flap
     /// in its hinge's own space ([`Flap::seat`] carries it through the race hinge, after which
-    /// every vertex is within 2 mm of the race flap's), and some PS2 files already hold the flap
+    /// every vertex is within 0.002 units of the race flap's), and some PS2 files already hold the flap
     /// in model space, where moving it again would throw it off the hull. Which of the two a
     /// flap is comes from where its centroid lies against the race flap's, before and after
     /// the hinge; an already placed flap only adopts the hinge, so a swing turns about the right

@@ -242,9 +242,10 @@ with **no locator `Transform` above them**, unlike `Ship.vex`/`Zone.vex`
 (`locator2` / `locator3` over each flap). The builder therefore had no hinge to
 bake, and a PSP flap, authored in hinge space, drew at the model origin, in the
 middle of the hull: Ship Select showed two stray flaps mid-craft while the race
-was right. Measured on every team of both pressings (the four DLC teams
+was right (confidence 95 for the file facts: no locator in any FE hull, and the
+PSP/PS2 split below, both read off every team's tree and vertex bounds). Measured on every team of both pressings (the four DLC teams
 included): carried through the race hull's hinge, each FE flap vertex lands
-within 1.4 mm of a vertex of the race hull's flaps (`Feisar` and `Triakis` carry
+within 0.0014 model units of a vertex of the race hull's flaps (`Feisar` and `Triakis` carry
 an `underbrake_flash` the FE hull keeps as a separate, already placed node, so
 the FE flap is a subset). Some PS2 files (Goteki, Feisar, EGX, Triakis,
 Harimau, Icaras, and every `Zone_FE.vex`) already hold the flap in model space;
@@ -264,6 +265,11 @@ transform. Pinned by `picker_flaps_ground_truth` (`oag-game`; every team, time
 trial and Zone, both pressings). The same read found PS2's Triakis race hull
 names its flaps `andy_ship:AirBrake_right`/`_left`, which `Flap::collect` did not
 match, so that craft's race flaps never deflected; the namespace is stripped now.
+HD's Icaras hull names them `Ship:AirBrake_Left`/`_Right` the same way, so its race
+flaps were missing too and now deflect (checked on a held-airbrake HD race frame);
+PSP Pulse and Pure have no namespaced flap node, so those two are the only models
+the strip changes. Whether a node or flag marks which PS2 files hold the flap
+already placed was not checked; the centroid comparison is the recorded fallback.
 Other titles: Pure's picker draws a pre-rendered sprite (no mesh, no flaps);
 HD, Omega and 2048 draw the race hull (`draws_hull`) through the same race
 loader, so they carry no front-end twin to seat. HD and Omega checked by

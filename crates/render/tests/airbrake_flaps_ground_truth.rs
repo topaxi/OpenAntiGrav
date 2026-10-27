@@ -44,55 +44,61 @@ fn ship_entry_name(team: &str) -> String {
     format!(r"Data\Ships\{team}\Ship.vex")
 }
 
-fn image() -> Option<PathBuf> {
-    oag_testdata::image("data/images/pulse-psp-usa.chd")
+/// The pressings read: PSP's, and PS2's, whose Triakis race hull names its flaps with a Maya
+/// namespace (`andy_ship:AirBrake_right`).
+fn images() -> Vec<PathBuf> {
+    ["pulse-psp-usa.chd", "pulse-ps2-eu.chd"]
+        .iter()
+        .filter_map(|name| oag_testdata::image(&format!("data/images/{name}")))
+        .collect()
 }
 
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn every_team_has_two_hinged_airbrake_flaps() {
-    let Some(image) = image() else { return };
-    let mut archives = oag_pulse::open(&image.display().to_string()).expect("opening archives");
+    for image in images() {
+        let mut archives = oag_pulse::open(&image.display().to_string()).expect("opening archives");
 
-    let mut missing = Vec::new();
-    let mut same_side = Vec::new();
-    for team in TEAMS {
-        let name = ship_entry_name(team);
-        let blob = archives.read_name(&name).expect("reading Ship.vex");
-        let model = mesh::build(&name, &blob).expect("decoding Ship.vex");
+        let mut missing = Vec::new();
+        let mut same_side = Vec::new();
+        for team in TEAMS {
+            let name = ship_entry_name(team);
+            let blob = archives.read_name(&name).expect("reading Ship.vex");
+            let model = mesh::build(&name, &blob).expect("decoding Ship.vex");
 
-        let [Some(left), Some(right)] = &model.airbrakes else {
-            missing.push(team);
-            continue;
-        };
+            let [Some(left), Some(right)] = &model.airbrakes else {
+                missing.push(team);
+                continue;
+            };
 
-        // `w_axis` is the translation column: where the hinge sits, in model
-        // space. The two must straddle the centreline.
-        let (left_x, right_x) = (left.hinge.w_axis.x, right.hinge.w_axis.x);
-        println!(
-            "{team}: left {} vertices hinged at x={left_x:+.4}, \
-             right {} vertices hinged at x={right_x:+.4}",
-            left.vertices.len(),
-            right.vertices.len(),
-        );
+            // `w_axis` is the translation column: where the hinge sits, in model
+            // space. The two must straddle the centreline.
+            let (left_x, right_x) = (left.hinge.w_axis.x, right.hinge.w_axis.x);
+            println!(
+                "{team}: left {} vertices hinged at x={left_x:+.4}, \
+                 right {} vertices hinged at x={right_x:+.4}",
+                left.vertices.len(),
+                right.vertices.len(),
+            );
 
-        if left.vertices.is_empty() || right.vertices.is_empty() || (left_x * right_x) >= 0.0 {
-            same_side.push(team);
+            if left.vertices.is_empty() || right.vertices.is_empty() || (left_x * right_x) >= 0.0 {
+                same_side.push(team);
+            }
         }
-    }
 
-    assert!(
-        missing.is_empty(),
-        "team(s) whose Ship.vex produced fewer than two flaps: {missing:?} - \
-         either the Mesh/Airbrake/Transform nesting or the Airbrake_Left / \
-         Airbrake_Right naming is not universal after all"
-    );
-    assert!(
-        same_side.is_empty(),
-        "team(s) with an empty flap or two hinges on the same side of the \
-         centreline: {same_side:?} - Flap::deflect relies on the mirrored \
-         hinges to swing the two sides apart"
-    );
+        assert!(
+            missing.is_empty(),
+            "team(s) whose Ship.vex produced fewer than two flaps: {missing:?} - \
+             either the Mesh/Airbrake/Transform nesting or the Airbrake_Left / \
+             Airbrake_Right naming is not universal after all"
+        );
+        assert!(
+            same_side.is_empty(),
+            "team(s) with an empty flap or two hinges on the same side of the \
+             centreline: {same_side:?} - Flap::deflect relies on the mirrored \
+             hinges to swing the two sides apart"
+        );
+    }
 }
 
 /// **A hull's flap normals are carried through the flap's node**, so the flap
@@ -107,53 +113,54 @@ fn every_team_has_two_hinged_airbrake_flaps() {
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn every_flaps_normals_face_outward() {
-    let Some(image) = image() else { return };
-    let mut archives = oag_pulse::open(&image.display().to_string()).expect("opening archives");
+    for image in images() {
+        let mut archives = oag_pulse::open(&image.display().to_string()).expect("opening archives");
 
-    let mut judged = 0usize;
-    for team in TEAMS {
-        let name = ship_entry_name(team);
-        let blob = archives.read_name(&name).expect("reading Ship.vex");
-        let model = mesh::build(&name, &blob).expect("decoding Ship.vex");
-        for flap in model.airbrakes.iter().flatten() {
-            let span = flap.vertices.start..flap.vertices.end;
-            let mut disagree = 0usize;
-            for draws in [
-                &model.draws,
-                &model.alpha_tested_draws,
-                &model.transparent_draws,
-            ] {
-                for draw in draws.iter() {
-                    for tri in model.indices[draw.range.start as usize..draw.range.end as usize]
-                        .chunks(3)
-                        .filter(|t| t.iter().all(|i| span.contains(i)))
-                    {
-                        let [a, b, c] = [0, 1, 2].map(|k| &model.vertices[tri[k] as usize]);
-                        let (ab, ac) = (
-                            [0, 1, 2].map(|k| b.position[k] - a.position[k]),
-                            [0, 1, 2].map(|k| c.position[k] - a.position[k]),
-                        );
-                        let face = [
-                            ab[1] * ac[2] - ab[2] * ac[1],
-                            ab[2] * ac[0] - ab[0] * ac[2],
-                            ab[0] * ac[1] - ab[1] * ac[0],
-                        ];
-                        if face.iter().map(|f| f * f).sum::<f32>() < 1.0e-12 {
-                            continue;
-                        }
-                        for v in [a, b, c] {
-                            judged += 1;
-                            let along: f32 = (0..3).map(|k| v.normal[k] * face[k]).sum();
-                            disagree += usize::from(along <= 0.0);
+        let mut judged = 0usize;
+        for team in TEAMS {
+            let name = ship_entry_name(team);
+            let blob = archives.read_name(&name).expect("reading Ship.vex");
+            let model = mesh::build(&name, &blob).expect("decoding Ship.vex");
+            for flap in model.airbrakes.iter().flatten() {
+                let span = flap.vertices.start..flap.vertices.end;
+                let mut disagree = 0usize;
+                for draws in [
+                    &model.draws,
+                    &model.alpha_tested_draws,
+                    &model.transparent_draws,
+                ] {
+                    for draw in draws.iter() {
+                        for tri in model.indices[draw.range.start as usize..draw.range.end as usize]
+                            .chunks(3)
+                            .filter(|t| t.iter().all(|i| span.contains(i)))
+                        {
+                            let [a, b, c] = [0, 1, 2].map(|k| &model.vertices[tri[k] as usize]);
+                            let (ab, ac) = (
+                                [0, 1, 2].map(|k| b.position[k] - a.position[k]),
+                                [0, 1, 2].map(|k| c.position[k] - a.position[k]),
+                            );
+                            let face = [
+                                ab[1] * ac[2] - ab[2] * ac[1],
+                                ab[2] * ac[0] - ab[0] * ac[2],
+                                ab[0] * ac[1] - ab[1] * ac[0],
+                            ];
+                            if face.iter().map(|f| f * f).sum::<f32>() < 1.0e-12 {
+                                continue;
+                            }
+                            for v in [a, b, c] {
+                                judged += 1;
+                                let along: f32 = (0..3).map(|k| v.normal[k] * face[k]).sum();
+                                disagree += usize::from(along <= 0.0);
+                            }
                         }
                     }
                 }
+                assert_eq!(
+                    disagree, 0,
+                    "{team}: a flap normal faces into its own surface"
+                );
             }
-            assert_eq!(
-                disagree, 0,
-                "{team}: a flap normal faces into its own surface"
-            );
         }
+        assert!(judged > 500, "{judged} flap vertices judged");
     }
-    assert!(judged > 500, "{judged} flap vertices judged");
 }
