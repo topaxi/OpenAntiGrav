@@ -3,8 +3,10 @@
 //! three targets.
 //!
 //! The screen file authors only each rectangle; the mark is
-//! `Data\FE\Images\corner2.gtf`, a 16 by 16 mask of one rounded top-left
-//! corner (`docs/formats/gtf.md`), and the settled frame of `09_blitzed`
+//! `Data\FE\Images\corner2.gtf`, a 16 by 16 mask of one rounded corner, the
+//! **bottom-left** one as stored (`docs/formats/gtf.md`; RPCS3 frames of Cell
+//! Selection and Ship Select, 2026-10-27, draw the top-left mark as the
+//! texture turned over), and the settled frame of `09_blitzed`
 //! draws it at the four corners of every rectangle, turned to each, in the
 //! colour the bracket authors. **Mirrored at the other three corners and
 //! placed flush with the rectangle's edges: measured on one frame, confidence
@@ -21,7 +23,7 @@ pub const SRC: &str = r"Data\FE\Images\corner2.gtf";
 const SIDE: f32 = 16.0;
 
 /// Every bracket's four marks.
-pub(super) fn draws(brackets: &[Bracket], sprites: &dyn Fn(&str) -> Option<Placed>) -> Vec<Draw> {
+pub fn draws(brackets: &[Bracket], sprites: &dyn Fn(&str) -> Option<Placed>) -> Vec<Draw> {
     let Some(mask) = sprites(SRC) else {
         return Vec::new();
     };
@@ -40,12 +42,15 @@ pub(super) fn draws(brackets: &[Bracket], sprites: &dyn Fn(&str) -> Option<Place
             } else {
                 bracket.y
             };
-            // A negative extent turns the mask about that axis.
+            // A negative extent turns the mask about that axis. The file's
+            // own corner is its bottom-left one (an RPCS3 frame of Cell
+            // Selection and of Ship Select draws the top-left mark as the
+            // texture turned over), so the top marks are the flipped ones.
             let uv = [
                 if right { mx + SIDE } else { mx },
-                if bottom { my + SIDE } else { my },
+                if bottom { my } else { my + SIDE },
                 if right { -SIDE } else { SIDE },
-                if bottom { -SIDE } else { SIDE },
+                if bottom { SIDE } else { -SIDE },
             ];
             out.push(Draw::Sprite {
                 rect: [x, y, SIDE, SIDE],

@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [hd]
-updated: 2026-10-10
+updated: 2026-10-27
 summary: "HD front end: hull_orbit pose fitted to the classic Feisar only, no _n1 frame, Safe Area 0.904 scale at default unchecked"
 difficulty: medium (30)
 ---
@@ -41,7 +41,9 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
   authored 0.4) and slide are fitted, not authored - find the original's
   rotation convention to drop the pitch override; `hull_orbit` remains only
   for Omega's hull and Pulse-shaped fallbacks
-- Ship Select: bracket corners, loyalty value; the hex column draws
+- Ship Select: ~~bracket corners, loyalty value~~ (LANDED 2026-10-27,
+  `hd-select-chrome`: corner marks, block arrows, `000`; open: the `middle`
+  marks, `UnlockNobble` hearts, the page `Squares`); the hex column draws
   (2026-10-08, `picker::hd::hex`); the `nitro` row is open where the original's
   fresh profile locks it (this build offers `_n1`); the
   original's default team is the maintainer's save (Feisar), not a gap
@@ -63,7 +65,8 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
 - Layout scale: the original is drawn at about 0.904 of the authored space,
   offset (+150, -8); ours is 1:1. Not applied: may be the maintainer's
   `Safe Area Setting`. Re-measure on a fresh RPCS3 profile first
-- Track Select: hex grid LANDED 2026-10-08 (`hd-track-select`, shared
+- Track Select (2026-10-27: corner marks and header arrows landed; open: the
+  circuit thumbnail is the `FlyByMovie` Bink widget, page `Squares`): hex grid LANDED 2026-10-08 (`hd-track-select`, shared
   `hex::draw_cells`; direction glyphs and ring thickness open). Circuit model
   LANDED 2026-10-09 (`hd-track-model`: all twelve scenes from the executable's
   record, `cf_fetracks` ramp by `N.V`, `oag_game::preview::track_model`). Omega

@@ -23,7 +23,8 @@
 //! Drawn, off the disc: the title, the three `MiniText` headings, the emblem
 //! frame, the circuit's own `Emblem` (`<environment>\FE\TrackSelectEmblem_Fury.gtf`,
 //! the widget authors no `src`), the circuit name, the length and distance
-//! rows, and the RECORDS table's header and empty cells.
+//! rows, the RECORDS table's header and empty cells, the `corner="true"`
+//! bracket marks and the arrow on the header blocks.
 //!
 //! Also drawn: the `TrackHexSelection` grid, a circuit per hexagon (see
 //! [`draw_grid`]).
@@ -407,6 +408,10 @@ pub(in crate::picker) fn body(
         }
     }
     draw_labels(&extra.common.labels, &mut out);
+    out.extend(crate::campaign::hd::cell_brackets::draws(
+        &screen.brackets,
+        sprites,
+    ));
     if let Some(grid) = &extra.hex_grid {
         draw_grid(grid, picker, sprites, &mut out);
     }
@@ -463,7 +468,7 @@ pub(in crate::picker) fn body(
             ));
         }
     }
-    records(screen, layout, frame, &extra.row_labels, &mut out);
+    records(screen, layout, frame, &extra.row_labels, sprites, &mut out);
     out
 }
 
@@ -472,6 +477,7 @@ fn records(
     layout: &Layout,
     frame: &Frame,
     row_labels: &[String; 3],
+    sprites: &dyn Fn(&str) -> Option<Placed>,
     out: &mut Vec<Draw>,
 ) {
     for block in &screen.blocks {
@@ -486,6 +492,7 @@ fn records(
             };
             oag_ui::menu::block::draw(&whole, &art, (1.0, 1.0), out);
         }
+        super::block_arrow(block, sprites, out);
         let name = block.name.as_deref().unwrap_or("");
         let label = match name
             .strip_prefix("Record.")

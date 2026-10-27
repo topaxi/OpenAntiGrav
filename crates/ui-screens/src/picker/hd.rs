@@ -37,7 +37,10 @@
 //! Drawn, off the disc: the `NAVIGATE TEAM` honeycomb ([`hex`]), the title,
 //! the four `MiniText` headings, the `LogoOutline` frame, the selected team's own `<location>\FE\Logo.gtf`
 //! in the `Logo` widget's rect, the four `STATISTICS` blocks with their
-//! value labels and down-nobbles, and the `LOYALTY` block's box and label.
+//! value labels and down-nobbles, the `LOYALTY` block's box, label and
+//! running total, the `corner="true"` bracket marks
+//! ([`crate::campaign::hd::cell_brackets`]) and the small arrow
+//! ([`BLOCK_ARROW_SRC`]) on every block that authors `ArrowColor`.
 //!
 //! Not drawn, and said so:
 //!
@@ -45,9 +48,11 @@
 //!   `ship.rcsmodel`; HD ships no `ship_FE.vex`), drawn by `oag_game` at a
 //!   pose in this screen's `SHIP MODEL` frame, composed from the widget's own
 //!   `ShipModel` values ([`ShipModel`]) by `oag_game::preview::ship_model`.
-//! - **The `Bracket` corner marks**, the `Padlock` and the `Unlockcondition`
-//!   text (this build keeps no unlock state), and the loyalty value, its
-//!   nobbles. `LiveryString` is authored empty and filled by code this
+//! - **The `middle="true"` marks** of the `SHIP MODEL` bracket (art not
+//!   found), the `Padlock` and the `Unlockcondition` text (this build keeps
+//!   no unlock state), the `UnlockNobble0..4` hearts (their thresholds are
+//!   unscaled onto the bar) and the `Squares` page dots (an empty item
+//!   `the screen cpp` fills). `LiveryString` is authored empty and filled by code this
 //!   build has not read; the honeycomb's cursor row shows the chosen model
 //!   instead, so nothing stands in for it.
 
@@ -342,6 +347,43 @@ const LOYALTY_BLOCK: &str = "Slide_4";
 /// [`TeamScreen::bonus`].
 const BONUS_GLOBAL: &str = "FEGlobals->HD_Blue";
 
+/// The small marker an `unselectable` block that authors `ArrowColor` shows
+/// at its left: the art `Info1 Arrow` names too, here tinted by the block's
+/// own `ArrowColor`. Neither the executable's draw of it (`Block_MakeSelectable`
+/// is the selectable path and makes the 32 by 32 `HD_options_arrow`) nor its
+/// art is read: **the art is chosen from the file's name, the place measured**
+/// off an RPCS3 frame of `SPEED` (about 21 units in, centred on the box).
+pub const BLOCK_ARROW_SRC: &str = r"Data\FE\Images\NonSelectable_Arrow_HD.gtf";
+const BLOCK_ARROW_INSET: f32 = 21.0;
+
+/// [`BLOCK_ARROW_SRC`] on `block`, when it is `unselectable` and tints one.
+pub(crate) fn block_arrow(
+    block: &BlockWidget,
+    sprites: &dyn Fn(&str) -> Option<Placed>,
+    out: &mut Vec<Draw>,
+) {
+    if block.selectable {
+        return;
+    }
+    let Some(tint) = block.arrow_color else {
+        return;
+    };
+    let Some(placed) = sprites(BLOCK_ARROW_SRC) else {
+        return;
+    };
+    let (width, height) = (placed.width as f32, placed.height as f32);
+    out.push(Draw::Sprite {
+        rect: [
+            block.x + BLOCK_ARROW_INSET,
+            block.y + (block.height - height) / 2.0,
+            width,
+            height,
+        ],
+        uv: [placed.x as f32, placed.y as f32, width, height],
+        color: argb_to_rgba(tint),
+    });
+}
+
 /// The body of the screen - see the module doc for what is and is not here.
 pub(super) fn body(
     picker: &Picker,
@@ -386,6 +428,10 @@ pub(super) fn body(
         });
     }
     draw_labels(&extra.labels, &mut out);
+    out.extend(crate::campaign::hd::cell_brackets::draws(
+        &screen.brackets,
+        sprites,
+    ));
     if let Some(grid) = &extra.hex {
         hex::draw(grid, picker, sprites, &mut out);
     }
@@ -409,7 +455,26 @@ pub(super) fn body(
         );
     }
     if let Some(block) = find_block(screen, LOYALTY_BLOCK) {
-        stat_bar(block, (None, None), layout, extra, frame, sprites, &mut out);
+        // The running loyalty total on the stat bars' own 0..100 scale.
+        // **Only the empty total is measured** (`000` on a fresh profile,
+        // the nobble at the bar's left end); how a larger total scales
+        // onto the bar and its three digits is chosen, not measured.
+        let loyalty = match &entry.details {
+            Details::Ship {
+                loyalty: Some(total),
+                ..
+            } => Some((*total).min(100) as u8),
+            _ => None,
+        };
+        stat_bar(
+            block,
+            (loyalty, None),
+            layout,
+            extra,
+            frame,
+            sprites,
+            &mut out,
+        );
     }
     out
 }
@@ -539,6 +604,7 @@ fn stat_bar(
             _ => oag_ui::menu::block::draw(&whole, &art, (1.0, 1.0), out),
         }
     }
+    block_arrow(block, sprites, out);
     if let Some(label) = find_text(&layout.screen, name) {
         let content = label.string.clone().unwrap_or_default();
         let mut positioned = label.clone();

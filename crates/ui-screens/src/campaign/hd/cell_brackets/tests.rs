@@ -47,8 +47,8 @@ fn a_bracket_is_the_mask_at_each_of_its_four_corners_turned_to_it() {
     };
     assert_eq!(
         *uv,
-        [116.0, 56.0, -16.0, -16.0],
-        "the far corner is turned both ways"
+        [116.0, 40.0, -16.0, 16.0],
+        "the far corner is the file's own bottom-left mark turned about x only"
     );
 }
 
