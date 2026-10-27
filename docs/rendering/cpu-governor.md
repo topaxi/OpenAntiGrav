@@ -103,10 +103,10 @@ At limit 500 it steps the same three knobs and fps goes 299.7 to 328.9 (+10 %), 
 90.0 fps, p99 11.19 to 11.24 ms, CPU row 6.8 against 6.7, and `governor=0` with no change line in either on run.
 Nothing was shed, so nothing visible was lost where the race holds its target.
 
-**Verdict: default on.** fps and mean p99 improve beyond run-to-run noise when the frame rate is unlocked
-(HD +3.7 %, Pulse +10 % where the CPU is over budget), and in a capped race that holds its target the
-governor never acts. The maintainer's settings copy has no `cpu_governor` key, so the flip turns it on for them;
-at their `smooth`/90 it stays inert. The earlier "0.25 ms is not worth trading tiers" reading was a capped
+**Verdict: recommend default on; the default stays off by maintainer decision** until there are more
+knobs or cases with stronger impact. fps and mean p99 improve beyond run-to-run noise when the frame rate is
+unlocked (HD +3.7 %, Pulse +10 % where the CPU is over budget), and in a capped race that holds its target the
+governor never acts. A settings copy with no `cpu_governor` key stays off. The earlier "0.25 ms is not worth trading tiers" reading was a capped
 measurement; the same 0.25 ms is 3.7 % of frame time once the cap is gone. The cost is real: when it acts it
 trades the player's own shadow map and model detail tiers for a few percent, which is why a profile without
 extras, and a race at its target, are untouched.
