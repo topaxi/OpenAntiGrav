@@ -25,11 +25,8 @@ on 2026-10-27: the threaded encoder finish adds about 1 ms of `scene` on the pho
    support; unreadable means the split stays on.
 3. The parked indirect depth prepass (`park/indirect-depth-prepass`) slightly regressed together
    with the split (maintainer); re-measure per platform if either changes.
-4. Confirm on the S24 with an installed build that the probe picks one encoder (the CPU row should
-   match the `OAG_SPLIT_FINISH=0` row).
 
 ## Next Steps
 
-1. On the S24: `just deploy android`, then the campaign route by taps, or
-   `scripts/android-race-phases.sh --serial R3CX707JA9T --out run.log --cool 287` for the scripted
-   race, with and without `-- OAG_SPLIT_FINISH=1`.
+1. On a hybrid Windows or macOS machine: `--frame-log` with `OAG_SPLIT_FINISH=0` and `=1`, compare
+   `scene` and `submit`. The S24 needs nothing more (maintainer, 2026-10-27).
