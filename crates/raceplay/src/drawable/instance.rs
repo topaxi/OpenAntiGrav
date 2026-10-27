@@ -177,7 +177,6 @@ impl Drawable {
             prepass: self.prepass.clone(),
             hidden: std::sync::Mutex::default(),
             reversed_indices: self.reversed_indices.clone(),
-            indirect: None,
             vertices: self.vertices.clone(),
             texcoords: self.texcoords.clone(),
             indices: self.indices.clone(),

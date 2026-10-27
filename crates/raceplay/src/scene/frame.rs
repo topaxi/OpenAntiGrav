@@ -1188,19 +1188,6 @@ impl Scene {
         draws.push(Draw::Effects);
         let mut shadow_runs = Vec::new();
         self.shadow_runs(&mut shadow_runs);
-        // Last, after the LOD switch: the draw trusts this list for both prepass halves.
-        let track_solid = self.track.draws_indirect().then(|| {
-            let order = super::record::opaque_order(&self.track, race.camera_position());
-            let sections = self.visibility.as_ref().map(|v| &v.sections);
-            let culling = (
-                sections,
-                visible_set.as_ref(),
-                chunk_set.as_ref(),
-                frustum.as_ref(),
-            );
-            self.track
-                .prepare_solid(queue, block, culling, Some(&order))
-        });
         ViewPass {
             layer: self.layer.get(),
             block,
@@ -1223,7 +1210,6 @@ impl Scene {
             shadow_runs,
             ghost: self.ghost_draw(race, lod_eye),
             stats: behind_glass,
-            track_solid: track_solid.flatten(),
             blur_lens,
         }
     }

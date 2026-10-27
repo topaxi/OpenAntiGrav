@@ -1102,7 +1102,6 @@ pub fn build_with(
 }
 
 pub mod bindless;
-pub mod indirect;
 mod material_layout;
 pub use material_layout::material_bind_group_layout;
 
