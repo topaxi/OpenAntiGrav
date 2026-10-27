@@ -70,6 +70,6 @@ fn amphiseums_start_gantry_board_scrolls_its_advert_and_static_under_the_scan_ma
             .filter(|v| v.slots & slots::ADD_SECOND != 0)
             .count()
             > 0,
-        "dc_hologramwithstatic2 (slot 340) keeps the generic additive second texture"
+        "other slots (dc_hologramwithstatic2 among them) keep the generic additive second texture"
     );
 }

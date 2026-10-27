@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd]
 updated: 2026-10-27
-summary: "HD fidelity queue: Bomb picture, unlit weapon taps, scenery items (booth glass wired), the scenery clock offset, Tech de Ra slot 384, exposure, LOD"
+summary: "HD fidelity queue: Bomb picture, weapon taps, Tech de Ra slot 384, scene behind Amphiseum's board, scenery clock, exposure, LOD"
 difficulty: medium (35)
 ---
 
@@ -61,7 +61,8 @@ from the craft (mean grey difference); 1-4 done, 5-8 not started. Evidence pages
 (hd-track-tone.md, "The Amphiseum hologram board"). Box `840,0 240x120`: per-pixel mean grey
 difference 90.5 to 26.2 (difference of means +90 to +23.5), the pair's whole frame 9.61 to 8.59, the other 17 HD
 pairs unchanged. The bar (within 10) is **not met**: the box now matches the program's own
-arithmetic (+13/+23/+24 lift against the expected +15/+23/+24) and the picture reads like the
+arithmetic (+13/+23/+24 lift against the expected +15/+23/+24) and the original's strength (scanline stripe
+energy ratio ours/theirs 0.87) and the picture reads like the
 original's (faint scanline-striped rings), but the box mean grey still sits above the original's
 because **the scene behind the board is about 20-25 grey brighter in ours than in the original**
 (ours with the board skipped reads `62, 81, 89` against theirs `54, 77, 90` with the board

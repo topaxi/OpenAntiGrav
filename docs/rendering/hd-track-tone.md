@@ -1336,19 +1336,26 @@ read live and wired (2026-10-27, `hd-hologram-board`):
   patched in; blend `SrcAlpha`/`One`, depth test `LEQUAL`, **`SET_TEXTURE_ADDRESS` `0x60710101`
   on units 0, 1 and 2: gamma nibble 7, all three decoded on fetch**, so the mask's red is
   decoded too. Confidence 88 (one frame, one draw).
-- **Arithmetic cross-check**: the mean of `decode(scan.r) * K` over the texture is `0.185`
-  and the mean of `encode(0.5 (decode(advert) + decode(static)))` is `0.32, 0.49, 0.50`, so
-  the board's expected mean lift on a quad it covers is `+15, +23, +24` (0-255, encoded
-  add); ours lifts the box by `+13.4, +22.8, +23.5` over the board skipped (slot 637,
-  `OAG_SKIP_SLOT=637`).
+- **Arithmetic self-check** (ours against the program's own law, not against the original):
+  the mean of `decode(scan.r) * K` over the texture is `0.185` and the mean of
+  `encode(0.5 (decode(advert) + decode(static)))` is `0.32, 0.49, 0.50`, so the expected lift
+  is `+15, +23, +24` (0-255, encoded add); ours lifts the box by `+13.4, +22.8, +23.5` over
+  the board skipped (`OAG_SKIP_SLOT=637`).
+- **Strength against the original** (the scan mask does not scroll, so its stripes read the
+  board's strength): per column of `x 880-1060, y 5-95`, the standard deviation of the
+  picture minus its 12-row vertical moving average, mean grey: theirs `18.3`, ours `17.4`,
+  the board skipped `14.1` (the scene's own floor), the old stand-in `34.7`. The board's
+  own stripe energy, `sqrt(a^2 - 14.1^2)`, is `11.7` theirs against `10.2` ours: **ratio
+  0.87**, so the board is not 1.4-2x too strong.
 - **Measured** (box `840,0 240x120` of `hd/the-amphiseum`, mean grey 0-255; theirs `54.1, 77.1,
   89.8` = 73.7): before `139.6, 170.3, 181.9` = 163.9 (mean of per-pixel |difference| 90.5);
   after `75.5, 103.5, 112.5` = 97.2 (**26.2**, difference of means +23.5); the whole board
   skipped (`OAG_SKIP_SLOT=637`) `62.1, 80.7, 89.0` = 77.3 (19.0, +3.6). The pair's whole-frame
-  mean grey 9.61 to 8.59; the other 17 HD pairs byte-identical. **The brief's bar (within 10)
-  is not met**, and skipping the board still scores better on the box, because the scene
-  behind the board is about 20-25 grey brighter in ours than in the original (the board
-  itself matches its own arithmetic above); the picture, read by eye, shows the original's
+  mean grey 9.61 to 8.59; the other 17 HD pairs unchanged (`ours.png` identical, `cmp`). **The brief's bar (within 10)
+  is not met**, and skipping the board still scores better on the box, because the board's
+  strength now matches the original's (stripe ratio above) while the scene behind it is about
+  20-25 grey brighter in ours (by subtraction: ours without the board `62, 81, 89` against
+  theirs with it `54, 77, 90`); the picture, read by eye, shows the original's
   faint scanline-striped rings. The next lead is the pillar and wall behind it.
 - **Wired** as glow-table mode 7 (`PROGRAM_STATIC_HOLOGRAM`, `mesh::rcs::static_hologram`),
   keyed on the family name and the block's declared samplers and parameters, so
@@ -1356,9 +1363,11 @@ read live and wired (2026-10-27, `hd-hologram-board`):
   `hd_static_hologram_ground_truth` (disc-backed) and `hd_static_hologram_lit_path` (the
   shader, no game content). Ours had added the advert to the scanlines' colour at full
   strength with no alpha mask and no `/2`.
-- **Candidate for the grill's 1.5x** (not checked): the unlit `plain` path of `shade.wesl`
-  applies no `scene.light.output_scale`, so an unlit program ending in `/2` that is not wired
-  by hand draws twice as strong in linear terms. This program takes the scale explicitly.
+- **The `/2`**: this program multiplies `scene.light.output_scale` into the colour sum
+  explicitly. A constant-colour probe through this unlit path gave an unexplained gain of
+  about 1.43 on the added value (0.2 to +0.287, 0.4 to +0.57, blend alpha 1); the stripe ratio
+  above is the check that the whole chain lands at the original's strength. Why that gain
+  exists, and whether it is the grill's 1.5x, is not resolved here.
 
 **Omega and 2048:** Omega ships `dc_hologramwithstatic_1.rcsmaterial` (and `..2_1`) beside
 the same Amphiseum layout: **checked, applies in name, not wired** (a PS4 GCN program, unread).
