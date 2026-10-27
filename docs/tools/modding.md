@@ -42,8 +42,8 @@ says what was tried).
 2. In the 3D view sidebar (N), tab **OAG**: draw a closed Curve and tag it `spline`, then
    *Build Floor and Walls*, *Add Start*, and optionally pads.
 3. *Export OAG Track* writes `name.track.toml` and `name.glb`. Keep the two together.
-4. Copy both into `<data dir>/oag/tracks/`, then RACE REMIX, TRACK TITLE `CUSTOM`,
-   track `<title> (TRACK FILE)`, START. Or `oag-game --track-file name.track.toml`.
+4. `oag-game --track-file name.track.toml`. (RACE REMIX's CUSTOM title, with the files in
+   `<data dir>/oag/tracks/`, needs a build with the `ballisticng` feature, which no shipped build has.)
 
 What a track file can carry is a closed list: the racing line, collision floor and walls,
 the start and speed and weapon pads. Sky, fog, lights, art and scenery are not in the

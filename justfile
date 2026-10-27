@@ -65,7 +65,7 @@ native_video_flags := if os() == "linux" { "--features native-video" } else { ""
 # order they get there, so nothing here changes what either asserts. Output of
 # the recipes interleaves; a failure names its recipe.
 [parallel]
-check: fmt-check lint test check-docs check-deps check-unused-deps check-determinism check-size check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-schemas
+check: fmt-check lint check-ballisticng test check-docs check-deps check-unused-deps check-determinism check-size check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-schemas
 
 # Documentation is a deliverable, so its links are checked like any other build output
 check-docs:
@@ -123,6 +123,16 @@ lint:
     # holds what it links; this holds that it builds.
     cargo clippy -p oag-net --lib --bins -- -D warnings
 
+# The `ballisticng` feature (BallisticNG Workshop tracks as foreign circuits) is
+# off by default and enabled by no build, so nothing above compiles it. This
+# builds and lints the code behind it, and runs the tests that only exist with
+# it on (the custom-track survey and its cache, the survey listings), so it does
+# not rot. The disc-backed `foreign_*` ground-truth tests behind it run by hand:
+# `cargo nextest run -p oag-raceplay --features ballisticng --run-ignored only -E 'test(foreign)'`.
+check-ballisticng:
+    cargo clippy -p oag-game -p oag-raceplay --features oag-game/ballisticng,oag-raceplay/ballisticng --all-targets -- -D warnings
+    cargo nextest run -p oag-game -p oag-raceplay --features oag-game/ballisticng,oag-raceplay/ballisticng --tests --cargo-profile quick -E 'test(custom_tracks::) | test(survey::)'
+
 # `--tests` builds what has tests to run - libraries, binaries, integration tests.
 #
 # `--cargo-profile quick` builds the workspace at opt-level 0 (Cargo.toml's
@@ -171,7 +181,7 @@ test-data *ARGS:
 # selects nothing. The lead still runs the full `just` and `just test-data` once
 # per merge batch - see `.claude/skills/oag-drive/member-rules.md`.
 [parallel]
-gate-affected: fmt-check lint test-affected check-docs check-deps check-unused-deps check-determinism check-size check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-schemas
+gate-affected: fmt-check lint check-ballisticng test-affected check-docs check-deps check-unused-deps check-determinism check-size check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-schemas
 
 # `just test`, narrowed to what `scripts/affected.py` selects.
 test-affected:

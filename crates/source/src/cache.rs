@@ -27,6 +27,15 @@ pub fn default_audio_cache_dir() -> std::path::PathBuf {
     cache_dir_named("audio")
 }
 
+/// The default custom-track survey directory: `data/cache/custom-tracks` in a
+/// repository checkout, and `<cache dir>/oag/custom-tracks` anywhere else. Holds
+/// what reading each track file said, keyed by path and modification time;
+/// deleting it only costs the next survey a re-read.
+#[must_use]
+pub fn default_custom_tracks_cache_dir() -> std::path::PathBuf {
+    cache_dir_named("custom-tracks")
+}
+
 /// The default unpacked-DLC directory: `data/cache/dlc` in a repository
 /// checkout, and `<cache dir>/oag/dlc` anywhere else.
 ///

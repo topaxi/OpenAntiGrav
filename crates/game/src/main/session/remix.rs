@@ -17,7 +17,6 @@ use crate::hints;
 use crate::stage::Stage;
 
 use super::Session;
-use oag_game::custom_tracks::{self, CUSTOM};
 use super::menus::combine_variant;
 use oag_game::livery_row::variant_choices;
 
@@ -429,7 +428,7 @@ impl Session {
         }
 
         let track_title = self.settings.remix.track_title.clone();
-        let custom = track_title == CUSTOM;
+        let custom = self.custom_track_selected(&track_title);
         // CUSTOM has no source of its own: the race is flown on the CRAFT TITLE's.
         let track_candidate = if custom {
             self.craft_backing().cloned()
@@ -451,8 +450,8 @@ impl Session {
             return;
         }
         if custom {
-            match self.custom_tracks.raceable(&self.settings.remix.track) {
-                Ok(path) => custom_tracks::apply(&mut race_options, path),
+            match self.apply_custom_track(&mut race_options) {
+                Ok(()) => {}
                 Err(why) => {
                     warn!("cannot race this custom track: {why}");
                     self.race_options = Some(race_options);

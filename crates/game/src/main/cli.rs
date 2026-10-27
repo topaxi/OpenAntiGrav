@@ -458,14 +458,19 @@ pub(crate) struct Cli {
     /// the own-format track directories (`$OAG_TRACKS`, `data/tracks`, `<data dir>/oag/tracks`) and the BallisticNG ones (`$OAG_BALLISTICNG`, `data/ballisticng`, beside the
     /// program, `<data dir>/oag/ballisticng`; `tracks/*.wtrk` in each). The source
     /// still supplies the ship, rules and physics. See `oag_raceplay::foreign`.
+    ///
+    /// Only in a build with the `ballisticng` feature, which no shipped build
+    /// enables.
+    #[cfg(feature = "ballisticng")]
     #[arg(long)]
     pub(crate) ballisticng_track: Option<String>,
 
     /// Race a track in this project's own format (ADR-0063): the path of its
     /// `*.track.toml` manifest, with the `.glb` it names beside it. The source
     /// still supplies the ship, rules and physics. Conflicts with
-    /// `--ballisticng-track`. See `oag_trackfile`.
-    #[arg(long, conflicts_with = "ballisticng_track")]
+    /// `--ballisticng-track` where a build has it. See `oag_trackfile`.
+    #[cfg_attr(feature = "ballisticng", arg(conflicts_with = "ballisticng_track"))]
+    #[arg(long)]
     pub(crate) track_file: Option<std::path::PathBuf>,
 
     /// The team, which selects both the handling stats and the model.

@@ -174,6 +174,7 @@ fn a_lone_craft_races_a_disc_circuit_and_its_exported_file_identically() {
     std::fs::remove_dir_all(dir).ok();
 }
 
+#[cfg(feature = "ballisticng")]
 fn workshop_items() -> Option<Vec<std::path::PathBuf>> {
     let root = oag_testdata::exact("data/ballisticng/workshop-473770")?;
     let mut dirs: Vec<_> = std::fs::read_dir(root)
@@ -193,6 +194,7 @@ fn workshop_items() -> Option<Vec<std::path::PathBuf>> {
     Some(out)
 }
 
+#[cfg(feature = "ballisticng")]
 /// Every Workshop track tagged `Original`: mapped, written in this format, read
 /// back. Nothing is lost between the importer's output and the file.
 #[test]
@@ -235,6 +237,7 @@ fn every_original_workshop_track_converts_and_reads_back_the_same() {
     assert_eq!(converted + refused.len(), 27, "the census of Originals");
 }
 
+#[cfg(feature = "ballisticng")]
 /// Lion's Den through `--ballisticng-track` and through its converted file, a lone AI
 /// craft on Pulse's physics: the same world hash on every tick.
 #[test]

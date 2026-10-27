@@ -88,3 +88,9 @@ slot), so the question was how to serialise that model, and where it lives.
   in a `.vex` tree and byte ranges into a disc payload) have no meaning in a file
   and do not survive; every other field of 80 disc circuits does (see the page).
 - A second serialisation of the same model (RON, CBOR) would be a new major.
+
+## Notes
+
+- 2026-10-27: the BallisticNG importer (`oag_raceplay::foreign`'s `.wtrk` reader, decision 7) is behind the
+  off-by-default `ballisticng` feature and ships in no build; the own-format reader and `--track-file` are
+  unaffected. See `docs/architecture/menus.md`.

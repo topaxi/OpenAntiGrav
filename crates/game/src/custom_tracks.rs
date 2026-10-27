@@ -8,13 +8,21 @@
 //! more than a menu should hold the window for. Until that finishes the rows are
 //! there, by file name, and cannot be started.
 //!
+//! **The survey is lazy** (maintainer, 2026-10-27: it was 22% of the profile
+//! samples in a race on the workstation). Finding the files is a directory read
+//! and happens at start-up, because it decides whether CUSTOM is offered at all.
+//! Reading them ([`Scan::begin`]) starts only when RACE REMIX's CUSTOM title is
+//! first on screen, never while a race is running, and its results are cached
+//! on disk by path and modification time ([`cache`]), so a file that has not
+//! changed is not decoded twice across runs.
+//!
 //! A file that will not load is listed anyway, dimmed, with the reason in the
 //! note slot under the rows ([`oag_ui::menu::Choice::unusable`]). It is never
 //! hidden and never raced instead of another.
 
 use std::path::{Path, PathBuf};
 
-use oag_raceplay::foreign::survey::{self, Listing};
+use oag_raceplay::foreign::survey::Listing;
 use oag_thread::Task;
 use oag_ui::language::StringTable;
 use oag_ui::menu::Choice;
@@ -28,30 +36,55 @@ pub struct Scan {
     files: Vec<PathBuf>,
     listings: Vec<Listing>,
     task: Option<Task<Vec<Listing>>>,
+    /// Whether the files have been read, or are being.
+    begun: bool,
+    /// Where the survey keeps what it read, or none.
+    cache_file: Option<PathBuf>,
 }
 
 impl Scan {
-    /// [`Scan::start`] over the default search paths of both sources.
+    /// [`Scan::new`] over the default search paths of both sources and the
+    /// default cache file.
     pub fn discover() -> Self {
-        Self::start(
+        Self::new(
             &oag_source::tracks::search_path(),
             &oag_source::ballisticng::search_path(),
+            Some(cache::file_in(
+                &oag_source::cache::default_custom_tracks_cache_dir(),
+            )),
         )
     }
 
-    /// Lists the files now (directory reads only) and starts reading them: the
-    /// own-format tracks in `own`, then BallisticNG's under `bases`.
-    pub fn start(own: &[PathBuf], bases: &[PathBuf]) -> Self {
-        let files = oag_source::tracks::all_in(own, bases);
-        let task = (!files.is_empty()).then(|| {
-            let files = files.clone();
-            Task::spawn("oag-custom-tracks", move || survey::survey(&files))
-        });
+    /// Lists the files now (directory reads only): the own-format tracks in
+    /// `own`, then BallisticNG's under `bases`. Nothing is read until
+    /// [`Scan::begin`].
+    pub fn new(own: &[PathBuf], bases: &[PathBuf], cache_file: Option<PathBuf>) -> Self {
         Self {
-            files,
+            files: oag_source::tracks::all_in(own, bases),
             listings: Vec::new(),
-            task,
+            task: None,
+            begun: false,
+            cache_file,
         }
+    }
+
+    /// Starts reading the files on a thread of their own, once. A later call is
+    /// a no-op, so a caller may ask every frame the CUSTOM title is showing.
+    pub fn begin(&mut self) {
+        if self.begun || self.files.is_empty() {
+            return;
+        }
+        self.begun = true;
+        let files = self.files.clone();
+        let cache_file = self.cache_file.clone();
+        self.task = Some(Task::spawn("oag-custom-tracks", move || {
+            cache::survey(&files, cache_file.as_deref())
+        }));
+    }
+
+    /// Whether [`Scan::begin`] has run, or there was nothing to read.
+    pub fn is_settled(&self) -> bool {
+        self.files.is_empty() || (self.begun && self.task.is_none())
     }
 
     /// Whether the scan found no file at all, so CUSTOM is not offered.
@@ -68,8 +101,9 @@ impl Scan {
         true
     }
 
-    /// Waits for the thread, for a capture that has no frames to wait across.
+    /// Reads the files and waits, for a capture that has no frames to wait across.
     pub fn wait(&mut self) {
+        self.begin();
         self.finish();
     }
 
@@ -97,7 +131,7 @@ impl Scan {
     /// The TRACK row's options. The stored value is the file's path, which is
     /// unique and known before the file is read.
     pub fn choices(&self, strings: &StringTable) -> Vec<Choice> {
-        if self.task.is_some() {
+        if !self.is_settled() {
             let reason = strings
                 .get("OAG_REMIX_CUSTOM_CHECKING")
                 .unwrap_or("still checking this file");
@@ -127,7 +161,7 @@ impl Scan {
     /// The file to race for a TRACK value, or why none can be.
     pub fn raceable(&self, value_: &str) -> Result<&Path, String> {
         match self.listing(value_) {
-            None if self.task.is_some() => Err("still checking the files".to_string()),
+            None if !self.is_settled() => Err("still checking the files".to_string()),
             None => Err(format!("{value_} is not a track this scan found")),
             Some(listing) => match &listing.problem {
                 Some(problem) => Err(format!("{}: {problem}", listing.title)),
@@ -181,5 +215,6 @@ pub fn apply(options: &mut oag_raceplay::Options, path: &Path) {
     options.craft_source = None;
 }
 
+mod cache;
 #[cfg(test)]
 mod tests;

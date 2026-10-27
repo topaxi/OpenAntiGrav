@@ -34,6 +34,7 @@ mod start_gantry_report_ground_truth;
 mod start_gantry_report_pure_ground_truth;
 mod start_line_ground_truth;
 mod start_pose_ground_truth;
+#[cfg(feature = "ballisticng")]
 mod survey;
 mod texture_stream_ground_truth;
 mod track_audio_hd_ground_truth;

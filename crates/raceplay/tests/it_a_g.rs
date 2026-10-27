@@ -57,7 +57,9 @@ mod falloff_survey_ground_truth;
 mod fire_law_inherit_ground_truth;
 mod font_border_ground_truth;
 mod foreign_conventions_ground_truth;
+#[cfg(feature = "ballisticng")]
 mod foreign_ground_truth;
+#[cfg(feature = "ballisticng")]
 mod foreign_race_ground_truth;
 mod gantry_mount_hd_circuits_ground_truth;
 mod german_ground_truth;

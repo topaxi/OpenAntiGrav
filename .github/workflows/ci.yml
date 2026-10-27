@@ -50,6 +50,9 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - uses: taiki-e/install-action@nextest
       - run: cargo nextest run --workspace --tests --cargo-profile quick
+      # Off by default and enabled by no build; built here so it does not rot.
+      - run: cargo clippy -p oag-game -p oag-raceplay --features oag-game/ballisticng,oag-raceplay/ballisticng --all-targets -- -D warnings
+      - run: cargo nextest run -p oag-game -p oag-raceplay --features oag-game/ballisticng,oag-raceplay/ballisticng --tests --cargo-profile quick -E 'test(custom_tracks::) | test(survey::)'
       - name: Assert the two architecture dependency rules still hold
         run: python3 scripts/check-dependency-rules.py
       # Cheap and early: a transcendental in simulation code is a divergence
