@@ -98,6 +98,7 @@ mod campaign_map;
 mod campaign_tiers;
 mod event_card;
 mod faces;
+mod mode_grid;
 mod options2048;
 mod team;
 mod team_info;

@@ -22,6 +22,11 @@ fn patched_xml() -> String {
         <TouchButton name="offlinefury"><Values idstring="FE_RC_FURY" x="592" y="110" width="135" height="135" toggle="true" StringWidthLimit="175" Src="Data\FE\NewImages\gamemodechoice\gm_SPFuryCampaign.gtf"></Values></TouchButton>
         <TouchButton name="multiplayer">"#,
     )
+    .replace(
+        r#"<TouchButton name="confirmButton">"#,
+        r#"<TouchButton name="adhoc"><Values idstring="FE_ADHOC" x="491" y="190" width="140" height="140" toggle="true" StringWidthLimit="150" Src="Data\FE\NewImages\gamemodechoice\gm_Adhoc.gtf"></Values></TouchButton>
+        <TouchButton name="confirmButton">"#,
+    )
 }
 
 fn cell(name: &str, x: f32, y: f32) -> MapEvent {
@@ -94,7 +99,8 @@ fn a_pointer_opens_a_tier_from_its_tile_and_launches_one_of_its_cells() {
         clicked: true,
         ..Pointer::default()
     };
-    let tile = [410.0, 110.0, 135.0, 135.0];
+    // One package mounted: the original puts single player at x=320 and the tile at 500, y=95.
+    let tile = [500.0, 95.0, 135.0, 135.0];
     // One tap chooses and confirms, as it does on every mode tile.
     assert!(frontend.pointer(&tap(tile)));
     tick(&mut frontend, &mut input, 0);
@@ -121,21 +127,18 @@ fn a_pointer_opens_a_tier_from_its_tile_and_launches_one_of_its_cells() {
 }
 
 #[test]
-fn a_tile_whose_package_is_not_mounted_still_says_it_leads_elsewhere() {
+fn a_tile_whose_package_is_not_mounted_is_hidden_and_the_pad_skips_it() {
     let (mut frontend, mut input) = on_the_grid(Vec::new());
+    assert!(
+        !frontend.draw_list().iter().any(
+            |draw| matches!(draw, Draw::Fill { rect, .. } if rect[2] == 135.0 && rect[3] == 135.0)
+        ),
+        "neither downloadable campaign's tile draws without its package"
+    );
+    // The tile after single player is the multiplayer one.
     choose(&mut frontend, &mut input, 1);
-    assert!(
-        frontend.machine().is(w2048::GAME_MODE_CHOICE),
-        "no map to open, so the grid stays"
-    );
+    assert_eq!(frontend.chosen_mode(), Some("FE_MP_CAMPAIGN"));
     assert_eq!(frontend.campaign_tile(), None);
-    let notes = frontend.take_notes();
-    assert!(
-        notes
-            .iter()
-            .any(|note| note.contains("FE_RC_HD is another title's campaign")),
-        "{notes:#?}"
-    );
 }
 
 #[test]
@@ -143,9 +146,11 @@ fn a_package_that_is_mounted_opens_only_its_own_tile() {
     let (mut frontend, mut input) = on_the_grid(vec![hd()]);
     assert!(frontend.has_campaign_tier("FE_RC_HD"));
     assert!(!frontend.has_campaign_tier("FE_RC_FURY"));
+    // Fury's package is absent, so its tile is hidden and the third tile is the
+    // multiplayer one.
     choose(&mut frontend, &mut input, 2);
     assert!(frontend.machine().is(w2048::GAME_MODE_CHOICE));
-    assert_eq!(frontend.chosen_mode(), Some("FE_RC_FURY"));
+    assert_eq!(frontend.chosen_mode(), Some("FE_MP_CAMPAIGN"));
     assert_eq!(frontend.campaign_tile(), None);
 }
 
@@ -180,20 +185,20 @@ fn tile_fill(frontend: &Frontend, rect: [f32; 4]) -> [f32; 4] {
 }
 
 #[test]
-fn the_tile_draws_as_enabled_with_its_package_and_as_the_network_modes_do_without() {
-    let hd_rect = [410.0, 110.0, 135.0, 135.0];
-    let sp_rect = [167.0, 190.0, 140.0, 140.0];
+fn the_tile_draws_as_enabled_with_its_package_and_a_network_mode_as_gated() {
+    let hd_rect = [500.0, 95.0, 135.0, 135.0];
+    let sp_rect = [320.0, 95.0, 140.0, 140.0];
+    let mp_rect = [228.0, 320.0, 140.0, 140.0];
     let (with, _) = on_the_grid(vec![hd()]);
-    let (without, _) = on_the_grid(Vec::new());
     assert_eq!(
         tile_fill(&with, hd_rect),
         tile_fill(&with, sp_rect),
         "with the package it is as blue as the single-player tile"
     );
     assert_ne!(
-        tile_fill(&without, hd_rect),
-        tile_fill(&without, sp_rect),
-        "without it is the grey of a mode this build cannot enter"
+        tile_fill(&with, mp_rect),
+        tile_fill(&with, sp_rect),
+        "the multiplayer mode is the grey of a mode this build cannot enter"
     );
 }
 
@@ -258,4 +263,14 @@ fn the_shell_helper_reaches_the_single_player_map_unchanged() {
     let mut input = Input::new();
     reach_the_shell(&mut frontend, &mut input);
     assert_eq!(frontend.campaign_tile(), None);
+}
+
+/// The executable recolours `multiplayer` and `crossplay` only; `adhoc` keeps
+/// its own blue whatever the network state (`mode_grid.rs`).
+#[test]
+fn adhoc_is_as_blue_as_single_player_and_multiplayer_is_grey() {
+    let (frontend, _) = on_the_grid(vec![hd()]);
+    let sp = tile_fill(&frontend, [320.0, 95.0, 140.0, 140.0]);
+    assert_eq!(tile_fill(&frontend, [410.0, 320.0, 140.0, 140.0]), sp);
+    assert_ne!(tile_fill(&frontend, [228.0, 320.0, 140.0, 140.0]), sp);
 }

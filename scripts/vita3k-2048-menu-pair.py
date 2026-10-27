@@ -146,10 +146,10 @@ WALK = [
                    "why": "ours stops on the tick TitleScreen is entered (`--ticks` after `--until` does not advance it), before the logo and the prompt appear"}},
     {"id": "psn", "title": "PSN prompt", "screen": "Boot Connect", "route": None, "xml": "the Vita system's own dialog",
      "why": "the dialog is the system's, not a screen of the game's XML"},
-    {"id": "game-mode", "title": "Game Mode", "screen": "GameModeChoice", "route": ["--until", "GameModeChoice", "--press", TO_MAP],
+    # `--original-menu` leaves out this build's RACEBOX, REMIX and MULTIPLAYER tiles; a player keeps them.
+    {"id": "game-mode", "title": "Game Mode", "screen": "GameModeChoice", "route": ["--until", "GameModeChoice", "--press", TO_MAP, "--original-menu"],
      "xml": "Definition.xml GameModeChoice",
-     "selection": {"original": "no tile highlighted (fresh entry)", "ours": "Single Player Campaign ringed", "matched": False,
-                   "why": "ours rings Single Player Campaign on entry; the original rings nothing until a tile is touched"}},
+     "selection": {"original": "no tile highlighted (fresh entry)", "ours": "no tile highlighted (fresh entry)", "matched": True}},
     {"id": "sp-tutorial", "title": "Campaign welcome panel", "screen": "SPTutorial", "route": None, "xml": "newFEshell->SPTutorial",
      "why": "ours draws SPTutorial only through `--screen`, on black without the shell, and its live flow never opens it"},
     {"id": "map", "title": "Campaign map", "screen": "newFEshell", "route": ["--until", "map:" + EVENT, "--press", TO_MAP],

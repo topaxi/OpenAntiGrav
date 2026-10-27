@@ -216,44 +216,33 @@ fn the_usa_package_ships_the_hd_pack_alone_so_only_its_tile_opens() {
     assert_eq!(frontend.campaign_tile(), Some("FE_RC_HD"));
     assert_eq!(frontend.campaign_events().len(), 87);
 
+    // Fury's package is absent, so the original hides its tile and the pad's
+    // third stop is the multiplayer one (`FUN_811241c2`).
     let (mut frontend, mut input) = on_the_grid(&usa);
     choose(&mut frontend, &mut input, 2);
     assert!(frontend.machine().is(w2048::GAME_MODE_CHOICE));
     assert_eq!(frontend.campaign_tile(), None);
-    assert!(
-        frontend
-            .take_notes()
-            .iter()
-            .any(|note| note.contains("FE_RC_FURY is another title's campaign")),
-        "the Fury tile says where it leads"
-    );
+    assert_eq!(frontend.chosen_mode(), Some("FE_MP_CAMPAIGN"));
 }
 
-/// "Without the pack, nothing changes": the tiles are on the grid the patch
-/// authors and refuse by note, as they did before any pack was read.
+/// Without either package the original hides both campaign tiles and the
+/// grid is one row of four: the pad's second stop is the multiplayer tile.
 #[test]
 #[ignore = "needs data/extracted/vita/PCSF00007"]
-fn without_either_package_the_tiles_keep_their_note_and_no_map_opens() {
+fn without_either_package_the_tiles_are_hidden_and_no_map_opens() {
     let Some(eu) = package("PCSF00007") else {
         return;
     };
     let bare = WithoutPacks::of(&eu);
     let (shell, ..) = boot::load_shell(&options(&bare.0)).expect("the base package boots");
     assert!(shell.tiers.is_empty());
-    for (steps, tile) in [(1, "FE_RC_HD"), (2, "FE_RC_FURY")] {
-        let (mut frontend, mut input) = on_the_grid(&bare.0);
-        assert!(!frontend.has_campaign_tier(tile));
-        choose(&mut frontend, &mut input, steps);
-        assert!(frontend.machine().is(w2048::GAME_MODE_CHOICE));
-        assert_eq!(frontend.campaign_tile(), None);
-        assert!(
-            frontend
-                .take_notes()
-                .iter()
-                .any(|note| note.contains(&format!("{tile} is another title's campaign"))),
-            "{tile} refuses by note"
-        );
-    }
+    let (mut frontend, mut input) = on_the_grid(&bare.0);
+    assert!(!frontend.has_campaign_tier("FE_RC_HD"));
+    assert!(!frontend.has_campaign_tier("FE_RC_FURY"));
+    choose(&mut frontend, &mut input, 1);
+    assert!(frontend.machine().is(w2048::GAME_MODE_CHOICE));
+    assert_eq!(frontend.campaign_tile(), None);
+    assert_eq!(frontend.chosen_mode(), Some("FE_MP_CAMPAIGN"));
 }
 
 /// The cells of both campaigns and the plan each launches with, resolved the

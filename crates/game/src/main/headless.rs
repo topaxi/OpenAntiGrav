@@ -49,6 +49,9 @@ pub(crate) fn run_windowless(
     if cli.overlay {
         loaded.frontend.set_overlay(true);
     }
+    if cli.original_menu {
+        loaded.frontend.set_extra_tiles(Vec::new());
+    }
     // A language chosen on an earlier run skips the picker. Reported either
     // way: silently not asking is indistinguishable from a broken picker, and
     // silently asking again is indistinguishable from a setting that did not

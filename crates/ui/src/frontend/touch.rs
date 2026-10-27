@@ -4,15 +4,18 @@
 //! # What is authored, what is measured, what is chosen
 //!
 //! **Authored** (`NEWGUI/Definition.xml`, confidence 92): every tile's
-//! position, size, icon texture, label id, `toggle` flag, `redirect` target
+//! size, icon texture, label id, `toggle` flag, `redirect` target
 //! and `StringWidthLimit`; the header icon and title; `Blue2048`, `Grey2048`
-//! and `Orange2048` as colours the skin declares.
+//! and `Orange2048` as colours the skin declares. **Not the position, on
+//! `GameModeChoice`:** the screen's own code overwrites it (and hides the tick
+//! and an unmounted campaign's tile, and greys only the multiplayer and
+//! cross-play tiles) - see [`super::mode_grid`].
 //!
 //! **Measured** off `data/reference/2048-frontend/08-game-mode-grid-clean.png`
 //! (one Vita3K frame, confidence 80): an enabled tile is a solid square of
 //! `Blue2048` (`0xff19295d` - the capture's tile pixels are exactly
 //! `(25, 41, 93)`), a network-gated tile is `Grey2048` (`0xff717b96`, exactly
-//! `(113, 123, 150)`), the icon is drawn at its texture's own size centred on
+//! `(113, 123, 150)`) with its label still `Blue2048`, the icon is drawn at its texture's own size centred on
 //! the tile (a 92px-wide glyph in a 128px texture lands 90px wide on screen),
 //! and the label sits under the tile in the tile colour, its cap line 18px
 //! below the tile's bottom edge, wrapped, 22px between lines. Off
@@ -21,22 +24,25 @@
 //! carries it inside, white, centred.
 //!
 //! **Chosen, not measured - no confidence score**: the pad cursor. The
-//! capture shows no selected state at all (it was taken between taps), so
-//! the tile the pad is on is outlined in `Orange2048`, a colour the skin
-//! declares for something, drawn as a 4-unit ring. A player needs to see
-//! where the cursor is; what the original draws there is unread.
+//! captures show no selected state at all and the original's grids answer
+//! touch only, so the tile the pad is on is outlined in `Orange2048`, a colour
+//! the skin declares for something, drawn as a 4-unit ring - **only once the
+//! pad has moved on the screen** ([`TouchState::pad_cursor`]), never on entry
+//! or under a pointer, as in the original. What the original draws for a pad
+//! is unread.
 //!
 //! # One tap on a mode tile
 //!
 //! `GameModeChoice`'s mode tiles are `toggle="true"` with no `redirect`;
 //! an unlabelled one (`Icon_Tick.gtf`, `redirect="newFEshell"`) is
-//! the tick. **Measured on Vita3K v0.2.1 (2026-10-26, confidence 90):** one
+//! the tick, which the screen hides (`FUN_811241c2`), so a tap here fires the
+//! tick's own `redirect` itself. **Measured on Vita3K v0.2.1 (2026-10-26, confidence 90):** one
 //! touch of the SINGLE PLAYER tile, and one of the HD tile with the DLC
 //! mounted, leaves the grid for the campaign map within a frame or two; the
 //! tile is never left marked to wait for the tick. The pad's cross, pressed
 //! after a right on the d-pad, did nothing visible: the original's grid
 //! answers touch only. So a tap here chooses and fires the tick at once; the
-//! tick stays tappable and leaves on a chosen mode as before. The pad is
+//! tick is not drawn or hit-tested on this page. The pad is
 //! this build's own (cursor and cross, **chosen, not measured**) and takes
 //! the same one-press path. This replaces an earlier two-tap reading taken
 //! off the screen file's shape. `Home`'s five tiles each carry their own
@@ -68,7 +74,9 @@
 //! (`GameModeChoice` is nested inside `newFEshell`) authors a `<TouchNews>`
 //! at `(16, 432)`, but that widget carries no size and this build draws
 //! nothing for it, so the rect is empty in the picture. See
-//! [`EXTRA_TILES`]. No disc icon exists for either, so neither draws one.
+//! [`EXTRA_TILES`]. No disc icon exists for either, so neither draws one. A
+//! compare shot leaves all three out (`oag-game --original-menu`, maintainer
+//! 2026-10-27): the original's page has none, a player keeps them.
 
 use crate::pointer::{Pointer, contains};
 use crate::screen::{Screen, TouchButton, argb_to_rgba, parse_argb};
@@ -144,6 +152,10 @@ pub struct TouchState {
     pub selected: usize,
     /// The `idstring` of the toggle tile last tapped on `GameModeChoice`.
     pub chosen_mode: Option<String>,
+    /// Whether the pad has moved on this screen: the ring shows only then. The
+    /// original's touch grids draw no focus at all; the ring is this build's
+    /// own, for a pad (see the module docs).
+    pub pad_cursor: bool,
     /// What a confirmed tap asked for, once one has. Read by the
     /// composition root through [`Frontend::launch`].
     pub launch: Option<Launch>,
@@ -256,7 +268,7 @@ impl Frontend {
         let mut tiles: Vec<Tile> = screen
             .touch_buttons
             .iter()
-            .map(|button| self.authored_tile(button))
+            .filter_map(|button| self.authored_tile(name, button))
             .collect();
         if name == w2048::GAME_MODE_CHOICE {
             for (extra, rect) in self.touch.extra.iter().zip(EXTRA_TILES) {
@@ -275,7 +287,13 @@ impl Frontend {
         tiles
     }
 
-    fn authored_tile(&self, button: &TouchButton) -> Tile {
+    /// `None` for a button the original hides on this screen.
+    fn authored_tile(&self, screen: &str, button: &TouchButton) -> Option<Tile> {
+        let rect = if screen == w2048::GAME_MODE_CHOICE {
+            self.mode_button_rect(button)?
+        } else {
+            tile_rect(button)
+        };
         let label = button
             .idstring
             .as_deref()
@@ -291,8 +309,8 @@ impl Frontend {
             (_, Some(target)) => Action::Redirect(target.clone()),
             _ => Action::Toggle(name.clone()),
         };
-        Tile {
-            rect: tile_rect(button),
+        Some(Tile {
+            rect,
             src: button.src.clone(),
             label,
             wrap: button.string_width_limit,
@@ -300,7 +318,7 @@ impl Frontend {
             color: argb_to_rgba(button.color),
             action,
             name,
-        }
+        })
     }
 
     /// The pad on a touch grid.
@@ -326,7 +344,7 @@ impl Frontend {
                     input.consume_press(button);
                     self.notes
                         .push(format!("{current}: {button:?} pressed, firing {target}"));
-                    self.touch.selected = 0;
+                    self.reset_touch_cursor();
                     self.on_screen_for = 0.0;
                     self.machine.fire(target);
                     return;
@@ -342,15 +360,35 @@ impl Frontend {
         self.touch.selected = self.touch.selected.min(count - 1);
         if input.is_pressed(Button::Right) {
             input.consume_press(Button::Right);
+            self.touch.pad_cursor = true;
             self.touch.selected = (self.touch.selected + 1) % count;
         } else if input.is_pressed(Button::Left) {
             input.consume_press(Button::Left);
+            self.touch.pad_cursor = true;
             self.touch.selected = (self.touch.selected + count - 1) % count;
         } else if input.is_pressed(Button::Cross) || input.is_pressed(Button::Start) {
             input.consume_press(Button::Cross);
             input.consume_press(Button::Start);
             self.activate_touch(&current, self.touch.selected);
         }
+    }
+
+    /// Back to the first tile, ring hidden: a screen was left or entered.
+    fn reset_touch_cursor(&mut self) {
+        self.touch.selected = 0;
+        self.touch.pad_cursor = false;
+    }
+
+    /// Where `current`'s own `confirmButton` leads, when it authors one: the
+    /// tick the original hides, fired for it by a tap on a mode.
+    fn confirm_target(&self, current: &str) -> Option<String> {
+        self.screens
+            .by_name(current)?
+            .touch_buttons
+            .iter()
+            .find(|button| button.name.as_deref() == Some("confirmButton"))?
+            .redirect
+            .clone()
     }
 
     /// A tap or a press on tile `at` of screen `current`.
@@ -372,14 +410,12 @@ impl Frontend {
                 // its toggle buttons would silently fire one of them instead
                 // of simply choosing.
                 if current == w2048::GAME_MODE_CHOICE
-                    && let Some(tick) = tiles
-                        .iter()
-                        .position(|t| t.label.is_none() && matches!(t.action, Action::Redirect(_)))
+                    && let Some(target) = self.confirm_target(current)
                 {
                     self.touch.chosen_mode = Some(id);
                     self.notes
                         .push(format!("{current}: {label} chosen, confirming"));
-                    self.activate_touch(current, tick);
+                    self.redirect_touch(current, &label, &target);
                     return;
                 }
                 self.touch.chosen_mode = Some(id);
@@ -417,12 +453,6 @@ impl Frontend {
                 Some(mode) if self.has_campaign_tier(mode) => {
                     self.show_campaign_map(Some(mode));
                 }
-                Some(mode @ ("FE_RC_HD" | "FE_RC_FURY")) => {
-                    self.notes.push(format!(
-                        "{current}: {mode} is another title's campaign, which this build does not carry in 2048"
-                    ));
-                    return;
-                }
                 Some(mode) => {
                     self.notes.push(format!(
                         "{current}: {mode} needs a network session this build does not have"
@@ -450,7 +480,7 @@ impl Frontend {
             self.notes.push(format!(
                 "{current}: {label} tapped, returning to {previous}"
             ));
-            self.touch.selected = 0;
+            self.reset_touch_cursor();
             self.on_screen_for = 0.0;
             self.machine.fire(&previous);
             return;
@@ -468,7 +498,7 @@ impl Frontend {
         self.notes
             .push(format!("{current}: {label} tapped, firing {target}"));
         self.touch.history.push(current.to_string());
-        self.touch.selected = 0;
+        self.reset_touch_cursor();
         self.on_screen_for = 0.0;
         self.machine.fire(target);
     }
@@ -538,14 +568,14 @@ impl Frontend {
             let colour = match &drawn.action {
                 Action::Toggle(id)
                     if name == w2048::GAME_MODE_CHOICE
-                        && id != "FE_SP_CAMPAIGN"
-                        && !self.has_campaign_tier(id) =>
+                        && matches!(id.as_str(), "FE_MP_CAMPAIGN" | "FE_CROSSPLAY") =>
                 {
                     gated
                 }
                 _ => tile,
             };
-            self.draw_tile(drawn, colour, at == self.touch.selected, cursor, out);
+            let ringed = self.touch.pad_cursor && at == self.touch.selected;
+            self.draw_tile(drawn, colour, ringed, cursor, out);
         }
     }
 
@@ -675,9 +705,11 @@ impl Frontend {
                 [1.0, 1.0, 1.0, 1.0],
             )
         } else {
+            // `Blue2048` under a `Grey2048` tile too: the capture's
+            // ONLINE CAMPAIGN and CROSS-PLAY labels are the enabled tiles' navy.
             (
                 rect[1] + rect[3] + LABEL_GAP - PEN_ABOVE_CAPS * LABEL_SCALE,
-                colour,
+                self.global_colour("Blue2048"),
             )
         };
         out.push(Draw::Text {
