@@ -130,7 +130,7 @@ def rerender(pj, binary):
     rec["overlap"] = ce.overlap_score(pair_dir / "theirs.png", pair_dir / "ours.png")
     rec["environment"] = ce.environment_text(plat, rec)
     pj.write_text(json.dumps(rec, indent=2) + "\n")
-    return "ok: " + changes(old, rec["overlap"])
+    return "ok: " + changes(old, rec["overlap"], "%s/%s" % (pair_dir.parent.name, pair_dir.name))
 
 
 #: `(key, label, format, lower is better)`, in the order printed.
@@ -139,15 +139,21 @@ COLOUR = (sys.stdout.isatty() and "NO_COLOR" not in os.environ) or bool(os.envir
 GREEN, RED, DIM, RESET = "\033[32m", "\033[31m", "\033[2m", "\033[0m"
 TALLY = {"better": 0, "worse": 0, "same": 0}
 TALLY_LOCK = threading.Lock()
+#: `(pair, old mean grey, new mean grey)` of every pair that had a previous score, for the closing summary.
+MOVES = []
+#: A mean grey move smaller than this is reported as small: a frame that differs by a few pixels' worth.
+SMALL = 0.5
+#: How many of the largest gains and regressions the summary names.
+NAMED = 5
 
 
 def paint(text, code):
     return code + text + RESET if COLOUR else text
 
 
-def changes(old, new):
+def changes(old, new, pair):
     """Each score old -> new, green where it improved, red where it regressed and dim where the printed value did not
-    move; the pair is tallied by its mean grey difference."""
+    move; the pair is tallied by its mean grey difference and kept for the summary."""
     parts = []
     for key, label, fmt, lower in SCORES:
         if key not in old or key not in new:
@@ -157,8 +163,43 @@ def changes(old, new):
         if key == "mean_grey":
             with TALLY_LOCK:
                 TALLY[verdict] += 1
+                MOVES.append((pair, old[key], new[key]))
         parts.append(paint("%s %s -> %s" % (label, a, b), {"same": DIM, "better": GREEN, "worse": RED}[verdict]))
     return ", ".join(parts) if parts else "no previous scores"
+
+
+def summary():
+    """The closing lines: the tally split by size, the summed mean grey per title and overall, and the largest gains
+    and regressions by name, so a run with many small regressions and a few large wins reads as what it is."""
+    if not MOVES:
+        return []
+    deltas = [(new - old, pair) for pair, old, new in MOVES]
+    big_better = sum(1 for d, _ in deltas if d <= -SMALL)
+    big_worse = sum(1 for d, _ in deltas if d >= SMALL)
+    small = sum(1 for d, _ in deltas if 0 < abs(d) < SMALL)
+    lines = ["mean grey moves: %s, %s, %s, %s" % (
+        paint("%d better by %.1f+" % (big_better, SMALL), GREEN), paint("%d worse by %.1f+" % (big_worse, SMALL), RED),
+        "%d within %.1f" % (small, SMALL), paint("%d unchanged" % sum(1 for d, _ in deltas if d == 0), DIM))]
+    titles = {}
+    for pair, old, new in MOVES:
+        t = titles.setdefault(pair.split("/")[0], [0, 0.0, 0.0])
+        t[0] += 1
+        t[1] += old
+        t[2] += new
+    net = sum(d for d, _ in deltas)
+    lines.append("summed mean grey: %.1f -> %.1f (%s), per title:" % (
+        sum(o for _, o, _ in MOVES), sum(n for _, _, n in MOVES), paint("%+.1f" % net, GREEN if net < 0 else RED if net > 0 else DIM)))
+    for name, (n, old, new) in sorted(titles.items(), key=lambda kv: kv[1][2] - kv[1][1]):
+        if new != old:
+            colour = GREEN if new < old else RED
+            lines.append("  %-18s %3d pair(s)  %8.2f -> %8.2f  %s" % (name, n, old, new, paint("%+.2f" % (new - old), colour)))
+    gains = sorted(d for d in deltas if d[0] <= -SMALL)[:NAMED]
+    losses = sorted((d for d in deltas if d[0] >= SMALL), reverse=True)[:NAMED]
+    if gains:
+        lines.append("largest gains:   " + ", ".join(paint("%s %+.2f" % (p, d), GREEN) for d, p in gains))
+    if losses:
+        lines.append("largest regressions: " + ", ".join(paint("%s %+.2f" % (p, d), RED) for d, p in losses))
+    return lines
 
 
 def rewrite_manifests(d):
@@ -237,6 +278,8 @@ def main():
     print("%d pair(s), %d not re-rendered; by mean grey: %s, %s, %s" % (
         len(pairs), bad, paint("%d better" % TALLY["better"], GREEN), paint("%d worse" % TALLY["worse"], RED),
         paint("%d same" % TALLY["same"], DIM)))
+    for line in summary():
+        print(line)
     sys.exit(1 if bad else 0)
 
 
