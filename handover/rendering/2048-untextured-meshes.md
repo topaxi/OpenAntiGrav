@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [2048]
 updated: 2026-10-27
-summary: "2048 flat meshes: Vita +0x28 declaration pointer resolves on 100% (14.2% was wrong); stride map misreads 83% of Empire Climb triangles; wire it"
+summary: "2048 flat meshes: Vita +0x28 declaration pointer resolves on 100%; stride map reads lightmap/colour/tangent as diffuse on 75% of Empire Climb tris; wire it"
 size: M (35)
 difficulty: medium (35)
 ---
@@ -162,12 +162,13 @@ test `crates/rcs/tests/psp2_flat_census_ground_truth.rs`).
 2. ~~Census.~~ **Done as a test, not as `Report` counters** (no draw behaviour or
    `psp2::Report` change). Empire Climb `track.rcsmodel` (4,957 submeshes, 470,840
    triangles): flat (empty + all-zero) 763 submeshes / 61,080 triangles (13%); partly
-   zeroed 1,760 / 209,561; **the reader's declaration differs from the record's own on
-   4,477 / 390,244 (83%)**; 658 / 38,563 of the flat ones read a real coordinate through
-   the own declaration. Base-archive flat triangle share: bridge 58%, tower 38% (incl.
-   Zone), subway 34%, altima 34%.
+   zeroed 1,760 / 209,561; **on 3,897 submeshes / 353,130 triangles (75%) the reader's
+   offset lands on the record's own lightmap, vertex colour, tangent or nothing**
+   (wrong whichever attribute is the diffuse one; 4,477 / 390,244 differ in all); 658 / 38,563 of the flat ones read a real coordinate through
+   the own declaration. Per circuit without the Zone model, flat share of triangles: bridge 85%
+   (authored: Omega's bridge matches), tower 16%, sol 14%, park 13%, subway 10%.
 3. ~~Rank by area.~~ Done above. The bigger defect than the flat 13% is the wrong
-   attribute on 83% of the triangles (lightmap UV or vertex-colour bytes as diffuse UV).
+   attribute on 75% of the triangles (lightmap UV, vertex colour or tangent as diffuse UV).
 4. ~~Measure the Vita pointer.~~ **It resolves on 276,239 of 276,239 Vita submeshes**
    (base, DLC1/2, patch data1/2), stride agreeing on all; lightmap control group 0
    off-diagonal. The 14.2% was a wrong measurement. **Ready to wire**: read the diffuse

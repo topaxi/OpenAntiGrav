@@ -68,6 +68,14 @@ struct Census {
     /// Of those, the declaration the reader used (the stride map's) puts `Uv1` elsewhere,
     /// or lacks it, or the own declaration does.
     disagree: Area,
+    /// Of `disagree`, those where the reader's offset lands in the own declaration on the
+    /// lightmap coordinate, a vertex colour, a tangent or no attribute: wrong whichever
+    /// coordinate turns out to be the diffuse one / on another non-lightmap two-component
+    /// attribute (depends on the fallback choice).
+    disagree_not_a_coordinate: Area,
+    disagree_other_coordinate: Area,
+    /// Resolved submeshes whose `+0x28` word is a relocation site of the CPU section's table.
+    relocated: usize,
     /// Of those, the own declaration has no `Uv1` at all.
     own_empty: Area,
     /// Reading `Uv1` through the own declaration, resolved submeshes only: all-zero.
@@ -105,6 +113,11 @@ impl Census {
         self.own_all_zero.plus(o.own_all_zero);
         self.flat_fixed.plus(o.flat_fixed);
         self.own_float.plus(o.own_float);
+        self.disagree_not_a_coordinate
+            .plus(o.disagree_not_a_coordinate);
+        self.disagree_other_coordinate
+            .plus(o.disagree_other_coordinate);
+        self.relocated += o.relocated;
         self.lm_both += o.lm_both;
         self.lm_neither += o.lm_neither;
         self.lm_material_only += o.lm_material_only;
@@ -152,6 +165,12 @@ fn census_of(blob: &[u8], ps4: bool) -> Census {
     }
     let (cpu, gpu) = (model.sections[0], model.sections[1]);
     let cpu_bytes = &blob[cpu.at..cpu.at + cpu.len];
+    let sites: std::collections::HashSet<usize> = (0..cpu.entries)
+        .map(|e| {
+            let at = cpu.table + e * psp2::RELOCATION_LEN;
+            u32::from_le_bytes(blob[at..at + 4].try_into().unwrap()) as usize
+        })
+        .collect();
     let by_header = vertex_decl::find_by_header(cpu_bytes);
     let by_stride = vertex_decl::find_by_stride(cpu_bytes);
     for s in &model.submeshes {
@@ -190,6 +209,8 @@ fn census_of(blob: &[u8], ps4: bool) -> Census {
             continue;
         };
         out.resolved.add(tris);
+        out.relocated +=
+            usize::from(sites.contains(&(s.record + vertex_decl::PS4_DECLARATION_POINTER)));
         if let Some(m) = s.material {
             let names = model.materials[m].lightmap.is_some()
                 || model.materials[m]
@@ -231,6 +252,14 @@ fn census_of(blob: &[u8], ps4: bool) -> Census {
         };
         if own_off != used_off {
             out.disagree.add(tris);
+            let landed = used_off.and_then(|o| own.attributes.iter().find(|a| a.offset == o));
+            if landed
+                .is_some_and(|a| a.components == 2 && a.name_hash != vertex_decl::LIGHTMAP_HASH)
+            {
+                out.disagree_other_coordinate.add(tris);
+            } else if used_off.is_some() {
+                out.disagree_not_a_coordinate.add(tris);
+            }
         }
         let Some(off) = own_off.map(usize::from) else {
             out.own_empty.add(tris);
@@ -316,7 +345,13 @@ fn sweep(rel: &str, ps4: bool) -> Option<BTreeMap<String, Census>> {
         let c = census_of(&blob, ps4);
         let dir = entry.rsplit_once('/').map_or("", |(d, _)| d);
         let dir = dir.strip_prefix("data/art/published/").unwrap_or(dir);
-        out.entry(dir.to_string()).or_default().plus(&c);
+        let zone = entry.to_ascii_lowercase().ends_with("trackzone.rcsmodel");
+        let key = if zone {
+            format!("{dir} [zone]")
+        } else {
+            dir.to_string()
+        };
+        out.entry(key).or_default().plus(&c);
     }
     Some(out)
 }
@@ -485,12 +520,197 @@ fn empire_climb_is_pinned() {
     assert_eq!(track.partly_zero, area(1_760, 209_561));
     assert_eq!(track.non_finite, area(1_456, 184_902));
     assert_eq!(track.disagree, area(4_477, 390_244));
+    // The rest of `disagree` are the empty ones: the reader found no `Uv1`, the record has one.
+    assert_eq!(track.disagree_not_a_coordinate, NOT_A_COORDINATE);
+    assert_eq!(track.disagree_other_coordinate, OTHER_COORDINATE);
     assert_eq!(track.own_empty.submeshes, 22);
     assert_eq!(track.own_float, area(139, 25_125));
     assert_eq!(track.own_all_zero, area(0, 0));
     assert_eq!(track.flat_fixed, area(658, 38_563));
     assert_eq!((track.lm_both, track.lm_neither), (2_206, 2_751));
 }
+
+/// One circuit's row: submeshes and triangles, then empty, all-zero and partly-zero areas.
+type Row = (
+    &'static str,
+    (usize, usize),
+    (usize, usize),
+    (usize, usize),
+    (usize, usize),
+);
+
+fn rows(by_dir: &BTreeMap<String, Census>, keys: &[&'static str]) -> Vec<Row> {
+    keys.iter()
+        .map(|&k| {
+            let c = &by_dir[k];
+            (
+                k,
+                (c.all.submeshes, c.all.triangles),
+                (c.empty.submeshes, c.empty.triangles),
+                (c.all_zero.submeshes, c.all_zero.triangles),
+                (c.partly_zero.submeshes, c.partly_zero.triangles),
+            )
+        })
+        .collect()
+}
+
+const CIRCUITS: [&str; 10] = [
+    "environments/altima",
+    "environments/arena",
+    "environments/bridge",
+    "environments/cathedral",
+    "environments/mall",
+    "environments/park",
+    "environments/sol",
+    "environments/square",
+    "environments/subway",
+    "environments/tower",
+];
+
+/// Each base circuit without its Zone-mode `trackZone.rcsmodel` (which draws flat colour by
+/// design): what a normal race loads, plus its skycube and start-grid parts.
+#[test]
+#[ignore = "needs the extracted 2048 packages in data/extracted/vita/"]
+fn base_circuits_without_zone_are_pinned() {
+    let Some(by_dir) = sweep("vita/PCSF00007/base/PSP2/data.psarc", false) else {
+        return;
+    };
+    let got = rows(&by_dir, &CIRCUITS);
+    if std::env::var_os("OAG_SWEEP").is_some() {
+        for r in &got {
+            println!("ROW {r:?},");
+        }
+    }
+    assert_eq!(got, BASE_ROWS);
+}
+
+/// The v1.04 patch replaces three circuits' main model; a patched install loads these.
+#[test]
+#[ignore = "needs the extracted 2048 packages in data/extracted/vita/"]
+fn patched_circuits_are_pinned() {
+    let Some(by_dir) = sweep("vita/PCSF00007/patch-v104/PSP2/data2.psarc", false) else {
+        return;
+    };
+    let got = rows(
+        &by_dir,
+        &[
+            "environments/arena [zone]",
+            "environments/bridge",
+            "environments/park",
+        ],
+    );
+    if std::env::var_os("OAG_SWEEP").is_some() {
+        for r in &got {
+            println!("PROW {r:?},");
+        }
+    }
+    assert_eq!(got, PATCH_ROWS);
+}
+
+const NOT_A_COORDINATE: Area = Area {
+    submeshes: 3_897,
+    triangles: 353_130,
+};
+const OTHER_COORDINATE: Area = Area {
+    submeshes: 0,
+    triangles: 0,
+};
+
+const BASE_ROWS: &[Row] = &[
+    (
+        "environments/altima",
+        (2979, 434182),
+        (319, 33258),
+        (0, 0),
+        (120, 101577),
+    ),
+    (
+        "environments/arena",
+        (3849, 399934),
+        (313, 32658),
+        (4, 858),
+        (157, 10341),
+    ),
+    (
+        "environments/bridge",
+        (5974, 600577),
+        (5220, 511281),
+        (0, 0),
+        (96, 6488),
+    ),
+    (
+        "environments/cathedral",
+        (4995, 449440),
+        (320, 30417),
+        (0, 0),
+        (252, 43860),
+    ),
+    (
+        "environments/mall",
+        (7505, 506303),
+        (193, 15365),
+        (0, 0),
+        (435, 55027),
+    ),
+    (
+        "environments/park",
+        (5007, 381069),
+        (827, 48429),
+        (0, 0),
+        (243, 24331),
+    ),
+    (
+        "environments/sol",
+        (2846, 272600),
+        (597, 38476),
+        (0, 0),
+        (93, 44708),
+    ),
+    (
+        "environments/square",
+        (5886, 510592),
+        (212, 18427),
+        (0, 0),
+        (521, 21375),
+    ),
+    (
+        "environments/subway",
+        (7403, 663407),
+        (641, 63867),
+        (2, 32),
+        (629, 70607),
+    ),
+    (
+        "environments/tower",
+        (5126, 486724),
+        (853, 75035),
+        (78, 1449),
+        (1760, 209561),
+    ),
+];
+const PATCH_ROWS: &[Row] = &[
+    (
+        "environments/arena [zone]",
+        (6797, 617816),
+        (303, 13594),
+        (2077, 252220),
+        (765, 39065),
+    ),
+    (
+        "environments/bridge",
+        (5753, 580679),
+        (5000, 492143),
+        (0, 0),
+        (96, 6488),
+    ),
+    (
+        "environments/park",
+        (4829, 365249),
+        (650, 33089),
+        (0, 0),
+        (243, 24331),
+    ),
+];
 
 const fn pin(
     files: usize,

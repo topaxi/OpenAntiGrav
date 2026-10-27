@@ -19,7 +19,7 @@
 //! declaration's header, and **resolves on every one of the 276,239 submeshes
 //! of the base, DLC and patch archives** with the declared stride equal to the
 //! buffer-derived one (`crates/rcs/tests/psp2_flat_census_ground_truth.rs`;
-//! an earlier 14.2% figure was a wrong measurement). The stride map was kept
+//! an earlier 14.2% figure is not reproduced). The stride map was kept
 //! because it predates that measurement, and it picks a different diffuse
 //! attribute from the record's own on 28.5% of submeshes.
 //! [`find_by_stride`] builds one map per file, keyed by the header's own
