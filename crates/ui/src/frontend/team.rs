@@ -309,9 +309,9 @@ impl Frontend {
             }
         }
         for column in 0..TEAM_COLUMNS.len() {
-            for row in 0..ROWS {
+            for (row, &row_craft) in ROW_CRAFT.iter().enumerate() {
                 let rect = cell_rect(column, row);
-                let locked = self.team_cell_locked(team_of(column), ROW_CRAFT[row]);
+                let locked = self.team_cell_locked(team_of(column), row_craft);
                 let fill = if (column, row) == (cursor_column, cursor_row) {
                     orange
                 } else if locked {
