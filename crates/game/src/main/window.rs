@@ -101,14 +101,31 @@ pub(crate) fn effective_scale(reported: f64, gamescope: bool) -> f64 {
 /// output; the saved setting is left alone, so the same file still means windowed on a desktop
 /// (maintainer decision, 2026-10-14).
 pub(crate) fn effective_mode(mode: display::WindowMode, gamescope: bool) -> display::WindowMode {
-    if gamescope { display::WindowMode::Borderless } else { mode }
+    if oag_game::settings::platform::surface_is_fixed(oag_mobile::MOBILE, gamescope) {
+        display::WindowMode::Borderless
+    } else {
+        mode
+    }
+}
+
+/// The monitor's size in physical pixels, which the size presets are fractions of: the window's
+/// monitor, else its own surface (a phone reports its panel as the window).
+pub(crate) fn native_size(window: &winit::window::Window) -> Option<display::Size> {
+    let size = window
+        .current_monitor()
+        .map_or_else(|| window.inner_size(), |monitor| monitor.size());
+    (size.width > 0 && size.height > 0).then(|| display::Size::new(size.width, size.height))
 }
 
 /// Whether a window is fullscreen right now: it is, by the compositor's report, or it is under
 /// gamescope, which opens every window borderless whatever the saved mode says
 /// ([`effective_mode`]). The saved `window_mode` alone misses both gamescope and an F11 toggle.
 pub(crate) fn is_fullscreen(window: &winit::window::Window) -> bool {
-    window.fullscreen().is_some() || under_gamescope_cached(window.current_monitor().as_ref())
+    // winit's Android backend answers `None` to `fullscreen()` whatever the window is (it cannot
+    // set one), which left `display.fullscreen_resolution` unread there.
+    oag_mobile::MOBILE
+        || window.fullscreen().is_some()
+        || under_gamescope_cached(window.current_monitor().as_ref())
 }
 
 /// The shape the game is drawn at: the setting, or in a fullscreen window a fixed fullscreen

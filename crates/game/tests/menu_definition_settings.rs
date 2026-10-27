@@ -647,7 +647,7 @@ fn the_anisotropy_row_offers_only_levels_that_parse() {
 #[test]
 fn the_two_settings_pages_offer_only_values_that_parse() {
     use oag_display::display::{
-        Aspect, BoostFovKick, Brightness, CameraView, Fov, Gamma, Size, WindowMode,
+        Aspect, BoostFovKick, Brightness, CameraView, Fov, Gamma, WindowMode,
     };
     let definition = built_in();
     let values = |setting: &str| -> Vec<String> {
@@ -741,16 +741,6 @@ fn the_two_settings_pages_offer_only_values_that_parse() {
         trail_order,
         oag_display::display::TrailOrder::ALL,
         "the TRAIL ORDER rows and `TrailOrder::ALL` must be one list"
-    );
-
-    let sizes: Vec<Size> = values("display.window_size")
-        .iter()
-        .map(|name| name.parse::<Size>().unwrap_or_else(|e| panic!("{e}")))
-        .collect();
-    assert_eq!(
-        sizes,
-        Size::OFFERED,
-        "the window-size rows and `Size::OFFERED` must be one list"
     );
 
     let overlays: Vec<oag_present::perf::Overlay> = values("graphics.perf_overlay")

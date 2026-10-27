@@ -40,6 +40,7 @@ mod dynamic_hud;
 mod hud_scale;
 mod motion_blur;
 mod msaa;
+pub mod presets;
 mod reconstruction;
 mod screen_filter;
 mod shadows;
@@ -339,20 +340,6 @@ pub struct Size {
 }
 
 impl Size {
-    /// The sizes the menus offer, at the PSP's own aspect.
-    ///
-    /// Multiples of 480x272 and then a few common desktop heights at the same
-    /// ratio, so the default shape needs no letterboxing at any of them. A
-    /// player on a different aspect gets bars, which is what [`Aspect`] is for.
-    pub const OFFERED: [Self; 6] = [
-        Self::new(960, 544),
-        Self::new(1280, 720),
-        Self::new(1440, 816),
-        Self::new(1600, 900),
-        Self::new(1920, 1080),
-        Self::new(2560, 1440),
-    ];
-
     /// A size, with both dimensions forced to at least one.
     ///
     /// Zero is what a minimised window reports and what a surface cannot be
