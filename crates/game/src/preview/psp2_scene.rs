@@ -71,6 +71,7 @@ pub fn model_named(
             log::debug!("card model {entry}: {report}");
             model.keep_nearest();
             alpha_from_the_picture(&mut model);
+            coverage_from_the_atlas(archives, &geometry, &mut model);
             return Ok((model, textures));
         }
     }
@@ -90,6 +91,86 @@ fn alpha_from_the_picture(model: &mut Model) {
     for vertex in &mut model.vertices {
         if (vertex.slots >> 3) & 3 == 0 {
             vertex.slots |= slots::DEFAULT;
+        }
+    }
+}
+
+/// The `.gnf` sampler hash of the elements atlas on `basicalpha` and `scrollingalpha`:
+/// the coverage, where the other sampler is the picture.
+const ELEMENTS_SAMPLER: u32 = 2_821_073_761;
+
+/// Binds the **base campaign's card materials** the way HD reads them: `basicalpha` and
+/// `scrollingalpha` take their colour from one sampler and their coverage from the red
+/// channel of the elements atlas (`ELEMENTS_SAMPLER`), unlit.
+///
+/// Inherited from HD, not measured on PS4: HD's own build gives both materials
+/// `ALPHA_FROM_SECOND`, alpha channel 0, no ambient and no sun (`0xc4`), with the swatch
+/// first and the atlas second; Omega ships the same two material names and the same
+/// textures with the samplers in the other order, which is why the build's pick (the first
+/// in address order, the atlas) draws a white strip and dark blocks where the wordmark and
+/// the edge stripes go. Scoped to the flyer cards, like [`alpha_from_the_picture`].
+fn coverage_from_the_atlas(
+    archives: &mut oag_assets::Archives,
+    geometry: &[u8],
+    model: &mut Model,
+) {
+    use mesh::slots;
+    let Ok(decoded) = oag_rcs::rcsmodel::psp2::parse(geometry) else {
+        return;
+    };
+    // The build gives each distinct material its own texture slot, in the order the
+    // submeshes first name it.
+    let mut materials: Vec<usize> = Vec::new();
+    for material in decoded.submeshes.iter().filter_map(|sub| sub.material) {
+        if !materials.contains(&material) {
+            materials.push(material);
+        }
+    }
+    let mut read = |path: &str| -> Option<std::sync::Arc<mesh::ModelTexture>> {
+        let blob = archives.read_name(path).ok()?;
+        mesh::ModelTexture::from_gnf(path, &blob).map(std::sync::Arc::new)
+    };
+    model.lightmaps.resize(model.textures.len(), None);
+    for (slot, &index) in materials.iter().enumerate() {
+        let material = &decoded.materials[index];
+        let name = material.name.as_str();
+        if !(name.ends_with("/basicalpha.rcsmaterial")
+            || name.ends_with("/scrollingalpha.rcsmaterial"))
+        {
+            continue;
+        }
+        let atlas = material.sampler(ELEMENTS_SAMPLER);
+        let picture = material
+            .samplers
+            .iter()
+            .find(|(hash, _)| *hash != ELEMENTS_SAMPLER)
+            .map(|(_, path)| path.as_str());
+        let (Some(atlas), Some(picture)) = (atlas, picture) else {
+            continue;
+        };
+        let (Some(picture_texture), Some(atlas_texture)) = (read(picture), read(atlas)) else {
+            continue;
+        };
+        if slot >= model.textures.len() {
+            continue;
+        }
+        model.textures[slot] = Some(picture_texture);
+        model.lightmaps[slot] = Some(atlas_texture);
+        for draw in model
+            .draws
+            .iter()
+            .chain(&model.alpha_tested_draws)
+            .chain(&model.transparent_draws)
+            .filter(|draw| draw.texture == Some(slot))
+        {
+            let range = draw.range.start as usize..draw.range.end as usize;
+            for &i in &model.indices[range] {
+                let vertex = &mut model.vertices[i as usize];
+                vertex.slots = (vertex.slots & !slots::alpha_channel(3))
+                    | slots::ALPHA_FROM_SECOND
+                    | slots::NO_AMBIENT
+                    | slots::NO_SUN;
+            }
         }
     }
 }
