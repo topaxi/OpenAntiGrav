@@ -265,6 +265,14 @@ pub struct Report {
     /// decode, the rate is not the vertex block's literal, the slot names another family's
     /// glow entry, or the table is full.
     pub twin_blend_unread: usize,
+    /// `dc_hologramwithstatic` materials whose three pictures and rates were bound - see
+    /// `super::static_hologram`.
+    pub static_hologram_bound: usize,
+    /// `dc_hologramwithstatic` materials on a program variant other than the unlit combine.
+    pub static_hologram_other_shape: usize,
+    /// `dc_hologramwithstatic` materials left as the generic reading drew them: a picture or a
+    /// rate did not read, the slot names another family's glow entry, or the table is full.
+    pub static_hologram_unread: usize,
     /// Zone-mode light cells (`dg_zonelights1`) whose blue and mask were bound - see
     /// `super::damage_lights`.
     pub damage_lights_bound: usize,
@@ -506,6 +514,16 @@ impl Report {
             0 => String::new(),
             n => format!(
                 ", {n} twin-blend material(s) whose pictures or rate could not be read (drawn as the generic reading)"
+            ),
+        } + &match self.static_hologram_bound {
+            0 => String::new(),
+            n => format!(
+                ", {n} static-hologram material(s) with the advert, the static and the scanline mask bound"
+            ),
+        } + &match self.static_hologram_other_shape + self.static_hologram_unread {
+            0 => String::new(),
+            n => format!(
+                ", {n} static-hologram material(s) on an unread variant or with a picture or rate missing (drawn as the generic reading)"
             ),
         } + &match self.damage_lights_bound {
             0 => String::new(),

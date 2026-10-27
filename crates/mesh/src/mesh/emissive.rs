@@ -82,6 +82,12 @@ pub const PROGRAM_SNOW: f32 = 4.0;
 /// binding, at the second coordinate set). See `super::rcs::twin_blend`.
 pub const PROGRAM_TWIN_BLEND: f32 = 6.0;
 
+/// [`Emissive::program`]'s mode for `dc_hologramwithstatic`: the second texture scrolled
+/// along `u` by the entry's tint `x` and the third (the static) along `v` by its tint `y`,
+/// summed, with the first texture's red times the tint `z` as the alpha. See
+/// `super::rcs::static_hologram`.
+pub const PROGRAM_STATIC_HOLOGRAM: f32 = 7.0;
+
 /// [`Emissive::program`]'s mode for a PSP hull's alpha-weighted extra pass: the
 /// picture (the environment map) multiplied by the **second** texture's alpha at
 /// the second coordinate set, which carry the batch's own texture and its
