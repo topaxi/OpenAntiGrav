@@ -89,6 +89,9 @@ pub const BARS_BLEND_HASH: u32 = 0x0e7e_a5a8;
 /// coordinates of the diffuse or lightmap sets.
 pub const PS4_HALF2: u8 = 1;
 
+/// The type nibble of a PS4 `tangent` (and `normal`): four signed bytes, read `/127`.
+pub const PS4_SBYTE4_NORM: u8 = 14;
+
 /// The type nibble of `VertexColour1` on the PS4 flyer shell's reflection (`00_flyer`'s
 /// `card_reflectShape`: `ff ff ff` and an alpha of `0x4c`, `0x26` or `0`).
 pub const PS4_UBYTE4_NORM: u8 = 11;

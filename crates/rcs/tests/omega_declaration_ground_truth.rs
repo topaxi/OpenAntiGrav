@@ -66,6 +66,12 @@ struct Survey {
     table_disagrees: usize,
     /// Files with at least one such submesh.
     files_with_a_lightmap: usize,
+    /// Vertices whose own declaration carries a type-14 `tangent`, and how many of them read a
+    /// `w` of exactly +-1 (the bitangent sign every Omega vertex program reads raw).
+    tangent_vertices: usize,
+    tangent_w_unit: usize,
+    /// Submeshes whose declaration carries a float `tangent`, which is not read.
+    tangent_other_type: usize,
     /// Submeshes on which the two halves of the control group disagree, by file.
     off_diagonal: std::collections::BTreeMap<String, usize>,
 }
@@ -132,6 +138,27 @@ fn sweep(name: &str) -> Option<Survey> {
                         .or_default() += 1;
                 }
             }
+            // The tangent: four signed bytes, type 14, read through the record's own declaration.
+            match decl.attribute(vertex_decl::TANGENT_HASH) {
+                Some(a) if a.gxm_type == vertex_decl::PS4_SBYTE4_NORM && a.components == 4 => {
+                    assert_eq!(
+                        s.tangents.len(),
+                        s.positions.len(),
+                        "{model_path}: submesh at {:#x}",
+                        s.record
+                    );
+                    survey.tangent_vertices += s.tangents.len();
+                    survey.tangent_w_unit +=
+                        s.tangents.iter().filter(|t| t[3].abs() == 1.0).count();
+                }
+                Some(a) => {
+                    survey.tangent_other_type += 1;
+                    // `environments2048/tower` alone authors `f32` x 4 (type 0); not read.
+                    assert_eq!(a.gxm_type, 0, "{model_path}: a tangent of an unknown type");
+                    assert!(s.tangents.is_empty(), "{model_path}");
+                }
+                None => assert!(s.tangents.is_empty(), "{model_path}"),
+            }
             // A submesh with a lightmapUV decodes one coordinate per vertex, all
             // finite; how many sit inside the atlas is counted.
             if has_uv {
@@ -178,6 +205,15 @@ fn every_record_resolves(name: &str, files: usize, submeshes: usize, lightmapped
     assert_eq!(
         survey.lightmap_vertices_in_unit, survey.lightmap_vertices,
         "{name}: a lightmapUV outside 0..=1"
+    );
+    println!(
+        "{name}: tangent vertices {} (|w| = 1 on {}), other-typed tangent submeshes {}",
+        survey.tangent_vertices, survey.tangent_w_unit, survey.tangent_other_type
+    );
+    assert!(survey.tangent_vertices > 0, "{name}: no tangent was read");
+    assert_eq!(
+        survey.tangent_w_unit, survey.tangent_vertices,
+        "{name}: a type-14 tangent whose w is not exactly +-1"
     );
     assert_eq!(
         (survey.files, survey.submeshes, survey.lightmapped),
