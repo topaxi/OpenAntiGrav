@@ -71,6 +71,8 @@ kind: debt              # optional: debt = something already built that has to b
 
 List them with `just threads [--status S] [--title T] [--category C] [--size Z] [--difficulty D] [--kind debt]` (`--counts` prints the tally). "What is ready to wire for Pulse?" is `just threads --status ready-to-wire --title pulse`. `just check-handover` refuses a thread with missing or invalid frontmatter, a status, size or difficulty outside its set, or a summary over 150 characters.
 
+`just debt` prints one overview of known tech debt: every ratchet's frozen baseline (entry count and the five largest entries), read from the check scripts, plus every `kind: debt` thread with its size and difficulty. `just threads --kind debt` lists only the threads.
+
 Counts when this section was written (re-run `just threads --counts`, do not trust these):
 
 - ready-to-wire: 65

@@ -1,9 +1,10 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-10-06
-summary: "Move 190 title-package path references to Title fields one crate per lane, starting with campaign.rs"
+updated: 2026-10-27
+summary: "Move 188 title-package path references to Title fields one crate per lane, starting with campaign.rs"
 difficulty: medium (35)
+kind: debt
 ---
 
 # Generic crates still name title packages by path

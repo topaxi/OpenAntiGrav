@@ -105,6 +105,10 @@ check-link-data:
 check-handover:
     python3 scripts/check-handover-size.py
 
+# One overview of known tech debt: ratchet baselines and `kind: debt` threads
+debt:
+    python3 -I scripts/debt.py
+
 # The handover threads from their frontmatter: just threads [--status S] [--title T] [--category C] [--counts|--paths]
 threads *args:
     python3 -I scripts/handover-threads.py {{args}}
