@@ -1301,6 +1301,7 @@ check-captures:
 # $OAG_PAIR_DIR (default data/reference/compare-page) and is skipped, loudly, where that directory is absent.
 check-pair-provenance:
     python3 scripts/compare_provenance.py selftest
+    python3 scripts/compare_env.py selftest
     python3 scripts/compare_provenance.py scan
 
 # Re-snapshot every program in the open Ghidra project. Two steps because only

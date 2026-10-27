@@ -222,8 +222,8 @@ def main():
         args.ours_ticks = GO_TICK + round(clock * 60) - HUD_LAG_TICKS
     pair.rec["original"]["race_clock_s"] = clock
     pair.rec["original"]["capture_path"] = os.environ.get("OAG_HD_CAPTURE_PATH", "restored savestate (RPCS3 paints garbage on the glass of a restored state)")
-    pair.rec["original"]["presented_lag"] = {"hud_clock_ticks": HUD_LAG_TICKS, "picture": "no correction: the RSX had presented the paused frame "
-                                              "(hull check on hd-race/talons-pack), not measured per tick"}
+    pair.rec["original"]["presented_lag"] = {"hud_clock_ticks": HUD_LAG_TICKS, "picture": "no correction to the picture: the RSX had presented the paused frame "
+                                              "(hull check on hd-race/talons-pack), not measured per tick; ours' ticks and gantry pin take the lag"}
     note = ship.get("autopilot_timer")
     if args.field:
         pair.rec["original"]["autopilot_timer"] = note
@@ -283,9 +283,10 @@ def main():
     mode = pair.rec["original"].get("state", {}).get("mode", "single_race" if args.field else "time_trial")
     flags += ["--mode", mode]
     # The GO board's phase, off the gantry node's own time in the same pause: the race clock alone
-    # does not give it. A board past its windows (the node reads outside every one) keeps ours' own.
+    # does not give it, less the presented lag like ours' ticks (`compare_env.gantry_pin`). A board past its windows (the
+    # node reads outside every one) keeps ours' own.
     if gantry is not None:
-        flags += ["--gantry-seconds", "%.6f" % gantry]
+        flags += ["--gantry-seconds", "%.6f" % ce.gantry_pin(gantry, HUD_LAG_TICKS)]
     if ours_world_offset is not None:
         flags += ["--world-clock-offset", "%.3f" % ours_world_offset]
     field_flags = []

@@ -129,7 +129,7 @@ one), or the sky map as a layer beside the probes (different sizes today, 512x25
 - **HD's scenery clock** (**measured 2026-10-27, `hd-scenery-clock`: global node clock, per capture; `rpcs3-hd-pair.py` now records `world_clock_offset_s`; open: re-make the 13 cold pairs with it, Modesto's airship and Anulpha's chevron unscored; docs/rendering/hd-track-tone.md, "HD's scenery clock"**; earlier text, `hd-tech-de-ra-2`; one measurement, several symptoms): ours runs every world mesh on the race
   tick over 60 (`Race::world_clock_seconds`, HD pairs record no `--world-clock-offset`), the original on a clock whose offset over the
   HUD clock is unread. On `hd/tech-de-ra` the camera droid sits over the left wall in the original (box `400,400 120x120`, 24 grey,
-  luma -23) and over the right-hand stands in ours (+15 there); the `nr_twinblend` GO banner shows another phase of its wipe; on
+  luma -23) and over the right-hand stands in ours (+15 there); the GO banner shows another phase (**closed 2026-10-27, `hd-go-banner`: it is the race manager's GO board, not `nr_twinblend`, and the pair's gantry pin lacked the 3-tick presented lag; `compare_env.gantry_pin`, compare-page.md; the 13 pairs need re-rendering with `compare-rerender-ours`**); on
   `hd/modesto-heights` an airship crosses the tower top right in ours only (box `1300,0 220x240`, 21 grey). The Anulpha chevron's
   outline phase is the same input. **Recipe**: on a cold RPCS3 frame, read the scenery animation time the engine hands
   `Anim Transform` nodes beside the HUD clock (find the writer in `/hdfury/EBOOT-ps3-hdfury-eu.elf` from the node evaluator's time

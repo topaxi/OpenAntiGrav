@@ -78,6 +78,9 @@ Three findings, the first two by-products of the same frame:
   on the pair's frame). `oag-game --gantry-seconds S` (`Options::gantry_seconds`) pins the race manager's board - the timelines with a release window, the card
   included - and nothing else; the pair script passes it. Swept in ours at 3.9, 4.2, 4.5, 4.68, 4.9, 5.15: bright, absent, bright, mid, absent, bright (a pulse of about 0.6 s), so every
   state the original shows is one ours can show.
+- **The pin is the RAM time less the presented lag (2026-10-27).** The GO glyph on Tech de Ra and Modesto Heights was drawn by ours and absent in the original: both RAM reads sat on the pulse's rising edge
+  (sweep in ours, Tech de Ra: blank to 4.30, 8.0 at 4.33, 12.2 at 4.40, full from 4.46 in banner-box error) and the picture was 3 ticks older. `compare_env.gantry_pin`; numbers in
+  [compare-page.md](../tools/compare-page.md). Not `nr_twinblend`.
 - **The grab lags the memory read.** With the game paused the RSX is still presenting the frames it was handed, so a screenshot taken at once showed a moment 0.1 to 0.3 s older than the
   RAM the pose, clock and gantry time come from (the HUD's lap clock read `0.21.0` against RAM's `21.2`, and ours at the RAM time pulsed a half cycle off). `OAG_CAPTURE_FLUSH`
   (3 s in `rpcs3-hd-pair.py`) lets it catch up: the HUD then reads `0.12.1` against RAM's `12.208`, about one tick.

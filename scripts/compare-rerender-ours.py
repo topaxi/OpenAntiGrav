@@ -98,6 +98,11 @@ def rerender(pj, binary):
     if "--hud-state" in flags and "--hud-autopilot" not in flags and rec["profile"] == "pulse-psp" and running \
             and timer is not None and 0.0 < timer <= 600.0:
         flags += ["--hud-autopilot", "%.4f" % timer]
+    # An HD pair's gantry pin is the RAM time less the presented lag (`ce.gantry_pin`); pairs made before 2026-10-27 pin the raw
+    # RAM time, which sits on the GO board's rising edge on Tech de Ra and Modesto Heights.
+    lag = (orig.get("presented_lag") or {}).get("hud_clock_ticks")
+    if rec["profile"] == "hd-fury" and "--gantry-seconds" in flags and orig.get("gantry_seconds") is not None and lag is not None:
+        flags[flags.index("--gantry-seconds") + 1] = "%.6f" % ce.gantry_pin(orig["gantry_seconds"], lag)
     plat = ce.platform(rec["profile"])
     # Pairs recorded before the profile held the exposure (2048) drew an adapting one; hold it as the profile says.
     if "--hold-exposure" not in flags:
