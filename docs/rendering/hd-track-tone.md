@@ -686,6 +686,61 @@ Method: ours re-rendered from scratch copies of the cold pairs (all captured at 
 
 **Omega/2048**: `fs_encode` runs only for a title that authors `HDR and Bloom` and does not run 2048's `wo_*` chain. Omega's EnvSettings carry a `Tonemap.*` block instead of HD's `HDR and Bloom.*` (`docs/formats/omega-status.md`), so Omega never reaches this pass and keeps its own tonemap end (its output curve is still unread: open). 2048 runs `wo_composite`, also untouched; not checkable (no HD-style resolve measured). Changed: HD only.
 
+## Anulpha's missing start-grid glow is the bloom chain's strength, not a material (2026-10-27, `hd-bloom-deficit`)
+
+**Claim tested:** "the missing glow on `hd/anulpha-pass`'s start grid is a material that writes no bloom source". **Result: false.**
+The white floor panels and the GO board are the biggest deficit cells (cell means over the 1920x1080 frame, original minus ours:
+GO board +36, floor panels +18..+20, a top row of cyan lights +23..+25), and the first two are not a missing mask or a missing draw.
+Confidence 70 (one boot of the original, one deterministic ours; the original's own bloom buffers were not read).
+
+**What the original does** (restored `hd-timetrial-anulpha-pass-harimau-classic-start`, paused, `Write Color Buffers` on, scale 100;
+GDB read of the scene target `0x40cc0000`, 1280x720 `A8R8G8B8`, byte 0 is alpha):
+
+- The scene target's **alpha over the floor panels is 0** (floor box mean 0.0, the lane 0.0). The glow mask is 255 on the three teal
+  boards (GO and the two side cards), the sign letters and the far red billboards, and about 0.5 on the sky strips. So the panels'
+  halo is the gate's **frame term** (`frame.rgb * lum * fade`), exactly what ours also feeds them. The mask is not what is missing.
+- The adapted luminance matches: the scene target's encoded-mean luma is 0.2236 (fade `1 - 12 * 0.25 * 0.2236 = 0.329`); ours' render
+  with the bloom off reads 0.2268 (fade 0.320). The fade is not the cause either (the adaptation patch in "Decide the adaptation law"
+  does not move it).
+
+**What ours does, ablated** (local env knobs on the `Constants` the gate and blur read; uncommitted, a scale on the authored
+`alpha_contribution` (0.5), `frame_contribution` (1.0), blur step; the authored block is `0.5 / 1.0 / exponent 1.0 / size 1.0 / boost 12`,
+nothing carried but the two Tone keys):
+
+| Variant (Anulpha) | whole-frame luma ratio | floor panels (grey r,g,b; original 74.2 92.5 102.8) | lane (original 113.6 138.5 147.2) |
+| --- | ---: | --- | --- |
+| bloom off (`alpha = frame = 0`) | 0.866 | 58.0 80.8 91.3 | 104.0 127.3 135.9 |
+| shipped | 0.911 | 63.5 84.5 94.4 | 106.3 130.2 139.1 |
+| alpha x2 | 0.930 | same as shipped | |
+| frame x2 | 0.928 | 67.3 87.1 96.6 | |
+| alpha x4 only | 0.957 | same as shipped | |
+| frame x4 only | 0.957 | 72.4 91.0 100.1 | 112.6 137.9 147.4 |
+| alpha x4 and frame x4 | **1.002** | 72.4 91.0 100.1 | 112.6 137.9 147.4 |
+| blur step x2 | 0.923 | 65.2 86.2 95.6 | |
+
+- The shipped bloom supplies **0.045 of the 0.134** the frame needs (it is 34 % of what the original's bloom does on this pair); the
+  mask term and the frame term each account for about half of the rest (x4 on either alone recovers 0.046, on both 0.091).
+- The floor panels and the lane, which carry no mask, are reproduced to 2 to 3 grey by the frame term x4 alone; the GO letters
+  need the mask term x4 (shipped 112/131/134, x4 156/181/184, original 167/175/179). The topgreen cyan lights (original 26/82/79,
+  ours 24/61/57) do **not** move with either term: that gap is scene source, not bloom (our lights are striped where the original's are solid).
+- **Not a uniform chain constant.** The same x4 on Vineta K (bloom off 0.850, shipped 0.969, x2 1.048, x4 1.174) and Ubermall (bloom off
+  0.960, shipped 0.994, x2 1.012, x4 1.038) overshoots. On those two the shipped bloom already supplies 80 % and 85 % of the original's,
+  so a global gain is falsified. The deficit is **Anulpha's**, so the next read is Anulpha's own gate and blur constants.
+- **A lead, not a result:** Anulpha authors `Bloom from alpha contribution 0.5`, `frame exponent 1.0`, sizes 1.0 (Metropia: 2.5, 3.0, 0.7;
+  Sol 2 2.5, Sebenco 2.0, Talon's 3.0). The ~x4 alpha term the GO letters want is 2.0, inside that other-circuit range. The
+  executable patches the gate program's constants live (the fade constant is read that way in "What the original's exposure is"), so
+  the live constants may differ from the file's. Fitting `alpha 2.5, exponent 3, step 0.7` (Metropia's set) gives whole luma 0.968 and the floor panels
+  71/89/98, no better than x4 and x4. Nothing here is wired: no value is read.
+
+**Next (ready to read, not to wire):** a draw dump of a running Anulpha frame (`hd-draw-dump.py` with `HOOK_NEED_SCREEN=1`; on this
+restored state the hook stalled at 31 draws on eleven attempts, so a cold boot is the likelier route) to read the gate fragment
+program's live constants (`contribution.x/y/z`), the blur taps' step and the composite's add, and compare them with the authored block.
+The bloom buffers' addresses were guessed from another layout (`0x42150000`, `0x42280000`...) and read as noise at this scale.
+Then wire the circuit's own values. **Talon's grill 1.5x** was not measured here (the bloom claim did not close; no shared cause shown).
+
+**Omega/2048:** Omega's `Tonemap` block (no `HDR and Bloom`) and 2048's `wo_composite` never reach `hd_bloom.wesl`; **not checkable**
+here (no HD-style gate read for either). Changed: nothing (measure-only lane).
+
 ## The reflection map is the sky, and Moa Therma's glass reads it (2026-10-21, `hd-one-pair-moa`)
 
 **Target**: the HD pair with the largest difference, `hd/moa-therma` (cold original, 1920x1080, Resolution Scale 100; mean grey 15.05
