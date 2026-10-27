@@ -22,7 +22,7 @@ const XML: &str = r#"<Variable global="Grey" name="Grey"><Values String="0xff969
     <HexSelection name="hexselection" OffsetX="112" OffsetY="225"><Values columns="5" rows="7" SelectedLockCol="0xFF808080" SelectedLockColFade="0xFF242424" HexCol="0x64808080" HexColFade="0x32808080" SelectedColumnCol="0x64ff0000"></Values></HexSelection>
   </Item>
   <Item name="shipStats" OffsetX="705" OffsetY="833">
-    <Block name="Slide_0"><Values idstring="RC_SPEED" width="512" shaped="true" color="FEGlobals->Grey" AlwaysSolidColor="0xff646464"></Values></Block>
+    <Block name="Slide_0"><Values idstring="RC_SPEED" width="512" shaped="true" unselectable="true" arrowcolor="0xffffffff" color="FEGlobals->Grey" AlwaysSolidColor="0xff646464"></Values></Block>
   </Item>
   <Text name="netLobbyStatus"><Values string="" font="Title" x="0" y="0"></Values></Text>
   <Screen type="TeamSelection" name="Team Selection">
@@ -858,4 +858,40 @@ fn a_scaled_honeycomb_shrinks_its_pitch_and_its_cells() {
     let pitch = |cells: &[hex::Cell]| cells[1].rect[1] - cells[0].rect[1];
     assert!((pitch(&b) - 0.8 * pitch(&a)).abs() < 1e-3);
     assert!((b[0].rect[2] - 0.8 * a[0].rect[2]).abs() < 1e-3);
+}
+
+fn art(src: &str) -> Option<Placed> {
+    let (x, size) = match src {
+        crate::campaign::hd::cell_brackets::SRC => (100, 16),
+        BLOCK_ARROW_SRC => (200, 12),
+        _ => return None,
+    };
+    Some(Placed {
+        x,
+        y: 0,
+        width: size,
+        height: size,
+        quad_extent: None,
+        quad_centre: None,
+        blend: None,
+    })
+}
+
+#[test]
+fn the_authored_corner_marks_and_block_arrow_are_drawn() {
+    let layout = layout();
+    let picker = Picker::new(Kind::Ship, vec![team("Feisar", Vec::new())], None, None);
+    let extra = layout.hd.as_deref().unwrap();
+    let draws = body(&picker, &layout, extra, &Frame::default(), &art);
+    let from = |x: f32| {
+        draws
+            .iter()
+            .filter(|draw| matches!(draw, Draw::Sprite { uv, .. } if uv[0].round() == x || (uv[0] - 16.0).round() == x))
+            .count()
+    };
+    // Three `corner="true"` brackets, four marks each; one arrow.
+    assert_eq!(from(100.0), 12, "{draws:?}");
+    assert_eq!(from(200.0), 1, "{draws:?}");
+    let none = body(&picker, &layout, extra, &Frame::default(), &|_| None);
+    assert!(none.iter().all(|draw| !matches!(draw, Draw::Sprite { .. })));
 }

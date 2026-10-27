@@ -37,7 +37,10 @@
 //! Drawn, off the disc: the `NAVIGATE TEAM` honeycomb ([`hex`]), the title,
 //! the four `MiniText` headings, the `LogoOutline` frame, the selected team's own `<location>\FE\Logo.gtf`
 //! in the `Logo` widget's rect, the four `STATISTICS` blocks with their
-//! value labels and down-nobbles, and the `LOYALTY` block's box and label.
+//! value labels and down-nobbles, the `LOYALTY` block's box, label and
+//! running total, the `corner="true"` bracket marks
+//! ([`crate::campaign::hd::cell_brackets`]) and the small arrow
+//! ([`BLOCK_ARROW_SRC`]) on every block that authors `ArrowColor`.
 //!
 //! Not drawn, and said so:
 //!
@@ -45,9 +48,11 @@
 //!   `ship.rcsmodel`; HD ships no `ship_FE.vex`), drawn by `oag_game` at a
 //!   pose in this screen's `SHIP MODEL` frame, composed from the widget's own
 //!   `ShipModel` values ([`ShipModel`]) by `oag_game::preview::ship_model`.
-//! - **The `Bracket` corner marks**, the `Padlock` and the `Unlockcondition`
-//!   text (this build keeps no unlock state), and the loyalty value, its
-//!   nobbles. `LiveryString` is authored empty and filled by code this
+//! - **The `middle="true"` marks** of the `SHIP MODEL` bracket (art not
+//!   found), the `Padlock` and the `Unlockcondition` text (this build keeps
+//!   no unlock state), the `UnlockNobble0..4` hearts (their thresholds are
+//!   unscaled onto the bar) and the `Squares` page dots (an empty item
+//!   `the screen cpp` fills). `LiveryString` is authored empty and filled by code this
 //!   build has not read; the honeycomb's cursor row shows the chosen model
 //!   instead, so nothing stands in for it.
 

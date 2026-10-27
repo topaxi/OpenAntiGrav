@@ -23,7 +23,8 @@
 //! Drawn, off the disc: the title, the three `MiniText` headings, the emblem
 //! frame, the circuit's own `Emblem` (`<environment>\FE\TrackSelectEmblem_Fury.gtf`,
 //! the widget authors no `src`), the circuit name, the length and distance
-//! rows, and the RECORDS table's header and empty cells.
+//! rows, the RECORDS table's header and empty cells, the `corner="true"`
+//! bracket marks and the arrow on the header blocks.
 //!
 //! Also drawn: the `TrackHexSelection` grid, a circuit per hexagon (see
 //! [`draw_grid`]).
