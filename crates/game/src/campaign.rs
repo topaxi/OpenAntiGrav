@@ -262,7 +262,16 @@ pub fn load(
             );
         }
         oag_title::CampaignDialect::Omega => {
-            return load_omega(archives, strings, faces, grid, base, fallback_globals);
+            return load_omega(
+                title,
+                archives,
+                strings,
+                faces,
+                grid,
+                base,
+                fallback_globals,
+                tracks,
+            );
         }
         oag_title::CampaignDialect::Pure => {
             anyhow::bail!("{} draws a list, not a grid", title.name)
@@ -449,74 +458,14 @@ fn load_hd(
     )?;
     let (selection_layout, grid_layout_fury) =
         hd_selection_screens(title, &screens, strings, faces, grid);
-    let flyer_names: Vec<String> = grids
-        .iter()
-        .filter_map(|grid| grid.flyer_name.clone())
-        .collect();
-    // Every card: the base campaign's eight, Fury's eight and the two
-    // `Campaign Selection` cards, each with the window of its camera's image
-    // it shows.
-    let is_base = |index: usize| oag_hd::campaign::HD_GRID_RANGE.contains(&index);
-    let grid_cards = grids.iter().enumerate().filter_map(|(index, grid)| {
-        let (window, gain) = if is_base(index) {
-            (crate::flyer::HD_WINDOW, crate::flyer::BASE_GAIN)
-        } else {
-            (crate::flyer::FURY_WINDOW, crate::flyer::FURY_GAIN)
-        };
-        Some(crate::flyer::CardSpec {
-            flyer: grid.flyer_name.clone()?,
-            side: crate::flyer::Side::Front,
-            window,
-            stretch: 1.0,
-            gain,
-        })
-    });
-    let back_cards = grids.iter().enumerate().filter_map(|(index, grid)| {
-        let gain = if is_base(index) {
-            crate::flyer::BASE_GAIN
-        } else {
-            crate::flyer::FURY_GAIN
-        };
-        Some(crate::flyer::CardSpec {
-            flyer: grid.flyer_name.clone()?,
-            side: crate::flyer::Side::Back,
-            window: crate::flyer::BACK_WINDOW,
-            stretch: crate::flyer::BACK_STRETCH,
-            gain,
-        })
-    });
-    let campaign_cards = [
-        oag_ui_screens::campaign::flyer::FURY_CAMPAIGN_FLYER,
-        oag_ui_screens::campaign::flyer::HD_CAMPAIGN_FLYER,
-    ]
-    .map(|name| crate::flyer::CardSpec {
-        flyer: name.to_string(),
-        side: crate::flyer::Side::Front,
-        window: crate::flyer::FURY_WINDOW,
-        stretch: crate::flyer::CAMPAIGN_STRETCH,
-        gain: crate::flyer::CAMPAIGN_GAIN,
-    });
-    // The two `Campaign Selection` cards exist only where that screen does.
-    let campaign_cards = selection_layout.is_some().then_some(campaign_cards);
-    let cards: Vec<crate::flyer::CardSpec> = grid_cards
-        .chain(back_cards)
-        .chain(campaign_cards.into_iter().flatten())
-        .collect();
-    let widgets = oag_ui_screens::campaign::flyer::read(&xml, &screens);
-    let flyers = widgets
-        .iter()
-        .any(|widget| widget.name == oag_ui_screens::campaign::flyer::GRID_WIDGET)
-        .then(|| crate::flyer::Flyers::load(archives, widgets, &cards));
-    if let Some(flyers) = &flyers {
-        for line in &flyers.report {
-            log::warn!("{line}");
-        }
-    } else {
-        log::warn!(
-            "{} authors no <Flyer name=\"FlyerModel\"> - Grid Selection draws no flyer",
-            oag_hd::campaign::SCREEN_ENTRY
-        );
-    }
+    let flyers = load_flyers(
+        archives,
+        &grids,
+        &xml,
+        &screens,
+        selection_layout.is_some(),
+        oag_hd::campaign::SCREEN_ENTRY,
+    );
     // `Cell Selection`'s own `Confirm`/`Back` legend, off the shared
     // front-end root - see [`read_footer`]'s own doc. `Cell Help` and the
     // ticker are still unmodelled: `CellMode_Definition.xml` authors no
@@ -550,18 +499,7 @@ fn load_hd(
             Err(error) => log::warn!("{src}: {error:#} - the widget it is for draws nothing"),
         }
     }
-    // Each grid's own `Logo.gtf`, which the unlock box under the card names
-    // by grid - see `oag_ui_screens::campaign::hd`'s `UnlockBox`. Keyed by the same
-    // spelling the screen's `flyerlogo` widget authors.
-    for name in &flyer_names {
-        let entry = oag_ui_screens::campaign::flyer::logo_entry(name);
-        match read_hd_texture(archives, &entry) {
-            Ok(blob) => blobs.push((entry, blob)),
-            Err(error) => log::warn!("{entry}: {error:#} - its unlock-box logo draws nothing"),
-        }
-    }
-    let circuit_emblems = emblems::circuit_emblems(tracks);
-    emblems::push_blobs(archives, &grids, &circuit_emblems, &mut blobs);
+    let circuit_emblems = push_card_art(archives, &grids, tracks, &mut blobs, &read_hd_texture_text);
     let mut report = Vec::new();
     let sprites = base.extended(&blobs, &mut report);
     oag_raceplay::loader_log::lines(report.iter().map(|line| format!("campaign sprites {line}")));
@@ -671,6 +609,135 @@ pub fn hd_data06_strings(
         .unwrap_or_default()
 }
 
+/// Each grid's own `Logo.gtf` (the unlock box under the card names it by
+/// grid, see `oag_ui_screens::campaign::hd`'s `UnlockBox`, keyed by the spelling
+/// the screen's `flyerlogo` widget authors) and `Cell Selection`'s emblem art,
+/// read through `read` into `blobs`: HD reads its `.gtf` files, Omega falls
+/// back to the `.gnf` beside each. One that will not read is logged and its
+/// widget draws nothing. Returns the circuit emblems by lowercased id.
+fn push_card_art(
+    archives: &mut oag_assets::Archives,
+    grids: &[Grid],
+    tracks: &[oag_raceplay::catalogue::Track],
+    blobs: &mut Vec<(String, Vec<u8>)>,
+    read: &dyn Fn(&mut oag_assets::Archives, &str) -> Result<Vec<u8>, String>,
+) -> std::collections::HashMap<String, String> {
+    for name in grids.iter().filter_map(|grid| grid.flyer_name.as_deref()) {
+        let entry = oag_ui_screens::campaign::flyer::logo_entry(name);
+        match read(archives, &entry) {
+            Ok(blob) => blobs.push((entry, blob)),
+            Err(error) => log::warn!("{entry}: {error} - its unlock-box logo draws nothing"),
+        }
+    }
+    let circuit_emblems = emblems::circuit_emblems(tracks);
+    emblems::push_blobs(archives, grids, &circuit_emblems, blobs, read);
+    circuit_emblems
+}
+
+/// [`read_hd_texture`] with its error as text, the reader shape
+/// [`push_card_art`] takes.
+fn read_hd_texture_text(
+    archives: &mut oag_assets::Archives,
+    path: &str,
+) -> Result<Vec<u8>, String> {
+    read_hd_texture(archives, path).map_err(|error| format!("{error:#}"))
+}
+
+/// Omega's reader for the same paths: the literal HD `.gtf` first, then the
+/// `.gnf` beside it (`crate::boot::sprites::gnf_sibling`).
+fn read_omega_texture(
+    archives: &mut oag_assets::Archives,
+    path: &str,
+) -> Result<Vec<u8>, String> {
+    match archives.read_name(path) {
+        Ok(blob) => Ok(blob),
+        Err(error) => match crate::boot::sprites::gnf_sibling(archives, path) {
+            Some(result) => result,
+            None => Err(format!("{error:#}")),
+        },
+    }
+}
+
+/// Every flyer card the campaign screens show, decoded: the base campaign's
+/// eight, Fury's eight and (where `Campaign Selection` exists) its two cards,
+/// each with the window of its camera's image it shows. `None`, logged, when
+/// `screen_entry`'s XML authors no `<Flyer name="FlyerModel">`; a card that
+/// will not decode is left out and says so in [`crate::flyer::Flyers::report`].
+fn load_flyers(
+    archives: &mut oag_assets::Archives,
+    grids: &[Grid],
+    xml: &str,
+    screens: &oag_ui::screen::Screens,
+    has_selection: bool,
+    screen_entry: &str,
+) -> Option<crate::flyer::Flyers> {
+    // Every card: the base campaign's eight, Fury's eight and the two
+    // `Campaign Selection` cards, each with the window of its camera's image
+    // it shows.
+    let is_base = |index: usize| oag_hd::campaign::HD_GRID_RANGE.contains(&index);
+    let grid_cards = grids.iter().enumerate().filter_map(|(index, grid)| {
+        let (window, gain) = if is_base(index) {
+            (crate::flyer::HD_WINDOW, crate::flyer::BASE_GAIN)
+        } else {
+            (crate::flyer::FURY_WINDOW, crate::flyer::FURY_GAIN)
+        };
+        Some(crate::flyer::CardSpec {
+            flyer: grid.flyer_name.clone()?,
+            side: crate::flyer::Side::Front,
+            window,
+            stretch: 1.0,
+            gain,
+        })
+    });
+    let back_cards = grids.iter().enumerate().filter_map(|(index, grid)| {
+        let gain = if is_base(index) {
+            crate::flyer::BASE_GAIN
+        } else {
+            crate::flyer::FURY_GAIN
+        };
+        Some(crate::flyer::CardSpec {
+            flyer: grid.flyer_name.clone()?,
+            side: crate::flyer::Side::Back,
+            window: crate::flyer::BACK_WINDOW,
+            stretch: crate::flyer::BACK_STRETCH,
+            gain,
+        })
+    });
+    let campaign_cards = [
+        oag_ui_screens::campaign::flyer::FURY_CAMPAIGN_FLYER,
+        oag_ui_screens::campaign::flyer::HD_CAMPAIGN_FLYER,
+    ]
+    .map(|name| crate::flyer::CardSpec {
+        flyer: name.to_string(),
+        side: crate::flyer::Side::Front,
+        window: crate::flyer::FURY_WINDOW,
+        stretch: crate::flyer::CAMPAIGN_STRETCH,
+        gain: crate::flyer::CAMPAIGN_GAIN,
+    });
+    // The two `Campaign Selection` cards exist only where that screen does.
+    let campaign_cards = has_selection.then_some(campaign_cards);
+    let cards: Vec<crate::flyer::CardSpec> = grid_cards
+        .chain(back_cards)
+        .chain(campaign_cards.into_iter().flatten())
+        .collect();
+    let widgets = oag_ui_screens::campaign::flyer::read(xml, screens);
+    let flyers = widgets
+        .iter()
+        .any(|widget| widget.name == oag_ui_screens::campaign::flyer::GRID_WIDGET)
+        .then(|| crate::flyer::Flyers::load(archives, widgets, &cards));
+    if let Some(flyers) = &flyers {
+        for line in &flyers.report {
+            log::warn!("{line}");
+        }
+    } else {
+        log::warn!(
+            "{} authors no <Flyer name=\"FlyerModel\"> - Grid Selection draws no flyer",
+            screen_entry
+        );
+    }
+    flyers
+}
+
 /// `Campaign Selection`/`Grid Selection Fury`, off the same already-parsed
 /// `DATA06` copy of [`oag_hd::campaign::SCREEN_ENTRY`] [`load_hd`] reads its
 /// base `Grid Selection`/`Cell Selection` from - **one parse serving all
@@ -745,12 +812,14 @@ fn hd_selection_screens(
 /// leaves the widget it was for undrawn rather than failing the whole screen
 /// load.
 fn load_omega(
+    title: &oag_title::Title,
     archives: &mut oag_assets::Archives,
     strings: &StringTable,
     faces: FaceScales,
     grid: [f32; 2],
     base: &Sheet,
     fallback_globals: &[(&str, &str)],
+    tracks: &[oag_raceplay::catalogue::Track],
 ) -> Result<Campaign> {
     let blob = archives
         .read_name(oag_omega::campaign::SCREEN_ENTRY)
@@ -775,12 +844,22 @@ fn load_omega(
         oag_omega::campaign::AUTHORED_GRID,
     )
     .context("Cell Selection is not on this screen")?;
+    let (selection_layout, grid_layout_fury) =
+        hd_selection_screens(title, &screens, strings, faces, grid);
 
     let grids = read_grids(
         archives,
         oag_omega::campaign::DEFINITION_ENTRY,
         oag_omega::TITLE.campaign.grid_archive,
     )?;
+    let flyers = load_flyers(
+        archives,
+        &grids,
+        &xml,
+        &screens,
+        selection_layout.is_some(),
+        oag_omega::campaign::SCREEN_ENTRY,
+    );
     // See [`load_hd`]'s own identical call - Omega's front end is HD's
     // `PI001` plugin carried forward, at the same relative root path.
     let (nav_legend, ticker) = read_footer(
@@ -813,6 +892,7 @@ fn load_omega(
             },
         }
     }
+    let circuit_emblems = push_card_art(archives, &grids, tracks, &mut blobs, &read_omega_texture);
     let mut report = Vec::new();
     let sprites = base.extended(&blobs, &mut report);
     oag_raceplay::loader_log::lines(report.iter().map(|line| format!("campaign sprites {line}")));
@@ -827,15 +907,10 @@ fn load_omega(
         nav_legend,
         ticker,
         sprites,
-        // Omega's own front end is HD's `PI001` plugin carried forward, but
-        // no `Campaign Selection`/`Grid Selection Fury` has been measured on
-        // it - Omega's racing is out of scope entirely
-        // (`docs/formats/omega-status.md`), so this is left unmodelled
-        // rather than assumed to carry HD's own screen unread.
-        selection_layout: None,
-        grid_layout_fury: None,
-        flyers: None,
-        circuit_emblems: std::collections::HashMap::new(),
+        selection_layout,
+        grid_layout_fury,
+        flyers,
+        circuit_emblems,
     })
 }
 

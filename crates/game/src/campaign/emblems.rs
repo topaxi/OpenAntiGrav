@@ -7,8 +7,6 @@ use std::collections::HashMap;
 use oag_tables::race_campaign::Grid;
 use oag_ui_screens::campaign::hd::{cell_brackets, cell_emblems};
 
-use super::read_hd_texture;
-
 /// A circuit's white emblem `src` by lowercased circuit id.
 pub(super) fn circuit_emblems(
     tracks: &[oag_raceplay::catalogue::Track],
@@ -32,6 +30,7 @@ pub(super) fn push_blobs(
     grids: &[Grid],
     circuit_emblems: &HashMap<String, String>,
     blobs: &mut Vec<(String, Vec<u8>)>,
+    read: &dyn Fn(&mut oag_assets::Archives, &str) -> Result<Vec<u8>, String>,
 ) {
     let mut sources = cell_emblems::sheet_sources();
     sources.extend(
@@ -46,9 +45,9 @@ pub(super) fn push_blobs(
     sources.sort_unstable();
     sources.dedup();
     for src in sources {
-        match read_hd_texture(archives, &src) {
+        match read(archives, &src) {
             Ok(blob) => blobs.push((src, blob)),
-            Err(error) => log::warn!("{src}: {error:#} - the emblem it is for draws nothing"),
+            Err(error) => log::warn!("{src}: {error} - the emblem it is for draws nothing"),
         }
     }
 }
