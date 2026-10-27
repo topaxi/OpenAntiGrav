@@ -1187,13 +1187,36 @@ Fury's cards were "not drawn" until 2026-09-30 on the reading that they were
 units where the base cards' are framed from 92.5, and once each is seen through
 its own camera the two families share one card.
 
-**Omega: same assets by name, not drawable yet.** Omega's base package carries
-`Data/fe/flyers/01_uplift/flyer.vex`, `flyer.rcsmodel`, `flyer_back.*` and
-`logo.gnf` (353 flyer entries in `data00.psarc`), but its `.rcsmodel` opens with
-`0xedad5cca`, PS4 little-endian, which HD's reader rejects (`version
-0xedad5cca, expected 0x000a0000`).
-Its campaign screens also draw through Pulse's path, not `hd_grid_draw_list`. Not
-wired: the Omega lane owns that reader.
+**Omega: Fury's cards draw (2026-10-27, `omega-fury-cell`).** `load_omega` now reads `Grid Selection Fury`
+off Omega's own `CellMode_Definition.xml` and the same flyer cards, logos and emblems `load_hd` does, through
+the helpers both share (`load_flyers`, `push_card_art`; Omega's reader falls back to the `.gnf` beside each
+`.gtf` path). Omega's 16 parsed grids split exactly as HD's (`grid0`..`grid7` `Campaign="HD"`, `grid8`..`grid15`
+`Campaign="Fury"`, `09_Blitzed` first; grids 16 to 18 carry no `RequiredPoints` and are skipped, and they come
+last, which is why `FURY_GRID_RANGE` 8..16 still holds), so `--menu-page cell-select`/`grid-select` land on
+Fury's first grid. The PS4 flyer models go through `oag_game::preview::psp2_scene::model_named` (the PS4
+`.rcsmodel` joined to its `.vex`, as the selection screens do); `Flyers::load` was scoped there on purpose, so
+no other caller changed. Fury's card texels take gain `Campaign::fury_card_gain` 1.0, not HD's 2.0
+(**fitted** off one shadPS4 frame: red field 0x40 against 0x80 at 2.0).
+Pairs (`omega/menu-cell-select`, `omega/menu-grid-select`; mean grey / RMSE / edge NCC): cell 129.0 / 0.658 /
+0.10 to 13.4 / 0.191 / 0.33; grid 55.0 / 0.397 / 0.27 to 40.9 / 0.333 / 0.25. HD's pairs unchanged (16.7, 15.0).
+**Left open**: the card shell's outline and reflection (`00_flyer.rcsmodel` is a PS4 container the chunk
+reader of `flyer::shell` rejects: `reading the shell's chunks: version 0xedad5cca`, cards are plain
+rectangles); a white box where the `blitzed` wordmark (cell) and the hexagon logo (grid) belong, an
+alpha-masked quad whose second texture the PS4 build does not apply; the sponsors strip; the red stripes on
+the cell card's right edge; the track name reads `17_TRACK` (Omega resolves no circuit names, as on `Track
+Select`). **`campaign-select` still refuses on Omega on purpose**: its chooser lists three campaigns (2048,
+HD, Fury), our `CampaignSelection` models HD's two and drew raw widgets, so `load_omega` keeps
+`selection_layout: None` and a live session opens on `Grid Selection` over every grid as before.
+HD's own base campaign on Omega (`cell-select-hd`) draws a grey card where the original's would sit and no
+red: the red back is Fury's art. Lineage, 2048's Fury DLC: **checked, differs**. 2048 ships no `CellMode_Definition.xml` and no `FlyerSelection` screen
+(its campaign is the touch map, `docs/formats/2048-frontend.md`); the screen shape here is Omega's own, which keeps HD's. Whether
+the Vita DLC packs carry `Data/FE/Flyers/09_Blitzed/flyer_back.*` was not censused.
+Fitted gain evidence: the grid card's red body reads 198 in ours and 197 in the shadPS4 frame (HD's 2.0 gave 255); the cell
+field reads 0x40 in the frame (confidence 65, one card, same-pose samples were not available). `hide_effects` was
+rendered off once: no white discs or bars appear and the sponsors strip stays missing, so the effects' slot mapping
+is not what hides it. The live session (Omega RACE CAMPAIGN) now draws cards on every grid; **not walked live**.
+`omegas_campaign_carries_fury_s_layout_and_every_card` (`omega_campaign_screens_ground_truth.rs`) fails if the layout read, the card
+loader or the PS4 dispatch is dropped.
 
 **The unlock box and points figures were corrected on the same frames**, see the
 paragraphs under the screen's widget table above.

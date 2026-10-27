@@ -171,6 +171,7 @@ const TITLE: &Title = &Title {
         selection_strings: false,
         screen_archive: None,
         grid_archive: None,
+        fury_card_gain: None,
         origin: oag_title::Origin::Chosen,
     },
     pressings: None,

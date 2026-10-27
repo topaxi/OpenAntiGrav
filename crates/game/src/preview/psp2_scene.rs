@@ -24,13 +24,56 @@ pub fn build(
     vex: &[u8],
     geometry: &[u8],
 ) -> Result<Option<(Model, String)>> {
+    Ok(build_named(archives, entry, vex, geometry)?.map(|(model, report, _)| (model, report)))
+}
+
+/// [`build`], and the path of each texture the build asked for, in the order it
+/// asked: what a card hides its unread effects by (`crate::flyer`).
+fn build_named(
+    archives: &mut oag_assets::Archives,
+    entry: &str,
+    vex: &[u8],
+    geometry: &[u8],
+) -> Result<Option<(Model, String, Vec<String>)>> {
     if !mesh::rcs::psp2::is_psp2(geometry) {
         return Ok(None);
     }
+    let mut textures = Vec::new();
     let (model, built) = mesh::rcs::psp2::build_with_vex(entry, geometry, vex, &mut |path| {
+        // Materials are asked for too; a draw's texture slot counts the pictures only.
+        if path.ends_with(".gnf") {
+            textures.push(path.to_string());
+        }
         archives.read_name(path).ok()
     })?;
-    Ok(Some((model, built.describe())))
+    Ok(Some((model, built.describe(), textures)))
+}
+
+/// [`super::model_named`] for a flyer card: the PS4 scene when the `.rcsmodel`
+/// beside `entry` is one, else the PS3 path. Scoped to the flyer cards, like
+/// [`model`] to the selection screens: [`super::model_named`] stays as it was.
+///
+/// # Errors
+///
+/// The entry is missing or will not decode.
+pub fn model_named(
+    archives: &mut oag_assets::Archives,
+    entry: &str,
+) -> Result<(Model, Vec<String>)> {
+    if let Some(sibling) = mesh::rcs::sibling_name(entry)
+        && let Ok(geometry) = archives.read_name(&sibling)
+    {
+        let vex = archives.read_name(entry)?;
+        if let Some((mut model, report, textures)) =
+            build_named(archives, entry, &vex, &geometry)
+                .with_context(|| format!("decoding the card model {entry}"))?
+        {
+            log::debug!("card model {entry}: {report}");
+            model.keep_nearest();
+            return Ok((model, textures));
+        }
+    }
+    super::model_named(archives, entry)
 }
 
 /// A selection screen's model, a circuit or a craft's hull: the PS4 scene when

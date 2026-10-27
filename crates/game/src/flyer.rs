@@ -433,7 +433,7 @@ impl Flyers {
                 report.push(format!("{entry}: no Camera node - no flyer is drawn"));
                 continue;
             };
-            match crate::preview::model_named(archives, &entry) {
+            match crate::preview::psp2_scene::model_named(archives, &entry) {
                 Ok((mut model, textures)) => {
                     hide_effects(&mut model, &textures);
                     // Fury's cards are lit by `simpletexture*` programs
