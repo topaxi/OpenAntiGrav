@@ -21,7 +21,9 @@ vertices of position, normal, colour, texcoord and a `lit` flag; draw calls that
 texture slot, a blend class, a culled flag and bounds; `Texture` nodes that are named and
 embedded in the `.vex`; `oag_vex::fog::FogVolume`s and `oag_vex::lighting` lights. A track's
 vertex colours are **baked lighting**, so for these two titles `COLOR_0` is the main light and
-the light records mainly reach the ships.
+the light records mainly reach the ships. Pure's sun lens flare (wired 2026-10-26) is the one
+authored-and-drawn item that is neither mesh nor light: a `lensflare` node of a direction and a
+colour, with the drawing owned by the executable.
 
 ## Decision
 
@@ -44,6 +46,12 @@ the light records mainly reach the ships.
    - `[art.sky] from = "<circuit .vex entry>"` plays that circuit's authored `Skycube`
      through the loader's existing sky path. `[[art.fog]]` and `[[art.light]]` rows carry the
      numbers of `FogVolume` and the ambient, directional and point lights.
+   - `[art.lensflare]` (Pure's sun flare, [`lens-flare.md`](../../rendering/lens-flare.md)) carries
+     what the disc authors and nothing the executable owns: the sun **direction**, the
+     **colour** and the atlas texture (a host reference to the circuit's
+     `LensflareComponents.tga`, or the author's own 64 x 64 picture). The ten-ring layout, the
+     fade by angle and the occlusion probe stay the renderer's law, so a track that names a
+     flare gets Pure's flare exactly and one that names none gets none.
 3. **A host reference that does not resolve draws nothing for the material and says so**,
    by entry and name, in the loader report. No stand-in texture and no neighbour's picture
    (CLAUDE.md, "Never invent what the assets already author"). A track with no art at all keeps
@@ -64,6 +72,11 @@ the light records mainly reach the ships.
 8. **Titles.** Pulse and Pure first: one `.vex` model path. 2048 and Omega share the
    `.rcsmodel` material model and HD its shader table; those are *checked, applies, not wired*
    until a lane opens for them, and the track-file page says so.
+
+What stays absent in 1.x after this (named in every loader report): clouds, scenery and its
+animation, track particle emitters, sound emitters, visibility sets (PVS), shadow hulls and the Zone
+variant. A track without PVS draws every art mesh every frame, which is a cost to measure, not a
+reason to author visibility by hand.
 
 ## Consequences
 
