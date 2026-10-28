@@ -19,6 +19,8 @@ use super::Session;
 
 #[path = "endrace_touch.rs"]
 mod touch;
+#[path = "endrace_prefetch.rs"]
+pub(crate) mod prefetch;
 
 impl Session {
     /// Attempts to build the EndRace flow for the race that just finished in
@@ -41,10 +43,15 @@ impl Session {
         if !stage.race.finished() || stage.endrace.is_some() || stage.endrace_unavailable {
             return;
         }
-        let Some(shell) = self.shell.as_ref() else {
+        // The prefetch still running on its worker: try again next frame rather than wait on it.
+        if stage
+            .endrace_prefetch
+            .as_ref()
+            .is_some_and(|task| !task.is_finished())
+        {
             return;
-        };
-        let Some(race_options) = self.race_options.as_ref() else {
+        }
+        let (Some(shell), Some(_)) = (self.shell.as_ref(), self.race_options.as_ref()) else {
             return;
         };
         // Past the guards that make this run once per finished race, so the
@@ -54,6 +61,21 @@ impl Session {
             self.build_endrace_touch();
             return;
         }
+        // The screens, the renderer and the trophy previews do not depend on how the race went,
+        // so a worker built them while it ran. Only a race that began before there was a
+        // prefetch, or one whose worker failed, builds them here.
+        let Some(prep) = self.take_endrace_prep() else {
+            self.mark_endrace_unavailable();
+            return;
+        };
+        let Stage::Race(stage) = &self.stage else {
+            return;
+        };
+        let (Some(shell), Some(race_options)) = (self.shell.as_ref(), self.race_options.as_ref())
+        else {
+            return;
+        };
+        let screens = prep.screens();
 
         // A network race is the server's: its mode and the team this seat flew are the race's
         // own, not whatever this machine's RACE page last held (a person who joined a room never
@@ -64,8 +86,6 @@ impl Session {
         } else {
             race_options.mode
         };
-        let source = race_options.source.clone();
-        let dlc = race_options.dlc.clone();
         let team = if net {
             stage.race.slot_teams().get(stage.race.player_slot()).cloned()
         } else {
@@ -131,73 +151,10 @@ impl Session {
             suggested_ship: false,
         });
 
-        let faces = oag_ui_screens::picker::FaceScales {
-            default: shell.menu_font.as_ref().map_or(
-                oag_ui_screens::picker::FaceScales::default().default,
-                |menu| shell.font.line_height / menu.line_height,
-            ),
-            ..oag_ui_screens::picker::FaceScales::default()
-        };
-        let grid = [shell.space.size.0, shell.space.size.1];
         let strings = shell.strings.clone();
-        let globals: Vec<(String, String)> = shell
-            .globals
-            .iter()
-            .map(|(key, value)| (key.clone(), value.clone()))
-            .collect();
         let skin_line_height = shell.menu_font.as_ref().unwrap_or(&shell.font).line_height;
         let skin = oag_ui::menu::Skin::new(shell.menu_skin, shell.space, skin_line_height);
         let frame = shell.frame.clone();
-        let atlas = shell
-            .menu_font
-            .clone()
-            .unwrap_or_else(|| shell.font.clone());
-        let base_sprites = shell.sprites.clone();
-        let format = self.gpu.output.config.format;
-
-        let (packs, pure_packs, problems) =
-            oag_source::dlc::packs_from_defaults(&dlc, &oag_source::cache::default_dlc_cache_dir());
-        for problem in problems {
-            warn!("{problem}");
-        }
-        let mut archives = match oag_source::title::open_source(&source, packs, pure_packs) {
-            Ok(opened) => opened.archives,
-            Err(error) => {
-                warn!("cannot open {source} for the EndRace screens: {error:#}");
-                self.mark_endrace_unavailable();
-                return;
-            }
-        };
-        let global_refs: Vec<(&str, &str)> = globals
-            .iter()
-            .map(|(key, value)| (key.as_str(), value.as_str()))
-            .collect();
-        let screens = match oag_game::endrace::load(
-            &mut archives,
-            &strings,
-            faces,
-            grid,
-            &base_sprites,
-            &global_refs,
-            title_ref,
-        ) {
-            Ok(screens) => screens,
-            Err(error) => {
-                // Not "this source has no EndRace screens": the entry name
-                // asked for is Pulse's own, and a title that authors its
-                // own elsewhere reaches here too. Wipeout HD ships
-                // `/data/plugins/frontend/gui/endrace_definition.xml` in
-                // five of its seven archives, in a widget vocabulary this
-                // build does not read yet - see
-                // `oag_game::endrace::SCREEN_ENTRY`'s own doc.
-                warn!(
-                    "{error:#} - this title's EndRace screens are not read by this build; \
-                     keeping the built-in results table"
-                );
-                self.mark_endrace_unavailable();
-                return;
-            }
-        };
 
         let is_hd = oag_game::endrace::dialect(title_ref) == Some(oag_title::EndRaceDialect::Field);
 
@@ -405,32 +362,20 @@ impl Session {
             new_best_lap_ticks,
         );
 
-        match EndRaceRuntime::new(
-            &self.gpu.device,
-            &self.gpu.queue,
-            format,
-            screens,
+        let runtime = EndRaceRuntime::new(
+            prep,
             skin,
             frame,
             strings,
-            atlas,
             results,
             rewards,
             split_rewards,
             menu,
             runs_on_after_the_end,
-            self.anisotropy,
             voice,
-        ) {
-            Ok(runtime) => {
-                if let Stage::Race(stage) = &mut self.stage {
-                    stage.endrace = Some(EndRace::Disc(Box::new(runtime)));
-                }
-            }
-            Err(error) => {
-                warn!("cannot build the EndRace screens' own renderer: {error:#}");
-                self.mark_endrace_unavailable();
-            }
+        );
+        if let Stage::Race(stage) = &mut self.stage {
+            stage.endrace = Some(EndRace::Disc(Box::new(runtime)));
         }
     }
 

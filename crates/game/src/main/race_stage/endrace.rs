@@ -106,6 +106,59 @@ impl std::fmt::Debug for EndRaceRuntime {
     }
 }
 
+/// Everything about a race's EndRace flow that does not depend on how the race went: the
+/// screens read off the disc, the renderer with its sprite sheet uploaded, and the trophy
+/// previews. Built on a worker while the race runs (`Session::start_endrace_prefetch`), so the
+/// frame that crosses the line only assembles it with the results.
+pub(crate) struct EndRacePrep {
+    screens: oag_game::endrace::EndRaceScreens,
+    renderer: Renderer,
+    /// One preview per decoded trophy, with the medal it stands for and its placement. Empty
+    /// unless the race is a campaign cell, the only race `EndRace Rewards` shows a medal for.
+    trophies: Vec<(oag_tables::race_campaign::Medal, oag_game::preview::Preview, oag_ui::screen::Model)>,
+}
+
+impl EndRacePrep {
+    /// The screens read in `screens`, with the GPU side built for `format`. `with_trophies` is
+    /// whether the race can award a medal; a trophy that will not build draws nothing.
+    pub(crate) fn build(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        format: wgpu::TextureFormat,
+        anisotropy: oag_mesh::mesh_render::Anisotropy,
+        atlas: oag_ui::font::Atlas,
+        mut screens: oag_game::endrace::EndRaceScreens,
+        with_trophies: bool,
+    ) -> Result<Self> {
+        let renderer = Renderer::new(device, queue, format, None, atlas, &screens.sprites)?;
+        let decoded = std::mem::take(&mut screens.trophies);
+        let trophies = decoded
+            .into_iter()
+            .filter(|_| with_trophies)
+            .filter_map(|trophy| {
+                let placement = trophy.placement.model;
+                match oag_game::preview::Preview::new(device, queue, format, anisotropy, trophy.mesh) {
+                    Ok(preview) => Some((trophy.medal, preview, placement)),
+                    Err(error) => {
+                        log::warn!("{}: {error:#} - the trophy draws nothing", placement.src);
+                        None
+                    }
+                }
+            })
+            .collect();
+        Ok(Self {
+            screens,
+            renderer,
+            trophies,
+        })
+    }
+
+    /// The screens, for the choices a finished race makes against what the disc authors.
+    pub(crate) fn screens(&self) -> &oag_game::endrace::EndRaceScreens {
+        &self.screens
+    }
+}
+
 impl EndRaceRuntime {
     /// Sets the button-prompt substitution on this flow's own renderer. See
     /// `session::prompts`.
@@ -122,23 +175,22 @@ impl EndRaceRuntime {
         reason = "one build site, each a separate fact"
     )]
     pub(crate) fn new(
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        format: wgpu::TextureFormat,
-        screens: oag_game::endrace::EndRaceScreens,
+        prep: EndRacePrep,
         skin: oag_ui::menu::Skin,
         frame: oag_ui::menu::Frame,
         strings: oag_ui::language::StringTable,
-        atlas: oag_ui::font::Atlas,
         results: ResultsModel,
         rewards: Option<Rewards>,
         split_rewards: Vec<Rewards>,
         menu: EndRaceMenu,
         runs_on_after_the_end: bool,
-        anisotropy: oag_mesh::mesh_render::Anisotropy,
         voice: Option<oag_game::endrace_voice::Voice>,
-    ) -> Result<Self> {
-        let mut screens = screens;
+    ) -> Self {
+        let EndRacePrep {
+            screens,
+            mut renderer,
+            trophies,
+        } = prep;
         // `Race End Photo` first after a finish by the line wherever the
         // disc's screen read (Pulse), and nowhere else: Wipeout HD/Fury's
         // equivalent was not read, so its panels come up at once as they
@@ -148,7 +200,6 @@ impl EndRaceRuntime {
             screens.photo.is_some(),
             matches!(results, ResultsModel::Hd(_)),
         ));
-        let mut renderer = Renderer::new(device, queue, format, None, atlas, &screens.sprites)?;
         renderer.set_space(skin.space());
         // Wipeout HD/Fury steps its options in their Blocks' own on-screen
         // order - see `oag_ui_screens::endrace::hd::hd_screen_order`.
@@ -158,17 +209,12 @@ impl EndRaceRuntime {
             }
             _ => menu,
         };
-        let trophy = trophy_for(rewards.as_ref(), &mut screens.trophies).and_then(|trophy| {
-            let placement = trophy.placement.model;
-            match oag_game::preview::Preview::new(device, queue, format, anisotropy, trophy.mesh) {
-                Ok(preview) => Some((preview, placement)),
-                Err(error) => {
-                    log::warn!("{}: {error:#} - the trophy draws nothing", placement.src);
-                    None
-                }
-            }
-        });
-        Ok(Self {
+        let trophy = trophy_index(rewards.as_ref(), trophies.iter().map(|trophy| trophy.0))
+            .and_then(|index| {
+                let (_, preview, placement) = trophies.into_iter().nth(index)?;
+                Some((preview, placement))
+            });
+        Self {
             screens,
             skin,
             frame,
@@ -181,7 +227,7 @@ impl EndRaceRuntime {
             flow,
             trophy,
             voice: endrace_voice::Speaker::new(voice),
-        })
+        }
     }
 
     /// The voice cue that starts this tick, if the screen on top calls for one.
@@ -499,20 +545,11 @@ impl EndRaceRuntime {
     }
 }
 
-/// The trophy this race shows, taken out of `trophies`: the one whose
-/// medal a campaign cell awarded, `None` on a race with no cell or no
-/// medal, as `EndRaceRewards_OnEnter`'s own two branches have it
-/// (`docs/ghidra/functions/psp-pulse-usa/endrace-screens.md`).
-fn trophy_for(
-    rewards: Option<&Rewards>,
-    trophies: &mut Vec<oag_game::endrace::Trophy>,
-) -> Option<oag_game::endrace::Trophy> {
-    let index = trophy_index(rewards, trophies.iter().map(|trophy| trophy.medal))?;
-    Some(trophies.swap_remove(index))
-}
-
-/// [`trophy_for`]'s choice, over the medals alone so it tests without a
-/// decoded mesh.
+/// The trophy a race shows, as an index into the medals the disc places: the one whose
+/// medal a campaign cell awarded, `None` on a race with no cell or no medal, as
+/// `EndRaceRewards_OnEnter`'s own two branches have it
+/// (`docs/ghidra/functions/psp-pulse-usa/endrace-screens.md`). Over the medals alone so it
+/// tests without a decoded mesh.
 fn trophy_index(
     rewards: Option<&Rewards>,
     medals: impl IntoIterator<Item = oag_tables::race_campaign::Medal>,
