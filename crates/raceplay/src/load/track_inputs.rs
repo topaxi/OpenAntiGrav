@@ -297,6 +297,7 @@ pub(super) fn export(
         nodes: inputs.nodes,
         speedup_pads: inputs.speedup_pads,
         weapon_pads: inputs.weapon_pads,
+        art: None,
         notes,
     })
 }

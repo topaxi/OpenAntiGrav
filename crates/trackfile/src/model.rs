@@ -1,3 +1,4 @@
+use crate::art::Art;
 use oag_vex::collision::CollisionNode;
 use oag_vex::pads::PadVolume;
 use oag_vex::track::{AiTrack, StartPosition};
@@ -40,6 +41,9 @@ pub struct Track {
     pub speedup_pads: Vec<PadVolume>,
     /// Weapon pads.
     pub weapon_pads: Vec<PadVolume>,
+    /// The art: meshes, textures, sun, sky, flare. `None` races as flat-shaded
+    /// collision. The simulation never reads it, so it is in no world hash.
+    pub art: Option<Art>,
     /// Free text the producer recorded: what it chose, ignored or could not map.
     /// Carried through a round trip so a loader report can print it.
     pub notes: Vec<String>,

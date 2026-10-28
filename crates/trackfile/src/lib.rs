@@ -12,6 +12,7 @@
 //! accessor, never as decimal text, so a read is bit-identical on every
 //! platform and a write-read round trip is exact.
 
+pub mod art;
 mod error;
 pub mod fixture;
 mod glb;
