@@ -109,6 +109,113 @@ min = 0
 type = "integer"
 min = 0
 
+# Written only when the track has art (ADR-0076).
+[types.counts.art_meshes]
+type = "integer"
+min = 0
+optional = true
+
+# The art section (ADR-0076). Its numbers are render-side only, so they are
+# decimal here: nothing simulates them. A reader also takes `2` for `2.0`.
+[types.number]
+oneof = ["integer", "float"]
+
+[types.vec3]
+type = "array"
+itemtype = "types.number"
+minlength = 3
+maxlength = 3
+
+[types.sun]
+type = "table"
+
+# Unit vector from the scene towards the sun.
+[types.sun.direction]
+type = "types.vec3"
+
+# Linear RGB.
+[types.sun.colour]
+type = "types.vec3"
+
+[types.sun.intensity]
+type = "types.number"
+
+# Degrees; 0 is a point sun.
+[types.sun.angular_diameter]
+type = "types.number"
+
+[types.sun.shadows]
+type = "boolean"
+
+[types.lensflare]
+type = "table"
+
+[types.lensflare.colour]
+type = "types.vec3"
+optional = true
+
+# An index into the `[[art.texture]]` rows.
+[types.lensflare.atlas]
+type = "integer"
+min = 0
+optional = true
+
+# A texture row is exactly one of the two: the author's own picture beside the
+# manifest, or a host title's circuit texture named by entry and node name.
+[types.image-texture]
+type = "table"
+
+[types.image-texture.image]
+type = "string"
+minlength = 1
+
+[types.host-reference]
+type = "table"
+
+[types.host-reference.entry]
+type = "string"
+minlength = 1
+
+[types.host-reference.name]
+type = "string"
+minlength = 1
+
+[types.host-texture]
+type = "table"
+
+[types.host-texture.host]
+type = "types.host-reference"
+
+[types.texture]
+oneof = ["types.image-texture", "types.host-texture"]
+
+[types.art]
+type = "table"
+
+# A host circuit's `.vex` entry whose `Skycube` is drawn.
+[types.art.sky]
+type = "string"
+minlength = 1
+optional = true
+
+# Linear RGB.
+[types.art.ambient]
+type = "types.vec3"
+optional = true
+
+[types.art.sun]
+type = "types.sun"
+optional = true
+
+[types.art.lensflare]
+type = "types.lensflare"
+optional = true
+
+[types.art.texture]
+type = "array"
+itemtype = "types.texture"
+optional = true
+
 [elements]
 
 [elements.toml-schema]
@@ -122,3 +229,7 @@ type = "types.spline"
 
 [elements.counts]
 type = "types.counts"
+
+[elements.art]
+type = "types.art"
+optional = true

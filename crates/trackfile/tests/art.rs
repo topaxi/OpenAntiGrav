@@ -30,7 +30,7 @@ fn quad(name: &str, texture: Option<usize>) -> ArtMesh {
     }
 }
 
-fn art() -> Art {
+pub(crate) fn art() -> Art {
     Art {
         meshes: vec![quad("kerb", Some(0)), quad("bare", None)],
         textures: vec![
@@ -56,7 +56,7 @@ fn art() -> Art {
     }
 }
 
-fn with_art(art: Art) -> Track {
+pub(crate) fn with_art(art: Art) -> Track {
     Track {
         art: Some(art),
         ..fixture::oval()
