@@ -722,5 +722,8 @@ not the cause here. A real device's callback thread competing with the new worke
 measured. (2) The worker builds the screens in the language live when the race starts (as a parked
 race's HUD already does); a LANGUAGE change from the pause menu shows at the next race. (3) The
 worker costs one thread's time early in the race (about 100 ms of CPU on this host, more on the
-Deck). (4) The Deck was not touched; the command to re-measure there is in the lane report and the
-handover thread `render-thread-io-after-the-finish-frame-fix`.
+Deck). (4) The Deck was not touched: re-measure it with a throwaway profile (`XDG_*` under a scratch
+directory, one `--script "8:quit"` launch to write `settings.toml`, then `[display] vsync = "off"`
+and `frame_limit = "unlimited"`), `OAG_PHASE_SPIKE_MS=11 --frame-log --autopilot`, audio on, the
+menus walked by hand to a race, and read the first `frame-spike` line after `race finished` in
+that profile's log.
