@@ -109,17 +109,12 @@ reason to author visibility by hand.
     - Playback is the race clock in ticks, looping or clamped per animation (`oag_loop`), never
       the wall clock; `--anim-seconds` pins it as it does for a disc circuit.
 
-11. **Events start animations by data, not by script.** glTF animation is time-driven, so "after
-    lap one, open the gate" is a trigger, and the format has a closed table for it:
-    `[[art.trigger]]` rows of `on` (`race_start`, `countdown_end`, `lap_start` with a `lap`,
-    `final_lap`, `finish`) and an action (`play` an animation by name, `stop`, `set_sun` to a
-    named pose). The events are ones the simulation already emits at deterministic ticks, so
-    the trigger tick is a function of the race and the renderer holds only "animation X began at
-    tick T". No expression language, no counters, no conditions. Anything past that table is a
-    **mod behaviour**, the WebAssembly rules host the maintainer decided on 2026-10-12
-    (`handover/gameplay/custom-race-modes-and-campaigns.md`); a track does not grow its own
-    runtime, and a trigger that changes **simulation** (a gate that really closes) waits for
-    that host with decision 10's moving-collision question.
+11. **No trigger events in 1.x** (maintainer, 2026-10-29). Animations are time-driven against the
+    race clock and nothing else starts them: "after lap one, move X" is not expressible, and the
+    format carries no trigger rows. Behaviour that reacts to the race is a **mod behaviour**, the
+    WebAssembly rules host decided on 2026-10-12
+    (`handover/gameplay/custom-race-modes-and-campaigns.md`); a track does not grow a runtime of
+    its own, and a later trigger table would be a minor version that adds optional rows.
 
 ## Consequences
 
