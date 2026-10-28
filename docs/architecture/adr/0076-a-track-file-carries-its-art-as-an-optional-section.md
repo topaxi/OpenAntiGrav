@@ -83,6 +83,16 @@ animation, track particle emitters, sound emitters, visibility sets (PVS), shado
 variant. A track without PVS draws every art mesh every frame, which is a cost to measure, not a
 reason to author visibility by hand.
 
+9. **Static shadows are baked in Blender, into `COLOR_0`.** The add-on's sun lamp is `[art.sun]`,
+   and a *Bake lighting* operator (Cycles, headless-capable) writes sun, sky and bounce light with
+   its cast shadows into each art mesh's vertex colours, the way Pulse and Pure light their own
+   circuits. The format stores the result and never the method, so the engine needs no baker. It
+   does not double-count: the `mapped` tier casts only what moves (`shadows.md`, since
+   2026-10-25), so a baked scenery shadow and a live ship shadow land on the road once each.
+   Vertex-colour bake is limited by mesh density (the operator reports the vertices per square
+   unit it baked at); a lightmap atlas, which HD's `Model::lightmaps` already draws, is a later
+   minor version that adds a second UV set and a texture.
+
 ## Consequences
 
 - **A sun on our own tracks is what `docs/rendering/shadows.md` lists first among the three things
