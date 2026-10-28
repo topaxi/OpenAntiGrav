@@ -89,7 +89,7 @@ impl PhaseClock {
         }
         self.frames += 1;
         if let Some(line) = self.spike_line(tick) {
-            println!("{line}");
+            log::info!("{line}");
         }
     }
 

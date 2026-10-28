@@ -172,7 +172,7 @@ pub(crate) struct RaceStage {
     pub(crate) endrace_unavailable: bool,
     /// The worker building [`Self::endrace`]'s screens while the race runs, so the finishing frame
     /// does no disc read or GPU build. See `crate::main::session::endrace::prefetch`.
-    pub(crate) endrace_prefetch: Option<oag_thread::Task<Option<endrace::EndRacePrep>>>,
+    pub(crate) endrace_prefetch: Option<crate::session::endrace::prefetch::Prefetch>,
     /// Whether that worker has been offered a start, so it is started once per race.
     pub(crate) endrace_prefetch_started: bool,
     /// The best medal [`Self::tick_messages`] has already announced, so a medal

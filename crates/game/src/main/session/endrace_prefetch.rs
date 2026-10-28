@@ -13,6 +13,27 @@ use crate::stage::Stage;
 
 use super::super::Session;
 
+/// The worker building a race's EndRace screens. Natively an [`oag_thread::Task`]; on the web
+/// nothing is ever started (wgpu's web types are not `Send`), so the type is uninhabited there
+/// and every `Option` of it is `None`.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) type Prefetch = oag_thread::Task<Option<EndRacePrep>>;
+
+/// See the native alias above.
+#[cfg(target_arch = "wasm32")]
+pub(crate) enum Prefetch {}
+
+#[cfg(target_arch = "wasm32")]
+impl Prefetch {
+    pub(crate) fn is_finished(&self) -> bool {
+        match *self {}
+    }
+
+    pub(crate) fn join(&mut self) -> Option<Result<Option<EndRacePrep>, oag_thread::Panicked>> {
+        match *self {}
+    }
+}
+
 /// What the build needs, all owned so the closure can leave the frame thread.
 pub(crate) struct EndRacePrepArgs {
     source: String,
@@ -151,13 +172,22 @@ impl Session {
         if stage.endrace_prefetch_started || stage.race.finished() {
             return;
         }
-        let args = self.endrace_prep_args();
+        // Not on the web: wgpu's web types belong to the page's thread and the race build runs
+        // inline there too (docs/tools/web.md, "Threads"), so the finishing frame builds the
+        // screens itself as it did before the prefetch.
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let args = self.endrace_prep_args();
+            let Stage::Race(stage) = &mut self.stage else {
+                return;
+            };
+            stage.endrace_prefetch =
+                args.map(|args| oag_thread::Task::spawn("endrace-prefetch", move || args.run()));
+        }
         let Stage::Race(stage) = &mut self.stage else {
             return;
         };
         stage.endrace_prefetch_started = true;
-        stage.endrace_prefetch =
-            args.map(|args| oag_thread::Task::spawn("endrace-prefetch", move || args.run()));
     }
 
     /// The prepared screens: the worker's when it ran and succeeded, else built here. `None`
