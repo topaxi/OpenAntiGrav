@@ -46,12 +46,17 @@ colour, with the drawing owned by the executable.
    - `[art.sky] from = "<circuit .vex entry>"` plays that circuit's authored `Skycube`
      through the loader's existing sky path. `[[art.fog]]` and `[[art.light]]` rows carry the
      numbers of `FogVolume` and the ambient, directional and point lights.
-   - `[art.lensflare]` (Pure's sun flare, [`lens-flare.md`](../../rendering/lens-flare.md)) carries
-     what the disc authors and nothing the executable owns: the sun **direction**, the
-     **colour** and the atlas texture (a host reference to the circuit's
-     `LensflareComponents.tga`, or the author's own 64 x 64 picture). The ten-ring layout, the
-     fade by angle and the occlusion probe stay the renderer's law, so a track that names a
-     flare gets Pure's flare exactly and one that names none gets none.
+   - **`[art.sun]` is the track's one real light**: a unit `direction` (towards the sun), a linear
+     `colour`, an `intensity`, an `angular_diameter` in degrees (0 is a point sun, a hard edge)
+     and `shadows` (whether it may cast). The ships, the `mapped` shadow tier and the lens flare all
+     read this one record, so they cannot disagree about where the sun is. The `ambient` light
+     is its own `[art.ambient]` colour. Point lights stay `[[art.light]]` rows.
+   - `[art.lensflare]` (Pure's sun flare, [`lens-flare.md`](../../rendering/lens-flare.md)) is a
+     switch plus the atlas: the flare is drawn along the sun's direction in the sun's colour
+     (`colour` overrides it), and the atlas is a host reference to a circuit's
+     `LensflareComponents.tga` or the author's own 64 x 64 picture. The ten-ring layout, the fade
+     by angle and the occlusion probe stay the renderer's law, so a track that names a flare gets
+     Pure's flare exactly and one that names none gets none.
 3. **A host reference that does not resolve draws nothing for the material and says so**,
    by entry and name, in the loader report. No stand-in texture and no neighbour's picture
    (CLAUDE.md, "Never invent what the assets already author"). A track with no art at all keeps
@@ -79,6 +84,16 @@ variant. A track without PVS draws every art mesh every frame, which is a cost t
 reason to author visibility by hand.
 
 ## Consequences
+
+- **A sun on our own tracks is what `docs/rendering/shadows.md` lists first among the three things
+  ray-traced shadows are blocked on**: "a light to trace against", where Pulse has none and the
+  direction would have to be invented. A track file authors one, with a size, so a `mapped`
+  shadow can be soft today and a traced one needs no format change later. The other two blockers
+  (ray queries in wgpu, a reason beyond contact shadows) are untouched, and this ADR adds no
+  `raytraced` variant: that row waits for its infrastructure.
+- An art mesh may be flagged a **caster** or a **receiver** (`oag_shadow`: `both`, `cast`,
+  `receive`, `none`; default `both`), because a sky dome or a decal that casts is wrong and the
+  author is the only one who knows. Collision geometry casts and receives nothing by itself.
 
 - A custom track can look like a Pulse circuit by naming its textures and sky, with a disc
   required only at race time, as the host title's ship and physics already require.
