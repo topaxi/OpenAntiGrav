@@ -93,6 +93,22 @@ reason to author visibility by hand.
    unit it baked at); a lightmap atlas, which HD's `Model::lightmaps` already draws, is a later
    minor version that adds a second UV set and a texture.
 
+10. **Motion is keyframed in Blender and carried as glTF animation.** An art mesh node, the sun
+    and the lens flare's host may each have translation, rotation and scale channels (glTF
+    `animations`, which Blender's Dope Sheet writes), played against the race clock. The
+    renderer already plays authored node motion (`Model::anim_nodes`, `Motion::sample`, the
+    texture-transform tracks) and the `mapped` tier already casts what animates, so a moving
+    mesh is a mapping onto that and a moving sun is one more channel of the same clock.
+    - **Visual only in 1.x.** Collision, pads and the spline never move: a moving collider is
+      simulation state, belongs in the world hash and in replays, and is its own decision.
+    - **A baked light does not follow a moving sun.** Vertex colours are baked for the sun's
+      pose at time zero. A sun that moves relights what is lit live (ships, the flare, `mapped`
+      shadows, the sky if it reads the sun) and leaves the baked track as it is; the operator
+      says so when it bakes a track whose sun is animated. Several baked sets crossfaded over
+      time (a day cycle) is a later minor version.
+    - Playback is the race clock in ticks, looping or clamped per animation (`oag_loop`), never
+      the wall clock; `--anim-seconds` pins it as it does for a disc circuit.
+
 ## Consequences
 
 - **A sun on our own tracks is what `docs/rendering/shadows.md` lists first among the three things
