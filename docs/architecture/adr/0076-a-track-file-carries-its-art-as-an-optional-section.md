@@ -32,7 +32,7 @@ colour, with the drawing owned by the executable.
    is what 1.0 wrote, byte for byte.
 2. **`Art` mirrors what the renderer takes, not glTF PBR.**
    - Meshes are glb nodes `oag/art/<n>`: `TRIANGLES`, `POSITION`, `NORMAL`, `TEXCOORD_0`,
-     `COLOR_0` (the baked light, linear RGBA). One primitive per draw.
+     `COLOR_0` (the baked light, linear RGB plus coverage alpha). One primitive per draw.
    - A primitive's material is extras on its node: `oag_texture` (an index into the manifest's
      texture list, absent for untextured), `oag_blend` (`opaque`, `cutout`, `alpha`, `additive`,
      `unblended`; the classes `oag_vex::vex::BlendClass` already names), `oag_culled`, `oag_lit`.
@@ -53,7 +53,8 @@ colour, with the drawing owned by the executable.
      is its own `[art.ambient]` colour. Point lights stay `[[art.light]]` rows.
    - `[art.lensflare]` (Pure's sun flare, [`lens-flare.md`](../../rendering/lens-flare.md)) is a
      switch plus the atlas: the flare is drawn along the sun's direction in the sun's colour
-     (`colour` overrides it), and the atlas is a host reference to a circuit's
+     (`direction` and `colour` override them; Pure authors its flare apart from its first
+     directional light, so its export carries both), and the atlas is a host reference to a circuit's
      `LensflareComponents.tga` or the author's own 64 x 64 picture. The ten-ring layout, the fade
      by angle and the occlusion probe stay the renderer's law, so a track that names a flare gets
      Pure's flare exactly and one that names none gets none.
@@ -122,26 +123,35 @@ reason to author visibility by hand.
       the equality of decision 7 holds through the round trip. Blender writes linear, so its
       export needs no conversion.
     - **`oag_alpha_ref`**, an optional per-primitive extra in `0..=255`, is the alpha-test
-      reference for `cutout`. Absent means the renderer's default; a Pure export writes the
-      disc's own (its speedup pad's is 0). Blender maps it from the material's alpha clip.
+      reference for `cutout`. Absent means the renderer's default; a disc export writes the
+      disc's own (Pure's speedup pad's is 0). It is per draw, as on the disc: the renderer
+      already submits `DrawCall::alpha_test_ref` per draw (`oag_mesh::mesh_render::cutout`, one
+      pipeline per distinct value), so no renderer change is needed. Blender maps it from the
+      material's alpha clip.
     - **`oag_layer`**, an optional integer per art node, default 0. The loader draws by layer,
       then by file order (a stable sort), so file order alone is the default case. A disc export
       writes the `.vex` layer, so its buffers match the disc build, not only its draws.
-    - **`[art.sun] shadows`** is `false` on a Pure export (its flare direction is not measured as
-      its shadow light; Pure keeps its own shadows) and `true` by default on a Blender-authored
-      track, whose sun is the shadow light by definition.
+    - **`[art.sun] shadows`** is `false` on a disc export (Pulse's and Pure's light nodes are not
+      measured as their shadow light; each keeps its own shadows) and `true` when absent, so a
+      Blender-authored track's sun is the shadow light by definition.
     - **Ships read the sun through the host title's own hull law.** Pulse and Pure on the PSP build
       their GE light rig (`oag_mesh`'s `HullLights`) from `[art.ambient]` and `[art.sun]` as
       directional 0, colour times intensity, clipped to a byte as the PSP does. An HD-family host
       feeds the same sun to its own authored-light equation. No project-owned light model.
-    - **The art section may carry a `light_scale` per spline point** (optional, four bytes, the
-      disc's `SplinePoint::light_scale` order: ambient, directional, then the two point-light
-      bytes; absent is 255 each). It is how a ship darkens in a tunnel. It lives in `Art`, not on
-      the simulation spline, so a track with no art stays byte-identical and no world hash can
-      move with it; the Bake operator may write it from the baked light under the centre line.
+    - **A `light_scale` per spline point** (four bytes, the disc's `SplinePoint::light_scale`
+      order: ambient, directional, then the two point-light bytes) is how a ship darkens in a
+      tunnel. **Format 1.0 already carries it** on the spline, as the required `_OAG_LIGHT_SCALE`
+      attribute of `oag/spline/<i>`, which a disc export fills with the circuit's own bytes and
+      the renderer reads through `oag_race::Course::light_scale_at` on a foreign track as on a
+      disc circuit. No world or state hash reads it (only `Course`'s render-side queries do), so
+      it stays where it is rather than gaining a second copy in `Art` (found in landing 2a; the
+      decision as first written assumed it absent). The Bake operator may write it from the
+      baked light under the centre line.
     - **A disc export carries every directional the circuit authors**: the first is `[art.sun]`,
-      the rest (Pulse authors up to four) are directional `[[art.light]]` rows, so the hull rig
-      built from the file equals the one built from the `.vex`.
+      the rest (Pulse authors up to four) are `[[art.light]]` rows of `kind = "directional"`, so
+      the hull rig built from the file equals the one built from the `.vex` (all 96 circuits,
+      2026-10-29). A colour is written as the linear value of the byte the PSP packs, and the
+      loader rounds back to that byte.
 
 ## Consequences
 

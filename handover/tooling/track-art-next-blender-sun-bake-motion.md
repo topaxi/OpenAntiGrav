@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [pulse, pure]
 updated: 2026-10-29
-summary: "Track art landing 2: Blender art export, sun lamp, vertex-colour bake, keyframed motion, with the decision-12 format changes first"
+summary: "Track art landing 2: decision-12 format and hull rig landed (2a); next the Blender art export, sun lamp, vertex-colour bake, keyframed motion (2b)"
 size: L (60)
 difficulty: medium (50)
 categories: [tooling, rendering]
@@ -57,13 +57,20 @@ agreed in conversation and not yet built**, so nothing is re-derived. The decisi
 
 ## Open
 
-- **Decided 2026-10-29, building in landing 2a** (ADR-0076 decision 12): `COLOR_0` linear with the
-  loader converting to the renderer's gamma bytes; optional `oag_alpha_ref`; optional `oag_layer`
-  (stable sort, file order by default); `shadows = false` on a Pure export and `true` by default on a
-  Blender track; hulls lit by the host title's own law (`HullLights` from `[art.ambient]` and the
-  sun, extra directionals as `[[art.light]]` rows); an optional per-spline-point `light_scale` in
-  `Art`.
-- ADR-0076 is still **Proposed**; the maintainer accepts it once landing 2a is in.
+- **Landing 2a is in** (branch `track-art-2`, 2026-10-29): linear `COLOR_0` (sRGB curve, rounded to
+  the byte, in `oag_raceplay::foreign::art::colour`), `oag_alpha_ref` and `oag_layer` per art node,
+  `[[art.light]]` directional rows, `[art.lensflare] direction`, `shadows` absent meaning `true` (a
+  disc export writes `false`), and the PSP hull rig from `[art.ambient]` plus the sun plus the
+  directional rows, proven equal to `HullLights::from_track` on all 96 circuits and wired on the
+  foreign path. `docs/formats/track-file.md` has the census.
+- **`light_scale` was already in 1.0** on the spline (`_OAG_LIGHT_SCALE`), filled by the exporter
+  and read by the renderer on a foreign track. ADR-0076 decision 12 now says so; raised with the lead
+  for the maintainer, who may still want it moved (it would be a 1.x format change).
+- **HD-family hosts** do not feed the sun to `Light::authored` yet: it needs the authored rig turned
+  on for a foreign track on an HD host and a check that it does not relight anything else. Open.
+- A lit art mesh's colour is a gamma float, not a byte (the `.vex` path's invented grey for an
+  uncoloured vertex is not a byte). The add-on should export `oag_lit` meshes knowing that.
+- ADR-0076 is still **Proposed**; the maintainer accepts it now that landing 2a is in.
 
 ## State of the sibling work
 
@@ -82,12 +89,11 @@ agreed in conversation and not yet built**, so nothing is re-derived. The decisi
 
 ## Next Steps
 
-1. Landing 2a: the decision-12 format and loader changes, the hull rig from the sun, and the proof
-   extended to the hull rig for all 96 circuits. Half a day to a day.
-2. Blender art export and import (item 1), with a generated checker texture as the committed fixture
+1. Blender art export and import (item 1), with a generated checker texture as the committed fixture
    (never disc pixels; `just audit-leakage`). A day.
-3. Sun lamp to `[art.sun]` and the hull-light decision, then the Bake operator (items 2, 3). A day
+2. Sun lamp to `[art.sun]` and the hull-light decision, then the Bake operator (items 2, 3). A day
    each, the second needs the first.
-4. Keyframed motion (items 4, 5): glTF animation read and write, the sampler against the race clock.
+3. Keyframed motion (items 4, 5): glTF animation read and write, the sampler against the race clock.
    Half a day to a day.
+4. HD-family host: the sun into `Light::authored` (about half a day with a screenshot check).
 5. Re-skin Hillside with a Pulse sky, host textures and a baked sun as the demonstration.
