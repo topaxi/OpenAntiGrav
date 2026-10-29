@@ -108,7 +108,7 @@ pub fn grid_draw_list(
                     image,
                     placed,
                     hex,
-                    SELECTOR_TINT,
+                    model.pulse().tint(),
                 ));
             }
             continue;
@@ -285,7 +285,7 @@ pub fn cell_draw_list(
                 image,
                 placed,
                 hex,
-                SELECTOR_TINT,
+                model.pulse().tint(),
             ));
             continue;
         }
@@ -688,7 +688,7 @@ pub(super) fn centred_selector_draw(image: &Image, placed: Placed, hex: [f32; 4]
 
 /// [`centred_selector_draw`], but with the tint overridden rather than taken
 /// from `image.color` - `Pulse`'s own `grid_draw_list`/`cell_draw_list` want
-/// [`SELECTOR_TINT`] here, but [`super::hd::hd_grid_draw_list`] still calls
+/// [`super::pulse::SelectorPulse::tint`] here, but [`super::hd::hd_grid_draw_list`] still calls
 /// [`centred_selector_draw`] itself unchanged, so that function's own
 /// signature (and HD's own, unmeasured, selected-tile look) is left alone
 /// rather than threading a tint parameter through a call this crate does not
@@ -705,24 +705,6 @@ pub(super) fn centred_selector_tinted_draw(
     let y = hex[1] + (hex[3] - height) * 0.5;
     sprite_draw(image, placed, x, y, argb)
 }
-
-/// `Selector`'s own runtime colour, one of two endpoints a shared,
-/// non-PI001 widget routine (`FUN_088a5700`, xref'd off the `Selector`/
-/// `SelectorGlow` widget-name strings at `0x08a7f130`/`0x08a7f178`) pulses
-/// the selected tile's outline between on a continuous ~1s triangle wave:
-/// `lerp(t, 0xff33a6b9, 0xffffffff)` one half of the cycle and the reverse
-/// the other half - `CellMode_Definition.xml` itself only authors `Selector`
-/// at a fixed `i="0xffffffff"` (multiply-neutral), so the pulse is entirely
-/// this routine's doing. Measured (the colour constant is a literal
-/// decompiled off `0x088a5700`, confidence 85), but the animation itself is
-/// **not implemented** - `grid_draw_list`/`cell_draw_list` build a draw list
-/// with no clock, so this always draws the cyan endpoint rather than
-/// oscillating. Picked over the white endpoint because it is what
-/// `data/reference/psp-campaign-screens/grid-selection-page1-grid0-unlocked.png`
-/// (this build's own comparison frame) happens to show; a capture taken at a
-/// different phase would show closer to white instead. See
-/// `docs/ui/campaign-screens.md`.
-const SELECTOR_TINT: u32 = 0xff33_a6b9;
 
 /// `Outline_x_y`'s own runtime tint on `Grid Selection` - **not** on `Cell
 /// Selection`, whose own `CellSelection_PopulateGrid` never calls
