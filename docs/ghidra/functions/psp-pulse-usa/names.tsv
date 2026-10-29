@@ -1438,3 +1438,4 @@
 0x088d0e3c	function	Ticker_PickMessage	72	race-box-screens.md
 0x088d1384	function	Ticker_AdvanceWeighted	72	race-box-screens.md
 0x088d22ac	function	Ticker_BuildStatMessage	72	race-box-screens.md
+0x088a3e8c	function	GridController_UpdateSelectorStamp	85	race-campaign.md

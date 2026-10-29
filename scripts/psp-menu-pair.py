@@ -102,8 +102,6 @@ SHIP_NODE_LOOP = 5.9833336
 #: end's bloom, wired for the cursor"), which gives the pulse phase exactly where the wall clock does not.
 SELECTOR_CENTRE = {"grid": (81, 159), "cell": (141, 111)}
 EDRAM = 0x04000000
-#: `SelectorPulse`'s entry hold, seconds (`oag_ui_screens::campaign::pulse::ENTRY_HOLD`): ours at `ENTRY_HOLD + t / 2` shows level `t`.
-ENTRY_HOLD = 0.35
 
 PREDICATES = {"title": lambda png: orange_share(png) > 0.03}
 
@@ -235,7 +233,7 @@ class Rig:
         state = self.state()
         # The grab takes `after - before`; the frame is read about the middle of it. Only when the entry was watched and the screen is still it.
         since = (before + after) / 2 - self.entered[1] if self.entered and self.entered[0] == state and self.entered[1] is not None else None
-        phase = None if level is None else ENTRY_HOLD + level / 2
+        phase = None if level is None else level / 2
         if phase is None and clock is not None and self.entered_clock is not None and self.entered and self.entered[0] == state:
             since = clock - self.entered_clock
         if since_ticks is not None:
@@ -409,7 +407,7 @@ def build_pairs(args, seen, out, plat, walk):
         pair.rec["original"]["capture_path"] = "walked by pad from Main Menu (no savestate)"
         pair.rec["original"]["selection_basis"] = "read by eye from the frame; the cursor is where the walk left it"
         if shot.get("from_stamp"):
-            pair.rec["original"]["seconds_since_entry"] = {"value": round(shot["since_entry"], 3), "basis": "not a wall clock: the pulse level %.3f the Selector's own glow-mask stamp reads in EDRAM (80 + 150 t, CPU stopped for the grab), as the seconds at which ours shows that level (entry hold + t / 2); good to one game frame" % shot["level"]}
+            pair.rec["original"]["seconds_since_entry"] = {"value": round(shot["since_entry"], 3), "basis": "not a wall clock: the pulse level %.3f the Selector's own glow-mask stamp reads in EDRAM (80 + 150 t, CPU stopped for the grab), as the seconds at which ours shows that level (t / 2 on the rising half; the original has no entry hold, `0x088a3e8c`); good to one game frame" % shot["level"]}
         elif shot.get("from_ticks"):
             pair.rec["original"]["seconds_since_entry"] = {"value": round(shot["since_entry"], 3), "basis": "not a wall clock: the emulator's own tick counter (cpu.status.ticks / 222e6, CPU stopped for the grab) at the grab minus its value at the start of the pad press that entered the screen; the press-to-screen latency (a frame or two) and the one frame the picture lags the stop are inside it. Pure has no recovered front-end clock"}
         elif shot.get("from_clock") and shot.get("since_entry") is not None:

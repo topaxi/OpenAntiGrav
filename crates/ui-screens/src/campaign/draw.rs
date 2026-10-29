@@ -747,7 +747,8 @@ fn push_selector(
 }
 
 /// `Selector`'s top-left relative to the selected hex's own top-left on Pulse PSP,
-/// `GridController_UpdateSelectorPulse` (`0x088a5700`): the literals `5.0` and `7.0` in
+/// the widget update `0x088a3e8c` (live; its twin `GridController_UpdateSelectorPulse`
+/// `0x088a5700` carries the same literals): the literals `5.0` and `7.0` in
 /// its position update. **Measured**, confidence 85: a GE dump of Grid Selection draws the
 /// 42x43 quad at (60,138) over the hex at (65,145), Cell Selection at (120,90) over
 /// (125,97). The sprite's visible ring is 32x28 at (5,9) in its canvas, so

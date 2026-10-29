@@ -94,7 +94,7 @@ fn the_selector_stamps_the_glow_mask_over_its_whole_quad_by_the_pulse() {
         stamps[0].1
     };
     assert_eq!(stamp_at(&model), 80, "held cyan");
-    model.pulse_mut().set_seconds(0.35 + 0.5);
+    model.pulse_mut().set_seconds(0.5);
     assert_eq!(stamp_at(&model), 230, "white");
 }
 
@@ -314,8 +314,9 @@ fn the_selector_colour_moves_with_the_pulse_clock() {
             .expect("the Selector draws as a 42x43 sprite")
     };
     assert_eq!(colour_at(0.0), argb_to_rgba(0xff33_a6b9));
-    assert_eq!(colour_at(0.85), argb_to_rgba(0xffff_ffff));
-    assert_eq!(colour_at(1.35), colour_at(0.0), "period is one second");
+    assert_ne!(colour_at(0.02), colour_at(0.0), "no entry hold");
+    assert_eq!(colour_at(0.5), argb_to_rgba(0xffff_ffff));
+    assert_eq!(colour_at(1.0), colour_at(0.0), "period is one second");
 }
 
 /// The original puts `Selector`'s top-left 5 px left of and 7 px above the selected hex's own
