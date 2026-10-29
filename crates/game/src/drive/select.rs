@@ -54,7 +54,10 @@ fn rows_listing(screen: &Screen) -> String {
 
 /// The row `target` names: a row id, a setting key, a label (case-insensitive) or `#index`.
 fn find<'a>(screen: &'a Screen, target: &str) -> Option<&'a Row> {
-    if let Some(index) = target.strip_prefix('#').and_then(|n| n.parse::<usize>().ok()) {
+    if let Some(index) = target
+        .strip_prefix('#')
+        .and_then(|n| n.parse::<usize>().ok())
+    {
         return screen.rows.get(index);
     }
     let by = |wanted: &dyn Fn(&Row) -> bool| screen.rows.iter().find(|row| wanted(row));
@@ -101,7 +104,11 @@ impl Select {
     /// onto the row - each says what the screen does have.
     pub fn next(&mut self, screen: &Screen) -> Result<Next, String> {
         let Some(row) = find(screen, &self.target) else {
-            return Err(format!("no row {:?}: {}", self.target, rows_listing(screen)));
+            return Err(format!(
+                "no row {:?}: {}",
+                self.target,
+                rows_listing(screen)
+            ));
         };
         let Some(focus) = screen.focus.as_ref().map(|f| f.index) else {
             return Err(format!(
@@ -119,7 +126,10 @@ impl Select {
                 self.probe += 1;
             }
         }
-        let button = match (screen.step.and_then(|(forward, _)| named(forward)), self.forward) {
+        let button = match (
+            screen.step.and_then(|(forward, _)| named(forward)),
+            self.forward,
+        ) {
             (Some(button), _) | (None, Some(button)) => button,
             (None, None) => *PROBES.get(self.probe).ok_or_else(|| {
                 format!(
@@ -181,7 +191,11 @@ impl SetChoice {
         };
         let toggle = row.kind == "toggle";
         if toggle {
-            if row.value.as_deref().is_some_and(|v| v.eq_ignore_ascii_case(&self.value)) {
+            if row
+                .value
+                .as_deref()
+                .is_some_and(|v| v.eq_ignore_ascii_case(&self.value))
+            {
                 return Ok(Next::Done);
             }
         } else {

@@ -90,12 +90,7 @@ pub fn read_back(
     Ok(pixels)
 }
 
-pub fn write_png(
-    path: &std::path::Path,
-    width: u32,
-    height: u32,
-    pixels: &[u8],
-) -> Result<()> {
+pub fn write_png(path: &std::path::Path, width: u32, height: u32, pixels: &[u8]) -> Result<()> {
     // A screenshot is opaque. The frame's alpha channel is the bloom mask and
     // not coverage - see `oag_mesh::capture::make_opaque` - so encoding it
     // straight from the readback writes a fully transparent PNG.

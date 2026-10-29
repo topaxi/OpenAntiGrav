@@ -4,7 +4,7 @@
 //! spaces and a word in double quotes may contain them (`select "LAUNCH RACE"`).
 //!
 //! ```text
-//! boot                             tap Start through the disc's own front end until our menus are up
+//! boot                             tap Start and Cross through the disc's own front end until our menus are up
 //! until stage=menu within 3000     wait for a state; fails with the last state after N ticks
 //! expect page=race                 the state must hold right now
 //! select <row>                     move focus to a row by id, setting key, label or #index
@@ -50,7 +50,9 @@ impl Cond {
             }
         };
         if !super::State::is_key(key) {
-            return Err(format!("{key:?} is not a state key (stage, frontend, page, screen, screen.id, title, focus, race.*)"));
+            return Err(format!(
+                "{key:?} is not a state key (stage, frontend, page, screen, screen.id, title, focus, race.*)"
+            ));
         }
         Ok(Self {
             key: key.to_string(),
@@ -63,22 +65,30 @@ impl Cond {
     /// the value, or for `!=` none does.
     #[must_use]
     pub fn holds(&self, held: &[String]) -> bool {
-        let equal = held.iter().any(|held| held.eq_ignore_ascii_case(&self.value));
+        let equal = held
+            .iter()
+            .any(|held| held.eq_ignore_ascii_case(&self.value));
         equal != self.negated
     }
 }
 
 impl std::fmt::Display for Cond {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}{}{}", self.key, if self.negated { "!=" } else { "=" }, self.value)
+        write!(
+            f,
+            "{}{}{}",
+            self.key,
+            if self.negated { "!=" } else { "=" },
+            self.value
+        )
     }
 }
 
 /// What a run is told to do, one entry of a [`Script`].
 #[derive(Debug, Clone, PartialEq)]
 pub enum Step {
-    /// Tap Start while the disc's own front end (the logo, the language list) is up, until our
-    /// menus open. Its screens are the disc's and carry no rows to `select`.
+    /// Tap Start and Cross in turn while the disc's own front end (the logo, the language list)
+    /// is up, until our menus open. Its screens are the disc's and carry no rows to `select`.
     Boot { within: u32 },
     /// Wait until every condition holds.
     Until { conds: Vec<Cond>, within: u32 },
@@ -87,7 +97,11 @@ pub enum Step {
     /// Move focus to this row.
     Select { target: String, within: u32 },
     /// Select the row of this setting and step its value to this one.
-    Set { setting: String, value: String, within: u32 },
+    Set {
+        setting: String,
+        value: String,
+        within: u32,
+    },
     /// Tap each button in turn.
     Press(Vec<Button>),
     /// Let this many ticks pass.
@@ -112,7 +126,11 @@ impl std::fmt::Display for Step {
             Self::Until { conds, within } => write!(f, "until {} within {within}", list(conds)),
             Self::Expect { conds } => write!(f, "expect {}", list(conds)),
             Self::Select { target, within } => write!(f, "select {target:?} within {within}"),
-            Self::Set { setting, value, within } => write!(f, "set {setting}={value} within {within}"),
+            Self::Set {
+                setting,
+                value,
+                within,
+            } => write!(f, "set {setting}={value} within {within}"),
             Self::Press(buttons) => write!(f, "press {buttons:?}"),
             Self::Ticks(n) => write!(f, "ticks {n}"),
             Self::Screenshot(path) => write!(f, "screenshot {}", path.display()),
@@ -213,13 +231,21 @@ impl Script {
             }
             "until" => {
                 let within = within(&mut words)?;
-                Step::Until { conds: conds(&words)?, within }
+                Step::Until {
+                    conds: conds(&words)?,
+                    within,
+                }
             }
-            "expect" => Step::Expect { conds: conds(&words)? },
+            "expect" => Step::Expect {
+                conds: conds(&words)?,
+            },
             "select" => {
                 let within = within(&mut words)?;
                 match words.as_slice() {
-                    [target] => Step::Select { target: target.clone(), within },
+                    [target] => Step::Select {
+                        target: target.clone(),
+                        within,
+                    },
                     _ => return Err("select takes one row (quote it if it has spaces)".into()),
                 }
             }
@@ -228,11 +254,16 @@ impl Script {
                 let [pair] = words.as_slice() else {
                     return Err("set takes one setting=value".into());
                 };
-                let Some((key, value)) = pair.split_once('=').filter(|(key, _)| !key.is_empty()) else {
+                let Some((key, value)) = pair.split_once('=').filter(|(key, _)| !key.is_empty())
+                else {
                     return Err(format!("{pair:?} is not setting=value"));
                 };
                 let (key, value) = (key.to_string(), value.to_string());
-                Step::Set { setting: key, value, within }
+                Step::Set {
+                    setting: key,
+                    value,
+                    within,
+                }
             }
             "press" => {
                 if words.is_empty() {

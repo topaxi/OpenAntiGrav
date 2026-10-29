@@ -39,12 +39,18 @@ fn a_script_parses_every_step_with_its_line() {
         "until stage=menu within 99  # boot\nselect \"LAUNCH RACE\"; press cross down\nset race.mode=time_trial\nticks 5\nscreenshot a.png\nexpect page!=race\nquit",
     )
     .unwrap();
-    let kinds: Vec<String> = script.steps.iter().map(|(n, s)| format!("{n}:{s}")).collect();
+    let kinds: Vec<String> = script
+        .steps
+        .iter()
+        .map(|(n, s)| format!("{n}:{s}"))
+        .collect();
     assert_eq!(kinds.len(), 8);
     assert_eq!(kinds[0], "1:until stage=menu within 99");
     assert_eq!(kinds[1], "2:select \"LAUNCH RACE\" within 1800");
     assert!(matches!(&script.steps[2].1, Step::Press(b) if b == &[Button::Cross, Button::Down]));
-    assert!(matches!(&script.steps[3].1, Step::Set { setting, value, .. } if setting == "race.mode" && value == "time_trial"));
+    assert!(
+        matches!(&script.steps[3].1, Step::Set { setting, value, .. } if setting == "race.mode" && value == "time_trial")
+    );
 }
 
 #[test]
@@ -64,11 +70,21 @@ fn a_bad_script_names_its_line_and_the_fault() {
 
 #[test]
 fn selecting_walks_down_a_list_and_finds_the_forward_button_by_pressing() {
-    let list = rows(&[("A", Some("a"), None), ("B", None, Some("x.b")), ("C", Some("c"), None)]);
+    let list = rows(&[
+        ("A", Some("a"), None),
+        ("B", None, Some("x.b")),
+        ("C", Some("c"), None),
+    ]);
     let mut select = Select::new("c");
     // The screen does not say which way is forward: Down is tried first, and moves.
-    assert_eq!(select.next(&screen(0, None, list.clone())), Ok(Next::Press(Button::Down)));
-    assert_eq!(select.next(&screen(1, None, list.clone())), Ok(Next::Press(Button::Down)));
+    assert_eq!(
+        select.next(&screen(0, None, list.clone())),
+        Ok(Next::Press(Button::Down))
+    );
+    assert_eq!(
+        select.next(&screen(1, None, list.clone())),
+        Ok(Next::Press(Button::Down))
+    );
     assert_eq!(select.next(&screen(2, None, list)), Ok(Next::Done));
 }
 
@@ -76,9 +92,15 @@ fn selecting_walks_down_a_list_and_finds_the_forward_button_by_pressing() {
 fn a_press_that_moves_nothing_tries_the_next_direction() {
     let list = rows(&[("A", Some("a"), None), ("B", Some("b"), None)]);
     let mut select = Select::new("b");
-    assert_eq!(select.next(&screen(0, None, list.clone())), Ok(Next::Press(Button::Down)));
+    assert_eq!(
+        select.next(&screen(0, None, list.clone())),
+        Ok(Next::Press(Button::Down))
+    );
     // A strip: Down did nothing, so Right is tried.
-    assert_eq!(select.next(&screen(0, None, list.clone())), Ok(Next::Press(Button::Right)));
+    assert_eq!(
+        select.next(&screen(0, None, list.clone())),
+        Ok(Next::Press(Button::Right))
+    );
     assert_eq!(select.next(&screen(1, None, list)), Ok(Next::Done));
 }
 
@@ -96,7 +118,10 @@ fn a_screen_that_names_its_buttons_is_not_probed() {
 fn a_row_that_is_not_there_fails_with_the_rows_that_are() {
     let list = rows(&[("A", Some("a"), None), ("B", None, Some("x.b"))]);
     let why = Select::new("zzz").next(&screen(0, None, list)).unwrap_err();
-    assert!(why.contains("no row \"zzz\"") && why.contains("\"a\"") && why.contains("\"x.b\""), "{why}");
+    assert!(
+        why.contains("no row \"zzz\"") && why.contains("\"a\"") && why.contains("\"x.b\""),
+        "{why}"
+    );
 }
 
 #[test]
@@ -113,23 +138,46 @@ fn a_choice_is_stepped_until_it_reads_the_value_and_refuses_one_it_lacks() {
     let mut list = rows(&[("MODE", None, Some("race.mode"))]);
     list[0].kind = "choice";
     list[0].values = vec![
-        Opt { value: "a".into(), label: "Alpha".into(), unavailable: None },
-        Opt { value: "b".into(), label: "Beta".into(), unavailable: None },
-        Opt { value: "/x/c.toml".into(), label: "C".into(), unavailable: Some("still checking".into()) },
+        Opt {
+            value: "a".into(),
+            label: "Alpha".into(),
+            unavailable: None,
+        },
+        Opt {
+            value: "b".into(),
+            label: "Beta".into(),
+            unavailable: None,
+        },
+        Opt {
+            value: "/x/c.toml".into(),
+            label: "C".into(),
+            unavailable: Some("still checking".into()),
+        },
     ];
     list[0].value = Some("a".into());
     let mut set = SetChoice::new("race.mode", "Beta");
-    assert_eq!(set.next(&screen(0, None, list.clone())), Ok(Next::Press(Button::Right)));
+    assert_eq!(
+        set.next(&screen(0, None, list.clone())),
+        Ok(Next::Press(Button::Right))
+    );
     list[0].value = Some("b".into());
     assert_eq!(set.next(&screen(0, None, list.clone())), Ok(Next::Done));
-    let Ok(Next::Wait(why)) = SetChoice::new("race.mode", "c.toml").next(&screen(0, None, list.clone())) else {
-        panic!("an option that cannot be used yet is waited for, and a file is named by its file name");
+    let Ok(Next::Wait(why)) =
+        SetChoice::new("race.mode", "c.toml").next(&screen(0, None, list.clone()))
+    else {
+        panic!(
+            "an option that cannot be used yet is waited for, and a file is named by its file name"
+        );
     };
     assert!(why.contains("cannot use it yet: still checking"), "{why}");
-    let Ok(Next::Wait(why)) = SetChoice::new("race.mode", "gamma").next(&screen(0, None, list)) else {
+    let Ok(Next::Wait(why)) = SetChoice::new("race.mode", "gamma").next(&screen(0, None, list))
+    else {
         panic!("a value the row lacks is waited for, in case a thread is still filling the list");
     };
-    assert!(why.contains("does not offer") && why.contains("a=\"Alpha\""), "{why}");
+    assert!(
+        why.contains("does not offer") && why.contains("a=\"Alpha\""),
+        "{why}"
+    );
 }
 
 #[test]
@@ -142,9 +190,17 @@ fn a_state_line_is_json_and_a_condition_reads_it() {
         ..State::default()
     };
     let line = state.to_line();
-    assert!(line.starts_with("{\"tick\":7,\"stage\":\"menu\",\"page\":\"race\""), "{line}");
+    assert!(
+        line.starts_with("{\"tick\":7,\"stage\":\"menu\",\"page\":\"race\""),
+        "{line}"
+    );
     let script = Script::parse("expect focus=go page=RACE stage!=race").unwrap();
-    let Step::Expect { conds } = &script.steps[0].1 else { panic!() };
+    let Step::Expect { conds } = &script.steps[0].1 else {
+        panic!()
+    };
     assert!(state.satisfies(conds));
-    assert!(state.same_as(&State { tick: 99, ..state.clone() }));
+    assert!(state.same_as(&State {
+        tick: 99,
+        ..state.clone()
+    }));
 }

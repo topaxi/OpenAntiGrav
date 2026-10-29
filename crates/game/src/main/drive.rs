@@ -183,10 +183,13 @@ impl Driver {
     fn exec(&mut self, step: &Step) -> Result<()> {
         match step {
             Step::Boot { within } => {
+                // Start skips the logo and the intro; the language list confirms on Cross.
+                let mut taps = [Button::Start, Button::Cross].into_iter().cycle();
                 while self.last.stage != "menu" {
                     self.spend(*within)?;
                     if self.last.stage == "frontend" {
-                        self.tap(Button::Start, *within)?;
+                        let button = taps.next().unwrap_or(Button::Start);
+                        self.tap(button, *within)?;
                     } else {
                         self.wait_frame()?;
                     }

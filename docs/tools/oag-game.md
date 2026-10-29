@@ -159,10 +159,101 @@ ticks, and the ship is correspondingly slower than under `--hold cross`.
 | `--trace-out <file.csv>` | Simulation only, no window: write our per-tick state to a CSV in the capture's own columns, for `oag-trace compare` against one from `scripts/psp-trace.py`. Refused together with `--screenshot`. |
 | `--input-script <file.inputs>` | With `--screenshot` or `--trace-out`: drive the run from a committed `.inputs` file instead of `--hold`/`--press` - see [the verification protocol](../reverse-engineering/verification-protocol.md). |
 | `--dry-run` | Report what was loaded and exit. |
+| `--drive <steps>` / `--drive-file <file>` | Run our own menus with no window, driven by a script, and exit non-zero when a step times out or a row is not there. See [Driving the menus with no window](#driving-the-menus-with-no-window). |
+| `--state-log <file>` | With `--drive`, write the game's state as one JSON line per change to this file (stderr when absent). |
 
 All of them apply to a race started from the front end as well, since it is the same
 race. `--class` in particular is parsed before anything is loaded, so a misspelling
 is not discovered forty seconds of intro later.
+
+## Driving the menus with no window
+
+`--screenshot` drives the disc's own front end and then races what the command line says
+(above). **Our own menus** - the race box, RACE REMIX, anything a window's `App` runs - are
+driven by `--drive`: the real windowed `Session`, on a device with no window, one tick a frame,
+told what to do by a script and reporting what it is doing as JSON. A menu launch goes through
+the same `launch_race`, loading stage and race build a pad's does; no parallel path exists to
+drift. No display is needed and no picture is parsed.
+
+```sh
+oag-game data/images/pulse-psp-eu.chd --no-audio --no-intro \
+  --state-log state.jsonl --drive '
+    boot                                  # tap Start and Cross through the disc front end
+    select racebox; press cross; until page=race
+    set race.mode=speed_lap
+    select start; press cross
+    until screen=picker; select 03_Track; press cross
+    until screen.id=ship-select; select Feisar; press cross
+    until stage=race within 3000
+    screenshot race.png'
+```
+
+`--drive "<steps>"` or `--drive-file <file>` (`#` starts a comment); steps are separated by
+newlines or `;`, and a word with spaces is quoted (`select "TRACK TITLE"`). `--state-log <file>`
+sends the state lines to a file, stderr otherwise. Run it with a profile of its own
+(`XDG_CONFIG_HOME` and friends): the menus save settings as a window does.
+
+| Step | Does |
+| --- | --- |
+| `boot` | Tap Start and Cross in turn while the disc's own front end is up (logo, language list) until our menus open. Those screens are the disc's and have no rows to select. |
+| `until <key=value ...> [within N]` | Wait until every condition holds. |
+| `expect <key=value ...>` | Fail now unless every condition holds. |
+| `select <row> [within N]` | Move focus to a row by pressing buttons, never by setting it. `<row>` is a row `id`, a setting key (`race.mode`), a label (case-insensitive) or `#index`; on a picker, an entry id (`03_Track`, `Feisar`). |
+| `set <setting>=<value> [within N]` | `select` the row of that setting, then step it right until it reads the value (its stored value, its label, or for a file the file name). An option the row lists but marks unusable (the custom-track check is still running) is waited for, then the step times out naming why. |
+| `press <button> ...` | Tap each in turn: held one tick, released the next. Waits out a page transition first. |
+| `ticks N` | Let N ticks pass. |
+| `screenshot <path>` | Draw the next frame offscreen through the window's own draw and write a PNG. The only step that draws. |
+| `quit` | End the run. Reaching the end of the script does too. |
+
+Conditions are `key=value` or `key!=value`, case-insensitive: `stage` (`launcher`, `loading`,
+`frontend`, `menu`, `race`), `frontend` (the disc's state name), `page` (the menu page, under
+whatever is open over it), `screen` (`page`, `picker`, `campaign`, `prompt`, ...), `screen.id`
+(the page id, or `track-select`/`ship-select`), `title`, `focus` (the focused row's id, setting
+or label - any of them holds) and `race.title|track|track_file|team|variant|mode|source|craft_source`.
+
+**What the game reports.** One JSON line whenever anything but the tick changed. A menu state:
+
+```json
+{"tick":66,"stage":"menu","page":"race","screen":{"kind":"picker","id":"track-select",
+ "focus":{"index":0,"id":"16_Track","label":"Talon's Junction White"},"step":["down","up"],
+ "rows":[{"index":0,"id":"16_Track","label":"Talon's Junction White","kind":"entry","enabled":true}, ...]},
+ "race":{"source":"data/images/pulse-psp-eu.chd","mode":"time_trial"}}
+```
+
+A choice row carries `setting`, `value` and `values` (`value`, `label`, `unavailable` when the
+menu offers it but cannot use it yet); `enabled:false` is a greyed row. `race` is the race the
+next launch would use; from `stage=loading` it is the one launched, and on `stage=race` it adds
+`title` and is what the loader was handed (`track` is the circuit's archive entry, `track_file` a
+`--track-file` manifest, `team`, `variant`, `mode`, `craft_source` for a remix).
+
+**Timeouts and failures** are the run's exit status. Each waiting step has `within N` ticks
+(default 1800, thirty seconds of game time); ticks spent on a loading screen are not counted, a
+step has 300 s of wall clock besides, and waiting frames run at real time so the threads the menus
+start (the custom-track check, the picker's distance worker) get the time a window gives them.
+`select` fails at once, without a timeout, when the row is not on the screen, listing the rows
+that are:
+
+```text
+Error: drive: step 12 (line 1): select "nonesuch" within 1800: no row "nonesuch": page "race" has rows ["race.mode", "race.class", ..., "START", "BACK"]
+  last state: {"tick":87,"stage":"menu","page":"race", ...}
+```
+
+RACE REMIX with a track file (`OAG_TRACKS` names the directory the CUSTOM title scans):
+
+```sh
+OAG_TRACKS=crates/trackfile/tests/fixtures oag-game data/images/pulse-psp-eu.chd --no-audio \
+  --no-intro --drive 'boot; select remix; press cross; until page=remix
+    set remix.track_title=CUSTOM; set remix.track=oval.track.toml
+    select start; press cross; until stage=race within 3000'
+```
+
+**Making a screen drivable.** `main/drive.rs` builds the state from the stage on screen and keeps
+no list of pages: a menu page reports its entries, a picker its entries and which buttons move it.
+A screen over the menus that reports no rows (a prompt, the campaign grid, the join screen) shows
+as `screen=<kind>` with an empty row list, so a script can wait for it and `press` through it;
+giving it rows is one more arm in `drive::screen`, and `select` and `set` work on it unchanged.
+The tests are `crates/game/tests/drive_ground_truth.rs` (disc-backed, `#[ignore]`d) and the unit
+tests of `oag_game::drive`.
 
 ## Either disc
 

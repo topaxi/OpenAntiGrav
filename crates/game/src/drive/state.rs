@@ -128,7 +128,13 @@ impl State {
     /// The same state without the tick, for "did anything change".
     #[must_use]
     pub fn same_as(&self, other: &Self) -> bool {
-        Self { tick: 0, ..self.clone() } == Self { tick: 0, ..other.clone() }
+        Self {
+            tick: 0,
+            ..self.clone()
+        } == Self {
+            tick: 0,
+            ..other.clone()
+        }
     }
 
     /// One compact JSON line.
@@ -196,7 +202,14 @@ impl State {
         ) || key.strip_prefix("race.").is_some_and(|rest| {
             matches!(
                 rest,
-                "title" | "track" | "track_file" | "team" | "variant" | "mode" | "source" | "craft_source"
+                "title"
+                    | "track"
+                    | "track_file"
+                    | "team"
+                    | "variant"
+                    | "mode"
+                    | "source"
+                    | "craft_source"
             )
         })
     }

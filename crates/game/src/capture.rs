@@ -29,8 +29,8 @@ use campaign_page::{campaign_kind, campaign_page};
 use endrace_page::endrace_kind;
 pub use loading::{LoadingOptions, draw_wave, loading};
 use menu_page::{is_split_ship, menu_page, picker_kind, picker_page, picker_stills};
-pub use offscreen::{read_back, write_png};
 use offscreen::{offscreen, touch_preview};
+pub use offscreen::{read_back, write_png};
 use preview_pass::{PreviewRequest, draw_preview, open_for_previews};
 
 /// What to capture.
