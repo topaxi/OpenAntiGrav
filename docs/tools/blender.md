@@ -31,8 +31,10 @@ property `oag_kind` on the object (the panel's buttons set it; so does adding th
 | `speedup`, `weapon` | an Empty: X lateral, +Y forward, +Z up | a pad |
 
 The six collision kinds and the four above are the whole list: the format has no `scenery`
-kind (a reader refuses an unknown tag by name), so scenery, sky, fog, lights and art are not
-exported ([the absent list](../formats/track-file.md#what-format-1x-carries-no-field-for)).
+kind (a reader refuses an unknown tag by name). The format has an optional art section (meshes,
+textures, sky, sun, lens flare: ADR-0076), which the add-on does not write yet; scenery, sky,
+fog and lights are not exported
+([what the format carries](../formats/track-file.md#what-format-1x-carries-no-field-for)).
 An untagged object is simply not part of the track.
 
 Steps (the same ones `scripts/blender/roundtrip.py loop` runs headless):
@@ -102,7 +104,8 @@ accessors the format needs.)
 a track directory: `$OAG_TRACKS`, `data/tracks`, `tracks/` beside the program, `<data dir>/oag/tracks`; TRACK
 `<title> (TRACK FILE)`; the `ballisticng` feature only adds Workshop rows to it;
 [menus.md](../architecture/menus.md#race-remix-custom-tracks)). The race uses the host title's ship, rules and
-physics, and draws flat-shaded collision. A file that will not read is listed dimmed with the reason.
+physics, and draws flat-shaded collision unless the file has an art section (which the add-on does not
+write yet). A file that will not read is listed dimmed with the reason.
 
 ## Proof (2026-10-12)
 

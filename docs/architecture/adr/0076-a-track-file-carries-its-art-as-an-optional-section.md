@@ -113,7 +113,7 @@ reason to author visibility by hand.
     race clock and nothing else starts them: "after lap one, move X" is not expressible, and the
     format carries no trigger rows. Behaviour that reacts to the race is a **mod behaviour**, the
     WebAssembly rules host decided on 2026-10-12
-    (`handover/gameplay/custom-race-modes-and-campaigns.md`); a track does not grow a runtime of
+    (maintainer; tracked in the custom race modes and campaigns handover thread); a track does not grow a runtime of
     its own, and a later trigger table would be a minor version that adds optional rows.
 
 ## Consequences
