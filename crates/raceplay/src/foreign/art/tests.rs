@@ -23,6 +23,8 @@ fn quad(at: f32, texture: Option<usize>, blend: Blend, lit: bool) -> ArtMesh {
         },
         shadow: ShadowRole::Both,
         layer: 0,
+        transform: None,
+        pad: None,
     }
 }
 
@@ -287,4 +289,98 @@ fn an_exported_colour_comes_back_as_its_byte() {
     let got: Vec<_> = second.vertices.iter().map(|v| v.colour).collect();
     let want: Vec<_> = first.vertices.iter().map(|v| v.colour).collect();
     assert_eq!(got, want);
+}
+
+/// `art()` with its first two meshes moving on the same tracks (one object's
+/// two material slots, as the add-on writes them) and the sun turning a
+/// quarter turn about +X over four seconds.
+fn moving() -> Art {
+    use oag_trackfile::art::motion::{
+        Animation, Channel, Interpolation, Keys, Repeat, Target, Trs,
+    };
+    let mut a = art();
+    let rest = Trs {
+        translation: [100.0, 0.0, 0.0],
+        ..Trs::IDENTITY
+    };
+    a.meshes[0].transform = Some(rest);
+    a.meshes[1].transform = Some(rest);
+    let slide = |m: usize| Channel {
+        target: Target::Mesh(m),
+        interpolation: Interpolation::Linear,
+        times: vec![0.0, 2.0],
+        keys: Keys::Translation(vec![[100.0, 0.0, 0.0], [100.0, 0.0, 40.0]]),
+    };
+    let h = std::f32::consts::FRAC_1_SQRT_2;
+    a.sun = Some(Sun {
+        direction: [0.0, 1.0, 0.0],
+        colour: [1.0; 3],
+        intensity: 1.0,
+        angular_diameter: 0.5,
+        shadows: true,
+    });
+    a.sun_rotation = Some([0.0, 0.0, 0.0, 1.0]);
+    a.animations = vec![
+        Animation {
+            name: "slide".into(),
+            repeat: Repeat::Clamp,
+            channels: vec![slide(0), slide(1)],
+        },
+        Animation {
+            name: "sun".into(),
+            repeat: Repeat::Loop,
+            channels: vec![Channel {
+                target: Target::Sun,
+                interpolation: Interpolation::Linear,
+                times: vec![0.0, 4.0],
+                keys: Keys::Rotation(vec![[0.0, 0.0, 0.0, 1.0], [h, 0.0, 0.0, h]]),
+            }],
+        },
+    ];
+    a
+}
+
+/// A moving mesh rides one node slot of the model's table, its draw is moving
+/// (drawn unculled, a moving caster for the `mapped` tier), the node is where
+/// the keys put it at a time and holds past the end of a clamped animation,
+/// two meshes on the same tracks share one node, and the model's sphere
+/// reaches where the motion goes.
+#[test]
+fn a_moving_mesh_rides_a_node_slot_on_the_animation_clock() {
+    let mut report = Vec::new();
+    let m = model("t", &moving(), vec![texel("t.png")], &mut report);
+    assert_eq!(m.anim_nodes.len(), 1, "{report:?}");
+    assert!(m.draws[0].moving && m.alpha_tested_draws[0].moving);
+    assert!(!m.transparent_draws[0].moving);
+    assert!(m.vertices[..8].iter().all(|v| v.xform == 1));
+    assert!(m.vertices[8..].iter().all(|v| v.xform == 0));
+    let at = |s: f32| vex::transform_point(&m.sample_anim_nodes(s)[0], m.vertices[0].position);
+    assert_eq!(at(0.0), [100.0, 0.0, 0.0]);
+    assert_eq!(at(1.0), [100.0, 0.0, 20.0]);
+    assert_eq!(at(9.0), [100.0, 0.0, 40.0]);
+    assert!(m.radius > 40.0, "{}", m.radius);
+    assert!(
+        report.iter().any(|l| l.contains("2 mesh(es) on 1 node(s)")),
+        "{report:?}"
+    );
+}
+
+/// The sun's direction turns by its node's rotation from rest: a quarter turn
+/// about +X takes "straight up" to +Z, halfway is the diagonal, and the loop
+/// brings it back.
+#[test]
+fn a_turning_sun_turns_the_shadow_direction() {
+    let mut report = Vec::new();
+    let x = extras(&moving(), &Vec::new(), &mut report);
+    let turn = x.sun_turn.expect("the sun turns");
+    let near = |a: [f32; 3], b: [f32; 3]| a.iter().zip(&b).all(|(p, q)| (p - q).abs() < 1e-5);
+    let h = std::f32::consts::FRAC_1_SQRT_2;
+    assert!(near(turn.direction_at(0.0), [0.0, 1.0, 0.0]));
+    assert!(
+        near(turn.direction_at(2.0), [0.0, h, h]),
+        "{:?}",
+        turn.direction_at(2.0)
+    );
+    assert!(near(turn.direction_at(4.0), [0.0, 1.0, 0.0]));
+    assert!(near(turn.direction_at(3.999), [0.0, 0.0, 1.0]) || turn.direction_at(3.999)[2] > 0.99);
 }

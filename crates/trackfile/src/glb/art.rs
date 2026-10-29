@@ -5,17 +5,22 @@ use gltf::accessor::Iter;
 use gltf::mesh::Semantic;
 use serde_json::{Value, json};
 
-use super::{Bin, ELEMENT_ARRAY_BUFFER, Error, TRIANGLES, UINT, extras_of, identity, same_len};
-use crate::art::{Art, ArtMaterial, ArtMesh, Blend, ShadowRole};
+use super::{
+    Bin, ELEMENT_ARRAY_BUFFER, Error, TRIANGLES, UINT, anim, extras_of, identity, same_len,
+};
+use crate::art::{Art, ArtMaterial, ArtMesh, Blend, PadPlate, ShadowRole};
 
 pub(super) const PREFIX: &str = "oag/art/";
 
+/// Writes the art mesh nodes and answers each one's glb node index, in mesh
+/// order.
 pub(super) fn write(
     bin: &mut Bin,
     art: &Art,
-    push: &mut impl FnMut(&str, Vec<Value>, Option<Value>),
-) -> Result<(), Error> {
+    push: &mut impl FnMut(&str, Vec<Value>, Option<Value>) -> usize,
+) -> Result<Vec<usize>, Error> {
     art.validate()?;
+    let mut nodes = Vec::with_capacity(art.meshes.len());
     for (n, m) in art.meshes.iter().enumerate() {
         let idx: Vec<u8> = m.indices.iter().flat_map(|i| i.to_le_bytes()).collect();
         let attrs = json!({
@@ -48,20 +53,30 @@ pub(super) fn write(
         if m.layer != 0 {
             extras["oag_layer"] = json!(m.layer);
         }
-        push(
+        if let Some(pad) = m.pad {
+            extras["oag_pad"] = json!(pad.tag());
+        }
+        nodes.push(push(
             &format!("{PREFIX}{n}"),
             vec![json!({ "attributes": attrs, "indices": indices, "mode": TRIANGLES })],
             Some(extras),
-        );
+        ));
     }
-    Ok(())
+    Ok(nodes)
 }
 
+/// One art mesh node. A rest pose other than the identity is kept in
+/// [`ArtMesh::transform`]; the caller refuses it unless an animation moves the
+/// node, and a transform given as a matrix is refused here.
 pub(super) fn read(index: usize, node: &gltf::Node<'_>, blob: &[u8]) -> Result<ArtMesh, Error> {
     let record = format!("{PREFIX}{index}");
-    if !identity(node) {
-        return Err(Error::Transformed { record });
-    }
+    let transform = if identity(node) {
+        None
+    } else {
+        Some(anim::trs_of(node).ok_or_else(|| Error::Transformed {
+            record: record.clone(),
+        })?)
+    };
     let mesh = node
         .mesh()
         .ok_or_else(|| Error::Glb(format!("{record}: the node has no mesh")))?;
@@ -126,6 +141,17 @@ pub(super) fn read(index: usize, node: &gltf::Node<'_>, blob: &[u8]) -> Result<A
             )
         })?,
     };
+    let pad = text("oag_pad")
+        .map(|tag| {
+            PadPlate::from_tag(tag).ok_or_else(|| {
+                Error::accessor(
+                    &record,
+                    "oag_pad",
+                    format!("{tag:?} is not \"speedup\" or \"weapon\""),
+                )
+            })
+        })
+        .transpose()?;
     let texture = extras
         .get("oag_texture")
         .map(|v| {
@@ -169,5 +195,7 @@ pub(super) fn read(index: usize, node: &gltf::Node<'_>, blob: &[u8]) -> Result<A
         },
         shadow,
         layer,
+        transform,
+        pad,
     })
 }

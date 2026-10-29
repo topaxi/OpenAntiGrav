@@ -26,15 +26,14 @@ use super::*;
 /// object, not a misplaced one.
 pub const NODE_ANIM_LIMIT: usize = 384;
 
-/// What moves a node: the two authored forms a local matrix at a time comes
-/// from.
+/// What moves a node: the authored forms a local matrix at a time comes from.
 ///
-/// Both answer the same question - "this node's local matrix at `seconds`" -
-/// and [`Model::sample_anim_nodes`] composes either through the same chain,
+/// Each answers the same question - "this node's local matrix at `seconds`" -
+/// and [`Model::sample_anim_nodes`] composes any through the same chain,
 /// so the shader's table and the per-frame upload never learn which title
 /// authored the node.
 ///
-/// Both variants are boxed: a `.vex` transform is 288 bytes of key vectors
+/// Every variant is boxed: a `.vex` transform is 288 bytes of key vectors
 /// and the rig's nine channel slots twice that, and a table of a few
 /// hundred is walked once a frame.
 #[derive(Debug, Clone, PartialEq)]
@@ -44,6 +43,8 @@ pub enum Motion {
     /// A `.rcsskeleton` node under its `.rcsanimclip` track: Wipeout 2048,
     /// whose `track.vex` authors no `Anim Transform` at all.
     Rig(Box<oag_rcs::rig::NodeMotion>),
+    /// Keys at any times, looping or held: a track file's glTF animation.
+    Keyed(Box<super::keyed::Keyed>),
 }
 
 impl Motion {
@@ -55,6 +56,7 @@ impl Motion {
         match self {
             Self::Vex(transform) => transform.sample(seconds),
             Self::Rig(motion) => motion.sample(seconds),
+            Self::Keyed(motion) => motion.sample(seconds),
         }
     }
 }

@@ -139,6 +139,35 @@ class OAG_OT_add_pad(Operator):
         return {"FINISHED"}
 
 
+class OAG_OT_add_pad_plates(Operator):
+    bl_idname = "oag.add_pad_plates"
+    bl_label = "Place Pad Plates"
+    bl_description = (
+        "A plate mesh on every pad: a quad slightly above the road over the pad's box, tagged as "
+        "that pad's plate (a weapon plate is not drawn where weapons are off); replaces earlier plates"
+    )
+    bl_options = {"REGISTER", "UNDO"}
+
+    material: StringProperty(name="Material", description="Material for every plate; empty: a chosen colour per kind")
+    lift: FloatProperty(name="Lift", default=scene_art.PLATE_LIFT, min=0.0)
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self)
+
+    def draw(self, context):
+        self.layout.prop_search(self, "material", bpy.data, "materials")
+        self.layout.prop(self, "lift")
+
+    def execute(self, context):
+        mat = bpy.data.materials.get(self.material) if self.material else None
+        if self.material and mat is None:
+            self.report({"ERROR"}, f"no material {self.material!r}")
+            return {"CANCELLED"}
+        plates = scene_art.place_plates(context, mat, self.lift)
+        self.report({"INFO"}, f"{len(plates)} pad plate(s)")
+        return {"FINISHED"}
+
+
 class OAG_OT_host_texture(Operator):
     bl_idname = "oag.host_texture"
     bl_label = "Make Host Texture"
@@ -254,6 +283,7 @@ class OAG_PT_track(Panel):
             layout.operator("oag.add_start")
             layout.operator("oag.add_pad", text="Add speedup pad").kind = "speedup"
             layout.operator("oag.add_pad", text="Add weapon pad").kind = "weapon"
+            layout.operator("oag.add_pad_plates")
         elif kind == scene.LINE_KIND:
             layout.label(text="Racing line: edit the points sideways;")
             layout.label(text="export reads each across its spline point.")
@@ -266,6 +296,9 @@ class OAG_PT_track(Panel):
             layout.prop(obj, "oag_shadow")
             layout.prop(obj, "oag_layer")
             layout.prop(obj, "oag_lit")
+            layout.prop(obj, "oag_pad")
+            if obj.animation_data is not None:
+                layout.prop(obj, "oag_loop")
             mat = obj.active_material
             if mat is not None:
                 layout.prop(mat, "oag_blend")
@@ -280,6 +313,8 @@ class OAG_PT_track(Panel):
             layout.prop(obj, "oag_intensity")
             layout.prop(obj.data, "angle", text="Angular diameter")
             layout.prop(obj.data, "use_shadow", text="Shadows")
+            if obj.animation_data is not None:
+                layout.prop(obj, "oag_loop")
 
 
 class OAG_PT_art(Panel):
@@ -295,6 +330,7 @@ class OAG_PT_art(Panel):
         sc = context.scene
         layout.prop(sc, "oag_sun")
         layout.prop(sc, "oag_sky")
+        layout.prop(sc, "oag_draw_collision")
         layout.prop(sc, "oag_skybox")
         if sc.oag_skybox:
             box = layout.box()
@@ -317,6 +353,7 @@ CLASSES = (
     OAG_OT_compute_racing_line,
     OAG_OT_add_start,
     OAG_OT_add_pad,
+    OAG_OT_add_pad_plates,
     OAG_OT_host_texture,
     OAG_OT_export,
     OAG_OT_import,
@@ -368,6 +405,20 @@ def _props():
     )
     ob.oag_layer = IntProperty(name="Layer", description="Render layer: draws go by layer, then file order", default=0, min=0)
     ob.oag_lit = BoolProperty(name="Lit", description="The light rig applies on top of the baked colour", default=False)
+    ob.oag_pad = EnumProperty(
+        name="Pad plate",
+        description="Drawn with the host's pad models instead of the track (a weapon plate is not drawn "
+        "where weapons are off); visual only, the pad itself is the pad Empty",
+        items=[("none", "none", ""), ("speedup", "speedup", ""), ("weapon", "weapon", "")],
+        default="none",
+    )
+    ob.oag_loop = EnumProperty(
+        name="Motion",
+        description="Past its last key the object's animation loops or holds (glTF oag_loop); objects "
+        "sharing an oag_anim name share one animation",
+        items=[("loop", "loop", ""), ("clamp", "clamp", "")],
+        default="loop",
+    )
     ob.oag_intensity = FloatProperty(
         name="Intensity",
         description="The file's intensity (a multiplier on the colour for the ships' light), not Blender's strength",
@@ -385,6 +436,12 @@ def _props():
         poll=lambda self, o: o.type == "LIGHT" and o.data.type == "SUN",
     )
     sc.oag_sky = StringProperty(name="Sky", description="A host circuit's .vex entry whose Skycube is drawn")
+    sc.oag_draw_collision = BoolProperty(
+        name="Draw collision",
+        description="Draw the flat-shaded floor and walls under the art ([art] draw_collision), for art "
+        "that does not cover the road",
+        default=False,
+    )
     sc.oag_skybox = BoolProperty(
         name="Own sky",
         description="The track's own sky: a cube of the author's images and/or a zenith-to-horizon gradient "
@@ -417,6 +474,7 @@ def _unprops():
         "oag_track_notes",
         "oag_sun",
         "oag_sky",
+        "oag_draw_collision",
         "oag_skybox",
         "oag_sky_gradient",
         "oag_sky_zenith",
@@ -440,6 +498,8 @@ def _unprops():
         "oag_shadow",
         "oag_layer",
         "oag_lit",
+        "oag_loop",
+        "oag_pad",
         "oag_intensity",
     ):
         delattr(bpy.types.Object, name)

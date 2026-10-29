@@ -20,11 +20,12 @@ use oag_assets::Archives;
 use oag_mesh::mesh::{self, Bounds, DrawCall, GpuVertex, Model, ModelTexture, TextureSlots};
 use oag_mesh::mesh_render::{HULL_LIGHTS, HullLights, ge_byte};
 use oag_trackfile::art::{
-    Art, ArtMaterial, ArtMesh, Blend, LensFlare, Light, ShadowRole, Sun, TextureSource,
+    Art, ArtMaterial, ArtMesh, Blend, LensFlare, Light, PadPlate, ShadowRole, Sun, TextureSource,
 };
 use oag_vex::vex::{self, BlendClass};
 
 pub mod colour;
+pub mod motion;
 
 /// What of a track file's art is drawn beside its track model.
 #[derive(Debug, Default)]
@@ -42,6 +43,19 @@ pub struct Extras {
     /// [`hull_lights`]. The loader uses it where the host title's own
     /// `hull_lights` rule applies.
     pub hull: Option<HullLights>,
+    /// The sun's rotation over time, when an animation turns it: the `mapped`
+    /// shadows' direction and a flare that follows the sun turn with it.
+    pub sun_turn: Option<motion::SunTurn>,
+    /// Whether the flare follows the turning sun (it names no direction of
+    /// its own).
+    pub flare_turns: bool,
+    /// The speed pads' plates (`oag_pad = "speedup"`): the loader's pad model.
+    pub pads: Option<Model>,
+    /// The weapon pads' plates (`oag_pad = "weapon"`): the loader's weapon pad
+    /// model, which a mode without weapons does not draw.
+    pub weapon_pads: Option<Model>,
+    /// Whether these come from a track file's art section (default: not).
+    pub from_art: bool,
 }
 
 /// A host circuit's texture table: one name and one decoded slot per
@@ -285,11 +299,49 @@ fn vertex(mesh: &ArtMesh, i: usize, glow: f32) -> GpuVertex {
 /// file order (`Model::sort_by_layer`, a stable sort), colours converted to the
 /// gamma bytes the renderer draws. A mesh whose texture did not resolve is left
 /// out and counted in `report`.
+///
+/// Pad plates (`oag_pad`) are left out: they are [`pad_model`]'s.
 #[must_use]
 pub fn model(label: &str, art: &Art, textures: TextureSlots, report: &mut Vec<String>) -> Model {
+    build(label, art, textures, None, report)
+}
+
+/// The plates of one pad kind as a pad model, built as [`model`] builds the
+/// track's, or `None` when the art tags none.
+#[must_use]
+pub fn pad_model(
+    label: &str,
+    art: &Art,
+    textures: TextureSlots,
+    which: PadPlate,
+    report: &mut Vec<String>,
+) -> Option<Model> {
+    art.meshes
+        .iter()
+        .any(|m| m.pad == Some(which))
+        .then(|| build(label, art, textures, Some(which), report))
+}
+
+fn build(
+    label: &str,
+    art: &Art,
+    textures: TextureSlots,
+    plates: Option<PadPlate>,
+    report: &mut Vec<String>,
+) -> Model {
     let mut model = Model::none(label);
     let mut skipped = 0usize;
-    for m in &art.meshes {
+    // Pad plates never move (`oag_trackfile` refuses it), so only the track
+    // model has nodes.
+    let (anim_nodes, slots) = if plates.is_none() {
+        motion::nodes(art, report)
+    } else {
+        (Vec::new(), vec![0; art.meshes.len()])
+    };
+    for (m, &xform) in art.meshes.iter().zip(&slots) {
+        if m.pad != plates {
+            continue;
+        }
         let texture = match m.material.texture {
             None => None,
             Some(t) if textures.get(t).is_some_and(Option::is_some) => Some(t),
@@ -306,15 +358,34 @@ pub fn model(label: &str, art: &Art, textures: TextureSlots, report: &mut Vec<St
         };
         let base = model.vertices.len() as u32;
         let first = model.indices.len() as u32;
-        model
-            .vertices
-            .extend((0..m.positions.len()).map(|i| vertex(m, i, glow)));
+        // A moving mesh's vertices are in its node's space and ride its slot; one
+        // the node table had no room for stands at its rest pose.
+        let rest = m.transform.filter(|_| xform == 0).map(|t| {
+            oag_rcs::rcsskeleton::local_matrix(
+                t.scale,
+                t.rotation,
+                t.translation,
+                [0.0; 3],
+                [0.0; 3],
+            )
+        });
+        model.vertices.extend((0..m.positions.len()).map(|i| {
+            let mut v = vertex(m, i, glow);
+            v.xform = xform;
+            if let Some(rest) = &rest {
+                v.position = vex::transform_point(rest, v.position);
+                v.normal = vex::transform_direction(rest, v.normal);
+            }
+            v
+        }));
         model.indices.extend(m.indices.iter().map(|&i| base + i));
         let draw = DrawCall {
             range: first..model.indices.len() as u32,
             texture,
             bounds: bounds(&m.positions),
-            moving: false,
+            // Drawn unculled, as a disc circuit's moving draws are: its bounds
+            // are in its node's space.
+            moving: xform != 0,
             culled: m.material.culled,
             blend,
             blend_state: None,
@@ -337,26 +408,33 @@ pub fn model(label: &str, art: &Art, textures: TextureSlots, report: &mut Vec<St
     }
     model.sort_by_layer();
     model.textures = textures;
-    let whole = bounds(
-        &model
-            .vertices
-            .iter()
-            .map(|v| v.position)
-            .collect::<Vec<_>>(),
-    );
-    model.centre = whole.centre;
-    // `mesh::build_with_textures`'s model radius: the widest half-extent.
-    model.radius = model
+    model.anim_nodes = anim_nodes;
+    // Where the art reaches: what stands still, and what moves at each key.
+    let reach: Vec<[f32; 3]> = model
         .vertices
         .iter()
-        .fold([0.0f32; 3], |r, v| {
-            std::array::from_fn(|k| r[k].max((v.position[k] - whole.centre[k]).abs()))
+        .filter(|v| v.xform == 0)
+        .map(|v| v.position)
+        .chain(motion::swept_positions(&model))
+        .collect();
+    let whole = bounds(&reach);
+    model.centre = whole.centre;
+    // `mesh::build_with_textures`'s model radius: the widest half-extent.
+    model.radius = reach
+        .iter()
+        .fold([0.0f32; 3], |r, p| {
+            std::array::from_fn(|k| r[k].max((p[k] - whole.centre[k]).abs()))
         })
         .into_iter()
         .fold(0.0f32, f32::max)
         .max(0.001);
     report.push(format!(
-        "art: {} mesh(es), {} triangle(s), {} texture(s){}",
+        "art{}: {} mesh(es), {} triangle(s), {} texture(s){}",
+        match plates {
+            None => "",
+            Some(PadPlate::Speedup) => " speed pad plates",
+            Some(PadPlate::Weapon) => " weapon pad plates",
+        },
         model.mesh_count,
         model.indices.len() / 3,
         model.textures.iter().filter(|t| t.is_some()).count(),
@@ -367,6 +445,24 @@ pub fn model(label: &str, art: &Art, textures: TextureSlots, report: &mut Vec<St
         }
     ));
     model
+}
+
+/// The flat-shaded collision (`flat`) with the art model over it, one model
+/// (`[art] draw_collision`): for a track whose art does not cover the road. The
+/// art keeps its draws, nodes and textures (rebased); the sphere is the wider of
+/// the merge's and the art's own, which reaches what moves.
+#[must_use]
+pub fn under_collision(flat: &Model, art: Model, report: &mut Vec<String>) -> Model {
+    let (centre, radius) = (art.centre, art.radius);
+    let label = art.label.clone();
+    let mut merged = mesh::merge(&label, vec![flat.clone(), art]);
+    if radius > merged.radius {
+        (merged.centre, merged.radius) = (centre, radius);
+    }
+    report.push(
+        "art: draw_collision: the flat-shaded floor and walls are drawn under the art".into(),
+    );
+    merged
 }
 
 /// Pure's flare from the track's sun and its atlas slot, or `None` with the
@@ -449,12 +545,41 @@ pub fn extras(art: &Art, textures: &TextureSlots, report: &mut Vec<String>) -> E
             "art hull lights: no ambient, sun or directional; hulls keep the stand-in rig".into()
         }
     });
+    let sun_turn = motion::SunTurn::of(art);
+    if sun_turn.is_some() {
+        report.push(
+            "art: the sun turns with its animation; the mapped shadows and a flare that follows              it turn too, the baked colours and the hull rig keep its pose at time zero"
+                .into(),
+        );
+    }
+    let lens_flare = lens_flare(art, textures, report);
+    let pads = pad_model(
+        "pad plates",
+        art,
+        textures.clone(),
+        PadPlate::Speedup,
+        report,
+    );
+    let weapon_pads = pad_model(
+        "weapon pad plates",
+        art,
+        textures.clone(),
+        PadPlate::Weapon,
+        report,
+    );
     Extras {
+        from_art: true,
+        pads,
+        weapon_pads,
         sky: art.sky.clone(),
         own_sky,
-        lens_flare: lens_flare(art, textures, report),
+        flare_turns: sun_turn.is_some()
+            && lens_flare.is_some()
+            && art.lens_flare.is_some_and(|f| f.direction.is_none()),
+        lens_flare,
         sun_shadow,
         hull,
+        sun_turn,
     }
 }
 
@@ -501,6 +626,32 @@ pub fn own_sky(art: &Art, textures: &TextureSlots, report: &mut Vec<String>) -> 
         }
     ));
     Some(mesh::sky_cube::own("art skybox", faces, gradient))
+}
+/// The weapon pad plates for the loader's weapon pad model, reported as the
+/// disc path reports its own: decoded either way, drawn only where the mode
+/// has weapons (`Scene::new` holds them back otherwise).
+pub fn weapon_pads(
+    extras: &mut Extras,
+    weapons_on: bool,
+    report: &mut Vec<String>,
+) -> Option<Model> {
+    let pads = extras.weapon_pads.take();
+    report.push(match &pads {
+        Some(p) => format!(
+            "{} the track file's weapon pad plates: {} triangle(s)",
+            if weapons_on {
+                "drawing"
+            } else {
+                "decoded but not drawing (weapons off in this mode)"
+            },
+            p.indices.len() / 3
+        ),
+        None if extras.from_art => {
+            "the track file tags no weapon pad plate (oag_pad); none is drawn".into()
+        }
+        None => return None,
+    });
+    pads
 }
 
 /// The GE light list Pulse and Pure on the PSP light a hull with
@@ -625,6 +776,8 @@ pub fn from_model(model: &Model, entry: &str, names: &[Option<String>]) -> Art {
             },
             shadow: ShadowRole::Both,
             layer: draw.layer,
+            transform: None,
+            pad: None,
         });
     }
     let textures = (0..model.textures.len())

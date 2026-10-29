@@ -181,7 +181,9 @@ fn the_art_authored_in_blender_reads_back_as_authored() {
     use oag_trackfile::art::{Blend, Light, ShadowRole, TextureSource};
     let l = load("blender_loop.track.toml");
     let art = l.track.art.as_ref().expect("the loop carries art");
-    assert_eq!(art.meshes.len(), 1);
+    assert_eq!(art.meshes.len(), 3, "the canopy and a plate on each pad");
+    // Its art is not the road, so the add-on's *Draw collision* is on.
+    assert!(art.draw_collision);
     let m = &art.meshes[0];
     assert_eq!(m.name, "canopy");
     assert_eq!(m.material.blend, Blend::Cutout);
@@ -243,6 +245,27 @@ fn the_art_authored_in_blender_reads_back_as_authored() {
     );
     assert_eq!(art.lens_flare.and_then(|f| f.atlas), Some(0));
 
+    // *Place Pad Plates*: a quad 0.3 above each pad's origin over its box, tagged with the
+    // pad's kind, receiving shadows, untextured, in the kind's chosen colour.
+    use oag_trackfile::art::PadPlate;
+    for (plate, kind, pad) in [
+        (&art.meshes[1], PadPlate::Speedup, &l.track.speedup_pads[0]),
+        (&art.meshes[2], PadPlate::Weapon, &l.track.weapon_pads[0]),
+    ] {
+        assert_eq!((plate.pad, plate.shadow), (Some(kind), ShadowRole::Receive));
+        assert_eq!((plate.positions.len(), plate.material.texture), (4, None));
+        let up = [pad.to_world[4], pad.to_world[5], pad.to_world[6]];
+        let origin = [pad.to_world[12], pad.to_world[13], pad.to_world[14]];
+        for p in &plate.positions {
+            let lift: f32 = (0..3).map(|k| (p[k] - origin[k]) * up[k]).sum();
+            assert!(
+                (lift - 0.3).abs() < 1e-3,
+                "{kind:?} plate at {p:?}, lift {lift}"
+            );
+        }
+    }
+    assert_eq!(art.meshes[2].colours[0], [1.0, 0.45, 0.05, 1.0]);
+
     // The canopy casts over the line: the points under it are darkened, the rest are not.
     let light: Vec<[u8; 4]> = l.track.ai.paths[0]
         .points
@@ -276,4 +299,119 @@ fn the_loop_imported_into_blender_and_exported_again_is_the_same_track() {
     assert!(b.unread.is_empty(), "{:?}", b.unread);
     assert!(b.track.art.is_some());
     assert_eq!(a.track, b.track);
+}
+
+/// Keyframed motion authored in Blender (`roundtrip.py motion`, ADR-0076 decision
+/// 10), read by the real reader: the airship object's two material slots are two
+/// art meshes in their own space with the pose at `frame_start` as rest, sharing
+/// one looping animation sampled per frame at 30 fps (frame 1 is 0 s, frame 97 is
+/// 3.2 s), 60 above the first straight, where frame 49 is 200 along +X and half a turn about the vertical; the
+/// sun turns 30 degrees by frame 61 and holds. Dropping the add-on's sampling, its
+/// axis change, its per-object grouping or `oag_loop` fails here.
+#[test]
+fn motion_authored_in_blender_reads_back_as_keyed() {
+    use oag_trackfile::art::motion::{Interpolation, Keys, Repeat, Target};
+    let l = load("blender_motion.track.toml");
+    assert!(l.unread.is_empty(), "{:?}", l.unread);
+    let art = l.track.art.as_ref().expect("art");
+    assert_eq!(
+        art.meshes.len(),
+        5,
+        "the airship's two slots, the canopy, two plates"
+    );
+    for m in &art.meshes[..2] {
+        let t = m.transform.expect("the airship moves");
+        assert_eq!(t.translation, [-200.0, 60.0, -500.0], "{}", m.name);
+        // Box half-extents 40 x 20 x 20 in Blender, in the node's own space.
+        assert!(
+            m.positions
+                .iter()
+                .all(|p| p[0].abs() == 40.0 && p[1].abs() == 20.0)
+        );
+    }
+    assert!(
+        art.meshes[2..].iter().all(|m| m.transform.is_none()),
+        "the canopy and the plates stand still"
+    );
+    let [ship, sun] = art.animations.as_slice() else {
+        panic!("{:?}", art.animations);
+    };
+    assert_eq!((ship.name.as_str(), ship.repeat), ("airship", Repeat::Loop));
+    assert_eq!((sun.name.as_str(), sun.repeat), ("sun", Repeat::Clamp));
+    assert_eq!(
+        ship.channels.len(),
+        4,
+        "translation and rotation for each slot"
+    );
+    assert!((ship.duration() - 3.2).abs() < 1e-6);
+    for ch in &ship.channels {
+        assert!(matches!(ch.target, Target::Mesh(0 | 1)));
+        assert_eq!(
+            (ch.interpolation, ch.times.len()),
+            (Interpolation::Linear, 97)
+        );
+        let mid = ch
+            .times
+            .iter()
+            .position(|&t| (t - 1.6).abs() < 1e-6)
+            .expect("frame 49");
+        match &ch.keys {
+            Keys::Translation(k) => assert_eq!(k[mid], [200.0, 60.0, -500.0]),
+            Keys::Rotation(k) => {
+                let q = k[mid];
+                assert!(
+                    (q[1].abs() - 1.0).abs() < 1e-6 && q[3].abs() < 1e-6,
+                    "{q:?}"
+                );
+            }
+            Keys::Scale(_) => panic!("the scale never changes"),
+        }
+    }
+    let [turn] = sun.channels.as_slice() else {
+        panic!("{:?}", sun.channels);
+    };
+    assert_eq!(turn.target, Target::Sun);
+    assert!((turn.times.last().unwrap() - 2.0).abs() < 1e-6);
+    assert!(art.sun_rotation.is_some());
+}
+
+/// The motion fixture imported by the add-on and exported again: the same track
+/// but for the last bits of a quaternion that went through Blender's matrices.
+#[test]
+fn motion_imported_into_blender_and_exported_again_keeps_its_keys() {
+    use oag_trackfile::art::motion::Keys;
+    let (a, b) = (
+        load("blender_motion.track.toml"),
+        load("blender_motion.reexport.track.toml"),
+    );
+    assert!(b.unread.is_empty(), "{:?}", b.unread);
+    let (mut a, mut b) = (a.track, b.track);
+    let (aa, ba) = (a.art.take().unwrap(), b.art.take().unwrap());
+    assert_eq!(a, b);
+    assert_eq!(aa.meshes, ba.meshes);
+    assert_eq!(aa.animations.len(), ba.animations.len());
+    let flat = |k: &Keys| -> Vec<f32> {
+        match k {
+            Keys::Translation(v) | Keys::Scale(v) => v.iter().flatten().copied().collect(),
+            Keys::Rotation(v) => v.iter().flatten().copied().collect(),
+        }
+    };
+    for (x, y) in aa.animations.iter().zip(&ba.animations) {
+        assert_eq!((&x.name, x.repeat), (&y.name, y.repeat));
+        for (p, q) in x.channels.iter().zip(&y.channels) {
+            assert_eq!(
+                (p.target, p.interpolation, &p.times),
+                (q.target, q.interpolation, &q.times)
+            );
+            assert_eq!(p.keys.path(), q.keys.path());
+            let (u, v) = (flat(&p.keys), flat(&q.keys));
+            assert_eq!(u.len(), v.len());
+            assert!(u.iter().zip(&v).all(|(s, t)| (s - t).abs() < 1e-6));
+        }
+    }
+    let (r, s) = (aa.sun_rotation.unwrap(), ba.sun_rotation.unwrap());
+    assert!(
+        r.iter().zip(&s).all(|(p, q)| (p - q).abs() < 1e-6),
+        "{r:?} {s:?}"
+    );
 }

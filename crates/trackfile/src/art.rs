@@ -12,6 +12,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::Error;
 
+pub mod motion;
+
 /// How far a direction may be from unit length before it is refused.
 const UNIT_TOLERANCE: f32 = 1e-3;
 
@@ -36,6 +38,17 @@ pub struct Art {
     pub lights: Vec<Light>,
     /// Pure's sun flare along the sun's direction.
     pub lens_flare: Option<LensFlare>,
+    /// Keyframed motion of the meshes and the sun, played against the race
+    /// clock (decision 10). Visual only.
+    pub animations: Vec<motion::Animation>,
+    /// Draw the flat-shaded collision (floor and walls) under the art
+    /// (`[art] draw_collision`), for a track whose art is not the road. `false`
+    /// when absent: the art alone is drawn.
+    pub draw_collision: bool,
+    /// The sun node's rest rotation (`x, y, z, w`), present exactly when an
+    /// animation turns the sun: its direction at a time is [`Sun::direction`]
+    /// turned by the rotation from this to the node's rotation then.
+    pub sun_rotation: Option<[f32; 4]>,
 }
 
 /// One draw: a run of triangles with one material.
@@ -61,6 +74,38 @@ pub struct ArtMesh {
     /// The render layer it is drawn in: draws go by layer, then by file order.
     /// `0` unless authored; a disc export writes the `.vex` layer.
     pub layer: u32,
+    /// The node's rest pose, only on a mesh an animation moves: its vertices
+    /// are then in the node's own space. `None` is the identity (a static
+    /// mesh's vertices are always in world space).
+    pub transform: Option<motion::Trs>,
+    /// A pad plate: drawn with the host's pad models instead of the track
+    /// model, so a weapon plate hides where weapons are off. `oag_pad`.
+    pub pad: Option<PadPlate>,
+}
+
+/// Which pad a plate mesh shows (`oag_pad`). Purely visual: what a pad does is
+/// the pad volumes (`oag/pads/*`), which never move.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PadPlate {
+    /// A speed pad's plate (`"speedup"`).
+    Speedup,
+    /// A weapon pad's plate (`"weapon"`): not drawn in a mode without weapons.
+    Weapon,
+}
+
+impl PadPlate {
+    pub(crate) fn tag(self) -> &'static str {
+        match self {
+            Self::Speedup => "speedup",
+            Self::Weapon => "weapon",
+        }
+    }
+
+    pub(crate) fn from_tag(tag: &str) -> Option<Self> {
+        [Self::Speedup, Self::Weapon]
+            .into_iter()
+            .find(|p| p.tag() == tag)
+    }
 }
 
 /// A mesh's material.
@@ -298,6 +343,8 @@ pub(crate) struct ArtTable {
     pub sky: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub skybox: Option<SkyboxTable>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub draw_collision: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ambient: Option<[f32; 3]>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -317,6 +364,7 @@ impl ArtTable {
         Self {
             sky: art.sky.clone(),
             skybox: art.skybox.as_ref().map(SkyboxTable::of),
+            draw_collision: art.draw_collision,
             ambient: art.ambient,
             sun: art.sun,
             lensflare: art.lens_flare,
@@ -336,6 +384,9 @@ impl ArtTable {
             ambient: self.ambient,
             lights: self.light,
             lens_flare: self.lensflare,
+            draw_collision: self.draw_collision,
+            animations: Vec::new(),
+            sun_rotation: None,
         })
     }
 }
@@ -543,6 +594,6 @@ impl Art {
                 ));
             }
         }
-        Ok(())
+        motion::validate(self)
     }
 }

@@ -9,6 +9,9 @@
 //! as the circuit's own bytes. Beside the draws: the hull light rig built from
 //! the file's ambient, sun and light rows against `HullLights::from_track` on
 //! the circuit, and, where they agree, the whole vertex and index buffers.
+//! The pad plates too: the speed and weapon pad models built from the meshes
+//! tagged `oag_pad` against `mesh::build_pads` and `mesh::build_weapon_pads`,
+//! draw for draw.
 //!
 //! The reference is the circuit's own model with the finest tier of each
 //! `LodGroup` (a track file has no level of detail), built here from `oag_mesh`
@@ -21,6 +24,7 @@ use oag_mesh::mesh::{self, DrawCall, GpuVertex, Model, ModelTexture, Texels};
 use oag_mesh::mesh_render::HullLights;
 use oag_raceplay::foreign::art;
 use oag_trackfile::Track;
+use oag_trackfile::art::PadPlate;
 use oag_vex::vex;
 
 /// What the walk saw, summed over every circuit.
@@ -56,6 +60,11 @@ pub struct Tally {
     /// tiers' vertices and indices after `keep_nearest` drops their draws. Each
     /// is held to buffer equality once those are dropped (`kept_only`).
     pub buffers_equal_without_lod_tiers: Vec<String>,
+    /// Circuits whose speed pad plates and weapon pad plates (each, when the
+    /// circuit authors them) equal the circuit's own, draw for draw.
+    pub pad_models: [usize; 2],
+    /// Their draws, summed.
+    pub pad_draws: usize,
 }
 
 fn reference(archives: &mut oag_assets::Archives, track: &str, blob: &[u8]) -> Model {
@@ -116,6 +125,54 @@ fn box_sphere(points: &[[f32; 3]]) -> ([f32; 3], f32) {
         .sum::<f32>()
         .sqrt();
     (centre, radius)
+}
+
+/// The circuit's pad plates of one kind as the race loader builds them.
+fn reference_pads(
+    archives: &mut oag_assets::Archives,
+    track: &str,
+    blob: &[u8],
+    which: PadPlate,
+) -> Model {
+    let build = match which {
+        PadPlate::Speedup => mesh::build_pads,
+        PadPlate::Weapon => mesh::build_weapon_pads,
+    };
+    let mut model = build(track, blob, None).expect("the pads build");
+    if !model.textures.is_empty()
+        && model.textures.iter().all(Option::is_none)
+        && let Some(set) = oag_livery::entry::ps2_texture_set(archives, track)
+    {
+        model = build(track, blob, Some(&set)).expect("the PS2 pads build");
+    }
+    model
+}
+
+/// Draw for draw, list by list.
+fn same_lists(want: &Model, got: &Model, poses: &[[f32; 16]]) -> Result<usize, String> {
+    let mut draws = 0;
+    for (list, (w, g)) in [
+        (&want.draws, &got.draws),
+        (&want.alpha_tested_draws, &got.alpha_tested_draws),
+        (&want.transparent_draws, &got.transparent_draws),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        if w.len() != g.len() {
+            return Err(format!(
+                "list {list}: {} draws against {}",
+                w.len(),
+                g.len()
+            ));
+        }
+        for (n, (wd, gd)) in w.iter().zip(g).enumerate() {
+            same_draw(want, got, wd, gd, poses)
+                .map_err(|e| format!("list {list} draw {n}: {e}"))?;
+        }
+        draws += w.len();
+    }
+    Ok(draws)
 }
 
 fn block(model: &Model, draw: &DrawCall) -> (u32, u32) {
@@ -211,8 +268,44 @@ pub fn art_draws_as_the_circuit(
     let want = reference(archives, entry, &blob);
     let mut report = Vec::new();
     let textures = art::resolve_textures(a, std::path::Path::new(""), archives, &mut report);
-    let got = art::model(entry, a, textures, &mut report);
+    let got = art::model(entry, a, textures.clone(), &mut report);
     let poses = want.sample_anim_nodes(0.0);
+
+    for (k, which) in [PadPlate::Speedup, PadPlate::Weapon]
+        .into_iter()
+        .enumerate()
+    {
+        let want = reference_pads(archives, entry, &blob, which);
+        let got = art::pad_model(entry, a, textures.clone(), which, &mut report);
+        match got {
+            None if want.indices.is_empty() => {}
+            None => {
+                return Err(format!(
+                    "{which:?} pad plates: the circuit has them, the file none"
+                ));
+            }
+            Some(got) => {
+                let draws = same_lists(&want, &got, &[])
+                    .map_err(|e| format!("{which:?} pad plates: {e}"))?;
+                // The plates' pictures are the circuit's own texture nodes.
+                for d in got
+                    .draws
+                    .iter()
+                    .chain(&got.alpha_tested_draws)
+                    .chain(&got.transparent_draws)
+                {
+                    if let Some(slot) = d.texture {
+                        match (&want.textures[slot], &got.textures[slot]) {
+                            (Some(w), Some(g)) if same_texels(w, g) => {}
+                            _ => return Err(format!("{which:?} pad plate texture {slot} differs")),
+                        }
+                    }
+                }
+                tally.pad_models[k] += 1;
+                tally.pad_draws += draws;
+            }
+        }
+    }
 
     for (list, (w, g)) in [
         (&want.draws, &got.draws),

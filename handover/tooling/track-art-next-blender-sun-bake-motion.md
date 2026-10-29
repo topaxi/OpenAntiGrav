@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [pulse, pure]
 updated: 2026-10-29
-summary: "Track art: format, hull rig (2a) and Blender art export, sun, cover light (2b) landed; next a Bake operator, motion, HD sun"
+summary: "Track art: format, hull rig, Blender export, sun, cover light, own sky, motion and pad plates landed; next a Bake operator, HD sun"
 size: L (60)
 difficulty: medium (50)
 categories: [tooling, rendering]
@@ -61,6 +61,26 @@ agreed in conversation and not yet built**, so nothing is re-derived. The decisi
   zenith/horizon gradient on HD's sky cube; add-on Own sky panel; `blender_loop` carries one and
   races on HD natively. Open: images inside the glb (no texture form for them in 1.x), and a
   Blender world Sky Texture or Environment Texture is not mapped (the panel's colours and images are).
+- **`[art] draw_collision` is in** (branch `motion-pads`, 2026-10-29; ADR-0076 decision 16): the
+  flat-shaded collision under the art; `blender_loop` sets it. Hillside covers its road with art
+  and needs nothing; the builder sets `scene.oag_draw_collision = True` only for art that leaves
+  the road bare.
+- **Pad plates are in** (branch `motion-pads`, 2026-10-29; ADR-0076 decision 15): `oag_pad` on
+  an art mesh routes it into the host's pad models, so weapon plates hide where weapons are off;
+  the disc export writes each circuit's plates (proof extended, draw for draw); the add-on has a
+  per-object *Pad plate* field and **Place Pad Plates**. Hillside's builder needs, after its
+  `add_pad` calls: `bpy.ops.oag.add_pad_plates(material="<a material name>", lift=0.3)` (or no
+  material for the chosen blue and amber colours); its plates then export tagged.
+- **Keyframed motion is in** (branch `motion-pads`, 2026-10-29; ADR-0076 decision 10's "Built"
+  bullet, `docs/formats/track-file.md` "Motion", `docs/tools/blender.md` "Motion"): glTF
+  animations on art nodes and an `oag/sun` node, `oag_loop`, read and written bit for bit, played
+  through `oag_mesh::mesh::Keyed` on the animation clock; the add-on samples per frame and imports
+  keys back; fixture `blender_motion` (an airship and a turning sun). Still open: the hull rig does
+  not follow a turning sun, a flare's own `direction` does not turn, `oag_shadow` is not honoured
+  by the moving casters, a disc export writes `Anim Transform` geometry at time zero. Hillside's
+  airships can move now: the builder keyframes each airship object (`location`/`rotation_euler`
+  `keyframe_insert` at a few frames, last frame equal to the first), sets `obj.oag_loop = "loop"`,
+  and the scene's `frame_start`/`render.fps` define time zero and the rate.
 - **What a track borrows pins the disc** (branch `track-host`, 2026-10-29, ADR-0076 decision 13):
   `[track] host` required exactly when the art borrows (host texture or sky), optional `titles`
   filter (checked against the craft's title). A pinned track on another title auto-remixes (track
@@ -121,8 +141,8 @@ agreed in conversation and not yet built**, so nothing is re-derived. The decisi
 2. The *Bake lighting* operator (item 3): lift the builder's bake into the add-on (swap to albedo
    materials, hide collision, `DIFFUSE` direct + indirect to `VERTEX_COLORS`, report vertices per
    area, warn on an animated sun). Half a day.
-3. Keyframed motion (items 4, 5): glTF animation read and write, the sampler against the race clock.
-   Half a day to a day.
+3. ~~Keyframed motion~~ (motion-pads). The hull rig following a turning sun: the rig is built once
+   at load (`loaded.light.hull`); re-derive directional 0 per frame from `SceneryFx::sun`.
 4. HD-family host: the sun into `Light::authored` (about half a day with a screenshot check).
 5. ~~Re-skin Hillside~~ (2b). A launch of Hillside from the campaign menu is still unverified (the
    lane raced it with `--race --track-file`).

@@ -15,7 +15,7 @@ import os
 import struct
 import tomllib
 
-from . import artfile, f32
+from . import artfile, f32, motionfile
 from .model import (
     COLLISION_KINDS,
     HEADER_WORD,
@@ -134,6 +134,7 @@ def write_glb(track):
         if extras is not None:
             node["extras"] = extras
         nodes.append(node)
+        return len(nodes) - 1
 
     s = track.start
     _finite(START, [*s.position, *s.left, *s.up, *s.forward])
@@ -258,10 +259,12 @@ def write_glb(track):
             extras["oag_name"] = node.name
         push(name, prims, extras)
 
+    animations = []
     if track.art is not None:
         try:
-            artfile.write_nodes(b, track.art, push)
-        except artfile.ArtError as e:
+            mesh_nodes = artfile.write_nodes(b, track.art, push)
+            animations = motionfile.write(b, track.art, nodes, mesh_nodes, push)
+        except (artfile.ArtError, motionfile.MotionError) as e:
             raise TrackFileError(str(e)) from e
 
     while len(b.data) % 4:
@@ -276,6 +279,8 @@ def write_glb(track):
         "bufferViews": b.views,
         "accessors": b.accessors,
     }
+    if animations:
+        doc["animations"] = animations
     text = json.dumps(doc, separators=(",", ":")).encode()
     text += b" " * (-len(text) % 4)
     total = 12 + 8 + len(text) + 8 + len(b.data)
@@ -523,7 +528,8 @@ def read(manifest_path):
     rows = m.get("spline", {}).get("path", [])
     splines = [None] * len(rows)
     start, speedup, weapon, nodes, art = None, [], [], [], []
-    for node in g.doc["nodes"]:
+    art_nodes, sun = {}, None
+    for at, node in enumerate(g.doc["nodes"]):
         name = node.get("name", "")
         extras = node.get("extras") or {}
         if "oag_kind" in extras:
@@ -540,7 +546,11 @@ def read(manifest_path):
         elif name == WEAPON:
             weapon = _read_pads(g, node, name)
         elif name.startswith(artfile.PREFIX):
-            art.append((int(name[len(artfile.PREFIX) :]), artfile.read_node(g, node, FLOAT)))
+            i = int(name[len(artfile.PREFIX) :])
+            art.append((i, artfile.read_node(g, node, FLOAT)))
+            art_nodes[at] = i
+        elif name == motionfile.SUN:
+            sun = (at, tuple(f32.r(float(c)) for c in node.get("rotation", (0.0, 0.0, 0.0, 1.0))))
     if start is None:
         raise TrackFileError(f"no {START} node")
     paths = []
@@ -570,6 +580,14 @@ def read(manifest_path):
     track_art = None
     if "art" in m or art:
         track_art = artfile.from_manifest(m.get("art"), [a for _, a in art])
+        try:
+            track_art.animations = motionfile.read(
+                g, lambda at: "sun" if sun is not None and at == sun[0] else art_nodes.get(at)
+            )
+            track_art.sun_rotation = None if sun is None else sun[1]
+            motionfile.validate(track_art)
+        except motionfile.MotionError as e:
+            raise TrackFileError(str(e)) from e
     host = t.get("host", "")
     if not host and track_art is not None and track_art.borrows_from_a_disc():
         raise TrackFileError("the art borrows from a disc but track.host names no title")

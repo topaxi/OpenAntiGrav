@@ -164,10 +164,13 @@ A scene with no art mesh, no Sun lamp and no sky writes no art section: the file
 | Alpha clip: a Math node set to **Greater Than** feeding the Principled BSDF's Alpha (Blender 4.2+), or the *Alpha Clip* blend mode on older versions | `oag_alpha_ref` = threshold x 255. Blender 5.2 silently turns `blend_method = 'CLIP'` into Hashed, so the node is the way |
 | Material backface culling | `oag_culled` |
 | Object *Shadow* (`oag_shadow`), *Layer* (`oag_layer`), *Lit* (`oag_lit`) | the same extras |
+| Object *Pad plate* (`oag_pad`: `none`, `speedup`, `weapon`) | `oag_pad`: drawn with the host's pad models, so a weapon plate hides where weapons are off |
+| **Place Pad Plates** (on a spline's panel, `bpy.ops.oag.add_pad_plates(material="", lift=0.3)`) | a plate object per pad Empty: a quad `lift` above the pad's origin over its box's lateral and forward extent, `oag_pad` the pad's kind, `oag_shadow` `receive`, the given material (else untextured, its baked colour a chosen blue for speed and amber for weapon). Run again, it replaces the plates it placed (`oag_plate_of`) |
 | The scene's *Sun* (`oag_sun`), else the only Sun lamp | `[art.sun]`: world +Z is the direction towards it, the lamp colour, *Intensity* (`oag_intensity`, default 1), the angle as `angular_diameter` in degrees, the shadow switch as `shadows` |
 | Every other Sun lamp | an `[[art.light]]` directional row |
 | The world's Background colour times its strength | `[art.ambient]` |
 | *Sky* (a host circuit's `.vex` entry), *Lens flare* and its atlas image | `[art] sky`, `[art.lensflare] atlas` |
+| The Art panel's *Draw collision* (`oag_draw_collision`) | `[art] draw_collision = true`: the flat-shaded floor and walls drawn under the art, for art that does not cover the road (`blender_loop` sets it: its art is a canopy and two plates) |
 | A Curve spline's *Cover light* below 255 | `_OAG_LIGHT_SCALE` per spline point, see below |
 
 **Intensity is not Blender's strength.** The file's `intensity` multiplies the colour the PSP hull
@@ -223,6 +226,48 @@ bit-equal to the plain track's, so records and ghosts keyed `foreign:hillside` s
 - In a race on Pulse PSP EU and USA the loader reports 77 meshes, 10 textures, the sky, the sun,
   the hull rig and the flare, and no texture that did not resolve.
 
+### Motion: keyframes become glTF animation (2026-10-29)
+
+ADR-0076 decision 10, code `scripts/blender/oag_track/scene_motion.py` (Blender side) and
+`motionfile.py` (the format). Keyframe an art object or the sun lamp the ordinary way (location,
+rotation, scale, in the Dope Sheet or with `keyframe_insert`); the export does the rest.
+
+| In Blender | In the file |
+| --- | --- |
+| An art object whose action (its own or an ancestor's) moves it | its `oag/art/<n>` nodes carry their vertices in the object's **own** space and its pose at `frame_start` as glTF `translation`/`rotation`/`scale`; one channel per moving property per node |
+| The scene's `frame_start` | time zero of the race clock; frame `f` is `(f - frame_start) / fps` seconds, `fps = render.fps / render.fps_base` |
+| The object's `oag_anim` (default its name) | the glTF animation it belongs to: an object's material slots, and objects sharing a name, share one |
+| *Motion* (`oag_loop`: `loop`, `clamp`) | the animation's `oag_loop` extra |
+| The sun lamp's rotation over time | an `oag/sun` node with the rest rotation and a rotation channel; `[art.sun] direction` is the direction at `frame_start`, turned in the race by the rotation from rest |
+
+**Sampled, not copied (chosen).** The exporter evaluates every whole frame from `frame_start` to
+the end of the latest action in the object's chain and decomposes `matrix_world`, so Bezier easing,
+constraints, parents and drivers all arrive as the player should see them, in `LINEAR` keys, one per
+frame. Copying Blender's keys would need Bezier handles (glTF's `CUBICSPLINE` is a different curve,
+and the reader refuses it) and would miss everything that is not a key. Only constant runs are
+thinned: a key that a straight blend would reproduce is kept, because whether it is dropped depends
+on an `f32`'s last bits, which a re-import evaluates differently, and Blender blends quaternion
+curves component by component, so a dropped rotation key would not come back. A property that never
+changes (within 1e-5) gets no channel. Quaternions are kept on one hemisphere from frame to frame.
+A minute at 30 fps is about 1,800 keys, 58 KiB per moving object.
+
+**A loop wraps on its last key**, which is the pose at the last frame sampled: make the last frame
+the first pose again (as the fixture's airship does) or the loop snaps.
+
+**Import** sets each moving object to `QUATERNION` rotation mode, keys `location`,
+`rotation_quaternion` and `scale` at the file's times with `LINEAR` (or `CONSTANT` for `STEP`)
+interpolation, sets `oag_anim` and *Motion*, and picks the first frame rate of 24, 25, 30, 48, 50,
+60 and 120 that puts every key on a whole frame (else keeps the scene's), so an export samples the
+keys where they are. Blender 5.2 inserts keys as Bezier whatever the preference says; the importer
+sets each curve's interpolation itself (through `bpy_extras.anim_utils`, actions are slotted). A
+turning sun lamp gets the file's rest rotation as its own; for a file this add-on wrote that points
+its +Z at the sun, for another the lamp may point elsewhere in the viewport while the export still
+writes the file's direction (the import's cached direction).
+
+**What moves, and what does not.** Visual only: collision, pads and the spline never move (a moving
+collider is simulation state, its own decision). A turning sun turns the `mapped` shadows and a flare
+that follows the sun; the baked `COLOR_0` and the ships' hull rig keep the pose at time zero.
+
 ## Import, and baked records
 
 **Import OAG Track** reads a `.track.toml` + `.glb` into tagged objects. A spline arrives as a
@@ -258,6 +303,8 @@ physics, and draws flat-shaded collision unless the file has an art section. A f
 | Lone AI craft on Pulse's physics, 7,200 ticks (`trackfile_ground_truth`) | `blender_loop`: lap 3, no respawns; the re-exported oval: lap 4, no respawns (the committed oval: lap 4) |
 | `oag-game --race --autopilot --track-file blender_loop.track.toml` | the player gets round at 127 speed; frames at ticks 400, 1200, 2400, 3600 read at 1280x720 |
 | Racing line (2026-10-29), AI speed plan lap on Pulse EU, `--race --opponents`, centre then computed | `blender_loop` 2,383 -> 2,373 ticks (-0.4 %); the same loop at 0.35 scale 845 -> 835 (-1.2 %), at 0.2 scale 501 -> 506 (+1.0 %, slower); Hillside's shape (12 control points, rises to 90, half width 28, 160 points, no art) 3,447 -> 3,424 (-0.7 %): small, and not always faster (every plan verified clean) |
+| Pad plates (2026-10-29): *Place Pad Plates* on the loop's two pads (`blender_loop.*`) | each plate tagged with its pad's kind, 0.3 above the pad over its box (`blender.rs`); raced to the weapon pad with `--autopilot --ticks 2375`, the amber plate draws in `--mode single_race` and not in `--mode time_trial` |
+| Motion (2026-10-29): the loop plus an airship box (two material slots) flying over the first straight and spinning, looping, and a sun turning 30 degrees and holding (`blender_motion.*`) | sampled at 30 fps, read back as keyed (`blender.rs`, `motion_authored_in_blender_reads_back_as_keyed`); imported and exported again, every key time equal and every value within 1e-6 (`blender_motion.reexport.*`); raced with `--autopilot --ticks 480` at `--anim-seconds` 0, 0.8 and 1.6 the airship is ahead, a quarter turn round, then half a turn round and farther along |
 | Art (2026-10-29): the loop's canopy, checker, sun, fill light, ambient, sky and flare (`blender_loop.*`, `blender_checker.png`) | every mapping read back as authored (`blender.rs`); the loop imported and exported again is byte-identical (`blender_loop.reexport.*`); on Pulse PSP the art resolves with no miss in the loader report (`trackfile_ground_truth`) |
 
 The Blender-driven part cannot run in CI (no Blender), so it is a local recipe whose output is
@@ -276,4 +323,6 @@ differently; regenerate with `--update` and review the diff.
 - More than one path and junction authoring beyond the scene property `oag_junctions` (a JSON list
   of `{"prev": [a, b], "next": [a, b]}`, `-1` for none) that the importer writes.
 - A *Bake lighting* operator (ADR-0076 decision 9): the bake above lives in a script today.
-- Keyframed motion (decision 10): not built; nothing animated is exported.
+- Motion: a parent's rotation about a pivot reaches the file only through the sampled world pose
+  (fine for playback; the hierarchy itself is not written). The lens flare's own `direction`, when it
+  has one, does not turn.

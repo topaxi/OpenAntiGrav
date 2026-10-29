@@ -192,7 +192,10 @@ fn every_pure_usa_circuit_exports_and_reads_back_the_same() {
 }
 
 /// A lone craft on a disc circuit and on the same circuit through its track
-/// file: the world hash on every tick must agree.
+/// file: the world hash on every tick must agree. The file's pad plates are the
+/// circuit's (as many vertices and triangles in each pad model), a weapon plate
+/// sits on every weapon pad that triggers, and in Time Trial the weapon plates
+/// are decoded but not drawn, as the circuit's are.
 #[test]
 #[ignore = "needs the Pulse PSP EU image"]
 fn a_lone_craft_races_a_disc_circuit_and_its_exported_file_identically() {
@@ -217,6 +220,16 @@ fn a_lone_craft_races_a_disc_circuit_and_its_exported_file_identically() {
             .as_ref()
             .map(|m| (m.vertices.len(), m.indices.len(), m.draws.len()));
         let native_hull = native_loaded.light.hull;
+        let size =
+            |m: Option<&oag_mesh::mesh::Model>| m.map(|m| (m.vertices.len(), m.indices.len()));
+        let native_pads = (
+            size(native_loaded.pad_model.as_ref()),
+            size(native_loaded.weapon_pad_model.as_ref()),
+        );
+        assert!(
+            native_pads.0.is_some() && native_pads.1.is_some(),
+            "{track}: pads"
+        );
         assert!(
             native_hull.enabled(),
             "{track}: the circuit lights its hulls"
@@ -250,6 +263,49 @@ fn a_lone_craft_races_a_disc_circuit_and_its_exported_file_identically() {
             assert!(
                 loaded.track_model.draws.len() > 1_000,
                 "{track}: the art model is not the circuit's"
+            );
+            assert_eq!(
+                (
+                    size(loaded.pad_model.as_ref()),
+                    size(loaded.weapon_pad_model.as_ref())
+                ),
+                native_pads,
+                "{track}: the file's pad plates are not the circuit's"
+            );
+            assert!(
+                report.contains("drawing the track file's weapon pad plates"),
+                "{report}"
+            );
+            let plates = loaded.weapon_pad_model.as_ref().unwrap();
+            for (i, pad) in loaded.setup.weapon_pads.iter().enumerate() {
+                let centre = pad.centre();
+                let nearest = plates
+                    .vertices
+                    .iter()
+                    .map(|v| {
+                        (0..3)
+                            .map(|k| (v.position[k] - centre[k]).powi(2))
+                            .sum::<f32>()
+                            .sqrt()
+                    })
+                    .fold(f32::INFINITY, f32::min);
+                assert!(
+                    nearest < 10.0,
+                    "{track}: weapon pad {i} has no plate ({nearest})"
+                );
+            }
+            let time_trial = race::load(&race::Options {
+                mode: oag_race::Mode::TimeTrial,
+                ..o.clone()
+            })
+            .unwrap();
+            assert!(
+                time_trial
+                    .report
+                    .iter()
+                    .any(|l| l.starts_with("decoded but not drawing (weapons off in this mode) the track file's weapon pad plates")),
+                "{:#?}",
+                time_trial.report
             );
             race::Race::start(loaded.setup)
         };
@@ -476,10 +532,29 @@ fn a_lone_craft_gets_round_a_loop_authored_in_blender() {
         "Blender Loop",
         &[
             "art: 1 mesh(es), 2 triangle(s), 1 texture(s)\n",
+            "art: draw_collision: the flat-shaded floor and walls are drawn under the art",
             "art skybox: the track's own sky, 1 face picture(s), 5 face(s) of zenith-to-horizon gradient",
             "art: the sun (0.000, 1.000, -0.000) sets the mapped shadows' direction",
             "art hull lights: the PSP rig from the ambient, the sun and 1 further directional(s)",
             "art lens flare: along (0.000, 1.000, -0.000), the track's sun, atlas 64x64",
+        ],
+    );
+}
+
+/// The loop with keyframed motion (`roundtrip.py motion`, ADR-0076 decision 10)
+/// races as the loop does, and its motion reaches the renderer's node table: the
+/// airship's two material slots on one node, the sun turning. Drop the mapping
+/// and the report lines go missing.
+#[test]
+#[ignore = "needs a Pulse image"]
+fn a_lone_craft_gets_round_a_loop_whose_art_moves() {
+    lone_craft_gets_round(
+        "blender_motion.track.toml",
+        "blender-motion",
+        "Blender Motion",
+        &[
+            "art motion: 2 animation(s), 2 mesh(es) on 1 node(s)",
+            "art: the sun turns with its animation",
         ],
     );
 }
