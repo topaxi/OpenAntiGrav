@@ -20,7 +20,7 @@ mod uniforms;
 mod texlod;
 pub use blend::{ADDITIVE_BLEND, TRANSPARENT_BLEND, TransparentPipelines};
 pub use glow_mask::GlowMask;
-pub use hull_lights::{HULL_LIGHTS, HullLights, ge_channel, pack_hull_scale};
+pub use hull_lights::{HULL_LIGHTS, HullLights, ge_byte, ge_channel, pack_hull_scale};
 pub use hull_points::{HULL_POINT_SLOTS, HullPoint, HullPointLights};
 pub use spu_light::{MAX_SPU_LIGHTS, RGBE_ROUND_TRIP, SpuLight, SpuLights};
 pub use stamp::Stamp;

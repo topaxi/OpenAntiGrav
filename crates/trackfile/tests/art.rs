@@ -2,7 +2,7 @@
 //! that is what 1.0 wrote, and every way an art section is refused by name.
 
 use oag_trackfile::art::{
-    Art, ArtMaterial, ArtMesh, Blend, LensFlare, ShadowRole, Sun, TextureSource,
+    Art, ArtMaterial, ArtMesh, Blend, LensFlare, Light, ShadowRole, Sun, TextureSource,
 };
 use oag_trackfile::{Error, Track, fixture, from_parts, to_parts};
 
@@ -25,14 +25,19 @@ fn quad(name: &str, texture: Option<usize>) -> ArtMesh {
             blend: Blend::Cutout,
             culled: false,
             lit: false,
+            alpha_ref: None,
         },
         shadow: ShadowRole::Cast,
+        layer: 0,
     }
 }
 
 pub(crate) fn art() -> Art {
+    let mut kerb = quad("kerb", Some(0));
+    kerb.material.alpha_ref = Some(0);
+    kerb.layer = 0x4a00_0000;
     Art {
-        meshes: vec![quad("kerb", Some(0)), quad("bare", None)],
+        meshes: vec![kerb, quad("bare", None)],
         textures: vec![
             TextureSource::Image("checker.png".into()),
             TextureSource::Host {
@@ -49,7 +54,13 @@ pub(crate) fn art() -> Art {
             shadows: true,
         }),
         ambient: Some([0.1, 0.1, 0.15]),
+        lights: vec![Light::Directional {
+            direction: [1.0, 0.0, 0.0],
+            colour: [0.2, 0.3, 0.4],
+            intensity: 1.0,
+        }],
         lens_flare: Some(LensFlare {
+            direction: None,
             colour: None,
             atlas: Some(1),
         }),
@@ -145,4 +156,36 @@ fn a_manifest_that_counts_art_the_glb_lacks_is_refused() {
     let none = to_parts(&fixture::oval(), "t.glb").unwrap();
     let err = from_parts(&p.manifest, &none.glb).unwrap_err();
     assert!(matches!(err, Error::CountMismatch { .. }), "{err}");
+}
+
+#[test]
+fn a_sun_that_does_not_say_casts() {
+    let p = to_parts(&with_art(art()), "t.glb").unwrap();
+    assert!(p.manifest.contains("shadows = true"), "{}", p.manifest);
+    let manifest = p.manifest.replacen("shadows = true\n", "", 1);
+    let loaded = from_parts(&manifest, &p.glb).unwrap();
+    assert!(loaded.track.art.unwrap().sun.unwrap().shadows);
+}
+
+#[test]
+fn a_light_row_that_is_not_a_unit_vector_is_refused() {
+    let mut a = art();
+    a.lights[0] = Light::Directional {
+        direction: [0.0, 0.5, 0.0],
+        colour: [1.0; 3],
+        intensity: 1.0,
+    };
+    let err = to_parts(&with_art(a), "t.glb").unwrap_err();
+    assert!(err.to_string().contains("art light 0"), "{err}");
+}
+
+#[test]
+fn absent_layer_and_alpha_ref_read_as_zero_and_none() {
+    let back = round(&with_art(art()));
+    let meshes = &back.art.unwrap().meshes;
+    assert_eq!(
+        (meshes[0].layer, meshes[0].material.alpha_ref),
+        (0x4a00_0000, Some(0))
+    );
+    assert_eq!((meshes[1].layer, meshes[1].material.alpha_ref), (0, None));
 }

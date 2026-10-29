@@ -18,10 +18,13 @@ use std::sync::Arc;
 
 use oag_assets::Archives;
 use oag_mesh::mesh::{self, Bounds, DrawCall, GpuVertex, Model, ModelTexture, TextureSlots};
+use oag_mesh::mesh_render::{HULL_LIGHTS, HullLights, ge_byte};
 use oag_trackfile::art::{
-    Art, ArtMaterial, ArtMesh, Blend, LensFlare, ShadowRole, Sun, TextureSource,
+    Art, ArtMaterial, ArtMesh, Blend, LensFlare, Light, ShadowRole, Sun, TextureSource,
 };
 use oag_vex::vex::{self, BlendClass};
+
+pub mod colour;
 
 /// What of a track file's art is drawn beside its track model.
 #[derive(Debug, Default)]
@@ -33,6 +36,10 @@ pub struct Extras {
     /// Towards the sun, when the track's sun may cast: the `mapped` shadow
     /// tier's direction in place of the host title's own axis.
     pub sun_shadow: Option<[f32; 3]>,
+    /// The PSP hull rig from the ambient, the sun and further directionals:
+    /// [`hull_lights`]. The loader uses it where the host title's own
+    /// `hull_lights` rule applies.
+    pub hull: Option<HullLights>,
 }
 
 /// A host circuit's texture table: one name and one decoded slot per
@@ -251,7 +258,7 @@ fn vertex(mesh: &ArtMesh, i: usize, glow: f32) -> GpuVertex {
     GpuVertex {
         position: mesh.positions[i],
         normal: mesh.normals[i],
-        colour: mesh.colours[i],
+        colour: colour::vertex(mesh.colours[i]),
         texcoord: mesh.texcoords[i],
         lit: if mesh.material.lit { 1.0 } else { 0.0 },
         anim: 0,
@@ -267,9 +274,11 @@ fn vertex(mesh: &ArtMesh, i: usize, glow: f32) -> GpuVertex {
     }
 }
 
-/// The track model of `art`'s meshes, one draw each in file order, over the
-/// resolved `textures`. A mesh whose texture did not resolve is left out and
-/// counted in `report`.
+/// The track model of `art`'s meshes, one draw each, over the resolved
+/// `textures`: vertices in file order, each list's draws by layer and then by
+/// file order (`Model::sort_by_layer`, a stable sort), colours converted to the
+/// gamma bytes the renderer draws. A mesh whose texture did not resolve is left
+/// out and counted in `report`.
 #[must_use]
 pub fn model(label: &str, art: &Art, textures: TextureSlots, report: &mut Vec<String>) -> Model {
     let mut model = Model::none(label);
@@ -303,9 +312,11 @@ pub fn model(label: &str, art: &Art, textures: TextureSlots, report: &mut Vec<St
             culled: m.material.culled,
             blend,
             blend_state: None,
-            layer: vex::LAYER_DEFAULT,
+            layer: m.layer,
             depth_point: None,
-            alpha_test_ref: None,
+            // The `.vex` path's expression (`oag_mesh::mesh`), so a disc
+            // export's reference comes back bit for bit.
+            alpha_test_ref: m.material.alpha_ref.map(|r| f32::from(r) / 255.0),
             writes_depth: false,
             node: None,
             chunk: None,
@@ -318,6 +329,7 @@ pub fn model(label: &str, art: &Art, textures: TextureSlots, report: &mut Vec<St
             .push(draw);
         model.mesh_count += 1;
     }
+    model.sort_by_layer();
     model.textures = textures;
     let whole = bounds(
         &model
@@ -360,7 +372,8 @@ pub fn lens_flare(
     report: &mut Vec<String>,
 ) -> Option<oag_fx::lens_flare::Setup> {
     let flare = art.lens_flare?;
-    let sun = art.sun?;
+    let direction = flare.direction.or(art.sun.map(|s| s.direction))?;
+    let linear = flare.colour.or(art.sun.map(|s| s.colour))?;
     let Some(texture) = flare.atlas.and_then(|a| textures.get(a).cloned().flatten()) else {
         report.push("art lens flare: its atlas did not resolve, none drawn".into());
         return None;
@@ -374,12 +387,22 @@ pub fn lens_flare(
         }
     };
     report.push(format!(
-        "art lens flare: along the track's sun ({:.3}, {:.3}, {:.3}), atlas {}x{}",
-        sun.direction[0], sun.direction[1], sun.direction[2], texture.width, texture.height
+        "art lens flare: along ({:.3}, {:.3}, {:.3}){}, atlas {}x{}",
+        direction[0],
+        direction[1],
+        direction[2],
+        if flare.direction.is_some() {
+            ", its own direction"
+        } else {
+            ", the track's sun"
+        },
+        texture.width,
+        texture.height
     ));
     Some(oag_fx::lens_flare::Setup {
-        direction: sun.direction,
-        colour: flare.colour.unwrap_or(sun.colour),
+        direction,
+        // Linear in the file; the ring law steps the gamma colour.
+        colour: linear.map(colour::to_gamma),
         atlas: oag_fx::lens_flare::Atlas {
             width: texture.width,
             height: texture.height,
@@ -401,22 +424,67 @@ pub fn extras(art: &Art, textures: &TextureSlots, report: &mut Vec<String>) -> E
             "art: a sun that casts nothing; shadows keep the host title's own axis".into()
         }
         Some(s) => format!(
-            "art: the sun ({:.3}, {:.3}, {:.3}) sets the mapped shadows' direction; the host's \
-             own hull lighting is kept (the authored rig is HD's equation)",
+            "art: the sun ({:.3}, {:.3}, {:.3}) sets the mapped shadows' direction",
             s.direction[0], s.direction[1], s.direction[2]
         ),
     });
-    if art.ambient.is_some() {
-        report.push(
-            "art: an ambient colour, read and not drawn: the host's own rig lights the hulls"
-                .into(),
-        );
-    }
+    let hull = hull_lights(art);
+    report.push(match &hull {
+        Some(h) => format!(
+            "art hull lights: the PSP rig from the ambient, the sun and {} further \
+             directional(s), ambient {:?}, diffuse {:?} (drawn where the host title lights hulls \
+             this way)",
+            art.lights.len(),
+            h.ambient,
+            h.diffuse
+        ),
+        None => {
+            "art hull lights: no ambient, sun or directional; hulls keep the stand-in rig".into()
+        }
+    });
     Extras {
         sky: art.sky.clone(),
         lens_flare: lens_flare(art, textures, report),
         sun_shadow,
+        hull,
     }
+}
+
+/// The GE light list Pulse and Pure on the PSP light a hull with
+/// (`oag_mesh::mesh_render::HullLights`), from the track's light: the ambient,
+/// then the sun as directional 0 and the directional `[[art.light]]` rows after
+/// it, four at most. Each colour is linear times its intensity, converted to
+/// the gamma byte and clipped (`colour::gamma_byte`), and built at the bare
+/// scale `256` as `HullLights::from_track` builds a circuit's. A direction is
+/// taken as written (the format holds it to unit length). `None` when the file
+/// authors none of the three, as `from_track` answers a circuit with no light.
+#[must_use]
+pub fn hull_lights(art: &Art) -> Option<HullLights> {
+    let directionals: Vec<([f32; 3], [f32; 3])> = art
+        .sun
+        .map(|s| (s.direction, s.colour.map(|c| c * s.intensity)))
+        .into_iter()
+        .chain(art.lights.iter().map(|l| match *l {
+            Light::Directional {
+                direction,
+                colour,
+                intensity,
+            } => (direction, colour.map(|c| c * intensity)),
+        }))
+        .collect();
+    if art.ambient.is_none() && directionals.is_empty() {
+        return None;
+    }
+    let channel = |linear: f32| ge_byte(colour::gamma_byte(linear), 256);
+    let ambient = art.ambient.unwrap_or([0.0; 3]).map(channel);
+    let mut out = HullLights::OFF;
+    out.ambient = [ambient[0], ambient[1], ambient[2], 1.0];
+    for (slot, (d, c)) in directionals.into_iter().take(HULL_LIGHTS).enumerate() {
+        out.direction[slot] = [d[0], d[1], d[2], 1.0];
+        let c = c.map(channel);
+        out.diffuse[slot] = [c[0], c[1], c[2], 0.0];
+    }
+    Some(out)
 }
 
 /// Which blend class a built draw is, from the list it is in.
@@ -430,9 +498,12 @@ fn blend_of(list: usize, draw: &DrawCall) -> Blend {
     }
 }
 
-/// A disc circuit's track model as art: one mesh per draw in the order the
-/// three lists dispatch them, its own block of vertices, textures as host
-/// references to `entry`'s own `Texture` nodes by `names`.
+/// A disc circuit's track model as art: one mesh per draw in vertex-buffer
+/// order (the order the `.vex` build appends them), each with its own block of
+/// vertices, its layer and its alpha-test reference, so the loader's stable
+/// sort by layer gives back each list's dispatch order. Colours are written
+/// linear; textures are host references to `entry`'s own `Texture` nodes by
+/// `names`.
 ///
 /// Geometry under an `Anim Transform` is placed at its time-zero pose (the
 /// format carries no motion yet); a texture node with no name is written as a
@@ -442,50 +513,66 @@ fn blend_of(list: usize, draw: &DrawCall) -> Blend {
 pub fn from_model(model: &Model, entry: &str, names: &[Option<String>]) -> Art {
     let poses = model.sample_anim_nodes(0.0);
     let mut meshes = Vec::new();
-    for (list, draws) in [
+    let mut draws: Vec<(usize, usize, &DrawCall)> = [
         &model.draws,
         &model.alpha_tested_draws,
         &model.transparent_draws,
     ]
     .into_iter()
     .enumerate()
-    {
-        for (n, draw) in draws.iter().enumerate() {
-            let indices = &model.indices[draw.range.start as usize..draw.range.end as usize];
-            let lo = indices.iter().copied().min().unwrap_or(0);
-            let hi = indices.iter().copied().max().unwrap_or(0);
-            let block = &model.vertices[lo as usize..=hi as usize];
-            let placed = |v: &GpuVertex| {
-                let pose = (v.xform as usize)
-                    .checked_sub(1)
-                    .and_then(|at| poses.get(at));
-                match pose {
-                    None => (v.position, v.normal),
-                    Some(m) => {
-                        let n = vex::transform_direction(m, v.normal);
-                        let len = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
-                        let n = if len > 0.0 { n.map(|c| c / len) } else { n };
-                        (vex::transform_point(m, v.position), n)
-                    }
+    .flat_map(|(list, draws)| draws.iter().enumerate().map(move |(n, d)| (list, n, d)))
+    .collect();
+    draws.sort_by_key(|(_, _, d)| d.range.start);
+    for (list, n, draw) in draws {
+        let indices = &model.indices[draw.range.start as usize..draw.range.end as usize];
+        let lo = indices.iter().copied().min().unwrap_or(0);
+        let hi = indices.iter().copied().max().unwrap_or(0);
+        let block = &model.vertices[lo as usize..=hi as usize];
+        let placed = |v: &GpuVertex| {
+            let pose = (v.xform as usize)
+                .checked_sub(1)
+                .and_then(|at| poses.get(at));
+            match pose {
+                None => (v.position, v.normal),
+                Some(m) => {
+                    let n = vex::transform_direction(m, v.normal);
+                    let len = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+                    let n = if len > 0.0 { n.map(|c| c / len) } else { n };
+                    (vex::transform_point(m, v.position), n)
                 }
-            };
-            let (positions, normals) = block.iter().map(placed).unzip();
-            meshes.push(ArtMesh {
-                name: format!("{} {n}", ["opaque", "cutout", "transparent"][list]),
-                positions,
-                normals,
-                texcoords: block.iter().map(|v| v.texcoord).collect(),
-                colours: block.iter().map(|v| v.colour).collect(),
-                indices: indices.iter().map(|&i| i - lo).collect(),
-                material: ArtMaterial {
-                    texture: draw.texture,
-                    blend: blend_of(list, draw),
-                    culled: draw.culled,
-                    lit: block.first().is_some_and(|v| v.lit != 0.0),
-                },
-                shadow: ShadowRole::Both,
-            });
-        }
+            }
+        };
+        let (positions, normals) = block.iter().map(placed).unzip();
+        meshes.push(ArtMesh {
+            name: format!("{} {n}", ["opaque", "cutout", "transparent"][list]),
+            positions,
+            normals,
+            texcoords: block.iter().map(|v| v.texcoord).collect(),
+            colours: block
+                .iter()
+                .map(|v| {
+                    let [r, g, b, a] = v.colour;
+                    [
+                        colour::to_linear(r),
+                        colour::to_linear(g),
+                        colour::to_linear(b),
+                        a,
+                    ]
+                })
+                .collect(),
+            indices: indices.iter().map(|&i| i - lo).collect(),
+            material: ArtMaterial {
+                texture: draw.texture,
+                blend: blend_of(list, draw),
+                culled: draw.culled,
+                lit: block.first().is_some_and(|v| v.lit != 0.0),
+                alpha_ref: draw
+                    .alpha_test_ref
+                    .map(|r| (r * 255.0).round().clamp(0.0, 255.0) as u8),
+            },
+            shadow: ShadowRole::Both,
+            layer: draw.layer,
+        });
     }
     let textures = (0..model.textures.len())
         .map(|i| TextureSource::Host {
@@ -504,23 +591,76 @@ pub fn from_model(model: &Model, entry: &str, names: &[Option<String>]) -> Art {
     }
 }
 
-/// Pure's flare node as the track's sun and its flare: the sun casts nothing
-/// (Pure's shadows are not cast from it), and the atlas is the circuit's own
-/// `LensflareComponents.tga` slot.
+/// A circuit's own light nodes as the track's: the `AmbientLight`s summed as
+/// `HullLights::from_track` sums them, the first `DirectionalLight` as the sun
+/// and every further one as a directional `[[art.light]]` row. Each colour is
+/// the GE byte the PSP packs (`min(255, trunc(c * 255))`), written linear, so
+/// the rig [`hull_lights`] builds from the file equals the circuit's; each
+/// direction is row 2 of the node's world matrix normalised as `from_track`
+/// does it. The sun casts nothing: a disc's shadows follow the host title's own
+/// axis, not its light nodes. A node whose row is zero length is skipped.
+pub fn lights_from_track(art: &mut Art, blob: &[u8], nodes: &[vex::Node]) {
+    use oag_vex::lighting;
+    let byte = |c: f32| colour::to_linear(f32::from(((c * 255.0) as u32).min(255) as u8) / 255.0);
+    let ambients = lighting::ambient_lights(blob, nodes);
+    if !ambients.is_empty() {
+        let sum = ambients.iter().fold([0.0f32; 3], |acc, light| {
+            [
+                acc[0] + light.colour[0],
+                acc[1] + light.colour[1],
+                acc[2] + light.colour[2],
+            ]
+        });
+        art.ambient = Some(sum.map(byte));
+    }
+    for light in lighting::directional_lights(blob, nodes) {
+        let row = [light.to_world[8], light.to_world[9], light.to_world[10]];
+        let length = (row[0] * row[0] + row[1] * row[1] + row[2] * row[2]).sqrt();
+        if length <= f32::EPSILON {
+            continue;
+        }
+        let direction = [row[0] / length, row[1] / length, row[2] / length];
+        let colour = light.colour.map(byte);
+        if art.sun.is_none() {
+            art.sun = Some(Sun {
+                direction,
+                colour,
+                intensity: 1.0,
+                angular_diameter: 0.0,
+                shadows: false,
+            });
+        } else {
+            art.lights.push(Light::Directional {
+                direction,
+                colour,
+                intensity: 1.0,
+            });
+        }
+    }
+}
+
+/// Pure's flare node as the track's flare, the atlas the circuit's own
+/// `LensflareComponents.tga` slot. Along the sun when the circuit's first
+/// directional is the flare's direction and colour; otherwise the flare carries
+/// its own (both exact through the linear curve, `colour::exact_linear`). With
+/// no sun yet, the flare becomes the sun, casting nothing (Pure's shadows are
+/// not cast from it).
 pub fn flare_as_sun(art: &mut Art, flare: &oag_fx::lens_flare::Setup, names: &[Option<String>]) {
     let atlas = names.iter().position(|n| {
         n.as_deref()
             .is_some_and(|n| spells("LensflareComponents.tga", n))
     });
-    art.sun = Some(Sun {
+    let linear = flare.colour.map(colour::exact_linear);
+    let sun = *art.sun.get_or_insert(Sun {
         direction: flare.direction,
-        colour: flare.colour,
+        colour: linear,
         intensity: 1.0,
         angular_diameter: 0.0,
         shadows: false,
     });
     art.lens_flare = Some(LensFlare {
-        colour: None,
+        direction: (sun.direction != flare.direction).then_some(flare.direction),
+        colour: (sun.colour.map(colour::to_gamma) != flare.colour).then_some(linear),
         atlas,
     });
 }

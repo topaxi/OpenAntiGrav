@@ -1352,6 +1352,16 @@ pub fn load(options: &Options) -> Result<Loaded> {
     #[cfg(feature = "view")]
     {
         loaded.setup.scenery_fx.sun = foreign_art.sun_shadow;
+        if let Some(hull) = foreign_art.hull
+            && title.looks.hull_lights.applies(archives.layout.platform)
+        {
+            // A track file's own light through the host title's hull law
+            // (ADR-0076 decision 12); HD-family hosts are not wired.
+            loaded.light.hull = hull;
+            loaded
+                .report
+                .push("hull lights: the track file's ambient and sun, the host's GE rig".into());
+        }
     }
     #[cfg(feature = "view")]
     pulse_ps2::finish(
