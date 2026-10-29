@@ -262,13 +262,24 @@ after a rollback unless the instance is fresh per tick.
 Owed before the ADR can be accepted:
 
 - **The same spike on AArch64** (Android) and **a browser run**; the browser needs the
-  load-time NaN and fuel rewrite, or wasmtime-on-`wasm32` with Pulley (README open
-  question 1).
+  load-time NaN and fuel rewrite (README open question 1); wasmtime on `wasm32` is
+  rejected unless a serious reason shows up (maintainer, 2026-10-29).
 - **iOS**: `cargo check --target aarch64-apple-ios` of wasmtime needs Apple's `xcrun`;
   check on a macOS machine, with `signals_based_traps` on and off.
 - **A call-depth counter** (stack overflow traps at an engine-dependent depth).
 - **The lobby fingerprint** hashes `id@version` only
   (`oag_net::discovery::content_fingerprint`): fold each sim module's SHA-256 in.
+- **Example mods in several guest languages** (maintainer, 2026-10-29): the same mod,
+  or a close variant (e.g. Feisar faster per speed pad), written once each in **Rust**,
+  **C++**, **JavaScript through Javy**, **Python through Pyodide** and **Lua through
+  Wasmoon or lua2wasm**, as `mod-examples` entries. Each must load under the design's
+  rules: core wasm, the one `oag` import namespace, no WASI, fuel and NaN
+  canonicalisation, a host-owned state blob. Expect the ABI to be tested hard by the
+  interpreter-based ones: Javy emits WASI preview-1 imports, Pyodide and Wasmoon are
+  Emscripten builds that expect a JavaScript host and are tens of MB, and lua2wasm's
+  output is unverified. Record per language whether it loads as-is, needs a shim (and
+  which), or cannot meet the rules, and the module size and per-tick cost; a language
+  that cannot is a finding for the README, not a reason to widen the capabilities.
 
 ## Next Steps
 
