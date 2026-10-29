@@ -480,7 +480,7 @@ Grid Selection); a widget stamps its quad's whole rectangle, transparent texels 
 stamp regions of their own (alpha histograms in `docs/ui/campaign-screens.md`, widgets not identified).
 The stamp sources are `Text_Draw` (`RealGlow` or the pulse formula) and the `Image` draw `FUN_0889812c` (`(1 - f) * 150 + 70`
 when its flag `0x200` is set, the `Selector`'s path); `docs/ui/campaign-screens.md` has the census. The generic `Image` draw is `Image_Draw`
-(`0x088a7a5c`): with `RealGlow` above zero (the field at `+0xf4`, which `Image_ParseValues` `0x088a6f38` fills from the attribute) it
+(`0x088a7a5c`): with `RealGlow` above zero (the field at `+0xf4`, which `Image_ParseValues` (`0x088a6f38`) fills from the attribute) it
 runs `StencilFunc(ALWAYS, RealGlow, 0xff)` with `StencilOp(KEEP, KEEP, REPLACE)` around its `DrawArray`, so a colour-only widget stamps its
 authored value **as written, not scaled by its colour's alpha** (confidence 80, decompile only: no EDRAM frame of a fill that authors it).
 Main Menu (EDRAM, six frames at different pulse phases): the six idle rows `110` over 14,526 pixels (flat at every phase; not

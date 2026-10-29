@@ -33,6 +33,12 @@ Wired by `pulse-glow-stamps` (`docs/ui/campaign-screens.md`, "The front end's bl
   memory-stick `Load` dialog). PS2 draws these stamps through the shared title record, uncompared; the Main Menu constants are
   inherited from PSP there.
 
+- One `s` runs on two periods now: `Text::glow_stamp` steps its ladder at 20 per second (1.0 s) while the title's text throb is the
+  measured 1.1 s `PULSE_PERIOD` and the Main Menu's selected stamp rides the 1.1 s colour pulse; the title halo drifts against its text.
+- The title and Main Menu gate on `MenuSkin.glow` (Pulse only), while the picker/footer stamps gate on `Campaign::frontend_glow`: two
+  per-title sources for one fact, a size-ratchet choice (`boot.rs`), to rule on at merge.
+- The end-of-race `tablehighlight` stamp is emitted but not drawn: the results screen overlays with `LoadOp::Load`.
+
 ## Next Steps
 
 1. EDRAM alpha dumps (`scripts/psp-glow-mask-dump.py` style) of Cell, Track and Ship Select at known pulse levels, then phase-match their scores (an afternoon).

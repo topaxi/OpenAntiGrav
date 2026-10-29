@@ -4693,7 +4693,7 @@ other screens' stamps still to wire (below).
   first poll. Re-made pairs (a fresh boot walk, then ours at the recorded second): the side-by-sides now agree in phase and halo,
   and the window-grab box scores are grid 5.44 and cell 5.77 (against 34.5 and 48.5 before; the EDRAM frames above score 0.29 and
   6.69, the window grab adds about a frame of phase slack).
-- **Other pages**: Track Select, Ship Select and Main Menu emit no stamps, so their renders are byte-identical before and after
+- **Other pages** (true before 2026-10-29; Main Menu stamps since, see below): Track Select, Ship Select and Main Menu emit no stamps, so their renders are byte-identical before and after
   (`cmp`); the whole-frame differing share cannot rise. They are also still missing the original's bloom (the footer tag, the
   row highlights): that is open work: the card title, the footer tag and `RealGlow` read from the XML (`HANDOVER.md`, open threads, frontend).
 - **Main Menu, the title and the fills (2026-10-29, `pulse-glow-rest`).** EDRAM of the displayed buffer on PPSSPP, `Show Logo` (six
@@ -4709,7 +4709,7 @@ other screens' stamps still to wire (below).
   not measured**: the exact map and the phase against the screen's opening. Wired in `oag_ui::menu::rows::draw_text_rows` (the
   bare-text column, not a settings page), PS2 sharing the record (**inherited from PSP**, not measured on the PS2). *Fills*:
   `Fill::real_glow` is read from the authored attribute (`128` on scrollbars and `tablehighlight`, `1` on full-screen fills) and
-  `Fill::glow_stamp` stamps it as written (`Image_Draw`, above); the end-of-race table emits it over the row it moved to. The
+  `Fill::glow_stamp` stamps it as written (`Image_Draw`, above); the end-of-race table emits it over the row it moved to - **emitted, not drawn live**: the results screen draws through `Renderer::overlay` (`LoadOp::Load`) and the glow pass runs only on a Clear load, so the stamp reaches no pixel until that screen owns its frame (a census of the other titles' extracted data finds no `RealGlow` outside Pulse). The
   scrollbars and full-screen fills sit on screens ours does not draw from the disc's XML (`menu.toml` pages), so they stay unwired.
   Score (mean grey difference, ours against the original's frame, before then after): Main Menu against the EDRAM frame at
   the matching pulse level (selected stamp 70): selected row `(49,31,210,51)` 13.59 to 1.82, idle rows `(49,59,307,219)` 18.15 to 14.39,
