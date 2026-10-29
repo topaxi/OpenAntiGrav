@@ -280,6 +280,9 @@ Owed before the ADR can be accepted:
   output is unverified. Record per language whether it loads as-is, needs a shim (and
   which), or cannot meet the rules, and the module size and per-tick cost; a language
   that cannot is a finding for the README, not a reason to widen the capabilities.
+  The list is a starting set, not a mandate (maintainer, 2026-10-29): pick each
+  language's runtime by **feasibility and ease of use** for a mod author (e.g. Wasmoon
+  or lua2wasm, whichever fits the ABI with less glue), and say why in its README.
 
 ## Next Steps
 
