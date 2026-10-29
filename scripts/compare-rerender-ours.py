@@ -107,6 +107,10 @@ def rerender(pj, binary):
     # Pairs recorded before the profile held the exposure (2048) drew an adapting one; hold it as the profile says.
     if "--hold-exposure" not in flags:
         flags += ce.exposure_hold_flags(plat["ours"])
+    # Pairs recorded before the profile carried Pilot Assist (2048, 2026-10-29) drew no indicator, where every original frame
+    # of the title draws it; a menu pair has no race to assist.
+    if "pilot_assist" in plat["ours"] and "--pilot-assist" not in flags and rec.get("kind") != "menu":
+        flags += ["--pilot-assist", plat["ours"]["pilot_assist"]]
     # The pair scripts record the flags after the disc image (`base[2:]`): the image is the pair's `--image`, else its
     # profile's, the same rule the scripts apply.
     argv = rec.get("argv") or []

@@ -706,6 +706,14 @@ pub struct HudArt {
     /// race with a field (`docs/formats/2048-hud.md`), so the rule is not a
     /// property of the engine.
     pub total_time_timed_modes_only: bool,
+    /// Whether `TotalTime` reads in hundredths (`0.00.00`) rather than tenths
+    /// (`0.00.0`).
+    ///
+    /// **Measured on 2048**: the Vita frames read `TOTAL 0.29.76` over `CURRENT
+    /// 0.29.7` in a native race and `TOTAL 0.00.00` in the HD Campaign's Vineta K
+    /// grid, the same widget pair on one screen at two precisions. `false` for
+    /// every title that has not had it checked (`docs/formats/2048-hud.md`).
+    pub total_time_hundredths: bool,
     /// Whether the Eliminator's `PosTag0`-`PosTag7` rows and `KillsText`
     /// header are drawn as `"<team> <kills>"` and `KILLS (n)`. **Pulse only**:
     /// read off its executable (`Hud_UpdateKillColumn`) and a live frame.

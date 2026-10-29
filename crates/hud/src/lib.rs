@@ -345,14 +345,24 @@ impl Layout {
             y -= height / 2.0;
         }
 
+        // A widget that authors neither `TxtrWidth` nor `TxtrHeight` samples its
+        // whole texture, scaled to its box ([`Sprite::uv`]: `0` x `0` means that,
+        // and `sprite_draw` fills it in once the sheet knows the texture's size).
+        // 2048's `PilotAssist` is the measured case: a 64x32 box over a 256x128
+        // texture whose alpha spans the whole of it, drawn whole in the original.
+        let whole = if node.value("TxtrWidth").is_none() && node.value("TxtrHeight").is_none() {
+            (0.0, 0.0)
+        } else {
+            (width, height)
+        };
         Some(Sprite {
             name,
             rect: [x, y, width, height],
             uv: [
                 number(&self.constants, node.value("U")).unwrap_or(0.0),
                 number(&self.constants, node.value("V")).unwrap_or(0.0),
-                number(&self.constants, node.value("TxtrWidth")).unwrap_or(width),
-                number(&self.constants, node.value("TxtrHeight")).unwrap_or(height),
+                number(&self.constants, node.value("TxtrWidth")).unwrap_or(whole.0),
+                number(&self.constants, node.value("TxtrHeight")).unwrap_or(whole.1),
             ],
             color: colour(&self.constants, node.value("Color")),
             src,

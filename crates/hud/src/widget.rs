@@ -115,6 +115,10 @@ pub struct Sprite {
     /// Separate from [`Self::rect`] because they genuinely differ: `TimeDiffIcon`
     /// samples a 28x23 patch and draws it at 14x12, so the sprite is
     /// half-size rather than 1:1.
+    ///
+    /// `[_, _, 0, 0]` is a widget that authors neither `TxtrWidth` nor
+    /// `TxtrHeight`: it samples its whole texture, whatever size that is
+    /// ([`sprite_draw`] resolves it against the sheet).
     pub uv: [f32; 4],
     /// Modulating colour, already resolved through the constant table.
     pub color: [f32; 4],

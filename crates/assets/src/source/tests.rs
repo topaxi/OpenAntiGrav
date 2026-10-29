@@ -207,6 +207,7 @@ const TITLE: &Title = &Title {
         hud_font_role: "HUD",
         hud_small_font_role: Some("HUDSmall"),
         total_time_timed_modes_only: false,
+        total_time_hundredths: false,
         kill_column: false,
         message_slots: false,
         lap_hud: None,

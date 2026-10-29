@@ -105,6 +105,7 @@ fn the_zone_ladder_counts_up_from_the_current_zone() {
                     None,
                     true,
                     false,
+                    crate::Precision::Tenths,
                 )
             })
             .collect()
@@ -165,6 +166,7 @@ fn pulse_names_the_speed_class_off_the_zone_and_blanks_the_caption_from_zen() {
             art.zone_speed_classes,
             true,
             false,
+            crate::Precision::Tenths,
         )
     };
     let class = |zone| text(zone, 1);

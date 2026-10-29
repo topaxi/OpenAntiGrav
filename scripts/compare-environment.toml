@@ -168,6 +168,11 @@ status = "scripts/vita-2048-pair.py: a grid-before-GO pair from a walked campaig
 # 1.15 (docs/ghidra/functions/vita-2048-eu-v104/exposure.md). On a Vita the exposure adapts, and so
 # does ours in play. Maintainer's ruling, 2026-10-26.
 exposure_hold = 1.15
+# Pilot Assist is ON in the original's 2048 states: all three frames (`dlc-vineta-k`, `empire-climb`,
+# `mall`) draw the `PilotAssist` icon (`HUD_assist_indicator.xml`, centred at 642,516, a 64x32 box over
+# its 256x128 texture) left of the speed bar, and ours draws the same icon with `--pilot-assist on`
+# (2026-10-29, `2048-dlc-vineta-k`). Only the Extreme setting lights it (`pilot_assist_shown`); `on` is Extreme.
+pilot_assist = "on"
 [platform.2048.emulator]
 name = "Vita3K"
 version = "v0.2.1 4095-84184a36"

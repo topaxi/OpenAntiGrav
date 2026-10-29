@@ -129,7 +129,8 @@ pub(super) fn crop_vertically(sprite: &Sprite, fraction: f32) -> Sprite {
 /// is the fourth ([`oag_title::HudArt::shield_percent`]). `position_combined`
 /// is the fifth, `speed_unit`'s own pattern applied to `Position`: `true`
 /// when the layout authors no `Position Outof` companion - 2048's shape, one
-/// widget carrying the whole `8/8`.
+/// widget carrying the whole `8/8`. `total_precision` is the sixth: the digits
+/// `TotalTime` carries ([`oag_title::HudArt::total_time_hundredths`]).
 #[allow(clippy::too_many_arguments)]
 pub(super) fn text_for(
     label: &Label,
@@ -140,6 +141,7 @@ pub(super) fn text_for(
     classes: Option<&oag_title::ZoneSpeedClasses>,
     shield_percent: bool,
     position_combined: bool,
+    total_precision: Precision,
 ) -> Option<String> {
     // A literal in the XML wins for the widgets that have one: `LapOf`'s "/" is
     // the separator between lap and total, and it is authored rather than
@@ -281,8 +283,8 @@ pub(super) fn text_for(
         // target shows alongside `TotalTime`'s own reddened colour -
         // see [`time_trial_colour`].
         "TotalTime" => (!place_shown).then(|| match readout.time_trial_pace {
-            Some(pace) => format_lap_time(u64::from(pace.remaining_ticks), Precision::Tenths),
-            None => format_lap_time(readout.race_ticks, Precision::Tenths),
+            Some(pace) => format_lap_time(u64::from(pace.remaining_ticks), total_precision),
+            None => format_lap_time(readout.race_ticks, total_precision),
         }),
         "TotalTimeTxt" => (!place_shown)
             .then(|| match readout.time_trial_pace {
@@ -1023,6 +1025,11 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
                 cx.art.zone_speed_classes,
                 cx.art.shield_percent,
                 position_combined,
+                if cx.art.total_time_hundredths {
+                    Precision::Hundredths
+                } else {
+                    Precision::Tenths
+                },
             )
         }) else {
             continue;
@@ -1196,11 +1203,16 @@ pub fn sprite_draw(sprite: &Sprite, sheet: &crate::sprite::Sheet) -> Option<Draw
     // `TxtrWidth` to mirror a patch, and `ui.wgsl` walks the corner from
     // `uv.xy` by `uv.zw`, so a negative one runs backwards and mirrors. See
     // `crate::sprite::Sheet`.
+    let (width, height) = if sprite.uv[2] == 0.0 && sprite.uv[3] == 0.0 {
+        (placed.width as f32, placed.height as f32)
+    } else {
+        (sprite.uv[2], sprite.uv[3])
+    };
     let uv = [
         placed.x as f32 + sprite.uv[0],
         placed.y as f32 + sprite.uv[1],
-        sprite.uv[2],
-        sprite.uv[3],
+        width,
+        height,
     ];
     if let Some([left, right]) = sprite.gradient {
         return Some(Draw::GradientSprite {

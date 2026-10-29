@@ -221,6 +221,7 @@ fn the_total_time_yields_its_anchor_to_the_place() {
                     None,
                     true,
                     layout.label("Position Outof").is_none(),
+                    crate::Precision::Tenths,
                 )
                 .is_some()
             })
@@ -311,6 +312,7 @@ fn the_clock_is_hidden_outside_the_timed_modes() {
     // did: 2048's own frame shows `TOTAL` beside `POS` in a race with a field.
     let unmeasured = oag_title::HudArt {
         total_time_timed_modes_only: false,
+        total_time_hundredths: false,
         kill_column: false,
         message_slots: false,
         ..*oag_pulse::hud::ART
@@ -646,7 +648,17 @@ fn the_2048_grant_announcement_is_the_icon_at_its_authored_rect_with_a_caption()
         .clone();
     let strings = oag_ui::language::StringTable::default();
     let text = |readout: &Readout| {
-        super::draw::text_for(&caption, readout, &strings, true, false, None, true, false)
+        super::draw::text_for(
+            &caption,
+            readout,
+            &strings,
+            true,
+            false,
+            None,
+            true,
+            false,
+            crate::Precision::Tenths,
+        )
     };
     let mut readout = Readout::blank();
     readout.pickup = Some(Weapon::Missile);
@@ -737,16 +749,17 @@ fn a_sprite_can_sample_larger_than_it_draws() {
     assert_eq!(icon.uv, [52.0, 86.0, 28.0, 23.0]);
 }
 
-/// A missing `U`/`V` pair falls back to the destination size rather than to
-/// zero, so a full-texture sprite draws the whole texture instead of nothing.
+/// A missing `U`/`V` pair is the texture's corner and a missing size is the
+/// whole texture (`0` x `0`, resolved by [`sprite_draw`]), so a full-texture
+/// sprite draws the whole texture instead of nothing.
 #[test]
-fn a_sprite_with_no_source_rectangle_samples_its_own_size() {
+fn a_sprite_with_no_source_rectangle_samples_the_whole_texture() {
     let layout = Layout::from_xml(
         r#"<Screen><Image name="Plain"><Values x="1" y="2" width="8" height="9" Src="a.mip"/></Image></Screen>"#,
     );
     assert_eq!(
         layout.sprite("Plain").expect("Plain").uv,
-        [0.0, 0.0, 8.0, 9.0]
+        [0.0, 0.0, 0.0, 0.0]
     );
 }
 
@@ -907,4 +920,77 @@ pub(super) fn context<'a>(
         default_line_height: 10.0,
         skin_line_height: 10.0,
     }
+}
+
+/// **A widget that authors no `TxtrWidth`/`TxtrHeight` samples its whole
+/// texture, scaled to its box**: 2048's `PilotAssist` is a 64x32 box over a
+/// 256x128 texture whose alpha spans all of it, and the original draws the icon
+/// whole. Cropping a 64x32 patch off the corner drew a solid white bar.
+#[test]
+fn a_sprite_with_no_texture_size_samples_its_whole_texture() {
+    let layout = Layout::from_xml(
+        r#"<Screen><Image name="Icon"><Values x="10" y="20" width="64" height="32" U="0" V="0" Src="a.mip"/></Image>
+        <Image name="Patch"><Values x="0" y="0" width="64" height="32" U="5" V="6" TxtrWidth="64" TxtrHeight="32" Src="a.mip"/></Image></Screen>"#,
+    );
+    let placed = crate::sprite::Placed {
+        x: 0,
+        y: 100,
+        width: 256,
+        height: 128,
+        quad_extent: None,
+        quad_centre: None,
+        blend: None,
+    };
+    let sheet = crate::sprite::Sheet::placed_at(&[("a.mip", placed)]);
+    let uv_of = |name: &str| {
+        let sprite = layout.sprites.iter().find(|s| s.name == name).expect(name);
+        let Some(Draw::Sprite { uv, .. }) = sprite_draw(sprite, &sheet) else {
+            panic!("expected a sprite draw");
+        };
+        uv
+    };
+    assert_eq!(uv_of("Icon"), [0.0, 100.0, 256.0, 128.0]);
+    assert_eq!(
+        uv_of("Patch"),
+        [5.0, 106.0, 64.0, 32.0],
+        "an authored size is kept"
+    );
+}
+
+/// `TotalTime` carries hundredths where the title measured it
+/// ([`oag_title::HudArt::total_time_hundredths`]) and tenths elsewhere, while
+/// `CurrentTime` stays in tenths on both.
+#[test]
+fn the_total_time_precision_follows_the_title() {
+    let layout = Layout::from_xml(
+        r#"<Screen><Text name="TotalTime"><Values font="HUD" x="0" y="0"/></Text>
+        <Text name="CurrentTime"><Values font="HUD" x="0" y="0"/></Text></Screen>"#,
+    );
+    let strings = oag_ui::language::StringTable::default();
+    let readout = Readout {
+        race_ticks: 178,
+        lap_ticks: 178,
+        ..Readout::blank()
+    };
+    let text = |name: &str, precision| {
+        let label = layout.labels.iter().find(|l| l.name == name).expect(name);
+        text_for(
+            label, &readout, &strings, false, false, None, false, false, precision,
+        )
+    };
+    assert_eq!(
+        text("TotalTime", Precision::Hundredths).as_deref(),
+        Some("0.02.96")
+    );
+    assert_eq!(
+        text("TotalTime", Precision::Tenths).as_deref(),
+        Some("0.02.9")
+    );
+    assert_eq!(
+        text("CurrentTime", Precision::Hundredths).as_deref(),
+        Some("0.02.9")
+    );
+    assert!(oag_2048::hud::ART.total_time_hundredths);
+    assert!(!oag_pulse::hud::ART.total_time_hundredths);
+    assert!(!oag_hd::hud::ART.total_time_hundredths);
 }

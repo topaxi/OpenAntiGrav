@@ -203,6 +203,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // measured. See `oag_title::HudArt::hud_small_font_role`.
     hud_small_font_role: None,
     total_time_timed_modes_only: false,
+    total_time_hundredths: true,
     kill_column: false,
     // **Measured**: `FUN_81150730` (`0x81150730`) is this title's message drain, and
     // it reads exactly as HD's `0x91d20` does - the same flag word at status

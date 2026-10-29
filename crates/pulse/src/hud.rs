@@ -112,6 +112,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // both widgets on it. Seen on a live Eliminator frame. See
     // `oag_title::HudArt::total_time_timed_modes_only`.
     total_time_timed_modes_only: true,
+    total_time_hundredths: false,
     kill_column: true,
     message_slots: true,
     // Measured: `Hud_UpdateMessages` (`0x0881f148`), `Craft_UpdateLapProgress`

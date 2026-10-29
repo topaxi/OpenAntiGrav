@@ -318,6 +318,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     hud_font_role: "HUD",
     hud_small_font_role: Some("HUDSmall"),
     total_time_timed_modes_only: false,
+    total_time_hundredths: false,
     kill_column: false,
     message_slots: true,
     // Measured: `0x00091d20` (the message drain), `0x000e4a30` (the lap writers),

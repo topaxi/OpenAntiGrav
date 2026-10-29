@@ -134,6 +134,7 @@ fn the_speed_digits_split_after_the_hundreds() {
             None,
             true,
             false,
+            crate::Precision::Tenths,
         )
     };
     assert_eq!(text("SpeedL", 0.0).as_deref(), Some(""));

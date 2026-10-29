@@ -174,3 +174,52 @@ fn the_hd_campaigns_zone_reads_its_hd_layout() {
     );
     assert_eq!(authored(&hd), [true; 4], "{:#?}", hd.report);
 }
+
+/// The HD Campaign's grid with Pilot Assist Extreme on, as the original's frame
+/// (`data/reference/compare-page/2048-vita/dlc-vineta-k`): the `PilotAssist` icon is its 256x128
+/// texture drawn whole into the layout's 64x32 box (`HUD_assist_indicator.xml` authors no
+/// `TxtrWidth`), and `TOTAL` reads hundredths (`0.00.00`) over `CURRENT` in tenths (`0.00.0`).
+///
+/// Fails if a sprite with no authored texture size goes back to cropping a 64x32 patch off the
+/// corner (a solid white bar), if the icon stops following the setting, or if
+/// `HudArt::total_time_hundredths` is dropped from 2048. Omega plays HD's layouts and HD authors
+/// no widget of this kind (checked over HD's 191 HUD files), so it is **checked, not wired**.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn pilot_assist_draws_its_icon_whole_and_the_total_reads_hundredths() {
+    let Some(source) = source() else { return };
+    let loaded = oag_raceplay::load(&oag_raceplay::Options {
+        track: Some(VINETA_K.to_string()),
+        team: Some("Feisar".to_string()),
+        mode: oag_race::Mode::SingleRace,
+        ..options(&source)
+    })
+    .expect("the DLC circuit loads");
+    let context = loaded.hud.context().expect("the layout parses");
+    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let icon_uv = |race: &oag_raceplay::Race| {
+        oag_hud::draw_list(&context, &race.readout())
+            .sprites
+            .iter()
+            .find_map(|draw| match draw {
+                Draw::Sprite { rect, uv, .. } if rect[2] == 64.0 && rect[3] == 32.0 => Some(*uv),
+                _ => None,
+            })
+    };
+    assert_eq!(icon_uv(&race), None, "no icon with the assist off");
+    race.set_pilot_assist(oag_physics::pilot_assist::Level::Extreme);
+    let uv = icon_uv(&race).expect("the icon is up with Extreme on");
+    assert_eq!(&uv[2..], &[256.0, 128.0], "the whole texture: {uv:?}");
+
+    let frame = oag_hud::draw_list(&context, &race.readout());
+    let text: Vec<&str> = frame
+        .hud_text
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::Text { text, .. } => Some(text.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert!(text.contains(&"0.00.00"), "TOTAL in hundredths: {text:?}");
+    assert!(text.contains(&"0.00.0"), "CURRENT in tenths: {text:?}");
+}

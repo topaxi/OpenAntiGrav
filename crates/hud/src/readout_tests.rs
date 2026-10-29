@@ -347,11 +347,31 @@ fn the_shield_readout_drops_the_percent_on_a_title_that_measures_none() {
     };
     let label = &layout.labels[0];
     assert_eq!(
-        text_for(label, &readout, &strings, false, true, None, false, false),
+        text_for(
+            label,
+            &readout,
+            &strings,
+            false,
+            true,
+            None,
+            false,
+            false,
+            crate::Precision::Tenths
+        ),
         Some("98".to_string())
     );
     assert_eq!(
-        text_for(label, &readout, &strings, false, true, None, true, false),
+        text_for(
+            label,
+            &readout,
+            &strings,
+            false,
+            true,
+            None,
+            true,
+            false,
+            crate::Precision::Tenths
+        ),
         Some("98%".to_string())
     );
 }
@@ -388,7 +408,8 @@ fn pickup_damage_and_absorb_draw_nothing_without_a_tracked_hit() {
                 true,
                 None,
                 false,
-                false
+                false,
+                crate::Precision::Tenths
             ),
             None,
             "{name} should draw nothing without a tracked recent-hit value"
@@ -415,7 +436,17 @@ fn position_txt2_never_draws_a_second_pos_caption() {
     };
     let label = &layout.labels[0];
     assert_eq!(
-        text_for(label, &readout, &strings, true, true, None, false, false),
+        text_for(
+            label,
+            &readout,
+            &strings,
+            true,
+            true,
+            None,
+            false,
+            false,
+            crate::Precision::Tenths
+        ),
         None
     );
 }
@@ -511,6 +542,7 @@ fn the_lap_hexagon_draws_the_lap_number_from_the_authored_literal() {
             None,
             false,
             false,
+            crate::Precision::Tenths,
         )
     };
     assert_eq!(text(1), Some("1".to_string()));

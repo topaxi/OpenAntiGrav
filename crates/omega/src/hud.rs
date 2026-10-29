@@ -266,6 +266,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     hud_font_role: "HUD",
     hud_small_font_role: Some("HUDSmall"),
     total_time_timed_modes_only: false,
+    total_time_hundredths: false,
     kill_column: false,
     message_slots: true,
     // **Measured** in the PS4 executable (`/omega/eboot-ps4-omega-eu.bin`, inside the
