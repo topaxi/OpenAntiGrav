@@ -50,7 +50,7 @@ Steps (the same ones `scripts/blender/roundtrip.py loop` runs headless):
    rotate the Empty to place it elsewhere.
 4. **Add speedup pad** / **Add weapon pad** put a pad on the spline point nearest the 3D
    cursor. The pad's box (`oag_min`, `oag_max`, in the format's pad-local axes lateral, up,
-   forward) defaults to the fixture's.
+   forward) defaults to the disc's own volume of that kind (measured off Pulse PSP's circuits: speedup 9.55 lateral by 8.72 forward, weapon 9.89 square; `derive.PAD_BOXES`), so the boost and pickup fire where a disc pad's would.
 5. Set the track id, title, **Runs on**, **Offered on** and notes at the top of the panel, then **Export OAG Track**
    and choose `name.track.toml`; `name.glb` is written beside it.
 
