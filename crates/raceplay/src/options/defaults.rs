@@ -17,6 +17,7 @@ impl Default for Options {
             track: None,
             foreign_track: None,
             extensions: Vec::new(),
+            find_extensions: None,
             boost_zoom: None,
             team: None,
             hull_variant: None,

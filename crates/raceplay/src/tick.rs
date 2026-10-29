@@ -185,7 +185,7 @@ impl Race {
         // above consumes - see `Race::advance_cannons`'s own doc comment.
         self.advance_cannons(inputs);
         // Phase C: each simulation mod's one call, its commands into the steps below.
-        self.tick_extensions();
+        self.tick_extensions(inputs);
 
         // Each person's craft, in slot order, against the same unmoved
         // projectile pool and the same unspent field-wide effects: the force law
@@ -406,6 +406,7 @@ impl Race {
             self.advance_engine_flares();
             self.advance_absorb_bursts();
             self.advance_hit_sparks();
+            self.draw_extension_effects();
             self.advance_damage_smoke();
             self.advance_wreck_fx();
             self.view

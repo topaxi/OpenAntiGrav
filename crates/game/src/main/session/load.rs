@@ -496,8 +496,8 @@ impl Session {
         // The join screen's seats, or the seats a restart kept: the load reads a
         // title's authored two-player split HUD, so it needs the view count
         // before `split_screen::seat_for_launch` cuts the screen. See `race::Options::views`.
-        // The rules modules of the mods that are on, read again here so a MODS page switch
-        // counts (manifests only, on this thread: the `.wasm` is read by the load worker).
+        // The rules modules of the mods that are on, searched again by the load worker
+        // (manifests and `.wasm` alike, off this thread) so a MODS page switch counts.
         // None in an original campaign's race (README 1.2; a mod campaign's runs them) or
         // a network race (the host's race runs vanilla).
         #[cfg(feature = "extensions")]
@@ -505,10 +505,7 @@ impl Session {
             let vanilla = (self.campaign_cell.is_some() && self.campaign_custom.is_none())
                 || self.pending_event.is_some()
                 || self.net.is_some();
-            match oag_game::mods::Mods::load(&self.settings.mods.disabled) {
-                Ok(mods) => oag_game::mod_extensions::attach(&mut options, &mods, vanilla),
-                Err(e) => log::warn!("mods: {e:#}; the race runs no simulation mod"),
-            }
+            oag_game::mod_extensions::attach(&mut options, &self.settings.mods.disabled, vanilla);
         }
         self.seat_the_windows(&mut options);
         options.people = 0;

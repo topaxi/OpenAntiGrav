@@ -338,6 +338,21 @@ impl Race {
         let Some(weapon) = self.sim.world.ships[slot].pickup.weapon else {
             return;
         };
+        // A simulation mod claimed it: the driver's fire (on a straight, as for a Turbo)
+        // or absorb goes to the mod (`crate::extensions`), and an absorb pays nothing.
+        if self.sim.extensions.claimed(slot) {
+            match decision {
+                oag_ai::weapon_ai::Decision::Absorb => {
+                    self.sim.world.ships[slot].pickup.take();
+                    self.sim.extensions.pickup_used(slot, true);
+                }
+                oag_ai::weapon_ai::Decision::Fire if controls.thrust > 0.0 => {
+                    self.sim.extensions.pickup_used(slot, false);
+                }
+                _ => {}
+            }
+            return;
+        }
         // Looked up and copied out before the branches, so the borrow of
         // `self.sim.weapons` ends here: the Rocket arm needs `&mut self` to put
         // anything in the air, and every one of these returns an owned value.

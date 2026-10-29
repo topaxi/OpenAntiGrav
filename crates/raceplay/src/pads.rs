@@ -110,9 +110,16 @@ impl Race {
         // original's single `craft+0x1d0` slot and its single `DAT_08b3435c` flag,
         // which `Zone_Update` (`0x0882f5cc`) consumes and clears once per tick.
         let entered = hit.map(|(index, _)| index);
+        // A simulation mod's `pad-mode` (`crate::extensions`): the pad gives this craft no
+        // boost, no plume and no pad sound, and the mod hears `pad-energy` instead. The
+        // edge, the cache and the Zone score are the pad's as ever.
+        let energy = self.sim.extensions.pad_mode(slot);
         if entered != self.sim.pad_current[slot] {
             self.sim.pad_current[slot] = entered;
-            if entered.is_some() {
+            if entered.is_some() && energy {
+                self.sim.extensions.pad_energy(slot);
+            }
+            if entered.is_some() && !energy {
                 // The lap table's third column: `Ship_ApplySpeedupPad` adds one to the
                 // human craft's own per-lap counter on this same edge (`craft+0x900 +
                 // lap * 0x10 + 0x94`, its only writer). See [`RunStats`].
@@ -175,6 +182,9 @@ impl Race {
             }
         }
 
+        if energy {
+            return None;
+        }
         hit.map(|(_, direction)| direction)
     }
 

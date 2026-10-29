@@ -165,6 +165,7 @@ impl Pending {
                 .and_then(|entry| entry.foreign.clone()),
             // Filled at launch (`oag_game::mod_extensions::attach`), from the mods on then.
             extensions: Vec::new(),
+            find_extensions: None,
             // Passed straight through like `track` above, `None` included:
             // `race::load` resolves an unnamed team from the title it opened,
             // which is the only place the title is known. See

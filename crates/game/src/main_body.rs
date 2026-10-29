@@ -533,10 +533,7 @@ fn run(cli: Cli) -> Result<()> {
         #[cfg(feature = "extensions")]
         {
             let vanilla = net.is_some() || cli.wreck.campaign_cell.is_some() || cli.event.is_some();
-            match oag_game::mods::Mods::load(&settings.mods.disabled) {
-                Ok(mods) => oag_game::mod_extensions::attach(&mut options, &mods, vanilla),
-                Err(e) => warn!("mods: {e:#}; the race runs no simulation mod"),
-            }
+            oag_game::mod_extensions::attach(&mut options, &settings.mods.disabled, vanilla);
         }
         let options = match &net {
             Some(net) => net.race_options(options)?,

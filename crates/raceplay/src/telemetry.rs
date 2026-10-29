@@ -206,6 +206,7 @@ impl Race {
             // running bit is set and the held id maps to none. The timer under it is
             // `Self::sub_weapon`.
             pickup: held,
+            pickup_tint: self.sim.extensions.pickup_tint(slot),
             sub_weapon: self.sub_weapon(slot),
             campaign_event: self.view.campaign_event,
             // The reticle, whatever it is doing. `Sight::visible` is what

@@ -162,6 +162,15 @@ impl Race {
         let Some(weapon) = self.sim.world.ships[slot].pickup.weapon else {
             return;
         };
+        // A simulation mod claimed this pickup: the button is the mod's, and an absorb
+        // takes the pickup away with no energy paid (`crate::extensions`).
+        if self.sim.extensions.claimed(slot) {
+            if !fire {
+                self.sim.world.ships[slot].pickup.take();
+            }
+            self.sim.extensions.pickup_used(slot, !fire);
+            return;
+        }
         let Some(weapons) = self.sim.weapons.as_ref() else {
             return;
         };
