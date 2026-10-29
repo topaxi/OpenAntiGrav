@@ -1218,3 +1218,16 @@ solid as in the original where they were pale and ghostly.
 clock and shadow questions are posing and default questions, not re-measured (`not
 checkable` here, no PS2 capture taken). Metropia and Talon's were not re-run: nothing
 in `oag-render` or `oag-post` moved.
+
+## The front end runs the same `Bloom_Draw` (2026-10-29, `pulse-frontend-bloom`)
+
+A GE dump of Grid Selection and Cell Selection ends with the four passes of this page and nothing else: the 1,320-vertex blur
+twice (vertex colours `0x14`, `0x1e`, `0x28`, `0x32` on 240 vertices each and `0x40` on 360, the 11 weights above at 2:2:2:2:3),
+a 2-vertex clear and an 8-vertex composite with `pmsk2` 255 (alpha protected). **Read, confidence 85**: the front end uses the
+race's parameters. The lists are built once by `Bloom_Construct` and the only xrefs to `g_bloom_composite_strength`
+(`0x08ab2344`), `g_bloom_blur_weights` (`0x08ab2348`) and `g_bloom_buffer_width`/`height` (`0x08a84cf0`/`f4`) are reads inside
+`Bloom_BuildCompositeList`, `Bloom_EmitBlurTaps` and `Bloom_BuildBrightPassList`. `Bloom_Draw` itself has no code xref (it
+is a method-table entry in the render queue). What the front end changes is the mask: its widgets stamp the stencil
+(`Gu_StencilOp(KEEP, KEEP, REPLACE)`, alpha test off), see `docs/rendering/glow-mask.md`, "The front end's mask". Ported:
+`oag_game::render::Renderer` (`render/glow.rs`) over `oag_post::bloom`. Pure's `BOOT.BIN` carries the same weight table and
+`0xaf` (byte search, four pressings): checked, applies, not wired.

@@ -45,6 +45,59 @@ fn the_selector_draws_the_measured_cyan_tint_not_the_xmls_own_white() {
     assert_eq!(selector_color, argb_to_rgba(0xff33_a6b9));
 }
 
+/// The `Selector`'s quad writes the glow mask over its whole 42x43 rectangle (alpha test off at the
+/// original's draw), at `80 + 150 * t` of the pulse: held at cyan the low end, at white the high one.
+/// Dropping the stamp drops the front end's bloom on the cursor.
+#[test]
+fn the_selector_stamps_the_glow_mask_over_its_whole_quad_by_the_pulse() {
+    let layout = grid_layout();
+    let mut model = GridSelection::new(vec![GridSummary {
+        name: "grid0".to_string(),
+        cell_count: 8,
+        max_points: 24,
+        required_points: 12,
+        gold_medals: 0,
+        points_earned: 0,
+        locked: false,
+        flyer_name: None,
+    }]);
+    let stamp_at = |model: &GridSelection| {
+        let layers = grid_draw_list(
+            model,
+            &layout,
+            &skin(),
+            &Frame::default(),
+            &strings(),
+            None,
+            false,
+            &|_| placed32(),
+            &[],
+        );
+        let selector = layers
+            .body
+            .iter()
+            .find_map(|draw| match draw {
+                Draw::Sprite { rect, .. } if rect[2] == 42.0 && rect[3] == 43.0 => Some(*rect),
+                _ => None,
+            })
+            .expect("the Selector draws as a 42x43 sprite");
+        let stamps: Vec<_> = layers
+            .body
+            .iter()
+            .filter_map(|draw| match draw {
+                Draw::GlowStamp { rect, value } => Some((*rect, *value)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(stamps.len(), 1, "one stamp, the Selector's");
+        assert_eq!(stamps[0].0, selector, "over the quad, not the ring");
+        stamps[0].1
+    };
+    assert_eq!(stamp_at(&model), 80, "held cyan");
+    model.pulse_mut().set_seconds(0.35 + 0.5);
+    assert_eq!(stamp_at(&model), 230, "white");
+}
+
 /// `Outline_x_y` draws `TIER_OUTLINE_TINT` on `Grid Selection` - both the
 /// unlocked hex (`Outline_0_0`) and the locked one behind it
 /// (`Outline_1_0`) get the same dim cyan-teal tile colour

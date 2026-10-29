@@ -35,7 +35,10 @@ impl Draw {
             // of a rule that fades in from the left would expect. Fading
             // both edges is [`Self::fade`]'s job, not this accessor's.
             Self::GradientFill { left, .. } | Self::GradientSprite { left, .. } => Some(left),
-            Self::Video { .. } | Self::FuryBackdrop(_) | Self::SceneBackdrop(_) => None,
+            Self::Video { .. }
+            | Self::FuryBackdrop(_)
+            | Self::SceneBackdrop(_)
+            | Self::GlowStamp { .. } => None,
         }
     }
 
@@ -104,6 +107,16 @@ impl Draw {
                 rect[3] *= scale;
                 left[3] *= alpha;
                 right[3] *= alpha;
+            }
+            // A glow stamp moves and scales with its widget but keeps its value through a
+            // fade. **Chosen, not measured**: the `Selector`'s issuer is not located, and the
+            // `Image` draw `FUN_0889812c` has no alpha term in its reference, so the fade is
+            // taken not to reach it; a `Text`'s reference does carry the alpha.
+            Self::GlowStamp { rect, .. } => {
+                rect[0] = about(rect[0], origin.0);
+                rect[1] = about(rect[1], origin.1);
+                rect[2] *= scale;
+                rect[3] *= scale;
             }
             // A movie and the point-cloud pass have no alpha channel to fade
             // and are never part of a page.

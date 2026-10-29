@@ -4613,3 +4613,72 @@ lookup stays dead on this screen (confidence 85; the string has one xref, no aut
 - **2048/Omega**: not applicable (this widget routine is Pulse's `GridController`; HD's `Selector` keeps `centred_selector_draw`,
   unmeasured). Checked, differs by lack of measurement, not wired.
 
+
+#### The front end's bloom, wired for the cursor (2026-10-29, `pulse-frontend-bloom`)
+
+Claim: Pulse PSP's front end draws the original's bloom, keyed by the stencil values its widgets stamp, so the selected hex on
+Grid Selection and Cell Selection shows the original's halo. **True for the cursor**, with the card title, the footer tab and the
+other screens' stamps still to wire (below).
+
+- **The bloom's parameters are the race's, read** (confidence 85). The dump's four closing prims: a 1,320-vertex blur whose
+  vertex colours are exactly the 11 kernel weights (`0x14`, `0x1e`, `0x28`, `0x32` on 240 vertices each, `0x40` on 360: 2:2:2:2:3
+  taps times 120), a 2-vertex clear, a second 1,320-vertex blur, and an 8-vertex composite with the alpha channel protected
+  (`pmsk2` 255), `GU_PSM_8888`, the 240x136 scratch buffers. The four lists are built once by `Bloom_Construct` into the
+  `g_bloom` singleton, and the only xrefs to `g_bloom_composite_strength` (`0x08ab2344`), the weights (`0x08ab2348`) and the
+  buffer size (`0x08a84cf0`/`f4`) are reads inside the list builders: nothing rewrites them for the front end. So
+  `oag_post::bloom` is reused unchanged (one `Bloom::new`, `prepare`, `composite`); no second bloom.
+- **The mask, measured out of EDRAM** (`memory.read` at `0x04000000`, the displayed buffer, 480x272 at stride 512; frames stopped
+  at six pulse phases per screen). Grid Selection: alpha `4` on 127,242 pixels (the clear), `1806` = 42x43 pixels carrying the
+  `Selector`'s reference (the **whole quad**, ring and transparent texels alike: alpha test is off at its prim), `1120` the card
+  title's glyph quads, `392` = 28x14 the footer tag at `64`. Every other Pulse screen has the same `64` footer tag and its own
+  stamps (regions measured, their widgets not identified): Main Menu a `14526`-pixel area at `110` plus `3652` at `128` and `2674` at `115`, Track Select `3958` pixels cycling and `1628` at
+  `255`, Ship Select `1680` cycling plus 20 pixels of `247`. The bright pass multiplies the colour under each stamp by it, so
+  the halo comes out box-bright, and the clear's `4` blurs to nothing as in a race.
+- **Does the ref follow the pulse? Yes** (confidence 85). Over 150 samples the `Selector`'s reference ranges 80 to 229, steps of
+  10 per game frame (`150 / 15`), and each GE dump's reference sits within one of `80 + 150 * t` for the tint `t` that dump's
+  quad was drawn with (grid `0x98` at t 0.48, `0xb1` at 0.65, `0x66` at 0.15; cell `0xb5` at 0.67). It is the same triangle as
+  the tint, so the halo pulses with the ring: `SelectorPulse::stamp`. Where the code issues it is not located: `FUN_0889812c`
+  (the `Image` draw, flag `+0x2c & 0x200`) stamps `(1 - f) * 150 + 70` (70 to 220, `f` its own 0..1 ramp), which is the same slope
+  but not the same range, and the `Selector` is not read through it.
+- **What else stamps, from `Text_Draw` (`0x088ce668`) and the `.cod` census** (read, not yet wired). A `Text` with `RealGlow` g > 0 (`Text_ParseValues` stores `RealGlow` at `+0xb8` and
+  `PulseMultiplier` at `+0xbc`)
+  stamps `g * alpha / 255`, or, while its pulse flag (`+0xc8 & 8`) is set, `(220 - s) * PulseMultiplier` with `s` a byte stepping
+  by 15 per `1/20 s` inside 0 to 150 (the card title: 11 levels 70 to 220 in steps of 15, measured). `RealGlow` is an authored
+  attribute and was undecoded until now: in `Data.wad`'s front-end `.cod` files it is `128` (16 widgets, the end-race table
+  highlights among them), `1` (6 widgets, full-screen fills among them), `100` (4 `title`-font texts at y 199 and 212) and `64` (one:
+  `NewsItemTagText`, the footer tag).
+- **Wired**: `Draw::GlowStamp { rect, value }` (draws nothing; `place`, `zoom` and the inset move it with its widget), emitted by
+  Pulse's grid and cell lists after the `Selector` draw. `Renderer::render_with` draws a list that carries stamps a second time
+  into a scratch target of the viewport's size, rewrites that target's alpha (the clear's `4`, then each stamp in list order,
+  a pipeline that writes the alpha channel alone: stencil REPLACE, blending never writes alpha), runs `oag_post::bloom`'s
+  bright pass and blurs over it, draws the list for real, then composites. `oag_title::Campaign::frontend_glow` (`Some(Measured)`
+  on Pulse only) gates it: the other titles drop the stamps (`oag_game::campaign::gate_glow`). Only Clear loads and lists with no
+  split-screen scissors take the path. Pulse PS2 shares the title record and so draws it too; its own front end's bloom is
+  **not checked** (the PS2 has its own bloom chain, `docs/rendering/ps2-bloom.md`).
+- **Score, controlled by phase** (the stamp of each original frame gives its pulse phase exactly, so ours is rendered at
+  `0.35 + t / 2` s, `ENTRY_HOLD` plus the rise; mean grey difference in the cursor-hex box `(60,142,100,178)` grid and
+  `(120,94,162,130)` cell; `before` is this tree with `frontend_glow` off, equal to `main`): grid 11.73, 47.42, 20.22, 55.44,
+  32.48, 39.80 (mean **34.51**) to 0.20, 0.39, 0.36, 0.19, 0.28, 0.31 (mean **0.29**); cell 13.13, 37.96, 89.45, 62.79, 31.04,
+  56.45 (mean **48.47**) to 0.25, 0.33, 38.66, 0.31, 0.28, 0.30 (mean **6.69**). The one cell outlier is a frame where the original's
+  animated backdrop streak crosses the box (visible in the side-by-side), not the cursor. The earlier lane's `52.36` and `65.05`
+  were scored against a single `theirs.png` at ours' fixed 2.07 s, which is phase-unmatched; against two real frames at that fixed
+  second the score moves either way with how far the frame's phase is from 2.07 s (grid 17.94 to 25.31 and 58.78 to 16.87), so
+  a fixed second cannot score a pulse.
+- **Pair clock**: a wall clock does not give the pulse phase (a fresh walk's `seconds_since_entry` was 3.16 s and 3.21 s, and ours at
+  that clock read cyan where the original read white). `scripts/psp-menu-pair.py` now stops the CPU for the grab on `grid` and
+  `cell`, reads the `Selector`'s stamp out of EDRAM and records `seconds_since_entry` as `ENTRY_HOLD + t / 2` for that level
+  (basis: the stamp, good to one game frame); an unwatched entry elsewhere falls back to the midpoint between the press and the
+  first poll. Re-made pairs (a fresh boot walk, then ours at the recorded second): the side-by-sides now agree in phase and halo,
+  and the window-grab box scores are grid 5.44 and cell 5.77 (against 34.5 and 48.5 before; the EDRAM frames above score 0.29 and
+  6.69, the window grab adds about a frame of phase slack).
+- **Other pages**: Track Select, Ship Select and Main Menu emit no stamps, so their renders are byte-identical before and after
+  (`cmp`); the whole-frame differing share cannot rise. They are also still missing the original's bloom (the footer tag, the
+  row highlights): that is open work: the card title, the footer tag and `RealGlow` read from the XML (`HANDOVER.md`, open threads, frontend).
+- **PS2**: the compare page's PS2 Grid Selection original also shows a soft halo round the cursor (visible in `pulse-ps2/menu-grid`),
+  so drawing one there points the right way; its chain and strength are not compared.
+- **Title screen**: `--until "Show Logo"` renders byte-identical before and after.
+- **Live path**: `menu_stage` reaches `flyer::render_list`, which for Pulse (no flyer cards) is exactly one `render_with` with a Clear
+  load of the whole list, stamps included; not seen in a window (the Xvfb grab under lavapipe came back black).
+- **Pure**: checked, the same constants. All four Pure `BOOT.BIN`s carry the weight table with `0xaf` in front of it, byte for byte.
+  Whether Pure's front end stamps, and where, is **not measured** (an EDRAM readout was tried and landed on PPSSPP's own load dialog, alpha flat at 4), so nothing is wired for it. 2048 and
+  Omega: not applicable here (HD's front end draws through its own pipeline, `frontend_glow` is `None`).

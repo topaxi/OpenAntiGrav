@@ -79,7 +79,8 @@ pub fn place(draw: &Draw, p: &Placement) -> Option<Draw> {
             | Draw::Sprite { rect, .. }
             | Draw::RotatedSprite { rect, .. }
             | Draw::TiledSprite { rect, .. }
-            | Draw::BlendedSprite { rect, .. } => {
+            | Draw::BlendedSprite { rect, .. }
+            | Draw::GlowStamp { rect, .. } => {
                 *rect = moved(*rect, p);
                 overlaps(*rect, p.clip).then_some(())?;
             }

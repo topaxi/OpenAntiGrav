@@ -469,3 +469,15 @@ it alone, and the groups that write it write `texel alpha * vertex colour alpha
 and 222 to 249 levels are in use. The measurement, the readout method and the
 port are on [`ps2-bloom.md`](ps2-bloom.md): `GlowMask::StampedByTexel`, with the
 loader's `pulse_ps2` marking the models, and the PSP's `Stamped` rule unchanged.
+
+## The front end's mask (2026-10-29, `pulse-frontend-bloom`)
+
+The front end ends each frame with the same `Bloom_Draw`, over a mask its **widgets** stamp. Read out of EDRAM on every Pulse
+PSP front-end screen (the displayed buffer, 480x272 at stride 512): the clear leaves `4` (127,242 of 130,560 visible pixels on
+Grid Selection); a widget stamps its quad's whole rectangle, transparent texels included (alpha test off at the prim), with
+`Gu_StencilFunc(ALWAYS, ref, 0xff)` and `REPLACE`. The refs: `Selector` `80 + 150 t` (the pulse), the card title a pulsing
+`70..220` in steps of 15, the footer tag `64` (`RealGlow="64"`); Main Menu, Track Select and Ship Select stamp regions of their own (alpha histograms in
+`docs/ui/campaign-screens.md`, widgets not identified).
+The stamp sources are `Text_Draw` (`RealGlow` or the pulse formula) and the `Image` draw `FUN_0889812c` (`(1 - f) * 150 + 70`
+when its flag `0x200` is set); `docs/ui/campaign-screens.md` has the census. Ours: `Draw::GlowStamp` and a second draw into a
+scratch frame whose alpha is rewritten to the mask (`oag_game::render::glow`), then `oag_post::bloom`.

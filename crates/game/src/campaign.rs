@@ -99,6 +99,10 @@ pub struct Campaign {
     /// sheet carries it under - see `oag_ui_screens::campaign::hd::cell_emblems`.
     /// Empty on every other title.
     pub circuit_emblems: std::collections::HashMap<String, String>,
+    /// Whether this title's front end blooms over the glow mask its widgets stamp
+    /// ([`oag_title::Campaign::frontend_glow`]); a screen's [`Draw::GlowStamp`]s are dropped
+    /// otherwise, so a title that does not bloom draws as it always did.
+    pub frontend_glow: bool,
 }
 
 /// [`Campaign::nav_legend`]/[`Campaign::ticker`]: both live on the front-end
@@ -194,6 +198,18 @@ pub fn static_footer_overlay(
 #[must_use]
 pub fn draws_hd_campaign(title: &oag_title::Title) -> bool {
     title.campaign.dialect.draws_hd_screens()
+}
+
+/// `layers` with the glow-mask stamps dropped unless the title's front end blooms
+/// ([`Campaign::frontend_glow`]).
+#[must_use]
+pub fn gate_glow(frontend_glow: bool, mut layers: oag_ui::menu::Layers) -> oag_ui::menu::Layers {
+    if !frontend_glow {
+        for list in [&mut layers.backdrop, &mut layers.chrome, &mut layers.body] {
+            list.retain(|draw| !matches!(draw, oag_ui::frontend::Draw::GlowStamp { .. }));
+        }
+    }
+    layers
 }
 
 /// Reads the campaign screen off `archives`, title-dispatched: Pulse's
@@ -339,6 +355,7 @@ pub fn load(
         grid_layout_fury: None,
         flyers: None,
         circuit_emblems: std::collections::HashMap::new(),
+        frontend_glow: title.campaign.frontend_glow.is_some(),
     })
 }
 
@@ -525,6 +542,7 @@ fn load_hd(
         grid_layout_fury,
         flyers,
         circuit_emblems,
+        frontend_glow: title.campaign.frontend_glow.is_some(),
     })
 }
 
@@ -939,6 +957,7 @@ fn load_omega(
         grid_layout_fury,
         flyers,
         circuit_emblems,
+        frontend_glow: title.campaign.frontend_glow.is_some(),
     })
 }
 
@@ -1050,8 +1069,32 @@ pub fn with_opening_difficulty(
 
 #[cfg(test)]
 mod tests {
-    use super::{race_mode_for_cell, same_archive, with_opening_difficulty};
+    use super::{gate_glow, race_mode_for_cell, same_archive, with_opening_difficulty};
     use oag_tables::race_campaign::Mode as CampaignMode;
+
+    /// Only Pulse's title record says its front end blooms, and a title that does not drops the
+    /// stamps its (shared) screen code emits.
+    #[test]
+    fn only_pulse_blooms_its_front_end_and_the_rest_drop_the_stamps() {
+        assert!(oag_pulse::TITLE.campaign.frontend_glow.is_some());
+        for title in [
+            &oag_pure::TITLE,
+            &oag_hd::TITLE,
+            &oag_omega::TITLE,
+            &oag_2048::TITLE,
+        ] {
+            assert!(title.campaign.frontend_glow.is_none(), "{}", title.name);
+        }
+        let stamped = || oag_ui::menu::Layers {
+            body: vec![oag_ui::frontend::Draw::GlowStamp {
+                rect: [0.0; 4],
+                value: 100,
+            }],
+            ..Default::default()
+        };
+        assert_eq!(gate_glow(true, stamped()).body.len(), 1);
+        assert!(gate_glow(false, stamped()).body.is_empty());
+    }
 
     /// A saved rung beats the title's default; with none saved, Pulse opens
     /// on Medium and HD on Easy; a rung saved for one title never reaches

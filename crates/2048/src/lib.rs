@@ -214,6 +214,7 @@ pub const TITLE: &Title = &Title {
         grid_archive: None,
         fury_card_gain: None,
         grid_card_pose: None,
+        frontend_glow: None,
         origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
         custom_campaigns: false,
     },

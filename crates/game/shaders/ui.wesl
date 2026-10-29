@@ -296,3 +296,10 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     let alpha = select(straight.a, 0.0, is_additive);
     return vec4<f32>(straight.rgb * straight.a, alpha);
 }
+
+// Writes only the alpha channel (the pipeline masks the rest): the front end's glow mask,
+// `Draw::GlowStamp`. The stamp's value rides in the instance colour's alpha.
+@fragment
+fn fs_stamp(in: VertexOut) -> @location(0) vec4<f32> {
+    return vec4<f32>(0.0, 0.0, 0.0, in.color.a);
+}

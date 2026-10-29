@@ -55,6 +55,18 @@ pub(super) struct Quad {
     pub(super) tile: [f32; 2],
 }
 
+/// The vertex attributes of a [`Quad`] instance, in field order.
+pub(super) const ATTRIBUTES: [wgpu::VertexAttribute; 8] = wgpu::vertex_attr_array![
+    0 => Float32x4,
+    1 => Float32x4,
+    2 => Float32x4,
+    3 => Float32x4,
+    4 => Float32,
+    5 => Float32,
+    6 => Float32x2,
+    7 => Float32x2
+];
+
 /// A quad whose `uv` is in glyph-atlas pixels, sampled for coverage.
 pub(super) const MODE_ATLAS: f32 = 0.0;
 /// A quad whose `uv` is in sprite-sheet pixels, sampled as RGBA.

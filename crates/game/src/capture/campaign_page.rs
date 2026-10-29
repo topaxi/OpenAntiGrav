@@ -540,6 +540,7 @@ pub(super) fn campaign_page(
             }
         }
     };
+    let layers = crate::campaign::gate_glow(campaign.frontend_glow, layers);
     let split = layers.backdrop.len();
     let shot = campaign.flyers.and_then(|flyers| {
         let shows = match (flyer_name, selected_campaign) {
