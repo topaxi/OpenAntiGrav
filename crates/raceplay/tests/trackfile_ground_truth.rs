@@ -725,3 +725,155 @@ fn the_other_titles_default_circuits_round_trip_too() {
     }
     println!("round-tripped: {checked:?}");
 }
+
+/// A track file's Zone race: `mode = Zone` on `file` against `source`.
+fn zone_options(source: &std::path::Path, file: &std::path::Path) -> race::Options {
+    race::Options {
+        source: source.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::Zone,
+        foreign_track: Some(file.to_path_buf()),
+        ..race::Options::default()
+    }
+}
+
+/// Zone on an own-format track file, Pulse as the host: the file's loop is the
+/// Zone circuit, the title's own Zone ramp (`<Zone>`) is the
+/// craft's speed law, the report names the Zone circuit environment a file has
+/// none of, and the autopilot flies the ramp up to zone 24 (a little over four minutes) with no
+/// respawn. Dropping the loader's Zone refusal or the ramp fails it. Run on the
+/// committed fixture and on the example campaign's Octagon where the submodule
+/// is checked out.
+#[test]
+#[ignore = "needs a Pulse image"]
+fn a_zone_race_on_a_track_file_flies_the_hosts_zone_ramp_round_the_files_loop() {
+    let Some(image) = oag_testdata::image(IMAGES[1]) else {
+        return;
+    };
+    let fixtures =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../trackfile/tests/fixtures");
+    let octagon = oag_testdata::repo_root()
+        .join("assets/mods/examples/example-campaign/tracks/practice-octagon.track.toml");
+    let files = [fixtures.join("oval.track.toml"), octagon]
+        .into_iter()
+        .filter(|file| file.is_file());
+    for file in files {
+        let loaded = race::load(&zone_options(&image, &file))
+            .unwrap_or_else(|e| panic!("{}: {e:#}", file.display()));
+        let report = loaded.report.join("\n");
+        for needle in ["the Zone variant", "zone: a track file has no Zone variant"] {
+            assert!(
+                report.contains(needle),
+                "{}: report lacks {needle:?}",
+                file.display()
+            );
+        }
+        assert!(
+            !loaded
+                .report
+                .iter()
+                .any(|l| l.starts_with("zone: ") && l.contains(" -> ")),
+            "a file is never swapped for a disc circuit's Zone file:\n{report}"
+        );
+        assert!(
+            loaded
+                .report
+                .iter()
+                .any(|l| l.starts_with("<Zone>: start ")),
+            "the title's Zone ramp is read: {report}"
+        );
+        assert!(loaded.setup.zone.is_some(), "{}", file.display());
+        let mut race = race::Race::start(loaded.setup);
+        race.set_autopilot(true);
+        let inputs = oag_gameplay::PlayerInputs::none();
+        for _ in 0..15_200 {
+            race.tick(&inputs);
+        }
+        let zone = race.sim.world.race[0].zone;
+        println!("{}: zone {zone} after 15200 ticks", file.display());
+        assert!(zone >= 24, "{}: zone {zone}", file.display());
+        assert_eq!(race.respawns_of(0), 0, "{}", file.display());
+        assert!(!race.finished(), "{}", file.display());
+    }
+}
+
+/// Zone on a track file where the host has a Zone default of its own: HD's
+/// `ZoneSky.gtf` and per-stage Zone grade over the file's flat-shaded loop. A
+/// file with a sky of its own keeps it, and the report says the Zone sky is not
+/// drawn over it. Pulse has no title-wide Zone sky, so it draws none.
+#[test]
+#[ignore = "needs an HD image"]
+fn a_zone_race_on_a_track_file_takes_the_hosts_zone_sky_unless_the_file_has_its_own() {
+    let Some(hd) = oag_testdata::image("data/images/hdfury-ps3-eu.iso") else {
+        return;
+    };
+    let fixtures =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../trackfile/tests/fixtures");
+    let loaded = race::load(&zone_options(&hd, &fixtures.join("oval.track.toml"))).expect("loads");
+    let report = loaded.report.join("\n");
+    for needle in [
+        "/data/tex/zonesky.gtf: the Zone sky, drawn in place of the circuit's own",
+        "per-stage Zone track textures decoded",
+        "the Zone colour grade",
+        "zone: a track file has no Zone variant",
+    ] {
+        assert!(
+            report.contains(needle),
+            "report lacks {needle:?}:\n{report}"
+        );
+    }
+    let own = race::load(&zone_options(
+        &hd,
+        &fixtures.join("blender_loop.track.toml"),
+    ))
+    .expect("loads");
+    let report = own.report.join("\n");
+    assert!(
+        report.contains("zone: the file's own sky stands; Wipeout HD's Zone sky (")
+            && !report.contains("the Zone sky, drawn in place of the circuit's own"),
+        "{report}"
+    );
+}
+
+/// The same Zone race on every other title that can host one: Pure, HD, Omega, the
+/// 2048 base package and Pulse's PS2 disc each load the oval in Zone with their own
+/// craft, ramp and HUD, and the autopilot's zone counter climbs (zone 1 lands at
+/// ten seconds after GO).
+#[test]
+#[ignore = "needs the other titles' images"]
+fn a_zone_race_on_a_track_file_loads_and_climbs_on_every_title() {
+    let file = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../trackfile/tests/fixtures/oval.track.toml");
+    let mut checked = Vec::new();
+    for image in [
+        "data/images/pure-psp-eu.chd",
+        "data/images/hdfury-ps3-eu.iso",
+        "data/images/omega-ps4-eu.pkg",
+        "data/extracted/vita/PCSF00007",
+        "data/images/pulse-ps2-eu.chd",
+    ] {
+        let Some(path) = oag_testdata::exact(image) else {
+            continue;
+        };
+        let loaded =
+            race::load(&zone_options(&path, &file)).unwrap_or_else(|e| panic!("{image}: {e:#}"));
+        assert!(
+            loaded
+                .report
+                .iter()
+                .any(|l| l.starts_with("zone: a track file has no Zone variant")),
+            "{image}"
+        );
+        assert!(loaded.setup.zone.is_some(), "{image}: no Zone ramp");
+        let mut race = race::Race::start(loaded.setup);
+        race.set_autopilot(true);
+        let inputs = oag_gameplay::PlayerInputs::none();
+        for _ in 0..1_800 {
+            race.tick(&inputs);
+        }
+        let zone = race.sim.world.race[0].zone;
+        assert!(zone >= 1, "{image}: zone {zone} after 1800 ticks");
+        checked.push(image);
+    }
+    println!("checked: {checked:?}");
+}

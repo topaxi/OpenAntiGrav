@@ -242,15 +242,29 @@ fn foreign(
     craft_title: &'static oag_title::Title,
     report: &mut Vec<String>,
 ) -> Result<Inputs> {
-    if options.mode == Mode::Zone {
-        anyhow::bail!("Zone is defined by a title's own Zone circuits; a foreign track has none");
-    }
     #[cfg_attr(not(feature = "view"), allow(unused_mut))]
     let (mut f, lines) = crate::foreign::read_any(path)?;
     crate::foreign::check_host(&f, title)
         .and_then(|()| crate::foreign::check_titles(&f, craft_title))
         .map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))?;
     report.extend(lines);
+    if options.mode == Mode::Zone {
+        report.push(
+            "zone: a track file has no Zone variant, so the file's own geometry and spline are \
+             the Zone circuit; what a disc keeps in a circuit's Zone file is named above as \
+             drawn as nothing, and what the title keeps for every Zone race (craft, speed ramp, \
+             HUD, sound, stage grade) is the host's own"
+                .into(),
+        );
+        if let (Some(zone_sky), Some(art)) = (title.race.zone_sky, &f.art)
+            && (art.sky.is_some() || art.skybox.is_some())
+        {
+            report.push(format!(
+                "zone: the file's own sky stands; {}'s Zone sky ({zone_sky}) is not drawn over it",
+                title.name
+            ));
+        }
+    }
     if let Some(host) = &f.host {
         report.push(format!(
             "track file borrows from {host}'s disc; the track source is {}",
@@ -372,6 +386,25 @@ pub(super) fn export(
         art,
         notes,
     })
+}
+
+/// **The host title's Zone sky for a track file that carries no sky of its own**,
+/// the one Zone-only part that is a title default rather than a circuit's file
+/// (`RaceDefaults::zone_sky`, HD's `ZoneSky.gtf`). `None` for a disc circuit, for
+/// a race that is not Zone and for a title with no Zone sky (Pulse keeps its Zone
+/// sky in the circuit's Zone file, which a track file has none of).
+#[cfg(feature = "view")]
+pub(super) fn host_zone_sky(
+    archives: &mut Archives,
+    track: &str,
+    title: &'static oag_title::Title,
+    mode: Mode,
+    report: &mut Vec<String>,
+) -> Option<Model> {
+    if !track.starts_with("foreign:") || title.race.zone_sky.is_none() {
+        return None;
+    }
+    super::environment::hd_sky_model(archives, track, title.race, mode, report)
 }
 
 /// A track file's sky: the `Skycube` of the host circuit its art names, built

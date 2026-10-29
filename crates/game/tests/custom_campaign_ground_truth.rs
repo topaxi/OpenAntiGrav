@@ -59,7 +59,14 @@ fn check(title: &'static oag_title::Title, source: &std::path::Path) {
                         .map(oag_raceplay::catalogue::Track::entry_name),
                 })
                 .unwrap_or_else(|refusal| panic!("{} on {}: {refusal}", cell.name, title.name));
-            assert!(!plan.class_is_fallback, "{}", cell.name);
+            // A Zone cell names no speed class (the disc's own author `Zone`),
+            // so it races at the fallback.
+            assert_eq!(
+                plan.class_is_fallback,
+                plan.mode == oag_race::Mode::Zone,
+                "{}",
+                cell.name
+            );
             for team in event.team.iter().chain(&event.teams) {
                 assert!(
                     has_team(team),
@@ -106,6 +113,23 @@ fn check(title: &'static oag_title::Title, source: &std::path::Path) {
         .filter_map(|event| Some(event.track_file.as_ref()?.id.as_str()))
         .collect();
     assert_eq!(files, ["hillside", "practice-octagon"]);
+    // The Practice Octagon is a Zone event on that track file: it plans as Zone
+    // on the file's own path, with a zone count for its medals and no lap count.
+    let zone = &custom.grids[1].cells[2];
+    let file = custom
+        .event(&zone.name)
+        .unwrap()
+        .track_file
+        .as_ref()
+        .unwrap();
+    let plan = launch::plan_cell_for(zone, "venom", ladder, |_, _| {
+        Some(file.path.display().to_string())
+    })
+    .unwrap();
+    assert_eq!(plan.mode, oag_race::Mode::Zone);
+    assert_eq!(plan.leg_entries, [file.path.display().to_string()]);
+    assert_eq!((plan.laps_override, zone.laps), (None, None));
+    assert!(zone.gold > zone.silver && zone.silver > zone.bronze);
     // The tournament keeps its three legs, in order.
     let tour = &custom.grids[1].cells[0];
     let plan = launch::plan_cell_for(tour, "venom", ladder, |_, id| {

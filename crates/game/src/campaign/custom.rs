@@ -493,9 +493,6 @@ fn compile_event(
                 "`file` replaces `track`, and a tournament's legs are disc circuits".to_string(),
             );
         }
-        if mode == Mode::Zone {
-            return Err("a track file has no Zone circuit".to_string());
-        }
         let track_file = files(file)?;
         track_titles.push(None);
         cell.track = Some(track_file.title.clone());

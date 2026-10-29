@@ -584,6 +584,10 @@ pub fn load(options: &Options) -> Result<Loaded> {
         Some(sky)
     } else if let Some(entry) = &foreign_art.sky {
         track_inputs::foreign_sky(&mut archives, entry, &mut report)
+    } else if let Some(sky) =
+        track_inputs::host_zone_sky(&mut archives, &track, title, options.mode, &mut report)
+    {
+        Some(sky)
     } else if !vex_geometry {
         None
     } else {
