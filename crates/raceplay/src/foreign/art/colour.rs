@@ -64,6 +64,16 @@ pub fn vertex(linear: [f32; 4]) -> [f32; 4] {
     .map(|byte| f32::from(byte) / 255.0)
 }
 
+/// A lit vertex's colour (the viewer's rig lights it; it carries no baked light
+/// and the PSP gave it no vertex colour) as the gamma floats the renderer
+/// takes, on no byte grid: the `.vex` path gives such a vertex an invented
+/// grey, `[0.75, 0.78, 0.82]`, which no byte spells.
+#[must_use]
+pub fn lit_vertex(linear: [f32; 4]) -> [f32; 4] {
+    let [r, g, b, a] = linear;
+    [to_gamma(r), to_gamma(g), to_gamma(b), a]
+}
+
 /// The linear value whose [`to_gamma`] is exactly `gamma`, where one lies within a
 /// few ulps of [`to_linear`]'s answer; otherwise the nearest. A colour the
 /// renderer takes as a float (the lens flare's, which its ring law steps in
@@ -114,7 +124,9 @@ mod tests {
 
     #[test]
     fn a_float_colour_comes_back_exactly() {
-        for g in [1.0f32, 0.6, 0.0, 0.9365, 0.619, 0.2, 0.7107] {
+        for g in [
+            1.0f32, 0.6, 0.0, 0.9365, 0.619, 0.2, 0.7107, 0.75, 0.78, 0.82,
+        ] {
             assert_eq!(to_gamma(exact_linear(g)), g, "{g}");
         }
     }

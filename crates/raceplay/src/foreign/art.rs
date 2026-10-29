@@ -258,7 +258,11 @@ fn vertex(mesh: &ArtMesh, i: usize, glow: f32) -> GpuVertex {
     GpuVertex {
         position: mesh.positions[i],
         normal: mesh.normals[i],
-        colour: colour::vertex(mesh.colours[i]),
+        colour: if mesh.material.lit {
+            colour::lit_vertex(mesh.colours[i])
+        } else {
+            colour::vertex(mesh.colours[i])
+        },
         texcoord: mesh.texcoords[i],
         lit: if mesh.material.lit { 1.0 } else { 0.0 },
         anim: 0,
@@ -553,9 +557,9 @@ pub fn from_model(model: &Model, entry: &str, names: &[Option<String>]) -> Art {
                 .map(|v| {
                     let [r, g, b, a] = v.colour;
                     [
-                        colour::to_linear(r),
-                        colour::to_linear(g),
-                        colour::to_linear(b),
+                        colour::exact_linear(r),
+                        colour::exact_linear(g),
+                        colour::exact_linear(b),
                         a,
                     ]
                 })
