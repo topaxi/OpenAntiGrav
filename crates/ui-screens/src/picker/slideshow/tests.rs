@@ -221,3 +221,99 @@ fn the_panel_bars_and_labels_are_read_above_any_named_screen() {
         "the panel draws before the still, since it sits before it in the XML"
     );
 }
+
+/// `Data\Ships\Assegai\screen.xml` as the disc authors it (compact form expanded): two
+/// screens, the split-screen lobby's first, each with its own `Mode3D` and `Model`.
+const CRAFT_XML: &str = r#"
+<Screen>
+<Screen name="MPLobby Info">
+<Mode3D><Values OriginX="-100.0" OriginY="20.0" nearZ="1.0"></Values>
+<Model name="Ship" DisableTransition="0">
+<Values Src="Data\Ships\Assegai\ship_FE.vex" x="0.0" y="0.0" z="-15.0" RotX="0.4" RotY="0.4"></Values>
+</Model></Mode3D>
+</Screen>
+<Screen name="Info">
+<Mode3D><Values OriginX="120.0" OriginY="20.0" nearZ="1.0"></Values>
+<Model name="Ship" DisableTransition="0">
+<Values Src="Data\Ships\Assegai\ship_FE.vex" x="0.0" y="0.0" z="-15.0" RotX="0.4" RotY="0.4"></Values>
+</Model></Mode3D>
+</Screen>
+</Screen>
+"#;
+
+/// Pulse's Ship Select has no turntable in code: the hull's pose is the craft `screen.xml`'s own
+/// `Mode3D` (`Info`'s, not the lobby's), with `farZ` left to `Mode3D_ReadValues`' default, and
+/// the sway is the hull's own `Anim Transform`.
+#[test]
+fn a_craft_places_its_hull_from_the_info_states_own_mode3d() {
+    let show = Slideshow::read(
+        CRAFT_XML,
+        r"Data\Ships\Assegai",
+        "Info",
+        &[],
+        &StringTable::default(),
+    )
+    .expect("the Info state reads");
+    let model = show.model.as_ref().expect("Info authors a Mode3D");
+    assert_eq!(model.src, r"Data\Ships\Assegai\ship_FE.vex");
+    assert_eq!(model.origin, [120.0, 20.0], "Info's, not MPLobby Info's");
+    assert_eq!(model.position, [0.0, 0.0, -15.0]);
+    assert_eq!(model.rotation, [0.4, 0.4], "authored, no turn added");
+    assert_eq!(model.depth, [1.0, oag_ui::screen::DEFAULT_FAR_Z]);
+}
+
+fn flat(_: &str) -> Option<Placed> {
+    Some(Placed {
+        x: 0,
+        y: 0,
+        width: 256,
+        height: 128,
+        quad_extent: None,
+        quad_centre: None,
+        blend: None,
+    })
+}
+
+fn alphas(draws: &[Draw]) -> Vec<f32> {
+    draws
+        .iter()
+        .map(|draw| match draw {
+            Draw::Sprite { color, .. } => color[3],
+            other => panic!("{other:?}"),
+        })
+        .collect()
+}
+
+/// Measured on Pulse PSP: each step's new cards ramp in linearly over
+/// [`STEP_FADE_SECONDS`], and the cards a step drops ramp out on top.
+#[test]
+fn a_step_cross_fades_the_cards_it_adds_and_drops() {
+    let show = show();
+    let half = STEP_FADE_SECONDS / 2.0;
+    let shadow = 0xCF as f32 / 255.0;
+    // Info -> Info2 at 2 s: the first card holds, its shadow and the second ramp in.
+    let a = alphas(&show.draws_fading(2.0 + half, STEP_FADE_SECONDS, &flat));
+    assert_eq!(a.len(), 3);
+    assert!((a[0] - 1.0).abs() < 1e-6, "{a:?}");
+    assert!((a[1] - 0.5 * shadow).abs() < 1e-3, "{a:?}");
+    assert!((a[2] - 0.5).abs() < 1e-3, "{a:?}");
+    // Settled: nothing extra, everything opaque.
+    let settled = alphas(&show.draws_fading(3.5, STEP_FADE_SECONDS, &flat));
+    assert_eq!(settled.len(), 3);
+    assert!((settled[2] - 1.0).abs() < 1e-6);
+    // Info3 -> Info2 Close at 6 s: the third card and its shadow ramp out, drawn on top.
+    let closing = show.draws_fading(6.0 + half, STEP_FADE_SECONDS, &flat);
+    let a = alphas(&closing);
+    assert_eq!(a.len(), 5, "three held plus the two leaving: {a:?}");
+    assert!((a[3] - 0.5 * shadow).abs() < 1e-3 && (a[4] - 0.5).abs() < 1e-3, "{a:?}");
+    // The first pass through the start state has nothing to cross-fade from, and
+    // `0.0` steps at once like `draws`.
+    assert_eq!(alphas(&show.draws_fading(0.1, STEP_FADE_SECONDS, &flat)), [1.0]);
+    assert_eq!(
+        show.draws_fading(2.0 + half, 0.0, &flat),
+        show.draws(2.0 + half, &flat)
+    );
+    // The cycle's wrap fades out the last state's cards too: Info2 Close -> Info at 8 s.
+    let a = alphas(&show.draws_fading(8.0 + half, STEP_FADE_SECONDS, &flat));
+    assert_eq!(a.len(), 3, "the first card and the two leaving: {a:?}");
+}

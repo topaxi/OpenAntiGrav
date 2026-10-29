@@ -339,6 +339,15 @@ pub fn mode3d_view_projection(model: &oag_ui::screen::Model, space: Space) -> Op
     Some((view_projection, model_matrix))
 }
 
+/// Whether a screen's authored `Mode3D` places its model: always, except a craft on the PS2
+/// pressing, whose `Origin` sign is unmeasured (it authors the PSP's `120` on a 640 wide grid
+/// and the circuit rule of negating it put the hull on top of the stat panel). PS2 keeps
+/// [`orbit_for`]'s capture-read orbit until a PCSX2 capture settles it.
+#[must_use]
+pub fn craft_mode3d_applies(kind: oag_ui_screens::picker::Kind, space: Space) -> bool {
+    kind != oag_ui_screens::picker::Kind::Ship || space.size != Space::PS2.size
+}
+
 /// One still of a slideshow as read off the disc: its entry name and its
 /// bytes, the pair `oag_hud::sprite::Sheet::extended` takes.
 pub type Still = (String, Vec<u8>);

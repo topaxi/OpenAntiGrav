@@ -529,7 +529,10 @@ impl PickerStage {
             return;
         }
         // `Track Creation`'s own `<Mode3D>` camera, when authored.
-        let mode3d_model = self.mode3d_model().cloned();
+        let mode3d_model = self
+            .mode3d_model()
+            .filter(|_| oag_game::preview::craft_mode3d_applies(self.model.kind(), space))
+            .cloned();
         let track_model = self.layout.hd_track.as_ref().and_then(|screen| screen.model);
         let ship_model = self
             .layout

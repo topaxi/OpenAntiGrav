@@ -757,7 +757,8 @@ pub fn run(
                 // hexagonal window's cards - reused here rather than read
                 // twice, since the two share one `screen.xml`.
                 let request = request.map(|r| PreviewRequest {
-                    mode3d: mode3d_model,
+                    mode3d: mode3d_model
+                        .filter(|_| crate::preview::craft_mode3d_applies(kind, space)),
                     seconds: options.menu_model_seconds.unwrap_or(r.seconds),
                     ..r
                 });

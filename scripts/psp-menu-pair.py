@@ -291,8 +291,8 @@ PULSE_PLAN = ",".join([
     "key:cross", "st:Cell Selection", "wait:3", "shot:cell", "back:Main Menu", "wait:1",
     "key:down", "key:cross", "wait:2", "st:Racebox", "wait:2", "shot:racebox",
     "key:cross", "wait:2", "st:Single Player", "wait:2", "shot:single",
-    "key:cross", "wait:3", "st:Track Creation", "wait:2", "shot:track",
-    "key:cross", "wait:3", "st:Team Selection", "wait:3", "shot:team", "back:Main Menu", "wait:1",
+    "key:cross", "st:Track Creation", "wait:3", "shot:track",
+    "key:cross", "st:Team Selection", "wait:3", "shot:team", "back:Main Menu", "wait:1",
     "key:down*5", "wait:1", "key:cross", "wait:2", "st:Additional", "wait:2", "shot:options", "back:Main Menu", "wait:1",
 ])
 

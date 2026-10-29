@@ -26,6 +26,7 @@ under fixed geometry. This one moves the geometry.
 | `0x08a6bb84` | `AnimTransform_ClassTag` | 88 | `void *(void)` |
 | `0x08a6bd48` | `Mesh_ClassTag` | 88 | `void *(void)` |
 | `0x08ad0fb4` | `g_anim_transform_vtable` | 85 | data |
+| `0x08b317b0` | `g_fe_anim_clock` | 85 | data - a pointer to the front end's clock object while `g_ingame` is null; `+0x40` is its seconds (see "The front end's clock") |
 | `0x08ab0818` | `g_ingame` | 85 | data - the in-game object, whose `+0x40` is the animation clock |
 | `0x08b620f8` | `g_anim_transform_desc` | 85 | data - the `desc` local `AnimTransform_Register` builds and passes to `Vex_RegisterClass`; see below |
 | `0x08813328` | `InGame_Update` | 85 | `int (float dt in f12, InGame *this in a0)` - advances `this->0x40` once its own boot sequence (`this->0x3c` < 3) has run |
@@ -510,3 +511,17 @@ caller and the class slot it sits in were not traced. Unnamed for the same reaso
   may also populate, is not traced.
 - **The third reader at `0890cefc`/`0890cf4c`**, found chasing the advancer
   above, has no Ghidra function covering it and is not named.
+
+## The front end's clock (2026-10-29, `pulse-picker-clock`)
+
+With `g_ingame` null (every menu), `AnimTransform_Update` reads
+`*(0x08b317b0) + 0x40` instead (`0x088fe0f4`..`0x088fe104`, disassembled).
+Read live on Pulse PSP USA at Ship Select: the value is emulated seconds,
+advancing with the CPU and stopping when it is stopped (413.66 s then 418.90 s
+across five emulated seconds), and the live ship node's `+0x80` held that value
+to within a frame while its `+0x40` ran 0.48 s ahead of the seconds since the
+screen's entry and wrapped at its 5.9833 s `LoopEnd` (`3.65 -> 0.07` across the wrap).
+Confidence 85 for the clock, 90 for the node fields (`+0x40`, `+0x54` loop,
+`+0x80`, `+0x84` pause). `Ship Select`'s per-frame `+0x10c` is the up/down
+repeat timer, not a turn. A 2048/Omega check: not checkable here (Vita3K/PS4
+object layouts differ); HD authors the same `Anim Transform` (`hd-status.md`).
