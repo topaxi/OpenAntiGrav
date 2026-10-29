@@ -714,7 +714,31 @@ neither frame shows it (it is held at its first frame).
 **Not the cause, measured.** The result capture (`records::save`, ghost save, tournament fold)
 costs 0.12 to 0.14 ms on the finishing frame and a ghost write 0.5 to 0.6 ms at a lap crossing;
 the two loyalty saves in `build_endrace` are the same kind of write (`std::fs::write`, no fsync).
-They stay on the frame thread. `ticks` is 0.2 to 1.5 ms across the finish.
+They stayed on the frame thread then; since 2026-10-29 they go through `records::save_in_background`
+(see "The save on the finish frame" below). `ticks` is 0.2 to 1.5 ms across the finish.
+
+### The save on the finish frame (2026-10-29, `cursor-pure-2048-saves`)
+
+The finishing frame's result capture (`records::save`) and the endrace loyalty saves were the last
+inline writes on the frame thread; the saves of race results, loyalty and `escape.rs` now go through
+`records::save_in_background`, as the campaign cursor and difficulty do. Same method as above
+(headless gamescope, release with line tables, Pulse PSP EU, vsync off, unlimited frame limit,
+`OAG_PHASE_SPIKE_MS=0`, `--autopilot`), but walked with `--drive` (the `--script` seconds no longer
+reach a race with the built-in `oag-extras` rows): Single Race on the campaign grid's default cell.
+Before is the same tree with the three call sites put back to an inline `records::save`; the runs
+alternate, load average 10 to 12.
+
+| Run | Finishing frame `total` (`ticks`, `prep`) |
+| --- | --- |
+| before 1, 2, 3 | 0.82 (0.25, 0.56), 0.89 (0.27, 0.62), 5.59 (2.36, 3.24) ms |
+| after 1, 2, 3 | 0.69 (0.11, 0.57), 0.76 (0.15, 0.61), 0.92 (0.17, 0.75) ms |
+
+The save was 0.12 to 0.14 ms on this host's SSD, so the win is small here (about 0.13 ms in the two
+quiet pairs) and the one 5.59 ms before-frame is the write meeting a busy disk; that is the case the
+change is for (a slower Deck SD card or a contended drive). Not measured on the Deck.
+`records::load` writes a copy still waiting before it reads, so a read right after a save sees it.
+**At exit** the process must join the last background write: `finish_background_saves`
+(`main/app.rs` on exit, `main/drive.rs` at the end of a `--drive` run); any new exit path calls it.
 
 **Limits.** (1) `--no-audio` is the null output backend: the mixer, cues and music fetch still
 run, and the frame thread's `ticks` phase shows no spike, so the audio work on the frame thread is

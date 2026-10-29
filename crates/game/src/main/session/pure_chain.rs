@@ -77,6 +77,14 @@ impl Session {
                     .map(|entry| (track.name.clone(), entry))
             })
             .collect();
+        let mut open = open;
+        // A relaunch reopens on the event last raced, as a session that raced it does.
+        if let Some(name) = self
+            .campaign_title()
+            .and_then(|title| self.records.campaign_cursor(&title).grid)
+        {
+            put_on_event(&mut open, &name, &self.records);
+        }
         if let Stage::Menu(stage) = &mut self.stage {
             stage.pure_chain = Some(open);
         }
@@ -106,13 +114,8 @@ impl Session {
         self.open_campaign();
         if let Stage::Menu(stage) = &mut self.stage
             && let Some(open) = stage.pure_chain.as_mut()
-            && let Some(event) = open.chain().campaign().event_named(name)
         {
-            open.chain_mut().return_to(&event);
-            open.refresh(&self.records, false);
-            if let Some(tag) = open.chain().tag_of(&event) {
-                open.choice_mut().select_tag(tag);
-            }
+            put_on_event(open, name, &self.records);
         }
     }
 
@@ -168,11 +171,25 @@ impl Session {
                     }
                     Chosen::Start(event) => {
                         self.play_navs(Some(Nav::Accept));
+                        self.keep_event_cursor(&event.name);
                         self.launch_campaign_cell(event.cell, None);
                     }
                 }
             }
         }
+    }
+}
+
+/// Puts `open` on the screen that picked the event named `name`, with the cursor on it; an
+/// event the disc no longer lists leaves the chain where it is.
+fn put_on_event(open: &mut PureChainStage, name: &str, records: &oag_game::records::Store) {
+    let Some(event) = open.chain().campaign().event_named(name) else {
+        return;
+    };
+    open.chain_mut().return_to(&event);
+    open.refresh(records, false);
+    if let Some(tag) = open.chain().tag_of(&event) {
+        open.choice_mut().select_tag(tag);
     }
 }
 

@@ -965,6 +965,7 @@ const HEADER: &str = "\
 ///   case the whole design exists for.
 #[must_use]
 pub fn load() -> Store {
+    land_waiting();
     let Some(path) = path() else {
         return Store::default();
     };
@@ -1033,12 +1034,30 @@ pub fn save(store: &Store) -> Result<()> {
 static WRITING: std::sync::Mutex<()> = std::sync::Mutex::new(());
 /// The copy [`save_in_background`] last asked to have written, until a writer takes it or an
 /// inline [`save`] supersedes it.
-static WAITING: std::sync::Mutex<Option<Store>> = std::sync::Mutex::new(None);
+static WAITING: std::sync::Mutex<Option<(PathBuf, Store)>> = std::sync::Mutex::new(None);
+
+/// Writes the copy [`save_in_background`] left waiting, if its writer has not taken it yet, so a
+/// [`load`] right after a save reads that save.
+fn land_waiting() {
+    let Ok(_writing) = WRITING.lock() else {
+        return;
+    };
+    let newest = WAITING.lock().ok().and_then(|mut waiting| waiting.take());
+    if let Some((path, store)) = newest
+        && let Err(e) = write_to(&path, &store)
+    {
+        error!("could not save the records: {e:#}");
+    }
+}
 
 fn write_file(store: &Store) -> Result<()> {
     let Some(path) = path() else {
         return Ok(());
     };
+    write_to(&path, store)
+}
+
+fn write_to(path: &std::path::Path, store: &Store) -> Result<()> {
     let text = format!(
         "{HEADER}{}",
         toml::to_string_pretty(store).context("serialising race records")?
@@ -1047,7 +1066,7 @@ fn write_file(store: &Store) -> Result<()> {
         crate::profile::create_dir_all(parent)
             .with_context(|| format!("creating {}", parent.display()))?;
     }
-    crate::profile::write(&path, text).with_context(|| format!("writing {}", path.display()))
+    crate::profile::write(path, text).with_context(|| format!("writing {}", path.display()))
 }
 
 /// The writer [`save_in_background`] last started, for [`finish_background_saves`].
@@ -1063,15 +1082,22 @@ static WRITER: std::sync::Mutex<Option<oag_thread::Task<()>>> = std::sync::Mutex
 /// and supersedes a copy still waiting, so no write overlaps another or lands out of order. The process calls
 /// [`finish_background_saves`] on its way out so the last one lands.
 pub fn save_in_background(store: &Store) {
+    if let Some(path) = path() {
+        save_in_background_to(path, store);
+    }
+}
+
+/// [`save_in_background`] to `path`: the seam the order test goes through.
+fn save_in_background_to(path: PathBuf, store: &Store) {
     // The browser keeps the file in `localStorage`, which a Web Worker cannot reach.
     #[cfg(target_arch = "wasm32")]
-    if let Err(e) = save(store) {
+    if let Err(e) = write_to(&path, store) {
         error!("could not save the records: {e:#}");
     }
     #[cfg(not(target_arch = "wasm32"))]
     {
         match WAITING.lock() {
-            Ok(mut waiting) => *waiting = Some(store.clone()),
+            Ok(mut waiting) => *waiting = Some((path, store.clone())),
             Err(_) => return,
         }
         let task = oag_thread::Task::spawn("records-save", || {
@@ -1079,8 +1105,8 @@ pub fn save_in_background(store: &Store) {
                 return;
             };
             let newest = WAITING.lock().ok().and_then(|mut waiting| waiting.take());
-            if let Some(store) = newest
-                && let Err(e) = write_file(&store)
+            if let Some((path, store)) = newest
+                && let Err(e) = write_to(&path, &store)
             {
                 error!("could not save the records: {e:#}");
             }

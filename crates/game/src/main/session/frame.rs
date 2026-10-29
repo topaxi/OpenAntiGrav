@@ -1001,9 +1001,7 @@ impl Session {
                     ..observation
                 };
                 self.records.record(key, observation);
-                if let Err(e) = records::save(&self.records) {
-                    error!("could not save race records: {e:#}");
-                }
+                records::save_in_background(&self.records);
             }
         }
 
