@@ -285,13 +285,6 @@ impl super::Race {
         } else {
             Vec::new()
         };
-            eprintln!(
-                "DBGE {:?} cam {:?}",
-                emitters.first().map(|e| e.at),
-                self.camera_frame().position
-            );
-        }
-        self.view
             .scenery_fx
             .weather_mut()
             .spray_mut()
