@@ -30,7 +30,7 @@ compiled and a race offered a module names it as left out in its load report.
 | The ABI | `oag_modhost::abi` | Core wasm: exports `memory`, `oag_abi` (1), `oag_io` (a 4,096-byte buffer), `tick`; **no imports at all** (the `oag` namespace is empty in ABI 1, so `rng-next` and `log` are not offered yet). The buffer's fixed little-endian layout is on that module's page; it carries the README's records only as far as Kiss Curse needs: the tick, the active-slot mask, the events, the blob, the reply |
 | Event | `wall-contact{slot}` | Raised in `Race::count_wall_contact` for a person's craft and an AI craft alike, **on every tick the craft touches a wall** (`contacts > floor_contacts`, the test `wall_contact_ticks` counts), at most once per craft per tick; delivered the next tick (the one-tick latency) |
 | Command | `scale-thrust{slot, factor}` | No `ticks` field and no host timer: the guest re-sends it each tick it wants it. `factor` finite and in `[0, 1]`; anything else, a slot with no craft, or two for one slot is a fault, never a clamp. **Multiplied** into `Ship::pending_thrust_scale`, so a Leach Beam drain armed the tick before is kept |
-| Kind | `[extension.rules]` in `oag-mod.toml` | A rules module, because section 2.1 lets a rules module touch any slot and a craft module only slots flying its hull: a curse on every craft would otherwise be one craft row per team. Section 1.1 names a rules module from a mode file; `modes/*.toml` does not exist yet, so until it does a mod's rules module runs in every race the mod is on for, on its titles, **except the original campaigns** (section 1.2) |
+| Kind | `[extension.rules]` in `oag-mod.toml` | A rules module, because section 2.1 lets a rules module touch any slot and a craft module only slots flying its hull: a curse on every craft would otherwise be one craft row per team. Section 1.1 names a rules module from a mode file; `modes/*.toml` does not exist yet, so until it does a mod's rules module runs in every race the mod is on for, on its titles, **except the original campaigns** (section 1.2) **and network races** (the host's race runs vanilla until phase 3; the lobby's fingerprint leaves the repository's examples out) |
 | State | `RaceSim::extensions` | Each module's blob (the manifest's `state_bytes`, at most 1,024), its fault tick, and the pending wall-contact bits, cloned with a snapshot and hashed last in `RaceSim::state_hash`; a race with no module hashes nothing there |
 | No replay | `Race::start_recording` | A modded race records none (section 4.4, phase 2's rule) |
 | Overlay | `oag_present::perf::mods` | The `Dev` overlay's `mods` block: per module fuel last tick, peak, share of the budget, call wall time, and the fault tick; a per-tick output timed in `oag-raceplay`, never hashed |
@@ -39,9 +39,10 @@ Proof: `oag_raceplay`'s `tests::extensions` (a vanilla race's 600 tick hashes fo
 to one constant in both builds and build no engine; a modded race hashes the same
 twice; a runaway module faults on the same tick twice while the race and the other
 module go on), `oag_modhost`'s unit tests, and the disc-backed
-`kiss_curse_ground_truth` (Pulse PSP EU, `16_Track`, throttle held: a second after
+`kiss_curse_ground_truth` (Pulse PSP EU, `16_Track`, Venom, throttle held: a second after
 the first wall contact the cursed craft is at 50.7 km/h against 115.6 km/h, two
-seconds after 15.6 against 81.7). `just check-extensions` lints the feature and runs
+seconds after 15.6 against 81.7; in a Single Race an AI craft's first contact
+leaves it at 255.3 km/h a second later against 410.7 km/h). `just check-extensions` lints the feature and runs
 the host's and `oag-raceplay`'s unit tests with it on.
 
 Not built from this page yet: the HUD MODDED tag and the results screen naming a

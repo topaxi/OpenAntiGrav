@@ -24,6 +24,10 @@
 //! | 1 s | 50.7 km/h | 115.6 km/h |
 //! | 2 s | 15.6 km/h | 81.7 km/h |
 //! | 5 s | 46.8 km/h | 83.3 km/h |
+//!
+//! The AI is cursed by the same law: in a Single Race with the player idle on the
+//! grid, the two races split at the first AI contact (slot 1, tick 2676, about
+//! 400 km/h); a second later that craft is at 255.3 km/h against 410.7 km/h.
 #![cfg(feature = "extensions")]
 
 use std::sync::Arc;
@@ -71,12 +75,16 @@ fn kiss_curse() -> Option<race::extensions::Source> {
 }
 
 fn race_with(extensions: Vec<race::extensions::Source>) -> Option<race::Race> {
+    race_in(oag_race::Mode::TimeTrial, extensions)
+}
+
+fn race_in(mode: oag_race::Mode, extensions: Vec<race::extensions::Source>) -> Option<race::Race> {
     let image = oag_testdata::image("data/images/pulse-psp-eu.chd")?;
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
         track: Some(TRACK.to_string()),
         class: "VENOM".to_string(),
-        mode: oag_race::Mode::TimeTrial,
+        mode,
         extensions,
         ..race::Options::default()
     })
@@ -121,5 +129,59 @@ fn a_craft_scraping_a_wall_is_slower_with_the_curse() {
         "a second after the first contact the cursed craft must be well down: {} against {}",
         cursed[t],
         plain[t]
+    );
+}
+
+/// Every craft's speed, km/h, every tick for `ticks` ticks, the player idle on the grid.
+fn field_speeds(mut race: race::Race, ticks: usize) -> Vec<[f32; oag_gameplay::MAX_SHIPS]> {
+    (0..ticks)
+        .map(|_| {
+            race.tick(&PlayerInputs::none());
+            std::array::from_fn(|slot| {
+                race.sim.world.ships[slot]
+                    .physics
+                    .body
+                    .linear_velocity
+                    .length()
+                    * oag_core::math::SPEED_TO_KMH
+            })
+        })
+        .collect()
+}
+
+#[test]
+#[ignore = "needs a Pulse disc image, the mod examples and --features extensions"]
+fn an_ai_craft_touching_a_wall_is_cursed_too() {
+    let Some(source) = kiss_curse() else { return };
+    let Some(cursed) = race_in(oag_race::Mode::SingleRace, vec![source]) else {
+        return;
+    };
+    let plain = race_in(oag_race::Mode::SingleRace, Vec::new()).unwrap();
+    const TICKS: usize = 3600;
+    let (cursed, plain) = (field_speeds(cursed, TICKS), field_speeds(plain, TICKS));
+    let (split, slot) = (0..TICKS)
+        .find_map(|t| {
+            (0..oag_gameplay::MAX_SHIPS)
+                .find(|&s| cursed[t][s] != plain[t][s])
+                .map(|s| (t, s))
+        })
+        .expect("no AI craft touched a wall");
+    for after in [0, 15, 30, 60, 90] {
+        let t = (split + after).min(TICKS - 1);
+        println!(
+            "slot {slot} tick {t} (split +{after}): cursed {:.1} km/h, plain {:.1} km/h",
+            cursed[t][slot], plain[t][slot]
+        );
+    }
+    assert_ne!(
+        slot, 0,
+        "the player sat on the grid; the first contact is an AI craft's"
+    );
+    let t = split + 60;
+    assert!(
+        cursed[t][slot] < plain[t][slot],
+        "the AI craft is slower a second after its first contact: {} against {}",
+        cursed[t][slot],
+        plain[t][slot]
     );
 }

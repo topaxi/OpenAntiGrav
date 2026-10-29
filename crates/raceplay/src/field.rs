@@ -541,7 +541,9 @@ impl Race {
     /// The wall counters for `slot` after its step: bookkeeping outside
     /// `state_hash`, for opponents and the player alike. See
     /// [`RaceSim::wall_contact_ticks`]; `was_racing` is the craft's state
-    /// before the step, so a wreck accrues nothing.
+    /// before the step, so a wreck accrues nothing. Also where a simulation mod's
+    /// `wall-contact` event is raised, which *is* hashed state when a module runs
+    /// ([`crate::extensions`]).
     pub(super) fn count_wall_contact(
         &mut self,
         slot: usize,

@@ -318,10 +318,15 @@ Still open from this slice:
   (README 4.2); the modded records table.
 - With the feature on and the examples submodule checked out, every race of a checkout
   run is cursed (the examples are on by default); turn it off on the MODS page.
-- Not checked by a test: an AI craft's wall contact reaching the guest on a disc
-  circuit (the event site is shared with the player's, `Race::count_wall_contact`,
-  and the fixture test scales an AI slot's thrust).
-- `oag-server` keeps the feature off (rule 6 lists `wasmtime`) until phase 3.
+- `oag-server` keeps the feature off (rule 6 lists `wasmtime`) until phase 3, and a
+  network race (LAN or online) attaches no module on either side; the lobby
+  fingerprint leaves `assets/mods/examples` out, so modules in a lobby need the
+  phase 3 module hashes first.
+- With the feature on, `Session::launch_race` reads the mods' manifests on the frame
+  thread at LAUNCH (`Mods::load`, as the LAN and online screens already do); the
+  `.wasm` itself is read on the load worker. A default build does neither.
+- The README's second no-engine test (menus and the MODS page with a module mod
+  installed build no engine) is not written.
 
 **Next example mod (maintainer, 2026-10-29): a turbo.** A button held boosts the
 craft and spends shield energy while it does; absorbing a pickup gives back either

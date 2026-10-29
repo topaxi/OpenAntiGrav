@@ -182,10 +182,10 @@ module = "ext/kiss_curse.wasm"
 ```
 
 The game must be built with the `extensions` feature
-(`cargo run -p oag-game --features extensions`); without it the race's load report
-says the module was left out. The manifest is read with the others; the `.wasm` is
-opened only by the race that runs it. A race running a module is MODDED and records
-no replay. The ABI, the event and the command are in
+(`cargo run -p oag-game --features extensions`); without it no module is looked for.
+The manifest is read with the others; the `.wasm` is opened only by the race that
+runs it. No module runs in an original campaign or a network race. A race running a
+module is MODDED and records no replay. The ABI, the event and the command are in
 [docs/architecture/wasm-extensions/](../architecture/wasm-extensions/README.md)
 ("What is built"); `assets/mods/examples/kiss-curse/` is the worked example.
 

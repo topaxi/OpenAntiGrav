@@ -497,12 +497,18 @@ impl Session {
         // title's authored two-player split HUD, so it needs the view count
         // before `split_screen::seat_for_launch` cuts the screen. See `race::Options::views`.
         // The rules modules of the mods that are on, read again here so a MODS page switch
-        // counts; an original campaign's race runs none (README 1.2), a mod campaign's does.
-        let original_campaign = (self.campaign_cell.is_some() && self.campaign_custom.is_none())
-            || self.pending_event.is_some();
-        match oag_game::mods::Mods::load(&self.settings.mods.disabled) {
-            Ok(mods) => oag_game::mod_extensions::attach(&mut options, &mods, original_campaign),
-            Err(e) => log::warn!("mods: {e:#}; the race runs no simulation mod"),
+        // counts (manifests only, on this thread: the `.wasm` is read by the load worker).
+        // None in an original campaign's race (README 1.2; a mod campaign's runs them) or
+        // a network race (the host's race runs vanilla).
+        #[cfg(feature = "extensions")]
+        {
+            let vanilla = (self.campaign_cell.is_some() && self.campaign_custom.is_none())
+                || self.pending_event.is_some()
+                || self.net.is_some();
+            match oag_game::mods::Mods::load(&self.settings.mods.disabled) {
+                Ok(mods) => oag_game::mod_extensions::attach(&mut options, &mods, vanilla),
+                Err(e) => log::warn!("mods: {e:#}; the race runs no simulation mod"),
+            }
         }
         self.seat_the_windows(&mut options);
         options.people = 0;

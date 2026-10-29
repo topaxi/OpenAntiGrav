@@ -53,13 +53,9 @@ fn reader(module: &oag_mod::Mod, name: &str) -> oag_raceplay::extensions::Reader
 }
 
 /// Fills `options.extensions` for a race: the rules modules of the mods that are on,
-/// or none in an original campaign (`original_campaign`), which stays vanilla.
-pub fn attach(
-    options: &mut oag_raceplay::Options,
-    mods: &crate::mods::Mods,
-    original_campaign: bool,
-) {
-    options.extensions = if original_campaign {
+/// or none for a race that stays `vanilla` (an original campaign, a network race).
+pub fn attach(options: &mut oag_raceplay::Options, mods: &crate::mods::Mods, vanilla: bool) {
+    options.extensions = if vanilla {
         Vec::new()
     } else {
         sources(mods.player())
