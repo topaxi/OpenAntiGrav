@@ -11,8 +11,8 @@
 //! Each test spawns the binary, so it goes through the same `Session` a window runs: the race
 //! box's own `launch_race`, the loading stage and the race build. What it reads is the game's
 //! own report, one JSON line per change (`--state-log`); no picture is parsed. The assertions
-//! are on the race the game says it loaded, so a launch that dropped the picked track, the
-//! picked craft or the track file reports something else and fails.
+//! are on the race the game says the loader was handed once `stage=race`, so a launch that dropped
+//! the picked track, the picked craft or the track file reports something else and fails.
 
 use std::path::{Path, PathBuf};
 use std::process::Output;
@@ -88,7 +88,7 @@ fn the_race_box_launches_the_track_and_craft_it_was_told_to_pick() {
         &image,
         "racebox",
         "boot; select racebox; press cross; until page=race; \
-         set race.mode=speed_lap; select start; press cross; \
+         set race.mode=speed_lap; select launch_race; press cross; \
          until screen=picker; select 03_Track; press cross; \
          until screen.id=ship-select; select Feisar; press cross; \
          until stage=race within 3000; ticks 30",
@@ -138,7 +138,7 @@ fn race_remix_launches_a_track_file_from_its_custom_title() {
         "remix-file",
         "boot; select remix; press cross; until page=remix; \
          set remix.track_title=CUSTOM; set remix.track=oval.track.toml; \
-         select start; press cross; until stage=race within 3000; ticks 30",
+         select launch_remix; press cross; until stage=race within 3000; ticks 30",
         Some(&tracks),
     );
     assert!(run.output.status.success(), "{}", run.stderr());

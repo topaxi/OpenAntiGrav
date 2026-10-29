@@ -28,6 +28,9 @@ pub struct Row {
     pub id: Option<String>,
     /// What the row says.
     pub label: String,
+    /// What an `action` row fires (`launch_race`, `quit`): the same in every language, unlike the label.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub action: Option<String>,
     /// `submenu`, `action`, `choice`, `toggle`, `binding`, `back` or `entry`.
     pub kind: &'static str,
     /// The settings key a `choice` or `toggle` row edits.

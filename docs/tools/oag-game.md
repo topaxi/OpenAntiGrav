@@ -181,7 +181,7 @@ oag-game data/images/pulse-psp-eu.chd --no-audio --no-intro \
     boot                                  # tap Start and Cross through the disc front end
     select racebox; press cross; until page=race
     set race.mode=speed_lap
-    select start; press cross
+    select launch_race; press cross
     until screen=picker; select 03_Track; press cross
     until screen.id=ship-select; select Feisar; press cross
     until stage=race within 3000
@@ -190,7 +190,7 @@ oag-game data/images/pulse-psp-eu.chd --no-audio --no-intro \
 
 `--drive "<steps>"` or `--drive-file <file>` (`#` starts a comment); steps are separated by
 newlines or `;`, and a word with spaces is quoted (`select "TRACK TITLE"`). `--state-log <file>`
-sends the state lines to a file, stderr otherwise. Run it with a profile of its own
+sends the state lines to a file, stderr otherwise. `--drive` needs one disc image (`--source`, or one on the search path) and refuses `--race`, `--screenshot`, `--dry-run` and `--launcher`. Run it with a profile of its own
 (`XDG_CONFIG_HOME` and friends): the menus save settings as a window does.
 
 | Step | Does |
@@ -198,7 +198,7 @@ sends the state lines to a file, stderr otherwise. Run it with a profile of its 
 | `boot` | Tap Start and Cross in turn while the disc's own front end is up (logo, language list) until our menus open. Those screens are the disc's and have no rows to select. |
 | `until <key=value ...> [within N]` | Wait until every condition holds. |
 | `expect <key=value ...>` | Fail now unless every condition holds. |
-| `select <row> [within N]` | Move focus to a row by pressing buttons, never by setting it. `<row>` is a row `id`, a setting key (`race.mode`), a label (case-insensitive) or `#index`; on a picker, an entry id (`03_Track`, `Feisar`). |
+| `select <row> [within N]` | Move focus to a row by pressing buttons, never by setting it. `<row>` is a row `id`, a setting key (`race.mode`), an action name (`launch_race`, `quit`: the same in every language), a label (case-insensitive) or `#index`; on a picker, an entry id (`03_Track`, `Feisar`). |
 | `set <setting>=<value> [within N]` | `select` the row of that setting, then step it right until it reads the value (its stored value, its label, or for a file the file name). An option the row lists but marks unusable (the custom-track check is still running) is waited for, then the step times out naming why. |
 | `press <button> ...` | Tap each in turn: held one tick, released the next. Waits out a page transition first. |
 | `ticks N` | Let N ticks pass. |
@@ -209,7 +209,7 @@ Conditions are `key=value` or `key!=value`, case-insensitive: `stage` (`launcher
 `frontend`, `menu`, `race`), `frontend` (the disc's state name), `page` (the menu page, under
 whatever is open over it), `screen` (`page`, `picker`, `campaign`, `prompt`, ...), `screen.id`
 (the page id, or `track-select`/`ship-select`), `title`, `focus` (the focused row's id, setting
-or label - any of them holds) and `race.title|track|track_file|team|variant|mode|source|craft_source`.
+or label - any of them holds) and `race.title|track|track_file|team|variant|mode|source|craft_source` (only once a race is loading).
 
 **What the game reports.** One JSON line whenever anything but the tick changed. A menu state:
 
@@ -221,10 +221,12 @@ or label - any of them holds) and `race.title|track|track_file|team|variant|mode
 ```
 
 A choice row carries `setting`, `value` and `values` (`value`, `label`, `unavailable` when the
-menu offers it but cannot use it yet); `enabled:false` is a greyed row. `race` is the race the
-next launch would use; from `stage=loading` it is the one launched, and on `stage=race` it adds
-`title` and is what the loader was handed (`track` is the circuit's archive entry, `track_file` a
-`--track-file` manifest, `team`, `variant`, `mode`, `craft_source` for a remix).
+menu offers it but cannot use it yet); an action row carries `action`; `enabled:false` is a greyed
+row. `race` appears from `stage=loading` on a race's own loading screen, and is what the loader
+was handed: `source`, `craft_source` for a remix, `track` (the circuit's archive entry) or
+`track_file` (a `--track-file` manifest), `team`, `variant`, `mode`; on `stage=race` it adds the
+loaded `title`. In the menus it is absent: a pick still open in a picker has not reached the
+launch options, so reporting them there would mislead.
 
 **Timeouts and failures** are the run's exit status. Each waiting step has `within N` ticks
 (default 1800, thirty seconds of game time); ticks spent on a loading screen are not counted, a
@@ -244,7 +246,7 @@ RACE REMIX with a track file (`OAG_TRACKS` names the directory the CUSTOM title 
 OAG_TRACKS=crates/trackfile/tests/fixtures oag-game data/images/pulse-psp-eu.chd --no-audio \
   --no-intro --drive 'boot; select remix; press cross; until page=remix
     set remix.track_title=CUSTOM; set remix.track=oval.track.toml
-    select start; press cross; until stage=race within 3000'
+    select launch_remix; press cross; until stage=race within 3000'
 ```
 
 **Making a screen drivable.** `main/drive.rs` builds the state from the stage on screen and keeps

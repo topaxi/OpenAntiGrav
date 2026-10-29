@@ -795,11 +795,19 @@ pub(crate) struct DevArgs {
     /// `ticks 60`, `screenshot out.png`, `expect stage=race`, `quit`. The game reports its state
     /// as JSON lines (`--state-log`); the script reads that, never a picture. Needs `--source`
     /// or one disc image in the search path. See docs/tools/oag-game.md, "Driving the menus".
-    #[arg(long, value_name = "STEPS", conflicts_with = "drive_file")]
+    #[arg(
+        long,
+        value_name = "STEPS",
+        conflicts_with_all = ["drive_file", "race", "screenshot", "dry_run", "trace_out", "launcher"]
+    )]
     pub(crate) drive: Option<String>,
 
     /// `--drive`, with the script read from a file (`#` starts a comment).
-    #[arg(long, value_name = "FILE")]
+    #[arg(
+        long,
+        value_name = "FILE",
+        conflicts_with_all = ["race", "screenshot", "dry_run", "trace_out", "launcher"]
+    )]
     pub(crate) drive_file: Option<std::path::PathBuf>,
 
     /// Where `--drive` writes its state, one JSON line per change. Stderr when absent.

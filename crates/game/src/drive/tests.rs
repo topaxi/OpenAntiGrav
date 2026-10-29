@@ -125,10 +125,15 @@ fn a_row_that_is_not_there_fails_with_the_rows_that_are() {
 }
 
 #[test]
-fn a_row_is_found_by_id_setting_label_or_index() {
-    let list = rows(&[("Alpha", Some("a"), None), ("Beta", None, Some("x.b"))]);
+fn a_row_is_found_by_id_setting_action_label_or_index() {
+    let mut list = rows(&[
+        ("Alpha", Some("a"), None),
+        ("Beta", None, Some("x.b")),
+        ("GO", None, None),
+    ]);
+    list[2].action = Some("launch_race".into());
     let s = screen(0, None, list);
-    for target in ["a", "x.b", "beta", "#1"] {
+    for target in ["a", "x.b", "beta", "#1", "launch_race"] {
         assert!(Select::new(target).row(&s).is_some(), "{target}");
     }
 }

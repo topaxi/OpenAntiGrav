@@ -40,6 +40,7 @@ fn rows_listing(screen: &Screen) -> String {
                 .id
                 .as_deref()
                 .or(row.setting.as_deref())
+                .or(row.action.as_deref())
                 .unwrap_or(&row.label);
             format!("{name:?}")
         })
@@ -52,7 +53,7 @@ fn rows_listing(screen: &Screen) -> String {
     )
 }
 
-/// The row `target` names: a row id, a setting key, a label (case-insensitive) or `#index`.
+/// The row `target` names: a row id, a setting key, an action name, a label (case-insensitive) or `#index`.
 fn find<'a>(screen: &'a Screen, target: &str) -> Option<&'a Row> {
     if let Some(index) = target
         .strip_prefix('#')
@@ -63,6 +64,7 @@ fn find<'a>(screen: &'a Screen, target: &str) -> Option<&'a Row> {
     let by = |wanted: &dyn Fn(&Row) -> bool| screen.rows.iter().find(|row| wanted(row));
     by(&|row| row.id.as_deref() == Some(target))
         .or_else(|| by(&|row| row.setting.as_deref() == Some(target)))
+        .or_else(|| by(&|row| row.action.as_deref() == Some(target)))
         .or_else(|| by(&|row| row.label.eq_ignore_ascii_case(target)))
 }
 

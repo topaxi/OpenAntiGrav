@@ -72,6 +72,7 @@ impl Host {
         }
     }
 
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     fn headless(size: winit::dpi::PhysicalSize<u32>) -> Self {
         Self { window: None, size }
     }
@@ -448,7 +449,7 @@ impl Gpu {
     /// # Errors
     ///
     /// No usable adapter, or one that will not make a device.
-    #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
+    #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn headless(
         size: winit::dpi::PhysicalSize<u32>,
         renderer: &display::Renderer,
@@ -713,6 +714,7 @@ impl Output {
     }
 
     /// A headless session's last drawn frame, for a `screenshot` step to read back.
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     pub(crate) fn offscreen(&self) -> Option<&wgpu::Texture> {
         self.offscreen.as_ref()
     }

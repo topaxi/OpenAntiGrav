@@ -49,6 +49,9 @@ const WAIT_FRAME: Duration = Duration::from_micros(16_667);
 /// The device or session will not open, a step times out, or a row a step names is not there.
 /// The message carries the step, its line and the last state reported.
 pub(crate) fn run(app: &mut App, script: Script, state_log: Option<&Path>) -> Result<()> {
+    if app.launcher.is_some() {
+        bail!("--drive: no disc image was chosen and the search path holds several; pass --source <image>");
+    }
     let size = app.settings.display.window_size;
     let gpu = Gpu::headless(
         winit::dpi::PhysicalSize::new(size.width, size.height),
@@ -320,13 +323,17 @@ fn state_of(session: &Session) -> State {
         }
         _ => {}
     }
-    if matches!(state.stage.as_str(), "menu" | "loading" | "race") {
+    // The race a launch handed the loader: from the race's own loading screen on. Before that
+    // `race_options` is what the menus last wrote, which a pick still open may not have reached.
+    if matches!(&session.stage, Stage::Race(_))
+        || matches!(&session.stage, Stage::Loading(stage) if stage.race.is_some())
+    {
         state.race = resolved(session);
     }
     state
 }
 
-/// The race the next launch would use, or the one launched; its `title` once it is loaded.
+/// The race the loader was handed; its `title` once it is loaded.
 fn resolved(session: &Session) -> Option<Resolved> {
     let options = session.race_options.as_ref()?;
     Some(Resolved {
@@ -462,6 +469,10 @@ fn page_screen(stage: &MenuStage) -> Screen {
             };
             Row {
                 index,
+                action: match entry {
+                    Entry::Run { action, .. } => Some(action.name().to_string()),
+                    _ => None,
+                },
                 id: page.meta.get(index).and_then(|meta| meta.id.clone()),
                 label: entry.label().to_string(),
                 kind,
