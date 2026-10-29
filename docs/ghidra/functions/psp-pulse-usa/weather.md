@@ -293,6 +293,22 @@ touch geometry (`Modifier_WrapBox` only wraps and blows them), so it has no spla
   measured. At `original` `Fog::wet` is exactly `0.0`; the shader takes a branch on it, so
   the frame is byte-identical (8 of 8 `cmp` on `14_Track` and `07_Track` at ticks 600,
   1000, 1500 and 2000).
+- **The road spray** (`scenery_fx::spray`, `Race::spray_emitters`). The original's craft
+  throw no spray off a wet road either; ours (chosen, not measured, no confidence score).
+  At `enhanced` every racing craft, player and AI, throws small translucent droplets from
+  the road under its two rear corners (a ray along its own down axis within 2.5 hull
+  heights, so a craft off a jump throws none), at `MAX_PER_TICK` (5) times the road's
+  `wet_road()` times its speed over `FULL_SPEED_KMH` (600 km/h) per tick, none below 60 km/h.
+  Droplets are born anywhere along the path the craft covered that tick, carry a tenth of
+  its speed and are stopped by drag, kick up 1 to 3 units a second and live 0.35 s at
+  0.15 half-size and at most 0.4 alpha: a fine mist, not a cloud. Dry road (rain not yet
+  fallen, snow, or a covered section by `Race::point_is_under_cover`) throws nothing.
+  Capped at `spray::CAPACITY` (320 droplets, 1,920 vertices against the particle buffer's
+  49,152), own random stream, drawn through the splash art's dot cell into the alpha list
+  from the craft's between-ticks pose; nothing runs at `original`. The spawn is stepped per
+  tick, only the pose it reads is interpolated. Cost on `14_Track` (same recipe as above,
+  seed 1): CPU p50 5.51 and 5.51 ms before, 5.87 and 5.54 ms after (the unchanged build
+  moves 0.0 to 0.4 ms between runs); final state hash the same.
 - **Cost**, whole-race bench recipe (`OAG_RENDER_BENCH_RACE`, single race, seed 1,
   autopilot, 1280x720, first 3,000 ticks, debug profile at opt-level 2, taken under the gate lock,
   load average 2 to 10 at start, adapter RADV). CPU ms a frame, p50 (mean): Fort Gale

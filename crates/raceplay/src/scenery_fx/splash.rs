@@ -234,7 +234,7 @@ fn basis(normal: Vec3) -> (Vec3, Vec3) {
 }
 
 /// Six vertices, two triangles, of a quad sampling `cell` of the sheet.
-fn quad(
+pub(super) fn quad(
     centre: Vec3,
     right: Vec3,
     up: Vec3,
