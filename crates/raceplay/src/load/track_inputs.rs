@@ -433,12 +433,13 @@ pub(super) fn circuit_art(
     let model = circuit_model(archives, track, blob)?;
     let names = art::texture_names(blob)?;
     let mut out = art::from_model(&model, track, &names);
+    art::lights_from_track(&mut out, blob, &oag_vex::vex::nodes(blob)?);
     let moving = model.vertices.iter().filter(|v| v.xform != 0).count();
     let scrolling = model.vertices.iter().filter(|v| v.anim != 0).count();
     report.push(format!(
         "art exported: {} mesh(es), {} texture reference(s); not carried: {moving} vertices under \
          an Anim Transform (placed at time zero), {scrolling} with a texture animation, {} \
-         extra-pass draw(s), each draw's layer, alpha-test reference and glow",
+         extra-pass draw(s), each draw's depth point and glow",
         out.meshes.len(),
         out.textures.len(),
         model.shine_draws.len(),

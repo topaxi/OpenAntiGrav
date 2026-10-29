@@ -42,6 +42,12 @@ pub(super) fn write(
         if let Some(t) = m.material.texture {
             extras["oag_texture"] = json!(t);
         }
+        if let Some(r) = m.material.alpha_ref {
+            extras["oag_alpha_ref"] = json!(r);
+        }
+        if m.layer != 0 {
+            extras["oag_layer"] = json!(m.layer);
+        }
         push(
             &format!("{PREFIX}{n}"),
             vec![json!({ "attributes": attrs, "indices": indices, "mode": TRIANGLES })],
@@ -128,6 +134,25 @@ pub(super) fn read(index: usize, node: &gltf::Node<'_>, blob: &[u8]) -> Result<A
                 .ok_or_else(|| Error::accessor(&record, "oag_texture", "not an index"))
         })
         .transpose()?;
+    let alpha_ref = extras
+        .get("oag_alpha_ref")
+        .map(|v| {
+            v.as_u64()
+                .and_then(|r| u8::try_from(r).ok())
+                .ok_or_else(|| Error::accessor(&record, "oag_alpha_ref", "not in 0..=255"))
+        })
+        .transpose()?;
+    let layer = extras
+        .get("oag_layer")
+        .map(|v| {
+            v.as_u64()
+                .and_then(|l| u32::try_from(l).ok())
+                .ok_or_else(|| {
+                    Error::accessor(&record, "oag_layer", "not an unsigned 32-bit integer")
+                })
+        })
+        .transpose()?
+        .unwrap_or(0);
     Ok(ArtMesh {
         name: text("oag_name").unwrap_or("").to_string(),
         positions,
@@ -140,7 +165,9 @@ pub(super) fn read(index: usize, node: &gltf::Node<'_>, blob: &[u8]) -> Result<A
             blend,
             culled: flag("oag_culled", true),
             lit: flag("oag_lit", false),
+            alpha_ref,
         },
         shadow,
+        layer,
     })
 }

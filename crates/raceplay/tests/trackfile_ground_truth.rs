@@ -209,6 +209,11 @@ fn a_lone_craft_races_a_disc_circuit_and_its_exported_file_identically() {
             .sky_model
             .as_ref()
             .map(|m| (m.vertices.len(), m.indices.len(), m.draws.len()));
+        let native_hull = native_loaded.light.hull;
+        assert!(
+            native_hull.enabled(),
+            "{track}: the circuit lights its hulls"
+        );
         let mut native = race::Race::start(native_loaded.setup);
         let mut from_file = {
             let mut o = native_options.clone();
@@ -230,6 +235,11 @@ fn a_lone_craft_races_a_disc_circuit_and_its_exported_file_identically() {
                 "{track}: the file's sky is not the circuit's"
             );
             assert!(!report.contains("draws nothing"), "{report}");
+            // The file's ambient and sun reach the hulls through Pulse's GE rig.
+            assert_eq!(
+                loaded.light.hull, native_hull,
+                "{track}: the file's hull rig is not the circuit's"
+            );
             assert!(
                 loaded.track_model.draws.len() > 1_000,
                 "{track}: the art model is not the circuit's"

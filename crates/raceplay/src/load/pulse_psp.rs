@@ -52,7 +52,8 @@ pub(super) fn finish(
             &mut loaded.report,
         );
     }
-    if hull_lights {
+    // A foreign track has no blob; its file's own light is `foreign::art`'s.
+    if hull_lights && !track_blob.is_empty() {
         light_hulls(loaded, track_blob, &nodes);
     }
     if track_shine {

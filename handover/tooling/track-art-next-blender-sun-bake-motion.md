@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [pulse, pure]
 updated: 2026-10-29
-summary: "Track art landing 2: Blender art export, sun lamp, vertex-colour bake, keyframed motion, and the five maintainer decisions landing 1 left open"
+summary: "Track art landing 2: decision-12 format and hull rig landed (2a); next the Blender art export, sun lamp, vertex-colour bake, keyframed motion (2b)"
 size: L (60)
 difficulty: medium (50)
 categories: [tooling, rendering]
@@ -55,22 +55,23 @@ agreed in conversation and not yet built**, so nothing is re-derived. The decisi
 7. **Moving collision** (gates, platforms) is simulation state: world hash, replays, ghosts. Its own
    decision and ADR; do not smuggle it in through animation.
 
-## Open: the maintainer decides
+## Open
 
-- **Sun and hull lighting.** Landing 1 feeds `[art.sun]` only to the `mapped` shadows (when `shadows`)
-  and the flare. `Light::authored` is HD's equation and would relight Pulse hulls unlike any Pulse
-  race, so ships do not read the sun yet and ambient is read but not drawn. The ADR says ships read
-  the sun; that needs the host title's own hull law (Pulse's `HullLights`). Pick: per-host hull law,
-  or one new project-owned light model behind an opt-in (CLAUDE.md: enhanced rendering is opt-in).
-- **What `shadows` means on an export.** Pure's flare direction is not measured as its shadow light,
-  so a Pure export writes `shadows = false` and keeps native shadows. Confirm.
-- **Draw order vs buffer order.** The export keeps dispatch order (layer-sorted), so draw `range`
-  offsets differ from the `.vex` build; the format has no layer field. Confirm that trade or add one.
-- **`COLOR_0` is the renderer's colour verbatim** (byte/255, gamma space on PSP), not the linear
-  light glTF reads. The Bake operator must write what the renderer expects; decide whether the ADR's
-  "linear RGBA" wording gives way.
-- **An alpha-test reference field** on the art material (`oag_alpha_ref`); Pure's speedup pad relies
-  on reference 0.
+- **Landing 2a is in** (branch `track-art-2`, 2026-10-29): linear `COLOR_0` (sRGB curve, rounded to
+  the byte, in `oag_raceplay::foreign::art::colour`), `oag_alpha_ref` and `oag_layer` per art node,
+  `[[art.light]]` directional rows, `[art.lensflare] direction`, `shadows` absent meaning `true` (a
+  disc export writes `false`), and the PSP hull rig from `[art.ambient]` plus the sun plus the
+  directional rows, proven equal to `HullLights::from_track` on all 96 circuits and wired on the
+  foreign path. `docs/formats/track-file.md` has the census.
+- **`light_scale` was already in 1.0** on the spline (`_OAG_LIGHT_SCALE`), filled by the exporter
+  and read by the renderer on a foreign track. ADR-0076 decision 12 records it as a landing-2a finding
+  pending the maintainer, as are the Pulse `shadows = false` and the flare `direction` override; the
+  maintainer may still want `light_scale` moved (a 1.x format change).
+- **HD-family hosts** do not feed the sun to `Light::authored` yet: it needs the authored rig turned
+  on for a foreign track on an HD host and a check that it does not relight anything else. Open.
+- A lit art mesh's colour is a gamma float, not a byte (the `.vex` path's invented grey for an
+  uncoloured vertex is not a byte). The add-on should export `oag_lit` meshes knowing that.
+- ADR-0076 is still **Proposed**; the maintainer accepts it now that landing 2a is in.
 
 ## State of the sibling work
 
@@ -89,11 +90,11 @@ agreed in conversation and not yet built**, so nothing is re-derived. The decisi
 
 ## Next Steps
 
-1. Maintainer: accept or edit ADR-0076 and answer the five open questions above (10 minutes).
-2. Blender art export and import (item 1), with a generated checker texture as the committed fixture
+1. Blender art export and import (item 1), with a generated checker texture as the committed fixture
    (never disc pixels; `just audit-leakage`). A day.
-3. Sun lamp to `[art.sun]` and the hull-light decision, then the Bake operator (items 2, 3). A day
+2. Sun lamp to `[art.sun]` and the hull-light decision, then the Bake operator (items 2, 3). A day
    each, the second needs the first.
-4. Keyframed motion (items 4, 5): glTF animation read and write, the sampler against the race clock.
+3. Keyframed motion (items 4, 5): glTF animation read and write, the sampler against the race clock.
    Half a day to a day.
+4. HD-family host: the sun into `Light::authored` (about half a day with a screenshot check).
 5. Re-skin Hillside with a Pulse sky, host textures and a baked sun as the demonstration.

@@ -4,19 +4,21 @@
 //! What is compared, draw by draw in each list's own order: the draw's vertices
 //! (position, normal, colour, texture coordinate, the `lit` flag), its triangles
 //! rebased to its first vertex, its texture slot and the texture that slot
-//! resolves to, its blend class, its culled flag and its bounds. Each draw's
-//! block sits elsewhere in the vertex buffer: the art keeps the order the lists
-//! dispatch in, which the `.vex` build reaches by sorting on a render layer the
-//! format does not carry.
+//! resolves to, its blend class, its culled flag, its layer, its alpha-test
+//! reference and its bounds. Colours go through the file linear and come back
+//! as the circuit's own bytes. Beside the draws: the hull light rig built from
+//! the file's ambient, sun and light rows against `HullLights::from_track` on
+//! the circuit, and, where they agree, the whole vertex and index buffers.
 //!
 //! The reference is the circuit's own model with the finest tier of each
 //! `LodGroup` (a track file has no level of detail), built here from `oag_mesh`
 //! rather than through the exporter's own helper. Geometry under an
 //! `Anim Transform` is compared at its time-zero pose, the pose the exporter
 //! writes. Not compared, because the format carries none of it: texture
-//! animation, the extra pass, layers, depth points, alpha-test references, glow.
+//! animation, the extra pass, depth points, glow.
 
 use oag_mesh::mesh::{self, DrawCall, GpuVertex, Model, ModelTexture, Texels};
+use oag_mesh::mesh_render::HullLights;
 use oag_raceplay::foreign::art;
 use oag_trackfile::Track;
 use oag_vex::vex;
@@ -40,6 +42,20 @@ pub struct Tally {
     pub shared_names: usize,
     pub skies: usize,
     pub flares: usize,
+    /// Of the flares, those whose direction is not the circuit's first
+    /// directional light's, so the file carries the flare's own.
+    pub flare_directions: usize,
+    /// Circuits whose hull rig from the file equals the circuit's own.
+    pub hull_rigs: usize,
+    /// Circuits that author no light at all (no rig on either side).
+    pub no_hull_rig: usize,
+    /// Circuits whose whole vertex and index buffers equal the `.vex` build's
+    /// as built.
+    pub buffers_equal: usize,
+    /// The others, by vertices: the `.vex` build keeps the coarser `LodGroup`
+    /// tiers' vertices and indices after `keep_nearest` drops their draws. Each
+    /// is held to buffer equality once those are dropped (`kept_only`).
+    pub buffers_equal_without_lod_tiers: Vec<String>,
 }
 
 fn reference(archives: &mut oag_assets::Archives, track: &str, blob: &[u8]) -> Model {
@@ -150,10 +166,22 @@ fn same_draw(
     if rebased(want, w, wlo) != rebased(got, g, glo) {
         return Err("triangles differ".into());
     }
-    if (w.texture, w.blend, w.culled) != (g.texture, g.blend, g.culled) {
+    if (w.texture, w.blend, w.culled, w.layer, w.alpha_test_ref)
+        != (g.texture, g.blend, g.culled, g.layer, g.alpha_test_ref)
+    {
         return Err(format!(
-            "material: texture {:?} blend {:?} culled {} against {:?} {:?} {}",
-            w.texture, w.blend, w.culled, g.texture, g.blend, g.culled
+            "material: texture {:?} blend {:?} culled {} layer {:#x} alpha ref {:?} against \
+             {:?} {:?} {} {:#x} {:?}",
+            w.texture,
+            w.blend,
+            w.culled,
+            w.layer,
+            w.alpha_test_ref,
+            g.texture,
+            g.blend,
+            g.culled,
+            g.layer,
+            g.alpha_test_ref
         ));
     }
     let bounds = if w.moving {
@@ -210,6 +238,25 @@ pub fn art_draws_as_the_circuit(
     }
     tally.vertices += got.vertices.len();
     tally.triangles += got.indices.len() / 3;
+    if buffers(&want, &got, &poses).is_ok() {
+        tally.buffers_equal += 1;
+    } else {
+        let kept = kept_only(&want);
+        buffers(&kept, &got, &poses).map_err(|e| format!("buffers, LOD tiers dropped: {e}"))?;
+        tally.buffers_equal_without_lod_tiers.push(format!(
+            "{entry}: {} of {} vertices",
+            kept.vertices.len(),
+            want.vertices.len()
+        ));
+    }
+
+    let nodes = vex::nodes(&blob).map_err(|e| e.to_string())?;
+    let rig = art::hull_lights(a);
+    match (rig, HullLights::from_track(&blob, &nodes, 256)) {
+        (None, None) => tally.no_hull_rig += 1,
+        (got, want) if got == want => tally.hull_rigs += 1,
+        (got, want) => return Err(format!("hull rig {got:?} against {want:?}")),
+    }
 
     let names = art::texture_names(&blob).map_err(|e| e.to_string())?;
     let mut used: Vec<usize> = [
@@ -247,7 +294,6 @@ pub fn art_draws_as_the_circuit(
         return Err("the circuit authors a sky the export does not name".into());
     }
 
-    let nodes = vex::nodes(&blob).map_err(|e| e.to_string())?;
     if let Some(node) = oag_vex::lensflare::lensflares(&blob, &nodes).first()
         && a.lens_flare.is_some()
     {
@@ -272,7 +318,85 @@ pub fn art_draws_as_the_circuit(
             return Err("the flare differs from the circuit's own".into());
         }
         tally.flares += 1;
+        tally.flare_directions += usize::from(a.lens_flare.is_some_and(|f| f.direction.is_some()));
     }
     tally.circuits += 1;
     Ok(())
+}
+
+/// The whole buffers: the art's vertices, placed at time zero as the file holds
+/// them, against the `.vex` build's, and the two index buffers. `Err` names
+/// the first thing that differs.
+fn buffers(want: &Model, got: &Model, poses: &[[f32; 16]]) -> Result<(), String> {
+    if want.vertices.len() != got.vertices.len() {
+        return Err(format!(
+            "{} vertices against {} (the art holds only what a kept draw reads)",
+            want.vertices.len(),
+            got.vertices.len()
+        ));
+    }
+    if want.indices != got.indices {
+        let at = want
+            .indices
+            .iter()
+            .zip(&got.indices)
+            .position(|(w, g)| w != g)
+            .unwrap_or(want.indices.len().min(got.indices.len()));
+        return Err(format!(
+            "indices differ from {at} ({} against {})",
+            want.indices.len(),
+            got.indices.len()
+        ));
+    }
+    for (k, (w, g)) in want.vertices.iter().zip(&got.vertices).enumerate() {
+        let (position, normal) = placed(w, poses);
+        if (position, normal, w.colour, w.texcoord, w.lit)
+            != (g.position, g.normal, g.colour, g.texcoord, g.lit)
+        {
+            return Err(format!("vertex {k} differs"));
+        }
+    }
+    Ok(())
+}
+
+/// `model` with only what its draws read: each draw's vertex block and indices,
+/// in vertex-buffer order, rebased. What `keep_nearest` leaves behind of the
+/// tiers it drops goes.
+fn kept_only(model: &Model) -> Model {
+    let mut draws: Vec<(usize, usize)> = [
+        &model.draws,
+        &model.alpha_tested_draws,
+        &model.transparent_draws,
+    ]
+    .into_iter()
+    .enumerate()
+    .flat_map(|(list, draws)| (0..draws.len()).map(move |n| (list, n)))
+    .collect();
+    let draw = |m: &Model, (list, n): (usize, usize)| {
+        [&m.draws, &m.alpha_tested_draws, &m.transparent_draws][list][n].clone()
+    };
+    draws.sort_by_key(|&at| draw(model, at).range.start);
+    let mut out = model.clone();
+    out.vertices.clear();
+    out.indices.clear();
+    for at in draws {
+        let d = draw(model, at);
+        let (lo, hi) = block(model, &d);
+        let base = out.vertices.len() as u32;
+        let first = out.indices.len() as u32;
+        out.vertices
+            .extend_from_slice(&model.vertices[lo as usize..=hi as usize]);
+        out.indices.extend(
+            model.indices[d.range.start as usize..d.range.end as usize]
+                .iter()
+                .map(|i| i - lo + base),
+        );
+        [
+            &mut out.draws,
+            &mut out.alpha_tested_draws,
+            &mut out.transparent_draws,
+        ][at.0][at.1]
+            .range = first..out.indices.len() as u32;
+    }
+    out
 }

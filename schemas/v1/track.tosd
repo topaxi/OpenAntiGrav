@@ -144,11 +144,37 @@ type = "types.number"
 [types.sun.angular_diameter]
 type = "types.number"
 
+# Absent is true: an authored sun is the shadow light. A Pure export writes false.
 [types.sun.shadows]
 type = "boolean"
+optional = true
+
+# A light beyond the sun and the ambient. `kind` is `directional` in 1.x.
+[types.light]
+type = "table"
+
+[types.light.kind]
+type = "string"
+allowedvalues = ["directional"]
+
+# Unit vector from the scene towards the light.
+[types.light.direction]
+type = "types.vec3"
+
+# Linear RGB.
+[types.light.colour]
+type = "types.vec3"
+
+[types.light.intensity]
+type = "types.number"
 
 [types.lensflare]
 type = "table"
+
+# Overrides the sun's direction (unit, towards the flare).
+[types.lensflare.direction]
+type = "types.vec3"
+optional = true
 
 [types.lensflare.colour]
 type = "types.vec3"
@@ -209,6 +235,11 @@ optional = true
 
 [types.art.lensflare]
 type = "types.lensflare"
+optional = true
+
+[types.art.light]
+type = "array"
+itemtype = "types.light"
 optional = true
 
 [types.art.texture]

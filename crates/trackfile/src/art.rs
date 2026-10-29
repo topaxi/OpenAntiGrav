@@ -29,6 +29,9 @@ pub struct Art {
     pub sun: Option<Sun>,
     /// The ambient light, linear RGB.
     pub ambient: Option<[f32; 3]>,
+    /// Lights beyond the sun and the ambient, in file order: further
+    /// directionals (the second and later of a disc circuit's).
+    pub lights: Vec<Light>,
     /// Pure's sun flare along the sun's direction.
     pub lens_flare: Option<LensFlare>,
 }
@@ -44,7 +47,8 @@ pub struct ArtMesh {
     pub normals: Vec<[f32; 3]>,
     /// One texture coordinate per position, texture v down as the disc's are.
     pub texcoords: Vec<[f32; 2]>,
-    /// One linear RGBA per position: the baked light, which tints the texture.
+    /// One RGBA per position: the baked light, which tints the texture. RGB is
+    /// linear (glTF's `COLOR_0`), alpha is coverage and on no curve.
     pub colours: Vec<[f32; 4]>,
     /// Triangle list into the vertex arrays.
     pub indices: Vec<u32>,
@@ -52,6 +56,9 @@ pub struct ArtMesh {
     pub material: ArtMaterial,
     /// What it does with the sun's shadows.
     pub shadow: ShadowRole,
+    /// The render layer it is drawn in: draws go by layer, then by file order.
+    /// `0` unless authored; a disc export writes the `.vex` layer.
+    pub layer: u32,
 }
 
 /// A mesh's material.
@@ -66,6 +73,9 @@ pub struct ArtMaterial {
     /// Whether the viewer's light rig applies on top of the baked colour. A
     /// track's baked colours are the light, so this is off for them.
     pub lit: bool,
+    /// The alpha-test reference in `0..=255` (a texel passes above it), or
+    /// none for the renderer's default. Read by the `cutout` pass.
+    pub alpha_ref: Option<u8>,
 }
 
 /// The blend classes `oag_vex::vex::BlendClass` and the alpha-test pass name.
@@ -166,15 +176,40 @@ pub struct Sun {
     pub intensity: f32,
     /// The sun's angular diameter in degrees: `0` is a point (a hard edge).
     pub angular_diameter: f32,
-    /// Whether it may cast shadows.
+    /// Whether it may cast shadows. `true` unless written: an authored sun is
+    /// the shadow light by definition.
+    #[serde(default = "yes")]
     pub shadows: bool,
+}
+
+fn yes() -> bool {
+    true
+}
+
+/// An `[[art.light]]` row: a light beyond the sun and the ambient.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum Light {
+    /// A light from a direction, as the sun is, with no size and no shadows.
+    Directional {
+        /// Unit vector from the scene towards the light.
+        direction: [f32; 3],
+        /// Linear RGB.
+        colour: [f32; 3],
+        /// A multiplier on the colour.
+        intensity: f32,
+    },
 }
 
 /// Pure's sun flare. The ten-ring layout, the fade by angle and the occlusion
 /// probe are the renderer's own law.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 pub struct LensFlare {
-    /// Overrides the sun's colour when given.
+    /// Overrides the sun's direction when given (a unit vector towards the
+    /// flare): Pure authors its flare apart from its first directional light.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub direction: Option<[f32; 3]>,
+    /// Overrides the sun's colour when given, linear RGB.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub colour: Option<[f32; 3]>,
     /// An index into [`Art::textures`]: the 2x2 atlas.
@@ -194,6 +229,8 @@ pub(crate) struct ArtTable {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lensflare: Option<LensFlare>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub light: Vec<Light>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub texture: Vec<TextureSource>,
     #[serde(flatten)]
     pub extra: BTreeMap<String, toml::Value>,
@@ -206,6 +243,7 @@ impl ArtTable {
             ambient: art.ambient,
             sun: art.sun,
             lensflare: art.lens_flare,
+            light: art.lights.clone(),
             texture: art.textures.clone(),
             extra: BTreeMap::new(),
         }
@@ -218,6 +256,7 @@ impl ArtTable {
             sky: self.sky,
             sun: self.sun,
             ambient: self.ambient,
+            lights: self.light,
             lens_flare: self.lensflare,
         }
     }
@@ -232,6 +271,28 @@ fn finite(what: &str, field: &str, values: impl IntoIterator<Item = f32>) -> Res
             field: field.to_string(),
         })
     }
+}
+
+/// A finite unit `direction`, a non-negative `colour` and `intensity`.
+fn light(what: &str, direction: [f32; 3], colour: [f32; 3], intensity: f32) -> Result<(), Error> {
+    finite(
+        what,
+        "values",
+        direction.iter().chain(&colour).chain(&[intensity]).copied(),
+    )?;
+    unit(what, direction)?;
+    if colour.iter().any(|&c| c < 0.0) || intensity < 0.0 {
+        return Err(range(what, "a negative colour or intensity".into()));
+    }
+    Ok(())
+}
+
+fn unit(what: &str, direction: [f32; 3]) -> Result<(), Error> {
+    let len = direction.iter().map(|c| c * c).sum::<f32>().sqrt();
+    if (len - 1.0).abs() > UNIT_TOLERANCE {
+        return Err(range(what, format!("direction has length {len}, not 1")));
+    }
+    Ok(())
 }
 
 fn range(what: &str, why: String) -> Error {
@@ -313,25 +374,8 @@ impl Art {
             }
         }
         if let Some(sun) = &self.sun {
-            finite(
-                "art sun",
-                "values",
-                sun.direction
-                    .iter()
-                    .chain(&sun.colour)
-                    .chain(&[sun.intensity, sun.angular_diameter])
-                    .copied(),
-            )?;
-            let len = sun.direction.iter().map(|c| c * c).sum::<f32>().sqrt();
-            if (len - 1.0).abs() > UNIT_TOLERANCE {
-                return Err(range(
-                    "art sun",
-                    format!("direction has length {len}, not 1"),
-                ));
-            }
-            if sun.colour.iter().any(|&c| c < 0.0) || sun.intensity < 0.0 {
-                return Err(range("art sun", "a negative colour or intensity".into()));
-            }
+            light("art sun", sun.direction, sun.colour, sun.intensity)?;
+            finite("art sun", "angular_diameter", [sun.angular_diameter])?;
             if !(0.0..=180.0).contains(&sun.angular_diameter) {
                 return Err(range(
                     "art sun",
@@ -348,14 +392,27 @@ impl Art {
                 return Err(range("art ambient", "a negative colour".into()));
             }
         }
+        for (i, l) in self.lights.iter().enumerate() {
+            match *l {
+                Light::Directional {
+                    direction,
+                    colour,
+                    intensity,
+                } => light(&format!("art light {i}"), direction, colour, intensity)?,
+            }
+        }
         if let Some(flare) = &self.lens_flare {
             if let Some(c) = &flare.colour {
                 finite("art lensflare", "colour", c.iter().copied())?;
             }
+            if let Some(d) = flare.direction {
+                finite("art lensflare", "direction", d)?;
+                unit("art lensflare", d)?;
+            }
             if let Some(a) = flare.atlas {
                 texture("art lensflare", a)?;
             }
-            if flare.colour.is_none() && self.sun.is_none() {
+            if (flare.colour.is_none() || flare.direction.is_none()) && self.sun.is_none() {
                 return Err(range(
                     "art lensflare",
                     "a flare lies along the sun's direction and the file has no sun".into(),

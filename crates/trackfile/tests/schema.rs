@@ -117,7 +117,7 @@ fn what_the_blender_add_on_writes_is_valid_and_reads() {
 }
 
 /// The art section (ADR-0076): the two forms of a texture row are exclusive,
-/// and the sun's keys are all required.
+/// and the sun's keys are all required but `shadows`.
 #[test]
 fn the_schema_and_the_reader_agree_on_the_art_section() {
     let p = to_parts(&crate::art::with_art(crate::art::art()), "t.glb").expect("writable");
@@ -144,8 +144,13 @@ fn the_schema_and_the_reader_agree_on_the_art_section() {
             false,
         ),
         (
-            "a sun with no shadows key",
+            "a sun with no shadows key (it casts)",
             cut("shadows = true\n", ""),
+            true,
+        ),
+        (
+            "a light row of an unknown kind",
+            cut("kind = \"directional\"", "kind = \"point\""),
             false,
         ),
         (
