@@ -746,7 +746,6 @@ pub(crate) struct Session {
     /// `PI_Track` name: the shell's catalogue lists only the ordinary ones.
     /// Filled when the list opens, read by `launch_campaign_cell`.
     pub(crate) pure_classic_entries: std::collections::BTreeMap<String, String>,
-    pub(crate) campaign_cursor: crate::campaign_stage::CellCursor, // kept across campaign openings
     /// [`Self::campaign_cell`]'s own difficulty rung, draining into
     /// [`RaceStage::campaign_difficulty`] the identical way and at the
     /// identical moment - see [`Session::launch_campaign_cell`]'s own doc

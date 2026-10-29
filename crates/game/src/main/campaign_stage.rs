@@ -58,15 +58,50 @@ pub(crate) enum Screen {
 /// this stage) behaves the same way - only Pulse PSP was observed.
 ///
 /// [`Session`]: crate::session::Session
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(crate) struct CellCursor(Option<(u32, u32)>);
+///
+/// **Kept across launches, ours, not the original's**: the slot and the grid
+/// `Grid Selection` was last on live in the records store per campaign
+/// ([`oag_game::records::CampaignCursor`]), so the same holds after a
+/// relaunch. The original's slot lives in the screen object, which a reboot
+/// resets; whether its `Grid Selection` index survives leaving the campaign
+/// is not measured, and ours keeps it.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct CellCursor(oag_game::records::CampaignCursor);
 
 impl CellCursor {
+    /// The position a campaign's screens last closed on.
+    pub(crate) fn kept(kept: oag_game::records::CampaignCursor) -> Self {
+        Self(kept)
+    }
+
+    /// Notes `grid` as the one `Grid Selection` last stood on.
+    pub(crate) fn set_grid(&mut self, grid: &str) {
+        if self.0.grid.as_deref() != Some(grid) {
+            self.0.grid = Some(grid.to_string());
+        }
+    }
+
+    /// The kept grid's absolute index in `grids`, when it is there and in
+    /// `range`; a grid a mod campaign dropped answers `None` (the default).
+    pub(crate) fn grid_in<'a>(
+        &self,
+        mut names: impl Iterator<Item = &'a str>,
+        range: &std::ops::Range<usize>,
+    ) -> Option<usize> {
+        let kept = self.0.grid.as_deref()?;
+        names.position(|name| name == kept).filter(|at| range.contains(at))
+    }
+
+    /// What to write back to the store.
+    pub(crate) fn into_kept(self) -> oag_game::records::CampaignCursor {
+        self.0
+    }
+
     /// Records `model`'s selected cell's slot as the cursor. A cell whose
     /// name carries no `(x, y)` leaves the slot as it was.
     pub(crate) fn remember(&mut self, model: &oag_ui_screens::campaign::CellSelection) {
         if let Some(slot) = model.selected().and_then(|cell| cell.grid_coords()) {
-            self.0 = Some(slot);
+            self.0.slot = Some(slot);
         }
     }
 
@@ -74,7 +109,7 @@ impl CellCursor {
     /// grid has one and it shows no lock glyph; otherwise a no-op, which
     /// keeps `CellSelection::new`'s first-unlocked default.
     pub(crate) fn restore(&self, model: &mut oag_ui_screens::campaign::CellSelection) {
-        let Some(slot) = self.0 else {
+        let Some(slot) = self.0.slot else {
             return;
         };
         let Some(target) = model
@@ -229,7 +264,6 @@ impl CampaignStage {
         records: oag_game::records::Store,
         flyers: Option<oag_game::flyer::Flyers>,
         circuit_emblems: std::collections::HashMap<String, String>,
-        cell_cursor: CellCursor,
         custom: Option<oag_game::campaign::custom::Custom>,
     ) -> Self {
         let title = title_ref.name.to_string();
@@ -238,6 +272,8 @@ impl CampaignStage {
             |custom| custom.records_title.clone(),
         );
         let grid_range = 0..grids.len();
+        let cell_cursor = CellCursor::kept(records.campaign_cursor(&campaign_title));
+        let kept_grid = cell_cursor.grid_in(grids.iter().map(|grid| grid.name.as_str()), &grid_range);
         // `Campaign Selection` is HD's own screen ahead of `Grid
         // Selection` - only opened on it when both halves of the pair
         // actually read (see `Self::has_selection`'s own doc); every other
@@ -245,7 +281,10 @@ impl CampaignStage {
         // straight on `Grid Selection` over every grid, the pre-this-pass
         // behaviour.
         let screen = if selection_layout.is_some() && grid_layout_fury.is_some() {
-            Screen::Selection(CampaignSelection::new())
+            Screen::Selection(match kept_grid {
+                Some(which) => CampaignSelection::at(Self::campaign_of(which)),
+                None => CampaignSelection::new(),
+            })
         } else {
             let model = oag_ui_screens::campaign::GridSelection::new(
                 grids
@@ -255,11 +294,14 @@ impl CampaignStage {
             );
             // A mod campaign on HD's screens has no `Campaign Selection` ahead
             // of it, and HD's grid pages one tier at a time.
-            let model = if custom.is_some() && title_ref.campaign.dialect.draws_hd_screens() {
+            let mut model = if custom.is_some() && title_ref.campaign.dialect.draws_hd_screens() {
                 model.with_per_page(1)
             } else {
                 model
             };
+            if let Some(which) = kept_grid {
+                model.set_index(which);
+            }
             Screen::Grid(model)
         };
         Self {
@@ -575,6 +617,53 @@ impl CampaignStage {
         &self.cell_layout
     }
 
+    /// What `--drive` reports: the open level (`selection`, `grid`, `cell`),
+    /// the cursor's index in it, and the name of what it is on.
+    pub(crate) fn drive_focus(&self) -> (&'static str, usize, String) {
+        match &self.screen {
+            Screen::Selection(model) => {
+                let campaign = model.selected();
+                ("selection", usize::from(campaign == Campaign::Fury), format!("{campaign:?}"))
+            }
+            Screen::Grid(model) => {
+                let name = self
+                    .grids
+                    .get(self.grid_range.start + model.index())
+                    .map_or_else(String::new, |grid| grid.name.clone());
+                ("grid", model.index(), name)
+            }
+            Screen::Cell { model, .. } => {
+                let name = model.selected().map(|cell| cell.name.clone());
+                let index = name
+                    .as_ref()
+                    .and_then(|name| model.cells().iter().position(|cell| &cell.name == name));
+                ("cell", index.unwrap_or(0), name.unwrap_or_default())
+            }
+        }
+    }
+
+    /// Which HD campaign the absolute grid index `which` belongs to.
+    fn campaign_of(which: usize) -> Campaign {
+        if oag_hd::campaign::FURY_GRID_RANGE.contains(&which) {
+            Campaign::Fury
+        } else {
+            Campaign::Hd
+        }
+    }
+
+    /// Keeps the grid the open screen is on as the cursor's grid, so the next
+    /// `Grid Selection` - this visit, the next, or the next launch - lands on it.
+    fn note_grid(&mut self) {
+        let which = match &self.screen {
+            Screen::Grid(model) => self.grid_range.start + model.index(),
+            Screen::Cell { which, .. } => *which,
+            Screen::Selection(_) => return,
+        };
+        if let Some(grid) = self.grids.get(which) {
+            self.cell_cursor.set_grid(&grid.name);
+        }
+    }
+
     /// **HD only.** Opens `campaign`'s own `Grid Selection`/`Grid Selection
     /// Fury`, narrowing [`Self::grid_range`] to that campaign's own eight
     /// grids - `Campaign Selection`'s own `Event::Confirmed`.
@@ -593,6 +682,10 @@ impl CampaignStage {
                 .collect(),
         )
         .with_per_page(1);
+        let mut model = model;
+        if let Some(which) = self.cell_cursor.grid_in(self.grids.iter().map(|grid| grid.name.as_str()), &self.grid_range) {
+            model.set_index(which - self.grid_range.start);
+        }
         self.screen = Screen::Grid(model);
     }
 
@@ -603,6 +696,7 @@ impl CampaignStage {
     /// a chosen `Wipeout HD` lands on `Campaign Selection` still showing
     /// `Wipeout HD` selected.
     pub(crate) fn open_selection(&mut self) {
+        self.note_grid();
         let model = match self.active_campaign {
             Some(campaign) => CampaignSelection::at(campaign),
             None => CampaignSelection::new(),
@@ -641,11 +735,7 @@ impl CampaignStage {
             return false;
         }
         if self.has_selection() {
-            let campaign = if oag_hd::campaign::FURY_GRID_RANGE.contains(&which) {
-                Campaign::Fury
-            } else {
-                Campaign::Hd
-            };
+            let campaign = Self::campaign_of(which);
             self.grid_range = campaign.grid_range();
             self.active_campaign = Some(campaign);
         }
@@ -688,6 +778,9 @@ impl CampaignStage {
         let mut model = with_opening_difficulty(model, records, campaign_title, self.is_hd());
         self.cell_cursor.restore(&mut model);
         self.screen = Screen::Cell { model, which };
+        if let Some(grid) = self.grids.get(which) {
+            self.cell_cursor.set_grid(&grid.name);
+        }
         true
     }
 
@@ -783,17 +876,18 @@ impl CampaignStage {
     /// The cursor as it stands as the campaign closes, for the session to
     /// carry to the next `RACE CAMPAIGN` (measured: the original's survives
     /// leaving the campaign, see [`CellCursor`]).
-    pub(crate) fn cursor_on_close(&self) -> CellCursor {
-        let mut cursor = self.cell_cursor;
+    pub(crate) fn cursor_on_close(&mut self) -> (String, oag_game::records::CampaignCursor) {
+        self.note_grid();
         if let Screen::Cell { model, .. } = &self.screen {
-            cursor.remember(model);
+            self.cell_cursor.remember(model);
         }
-        cursor
+        (self.campaign_title.clone(), self.cell_cursor.clone().into_kept())
     }
 
     /// Returns to `Grid Selection`, on the tier `Cell Selection` was opened
     /// from.
     pub(crate) fn back_to_grid_selection(&mut self) {
+        self.note_grid();
         if let Screen::Cell { model, .. } = &self.screen {
             self.cell_cursor.remember(model);
         }
@@ -893,6 +987,22 @@ mod tests {
         let mut back = CellSelection::new(grid0);
         cursor.restore(&mut back);
         assert_eq!(selected(&back), "grid0_3_1");
+    }
+
+    /// The kept grid is found by name, so a campaign that dropped or moved it
+    /// (a mod changed) answers the default, never a stale index.
+    #[test]
+    fn the_kept_grid_is_found_by_name_and_a_missing_one_is_the_default() {
+        let grids = ["grid0", "grid1", "grid2"];
+        let names = |count: usize| grids.into_iter().take(count);
+        let mut cursor = CellCursor::default();
+        assert_eq!(cursor.grid_in(names(3), &(0..3)), None, "nothing kept");
+        cursor.set_grid("grid2");
+        assert_eq!(cursor.grid_in(names(3), &(0..3)), Some(2));
+        assert_eq!(cursor.grid_in(names(3), &(0..2)), None, "outside the open range");
+        assert_eq!(cursor.grid_in(names(2), &(0..2)), None, "the grid is gone");
+        let kept = CellCursor::kept(cursor.into_kept());
+        assert_eq!(kept.grid_in(names(3), &(0..3)), Some(2), "through the store's form");
     }
 
     /// A slot whose cell is locked, or that the grid does not have, falls to

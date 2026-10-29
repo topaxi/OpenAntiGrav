@@ -595,7 +595,6 @@ impl App {
             campaign_custom: None,
             custom_campaign: None,
             campaign_home: None,
-            campaign_cursor: crate::campaign_stage::CellCursor::default(),
             pure_chain_class: 0,
             split_lobby: None,
             split_cut: self.split_cut,
@@ -1038,7 +1037,9 @@ impl ApplicationHandler for App {
         // quit from the race), so the playlist's place is saved once, whichever.
         if let Some(session) = self.state.as_mut() {
             session.save_race_music();
+            session.keep_campaign_position();
         }
+        oag_game::records::finish_background_saves();
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {

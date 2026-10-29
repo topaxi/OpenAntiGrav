@@ -229,3 +229,54 @@ fn pulse_difficulty_footer_answers_a_click() {
     );
     assert_eq!(model.difficulty(), Difficulty::Hard);
 }
+
+/// A cell the campaign reopened on (the remembered one, which the stage puts
+/// the cursor on with `select_by_name`) answers a click like any other: the
+/// first click on it is the second tap and confirms, and a click on another
+/// hexagon moves the selection there. Fails if restoring left the pointer's
+/// idea of the selection behind the model's.
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd"]
+fn pulse_a_remembered_cell_answers_a_click_like_a_picked_one() {
+    use oag_ui::pointer::Pointer;
+    use oag_ui_screens::campaign::Event;
+    let Some(source) = oag_testdata::exact("data/images/pulse-psp-eu.chd") else {
+        return;
+    };
+    let opened =
+        oag_source::title::open_source(&source.display().to_string(), Vec::new(), Vec::new())
+            .expect("open pulse");
+    let mut archives = opened.archives;
+    let pulse = load_on(&mut archives, oag_pulse::TITLE, [480.0, 272.0]);
+    let campaign = &pulse.campaign;
+    let mut model = CellSelection::new(campaign.grids[0].cells.clone());
+    let default = model.selected().expect("a default cell").name.clone();
+    let remembered = "grid0_3_2";
+    assert_ne!(default, remembered);
+    model.select_by_name(remembered);
+    let targets =
+        oag_game::campaign::hit::cell_targets(&model, &campaign.cell_layout, &campaign.sprites);
+    let centres: Vec<(String, (f32, f32))> = drawn_hexagons(campaign, &model)
+        .into_iter()
+        .map(|(cell, centre, _)| (model.cells()[cell].name.clone(), (centre[0], centre[1])))
+        .collect();
+    let centre_of = |name: &str| centres.iter().find(|(have, _)| have == name).unwrap().1;
+    let click = |at| Pointer {
+        at: Some(at),
+        moved: true,
+        clicked: true,
+        ..Pointer::default()
+    };
+    let other = centres
+        .iter()
+        .map(|(name, _)| name.clone())
+        .find(|name| name != remembered)
+        .unwrap();
+    let events = model.pointer_with_difficulty(&click(centre_of(&other)), &targets, None);
+    assert!(events.contains(&Event::Moved), "{events:?}");
+    assert_eq!(model.selected().unwrap().name, other);
+    model.select_by_name(remembered);
+    let events = model.pointer_with_difficulty(&click(centre_of(remembered)), &targets, None);
+    assert!(events.contains(&Event::Confirmed), "{events:?}");
+    assert_eq!(model.selected().unwrap().name, remembered);
+}

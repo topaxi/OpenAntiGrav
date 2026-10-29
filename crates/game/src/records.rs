@@ -116,9 +116,11 @@ use anyhow::{Context, Result};
 use log::{error, warn};
 use serde::{Deserialize, Serialize};
 
+mod cursor;
 mod difficulty;
 mod loyalty;
 mod medal;
+pub use cursor::CampaignCursor;
 pub use medal::{Difficulty, Medal};
 
 /// Which circuit/mode/class a [`Record`] is about.
@@ -511,6 +513,19 @@ pub struct CampaignDifficultyRecord {
     pub difficulty: Difficulty,
 }
 
+/// Where a campaign's screens last stood - see `cursor.rs`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CampaignCursorRecord {
+    /// [`campaign_title`]'s string (or a mod campaign's), lower-cased.
+    pub title: String,
+    /// The grid `Grid Selection` was last on, by name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub grid: Option<String>,
+    /// `Cell Selection`'s `(x, y)` slot.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub slot: Option<[u32; 2]>,
+}
+
 /// Every row [`load`] found or [`Store::record`] has added since, in one
 /// file.
 ///
@@ -535,6 +550,9 @@ pub struct Store {
     /// One row per campaign title whose difficulty rung the player changed.
     /// Absent in every file written before it existed.
     campaign_difficulty: Vec<CampaignDifficultyRecord>,
+    /// One row per campaign whose screens the player has left. Absent in every
+    /// file written before it existed.
+    campaign_cursor: Vec<CampaignCursorRecord>,
 }
 
 impl Store {
@@ -858,12 +876,30 @@ pub fn parse(text: &str) -> Result<(Store, Vec<String>)> {
     }
     campaign_difficulty.sort_by(|a, b| a.title.cmp(&b.title));
 
+    let mut campaign_cursor = Vec::new();
+    match table.get("campaign_cursor") {
+        Some(toml::Value::Array(rows)) => {
+            for (index, row) in rows.iter().enumerate() {
+                match row.clone().try_into::<CampaignCursorRecord>() {
+                    Ok(record) => campaign_cursor.push(record),
+                    Err(e) => notes.push(format!("campaign_cursor[{index}] dropped: {e}")),
+                }
+            }
+        }
+        Some(_) => {
+            notes.push("`campaign_cursor` is not an array of tables; ignoring it".to_string())
+        }
+        None => {}
+    }
+    campaign_cursor.sort_by(|a, b| a.title.cmp(&b.title));
+
     Ok((
         Store {
             records,
             campaign,
             loyalty,
             campaign_difficulty,
+            campaign_cursor,
         },
         notes,
     ))
@@ -995,6 +1031,51 @@ pub fn save(store: &Store) -> Result<()> {
             .with_context(|| format!("creating {}", parent.display()))?;
     }
     crate::profile::write(&path, text).with_context(|| format!("writing {}", path.display()))
+}
+
+/// The writer [`save_in_background`] last started, for [`finish_background_saves`].
+static WRITER: std::sync::Mutex<Option<oag_thread::Task<()>>> = std::sync::Mutex::new(None);
+
+/// [`save`] on another thread, with a copy of `store`: the frame that asks
+/// never waits on the disk.
+///
+/// Only the newest copy is ever written: each call replaces the one waiting,
+/// and a writer that finds nothing waiting has been overtaken and does
+/// nothing, so two writes in quick succession cannot land out of order. A
+/// write that fails is logged, as [`save`]'s callers do. The process calls
+/// [`finish_background_saves`] on its way out so the last one lands.
+pub fn save_in_background(store: &Store) {
+    static WAITING: std::sync::Mutex<Option<Store>> = std::sync::Mutex::new(None);
+    static WRITING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    match WAITING.lock() {
+        Ok(mut waiting) => *waiting = Some(store.clone()),
+        Err(_) => return,
+    }
+    let task = oag_thread::Task::spawn("records-save", || {
+        let Ok(_writing) = WRITING.lock() else {
+            return;
+        };
+        let newest = WAITING.lock().ok().and_then(|mut waiting| waiting.take());
+        if let Some(store) = newest
+            && let Err(e) = save(&store)
+        {
+            error!("could not save the records: {e:#}");
+        }
+    });
+    if let Ok(mut writer) = WRITER.lock() {
+        // The writer it replaces is overtaken or done: it finds nothing
+        // waiting, or has written what it had.
+        *writer = Some(task);
+    }
+}
+
+/// Waits for the last [`save_in_background`] write; the process calls it
+/// before it exits.
+pub fn finish_background_saves() {
+    let task = WRITER.lock().ok().and_then(|mut writer| writer.take());
+    if let Some(mut task) = task {
+        let _joined = task.join();
+    }
 }
 
 #[cfg(test)]

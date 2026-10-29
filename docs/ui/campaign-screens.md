@@ -2750,11 +2750,52 @@ grid reached by the game's own unlock path rather than the `Locked` poke.
 
 **Implemented** (`crates/game/src/main/campaign_stage.rs`, `CellCursor`, four unit tests): the slot is the cell's
 `(x, y)` from its name (`Cell::grid_coords`); `restore` selects the cell at the slot and puts the cursor back on the
-default if `selected_is_locked()` says that cell still shows a glyph; `Session::campaign_cursor` carries it across
-`RACE CAMPAIGN` openings (written when the campaign closes on any path, including launching a race). HD/Fury run the
+default if `selected_is_locked()` says that cell still shows a glyph; the records store carries it across
+`RACE CAMPAIGN` openings and relaunches (see "Where the campaign reopens" below; written when the campaign closes on any path, including launching a race). HD/Fury run the
 same code through the shared stage: **chosen, not measured** there. Confidence **90** for the shared slot and its
 persistence across leaving the campaign (decompile plus a runtime read on two boots, one binary), **85** for the
 glyph filter (a runtime read, G1 and its control seen once each, the decompile's layer-4 flag test agreeing).
+
+### Where the campaign reopens: kept across launches, ours (2026-10-29, `campaign-cursor-memory`)
+
+**Measured, original (PPSSPP, `pulse-psp-usa`, above):** `Cell Selection`'s cursor is one `(x, y)` slot shared by every
+grid; it survives backing out to `Main Menu` and re-entering `RACE CAMPAIGN` (the screen object outlives the
+campaign) and a race (the screen object is the same). **It does not survive a reboot** (boot 2 of the table started
+on the default). Whether `Grid Selection`'s own tile index survives leaving the campaign was not read.
+
+**Ours, not the original's** (maintainer ask, 2026-10-29: "store the selected grid and cell in campaigns, so when
+navigating through it, we end up quickly where we left off"): the same slot **and** the grid `Grid Selection` was last
+on persist per campaign in `records.toml`, so the rule holds after a relaunch too.
+
+- One `[[campaign_cursor]]` row per campaign (`oag_game::records::CampaignCursorRecord`), filed under
+  `records::campaign_title` (a pressing's own campaign) or a mod campaign's `records_title`, so custom campaigns
+  (ADR-0077) each keep their own. The grid is stored **by name** and the cell as the slot `(x, y)`: a mod campaign that
+  dropped or moved the grid misses the lookup (`CellCursor::grid_in`) and the screen opens on its default; a slot the
+  grid has no unlocked cell at falls to the first-unlocked default (`CellCursor::restore`, the measured rule).
+- Entering `Grid Selection` lands on the kept grid (Pulse, Omega, 2048: the page of that tier; HD/Fury: `Campaign
+  Selection` opens on the campaign that grid belongs to and its `Grid Selection` on the grid). Opening a grid lands
+  on the shared slot, which is that grid's last cell when it is the grid last left. **Not per-grid memory**: that was
+  falsified against the original (rows A, B1) and the original's rule is kept where it was measured.
+- Written when the campaign closes or launches a race (`session/campaign.rs`, `keep_cursor`) and when the process
+  ends with a campaign screen open (`Session::keep_campaign_position`), never per move.
+  **Off the render thread**: `records::save_in_background` clones the store and writes it on an `oag_thread::Task`
+  (newest copy wins; `finish_background_saves` joins it at exit and at the end of a `--drive` run). The existing
+  `campaign_difficulty` write used to be an inline `records::save` on the frame thread; it goes through the same
+  helper now. Every *other* `records::save` call (race results, loyalty, `escape.rs`) is still on the frame thread.
+- Back from a race: `RETURN TO GRID` selects the cell raced (`reopen_cell_selection`); Pulse's pause-menu QUIT RACE
+  keeps its measured default-cell landing in intent, but because launching a cell files the shared slot, the restore
+  inside `open_cell_selection` lands on the raced cell when it shows no lock glyph (unchanged by this lane: the
+  in-memory cursor was filed at launch the same way). Not reconciled with the 2026-10-08 Head2Head reading.
+- Per title: **Pulse (PSP, PS2 inherits), HD/Fury, Omega, 2048** share `CampaignStage`, so all four are wired.
+  **Pure** is a different flow (an event list per speed class, `pure_chain`) with its own return-to-event landing and
+  is not touched. Pointer/touch: remembering sets the same model selection a hover does; a click on the remembered
+  hexagon confirms, a click elsewhere moves (`campaign_pointer_ground_truth::pulse_a_remembered_cell_answers_a_click_like_a_picked_one`).
+- Compare shots: `--menu-page grid-select`/`cell-select` never read the store; PNGs byte-identical before/after, also
+  with a populated profile.
+- Tests: `crates/game/tests/campaign_cursor_ground_truth.rs` (real `--drive` sessions, two launches on one profile),
+  `records::tests::the_campaign_cursor_is_kept_per_campaign_and_round_trips`, `campaign_stage::tests::the_kept_grid_is_found_by_name_and_a_missing_one_is_the_default`.
+  `--drive` reports a campaign screen as `screen=campaign`, `screen.id=selection|grid|cell`, `focus=<grid or cell name>`.
+- 2048/Omega: checked, same file and wiring (`CampaignStage`); not walked live per title (HD walked headless).
 
 ## Open
 

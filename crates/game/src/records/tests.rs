@@ -902,3 +902,48 @@ fn the_campaign_difficulty_is_kept_per_title_and_round_trips() {
     assert_eq!(parsed.campaign_difficulty("pulse"), Some(Difficulty::Easy));
     assert_eq!(parsed.campaign_difficulty("hd"), Some(Difficulty::Medium));
 }
+
+/// The campaign position is filed per campaign, an empty one writes no row,
+/// and it survives a write and a parse (the restart).
+#[test]
+fn the_campaign_cursor_is_kept_per_campaign_and_round_trips() {
+    let mut store = Store::default();
+    assert_eq!(store.campaign_cursor("pulse"), CampaignCursor::default());
+    store.set_campaign_cursor("Pulse", &CampaignCursor::default());
+    assert_eq!(
+        store.campaign_cursor.len(),
+        0,
+        "an empty position is no row"
+    );
+    let first = CampaignCursor {
+        grid: Some("grid2".into()),
+        slot: Some((3, 2)),
+    };
+    store.set_campaign_cursor("Pulse", &first);
+    store.set_campaign_cursor(
+        "hd",
+        &CampaignCursor {
+            grid: Some("grid9".into()),
+            slot: None,
+        },
+    );
+    store.set_campaign_cursor(
+        "pulse",
+        &CampaignCursor {
+            grid: Some("grid1".into()),
+            slot: Some((4, 3)),
+        },
+    );
+    assert_eq!(
+        store.campaign_cursor("pulse").grid.as_deref(),
+        Some("grid1")
+    );
+    assert_eq!(store.campaign_cursor("pure"), CampaignCursor::default());
+
+    let text = toml::to_string_pretty(&store).expect("serialises");
+    let (parsed, notes) = parse(&text).expect("parses back");
+    assert!(notes.is_empty(), "{notes:?}");
+    assert_eq!(parsed.campaign_cursor("pulse").slot, Some((4, 3)));
+    assert_eq!(parsed.campaign_cursor("hd").grid.as_deref(), Some("grid9"));
+    assert_eq!(parsed.campaign_cursor("hd").slot, None);
+}
