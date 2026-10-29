@@ -20,6 +20,7 @@ from .model import (
     ArtMesh,
     DirectionalLight,
     LensFlare,
+    Skybox,
     Sun,
     Texture,
 )
@@ -76,6 +77,20 @@ def validate(art):
             raise ArtError(f"{what}: alpha ref {m.alpha_ref} is not in 0..=255")
         if not 0 <= m.layer < 2**32:
             raise ArtError(f"{what}: layer {m.layer} is not an unsigned 32-bit integer")
+    if art.skybox is not None:
+        sb = art.skybox
+        if art.sky is not None:
+            raise ArtError("art.skybox: a track draws one sky, the host form (sky) or its own, not both")
+        if (sb.zenith is None) != (sb.horizon is None):
+            raise ArtError("art.skybox: the gradient needs both zenith and horizon")
+        for i, f in enumerate(sb.faces):
+            if f is None and sb.zenith is None:
+                raise ArtError(f"art.skybox.faces[{i}]: a face with no texture needs the gradient")
+            if f is not None and not 0 <= f < len(art.textures):
+                raise ArtError(f"art.skybox.faces[{i}]: texture {f}, the file lists {len(art.textures)}")
+        for c in (sb.zenith or ()) + (sb.horizon or ()):
+            if c < 0:
+                raise ArtError("art.skybox: a negative colour")
     lights = [("art sun", art.sun)] if art.sun else []
     lights += [(f"art light {i}", l) for i, l in enumerate(art.lights)]
     for what, l in lights:
@@ -140,6 +155,15 @@ def manifest_lines(art):
         out.append(f"sky = {_q(art.sky)}")
     if art.ambient is not None:
         out.append(f"ambient = {_vec(art.ambient)}")
+    if art.skybox is not None:
+        sb = art.skybox
+        out += ["", "[art.skybox]"]
+        if any(f is not None for f in sb.faces):
+            out.append("faces = [" + ", ".join(str(-1 if f is None else f) for f in sb.faces) + "]")
+        if sb.zenith is not None:
+            out.append(f"zenith = {_vec(sb.zenith)}")
+        if sb.horizon is not None:
+            out.append(f"horizon = {_vec(sb.horizon)}")
     if art.sun is not None:
         s = art.sun
         out += [
@@ -204,6 +228,13 @@ def from_manifest(table, meshes):
         meshes=meshes,
         textures=textures,
         sky=table.get("sky"),
+        skybox=None
+        if "skybox" not in table
+        else Skybox(
+            tuple(None if f == -1 else f for f in table["skybox"].get("faces", [-1] * 6)),
+            None if "zenith" not in table["skybox"] else _floats3(table["skybox"]["zenith"]),
+            None if "horizon" not in table["skybox"] else _floats3(table["skybox"]["horizon"]),
+        ),
         sun=None
         if sun is None
         else Sun(

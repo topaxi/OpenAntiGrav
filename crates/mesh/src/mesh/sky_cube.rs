@@ -1,4 +1,5 @@
-//! Building a drawable [`Model`] from a Wipeout HD `sky.gtf` cubemap.
+//! Building a drawable camera-centred sky cube [`Model`]: from a Wipeout HD
+//! `sky.gtf` cubemap ([`build`]), or from a track file's own faces and gradient ([`own`]).
 //!
 //! Wipeout HD authors no `Skycube` node - class `0x3c6` is in every circuit's
 //! class table and zero nodes carry it. Its sky is `sky.gtf` beside the track:
@@ -77,9 +78,6 @@ const FACES: [([f32; 3], [f32; 3], [f32; 3]); 6] = [
     ([0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, -1.0, 0.0]),
     ([0.0, 0.0, -1.0], [-1.0, 0.0, 0.0], [0.0, -1.0, 0.0]),
 ];
-
-/// The four `(sc, tc)` corners of a face, in fan order.
-const CORNERS: [(f32, f32); 4] = [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)];
 
 /// Builds a camera-centred cube from a `.gtf` cubemap.
 ///
@@ -175,15 +173,8 @@ pub fn build(
     }
     let (width, height) = texture.level_size(0);
 
-    let colour = tint_in_texel_domain(tint);
-    let (sin, cos) = rotation_degrees.to_radians().sin_cos();
-    let turn = |p: [f32; 3]| [p[0] * cos + p[2] * sin, p[1], p[2] * cos - p[0] * sin];
-
-    let mut vertices = Vec::with_capacity(24);
-    let mut indices = Vec::with_capacity(36);
-    let mut draws = Vec::with_capacity(6);
-    let mut textures = Vec::with_capacity(6);
-    for (face, (major, s_axis, t_axis)) in FACES.iter().enumerate() {
+    let mut textures: super::TextureSlots = Vec::with_capacity(6);
+    for face in 0..FACES.len() {
         let rgba = texture
             .face_to_rgba(blob, face)
             .with_context(|| format!("{label}: decoding face {face}"))?;
@@ -194,43 +185,119 @@ pub fn build(
             rgba.into_iter().flatten().collect(),
             None,
         ))));
+    }
+    Ok(cube(
+        label,
+        textures,
+        tint_in_texel_domain(tint),
+        None,
+        rotation_degrees,
+        mask,
+    ))
+}
 
+/// A track file's own sky (ADR-0076 decision 14) on the same camera-centred
+/// cube: face `i` draws `faces[i]` where it is `Some`, and otherwise the
+/// vertical gradient, `zenith` overhead fading to `horizon` at eye level and
+/// `horizon` below it. Colours are the display-domain vertex colours the sky's
+/// shading path multiplies (the caller converts a file's linear colour). No
+/// rotation and no glow mask: the file authors neither.
+///
+/// # Panics
+///
+/// A face with no texture and no `gradient`, which a validated track file
+/// cannot carry.
+#[must_use]
+pub fn own(
+    label: &str,
+    faces: [Option<std::sync::Arc<ModelTexture>>; 6],
+    gradient: Option<([f32; 3], [f32; 3])>,
+) -> Model {
+    assert!(
+        gradient.is_some() || faces.iter().all(Option::is_some),
+        "{label}: a face with no texture needs the gradient"
+    );
+    cube(label, faces.into(), [1.0; 3], gradient, 0.0, 0.0)
+}
+
+/// The cube itself: one quad per face where `textures` has the face's picture,
+/// drawn with vertex colour `colour`; otherwise two quads split at the horizon
+/// carrying `gradient` (`zenith`, `horizon`) by height, untextured.
+fn cube(
+    label: &str,
+    textures: super::TextureSlots,
+    colour: [f32; 3],
+    gradient: Option<([f32; 3], [f32; 3])>,
+    rotation_degrees: f32,
+    mask: f32,
+) -> Model {
+    let (sin, cos) = rotation_degrees.to_radians().sin_cos();
+    let turn = |p: [f32; 3]| [p[0] * cos + p[2] * sin, p[1], p[2] * cos - p[0] * sin];
+    // The gradient by the corner's height on the unit cube: the zenith colour
+    // at the top, the horizon's from eye level down.
+    let shade = |y: f32| -> [f32; 3] {
+        let (zenith, horizon) = gradient.unwrap_or(([1.0; 3], [1.0; 3]));
+        let k = y.max(0.0);
+        std::array::from_fn(|c| horizon[c] * (1.0 - k) + zenith[c] * k)
+    };
+
+    let mut vertices = Vec::with_capacity(36);
+    let mut indices = Vec::with_capacity(72);
+    let mut draws = Vec::with_capacity(6);
+    for (face, (major, s_axis, t_axis)) in FACES.iter().enumerate() {
+        let textured = textures.get(face).is_some_and(Option::is_some);
+        // A textured face is one quad; a gradient face is two, split at the
+        // horizon (`tc = 0` on a side face, whose `t` runs down the sky), so
+        // the colour follows height exactly.
+        let rows: &[f32] = if textured {
+            &[-1.0, 1.0]
+        } else {
+            &[-1.0, 0.0, 1.0]
+        };
         let base = vertices.len() as u32;
-        for &(sc, tc) in &CORNERS {
-            let position = turn([
-                (major[0] + s_axis[0] * sc + t_axis[0] * tc) * HALF_EXTENT,
-                (major[1] + s_axis[1] * sc + t_axis[1] * tc) * HALF_EXTENT,
-                (major[2] + s_axis[2] * sc + t_axis[2] * tc) * HALF_EXTENT,
-            ]);
-            vertices.push(GpuVertex {
-                quake: 0.0,
-                position,
-                // Inward, and unread: `lit` 0.0 keeps the light rig off the
-                // sky, the same way Pulse's own sky meshes are authored
-                // `_nolight`. A sky is a picture of light, not a surface.
-                normal: [-major[0], -major[1], -major[2]],
-                colour: [colour[0], colour[1], colour[2], 1.0],
-                texcoord: [(sc + 1.0) / 2.0, (tc + 1.0) / 2.0],
-                lit: 0.0,
-                anim: 0,
-                lightmap_texcoord: [0.0, 0.0],
-                xform: 0,
-                sun_mask: 1.0,
-                slots: crate::mesh::slots::DEFAULT,
-                specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
-                glow: mask,
-                texcoord2: [0.0, 0.0],
-                tangent: 0,
-            });
+        for &tc in rows {
+            for sc in [-1.0f32, 1.0] {
+                let unit = [
+                    major[0] + s_axis[0] * sc + t_axis[0] * tc,
+                    major[1] + s_axis[1] * sc + t_axis[1] * tc,
+                    major[2] + s_axis[2] * sc + t_axis[2] * tc,
+                ];
+                let position = turn(unit.map(|c| c * HALF_EXTENT));
+                let rgb = if textured { colour } else { shade(unit[1]) };
+                vertices.push(GpuVertex {
+                    quake: 0.0,
+                    position,
+                    // Inward, and unread: `lit` 0.0 keeps the light rig off the
+                    // sky, the same way Pulse's own sky meshes are authored
+                    // `_nolight`. A sky is a picture of light, not a surface.
+                    normal: [-major[0], -major[1], -major[2]],
+                    colour: [rgb[0], rgb[1], rgb[2], 1.0],
+                    texcoord: [(sc + 1.0) / 2.0, (tc + 1.0) / 2.0],
+                    lit: 0.0,
+                    anim: 0,
+                    lightmap_texcoord: [0.0, 0.0],
+                    xform: 0,
+                    sun_mask: 1.0,
+                    slots: crate::mesh::slots::DEFAULT,
+                    specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
+                    glow: mask,
+                    texcoord2: [0.0, 0.0],
+                    tangent: 0,
+                });
+            }
         }
         let start = indices.len() as u32;
-        for i in [0u32, 1, 2, 0, 2, 3] {
-            indices.push(base + i);
+        for band in 0..rows.len() as u32 - 1 {
+            let (a, b) = (base + band * 2, base + band * 2 + 2);
+            // Fan order per band: (-1, t0), (+1, t0), (+1, t1), (-1, t1).
+            for i in [a, a + 1, b + 1, a, b + 1, b] {
+                indices.push(i);
+            }
         }
         draws.push(DrawCall {
             writes_depth: false,
-            range: start..start + 6,
-            texture: Some(face),
+            range: start..indices.len() as u32,
+            texture: textured.then_some(face),
             bounds: Bounds {
                 centre: [0.0, 0.0, 0.0],
                 radius: HALF_EXTENT * 3.0f32.sqrt(),
@@ -250,8 +317,10 @@ pub fn build(
         });
     }
 
+    let mut textures = textures;
+    textures.resize(FACES.len(), None);
     let lightmaps = vec![None; textures.len()];
-    Ok(Model {
+    Model {
         label: label.to_string(),
         vertices,
         indices,
@@ -293,7 +362,7 @@ pub fn build(
         lod_groups: Default::default(),
         anim_nodes: Vec::new(),
         emissive: Vec::new(),
-    })
+    }
 }
 
 /// The sky's linear-light `tint` as the vertex colour its shading path reads.
@@ -353,6 +422,45 @@ mod tests {
             let (_, _, t_axis) = FACES[face];
             assert_eq!(t_axis, [0.0, -1.0, 0.0], "face {face}");
         }
+    }
+
+    /// A track's own sky: a gradient face is drawn untextured in two bands,
+    /// the zenith colour overhead and the horizon's at eye level and below; a
+    /// face with a picture draws it white. Dropping the gradient or the split
+    /// fails here.
+    #[test]
+    fn an_own_sky_draws_its_pictures_and_its_gradient_by_height() {
+        let picture =
+            std::sync::Arc::new(ModelTexture::rgba8("p".into(), 1, 1, vec![255; 4], None));
+        let (zenith, horizon) = ([0.1, 0.2, 0.9], [0.8, 0.7, 0.6]);
+        let mut faces: [Option<std::sync::Arc<ModelTexture>>; 6] = Default::default();
+        faces[2] = Some(picture);
+        let sky = own("sky", faces, Some((zenith, horizon)));
+        assert_eq!(sky.draws.len(), 6);
+        assert_eq!(sky.draws[2].texture, Some(2));
+        assert!(
+            sky.draws
+                .iter()
+                .enumerate()
+                .all(|(i, d)| (i == 2) == d.texture.is_some())
+        );
+        let colour = |p: [f32; 3]| {
+            sky.vertices
+                .iter()
+                .find(|v| v.position == p && v.colour != [1.0; 4])
+                .map(|v| [v.colour[0], v.colour[1], v.colour[2]])
+        };
+        let h = HALF_EXTENT;
+        // +X face: its top corner is the zenith colour, eye level and the
+        // bottom the horizon's.
+        assert_eq!(colour([h, h, h]), Some(zenith));
+        assert_eq!(colour([h, 0.0, h]), Some(horizon));
+        assert_eq!(colour([h, -h, h]), Some(horizon));
+        // The zenith face carries the picture, white.
+        assert!(
+            sky.vertices[sky.indices[sky.draws[2].range.start as usize] as usize].colour
+                == [1.0; 4]
+        );
     }
 
     /// The live draw's displayed factors (renderer.md, "The sky law, read off

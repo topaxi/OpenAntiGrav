@@ -162,10 +162,22 @@ class Texture:
 
 
 @dataclass
+class Skybox:
+    """The track's own sky (ADR-0076 decision 14): a texture row per cube face
+    (+X, -X, +Y zenith, -Y nadir, +Z, -Z; None draws the gradient) and/or the
+    gradient from `horizon` to `zenith`, linear RGB."""
+
+    faces: tuple = (None,) * 6
+    zenith: tuple = None
+    horizon: tuple = None
+
+
+@dataclass
 class Art:
     meshes: list = field(default_factory=list)
     textures: list = field(default_factory=list)
     sky: str = None
+    skybox: Skybox = None
     sun: Sun = None
     ambient: tuple = None
     lights: list = field(default_factory=list)

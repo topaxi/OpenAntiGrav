@@ -128,8 +128,35 @@ fn the_schema_and_the_reader_agree_on_the_art_section() {
         assert!(m.contains(from), "{from:?} is not in\n{m}");
         m.replacen(from, to, 1)
     };
+    // The host sky's line swapped for an own skybox table at the end.
+    let own_sky = |table: &str| {
+        let without: String = m
+            .lines()
+            .filter(|l| !l.starts_with("sky = "))
+            .map(|l| format!("{l}\n"))
+            .collect();
+        assert_ne!(&without, m, "the fixture names a host sky");
+        format!("{without}\n[art.skybox]\n{table}")
+    };
     let cases = [
         ("as written", m.clone(), true),
+        (
+            "an own skybox: one picture over the gradient",
+            own_sky(
+                "faces = [-1, -1, 0, -1, -1, -1]\nzenith = [0.1, 0.2, 0.6]\nhorizon = [0.7, 0.8, 0.9]\n",
+            ),
+            true,
+        ),
+        (
+            "an own skybox with five faces",
+            own_sky("faces = [0, 0, 0, 0, 0]\n"),
+            false,
+        ),
+        (
+            "an own skybox whose colour is not three numbers",
+            own_sky("zenith = [0.1, 0.2]\nhorizon = [0.7, 0.8, 0.9]\n"),
+            false,
+        ),
         (
             "a texture row with both forms",
             cut(
