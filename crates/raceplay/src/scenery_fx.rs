@@ -273,12 +273,31 @@ impl super::Race {
             .drop_segments()
             .into_iter()
             .filter_map(|(from, to)| self.floor_crossing(from, to))
+            .filter(|&(at, _)| !self.point_is_under_cover(at))
             .collect();
         let splashes = self.view.scenery_fx.weather_mut().splashes_mut();
         splashes.advance(dt);
         for (at, normal) in hits {
             splashes.spawn(at, normal, snow);
         }
+    }
+
+    /// Whether `point`, a hit on the track, lies in a covered section: the
+    /// section of the spline sample nearest it, tested with the original's
+    /// own mask (`Section_IsCovered`), wherever the camera is. **A point the
+    /// spline cannot place (off the track) counts as open**: no cover is
+    /// evidence for it. Chosen, not measured.
+    pub fn point_is_under_cover(&self, point: Vec3) -> bool {
+        let Some((index, _, _)) = self.sim.spline.nearest(point) else {
+            return false;
+        };
+        let section = self.section_of(index, point);
+        section != oag_render::pvs::UNPLACED
+            && self
+                .view
+                .scenery_fx
+                .weather()
+                .section_is_covered(i32::from(section))
     }
 
     /// Where the segment `from..to` crosses a floor from above, and that

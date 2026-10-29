@@ -51,14 +51,72 @@ const SEED: u64 = 0x7a1e_b01d;
 pub const WET_RAMP_SECONDS: f32 = 40.0;
 
 /// How wet the road is after `clock` seconds of weather, `0.0..=1.0`: rising
-/// linearly over [`WET_RAMP_SECONDS`] for rain, never for snow, and dry while the
-/// weather sits at a covered section's anchor (the camera is under a roof).
+/// linearly over [`WET_RAMP_SECONDS`] for rain, never for snow. **Not decided by
+/// where the camera is**: a roofed road is kept dry per draw at load
+/// ([`dry_covered_road`]), so the open road seen from inside a tunnel is wet
+/// and the roofed road seen from outside is not.
 #[must_use]
-pub fn wetness(clock: f32, snow: bool, anchored: bool) -> f32 {
-    if snow || anchored {
+pub fn wetness(clock: f32, snow: bool) -> f32 {
+    if snow {
         return 0.0;
     }
     (clock / WET_RAMP_SECONDS).clamp(0.0, 1.0)
+}
+
+/// Marks every road vertex of a covered section dry: clears
+/// [`oag_mesh::mesh::ROAD_MARK`] on the vertices of each draw call whose scene
+/// node a covered section governs (`oag_vex::pvs::governing_sections`, the
+/// rule the PVS places draws by). A section the file declares no anchor for
+/// stays open. Returns how many vertices it cleared. Chosen, not measured:
+/// the original has no wet road.
+pub fn dry_covered_road(
+    model: &mut oag_mesh::mesh::Model,
+    governing: &[Option<u8>],
+    anchors: &[CoveredAnchor],
+) -> usize {
+    let mask = covered::covered_mask(anchors);
+    if mask == 0 {
+        return 0;
+    }
+    let lists = [
+        &model.draws,
+        &model.alpha_tested_draws,
+        &model.transparent_draws,
+    ];
+    let mut ranges = Vec::new();
+    for draw in lists.into_iter().flatten() {
+        let section = draw
+            .node
+            .and_then(|node| governing.get(node as usize).copied().flatten());
+        if section.is_some_and(|id| covered::covered(mask, i32::from(id))) {
+            ranges.push(draw.range.clone());
+        }
+    }
+    clear_road_marks(&mut model.vertices, &model.indices, &ranges)
+}
+
+/// Clears the road mark of every vertex the index `ranges` reference, and
+/// counts the marks it cleared.
+fn clear_road_marks(
+    vertices: &mut [oag_mesh::mesh::GpuVertex],
+    indices: &[u32],
+    ranges: &[std::ops::Range<u32>],
+) -> usize {
+    let mut cleared = 0;
+    for range in ranges {
+        let Some(indices) = indices.get(range.start as usize..range.end as usize) else {
+            continue;
+        };
+        for &index in indices {
+            if let Some(vertex) = vertices.get_mut(index as usize)
+                && vertex.texcoord2[0] != 0.0
+            {
+                vertex.texcoord2[0] = 0.0;
+                cleared += 1;
+            }
+        }
+    }
+    cleared
 }
 
 /// What a circuit asks for and where it is covered, read at load.
@@ -208,6 +266,14 @@ impl Weather {
             .is_some_and(|path| effect_name(path) == oag_title::engine_effects::SNOW_EFFECT)
     }
 
+    /// Whether `section` is a covered one: the original's own test
+    /// (`Section_IsCovered`), read here for a hit's or a draw's section rather
+    /// than the camera's. A section below zero counts as covered, as there.
+    #[must_use]
+    pub fn section_is_covered(&self, section: i32) -> bool {
+        covered::covered(self.mask, section)
+    }
+
     /// How wet the enhanced weather's road is now, `0.0..=1.0`; see [`wetness`].
     /// `0.0` for a circuit with no playing weather.
     #[must_use]
@@ -215,7 +281,7 @@ impl Weather {
         if !self.is_playing() {
             return 0.0;
         }
-        wetness(self.clock, self.is_snow(), self.anchored)
+        wetness(self.clock, self.is_snow())
     }
 
     /// The enhanced weather's splashes.
@@ -408,14 +474,27 @@ mod tests {
     use super::*;
 
     #[test]
-    fn rain_wets_the_road_over_time_and_snow_and_roofs_do_not() {
-        assert_eq!(wetness(0.0, false, false), 0.0);
-        let early = wetness(10.0, false, false);
-        let later = wetness(30.0, false, false);
+    fn rain_wets_the_road_over_time_and_snow_does_not() {
+        assert_eq!(wetness(0.0, false), 0.0);
+        let early = wetness(10.0, false);
+        let later = wetness(30.0, false);
         assert!(0.0 < early && early < later && later < 1.0);
-        assert_eq!(wetness(WET_RAMP_SECONDS * 3.0, false, false), 1.0);
-        assert_eq!(wetness(100.0, true, false), 0.0, "snow leaves the road dry");
-        assert_eq!(wetness(100.0, false, true), 0.0, "a covered section is dry");
+        assert_eq!(wetness(WET_RAMP_SECONDS * 3.0, false), 1.0);
+        assert_eq!(wetness(100.0, true), 0.0, "snow leaves the road dry");
+    }
+
+    #[test]
+    fn only_the_vertices_of_a_covered_draw_lose_the_road_mark() {
+        let road = oag_mesh::mesh::GpuVertex {
+            texcoord2: [oag_mesh::mesh::ROAD_MARK, 0.0],
+            ..bytemuck::Zeroable::zeroed()
+        };
+        let mut vertices = [road; 6];
+        let indices = [0, 1, 2, 3, 4, 5];
+        let cleared = clear_road_marks(&mut vertices, &indices, &[3..6]);
+        assert_eq!(cleared, 3);
+        let marked: Vec<bool> = vertices.iter().map(|v| v.texcoord2[0] != 0.0).collect();
+        assert_eq!(marked, [true, true, true, false, false, false]);
     }
 
     #[test]

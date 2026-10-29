@@ -37,17 +37,21 @@ const SEED: u64 = 0x5b1a_5e07;
 
 /// Seconds a rain splash lasts, and the ring's radius at its start and end.
 const RAIN_LIFE: f32 = 0.35;
-const RING_RADIUS: (f32, f32) = (0.5, 2.6);
+const RING_RADIUS: (f32, f32) = (0.125, 0.65);
 
+/// Every length here is a quarter of the first version's (the maintainer's play
+/// report asked for much smaller drops); speeds and gravity scale with them so
+/// the flight takes the same time.
+///
 /// A droplet's launch speed along the surface normal and across it, and the
 /// gravity pulling it back, in world units a second.
-const SPRAY_UP: (f32, f32) = (7.0, 12.0);
-const SPRAY_OUT: f32 = 4.0;
-const GRAVITY: f32 = 55.0;
+const SPRAY_UP: (f32, f32) = (1.75, 3.0);
+const SPRAY_OUT: f32 = 1.0;
+const GRAVITY: f32 = 13.75;
 
 /// A droplet's and a settled flake's half-size, in world units.
-const DROPLET_SIZE: f32 = 0.3;
-const FLAKE_SIZE: f32 = 0.42;
+const DROPLET_SIZE: f32 = 0.075;
+const FLAKE_SIZE: f32 = 0.105;
 
 /// Seconds a flake stays settled, with the share of it spent fading in and out.
 const SNOW_LIFE: f32 = 1.6;
@@ -55,7 +59,7 @@ const SNOW_FADE: f32 = 0.25;
 
 /// How far off the surface a flat ring or flake is drawn, so it does not
 /// z-fight with the road it lies on.
-const LIFT: f32 = 0.06;
+const LIFT: f32 = 0.03;
 
 /// The ring's cell and the dot's, as the share of the placed sprite's width
 /// they take: the art is two square cells side by side.

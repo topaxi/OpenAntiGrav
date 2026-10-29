@@ -174,6 +174,12 @@ fn place_weather(
         config.env_psys.as_deref().unwrap_or("no EnvPsys"),
         anchors.len()
     ));
+    let dried = oag_vex::pvs::governing_sections(track_blob, nodes).map_or(0, |governing| {
+        crate::scenery_fx::weather::dry_covered_road(&mut loaded.track_model, &governing, &anchors)
+    });
+    loaded.report.push(format!(
+        "weather: {dried} road vertices under cover kept dry for the enhanced wet road (ours)"
+    ));
     let mist_texture = mist_texture(archives, config.tex.as_deref(), &mut loaded.report);
     let splash_cell = splash_art(loaded, archives);
     loaded.setup.scenery_fx.weather = Some(crate::scenery_fx::weather::Setup {
