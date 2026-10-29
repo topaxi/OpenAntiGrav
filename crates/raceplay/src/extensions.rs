@@ -240,6 +240,28 @@ impl Extensions {
         }
     }
 
+    /// Whether a module claimed `slot`'s pickup: the engine must neither fire nor absorb
+    /// it, and calls [`Self::pickup_used`] instead. `false` in every race without one.
+    pub(super) fn claimed(&self, slot: usize) -> bool {
+        #[cfg(feature = "extensions")]
+        {
+            self.on.claimed(slot)
+        }
+        #[cfg(not(feature = "extensions"))]
+        {
+            let _ = slot;
+            false
+        }
+    }
+
+    /// A claimed pickup's fire (`absorbed == false`) or absorb, raised for the module.
+    pub(super) fn pickup_used(&mut self, slot: usize, absorbed: bool) {
+        #[cfg(feature = "extensions")]
+        self.on.pickup_used(slot, absorbed);
+        #[cfg(not(feature = "extensions"))]
+        let _ = (slot, absorbed);
+    }
+
     /// `slot`'s mod engine scale for this tick's step, reset to `1.0` as it is taken:
     /// `1.0` in every race without a module.
     pub(super) fn take_boost(&mut self, slot: usize) -> f32 {
@@ -271,6 +293,12 @@ impl Extensions {
         self.on.hash_into(hasher);
         #[cfg(not(feature = "extensions"))]
         let _ = hasher;
+    }
+
+    /// Module `index`'s state blob.
+    #[cfg(all(test, feature = "extensions"))]
+    pub(crate) fn blob_for_tests(&self, index: usize) -> Vec<u8> {
+        self.on.slot_blob(index)
     }
 
     /// Each module's numbers after the last tick, in id order.
@@ -337,6 +365,13 @@ mod on {
         /// Each slot's engine scale above 1.0 for this tick's step
         /// (`Environment::extension_thrust`), set at the call and taken by the step.
         pub(super) boost: [f32; oag_gameplay::MAX_SHIPS],
+        /// Which module claimed each slot's pickup (its index plus one, 0 for none), and
+        /// the weapon it claimed: the claim lasts while that weapon stays in the slot.
+        claims: [u8; oag_gameplay::MAX_SHIPS],
+        claimed: [Option<oag_tables::weapons::Weapon>; oag_gameplay::MAX_SHIPS],
+        /// `pickup-fire` / `pickup-absorbed` raised since the last call, one bit a slot.
+        fires: u32,
+        absorbs: u32,
     }
 
     impl On {
@@ -356,6 +391,27 @@ mod on {
                     .collect(),
                 walls: 0,
                 boost: [1.0; oag_gameplay::MAX_SHIPS],
+                claims: [0; oag_gameplay::MAX_SHIPS],
+                claimed: [None; oag_gameplay::MAX_SHIPS],
+                fires: 0,
+                absorbs: 0,
+            }
+        }
+
+        #[cfg(test)]
+        pub(super) fn slot_blob(&self, index: usize) -> Vec<u8> {
+            self.slots[index].blob.clone()
+        }
+
+        pub(super) fn claimed(&self, slot: usize) -> bool {
+            self.claims[slot] != 0
+        }
+
+        pub(super) fn pickup_used(&mut self, slot: usize, absorbed: bool) {
+            if absorbed {
+                self.absorbs |= 1 << slot;
+            } else {
+                self.fires |= 1 << slot;
             }
         }
 
@@ -374,6 +430,12 @@ mod on {
             for boost in self.boost {
                 hasher.write_f32(boost);
             }
+            for (claim, weapon) in self.claims.iter().zip(self.claimed) {
+                hasher.write_u8(*claim);
+                hasher.write_u8(weapon.map_or(0, |w| w as u8 + 1));
+            }
+            hasher.write_u32(self.fires);
+            hasher.write_u32(self.absorbs);
             for slot in &self.slots {
                 hasher.write(&slot.blob);
                 match &slot.faulted {
@@ -403,6 +465,7 @@ mod on {
 
     /// The observation's craft records: copies of the world, never a pointer into it.
     fn crafts(sim: &RaceSim, inputs: &oag_gameplay::PlayerInputs) -> Vec<abi::Craft> {
+        let claims = sim.extensions.on.claims;
         sim.world
             .ships
             .iter()
@@ -424,7 +487,8 @@ mod on {
                     }),
                     flags: u8::from(person) * abi::CRAFT_PERSON
                         | u8::from(fire_held) * abi::CRAFT_FIRE_HELD
-                        | u8::from(racing) * abi::CRAFT_RACING,
+                        | u8::from(racing) * abi::CRAFT_RACING
+                        | u8::from(claims[slot] != 0) * abi::CRAFT_CLAIMED,
                     shield: ship.physics.shield,
                     shield_max: ship.handling.dimensions.shield,
                     speed_kmh: ship.physics.body.linear_velocity.length()
@@ -462,6 +526,15 @@ mod on {
         if sim.extensions.on.slots.is_empty() {
             return;
         }
+        // A claim ends when its pickup leaves the slot (absorbed, cleared by a respawn,
+        // replaced by another).
+        for slot in 0..oag_gameplay::MAX_SHIPS {
+            let on = &mut sim.extensions.on;
+            if on.claims[slot] != 0 && sim.world.ships[slot].pickup.weapon != on.claimed[slot] {
+                on.claims[slot] = 0;
+                on.claimed[slot] = None;
+            }
+        }
         let crafts = crafts(sim, inputs);
         let tick = sim.world.tick;
         let active = sim
@@ -475,12 +548,23 @@ mod on {
         let on = &mut sim.extensions.on;
         // A boost the step never took (a craft that did not step) does not carry over.
         on.boost = [1.0; oag_gameplay::MAX_SHIPS];
+        // Per slot in slot order: a wall contact, a fire, an absorb.
         let events: Vec<Event> = (0..oag_gameplay::MAX_SHIPS)
-            .filter(|slot| on.walls & (1 << slot) != 0)
-            .map(|slot| Event::WallContact { slot: slot as u8 })
+            .flat_map(|slot| {
+                let bit = |mask: u32| mask & (1 << slot) != 0;
+                let slot8 = slot as u8;
+                [
+                    bit(on.walls).then_some(Event::WallContact { slot: slot8 }),
+                    bit(on.fires).then_some(Event::PickupFire { slot: slot8 }),
+                    bit(on.absorbs).then_some(Event::PickupAbsorbed { slot: slot8 }),
+                ]
+            })
+            .flatten()
             .take(MAX_EVENTS)
             .collect();
         on.walls = 0;
+        on.fires = 0;
+        on.absorbs = 0;
         let observation = Observation {
             tick,
             active,
@@ -491,7 +575,7 @@ mod on {
         // Every module's checked commands, in id order: applied once all have run, so
         // each saw the same observation.
         let mut applied = Vec::new();
-        for slot in &mut on.slots {
+        for (index, slot) in on.slots.iter_mut().enumerate() {
             if slot.faulted.is_some() {
                 slot.fuel_used = 0;
                 continue;
@@ -504,7 +588,7 @@ mod on {
             slot.call_us = started.elapsed().as_secs_f32() * 1.0e6;
             let cost = match outcome {
                 Ok(cost) => {
-                    applied.append(&mut commands);
+                    applied.extend(commands.drain(..).map(|command| (index, command)));
                     cost
                 }
                 Err((fault, cost)) => {
@@ -519,7 +603,7 @@ mod on {
             slot.fuel_used = cost.fuel_used;
             slot.fuel_peak = slot.fuel_peak.max(cost.fuel_used);
         }
-        for command in applied {
+        for (index, command) in applied {
             match command {
                 // Below 1.0 the Leach Beam's path, multiplied so a drain is kept; above it
                 // the mod's own engine scale, multiplied so two modules compose. Both are
@@ -532,6 +616,29 @@ mod on {
                     *boost = (*boost * factor).min(abi::MAX_THRUST_FACTOR);
                 }
                 Command::ShieldDelta { slot, amount } => shield_delta(sim, slot as usize, amount),
+                Command::ClaimPickup { slot } => {
+                    let slot = slot as usize;
+                    let weapon = sim.world.ships[slot].pickup.weapon;
+                    let on = &mut sim.extensions.on;
+                    let owner = index as u8 + 1;
+                    if on.claims[slot] == 0 || on.claims[slot] == owner {
+                        on.claims[slot] = owner;
+                        on.claimed[slot] = weapon;
+                    } else {
+                        // One module's claim at a time: a second is a refused command.
+                        let module = &mut on.slots[index];
+                        if module.faulted.is_none() {
+                            log::warn!(
+                                "mod {}: claim-pickup for slot {slot}, already claimed, at tick {tick}; off for the rest of the race",
+                                module.mod_id
+                            );
+                            module.faulted = Some((
+                                tick,
+                                format!("claim-pickup for slot {slot}, already claimed"),
+                            ));
+                        }
+                    }
+                }
             }
         }
     }

@@ -178,6 +178,85 @@ mod on {
         assert_eq!(race.extension_reports()[0].faulted, None);
     }
 
+    const EVENTS: i32 = 1024 + oag_modhost::abi::EVENTS_AT as i32;
+
+    /// Claims slot 0's pickup whenever it holds an unclaimed one, and counts the
+    /// `pickup-fire` (blob word 0) and `pickup-absorbed` (word 1) events it is sent.
+    fn claimer() -> Source {
+        module(
+            "test.claimer",
+            &format!(
+                "(local $i i32) (local $kind i32)
+                 (block $done (loop $next
+                   (br_if $done (i32.ge_u (local.get $i) (i32.load (i32.const {count}))))
+                   (local.set $kind (i32.load8_u (i32.add (i32.const {EVENTS}) (i32.mul (local.get $i) (i32.const 8)))))
+                   (if (i32.eq (local.get $kind) (i32.const 2))
+                     (then (i32.store (i32.const {STATE}) (i32.add (i32.load (i32.const {STATE})) (i32.const 1)))))
+                   (if (i32.eq (local.get $kind) (i32.const 3))
+                     (then (i32.store (i32.const {s4}) (i32.add (i32.load (i32.const {s4})) (i32.const 1)))))
+                   (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                   (br $next)))
+                 (if (i32.and (i32.ne (i32.load8_u (i32.const {CRAFTS})) (i32.const 0))
+                              (i32.eqz (i32.and (i32.load8_u (i32.const {flags})) (i32.const 8))))
+                   (then
+                     (i32.store (i32.const {REPLY}) (i32.const 1))
+                     (i32.store8 (i32.const {cmd}) (i32.const 3))
+                     (i32.store8 (i32.const {slot}) (i32.const 0))))
+                 i32.const 0",
+                count = 1024 + 24,
+                s4 = STATE + 4,
+                flags = CRAFTS + 1,
+                cmd = REPLY + 4,
+                slot = REPLY + 5,
+            ),
+        )
+    }
+
+    fn pressed(button: oag_gameplay::input::Button) -> PlayerInputs {
+        let mut buttons = oag_gameplay::input::Input::new();
+        buttons.begin_frame(button.bit());
+        PlayerInputs::single(oag_gameplay::InputSnapshot {
+            buttons,
+            ..oag_gameplay::InputSnapshot::new()
+        })
+    }
+
+    #[test]
+    fn a_claimed_pickup_is_the_mods_to_fire_and_an_absorb_pays_nothing() {
+        use oag_gameplay::input::Button;
+        let mut race = grid(prepared(&[claimer()]));
+        race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Turbo);
+        race.tick(&PlayerInputs::none()); // the claim
+        race.tick(&pressed(Button::Square));
+        assert_eq!(
+            race.sim.world.ships[0].pickup.weapon,
+            Some(oag_tables::weapons::Weapon::Turbo),
+            "a claimed pickup is not spent by fire"
+        );
+        assert_eq!(
+            race.sim.world.ships[0].physics.turbo_timer, 0.0,
+            "nor fired as a Turbo"
+        );
+        let shield = race.sim.world.ships[0].physics.shield;
+        race.tick(&PlayerInputs::none()); // the fire event reaches the module
+        race.tick(&pressed(Button::Circle));
+        assert_eq!(
+            race.sim.world.ships[0].pickup.weapon, None,
+            "absorb takes it away"
+        );
+        assert_eq!(
+            race.sim.world.ships[0].physics.shield, shield,
+            "and pays nothing"
+        );
+        race.tick(&PlayerInputs::none());
+        let blob = race.sim.extensions.blob_for_tests(0);
+        assert_eq!(
+            &blob[..8],
+            &[1, 0, 0, 0, 1, 0, 0, 0],
+            "one fire, one absorb"
+        );
+    }
+
     /// Counts its calls in the blob and halves slot 1's thrust every tick.
     fn halver() -> Source {
         module(

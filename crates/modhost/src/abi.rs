@@ -67,10 +67,16 @@ pub const MAX_THRUST_FACTOR: f32 = 2.0;
 
 /// Event kind codes.
 pub const EVENT_WALL_CONTACT: u8 = 1;
+/// `pickup-fire{slot}`.
+pub const EVENT_PICKUP_FIRE: u8 = 2;
+/// `pickup-absorbed{slot}`.
+pub const EVENT_PICKUP_ABSORBED: u8 = 3;
 /// Command kind codes.
 pub const COMMAND_SCALE_THRUST: u8 = 1;
 /// `shield-delta{slot, amount}`.
 pub const COMMAND_SHIELD_DELTA: u8 = 2;
+/// `claim-pickup{slot}`.
+pub const COMMAND_CLAIM_PICKUP: u8 = 3;
 
 /// One grid slot as a guest reads it: copies of what the HUD already shows.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -97,6 +103,18 @@ pub enum Event {
         /// The grid slot.
         slot: u8,
     },
+    /// A craft whose pickup a module claimed asked to fire it: a person's fire press, or
+    /// an AI craft's decision to fire. The pickup is kept.
+    PickupFire {
+        /// The grid slot.
+        slot: u8,
+    },
+    /// A craft absorbed its claimed pickup: the pickup is gone and the engine paid no
+    /// energy for it.
+    PickupAbsorbed {
+        /// The grid slot.
+        slot: u8,
+    },
 }
 
 /// What a guest asked for, checked (README 2.1, `command`).
@@ -119,6 +137,13 @@ pub enum Command {
         slot: u8,
         /// Energy, finite.
         amount: f32,
+    },
+    /// Take over the slot's held pickup: from now until it leaves the slot, the engine
+    /// neither fires nor absorbs it, and raises `pickup-fire` / `pickup-absorbed` for the
+    /// module instead. The slot must hold a pickup; one module's claim at a time.
+    ClaimPickup {
+        /// The grid slot.
+        slot: u8,
     },
 }
 
@@ -143,6 +168,14 @@ pub(crate) fn write_observation(buffer: &mut [u8], observation: &Observation<'_>
         match *event {
             Event::WallContact { slot } => {
                 buffer[at] = EVENT_WALL_CONTACT;
+                buffer[at + 1] = slot;
+            }
+            Event::PickupFire { slot } => {
+                buffer[at] = EVENT_PICKUP_FIRE;
+                buffer[at + 1] = slot;
+            }
+            Event::PickupAbsorbed { slot } => {
+                buffer[at] = EVENT_PICKUP_ABSORBED;
                 buffer[at + 1] = slot;
             }
         }
@@ -220,6 +253,18 @@ pub(crate) fn read_reply(
                 }
                 shield_seen |= 1 << slot;
                 commands.push(Command::ShieldDelta { slot, amount });
+            }
+            COMMAND_CLAIM_PICKUP => {
+                let holds = observation
+                    .crafts
+                    .get(usize::from(slot))
+                    .is_some_and(|craft| craft.pickup != 0);
+                if !holds {
+                    return Err(Fault::Reply(format!(
+                        "claim-pickup for slot {slot}, which holds no pickup"
+                    )));
+                }
+                commands.push(Command::ClaimPickup { slot });
             }
             other => {
                 return Err(Fault::Reply(format!(
