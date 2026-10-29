@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-10-29
-summary: "Custom campaigns landed (ADR-0077); open: 2048, grid editor, drag race; wasm design adds a frontend world (ADR-0080) and a no-mods rule"
+summary: "Custom campaigns landed (ADR-0077); Kiss Curse (first wasm sim mod) landed on wasm-extensions; open: 2048, grid editor, drag race, a turbo mod"
 size: XL (20)
 difficulty: hard (35)
 ---
@@ -302,6 +302,34 @@ decision 4 for wasm screens only), detailed in README section 2.3. Owed items:
   `extensions` on matches the feature-off hashes and creates no Engine.
 
 ## The first player-facing mod: Kiss Curse (maintainer, 2026-10-29)
+
+**Landed on `wasm-extensions` (2026-10-29, lane wasm-kiss-curse).** What was built and
+its proof: `docs/architecture/wasm-extensions/README.md`, "What is built". Final
+numbers: thrust x0.25 for 90 ticks (1.5 s), renewed each tick of wall contact
+(**chosen**); on Pulse PSP EU `16_Track` the cursed craft is at 50.7 km/h a second
+after its first contact against 115.6 km/h. Choices the spec left open, made there:
+the event fires every tick of contact, not only the edge; an out-of-range or NaN
+factor faults the module (README 1.2's "never a silent clamp") rather than being
+clamped; the kind is `[extension.rules]`, running in every race but the original
+campaigns until `modes/*.toml` exists; ABI 1 offers no imports (no `rng-next`).
+Still open from this slice:
+
+- The HUD's MODDED tag and the results screen naming a faulted mod and its tick
+  (README 4.2); the modded records table.
+- With the feature on and the examples submodule checked out, every race of a checkout
+  run is cursed (the examples are on by default); turn it off on the MODS page.
+- Not checked by a test: an AI craft's wall contact reaching the guest on a disc
+  circuit (the event site is shared with the player's, `Race::count_wall_contact`,
+  and the fixture test scales an AI slot's thrust).
+- `oag-server` keeps the feature off (rule 6 lists `wasmtime`) until phase 3.
+
+**Next example mod (maintainer, 2026-10-29): a turbo.** A button held boosts the
+craft and spends shield energy while it does; absorbing a pickup gives back either
+nothing or more energy the more was spent, at most 50 % of what was consumed, so a
+player who burns their shield risks being wrecked by a hit. Needs, beyond Kiss
+Curse: the held buttons in the observation (README 2.1's `input` record), a
+`shield-delta` command through the damage path, a pickup-absorbed event, and a thrust
+factor above 1.0 (the Feisar walk's engine change, or a boost command of its own).
 
 The smallest increment that a player feels, ahead of the README's phase 1 and 2: a
 craft that touches a wall slows far more than a normal craft.

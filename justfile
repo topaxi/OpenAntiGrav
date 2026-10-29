@@ -65,7 +65,7 @@ native_video_flags := if os() == "linux" { "--features native-video" } else { ""
 # order they get there, so nothing here changes what either asserts. Output of
 # the recipes interleaves; a failure names its recipe.
 [parallel]
-check: fmt-check lint check-ballisticng test check-docs check-deps check-unused-deps check-determinism check-size check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-schemas
+check: fmt-check lint check-ballisticng check-extensions test check-docs check-deps check-unused-deps check-determinism check-size check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-schemas
 
 # Documentation is a deliverable, so its links are checked like any other build output
 check-docs:
@@ -137,6 +137,16 @@ check-ballisticng:
     cargo clippy -p oag-game -p oag-raceplay --features oag-game/ballisticng,oag-raceplay/ballisticng --all-targets -- -D warnings
     cargo nextest run -p oag-game -p oag-raceplay --features oag-game/ballisticng,oag-raceplay/ballisticng --tests --cargo-profile quick -E 'test(custom_tracks::) | test(survey::)'
 
+# The `extensions` feature (simulation mods in WebAssembly through `oag-modhost` and
+# wasmtime) is off by default, so nothing above compiles it. This lints the code
+# behind it and runs, with it on, the host's tests and every `oag-raceplay` unit
+# test (the hash goldens among them, which a vanilla race must still meet with the
+# feature on). The disc-backed Kiss Curse test runs by hand:
+# `cargo nextest run -p oag-raceplay --features extensions --run-ignored only -E 'test(/kiss_curse_ground_truth::/)'`.
+check-extensions:
+    cargo clippy -p oag-modhost -p oag-raceplay -p oag-game --features oag-game/extensions,oag-raceplay/extensions --all-targets -- -D warnings
+    cargo nextest run -p oag-modhost -p oag-raceplay --features oag-raceplay/extensions --lib --cargo-profile quick
+
 # `--tests` builds what has tests to run - libraries, binaries, integration tests.
 #
 # `--cargo-profile quick` builds the workspace at opt-level 0 (Cargo.toml's
@@ -185,7 +195,7 @@ test-data *ARGS:
 # selects nothing. The lead still runs the full `just` and `just test-data` once
 # per merge batch - see `.claude/skills/oag-drive/member-rules.md`.
 [parallel]
-gate-affected: fmt-check lint check-ballisticng test-affected check-docs check-deps check-unused-deps check-determinism check-size check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-schemas
+gate-affected: fmt-check lint check-ballisticng check-extensions test-affected check-docs check-deps check-unused-deps check-determinism check-size check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-schemas
 
 # `just test`, narrowed to what `scripts/affected.py` selects.
 test-affected:

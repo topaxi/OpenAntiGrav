@@ -129,6 +129,11 @@ rollback replays it. Names are the README's `event` variants.
   `step_opponents`) already counts it and `raise_contact_cue`
   (`crates/raceplay/src/cues.rs:41`, called at `tick.rs:673`) raises the sound.
 - **Per contact edge**, once per craft per tick at most.
+- **Built (Kiss Curse, 2026-10-29) as every tick of contact**, not the edge: the
+  event is raised on each tick `contacts > floor_contacts` (the same test that
+  counts `wall_contact_ticks`), so a craft that stays on the wall keeps reporting
+  it and a curse can be renewed while it scrapes. `evaluated.wall.impact` alone
+  would end a long scrape's curse 1.5 s after its first tick.
 
 ### `weapon-fired`
 
@@ -181,6 +186,10 @@ What each README command writes, where, and what the host refuses there. The
 clamps are the README's.
 
 ### `scale-thrust{slot, factor, ticks}`
+
+- **Built without `ticks` (Kiss Curse, 2026-10-29)**: `factor` in `[0, 1]` only, sent
+  each tick it should hold, multiplied into `pending_thrust_scale` at phase C. The
+  timer and factors above 1.0 below are still the Feisar walk's engine change.
 
 - **Lands in** `Ship::pending_thrust_scale` (`crates/gameplay/src/world.rs:204`),
   which the step consumes and resets to 1.0 (`player_step.rs:231`, and the same for

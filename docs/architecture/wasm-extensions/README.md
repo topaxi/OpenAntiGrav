@@ -1,6 +1,6 @@
 # WebAssembly extensions: who may extend what, through which surface, and what stays closed
 
-**Status: a design, nothing built** (2026-10-29). The decision record is
+**Status: a design, with its first slice built** (2026-10-29): Kiss Curse, below. The decision record is
 [ADR-0079](../adr/0079-extensions-are-sandboxed-webassembly-guests-behind-two-worlds.md),
 status *Proposed*; the `frontend` world (mod screens) is
 [ADR-0080](../adr/0080-a-wasm-mod-may-own-a-screen-and-save-a-small-blob.md), also
@@ -14,6 +14,42 @@ and the maintainer's examples walked end to end. The engine half is beside it:
 blob, the hash, replays, network play, web and iOS, the spike's measurements).
 Where this page and those two disagree, they own the engine facts and this page
 is to be corrected.
+
+## What is built: Kiss Curse (2026-10-29)
+
+The smallest slice a player feels, ahead of the rollout's phases: the example mod
+`oag.kiss-curse` (`assets/mods/examples/kiss-curse/`, Rust, 627 bytes of wasm) makes a
+craft that touches a wall keep a quarter of its thrust for 1.5 s, renewed each tick it
+stays on the wall. All behind the `extensions` cargo feature (`oag-game` turns on
+`oag-raceplay/extensions`, which links `oag-modhost`); off, nothing of wasmtime is
+compiled and a race offered a module names it as left out in its load report.
+
+| Piece | Where | What it is |
+| --- | --- | --- |
+| The host | `crates/modhost` | Section 4.1's configuration minus Pulley and the load-time rewrite (desktop Cranelift only); one process-wide `Engine`, built at the first compile and counted (`engines_created`); a fresh pooled instance per tick; fuel per tick `FUEL_PER_TICK` = 200,000, **chosen**; a trap or a refused reply is a `Fault` |
+| The ABI | `oag_modhost::abi` | Core wasm: exports `memory`, `oag_abi` (1), `oag_io` (a 4,096-byte buffer), `tick`; **no imports at all** (the `oag` namespace is empty in ABI 1, so `rng-next` and `log` are not offered yet). The buffer's fixed little-endian layout is on that module's page; it carries the README's records only as far as Kiss Curse needs: the tick, the active-slot mask, the events, the blob, the reply |
+| Event | `wall-contact{slot}` | Raised in `Race::count_wall_contact` for a person's craft and an AI craft alike, **on every tick the craft touches a wall** (`contacts > floor_contacts`, the test `wall_contact_ticks` counts), at most once per craft per tick; delivered the next tick (the one-tick latency) |
+| Command | `scale-thrust{slot, factor}` | No `ticks` field and no host timer: the guest re-sends it each tick it wants it. `factor` finite and in `[0, 1]`; anything else, a slot with no craft, or two for one slot is a fault, never a clamp. **Multiplied** into `Ship::pending_thrust_scale`, so a Leach Beam drain armed the tick before is kept |
+| Kind | `[extension.rules]` in `oag-mod.toml` | A rules module, because section 2.1 lets a rules module touch any slot and a craft module only slots flying its hull: a curse on every craft would otherwise be one craft row per team. Section 1.1 names a rules module from a mode file; `modes/*.toml` does not exist yet, so until it does a mod's rules module runs in every race the mod is on for, on its titles, **except the original campaigns** (section 1.2) |
+| State | `RaceSim::extensions` | Each module's blob (the manifest's `state_bytes`, at most 1,024), its fault tick, and the pending wall-contact bits, cloned with a snapshot and hashed last in `RaceSim::state_hash`; a race with no module hashes nothing there |
+| No replay | `Race::start_recording` | A modded race records none (section 4.4, phase 2's rule) |
+| Overlay | `oag_present::perf::mods` | The `Dev` overlay's `mods` block: per module fuel last tick, peak, share of the budget, call wall time, and the fault tick; a per-tick output timed in `oag-raceplay`, never hashed |
+
+Proof: `oag_raceplay`'s `tests::extensions` (a vanilla race's 600 tick hashes fold
+to one constant in both builds and build no engine; a modded race hashes the same
+twice; a runaway module faults on the same tick twice while the race and the other
+module go on), `oag_modhost`'s unit tests, and the disc-backed
+`kiss_curse_ground_truth` (Pulse PSP EU, `16_Track`, throttle held: a second after
+the first wall contact the cursed craft is at 50.7 km/h against 115.6 km/h, two
+seconds after 15.6 against 81.7). `just check-extensions` lints the feature and runs
+the host's and `oag-raceplay`'s unit tests with it on.
+
+Not built from this page yet: the HUD MODDED tag and the results screen naming a
+faulted mod (4.2), the modded records table, `race-start`/`race-end`, the
+observation's craft records and spline samples, every other event and command,
+the other five kinds, the HUD and frontend worlds, Pulley, the browser and the
+load-time rewrite, and `oag-server` linking the host (rule 6 forbids `wasmtime` to
+it until phase 3).
 
 ## What is already decided, and not reopened here
 
