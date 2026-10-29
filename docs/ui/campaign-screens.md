@@ -4632,6 +4632,6 @@ Pulse (PS2)"): the selected ring's gradient offset to the original, **before** `
 (cell), **after** `+2.5 / -3.4` and `+1.8 / -3.4`; the unselected hexes (8 of them over both screens) sit at `+0.6..+2.9 / -3.7`,
 a **frame-level transform** between PCSX2's screenshot and ours (x: the documented 480/272 pillar of `Space::PS2`, `-0.0073` px per
 px; y: a constant `-3.68 px` = 2.3 grid units, cause not isolated), and **against that transform the residual is within
-0.07 px for the unselected hexes and 0.28 px for the selected ring**, both axes, both screens.
+0.07 px for the unselected hexes (the transform is fitted on them, so that only shows the field is rigid) and 0.28 px for the selected ring (independent)**, both axes, both screens. In the original's own coordinates the placement is exact: selector `(76,233)` / `(144,129)` equal the GS quads. Whether the frame-level offset is PCSX2's presentation or ours is open.
 - **2048/Omega**: not applicable (Pulse's `GridController` and Pulse PS2's skin). Pure PSP and Pulse PSP keep `(-5, -7)`.
 

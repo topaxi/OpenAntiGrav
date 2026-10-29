@@ -1047,7 +1047,7 @@ patches by gradient cross-correlation (Gaussian, strongest edges, parabolic sub-
 `dy = -3.68` (sd 0.04) px from PCSX2's: x is `Space::PS2`'s documented 480/272 pillar (0.74 % against the 16:9 the screenshot fills), y is a constant
 2.3 grid units that the right-hand panel's rules (-3.4, -3.6), the footer bars (-2.4 to -4.3) and the Main Menu rows (-3.6 to -3.9) share (so it is not hex placement; the title bar reads -0.3 by correlation but 4 px low by its bright-row extent, a slanted shape); the GS dump puts the original's outlines exactly on
 the XML's coordinates, and its registers read `DISPLAY2.DBY = 1`, `DY = 52` (a field offset is one candidate, PCSX2's PAL crop another; **cause
-not isolated**). After that transform the hexes agree within 0.07 px and the selected ring within 0.28 px on both axes. Before the
+not isolated**). After that transform the selected ring agrees within 0.28 px on both axes (the unselected hexes within 0.07 px, but the transform is fitted on them, so that only shows the field is rigid). Before the
 fix the ring was `+15.4 / +8.2` (grid) and `+13.9 / +7.7` (cell) px off the original's, 12 px and 11 px of that the PSP's `(-5, -7)` used on the PS2's `(-11, -14)`
 (`docs/ui/campaign-screens.md`, "PS2: the selector sits at...").
 
