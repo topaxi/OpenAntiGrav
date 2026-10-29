@@ -198,6 +198,31 @@ pub fn locked_teams(
         .collect()
 }
 
+/// [`locked_teams`] for `title` read off `archives` and `records`: what the
+/// live Team Selection and its `--menu-page` still both drop. Empty on a title
+/// with no list campaign, under `--unlock-all`, or when the campaign will not
+/// read (logged; nothing is gated rather than every team).
+#[must_use]
+pub fn locked_teams_on(
+    title: &oag_title::Title,
+    archives: &mut oag_assets::Archives,
+    records: &crate::records::Store,
+) -> Vec<String> {
+    if title.campaign.list_entry.is_none() || crate::unlock::unlock_all() {
+        return Vec::new();
+    }
+    match load(archives, title) {
+        Ok(campaign) => {
+            let medal_of = crate::unlock::campaign_medal_of(records, title.name);
+            locked_teams(&campaign, &medal_of, "")
+        }
+        Err(error) => {
+            log::warn!("{error:#} - no team is gated");
+            Vec::new()
+        }
+    }
+}
+
 /// Our own wording, each with the id `assets/ui/strings/english.toml` holds it
 /// under and the literal it falls back to.
 const WORDS: [(&str, &str); 3] = [

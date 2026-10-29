@@ -89,22 +89,14 @@ impl Session {
         let Some(shell) = self.shell.as_ref() else {
             return Vec::new();
         };
+        // Before the source is opened: no list campaign, nothing to read.
         if shell.title.campaign.list_entry.is_none() || oag_game::unlock::unlock_all() {
             return Vec::new();
         }
         let Some(mut archives) = self.open_title_archives("Team Selection") else {
             return Vec::new();
         };
-        match pure_list::load(&mut archives, shell.title) {
-            Ok(campaign) => {
-                let medal_of = oag_game::unlock::campaign_medal_of(&self.records, shell.title.name);
-                pure_list::locked_teams(&campaign, &medal_of, "")
-            }
-            Err(error) => {
-                warn!("{error:#} - no team is gated");
-                Vec::new()
-            }
-        }
+        pure_list::locked_teams_on(shell.title, &mut archives, &self.records)
     }
 
     /// Opens the chain again on the screen that picked the event named `name`,
