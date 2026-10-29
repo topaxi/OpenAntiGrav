@@ -1208,7 +1208,10 @@ mod tests {
         // The PCSX2 capture puts the hull's middle near x 159 of 640, left of the stat panel
         // (x 387): `x -6` at depth 15 under the 640x448 grid's aspect, and nothing else.
         let (x, y) = landing(&placed, Space::PS2);
-        assert!((140.0..180.0).contains(&x) && (150.0..210.0).contains(&y), "({x}, {y})");
+        assert!(
+            (140.0..180.0).contains(&x) && (150.0..210.0).contains(&y),
+            "({x}, {y})"
+        );
         // With the circuit's sign rule and the authored `Origin` the hull is 120 px further right.
         let (shifted, _) = landing(&authored, Space::PS2);
         assert!(shifted > x + 100.0, "{shifted} against {x}");

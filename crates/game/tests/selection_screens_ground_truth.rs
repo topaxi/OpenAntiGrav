@@ -499,7 +499,11 @@ fn the_ps2s_ship_select_places_every_hull_left_of_the_stat_panel_from_its_own_mo
         return;
     };
     let shell = shell(&path);
-    let panel_left = shell.ship_select.as_ref().expect("Team Selection reads").panel[0];
+    let panel_left = shell
+        .ship_select
+        .as_ref()
+        .expect("Team Selection reads")
+        .panel[0];
     let space = oag_display::space::Space::PS2;
     let mut archives = oag_assets::Archives::open(&path.to_string_lossy(), oag_pulse::TITLE)
         .expect("the archives open");
