@@ -362,7 +362,7 @@ pub struct MenuSkin {
     /// [`Self::space`]'s grid, on Grid Selection and Cell Selection.
     ///
     /// `None` is the PSP's `(-5, -7)` (`oag_ui_screens::campaign`'s `SELECTOR_ORIGIN`, a GE
-    /// dump of `GridController_UpdateSelectorPulse` `0x088a5700`). **Pulse PS2 is
+    /// dump of the widget update `0x088a3e8c`, twin `GridController_UpdateSelectorPulse` `0x088a5700`). **Pulse PS2 is
     /// `Some((-11, -14))`, measured**: a PCSX2 GS dump of both screens draws the 56x56 quad at
     /// the outline's top-left minus (11, 14) (Grid Selection tile 0 at (87,247), selector at
     /// (76,233); Cell Selection tile (155,143), selector (144,129)). `FUN_001905d8` keeps the

@@ -1,23 +1,20 @@
-//! `Selector`'s pulse clock: `GridController_UpdateSelectorPulse`
-//! (`0x088a5700`, confidence 85) drives the selected hex's colour off a phase
-//! advanced `elapsed * 2.0` and wrapped at `2.0`, a 1 s triangle wave between
-//! [`CYAN`] and white. See `docs/ui/campaign-screens.md`.
+//! `Selector`'s pulse clock: the widget update at `0x088a3e8c` (live on Grid
+//! and Cell Selection, PPSSPP breakpoint; its twin `0x088a5700` never runs
+//! there) drives the selected hex's colour off a phase advanced
+//! `elapsed * 2.0` and wrapped at `2.0`, a 1 s triangle wave between
+//! [`CYAN`] and white. The phase starts at `0.0` and runs from the first
+//! frame: there is no entry hold. The original keeps the phase in the widget
+//! across visits, so a re-entry resumes where it was left; ours restarts at
+//! cyan, which is the original's first entry since boot. See
+//! `docs/ui/campaign-screens.md`.
 
 /// The pulse's low endpoint, a literal in `0x088a5700`.
 const CYAN: u32 = 0xff33_a6b9;
 const WHITE: u32 = 0xffff_ffff;
 
-/// Seconds after the screen opened that the original holds the selector at
-/// cyan before the triangle starts: PPSSPP frames grabbed 0.04-0.9 s after
-/// `Grid Selection` replaced `Main Menu` (7 entries, `scripts/psp-menu-pair.py`'s
-/// entry clock) read cyan until 0.3-0.4 s, then rise to white by 0.7-0.9 s.
-/// Fitted to those frames (+-0.1 s, wall clock), not read from the executable:
-/// the entrance animation that holds it is not located. Confidence 50.
-const ENTRY_HOLD: f32 = 0.35;
-
 /// Seconds since the screen opened, owned by the `Grid Selection`/`Cell
 /// Selection` model so the draw list needs no clock argument. The law (rate,
-/// endpoints) is `0x088a5700`'s; [`ENTRY_HOLD`] is the fitted entry delay.
+/// endpoints, no hold) is `0x088a3e8c`'s.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct SelectorPulse {
     seconds: f32,
@@ -39,7 +36,7 @@ impl SelectorPulse {
 
     /// The pulse's position in its triangle, `0.0` at cyan to `1.0` at white: the `t` of [`Self::tint`].
     fn level(&self) -> f32 {
-        let phase = ((self.seconds - ENTRY_HOLD).max(0.0) * 2.0) % 2.0;
+        let phase = (self.seconds * 2.0) % 2.0;
         if phase > 1.0 { 2.0 - phase } else { phase }
     }
 
@@ -60,7 +57,7 @@ impl SelectorPulse {
     /// half of the 2.0-wide phase, `lerp(phase - 1, white, cyan)` for the rest.
     #[must_use]
     pub fn tint(&self) -> u32 {
-        let phase = ((self.seconds - ENTRY_HOLD).max(0.0) * 2.0) % 2.0;
+        let phase = (self.seconds * 2.0) % 2.0;
         if phase > 1.0 {
             lerp_argb(phase - 1.0, WHITE, CYAN)
         } else {
@@ -89,28 +86,30 @@ mod tests {
     fn tint_is_a_one_second_triangle_between_cyan_and_white() {
         let mut p = SelectorPulse::default();
         assert_eq!(p.tint(), CYAN);
-        p.set_seconds(ENTRY_HOLD);
-        assert_eq!(p.tint(), CYAN, "held cyan through the entry");
-        p.set_seconds(ENTRY_HOLD + 0.5);
-        assert_eq!(p.tint(), WHITE);
-        p.set_seconds(ENTRY_HOLD + 1.0);
+        p.set_seconds(0.0);
         assert_eq!(p.tint(), CYAN);
-        p.set_seconds(ENTRY_HOLD + 0.25);
+        p.set_seconds(0.02);
+        assert_ne!(p.tint(), CYAN, "no entry hold: the rise starts at once");
+        p.set_seconds(0.5);
+        assert_eq!(p.tint(), WHITE);
+        p.set_seconds(1.0);
+        assert_eq!(p.tint(), CYAN);
+        p.set_seconds(0.25);
         let quarter = p.tint();
         assert!(quarter != CYAN && quarter != WHITE);
-        p.set_seconds(ENTRY_HOLD + 0.75);
+        p.set_seconds(0.75);
         assert_eq!(p.tint(), quarter, "the wave is symmetric about 0.5 s");
     }
 
     #[test]
     fn the_stamp_follows_the_pulse_from_80_to_230() {
         let mut p = SelectorPulse::default();
-        assert_eq!(p.stamp(), 80, "held at cyan: the low end");
-        p.set_seconds(ENTRY_HOLD + 0.5);
+        assert_eq!(p.stamp(), 80, "cyan: the low end");
+        p.set_seconds(0.5);
         assert_eq!(p.stamp(), 230, "white: the high end");
-        p.set_seconds(ENTRY_HOLD + 0.25);
+        p.set_seconds(0.25);
         let rising = p.stamp();
-        p.set_seconds(ENTRY_HOLD + 0.75);
+        p.set_seconds(0.75);
         assert_eq!(p.stamp(), rising, "the same triangle as the tint");
         assert_eq!(rising, 155);
     }
