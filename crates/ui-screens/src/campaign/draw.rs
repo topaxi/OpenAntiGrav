@@ -104,7 +104,14 @@ pub fn grid_draw_list(
         };
         if image.name.as_deref() == Some("Selector") {
             if let Some(hex) = hex_rect(screen, slot, 0, sprites) {
-                push_selector(&mut out, image, placed, hex, model.pulse());
+                push_selector(
+                    &mut out,
+                    image,
+                    placed,
+                    hex,
+                    model.pulse(),
+                    skin.selector_origin(),
+                );
             }
             continue;
         }
@@ -276,7 +283,14 @@ pub fn cell_draw_list(
             && let Some((sx, sy)) = selected_coords
             && let Some(hex) = hex_rect(screen, sx as usize, sy as usize, sprites)
         {
-            push_selector(&mut out, image, placed, hex, model.pulse());
+            push_selector(
+                &mut out,
+                image,
+                placed,
+                hex,
+                model.pulse(),
+                skin.selector_origin(),
+            );
             continue;
         }
         if let Some((x, y)) = image.name.as_deref().and_then(|n| hex_slot_xy(n, "Medal_")) {
@@ -688,14 +702,10 @@ pub(super) fn selector_tinted_draw(
     placed: Placed,
     hex: [f32; 4],
     argb: u32,
+    origin: Option<(f32, f32)>,
 ) -> Draw {
-    sprite_draw(
-        image,
-        placed,
-        hex[0] + SELECTOR_ORIGIN[0],
-        hex[1] + SELECTOR_ORIGIN[1],
-        argb,
-    )
+    let [dx, dy] = origin.map_or(SELECTOR_ORIGIN, |(x, y)| [x, y]);
+    sprite_draw(image, placed, hex[0] + dx, hex[1] + dy, argb)
 }
 
 /// `Selector`'s draw and, after it, the glow-mask stamp its quad writes: the whole 42x43 rectangle,
@@ -708,8 +718,9 @@ fn push_selector(
     placed: Placed,
     hex: [f32; 4],
     pulse: &super::pulse::SelectorPulse,
+    origin: Option<(f32, f32)>,
 ) {
-    let draw = selector_tinted_draw(image, placed, hex, pulse.tint());
+    let draw = selector_tinted_draw(image, placed, hex, pulse.tint(), origin);
     if let Draw::Sprite { rect, .. } = &draw {
         let value = pulse.stamp();
         out.push(draw.clone());

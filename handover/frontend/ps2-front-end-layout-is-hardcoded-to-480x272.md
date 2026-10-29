@@ -1,8 +1,8 @@
 ---
 status: re-first
 titles: [pulse]
-updated: 2026-09-30
-summary: "PS2 front-end skin constants rest on one screen; a second helptext step and the title position residual open"
+updated: 2026-10-29
+summary: "PS2 Selector at hex minus (11,14), GS-measured; a constant 2.3-unit vertical offset, PCSX2 frame vs ours, and the skin residuals open"
 ---
 
 # PS2 front-end layout is hardcoded to 480x272
@@ -137,7 +137,12 @@ unmeasured gap.
   `racebox1.png` (the disc's row
   list) against `ours-race.png` (this build's).
 
+**2026-10-29 (`pulse-ps2-hex-align`): the Grid and Cell Selection `Selector` is at the outline's top-left minus (11, 14) on a PS2 source** (it drew the PSP's `(-5, -7)`, 12 px and 11 px off at 1280x720): measured off PCSX2 GS dumps of both screens, carried by `oag_title::MenuSkin::selector_origin` (`PS2_MENU_SKIN` `Some((-11, -14))`), pinned by a unit test, evidence in `docs/ui/campaign-screens.md` and `docs/ghidra/functions/ps2-pulse-eu/grid-selection.md` (`GridController_UpdateSelectorPulse` `0x001905d8`). First PS2 menu pairs: `scripts/pcsx2-menu-pair.py` (`docs/tools/compare-page.md`). **Open, measured, cause not isolated:** against PCSX2's frame ours sits a constant 2.3 grid units (3.7 px at 720) high on every PS2 front-end screen read (hexes, rules, footer, Main Menu rows), and 0.74 % narrow (the documented `Space::PS2` 480/272 pillar against a 16:9 screenshot). The GS dump puts the original's quads on the XML's coordinates, so it is the presentation (PCSX2's PAL display crop, `DISPLAY2.DBY = 1`, or ours), not placement: a real-hardware or second-emulator reading, or the GS display registers read through, decides it. The title bar and the Main Menu's own title/rows were not re-pinned by this.
+
 ## Next Steps
+
+- Isolate the constant 2.3-unit vertical offset and the 0.74 % horizontal fit between PCSX2's GS screenshot and ours (see the 2026-10-29 paragraph under Open): read `DISPLAY1/2` (`DX`, `DY`, `MAGH`, `DBY`) against how PCSX2 crops a PAL 448-line frame, and decide whether `Space::PS2`'s display aspect should be 16:9. Not a hex change.
+- Pulse colour and period on the PS2 is the PSP's law by decompile only: a PCSX2 frame sequence of the selected hex (the pulse clock) would measure it.
 
 - Read a second PS2 screen's `helptext` step (or find the PS2's equivalent
   of `Single Player`/`Cell Setup`, the two PSP screens that corroborated the

@@ -4611,6 +4611,28 @@ lookup stays dead on this screen (confidence 85; the string has one xref, no aut
 - **2048/Omega**: not applicable (this widget routine is Pulse's `GridController`; HD's `Selector` keeps `centred_selector_draw`,
   unmeasured). Checked, differs by lack of measurement, not wired.
 
+#### PS2: the selector sits at the hex's top-left minus (11, 14) (2026-10-29, `pulse-ps2-hex-align`)
+
+**Measured off PCSX2 GS dumps, not scaled from the PSP.** Both PS2 screens author the `Selector` as
+`width="56" height="56"` over a 43x43 sprite (`CellMode_Definition.xml`, Grid Selection `x=24 y=150`, Cell
+Selection the same), and the GS draws that quad at the outline's top-left minus `(11, 14)` on Grid Selection
+(hex `(87,247)`, quad `(76,233)`) and on Cell Selection (hex `(155,143)`, quad `(144,129)`), in the 640x448
+grid; every outline quad equals the XML. Ours drew the PSP's `(-5, -7)` on a PS2 source (6 and 7 grid units too far
+right and down, 12 px and 11 px at 1280x720). `oag_title::MenuSkin::selector_origin` is the per-source value (`None` is
+the PSP's `SELECTOR_ORIGIN`; `oag_pulse::frontend::PS2_MENU_SKIN` is `Some((-11, -14))`), read by `grid_draw_list` and
+`cell_draw_list`; pinned by `the_ps2_selector_sits_at_the_measured_ps2_offset_not_the_psp_one`. The decompile of the PS2
+function (`FUN_001905d8`, [grid-selection.md](../ghidra/functions/ps2-pulse-eu/grid-selection.md)) keeps the `5.0` and `7.0`
+literals and the pulse law, so the extra `(-6, -7)` is the stretched art (x: `(56-43)/2 = 6.5`; y: not explained).
+**Pulse colour and period on the PS2: the same law as the PSP by the decompile** (phase `2*dt`, wrap `2.0`, `0xff33a6b9` to white),
+not yet measured on PCSX2 pixels. Measured against PCSX2's frames
+(`scripts/pcsx2-menu-pair.py`, `scripts/menu_hex_offsets.py`, [compare-page.md](../tools/compare-page.md), "Menu pairs: Wipeout
+Pulse (PS2)"): the selected ring's gradient offset to the original, **before** `+15.4 / +8.2 px` (grid) and `+13.9 / +7.7`
+(cell), **after** `+2.5 / -3.4` and `+1.8 / -3.4`; the unselected hexes (8 of them over both screens) sit at `+0.6..+2.9 / -3.7`,
+a **frame-level transform** between PCSX2's screenshot and ours (x: the documented 480/272 pillar of `Space::PS2`, `-0.0073` px per
+px; y: a constant `-3.68 px` = 2.3 grid units, cause not isolated), and **against that transform the residual is within
+0.07 px for the unselected hexes (the transform is fitted on them, so that only shows the field is rigid) and 0.28 px for the selected ring (independent)**, both axes, both screens. In the original's own coordinates the placement is exact: selector `(76,233)` / `(144,129)` equal the GS quads. Whether the frame-level offset is PCSX2's presentation or ours is open.
+- **2048/Omega**: not applicable (Pulse's `GridController` and Pulse PS2's skin). Pure PSP and Pulse PSP keep `(-5, -7)`.
+
 
 #### The front end's bloom, wired for the cursor (2026-10-29, `pulse-frontend-bloom`)
 
@@ -4680,3 +4702,4 @@ other screens' stamps still to wire (below).
 - **Pure**: checked, the same constants. All four Pure `BOOT.BIN`s carry the weight table with `0xaf` in front of it, byte for byte.
   Whether Pure's front end stamps, and where, is **not measured** (an EDRAM readout was tried and landed on PPSSPP's own load dialog, alpha flat at 4), so nothing is wired for it. 2048 and
   Omega: not applicable here (HD's front end draws through its own pipeline, `frontend_glow` is `None`).
+
