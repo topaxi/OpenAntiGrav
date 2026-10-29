@@ -322,6 +322,11 @@ craft that touches a wall slows far more than a normal craft.
   feature on matches the feature-off build; the determinism references untouched;
   out of fuel falls back to vanilla deterministically; a ground-truth test that a
   cursed craft's speed after a scrape is below an uncursed one's.
+- **Dev overlay** (maintainer, 2026-10-29): a `mods` section in the perf overlay
+  (`crates/present/src/perf.rs`, beside `perf/net.rs` and `perf/memory.rs`): per module,
+  fuel used last tick, its peak, the budget's share, and the call's wall time; a
+  faulted module shown with its tick. A per-tick *output* of the host, like the
+  audio cues, never `World` state and never hashed.
 - **Out**: HUD world, the Pilot Assist move, browser, iOS, replays, lobby. The race is
   MODDED and records no replay (phase 2's rule).
 
