@@ -38,7 +38,8 @@ impl Draw {
             Self::Video { .. }
             | Self::FuryBackdrop(_)
             | Self::SceneBackdrop(_)
-            | Self::GlowStamp { .. } => None,
+            | Self::GlowStamp { .. }
+            | Self::GlowText { .. } => None,
         }
     }
 
@@ -119,8 +120,12 @@ impl Draw {
                 rect[3] *= scale;
             }
             // A movie and the point-cloud pass have no alpha channel to fade
-            // and are never part of a page.
-            Self::Video { .. } | Self::FuryBackdrop(_) | Self::SceneBackdrop(_) => {}
+            // and are never part of a page; a text's glow stamp follows its glyph quads, which
+            // moved with the text.
+            Self::Video { .. }
+            | Self::FuryBackdrop(_)
+            | Self::SceneBackdrop(_)
+            | Self::GlowText { .. } => {}
         }
     }
 

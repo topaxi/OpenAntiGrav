@@ -275,6 +275,56 @@ pub struct NavigationLegend {
     /// The root's own `FE_SCREEN_TITLE` caption over the page title, where the
     /// file authors one - HD's. Drawn the way `Team Selection`'s headings are.
     caption: Option<crate::picker::hd::MiniText>,
+    /// The footer tag's glow-mask stamp, where the root authors a `RealGlow` on it: Pulse's
+    /// `NewsItemTagText` (`RealGlow="64"`). See [`TagGlow`].
+    tag_glow: Option<TagGlow>,
+}
+
+/// The glow-mask stamp of the footer's tag, `<TextInfo type="tag">` over `NewsItemTagText`.
+///
+/// The value is authored (`RealGlow`); the box is not: the original fills the tag with a string at
+/// run time and stamps that string's glyph quads, and ours has no string to draw there. The box is
+/// what an EDRAM readout of Grid Selection measured, the same 392 pixels (28x14, one pixel up and
+/// left of the authored `x`, `y`) on every Pulse screen it was read on (**measured**, confidence
+/// 75: one string's extent, `docs/ui/campaign-screens.md`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct TagGlow {
+    rect: [f32; 4],
+    value: u8,
+}
+
+/// The measured tag stamp's size and its offset from the authored position.
+const TAG_GLOW_SIZE: [f32; 2] = [28.0, 14.0];
+const TAG_GLOW_OFFSET: [f32; 2] = [-1.0, -1.0];
+
+fn read_tag_glow(root: &Node, globals: &HashMap<String, String>) -> Option<TagGlow> {
+    fn tag_info(node: &Node) -> Option<(&Node, &Node)> {
+        let text = node
+            .children_named("Text")
+            .find(|text| text.attr("name") == Some("NewsItemTagText"));
+        if let Some(text) = text
+            && node.name.eq_ignore_ascii_case("TextInfo")
+        {
+            return Some((node, text));
+        }
+        node.children.iter().find_map(tag_info)
+    }
+    let (info, text) = tag_info(root)?;
+    let value = number(globals, text, "RealGlow")?.clamp(0.0, 255.0) as u8;
+    if value == 0 {
+        return None;
+    }
+    let x = number(globals, info, "x").unwrap_or(0.0);
+    let y = number(globals, info, "y").unwrap_or(0.0);
+    Some(TagGlow {
+        rect: [
+            x + TAG_GLOW_OFFSET[0],
+            y + TAG_GLOW_OFFSET[1],
+            TAG_GLOW_SIZE[0],
+            TAG_GLOW_SIZE[1],
+        ],
+        value,
+    })
 }
 
 impl NavigationLegend {
@@ -414,6 +464,7 @@ impl NavigationLegend {
         Some(Self {
             prompts: prompts.into_iter().map(|(_, prompt)| prompt).collect(),
             caption,
+            tag_glow: read_tag_glow(root, globals),
         })
     }
 
@@ -430,7 +481,15 @@ impl NavigationLegend {
             .map(|prompt| Self::draw_prompt(prompt, faces))
             .collect();
         self.draw_caption(&mut out);
+        out.extend(self.tag_stamp());
         out
+    }
+
+    fn tag_stamp(&self) -> Option<Draw> {
+        self.tag_glow.map(|glow| Draw::GlowStamp {
+            rect: glow.rect,
+            value: glow.value,
+        })
     }
 
     fn draw_caption(&self, out: &mut Vec<Draw>) {
@@ -458,6 +517,7 @@ impl NavigationLegend {
             .map(|prompt| Self::draw_prompt(prompt, faces))
             .collect();
         self.draw_caption(&mut out);
+        out.extend(self.tag_stamp());
         out
     }
 
@@ -656,14 +716,18 @@ impl NavigationLegend {
     #[must_use]
     pub fn describe(&self) -> String {
         let has = |kind: PromptKind| self.prompts.iter().any(|prompt| prompt.kind == kind);
-        match (has(PromptKind::Confirm), has(PromptKind::Back)) {
-            (true, true) => "Confirm+Back".to_string(),
-            (true, false) => "Confirm only".to_string(),
-            (false, true) => "Back only".to_string(),
+        let prompts = match (has(PromptKind::Confirm), has(PromptKind::Back)) {
+            (true, true) => "Confirm+Back",
+            (true, false) => "Confirm only",
+            (false, true) => "Back only",
             // Unreachable in practice - `Self::read` returns `None` rather
             // than a legend with no prompts at all - kept exhaustive rather
             // than a `_` so a future prompt kind cannot silently fall here.
-            (false, false) => "no prompts".to_string(),
+            (false, false) => "no prompts",
+        };
+        match self.tag_glow {
+            Some(glow) => format!("{prompts}, tag glow {}", glow.value),
+            None => prompts.to_string(),
         }
     }
 }

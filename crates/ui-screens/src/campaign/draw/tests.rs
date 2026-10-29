@@ -23,7 +23,7 @@ const XML: &str = r#"
 <Screen type="GridSelection" name="Grid Selection">
 <LeftLayer transition="0.5" OffsetX="256" OffsetY="80">
 <Item OffsetX="14">
-<Text name="Title" String="GRID 1" font="Menu" y="13" color="0xffffffff"></Text>
+<Text name="Title" String="GRID 1" font="Menu" pulse="true" y="13" color="0xffffffff"></Text>
 <Item OffsetY="51">
 <Text name="Medals" String="00/16" font="default" x="120" color="0xffffffff"></Text>
 </Item>
@@ -111,7 +111,7 @@ const XML: &str = r#"
 </GridController>
 </LeftLayer>
 <LeftLayer transition="0.5">
-<Text name="Title" String="SINGLE RACE 01" font="Menu" x="270" y="38" color="0xffffffff"></Text>
+<Text name="Title" String="SINGLE RACE 01" font="Menu" pulse="true" x="270" y="38" color="0xffffffff"></Text>
 <Item OffsetX="260" OffsetY="60">
 <Text name="Track Line" font="default" x="10" y="0" color="0xffffffff"></Text>
 </Item>

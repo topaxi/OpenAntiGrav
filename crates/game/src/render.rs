@@ -670,6 +670,8 @@ impl Renderer {
         // this one and its composite is drawn at its place in the order.
         let mut fury_at = None;
         let mut stamps: Vec<([f32; 4], u8)> = Vec::new();
+        // The quads the latest text draw laid out, which a `Draw::GlowText` after it stamps.
+        let mut last_text = 0..0;
         let mut scene_at = None;
         let scissors = std::mem::take(&mut self.scissors);
         let mut segments: Vec<(u32, [u32; 4])> = Vec::new();
@@ -702,8 +704,19 @@ impl Renderer {
                 }
                 segments.push((self.quads.len() as u32, rect));
             }
+            let quads_before = self.quads.len();
             match draw {
                 Draw::GlowStamp { rect, value } => stamps.push((*rect, *value)),
+                Draw::GlowText { value } => {
+                    // The original's stamp is each glyph quad grown one pixel left and up:
+                    // Grid Selection's `GRID 1` covers 269..332 x 92..112 in EDRAM where ours
+                    // lays its glyphs at 270..332 x 93..112 (**measured**, confidence 65, one
+                    // string at scale 1.0).
+                    stamps.extend(self.quads[last_text.clone()].iter().map(|quad| {
+                        let [x, y, w, h] = quad.rect;
+                        ([x - 1.0, y - 1.0, w + 1.0, h + 1.0], *value)
+                    }));
+                }
                 Draw::FuryBackdrop(frame) => {
                     fury_at = Some((self.quads.len() as u32, frame.as_ref()));
                 }
@@ -905,6 +918,9 @@ impl Renderer {
                             .push_text(slot, *x, *y, *scale, *color, border, *align, text, bounds),
                     }
                 }
+            }
+            if matches!(draw, Draw::Text { .. } | Draw::FacedText { .. }) {
+                last_text = quads_before..self.quads.len();
             }
         }
 

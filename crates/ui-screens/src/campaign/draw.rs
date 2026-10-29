@@ -187,7 +187,7 @@ pub fn grid_draw_list(
             _ => text.string.clone(),
         };
         let Some(content) = content else { continue };
-        out.push(text_draw(text, &content, layout));
+        push_text(&mut out, text, &content, layout, model.pulse());
     }
     layers.body = out;
     layers
@@ -383,7 +383,7 @@ pub fn cell_draw_list(
             _ => text.string.clone(),
         };
         let Some(content) = content else { continue };
-        out.push(text_draw(text, &content, layout));
+        push_text(&mut out, text, &content, layout, model.pulse());
     }
     // The three medal-tier swatches: shown iff their own text row is.
     for image in &screen.images {
@@ -706,6 +706,22 @@ pub(super) fn selector_tinted_draw(
 ) -> Draw {
     let [dx, dy] = origin.map_or(SELECTOR_ORIGIN, |(x, y)| [x, y]);
     sprite_draw(image, placed, hex[0] + dx, hex[1] + dy, argb)
+}
+
+/// `text`'s draw and, after it, what `Text_Draw` stamps into the glow mask for it
+/// ([`Text::glow_stamp`]) over its glyph quads. The title gates whether the frame blooms.
+pub(super) fn push_text(
+    out: &mut Vec<Draw>,
+    text: &Text,
+    content: &str,
+    layout: &Layout,
+    pulse: &super::pulse::SelectorPulse,
+) {
+    out.push(text_draw(text, content, layout));
+    let value = text.glow_stamp(pulse.seconds());
+    if value > 0 {
+        out.push(Draw::GlowText { value });
+    }
 }
 
 /// `Selector`'s draw and, after it, the glow-mask stamp its quad writes: the whole 42x43 rectangle,

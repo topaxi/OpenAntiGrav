@@ -231,6 +231,10 @@ pub(super) fn body(
             text_draw(text, &content, layout),
             fade_in(text.transition, picker.seconds()),
         ));
+        let value = text.glow_stamp(picker.seconds());
+        if value > 0 {
+            out.push(Draw::GlowText { value });
+        }
     }
     // The team's own name sits where the disc's `List` puts its rows - the
     // panel's inner left edge, three down - which no `Text` widget authors.

@@ -138,3 +138,47 @@ fn the_glow_follows_the_stamps_value() {
         red(&weak, 194, 120)
     );
 }
+
+fn text_list(stamp: Option<u8>) -> Vec<Draw> {
+    let mut list = vec![Draw::Text {
+        x: 200.0,
+        y: 100.0,
+        scale: 6.0,
+        color: [1.0, 1.0, 1.0, 1.0],
+        border: None,
+        align: oag_ui::frontend::Align::Left,
+        text: "HHHH".to_string(),
+        wrap_width: None,
+    }];
+    if let Some(value) = stamp {
+        list.push(Draw::GlowText { value });
+    }
+    list
+}
+
+/// A `Draw::GlowText` stamps the glyph quads of the text draw before it: the text blooms past its
+/// own edge, and far from it nothing does.
+#[test]
+fn a_text_stamps_its_glyph_quads_and_blooms() {
+    let (Some(plain), Some(stamped)) = (frame(&text_list(None)), frame(&text_list(Some(220))))
+    else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let near = |frame: &[u8]| {
+        (180..200)
+            .map(|x| u32::from(red(frame, x, 110)))
+            .sum::<u32>()
+    };
+    assert_eq!(near(&plain), 0, "no stamp, no bloom");
+    assert!(
+        near(&stamped) > 40,
+        "the stamped text blooms past its left edge, got {}",
+        near(&stamped)
+    );
+    assert_eq!(
+        red(&stamped, 20, 20),
+        0,
+        "far from the text nothing is added"
+    );
+}

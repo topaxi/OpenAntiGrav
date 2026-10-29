@@ -205,7 +205,13 @@ pub fn draws_hd_campaign(title: &oag_title::Title) -> bool {
 pub fn gate_glow(frontend_glow: bool, mut layers: oag_ui::menu::Layers) -> oag_ui::menu::Layers {
     if !frontend_glow {
         for list in [&mut layers.backdrop, &mut layers.chrome, &mut layers.body] {
-            list.retain(|draw| !matches!(draw, oag_ui::frontend::Draw::GlowStamp { .. }));
+            list.retain(|draw| {
+                !matches!(
+                    draw,
+                    oag_ui::frontend::Draw::GlowStamp { .. }
+                        | oag_ui::frontend::Draw::GlowText { .. }
+                )
+            });
         }
     }
     layers

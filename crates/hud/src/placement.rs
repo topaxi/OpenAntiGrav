@@ -109,7 +109,10 @@ pub fn place(draw: &Draw, p: &Placement) -> Option<Draw> {
                 *wrap_width = wrap_width.map(|width| width * p.scale);
                 inside(*x, *y, p.clip).then_some(())?;
             }
-            Draw::Video { .. } | Draw::FuryBackdrop(_) | Draw::SceneBackdrop(_) => return None,
+            Draw::Video { .. }
+            | Draw::FuryBackdrop(_)
+            | Draw::SceneBackdrop(_)
+            | Draw::GlowText { .. } => return None,
         }
     }
     Some(draw)
