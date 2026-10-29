@@ -25,7 +25,15 @@ fn the_oval_imported_into_blender_and_exported_again_is_the_same_track() {
             for v in [p.pos, p.tangent, p.down, p.lateral] {
                 out.extend(v.map(f32::to_bits));
             }
-            out.extend([p.progress, p.half_width_left, p.ai_bound_right].map(f32::to_bits));
+            out.extend(
+                [
+                    p.progress,
+                    p.half_width_left,
+                    p.ai_bound_right,
+                    p.racing_line,
+                ]
+                .map(f32::to_bits),
+            );
         }
         for n in &t.nodes {
             for m in &n.geometry.meshes {
@@ -103,6 +111,62 @@ fn a_loop_built_in_blender_reads_with_every_record_the_race_needs() {
     );
     let f = path.points[0].tangent;
     assert!(t.start.forward[0] * f[0] + t.start.forward[2] * f[2] > 0.9);
+}
+
+/// The racing line the add-on computes by default for a spline drawn as a Curve
+/// (`scripts/blender/oag_track/racing_line.py`, chosen not measured): it leaves the
+/// centre, stays in the middle 40 percent of the AI corridor (the room the original
+/// driver needs on each side of its line, `racing_line.py`'s `INSET`), and is a
+/// straighter line than the centre. Drop the solver and the line is all zeros,
+/// which fails the first assertion; a solver that only moved points about fails the
+/// curvature one.
+#[test]
+fn the_loop_gets_a_computed_racing_line_inside_its_corridor() {
+    let l = load("blender_loop.track.toml");
+    let points = &l.track.ai.paths[0].points;
+    assert!(
+        points.iter().any(|p| p.racing_line.abs() > 1.0),
+        "the line stayed on the centre"
+    );
+    for (i, p) in points.iter().enumerate() {
+        let inset = 0.3 * (p.ai_bound_right - p.ai_bound_left);
+        assert!(
+            p.racing_line >= p.ai_bound_left + inset - 1e-4
+                && p.racing_line <= p.ai_bound_right - inset + 1e-4,
+            "point {i}: line {} outside [{}, {}]",
+            p.racing_line,
+            p.ai_bound_left,
+            p.ai_bound_right
+        );
+    }
+    // The integral of curvature squared along the driven line, `sum |q[k-1] - 2 q[k]
+    // + q[k+1]|^2 / h[k]^3` with `h` half the chord across the point.
+    let energy = |offset: &dyn Fn(usize) -> f32| -> f64 {
+        let q: Vec<[f64; 3]> = points
+            .iter()
+            .enumerate()
+            .map(|(i, p)| {
+                std::array::from_fn(|c| {
+                    f64::from(p.pos[c]) + f64::from(offset(i)) * f64::from(p.lateral[c])
+                })
+            })
+            .collect();
+        let n = q.len();
+        (0..n)
+            .map(|k| {
+                let (a, b, c) = (q[(k + n - 1) % n], q[k], q[(k + 1) % n]);
+                let second: f64 = (0..3).map(|i| (a[i] - 2.0 * b[i] + c[i]).powi(2)).sum();
+                let chord: f64 = (0..3).map(|i| (c[i] - a[i]).powi(2)).sum::<f64>().sqrt();
+                second / (chord / 2.0).powi(3)
+            })
+            .sum()
+    };
+    let centre = energy(&|_| 0.0);
+    let line = energy(&|i| points[i].racing_line);
+    assert!(
+        line < centre * 0.98,
+        "curvature {line} is not below the centre's {centre}"
+    );
 }
 
 /// The art the add-on writes (`scripts/blender/oag_track/scene_art.py`, ADR-0076),

@@ -10,7 +10,9 @@ An object is part of the track when it carries the custom property `oag_kind`:
 - `floor`, `wall`, `reset`, `mag_floor`, `cage`, `track_wall` (a mesh): collision;
 - `spline` (a closed Curve to sample, or a Mesh of baked points);
 - `start` (an Empty: +Y forward, +Z up);
-- `speedup`, `weapon` (an Empty: X lateral, +Y forward, +Z up).
+- `speedup`, `weapon` (an Empty: X lateral, +Y forward, +Z up);
+- `racing_line` (a closed Curve beside a spline: the AI line, hand-editable; see
+  `line_offsets`).
 
 Baked records (what the importer makes, and what a re-export passes through) are
 written back exactly. Authored records are derived at export (`derive.py`).
@@ -24,7 +26,7 @@ import re
 import bpy
 from mathutils import Matrix, Vector
 
-from . import derive, f32, scene_art, trackfile
+from . import derive, f32, racing_line, scene_art, trackfile
 from .model import (
     COLLISION_KINDS,
     HEADER_WORD,
@@ -41,9 +43,13 @@ from .model import (
 )
 from .trackfile import MAX_VERTICES, TrackFileError
 
-KINDS = (*COLLISION_KINDS, "spline", "start", "speedup", "weapon")
+LINE_KIND = "racing_line"
+KINDS = (*COLLISION_KINDS, "spline", LINE_KIND, "start", "speedup", "weapon")
 COLLECTION = "OAG Track"
 CACHE_TOLERANCE = 1e-6
+# How far a racing-line curve point may sit from where the operator put it and still
+# count as unmoved (the curve stores `f32`; the format's units are about a metre).
+LINE_TOLERANCE = 1e-3
 
 
 def to_format(v):
@@ -230,6 +236,63 @@ def path_of(obj, depsgraph, index):
     return path
 
 
+def _line_objects(objs, count):
+    """The racing-line curve of each path index, by `oag_path` (default 0)."""
+    out = {}
+    for o in _order(objs):
+        index = int(o.get("oag_path", 0))
+        if not 0 <= index < count:
+            raise TrackFileError(f"{o.name}: oag_path {index} names no spline (there are {count})")
+        if index in out:
+            raise TrackFileError(
+                f"{out[index].name} and {o.name} are both the racing line of spline {index}"
+            )
+        out[index] = o
+    return out
+
+
+def line_offsets(obj, path, depsgraph):
+    """The racing line a curve draws, as one offset per point of `path`.
+
+    A curve the add-on made and nobody moved (each point where the stored offset
+    puts it) gives the stored offsets back verbatim, so an import or a computed line
+    exports with the bits it was made with. Anything else - a point nudged, a curve
+    drawn by hand, a Bezier, a different point count - is projected onto each
+    spline point's cross-section (`racing_line.project`) and boxed to the corridor.
+    """
+    ring = curve_ring(obj, depsgraph)
+    stored = obj.get("oag_line_offsets")
+    pts = path.points
+    if stored is not None and len(stored) == len(ring) == len(pts):
+        stored = [float(v) for v in stored]
+        if all(
+            all(
+                abs(r[c] - (p.pos[c] + o * p.lateral[c])) <= LINE_TOLERANCE
+                for c in range(3)
+            )
+            for r, p, o in zip(ring, pts, stored)
+        ):
+            return stored
+    try:
+        return racing_line.project(pts, ring)
+    except ValueError as e:
+        raise TrackFileError(f"{obj.name}: {e}") from None
+
+
+def line_for(spline_obj, path, line_obj, depsgraph):
+    """The offsets to write for one spline, or `None` to keep what `path` holds.
+
+    A racing-line curve wins; without one an authored (Curve) spline gets the
+    computed line unless its `oag_auto_racing_line` is off; a baked Mesh spline
+    keeps the records it was imported with.
+    """
+    if line_obj is not None:
+        return line_offsets(line_obj, path, depsgraph)
+    if spline_obj.type == "CURVE" and spline_obj.oag_auto_racing_line:
+        return racing_line.solve(path.points)
+    return None
+
+
 def _order(objects, key="oag_path"):
     return sorted(
         objects,
@@ -356,6 +419,12 @@ def collect(context):
     if not splines:
         raise TrackFileError("no object is tagged spline")
     paths = [path_of(o, depsgraph, i) for i, o in enumerate(splines)]
+    lines = _line_objects(by((LINE_KIND,)), len(splines))
+    for i, (o, path) in enumerate(zip(splines, paths)):
+        offsets = line_for(o, path, lines.get(i), depsgraph)
+        if offsets is not None:
+            for p, offset in zip(path.points, offsets):
+                p.racing_line = offset
     art = scene_art.collect(context, depsgraph)
     for o, path in zip(splines, paths):
         if o.type == "CURVE" and o.oag_cover_light < 255:
@@ -485,6 +554,47 @@ def make_spline_object(scene, path, index):
     return _link(scene, obj)
 
 
+def make_line_object(scene, path, index, offsets):
+    """A closed poly curve through each spline point moved by its offset, tagged `racing_line`.
+
+    The offsets are kept on the object (`oag_line_offsets`): while no point moves,
+    export writes them back exactly (`line_offsets`).
+    """
+    n = len(path.points)
+    curve = bpy.data.curves.new(f"oag/racing_line/{index}", "CURVE")
+    curve.dimensions = "3D"
+    sp = curve.splines.new("POLY")
+    sp.points.add(n - 1)
+    flat = []
+    for p, o in zip(path.points, offsets):
+        q = to_blender(tuple(p.pos[c] + o * p.lateral[c] for c in range(3)))
+        flat += [q[0], q[1], q[2], 1.0]
+    sp.points.foreach_set("co", flat)
+    sp.use_cyclic_u = True
+    obj = bpy.data.objects.new(f"oag/racing_line/{index}", curve)
+    obj["oag_kind"] = LINE_KIND
+    obj["oag_path"] = index
+    obj["oag_line_offsets"] = [float(o) for o in offsets]
+    obj.hide_render = True
+    obj.color = (1.0, 0.45, 0.0, 1.0)
+    return _link(scene, obj)
+
+
+def compute_racing_line(context, spline_obj):
+    """(Re)make the editable racing-line curve of `spline_obj` from the solver."""
+    scene = context.scene
+    splines = _order([o for o in scene.objects if _kind(o) == "spline"])
+    index = splines.index(spline_obj)
+    path = path_of(spline_obj, context.evaluated_depsgraph_get(), index)
+    offsets = racing_line.solve(path.points)
+    for old in [o for o in scene.objects if _kind(o) == LINE_KIND and int(o.get("oag_path", 0)) == index]:
+        data = old.data
+        bpy.data.objects.remove(old, do_unlink=True)
+        if data.users == 0:
+            bpy.data.curves.remove(data)
+    return make_line_object(scene, path, index, offsets)
+
+
 def _matrix_from(columns):
     m = Matrix.Identity(4)
     for i, c in enumerate(columns):
@@ -567,6 +677,8 @@ def populate(context, track, manifest_dir="."):
     )
     for i, path in enumerate(track.paths):
         make_spline_object(scene, path, i)
+        if any(p.racing_line != 0.0 for p in path.points):
+            make_line_object(scene, path, i, [p.racing_line for p in path.points])
     make_start_object(context, track.start)
     for kind, pads in (("speedup", track.speedup_pads), ("weapon", track.weapon_pads)):
         for i, pad in enumerate(pads):

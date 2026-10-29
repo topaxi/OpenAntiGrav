@@ -78,6 +78,28 @@ class OAG_OT_build_ribbon(Operator):
         return {"FINISHED"}
 
 
+class OAG_OT_compute_racing_line(Operator):
+    bl_idname = "oag.compute_racing_line"
+    bl_label = "Compute Racing Line"
+    bl_description = (
+        "Make (or replace) an editable curve of the AI racing line for the active spline: the "
+        "minimum-curvature line inside the AI corridor. Edit its points; export reads them"
+    )
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        obj = _active_spline(self, context)
+        if obj is None:
+            return {"CANCELLED"}
+        try:
+            line = scene.compute_racing_line(context, obj)
+        except ERRORS as e:
+            self.report({"ERROR"}, str(e))
+            return {"CANCELLED"}
+        self.report({"INFO"}, f"{line.name}: {len(line.data.splines[0].points)} points")
+        return {"FINISHED"}
+
+
 class OAG_OT_add_start(Operator):
     bl_idname = "oag.add_start"
     bl_label = "Add Start"
@@ -225,11 +247,16 @@ class OAG_PT_track(Panel):
                 layout.prop(obj, "oag_half_width")
                 layout.prop(obj, "oag_ai_fraction")
                 layout.prop(obj, "oag_cover_light")
+                layout.prop(obj, "oag_auto_racing_line")
             layout.prop(obj, "oag_wall_height")
             layout.operator("oag.build_ribbon")
+            layout.operator("oag.compute_racing_line")
             layout.operator("oag.add_start")
             layout.operator("oag.add_pad", text="Add speedup pad").kind = "speedup"
             layout.operator("oag.add_pad", text="Add weapon pad").kind = "weapon"
+        elif kind == scene.LINE_KIND:
+            layout.label(text="Racing line: edit the points sideways;")
+            layout.label(text="export reads each across its spline point.")
         elif kind in ("speedup", "weapon"):
             layout.prop(obj, "oag_min")
             layout.prop(obj, "oag_max")
@@ -287,6 +314,7 @@ CLASSES = (
     OAG_OT_tag,
     OAG_OT_untag,
     OAG_OT_build_ribbon,
+    OAG_OT_compute_racing_line,
     OAG_OT_add_start,
     OAG_OT_add_pad,
     OAG_OT_host_texture,
@@ -326,6 +354,12 @@ def _props():
         default=255,
         min=0,
         max=255,
+    )
+    ob.oag_auto_racing_line = BoolProperty(
+        name="Compute racing line",
+        description="With no racing-line curve, export computes the AI line (minimum curvature "
+        "inside the AI corridor). Off: the line stays on the centre",
+        default=True,
     )
     ob.oag_shadow = EnumProperty(
         name="Shadow",
@@ -402,6 +436,7 @@ def _unprops():
         "oag_max",
         "oag_disabled",
         "oag_cover_light",
+        "oag_auto_racing_line",
         "oag_shadow",
         "oag_layer",
         "oag_lit",

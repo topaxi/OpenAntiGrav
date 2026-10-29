@@ -7,6 +7,8 @@
 #   blender_loop.reexport.* that loop imported by the add-on and exported again
 #   oval.reexport.*         the committed oval, imported by the add-on and exported again
 #
+# It also runs `roundtrip.py line`, which asserts the racing-line paths and writes no fixture.
+#
 # Needs Blender 4.2 or later on PATH (or $BLENDER). The gate does not run this (CI has
 # no Blender); crates/trackfile/tests/blender.rs and trackfile_ground_truth.rs read the
 # committed output. `--update` rewrites the fixtures instead of comparing.
@@ -26,6 +28,7 @@ run() {
 }
 "$blender" --command extension validate scripts/blender/oag_track
 run loop "$out"
+run line "$out"
 run reexport "$out/blender_loop.track.toml" "$out"
 run reexport "$fixtures/oval.track.toml" "$out"
 
