@@ -45,6 +45,9 @@ EXTENSIONS = [
 # fixtures" section.
 ALLOWED_TRACKED = {
     "crates/video/tests/data/testsrc-64x64.ivf",
+    # A 64x64 grey checker `scripts/blender/roundtrip.py` writes byte by byte:
+    # the Blender add-on's own-image texture fixture (docs/tools/blender.md).
+    "crates/trackfile/tests/fixtures/blender_checker.png",
     # SMAA's own precomputed AreaTex/SearchTex, MIT-licensed - see
     # crates/post/src/smaa.rs's module docs and licences/SMAA-MIT.txt.
     "crates/post/src/smaa_area.bin",
