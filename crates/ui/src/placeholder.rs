@@ -71,4 +71,5 @@ pub const MENU_SKIN: MenuSkin = MenuSkin {
     list: None,
     settings: None,
     help_text: None,
+    glow: None,
 };

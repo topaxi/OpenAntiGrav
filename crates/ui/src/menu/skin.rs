@@ -458,6 +458,27 @@ impl Skin {
         self.touch_rows
     }
 
+    /// What this title's menu texts stamp into the glow mask, `None` for no stamp. See
+    /// [`oag_title::MenuGlow`].
+    #[must_use]
+    pub fn glow(&self) -> Option<oag_title::MenuGlow> {
+        self.skin.glow
+    }
+
+    /// The glow-mask reference the selected row stamps now: `70 + 15 k`, `k` in `0..=10`, rising
+    /// and falling with [`Self::selected`]'s colour pulse (`t`, `0` at the unselected ink and `1`
+    /// at white) as the EDRAM frames of Pulse's `Main Menu` read: reference `70` with the ink
+    /// barely lifted, `220` with it white, monotone between. `None` on a skin with no measured
+    /// pulse. **Chosen, not measured**: the exact map from `t` (the colour's own shape is ours,
+    /// see [`Self::selected`]) and the phase against the screen's opening.
+    #[must_use]
+    pub fn selected_stamp(&self) -> Option<u8> {
+        let period = self.skin.selected_pulse_period_secs.filter(|p| *p > 0.0)?;
+        let phase = (self.pulse_elapsed / period).fract();
+        let t = 0.5 - 0.5 * (phase * std::f32::consts::TAU).cos();
+        Some(70 + 15 * (t * 10.0).round() as u8)
+    }
+
     /// A row's subtitle geometry, in the grid being drawn in, for a title
     /// whose main-menu screen was captured for it - see
     /// [`oag_title::MenuSkin::help_text`].
@@ -947,6 +968,7 @@ mod tests {
         list: None,
         settings: None,
         help_text: None,
+        glow: None,
     };
 
     fn skin() -> Skin {

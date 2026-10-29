@@ -84,7 +84,8 @@ pub use language::LanguageManifest;
 pub use loading::Loading;
 pub use main_menu::{Attached, MainMenu, OriginalRow};
 pub use menu::{
-    HelpText, ListBlocks, MenuBlocks, MenuList, MenuSettings, MenuSkin, MenuStrip, StripBlocks,
+    HelpText, ListBlocks, MenuBlocks, MenuGlow, MenuList, MenuSettings, MenuSkin, MenuStrip,
+    StripBlocks,
 };
 pub use oag_disc::Platform;
 pub use pressing::{Pressing, Pressings};

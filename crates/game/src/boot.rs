@@ -1269,6 +1269,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         placements,
     );
     frontend.set_menu_skin(menu_skin);
+    frontend.set_glow(title.campaign.frontend_glow.is_some());
     // Only where they were measured - see `load_shell`'s own gate.
     if !face_scales.is_empty() {
         frontend.set_face_scales(face_scales.clone(), font.line_height);

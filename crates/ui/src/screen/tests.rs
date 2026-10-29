@@ -454,6 +454,7 @@ fn a_colour_only_image_inside_an_animation_keeps_its_own_rect_and_carries_the_re
             color: 0xff3a_bcf2,
             gradient: None,
             own_offset: (0.0, 0.0),
+            real_glow: 0,
             reveal: vec![
                 RevealKey {
                     time: 0.0,
@@ -506,6 +507,7 @@ fn an_animation_wrapped_fill_resolves_a_feglobals_colour() {
             color: 0xffff_ffff,
             gradient: None,
             own_offset: (0.0, 0.0),
+            real_glow: 0,
             reveal: Vec::new(),
             transition: 0.0,
         }]
@@ -547,6 +549,7 @@ fn collects_solid_colour_backdrops() {
             color: 0xff00_0000,
             gradient: None,
             own_offset: (0.0, 0.0),
+            real_glow: 0,
             reveal: Vec::new(),
             transition: 0.0,
         }]
@@ -1046,4 +1049,35 @@ fn a_texts_authored_real_glow_becomes_its_stamp() {
         1.0,
         "Text_Construct's default"
     );
+}
+
+/// A colour-only widget's `RealGlow` is read onto its [`Fill`] and stamped as written over its
+/// rectangle (`Image`'s draw, `0x088a7a5c`): not scaled by the colour's alpha, which is `0x30`
+/// on the end-of-race `tablehighlight`.
+#[test]
+fn a_fills_authored_real_glow_is_its_stamp_as_written() {
+    let xml = r#"
+<Screen>
+  <Screen name="Probe">
+    <Image name="tablehighlight"><Values x="0" y="20" width="480" height="19" RealGlow="128" Color="0x30009fff"></Values></Image>
+    <Image name="plain"><Values x="1" y="2" width="3" height="4" Color="0x30009fff"></Values></Image>
+  </Screen>
+</Screen>"#;
+    let screens = Screens::from_xml(xml);
+    let fills = &screens.screens[0].fills;
+    let find = |name: &str| {
+        fills
+            .iter()
+            .find(|f| f.name.as_deref() == Some(name))
+            .unwrap()
+    };
+    assert_eq!(find("tablehighlight").real_glow, 128);
+    assert_eq!(
+        find("tablehighlight").glow_stamp(),
+        Some(crate::frontend::Draw::GlowStamp {
+            rect: [0.0, 20.0, 480.0, 19.0],
+            value: 128
+        })
+    );
+    assert_eq!(find("plain").glow_stamp(), None, "no RealGlow, no stamp");
 }

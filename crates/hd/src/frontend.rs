@@ -228,6 +228,7 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     // anywhere in the census `docs/formats/hd-frontend.md` already ran for
     // its selected-row pulse - see `oag_title::MenuSkin::help_text`.
     help_text: None,
+    glow: None,
 };
 
 /// The box behind every entry of HD's strip and settings rows, as

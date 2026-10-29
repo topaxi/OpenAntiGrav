@@ -368,6 +368,19 @@ fn draw_text_rows(
             Align::Left,
             entry.label().to_string(),
         ));
+        // `Text_Draw`'s stamp over the label's glyph quads: the selected row rides the pulse, the
+        // rest sit at the `Menu` widget's constant. Only the bare-text column the original's
+        // `Main Menu` is drawn by, not a settings page (unmeasured).
+        if settings.is_none()
+            && let Some(glow) = skin.glow()
+        {
+            let value = if selected {
+                skin.selected_stamp().unwrap_or(glow.row)
+            } else {
+                glow.row
+            };
+            out.push(Draw::GlowText { value });
+        }
 
         // The right-hand column: a setting's value, or what a button is bound
         // to. `Align::Right` anchors at `x - width`, so both kinds land on the
@@ -446,6 +459,9 @@ fn draw_text_rows(
             Align::Left,
             text.clone(),
         ));
+        if let Some(glow) = skin.glow() {
+            out.push(Draw::GlowText { value: glow.help });
+        }
     }
 
     // Under the last row *drawn* rather than at a fixed height, so it sits with

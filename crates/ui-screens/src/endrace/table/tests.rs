@@ -286,3 +286,46 @@ fn lap_cells_read_their_table_and_slot() {
     assert_eq!(cell("Line1_0"), None);
     assert_eq!(cell("Line1"), None);
 }
+
+/// `tablehighlight` authors `RealGlow="128"`, and `Image`'s draw stamps that value as written
+/// over the quad (`FUN_088a7a5c`): one stamp on each highlighted row's rectangle, none without a
+/// highlight.
+#[test]
+fn the_highlight_stamps_its_authored_real_glow_on_the_row_it_moved_to() {
+    let single = Table { suffix: "", ..PS2 };
+    let (p0, p1) = (split(-96.0, "_0"), split(110.0, "_1"));
+    let layout = layout(&[&single, &p0, &p1]);
+    let stamps = |layers: &Layers| -> Vec<([f32; 4], u8)> {
+        layers
+            .body
+            .iter()
+            .filter_map(|draw| match draw {
+                Draw::GlowStamp { rect, value } => Some((*rect, *value)),
+                _ => None,
+            })
+            .collect()
+    };
+    let fills = |layers: &Layers| -> Vec<[f32; 4]> {
+        layers
+            .body
+            .iter()
+            .filter_map(|draw| match draw {
+                Draw::Fill { rect, color } if color[3] < 0.2 => Some(*rect),
+                _ => None,
+            })
+            .collect()
+    };
+    let both = draw(
+        &layout,
+        &[(Some(0), shown(2, Some(2))), (Some(1), shown(2, Some(1)))],
+    );
+    let stamped = stamps(&both);
+    assert_eq!(stamped.len(), 2, "{stamped:?}");
+    assert!(stamped.iter().all(|(_, value)| *value == 128));
+    assert_eq!(
+        stamped.iter().map(|(rect, _)| *rect).collect::<Vec<_>>(),
+        fills(&both),
+        "each stamp covers the translucent highlight it follows"
+    );
+    assert!(stamps(&draw(&layout, &[(Some(1), shown(2, None))])).is_empty());
+}

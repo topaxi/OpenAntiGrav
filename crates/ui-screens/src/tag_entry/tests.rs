@@ -31,6 +31,7 @@ fn geometry(length: u32) -> Geometry {
                 color: 0x2fff_ffff,
                 gradient: None,
                 own_offset: (0.0, 0.0),
+                real_glow: 0,
                 reveal: Vec::new(),
                 transition: 0.0,
             })

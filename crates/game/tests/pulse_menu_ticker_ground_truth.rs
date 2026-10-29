@@ -206,3 +206,95 @@ fn pulses_footer_tag_and_card_titles_author_their_glow() {
         }
     }
 }
+
+/// What Pulse authors for the glow it stamps on the title and the Main Menu, against the numbers
+/// `oag_pulse::FRONT_END.menu.glow` carries (EDRAM frames of both screens on PPSSPP): the seven
+/// `helptext` widgets author `RealGlow="128"` (the `help` reference), the title's
+/// `BOOT_PRESS_START` is `pulse="true"`, and the end-of-race `tablehighlight` and the scrollbars
+/// author `RealGlow="128"` onto a colour-only widget (a `Fill`). Dropping the read of any stamps
+/// nothing.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn pulses_main_menu_help_title_text_and_fills_author_their_glow() {
+    let images = images();
+    assert!(
+        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none() || !images.is_empty(),
+        "OAG_REQUIRE_GAME_DATA is set but neither Pulse PSP image is present"
+    );
+    let glow = oag_pulse::FRONT_END
+        .menu
+        .and_then(|menu| menu.glow)
+        .expect("Pulse's menu skin carries its glow");
+    for (label, path) in images {
+        let mut archives = oag_assets::Archives::open(&path.to_string_lossy(), oag_pulse::TITLE)
+            .unwrap_or_else(|e| panic!("{label}: the archives open: {e}"));
+        let root = Screens::from_xml(&front_end_root_xml(&mut archives));
+        let logo = root
+            .screens
+            .iter()
+            .find(|screen| screen.name == "Show Logo")
+            .unwrap_or_else(|| panic!("{label}: Skin.xml authors Show Logo"));
+        let press = logo
+            .texts
+            .iter()
+            .find(|text| text.idstring.as_deref() == Some("BOOT_PRESS_START"))
+            .unwrap_or_else(|| panic!("{label}: Show Logo has BOOT_PRESS_START"));
+        assert!(press.pulse, "{label}: BOOT_PRESS_START is pulse=\"true\"");
+        assert_eq!(
+            press.glow_stamp_at(1.0),
+            Some(220),
+            "{label}: the ladder's top"
+        );
+
+        // `Data.wad`'s `MainMenu_Definition.xml` and the end-of-race screens, found by what they
+        // author rather than by name, since the entries are hash-addressed.
+        let mut helps = 0;
+        let mut highlight = None;
+        let oag_assets::Container::Wad(wad) = &mut archives.data else {
+            panic!("{label}: Pulse's Data archive is a WAD");
+        };
+        for index in 0..wad.directory().entries.len() {
+            let Ok(head) = wad.peek(index, 64) else {
+                continue;
+            };
+            if !fexml::is_fexml(&head) {
+                continue;
+            }
+            let Ok(raw) = wad.read(index) else {
+                continue;
+            };
+            if !fexml::is_fexml(&raw) {
+                continue;
+            }
+            let Ok(text) = fexml::text(&raw) else {
+                continue;
+            };
+            let screens = Screens::from_xml(&text);
+            for screen in &screens.screens {
+                for t in &screen.texts {
+                    if screen.name == "Main Menu"
+                        && t.idstring
+                            .as_deref()
+                            .is_some_and(|id| id.starts_with("FE_HELP_"))
+                    {
+                        assert_eq!(t.real_glow, glow.help, "{label}: {:?}", t.idstring);
+                        helps += 1;
+                    }
+                }
+                for fill in &screen.fills {
+                    if screen.name == "EndRace Results" && fill.real_glow == 128 {
+                        highlight = Some(fill.glow_stamp());
+                    }
+                }
+            }
+        }
+        assert_eq!(helps, 7, "{label}: seven help lines author the stamp");
+        assert!(
+            matches!(
+                highlight,
+                Some(Some(oag_ui::frontend::Draw::GlowStamp { value: 128, .. }))
+            ),
+            "{label}: the end-of-race highlight stamps 128, got {highlight:?}"
+        );
+    }
+}

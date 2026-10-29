@@ -476,8 +476,15 @@ The front end ends each frame with the same `Bloom_Draw`, over a mask its **widg
 PSP front-end screen (the displayed buffer, 480x272 at stride 512): the clear leaves `4` (127,242 of 130,560 visible pixels on
 Grid Selection); a widget stamps its quad's whole rectangle, transparent texels included (alpha test off at the prim), with
 `Gu_StencilFunc(ALWAYS, ref, 0xff)` and `REPLACE`. The refs: `Selector` `80 + 150 t` (the pulse), the card title a pulsing
-`70..220` in steps of 15, the footer tag `64` (`RealGlow="64"`); Main Menu, Track Select and Ship Select stamp regions of their own (alpha histograms in
-`docs/ui/campaign-screens.md`, widgets not identified).
+`70..220` in steps of 15, the footer tag `64` (`RealGlow="64"`); Main Menu's widgets are identified (below, 2026-10-29 `pulse-glow-rest`); Track Select and Ship Select
+stamp regions of their own (alpha histograms in `docs/ui/campaign-screens.md`, widgets not identified).
 The stamp sources are `Text_Draw` (`RealGlow` or the pulse formula) and the `Image` draw `FUN_0889812c` (`(1 - f) * 150 + 70`
-when its flag `0x200` is set); `docs/ui/campaign-screens.md` has the census. Ours: `Draw::GlowStamp` and a second draw into a
+when its flag `0x200` is set, the `Selector`'s path); `docs/ui/campaign-screens.md` has the census. The generic `Image` draw is `Image_Draw`
+(`0x088a7a5c`): with `RealGlow` above zero (the field at `+0xf4`, which `Image_ParseValues` `0x088a6f38` fills from the attribute) it
+runs `StencilFunc(ALWAYS, RealGlow, 0xff)` with `StencilOp(KEEP, KEEP, REPLACE)` around its `DrawArray`, so a colour-only widget stamps its
+authored value **as written, not scaled by its colour's alpha** (confidence 80, decompile only: no EDRAM frame of a fill that authors it).
+Main Menu (EDRAM, six frames at different pulse phases): the six idle rows `110` over 14,526 pixels (flat at every phase; not
+`RealGlow * alpha / 255` of anything authored), the help line `128` (3,652 pixels; `helptext0..6` author `RealGlow="128"`), the selected row a
+`70 + 15 k` ladder over 2,674 pixels (100, 115, 130, 145, 190 and 220 seen) that rises with the row's own colour pulse. The title's
+`BOOT_PRESS_START` (`pulse="true"`, `font="Menu"`) stamps 3,920 pixels on the same ladder (70, 85, 130, 160, 175 seen). Ours: `Draw::GlowStamp` and a second draw into a
 scratch frame whose alpha is rewritten to the mask (`oag_game::render::glow`), then `oag_post::bloom`.

@@ -559,3 +559,53 @@ fn an_empty_language_list_does_not_panic() {
     assert_eq!(frontend.chosen(), None);
     let _ = frontend.draw_list();
 }
+
+/// `BOOT_PRESS_START` is `pulse="true"`, so on a title whose front end blooms `Text_Draw` stamps
+/// its glyph quads on the `(220 - s) * PulseMultiplier` ladder (Pulse PSP's `Show Logo`, EDRAM:
+/// one 3,920-pixel region reading 70, 85, 130, 160, 175 in six frames). Nothing stamps before its
+/// `delay`, and nothing on a title that does not bloom.
+#[test]
+fn a_blooming_titles_press_start_stamps_its_glyph_quads_on_the_pulse_ladder() {
+    let stamps = |frontend: &Frontend| -> Vec<u8> {
+        let draws = frontend.draw_list();
+        draws
+            .iter()
+            .enumerate()
+            .filter_map(|(at, draw)| match draw {
+                Draw::GlowText { value } => {
+                    assert!(
+                        matches!(&draws[at - 1], Draw::Text { text, .. } if text == "BOOT_PRESS_START"),
+                        "a text stamp follows the text it stamps"
+                    );
+                    Some(*value)
+                }
+                _ => None,
+            })
+            .collect()
+    };
+    let mut frontend = frontend(300);
+    let mut input = Input::new();
+    pick_a_language(&mut frontend, &mut input);
+    assert!(
+        stamps(&frontend).is_empty(),
+        "off by default: not every title blooms"
+    );
+
+    frontend.set_glow(true);
+    let already = frontend.on_screen_for;
+    input.begin_frame(0);
+    frontend.update(0.5 - already, &mut input, None);
+    assert!(
+        stamps(&frontend).is_empty(),
+        "0.5 s: inside the one-second delay"
+    );
+
+    // 0.225 s after the delay: step 4 of the 1/20 s ladder, s = 60, reference 160.
+    input.begin_frame(0);
+    frontend.update(0.725, &mut input, None);
+    assert_eq!(stamps(&frontend), [160]);
+    // Half a second on the ladder is at its trough: s = 150, reference 70.
+    input.begin_frame(0);
+    frontend.update(0.3, &mut input, None);
+    assert_eq!(stamps(&frontend), [70]);
+}

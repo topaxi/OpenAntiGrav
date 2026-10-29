@@ -679,6 +679,11 @@ impl Frontend {
                 text: self.strings.get_or_id(id).to_string(),
                 wrap_width: text.wrap_width,
             });
+            if self.glow
+                && let Some(value) = text.glow_stamp_at(elapsed)
+            {
+                out.push(Draw::GlowText { value });
+            }
         }
         out
     }

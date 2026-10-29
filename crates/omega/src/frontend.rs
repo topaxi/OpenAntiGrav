@@ -116,6 +116,7 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
         text_scale: 0.8,
     }),
     help_text: None,
+    glow: None,
 };
 
 /// The boot order Omega's `skin.xml` declares, read redirect by redirect out
