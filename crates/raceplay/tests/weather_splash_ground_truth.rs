@@ -94,6 +94,10 @@ fn compare(track: &str, ticks: u32) -> Option<Census> {
         census.most_at_once = census.most_at_once.max(splashes.len());
         for point in splashes.points() {
             census.spawned_points += 1;
+            assert!(
+                !enhanced.point_is_under_cover(point),
+                "{point:?} is a splash under a roof"
+            );
             let above = enhanced
                 .floor_above(point, Vec3::Y)
                 .or_else(|| enhanced.floor_above(point, -Vec3::Y));
@@ -129,6 +133,101 @@ fn rain_splashes_on_fort_gales_road_and_original_draws_none() {
         "Fort Gale: splashes on {} of 1500 ticks, at most {} at once",
         census.ticks_with_splashes, census.most_at_once
     );
+}
+
+/// The cover check is per hit, whatever the camera's section: a spline sample
+/// of a covered section is under cover, one of an open section is not, and the
+/// wet road is not zeroed because the weather is anchored.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn a_hit_in_a_covered_section_is_rejected_and_an_open_one_is_not() {
+    let Some(image) = oag_testdata::image("pulse-psp-usa.chd") else {
+        return;
+    };
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::TimeTrial,
+        track: Some(r"Data\Environments\14_Track\track.vex".to_string()),
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    let spline = loaded.setup.spline.clone();
+    let mut race = race::Race::start(loaded.setup);
+    race.set_weather(Weather::Enhanced);
+    let (mut covered, mut open) = (0, 0);
+    for index in 0..spline.len() {
+        let Some(sample) = spline.sample(index) else {
+            continue;
+        };
+        let point = Vec3::from_array(sample.pos);
+        let under = race
+            .scenery_fx()
+            .weather()
+            .section_is_covered(i32::from(sample.section_id));
+        // A sample can sit near a stacked stretch of another section; judge
+        // only where the nearest sample is this one's own section.
+        let Some((nearest, _, _)) = spline.nearest(point) else {
+            continue;
+        };
+        if spline.sample(nearest).map(|s| s.section_id) != Some(sample.section_id) {
+            continue;
+        }
+        assert_eq!(race.point_is_under_cover(point), under, "sample {index}");
+        if under {
+            covered += 1;
+        } else {
+            open += 1;
+        }
+    }
+    assert!(
+        covered > 100 && open > 100,
+        "{covered} covered, {open} open"
+    );
+}
+
+/// The road of a covered section is dry for good (cleared at load), so the
+/// open road seen from inside a tunnel is wet and the wet road does not
+/// depend on the camera's section: after a minute of rain it is full, at any
+/// tick, anchored or not.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn the_road_under_cover_is_dry_at_load_and_the_wetness_ignores_the_camera() {
+    let image = oag_testdata::image("pulse-psp-usa.chd");
+    let Some(image) = image else {
+        return;
+    };
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::TimeTrial,
+        track: Some(r"Data\Environments\14_Track\track.vex".to_string()),
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    let line = loaded
+        .report
+        .iter()
+        .find(|line| line.contains("road vertices under cover kept dry"))
+        .expect("the loader says how many it dried");
+    let dried: usize = line
+        .trim_start_matches("weather: ")
+        .split(' ')
+        .next()
+        .and_then(|n| n.parse().ok())
+        .expect("a count");
+    assert!(dried > 1000, "{line}");
+    let marked = loaded
+        .track_model
+        .vertices
+        .iter()
+        .filter(|v| v.texcoord2[0] == oag_mesh::mesh::ROAD_MARK)
+        .count();
+    assert!(
+        marked > dried,
+        "open road stays marked: {marked} vs {dried}"
+    );
+    eprintln!("Fort Gale: {dried} road vertices dried, {marked} still marked");
 }
 
 /// Outpost 7's snow: 64 flakes, one settles where it meets the road.

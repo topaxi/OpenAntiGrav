@@ -97,12 +97,12 @@ names that 2048 and Omega never authors") and no longer load there.
 
 - **Enhanced weather splashes (ours, 2026-10-29, `weather-enhanced` branch):** wired, evidence in
   `docs/ghidra/functions/psp-pulse-usa/weather.md`. Open: no Deck or phone frame-time check
-  (the headless sweep says 0.002 to 0.005 ms a tick); snow flakes are brighter than the
+  (the headless sweep says 0.002 to 0.005 ms a tick); splashes and flakes are a quarter of their first size (play-report fix), flakes are brighter than the
   original's faint specks and look best judged on a real window.
 
 - **Enhanced weather wet road (ours, 2026-10-29, `weather-enhanced` branch):** wired, same
-  page. Open: the road seen from inside a covered section is dry and the wet term pops on at
-  a tunnel mouth; the road is picked by texture name (`surface`), unchecked on circuits
+  page. Roofed road is dry per draw at load (2026-10-29, `weather-splash-fix`), whatever the
+  camera's section. Open: the road is picked by texture name (`surface`), unchecked on circuits
   other than Fort Gale; no Deck or phone check; the PS2 circuits are not seen.
 
 - **The weather is wired** (Fort Gale rain and lens, Outpost 7 snow), see

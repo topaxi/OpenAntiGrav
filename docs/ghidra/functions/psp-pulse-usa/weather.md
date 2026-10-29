@@ -253,13 +253,20 @@ touch geometry (`Modifier_WrapBox` only wraps and blows them), so it has no spla
 (Pulse, both pressings; hidden elsewhere).
 
 - **Hits.** Once a tick, in the open only (no hits while the box sits at a covered
-  section's anchor, as the original's cover says), each live drop's last move in the
+  section's anchor, as the original's cover says, and **none whose own point lies in a
+  covered section**: `Race::point_is_under_cover` takes the section of the spline sample
+  nearest the hit and tests it with `Section_IsCovered`'s mask, so the drops the open
+  box throws past a tunnel mouth splash nowhere under the roof; a point the spline cannot
+  place counts as open, chosen), each live drop's last move in the
   world (`[p - wind, p]`, `oag_fx::psys::System::world_positions` and the pool's wind
   step) is cast against the circuit's collision with the same read-only floor cast the
   blob shadows use (`Race::floor_crossing`, hoverable surfaces, from above). The pool is
   not touched and the simulation never knows.
 - **Rain**: a ring flat on the road, fading over 0.35 s, and three droplets thrown up
-  and back under a chosen gravity. **Snow**: one flake that settles on the road and
+  and back under a chosen gravity. Sizes (chosen; a quarter of the first version's, on the
+  maintainer's play report 2026-10-29): `RING_RADIUS` 0.125 to 0.65, `DROPLET_SIZE` 0.075,
+  `FLAKE_SIZE` 0.105, `LIFT` 0.03, `SPRAY_UP` 1.75 to 3.0, `SPRAY_OUT` 1.0, `GRAVITY`
+  13.75 (speeds and gravity scale with the lengths, so a droplet's flight time is as before). **Snow**: one flake that settles on the road and
   fades in and out over 1.6 s. At most `splash::CAPACITY` (48) alive; a hit past it is
   dropped. Own `Rng` seed, so the drops' stream is the original's either way.
 - **Art.** The disc has no splash sprite, so the ring and the dot are this project's:
@@ -274,10 +281,14 @@ touch geometry (`Modifier_WrapBox` only wraps and blows them), so it has no spla
   the batches whose texture label contains `surface` (`Dsurface6_*` on Fort Gale; 9
   textures, 185 of 1,394 draws), marked per vertex in `GpuVertex::texcoord2.x`
   (`ROAD_MARK`) at load: a name test on the artists' own naming, chosen because no field on
-  the disc says "road". Snow stays dry, and the road is dry while the weather sits at a
-  covered section's anchor (the camera is under a roof), so the wet term pops on at a
-  tunnel mouth. Open: the road seen *from* a tunnel looking out is dry, and the other
-  circuits' road texture names are unchecked (Outpost 7 is snow and unaffected).
+  the disc says "road". Snow stays dry. **Cover is decided per draw at load, not by the camera**:
+  `scenery_fx::weather::dry_covered_road` clears `ROAD_MARK` on every vertex of a draw
+  whose scene node a covered section governs (`oag_vex::pvs::governing_sections`, the
+  rule the PVS places draws by; Fort Gale: 12,867 of 34,150 marked vertices), so roofed
+  road is dry wherever the camera is and the open road seen from inside a tunnel is wet.
+  A tunnel's road in a section with no `weatherPos` anchor stays open, as in the
+  original's own cover test. The other circuits' road texture names are unchecked
+  (Outpost 7 is snow and unaffected).
   Constants (`WET_DARKEN` 0.42, grazing sky share 0.85, face-on 0.06) are chosen, not
   measured. At `original` `Fog::wet` is exactly `0.0`; the shader takes a branch on it, so
   the frame is byte-identical (8 of 8 `cmp` on `14_Track` and `07_Track` at ticks 600,
