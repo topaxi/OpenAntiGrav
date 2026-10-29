@@ -324,6 +324,10 @@ Still open from this slice:
   phase 3 module hashes first.
 - The README's second no-engine test (menus and the MODS page with a module mod
   installed build no engine) is not written.
+- **The guest API is cumbersome (maintainer, 2026-10-29):** both examples hand-roll ABI 1
+  (copied offsets and codes, volatile byte I/O, the blob by hand). A shared layout crate,
+  a Rust guest SDK, a C header and an `oag-ext check` tool are the thread
+  `handover/tooling/a-mod-author-writes-the-abi-by-hand-a-guest-sdk-is-next.md`.
 
 **Second example built: Energy Turbo (maintainer, 2026-10-29).** The maintainer's words:
 "boosts while pressing the button but consuming shield energy while doing so,
