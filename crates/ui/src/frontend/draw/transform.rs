@@ -108,9 +108,10 @@ impl Draw {
                 left[3] *= alpha;
                 right[3] *= alpha;
             }
-            // A glow stamp moves and scales with its widget but keeps its value:
-            // an `Image`'s stencil reference carries no alpha term
-            // (`FUN_0889812c`, `(1 - f) * 150 + 70`), so the fade does not reach it.
+            // A glow stamp moves and scales with its widget but keeps its value through a
+            // fade. **Chosen, not measured**: the `Selector`'s issuer is not located, and the
+            // `Image` draw `FUN_0889812c` has no alpha term in its reference, so the fade is
+            // taken not to reach it; a `Text`'s reference does carry the alpha.
             Self::GlowStamp { rect, .. } => {
                 rect[0] = about(rect[0], origin.0);
                 rect[1] = about(rect[1], origin.1);

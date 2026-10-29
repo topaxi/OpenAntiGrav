@@ -4664,13 +4664,21 @@ other screens' stamps still to wire (below).
   were scored against a single `theirs.png` at ours' fixed 2.07 s, which is phase-unmatched; against two real frames at that fixed
   second the score moves either way with how far the frame's phase is from 2.07 s (grid 17.94 to 25.31 and 58.78 to 16.87), so
   a fixed second cannot score a pulse.
-- **Pair clock**: `scripts/psp-menu-pair.py` now falls back to the midpoint between the press and the first poll when the entry was
-  not watched (a settled emulator answers the press before the first poll), so a fresh walk records `seconds_since_entry`
-  (grid 3.163 s, cell 3.209 s). At 3 s after entry the wall clock is not the game's: ours rendered at that clock read cyan where
-  the original read white, so score a pulse by the stamp phase above, not by this clock.
+- **Pair clock**: a wall clock does not give the pulse phase (a fresh walk's `seconds_since_entry` was 3.16 s and 3.21 s, and ours at
+  that clock read cyan where the original read white). `scripts/psp-menu-pair.py` now stops the CPU for the grab on `grid` and
+  `cell`, reads the `Selector`'s stamp out of EDRAM and records `seconds_since_entry` as `ENTRY_HOLD + t / 2` for that level
+  (basis: the stamp, good to one game frame); an unwatched entry elsewhere falls back to the midpoint between the press and the
+  first poll. Re-made pairs (a fresh boot walk, then ours at the recorded second): the side-by-sides now agree in phase and halo,
+  and the window-grab box scores are grid 5.44 and cell 5.77 (against 34.5 and 48.5 before; the EDRAM frames above score 0.29 and
+  6.69, the window grab adds about a frame of phase slack).
 - **Other pages**: Track Select, Ship Select and Main Menu emit no stamps, so their renders are byte-identical before and after
   (`cmp`); the whole-frame differing share cannot rise. They are also still missing the original's bloom (the footer tag, the
-  row highlights): that is the open thread `pulse-front-end-glow-stamps`.
+  row highlights): that is open work: the card title, the footer tag and `RealGlow` read from the XML (`HANDOVER.md`, open threads, frontend).
+- **PS2**: the compare page's PS2 Grid Selection original also shows a soft halo round the cursor (visible in `pulse-ps2/menu-grid`),
+  so drawing one there points the right way; its chain and strength are not compared.
+- **Title screen**: `--until "Show Logo"` renders byte-identical before and after.
+- **Live path**: `menu_stage` reaches `flyer::render_list`, which for Pulse (no flyer cards) is exactly one `render_with` with a Clear
+  load of the whole list, stamps included; not seen in a window (the Xvfb grab under lavapipe came back black).
 - **Pure**: checked, the same constants. All four Pure `BOOT.BIN`s carry the weight table with `0xaf` in front of it, byte for byte.
-  Whether Pure's front end stamps, and where, is **not measured** (no alpha readout taken), so nothing is wired for it. 2048 and
+  Whether Pure's front end stamps, and where, is **not measured** (an EDRAM readout was tried and landed on PPSSPP's own load dialog, alpha flat at 4), so nothing is wired for it. 2048 and
   Omega: not applicable here (HD's front end draws through its own pipeline, `frontend_glow` is `None`).

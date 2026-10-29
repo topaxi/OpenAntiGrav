@@ -25,7 +25,8 @@ frames. Everything else the original stamps is read and not wired.
 - Where the code issues the `Selector`'s ref: `FUN_0889812c` stamps `(1 - f) * 150 + 70` (70..220) for an `Image` with flag
   `0x200`, which is not the 80..230 read.
 - Pure's front end: the constants are the same (`BOOT.BIN` byte search); whether and where it stamps is not measured.
-- Pulse PS2 shares the title record and now draws the cursor bloom; its own front end's bloom (PS2 chain) is not checked.
+- Pulse PS2 shares the title record and now draws the cursor bloom; its original shows a halo too, but the PS2 chain's strength is not compared.
+- Not seen in a window: the live `menu_stage` path was read (one `render_with`, Clear) but a lavapipe Xvfb grab came back black.
 
 ## Next Steps
 
