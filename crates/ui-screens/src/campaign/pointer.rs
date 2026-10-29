@@ -348,10 +348,7 @@ pub fn difficulty_button_rect(screen: &oag_ui::screen::Screen) -> Option<[f32; 4
         .texts
         .iter()
         .find(|text| text.name.as_deref() == Some("DifficultyButton"))?;
-    eprintln!(
-        "DBG {:?} {} {} {} {}",
-        text.name, text.x, text.y, text.scale, text.align
-    );
+
     Some([text.x - 24.0, text.y - 4.0, 136.0, 20.0])
 }
 

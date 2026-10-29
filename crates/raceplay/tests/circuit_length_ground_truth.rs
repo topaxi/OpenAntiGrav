@@ -49,10 +49,6 @@ fn the_racing_line_length_is_the_distance_the_screen_prints() {
     for (name, shown) in SHOWN {
         let blob = archives.read_name(name).expect("the circuit resolves");
         let length = oag_raceplay::circuit_length(&blob).expect("it measures");
-        eprintln!(
-            "DBG {name}: measured {length:.1}, shown {shown:.0}, ratio {:.4}",
-            shown / length
-        );
         let off = (length - shown).abs() / shown;
         // Consistently 1.7 to 2.3 per cent short of the screen, and not by
         // sampling - see `circuit_length`'s own doc for the measurement.
