@@ -172,6 +172,80 @@ fn the_preview_meshes_resolve_and_are_what_the_screens_show() {
     assert!(hull.radius < 20.0, "craft scale: radius {}", hull.radius);
 }
 
+/// Pulse's Ship Select turns nothing in code: every team's own `screen.xml` places its
+/// `ship_FE.vex` at its authored `Mode3D` origin, depth and `RotX`/`RotY` (Assegai: origin (120, 20), `z = -15`, `RotX = RotY = 0.4`), and the sway
+/// is the hull's own `Anim Transform` (a 5.98 s loop on Assegai), which moves the hull.
+/// Measured against a PPSSPP capture of Assegai at the game's own node clock
+/// (`docs/ui/selection-screens.md`, "The craft sways, it does not turn").
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn every_craft_is_placed_by_its_own_screen_xml_and_sways_on_its_own_anim_transform() {
+    let Some(path) = image() else {
+        return;
+    };
+    let shell = shell(&path);
+    let mut archives = oag_assets::Archives::open(&path.to_string_lossy(), oag_pulse::TITLE)
+        .expect("the archives open");
+    assert!(shell.teams.len() >= 8, "{}", shell.teams.len());
+    for team in &shell.teams {
+        let mut report = Vec::new();
+        let (show, _) = oag_game::preview::slideshow(
+            &mut archives,
+            &team.location,
+            false,
+            &[],
+            &StringTable::default(),
+            &mut report,
+        )
+        .unwrap_or_else(|e| panic!("{}: {e:#}", team.location));
+        let model = show
+            .model
+            .as_ref()
+            .unwrap_or_else(|| panic!("{}: no Mode3D model", team.location));
+        assert_eq!(model.src, format!(r"{}\ship_FE.vex", team.location));
+        // (OriginY, z, RotX) per team, as authored; OriginX 120 and RotY 0.4 are shared.
+        let want = match team.location.rsplit('\\').next().unwrap_or_default() {
+            "Assegai" | "Qirex" | "Piranha" => (20.0, -15.0, 0.4),
+            "Feisar" | "AG_Systems" | "EGX" => (23.0, -13.0, 0.4),
+            "Goteki" => (25.0, -15.0, 0.35),
+            "Triakis" => (28.0, -16.0, 0.3),
+            other => panic!("a team this test does not know: {other}"),
+        };
+        assert_eq!(
+            (model.origin, model.position, model.rotation),
+            ([120.0, want.0], [0.0, 0.0, want.1], [want.2, 0.4]),
+            "{}",
+            team.location
+        );
+        assert!(
+            oag_game::preview::mode3d_view_projection(model, oag_display::space::Space::PSP)
+                .is_some(),
+            "{}: the camera is usable with farZ defaulted",
+            team.location
+        );
+        let blob = archives.read_name(&model.src).expect("the hull resolves");
+        let hull = oag_mesh::mesh::build("hull", &blob).expect("it decodes");
+        let swaying = hull.sample_anim_nodes(0.0) != hull.sample_anim_nodes(1.5);
+        assert!(
+            swaying,
+            "{}: the hull's Anim Transform moves it",
+            team.location
+        );
+    }
+    // Assegai's sway is a 359-frame loop: the same pose one loop on.
+    let blob = archives
+        .read_name(r"Data\Ships\Assegai\ship_FE.vex")
+        .expect("the hull resolves");
+    let hull = oag_mesh::mesh::build("hull", &blob).expect("it decodes");
+    let (a, b) = (
+        hull.sample_anim_nodes(1.5),
+        hull.sample_anim_nodes(1.5 + 359.0 / 60.0),
+    );
+    for (x, y) in a.iter().flatten().zip(b.iter().flatten()) {
+        assert!((x - y).abs() < 1e-3, "{x} against {y}");
+    }
+}
+
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn the_track_picker_draws_the_discs_own_rows() {

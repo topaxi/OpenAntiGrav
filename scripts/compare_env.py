@@ -443,6 +443,37 @@ def build_text(binary):
     return "build %s%s (tree at render)" % (head, "+dirty" if binary.get("tree_dirty") else "")
 
 
+#: Where the original's display sits that ours (centred, as in play) does not: `(profile, pair kind)` to the offset.
+#: Pulse PS2 draws its frame `DISPLAY1/2.DY - D0` rows below the raster's centre; the sweep of `DY` (40, 50, 51, 52, 53)
+#: moved PCSX2's screenshot exactly 1 frame row per unit and the shift at the game's `DY = 52` measured 2.3 rows
+#: (`docs/ps2/aspect-ratio.md`, "Measured against PCSX2's frame"). PCSX2's own default `D0` is not determinable here
+#: (about 49.7 from that shift), so the 2.3 is recorded as measured rather than computed from `DY - D0`.
+#: Compare shots only: play keeps the console port centred (maintainer, 2026-10-29).
+DISPLAY_OFFSETS = {
+    ("pulse-ps2", "menu"): {
+        "frame_rows": 2.3, "frame_height": 448, "direction": "down",
+        "basis": "measured (confidence 70): game DISPLAY1/2.DY = 52, DY sweep 40/50/51/52/53 = 1 frame row per unit, "
+                 "shift 2.3 frame rows (PCSX2 default D0 about 49.7); pulse-ps2-pair-dy 2026-10-29",
+    },
+}
+
+
+def display_offset_record(profile, kind):
+    """The offset record for a pair of `profile` and `kind`, or `None` (every other pair is drawn unshifted)."""
+    rec = DISPLAY_OFFSETS.get((profile, kind))
+    return dict(rec) if rec else None
+
+
+def apply_display_offset(png, offset):
+    """Shift `png` down by `offset` (a `DISPLAY_OFFSETS` record) in place, bicubic, black above; return pixels moved."""
+    from PIL import Image
+    img = Image.open(png).convert("RGB")
+    px = offset["frame_rows"] * img.size[1] / offset["frame_height"]
+    out = img.transform(img.size, Image.AFFINE, (1, 0, 0, 0, 1, -px), resample=Image.BICUBIC, fillcolor=(0, 0, 0))
+    out.save(png)
+    return round(px, 3)
+
+
 def image_size(path):
     out = subprocess.run(["magick", "identify", "-format", "%w %h", str(path) + "[0]"],
                          capture_output=True, text=True, check=True).stdout.split()

@@ -171,7 +171,7 @@ pub(super) fn draw_preview(
                 }
                 orbit
             },
-            0.0,
+            request.seconds,
         ),
         Err(error) => log::warn!("{}: {error:#} - the preview draws nothing", request.entry),
     }

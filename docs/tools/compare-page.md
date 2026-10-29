@@ -1017,7 +1017,15 @@ over the dimmed race). Pure has no Options or Racebox screen in its main menu.
 that saw the screen replace another (polled every 0.03 s, so +-0.015 s) to the middle of the frame grab; PPSSPP holds 60 fps, but entries
 spread about +-0.1 s in the first second (`docs/ui/campaign-screens.md`, "The `Selector` pulse"). It exists only when the walk watched the
 change (a plan step `key:BUTTON,st:SCREEN`, which skips the tap's 0.7 s settle); otherwise it is absent, never guessed. Ours gets it as
-`--menu-picker-seconds` for the pages in `CLOCKED` (`grid`, `cell`) only.
+`--menu-picker-seconds` for the pages in `CLOCKED` (`grid`, `cell`, `team`, `track`) only.
+
+**The wall clock is replaced on `team` and `track` (2026-10-29, `pulse-picker-clock`).** Their `seconds_since_entry` is the front end's own
+animation clock (`*(0x08b317b0) + 0x40`, emulated seconds, read with the CPU stopped for the grab) minus its value as the entering press
+starts (the screen changes a frame or two later; sampling at the poll that saw the new name is 0.15 s late, because the press call
+returns after the button's six frames). `team` also reads the live ship `Anim Transform` node's own time (`node+0x40`, the node whose
+`+0x80` equals the clock and whose loop is 5.9833 s) and passes it as `--menu-model-seconds`: the hull's sway started when the model
+loaded, 0.5 to 1.9 s before the screen entry, so it is not `--menu-picker-seconds`. Against the wall clock the Track Select photo box went
+from a mean abs diff of 44.9 grey to 0.28 and the Ship Select hull box from 29.0 to 5.2.
 
 **Reproduce:** `scripts/ppsspp-start.sh <lane> 91 <port> <image>` with `PPSSPP_EXTRA_INI` from `compare_env.py ppsspp-ini pulse-psp|pure-psp`,
 `source <scratch>/pp/env.sh`, ours' `XDG_*` under `data/scratch/<lane>/`, then `uv run --with websocket-client --with pillow python3
@@ -1042,6 +1050,8 @@ patches by gradient cross-correlation (Gaussian, strongest edges, parabolic sub-
 `0.00 / -0.01` on the existing PSP Grid Selection pair). `--ps2-grid` takes patch centres in the 640x448 grid of a GS dump
 (`scripts/pcsx2-gsdump.py`), the exact quads. The selected hex mixes the outline and the ring: measure the ring alone with a brightness mask
 (ring pixels above 140 in the pair; the outline is dimmer).
+
+**Display offset (2026-10-29, `pulse-ps2-pair-dy`).** The PS2 menu pairs score ours with the game's `DISPLAY1/2.DY = 52` applied: `compare_env.DISPLAY_OFFSETS[("pulse-ps2", "menu")]` is 2.3 frame rows (3.70 px at 1280x720, measured, confidence 70, the DY sweep in `docs/ps2/aspect-ratio.md`). `compare_menu.menu_pair` and `compare-rerender-ours.py` shift `ours.png` down by it after the render (bicubic, black above) and record `ours.display_offset` in `pair.json`; a rerender applies it even to a pair that predates the field. Compare shots only: play stays centred. After it the hexes read `dy` within 0.02 px (Grid `+0.01/-0.01/+0.00`, Cell `+0.01`), `dx` unchanged at `-0.45..-0.50` (whole-frame Cell patch `-0.64`). Other platforms are untouched.
 
 **Result (1280x720), cause settled 2026-10-29 (`pulse-ps2-frame-offset`).** Against PCSX2's frame ours' unselected hexes (3 on Grid Selection, 5
 on Cell Selection) lay a frame-level `dx = +4.19 - 0.00728 x`, `dy = -3.68` (sd 0.04) px off, from **two separate causes**:

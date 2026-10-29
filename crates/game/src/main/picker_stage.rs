@@ -260,7 +260,11 @@ impl PickerStage {
         self.slideshow.as_ref().map_or_else(Vec::new, |show| {
             let seconds = self.model.since_selection();
             let alpha = (seconds / oag_game::preview::CARD_FADE_SECONDS).clamp(0.0, 1.0);
-            show.draws(seconds, &|src| self.placed(src))
+            show.draws_fading(
+                seconds,
+                oag_ui_screens::picker::slideshow::STEP_FADE_SECONDS,
+                &|src| self.placed(src),
+            )
                 .into_iter()
                 .map(|draw| oag_game::preview::fade_draw(draw, alpha))
                 .collect()
@@ -525,7 +529,10 @@ impl PickerStage {
             return;
         }
         // `Track Creation`'s own `<Mode3D>` camera, when authored.
-        let mode3d_model = self.mode3d_model().cloned();
+        let mode3d_model = self
+            .mode3d_model()
+            .filter(|_| oag_game::preview::craft_mode3d_applies(self.model.kind(), space))
+            .cloned();
         let track_model = self.layout.hd_track.as_ref().and_then(|screen| screen.model);
         let ship_model = self
             .layout

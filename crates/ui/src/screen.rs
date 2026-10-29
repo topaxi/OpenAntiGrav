@@ -43,7 +43,7 @@ pub use block::BlockWidget;
 pub use color::{argb_to_rgba, parse_argb};
 pub use display_type::DisplayType;
 pub use fade::{MEASURED_HIDDEN_WIDGET_FADE_IN_SECONDS, resolve_fade_in};
-pub use mode3d::{Mode3dModel, Model};
+pub use mode3d::{DEFAULT_FAR_Z, DEFAULT_NEAR_Z, Mode3dModel, Model};
 pub use movie::{DEFAULT_REGION, MOVIE_EXTENSIONS, Movie};
 pub use rects::{Bracket, Slot};
 pub use reveal::{RevealKey, interpolate_reveal};
