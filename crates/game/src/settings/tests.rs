@@ -1349,3 +1349,24 @@ fn the_reset_prompt_sits_on_confirms_row_and_only_off_default() {
     }
     assert!(rect[0] >= 0.0 && rect[0] + rect[2] <= 480.0, "{rect:?}");
 }
+
+#[test]
+fn the_mods_turned_off_round_trip_and_a_fresh_file_turns_none_off() {
+    assert!(
+        fresh().mods.disabled.is_empty(),
+        "a mod installed later is on"
+    );
+    let settings = read("[mods]\ndisabled = [\"oag.hillside\", \"a.b\"]\n");
+    let ids: Vec<&str> = settings.mods.disabled.iter().map(String::as_str).collect();
+    assert_eq!(
+        ids,
+        ["a.b", "oag.hillside"],
+        "kept sorted, for a stable rewrite"
+    );
+    let written = toml::to_string_pretty(&settings).expect("serialise");
+    assert_eq!(read(&written).mods, settings.mods, "{written}");
+    assert!(
+        read("").mods.disabled.is_empty(),
+        "an old file without [mods]"
+    );
+}

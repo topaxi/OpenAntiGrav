@@ -25,6 +25,7 @@ mod mine_launch_audio_ground_truth;
 mod mine_texture_scroll_ground_truth;
 mod mods_menu;
 mod mods_page;
+mod mods_switch;
 mod movie_access_units_ground_truth;
 mod movie_container_audio_ground_truth;
 mod movie_ground_truth;

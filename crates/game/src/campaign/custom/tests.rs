@@ -502,3 +502,24 @@ fn mod_progress_and_disc_progress_never_meet() {
     let medal_of = crate::unlock::campaign_medal_of(&records, &custom.records_title);
     assert_eq!(custom.fixed_lock("grid0_2_2", &medal_of), Some(false));
 }
+
+#[test]
+fn a_campaign_racing_a_mod_turned_off_is_left_out_saying_so() {
+    needs_examples!();
+    let module = scratch_mod("turned-off", example_text(), false);
+    let off = Installed::for_title([&module], &["oag.hillside"], oag_pulse::TITLE, &|_| true);
+    assert!(off.campaigns.is_empty());
+    let reason = &off.failed[0].1;
+    assert!(
+        reason.contains("\"oag.hillside\" is turned off"),
+        "the reason names the mod and that it is off, not missing: {reason}"
+    );
+    let gone = Installed::for_title([&module], &[], oag_pulse::TITLE, &|_| true);
+    assert!(
+        gone.failed[0]
+            .1
+            .contains("no mod \"oag.hillside\" is installed"),
+        "{:?}",
+        gone.failed
+    );
+}
