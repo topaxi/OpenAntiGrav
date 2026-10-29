@@ -55,6 +55,7 @@ pub use oag_gameplay::input;
 /// is a device concern, and the front end is one of its consumers rather than
 /// its owner.
 pub use oag_input::keys;
+pub mod gpu_workers;
 pub mod lan_list;
 pub mod launcher;
 pub mod livery_row;

@@ -192,6 +192,9 @@ fn main() -> Result<()> {
     #[cfg(not(target_os = "ios"))]
     let cli = Cli::parse();
     let result = run(cli);
+    // Every route out of `run` has dropped its session by now; a worker still inside the driver
+    // must finish before the process exit tears the driver down under it.
+    oag_game::gpu_workers::finish();
     oag_log::flush();
     result
 }
@@ -213,6 +216,7 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
         Ok(cli) => run(cli),
         Err(why) => Err(anyhow::anyhow!("launch arguments: {why}")),
     };
+    oag_game::gpu_workers::finish();
     oag_log::flush();
     if let Err(why) = result {
         log::error!("oag-game exited: {why:#}");

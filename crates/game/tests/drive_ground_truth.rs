@@ -41,6 +41,17 @@ impl Run {
 
 /// Runs the game on `image` with `script` and no window, in a profile of its own.
 fn drive(image: &Path, tag: &str, script: &str, tracks: Option<&Path>) -> Run {
+    drive_with(image, tag, script, tracks, &[])
+}
+
+/// [`drive`] with `env` added to the game's environment.
+fn drive_with(
+    image: &Path,
+    tag: &str,
+    script: &str,
+    tracks: Option<&Path>,
+    env: &[(&str, &str)],
+) -> Run {
     let scratch = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("drive-{tag}"));
     let _ = std::fs::remove_dir_all(&scratch);
     std::fs::create_dir_all(&scratch).expect("a scratch directory");
@@ -60,6 +71,7 @@ fn drive(image: &Path, tag: &str, script: &str, tracks: Option<&Path>) -> Run {
         // No display: the run must not need one.
         .env_remove("WAYLAND_DISPLAY")
         .env_remove("DISPLAY");
+    command.envs(env.iter().copied());
     match tracks {
         Some(dir) => command.env("OAG_TRACKS", dir),
         None => command.env("OAG_TRACKS", scratch.join("no-tracks")),
@@ -129,6 +141,40 @@ fn the_race_box_launches_the_track_and_craft_it_was_told_to_pick() {
         screens.contains(&"track-select") && screens.contains(&"ship-select"),
         "{screens:?}"
     );
+}
+
+/// The process does not exit under a GPU worker: the race's EndRace prefetch is held up for three
+/// seconds (a debug-build hook, `OAG_TEST_PREFETCH_DELAY_MS`), the script ends first, and the
+/// game says it waited for the worker and exits 0. Dropping `gpu_workers::finish` from `main`
+/// removes the line and, on a machine slow enough, the exit status with it.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_process_waits_for_a_running_gpu_worker_before_it_exits() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let race = "boot; select racebox; press cross; until page=race; \
+         set race.mode=speed_lap; select launch_race; press cross; \
+         until screen=picker; select 03_Track; press cross; \
+         until screen.id=ship-select; select Feisar; press cross; \
+         until stage=race within 3000; ticks 5";
+    let slow = [("OAG_TEST_PREFETCH_DELAY_MS", "3000")];
+    for (tag, script) in [
+        ("exit-in-race", race.to_string()),
+        ("exit-after-escape", format!("{race}; escape; ticks 5")),
+    ] {
+        let run = drive_with(&image, tag, &script, None, &slow);
+        assert!(
+            run.output.status.success(),
+            "{tag}: {}",
+            run.why_not_success()
+        );
+        assert!(
+            run.stderr().contains("waiting for GPU workers before exit"),
+            "{tag}: the exit did not wait for the prefetch:\n{}",
+            run.stderr()
+        );
+    }
 }
 
 #[test]

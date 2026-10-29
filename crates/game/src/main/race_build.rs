@@ -110,11 +110,15 @@ impl BuildWorker {
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn spawn(request: Request, loaded: race::Loaded) -> Self {
         let allocation = request.allocation;
+        let guard = oag_game::gpu_workers::Guard::enter("race-build");
         let handle = std::thread::Builder::new()
             // Named like `race-load` beside it, so a debugger and `top` say
             // which thread the loading screen is waiting on.
             .name("race-build".to_string())
-            .spawn(move || build(request, loaded))
+            .spawn(move || {
+                let _guard = guard;
+                build(request, loaded)
+            })
             .ok();
         Self { handle, allocation }
     }
@@ -302,9 +306,13 @@ pub(crate) fn drop_off_thread(stage: Box<RaceStage>) {
 /// See the wasm twin above: the web build has no thread to drop it on.
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn drop_off_thread(stage: Box<RaceStage>) {
+    let guard = oag_game::gpu_workers::Guard::enter("race-drop");
     let spawned = std::thread::Builder::new()
         .name("race-drop".to_string())
-        .spawn(move || drop(stage));
+        .spawn(move || {
+            let _guard = guard;
+            drop(stage);
+        });
     if let Err(e) = spawned {
         log::warn!("could not release the parked race off the frame thread: {e}");
     }
