@@ -285,6 +285,7 @@ impl super::Race {
         } else {
             Vec::new()
         };
+        self.view
             .scenery_fx
             .weather_mut()
             .spray_mut()
