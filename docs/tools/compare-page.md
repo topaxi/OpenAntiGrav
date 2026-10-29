@@ -996,18 +996,17 @@ read side by side):
 | Pulse Grid Selection | 0.076 / 0.35 / 4.2 | 2.1 % | the cursor hex glows in the original, plain in ours; the footer ticker scrolls in the original and is empty in ours at tick 0 |
 | Pulse Cell Selection | 0.077 / 0.39 / 4.3 | 1.8 % | closest of all Pulse: the same glow and ticker only |
 | Pure Team Selection | 0.101 / 0.29 / 6.9 | 8.6 % (7.5 % re-made 2026-10-29, eight teams, Feisar to Harimau, as the original) | ours listed 17 teams in small type (the 7 DLC teams plus the disc's two gated ones, `Zone` and `Medievil`, which the still did not drop; the live screen did), the hull outline from another angle, the stat labels run into their values |
-| Pure Track Selection (single race) | 0.092 / 0.40 / 5.0 | 5.5 % | ours adds the `SINGLE RACE - VENOM - ALPHA` context line under the heading (chosen, not measured, `docs/architecture/menus.md`), the records read `0.00.00` against `0'00"00`, lower-case unit `m` (the description line is drawn since 2026-10-29) |
+| Pure Track Selection (single race) | 0.092 / 0.40 / 5.0 | 5.5 % (5.6 % re-made 2026-10-29 with the type-in) | ours adds the `SINGLE RACE - VENOM - ALPHA` context line under the heading (chosen, not measured, `docs/architecture/menus.md`), the records read `0.00.00` against `0'00"00`, lower-case unit `m` (the description line types in since 2026-10-29) |
 | Pure Single Player (mode) | 0.074 / 0.40 / 3.0 | 3.4 % | no context line here; the hint line and the `BACK` prompt differ (below) |
-| Pure Tournament Selection (campaign) | 0.069 / 0.44 / 2.7 | 3.1 % | the context line `TOURNAMENT - VECTOR` (chosen), the description line (drawn settled since 2026-10-29), the footer prompt |
-| Pure League Selection, Class Selection (x2) | 0.066-0.067 / 0.44 / 2.4 | 2.8-2.9 % | the same three: context line, description line (drawn since 2026-10-29), footer |
+| Pure Tournament Selection (campaign) | 0.069 / 0.44 / 2.7 | 3.1 % (3.0 % re-made 2026-10-29 with the type-in) | the context line `TOURNAMENT - VECTOR` (chosen), the description line (typed in since 2026-10-29, at the original's seconds), the footer prompt |
+| Pure League Selection, Class Selection (x2) | 0.066-0.067 / 0.44 / 2.4 | 2.8-2.9 % (League 2.8 %, Class 2.6 % re-made 2026-10-29) | the same three: context line, description line (typed in since 2026-10-29), footer |
 | Pure title | 0.017 / 0.60 / 0.5 | 0.3 % | none visible (the cursor underscore blinks) |
 
 Three differences recur on every Pure chain screen: the **context line** (ours' `SINGLE RACE - VENOM`, a known chosen stand-in of
-`docs/architecture/menus.md`, absent from the original), the **description line** along the bottom (the original types it in, so its frames hold a prefix; ours draws it **settled**,
-5 s in, `ARRIVED` in `pure_chain_page.rs`, since 2026-10-29: the string is the disc's `Text->SCREEN->ITEM->VALUE` entry, for example
+`docs/architecture/menus.md`, absent from the original), the **description line** along the bottom (the original types it in, so its frames hold a prefix; ours types it in too since 2026-10-29, and draws it settled when no `--menu-picker-seconds` is given: the string is the disc's `Text->SCREEN->ITEM->VALUE` entry, for example
 `Text->Track Selection->Track->Vineta K`, laid in the footer `TextInfo` viewport at `(21, 217)` 427 wide, amber `TextInfoBoxColor`, wrapped
 to its three `Text` lines; its scale `0.7` is **chosen** because the `FEGlobals` it names are not declared; the type-in (58 characters a second, a 3.12 s hold and a loop, a cursor) was measured and wired 2026-10-29 and the pairs are drawn at the original's seconds since entry, so the shares fell again: Track Selection 6.4 to 5.6 %, Class 3.6 to 2.6 %, League 4.5 to 2.8 %, Tournament 4.7 to 3.0 % (`docs/ui/menus-original.md`, "Wipeout Pure types its description line in"; before that wiring they had **risen** on a full text against the original's few typed letters; the original's face is the `Scroll` face, `LTe50325.fnt`,
-ours the menu face) and the **footer's BACK prompt** (fixed 2026-10-29: the skin's `Back button` is the table's `Back Button`, found case-folded,
+ours the menu face)) and the **footer's BACK prompt** (fixed 2026-10-29: the skin's `Back button` is the table's `Back Button`, found case-folded,
 and draws the triangle glyph). Still open on the same frames: the dashed cyan rule across the bottom at y 217 and the solid footer rule at y 251,
 which the original draws and ours does not. Pulse's pairs share the footer
 ticker (scrolling in the original) and the cursor glow.

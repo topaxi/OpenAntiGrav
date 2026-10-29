@@ -379,8 +379,8 @@ unread; if a capture there shows a type-in, `display_type` is where it would sta
 
 ## Wipeout Pure types its description line in, and loops it - measured 2026-10-29
 
-Pulse draws its `TELETYPE` text whole (above); **Pure's selection screens (Class, League, Tournament and Track, and the
-mode screen's help line) type the amber description along the bottom, one character at a time, hold it, clear it
+Pulse draws its `TELETYPE` text whole (above); **Pure's selection screens (Class, League, Tournament and Track; the main
+menu's help line is seen typing too, `PLAY._`, in the walk's `main` frame, and is not wired) type the amber description along the bottom, one character at a time, hold it, clear it
 and type it again**, for as long as the screen is open. Measured on PPSSPP v1.20.4 (software renderer, `InternalResolution 1`,
 USA disc `UCUS98612`, muted, own profile), from 30 fps recordings of the 480x272 window and from stopped-CPU grabs. The emulator's
 own clock (`cpu.status.ticks / 222e6`) ran at 1.0000 of wall time over two 52 s recordings. The code was not read (Pure's
@@ -392,7 +392,7 @@ own clock (`cpu.status.ticks / 222e6`) ran at 1.0000 of wall time over two 52 s 
 | hold | **3.12 s** from the last character to the clear, then it types again at once | the same two periods less their typing time (3.124 and 3.113 s) |
 | start | **0.067 s after the pad press** | the eight grabs (0.082, 0.046, 0.044, 0.042, 0.073, 0.069, 0.099, 0.077 s); includes the press-to-screen latency, which cannot be separated |
 | cursor | `_` after the last typed character, **solid while typing**, then **blinking 0.5 s on, 0.5 s off** | every one of the eight partial grabs shows it; after the line completes it toggles every 15 frames of 30. The blink is **free-running, not tied to the cycle**: cycles 2 and 3 of one 52 s League recording toggle in opposite senses (163.2 frames is not a multiple of 30) |
-| wrap | the whole string is wrapped first, then revealed across the lines; a wrap's space is a typed character | Class keeps `AG` on line 1 while line 2 is still empty |
+| wrap | the whole string is wrapped first, then revealed across the lines | Class keeps `AG` on line 1 while line 2 is still empty. **Whether a wrap's space costs a typed character is not measured**: ours counts it (chosen); leaving it out gives 57.6 a second from the same periods, also inside the held-out check |
 | line pitch, advance | 10 px between lines (glyph rows 222, 232, 242); 7.6 px per character in a 7 px cap height | the `Scroll` face's own metrics; **not wired**: ours draws the menu face at the chosen scale 0.7 and a pitch of the viewport height over three lines (10.7 px) |
 
 **The authored `<TextInfo delay="1.6">` matches none of these** (the start is 0.07 s, the hold 3.1 s) and is not used.
