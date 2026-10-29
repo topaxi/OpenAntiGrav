@@ -309,6 +309,17 @@ touch geometry (`Modifier_WrapBox` only wraps and blows them), so it has no spla
   tick, only the pose it reads is interpolated. Cost on `14_Track` (same recipe as above,
   seed 1): CPU p50 5.51 and 5.51 ms before, 5.87 and 5.54 ms after (the unchanged build
   moves 0.0 to 0.4 ms between runs); final state hash the same.
+  **The mist** (`spray::Spray::mist`, chosen, not measured, no confidence score), added
+  because the droplets die under the hull and the far chase camera never saw a craft's own
+  spray: at `MIST_MAX_PER_TICK` (1) per craft per tick on the droplets' wet-and-speed rule,
+  from the same emitters (so none on a covered section), the soft dot of the splash art as a
+  puff of 0.8 growing to 3 half-size, alpha at most 0.12 (in over the first 8 % of its 1.4 s,
+  out over the rest), born above the road at the rear corners, rising 2 to 4 units a second
+  with a 4-unit sideways spread and carried at 98 % of the craft's speed (so it trails the
+  craft instead of being left behind the camera in a tenth of a second). Capped at
+  `MIST_CAPACITY` (240 puffs), own random stream apart from the droplets' (the droplets are
+  unchanged). A close or cockpit view mostly sees none: the camera sits inside the gap the
+  puffs open.
 - **Cost**, whole-race bench recipe (`OAG_RENDER_BENCH_RACE`, single race, seed 1,
   autopilot, 1280x720, first 3,000 ticks, debug profile at opt-level 2, taken under the gate lock,
   load average 2 to 10 at start, adapter RADV). CPU ms a frame, p50 (mean): Fort Gale

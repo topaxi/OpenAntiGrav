@@ -328,6 +328,7 @@ fn the_craft_throws_spray_on_wet_open_road_only() {
     original.set_weather(Weather::Original);
     enhanced.set_weather(Weather::Enhanced);
     let (mut sprayed, mut covered_ticks, mut open_emitting, mut peak) = (0, 0, 0, 0);
+    let (mut misted, mut mist_peak, mut mist_before) = (0, 0, 0);
     for tick in 0..3200 {
         original.tick(&PlayerInputs::none());
         enhanced.tick(&PlayerInputs::none());
@@ -337,6 +338,9 @@ fn the_craft_throws_spray_on_wet_open_road_only() {
             assert!(spray.is_empty(), "tick {tick}: spray on a dry road");
         }
         peak = peak.max(spray.len());
+        let mist = spray.mist_len();
+        mist_peak = mist_peak.max(mist);
+        misted += usize::from(mist > 0);
         if !spray.is_empty() {
             sprayed += 1;
             let (o_add, o_alpha) = lists(&original);
@@ -355,6 +359,7 @@ fn the_craft_throws_spray_on_wet_open_road_only() {
         let emitters = enhanced.spray_emitters();
         if under {
             covered_ticks += 1;
+            assert!(mist <= mist_before, "tick {tick}: mist thrown under a roof");
             assert!(
                 emitters.is_empty(),
                 "tick {tick}: spray source under a roof"
@@ -362,6 +367,7 @@ fn the_craft_throws_spray_on_wet_open_road_only() {
         } else if !emitters.is_empty() {
             open_emitting += 1;
         }
+        mist_before = mist;
     }
     assert!(sprayed > 200, "{sprayed} ticks with spray in 3200");
     assert!(
@@ -369,6 +375,8 @@ fn the_craft_throws_spray_on_wet_open_road_only() {
         "{covered_ticks} covered, {open_emitting} open"
     );
     assert!(peak <= race::scenery_fx::spray::CAPACITY);
+    assert!(misted > 200, "{misted} ticks with mist in 3200");
+    assert!(mist_peak <= race::scenery_fx::spray::MIST_CAPACITY);
     eprintln!(
         "spray on {sprayed} ticks, peak {peak}, {covered_ticks} covered ticks, {open_emitting} open emitting"
     );

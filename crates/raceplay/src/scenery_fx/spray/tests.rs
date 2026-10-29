@@ -50,20 +50,60 @@ fn the_pool_is_capped_and_drains() {
         spray.advance(1.0 / 60.0, 1.0, &many);
     }
     assert_eq!(spray.len(), CAPACITY);
-    spray.advance(LIFE + 0.1, 0.0, &[]);
+    assert_eq!(spray.mist_len(), MIST_CAPACITY);
+    spray.advance(MIST_LIFE + 0.1, 0.0, &[]);
     assert!(spray.is_empty());
 }
 
+fn mist_height(spray: &Spray) -> f32 {
+    let sum: f32 = spray.mist.iter().map(|puff| puff.position().y).sum();
+    sum / spray.mist_len() as f32
+}
+
 #[test]
-fn droplets_draw_translucent_and_stay_above_the_road() {
+fn the_mist_rises_and_outlives_the_droplets() {
     let mut spray = Spray::default();
     spray.advance(1.0 / 60.0, 1.0, &[emitter(600.0); 4]);
-    spray.advance(0.1, 1.0, &[]);
+    assert!(spray.mist_len() > 0);
+    let born = mist_height(&spray);
+    spray.advance(0.5, 0.0, &[]);
+    assert_eq!(spray.len(), 0);
+    assert!(spray.mist_len() > 0, "mist gone with the droplets");
+    assert!(mist_height(&spray) > born + 0.5);
+    spray.advance(MIST_LIFE, 0.0, &[]);
+    assert_eq!(spray.mist_len(), 0);
+}
+
+#[test]
+fn no_mist_on_a_dry_road_a_slow_craft_or_without_an_emitter() {
+    for (speed, wet) in [(600.0, 0.0), (MIN_SPEED_KMH - 1.0, 1.0)] {
+        let mut spray = Spray::default();
+        for _ in 0..30 {
+            spray.advance(1.0 / 60.0, wet, &[emitter(speed)]);
+        }
+        assert_eq!(spray.mist_len(), 0, "{speed} km/h wet {wet}");
+    }
+    let mut spray = Spray::default();
+    spray.advance(1.0 / 60.0, 1.0, &[]);
+    assert_eq!(spray.mist_len(), 0);
+}
+
+#[test]
+fn mist_is_faint_and_fades_in_and_out() {
+    let at = |t: f32| mist_alpha(MIST_LIFE * t);
+    assert_eq!(at(0.0), 0.0);
+    assert_eq!(at(1.0), 0.0);
+    assert!(at(0.05) < at(MIST_FADE_IN) && at(0.9) < at(MIST_FADE_IN));
+    assert!((0.0..=MIST_ALPHA).contains(&at(MIST_FADE_IN)));
+}
+
+#[test]
+fn mist_puffs_reach_the_draw_list() {
+    let mut spray = Spray::default();
+    spray.advance(1.0 / 60.0, 1.0, &[emitter(600.0); 4]);
+    spray.advance(0.5, 0.0, &[]);
+    assert_eq!(spray.len(), 0);
     let mut out = Vec::new();
     spray.extend_vertices(&mut out, Vec3::X, Vec3::Y, [0.0, 0.0, 0.5, 0.25]);
-    assert!(!out.is_empty());
-    for vertex in &out {
-        assert!(vertex.colour[3] <= ALPHA);
-        assert!(vertex.position[1] >= -SIZE - 1e-4);
-    }
+    assert_eq!(out.len(), spray.mist_len() * 6);
 }
