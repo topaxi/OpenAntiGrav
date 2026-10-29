@@ -153,7 +153,7 @@ impl Race {
         }
     }
 
-    fn start_flash(&mut self, kind: oag_fx::flash::Kind, at: Vec3) {
+    pub(super) fn start_flash(&mut self, kind: oag_fx::flash::Kind, at: Vec3) {
         if let Some(flash) = &mut self.view.screen_flash {
             flash.start(kind, at);
         }

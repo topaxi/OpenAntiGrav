@@ -116,8 +116,8 @@ impl super::Scene {
                 queue,
                 vp,
                 eye.to_array(),
-                // The offset is the world meshes' epoch; the strip is a weapon's, not a world mesh's.
-                self.anim_clock.get() - race.world_clock_offset(),
+                // The offset and the flyby are the world meshes' epoch; the strip is a weapon's.
+                self.anim_clock.get() - race.world_clock_offset() - race.flyby_seconds(),
                 &race.leach_strip_vertices(),
             );
         }

@@ -107,8 +107,10 @@ Compared with the original at five matched times on `03_Track` (`scripts/psp-fly
 against `--intro-ticks` captures, native 480x272): the same buildings, framing and field at all
 five, judged by eye (`cmp-all.png`, scratch). What differs: the craft has
 settled in the original and sits at its placement pose in ours (4.0 against 1.85 above the track on
-`03_Track`), and the original's scenery animates under the flyby while ours holds its first
-frame.
+`03_Track`), and the original's scenery animates under the flyby while ours held its first
+frame (**fixed 2026-10-29, `pulse-flyby-settle`**: the world meshes' clock adds the flyby's seconds, `Race::flyby_seconds`; the gantry's does not, the original starts it at the flyby's end. Talon's Junction at `--intro-ticks 1200` differs in 128,614 pixels against the old build: its junction girders and lamps are elsewhere; Moa Therma only its stand crowds. The clock steps at 60 Hz with no draw alpha during the flyby. Clouds still read `World::tick`: unmeasured. PS2's flyby is not on, `PRE_RACE.on`; it inherits when widened).
+
+The flyby's end starts `ScreenFlash` kind 10 (0.7 s, white, alpha 1 to 0, the executable's keys, additive), wired 2026-10-29. Open: the 2026-10-02 frames fade faster than that (half by two calls, clear by about the 17th); `--intro-ticks 1529 --ticks 17` still shows about half. Whether a call is a tick is unmeasured, so the authored kind stands.
 
 The panel was compared at the sizes a player sees (480x272), `--intro-ticks N --screenshot` against
 the original's frames: `03_Track` at tick 300 (identical breaks, bars and positions), `16_Track`
