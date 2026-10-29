@@ -231,9 +231,39 @@ the bar is drawn at `rating / 10` of its width with the texture sub-rect
 scaled the same way, so the segments stay aligned. Confidence 95.
 
 **The craft is `Data\Ships\<team>\ship_FE.vex`** (6 meshes, 1,303 vertices
-for Assegai), turning once every twelve seconds seen slightly from above -
-the period and the pitch are this build's own readings of two frames a
-second apart, not recovered numbers.
+for Assegai).
+
+**The craft sways, it does not turn (2026-10-29, `pulse-picker-clock`).** The
+"one revolution every twelve seconds" this page and `orbit_for` carried was
+read off two frames a second apart and is wrong: a PPSSPP frame sequence shows
+the hull rocking about one pose. Both halves are on the disc. (1) The pose is
+`Data\Ships\<team>\screen.xml`'s `Info` state: a `Mode3D` (`OriginX 120`,
+`OriginY` 20 to 28, `nearZ 1`, `farZ` the widget default 100) over a `Model`
+at `x=0 y=0 z=-13..-16`, `RotX` 0.3 to 0.4, `RotY` 0.4, per team (all eight
+pinned in `selection_screens_ground_truth`), drawn through
+`mode3d_view_projection` like the circuit outline. The lobby state
+(`MPLobby Info`) authors the same model at `OriginX -100`; the start state's
+own is taken. (2) The motion is `ship_FE.vex`'s own `Anim Transform`: on
+Assegai a 359-frame (5.983 s) loop with a roll of about +-19 degrees about one
+axis and a two-cycle bob on another. Confidence 90 (file facts, and our
+render at the node's clock matches the capture to 6.9 mean abs grey against
+27 with the clock off). **The clock is the node's own time, not the time since
+entry**: the model loads before the screen opens (offsets 0.48 to 1.92 s were
+read), `node+0x40`, the front end's animation clock at `*(0x08b317b0)+0x40`
+(`anim-transform.md`). `--menu-model-seconds` carries it into a still. The
+PS2 pressing authors `Origin 120` on its 640 grid with another `x y RotY`
+(Assegai `-6 2 -15`, `0.7`); whether its sign is the circuit rule's is not
+measured (the circuit rule put the hull over the stat panel), so PS2 keeps the
+old orbit (`craft_mode3d_applies`) until PCSX2 settles it.
+
+**Track Select's stills step every 2 s and cross-fade over 0.70 s
+(2026-10-29).** Fitted to 24 phase-read frames of a PPSSPP capture (the
+first card and three steps): a linear ramp starting at the step, 0.70 s long,
+residual 0.08 summed squares; confidence 70 (frames 0.17 s apart). The cards
+a step adds ramp in and the ones it drops ramp out on top
+(`Slideshow::draws_fading`, `STEP_FADE_SECONDS`); the earlier 0.5 s arrival fade
+and the hard steps were chosen. With the clock on the game's own timer the
+photo window is pixel-close (mean abs diff 0.28 grey).
 
 **The airbrake flaps are seated from the race hull (2026-10-27, picker-flaps).**
 A Pulse `ship_FE.vex` (PSP and PS2, all twelve teams, `Zone_FE.vex` too) hangs

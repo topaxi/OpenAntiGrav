@@ -1017,7 +1017,15 @@ over the dimmed race). Pure has no Options or Racebox screen in its main menu.
 that saw the screen replace another (polled every 0.03 s, so +-0.015 s) to the middle of the frame grab; PPSSPP holds 60 fps, but entries
 spread about +-0.1 s in the first second (`docs/ui/campaign-screens.md`, "The `Selector` pulse"). It exists only when the walk watched the
 change (a plan step `key:BUTTON,st:SCREEN`, which skips the tap's 0.7 s settle); otherwise it is absent, never guessed. Ours gets it as
-`--menu-picker-seconds` for the pages in `CLOCKED` (`grid`, `cell`) only.
+`--menu-picker-seconds` for the pages in `CLOCKED` (`grid`, `cell`, `team`, `track`) only.
+
+**The wall clock is replaced on `team` and `track` (2026-10-29, `pulse-picker-clock`).** Their `seconds_since_entry` is the front end's own
+animation clock (`*(0x08b317b0) + 0x40`, emulated seconds, read with the CPU stopped for the grab) minus its value as the entering press
+starts (the screen changes a frame or two later; sampling at the poll that saw the new name is 0.15 s late, because the press call
+returns after the button's six frames). `team` also reads the live ship `Anim Transform` node's own time (`node+0x40`, the node whose
+`+0x80` equals the clock and whose loop is 5.9833 s) and passes it as `--menu-model-seconds`: the hull's sway started when the model
+loaded, 0.5 to 1.9 s before the screen entry, so it is not `--menu-picker-seconds`. Against the wall clock the Track Select photo box went
+from a mean abs diff of 44.9 grey to 0.28 and the Ship Select hull box from 29.0 to 5.2.
 
 **Reproduce:** `scripts/ppsspp-start.sh <lane> 91 <port> <image>` with `PPSSPP_EXTRA_INI` from `compare_env.py ppsspp-ini pulse-psp|pure-psp`,
 `source <scratch>/pp/env.sh`, ours' `XDG_*` under `data/scratch/<lane>/`, then `uv run --with websocket-client --with pillow python3

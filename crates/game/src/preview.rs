@@ -339,6 +339,15 @@ pub fn mode3d_view_projection(model: &oag_ui::screen::Model, space: Space) -> Op
     Some((view_projection, model_matrix))
 }
 
+/// Whether a screen's authored `Mode3D` places its model: always, except a craft on the PS2
+/// pressing, whose `Origin` sign is unmeasured (it authors the PSP's `120` on a 640 wide grid
+/// and the circuit rule of negating it put the hull on top of the stat panel). PS2 keeps
+/// [`orbit_for`]'s capture-read orbit until a PCSX2 capture settles it.
+#[must_use]
+pub fn craft_mode3d_applies(kind: oag_ui_screens::picker::Kind, space: Space) -> bool {
+    kind != oag_ui_screens::picker::Kind::Ship || space.size != Space::PS2.size
+}
+
 /// One still of a slideshow as read off the disc: its entry name and its
 /// bytes, the pair `oag_hud::sprite::Sheet::extended` takes.
 pub type Still = (String, Vec<u8>);
@@ -434,13 +443,11 @@ pub fn read_stills(
 }
 
 /// Seconds the hexagonal window's own stills take to fade in on a fresh
-/// selection - **chosen, not measured**: the circuit's own `screen.xml`
-/// authors no `transition` of its own for them (unlike `Selection_Definition.xml`'s
-/// `LeftLayer`s, which do - see [`oag_ui_screens::picker`]'s own reading of that
-/// attribute), but a live PPSSPP capture shows them arriving in step with
-/// the info panel's own measured `0.5`s (`docs/ui/selection-screens.md`), so
-/// this reuses that number rather than inventing an unrelated one.
-pub const CARD_FADE_SECONDS: f32 = 0.5;
+/// selection: the same linear ramp every later step of the slideshow takes,
+/// [`oag_ui_screens::picker::slideshow::STEP_FADE_SECONDS`] (0.70 s, measured on Pulse
+/// PSP's Track Select; Pure and the PS2 pressing inherit it unmeasured). The circuit's
+/// own `screen.xml` authors no `transition` for them.
+pub const CARD_FADE_SECONDS: f32 = oag_ui_screens::picker::slideshow::STEP_FADE_SECONDS;
 
 /// `draw` with every colour it carries multiplied by `alpha` - [`CARD_FADE_SECONDS`]'s
 /// own arrival fade, applied after [`Slideshow::draws`] since that method
