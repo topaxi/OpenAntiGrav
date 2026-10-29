@@ -185,6 +185,7 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     // (30 Hz) across four consecutive cycles. See
     // `oag_title::MenuSkin::selected_pulse_period_secs`.
     selected_pulse_period_secs: Some(1.1),
+    selector_origin: None,
     transition_secs: 0.5,
     // **A measurement, not a gap.** Pulse's main menu is a vertical `<Menu>`,
     // and no `<HorizMenu>` exists anywhere on either pressing: every blob of
@@ -308,6 +309,7 @@ pub const PS2_MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     background: None,
     selected: Some(0xFFFF_FFFF),
     selected_pulse_period_secs: Some(1.1),
+    selector_origin: Some((-11.0, -14.0)),
     transition_secs: 0.5,
     strip: None,
     blocks: None,

@@ -109,6 +109,7 @@ pub fn grid_draw_list(
                     placed,
                     hex,
                     model.pulse().tint(),
+                    skin.selector_origin(),
                 ));
             }
             continue;
@@ -286,6 +287,7 @@ pub fn cell_draw_list(
                 placed,
                 hex,
                 model.pulse().tint(),
+                skin.selector_origin(),
             ));
             continue;
         }
@@ -698,14 +700,10 @@ pub(super) fn selector_tinted_draw(
     placed: Placed,
     hex: [f32; 4],
     argb: u32,
+    origin: Option<(f32, f32)>,
 ) -> Draw {
-    sprite_draw(
-        image,
-        placed,
-        hex[0] + SELECTOR_ORIGIN[0],
-        hex[1] + SELECTOR_ORIGIN[1],
-        argb,
-    )
+    let [dx, dy] = origin.map_or(SELECTOR_ORIGIN, |(x, y)| [x, y]);
+    sprite_draw(image, placed, hex[0] + dx, hex[1] + dy, argb)
 }
 
 /// `Selector`'s top-left relative to the selected hex's own top-left on Pulse PSP,

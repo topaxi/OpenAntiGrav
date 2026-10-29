@@ -662,6 +662,13 @@ impl Skin {
         self.skin.selected_pulse_period_secs
     }
 
+    /// Where `Selector` sits against the selected hex on the campaign screens, in
+    /// [`Self::space`]'s grid. See [`oag_title::MenuSkin::selector_origin`].
+    #[must_use]
+    pub fn selector_origin(&self) -> Option<(f32, f32)> {
+        self.skin.selector_origin
+    }
+
     /// Where the screen title sits, and how big.
     ///
     /// The scale is dimensionless and stays as authored: it multiplies a face
@@ -933,6 +940,7 @@ mod tests {
         background: None,
         selected: Some(0xFFFF_FFFF),
         selected_pulse_period_secs: Some(1.1),
+        selector_origin: None,
         transition_secs: 0.5,
         strip: None,
         blocks: None,
@@ -985,6 +993,7 @@ mod tests {
     fn a_title_with_no_measured_period_never_pulses() {
         const FLAT: oag_title::MenuSkin = oag_title::MenuSkin {
             selected_pulse_period_secs: None,
+            selector_origin: None,
             ..PULSING
         };
         let mut skin = Skin::new(&FLAT, oag_display::space::Space::PSP, 22.0);

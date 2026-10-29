@@ -56,3 +56,53 @@ this pass, so they keep their `FUN_` names:
 | `FUN_0018fee0` | `GridController_ClearTileFlags` (`0x088a374c`) |
 | `FUN_0018ff78` | `GridController_SetTileColor` (`0x088a3850`) |
 | `FUN_0011f9d0` | the float-to-int conversion the PSP inlines |
+
+## `GridController_UpdateSelectorPulse` (`0x001905d8`, 2026-10-29, `pulse-ps2-hex-align`)
+
+**Binary:** `SCES_547.48`. The PSP body is `GridController_UpdateSelectorPulse` (`0x088a5700`),
+[`../psp-pulse-usa/race-campaign.md`](../psp-pulse-usa/race-campaign.md). Found by position (the PSP
+function sits 0x1eb0 after the `SetTileColor` helper listed above) and confirmed by its literals.
+Headless decompile, in the PSP's shape:
+
+- looks up two named children of the grid controller by string, `Selector` (`0x002ada98`) and
+  `SelectorGlow` (`0x002adaa8`);
+- on `Selector`, **eases its position toward `(hex.x + 0.5 - 5.0, hex.y + 0.5 - 7.0)`**: each call sets
+  `pos = pos + (target - pos) * 0.5`, with `hex` the two floats at `+0x98`/`+0x9c` of the controller. The
+  literals `5.0` and `7.0` are the PSP's;
+- advances a phase at `+0xa0` by `2 * dt`, wrapping at `2.0`, and tints `Selector` with
+  `lerp(phase, 0xff33a6b9, 0xffffffff)` for the first half and the reverse for the second
+  (`FUN_001a8cb0`, all four vertex colours), the PSP's law and its colour literal;
+- `SelectorGlow` is moved to the same place and tinted `0 -> white`; no authored `SelectorGlow` widget
+  exists in the PS2 XML either (the lookup is dead, as on the PSP);
+- polls the four d-pad masks and calls `FUN_00190e90` (move cursor) per direction.
+
+**Confidence 85** for the identification (same literals, same two string lookups, same pulse law and
+colour; `5.0`, `7.0`, `2.0` and `0xff33a6b9` all present). **Law is shared with the PSP; the drawn
+position is not**, see "Where the PS2 draws it" below.
+
+### Where the PS2 draws it (measured, GS dump)
+
+A PCSX2 GS dump (`scripts/pcsx2-gsdump.py`, frame of a settled `Grid Selection` and of `Cell
+Selection`; coordinates are the frame's `x - 2048 + 320`, `y - 2048 + 224`, i.e. the 640x448 grid) lists
+the quads:
+
+| Screen | Hex outline (32x32, texture `hex_outline`) | `Selector` quad (56x56, `pulse_assets` uv `(114,75)` 43x43) | Offset |
+| --- | --- | --- | --- |
+| Grid Selection, tile 0 | `(87, 247)` | `(76, 233)` | `(-11, -14)` |
+| Cell Selection, selected tile | `(155, 143)` | `(144, 129)` | `(-11, -14)` |
+
+The outlines match the XML exactly (`Outline_0_0` at `(47+40, 82+31+134) = (87, 247)`; the four tier
+outlines step `(40, -31)`; Cell Selection's five at `(-245,-19)`, `(-205,-50)`, `(-165,-81)`,
+`(-125,-50)`, `(-85,-19)` plus the centre `(-165,-19)`, all 32x32, 27x36 locks). The selector is the
+XML's `width="56" height="56"` stretch of a 43x43 sprite, at the outline's top-left **minus (11, 14)**,
+not the PSP's `(5, 7)`. The code's `5.0`/`7.0` are the same literals, so the extra `(-6, -7)` is the
+PS2 art's own size difference (a 56 px quad over a 43 px canvas puts the quad `(56-43)/2 = 6.5` left
+of where a 43 px quad would sit: the x half is explained; the y half, `-7` where `-6.5` is expected, is
+not). **The value `(-11, -14)` is measured, two screens, quad edges read straight off the GS packets
+(confidence 90); the split into `5/7` plus art stretch is a reading, confidence 45.**
+
+Not seen on the PS2: a second quad for `SelectorGlow` (one `Selector` quad per frame, as on the PSP).
+Pulse colour and period: **same law as the PSP** by the decompile (`2 * dt` phase, wrap `2.0`, cyan
+`0xff33a6b9` to white); **not measured on PCSX2 pixels** (the loaded states keep their own phase). The
+GS dump shows the quad's vertex colour at `(47,92,100)`/`(121,125,125)` on the two frames, between the two
+ends as the law says.

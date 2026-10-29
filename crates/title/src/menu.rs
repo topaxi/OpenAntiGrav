@@ -358,6 +358,17 @@ pub struct MenuSkin {
     /// own behaviour is simply unmeasured (Pure). `None` must never be filled
     /// in from Pulse's own number - see `docs/ui/menus-original.md`.
     pub selected_pulse_period_secs: Option<f32>,
+    /// Where `Selector`'s top-left sits relative to the selected hex's own top-left, in
+    /// [`Self::space`]'s grid, on Grid Selection and Cell Selection.
+    ///
+    /// `None` is the PSP's `(-5, -7)` (`oag_ui_screens::campaign`'s `SELECTOR_ORIGIN`, a GE
+    /// dump of `GridController_UpdateSelectorPulse` `0x088a5700`). **Pulse PS2 is
+    /// `Some((-11, -14))`, measured**: a PCSX2 GS dump of both screens draws the 56x56 quad at
+    /// the outline's top-left minus (11, 14) (Grid Selection tile 0 at (87,247), selector at
+    /// (76,233); Cell Selection tile (155,143), selector (144,129)). `FUN_001905d8` keeps the
+    /// PSP's `5.0` and `7.0` literals, so the PS2 art's 56 px stretch of a 43 px sprite is the
+    /// likely rest of the difference; the y half is not explained.
+    pub selector_origin: Option<(f32, f32)>,
     /// How long a page change takes, in seconds. Authored, `transition=`.
     ///
     /// Confirmed as seconds rather than assumed: Pulse's `Main Menu` is
@@ -662,6 +673,7 @@ mod tests {
         background: None,
         selected: Some(0xFFFF_FFFF),
         selected_pulse_period_secs: Some(1.1),
+        selector_origin: None,
         transition_secs: 0.5,
         // Pulse's own answer: its discs author no `<HorizMenu>` at all.
         strip: None,

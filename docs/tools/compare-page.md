@@ -1027,6 +1027,30 @@ separate boot: `--plan "st:Show Logo,wait:5,shot:title" --ids title`). Adopt: `p
 data/reference/compare-page/menus-pulse.toml data/reference/compare-page/pulse-psp/menu-*` (and `menus-pure.toml` over `pure-psp/menu-*`),
 then `just compare-page`.
 
+## Menu pairs: Wipeout Pulse (PS2) front-end screens (2026-10-29, `pulse-ps2-hex-align`)
+
+`scripts/pcsx2-menu-pair.py pairs --slot S --out D` makes Grid Selection and Cell Selection pairs (`menu-grid`, `menu-cell`) from
+PCSX2 savestates (`data/saves/pulse-ps2/menu/`), on `compare_menu.py` like `psp-menu-pair.py`. The state is copied into the
+instance's own savestate folder as slot 1, loaded with the VM running, PCSX2's GS screenshot (1592x896, `AspectRatio 16:9`) taken and
+resized ONCE (Lanczos) to the profile's 1280x720; ours is `oag-game --menu-page grid-select|cell-select` through `compare_menu.render_ours` (no DLC
+pack mounted, `[dev] unlock_everything = false`, aspect `wide`). The screen is read by eye (the PS2's front-end state name has no recovered
+address) and the script's docstring lists the key walk that makes a state; the selector pulses on its own clock, so compare
+placement, not brightness.
+
+`scripts/menu_hex_offsets.py THEIRS OURS [--search=N] [--ps2-grid] NAME:CX:CY:W:H ...` measures per-axis offsets of ours against the original on
+patches by gradient cross-correlation (Gaussian, strongest edges, parabolic sub-pixel peak; self-tested on a known 3 px shift, and
+`0.00 / -0.01` on the existing PSP Grid Selection pair). `--ps2-grid` takes patch centres in the 640x448 grid of a GS dump
+(`scripts/pcsx2-gsdump.py`), the exact quads. The selected hex mixes the outline and the ring: measure the ring alone with a brightness mask
+(ring pixels above 140 in the pair; the outline is dimmer).
+
+**Result (1280x720).** Ours' unselected hexes (3 on Grid Selection, 5 on Cell Selection) lie a **frame-level** `dx = +4.19 - 0.00728 x`,
+`dy = -3.68` (sd 0.04) px from PCSX2's: x is `Space::PS2`'s documented 480/272 pillar (0.74 % against the 16:9 the screenshot fills), y is a constant
+2.3 grid units that the right-hand panel's rules (-3.4, -3.6), the footer bars (-2.4 to -4.3) and the Main Menu rows (-3.6 to -3.9) share (so it is not hex placement; the title bar reads -0.3 by correlation but 4 px low by its bright-row extent, a slanted shape); the GS dump puts the original's outlines exactly on
+the XML's coordinates, and its registers read `DISPLAY2.DBY = 1`, `DY = 52` (a field offset is one candidate, PCSX2's PAL crop another; **cause
+not isolated**). After that transform the hexes agree within 0.07 px and the selected ring within 0.28 px on both axes. Before the
+fix the ring was `+15.4 / +8.2` (grid) and `+13.9 / +7.7` (cell) px off the original's, 12 px and 11 px of that the PSP's `(-5, -7)` used on the PS2's `(-11, -14)`
+(`docs/ui/campaign-screens.md`, "PS2: the selector sits at...").
+
 ## Provenance: the trust model (2026-10-21, `ref-provenance`)
 
 A pair is only as good as the original frame in it, and three things made a bad original look fine on
