@@ -484,7 +484,7 @@ pub(super) fn ensure_known_titles(settings: &mut Settings) {
 /// hold", because the struct answers that. What needs it is the sweep that
 /// checks every menu seed lands in a table the settings file actually writes.
 #[cfg(test)]
-pub(super) const PROFILE_KEYS: [&str; 15] = [
+pub(super) const PROFILE_KEYS: [&str; 16] = [
     "render_scale",
     "render_scale_chosen",
     "target_fps",
@@ -500,6 +500,7 @@ pub(super) const PROFILE_KEYS: [&str; 15] = [
     "model_detail",
     "texture_detail",
     "trail_order",
+    "weather",
 ];
 
 /// The keys that used to live flat in `[graphics]` and now live in one
