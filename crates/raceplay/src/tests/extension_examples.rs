@@ -41,6 +41,8 @@ fn full_grid_fuel(module: &Module) -> Vec<u64> {
             person: slot == 0,
             fire_held: slot == 0,
             racing: true,
+            lap: 2,
+            laps_target: 3,
             shield: 100.0,
             shield_max: 100.0,
             speed_kmh: 400.0,

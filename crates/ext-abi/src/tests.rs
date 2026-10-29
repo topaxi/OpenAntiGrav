@@ -64,6 +64,8 @@ fn a_craft() -> Craft {
         person: true,
         fire_held: false,
         racing: true,
+        lap: 3,
+        laps_target: 5,
         shield: 12.5,
         shield_max: 100.0,
         speed_kmh: 401.25,
@@ -103,6 +105,8 @@ fn layout_fold() -> u64 {
         COMMAND_WORD as u32,
         CRAFT_PICKUP as u32,
         CRAFT_FLAGS as u32,
+        CRAFT_LAP as u32,
+        CRAFT_LAPS_TARGET as u32,
         CRAFT_SHIELD as u32,
         CRAFT_SHIELD_MAX as u32,
         CRAFT_SPEED as u32,
@@ -158,7 +162,7 @@ fn layout_fold() -> u64 {
 
 /// The revision and the layout it names. Edit the layout and this fails: bump
 /// [`REVISION`] and record the new fold beside it, in the same change.
-const REVISION_AND_FOLD: (u32, u64) = (1, 0xa39d_2a3b_a54b_6419);
+const REVISION_AND_FOLD: (u32, u64) = (2, 0x6496_c099_9726_777e);
 
 #[test]
 fn the_layout_is_the_revision_it_says() {

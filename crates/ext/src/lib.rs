@@ -101,6 +101,19 @@ impl Craft<'_> {
         self.read().racing
     }
 
+    /// The lap being driven, 1-based, saturating at 255.
+    #[must_use]
+    pub fn lap(&self) -> u8 {
+        self.read().lap
+    }
+
+    /// The laps the race ends after; 0 when it has no target. The craft is on its final
+    /// lap when `laps_target() > 0 && lap() == laps_target()`.
+    #[must_use]
+    pub fn laps_target(&self) -> u8 {
+        self.read().laps_target
+    }
+
     /// The energy pool.
     #[must_use]
     pub fn shield(&self) -> f32 {

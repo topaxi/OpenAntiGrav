@@ -656,6 +656,11 @@ mod on {
                     person,
                     fire_held,
                     racing,
+                    lap: u8::try_from(ship.standing.lap).unwrap_or(u8::MAX),
+                    laps_target: sim
+                        .world
+                        .laps_target()
+                        .map_or(0, |n| u8::try_from(n).unwrap_or(u8::MAX)),
                     shield: ship.physics.shield,
                     shield_max: ship.handling.dimensions.shield,
                     speed_kmh: ship.physics.body.linear_velocity.length()

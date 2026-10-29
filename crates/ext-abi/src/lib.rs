@@ -22,7 +22,7 @@
 //! | [`STATE_AT`] | [`MAX_STATE_BYTES`] | the module's state blob, in and out |
 //! | [`REPLY_AT`] | 4 | command count, written by the guest |
 //! | [`REPLY_AT`] + 4 | [`COMMAND_LEN`] x [`MAX_COMMANDS`] | commands ([`Command`]): kind `u8`, slot `u8`, `u16` argument, `f32`, `u32` |
-//! | [`CRAFTS_AT`] | [`CRAFT_LEN`] x [`MAX_CRAFTS`] | one record per grid slot ([`Craft`]): pickup `u8`, flags `u8`, 2 bytes zero, shield `f32`, shield maximum `f32`, speed km/h `f32` |
+//! | [`CRAFTS_AT`] | [`CRAFT_LEN`] x [`MAX_CRAFTS`] | one record per grid slot ([`Craft`]): pickup `u8`, flags `u8`, lap `u8`, laps target `u8`, shield `f32`, shield maximum `f32`, speed km/h `f32` |
 //!
 //! The README's WIT (`docs/architecture/wasm-extensions/README.md`, section 2.1) is
 //! the documentation of the records; this is what is built of it.
@@ -40,7 +40,7 @@ use core::fmt;
 pub const ABI: u32 = 1;
 /// The layout revision within [`ABI`]: bumped by hand on any edit to the layout. A
 /// module built before revisions existed returns the bare major and is revision 0.
-pub const REVISION: u32 = 1;
+pub const REVISION: u32 = 2;
 const _: () = assert!(REVISION > 0 && REVISION < 256);
 /// What a guest's `oag_abi` returns: the major above the revision's 8 bits.
 pub const ABI_WORD: u32 = (ABI << 8) | REVISION;
@@ -116,6 +116,10 @@ pub const COMMAND_WORD: usize = 8;
 pub const CRAFT_PICKUP: usize = 0;
 /// Within a craft record: the flags.
 pub const CRAFT_FLAGS: usize = 1;
+/// Within a craft record: the lap being driven, 1-based, saturating at 255.
+pub const CRAFT_LAP: usize = 2;
+/// Within a craft record: the laps the race ends after; 0 for a race with no target.
+pub const CRAFT_LAPS_TARGET: usize = 3;
 /// Within a craft record: the shield, `f32`.
 pub const CRAFT_SHIELD: usize = 4;
 /// Within a craft record: the shield maximum, `f32`.
@@ -357,6 +361,10 @@ pub struct Craft {
     pub fire_held: bool,
     /// Racing: past the start, not wrecked, not respawning.
     pub racing: bool,
+    /// The lap being driven, 1-based, saturating at 255.
+    pub lap: u8,
+    /// The laps the race ends after; 0 when it has no target.
+    pub laps_target: u8,
     /// The energy pool.
     pub shield: f32,
     /// Its maximum: the bound of a `shield-delta` for this slot.
@@ -378,6 +386,8 @@ impl Craft {
         ]
         .into_iter()
         .fold(0, |flags, (on, bit)| if on { flags | bit } else { flags });
+        record[CRAFT_LAP] = self.lap;
+        record[CRAFT_LAPS_TARGET] = self.laps_target;
         put_u32(&mut record, CRAFT_SHIELD, self.shield.to_bits());
         put_u32(&mut record, CRAFT_SHIELD_MAX, self.shield_max.to_bits());
         put_u32(&mut record, CRAFT_SPEED, self.speed_kmh.to_bits());
@@ -394,6 +404,8 @@ impl Craft {
             person: flags & CRAFT_PERSON != 0,
             fire_held: flags & CRAFT_FIRE_HELD != 0,
             racing: flags & CRAFT_RACING != 0,
+            lap: record[CRAFT_LAP],
+            laps_target: record[CRAFT_LAPS_TARGET],
             shield: f32::from_bits(get_u32(record, CRAFT_SHIELD)),
             shield_max: f32::from_bits(get_u32(record, CRAFT_SHIELD_MAX)),
             speed_kmh: f32::from_bits(get_u32(record, CRAFT_SPEED)),
