@@ -173,6 +173,9 @@ pub struct Names<'a> {
     pub name_of: &'a dyn Fn(&str) -> String,
     /// Our own words.
     pub words: &'a Words,
+    /// The disc's description of a row, from its screen's authored name, the
+    /// item the screen picks and the row's own name; empty where it has none.
+    pub describe: &'a dyn Fn(&str, &str, &str) -> String,
 }
 
 /// The ids (the leaf of each ship directory) of the teams the profile has not

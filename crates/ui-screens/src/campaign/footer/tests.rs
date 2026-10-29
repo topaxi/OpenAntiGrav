@@ -169,6 +169,9 @@ fn no_tips_draws_nothing() {
         viewport: [85.0, 235.0, 370.0, 32.0],
         font: "small".to_string(),
         color: [1.0, 1.0, 1.0, 1.0],
+        text_scale: 1.0,
+        text_lines: 1,
+        text_font: String::new(),
     };
     let draw = ticker_draw(&layout, 0.0, &[], &FaceScales::default(), &|_| 100.0);
     assert!(draw.is_none());
@@ -180,6 +183,9 @@ fn one_tip_starts_flush_against_the_viewport_s_own_left_edge_at_zero_elapsed() {
         viewport: [85.0, 235.0, 370.0, 32.0],
         font: "small".to_string(),
         color: [1.0, 1.0, 1.0, 1.0],
+        text_scale: 1.0,
+        text_lines: 1,
+        text_font: String::new(),
     };
     let tips = vec!["Why don't you try out the Speed Lap events?".to_string()];
     let draw =
@@ -198,6 +204,9 @@ fn scrolling_moves_the_tip_left_at_ticker_speed() {
         viewport: [85.0, 235.0, 370.0, 32.0],
         font: "small".to_string(),
         color: [1.0, 1.0, 1.0, 1.0],
+        text_scale: 1.0,
+        text_lines: 1,
+        text_font: String::new(),
     };
     let tips = vec!["a fixed-width tip".to_string()];
     let measure = |_: &str| 100.0;
@@ -397,6 +406,9 @@ fn the_same_inputs_produce_an_equal_draw_for_the_index_lookup_to_find() {
         viewport: [85.0, 235.0, 370.0, 32.0],
         font: "small".to_string(),
         color: [1.0, 1.0, 1.0, 1.0],
+        text_scale: 1.0,
+        text_lines: 1,
+        text_font: String::new(),
     };
     let tips = vec!["a fixed-width tip".to_string()];
     let measure = |_: &str| 100.0;
@@ -590,4 +602,29 @@ fn a_prompt_idstring_differing_only_in_case_still_resolves() {
     let draws = legend.draw(&FaceScales::default(), &|_| 10.0);
     let texts: Vec<&str> = draws.iter().map(|draw| text_and_y(draw).0).collect();
     assert_eq!(texts, ["g", "Back"]);
+}
+
+/// Pure's `TextInfo` authors three `Text` lines and names no scale: the description wraps to the
+/// viewport's width, stops at three lines, and sits at the viewport's own left edge in its colour.
+#[test]
+fn a_description_wraps_into_the_text_infos_lines_and_no_more() {
+    let root = parse(
+        r#"<Screen name="Skin"><Viewport name="TextInfoIsAlwaysLast" OffsetX="21" OffsetY="217">
+<Values width="427" height="32"></Values>
+<TextInfo delay="1.6"><Values y="1" font="scroll" scale="FEGlobals->TextInfoScale" color="0xFFFAB41A"></Values>
+<Text Name="Text0"></Text><Text Name="Text1"></Text><Text Name="Text2"></Text></TextInfo></Viewport></Screen>"#,
+    );
+    let layout = TickerLayout::read(&root, &HashMap::new()).expect("the viewport");
+    assert_eq!(
+        layout.text_lines, 3,
+        "the three Text children are its lines"
+    );
+    assert_eq!(layout.text_scale, DESCRIPTION_SCALE);
+    let words = vec!["word"; 40].join(" ");
+    let draws = description_draws(&layout, &words, &|text| text.len() as f32 * 10.0);
+    assert_eq!(draws.len(), 3, "cut at the authored line count");
+    let ys: Vec<f32> = draws.iter().map(|draw| text_and_y(draw).1).collect();
+    assert_eq!(ys[0], 217.0);
+    assert!(ys[1] > ys[0] && ys[2] > ys[1], "{ys:?}");
+    assert!(description_draws(&layout, "  ", &|_| 1.0).is_empty());
 }

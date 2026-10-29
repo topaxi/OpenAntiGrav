@@ -788,6 +788,14 @@ pub struct TickerLayout {
     pub viewport: [f32; 4],
     font: String,
     color: [f32; 4],
+    /// The `TextInfo`'s own `scale` and `NumLines` where the file resolves
+    /// them (Pure's name `FEGlobals` entries that its `FEGlobals` does not
+    /// declare, so neither resolves there: see [`DESCRIPTION_SCALE`]);
+    /// `description_draws` reads them.
+    text_scale: f32,
+    text_lines: usize,
+    /// The `TextInfo`'s own `font` name, as authored (Pure: `scroll`).
+    text_font: String,
 }
 
 impl TickerLayout {
@@ -817,8 +825,90 @@ impl TickerLayout {
             // `Pulse_14`-scaled capitals. Not a traced binding either.
             font: "default".to_string(),
             color,
+            text_scale: bar
+                .and_then(|bar| number(globals, bar, "scale"))
+                .unwrap_or(DESCRIPTION_SCALE),
+            // `NumLines` unresolved: the `Text` children the `TextInfo`
+            // authors are its lines (Pure: `Text0`, `Text1`, `Text2`).
+            text_lines: bar
+                .and_then(|bar| number(globals, bar, "NumLines"))
+                .map_or_else(
+                    || {
+                        bar.map_or(1, |bar| bar.children_named("Text").count())
+                            .max(1)
+                    },
+                    |lines| lines.max(1.0) as usize,
+                ),
+            text_font: bar
+                .and_then(|bar| bar.value("font"))
+                .unwrap_or("default")
+                .to_string(),
         })
     }
+}
+
+/// The scale of a `TextInfo` whose `scale` does not resolve. **Chosen, not
+/// measured off a number on the disc**: Pure's `TextInfo` names
+/// `FEGlobals->TextInfoScale`, which its `FEGlobals` never declares, so the
+/// original's value lives in its code. 0.7 is the `Confirm` prompt's authored
+/// scale in the same `scroll` face, and its capital height matches the
+/// description's in the `menu-sr-track` PPSSPP pair.
+pub const DESCRIPTION_SCALE: f32 = 0.7;
+
+/// `text` wrapped into the viewport of `layout`, one [`Draw`] a line, in the
+/// `TextInfo`'s own colour and scale ([`DESCRIPTION_SCALE`] where it names
+/// none), at most its line count (the rest is cut: the original's box holds
+/// that many), spread evenly down the viewport's height. The description
+/// Wipeout Pure types along a selection screen's bottom, drawn here settled.
+///
+/// Empty for an empty `text` or a viewport with no width. `measure` is a
+/// face's text width at scale `1.0`.
+#[must_use]
+pub fn description_draws(
+    layout: &TickerLayout,
+    text: &str,
+    measure: &dyn Fn(&str) -> f32,
+) -> Vec<Draw> {
+    let [x, y, width, height] = layout.viewport;
+    if text.trim().is_empty() || width <= 0.0 {
+        return Vec::new();
+    }
+    let scale = layout.text_scale;
+    let mut lines: Vec<String> = Vec::new();
+    let mut line = String::new();
+    for word in text.split_whitespace() {
+        let candidate = if line.is_empty() {
+            word.to_string()
+        } else {
+            format!("{line} {word}")
+        };
+        if !line.is_empty() && measure(&candidate) * scale > width {
+            lines.push(std::mem::take(&mut line));
+            line = word.to_string();
+        } else {
+            line = candidate;
+        }
+    }
+    if !line.is_empty() {
+        lines.push(line);
+    }
+    let pitch = height / layout.text_lines as f32;
+    lines
+        .into_iter()
+        .take(layout.text_lines)
+        .enumerate()
+        .map(|(index, line)| {
+            Draw::in_role(
+                face_role(&layout.text_font),
+                x,
+                y + pitch * index as f32,
+                scale,
+                layout.color,
+                Align::Left,
+                line,
+            )
+        })
+        .collect()
 }
 
 /// How fast the ticker travels, in pixels a second. **Chosen, not
