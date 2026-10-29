@@ -79,6 +79,7 @@ pub(crate) fn run(app: &mut App, script: Script, state_log: Option<&Path>) -> Re
         driver.reset_budget();
         if let Err(why) = driver.exec(step) {
             driver.session.finish_endrace_prefetch();
+            oag_game::records::finish_background_saves();
             driver.out.flush().ok();
             bail!(
                 "drive: step {} (line {line}): {step}: {why}\n  last state: {}",
@@ -91,6 +92,8 @@ pub(crate) fn run(app: &mut App, script: Script, state_log: Option<&Path>) -> Re
         }
     }
     driver.session.finish_endrace_prefetch();
+    driver.session.keep_campaign_position();
+    oag_game::records::finish_background_saves();
     driver.out.flush()?;
     Ok(())
 }
@@ -234,6 +237,13 @@ impl Driver {
                     self.tap(*button, oag_game::drive::script::DEFAULT_WITHIN)?;
                 }
             }
+            Step::Escape => {
+                // Leaving the race drops its EndRace worker unjoined, and a process that exits
+                // under it tears the driver down mid-submit (see `finish_endrace_prefetch`).
+                self.session.finish_endrace_prefetch();
+                self.session.escape();
+                self.frame(None)?;
+            }
             Step::Ticks(n) => {
                 for _ in 0..*n {
                     self.frame(None)?;
@@ -369,8 +379,8 @@ fn screen(stage: &MenuStage) -> Screen {
     if let Some(picker) = &stage.picker {
         return picker_screen(&picker.model);
     }
-    if stage.campaign.is_some() {
-        return overlay("campaign");
+    if let Some(campaign) = &stage.campaign {
+        return campaign_screen(campaign);
     }
     if stage.pure_chain.is_some() {
         return overlay("pure-chain");
@@ -385,6 +395,22 @@ fn screen(stage: &MenuStage) -> Screen {
         return overlay("seat-assign");
     }
     page_screen(stage)
+}
+
+/// The campaign's screen: which of its levels is open, and the grid or cell under the cursor.
+fn campaign_screen(campaign: &crate::campaign_stage::CampaignStage) -> Screen {
+    let (id, index, name) = campaign.drive_focus();
+    Screen {
+        kind: "campaign".to_string(),
+        id: id.to_string(),
+        focus: Some(Focus {
+            index,
+            id: Some(name.clone()),
+            label: name,
+            setting: None,
+        }),
+        ..Screen::default()
+    }
 }
 
 fn picker_screen(picker: &oag_ui_screens::picker::Picker) -> Screen {

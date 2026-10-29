@@ -131,6 +131,12 @@ impl Session {
     /// `EndRace`'s `RETURN TO GRID` keeps the cell instead
     /// (`Session::return_to_campaign`).
     ///
+    /// **Ours, not the original's**: launching a cell files the campaign's
+    /// shared cursor slot, so the restore inside `open_cell_selection` puts
+    /// the cursor back on the cell raced (when it shows no lock glyph) rather
+    /// than the default cell the Head2Head reading saw
+    /// (`campaign_cursor_ground_truth`).
+    ///
     /// **Chosen, not measured:** this build has no pause menu, so escape is
     /// the pause menu's QUIT RACE row and the race is discarded rather than
     /// parked - a campaign race cannot be resumed from the menus the way a

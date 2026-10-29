@@ -372,6 +372,17 @@ purpose. See [race-campaign.md](../formats/race-campaign.md) and
 `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "Grid0..Grid14:
 what the gate actually evaluates".
 
+## Where the campaign screens last stood (2026-10-29)
+
+A `[[campaign_cursor]]` table in `records.toml`: one row per campaign (the
+same `campaign_title` key, or a mod campaign's own records title) with the
+grid `Grid Selection` was last on (by name) and `Cell Selection`'s `(x, y)`
+slot. Written when the campaign closes, launches a race or the process ends
+with it open, on a background thread (`records::save_in_background`). Absent
+rows, or a grid a mod removed, open on the defaults. Page:
+[`docs/ui/campaign-screens.md`](../ui/campaign-screens.md), "Where the
+campaign reopens".
+
 ## The browsed campaign difficulty (2026-10-26)
 
 The rung a player last stepped to on the campaign's cell screen (the `AI

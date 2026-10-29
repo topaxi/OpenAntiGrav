@@ -155,12 +155,21 @@ impl Session {
                         records,
                         campaign.flyers,
                         campaign.circuit_emblems,
-                        self.campaign_cursor,
                         custom,
                     ));
                 }
             }
             Err(error) => warn!("{error:#} - RACE CAMPAIGN has nothing to show"),
+        }
+    }
+
+    /// Keeps where an open campaign screen stands, for a process that is ending
+    /// with it open (a window closed on `Cell Selection`).
+    pub(crate) fn keep_campaign_position(&mut self) {
+        if let Stage::Menu(stage) = &mut self.stage
+            && let Some(campaign) = stage.campaign.as_mut()
+        {
+            keep_cursor(&mut self.records, campaign);
         }
     }
 
@@ -261,7 +270,7 @@ impl Session {
                     campaign.open_grid_selection(chosen);
                 }
                 (Screen::Selection(_), Event::Back) => {
-                    self.campaign_cursor = campaign.cursor_on_close();
+                    keep_cursor(&mut self.records, campaign);
                     stage.campaign = None;
                 }
                 (Screen::Grid(model), Event::Confirmed) => {
@@ -294,7 +303,7 @@ impl Session {
                     campaign.open_selection();
                 }
                 (Screen::Grid(_), Event::Back) => {
-                    self.campaign_cursor = campaign.cursor_on_close();
+                    keep_cursor(&mut self.records, campaign);
                     stage.campaign = None;
                 }
                 (Screen::Cell { model, .. }, Event::Confirmed) => {
@@ -334,9 +343,7 @@ impl Session {
                 (Screen::Cell { model, .. }, Event::DifficultyChanged) => {
                     let (title, stored) = campaign.remember_difficulty(model.difficulty());
                     self.records.set_campaign_difficulty(&title, stored);
-                    if let Err(e) = oag_game::records::save(&self.records) {
-                        warn!("could not save the campaign difficulty: {e:#}");
-                    }
+                    oag_game::records::save_in_background(&self.records);
                 }
                 (_, Event::DifficultyChanged) => {}
             }
@@ -572,8 +579,8 @@ impl Session {
             is_tournament.then(|| oag_raceplay::tournament::Progress::new(leg_entries));
         if let Stage::Menu(stage) = &mut self.stage {
             stage.pure_chain = None;
-            if let Some(campaign) = stage.campaign.take() {
-                self.campaign_cursor = campaign.cursor_on_close();
+            if let Some(mut campaign) = stage.campaign.take() {
+                keep_cursor(&mut self.records, &mut campaign);
             }
         }
         // A title whose own chain has no team step in Zone launches without the screen, as the
@@ -750,4 +757,13 @@ impl Session {
             pilot,
         })
     }
+}
+
+/// Keeps where `campaign`'s screens stand as that campaign's position and
+/// writes the store off the render thread, as the campaign closes or a race
+/// launches from it.
+fn keep_cursor(records: &mut oag_game::records::Store, campaign: &mut CampaignStage) {
+    let (title, kept) = campaign.cursor_on_close();
+    records.set_campaign_cursor(&title, &kept);
+    oag_game::records::save_in_background(records);
 }

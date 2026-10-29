@@ -18,6 +18,7 @@ mod bomb_orbit_ground_truth;
 mod boot_ground_truth;
 mod boot_legal_wrap_ground_truth;
 mod campaign_cell_class_census_ground_truth;
+mod campaign_cursor_ground_truth;
 mod campaign_medal;
 mod campaign_pointer_ground_truth;
 mod cockpit_hit_ground_truth;
