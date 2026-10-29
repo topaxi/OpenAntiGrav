@@ -1,0 +1,22 @@
+[package]
+name = "oag-modhost"
+description = "The WebAssembly extension host: wasmtime configured for determinism, the I/O buffer ABI, fuel and the fault path"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+# Desktop only for now (docs/architecture/wasm-extensions/README.md, section 5):
+# Cranelift, no Pulley, no WASI, no component model, no threads, no cache, no
+# parallel compilation. The version is the spike's (`spikes/wasm-extensions/`).
+[dependencies]
+wasmtime = { version = "=50.0.0", default-features = false, features = ["runtime", "cranelift", "std", "pooling-allocator"] }
+
+[dev-dependencies]
+# The tests' guests are written in the text format.
+wat = "1.262.0"
+
+[lints]
+workspace = true
