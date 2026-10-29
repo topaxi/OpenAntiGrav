@@ -81,6 +81,19 @@ pub const COMMAND_SHIELD_DELTA: u8 = 2;
 pub const COMMAND_CLAIM_PICKUP: u8 = 3;
 /// `pad-mode{slot}`.
 pub const COMMAND_PAD_MODE: u8 = 4;
+/// `play-cue{slot, cue}`: an output, never state.
+pub const COMMAND_PLAY_CUE: u8 = 5;
+/// `fire-effect{slot, effect}`: an output, never state.
+pub const COMMAND_FIRE_EFFECT: u8 = 6;
+/// `pickup-tint{slot, rgba}`: an output, never state.
+pub const COMMAND_PICKUP_TINT: u8 = 7;
+
+/// `play-cue`'s codes: a title's own sounds, by the engine's cue names. 0 `SpeedupPad`,
+/// 1 `Turbo`, 2 `Collision`, 3 `Absorb`, 4 `Shield`, 5 `ShieldActive`.
+pub const CUES: u16 = 6;
+/// `fire-effect`'s codes: a title's own particle effects, by trigger. 0 the wall
+/// contact's sparks (`CollisionSpark`), 1 a weapon hit's (`HitSpark`).
+pub const EFFECTS: u16 = 2;
 
 /// One grid slot as a guest reads it: copies of what the HUD already shows.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -159,6 +172,30 @@ pub enum Command {
     PadMode {
         /// The grid slot.
         slot: u8,
+    },
+    /// Play one of the title's own sounds from the craft ([`CUES`]). An output: queued
+    /// beside the engine's cues, heard, never hashed.
+    PlayCue {
+        /// The grid slot.
+        slot: u8,
+        /// A [`CUES`] code.
+        cue: u16,
+    },
+    /// Fire one of the title's own particle effects at the craft's nozzle ([`EFFECTS`]).
+    /// An output: drawn, never hashed. A title that ships no such effect draws nothing.
+    FireEffect {
+        /// The grid slot.
+        slot: u8,
+        /// An [`EFFECTS`] code.
+        effect: u16,
+    },
+    /// This tick, draw the slot's held-pickup backdrop in `rgba` instead of the
+    /// weapon's own colour. An output: drawn, never hashed.
+    PickupTint {
+        /// The grid slot.
+        slot: u8,
+        /// Red, green, blue, alpha, a byte each, red in the low byte.
+        rgba: u32,
     },
 }
 
@@ -286,6 +323,28 @@ pub(crate) fn read_reply(
                 commands.push(Command::ClaimPickup { slot });
             }
             COMMAND_PAD_MODE => commands.push(Command::PadMode { slot }),
+            COMMAND_PLAY_CUE | COMMAND_FIRE_EFFECT => {
+                let code = u16::from_le_bytes([buffer[at + 2], buffer[at + 3]]);
+                let (count, name) = if kind == COMMAND_PLAY_CUE {
+                    (CUES, "play-cue")
+                } else {
+                    (EFFECTS, "fire-effect")
+                };
+                if code >= count {
+                    return Err(Fault::Reply(format!(
+                        "{name} code {code} is not one of {count}"
+                    )));
+                }
+                commands.push(if kind == COMMAND_PLAY_CUE {
+                    Command::PlayCue { slot, cue: code }
+                } else {
+                    Command::FireEffect { slot, effect: code }
+                });
+            }
+            COMMAND_PICKUP_TINT => commands.push(Command::PickupTint {
+                slot,
+                rgba: get_u32(buffer, at + 8),
+            }),
             other => {
                 return Err(Fault::Reply(format!(
                     "command {i} has unknown kind {other}"

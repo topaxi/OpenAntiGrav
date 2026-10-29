@@ -20,6 +20,29 @@
 
 use std::sync::Arc;
 
+/// `play-cue`'s codes ([`oag_modhost::abi::CUES`]), in order.
+pub const CUES: [oag_gameplay::cue::Cue; 6] = {
+    use oag_gameplay::cue::Cue;
+    [
+        Cue::SpeedupPad,
+        Cue::Turbo,
+        Cue::Collision,
+        Cue::Absorb,
+        Cue::Shield,
+        Cue::ShieldActive,
+    ]
+};
+/// `fire-effect`'s codes ([`oag_modhost::abi::EFFECTS`]), in order.
+pub const EFFECTS: [oag_title::effects::Trigger; 2] = [
+    oag_title::effects::Trigger::CollisionSpark,
+    oag_title::effects::Trigger::HitSpark,
+];
+#[cfg(feature = "extensions")]
+const _: () = assert!(
+    CUES.len() == oag_modhost::abi::CUES as usize
+        && EFFECTS.len() == oag_modhost::abi::EFFECTS as usize
+);
+
 /// The most simulation modules one race runs. Chosen.
 pub const MAX_SIM_MODS: usize = 4;
 
@@ -254,6 +277,32 @@ impl Extensions {
         }
     }
 
+    /// `slot`'s `pickup-tint` this tick: an output for the HUD, `None` without one.
+    #[must_use]
+    pub fn pickup_tint(&self, slot: usize) -> Option<[f32; 4]> {
+        #[cfg(feature = "extensions")]
+        {
+            self.on.tints.get(slot).copied().flatten()
+        }
+        #[cfg(not(feature = "extensions"))]
+        {
+            let _ = slot;
+            None
+        }
+    }
+
+    /// The `fire-effect`s queued since the view last drew them.
+    pub(super) fn take_effects(&mut self) -> Vec<(usize, oag_title::effects::Trigger)> {
+        #[cfg(feature = "extensions")]
+        {
+            std::mem::take(&mut self.on.effects)
+        }
+        #[cfg(not(feature = "extensions"))]
+        {
+            Vec::new()
+        }
+    }
+
     /// Whether a module put `slot` in `pad-mode` this tick: a speed pad gives it no boost.
     pub(super) fn pad_mode(&self, slot: usize) -> bool {
         #[cfg(feature = "extensions")]
@@ -318,6 +367,12 @@ impl Extensions {
         let _ = hasher;
     }
 
+    /// The `fire-effect`s queued this tick, not yet drawn.
+    #[cfg(all(test, feature = "extensions"))]
+    pub(crate) fn effects_for_tests(&self) -> Vec<(usize, oag_title::effects::Trigger)> {
+        self.on.effects.clone()
+    }
+
     /// Module `index`'s state blob.
     #[cfg(all(test, feature = "extensions"))]
     pub(crate) fn blob_for_tests(&self, index: usize) -> Vec<u8> {
@@ -346,6 +401,24 @@ impl crate::Race {
         on::tick(&mut self.sim, inputs);
         #[cfg(not(feature = "extensions"))]
         let _ = inputs;
+    }
+
+    /// The modules' `fire-effect`s, each at its craft's nozzle (the hull's back end),
+    /// played from the title's own effect for that trigger; a title without one draws
+    /// nothing (the load report names every absent effect).
+    #[cfg(feature = "view")]
+    pub(super) fn draw_extension_effects(&mut self) {
+        for (slot, trigger) in self.sim.extensions.take_effects() {
+            let Some(effect) = self.view.handles.get(trigger).cloned() else {
+                continue;
+            };
+            let ship = &self.sim.world.ships[slot];
+            let model = crate::drawable::model_matrix_of(ship);
+            let tail = oag_core::math::Vec3::new(0.0, 0.0, ship.handling.dimensions.length * 0.5);
+            self.view
+                .stage
+                .play(&effect, model.transform_point3(tail), 1.0);
+        }
     }
 
     /// The modules' numbers for the dev overlay ([`Report`]).
@@ -398,6 +471,10 @@ mod on {
         /// Slots in `pad-mode` this tick, and `pad-energy` raised since the last call.
         pub(super) pad_mode: u32,
         pub(super) pad_energy: u32,
+        /// Outputs, never hashed: each slot's `pickup-tint` this tick, and the
+        /// `fire-effect`s the view has still to draw.
+        pub(super) tints: [Option<[f32; 4]>; oag_gameplay::MAX_SHIPS],
+        pub(super) effects: Vec<(usize, oag_title::effects::Trigger)>,
     }
 
     impl On {
@@ -423,6 +500,8 @@ mod on {
                 absorbs: 0,
                 pad_mode: 0,
                 pad_energy: 0,
+                tints: [None; oag_gameplay::MAX_SHIPS],
+                effects: Vec::new(),
             }
         }
 
@@ -515,10 +594,15 @@ mod on {
                             .position(|w| *w == weapon)
                             .map_or(0, |i| i as u8 + 1)
                     }),
-                    flags: u8::from(person) * abi::CRAFT_PERSON
-                        | u8::from(fire_held) * abi::CRAFT_FIRE_HELD
-                        | u8::from(racing) * abi::CRAFT_RACING
-                        | u8::from(claims[slot] != 0) * abi::CRAFT_CLAIMED,
+                    flags: [
+                        (person, abi::CRAFT_PERSON),
+                        (fire_held, abi::CRAFT_FIRE_HELD),
+                        (racing, abi::CRAFT_RACING),
+                        (claims[slot] != 0, abi::CRAFT_CLAIMED),
+                    ]
+                    .into_iter()
+                    .filter(|(on, _)| *on)
+                    .fold(0, |flags, (_, bit)| flags | bit),
                     shield: ship.physics.shield,
                     shield_max: ship.handling.dimensions.shield,
                     speed_kmh: ship.physics.body.linear_velocity.length()
@@ -598,6 +682,10 @@ mod on {
         on.absorbs = 0;
         on.pad_energy = 0;
         on.pad_mode = 0;
+        on.tints = [None; oag_gameplay::MAX_SHIPS];
+        // This tick's alone: a tick that draws nothing (a replayed one, a server's) drops
+        // them rather than piling them up.
+        on.effects.clear();
         let observation = Observation {
             tick,
             active,
@@ -650,6 +738,22 @@ mod on {
                 }
                 Command::ShieldDelta { slot, amount } => shield_delta(sim, slot as usize, amount),
                 Command::PadMode { slot } => sim.extensions.on.pad_mode |= 1 << slot,
+                Command::PlayCue { slot, cue } => {
+                    sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                        super::CUES[usize::from(cue)],
+                        usize::from(slot),
+                    ));
+                }
+                Command::FireEffect { slot, effect } => sim
+                    .extensions
+                    .on
+                    .effects
+                    .push((usize::from(slot), super::EFFECTS[usize::from(effect)])),
+                Command::PickupTint { slot, rgba } => {
+                    let [r, g, b, a] = rgba.to_le_bytes();
+                    sim.extensions.on.tints[usize::from(slot)] =
+                        Some([r, g, b, a].map(|c| f32::from(c) / 255.0));
+                }
                 Command::ClaimPickup { slot } => {
                     let slot = slot as usize;
                     let weapon = sim.world.ships[slot].pickup.weapon;

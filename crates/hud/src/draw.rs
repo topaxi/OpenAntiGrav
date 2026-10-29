@@ -949,7 +949,12 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
     // rather than allow-listed, because *which* icon is live changes with what
     // the craft is holding - see `pickup_sprites`.
     if let Some(weapon) = readout.pickup {
-        for sprite in pickup_sprites(cx.layout, weapon, cx.art, readout.pickup_announcing) {
+        for mut sprite in pickup_sprites(cx.layout, weapon, cx.art, readout.pickup_announcing) {
+            if let Some(tint) = readout.pickup_tint
+                && sprite.name == super::pickup::PICKUP_BACKGROUND
+            {
+                sprite.color = tint;
+            }
             frame.sprites.extend(sprite_draw(&sprite, cx.sheet));
         }
         frame.sprites.extend(pickup_model_draws(cx, weapon));

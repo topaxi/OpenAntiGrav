@@ -257,6 +257,64 @@ mod on {
         );
     }
 
+    /// Every tick: a Turbo cue, the wall sparks and a red pickup backdrop for slot 1.
+    fn outputter(id: &str, outputs: bool) -> Source {
+        let body = if outputs {
+            format!(
+                "(i32.store (i32.const {REPLY}) (i32.const 3))
+                 (i32.store8 (i32.const {c0}) (i32.const 5)) (i32.store8 (i32.const {s0}) (i32.const 1))
+                 (i32.store16 (i32.const {a0}) (i32.const 1))
+                 (i32.store8 (i32.const {c1}) (i32.const 6)) (i32.store8 (i32.const {s1}) (i32.const 1))
+                 (i32.store16 (i32.const {a1}) (i32.const 0))
+                 (i32.store8 (i32.const {c2}) (i32.const 7)) (i32.store8 (i32.const {s2}) (i32.const 1))
+                 (i32.store (i32.const {b2}) (i32.const 0xff0000ff))
+                 i32.const 0",
+                c0 = REPLY + 4,
+                s0 = REPLY + 5,
+                a0 = REPLY + 6,
+                c1 = REPLY + 16,
+                s1 = REPLY + 17,
+                a1 = REPLY + 18,
+                c2 = REPLY + 28,
+                s2 = REPLY + 29,
+                b2 = REPLY + 36,
+            )
+        } else {
+            "i32.const 0".to_string()
+        };
+        module(id, &body)
+    }
+
+    #[test]
+    fn output_commands_reach_the_cues_effects_and_hud_and_leave_the_hash_alone() {
+        let mut loud = grid(prepared(&[outputter("test.loud", true)]));
+        let mut quiet = grid(prepared(&[outputter("test.quiet", false)]));
+        for _ in 0..120 {
+            loud.tick(&PlayerInputs::none());
+            quiet.tick(&PlayerInputs::none());
+            assert_eq!(loud.sim.state_hash(), quiet.sim.state_hash());
+        }
+        assert!(
+            loud.sim
+                .cues
+                .iter()
+                .any(|cue| cue.cue == oag_gameplay::cue::Cue::Turbo && cue.slot == 1),
+            "the Turbo cue is queued"
+        );
+        // A drawn tick hands the effect to the view at once; a tick that draws nothing
+        // leaves this tick's queued.
+        loud.tick_sim_only(&PlayerInputs::none());
+        assert_eq!(
+            loud.sim.extensions.effects_for_tests(),
+            [(1, oag_title::effects::Trigger::CollisionSpark)]
+        );
+        assert_eq!(
+            loud.sim.extensions.pickup_tint(1),
+            Some([1.0, 0.0, 0.0, 1.0])
+        );
+        assert_eq!(quiet.sim.extensions.pickup_tint(1), None);
+    }
+
     /// Counts its calls in the blob and halves slot 1's thrust every tick.
     fn halver() -> Source {
         module(
