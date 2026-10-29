@@ -73,6 +73,7 @@ matches what that generator would write.
 | Track id | the scene's id, else the scene name slugged |
 | `track.host` | the scene's **Runs on** (`oag_track_host`: `none`, default, or one of the five title slugs): the title whose disc the art's host textures and sky resolve from; export refuses `none` when the art borrows ([ADR-0076](../architecture/adr/0076-a-track-file-carries-its-art-as-an-optional-section.md) decision 13). Import refuses an unknown value |
 | `track.titles` | the scene's **Offered on** (`oag_track_titles`), comma-separated slugs; empty writes no key (every title) |
+| `[art.skybox]` | the Art panel's **Own sky** (`oag_skybox`): **Gradient** with **Zenith** and **Horizon** (scene-linear colours, `oag_sky_zenith`, `oag_sky_horizon`) and six **Face** images (`oag_sky_face_0..5`, cubemap order `+X, -X, +Y, -Y, +Z, -Z`; empty draws the gradient). Each image becomes a texture row like a material's. Not with **Sky** (the host form); export refuses both ([ADR-0076](../architecture/adr/0076-a-track-file-carries-its-art-as-an-optional-section.md) decision 14) |
 
 "Tiles", "AI line" and "start grid" in other tools map to fields that exist here: the pad lists,
 the spline with its `ai_bound`/`racing_line`, and the start slot (the engine lays its own grid from it).

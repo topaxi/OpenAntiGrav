@@ -57,6 +57,10 @@ agreed in conversation and not yet built**, so nothing is re-derived. The decisi
 
 ## Open
 
+- **Own sky landed** (branch `track-host`, ADR-0076 decision 14): `[art.skybox]` faces and/or a
+  zenith/horizon gradient on HD's sky cube; add-on Own sky panel; `blender_loop` carries one and
+  races on HD natively. Open: images inside the glb (no texture form for them in 1.x), and a
+  Blender world Sky Texture or Environment Texture is not mapped (the panel's colours and images are).
 - **What a track borrows pins the disc** (branch `track-host`, 2026-10-29, ADR-0076 decision 13):
   `[track] host` required exactly when the art borrows (host texture or sky), optional `titles`
   filter (checked against the craft's title). A pinned track on another title auto-remixes (track
