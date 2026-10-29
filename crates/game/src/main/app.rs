@@ -559,7 +559,14 @@ impl App {
             // Race Remix's title pickers - see the field's own doc comment
             // for why this is a fresh survey rather than the chooser's.
             titles: launcher::distinct_titles(&launcher::survey(&source::candidates())),
-            custom_tracks: oag_game::custom_tracks::Scan::discover(),
+            // The search path's tracks, then the mods' that are on (`docs/tools/mods.md`).
+            custom_tracks: {
+                let mut scan = oag_game::custom_tracks::Scan::discover();
+                if let Some(shell) = &self.shell {
+                    scan.set_mod_files(&shell.custom_campaigns.tracks);
+                }
+                scan
+            },
             // Moved rather than cloned: `Assets` owns a decoded glow strip and
             // a full-screen backdrop, and `App` has no use for either once the
             // window it opened has them. What is left behind is the drawable

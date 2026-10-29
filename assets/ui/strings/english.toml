@@ -470,7 +470,10 @@ OAG_MODS_OFF = { text = "OFF", human = false }
 OAG_MODS_TURNED_OFF = { text = "NOTHING, TURNED OFF", human = false }
 OAG_MODS_ALWAYS_ON = { text = "BUILT IN: CARRIES OPTIONS AND THIS PAGE, ALWAYS ON", human = false }
 OAG_MODS_NOT_LOADED = { text = "DID NOT LOAD: NOTHING TO SWITCH", human = false }
-OAG_MODS_LEFT_OUT = { text = "LEFT OUT: %s", human = false }
+OAG_MODS_LEFT_OUT = { text = "LEFT OUT", human = false }
+OAG_MODS_NEEDS = { text = "NEEDS", human = false }
+OAG_MODS_NEEDS_OFF = { text = "%s, OFF", human = false }
+OAG_MODS_NEEDS_MISSING = { text = "%s, MISSING", human = false }
 
 # The line under a split race's pause - `crates/game/src/main/session/pause.rs`.
 # Read by Rust, not by a `menu.toml` row. `%s` is substituted left to right: the

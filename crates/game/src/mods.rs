@@ -72,10 +72,10 @@ pub struct Listing {
     pub enabled: Option<bool>,
     /// Why it is not in the game, when it is not.
     pub error: Option<String>,
-    /// What of it is left out while the mod itself is in: a campaign that names a mod
-    /// turned off or missing (`campaign::custom::add_picker`). Shown in the note slot,
-    /// with the detail lines kept.
-    pub problems: Vec<String>,
+    /// What of it is left out while the mod itself is in, as detail lines (label,
+    /// value): the mod a campaign needs that is off or missing, or a campaign file that
+    /// did not compile ([`note_left_out`]). The log has the whole reason.
+    pub problems: Vec<(String, String)>,
 }
 
 /// The string id and English text of each label and word the MODS page draws.
@@ -110,8 +110,14 @@ pub mod words {
     );
     /// Why a candidate that never opened has no switch.
     pub const NOT_LOADED: (&str, &str) = ("OAG_MODS_NOT_LOADED", "DID NOT LOAD: NOTHING TO SWITCH");
-    /// A campaign left out, on its mod's ADDS line; `%s` is the reason.
-    pub const LEFT_OUT: (&str, &str) = ("OAG_MODS_LEFT_OUT", "LEFT OUT: %s");
+    /// The detail line of a campaign file that did not compile; the value is the file.
+    pub const LEFT_OUT: (&str, &str) = ("OAG_MODS_LEFT_OUT", "LEFT OUT");
+    /// The detail line naming a mod a campaign races a track of, which is off or missing.
+    pub const NEEDS: (&str, &str) = ("OAG_MODS_NEEDS", "NEEDS");
+    /// After the needed mod's name: it is installed and turned off.
+    pub const NEEDS_OFF: (&str, &str) = ("OAG_MODS_NEEDS_OFF", "%s, OFF");
+    /// After the needed mod's id: no such mod is installed.
+    pub const NEEDS_MISSING: (&str, &str) = ("OAG_MODS_NEEDS_MISSING", "%s, MISSING");
     /// The page RACE CAMPAIGN opens once a mod adds a campaign (ADR-0077).
     pub const CAMPAIGN_PICKER: (&str, &str) = ("OAG_MENU_CAMPAIGN_PICKER", "CAMPAIGNS");
     /// The built-in mod's mark after its name.
@@ -153,6 +159,43 @@ pub fn switch_for(
         _ if listing.builtin => (vec![on.unusable(say(words::ALWAYS_ON))], "on"),
         None => (vec![off.unusable(say(words::NOT_LOADED))], "off"),
         Some(enabled) => (vec![on, off], if enabled { "on" } else { "off" }),
+    }
+}
+
+/// Puts what `installed` left out on its mods' MODS entries: a NEEDS line per mod a
+/// campaign races a track of that is off (by its name) or missing (by its id), else a
+/// LEFT OUT line naming the campaign file.
+pub fn note_left_out(
+    listing: &mut [Listing],
+    installed: &crate::campaign::custom::Installed,
+    strings: &StringTable,
+) {
+    let say = |(id, english): (&str, &str)| strings.get_or_fallback(id, english).to_string();
+    for (mod_id, other, off) in &installed.needs {
+        let value = if *off {
+            let name = (listing.iter())
+                .find(|entry| &entry.id == other)
+                .map_or_else(|| other.clone(), |entry| entry.name.clone());
+            say(words::NEEDS_OFF).replace("%s", &name)
+        } else {
+            say(words::NEEDS_MISSING).replace("%s", other)
+        };
+        if let Some(entry) = listing.iter_mut().find(|entry| &entry.id == mod_id) {
+            let line = (say(words::NEEDS), value);
+            if !entry.problems.contains(&line) {
+                entry.problems.push(line);
+            }
+        }
+    }
+    for (mod_id, reason) in &installed.failed {
+        let needs = installed.needs.iter().any(|(m, _, _)| m == mod_id);
+        let file = reason.split(':').next().unwrap_or(reason);
+        if let Some(entry) = listing.iter_mut().find(|entry| &entry.id == mod_id)
+            && !needs
+        {
+            let name = file.rsplit('/').next().unwrap_or(file).to_string();
+            entry.problems.push((say(words::LEFT_OUT), name));
+        }
     }
 }
 
@@ -211,7 +254,10 @@ pub fn table_for(
     if model.page().id != PAGE {
         return None;
     }
-    selected(model, listing).map(|mod_| mod_.table(strings))
+    let room = model
+        .visible_rows()
+        .saturating_sub(model.page().entries.len());
+    selected(model, listing).map(|mod_| mod_.table_within(strings, room))
 }
 
 impl Listing {
@@ -257,8 +303,8 @@ impl Listing {
     #[must_use]
     pub fn choice(&self, _strings: &StringTable) -> oag_ui::menu::Choice {
         let choice = oag_ui::menu::Choice::labelled(self.id.clone(), fit(&self.name));
-        match self.error.as_ref().or(self.problems.first()) {
-            Some(note) => choice.unusable(note.clone()),
+        match &self.error {
+            Some(error) => choice.unusable(error.clone()),
             None => choice,
         }
     }
@@ -289,13 +335,32 @@ impl Listing {
         } else {
             self.rows.join(", ")
         };
-        let lines = vec![
+        let mut lines = vec![
             (say(words::ID), fit(&self.id)),
             (say(words::VERSION), fit(&version)),
             (say(words::AUTHORS), fit(&self.authors.join(", "))),
             (say(words::LICENSE), fit(&license)),
             (say(words::ADDS), fit(&adds)),
         ];
+        lines.extend((self.problems.iter()).map(|(label, value)| (label.clone(), fit(value))));
+        lines
+    }
+
+    /// [`Self::table`] cut to `room` lines: the ones a player can do least with go
+    /// first (AUTHORS, then VERSION, then LICENSE), the rest keep their order. A
+    /// flat-list front end (Pulse) has room for four under the MODS page's rows, HD
+    /// for all.
+    #[must_use]
+    pub fn table_within(&self, strings: &StringTable, room: usize) -> Vec<(String, String)> {
+        let say = |(id, english): (&str, &str)| strings.get_or_fallback(id, english).to_string();
+        let mut lines = self.table(strings);
+        for least in [words::AUTHORS, words::VERSION, words::LICENSE] {
+            if lines.len() <= room {
+                break;
+            }
+            let label = say(least);
+            lines.retain(|(l, _)| *l != label);
+        }
         lines
     }
 }

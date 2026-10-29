@@ -298,7 +298,10 @@ OAG_MODS_OFF = { text = "DESLIGADO", human = false }
 OAG_MODS_TURNED_OFF = { text = "NADA, DESLIGADO", human = false }
 OAG_MODS_ALWAYS_ON = { text = "INTEGRADO: TRAZ OPÇÕES E ESTA PÁGINA, SEMPRE LIGADO", human = false }
 OAG_MODS_NOT_LOADED = { text = "NÃO CARREGOU: NADA A ALTERNAR", human = false }
-OAG_MODS_LEFT_OUT = { text = "DEIXADO DE FORA: %s", human = false }
+OAG_MODS_LEFT_OUT = { text = "DEIXADO DE FORA", human = false }
+OAG_MODS_NEEDS = { text = "PRECISA DE", human = false }
+OAG_MODS_NEEDS_OFF = { text = "%s, DESLIGADO", human = false }
+OAG_MODS_NEEDS_MISSING = { text = "%s, AUSENTE", human = false }
 OAG_PAUSE_OWNED = { text = "JOGADOR %s PAUSOU - QUALQUER UM PODE RETOMAR EM %s", human = false }
 OAG_PAUSE_OPEN = { text = "JOGADOR %s PAUSOU - QUALQUER UM PODE RETOMAR", human = false }
 OAG_PAUSE_OPEN_UNOWNED = { text = "PAUSADO - QUALQUER UM PODE RETOMAR", human = false }
