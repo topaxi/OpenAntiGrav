@@ -1358,10 +1358,9 @@ So `Selector` is a continuous ~1s triangle wave between white and
 second, separate widget - **not authored anywhere in `CellMode_Definition.xml`**
 (only `Selector` itself is; `SelectorGlow` is created procedurally, the same
 way the generic `GridController` widget class itself is never authored as
-XML content either). `crate::campaign::draw` implements the colour half of
-this (`SELECTOR_TINT = 0xff33a6b9`, a static draw of one endpoint rather than
-the animation - the draw-list builder has no clock) and does not implement
-`SelectorGlow` at all, since this pass did not locate its own geometry/texture
+XML content either). `oag_ui_screens::campaign::pulse::SelectorPulse` implements the colour half
+(a model-owned clock, `tint()` = the triangle below; see `docs/ui/campaign-screens.md`, "The `Selector` pulse")
+and does not implement `SelectorGlow` at all, since this pass did not locate its own geometry/texture
 - drawing a halo shape this build never measured would be exactly the
 "plausible-looking stand-in" this project's CLAUDE.md warns against.
 `docs/ui/campaign-screens.md`'s own comparison names the gap.

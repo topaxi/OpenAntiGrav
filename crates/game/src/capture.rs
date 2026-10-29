@@ -823,6 +823,7 @@ pub fn run(
                     // of its own to read `default_atlas` off.
                     &|text| oag_ui::font::measure(&font, text),
                     &records,
+                    options.menu_picker_seconds,
                 )?;
                 flyer_shot = shot;
                 (backdrop, video_format, list, space)

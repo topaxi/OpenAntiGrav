@@ -92,6 +92,7 @@ pub mod footer;
 pub mod hd;
 mod hex;
 pub mod pointer;
+pub mod pulse;
 pub mod selection;
 
 pub(crate) use hex::{hex_image, hex_rect};
@@ -286,6 +287,8 @@ pub struct GridSelection {
     /// paging arrows) always moves by one tier regardless - see
     /// [`Self::update`]'s own doc for the measurement this splits on.
     per_page: usize,
+    /// `Selector`'s pulse clock, see [`pulse::SelectorPulse`].
+    pulse: pulse::SelectorPulse,
 }
 
 impl GridSelection {
@@ -295,6 +298,7 @@ impl GridSelection {
             grids,
             index: 0,
             per_page: GRIDS_PER_PAGE,
+            pulse: pulse::SelectorPulse::default(),
         }
     }
 
@@ -307,6 +311,15 @@ impl GridSelection {
     pub fn with_per_page(mut self, per_page: usize) -> Self {
         self.per_page = per_page.max(1);
         self
+    }
+
+    #[must_use]
+    pub fn pulse(&self) -> &pulse::SelectorPulse {
+        &self.pulse
+    }
+
+    pub fn pulse_mut(&mut self) -> &mut pulse::SelectorPulse {
+        &mut self.pulse
     }
 
     #[must_use]
@@ -488,6 +501,8 @@ pub struct CellSelection {
     difficulties: Vec<Option<Difficulty>>,
     index: usize,
     help_open: bool,
+    /// `Selector`'s pulse clock, see [`pulse::SelectorPulse`].
+    pulse: pulse::SelectorPulse,
     /// The rung the `DifficultyButton` widget's square-button prompt
     /// currently shows (built by [`draw::cell_draw_list`]), and what
     /// `crate::main::session::campaign` (`oag_game`) records alongside a
@@ -580,8 +595,18 @@ impl CellSelection {
             index,
             difficulties,
             help_open: false,
+            pulse: pulse::SelectorPulse::default(),
             difficulty: Difficulty::Medium,
         }
+    }
+
+    #[must_use]
+    pub fn pulse(&self) -> &pulse::SelectorPulse {
+        &self.pulse
+    }
+
+    pub fn pulse_mut(&mut self) -> &mut pulse::SelectorPulse {
+        &mut self.pulse
     }
 
     /// Attaches each cell's own earned medal difficulty alongside

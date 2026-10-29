@@ -168,6 +168,9 @@ pub(super) fn campaign_page(
     // own. A capture with no file, or a title/cell this machine has never
     // raced under, draws exactly the fresh-profile numbers either way.
     records: &crate::records::Store,
+    // `--menu-picker-seconds`: how long after the screen opened `Selector`'s
+    // pulse is drawn at (`SelectorPulse`); `None` draws it at clock 0.
+    pulse_seconds: Option<f32>,
 ) -> Result<(Vec<oag_ui::frontend::Draw>, Option<FlyerShot>)> {
     let campaign = crate::campaign::load(
         archives,
@@ -402,6 +405,8 @@ pub(super) fn campaign_page(
                         })
                         .collect(),
                 );
+                let mut model = model;
+                model.pulse_mut().set_seconds(pulse_seconds.unwrap_or(0.0));
                 oag_ui_screens::campaign::grid_draw_list(
                     &model,
                     &campaign.grid_layout,
@@ -429,6 +434,8 @@ pub(super) fn campaign_page(
                     &campaign_title,
                     false,
                 );
+                let mut model = model;
+                model.pulse_mut().set_seconds(pulse_seconds.unwrap_or(0.0));
                 oag_ui_screens::campaign::cell_draw_list(
                     &model,
                     &campaign.cell_layout,

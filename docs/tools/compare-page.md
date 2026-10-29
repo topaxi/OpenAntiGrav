@@ -1007,6 +1007,12 @@ PHOTO MODE, GAME MANUAL, RESTART RACE, QUIT RACE; a Time Trial restored from a s
 MULTIPLAYER, PROFILE, DOWNLOAD on the white frame, against ours' dark teal `menu.toml` page) and the pause menu (CONTINUE, RESTART, QUIT
 over the dimmed race). Pure has no Options or Racebox screen in its main menu.
 
+**Screen-entry clock (2026-10-29).** `original.seconds_since_entry` (`value`, `basis: measured`) is the wall clock from the state-name poll
+that saw the screen replace another (polled every 0.03 s, so +-0.015 s) to the middle of the frame grab; PPSSPP holds 60 fps, but entries
+spread about +-0.1 s in the first second (`docs/ui/campaign-screens.md`, "The `Selector` pulse"). It exists only when the walk watched the
+change (a plan step `key:BUTTON,st:SCREEN`, which skips the tap's 0.7 s settle); otherwise it is absent, never guessed. Ours gets it as
+`--menu-picker-seconds` for the pages in `CLOCKED` (`grid`, `cell`) only.
+
 **Reproduce:** `scripts/ppsspp-start.sh <lane> 91 <port> <image>` with `PPSSPP_EXTRA_INI` from `compare_env.py ppsspp-ini pulse-psp|pure-psp`,
 `source <scratch>/pp/env.sh`, ours' `XDG_*` under `data/scratch/<lane>/`, then `uv run --with websocket-client --with pillow python3
 scripts/psp-menu-pair.py pairs --title pulse|pure --out D --autopilot off --difficulty medium|""` (about 90 s on Pulse from a walked

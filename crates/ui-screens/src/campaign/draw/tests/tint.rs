@@ -5,9 +5,9 @@
 
 use super::*;
 
-/// `Selector` draws `SELECTOR_TINT` (`0xff33a6b9`), not the XML's own
-/// multiply-neutral `i="0xffffffff"` - see that constant's own doc for the
-/// decompiled pulse this is one static endpoint of.
+/// `Selector` draws the pulse's cyan endpoint (`0xff33a6b9`) at clock 0, not the XML's own
+/// multiply-neutral `i="0xffffffff"` - see `pulse::SelectorPulse` for the
+/// decompiled pulse this is one endpoint of.
 /// `data/reference/psp-campaign-screens/grid-selection-page1-grid0-unlocked.png`
 /// is a real capture of it.
 #[test]
@@ -42,7 +42,7 @@ fn the_selector_draws_the_measured_cyan_tint_not_the_xmls_own_white() {
             _ => None,
         })
         .expect("the Selector draws as a 42x43 sprite");
-    assert_eq!(selector_color, argb_to_rgba(SELECTOR_TINT));
+    assert_eq!(selector_color, argb_to_rgba(0xff33_a6b9));
 }
 
 /// `Outline_x_y` draws `TIER_OUTLINE_TINT` on `Grid Selection` - both the
@@ -168,4 +168,49 @@ fn the_page_arrows_grey_out_at_their_own_boundary() {
         down.expect("down arrow draws"),
         argb_to_rgba(ARROW_DISABLED_TINT)
     );
+}
+
+/// The pulse moves `Selector`'s drawn colour with the model's clock; dropping
+/// the wiring in either draw list leaves the colour fixed.
+#[test]
+fn the_selector_colour_moves_with_the_pulse_clock() {
+    let layout = grid_layout();
+    let grid = GridSummary {
+        name: "grid0".to_string(),
+        cell_count: 8,
+        max_points: 24,
+        required_points: 12,
+        gold_medals: 0,
+        points_earned: 0,
+        locked: false,
+        flyer_name: None,
+    };
+    let colour_at = |seconds: f32| {
+        let mut model = GridSelection::new(vec![grid.clone()]);
+        model.pulse_mut().set_seconds(seconds);
+        let layers = grid_draw_list(
+            &model,
+            &layout,
+            &skin(),
+            &Frame::default(),
+            &strings(),
+            None,
+            false,
+            &|_| placed32(),
+            &[],
+        );
+        layers
+            .body
+            .iter()
+            .find_map(|draw| match draw {
+                Draw::Sprite { rect, color, .. } if rect[2] == 42.0 && rect[3] == 43.0 => {
+                    Some(*color)
+                }
+                _ => None,
+            })
+            .expect("the Selector draws as a 42x43 sprite")
+    };
+    assert_eq!(colour_at(0.0), argb_to_rgba(0xff33_a6b9));
+    assert_eq!(colour_at(0.85), argb_to_rgba(0xffff_ffff));
+    assert_eq!(colour_at(1.35), colour_at(0.0), "period is one second");
 }
