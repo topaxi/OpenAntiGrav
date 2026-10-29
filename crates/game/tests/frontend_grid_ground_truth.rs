@@ -460,7 +460,10 @@ fn the_ps2_selector_is_authored_56_square_and_the_ps2_skin_carries_the_gs_offset
         .lines()
         .filter(|line| line.contains("<Image name=\"Selector\">"))
         .count();
-    assert_eq!(selectors, 2, "Grid Selection and Cell Selection each author one Selector");
+    assert_eq!(
+        selectors, 2,
+        "Grid Selection and Cell Selection each author one Selector"
+    );
     assert_eq!(
         text.matches("txtrwidth=\"43\" txtrheight=\"43\" width=\"56\" height=\"56\"")
             .count(),
@@ -472,11 +475,23 @@ fn the_ps2_selector_is_authored_56_square_and_the_ps2_skin_carries_the_gs_offset
         .nth(1)
         .expect("Grid Selection authors Outline_0_0");
     assert!(
-        outline.split("</Image>").next().unwrap().contains("y=\"134\""),
+        outline
+            .split("</Image>")
+            .next()
+            .unwrap()
+            .contains("y=\"134\""),
         "Outline_0_0 authors y=134 under the (47,82)+(40,31) items"
     );
-    let ps2 = oag_pulse::FRONT_END.menu_ps2.expect("Pulse authors a PS2 skin");
+    let ps2 = oag_pulse::FRONT_END
+        .menu_ps2
+        .expect("Pulse authors a PS2 skin");
     assert_eq!(ps2.selector_origin, Some((-11.0, -14.0)));
     // The PSP pressings keep the GE-dump value (`None`: `SELECTOR_ORIGIN` = (-5, -7)).
-    assert_eq!(oag_pulse::FRONT_END.menu.expect("the PSP skin").selector_origin, None);
+    assert_eq!(
+        oag_pulse::FRONT_END
+            .menu
+            .expect("the PSP skin")
+            .selector_origin,
+        None
+    );
 }
