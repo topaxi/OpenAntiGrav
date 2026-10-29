@@ -242,6 +242,34 @@ conformance test running the same module and inputs on Cranelift, Pulley and a h
 (`wasm-bindgen-test`) with identical outputs - Pilot Assist first, also against the built-in Rust
 law. The lane confirms Pulley's iOS status and the crates before the ADR.
 
+## WebAssembly extensions design (2026-10-29, `wasm-extensions` branch only)
+
+A design lane (two members) wrote the proposal the phases above call for; it lives on
+the local `wasm-extensions` branch, not on main (maintainer's rule). Pages:
+`docs/architecture/wasm-extensions/README.md` (capability surface, the `sim` and `hud`
+worlds, non-capabilities, packaging, trust, licences),
+[hooks.md](../../docs/architecture/wasm-extensions/hooks.md) (one `tick` call per
+module per tick between `advance_cannons` and `step_player`; every event's source and
+every command's sink at a pinned `file:line`; the maintainer's examples mapped, with
+the engine changes each needs),
+[determinism-and-state.md](../../docs/architecture/wasm-extensions/determinism-and-state.md)
+(NaN, fuel, state blob, hash, replays, lobby, rollback cost), and ADR-0079 (Proposed).
+The spike `spikes/wasm-extensions/` (own `[workspace]`, root `Cargo.lock` untouched):
+wasmtime 50.0.0 Cranelift and Pulley bit-identical under fuel on one x86-64 host,
+including the out-of-fuel trap point; a guest keeping state in its own memory diverges
+after a rollback unless the instance is fresh per tick.
+
+Owed before the ADR can be accepted:
+
+- **The same spike on AArch64** (Android) and **a browser run**; the browser needs the
+  load-time NaN and fuel rewrite, or wasmtime-on-`wasm32` with Pulley (README open
+  question 1).
+- **iOS**: `cargo check --target aarch64-apple-ios` of wasmtime needs Apple's `xcrun`;
+  check on a macOS machine, with `signals_based_traps` on and off.
+- **A call-depth counter** (stack overflow traps at an engine-dependent depth).
+- **The lobby fingerprint** hashes `id@version` only
+  (`oag_net::discovery::content_fingerprint`): fold each sim module's SHA-256 in.
+
 ## Next Steps
 
 1. Refactor the lap modes into race rules as data, every existing hash unchanged.

@@ -1,0 +1,10 @@
+# A standalone spike, deliberately NOT a member of the repository's workspace:
+# its own [workspace] table and its own Cargo.lock, so the root Cargo.lock never
+# sees wasmtime. See README.md.
+[workspace]
+resolver = "3"
+members = ["host", "guest", "sizeprobe"]
+
+[profile.release]
+debug = false
+strip = true
