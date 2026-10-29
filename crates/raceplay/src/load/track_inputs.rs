@@ -23,10 +23,14 @@ pub(super) struct Inputs {
     pub collision: CollisionWorld,
     pub speedup_pads: Vec<PadVolume>,
     pub weapon_pads: Vec<PadVolume>,
-    /// The foreign track's flat-shaded floor and wall, drawn in place of the
-    /// art meshes it has no mapping for. `None` for a disc circuit.
+    /// A foreign track's drawn model: its art meshes (ADR-0076), or its
+    /// flat-shaded floor and wall when it has none. `None` for a disc circuit.
     #[cfg(feature = "view")]
     pub drawn: Option<Model>,
+    /// What of a foreign track's art is drawn beside [`Self::drawn`]: its sky,
+    /// its flare, its sun's shadow direction. Default for a disc circuit.
+    #[cfg(feature = "view")]
+    pub art: crate::foreign::art::Extras,
 }
 
 pub(super) fn resolve(
@@ -36,7 +40,7 @@ pub(super) fn resolve(
     report: &mut Vec<String>,
 ) -> Result<Inputs> {
     if let Some(path) = &options.foreign_track {
-        return foreign(path, options, report);
+        return foreign(path, options, archives, report);
     }
     // **The circuit this source actually offers**, resolved here because this is
     // the first point the title is known - see [`Options::track`]. Reported
@@ -216,18 +220,28 @@ pub(super) fn resolve(
         weapon_pads,
         #[cfg(feature = "view")]
         drawn: None,
+        #[cfg(feature = "view")]
+        art: Default::default(),
     })
 }
 
 /// A foreign track in the shapes a disc circuit is read into. Everything the
 /// content does not author is named in the report by `crate::foreign`, and left
-/// out here rather than borrowed from the host: no `.vex` blob, so no sky, fog,
-/// clouds, art meshes, track emitters or PVS.
-fn foreign(path: &std::path::Path, options: &Options, report: &mut Vec<String>) -> Result<Inputs> {
+/// out here rather than borrowed from the host: no `.vex` blob, so no fog,
+/// clouds, track emitters or PVS. Its art, where the file has some, is drawn
+/// by `crate::foreign::art`.
+#[cfg_attr(not(feature = "view"), allow(unused_variables))]
+fn foreign(
+    path: &std::path::Path,
+    options: &Options,
+    archives: &mut Archives,
+    report: &mut Vec<String>,
+) -> Result<Inputs> {
     if options.mode == Mode::Zone {
         anyhow::bail!("Zone is defined by a title's own Zone circuits; a foreign track has none");
     }
-    let (f, lines) = crate::foreign::read_any(path)?;
+    #[cfg_attr(not(feature = "view"), allow(unused_mut))]
+    let (mut f, lines) = crate::foreign::read_any(path)?;
     report.extend(lines);
     let collision = collision_world(&f.nodes);
     report.push(format!(
@@ -241,8 +255,42 @@ fn foreign(path: &std::path::Path, options: &Options, report: &mut Vec<String>) 
             .sum::<usize>()
     ));
     #[cfg(feature = "view")]
-    let drawn =
-        render_collision::build_model(&f.title, &f.nodes, render_collision::Style::Solid, false);
+    let (drawn, art) = match f.art.take() {
+        Some(art) => {
+            use crate::foreign::art;
+            let dir = path.parent().unwrap_or_else(|| std::path::Path::new(""));
+            let textures = art::resolve_textures(&art, dir, archives, report);
+            let extras = art::extras(&art, &textures, report);
+            let model = if art.meshes.is_empty() {
+                report.push("art: no meshes; the collision is drawn flat-shaded".into());
+                render_collision::build_model(
+                    &f.title,
+                    &f.nodes,
+                    render_collision::Style::Solid,
+                    false,
+                )
+            } else {
+                art::model(&f.title, &art, textures, report)
+            };
+            (model, extras)
+        }
+        None => {
+            report.push(
+                "the track has no art section: its collision is drawn flat-shaded, with no \
+                 sky, sun or lens flare"
+                    .into(),
+            );
+            (
+                render_collision::build_model(
+                    &f.title,
+                    &f.nodes,
+                    render_collision::Style::Solid,
+                    false,
+                ),
+                Default::default(),
+            )
+        }
+    };
     Ok(Inputs {
         track: format!("foreign:{}", f.id),
         ai: f.ai,
@@ -257,6 +305,8 @@ fn foreign(path: &std::path::Path, options: &Options, report: &mut Vec<String>) 
         weapon_pads: f.weapon_pads,
         #[cfg(feature = "view")]
         drawn: Some(drawn),
+        #[cfg(feature = "view")]
+        art,
     })
 }
 
@@ -265,9 +315,9 @@ fn foreign(path: &std::path::Path, options: &Options, report: &mut Vec<String>) 
 /// use only** - what it returns is content from a disc and must never be
 /// committed (`just audit-leakage`).
 ///
-/// What a track file has no field for is dropped, and the track's notes say so
-/// (`oag_trackfile::ABSENT` is the list; the circuit's art, sky, fog, lights,
-/// emitters and visibility sets are all authored in the `.vex` blob).
+/// A Pulse or Pure circuit (one whose `.vex` carries its own geometry) exports
+/// its art too ([`circuit_art`]); what a track file has no field for is
+/// dropped, and the track's notes say so (`oag_trackfile::ABSENT` is the list).
 pub(super) fn export(
     options: &Options,
     archives: &mut Archives,
@@ -288,6 +338,16 @@ pub(super) fn export(
         "exported from {}'s circuit {} by this project's local exporter (not for redistribution)",
         title.name, inputs.track
     )];
+    #[cfg(feature = "view")]
+    let art = circuit_art(
+        archives,
+        title,
+        &inputs.track,
+        &inputs.track_blob,
+        &mut report,
+    )?;
+    #[cfg(not(feature = "view"))]
+    let art = None;
     notes.extend(report);
     Ok(oag_trackfile::Track {
         id: inputs.track,
@@ -297,7 +357,114 @@ pub(super) fn export(
         nodes: inputs.nodes,
         speedup_pads: inputs.speedup_pads,
         weapon_pads: inputs.weapon_pads,
-        art: None,
+        art,
         notes,
     })
+}
+
+/// A track file's sky: the `Skycube` of the host circuit its art names, built
+/// the way a disc circuit's own is. `None`, with the reason in `report`, when
+/// the entry does not read or authors no sky.
+#[cfg(feature = "view")]
+pub(super) fn foreign_sky(
+    archives: &mut Archives,
+    entry: &str,
+    report: &mut Vec<String>,
+) -> Option<Model> {
+    let blob = match archives.read_name(entry) {
+        Ok(blob) => blob,
+        Err(e) => {
+            report.push(format!(
+                "art sky: {entry} does not read ({e}); the sky stays black"
+            ));
+            return None;
+        }
+    };
+    let external = ps2_texture_set(archives, entry);
+    let mut sky = match mesh::build_sky(entry, &blob, external.as_ref()) {
+        Ok(sky) if !sky.indices.is_empty() => sky,
+        Ok(_) => {
+            report.push(format!(
+                "art sky: {entry} authors no Skycube; the sky stays black"
+            ));
+            return None;
+        }
+        Err(e) => {
+            report.push(format!("art sky: {entry}: {e}; the sky stays black"));
+            return None;
+        }
+    };
+    super::environment::unlit_sky(&mut sky, report);
+    report.push(format!(
+        "art sky: {entry}'s Skycube, {} triangle(s)",
+        sky.indices.len() / 3
+    ));
+    Some(sky)
+}
+
+/// A Pulse or Pure circuit's art: the track model its `.vex` builds with only
+/// the finest tier of each `LodGroup` (a track file has no level of detail),
+/// its textures as references to its own `Texture` nodes, its sky, and on a
+/// title whose flare law applies, its `lensflare` node as the sun. `None`, and
+/// a line in `report`, for a circuit whose geometry is not in its `.vex` (HD,
+/// Omega, 2048: checked, applies, not wired).
+#[cfg(feature = "view")]
+pub(super) fn circuit_art(
+    archives: &mut Archives,
+    title: &'static oag_title::Title,
+    track: &str,
+    blob: &[u8],
+    report: &mut Vec<String>,
+) -> Result<Option<oag_trackfile::art::Art>> {
+    use crate::foreign::art;
+    if oag_vex::vex::geometry_is_external(blob) {
+        report.push(
+            "art not exported: this circuit's geometry is in its .rcsmodel, which the exporter \
+             does not write yet"
+                .into(),
+        );
+        return Ok(None);
+    }
+    let model = circuit_model(archives, track, blob)?;
+    let names = art::texture_names(blob)?;
+    let mut out = art::from_model(&model, track, &names);
+    let moving = model.vertices.iter().filter(|v| v.xform != 0).count();
+    let scrolling = model.vertices.iter().filter(|v| v.anim != 0).count();
+    report.push(format!(
+        "art exported: {} mesh(es), {} texture reference(s); not carried: {moving} vertices under \
+         an Anim Transform (placed at time zero), {scrolling} with a texture animation, {} \
+         extra-pass draw(s), each draw's layer, alpha-test reference and glow",
+        out.meshes.len(),
+        out.textures.len(),
+        model.shine_draws.len(),
+    ));
+    if mesh::build_sky(track, blob, None).is_ok_and(|sky| !sky.indices.is_empty())
+        || ps2_texture_set(archives, track)
+            .and_then(|set| mesh::build_sky(track, blob, Some(&set)).ok())
+            .is_some_and(|sky| !sky.indices.is_empty())
+    {
+        out.sky = Some(track.to_string());
+    }
+    if title.looks.lens_flare.applies(archives.layout.platform) {
+        let mut quiet = Vec::new();
+        if let Some(flare) = super::lens_flare::read(blob, &mut quiet) {
+            art::flare_as_sun(&mut out, &flare, &names);
+        }
+    }
+    Ok(Some(out))
+}
+
+/// A circuit's track model as the race loader builds it (the PS2's texture set
+/// beside it included), with each `LodGroup`'s finest tier only.
+#[cfg(feature = "view")]
+pub fn circuit_model(archives: &mut Archives, track: &str, blob: &[u8]) -> Result<Model> {
+    let mut model = mesh::build_with_textures(track, blob, None)?;
+    if !model.textures.is_empty()
+        && model.textures.iter().all(Option::is_none)
+        && let Some(external) = ps2_texture_set(archives, track)
+    {
+        model = mesh::build_with_textures(track, blob, Some(&external))?;
+    }
+    model.keep_nearest();
+    Ok(model)
 }

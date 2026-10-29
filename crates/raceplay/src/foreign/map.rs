@@ -79,6 +79,7 @@ pub(super) fn map(wtrk: &Wtrk, track: &Track) -> anyhow::Result<OagTrack> {
         nodes,
         speedup_pads,
         weapon_pads,
+        art: None,
         notes: report,
     })
 }

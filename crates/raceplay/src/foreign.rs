@@ -14,6 +14,8 @@
 //! start slot; the simulation reads them like a disc circuit's and learns nothing
 //! of where they came from.
 
+#[cfg(feature = "view")]
+pub mod art;
 #[cfg(feature = "ballisticng")]
 pub mod choice;
 #[cfg(feature = "ballisticng")]

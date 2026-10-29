@@ -630,7 +630,10 @@ impl super::super::Scene {
 
     /// The `mapped` tier's fit around the craft in `slot`.
     pub(crate) fn mapped_fit_for(&self, race: &Race, slot: usize) -> oag_render::shadow::map::Fit {
-        mapped_fit(race.ship_model_matrix_of(slot), mapped_light(&self.light))
+        mapped_fit(
+            race.ship_model_matrix_of(slot),
+            mapped_light(&self.light, race.scenery_fx().sun()),
+        )
     }
 
     /// The `mapped` tier's far-layer fit around the craft in `slot`.
@@ -639,7 +642,10 @@ impl super::super::Scene {
         race: &Race,
         slot: usize,
     ) -> oag_render::shadow::map::Fit {
-        mapped_far_fit(race.ship_model_matrix_of(slot), mapped_light(&self.light))
+        mapped_far_fit(
+            race.ship_model_matrix_of(slot),
+            mapped_light(&self.light, race.scenery_fx().sun()),
+        )
     }
 
     /// The projection the `mapped` depth map was last drawn with.
@@ -829,7 +835,10 @@ fn mapped_fit(player: oag_core::math::Mat4, towards_light: Vec3) -> oag_render::
 /// it, where the craft itself hides it. That is what the first capture of this
 /// tier showed - a frame with shadows on the scenery and nothing under the
 /// ship.
-fn mapped_light(light: &oag_mesh::mesh_render::Light) -> Vec3 {
+fn mapped_light(light: &oag_mesh::mesh_render::Light, track_sun: Option<[f32; 3]>) -> Vec3 {
+    if let Some(sun) = track_sun {
+        return Vec3::from_array(sun);
+    }
     if light.enabled != 0.0 {
         return Vec3::from_array(light.direction);
     }

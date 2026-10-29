@@ -148,6 +148,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
         weapon_pads,
         #[cfg(feature = "view")]
         mut drawn,
+        #[cfg(feature = "view")]
+            art: foreign_art,
     } = track_inputs::resolve(options, &mut archives, title, &mut report)?;
     let read = |archives: &mut oag_assets::Archives, name: &str| -> Result<Vec<u8>> {
         archives
@@ -578,6 +580,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
         } else {
             hd_sky_model(&mut archives, &track, title.race, options.mode, &mut report)
         }
+    } else if let Some(entry) = &foreign_art.sky {
+        track_inputs::foreign_sky(&mut archives, entry, &mut report)
     } else if !vex_geometry {
         None
     } else {
@@ -676,6 +680,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         match (vex_geometry, rcs_drawn) {
             (true, _) => "art meshes",
             (false, true) => "art meshes out of the .rcsmodel beside it",
+            (false, false) if track.starts_with("foreign:") => "foreign track model",
             (false, false) => "driveable ribbon",
         },
         track_model.indices.len() / 3,
@@ -1339,6 +1344,14 @@ pub fn load(options: &Options) -> Result<Loaded> {
     if vex_geometry && title.looks.lens_flare.applies(archives.layout.platform) {
         loaded.setup.scenery_fx.lens_flare =
             lens_flare::read(&track_blob, &mut loaded.report).map(Box::new);
+    }
+    #[cfg(feature = "view")]
+    if foreign_art.lens_flare.is_some() {
+        loaded.setup.scenery_fx.lens_flare = foreign_art.lens_flare.map(Box::new);
+    }
+    #[cfg(feature = "view")]
+    {
+        loaded.setup.scenery_fx.sun = foreign_art.sun_shadow;
     }
     #[cfg(feature = "view")]
     pulse_ps2::finish(

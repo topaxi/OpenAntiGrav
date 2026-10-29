@@ -3193,6 +3193,7 @@ dependencies = [
  "oag-unity",
  "oag-vex",
  "oag-weapons",
+ "png",
  "pollster",
  "serde",
  "toml",
