@@ -79,6 +79,11 @@ const FACES: [([f32; 3], [f32; 3], [f32; 3]); 6] = [
     ([0.0, 0.0, -1.0], [-1.0, 0.0, 0.0], [0.0, -1.0, 0.0]),
 ];
 
+/// The cells along each edge of a gradient face: chosen, not measured, as
+/// enough that the gradient shows no crease at 1440x816 (an even count, so a
+/// side face has a row on the horizon).
+const GRADIENT_STEPS: u32 = 8;
+
 /// Builds a camera-centred cube from a `.gtf` cubemap.
 ///
 /// `tint` is the circuit's `Lighting.Sky colour` in linear light, `byte /
@@ -233,11 +238,14 @@ fn cube(
 ) -> Model {
     let (sin, cos) = rotation_degrees.to_radians().sin_cos();
     let turn = |p: [f32; 3]| [p[0] * cos + p[2] * sin, p[1], p[2] * cos - p[0] * sin];
-    // The gradient by the corner's height on the unit cube: the zenith colour
-    // at the top, the horizon's from eye level down.
-    let shade = |y: f32| -> [f32; 3] {
+    // The gradient by elevation (the sine of the view direction's angle above
+    // eye level): the zenith colour overhead, the horizon's from eye level down.
+    // By direction, not by height on the cube, or the cube's corners show as
+    // creases in the picture.
+    let shade = |unit: [f32; 3]| -> [f32; 3] {
         let (zenith, horizon) = gradient.unwrap_or(([1.0; 3], [1.0; 3]));
-        let k = y.max(0.0);
+        let length = (unit[0] * unit[0] + unit[1] * unit[1] + unit[2] * unit[2]).sqrt();
+        let k = (unit[1] / length).max(0.0);
         std::array::from_fn(|c| horizon[c] * (1.0 - k) + zenith[c] * k)
     };
 
@@ -246,24 +254,23 @@ fn cube(
     let mut draws = Vec::with_capacity(6);
     for (face, (major, s_axis, t_axis)) in FACES.iter().enumerate() {
         let textured = textures.get(face).is_some_and(Option::is_some);
-        // A textured face is one quad; a gradient face is two, split at the
-        // horizon (`tc = 0` on a side face, whose `t` runs down the sky), so
-        // the colour follows height exactly.
-        let rows: &[f32] = if textured {
-            &[-1.0, 1.0]
-        } else {
-            &[-1.0, 0.0, 1.0]
-        };
+        // A textured face is one quad; a gradient face a grid fine enough that
+        // the per-vertex colour reads as a smooth sky, with a row on the
+        // horizon (`tc = 0` on a side face, whose `t` runs down the sky).
+        let steps = if textured { 1 } else { GRADIENT_STEPS };
+        let at = |i: u32| -1.0 + 2.0 * i as f32 / steps as f32;
         let base = vertices.len() as u32;
-        for &tc in rows {
-            for sc in [-1.0f32, 1.0] {
+        for row in 0..=steps {
+            let tc = at(row);
+            for col in 0..=steps {
+                let sc = at(col);
                 let unit = [
                     major[0] + s_axis[0] * sc + t_axis[0] * tc,
                     major[1] + s_axis[1] * sc + t_axis[1] * tc,
                     major[2] + s_axis[2] * sc + t_axis[2] * tc,
                 ];
                 let position = turn(unit.map(|c| c * HALF_EXTENT));
-                let rgb = if textured { colour } else { shade(unit[1]) };
+                let rgb = if textured { colour } else { shade(unit) };
                 vertices.push(GpuVertex {
                     quake: 0.0,
                     position,
@@ -287,11 +294,14 @@ fn cube(
             }
         }
         let start = indices.len() as u32;
-        for band in 0..rows.len() as u32 - 1 {
-            let (a, b) = (base + band * 2, base + band * 2 + 2);
-            // Fan order per band: (-1, t0), (+1, t0), (+1, t1), (-1, t1).
-            for i in [a, a + 1, b + 1, a, b + 1, b] {
-                indices.push(i);
+        for row in 0..steps {
+            for col in 0..steps {
+                let a = base + row * (steps + 1) + col;
+                let b = a + steps + 1;
+                // Fan order per cell: (s0, t0), (s1, t0), (s1, t1), (s0, t1).
+                for i in [a, a + 1, b + 1, a, b + 1, b] {
+                    indices.push(i);
+                }
             }
         }
         draws.push(DrawCall {
@@ -429,20 +439,20 @@ mod tests {
     /// face with a picture draws it white. Dropping the gradient or the split
     /// fails here.
     #[test]
-    fn an_own_sky_draws_its_pictures_and_its_gradient_by_height() {
+    fn an_own_sky_draws_its_pictures_and_its_gradient_by_elevation() {
         let picture =
             std::sync::Arc::new(ModelTexture::rgba8("p".into(), 1, 1, vec![255; 4], None));
         let (zenith, horizon) = ([0.1, 0.2, 0.9], [0.8, 0.7, 0.6]);
         let mut faces: [Option<std::sync::Arc<ModelTexture>>; 6] = Default::default();
-        faces[2] = Some(picture);
+        faces[0] = Some(picture);
         let sky = own("sky", faces, Some((zenith, horizon)));
         assert_eq!(sky.draws.len(), 6);
-        assert_eq!(sky.draws[2].texture, Some(2));
+        assert_eq!(sky.draws[0].texture, Some(0));
         assert!(
             sky.draws
                 .iter()
                 .enumerate()
-                .all(|(i, d)| (i == 2) == d.texture.is_some())
+                .all(|(i, d)| (i == 0) == d.texture.is_some())
         );
         let colour = |p: [f32; 3]| {
             sky.vertices
@@ -451,14 +461,16 @@ mod tests {
                 .map(|v| [v.colour[0], v.colour[1], v.colour[2]])
         };
         let h = HALF_EXTENT;
-        // +X face: its top corner is the zenith colour, eye level and the
-        // bottom the horizon's.
-        assert_eq!(colour([h, h, h]), Some(zenith));
-        assert_eq!(colour([h, 0.0, h]), Some(horizon));
-        assert_eq!(colour([h, -h, h]), Some(horizon));
-        // The zenith face carries the picture, white.
+        // Straight up is the zenith colour; eye level and below the horizon's;
+        // in between by elevation, so the zenith face's corner is neither.
+        assert_eq!(colour([0.0, h, 0.0]), Some(zenith));
+        assert_eq!(colour([0.0, 0.0, h]), Some(horizon));
+        assert_eq!(colour([0.0, -h, 0.0]), Some(horizon));
+        let corner = colour([-h, h, h]).unwrap();
+        assert!(corner != zenith && corner != horizon, "{corner:?}");
+        // The +X face carries the picture, white.
         assert!(
-            sky.vertices[sky.indices[sky.draws[2].range.start as usize] as usize].colour
+            sky.vertices[sky.indices[sky.draws[0].range.start as usize] as usize].colour
                 == [1.0; 4]
         );
     }
