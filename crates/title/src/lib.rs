@@ -602,6 +602,22 @@ pub struct FrontEnd {
     /// `KILLS` row offers (see `oag_game::boot::kill_targets`). `None` on a
     /// title whose setup page is unread, which shows no kill target to pick.
     pub race_setup: Option<&'static str>,
+    /// Text widgets of the track screen whose string the screen's class sets in code in
+    /// place of the one its XML authors: `(widget name, string id)` pairs, empty where
+    /// the class takes the XML's own. Pulse's `TrackSelection_ApplySelection`
+    /// (`0x088ee2f8`) labels the first stat row with `MSC_DISTANCE` (`Distance(m)`)
+    /// where `Track Creation` authors `IG_HUD_DISTANCE` (`Distance`).
+    pub track_label_overrides: &'static [(&'static str, &'static str)],
+    /// What the track screen's lap and race record rows read before a time is set.
+    /// Pulse's `0x088edd60` draws `-.--.--` for a record of `0` or `0xffff`; the other
+    /// titles keep the single dash this build has always drawn (unmeasured).
+    pub track_record_empty: &'static str,
+    /// Whether the track screen's `Distance` row is the circuit's own authored
+    /// `<Physical Length>` (`<location>\stats.xml`, `stats_reversed.xml` for a reversed
+    /// entry) rather than a length this build measures. Pulse's `TrackStats_ParseElement`
+    /// (`0x088c46f8`) reads it into the definition's `+0xdc`, which the screen prints
+    /// through `%d`. `false` where unmeasured: Pure's panel keeps the measured lap.
+    pub track_distance_authored: bool,
     /// Whether this title's race-setup screens preview an entry with a
     /// rendered mesh.
     ///

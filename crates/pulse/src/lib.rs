@@ -233,6 +233,13 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     team_select: None,
     track_select: None,
     race_setup: Some(names::RACE_SETUP_DEFINITION),
+    // `TrackSelection_ApplySelection` hands `MSC_DISTANCE` to `Info1 Title` through
+    // `0x088ede50` (`0x088cd0f4` sets the label); the XML's `IG_HUD_DISTANCE` is never shown.
+    track_label_overrides: &[("Info1 Title", "MSC_DISTANCE")],
+    // The literal at `0x08a84914`, drawn by `0x088edd60` for an unset record.
+    track_record_empty: "-.--.--",
+    // `<Physical Length>` of the circuit's `stats.xml`, printed `%d` (`0x088ede50`).
+    track_distance_authored: true,
     // `<location>\FE\forward.vex` and `<location>\ship_FE.vex`, both
     // resolving on both pressings - see `docs/formats/race-setup.md`.
     preview_meshes: true,

@@ -411,6 +411,9 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     team_select: Some(names::TEAM_SELECTION_DEFINITION),
     track_select: Some(names::TRACK_SELECTION_DEFINITION),
     race_setup: None,
+    track_label_overrides: &[],
+    track_record_empty: "-",
+    track_distance_authored: false,
     // `false`: the one mesh path reads `<team>\ship_FE.vex` and `FE\forward.vex`,
     // which HD's `screen.xml`s name and no HD archive carries. The craft the
     // original draws on `Team Selection` is the race hull, named here, and

@@ -421,22 +421,17 @@ impl Spline {
 /// [`oag_race::course::Course`] walks - every authored path in ring order,
 /// resampled, closed back to the start.
 ///
-/// What `Track Creation`'s `Distance(m)` row shows on the original, one
-/// world unit being one metre (the HUD's own `speed * 3.6` km/h factor says
-/// so). Pulse's circuits author the lap as **two open paths joined at two
-/// junctions** - Talon's Junction's are 2,608 and 2,471 units long and the
-/// two links between them make up the rest - so a single path's own length
-/// is two thirds of a lap, and the ring is what the screen prints: `5094`,
-/// `5228` and `4330` here against the `5178`, `5350` and `4419` on screen
-/// for the three circuits a fresh profile offers. **That is 1.7 to 2.3 per
-/// cent short, and the gap is not sampling** - the figure is the same to a
-/// unit at one, four, sixteen and sixty-four steps per segment and from the
-/// raw control points - so the original sums a slightly different curve
-/// (the centreline rather than the racing line, most likely) or counts the
-/// junction links differently. Unread. Confidence 70 that the screen's
-/// number is a lap length at all in the sense measured here; this build
-/// prints its own measurement rather than a stand-in, and the test pins the
-/// gap at under three per cent so a change in either direction is noticed.
+/// **Not** what `Track Creation`'s `Distance(m)` row prints on Pulse: the original reads that
+/// from the circuit's authored `<Physical Length>` (`stats.xml`; `TrackStats_ParseElement`
+/// `0x088c46f8` into the definition's `+0xdc`, printed `%d`), which [`crate::authored_length`]
+/// reads. This is the lap this build measures off the circuit's own spline, one world unit
+/// being one metre (the HUD's `speed * 3.6` km/h factor says so). Pulse's circuits author the
+/// lap as **two open paths joined at two junctions**, so a single path is two thirds of a lap
+/// and the ring is what is summed; on the three fresh-profile circuits that is `5094`, `5228`
+/// and `4330` against the authored `5178`, `5350` and `4419` (1.7 to 2.3 per cent short, and
+/// not by sampling). It stays the Distance row's fallback where a title prints a length and
+/// the circuit's `stats.xml` gives none,.
+///
 /// See `crates/raceplay/tests/circuit_length_ground_truth.rs`.
 ///
 /// # Errors

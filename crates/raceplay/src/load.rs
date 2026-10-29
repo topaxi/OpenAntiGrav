@@ -47,6 +47,7 @@ mod skin;
 mod surfaces;
 mod track_inputs;
 mod track_stats;
+pub use track_stats::authored_length;
 #[cfg(feature = "view")]
 mod variant;
 #[cfg(feature = "view")]

@@ -184,21 +184,25 @@ this build already had changes appearance.
 
 ### What this build draws differently, and why
 
-- **Distance is measured, and reads about two per cent under the
-  original.** The original prints `5178` for Talon's Junction White, `5350`
-  Moa Therma, `4419` Metropia. This build measures the lap
-  `oag_race::course::Course` walks - both authored paths in ring order,
-  closed - off each circuit's own file on a worker thread as the screen
-  opens (selected circuit first), and prints `5094`, `5228`, `4330`. **The
-  gap is not sampling**: the figure is identical to a unit at one, four,
-  sixteen and sixty-four steps per segment and from the raw control
-  points, so the original sums a slightly different curve - the centreline
-  rather than the racing line, most likely - or counts the two junction
-  links differently. Unread; confidence 70 on what the screen's number is.
-  Pinned at under three per cent in
-  `crates/raceplay/tests/circuit_length_ground_truth.rs`, and drawn as this
-  build's own measurement rather than a stand-in. Until the worker has
-  read a circuit its row shows `-`.
+- **Distance is the circuit's authored length** (closed 2026-10-29). The original prints
+  `<Physical Length>` of the circuit's `stats.xml` (`stats_reversed.xml` for a reversed entry)
+  through `%d`: `5178` for Talon's Junction White, `5350` Moa Therma, `4419` Metropia. This build
+  reads the same file on the worker thread as the screen opens (`oag_raceplay::authored_length`,
+  `crates/raceplay/tests/circuit_length_ground_truth.rs`) and prints it the same way. A circuit
+  whose `stats.xml` is absent or authors no length (a DLC circuit may) falls back to the lap this
+  build measures off the circuit's spline (`oag_raceplay::circuit_length`, 1.7 to 2.3 per cent
+  short; chosen, not measured). Until the worker has read a circuit its row shows `-`. Pulse PS2
+  reads its own `stats.xml` from the race archives (PS2 data, not inherited); Pure keeps the
+  measured lap (its panel is unmeasured), and HD, 2048 and Omega print `length_rows` of the
+  measured lap (HD's `stats.xml` authors `Length="5.2"` in km: checked, applies, not wired).
+- **The first row's label is `Distance(m)`**: the class overwrites the XML's `IG_HUD_DISTANCE`
+  (`Distance`) with `MSC_DISTANCE` (`oag_title::FrontEnd::track_label_overrides`).
+- **An unset record reads `-.--.--`** (`0x08a84914`, drawn by `0x088edd60` for `0` or `0xffff`),
+  `oag_title::FrontEnd::track_record_empty`. Pure's panel draws `0'00"00` through its own binary: a
+  different literal, not switched on (open).
+- **The panel draws the same three rows in every mode.** The original moves the distance to
+  `Info2` and blanks `Info1`/`Info3` outside modes 3, 5, 6, 9 and 10, and Zone shows a zone score
+  (`race-box-screens.md`); not wired (open).
 - **Lap record / Race record are this build's own store**, keyed the way
   the RECORDS page keys them - circuit, mode and the RACE page's class.
 - **The counter is `n / 32` on a fresh profile**, not `1 / 3`: this build
@@ -609,7 +613,7 @@ keeps all three rows and launches from `START` as before.
   match. Captures: `pcsx2-track-select.png`,
   `pcsx2-ship-select.png` against `ours-track-select.png`/`ours-ship-select.png`
   in the same directory.
-- Which curve the original's `Distance(m)` sums - see above.
+- ~~Which curve the original's `Distance(m)` sums~~ - none: it prints the authored `<Physical Length>` (closed 2026-10-29, above).
 - The `Loyalty` counter, once anything keeps one.
 - The `Track Help` / `Team Help` overlays and `Pre Race Music Select`: read
   (they are on the same XML) and not drawn.

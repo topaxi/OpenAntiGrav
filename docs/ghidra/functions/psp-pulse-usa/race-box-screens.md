@@ -78,6 +78,57 @@ the actual screen behaviour lives:
 | `0x088ed6cc` | `TrackSelection_OnExit` | 80 | writes the chosen circuit's name into the `Track` front-end global |
 | `0x088ed4f4` | `TrackSelection_Destruct` | 72 | restores the base vtable, frees |
 
+### The info panel's three rows, read 2026-10-29 (`0x088ee2f8`'s tail, `0x088ede50`, `0x088edd60`)
+
+Two row setters, both taking `(screen, widget name, label id, value)`:
+
+| Address | Name | Confidence | What it does |
+| --- | --- | --- | --- |
+| `0x088ede50` | `TrackSelection_SetIntRow` | 88 | sets `"<name> Title"` to the label id (through `0x088cd0f4`), then the row text to `"%d"` of the value (`0x08a8491c`), or `--` (`0x08a84920`) when it is 0 |
+| `0x088edd60` | `TrackSelection_SetTimeRow` | 88 | the same label write, then the row text to the formatted time (`0x088196e4`), or `-.--.--` (`0x08a84914`) when the value is `0` or `0xffff` |
+
+`TrackSelection_ApplySelection` calls them per mode (`local_38`, the `Mode` name resolved by
+`GameMode_FromName`): modes `3`/`9` and `5` put the distance in `Info1`, the lap record
+(`IG_HUD_LAP_REC`, a `u16` at `+0x348`/`+0x288` of the profile's per-circuit record) in `Info2` and
+the race record (`ER_RR`, a sum over five `u16`s) in `Info3`; mode `10` shows `Info1` and `Info2` with
+`Info3` blanked; mode `6` (Zone) shows `Info1`, a second integer in `Info2` (label at `0x08a849dc`)
+and `ER_ZONE_SCORE` in `Info3`; **every other mode moves the distance to `Info2` and blanks `Info1`
+and `Info3`**. Confidence 85 (decompiled; the modes are `GameMode_FromName` indices, not named
+here).
+
+**The label is `MSC_DISTANCE`, not the XML's `IG_HUD_DISTANCE`.** The class passes the id to the
+setter, so the authored `<Text name="Info1 Title" idstring="IG_HUD_DISTANCE">` is overwritten at
+run time; the English table's `MSC_DISTANCE` is `Distance(m)`. Confidence 90.
+
+**The distance is the circuit's authored `<Physical Length>`, not a measurement.** Its value is
+`*(int *)(definition + 0xdc)`; `TrackStats_Load` (`0x088c45b0`, opens `<location>\stats.xml`, or
+`stats_reversed.xml` for a reversed entry) feeds each child element to `TrackStats_ParseElement`
+(`0x088c46f8`), whose `Physical` branch reads the `Length` attribute with `Xml_AttributeAsInt` into
+`+0xdc`. `Data\Environments\16_Track\stats.xml` authors `Length="5178"`; the three fresh-profile
+circuits print `5178`, `5350` and `4419`, which `oag_raceplay::authored_length` reads exactly. This
+retires the long-standing "ours is 1.7 to 2.3 per cent short of the screen" note: the screen never
+summed a curve. Confidence 95 (decompile, the disc's file, and the capture agree on three circuits).
+
+### The footer ticker's message choice, read 2026-10-29 (`0x088d0e3c`)
+
+`FUN_088d0e3c` (`Ticker_PickMessage`, 72) builds the next message. A first call to `FUN_088d0fe0`
+looks for unseen content (new tracks, skins, grid: the `TKR_FYI*` family, flags at `+0xd0..+0xf4`);
+otherwise it loops: `0x088d1384` (`Ticker_AdvanceWeighted`, 72) draws the next item with
+**`rand() % total`** over per-item weight ranges (`+0xb0` width, `+0xb8` start; total at `+0x104`),
+never the item it just showed, then the item's kind (`+0xa8`) picks a builder, and the loop repeats
+until a builder returns a message. `0x088d22ac` (`Ticker_BuildStatMessage`, 72), the kind-0 builder,
+formats a lifetime statistic from the profile's stat table (`DAT_08b31774 + 0x11c + slot * 4`,
+slot at item `+0xac`) through the item's own `%d`/`%s`/`%.2f` string; **a statistic that is 0 yields
+no message and the loop draws again**, and for the six per-mode time items (`TKR_SRTIM` ...
+`TKR_ZTIM`) a 0 statistic is replaced by the matching `TKR_NO*` tip.
+
+So the original's choice is **a weighted random draw among the items that have data**, not an order
+or a start index, and the data is a lifetime statistics table (laps, zones, songs listened to, the
+most-listened track, ...) the profile accumulates, menu music included: that is why a fresh
+profile that has only sat in the menus shows `6 songs` / `Your most listened to music track is ...`.
+This build keeps no such table, so it rotates only the `TKR_NO*` tips (`oag_game::records::ticker_tips`).
+Matching the original means a lifetime-statistics store and the weights; open (see the handover thread).
+
 ### `TrackSelection_PopulateList` closes "what populates the track list is unread"
 
 `docs/formats/race-setup.md`'s open item is answered: `FUN_088edf3c`

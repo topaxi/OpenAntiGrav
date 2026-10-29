@@ -405,14 +405,16 @@ pub(super) fn selection_layouts(
     // `MenuSkin::default_face_is_row_face`: HD's rows are the `default` face, ratio 1.
     default_is_row_face: bool,
     space: oag_display::space::Space,
-    borrows_ps2_split: bool,
-    ship_pose: Option<oag_title::ShipPose>,
+    front_end: Option<&oag_title::FrontEnd>,
     report: &mut Vec<String>,
 ) -> (
     Option<oag_ui_screens::picker::Layout>,
     Option<oag_ui_screens::picker::Layout>,
     Option<[oag_ui_screens::picker::Layout; 2]>,
 ) {
+    let borrows_ps2_split = front_end.is_some_and(|front_end| front_end.borrows_ps2_split_screens);
+    let ship_pose = front_end.and_then(|front_end| front_end.ship_preview_pose);
+    let track_labels = front_end.map_or(&[][..], |front_end| front_end.track_label_overrides);
     let faces = oag_ui_screens::picker::FaceScales {
         default: menu_font.map_or(
             if default_is_row_face {
@@ -434,6 +436,10 @@ pub(super) fn selection_layouts(
                 faces,
                 [space.size.0, space.size.1],
             )
+        })
+        .map(|mut layout| {
+            layout.override_labels(track_labels, strings);
+            layout
         })
         .or_else(|| {
             let track_box = track_box?;

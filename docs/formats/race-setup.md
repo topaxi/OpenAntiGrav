@@ -222,8 +222,8 @@ the executable, while `MSC_DISTANCE` occurs at `0x08a84998` - inside this block
 - and nowhere in the XML. So the class names its own string key for that row
 rather than using the authored one, which is the same overwrite-the-authored-
 value pattern the placeholder circuit names and the `Team Entry NN` rows
-already show. Confidence 85 for the observation; **what makes the class prefer
-its own key is not established.**
+already show. Confidence 85 for the observation; **the class passes its own key to the row setter, which writes it
+over the authored one (closed 2026-10-29, below).**
 
 **The constructed paths resolve on the disc**, in `Data.wad`:
 
@@ -336,11 +336,12 @@ layout ever switching to a multi-row `2.x`/`3.x` template. So this capture
 does not confirm the `Info Track %d.%d` = (count, index) hypothesis; it is
 consistent with "always 1.1 when nothing multi-line is needed" just as much as
 with any other reading, and stays unresolved. The rendered label for the
-disputed stat row read **`Distance(m)`** regardless of which idstring drove it
-(`IG_HUD_DISTANCE` from the XML or `MSC_DISTANCE` from the class) - the two
-evidently resolve to the same or near-identical English text, so a screenshot
-alone cannot discriminate which key actually rendered; the localisation table
-that could was not located this session. The 85-confidence conflict stands.
+disputed stat row read **`Distance(m)`**. **Resolved 2026-10-29: the class's key wins.** The English
+table holds `IG_HUD_DISTANCE` = `Distance` and `MSC_DISTANCE` = `Distance(m)`; the capture reads
+`Distance(m)`, and `TrackSelection_SetIntRow` (`0x088ede50`) writes the label it is passed, so the
+authored `IG_HUD_DISTANCE` is overwritten
+([`race-box-screens.md`](../ghidra/functions/psp-pulse-usa/race-box-screens.md#the-info-panels-three-rows-read-2026-10-29-0x088ee2f8s-tail-0x088ede50-0x088edd60)).
+Wired as `oag_title::FrontEnd::track_label_overrides`. Confidence 90.
 
 **The locked-circuit info panel is confirmed unreachable from `Track
 Creation`, not just inferred from `<Unlock>` XML.** All three list entries

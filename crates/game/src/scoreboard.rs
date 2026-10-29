@@ -107,15 +107,18 @@ fn medal_label(medal: records::Medal) -> &'static str {
 /// uses for a craft that never crossed.
 #[must_use]
 pub fn record_table_value(record: Option<&records::Record>, show_total: bool) -> String {
+    record_time(record, show_total).unwrap_or_else(|| "-".to_string())
+}
+
+/// The record's time as text, or `None` where none is set - for a screen that draws its own
+/// empty value (the track screen's `-.--.--`, `oag_title::FrontEnd::track_record_empty`).
+pub fn record_time(record: Option<&records::Record>, show_total: bool) -> Option<String> {
     let ticks: Option<u64> = if show_total {
         record.and_then(|row| row.best_total_ticks)
     } else {
         record.and_then(|row| row.best_lap_ticks).map(u64::from)
     };
-    match ticks {
-        Some(ticks) => format_lap_time(ticks, Precision::Hundredths),
-        None => "-".to_string(),
-    }
+    ticks.map(|ticks| format_lap_time(ticks, Precision::Hundredths))
 }
 
 /// The page id [`records_table`] answers for - checked explicitly rather
