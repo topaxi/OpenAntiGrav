@@ -604,11 +604,25 @@ impl Race {
         }
     }
 
-    /// The clock the world meshes' texture animation runs on: [`Self::clock_seconds`] plus the capture's
-    /// [`crate::Options::world_clock_offset`] (zero in every race).
+    /// The seconds the pre-race flyby has run: zero with none, frozen at its length once it is
+    /// over. The world is held at tick 0 under it, but the original's scenery clock runs through
+    /// it (`docs/gameplay/race-intro.md`), so the world meshes add this to the race clock. The
+    /// gantry's clock does not: the original starts it at the flyby's end, so it reads
+    /// [`Self::clock_seconds`]. Steps at the 60 Hz tick (no draw alpha of its own).
+    #[must_use]
+    pub fn flyby_seconds(&self) -> f32 {
+        self.view
+            .intro
+            .as_ref()
+            .map_or(0.0, |intro| intro.ticks() as f32 / 60.0)
+    }
+
+    /// The clock the world meshes' texture and node animation run on: [`Self::clock_seconds`] plus
+    /// [`Self::flyby_seconds`] plus the capture's [`crate::Options::world_clock_offset`] (zero in
+    /// every race).
     #[must_use]
     pub fn world_clock_seconds(&self) -> f32 {
-        self.clock_seconds() + self.view.world_clock_offset
+        self.clock_seconds() + self.flyby_seconds() + self.view.world_clock_offset
     }
 
     /// The gantry time a capture imposes, [`crate::Options::gantry_seconds`] (`None` in every race).

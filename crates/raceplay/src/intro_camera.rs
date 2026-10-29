@@ -315,6 +315,10 @@ impl Race {
                 intro.ticks(),
                 if held { ", Cross held" } else { "" }
             );
+            // `RaceMode_UpdateIntro` starts `ScreenFlash` kind 10 as its camera substate ends:
+            // 0.7 s of white, its keys and duration the executable's (no falloff). The flash
+            // advances on the race ticks that follow. Pulse PSP's node only (`screen_flash`).
+            self.start_flash(oag_fx::flash::INTRO_END, Vec3::ZERO);
         }
     }
 

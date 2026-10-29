@@ -107,3 +107,44 @@ fn a_held_cross_ends_it_when_the_lock_lifts_and_not_before() {
     }
     assert_eq!(ticks, oag_pulse::pre_race::PRE_RACE.lock_ticks.value + 1);
 }
+
+/// The scenery's clock runs through the flyby while the world is held at tick 0, and the
+/// gantry's does not (the original starts it at the flyby's end); the flyby's end starts
+/// `ScreenFlash` kind 10, white at full strength. Fails if `world_clock_seconds` drops the
+/// flyby term, or if the flyby's end stops starting the wash.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn the_scenery_clock_runs_through_the_flyby_and_its_end_washes_white() {
+    let Some(mut race) = started() else { return };
+    assert!(race.begin_intro());
+    assert_eq!(race.world_clock_seconds(), 0.0);
+    for _ in 0..300 {
+        race.tick_intro(&PlayerInputs::none());
+    }
+    assert_eq!(race.sim.world.tick, 0, "the world is held");
+    assert_eq!(
+        race.clock_seconds(),
+        0.0,
+        "the race clock and the gantry's stay put"
+    );
+    assert!(
+        (race.world_clock_seconds() - 5.0).abs() < 1e-4,
+        "the scenery's runs: 300 ticks = 5 s"
+    );
+    assert!(race.screen_wash().is_none(), "no wash while it plays");
+    while race.in_intro() {
+        race.tick_intro(&PlayerInputs::none());
+    }
+    let held = race.world_clock_seconds();
+    assert!(held > 24.9, "frozen at the flyby's length: {held}");
+    race.tick(&PlayerInputs::none());
+    let wash = race.screen_wash().expect("the end of the flyby washes");
+    assert!(
+        wash[0] > 0.9 && wash[1] > 0.9 && wash[2] > 0.9 && wash[3] > 0.9,
+        "white at full strength at its start: {wash:?}"
+    );
+    assert!(
+        (race.world_clock_seconds() - held - 1.0 / 60.0).abs() < 1e-4,
+        "continuous into the race"
+    );
+}

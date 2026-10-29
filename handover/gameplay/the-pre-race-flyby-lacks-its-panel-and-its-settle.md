@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [pulse]
-updated: 2026-10-21
-summary: "Split scene/frame.rs and give scenery and the gantry's clock Race::motion_tick; optional flyby rise of the pose"
+updated: 2026-10-29
+summary: "Scenery clock and the end wash landed; the intro music cue and an optional flyby rise of the pose remain"
 categories: [rendering, frontend]
 difficulty: medium (30)
 ---
@@ -50,17 +50,14 @@ node, played for `AnimEnd` seconds or until a held Cross, with the world held at
   `Craft_SetState(1)` runs at GO (timing measured, caller unnamed); modes that skip the grid branch
   (`0x000f2390`); a respawn's state 0 may re-lower a craft; rivals unmeasured; HD golden hashes that move
   (none found in the affected gate). Pulse's craft update was not read for the same branch.
-- **The scenery does not animate under the flyby**: `Scene::render` takes its animation clock from
-  `World::tick`, held at 0 for the 25 s. One line in `scene/frame.rs` (`race.sim.world.tick` ->
-  `Race::motion_tick`, at the two places it is read), but the file is 1,000 lines of one function
-  and has to be split first.
+- ~~The scenery does not animate under the flyby~~ **landed 2026-10-29 (`pulse-flyby-settle`)**:
+  `Race::world_clock_seconds` adds `flyby_seconds`; the gantry stays on the race clock (measured:
+  it starts at the flyby's end). `scene/frame.rs` is 1,232 lines, under the ceiling, left unsplit.
+  Open: clouds still read `World::tick`; no draw alpha during the flyby.
 - **The tail**: the music the intro starts and stops (`g_music_player` calls at the counter's
-  `0x28` and `0`), and the `ScreenFlash` kind 10 wash at its end, are not played.
-  **The wash was photographed 2026-10-02** (`h0103.png` to
-  `h0125.png`, one frame per call, scratch): the picture is solid white on the call after
-  substate 2 first reads (h0103), already half-transparent over the chase view by h0105, and
-  clear by about h0120, with the panel fading under it. Colour and curve are not measured; it is
-  white at full strength at its start.
+  `0x28` and `0`) is not played. ~~The `ScreenFlash` kind 10 wash~~ **wired 2026-10-29**, the
+  executable's 0.7 s white; the 2026-10-02 frames (`h0103` to `h0125`) fade faster (half by two
+  calls, clear by about 17), unresolved whether a call is a tick.
 - **Demo mode** skips it (`g_game_mode == 2`); a byte at mode object `+0x40` also skips it
   without a held button and is unread. Only Single Race and Time Trial were captured.
 - **A fresh menu-walk load on `03_Track` and Metropia reached the intro already in its fade-out
@@ -77,7 +74,7 @@ node, played for `AnimEnd` seconds or until a held Cross, with the world held at
 
 ## Next Steps
 
-1. Split `scene/frame.rs`, then give the scenery and the gantry's clock `Race::motion_tick`.
+1. The intro music cue (`g_music_player` at the counter's `0x28` and `0`), the disc's own cue only.
 2. ~~Pulse's settle~~ closed (see Open). Optional: a view-side rise of the drawn pose over the first ~50
    flyby ticks, if the flyby camera shows the craft then (chosen, not measured).
 3. Re-measure one of the short circuits (`01_Track`) through to its end, and a fresh-load

@@ -180,7 +180,8 @@ pub const MODE_START: Kind = kind(
 );
 
 /// Kind 10: `RaceMode_UpdateIntro_q` (`0x08829e6c`), when the intro
-/// camera's pass ends, 0.7 s of white. **Unwired**, for kind 9's reason.
+/// camera's pass ends, 0.7 s of white. Started by `Race::tick_intro` when the
+/// pre-race flyby ends (Pulse PSP's node).
 pub const INTRO_END: Kind = kind(
     0.7,
     0.0,
