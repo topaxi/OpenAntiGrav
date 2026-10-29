@@ -718,7 +718,7 @@ def add_pad_at(context, spline_obj, kind, near):
     path = path_of(spline_obj, context.evaluated_depsgraph_get(), 0)
     target = to_format(tuple(near))
     best = min(path.points, key=lambda p: sum((p.pos[i] - target[i]) ** 2 for i in range(3)))
-    pad = derive.pad_at(best)
+    pad = derive.pad_at(best, kind)
     index = sum(1 for o in context.scene.objects if _kind(o) == kind)
     obj = make_pad_object(context, pad, kind, index)
     return obj

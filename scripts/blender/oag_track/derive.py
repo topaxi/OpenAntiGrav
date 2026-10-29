@@ -25,7 +25,21 @@ START_BEHIND = 154.0
 HALF_WIDTH = 20.0
 WALL_HEIGHT = 15.0
 AI_FRACTION = 0.6
-PAD_BOX = ((-10.0, -2.0, -10.0), (10.0, 8.0, 10.0))
+# The disc's own pad volumes (measured): `oag_vex::pads::PadVolume` of every Pulse PSP EU circuit
+# (03_Track, 01_Track) exported with `export_track`, read from `oag/pads/*` `_OAG_MIN`/`_OAG_MAX` in
+# pad-local (lateral, up, forward). Every pad of a kind has the same box; the vertical span is the
+# loader's bind expansion (-2.0 down, +8.0 up) around the authored one.
+PAD_BOXES = {
+    "speedup": (
+        (-4.775538921356201, -2.1500000953674316, -3.753633737564087),
+        (4.775538921356201, 7.998385429382324, 4.967547416687012),
+    ),
+    "weapon": (
+        (-4.942544460296631, -2.1500790119171143, -4.942544460296631),
+        (4.942544460296631, 8.007926940917969, 4.942544460296631),
+    ),
+}
+PAD_BOX = PAD_BOXES["speedup"]
 
 
 class AuthoringError(Exception):
@@ -134,9 +148,10 @@ def start_frame(points, behind=START_BEHIND):
     return Start(start, f32.cross(WORLD_UP, forward), WORLD_UP, forward)
 
 
-def pad_at(point, box=PAD_BOX):
+def pad_at(point, kind):
     """A pad on a spline point: the unit basis (lateral, up, forward) in the rows,
-    the size in the box, as the fixture does."""
+    the size in the box: the disc's own volume of that kind (`PAD_BOXES`)."""
+    box = PAD_BOXES[kind]
     up = f32.unit(f32.cross(point.lateral, point.tangent))
     rows = [point.lateral, up, point.tangent]
     to_world = []
