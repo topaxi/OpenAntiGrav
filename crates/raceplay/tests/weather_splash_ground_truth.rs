@@ -341,7 +341,7 @@ fn the_craft_throws_spray_on_wet_open_road_only() {
             sprayed += 1;
             let (o_add, o_alpha) = lists(&original);
             let (e_add, e_alpha) = lists(&enhanced);
-            assert_eq!(e_add.len() >= o_add.len(), true);
+            assert!(e_add.len() >= o_add.len());
             assert!(
                 e_alpha.len() > o_alpha.len(),
                 "spray draws: tick {tick} n={} {} vs {} cell {:?}",

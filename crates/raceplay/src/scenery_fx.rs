@@ -285,7 +285,6 @@ impl super::Race {
         } else {
             Vec::new()
         };
-        if std::env::var_os("DBGSPRAY").is_some() {
             eprintln!(
                 "DBGE {:?} cam {:?}",
                 emitters.first().map(|e| e.at),
