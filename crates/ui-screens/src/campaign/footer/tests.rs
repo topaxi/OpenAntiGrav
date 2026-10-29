@@ -571,3 +571,23 @@ fn a_button_half_is_known_by_its_widget_name_not_its_idstring() {
     let legend = NavigationLegend::read(&root, &globals(), &strings).expect("controller");
     assert!(legend.can_model_reset_prompt());
 }
+
+/// Pure's skin names `Back button` where its string table keys `Back Button`: the prompt still
+/// resolves to the table's glyph, and does not draw the id as text.
+#[test]
+fn a_prompt_idstring_differing_only_in_case_still_resolves() {
+    let root = parse(
+        r#"<Root><NavigationController name="NavigationController">
+<Text name="ControlTextBackButton"><Values idstring="Back button" font="scroll" x="365" y="251"></Values></Text>
+<Text name="ControlTextBack"><Values idstring="Back" font="scroll" scale="0.7" x="381" y="253"></Values></Text>
+</NavigationController></Root>"#,
+    );
+    let strings = StringTable::from_xml(
+        r#"<Entries><Entry ID="Back Button" String="g"></Entry><Entry ID="Back" String="Back"></Entry></Entries>"#,
+    );
+    let legend =
+        NavigationLegend::read(&root, &HashMap::new(), &strings).expect("controller present");
+    let draws = legend.draw(&FaceScales::default(), &|_| 10.0);
+    let texts: Vec<&str> = draws.iter().map(|draw| text_and_y(draw).0).collect();
+    assert_eq!(texts, ["g", "Back"]);
+}

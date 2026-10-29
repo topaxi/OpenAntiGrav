@@ -340,7 +340,16 @@ impl NavigationLegend {
             prompts.push((
                 idstring.to_string(),
                 Prompt {
-                    text: strings.get_or_id(idstring).to_string(),
+                    // Pure's skin says `Back button` where its table's key is
+                    // `Back Button` (the `Confirm button` pair agrees): the
+                    // original resolves it to the triangle glyph, so an exact
+                    // miss is retried with the case folded before the id is
+                    // shown.
+                    text: strings
+                        .get(idstring)
+                        .or_else(|| strings.find_ignoring_case(idstring))
+                        .unwrap_or(idstring)
+                        .to_string(),
                     // `ControlTextConfirmButton`/`BackButton` author
                     // `font="small"` themselves; `ControlTextConfirm`/`Back`
                     // (the words) author no `font` at all. `"default"` is
