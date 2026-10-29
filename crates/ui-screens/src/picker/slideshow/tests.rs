@@ -305,10 +305,16 @@ fn a_step_cross_fades_the_cards_it_adds_and_drops() {
     let closing = show.draws_fading(6.0 + half, STEP_FADE_SECONDS, &flat);
     let a = alphas(&closing);
     assert_eq!(a.len(), 5, "three held plus the two leaving: {a:?}");
-    assert!((a[3] - 0.5 * shadow).abs() < 1e-3 && (a[4] - 0.5).abs() < 1e-3, "{a:?}");
+    assert!(
+        (a[3] - 0.5 * shadow).abs() < 1e-3 && (a[4] - 0.5).abs() < 1e-3,
+        "{a:?}"
+    );
     // The first pass through the start state has nothing to cross-fade from, and
     // `0.0` steps at once like `draws`.
-    assert_eq!(alphas(&show.draws_fading(0.1, STEP_FADE_SECONDS, &flat)), [1.0]);
+    assert_eq!(
+        alphas(&show.draws_fading(0.1, STEP_FADE_SECONDS, &flat)),
+        [1.0]
+    );
     assert_eq!(
         show.draws_fading(2.0 + half, 0.0, &flat),
         show.draws(2.0 + half, &flat)

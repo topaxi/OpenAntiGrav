@@ -226,14 +226,21 @@ fn every_craft_is_placed_by_its_own_screen_xml_and_sways_on_its_own_anim_transfo
         let blob = archives.read_name(&model.src).expect("the hull resolves");
         let hull = oag_mesh::mesh::build("hull", &blob).expect("it decodes");
         let swaying = hull.sample_anim_nodes(0.0) != hull.sample_anim_nodes(1.5);
-        assert!(swaying, "{}: the hull's Anim Transform moves it", team.location);
+        assert!(
+            swaying,
+            "{}: the hull's Anim Transform moves it",
+            team.location
+        );
     }
     // Assegai's sway is a 359-frame loop: the same pose one loop on.
     let blob = archives
         .read_name(r"Data\Ships\Assegai\ship_FE.vex")
         .expect("the hull resolves");
     let hull = oag_mesh::mesh::build("hull", &blob).expect("it decodes");
-    let (a, b) = (hull.sample_anim_nodes(1.5), hull.sample_anim_nodes(1.5 + 359.0 / 60.0));
+    let (a, b) = (
+        hull.sample_anim_nodes(1.5),
+        hull.sample_anim_nodes(1.5 + 359.0 / 60.0),
+    );
     for (x, y) in a.iter().flatten().zip(b.iter().flatten()) {
         assert!((x - y).abs() < 1e-3, "{x} against {y}");
     }

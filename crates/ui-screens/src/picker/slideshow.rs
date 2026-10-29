@@ -282,7 +282,10 @@ impl Slideshow {
         } else {
             1.0
         };
-        let before = step.previous.filter(|_| alpha < 1.0).map(|i| &self.states[i]);
+        let before = step
+            .previous
+            .filter(|_| alpha < 1.0)
+            .map(|i| &self.states[i]);
         let same = |a: &Image, b: &Image| a.src == b.src && a.x == b.x && a.y == b.y;
         let sprite = |image: &Image, alpha: f32| {
             let placed = sprites(&image.src)?;
