@@ -166,6 +166,13 @@ pub enum Draw {
         /// The stencil reference, `0..=255`.
         value: u8,
     },
+    /// [`Self::GlowStamp`] over each glyph quad the draw just before it laid out (the union of the
+    /// per-glyph quads, not the line box): what `Text_Draw` stamps for a `Text`.
+    /// Draws nothing; stamps nothing after a draw that is not text.
+    GlowText {
+        /// The stencil reference, `0..=255`.
+        value: u8,
+    },
     /// One of the front end's own images, from the sprite sheet.
     Sprite {
         /// Where it goes on the 480x272 screen: `[x, y, width, height]`.

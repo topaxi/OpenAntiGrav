@@ -187,7 +187,7 @@ pub fn grid_draw_list(
             _ => text.string.clone(),
         };
         let Some(content) = content else { continue };
-        out.push(text_draw(text, &content, layout));
+        push_text(&mut out, text, &content, layout, model.pulse());
     }
     layers.body = out;
     layers
@@ -383,7 +383,7 @@ pub fn cell_draw_list(
             _ => text.string.clone(),
         };
         let Some(content) = content else { continue };
-        out.push(text_draw(text, &content, layout));
+        push_text(&mut out, text, &content, layout, model.pulse());
     }
     // The three medal-tier swatches: shown iff their own text row is.
     for image in &screen.images {
@@ -706,6 +706,29 @@ pub(super) fn selector_tinted_draw(
 ) -> Draw {
     let [dx, dy] = origin.map_or(SELECTOR_ORIGIN, |(x, y)| [x, y]);
     sprite_draw(image, placed, hex[0] + dx, hex[1] + dy, argb)
+}
+
+/// `text`'s draw and, after it, what `Text_Draw` stamps into the glow mask for it: the authored
+/// `RealGlow` (times the colour's alpha, `RealGlow * alpha / 255`), or while the widget is
+/// `pulse="true"` the ladder [`super::pulse::SelectorPulse::text_stamp`] over its glyph quads.
+/// Nothing for a text that authors neither. The title gates whether the frame blooms.
+pub(super) fn push_text(
+    out: &mut Vec<Draw>,
+    text: &Text,
+    content: &str,
+    layout: &Layout,
+    pulse: &super::pulse::SelectorPulse,
+) {
+    out.push(text_draw(text, content, layout));
+    let value = if text.pulse {
+        pulse.text_stamp(text.pulse_multiplier)
+    } else {
+        let alpha = (text.color >> 24) as f32;
+        (f32::from(text.real_glow) * alpha / 255.0) as u8
+    };
+    if value > 0 {
+        out.push(Draw::GlowText { value });
+    }
 }
 
 /// `Selector`'s draw and, after it, the glow-mask stamp its quad writes: the whole 42x43 rectangle,

@@ -90,6 +90,14 @@ pub struct Text {
     /// per widget, since no other `pulse="true"` widget has been captured yet
     /// to say whether they share the same numbers.
     pub pulse: bool,
+    /// `RealGlow`: the stencil reference this widget stamps into the glow mask, `0` (stamps
+    /// nothing of its own) when absent. `Text_ParseValues` (`0x088cdb34`) stores it at `+0xb8`,
+    /// default `0`; `Text_Draw` stamps `RealGlow * alpha / 255`. Read as authored; whether a
+    /// title's front end blooms is `oag_title::Campaign::frontend_glow`.
+    pub real_glow: u8,
+    /// `PulseMultiplier`: scales a pulsing text's stamp, `(220 - s) * PulseMultiplier`
+    /// (`Text_Draw`). `1.0` when absent (`Text_Construct` `0x088ccbe8` stores `0x3f800000`).
+    pub pulse_multiplier: f32,
     /// The authored `DisplayType`. Data only, see [`DisplayType`].
     pub display_type: DisplayType,
     /// Seconds after the widget's screen appears before it starts drawing at

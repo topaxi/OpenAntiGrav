@@ -56,6 +56,20 @@ impl SelectorPulse {
         (80.0 + 150.0 * self.level()).round().clamp(0.0, 255.0) as u8
     }
 
+    /// The glow-mask byte a pulsing `Text` stamps now: `(220 - s) * multiplier`, `s` a byte that
+    /// `Text_Draw` (`0x088ce668`, confidence 85) steps by 15 per `1/20 s` tick, up from 0 to 150 and
+    /// back, so the value runs 220 down to 70 and back over one second in 15-unit levels. The
+    /// shape and the levels are read (and met in EDRAM: Grid Selection's `GRID 1` read 115 and
+    /// 130, both on the ladder). **Chosen, not measured**: the phase. The original's `s` starts at
+    /// 0 on the text's first draw but is caught up to the game clock's tick count, so it has no
+    /// law against the screen's entry; ours starts at 0 when the screen opens.
+    #[must_use]
+    pub fn text_stamp(&self, multiplier: f32) -> u8 {
+        let step = (self.seconds.max(0.0) * 20.0) as u32 % 20;
+        let s = 15 * if step <= 10 { step } else { 20 - step };
+        ((220 - s) as f32 * multiplier).clamp(0.0, 255.0) as u8
+    }
+
     /// `Selector`'s ARGB tint now: `lerp(phase, cyan, white)` for the first
     /// half of the 2.0-wide phase, `lerp(phase - 1, white, cyan)` for the rest.
     #[must_use]
@@ -113,6 +127,21 @@ mod tests {
         p.set_seconds(ENTRY_HOLD + 0.75);
         assert_eq!(p.stamp(), rising, "the same triangle as the tint");
         assert_eq!(rising, 155);
+    }
+
+    #[test]
+    fn a_pulsing_texts_stamp_is_a_220_to_70_ladder_over_one_second() {
+        let mut p = SelectorPulse::default();
+        assert_eq!(p.text_stamp(1.0), 220, "s starts at 0");
+        p.set_seconds(0.5);
+        assert_eq!(p.text_stamp(1.0), 70, "s tops out at 150 after ten ticks");
+        p.set_seconds(0.25);
+        assert_eq!(p.text_stamp(1.0), 145);
+        p.set_seconds(0.75);
+        assert_eq!(p.text_stamp(1.0), 145, "the way back is the way out");
+        p.set_seconds(1.0);
+        assert_eq!(p.text_stamp(1.0), 220);
+        assert_eq!(p.text_stamp(0.5), 110, "PulseMultiplier scales it");
     }
 
     #[test]
