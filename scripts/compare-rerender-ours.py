@@ -140,6 +140,10 @@ def rerender(pj, binary):
             got = tomllib.loads(ce.settings_path(tmp / "profile").read_text())["graphics"].get("hud_safe_area")
             if got != want:
                 return "FAILED: ours ran with hud_safe_area %r, the pair says %r" % (got, want)
+        offset = rec["ours"].get("display_offset") or ce.display_offset_record(rec["profile"], rec.get("kind"))
+        if offset:
+            offset["pixels"] = ce.apply_display_offset(shot, offset)
+            rec["ours"]["display_offset"] = offset
         shutil.move(str(shot), pair_dir / "ours.png")
     subprocess.run(["magick", "montage", pair_dir / "theirs.png", pair_dir / "ours.png", "-tile", "2x1",
                     "-geometry", "+2+2", pair_dir / "side.png"], check=True)
