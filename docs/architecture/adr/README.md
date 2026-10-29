@@ -87,6 +87,7 @@ out to be wrong.
 | [0076](0076-a-track-file-carries-its-art-as-an-optional-section.md) | A track file carries its art as an optional section | **Proposed** |
 | [0077](0077-a-custom-campaign-compiles-to-the-titles-own-grid.md) | A custom campaign is a mod file that compiles to the title's own grid | Accepted |
 | [0078](0078-a-mod-is-turned-off-by-id-live-and-the-built-in-never.md) | A mod is turned off by id, live, and the built-in never | **Proposed** |
+| [0079](0079-extensions-are-sandboxed-webassembly-guests-behind-two-worlds.md) | Extensions are sandboxed WebAssembly guests behind two worlds: a sim world of copies in and bounded commands out, and a HUD world that reaches no state | **Proposed** |
 
 ## Format
 
