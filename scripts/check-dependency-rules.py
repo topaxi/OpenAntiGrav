@@ -157,8 +157,12 @@ TITLE_FREE_RENDER_CRATES = {
 # ADR-0062.
 GENERIC_READERS = {
     "oag-unity": {"oag-bytes"},
-    # The extension host knows no game and no title: wasmtime and nothing of ours.
-    "oag-modhost": set(),
+    # The extension host knows no game and no title: wasmtime, and of ours only the
+    # ABI's one definition, which the guest SDK compiles against too.
+    "oag-modhost": {"oag-ext-abi"},
+    # The ABI's one definition: no dependencies, so host and guest reach nothing
+    # either could not.
+    "oag-ext-abi": set(),
 }
 
 # Rule 5: a game-specific Unity layer builds on `oag-unity` and the texture

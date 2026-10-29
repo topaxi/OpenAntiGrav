@@ -4,7 +4,7 @@
 //! (sections 2.1 and 4), the engine side in `hooks.md` and `determinism-and-state.md`
 //! beside it. This crate knows no game and no title. It compiles a module, checks it,
 //! and runs its `tick` export on a fresh pooled instance under a fuel budget, with the
-//! observation and the reply crossing in one I/O buffer ([`abi`]).
+//! observation and the reply crossing in one I/O buffer, laid out by `oag_ext_abi`.
 //!
 //! - **Lazy**: no wasmtime [`Engine`] exists until the first [`Module::compile`];
 //!   [`engines_created`] counts them so a test can prove a vanilla race built none.
@@ -25,12 +25,9 @@ use wasmtime::{
     StoreLimitsBuilder, Trap,
 };
 
-pub mod abi;
+use oag_ext_abi::{ABI, ABI_WORD, Command, Craft, Event, IO_LEN, MAX_STATE_BYTES, REVISION};
 
-pub use abi::{Command, Event};
-
-/// The ABI major this host writes: a module's `oag_abi` export must return it.
-pub const ABI: u32 = 1;
+mod reply;
 
 /// The most a module may ask for, in 64 KiB pages (16 MiB). Proposed in the README
 /// (section 4.1), chosen.
@@ -99,8 +96,21 @@ pub enum LoadError {
     Import(String),
     /// A required export is missing or has the wrong type.
     Export(String),
-    /// `oag_abi` returned another major.
-    Abi(u32),
+    /// `oag_abi` returned another major or layout revision; `revision` is `None` for
+    /// a module built before revisions existed.
+    Abi {
+        /// The major the module was built for.
+        major: u32,
+        /// The layout revision it was built for.
+        revision: Option<u32>,
+    },
+    /// The module's `oag_state_len` export disagrees with the manifest's `state_bytes`.
+    State {
+        /// What the module exports.
+        module: u32,
+        /// What the manifest declares.
+        manifest: u32,
+    },
     /// The declared limits are out of range.
     Limits(String),
     /// Instantiating or the first call trapped.
@@ -114,7 +124,24 @@ impl std::fmt::Display for LoadError {
             Self::Compile(e) => write!(f, "does not compile: {e}"),
             Self::Import(e) => write!(f, "imports {e}; only the `oag` namespace exists"),
             Self::Export(e) => write!(f, "export {e}"),
-            Self::Abi(major) => write!(f, "built for ABI {major}, this host is ABI {ABI}"),
+            Self::Abi {
+                major,
+                revision: Some(revision),
+            } => write!(
+                f,
+                "built for ABI {major} rev {revision}, this host is ABI {ABI} rev {REVISION}"
+            ),
+            Self::Abi {
+                major,
+                revision: None,
+            } => write!(
+                f,
+                "built for ABI {major} without a layout revision, this host is ABI {ABI} rev {REVISION}"
+            ),
+            Self::State { module, manifest } => write!(
+                f,
+                "the module's state is {module} bytes, its manifest declares state_bytes = {manifest}"
+            ),
             Self::Limits(e) => write!(f, "{e}"),
             Self::Start(e) => write!(f, "traps on start: {e}"),
         }
@@ -128,7 +155,7 @@ impl std::error::Error for LoadError {}
 pub struct Limits {
     /// The guest's maximum linear memory, 64 KiB pages, at most [`MAX_MEMORY_PAGES`].
     pub memory_pages: u32,
-    /// The state blob's length, at most [`abi::MAX_STATE_BYTES`].
+    /// The state blob's length, at most [`MAX_STATE_BYTES`].
     pub state_bytes: u32,
     /// Fuel per tick.
     pub fuel: u64,
@@ -194,7 +221,7 @@ pub struct Observation<'a> {
     /// What happened since the last call, in engine order.
     pub events: &'a [Event],
     /// Each grid slot, in slot order.
-    pub crafts: &'a [abi::Craft],
+    pub crafts: &'a [Craft],
 }
 
 /// What a call cost, for the dev overlay. An output, never simulation state.
@@ -219,11 +246,10 @@ impl Module {
                 limits.memory_pages
             )));
         }
-        if limits.state_bytes as usize > abi::MAX_STATE_BYTES {
+        if limits.state_bytes as usize > MAX_STATE_BYTES {
             return Err(LoadError::Limits(format!(
-                "state_bytes {} is over {}",
-                limits.state_bytes,
-                abi::MAX_STATE_BYTES
+                "state_bytes {} is over {MAX_STATE_BYTES}",
+                limits.state_bytes
             )));
         }
         let engine = engine()?;
@@ -262,12 +288,26 @@ impl Module {
         let (mut store, instance) = loaded
             .instantiate()
             .map_err(|e| LoadError::Start(format!("{e:#}")))?;
-        let major = instance
+        let word = instance
             .get_typed_func::<(), u32>(&mut store, "oag_abi")
             .and_then(|f| f.call(&mut store, ()))
             .map_err(|e| LoadError::Export(format!("`oag_abi`: {e:#}")))?;
-        if major != ABI {
-            return Err(LoadError::Abi(major));
+        if word != ABI_WORD {
+            let (major, revision) = oag_ext_abi::split_abi_word(word);
+            return Err(LoadError::Abi { major, revision });
+        }
+        // Optional: a module that says how long its state is must agree with its manifest.
+        if module.get_export("oag_state_len").is_some() {
+            let len = instance
+                .get_typed_func::<(), u32>(&mut store, "oag_state_len")
+                .and_then(|f| f.call(&mut store, ()))
+                .map_err(|e| LoadError::Export(format!("`oag_state_len`: {e:#}")))?;
+            if len != limits.state_bytes {
+                return Err(LoadError::State {
+                    module: len,
+                    manifest: limits.state_bytes,
+                });
+            }
         }
         Ok(loaded)
     }
@@ -337,9 +377,16 @@ impl Module {
                 .get_typed_func::<(), u32>(&mut store, "oag_io")
                 .and_then(|f| f.call(&mut store, ()))
                 .map_err(trap)? as usize;
-            let mut buffer = vec![0_u8; abi::IO_LEN];
-            abi::write_observation(&mut buffer, observation, state);
-            memory.write(&mut store, io, &buffer).map_err(|e| {
+            let mut buffer = Box::new([0_u8; IO_LEN]);
+            oag_ext_abi::write_observation(
+                &mut buffer,
+                observation.tick,
+                observation.active,
+                observation.events,
+                observation.crafts,
+                state,
+            );
+            memory.write(&mut store, io, &buffer[..]).map_err(|e| {
                 Fault::Trap(format!("the I/O buffer at {io:#x} is outside memory: {e}"))
             })?;
             let status = instance
@@ -350,10 +397,11 @@ impl Module {
                 return Err(Fault::Reply(format!("tick returned {status}")));
             }
             memory
-                .read(&store, io, &mut buffer)
+                .read(&store, io, &mut buffer[..])
                 .map_err(|e| Fault::Trap(e.to_string()))?;
-            let commands = abi::read_reply(&buffer, observation)?;
-            Ok((abi::state(&buffer, state.len()).to_vec(), commands))
+            let commands = reply::read(&buffer, observation)?;
+            let at = oag_ext_abi::STATE_AT;
+            Ok((buffer[at..at + state.len()].to_vec(), commands))
         })();
         *fuel_left = store.get_fuel().ok();
         outcome

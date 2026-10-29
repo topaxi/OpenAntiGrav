@@ -10,6 +10,7 @@ members = [
   "crates/core",
   "crates/disc",
   "crates/display",
+  "crates/ext-abi",
   "crates/formats",
   "crates/fx",
   "crates/game",
@@ -86,6 +87,7 @@ oag-net = { path = "crates/net" }
 oag-mobile = { path = "crates/mobile" }
 oag-mod = { path = "crates/mod" }
 oag-modhost = { path = "crates/modhost" }
+oag-ext-abi = { path = "crates/ext-abi" }
 oag-input = { path = "crates/input" }
 oag-livery = { path = "crates/livery" }
 oag-mesh = { path = "crates/mesh" }
