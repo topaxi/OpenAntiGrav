@@ -270,6 +270,28 @@ pub fn host_disc<'a>(
         })
 }
 
+/// Why a listed file is not offered for `craft`'s title (its `titles` filter,
+/// ADR-0076 decision 13), or `None` when it is, when it lists no titles, or when
+/// no craft title is known yet.
+#[must_use]
+pub fn not_offered(listing: &Listing, craft: Option<&oag_title::Title>) -> Option<String> {
+    let craft = craft?;
+    if listing.titles.is_empty()
+        || listing
+            .titles
+            .iter()
+            .any(|t| *t == oag_source::layers::slug(craft))
+    {
+        return None;
+    }
+    let names: Vec<&str> = listing
+        .titles
+        .iter()
+        .map(|t| oag_source::title::by_slug(t).map_or(t.as_str(), |title| title.name))
+        .collect();
+    Some(format!("offered on {} only", names.join(", ")))
+}
+
 /// Makes a launch of a track file that borrows from another title's disc a Race
 /// Remix (ADR-0076 decision 13): the host's disc becomes the track source and
 /// the launch's own source the craft's (unless a craft source is already set).
