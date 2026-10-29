@@ -540,9 +540,9 @@ fn line5_draws_the_selected_cells_saved_record_when_one_exists() {
     );
 }
 
-/// The regression this pass fixes: `Selector` used to share the selected
-/// hex's own top-left corner, which put a 42x43 cursor visibly down-and-right
-/// of a 32x32 hex rather than around it - see `docs/ui/campaign-screens.md`.
+/// `Selector` sits at the selected hex's top-left minus (5,7), not top-left aligned (which put the
+/// cursor visibly down-and-right of the hex) and not canvas-centred (1.5 px low); see
+/// `SELECTOR_ORIGIN`.
 #[test]
 fn the_selector_is_centred_on_the_selected_hex_not_top_left_aligned() {
     let layout = grid_layout();
@@ -577,7 +577,7 @@ fn the_selector_is_centred_on_the_selected_hex_not_top_left_aligned() {
         .expect("the Selector draws as a 42x43 sprite");
     // Hex 0 sits at [65,145,32,32]. Centred: `65 + (32-42)/2 = 60`,
     // `145 + (32-43)/2 = 139.5`.
-    assert_eq!(selector_rect, [60.0, 139.5, 42.0, 43.0]);
+    assert_eq!(selector_rect, [60.0, 138.0, 42.0, 43.0]);
 }
 
 #[test]
@@ -961,7 +961,7 @@ fn cell_selections_selector_is_also_centred_on_the_selected_hex() {
         })
         .expect("the Selector draws as a 42x43 sprite");
     // Cell (1,0) sits at [65,59,32,32].
-    assert_eq!(selector_rect, [60.0, 53.5, 42.0, 43.0]);
+    assert_eq!(selector_rect, [60.0, 52.0, 42.0, 43.0]);
 }
 
 #[test]

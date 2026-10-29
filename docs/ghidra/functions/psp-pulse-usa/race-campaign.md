@@ -2210,3 +2210,9 @@ and [`docs/ui/campaign-screens.md`](../../../ui/campaign-screens.md)'s "Where th
   persistence), 85 (the glyph filter: one boot, one control). `CellCursor` in `campaign_stage.rs` now implements it
   (the screen's own lock predicate) - not the byte, which a first draft used and the gold-neighbour row refuted.
 
+**`pulse-selector-glow` lane, 2026-10-29: the halo is the bloom.** A GE dump of the original's Grid and Cell Selection shows one cursor
+quad (no second draw) whose texture holds no halo, and the frame's tail is `Bloom_Draw`; `Selector` stamps the stencil
+(ref `0x98` and `0xb5` on the two dumps) that the bloom reads. `SelectorGlow` stays dead code here. The same function's position
+update uses the literals `5.0` and `7.0`: the quad's top-left is the hex's top-left minus (5,7), measured `(60,138)` over `(65,145)`.
+See `docs/ui/campaign-screens.md`, "The halo is the front end's bloom".
+
