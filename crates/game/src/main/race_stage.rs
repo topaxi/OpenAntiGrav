@@ -178,9 +178,25 @@ pub(crate) struct RaceStage {
     pub(crate) endrace_prefetch: Option<crate::session::endrace::prefetch::Prefetch>,
     /// Whether that worker has been offered a start, so it is started once per race.
     pub(crate) endrace_prefetch_started: bool,
+    /// Raised when this stage is dropped so the worker stops at its next phase; see the `Drop`.
+    pub(crate) endrace_cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
     /// The best medal [`Self::tick_messages`] has already announced, so a medal
     /// is raised once however many ticks it stays earned.
     pub(super) earned_medal: Option<oag_tables::race_campaign::Medal>,
+}
+
+impl Drop for RaceStage {
+    /// Cancels and joins the EndRace worker before this stage's GPU resources are released: a
+    /// worker still submitting while the main thread tears a race down crashes the driver (a
+    /// SIGSEGV on leaving a race with the prefetch unfinished). Waits only for the phase the
+    /// worker is in; a stage dropped off the frame thread (`drop_off_thread`) waits there.
+    fn drop(&mut self) {
+        self.endrace_cancel
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        if let Some(mut task) = self.endrace_prefetch.take() {
+            drop(task.join());
+        }
+    }
 }
 
 impl RaceStage {

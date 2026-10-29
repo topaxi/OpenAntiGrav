@@ -694,6 +694,7 @@ impl Stage {
             endrace_unavailable: false,
             endrace_prefetch: None,
             endrace_prefetch_started: false,
+            endrace_cancel: std::sync::Arc::default(),
             earned_medal: None,
         }))
     }

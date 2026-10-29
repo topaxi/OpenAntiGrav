@@ -50,9 +50,15 @@ pub(crate) struct EndRacePrepArgs {
     format: wgpu::TextureFormat,
     anisotropy: oag_mesh::mesh_render::Anisotropy,
     with_trophies: bool,
+    cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl EndRacePrepArgs {
+    /// The process is exiting or this race's stage is being dropped.
+    fn leaving(&self) -> bool {
+        oag_game::gpu_workers::stopping() || self.cancel.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
     /// Opens the source, reads the screens and builds the GPU side. `None` after saying why:
     /// the caller then keeps the built-in results table for this race.
     pub(crate) fn run(self) -> Option<EndRacePrep> {
@@ -67,7 +73,7 @@ impl EndRacePrepArgs {
         {
             std::thread::sleep(std::time::Duration::from_millis(ms));
         }
-        if oag_game::gpu_workers::stopping() {
+        if self.leaving() {
             return None;
         }
         let (packs, pure_packs, problems) = oag_source::dlc::packs_from_defaults(
@@ -87,7 +93,7 @@ impl EndRacePrepArgs {
                 return None;
             }
         };
-        if oag_game::gpu_workers::stopping() {
+        if self.leaving() {
             return None;
         }
         let global_refs: Vec<(&str, &str)> = self
@@ -118,7 +124,7 @@ impl EndRacePrepArgs {
                 return None;
             }
         };
-        if oag_game::gpu_workers::stopping() {
+        if self.leaving() {
             return None;
         }
         match EndRacePrep::build(
@@ -179,6 +185,7 @@ impl Session {
             format: self.gpu.output.config.format,
             anisotropy: self.anisotropy,
             with_trophies: stage.campaign_cell.is_some(),
+            cancel: std::sync::Arc::clone(&stage.endrace_cancel),
         })
     }
 
