@@ -116,17 +116,49 @@ fn layout_fold() -> u64 {
         Effect::ALL.len() as u32,
         u32::from(Pickup::Ours.code()),
     ];
+    // Each code by name: a reordered variant moves a byte's meaning on the wire.
+    let codes = [
+        Weapon::Rocket,
+        Weapon::Missile,
+        Weapon::Quake,
+        Weapon::Cannon,
+        Weapon::Turbo,
+        Weapon::Shield,
+        Weapon::Autopilot,
+        Weapon::Plasma,
+        Weapon::Bomb,
+        Weapon::Mine,
+        Weapon::LeachBeam,
+        Weapon::Repulser,
+        Weapon::Shuriken,
+        Weapon::Disruptor,
+    ]
+    .map(|weapon| u32::from(weapon.code()))
+    .into_iter()
+    .chain(
+        [
+            Cue::SpeedupPad,
+            Cue::Turbo,
+            Cue::Collision,
+            Cue::Absorb,
+            Cue::Shield,
+            Cue::ShieldActive,
+        ]
+        .map(|cue| u32::from(cue.code())),
+    )
+    .chain([Effect::CollisionSpark, Effect::HitSpark].map(|effect| u32::from(effect.code())));
     let commands = every_command().into_iter().flat_map(|c| c.encode());
     let events = every_event().into_iter().flat_map(Event::encode);
     let craft = a_craft().encode();
     fnv(consts
         .into_iter()
+        .chain(codes)
         .chain(commands.chain(events).chain(craft).map(u32::from)))
 }
 
 /// The revision and the layout it names. Edit the layout and this fails: bump
 /// [`REVISION`] and record the new fold beside it, in the same change.
-const REVISION_AND_FOLD: (u32, u64) = (1, 0xf160_519e_04b4_b616);
+const REVISION_AND_FOLD: (u32, u64) = (1, 0xa39d_2a3b_a54b_6419);
 
 #[test]
 fn the_layout_is_the_revision_it_says() {

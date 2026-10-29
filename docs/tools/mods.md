@@ -202,8 +202,10 @@ natively under `cargo test`, with no wasm toolchain. Build with
 `cargo build --release --target wasm32-unknown-unknown`, a 16 KiB stack
 (`-C link-arg=-zstack-size=16384`) and `panic = "abort"`.
 `assets/mods/examples/kiss-curse/` (one event, one command) and
-`assets/mods/examples/energy-turbo/` (a pickup of its own) are the worked examples;
-copy either one's `guest/` to start.
+`assets/mods/examples/energy-turbo/` (a pickup of its own) are the worked examples.
+Copy either one's `guest/` to start inside a `mod-examples` checkout; elsewhere, point
+its `oag-ext` dependency at your engine checkout's `crates/ext` (the example's is a
+relative `path` into the engine the submodule sits in).
 
 A module built for another layout revision of ABI 1 is refused at load, by name
 (`built for ABI 1 rev N, this host is ABI 1 rev M`): rebuild it against the SDK of
