@@ -289,6 +289,36 @@ These run on the render thread, once a frame, and never touch the simulation
   `:89` and `:94`), in a subset of `oag_ui`'s `Draw` vocabulary
   (`crates/ui/src/frontend/draw.rs:28`).
 
+## Menu side: the `frontend` world
+
+A mod screen runs in the menus, never in a race, and touches none of the sites above
+([README section 2.3](README.md#23-the-frontend-world)). Its engine meeting points:
+
+- **The row**: a mod's `menu.toml` row with `action = "open-mod-screen"` and
+  `screen = "<id>"`; the new `oag_ui::menu::vocabulary::Action` variant
+  (`crates/ui/src/menu/vocabulary.rs:13`) handled in `oag-game`, which opens the
+  screen model over `oag-ui-screens` (the `Input` and `Pointer` in, `Outcome` and
+  `Draw` out shape of `TagEntry`, `crates/ui-screens/src/tag_entry.rs:361`, `:423`,
+  `:472`). The host widgets take pad and pointer through the same `Input` and
+  `oag_ui::pointer::Pointer` (`crates/ui/src/pointer.rs:46`).
+- **The save**: a reply's `save` goes into the records `Store`
+  (`crates/game/src/records.rs:539`) and out through `records::save_in_background`
+  (`:1090`), off the render thread; inline on the web (`:1098-1102`).
+- **Into a race**: the one place a saved blob reaches a race is `setup.tune` at
+  `race-start`, built at `Race::start` (`crates/raceplay/src/start.rs:30`) from the
+  load's copy of the blob, never read from disk during the race.
+- **Not wired anywhere else**: the frontend host is not called from
+  `Race::tick_body`, and the sim hook never sees a screen.
+
+## No module loaded: no host
+
+The `Host` (wasmtime `Engine`) is built at the first module load by a race or a
+screen, not at start-up, and `Race::tick_body`'s call site (C) iterates the loaded
+sim modules: with none, the loop body never runs, no observation is built and no
+buffer is written, so a vanilla tick is unchanged and the hash gains nothing
+([README section 4.5](README.md#45-with-no-mods-loaded-nothing-runs)). The test that
+proves it is part of the first build step below.
+
 ## The maintainer's examples, mapped
 
 The README walks each end to end; this is what each needs from the engine.
@@ -327,8 +357,12 @@ definition float, with "the purple swoosh on a pad" unexplained
 Each is its own merge, each with a proof that a vanilla race's hashes do not move.
 
 1. The host (wasmtime engine and configuration, fuel, the fault path, the pooled
-   per-tick instance) with no call site wired.
-2. The `hud` world (phase 1).
+   per-tick instance) with no call site wired, built lazily at the first module
+   load; with the test that a vanilla race with the `extensions` feature on matches
+   the feature-off hashes and creates no `Engine`.
+2. The `hud` world (phase 1), and the `frontend` world beside it
+   ([README section 2.3](README.md#23-the-frontend-world)): `open-mod-screen`, host
+   widgets, the saved blob. `setup.tune` waits for step 4.
 3. Call site C, the event buffer, the state blob in the race state and the hash, and
    the `assist` command, proven by Pilot Assist on Pulse and Pure (phase 2).
 4. `scale-thrust` with its timer, then the craft example.
