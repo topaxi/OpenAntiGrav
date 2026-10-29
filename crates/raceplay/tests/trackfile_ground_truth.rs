@@ -484,6 +484,24 @@ fn a_lone_craft_gets_round_a_loop_authored_in_blender() {
     );
 }
 
+/// The loop with keyframed motion (`roundtrip.py motion`, ADR-0076 decision 10)
+/// races as the loop does, and its motion reaches the renderer's node table: the
+/// airship's two material slots on one node, the sun turning. Drop the mapping
+/// and the report lines go missing.
+#[test]
+#[ignore = "needs a Pulse image"]
+fn a_lone_craft_gets_round_a_loop_whose_art_moves() {
+    lone_craft_gets_round(
+        "blender_motion.track.toml",
+        "blender-motion",
+        "Blender Motion",
+        &[
+            "art motion: 2 animation(s), 2 mesh(es) on 1 node(s)",
+            "art: the sun turns with its animation",
+        ],
+    );
+}
+
 #[test]
 #[ignore = "needs a Pulse image"]
 fn a_lone_craft_gets_round_the_oval_re_exported_from_blender() {
