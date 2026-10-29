@@ -67,7 +67,7 @@ impl MenuStage {
             && let Some(row) = open.choice().selected_row()
             && !frozen_race
         {
-            list.extend(self.description_overlay(&row.description));
+            list.extend(self.description_overlay(&row.description, open.description_seconds()));
         }
         self.renderer.render_with(
             wgpu::LoadOp::Clear(wgpu::Color::BLACK),

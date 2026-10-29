@@ -819,14 +819,17 @@ pub const DESCRIPTION_SCALE: f32 = 0.7;
 /// `TextInfo`'s own colour and scale ([`DESCRIPTION_SCALE`] where it names
 /// none), at most its line count (the rest is cut: the original's box holds
 /// that many), spread evenly down the viewport's height. The description
-/// Wipeout Pure types along a selection screen's bottom, drawn here settled.
+/// Wipeout Pure types along a selection screen's bottom.
 ///
-/// Empty for an empty `text` or a viewport with no width. `measure` is a
-/// face's text width at scale `1.0`.
+/// `since` is the seconds since the screen appeared: the line is wrapped whole and then
+/// shown as far as [`typein::typed`] says, with its cursor. `None` draws it settled, no
+/// cursor. Empty for an empty `text` or a viewport with no width. `measure` is a face's
+/// text width at scale `1.0`.
 #[must_use]
 pub fn description_draws(
     layout: &TickerLayout,
     text: &str,
+    since: Option<f32>,
     measure: &dyn Fn(&str) -> f32,
 ) -> Vec<Draw> {
     let [x, y, width, height] = layout.viewport;
@@ -852,23 +855,45 @@ pub fn description_draws(
     if !line.is_empty() {
         lines.push(line);
     }
+    lines.truncate(layout.text_lines);
+    let total: usize = lines
+        .iter()
+        .map(|line| line.chars().count() + 1)
+        .sum::<usize>()
+        - 1;
+    let shown = since.map(|since| typein::typed(total, since));
+    let mut left = shown.map_or(total, |shown| shown.chars);
     let pitch = height / layout.text_lines as f32;
-    lines
-        .into_iter()
-        .take(layout.text_lines)
-        .enumerate()
-        .map(|(index, line)| {
-            Draw::in_role(
-                face_role(&layout.text_font),
-                x,
-                y + pitch * index as f32,
-                scale,
-                layout.color,
-                Align::Left,
-                line,
-            )
-        })
-        .collect()
+    let mut draws = Vec::new();
+    for (index, line) in lines.into_iter().enumerate() {
+        let length = line.chars().count();
+        let cut = left.min(length);
+        // A line's wrap space is typed too, so a line that is whole may still be
+        // waiting on it before the next begins.
+        let last = left <= length;
+        left = left.saturating_sub(length + 1);
+        let cursor = last && shown.is_some_and(|shown| shown.cursor);
+        if cut == 0 && !cursor {
+            break;
+        }
+        let mut visible: String = line.chars().take(cut).collect();
+        if cursor {
+            visible.push('_');
+        }
+        draws.push(Draw::in_role(
+            face_role(&layout.text_font),
+            x,
+            y + pitch * index as f32,
+            scale,
+            layout.color,
+            Align::Left,
+            visible,
+        ));
+        if last {
+            break;
+        }
+    }
+    draws
 }
 
 /// How fast the ticker travels, in pixels a second. **Chosen, not
@@ -943,6 +968,8 @@ pub fn ticker_draw(
     }
     None
 }
+
+pub mod typein;
 
 #[cfg(test)]
 mod tests;

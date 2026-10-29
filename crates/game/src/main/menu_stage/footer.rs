@@ -87,15 +87,15 @@ impl MenuStage {
     }
 
     /// `description` typed along the footer's `TextInfo` viewport (Wipeout
-    /// Pure's selection-screen description line), drawn settled; nothing on a
-    /// source with no such viewport.
+    /// Pure's selection-screen description line) `since` seconds after its
+    /// screen appeared; nothing on a source with no such viewport.
     #[must_use]
-    pub(super) fn description_overlay(&self, description: &str) -> Vec<Draw> {
+    pub(super) fn description_overlay(&self, description: &str, since: f32) -> Vec<Draw> {
         let Some(layout) = self.ticker.as_ref() else {
             return Vec::new();
         };
         let measure = |text: &str| font::measure(&self.default_atlas, text);
-        oag_ui_screens::campaign::footer::description_draws(layout, description, &measure)
+        oag_ui_screens::campaign::footer::description_draws(layout, description, Some(since), &measure)
     }
 
     /// The footer a picker carries: the `Confirm`/`Back` legend and the ticker,

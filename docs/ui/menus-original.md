@@ -377,6 +377,59 @@ and a live PPSSPP capture shows the prompts and plate titles complete from their
 [text-display-type.md](../ghidra/functions/psp-pulse-usa/text-display-type.md). HD authors 105 and its `Text` class is
 unread; if a capture there shows a type-in, `display_type` is where it would start.
 
+## Wipeout Pure types its description line in, and loops it - measured 2026-10-29
+
+Pulse draws its `TELETYPE` text whole (above); **Pure's selection screens (Class, League, Tournament and Track, and the
+mode screen's help line) type the amber description along the bottom, one character at a time, hold it, clear it
+and type it again**, for as long as the screen is open. Measured on PPSSPP v1.20.4 (software renderer, `InternalResolution 1`,
+USA disc `UCUS98612`, muted, own profile), from 30 fps recordings of the 480x272 window and from stopped-CPU grabs. The emulator's
+own clock (`cpu.status.ticks / 222e6`) ran at 1.0000 of wall time over two 52 s recordings. The code was not read (Pure's
+`BOOT.BIN` is not open in Ghidra here); everything below is observed, confidence 70.
+
+| Quantity | Value | Evidence |
+| --- | --- | --- |
+| rate | **58 characters a second** (17 ms each) | the loop period of Class Selection's 86-character line is 138.2 frames at 30 fps (4.607 s, 11 clears over 52 s), League Selection's 135-character line 163.2 frames (5.441 s, 10 clears): the 49-character difference is 0.834 s, 58.8 a second; eight stopped grabs of Class between 0.18 s and 1.32 s after the press fit 57.1 a second. One character per 60 Hz frame (59.94) is within a frame of both and is not excluded |
+| hold | **3.12 s** from the last character to the clear, then it types again at once | the same two periods less their typing time (3.124 and 3.113 s) |
+| start | **0.067 s after the pad press** | the eight grabs (0.082, 0.046, 0.044, 0.042, 0.073, 0.069, 0.099, 0.077 s); includes the press-to-screen latency, which cannot be separated |
+| cursor | `_` after the last typed character, **solid while typing**, then **blinking 0.5 s on, 0.5 s off** | every one of the eight partial grabs shows it; after the line completes it toggles every 15 frames of 30. The blink is **free-running, not tied to the cycle**: cycles 2 and 3 of one 52 s League recording toggle in opposite senses (163.2 frames is not a multiple of 30) |
+| wrap | the whole string is wrapped first, then revealed across the lines; a wrap's space is a typed character | Class keeps `AG` on line 1 while line 2 is still empty |
+| line pitch, advance | 10 px between lines (glyph rows 222, 232, 242); 7.6 px per character in a 7 px cap height | the `Scroll` face's own metrics; **not wired**: ours draws the menu face at the chosen scale 0.7 and a pitch of the viewport height over three lines (10.7 px) |
+
+**The authored `<TextInfo delay="1.6">` matches none of these** (the start is 0.07 s, the hold 3.1 s) and is not used.
+**Not measured: whether moving the cursor to another row restarts the line.** Ours restarts it on a row change (chosen, not
+measured). **The blink's phase** is chosen: ours anchors it to the screen's clock zero.
+
+**Held-out check.** Track Selection (about 100 characters, not used in the fit) predicts 53 typed characters 5.87 s in; the
+frame shows 55 (`4.45K OF TUNGSTEN-ALUM HI-BOUNCE TM SNAKES PAST PRIME` and the `O` of the next line). League predicted 23 against 21 seen,
+Class 9 against 10: all within two characters, 35 ms.
+
+**Wired:** `oag_ui_screens::campaign::footer::typein` (the law, with its own unit tests) and
+`description_draws(.., since, ..)`, which wraps the whole line and then shows the first `typed(total, since).chars` characters
+and the cursor. Live, `PureChainStage` carries the seconds since the screen or row changed; the still takes
+`--menu-picker-seconds` (`None` draws it settled, no cursor).
+
+**The pair clock.** Pure has no recovered front-end clock or state name, so `scripts/psp-menu-pair.py` reads the emulator's tick
+counter at the start of the pad press that enters the screen and again with the CPU stopped for the grab (`PURE_CLOCKED`):
+`seconds_since_entry`. Its error is the press-to-screen latency (a frame or two) and the one frame the presented picture lags
+the stop, about 35 ms, two characters of the line. Pulse's clock addresses (`0x08b317b0`) are not read on Pure any more.
+
+**Pairs, description box `(18, 217, 450, 250)`** (the differing share counts pixels more than 40 grey apart; ours rendered
+settled against ours typed at the original frame's seconds, both against the same original frame):
+
+| Pair | Seconds since entry | Whole frame before | Whole frame after | Box before | Box after |
+| --- | --- | --- | --- | --- | --- |
+| Class Selection | 4.82 | 3.63 % | 2.58 % | 13.3 % | 3.7 % |
+| League Selection | 5.90 | 4.51 % | 2.82 % | 21.0 % | 5.6 % |
+| Track Selection | 5.87 | 6.39 % | 5.58 % | 16.9 % | 9.5 % |
+| Tournament Class | 4.82 | 3.60 % | 2.55 % | 13.3 % | 3.7 % |
+| Tournament Selection | 5.87 | 4.70 % | 3.02 % | 20.9 % | 5.6 % |
+
+Mean grey whole frame, ours settled / typed / original: League 246.1 / 247.3 / 247.1, Track 244.6 / 245.2 / 246.3, Tournament
+245.9 / 247.2 / 246.9. What stays in the box is the face (ours the menu face, the original the thin `Scroll` face, so a
+wrapped line breaks one word later in ours: `EACH TRACK` against `EACH`) and Track's second line (ours wraps `PRIME` and
+`OCEAN` apart). Cross-title: Pulse authors 58 `TELETYPE` texts and types none (checked, differs); HD, 2048 and Omega author
+`TELETYPE` too (HD 105) and their `Text` class is unread (not checkable here).
+
 ## Two faces, not one swapped for the other - measured 2026-09-21
 
 **The front end draws every label in one 22px face; the original draws each

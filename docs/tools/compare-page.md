@@ -960,7 +960,7 @@ row, which the still **ignores** (see the campaign paragraph).
 
 **What is read and what is declared.** Pulse's screen name is read from the game's own state machine (`0x08b31784 + 0x18c`, the same
 `Debugger.state_name` the race pairs use); every Pulse pair's `original.screen_basis` says so. Pure has no recovered state name: its
-screens are declared in `PURE_WALK` and read by eye (`original.screen_basis`), and the walk waits on a frame predicate (`pu:cross:title`,
+screens are declared in `PURE_WALK` and read by eye (`original.screen_basis`), and the chain screens' `seconds_since_entry` is the emulator's tick counter from the entering pad press to the CPU-stopped grab (`PURE_CLOCKED`, about 35 ms), and the walk waits on a frame predicate (`pu:cross:title`,
 the orange logo) because the language and memory-stick screens swallow a fixed-sleep walk. The highlighted row of both sides is read by
 eye and declared (`selection`), so the check catches a `WALK` entry that names two rows, not a cursor that drifted; the pair images are
 the evidence.
@@ -1006,9 +1006,7 @@ Three differences recur on every Pure chain screen: the **context line** (ours' 
 `docs/architecture/menus.md`, absent from the original), the **description line** along the bottom (the original types it in, so its frames hold a prefix; ours draws it **settled**,
 5 s in, `ARRIVED` in `pure_chain_page.rs`, since 2026-10-29: the string is the disc's `Text->SCREEN->ITEM->VALUE` entry, for example
 `Text->Track Selection->Track->Vineta K`, laid in the footer `TextInfo` viewport at `(21, 217)` 427 wide, amber `TextInfoBoxColor`, wrapped
-to its three `Text` lines; its scale `0.7` is **chosen** because the `FEGlobals` it names are not declared, and the type-in rate is not
-measured, so the **share of pixels differing rose** on the chain pairs (Track Selection 5.5 to 6.4 %, Class 2.8 to 3.6 %, League 2.9 to
-4.5 %, Tournament 3.1 to 4.7 %: a full text against the original's few typed letters; the original's face is the `Scroll` face, `LTe50325.fnt`,
+to its three `Text` lines; its scale `0.7` is **chosen** because the `FEGlobals` it names are not declared; the type-in (58 characters a second, a 3.12 s hold and a loop, a cursor) was measured and wired 2026-10-29 and the pairs are drawn at the original's seconds since entry, so the shares fell again: Track Selection 6.4 to 5.6 %, Class 3.6 to 2.6 %, League 4.5 to 2.8 %, Tournament 4.7 to 3.0 % (`docs/ui/menus-original.md`, "Wipeout Pure types its description line in"; before that wiring they had **risen** on a full text against the original's few typed letters; the original's face is the `Scroll` face, `LTe50325.fnt`,
 ours the menu face) and the **footer's BACK prompt** (fixed 2026-10-29: the skin's `Back button` is the table's `Back Button`, found case-folded,
 and draws the triangle glyph). Still open on the same frames: the dashed cyan rule across the bottom at y 217 and the solid footer rule at y 251,
 which the original draws and ours does not. Pulse's pairs share the footer

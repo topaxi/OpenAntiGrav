@@ -129,6 +129,7 @@ impl Session {
         open.choice_mut().follow(&stage.skin);
         open.follow_art();
         open.art_mut().advance(1.0 / 60.0);
+        open.advance_description(1.0 / 60.0);
         for event in events {
             self.handle_pure_chain(event);
         }
