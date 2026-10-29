@@ -38,6 +38,10 @@ impl Profile {
             .env("XDG_DATA_HOME", self.0.join("data"))
             .env("XDG_STATE_HOME", self.0.join("state"))
             .env("OAG_TRACKS", self.0.join("no-tracks"))
+            // The repository's example mods sit on the default search path when their submodule
+            // is checked out; a mod campaign puts a picker behind RACE CAMPAIGN, and this test is
+            // about the disc's own campaign.
+            .env("OAG_MODS", self.0.join("no-mods"))
             .current_dir(Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))
             .env_remove("WAYLAND_DISPLAY")
             .env_remove("DISPLAY")
