@@ -79,6 +79,10 @@ pub struct Screen {
     /// A transition is running and presses are not taken yet.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub busy: bool,
+    /// The campaign's `Selector` pulse clock in whole milliseconds, on the two screens that have
+    /// one (`Grid Selection`, `Cell Selection`); how a drive sees a re-entry resume it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pulse_ms: Option<u32>,
 }
 
 /// The race the game resolved: what it launched, or is racing.

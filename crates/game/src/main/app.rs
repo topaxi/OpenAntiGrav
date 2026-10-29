@@ -553,6 +553,7 @@ impl App {
             // which cannot fail - a records file this build cannot make sense
             // of degrades to an empty store rather than failing the boot.
             records: oag_game::records::load(),
+            selector_phases: oag_ui_screens::campaign::pulse::SelectorPhases::default(),
             shell: self.shell.clone(),
             race_title: self.race_title,
             race_platform: self.race_platform,

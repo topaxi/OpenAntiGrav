@@ -181,6 +181,11 @@ pub(crate) struct CampaignStage {
     /// the original ticker is not observed to restart on a screen change
     /// (see `docs/ui/campaign-screens.md`), so this build keeps it running.
     ticker_elapsed: f32,
+    /// Where `Grid Selection`'s and `Cell Selection`'s `Selector` pulses stand, written back every
+    /// tick and put on each screen as it is built, so a re-entry resumes the phase it was left at
+    /// (`oag_ui_screens::campaign::pulse::SelectorPhases`). Only where the title blooms its front
+    /// end ([`Self::frontend_glow`], Pulse): the other titles keep a fresh phase per screen.
+    selector_phases: oag_ui_screens::campaign::pulse::SelectorPhases,
     /// `Campaign Selection`'s two cards turning toward the selection, stepped
     /// by [`Self::tick_cards`]; `None` off that screen, where a card is drawn
     /// settled.
@@ -317,6 +322,7 @@ impl CampaignStage {
             nav_legend,
             ticker,
             ticker_elapsed: 0.0,
+            selector_phases: oag_ui_screens::campaign::pulse::SelectorPhases::default(),
             card_swing: None,
             strings,
             sprites,
@@ -392,8 +398,53 @@ impl CampaignStage {
     pub(crate) fn tick_ticker(&mut self, dt: f32) {
         self.ticker_elapsed += dt.max(0.0);
         match &mut self.screen {
-            Screen::Grid(model) => model.pulse_mut().tick(dt),
-            Screen::Cell { model, .. } => model.pulse_mut().tick(dt),
+            Screen::Grid(model) => {
+                model.pulse_mut().tick(dt);
+                self.selector_phases.grid = *model.pulse();
+            }
+            Screen::Cell { model, .. } => {
+                model.pulse_mut().tick(dt);
+                self.selector_phases.cell = *model.pulse();
+            }
+            Screen::Selection(_) => {}
+        }
+    }
+
+    /// The open screen's `Selector` clock, when it has one (what `--drive` reports).
+    pub(crate) fn selector_seconds(&self) -> Option<f32> {
+        match &self.screen {
+            Screen::Grid(model) => Some(model.pulse().seconds()),
+            Screen::Cell { model, .. } => Some(model.pulse().seconds()),
+            Screen::Selection(_) => None,
+        }
+    }
+
+    /// Where the pulses stand, for the session to carry to the next `RACE CAMPAIGN`.
+    pub(crate) fn selector_phases(&self) -> oag_ui_screens::campaign::pulse::SelectorPhases {
+        self.selector_phases
+    }
+
+    /// Starts from the pulses a previous campaign left (a cold boot passes the default), and puts
+    /// them on the open screen.
+    pub(crate) fn resume_selector(
+        &mut self,
+        phases: oag_ui_screens::campaign::pulse::SelectorPhases,
+    ) {
+        if self.frontend_glow {
+            self.selector_phases = phases;
+        }
+        self.apply_selector_phase();
+    }
+
+    /// Puts the kept phase on the screen just built; the original's widget keeps it while the
+    /// screen is away.
+    fn apply_selector_phase(&mut self) {
+        if !self.frontend_glow {
+            return;
+        }
+        match &mut self.screen {
+            Screen::Grid(model) => *model.pulse_mut() = self.selector_phases.grid,
+            Screen::Cell { model, .. } => *model.pulse_mut() = self.selector_phases.cell,
             Screen::Selection(_) => {}
         }
     }
@@ -687,6 +738,7 @@ impl CampaignStage {
             model.set_index(which - self.grid_range.start);
         }
         self.screen = Screen::Grid(model);
+        self.apply_selector_phase();
     }
 
     /// **HD only.** Returns to `Campaign Selection` - `Grid Selection`'s own
@@ -777,6 +829,9 @@ impl CampaignStage {
         }
         let mut model = with_opening_difficulty(model, records, campaign_title, self.is_hd());
         self.cell_cursor.restore(&mut model);
+        if self.frontend_glow {
+            *model.pulse_mut() = self.selector_phases.cell;
+        }
         self.screen = Screen::Cell { model, which };
         if let Some(grid) = self.grids.get(which) {
             self.cell_cursor.set_grid(&grid.name);
@@ -918,6 +973,7 @@ impl CampaignStage {
         }
         model.set_index(index);
         self.screen = Screen::Grid(model);
+        self.apply_selector_phase();
     }
 }
 
