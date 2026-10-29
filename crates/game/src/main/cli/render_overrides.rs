@@ -55,5 +55,8 @@ impl Cli {
         if let Some(order) = self.trail_order {
             profile.trail_order = order;
         }
+        if let Some(weather) = self.weather {
+            profile.weather = weather;
+        }
     }
 }

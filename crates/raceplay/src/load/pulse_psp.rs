@@ -175,11 +175,32 @@ fn place_weather(
         anchors.len()
     ));
     let mist_texture = mist_texture(archives, config.tex.as_deref(), &mut loaded.report);
+    let splash_cell = splash_art(loaded, archives);
     loaded.setup.scenery_fx.weather = Some(crate::scenery_fx::weather::Setup {
         config,
         anchors,
         mist_texture,
+        splash_cell,
     });
+}
+
+#[cfg(feature = "view")]
+/// This project's own splash art for the enhanced weather, placed on the
+/// particle sheet after every effect's sprite. `None`, with the reason in
+/// the report, draws no splash rather than a stand-in. Chosen, not measured:
+/// the disc has no splash sprite.
+fn splash_art(loaded: &mut Loaded, archives: &mut oag_assets::Archives) -> Option<[f32; 4]> {
+    let name = crate::scenery_fx::splash::ART;
+    let sprite = archives
+        .read_name(name)
+        .ok()
+        .and_then(|blob| oag_fx::psys::sprite::Sprite::from_mask(&blob));
+    let cell = sprite.and_then(|sprite| loaded.setup.effects.place_sprite(&sprite));
+    loaded.report.push(match cell {
+        Some(_) => format!("weather: splash art {name} (ours), for the enhanced setting only"),
+        None => format!("weather: splash art {name} did not load, the enhanced setting draws none"),
+    });
+    cell
 }
 
 #[cfg(feature = "view")]

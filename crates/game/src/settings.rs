@@ -1098,6 +1098,11 @@ pub fn menu_seeds(
             text(&profile.trail_order.to_string()),
         ));
     }
+    // Offered only where the weather is played; elsewhere the row is dropped
+    // (`Definition::drop_unavailable_weather`) and nothing seeds it.
+    if title.weather.is_played() {
+        out.push(("graphics.weather", text(&profile.weather.to_string())));
+    }
     // Offered only where the title's options list it; elsewhere the row is dropped
     // (`Definition::drop_unavailable_dynamic_hud`) and nothing seeds it.
     if title.hud_art.dynamic_hud.is_some() {

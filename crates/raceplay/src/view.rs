@@ -459,6 +459,9 @@ pub struct RaceView {
     /// Where the PSP ribbons draw against the circuit's blended list.
     /// `[render_profiles.<title>] trail_order`; see [`Race::ribbons_first`].
     pub(super) trail_order: oag_display::display::TrailOrder,
+    /// What the weather adds to the original's. `[render_profiles.<title>] weather`;
+    /// see [`Race::set_weather`].
+    pub(super) weather: oag_display::display::Weather,
     /// The results table, taken on the tick the race reached its finish
     /// condition, and `None` before that.
     ///

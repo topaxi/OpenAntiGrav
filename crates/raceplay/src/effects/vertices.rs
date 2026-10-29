@@ -89,6 +89,12 @@ impl Race {
             .scenery_fx
             .weather()
             .extend_vertices(additive, alpha_over, camera, right, up);
+        if self.view.weather.is_enhanced() {
+            self.view
+                .scenery_fx
+                .weather()
+                .extend_splash_vertices(additive, alpha_over, right, up);
+        }
     }
 
     /// The blend class 8 quads (heat haze, shock rings) everything the stage

@@ -135,6 +135,7 @@ pub const TITLE: &Title = &Title {
     cursor: include_str!("../../../assets/cursors/2048.svg"),
     // The proximity and environment shadows are not built (`docs/rendering/shadows.md`).
     original_shadows: oag_title::shadow::OriginalShadows::Unbuilt,
+    weather: oag_title::weather::Weather::Unplayed,
     // **2048's own tables, beside the HD-derived ones.** The archive carries
     // five `weaponstats*` documents: HD's three (`_Race`, `_Elimination`,
     // `_Detonator`) and two suffixed `_2048`. The suffixed pair is this

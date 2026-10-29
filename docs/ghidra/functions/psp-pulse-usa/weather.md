@@ -243,6 +243,46 @@ frame to frame. The first sampler step and the layers' starting `t` are chosen (
 `oag_fx::mist`). Not compared: a climb or a dive, and Fort Gale's rain lens over
 the mist.
 
+## The enhanced weather (ours, 2026-10-29)
+
+**Chosen, not measured; no confidence score.** The original's drops and flakes never
+touch geometry (`Modifier_WrapBox` only wraps and blows them), so it has no splash.
+`[render_profiles.<title>] weather` (menu row WEATHER, `--weather`) is `original`
+(the default, the frame as above, byte-identical to a build without the row) or
+`enhanced`. The row is offered where `Title::weather` says the weather is played
+(Pulse, both pressings; hidden elsewhere).
+
+- **Hits.** Once a tick, in the open only (no hits while the box sits at a covered
+  section's anchor, as the original's cover says), each live drop's last move in the
+  world (`[p - wind, p]`, `oag_fx::psys::System::world_positions` and the pool's wind
+  step) is cast against the circuit's collision with the same read-only floor cast the
+  blob shadows use (`Race::floor_crossing`, hoverable surfaces, from above). The pool is
+  not touched and the simulation never knows.
+- **Rain**: a ring flat on the road, fading over 0.35 s, and three droplets thrown up
+  and back under a chosen gravity. **Snow**: one flake that settles on the road and
+  fades in and out over 1.6 s. At most `splash::CAPACITY` (48) alive; a hit past it is
+  dropped. Own `Rng` seed, so the drops' stream is the original's either way.
+- **Art.** The disc has no splash sprite, so the ring and the dot are this project's:
+  `assets/fallback/Data/Psys/Tex/OAGSplash.oagmask` (`scripts/gen-fallback-splash-art.py`),
+  served by the fallback layer ([asset-layers.md](../../../architecture/asset-layers.md))
+  and placed on the particle sheet after every effect's sprite. The loader report
+  says `weather: splash art ... (ours)`.
+- **Cost**, whole-race bench recipe (`OAG_RENDER_BENCH_RACE`, single race, seed 1,
+  autopilot, 1280x720, first 3,000 ticks, debug profile at opt-level 2, taken under the gate lock,
+  load average 2 to 10 at start, adapter RADV). CPU ms a frame, p50 (mean): Fort Gale
+  `14_Track\track.vex` before 4.30 to 4.33 (4.45 to 4.51), `original` 4.36 (4.47), `enhanced`
+  4.40 (4.54); Outpost 7 `07_Track\track.vex` before 5.67 (5.74 to 5.75), `original` 5.61 (5.71),
+  `enhanced` 5.63 (5.68). Two runs of the unchanged build differ by about 0.07 ms, so
+  `enhanced` is within a tenth of a millisecond of `original`; GPU p50 is unchanged
+  (0.305 and 0.389 ms) and the final state hash is the same in all runs. The `original`
+  path runs nothing. Not measured on a Deck or a phone.
+- **Evidence.** `crates/raceplay/tests/weather_splash_ground_truth.rs`: an original and
+  an enhanced race stepped together hash identically every tick, the enhanced draw lists
+  begin with the original's byte for byte, every splash lies on a floor, and the enhanced
+  race throws splashes on 1,041 of 1,500 ticks on Fort Gale and 569 on Outpost 7.
+- **PS2** loads the same circuits' weather (`circuit_effects`) and the art (a load test on
+  `14_Track`); inherited from the PSP, not seen on a PS2 frame.
+
 ## Not done, and why
 
 - **The noise clock** is the manager's `0x08ab224c` (seconds, measured: it ran `0.57` per
@@ -250,7 +290,8 @@ the mist.
 - **The original updates at its frame rate**: the wind step is not scaled by `dt`, so on the
   PSP's 30 fps the fall is half as fast in time. Ours is 60 Hz.
 - **Other titles.** The PS2 disc authors `<Weather>` on `07`, `11` (not on the PSP disc) and
-  `14`; none is played. Wipeout HD carries neither effect.
+  `14`; since 2026-10-17 it is loaded and reported there (`circuit_effects`), not yet seen on a
+  PS2 frame. Wipeout HD carries neither effect.
 - **The PS2 executable has the same law** (2026-10-04, static, confidence **75**). In
   `SCES_547.48` the `TrackStartup` parser `FUN_00146668` reads the same attribute list
   (`MistInside` at `0x002a46f8`, referenced at `0x00146870`). Under the same gate

@@ -527,6 +527,8 @@ pub(crate) fn finish_definition(
     definition.drop_unavailable_dynamic_hud(title);
     // And the TRAIL ORDER row, where the ribbon is the PSP preset: Pulse and Pure.
     definition.drop_unavailable_trail_order(title);
+    // And the WEATHER row, where the weather is played: Pulse.
+    definition.drop_unavailable_weather(title);
     // And the three rows the race box's own screens pick, on a title
     // that authors them - see `menu::Definition::drop_rows_picked_on_screen`.
     definition.drop_rows_picked_on_screen(title);

@@ -1309,6 +1309,19 @@ string_id = "OAG_GRAPHICS_TRAIL_ORDER"
 setting = "graphics.trail_order"
 values = ["original", "over-floors"]
 
+# What a circuit's rain and snow add to the original's. `original` is the
+# default and draws the weather exactly as the original does; `enhanced` adds
+# splashes where a drop meets the track and flakes that settle on it, this
+# project's own, chosen, not measured (the original's particles never touch
+# geometry). Only a title whose weather is played has a choice; the row is
+# dropped elsewhere (`Definition::drop_unavailable_weather`). Applies live.
+[[page.entry]]
+kind = "choice"
+label = "WEATHER"
+string_id = "OAG_GRAPHICS_WEATHER"
+setting = "graphics.weather"
+values = ["original", "enhanced"]
+
 
 # A simulation of the display the title ran on, drawn over the finished frame
 # - menus, HUD and all - just before brightness and gamma. The list is

@@ -293,6 +293,32 @@ fn the_trail_order_row_is_offered_only_on_the_psp_ribbon() {
     }
 }
 
+/// The WEATHER row is offered where the weather is played (Pulse) and dropped
+/// elsewhere, and it offers every setting.
+#[test]
+fn the_weather_row_is_offered_only_where_the_weather_is_played() {
+    let rows = |definition: &Definition| {
+        definition
+            .pages
+            .iter()
+            .flat_map(|page| page.entries.iter())
+            .filter(|entry| entry.setting() == Some("graphics.weather"))
+            .count()
+    };
+    for (title, offered) in [
+        (oag_pulse::TITLE, 1),
+        (oag_pure::TITLE, 0),
+        (oag_hd::TITLE, 0),
+        (oag_omega::TITLE, 0),
+        (oag_2048::TITLE, 0),
+    ] {
+        let mut definition = built_in();
+        assert_eq!(rows(&definition), 1, "the definition ships the row");
+        definition.drop_unavailable_weather(title);
+        assert_eq!(rows(&definition), offered, "{}", title.name);
+    }
+}
+
 /// The HUD STYLE row is offered where the disc authors a `HUD Style` list (HD and Omega)
 /// and dropped on the titles that author none, and what it offers is that list.
 #[test]
@@ -741,6 +767,16 @@ fn the_two_settings_pages_offer_only_values_that_parse() {
         trail_order,
         oag_display::display::TrailOrder::ALL,
         "the TRAIL ORDER rows and `TrailOrder::ALL` must be one list"
+    );
+
+    let weather: Vec<oag_display::display::Weather> = values("graphics.weather")
+        .iter()
+        .map(|name| name.parse().unwrap_or_else(|e| panic!("{e}")))
+        .collect();
+    assert_eq!(
+        weather,
+        oag_display::display::Weather::ALL,
+        "the WEATHER rows and `Weather::ALL` must be one list"
     );
 
     let overlays: Vec<oag_present::perf::Overlay> = values("graphics.perf_overlay")

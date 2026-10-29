@@ -114,6 +114,10 @@ pub fn fallback_layer() -> Layer {
         "Data\\XML\\SplitHud_2048.toml",
         include_bytes!("../../../assets/fallback/Data/XML/SplitHud_2048.toml"),
     );
+    layer.insert_bytes(
+        "Data\\Psys\\Tex\\OAGSplash.oagmask",
+        include_bytes!("../../../assets/fallback/Data/Psys/Tex/OAGSplash.oagmask"),
+    );
     layer
 }
 

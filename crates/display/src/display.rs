@@ -45,11 +45,12 @@ mod reconstruction;
 mod screen_filter;
 mod shadows;
 mod trail_order;
+mod weather;
 
 pub use {
     aspect::Aspect, dynamic_hud::DynamicHud, hud_scale::*, motion_blur::*, msaa::Msaa,
     reconstruction::Reconstruction, screen_filter::FilterStrength, shadows::Shadows,
-    trail_order::TrailOrder,
+    trail_order::TrailOrder, weather::Weather,
 };
 
 /// What kind of window the game asks the compositor for.

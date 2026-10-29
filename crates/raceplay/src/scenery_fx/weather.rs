@@ -39,6 +39,7 @@ use oag_vex::weather::{self as covered, Anchor as CoveredAnchor};
 
 use super::lens::{Edge, Lens};
 use super::mist::Mist;
+use super::splash::Splashes;
 use super::wind::Wind;
 
 /// Seed for the weather's own spawn draws, wind table and phases. Any
@@ -55,6 +56,10 @@ pub struct Setup {
     /// `Tex` decoded, the mist overlay's texture; `None` when the circuit
     /// names none or it did not decode, and then the mist draws nothing.
     pub mist_texture: Option<oag_fx::exhaust::FlareTexture>,
+    /// Where this project's own splash art sits on the particle sheet, when
+    /// it was found and placed; `None` and the enhanced weather draws no
+    /// splash (see [`super::splash`]).
+    pub splash_cell: Option<[f32; 4]>,
 }
 
 /// The weather of a race: inert unless the circuit authors one.
@@ -79,6 +84,11 @@ pub struct Weather {
     mist: Option<Mist>,
     clock: f32,
     rng: Rng,
+    /// The enhanced weather's splashes: empty and never touched at
+    /// `original`. Own random stream, so they never move the drops'.
+    splashes: Splashes,
+    /// The last frame's wind step, a drop's move in the world a tick.
+    step: Vec3,
 }
 
 impl Default for Weather {
@@ -121,6 +131,8 @@ impl Weather {
             mist,
             clock: 0.0,
             rng,
+            splashes: Splashes::default(),
+            step: Vec3::ZERO,
         }
     }
 
@@ -164,6 +176,70 @@ impl Weather {
     #[must_use]
     pub fn mist_texture(&self) -> Option<&oag_fx::exhaust::FlareTexture> {
         self.setup.as_ref()?.mist_texture.as_ref()
+    }
+
+    /// Where the splash art sits on the particle sheet.
+    #[must_use]
+    pub fn splash_cell(&self) -> Option<[f32; 4]> {
+        self.setup.as_ref()?.splash_cell
+    }
+
+    /// Whether the env effect is the snow rather than the rain.
+    #[must_use]
+    pub fn is_snow(&self) -> bool {
+        self.setup
+            .as_ref()
+            .and_then(|s| s.config.env_psys.as_deref())
+            .is_some_and(|path| effect_name(path) == oag_title::engine_effects::SNOW_EFFECT)
+    }
+
+    /// The enhanced weather's splashes.
+    #[must_use]
+    pub fn splashes(&self) -> &Splashes {
+        &self.splashes
+    }
+
+    /// The splashes, to age and add to.
+    pub fn splashes_mut(&mut self) -> &mut Splashes {
+        &mut self.splashes
+    }
+
+    /// The last move of every drop in the open, as a world segment from where
+    /// it was a tick ago to where it is drawn: what a splash is found on.
+    ///
+    /// Empty under cover (the original's anchored box: no hits there), before
+    /// the pool plays, and for a circuit with no field. The pool is not touched.
+    #[must_use]
+    pub fn drop_segments(&self) -> Vec<(Vec3, Vec3)> {
+        let (Some(effect), Some(previous), false) = (&self.effect, self.previous, self.anchored)
+        else {
+            return Vec::new();
+        };
+        if effect.field.is_none() || !self.pool.is_running() {
+            return Vec::new();
+        }
+        let anchor = Anchor::Camera {
+            previous,
+            current: previous,
+        };
+        self.pool
+            .world_positions(&anchor, effect.view_depth)
+            .map(|at| (at - self.step, at))
+            .collect()
+    }
+
+    /// Appends the splashes' geometry, when their art is placed.
+    pub fn extend_splash_vertices(
+        &self,
+        additive: &mut Vec<GpuVertex>,
+        alpha_over: &mut Vec<GpuVertex>,
+        right: Vec3,
+        up: Vec3,
+    ) {
+        if let Some(cell) = self.splash_cell() {
+            self.splashes
+                .extend_vertices(additive, alpha_over, right, up, cell);
+        }
     }
 
     /// The pool, for tests.
@@ -242,6 +318,7 @@ impl Weather {
                 wind: self.wind.modifier(),
             };
             let anchor = self.anchor_for(camera);
+            self.step = spec.wind;
             self.pool
                 .advance_field(&effect, dt, &anchor, &spec, &mut self.rng);
         }

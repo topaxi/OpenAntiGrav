@@ -506,6 +506,19 @@ impl Session {
                     return;
                 }
             },
+            // Applied by the next frame the race draws: the session hands the
+            // setting to `Race::set_weather` every frame.
+            "graphics.weather" => match text.parse::<oag_display::display::Weather>() {
+                Ok(weather) => {
+                    if let Some(profile) = self.render_profile_mut() {
+                        profile.weather = weather;
+                    }
+                }
+                Err(e) => {
+                    warn!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
             // Applied by the next frame the race draws, which reads the
             // tier fresh - the pass is built with every race whatever this
             // says, the same shape `graphics.motion_blur` above has. See
