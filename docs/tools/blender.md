@@ -112,8 +112,9 @@ A ring of more than 64 points is solved on every `m`-th point and joined by a cy
 A line is only as good as the centre line is smooth.
 
 *Why the middle 40 percent, not the whole corridor.* The original driver (`oag_ai::original`) measures
-its lane across the room between the line and each bound, so a line near a bound leaves one
-side with almost none. Measured on `blender_loop` (corridor +-12), headless, Pulse physics: a line
+its lane across the room between the line and each bound (`TrackPoint::lane_of` divides by it), so a
+line near a bound leaves one side with almost none; that is the likely reason for what follows, not a
+traced one (nobody looked at which sample went unresolved). Measured on `blender_loop` (corridor +-12), headless, Pulse physics: a line
 allowed to 0.1 from the bounds, and one allowed to 20 percent of the width in, both leave
 the opponents' speed plan unable to learn a lap (`1 unresolved`, no lap in 256,000 steps);
 25, 30 and 40 percent get round. 30 keeps a margin from that cliff. **Chosen, not measured**,
@@ -255,7 +256,7 @@ physics, and draws flat-shaded collision unless the file has an art section. A f
 | A loop built from scratch in Blender: 8 Bezier control points, 64 samples, floor, walls, start, one pad of each kind (`blender_loop.*`) | reads, nothing unread, schema-valid (`schema.rs`) |
 | Lone AI craft on Pulse's physics, 7,200 ticks (`trackfile_ground_truth`) | `blender_loop`: lap 3, no respawns; the re-exported oval: lap 4, no respawns (the committed oval: lap 4) |
 | `oag-game --race --autopilot --track-file blender_loop.track.toml` | the player gets round at 127 speed; frames at ticks 400, 1200, 2400, 3600 read at 1280x720 |
-| Racing line (2026-10-29), AI speed plan lap on Pulse EU, `--race --opponents`, centre then computed | `blender_loop` 2,383 -> 2,373 ticks (-0.4 %); the same loop at 0.35 scale 845 -> 835 (-1.2 %), at 0.2 scale 501 -> 506 (+1.0 %): small, and not always faster (the plan is verified clean in every case, no wall touched) |
+| Racing line (2026-10-29), AI speed plan lap on Pulse EU, `--race --opponents`, centre then computed | `blender_loop` 2,383 -> 2,373 ticks (-0.4 %); the same loop at 0.35 scale 845 -> 835 (-1.2 %), at 0.2 scale 501 -> 506 (+1.0 %, slower); Hillside's shape (12 control points, rises to 90, half width 28, 160 points, no art) 3,447 -> 3,424 (-0.7 %): small, and not always faster (every plan verified clean) |
 | Art (2026-10-29): the loop's canopy, checker, sun, fill light, ambient, sky and flare (`blender_loop.*`, `blender_checker.png`) | every mapping read back as authored (`blender.rs`); the loop imported and exported again is byte-identical (`blender_loop.reexport.*`); on Pulse PSP the art resolves with no miss in the loader report (`trackfile_ground_truth`) |
 
 The Blender-driven part cannot run in CI (no Blender), so it is a local recipe whose output is

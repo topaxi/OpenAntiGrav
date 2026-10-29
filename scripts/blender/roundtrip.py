@@ -260,7 +260,23 @@ def line_checks(out_dir):
     scene.write_track(ctx, edited)
     after = read_lines(edited)
     assert abs((after[10] - before[10]) - push) < 0.05, (before[10], after[10])
-    print("racing line: default, switch, operator, nudge, clamp, import round trip, imported edit: ok")
+    # 7. An imported (baked) spline has no computed default, but the operator works on it.
+    fresh()
+    oval = os.path.join(HERE, "..", "..", "crates", "trackfile", "tests", "fixtures", "oval.track.toml")
+    track = trackfile.read(oval)
+    assert all(p.racing_line == 0.0 for p in track.paths[0].points)
+    scene.populate(ctx, track, os.path.dirname(oval))
+    assert not tagged("racing_line"), "a file with the centre line everywhere gets no curve"
+    (spline_obj,) = tagged("spline")
+    ctx.view_layer.objects.active = spline_obj
+    assert bpy.ops.oag.compute_racing_line() == {"FINISHED"}
+    out = os.path.join(out_dir, "line_check.oval.track.toml")
+    scene.write_track(ctx, out)
+    made = trackfile.read(out).paths[0].points
+    assert any(abs(p.racing_line) > 1.0 for p in made), "the operator left the imported oval on the centre"
+    for p, (lo, hi) in zip(made, racing_line._box(made, racing_line.MARGIN)):
+        assert lo - 1e-5 <= p.racing_line <= hi + 1e-5
+    print("racing line: default, switch, operator, nudge, clamp, import round trip, imported edit, operator on an import: ok")
 
 
 def main():

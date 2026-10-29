@@ -29,7 +29,8 @@ from each bound (never less than `MARGIN`). The
 box-constrained minimum is found by an **active set**: solve the free points exactly
 (sparse Gaussian elimination, linear in the ring size), pin the ones that left the
 box, release the pinned ones whose gradient points back inside, repeat. Every step
-is a fixed visiting order over doubles, so the result is the same on every machine;
+is a fixed visiting order over doubles using only `+ - * /` and `math.sqrt` (IEEE correctly
+rounded; no `pow`, whose last bit a libm may vary), so the result is the same on every machine;
 only the final offset is rounded to `f32` (`f32.r`), which is what the file stores.
 `RIDGE` (a weight per length to the fourth, so the choice does not move with the
 number of points) only picks a position where curvature does not care, as on a
@@ -44,6 +45,8 @@ original driver tolerates (see `INSET`).
 
 Nothing here imports `bpy`.
 """
+
+import math
 
 from . import f32
 
@@ -63,6 +66,10 @@ ROUNDS = 6
 KNOTS = 64
 MAX_ROUNDS = 100
 GRADIENT_TOLERANCE = 1e-9
+
+def _square(x):
+    return x * x
+
 
 def _dot(a, b):
     return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
@@ -88,7 +95,7 @@ def _gaps(points, offsets):
         for p, o in zip(points, offsets)
     ]
     return [
-        sum((q[(k + 1) % n][c] - q[(k - 1) % n][c]) ** 2 for c in range(3)) ** 0.5 / 2.0
+        math.sqrt(sum(_square(q[(k + 1) % n][c] - q[(k - 1) % n][c]) for c in range(3))) / 2.0
         for k in range(n)
     ]
 
@@ -105,7 +112,7 @@ def _normal_equations(points, gaps):
         sideways = _dot(
             lat[k], tuple(pos[prev][c] - 2.0 * pos[k][c] + pos[nxt][c] for c in range(3))
         )
-        weight = gaps[k] ** -3.0
+        weight = 1.0 / (gaps[k] * gaps[k] * gaps[k])
         terms = (
             (prev, _dot(lat[k], lat[prev])),
             (k, -2.0 * _dot(lat[k], lat[k])),
@@ -210,7 +217,7 @@ def _catmull_rom(values, k, t):
         2.0 * p1
         + (p2 - p0) * t
         + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t * t
-        + (3.0 * p1 - p0 - 3.0 * p2 + p3) * t**3
+        + (3.0 * p1 - p0 - 3.0 * p2 + p3) * (t * t * t)
     )
 
 
@@ -259,7 +266,7 @@ def curvature_energy(points, offsets):
     total = 0.0
     for k, h in enumerate(_gaps(points, offsets)):
         a, b, c = q[(k - 1) % n], q[k], q[(k + 1) % n]
-        total += sum((a[i] - 2.0 * b[i] + c[i]) ** 2 for i in range(3)) / h**3
+        total += sum(_square(a[i] - 2.0 * b[i] + c[i]) for i in range(3)) / (h * h * h)
     return total
 
 
