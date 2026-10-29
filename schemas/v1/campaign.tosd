@@ -1,0 +1,324 @@
+# A custom campaign, `campaigns/<id>.toml` in a mod: see crates/mod/src/campaign.rs,
+# crates/game/src/campaign/custom.rs and docs/formats/custom-campaign.md (ADR-0077).
+# What cannot be said here and stays the loader's: that ids have the id shape and
+# are unique, that a slot holds one event and its coordinates are 0..=9, that a
+# requirement and `unlock_grid` name something that exists, that a tournament names
+# `tracks` and anything else one `track`; and, when the campaign compiles for a
+# title, that a mode, class, difficulty, pilot or team is one the engine knows.
+
+[toml-schema]
+version = "1.0.0"
+
+[types.toml-schema-reference]
+type = "table"
+
+[types.toml-schema-reference.location]
+type = "string"
+pattern = "/v1/campaign[.]tosd$"
+
+[types.toml-schema-reference.version]
+type = "string"
+allowedvalues = ["1.0.0"]
+
+[types.number]
+oneof = ["integer", "float"]
+
+[types.campaign]
+type = "table"
+
+[types.campaign.id]
+type = "string"
+
+[types.campaign.name]
+type = "string"
+
+[types.campaign.description]
+type = "string"
+optional = true
+
+[types.campaign.titles]
+type = "array"
+itemtype = "string"
+optional = true
+
+[types.campaign.reveal]
+type = "string"
+allowedvalues = ["locked", "hidden"]
+optional = true
+
+[types.grid]
+type = "table"
+
+[types.grid.id]
+type = "string"
+
+[types.grid.name]
+type = "string"
+optional = true
+
+[types.grid.required_points]
+type = "integer"
+min = 0
+optional = true
+
+[types.grid.unlock_grid]
+type = "string"
+optional = true
+
+[types.grid.reveal]
+type = "string"
+allowedvalues = ["locked", "hidden"]
+optional = true
+
+[types.grid.flyer]
+type = "string"
+optional = true
+
+[types.grid.event]
+type = "array"
+itemtype = "types.event"
+minlength = 1
+
+[types.slot]
+type = "array"
+itemtype = "integer"
+minlength = 2
+maxlength = 2
+
+[types.event]
+type = "table"
+
+[types.event.slot]
+type = "types.slot"
+
+[types.event.id]
+type = "string"
+optional = true
+
+[types.event.name]
+type = "string"
+optional = true
+
+[types.event.mode]
+type = "string"
+allowedvalues = ["race", "time_trial", "speed_lap", "zone", "elimination", "eliminator", "tournament", "head2head"]
+
+[types.event.track]
+type = "string"
+optional = true
+
+[types.event.tracks]
+type = "array"
+itemtype = "string"
+optional = true
+
+[types.event.file]
+type = "string"
+optional = true
+
+[types.event.class]
+type = "string"
+optional = true
+
+[types.event.laps]
+type = "integer"
+min = 1
+optional = true
+
+[types.event.weapons]
+type = "boolean"
+optional = true
+
+[types.event.craft]
+type = "types.craft"
+optional = true
+
+[types.event.field]
+type = "types.field"
+optional = true
+
+[types.event.medals]
+type = "types.medals"
+optional = true
+
+[types.event.unlock]
+type = "types.unlock"
+optional = true
+
+[types.craft]
+type = "table"
+
+[types.craft.team]
+type = "string"
+
+[types.field]
+type = "table"
+
+[types.field.ai]
+type = "string"
+allowedvalues = ["original", "ours"]
+optional = true
+
+[types.field.difficulty]
+type = "string"
+allowedvalues = ["easy", "medium", "hard", "novice", "skilled", "elite", "ace"]
+optional = true
+
+[types.field.skill]
+type = "types.number"
+optional = true
+
+[types.field.pilot]
+oneof = ["string", "types.pilot"]
+optional = true
+
+[types.field.teams]
+type = "array"
+itemtype = "string"
+optional = true
+
+# A pilot written out: the keys of a pilot file (pilot.tosd) without its header.
+[types.span]
+type = "array"
+itemtype = "types.number"
+minlength = 2
+maxlength = 2
+optional = true
+
+[types.pilot]
+type = "table"
+
+[types.pilot.lean]
+type = "string"
+allowedvalues = ["either", "left", "right"]
+optional = true
+
+[types.pilot.line_bias]
+type = "types.span"
+
+[types.pilot.wander]
+type = "types.span"
+
+[types.pilot.wander_period]
+type = "types.span"
+
+[types.pilot.look]
+type = "types.span"
+
+[types.pilot.commitment]
+type = "types.span"
+
+[types.pilot.patience]
+type = "types.span"
+
+[types.pilot.trail]
+type = "types.span"
+
+[types.pilot.width]
+type = "types.span"
+
+[types.pilot.inside]
+type = "types.span"
+
+[types.pilot.courtesy]
+type = "types.span"
+
+[types.pilot.defence]
+type = "types.span"
+
+[types.pilot.caution]
+type = "types.span"
+
+[types.pilot.ram]
+type = "types.span"
+
+[types.pilot.provocation_ticks]
+type = "types.span"
+
+[types.pilot.trigger]
+type = "types.span"
+
+[types.pilot.roll_chance]
+type = "types.span"
+
+[types.pilot.roll_floor]
+type = "types.span"
+
+[types.pilot.roll_airtime]
+type = "types.span"
+
+[types.targets]
+type = "table"
+optional = true
+
+[types.targets.gold]
+type = "types.number"
+optional = true
+
+[types.targets.silver]
+type = "types.number"
+optional = true
+
+[types.targets.bronze]
+type = "types.number"
+optional = true
+
+[types.medals]
+type = "table"
+
+[types.medals.gold]
+type = "types.number"
+optional = true
+
+[types.medals.silver]
+type = "types.number"
+optional = true
+
+[types.medals.bronze]
+type = "types.number"
+optional = true
+
+[types.medals.easy]
+type = "types.targets"
+
+[types.medals.medium]
+type = "types.targets"
+
+[types.medals.hard]
+type = "types.targets"
+
+[types.requirement]
+type = "table"
+
+[types.requirement.event]
+type = "string"
+
+[types.requirement.medal]
+type = "string"
+allowedvalues = ["any", "bronze", "silver", "gold"]
+optional = true
+
+[types.unlock]
+type = "table"
+
+[types.unlock.open]
+type = "boolean"
+optional = true
+
+[types.unlock.requires]
+type = "array"
+itemtype = "types.requirement"
+optional = true
+
+[elements]
+
+[elements.toml-schema]
+type = "types.toml-schema-reference"
+
+[elements.campaign]
+type = "types.campaign"
+
+[elements.grid]
+type = "array"
+itemtype = "types.grid"
+minlength = 1

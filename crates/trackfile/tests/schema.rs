@@ -107,11 +107,103 @@ fn the_committed_fixture_is_valid_and_reads() {
 #[test]
 fn what_the_blender_add_on_writes_is_valid_and_reads() {
     let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures");
-    for name in ["blender_loop", "oval.reexport"] {
+    for name in ["blender_loop", "blender_loop.reexport", "oval.reexport"] {
         let text = std::fs::read_to_string(format!("{dir}/{name}.track.toml")).unwrap();
         oag_schema::validate::accepts("track", 1, &text)
             .unwrap_or_else(|e| panic!("{name}: {e:?}"));
         let glb = std::fs::read(format!("{dir}/{name}.glb")).unwrap();
         from_parts(&text, &glb).unwrap_or_else(|e| panic!("{name}: {e}"));
+    }
+}
+
+/// The art section (ADR-0076): the two forms of a texture row are exclusive,
+/// and the sun's keys are all required but `shadows`.
+#[test]
+fn the_schema_and_the_reader_agree_on_the_art_section() {
+    let p = to_parts(&crate::art::with_art(crate::art::art()), "t.glb").expect("writable");
+    let m = &p.manifest;
+    let image = "[[art.texture]]\nimage = \"checker.png\"\n";
+    assert!(m.contains(image), "{m}");
+    let cut = |from: &str, to: &str| {
+        assert!(m.contains(from), "{from:?} is not in\n{m}");
+        m.replacen(from, to, 1)
+    };
+    // The host sky's line swapped for an own skybox table at the end.
+    let own_sky = |table: &str| {
+        let without: String = m
+            .lines()
+            .filter(|l| !l.starts_with("sky = "))
+            .map(|l| format!("{l}\n"))
+            .collect();
+        assert_ne!(&without, m, "the fixture names a host sky");
+        format!("{without}\n[art.skybox]\n{table}")
+    };
+    let cases = [
+        ("as written", m.clone(), true),
+        (
+            "an own skybox: one picture over the gradient",
+            own_sky(
+                "faces = [-1, -1, 0, -1, -1, -1]\nzenith = [0.1, 0.2, 0.6]\nhorizon = [0.7, 0.8, 0.9]\n",
+            ),
+            true,
+        ),
+        (
+            "an own skybox with five faces",
+            own_sky("faces = [0, 0, 0, 0, 0]\n"),
+            false,
+        ),
+        (
+            "an own skybox whose colour is not three numbers",
+            own_sky("zenith = [0.1, 0.2]\nhorizon = [0.7, 0.8, 0.9]\n"),
+            false,
+        ),
+        (
+            "a texture row with both forms",
+            cut(
+                image,
+                "[[art.texture]]\nimage = \"checker.png\"\nhost = { entry = \"a\", name = \"b\" }\n",
+            ),
+            false,
+        ),
+        (
+            "a texture row with neither",
+            cut(image, "[[art.texture]]\n"),
+            false,
+        ),
+        (
+            "a sun with no shadows key (it casts)",
+            cut("shadows = true\n", ""),
+            true,
+        ),
+        (
+            "a light row of an unknown kind",
+            cut("kind = \"directional\"", "kind = \"point\""),
+            false,
+        ),
+        (
+            "an atlas index that is negative",
+            cut("atlas = 1", "atlas = -1"),
+            false,
+        ),
+        (
+            "an art mesh count that is negative",
+            cut("art_meshes = 2", "art_meshes = -2"),
+            false,
+        ),
+    ];
+    for (what, text, accepted) in cases {
+        let schema = oag_schema::validate::accepts("track", 1, &text);
+        let reader = from_parts(&text, &p.glb);
+        assert_eq!(
+            schema.is_ok(),
+            accepted,
+            "schema, {what}: {schema:?}\n{text}"
+        );
+        assert_eq!(
+            reader.is_ok(),
+            accepted,
+            "reader, {what}: {:?}",
+            reader.err()
+        );
     }
 }

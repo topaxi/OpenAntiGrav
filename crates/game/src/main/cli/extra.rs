@@ -1,6 +1,7 @@
 //! Flag groups `clap` flattens into [`super::Cli`], each its own struct so
 //! `cli.rs` stays under the size ratchet.
 
+use anyhow::Context as _;
 use std::path::PathBuf;
 
 /// Writing the window icon.
@@ -787,6 +788,31 @@ pub(crate) struct DevArgs {
     /// To the terminal and the log file. Dev only.
     #[arg(long)]
     pub(crate) frame_log: bool,
+
+    /// Run our own menus with no window, driven by this script, and exit non-zero when a step
+    /// times out or names a row that is not there. Steps are separated by `;` or newlines:
+    /// `until page=race`, `select race.track`, `set race.mode=time_trial`, `press cross`,
+    /// `ticks 60`, `screenshot out.png`, `expect stage=race`, `quit`. The game reports its state
+    /// as JSON lines (`--state-log`); the script reads that, never a picture. Needs `--source`
+    /// or one disc image in the search path. See docs/tools/oag-game.md, "Driving the menus".
+    #[arg(
+        long,
+        value_name = "STEPS",
+        conflicts_with_all = ["drive_file", "race", "screenshot", "dry_run", "trace_out", "launcher"]
+    )]
+    pub(crate) drive: Option<String>,
+
+    /// `--drive`, with the script read from a file (`#` starts a comment).
+    #[arg(
+        long,
+        value_name = "FILE",
+        conflicts_with_all = ["race", "screenshot", "dry_run", "trace_out", "launcher"]
+    )]
+    pub(crate) drive_file: Option<std::path::PathBuf>,
+
+    /// Where `--drive` writes its state, one JSON line per change. Stderr when absent.
+    #[arg(long, value_name = "FILE")]
+    pub(crate) state_log: Option<std::path::PathBuf>,
 }
 
 impl DevArgs {
@@ -800,6 +826,23 @@ impl DevArgs {
                 None => oag_game::devrun::Script::default(),
             },
             frame_log: self.frame_log || std::env::var_os("OAG_FRAME_LOG").is_some_and(|v| v != "0"),
+            lockstep: self.drive.is_some() || self.drive_file.is_some(),
         })
+    }
+
+    /// The script `--drive` or `--drive-file` names, parsed, or `None` for a run that drives nothing.
+    pub(crate) fn drive(&self) -> anyhow::Result<Option<oag_game::drive::Script>> {
+        let text = match (&self.drive, &self.drive_file) {
+            (Some(text), _) => text.clone(),
+            (None, Some(path)) => std::fs::read_to_string(path)
+                .with_context(|| format!("--drive-file {}", path.display()))?,
+            (None, None) => {
+                anyhow::ensure!(self.state_log.is_none(), "--state-log needs --drive or --drive-file");
+                return Ok(None);
+            }
+        };
+        oag_game::drive::Script::parse(&text)
+            .map(Some)
+            .map_err(|why| anyhow::anyhow!("--drive: {why}"))
     }
 }

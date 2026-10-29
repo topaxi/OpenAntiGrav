@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-10-14
-summary: "Design only: refactor lap modes into data rules, mod-declared modes and campaign.tosd, drag race example"
+updated: 2026-10-29
+summary: "Custom campaigns v1.0 landed for Pulse/HD/Omega (ADR-0077); open: 2048, grid editor, opponent variants; drag race still design only"
 size: XL (20)
 difficulty: hard (35)
 ---
@@ -150,6 +150,36 @@ extension points above (rules as data) plus the ghost renderer that already exis
 
 ## 2. A custom campaign
 
+**v1.0 landed (2026-10-29) for Pulse, HD/Fury and Omega**:
+`docs/formats/custom-campaign.md`, ADR-0077, `schemas/v1/campaign.tosd`,
+`oag_mod::campaign` (shape), `oag_game::campaign::custom` (compile),
+`assets/mods/examples/example-campaign/` (with a mod pilot, `pilots/rival.toml`), ground truth
+`crates/game/tests/custom_campaign_ground_truth.rs`. It is slot-addressed on the
+titles' own hex grid, uses existing modes only, and keeps namespaced progress. The
+maintainer's decisions from the plan stand: a picker page only when one is installed;
+hidden or locked reveal; disc circuits plus `title:circuit` cross-disc; per-event AI
+`original`/`ours` with its difficulty; a pilot by name (the mod's own first) or inline.
+A campaign that fails, or names a disc not on this machine, is not offered and is logged
+only (maintainer, 2026-10-29).
+
+Open after v1.0, in the order the maintainer raised them:
+
+- **2048** (the plan's step 7): a campaign layout of our own drawing 2048's hex art, a
+  picker tile on the touch front end, `custom_campaigns = true` on its `Title`.
+- **The grid editor** (step 9, its own merge): every slot drawn, confirming a slot picks
+  track/mode/craft and saves into it, writing a generated mod through a serializer the
+  reader round-trips.
+- **Opponent craft variants** in `field.teams` (`{ team, variant }`): `oag_livery::load`
+  paints opponent slots by team only today, so this is a livery change too.
+- **AI craft overrides** (top speed and other handling for the opponents) and a
+  **pilot per slot**: compatible additions to `[grid.event.field]`.
+- **A flyer card shipped in the mod** for HD/Omega tiers; only disc cards are named now.
+- Not run live yet: a play-through on HD/Omega of a hidden cell appearing after its
+  requirement, and a cross-disc event racing (the ground truth plans the cells, it does
+  not race them).
+
+The design notes below are from before v1.0:
+
 What the titles' campaigns already give us: Pulse/HD/Omega grids and Pure's list (both launch
 events as **campaign cells** through one path, record medals in `[[campaign]]` and apply unlocks;
 `crates/game/src/main/session/campaign.rs`, `crates/game/src/campaign/`, the Pure chain in
@@ -222,6 +252,19 @@ law. The lane confirms Pulley's iOS status and the crates before the ADR.
    (mini-map or lap-delta graph); no simulation code.
 4. WebAssembly phase 2: the simulation hook, proven by moving Pulse/Pure's Pilot Assist backport
    into a mod with bit-identical replay hashes; then shared by rules and AI controllers.
-5. The campaign definition format and its schema, the CAMPAIGNS row and picker, one built-in
-   OAG campaign containing a drag race event.
+5. Custom campaigns: v1.0 landed (section 2). Still open: 2048, the grid editor, the
+   follow-ups listed there, and one built-in OAG campaign with a drag race event once the
+   drag race exists.
+   **The examples are a submodule (2026-10-29):** github.com/OpenAntiGrav/mod-examples at
+   `assets/mods/examples`, Pulse-only (Hillside borrows Pulse 03_Track art). NIGHT RUN
+   races Hillside out of the track-only `oag.hillside` (`file = "<mod id>:<path>"`) and
+   bundles Practice Octagon. Open: the maintainer wants Practice Octagon as a **Zone**
+   event; the loader refuses Zone on a track file (`raceplay::load::track_inputs`,
+   `fn foreign`). The track-art session agreed to lift it after track-host merges:
+   the file's own geometry and spline, Zone-only parts from the host's Zone defaults
+   or drawn as nothing and reported, plus a lone-craft Zone test on the oval fixture.
+   Then drop the compiler's refusal (`custom.rs`, "a track file has no Zone circuit")
+   and RACE REMIX's warn. Mod dependencies: `handover/tooling/a-mod-names-no-dependencies-yet.md`.
+   HD/Omega have no disc-backed example (flyers, slots); an HD-only example would
+   restore it.
 6. Later: open (point-to-point) tracks in the track format, the spline and the AI plan.

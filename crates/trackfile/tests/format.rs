@@ -221,6 +221,58 @@ fn an_unwritable_track_is_refused_before_a_file_exists() {
     assert!(matches!(to_parts(&t, "x.glb"), Err(Error::Unwritable(_))));
 }
 
+/// `track.host` is required exactly when the art borrows from a disc (ADR-0076
+/// decision 13): a pinned track without one, or an empty one, is refused by
+/// name on write and on read; a track that borrows nothing needs none, and
+/// `titles` round-trips as written.
+#[test]
+fn a_track_whose_art_borrows_from_a_disc_must_name_its_host() {
+    use oag_trackfile::art::{Art, TextureSource};
+    let plain = parts();
+    assert!(!plain.manifest.contains("host ="), "{}", plain.manifest);
+    let pinned = Track {
+        host: Some("wipeout-pulse".into()),
+        titles: vec!["wipeout-pulse".into(), "wipeout-hd".into()],
+        art: Some(Art {
+            sky: Some(r"Data\Environments\03_Track\track.vex".into()),
+            ..Art::default()
+        }),
+        ..fixture::oval()
+    };
+    let p = to_parts(&pinned, "oval.glb").expect("writable");
+    let loaded = from_parts(&p.manifest, &p.glb).expect("reads");
+    assert_eq!(loaded.track.host.as_deref(), Some("wipeout-pulse"));
+    assert_eq!(loaded.track.titles, pinned.titles);
+
+    let unnamed = Track {
+        host: None,
+        ..pinned.clone()
+    };
+    assert!(
+        matches!(to_parts(&unnamed, "x.glb"), Err(Error::Unwritable(m)) if m.contains("track.host"))
+    );
+    let line = "host = \"wipeout-pulse\"\n";
+    assert!(p.manifest.contains(line), "{}", p.manifest);
+    let err = from_parts(&p.manifest.replace(line, ""), &p.glb).unwrap_err();
+    assert!(
+        matches!(&err, Error::Manifest(m) if m.contains("track.host")),
+        "{err}"
+    );
+    let err = from_parts(&p.manifest.replace(line, "host = \"\"\n"), &p.glb).unwrap_err();
+    assert!(
+        matches!(&err, Error::Manifest(m) if m.contains("track.host")),
+        "{err}"
+    );
+
+    let mut host_texture = Art::default();
+    host_texture.textures.push(TextureSource::Host {
+        entry: r"Data\Tracks\01_Track.vex".into(),
+        name: "a".into(),
+    });
+    assert!(host_texture.borrows_from_a_disc());
+    assert!(!Art::default().borrows_from_a_disc());
+}
+
 #[test]
 fn the_original_ai_bytes_round_trip_when_a_point_carries_them() {
     let mut track = fixture::oval();

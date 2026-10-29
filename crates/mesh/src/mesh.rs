@@ -566,39 +566,7 @@ fn build_class(
     // Positional: materials name a texture by its ordinal among the `Texture`
     // nodes, so an entry this build cannot decode has to stay in place as `None`
     // rather than shift every later index.
-    let embedded: TextureSlots = vex::textures(data)
-        .context("extracting textures")?
-        .into_iter()
-        .map(|slot| {
-            slot.map(|t| {
-                let label = t
-                    .asset_path
-                    .as_deref()
-                    .or(t.name.as_deref())
-                    .and_then(|n| n.rsplit(['/', '\\']).next())
-                    .unwrap_or("?")
-                    .to_string();
-                let (width, height) = (u32::from(t.width), u32::from(t.height));
-                // The levels the disc authors, when they were read: the chain
-                // is the game's and so is the rule that picks among them -
-                // see `Texels::Chain`. A texture whose levels are not read (a
-                // pre-swizzled Pure one) keeps the box-filtered chain, capped
-                // at the depth it declares; `.max(1)`: a 0 would upload no
-                // base level at all.
-                if t.levels.len() + 1 == usize::from(t.mip_count.max(1)) {
-                    std::sync::Arc::new(ModelTexture::chain(label, width, height, t.levels_rgba()))
-                } else {
-                    std::sync::Arc::new(ModelTexture::rgba8(
-                        label,
-                        width,
-                        height,
-                        t.to_rgba(),
-                        Some(u32::from(t.mip_count).max(1)),
-                    ))
-                }
-            })
-        })
-        .collect();
+    let embedded = embedded_texture_slots(data)?;
     // The original resolves every `Texture` node by its own declared name,
     // never by position - see [`Ps2TextureSet::resolve`] and
     // `docs/formats/ps2-texture.md`. A node whose name resolves to nothing
@@ -992,6 +960,50 @@ fn build_class(
     // index-parallel, so it has to see them already sorted.
     model.sort_by_layer();
     Ok(model)
+}
+
+/// A `.vex`'s embedded textures, one slot per `Texture` node in node order,
+/// `None` where this build cannot decode one: the positional table a material
+/// names its texture in. Empty slots on a PS2 file, whose textures live in the
+/// [`Ps2TextureSet`] beside it.
+///
+/// # Errors
+///
+/// A texture block that will not walk.
+pub fn embedded_texture_slots(data: &[u8]) -> Result<TextureSlots> {
+    Ok(vex::textures(data)
+        .context("extracting textures")?
+        .into_iter()
+        .map(|slot| {
+            slot.map(|t| {
+                let label = t
+                    .asset_path
+                    .as_deref()
+                    .or(t.name.as_deref())
+                    .and_then(|n| n.rsplit(['/', '\\']).next())
+                    .unwrap_or("?")
+                    .to_string();
+                let (width, height) = (u32::from(t.width), u32::from(t.height));
+                // The levels the disc authors, when they were read: the chain
+                // is the game's and so is the rule that picks among them -
+                // see `Texels::Chain`. A texture whose levels are not read (a
+                // pre-swizzled Pure one) keeps the box-filtered chain, capped
+                // at the depth it declares; `.max(1)`: a 0 would upload no
+                // base level at all.
+                if t.levels.len() + 1 == usize::from(t.mip_count.max(1)) {
+                    std::sync::Arc::new(ModelTexture::chain(label, width, height, t.levels_rgba()))
+                } else {
+                    std::sync::Arc::new(ModelTexture::rgba8(
+                        label,
+                        width,
+                        height,
+                        t.to_rgba(),
+                        Some(u32::from(t.mip_count).max(1)),
+                    ))
+                }
+            })
+        })
+        .collect())
 }
 
 mod ps2_textures;

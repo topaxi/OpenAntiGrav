@@ -152,6 +152,20 @@ pub enum Draw {
     /// [`Self::FuryBackdrop`] it is what the page sits on, not part of it -
     /// see [`crate::scene_backdrop::Frame`].
     SceneBackdrop(Box<crate::scene_backdrop::Frame>),
+    /// A rectangle the front end writes into the framebuffer's alpha channel, the glow mask the
+    /// frame-end bloom reads. Draws nothing visible.
+    ///
+    /// Pulse PSP's widgets stamp the **stencil** (`Gu_StencilOp(KEEP, KEEP, REPLACE)`, alpha test
+    /// off) under their quad, so every pixel of the quad, transparent texels included, takes the
+    /// reference, and `Bloom_Draw` then blooms `rgb * mask`. `docs/rendering/glow-mask.md` has the
+    /// mask rules, `docs/ui/campaign-screens.md` the front end's. A later stamp over the same
+    /// pixels replaces an earlier one, in list order.
+    GlowStamp {
+        /// `[x, y, width, height]` in the screen's grid.
+        rect: [f32; 4],
+        /// The stencil reference, `0..=255`.
+        value: u8,
+    },
     /// One of the front end's own images, from the sprite sheet.
     Sprite {
         /// Where it goes on the 480x272 screen: `[x, y, width, height]`.

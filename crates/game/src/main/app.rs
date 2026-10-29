@@ -189,6 +189,12 @@ impl App {
             &self.settings.graphics.renderer,
             self.settings.language.as_deref(),
         )?;
+        self.open_with(gpu)
+    }
+
+    /// The session on a device that is already up: the second half of [`Self::open`], and what
+    /// `--drive` calls with a device that has no window (`crate::drive`).
+    pub(crate) fn open_with(&mut self, gpu: Gpu) -> Result<Option<Session>> {
 
         // Built before the stage, because a race's depth attachment has to match
         // this rather than the window. On the launcher and boot legs it is too
@@ -579,6 +585,9 @@ impl App {
                 .and_then(crate::session::LoadProbe::new),
             suspended_race: None,
             campaign_cell: None,
+            campaign_custom: None,
+            custom_campaign: None,
+            campaign_home: None,
             campaign_cursor: crate::campaign_stage::CellCursor::default(),
             pure_chain_class: 0,
             split_lobby: None,

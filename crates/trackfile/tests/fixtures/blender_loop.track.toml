@@ -25,3 +25,31 @@ next = [0, -1]
 collision_nodes = 2
 speedup_pads = 1
 weapon_pads = 1
+art_meshes = 1
+
+[art]
+ambient = [0.1, 0.12, 0.15]
+
+[art.skybox]
+faces = [-1, -1, 0, -1, -1, -1]
+zenith = [0.1, 0.25, 0.6]
+horizon = [0.7, 0.75, 0.8]
+
+[art.sun]
+direction = [0.0, 1.0, -0.0]
+colour = [1.0, 0.9, 0.7]
+intensity = 1.0
+angular_diameter = 2.0
+shadows = true
+
+[art.lensflare]
+atlas = 0
+
+[[art.light]]
+kind = "directional"
+direction = [0.0, -1.3435884e-07, -1.0]
+colour = [0.2, 0.25, 0.4]
+intensity = 0.5
+
+[[art.texture]]
+image = "blender_checker.png"

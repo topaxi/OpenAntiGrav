@@ -217,7 +217,12 @@ impl Session {
             let observation = stage.observation();
             if let Some(cell) = stage.campaign_cell.as_ref() {
                 self.records.record_campaign(
-                    campaign_title.as_deref().unwrap_or(&key.title),
+                    stage
+                        .campaign_custom
+                        .as_ref()
+                        .map(|custom| custom.records_title.as_str())
+                        .or(campaign_title.as_deref())
+                        .unwrap_or(&key.title),
                     &cell.name,
                     observation.campaign_medal,
                     observation.campaign_difficulty,
@@ -231,6 +236,13 @@ impl Session {
                     None,
                 );
             }
+            // A mod campaign's medal lives only under its own title.
+            let observation = records::Observation {
+                campaign_medal: observation
+                    .campaign_medal
+                    .filter(|_| stage.campaign_custom.is_none()),
+                ..observation
+            };
             self.records.record(key, observation);
             if let Err(e) = records::save(&self.records) {
                 error!("could not save race records: {e:#}");

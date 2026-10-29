@@ -9,6 +9,7 @@
 //! A new test file is only compiled once it is listed here, and
 //! `every_test_file_is_listed` below fails until it is.
 
+mod art;
 mod blender;
 mod format;
 mod schema;

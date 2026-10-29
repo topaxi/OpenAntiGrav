@@ -110,17 +110,26 @@ pub(crate) fn effective_mode(mode: display::WindowMode, gamescope: bool) -> disp
 
 /// The monitor's size in physical pixels, which the size presets are fractions of: the window's
 /// monitor, else its own surface (a phone reports its panel as the window).
-pub(crate) fn native_size(window: &winit::window::Window) -> Option<display::Size> {
-    let size = window
-        .current_monitor()
-        .map_or_else(|| window.inner_size(), |monitor| monitor.size());
+pub(crate) fn native_size(host: &crate::gpu::Host) -> Option<display::Size> {
+    let size = host.get().map_or_else(
+        || host.headless_size(),
+        |window| {
+            window
+                .current_monitor()
+                .map_or_else(|| window.inner_size(), |monitor| monitor.size())
+        },
+    );
     (size.width > 0 && size.height > 0).then(|| display::Size::new(size.width, size.height))
 }
 
 /// Whether a window is fullscreen right now: it is, by the compositor's report, or it is under
 /// gamescope, which opens every window borderless whatever the saved mode says
 /// ([`effective_mode`]). The saved `window_mode` alone misses both gamescope and an F11 toggle.
-pub(crate) fn is_fullscreen(window: &winit::window::Window) -> bool {
+pub(crate) fn is_fullscreen(host: &crate::gpu::Host) -> bool {
+    // A headless session has no compositor to ask.
+    let Some(window) = host.get() else {
+        return false;
+    };
     // winit's Android backend answers `None` to `fullscreen()` whatever the window is (it cannot
     // set one), which left `display.fullscreen_resolution` unread there.
     oag_mobile::MOBILE

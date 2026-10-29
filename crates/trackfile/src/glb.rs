@@ -22,10 +22,13 @@ use crate::{Error, Loaded, Track};
 const FLOAT: u32 = 5126;
 const UBYTE: u32 = 5121;
 const USHORT: u32 = 5123;
+const UINT: u32 = 5125;
 const ARRAY_BUFFER: u32 = 34962;
 const ELEMENT_ARRAY_BUFFER: u32 = 34963;
 const POINTS: u32 = 0;
 const TRIANGLES: u32 = 4;
+
+mod art;
 
 const START: &str = "oag/start";
 const SPEEDUP: &str = "oag/pads/speedup";
@@ -339,6 +342,10 @@ pub(crate) fn write(track: &Track) -> Result<Vec<u8>, Error> {
         push(&name, prims, Some(extras));
     }
 
+    if let Some(art) = &track.art {
+        art::write(&mut bin, art, &mut push)?;
+    }
+
     while !bin.data.len().is_multiple_of(4) {
         bin.data.push(0);
     }
@@ -472,6 +479,7 @@ pub(crate) fn read(m: Parsed, bytes: &[u8]) -> Result<Loaded, Error> {
     let mut spline: Vec<Option<Vec<SplinePoint>>> = vec![None; m.paths.len()];
     let (mut speedup, mut weapon) = (Vec::new(), Vec::new());
     let mut nodes = Vec::new();
+    let mut art_meshes: Vec<(usize, crate::art::ArtMesh)> = Vec::new();
     let mut other = 0usize;
 
     for node in &all {
@@ -505,6 +513,11 @@ pub(crate) fn read(m: Parsed, bytes: &[u8]) -> Result<Loaded, Error> {
                 why: "the manifest has no such path".into(),
             })?;
             *slot = Some(read_spline(name, node, blob)?);
+        } else if let Some(i) = name.strip_prefix(art::PREFIX) {
+            let i: usize = i
+                .parse()
+                .map_err(|_| Error::Glb(format!("{name}: bad art mesh index")))?;
+            art_meshes.push((i, art::read(i, node, blob)?));
         } else if name == SPEEDUP {
             speedup = read_pads(name, node, blob)?;
         } else if name == WEAPON {
@@ -545,6 +558,7 @@ pub(crate) fn read(m: Parsed, bytes: &[u8]) -> Result<Loaded, Error> {
         ("collision nodes", m.counts.collision_nodes, nodes.len()),
         ("speedup pads", m.counts.speedup_pads, speedup.len()),
         ("weapon pads", m.counts.weapon_pads, weapon.len()),
+        ("art meshes", m.counts.art_meshes, art_meshes.len()),
     ] {
         if manifest != glb {
             return Err(Error::CountMismatch {
@@ -554,12 +568,30 @@ pub(crate) fn read(m: Parsed, bytes: &[u8]) -> Result<Loaded, Error> {
             });
         }
     }
+    art_meshes.sort_by_key(|(i, _)| *i);
+    if art_meshes.iter().enumerate().any(|(n, (i, _))| n != *i) {
+        return Err(Error::Glb("the art meshes are not numbered 0..n".into()));
+    }
+    let art = if m.art.is_some() || !art_meshes.is_empty() {
+        let art = m
+            .art
+            .unwrap_or_default()
+            .into_art(art_meshes.into_iter().map(|(_, a)| a).collect())?;
+        art.validate()?;
+        Some(art)
+    } else {
+        None
+    };
+    crate::manifest::host_rule(m.host.as_deref(), art.as_ref(), &m.titles)
+        .map_err(Error::Manifest)?;
     let mut notes = m.notes;
     notes.shrink_to_fit();
     Ok(Loaded {
         track: Track {
             id: m.id,
             title: m.title,
+            host: m.host,
+            titles: m.titles,
             ai: AiTrack {
                 version: m.point_version,
                 paths,
@@ -569,6 +601,7 @@ pub(crate) fn read(m: Parsed, bytes: &[u8]) -> Result<Loaded, Error> {
             nodes,
             speedup_pads: speedup,
             weapon_pads: weapon,
+            art,
             notes,
         },
         unread,

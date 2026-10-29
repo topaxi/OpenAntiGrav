@@ -20,6 +20,7 @@ use oag_ui::frontend::{Align, Draw};
 
 mod backdrop;
 mod face;
+mod glow;
 mod hud_scale;
 pub mod inset;
 mod quad;
@@ -186,6 +187,8 @@ pub struct Renderer {
     inset: f32,
     /// How a raster HUD is stretched - see [`hud_scale`].
     hud: HudStretch,
+    /// The frame-end bloom, built the first time a list carries a [`Draw::GlowStamp`].
+    glow: Option<glow::Glow>,
 }
 
 impl std::fmt::Debug for Renderer {
@@ -374,16 +377,7 @@ impl Renderer {
                 buffers: &[Some(wgpu::VertexBufferLayout {
                     array_stride: std::mem::size_of::<Quad>() as u64,
                     step_mode: wgpu::VertexStepMode::Instance,
-                    attributes: &wgpu::vertex_attr_array![
-                        0 => Float32x4,
-                        1 => Float32x4,
-                        2 => Float32x4,
-                        3 => Float32x4,
-                        4 => Float32,
-                        5 => Float32,
-                        6 => Float32x2,
-                        7 => Float32x2
-                    ],
+                    attributes: &quad::ATTRIBUTES,
                 })],
                 compilation_options: Default::default(),
             },
@@ -453,7 +447,23 @@ impl Renderer {
             space: Space::PSP,
             inset: 1.0,
             hud: HudStretch::default(),
+            glow: None,
         })
+    }
+
+    /// Builds [`Self::glow`] on first use. `false` when it will not build: the list then draws
+    /// with no glow, and the log says so once per attempt.
+    fn ensure_glow(&mut self, device: &wgpu::Device) -> bool {
+        if self.glow.is_none() {
+            match glow::Glow::new(device, &self.ui_layout, self.target_format) {
+                Ok(glow) => self.glow = Some(glow),
+                Err(error) => {
+                    log::warn!("front-end glow: {error:#} - the list draws without its bloom");
+                    return false;
+                }
+            }
+        }
+        true
     }
 
     /// Replaces the sprite sheet every later draw samples.
@@ -659,6 +669,7 @@ impl Renderer {
         // Where the Fury backdrop sits, the same way: its passes run before
         // this one and its composite is drawn at its place in the order.
         let mut fury_at = None;
+        let mut stamps: Vec<([f32; 4], u8)> = Vec::new();
         let mut scene_at = None;
         let scissors = std::mem::take(&mut self.scissors);
         let mut segments: Vec<(u32, [u32; 4])> = Vec::new();
@@ -692,6 +703,7 @@ impl Renderer {
                 segments.push((self.quads.len() as u32, rect));
             }
             match draw {
+                Draw::GlowStamp { rect, value } => stamps.push((*rect, *value)),
                 Draw::FuryBackdrop(frame) => {
                     fury_at = Some((self.quads.len() as u32, frame.as_ref()));
                 }
@@ -899,6 +911,15 @@ impl Renderer {
         if self.hud.mode.snaps_geometry() {
             hud_scale::snap_sprites(&mut self.quads, self.hud.pixels_per_grid);
         }
+        // The glow mask's instances sit after the list's own, drawn only by the mask pass.
+        let normal = self.quads.len() as u32;
+        let glowing = !stamps.is_empty()
+            && segments.is_empty()
+            && matches!(load, wgpu::LoadOp::Clear(_))
+            && self.ensure_glow(device);
+        if glowing {
+            self.quads.extend(glow::mask_quads(&stamps));
+        }
         queue.write_buffer(
             &self.uniform_buffer,
             0,
@@ -947,27 +968,7 @@ impl Renderer {
             ),
             (viewport.2 as u32, viewport.3 as u32),
         );
-        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("frame"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view,
-                depth_slice: None,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load,
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: None,
-            timestamp_writes: None,
-            occlusion_query_set: None,
-            multiview_mask: None,
-        });
-        // A clearing pass clears the whole surface to black, so whatever the
-        // rectangle does not cover stays black - which is what the bars are.
-        pass.set_viewport(viewport.0, viewport.1, viewport.2, viewport.3, 0.0, 1.0);
-
-        let total = self.quads.len() as u32;
+        let total = normal;
         if !self.quads.is_empty() {
             queue.write_buffer(&self.quad_buffer, 0, bytemuck::cast_slice(&self.quads));
         }
@@ -980,63 +981,120 @@ impl Renderer {
         cuts.extend(fury_at.map(|(at, _)| (at, backdrop::Cut::Fury)));
         cuts.extend(scene_at.map(|(at, _)| (at, backdrop::Cut::Scene)));
         cuts.sort_unstable();
-        let mut drawn = 0;
-        let whole = [
-            viewport.0 as u32,
-            viewport.1 as u32,
-            viewport.2 as u32,
-            viewport.3 as u32,
-        ];
-        let draw_quads = |pass: &mut wgpu::RenderPass<'_>, range: std::ops::Range<u32>| {
-            if range.start >= range.end {
-                return;
-            }
-            pass.set_pipeline(&self.ui_pipeline);
-            pass.set_bind_group(0, &self.ui_bind_group, &[]);
-            pass.set_vertex_buffer(0, self.quad_buffer.slice(..));
-            if segments.is_empty() {
-                pass.draw(0..6, range);
-                return;
-            }
-            // One draw per view, each inside its own rectangle: the quads before
-            // the first view's start have the whole viewport.
-            let mut from = range.start;
-            while from < range.end {
-                let seen = segments.partition_point(|&(at, _)| at <= from);
-                let rect = seen.checked_sub(1).map_or(whole, |i| segments[i].1);
-                let to = segments
-                    .get(seen)
-                    .map_or(range.end, |&(at, _)| at.min(range.end));
-                if rect[2] > 0 && rect[3] > 0 {
-                    pass.set_scissor_rect(rect[0], rect[1], rect[2], rect[3]);
-                    pass.draw(0..6, from..to);
+        // The list, once, into `target`: the real one, and again into the glow's scratch frame.
+        let record = |encoder: &mut wgpu::CommandEncoder,
+                      target: &wgpu::TextureView,
+                      load: wgpu::LoadOp<wgpu::Color>,
+                      viewport: (f32, f32, f32, f32)| {
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("frame"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: target,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+            // A clearing pass clears the whole surface to black, so whatever the
+            // rectangle does not cover stays black - which is what the bars are.
+            pass.set_viewport(viewport.0, viewport.1, viewport.2, viewport.3, 0.0, 1.0);
+            let mut drawn = 0;
+            let whole = [
+                viewport.0 as u32,
+                viewport.1 as u32,
+                viewport.2 as u32,
+                viewport.3 as u32,
+            ];
+            let draw_quads = |pass: &mut wgpu::RenderPass<'_>, range: std::ops::Range<u32>| {
+                if range.start >= range.end {
+                    return;
                 }
-                from = to;
-            }
-        };
-        for (at, cut) in cuts {
-            draw_quads(&mut pass, drawn..at);
-            drawn = at;
-            match (cut, &self.video, &self.fury, &fury_at) {
-                (backdrop::Cut::Video, Some(video), ..) => {
-                    pass.set_pipeline(&video.pipeline);
-                    pass.set_bind_group(0, &video.bind_group, &[]);
-                    pass.draw(0..6, 0..1);
+                pass.set_pipeline(&self.ui_pipeline);
+                pass.set_bind_group(0, &self.ui_bind_group, &[]);
+                pass.set_vertex_buffer(0, self.quad_buffer.slice(..));
+                if segments.is_empty() {
+                    pass.draw(0..6, range);
+                    return;
                 }
-                (backdrop::Cut::Fury, _, Some(fury), Some(_)) => {
-                    fury.composite(&mut pass);
-                }
-                (backdrop::Cut::Scene, ..) => {
-                    if let Some(scene) = &self.scene {
-                        scene.composite(&mut pass);
+                // One draw per view, each inside its own rectangle: the quads before
+                // the first view's start have the whole viewport.
+                let mut from = range.start;
+                while from < range.end {
+                    let seen = segments.partition_point(|&(at, _)| at <= from);
+                    let rect = seen.checked_sub(1).map_or(whole, |i| segments[i].1);
+                    let to = segments
+                        .get(seen)
+                        .map_or(range.end, |&(at, _)| at.min(range.end));
+                    if rect[2] > 0 && rect[3] > 0 {
+                        pass.set_scissor_rect(rect[0], rect[1], rect[2], rect[3]);
+                        pass.draw(0..6, from..to);
                     }
+                    from = to;
                 }
-                _ => {}
+            };
+            for &(at, cut) in &cuts {
+                draw_quads(&mut pass, drawn..at);
+                drawn = at;
+                match (cut, &self.video, &self.fury, &fury_at) {
+                    (backdrop::Cut::Video, Some(video), ..) => {
+                        pass.set_pipeline(&video.pipeline);
+                        pass.set_bind_group(0, &video.bind_group, &[]);
+                        pass.draw(0..6, 0..1);
+                    }
+                    (backdrop::Cut::Fury, _, Some(fury), Some(_)) => {
+                        fury.composite(&mut pass);
+                    }
+                    (backdrop::Cut::Scene, ..) => {
+                        if let Some(scene) = &self.scene {
+                            scene.composite(&mut pass);
+                        }
+                    }
+                    _ => {}
+                }
             }
+            // A picture last in the list - `Show Logo`'s movie with nothing over
+            // it - is drawn by the loop above, not skipped by a cut at `total`.
+            draw_quads(&mut pass, drawn..total);
+        };
+        let size = (viewport.2 as u32, viewport.3 as u32);
+        if glowing && let Some(glow) = self.glow.as_mut() {
+            let scratch = glow.scratch(device, self.target_format, size).clone();
+            record(
+                encoder,
+                &scratch,
+                wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                (0.0, 0.0, viewport.2, viewport.3),
+            );
+            glow.stamp(
+                encoder,
+                &self.ui_bind_group,
+                &self.quad_buffer,
+                normal..self.quads.len() as u32,
+            );
+            glow.bloom.prepare(
+                device,
+                queue,
+                encoder,
+                oag_post::bloom::Frame {
+                    scene: &scratch,
+                    size,
+                    origin: (0.0, 0.0),
+                    viewport: size,
+                },
+            );
         }
-        // A picture last in the list - `Show Logo`'s movie with nothing over
-        // it - is drawn by the loop above, not skipped by a cut at `total`.
-        draw_quads(&mut pass, drawn..total);
+        record(encoder, view, load, viewport);
+        if glowing && let Some(glow) = self.glow.as_ref() {
+            glow.bloom
+                .composite(encoder, view, (viewport.0, viewport.1), size);
+        }
     }
 }
 
@@ -1095,6 +1153,8 @@ pub fn to_grid(space: Space, viewport: (f32, f32, f32, f32), window: (f32, f32))
     (normalised_x * space.size.0, normalised_y * space.size.1)
 }
 
+#[cfg(test)]
+mod glow_tests;
 #[cfg(test)]
 mod prompt_tests;
 #[cfg(test)]

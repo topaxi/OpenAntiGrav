@@ -741,6 +741,7 @@ impl MenuStage {
                     }
                 }
             };
+            let layers = oag_game::campaign::gate_glow(campaign.frontend_glow, layers);
             let split = layers.backdrop.len();
             let flat = layers.flatten();
             // The ticker's own clip: `Renderer::render_with`'s `clip` is

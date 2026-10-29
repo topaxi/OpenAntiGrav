@@ -85,11 +85,15 @@ impl Pending {
     /// mounted. Logs what each mod did.
     pub(crate) fn menu_for(
         &self,
-        title: &oag_title::Title,
+        title: &'static oag_title::Title,
         updated: bool,
-    ) -> Result<(menu::Definition, Vec<oag_game::mods::Listing>)> {
+    ) -> Result<(
+        menu::Definition,
+        Vec<oag_game::mods::Listing>,
+        oag_game::campaign::custom::Installed,
+    )> {
         let MenuSource::Mods(mods) = &self.menu_source else {
-            return Ok((self.definition.clone(), Vec::new()));
+            return Ok((self.definition.clone(), Vec::new(), Default::default()));
         };
         let built = mods.build(
             menu::BUILT_IN,
@@ -99,7 +103,36 @@ impl Pending {
         for line in &built.report {
             log::info!("{line}");
         }
-        Ok((built.definition, built.listing))
+        let mut definition = built.definition;
+        let mut listing = built.listing;
+        // Surveyed only when a campaign names another disc: the same survey
+        // Race Remix reads, by title slug.
+        let discs = std::cell::OnceCell::new();
+        let has_disc = |slug: &str| {
+            discs
+                .get_or_init(|| {
+                    oag_game::launcher::distinct_titles(&oag_game::launcher::survey(
+                        &oag_source::source::candidates(),
+                    ))
+                    .iter()
+                    .filter_map(|candidate| match &candidate.state {
+                        oag_game::launcher::State::Playable(title) => Some(title.slug()),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+                })
+                .iter()
+                .any(|have| have == slug)
+        };
+        let installed =
+            oag_game::campaign::custom::Installed::for_title(mods.player(), title, &has_disc);
+        oag_game::campaign::custom::add_picker(
+            &mut definition,
+            &mut listing,
+            &installed,
+            &strings::project_table(self.settings.language.as_deref()),
+        );
+        Ok((definition, listing, installed))
     }
 
     /// The boot sequence's own options for one source.
@@ -141,7 +174,7 @@ impl Pending {
     /// empty everywhere else, which is the whole grid in the player's own hull -
     /// see [`race::Options::opponent_teams`].
     pub(crate) fn race_options(&self, source: &str, opponent_teams: Vec<String>) -> race::Options {
-        race::Options {
+        let mut options = race::Options {
             source: source.to_string(),
             // `None` outside a Race Remix - the ordinary CLI/menu route names
             // one source, and `race::load` treats that as "craft comes from
@@ -263,7 +296,23 @@ impl Pending {
             world_clock_offset: self.cli.world_clock_offset.unwrap_or(0.0),
             gantry_seconds: self.cli.gantry_seconds,
             camera: self.camera,
+        };
+        // A track file that borrows from another title's disc races as a remix
+        // with that disc as the track source (ADR-0076 decision 13).
+        match oag_game::custom_tracks::route_to_host(
+            &mut options,
+            oag_source::title::identify,
+            || {
+                oag_game::launcher::distinct_titles(&oag_game::launcher::survey(
+                    &oag_source::source::candidates(),
+                ))
+            },
+        ) {
+            Ok(Some(line)) => log::info!("{line}"),
+            Ok(None) => {}
+            Err(why) => log::warn!("{why}"),
         }
+        options
     }
 
     /// The control scheme every race this run starts is driven with.
@@ -349,7 +398,7 @@ impl Pending {
         // settings file stores, and on a circuit or a team those are different
         // strings - `16_Track` and `Mantis` against their localised names,
         // which are shipped content and only ever live in memory.
-        let (mut definition, mods) = self.menu_for(title, updated)?;
+        let (mut definition, mods, custom_campaigns) = self.menu_for(title, updated)?;
         // A no-op on every title but Wipeout Pure and Wipeout Pulse, whose
         // race defaults declare no variant axis at all - see
         // `menu::Definition::drop_unavailable_race_variant`.
@@ -397,6 +446,7 @@ impl Pending {
         // same way - see that function's own doc.
         let mut shell = Shell::from_boot(title, definition, &boot_shell);
         shell.mods = mods;
+        shell.custom_campaigns = std::sync::Arc::new(custom_campaigns);
         shell.menu_sfx = Some(menu_sfx);
 
         println!("\n{}", hints::menu_keys(&boot_shell.strings));

@@ -2,7 +2,7 @@
 status: re-first
 titles: [pulse]
 updated: 2026-10-29
-summary: "Pulse cursor halo is the front end bloom (GE dump), not a SelectorGlow image; a front-end bloom pass is open; Selector position fixed"
+summary: "Cursor halo is the front end bloom, now drawn for the Selector; other stamps in pulse-front-end-glow-stamps"
 ---
 
 # The campaign grid draws and does not launch
@@ -454,13 +454,13 @@ read), `crates/game/src/main/campaign_stage.rs` and
   above still describes this build's own choice not to implement it, which
   stands unless whoever picks this thread up next decides otherwise.
 
-## Next Steps (2026-10-29 update, `pulse-selector-glow`)
+## Next Steps (2026-10-29 update, `pulse-frontend-bloom`)
 
-- **Front-end bloom on Pulse** (top item; supersedes every `SelectorGlow` item below): the halo is `Bloom_Draw` reading the stencil
-  that the footer tab (ref 0x40), card title (0x73) and `Selector` (0x98 grid / 0xb5 cell, varies per frame) stamp; see
-  `docs/ui/campaign-screens.md`, "The halo is the front end's bloom". Read first: the front end's bloom parameters, whether the
-  Selector ref follows the pulse, and the mask of every other stamped draw; then run `oag_post::bloom` over the front-end frame.
-  Cursor-box mean grey now 52.4 (grid), 65.1 (cell).
+- **Front-end bloom on Pulse: landed for the cursor.** The halo is `Bloom_Draw` over the stencil the widgets stamp; the
+  `Selector`'s ref is `80 + 150 t` (follows the pulse) and ours now draws it (`Draw::GlowStamp`, `oag_game::render::glow`,
+  `Campaign::frontend_glow`). Cursor-box mean grey, phase-matched: grid 34.51 to 0.29, cell 48.47 to 6.69 (one frame with the
+  backdrop streak in the box). The remaining stamps (card title, footer tag, other screens) are the thread
+  `pulse-front-end-glow-stamps`.
 
 ## Next Steps
 

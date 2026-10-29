@@ -37,6 +37,25 @@ impl SelectorPulse {
         self.seconds
     }
 
+    /// The pulse's position in its triangle, `0.0` at cyan to `1.0` at white: the `t` of [`Self::tint`].
+    fn level(&self) -> f32 {
+        let phase = ((self.seconds - ENTRY_HOLD).max(0.0) * 2.0) % 2.0;
+        if phase > 1.0 { 2.0 - phase } else { phase }
+    }
+
+    /// The glow-mask byte `Selector`'s quad stamps now: `80 + 150 * t`, `t` being [`Self::level`].
+    ///
+    /// **Measured**, not read: 150 EDRAM samples of Grid Selection's alpha over the Selector's
+    /// box ran 80 to 229 in steps of 10 per game frame (`150 / 15`), and four GE dumps put the
+    /// reference (`0xff9801`, `0xffb101`, `0xff6601`, Cell Selection `0xffb501`) within one of
+    /// `80 + 150 t` for the tint each frame drew. The code that issues it is not located
+    /// (`FUN_0889812c` stamps `(1 - f) * 150 + 70` for an `Image` with flag `0x200`, 70 to 220,
+    /// which is not the range read here).
+    #[must_use]
+    pub fn stamp(&self) -> u8 {
+        (80.0 + 150.0 * self.level()).round().clamp(0.0, 255.0) as u8
+    }
+
     /// `Selector`'s ARGB tint now: `lerp(phase, cyan, white)` for the first
     /// half of the 2.0-wide phase, `lerp(phase - 1, white, cyan)` for the rest.
     #[must_use]
@@ -81,6 +100,19 @@ mod tests {
         assert!(quarter != CYAN && quarter != WHITE);
         p.set_seconds(ENTRY_HOLD + 0.75);
         assert_eq!(p.tint(), quarter, "the wave is symmetric about 0.5 s");
+    }
+
+    #[test]
+    fn the_stamp_follows_the_pulse_from_80_to_230() {
+        let mut p = SelectorPulse::default();
+        assert_eq!(p.stamp(), 80, "held at cyan: the low end");
+        p.set_seconds(ENTRY_HOLD + 0.5);
+        assert_eq!(p.stamp(), 230, "white: the high end");
+        p.set_seconds(ENTRY_HOLD + 0.25);
+        let rising = p.stamp();
+        p.set_seconds(ENTRY_HOLD + 0.75);
+        assert_eq!(p.stamp(), rising, "the same triangle as the tint");
+        assert_eq!(rising, 155);
     }
 
     #[test]

@@ -15,7 +15,7 @@ import os
 import struct
 import tomllib
 
-from . import f32
+from . import artfile, f32
 from .model import (
     COLLISION_KINDS,
     HEADER_WORD,
@@ -43,7 +43,7 @@ WEAPON = "oag/pads/weapon"
 SPLINE = "oag/spline/"
 
 _WIDTH = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4, "MAT4": 16}
-_COMPONENT = {FLOAT: ("f", 4), UBYTE: ("B", 1), USHORT: ("H", 2)}
+_COMPONENT = {FLOAT: ("f", 4), UBYTE: ("B", 1), USHORT: ("H", 2), artfile.UINT: ("I", 4)}
 
 
 class TrackFileError(Exception):
@@ -258,6 +258,12 @@ def write_glb(track):
             extras["oag_name"] = node.name
         push(name, prims, extras)
 
+    if track.art is not None:
+        try:
+            artfile.write_nodes(b, track.art, push)
+        except artfile.ArtError as e:
+            raise TrackFileError(str(e)) from e
+
     while len(b.data) % 4:
         b.data.append(0)
     doc = {
@@ -297,6 +303,10 @@ def write_manifest(track, glb_name):
     """The `.track.toml` text. Integers and strings only: no float is written."""
     if not track.id:
         raise TrackFileError("the track has no id")
+    if not track.host and track.art is not None and track.art.borrows_from_a_disc():
+        raise TrackFileError(
+            "the art borrows from a disc (a host texture or a sky): set Runs on to the title it borrows from"
+        )
     lines = [
         "[toml-schema]",
         f"location = {_quote(SCHEMA_LOCATION)}",
@@ -305,6 +315,12 @@ def write_manifest(track, glb_name):
         "[track]",
         f"id = {_quote(track.id)}",
         f"title = {_quote(track.title)}",
+    ]
+    if track.host:
+        lines.append(f"host = {_quote(track.host)}")
+    if track.titles:
+        lines.append("titles = [" + ", ".join(_quote(n) for n in track.titles) + "]")
+    lines += [
         f"glb = {_quote(glb_name)}",
     ]
     if track.notes:
@@ -332,8 +348,12 @@ def write_manifest(track, glb_name):
         f"collision_nodes = {len(track.nodes)}",
         f"speedup_pads = {len(track.speedup_pads)}",
         f"weapon_pads = {len(track.weapon_pads)}",
-        "",
     ]
+    if track.art is not None:
+        lines.append(f"art_meshes = {len(track.art.meshes)}")
+        lines += ["", *artfile.manifest_lines(track.art)]
+    else:
+        lines.append("")
     return "\n".join(lines)
 
 
@@ -502,7 +522,7 @@ def read(manifest_path):
         g = _Glb(fh.read())
     rows = m.get("spline", {}).get("path", [])
     splines = [None] * len(rows)
-    start, speedup, weapon, nodes = None, [], [], []
+    start, speedup, weapon, nodes, art = None, [], [], [], []
     for node in g.doc["nodes"]:
         name = node.get("name", "")
         extras = node.get("extras") or {}
@@ -519,6 +539,8 @@ def read(manifest_path):
             speedup = _read_pads(g, node, name)
         elif name == WEAPON:
             weapon = _read_pads(g, node, name)
+        elif name.startswith(artfile.PREFIX):
+            art.append((int(name[len(artfile.PREFIX) :]), artfile.read_node(g, node, FLOAT)))
     if start is None:
         raise TrackFileError(f"no {START} node")
     paths = []
@@ -542,9 +564,20 @@ def read(manifest_path):
         for j in m.get("spline", {}).get("junction", [])
     ]
     t = m["track"]
+    art.sort(key=lambda a: a[0])
+    if [i for i, _ in art] != list(range(len(art))):
+        raise TrackFileError("the art meshes are not numbered 0..n")
+    track_art = None
+    if "art" in m or art:
+        track_art = artfile.from_manifest(m.get("art"), [a for _, a in art])
+    host = t.get("host", "")
+    if not host and track_art is not None and track_art.borrows_from_a_disc():
+        raise TrackFileError("the art borrows from a disc but track.host names no title")
     return Track(
         t["id"],
         t["title"],
+        host,
+        list(t.get("titles", [])),
         m["spline"]["point_version"],
         paths,
         junctions,
@@ -553,4 +586,5 @@ def read(manifest_path):
         speedup,
         weapon,
         list(t.get("notes", [])),
+        track_art,
     )

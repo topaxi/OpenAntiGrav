@@ -184,6 +184,23 @@ const PULSE_DENY_LIST_OPENERS: &[DenyListOpener] = &[DenyListOpener {
     open: oag_pure::open_with_packs,
 }];
 
+/// Every title this build opens, one entry per release family (Wipeout HD's
+/// PSN variant shares [`oag_hd::TITLE`]'s name, so its slug too).
+pub const ALL: [&Title; 5] = [
+    oag_pulse::TITLE,
+    oag_pure::TITLE,
+    oag_hd::TITLE,
+    oag_omega::TITLE,
+    oag_2048::TITLE,
+];
+
+/// The title whose [`crate::layers::slug`] is `slug` (`wipeout-pulse`), the
+/// spelling a track file's `track.host` and a mod's `titles` use.
+#[must_use]
+pub fn by_slug(slug: &str) -> Option<&'static Title> {
+    ALL.into_iter().find(|t| crate::layers::slug(t) == slug)
+}
+
 /// Which title a source is, for a caller that needs the answer before it has
 /// any other reason to open the archives.
 ///

@@ -79,6 +79,14 @@ ENTRY_POLL = 0.03
 #: The `WALK` ids whose ours is drawn at the original's seconds since entry (`--menu-picker-seconds`): the pages with a measured clock law.
 CLOCKED = ("grid", "cell")
 
+#: Where the `Selector`'s quad is on `grid` and `cell` (a GE dump: 42x43 at (60,138) and (120,90)): its centre pixel's alpha in the
+#: displayed EDRAM buffer is the glow-mask byte the quad stamps, `80 + 150 * t` of the pulse (`docs/ui/campaign-screens.md`, "The front
+#: end's bloom, wired for the cursor"), which gives the pulse phase exactly where the wall clock does not.
+SELECTOR_CENTRE = {"grid": (81, 159), "cell": (141, 111)}
+EDRAM = 0x04000000
+#: `SelectorPulse`'s entry hold, seconds (`oag_ui_screens::campaign::pulse::ENTRY_HOLD`): ours at `ENTRY_HOLD + t / 2` shows level `t`.
+ENTRY_HOLD = 0.35
+
 PREDICATES = {"title": lambda png: orange_share(png) > 0.03}
 
 
@@ -89,6 +97,7 @@ class Rig:
         self.title = title
         self.seen = {}
         self.entered = None  # (state, time.monotonic() when `expect` saw it replace another): the screen-entry clock
+        self.pressed_at = None  # time.monotonic() of the press straight before an `st:` step: the entry cannot be earlier
         if self.dbg.is_stepping():
             self.dbg.call("cpu.resume")
             time.sleep(0.5)
@@ -112,7 +121,12 @@ class Rig:
                 # entry lies between the last poll that saw another screen and this one: take the midpoint (+-ENTRY_POLL/2)
                 # Seen already on the first poll: the entry was not watched, so there is no clock (`None`), never "now".
                 now = time.monotonic()
-                self.entered = (seen, None if last_other is None else (last_other + now) / 2)
+                # The press that causes the entry returns after the screen has already changed on a settled emulator, so the first
+                # poll can see the new name at once: the entry then lies between the press and that poll, a wider window than a
+                # watched change (which is `ENTRY_POLL`).
+                before = last_other if last_other is not None else self.pressed_at
+                self.pressed_at = None
+                self.entered = (seen, None if before is None else (before + now) / 2)
                 return
             last_other = time.monotonic()
             time.sleep(ENTRY_POLL)
@@ -137,16 +151,37 @@ class Rig:
             self.tap(button, wait=3.0)
         sys.exit("STALLED pressing %s until %s" % (button, predicate))
 
+    def selector_stamp(self, name):
+        """The pulse level `t` (0 cyan, 1 white) read off the displayed buffer's `Selector` stamp, or `None`. The CPU must be stopped."""
+        cx, cy = SELECTOR_CENTRE[name]
+        for offset in (0, 0x88000):
+            raw = self.dbg.read(EDRAM + offset, 512 * 272 * 4)
+            ref = raw[(cy * 512 + cx) * 4 + 3]
+            if raw[(5 * 512 + 5) * 4 + 3] == 4 and ref != 4:
+                return max(0.0, min(1.0, (ref - 80) / 150.0))
+        return None
+
     def shot(self, name):
         wid, x, y, w, h = set_window(480, 272)
         dst = self.shots / (name + ".png")
+        stopped = name in SELECTOR_CENTRE
+        if stopped:
+            # Frozen for the grab and the read, so the frame and the stamp are one pulse phase.
+            self.dbg.call("cpu.stepping")
+            time.sleep(0.25)
         before = time.monotonic()
         subprocess.run(["import", "-window", "root", "-crop", "%dx%d+%d+%d" % (w, h, x, y), "+repage", str(dst)], check=True)
         after = time.monotonic()
+        level = None
+        if stopped:
+            level = self.selector_stamp(name)
+            self.dbg.call("cpu.resume")
         state = self.state()
         # The grab takes `after - before`; the frame is read about the middle of it. Only when the entry was watched and the screen is still it.
         since = (before + after) / 2 - self.entered[1] if self.entered and self.entered[0] == state and self.entered[1] is not None else None
-        self.seen[name] = {"png": dst, "at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"), "state": state, "since_entry": since}
+        phase = None if level is None else ENTRY_HOLD + level / 2
+        self.seen[name] = {"png": dst, "at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"), "state": state,
+                           "since_entry": phase if phase is not None else since, "from_stamp": phase is not None, "level": level}
         return dst
 
     def boot(self, timeout=240.0):
@@ -186,6 +221,7 @@ class Rig:
                 button, _, n = rest.partition("*")
                 # A key straight before `st:` skips the tap's 0.7 s settle so `expect` sees the screen change itself (the entry clock).
                 watched = steps[at + 1:at + 2] and steps[at + 1].startswith("st:") and int(n or 1) == 1
+                self.pressed_at = time.monotonic() if watched else None
                 self.tap(button, 1, wait=0.0) if watched else self.tap(button, int(n or 1))
             elif kind == "pu":
                 button, _, pred = rest.partition(":")
@@ -308,8 +344,10 @@ def build_pairs(args, seen, out, plat, walk):
         pair.rec["original"]["captured_at"] = shot["at"]
         pair.rec["original"]["capture_path"] = "walked by pad from Main Menu (no savestate)"
         pair.rec["original"]["selection_basis"] = "read by eye from the frame; the cursor is where the walk left it"
-        if shot.get("since_entry") is not None:
-            pair.rec["original"]["seconds_since_entry"] = {"value": round(shot["since_entry"], 3), "basis": "measured: wall clock from the poll that saw the state name change (+-%.2f s) to the middle of the frame grab; PPSSPP runs at 60 fps, its pulse period reads 1 s on this clock" % (ENTRY_POLL / 2)}
+        if shot.get("from_stamp"):
+            pair.rec["original"]["seconds_since_entry"] = {"value": round(shot["since_entry"], 3), "basis": "not a wall clock: the pulse level %.3f the Selector's own glow-mask stamp reads in EDRAM (80 + 150 t, CPU stopped for the grab), as the seconds at which ours shows that level (entry hold + t / 2); good to one game frame" % shot["level"]}
+        elif shot.get("since_entry") is not None:
+            pair.rec["original"]["seconds_since_entry"] = {"value": round(shot["since_entry"], 3), "basis": "measured: wall clock from the poll that saw the state name change (+-%.2f s; when the first poll already saw the new name, from the midpoint between the press and that poll, wider) to the middle of the frame grab; PPSSPP runs at 60 fps, its pulse period reads 1 s on this clock" % (ENTRY_POLL / 2)}
         pair.rec["original"]["screen_basis"] = ("the game's own state machine (0x08b31784+0x18c): %r" % shot["state"]) if shot["state"] else "read by eye from the frame (no recovered state name for this title)"
         prepare_profile(plat, profile, args.campaign_title, args.difficulty, item.get("race"))
         cp.build(pair, args, "menu", "cold_boot", None, {"value": None, "unit": None, "basis": "not applicable: a menu is a still"})

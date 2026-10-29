@@ -14,6 +14,7 @@
 //!
 //! [`docs/tools/mods.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/tools/mods.md
 
+pub mod campaign;
 mod container;
 mod discover;
 pub mod extras;
@@ -22,7 +23,7 @@ mod manifest;
 pub mod pack;
 
 pub use container::{Container, Origin};
-pub use discover::{Failed, Found, Loaded, SEARCH_ENV, load, mods_search_path, search};
+pub use discover::{EXAMPLES, Failed, Found, Loaded, SEARCH_ENV, load, mods_search_path, search};
 pub use manifest::{
     Error as ManifestError, License, MANIFEST, Manifest, SCHEMA_KIND, SCHEMA_MAJOR,
 };
@@ -134,6 +135,14 @@ impl Mod {
         Ok(self
             .read(name)?
             .map(|bytes| String::from_utf8_lossy(&bytes).into_owned()))
+    }
+
+    /// The file `name` on disk, for a mod that is a folder; `None` otherwise.
+    /// What a reader that takes a path (a track file and the `.glb` beside it)
+    /// needs.
+    #[must_use]
+    pub fn local_path(&self, name: &str) -> Option<std::path::PathBuf> {
+        self.container.local_path(name)
     }
 
     /// Every file in the mod, by path.

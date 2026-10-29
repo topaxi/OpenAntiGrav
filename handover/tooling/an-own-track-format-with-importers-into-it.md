@@ -1,9 +1,10 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-10-27
-summary: "Track format: visual meshes, materials and sky as optional records; non-Pulse hosts; picker preview"
+updated: 2026-10-29
+summary: "Track format: art landed for Pulse/Pure (ADR-0076); rcsmodel art for HD/2048/Omega, hull lighting, alpha-test ref, pads, Blender art open"
 difficulty: medium (30)
+categories: [tooling, rendering]
 ---
 
 # An own track format, with BallisticNG and the originals as importers into it
@@ -57,8 +58,22 @@ are committed fixtures (`just blender-fixtures`), read by `crates/trackfile/test
 
 - Add-on follow-ups (`docs/tools/blender.md`, "Open"): banking and per-point width on the curve; multi-path and
   junction authoring beyond the scene property the importer writes.
-- Visual meshes, materials, sky, fog, lights, emitters and PVS as optional records (a minor version each); today a track
-  file draws as flat-shaded collision and the report names the absent list.
+- **Landed 2026-10-29 (`track-art`, ADR-0076 landing 1):** the optional art section (meshes, host or image textures,
+  sky, sun, ambient, lens flare), its schema, the loader (`oag_raceplay::foreign::art`) and the disc exporter for Pulse
+  and Pure; proof `trackfile_ground_truth::every_*_circuit_exports_and_reads_back_the_same` (96 circuits, per-draw
+  equality; `docs/formats/track-file.md` says what is not bit for bit and why).
+- **Art for HD, 2048 and Omega: checked, applies, not wired.** Their circuits draw from the `.rcsmodel`; the art
+  material has no field for its shader table, lightmaps or blend factors, the exporter writes no art for them, and a
+  host reference names only a `.vex` `Texture` node. 2048 and Omega share the material model: one lane for both.
+- **Hull lighting and ambient from `[art.sun]`/`[art.ambient]`:** read, not drawn. `Light::authored` is HD's equation and
+  would relight Pulse hulls; needs the host title's own hull law (Pulse's `HullLights`). Today the sun only points the
+  `mapped` shadows (when `shadows`) and the flare.
+- **What an export loses** (named in its notes): per-batch alpha-test reference (0x10 / 0x7f on Pulse and Pure; the art
+  draws with the shader default), texture animation, `Anim Transform` motion (written at time zero), LOD tiers (finest
+  written), render layer and depth order, the PSP glow stamp, the shine pass (visible: Vineta K's building windows draw
+  black, not blue), the gantry panel. Pad plates are separate models and are not exported, so a track file draws none.
+- `COLOR_0` holds the renderer's vertex colour verbatim (byte/255 on PSP), not linear light as glTF reads it.
+- Remaining absent records: fog, point lights, clouds, scenery animation, emitters, PVS, Zone.
 - Hosts other than Pulse (HD, 2048, Omega physics) are not exercised for a raced track file.
 
 ## Next Steps
@@ -67,4 +82,6 @@ are committed fixtures (`just blender-fixtures`), read by `crates/trackfile/test
    the RACE page's CIRCUIT row if custom tracks should race outside RACE REMIX.
 
 1. ~~The Blender add-on~~ landed 2026-10-12 (`scripts/blender/oag_track`, `docs/tools/blender.md`, `just blender-fixtures`).
-2. A first optional record: visual meshes with materials, so a custom track is drawn rather than flat-shaded.
+2. ~~A first optional record: visual meshes with materials~~ landed 2026-10-29 (ADR-0076 landing 1).
+3. The Blender add-on's art export (ADR-0076 landing 2): untagged meshes, vertex colours, image textures, host picks.
+4. An alpha-test reference on the art material (`oag_alpha_ref`), then the rcsmodel art lane for HD/2048/Omega.

@@ -1,6 +1,6 @@
 # The Blender add-on: author a track, export it, race it
 
-**Status: built (2026-10-12).** Blender 4.2 or later; developed and tested on 5.2.2 LTS, headless.
+**Status: built (2026-10-12); the art section since 2026-10-29.** Blender 4.2 or later; developed and tested on 5.2.2 LTS, headless.
 The add-on writes this project's own track format ([track-file.md](../formats/track-file.md),
 [ADR-0063](../architecture/adr/0063-the-own-track-format-is-glb-plus-a-toml-manifest.md)) and
 nothing else: every field it writes is a field the format defines. Where it derives a value
@@ -31,9 +31,11 @@ property `oag_kind` on the object (the panel's buttons set it; so does adding th
 | `speedup`, `weapon` | an Empty: X lateral, +Y forward, +Z up | a pad |
 
 The six collision kinds and the four above are the whole list: the format has no `scenery`
-kind (a reader refuses an unknown tag by name), so scenery, sky, fog, lights and art are not
-exported ([the absent list](../formats/track-file.md#what-format-1x-carries-no-field-for)).
-An untagged object is simply not part of the track.
+kind (a reader refuses an unknown tag by name). An **untagged** mesh that renders is **art**
+(see [Art](#art-meshes-textures-the-sun-and-baked-light) below); fog, point lights and scenery
+animation are not in the format
+([what it carries](../formats/track-file.md#what-format-1x-carries-no-field-for)).
+An untagged object hidden from render (`hide_render`) is not part of the track.
 
 Steps (the same ones `scripts/blender/roundtrip.py loop` runs headless):
 
@@ -48,7 +50,7 @@ Steps (the same ones `scripts/blender/roundtrip.py loop` runs headless):
 4. **Add speedup pad** / **Add weapon pad** put a pad on the spline point nearest the 3D
    cursor. The pad's box (`oag_min`, `oag_max`, in the format's pad-local axes lateral, up,
    forward) defaults to the fixture's.
-5. Set the track id, title and notes at the top of the panel, then **Export OAG Track**
+5. Set the track id, title, **Runs on**, **Offered on** and notes at the top of the panel, then **Export OAG Track**
    and choose `name.track.toml`; `name.glb` is written beside it.
 
 ### What the add-on derives (chosen, not measured)
@@ -63,12 +65,15 @@ matches what that generator would write.
 | `lateral`, `down` | `lateral` = unit(tangent x world up); `down` = -up, with up = lateral x tangent (the lateral axis stays level, up follows a slope; **banking is not authored**) |
 | `progress` | cumulative gap over the total, 0 at point 0 |
 | `half_width`, `ai_bound` | the object's half width; AI bound = -/+ half width x AI fraction |
-| `racing_line`, `section`, `flags`, `light_scale` | 0, `0xff`, 0, 255 |
+| `racing_line`, `section`, `flags`, `light_scale` | 0, `0xff`, 0, 255 (`light_scale` lowered under art when the spline sets *Cover light*, see [Art](#art-meshes-textures-the-sun-and-baked-light)) |
 | path `entry`/`exit`, junction | `0`/`0` and one junction `[0, -1]` -> `[0, -1]`: a single closed loop |
 | `max_spacing` | the largest gap between neighbours |
 | Start slot | 154 units back along the ring from point 0, level, facing along the line. The race puts the **lap line** 154 units ahead of the start slot (`oag_race::Course::START_LINE_ADVANCE`), so spline point 0, the curve's first control point, is the lap line |
 | Pad matrix | the Empty's unit basis in rows (lateral, up, forward) and its position; scale is ignored, the size is the box |
 | Track id | the scene's id, else the scene name slugged |
+| `track.host` | the scene's **Runs on** (`oag_track_host`: `none`, default, or one of the five title slugs): the title whose disc the art's host textures and sky resolve from; export refuses `none` when the art borrows ([ADR-0076](../architecture/adr/0076-a-track-file-carries-its-art-as-an-optional-section.md) decision 13). Import refuses an unknown value |
+| `track.titles` | the scene's **Offered on** (`oag_track_titles`), comma-separated slugs; empty writes no key (every title) |
+| `[art.skybox]` | the Art panel's **Own sky** (`oag_skybox`): **Gradient** with **Zenith** and **Horizon** (scene-linear colours, `oag_sky_zenith`, `oag_sky_horizon`) and six **Face** images (`oag_sky_face_0..5`, cubemap order `+X, -X, +Y, -Y, +Z, -Z`; empty draws the gradient). Each image becomes a texture row like a material's. Not with **Sky** (the host form); export refuses both ([ADR-0076](../architecture/adr/0076-a-track-file-carries-its-art-as-an-optional-section.md) decision 14) |
 
 "Tiles", "AI line" and "start grid" in other tools map to fields that exist here: the pad lists,
 the spline with its `ai_bound`/`racing_line`, and the start slot (the engine lays its own grid from it).
@@ -78,6 +83,85 @@ negation, so exact `f32` values and winding survive in both directions. Mesh tra
 into the vertices on export (`matrix_world`; an identity transform is not multiplied, so bits do not move).
 A mesh over 65,535 vertices is split into several collision meshes of one node, because the format's
 indices are `u16`.
+
+## Art: meshes, textures, the sun and baked light
+
+**Since 2026-10-29** the add-on writes and reads the optional art section
+([ADR-0076](../architecture/adr/0076-a-track-file-carries-its-art-as-an-optional-section.md),
+[track-file.md](../formats/track-file.md)); the reader of record is `oag_trackfile`, and
+`crates/trackfile/tests/blender.rs` reads what the add-on wrote. Code:
+`scripts/blender/oag_track/scene_art.py` (Blender side) and `artfile.py` (the format, no `bpy`).
+A scene with no art mesh, no Sun lamp and no sky writes no art section: the file is what 1.0 wrote.
+
+| In Blender | In the file |
+| --- | --- |
+| An untagged Mesh object that renders | one `oag/art/<n>` draw per material slot it uses, vertices split per face corner, transforms baked, in natural name order |
+| The active colour attribute, read as `.color` (Blender keeps it **linear**; never `.color_srgb`), either domain | `COLOR_0`, the baked light; white without one |
+| The active UV map | `TEXCOORD_0`, `v` flipped to the disc's v-down |
+| The material's first Image Texture node: an image with custom properties `oag_host_entry` and `oag_host_name` (or **Make Host Texture** in the panel) | `[[art.texture]] host = { entry, name }`: a `Texture` node of a circuit on the host title's disc, by its full asset path. No pixels are exported |
+| Any other image (a PNG file on disk) | `[[art.texture]] image = "<file>.png"`, the file copied beside the manifest |
+| Material *Blend* (`oag_blend`), or from Blender when *auto*: alpha clip is `cutout`, *Blend* is `alpha`, else `opaque` | `oag_blend` |
+| Alpha clip: a Math node set to **Greater Than** feeding the Principled BSDF's Alpha (Blender 4.2+), or the *Alpha Clip* blend mode on older versions | `oag_alpha_ref` = threshold x 255. Blender 5.2 silently turns `blend_method = 'CLIP'` into Hashed, so the node is the way |
+| Material backface culling | `oag_culled` |
+| Object *Shadow* (`oag_shadow`), *Layer* (`oag_layer`), *Lit* (`oag_lit`) | the same extras |
+| The scene's *Sun* (`oag_sun`), else the only Sun lamp | `[art.sun]`: world +Z is the direction towards it, the lamp colour, *Intensity* (`oag_intensity`, default 1), the angle as `angular_diameter` in degrees, the shadow switch as `shadows` |
+| Every other Sun lamp | an `[[art.light]]` directional row |
+| The world's Background colour times its strength | `[art.ambient]` |
+| *Sky* (a host circuit's `.vex` entry), *Lens flare* and its atlas image | `[art] sky`, `[art.lensflare] atlas` |
+| A Curve spline's *Cover light* below 255 | `_OAG_LIGHT_SCALE` per spline point, see below |
+
+**Intensity is not Blender's strength.** The file's `intensity` multiplies the colour the PSP hull
+rig is built from, clipped to a byte, and a disc export writes 1.0; a Sun lamp's strength is
+Cycles irradiance (the API default is 10). So the two are separate: strength lights the bake,
+*Intensity* lights the ships.
+
+**Cover light (chosen, not measured).** A spline point is covered when a ray straight up from 5
+units above it hits art that casts (`oag_shadow` `both` or `cast`); its ambient byte becomes
+the *Cover light* value, and so does its directional byte when a ray towards the sun is blocked
+too. An uncovered point stays 255 whatever shades it. This is how a ship darkens under a roof or
+in a tunnel (`oag_race::Course::light_scale_at`). Off (255) by default, so a track without it
+keeps its bytes.
+
+**Baking light into `COLOR_0`.** The format stores the result, never the method (ADR-0076
+decision 9); the add-on has no Bake operator yet, so a builder script does it with Cycles,
+headless: give each art mesh a `FLOAT_COLOR` colour attribute and make it active, swap each
+material for a plain diffuse one of roughly the texture's albedo (the host textures have no pixels
+in Blender), hide the tagged collision from render (the floor lies in the road's plane and would
+shadow it), then `bpy.ops.object.bake(type='DIFFUSE', pass_filter={'DIRECT', 'INDIRECT'},
+target='VERTEX_COLORS')` with `scene.render.bake.target = 'VERTEX_COLORS'`. Diffuse without the
+colour pass is the light alone; a Combined bake would bake the albedo in and the texture would
+multiply it again. A vertex bake is only as sharp as the mesh is dense.
+
+**What an import keeps.** Imported art carries the file's normals and texcoords as corner
+attributes (`oag_normal`, and `oag_texcoord` as a 3-vector, because Blender takes any 2-float
+corner attribute for a UV map) and each lamp's direction and colour, and writes them back
+verbatim while what Blender holds still matches, as pads do. A lens flare's colour and direction
+overrides travel as the scene properties `oag_lensflare_colour`/`oag_lensflare_direction`.
+
+### Hillside, the worked example (2026-10-29)
+
+Hillside, the 12-point circuit in the example campaign, was re-skinned with all of the above from
+a headless builder script that is not committed (its spline, collision, start and pads came out
+bit-equal to the plain track's, so records and ghosts keyed `foreign:hillside` stay valid):
+
+- Pulse 03_Track's textures by name: `GenericTrackTextures\_surface6_1`, `_wall6_1`, `_walltop6_1`
+  for road and walls, `03_Track\Textures\Grass`, `SeaRock`, `Tree1low`, `_pod2_ceiling`, `Metalbase1`;
+  03_Track's sky. Full asset paths, read off the disc with
+  `cargo run -p oag-raceplay --example export_track -- <image> 'Data\Environments\03_Track\track.vex' <out>`
+  (the generic road and wall set is not under the circuit's own `Textures` folder).
+- Terrain either side (receive), 18 rocks and 46 crossed-quad trees (both; the trees `cutout` at
+  a 0.25 clip, `oag_alpha_ref` 64, because Pulse's texel alpha tops out near half), a covered bend
+  over spline points 84 to 94 on pillars outside the walls (both), amber chevrons as an own PNG
+  (`alpha`, layer 1, lifted 0.3 above the road, receive).
+- The Sun lamp where 03_Track's skycube paints its sun (format `(0.24, 0.31, -0.92)`, 18 degrees
+  up, read off a frame aimed at it) so the baked shadows, the ships' light and the flare agree with
+  the sky; a cool fill lamp at strength 0 (it lights the ships only); the world colour as ambient;
+  an own 64 x 64 flare atlas in the 2x2 cell layout ([lens-flare.md](../rendering/lens-flare.md)).
+- Cycles bake, 128 samples: the road at 2.8 vertices per 1,000 square units, terrain 0.6, an
+  exposure of 1.35 so the road's median (0.23 linear) sits in 03_Track's own range for the same
+  texture (about 0.23 to 0.55). Cover light 110 under the roof.
+- In a race on Pulse PSP EU and USA the loader reports 77 meshes, 10 textures, the sky, the sun,
+  the hull rig and the flare, and no texture that did not resolve.
 
 ## Import, and baked records
 
@@ -102,17 +186,18 @@ accessors the format needs.)
 a track directory: `$OAG_TRACKS`, `data/tracks`, `tracks/` beside the program, `<data dir>/oag/tracks`; TRACK
 `<title> (TRACK FILE)`; the `ballisticng` feature only adds Workshop rows to it;
 [menus.md](../architecture/menus.md#race-remix-custom-tracks)). The race uses the host title's ship, rules and
-physics, and draws flat-shaded collision. A file that will not read is listed dimmed with the reason.
+physics, and draws flat-shaded collision unless the file has an art section. A file that will not read is listed dimmed with the reason.
 
-## Proof (2026-10-12)
+## Proof (2026-10-12, art 2026-10-29)
 
 | Check | Result |
 | --- | --- |
-| `just blender-fixtures` rebuilds the two fixtures headless and compares them to the committed bytes | up to date, twice (the output is deterministic) |
+| `just blender-fixtures` rebuilds the fixtures headless and compares them to the committed bytes | up to date, twice (the output is deterministic) |
 | `oval.track.toml` imported by the add-on and exported again (`oval.reexport.*`) | `read(oval) == read(oval.reexport)` and every spline, vertex, pad, start and `max_spacing` float is bit-equal (`crates/trackfile/tests/blender.rs`) |
 | A loop built from scratch in Blender: 8 Bezier control points, 64 samples, floor, walls, start, one pad of each kind (`blender_loop.*`) | reads, nothing unread, schema-valid (`schema.rs`) |
 | Lone AI craft on Pulse's physics, 7,200 ticks (`trackfile_ground_truth`) | `blender_loop`: lap 3, no respawns; the re-exported oval: lap 4, no respawns (the committed oval: lap 4) |
 | `oag-game --race --autopilot --track-file blender_loop.track.toml` | the player gets round at 127 speed; frames at ticks 400, 1200, 2400, 3600 read at 1280x720 |
+| Art (2026-10-29): the loop's canopy, checker, sun, fill light, ambient, sky and flare (`blender_loop.*`, `blender_checker.png`) | every mapping read back as authored (`blender.rs`); the loop imported and exported again is byte-identical (`blender_loop.reexport.*`); on Pulse PSP the art resolves with no miss in the loader report (`trackfile_ground_truth`) |
 
 The Blender-driven part cannot run in CI (no Blender), so it is a local recipe whose output is
 committed: `just blender-fixtures` (`--update` rewrites the fixtures). The gate reads the committed
@@ -126,4 +211,5 @@ differently; regenerate with `--update` and review the diff.
   surface on the curve.
 - More than one path and junction authoring beyond the scene property `oag_junctions` (a JSON list
   of `{"prev": [a, b], "next": [a, b]}`, `-1` for none) that the importer writes.
-- Visual meshes and materials: not in format 1.x ([track-file.md](../formats/track-file.md#open)).
+- A *Bake lighting* operator (ADR-0076 decision 9): the bake above lives in a script today.
+- Keyframed motion (decision 10): not built; nothing animated is exported.

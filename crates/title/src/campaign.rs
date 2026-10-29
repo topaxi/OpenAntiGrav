@@ -167,7 +167,19 @@ pub struct Campaign {
     /// measured off one shadPS4 frame and chosen, its own camera constants
     /// unread (`docs/ui/campaign-screens.md`).
     pub grid_card_pose: Option<CardPose>,
+    /// Whether the front end ends its frame with the race's bloom over a glow mask its widgets
+    /// stamp, and how well that is known. Pulse PSP: its Grid and Cell Selection frames end with
+    /// `Bloom_Draw` (a GE dump), reading the stencil references the `Selector`, the card title
+    /// and the footer tab write (`docs/ui/campaign-screens.md`, "The halo is the front end's
+    /// bloom"). `None` draws no front-end bloom: Pure's is unmeasured, HD, Omega and 2048 draw
+    /// theirs another way.
+    pub frontend_glow: Option<Origin>,
     /// Where the dialect, grids file, selection flag, screen archive and grid
     /// archive came from.
     pub origin: Origin,
+    /// Whether a mod's custom campaigns (`campaigns/*.toml`, ADR-0077) can be
+    /// played on this title: its campaign draws the hex grid they compile to.
+    /// **Chosen**: Pulse, HD/Fury and Omega; Pure draws a list and 2048 has no
+    /// hex screens to draw them on yet.
+    pub custom_campaigns: bool,
 }

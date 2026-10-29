@@ -153,10 +153,26 @@ impl Session {
             && !refused
             && matches!(&self.stage, Stage::Menu(stage) if stage.campaign.as_ref().is_some_and(
                 |campaign| match &campaign.screen {
-                    Screen::Cell { model, .. } => model
-                        .selected()
-                        .and_then(|cell| self.plan_cell(cell))
-                        .is_some_and(|plan| plan.is_err()),
+                    Screen::Cell { model, .. } => model.selected().is_some_and(|cell| {
+                        // A mod event's own track file plans against itself; a
+                        // cross-disc one is checked against the other disc only
+                        // when it launches, which says so if it cannot.
+                        let event = self.custom_campaign.as_ref().zip(self.shell.as_ref()).and_then(
+                            |(key, shell)| shell.custom_campaigns.get(key)?.event(&cell.name).cloned(),
+                        );
+                        let other_disc = event.as_ref().is_some_and(|event| {
+                            self.shell.as_ref().is_some_and(|shell| {
+                                event
+                                    .track_title
+                                    .as_ref()
+                                    .is_some_and(|slug| *slug != shell.title.slug())
+                            })
+                        });
+                        !other_disc
+                            && self
+                                .plan_cell(cell, None, event.as_ref().and_then(|e| e.track_file.as_ref()))
+                                .is_some_and(|plan| plan.is_err())
+                    }),
                     _ => false,
                 }
             ));

@@ -18,15 +18,17 @@ written back exactly. Authored records are derived at export (`derive.py`).
 
 import array
 import json
+import os
 import re
 
 import bpy
 from mathutils import Matrix, Vector
 
-from . import derive, f32
+from . import derive, f32, scene_art, trackfile
 from .model import (
     COLLISION_KINDS,
     HEADER_WORD,
+    HOSTS,
     SHORT_POINT_VERSION,
     CollisionMesh,
     CollisionNode,
@@ -354,6 +356,13 @@ def collect(context):
     if not splines:
         raise TrackFileError("no object is tagged spline")
     paths = [path_of(o, depsgraph, i) for i, o in enumerate(splines)]
+    art = scene_art.collect(context, depsgraph)
+    for o, path in zip(splines, paths):
+        if o.type == "CURVE" and o.oag_cover_light < 255:
+            sun = art.sun.direction if art is not None and art.sun is not None else None
+            rows = scene_art.cover_light_scale(context, depsgraph, path.points, o.oag_cover_light, sun)
+            for p, light in zip(path.points, rows):
+                p.light_scale = light
     start = _start(by(("start",)), paths[0])
     pads = {
         k: [_pad(o) for o in _order(by((k,)), "oag_index")] for k in ("speedup", "weapon")
@@ -395,6 +404,8 @@ def collect(context):
     return Track(
         track_id,
         scene.oag_track_title or track_id,
+        "" if scene.oag_track_host == "none" else scene.oag_track_host,
+        [n.strip() for n in scene.oag_track_titles.split(",") if n.strip()],
         int(scene.get("oag_point_version", SHORT_POINT_VERSION)),
         paths,
         _junctions(scene, paths),
@@ -403,7 +414,17 @@ def collect(context):
         pads["speedup"],
         pads["weapon"],
         notes,
+        art,
     )
+
+
+def write_track(context, path):
+    """Collects the scene and writes `path` and its glb, with the own images beside them."""
+    track = collect(context)
+    trackfile.write(track, path)
+    if track.art is not None:
+        scene_art.copy_images(track.art, context.scene, os.path.dirname(os.path.abspath(path)))
+    return track
 
 
 def _collection(scene):
@@ -526,11 +547,16 @@ def make_collision_object(scene, kind, mesh, node, n, m, multi):
     return _link(scene, obj)
 
 
-def populate(context, track):
+def populate(context, track, manifest_dir="."):
     """Creates the objects and scene properties for `track` (the importer)."""
     scene = context.scene
     scene.oag_track_id = track.id
     scene.oag_track_title = track.title
+    for name in [track.host] * bool(track.host) + list(track.titles):
+        if name not in HOSTS:
+            raise TrackFileError(f"{name!r} is not a title this add-on knows: {', '.join(HOSTS)}")
+    scene.oag_track_host = track.host or "none"
+    scene.oag_track_titles = ", ".join(track.titles)
     scene.oag_track_notes = "\n".join(track.notes)
     scene["oag_point_version"] = track.point_version
     scene["oag_junctions"] = json.dumps(
@@ -548,6 +574,8 @@ def populate(context, track):
     for n, node in enumerate(track.nodes):
         for m, mesh in enumerate(node.meshes):
             make_collision_object(scene, node.kind, mesh, node, n, m, len(node.meshes) > 1)
+    if track.art is not None:
+        scene_art.populate(context, track.art, manifest_dir)
     context.view_layer.update()
 
 

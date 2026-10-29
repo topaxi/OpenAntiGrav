@@ -72,6 +72,7 @@
 # scripts/check-leakage.py, which is the single source of truth this list
 # must stay in sync with.
 *.png
+!/crates/trackfile/tests/fixtures/blender_checker.png
 *.ivf
 !/crates/formats/tests/data/testsrc-64x64.ivf
 *.h264
