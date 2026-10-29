@@ -104,7 +104,7 @@ pub fn grid_draw_list(
         };
         if image.name.as_deref() == Some("Selector") {
             if let Some(hex) = hex_rect(screen, slot, 0, sprites) {
-                out.push(centred_selector_tinted_draw(
+                out.push(selector_tinted_draw(
                     image,
                     placed,
                     hex,
@@ -281,7 +281,7 @@ pub fn cell_draw_list(
             && let Some((sx, sy)) = selected_coords
             && let Some(hex) = hex_rect(screen, sx as usize, sy as usize, sprites)
         {
-            out.push(centred_selector_tinted_draw(
+            out.push(selector_tinted_draw(
                 image,
                 placed,
                 hex,
@@ -693,18 +693,29 @@ pub(super) fn centred_selector_draw(image: &Image, placed: Placed, hex: [f32; 4]
 /// signature (and HD's own, unmeasured, selected-tile look) is left alone
 /// rather than threading a tint parameter through a call this crate does not
 /// own the other end of.
-pub(super) fn centred_selector_tinted_draw(
+pub(super) fn selector_tinted_draw(
     image: &Image,
     placed: Placed,
     hex: [f32; 4],
     argb: u32,
 ) -> Draw {
-    let width = image.width.unwrap_or(placed.width as f32);
-    let height = image.height.unwrap_or(placed.height as f32);
-    let x = hex[0] + (hex[2] - width) * 0.5;
-    let y = hex[1] + (hex[3] - height) * 0.5;
-    sprite_draw(image, placed, x, y, argb)
+    sprite_draw(
+        image,
+        placed,
+        hex[0] + SELECTOR_ORIGIN[0],
+        hex[1] + SELECTOR_ORIGIN[1],
+        argb,
+    )
 }
+
+/// `Selector`'s top-left relative to the selected hex's own top-left on Pulse PSP,
+/// `GridController_UpdateSelectorPulse` (`0x088a5700`): the literals `5.0` and `7.0` in
+/// its position update. **Measured**, confidence 85: a GE dump of Grid Selection draws the
+/// 42x43 quad at (60,138) over the hex at (65,145), Cell Selection at (120,90) over
+/// (125,97). The sprite's visible ring is 32x28 at (5,9) in its canvas, so
+/// this lands it on the hex's own 32 px width and 2 px down inside its 32 px height; plain
+/// centring of the canvas sat 1.5 px too low.
+pub(super) const SELECTOR_ORIGIN: [f32; 2] = [-5.0, -7.0];
 
 /// `Outline_x_y`'s own runtime tint on `Grid Selection` - **not** on `Cell
 /// Selection`, whose own `CellSelection_PopulateGrid` never calls

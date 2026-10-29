@@ -214,3 +214,50 @@ fn the_selector_colour_moves_with_the_pulse_clock() {
     assert_eq!(colour_at(0.85), argb_to_rgba(0xffff_ffff));
     assert_eq!(colour_at(1.35), colour_at(0.0), "period is one second");
 }
+
+/// The original puts `Selector`'s top-left 5 px left of and 7 px above the selected hex's own
+/// top-left (`GridController_UpdateSelectorPulse`'s `5.0` and `7.0`; GE dump: quad (60,138) over
+/// the hex at (65,145)). Centring the 42x43 canvas instead puts it 1.5 px low.
+#[test]
+fn the_selector_sits_five_left_and_seven_above_its_hex() {
+    let layout = grid_layout();
+    let model = GridSelection::new(vec![GridSummary {
+        name: "grid0".to_string(),
+        cell_count: 8,
+        max_points: 24,
+        required_points: 12,
+        gold_medals: 0,
+        points_earned: 0,
+        locked: false,
+        flyer_name: None,
+    }]);
+    let layers = grid_draw_list(
+        &model,
+        &layout,
+        &skin(),
+        &Frame::default(),
+        &strings(),
+        None,
+        false,
+        &|_| placed32(),
+        &[],
+    );
+    let selector = layers
+        .body
+        .iter()
+        .find_map(|draw| match draw {
+            Draw::Sprite { rect, .. } if rect[2] == 42.0 && rect[3] == 43.0 => Some(*rect),
+            _ => None,
+        })
+        .expect("the Selector draws as a 42x43 sprite");
+    let hex_there = layers.body.iter().any(|draw| match draw {
+        Draw::Sprite { rect, .. } => {
+            rect[2] == 32.0
+                && rect[3] == 32.0
+                && rect[0] == selector[0] + 5.0
+                && rect[1] == selector[1] + 7.0
+        }
+        _ => false,
+    });
+    assert!(hex_there, "a 32x32 hex at the Selector's origin + (5,7)");
+}

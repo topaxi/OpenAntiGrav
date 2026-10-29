@@ -4580,3 +4580,36 @@ confidence 85): a triangle wave from `0xff33a6b9` to white, phase `elapsed * 2.0
   peak, ours a thin ring. Controlled score on the same `theirs.png` (mean grey difference in the cursor-hex box, `main`'s static
   cyan against the pulse at the recorded 2.07 s): grid 66.3 to 59.3, cell 77.2 to 69.2; the best ours-seconds on a sweep gives
   56.6 and 65.1, so the clock closes about two thirds of what the pulse alone can, the rest is the glow and a ~0.2 s phase miss.
+
+#### The halo is the front end's bloom, not a `SelectorGlow` image (2026-10-29, `pulse-selector-glow`)
+
+A GE dump (`scripts/psp-ge-dump.py dump`, PPSSPP software renderer, settled `Grid Selection` and `Cell Selection`) lists every
+draw of the original's frame. **There is no second draw for the cursor**: one quad, 42x43, `pulse_assets.mip` uv `(114,75)`,
+alpha blend (`blendmode` 50), and the sprite's own alpha (decoded from the `.mip`: 15 alpha levels, all of them the ring) holds no
+halo pixel. The halo the pair shows (soft, 5 to 12 px wide, bright inside and outside the ring) is the frame's bloom: the
+dump ends with the `Bloom_Draw` passes (a 1,320-vertex blur into a second buffer, an 8-vertex composite). `SelectorGlow`'s
+lookup stays dead on this screen (confidence 85; the string has one xref, no authored widget).
+
+- **What feeds the bloom is the stencil.** Three prims of the front end's frame write it (`stenciltestenable` 1, `stencilop`
+  zpass REPLACE): the footer's tab (ref `0x40`), the card title (ref `0x73`) and `Selector`. `Selector`'s ref differs per frame:
+  `0x98` (152) on the Grid Selection dump, `0xb5` (181) on the Cell Selection one, so the glow strength follows something that
+  moves (the pulse is the candidate; **not established**, two samples). The mask rules are `docs/rendering/glow-mask.md`'s
+  (alpha is the stencil, blending never writes it).
+- **Not drawn in ours.** Ours has no bloom on the Pulse front end. Drawing it is a front-end bloom pass over a mask only these
+  measured stamps write, using `oag_post::bloom`'s constants; that is a lane of its own (the mask values of the other stamped
+  draws, the front end's bloom parameters and where the pass sits in the front-end frame are unread). Drawing a halo shape
+  instead would be the stand-in the project forbids. Confidence 80 on the mechanism, 40 on the ref law.
+- **Position, measured: `Selector`'s top-left is the hex's top-left minus (5,7).** The same function's literals `5.0` and `7.0`
+  (`GridController_UpdateSelectorPulse`, confidence 85). GE dumps: Grid Selection quad `(60,138)` over the hex `(65,145)`,
+  Cell Selection `(120,90)` over `(125,97)`. Plain centring of the 42x43 canvas (this build before 2026-10-29) put it at `(60,139.5)`,
+  1.5 px low; the ring is 32x28 at `(5,9)` in the canvas, so it now lands on the hex's 32 px width and 2 px down inside its height.
+  `oag_ui_screens::campaign::draw::SELECTOR_ORIGIN`. Edge alignment (gradient-magnitude correlation of the 48x48 window around the
+  cursor, parabolic sub-pixel peak, `Selector`'s ring against the original's): ours had to move `dx 0.00, dy -1.33` (grid) and
+  `dx 0.00, dy -1.17` (cell) before, `0.00, 0.00` on both after. **The maintainer's 1-2 px horizontal offset was not
+  reproduced**: the columns agree to well under a pixel before and after; the vertical 1.2 to 1.3 px was the whole error.
+- **Score, controlled** (same `theirs.png` as the previous lane, ours at the recorded 2.07 s, mean grey difference in the
+  cursor-hex box): grid 59.33 to 52.36, cell 69.25 to 65.05. What remains is the bloom (the original is white-filled with a
+  halo at this phase, ours a thin cyan ring).
+- **2048/Omega**: not applicable (this widget routine is Pulse's `GridController`; HD's `Selector` keeps `centred_selector_draw`,
+  unmeasured). Checked, differs by lack of measurement, not wired.
+
