@@ -121,8 +121,8 @@ Two more exhaustion cases:
 - **Randomness comes from the host.** The guest has no generator of its own and no
   entropy. `oag.rng_next` returns the next value of a host `oag_core::Rng`
   (`crates/core/src/rng.rs:28`, xoshiro128**, 16 bytes of state). **One stream per
-  module** (README: a child stream seeded from the race seed and the module's load
-  index; the load order is fixed by mod id), stored beside the module's blob, so a mod drawing numbers never shifts the game's own stream
+  module** (README: a child stream seeded from the race seed and the module's mod
+  id, so a stream survives another mod being added), stored beside the module's blob, so a mod drawing numbers never shifts the game's own stream
   (`World::rng`, `crates/gameplay/src/world.rs:309`), which AI and weapon rolls read.
   (The spike shared its one toy stream; that is enough to show the draws are
   deterministic, not to show the separation.)
