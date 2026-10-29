@@ -181,8 +181,9 @@ state_bytes = 16         # its state blob, at most 1,024 bytes
 module = "ext/kiss_curse.wasm"
 ```
 
-The game must be built with the `extensions` feature
-(`cargo run -p oag-game --features extensions`); without it no module is looked for.
+The game must be built with the `extensions` feature: `just play-mods` (`just play`
+with it), or `cargo run --release -p oag-game --features extensions`. Plain
+`just play` runs no module; its boot log says so for each mod that ships one.
 The manifest is read with the others; the `.wasm` is opened only by the race that
 runs it. No module runs in an original campaign or a network race. A race running a
 module is MODDED and records no replay. The ABI, the event and the command are in
