@@ -157,6 +157,31 @@ reason to author visibility by hand.
       directional, as for Pulse, and `[art.lensflare]` carries its own `direction` (lead,
       2026-10-29, relayed to the maintainer).
 
+13. **A track file names the title it runs on** (maintainer, 2026-10-29: "The track shall name
+    the title it runs on, it only loads in another title via remix."). Found when Hillside, whose
+    art borrows Pulse 03_Track's textures and sky by name, raced on HD and Omega: every host
+    texture missed, one own-PNG mesh kept the flat-collision fallback off, and the track drew
+    black.
+    - **`[track] host`**, required in every manifest, is the title spelled as
+      `oag_source::layers::slug` spells its name (`wipeout-pulse`, `wipeout-pure`, `wipeout-hd`,
+      `wipeout-omega-collection`, `wipeout-2048`), the vocabulary a mod's `titles` already uses.
+      The schema lists the five; the loader refuses a value naming no title it knows.
+    - **Required for every track, not only one with host references**, because the maintainer's
+      wording is about the track, and because a track's physics tuning, pads and grid were
+      authored against one title's ships as much as its art was. The disc exporter writes its
+      source's title; the Blender add-on writes the scene's "Runs on" (default Pulse).
+    - **`Track::host` is an `Option` in memory** only for a BallisticNG Workshop track mapped
+      straight from its `.wtrk`: it borrows nothing from any disc, so it names no host and races
+      on any source. Writing one as a file needs a host named (the writer refuses `None`).
+    - **Natively a track loads only when the race's track source is its host**, checked in the
+      loader (`oag_raceplay::foreign::check_host`), so the command line, RACE, a campaign event
+      and RACE REMIX meet the same refusal, naming both titles and the remix that races it.
+    - **On another title it races only as a Race Remix**: `Options::source`, the track side
+      (collision, environment, host textures, sky), is the host title's own disc, never a guest
+      standing in for it (2048 for HD), and `craft_source` is the other title. RACE REMIX's CUSTOM
+      track takes its track source from the file's host and its craft from CRAFT TITLE; a file
+      whose host this machine has no disc of is listed dimmed with the reason.
+
 ## Consequences
 
 - **A sun on our own tracks is what `docs/rendering/shadows.md` lists first among the three things

@@ -57,6 +57,12 @@ agreed in conversation and not yet built**, so nothing is re-derived. The decisi
 
 ## Open
 
+- **A track file names the title it runs on** (branch `track-host`, 2026-10-29, ADR-0076 decision 13):
+  required `[track] host` (title slug, e.g. `wipeout-pulse`); refused natively on another title, raced
+  there only as a remix with the host's disc as the track source (CLI `--craft-source`, RACE REMIX
+  CUSTOM). Hillside's data copy and builder name Pulse. The example campaign's Hillside copy needs the
+  same `host` line, and custom-campaign events on a track file must filter by its host or launch as a
+  remix (another session's work; the lead has the hand-over).
 - **Landing 2b is in** (branch `track-art-2b`, 2026-10-29): the add-on writes and reads the art
   section (`scripts/blender/oag_track/scene_art.py`, `artfile.py`; mapping table in
   `docs/tools/blender.md`, "Art"): untagged meshes per material slot, linear `.color`, host and

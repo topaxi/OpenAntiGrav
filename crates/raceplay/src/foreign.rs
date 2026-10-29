@@ -134,7 +134,7 @@ pub fn check_host(track: &Track, source: &oag_title::Title) -> anyhow::Result<()
     anyhow::bail!(
         "{:?} runs on {} (track.host = {:?}); this race's track source is {}. Race it on \
          {}, or on {}'s craft as a Race Remix with {} as the track source (RACE REMIX, or \
-         --source <{} disc> --craft-source <{} disc>)",
+         the {} disc as the source with --craft-source <{} disc>)",
         track.title,
         host.name,
         track.host.as_deref().unwrap_or_default(),
