@@ -2759,9 +2759,15 @@ glyph filter (a runtime read, G1 and its control seen once each, the decompile's
 ### Where the campaign reopens: kept across launches, ours (2026-10-29, `campaign-cursor-memory`)
 
 **Measured, original (PPSSPP, `pulse-psp-usa`, above):** `Cell Selection`'s cursor is one `(x, y)` slot shared by every
-grid; it survives backing out to `Main Menu` and re-entering `RACE CAMPAIGN` (the screen object outlives the
-campaign) and a race (the screen object is the same). **It does not survive a reboot** (boot 2 of the table started
-on the default). Whether `Grid Selection`'s own tile index survives leaving the campaign was not read.
+grid, and it survives backing out to `Main Menu` and re-entering `RACE CAMPAIGN` (the screen object outlives the
+campaign). **Not measured:** a reboot (boot 2's walk started from the default, but boot 1 ended on `grid0_3_1`, which
+*is* the default, so the two boots cannot tell "persists" from "resets"; nothing in the original is known to write the
+slot to the save), a race (the 2026-10-08 QUIT RACE reading, `Session::quit_campaign_race`, saw the Head2Head cell's
+grid land on its **default** cell, one cell on one grid), and `Grid Selection`'s tile index across leaving the
+campaign. Decompile, 2026-10-29 (`/pulse/BOOT-psp-pulse-usa.BIN`, confidence 40): `GridSelection_OnEnter` (`0x088de0f0`)
+calls `GridSelection_PopulateGrids` (`0x088de380`), which writes the current tile slot (`+0x114`) to 0 and the selection
+sentinel (`+0xdc`) to -1 on every entry and passes `+0xe0` and `FUN_088de27c`'s result as the page; whether `+0xe0`
+survives a leave was not traced, so the original may well reopen `Grid Selection` on the first page.
 
 **Ours, not the original's** (maintainer ask, 2026-10-29: "store the selected grid and cell in campaigns, so when
 navigating through it, we end up quickly where we left off"): the same slot **and** the grid `Grid Selection` was last
@@ -2782,10 +2788,11 @@ on persist per campaign in `records.toml`, so the rule holds after a relaunch to
   (newest copy wins; `finish_background_saves` joins it at exit and at the end of a `--drive` run). The existing
   `campaign_difficulty` write used to be an inline `records::save` on the frame thread; it goes through the same
   helper now. Every *other* `records::save` call (race results, loyalty, `escape.rs`) is still on the frame thread.
-- Back from a race: `RETURN TO GRID` selects the cell raced (`reopen_cell_selection`); Pulse's pause-menu QUIT RACE
-  keeps its measured default-cell landing in intent, but because launching a cell files the shared slot, the restore
-  inside `open_cell_selection` lands on the raced cell when it shows no lock glyph (unchanged by this lane: the
-  in-memory cursor was filed at launch the same way). Not reconciled with the 2026-10-08 Head2Head reading.
+- Back from a race: `RETURN TO GRID` selects the cell raced (`reopen_cell_selection`, HD's measured-by-choice keep).
+  Pulse's pause-menu QUIT RACE was read once to land on the grid's default cell (Head2Head `grid4_5_2`, 2026-10-08), but
+  launching a cell files the shared slot and `open_cell_selection` restores it, so ours lands on the cell raced
+  (`campaign_cursor_ground_truth::the_cell_raced_is_the_one_the_campaign_reopens_on`, a real launch then `escape`).
+  **Ours, not the original's**; this was already so before this lane (the cursor was filed at launch in memory).
 - Per title: **Pulse (PSP, PS2 inherits), HD/Fury, Omega, 2048** share `CampaignStage`, so all four are wired.
   **Pure** is a different flow (an event list per speed class, `pure_chain`) with its own return-to-event landing and
   is not touched. Pointer/touch: remembering sets the same model selection a hover does; a click on the remembered
@@ -2795,7 +2802,11 @@ on persist per campaign in `records.toml`, so the rule holds after a relaunch to
 - Tests: `crates/game/tests/campaign_cursor_ground_truth.rs` (real `--drive` sessions, two launches on one profile),
   `records::tests::the_campaign_cursor_is_kept_per_campaign_and_round_trips`, `campaign_stage::tests::the_kept_grid_is_found_by_name_and_a_missing_one_is_the_default`.
   `--drive` reports a campaign screen as `screen=campaign`, `screen.id=selection|grid|cell`, `focus=<grid or cell name>`.
-- 2048/Omega: checked, same file and wiring (`CampaignStage`); not walked live per title (HD walked headless).
+- Omega: **ported**, walked through `--drive` on `data/extracted/ps4` (slot `(3, 2)` filed under `wipeout: omega
+  collection`, a relaunch reopens `Grid Selection`); HD: walked too (`grid9` kept, a relaunch lands on it; the grid kept
+  reaches `Campaign Selection` through `CampaignSelection::at`). **2048: not applicable yet**, its campaign is the touch
+  event map with no `CampaignStage` (`oag_2048::TITLE.campaign` has no definition entry), so there is no grid or cell to
+  remember; the map's last event is an open follow-up. **Pure**: unchanged and open, see the handover thread.
 
 ## Open
 

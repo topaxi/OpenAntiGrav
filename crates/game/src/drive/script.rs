@@ -10,6 +10,7 @@
 //! select <row>                     move focus to a row by id, setting key, label or #index
 //! set race.mode=time_trial         select that row, then step its value until it reads so
 //! press cross down                 tap each button in turn
+//! escape                           the Escape key (a race: the pause menu's way out)
 //! ticks 120                        let this many ticks pass
 //! screenshot out.png               draw the next frame offscreen into a PNG
 //! quit                             end the run (reaching the end of the script does too)
@@ -104,6 +105,8 @@ pub enum Step {
     },
     /// Tap each button in turn.
     Press(Vec<Button>),
+    /// The Escape key, which a button tap does not reach.
+    Escape,
     /// Let this many ticks pass.
     Ticks(u32),
     /// Write the next frame to this PNG.
@@ -132,6 +135,7 @@ impl std::fmt::Display for Step {
                 within,
             } => write!(f, "set {setting}={value} within {within}"),
             Self::Press(buttons) => write!(f, "press {buttons:?}"),
+            Self::Escape => f.write_str("escape"),
             Self::Ticks(n) => write!(f, "ticks {n}"),
             Self::Screenshot(path) => write!(f, "screenshot {}", path.display()),
             Self::Quit => f.write_str("quit"),
@@ -286,6 +290,7 @@ impl Script {
                 [path] => Step::Screenshot(PathBuf::from(path)),
                 _ => return Err("screenshot takes one path".into()),
             },
+            "escape" if words.is_empty() => Step::Escape,
             "quit" => Step::Quit,
             other => return Err(format!("unknown step {other:?}")),
         })

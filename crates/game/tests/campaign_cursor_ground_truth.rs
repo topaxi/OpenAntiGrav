@@ -168,12 +168,24 @@ fn the_position_is_filed_in_the_records_file() {
     );
 }
 
-/// Launching a cell files the cursor on it, so what comes back from the race - or a relaunch after
-/// it - opens on the cell raced. (`--drive` cannot press escape or finish a race, so the way back
-/// itself, `RETURN TO GRID`, is `Session::reopen_cell_selection` and is not driven here.)
+/// The first cell `Cell Selection` reported, and the last: the cursor moved between them.
+fn first_and_last_cell(states: &[Value]) -> (String, String) {
+    let first = states
+        .iter()
+        .find_map(|state| {
+            let screen = state.get("screen")?;
+            (screen["id"] == "cell").then(|| screen["focus"]["id"].as_str().map(String::from))
+        })
+        .flatten()
+        .expect("Cell Selection opened");
+    (first, last_campaign(states).1)
+}
+
+/// Back from a race lands on the cell raced - through the real path (launch, Escape, which is
+/// the pause menu's QUIT RACE) - and so does a relaunch after a launch.
 #[test]
 #[ignore = "needs data/images/pulse-psp-eu.chd"]
-fn a_launched_cell_is_the_one_the_campaign_reopens_on() {
+fn the_cell_raced_is_the_one_the_campaign_reopens_on() {
     if !pulse_present() {
         return;
     }
@@ -181,14 +193,24 @@ fn a_launched_cell_is_the_one_the_campaign_reopens_on() {
     let states = profile.drive(
         &format!(
             "{OPEN}; press cross; until screen.id=cell; press down; ticks 5; \
-             press cross; until screen=picker; press cross; until stage=race within 3000; ticks 10"
+             press cross; until screen=picker; press cross; until stage=race within 3000; ticks 10; \
+             escape; until screen.id=cell within 600; ticks 10"
         ),
         "a.jsonl",
     );
-    let raced = last_campaign(&states).1;
+    let (default, back) = first_and_last_cell(&states);
+    // The cell under the cursor when the launch left the menus.
+    let launch = states
+        .iter()
+        .position(|state| state["stage"] == "race")
+        .expect("the race launched");
+    let raced = last_campaign(&states[..launch]).1;
+    assert_ne!(raced, default, "the launch was off the default cell");
+    assert_eq!(back, raced, "back from the race lands on the cell raced");
+    // Escape ended the process on the cell; a relaunch lands on it too.
     let states = profile.drive(
         &format!("{OPEN}; press cross; until screen.id=cell; ticks 10"),
         "b.jsonl",
     );
-    assert_eq!(last_campaign(&states), ("cell".into(), raced));
+    assert_eq!(last_campaign(&states), ("cell".into(), back));
 }

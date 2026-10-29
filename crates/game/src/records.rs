@@ -1019,6 +1019,23 @@ pub fn load() -> Store {
 /// thing the caller does with the failure: log it and carry on, never panic
 /// or abort a race over a write that did not land.
 pub fn save(store: &Store) -> Result<()> {
+    let Ok(_writing) = WRITING.lock() else {
+        return write_file(store);
+    };
+    // This copy is newer than any background one still waiting.
+    if let Ok(mut waiting) = WAITING.lock() {
+        *waiting = None;
+    }
+    write_file(store)
+}
+
+/// Taken by every write of the records file, so a background write and an inline one never overlap.
+static WRITING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+/// The copy [`save_in_background`] last asked to have written, until a writer takes it or an
+/// inline [`save`] supersedes it.
+static WAITING: std::sync::Mutex<Option<Store>> = std::sync::Mutex::new(None);
+
+fn write_file(store: &Store) -> Result<()> {
     let Some(path) = path() else {
         return Ok(());
     };
@@ -1042,30 +1059,35 @@ static WRITER: std::sync::Mutex<Option<oag_thread::Task<()>>> = std::sync::Mutex
 /// Only the newest copy is ever written: each call replaces the one waiting,
 /// and a writer that finds nothing waiting has been overtaken and does
 /// nothing, so two writes in quick succession cannot land out of order. A
-/// write that fails is logged, as [`save`]'s callers do. The process calls
+/// write that fails is logged, as [`save`]'s callers do; an inline [`save`] takes the same lock
+/// and supersedes a copy still waiting, so no write overlaps another or lands out of order. The process calls
 /// [`finish_background_saves`] on its way out so the last one lands.
 pub fn save_in_background(store: &Store) {
-    static WAITING: std::sync::Mutex<Option<Store>> = std::sync::Mutex::new(None);
-    static WRITING: std::sync::Mutex<()> = std::sync::Mutex::new(());
-    match WAITING.lock() {
-        Ok(mut waiting) => *waiting = Some(store.clone()),
-        Err(_) => return,
+    // The browser keeps the file in `localStorage`, which a Web Worker cannot reach.
+    #[cfg(target_arch = "wasm32")]
+    if let Err(e) = save(store) {
+        error!("could not save the records: {e:#}");
     }
-    let task = oag_thread::Task::spawn("records-save", || {
-        let Ok(_writing) = WRITING.lock() else {
-            return;
-        };
-        let newest = WAITING.lock().ok().and_then(|mut waiting| waiting.take());
-        if let Some(store) = newest
-            && let Err(e) = save(&store)
-        {
-            error!("could not save the records: {e:#}");
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        match WAITING.lock() {
+            Ok(mut waiting) => *waiting = Some(store.clone()),
+            Err(_) => return,
         }
-    });
-    if let Ok(mut writer) = WRITER.lock() {
-        // The writer it replaces is overtaken or done: it finds nothing
-        // waiting, or has written what it had.
-        *writer = Some(task);
+        let task = oag_thread::Task::spawn("records-save", || {
+            let Ok(_writing) = WRITING.lock() else {
+                return;
+            };
+            let newest = WAITING.lock().ok().and_then(|mut waiting| waiting.take());
+            if let Some(store) = newest
+                && let Err(e) = write_file(&store)
+            {
+                error!("could not save the records: {e:#}");
+            }
+        });
+        if let Ok(mut writer) = WRITER.lock() {
+            *writer = Some(task);
+        }
     }
 }
 

@@ -237,6 +237,13 @@ impl Driver {
                     self.tap(*button, oag_game::drive::script::DEFAULT_WITHIN)?;
                 }
             }
+            Step::Escape => {
+                // Leaving the race drops its EndRace worker unjoined, and a process that exits
+                // under it tears the driver down mid-submit (see `finish_endrace_prefetch`).
+                self.session.finish_endrace_prefetch();
+                self.session.escape();
+                self.frame(None)?;
+            }
             Step::Ticks(n) => {
                 for _ in 0..*n {
                     self.frame(None)?;
