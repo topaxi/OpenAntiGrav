@@ -977,22 +977,28 @@ read side by side):
 
 | Pair | Overlap | Differs | Most visible difference |
 | --- | --- | --- | --- |
-| Pulse Track Select | 0.180 / 0.26 / 19.4 | 16.2 % | the circuit photo (stacked cards, a different view), `1/3` against `1/11` (ours shows 11 circuits; checked 2026-10-27: it is the same under `race.mode` `time_trial` and `single_race`, and `[dev] unlock_everything = false` survives in the rewritten settings, so the cause is open), distance `5178` against `5094`, the empty records `-.--.--` against `-` |
-| Pulse Ship Select | 0.129 / 0.34 / 9.5 | 7.1 % | the Assegai hull: the original's blue-white livery large and tilted, ours a dark livery smaller; `1/8` against `1/12` |
+| Pulse Track Select | 0.180 / 0.26 / 19.4 | 16.2 % | the circuit photo (stacked cards, a different view), `1/3` on both sides since 2026-10-29 (ours showed `1/11`: the three circuits that author no `<Unlock>` plus eight DLC-pack circuits from the maintainer's `data/dlc`, which the pair run mounted; the compare menu route now sets an empty `$OAG_DLC`), distance `5178` against `5094`, the empty records `-.--.--` against `-` |
+| Pulse Ship Select | 0.129 / 0.34 / 9.5 | 7.1 % | the Assegai hull: the original's blue-white livery large and tilted, ours a dark livery smaller; `1/8` on both sides since 2026-10-29 (it was `1/12`: four DLC teams) |
 | Pulse title | 0.069 / 0.30 / 4.7 | 2.6 % | the type: the original's wide `PRESS START BUTTON` and legal line against ours' small mixed-case `Press START button`; the rays are at another phase (animated) |
 | Pulse Grid Selection | 0.076 / 0.35 / 4.2 | 2.1 % | the cursor hex glows in the original, plain in ours; the footer ticker scrolls in the original and is empty in ours at tick 0 |
 | Pulse Cell Selection | 0.077 / 0.39 / 4.3 | 1.8 % | closest of all Pulse: the same glow and ticker only |
-| Pure Team Selection | 0.101 / 0.29 / 6.9 | 8.6 % | ours lists all 17 teams in small type (the original's fresh list is eight, large; the cause is open), the hull outline from another angle, the stat labels run into their values |
-| Pure Track Selection (single race) | 0.092 / 0.40 / 5.0 | 5.5 % | ours adds the `SINGLE RACE - VENOM - ALPHA` context line under the heading (chosen, not measured, `docs/architecture/menus.md`), the records read `0.00.00` against `0'00"00`, lower-case unit `m`, no description line |
+| Pure Team Selection | 0.101 / 0.29 / 6.9 | 8.6 % (7.6 % re-made 2026-10-29, eight teams, Feisar to Harimau, as the original) | ours listed 17 teams in small type (the 7 DLC teams plus the disc's two gated ones, `Zone` and `Medievil`, which the still did not drop; the live screen did), the hull outline from another angle, the stat labels run into their values |
+| Pure Track Selection (single race) | 0.092 / 0.40 / 5.0 | 5.5 % | ours adds the `SINGLE RACE - VENOM - ALPHA` context line under the heading (chosen, not measured, `docs/architecture/menus.md`), the records read `0.00.00` against `0'00"00`, lower-case unit `m` (the description line is drawn since 2026-10-29) |
 | Pure Single Player (mode) | 0.074 / 0.40 / 3.0 | 3.4 % | no context line here; the hint line and the `BACK` prompt differ (below) |
-| Pure Tournament Selection (campaign) | 0.069 / 0.44 / 2.7 | 3.1 % | the context line `TOURNAMENT - VECTOR` (chosen), no description line, the footer prompt |
-| Pure League Selection, Class Selection (x2) | 0.066-0.067 / 0.44 / 2.4 | 2.8-2.9 % | the same three: context line, no description line, footer |
+| Pure Tournament Selection (campaign) | 0.069 / 0.44 / 2.7 | 3.1 % | the context line `TOURNAMENT - VECTOR` (chosen), the description line (drawn settled since 2026-10-29), the footer prompt |
+| Pure League Selection, Class Selection (x2) | 0.066-0.067 / 0.44 / 2.4 | 2.8-2.9 % | the same three: context line, description line (drawn since 2026-10-29), footer |
 | Pure title | 0.017 / 0.60 / 0.5 | 0.3 % | none visible (the cursor underscore blinks) |
 
 Three differences recur on every Pure chain screen: the **context line** (ours' `SINGLE RACE - VENOM`, a known chosen stand-in of
-`docs/architecture/menus.md`, absent from the original), the **description line** along the bottom (the original types it in; ours is
-drawn settled, 5 s in, `ARRIVED` in `pure_chain_page.rs`, and still shows none, so it is a missing element, not timing) and the
-**footer's BACK prompt** (the original shows a triangle and `BACK`, ours `BACK BUTTON` drawn over itself). Pulse's pairs share the footer
+`docs/architecture/menus.md`, absent from the original), the **description line** along the bottom (the original types it in, so its frames hold a prefix; ours draws it **settled**,
+5 s in, `ARRIVED` in `pure_chain_page.rs`, since 2026-10-29: the string is the disc's `Text->SCREEN->ITEM->VALUE` entry, for example
+`Text->Track Selection->Track->Vineta K`, laid in the footer `TextInfo` viewport at `(21, 217)` 427 wide, amber `TextInfoBoxColor`, wrapped
+to its three `Text` lines; its scale `0.7` is **chosen** because the `FEGlobals` it names are not declared, and the type-in rate is not
+measured, so the **share of pixels differing rose** on the chain pairs (Track Selection 5.5 to 6.4 %, Class 2.8 to 3.6 %, League 2.9 to
+4.5 %, Tournament 3.1 to 4.7 %: a full text against the original's few typed letters; the original's face is the `Scroll` face, `LTe50325.fnt`,
+ours the menu face) and the **footer's BACK prompt** (fixed 2026-10-29: the skin's `Back button` is the table's `Back Button`, found case-folded,
+and draws the triangle glyph). Still open on the same frames: the dashed cyan rule across the bottom at y 217 and the solid footer rule at y 251,
+which the original draws and ours does not. Pulse's pairs share the footer
 ticker (scrolling in the original) and the cursor glow.
 
 **Repeat noise** (run 1 against run 2, cold boots on Pure; Pulse run 3 against run 1, two boots on one instance and a fresh one, the title two further boots each): ours against itself exactly 0 on
@@ -1009,7 +1015,7 @@ over the dimmed race). Pure has no Options or Racebox screen in its main menu.
 
 **Reproduce:** `scripts/ppsspp-start.sh <lane> 91 <port> <image>` with `PPSSPP_EXTRA_INI` from `compare_env.py ppsspp-ini pulse-psp|pure-psp`,
 `source <scratch>/pp/env.sh`, ours' `XDG_*` under `data/scratch/<lane>/`, then `uv run --with websocket-client --with pillow python3
-scripts/psp-menu-pair.py pairs --title pulse|pure --out D --autopilot off --difficulty medium|""` (about 90 s on Pulse from a walked
+scripts/psp-menu-pair.py pairs --title pulse|pure --out D --autopilot off --difficulty medium|""` (ours is run with an empty `$OAG_DLC`, `compare_menu.render_ours`, so `data/dlc` packs do not join its lists; about 90 s on Pulse from a walked
 `Main Menu`, about 3 min on Pure from a cold boot; `walk --plan "..."` photographs any plan, `--ids` restricts a run; Pulse's title is a
 separate boot: `--plan "st:Show Logo,wait:5,shot:title" --ids title`). Adopt: `python3 scripts/compare_env.py manifest
 data/reference/compare-page/menus-pulse.toml data/reference/compare-page/pulse-psp/menu-*` (and `menus-pure.toml` over `pure-psp/menu-*`),
