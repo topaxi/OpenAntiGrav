@@ -162,7 +162,7 @@ from a disc circuit and nothing is invented**:
 | Part | On a track file |
 | --- | --- |
 | Geometry, spline, collision, start | the file's own |
-| Craft, handling, speed ramp (`<Zone>`: Pulse's start 34, increment 4.4, recharge 10), Zone HUD, ship and speech sound banks, stage names | the host title's own Zone ones, as for any Zone race |
+| Craft, handling, speed ramp (the title's `<Zone>` start, increment and recharge), Zone HUD, ship and speech sound banks, stage names | the host title's own Zone ones, as for any Zone race |
 | Zone circuit environment (a circuit's Zone meshes, lights, fog, `Skycube`) | drawn as nothing; the file's own art and sky, if it has them, stand |
 | HD's `ZoneSky.gtf` (a title-wide Zone default) | drawn when the file carries no sky of its own; a file with its own sky keeps it and the report says the Zone sky is not drawn over it |
 | HD's stage grade (`zonemode.effectsettings`, per-stage textures; title-wide) | applied over the file's model, as on an HD Zone circuit |
@@ -174,15 +174,18 @@ ramp to zone 24 round the fixture and the example Octagon with no respawn; HD: t
 The autopilot is not a physics reference: it only shows the loop can be flown. On the Octagon it
 clears zone 24 in a little over four minutes and wrecks at zone 626 (about 104 minutes).
 
-**Cross-check, 2048 and Omega: ported on load.** The oval fixture loads in Zone and runs the ramp on
-Pure, HD, Omega, the 2048 base package and Pulse's PS2 disc (Zone craft, ramp and HUD are each
-title's own; only HD has a Zone sky or a title-wide grade to draw). Not checked: how Omega's and
-2048's own per-circuit Zone environment would map onto a file (they keep none that a file could
-name). One thing seen on the way and not Zone-specific: with the autopilot on a track file, every
-host but Pulse PSP respawns once at tick 44 (a time trial shows it too).
+**Cross-check, 2048 and Omega: ported.** `a_zone_race_on_a_track_file_loads_and_climbs_on_every_title`
+loads the oval in Zone on Pure, HD, Omega, the 2048 base package and Pulse's PS2 disc, asserts the
+report line and the title's `<Zone>` ramp, and the autopilot's zone counter climbs. Each title flies its
+own Zone craft, ramp and HUD; only HD has a Zone sky or a title-wide grade to draw (a test of its own).
+Checked, differs: Omega's and 2048's per-circuit Zone environments are not something a file can name,
+so a file gets nothing of them (drawn as nothing, as above).
 
 ## Open
 
+- With the autopilot on a track file, HD, Pure and Pulse's PS2 disc respawn the craft once at tick 44,
+  Pulse's PSP discs do not (a time trial shows it too, so not Zone-specific; Omega and 2048 also show one
+  respawn within 7,000 ticks, their tick not measured). Not investigated.
 - Authoring: [the Blender add-on](../tools/blender.md) writes this form (2026-10-12). Blender 5.2.2's own
   glTF importer cannot open the file (it raises on the pad `_OAG_TO_WORLD` `MAT4`); the add-on has its
   own importer. Banking and per-point width are not authored yet.
