@@ -2,7 +2,7 @@
 status: re-first
 titles: [pulse]
 updated: 2026-10-29
-summary: "The cursor halo is the front end's bloom (GE dump), not a SelectorGlow image: a front-end bloom pass over the measured stencil stamps is open; Selector position fixed"
+summary: "Pulse cursor halo is the front end bloom (GE dump), not a SelectorGlow image; a front-end bloom pass is open; Selector position fixed"
 ---
 
 # The campaign grid draws and does not launch
