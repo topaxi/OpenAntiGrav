@@ -100,6 +100,10 @@ names that 2048 and Omega never authors") and no longer load there.
   (the headless sweep says 0.002 to 0.005 ms a tick); splashes and flakes are a quarter of their first size (play-report fix), flakes are brighter than the
   original's faint specks and look best judged on a real window.
 
+- **Enhanced weather road spray (ours, 2026-10-29, `weather-spray`):** wired, same page. Open: the
+  spray is world-stationary mist behind the craft, judged on the headless chase frame only; no Deck or
+  phone check; tune size and amount on a real window.
+
 - **Enhanced weather wet road (ours, 2026-10-29, `weather-enhanced` branch):** wired, same
   page. Roofed road is dry per draw at load (2026-10-29, `weather-splash-fix`), whatever the
   camera's section. Open: the road is picked by texture name (`surface`), unchecked on circuits

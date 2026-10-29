@@ -19,12 +19,12 @@ use oag_physics::collide::{Ray, Raycaster};
 use super::splash::quad;
 
 /// Droplets alive at once, over every craft. Past it a new one is dropped.
-pub const CAPACITY: usize = 256;
+pub const CAPACITY: usize = 320;
 
 /// The speed (km/h) at which a craft throws its full share, and the most
 /// droplets one craft throws a tick at full speed on a fully wet road.
 pub const FULL_SPEED_KMH: f32 = 600.0;
-pub const MAX_PER_TICK: f32 = 3.0;
+pub const MAX_PER_TICK: f32 = 5.0;
 
 /// A craft slower than this throws nothing.
 pub const MIN_SPEED_KMH: f32 = 60.0;
@@ -35,7 +35,7 @@ const REACH_HULLS: f32 = 2.5;
 
 /// Seconds a droplet lasts, and its half-size in world units.
 const LIFE: f32 = 0.35;
-const SIZE: f32 = 0.1;
+const SIZE: f32 = 0.15;
 
 /// The share of the craft's speed a droplet is born with (forward, as the
 /// air it is torn from is moving) and the drag per second that stops it, so it
@@ -50,7 +50,7 @@ const SPREAD: f32 = 3.0;
 const GRAVITY: f32 = 4.5;
 
 /// The most opaque a droplet gets.
-const ALPHA: f32 = 0.3;
+const ALPHA: f32 = 0.4;
 
 const SEED: u64 = 0x5b2a_7c19;
 
