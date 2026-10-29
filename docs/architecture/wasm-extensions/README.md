@@ -50,8 +50,9 @@ the host's and `oag-raceplay`'s unit tests with it on.
 The second example, `oag.energy-turbo` (`assets/mods/examples/energy-turbo/`, 1,676
 bytes): a pickup of its own, which the weapon pads hand out in place of **every second
 Turbo** (the other half stay the title's Turbo), drawn as the Turbo's icon on a red
-backdrop. Hold fire to boost (thrust x1.6) for as long as the pool lasts, paid at
-0.4 % of the pool a tick and stopping at 5 % so the drain alone never wrecks. An AI
+backdrop. Hold fire to boost (thrust x1.9) for as long as the pool lasts, paid at
+0.8 % of the pool a tick (a full pool lasts about 2 s) and stopping at 5 % so the drain
+alone never wrecks; the title's wall sparks burst at the nozzle three times a second. An AI
 craft holds no button: its driver asks to fire wherever the Turbo's own AI gate would
 fire a Turbo (a straight, nobody close ahead, `Driver::affords_boost`), and the mod
 turns that into a 1 s burst followed by a 2 s rest. Absorb it and half of what it cost comes back. While it is
@@ -84,8 +85,8 @@ stopped for N's pads.
 
 **Proof** (`energy_turbo_ground_truth`, Pulse PSP EU, `16_Track`, Single Race with an
 empty grid, this project's driver flying, the pool at half):
-- Fire held from tick 360: 610.2 km/h at tick 479 against 503.8 carrying it unfired,
-  the pool 47.50 to 4.94 (spent 42.56).
+- Fire held from tick 360: 619.8 km/h at tick 420 against 479.5 carrying it unfired,
+  the pool 47.50 to 4.94 (spent 42.56, the floor reached by then).
 - The absorb gives back 21.28, exactly half.
 - Carried over the first pad: no boost (505.4 against 623.6 km/h 0.5 s on) and +14.25
   energy.
