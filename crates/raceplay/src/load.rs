@@ -893,11 +893,11 @@ pub fn load(options: &Options) -> Result<Loaded> {
                 .into(),
         );
         report.push(
-            "a craft flying into a trail sparks: WO_TRAIL_HITSHIP, red variant on a \
-             Fury skin, spawned on the intruder at the closest point of the ribbon. \
-             The consumer, spawner and colour select are read; the geometric test and \
-             the once-per-entry rate are this engine's - Race::advance_trail_hits \
-             names both"
+            "a craft flying into a trail sparks: WO_TRAIL_HITSHIP, red variant when the \
+             ribbon's owner is Fury-skinned, spawned every tick on the intruder's hull \
+             anchor nearest the contact and carrying half its velocity. The consumer, \
+             spawner, colour select, rate and velocity are read; the geometric test is \
+             this engine's - Race::advance_trail_hits names it"
                 .into(),
         );
     }

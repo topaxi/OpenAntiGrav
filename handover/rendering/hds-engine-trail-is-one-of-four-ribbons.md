@@ -1,7 +1,7 @@
 ---
 status: re-first
 titles: [hd]
-updated: 2026-10-19
+updated: 2026-10-29
 summary: "HD WakeTrail documented but unwired; 61 particle systems with no recovered trigger need one-at-a-time reads"
 ---
 
@@ -11,6 +11,16 @@ summary: "HD WakeTrail documented but unwired; 61 particle systems with no recov
 
 ## Open
 
+- **`WO_TRAIL_HITSHIP` measured, 2026-10-29 (`hd-trail-sparks`).** The rate (per
+  frame), the node (the intruder's), the colour (the ribbon owner's) and the carried
+  velocity are read and wired; see engine-trail.md, "The trail-hit burst, measured".
+  Still open, each with its address there:
+  - what instance `+0x40`/`+0x4c` (`1 - f1`, f1 = contact sample over 54) do on HD;
+  - HD's class-6 streak draw (ours draws the procedural profile);
+  - carrying HD's collision sparks too (`ShipCollisionFx_Trigger` writes the same
+    velocity);
+  - what the purple lightning arcs over Talon's Junction are. They are not this
+    effect: they stay with both trail-hit names broken.
 - `WakeTrail` is documented only, not wired
 - **Correction, 2026-08-25:** the "extend the psys inventory ground truth to
   cover `WakeTrail`" framing below was wrong. `WakeTrail` is an SPU ribbon

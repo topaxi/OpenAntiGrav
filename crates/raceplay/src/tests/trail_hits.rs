@@ -151,3 +151,79 @@ fn an_authored_anchor_decides_the_hit_and_the_sphere_does_not() {
     place_and_step(&mut race, Vec3::new(-40.0, 0.2, 0.0));
     assert_ne!(race.view.trail_inside[0] & 0b10, 0);
 }
+
+/// A race with only the **red** trail-hit burst loaded: a still, one-tick
+/// emitter whose `+0x4d0` (what its particles inherit of the carrier's
+/// velocity) is `0.5`, as `WO_TRAIL_HITSHIP`'s own is. Slot 0 owns the ribbon
+/// and is Fury-red; slot 1, the intruder, is classic.
+fn race_with_only_the_red_burst() -> Race {
+    let mut race = race_with_a_trail();
+    let name = oag_title::engine_effects::TRAIL_HITSHIP_RED_EFFECT;
+    let mut blob = super::respawn::one_emitter_pob(name, 0);
+    let record = blob.len() - oag_pob::EMITTER_LEN;
+    blob[record + 0x24..record + 0x28].copy_from_slice(&1.0f32.to_bits().to_le_bytes());
+    blob[record + 0x4d0..record + 0x4d4].copy_from_slice(&0.5f32.to_bits().to_le_bytes());
+    let effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
+        .expect("the hand-laid effect parses");
+    let mut library = oag_fx::psys::Library::new();
+    library.insert(name, effect);
+    race.view.handles = crate::EffectHandles::resolve(oag_hd::TITLE, &library);
+    race.view.hd_trail_red = [0.0; oag_gameplay::MAX_SHIPS];
+    race.view.hd_trail_red[0] = 1.0;
+    race.view.spark_anchors = vec![Vec::new(); oag_gameplay::MAX_SHIPS];
+    race.view.spark_anchors[1] = vec![Vec3::ZERO];
+    race
+}
+
+/// The mean `x` of every live particle's quad, or `None` with nothing alive.
+fn particles_mean_x(race: &Race) -> Option<f32> {
+    let (additive, alpha) = race.view.stage.vertices(Vec3::Z, Vec3::Y);
+    let all: Vec<_> = additive.iter().chain(alpha.iter()).collect();
+    (!all.is_empty()).then(|| all.iter().map(|v| v.position[0]).sum::<f32>() / all.len() as f32)
+}
+
+/// **The ribbon's owner picks the colour, measured live.** At the call
+/// (`0x002e3b88`) the variant byte comes off the craft at the trail block's
+/// `+0x1204`, which a breakpoint run showed is the ribbon's owner (slot 5 of the
+/// grid), while the node the burst parents to belongs to the intruder
+/// (`+0x11f0`, the player). With only the red burst loaded, a red owner and a
+/// classic intruder, something plays only if the owner's flag chose it.
+#[test]
+fn the_ribbons_owner_picks_the_colour_and_the_intruder_carries_it() {
+    let mut race = race_with_only_the_red_burst();
+    place_and_step(&mut race, Vec3::new(-40.0, 0.0, 0.0));
+    assert_eq!(
+        race.view.stage.playing_count(),
+        1,
+        "the red owner's burst did not play on the classic intruder"
+    );
+}
+
+/// **The burst rides the craft by half its speed**, the record's `+0x4d0`
+/// times the craft's own velocity (`Trail_HitShipEffect` writes it to the
+/// instance's `+0x160`, `0x002d9fb4`-`0x002d9ff4`; the spawn adds `+0x160 *
+/// +0x4d0` to each newborn, `0x002899d4`-`0x00289a18`). Fired from a craft
+/// moving at 60 units a second, a still emitter's particles drift 30 a second:
+/// 3 units over six ticks. Played without the craft's velocity they stay put,
+/// and a fast craft leaves them piling up behind its hull - which is what a
+/// player saw.
+#[test]
+fn the_trail_hit_burst_inherits_half_the_intruders_velocity() {
+    let mut race = race_with_only_the_red_burst();
+    race.sim.world.ships[1].physics.body.linear_velocity = Vec3::new(60.0, 0.0, 0.0);
+    place_and_step(&mut race, Vec3::new(-40.0, 0.0, 0.0));
+    // Out of the ribbon, so nothing re-fires while the first burst is watched.
+    place_and_step(&mut race, Vec3::new(-40.0, 50.0, 0.0));
+    let mut rng = oag_core::Rng::new(5);
+    let dt = 1.0 / 60.0;
+    race.view.stage.advance(dt, &mut rng);
+    let start = particles_mean_x(&race).expect("the burst spawned");
+    for _ in 0..6 {
+        race.view.stage.advance(dt, &mut rng);
+    }
+    let drift = particles_mean_x(&race).expect("still alive") - start;
+    assert!(
+        (2.5..=3.5).contains(&drift),
+        "drifted {drift} units in six ticks"
+    );
+}
