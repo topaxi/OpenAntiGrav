@@ -1014,6 +1014,7 @@ pub use picture::{Backdrop, Picture};
 mod focus;
 mod frame;
 mod jump;
+pub use jump::Spot;
 pub mod nav;
 mod pin;
 mod unavailable;

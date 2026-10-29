@@ -86,6 +86,7 @@ out to be wrong.
 | [0075](0075-dynamic-resolution-sheds-the-blur-gather-before-pixels.md) | Dynamic resolution sheds the blur gather before pixels | **Proposed** (2026-10-25); a second, discrete controller output beside ADR-0040/0042/0044/0073, which stand |
 | [0076](0076-a-track-file-carries-its-art-as-an-optional-section.md) | A track file carries its art as an optional section | **Proposed** |
 | [0077](0077-a-custom-campaign-compiles-to-the-titles-own-grid.md) | A custom campaign is a mod file that compiles to the title's own grid | Accepted |
+| [0078](0078-a-mod-is-turned-off-by-id-live-and-the-built-in-never.md) | A mod is turned off by id, live, and the built-in never | **Proposed** |
 
 ## Format
 

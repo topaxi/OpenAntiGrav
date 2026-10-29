@@ -179,11 +179,13 @@ impl Session {
                 log::warn!("menu: {e:#}");
                 (pending.definition.clone(), Vec::new(), Default::default())
             });
-        self.custom_tracks.add_files(&custom_campaigns.tracks);
+        self.custom_tracks.set_mod_files(&custom_campaigns.tracks);
         self.shell = Some(Shell {
             definition,
             mods,
             custom_campaigns: std::sync::Arc::new(custom_campaigns),
+            rebuild: matches!(pending.menu_source, crate::prepare::MenuSource::Mods(_))
+                .then_some(crate::session::MenuRebuild { updated: false }),
             menu_sfx: None,
             title,
             platform: archives.layout.platform,

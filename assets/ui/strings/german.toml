@@ -282,7 +282,7 @@ OAG_MEDAL_GOLD = { text = "GOLD", human = false }
 OAG_MEDAL_SILVER = { text = "SILBER", human = false }
 OAG_MEDAL_BRONZE = { text = "BRONZE", human = false }
 OAG_MENU_MODS = { text = "MODS", human = false }
-OAG_MENU_MODS_SUBTITLE = { text = "Die geladenen Mods: Urheber, Lizenz und die Zeilen, die sie hinzufügen", human = false }
+OAG_MENU_MODS_SUBTITLE = { text = "Jeden Mod an- oder ausschalten; Urheber, Lizenz und was er hinzufügt", human = false }
 OAG_MODS_PAGE_TITLE = { text = "MODS", human = false }
 OAG_MODS_ROW = { text = "MOD", human = false }
 OAG_MODS_ID = { text = "ID", human = false }
@@ -294,6 +294,16 @@ OAG_MODS_NO_LICENSE = { text = "KEINE LIZENZ ANGEGEBEN", human = false }
 OAG_MODS_LICENSE_FILE = { text = "SIEHE %s", human = false }
 OAG_MODS_NOTHING = { text = "NICHTS", human = false }
 OAG_MODS_BUILT_IN = { text = "EINGEBAUT", human = false }
+OAG_MODS_ENABLED = { text = "AKTIVIERT", human = false }
+OAG_MODS_ON = { text = "AN", human = false }
+OAG_MODS_OFF = { text = "AUS", human = false }
+OAG_MODS_TURNED_OFF = { text = "NICHTS, AUSGESCHALTET", human = false }
+OAG_MODS_ALWAYS_ON = { text = "IMMER AN", human = false }
+OAG_MODS_NOT_LOADED = { text = "NICHT GELADEN: NICHTS ZU SCHALTEN", human = false }
+OAG_MODS_LEFT_OUT = { text = "AUSGELASSEN", human = false }
+OAG_MODS_NEEDS = { text = "BRAUCHT", human = false }
+OAG_MODS_NEEDS_OFF = { text = "%s, AUS", human = false }
+OAG_MODS_NEEDS_MISSING = { text = "%s, FEHLT", human = false }
 OAG_PAUSE_OWNED = { text = "SPIELER %s HAT PAUSIERT - JEDER KANN IN %s FORTSETZEN", human = false }
 OAG_PAUSE_OPEN = { text = "SPIELER %s HAT PAUSIERT - JEDER KANN FORTSETZEN", human = false }
 OAG_PAUSE_OPEN_UNOWNED = { text = "PAUSIERT - JEDER KANN FORTSETZEN", human = false }

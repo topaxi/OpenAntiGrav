@@ -151,7 +151,6 @@ impl Session {
             .context("this run has no menus: nothing loaded a font or a sprite sheet")?;
         // Everything below this is a load, and a load is not a frame time.
         self.stalled = true;
-        let mut model = menu::Menu::new(shell.definition.clone());
         // The skin decides the row pitch, and the pitch decides how many rows a
         // page shows - so the window has to be told before anything scrolls.
         // The face the rows will be drawn in, which is also the face whose
@@ -170,239 +169,7 @@ impl Session {
         // And where that face keeps its ink, for the pointer bands on the
         // selection screens' rows - the renderer below draws them with it.
         skin.set_row_ink(oag_ui::pointer::RowInk::measure(&rows_face));
-        // Just the first frame's own value - `MenuStage::render` refreshes
-        // this every frame off whichever page is actually current, since a
-        // player can navigate to a page with a different reservation need
-        // (AI PILOTS today) without this method running again. See
-        // `menu::visible_rows`'s own doc for why the reservation has to
-        // track the page rather than the frame's live row values.
-        let reserve_note =
-            pilots::page_reserves_axis_preview(model.page()) || model.reserves_unavailable_note();
-        model.set_visible_rows(menu::visible_rows(&skin, &shell.frame, reserve_note));
-        // And which way a page steps, for the disc that draws one of them as a
-        // strip: left and right along the entries rather than up and down a
-        // column. Set from the same skin the drawing side reads, so what is on
-        // screen and what the buttons do cannot disagree.
-        model.set_strip_layout(skin.strip().is_some());
-        // And whether rows a mod attached to another are revealed under it or drawn
-        // inline: the title's own answer (`oag_title::MainMenu::attached`).
-        model.set_reveal_attached(shell.title.main_menu.attached == oag_title::Attached::Revealed);
-        // Supplied before seeding, because a value cannot be seeded onto a list
-        // that is not there yet. The race list or the Zone one, matching
-        // whichever `race.mode` is already saved - so a menu reopened on a
-        // saved Zone setting shows the Zone list from the first frame, not
-        // just after the row is next touched. See `Self::race_mode` and
-        // `Self::resupply_tracks_for_mode`, which keeps the two in step
-        // whenever MODE changes while the menus stay open.
-        let tracks: Vec<menu::Choice> = shell
-            .tracks_for(self.race_mode())
-            .iter()
-            .map(|(track, name)| menu::Choice::labelled(&track.id, name))
-            .collect();
-        model.supply(menu::ValueSource::Tracks, &tracks);
-        model.supply(menu::ValueSource::Teams, &shell.teams);
-        // Scoped to whichever team `race.team` already names, the same
-        // reason the CIRCUIT row above is seeded from `race.mode`, and
-        // settled against that list for the reason RACE REMIX's own rows are
-        // below - `race.variant` defaults to empty, which is a real value
-        // only on the titles whose first variant is the unsuffixed one.
-        let race_variants =
-            gated_variant_choices(
-                shell.title,
-                &self.settings.race.team,
-                &shell.team_details,
-                &oag_game::records::load(),
-            );
-        remix_menu::settle(&mut self.settings.race.variant, &race_variants);
-        model.supply(menu::ValueSource::RaceVariant, &race_variants);
-        // The booted title's own ladder, filtered to the rungs this build can
-        // put a ship on. `None` means the title's per-team handling files have
-        // not been read - Wipeout 2048 - and the caller keeps its own list
-        // rather than lending that title another's measurement.
-        model.supply(
-            menu::ValueSource::SpeedClasses,
-            &speed_class_choices(shell.title),
-        );
-        // RACE REMIX's own axis: the union across every title this machine can
-        // currently open a source for, so a class is offered exactly when the
-        // data behind it is actually here. See `Self::remix_speed_classes`.
-        //
-        // **Settled only when the union has something in it**, the same rule
-        // the RACE REMIX rows below follow and for the same reason: an empty
-        // union is not evidence that a saved pick is wrong, and settling
-        // against it would clear `race.class` to the empty string. That is a
-        // reachable configuration rather than a hypothetical - a machine whose
-        // only playable source is Wipeout 2048, whose ladder is unread, unions
-        // to nothing - and it would silently lose the player's saved class
-        // while the RACE page above still displayed its own fallback.
-        //
-        // `supply` is unconditional because it does not touch `self.settings`:
-        // it keeps the row on its current value when the list still offers it
-        // and falls to the first entry for *display* otherwise.
-        let remix_classes = self.remix_speed_classes();
-        if !remix_classes.is_empty() {
-            remix_menu::settle(&mut self.settings.race.class, &remix_classes);
-        }
-        model.supply(menu::ValueSource::RemixSpeedClasses, &remix_classes);
-        model.supply(menu::ValueSource::RemixAiDifficulty, &self.remix_ai_difficulty());
-        model.supply(menu::ValueSource::Languages, &shell.languages);
-        model.supply(menu::ValueSource::RaceModes, &shell.modes);
-        model.supply(menu::ValueSource::KillTargets, &shell.kill_targets);
-        model.supply(menu::ValueSource::Weapons, &shell.weapons);
-        model.supply(
-            menu::ValueSource::HudStyles,
-            &menu::hud_style_choices(shell.title, |skin| {
-                oag_game::unlock::hud_skin_unlocked(skin, &self.records, shell.title)
-            }),
-        );
-        // Enumerated every time the menus open rather than kept from startup,
-        // because a screen can be plugged in while the game is running and the
-        // row should show it without a restart.
-        let monitors = crate::window::monitor_choices(
-            &monitor_names(&self.gpu.output.window.available_monitors().collect::<Vec<_>>()),
-            crate::window::under_gamescope(self.gpu.output.window.current_monitor().as_ref()),
-            shell
-                .strings
-                .get("OAG_DISPLAY_MONITOR_GAMESCOPE")
-                .unwrap_or("GAMESCOPE SHOWS ONE DISPLAY"),
-        );
-        model.supply(menu::ValueSource::Monitors, &monitors);
-        let (window_sizes, fullscreen_resolutions) = settings::platform::size_choices(
-            crate::window::native_size(&self.gpu.output.window),
-            &self.settings.display,
-        );
-        let plain = |texts: &[String]| texts.iter().map(menu::Choice::plain).collect::<Vec<_>>();
-        model.supply(menu::ValueSource::WindowSizes, &plain(&window_sizes));
-        model.supply(menu::ValueSource::FullscreenResolutions, &plain(&fullscreen_resolutions));
-        // Kept from startup rather than enumerated, unlike the monitors above,
-        // and the difference is what a fresh answer would be worth. A screen
-        // plugged in now can be used now; an adapter plugged in now cannot,
-        // because the device was made at boot. Listing one would be offering a
-        // row that does nothing this run.
-        let renderers: Vec<menu::Choice> = display::Renderer::offered(&self.gpu.adapters)
-            .into_iter()
-            .map(menu::Choice::plain)
-            .collect();
-        model.supply(menu::ValueSource::Renderers, &renderers);
-        // Empty unless this machine has both Pulse discs, which draws the row
-        // unusable rather than offering a swap that cannot happen. Kept from
-        // the boot survey rather than re-derived here: answering it means
-        // opening every image on the search path, and a menu opening is not
-        // the moment for that. See `oag_sound::MusicDiscs`.
-        let music_sources: Vec<menu::Choice> = if self.music_discs.both() {
-            oag_sound::MusicSource::ALL
-                .iter()
-                .map(|source| menu::Choice::plain(source.name()))
-                .collect()
-        } else {
-            Vec::new()
-        };
-        model.supply(menu::ValueSource::MusicSources, &music_sources);
-        // The stylings this source ships art for, off its own title package.
-        // One row on every title but Wipeout HD, which ships two - and a row
-        // with one value draws the setting as the fact it is. Empty on a source
-        // whose title authors no loading screen at all, which greys it out.
-        model.supply(menu::ValueSource::FrontEndStyles, &shell.front_end_styles);
-        // Off, the built-ins, and the player's own files as of the last poll.
-        model.supply(
-            menu::ValueSource::ScreenFilters,
-            &self.screen_filters.choices(),
-        );
-        // Race Remix's own axis - every title this machine can currently open
-        // a source for, surveyed once at `Session` construction. See the
-        // field's own doc comment. TRACK TITLE's own row: 2048's circuits are
-        // not HD's, so no synthetic entry applies here; CRAFT TITLE's does,
-        // see `Self::craft_title_choices`.
-        //
-        // **Settled, not merely supplied**, and outward-in: each row's stored
-        // setting is brought into step with the list it is about to be given
-        // before the row below it is resolved from that setting. See
-        // `remix_menu::settle`, which is what keeps a fresh settings file's
-        // empty `remix.*` from leaving every row showing one thing and
-        // `self.settings` holding another.
-        let (titles, craft_titles) = self.settle_remix_titles();
-        model.supply(menu::ValueSource::Titles, &titles);
-        model.supply(menu::ValueSource::CraftTitles, &craft_titles);
-        // Scoped to whichever titles `remix.track_title`/`remix.craft_title`
-        // now name, the same reason the CIRCUIT row above is seeded from
-        // `race.mode` rather than left empty until MODE is next touched: a
-        // menu reopened on a saved pick should show that pick's own list from
-        // the first frame. Both are `None` and supply nothing when the named
-        // title's source is no longer on this machine's search path, or will
-        // not open - see `Self::remix_catalogue_for`/
-        // `Self::remix_craft_catalogue`. Nothing is settled in that case
-        // either: an unreadable source is not evidence that a saved pick is
-        // wrong, and clearing it would lose it.
-        if let Some(tracks) = self.remix_track_options() {
-            remix_menu::settle(&mut self.settings.remix.track, &tracks);
-            model.supply(menu::ValueSource::RemixTracks, &tracks);
-        }
-        if let Some(catalogue) = self.remix_craft_catalogue() {
-            remix_menu::settle(&mut self.settings.remix.team, &catalogue.teams);
-            model.supply(menu::ValueSource::RemixTeams, &catalogue.teams);
-        }
-        // Last, because it is scoped to the team the line above just settled.
-        if let Some(title) = self.craft_title() {
-            let variants = variant_choices(title, &self.settings.remix.team);
-            remix_menu::settle(&mut self.settings.remix.variant, &variants);
-            model.supply(menu::ValueSource::RemixVariant, &variants);
-        }
-        // Ours, and settings-backed like everything above it - except PILOT
-        // and AXIS, which nothing persists, so this both supplies and seeds
-        // LOW/HIGH in one call. See `super::pilot_editor`.
-        self.supply_pilot_menu(&mut model);
-        model.supply(
-            menu::ValueSource::Mods,
-            &oag_game::mods::choices(&shell.mods, &shell.strings),
-        );
-        self.seed_menu(&mut model, shell.title, shell.platform);
-        settings::supply_reset(
-            &mut model,
-            shell.title,
-            shell.platform,
-            &shell.strings,
-        );
-        // What the row is set to comes from the settings file, above; what the
-        // game is *drawing with* can only come from here, and the RENDERER row's
-        // restart note is the difference between the two. Told every time the
-        // menus open rather than once, because the model is new every time.
-        let in_use: Vec<menu::Value> = self
-            .gpu
-            .in_use
-            .iter()
-            .map(|name| menu::Value::Text(name.clone()))
-            .collect();
-        if !model.in_effect("graphics.renderer", &in_use) {
-            warn!("nothing in the menus defers graphics.renderer");
-        }
-        // What the row is set to comes from the settings file; what a race on
-        // screen is actually *drawing* with can only come from its own
-        // `Scene`, built once when that race started. Silent on the front end
-        // and the menus, where no race exists yet to compare against - see
-        // `Restart::in_effect`.
-        //
-        // **A single value, since [ADR-0041] split the row.** This used to
-        // carry a list, because the old `anti_aliasing` row mixed MSAA - baked
-        // into the scene's pipelines at `race::Scene::new` - with FXAA and SMAA,
-        // which `upscale::Framebuffer::resolve_scene` reads fresh every frame;
-        // every mode sharing the built scene's sample count was equally "in
-        // effect". The MSAA row is now nothing but the sample count, so the
-        // only thing in effect is the level the running scene was built with.
-        //
-        // [ADR-0041]: ../../../../../docs/architecture/adr/0041-one-row-for-what-resolves-the-frame.md
-        if let Stage::Race(stage) = &self.stage {
-            let in_use = [menu::Value::Text(stage.scene.msaa().to_string())];
-            if !model.in_effect("graphics.msaa", &in_use) {
-                warn!("nothing in the menus defers graphics.msaa");
-            }
-            // Same story as MSAA above, but a single tier baked in at
-            // `Race::start` rather than a range of equivalent modes.
-            let in_use = [menu::Value::Text(stage.race.boost_fov_kick().to_string())];
-            if !model.in_effect("graphics.boost_fov_kick", &in_use) {
-                warn!("nothing in the menus defers graphics.boost_fov_kick");
-            }
-        }
-
+        let model = self.menu_model(&shell, &skin);
         // **The movie planes are asked for only when there is a movie to put in
         // them.** This used to be unconditionally `None`, on the grounds that
         // wanting them would tie the menus to a stage that had played one; that
@@ -1148,5 +915,248 @@ mod people_cap_tests {
         for mode in [Mode::TimeTrial, Mode::Zone, Mode::SingleRace, Mode::Eliminator] {
             assert_eq!(mode_for_people(mode, 4), mode);
         }
+    }
+}
+
+impl Session {
+    /// The menu model [`Self::open_menus`] opens, on `shell`'s tree: every list supplied,
+    /// every setting seeded, the window sized for `skin`. A MODS page switch builds the
+    /// rebuilt tree's model with it too (`super::mods_page`), so the two cannot differ.
+    pub(crate) fn menu_model(&mut self, shell: &super::Shell, skin: &menu::Skin) -> menu::Menu {
+        let mut model = menu::Menu::new(shell.definition.clone());
+        // Just the first frame's own value - `MenuStage::render` refreshes
+        // this every frame off whichever page is actually current, since a
+        // player can navigate to a page with a different reservation need
+        // (AI PILOTS today) without this method running again. See
+        // `menu::visible_rows`'s own doc for why the reservation has to
+        // track the page rather than the frame's live row values.
+        let reserve_note =
+            pilots::page_reserves_axis_preview(model.page()) || model.reserves_unavailable_note();
+        model.set_visible_rows(menu::visible_rows(skin, &shell.frame, reserve_note));
+        // And which way a page steps, for the disc that draws one of them as a
+        // strip: left and right along the entries rather than up and down a
+        // column. Set from the same skin the drawing side reads, so what is on
+        // screen and what the buttons do cannot disagree.
+        model.set_strip_layout(skin.strip().is_some());
+        // And whether rows a mod attached to another are revealed under it or drawn
+        // inline: the title's own answer (`oag_title::MainMenu::attached`).
+        model.set_reveal_attached(shell.title.main_menu.attached == oag_title::Attached::Revealed);
+        // Supplied before seeding, because a value cannot be seeded onto a list
+        // that is not there yet. The race list or the Zone one, matching
+        // whichever `race.mode` is already saved - so a menu reopened on a
+        // saved Zone setting shows the Zone list from the first frame, not
+        // just after the row is next touched. See `Self::race_mode` and
+        // `Self::resupply_tracks_for_mode`, which keeps the two in step
+        // whenever MODE changes while the menus stay open.
+        let tracks: Vec<menu::Choice> = shell
+            .tracks_for(self.race_mode())
+            .iter()
+            .map(|(track, name)| menu::Choice::labelled(&track.id, name))
+            .collect();
+        model.supply(menu::ValueSource::Tracks, &tracks);
+        model.supply(menu::ValueSource::Teams, &shell.teams);
+        // Scoped to whichever team `race.team` already names, the same
+        // reason the CIRCUIT row above is seeded from `race.mode`, and
+        // settled against that list for the reason RACE REMIX's own rows are
+        // below - `race.variant` defaults to empty, which is a real value
+        // only on the titles whose first variant is the unsuffixed one.
+        let race_variants =
+            gated_variant_choices(
+                shell.title,
+                &self.settings.race.team,
+                &shell.team_details,
+                &oag_game::records::load(),
+            );
+        remix_menu::settle(&mut self.settings.race.variant, &race_variants);
+        model.supply(menu::ValueSource::RaceVariant, &race_variants);
+        // The booted title's own ladder, filtered to the rungs this build can
+        // put a ship on. `None` means the title's per-team handling files have
+        // not been read - Wipeout 2048 - and the caller keeps its own list
+        // rather than lending that title another's measurement.
+        model.supply(
+            menu::ValueSource::SpeedClasses,
+            &speed_class_choices(shell.title),
+        );
+        // RACE REMIX's own axis: the union across every title this machine can
+        // currently open a source for, so a class is offered exactly when the
+        // data behind it is actually here. See `Self::remix_speed_classes`.
+        //
+        // **Settled only when the union has something in it**, the same rule
+        // the RACE REMIX rows below follow and for the same reason: an empty
+        // union is not evidence that a saved pick is wrong, and settling
+        // against it would clear `race.class` to the empty string. That is a
+        // reachable configuration rather than a hypothetical - a machine whose
+        // only playable source is Wipeout 2048, whose ladder is unread, unions
+        // to nothing - and it would silently lose the player's saved class
+        // while the RACE page above still displayed its own fallback.
+        //
+        // `supply` is unconditional because it does not touch `self.settings`:
+        // it keeps the row on its current value when the list still offers it
+        // and falls to the first entry for *display* otherwise.
+        let remix_classes = self.remix_speed_classes();
+        if !remix_classes.is_empty() {
+            remix_menu::settle(&mut self.settings.race.class, &remix_classes);
+        }
+        model.supply(menu::ValueSource::RemixSpeedClasses, &remix_classes);
+        model.supply(menu::ValueSource::RemixAiDifficulty, &self.remix_ai_difficulty());
+        model.supply(menu::ValueSource::Languages, &shell.languages);
+        model.supply(menu::ValueSource::RaceModes, &shell.modes);
+        model.supply(menu::ValueSource::KillTargets, &shell.kill_targets);
+        model.supply(menu::ValueSource::Weapons, &shell.weapons);
+        model.supply(
+            menu::ValueSource::HudStyles,
+            &menu::hud_style_choices(shell.title, |skin| {
+                oag_game::unlock::hud_skin_unlocked(skin, &self.records, shell.title)
+            }),
+        );
+        // Enumerated every time the menus open rather than kept from startup,
+        // because a screen can be plugged in while the game is running and the
+        // row should show it without a restart.
+        let monitors = crate::window::monitor_choices(
+            &monitor_names(&self.gpu.output.window.available_monitors().collect::<Vec<_>>()),
+            crate::window::under_gamescope(self.gpu.output.window.current_monitor().as_ref()),
+            shell
+                .strings
+                .get("OAG_DISPLAY_MONITOR_GAMESCOPE")
+                .unwrap_or("GAMESCOPE SHOWS ONE DISPLAY"),
+        );
+        model.supply(menu::ValueSource::Monitors, &monitors);
+        let (window_sizes, fullscreen_resolutions) = settings::platform::size_choices(
+            crate::window::native_size(&self.gpu.output.window),
+            &self.settings.display,
+        );
+        let plain = |texts: &[String]| texts.iter().map(menu::Choice::plain).collect::<Vec<_>>();
+        model.supply(menu::ValueSource::WindowSizes, &plain(&window_sizes));
+        model.supply(menu::ValueSource::FullscreenResolutions, &plain(&fullscreen_resolutions));
+        // Kept from startup rather than enumerated, unlike the monitors above,
+        // and the difference is what a fresh answer would be worth. A screen
+        // plugged in now can be used now; an adapter plugged in now cannot,
+        // because the device was made at boot. Listing one would be offering a
+        // row that does nothing this run.
+        let renderers: Vec<menu::Choice> = display::Renderer::offered(&self.gpu.adapters)
+            .into_iter()
+            .map(menu::Choice::plain)
+            .collect();
+        model.supply(menu::ValueSource::Renderers, &renderers);
+        // Empty unless this machine has both Pulse discs, which draws the row
+        // unusable rather than offering a swap that cannot happen. Kept from
+        // the boot survey rather than re-derived here: answering it means
+        // opening every image on the search path, and a menu opening is not
+        // the moment for that. See `oag_sound::MusicDiscs`.
+        let music_sources: Vec<menu::Choice> = if self.music_discs.both() {
+            oag_sound::MusicSource::ALL
+                .iter()
+                .map(|source| menu::Choice::plain(source.name()))
+                .collect()
+        } else {
+            Vec::new()
+        };
+        model.supply(menu::ValueSource::MusicSources, &music_sources);
+        // The stylings this source ships art for, off its own title package.
+        // One row on every title but Wipeout HD, which ships two - and a row
+        // with one value draws the setting as the fact it is. Empty on a source
+        // whose title authors no loading screen at all, which greys it out.
+        model.supply(menu::ValueSource::FrontEndStyles, &shell.front_end_styles);
+        // Off, the built-ins, and the player's own files as of the last poll.
+        model.supply(
+            menu::ValueSource::ScreenFilters,
+            &self.screen_filters.choices(),
+        );
+        // Race Remix's own axis - every title this machine can currently open
+        // a source for, surveyed once at `Session` construction. See the
+        // field's own doc comment. TRACK TITLE's own row: 2048's circuits are
+        // not HD's, so no synthetic entry applies here; CRAFT TITLE's does,
+        // see `Self::craft_title_choices`.
+        //
+        // **Settled, not merely supplied**, and outward-in: each row's stored
+        // setting is brought into step with the list it is about to be given
+        // before the row below it is resolved from that setting. See
+        // `remix_menu::settle`, which is what keeps a fresh settings file's
+        // empty `remix.*` from leaving every row showing one thing and
+        // `self.settings` holding another.
+        let (titles, craft_titles) = self.settle_remix_titles();
+        model.supply(menu::ValueSource::Titles, &titles);
+        model.supply(menu::ValueSource::CraftTitles, &craft_titles);
+        // Scoped to whichever titles `remix.track_title`/`remix.craft_title`
+        // now name, the same reason the CIRCUIT row above is seeded from
+        // `race.mode` rather than left empty until MODE is next touched: a
+        // menu reopened on a saved pick should show that pick's own list from
+        // the first frame. Both are `None` and supply nothing when the named
+        // title's source is no longer on this machine's search path, or will
+        // not open - see `Self::remix_catalogue_for`/
+        // `Self::remix_craft_catalogue`. Nothing is settled in that case
+        // either: an unreadable source is not evidence that a saved pick is
+        // wrong, and clearing it would lose it.
+        if let Some(tracks) = self.remix_track_options() {
+            remix_menu::settle(&mut self.settings.remix.track, &tracks);
+            model.supply(menu::ValueSource::RemixTracks, &tracks);
+        }
+        if let Some(catalogue) = self.remix_craft_catalogue() {
+            remix_menu::settle(&mut self.settings.remix.team, &catalogue.teams);
+            model.supply(menu::ValueSource::RemixTeams, &catalogue.teams);
+        }
+        // Last, because it is scoped to the team the line above just settled.
+        if let Some(title) = self.craft_title() {
+            let variants = variant_choices(title, &self.settings.remix.team);
+            remix_menu::settle(&mut self.settings.remix.variant, &variants);
+            model.supply(menu::ValueSource::RemixVariant, &variants);
+        }
+        // Ours, and settings-backed like everything above it - except PILOT
+        // and AXIS, which nothing persists, so this both supplies and seeds
+        // LOW/HIGH in one call. See `super::pilot_editor`.
+        self.supply_pilot_menu(&mut model);
+        model.supply(
+            menu::ValueSource::Mods,
+            &oag_game::mods::choices(&shell.mods, &shell.strings),
+        );
+        oag_game::mods::resupply_switch(&mut model, &shell.mods, &shell.strings);
+        self.seed_menu(&mut model, shell.title, shell.platform);
+        settings::supply_reset(
+            &mut model,
+            shell.title,
+            shell.platform,
+            &shell.strings,
+        );
+        // What the row is set to comes from the settings file, above; what the
+        // game is *drawing with* can only come from here, and the RENDERER row's
+        // restart note is the difference between the two. Told every time the
+        // menus open rather than once, because the model is new every time.
+        let in_use: Vec<menu::Value> = self
+            .gpu
+            .in_use
+            .iter()
+            .map(|name| menu::Value::Text(name.clone()))
+            .collect();
+        if !model.in_effect("graphics.renderer", &in_use) {
+            warn!("nothing in the menus defers graphics.renderer");
+        }
+        // What the row is set to comes from the settings file; what a race on
+        // screen is actually *drawing* with can only come from its own
+        // `Scene`, built once when that race started. Silent on the front end
+        // and the menus, where no race exists yet to compare against - see
+        // `Restart::in_effect`.
+        //
+        // **A single value, since [ADR-0041] split the row.** This used to
+        // carry a list, because the old `anti_aliasing` row mixed MSAA - baked
+        // into the scene's pipelines at `race::Scene::new` - with FXAA and SMAA,
+        // which `upscale::Framebuffer::resolve_scene` reads fresh every frame;
+        // every mode sharing the built scene's sample count was equally "in
+        // effect". The MSAA row is now nothing but the sample count, so the
+        // only thing in effect is the level the running scene was built with.
+        //
+        // [ADR-0041]: ../../../../../docs/architecture/adr/0041-one-row-for-what-resolves-the-frame.md
+        if let Stage::Race(stage) = &self.stage {
+            let in_use = [menu::Value::Text(stage.scene.msaa().to_string())];
+            if !model.in_effect("graphics.msaa", &in_use) {
+                warn!("nothing in the menus defers graphics.msaa");
+            }
+            // Same story as MSAA above, but a single tier baked in at
+            // `Race::start` rather than a range of equivalent modes.
+            let in_use = [menu::Value::Text(stage.race.boost_fov_kick().to_string())];
+            if !model.in_effect("graphics.boost_fov_kick", &in_use) {
+                warn!("nothing in the menus defers graphics.boost_fov_kick");
+            }
+        }
+        model
     }
 }

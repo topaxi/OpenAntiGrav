@@ -535,13 +535,18 @@ kind = "back"
 label = "BACK"
 string_id = "OAG_MENU_BACK"
 
-# **The MODS page: read-only.** One MOD row that steps through every mod the run has
+# **The MODS page.** One MOD row that steps through every mod the run has
 # (`values_from = "mods"`, built-in first; a mod that did not load is listed dimmed with
-# its error as the reason, the way a custom track that will not load is), and under it the
-# detail lines of the mod the row is on: id, version, authors, licence (NO LICENSE STATED
-# when it has none) and the menu rows it added. `mods.selected` is never stored; it only
-# says which mod the lines are about. Reached from OPTIONS through the built-in mod
-# `oag-extras`, like any mod's row. Chosen, not measured.
+# its error as the reason, the way a custom track that will not load is), an ENABLED row
+# that turns the mod the MOD row is on on or off, and under them the detail lines of that
+# mod: id, version, authors, licence (NO LICENSE STATED when it has none) and what it
+# added. `mods.selected` is never stored; it only says which mod the rows are about.
+# ENABLED is stored as `[mods] disabled` in the settings file and rebuilds the menus at
+# once (`oag_game::mods`, `session::mods_page`). A stepper plus one switch rather than a
+# switch per mod: the page's rows are this file's, and the mods are only known at run
+# time. Reached from OPTIONS through the built-in mod `oag-extras`, like any mod's row;
+# `oag-extras` itself cannot be turned off, since it carries OPTIONS and this row.
+# Chosen, not measured.
 [[page]]
 id = "mods"
 title = "MODS"
@@ -553,6 +558,13 @@ label = "MOD"
 string_id = "OAG_MODS_ROW"
 setting = "mods.selected"
 values_from = "mods"
+
+[[page.entry]]
+kind = "choice"
+label = "ENABLED"
+string_id = "OAG_MODS_ENABLED"
+setting = "mods.enabled"
+values_from = "mod_switch"
 
 [[page.entry]]
 kind = "back"

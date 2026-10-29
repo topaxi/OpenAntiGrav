@@ -12,7 +12,7 @@ fn titles() -> [&'static oag_title::Title; 5] {
 }
 
 fn built(title: &'static oag_title::Title) -> oag_ui::menu::Definition {
-    crate::mods::Mods::load()
+    crate::mods::Mods::load(&Default::default())
         .unwrap()
         .build(
             oag_ui::menu::BUILT_IN,

@@ -716,7 +716,7 @@ impl NetArgs {
         let edition = oag_net::wire::online::Edition {
             title: title.to_string(),
             platform: opened.archives.layout.platform.to_string(),
-            content: oag_game::mods::Mods::load()
+            content: oag_game::mods::Mods::load_for_profile()
                 .ok()
                 .map_or(0, |mods| mods.content_fingerprint()),
             build: oag_net::BUILD_VERSION.to_string(),

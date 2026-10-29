@@ -95,44 +95,7 @@ impl Pending {
         let MenuSource::Mods(mods) = &self.menu_source else {
             return Ok((self.definition.clone(), Vec::new(), Default::default()));
         };
-        let built = mods.build(
-            menu::BUILT_IN,
-            self.settings.language.as_deref(),
-            Some(menu::For { title, updated }),
-        )?;
-        for line in &built.report {
-            log::info!("{line}");
-        }
-        let mut definition = built.definition;
-        let mut listing = built.listing;
-        // Surveyed only when a campaign names another disc: the same survey
-        // Race Remix reads, by title slug.
-        let discs = std::cell::OnceCell::new();
-        let has_disc = |slug: &str| {
-            discs
-                .get_or_init(|| {
-                    oag_game::launcher::distinct_titles(&oag_game::launcher::survey(
-                        &oag_source::source::candidates(),
-                    ))
-                    .iter()
-                    .filter_map(|candidate| match &candidate.state {
-                        oag_game::launcher::State::Playable(title) => Some(title.slug()),
-                        _ => None,
-                    })
-                    .collect::<Vec<_>>()
-                })
-                .iter()
-                .any(|have| have == slug)
-        };
-        let installed =
-            oag_game::campaign::custom::Installed::for_title(mods.player(), title, &has_disc);
-        oag_game::campaign::custom::add_picker(
-            &mut definition,
-            &mut listing,
-            &installed,
-            &strings::project_table(self.settings.language.as_deref()),
-        );
-        Ok((definition, listing, installed))
+        mods_menu(mods, self.settings.language.as_deref(), title, updated)
     }
 
     /// The boot sequence's own options for one source.
@@ -399,47 +362,7 @@ impl Pending {
         // strings - `16_Track` and `Mantis` against their localised names,
         // which are shipped content and only ever live in memory.
         let (mut definition, mods, custom_campaigns) = self.menu_for(title, updated)?;
-        // A no-op on every title but Wipeout Pure and Wipeout Pulse, whose
-        // race defaults declare no variant axis at all - see
-        // `menu::Definition::drop_unavailable_race_variant`.
-        definition.drop_unavailable_race_variant(title);
-        // The BOOST ZOOM row exists where a ring can be borrowed: Pulse and Pure.
-        definition.drop_unavailable_boost_zoom(title);
-        // And the HUD STYLE row, where the disc authors the list: HD and Omega.
-        definition.drop_unavailable_hud_style(title);
-        // And the DYNAMIC HUD row, where the options list it: Pulse.
-        definition.drop_unavailable_dynamic_hud(title);
-        // And the TRAIL ORDER row, where the ribbon is the PSP preset: Pulse and Pure.
-        definition.drop_unavailable_trail_order(title);
-        // And the three rows the race box's own screens pick, on a title
-        // that authors them - see `menu::Definition::drop_rows_picked_on_screen`.
-        definition.drop_rows_picked_on_screen(title);
-        // The campaign row as the title's original words it (`SINGLE PLAYER` on
-        // Pure) - see `menu::Definition::rename_campaign_row`.
-        definition.rename_campaign_row(title, &boot_shell.strings);
-        // And the MULTIPLAYER row where the title's own is worded differently (Pulse's
-        // `MULTIPLAYER & SHARING`) - see `menu::Definition::rename_multiplayer_row`.
-        definition.rename_multiplayer_row(title, &boot_shell.strings);
-        // A phone app is left, not quit - see `menu::Definition::drop_quit`.
-        if oag_mobile::MOBILE {
-            definition.drop_quit();
-        }
-        // A page has no monitor to pick and one present mode, and a desktop
-        // has no canvas: see `settings::web`.
-        if cfg!(target_arch = "wasm32") {
-            definition.drop_settings(&settings::web::HIDDEN_ROWS);
-            definition.drop_settings(&["display.window_size"]);
-            // The browser's words for the two modes.
-            definition.relabel_choice("display.window_mode", "borderless", "FULLSCREEN");
-        } else {
-            definition.drop_settings(&settings::web::WEB_ONLY_ROWS);
-        }
-        // A phone's window is the whole panel: its monitor, mode and size rows have no choice.
-        definition.drop_settings(settings::platform::hidden_rows(oag_mobile::MOBILE));
-        // Only a touchscreen has an overlay to set up.
-        if !oag_game::touch_controls::available() {
-            definition.drop_touch_controls();
-        }
+        finish_definition(&mut definition, title, &boot_shell.strings);
         // Built through `Shell::from_boot` rather than a literal here, so
         // this boot and a live LANGUAGE-row switch
         // (`Session::resupply_language`) read the same `boot::Shell` the
@@ -448,6 +371,10 @@ impl Pending {
         shell.mods = mods;
         shell.custom_campaigns = std::sync::Arc::new(custom_campaigns);
         shell.menu_sfx = Some(menu_sfx);
+        // What the MODS page's switches rebuild the tree from, live: a `--menu` file has
+        // no mods to switch.
+        shell.rebuild = matches!(self.menu_source, MenuSource::Mods(_))
+            .then_some(crate::session::MenuRebuild { updated });
 
         println!("\n{}", hints::menu_keys(&boot_shell.strings));
 
@@ -502,6 +429,7 @@ impl Pending {
 pub(crate) fn definition(
     cli: &Cli,
     language: Option<&str>,
+    disabled: &std::collections::BTreeSet<String>,
 ) -> Result<(menu::Definition, MenuSource)> {
     match cli.menu_args.menu.as_deref() {
         Some(path) => {
@@ -513,11 +441,119 @@ pub(crate) fn definition(
             Ok((tree, MenuSource::Custom))
         }
         None => {
-            let mods = oag_game::mods::Mods::load()?;
+            let mods = oag_game::mods::Mods::load(disabled)?;
             let built = mods
                 .build(menu::BUILT_IN, language, None)
                 .context("building the menu definition")?;
             Ok((built.definition, MenuSource::Mods(Box::new(mods))))
         }
+    }
+}
+
+/// The menu tree for `title` with `mods`' rows, the MODS page's listing and the mod
+/// campaigns and tracks: what a boot builds ([`Pending::menu_for`]) and what a MODS page
+/// switch rebuilds live (`Session::switch_selected_mod`). Logs what each mod did.
+///
+/// # Errors
+///
+/// The vanilla tree or the extras are wrong, which is a build defect.
+pub(crate) fn mods_menu(
+    mods: &oag_game::mods::Mods,
+    language: Option<&str>,
+    title: &'static oag_title::Title,
+    updated: bool,
+) -> Result<(
+    menu::Definition,
+    Vec<oag_game::mods::Listing>,
+    oag_game::campaign::custom::Installed,
+)> {
+    let built = mods.build(
+        menu::BUILT_IN,
+        language,
+        Some(menu::For { title, updated }),
+    )?;
+    for line in &built.report {
+        log::info!("{line}");
+    }
+    let mut definition = built.definition;
+    let mut listing = built.listing;
+    // Surveyed only when a campaign names another disc: the same survey
+    // Race Remix reads, by title slug.
+    let discs = std::cell::OnceCell::new();
+    let has_disc = |slug: &str| {
+        discs
+            .get_or_init(|| {
+                oag_game::launcher::distinct_titles(&oag_game::launcher::survey(
+                    &oag_source::source::candidates(),
+                ))
+                .iter()
+                .filter_map(|candidate| match &candidate.state {
+                    oag_game::launcher::State::Playable(title) => Some(title.slug()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+            })
+            .iter()
+            .any(|have| have == slug)
+    };
+    let installed =
+        mods.installed_for(title, &has_disc);
+    oag_game::campaign::custom::add_picker(
+        &mut definition,
+        &mut listing,
+        &installed,
+        &strings::project_table(language),
+    );
+    Ok((definition, listing, installed))
+}
+
+/// The title's trims of a tree [`mods_menu`] built: rows this title, platform or input
+/// lacks, and the rows its own words rename. Boot and a live rebuild both run it, so a
+/// rebuilt tree has the rows a booted one has.
+pub(crate) fn finish_definition(
+    definition: &mut menu::Definition,
+    title: &'static oag_title::Title,
+    strings: &oag_ui::language::StringTable,
+) {
+    // A no-op on every title but Wipeout Pure and Wipeout Pulse, whose
+    // race defaults declare no variant axis at all - see
+    // `menu::Definition::drop_unavailable_race_variant`.
+    definition.drop_unavailable_race_variant(title);
+    // The BOOST ZOOM row exists where a ring can be borrowed: Pulse and Pure.
+    definition.drop_unavailable_boost_zoom(title);
+    // And the HUD STYLE row, where the disc authors the list: HD and Omega.
+    definition.drop_unavailable_hud_style(title);
+    // And the DYNAMIC HUD row, where the options list it: Pulse.
+    definition.drop_unavailable_dynamic_hud(title);
+    // And the TRAIL ORDER row, where the ribbon is the PSP preset: Pulse and Pure.
+    definition.drop_unavailable_trail_order(title);
+    // And the three rows the race box's own screens pick, on a title
+    // that authors them - see `menu::Definition::drop_rows_picked_on_screen`.
+    definition.drop_rows_picked_on_screen(title);
+    // The campaign row as the title's original words it (`SINGLE PLAYER` on
+    // Pure) - see `menu::Definition::rename_campaign_row`.
+    definition.rename_campaign_row(title, strings);
+    // And the MULTIPLAYER row where the title's own is worded differently (Pulse's
+    // `MULTIPLAYER & SHARING`) - see `menu::Definition::rename_multiplayer_row`.
+    definition.rename_multiplayer_row(title, strings);
+    // A phone app is left, not quit - see `menu::Definition::drop_quit`.
+    if oag_mobile::MOBILE {
+        definition.drop_quit();
+    }
+    // A page has no monitor to pick and one present mode, and a desktop
+    // has no canvas: see `settings::web`.
+    if cfg!(target_arch = "wasm32") {
+        definition.drop_settings(&settings::web::HIDDEN_ROWS);
+        definition.drop_settings(&["display.window_size"]);
+        // The browser's words for the two modes.
+        definition.relabel_choice("display.window_mode", "borderless", "FULLSCREEN");
+    } else {
+        definition.drop_settings(&settings::web::WEB_ONLY_ROWS);
+    }
+    // A phone's window is the whole panel: its monitor, mode and size rows have no choice.
+    definition.drop_settings(settings::platform::hidden_rows(oag_mobile::MOBILE));
+    // Only a touchscreen has an overlay to set up.
+    if !oag_game::touch_controls::available() {
+        definition.drop_touch_controls();
     }
 }

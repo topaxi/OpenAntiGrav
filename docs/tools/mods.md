@@ -129,21 +129,41 @@ QUIT, built into the program, in the same format, carrying the project's own lic
 ## The MODS page
 
 Every title's main menu has a **MODS** row under OPTIONS (added by `oag-extras` like any mod row,
-after RECORDS and before QUIT). It opens a read-only page: one MOD row that steps through the
-list, built-in first, then each mod in search order, then what was left out; and under it the
-lines for the mod the row is on: id, version (marked BUILT IN for `oag-extras`), authors,
-licence (**NO LICENSE STATED** when the manifest has neither `license` nor `license-file`;
-`see <file>` for a `license-file`) and the ids of the rows it added. Values over 22 characters are
-cut with `...`.
+after RECORDS and before QUIT). It opens a page with a **MOD** row that steps through the list,
+built-in first, then each mod in search order, then what was left out; an **ENABLED** row that
+turns the mod MOD is on on or off; and under them the lines for that mod: id, version (marked BUILT
+IN for `oag-extras`), authors, licence (**NO LICENSE STATED** when the manifest has neither
+`license` nor `license-file`; `see <file>` for a `license-file`) and what it added. Values over 22
+characters are cut with `...`. Where the page has no room for every line (Pulse: four under the
+three rows), AUTHORS goes first, then VERSION, then LICENSE (`Listing::table_within`).
+
+**Turning a mod off** ([ADR-0078](../architecture/adr/0078-a-mod-is-turned-off-by-id-live-and-the-built-in-never.md)):
+
+- It is stored by id as `[mods] disabled = ["oag.hillside"]` in the settings file. A mod
+  installed later is on; an id no installed mod has is kept.
+- An off mod adds nothing: no menu rows, no strings, no campaigns, no pilots, no tracks on RACE
+  REMIX's CUSTOM title, and it is left out of the LAN content fingerprint. It stays on the MODS
+  page, its ADDS line reading **NOTHING, TURNED OFF**, so it can be turned back on. The gate is
+  one place, `oag_game::mods::Mods` (`player()` and `build()`).
+- **It applies at once.** The menus are rebuilt as a boot builds them and reopen on the MODS page
+  with BACK leading where it led. A race parked under the menus keeps what it started with.
+- **`oag-extras` cannot be turned off**: it carries OPTIONS, this page's row and QUIT. Its
+  ENABLED row holds one value, **ALWAYS ON**. A candidate that never opened has one dimmed OFF:
+  there is nothing to switch.
+- **A campaign that races a track of a mod that is off or missing is left out whole**, the log
+  names the reason (`mod "oag.hillside" is turned off on the MODS page`), and its mod's entry
+  gains a line: **NEEDS HILLSIDE, OFF**, or **NEEDS &lt;id&gt;, MISSING**. Another campaign that
+  does not compile gets a **LEFT OUT** line naming its file.
 
 A candidate the search left out (a broken zip, a duplicate id, a mod for another game version) and
 a mod whose rows did not fit the menu are listed too, **dimmed, with the error in the note line
 under the rows** and no detail lines: the mechanism a custom track that will not load uses. It
-is the same list the boot load report is written from (`oag_game::mods::Built::listing`). The
-pointer and touch move the MOD row as they move any choice row. A flat-list front end (Pulse,
-Pure, 2048) draws it as a page; HD and Omega reveal MODS below OPTIONS with the pad or pointer.
-There is no enable or disable: a mod is on while it is in the search path. `--menu-page mods`
-draws the page headless, and `--menu-page mods:<mod id>` puts the row on that mod.
+is the same list the boot load report is written from (`oag_game::mods::Built::listing`); a mod
+turned off is a line of its own there. The pointer and touch move both rows as they move any
+choice row. A flat-list front end (Pulse, Pure, 2048) draws it as a page; HD and Omega reveal MODS
+below OPTIONS with the pad or pointer. `--menu-page mods` draws the page headless with the
+profile's switches, and `--menu-page mods:<mod id>` puts the MOD row on that mod. `just mods-list`
+(`oag-mod`) does not read the game's settings and lists every mod it finds.
 
 ## Packaging
 

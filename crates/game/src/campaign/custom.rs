@@ -109,9 +109,11 @@ pub fn mod_track_file(module: &oag_mod::Mod, name: &str) -> Result<TrackFile, St
 
 /// The track file an event's `file` names: `<mod id>:<path>` in another
 /// installed mod, which must be for `slug` as well, or a path in `module`, the
-/// campaign's own. A mod that is not installed refuses the event by name.
+/// campaign's own. A mod that is not installed, or that the player turned off
+/// (`off`, by id), refuses the event by name.
 fn track_file_in(
     mods: &[&oag_mod::Mod],
+    off: &[&str],
     module: &oag_mod::Mod,
     slug: &str,
     name: &str,
@@ -119,6 +121,11 @@ fn track_file_in(
     let Some((mod_id, path)) = name.split_once(':') else {
         return mod_track_file(module, name);
     };
+    if off.contains(&mod_id) {
+        return Err(format!(
+            "file {name:?}: mod {mod_id:?} is turned off on the MODS page"
+        ));
+    }
     let other = mods
         .iter()
         .find(|other| other.manifest.id == mod_id)
@@ -267,8 +274,8 @@ pub struct Launch {
 
 /// RACE CAMPAIGN as a page picking between the disc's campaign and each of
 /// `installed`'s (ADR-0077), and the MODS page's ADDS line naming each. One left
-/// out is offered nowhere and named in the log only. With none the tree is
-/// untouched.
+/// out is offered nowhere, named in the log and in its mod's MODS entry
+/// ([`crate::mods::Listing::problems`]). With none the tree is untouched.
 pub fn add_picker(
     definition: &mut oag_ui::menu::Definition,
     listing: &mut [crate::mods::Listing],
@@ -278,6 +285,7 @@ pub fn add_picker(
     for (mod_id, reason) in &installed.failed {
         log::error!("mod {mod_id}: campaign left out: {reason}");
     }
+    crate::mods::note_left_out(listing, installed, strings);
     for entry in listing.iter_mut() {
         for custom in installed.campaigns.iter().filter(|c| c.mod_id == entry.id) {
             entry.rows.push(format!("campaign {}", custom.name));
@@ -696,6 +704,10 @@ pub struct Installed {
     pub campaigns: Vec<Custom>,
     /// `<mod id> <file>: <reason>` for each campaign left out.
     pub failed: Vec<(String, String)>,
+    /// For a campaign left out because an event races another mod's track: the
+    /// campaign's mod id, the other mod's id, and whether that mod is turned off
+    /// (`true`) rather than not installed. What the MODS page's NEEDS line says.
+    pub needs: Vec<(String, String, bool)>,
     /// Every `tracks/*.track.toml` of a folder mod for this title, raced from
     /// RACE REMIX's CUSTOM title as well as from a campaign.
     pub tracks: Vec<std::path::PathBuf>,
@@ -705,12 +717,16 @@ impl Installed {
     /// Reads and compiles every campaign the mods carry for `title`: a mod or
     /// campaign whose `titles` leave this title out is skipped quietly, a broken
     /// one, or one with an event on a disc `has_disc` (by title slug) says this
-    /// machine cannot open, is named in [`Self::failed`] and offered nowhere.
+    /// machine cannot open, is named in [`Self::failed`] and offered nowhere. So is
+    /// one racing a track of a mod in `off` (turned off by the player:
+    /// [`crate::mods::Mods::disabled`]), whose reason says so rather than "not
+    /// installed". `mods` is the mods that are on ([`crate::mods::Mods::player`]).
     /// Empty on a title whose campaign does not draw the hex grid
     /// ([`oag_title::Campaign::custom_campaigns`]).
     #[must_use]
     pub fn for_title<'a>(
         mods: impl IntoIterator<Item = &'a oag_mod::Mod>,
+        off: &[&str],
         title: &'static oag_title::Title,
         has_disc: &dyn Fn(&str) -> bool,
     ) -> Self {
@@ -742,13 +758,22 @@ impl Installed {
                     .push((module.manifest.id.clone(), format!("{file}: {reason}")));
             }
             for found in module.campaigns() {
+                let needed = std::cell::RefCell::new(None);
                 let compiled = found.def.and_then(|def| {
                     let titles = &def.campaign.titles;
                     if !titles.is_empty() && !titles.iter().any(|t| t.eq_ignore_ascii_case(&slug)) {
                         return Ok(None);
                     }
                     let custom = compile(&def, &found.mod_id, title, &pilots, &|name| {
-                        track_file_in(&mods, module, &slug, name)
+                        let found = track_file_in(&mods, off, module, &slug, name);
+                        if found.is_err()
+                            && let Some((other, _)) = name.split_once(':')
+                            && (off.contains(&other)
+                                || !mods.iter().any(|m| m.manifest.id == other))
+                        {
+                            *needed.borrow_mut() = Some((other.to_string(), off.contains(&other)));
+                        }
+                        found
                     })?;
                     if let Some(missing) = custom.other_discs(title).find(|slug| !has_disc(slug)) {
                         return Err(format!(
@@ -761,9 +786,14 @@ impl Installed {
                 match compiled {
                     Ok(Some(custom)) => installed.campaigns.push(custom),
                     Ok(None) => {}
-                    Err(reason) => installed
-                        .failed
-                        .push((found.mod_id.clone(), format!("{}: {reason}", found.file))),
+                    Err(reason) => {
+                        if let Some((other, is_off)) = needed.into_inner() {
+                            installed.needs.push((found.mod_id.clone(), other, is_off));
+                        }
+                        installed
+                            .failed
+                            .push((found.mod_id.clone(), format!("{}: {reason}", found.file)));
+                    }
                 }
             }
         }

@@ -324,6 +324,16 @@ ids = [
     "OAG_MODS_LICENSE_FILE",
     "OAG_MODS_NOTHING",
     "OAG_MODS_BUILT_IN",
+    "OAG_MODS_ENABLED",
+    "OAG_MODS_ON",
+    "OAG_MODS_OFF",
+    "OAG_MODS_TURNED_OFF",
+    "OAG_MODS_ALWAYS_ON",
+    "OAG_MODS_NOT_LOADED",
+    "OAG_MODS_LEFT_OUT",
+    "OAG_MODS_NEEDS",
+    "OAG_MODS_NEEDS_OFF",
+    "OAG_MODS_NEEDS_MISSING",
     # BLUR RESOLUTION, new 2026-10-03 with the half-resolution blur; no
     # translation pass yet.
     "OAG_GRAPHICS_MOTION_BLUR_RESOLUTION",

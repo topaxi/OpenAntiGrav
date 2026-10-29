@@ -210,9 +210,8 @@ pub(super) fn campaign_page(
     // `Session::open_campaign` does live.
     let custom = match &page.custom {
         Some(key) => {
-            let mods = crate::mods::Mods::load()?;
-            let installed =
-                crate::campaign::custom::Installed::for_title(mods.player(), title, &|_| true);
+            let mods = crate::mods::Mods::load_for_profile()?;
+            let installed = mods.installed_for(title, &|_| true);
             for (mod_id, reason) in &installed.failed {
                 log::error!("mod {mod_id}: campaign left out: {reason}");
             }

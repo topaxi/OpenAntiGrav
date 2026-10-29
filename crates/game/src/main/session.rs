@@ -54,6 +54,8 @@ mod load_probe;
 mod menu_sound;
 #[path = "session/music.rs"]
 mod music;
+#[path = "session/mods_page.rs"]
+mod mods_page;
 pub(crate) use load_probe::LoadProbe;
 #[path = "session/menus.rs"]
 pub(crate) mod menus;
@@ -824,6 +826,14 @@ pub(crate) struct BackdropShape {
     rect: [f32; 4],
 }
 
+/// What the boot knew that a live rebuild of the mods' menu tree needs again
+/// (`crate::prepare::mods_menu`); the title and strings are the shell's own.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct MenuRebuild {
+    /// Whether the title's update is mounted: 2048's main menu grows two tiles with it.
+    pub(crate) updated: bool,
+}
+
 /// The race options a mod campaign event replaces: a cross-disc event's
 /// sources, an event's AI level.
 pub(crate) struct CampaignHome {
@@ -846,6 +856,9 @@ pub(crate) struct Shell {
     /// The mod campaigns this title can play, compiled with
     /// [`Self::definition`]'s campaign picker.
     pub(crate) custom_campaigns: std::sync::Arc<oag_game::campaign::custom::Installed>,
+    /// What a MODS page switch rebuilds [`Self::definition`], [`Self::mods`] and
+    /// [`Self::custom_campaigns`] from; `None` for a `--menu` file, which has no mods.
+    pub(crate) rebuild: Option<MenuRebuild>,
     /// The front end's navigation sounds, decoded at boot from the title's
     /// front-end bank. `None` where the boot never read one; a title without
     /// the bank holds an empty [`oag_sound::sfx::MenuSfx`] and plays nothing.
@@ -1013,6 +1026,7 @@ impl Shell {
             definition,
             mods: Vec::new(),
             custom_campaigns: std::sync::Arc::default(),
+            rebuild: None,
             menu_sfx: None,
             title,
             platform: boot_shell.platform,

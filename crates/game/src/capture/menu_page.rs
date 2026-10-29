@@ -137,7 +137,7 @@ pub(super) fn menu_page(
         Some((page, row)) => (page, Some(row)),
         None => (page, None),
     };
-    let loaded = crate::mods::Mods::load()?;
+    let loaded = crate::mods::Mods::load(&settings.mods.disabled)?;
     let built = loaded
         .build_with_strings(
             oag_ui::menu::BUILT_IN,
@@ -160,8 +160,7 @@ pub(super) fn menu_page(
     definition.rename_multiplayer_row(title, strings);
     // A mod campaign's picker, as `crate::prepare` adds it; a cross-disc one
     // is kept here, since a still never races it.
-    let installed =
-        crate::campaign::custom::Installed::for_title(loaded.player(), title, &|_| true);
+    let installed = loaded.installed_for(title, &|_| true);
     crate::campaign::custom::add_picker(&mut definition, &mut mods, &installed, strings);
     if definition.page(page).is_none() {
         anyhow::bail!(
@@ -368,6 +367,8 @@ pub(super) fn menu_page(
     {
         anyhow::bail!("page {page:?} has no row with id {row:?}");
     }
+    // The ENABLED row for whichever mod the MOD row now holds, as the live page has it.
+    crate::mods::resupply_switch(&mut model, &mods, strings);
     // A still shows the page at rest, not the tick it arrived on - see
     // `Menu::settle` for what the arrival tick would otherwise draw.
     model.settle();

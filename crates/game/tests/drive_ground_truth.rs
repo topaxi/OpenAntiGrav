@@ -214,3 +214,112 @@ fn a_row_that_does_not_exist_and_a_wait_that_never_ends_fail_with_the_state() {
         "{why}"
     );
 }
+
+/// The labels of the remix TRACK row in every state that shows it, in order.
+fn remix_tracks(run: &Run) -> Vec<Vec<String>> {
+    let mut seen: Vec<Vec<String>> = Vec::new();
+    for state in &run.states {
+        let rows = state.pointer("/screen/rows").and_then(Value::as_array);
+        let Some(track) = rows.and_then(|rows| {
+            rows.iter()
+                .find(|row| row.get("setting").and_then(Value::as_str) == Some("remix.track"))
+        }) else {
+            continue;
+        };
+        let labels: Vec<String> = (track.get("values").and_then(Value::as_array))
+            .into_iter()
+            .flatten()
+            .filter_map(|value| value.get("label").and_then(Value::as_str))
+            .map(str::to_string)
+            .collect();
+        if seen.last() != Some(&labels) {
+            seen.push(labels);
+        }
+    }
+    seen
+}
+
+/// What RACE CAMPAIGN is on the main page, in order: `submenu` while a mod campaign puts
+/// the picker behind it, `action` (the disc's campaign) with none.
+fn campaign_row_kinds(run: &Run) -> Vec<String> {
+    let mut seen: Vec<String> = Vec::new();
+    for state in run
+        .states
+        .iter()
+        .filter(|s| text(s, &["page"]) == Some("main"))
+    {
+        let rows = state.pointer("/screen/rows").and_then(Value::as_array);
+        let kind = rows
+            .and_then(|rows| {
+                rows.iter()
+                    .find(|row| row.get("id").and_then(Value::as_str) == Some("campaign"))
+            })
+            .and_then(|row| row.get("kind").and_then(Value::as_str));
+        if let Some(kind) = kind
+            && seen.last().map(String::as_str) != Some(kind)
+        {
+            seen.push(kind.to_string());
+        }
+    }
+    seen
+}
+
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_mods_page_turns_a_mod_off_and_on_and_what_it_adds_goes_and_comes_back_live() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let examples = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/mods/examples");
+    if !examples.join("hillside/oag-mod.toml").is_file() {
+        eprintln!("skipped: the mod-examples submodule is not checked out");
+        return;
+    }
+    // Hillside is a track-only mod; NIGHT RUN (example-campaign) races its track.
+    let run = drive(
+        &image,
+        "mods-switch",
+        "boot; select remix; press cross; until page=remix; \
+         set remix.track_title=CUSTOM; ticks 120; press circle; until page=main; \
+         select mods; press cross; until page=mods; \
+         set mods.selected=oag.hillside; set mods.enabled=off; expect page=mods; \
+         press circle; until page=main; \
+         select remix; press cross; until page=remix; ticks 60; press circle; until page=main; \
+         select mods; press cross; until page=mods; \
+         set mods.selected=oag.hillside; set mods.enabled=on; \
+         press circle; until page=main; ticks 5",
+        None,
+    );
+    assert!(run.output.status.success(), "{}", run.stderr());
+    let tracks = remix_tracks(&run);
+    let has = |labels: &[String], name: &str| labels.iter().any(|l| l.contains(name));
+    let custom: Vec<&Vec<String>> = tracks.iter().filter(|labels| has(labels, "OCTA")).collect();
+    assert!(
+        custom.first().is_some_and(|l| has(l, "HILLSIDE")),
+        "CUSTOM lists Hillside's track while it is on: {tracks:?}"
+    );
+    assert!(
+        custom.last().is_some_and(|l| !has(l, "HILLSIDE")),
+        "and not once it is off, the campaign's own track kept: {tracks:?}"
+    );
+    assert_eq!(
+        campaign_row_kinds(&run),
+        ["submenu", "action", "submenu"],
+        "NIGHT RUN's picker goes with Hillside off (its event races Hillside) and comes back"
+    );
+    let why = run.stderr();
+    assert!(
+        why.contains("\"oag.hillside\" is turned off on the MODS page"),
+        "the campaign is refused by name, saying why: {why}"
+    );
+    let saved = std::fs::read_to_string(
+        Path::new(env!("CARGO_TARGET_TMPDIR")).join("drive-mods-switch/config/oag/settings.toml"),
+    )
+    .expect("the run saved its settings");
+    let saved: toml::Table = saved.parse().unwrap();
+    assert_eq!(
+        saved["mods"]["disabled"].as_array().map(Vec::len),
+        Some(0),
+        "turned back on, nothing is left off"
+    );
+}

@@ -280,7 +280,7 @@ OAG_MEDAL_GOLD = { text = "OURO", human = false }
 OAG_MEDAL_SILVER = { text = "PRATA", human = false }
 OAG_MEDAL_BRONZE = { text = "BRONZE", human = false }
 OAG_MENU_MODS = { text = "MODS", human = false }
-OAG_MENU_MODS_SUBTITLE = { text = "Os mods carregados: quem os fez, a licença e as linhas que adicionam", human = false }
+OAG_MENU_MODS_SUBTITLE = { text = "Ligue ou desligue cada mod; quem o fez, a licença e o que adiciona", human = false }
 OAG_MODS_PAGE_TITLE = { text = "MODS", human = false }
 OAG_MODS_ROW = { text = "MOD", human = false }
 OAG_MODS_ID = { text = "ID", human = false }
@@ -292,6 +292,16 @@ OAG_MODS_NO_LICENSE = { text = "SEM LICENÇA INFORMADA", human = false }
 OAG_MODS_LICENSE_FILE = { text = "VEJA %s", human = false }
 OAG_MODS_NOTHING = { text = "NADA", human = false }
 OAG_MODS_BUILT_IN = { text = "INTEGRADO", human = false }
+OAG_MODS_ENABLED = { text = "ATIVADO", human = false }
+OAG_MODS_ON = { text = "LIGADO", human = false }
+OAG_MODS_OFF = { text = "DESLIGADO", human = false }
+OAG_MODS_TURNED_OFF = { text = "NADA, DESLIGADO", human = false }
+OAG_MODS_ALWAYS_ON = { text = "SEMPRE LIGADO", human = false }
+OAG_MODS_NOT_LOADED = { text = "NÃO CARREGOU: NADA A ALTERNAR", human = false }
+OAG_MODS_LEFT_OUT = { text = "DEIXADO DE FORA", human = false }
+OAG_MODS_NEEDS = { text = "PRECISA DE", human = false }
+OAG_MODS_NEEDS_OFF = { text = "%s, DESLIGADO", human = false }
+OAG_MODS_NEEDS_MISSING = { text = "%s, AUSENTE", human = false }
 OAG_PAUSE_OWNED = { text = "JOGADOR %s PAUSOU - QUALQUER UM PODE RETOMAR EM %s", human = false }
 OAG_PAUSE_OPEN = { text = "JOGADOR %s PAUSOU - QUALQUER UM PODE RETOMAR", human = false }
 OAG_PAUSE_OPEN_UNOWNED = { text = "PAUSADO - QUALQUER UM PODE RETOMAR", human = false }

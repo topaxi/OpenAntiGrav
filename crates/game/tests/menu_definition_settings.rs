@@ -888,9 +888,12 @@ fn every_settings_row_is_one_the_game_seeds() {
                 continue;
             };
             // The web's own rows are dropped on a desktop and seeded only there.
-            // The MODS page's one row only says which mod the detail lines are about.
+            // The MODS page's MOD row only says which mod the rows under it are about, and
+            // its ENABLED row is seeded from `[mods] disabled` for that mod
+            // (`oag_game::mods::resupply_switch`), not from a key of its own.
             if PILOT_EDITOR_ROWS.contains(&setting)
                 || setting == oag_game::mods::SELECTED
+                || setting == oag_game::mods::ENABLED
                 || oag_game::settings::web::WEB_ONLY_ROWS.contains(&setting)
             {
                 continue;

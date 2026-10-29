@@ -166,7 +166,7 @@ impl Session {
 
     /// This machine as discovery's compatibility check sees it.
     fn lan_facts(&self) -> LanFacts {
-        let mods = oag_game::mods::Mods::load().ok();
+        let mods = oag_game::mods::Mods::load(&self.settings.mods.disabled).ok();
         LanFacts {
             title: self.shell.as_ref().map_or("", |s| s.title.name).to_string(),
             platform: self
