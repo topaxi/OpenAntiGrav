@@ -67,7 +67,7 @@ pub extern "C" fn oag_io() -> u32 {
     io() as u32
 }
 
-/// `pad.enter`: one more pad crossed, five percent more top speed, capped.
+/// On a `pad-crossed` event: one more pad crossed, five percent more top speed, capped.
 #[unsafe(no_mangle)]
 pub extern "C" fn on_pad_enter() -> u32 {
     put_u32(BLOB_PADS, get_u32(BLOB_PADS) + 1);
@@ -87,7 +87,7 @@ fn tick_scale() -> f32 {
     s * (1.0 - 0.01 * drag * drag) + accum.sqrt() * 0.001
 }
 
-/// `craft.environment`: the top-speed scale this tick.
+/// The `tick` call: the top-speed scale this tick (a `scale-thrust` in miniature).
 #[unsafe(no_mangle)]
 pub extern "C" fn on_tick() -> u32 {
     put_f32(OUT_SCALE, tick_scale());

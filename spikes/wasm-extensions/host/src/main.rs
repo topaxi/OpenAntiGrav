@@ -234,7 +234,7 @@ fn integrate(toy: &mut Toy, throttle: f32, scale: f32) {
 }
 
 /// The toy tick: input from the seeded generator, the guest's
-/// `craft.environment` scale, a pad edge calling `pad.enter`. `f32` only, no
+/// scale, a pad edge calling `on_pad_enter` (a `pad-crossed` event in miniature). `f32` only, no
 /// fused multiply-add.
 fn tick(toy: &mut Toy, guest: &mut Guest) -> Result<()> {
     if guest.lifetime == Lifetime::PerTick {

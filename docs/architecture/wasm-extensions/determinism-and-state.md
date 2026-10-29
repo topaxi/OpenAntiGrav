@@ -54,7 +54,7 @@ exhaustion (fuel, stack, memory), and anything imported.
     platform, it makes the three engines run the same module; wasmtime's own switch
     stays on as a second line. Not built; it needs the conformance test below.
   - **Outputs are checked regardless.** A NaN in any command field is a fault
-    ([hooks.md](hooks.md#the-shape-every-hook-shares)), never forwarded.
+    ([hooks.md](hooks.md#the-shape-one-call-per-tick-events-in-commands-out)), never forwarded.
 - **SIMD.** `relaxed_simd` is refused at load (its results are
   implementation-defined by design; it includes a fused multiply-add). Plain
   `simd128` is deterministic except NaN bits, which the canonicalisation also covers
@@ -67,7 +67,7 @@ A guest is bounded by **fuel**, never by wall time: a timeout would fire at a
 different instruction on a faster machine. wasmtime's `Config::consume_fuel(true)`
 counts WebAssembly operations; the host sets a budget before each call
 (`Store::set_fuel`) and an exhausted budget traps `OutOfFuel`, which faults the mod
-deterministically ([hooks.md](hooks.md#the-shape-every-hook-shares)).
+deterministically ([hooks.md](hooks.md#the-shape-one-call-per-tick-events-in-commands-out)).
 
 Measured in the spike:
 
@@ -120,9 +120,9 @@ Two more exhaustion cases:
   spike's guest imports exactly `oag.rng_next`.
 - **Randomness comes from the host.** The guest has no generator of its own and no
   entropy. `oag.rng_next` returns the next value of a host `oag_core::Rng`
-  (`crates/core/src/rng.rs:28`, xoshiro128**, 16 bytes of state). **Proposal: one
-  stream per mod**, seeded from the world seed and the mod's id and stored beside the
-  mod's blob, so a mod drawing numbers never shifts the game's own stream
+  (`crates/core/src/rng.rs:28`, xoshiro128**, 16 bytes of state). **One stream per
+  module** (README: a child stream seeded from the race seed and the module's load
+  index; the load order is fixed by mod id), stored beside the module's blob, so a mod drawing numbers never shifts the game's own stream
   (`World::rng`, `crates/gameplay/src/world.rs:309`), which AI and weapon rolls read.
   (The spike shared its one toy stream; that is enough to show the draws are
   deterministic, not to show the separation.)
@@ -153,11 +153,14 @@ arrays, so a snapshot is one copy. A mod's state follows that rule:
   | --- | --- | --- |
   | One for the race | **No**, unless the guest is stateless | 0.36 / 1.2 us a call |
   | Fresh per call | Yes | 9.5 / 9.8 us a call; 4.2 / 5.2 us pooled |
-  | **Fresh per tick, pooled, every call that tick on it** | **Yes**: at a tick boundary the guest's memory is always the module's initial image | **11.4 / 27.3 us a tick for 20 calls** |
+  | **Fresh per tick, pooled, every call that tick on it** | **Yes**: at a tick boundary the guest's memory is always the module's initial image | **4.2 / 5.2 us a tick for the one `tick` call**; 11.4 / 27.3 us for 20 calls |
 
-  **Recommended: one pooled instance per mod per tick** (wasmtime's pooling
-  allocator resets memory copy-on-write). A guest may keep scratch state within a
-  tick; what crosses a tick boundary is the blob alone. The alternative, snapshotting
+  **Recommended: one pooled instance per module per tick** (wasmtime's pooling
+  allocator resets memory copy-on-write). With the README's ABI, one `tick` call per
+  module per tick ([hooks.md](hooks.md#the-shape-one-call-per-tick-events-in-commands-out)),
+  that is a fresh pooled instance per call. What crosses a tick boundary is the
+  declared state blob alone, passed in with the observation and returned with the
+  commands; the between-races save blob (README) is a separate thing. The alternative, snapshotting
   each guest's whole linear memory with `RaceSim`, also works but makes a snapshot
   cost scale with guest memory (a Rust guest's default is 1 MiB of stack alone), and
   must also capture non-exported mutable globals, which wasmtime does not expose.
@@ -184,10 +187,12 @@ A mod's code is part of what re-simulates, so a replay must name it:
 - **Today the header has no mod field** (`oag_replay::Header`,
   `crates/replay/src/header.rs:20`); `options` is an opaque string map for the
   composition root and `build` is informational, never compared.
-- **Proposal: a `mods` list in the header**: each simulation mod's id, version,
-  the SHA-256 of its module bytes, and its blob layout version. Playback refuses a
-  replay whose modules are not present with those exact hashes, by name. Nothing is
-  released, so this edits format v1 in place rather than adding a v2.
+- **Proposal (agreed with the README): a `mods` key in `Header::options`**
+  (`header.rs:58`), listing each simulation module's mod id, version and the SHA-256
+  of its bytes. `options` is opaque to `oag-replay`, so the composition root writes
+  it and refuses playback, by name, unless the identical modules are installed and
+  on; the stored hashes still decide validity. Nothing is released, so format v1 is
+  edited in place if a dedicated field is wanted later.
 - **The phases decided on 2026-10-12** come first: in phase 2 a session with a
   simulation mod is **modded** and records no replays or ghosts at all; the header
   field is phase 3, once the conformance test below holds.
@@ -216,13 +221,19 @@ through a lobby is never auto-run").
   and measured corrections replay 7 to 11 ticks
   ([networking](../../networking/README.md), "Replay cost on this machine"). A race
   tick costs about 60 us sim-only on the desktop that measured it. With the
-  recommended per-tick instance and 20 guest calls a tick:
+  recommended per-tick instance, one `tick` call per module, and **three simulation
+  modules** (a craft, a track and a rules mod; 3 x 4.2 us on Cranelift, 3 x 5.2 us on
+  Pulley, a light guest):
 
-  | | Vanilla | + mods, Cranelift | + mods, Pulley |
+  | | Vanilla | + 3 modules, Cranelift | + 3 modules, Pulley |
   | --- | --- | --- | --- |
-  | One tick | 60 us | 71 us (+19 %) | 87 us (+45 %) |
-  | A typical correction, 11 ticks | 0.66 ms | 0.79 ms | 0.96 ms |
-  | The worst case, 30 ticks | 1.8 ms | 2.1 ms | 2.6 ms |
+  | One tick | 60 us | 73 us (+21 %) | 76 us (+26 %) |
+  | A typical correction, 11 ticks | 0.66 ms | 0.80 ms | 0.83 ms |
+  | The worst case, 30 ticks | 1.8 ms | 2.2 ms | 2.3 ms |
+
+  The guest's own work is on top: the spike's guest is a few hundred operations a
+  call, and a heavy module (a controller reading every craft) runs 3.4 times slower
+  on Pulley than on Cranelift (the persistent-instance row).
 
   Desktop numbers from two different runs on one shared machine, so an estimate,
   not a measurement of the combination. A phone is slower on both sides; the S24
@@ -237,29 +248,32 @@ through a lobby is never auto-run").
   `Rng`). It does no float arithmetic of its own beyond range checks, and it joins
   `check-transcendentals`' scanned crates (`scripts/check-transcendentals.py`,
   `SCANNED_CRATES`), which today do not include `oag-raceplay`.
-- **The simulation hooks are called from `oag-raceplay`'s simulation half**, where
-  `Race::tick` lives. No `GAMEPLAY_CRATES` member
+- **The simulation call (and its event buffer and command sinks) is in
+  `oag-raceplay`'s simulation half**, where `Race::tick` lives. No `GAMEPLAY_CRATES` member
   (`scripts/check-dependency-rules.py`) depends on the host: `oag-physics`,
   `oag-race`, `oag-weapons` and `oag-ai` see only plain data (`Environment` fields,
-  rules, a `Controller` trait), which keeps their determinism scan and their wasm32
+  rules), which keeps their determinism scan and their wasm32
   test run (`just test-wasm`) meaningful.
-- **The HUD host is render side**: `hud.widget` runs in `oag-game`'s HUD overlay,
-  with the same crate configured without fuel-based determinism needs (phase 1).
-- **`oag-server` links the host and no renderer** (rule 6): the host depends on
-  nothing that draws.
-- **Behind a cargo feature.** wasmtime with Cranelift adds about 11.3 MB to a
-  binary (spike, below). The web build never links wasmtime.
+- **The HUD host is render side**: the `hud` world runs in `oag-game`'s HUD overlay,
+  through the same crate (phase 1).
+- **`oag-server` links the host and no renderer** (rule 6), from phase 3, when the
+  lobby carries module hashes: the host depends on nothing that draws.
+- **Behind a cargo feature** (the README's `extensions`). wasmtime with Cranelift
+  adds about 11.3 MB to a binary (spike, below).
 
 ## Web and iOS
 
-- **Web.** The game itself is a wasm32 module in the browser (`docs/tools/web.md`).
-  A mod's module is compiled through the browser's own `WebAssembly` API from our
-  Rust via JS glue, asynchronously at race load, never per tick; per-tick calls
-  copy the observation into the module's memory, as on native. The browser has
-  neither NaN canonicalisation nor fuel, which is why both move into a load-time
-  rewrite of the module (above). The component model does not run natively in
-  browsers, so the ABI is core WebAssembly: an I/O buffer and a few exports, as the
-  spike's guest is.
+- **Web: open (the README's open question 1).** The game itself is a wasm32 module
+  in the browser (`docs/tools/web.md`). Either (a) wasmtime built for `wasm32` with
+  Pulley as its only backend, the guest interpreted inside our module: one host, one
+  proof, wasmtime's NaN canonicalisation and fuel included, if wasmtime builds for
+  that target (not checked); or (b) the browser's own `WebAssembly`, compiled
+  asynchronously at race load, never per tick: faster, but the browser has neither
+  NaN canonicalisation nor fuel, so both move into a load-time rewrite of the module
+  (above), and the component model the README sketches does not run natively in a
+  browser (a guest component would be transpiled to a core module first). The spike
+  used a core-WebAssembly I/O buffer, which runs on all three; it does not decide
+  the interface language.
 - **iOS.** No executable memory, so no Cranelift-to-native. Two options:
   - **Cranelift compiling to Pulley bytecode on the device** (no native code is
     generated, which is what the spike's Pulley runs did on x86): one code path,
@@ -299,8 +313,9 @@ directory; its README carries the raw output.
 1,000-unit loop, four speed pads, throttle from `oag_core::Rng` seed 42, 36,000 ticks
 = ten minutes at 60 Hz), hashed with `oag_core::StateHasher`. The guest is "+5 % top
 speed per speed pad crossed, capped at +50 %", 1,654 bytes, compiled from Rust for
-`wasm32-unknown-unknown`, core WebAssembly only: `pad.enter` and `craft.environment`
-in miniature, with a 64-byte host-owned blob. Engine: wasmtime **50.0.0**
+`wasm32-unknown-unknown`, core WebAssembly only: a `pad-crossed` event and a
+`scale-thrust` command in miniature (the spike calls the pad edge as an export of its
+own, the same tick), with a 64-byte host-owned blob. Engine: wasmtime **50.0.0**
 (cranelift-codegen 0.137.0, pulley-interpreter 50.0.0), licence **Apache-2.0 WITH
 LLVM-exception** (read from the crate's own `Cargo.toml`), with fuel on, NaN
 canonicalisation on, SIMD and relaxed SIMD off, no `threads` feature, no WASI.
