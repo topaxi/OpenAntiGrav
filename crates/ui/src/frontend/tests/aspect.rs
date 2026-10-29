@@ -62,9 +62,16 @@ fn the_display_aspect_undoes_the_anamorphic_stretch() {
     let (sx, sy) = Space::PS2.texture_scale();
     // A texel square, drawn `sx` by `sy` grid units, shown as `display_aspect`.
     let on_screen = (sx / sy) * Space::PS2.display_aspect * Space::PS2.size.1 / Space::PS2.size.0;
+    // The console outputs 16:9, so the art is 0.74 % wide of undistorted (480/272).
     assert!(
-        (on_screen - 1.0).abs() < 1e-5,
+        (on_screen - (16.0 / 9.0) / (480.0 / 272.0)).abs() < 1e-5,
         "a square comes out {on_screen} times as wide as it is tall"
+    );
+    assert!(on_screen - 1.0 < 0.0075, "{on_screen}");
+    assert_eq!(
+        Space::PS2.display_aspect,
+        16.0 / 9.0,
+        "PCSX2's 16:9 frame has the 640-column frame flush to both sides; a 480/272 pillar was 4 px at 1280"
     );
     // And 4:3, which is what this used to carry, is where the squash was.
     let squashed = (sx / sy) * (4.0 / 3.0) * Space::PS2.size.1 / Space::PS2.size.0;
