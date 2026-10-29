@@ -94,15 +94,15 @@ Selection and Cell Selection (the footer reads `AI difficulty (Medium)` on both 
 Pure shows no difficulty control). No renderer or UI code changed. Ranked by the share of pixels that differ by more than 40 grey:
 
 **Pulse**
-1. **Track Select** (16.2 %, unchanged): the list now matches (`1/3`; the 11 were eight maintainer DLC circuits, fixed 2026-10-29 by an empty `$OAG_DLC` in the pair run), the photo cards show another view, distance `5094` against `5178`, empty records `-` against `-.--.--`.
-2. **Ship Select** (7.1 %): the hull's livery and size (the original's blue-white Assegai, large and tilted; ours dark and smaller), `1/8` on both sides since 2026-10-29 (it was
+1. **Track Select** (16.2 %, 14.6 % re-made 2026-10-29): the list now matches (`1/3`; the 11 were eight maintainer DLC circuits, fixed 2026-10-29 by an empty `$OAG_DLC` in the pair run), the photo cards show another view, distance `5094` against `5178`, empty records `-` against `-.--.--`.
+2. **Ship Select** (7.1 %, 7.0 % re-made): the hull's livery and size (the original's blue-white Assegai, large and tilted; ours dark and smaller), `1/8` on both sides since 2026-10-29 (it was
    `1/12`: four DLC teams).
 3. **Title** (2.6 %, `--until "Show Logo" --press cross --ticks 200`; the `--screen` route lacks the ray backdrop and reads 6.0 %): the
    wide `PRESS START BUTTON` and legal-line type face is small mixed case in ours; the rays are at another phase.
 4. **Grid Selection, Cell Selection** (2.1 %, 1.8 %): the cursor hex glow and the scrolling footer ticker (empty at tick 0).
 
 **Pure**
-1. **Team Selection** (8.6 %, 7.6 % re-made 2026-10-29): eight teams on both sides now; open: the original's large type, the hull outline's angle, crowded stat labels.
+1. **Team Selection** (8.6 %, 7.5 % re-made 2026-10-29): eight teams on both sides now; open: the original's large type, the hull outline's angle, crowded stat labels.
 2. **Track Selection** (5.5 %): the `SINGLE RACE - VENOM - ALPHA` context line (chosen), record format `0.00.00` against `0'00"00`, `m` unit case.
 3. **Every chain screen** (2.4 to 3.4 %): the context line (ours' chosen stand-in; Class, League, Tournament Selection), the description
    line is drawn settled since 2026-10-29 (the original types it in and its frame holds a prefix, so the share rose 0.8-1.6 points; its type-in rate is
