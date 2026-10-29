@@ -33,6 +33,8 @@ mod damage_fx;
 mod destroy_camera;
 mod eliminator;
 mod energy_bar_delay;
+#[cfg(feature = "extensions")]
+mod extension_examples;
 mod extensions;
 mod field;
 mod hash;

@@ -27,7 +27,7 @@ compiled and a race offered a module names it as left out in its load report.
 | Piece | Where | What it is |
 | --- | --- | --- |
 | The host | `crates/modhost` | Section 4.1's configuration minus Pulley and the load-time rewrite (desktop Cranelift only); one process-wide `Engine`, built at the first compile and counted (`engines_created`); a fresh pooled instance per tick; fuel per tick `FUEL_PER_TICK` = 200,000, **chosen**; a trap or a refused reply is a `Fault` |
-| The ABI | `oag_modhost::abi` | Core wasm: exports `memory`, `oag_abi` (1), `oag_io` (a 4,096-byte buffer), `tick`; **no imports at all** (the `oag` namespace is empty in ABI 1, so `rng-next` and `log` are not offered yet). The buffer's fixed little-endian layout is on that module's page; it carries the README's records only as far as Kiss Curse needs: the tick, the active-slot mask, the events, the blob, the reply |
+| The ABI | `crates/ext-abi` (`oag_ext_abi`) | Core wasm: exports `memory`, `oag_abi` (the major and the layout revision, below), `oag_io` (a 4,096-byte buffer), `tick`, optionally `oag_state_len`; **no imports at all** (the `oag` namespace is empty in ABI 1, so `rng-next` and `log` are not offered yet). The buffer's fixed little-endian layout is on that crate's page, the one definition the host and the guest SDK both compile against (it moved out of `oag-modhost` with the SDK, below); it carries the README's records only as far as the examples need: the tick, the active-slot mask, the events, the blob, the reply, the craft records |
 | Event | `wall-contact{slot}` | Raised in `Race::count_wall_contact` for a person's craft and an AI craft alike, **on every tick the craft touches a wall** (`contacts > floor_contacts`, the test `wall_contact_ticks` counts), at most once per craft per tick; delivered the next tick (the one-tick latency) |
 | Command | `scale-thrust{slot, factor}` | No `ticks` field and no host timer: the guest re-sends it each tick it wants it. `factor` finite and in `[0, 1]` for Kiss Curse (`[0, 2]` since Energy Turbo, below); anything else, a slot with no craft, or two for one slot is a fault, never a clamp. Below 1.0 **multiplied** into `Ship::pending_thrust_scale`, so a Leach Beam drain armed the tick before is kept |
 | Kind | `[extension.rules]` in `oag-mod.toml` | A rules module, because section 2.1 lets a rules module touch any slot and a craft module only slots flying its hull: a curse on every craft would otherwise be one craft row per team. Section 1.1 names a rules module from a mode file; `modes/*.toml` does not exist yet, so until it does a mod's rules module runs in every race the mod is on for, on its titles, **except the original campaigns** (section 1.2) **and network races** (the host's race runs vanilla until phase 3; the lobby's fingerprint leaves the repository's examples out) |
@@ -62,14 +62,14 @@ added to the engine and the ABI, each its own commit with the vanilla fold uncha
 
 | Piece | Kind | What it is |
 | --- | --- | --- |
-| Craft records | observation | One 16-byte record per slot (`oag_modhost::abi::Craft`): the held pickup (its place in `Weapon::ALL` plus one, 255 for the mod's own), flags (person-flown, fire button held, racing past GO), shield, its maximum, speed. Copies; the held input is the `InputSnapshot` the tick already has |
+| Craft records | observation | One 16-byte record per slot (`oag_ext_abi::Craft`): the held pickup (its place in `Weapon::ALL` plus one, 255 for the mod's own), flags (person-flown, fire button held, racing past GO), shield, its maximum, speed. Copies; the held input is the `InputSnapshot` the tick already has |
 | `scale-thrust` up to 2.0 | command | Above 1.0 through a new `Environment::extension_thrust` (`oag-physics`, applied to the engine's thrust after the Leach Beam's scale; `1.0` skips the multiply, so no vanilla bit moves). Below 1.0 still the Leach Beam's path |
 | `shield-delta{slot, amount}` | command | A loss through `oag_physics::damage::apply_weapon` at its full amount, so the destroyed edge, the Shield pickup's immunity and the critical crossing are a hit's (a drained pool wrecks: proven); a gain through `damage::add`'s clamp. `|amount|` at most the slot's maximum; refused where the mode takes no damage |
 | The mod's own pickup | engine | `oag_tables::weapons::Weapon::Extension` (7.5): a fieldless arm outside `Weapon::ALL`, so `Option<Weapon>` stays one byte and the World snapshot does not grow; hashed as 255, which no vanilla race writes. The engine never fires or absorbs it: a person's press (`Race::spend_pickup`) and the AI's fire (`Race::spend_opponent_pickup`, through the Turbo's gate; the AI never absorbs it) raise **`pickup-fire{slot}`** / **`pickup-absorbed{slot}`**; an absorb clears it and pays no pool. The HUD draws the title's Turbo icon for it |
 | `give-pickup{slot}` / `clear-pickup{slot}` | command | Puts the mod's pickup in an empty slot / takes it out of a slot holding it (a fault otherwise). A race without weapons gives nothing. The slot's last-granted weapon is left alone, so the title's repeat rule is unchanged |
 | `pickup-roll{weapon, every}` | command | Race-wide (sent on slot 0): every `every`-th time a weapon pad (`Race::test_weapon_pads`) draws that weapon, it hands out the mod's pickup instead, with the drawn weapon still the slot's last grant. The count is hashed; re-sending the same rule keeps it. The first module to send any of the three pickup commands owns the kind for the race; another one faults |
 | `pad-mode{slot}` | command | This tick the slot's speed pads (`Race::test_speedup_pads`) give no force, plume or pad sound, and the entry edge raises **`pad-energy{slot}`** |
-| `play-cue{slot, cue}` | output | One of six of the engine's cues (`oag_raceplay::extensions::CUES`), pushed beside the tick's own |
+| `play-cue{slot, cue}` | output | One of six of the engine's cues (`oag_ext_abi::Cue`, matched to the engine's in `oag_raceplay::extensions`), pushed beside the tick's own |
 | `fire-effect{slot, effect}` | output | The title's own `CollisionSpark` or `HitSpark` `.pob`, at the hull's back end, drawn by the view half; a title without it draws nothing |
 | `pickup-tint{slot, rgba}` | output | The HUD's `PickupBackground` drawn in that colour instead of the weapon's measured one (`oag_hud::Readout::pickup_tint`): the disc's sprite, recoloured through the tint it is already drawn with |
 
@@ -105,6 +105,48 @@ observation's craft records and spline samples, every other event and command,
 the other five kinds, a mod pickup's own icon art (it borrows the Turbo's), the HUD and frontend worlds, Pulley, the browser and the
 load-time rewrite, and `oag-server` linking the host (rule 6 forbids `wasmtime` to
 it until phase 3).
+
+### And the SDK (2026-10-29)
+
+Both examples wrote ABI 1 by hand: copied offsets, `unsafe` byte plumbing, a state
+blob serialised field by field, commands as positional tuples, magic codes, and the
+host's rules (an empty slot, two `scale-thrust` for one craft, a shield change past
+the pool) left for a race-time fault. Two crates replace that, and both examples are
+rewritten on them with **no `unsafe`, no offsets and no ABI codes**:
+
+| Piece | Where | What it is |
+| --- | --- | --- |
+| The layout | `crates/ext-abi` (`oag-ext-abi`) | `no_std`, zero dependencies, `#![forbid(unsafe_code)]`. Offsets, sizes, caps, flag bits, and the records `Craft`, `Event`, `Command` with their encode and decode; the shared vocabulary `Slot`, `Weapon` (the 14 codes in `Weapon::ALL`'s order), `Pickup` (`None`, `Weapon`, `Ours`), `Cue`, `Effect`, `Rgba`. `oag-modhost` depends on it and keeps only the checks that need the observation (the slot holds a craft, the shield maximum, the pickup held, one of a kind per slot); `oag-raceplay` maps the vocabulary to the engine's with exhaustive `match`es, so either side growing is a compile error |
+| The revision | `oag_ext_abi::REVISION` | Bumped by hand on any edit to the layout; a unit test folds every offset, size, code and one encoding of each record into a committed `(REVISION, fold)` pair, so a layout edit without a bump fails the gate. `oag_abi()` returns `(ABI << 8) \| REVISION`; the host refuses another revision **by name** ("built for ABI 1 rev 2, this host is ABI 1 rev 1"), and a value below 256 as a module "without a layout revision". Revision 1 is the layout the pre-SDK examples were built against, so the old `.wasm` files are refused |
+| The state length | `oag_state_len` | An optional export; when present it must equal the manifest's `state_bytes` (refused by name otherwise). `state_bytes` stays required in the manifest and its schema |
+| The guest SDK | `crates/ext` (`oag-ext`) | `no_std`, no `alloc`, depends on `oag-ext-abi` only; no engine crate may depend on it (`just check-deps`, rule 2). `Observation` (`tick()`, `crafts()` over occupied slots, `craft(slot)`, `events()` skipping unknown kinds); `Craft`, a view whose accessors (`is_person`, `fire_held`, `is_racing`, `shield`, `shield_max`, `speed_kmh`, `pickup`) read their field when asked; `Reply` with one method per command, taking a `&Craft` where the slot must hold one and returning `Err(Refused)` where the host would fault; the count written by the glue; `blob!` for the state (a plain-data struct, field order, little-endian, no padding, a `const` assert against `MAX_STATE_BYTES`); the `Extension` trait carrying the fresh-instance and one-tick-late rules; `export!` emitting `oag_abi`, `oag_io`, `oag_state_len`, `tick` and the panic handler on wasm32 only. Its `test` feature's `test::Race` runs an extension natively through the host's own writer and decoder |
+| The examples | `mod-examples`, branch `ext-sdk` | Kiss Curse 87 lines (its blob `[u16; 8]`), Energy Turbo 271 (its record kept at 12 bytes with a spare `u16`), each with native tests under `cargo test`. The dependency is a `path` into the engine checkout the submodule sits in; a stand-alone clone needs a git dependency pinned to the revision, which waits until the branch is public |
+
+Measured on the rebuilt modules (`opt-level = "s"`, LTO, stripped). Fuel is from
+`oag_raceplay`'s `tests::extension_examples`: a full grid of eight racing crafts
+carrying the mod's pickup, slot 0 a person holding fire, a loud tick (every craft
+touching a wall, firing and crossing a pad), then a quiet one:
+
+| Module | Bytes before | Bytes after | Fuel, loud tick | Fuel, quiet tick |
+| --- | --- | --- | --- | --- |
+| Kiss Curse | 627 | 638 | 1,968 to 2,586 | 1,207 to 834 |
+| Energy Turbo | 1,774 | 2,395 | 14,267 to 11,722 | 10,027 to 8,432 |
+
+A first cut that decoded every occupied slot up front cost Kiss Curse 2.25 times its
+hand-written fuel on the quiet tick; the craft view is why it now costs less.
+
+Proof: `oag_ext_abi`'s unit tests (the fold, record round trips, the malformed
+cases), `oag_modhost`'s (another revision and a module without one refused, both
+named; an `oag_state_len` disagreeing with the manifest refused), `oag_ext`'s
+(the blob's byte layout against Energy Turbo's hand-written one, the reply's
+refusals, an extension run natively), the examples' own `cargo test`, and
+`tests::extension_examples`, which compiles each committed example `.wasm` in
+`just check-extensions`: a module built against another revision fails there by
+name. `kiss_curse_ground_truth` and `energy_turbo_ground_truth` pass unchanged
+against the rebuilt modules, and the vanilla fold did not move.
+
+Not built yet: an `oag-ext check` tool, a generated C header and a C++ example
+built from it, a template mod, and the git dependency.
 
 ## What is already decided, and not reopened here
 
@@ -919,7 +961,9 @@ with wasmtime's own switches left on as a second line
 - The ABI is **major 1, edited in place until the first release** (pre-release
   rule: no migration code paths). A module built against a record layout the host no
   longer writes fails at load by name; that is the whole compatibility story before
-  1.0. The manifest's `api` names the major.
+  1.0. The manifest's `api` names the major. Within the major, every layout edit
+  bumps `oag_ext_abi::REVISION`, which a module returns from `oag_abi` beside the
+  major and the host checks by name (What is built, "And the SDK").
 - After the first release: a new field at the end of a record, a new event variant
   or a new command is a compatible addition inside major 1 (a guest reads the prefix
   it knows and ignores an event it does not); a change to an existing field's

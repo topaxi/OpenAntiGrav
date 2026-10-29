@@ -12,6 +12,8 @@ publish = false
 # Cranelift, no Pulley, no WASI, no component model, no threads, no cache, no
 # parallel compilation. The version is the spike's (`spikes/wasm-extensions/`).
 [dependencies]
+# The layout, defined once for the host and the guest SDK.
+oag-ext-abi.workspace = true
 wasmtime = { version = "=50.0.0", default-features = false, features = ["runtime", "cranelift", "std", "pooling-allocator"] }
 
 [dev-dependencies]

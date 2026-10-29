@@ -1,19 +1,25 @@
 use super::*;
+use oag_ext_abi::Slot;
+
+/// A whole module in WAT, `{ABI_WORD}` standing for this host's `oag_abi` value.
+fn module(src: &str) -> Vec<u8> {
+    wat::parse_str(src.replace("{ABI_WORD}", &ABI_WORD.to_string())).unwrap()
+}
 
 /// A guest in WAT: the buffer at 1024, `tick` running `$body`.
 fn guest(body: &str) -> Vec<u8> {
     wat::parse_str(format!(
         r#"(module
             (memory (export "memory") 1)
-            (func (export "oag_abi") (result i32) i32.const 1)
+            (func (export "oag_abi") (result i32) i32.const {ABI_WORD})
             (func (export "oag_io") (result i32) i32.const 1024)
             (func (export "tick") (result i32) {body}))"#
     ))
     .unwrap()
 }
 
-const STATE: i32 = 1024 + abi::STATE_AT as i32;
-const REPLY: i32 = 1024 + abi::REPLY_AT as i32;
+const STATE: i32 = 1024 + oag_ext_abi::STATE_AT as i32;
+const REPLY: i32 = 1024 + oag_ext_abi::REPLY_AT as i32;
 
 /// Counts ticks in the blob's first word and asks slot 1 for `factor`.
 fn counter(factor: &str) -> Vec<u8> {
@@ -53,7 +59,7 @@ fn a_tick_returns_the_blob_and_a_checked_command() {
     assert_eq!(
         commands,
         [Command::ScaleThrust {
-            slot: 1,
+            slot: Slot::new(1).unwrap(),
             factor: 0.25
         }]
     );
@@ -123,24 +129,22 @@ fn an_instance_is_fresh_every_tick() {
 
 #[test]
 fn a_module_is_refused_at_load_by_name() {
-    let import = wat::parse_str(
+    let import = module(
         r#"(module (import "wasi_snapshot_preview1" "clock_time_get" (func))
             (memory (export "memory") 1)
-            (func (export "oag_abi") (result i32) i32.const 1)
+            (func (export "oag_abi") (result i32) i32.const {ABI_WORD})
             (func (export "oag_io") (result i32) i32.const 0)
             (func (export "tick") (result i32) i32.const 0))"#,
-    )
-    .unwrap();
+    );
     assert_eq!(
         Module::compile(&import, Limits::default()).unwrap_err(),
         LoadError::Import("`wasi_snapshot_preview1.clock_time_get`".to_string())
     );
-    let no_tick = wat::parse_str(
+    let no_tick = module(
         r#"(module (memory (export "memory") 1)
-            (func (export "oag_abi") (result i32) i32.const 1)
+            (func (export "oag_abi") (result i32) i32.const {ABI_WORD})
             (func (export "oag_io") (result i32) i32.const 0))"#,
-    )
-    .unwrap();
+    );
     assert!(matches!(
         Module::compile(&no_tick, Limits::default()),
         Err(LoadError::Export(e)) if e.contains("tick")
@@ -150,13 +154,12 @@ fn a_module_is_refused_at_load_by_name() {
         Module::compile(&simd, Limits::default()),
         Err(LoadError::Compile(_))
     ));
-    let big = wat::parse_str(
+    let big = module(
         r#"(module (memory (export "memory") 32)
-            (func (export "oag_abi") (result i32) i32.const 1)
+            (func (export "oag_abi") (result i32) i32.const {ABI_WORD})
             (func (export "oag_io") (result i32) i32.const 0)
             (func (export "tick") (result i32) i32.const 0))"#,
-    )
-    .unwrap();
+    );
     assert!(matches!(
         Module::compile(&big, Limits::default()),
         Err(LoadError::Start(_))
@@ -187,12 +190,16 @@ fn events_reach_the_guest() {
          i32.const 0",
         count = 1024 + 24,
         s4 = STATE + 4,
-        slot = 1024 + abi::EVENTS_AT as i32 + 1,
+        slot = 1024 + oag_ext_abi::EVENTS_AT as i32 + 1,
     ));
     let module = Module::compile(&echo, Limits::default()).unwrap();
     let events = [
-        Event::WallContact { slot: 5 },
-        Event::WallContact { slot: 2 },
+        Event::WallContact {
+            slot: Slot::new(5).unwrap(),
+        },
+        Event::WallContact {
+            slot: Slot::new(2).unwrap(),
+        },
     ];
     let mut state = vec![0; 8];
     module
@@ -208,4 +215,66 @@ fn events_reach_the_guest() {
         )
         .unwrap();
     assert_eq!(state, [2, 0, 0, 0, 5, 0, 0, 0]);
+}
+
+/// A module whose `oag_abi` returns `word`, otherwise well-formed.
+fn answering(word: u32, extra: &str) -> Vec<u8> {
+    module(&format!(
+        r#"(module (memory (export "memory") 1)
+            (func (export "oag_abi") (result i32) i32.const {word})
+            (func (export "oag_io") (result i32) i32.const 0)
+            (func (export "tick") (result i32) i32.const 0)
+            {extra})"#
+    ))
+}
+
+#[test]
+fn another_layout_revision_is_refused_at_load_naming_both() {
+    let other = REVISION + 1;
+    let error = Module::compile(&answering((ABI << 8) | other, ""), Limits::default()).unwrap_err();
+    assert_eq!(
+        error,
+        LoadError::Abi {
+            major: ABI,
+            revision: Some(other)
+        }
+    );
+    let text = error.to_string();
+    assert!(
+        text.contains(&format!("rev {other}")) && text.contains(&format!("rev {REVISION}")),
+        "{text}"
+    );
+    // A module from before revisions returns the bare major.
+    let legacy = Module::compile(&answering(ABI, ""), Limits::default()).unwrap_err();
+    assert_eq!(
+        legacy,
+        LoadError::Abi {
+            major: ABI,
+            revision: None
+        }
+    );
+    assert!(
+        legacy.to_string().contains("without a layout revision"),
+        "{legacy}"
+    );
+    assert!(Module::compile(&answering(ABI_WORD, ""), Limits::default()).is_ok());
+}
+
+#[test]
+fn a_state_length_export_must_agree_with_the_manifest() {
+    let says_16 = r#"(func (export "oag_state_len") (result i32) i32.const 16)"#;
+    let limits = |state_bytes| Limits {
+        state_bytes,
+        ..Limits::default()
+    };
+    assert!(Module::compile(&answering(ABI_WORD, says_16), limits(16)).is_ok());
+    let error = Module::compile(&answering(ABI_WORD, says_16), limits(96)).unwrap_err();
+    assert_eq!(
+        error,
+        LoadError::State {
+            module: 16,
+            manifest: 96
+        }
+    );
+    assert!(error.to_string().contains("state_bytes = 96"), "{error}");
 }

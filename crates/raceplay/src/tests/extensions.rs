@@ -69,16 +69,17 @@ mod on {
     use super::*;
     use crate::extensions::{Prepared, Source, prepare};
 
-    const STATE: i32 = 1024 + oag_modhost::abi::STATE_AT as i32;
-    const REPLY: i32 = 1024 + oag_modhost::abi::REPLY_AT as i32;
+    const STATE: i32 = 1024 + oag_ext_abi::STATE_AT as i32;
+    const REPLY: i32 = 1024 + oag_ext_abi::REPLY_AT as i32;
 
     fn module(id: &str, body: &str) -> Source {
         let wasm = wat::parse_str(format!(
             r#"(module
                 (memory (export "memory") 1)
-                (func (export "oag_abi") (result i32) i32.const 1)
+                (func (export "oag_abi") (result i32) i32.const {word})
                 (func (export "oag_io") (result i32) i32.const 1024)
-                (func (export "tick") (result i32) {body}))"#
+                (func (export "tick") (result i32) {body}))"#,
+            word = oag_ext_abi::ABI_WORD,
         ))
         .unwrap();
         Source {
@@ -134,7 +135,7 @@ mod on {
         assert_eq!(fold(&plain), VANILLA_FOLD);
     }
 
-    const CRAFTS: i32 = 1024 + oag_modhost::abi::CRAFTS_AT as i32;
+    const CRAFTS: i32 = 1024 + oag_ext_abi::CRAFTS_AT as i32;
 
     /// On its first call takes slot 1's whole pool (`-shield_max`, read from its craft
     /// record), then nothing.
@@ -178,7 +179,7 @@ mod on {
         assert_eq!(race.extension_reports()[0].faulted, None);
     }
 
-    const EVENTS: i32 = 1024 + oag_modhost::abi::EVENTS_AT as i32;
+    const EVENTS: i32 = 1024 + oag_ext_abi::EVENTS_AT as i32;
 
     /// Gives slot 0 the mod pickup while it holds nothing and nothing has been fired or
     /// absorbed yet, and counts the `pickup-fire` (blob word 0) and `pickup-absorbed`

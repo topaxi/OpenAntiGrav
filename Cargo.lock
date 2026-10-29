@@ -3010,6 +3010,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "oag-ext"
+version = "0.1.0"
+dependencies = [
+ "oag-ext-abi",
+]
+
+[[package]]
+name = "oag-ext-abi"
+version = "0.1.0"
+
+[[package]]
 name = "oag-formats"
 version = "0.1.0"
 dependencies = [
@@ -3270,6 +3281,7 @@ dependencies = [
 name = "oag-modhost"
 version = "0.1.0"
 dependencies = [
+ "oag-ext-abi",
  "wasmtime",
  "wat",
 ]
@@ -3432,6 +3444,7 @@ dependencies = [
  "oag-core",
  "oag-disc",
  "oag-display",
+ "oag-ext-abi",
  "oag-formats",
  "oag-fx",
  "oag-gameplay",

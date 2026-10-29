@@ -2,9 +2,9 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-10-29
-summary: "Both example sim mods hand-roll ABI 1 (offsets, codes, byte I/O, blob by hand); open: a shared layout crate, a Rust guest SDK, a C header, a checker"
+summary: "oag-ext-abi (checked revision) and the oag-ext Rust SDK landed, examples rewritten; open: check/run tool, C header, C++ example, template, git dep"
 categories: [gameplay]
-size: L (60)
+size: M (55)
 difficulty: medium (60)
 ---
 
@@ -21,7 +21,30 @@ settled by `docs/architecture/wasm-extensions/README.md` section 2 and
 `determinism-and-state.md` ("Web and iOS") and is **not** what this thread changes. The
 problem is that the buffer's bytes are the *only* interface a mod author has.
 
-## What a mod author writes today
+## Landed (2026-10-29, lane `ext-sdk`)
+
+Layers 0 and 1 below, and the examples on them; the README's "And the SDK" entry
+has the pieces, sizes and fuel:
+
+- ~~`oag-ext-abi`: the layout moved out of `oag_modhost::abi`, `REVISION` with its
+  folded-layout test, `oag_abi() = (ABI << 8) | REVISION` refused by name, optional
+  `oag_state_len`.~~ `state_bytes` stays **required** in the manifest (the lane's
+  brief over this thread's "optional"); the export, when present, must equal it.
+- ~~`oag-ext`: `Observation`, `Craft`, `Reply`, `blob!`, `Extension`, `export!`,
+  `test::Race`.~~ Deviation: `Observation::craft` returns `Option<Craft<'_>>` by
+  value, a view over the record, not `Option<&Craft>`: decoding every slot up front
+  put Kiss Curse at 2.25x its old fuel; the view brought it under.
+- ~~Kiss Curse and Energy Turbo rewritten (mod-examples branch `ext-sdk`); ground
+  truths unchanged; sizes 627 to 638 and 1,774 to 2,395 bytes.~~
+- ~~Decision 4's committed-examples test~~: `oag_raceplay`'s
+  `tests::extension_examples` compiles each committed `.wasm` in
+  `just check-extensions` and runs a full grid under the fuel budget.
+- ~~Docs: README "What is built", `docs/tools/mods.md`, `hooks.md`'s command table.~~
+
+Findings 1 to 8 below are closed by it; finding 9 is half closed (a mod's logic runs
+under `cargo test`; no tool runs a built `.wasm` yet).
+
+## What a mod author writes today (the review, 2026-10-29)
 
 Reviewed: `mod-examples` at `43d45b9` (branch `wasm-kiss-curse`), `kiss-curse/guest/src/lib.rs`
 (119 lines) and `energy-turbo/guest/src/lib.rs` (271 lines), against the host's
@@ -272,29 +295,30 @@ one generic record, and the documentation table names them per kind.
 
 ## Open
 
-- The layout revision in `oag_abi()`'s return value versus a separate export
-  (`oag_abi_revision`). Packed is one export fewer and one `u32` to compare; a
-  separate export reads clearer in a `.wat`. Either is fine; pick and document.
-- Whether `scale_thrust` on a craft that already has one this tick replaces or refuses.
-  Refuse (matches the host; a replace would hide a logic bug).
+- **The examples' SDK dependency is a `path`** into the engine checkout the
+  submodule sits in (`../../../../../crates/ext`, five levels from `guest/`). A
+  stand-alone clone of `mod-examples` does not build until it is a git dependency on
+  the engine with a pinned `rev`, which waits until the `wasm-extensions` branch is
+  public. Bump the pin with each `REVISION`.
+- **No `oag-ext check` / `run` tool** (layer 2): exports, revision, state length,
+  memory, size and fuel for a built module, and a scripted run printing the typed
+  commands. `tests::extension_examples` holds the fuel harness to start from.
+- **No generated C header, no C++ example.** `oag_ext_abi` is the source to generate
+  `oag_ext.h` from (`just gen-ext-abi` / `check-ext-abi`, the `gen-status` pattern),
+  with per-kind command structs; the doc table at the top of `oag_ext_abi` is still
+  written by hand.
+- **No template** in `mod-examples` (the two `guest/` directories differ by name only).
 - Whether the manifest keeps `memory_pages` as a budget while the module's own memory
-  type carries the need (the host could read the module's declared maximum and refuse
-  need > budget by name). Not needed for the SDK; note for the manifest thread.
-- The Energy Turbo blob's two spare bytes (see Acceptance).
+  type carries the need: a note for the manifest thread, not the SDK.
 - A generated TypeScript/AssemblyScript layout module waits for a JS-side example.
 
 ## Next Steps
 
-1. `oag-ext-abi`: move the layout out of `crates/modhost/src/abi.rs`, add `REVISION`,
-   the folded-layout test, the generated doc table and `just gen-ext-abi`/`check-ext-abi`
-   with `oag_ext.h`. Host refuses a differing revision by name. Vanilla fold unchanged.
-2. `oag-ext`: `Observation`, `Craft`, `Event`, `Reply`, `blob!`, `Extension`, `export!`,
-   `oag_state_len`, the `test` feature's `Race`. Unit tests native.
-3. Rewrite Kiss Curse on it in `mod-examples`; ground truth unchanged; sizes and fuel
-   recorded in this thread. Then Energy Turbo.
-4. `oag-tools`: `oag-ext check` and `run`; the committed-examples revision test in
-   `oag-raceplay`.
-5. The `mod-examples` template, and the C++ example from `oag_ext.h`, with its size and
-   fuel beside the Rust ones.
-6. Docs: README "What is built", `docs/tools/mods.md`, `hooks.md`'s table; move this
-   thread's findings there and delete the thread.
+1. `oag-tools`: `oag-ext check <mod dir>` and `oag-ext run`, on `oag_modhost::Module`
+   and the full-grid observation in `tests::extension_examples`.
+2. `just gen-ext-abi` / `check-ext-abi`: `oag_ext.h` and the doc table from
+   `oag_ext_abi`; then the C++ example in `mod-examples` from the header, with its size
+   and fuel beside the Rust ones, checked by `oag-ext check`.
+3. The `mod-examples` template on `oag-ext`.
+4. When the branch is public: the examples' git dependency, pinned.
+5. Move what is left of this thread into the README and delete it.

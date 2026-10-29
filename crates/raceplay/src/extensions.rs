@@ -20,29 +20,6 @@
 
 use std::sync::Arc;
 
-/// `play-cue`'s codes ([`oag_modhost::abi::CUES`]), in order.
-pub const CUES: [oag_gameplay::cue::Cue; 6] = {
-    use oag_gameplay::cue::Cue;
-    [
-        Cue::SpeedupPad,
-        Cue::Turbo,
-        Cue::Collision,
-        Cue::Absorb,
-        Cue::Shield,
-        Cue::ShieldActive,
-    ]
-};
-/// `fire-effect`'s codes ([`oag_modhost::abi::EFFECTS`]), in order.
-pub const EFFECTS: [oag_title::effects::Trigger; 2] = [
-    oag_title::effects::Trigger::CollisionSpark,
-    oag_title::effects::Trigger::HitSpark,
-];
-#[cfg(feature = "extensions")]
-const _: () = assert!(
-    CUES.len() == oag_modhost::abi::CUES as usize
-        && EFFECTS.len() == oag_modhost::abi::EFFECTS as usize
-);
-
 /// The most simulation modules one race runs. Chosen.
 pub const MAX_SIM_MODS: usize = 4;
 
@@ -162,13 +139,13 @@ pub fn prepare(sources: &[Source], title: &str, report: &mut Vec<String>) -> Pre
                 );
                 continue;
             }
-            if source.api != oag_modhost::ABI {
+            if source.api != oag_ext_abi::ABI {
                 push(
                     report,
                     format!(
                         "{label} left out: built for API {}, this host is API {}",
                         source.api,
-                        oag_modhost::ABI
+                        oag_ext_abi::ABI
                     ),
                 );
                 continue;
@@ -437,7 +414,8 @@ impl crate::Race {
 
 #[cfg(feature = "extensions")]
 mod on {
-    use oag_modhost::{Command, Event, Module, Observation, abi, abi::MAX_EVENTS};
+    use oag_ext_abi::{Command, Event, MAX_EVENTS, Pickup};
+    use oag_modhost::{Module, Observation};
 
     use super::Report;
     use crate::sim::RaceSim;
@@ -589,8 +567,76 @@ mod on {
         }
     }
 
+    /// `play-cue`'s sounds as the engine's cues.
+    fn cue(cue: oag_ext_abi::Cue) -> oag_gameplay::cue::Cue {
+        use oag_ext_abi::Cue as Abi;
+        use oag_gameplay::cue::Cue;
+        match cue {
+            Abi::SpeedupPad => Cue::SpeedupPad,
+            Abi::Turbo => Cue::Turbo,
+            Abi::Collision => Cue::Collision,
+            Abi::Absorb => Cue::Absorb,
+            Abi::Shield => Cue::Shield,
+            Abi::ShieldActive => Cue::ShieldActive,
+        }
+    }
+
+    /// `fire-effect`'s effects as the title's triggers.
+    fn effect(effect: oag_ext_abi::Effect) -> oag_title::effects::Trigger {
+        use oag_title::effects::Trigger;
+        match effect {
+            oag_ext_abi::Effect::CollisionSpark => Trigger::CollisionSpark,
+            oag_ext_abi::Effect::HitSpark => Trigger::HitSpark,
+        }
+    }
+
+    /// The ABI's weapon vocabulary and the tables' weapons, both ways. The tables' own
+    /// `Extension` is the mod's pickup, which the ABI names [`Pickup::Ours`].
+    fn pickup(weapon: oag_tables::weapons::Weapon) -> Pickup {
+        use oag_ext_abi::Weapon as Abi;
+        use oag_tables::weapons::Weapon;
+        Pickup::Weapon(match weapon {
+            Weapon::Rocket => Abi::Rocket,
+            Weapon::Missile => Abi::Missile,
+            Weapon::Quake => Abi::Quake,
+            Weapon::Cannon => Abi::Cannon,
+            Weapon::Turbo => Abi::Turbo,
+            Weapon::Shield => Abi::Shield,
+            Weapon::Autopilot => Abi::Autopilot,
+            Weapon::Plasma => Abi::Plasma,
+            Weapon::Bomb => Abi::Bomb,
+            Weapon::Mine => Abi::Mine,
+            Weapon::LeachBeam => Abi::LeachBeam,
+            Weapon::Repulser => Abi::Repulser,
+            Weapon::Shuriken => Abi::Shuriken,
+            Weapon::Disruptor => Abi::Disruptor,
+            Weapon::Extension => return Pickup::Ours,
+        })
+    }
+
+    fn weapon(weapon: oag_ext_abi::Weapon) -> oag_tables::weapons::Weapon {
+        use oag_ext_abi::Weapon as Abi;
+        use oag_tables::weapons::Weapon;
+        match weapon {
+            Abi::Rocket => Weapon::Rocket,
+            Abi::Missile => Weapon::Missile,
+            Abi::Quake => Weapon::Quake,
+            Abi::Cannon => Weapon::Cannon,
+            Abi::Turbo => Weapon::Turbo,
+            Abi::Shield => Weapon::Shield,
+            Abi::Autopilot => Weapon::Autopilot,
+            Abi::Plasma => Weapon::Plasma,
+            Abi::Bomb => Weapon::Bomb,
+            Abi::Mine => Weapon::Mine,
+            Abi::LeachBeam => Weapon::LeachBeam,
+            Abi::Repulser => Weapon::Repulser,
+            Abi::Shuriken => Weapon::Shuriken,
+            Abi::Disruptor => Weapon::Disruptor,
+        }
+    }
+
     /// The observation's craft records: copies of the world, never a pointer into it.
-    fn crafts(sim: &RaceSim, inputs: &oag_gameplay::PlayerInputs) -> Vec<abi::Craft> {
+    fn crafts(sim: &RaceSim, inputs: &oag_gameplay::PlayerInputs) -> Vec<oag_ext_abi::Craft> {
         sim.world
             .ships
             .iter()
@@ -605,24 +651,11 @@ mod on {
                 // Racing and past the start: a craft on the grid has no thrust yet.
                 let racing = ship.physics.craft_state == oag_physics::damage::CraftState::Racing
                     && !oag_race::RaceState::thrust_gated(sim.world.tick);
-                abi::Craft {
-                    pickup: ship.pickup.weapon.map_or(0, |weapon| {
-                        if weapon == oag_tables::weapons::Weapon::Extension {
-                            return abi::PICKUP_EXTENSION;
-                        }
-                        oag_tables::weapons::Weapon::ALL
-                            .iter()
-                            .position(|w| *w == weapon)
-                            .map_or(0, |i| i as u8 + 1)
-                    }),
-                    flags: [
-                        (person, abi::CRAFT_PERSON),
-                        (fire_held, abi::CRAFT_FIRE_HELD),
-                        (racing, abi::CRAFT_RACING),
-                    ]
-                    .into_iter()
-                    .filter(|(on, _)| *on)
-                    .fold(0, |flags, (_, bit)| flags | bit),
+                oag_ext_abi::Craft {
+                    pickup: ship.pickup.weapon.map_or(Pickup::None, pickup),
+                    person,
+                    fire_held,
+                    racing,
                     shield: ship.physics.shield,
                     shield_max: ship.handling.dimensions.shield,
                     speed_kmh: ship.physics.body.linear_velocity.length()
@@ -685,19 +718,19 @@ mod on {
             // The slot's `last` stays what it was: the repeat rule is about the title's
             // own weapons.
             Command::GivePickup { slot } => {
-                let pickup = &mut sim.world.ships[usize::from(slot)].pickup;
+                let pickup = &mut sim.world.ships[slot.index()].pickup;
                 if pickup.weapon.is_none() {
                     pickup.weapon = Some(extension);
                 }
             }
             Command::ClearPickup { slot } => {
-                let pickup = &mut sim.world.ships[usize::from(slot)].pickup;
+                let pickup = &mut sim.world.ships[slot.index()].pickup;
                 if pickup.weapon == Some(extension) {
                     pickup.take();
                 }
             }
             Command::PickupRoll { weapon, every } => {
-                let weapon = oag_tables::weapons::Weapon::ALL[usize::from(weapon) - 1];
+                let weapon = self::weapon(weapon);
                 let on = &mut sim.extensions.on;
                 if on.roll != Some((weapon, every)) {
                     on.roll = Some((weapon, every));
@@ -727,14 +760,14 @@ mod on {
         on.boost = [1.0; oag_gameplay::MAX_SHIPS];
         // Per slot in slot order: a wall contact, a fire, an absorb.
         let events: Vec<Event> = (0..oag_gameplay::MAX_SHIPS)
+            .filter_map(oag_ext_abi::Slot::new)
             .flat_map(|slot| {
-                let bit = |mask: u32| mask & (1 << slot) != 0;
-                let slot8 = slot as u8;
+                let bit = |mask: u32| mask & slot.bit() != 0;
                 [
-                    bit(on.walls).then_some(Event::WallContact { slot: slot8 }),
-                    bit(on.fires).then_some(Event::PickupFire { slot: slot8 }),
-                    bit(on.absorbs).then_some(Event::PickupAbsorbed { slot: slot8 }),
-                    bit(on.pad_energy).then_some(Event::PadEnergy { slot: slot8 }),
+                    bit(on.walls).then_some(Event::WallContact { slot }),
+                    bit(on.fires).then_some(Event::PickupFire { slot }),
+                    bit(on.absorbs).then_some(Event::PickupAbsorbed { slot }),
+                    bit(on.pad_energy).then_some(Event::PadEnergy { slot }),
                 ]
             })
             .flatten()
@@ -793,28 +826,28 @@ mod on {
                 // the mod's own engine scale, multiplied so two modules compose. Both are
                 // consumed by this tick's step.
                 Command::ScaleThrust { slot, factor } if factor <= 1.0 => {
-                    sim.world.ships[slot as usize].pending_thrust_scale *= factor;
+                    sim.world.ships[slot.index()].pending_thrust_scale *= factor;
                 }
                 Command::ScaleThrust { slot, factor } => {
-                    let boost = &mut sim.extensions.on.boost[slot as usize];
-                    *boost = (*boost * factor).min(abi::MAX_THRUST_FACTOR);
+                    let boost = &mut sim.extensions.on.boost[slot.index()];
+                    *boost = (*boost * factor).min(oag_ext_abi::MAX_THRUST_FACTOR);
                 }
-                Command::ShieldDelta { slot, amount } => shield_delta(sim, slot as usize, amount),
-                Command::PadMode { slot } => sim.extensions.on.pad_mode |= 1 << slot,
+                Command::ShieldDelta { slot, amount } => shield_delta(sim, slot.index(), amount),
+                Command::PadMode { slot } => sim.extensions.on.pad_mode |= slot.bit(),
                 Command::PlayCue { slot, cue } => {
                     sim.cues.push(oag_gameplay::cue::CueEvent::new(
-                        super::CUES[usize::from(cue)],
-                        usize::from(slot),
+                        self::cue(cue),
+                        slot.index(),
                     ));
                 }
                 Command::FireEffect { slot, effect } => sim
                     .extensions
                     .on
                     .effects
-                    .push((usize::from(slot), super::EFFECTS[usize::from(effect)])),
+                    .push((slot.index(), self::effect(effect))),
                 Command::PickupTint { slot, rgba } => {
-                    let [r, g, b, a] = rgba.to_le_bytes();
-                    sim.extensions.on.tints[usize::from(slot)] =
+                    let oag_ext_abi::Rgba { r, g, b, a } = rgba;
+                    sim.extensions.on.tints[slot.index()] =
                         Some([r, g, b, a].map(|c| f32::from(c) / 255.0));
                 }
                 Command::GivePickup { .. }

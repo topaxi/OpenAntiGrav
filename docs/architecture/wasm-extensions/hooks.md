@@ -185,6 +185,26 @@ Two sources, because a person and an AI craft count laps through two structs:
 What each README command writes, where, and what the host refuses there. The
 clamps are the README's.
 
+The commands built so far, the record the host decodes (`oag_ext_abi::Command`)
+and the guest SDK's method for each (`oag_ext::Reply`; [README](README.md), "And
+the SDK"). A method taking a `&Craft` can only name a slot that holds one; each
+returns `Err(Refused)` where the host would fault:
+
+| Command | `oag_ext_abi::Command` | `oag_ext::Reply` | The SDK refuses |
+| --- | --- | --- | --- |
+| `scale-thrust{slot, factor}` | `ScaleThrust` | `scale_thrust(&craft, factor)` | a factor outside `[0, 2]` or not finite; a second for the craft this tick |
+| `shield-delta{slot, amount}` | `ShieldDelta` | `shield_delta(&craft, amount)` | not finite or past `craft.shield_max()`; a second for the craft this tick |
+| `give-pickup{slot}` | `GivePickup` | `give_pickup(&craft)` | a craft holding anything |
+| `clear-pickup{slot}` | `ClearPickup` | `clear_pickup(&craft)` | a craft not holding `Pickup::Ours` |
+| `pickup-roll{weapon, every}` | `PickupRoll` | `pickup_roll(weapon, every)` | `every` 0 |
+| `pad-mode{slot}` | `PadMode` | `pad_mode(&craft)` | |
+| `play-cue{slot, cue}` | `PlayCue` | `play_cue(&craft, cue)` | |
+| `fire-effect{slot, effect}` | `FireEffect` | `fire_effect(&craft, effect)` | |
+| `pickup-tint{slot, rgba}` | `PickupTint` | `pickup_tint(&craft, rgba)` | |
+
+Every method also refuses a 65th command (`Refused::Full`). The host's checks stay
+the backstop for a guest written without the SDK.
+
 ### `scale-thrust{slot, factor, ticks}`
 
 - **Built without `ticks` (Kiss Curse, 2026-10-29)**: `factor` in `[0, 1]` only (`[0, 2]` since Energy Turbo, below), sent

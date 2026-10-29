@@ -1,0 +1,15 @@
+[package]
+name = "oag-ext-abi"
+description = "The WebAssembly extension ABI's one definition: the I/O buffer's layout, its records and the vocabulary host and guest share"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+# No dependencies: the host (`oag-modhost`) and the guest SDK (`oag-ext`, built for
+# wasm32) both compile against this crate, so it reaches nothing either side could not.
+
+[lints]
+workspace = true
