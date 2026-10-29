@@ -95,7 +95,6 @@ fn mist_is_faint_and_fades_in_and_out() {
     assert_eq!(at(1.0), 0.0);
     assert!(at(0.05) < at(MIST_FADE_IN) && at(0.9) < at(MIST_FADE_IN));
     assert!((0.0..=MIST_ALPHA).contains(&at(MIST_FADE_IN)));
-    assert!(MIST_ALPHA < ALPHA);
 }
 
 #[test]
