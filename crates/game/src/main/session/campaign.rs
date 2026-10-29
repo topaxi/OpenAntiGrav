@@ -759,6 +759,23 @@ impl Session {
     }
 }
 
+impl Session {
+    /// Files the event just started as its campaign's position, off the render thread (modern
+    /// saves: no prompt): Pure's chain and 2048's event map, which have no `CampaignStage`, keep
+    /// the event's name in the cursor row's `grid`. The next launch opens on it.
+    pub(super) fn keep_event_cursor(&mut self, name: &str) {
+        let Some(title) = self.campaign_title() else {
+            return;
+        };
+        let kept = oag_game::records::CampaignCursor {
+            grid: Some(name.to_string()),
+            slot: None,
+        };
+        self.records.set_campaign_cursor(&title, &kept);
+        oag_game::records::save_in_background(&self.records);
+    }
+}
+
 /// Keeps where `campaign`'s screens stand as that campaign's position and
 /// writes the store off the render thread, as the campaign closes or a race
 /// launches from it.

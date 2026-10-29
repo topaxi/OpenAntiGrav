@@ -28,6 +28,11 @@ impl Profile {
     /// One launch of Pulse on `script`; the states it reported.
     fn drive(&self, script: &str, log: &str) -> Vec<Value> {
         let image = oag_testdata::image("pulse-psp-eu.chd").expect("pulse-psp-eu.chd");
+        self.drive_on(&image, script, log)
+    }
+
+    /// One launch of the title at `image` on `script`; the states it reported.
+    fn drive_on(&self, image: &Path, script: &str, log: &str) -> Vec<Value> {
         let log = self.0.join(log);
         let output = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
             .arg(image)
@@ -211,10 +216,119 @@ fn the_cell_raced_is_the_one_the_campaign_reopens_on() {
     let raced = last_campaign(&states[..launch]).1;
     assert_ne!(raced, default, "the launch was off the default cell");
     assert_eq!(back, raced, "back from the race lands on the cell raced");
+    // Leaving the race saved its result off the frame thread; the file has it, beside the cursor
+    // the launch filed before it (two saves in a row, neither lost).
+    let text = std::fs::read_to_string(profile.0.join("config/oag/records.toml"))
+        .expect("the records file");
+    assert!(
+        text.contains("[[records]]") && text.contains("[[campaign_cursor]]"),
+        "{text}"
+    );
     // Escape ended the process on the cell; a relaunch lands on it too.
     let states = profile.drive(
         &format!("{OPEN}; press cross; until screen.id=cell; ticks 10"),
         "b.jsonl",
     );
     assert_eq!(last_campaign(&states), ("cell".into(), back));
+}
+
+/// The Single Player chain's screen id and the name under the cursor in the last state it
+/// reported.
+fn last_chain(states: &[Value]) -> (String, String) {
+    let screen = states
+        .iter()
+        .rev()
+        .find_map(|state| state.get("screen").filter(|s| s["kind"] == "pure-chain"))
+        .expect("the chain was open");
+    (
+        screen["id"].as_str().unwrap_or_default().to_string(),
+        screen["focus"]["id"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string(),
+    )
+}
+
+/// Pure's SINGLE PLAYER chain reopens on the event last started, after a relaunch.
+#[test]
+#[ignore = "needs data/images/pure-psp-eu.chd"]
+fn pure_single_player_reopens_on_the_event_last_started() {
+    let Some(image) = oag_testdata::image("pure-psp-eu.chd") else {
+        return;
+    };
+    let profile = Profile::fresh("pure");
+    let open = "boot; until stage=menu within 3000; select campaign; press cross; \
+                until screen=pure-chain";
+    // SINGLE RACE, class, league CLASSIC, the second track, then the ship screen starts it.
+    let states = profile.drive_on(
+        &image,
+        &format!(
+            "{open}; press cross; until screen.id=class; press cross; until screen.id=league; \
+             press down; press down; press cross; until screen.id=track; press down; ticks 3; \
+             press cross; until screen=picker; ticks 5"
+        ),
+        "a.jsonl",
+    );
+    let (level, raced) = last_chain(&states);
+    assert_eq!(level, "track");
+    assert_ne!(raced, "KARBONIS", "the cursor was off the first track");
+    let states = profile.drive_on(&image, &format!("{open}; ticks 10"), "b.jsonl");
+    assert_eq!(
+        last_chain(&states),
+        ("track".into(), raced),
+        "the chain reopens on the track raced after a relaunch"
+    );
+}
+
+/// 2048's campaign map opens with the cursor on the event last started, after a relaunch.
+#[test]
+#[ignore = "needs data/extracted/vita/PCSF00007"]
+fn the_2048_map_reopens_on_the_event_last_started() {
+    let Some(image) = oag_testdata::exact("data/extracted/vita/PCSF00007") else {
+        return;
+    };
+    let profile = Profile::fresh("map2048");
+    // Event 1 passed, so Event 2 is open; a fresh profile locks every event but the first.
+    let mut store = oag_game::records::Store::default();
+    store.record_campaign(
+        "wipeout 2048",
+        "2048 - Event 1",
+        Some(oag_game::records::Medal::Bronze),
+        None,
+    );
+    let records = profile.0.join("config/oag/records.toml");
+    std::fs::create_dir_all(records.parent().expect("a parent")).expect("a config directory");
+    std::fs::write(
+        &records,
+        toml::to_string_pretty(&store).expect("serialises"),
+    )
+    .expect("a seeded records file");
+    let to_map = "until frontend=\"Boot Intro Movie\" within 3000; ticks 20; press start; \
+                  until frontend=TitleScreen within 3000; press start; \
+                  until frontend=GameModeChoice within 3000; press cross; \
+                  until frontend=newFEshell within 3000; ticks 60";
+    let map_event = |states: &[Value]| {
+        states
+            .iter()
+            .rev()
+            .find_map(|state| state["map_event"].as_str().map(String::from))
+            .expect("the map reported its cursor")
+    };
+    // Right to Event 2; its card opens on cross and cross launches it.
+    let states = profile.drive_on(
+        &image,
+        &format!(
+            "{to_map}; expect map_event=\"2048 - Event 1\"; press right; ticks 40; \
+                  expect map_event=\"2048 - Event 2\"; press cross; ticks 60; press cross; \
+                  until stage=loading within 600"
+        ),
+        "a.jsonl",
+    );
+    assert_eq!(map_event(&states), "2048 - Event 2");
+    let states = profile.drive_on(&image, &format!("{to_map}; ticks 10"), "b.jsonl");
+    assert_eq!(
+        map_event(&states),
+        "2048 - Event 2",
+        "the map reopens on the event started after a relaunch"
+    );
 }

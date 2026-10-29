@@ -323,6 +323,7 @@ fn state_of(session: &Session) -> State {
     match &session.stage {
         Stage::Frontend(stage) => {
             state.frontend = stage.frontend.machine().current().map(str::to_string);
+            state.map_event = stage.frontend.selected_event().map(|event| event.name.clone());
         }
         Stage::Menu(stage) => {
             state.page = Some(stage.menu.page().id.clone());
@@ -377,8 +378,8 @@ fn screen(stage: &MenuStage) -> Screen {
     if let Some(campaign) = &stage.campaign {
         return campaign_screen(campaign);
     }
-    if stage.pure_chain.is_some() {
-        return overlay("pure-chain");
+    if let Some(chain) = &stage.pure_chain {
+        return pure_chain_screen(chain);
     }
     if stage.join.is_some() || stage.lan.is_some() {
         return overlay("join");
@@ -390,6 +391,23 @@ fn screen(stage: &MenuStage) -> Screen {
         return overlay("seat-assign");
     }
     page_screen(stage)
+}
+
+/// Wipeout Pure's SINGLE PLAYER chain: the screen it is on (`id`, the disc's step name) and the
+/// row under the cursor.
+fn pure_chain_screen(chain: &crate::pure_chain_stage::PureChainStage) -> Screen {
+    let row = chain.choice().selected_row();
+    Screen {
+        kind: "pure-chain".to_string(),
+        id: format!("{:?}", chain.chain().at()).to_lowercase(),
+        focus: row.map(|row| Focus {
+            index: row.tag,
+            id: Some(row.label.clone()),
+            label: row.label.clone(),
+            setting: None,
+        }),
+        ..Screen::default()
+    }
 }
 
 /// The campaign's screen: which of its levels is open, and the grid or cell under the cursor.

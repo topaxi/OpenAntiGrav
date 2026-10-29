@@ -947,3 +947,57 @@ fn the_campaign_cursor_is_kept_per_campaign_and_round_trips() {
     assert_eq!(parsed.campaign_cursor("hd").grid.as_deref(), Some("grid9"));
     assert_eq!(parsed.campaign_cursor("hd").slot, None);
 }
+
+/// Saves that follow each other land in order: the newest copy is the file, however the writer
+/// threads are scheduled, and a save after a join lands too.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn background_saves_land_in_order_and_none_is_lost() {
+    let dir = std::env::temp_dir().join(format!("oag-records-order-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("a scratch directory");
+    let file = dir.join("records.toml");
+    let with_cursor = |event: &str| {
+        let mut store = Store::default();
+        store.set_campaign_cursor(
+            "wipeout pure",
+            &CampaignCursor {
+                grid: Some(event.to_string()),
+                slot: None,
+            },
+        );
+        store
+    };
+    for round in 0..40 {
+        let (first, second) = (format!("first {round}"), format!("second {round}"));
+        save_in_background_to(file.clone(), &with_cursor(&first));
+        save_in_background_to(file.clone(), &with_cursor(&second));
+        finish_background_saves();
+        let kept = parse(&std::fs::read_to_string(&file).expect("the file landed"))
+            .expect("parses")
+            .0;
+        assert_eq!(
+            kept.campaign_cursor("wipeout pure").grid.as_deref(),
+            Some(second.as_str()),
+            "round {round}: the later save is the file"
+        );
+    }
+    // A read right after a save sees it, whether or not the writer has run: no disk wait.
+    save_in_background_to(file.clone(), &with_cursor("queued"));
+    let seen = queued_for(&file).expect("the queued copy is returned");
+    assert_eq!(
+        seen.campaign_cursor("wipeout pure").grid.as_deref(),
+        Some("queued")
+    );
+    finish_background_saves();
+    // A save after the join is a new write, not swallowed by the earlier ones.
+    save_in_background_to(file.clone(), &with_cursor("last"));
+    finish_background_saves();
+    let kept = parse(&std::fs::read_to_string(&file).expect("the file landed"))
+        .expect("parses")
+        .0;
+    assert_eq!(
+        kept.campaign_cursor("wipeout pure").grid.as_deref(),
+        Some("last")
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

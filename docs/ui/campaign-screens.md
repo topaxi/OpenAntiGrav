@@ -2785,28 +2785,44 @@ on persist per campaign in `records.toml`, so the rule holds after a relaunch to
 - Written when the campaign closes or launches a race (`session/campaign.rs`, `keep_cursor`) and when the process
   ends with a campaign screen open (`Session::keep_campaign_position`), never per move.
   **Off the render thread**: `records::save_in_background` clones the store and writes it on an `oag_thread::Task`
-  (newest copy wins; `finish_background_saves` joins it at exit and at the end of a `--drive` run). The existing
-  `campaign_difficulty` write used to be an inline `records::save` on the frame thread; it goes through the same
-  helper now. Every *other* `records::save` call (race results, loyalty, `escape.rs`) is still on the frame thread.
+  (newest copy wins; `finish_background_saves` joins it at exit and at the end of a `--drive` run). Every save the
+  session makes goes through it now: the cursor, the difficulty, race results (`frame.rs`, `escape.rs`) and loyalty
+  (`endrace.rs`). One `WRITING` lock serialises every write of the file and an inline `records::save` (tests,
+  tools) supersedes a copy still waiting; `records::load` returns the newest copy handed to the background writer (no disk wait), so a read
+  right after a save sees it. Order: `records::tests::background_saves_land_in_order_and_none_is_lost`; the
+  results save landing beside the cursor: `campaign_cursor_ground_truth::the_cell_raced_is_the_one_the_campaign_reopens_on`.
 - Back from a race: `RETURN TO GRID` selects the cell raced (`reopen_cell_selection`, HD's measured-by-choice keep).
   Pulse's pause-menu QUIT RACE was read once to land on the grid's default cell (Head2Head `grid4_5_2`, 2026-10-08), but
   launching a cell files the shared slot and `open_cell_selection` restores it, so ours lands on the cell raced
   (`campaign_cursor_ground_truth::the_cell_raced_is_the_one_the_campaign_reopens_on`, a real launch then `escape`).
   **Ours, not the original's**; this was already so before this lane (the cursor was filed at launch in memory).
 - Per title: **Pulse (PSP, PS2 inherits), HD/Fury, Omega, 2048** share `CampaignStage`, so all four are wired.
-  **Pure** is a different flow (an event list per speed class, `pure_chain`) with its own return-to-event landing and
-  is not touched. Pointer/touch: remembering sets the same model selection a hover does; a click on the remembered
+  Pointer/touch: remembering sets the same model selection a hover does; a click on the remembered
   hexagon confirms, a click elsewhere moves (`campaign_pointer_ground_truth::pulse_a_remembered_cell_answers_a_click_like_a_picked_one`).
+- **Pure** (no `CampaignStage`; `pure_chain`): the event started (`Chosen::Start`) is filed in the same
+  `[[campaign_cursor]]` row, its name in `grid` (`Session::keep_event_cursor`), and `open_pure_chain` puts the chain on
+  that event's screen with the cursor on it (the landing a race's return already used, `put_on_event`). A relaunch
+  reopens on the track raced, not on `Mode` (`campaign_cursor_ground_truth::pure_single_player_reopens_on_the_event_last_started`,
+  PSP EU). Backing out of the chain without starting an event files nothing; **ours, not the original's**
+  (Pure's reboot behaviour is unread, see the handover thread).
+- **2048** (the touch event map, no `CampaignStage`): `follow_launch` files the event started (`Launch::Event`, and a
+  downloadable campaign's `Launch::Cell`) in the same row, and `finish_loading` puts the map's cursor on it
+  (`Frontend::select_campaign_event`) after the progress is folded in; a name the map no longer lists leaves the
+  default (Event 1). The map is shown once per launch (a race returns into this build's menus), so "reopen" is the
+  next launch. Test: `campaign_cursor_ground_truth::the_2048_map_reopens_on_the_event_last_started` (extracted Vita
+  PCSF00007, a seeded Event 1 bronze so Event 2 is open; `--drive` reports the map's cursor as `map_event`).
+  Pad and pointer land the same: the cursor is the map's own `selected`, which a tap sets too.
+  **Lineage, 2048 against Omega: checked, differs**: Omega's campaign is HD's `CampaignStage` (already remembers
+  per campaign, ported above); it has no touch event map, so there is nothing to wire there.
 - Compare shots: `--menu-page grid-select`/`cell-select` never read the store; PNGs byte-identical before/after, also
   with a populated profile.
 - Tests: `crates/game/tests/campaign_cursor_ground_truth.rs` (real `--drive` sessions, two launches on one profile),
   `records::tests::the_campaign_cursor_is_kept_per_campaign_and_round_trips`, `campaign_stage::tests::the_kept_grid_is_found_by_name_and_a_missing_one_is_the_default`.
-  `--drive` reports a campaign screen as `screen=campaign`, `screen.id=selection|grid|cell`, `focus=<grid or cell name>`.
+  `--drive` reports a campaign screen as `screen=campaign`, `screen.id=selection|grid|cell`, `focus=<grid or cell name>`,
+  Pure's chain as `screen=pure-chain`, `screen.id=<step>`, `focus=<row>`.
 - Omega: **ported**, walked through `--drive` on `data/extracted/ps4` (slot `(3, 2)` filed under `wipeout: omega
   collection`, a relaunch reopens `Grid Selection`); HD: walked too (`grid9` kept, a relaunch lands on it; the grid kept
-  reaches `Campaign Selection` through `CampaignSelection::at`). **2048: not applicable yet**, its campaign is the touch
-  event map with no `CampaignStage` (`oag_2048::TITLE.campaign` has no definition entry), so there is no grid or cell to
-  remember; the map's last event is an open follow-up. **Pure**: unchanged and open, see the handover thread.
+  reaches `Campaign Selection` through `CampaignSelection::at`).
 
 ## Open
 

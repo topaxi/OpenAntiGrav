@@ -27,12 +27,16 @@ impl Session {
             Some(Launch::Event(name)) => {
                 self.sync_race_team();
                 debug!("Launch 2048: starting campaign event {name:?}");
+                self.keep_event_cursor(&name);
                 self.pending_event = Some(name);
                 if let Err(e) = self.launch_race() {
                     log::error!("cannot start the campaign event: {e:#}");
                 }
             }
-            Some(Launch::Cell(name)) => self.launch_tier_cell(&name),
+            Some(Launch::Cell(name)) => {
+                self.keep_event_cursor(&name);
+                self.launch_tier_cell(&name);
+            }
             // Walked into rather than jumped to, so BACK from either page
             // lands on the menu root the way it does from the root's own
             // row - `oag_ui::menu::Menu::push`.

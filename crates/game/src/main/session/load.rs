@@ -243,6 +243,11 @@ impl Session {
                     records::Medal::Silver | records::Medal::Bronze => EarnedTier::Pass,
                 })
         });
+        // The map opens on the event last started, as the other campaigns reopen where they
+        // were left. A name the map no longer lists leaves it on its default.
+        if let Some(name) = self.records.campaign_cursor(&title_name).grid {
+            loaded.frontend.select_campaign_event(&name);
+        }
         if let Some(race_options) = &self.race_options {
             boot::tiers2048::refresh_locks(
                 &mut loaded.frontend,

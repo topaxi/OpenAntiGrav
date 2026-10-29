@@ -116,6 +116,9 @@ pub struct State {
     /// What the boot sequence is showing, on `stage=frontend`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub frontend: Option<String>,
+    /// The event the campaign map's cursor is on (Wipeout 2048), on `stage=frontend`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub map_event: Option<String>,
     /// The menu page under whatever overlay is open, on `stage=menu`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub page: Option<String>,
@@ -149,7 +152,7 @@ impl State {
     /// The texts a script condition may compare for `key`. Most keys have one; `focus` is the
     /// focused row's id, setting and label, so `focus=launch` and `focus="LAUNCH RACE"` both hold.
     ///
-    /// Keys: `stage`, `frontend`, `page`, `screen` (the overlay kind, `page` when none),
+    /// Keys: `stage`, `frontend`, `map_event`, `page`, `screen` (the overlay kind, `page` when none),
     /// `screen.id`, `title`, `focus`, and `race.title|track|track_file|team|variant|mode|source|craft_source`.
     #[must_use]
     pub fn get(&self, key: &str) -> Vec<String> {
@@ -158,6 +161,7 @@ impl State {
         match key {
             "stage" => vec![self.stage.clone()],
             "frontend" => one(self.frontend.clone()),
+            "map_event" => one(self.map_event.clone()),
             "page" => one(self.page.clone()),
             "screen" => one(screen.map(|s| s.kind.clone())),
             "screen.id" => one(screen.map(|s| s.id.clone())),
@@ -201,7 +205,14 @@ impl State {
     pub fn is_key(key: &str) -> bool {
         matches!(
             key,
-            "stage" | "frontend" | "page" | "screen" | "screen.id" | "title" | "focus"
+            "stage"
+                | "frontend"
+                | "map_event"
+                | "page"
+                | "screen"
+                | "screen.id"
+                | "title"
+                | "focus"
         ) || key.strip_prefix("race.").is_some_and(|rest| {
             matches!(
                 rest,

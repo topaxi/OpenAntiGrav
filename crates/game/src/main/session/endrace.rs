@@ -172,9 +172,7 @@ impl Session {
                     difficulty: stage.campaign_difficulty,
                 });
                 let total = self.records.record_loyalty(title_ref, &team, award);
-                if let Err(e) = oag_game::records::save(&self.records) {
-                    warn!("could not save the loyalty total: {e:#}");
-                }
+                oag_game::records::save_in_background(&self.records);
                 oag_ui_screens::endrace::HdLoyalty { award, total }
             })
         } else {
@@ -196,9 +194,7 @@ impl Session {
             // Selection` always names one.
             let loyalty = team.clone().map(|team| {
                 let total = self.records.record_loyalty(title_ref, &team, award);
-                if let Err(e) = oag_game::records::save(&self.records) {
-                    warn!("could not save the loyalty total: {e:#}");
-                }
+                oag_game::records::save_in_background(&self.records);
                 oag_ui_screens::endrace::Loyalty {
                     team_name: team,
                     award,
@@ -291,10 +287,8 @@ impl Session {
                     })
                     .collect()
             });
-        if split_results.is_some()
-            && let Err(e) = oag_game::records::save(&self.records)
-        {
-            warn!("could not save the loyalty totals: {e:#}");
+        if split_results.is_some() {
+            oag_game::records::save_in_background(&self.records);
         }
 
         // Only where the mode has no table of its own (Eliminator's and Zone's keep theirs).
