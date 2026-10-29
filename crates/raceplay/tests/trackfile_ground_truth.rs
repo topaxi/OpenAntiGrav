@@ -523,9 +523,9 @@ fn a_track_file_loads_on_its_host_and_elsewhere_only_as_a_remix() {
         foreign_track: Some(manifest.clone()),
         ..race::Options::default()
     };
-    let refused = race::load(&options(&hd, None))
-        .err()
-        .expect("a Pulse track on HD's own source is refused");
+    let Err(refused) = race::load(&options(&hd, None)) else {
+        panic!("a Pulse track on HD's own source is refused");
+    };
     let why = format!("{refused:#}");
     for needle in [
         "runs on Wipeout Pulse",
