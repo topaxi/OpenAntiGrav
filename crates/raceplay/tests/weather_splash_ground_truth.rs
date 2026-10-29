@@ -41,6 +41,8 @@ struct Census {
     ticks_with_splashes: usize,
     most_at_once: usize,
     spawned_points: usize,
+    /// The most the wet road reached at `enhanced`, which `original` must never leave `0.0`.
+    wettest: f32,
 }
 
 /// Runs an original race and an enhanced one in step and checks, every tick,
@@ -55,6 +57,7 @@ fn compare(track: &str, ticks: u32) -> Option<Census> {
         ticks_with_splashes: 0,
         most_at_once: 0,
         spawned_points: 0,
+        wettest: 0.0,
     };
     for tick in 0..ticks {
         original.tick(&PlayerInputs::none());
@@ -65,6 +68,12 @@ fn compare(track: &str, ticks: u32) -> Option<Census> {
             "the setting is render-side: the simulation must not notice it"
         );
         assert!(original.scenery_fx().weather().splashes().is_empty());
+        assert_eq!(
+            original.wet_road(),
+            0.0,
+            "the original's road is dry, whatever the weather"
+        );
+        census.wettest = census.wettest.max(enhanced.wet_road());
         let (o_add, o_alpha) = lists(&original);
         let (e_add, e_alpha) = lists(&enhanced);
         assert!(
@@ -111,6 +120,11 @@ fn rain_splashes_on_fort_gales_road_and_original_draws_none() {
         "{} at once",
         census.most_at_once
     );
+    assert!(
+        census.wettest > 0.3,
+        "Fort Gale's rain wets the road at enhanced: wettest {}",
+        census.wettest
+    );
     eprintln!(
         "Fort Gale: splashes on {} of 1500 ticks, at most {} at once",
         census.ticks_with_splashes, census.most_at_once
@@ -129,6 +143,7 @@ fn snow_settles_on_outpost_7s_road_and_original_draws_none() {
         "{} ticks with a flake in 1500",
         census.ticks_with_splashes
     );
+    assert_eq!(census.wettest, 0.0, "snow leaves the road dry");
     eprintln!(
         "Outpost 7: flakes on {} of 1500 ticks, at most {} at once",
         census.ticks_with_splashes, census.most_at_once

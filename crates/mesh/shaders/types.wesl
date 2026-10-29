@@ -94,6 +94,9 @@ struct Fog {
     // `mesh_render::TextureDetail::level_shift`. 0.0 is the recovered law, and
     // what a zeroed buffer holds.
     texlod_shift: f32,
+    // The enhanced weather's wet road, 0..1 - `mesh_render::Fog::wet`. Zero is
+    // the original's dry road, and the only value any other title writes.
+    wet: f32,
 };
 
 // The light rig a Wipeout HD circuit authors in its own `.envsettings`, or the

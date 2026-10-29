@@ -267,6 +267,21 @@ touch geometry (`Modifier_WrapBox` only wraps and blows them), so it has no spla
   served by the fallback layer ([asset-layers.md](../../../architecture/asset-layers.md))
   and placed on the particle sheet after every effect's sprite. The loader report
   says `weather: splash art ... (ours)`.
+- **The wet road** (`oag_mesh` `wet.wesl`, `Fog::wet`, `Race::wet_road`). The original has no
+  wet road either, so this is ours too. At `enhanced`, a rain circuit's road is darkened
+  and given a Fresnel reflection of the sky (the circuit's own fog colour), growing
+  linearly over `WET_RAMP_SECONDS` (40 s of weather clock) from dry to full. The road is
+  the batches whose texture label contains `surface` (`Dsurface6_*` on Fort Gale; 9
+  textures, 185 of 1,394 draws), marked per vertex in `GpuVertex::texcoord2.x`
+  (`ROAD_MARK`) at load: a name test on the artists' own naming, chosen because no field on
+  the disc says "road". Snow stays dry, and the road is dry while the weather sits at a
+  covered section's anchor (the camera is under a roof), so the wet term pops on at a
+  tunnel mouth. Open: the road seen *from* a tunnel looking out is dry, and the other
+  circuits' road texture names are unchecked (Outpost 7 is snow and unaffected).
+  Constants (`WET_DARKEN` 0.42, grazing sky share 0.85, face-on 0.06) are chosen, not
+  measured. At `original` `Fog::wet` is exactly `0.0`; the shader takes a branch on it, so
+  the frame is byte-identical (8 of 8 `cmp` on `14_Track` and `07_Track` at ticks 600,
+  1000, 1500 and 2000).
 - **Cost**, whole-race bench recipe (`OAG_RENDER_BENCH_RACE`, single race, seed 1,
   autopilot, 1280x720, first 3,000 ticks, debug profile at opt-level 2, taken under the gate lock,
   load average 2 to 10 at start, adapter RADV). CPU ms a frame, p50 (mean): Fort Gale

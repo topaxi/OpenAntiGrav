@@ -417,7 +417,9 @@ impl Scene {
         // draws - reading an empty map at zero strength.
         self.render_shadow_passes(queue, encoder, race, shadows, frustum.as_ref());
         let scene = mesh_render::Scene {
-            fog: fog.with_texture_detail(race.texture_detail()),
+            fog: fog
+                .with_texture_detail(race.texture_detail())
+                .with_wet(race.wet_road()),
             // Pulse's hull lights reach the craft alone - see `ship_scene`.
             light: light.without_hull(),
             // The flame surface's scroll clock - `time`, engine parameter slot
