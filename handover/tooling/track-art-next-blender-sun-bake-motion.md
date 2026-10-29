@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [pulse, pure]
 updated: 2026-10-29
-summary: "Track art: format, hull rig (2a), Blender art export, sun, cover light (2b), keyframed motion and pad plates landed; next a Bake operator, HD sun"
+summary: "Track art: format, hull rig, Blender export, sun, cover light, own sky, motion and pad plates landed; next a Bake operator, HD sun"
 size: L (60)
 difficulty: medium (50)
 categories: [tooling, rendering]
