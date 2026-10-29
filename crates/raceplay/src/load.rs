@@ -1369,6 +1369,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     if track_module && loaded.setup.scenery_fx.weather.is_none() {
         pulse_psp::place_driven_weather(&mut loaded, title, &mut archives);
     }
+    #[cfg(feature = "view")]
     if foreign_art.lens_flare.is_some() {
         loaded.setup.scenery_fx.lens_flare = foreign_art.lens_flare.map(Box::new);
     }
