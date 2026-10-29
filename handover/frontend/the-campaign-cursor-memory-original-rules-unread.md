@@ -1,5 +1,5 @@
 ---
-status: open
+status: re-first
 titles: [pulse, pure]
 updated: 2026-10-29
 summary: "Campaign cursor memory persists on Pulse, HD, Omega, Pure and 2048; the original's reboot and race rules are unread"
