@@ -33,6 +33,7 @@ mod damage_fx;
 mod destroy_camera;
 mod eliminator;
 mod energy_bar_delay;
+mod extensions;
 mod field;
 mod hash;
 mod hd_effect_sprites;

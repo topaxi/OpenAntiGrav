@@ -79,10 +79,13 @@ pub fn prepare(sources: &[Source], title: &str, report: &mut Vec<String>) -> Pre
     #[cfg(not(feature = "extensions"))]
     {
         for source in sources {
-            report.push(format!(
-                "mod {}: {} left out: this build has no `extensions` feature",
-                source.mod_id, source.module
-            ));
+            push(
+                report,
+                format!(
+                    "mod {}: {} left out: this build has no `extensions` feature",
+                    source.mod_id, source.module
+                ),
+            );
         }
         Prepared::default()
     }
@@ -94,17 +97,23 @@ pub fn prepare(sources: &[Source], title: &str, report: &mut Vec<String>) -> Pre
         for source in sorted {
             let label = format!("mod {}: {}", source.mod_id, source.module);
             if modules.len() == MAX_SIM_MODS {
-                report.push(format!(
-                    "{label} left out: a race runs at most {MAX_SIM_MODS} simulation modules"
-                ));
+                push(
+                    report,
+                    format!(
+                        "{label} left out: a race runs at most {MAX_SIM_MODS} simulation modules"
+                    ),
+                );
                 continue;
             }
             if source.api != oag_modhost::ABI {
-                report.push(format!(
-                    "{label} left out: built for API {}, this host is API {}",
-                    source.api,
-                    oag_modhost::ABI
-                ));
+                push(
+                    report,
+                    format!(
+                        "{label} left out: built for API {}, this host is API {}",
+                        source.api,
+                        oag_modhost::ABI
+                    ),
+                );
                 continue;
             }
             let limits = oag_modhost::Limits {
@@ -118,18 +127,28 @@ pub fn prepare(sources: &[Source], title: &str, report: &mut Vec<String>) -> Pre
                     oag_modhost::Module::compile(&wasm, limits).map_err(|e| e.to_string())
                 }) {
                 Ok(module) => {
-                    report.push(format!(
-                        "{label}: simulation module loaded, {} state bytes, {} fuel a tick; the race is MODDED and records no replay",
-                        source.state_bytes,
-                        oag_modhost::FUEL_PER_TICK
-                    ));
+                    push(
+                        report,
+                        format!(
+                            "{label}: simulation module loaded, {} state bytes, {} fuel a tick; the race is MODDED and records no replay",
+                            source.state_bytes,
+                            oag_modhost::FUEL_PER_TICK
+                        ),
+                    );
                     modules.push((source.mod_id.clone(), module));
                 }
-                Err(e) => report.push(format!("{label} left out: {e}")),
+                Err(e) => push(report, format!("{label} left out: {e}")),
             }
         }
         Prepared { modules }
     }
+}
+
+/// A load report line, also logged at `info`: a modded race says so at the default
+/// filter, where the rest of the report is `debug`.
+fn push(report: &mut Vec<String>, line: String) {
+    log::info!("{line}");
+    report.push(line);
 }
 
 /// One module's numbers for the dev overlay, after the last tick. An output, never

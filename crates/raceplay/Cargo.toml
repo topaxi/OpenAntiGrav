@@ -119,6 +119,8 @@ oag-omega.workspace = true
 oag-schema = { workspace = true, features = ["validate"] }
 oag-testdata.workspace = true
 pollster.workspace = true
+# The extension tests' guests, in the text format.
+wat = "1.262.0"
 
 [[test]]
 name = "it_a_g"
