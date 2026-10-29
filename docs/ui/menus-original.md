@@ -540,9 +540,9 @@ Ranked by how much a player notices, ours first listed worst:
    the strip, ink and size matching). The tag is still empty. On the campaign
    pages a `--menu-page` still draws no tip at all (`static_footer_overlay`
    passes an empty rotation), so only the live stage and `--menu-page main`
-   show the new face. Also visible there: our `Confirm` label is smaller than
-   the original's and sits higher against its button glyph (shrink-to-fit
-   scale, not measured against the disc).
+   show the new face. *(Our `Confirm` label was
+   smaller than the original's and sat higher against its button glyph, a
+   shrink-to-fit workaround; closed 2026-10-29, it draws as authored.)*
 4. ~~**Track and Ship Select labels are capitals where the original is mixed
    case.**~~ **Closed 2026-10-08**: `font="default"` text draws in the `Default` atlas at native size (`FaceScales::native_default`), the pickers carry the `Confirm`/`Back` legend and the ticker (`MenuStage::picker_footer`, and the same for `--menu-page`), and the slash in the counters is the real one. *(was:)* `Distance(m)`, `Lap record`, `Classic`, `Speed`, `Thrust`, the
    `Help`/`Music playlist` prompts are `Default` role on the disc. Ours draws

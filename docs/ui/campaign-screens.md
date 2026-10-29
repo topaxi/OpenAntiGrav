@@ -2585,18 +2585,15 @@ solo look at the new draw caught:
    (see `oag_ui_screens::campaign::footer::ticker_draw`'s own doc). Confirmed live,
    `crop-ticker-left.png`: the text now cuts
    cleanly at the tab's own edge.
-2. **`Confirm` ran into both button glyphs beside it.** `ControlTextConfirm`
-   authors no `font=` in `Skin.xml`, and this crate's fallback (`"Default"`,
-   13px) draws through the same single loaded menu-face atlas every other
-   campaign-screen label does - wider per glyph than whatever compact face
-   authored `Confirm`'s own 47-native-pixel gap to the back button. No
-   available role fit it from either end (`crop-legend2-zoom.png`/
-   `crop-legend3-zoom.png`), so `NavigationLegend` now right-aligns
-   `Confirm` to end just short of the back glyph and shrinks its own scale
-   only if that still does not clear the confirm glyph on its other side -
-   both **chosen, not measured**, since nothing on disc says where the
-   word should end or how far it may shrink. Confirmed live,
-   `FIXED-cellselect-ticker-clipped-legend-fit.png`.
+2. **`Confirm` ran into both button glyphs beside it.** *(Superseded,
+   2026-10-29.)* While the menu face drew wider than the original's,
+   `NavigationLegend` right-aligned `Confirm` to the back glyph and shrank
+   it to fit (chosen, not measured). The face now matches the original's
+   word widths pixel for pixel, so the workaround only made `Confirm` 34 px
+   wide where the original's is 40 (PSP `Cell Selection` pair, x 375-408
+   against 369-408) and is gone: `Confirm` draws left-aligned at its
+   authored `x="368"` at scale 1.0, ending at x 408 against the back
+   glyph's 415 (``pulses_confirm_keeps_its_authored_x_and_full_scale`).
 
 **Not fixed, and now written down rather than silently left**: neither
 defect's *root cause* is reachable from this crate. This build loads
@@ -3237,7 +3234,7 @@ and its own "what is not determined" section.
   `menu::rows::draw_text_rows` already do) - a change to this crate's own
   `campaign/draw.rs`, outside the lane that found and fixed the mechanism.
   `NavigationLegend`'s own `FE_CONFIRM` shrink-to-fit (`Prompt::left_bound`/
-  `align_right_to`, above) is now measured against the atlas it actually
+  `align_right_to`, since removed, 2026-10-29: see the superseded note above) is now measured against the atlas it actually
   draws through rather than the wrong one - **on both paths**: the live
   session (`crate::main::menu_stage::MenuStage`'s own `default_atlas`/
   `default_measure`) and `--menu-page`/`capture.rs`, which had its *own*,
@@ -3404,7 +3401,8 @@ to something" is not evidence it decoded the right thing; see the probe's
 own module doc for the correction.
 
 **HD's own `CONFIRM` needed one more fix once its icon stopped being
-excluded: it must not shrink-to-fit the way Pulse's does.** Pulse's own
+excluded: it must not shrink-to-fit the way Pulse's did (the shrink was
+removed on 2026-10-29, so every title now draws `CONFIRM` as authored).** Pulse's own
 `Confirm`/`Back` glyphs sit close enough together at `menu`-role scale that
 the word overlaps the back glyph, so `NavigationLegend::read` right-aligns
 and shrinks `FE_CONFIRM` to fit between the two (`docs/ui/campaign-screens.md`'s

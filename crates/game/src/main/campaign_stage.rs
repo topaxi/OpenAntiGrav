@@ -364,12 +364,11 @@ impl CampaignStage {
     pub(crate) fn nav_legend_draw(
         &self,
         faces: &oag_ui_screens::picker::FaceScales,
-        measure: &dyn Fn(&str) -> f32,
     ) -> Vec<oag_ui::frontend::Draw> {
         let Some(legend) = self.nav_legend.as_ref() else {
             return Vec::new();
         };
-        let mut draws = legend.draw(faces, measure);
+        let mut draws = legend.draw(faces);
         draws.extend(
             self.notice
                 .as_deref()
