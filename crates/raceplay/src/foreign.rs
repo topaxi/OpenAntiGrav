@@ -92,6 +92,61 @@ pub fn read_any(path: &Path) -> anyhow::Result<(Track, Vec<String>)> {
     Ok((loaded.track, report))
 }
 
+/// The title a track names as its host (`Track::host`, ADR-0076 decision 13),
+/// or `None` for a track that names none (a Workshop track mapped in memory).
+///
+/// # Errors
+///
+/// A host spelled as no title this build knows, named with the ones it does.
+pub fn host_title(track: &Track) -> anyhow::Result<Option<&'static oag_title::Title>> {
+    let Some(host) = track.host.as_deref() else {
+        return Ok(None);
+    };
+    oag_source::title::by_slug(host).map(Some).ok_or_else(|| {
+        anyhow::anyhow!(
+            "track.host {host:?} names no title this build knows; one of: {}",
+            oag_source::title::ALL
+                .iter()
+                .map(|t| oag_source::layers::slug(t))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    })
+}
+
+/// Refuses a track raced with a track source of another title than its host.
+/// What it borrows by name (host textures, the sky circuit) resolves only from
+/// its host's disc, so on another source it would draw black; another title
+/// races it only as a Race Remix, the host as the track source and the other
+/// title's craft.
+///
+/// # Errors
+///
+/// As [`host_title`], and the mismatch, naming both titles and the remix
+/// that races it.
+pub fn check_host(track: &Track, source: &oag_title::Title) -> anyhow::Result<()> {
+    let Some(host) = host_title(track)? else {
+        return Ok(());
+    };
+    if oag_source::layers::slug(host) == oag_source::layers::slug(source) {
+        return Ok(());
+    }
+    anyhow::bail!(
+        "{:?} runs on {} (track.host = {:?}); this race's track source is {}. Race it on \
+         {}, or on {}'s craft as a Race Remix with {} as the track source (RACE REMIX, or \
+         --source <{} disc> --craft-source <{} disc>)",
+        track.title,
+        host.name,
+        track.host.as_deref().unwrap_or_default(),
+        source.name,
+        host.name,
+        source.name,
+        host.name,
+        host.name,
+        source.name,
+    )
+}
+
 /// The catalogue entry for the track at `path` (a `.wtrk` or a track-file
 /// manifest): a synthetic [`catalogue::Track`](crate::catalogue::Track) carrying
 /// the file as data, so nothing downstream branches on a title or a name to tell

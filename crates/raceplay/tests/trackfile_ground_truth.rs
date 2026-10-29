@@ -76,6 +76,7 @@ fn same(a: &Track, b: &Track) -> Result<(), String> {
     }
     eq!("id", a.id, b.id);
     eq!("title", a.title, b.title);
+    eq!("host", a.host, b.host);
     eq!("ai", a.ai, b.ai);
     eq!("start", a.start, b.start);
     eq!("speedup pads", a.speedup_pads, b.speedup_pads);
@@ -126,6 +127,12 @@ fn every_circuit_exports_and_reads_back_the_same(image: &str) {
                     continue;
                 }
             };
+            let host = if is_pure(image) {
+                "wipeout-pure"
+            } else {
+                "wipeout-pulse"
+            };
+            assert_eq!(exported.host.as_deref(), Some(host), "{image} {track}");
             let parts = match to_parts(&exported, "x.glb") {
                 Ok(p) => p,
                 Err(e) => {
@@ -310,13 +317,16 @@ fn every_original_workshop_track_converts_and_reads_back_the_same() {
         if !w.has_tag("Original") || w.has_tag("Port/Remake") {
             continue;
         }
-        let mapped = match race::foreign::read(&path) {
+        let mut mapped = match race::foreign::read(&path) {
             Ok(t) => t,
             Err(e) => {
                 refused.push(format!("{}: {e}", w.title));
                 continue;
             }
         };
+        // A Workshop track names no host; a converter writing it as a file names one.
+        assert_eq!(mapped.host, None, "{}", w.title);
+        mapped.host = Some("wipeout-pulse".to_string());
         let parts = to_parts(&mapped, "x.glb").unwrap_or_else(|e| panic!("{}: {e}", w.title));
         let back =
             from_parts(&parts.manifest, &parts.glb).unwrap_or_else(|e| panic!("{}: {e}", w.title));
@@ -349,7 +359,9 @@ fn lions_den_races_the_same_converted_as_loaded_directly() {
     let dir = std::env::temp_dir().join(format!("oag-trackfile-lion-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let manifest = dir.join("lions-den.track.toml");
-    oag_trackfile::write(&race::foreign::read(&wtrk).unwrap(), &manifest).unwrap();
+    let mut converted = race::foreign::read(&wtrk).unwrap();
+    converted.host = Some("wipeout-pulse".to_string());
+    oag_trackfile::write(&converted, &manifest).unwrap();
 
     let start = |track: std::path::PathBuf| {
         let o = race::Options {
@@ -483,6 +495,68 @@ fn a_lone_craft_gets_round_the_oval_re_exported_from_blender() {
         "Fixture Octagon",
         &[],
     );
+}
+
+/// A track file loads natively only on the title its `track.host` names
+/// (ADR-0076, decision 13), and on another title's craft only as a Race Remix
+/// with the host as the track source. The Blender loop borrows 03_Track's sky
+/// from the Pulse disc: on HD natively it is refused by name rather than drawn
+/// without it; remixed (Pulse track source, HD craft) it loads with nothing
+/// missed. Drop the check and the first half fails; route the track side
+/// through the craft's disc and the second half's misses appear.
+#[test]
+#[ignore = "needs a Pulse and an HD image"]
+fn a_track_file_loads_on_its_host_and_elsewhere_only_as_a_remix() {
+    let (Some(pulse), Some(hd)) = (
+        oag_testdata::image(IMAGES[1]),
+        oag_testdata::image("data/images/hdfury-ps3-eu.iso"),
+    ) else {
+        return;
+    };
+    let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../trackfile/tests/fixtures/blender_loop.track.toml");
+    let options = |source: &std::path::Path, craft: Option<&std::path::Path>| race::Options {
+        source: source.display().to_string(),
+        craft_source: craft.map(|c| c.display().to_string()),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        foreign_track: Some(manifest.clone()),
+        ..race::Options::default()
+    };
+    let refused = race::load(&options(&hd, None))
+        .err()
+        .expect("a Pulse track on HD's own source is refused");
+    let why = format!("{refused:#}");
+    for needle in [
+        "runs on Wipeout Pulse",
+        "track source is Wipeout HD",
+        "Race Remix",
+    ] {
+        assert!(why.contains(needle), "refusal lacks {needle:?}: {why}");
+    }
+    let loaded = race::load(&options(&pulse, Some(&hd))).expect("the remix loads");
+    let report = loaded.report.join("\n");
+    assert!(
+        report.contains("track file runs on wipeout-pulse; the track source is Wipeout Pulse"),
+        "{report}"
+    );
+    assert!(
+        report.contains(r"art sky: Data\Environments\03_Track\track.vex's Skycube"),
+        "the Pulse sky resolves on the track source:\n{report}"
+    );
+    // The craft side (HD's engine flares) reports on its own lines; the track's
+    // art is what the track source must answer.
+    for line in report.lines().filter(|l| l.starts_with("art")) {
+        for miss in [
+            "draws nothing",
+            "does not read",
+            "did not resolve",
+            "none drawn",
+        ] {
+            assert!(!line.contains(miss), "art line has {miss:?}: {line}");
+        }
+    }
+    assert_eq!(loaded.setup.foreign.as_deref(), Some("blender-loop"));
 }
 
 /// The other titles' default circuits through the same exporter: Pure, HD,
