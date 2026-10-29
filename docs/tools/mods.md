@@ -20,7 +20,8 @@ contents) is read with the wrapping directory stripped. A path that leaves the m
 (`..`, an absolute path) is refused.
 
 Searched, in this order: `$OAG_MODS` alone when set (a path list), else `data/mods/` (a
-checkout), `mods/` beside the program (or the AppImage), and `<data dir>/oag/mods/`
+checkout), `assets/mods/examples/` (the example mods, the [`mod-examples`](https://github.com/OpenAntiGrav/mod-examples) submodule,
+found when the game runs from a checkout), `mods/` beside the program (or the AppImage), and `<data dir>/oag/mods/`
 (`~/.local/share/oag/mods/` on Linux). Each directory is searched one level deep: a
 folder holding `oag-mod.toml`, or a `*.zip`, or a `*.oagmod`. `just mods-list` shows
 what the search finds and what it left out.
@@ -46,8 +47,40 @@ repository = "https://example.org/example"   # optional
 
 A mod **with no licence loads**, and the mods list and the load report print `no license
 stated`. `oag` is a semver requirement against this build; a mod asking for another
-version is left out and named. `titles` is information for now. `just mods-check <path>`
+version is left out and named. `titles` names the titles the mod is for, by
+`oag_title::Title::slug` (`wipeout-pulse`, `wipeout-hd`, `wipeout-omega-collection`);
+a mod's campaigns are offered only on those (empty: any). `just mods-check <path>`
 opens a mod and checks its manifest.
+
+## Campaigns, pilots and tracks: `campaigns/`, `pilots/`, `tracks/`
+
+A mod may carry custom campaigns, one file each under `campaigns/`; pilots for them
+under `pilots/` (the pilot file's own format, `pilot.tosd`), which an event names by
+file stem before the player's roster; and circuits under `tracks/` ([track
+file](../formats/track-file.md): the `.track.toml` and the `.glb` it names), which an
+event races with `file = "tracks/<name>.track.toml"`, or another installed mod's with
+`file = "<mod id>:tracks/<name>.track.toml"`. A track file is raced from a
+**folder** mod only, since its reader takes a path on disk. Every folder mod's
+`tracks/*.track.toml` is also a row on RACE REMIX's CUSTOM title, on any title the mod
+is for, so a mod may carry tracks and nothing else. On Pulse, HD/Fury
+and Omega, RACE CAMPAIGN then opens a page listing the disc's campaign first and each
+installed campaign after it. The format is [custom campaign](../formats/custom-campaign.md);
+a campaign that does not compile, or names a disc this machine cannot open, is not
+offered and the log says why. The MODS page's ADDS line names each campaign offered.
+The worked examples live in their own repository, [`mod-examples`](https://github.com/OpenAntiGrav/mod-examples),
+mounted at `assets/mods/examples` as a git submodule (`git submodule update --init`;
+its tracks are in Git LFS). `example-campaign/` is NIGHT RUN: two tiers (six events and
+five), the first drawn with locks and the second revealed as it opens, a mod pilot
+(`pilots/rival.toml`), a track it bundles (`tracks/practice-octagon.track.toml`) and
+Hillside out of `hillside/`, a track-only mod (`oag.hillside`). Both are for Pulse only:
+Hillside's art borrows Pulse 03_Track's textures by name. The game run from the
+checkout (`just play`) searches `assets/mods/examples` too, relative to the working
+directory, so they are offered there; an installed game has no such folder, so copy
+both folders into a mods directory to play them there. `OAG_MODS` replaces the whole
+search path, examples included. **Track and model files never go into this
+repository** (`just audit-leakage` refuses a tracked `.glb`, `.gltf` or `.blend`
+outside `crates/trackfile/tests/fixtures/`): an example goes to `mod-examples`, a real
+mod to a repository of its own.
 
 ## Menu rows: `menu.toml`
 

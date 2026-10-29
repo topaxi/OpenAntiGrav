@@ -272,6 +272,8 @@ OAG_LOADING_COUNTS_CACHED_SUFFIX = { text = ", {cached} já no cache", human = f
 OAG_LOADING_COUNTS_FAILED_SUFFIX = { text = ", {failed} com falha", human = false }
 OAG_CAMPAIGN_MODE_UNSUPPORTED = { text = "O MODO DESTE EVENTO AINDA NÃO PODE SER CORRIDO NESTA VERSÃO", human = false }
 OAG_CAMPAIGN_TRACK_UNAVAILABLE = { text = "O CIRCUITO DESTE EVENTO NÃO ESTÁ NESTE DISCO", human = false }
+OAG_CAMPAIGN_EVENT_UNAVAILABLE = { text = "ESTE EVENTO NÃO PODE SER CORRIDO COM O QUE ESTA MÁQUINA TEM", human = false }
+OAG_MENU_CAMPAIGN_PICKER = { text = "CAMPANHAS", human = false }
 OAG_MENU_SINGLE_PLAYER = { text = "UM JOGADOR", human = false }
 OAG_MENU_SINGLE_PLAYER_SUBTITLE = { text = "Arcade, torneios, contra o relógio e Zona, classe por classe", human = false }
 OAG_MEDAL_GOLD = { text = "OURO", human = false }

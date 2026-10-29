@@ -87,6 +87,24 @@ impl Scan {
         self.held.store(held, Ordering::Relaxed);
     }
 
+    /// Adds track files found elsewhere (installed mods'), after the search
+    /// path's own. Only before [`Scan::begin`]: a scan already reading keeps
+    /// the list it started with.
+    pub fn add_files(&mut self, files: &[PathBuf]) {
+        if self.begun {
+            log::warn!(
+                "{} mod track file(s) found after the custom track scan began; not listed",
+                files.len()
+            );
+            return;
+        }
+        for file in files {
+            if !self.files.contains(file) {
+                self.files.push(file.clone());
+            }
+        }
+    }
+
     /// Starts reading the files on a thread of their own, once. A later call is
     /// a no-op, so a caller may ask every frame the CUSTOM title is showing.
     pub fn begin(&mut self) {
@@ -243,6 +261,105 @@ pub fn apply(options: &mut oag_raceplay::Options, path: &Path) {
     options.foreign_track = Some(path.to_path_buf());
     options.track = None;
     options.craft_source = None;
+}
+
+/// The disc a track file's track side loads from: the first playable row of
+/// the title `host` names (`oag_source::layers::slug`), never a guest standing
+/// in for it (2048 for HD), since only that disc holds what the file borrows by
+/// name (ADR-0076 decision 13). The error is the reason a menu or a log gives
+/// for a file whose host this machine has no disc of.
+///
+/// # Errors
+///
+/// No playable row of that title.
+pub fn host_disc<'a>(
+    titles: &'a [crate::launcher::Candidate],
+    host: &str,
+) -> Result<&'a crate::launcher::Candidate, String> {
+    titles
+        .iter()
+        .find(|c| {
+            c.playable()
+                .is_some_and(|t| oag_source::layers::slug(t) == host)
+        })
+        .ok_or_else(|| {
+            let name = oag_source::title::by_slug(host).map_or(host, |t| t.name);
+            format!("borrows from the {name} disc, which this machine does not have")
+        })
+}
+
+/// Why a listed file is not offered for `craft`'s title (its `titles` filter,
+/// ADR-0076 decision 13), or `None` when it is, when it lists no titles, or when
+/// no craft title is known yet.
+#[must_use]
+pub fn not_offered(listing: &Listing, craft: Option<&oag_title::Title>) -> Option<String> {
+    let craft = craft?;
+    if listing.titles.is_empty()
+        || listing
+            .titles
+            .iter()
+            .any(|t| *t == oag_source::layers::slug(craft))
+    {
+        return None;
+    }
+    let names: Vec<&str> = listing
+        .titles
+        .iter()
+        .map(|t| oag_source::title::by_slug(t).map_or(t.as_str(), |title| title.name))
+        .collect();
+    Some(format!("offered on {} only", names.join(", ")))
+}
+
+/// Makes a launch of a track file that borrows from another title's disc a Race
+/// Remix (ADR-0076 decision 13): the host's disc becomes the track source and
+/// the launch's own source the craft's (unless a craft source is already set).
+/// A track that borrows nothing, a Workshop track, or one already on its host's
+/// disc is left alone. `source_title` names the title of a source path;
+/// `discs` lists this machine's discs, asked for only when a swap is needed.
+///
+/// `Ok(Some(line))` says what was swapped, for the log.
+///
+/// # Errors
+///
+/// The track borrows from a title this machine has no disc of; the options are
+/// left as they were, and the loader refuses the race by name.
+pub fn route_to_host(
+    options: &mut oag_raceplay::Options,
+    source_title: impl FnOnce(&str) -> Option<&'static oag_title::Title>,
+    discs: impl FnOnce() -> Vec<crate::launcher::Candidate>,
+) -> Result<Option<String>, String> {
+    let Some(path) = options.foreign_track.as_deref() else {
+        return Ok(None);
+    };
+    if !oag_raceplay::foreign::is_track_file(path) {
+        return Ok(None);
+    }
+    // A file that will not read is left for the loader to refuse, by name.
+    let Ok((track, _)) = oag_raceplay::foreign::read_any(path) else {
+        return Ok(None);
+    };
+    let Some(host) = track.host else {
+        return Ok(None);
+    };
+    if source_title(&options.source).is_some_and(|t| oag_source::layers::slug(t) == host) {
+        return Ok(None);
+    }
+    let discs = discs();
+    let disc = host_disc(&discs, &host).map_err(|why| format!("{}: {why}", track.title))?;
+    let craft = options
+        .craft_source
+        .take()
+        .unwrap_or_else(|| options.source.clone());
+    let line = format!(
+        "{:?} borrows from the {} disc: racing it as a Race Remix, track from {}, craft from \
+         {craft}",
+        track.title,
+        disc.title(),
+        disc.source
+    );
+    options.source.clone_from(&disc.source);
+    options.craft_source = (craft != options.source).then_some(craft);
+    Ok(Some(line))
 }
 
 mod cache;

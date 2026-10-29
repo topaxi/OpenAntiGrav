@@ -925,6 +925,21 @@ impl Title {
     pub fn team_identity(&self, team: &str) -> String {
         team::identity_of(self.teams, team)
     }
+    /// The name as a mod's `titles` list spells it: lowercase ASCII, every run
+    /// of anything else one `-` (`Wipeout: Omega Collection` is
+    /// `wipeout-omega-collection`).
+    #[must_use]
+    pub fn slug(&self) -> String {
+        let mut out = String::new();
+        for c in self.name.chars() {
+            if c.is_ascii_alphanumeric() {
+                out.push(c.to_ascii_lowercase());
+            } else if !out.is_empty() && !out.ends_with('-') {
+                out.push('-');
+            }
+        }
+        out.trim_end_matches('-').to_string()
+    }
 
     /// What this title throws on `trigger`, or `None` when it draws nothing
     /// there (it does not do it, or it is unread).

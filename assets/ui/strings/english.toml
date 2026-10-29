@@ -439,6 +439,10 @@ OAG_LOADING_COUNTS_FAILED_SUFFIX = { text = ", {failed} failed", human = false }
 # looking dead. `crates/game/src/main/campaign_stage.rs`.
 OAG_CAMPAIGN_MODE_UNSUPPORTED = { text = "THIS EVENT'S MODE CANNOT BE RACED IN THIS BUILD YET", human = false }
 OAG_CAMPAIGN_TRACK_UNAVAILABLE = { text = "THIS EVENT'S CIRCUIT IS NOT ON THIS DISC", human = false }
+# A mod campaign event naming a team, pilot or disc this machine does not have
+# (ADR-0077), and the page that picks the disc's campaign or a mod's.
+OAG_CAMPAIGN_EVENT_UNAVAILABLE = { text = "THIS EVENT CANNOT BE RACED WITH WHAT THIS MACHINE HAS", human = false }
+OAG_MENU_CAMPAIGN_PICKER = { text = "CAMPAIGNS", human = false }
 
 # Wipeout Pure's SINGLE PLAYER chain: our own wording around the disc's circuit,
 # tournament, class and mode names. `crates/game/src/main/pure_chain_stage.rs`.

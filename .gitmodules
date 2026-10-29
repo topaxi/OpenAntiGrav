@@ -1,0 +1,3 @@
+[submodule "assets/mods/examples"]
+	path = assets/mods/examples
+	url = https://github.com/OpenAntiGrav/mod-examples

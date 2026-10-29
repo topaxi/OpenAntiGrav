@@ -18,6 +18,26 @@ fn shipped() -> Vec<(&'static str, &'static str)> {
         ("assets/ai/example-pilot.toml", "pilot"),
         ("assets/mods/oag-extras/oag-mod.toml", "mod"),
         ("assets/mods/oag-extras/menu.toml", "mod-menu"),
+        // The example mods' submodule (github.com/OpenAntiGrav/mod-examples):
+        // read when checked out, skipped by name when not.
+        ("assets/mods/examples/example-campaign/oag-mod.toml", "mod"),
+        ("assets/mods/examples/hillside/oag-mod.toml", "mod"),
+        (
+            "assets/mods/examples/hillside/tracks/hillside.track.toml",
+            "track",
+        ),
+        (
+            "assets/mods/examples/example-campaign/tracks/practice-octagon.track.toml",
+            "track",
+        ),
+        (
+            "assets/mods/examples/example-campaign/campaigns/night-run.toml",
+            "campaign",
+        ),
+        (
+            "assets/mods/examples/example-campaign/pilots/rival.toml",
+            "pilot",
+        ),
         ("crates/trackfile/tests/fixtures/oval.track.toml", "track"),
         ("crates/game/tests/fixtures/music-state.toml", "music-state"),
         ("assets/fallback/Data/XML/SplitHud_Pulse.toml", "split-hud"),
@@ -30,6 +50,10 @@ fn shipped() -> Vec<(&'static str, &'static str)> {
 #[test]
 fn every_shipped_document_validates_against_the_schema_it_names() {
     for (path, kind) in shipped() {
+        if path.starts_with("assets/mods/examples/") && !root().join(path).is_file() {
+            eprintln!("skipped {path}: the example mods submodule is not checked out");
+            continue;
+        }
         let text = std::fs::read_to_string(root().join(path)).unwrap();
         let table: toml::Table = text.parse().unwrap();
         let header: oag_schema::Header = table[oag_schema::TABLE].clone().try_into().unwrap();

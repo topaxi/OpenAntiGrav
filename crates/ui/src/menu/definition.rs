@@ -33,7 +33,8 @@ use crate::language::StringTable;
 use oag_core::buttons::button_from_name;
 
 use super::{
-    Action, Choice, Condition, Entry, Page, Pin, Restart, RowMeta, Value, ValueSource, Warning,
+    Action, CAMPAIGN_PICKER_PAGE, CUSTOM_CAMPAIGN_ROW, Choice, Condition, Entry,
+    ORIGINAL_CAMPAIGN_ROW, Page, Pin, Restart, RowMeta, Value, ValueSource, Warning,
 };
 
 /// The schema kind a menu file declares in its `[toml-schema]` header.
@@ -599,6 +600,69 @@ impl Definition {
             &say(row.label),
             Some(&say(row.subtitle)),
         );
+    }
+
+    /// Turns the campaign row into a page that picks between the disc's own
+    /// campaign and each mod campaign in `rows` (`(key, name, description)`),
+    /// ADR-0077. The page's first row is the original campaign, worded as the
+    /// row was; each other row fires [`Action::OpenCustomCampaign`] and carries
+    /// `CUSTOM_CAMPAIGN_ROW` + its key as its id. With `rows` empty, or no
+    /// campaign row in the tree, nothing changes. Run once, after the title's
+    /// own trimming and [`Self::rename_campaign_row`].
+    pub fn add_campaign_picker(&mut self, title: &str, rows: &[(String, String, String)]) {
+        if rows.is_empty() {
+            return;
+        }
+        let Some((page, row)) = self.pages.iter().enumerate().find_map(|(p, page)| {
+            page.entries
+                .iter()
+                .position(|entry| {
+                    matches!(
+                        entry,
+                        Entry::Run {
+                            action: Action::OpenCampaign,
+                            ..
+                        }
+                    )
+                })
+                .map(|row| (p, row))
+        }) else {
+            return;
+        };
+        let Entry::Run { label, .. } = self.pages[page].entries[row].clone() else {
+            return;
+        };
+        let subtitle = self.pages[page].subtitles[row].clone();
+        let mut picker = Page {
+            id: CAMPAIGN_PICKER_PAGE.to_string(),
+            title: title.to_string(),
+            entries: vec![Entry::Run {
+                label: label.clone(),
+                action: Action::OpenCampaign,
+            }],
+            subtitles: vec![subtitle],
+            meta: vec![RowMeta {
+                id: Some(ORIGINAL_CAMPAIGN_ROW.to_string()),
+                parent: None,
+            }],
+            parked: Vec::new(),
+        };
+        for (key, name, description) in rows {
+            picker.entries.push(Entry::Run {
+                label: name.clone(),
+                action: Action::OpenCustomCampaign,
+            });
+            picker
+                .subtitles
+                .push((!description.is_empty()).then(|| description.clone()));
+            picker.meta.push(RowMeta {
+                id: Some(format!("{CUSTOM_CAMPAIGN_ROW}{key}")),
+                parent: None,
+            });
+        }
+        let target = self.pages.len();
+        self.pages.push(picker);
+        self.pages[page].entries[row] = Entry::Submenu { label, target };
     }
 
     /// Words the MULTIPLAYER row as the title's original does

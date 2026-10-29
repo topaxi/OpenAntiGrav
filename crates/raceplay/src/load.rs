@@ -148,7 +148,9 @@ pub fn load(options: &Options) -> Result<Loaded> {
         weapon_pads,
         #[cfg(feature = "view")]
         mut drawn,
-    } = track_inputs::resolve(options, &mut archives, title, &mut report)?;
+        #[cfg(feature = "view")]
+            art: mut foreign_art,
+    } = track_inputs::resolve(options, &mut archives, title, craft_title, &mut report)?;
     let read = |archives: &mut oag_assets::Archives, name: &str| -> Result<Vec<u8>> {
         archives
             .read_name(name)
@@ -578,6 +580,10 @@ pub fn load(options: &Options) -> Result<Loaded> {
         } else {
             hd_sky_model(&mut archives, &track, title.race, options.mode, &mut report)
         }
+    } else if let Some(sky) = foreign_art.own_sky.take() {
+        Some(sky)
+    } else if let Some(entry) = &foreign_art.sky {
+        track_inputs::foreign_sky(&mut archives, entry, &mut report)
     } else if !vex_geometry {
         None
     } else {
@@ -676,6 +682,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         match (vex_geometry, rcs_drawn) {
             (true, _) => "art meshes",
             (false, true) => "art meshes out of the .rcsmodel beside it",
+            (false, false) if track.starts_with("foreign:") => "foreign track model",
             (false, false) => "driveable ribbon",
         },
         track_model.indices.len() / 3,
@@ -1339,6 +1346,24 @@ pub fn load(options: &Options) -> Result<Loaded> {
     if vex_geometry && title.looks.lens_flare.applies(archives.layout.platform) {
         loaded.setup.scenery_fx.lens_flare =
             lens_flare::read(&track_blob, &mut loaded.report).map(Box::new);
+    }
+    #[cfg(feature = "view")]
+    if foreign_art.lens_flare.is_some() {
+        loaded.setup.scenery_fx.lens_flare = foreign_art.lens_flare.map(Box::new);
+    }
+    #[cfg(feature = "view")]
+    {
+        loaded.setup.scenery_fx.sun = foreign_art.sun_shadow;
+        if let Some(hull) = foreign_art.hull
+            && title.looks.hull_lights.applies(archives.layout.platform)
+        {
+            // A track file's own light through the host title's hull law
+            // (ADR-0076 decision 12); HD-family hosts are not wired.
+            loaded.light.hull = hull;
+            loaded
+                .report
+                .push("hull lights: the track file's ambient and sun, the host's GE rig".into());
+        }
     }
     #[cfg(feature = "view")]
     pulse_ps2::finish(

@@ -128,8 +128,14 @@ impl HullLights {
 /// read back by the GE as a byte.
 #[must_use]
 pub fn ge_channel(colour: f32, scale: u16) -> f32 {
-    let byte = ((colour * 255.0) as u32).min(255);
-    ((byte * u32::from(scale)) >> 8) as f32 / 255.0
+    ge_byte(((colour * 255.0) as u32).min(255) as u8, scale)
+}
+
+/// A colour byte already packed by [`ge_channel`]'s first step, times the
+/// scale and shifted right by eight, as the GE reads it back.
+#[must_use]
+pub fn ge_byte(byte: u8, scale: u16) -> f32 {
+    ((u32::from(byte) * u32::from(scale)) >> 8) as f32 / 255.0
 }
 
 /// A craft's two hull-light scale bytes as the one float `mesh.wesl` reads

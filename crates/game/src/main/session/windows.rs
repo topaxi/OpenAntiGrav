@@ -681,7 +681,7 @@ impl Session {
             return Ok(());
         };
         let view = frame
-            .texture
+            .texture()
             .create_view(&wgpu::TextureViewDescriptor::default());
         let mut encoder = self
             .gpu
@@ -696,7 +696,7 @@ impl Session {
         }
         self.gpu.queue.submit(Some(encoder.finish()));
         let presenting = web_time::Instant::now();
-        self.gpu.queue.present(frame);
+        frame.present(&self.gpu.queue);
         screen.present.record(presenting.elapsed().as_secs_f32());
         Ok(())
     }

@@ -80,10 +80,20 @@ class CollisionNode:
     version: int = HEADER_WORD
 
 
+# The titles a track may name as its host (`[track] host`) or offer itself on
+# (`[track] titles`), spelled the way `oag_source::layers::slug` spells a title's
+# name. The host is the disc the art borrows from (host textures, the sky);
+# required exactly when it borrows, and on another title such a track runs as a
+# Race Remix with the host as the track source (ADR-0076, decision 13).
+HOSTS = ("wipeout-pulse", "wipeout-pure", "wipeout-hd", "wipeout-omega-collection", "wipeout-2048")
+
+
 @dataclass
 class Track:
     id: str
     title: str
+    host: str
+    titles: list
     point_version: int
     paths: list
     junctions: list
@@ -92,3 +102,87 @@ class Track:
     speedup_pads: list = field(default_factory=list)
     weapon_pads: list = field(default_factory=list)
     notes: list = field(default_factory=list)
+    art: "Art" = None
+
+
+# The art section (ADR-0076): what the renderer draws and the simulation never reads.
+
+BLENDS = ("opaque", "cutout", "alpha", "additive", "unblended")
+SHADOW_ROLES = ("both", "cast", "receive", "none")
+
+
+@dataclass
+class ArtMesh:
+    """One draw: `oag/art/<n>`. Colours are linear RGB plus coverage alpha."""
+
+    name: str
+    positions: list
+    normals: list
+    texcoords: list  # texture v down, as the disc's
+    colours: list
+    indices: list
+    texture: int = None
+    blend: str = "opaque"
+    culled: bool = True
+    lit: bool = False
+    shadow: str = "both"
+    alpha_ref: int = None
+    layer: int = 0
+
+
+@dataclass
+class Sun:
+    direction: tuple  # unit, towards the sun
+    colour: tuple  # linear RGB
+    intensity: float = 1.0
+    angular_diameter: float = 0.0  # degrees
+    shadows: bool = True
+
+
+@dataclass
+class DirectionalLight:
+    direction: tuple
+    colour: tuple
+    intensity: float = 1.0
+
+
+@dataclass
+class LensFlare:
+    atlas: int = None
+    colour: tuple = None
+    direction: tuple = None
+
+
+@dataclass
+class Texture:
+    """Exactly one of `image` (a file beside the manifest) or `host` (entry, name)."""
+
+    image: str = None
+    host: tuple = None
+
+
+@dataclass
+class Skybox:
+    """The track's own sky (ADR-0076 decision 14): a texture row per cube face
+    (+X, -X, +Y zenith, -Y nadir, +Z, -Z; None draws the gradient) and/or the
+    gradient from `horizon` to `zenith`, linear RGB."""
+
+    faces: tuple = (None,) * 6
+    zenith: tuple = None
+    horizon: tuple = None
+
+
+@dataclass
+class Art:
+    meshes: list = field(default_factory=list)
+    textures: list = field(default_factory=list)
+    sky: str = None
+    skybox: Skybox = None
+    sun: Sun = None
+    ambient: tuple = None
+    lights: list = field(default_factory=list)
+    lens_flare: LensFlare = None
+
+    def borrows_from_a_disc(self):
+        """A host texture or a sky: the track must name its host."""
+        return self.sky is not None or any(t.host is not None for t in self.textures)

@@ -171,10 +171,16 @@ pub(crate) struct CampaignStage {
     /// pick between Pulse's draw/pointer functions and
     /// [`oag_ui_screens::campaign::hd`]'s own, since both screens share one name.
     title: String,
-    /// [`oag_game::records::campaign_title`]: what the campaign rows of
-    /// [`Self::records`] are filed under, which differs from [`Self::title`]
-    /// on a title's second pressing.
+    /// What the campaign rows of [`Self::records`] are filed under:
+    /// [`oag_game::records::campaign_title`] for the disc's own campaign (which
+    /// differs from [`Self::title`] on a title's second pressing), the
+    /// namespaced `oag_game::campaign::custom::Custom::records_title` for a
+    /// mod's, so its progress never meets the original's rows. Per-track
+    /// records keep [`Self::title`].
     campaign_title: String,
+    /// The mod campaign on screen, `None` for the disc's own: its `open` and
+    /// `requires` locks, and its hidden cells.
+    custom: Option<oag_game::campaign::custom::Custom>,
     /// [`oag_title::Campaign::dialect`] of the title, the draw list's choice.
     dialect: oag_title::CampaignDialect,
     /// **HD only** - Pulse's own `Track Line` never needs this fold (see
@@ -222,9 +228,13 @@ impl CampaignStage {
         flyers: Option<oag_game::flyer::Flyers>,
         circuit_emblems: std::collections::HashMap<String, String>,
         cell_cursor: CellCursor,
+        custom: Option<oag_game::campaign::custom::Custom>,
     ) -> Self {
         let title = title_ref.name.to_string();
-        let campaign_title = oag_game::records::campaign_title(title_ref, platform);
+        let campaign_title = custom.as_ref().map_or_else(
+            || oag_game::records::campaign_title(title_ref, platform),
+            |custom| custom.records_title.clone(),
+        );
         let grid_range = 0..grids.len();
         // `Campaign Selection` is HD's own screen ahead of `Grid
         // Selection` - only opened on it when both halves of the pair
@@ -241,6 +251,13 @@ impl CampaignStage {
                     .map(|grid| Self::grid_summary(grid, &campaign_title, &records))
                     .collect(),
             );
+            // A mod campaign on HD's screens has no `Campaign Selection` ahead
+            // of it, and HD's grid pages one tier at a time.
+            let model = if custom.is_some() && title_ref.campaign.dialect.draws_hd_screens() {
+                model.with_per_page(1)
+            } else {
+                model
+            };
             Screen::Grid(model)
         };
         Self {
@@ -262,6 +279,7 @@ impl CampaignStage {
             notice: None,
             title,
             campaign_title,
+            custom,
             dialect: title_ref.campaign.dialect,
             circuit_names,
             records,
@@ -629,29 +647,43 @@ impl CampaignStage {
             self.grid_range = campaign.grid_range();
             self.active_campaign = Some(campaign);
         }
-        let cells = grid.cells.clone();
+        let mut cells = grid.cells.clone();
         let title = &self.title;
         let campaign_title = &self.campaign_title;
         let records = &self.records;
-        let by_name = cells.clone();
-        let model = oag_ui_screens::campaign::CellSelection::with_medals_and_records(
-            cells,
-            &|name| {
+        let medal_of = campaign_medal_of(records, campaign_title);
+        let build = |cells: Vec<race_campaign::Cell>| {
+            let by_name = cells.clone();
+            let model = oag_ui_screens::campaign::CellSelection::with_medals_and_records(
+                cells,
+                &medal_of,
+                &|name| Self::saved_record_centiseconds(&by_name, records, title, name),
+            )
+            .with_difficulty(&|name| {
                 records
                     .campaign_medal(campaign_title, name)?
-                    .best_medal
-                    .map(to_campaign_medal)
-            },
-            &|name| Self::saved_record_centiseconds(&by_name, records, title, name),
-        )
-        .with_difficulty(&|name| {
-            records
-                .campaign_medal(campaign_title, name)?
-                .best_difficulty
-                .map(to_campaign_difficulty)
-        });
-        let model = with_opening_difficulty(model, records, campaign_title, self.is_hd());
-        let mut model = model;
+                    .best_difficulty
+                    .map(to_campaign_difficulty)
+            });
+            match &self.custom {
+                Some(custom) => model.with_fixed_locks(&|name| custom.fixed_lock(name, &medal_of)),
+                None => model,
+            }
+        };
+        let mut model = build(cells.clone());
+        // A mod campaign that hides what is not open yet: the cells still
+        // locked are not in the model at all, so the draw, the pad, the
+        // pointer and Confirm cannot reach them. Points stay the whole grid's.
+        if let Some(custom) = &self.custom
+            && custom.reveal(which) == oag_mod::campaign::Reveal::Hidden
+        {
+            let locked = model.locked_names();
+            if !locked.is_empty() && locked.len() < cells.len() {
+                cells.retain(|cell| !locked.contains(&cell.name));
+                model = build(cells);
+            }
+        }
+        let mut model = with_opening_difficulty(model, records, campaign_title, self.is_hd());
         self.cell_cursor.restore(&mut model);
         self.screen = Screen::Cell { model, which };
         true

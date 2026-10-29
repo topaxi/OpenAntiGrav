@@ -947,3 +947,30 @@ fn a_click_on_pulses_difficulty_footer_cycles_the_rung() {
     model.pointer_with_difficulty(&click((250.0, 262.0)), &[], Some(rect));
     assert_eq!(model.difficulty(), Difficulty::Easy);
 }
+
+/// A mod campaign's `open`/`requires` locks (ADR-0077) replace the three-term
+/// rule for their cells: a medalled neighbour does not open a fixed-locked
+/// cell, a fixed-open one needs none, and a cell with no fixed lock keeps the
+/// rule. The cursor leaves a locked first cell for the first open one.
+#[test]
+fn a_fixed_lock_replaces_the_neighbour_rule_for_its_cell() {
+    let cells = vec![
+        race_cell("grid0_0_0", "16_Track"),
+        race_cell("grid0_1_0", "16_Track"),
+        race_cell("grid0_2_0", "16_Track"),
+    ];
+    let medal_of = |name: &str| (name == "grid0_1_0").then_some(Medal::Gold);
+    let model = CellSelection::with_medals(cells, &medal_of).with_fixed_locks(&|name| match name {
+        "grid0_0_0" => Some(true),
+        "grid0_2_0" => Some(false),
+        _ => None,
+    });
+    assert!(
+        model.cell_shows_lock(0, 0),
+        "a medalled neighbour does not open it"
+    );
+    assert!(!model.cell_shows_lock(1, 0), "its own medal opens it");
+    assert!(!model.cell_shows_lock(2, 0));
+    assert_eq!(model.locked_names(), ["grid0_0_0"]);
+    assert_eq!(model.selected().unwrap().name, "grid0_1_0");
+}

@@ -8,8 +8,14 @@ use crate::{Error, MANIFEST, Mod};
 /// the default search path, as `OAG_OVERRIDES` does for overrides.
 pub const SEARCH_ENV: &str = "OAG_MODS";
 
+/// The repository's example mods, relative to the working directory: found when
+/// the game runs from a checkout (`just play`), the way `data/mods` is, and by
+/// nothing a player installs, which has no such folder.
+pub const EXAMPLES: &str = "assets/mods/examples";
+
 /// Where mods are looked for when nothing names a directory: `data/mods` in a
-/// checkout, `mods` beside the program, and `<data dir>/oag/mods`.
+/// checkout, [`EXAMPLES`] in a checkout, `mods` beside the program, and
+/// `<data dir>/oag/mods`.
 #[must_use]
 pub fn mods_search_path() -> Vec<PathBuf> {
     if let Some(from_env) = std::env::var_os(SEARCH_ENV) {
@@ -19,6 +25,7 @@ pub fn mods_search_path() -> Vec<PathBuf> {
         }
     }
     let mut paths = vec![PathBuf::from("data/mods")];
+    paths.push(PathBuf::from(EXAMPLES));
     let beside = std::env::var_os("APPIMAGE")
         .map(PathBuf::from)
         .or_else(|| std::env::current_exe().ok())

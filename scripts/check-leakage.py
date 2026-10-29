@@ -70,18 +70,33 @@ ARTIFACT_ALLOWED = {
     *(f"AppIcon-{size}.png" for size in (120, 152, 167, 180, 1024)),
 }
 
+# Track and model sources of our own: not game content, but they live in the
+# mod repositories (github.com/OpenAntiGrav/mod-examples, mounted at
+# assets/mods/examples), never in this one, so its history stays code. Checked
+# on tracked files only; a release artifact carries none either way.
+TRACK_ASSET_EXTENSIONS = ["glb", "gltf", "blend"]
+
+# Directories whose files may carry a forbidden or track-asset extension: the
+# track format's small synthetic test fixtures, written by this project's own
+# scripts and tests (docs/tools/blender.md). New generated fixtures land here
+# without a row of their own.
+ALLOWED_TRACKED_DIRS = ("crates/trackfile/tests/fixtures/",)
+
 ROOT = Path(__file__).resolve().parent.parent
 
 
 def tracked_leaks() -> list[str]:
-    pattern = re.compile(r"\.(" + "|".join(EXTENSIONS) + r")$", re.IGNORECASE)
+    extensions = EXTENSIONS + TRACK_ASSET_EXTENSIONS
+    pattern = re.compile(r"\.(" + "|".join(extensions) + r")$", re.IGNORECASE)
     result = subprocess.run(
         ["git", "ls-files"], cwd=ROOT, capture_output=True, text=True, check=True
     )
     return [
         path
         for path in result.stdout.splitlines()
-        if pattern.search(path) and path not in ALLOWED_TRACKED
+        if pattern.search(path)
+        and path not in ALLOWED_TRACKED
+        and not path.startswith(ALLOWED_TRACKED_DIRS)
     ]
 
 

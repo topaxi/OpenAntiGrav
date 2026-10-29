@@ -7,16 +7,20 @@ import os
 
 import bpy
 from bpy.props import (
+    BoolProperty,
     EnumProperty,
     FloatProperty,
     FloatVectorProperty,
     IntProperty,
+    PointerProperty,
     StringProperty,
 )
 from bpy.types import Operator, Panel
 from bpy_extras.io_utils import ExportHelper, ImportHelper
 
-from . import derive, scene, trackfile
+from . import artfile, derive, model, scene, scene_art, trackfile
+
+ERRORS = (trackfile.TrackFileError, derive.AuthoringError, artfile.ArtError)
 
 PANEL_CATEGORY = "OAG"
 KIND_ITEMS = [(k, k, "") for k in scene.KINDS]
@@ -113,6 +117,31 @@ class OAG_OT_add_pad(Operator):
         return {"FINISHED"}
 
 
+class OAG_OT_host_texture(Operator):
+    bl_idname = "oag.host_texture"
+    bl_label = "Make Host Texture"
+    bl_description = (
+        "Turn the active material's image into a host reference: a Texture node of a circuit "
+        "on the host title's disc, by entry and name (no pixels are exported)"
+    )
+    bl_options = {"REGISTER", "UNDO"}
+
+    entry: StringProperty(name="Circuit entry", default="Data\\Environments\\03_Track\\track.vex")
+    name: StringProperty(name="Texture name")
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self)
+
+    def execute(self, context):
+        image = scene_art._image_node(context.active_object.active_material)
+        if image is None or not self.entry or not self.name:
+            self.report({"ERROR"}, "an image texture, an entry and a name are all needed")
+            return {"CANCELLED"}
+        image[scene_art.HOST_ENTRY] = self.entry
+        image[scene_art.HOST_NAME] = self.name
+        return {"FINISHED"}
+
+
 class OAG_OT_export(Operator, ExportHelper):
     bl_idname = "oag.export_track"
     bl_label = "Export OAG Track"
@@ -126,16 +155,16 @@ class OAG_OT_export(Operator, ExportHelper):
         if not path.endswith(".track.toml"):
             path = path.removesuffix(".toml").removesuffix(".track") + ".track.toml"
         try:
-            track = scene.collect(context)
-            trackfile.write(track, path)
-        except (trackfile.TrackFileError, derive.AuthoringError) as e:
+            track = scene.write_track(context, path)
+        except ERRORS as e:
             self.report({"ERROR"}, str(e))
             return {"CANCELLED"}
         self.report(
             {"INFO"},
             f"{os.path.basename(path)}: {sum(len(p.points) for p in track.paths)} spline points, "
             f"{len(track.nodes)} collision nodes, "
-            f"{len(track.speedup_pads)} speedup + {len(track.weapon_pads)} weapon pads",
+            f"{len(track.speedup_pads)} speedup + {len(track.weapon_pads)} weapon pads, "
+            f"{len(track.art.meshes) if track.art else 0} art meshes",
         )
         return {"FINISHED"}
 
@@ -151,8 +180,8 @@ class OAG_OT_import(Operator, ImportHelper):
     def execute(self, context):
         try:
             track = trackfile.read(self.filepath)
-            scene.populate(context, track)
-        except (trackfile.TrackFileError, OSError, KeyError, ValueError) as e:
+            scene.populate(context, track, os.path.dirname(self.filepath))
+        except (*ERRORS, OSError, KeyError, ValueError) as e:
             self.report({"ERROR"}, f"{self.filepath}: {e}")
             return {"CANCELLED"}
         return {"FINISHED"}
@@ -171,6 +200,8 @@ class OAG_PT_track(Panel):
         box = layout.box()
         box.prop(sc, "oag_track_id")
         box.prop(sc, "oag_track_title")
+        box.prop(sc, "oag_track_host")
+        box.prop(sc, "oag_track_titles")
         box.prop(sc, "oag_track_notes")
         row = layout.row(align=True)
         row.operator("oag.import_track", text="Import", icon="IMPORT")
@@ -193,6 +224,7 @@ class OAG_PT_track(Panel):
                 layout.prop(obj, "oag_points")
                 layout.prop(obj, "oag_half_width")
                 layout.prop(obj, "oag_ai_fraction")
+                layout.prop(obj, "oag_cover_light")
             layout.prop(obj, "oag_wall_height")
             layout.operator("oag.build_ribbon")
             layout.operator("oag.add_start")
@@ -202,6 +234,53 @@ class OAG_PT_track(Panel):
             layout.prop(obj, "oag_min")
             layout.prop(obj, "oag_max")
             layout.prop(obj, "oag_disabled")
+        elif scene_art.is_art(obj):
+            layout.label(text="Art mesh (untagged):")
+            layout.prop(obj, "oag_shadow")
+            layout.prop(obj, "oag_layer")
+            layout.prop(obj, "oag_lit")
+            mat = obj.active_material
+            if mat is not None:
+                layout.prop(mat, "oag_blend")
+                layout.prop(mat, "use_backface_culling", text="Culled")
+                image = scene_art._image_node(mat)
+                if image is not None and scene_art.HOST_ENTRY in image:
+                    layout.prop(image, f'["{scene_art.HOST_ENTRY}"]', text="Host entry")
+                    layout.prop(image, f'["{scene_art.HOST_NAME}"]', text="Host name")
+                elif image is not None:
+                    layout.operator("oag.host_texture")
+        elif obj.type == "LIGHT" and obj.data.type == "SUN":
+            layout.prop(obj, "oag_intensity")
+            layout.prop(obj.data, "angle", text="Angular diameter")
+            layout.prop(obj.data, "use_shadow", text="Shadows")
+
+
+class OAG_PT_art(Panel):
+    bl_label = "Art"
+    bl_idname = "OAG_PT_art"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = PANEL_CATEGORY
+    bl_parent_id = "OAG_PT_track"
+
+    def draw(self, context):
+        layout = self.layout
+        sc = context.scene
+        layout.prop(sc, "oag_sun")
+        layout.prop(sc, "oag_sky")
+        layout.prop(sc, "oag_skybox")
+        if sc.oag_skybox:
+            box = layout.box()
+            box.prop(sc, "oag_sky_gradient")
+            if sc.oag_sky_gradient:
+                box.prop(sc, "oag_sky_zenith")
+                box.prop(sc, "oag_sky_horizon")
+            for i in range(6):
+                box.prop(sc, f"oag_sky_face_{i}")
+        layout.prop(sc, "oag_lensflare")
+        if sc.oag_lensflare:
+            layout.prop(sc, "oag_lensflare_atlas")
+        layout.label(text="Ambient: the world's Background colour")
 
 
 CLASSES = (
@@ -210,9 +289,11 @@ CLASSES = (
     OAG_OT_build_ribbon,
     OAG_OT_add_start,
     OAG_OT_add_pad,
+    OAG_OT_host_texture,
     OAG_OT_export,
     OAG_OT_import,
     OAG_PT_track,
+    OAG_PT_art,
 )
 
 
@@ -220,6 +301,17 @@ def _props():
     sc, ob = bpy.types.Scene, bpy.types.Object
     sc.oag_track_id = StringProperty(name="Track id", description="Stable id; keys records and ghosts")
     sc.oag_track_title = StringProperty(name="Title")
+    sc.oag_track_host = EnumProperty(
+        name="Runs on",
+        description="The title whose disc the art borrows host textures and the sky from (required when it does); "
+        "another title races the track as a Race Remix with this disc as the track source",
+        items=[("none", "none (borrows nothing)", "")] + [(h, h, "") for h in model.HOSTS],
+        default="none",
+    )
+    sc.oag_track_titles = StringProperty(
+        name="Offered on",
+        description="Comma-separated title slugs the track is offered on (e.g. wipeout-pulse, wipeout-hd); empty is every title",
+    )
     sc.oag_track_notes = StringProperty(name="Notes", description="Free text printed in the loader report")
     ob.oag_points = IntProperty(name="Spline points", default=64, min=3, max=4096)
     ob.oag_half_width = FloatProperty(name="Half width", default=derive.HALF_WIDTH, min=0.01)
@@ -228,11 +320,79 @@ def _props():
     ob.oag_min = FloatVectorProperty(name="Box min (lateral, up, forward)", size=3, default=derive.PAD_BOX[0])
     ob.oag_max = FloatVectorProperty(name="Box max (lateral, up, forward)", size=3, default=derive.PAD_BOX[1])
     ob.oag_disabled = FloatProperty(name="Disabled", default=0.0)
+    ob.oag_cover_light = IntProperty(
+        name="Cover light",
+        description="Light scale byte where art casts over the line (255: off, the spline stays fully lit)",
+        default=255,
+        min=0,
+        max=255,
+    )
+    ob.oag_shadow = EnumProperty(
+        name="Shadow",
+        items=[(k, k, "") for k in ("both", "cast", "receive", "none")],
+        default="both",
+    )
+    ob.oag_layer = IntProperty(name="Layer", description="Render layer: draws go by layer, then file order", default=0, min=0)
+    ob.oag_lit = BoolProperty(name="Lit", description="The light rig applies on top of the baked colour", default=False)
+    ob.oag_intensity = FloatProperty(
+        name="Intensity",
+        description="The file's intensity (a multiplier on the colour for the ships' light), not Blender's strength",
+        default=1.0,
+        min=0.0,
+    )
+    bpy.types.Material.oag_blend = EnumProperty(
+        name="Blend",
+        items=[("auto", "auto (from blend mode)", "")] + [(k, k, "") for k in ("opaque", "cutout", "alpha", "additive", "unblended")],
+        default="auto",
+    )
+    sc.oag_sun = PointerProperty(
+        name="Sun",
+        type=bpy.types.Object,
+        poll=lambda self, o: o.type == "LIGHT" and o.data.type == "SUN",
+    )
+    sc.oag_sky = StringProperty(name="Sky", description="A host circuit's .vex entry whose Skycube is drawn")
+    sc.oag_skybox = BoolProperty(
+        name="Own sky",
+        description="The track's own sky: a cube of the author's images and/or a zenith-to-horizon gradient "
+        "(never together with a host Sky)",
+        default=False,
+    )
+    sc.oag_sky_gradient = BoolProperty(name="Gradient", default=True)
+    sc.oag_sky_zenith = FloatVectorProperty(
+        name="Zenith", subtype="COLOR", size=3, min=0.0, default=(0.18, 0.36, 0.75)
+    )
+    sc.oag_sky_horizon = FloatVectorProperty(
+        name="Horizon", subtype="COLOR", size=3, min=0.0, default=(0.75, 0.82, 0.9)
+    )
+    for i, face in enumerate(("+X", "-X", "+Y (zenith)", "-Y (nadir)", "+Z", "-Z")):
+        setattr(
+            sc,
+            f"oag_sky_face_{i}",
+            PointerProperty(name=f"Face {face}", type=bpy.types.Image, description="Empty draws the gradient"),
+        )
+    sc.oag_lensflare = BoolProperty(name="Lens flare", default=False)
+    sc.oag_lensflare_atlas = PointerProperty(name="Flare atlas", type=bpy.types.Image)
 
 
 def _unprops():
-    for name in ("oag_track_id", "oag_track_title", "oag_track_notes"):
+    for name in (
+        "oag_track_id",
+        "oag_track_title",
+        "oag_track_host",
+        "oag_track_titles",
+        "oag_track_notes",
+        "oag_sun",
+        "oag_sky",
+        "oag_skybox",
+        "oag_sky_gradient",
+        "oag_sky_zenith",
+        "oag_sky_horizon",
+        *(f"oag_sky_face_{i}" for i in range(6)),
+        "oag_lensflare",
+        "oag_lensflare_atlas",
+    ):
         delattr(bpy.types.Scene, name)
+    del bpy.types.Material.oag_blend
     for name in (
         "oag_points",
         "oag_half_width",
@@ -241,6 +401,11 @@ def _unprops():
         "oag_min",
         "oag_max",
         "oag_disabled",
+        "oag_cover_light",
+        "oag_shadow",
+        "oag_layer",
+        "oag_lit",
+        "oag_intensity",
     ):
         delattr(bpy.types.Object, name)
 

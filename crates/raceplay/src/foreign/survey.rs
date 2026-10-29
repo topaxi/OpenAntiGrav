@@ -43,6 +43,14 @@ pub struct Listing {
     /// `.wtrk` carries the Workshop title, tags and description, and the author
     /// is a Steam account the file does not hold. Always `None` until one does.
     pub author: Option<String>,
+    /// The title a track file names as its host (`oag_trackfile::Track::host`,
+    /// as `oag_source::layers::slug` spells it), or `None` for a Workshop track
+    /// or a file that would not read. A RACE REMIX of it takes this title's
+    /// disc as the track source.
+    pub host: Option<String>,
+    /// The titles the file offers itself on (`oag_trackfile::Track::titles`),
+    /// empty for every title.
+    pub titles: Vec<String>,
     /// Which format it is.
     pub kind: Kind,
     /// The Workshop tags, in file order (empty for the own format).
@@ -73,6 +81,8 @@ pub fn listing(path: &Path) -> Listing {
         id: format!("foreign:{stem}"),
         title: stem,
         author: None,
+        host: None,
+        titles: Vec::new(),
         kind,
         tags: Vec::new(),
         problem: None,
@@ -114,6 +124,11 @@ pub fn listing(path: &Path) -> Listing {
     match super::read_any(path) {
         Ok((track, _)) => {
             out.id = format!("foreign:{}", track.id);
+            if let Err(e) = super::host_title(&track) {
+                out.problem = Some(short(&root_cause(&e), "names no known title"));
+            }
+            out.host.clone_from(&track.host);
+            out.titles.clone_from(&track.titles);
             if kind == Kind::Own && !track.title.trim().is_empty() {
                 out.title = track.title.trim().to_string();
             }

@@ -271,7 +271,12 @@ impl Session {
                 warn!("frame: {:.1} ms", elapsed.as_secs_f32() * 1000.0);
             }
         }
-        let nanos = u64::try_from(elapsed.as_nanos()).unwrap_or(u64::MAX);
+        // `--drive` steps exactly one tick a frame, so a script counts ticks, not milliseconds.
+        let nanos = if self.dev.lockstep {
+            self.clock.rate().dt_nanos()
+        } else {
+            u64::try_from(elapsed.as_nanos()).unwrap_or(u64::MAX)
+        };
         let steps = self.clock.advance(nanos);
         let dt = f64::from(self.clock.rate().dt());
 
@@ -948,7 +953,12 @@ impl Session {
                     .filter(|cell| !oag_tables::pure_campaign::is_free_play(&cell.name))
                 {
                     self.records.record_campaign(
-                        campaign_title.as_deref().unwrap_or(&key.title),
+                        stage
+                            .campaign_custom
+                            .as_ref()
+                            .map(|custom| custom.records_title.as_str())
+                            .or(campaign_title.as_deref())
+                            .unwrap_or(&key.title),
                         &cell.name,
                         observation.campaign_medal,
                         observation.campaign_difficulty,
@@ -983,6 +993,13 @@ impl Session {
                     let total = self.records.record_loyalty(shell.title, team, award);
                     log::info!("loyalty: {team} +{award} (total {total})");
                 }
+                // A mod campaign's medal lives only under its own title.
+                let observation = records::Observation {
+                    campaign_medal: observation
+                        .campaign_medal
+                        .filter(|_| stage.campaign_custom.is_none()),
+                    ..observation
+                };
                 self.records.record(key, observation);
                 if let Err(e) = records::save(&self.records) {
                     error!("could not save race records: {e:#}");

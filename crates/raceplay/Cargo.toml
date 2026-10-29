@@ -62,6 +62,7 @@ oag-vex.workspace = true
 oag-weapons.workspace = true
 anyhow.workspace = true
 bytemuck = { workspace = true, features = ["derive"], optional = true }
+png = { workspace = true, optional = true }
 dirs = "7"
 log.workspace = true
 serde.workspace = true
@@ -92,6 +93,7 @@ view = [
     "dep:oag-sound",
     "dep:oag-ui",
     "dep:oag-ui-screens",
+    "dep:png",
     "dep:wgpu",
     "dep:winit",
 ]

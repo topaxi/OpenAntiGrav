@@ -137,7 +137,8 @@ pub(super) fn menu_page(
         Some((page, row)) => (page, Some(row)),
         None => (page, None),
     };
-    let built = crate::mods::Mods::load()?
+    let loaded = crate::mods::Mods::load()?;
+    let built = loaded
         .build_with_strings(
             oag_ui::menu::BUILT_IN,
             strings,
@@ -147,7 +148,7 @@ pub(super) fn menu_page(
             }),
         )
         .context("building the menu definition")?;
-    let mods = built.listing;
+    let mut mods = built.listing;
     let mut definition = built.definition;
     // The same two trims `crate::prepare` makes before a live menu opens, so
     // a captured RACE page has the rows a player's has.
@@ -157,6 +158,11 @@ pub(super) fn menu_page(
     definition.drop_unavailable_dynamic_hud(title);
     definition.rename_campaign_row(title, strings);
     definition.rename_multiplayer_row(title, strings);
+    // A mod campaign's picker, as `crate::prepare` adds it; a cross-disc one
+    // is kept here, since a still never races it.
+    let installed =
+        crate::campaign::custom::Installed::for_title(loaded.player(), title, &|_| true);
+    crate::campaign::custom::add_picker(&mut definition, &mut mods, &installed, strings);
     if definition.page(page).is_none() {
         anyhow::bail!(
             "no menu page named {page:?}; this definition has {}",

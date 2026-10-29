@@ -358,6 +358,38 @@ pub struct Cell {
 }
 
 impl Cell {
+    /// A cell no disc authored: a mod's custom campaign event (ADR-0077), named
+    /// `name`, with every optional field absent, no tournament legs and no
+    /// per-rung or nitro targets. The caller fills in the rest; the medal
+    /// targets start at `0`, which [`Cell::evaluate_medal`] never awards on a
+    /// lower-is-better mode.
+    #[must_use]
+    pub fn authored(name: String, mode: Mode, class: String) -> Self {
+        Self {
+            name,
+            track: None,
+            mode,
+            class,
+            weapons: true,
+            damage: true,
+            locked: None,
+            status: None,
+            ai_count: None,
+            skill: None,
+            skill_easy: None,
+            skill_hard: None,
+            laps: None,
+            ship: None,
+            ship_choice: None,
+            gold: 0,
+            silver: 0,
+            bronze: 0,
+            tournament_tracks: Vec::new(),
+            difficulty_targets: None,
+            nitro_elimination_targets: None,
+        }
+    }
+
     /// [`Cell::class`] as a [`crate::handling::SpeedClass`] when it is one of the
     /// four; `None` for `"Zone"` or anything unrecognised, never an error.
     #[must_use]

@@ -195,6 +195,10 @@ pub struct Dev {
     pub script: Script,
     /// `--frame-log` or `OAG_FRAME_LOG`.
     pub frame_log: bool,
+    /// `--drive`: every frame steps the simulation exactly one tick, whatever the wall clock
+    /// says, so a script counts ticks rather than milliseconds and a slow machine cannot change
+    /// what it does. A window never sets it.
+    pub lockstep: bool,
 }
 
 #[cfg(test)]

@@ -12,10 +12,34 @@ const IMAGES: [&str; 3] = [
     "data/images/pulse-ps2-eu.chd",
 ];
 
-fn circuits(image: &str) -> Vec<String> {
-    let mut archives = oag_pulse::open(image).expect("mounting the disc");
+/// Pure's images, walked by the same export check: its circuits are the other
+/// half of ADR-0076's art proof.
+const PURE_IMAGES: [&str; 2] = [
+    "data/images/pure-psp-eu.chd",
+    "data/images/pure-psp-usa.chd",
+];
+
+fn is_pure(image: &str) -> bool {
+    PURE_IMAGES.contains(&image)
+}
+
+fn open(image: &str, path: &str) -> oag_assets::Archives {
+    if is_pure(image) {
+        oag_pure::open(path).expect("mounting the disc")
+    } else {
+        oag_pulse::open(path).expect("mounting the disc")
+    }
+}
+
+fn circuits(image: &str, path: &str) -> Vec<String> {
+    let mut archives = open(image, path);
+    let definition = if is_pure(image) {
+        oag_pure::names::GAME_PLUGIN_DEFINITION
+    } else {
+        oag_pulse::names::GAME_PLUGIN_DEFINITION
+    };
     let blob = archives
-        .read_name(oag_pulse::names::GAME_PLUGIN_DEFINITION)
+        .read_name(definition)
         .expect("the game plugin definition");
     let definition = oag_tables::fexml::expand(&blob)
         .or_else(|_| oag_tables::fexml::text(&blob))
@@ -25,6 +49,9 @@ fn circuits(image: &str) -> Vec<String> {
         .map(race::catalogue::Track::entry_name)
         .collect()
 }
+
+#[path = "trackfile_ground_truth/art_proof.rs"]
+mod art_proof;
 
 fn options(image: &str, track: &str) -> race::Options {
     race::Options {
@@ -49,11 +76,13 @@ fn same(a: &Track, b: &Track) -> Result<(), String> {
     }
     eq!("id", a.id, b.id);
     eq!("title", a.title, b.title);
+    eq!("host", a.host, b.host);
     eq!("ai", a.ai, b.ai);
     eq!("start", a.start, b.start);
     eq!("speedup pads", a.speedup_pads, b.speedup_pads);
     eq!("weapon pads", a.weapon_pads, b.weapon_pads);
     eq!("notes", a.notes, b.notes);
+    eq!("art", a.art, b.art);
     eq!("collision node count", a.nodes.len(), b.nodes.len());
     for (i, (x, y)) in a.nodes.iter().zip(&b.nodes).enumerate() {
         eq!("node kind", x.kind, y.kind);
@@ -76,19 +105,20 @@ fn same(a: &Track, b: &Track) -> Result<(), String> {
     Ok(())
 }
 
-#[test]
-#[ignore = "needs the Pulse images"]
-fn every_pulse_circuit_exports_and_reads_back_the_same() {
+/// Every circuit of one image: export, write, read back, compare, and the art
+/// proof (`art_proof`). One test per image, because the walk is the slow part
+/// and nextest runs tests, not loop iterations, in parallel.
+fn every_circuit_exports_and_reads_back_the_same(image: &str) {
     let mut total = 0;
     let mut refused = Vec::new();
-    let mut checked_images = 0;
-    for image in IMAGES {
+    let mut art = art_proof::Tally::default();
+    {
         let Some(path) = oag_testdata::image(image) else {
-            continue;
+            return;
         };
-        checked_images += 1;
         let path = path.display().to_string();
-        for track in circuits(&path) {
+        let mut archives = open(image, &path);
+        for track in circuits(image, &path) {
             total += 1;
             let exported = match race::export_track(&options(&path, &track)) {
                 Ok(t) => t,
@@ -97,6 +127,12 @@ fn every_pulse_circuit_exports_and_reads_back_the_same() {
                     continue;
                 }
             };
+            let host = if is_pure(image) {
+                "wipeout-pure"
+            } else {
+                "wipeout-pulse"
+            };
+            assert_eq!(exported.host.as_deref(), Some(host), "{image} {track}");
             let parts = match to_parts(&exported, "x.glb") {
                 Ok(p) => p,
                 Err(e) => {
@@ -104,6 +140,8 @@ fn every_pulse_circuit_exports_and_reads_back_the_same() {
                     continue;
                 }
             };
+            oag_schema::validate::accepts("track", 1, &parts.manifest)
+                .unwrap_or_else(|e| panic!("{image} {track}: schema: {e:?}"));
             let loaded = from_parts(&parts.manifest, &parts.glb)
                 .unwrap_or_else(|e| panic!("{image} {track}: reads back: {e}"));
             same(&exported, &loaded.track)
@@ -114,13 +152,43 @@ fn every_pulse_circuit_exports_and_reads_back_the_same() {
                 to_parts(&loaded.track, "x.glb").unwrap(),
                 "{image} {track}: not byte-stable"
             );
+            art_proof::art_draws_as_the_circuit(&mut archives, &track, &loaded.track, &mut art)
+                .unwrap_or_else(|e| panic!("{image} {track}: art: {e}"));
         }
     }
-    if checked_images == 0 {
-        return;
-    }
-    println!("{total} circuit(s) across {checked_images} image(s); refused: {refused:#?}");
+    println!("{image}: {total} circuit(s); refused: {refused:#?}");
+    println!("art: {art:#?}");
     assert!(refused.is_empty(), "{refused:#?}");
+}
+
+#[test]
+#[ignore = "needs the Pulse PSP EU image"]
+fn every_pulse_psp_eu_circuit_exports_and_reads_back_the_same() {
+    every_circuit_exports_and_reads_back_the_same(IMAGES[0]);
+}
+
+#[test]
+#[ignore = "needs the Pulse PSP USA image"]
+fn every_pulse_psp_usa_circuit_exports_and_reads_back_the_same() {
+    every_circuit_exports_and_reads_back_the_same(IMAGES[1]);
+}
+
+#[test]
+#[ignore = "needs the Pulse PS2 image"]
+fn every_pulse_ps2_circuit_exports_and_reads_back_the_same() {
+    every_circuit_exports_and_reads_back_the_same(IMAGES[2]);
+}
+
+#[test]
+#[ignore = "needs the Pure PSP EU image"]
+fn every_pure_eu_circuit_exports_and_reads_back_the_same() {
+    every_circuit_exports_and_reads_back_the_same(PURE_IMAGES[0]);
+}
+
+#[test]
+#[ignore = "needs the Pure PSP USA image"]
+fn every_pure_usa_circuit_exports_and_reads_back_the_same() {
+    every_circuit_exports_and_reads_back_the_same(PURE_IMAGES[1]);
 }
 
 /// A lone craft on a disc circuit and on the same circuit through its track
@@ -143,12 +211,47 @@ fn a_lone_craft_races_a_disc_circuit_and_its_exported_file_identically() {
         oag_trackfile::write(&exported, &manifest).unwrap();
         let mut native_options = options(&image, track);
         native_options.difficulty = oag_ai::Difficulty::Ace;
-        let mut native = race::Race::start(race::load(&native_options).unwrap().setup);
+        let native_loaded = race::load(&native_options).unwrap();
+        let native_sky = native_loaded
+            .sky_model
+            .as_ref()
+            .map(|m| (m.vertices.len(), m.indices.len(), m.draws.len()));
+        let native_hull = native_loaded.light.hull;
+        assert!(
+            native_hull.enabled(),
+            "{track}: the circuit lights its hulls"
+        );
+        let mut native = race::Race::start(native_loaded.setup);
         let mut from_file = {
             let mut o = native_options.clone();
             o.track = None;
             o.foreign_track = Some(manifest);
-            race::Race::start(race::load(&o).unwrap().setup)
+            let loaded = race::load(&o).unwrap();
+            // The exported art draws through the foreign path: the circuit's
+            // own meshes over its own textures, and its own sky.
+            let report = loaded.report.join("\n");
+            assert!(!report.contains("not drawn, their texture"), "{report}");
+            assert!(report.contains("art sky:"), "{report}");
+            assert_eq!(
+                loaded.sky_model.as_ref().map(|m| (
+                    m.vertices.len(),
+                    m.indices.len(),
+                    m.draws.len()
+                )),
+                native_sky,
+                "{track}: the file's sky is not the circuit's"
+            );
+            assert!(!report.contains("draws nothing"), "{report}");
+            // The file's ambient and sun reach the hulls through Pulse's GE rig.
+            assert_eq!(
+                loaded.light.hull, native_hull,
+                "{track}: the file's hull rig is not the circuit's"
+            );
+            assert!(
+                loaded.track_model.draws.len() > 1_000,
+                "{track}: the art model is not the circuit's"
+            );
+            race::Race::start(loaded.setup)
         };
         for race in [&mut native, &mut from_file] {
             for slot in 2..8 {
@@ -221,6 +324,8 @@ fn every_original_workshop_track_converts_and_reads_back_the_same() {
                 continue;
             }
         };
+        // A Workshop track borrows nothing from a disc, so it names no host.
+        assert_eq!(mapped.host, None, "{}", w.title);
         let parts = to_parts(&mapped, "x.glb").unwrap_or_else(|e| panic!("{}: {e}", w.title));
         let back =
             from_parts(&parts.manifest, &parts.glb).unwrap_or_else(|e| panic!("{}: {e}", w.title));
@@ -288,8 +393,10 @@ fn lions_den_races_the_same_converted_as_loaded_directly() {
 }
 
 /// A committed track file on Pulse's physics: it loads, the report says what the
-/// format carries nothing for, and a lone AI craft gets round it.
-fn lone_craft_gets_round(file: &str, id: &str, title: &str) {
+/// format carries nothing for, and a lone AI craft gets round it. `art` names the
+/// report lines a file with an art section must print (none of them a miss);
+/// empty, the file must have none.
+fn lone_craft_gets_round(file: &str, id: &str, title: &str, art: &[&str]) {
     let Some(image) = oag_testdata::image(IMAGES[1]) else {
         return;
     };
@@ -306,11 +413,29 @@ fn lone_craft_gets_round(file: &str, id: &str, title: &str) {
     };
     let loaded = race::load(&o).expect("loads");
     let report = loaded.report.join("\n");
-    for needle in [title, "schema v1", "not authored by schema v1", "sky, fog"] {
+    let no_art = ["no art section"];
+    let art_lines = if art.is_empty() { &no_art[..] } else { art };
+    for needle in [
+        title,
+        "schema v1",
+        "not authored by schema v1",
+        "fog, point lights",
+    ]
+    .iter()
+    .chain(art_lines)
+    {
         assert!(
             report.contains(needle),
             "report lacks {needle:?}:\n{report}"
         );
+    }
+    for miss in [
+        "draws nothing",
+        "does not read",
+        "did not resolve",
+        "none drawn",
+    ] {
+        assert!(!report.contains(miss), "report has {miss:?}:\n{report}");
     }
     assert_eq!(loaded.setup.foreign.as_deref(), Some(id));
     let mut race = race::Race::start(loaded.setup);
@@ -333,16 +458,30 @@ fn lone_craft_gets_round(file: &str, id: &str, title: &str) {
 #[test]
 #[ignore = "needs a Pulse image"]
 fn a_lone_craft_gets_round_the_committed_fixture() {
-    lone_craft_gets_round("oval.track.toml", "fixture-octagon", "Fixture Octagon");
+    lone_craft_gets_round("oval.track.toml", "fixture-octagon", "Fixture Octagon", &[]);
 }
 
 /// The add-on's own output (`scripts/blender/oag_track`, `just blender-fixtures`):
 /// a loop authored in Blender from eight control points, raced as the committed
-/// file. Drop the add-on's spline, start or ribbon and this craft does not get round.
+/// file. Drop the add-on's spline, start or ribbon and this craft does not get round;
+/// drop its art and the report lines below go missing: the generated checker
+/// draws, its own sky (gradient, checker overhead) is built, the Sun lamp lights the hulls and
+/// the shadows, and the flare takes the checker as its atlas.
 #[test]
 #[ignore = "needs a Pulse image"]
 fn a_lone_craft_gets_round_a_loop_authored_in_blender() {
-    lone_craft_gets_round("blender_loop.track.toml", "blender-loop", "Blender Loop");
+    lone_craft_gets_round(
+        "blender_loop.track.toml",
+        "blender-loop",
+        "Blender Loop",
+        &[
+            "art: 1 mesh(es), 2 triangle(s), 1 texture(s)\n",
+            "art skybox: the track's own sky, 1 face picture(s), 5 face(s) of zenith-to-horizon gradient",
+            "art: the sun (0.000, 1.000, -0.000) sets the mapped shadows' direction",
+            "art hull lights: the PSP rig from the ambient, the sun and 1 further directional(s)",
+            "art lens flare: along (0.000, 1.000, -0.000), the track's sun, atlas 64x64",
+        ],
+    );
 }
 
 #[test]
@@ -352,11 +491,138 @@ fn a_lone_craft_gets_round_the_oval_re_exported_from_blender() {
         "oval.reexport.track.toml",
         "fixture-octagon",
         "Fixture Octagon",
+        &[],
+    );
+}
+
+/// Which title a track file loads on (ADR-0076 decisions 13 and 14). The Blender
+/// loop draws only its own art (a checker and its own sky), so it loads with its
+/// art on HD's own disc. Re-pointed at Pulse 03_Track's sky, it pins the Pulse
+/// disc: with HD's as the track source it is refused by name rather than drawn
+/// without it, and as a remix (Pulse track source, HD craft, what the game's
+/// launches arrange) it loads with nothing missed. The oval, offered on Pulse
+/// alone (`titles`), is refused on HD. Drop the host check, the titles filter,
+/// the own sky, or route the track side through the craft's disc, and one part
+/// fails.
+#[test]
+#[ignore = "needs a Pulse and an HD image"]
+fn a_track_file_loads_on_the_disc_it_borrows_from_and_where_its_author_offers_it() {
+    let (Some(pulse), Some(hd)) = (
+        oag_testdata::image(IMAGES[1]),
+        oag_testdata::image("data/images/hdfury-ps3-eu.iso"),
+    ) else {
+        return;
+    };
+    let fixtures =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../trackfile/tests/fixtures");
+    let options = |source: &std::path::Path,
+                   craft: Option<&std::path::Path>,
+                   track: &std::path::Path| race::Options {
+        source: source.display().to_string(),
+        craft_source: craft.map(|c| c.display().to_string()),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        foreign_track: Some(track.to_path_buf()),
+        ..race::Options::default()
+    };
+    let no_art_miss = |report: &str| {
+        // The craft side (HD's engine flares) reports on its own lines; the
+        // track's art is what the track source must answer.
+        for line in report.lines().filter(|l| l.starts_with("art")) {
+            for miss in [
+                "draws nothing",
+                "does not read",
+                "did not resolve",
+                "none drawn",
+                "stays black",
+            ] {
+                assert!(!line.contains(miss), "art line has {miss:?}: {line}");
+            }
+        }
+    };
+
+    // Own art only: natively on HD, art and own sky drawn.
+    let own = fixtures.join("blender_loop.track.toml");
+    let loaded = race::load(&options(&hd, None, &own))
+        .unwrap_or_else(|e| panic!("own art loads on HD natively: {e:#}"));
+    let report = loaded.report.join("\n");
+    for needle in [
+        "racing on Wipeout HD",
+        "art: 1 mesh(es), 2 triangle(s), 1 texture(s)\n",
+        "art skybox: the track's own sky, 1 face picture(s), 5 face(s) of zenith-to-horizon gradient",
+    ] {
+        assert!(
+            report.contains(needle),
+            "report lacks {needle:?}:\n{report}"
+        );
+    }
+    no_art_miss(&report);
+
+    // The same loop pinned to Pulse by a host sky.
+    let dir = std::env::temp_dir().join(format!("oag-trackfile-host-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut pinned = oag_trackfile::read(&own).unwrap().track;
+    let art = pinned.art.as_mut().unwrap();
+    art.skybox = None;
+    art.sky = Some(r"Data\Environments\03_Track\track.vex".to_string());
+    pinned.host = Some("wipeout-pulse".to_string());
+    let pinned_path = dir.join("pinned.track.toml");
+    oag_trackfile::write(&pinned, &pinned_path).unwrap();
+    std::fs::copy(
+        fixtures.join("blender_checker.png"),
+        dir.join("blender_checker.png"),
+    )
+    .unwrap();
+    let Err(refused) = race::load(&options(&hd, None, &pinned_path)) else {
+        panic!("a Pulse-pinned track with HD's disc as the track source is refused");
+    };
+    let why = format!("{refused:#}");
+    for needle in [
+        "borrows its art from the Wipeout Pulse disc",
+        "track source is Wipeout HD",
+        "Race Remix",
+    ] {
+        assert!(why.contains(needle), "refusal lacks {needle:?}: {why}");
+    }
+    let loaded = race::load(&options(&pulse, Some(&hd), &pinned_path)).expect("the remix loads");
+    let report = loaded.report.join("\n");
+    for needle in [
+        "track file borrows from wipeout-pulse's disc; the track source is Wipeout Pulse",
+        r"art sky: Data\Environments\03_Track\track.vex's Skycube",
+    ] {
+        assert!(
+            report.contains(needle),
+            "report lacks {needle:?}:\n{report}"
+        );
+    }
+    no_art_miss(&report);
+    assert_eq!(loaded.setup.foreign.as_deref(), Some("blender-loop"));
+
+    // A filter: the oval offered on Pulse alone is refused on HD.
+    let text = std::fs::read_to_string(fixtures.join("oval.track.toml")).unwrap();
+    let offered = text.replacen(
+        "glb = \"oval.glb\"",
+        "titles = [\"wipeout-pulse\"]\nglb = \"oval.glb\"",
+        1,
+    );
+    assert_ne!(offered, text);
+    std::fs::write(dir.join("oval.track.toml"), offered).unwrap();
+    std::fs::copy(fixtures.join("oval.glb"), dir.join("oval.glb")).unwrap();
+    let refused = race::load(&options(&hd, None, &dir.join("oval.track.toml")));
+    std::fs::remove_dir_all(&dir).ok();
+    let Err(refused) = refused else {
+        panic!("a track offered on Pulse alone is refused on HD");
+    };
+    let why = format!("{refused:#}");
+    assert!(
+        why.contains("offered on Wipeout Pulse") && why.contains("not on Wipeout HD"),
+        "{why}"
     );
 }
 
 /// The other titles' default circuits through the same exporter: Pure, HD,
-/// Omega and 2048 (a DLC `.vpk`, the only plain-file 2048 source here).
+/// Omega and 2048 (a DLC `.vpk`, and the base game's package decrypted and
+/// extracted offline: the `.pkg` itself is PFS-encrypted and not read in place).
 #[test]
 #[ignore = "needs the other titles' images"]
 fn the_other_titles_default_circuits_round_trip_too() {
@@ -366,6 +632,7 @@ fn the_other_titles_default_circuits_round_trip_too() {
         "data/images/hdfury-ps3-eu.iso",
         "data/images/omega-ps4-eu.pkg",
         "data/test-vpk/2048-PCSF00007-dlc1.vpk",
+        "data/extracted/vita/PCSF00007",
     ] {
         let Some(path) = oag_testdata::exact(image) else {
             continue;

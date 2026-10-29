@@ -223,6 +223,7 @@ pub const TITLE: &Title = &Title {
         fury_card_gain: None,
         grid_card_pose: None,
         origin: oag_title::Origin::Measured,
+        custom_campaigns: true,
     },
     pressings: None,
     pre_race: Some(&pre_race::PRE_RACE),

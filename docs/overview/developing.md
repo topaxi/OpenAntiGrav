@@ -83,7 +83,7 @@ list.
 ## A first session
 
 ```sh
-git clone <this repo> && cd OpenAntiGrav
+git clone --recurse-submodules <this repo> && cd OpenAntiGrav   # the example mods (Git LFS)
 cp "/path/to/WipEout Pulse (Europe).chd" data/images/pulse-psp-eu.chd
 just unpack info data/images/pulse-psp-eu.chd     # what is this disc?
 just unpack list data/images/pulse-psp-eu.chd     # what is on it?

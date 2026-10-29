@@ -28,6 +28,9 @@ mod campaign_stage;
 mod clipboard;
 #[path = "main/cli.rs"]
 mod cli;
+#[cfg(not(target_arch = "wasm32"))]
+#[path = "main/drive.rs"]
+mod drive;
 #[path = "main/frontend_stage.rs"]
 mod frontend_stage;
 #[path = "main/gpu.rs"]
@@ -701,9 +704,9 @@ fn run(cli: Cli) -> Result<()> {
     let anim_seconds = cli.anim_seconds;
     let settings = settings.clone();
 
-    let event_loop = new_event_loop()?;
-    // Poll rather than Wait: the intro is animated whether or not input arrives.
-    event_loop.set_control_flow(ControlFlow::Poll);
+    // `--drive` runs the same session with no window and so no event loop: made after it.
+    let drive = cli.dev.drive()?;
+    let state_log = cli.dev.state_log.clone();
 
     #[cfg_attr(target_arch = "wasm32", allow(unused_mut))]
     let mut app = App {
@@ -756,6 +759,16 @@ fn run(cli: Cli) -> Result<()> {
         suspended: false,
         occluded: false,
     };
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some(script) = drive {
+        oag_sound::probe::mark_frame_thread();
+        return crate::drive::run(&mut app, script, state_log.as_deref());
+    }
+    #[cfg(target_arch = "wasm32")]
+    let _ = (drive, state_log);
+    let event_loop = new_event_loop()?;
+    // Poll rather than Wait: the intro is animated whether or not input arrives.
+    event_loop.set_control_flow(ControlFlow::Poll);
     // From here on this thread draws frames, so music work on it is logged with
     // its duration (`oag_sound::probe`).
     oag_sound::probe::mark_frame_thread();
