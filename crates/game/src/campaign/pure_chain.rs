@@ -234,25 +234,21 @@ impl Chain {
         profile: &Profile<'_>,
         names: &Names<'_>,
         show_medal: bool,
-        note: String,
     ) -> Option<Row> {
         let progress = self.progress(profile);
         if !(profile.unlock_all || pure_campaign::all_met(&event.unlocks, &progress)) {
             return None;
         }
         let held = (profile.medal_of)(&event.name).filter(|_| show_medal);
-        Some(
-            match held {
-                Some(medal) => Row::event(
-                    label,
-                    tag,
-                    Status::Medal(medal),
-                    names.words.medal(medal).to_string(),
-                ),
-                None => Row::event(label, tag, Status::Open, String::new()),
-            }
-            .described(note),
-        )
+        Some(match held {
+            Some(medal) => Row::event(
+                label,
+                tag,
+                Status::Medal(medal),
+                names.words.medal(medal).to_string(),
+            ),
+            None => Row::event(label, tag, Status::Open, String::new()),
+        })
     }
 
     /// The screen the player is on, as rows.
@@ -314,15 +310,8 @@ impl Chain {
                     .enumerate()
                     .filter_map(|(tag, event)| {
                         let described = note("Tournament", &event.subject);
-                        self.event_row(
-                            say(&event.subject),
-                            tag,
-                            event,
-                            profile,
-                            names,
-                            true,
-                            described,
-                        )
+                        self.event_row(say(&event.subject), tag, event, profile, names, true)
+                            .map(|row| row.described(described))
                     })
                     .collect()
             }
@@ -347,7 +336,8 @@ impl Chain {
                         let event = events.iter().find(|e| &e.subject == track)?;
                         let show = self.mode_kind() != Some(ModeKind::FreePlay);
                         let described = note("Track", track);
-                        self.event_row(say(track), tag, event, profile, names, show, described)
+                        self.event_row(say(track), tag, event, profile, names, show)
+                            .map(|row| row.described(described))
                     })
                     .collect()
             }
@@ -358,15 +348,8 @@ impl Chain {
                     .enumerate()
                     .filter_map(|(tag, event)| {
                         let described = note("Track", &event.subject);
-                        self.event_row(
-                            say(&event.subject),
-                            tag,
-                            event,
-                            profile,
-                            names,
-                            true,
-                            described,
-                        )
+                        self.event_row(say(&event.subject), tag, event, profile, names, true)
+                            .map(|row| row.described(described))
                     })
                     .collect()
             }
