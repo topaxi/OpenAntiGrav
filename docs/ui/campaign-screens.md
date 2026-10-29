@@ -2788,7 +2788,7 @@ on persist per campaign in `records.toml`, so the rule holds after a relaunch to
   (newest copy wins; `finish_background_saves` joins it at exit and at the end of a `--drive` run). Every save the
   session makes goes through it now: the cursor, the difficulty, race results (`frame.rs`, `escape.rs`) and loyalty
   (`endrace.rs`). One `WRITING` lock serialises every write of the file and an inline `records::save` (tests,
-  tools) supersedes a copy still waiting; `records::load` writes a copy still waiting before it reads, so a read
+  tools) supersedes a copy still waiting; `records::load` returns the newest copy handed to the background writer (no disk wait), so a read
   right after a save sees it. Order: `records::tests::background_saves_land_in_order_and_none_is_lost`; the
   results save landing beside the cursor: `campaign_cursor_ground_truth::the_cell_raced_is_the_one_the_campaign_reopens_on`.
 - Back from a race: `RETURN TO GRID` selects the cell raced (`reopen_cell_selection`, HD's measured-by-choice keep).

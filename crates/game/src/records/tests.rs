@@ -981,6 +981,14 @@ fn background_saves_land_in_order_and_none_is_lost() {
             "round {round}: the later save is the file"
         );
     }
+    // A read right after a save sees it, whether or not the writer has run: no disk wait.
+    save_in_background_to(file.clone(), &with_cursor("queued"));
+    let seen = queued_for(&file).expect("the queued copy is returned");
+    assert_eq!(
+        seen.campaign_cursor("wipeout pure").grid.as_deref(),
+        Some("queued")
+    );
+    finish_background_saves();
     // A save after the join is a new write, not swallowed by the earlier ones.
     save_in_background_to(file.clone(), &with_cursor("last"));
     finish_background_saves();

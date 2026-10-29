@@ -734,9 +734,13 @@ alternate, load average 10 to 12.
 | after 1, 2, 3 | 0.69 (0.11, 0.57), 0.76 (0.15, 0.61), 0.92 (0.17, 0.75) ms |
 
 The save was 0.12 to 0.14 ms on this host's SSD, so the win is small here (about 0.13 ms in the two
-quiet pairs) and the one 5.59 ms before-frame is the write meeting a busy disk; that is the case the
-change is for (a slower Deck SD card or a contended drive). Not measured on the Deck.
-`records::load` writes a copy still waiting before it reads, so a read right after a save sees it.
+quiet pairs). The 5.59 ms before-frame is an outlier with both `ticks` and `prep` raised and no
+measured cause (machine contention is the likely reading, not shown). The change matters where a
+write is slow (a Deck SD card, a contended drive); not measured on the Deck.
+Every after-run's profile held `[[records]]` (the finishing frame's save), `[[campaign]]` and
+`[[loyalty]]` (the end-of-race saves) and the launch's `[[campaign_cursor]]` once the process exited, so no
+save was lost. `records::load` returns the newest copy handed to the background writer (no write, no disk wait), so
+a read right after a save sees it.
 **At exit** the process must join the last background write: `finish_background_saves`
 (`main/app.rs` on exit, `main/drive.rs` at the end of a `--drive` run); any new exit path calls it.
 

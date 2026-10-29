@@ -965,7 +965,12 @@ const HEADER: &str = "\
 ///   case the whole design exists for.
 #[must_use]
 pub fn load() -> Store {
-    land_waiting();
+    // A save still on its way to the disk is the truth: read it, never wait for the disk.
+    if let Some(path) = path()
+        && let Some(queued) = queued_for(&path)
+    {
+        return queued;
+    }
     let Some(path) = path() else {
         return Store::default();
     };
@@ -1027,6 +1032,9 @@ pub fn save(store: &Store) -> Result<()> {
     if let Ok(mut waiting) = WAITING.lock() {
         *waiting = None;
     }
+    if let Ok(mut queued) = QUEUED.lock() {
+        *queued = None;
+    }
     write_file(store)
 }
 
@@ -1035,19 +1043,17 @@ static WRITING: std::sync::Mutex<()> = std::sync::Mutex::new(());
 /// The copy [`save_in_background`] last asked to have written, until a writer takes it or an
 /// inline [`save`] supersedes it.
 static WAITING: std::sync::Mutex<Option<(PathBuf, Store)>> = std::sync::Mutex::new(None);
+/// The copy [`save_in_background`] was last given, for [`load`] to return while it may still be on
+/// its way to the disk. Never taken by a writer; an inline [`save`] clears it.
+static QUEUED: std::sync::Mutex<Option<(PathBuf, Store)>> = std::sync::Mutex::new(None);
 
-/// Writes the copy [`save_in_background`] left waiting, if its writer has not taken it yet, so a
-/// [`load`] right after a save reads that save.
-fn land_waiting() {
-    let Ok(_writing) = WRITING.lock() else {
-        return;
-    };
-    let newest = WAITING.lock().ok().and_then(|mut waiting| waiting.take());
-    if let Some((path, store)) = newest
-        && let Err(e) = write_to(&path, &store)
-    {
-        error!("could not save the records: {e:#}");
-    }
+/// The copy last handed to [`save_in_background`] for `path`, if there is one.
+fn queued_for(path: &std::path::Path) -> Option<Store> {
+    let queued = QUEUED.lock().ok()?;
+    queued
+        .as_ref()
+        .filter(|(queued_path, _)| queued_path == path)
+        .map(|(_, store)| store.clone())
 }
 
 fn write_file(store: &Store) -> Result<()> {
@@ -1096,6 +1102,9 @@ fn save_in_background_to(path: PathBuf, store: &Store) {
     }
     #[cfg(not(target_arch = "wasm32"))]
     {
+        if let Ok(mut queued) = QUEUED.lock() {
+            *queued = Some((path.clone(), store.clone()));
+        }
         match WAITING.lock() {
             Ok(mut waiting) => *waiting = Some((path, store.clone())),
             Err(_) => return,
