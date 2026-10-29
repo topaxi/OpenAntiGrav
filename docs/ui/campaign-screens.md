@@ -4705,3 +4705,52 @@ other screens' stamps still to wire (below).
   Whether Pure's front end stamps, and where, is **not measured** (an EDRAM readout was tried and landed on PPSSPP's own load dialog, alpha flat at 4), so nothing is wired for it. 2048 and
   Omega: not applicable here (HD's front end draws through its own pipeline, `frontend_glow` is `None`).
 
+#### The front end's bloom, wired from the widgets' own attributes (2026-10-29, `pulse-glow-stamps`)
+
+Claim: Pulse PSP's front end draws the glow its widgets author, read from the disc's XML onto `Text` rather than coded per screen.
+**True for the footer tag and for every `pulse="true"` text; partly false for "from the XML" on the card title's clock.**
+
+- **`Text_Draw` (`0x088ce668`) decoded further** (confidence 85, decompiled and met in EDRAM). The stamp is `RealGlow * alpha / 255`
+  (`+0xb8`, default 0), and **whenever the pulse flag `+0xc8 & 8` is set it is `(150 - s + 70) * PulseMultiplier`** instead (`+0xbc`,
+  default `1.0`, `Text_Construct` `0x088ccbe8`). **`Text_ParseValues` sets that flag from the XML's `pulse="true"`**, so the
+  pulse path is not gated on `RealGlow > 0`: every `pulse="true"` text stamps. `s` is a byte stepped by 15 for each `1/20 s` of the game
+  clock (`DAT_08b317b0 + 0x40`), 0 up to 150 and back (bit `0x80` is the direction); the first draw runs the catch-up loop from tick 0 of
+  the global clock, so **its phase has no law against the screen's entry** (ours starts at `s = 0`, 220, when the screen opens:
+  **chosen, not measured**). Grid Selection's `GRID 1` read 115 and 130 in EDRAM, both on the 70 + 15 k ladder.
+- **What the disc authors.** `GRID 1` (`Grid Selection`'s `Title`), `SINGLE RACE` (`Cell Selection`'s), the track names on Track
+  Creation (`Moa Therma`, `White`, `Talon's`, `Junction`, `Black`) and the title screen's `BOOT_PRESS_START`/`BOOT_PRESS_ANY2` are
+  `pulse="true"`; `PulseMultiplier="0.4"` appears only on `Menu` elements, which `Text_ParseValues` does not read. The footer tag
+  `NewsItemTagText` is the one authored `RealGlow="64"`. The earlier note that a `pulse` has "no oscillation parameters" stands:
+  the ladder is the code's, the flag the XML's.
+- **Wired.** `oag_ui::screen::Text` carries `real_glow` and `pulse_multiplier` (read off `Values`, `Text::glow_stamp(seconds)` gives
+  the byte). `Draw::GlowText { value }` stamps the glyph quads of the text draw before it (`Renderer::render_with` keeps the
+  quads the last text laid out). Grid and Cell Selection (`campaign::draw::push_text`) and the picker body
+  (`picker::body`, Track and Ship Select) emit it after every text; `NavigationLegend` appends the tag's `GlowStamp` (value
+  authored, box measured). `gate_glow` drops both variants on a title that does not bloom; the picker path is gated the same way
+  (`MenuStage::frontend_glow`, `capture::menu_page`). Wipeout Pure's root authors no glow on its tag (loader report line
+  `nav legend: Confirm+Back`, Pulse's reads `..., tag glow 64`).
+- **The glyph quad of the original is ours grown one pixel left and up** (**measured**, confidence 65, one string): Grid
+  Selection's `GRID 1` covers 269..332 x 92..112 in EDRAM (1120 px, 64x20 box) where ours lays its glyphs at 270..332 x 93..112;
+  growing each by one pixel left and up gives 51 columns to the original's 56 (the `1` is 5 wide to its 6). The residual is open.
+- **The footer tag's box** is the EDRAM readout, 28x14 at (29,234), the glyph quads of a string the original fills at run time
+  (`AAA` in every capture; ours draws no tag text, still open): value authored, box measured (confidence 75, one string).
+  Ours stamps the box over the empty tab, so the halo is the tab's blue, not the original's white text glow.
+- **Scores** (mean grey difference, `(x0,y0,x1,y1)` boxes on the re-made pairs; `before` is `main` at `c18bf613b`):
+  - Card title `(264,88,338,116)`, Grid Selection, EDRAM frames phase-matched on the card's own stamp (115 -> ours at 0.36 s,
+    130 -> 0.31 s): **18.50 -> 1.10** and **21.43 -> 1.13**.
+  - Card title `(262,30,420,60)`, Cell Selection pair, window grab, phase **fitted** (best of the 20 ladder steps, no
+    EDRAM alpha for that frame): 38.09 -> 1.67; Grid pair, same fit: 30.52 -> 1.42.
+  - Footer tag `(26,231,60,250)`, every pair: 47.27 -> 32.51 (the rest is the missing `AAA` text).
+  - Whole frame: grid 5.74 -> 5.43, cell 4.66 -> 4.14, Track Select pair 21.04 -> 17.99, Ship Select pair 8.73 -> 8.64: none worse.
+- **Not wired**: Main Menu's regions (`14526` px at 110 and two more): no widget carrying them was identified, and the
+  census above (`RealGlow` 128/1/100/64, `pulse` on the texts listed) names none that sits on that screen, so they are code-side;
+  Track and Ship Select emit stamps from the picker's own clock (`picker.seconds()`), so their phase is as arbitrary as the
+  original's and no EDRAM alpha was read for them; the title screen's `BOOT_PRESS_START` (`pulse="true"`) stamps in the original
+  by the code above but is drawn by `frontend::draw`'s own path, unwired and unmeasured; the text colour pulse
+  (`FUN_088cd2b8` mixes the colour toward white by `s / 150`) is not drawn. The 392-pixel and 1120-pixel boxes are the only EDRAM
+  alpha readouts; Cell, Track and Ship Select need their own (`scripts/psp-glow-mask-dump.py` style).
+- **Pure**: not wired; its root authors no tag glow, and no Pure front-end alpha was read.
+- **PS2**: shares the title record and so draws these stamps; the PS2 chain's strength is not compared.
+- **2048/Omega**: not applicable, HD's front end draws through its own pipeline (`frontend_glow` is `None`; HD pickers
+  use `picker::hd`, which emits no glow).
+

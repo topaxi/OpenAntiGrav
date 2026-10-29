@@ -142,9 +142,10 @@ builds it; `oag_game::preview::orbit_for`'s own `Track` branch is now dead
 code kept only as the fallback for a circuit whose `screen.xml` authors no
 usable `Mode3D`. Open: the `Model`'s own rotation composition order in this
 renderer's column-vector convention is a plausible transpose of the PSP's
-own row-vector one, not confirmed by stepping through a frame, and the PS2's
-own `Origin` sign is inferred from the two pressings' authored numbers
-rather than read off `psp-pulse-eu`.
+own row-vector one, not confirmed by stepping through a frame. The PS2's
+`Origin` is read off its own executable ([mode3d.md](../ghidra/functions/ps2-pulse-eu/mode3d.md)):
+it is a switched GS-offset shift (on for the circuit, with the sign measured live; off for the
+craft), and the camera's aspect is the grid's own `640/448`.
 
 **The cards fade in on the original, and now here too.** Every `LeftLayer`
 on the screen carries a `transition` - a fade-in/fade-out duration in
@@ -251,10 +252,17 @@ render at the node's clock matches the capture to 6.9 mean abs grey against
 entry**: the model loads before the screen opens (offsets 0.48 to 1.92 s were
 read), `node+0x40`, the front end's animation clock at `*(0x08b317b0)+0x40`
 (`anim-transform.md`). `--menu-model-seconds` carries it into a still. The
-PS2 pressing authors `Origin 120` on its 640 grid with another `x y RotY`
-(Assegai `-6 2 -15`, `0.7`); whether its sign is the circuit rule's is not
-measured (the circuit rule put the hull over the stat panel), so PS2 keeps the
-old orbit (`craft_mode3d_applies`) until PCSX2 settles it.
+PS2 pressing authors `Origin 120, 20` on its 640 grid with another `x y z RotX RotY`
+(Assegai `-6 2 -15`, `0.4`, `0.7`) and **plays it without the `Origin`** (2026-10-29,
+`pulse-ps2-ship-pose`): the PS2's `Mode3D` draw adds `Origin` to the GS offset only while
+`g_mode3d_origin_enabled` is set, and a PCSX2 frame of Ship Select puts the hull where `x -6 y 2
+z -15` alone places it, with the grid's own aspect `640/448`
+([mode3d.md](../ghidra/functions/ps2-pulse-eu/mode3d.md), `placed_mode3d`; confidence 70). Against
+that frame, box (60,150)-(640,560) at 1280x720, the best of twelve sway phases of ours: mean
+abs grey diff 24.36 before (the 12 s orbit) to 8.16 after (original box mean grey 19.81, ours
+18.87); the sway phase is matched by scan (`--model-seconds 3.0`), the PS2's node clock has no
+recovered address. `orbit_for`'s craft orbit is only the fallback for a craft whose own
+`screen.xml` authors no `Mode3D`.
 
 **Track Select's stills step every 2 s and cross-fade over 0.70 s
 (2026-10-29).** Fitted to 24 phase-read frames of a PPSSPP capture (the
@@ -587,8 +595,8 @@ keeps all three rows and launches from `START` as before.
   [race-box-screens.md](../ghidra/functions/psp-pulse-usa/race-box-screens.md#mode3ds-own-fixed-camera-and-the-child-models-own-pose-2026-09-28):
   the outline is now framed by the disc's own fixed camera
   (`oag_game::preview::mode3d_view_projection`), with the rotation
-  composition order and the PS2's `Origin` sign left as the two open
-  sub-items that page's own history entry names.
+  composition order left open; the PS2's `Origin` is settled by
+  [mode3d.md](../ghidra/functions/ps2-pulse-eu/mode3d.md) (2026-10-29).
 - ~~The PS2 screens are captured headlessly against the PSP's live capture
   only: no PCSX2 walk of the PS2's own race box exists yet~~ **2026-09-27:
   walked.** `pulse-ps2-eu.chd` on PCSX2 (`SCES-54748`), `RACEBOX` -> `TRACK

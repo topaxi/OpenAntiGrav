@@ -90,6 +90,14 @@ pub struct Text {
     /// per widget, since no other `pulse="true"` widget has been captured yet
     /// to say whether they share the same numbers.
     pub pulse: bool,
+    /// `RealGlow`: the stencil reference this widget stamps into the glow mask, `0` (stamps
+    /// nothing of its own) when absent. `Text_ParseValues` (`0x088cdb34`) stores it at `+0xb8`,
+    /// default `0`; `Text_Draw` stamps `RealGlow * alpha / 255`. Read as authored; whether a
+    /// title's front end blooms is `oag_title::Campaign::frontend_glow`.
+    pub real_glow: u8,
+    /// `PulseMultiplier`: scales a pulsing text's stamp, `(220 - s) * PulseMultiplier`
+    /// (`Text_Draw`). `1.0` when absent (`Text_Construct` `0x088ccbe8` stores `0x3f800000`).
+    pub pulse_multiplier: f32,
     /// The authored `DisplayType`. Data only, see [`DisplayType`].
     pub display_type: DisplayType,
     /// Seconds after the widget's screen appears before it starts drawing at
@@ -128,6 +136,28 @@ pub struct Text {
     /// inset" as the general rule; 95 that it is right for this screen. See
     /// `docs/architecture/frontend-boot.md`.
     pub wrap_width: Option<f32>,
+}
+
+impl Text {
+    /// The glow-mask byte this text stamps `seconds` after its screen opened, `0` for none.
+    ///
+    /// `Text_Draw` (`0x088ce668`, confidence 85): `RealGlow * alpha / 255`, replaced while the
+    /// pulse flag is set (`pulse="true"`) by `(220 - s) * PulseMultiplier`, `s` a byte stepped by
+    /// 15 per `1/20 s` tick, 0 up to 150 and back: 220 down to 70 and back over one second in
+    /// 15-unit levels. The ladder was met in EDRAM (Grid Selection's `GRID 1` read 115 and 130).
+    /// **Chosen, not measured**: the phase. The original's `s` starts at 0 on the first draw but
+    /// is caught up to the game clock's tick count, so it has no law against the screen's entry;
+    /// ours starts at 0 when the screen opens.
+    #[must_use]
+    pub fn glow_stamp(&self, seconds: f32) -> u8 {
+        if self.pulse {
+            let step = (seconds.max(0.0) * 20.0) as u32 % 20;
+            let s = 15 * if step <= 10 { step } else { 20 - step };
+            return ((220 - s) as f32 * self.pulse_multiplier).clamp(0.0, 255.0) as u8;
+        }
+        let alpha = (self.color >> 24) as f32;
+        (f32::from(self.real_glow) * alpha / 255.0) as u8
+    }
 }
 
 /// One `Redirect`: a button, and the screen it goes to.

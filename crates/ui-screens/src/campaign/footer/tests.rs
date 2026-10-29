@@ -28,7 +28,7 @@ const XML: &str = r#"
 <Screen>
 <TextInfo delay="1.6">
 <Values type="tag" x="30" y="235" scale="1.0" color="FEGlobals->BackgroundColor"></Values>
-<Text name="NewsItemTagText"></Text>
+<Text name="NewsItemTagText"><Values RealGlow="64"></Values></Text>
 </TextInfo>
 <Viewport name="TextInfoIsAlwaysLast" delay="1" OffsetX="85" OffsetY="235">
 <Values width="370" height="32"></Values>
@@ -80,8 +80,19 @@ fn the_navigation_controller_s_four_prompts_resolve_through_the_string_table() {
     let strings = StringTable::from_xml(ENTRIES);
     let legend = NavigationLegend::read(&root, &globals(), &strings)
         .expect("Skin.xml authors a NavigationController");
-    let draws = legend.draw(&FaceScales::default());
+    let (stamps, draws): (Vec<Draw>, Vec<Draw>) = legend
+        .draw(&FaceScales::default())
+        .into_iter()
+        .partition(|draw| matches!(draw, Draw::GlowStamp { .. }));
     assert_eq!(draws.len(), 4);
+    assert_eq!(
+        stamps,
+        [Draw::GlowStamp {
+            rect: [29.0, 234.0, 28.0, 14.0],
+            value: 64
+        }],
+        "NewsItemTagText's authored RealGlow=\"64\" is the footer tag's stamp"
+    );
     let texts: Vec<&str> = draws.iter().map(|draw| text_and_y(draw).0).collect();
     assert_eq!(texts, ["ε", "Confirm", "γ", "Back"]);
     // `Confirm`/`Back` (the words, `font`-less in the fixture) route to the
@@ -376,9 +387,16 @@ fn draw_gated_drops_back_but_never_confirm() {
     let root = parse(XML);
     let strings = StringTable::from_xml(ENTRIES);
     let legend = NavigationLegend::read(&root, &globals(), &strings).expect("controller");
-    let with_back = legend.draw_gated(&FaceScales::default(), true);
+    let prompts = |show_back| -> Vec<Draw> {
+        legend
+            .draw_gated(&FaceScales::default(), show_back)
+            .into_iter()
+            .filter(|draw| !matches!(draw, Draw::GlowStamp { .. }))
+            .collect()
+    };
+    let with_back = prompts(true);
     assert_eq!(with_back.len(), 4, "unchanged from draw() when show_back");
-    let without_back = legend.draw_gated(&FaceScales::default(), false);
+    let without_back = prompts(false);
     let texts: Vec<&str> = without_back.iter().map(|draw| text_and_y(draw).0).collect();
     assert_eq!(
         texts,

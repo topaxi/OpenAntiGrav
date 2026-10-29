@@ -118,6 +118,9 @@ pub(crate) struct MenuStage {
     /// shape [`Self::picker`] is. See `crate::campaign_stage` and
     /// `crate::session::campaign`.
     pub(crate) campaign: Option<crate::campaign_stage::CampaignStage>,
+    /// Whether this title's front end blooms over the glow mask its widgets stamp
+    /// ([`oag_title::Campaign::frontend_glow`]); the picker's stamps are dropped otherwise.
+    pub(crate) frontend_glow: bool,
     /// Wipeout Pure's SINGLE PLAYER chain, when open: it takes the tick whole and is
     /// drawn on the frame the page behind it carries. See `crate::pure_chain_stage`.
     pub(crate) pure_chain: Option<crate::pure_chain_stage::PureChainStage>,
@@ -522,6 +525,7 @@ impl MenuStage {
                 &self.nav_legend,
                 picker,
             ));
+            let layers = oag_game::campaign::gate_glow(self.frontend_glow, layers);
             let (flat, ticker_clip) = footer::append(layers.flatten(), picker_footer);
             let list: Vec<Draw> = if frozen_race {
                 std::iter::once(Draw::Fill {

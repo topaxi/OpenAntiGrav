@@ -50,7 +50,12 @@ WALK = [
     {"id": "cell", "title": "Race Campaign: Cell Selection (campaign cell)", "screen": "Cell Selection", "page": "cell-select", "state": "cell-selection.p2s",
      "xml": "CellMode_Definition.xml (Cell Selection)",
      "selection": {"original": "Single Race, Moa Therma White, AI difficulty Medium (the footer)", "ours": "Single Race, Moa Therma White, AI difficulty Medium (the footer)"}},
+    {"id": "team", "title": "Ship Select", "screen": "Team Selection", "page": "ship-select", "state": "team-selection.p2s",
+     "xml": "Selection_Definition.xml (Team Selection)",
+     "selection": {"original": "Assegai, Classic (first craft)", "ours": "Assegai, Classic (first craft)"}},
 ]
+#: `--menu-model-seconds` for ours' hull, per WALK id. PS2 Pulse has no recovered address for the ship node's clock (the PSP's is `node+0x40`),
+#: and a loaded state keeps its phase while the VM runs on, so the hull's sway phase is matched by eye/box against the frame: pass `--model-seconds`.
 
 
 def run(cmd, **kw):
@@ -104,7 +109,8 @@ def build_pair(args, item, out, plat, profile, raw, captured_at):
         cm.menu_pair(pair, theirs_png=pdir / "resized.png", oag_game=args.oag_game, image=args.source, page=item["page"], drawn_from="xml",
                      xml_file=item["xml"], screen_seen=item["screen"], screen_wanted=item["screen"], profile_dir=profile,
                      size=ce.size_text(plat), front_end_style="the disc's own", language="English", original_language="English",
-                     selection=item["selection"], screen_source="read by eye")
+                     selection=item["selection"], screen_source="read by eye",
+                     extra_args=("--menu-model-seconds", "%.3f" % args.model_seconds) if item["id"] == "team" and args.model_seconds is not None else ())
         pair.finish()
         (pdir / "resized.png").unlink()
     except SystemExit as exc:
@@ -125,6 +131,7 @@ def main():
     ap.add_argument("--states", type=Path, default=ce.MAIN / "data" / "saves" / "pulse-ps2" / "menu")
     ap.add_argument("--ids", default="", help="only these WALK ids (comma separated)")
     ap.add_argument("--settle", type=float, default=4.0, help="seconds the VM runs after the state loads, before the grab")
+    ap.add_argument("--model-seconds", type=float, default=None, help="ours' ship hull's own animation clock for the `team` pair (sway phase)")
     cp.add_arguments(ap)
     args = ap.parse_args()
     if not os.environ.get("OAG_PCSX2_DATA") or "OAG_PCSX2_DISPLAY" not in os.environ:

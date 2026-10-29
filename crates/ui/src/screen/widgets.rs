@@ -216,6 +216,11 @@ impl Screens {
                 .is_some_and(|v| v.eq_ignore_ascii_case("middle")),
             start_enabled: node.flag("StartEnabled").unwrap_or(true),
             pulse: node.flag("pulse").unwrap_or(false),
+            real_glow: real_glow(node),
+            pulse_multiplier: node
+                .value("PulseMultiplier")
+                .and_then(|v| v.trim().parse().ok())
+                .unwrap_or(1.0),
             display_type: node
                 .value("DisplayType")
                 .map(DisplayType::from_authored)
@@ -229,6 +234,13 @@ impl Screens {
             transition: 0.0,
         }
     }
+}
+
+/// A widget's authored `RealGlow`, `0` when absent or unreadable.
+fn real_glow(node: &Node) -> u8 {
+    node.value("RealGlow")
+        .and_then(|v| v.trim().parse::<f32>().ok())
+        .map_or(0, |v| v.clamp(0.0, 255.0) as u8)
 }
 
 pub(super) fn redirect_from_node(node: &Node) -> Redirect {

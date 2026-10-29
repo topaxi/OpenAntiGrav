@@ -488,6 +488,55 @@ fn the_ps2_pressing_reads_the_same_screens_on_its_own_grid() {
     assert_eq!(zone.at(0.0).name, "Zone");
 }
 
+/// The PS2's Ship Select takes the `Mode3D` path: every team's own `screen.xml` authors a
+/// `Mode3D` model on the PS2 too (Assegai `x -6 y 2 z -15`, `RotX 0.4`, `RotY 0.7`, `Origin 120, 20`),
+/// `placed_mode3d` plays it without the `Origin`, and the hull lands left of the stat panel
+/// (`docs/ui/selection-screens.md`, "The PS2's craft").
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_ps2s_ship_select_places_every_hull_left_of_the_stat_panel_from_its_own_mode3d() {
+    let Some(path) = oag_testdata::image("data/images/pulse-ps2-eu.chd") else {
+        return;
+    };
+    let shell = shell(&path);
+    let panel_left = shell
+        .ship_select
+        .as_ref()
+        .expect("Team Selection reads")
+        .panel[0];
+    let space = oag_display::space::Space::PS2;
+    let mut archives = oag_assets::Archives::open(&path.to_string_lossy(), oag_pulse::TITLE)
+        .expect("the archives open");
+    assert!(shell.teams.len() >= 8, "{}", shell.teams.len());
+    for team in &shell.teams {
+        let mut report = Vec::new();
+        let (show, _) = oag_game::preview::slideshow(
+            &mut archives,
+            &team.location,
+            false,
+            &[],
+            &StringTable::default(),
+            &mut report,
+        )
+        .unwrap_or_else(|e| panic!("{}: {e:#}", team.location));
+        let authored = show
+            .model
+            .as_ref()
+            .unwrap_or_else(|| panic!("{}: no Mode3D model on the PS2", team.location));
+        let placed = oag_game::preview::placed_mode3d(authored, Kind::Ship, space);
+        assert_eq!(placed.origin, [0.0, 0.0], "{}", team.location);
+        let (view_projection, model) =
+            oag_game::preview::mode3d_view_projection(&placed, space).expect("usable camera");
+        let clip = view_projection * model * oag_core::math::Vec4::new(0.0, 0.0, 0.0, 1.0);
+        let x = (clip.x / clip.w + 1.0) * 0.5 * space.size.0;
+        assert!(
+            x > 0.0 && x < panel_left - 100.0,
+            "{}: the hull's middle lands at x {x}, the stat panel starts at {panel_left}",
+            team.location
+        );
+    }
+}
+
 /// Pure: same definition file name as Pulse's, different screen name for the
 /// track picker (`Track Selection`, not `Track Creation`), and **no preview
 /// mesh at all** - both screens preview with the stills the selected entry's

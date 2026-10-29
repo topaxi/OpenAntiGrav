@@ -1001,3 +1001,49 @@ fn a_colour_template_adds_nothing_and_a_global_declaration_is_not_an_override() 
     let missing = Screens::from_xml_with_fallbacks(TEMPLATED_SKIN, &[], &[], Some("Nope_Colours"));
     assert_eq!(missing.globals["Ink"], "0xFF646464");
 }
+
+/// A widget's authored `RealGlow` is the stamp it writes into the glow mask, and `pulse="true"`
+/// replaces it with the 220 to 70 ladder scaled by `PulseMultiplier`.
+#[test]
+fn a_texts_authored_real_glow_becomes_its_stamp() {
+    let xml = r#"
+<Screen>
+  <Screen name="Probe">
+    <Text name="Plain"><Values string="A" color="0xff112233" RealGlow="100"></Values></Text>
+    <Text name="Faded"><Values string="B" color="0x80112233" RealGlow="100"></Values></Text>
+    <Text name="Pulsing"><Values string="C" pulse="true" PulseMultiplier="0.5"></Values></Text>
+    <Text name="Silent"><Values string="D"></Values></Text>
+  </Screen>
+</Screen>"#;
+    let screens = Screens::from_xml(xml);
+    let screen = &screens.screens[0];
+    let text = |name: &str| {
+        screen
+            .texts
+            .iter()
+            .find(|t| t.name.as_deref() == Some(name))
+            .unwrap_or_else(|| panic!("{name} parses"))
+    };
+    assert_eq!(text("Plain").real_glow, 100);
+    assert_eq!(text("Plain").glow_stamp(3.7), 100, "RealGlow * alpha / 255");
+    assert_eq!(
+        text("Faded").glow_stamp(0.0),
+        50,
+        "the colour's alpha scales it"
+    );
+    assert_eq!(text("Silent").glow_stamp(0.0), 0, "no RealGlow, no stamp");
+    let pulsing = text("Pulsing");
+    assert!((pulsing.pulse_multiplier - 0.5).abs() < f32::EPSILON);
+    assert_eq!(pulsing.glow_stamp(0.0), 110, "(220 - 0) * 0.5");
+    assert_eq!(
+        pulsing.glow_stamp(0.5),
+        35,
+        "(220 - 150) * 0.5 at the ladder's top"
+    );
+    assert_eq!(pulsing.glow_stamp(1.0), 110, "one second round");
+    assert_eq!(
+        text("Silent").pulse_multiplier,
+        1.0,
+        "Text_Construct's default"
+    );
+}

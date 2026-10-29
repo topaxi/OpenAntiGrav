@@ -98,6 +98,56 @@ fn the_selector_stamps_the_glow_mask_over_its_whole_quad_by_the_pulse() {
     assert_eq!(stamp_at(&model), 230, "white");
 }
 
+/// The card title is authored `pulse="true"` on the disc (`GRID 1`, `SINGLE RACE`), so after its
+/// text draw the list carries a glyph-quad stamp stepping down the 220 to 70 ladder; dropping the
+/// widget's authored flag or the emission drops the title's halo.
+#[test]
+fn a_pulsing_title_stamps_its_glyph_quads_after_its_text() {
+    let layout = grid_layout();
+    let mut model = GridSelection::new(vec![GridSummary {
+        name: "grid0".to_string(),
+        cell_count: 8,
+        max_points: 24,
+        required_points: 12,
+        gold_medals: 0,
+        points_earned: 0,
+        locked: false,
+        flyer_name: None,
+    }]);
+    let stamp_at = |model: &GridSelection| {
+        let layers = grid_draw_list(
+            model,
+            &layout,
+            &skin(),
+            &Frame::default(),
+            &strings(),
+            None,
+            false,
+            &|_| placed32(),
+            &[],
+        );
+        let at = layers
+            .body
+            .iter()
+            .position(|draw| matches!(draw, Draw::GlowText { .. }))
+            .expect("the pulsing title stamps");
+        assert!(
+            matches!(
+                &layers.body[at - 1],
+                Draw::Text { .. } | Draw::FacedText { .. }
+            ),
+            "the stamp follows the title's own draw"
+        );
+        let Draw::GlowText { value } = layers.body[at] else {
+            unreachable!()
+        };
+        value
+    };
+    assert_eq!(stamp_at(&model), 220);
+    model.pulse_mut().set_seconds(0.5);
+    assert_eq!(stamp_at(&model), 70);
+}
+
 /// `Outline_x_y` draws `TIER_OUTLINE_TINT` on `Grid Selection` - both the
 /// unlocked hex (`Outline_0_0`) and the locked one behind it
 /// (`Outline_1_0`) get the same dim cyan-teal tile colour
