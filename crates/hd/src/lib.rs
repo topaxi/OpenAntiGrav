@@ -222,6 +222,7 @@ pub const TITLE: &Title = &Title {
         grid_archive: Some(campaign::GRID_ARCHIVE),
         fury_card_gain: None,
         grid_card_pose: None,
+        frontend_glow: None,
         origin: oag_title::Origin::Measured,
     },
     pressings: None,

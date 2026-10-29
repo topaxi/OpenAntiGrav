@@ -89,6 +89,7 @@ class Rig:
         self.title = title
         self.seen = {}
         self.entered = None  # (state, time.monotonic() when `expect` saw it replace another): the screen-entry clock
+        self.pressed_at = None  # time.monotonic() of the press straight before an `st:` step: the entry cannot be earlier
         if self.dbg.is_stepping():
             self.dbg.call("cpu.resume")
             time.sleep(0.5)
@@ -112,7 +113,12 @@ class Rig:
                 # entry lies between the last poll that saw another screen and this one: take the midpoint (+-ENTRY_POLL/2)
                 # Seen already on the first poll: the entry was not watched, so there is no clock (`None`), never "now".
                 now = time.monotonic()
-                self.entered = (seen, None if last_other is None else (last_other + now) / 2)
+                # The press that causes the entry returns after the screen has already changed on a settled emulator, so the first
+                # poll can see the new name at once: the entry then lies between the press and that poll, a wider window than a
+                # watched change (which is `ENTRY_POLL`).
+                before = last_other if last_other is not None else self.pressed_at
+                self.pressed_at = None
+                self.entered = (seen, None if before is None else (before + now) / 2)
                 return
             last_other = time.monotonic()
             time.sleep(ENTRY_POLL)
@@ -186,6 +192,7 @@ class Rig:
                 button, _, n = rest.partition("*")
                 # A key straight before `st:` skips the tap's 0.7 s settle so `expect` sees the screen change itself (the entry clock).
                 watched = steps[at + 1:at + 2] and steps[at + 1].startswith("st:") and int(n or 1) == 1
+                self.pressed_at = time.monotonic() if watched else None
                 self.tap(button, 1, wait=0.0) if watched else self.tap(button, int(n or 1))
             elif kind == "pu":
                 button, _, pred = rest.partition(":")
@@ -309,7 +316,7 @@ def build_pairs(args, seen, out, plat, walk):
         pair.rec["original"]["capture_path"] = "walked by pad from Main Menu (no savestate)"
         pair.rec["original"]["selection_basis"] = "read by eye from the frame; the cursor is where the walk left it"
         if shot.get("since_entry") is not None:
-            pair.rec["original"]["seconds_since_entry"] = {"value": round(shot["since_entry"], 3), "basis": "measured: wall clock from the poll that saw the state name change (+-%.2f s) to the middle of the frame grab; PPSSPP runs at 60 fps, its pulse period reads 1 s on this clock" % (ENTRY_POLL / 2)}
+            pair.rec["original"]["seconds_since_entry"] = {"value": round(shot["since_entry"], 3), "basis": "measured: wall clock from the poll that saw the state name change (+-%.2f s; when the first poll already saw the new name, from the midpoint between the press and that poll, wider) to the middle of the frame grab; PPSSPP runs at 60 fps, its pulse period reads 1 s on this clock" % (ENTRY_POLL / 2)}
         pair.rec["original"]["screen_basis"] = ("the game's own state machine (0x08b31784+0x18c): %r" % shot["state"]) if shot["state"] else "read by eye from the frame (no recovered state name for this title)"
         prepare_profile(plat, profile, args.campaign_title, args.difficulty, item.get("race"))
         cp.build(pair, args, "menu", "cold_boot", None, {"value": None, "unit": None, "basis": "not applicable: a menu is a still"})
