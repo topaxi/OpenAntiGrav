@@ -1,5 +1,5 @@
-//! Which simulation modules a race runs: the rules modules of the mods that are on
-//! (`oag_mod::Extension`), for the title, never in an original campaign
+//! Which simulation modules a race runs: the rules modules and the track modules of the
+//! mods that are on (`oag_mod::Extension`), for the title, never in an original campaign
 //! (`docs/architecture/wasm-extensions/README.md`, section 1.2).
 //!
 //! Only the manifests are read here; each `.wasm` is read by the race load
@@ -8,25 +8,36 @@
 
 use std::sync::Arc;
 
-use oag_raceplay::extensions::Source;
+use oag_raceplay::extensions::{Scope, Source};
 
-/// The rules modules of `mods`, in id order. The race load keeps the ones for its title.
+/// The rules and track modules of `mods`, in id order. The race load keeps the ones for its title.
 #[must_use]
 pub fn sources<'a>(mods: impl IntoIterator<Item = &'a oag_mod::Mod>) -> Vec<Source> {
     let mut found: Vec<Source> = mods
         .into_iter()
-        .filter_map(|m| {
-            let extension = m.manifest.extension.as_ref()?;
-            let rules = extension.rules.as_ref()?;
-            Some(Source {
+        .flat_map(|m| {
+            let Some(extension) = m.manifest.extension.as_ref() else {
+                return Vec::new();
+            };
+            let source = |module: &String, scope: Scope| Source {
                 mod_id: m.manifest.id.clone(),
-                module: rules.module.clone(),
+                module: module.clone(),
                 titles: m.manifest.titles.clone(),
                 api: extension.api,
                 memory_pages: extension.memory_pages,
                 state_bytes: extension.state_bytes,
-                read: reader(m, &rules.module),
-            })
+                scope,
+                read: reader(m, module),
+            };
+            let rules = extension
+                .rules
+                .iter()
+                .map(|rules| source(&rules.module, Scope::Rules));
+            let track = extension
+                .track
+                .iter()
+                .map(|t| source(&t.module, Scope::Track(m.local_path(&t.track))));
+            rules.chain(track).collect()
         })
         .collect();
     found.sort_by(|a, b| a.mod_id.cmp(&b.mod_id));

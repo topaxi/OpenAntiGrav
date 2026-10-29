@@ -38,7 +38,7 @@ pub mod test;
 pub use blob::Blob;
 pub use oag_ext_abi::{
     ABI_WORD, Command, Cue, Effect, Event, IO_LEN, MAX_CRAFTS, MAX_STATE_BYTES, MAX_THRUST_FACTOR,
-    Pickup, Rgba, Slot, Weapon,
+    Pickup, Rgba, Slot, Weapon, WeatherKind,
 };
 pub use reply::{Refused, Reply};
 
@@ -99,6 +99,19 @@ impl Craft<'_> {
     #[must_use]
     pub fn is_racing(&self) -> bool {
         self.read().racing
+    }
+
+    /// The lap being driven, 1-based, saturating at 255.
+    #[must_use]
+    pub fn lap(&self) -> u8 {
+        self.read().lap
+    }
+
+    /// The laps the race ends after; 0 when it has no target. The craft is on its final
+    /// lap when `laps_target() > 0 && lap() == laps_target()`.
+    #[must_use]
+    pub fn laps_target(&self) -> u8 {
+        self.read().laps_target
     }
 
     /// The energy pool.

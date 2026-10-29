@@ -181,6 +181,18 @@ state_bytes = 16         # its state blob, at most 1,024 bytes
 module = "ext/kiss_curse.wasm"
 ```
 
+A mod may instead (or also) bind a module to one of its own track files:
+
+```toml
+[extension.track]
+module = "ext/hillside_rain.wasm"
+track = "tracks/hillside.track.toml"   # a .track.toml of this mod; the module runs only there
+```
+
+It needs `simulation = true` too, loads only in a race of that file (never a disc circuit)
+and may send the same commands as a rules module, including the race-wide `set-weather`,
+`set-sun` and `grade-sky` outputs. Hillside's rain is one.
+
 The game must be built with the `extensions` feature: `just play-mods` (`just play`
 with it), or `cargo run --release -p oag-game --features extensions`. Plain
 `just play` runs no module; its boot log says so for each mod that ships one.

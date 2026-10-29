@@ -710,7 +710,7 @@ impl Drawable {
             hull_scale: hull.scale,
             env_layer: hull.env.map_or(0.0, |layer| layer as f32 + 1.0),
             env_tint: hull.env_tint.to_array(),
-            env_pad: 0.0,
+            sky_grey: hull.sky_grey,
             hull_point: hull.point,
             prev_mvp: prev_mvp.to_cols_array_2d(),
         };
@@ -1123,6 +1123,8 @@ pub(crate) struct HullLayers {
     pub(crate) env: Option<usize>,
     /// The tint those probes are multiplied by, see [`crate::env_probes::ProbeTint`].
     pub(crate) env_tint: crate::env_probes::ProbeTint,
+    /// `grade-sky`'s grey for the sky draw, `0.0` (the identity) for everything else.
+    pub(crate) sky_grey: f32,
 }
 
 /// Uniforms shared with `oag-render`'s `mesh.wgsl`.
@@ -1151,7 +1153,8 @@ pub(crate) struct Uniforms {
     /// See `mesh_render`'s own mirror: the environment-probe layer plus one, `0.0` for none.
     env_layer: f32,
     env_tint: [f32; 2],
-    env_pad: f32,
+    /// See `mesh_render`'s own mirror: the sky's `grade-sky` mix, `0.0` for every other draw.
+    sky_grey: f32,
     /// See `mesh_render`'s own mirror: Pulse's point and spot lights for a hull.
     hull_point: [[f32; 4]; mesh_render::HULL_POINT_SLOTS],
     /// The previous tick's `view_projection * model`, premultiplied - one

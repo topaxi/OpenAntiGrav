@@ -106,6 +106,88 @@ the other five kinds, a mod pickup's own icon art (it borrows the Turbo's), the 
 load-time rewrite, and `oag-server` linking the host (rule 6 forbids `wasmtime` to
 it until phase 3).
 
+### And Hillside's rain (2026-10-30)
+
+The third example mod, and the first **track module**: `oag.hillside`
+(`assets/mods/examples/hillside/guest/`, Rust on `oag-ext`, 1,161 bytes of wasm) turns
+Hillside's final lap rainy. The first craft of any kind, a person's or the AI's, to enter
+its final lap starts a 3 s ramp (180 ticks): the host title's own rain begins, the sun's
+lens flare fades out and the sky greys. Every earlier lap sends nothing at all, so it is
+the vanilla frame, pixel for pixel.
+
+Four things landed with it; ABI 1's revision is **3** (the lap fields were revision 2, the
+commands revision 3, each with its own fold):
+
+- **The lap fields.** The craft record's two zero bytes (offsets +2, +3) are `lap` (1-based,
+  saturating at 255) and `laps_target` (0 when the race has no target), filled from each
+  ship's `Standing` and `World::laps_target`. SDK: `Craft::lap()`, `laps_target()`. A craft is on
+  its final lap when `laps_target() > 0 && lap() == laps_target()`; after it finishes `lap` is
+  `target + 1`.
+- **`[extension.track]`**: `module = "..."` and `track = "tracks/x.track.toml"` (both in the
+  mod; `simulation = true` as for a rules module). `oag_raceplay::extensions::prepare` loads it
+  **only** when the race's `Options::foreign_track` is that file (canonical path equality, so
+  another mod's track with the same id never matches, and a disc circuit never runs it); a mod
+  that is not a folder has no path to match and its track module never loads. This is
+  built differently from section 1.1's sketch (a `track.extension` key in the track
+  manifest): the binding lives in the mod's manifest and names the track file. The load report
+  says "track module loaded". The session is MODDED as for a rules module: open, an
+  outputs-only module perhaps should not mark a race modded (it changes nothing a replay
+  needs).
+- **Three race-wide output commands**, sent on slot 0 like `pickup-roll`, re-sent every tick,
+  held by `Extensions` for the view half, cleared each tick, **never hashed** (the unit test
+  `output_commands_reach_the_cues_effects_and_hud_and_leave_the_hash_alone` runs them and
+  compares hashes with a module that sends none). Each value is finite in `[0, 1]` or the
+  module faults; two modules sending one: the later in id order wins (chosen):
+  - `set-weather{kind, strength}` (`Reply::set_weather(WeatherKind::Rain, s)`): the host title's
+    authored rain. On Pulse the weather `Setup` of Fort Gale (`Title::weather`'s `rain_circuit`,
+    `14_Track`): its `<Weather>`, `WO_RAIN` and the `WO_RAIN_LENS` lens, loaded at race load when
+    a track module is present, with **no cover anchors**, so the whole track is open and
+    Hillside's covered bend rains too. A title with no rain circuit, or one whose
+    `trackstartup.xml` authors no `<Weather>`, says so in the loader report and nothing draws.
+    `strength` scales the drops' emission (the authored per-emission counts, rounded), the
+    wet road and the lens drops' target count, and the mist overlay's alpha.
+    **Forced enhanced:** while this weather runs the enhanced effects (splashes, the wet road,
+    craft spray, the rising mist) are on whatever the WEATHER setting says
+    (`Race::enhanced_weather`); the setting keeps governing a disc circuit's authored weather.
+    Idle at strength 0: it neither runs nor draws, and keeps its pool and clock.
+  - `set-sun{intensity}` (`set_sun`): scales the lens flare's ring alpha at the draw
+    (`scene/lens_flare.rs`), 0 off; untouched at 1.0. **On a track file only the flare fades**:
+    the sun's disc is part of the borrowed `03_Track` Skycube, not a separate draw, and the sun
+    as a light (the shadow direction and the hull rig) is untouched.
+  - `grade-sky{grey}` (`grade_sky`): one per-draw uniform (`Uniforms::sky_grey`, a padding
+    float until now), written for the sky draw alone and branched on `> 0.0` in `shade.wesl`, so
+    a vanilla pixel does not move: the authored colour is mixed toward an overcast grey (its
+    luma times 0.45 plus `(0.16, 0.18, 0.21)`: darker, desaturated, slightly cool; chosen, not
+    measured). The sky stays Hillside's borrowed Skycube; the track format is unchanged.
+
+Measured 2026-10-30, Pulse PSP EU, headless `oag-game --race --mode single_race --opponents
+--track-file` at 960x544. The player is idle: its craft drifts to the first bend's wall and
+sits there from about tick 4,500, so the camera is the same in every frame from tick 6,000
+on. The AI leader enters its final lap between ticks 8,400 and 8,560 (the ramp is mid-way at
+8,560 and done by about 8,700; the HUD's "current" clock restarts at the first line crossing
+and is not the tick). Sky box `x 300..420, y 0..55` (clear sky left of the sun):
+
+| Frame | Sky saturation | Sky luminance | Flare rings | Rain |
+| --- | --- | --- | --- | --- |
+| Module on, lap 1 (tick 6,000) | 0.201 | 0.711 | present | none |
+| Same tick, module off, lap 1 | 0.201 | 0.711 | present | none |
+| Module on, tick 8,560 (the ramp running) | 0.126 | 0.660 | fading | drops, lens drops |
+| Module on, final lap (tick 9,000) | 0.088 | 0.537 | gone | drops, lens drops, wet road |
+| Module off, tick 9,000 (same camera) | 0.202 | 0.753 | present | none |
+
+The module-on and module-off frames at ticks 300, 6,000 and 8,400 (the last one before the
+final lap) are **byte-identical PNGs** (0 differing pixels; module off against module off is
+identical too, so the comparison has no noise); `oag-game`'s
+`hillside_rain_frame_ground_truth` asserts the tick 6,000 pair equal and the tick 9,000 pair's
+sky saturation, luminance and flare patch down (a mutation check: dropping the flare's alpha
+scale fails it). `hillside_rain_ground_truth` (disc-backed) counts it: a two-lap race at tick 600 holds
+no output and no drop; a one-lap race at tick 900 holds 32 drops in the air (the original
+holds 32), 49 on the glass, a wet road of 0.26 and 32 drop segments for the splashes, with
+`Sky { rain: Some(1.0), sun: 0.0, grey: 1.0 }`; a disc circuit never loads the module.
+
+Fuel (`tests::extension_examples`, a full grid with one craft on its final lap): 2,363 on the
+tick it starts, 292 after, against the 200,000 budget.
+
 ### And the SDK (2026-10-29)
 
 Both examples wrote ABI 1 by hand: copied offsets, `unsafe` byte plumbing, a state
@@ -206,7 +288,7 @@ race and no hash, and can hand back one small data blob.
 | Kind | Bound to | World | Declared in | Runs when |
 | --- | --- | --- | --- | --- |
 | **Craft** | a team identity (`oag_title::team::TeamIdentity::identity`, the shared lower-case id, `crates/title/src/team.rs:18-27`), optionally a variant (2048's `feisar2048\4` is the prototype, `oag_2048::race::SHIP_TYPES`) | sim | `oag-mod.toml` `[[extension.craft]]` | every grid slot flying that hull, a person's or the AI's alike |
-| **Track** | one track file ([ADR-0063](../adr/0063-the-own-track-format-is-glb-plus-a-toml-manifest.md)) | sim | the track manifest, `track.extension` (a new optional key of `schemas/v1/track.tosd`) | a race on that track |
+| **Track** | one track file ([ADR-0063](../adr/0063-the-own-track-format-is-glb-plus-a-toml-manifest.md)) | sim | the track manifest, `track.extension` (a new optional key of `schemas/v1/track.tosd`); **built instead as** `oag-mod.toml`'s `[extension.track]` (`module` and `track`), see "And Hillside's rain" | a race on that track |
 | **Rules / race mode** | a mode the mod declares (`modes/*.toml`, the rules-as-data step the thread puts first) | sim | the mode file, `extension = "..."` | a race in that mode |
 | **Weapon** | a pickup id the mod declares (a custom arm of `oag_tables::weapons::Weapon`, an engine change) | sim | `oag-mod.toml` `[[extension.weapon]]` | a race with weapons on, on the titles the mod is for |
 | **HUD** | a widget box in a HUD layout patch (`hud/*.toml`, the thread's section 1c) | hud | `oag-mod.toml` `[[extension.hud]]` | the HUD of a race the mod is on for |

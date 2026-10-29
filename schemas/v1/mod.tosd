@@ -105,6 +105,17 @@ optional = true
 [types.extension.rules.module]
 type = "string"
 
+# One module bound to one track file of the mod; it runs only in a race of that file.
+[types.extension.track]
+type = "table"
+optional = true
+
+[types.extension.track.module]
+type = "string"
+
+[types.extension.track.track]
+type = "string"
+
 [elements.extension]
 type = "types.extension"
 optional = true

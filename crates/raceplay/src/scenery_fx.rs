@@ -251,10 +251,20 @@ impl super::Race {
             i32::from(section)
         };
         let camera = self.camera_frame();
+        let rain = self.sim.extensions.sky().rain.unwrap_or(0.0);
+        self.view.scenery_fx.weather_mut().drive(rain);
         self.view
             .scenery_fx
             .advance_weather(&self.view.effects, dt, camera, section);
         self.advance_splashes(dt);
+    }
+
+    /// Whether the enhanced weather's extras run: the player's setting, or a track
+    /// module's rain, which forces them on whatever the setting says. A circuit's own
+    /// authored weather stays under the setting alone.
+    #[must_use]
+    pub fn enhanced_weather(&self) -> bool {
+        self.view.weather.is_enhanced() || self.view.scenery_fx.weather().is_driven_active()
     }
 
     /// The enhanced weather's one step: ages the splashes and throws one
@@ -262,7 +272,7 @@ impl super::Race {
     /// beyond clearing what a switch back left behind, so that frame is the
     /// original's. See [`splash`].
     fn advance_splashes(&mut self, dt: f32) {
-        if !self.view.weather.is_enhanced() {
+        if !self.enhanced_weather() {
             if !self.view.scenery_fx.weather().splashes().is_empty() {
                 self.view.scenery_fx.weather_mut().splashes_mut().clear();
             }

@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-10-29
-summary: "oag-ext-abi (checked revision) and the oag-ext Rust SDK landed, examples rewritten; open: check/run tool, C header, C++ example, template, git dep"
+updated: 2026-10-30
+summary: "SDK rev 3 + track module + Hillside rain landed locally; open: check/run tool, C header, C++ example, template, git dep, MODDED rule"
 categories: [gameplay]
 size: M (55)
 difficulty: medium (60)
@@ -20,6 +20,15 @@ The wire ABI itself (one I/O buffer, three exports, core wasm, no component mode
 settled by `docs/architecture/wasm-extensions/README.md` section 2 and
 `determinism-and-state.md` ("Web and iOS") and is **not** what this thread changes. The
 problem is that the buffer's bytes are the *only* interface a mod author has.
+
+## Landed since (2026-10-30, lane `hillside-rain`, local `wasm-extensions` branch)
+
+The `[extension.track]` kind (a module bound to one track file of its mod), the craft
+record's `lap` and `laps_target` (`Craft::lap()`, `laps_target()`), three race-wide output
+commands (`set-weather`, `set-sun`, `grade-sky`) and the third example, Hillside's rain;
+ABI 1 is revision 3. Open items below are unchanged. New, for whoever takes the tooling
+lane: an outputs-only module perhaps should not mark a race MODDED, and a track module in
+a `.zip` mod has no path to match (`Scope::Track(None)`), so it never loads.
 
 ## Landed (2026-10-29, lane `ext-sdk`)
 

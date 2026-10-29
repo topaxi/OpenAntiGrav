@@ -537,6 +537,7 @@ impl super::super::Scene {
                         } else {
                             crate::env_probes::ProbeTint::ENGINE
                         },
+                        ..Default::default()
                     },
                 );
             }

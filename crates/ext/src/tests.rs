@@ -178,6 +178,14 @@ fn the_reply_refuses_what_the_host_would_fault_on() {
     assert_eq!(reply.give_pickup(&held), Err(Refused::Pickup));
     assert_eq!(reply.clear_pickup(&held), Ok(()));
     assert_eq!(reply.pickup_roll(Weapon::Turbo, 0), Err(Refused::Range));
+    for bad in [-0.1, 1.1, f32::NAN, f32::INFINITY] {
+        assert_eq!(
+            reply.set_weather(WeatherKind::Rain, bad),
+            Err(Refused::Range)
+        );
+        assert_eq!(reply.set_sun(bad), Err(Refused::Range));
+        assert_eq!(reply.grade_sky(bad), Err(Refused::Range));
+    }
     assert_eq!(reply.len(), 3);
     while reply.len() < MAX_COMMANDS_FOR_TEST {
         reply.pad_mode(&held).unwrap();

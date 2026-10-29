@@ -727,7 +727,7 @@ impl Mods {
                     .manifest
                     .extension
                     .as_ref()
-                    .is_some_and(|e| e.rules.is_some())
+                    .is_some_and(|e| e.rules.is_some() || e.track.is_some())
             {
                 lines.push(format!(
                     "mod {}: its simulation module does not run, this build has no `extensions` feature (`just play-mods`)",

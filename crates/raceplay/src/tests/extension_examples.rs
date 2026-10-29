@@ -18,9 +18,13 @@ fn example(dir: &str) -> Option<Module> {
     }
     let module = oag_mod::Mod::open(&root).unwrap_or_else(|e| panic!("{dir}: {e}"));
     let extension = module.manifest.extension.clone().expect("[extension]");
-    let rules = extension.rules.expect("a rules module");
+    let name = extension
+        .rules
+        .map(|rules| rules.module)
+        .or(extension.track.map(|track| track.module))
+        .expect("a rules or a track module");
     let wasm = module
-        .read(&rules.module)
+        .read(&name)
         .unwrap()
         .expect("the committed module is in the mod");
     let limits = Limits {
@@ -41,6 +45,10 @@ fn full_grid_fuel(module: &Module) -> Vec<u64> {
             person: slot == 0,
             fire_held: slot == 0,
             racing: true,
+            // One craft on its final lap, so a track module that starts there is measured
+            // on its busy ticks.
+            lap: if slot == 7 { 3 } else { 2 },
+            laps_target: 3,
             shield: 100.0,
             shield_max: 100.0,
             speed_kmh: 400.0,
@@ -77,7 +85,7 @@ fn full_grid_fuel(module: &Module) -> Vec<u64> {
 
 #[test]
 fn the_committed_examples_load_and_run_a_full_grid_in_budget() {
-    for dir in ["kiss-curse", "energy-turbo"] {
+    for dir in ["kiss-curse", "energy-turbo", "hillside"] {
         let Some(module) = example(dir) else {
             eprintln!("{dir}: the mod-examples submodule is not checked out; skipped");
             continue;

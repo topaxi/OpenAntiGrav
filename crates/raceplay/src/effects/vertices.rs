@@ -89,7 +89,7 @@ impl Race {
             .scenery_fx
             .weather()
             .extend_vertices(additive, alpha_over, camera, right, up);
-        if self.view.weather.is_enhanced() {
+        if self.enhanced_weather() {
             self.view
                 .scenery_fx
                 .weather()

@@ -201,6 +201,9 @@ returns `Err(Refused)` where the host would fault:
 | `play-cue{slot, cue}` | `PlayCue` | `play_cue(&craft, cue)` | |
 | `fire-effect{slot, effect}` | `FireEffect` | `fire_effect(&craft, effect)` | |
 | `pickup-tint{slot, rgba}` | `PickupTint` | `pickup_tint(&craft, rgba)` | |
+| `set-weather{kind, strength}` | `SetWeather` | `set_weather(kind, strength)` | `strength` outside `[0, 1]` or not finite |
+| `set-sun{intensity}` | `SetSun` | `set_sun(intensity)` | outside `[0, 1]` or not finite |
+| `grade-sky{grey}` | `GradeSky` | `grade_sky(grey)` | outside `[0, 1]` or not finite |
 
 Every method also refuses a 65th command (`Refused::Full`). The host's checks stay
 the backstop for a guest written without the SDK.
@@ -297,7 +300,11 @@ the backstop for a guest written without the SDK.
 - **`play-cue`** pushes onto `RaceSim::cues`. **`fire-effect`** queues for
   `Race::draw_extension_effects` (`tick.rs`'s drawn-tick block, beside the hit sparks).
   **`pickup-tint`** feeds `oag_hud::Readout::pickup_tint`.
-- None of the three outputs is hashed. The README's "What is built" has the table.
+- **`set-weather`, `set-sun`, `grade-sky`** are race-wide (slot 0), held in
+  `Extensions` (`Sky`) for the tick, cleared at the next call, and read by the view half:
+  `Race::advance_weather` drives the track module's rain (`Weather::drive`), `Scene`'s lens
+  flare placement scales the rings' alpha, and the sky draw writes `Uniforms::sky_grey`.
+- None of the outputs is hashed. The README's "What is built" has the table.
 
 ### `message{slot, string-id}` and `publish{key, value}`: outputs, not state
 

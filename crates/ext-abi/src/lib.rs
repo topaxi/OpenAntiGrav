@@ -22,7 +22,7 @@
 //! | [`STATE_AT`] | [`MAX_STATE_BYTES`] | the module's state blob, in and out |
 //! | [`REPLY_AT`] | 4 | command count, written by the guest |
 //! | [`REPLY_AT`] + 4 | [`COMMAND_LEN`] x [`MAX_COMMANDS`] | commands ([`Command`]): kind `u8`, slot `u8`, `u16` argument, `f32`, `u32` |
-//! | [`CRAFTS_AT`] | [`CRAFT_LEN`] x [`MAX_CRAFTS`] | one record per grid slot ([`Craft`]): pickup `u8`, flags `u8`, 2 bytes zero, shield `f32`, shield maximum `f32`, speed km/h `f32` |
+//! | [`CRAFTS_AT`] | [`CRAFT_LEN`] x [`MAX_CRAFTS`] | one record per grid slot ([`Craft`]): pickup `u8`, flags `u8`, lap `u8`, laps target `u8`, shield `f32`, shield maximum `f32`, speed km/h `f32` |
 //!
 //! The README's WIT (`docs/architecture/wasm-extensions/README.md`, section 2.1) is
 //! the documentation of the records; this is what is built of it.
@@ -40,7 +40,7 @@ use core::fmt;
 pub const ABI: u32 = 1;
 /// The layout revision within [`ABI`]: bumped by hand on any edit to the layout. A
 /// module built before revisions existed returns the bare major and is revision 0.
-pub const REVISION: u32 = 1;
+pub const REVISION: u32 = 3;
 const _: () = assert!(REVISION > 0 && REVISION < 256);
 /// What a guest's `oag_abi` returns: the major above the revision's 8 bits.
 pub const ABI_WORD: u32 = (ABI << 8) | REVISION;
@@ -116,6 +116,10 @@ pub const COMMAND_WORD: usize = 8;
 pub const CRAFT_PICKUP: usize = 0;
 /// Within a craft record: the flags.
 pub const CRAFT_FLAGS: usize = 1;
+/// Within a craft record: the lap being driven, 1-based, saturating at 255.
+pub const CRAFT_LAP: usize = 2;
+/// Within a craft record: the laps the race ends after; 0 for a race with no target.
+pub const CRAFT_LAPS_TARGET: usize = 3;
 /// Within a craft record: the shield, `f32`.
 pub const CRAFT_SHIELD: usize = 4;
 /// Within a craft record: the shield maximum, `f32`.
@@ -151,6 +155,9 @@ const COMMAND_FIRE_EFFECT: u8 = 6;
 const COMMAND_PICKUP_TINT: u8 = 7;
 const COMMAND_CLEAR_PICKUP: u8 = 8;
 const COMMAND_PICKUP_ROLL: u8 = 9;
+const COMMAND_SET_WEATHER: u8 = 10;
+const COMMAND_SET_SUN: u8 = 11;
+const COMMAND_GRADE_SKY: u8 = 12;
 /// The craft record's pickup code for a simulation mod's own pickup.
 const PICKUP_OURS: u8 = u8::MAX;
 
@@ -278,6 +285,14 @@ coded! {
     }
 }
 
+coded! {
+    /// `set-weather`'s kinds: the host title's own weather, by kind.
+    WeatherKind: u16, first 0 {
+        /// The title's authored rain.
+        Rain,
+    }
+}
+
 /// What a craft holds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum Pickup {
@@ -357,6 +372,10 @@ pub struct Craft {
     pub fire_held: bool,
     /// Racing: past the start, not wrecked, not respawning.
     pub racing: bool,
+    /// The lap being driven, 1-based, saturating at 255.
+    pub lap: u8,
+    /// The laps the race ends after; 0 when it has no target.
+    pub laps_target: u8,
     /// The energy pool.
     pub shield: f32,
     /// Its maximum: the bound of a `shield-delta` for this slot.
@@ -378,6 +397,8 @@ impl Craft {
         ]
         .into_iter()
         .fold(0, |flags, (on, bit)| if on { flags | bit } else { flags });
+        record[CRAFT_LAP] = self.lap;
+        record[CRAFT_LAPS_TARGET] = self.laps_target;
         put_u32(&mut record, CRAFT_SHIELD, self.shield.to_bits());
         put_u32(&mut record, CRAFT_SHIELD_MAX, self.shield_max.to_bits());
         put_u32(&mut record, CRAFT_SPEED, self.speed_kmh.to_bits());
@@ -394,6 +415,8 @@ impl Craft {
             person: flags & CRAFT_PERSON != 0,
             fire_held: flags & CRAFT_FIRE_HELD != 0,
             racing: flags & CRAFT_RACING != 0,
+            lap: record[CRAFT_LAP],
+            laps_target: record[CRAFT_LAPS_TARGET],
             shield: f32::from_bits(get_u32(record, CRAFT_SHIELD)),
             shield_max: f32::from_bits(get_u32(record, CRAFT_SHIELD_MAX)),
             speed_kmh: f32::from_bits(get_u32(record, CRAFT_SPEED)),
@@ -544,6 +567,27 @@ pub enum Command {
         /// The colour.
         rgba: Rgba,
     },
+    /// Race-wide (written with slot 0): play the host title's own `kind` of weather at
+    /// `strength`, drawn with the enhanced weather whatever the player's setting. An
+    /// output, re-sent each tick it should hold: drawn, never hashed.
+    SetWeather {
+        /// The kind.
+        kind: WeatherKind,
+        /// Finite, in `[0, 1]`.
+        strength: f32,
+    },
+    /// Race-wide: scale the sun's draw and the lens flare's alpha by `intensity`
+    /// (0 = both off). The sun as a light is untouched. An output, never hashed.
+    SetSun {
+        /// Finite, in `[0, 1]`.
+        intensity: f32,
+    },
+    /// Race-wide: mix the sky toward a grey, rainy colour by `grey` (0 = the authored
+    /// sky). An output, never hashed.
+    GradeSky {
+        /// Finite, in `[0, 1]`.
+        grey: f32,
+    },
 }
 
 impl Command {
@@ -559,7 +603,10 @@ impl Command {
             | Self::PlayCue { slot, .. }
             | Self::FireEffect { slot, .. }
             | Self::PickupTint { slot, .. } => Some(slot),
-            Self::PickupRoll { .. } => None,
+            Self::PickupRoll { .. }
+            | Self::SetWeather { .. }
+            | Self::SetSun { .. }
+            | Self::GradeSky { .. } => None,
         }
     }
 
@@ -581,6 +628,9 @@ impl Command {
             Self::PlayCue { cue, .. } => (COMMAND_PLAY_CUE, cue.code(), 0.0, 0),
             Self::FireEffect { effect, .. } => (COMMAND_FIRE_EFFECT, effect.code(), 0.0, 0),
             Self::PickupTint { rgba, .. } => (COMMAND_PICKUP_TINT, 0, 0.0, rgba.to_u32()),
+            Self::SetWeather { kind, strength } => (COMMAND_SET_WEATHER, kind.code(), strength, 0),
+            Self::SetSun { intensity } => (COMMAND_SET_SUN, 0, intensity, 0),
+            Self::GradeSky { grey } => (COMMAND_GRADE_SKY, 0, grey, 0),
         };
         let mut record = [0; COMMAND_LEN];
         record[COMMAND_KIND] = kind;
@@ -614,6 +664,26 @@ impl Command {
                     every: word,
                 }),
             };
+        }
+        if matches!(
+            kind,
+            COMMAND_SET_WEATHER | COMMAND_SET_SUN | COMMAND_GRADE_SKY
+        ) {
+            if raw_slot != 0 || !(0.0..=1.0).contains(&value) {
+                return Err(Malformed::Unit {
+                    kind,
+                    slot: raw_slot,
+                    value,
+                });
+            }
+            return Ok(match kind {
+                COMMAND_SET_WEATHER => Self::SetWeather {
+                    kind: WeatherKind::from_code(arg).ok_or(Malformed::Weather(arg))?,
+                    strength: value,
+                },
+                COMMAND_SET_SUN => Self::SetSun { intensity: value },
+                _ => Self::GradeSky { grey: value },
+            });
         }
         let slot = Slot::new(usize::from(raw_slot)).ok_or(Malformed::Slot(raw_slot))?;
         Ok(match kind {
@@ -699,6 +769,18 @@ pub enum Malformed {
         /// The period.
         every: u32,
     },
+    /// A race-wide `set-weather`, `set-sun` or `grade-sky` with a slot other than 0, or a
+    /// value outside `[0, 1]` (NaN included).
+    Unit {
+        /// The command kind code.
+        kind: u8,
+        /// The slot byte.
+        slot: u8,
+        /// The value sent.
+        value: f32,
+    },
+    /// A `set-weather` kind code outside [`WeatherKind::ALL`].
+    Weather(u16),
 }
 
 impl fmt::Display for Malformed {
@@ -720,6 +802,15 @@ impl fmt::Display for Malformed {
                 f,
                 "fire-effect code {code} is not one of {}",
                 Effect::ALL.len()
+            ),
+            Self::Unit { kind, slot, value } => write!(
+                f,
+                "race-wide command {kind} slot {slot} value {value}: slot 0 and a value in [0, 1]"
+            ),
+            Self::Weather(code) => write!(
+                f,
+                "set-weather kind {code} is not one of {}",
+                WeatherKind::ALL.len()
             ),
             Self::Roll {
                 slot,

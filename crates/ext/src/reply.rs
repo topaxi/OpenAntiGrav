@@ -2,6 +2,7 @@
 
 use oag_ext_abi::{
     Command, Cue, Effect, MAX_COMMANDS, MAX_THRUST_FACTOR, Pickup, Rgba, Sections, Weapon,
+    WeatherKind,
 };
 
 use crate::Craft;
@@ -195,5 +196,45 @@ impl<'a> Reply<'a> {
             slot: craft.slot(),
             rgba,
         })
+    }
+
+    /// `set-weather`: race-wide, play the host title's own `kind` of weather at
+    /// `strength` in `[0, 1]`, drawn with the enhanced weather whatever the player's
+    /// setting. Re-send it each tick it should hold. Drawn, never hashed.
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`], [`Refused::Range`] outside `[0, 1]` or not a number.
+    pub fn set_weather(&mut self, kind: WeatherKind, strength: f32) -> Result<(), Refused> {
+        if !(0.0..=1.0).contains(&strength) {
+            return Err(Refused::Range);
+        }
+        self.push(&Command::SetWeather { kind, strength })
+    }
+
+    /// `set-sun`: race-wide, scale the sun's draw and the lens flare's alpha by
+    /// `intensity` in `[0, 1]` (0 = both off). The sun as a light is untouched.
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`], [`Refused::Range`] outside `[0, 1]` or not a number.
+    pub fn set_sun(&mut self, intensity: f32) -> Result<(), Refused> {
+        if !(0.0..=1.0).contains(&intensity) {
+            return Err(Refused::Range);
+        }
+        self.push(&Command::SetSun { intensity })
+    }
+
+    /// `grade-sky`: race-wide, mix the sky toward a grey, rainy colour by `grey` in
+    /// `[0, 1]` (0 = the authored sky).
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`], [`Refused::Range`] outside `[0, 1]` or not a number.
+    pub fn grade_sky(&mut self, grey: f32) -> Result<(), Refused> {
+        if !(0.0..=1.0).contains(&grey) {
+            return Err(Refused::Range);
+        }
+        self.push(&Command::GradeSky { grey })
     }
 }

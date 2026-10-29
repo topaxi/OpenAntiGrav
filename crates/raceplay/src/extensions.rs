@@ -26,6 +26,33 @@ pub const MAX_SIM_MODS: usize = 4;
 /// Reads a module's bytes, on the load thread.
 pub type Reader = Arc<dyn Fn() -> Result<Vec<u8>, String> + Send + Sync>;
 
+/// Where a [`Source`] runs.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum Scope {
+    /// Every race of the mod's titles: a rules module.
+    #[default]
+    Rules,
+    /// Only a race of this track file (`[extension.track]`); `None` is a track the
+    /// composition root could not place on disk (a mod that is not a folder), which no
+    /// race matches.
+    Track(Option<std::path::PathBuf>),
+}
+
+impl Scope {
+    /// Whether a race of `foreign_track` (the track file it was asked to race, if any)
+    /// runs it.
+    fn runs_on(&self, foreign_track: Option<&std::path::Path>) -> bool {
+        let Self::Track(track) = self else {
+            return true;
+        };
+        let (Some(track), Some(raced)) = (track, foreign_track) else {
+            return false;
+        };
+        let same = |path: &std::path::Path| path.canonicalize().unwrap_or_else(|_| path.into());
+        same(track) == same(raced)
+    }
+}
+
 /// A simulation module a mod that is on offers this race: what the composition root
 /// found in `oag-mod.toml`, with a reader for the `.wasm` so nothing is opened until
 /// the race loads it.
@@ -44,6 +71,8 @@ pub struct Source {
     pub memory_pages: u32,
     /// `[extension] state_bytes`.
     pub state_bytes: u32,
+    /// Where it runs.
+    pub scope: Scope,
     /// Reads the module.
     pub read: Reader,
 }
@@ -99,16 +128,33 @@ pub fn gather(
 pub struct Prepared {
     #[cfg(feature = "extensions")]
     modules: Vec<(String, oag_modhost::Module)>,
+    /// Whether a track module is among them: the load then builds the host title's
+    /// rain for it ([`Self::has_track_module`]).
+    track_module: bool,
 }
 
-/// Reads and compiles the `sources` that are for `title` (its slug), at race load. A
-/// module that fails leaves its mod out and says why in `report`; the race runs
-/// without it.
+impl Prepared {
+    /// Whether a module bound to this race's track file loaded.
+    #[must_use]
+    pub fn has_track_module(&self) -> bool {
+        self.track_module
+    }
+}
+
+/// Reads and compiles the `sources` that are for `title` (its slug) and, for a track
+/// module, for `foreign_track` (the track file raced), at race load. A module that
+/// fails leaves its mod out and says why in `report`; the race runs without it.
 #[must_use]
-pub fn prepare(sources: &[Source], title: &str, report: &mut Vec<String>) -> Prepared {
+pub fn prepare(
+    sources: &[Source],
+    title: &str,
+    foreign_track: Option<&std::path::Path>,
+    report: &mut Vec<String>,
+) -> Prepared {
     let sources: Vec<&Source> = sources
         .iter()
         .filter(|s| s.titles.is_empty() || s.titles.iter().any(|t| t.eq_ignore_ascii_case(title)))
+        .filter(|s| s.scope.runs_on(foreign_track))
         .collect();
     #[cfg(not(feature = "extensions"))]
     {
@@ -128,6 +174,7 @@ pub fn prepare(sources: &[Source], title: &str, report: &mut Vec<String>) -> Pre
         let mut sorted = sources;
         sorted.sort_by(|a, b| a.mod_id.cmp(&b.mod_id));
         let mut modules = Vec::new();
+        let mut track_module = false;
         for source in sorted {
             let label = format!("mod {}: {}", source.mod_id, source.module);
             if modules.len() == MAX_SIM_MODS {
@@ -164,17 +211,25 @@ pub fn prepare(sources: &[Source], title: &str, report: &mut Vec<String>) -> Pre
                     push(
                         report,
                         format!(
-                            "{label}: simulation module loaded, {} state bytes, {} fuel a tick; the race is MODDED and records no replay",
+                            "{label}: {} loaded, {} state bytes, {} fuel a tick; the race is MODDED and records no replay",
+                            match source.scope {
+                                Scope::Rules => "simulation module",
+                                Scope::Track(_) => "track module",
+                            },
                             source.state_bytes,
                             oag_modhost::FUEL_PER_TICK
                         ),
                     );
+                    track_module |= matches!(source.scope, Scope::Track(_));
                     modules.push((source.mod_id.clone(), module));
                 }
                 Err(e) => push(report, format!("{label} left out: {e}")),
             }
         }
-        Prepared { modules }
+        Prepared {
+            modules,
+            track_module,
+        }
     }
 }
 
@@ -183,6 +238,29 @@ pub fn prepare(sources: &[Source], title: &str, report: &mut Vec<String>) -> Pre
 fn push(report: &mut Vec<String>, line: String) {
     log::info!("{line}");
     report.push(line);
+}
+
+/// The race-wide outputs of `set-weather`, `set-sun` and `grade-sky` this tick. Each is
+/// its own identity when unsent, so a race without a module draws the vanilla frame.
+/// Two modules sending the same command: the later module in id order wins (chosen).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Sky {
+    /// `set-weather`'s rain strength, `None` when not sent.
+    pub rain: Option<f32>,
+    /// `set-sun`'s intensity; `1.0` when not sent.
+    pub sun: f32,
+    /// `grade-sky`'s grey; `0.0` when not sent.
+    pub grey: f32,
+}
+
+impl Default for Sky {
+    fn default() -> Self {
+        Self {
+            rain: None,
+            sun: 1.0,
+            grey: 0.0,
+        }
+    }
 }
 
 /// One module's numbers for the dev overlay, after the last tick. An output, never
@@ -265,6 +343,20 @@ impl Extensions {
         {
             let _ = slot;
             None
+        }
+    }
+
+    /// What a module's race-wide outputs ask this tick: `None` strength is no rain.
+    /// Held for the view half, never hashed, `Sky::default()` in every race without one.
+    #[must_use]
+    pub fn sky(&self) -> Sky {
+        #[cfg(feature = "extensions")]
+        {
+            self.on.sky
+        }
+        #[cfg(not(feature = "extensions"))]
+        {
+            Sky::default()
         }
     }
 
@@ -399,6 +491,13 @@ impl crate::Race {
         }
     }
 
+    /// The race-wide outputs of the modules this tick (`set-sun`, `grade-sky`,
+    /// `set-weather`): [`Sky::default`] in a race without a module.
+    #[must_use]
+    pub fn extension_sky(&self) -> Sky {
+        self.sim.extensions.sky()
+    }
+
     /// The modules' numbers for the dev overlay ([`Report`]).
     #[must_use]
     pub fn extension_reports(&self) -> Vec<Report> {
@@ -457,6 +556,8 @@ mod on {
         /// `fire-effect`s the view has still to draw.
         pub(super) tints: [Option<[f32; 4]>; oag_gameplay::MAX_SHIPS],
         pub(super) effects: Vec<(usize, oag_title::effects::Trigger)>,
+        /// The race-wide outputs of this tick.
+        pub(super) sky: super::Sky,
     }
 
     impl On {
@@ -485,6 +586,7 @@ mod on {
                 pad_energy: 0,
                 tints: [None; oag_gameplay::MAX_SHIPS],
                 effects: Vec::new(),
+                sky: super::Sky::default(),
             }
         }
 
@@ -656,6 +758,11 @@ mod on {
                     person,
                     fire_held,
                     racing,
+                    lap: u8::try_from(ship.standing.lap).unwrap_or(u8::MAX),
+                    laps_target: sim
+                        .world
+                        .laps_target()
+                        .map_or(0, |n| u8::try_from(n).unwrap_or(u8::MAX)),
                     shield: ship.physics.shield,
                     shield_max: ship.handling.dimensions.shield,
                     speed_kmh: ship.physics.body.linear_velocity.length()
@@ -779,6 +886,7 @@ mod on {
         on.pad_energy = 0;
         on.pad_mode = 0;
         on.tints = [None; oag_gameplay::MAX_SHIPS];
+        on.sky = super::Sky::default();
         // This tick's alone: a tick that draws nothing (a replayed one, a server's) drops
         // them rather than piling them up.
         on.effects.clear();
@@ -850,6 +958,11 @@ mod on {
                     sim.extensions.on.tints[slot.index()] =
                         Some([r, g, b, a].map(|c| f32::from(c) / 255.0));
                 }
+                Command::SetWeather { strength, .. } => {
+                    sim.extensions.on.sky.rain = Some(strength);
+                }
+                Command::SetSun { intensity } => sim.extensions.on.sky.sun = intensity,
+                Command::GradeSky { grey } => sim.extensions.on.sky.grey = grey,
                 Command::GivePickup { .. }
                 | Command::ClearPickup { .. }
                 | Command::PickupRoll { .. } => pickup_command(sim, index, command),

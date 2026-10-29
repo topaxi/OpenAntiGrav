@@ -84,6 +84,9 @@ pub struct Lens {
     saved_lifetime: (f32, f32),
     emitting: bool,
     azimuth: f32,
+    /// A track module's rain strength scaling the open sections' target; `1.0`
+    /// unless a driven weather ([`super::Weather::drive`]) says otherwise.
+    gain: f32,
 }
 
 /// What the effect authors, to put back.
@@ -120,7 +123,19 @@ impl Lens {
             saved_lifetime: (0.0, 0.0),
             emitting: true,
             azimuth: 0.0,
+            gain: 1.0,
         }
+    }
+
+    /// Scales the count the emitter eases toward (a track module's rain strength).
+    pub fn set_gain(&mut self, gain: f32) {
+        self.gain = gain;
+    }
+
+    /// The scale [`Self::set_gain`] set.
+    #[must_use]
+    pub fn gain(&self) -> f32 {
+        self.gain
     }
 
     /// Whether the lens loaded.
@@ -195,7 +210,7 @@ impl Lens {
             return;
         };
         for _ in 0..(dt * 60.0) as u32 {
-            self.count += (self.target - self.count) * SMOOTHING;
+            self.count += (self.target * self.gain - self.count) * SMOOTHING;
         }
         let per_emission = self.count as u32;
         let seen = camera.direction_to_local(wind);
