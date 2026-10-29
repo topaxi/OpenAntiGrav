@@ -381,11 +381,13 @@ def copy_images(art, scene, manifest_dir):
 
 
 def cover_light_scale(context, depsgraph, points, cover, sun_dir):
-    """Per spline point light scale bytes, darkened where art casts over the line.
+    """Per spline point light scale bytes, darkened where the line passes under art.
 
     **Chosen, not measured.** From a point lifted `COVER_LIFT` above the line, a ray
-    straight up and one towards the sun, against art that casts: blocked upwards
-    sets the ambient byte to `cover`, blocked sunwards the directional byte. The two
+    straight up against art that casts: blocked, the point is covered and its
+    ambient byte is `cover`, and so is its directional byte when a ray towards the
+    sun is blocked too. An uncovered point stays 255 whatever shades it (a wall's
+    shadow on a low sun is the bake's business, not the ship's). The two
     point-light bytes stay 255 (format 1.x carries no point light).
     """
     scene = context.scene
@@ -407,9 +409,11 @@ def cover_light_scale(context, depsgraph, points, cover, sun_dir):
     for p in points:
         up = to_blender(tuple(-c for c in p.down))
         origin = Vector(to_blender(p.pos)) + Vector(up) * COVER_LIFT
-        amb = cover if blocked(origin, up) else 255
+        if not blocked(origin, up):
+            out.append((255, 255, 255, 255))
+            continue
         sun = cover if sun_dir is not None and blocked(origin, to_blender(sun_dir)) else 255
-        out.append((amb, sun, 255, 255))
+        out.append((cover, sun, 255, 255))
     return out
 
 

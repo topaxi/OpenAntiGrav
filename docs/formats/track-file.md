@@ -11,7 +11,7 @@ circuit's race inputs unchanged (census below).
 ## Files
 
 `<name>.track.toml` (the manifest) and the `<name>.glb` it names in `track.glb`, in the same
-directory. Raced with `oag-game --track-file <manifest>` (host title's ship, rules, physics). Authored in Blender with [the add-on](../tools/blender.md).
+directory. Raced with `oag-game --track-file <manifest>` (host title's ship, rules, physics). Authored in Blender with [the add-on](../tools/blender.md), which writes and reads the art section too (its mapping from Blender: [Art](../tools/blender.md#art-meshes-textures-the-sun-and-baked-light)).
 
 ### Manifest (TOML)
 
