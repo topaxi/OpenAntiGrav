@@ -458,12 +458,6 @@ impl Session {
             self.race_options = Some(race_options);
             return;
         };
-        if custom && race_options.mode == oag_race::Mode::Zone {
-            // The loader refuses it too; refusing here keeps the menus up.
-            warn!("a custom track has no Zone circuit; choose another MODE or a disc title");
-            self.race_options = Some(race_options);
-            return;
-        }
         if custom {
             match self.apply_custom_track(&mut race_options) {
                 Ok(()) => {}

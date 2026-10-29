@@ -354,12 +354,13 @@ fn a_track_file_is_the_mods_own_or_another_installed_mods() {
         let error = edited(octagon, to).unwrap_err();
         assert!(error.contains(says), "{to}: {error}");
     }
-    let error = edited(
-        "mode = \"time_trial\"\nfile = \"tracks/practice",
-        "mode = \"zone\"\nfile = \"tracks/practice",
-    )
-    .unwrap_err();
-    assert!(error.contains("no Zone circuit"), "{error}");
+    // The Octagon is a Zone event on that file: it compiles, with no laps and
+    // the mode's own class word.
+    let zone = &custom.grids[1].cells[2];
+    assert_eq!(zone.mode, Mode::Zone);
+    assert_eq!(zone.class, "Zone");
+    assert_eq!(zone.laps, None);
+    assert!(custom.event("grid1_2_2").unwrap().track_file.is_some());
 }
 
 #[test]
