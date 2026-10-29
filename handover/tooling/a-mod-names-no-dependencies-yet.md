@@ -49,6 +49,12 @@ now.
 - Other asset kinds: pilots are per mod (`pilots/`); a cross-mod pilot reference would
   need the same rule.
 
+- From the MODS on/off lane (ADR-0078, 2026-10-29): a campaign needing an off or missing mod's
+  track is left out whole; leaving out only the events that need it is open (it pairs with
+  optional dependencies above). `just mods-list` ignores the game's `[mods] disabled` setting and
+  lists every mod as on. `--menu-page` applies only some of the boot's title trims, so a captured
+  MODS page can differ from the live one (that drift predates the lane).
+
 ## Next Steps
 
 1. Decide the manifest shape (key, semver, optional) and the reach rule with the
