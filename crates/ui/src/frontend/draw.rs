@@ -679,7 +679,8 @@ impl Frontend {
                 text: self.strings.get_or_id(id).to_string(),
                 wrap_width: text.wrap_width,
             });
-            if self.glow
+            // A title whose menu skin carries a glow blooms its front end: Pulse's.
+            if self.menu_skin.is_some_and(|skin| skin.glow.is_some())
                 && let Some(value) = text.glow_stamp_at(elapsed)
             {
                 out.push(Draw::GlowText { value });

@@ -591,7 +591,7 @@ fn a_blooming_titles_press_start_stamps_its_glyph_quads_on_the_pulse_ladder() {
         "off by default: not every title blooms"
     );
 
-    frontend.set_glow(true);
+    frontend.set_menu_skin(oag_pulse::FRONT_END.menu.unwrap());
     let already = frontend.on_screen_for;
     input.begin_frame(0);
     frontend.update(0.5 - already, &mut input, None);

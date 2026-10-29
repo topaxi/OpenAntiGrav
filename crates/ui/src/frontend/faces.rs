@@ -37,14 +37,6 @@ impl Frontend {
         self.picker_line_height = Some(line_height);
     }
 
-    /// Whether this title's front end blooms: the screens' own widgets then stamp the glow mask
-    /// their `Text` authors (`RealGlow`, `pulse`), as `Text_Draw` does. Set from
-    /// [`oag_title::Campaign::frontend_glow`]; off, as for every title it was not measured on,
-    /// draws no stamp.
-    pub fn set_glow(&mut self, on: bool) {
-        self.glow = on;
-    }
-
     /// The scale a widget authored in font `role` draws at, against
     /// `Default`. `1.0` for a role nothing measured.
     pub(crate) fn face_scale(&self, role: &str) -> f32 {

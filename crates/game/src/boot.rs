@@ -835,12 +835,7 @@ pub fn load_shell(
         fonts::default_in_own_slot(menu_skin),
         menu_skin.default_face_is_row_face,
         space,
-        title
-            .front_end
-            .is_some_and(|front_end| front_end.borrows_ps2_split_screens),
-        title
-            .front_end
-            .and_then(|front_end| front_end.ship_preview_pose),
+        title.front_end,
         &mut report,
     );
     report.push(steps.describe("the boot's first half"));
@@ -1269,7 +1264,6 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         placements,
     );
     frontend.set_menu_skin(menu_skin);
-    frontend.set_glow(title.campaign.frontend_glow.is_some());
     // Only where they were measured - see `load_shell`'s own gate.
     if !face_scales.is_empty() {
         frontend.set_face_scales(face_scales.clone(), font.line_height);

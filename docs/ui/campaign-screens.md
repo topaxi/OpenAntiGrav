@@ -4700,7 +4700,7 @@ other screens' stamps still to wire (below).
   frames) and `Main Menu` (six frames, two buffers each). *Title*: one 3,920-pixel region, bbox `(242,219,461,239)`, reading 70, 85,
   130, 160, 175: the ladder `70 + 15 k` of a `pulse="true"` text, so `BOOT_PRESS_START` (`font="Menu"`, authored `PulseMultiplier`
   none, so 1.0) stamps through `Text::glow_stamp_at`, `frontend::draw_screen_at` emitting `GlowText` after each text once
-  `Frontend::set_glow` (from `Campaign::frontend_glow`) is on and its `delay` has run. *Main Menu*: `110` over 14,526 pixels, bbox
+  `Frontend`'s menu skin carries a glow (Pulse's, `oag_title::MenuGlow`) and its `delay` has run. *Main Menu*: `110` over 14,526 pixels, bbox
   `(49,59,307,219)` (the six idle rows), `128` over 3,652 `(49,49,313,65)` (the help line: `helptext0..6` author `RealGlow="128"`), and a
   pulsing region `(49,31,210,51)` (the selected row, 100 to 220 seen). The idle `110` has no authored source (the rows author no
   `RealGlow`, `TextColor` is opaque): it is the `Menu` widget's constant, `oag_title::MenuGlow::row`, measured. The selected row's
@@ -4718,7 +4718,7 @@ other screens' stamps still to wire (below).
   `BOOT_PRESS_START` in the `Menu` face, uppercase and wider, ours in `Default`: the stamp follows our glyphs, so the face is the
   gap). Grid, Cell, Track and Ship Select whole frames unchanged. **Pure**: a second EDRAM attempt (this lane) again landed on
   PPSSPP's own memory-stick `Load` dialog (alpha flat at 4), so Pure's front-end stamps stay **not measured**. 2048 and Omega:
-  `Frontend::set_glow` is off for them (`frontend_glow` is `None`); their `Text`s' authored `RealGlow` is untouched.
+  their menu skins carry no `MenuGlow`; their `Text`s' authored `RealGlow` is untouched.
 - **PS2**: the compare page's PS2 Grid Selection original also shows a soft halo round the cursor (visible in `pulse-ps2/menu-grid`),
   so drawing one there points the right way; its chain and strength are not compared.
 - **Title screen**: `--until "Show Logo"` renders byte-identical before and after.

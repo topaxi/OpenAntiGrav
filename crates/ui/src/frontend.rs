@@ -451,9 +451,6 @@ pub struct Frontend {
     /// pitch is to be one line of it - see
     /// [`Self::set_picker_line_height`]. `None` keeps the table.
     picker_line_height: Option<f32>,
-    /// Whether this title's front end blooms, so its widgets' glow-mask stamps are emitted
-    /// ([`oag_title::Campaign::frontend_glow`]); see [`Self::set_glow`]. Off draws no stamp.
-    glow: bool,
 }
 
 impl Frontend {
@@ -590,7 +587,6 @@ impl Frontend {
             face_scales: Vec::new(),
             default_line_height: None,
             picker_line_height: None,
-            glow: false,
         };
         frontend.machine.transition_to(start);
         frontend
