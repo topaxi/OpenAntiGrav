@@ -68,7 +68,7 @@ SCANNED_CRATES = (
     "texture", "vex", "pob", "rcs", "display", "ui", "ui-screens", "replay", "trackfile", "bytes",
     # The WebAssembly host and the ABI it shares with the guest SDK: range checks and
     # bit copies only, no float law of their own.
-    "modhost", "ext-abi",
+    "modhost", "ext-abi", "ext",
 )
 
 # Not required by IEEE-754 to be correctly rounded, so not portable. `sqrt` is

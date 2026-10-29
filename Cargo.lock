@@ -3010,6 +3010,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "oag-ext"
+version = "0.1.0"
+dependencies = [
+ "oag-ext-abi",
+]
+
+[[package]]
 name = "oag-ext-abi"
 version = "0.1.0"
 

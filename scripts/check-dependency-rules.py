@@ -176,6 +176,10 @@ CONTENT_LAYERS = {
 
 # Rule 2: no crate may depend on the composition root.
 COMPOSITION_ROOT = "oag-game"
+# Rule 2 also covers the guest SDK: `oag-ext` is what a mod's WebAssembly module is
+# built on, so the engine never links it. The host and the SDK share
+# `oag-ext-abi`, never each other (docs/architecture/wasm-extensions/README.md).
+GUEST_SDK = "oag-ext"
 
 # Rule 6: the headless server links nothing that draws, plays, opens a window or
 # reads a pad. `oag-server` is a binary of `oag-net`, built with that crate's own
@@ -343,20 +347,21 @@ def main() -> int:
                 "rather than being one, say so in NOT_TITLE_PACKAGES."
             )
 
-    root_id = id_by_name.get(COMPOSITION_ROOT)
-    if root_id is None:
-        problems.append(f"composition root {COMPOSITION_ROOT!r} not found in cargo metadata")
-    else:
+    for leaf, why in (
+        (COMPOSITION_ROOT, "nothing depends on the composition root"),
+        (GUEST_SDK, "no engine crate depends on the guest SDK"),
+    ):
+        root_id = id_by_name.get(leaf)
+        if root_id is None:
+            problems.append(f"{leaf!r} not found in cargo metadata")
+            continue
         dependents = sorted(
             names[member_id]
             for member_id in meta["workspace_members"]
             if member_id != root_id and root_id in graph.get(member_id, [])
         )
         if dependents:
-            problems.append(
-                f"{dependents} depend on {COMPOSITION_ROOT}, "
-                "which rule 2 (nothing depends on the composition root) forbids"
-            )
+            problems.append(f"{dependents} depend on {leaf}, which rule 2 ({why}) forbids")
 
     hit = lean_server_names() & FORBIDDEN_FOR_SERVER
     if hit:
