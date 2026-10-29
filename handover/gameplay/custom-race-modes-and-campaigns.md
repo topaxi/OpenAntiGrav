@@ -330,17 +330,20 @@ Still open from this slice:
 absorbing it does either nothing or restores more energy the more energy you use ...
 but only returning 50 % of the energy consumed". With the correction that "held" means
 carrying the pickup, it is built as follows:
-- the energy turbo is the title's Turbo, claimed by the mod and drawn with a red
+- the energy turbo is a pickup of the mod's own (`Weapon::Extension`), handed out by
+  the weapon pads in place of every second Turbo and drawn as the Turbo on a red
   backdrop;
-- fire held boosts it on shield;
-- absorbing **the turbo itself** returns half of what it cost;
+- fire held boosts it on shield; an AI craft fires a 1 s burst where it would fire a
+  Turbo, then rests 2 s;
+- absorbing **the energy turbo pickup** returns half of what it cost;
 - while it is carried, pads refill instead of boosting.
 
 What landed and its proof: `docs/architecture/wasm-extensions/README.md`, "And Energy
 Turbo". Open:
-- An AI craft's turbo bursts are not covered by a disc test.
-- A pickup of a mod's own (README 7.5) is not built; the mod reuses the title's Turbo,
-  so every Turbo becomes an energy turbo.
+- The mod pickup borrows the Turbo's icon; a mod shipping its own icon art is not built.
+- An Eliminator absorb under a running Autopilot takes the mod pickup without raising
+  `pickup-absorbed` (`Race::spend_pickup_under_autopilot`); the mod closes its account
+  when the slot empties, but pays nothing back.
 
 The smallest increment that a player feels, ahead of the README's phase 1 and 2: a
 craft that touches a wall slows far more than a normal craft.

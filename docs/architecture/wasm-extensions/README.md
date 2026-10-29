@@ -48,20 +48,25 @@ the host's and `oag-raceplay`'s unit tests with it on.
 ### And Energy Turbo (2026-10-29)
 
 The second example, `oag.energy-turbo` (`assets/mods/examples/energy-turbo/`, 1,676
-bytes): every Turbo pickup becomes an energy turbo with a red backdrop. Hold fire to
-boost (thrust x1.6) for as long as the pool lasts, paid at 0.4 % of the pool a tick
-and stopping at 5 % so the drain alone never wrecks; an AI craft boosts for 1 s each
-time its driver fires. Absorb it and half of what it cost comes back. While it is
+bytes): a pickup of its own, which the weapon pads hand out in place of **every second
+Turbo** (the other half stay the title's Turbo), drawn as the Turbo's icon on a red
+backdrop. Hold fire to boost (thrust x1.6) for as long as the pool lasts, paid at
+0.4 % of the pool a tick and stopping at 5 % so the drain alone never wrecks. An AI
+craft holds no button: its driver asks to fire wherever the Turbo's own AI gate would
+fire a Turbo (a straight, nobody close ahead, `Driver::affords_boost`), and the mod
+turns that into a 1 s burst followed by a 2 s rest. Absorb it and half of what it cost comes back. While it is
 carried a speed pad gives 15 % of the pool instead of a boost (a separate income, not
 part of the absorb's half). All numbers are the mod's constants, **chosen**. What it
 added to the engine and the ABI, each its own commit with the vanilla fold unchanged:
 
 | Piece | Kind | What it is |
 | --- | --- | --- |
-| Craft records | observation | One 16-byte record per slot (`oag_modhost::abi::Craft`): the held pickup (its place in `Weapon::ALL` plus one), flags (person-flown, fire button held, racing past GO, pickup claimed), shield, its maximum, speed. Copies; the held input is the `InputSnapshot` the tick already has |
+| Craft records | observation | One 16-byte record per slot (`oag_modhost::abi::Craft`): the held pickup (its place in `Weapon::ALL` plus one, 255 for the mod's own), flags (person-flown, fire button held, racing past GO), shield, its maximum, speed. Copies; the held input is the `InputSnapshot` the tick already has |
 | `scale-thrust` up to 2.0 | command | Above 1.0 through a new `Environment::extension_thrust` (`oag-physics`, applied to the engine's thrust after the Leach Beam's scale; `1.0` skips the multiply, so no vanilla bit moves). Below 1.0 still the Leach Beam's path |
 | `shield-delta{slot, amount}` | command | A loss through `oag_physics::damage::apply_weapon` at its full amount, so the destroyed edge, the Shield pickup's immunity and the critical crossing are a hit's (a drained pool wrecks: proven); a gain through `damage::add`'s clamp. `|amount|` at most the slot's maximum; refused where the mode takes no damage |
-| `claim-pickup{slot}` | command | The engine stops firing or absorbing the slot's held pickup (`Race::spend_pickup` for a person, `Race::spend_opponent_pickup` for the AI) and raises **`pickup-fire{slot}`** and **`pickup-absorbed{slot}`** instead; an absorb clears the pickup and pays no pool. Hashed; ends when the pickup leaves the slot; a second module's claim faults |
+| The mod's own pickup | engine | `oag_tables::weapons::Weapon::Extension` (7.5): a fieldless arm outside `Weapon::ALL`, so `Option<Weapon>` stays one byte and the World snapshot does not grow; hashed as 255, which no vanilla race writes. The engine never fires or absorbs it: a person's press (`Race::spend_pickup`) and the AI's fire (`Race::spend_opponent_pickup`, through the Turbo's gate; the AI never absorbs it) raise **`pickup-fire{slot}`** / **`pickup-absorbed{slot}`**; an absorb clears it and pays no pool. The HUD draws the title's Turbo icon for it |
+| `give-pickup{slot}` / `clear-pickup{slot}` | command | Puts the mod's pickup in an empty slot / takes it out of a slot holding it (a fault otherwise). A race without weapons gives nothing. The slot's last-granted weapon is left alone, so the title's repeat rule is unchanged |
+| `pickup-roll{weapon, every}` | command | Race-wide (sent on slot 0): every `every`-th time a weapon pad (`Race::test_weapon_pads`) draws that weapon, it hands out the mod's pickup instead, with the drawn weapon still the slot's last grant. The count is hashed; re-sending the same rule keeps it. The first module to send any of the three pickup commands owns the kind for the race; another one faults |
 | `pad-mode{slot}` | command | This tick the slot's speed pads (`Race::test_speedup_pads`) give no force, plume or pad sound, and the entry edge raises **`pad-energy{slot}`** |
 | `play-cue{slot, cue}` | output | One of six of the engine's cues (`oag_raceplay::extensions::CUES`), pushed beside the tick's own |
 | `fire-effect{slot, effect}` | output | The title's own `CollisionSpark` or `HitSpark` `.pob`, at the hull's back end, drawn by the view half; a title without it draws nothing |
@@ -71,9 +76,9 @@ Outputs are never `RaceSim` state: a test runs a module sending all three agains
 sending none and the state hashes match every tick.
 
 **Timing and edge cases.** The call is at phase C, after the people's pickups are
-spent (phase 2) and before any step. A Turbo picked up on tick N is claimed at N+1's
-call. A fire pressed on N+1 is the engine's own Turbo, because the claim comes after
-phase 2. A speed pad entered on tick N itself boosts as ever, because `pad-mode` starts
+spent (phase 2) and before any step. A `pickup-roll` sent at tick N's call applies from
+N+1's pads; a `give-pickup` lands at N's call, so a fire pressed on N+1 is already the
+mod's. A speed pad entered on tick N itself boosts as ever, because `pad-mode` starts
 at N+1. An absorb on tick N reaches the module the same tick, so `pad-mode` has already
 stopped for N's pads.
 
@@ -86,6 +91,8 @@ empty grid, this project's driver flying, the pool at half):
   energy.
 - A craft without the turbo flies the vanilla race tick for tick.
 - Two runs hash the same every tick.
+- A full field over 180 s: the pads handed the AI 3 Turbos and 2 energy turbos (every
+  second), and AI craft boosted on theirs for 538 ticks.
 
 **Rules modules per race**: both examples are rules modules and run together. A race
 runs up to four (`MAX_SIM_MODS`, chosen), not section 1.2's one. The two compose:
@@ -94,8 +101,7 @@ Kiss Curse scales below 1.0 and the turbo above it.
 Not built from this page yet: the HUD MODDED tag and the results screen naming a
 faulted mod (4.2), the modded records table, `race-start`/`race-end`, the
 observation's craft records and spline samples, every other event and command,
-the other five kinds, a pickup of a mod's own (README 7.5; the energy turbo claims the
-title's Turbo instead), the HUD and frontend worlds, Pulley, the browser and the
+the other five kinds, a mod pickup's own icon art (it borrows the Turbo's), the HUD and frontend worlds, Pulley, the browser and the
 load-time rewrite, and `oag-server` linking the host (rule 6 forbids `wasmtime` to
 it until phase 3).
 
