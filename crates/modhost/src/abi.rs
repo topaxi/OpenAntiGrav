@@ -56,7 +56,7 @@ const _: () = assert!(CRAFTS_AT + CRAFT_LEN * MAX_CRAFTS <= IO_LEN);
 pub const CRAFT_PERSON: u8 = 1;
 /// [`Craft::flags`]: a person flying the slot holds the fire button (`SQUARE`) this tick.
 pub const CRAFT_FIRE_HELD: u8 = 2;
-/// [`Craft::flags`]: the craft is racing (not wrecked, not respawning).
+/// [`Craft::flags`]: the craft is racing: past the start, not wrecked, not respawning.
 pub const CRAFT_RACING: u8 = 4;
 /// [`Craft::flags`]: the craft's pickup is claimed by a module (`claim-pickup`).
 pub const CRAFT_CLAIMED: u8 = 8;

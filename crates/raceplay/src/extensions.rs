@@ -586,7 +586,9 @@ mod on {
                         .get(slot)
                         .buttons
                         .is_held(oag_gameplay::input::Button::Square);
-                let racing = ship.physics.craft_state == oag_physics::damage::CraftState::Racing;
+                // Racing and past the start: a craft on the grid has no thrust yet.
+                let racing = ship.physics.craft_state == oag_physics::damage::CraftState::Racing
+                    && !oag_race::RaceState::thrust_gated(sim.world.tick);
                 abi::Craft {
                     pickup: ship.pickup.weapon.map_or(0, |weapon| {
                         oag_tables::weapons::Weapon::ALL
