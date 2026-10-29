@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [pulse, pure]
 updated: 2026-10-29
-summary: "Track art landing 2: Blender art export, sun lamp, vertex-colour bake, keyframed motion, and the five maintainer decisions landing 1 left open"
+summary: "Track art landing 2: Blender art export, sun lamp, vertex-colour bake, keyframed motion, with the decision-12 format changes first"
 size: L (60)
 difficulty: medium (50)
 categories: [tooling, rendering]
@@ -55,22 +55,15 @@ agreed in conversation and not yet built**, so nothing is re-derived. The decisi
 7. **Moving collision** (gates, platforms) is simulation state: world hash, replays, ghosts. Its own
    decision and ADR; do not smuggle it in through animation.
 
-## Open: the maintainer decides
+## Open
 
-- **Sun and hull lighting.** Landing 1 feeds `[art.sun]` only to the `mapped` shadows (when `shadows`)
-  and the flare. `Light::authored` is HD's equation and would relight Pulse hulls unlike any Pulse
-  race, so ships do not read the sun yet and ambient is read but not drawn. The ADR says ships read
-  the sun; that needs the host title's own hull law (Pulse's `HullLights`). Pick: per-host hull law,
-  or one new project-owned light model behind an opt-in (CLAUDE.md: enhanced rendering is opt-in).
-- **What `shadows` means on an export.** Pure's flare direction is not measured as its shadow light,
-  so a Pure export writes `shadows = false` and keeps native shadows. Confirm.
-- **Draw order vs buffer order.** The export keeps dispatch order (layer-sorted), so draw `range`
-  offsets differ from the `.vex` build; the format has no layer field. Confirm that trade or add one.
-- **`COLOR_0` is the renderer's colour verbatim** (byte/255, gamma space on PSP), not the linear
-  light glTF reads. The Bake operator must write what the renderer expects; decide whether the ADR's
-  "linear RGBA" wording gives way.
-- **An alpha-test reference field** on the art material (`oag_alpha_ref`); Pure's speedup pad relies
-  on reference 0.
+- **Decided 2026-10-29, building in landing 2a** (ADR-0076 decision 12): `COLOR_0` linear with the
+  loader converting to the renderer's gamma bytes; optional `oag_alpha_ref`; optional `oag_layer`
+  (stable sort, file order by default); `shadows = false` on a Pure export and `true` by default on a
+  Blender track; hulls lit by the host title's own law (`HullLights` from `[art.ambient]` and the
+  sun, extra directionals as `[[art.light]]` rows); an optional per-spline-point `light_scale` in
+  `Art`.
+- ADR-0076 is still **Proposed**; the maintainer accepts it once landing 2a is in.
 
 ## State of the sibling work
 
@@ -89,7 +82,8 @@ agreed in conversation and not yet built**, so nothing is re-derived. The decisi
 
 ## Next Steps
 
-1. Maintainer: accept or edit ADR-0076 and answer the five open questions above (10 minutes).
+1. Landing 2a: the decision-12 format and loader changes, the hull rig from the sun, and the proof
+   extended to the hull rig for all 96 circuits. Half a day to a day.
 2. Blender art export and import (item 1), with a generated checker texture as the committed fixture
    (never disc pixels; `just audit-leakage`). A day.
 3. Sun lamp to `[art.sun]` and the hull-light decision, then the Bake operator (items 2, 3). A day

@@ -116,6 +116,33 @@ reason to author visibility by hand.
     (maintainer; tracked in the custom race modes and campaigns handover thread); a track does not grow a runtime of
     its own, and a later trigger table would be a minor version that adds optional rows.
 
+12. **Settled after landing 1** (maintainer, 2026-10-29):
+    - **`COLOR_0` stays linear**, as glTF reads it, and the loader converts it once to the gamma
+      bytes the renderer draws (PSP: byte / 255). The disc exporter converts the other way, and
+      the equality of decision 7 holds through the round trip. Blender writes linear, so its
+      export needs no conversion.
+    - **`oag_alpha_ref`**, an optional per-primitive extra in `0..=255`, is the alpha-test
+      reference for `cutout`. Absent means the renderer's default; a Pure export writes the
+      disc's own (its speedup pad's is 0). Blender maps it from the material's alpha clip.
+    - **`oag_layer`**, an optional integer per art node, default 0. The loader draws by layer,
+      then by file order (a stable sort), so file order alone is the default case. A disc export
+      writes the `.vex` layer, so its buffers match the disc build, not only its draws.
+    - **`[art.sun] shadows`** is `false` on a Pure export (its flare direction is not measured as
+      its shadow light; Pure keeps its own shadows) and `true` by default on a Blender-authored
+      track, whose sun is the shadow light by definition.
+    - **Ships read the sun through the host title's own hull law.** Pulse and Pure on the PSP build
+      their GE light rig (`oag_mesh`'s `HullLights`) from `[art.ambient]` and `[art.sun]` as
+      directional 0, colour times intensity, clipped to a byte as the PSP does. An HD-family host
+      feeds the same sun to its own authored-light equation. No project-owned light model.
+    - **The art section may carry a `light_scale` per spline point** (optional, four bytes, the
+      disc's `SplinePoint::light_scale` order: ambient, directional, then the two point-light
+      bytes; absent is 255 each). It is how a ship darkens in a tunnel. It lives in `Art`, not on
+      the simulation spline, so a track with no art stays byte-identical and no world hash can
+      move with it; the Bake operator may write it from the baked light under the centre line.
+    - **A disc export carries every directional the circuit authors**: the first is `[art.sun]`,
+      the rest (Pulse authors up to four) are directional `[[art.light]]` rows, so the hull rig
+      built from the file equals the one built from the `.vex`.
+
 ## Consequences
 
 - **A sun on our own tracks is what `docs/rendering/shadows.md` lists first among the three things
