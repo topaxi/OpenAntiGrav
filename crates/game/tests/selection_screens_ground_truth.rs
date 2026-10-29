@@ -297,7 +297,9 @@ fn the_track_picker_draws_the_discs_own_rows() {
     // name: none of them spelled in this repository.
     let counter = format!("1 / {}", shell.tracks.len());
     assert!(texts.contains(&counter), "{counter}: {texts:?}");
-    for id in ["IG_HUD_DISTANCE", "IG_HUD_LAP_REC", "ER_RR"] {
+    // The first row's label is the class's `MSC_DISTANCE`, not the XML's `IG_HUD_DISTANCE`
+    // (`oag_title::FrontEnd::track_label_overrides`).
+    for id in ["MSC_DISTANCE", "IG_HUD_LAP_REC", "ER_RR"] {
         let title = shell
             .strings
             .get(id)
