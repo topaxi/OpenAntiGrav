@@ -824,7 +824,8 @@ fn mapped_fit(player: oag_core::math::Mat4, towards_light: Vec3) -> oag_render::
 
 /// Which way the `mapped` tier's light points, per title.
 ///
-/// **The circuit's own sun where there is one**, which on Wipeout HD there is;
+/// **A track file's own sun first**, when it authors one that casts
+/// (ADR-0076, `SceneryFx::sun`). Then **the circuit's own sun where there is one**, which on Wipeout HD there is;
 /// **the direction that title's own shadows are cast along** where there is
 /// not, which on Pulse is `oag_pulse::shadow::WORLD_AXIS` - so switching
 /// between `original` and `mapped` changes what is shadowed and not where the
@@ -893,7 +894,7 @@ mod tests {
 
     use super::{
         MAPPED_AHEAD, MAPPED_DEPTH_BIAS, far_depth_bias, mapped_centre, mapped_far_fit, mapped_fit,
-        rank_by_distance,
+        mapped_light, rank_by_distance,
     };
     use oag_core::math::Vec3;
 
@@ -1088,5 +1089,17 @@ mod tests {
     fn the_far_bias_is_the_near_one_in_the_far_layers_units() {
         let far = far_depth_bias();
         assert!(far > 0.0 && far < MAPPED_DEPTH_BIAS, "far bias {far}");
+    }
+
+    /// A track file's sun sets the direction; without one, Pulse's own axis.
+    #[test]
+    fn a_track_files_sun_points_the_mapped_light() {
+        let stand_in = oag_mesh::mesh_render::Light::stand_in();
+        let sun = [0.6, 0.8, 0.0];
+        assert_eq!(mapped_light(&stand_in, Some(sun)), Vec3::from_array(sun));
+        assert_eq!(
+            mapped_light(&stand_in, None),
+            -Vec3::from_array(oag_pulse::shadow::WORLD_AXIS)
+        );
     }
 }

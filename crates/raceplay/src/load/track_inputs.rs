@@ -255,23 +255,24 @@ fn foreign(
             .sum::<usize>()
     ));
     #[cfg(feature = "view")]
+    let flat =
+        render_collision::build_model(&f.title, &f.nodes, render_collision::Style::Solid, false);
+    #[cfg(feature = "view")]
     let (drawn, art) = match f.art.take() {
         Some(art) => {
             use crate::foreign::art;
             let dir = path.parent().unwrap_or_else(|| std::path::Path::new(""));
             let textures = art::resolve_textures(&art, dir, archives, report);
             let extras = art::extras(&art, &textures, report);
-            let model = if art.meshes.is_empty() {
-                report.push("art: no meshes; the collision is drawn flat-shaded".into());
-                render_collision::build_model(
-                    &f.title,
-                    &f.nodes,
-                    render_collision::Style::Solid,
-                    false,
-                )
-            } else {
-                art::model(&f.title, &art, textures, report)
-            };
+            let mut model = art::model(&f.title, &art, textures, report);
+            if model.indices.is_empty() {
+                report.push("art: no mesh drawn; the collision is drawn flat-shaded".into());
+                model = flat;
+            } else if model.radius < flat.radius {
+                // The far plane and the framing read the track model's sphere: a
+                // track whose art is a few decals still spans its whole collision.
+                (model.centre, model.radius) = (flat.centre, flat.radius);
+            }
             (model, extras)
         }
         None => {
@@ -280,15 +281,7 @@ fn foreign(
                  sky, sun or lens flare"
                     .into(),
             );
-            (
-                render_collision::build_model(
-                    &f.title,
-                    &f.nodes,
-                    render_collision::Style::Solid,
-                    false,
-                ),
-                Default::default(),
-            )
+            (flat, Default::default())
         }
     };
     Ok(Inputs {
@@ -380,8 +373,20 @@ pub(super) fn foreign_sky(
             return None;
         }
     };
-    let external = ps2_texture_set(archives, entry);
-    let mut sky = match mesh::build_sky(entry, &blob, external.as_ref()) {
+    // The PS2's texture set only when the file embeds none, as the track model's
+    // own build decides it: a preceding entry that happens to parse must not
+    // re-skin a PSP sky.
+    let built = mesh::build_sky(entry, &blob, None).and_then(|sky| {
+        if !sky.textures.is_empty()
+            && sky.textures.iter().all(Option::is_none)
+            && let Some(set) = ps2_texture_set(archives, entry)
+        {
+            mesh::build_sky(entry, &blob, Some(&set))
+        } else {
+            Ok(sky)
+        }
+    });
+    let mut sky = match built {
         Ok(sky) if !sky.indices.is_empty() => sky,
         Ok(_) => {
             report.push(format!(

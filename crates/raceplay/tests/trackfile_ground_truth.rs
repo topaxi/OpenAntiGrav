@@ -133,6 +133,8 @@ fn every_circuit_exports_and_reads_back_the_same(image: &str) {
                     continue;
                 }
             };
+            oag_schema::validate::accepts("track", 1, &parts.manifest)
+                .unwrap_or_else(|e| panic!("{image} {track}: schema: {e:?}"));
             let loaded = from_parts(&parts.manifest, &parts.glb)
                 .unwrap_or_else(|e| panic!("{image} {track}: reads back: {e}"));
             same(&exported, &loaded.track)
@@ -202,7 +204,12 @@ fn a_lone_craft_races_a_disc_circuit_and_its_exported_file_identically() {
         oag_trackfile::write(&exported, &manifest).unwrap();
         let mut native_options = options(&image, track);
         native_options.difficulty = oag_ai::Difficulty::Ace;
-        let mut native = race::Race::start(race::load(&native_options).unwrap().setup);
+        let native_loaded = race::load(&native_options).unwrap();
+        let native_sky = native_loaded
+            .sky_model
+            .as_ref()
+            .map(|m| (m.vertices.len(), m.indices.len(), m.draws.len()));
+        let mut native = race::Race::start(native_loaded.setup);
         let mut from_file = {
             let mut o = native_options.clone();
             o.track = None;
@@ -213,7 +220,15 @@ fn a_lone_craft_races_a_disc_circuit_and_its_exported_file_identically() {
             let report = loaded.report.join("\n");
             assert!(!report.contains("not drawn, their texture"), "{report}");
             assert!(report.contains("art sky:"), "{report}");
-            assert!(loaded.sky_model.is_some(), "{track}: no sky");
+            assert_eq!(
+                loaded.sky_model.as_ref().map(|m| (
+                    m.vertices.len(),
+                    m.indices.len(),
+                    m.draws.len()
+                )),
+                native_sky,
+                "{track}: the file's sky is not the circuit's"
+            );
             assert!(!report.contains("draws nothing"), "{report}");
             assert!(
                 loaded.track_model.draws.len() > 1_000,

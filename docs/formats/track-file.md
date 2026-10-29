@@ -66,7 +66,7 @@ draws:
 
 | Part | How |
 | --- | --- |
-| Art meshes | One draw each, in file order, in the draw list its blend class names, as the Pulse/Pure track model (`oag_mesh::mesh::Model`) is built. A mesh whose texture does not resolve is **not drawn**, and the report counts it. |
+| Art meshes | One draw each, in file order, in the draw list its blend class names, as the Pulse/Pure track model (`oag_mesh::mesh::Model`) is built. A mesh whose texture does not resolve is **not drawn**, and the report counts it; if no mesh draws (a Pulse export raced on a Pure host), the collision is drawn flat-shaded. The model sphere (far plane, framing) is never smaller than the collision's. |
 | Textures | `image`: the PNG beside the manifest. `host`: the named node of that circuit, decoded as the race loader decodes it (the PS2's external texture set included). A miss is named by entry and name; nothing stands in. Rows no mesh or flare names are not resolved. |
 | Sky | The named circuit's `Skycube`, through the disc circuit's own sky path. |
 | Sun | Its direction is the `mapped` shadow tier's when `shadows` is set; otherwise that tier keeps the host title's axis. The hull lighting stays the host's: the authored rig (`Light::authored`) is HD's equation, and switching it on would relight Pulse's hulls (chosen, 2026-10-29). |
