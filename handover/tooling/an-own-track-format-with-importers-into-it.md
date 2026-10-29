@@ -73,7 +73,7 @@ are committed fixtures (`just blender-fixtures`), read by `crates/trackfile/test
   written), render layer and depth order, the PSP glow stamp, the shine pass (visible: Vineta K's building windows draw
   black, not blue), the gantry panel. Pad plates travel since 2026-10-29 (`oag_pad`, branch `motion-pads`).
 - `COLOR_0` holds the renderer's vertex colour verbatim (byte/255 on PSP), not linear light as glTF reads it.
-- Remaining absent records: fog, point lights, clouds, scenery animation, emitters, PVS, Zone.
+- Remaining absent records: fog, point lights, clouds, texture animation, emitters, PVS, Zone (keyframed node motion travels since 2026-10-29, branch `motion-pads`).
 - Hosts other than Pulse (HD, 2048, Omega physics) are not exercised for a raced track file.
 
 ## Next Steps

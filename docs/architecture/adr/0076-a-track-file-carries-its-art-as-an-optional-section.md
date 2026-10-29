@@ -78,8 +78,8 @@ colour, with the drawing owned by the executable.
    `.rcsmodel` material model and HD its shader table; those are *checked, applies, not wired*
    until a lane opens for them, and the track-file page says so.
 
-What stays absent in 1.x after this (named in every loader report): clouds, scenery and its
-animation, track particle emitters, sound emitters, visibility sets (PVS), shadow hulls and the Zone
+What stays absent in 1.x after this (named in every loader report): clouds, a texture's own
+animation (keyframed node motion is decision 10), track particle emitters, sound emitters, visibility sets (PVS), shadow hulls and the Zone
 variant. A track without PVS draws every art mesh every frame, which is a cost to measure, not a
 reason to author visibility by hand.
 
@@ -102,8 +102,9 @@ reason to author visibility by hand.
     - **Visual only in 1.x.** Collision, pads and the spline never move: a moving collider is
       simulation state, belongs in the world hash and in replays, and is its own decision.
     - **A baked light does not follow a moving sun.** Vertex colours are baked for the sun's
-      pose at time zero. A sun that moves relights what is lit live (ships, the flare, `mapped`
-      shadows, the sky if it reads the sun) and leaves the baked track as it is; the operator
+      pose at time zero. A sun that moves relights what is lit live (the flare and the `mapped`
+      shadows since 2026-10-29; the ships' hull rig is built once at load and keeps the time-zero
+      pose, open) and leaves the baked track as it is; the operator
       says so when it bakes a track whose sun is animated. Several baked sets crossfaded over
       time (a day cycle) is a later minor version.
     - Playback is the race clock in ticks, looping or clamped per animation (`oag_loop`), never
