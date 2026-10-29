@@ -491,7 +491,7 @@ mod tests {
         };
         let mut vertices = [road; 6];
         let indices = [0, 1, 2, 3, 4, 5];
-        let cleared = clear_road_marks(&mut vertices, &indices, &[3..6]);
+        let cleared = clear_road_marks(&mut vertices, &indices, std::slice::from_ref(&(3..6)));
         assert_eq!(cleared, 3);
         let marked: Vec<bool> = vertices.iter().map(|v| v.texcoord2[0] != 0.0).collect();
         assert_eq!(marked, [true, true, true, false, false, false]);

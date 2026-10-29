@@ -180,7 +180,10 @@ fn a_hit_in_a_covered_section_is_rejected_and_an_open_one_is_not() {
             open += 1;
         }
     }
-    assert!(covered > 100 && open > 100, "{covered} covered, {open} open");
+    assert!(
+        covered > 100 && open > 100,
+        "{covered} covered, {open} open"
+    );
 }
 
 /// The road of a covered section is dry for good (cleared at load), so the
@@ -220,7 +223,10 @@ fn the_road_under_cover_is_dry_at_load_and_the_wetness_ignores_the_camera() {
         .iter()
         .filter(|v| v.texcoord2[0] == oag_mesh::mesh::ROAD_MARK)
         .count();
-    assert!(marked > dried, "open road stays marked: {marked} vs {dried}");
+    assert!(
+        marked > dried,
+        "open road stays marked: {marked} vs {dried}"
+    );
     eprintln!("Fort Gale: {dried} road vertices dried, {marked} still marked");
 }
 
