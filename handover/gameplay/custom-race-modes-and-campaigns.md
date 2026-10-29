@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-10-29
-summary: "Custom campaigns v1.0 landed for Pulse/HD/Omega (ADR-0077); open: 2048, grid editor, opponent variants; drag race still design only"
+summary: "Custom campaigns landed (ADR-0077); open: 2048, grid editor, drag race; wasm design adds a frontend world (ADR-0080) and a no-mods rule"
 size: XL (20)
 difficulty: hard (35)
 ---
@@ -283,6 +283,23 @@ Owed before the ADR can be accepted:
   The list is a starting set, not a mandate (maintainer, 2026-10-29): pick each
   language's runtime by **feasibility and ease of use** for a mod author (e.g. Wasmoon
   or lua2wasm, whichever fits the ABI with less glue), and say why in its README.
+
+**The frontend world and the no-mods rule (2026-10-29, proposed):** a third world for
+mod-owned screens (editors, pickers), ADR-0080 (Proposed; supersedes ADR-0066
+decision 4 for wasm screens only), detailed in README section 2.3. Owed items:
+
+- **Maintainer's decision** on ADR-0080: one new `Action`, `open-mod-screen`; host
+  widgets plus a display-only canvas rather than raw draws; fuel (not a deadline) for
+  the world; a 4 KiB blob per mod and title as a records `Store` table.
+- **Build order**: the `frontend` world lands with the HUD world (rollout step 2b),
+  pad and pointer from the first change; `setup.tune` waits for the craft kind.
+- **Open questions it raises** (README 13 to 18): per-seat tune on the wire, animated
+  canvas, which disc data a screen may read, blob lifetime on uninstall, a screen
+  during a race, a craft-tune editor and a craft mod as separate mods.
+- **No mods loaded, no host:** no wasmtime Engine, Store or instance until a race or a
+  screen loads a module; an empty per-tick list does no call and no buffer copy
+  (README section 4.5). Owed with the host: a test that a vanilla race with
+  `extensions` on matches the feature-off hashes and creates no Engine.
 
 ## The first player-facing mod: Kiss Curse (maintainer, 2026-10-29)
 

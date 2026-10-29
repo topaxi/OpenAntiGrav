@@ -165,6 +165,18 @@ arrays, so a snapshot is one copy. A mod's state follows that rule:
   cost scale with guest memory (a Rust guest's default is 1 MiB of stack alone), and
   must also capture non-exported mutable globals, which wasmtime does not expose.
 
+### A saved blob that enters a race
+
+A mod screen can save a blob of at most 4 KiB per mod and title
+([README section 2.3](README.md#23-the-frontend-world)). It is **not** race state
+and is not in the hash while it is a file on disk. It becomes simulation input at
+exactly one point: `race-start` hands the same mod's sim module a copy (`setup.tune`),
+and the module copies what it needs into its **state blob**, which is hashed below.
+So the hash covers the tune through the state blob, with no second path; a mod with
+no sim module, or a blob its module ignores, adds nothing to any hash, replay header
+or fingerprint. The bytes are read once at race load and never again, so the race is
+a function of those bytes and the inputs.
+
 ### The state hash
 
 `oag_gameplay::hash::write_world` (`crates/gameplay/src/hash.rs:62`) destructures
@@ -173,7 +185,8 @@ its own fields in `Race::state_hash` (`crates/raceplay/src/hash.rs:46`). The mod
 slots are hashed there: blob bytes, `Rng` state, and the fault flag with its
 tick. Not the fuel used (see [Fuel, not time](#fuel-not-time)).
 
-**A race with no simulation mod writes nothing for them**, so every vanilla hash,
+**A race with no simulation mod writes nothing for them** (and builds no wasmtime
+`Engine`: [README section 4.5](README.md#45-with-no-mods-loaded-nothing-runs)), so every vanilla hash,
 including `crates/core/tests/determinism.rs`'s committed references, stays
 bit-identical. Those references are never edited (CLAUDE.md); a design that moved
 them would be wrong.
@@ -193,6 +206,10 @@ A mod's code is part of what re-simulates, so a replay must name it:
   never interprets. Playback refuses a replay whose modules are not present with
   those exact hashes, by name; the stored state hashes still decide validity.
   Nothing is released, so this edits format v1 in place rather than adding a v2.
+- **A tune travels in the header.** A replay re-simulates, so a hash of the tune is
+  not enough: the `mods` entry also carries the tune bytes (at most 4 KiB per mod),
+  and playback feeds them to `race-start` in place of the local save. Without
+  them a machine with another tune, or none, could not reproduce the run.
 - **The phases decided on 2026-10-12** come first: in phase 2 a session with a
   simulation mod is **modded** and records no replays or ghosts at all; the header
   field is phase 3, once the conformance test below holds.
@@ -216,6 +233,10 @@ through a lobby is never auto-run").
   by `crates/game/src/mods.rs:446`), not over the module's bytes: two different
   builds of one mod version would be admitted together and desync. Phase 3 folds
   each simulation module's SHA-256 into that fingerprint.
+- **A tune and the fingerprint.** A tune the whole session shares folds into the
+  fingerprint with the module hash. A **per-seat** tune cannot (it would refuse every
+  join where two players differ); it travels as race-start input with the seat, which
+  is a wire change and README open question 13.
 - **Rollback multiplies the guest's cost.** A client replays from the server's
   confirmed tick, at most `MAX_WINDOW = 30` ticks (`crates/net/src/client.rs:71`),
   and measured corrections replay 7 to 11 ticks

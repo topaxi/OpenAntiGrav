@@ -2,9 +2,11 @@
 
 **Status: a design, nothing built** (2026-10-29). The decision record is
 [ADR-0079](../adr/0079-extensions-are-sandboxed-webassembly-guests-behind-two-worlds.md),
-status *Proposed*. This page is the shape of the API: the extension kinds, how
-each is declared, the interface sketch (the `sim` and `hud` worlds, their events
-and commands), the explicit non-capabilities, limits, trust, targets, licences,
+status *Proposed*; the `frontend` world (mod screens) is
+[ADR-0080](../adr/0080-a-wasm-mod-may-own-a-screen-and-save-a-small-blob.md), also
+*Proposed*. This page is the shape of the API: the extension kinds, how
+each is declared, the interface sketch (the `sim`, `hud` and `frontend` worlds,
+their events and commands), the explicit non-capabilities, limits, trust, targets, licences,
 and the maintainer's examples walked end to end. The engine half is beside it:
 [hooks.md](hooks.md) (where each event is raised and each command lands, at its
 `file:line`, and where the one guest call per tick sits) and
@@ -22,7 +24,7 @@ page builds on them rather than re-deriving them.
   (maintainer, 2026-10-12). Rules a mod can say as data come first (`modes/*.toml`);
   the WebAssembly hook is for what data cannot express.
 - **Two phases, then a third.** Phase 1 runs modules only where nothing reaches a
-  race's state (HUD widgets). Phase 2 opens the simulation hook; a mod that touches
+  race's state (HUD widgets, and the frontend world's mod screens, section 2.3). Phase 2 opens the simulation hook; a mod that touches
   the simulation declares `simulation = true` and marks the session **MODDED**: no
   multiplayer, no ghosts or replays recorded or played back, records in a separate
   modded table, MODDED on the HUD and the MODS page. Phase 3 lifts that once module
@@ -61,10 +63,12 @@ hooked, what is exposed, what is not.
 
 ## 1. Who extends what
 
-Five extension kinds, two worlds. A **world** is the set of functions a guest
+Six extension kinds, three worlds. A **world** is the set of functions a guest
 module exports and the host functions it may import. The **sim world** is
 deterministic and is called once per tick inside the race tick; the **HUD world**
-runs on the render side and can reach nothing the simulation hashes.
+runs on the render side and can reach nothing the simulation hashes; the
+**frontend world** runs a mod's own screen in the menus (section 2.3), reaches no
+race and no hash, and can hand back one small data blob.
 
 | Kind | Bound to | World | Declared in | Runs when |
 | --- | --- | --- | --- | --- |
@@ -73,6 +77,7 @@ runs on the render side and can reach nothing the simulation hashes.
 | **Rules / race mode** | a mode the mod declares (`modes/*.toml`, the rules-as-data step the thread puts first) | sim | the mode file, `extension = "..."` | a race in that mode |
 | **Weapon** | a pickup id the mod declares (a custom arm of `oag_tables::weapons::Weapon`, an engine change) | sim | `oag-mod.toml` `[[extension.weapon]]` | a race with weapons on, on the titles the mod is for |
 | **HUD** | a widget box in a HUD layout patch (`hud/*.toml`, the thread's section 1c) | hud | `oag-mod.toml` `[[extension.hud]]` | the HUD of a race the mod is on for |
+| **Screen** | a menu row of the mod's (`menu.toml`, action `open-mod-screen`, [ADR-0080](../adr/0080-a-wasm-mod-may-own-a-screen-and-save-a-small-blob.md)) | frontend | `oag-mod.toml` `[[extension.screen]]` | the player opens the row; never during a race |
 
 A **pilot controller** (a module flying an AI slot, `controller = "mod:<name>"` in
 a pilot file) is the pilot-controller thread's ADR; it would share this host, this
@@ -122,6 +127,12 @@ module = "ext/emp.wasm"            # sim world
 id = "lap-delta"
 module = "ext/lap_delta.wasm"      # hud world
 layout = "hud/lap-delta.toml"      # the widget box, per title layout (section 2.2)
+
+[[extension.screen]]
+id = "tune"                        # a mod menu row names this: action = "open-mod-screen", screen = "tune"
+module = "ext/tune.wasm"           # frontend world (section 2.3)
+title_string_id = "TUNE_TITLE"     # strings/<language>.toml
+data_bytes = 1024                  # the most the screen may save (cap 4096, section 2.3)
 ```
 
 A track-bound module is named by the **track manifest**, not by `oag-mod.toml`,
@@ -358,6 +369,7 @@ interface types {
         crafts: list<craft>,            // the grid as placed, tick 0
         volumes: list<string>,          // the track's volume names, by index
         state: list<u8>,                // zeroed
+        tune: list<u8>,                 // this mod's saved blob for this title (section 2.3), or empty
     }
     record result { finished: list<u8>, places: list<u8>, state: list<u8> }
 }
@@ -485,7 +497,232 @@ draws it. On a title the mod is not for, the widget does not exist. The draw lis
 capped (64 draws per widget per frame, proposed); video, backdrops, model draws and
 anything outside the safe area are refused.
 
-### 2.3 Where the two worlds run
+### 2.3 The frontend world
+
+A **mod screen** is a page the mod owns, reached from a mod menu row, so that a
+mod can have an editor, a picker or a settings page of its own (a craft tune
+editor, a livery chooser, a custom-campaign grid editor). It is the third world
+because it differs from both others: it needs input events like no HUD widget
+does, it runs while no race exists, and it may leave something behind (a blob).
+It is **UI side only**: no determinism, no state in the hash, no `World`, and it
+never marks a session MODDED (that stays the sim module's `simulation = true`,
+section 2.4).
+
+**The row.** [ADR-0066](../adr/0066-the-menu-is-the-disc-plus-mods.md) decision 4
+allows a mod row to be a `submenu` or an `action` "of the closed vocabulary". That
+stays closed: ADR-0080 adds exactly **one** variant to
+`oag_ui::menu::vocabulary::Action` (`crates/ui/src/menu/vocabulary.rs:13`, whose doc
+says a new action is added there and handled in the composition root),
+`open-mod-screen`, and the row names the screen: `screen = "tune"`. A row naming a
+screen the mod does not declare is a load error naming the mod and key, as ADR-0066
+decision 4 already makes an unknown action. A mod still adds no page, setting or
+row to a disc's own menus, and a disc screen never gains behaviour a mod invented
+(section 3).
+
+**Widgets: host widgets first, plus a capped canvas.** Recommended, and chosen
+over a raw `Draw` list alone. The existing screens all have the shape *`Input` and
+`Pointer` in, `Outcome` and `Draw` out* (`TagEntry::update` and `::pointer`,
+`crates/ui-screens/src/tag_entry.rs:361`, `:423`; the picker's `Event` with its
+navigation sound, `crates/ui-screens/src/picker.rs:147-175`), and every new screen
+must ship with mouse and touch in the same change. A guest that returned only
+draws would have to re-implement focus, hit-testing, scrolling, the drag threshold
+and the click sounds, and each mod would get them differently wrong on a pad or a
+finger. So the guest returns a **view**, a small retained description, and the host
+runs it:
+
+- **Host widgets**: `list` (rows with an optional value, scrolled by the pointer's
+  `scroll` and `drag`), `slider` (a bounded `f32` with step), `toggle`, `choice`
+  (the existing option-row idiom), `text-entry` (the `TagEntry` grid over a given
+  alphabet, `crates/ui-screens/src/tag_entry.rs:224`), and `button`. The host owns
+  focus, the pad and the pointer (`oag_ui::pointer::Pointer`, `crates/ui/src/pointer.rs:46`:
+  `clicked`, `back`, `scroll`, `drag`, and a touch decided on lift), the navigation
+  sounds and the skin of the title it runs on, so a mod screen looks like the title
+  it is in and a pad-only or touch-only player is served the same.
+- **A canvas**: a capped list of the HUD world's three draws (`fill`, `sprite`,
+  `text`; a subset of `oag_ui::frontend::Draw`, `crates/ui/src/frontend/draw.rs:28`),
+  inside the screen box, for a preview a widget cannot say (a craft's stats bars).
+  **Display only**: a canvas has no hit regions; interaction is a host widget's, so
+  pointer and pad parity is not the author's to get right. Video, backdrops and
+  model draws are refused, as in the HUD world.
+
+**Events in, a view out.** Three exports; the instance lives from the screen's
+open to its close (nothing here is rolled back, so, unlike the sim world, guest
+memory may hold the screen's working state; it is dropped at close and is never
+hashed):
+
+```wit
+interface frontend-types {
+    use hud-types.{rect, rgba, draw};            // the canvas draws are the HUD world's
+    enum button { up, down, left, right, accept, back, aux }   // oag_gameplay::input::Button, the menu subset
+    variant widget {
+        list(list-view),   slider(slider-view),   toggle(toggle-view),
+        choice(choice-view), text-entry(text-view), button(button-view),
+    }
+    record list-view   { id: string, rows: list<row>, selected: u32 }
+    record row         { label: string, value: option<string> }      // string ids resolved by the host
+    record slider-view { id: string, label: string, min: f32, max: f32, step: f32, value: f32 }
+    record toggle-view { id: string, label: string, on: bool }
+    record choice-view { id: string, label: string, options: list<string>, selected: u32 }
+    record text-view   { id: string, label: string, alphabet: string, max-len: u32, text: string }
+    record button-view { id: string, label: string, enabled: bool }
+
+    /// What the screen shows. The host lays the widgets out top to bottom in
+    /// `box`, in order; the canvas draws sit behind them.
+    record view { widgets: list<widget>, canvas: list<draw>, focus: option<string> }
+
+    /// What the player did, already interpreted by the host's widgets.
+    variant event {
+        changed-list(tuple<string, u32>),        // widget id, selected row
+        changed-slider(tuple<string, f32>),
+        changed-toggle(tuple<string, bool>),
+        changed-choice(tuple<string, u32>),
+        changed-text(tuple<string, string>),
+        pressed(string),                         // a button id
+        back,                                    // the player asked to leave
+    }
+
+    /// Replies to an event: a new view, and optionally the blob to keep.
+    record reply { view: view, save: option<list<u8>>, close: bool }
+
+    record open-context {
+        title: string,                           // the title id the screen runs on
+        language: string,
+        data: list<u8>,                          // this mod's saved blob for this title, or empty
+        box: rect,                               // the screen box, in the layout's grid, inside the safe area
+        teams: list<team-info>,                  // the title's teams (identity, string id), read-only
+    }
+    record team-info { identity: string, name-string-id: string }
+}
+
+interface frontend-host {
+    /// A string from the mod's strings/<language>.toml, or the id itself.
+    string: func(id: string) -> string;
+    /// A texture handle: the mod's own file named in its [[extension.screen]] row.
+    texture: func(name: string) -> option<u32>;
+    log: func(level: u8, text: string);
+}
+
+world frontend {
+    import frontend-host;
+    use frontend-types.{open-context, view, event, reply};
+    export open:  func(ctx: open-context) -> view;
+    export event: func(ev: event) -> reply;
+}
+```
+
+The host re-asks the guest only on an event, never per frame, so a screen costs
+nothing while the player looks at it; animation is the host widgets' own (focus,
+scroll). A canvas that must move waits for open question 14.
+
+**Limits.** The same fuel rewrite and memory ceiling as the other worlds
+([section 4.1](#41-engine-configuration-and-the-load-time-rewrite)), a budget per
+call; whether this world uses fuel or a wall-clock deadline follows open question 2
+for the HUD world, and the recommendation is **fuel here too**: the rewrite exists
+for the sim world anyway, a deadline would make the same screen behave differently
+on a Deck and a phone, and the cost is none. Caps (proposed): 64 widgets and 256
+canvas draws a view, a string of at most 128 bytes, a list of at most 256 rows, the
+blob at most 4 KiB. **One answer for every failure**: a trap, a refused value or an
+oversize blob closes the screen, discards that reply (nothing is saved), and names
+the mod and the reason in the load report and as a one-line notice on the menu row's
+page. The player is back in the menu; no race and no other save is touched.
+
+**Compiling, off the render thread.** A screen's module is compiled when its row is
+first opened, not at startup: on a load thread (`oag-thread`) on native, and
+asynchronously through the browser's `WebAssembly` on the web, as a race's modules
+are (section 5). The screen shows a loading state until `open` returns; a module that
+will not validate leaves the screen unopened, named in the load report, like any mod
+row that does not fit (ADR-0066 decision 8). Guest calls themselves are fast (a
+view is a few hundred bytes), and are made on the UI thread between frames; I/O, the
+blob save included, is off the render thread (maintainer, 2026-10-27).
+
+**Text.** A label is a string id the mod ships in its own `strings/<language>.toml`
+(ADR-0066's consequence: "a mod that asks for a string id must ship it or use a
+project id"), resolved by `frontend-host.string` and by the host for widget labels.
+The file follows `assets/ui/strings/english.toml`'s convention: `ID = { text = "...",
+human = false }`, `human = true` only when a human wrote or approved it; another
+language may lag by naming the gap in an `[untranslated]` table, and a machine
+translation may fill one with `human = false`. Mod-shipped literal text with no id is
+refused: a screen without ids could never be translated. A `text-entry` value the
+player typed is data, not a string id, and is never translated.
+
+**What the frontend world cannot do.** It cannot start a race, change a setting,
+open or modify another page, read or write any file but its own blob, read the disc
+or another mod's data, open a window, play a sound of its own (the host widgets play
+the title's navigation sounds) or reach a clock or the network: the imports are the
+three functions above (section 3). The `teams` list in `open-context` is the one piece
+of title data a screen is handed, as a copy of names it cannot change; a screen that
+wants a disc table's numbers (a tune editor showing the stock handling next to a
+slider) is open question 15.
+
+**The data blob.** `reply.save` is the screen's only output. It is the fixed shape
+of the thing the maintainer asked for ("a mod's editor saves a tune, a race picks it
+up") and it is the same blob the section 3 non-capability row and open question 9
+already proposed, so the number is reused: **at most 4 KiB per mod and title**, one
+blob (a mod wanting several packs them), checked against the manifest's
+`data_bytes`. The host writes it through the records path, not a file of the mod's:
+
+- **Where it lives**: a sibling table in the records `Store`
+  (`crates/game/src/records.rs:539`), keyed by mod id and title, beside `campaign` and
+  `loyalty` (`:541-551`), which a file written before it existed parses to empty. One
+  profile file, no slot, nothing a player manages, and written by
+  `records::save_in_background(store)` (`records.rs:1090`), which queues the whole
+  store behind one lock so no two writes overlap. On the web that function writes
+  inline (`records.rs:1098-1102`: the file is `localStorage`, out of a Worker's
+  reach), so the blob save there is inline and small by construction.
+- **Encoding**: `records.toml` is text, so the table stores the bytes as base64. The
+  4 KiB cap is on the **raw bytes**, checked before encoding, so a mod's budget does
+  not depend on the encoding.
+- **Who may read it**: this mod's screen at `open` (`open-context.data`), and this
+  mod's sim module at `race-start` (below). No other mod; no HUD module. The MODS
+  page names the size and offers to clear it; turning a mod off hides its blob and
+  uninstalling it leaves an orphan the page lists (section 3's old worry,
+  answered). Whether uninstall deletes it is open question 9.
+- **Not a replay or a ghost**: records, ghosts and replays do not carry the blob
+  except as the next paragraph says.
+
+**A blob that changes a race** enters it at one place only. At `race-start`
+(section 2.1) the host passes the sim module of **the same mod** a copy of that
+mod's saved blob in `setup.tune` (empty if none).
+The guest copies whatever it needs into its **state blob**, and from then on it is
+the module's host-owned state: snapshotted, restored and hashed with everything
+else (determinism-and-state.md,
+[mod state](determinism-and-state.md#mod-state-is-a-fixed-size-blob-in-the-race-state),
+[the state hash](determinism-and-state.md#the-state-hash)). The bytes are never
+re-read from disk during the race, so a save made mid-race by a second process
+cannot reach it. Nothing else crosses: a screen can never write a `Handling`, a
+table or a `World` field.
+
+**A blob that changes no race** (a layout the mod remembers, a cosmetic choice, a
+bookmark) is never given to a sim module, so it is never in a hash, a replay header
+or the lobby fingerprint. This is the line: *a byte is simulation input if and only
+if a sim module reads it at `race-start`*, and the manifest says which mods have
+one (`simulation = true`).
+
+**Replays and the lobby (phase 3).** A replay re-simulates, so a hash of the tune
+is not enough: playback on a machine with a different or no tune must still
+reproduce the run. The proposal is that the replay header's `mods` entry
+(determinism-and-state.md,
+[replays](determinism-and-state.md#replays)) carries the **tune bytes themselves**,
+at most 4 KiB per mod, beside the module hash and blob layout version; playback
+feeds those bytes to `race-start` in place of the local save. For the lobby: a tune
+the whole session shares (a host-chosen setting) is folded into
+`content_fingerprint` with the module hash
+([network play](determinism-and-state.md#network-play)); a **per-seat** tune (each
+player's own craft) cannot be, since folding it would refuse every join where two
+players differ. Per-seat tunes are the server receiving each seat's bytes with the
+seat at race start, which touches the wire and is open question 13. Until phase 3,
+a session whose sim module reads a tune is MODDED anyway: no replay, no ghost, no
+multiplayer.
+
+**Where it runs.** The screen model is `oag-ui-screens`'s, in the existing shape
+(`Input` and `Pointer` in, `Outcome` and `Draw` out), over a small injected trait
+for the guest, so `oag-ui-screens` links no wasmtime; `oag-game` (the composition
+root) wires the `oag-modhost` implementation to it, behind the `extensions` feature.
+`oag-modhost` is the same crate as the sim and HUD worlds' and is not built until a
+module loads (section 4.5). The sim world's gameplay crates never learn a screen
+exists.
+
+### 2.4 Where the three worlds run
 
 - **The host is its own crate**, proposed `oag-modhost`: the engine and its
   configuration, the I/O buffer ABI, fuel, the fault path, the pooled per-tick
@@ -501,10 +738,18 @@ anything outside the safe area are refused.
   test-wasm` stay meaningful.
 - **The HUD host is render side**: the `hud` world runs in `oag-game`'s HUD overlay
   with the same crate, without the determinism needs.
+- **The frontend host is menu side**: a mod screen runs in the front end's loop in
+  `oag-game`, over `oag-ui-screens`'s model and an injected guest trait (section
+  2.3), with the same crate and no determinism needs. It is never called from
+  `oag-raceplay` and never during a race.
 - **Behind a cargo feature** (`extensions`), because Cranelift adds about 11.3 MB
   to a binary; `oag-server` links the host (wasmtime draws nothing, rule 6 holds)
   and runs sim modules in phase 3; the web build never links wasmtime (section 5).
-- **A race with any sim module is MODDED** (phase 2). With no sim module loaded the
+- **Nothing is built until a module loads** (section 4.5): with no module the host
+  does not exist as far as a tick, a menu or a start-up is concerned.
+- **A race with any sim module is MODDED** (phase 2). A screen or a HUD module is
+  not: only `simulation = true` marks a session, and a saved blob matters to a race
+  only through the sim module that reads it. With no sim module loaded the
   host writes nothing to the hash, so every golden hash and determinism reference is
   unchanged by construction ([determinism-and-state.md](determinism-and-state.md#the-state-hash)).
 
@@ -524,10 +769,10 @@ load (an import outside `oag`) or faults at the command check.
 | **No renderer, GPU, window, camera, draw or sound from the sim world** | The simulation must not know a renderer exists (CLAUDE.md, dependency rule 1). `message` and `publish` are outputs queued beside the cues ([ADR-0018](../adr/0018-audio-mixer-architecture.md)) and drained by the view; a mod-provided sound is open question 6 |
 | **No input devices; only the `InputSnapshot` the tick already received, for person-flown slots** | The snapshot is the one thing a replay and a network peer carry (ADR-0055, [ADR-0070](../adr/0070-the-network-transport-is-webtransport.md) decision 4). Reading a pad directly would be an un-replayed input |
 | **No reading or writing another module's blob, commands or published keys** | One instance and one blob per module; composition between mods is open question 8 and must not happen by accident |
-| **No persistence between races in v1** (a host-mediated save of the blob, at most 4 KiB per mod and title, written through `records::save_in_background` like every other save, is open question 9) | Modern saves: no slots, no files a player manages; a mod must not leave state on disk the MODS page does not know about. Turning a mod off would hide its blob; uninstalling would delete it |
+| **No persistence from the sim or HUD world, and none of a guest's own files.** The one exception is the frontend world's saved blob, at most 4 KiB per mod and title, a host-written table beside the records (section 2.3) | Modern saves: no slots, no files a player manages; a mod must not leave state on disk the MODS page does not know about. The blob is the host's, listed and clearable on the MODS page. The sim guest sees it only as `setup.tune` at `race-start` and never writes it |
 | **No change to an original title's faithful modes unless the player opts into the mod** | The MODS page's ENABLED switch is the opt-in (ADR-0078). With a sim module on, the session is MODDED (phase 2): records go to the modded table, ghosts and replays are off, the HUD says so. The original campaigns never load an extension (settled) |
 | **No projectile of the mod's own in v1** | `World::projectiles` is a fixed-size pool of plain `Copy` data (`crates/gameplay/src/world.rs:378`); the Quake, Leach Beam and Repulser each have their own single-slot pool. A guest-defined projectile would change the snapshot's size and every golden hash. A custom weapon is a timed self-effect first (section 7.5); a projectile pool for mods, with a visual from the mod's files, is open question 4 |
-| **No menu rows beyond ADR-0066's closed vocabulary, no settings, no pages** | A mod cannot invent front-end behaviour (ADR-0066 decision 4); the extension kinds attach to a race, not to the menus |
+| **No menu rows beyond ADR-0066's closed vocabulary, no settings, no new disc pages, no behaviour in a disc's own menus.** The one allowance is a mod's own screen in the frontend world: one extra action, `open-mod-screen`, and a page the mod owns (section 2.3, [ADR-0080](../adr/0080-a-wasm-mod-may-own-a-screen-and-save-a-small-blob.md), which supersedes ADR-0066 decision 4 for wasm screens only) | A mod still cannot invent front-end behaviour on the disc's pages; its screen is a page of its own that cannot start a race, change a setting or reach a file. The sim, craft, track, rules and weapon kinds still attach to a race, not to the menus |
 | **No AI advantage.** A craft module runs for every slot flying its hull, the AI's included; `controller` is readable so a rules mod can handicap, but nothing in `oag-extras` ever favours the AI | The AI obeys the player's physics (maintainer's rule). A third-party mod that does otherwise is the player's choice and is MODDED |
 | **No unbounded work**: fuel per call, a declared memory maximum, a call-depth cap, a command cap, an event cap, string caps | A tick has a budget on a Steam Deck and a phone; a guest that loops forever must be a named, deterministic fault, not a hang ([determinism-and-state.md](determinism-and-state.md#fuel-not-time)) |
 | **No floating-point escape hatches**: no relaxed SIMD, no SIMD in v1, no threads, no shared memory, NaN canonicalised, a NaN in any reply a fault | The three-engine rule ([determinism-and-state.md](determinism-and-state.md#floating-point)) |
@@ -624,6 +869,32 @@ with wasmtime's own switches left on as a second line
   ticks, typically 7 to 11; estimated +19 % a tick on Cranelift and +45 % on Pulley
   with 20 guest calls a tick (desktop; a phone is open). One call per module per
   tick here keeps it at the low end.
+
+### 4.5 With no mods loaded, nothing runs
+
+*Proposed, not built.* The maintainer's question: does wasmtime run when no mod is
+registered? **No.**
+
+- **Without the `extensions` feature**, wasmtime is not linked at all, and the web
+  build never links it (section 5): nothing to run.
+- **With the feature on and no module loaded**, no wasmtime `Engine`, `Store` or
+  instance exists. The host is built **lazily**, at the first load of a module by a
+  race (a sim or HUD module of a mod that is on for it) or by a screen (the first
+  `open-mod-screen`). Start-up, the main menu, the MODS page, reading a manifest and
+  listing a mod's rows compile and instantiate nothing: a mod is discovered by its
+  `oag-mod.toml`, and its `.wasm` is opened only for the load that needs it.
+- **The per-tick hook iterates an empty list**: the `[ModSlot; MAX_SIM_MODS]` array
+  has a count of zero, so there is no guest call, no observation built, no buffer
+  copy, and nothing written for the hash
+  ([determinism-and-state.md](determinism-and-state.md#the-state-hash)). A vanilla
+  race tick costs what it does today, plus one load of a count. The same holds for
+  a HUD frame with no widget and a menu with no mod screen.
+- **The proof, owed with the host (rollout step 1)**: a test that a vanilla race
+  built with `extensions` on produces the same state hashes as the feature-off build
+  (the committed determinism references stay untouched), and that it creates no
+  `Engine`, observed through a creation counter the host exposes to tests. A second
+  test opens the main menu and the MODS page with a module-carrying mod installed and
+  asserts the same counter is still zero.
 
 ## 5. Targets: the same bits everywhere
 
@@ -860,7 +1131,8 @@ channel; the HUD layout files are planned separately.
    (`wasm-bindgen-test`) is what shows the browser matches.
 2. **The fuel budget** per call, set with the first real hook; and whether the HUD
    world gets fuel or a wall-clock deadline (it is not deterministic, so a deadline
-   is allowed there).
+   is allowed there). The frontend world follows the answer; fuel is recommended for
+   both (section 2.3).
 3. **A per-craft gravity direction** in `Environment` (7.3): a measured default of
    `-Y` proven bit-identical for every race that does not set it, then the camera and
    the AI line checked before a `set-gravity` command is offered.
@@ -887,6 +1159,27 @@ channel; the HUD layout files are planned separately.
     debug flag): useful, and incompatible with the hash; debug builds only, if at all.
 12. **iOS and AArch64**: the spike on an AArch64 machine and the wasmtime build on
     iOS (`xcrun`), both owed to hardware this machine does not have.
+13. **A per-seat tune on the wire** (section 2.3): the server receives each seat's
+    tune bytes with the seat at race start, so players may differ; what that adds to
+    ADR-0070's messages and to the content fingerprint (a session-shared tune folds
+    in, a per-seat one cannot). Until answered, a tune is single-player or
+    session-shared.
+14. **An animated canvas**: whether the frontend world gets a per-frame `frame` export
+    (like the HUD world) for a preview that moves, and the cost of calling a guest
+    every frame while a menu is open.
+15. **What disc data a screen may read**: the `teams` list is the one copy it gets. A
+    tune editor showing stock handling beside a slider needs a read-only copy of a
+    table; which tables, and whether a disc table may reach a mod at all (the HUD
+    sheet by name is the existing exception).
+16. **Blob lifetime**: whether uninstalling a mod deletes its blob, whether the
+    MODS page's CLEAR is the only way, and whether a title's blob follows a mod to
+    another title (today: keyed by mod id and title, no).
+17. **A screen during a race**: a pause-menu page or a post-race page of the mod's.
+    Excluded here (the frontend world never runs with a race live); the end-of-race
+    results screen is the likelier first ask.
+18. **A third-party sim guest reading a tune it did not author**: the manifest ties
+    a blob to its own mod's module only; whether a craft-tune editor and a separate
+    craft mod may be different mods is the composition question 8.
 
 ## 9. Phased rollout
 
@@ -896,11 +1189,20 @@ not move ([hooks.md](hooks.md#what-has-to-be-built-in-order)):
 
 1. **The host itself** (`oag-modhost`: the engine configuration of section 4.1, the
    I/O buffer ABI, fuel, the fault path, the pooled per-tick instance, the load-time
-   checks), no call site wired, behind the `extensions` feature. The ADR accepted;
-   the spike's result on this page.
+   checks), no call site wired, behind the `extensions` feature, built lazily at the
+   first module load (section 4.5), with the no-`Engine` test and the
+   vanilla-hashes-unchanged test. The ADR accepted; the spike's result on this page.
 2. **Phase 1, no simulation code**: the `hud` world, `[[extension.hud]]` and the
    `hud/*.toml` widget box, one example widget (the lap-delta graph) in
    `mod-examples`. Proves the host on low-stakes code.
+2b. **The frontend world** (ADR-0080), a second harmless-half step beside the HUD
+   world and needing no simulation code: the `open-mod-screen` action and
+   `[[extension.screen]]`, the host widgets and canvas over `oag-ui-screens`'s model
+   (pad and pointer from the first change), the 4 KiB blob in the records `Store`,
+   and one example screen that saves a blob nothing reads. It lands after step 2 (the
+   host and the HUD world prove the engine) and before phase 3. A screen whose blob a
+   sim module consumes (a craft tune) waits for step 4; the `setup.tune` field is
+   added with it.
 3. **Phase 2, the simulation call**: call site C, the event buffer, the state blob in
    the race state and the hash, and the `assist` command, proven by moving
    Pulse/Pure's Pilot Assist backport into a module with bit-identical replay hashes
@@ -917,4 +1219,6 @@ not move ([hooks.md](hooks.md#what-has-to-be-built-in-order)):
    fingerprint, playback and join refusing a mismatch by name, the conformance test
    across Cranelift, Pulley and the browser, `oag-server` running sim modules;
    MODDED stops meaning "no replay, no multiplayer" and starts meaning "with these
-   modules".
+   modules". The tune bytes join the replay header's `mods` entry, and a
+   session-shared tune joins the lobby fingerprint (section 2.3; a per-seat tune is
+   open question 13).
