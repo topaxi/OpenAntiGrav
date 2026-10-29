@@ -1008,7 +1008,11 @@ pub(super) fn picker_stills(
             let alpha = (seconds.unwrap_or(SETTLED_SECONDS) / crate::preview::CARD_FADE_SECONDS)
                 .clamp(0.0, 1.0);
             let draws = show
-                .draws(seconds.unwrap_or(0.0), &|src| sprites.get(src))
+                .draws_fading(
+                    seconds.unwrap_or(0.0),
+                    oag_ui_screens::picker::slideshow::STEP_FADE_SECONDS,
+                    &|src| sprites.get(src),
+                )
                 .into_iter()
                 .map(|draw| crate::preview::fade_draw(draw, alpha))
                 .collect();

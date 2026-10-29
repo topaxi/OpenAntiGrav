@@ -147,6 +147,14 @@ pub(crate) struct MenuArgs {
     #[arg(long, value_name = "SECONDS")]
     pub(crate) menu_picker_step_seconds: Option<f32>,
 
+    /// With `--menu-page track-select`/`ship-select`, the previewed model's
+    /// own animation time in seconds, where it is not the time since the screen
+    /// opened: Pulse's `ship_FE.vex` sways on an `Anim Transform` that
+    /// started when the model loaded, not when the screen did. `None` takes
+    /// `--menu-picker-seconds`.
+    #[arg(long, value_name = "SECONDS")]
+    pub(crate) menu_model_seconds: Option<f32>,
+
     /// With `--menu-page`, draw a modal prompt over it: `rename`,
     /// `rename-note`, `delete`, `delete-built-in` or `binding`.
     ///

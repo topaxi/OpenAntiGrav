@@ -132,6 +132,8 @@ impl Slideshow {
                 &mut model,
             );
         }
+        // A state that authors its own `Mode3D` (a craft's `Info` against its `MPLobby Info`) places the model, ahead of the first one in the file.
+        let model = start_model(&root, start, location).or(model);
         let start = states.iter().position(|state| state.name == start)?;
         let (path, cycle_from) = chain(&states, start);
         Some(Self {
@@ -205,7 +207,14 @@ impl Slideshow {
     /// rather than a zero-length step that would spin.
     #[must_use]
     pub fn at(&self, seconds: f32) -> &State {
+        &self.states[self.step(seconds).current]
+    }
+
+    /// Where the chain is `seconds` in: the state, the one it came from (none in the
+    /// first pass through the start state) and the seconds since this one began.
+    fn step(&self, seconds: f32) -> Step {
         let mut t = seconds.max(0.0);
+        let mut wraps = false;
         if let Some(from) = self.cycle_from {
             let prefix: f32 = self.path[..from]
                 .iter()
@@ -216,19 +225,32 @@ impl Slideshow {
                 .map(|&index| self.states[index].delay)
                 .sum();
             if t >= prefix && cycle > 0.0 {
+                wraps = t >= prefix + cycle;
                 t = prefix + (t - prefix) % cycle;
             }
         }
         let mut current = self.path[0];
-        for &index in &self.path {
+        let mut previous = None;
+        let mut landed = 0;
+        for (at, &index) in self.path.iter().enumerate() {
             current = index;
+            landed = at;
+            previous = at.checked_sub(1).map(|before| self.path[before]);
             let delay = self.states[index].delay;
             if delay <= 0.0 || t < delay {
-                return &self.states[index];
+                break;
             }
             t -= delay;
         }
-        &self.states[current]
+        // Back at the top of the cycle: it came from the end of the path.
+        if wraps && self.cycle_from == Some(landed) {
+            previous = self.path.last().copied();
+        }
+        Step {
+            current,
+            previous,
+            since: t,
+        }
     }
 
     /// The panel's bars and labels plus the stills, all on screen `seconds`
@@ -239,11 +261,33 @@ impl Slideshow {
     /// blank.
     #[must_use]
     pub fn draws(&self, seconds: f32, sprites: &dyn Fn(&str) -> Option<Placed>) -> Vec<Draw> {
-        let state = self.at(seconds);
-        let mut out: Vec<Draw> = state.fills.iter().map(super::fill_draw).collect();
-        out.extend(state.texts.iter().filter_map(label_draw));
-        out.extend(state.images.iter().filter_map(|image| {
+        self.draws_fading(seconds, 0.0, sprites)
+    }
+
+    /// [`Self::draws`] with each step between two states a linear crossfade of
+    /// `fade` seconds: the stills the new state adds fade in, the ones it drops fade
+    /// out on top. `0.0` steps at once. Pulse's own steps measured this way (0.70 s, see
+    /// [`STEP_FADE_SECONDS`]).
+    #[must_use]
+    pub fn draws_fading(
+        &self,
+        seconds: f32,
+        fade: f32,
+        sprites: &dyn Fn(&str) -> Option<Placed>,
+    ) -> Vec<Draw> {
+        let step = self.step(seconds);
+        let state = &self.states[step.current];
+        let alpha = if fade > 0.0 {
+            (step.since / fade).clamp(0.0, 1.0)
+        } else {
+            1.0
+        };
+        let before = step.previous.filter(|_| alpha < 1.0).map(|i| &self.states[i]);
+        let same = |a: &Image, b: &Image| a.src == b.src && a.x == b.x && a.y == b.y;
+        let sprite = |image: &Image, alpha: f32| {
             let placed = sprites(&image.src)?;
+            let mut color = argb_to_rgba(image.color);
+            color[3] *= alpha;
             Some(Draw::Sprite {
                 rect: [
                     image.x,
@@ -252,11 +296,41 @@ impl Slideshow {
                     image.height.unwrap_or(placed.height as f32),
                 ],
                 uv: super::image_uv(image, placed),
-                color: argb_to_rgba(image.color),
+                color,
             })
+        };
+        let mut out: Vec<Draw> = state.fills.iter().map(super::fill_draw).collect();
+        out.extend(state.texts.iter().filter_map(label_draw));
+        out.extend(state.images.iter().filter_map(|image| {
+            let arriving = before.is_some_and(|b| !b.images.iter().any(|old| same(old, image)));
+            sprite(image, if arriving { alpha } else { 1.0 })
         }));
+        if let Some(before) = before {
+            out.extend(
+                before
+                    .images
+                    .iter()
+                    .filter(|old| !state.images.iter().any(|image| same(old, image)))
+                    .filter_map(|old| sprite(old, 1.0 - alpha)),
+            );
+        }
         out
     }
+}
+
+/// Seconds a step between two states takes to cross-fade on Pulse PSP: a linear ramp over
+/// 0.70 s, fitted to the photo window of a PPSSPP capture (17 frames across the first card and
+/// three steps, the entry clock read off the game's own animation clock, residual 0.08 summed
+/// squares), and measured the same on the first card and on each step. The step itself is at
+/// every 2 s of the redirect `delay`. Confidence 70: the ramp's end is read off frames 0.17 s
+/// apart.
+pub const STEP_FADE_SECONDS: f32 = 0.7;
+
+/// What [`Slideshow::step`] found.
+struct Step {
+    current: usize,
+    previous: Option<usize>,
+    since: f32,
 }
 
 /// Follows the redirects from `start`: the states visited in order, and
@@ -398,6 +472,21 @@ fn label_draw(text: &Text) -> Option<Draw> {
     })
 }
 
+/// The `Mode3D` model directly under the `Screen` named `start`, anywhere in the tree.
+fn start_model(node: &oag_ui::screen::Node, start: &str, location: &str) -> Option<Model> {
+    if node.name.eq_ignore_ascii_case("Screen") && node.attr("name") == Some(start) {
+        if let Some(model) = node
+            .children_named("Mode3D")
+            .find_map(|mode3d| model_from(mode3d, location))
+        {
+            return Some(model);
+        }
+    }
+    node.children
+        .iter()
+        .find_map(|child| start_model(child, start, location))
+}
+
 fn model_from(node: &oag_ui::screen::Node, location: &str) -> Option<Model> {
     let number = |n: &oag_ui::screen::Node, key: &str| -> f32 {
         n.value(key)
@@ -411,7 +500,15 @@ fn model_from(node: &oag_ui::screen::Node, location: &str) -> Option<Model> {
         position: [number(model, "x"), number(model, "y"), number(model, "z")],
         rotation: [number(model, "RotX"), number(model, "RotY")],
         origin: [number(node, "OriginX"), number(node, "OriginY")],
-        depth: [number(node, "nearZ"), number(node, "farZ")],
+        // `Mode3D_ReadValues`' own defaults where the file authors none: a craft's `Info` gives `nearZ` alone.
+        depth: [
+            node.value("nearZ")
+                .and_then(|v| v.trim().parse().ok())
+                .unwrap_or(oag_ui::screen::DEFAULT_NEAR_Z),
+            node.value("farZ")
+                .and_then(|v| v.trim().parse().ok())
+                .unwrap_or(oag_ui::screen::DEFAULT_FAR_Z),
+        ],
     })
 }
 

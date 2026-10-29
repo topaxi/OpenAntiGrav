@@ -434,13 +434,11 @@ pub fn read_stills(
 }
 
 /// Seconds the hexagonal window's own stills take to fade in on a fresh
-/// selection - **chosen, not measured**: the circuit's own `screen.xml`
-/// authors no `transition` of its own for them (unlike `Selection_Definition.xml`'s
-/// `LeftLayer`s, which do - see [`oag_ui_screens::picker`]'s own reading of that
-/// attribute), but a live PPSSPP capture shows them arriving in step with
-/// the info panel's own measured `0.5`s (`docs/ui/selection-screens.md`), so
-/// this reuses that number rather than inventing an unrelated one.
-pub const CARD_FADE_SECONDS: f32 = 0.5;
+/// selection: the same linear ramp every later step of the slideshow takes,
+/// [`oag_ui_screens::picker::slideshow::STEP_FADE_SECONDS`] (0.70 s, measured on Pulse
+/// PSP's Track Select; Pure and the PS2 pressing inherit it unmeasured). The circuit's
+/// own `screen.xml` authors no `transition` for them.
+pub const CARD_FADE_SECONDS: f32 = oag_ui_screens::picker::slideshow::STEP_FADE_SECONDS;
 
 /// `draw` with every colour it carries multiplied by `alpha` - [`CARD_FADE_SECONDS`]'s
 /// own arrival fade, applied after [`Slideshow::draws`] since that method

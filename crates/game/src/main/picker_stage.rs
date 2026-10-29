@@ -260,7 +260,11 @@ impl PickerStage {
         self.slideshow.as_ref().map_or_else(Vec::new, |show| {
             let seconds = self.model.since_selection();
             let alpha = (seconds / oag_game::preview::CARD_FADE_SECONDS).clamp(0.0, 1.0);
-            show.draws(seconds, &|src| self.placed(src))
+            show.draws_fading(
+                seconds,
+                oag_ui_screens::picker::slideshow::STEP_FADE_SECONDS,
+                &|src| self.placed(src),
+            )
                 .into_iter()
                 .map(|draw| oag_game::preview::fade_draw(draw, alpha))
                 .collect()

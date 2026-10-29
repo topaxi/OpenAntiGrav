@@ -188,9 +188,9 @@ impl Fills {
 }
 
 /// Seconds a picture takes to arrive when its widgets author no
-/// `transition`. **Chosen, not measured**; see [`crate::preview::CARD_FADE_SECONDS`],
-/// the same number for the same reason.
-pub const FADE_SECONDS: f32 = crate::preview::CARD_FADE_SECONDS;
+/// `transition`. **Chosen, not measured**: 0.5 s, the picker's own panel transition
+/// (`docs/ui/selection-screens.md`).
+pub const FADE_SECONDS: f32 = 0.5;
 
 /// The art on screen for the focused row, loaded on demand and drawn from a
 /// sheet of its own: the front end's, extended with every texture shown so far.
