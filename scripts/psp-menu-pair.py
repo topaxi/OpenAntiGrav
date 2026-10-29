@@ -87,6 +87,13 @@ FE_CLOCK_PTR = 0x08B317B0
 FE_CLOCK_FIELD = 0x40
 #: A shot of these ids is grabbed with the CPU stopped, so the frame and the clock read are one moment.
 STOPPED = ("grid", "cell", "team", "track")
+
+#: Pure has no recovered front-end clock or state name, so its clock is the emulator's own tick counter (`cpu.status.ticks`, the PSP's
+#: 222 MHz CPU clock, which stops with the CPU and ran at 1.0000 of wall time over two 52 s recordings), read at the start of the pad
+#: press that entered the screen and again with the CPU stopped for the grab. Error: the press-to-screen latency (a frame or two) and
+#: the one frame the presented picture lags the stop. The `PURE_WALK` ids whose description types in (`oag_ui_screens::campaign::footer::typein`).
+PURE_CLOCKED = ("sr-class", "sr-league", "sr-track", "t-class", "t-sel")
+PSP_CPU_HZ = 222e6
 #: `team`: the ship's own `Anim Transform` node (loop `LoopEnd` 5.9833336 s on Assegai's `ship_FE.vex`) holds its own time at `+0x40`.
 SHIP_NODE_LOOP = 5.9833336
 
@@ -111,6 +118,7 @@ class Rig:
         self.entered_clock = None  # the front end's animation clock at the poll that saw the state name change
         self.entered = None  # (state, time.monotonic() when `expect` saw it replace another): the screen-entry clock
         self.pressed_at = None  # time.monotonic() of the press straight before an `st:` step: the entry cannot be earlier
+        self.press_ticks = None  # Pure: `cpu.status.ticks` at the start of the latest pad press
         if self.dbg.is_stepping():
             self.dbg.call("cpu.resume")
             time.sleep(0.5)
@@ -121,6 +129,8 @@ class Rig:
 
     def tap(self, button, times=1, wait=0.7):
         for _ in range(times):
+            if self.title == "pure":
+                self.press_ticks = self.dbg.call("cpu.status")["ticks"]
             self.dbg.press(button, duration=6)
             time.sleep(wait)
 
@@ -200,7 +210,7 @@ class Rig:
     def shot(self, name):
         wid, x, y, w, h = set_window(480, 272)
         dst = self.shots / (name + ".png")
-        stopped = name.split("@")[0] in STOPPED
+        stopped = name.split("@")[0] in (STOPPED if self.title == "pulse" else PURE_CLOCKED)
         if stopped:
             # Frozen for the grab and the read, so the frame and the stamp are one pulse phase.
             self.dbg.call("cpu.stepping")
@@ -209,12 +219,17 @@ class Rig:
         subprocess.run(["import", "-window", "root", "-crop", "%dx%d+%d+%d" % (w, h, x, y), "+repage", str(dst)], check=True)
         after = time.monotonic()
         level = None
+        since_ticks = None
         clock = ship_t = None
         if stopped:
             if name in SELECTOR_CENTRE:
                 level = self.selector_stamp(name)
-            clock = self.fe_clock()
-            if name.split("@")[0] == "team":
+            if self.title == "pure":
+                ticks = self.dbg.call("cpu.status")["ticks"]
+                if self.press_ticks is not None:
+                    since_ticks = (ticks - self.press_ticks) / PSP_CPU_HZ
+            clock = self.fe_clock() if self.title == "pulse" else None
+            if self.title == "pulse" and name.split("@")[0] == "team":
                 ship_t = self.ship_node_time()
             self.dbg.call("cpu.resume")
         state = self.state()
@@ -223,8 +238,10 @@ class Rig:
         phase = None if level is None else ENTRY_HOLD + level / 2
         if phase is None and clock is not None and self.entered_clock is not None and self.entered and self.entered[0] == state:
             since = clock - self.entered_clock
+        if since_ticks is not None:
+            since = since_ticks
         self.seen[name] = {"png": dst, "at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"), "state": state,
-                           "since_entry": phase if phase is not None else since, "from_stamp": phase is not None, "level": level, "from_clock": phase is None and clock is not None, "ship_t": ship_t}
+                           "since_entry": phase if phase is not None else since, "from_stamp": phase is not None, "level": level, "from_clock": phase is None and clock is not None, "ship_t": ship_t, "from_ticks": since_ticks is not None}
         print("shot", name, "since_entry", self.seen[name]["since_entry"], "ship_node_time", ship_t, "clock", clock, flush=True)
         return dst
 
@@ -393,6 +410,8 @@ def build_pairs(args, seen, out, plat, walk):
         pair.rec["original"]["selection_basis"] = "read by eye from the frame; the cursor is where the walk left it"
         if shot.get("from_stamp"):
             pair.rec["original"]["seconds_since_entry"] = {"value": round(shot["since_entry"], 3), "basis": "not a wall clock: the pulse level %.3f the Selector's own glow-mask stamp reads in EDRAM (80 + 150 t, CPU stopped for the grab), as the seconds at which ours shows that level (entry hold + t / 2); good to one game frame" % shot["level"]}
+        elif shot.get("from_ticks"):
+            pair.rec["original"]["seconds_since_entry"] = {"value": round(shot["since_entry"], 3), "basis": "not a wall clock: the emulator's own tick counter (cpu.status.ticks / 222e6, CPU stopped for the grab) at the grab minus its value at the start of the pad press that entered the screen; the press-to-screen latency (a frame or two) and the one frame the picture lags the stop are inside it. Pure has no recovered front-end clock"}
         elif shot.get("from_clock") and shot.get("since_entry") is not None:
             pair.rec["original"]["seconds_since_entry"] = {"value": round(shot["since_entry"], 3), "basis": "not a wall clock: the front end's own animation clock (*(0x08b317b0)+0x40, emulated seconds, CPU stopped for the grab) at the grab minus its value at the poll that saw the state name change; good to one poll (a frame or two)" + ("; the ship's Anim Transform node time read %.3f s (loop 5.983 s)" % shot["ship_t"] if shot.get("ship_t") is not None else "")}
         elif shot.get("since_entry") is not None:
@@ -405,7 +424,7 @@ def build_pairs(args, seen, out, plat, walk):
                          xml_file=item["xml"], screen_seen=shot["state"] or item["screen"], screen_wanted=item["screen"], profile_dir=profile,
                          size=ce.size_text(plat), front_end_style="the disc's own", language="English", original_language="English",
                          selection=item["selection"], route=item.get("route"),
-                         extra_args=(("--menu-picker-seconds", "%.3f" % shot["since_entry"]) + (("--menu-model-seconds", "%.3f" % shot["ship_t"]) if shot.get("ship_t") is not None else ())) if item["id"] in CLOCKED and shot.get("since_entry") is not None else (), screen_source="PPSSPP, the front end's state name" if shot["state"] else "read by eye")
+                         extra_args=(("--menu-picker-seconds", "%.3f" % shot["since_entry"]) + (("--menu-model-seconds", "%.3f" % shot["ship_t"]) if shot.get("ship_t") is not None else ())) if item["id"] in (CLOCKED if args.title == "pulse" else PURE_CLOCKED) and shot.get("since_entry") is not None else (), screen_source="PPSSPP, the front end's state name" if shot["state"] else "read by eye")
             pair.finish()
         except SystemExit as exc:
             if exc.code == 3:

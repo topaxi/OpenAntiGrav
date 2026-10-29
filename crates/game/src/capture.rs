@@ -935,6 +935,7 @@ pub fn run(
                     frame,
                     &skin,
                     &menu_frame,
+                    options.menu_picker_seconds,
                     footer,
                 )?;
                 ticker_clip = clip;

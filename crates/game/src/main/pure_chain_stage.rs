@@ -23,6 +23,10 @@ pub(crate) struct PureChainStage {
     /// The screen and row the art was last asked for, so a tick that moved
     /// nothing does not rebuild the event lists to find the same key.
     art_for: Option<(Step, usize)>,
+    /// Seconds since the screen or its row changed: the clock the description types by.
+    /// **A row change restarting the line is chosen, not measured**; the screen change is
+    /// the measured case (`oag_ui_screens::campaign::footer::typein`).
+    description_seconds: f32,
 }
 
 impl PureChainStage {
@@ -42,6 +46,7 @@ impl PureChainStage {
             title,
             art,
             art_for: None,
+            description_seconds: 0.0,
         };
         open.follow_art();
         open
@@ -56,7 +61,18 @@ impl PureChainStage {
             return;
         }
         self.art_for = at;
+        self.description_seconds = 0.0;
         self.art.show(tag.and_then(|tag| self.chain.art_key(tag)));
+    }
+
+    /// Seconds the description has been typing.
+    pub(crate) fn description_seconds(&self) -> f32 {
+        self.description_seconds
+    }
+
+    /// Moves the description's clock on by `dt` seconds.
+    pub(crate) fn advance_description(&mut self, dt: f32) {
+        self.description_seconds += dt;
     }
 
     pub(crate) fn art(&self) -> &Player {

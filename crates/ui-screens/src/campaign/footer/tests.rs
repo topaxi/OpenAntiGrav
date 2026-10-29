@@ -633,10 +633,59 @@ fn a_description_wraps_into_the_text_infos_lines_and_no_more() {
     );
     assert_eq!(layout.text_scale, DESCRIPTION_SCALE);
     let words = vec!["word"; 40].join(" ");
-    let draws = description_draws(&layout, &words, &|text| text.len() as f32 * 10.0);
+    let draws = description_draws(&layout, &words, None, &|text| text.len() as f32 * 10.0);
     assert_eq!(draws.len(), 3, "cut at the authored line count");
     let ys: Vec<f32> = draws.iter().map(|draw| text_and_y(draw).1).collect();
     assert_eq!(ys[0], 217.0);
     assert!(ys[1] > ys[0] && ys[2] > ys[1], "{ys:?}");
-    assert!(description_draws(&layout, "  ", &|_| 1.0).is_empty());
+    assert!(description_draws(&layout, "  ", None, &|_| 1.0).is_empty());
+}
+
+/// The description wraps whole and is then revealed across the lines: at 0.5 s only the first
+/// line's prefix and the cursor draw, the second line waits for the first, and settled it all draws.
+#[test]
+fn a_description_types_across_its_wrapped_lines_and_loops() {
+    let root = parse(
+        r#"<Screen name="Skin"><Viewport name="TextInfoIsAlwaysLast" OffsetX="21" OffsetY="217">
+<Values width="100" height="32"></Values>
+<TextInfo delay="1.6"><Values y="1" font="scroll" color="0xFFFAB41A"></Values>
+<Text Name="Text0"></Text><Text Name="Text1"></Text><Text Name="Text2"></Text></TextInfo></Viewport></Screen>"#,
+    );
+    let layout = TickerLayout::read(&root, &HashMap::new()).expect("the viewport");
+    let measure = |text: &str| text.len() as f32 * 10.0;
+    let text = "aaaa bbbb cccc dddd eeee ffff gggg hhhh iiii jjjj";
+    let texts = |since: Option<f32>| -> Vec<String> {
+        description_draws(&layout, text, since, &measure)
+            .iter()
+            .map(|draw| text_and_y(draw).0.to_string())
+            .collect()
+    };
+    let settled = texts(None);
+    assert!(settled.len() > 1, "wrapped over several lines: {settled:?}");
+    let early = texts(Some(typein::START + 0.2));
+    assert_eq!(
+        early.len(),
+        1,
+        "the second line waits for the first: {early:?}"
+    );
+    assert!(early[0].ends_with('_'), "a cursor while typing: {early:?}");
+    let typed = early[0].trim_end_matches('_');
+    assert!(settled[0].starts_with(typed) && typed.len() < settled[0].len());
+    let total = settled.iter().map(|line| line.len() + 1).sum::<usize>() - 1;
+    let done = typein::START + total as f32 / typein::CHARS_PER_SECOND + 0.1;
+    let whole: Vec<String> = texts(Some(done))
+        .into_iter()
+        .map(|line| line.trim_end_matches('_').to_string())
+        .collect();
+    assert_eq!(whole, settled, "held whole once typed");
+    assert!(
+        texts(Some(0.0)).is_empty(),
+        "nothing before the start delay"
+    );
+    let round = typein::START + total as f32 / typein::CHARS_PER_SECOND + typein::HOLD;
+    assert_eq!(
+        texts(Some(round + 0.2)).len(),
+        1,
+        "typed again from the first line"
+    );
 }

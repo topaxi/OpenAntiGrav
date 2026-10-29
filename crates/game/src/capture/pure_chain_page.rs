@@ -21,6 +21,8 @@ pub(super) fn answers(page: &str) -> Option<&str> {
     (rest.is_empty() || rest.starts_with(':') || rest.starts_with('@')).then_some(rest)
 }
 
+/// `typed_since` is `--menu-picker-seconds`: the seconds the description has been typing, `None` for it settled.
+///
 /// Draws the screen `answers` reaches: MODE by name (`arcade`, `tournament`,
 /// `time-trial`, `zone`, `free-play`), the rest by row number. Read against
 /// whatever `records.toml` holds, through the same `pure_chain::present` the live
@@ -45,6 +47,7 @@ pub(super) fn capture(
     backdrop: Option<oag_ui::menu::Picture>,
     skin: &oag_ui::menu::Skin,
     frame: &oag_ui::menu::Frame,
+    typed_since: Option<f32>,
     footer: (
         Option<&oag_ui_screens::campaign::footer::NavigationLegend>,
         Option<&oag_ui_screens::campaign::footer::TickerLayout>,
@@ -133,6 +136,7 @@ pub(super) fn capture(
         list.extend(oag_ui_screens::campaign::footer::description_draws(
             layout,
             &row.description,
+            typed_since,
             &measure,
         ));
     }
