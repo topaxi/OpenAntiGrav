@@ -193,6 +193,8 @@ pub struct Observation<'a> {
     pub active: u32,
     /// What happened since the last call, in engine order.
     pub events: &'a [Event],
+    /// Each grid slot, in slot order.
+    pub crafts: &'a [abi::Craft],
 }
 
 /// What a call cost, for the dev overlay. An output, never simulation state.
@@ -350,7 +352,7 @@ impl Module {
             memory
                 .read(&store, io, &mut buffer)
                 .map_err(|e| Fault::Trap(e.to_string()))?;
-            let commands = abi::read_reply(&buffer, observation.active)?;
+            let commands = abi::read_reply(&buffer, observation)?;
             Ok((abi::state(&buffer, state.len()).to_vec(), commands))
         })();
         *fuel_left = store.get_fuel().ok();

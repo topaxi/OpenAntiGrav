@@ -134,6 +134,50 @@ mod on {
         assert_eq!(fold(&plain), VANILLA_FOLD);
     }
 
+    const CRAFTS: i32 = 1024 + oag_modhost::abi::CRAFTS_AT as i32;
+
+    /// On its first call takes slot 1's whole pool (`-shield_max`, read from its craft
+    /// record), then nothing.
+    fn drainer() -> Source {
+        module(
+            "test.drainer",
+            &format!(
+                "(if (i32.eqz (i32.load (i32.const {STATE})))
+                   (then
+                     (i32.store (i32.const {STATE}) (i32.const 1))
+                     (i32.store (i32.const {REPLY}) (i32.const 1))
+                     (i32.store8 (i32.const {cmd}) (i32.const 2))
+                     (i32.store8 (i32.const {slot}) (i32.const 1))
+                     (f32.store (i32.const {f}) (f32.neg (f32.load (i32.const {max}))))))
+                 i32.const 0",
+                cmd = REPLY + 4,
+                slot = REPLY + 5,
+                f = REPLY + 8,
+                max = CRAFTS + 16 + 8,
+            ),
+        )
+    }
+
+    #[test]
+    fn a_shield_delta_that_empties_the_pool_wrecks_the_craft_as_a_hit_does() {
+        let mut race = grid(prepared(&[drainer()]));
+        // The fixture's hulls carry no pool; give slot 1 a full one.
+        race.sim.world.ships[1].handling.dimensions.shield = 100.0;
+        race.sim.world.ships[1].physics.shield = 100.0;
+        assert_eq!(
+            race.sim.world.ships[1].physics.craft_state,
+            oag_physics::damage::CraftState::Racing
+        );
+        race.tick(&PlayerInputs::none());
+        let ship = &race.sim.world.ships[1];
+        assert_eq!(ship.physics.shield, 0.0);
+        assert_eq!(
+            ship.physics.craft_state,
+            oag_physics::damage::CraftState::Destroyed
+        );
+        assert_eq!(race.extension_reports()[0].faulted, None);
+    }
+
     /// Counts its calls in the blob and halves slot 1's thrust every tick.
     fn halver() -> Source {
         module(

@@ -35,6 +35,7 @@ fn observe(tick: u64) -> Observation<'static> {
         tick,
         active: 0b11,
         events: &[],
+        crafts: &[],
     }
 }
 
@@ -169,6 +170,7 @@ fn a_slot_with_no_craft_is_refused() {
         tick: 0,
         active: 0b1,
         events: &[],
+        crafts: &[],
     };
     let (fault, _) = module
         .tick(&only_slot_0, &mut [0; 4], &mut Vec::new())
@@ -199,6 +201,7 @@ fn events_reach_the_guest() {
                 tick: 9,
                 active: 0xff,
                 events: &events,
+                crafts: &[],
             },
             &mut state,
             &mut Vec::new(),

@@ -290,9 +290,11 @@ impl Extensions {
 impl crate::Race {
     /// Phase C: each module's `tick`, its commands into this tick's step. With no
     /// module, returns at once and touches nothing.
-    pub(super) fn tick_extensions(&mut self) {
+    pub(super) fn tick_extensions(&mut self, inputs: &oag_gameplay::PlayerInputs) {
         #[cfg(feature = "extensions")]
-        on::tick(&mut self.sim);
+        on::tick(&mut self.sim, inputs);
+        #[cfg(not(feature = "extensions"))]
+        let _ = inputs;
     }
 
     /// The modules' numbers for the dev overlay ([`Report`]).
@@ -310,7 +312,7 @@ impl crate::Race {
 
 #[cfg(feature = "extensions")]
 mod on {
-    use oag_modhost::{Command, Event, Module, Observation, abi::MAX_EVENTS};
+    use oag_modhost::{Command, Event, Module, Observation, abi, abi::MAX_EVENTS};
 
     use super::Report;
     use crate::sim::RaceSim;
@@ -399,10 +401,68 @@ mod on {
         }
     }
 
-    pub(super) fn tick(sim: &mut RaceSim) {
+    /// The observation's craft records: copies of the world, never a pointer into it.
+    fn crafts(sim: &RaceSim, inputs: &oag_gameplay::PlayerInputs) -> Vec<abi::Craft> {
+        sim.world
+            .ships
+            .iter()
+            .enumerate()
+            .map(|(slot, ship)| {
+                let person = sim.world.person_flown(slot);
+                let fire_held = person
+                    && inputs
+                        .get(slot)
+                        .buttons
+                        .is_held(oag_gameplay::input::Button::Square);
+                let racing = ship.physics.craft_state == oag_physics::damage::CraftState::Racing;
+                abi::Craft {
+                    pickup: ship.pickup.weapon.map_or(0, |weapon| {
+                        oag_tables::weapons::Weapon::ALL
+                            .iter()
+                            .position(|w| *w == weapon)
+                            .map_or(0, |i| i as u8 + 1)
+                    }),
+                    flags: u8::from(person) * abi::CRAFT_PERSON
+                        | u8::from(fire_held) * abi::CRAFT_FIRE_HELD
+                        | u8::from(racing) * abi::CRAFT_RACING,
+                    shield: ship.physics.shield,
+                    shield_max: ship.handling.dimensions.shield,
+                    speed_kmh: ship.physics.body.linear_velocity.length()
+                        * oag_core::math::SPEED_TO_KMH,
+                }
+            })
+            .collect()
+    }
+
+    /// `shield-delta`'s sink: a loss through the weapon-damage path (so the destroyed
+    /// edge, the shield pickup's immunity and the critical crossing behave as a hit's),
+    /// at its full amount; a gain through the pool's clamp. A race whose rules take no
+    /// damage (Time Trial, Speed Lap) refuses a loss: the mod cannot wreck a craft where
+    /// nothing else can.
+    fn shield_delta(sim: &mut RaceSim, slot: usize, amount: f32) {
+        let rules = sim.damage_rules();
+        let ship = &mut sim.world.ships[slot];
+        let dimensions = ship.handling.dimensions;
+        if amount >= 0.0 {
+            oag_physics::damage::add(&mut ship.physics, &dimensions, amount);
+        } else if rules.damage {
+            oag_physics::damage::apply_weapon(
+                &mut ship.physics,
+                &dimensions,
+                -amount,
+                oag_physics::damage::DamageRules {
+                    weapons: true,
+                    ..rules
+                },
+            );
+        }
+    }
+
+    pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs) {
         if sim.extensions.on.slots.is_empty() {
             return;
         }
+        let crafts = crafts(sim, inputs);
         let tick = sim.world.tick;
         let active = sim
             .world
@@ -425,9 +485,12 @@ mod on {
             tick,
             active,
             events: &events,
+            crafts: &crafts,
         };
         let mut commands = Vec::new();
-        let on_boost = &mut on.boost;
+        // Every module's checked commands, in id order: applied once all have run, so
+        // each saw the same observation.
+        let mut applied = Vec::new();
         for slot in &mut on.slots {
             if slot.faulted.is_some() {
                 slot.fuel_used = 0;
@@ -441,20 +504,7 @@ mod on {
             slot.call_us = started.elapsed().as_secs_f32() * 1.0e6;
             let cost = match outcome {
                 Ok(cost) => {
-                    for command in &commands {
-                        match *command {
-                            // Below 1.0 the Leach Beam's path, multiplied so a drain is
-                            // kept; above it the mod's own engine scale, multiplied so two
-                            // modules compose. Both are consumed by this tick's step.
-                            Command::ScaleThrust { slot, factor } if factor <= 1.0 => {
-                                sim.world.ships[slot as usize].pending_thrust_scale *= factor;
-                            }
-                            Command::ScaleThrust { slot, factor } => {
-                                let boost = &mut on_boost[slot as usize];
-                                *boost = (*boost * factor).min(oag_modhost::abi::MAX_THRUST_FACTOR);
-                            }
-                        }
-                    }
+                    applied.append(&mut commands);
                     cost
                 }
                 Err((fault, cost)) => {
@@ -468,6 +518,21 @@ mod on {
             };
             slot.fuel_used = cost.fuel_used;
             slot.fuel_peak = slot.fuel_peak.max(cost.fuel_used);
+        }
+        for command in applied {
+            match command {
+                // Below 1.0 the Leach Beam's path, multiplied so a drain is kept; above it
+                // the mod's own engine scale, multiplied so two modules compose. Both are
+                // consumed by this tick's step.
+                Command::ScaleThrust { slot, factor } if factor <= 1.0 => {
+                    sim.world.ships[slot as usize].pending_thrust_scale *= factor;
+                }
+                Command::ScaleThrust { slot, factor } => {
+                    let boost = &mut sim.extensions.on.boost[slot as usize];
+                    *boost = (*boost * factor).min(abi::MAX_THRUST_FACTOR);
+                }
+                Command::ShieldDelta { slot, amount } => shield_delta(sim, slot as usize, amount),
+            }
         }
     }
 }

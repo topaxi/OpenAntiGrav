@@ -18,7 +18,8 @@
 //! | [`EVENTS_AT`] | 8 x [`MAX_EVENTS`] | events: kind `u8`, slot `u8`, 6 bytes zero |
 //! | [`STATE_AT`] | [`MAX_STATE_BYTES`] | the module's state blob, in and out |
 //! | [`REPLY_AT`] | 4 | command count, written by the guest |
-//! | [`REPLY_AT`] + 4 | 12 x [`MAX_COMMANDS`] | commands: kind `u8`, slot `u8`, 2 bytes zero, `f32`, `u32` |
+//! | [`REPLY_AT`] + 4 | 12 x [`MAX_COMMANDS`] | commands: kind `u8`, slot `u8`, `u16` argument, `f32`, `u32` |
+//! | [`CRAFTS_AT`] | 16 x [`MAX_CRAFTS`] | one record per grid slot ([`Craft`]): pickup `u8`, flags `u8`, 2 bytes zero, shield `f32`, shield maximum `f32`, speed km/h `f32` |
 //!
 //! The README's WIT (section 2.1) is the documentation of the records; this is the
 //! subset Kiss Curse needs: one event, one command.
@@ -44,7 +45,21 @@ pub const STATE_AT: usize = EVENTS_AT + EVENT_LEN * MAX_EVENTS;
 /// Where the guest writes its reply.
 pub const REPLY_AT: usize = STATE_AT + MAX_STATE_BYTES;
 const COMMAND_LEN: usize = 12;
-const _: () = assert!(REPLY_AT + 4 + COMMAND_LEN * MAX_COMMANDS <= IO_LEN);
+/// Where the craft records start.
+pub const CRAFTS_AT: usize = REPLY_AT + 4 + COMMAND_LEN * MAX_COMMANDS;
+const CRAFT_LEN: usize = 16;
+/// Craft records per observation: a grid's slots.
+pub const MAX_CRAFTS: usize = 16;
+const _: () = assert!(CRAFTS_AT + CRAFT_LEN * MAX_CRAFTS <= IO_LEN);
+
+/// [`Craft::flags`]: a person flies the slot.
+pub const CRAFT_PERSON: u8 = 1;
+/// [`Craft::flags`]: a person flying the slot holds the fire button (`SQUARE`) this tick.
+pub const CRAFT_FIRE_HELD: u8 = 2;
+/// [`Craft::flags`]: the craft is racing (not wrecked, not respawning).
+pub const CRAFT_RACING: u8 = 4;
+/// [`Craft::flags`]: the craft's pickup is claimed by a module (`claim-pickup`).
+pub const CRAFT_CLAIMED: u8 = 8;
 
 /// The largest `scale-thrust` factor: a mod may double an engine's thrust, no more.
 /// Chosen (README 2.1 proposed `[0.25, 2.0]`; the lower end is `0` here).
@@ -54,6 +69,25 @@ pub const MAX_THRUST_FACTOR: f32 = 2.0;
 pub const EVENT_WALL_CONTACT: u8 = 1;
 /// Command kind codes.
 pub const COMMAND_SCALE_THRUST: u8 = 1;
+/// `shield-delta{slot, amount}`.
+pub const COMMAND_SHIELD_DELTA: u8 = 2;
+
+/// One grid slot as a guest reads it: copies of what the HUD already shows.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct Craft {
+    /// The held pickup: 0 for none, else its place in the title's weapon list plus one
+    /// (`oag_tables::weapons::Weapon::ALL`: Rocket 1, Missile 2, Quake 3, Cannon 4,
+    /// Turbo 5, ...).
+    pub pickup: u8,
+    /// [`CRAFT_PERSON`], [`CRAFT_FIRE_HELD`], [`CRAFT_RACING`], [`CRAFT_CLAIMED`].
+    pub flags: u8,
+    /// The energy pool.
+    pub shield: f32,
+    /// Its maximum: the bound of a `shield-delta` for this slot.
+    pub shield_max: f32,
+    /// The body's speed, km/h.
+    pub speed_kmh: f32,
+}
 
 /// Something that happened in the race since the last call (README 2.1, `event`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -76,6 +110,15 @@ pub enum Command {
         slot: u8,
         /// The scale, finite and in `[0, MAX_THRUST_FACTOR]`.
         factor: f32,
+    },
+    /// Add `amount` to the slot's energy pool (negative takes it away) through the damage
+    /// path: a loss can wreck the craft as a weapon hit does, a gain is clamped at the
+    /// maximum. `|amount|` at most the slot's shield maximum.
+    ShieldDelta {
+        /// The grid slot.
+        slot: u8,
+        /// Energy, finite.
+        amount: f32,
     },
 }
 
@@ -105,6 +148,14 @@ pub(crate) fn write_observation(buffer: &mut [u8], observation: &Observation<'_>
         }
     }
     buffer[STATE_AT..STATE_AT + state.len()].copy_from_slice(state);
+    for (i, craft) in observation.crafts.iter().take(MAX_CRAFTS).enumerate() {
+        let at = CRAFTS_AT + i * CRAFT_LEN;
+        buffer[at] = craft.pickup;
+        buffer[at + 1] = craft.flags;
+        put_u32(buffer, at + 4, craft.shield.to_bits());
+        put_u32(buffer, at + 8, craft.shield_max.to_bits());
+        put_u32(buffer, at + 12, craft.speed_kmh.to_bits());
+    }
 }
 
 pub(crate) fn state(buffer: &[u8], len: usize) -> &[u8] {
@@ -113,7 +164,11 @@ pub(crate) fn state(buffer: &[u8], len: usize) -> &[u8] {
 
 /// Reads and checks the reply: every field in bounds, at most one of a kind per slot,
 /// a slot that holds a craft. A broken rule is a [`Fault::Reply`], never a clamp.
-pub(crate) fn read_reply(buffer: &[u8], active: u32) -> Result<Vec<Command>, Fault> {
+pub(crate) fn read_reply(
+    buffer: &[u8],
+    observation: &Observation<'_>,
+) -> Result<Vec<Command>, Fault> {
+    let active = observation.active;
     let count = get_u32(buffer, REPLY_AT) as usize;
     if count > MAX_COMMANDS {
         return Err(Fault::Reply(format!(
@@ -121,6 +176,7 @@ pub(crate) fn read_reply(buffer: &[u8], active: u32) -> Result<Vec<Command>, Fau
         )));
     }
     let mut thrust_seen = 0_u32;
+    let mut shield_seen = 0_u32;
     let mut commands = Vec::with_capacity(count);
     for i in 0..count {
         let at = REPLY_AT + 4 + i * COMMAND_LEN;
@@ -145,6 +201,25 @@ pub(crate) fn read_reply(buffer: &[u8], active: u32) -> Result<Vec<Command>, Fau
                 }
                 thrust_seen |= 1 << slot;
                 commands.push(Command::ScaleThrust { slot, factor });
+            }
+            COMMAND_SHIELD_DELTA => {
+                let amount = f32::from_bits(get_u32(buffer, at + 4));
+                let max = observation
+                    .crafts
+                    .get(usize::from(slot))
+                    .map_or(0.0, |craft| craft.shield_max);
+                if !amount.is_finite() || amount.abs() > max {
+                    return Err(Fault::Reply(format!(
+                        "shield-delta {amount} for slot {slot} is not within its maximum {max}"
+                    )));
+                }
+                if shield_seen & (1 << slot) != 0 {
+                    return Err(Fault::Reply(format!(
+                        "two shield-delta commands for slot {slot}"
+                    )));
+                }
+                shield_seen |= 1 << slot;
+                commands.push(Command::ShieldDelta { slot, amount });
             }
             other => {
                 return Err(Fault::Reply(format!(
