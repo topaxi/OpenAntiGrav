@@ -464,6 +464,13 @@ OAG_MODS_NO_LICENSE = { text = "NO LICENSE STATED", human = false }
 OAG_MODS_LICENSE_FILE = { text = "SEE %s", human = false }
 OAG_MODS_NOTHING = { text = "NOTHING", human = false }
 OAG_MODS_BUILT_IN = { text = "BUILT IN", human = false }
+OAG_MODS_ENABLED = { text = "ENABLED", human = false }
+OAG_MODS_ON = { text = "ON", human = false }
+OAG_MODS_OFF = { text = "OFF", human = false }
+OAG_MODS_TURNED_OFF = { text = "NOTHING, TURNED OFF", human = false }
+OAG_MODS_ALWAYS_ON = { text = "BUILT IN: CARRIES OPTIONS AND THIS PAGE, ALWAYS ON", human = false }
+OAG_MODS_NOT_LOADED = { text = "DID NOT LOAD: NOTHING TO SWITCH", human = false }
+OAG_MODS_LEFT_OUT = { text = "LEFT OUT: %s", human = false }
 
 # The line under a split race's pause - `crates/game/src/main/session/pause.rs`.
 # Read by Rust, not by a `menu.toml` row. `%s` is substituted left to right: the

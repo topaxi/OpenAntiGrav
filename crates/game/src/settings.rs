@@ -135,6 +135,9 @@ pub struct Settings {
     pub ai: Ai,
     #[serde(default)]
     pub log: Log,
+    /// Which mods are turned off on the MODS page.
+    #[serde(default)]
+    pub mods: Mods,
     /// Developer switches, read in debug builds only (see [`Dev`]).
     #[serde(default, skip_serializing_if = "Dev::is_empty")]
     pub dev: Dev,
@@ -192,6 +195,17 @@ pub struct Log {
     /// [`oag_log::tool::FILE_FILTER`]. The terminal is untouched by it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub filter: Option<String>,
+}
+
+/// The MODS page's switches, by mod id (`oag_mod::Manifest::id`).
+///
+/// A set of the mods turned **off**, so a mod installed later is on until the player
+/// says otherwise. An id no installed mod has is kept: a mod moved out of the search
+/// path and back stays off. A `BTreeSet` so the rewrite [`load`] makes is stable.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Mods {
+    #[serde(default)]
+    pub disabled: std::collections::BTreeSet<String>,
 }
 
 /// What the opponents are like.

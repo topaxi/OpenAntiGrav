@@ -31,7 +31,7 @@ fn check(title: &'static oag_title::Title, source: &std::path::Path) {
     let Some(mods) = example_mods() else {
         return;
     };
-    let installed = Installed::for_title(&mods, title, &|_| false);
+    let installed = Installed::for_title(&mods, &[], title, &|_| false);
     assert!(installed.failed.is_empty(), "{:?}", installed.failed);
     let [custom]: [Custom; 1] = installed.campaigns.try_into().expect("one campaign");
     let catalogue = oag_game::remix::catalogue(&source.display().to_string())
@@ -153,7 +153,7 @@ fn the_example_campaign_is_for_no_other_title() {
         oag_pure::TITLE,
         oag_2048::TITLE,
     ] {
-        let installed = Installed::for_title(&mods, title, &|_| true);
+        let installed = Installed::for_title(&mods, &[], title, &|_| true);
         assert!(installed.campaigns.is_empty() && installed.failed.is_empty());
     }
 }

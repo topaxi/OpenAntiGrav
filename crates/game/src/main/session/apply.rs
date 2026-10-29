@@ -796,8 +796,16 @@ impl Session {
                 return;
             }
             "pilot.low" | "pilot.high" => return,
-            // The MODS page only moves its detail lines; nothing is stored.
-            oag_game::mods::SELECTED => return,
+            // The MOD row moves the detail lines and the ENABLED row; nothing is stored.
+            oag_game::mods::SELECTED => {
+                self.resupply_mod_switch();
+                return;
+            }
+            // Saved by the switch itself, into `[mods] disabled`, and rebuilt live.
+            oag_game::mods::ENABLED => {
+                self.switch_selected_mod(text == "on");
+                return;
+            }
             other => {
                 warn!("nothing applies {other}");
                 return;

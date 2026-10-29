@@ -182,7 +182,7 @@ pub(super) fn extra_tiles(
     title: &oag_title::Title,
     updated: bool,
 ) -> Vec<ExtraTile> {
-    let built = crate::mods::Mods::load().and_then(|mods| {
+    let built = crate::mods::Mods::load_for_profile().and_then(|mods| {
         mods.build(
             oag_ui::menu::BUILT_IN,
             language,

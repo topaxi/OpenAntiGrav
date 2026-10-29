@@ -18,6 +18,7 @@ fn listing(title: &str, problem: Option<&str>) -> Listing {
 fn scanned(listings: Vec<Listing>) -> Scan {
     Scan {
         files: listings.iter().map(|l| l.path.clone()).collect(),
+        mod_files: Vec::new(),
         listings,
         task: None,
         begun: true,
@@ -499,4 +500,40 @@ fn a_file_is_offered_only_for_the_titles_it_lists() {
     let why = not_offered(&l, Some(oag_hd::TITLE)).unwrap();
     assert!(why.contains("Wipeout Pulse"), "{why}");
     assert_eq!(not_offered(&l, None), None);
+}
+
+#[test]
+fn a_mod_turned_off_takes_its_tracks_off_the_custom_list_and_the_search_paths_stay() {
+    let mut scan = scanned(vec![listing("Own", None), listing("Modded", None)]);
+    let modded = PathBuf::from("/tracks/Modded.wtrk");
+    let own = PathBuf::from("/tracks/Own.wtrk");
+    // A file the search path found and a mod carries too stays when the mod goes.
+    scan.mod_files = vec![modded.clone()];
+    scan.set_mod_files(std::slice::from_ref(&own));
+    let values: Vec<String> = (scan.choices(&StringTable::default()).iter())
+        .map(|choice| choice.value.clone())
+        .collect();
+    assert_eq!(
+        values,
+        vec![value(&own)],
+        "the mod's track is gone, the own one kept"
+    );
+    scan.set_mod_files(&[]);
+    assert_eq!(
+        scan.files,
+        vec![own],
+        "a search-path file is never a mod's to drop"
+    );
+}
+
+#[test]
+fn a_mod_turned_on_before_the_scan_lists_its_tracks() {
+    let mut scan = Scan::new(&[], &[], None);
+    let file = PathBuf::from("/mods/hillside/tracks/hillside.track.toml");
+    scan.set_mod_files(std::slice::from_ref(&file));
+    assert_eq!(scan.files, vec![file.clone()]);
+    scan.set_mod_files(std::slice::from_ref(&file));
+    assert_eq!(scan.files, vec![file], "the same file twice is listed once");
+    scan.set_mod_files(&[]);
+    assert!(scan.is_empty(), "and none once the mod is off");
 }

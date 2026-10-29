@@ -44,7 +44,7 @@ fn folder(root: &Path, manifest: &str, menu: &str) {
 }
 
 fn build(base: &Path, title: &'static oag_title::Title) -> mods::Built {
-    Mods::load_from(&[base.to_path_buf()])
+    Mods::load_from(&[base.to_path_buf()], &Default::default())
         .unwrap()
         .build(
             BUILT_IN,

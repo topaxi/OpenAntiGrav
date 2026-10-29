@@ -43,6 +43,9 @@ pub const CUSTOM: &str = "CUSTOM";
 #[derive(Debug, Default)]
 pub struct Scan {
     files: Vec<PathBuf>,
+    /// The part of [`Self::files`] the installed mods that are on carry
+    /// ([`Self::set_mod_files`]).
+    mod_files: Vec<PathBuf>,
     listings: Vec<Listing>,
     task: Option<Task<Vec<Listing>>>,
     /// Whether the files have been read, or are being.
@@ -72,6 +75,7 @@ impl Scan {
     pub fn new(own: &[PathBuf], bases: &[PathBuf], cache_file: Option<PathBuf>) -> Self {
         Self {
             files: oag_source::tracks::all_in(own, bases),
+            mod_files: Vec::new(),
             listings: Vec::new(),
             task: None,
             begun: false,
@@ -87,21 +91,39 @@ impl Scan {
         self.held.store(held, Ordering::Relaxed);
     }
 
-    /// Adds track files found elsewhere (installed mods'), after the search
-    /// path's own. Only before [`Scan::begin`]: a scan already reading keeps
-    /// the list it started with.
-    pub fn add_files(&mut self, files: &[PathBuf]) {
-        if self.begun {
-            log::warn!(
-                "{} mod track file(s) found after the custom track scan began; not listed",
-                files.len()
-            );
+    /// Makes `files` the installed mods' track files, after the search path's own:
+    /// what the mods that are on carry (`oag_game::campaign::custom::Installed::tracks`).
+    /// A file the last call named and this one does not is dropped from the list, read
+    /// or not, so a mod turned off on the MODS page takes its tracks with it. A new one
+    /// joins the list; on a scan already read, the scan waits out its thread and reads
+    /// again (the cache makes the files it has seen cheap), so the row offers it now.
+    pub fn set_mod_files(&mut self, files: &[PathBuf]) {
+        let own_too = |path: &PathBuf| self.files.contains(path) && !self.mod_files.contains(path);
+        let gone: Vec<PathBuf> = (self.mod_files.iter())
+            .filter(|path| !files.contains(path))
+            .cloned()
+            .collect();
+        let new: Vec<PathBuf> = (files.iter())
+            .filter(|path| !self.files.contains(path))
+            .cloned()
+            .collect();
+        let kept: Vec<PathBuf> = files
+            .iter()
+            .filter(|path| !own_too(path))
+            .cloned()
+            .collect();
+        self.files.retain(|path| !gone.contains(path));
+        self.listings
+            .retain(|listing| !gone.contains(&listing.path));
+        self.mod_files = kept;
+        if new.is_empty() {
             return;
         }
-        for file in files {
-            if !self.files.contains(file) {
-                self.files.push(file.clone());
-            }
+        self.files.extend(new);
+        if self.begun {
+            self.finish();
+            self.begun = false;
+            self.begin();
         }
     }
 

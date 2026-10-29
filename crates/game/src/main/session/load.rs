@@ -69,6 +69,9 @@ impl Session {
         self.cli_foreign_track = prepared.race_options.foreign_track.clone();
         self.race_options = Some(prepared.race_options);
         self.music_discs = prepared.music_discs;
+        // The mods' tracks join RACE REMIX's CUSTOM list (`docs/tools/mods.md`).
+        self.custom_tracks
+            .set_mod_files(&prepared.shell.custom_campaigns.tracks);
         self.shell = Some(prepared.shell);
         self.prefetch_pending = prepared.prefetch;
         let assets = prepared.loading_assets;

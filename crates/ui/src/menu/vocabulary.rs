@@ -352,9 +352,13 @@ pub enum ValueSource {
     Weapons,
     /// Every mod this run has, the built-in one first: its name as the label, its id as the
     /// value, and a mod that did not load listed dimmed with its error as the reason
-    /// (`oag_game::mods::Listing`). The MODS page is read-only, so the row only moves the
-    /// detail lines under it.
+    /// (`oag_game::mods::Listing`). The row moves the detail lines and the ENABLED row
+    /// under it; nothing stores it.
     Mods,
+    /// The MODS page's ENABLED row for the mod the MOD row is on: `on` and `off`, or one
+    /// dimmed value with the reason for a mod that cannot be switched (the built-in, a
+    /// candidate that never opened). Re-supplied each time the MOD row moves.
+    ModSwitch,
 }
 
 impl ValueSource {
@@ -399,6 +403,7 @@ impl ValueSource {
             Self::KillTargets => "kill_targets",
             Self::Weapons => "weapons",
             Self::Mods => "mods",
+            Self::ModSwitch => "mod_switch",
         }
     }
 
@@ -434,6 +439,7 @@ impl ValueSource {
             "kill_targets" => Some(Self::KillTargets),
             "weapons" => Some(Self::Weapons),
             "mods" => Some(Self::Mods),
+            "mod_switch" => Some(Self::ModSwitch),
             _ => None,
         }
     }

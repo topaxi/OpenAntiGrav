@@ -66,7 +66,7 @@ fn zipped(path: &Path, method: CompressionMethod) {
 
 /// The main page's labels in drawn order for a mod search over `base`.
 fn labels(base: &Path, title: &'static oag_title::Title) -> (Vec<String>, Vec<String>) {
-    let mods = Mods::load_from(&[base.to_path_buf()]).unwrap();
+    let mods = Mods::load_from(&[base.to_path_buf()], &Default::default()).unwrap();
     let built = mods
         .build(
             oag_ui::menu::BUILT_IN,

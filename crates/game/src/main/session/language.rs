@@ -62,11 +62,12 @@ impl Session {
         let Some(race_options) = self.race_options.as_ref() else {
             return;
         };
-        let Some((definition, mods, custom_campaigns)) = self.shell.as_ref().map(|shell| {
+        let Some((definition, mods, custom_campaigns, rebuild)) = self.shell.as_ref().map(|shell| {
             (
                 shell.definition.clone(),
                 shell.mods.clone(),
                 shell.custom_campaigns.clone(),
+                shell.rebuild,
             )
         })
         else {
@@ -100,6 +101,7 @@ impl Session {
         let mut shell = Shell::from_boot(title, definition, &boot_shell);
         shell.mods = mods;
         shell.custom_campaigns = custom_campaigns;
+        shell.rebuild = rebuild;
         // Decoded once at boot and language-independent, so it rides across.
         shell.menu_sfx = self.shell.as_ref().and_then(|old| old.menu_sfx.clone());
         let mode = self.race_mode();

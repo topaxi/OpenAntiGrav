@@ -45,7 +45,13 @@ fn example_mods() -> [oag_mod::Mod; 2] {
 /// A track file the example names: its own, or `oag.hillside:` Hillside's.
 fn files(name: &str) -> Result<TrackFile, String> {
     let [campaign, hillside] = example_mods();
-    track_file_in(&[&campaign, &hillside], &campaign, "wipeout-pulse", name)
+    track_file_in(
+        &[&campaign, &hillside],
+        &[],
+        &campaign,
+        "wipeout-pulse",
+        name,
+    )
 }
 
 fn example() -> Custom {
@@ -415,7 +421,7 @@ fn scratch_mod(name: &str, campaign: &str, broken: bool) -> oag_mod::Mod {
 fn installed_skips_a_title_the_mod_is_not_for_and_names_a_broken_campaign() {
     needs_examples!();
     let module = scratch_mod("installed", example_text(), true);
-    let pulse = Installed::for_title([&module, &hillside()], oag_pulse::TITLE, &|_| true);
+    let pulse = Installed::for_title([&module, &hillside()], &[], oag_pulse::TITLE, &|_| true);
     assert_eq!(pulse.campaigns.len(), 1, "{:?}", pulse.failed);
     assert!(matches!(
         pulse.campaigns[0].event("grid0_3_2").unwrap().pilot,
@@ -424,7 +430,7 @@ fn installed_skips_a_title_the_mod_is_not_for_and_names_a_broken_campaign() {
     assert_eq!(pulse.failed.len(), 1);
     assert!(pulse.failed[0].1.starts_with("campaigns/broken.toml"));
     assert!(pulse.get("oag.example-campaign/night-run").is_some());
-    let pure = Installed::for_title([&module, &hillside()], oag_pure::TITLE, &|_| true);
+    let pure = Installed::for_title([&module, &hillside()], &[], oag_pure::TITLE, &|_| true);
     assert!(pure.campaigns.is_empty() && pure.failed.is_empty());
 }
 
@@ -439,7 +445,7 @@ fn a_track_file_in_a_zipped_mod_is_refused_by_name() {
         ("campaigns/night-run.toml", example_text().as_bytes()),
     ]));
     let module = oag_mod::Mod::from_container(oag_mod::Container::memory("test", files)).unwrap();
-    let installed = Installed::for_title([&module, &hillside()], oag_pulse::TITLE, &|_| true);
+    let installed = Installed::for_title([&module, &hillside()], &[], oag_pulse::TITLE, &|_| true);
     assert!(installed.campaigns.is_empty());
     assert!(
         installed.failed[0].1.contains("folder mod"),
@@ -454,14 +460,14 @@ fn a_campaign_on_a_disc_that_is_not_here_is_left_out_by_name() {
     let text =
         example_text().replacen("track = \"03_Track\"", "track = \"wipeout-hd:03_Track\"", 1);
     let module = scratch_mod("cross-disc", &text, false);
-    let without = Installed::for_title([&module, &hillside()], oag_pulse::TITLE, &|_| false);
+    let without = Installed::for_title([&module, &hillside()], &[], oag_pulse::TITLE, &|_| false);
     assert!(without.campaigns.is_empty());
     assert!(
         without.failed[0].1.contains("wipeout-hd"),
         "{:?}",
         without.failed
     );
-    let with = Installed::for_title([&module, &hillside()], oag_pulse::TITLE, &|slug| {
+    let with = Installed::for_title([&module, &hillside()], &[], oag_pulse::TITLE, &|slug| {
         slug == "wipeout-hd"
     });
     assert_eq!(with.campaigns.len(), 1);

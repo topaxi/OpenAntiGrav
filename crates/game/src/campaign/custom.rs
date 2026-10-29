@@ -109,9 +109,11 @@ pub fn mod_track_file(module: &oag_mod::Mod, name: &str) -> Result<TrackFile, St
 
 /// The track file an event's `file` names: `<mod id>:<path>` in another
 /// installed mod, which must be for `slug` as well, or a path in `module`, the
-/// campaign's own. A mod that is not installed refuses the event by name.
+/// campaign's own. A mod that is not installed, or that the player turned off
+/// (`off`, by id), refuses the event by name.
 fn track_file_in(
     mods: &[&oag_mod::Mod],
+    off: &[&str],
     module: &oag_mod::Mod,
     slug: &str,
     name: &str,
@@ -119,6 +121,11 @@ fn track_file_in(
     let Some((mod_id, path)) = name.split_once(':') else {
         return mod_track_file(module, name);
     };
+    if off.contains(&mod_id) {
+        return Err(format!(
+            "file {name:?}: mod {mod_id:?} is turned off on the MODS page"
+        ));
+    }
     let other = mods
         .iter()
         .find(|other| other.manifest.id == mod_id)
@@ -267,16 +274,21 @@ pub struct Launch {
 
 /// RACE CAMPAIGN as a page picking between the disc's campaign and each of
 /// `installed`'s (ADR-0077), and the MODS page's ADDS line naming each. One left
-/// out is offered nowhere and named in the log only. With none the tree is
-/// untouched.
+/// out is offered nowhere, named in the log and in its mod's MODS entry
+/// ([`crate::mods::Listing::problems`]). With none the tree is untouched.
 pub fn add_picker(
     definition: &mut oag_ui::menu::Definition,
     listing: &mut [crate::mods::Listing],
     installed: &Installed,
     strings: &oag_ui::language::StringTable,
 ) {
+    let (id, english) = crate::mods::words::LEFT_OUT;
+    let left_out = strings.get(id).unwrap_or(english);
     for (mod_id, reason) in &installed.failed {
         log::error!("mod {mod_id}: campaign left out: {reason}");
+        if let Some(entry) = listing.iter_mut().find(|entry| &entry.id == mod_id) {
+            entry.problems.push(left_out.replace("%s", reason));
+        }
     }
     for entry in listing.iter_mut() {
         for custom in installed.campaigns.iter().filter(|c| c.mod_id == entry.id) {
@@ -708,12 +720,16 @@ impl Installed {
     /// Reads and compiles every campaign the mods carry for `title`: a mod or
     /// campaign whose `titles` leave this title out is skipped quietly, a broken
     /// one, or one with an event on a disc `has_disc` (by title slug) says this
-    /// machine cannot open, is named in [`Self::failed`] and offered nowhere.
+    /// machine cannot open, is named in [`Self::failed`] and offered nowhere. So is
+    /// one racing a track of a mod in `off` (turned off by the player:
+    /// [`crate::mods::Mods::disabled`]), whose reason says so rather than "not
+    /// installed". `mods` is the mods that are on ([`crate::mods::Mods::player`]).
     /// Empty on a title whose campaign does not draw the hex grid
     /// ([`oag_title::Campaign::custom_campaigns`]).
     #[must_use]
     pub fn for_title<'a>(
         mods: impl IntoIterator<Item = &'a oag_mod::Mod>,
+        off: &[&str],
         title: &'static oag_title::Title,
         has_disc: &dyn Fn(&str) -> bool,
     ) -> Self {
@@ -751,7 +767,7 @@ impl Installed {
                         return Ok(None);
                     }
                     let custom = compile(&def, &found.mod_id, title, &pilots, &|name| {
-                        track_file_in(&mods, module, &slug, name)
+                        track_file_in(&mods, off, module, &slug, name)
                     })?;
                     if let Some(missing) = custom.other_discs(title).find(|slug| !has_disc(slug)) {
                         return Err(format!(

@@ -186,7 +186,7 @@ fn a_walk_of_the_menus_sounds_each_cue_on_the_tick_of_its_press() {
         // title-less tree is every vanilla row, Pulse's and Pure's own show the two split
         // rows there, and none of that is what the cues are being checked on.
         let mut menu = Menu::new(
-            oag_game::mods::Mods::load()
+            oag_game::mods::Mods::load(&Default::default())
                 .expect("the built-in mods")
                 .build(
                     oag_ui::menu::BUILT_IN,
