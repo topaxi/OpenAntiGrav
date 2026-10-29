@@ -18,7 +18,7 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow, bail};
-use oag_game::drive::{Focus, Next, Resolved, Row, Screen, Script, Select, SetChoice, State, Step};
+use oag_game::drive::{Focus, Next, Opt, Resolved, Row, Screen, Script, Select, SetChoice, State, Step};
 use oag_gameplay::input::Button;
 use oag_ui::menu::{Entry, Value};
 
@@ -33,9 +33,14 @@ use crate::stage::Stage;
 /// against `within`, so this is what bounds a load that never ends.
 const WALL: Duration = Duration::from_secs(300);
 
-/// Nap taken on a frame that is waiting for a worker thread, so a loading screen is not spun
-/// through at thousands of frames a second.
+/// Nap taken on a loading screen, so it is not spun through at thousands of frames a second.
+/// Its ticks are not counted against a step's `within`.
 const LOADING_NAP: Duration = Duration::from_millis(2);
+
+/// How long a frame spent *waiting* takes: one tick of real time, as in a window. Threads the
+/// menus start (the custom-track check, a picker's distance worker) run on the wall clock, so a
+/// wait that spun through its ticks in a millisecond would time out before they could answer.
+const WAIT_FRAME: Duration = Duration::from_micros(16_667);
 
 /// Runs `script` against a headless session.
 ///
@@ -67,12 +72,13 @@ pub(crate) fn run(app: &mut App, script: Script, state_log: Option<&Path>) -> Re
         started: Instant::now(),
     };
     driver.observe()?;
-    for (line, step) in &script.steps {
+    for (number, (line, step)) in script.steps.iter().enumerate() {
         driver.reset_budget();
         if let Err(why) = driver.exec(step) {
             driver.out.flush().ok();
             bail!(
-                "drive: line {line}: {step}: {why}\n  last state: {}",
+                "drive: step {} (line {line}): {step}: {why}\n  last state: {}",
+                number + 1,
                 driver.last.to_line()
             );
         }
@@ -121,6 +127,16 @@ impl Driver {
         Ok(())
     }
 
+    /// A frame spent waiting for something to happen: [`Self::frame`], held to real time.
+    fn wait_frame(&mut self) -> Result<()> {
+        let began = Instant::now();
+        self.frame(None)?;
+        if self.last.stage != "loading" {
+            std::thread::sleep(WAIT_FRAME.saturating_sub(began.elapsed()));
+        }
+        Ok(())
+    }
+
     /// Spends a tick of the running step's budget, failing when it is gone. Time on a loading
     /// screen is bounded by the wall clock alone.
     fn spend(&mut self, within: u32) -> Result<()> {
@@ -158,7 +174,7 @@ impl Driver {
     fn tap(&mut self, button: Button, within: u32) -> Result<()> {
         while self.last.screen.as_ref().is_some_and(|s| s.busy) {
             self.spend(within)?;
-            self.frame(None)?;
+            self.wait_frame()?;
         }
         self.frame(Some(button))?;
         self.frame(None)
@@ -172,14 +188,14 @@ impl Driver {
                     if self.last.stage == "frontend" {
                         self.tap(Button::Start, *within)?;
                     } else {
-                        self.frame(None)?;
+                        self.wait_frame()?;
                     }
                 }
             }
             Step::Until { conds, within } => {
                 while !self.last.satisfies(conds) {
                     self.spend(*within)?;
-                    self.frame(None)?;
+                    self.wait_frame()?;
                 }
             }
             Step::Expect { conds } => {
@@ -197,6 +213,10 @@ impl Driver {
                         Next::Press(button) => {
                             self.spend(*within)?;
                             self.tap(button, *within)?;
+                        }
+                        Next::Wait(reason) => {
+                            self.spend(*within).map_err(|e| anyhow!("{e}; {reason}"))?;
+                            self.wait_frame()?;
                         }
                     }
                 }
@@ -222,13 +242,13 @@ impl Driver {
         loop {
             while self.last.screen.as_ref().is_some_and(|s| s.busy) {
                 self.spend(within)?;
-                self.frame(None)?;
+                self.wait_frame()?;
             }
             // A page that has not opened yet is waited for, not failed: `select` straight after a
             // `press cross` that opens it.
             if self.screen().is_err() {
                 self.spend(within)?;
-                self.frame(None)?;
+                self.wait_frame()?;
                 continue;
             }
             match select.next(self.screen()?).map_err(|why| anyhow!(why))? {
@@ -237,6 +257,7 @@ impl Driver {
                     self.spend(within)?;
                     self.tap(button, within)?;
                 }
+                Next::Wait(_) => self.wait_frame()?,
             }
         }
     }
@@ -418,7 +439,11 @@ fn page_screen(stage: &MenuStage) -> Screen {
                     values.get(*current).map(|choice| choice.value.clone()),
                     values
                         .iter()
-                        .map(|choice| (choice.value.clone(), choice.label.clone()))
+                        .map(|choice| Opt {
+                            value: choice.value.clone(),
+                            label: choice.label.clone(),
+                            unavailable: choice.unavailable.clone(),
+                        })
                         .collect(),
                 ),
                 Entry::Toggle { setting, .. } => (

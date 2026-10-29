@@ -112,13 +112,23 @@ fn a_row_is_found_by_id_setting_label_or_index() {
 fn a_choice_is_stepped_until_it_reads_the_value_and_refuses_one_it_lacks() {
     let mut list = rows(&[("MODE", None, Some("race.mode"))]);
     list[0].kind = "choice";
-    list[0].values = vec![("a".into(), "Alpha".into()), ("b".into(), "Beta".into())];
+    list[0].values = vec![
+        Opt { value: "a".into(), label: "Alpha".into(), unavailable: None },
+        Opt { value: "b".into(), label: "Beta".into(), unavailable: None },
+        Opt { value: "/x/c.toml".into(), label: "C".into(), unavailable: Some("still checking".into()) },
+    ];
     list[0].value = Some("a".into());
     let mut set = SetChoice::new("race.mode", "Beta");
     assert_eq!(set.next(&screen(0, None, list.clone())), Ok(Next::Press(Button::Right)));
     list[0].value = Some("b".into());
     assert_eq!(set.next(&screen(0, None, list.clone())), Ok(Next::Done));
-    let why = SetChoice::new("race.mode", "gamma").next(&screen(0, None, list)).unwrap_err();
+    let Ok(Next::Wait(why)) = SetChoice::new("race.mode", "c.toml").next(&screen(0, None, list.clone())) else {
+        panic!("an option that cannot be used yet is waited for, and a file is named by its file name");
+    };
+    assert!(why.contains("cannot use it yet: still checking"), "{why}");
+    let Ok(Next::Wait(why)) = SetChoice::new("race.mode", "gamma").next(&screen(0, None, list)) else {
+        panic!("a value the row lacks is waited for, in case a thread is still filling the list");
+    };
     assert!(why.contains("does not offer") && why.contains("a=\"Alpha\""), "{why}");
 }
 

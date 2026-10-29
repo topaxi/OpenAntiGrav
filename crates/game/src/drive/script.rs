@@ -228,9 +228,10 @@ impl Script {
                 let [pair] = words.as_slice() else {
                     return Err("set takes one setting=value".into());
                 };
-                let Cond { key, value, negated: false } = Cond::parse(pair)? else {
-                    return Err("set takes setting=value, not !=".into());
+                let Some((key, value)) = pair.split_once('=').filter(|(key, _)| !key.is_empty()) else {
+                    return Err(format!("{pair:?} is not setting=value"));
                 };
+                let (key, value) = (key.to_string(), value.to_string());
                 Step::Set { setting: key, value, within }
             }
             "press" => {

@@ -6,6 +6,18 @@
 
 use serde::Serialize;
 
+/// One option of a choice row.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+pub struct Opt {
+    /// What the setting stores.
+    pub value: String,
+    /// What the row shows.
+    pub label: String,
+    /// Why this option cannot be used yet or at all, when it cannot. The menus still offer it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unavailable: Option<String>,
+}
+
 /// One row of the screen that has focus: a menu row, a picker entry.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct Row {
@@ -24,9 +36,9 @@ pub struct Row {
     /// What a `choice` row is set to (the stored value, not the label), or `on`/`off`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub value: Option<String>,
-    /// The options a `choice` row steps through, as `(value, label)`.
+    /// The options a `choice` row steps through.
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub values: Vec<(String, String)>,
+    pub values: Vec<Opt>,
     /// `false` for a row greyed out.
     pub enabled: bool,
 }

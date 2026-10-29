@@ -19,7 +19,7 @@ pub mod state;
 
 pub use script::{Cond, Script, Step};
 pub use select::{Next, Select, SetChoice};
-pub use state::{Focus, Resolved, Row, Screen, State};
+pub use state::{Focus, Opt, Resolved, Row, Screen, State};
 
 #[cfg(test)]
 mod tests;
