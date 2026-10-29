@@ -12,6 +12,7 @@
 mod art;
 mod blender;
 mod format;
+mod motion;
 mod schema;
 
 /// A `tests/*.rs` file missing from every `tests/it*.rs` listing compiles into

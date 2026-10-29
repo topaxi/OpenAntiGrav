@@ -78,8 +78,8 @@ colour, with the drawing owned by the executable.
    `.rcsmodel` material model and HD its shader table; those are *checked, applies, not wired*
    until a lane opens for them, and the track-file page says so.
 
-What stays absent in 1.x after this (named in every loader report): clouds, scenery and its
-animation, track particle emitters, sound emitters, visibility sets (PVS), shadow hulls and the Zone
+What stays absent in 1.x after this (named in every loader report): clouds, a texture's own
+animation (keyframed node motion is decision 10), track particle emitters, sound emitters, visibility sets (PVS), shadow hulls and the Zone
 variant. A track without PVS draws every art mesh every frame, which is a cost to measure, not a
 reason to author visibility by hand.
 
@@ -102,12 +102,25 @@ reason to author visibility by hand.
     - **Visual only in 1.x.** Collision, pads and the spline never move: a moving collider is
       simulation state, belongs in the world hash and in replays, and is its own decision.
     - **A baked light does not follow a moving sun.** Vertex colours are baked for the sun's
-      pose at time zero. A sun that moves relights what is lit live (ships, the flare, `mapped`
-      shadows, the sky if it reads the sun) and leaves the baked track as it is; the operator
+      pose at time zero. A sun that moves relights what is lit live (the flare and the `mapped`
+      shadows since 2026-10-29; the ships' hull rig is built once at load and keeps the time-zero
+      pose, open) and leaves the baked track as it is; the operator
       says so when it bakes a track whose sun is animated. Several baked sets crossfaded over
       time (a day cycle) is a later minor version.
     - Playback is the race clock in ticks, looping or clamped per animation (`oag_loop`), never
       the wall clock; `--anim-seconds` pins it as it does for a disc circuit.
+    - **Built 2026-10-29** (branch `motion-pads`), as settled there: a moving art node carries
+      its rest pose as glTF `translation`/`rotation`/`scale` and its vertices in its own space (a
+      still one keeps the identity, and a rest pose with no animation is refused); the sun is an
+      `oag/sun` node of a rest rotation, and its direction at a time is `[art.sun] direction`
+      turned by the rotation from rest, so no lamp axis convention is assumed. Channels are
+      `LINEAR` (rotation by slerp) or `STEP`; `CUBICSPLINE` is refused, and so is a channel on
+      anything but an art node or the sun. The renderer samples through a third `Motion`
+      (`oag_mesh::mesh::Keyed`): the `.rcsanimclip` form's evenly spaced, always-wrapping keys
+      cannot carry uneven times or a held end. The Blender add-on samples the world pose per
+      frame (easing, constraints and parents arrive as seen) and imports keys back. The lens
+      flare follows a turning sun unless it names its own direction, which does not turn; the hull
+      rig keeps the pose at time zero (open). Format: `docs/formats/track-file.md`, "Motion".
 
 11. **No trigger events in 1.x** (maintainer, 2026-10-29). Animations are time-driven against the
     race clock and nothing else starts them: "after lap one, move X" is not expressible, and the
@@ -209,6 +222,19 @@ reason to author visibility by hand.
     - The Blender add-on writes it from the Art panel's **Own sky**: a gradient's two colours and
       one image per face. The committed `blender_loop` fixture carries one (gradient, its
       generated checker overhead), borrows nothing, and loads natively on HD with its art.
+
+15. **Pad plates are art tagged `oag_pad`** (`speedup` or `weapon`; lead, 2026-10-29, built on
+    branch `motion-pads`). The loader routes a tagged mesh into the host's pad model of that kind
+    instead of the track model, so the existing rule holds unchanged: a weapon plate is decoded in
+    every mode and drawn only where weapons are on. A plate is visual only (the pad volumes are
+    the pads) and never moves. The disc exporter writes each circuit's own plates, and decision
+    7's proof holds them equal to the `.vex` build draw for draw.
+
+16. **`[art] draw_collision`** (maintainer, 2026-10-29; built on branch `motion-pads`): `true`
+    draws the flat-shaded collision (floor and walls) under the art, merged into one model; absent
+    is `false`, the art alone, as before. An explicit switch rather than a guess at whether the art
+    covers the road: a track of a few decals or a canopy shows no road without it. The Blender
+    add-on's *Draw collision* checkbox writes it.
 
 ## Consequences
 

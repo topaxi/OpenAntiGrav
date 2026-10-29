@@ -7,12 +7,13 @@ use oag_vex::track::{AiTrack, StartPosition};
 /// these in its report rather than borrowing them from the host title: absent
 /// means absent (CLAUDE.md, "Never invent what the assets already author").
 /// The art meshes, their textures, the sky, the sun, the ambient and the lens
-/// flare are [`Track::art`] (ADR-0076), present or not per file.
+/// flare are [`Track::art`] (ADR-0076), present or not per file, and so is
+/// keyframed node motion (`Art::animations`); a texture's own animation is not.
 pub const ABSENT: [&str; 8] = [
     "fog",
     "point lights",
     "clouds",
-    "scenery animation",
+    "texture animation",
     "track particle emitters",
     "sound emitters",
     "visibility sets (PVS)",

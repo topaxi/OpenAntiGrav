@@ -584,6 +584,10 @@ pub fn load(options: &Options) -> Result<Loaded> {
         Some(sky)
     } else if let Some(entry) = &foreign_art.sky {
         track_inputs::foreign_sky(&mut archives, entry, &mut report)
+    } else if let Some(sky) =
+        track_inputs::host_zone_sky(&mut archives, &track, title, options.mode, &mut report)
+    {
+        Some(sky)
     } else if !vex_geometry {
         None
     } else {
@@ -616,7 +620,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let pad_model = if ps3_pad_model.is_some() {
         ps3_pad_model
     } else if !vex_geometry {
-        None
+        foreign_art.pads.take()
     } else {
         let pads = mesh::build_pads(&track, &track_blob, ps2_track_textures.as_ref())?;
         if pads.indices.is_empty() {
@@ -651,7 +655,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let weapon_pad_model = if rcs_drawn {
         geometry::weapon_pad_model(ps3_weapon_pad_model, options.weapons_on(), &mut report)
     } else if !vex_geometry {
-        None
+        crate::foreign::art::weapon_pads(&mut foreign_art, options.weapons_on(), &mut report)
     } else {
         let pads = mesh::build_weapon_pads(&track, &track_blob, ps2_track_textures.as_ref())?;
         if pads.indices.is_empty() {
@@ -1354,6 +1358,10 @@ pub fn load(options: &Options) -> Result<Loaded> {
     #[cfg(feature = "view")]
     {
         loaded.setup.scenery_fx.sun = foreign_art.sun_shadow;
+        (
+            loaded.setup.scenery_fx.sun_turn,
+            loaded.setup.scenery_fx.flare_turns,
+        ) = (foreign_art.sun_turn, foreign_art.flare_turns);
         if let Some(hull) = foreign_art.hull
             && title.looks.hull_lights.applies(archives.layout.platform)
         {

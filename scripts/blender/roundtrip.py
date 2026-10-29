@@ -1,14 +1,18 @@
 """Headless driver for the add-on (docs/tools/blender.md, `just blender-fixtures`).
 
     blender -b --factory-startup --python-exit-code 1 --python roundtrip.py -- loop <out-dir>
+    blender -b --factory-startup --python-exit-code 1 --python roundtrip.py -- motion <out-dir>
     blender -b --factory-startup --python-exit-code 1 --python roundtrip.py -- reexport <in.track.toml> <out-dir>
     blender -b --factory-startup --python-exit-code 1 --python roundtrip.py -- line <out-dir>
 
 `loop` builds a track from scratch (8 control points, floor, walls, start, one pad
 of each kind, and art: a canopy over the line textured with a generated checker,
-a sun, a fill light, an ambient, its own sky (gradient, checker overhead) and a
-lens flare) and exports
-`blender_loop.track.toml` with `blender_checker.png` beside it. The checker is
+a sun, a fill light, an ambient, its own sky (gradient, checker overhead), a
+lens flare and a plate on each pad) and exports
+`blender_loop.track.toml` with `blender_checker.png` beside it. `motion` is the
+same loop with keyframed motion (ADR-0076 decision 10): an airship box that flies
+and spins on a loop, and a sun that turns and holds, as `blender_motion.track.toml`.
+The checker is
 written here, byte for byte: never disc pixels. `reexport` imports a track
 file with the add-on's importer and exports it again as `<stem>.reexport.track.toml`.
 `line` writes no fixture: it asserts the racing-line paths (computed by default, off by
@@ -27,7 +31,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 import bpy  # noqa: E402
-from mathutils import Vector  # noqa: E402
+from mathutils import Quaternion, Vector  # noqa: E402
 
 import oag_track  # noqa: E402
 from oag_track import racing_line, scene, trackfile  # noqa: E402
@@ -161,13 +165,63 @@ def make_loop(ctx):
     return obj
 
 
-def build_loop(out_dir):
+def add_motion(ctx):
+    """An airship (a box, two material slots) flying a loop over the line, and the sun turning.
+
+    Keys at frames 1, 49 and 97 of a 30 fps scene: the airship, 60 above the first
+    straight (Blender y = 500, where the start's camera looks), goes 400 units along +X
+    and comes back, spinning a full turn about Z (Blender's default Bezier easing,
+    sampled per frame on export), and loops; the sun tilts 30 degrees by frame 61 and
+    holds (clamp).
+    """
+    scene = ctx.scene
+    scene.render.fps, scene.render.fps_base = 30, 1.0
+    scene.frame_start, scene.frame_end = 1, 97
+    mats = []
+    for name, colour in (("hull", (0.8, 0.2, 0.1, 1.0)), ("gondola", (0.2, 0.2, 0.25, 1.0))):
+        mat = bpy.data.materials.new(name)
+        mat.use_nodes = True
+        bsdf = next(n for n in mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+        bsdf.inputs["Base Color"].default_value = colour
+        mats.append(mat)
+    s = 20.0
+    verts = [(x * 2 * s, y * s, z * s) for x in (-1, 1) for y in (-1, 1) for z in (-1, 1)]
+    faces = [(0, 1, 3, 2), (4, 6, 7, 5), (0, 4, 5, 1), (2, 3, 7, 6), (0, 2, 6, 4), (1, 5, 7, 3)]
+    me = bpy.data.meshes.new("airship")
+    me.from_pydata(verts, [], faces)
+    for m in mats:
+        me.materials.append(m)
+    for poly in me.polygons:
+        poly.material_index = 1 if poly.index == 0 else 0
+    # Baked light, dark against the sky: a red hull and a near-black gondola.
+    col = me.color_attributes.new("Col", "FLOAT_COLOR", "CORNER")
+    for poly in me.polygons:
+        for loop in poly.loop_indices:
+            col.data[loop].color = (0.05, 0.05, 0.08, 1.0) if poly.index == 0 else (0.45, 0.04, 0.02, 1.0)
+    me.color_attributes.active_color = col
+    obj = bpy.data.objects.new("airship", me)
+    scene.collection.objects.link(obj)
+    obj.oag_loop = "loop"
+    for frame, x, turn in ((1, -200.0, 0.0), (49, 200.0, math.pi), (97, -200.0, 2 * math.pi)):
+        obj.location = (x, 500.0, 60.0)
+        obj.rotation_euler = (0.0, 0.0, turn)
+        obj.keyframe_insert("location", frame=frame)
+        obj.keyframe_insert("rotation_euler", frame=frame)
+    sun = scene.oag_sun
+    rest = sun.rotation_quaternion.copy()
+    sun.keyframe_insert("rotation_quaternion", frame=1)
+    sun.rotation_quaternion = Quaternion((1.0, 0.0, 0.0), math.radians(30.0)) @ rest
+    sun.keyframe_insert("rotation_quaternion", frame=61)
+    sun.oag_loop = "clamp"
+    scene.frame_set(1)
+
+
+def build_loop(out_dir, motion=False):
     fresh()
     ctx = bpy.context
     obj = make_loop(ctx)
-    ctx.scene.oag_track_id = "blender-loop"
-    ctx.scene.oag_track_title = "Blender Loop"
-    ctx.scene.oag_track_host = "wipeout-pulse"  # its art borrows 03_Track's sky
+    ctx.scene.oag_track_id = "blender-motion" if motion else "blender-loop"
+    ctx.scene.oag_track_title = "Blender Motion" if motion else "Blender Loop"
     ctx.scene.oag_track_notes = "authored headless in Blender with the OAG add-on: 8 control points (chosen, not measured)"
     assert bpy.ops.oag.build_ribbon() == {"FINISHED"}
     assert bpy.ops.oag.add_start() == {"FINISHED"}
@@ -176,8 +230,13 @@ def build_loop(out_dir):
     ctx.scene.cursor.location = (-900.0, 0.0, 0.0)
     assert bpy.ops.oag.add_pad(kind="weapon") == {"FINISHED"}
     add_art(ctx, out_dir)
+    assert bpy.ops.oag.add_pad_plates() == {"FINISHED"}
     obj.oag_cover_light = 96
-    export(os.path.join(out_dir, "blender_loop.track.toml"))
+    # Its art is a canopy and two plates, not the road: draw the collision under it.
+    ctx.scene.oag_draw_collision = True
+    if motion:
+        add_motion(ctx)
+    export(os.path.join(out_dir, "blender_motion.track.toml" if motion else "blender_loop.track.toml"))
 
 
 def export(path):
@@ -290,6 +349,8 @@ def main():
     args = sys.argv[sys.argv.index("--") + 1 :]
     if args[:1] == ["loop"]:
         build_loop(args[1])
+    elif args[:1] == ["motion"]:
+        build_loop(args[1], motion=True)
     elif args[:1] == ["line"]:
         line_checks(args[1])
     elif args[:1] == ["reexport"]:

@@ -25,10 +25,11 @@ next = [0, -1]
 collision_nodes = 2
 speedup_pads = 1
 weapon_pads = 1
-art_meshes = 1
+art_meshes = 3
 
 [art]
 ambient = [0.1, 0.12, 0.15]
+draw_collision = true
 
 [art.skybox]
 faces = [-1, -1, 0, -1, -1, -1]

@@ -7,6 +7,8 @@
 
 use super::*;
 use oag_assets::Archives;
+#[cfg(feature = "view")]
+use oag_trackfile::art::PadPlate;
 use oag_vex::collision::CollisionNode;
 use oag_vex::pads::PadVolume;
 use oag_vex::vex::classes::Classes;
@@ -240,15 +242,29 @@ fn foreign(
     craft_title: &'static oag_title::Title,
     report: &mut Vec<String>,
 ) -> Result<Inputs> {
-    if options.mode == Mode::Zone {
-        anyhow::bail!("Zone is defined by a title's own Zone circuits; a foreign track has none");
-    }
     #[cfg_attr(not(feature = "view"), allow(unused_mut))]
     let (mut f, lines) = crate::foreign::read_any(path)?;
     crate::foreign::check_host(&f, title)
         .and_then(|()| crate::foreign::check_titles(&f, craft_title))
         .map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))?;
     report.extend(lines);
+    if options.mode == Mode::Zone {
+        report.push(
+            "zone: a track file has no Zone variant, so the file's own geometry and spline are \
+             the Zone circuit; what a disc keeps in a circuit's Zone file is named above as \
+             drawn as nothing, and what the title keeps for every Zone race (craft, speed ramp, \
+             HUD, sound, stage grade) is the host's own"
+                .into(),
+        );
+        if let (Some(zone_sky), Some(art)) = (title.race.zone_sky, &f.art)
+            && (art.sky.is_some() || art.skybox.is_some())
+        {
+            report.push(format!(
+                "zone: the file's own sky stands; {}'s Zone sky ({zone_sky}) is not drawn over it",
+                title.name
+            ));
+        }
+    }
     if let Some(host) = &f.host {
         report.push(format!(
             "track file borrows from {host}'s disc; the track source is {}",
@@ -277,6 +293,9 @@ fn foreign(
             let textures = art::resolve_textures(&art, dir, archives, report);
             let extras = art::extras(&art, &textures, report);
             let mut model = art::model(&f.title, &art, textures, report);
+            if art.draw_collision && !model.indices.is_empty() {
+                model = art::under_collision(&flat, model, report);
+            }
             if model.indices.is_empty() {
                 report.push("art: no mesh drawn; the collision is drawn flat-shaded".into());
                 model = flat;
@@ -369,6 +388,25 @@ pub(super) fn export(
     })
 }
 
+/// **The host title's Zone sky for a track file that carries no sky of its own**,
+/// the one Zone-only part that is a title default rather than a circuit's file
+/// (`RaceDefaults::zone_sky`, HD's `ZoneSky.gtf`). `None` for a disc circuit, for
+/// a race that is not Zone and for a title with no Zone sky (Pulse keeps its Zone
+/// sky in the circuit's Zone file, which a track file has none of).
+#[cfg(feature = "view")]
+pub(super) fn host_zone_sky(
+    archives: &mut Archives,
+    track: &str,
+    title: &'static oag_title::Title,
+    mode: Mode,
+    report: &mut Vec<String>,
+) -> Option<Model> {
+    if !track.starts_with("foreign:") || title.race.zone_sky.is_none() {
+        return None;
+    }
+    super::environment::hd_sky_model(archives, track, title.race, mode, report)
+}
+
 /// A track file's sky: the `Skycube` of the host circuit its art names, built
 /// the way a disc circuit's own is. `None`, with the reason in `report`, when
 /// the entry does not read or authors no sky.
@@ -447,6 +485,19 @@ pub(super) fn circuit_art(
     let model = circuit_model(archives, track, blob)?;
     let names = art::texture_names(blob)?;
     let mut out = art::from_model(&model, track, &names);
+    for which in [PadPlate::Speedup, PadPlate::Weapon] {
+        let pads = circuit_pads(archives, track, blob, which)?;
+        out.meshes.extend(
+            art::from_model(&pads, track, &names)
+                .meshes
+                .into_iter()
+                .map(|mut m| {
+                    m.name = format!("{} pad {}", which_name(which), m.name);
+                    m.pad = Some(which);
+                    m
+                }),
+        );
+    }
     art::lights_from_track(&mut out, blob, &oag_vex::vex::nodes(blob)?);
     let moving = model.vertices.iter().filter(|v| v.xform != 0).count();
     let scrolling = model.vertices.iter().filter(|v| v.anim != 0).count();
@@ -472,6 +523,39 @@ pub(super) fn circuit_art(
         }
     }
     Ok(Some(out))
+}
+
+#[cfg(feature = "view")]
+fn which_name(which: PadPlate) -> &'static str {
+    match which {
+        PadPlate::Speedup => "speed",
+        PadPlate::Weapon => "weapon",
+    }
+}
+
+/// A circuit's pad plates of one kind as the race loader builds them
+/// (`mesh::build_pads`, `mesh::build_weapon_pads`, the PS2's texture set beside
+/// it when the file embeds none). Their texture slots index the same `Texture`
+/// nodes the track model's do.
+#[cfg(feature = "view")]
+pub fn circuit_pads(
+    archives: &mut Archives,
+    track: &str,
+    blob: &[u8],
+    which: PadPlate,
+) -> Result<Model> {
+    let build = match which {
+        PadPlate::Speedup => mesh::build_pads,
+        PadPlate::Weapon => mesh::build_weapon_pads,
+    };
+    let mut model = build(track, blob, None)?;
+    if !model.textures.is_empty()
+        && model.textures.iter().all(Option::is_none)
+        && let Some(external) = ps2_texture_set(archives, track)
+    {
+        model = build(track, blob, Some(&external))?;
+    }
+    Ok(model)
 }
 
 /// A circuit's track model as the race loader builds it (the PS2's texture set

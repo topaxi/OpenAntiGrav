@@ -150,6 +150,34 @@ fn race_remix_launches_a_track_file_from_its_custom_title() {
     );
 }
 
+/// MODE Zone on RACE REMIX's CUSTOM title races the file's loop as the Zone circuit:
+/// the launch used to log "a custom track has no Zone circuit" and stay on the page.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn race_remix_launches_a_track_file_in_zone_mode() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let tracks = Path::new(env!("CARGO_MANIFEST_DIR")).join("../trackfile/tests/fixtures");
+    let run = drive(
+        &image,
+        "remix-file-zone",
+        "boot; select remix; press cross; until page=remix; \
+         set race.mode=zone; \
+         set remix.track_title=CUSTOM; set remix.track=oval.track.toml; \
+         select launch_remix; press cross; until stage=race within 3000; ticks 30",
+        Some(&tracks),
+    );
+    assert!(run.output.status.success(), "{}", run.stderr());
+    let last = run.last();
+    assert_eq!(text(last, &["stage"]), Some("race"));
+    assert_eq!(text(last, &["race", "mode"]), Some("zone"));
+    assert!(
+        text(last, &["race", "track_file"]).is_some_and(|path| path.ends_with("oval.track.toml")),
+        "the picked track file is the one raced: {last}"
+    );
+}
+
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn a_row_that_does_not_exist_and_a_wait_that_never_ends_fail_with_the_state() {
