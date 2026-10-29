@@ -39,6 +39,21 @@ impl Fill {
             },
         }
     }
+
+    /// What this fill stamps into the glow mask over its rectangle: `RealGlow` as authored, or
+    /// `None` for a fill that authors none. See [`Self::real_glow`].
+    #[must_use]
+    pub fn glow_stamp(&self) -> Option<Draw> {
+        (self.real_glow > 0).then(|| Draw::GlowStamp {
+            rect: [
+                self.x,
+                self.y,
+                self.width.unwrap_or(0.0),
+                self.height.unwrap_or(0.0),
+            ],
+            value: self.real_glow,
+        })
+    }
 }
 
 fn mean(a: [f32; 4], b: [f32; 4]) -> [f32; 4] {
@@ -86,6 +101,7 @@ impl Screens {
                 self.number(node.value("OffsetX")).unwrap_or(0.0),
                 self.number(node.value("OffsetY")).unwrap_or(0.0),
             ),
+            real_glow: real_glow(node),
             reveal: Vec::new(),
             transition: 0.0,
         })

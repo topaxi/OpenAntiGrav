@@ -410,6 +410,28 @@ pub struct MenuSkin {
     /// at all rather than guessing at Pulse's own numbers - the same rule
     /// [`Self::selected_pulse_period_secs`] states for its own pulse.
     pub help_text: Option<HelpText>,
+    /// What the vertical `<Menu>`'s text rows stamp into the glow mask the frame-end bloom reads,
+    /// for a title whose front end blooms ([`crate::Campaign::frontend_glow`]). See [`MenuGlow`].
+    /// `None` stamps nothing.
+    pub glow: Option<MenuGlow>,
+}
+
+/// The glow-mask references a vertical `<Menu>`'s texts stamp (`Text_Draw`'s `RealGlow` path;
+/// `docs/ui/campaign-screens.md`, "The front end's bloom, wired from the widgets' own attributes").
+///
+/// Read out of EDRAM on Pulse PSP's `Main Menu` over six frames at different pulse phases: six
+/// idle rows stamp `110` (14,526 pixels, flat at every phase), the help line `128` (3,652
+/// pixels), and the selected row a ladder `70 + 15 k` that rises and falls with the row's own
+/// colour pulse (2,674 pixels, 100 to 220 seen). The selected row's reference is
+/// [`MenuSkin::selected_pulse_period_secs`]'s pulse, not a number of its own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MenuGlow {
+    /// An unselected row's reference. `110`: **measured**, and not `RealGlow * alpha / 255` of
+    /// any attribute the `Main Menu` authors (its rows author none, and `TextColor` is opaque), so
+    /// it is the `Menu` widget's own constant.
+    pub row: u8,
+    /// The help line's reference: `helptext0..6`'s authored `RealGlow="128"` at alpha `0xff`.
+    pub help: u8,
 }
 
 /// A row's help text, as `MainMenu_Definition.xml`'s own seven `helptext`
@@ -681,6 +703,7 @@ mod tests {
         list: None,
         settings: None,
         help_text: None,
+        glow: None,
     };
 
     /// The four pitches measured off the original, reproduced by the rule.

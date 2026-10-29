@@ -1417,6 +1417,7 @@
 0x0881a3e0	function	Hud_UpdateSpeedBar	88	hud-bar-tip.md
 0x0897e158	function	Math_Floorf	85	hud-bar-tip.md
 0x0881ad10	function	Hud_UpdateZoneSpeedClass	85	zone-speed-class.md
+0x088a6f38	function	Image_ParseValues	75	hud-boost-smear.md
 0x088a7a5c	function	Image_Draw	80	hud-boost-smear.md
 0x0892a408	function	Trail_Submit	85	exhaust.md
 0x0883f7b8	function	Ship_UpdateBackwardCamera	80	cannon-quake-leachbeam.md

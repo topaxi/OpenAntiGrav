@@ -136,3 +136,14 @@ where `main` moved on from the binary compared. A timer of zero draws the plain 
   screen edge for about a second after a boost starts ([funklayer-zoom.md](../ps3-hdfury-eu/funklayer-zoom.md));
   its HUD draws once.
 - **2048: not checked** (a Vita HUD of HD's lineage; no frame at a boost).
+
+## `Image_Draw`'s glow-mask stamp (2026-10-29, `pulse-glow-rest`)
+
+`Image_Draw` (`0x088a7a5c`) ends its draw array with a stencil stamp: when the field at `param_1 + 0xf4` is above zero it runs
+`Gu_PixelMask(0)`, `Gu_Enable(3)`, `Gu_StencilOp(0, 0, 2)` (KEEP, KEEP, REPLACE) and `Gu_StencilFunc(1, *(param_1 + 0xf4), 0xff)`
+before the `Gu_DrawArray(4, 0x19f, ...)` over the widget's vertices, then `Gu_PixelMask(0xff000000)` and `Gu_Disable(3)` after. The
+field is `RealGlow` (`Image_ParseValues` (`0x088a6f38`, confidence 75: a table of attribute names and destination offsets, `Text_ParseValues`'s shape) passes `param_1 + 0xf4` as the destination of the
+`"RealGlow"` string at `0x08a7f294`, next to `Color1..4`, `DeltaWidth`, `Centred`, `AutoLoad`). So an `Image` stamps the authored
+value as written, not scaled by alpha (`Text_Draw` scales). Confidence 80 (decompile; the stamp's quad, the whole vertex array, is
+read from the draw call). `FUN_0889812c` (the other `Image` draw, flag `+0x2c & 0x200`) does not read `+0xf4`.
+

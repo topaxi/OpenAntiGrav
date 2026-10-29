@@ -415,3 +415,77 @@ fn the_campaign_picker_appears_only_with_a_mod_campaign() {
     let menu = Menu::new(picked);
     assert!(!menu.definition().pages.is_empty());
 }
+
+/// What a blooming title's vertical `<Menu>` stamps into the glow mask (Pulse PSP's `Main Menu`,
+/// EDRAM, six frames): idle rows 110 at every phase, the help line 128, the selected row a
+/// `70 + 15 k` ladder that follows the row's colour pulse.
+#[test]
+fn a_menus_rows_stamp_their_glyph_quads_idle_selected_and_help() {
+    let menu = Menu::new(built_in());
+    let skin = skin();
+    let draws = list(&menu, &no_bindings, None);
+    let glow = |draws: &[Draw]| -> Vec<(String, u8)> {
+        draws
+            .iter()
+            .enumerate()
+            .filter_map(
+                |(at, draw)| match (draw, at.checked_sub(1).map(|p| &draws[p])) {
+                    (Draw::GlowText { value }, Some(Draw::Text { text, .. })) => {
+                        Some((text.clone(), *value))
+                    }
+                    (Draw::GlowText { value }, Some(Draw::FacedText { text, .. })) => {
+                        Some((text.clone(), *value))
+                    }
+                    (Draw::GlowText { .. }, other) => panic!("a stamp after {other:?}"),
+                    _ => None,
+                },
+            )
+            .collect()
+    };
+    let stamps = glow(&draws);
+    let glow_data = skin.glow().expect("Pulse's menu skin carries its glow");
+    let rows = menu.page().entries.len().min(visible());
+    assert!(rows > 2, "a menu with rows to compare");
+    // The pulse's trough: row 0 selected, reference 70, every other row 110, then the help line.
+    assert_eq!(stamps[0].1, 70, "{stamps:?}");
+    assert!(stamps[1..rows].iter().all(|(_, v)| *v == glow_data.row));
+    assert_eq!(glow_data.row, 110);
+    if menu.page().subtitles.first().is_some_and(Option::is_some) {
+        assert_eq!(stamps.last().map(|(_, v)| *v), Some(glow_data.help));
+    }
+
+    // At the pulse's peak the selected row stamps `70 + 150`.
+    let mut peak = skin;
+    peak.tick_pulse(peak.selected_pulse_period_secs().unwrap_or(0.0) / 2.0);
+    let draws = draw_list(
+        &menu,
+        &peak,
+        &no_bindings,
+        &measure,
+        None,
+        &Frame::default(),
+        false,
+    )
+    .flatten();
+    assert_eq!(glow(&draws)[0].1, 220);
+
+    // A skin with no glow stamps nothing (every title but Pulse).
+    let mut none = *oag_pulse::FRONT_END.menu.unwrap();
+    none.glow = None;
+    let plain = Skin::new(
+        Box::leak(Box::new(none)),
+        oag_display::space::Space::PSP,
+        PULSE_MENU_LINE_HEIGHT,
+    );
+    let draws = draw_list(
+        &menu,
+        &plain,
+        &no_bindings,
+        &measure,
+        None,
+        &Frame::default(),
+        false,
+    )
+    .flatten();
+    assert!(glow(&draws).is_empty());
+}

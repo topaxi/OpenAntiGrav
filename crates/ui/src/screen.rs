@@ -158,6 +158,22 @@ impl Text {
         let alpha = (self.color >> 24) as f32;
         (f32::from(self.real_glow) * alpha / 255.0) as u8
     }
+
+    /// [`Self::glow_stamp`] for a screen `elapsed` seconds old, `None` for no stamp: a stamp of `0`,
+    /// or a widget whose `delay` has not run out (it is not drawn yet, so it stamps nothing). An
+    /// `elapsed` that is not finite is a settled still, read at the clock's start.
+    #[must_use]
+    pub fn glow_stamp_at(&self, elapsed: f64) -> Option<u8> {
+        let seconds = if elapsed.is_finite() {
+            elapsed - f64::from(self.delay)
+        } else {
+            0.0
+        };
+        if seconds < 0.0 {
+            return None;
+        }
+        Some(self.glow_stamp(seconds as f32)).filter(|value| *value > 0)
+    }
 }
 
 /// One `Redirect`: a button, and the screen it goes to.
@@ -326,6 +342,14 @@ pub struct Fill {
     /// colour-only `Image` used as a container (`EndRace Results`' `tablebg{r}`)
     /// carries its position there, and its nested widgets already include it.
     pub own_offset: (f32, f32),
+    /// `RealGlow`: the stencil reference this widget stamps over its rectangle, `0` (none) when
+    /// absent. `Image`'s draw (`FUN_088a7a5c`, `0x088a7a5c`) runs `Gu_StencilFunc(ALWAYS,
+    /// RealGlow, 0xff)` with `StencilOp(KEEP, KEEP, REPLACE)` when it is above zero, so the
+    /// authored value goes into the mask as written, **not** scaled by the colour's alpha as a
+    /// `Text`'s is (read from the decompile, confidence 80; no EDRAM frame of a fill with it was
+    /// taken). Pulse authors `128` on scrollbars and the end-of-race `tablehighlight` (colour
+    /// alpha `0x30`) and `1` on full-screen fills.
+    pub real_glow: u8,
     /// The wrapping `<Animation>`'s own `<Key>` timeline - empty for a widget
     /// the XML does not wrap this way. See [`RevealKey`].
     pub reveal: Vec<RevealKey>,

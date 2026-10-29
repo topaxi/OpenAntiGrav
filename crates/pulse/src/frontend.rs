@@ -228,6 +228,15 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
         scale: 1.0,
         color: 0xFFFF_FFFF,
     }),
+    glow: Some(MENU_GLOW),
+};
+
+/// What `Main Menu`'s texts stamp into the glow mask, read out of EDRAM on the PSP
+/// (`oag_title::MenuGlow`): rows `110`, help line `128`. The PS2 pressing uses the same record:
+/// **inherited from PSP**, not measured on the PS2.
+const MENU_GLOW: oag_title::MenuGlow = oag_title::MenuGlow {
+    row: 110,
+    help: 128,
 };
 
 /// [`MENU_SKIN`] again, read off the PS2 pressing's own `Skin.xml` and
@@ -320,6 +329,7 @@ pub const PS2_MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
         scale: 1.0,
         color: 0xFFFF_FFFF,
     }),
+    glow: Some(MENU_GLOW),
 };
 
 #[cfg(test)]

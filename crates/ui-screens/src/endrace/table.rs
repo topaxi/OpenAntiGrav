@@ -257,15 +257,23 @@ pub(super) fn table_layers(
                 let Some(y) = grid.highlight_y(suffix, row) else {
                     continue;
                 };
+                let rect = [
+                    0.0,
+                    y,
+                    authored.width.unwrap_or(0.0),
+                    authored.height.unwrap_or(0.0),
+                ];
                 out.push(Draw::Fill {
-                    rect: [
-                        0.0,
-                        y,
-                        authored.width.unwrap_or(0.0),
-                        authored.height.unwrap_or(0.0),
-                    ],
+                    rect,
                     color: argb_to_rgba(authored.color),
                 });
+                // The widget's authored `RealGlow` (`128` on Pulse), over the row it moved to.
+                if authored.real_glow > 0 {
+                    out.push(Draw::GlowStamp {
+                        rect,
+                        value: authored.real_glow,
+                    });
+                }
             }
             continue;
         }
