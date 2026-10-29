@@ -68,8 +68,11 @@ agreed in conversation and not yet built**, so nothing is re-derived. The decisi
   `crates/trackfile/tests/blender.rs`; the lone-craft ground truth asserts its art resolves on Pulse.
 - **Hillside** (data/tracks, not committed) is re-skinned with all of it; builder at
   `~/.cache/oag-scratch/hillside.py` (not committed). Its simulation half is bit-equal to the plain
-  track's. Point the builder's `OAG_ADDON_DIR` default at the main checkout once this merges
-  (it already is; the lane ran it with the worktree's add-on).
+  track's. Its `OAG_ADDON_DIR` defaults to the main checkout's `scripts/blender`, which has the art
+  export once this merges. The example campaign's copy (`assets/mods/examples/example-campaign/tracks/`)
+  holds only the old toml, glb and blend: the new Hillside needs `hillside_chevron.png` and
+  `hillside_flare.png` beside it too, and committing those needs the `ALLOWED_TRACKED` and
+  `.gitignore` treatment `blender_checker.png` got.
 - The bake is a builder-script step, not an operator. Recipe in `docs/tools/blender.md`.
 
 - **Landing 2a is in** (branch `track-art-2`, 2026-10-29): linear `COLOR_0` (sRGB curve, rounded to

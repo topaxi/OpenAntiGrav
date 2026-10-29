@@ -65,7 +65,7 @@ matches what that generator would write.
 | `lateral`, `down` | `lateral` = unit(tangent x world up); `down` = -up, with up = lateral x tangent (the lateral axis stays level, up follows a slope; **banking is not authored**) |
 | `progress` | cumulative gap over the total, 0 at point 0 |
 | `half_width`, `ai_bound` | the object's half width; AI bound = -/+ half width x AI fraction |
-| `racing_line`, `section`, `flags`, `light_scale` | 0, `0xff`, 0, 255 |
+| `racing_line`, `section`, `flags`, `light_scale` | 0, `0xff`, 0, 255 (`light_scale` lowered under art when the spline sets *Cover light*, see [Art](#art-meshes-textures-the-sun-and-baked-light)) |
 | path `entry`/`exit`, junction | `0`/`0` and one junction `[0, -1]` -> `[0, -1]`: a single closed loop |
 | `max_spacing` | the largest gap between neighbours |
 | Start slot | 154 units back along the ring from point 0, level, facing along the line. The race puts the **lap line** 154 units ahead of the start slot (`oag_race::Course::START_LINE_ADVANCE`), so spline point 0, the curve's first control point, is the lap line |
@@ -185,15 +185,16 @@ a track directory: `$OAG_TRACKS`, `data/tracks`, `tracks/` beside the program, `
 [menus.md](../architecture/menus.md#race-remix-custom-tracks)). The race uses the host title's ship, rules and
 physics, and draws flat-shaded collision unless the file has an art section. A file that will not read is listed dimmed with the reason.
 
-## Proof (2026-10-12)
+## Proof (2026-10-12, art 2026-10-29)
 
 | Check | Result |
 | --- | --- |
-| `just blender-fixtures` rebuilds the two fixtures headless and compares them to the committed bytes | up to date, twice (the output is deterministic) |
+| `just blender-fixtures` rebuilds the fixtures headless and compares them to the committed bytes | up to date, twice (the output is deterministic) |
 | `oval.track.toml` imported by the add-on and exported again (`oval.reexport.*`) | `read(oval) == read(oval.reexport)` and every spline, vertex, pad, start and `max_spacing` float is bit-equal (`crates/trackfile/tests/blender.rs`) |
 | A loop built from scratch in Blender: 8 Bezier control points, 64 samples, floor, walls, start, one pad of each kind (`blender_loop.*`) | reads, nothing unread, schema-valid (`schema.rs`) |
 | Lone AI craft on Pulse's physics, 7,200 ticks (`trackfile_ground_truth`) | `blender_loop`: lap 3, no respawns; the re-exported oval: lap 4, no respawns (the committed oval: lap 4) |
 | `oag-game --race --autopilot --track-file blender_loop.track.toml` | the player gets round at 127 speed; frames at ticks 400, 1200, 2400, 3600 read at 1280x720 |
+| Art (2026-10-29): the loop's canopy, checker, sun, fill light, ambient, sky and flare (`blender_loop.*`, `blender_checker.png`) | every mapping read back as authored (`blender.rs`); the loop imported and exported again is byte-identical (`blender_loop.reexport.*`); on Pulse PSP the art resolves with no miss in the loader report (`trackfile_ground_truth`) |
 
 The Blender-driven part cannot run in CI (no Blender), so it is a local recipe whose output is
 committed: `just blender-fixtures` (`--update` rewrites the fixtures). The gate reads the committed
