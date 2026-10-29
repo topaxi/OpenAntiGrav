@@ -188,7 +188,28 @@ The manifest is read with the others; the `.wasm` is opened only by the race tha
 runs it. No module runs in an original campaign or a network race. A race running a
 module is MODDED and records no replay. The ABI, the event and the command are in
 [docs/architecture/wasm-extensions/](../architecture/wasm-extensions/README.md)
-("What is built"); `assets/mods/examples/kiss-curse/` is the worked example.
+("What is built").
+
+**Write a module on the guest SDK, `oag-ext` (`crates/ext`), first.** It is the
+whole interface a Rust mod needs: implement `oag_ext::Extension` (a `tick` reading an
+`Observation`, updating the state, sending commands through a `Reply`), declare the
+state with `oag_ext::blob!`, and name the type in `oag_ext::export!`. No offsets, no
+codes, no `unsafe`; a command for an empty slot does not compile, and the common
+mistakes the host would fault on come back as `Err(Refused)`. The state's length is
+exported as `oag_state_len` and must equal `state_bytes` above. With the SDK's
+`test` feature as a dev-dependency, `oag_ext::test::Race` runs the mod's `tick`
+natively under `cargo test`, with no wasm toolchain. Build with
+`cargo build --release --target wasm32-unknown-unknown`, a 16 KiB stack
+(`-C link-arg=-zstack-size=16384`) and `panic = "abort"`.
+`assets/mods/examples/kiss-curse/` (one event, one command) and
+`assets/mods/examples/energy-turbo/` (a pickup of its own) are the worked examples;
+copy either one's `guest/` to start.
+
+A module built for another layout revision of ABI 1 is refused at load, by name
+(`built for ABI 1 rev N, this host is ABI 1 rev M`): rebuild it against the SDK of
+the engine you run. A module in another language writes the buffer itself; the layout
+is `oag-ext-abi`'s (`crates/ext-abi`), and its `oag_abi` must return
+`(1 << 8) | REVISION`.
 
 ## Packaging
 
