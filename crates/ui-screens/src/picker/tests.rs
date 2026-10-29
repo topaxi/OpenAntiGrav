@@ -1098,3 +1098,39 @@ fn a_fixed_livery_offers_no_arrow_to_press() {
         assert_eq!(arrows, expected, "fixed {fixed}");
     }
 }
+
+/// The class sets `Info1 Title` to `MSC_DISTANCE` in code (`0x088ede50`), where the XML authors
+/// `IG_HUD_DISTANCE`: an override names the widget and takes its text from the other id.
+#[test]
+fn an_override_relabels_the_named_widget_from_its_own_string_id() {
+    let screens = Screens::from_xml(XML);
+    let strings = StringTable::from_xml(
+        r#"<Strings><Entry ID="RB_TRACK_SEL" String="TRACK SELECT"></Entry><Entry ID="IG_HUD_DISTANCE" String="Distance"></Entry><Entry ID="MSC_DISTANCE" String="Distance(m)"></Entry></Strings>"#,
+    );
+    let mut layout =
+        Layout::read(&screens, Kind::Track, &strings, FaceScales::default(), PSP).unwrap();
+    let label = |layout: &Layout| {
+        layout
+            .screen
+            .texts
+            .iter()
+            .find(|text| text.name.as_deref() == Some("Info1 Title"))
+            .and_then(|text| text.string.clone())
+    };
+    assert_eq!(label(&layout).as_deref(), Some("Distance"), "as authored");
+    layout.override_labels(&[("Info1 Title", "MSC_DISTANCE")], &strings);
+    assert_eq!(label(&layout).as_deref(), Some("Distance(m)"));
+    layout.override_labels(&[("Info1 Title", "NOT_A_STRING")], &strings);
+    assert_eq!(
+        label(&layout).as_deref(),
+        Some("Distance(m)"),
+        "an id the table lacks changes nothing"
+    );
+}
+
+/// `%d` of the length, `--` for a length of 0 (`0x08a8491c`, `0x08a84920`).
+#[test]
+fn the_distance_row_prints_the_whole_number_and_dashes_for_zero() {
+    assert_eq!(distance_text(5178.0), "5178");
+    assert_eq!(distance_text(0.0), "--");
+}

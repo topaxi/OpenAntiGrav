@@ -159,6 +159,10 @@ impl Session {
     /// row keeps its dash.
     fn spawn_distance_worker(&self, order: Vec<(String, String)>) -> Option<Distances> {
         let options = self.race_options.as_ref()?;
+        let title = self.shell.as_ref()?.title;
+        let authored = title
+            .front_end
+            .is_some_and(|front_end| front_end.track_distance_authored);
         let source = options.source.clone();
         let dlc = options.dlc.clone();
         let distances: Distances = Arc::new(Mutex::new(std::collections::HashMap::new()));
@@ -179,10 +183,20 @@ impl Session {
                     }
                 };
                 for (id, entry) in order {
-                    let measured = archives
-                        .read_name(&entry)
-                        .map_err(anyhow::Error::from)
-                        .and_then(|blob| oag_raceplay::circuit_length(&blob));
+                    // The circuit's authored length where the title's screen prints it;
+                    // the measured lap only where that file gives none.
+                    let stated = authored
+                        .then(|| {
+                            oag_raceplay::authored_length(&source, &mut archives, title, &entry)
+                        })
+                        .flatten();
+                    let measured = match stated {
+                        Some(length) => Ok(length),
+                        None => archives
+                            .read_name(&entry)
+                            .map_err(anyhow::Error::from)
+                            .and_then(|blob| oag_raceplay::circuit_length(&blob)),
+                    };
                     match measured {
                         Ok(length) => {
                             if let Ok(mut map) = sink.lock() {
@@ -383,10 +397,10 @@ impl Session {
 
     /// The three info rows for a circuit: distance, lap record, race
     /// record. The records come off this build's own store, keyed the way
-    /// the RECORDS page keys them; the distance is **not known here** - the
-    /// original reads it off the loaded circuit, and this screen has not
-    /// loaded one - so it draws the same dash an unset record does rather
-    /// than a number nothing measured.
+    /// the RECORDS page keys them, and an unset one draws the title's own empty
+    /// value (`oag_title::FrontEnd::track_record_empty`). The distance is read
+    /// off the circuit's file on a worker (`spawn_distance_worker`), so until it
+    /// lands the row holds a dash.
     fn track_info(
         &self,
         title: &str,
@@ -411,10 +425,15 @@ impl Session {
         }) {
             return ["-".into(), "-".into(), "-".into()];
         }
+        let empty = self
+            .shell
+            .as_ref()
+            .and_then(|shell| shell.title.front_end)
+            .map_or("-", |front_end| front_end.track_record_empty);
         [
             "-".to_string(),
-            oag_game::scoreboard::record_table_value(record, false),
-            oag_game::scoreboard::record_table_value(record, true),
+            oag_game::scoreboard::record_time(record, false).unwrap_or_else(|| empty.to_string()),
+            oag_game::scoreboard::record_time(record, true).unwrap_or_else(|| empty.to_string()),
         ]
     }
 

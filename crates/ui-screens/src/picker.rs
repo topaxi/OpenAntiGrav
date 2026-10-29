@@ -535,7 +535,37 @@ impl Layout {
     }
 }
 
+/// A circuit's length as the track screen's `Distance` row prints it: `%d` of the whole
+/// number (`0x08a8491c`), and `--` (`0x08a84920`) for 0, which `0x088ede50` tests first.
+#[must_use]
+pub fn distance_text(length: f32) -> String {
+    let whole = length as i32;
+    if whole == 0 {
+        "--".to_string()
+    } else {
+        whole.to_string()
+    }
+}
+
 impl Layout {
+    /// Sets the string of the screen's named text widgets from `strings`, one
+    /// `(widget name, string id)` pair each: what the screen's class writes in code in
+    /// place of the `idstring` its XML authors ([`oag_title::FrontEnd::track_label_overrides`]).
+    /// An id the table does not hold leaves the authored string, and a name no widget
+    /// carries changes nothing.
+    pub fn override_labels(&mut self, pairs: &[(&str, &str)], strings: &StringTable) {
+        for (name, id) in pairs {
+            let Some(resolved) = strings.get(id) else {
+                continue;
+            };
+            for text in &mut self.screen.texts {
+                if text.name.as_deref() == Some(name) {
+                    text.string = Some(resolved.to_string());
+                }
+            }
+        }
+    }
+
     /// Reads `Track Creation` or `Team Selection` off the parsed front-end
     /// XML, resolving every `idstring` through `strings`.
     ///

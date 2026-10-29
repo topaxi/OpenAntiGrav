@@ -39,13 +39,19 @@ pub(super) fn track_entries(
             // A capture keeps no records store; the distance is the
             // caller's, for the selected circuit only.
             let measured = distance.filter(|_| track.id == settings.race.track);
+            let empty = || {
+                title
+                    .front_end
+                    .map_or("-", |front_end| front_end.track_record_empty)
+                    .to_string()
+            };
             let info = match (measured, layout.hd_track.is_some()) {
                 (Some(d), true) => {
                     let [length, race] = oag_ui_screens::picker::hd::track::length_rows(d, laps);
                     [length, race, "-".into()]
                 }
-                (Some(d), false) => [format!("{d:.0}"), "-".into(), "-".into()],
-                (None, _) => ["-".into(), "-".into(), "-".into()],
+                (Some(d), false) => [oag_ui_screens::picker::distance_text(d), empty(), empty()],
+                (None, _) => ["-".into(), empty(), empty()],
             };
             (
                 Entry {

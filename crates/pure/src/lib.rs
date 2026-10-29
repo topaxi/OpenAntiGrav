@@ -326,6 +326,9 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     team_select: None,
     track_select: None,
     race_setup: None,
+    track_label_overrides: &[],
+    track_record_empty: "-",
+    track_distance_authored: false,
     // Pure ships neither `FE\forward.vex` nor `ship_FE.vex`; both screens
     // preview with the stills the entry's own `screen.xml` authors.
     preview_meshes: false,

@@ -14,6 +14,21 @@
 
 use oag_tables::track_stats::{self, TrackStats};
 
+/// The circuit's authored `<Physical Length>`, the figure Pulse's `Track Creation` prints as
+/// `Distance(m)` (`TrackStats_ParseElement` `0x088c46f8` into the definition's `+0xdc`, then
+/// `%d` at `0x088ede50`). Read the way a race reads its stats, so a PSP disc's `FEData.wad`
+/// copy and a PS2 disc's race-archive copy both resolve. `None` when the file is absent, does
+/// not parse or authors no length; the caller then has nothing authored to show.
+pub fn authored_length(
+    source: &str,
+    archives: &mut oag_assets::Archives,
+    title: &oag_title::Title,
+    track: &str,
+) -> Option<f32> {
+    let in_fedata = super::pulse_psp::is_pulse_psp(title, archives);
+    read(source, archives, track, in_fedata, &mut Vec::new())?.length
+}
+
 /// The stats for `track` (a `.vex` entry name), or `None` where the file is
 /// absent or unreadable. Says which in `report`. `in_fedata` is Pulse's PSP
 /// disc, whose file sits in `FEData.wad`; every other title reads it out of the

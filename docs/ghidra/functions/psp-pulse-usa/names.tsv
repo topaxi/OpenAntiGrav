@@ -1431,3 +1431,9 @@
 # 2026-10-26 autopilot-re: the per-craft weapon step and its pad test (autopilot.md)
 0x0883f540	function	Ship_UpdateWeapons	80	autopilot.md
 0x0883efb4	function	Ship_TestWeaponPads	65	autopilot.md
+# 2026-10-29 pulse-track-select-text: the track panel rows and the ticker's message choice (race-box-screens.md)
+0x088ede50	function	TrackSelection_SetIntRow	88	race-box-screens.md
+0x088edd60	function	TrackSelection_SetTimeRow	88	race-box-screens.md
+0x088d0e3c	function	Ticker_PickMessage	72	race-box-screens.md
+0x088d1384	function	Ticker_AdvanceWeighted	72	race-box-screens.md
+0x088d22ac	function	Ticker_BuildStatMessage	72	race-box-screens.md

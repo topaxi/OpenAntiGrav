@@ -569,9 +569,10 @@ Ranked by how much a player notices, ours first listed worst:
    BUTTON` in the menu face, larger and with a glow. This is the debugging
    view of one screen and not the boot flow, so it is unconfirmed as a player
    gap.
-8. **Notes, not ranked.** The track circuit's distance reads 5178 on the
-   original and 5094 on ours for Talon's Junction White (ours is not the
-   authored value, worth a trace). A circuit count of 1 / 3 on a fresh
+8. **Notes, not ranked.** ~~The track circuit's distance reads 5178 on the
+   original and 5094 on ours for Talon's Junction White~~ (closed 2026-10-29: the original prints
+   the circuit's authored `stats.xml` `<Physical Length>`, now read; the `Distance(m)` label and
+   the `-.--.--` empty record are wired too, `selection-screens.md`). A circuit count of 1 / 3 on a fresh
    original profile against 1 / 11 on ours is our unlock default. `/` in
    counters and the HUD lap draws as a long-s glyph on the pickers but as a
    plain slash on the grid page.

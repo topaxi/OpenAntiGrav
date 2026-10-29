@@ -1,7 +1,7 @@
 ---
 status: re-first
 titles: [pulse]
-updated: 2026-09-30
+updated: 2026-10-29
 summary: "Nine unlock-predicate functions untraced; the two-axis unlock reading rests on XML plus one capture"
 ---
 
@@ -144,12 +144,12 @@ screens (`Definition::drop_rows_picked_on_screen`). Docs:
   are drawn off the PSP reading scaled to 640x448, with the PS2's own card
   sizes (256x128 on the larger grid) and `0`-set placement unverified on
   PCSX2.
-- **Distance is measured on a worker and reads ~2% under the original**
-  (`5094` vs `5178`, `5228` vs `5350`, `4330` vs `4419`) - not sampling,
-  the figure is stable from one to sixty-four steps per segment. The
-  original sums a different curve or counts the junction links differently;
-  `circuit_length`'s doc has the numbers. Reading `TrackSelection`'s own
-  formatter would settle it.
+- ~~**Distance is measured on a worker and reads ~2% under the original**~~ - closed 2026-10-29: the
+  original prints `stats.xml`'s `<Physical Length>`, read by `oag_raceplay::authored_length`.
+  Still open on the panel (`docs/ghidra/functions/psp-pulse-usa/race-box-screens.md`): the per-mode
+  row layout (distance moves to `Info2` outside modes 3/5/6/9/10; Zone's score row), Pure's
+  `0'00"00` empty record (its own binary), and the footer ticker's lifetime-statistics store
+  (weighted random draw among items with data; this build rotates only `TKR_NO*`).
 - **`Loyalty` is not drawn** - no counter to show. ~~The livery row cycles
   the variant axis~~ - it is the skin axis now (`Classic` + each
   `PI_ModelSkin`, `race.skin`), repainting the preview and reaching the

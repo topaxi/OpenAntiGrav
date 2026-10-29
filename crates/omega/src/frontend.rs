@@ -242,6 +242,9 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     team_select: Some(names::TEAM_SELECTION_DEFINITION),
     track_select: Some(names::TRACK_SELECTION_DEFINITION),
     race_setup: None,
+    track_label_overrides: &[],
+    track_record_empty: "-",
+    track_distance_authored: false,
     preview_meshes: false,
     ship_preview_hull: Some("ship.vex"),
     // **Chosen, not measured.** Omega's `ShipModel` authors `z=-2.05` with

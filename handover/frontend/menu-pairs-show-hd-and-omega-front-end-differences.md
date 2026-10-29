@@ -94,7 +94,7 @@ Selection and Cell Selection (the footer reads `AI difficulty (Medium)` on both 
 Pure shows no difficulty control). No renderer or UI code changed. Ranked by the share of pixels that differ by more than 40 grey:
 
 **Pulse**
-1. **Track Select** (16.2 %, 14.6 % re-made 2026-10-29): the list now matches (`1/3`; the 11 were eight maintainer DLC circuits, fixed 2026-10-29 by an empty `$OAG_DLC` in the pair run), the photo cards show another view, distance `5094` against `5178`, empty records `-` against `-.--.--`.
+1. **Track Select** (16.2 %, 14.6 % re-made 2026-10-29): the list now matches (`1/3`; the 11 were eight maintainer DLC circuits, fixed 2026-10-29 by an empty `$OAG_DLC` in the pair run), the photo cards show another view, distance, the `Distance(m)` label and the `-.--.--` empty records closed 2026-10-29 (the ticker's message choice is a weighted random draw over lifetime statistics, not wired).
 2. **Ship Select** (7.1 %, 7.0 % re-made): the hull's livery and size (the original's blue-white Assegai, large and tilted; ours dark and smaller), `1/8` on both sides since 2026-10-29 (it was
    `1/12`: four DLC teams).
 3. **Title** (2.6 %, `--until "Show Logo" --press cross --ticks 200`; the `--screen` route lacks the ray backdrop and reads 6.0 %): the

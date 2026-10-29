@@ -505,7 +505,7 @@ impl PickerStage {
                 self.model.set_track_info(index, 0, track);
                 self.model.set_track_info(index, 1, race);
             } else {
-                self.model.set_track_info(index, 0, format!("{length:.0}"));
+                self.model.set_track_info(index, 0, picker::distance_text(length));
             }
         }
     }

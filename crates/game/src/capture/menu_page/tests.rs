@@ -217,3 +217,39 @@ fn layers_text_y(
         _ => None,
     })
 }
+
+/// Pulse's track screen draws an unset lap or race record as `-.--.--` (`0x088edd60`), and the
+/// selected circuit's authored length through `%d`. The entries come from the title's own data.
+#[test]
+fn pulses_track_entries_draw_the_unset_record_as_three_dashed_fields() {
+    let screens = oag_ui::screen::Screens::from_xml(
+        r#"<Screen name="Top"><Screen name="Track Creation"></Screen></Screen>"#,
+    );
+    let strings = oag_ui::language::StringTable::default();
+    let layout = oag_ui_screens::picker::Layout::read(
+        &screens,
+        oag_ui_screens::picker::Kind::Track,
+        &strings,
+        oag_ui_screens::picker::FaceScales::default(),
+        [480.0, 272.0],
+    )
+    .expect("the screen reads");
+    let tracks = oag_raceplay::catalogue::tracks(
+        r#"<PI_Track name="16_Track"><Values type="Race" location="Data\Environments\16_Track"></Values></PI_Track>"#,
+    );
+    let mut settings = crate::settings::Settings::default();
+    settings.race.track = "16_Track".into();
+    let (entries, _, _) = track_entries::track_entries(
+        oag_pulse::TITLE,
+        &settings,
+        &oag_ui::language::CircuitNames::default(),
+        &strings,
+        &tracks,
+        &layout,
+        Some(5178.0),
+    );
+    let oag_ui_screens::picker::Details::Track { info, .. } = &entries[0].details else {
+        panic!("a circuit entry");
+    };
+    assert_eq!(info, &["5178", "-.--.--", "-.--.--"]);
+}

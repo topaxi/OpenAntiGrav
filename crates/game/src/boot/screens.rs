@@ -407,6 +407,7 @@ pub(super) fn selection_layouts(
     space: oag_display::space::Space,
     borrows_ps2_split: bool,
     ship_pose: Option<oag_title::ShipPose>,
+    track_labels: &[(&str, &str)],
     report: &mut Vec<String>,
 ) -> (
     Option<oag_ui_screens::picker::Layout>,
@@ -434,6 +435,10 @@ pub(super) fn selection_layouts(
                 faces,
                 [space.size.0, space.size.1],
             )
+        })
+        .map(|mut layout| {
+            layout.override_labels(track_labels, strings);
+            layout
         })
         .or_else(|| {
             let track_box = track_box?;

@@ -841,6 +841,9 @@ pub fn load_shell(
         title
             .front_end
             .and_then(|front_end| front_end.ship_preview_pose),
+        title
+            .front_end
+            .map_or(&[], |front_end| front_end.track_label_overrides),
         &mut report,
     );
     report.push(steps.describe("the boot's first half"));

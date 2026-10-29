@@ -648,10 +648,25 @@ pub fn run(
                     .iter()
                     .find(|track| track.id == options.settings.race.track);
                 let distance = match (kind, archives.as_mut(), selected) {
-                    (oag_ui_screens::picker::Kind::Track, Some(archives), Some(track)) => archives
-                        .read_name(&track.entry_name())
-                        .ok()
-                        .and_then(|blob| race::circuit_length(&blob).ok()),
+                    (oag_ui_screens::picker::Kind::Track, Some(archives), Some(track)) => {
+                        let entry = track.entry_name();
+                        // The same rule as the live screen's worker: the authored length
+                        // where the title prints it, the measured lap otherwise.
+                        title
+                            .front_end
+                            .is_some_and(|front_end| front_end.track_distance_authored)
+                            .then(|| {
+                                let source = options.race.as_ref()?.source.as_str();
+                                oag_raceplay::authored_length(source, archives, title, &entry)
+                            })
+                            .flatten()
+                            .or_else(|| {
+                                archives
+                                    .read_name(&entry)
+                                    .ok()
+                                    .and_then(|blob| race::circuit_length(&blob).ok())
+                            })
+                    }
                     _ => None,
                 };
                 let (stills, mode3d_model) = picker_stills(
