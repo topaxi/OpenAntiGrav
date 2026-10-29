@@ -64,8 +64,9 @@ agreed in conversation and not yet built**, so nothing is re-derived. The decisi
   directional rows, proven equal to `HullLights::from_track` on all 96 circuits and wired on the
   foreign path. `docs/formats/track-file.md` has the census.
 - **`light_scale` was already in 1.0** on the spline (`_OAG_LIGHT_SCALE`), filled by the exporter
-  and read by the renderer on a foreign track. ADR-0076 decision 12 now says so; raised with the lead
-  for the maintainer, who may still want it moved (it would be a 1.x format change).
+  and read by the renderer on a foreign track. ADR-0076 decision 12 records it as a landing-2a finding
+  pending the maintainer, as are the Pulse `shadows = false` and the flare `direction` override; the
+  maintainer may still want `light_scale` moved (a 1.x format change).
 - **HD-family hosts** do not feed the sun to `Light::authored` yet: it needs the authored rig turned
   on for a foreign track on an HD host and a check that it does not relight anything else. Open.
 - A lit art mesh's colour is a gamma float, not a byte (the `.vex` path's invented grey for an
