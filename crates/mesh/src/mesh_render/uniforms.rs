@@ -316,6 +316,14 @@ pub struct Fog {
     /// is the recovered law, which is also what every buffer nothing writes
     /// holds. Here rather than a pipeline constant so the setting applies live.
     pub texlod_shift: f32,
+    /// The enhanced weather's wet road, `0.0..=1.0`: how far the surfaces
+    /// marked [`ROAD_MARK`](crate::mesh::ROAD_MARK) are darkened and given a
+    /// sky reflection (`mesh.wesl`'s `wet_road`). `0.0` is the original's dry
+    /// road and is what every buffer nothing writes holds; the shader takes a
+    /// branch on it, so a dry frame runs none of the wet code.
+    pub wet: f32,
+    /// Pads the block to the 16 bytes WGSL rounds a struct to.
+    pub wet_pad: [f32; 3],
 }
 
 impl Fog {
@@ -335,6 +343,8 @@ impl Fog {
             density: 0.0,
             curve: 0.0,
             texlod_shift: 0.0,
+            wet: 0.0,
+            wet_pad: [0.0; 3],
         }
     }
 
@@ -345,6 +355,12 @@ impl Fog {
             texlod_shift: detail.level_shift(),
             ..self
         }
+    }
+
+    /// This fog with the wet road at `wet` (`0.0..=1.0`).
+    #[must_use]
+    pub fn with_wet(self, wet: f32) -> Self {
+        Self { wet, ..self }
     }
 
     /// Fog from one sampled [`oag_vex::fog::FogParams`] and the eye it was
@@ -362,6 +378,8 @@ impl Fog {
             density: 0.0,
             curve: 0.0,
             texlod_shift: 0.0,
+            wet: 0.0,
+            wet_pad: [0.0; 3],
         }
     }
 
@@ -385,6 +403,8 @@ impl Fog {
             density,
             curve: 1.0,
             texlod_shift: 0.0,
+            wet: 0.0,
+            wet_pad: [0.0; 3],
         }
     }
 }

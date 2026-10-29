@@ -46,6 +46,21 @@ use super::wind::Wind;
 /// constant: render state, never hashed.
 const SEED: u64 = 0x7a1e_b01d;
 
+/// Seconds of rain it takes the enhanced weather's road to go fully wet. Chosen,
+/// not measured: the original has no wet road.
+pub const WET_RAMP_SECONDS: f32 = 40.0;
+
+/// How wet the road is after `clock` seconds of weather, `0.0..=1.0`: rising
+/// linearly over [`WET_RAMP_SECONDS`] for rain, never for snow, and dry while the
+/// weather sits at a covered section's anchor (the camera is under a roof).
+#[must_use]
+pub fn wetness(clock: f32, snow: bool, anchored: bool) -> f32 {
+    if snow || anchored {
+        return 0.0;
+    }
+    (clock / WET_RAMP_SECONDS).clamp(0.0, 1.0)
+}
+
 /// What a circuit asks for and where it is covered, read at load.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Setup {
@@ -191,6 +206,16 @@ impl Weather {
             .as_ref()
             .and_then(|s| s.config.env_psys.as_deref())
             .is_some_and(|path| effect_name(path) == oag_title::engine_effects::SNOW_EFFECT)
+    }
+
+    /// How wet the enhanced weather's road is now, `0.0..=1.0`; see [`wetness`].
+    /// `0.0` for a circuit with no playing weather.
+    #[must_use]
+    pub fn wet_road(&self) -> f32 {
+        if !self.is_playing() {
+            return 0.0;
+        }
+        wetness(self.clock, self.is_snow(), self.anchored)
     }
 
     /// The enhanced weather's splashes.
@@ -375,5 +400,26 @@ fn frame_of(world: &[f32; 16]) -> Frame {
         right: row(0),
         up: row(4),
         back: row(8),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rain_wets_the_road_over_time_and_snow_and_roofs_do_not() {
+        assert_eq!(wetness(0.0, false, false), 0.0);
+        let early = wetness(10.0, false, false);
+        let later = wetness(30.0, false, false);
+        assert!(0.0 < early && early < later && later < 1.0);
+        assert_eq!(wetness(WET_RAMP_SECONDS * 3.0, false, false), 1.0);
+        assert_eq!(wetness(100.0, true, false), 0.0, "snow leaves the road dry");
+        assert_eq!(wetness(100.0, false, true), 0.0, "a covered section is dry");
+    }
+
+    #[test]
+    fn a_circuit_with_no_weather_is_dry() {
+        assert_eq!(Weather::default().wet_road(), 0.0);
     }
 }

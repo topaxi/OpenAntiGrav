@@ -100,6 +100,11 @@ names that 2048 and Omega never authors") and no longer load there.
   (the headless sweep says 0.002 to 0.005 ms a tick); snow flakes are brighter than the
   original's faint specks and look best judged on a real window.
 
+- **Enhanced weather wet road (ours, 2026-10-29, `weather-enhanced` branch):** wired, same
+  page. Open: the road seen from inside a covered section is dry and the wet term pops on at
+  a tunnel mouth; the road is picked by texture name (`surface`), unchecked on circuits
+  other than Fort Gale; no Deck or phone check; the PS2 circuits are not seen.
+
 - **The weather is wired** (Fort Gale rain and lens, Outpost 7 snow), see
   [weather.md](../../docs/ghidra/functions/psp-pulse-usa/weather.md). Open:
   - ~~Outpost 7's snow withheld~~: closed 2026-10-04. `WO_SNOW` sets the immortal flag
