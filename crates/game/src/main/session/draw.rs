@@ -145,7 +145,7 @@ impl Session {
         // loop doing too much work in the frame time alone. See `perf::CpuCost`.
         let mut present_seconds = acquire_wait;
         let view = frame
-            .texture
+            .texture()
             .create_view(&wgpu::TextureViewDescriptor::default());
         // The scene may close this encoder part-way, its first passes finished on another
         // thread while the rest records (`oag_gpu::split_finish`); `frame_work` submits it all.
@@ -1029,7 +1029,7 @@ impl Session {
         // `PRESENT` row, which every frame contributes to.
         self.phases.mark(super::phases::Phase::Readback);
         let present_start = web_time::Instant::now();
-        self.gpu.queue.present(frame);
+        frame.present(&self.gpu.queue);
         self.phases.mark(super::phases::Phase::Present);
         present_seconds += present_start.elapsed().as_secs_f32();
         if timing_first_race_frame {

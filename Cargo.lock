@@ -2840,6 +2840,7 @@ dependencies = [
  "resvg",
  "semver",
  "serde",
+ "serde_json",
  "toml",
  "wasm-bindgen",
  "wasm-bindgen-futures",

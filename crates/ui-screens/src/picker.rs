@@ -252,6 +252,12 @@ impl Picker {
         self
     }
 
+    /// Whether the entries move left/right and the livery up/down. See [`Self::with_entries_across`].
+    #[must_use]
+    pub fn entries_across(&self) -> bool {
+        self.across
+    }
+
     /// Draws the livery as the screen's `skin fixed` label instead of its `skin` cycler: the
     /// mode picks the craft's livery, so there is nothing to step through. The original's
     /// `TeamSelection_Update` hides the cycler and its two arrows and shows `skin fixed` in

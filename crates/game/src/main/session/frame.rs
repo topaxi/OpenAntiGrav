@@ -271,7 +271,12 @@ impl Session {
                 warn!("frame: {:.1} ms", elapsed.as_secs_f32() * 1000.0);
             }
         }
-        let nanos = u64::try_from(elapsed.as_nanos()).unwrap_or(u64::MAX);
+        // `--drive` steps exactly one tick a frame, so a script counts ticks, not milliseconds.
+        let nanos = if self.dev.lockstep {
+            self.clock.rate().dt_nanos()
+        } else {
+            u64::try_from(elapsed.as_nanos()).unwrap_or(u64::MAX)
+        };
         let steps = self.clock.advance(nanos);
         let dt = f64::from(self.clock.rate().dt());
 

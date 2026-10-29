@@ -35,7 +35,7 @@ pub(super) fn offscreen(
 ///
 /// Copies out of a texture must have rows aligned to 256 bytes, so the readback
 /// buffer is usually wider than the image and needs unpadding.
-pub(super) fn read_back(
+pub fn read_back(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     mut encoder: wgpu::CommandEncoder,
@@ -90,7 +90,7 @@ pub(super) fn read_back(
     Ok(pixels)
 }
 
-pub(super) fn write_png(
+pub fn write_png(
     path: &std::path::Path,
     width: u32,
     height: u32,

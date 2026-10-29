@@ -22,13 +22,22 @@ use crate::window::{Look, attributes, choose_monitor, frame_latency, present_mod
 /// not the device. Window 1 owns one inside [`Gpu`]; each further window of a
 /// multi-window race (`crate::windows`) owns one beside the same device.
 pub(crate) struct Output {
-    pub(crate) window: Arc<Window>,
+    pub(crate) window: Host,
     /// The swapchain image this frame acquired ahead of its ticks, until the
     /// draw takes it. See [`Output::acquire`]. **Declared before
     /// [`Self::surface`]** because fields drop in declaration order, and an
     /// image must not outlive the surface it came from.
-    held: Option<wgpu::SurfaceTexture>,
-    pub(crate) surface: wgpu::Surface<'static>,
+    held: Option<Frame>,
+    /// `None` in a headless session (`Gpu::headless`), which draws into
+    /// [`Self::offscreen`] instead and only on a frame that asked for it.
+    surface: Option<wgpu::Surface<'static>>,
+    /// A headless session's stand-in for the swapchain image: the picture a
+    /// `screenshot` step reads back. Always `Some` exactly when [`Self::surface`] is `None`.
+    offscreen: Option<wgpu::Texture>,
+    /// Whether the next [`Self::acquire`] of a headless session hands out the
+    /// offscreen target. Off by default, so a headless run draws nothing it
+    /// was not asked to.
+    pub(crate) draw_next: bool,
     pub(crate) config: wgpu::SurfaceConfiguration,
     /// The present modes this surface actually has. See [`Output::present_mode`].
     offered: Vec<wgpu::PresentMode>,
@@ -39,6 +48,112 @@ pub(crate) struct Output {
     /// The queue depth and fullscreen state the last configure logged, so the decision is said
     /// once per change rather than on every resize.
     logged: Option<(wgpu::PresentMode, u32, bool)>,
+}
+
+/// The window of an [`Output`], or nothing in a headless session.
+///
+/// It derefs to the winit window, so every call site that never meets a
+/// headless session is unchanged. The methods below are the ones a headless
+/// session can reach (the menus read the monitor, the title and the size
+/// while they open); each answers what a window with no monitor and no
+/// compositor would. Any other method panics with a message that says so,
+/// which is the loud failure for a path nobody has taught to run headless.
+pub(crate) struct Host {
+    window: Option<Arc<Window>>,
+    /// A headless session's size, which no window reports.
+    size: winit::dpi::PhysicalSize<u32>,
+}
+
+impl Host {
+    pub(crate) fn window(window: Arc<Window>) -> Self {
+        Self {
+            window: Some(window),
+            size: winit::dpi::PhysicalSize::new(0, 0),
+        }
+    }
+
+    fn headless(size: winit::dpi::PhysicalSize<u32>) -> Self {
+        Self { window: None, size }
+    }
+
+    pub(crate) fn current_monitor(&self) -> Option<winit::monitor::MonitorHandle> {
+        self.window.as_ref().and_then(|window| window.current_monitor())
+    }
+
+    pub(crate) fn available_monitors(&self) -> std::vec::IntoIter<winit::monitor::MonitorHandle> {
+        self.window
+            .as_ref()
+            .map_or_else(Vec::new, |window| window.available_monitors().collect())
+            .into_iter()
+    }
+
+    pub(crate) fn inner_size(&self) -> winit::dpi::PhysicalSize<u32> {
+        self.window
+            .as_ref()
+            .map_or(self.size, |window| window.inner_size())
+    }
+
+    pub(crate) fn id(&self) -> winit::window::WindowId {
+        self.window
+            .as_ref()
+            .map_or(winit::window::WindowId::dummy(), |window| window.id())
+    }
+
+    pub(crate) fn set_title(&self, title: &str) {
+        if let Some(window) = &self.window {
+            window.set_title(title);
+        }
+    }
+
+    pub(crate) fn request_redraw(&self) {
+        if let Some(window) = &self.window {
+            window.request_redraw();
+        }
+    }
+
+    /// The winit window, when there is one.
+    pub(crate) fn get(&self) -> Option<&Window> {
+        self.window.as_deref()
+    }
+
+    /// A headless session's own size, which [`crate::window::native_size`] answers with.
+    pub(crate) fn headless_size(&self) -> winit::dpi::PhysicalSize<u32> {
+        self.size
+    }
+}
+
+impl std::ops::Deref for Host {
+    type Target = Window;
+
+    fn deref(&self) -> &Window {
+        self.window
+            .as_deref()
+            .expect("a headless session has no window: this path needs one taught to run without")
+    }
+}
+
+/// What a frame is drawn into: a swapchain image, or a headless session's
+/// offscreen target.
+pub(crate) enum Frame {
+    Surface(wgpu::SurfaceTexture),
+    Offscreen(wgpu::Texture),
+}
+
+impl Frame {
+    pub(crate) fn texture(&self) -> &wgpu::Texture {
+        match self {
+            Self::Surface(frame) => &frame.texture,
+            Self::Offscreen(texture) => texture,
+        }
+    }
+
+    /// Hands the finished frame over: a swapchain image is presented, an
+    /// offscreen target is left for the driver to read back.
+    pub(crate) fn present(self, queue: &wgpu::Queue) {
+        if let Self::Surface(frame) = self {
+            queue.present(frame);
+        }
+    }
 }
 
 /// The window and the GPU objects, which both stages draw through.
@@ -111,7 +226,7 @@ impl Gpu {
     /// adapter is found but will not serve.
     fn bring_up(
         instance: &wgpu::Instance,
-        surface: &wgpu::Surface<'static>,
+        surface: Option<&wgpu::Surface<'static>>,
         size: winit::dpi::PhysicalSize<u32>,
         renderer: &display::Renderer,
     ) -> Result<BroughtUp> {
@@ -121,7 +236,7 @@ impl Gpu {
             web::take()?
         };
         #[cfg(not(target_arch = "wasm32"))]
-        let chosen = adapter::choose(instance, Some(surface), renderer)?;
+        let chosen = adapter::choose(instance, surface, renderer)?;
         #[cfg(not(target_arch = "wasm32"))]
         let (device, queue) =
             pollster::block_on(chosen.adapter.request_device(&wgpu::DeviceDescriptor {
@@ -136,28 +251,33 @@ impl Gpu {
                 ..oag_mesh::mesh_render::device_descriptor("oag-game", &chosen.adapter)
             }))
             .context("requesting the device")?;
-        let mut config = surface
-            .get_default_config(&chosen.adapter, size.width.max(1), size.height.max(1))
-            .context("surface is not supported by this adapter")?;
-        // **The window does not encode.** Every shader in this pipeline writes
-        // gamma-space values - the GE blends stored bytes, so that is the space
-        // the whole thing works in - and an sRGB surface would encode them a
-        // second time. See
-        // [ADR-0020](../../../docs/architecture/adr/0020-gamma-authoritative-colour-space.md).
-        //
-        // Forced rather than accepted: `get_default_config` returns whichever
-        // format the adapter lists first, which is the sRGB variant on some
-        // backends and not on others, so leaving it alone would make the
-        // pipeline's colour space a property of the driver. `Renderer::new`
-        // forks the sprite sheet's texture format on `format.is_srgb()` and now
-        // always takes the raw side, which is what keeps authored sprite and
-        // text colours reaching the screen as authored on every path.
+        let mut config = match surface {
+            Some(surface) => surface
+                .get_default_config(&chosen.adapter, size.width.max(1), size.height.max(1))
+                .context("surface is not supported by this adapter")?,
+            // A headless session has no surface to ask: the same pipeline
+            // format the window ends up with, at the size it was told.
+            None => wgpu::SurfaceConfiguration {
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                width: size.width.max(1),
+                height: size.height.max(1),
+                present_mode: wgpu::PresentMode::Fifo,
+                desired_maximum_frame_latency: 1,
+                alpha_mode: wgpu::CompositeAlphaMode::Auto,
+                color_space: wgpu::SurfaceColorSpace::Auto,
+                view_formats: Vec::new(),
+            },
+        };
         config.format = config.format.remove_srgb_suffix();
         config.view_formats = vec![config.format];
         // Kept because the adapter is not: every later change of the vsync row
         // has to be checked against this same list, and re-requesting an
         // adapter to ask would be a second answer to the same question.
-        let offered = surface.get_capabilities(&chosen.adapter).present_modes;
+        let offered = surface.map_or_else(
+            || vec![wgpu::PresentMode::Fifo],
+            |surface| surface.get_capabilities(&chosen.adapter).present_modes,
+        );
         let temporal = oag_post::fsr3::supported(&chosen.adapter);
         if !temporal {
             warn!("no compute shaders on this adapter; UPSCALER fsr3 will run as fsr1");
@@ -262,7 +382,7 @@ impl Gpu {
             .context("creating the surface")?;
         let size = crate::window::surface_size(&window);
 
-        let brought = match Self::bring_up(&instance, &surface, size, renderer) {
+        let brought = match Self::bring_up(&instance, Some(&surface), size, renderer) {
             Ok(brought) => brought,
             // A *named* adapter that will not serve is recoverable, and the
             // recovery has to happen here rather than being left to the player:
@@ -276,7 +396,7 @@ impl Gpu {
                 );
                 Self::bring_up(
                     &instance,
-                    &surface,
+                    Some(&surface),
                     size,
                     &display::Renderer::default_renderer(),
                 )
@@ -298,9 +418,11 @@ impl Gpu {
         let mut gpu = Self {
             temporal,
             output: Output {
-                window,
+                window: Host::window(window),
                 held: None,
-                surface,
+                surface: Some(surface),
+                offscreen: None,
+                draw_next: false,
                 config,
                 offered,
                 latency: 1,
@@ -314,6 +436,54 @@ impl Gpu {
             in_use,
         };
         gpu.output.apply_vsync(settings.vsync);
+        gpu.output.configure(&gpu.device);
+        Ok(gpu)
+    }
+
+    /// The device and queue with no window, no surface and no event loop: what a
+    /// headless session (`crate::drive`) runs the real [`Session`](crate::session::Session)
+    /// on. The picture goes to [`Output::offscreen`] on a frame that asks for
+    /// one, never to a swapchain.
+    ///
+    /// # Errors
+    ///
+    /// No usable adapter, or one that will not make a device.
+    #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
+    pub(crate) fn headless(
+        size: winit::dpi::PhysicalSize<u32>,
+        renderer: &display::Renderer,
+    ) -> Result<Self> {
+        let instance = adapter::instance();
+        let BroughtUp {
+            adapter,
+            device,
+            queue,
+            config,
+            offered,
+            adapters,
+            in_use,
+            temporal,
+        } = Self::bring_up(&instance, None, size, renderer)?;
+        let mut gpu = Self {
+            temporal,
+            output: Output {
+                window: Host::headless(size),
+                held: None,
+                surface: None,
+                offscreen: None,
+                draw_next: false,
+                config,
+                offered,
+                latency: 1,
+                logged: None,
+            },
+            instance,
+            adapter,
+            device,
+            queue,
+            adapters,
+            in_use,
+        };
         gpu.output.configure(&gpu.device);
         Ok(gpu)
     }
@@ -340,8 +510,8 @@ impl Gpu {
             .create_surface(window.clone())
             .context("recreating the surface")?;
         let size = crate::window::surface_size(&window);
-        self.output.window = window;
-        self.output.surface = surface;
+        self.output.window = Host::window(window);
+        self.output.surface = Some(surface);
         self.output.config.width = size.width.max(1);
         self.output.config.height = size.height.max(1);
         self.output.configure(&self.device);
@@ -382,9 +552,11 @@ impl Gpu {
         config.view_formats = vec![config.format];
         let offered = surface.get_capabilities(&self.adapter).present_modes;
         let mut output = Output {
-            window,
+            window: Host::window(window),
             held: None,
-            surface,
+            surface: Some(surface),
+            offscreen: None,
+            draw_next: false,
             config,
             offered,
             latency: 1,
@@ -412,10 +584,20 @@ impl Output {
     /// window) skips the frame the same way.
     pub(crate) fn acquire(&mut self, device: &wgpu::Device) -> bool {
         self.held = None;
-        match self.surface.get_current_texture() {
+        let Some(surface) = &self.surface else {
+            // Headless: a picture only on the frame that was asked for one.
+            if std::mem::take(&mut self.draw_next)
+                && let Some(texture) = &self.offscreen
+            {
+                self.held = Some(Frame::Offscreen(texture.clone()));
+                return true;
+            }
+            return false;
+        };
+        match surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(frame)
             | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => {
-                self.held = Some(frame);
+                self.held = Some(Frame::Surface(frame));
                 true
             }
             wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
@@ -431,7 +613,7 @@ impl Output {
 
     /// The image [`Self::acquire`] took for this frame, `None` when it got
     /// none or a reconfigure since let it go.
-    pub(crate) fn take_acquired(&mut self) -> Option<wgpu::SurfaceTexture> {
+    pub(crate) fn take_acquired(&mut self) -> Option<Frame> {
         self.held.take()
     }
 
@@ -451,6 +633,25 @@ impl Output {
             );
             (self.config.width, self.config.height) = (width, height);
         }
+        let Some(surface) = &self.surface else {
+            self.offscreen = Some(device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("headless frame"),
+                size: wgpu::Extent3d {
+                    width: self.config.width,
+                    height: self.config.height,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: self.config.format,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                    | wgpu::TextureUsages::COPY_SRC
+                    | wgpu::TextureUsages::TEXTURE_BINDING,
+                view_formats: &[],
+            }));
+            return;
+        };
         let fullscreen = crate::window::is_fullscreen(&self.window);
         self.config.desired_maximum_frame_latency =
             crate::window::queued_frames(self.latency, fullscreen);
@@ -469,7 +670,7 @@ impl Output {
                 if fullscreen { "fullscreen" } else { "windowed" },
             );
         }
-        self.surface.configure(device, &self.config);
+        surface.configure(device, &self.config);
     }
 
     /// The best present mode this surface offers out of `wanted`, best first.
@@ -509,6 +710,11 @@ impl Output {
     fn apply_modes(&mut self, modes: &[wgpu::PresentMode], latency: u32) {
         self.config.present_mode = self.present_mode(modes, &"a further window's present mode");
         self.latency = latency;
+    }
+
+    /// A headless session's last drawn frame, for a `screenshot` step to read back.
+    pub(crate) fn offscreen(&self) -> Option<&wgpu::Texture> {
+        self.offscreen.as_ref()
     }
 
     /// The viewport, which every stage draws into.
