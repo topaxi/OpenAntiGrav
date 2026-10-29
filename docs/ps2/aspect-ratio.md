@@ -337,8 +337,13 @@ px, the 640x448 frame at 16:9).
   television shows the same register: the PS2 front end is drawn 2 to 2.3
   frame rows (about 3.2 px at 720p) below the frame's centre. Confidence 70
   that it is `DY` (the sweep is exact), 45 on the 0.3-row remainder.
-  **Ours does not apply it**: no display offset exists in `Space` or the
-  viewport, and a PS2 race would need the 3D view shifted the same way.
+  **Play does not apply it** (maintainer ruling, 2026-10-29: the port stays
+  centred; a PS2 race would need the 3D view shifted the same way). **The PS2
+  compare pairs do**: `compare_env.DISPLAY_OFFSETS` shifts ours down 2.3 frame
+  rows (3.70 px at 720p) after rendering, recorded as `ours.display_offset` in
+  `pair.json`; the hexes then read `dy +0.01 / -0.01 / +0.00` (Grid) and
+  `+0.01` (Cell) against `-3.65` and `-3.7`. `D0` is not determinable here, so
+  the 2.3 is recorded as measured, not computed from `DY - D0`.
 - The decoded frame buffer is not the picture: the dump's VRAM is the state
   *before* the packets, so FBP 0 and FBP 140 hold the previous frame (the
   loading card). The 4 MiB VRAM starts 425 bytes into the state (`state_size -

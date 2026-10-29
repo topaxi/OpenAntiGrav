@@ -1051,6 +1051,8 @@ patches by gradient cross-correlation (Gaussian, strongest edges, parabolic sub-
 (`scripts/pcsx2-gsdump.py`), the exact quads. The selected hex mixes the outline and the ring: measure the ring alone with a brightness mask
 (ring pixels above 140 in the pair; the outline is dimmer).
 
+**Display offset (2026-10-29, `pulse-ps2-pair-dy`).** The PS2 menu pairs score ours with the game's `DISPLAY1/2.DY = 52` applied: `compare_env.DISPLAY_OFFSETS[("pulse-ps2", "menu")]` is 2.3 frame rows (3.70 px at 1280x720, measured, confidence 70, the DY sweep in `docs/ps2/aspect-ratio.md`). `compare_menu.menu_pair` and `compare-rerender-ours.py` shift `ours.png` down by it after the render (bicubic, black above) and record `ours.display_offset` in `pair.json`; a rerender applies it even to a pair that predates the field. Compare shots only: play stays centred. After it the hexes read `dy` within 0.02 px (Grid `+0.01/-0.01/+0.00`, Cell `+0.01`), `dx` unchanged at `-0.45..-0.50` (whole-frame Cell patch `-0.64`). Other platforms are untouched.
+
 **Result (1280x720), cause settled 2026-10-29 (`pulse-ps2-frame-offset`).** Against PCSX2's frame ours' unselected hexes (3 on Grid Selection, 5
 on Cell Selection) lay a frame-level `dx = +4.19 - 0.00728 x`, `dy = -3.68` (sd 0.04) px off, from **two separate causes**:
 
