@@ -180,11 +180,12 @@ mod on {
 
     const EVENTS: i32 = 1024 + oag_modhost::abi::EVENTS_AT as i32;
 
-    /// Claims slot 0's pickup whenever it holds an unclaimed one, and counts the
-    /// `pickup-fire` (blob word 0) and `pickup-absorbed` (word 1) events it is sent.
-    fn claimer() -> Source {
+    /// Gives slot 0 the mod pickup while it holds nothing and nothing has been fired or
+    /// absorbed yet, and counts the `pickup-fire` (blob word 0) and `pickup-absorbed`
+    /// (word 1) events it is sent.
+    fn giver(id: &str) -> Source {
         module(
-            "test.claimer",
+            id,
             &format!(
                 "(local $i i32) (local $kind i32)
                  (block $done (loop $next
@@ -196,8 +197,8 @@ mod on {
                      (then (i32.store (i32.const {s4}) (i32.add (i32.load (i32.const {s4})) (i32.const 1)))))
                    (local.set $i (i32.add (local.get $i) (i32.const 1)))
                    (br $next)))
-                 (if (i32.and (i32.ne (i32.load8_u (i32.const {CRAFTS})) (i32.const 0))
-                              (i32.eqz (i32.and (i32.load8_u (i32.const {flags})) (i32.const 8))))
+                 (if (i32.eqz (i32.or (i32.load8_u (i32.const {CRAFTS}))
+                                      (i32.or (i32.load (i32.const {STATE})) (i32.load (i32.const {s4})))))
                    (then
                      (i32.store (i32.const {REPLY}) (i32.const 1))
                      (i32.store8 (i32.const {cmd}) (i32.const 3))
@@ -205,9 +206,27 @@ mod on {
                  i32.const 0",
                 count = 1024 + 24,
                 s4 = STATE + 4,
-                flags = CRAFTS + 1,
                 cmd = REPLY + 4,
                 slot = REPLY + 5,
+            ),
+        )
+    }
+
+    /// Every tick: `pickup-roll` every second Turbo.
+    fn roller() -> Source {
+        module(
+            "test.roller",
+            &format!(
+                "(i32.store (i32.const {REPLY}) (i32.const 1))
+                 (i32.store8 (i32.const {cmd}) (i32.const 9))
+                 (i32.store8 (i32.const {slot}) (i32.const 0))
+                 (i32.store16 (i32.const {arg}) (i32.const 5))
+                 (i32.store (i32.const {word}) (i32.const 2))
+                 i32.const 0",
+                cmd = REPLY + 4,
+                slot = REPLY + 5,
+                arg = REPLY + 6,
+                word = REPLY + 12,
             ),
         )
     }
@@ -222,23 +241,30 @@ mod on {
     }
 
     #[test]
-    fn a_claimed_pickup_is_the_mods_to_fire_and_an_absorb_pays_nothing() {
+    fn the_mods_own_pickup_is_the_mods_to_fire_and_an_absorb_pays_nothing() {
         use oag_gameplay::input::Button;
-        let mut race = grid(prepared(&[claimer()]));
-        race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Turbo);
-        race.tick(&PlayerInputs::none()); // the claim
+        use oag_tables::weapons::Weapon;
+        let mut race = grid(prepared(&[giver("test.giver")]));
+        race.tick(&PlayerInputs::none()); // the give
+        assert_eq!(
+            race.sim.world.ships[0].pickup.weapon,
+            Some(Weapon::Extension)
+        );
+        assert_eq!(
+            race.sim.world.ships[0].pickup.last, None,
+            "the repeat rule's memory is the title's"
+        );
         race.tick(&pressed(Button::Square));
         assert_eq!(
             race.sim.world.ships[0].pickup.weapon,
-            Some(oag_tables::weapons::Weapon::Turbo),
-            "a claimed pickup is not spent by fire"
+            Some(Weapon::Extension),
+            "fire does not spend it"
         );
         assert_eq!(
             race.sim.world.ships[0].physics.turbo_timer, 0.0,
-            "nor fired as a Turbo"
+            "nor does the engine fire anything"
         );
         let shield = race.sim.world.ships[0].physics.shield;
-        race.tick(&PlayerInputs::none()); // the fire event reaches the module
         race.tick(&pressed(Button::Circle));
         assert_eq!(
             race.sim.world.ships[0].pickup.weapon, None,
@@ -255,6 +281,61 @@ mod on {
             &[1, 0, 0, 0, 1, 0, 0, 0],
             "one fire, one absorb"
         );
+    }
+
+    #[test]
+    fn a_pickup_roll_turns_every_nth_grant_of_its_weapon_into_the_mods_pickup() {
+        use oag_tables::weapons::Weapon;
+        let mut race = grid(prepared(&[roller()]));
+        assert!(
+            !race.sim.extensions.rolls(Weapon::Turbo),
+            "no rule before the first call"
+        );
+        race.tick(&PlayerInputs::none());
+        let rolled: Vec<bool> = [
+            Weapon::Turbo,
+            Weapon::Rocket,
+            Weapon::Turbo,
+            Weapon::Turbo,
+            Weapon::Turbo,
+        ]
+        .into_iter()
+        .map(|weapon| race.sim.extensions.rolls(weapon))
+        .collect();
+        assert_eq!(
+            rolled,
+            [false, false, true, false, true],
+            "every second Turbo, nothing else"
+        );
+        // Re-sent every tick, the same rule keeps its count.
+        race.tick(&PlayerInputs::none());
+        assert!(!race.sim.extensions.rolls(Weapon::Turbo));
+        assert!(race.sim.extensions.rolls(Weapon::Turbo));
+    }
+
+    #[test]
+    fn a_second_module_reaching_for_the_mods_pickup_faults_and_the_first_keeps_it() {
+        let mut race = grid(prepared(&[giver("test.a"), giver("test.b")]));
+        race.tick(&PlayerInputs::none());
+        let reports = race.extension_reports();
+        assert!(reports[0].faulted.is_none(), "{:?}", reports[0].faulted);
+        let (_, why) = reports[1]
+            .faulted
+            .clone()
+            .expect("the second giver faulted");
+        assert!(why.contains("test.a"), "{why}");
+        assert_eq!(
+            race.sim.world.ships[0].pickup.weapon,
+            Some(oag_tables::weapons::Weapon::Extension)
+        );
+    }
+
+    #[test]
+    fn a_race_without_weapons_gives_no_mod_pickup() {
+        let mut setup_race = grid(prepared(&[giver("test.giver")]));
+        setup_race.sim.weapons_on = false;
+        setup_race.tick(&PlayerInputs::none());
+        assert_eq!(setup_race.sim.world.ships[0].pickup.weapon, None);
     }
 
     /// Every tick: a Turbo cue, the wall sparks and a red pickup backdrop for slot 1.

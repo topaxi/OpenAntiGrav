@@ -332,7 +332,13 @@ impl Race {
             (!self.sim.allowed_weapons.is_empty()).then_some(self.sim.allowed_weapons.as_slice());
         let drawn = oag_weapons::pickup::draw(&mut self.sim.world.rng, table, who, last, allowed);
         if let Some(weapon) = drawn {
-            self.sim.world.ships[slot].pickup.grant(weapon);
+            let pickup = &mut self.sim.world.ships[slot].pickup;
+            pickup.grant(weapon);
+            // A simulation mod's `pickup-roll`: this grant becomes the mod's own pickup,
+            // with `last` still the drawn weapon, so the title's repeat rule is unchanged.
+            if self.sim.extensions.rolls(weapon) {
+                pickup.weapon = Some(oag_tables::weapons::Weapon::Extension);
+            }
         }
     }
 }

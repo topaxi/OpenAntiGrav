@@ -338,8 +338,6 @@ impl Race {
         let Some(weapon) = self.sim.world.ships[slot].pickup.weapon else {
             return;
         };
-        // A simulation mod claimed it: the driver's fire (on a straight, as for a Turbo)
-        // or absorb goes to the mod (`crate::extensions`), and an absorb pays nothing.
         // A mod's own pickup: the driver asks to fire it wherever it would fire a Turbo
         // (on a straight, `controls.thrust > 0`), every such tick, and never absorbs it.
         // Its weapon AI answers `Hold` for anything it does not aim, a Turbo included.
@@ -348,19 +346,6 @@ impl Race {
                 && self.sim.world.ships[slot].physics.craft_state == oag_physics::CraftState::Racing
             {
                 self.sim.extensions.pickup_used(slot, false);
-            }
-            return;
-        }
-        if self.sim.extensions.claimed(slot) {
-            match decision {
-                oag_ai::weapon_ai::Decision::Absorb => {
-                    self.sim.world.ships[slot].pickup.take();
-                    self.sim.extensions.pickup_used(slot, true);
-                }
-                oag_ai::weapon_ai::Decision::Fire if controls.thrust > 0.0 => {
-                    self.sim.extensions.pickup_used(slot, false);
-                }
-                _ => {}
             }
             return;
         }

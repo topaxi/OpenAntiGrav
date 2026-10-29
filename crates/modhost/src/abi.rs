@@ -58,8 +58,6 @@ pub const CRAFT_PERSON: u8 = 1;
 pub const CRAFT_FIRE_HELD: u8 = 2;
 /// [`Craft::flags`]: the craft is racing: past the start, not wrecked, not respawning.
 pub const CRAFT_RACING: u8 = 4;
-/// [`Craft::flags`]: the craft's pickup is claimed by a module (`claim-pickup`).
-pub const CRAFT_CLAIMED: u8 = 8;
 
 /// The largest `scale-thrust` factor: a mod may double an engine's thrust, no more.
 /// Chosen (README 2.1 proposed `[0.25, 2.0]`; the lower end is `0` here).
@@ -77,8 +75,8 @@ pub const EVENT_PAD_ENERGY: u8 = 4;
 pub const COMMAND_SCALE_THRUST: u8 = 1;
 /// `shield-delta{slot, amount}`.
 pub const COMMAND_SHIELD_DELTA: u8 = 2;
-/// `claim-pickup{slot}`.
-pub const COMMAND_CLAIM_PICKUP: u8 = 3;
+/// `give-pickup{slot}`.
+pub const COMMAND_GIVE_PICKUP: u8 = 3;
 /// `pad-mode{slot}`.
 pub const COMMAND_PAD_MODE: u8 = 4;
 /// `play-cue{slot, cue}`: an output, never state.
@@ -87,6 +85,15 @@ pub const COMMAND_PLAY_CUE: u8 = 5;
 pub const COMMAND_FIRE_EFFECT: u8 = 6;
 /// `pickup-tint{slot, rgba}`: an output, never state.
 pub const COMMAND_PICKUP_TINT: u8 = 7;
+/// `clear-pickup{slot}`.
+pub const COMMAND_CLEAR_PICKUP: u8 = 8;
+/// `pickup-roll{weapon, every}`: race-wide, sent with slot 0.
+pub const COMMAND_PICKUP_ROLL: u8 = 9;
+
+/// The weapon codes a `pickup-roll` may name: [`Craft::pickup`]'s, `1..=WEAPON_CODES`.
+pub const WEAPON_CODES: u16 = 14;
+/// The longest `pickup-roll` period: every 1st up to every 255th grant.
+pub const MAX_ROLL_EVERY: u32 = 255;
 
 /// `play-cue`'s codes: a title's own sounds, by the engine's cue names. 0 `SpeedupPad`,
 /// 1 `Turbo`, 2 `Collision`, 3 `Absorb`, 4 `Shield`, 5 `ShieldActive`.
@@ -105,7 +112,7 @@ pub struct Craft {
     /// (`oag_tables::weapons::Weapon::ALL`: Rocket 1, Missile 2, Quake 3, Cannon 4,
     /// Turbo 5, ...), or [`PICKUP_EXTENSION`] for a mod's own.
     pub pickup: u8,
-    /// [`CRAFT_PERSON`], [`CRAFT_FIRE_HELD`], [`CRAFT_RACING`], [`CRAFT_CLAIMED`].
+    /// [`CRAFT_PERSON`], [`CRAFT_FIRE_HELD`], [`CRAFT_RACING`].
     pub flags: u8,
     /// The energy pool.
     pub shield: f32,
@@ -123,13 +130,13 @@ pub enum Event {
         /// The grid slot.
         slot: u8,
     },
-    /// A craft whose pickup a module claimed asked to fire it: a person's fire press, or
-    /// an AI craft's decision to fire. The pickup is kept.
+    /// A craft holding the mod's own pickup ([`PICKUP_EXTENSION`]) asked to fire it: a
+    /// person's fire press, or an AI craft's decision to fire. The pickup is kept.
     PickupFire {
         /// The grid slot.
         slot: u8,
     },
-    /// A craft absorbed its claimed pickup: the pickup is gone and the engine paid no
+    /// A craft absorbed the mod's own pickup: the pickup is gone and the engine paid no
     /// energy for it.
     PickupAbsorbed {
         /// The grid slot.
@@ -163,12 +170,26 @@ pub enum Command {
         /// Energy, finite.
         amount: f32,
     },
-    /// Take over the slot's held pickup: from now until it leaves the slot, the engine
-    /// neither fires nor absorbs it, and raises `pickup-fire` / `pickup-absorbed` for the
-    /// module instead. The slot must hold a pickup; one module's claim at a time.
-    ClaimPickup {
+    /// Put the mod's own pickup ([`PICKUP_EXTENSION`]) in the slot, which must hold none.
+    /// The engine never fires or absorbs it; it raises `pickup-fire` / `pickup-absorbed`
+    /// instead. One module owns the kind for the race; a race without weapons refuses it.
+    GivePickup {
         /// The grid slot.
         slot: u8,
+    },
+    /// Take the mod's own pickup out of the slot, which must hold it.
+    ClearPickup {
+        /// The grid slot.
+        slot: u8,
+    },
+    /// From now on, every `every`-th time a weapon pad hands out weapon `weapon` (a
+    /// [`Craft::pickup`] code), it hands out the mod's own pickup instead. Race-wide,
+    /// held until replaced; the count is the engine's, hashed.
+    PickupRoll {
+        /// A weapon code, `1..=WEAPON_CODES`.
+        weapon: u8,
+        /// `1..=MAX_ROLL_EVERY`.
+        every: u8,
     },
     /// This tick, a speed pad gives the slot no boost: on entering one the engine raises
     /// `pad-energy` instead. Sent each tick it should hold.
@@ -273,6 +294,23 @@ pub(crate) fn read_reply(
     for i in 0..count {
         let at = REPLY_AT + 4 + i * COMMAND_LEN;
         let (kind, slot) = (buffer[at], buffer[at + 1]);
+        if kind == COMMAND_PICKUP_ROLL {
+            let code = u16::from_le_bytes([buffer[at + 2], buffer[at + 3]]);
+            let every = get_u32(buffer, at + 8);
+            if slot != 0
+                || !(1..=WEAPON_CODES).contains(&code)
+                || !(1..=MAX_ROLL_EVERY).contains(&every)
+            {
+                return Err(Fault::Reply(format!(
+                    "pickup-roll slot {slot} weapon {code} every {every}: slot 0, a weapon in 1..={WEAPON_CODES}, every in 1..={MAX_ROLL_EVERY}"
+                )));
+            }
+            commands.push(Command::PickupRoll {
+                weapon: code as u8,
+                every: every as u8,
+            });
+            continue;
+        }
         if u32::from(slot) >= MAX_SLOTS || active & (1 << slot) == 0 {
             return Err(Fault::Reply(format!(
                 "command {i} names slot {slot}, which holds no craft"
@@ -313,17 +351,27 @@ pub(crate) fn read_reply(
                 shield_seen |= 1 << slot;
                 commands.push(Command::ShieldDelta { slot, amount });
             }
-            COMMAND_CLAIM_PICKUP => {
-                let holds = observation
+            COMMAND_GIVE_PICKUP | COMMAND_CLEAR_PICKUP => {
+                let pickup = observation
                     .crafts
                     .get(usize::from(slot))
-                    .is_some_and(|craft| craft.pickup != 0);
-                if !holds {
+                    .map_or(0, |craft| craft.pickup);
+                let give = kind == COMMAND_GIVE_PICKUP;
+                if give && pickup != 0 {
                     return Err(Fault::Reply(format!(
-                        "claim-pickup for slot {slot}, which holds no pickup"
+                        "give-pickup for slot {slot}, which already holds pickup {pickup}"
                     )));
                 }
-                commands.push(Command::ClaimPickup { slot });
+                if !give && pickup != PICKUP_EXTENSION {
+                    return Err(Fault::Reply(format!(
+                        "clear-pickup for slot {slot}, which holds no mod pickup"
+                    )));
+                }
+                commands.push(if give {
+                    Command::GivePickup { slot }
+                } else {
+                    Command::ClearPickup { slot }
+                });
             }
             COMMAND_PAD_MODE => commands.push(Command::PadMode { slot }),
             COMMAND_PLAY_CUE | COMMAND_FIRE_EFFECT => {
