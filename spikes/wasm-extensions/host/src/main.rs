@@ -83,6 +83,10 @@ struct Host {
 enum Lifetime {
     Persistent,
     Fresh,
+    /// One instance per tick, shared by every call in it: a rollback restores
+    /// at a tick boundary, where the guest's memory is always the module's
+    /// initial image, so it needs only the blob.
+    PerTick,
 }
 
 struct Guest {
@@ -233,6 +237,9 @@ fn integrate(toy: &mut Toy, throttle: f32, scale: f32) {
 /// `craft.environment` scale, a pad edge calling `pad.enter`. `f32` only, no
 /// fused multiply-add.
 fn tick(toy: &mut Toy, guest: &mut Guest) -> Result<()> {
+    if guest.lifetime == Lifetime::PerTick {
+        guest.live = None;
+    }
     let throttle = if toy.rng.next_f32() > 0.2 { 1.0f32 } else { 0.0 };
     let pad = pad_at(toy.distance);
     let entered = pad != toy.pad_current && pad >= 0;
@@ -413,6 +420,7 @@ fn main() -> Result<()> {
         ("persistent/on_tick", Lifetime::Persistent, "on_tick"),
         ("persistent/on_tick_leaky", Lifetime::Persistent, "on_tick_leaky"),
         ("fresh/on_tick_leaky", Lifetime::Fresh, "on_tick_leaky"),
+        ("per-tick/on_tick_leaky", Lifetime::PerTick, "on_tick_leaky"),
     ] {
         let mut g = Guest::new(canon.clone(), &wasm, lifetime, export)?;
         let (a, b) = rollback(&mut g, 6000, 2500)?;
@@ -460,6 +468,21 @@ fn main() -> Result<()> {
     }
     let per = t0.elapsed().as_nanos() as f64 / f64::from(n);
     println!("time {kind} fresh-pooled per-call={per:.0}ns");
+    // A tick's worth of guest work: one pooled instance per tick, twenty calls
+    // on it (eight craft, two or three hooks each), as `Lifetime::PerTick`.
+    let pooled = engine_with(kind, true, true)?;
+    let mut g = Guest::new(pooled, &wasm, Lifetime::PerTick, "on_tick")?;
+    let mut toy = Toy::new();
+    let ticks_timed = 2_000u32;
+    let t0 = Instant::now();
+    for _ in 0..ticks_timed {
+        g.live = None;
+        for _ in 0..20 {
+            g.call(&mut toy, "on_tick")?;
+        }
+    }
+    let per = t0.elapsed().as_nanos() as f64 / f64::from(ticks_timed);
+    println!("time {kind} per-tick-pooled 20-calls-per-tick={per:.0}ns");
     let t0 = Instant::now();
     let _ = Module::new(&canon, &wasm)?;
     println!(

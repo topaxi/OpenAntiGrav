@@ -3,7 +3,8 @@
 A throwaway measurement for
 [`docs/architecture/wasm-extensions/determinism-and-state.md`](../../docs/architecture/wasm-extensions/determinism-and-state.md).
 Not engine code, not a workspace member: its own `[workspace]` table and its own
-`Cargo.lock`, so the repository's `Cargo.lock` never sees wasmtime
+`Cargo.lock` (untracked: the root `.gitignore` ignores `*.lock`; the version
+is pinned `=50.0.0` instead), so the repository's `Cargo.lock` never sees wasmtime
 (`git diff main -- Cargo.lock` is empty).
 
 ```sh
@@ -56,6 +57,7 @@ rollback fresh/on_tick straight=826952efcd381325 replayed=826952efcd381325 equal
 rollback persistent/on_tick straight=826952efcd381325 replayed=826952efcd381325 equal=true
 rollback persistent/on_tick_leaky straight=d843aa8f6084fbca replayed=102b878134e1409c equal=false
 rollback fresh/on_tick_leaky straight=6e9c07b1fc75c339 replayed=6e9c07b1fc75c339 equal=true
+rollback per-tick/on_tick_leaky straight=6e9c07b1fc75c339 replayed=6e9c07b1fc75c339 equal=true
 fuel budget=1000 trap=Some(OutOfFuel) stopped_at=47 left=0
 fuel budget=10000 trap=Some(OutOfFuel) stopped_at=475 left=0
 nan canon=true 7fc00000 7fc00000 7fc00000 7fc00000 7fc00000 00000000 80000000 00000000 00000000 7ff80000 ffa00001 7fc00000
@@ -71,8 +73,10 @@ What each line shows:
 3. **Rollback**: snapshot at tick 2,500 of 6,000, restore, replay. Equal for the
    stateless guest whatever the instance lifetime. **The leaky guest** (a counter
    in its own linear memory) **diverges under a persistent instance** and is
-   repaired only by a fresh instance per call. A rollback restores what the host
-   owns, never a guest's memory.
+   repaired by a fresh instance per call or **per tick** (one instance shared by
+   every call in a tick, dropped at the tick's end). A rollback restores what the
+   host owns, never a guest's memory; at a tick boundary a per-tick guest's
+   memory is always the module's initial image.
 4. **Fuel**: a runaway loop traps `OutOfFuel` at the same iteration on both
    engines (47 at 1,000 units, 475 at 10,000). **Fuel is checked at function
    entry and loop back-edges, not per instruction**: the loop-free tick hook ran a
@@ -95,11 +99,14 @@ Per call (not compared across runs; this host, release):
 | --- | --- | --- |
 | persistent instance | 0.36 us | 1.2 to 1.3 us |
 | fresh instance per call | 9.5 us | 9.8 us |
-| fresh, pooling allocator | 4.3 us | 5.3 us |
+| fresh, pooling allocator | 4.2 to 4.3 us | 5.2 to 5.3 us |
+| **one pooled instance per tick, 20 calls on it** | **11.4 us a tick** | **27.3 us a tick** |
 | compile the 1.6 KB guest | 1.7 ms | 1.6 to 1.9 ms |
 
 Pulley's 3.4x per-call cost against Cranelift is the evidence it really
-interpreted (both compile through Cranelift; Pulley to its bytecode).
+interpreted (both compile through Cranelift; Pulley to its bytecode). For scale, a whole
+race tick (`Race::tick_sim_only`, eight craft) costs about 60 us on this machine
+(`docs/networking/README.md`, "Reconciliation cost").
 
 Binary size (`sizeprobe`, release, stripped):
 
