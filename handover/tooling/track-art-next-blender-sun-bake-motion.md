@@ -2,8 +2,9 @@
 status: ready-to-wire
 titles: [pulse, pure]
 updated: 2026-10-29
-summary: "Track art landing 2: the Blender add-on's art export, sun lamp, vertex-colour bake and keyframed motion; plus the maintainer decisions the first landing left open"
-difficulty: large (60)
+summary: "Track art landing 2: Blender art export, sun lamp, vertex-colour bake, keyframed motion, and the five maintainer decisions landing 1 left open"
+size: L (60)
+difficulty: medium (50)
 categories: [tooling, rendering]
 ---
 
