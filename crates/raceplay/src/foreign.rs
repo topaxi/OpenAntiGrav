@@ -104,7 +104,7 @@ pub fn host_title(track: &Track) -> anyhow::Result<Option<&'static oag_title::Ti
     };
     oag_source::title::by_slug(host).map(Some).ok_or_else(|| {
         anyhow::anyhow!(
-            "track.host {host:?} names no title this build knows; one of: {}",
+            "track.host {host:?} is no title this build knows (it knows {})",
             oag_source::title::ALL
                 .iter()
                 .map(|t| oag_source::layers::slug(t))

@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 
 /// Bump when the importer's verdicts change, so a cached "cannot load" or a
 /// cached title is not trusted across the change.
-const REVISION: u32 = 1;
+const REVISION: u32 = 2;
 
 const FILE_NAME: &str = "survey.toml";
 
@@ -43,6 +43,8 @@ struct Entry {
     id: String,
     title: String,
     author: Option<String>,
+    #[serde(default)]
+    host: Option<String>,
     tags: Vec<String>,
     problem: Option<String>,
 }
@@ -79,6 +81,7 @@ fn from_entry(entry: Entry) -> Listing {
         id: entry.id,
         title: entry.title,
         author: entry.author,
+        host: entry.host,
         kind: if entry.own { Kind::Own } else { Kind::Workshop },
         tags: entry.tags,
         problem: entry.problem,
@@ -94,6 +97,7 @@ fn to_entry(listing: &Listing, (secs, nanos): (u64, u32)) -> Entry {
         id: listing.id.clone(),
         title: listing.title.clone(),
         author: listing.author.clone(),
+        host: listing.host.clone(),
         tags: listing.tags.clone(),
         problem: listing.problem.clone(),
     }

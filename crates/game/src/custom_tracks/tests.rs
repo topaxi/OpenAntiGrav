@@ -7,6 +7,7 @@ fn listing(title: &str, problem: Option<&str>) -> Listing {
         id: format!("foreign:{title}"),
         title: title.to_string(),
         author: None,
+        host: None,
         kind: Kind::Workshop,
         tags: Vec::new(),
         problem: problem.map(str::to_string),

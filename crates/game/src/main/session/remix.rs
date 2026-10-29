@@ -94,6 +94,26 @@ fn craft_title_choices(titles: &[oag_game::launcher::Candidate]) -> Vec<menu::Ch
     choices
 }
 
+/// The survey row whose disc a track file's track side loads from: the first
+/// playable one of the title `host` names (`oag_source::layers::slug`), never a
+/// guest standing in for it (ADR-0076, decision 13). The error is the menu's
+/// note for a file whose host this machine has no disc of.
+pub(super) fn resolve_host_candidate<'a>(
+    titles: &'a [oag_game::launcher::Candidate],
+    host: &str,
+) -> Result<&'a oag_game::launcher::Candidate, String> {
+    titles
+        .iter()
+        .find(|c| {
+            c.playable()
+                .is_some_and(|t| oag_source::layers::slug(t) == host)
+        })
+        .ok_or_else(|| {
+            let name = oag_source::title::by_slug(host).map_or(host, |t| t.name);
+            format!("runs on {name}, which this machine has no disc of")
+        })
+}
+
 /// Which of `titles` backs `craft_title` - the matching one if it is there,
 /// or Wipeout 2048's own package when "Wipeout HD" is named and no real HD
 /// source is among `titles`.
@@ -429,9 +449,23 @@ impl Session {
 
         let track_title = self.settings.remix.track_title.clone();
         let custom = self.custom_track_selected(&track_title);
-        // CUSTOM has no source of its own: the race is flown on the CRAFT TITLE's.
+        // A CUSTOM file's track side loads from the disc of the title it names
+        // as its host (ADR-0076, decision 13), the craft from CRAFT TITLE's; a
+        // file that names none (a Workshop track) is flown on CRAFT TITLE's.
+        let custom_host = if custom {
+            match self.custom_track_host(&self.settings.remix.track) {
+                Ok(host) => host.cloned(),
+                Err(why) => {
+                    warn!("cannot race this custom track: {why}");
+                    self.race_options = Some(race_options);
+                    return;
+                }
+            }
+        } else {
+            None
+        };
         let track_candidate = if custom {
-            self.craft_backing().cloned()
+            custom_host.clone().or_else(|| self.craft_backing().cloned())
         } else {
             self.titles
                 .iter()
@@ -468,7 +502,7 @@ impl Session {
         // search path since it was saved) falls back the same way,
         // reported rather than silent.
         let craft_title = self.settings.remix.craft_title.clone();
-        let craft_source = if craft_title.is_empty() || custom {
+        let craft_source = if craft_title.is_empty() || (custom && custom_host.is_none()) {
             None
         } else {
             // `craft_backing` is what resolves "Wipeout HD" to 2048's
