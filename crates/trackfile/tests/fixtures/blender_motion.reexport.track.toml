@@ -5,7 +5,6 @@ version = "1.0.0"
 [track]
 id = "blender-motion"
 title = "Blender Motion"
-host = "wipeout-pulse"
 glb = "blender_motion.reexport.glb"
 notes = ["authored headless in Blender with the OAG add-on: 8 control points (chosen, not measured)"]
 
@@ -26,11 +25,15 @@ next = [0, -1]
 collision_nodes = 2
 speedup_pads = 1
 weapon_pads = 1
-art_meshes = 3
+art_meshes = 5
 
 [art]
-sky = "Data\\Environments\\03_Track\\track.vex"
 ambient = [0.1, 0.12, 0.15]
+
+[art.skybox]
+faces = [-1, -1, 0, -1, -1, -1]
+zenith = [0.1, 0.25, 0.6]
+horizon = [0.7, 0.75, 0.8]
 
 [art.sun]
 direction = [0.0, 1.0, -0.0]

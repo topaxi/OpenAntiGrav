@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [pulse, pure]
 updated: 2026-10-29
-summary: "Track art: format, hull rig (2a), Blender art export, sun, cover light (2b) and keyframed motion landed; next a Bake operator, HD sun"
+summary: "Track art: format, hull rig (2a), Blender art export, sun, cover light (2b), keyframed motion and pad plates landed; next a Bake operator, HD sun"
 size: L (60)
 difficulty: medium (50)
 categories: [tooling, rendering]
@@ -61,6 +61,12 @@ agreed in conversation and not yet built**, so nothing is re-derived. The decisi
   zenith/horizon gradient on HD's sky cube; add-on Own sky panel; `blender_loop` carries one and
   races on HD natively. Open: images inside the glb (no texture form for them in 1.x), and a
   Blender world Sky Texture or Environment Texture is not mapped (the panel's colours and images are).
+- **Pad plates are in** (branch `motion-pads`, 2026-10-29; ADR-0076 decision 15): `oag_pad` on
+  an art mesh routes it into the host's pad models, so weapon plates hide where weapons are off;
+  the disc export writes each circuit's plates (proof extended, draw for draw); the add-on has a
+  per-object *Pad plate* field and **Place Pad Plates**. Hillside's builder needs, after its
+  `add_pad` calls: `bpy.ops.oag.add_pad_plates(material="<a material name>", lift=0.3)` (or no
+  material for the chosen blue and amber colours); its plates then export tagged.
 - **Keyframed motion is in** (branch `motion-pads`, 2026-10-29; ADR-0076 decision 10's "Built"
   bullet, `docs/formats/track-file.md` "Motion", `docs/tools/blender.md` "Motion"): glTF
   animations on art nodes and an `oag/sun` node, `oag_loop`, read and written bit for bit, played

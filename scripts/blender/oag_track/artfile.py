@@ -19,6 +19,7 @@ from .model import (
     Art,
     ArtMesh,
     DirectionalLight,
+    PAD_PLATES,
     LensFlare,
     Skybox,
     Sun,
@@ -75,6 +76,8 @@ def validate(art):
             raise ArtError(f"{what}: unknown shadow role {m.shadow!r}")
         if m.alpha_ref is not None and not 0 <= m.alpha_ref <= 255:
             raise ArtError(f"{what}: alpha ref {m.alpha_ref} is not in 0..=255")
+        if m.pad is not None and m.pad not in PAD_PLATES:
+            raise ArtError(f"{what}: oag_pad {m.pad!r} is not speedup or weapon")
         if not 0 <= m.layer < 2**32:
             raise ArtError(f"{what}: layer {m.layer} is not an unsigned 32-bit integer")
     if art.skybox is not None:
@@ -139,6 +142,8 @@ def write_nodes(b, art, push):
             extras["oag_alpha_ref"] = m.alpha_ref
         if m.layer:
             extras["oag_layer"] = m.layer
+        if m.pad is not None:
+            extras["oag_pad"] = m.pad
         out.append(push(f"{PREFIX}{n}", [{"attributes": attrs, "indices": indices, "mode": 4}], extras))
     return out
 
@@ -286,4 +291,11 @@ def read_node(g, node, float_kind):
         alpha_ref=e.get("oag_alpha_ref"),
         layer=e.get("oag_layer", 0),
         transform=transform,
+        pad=_pad_tag(name, e.get("oag_pad")),
     )
+
+
+def _pad_tag(name, tag):
+    if tag is not None and tag not in PAD_PLATES:
+        raise ArtError(f"{name}: oag_pad {tag!r} is not speedup or weapon")
+    return tag

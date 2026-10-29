@@ -14,7 +14,8 @@ colour are its own). What becomes what:
 - Blend: the material's `oag_blend`, or from Blender's blend mode when it is
   `auto` (CLIP is `cutout` with `oag_alpha_ref` = alpha threshold x 255, BLEND is
   `alpha`, anything else `opaque`). `oag_culled` is the material's backface culling.
-- Per object: `oag_shadow`, `oag_layer`, `oag_lit`.
+- Per object: `oag_shadow`, `oag_layer`, `oag_lit`, `oag_pad` (a pad plate: `speedup` or
+  `weapon`, drawn with the host's pad models; *Place Pad Plates* makes them).
 - The sun is a Sun lamp (the scene's `oag_sun`, else the only Sun lamp): its
   world +Z is the direction towards it, its colour, `oag_intensity` (not Blender's
   strength, which is irradiance for Cycles), its angle as the angular diameter in
@@ -257,6 +258,7 @@ def art_meshes(obj, depsgraph, textures, local=False):
                     shadow=obj.oag_shadow,
                     alpha_ref=ref,
                     layer=int(obj.oag_layer),
+                    pad=None if obj.oag_pad == "none" else obj.oag_pad,
                 )
             )
         return out
@@ -537,6 +539,7 @@ def populate(context, art, manifest_dir):
         obj.oag_shadow = a.shadow
         obj.oag_layer = a.layer
         obj.oag_lit = a.lit
+        obj.oag_pad = a.pad or "none"
         _link(scene, obj)
         objs.append(obj)
     context.view_layer.update()
@@ -592,3 +595,47 @@ def populate(context, art, manifest_dir):
             if v is not None:
                 scene[f"oag_lensflare_{key}"] = list(v)
     scene_motion.apply(context, art, objs, sun_obj)
+
+
+PLATE_LIFT = 0.3
+# Chosen, not measured: what an untextured plate's baked colour is (blue speed, amber weapon).
+PLATE_COLOURS = {"speedup": (0.1, 0.45, 1.0, 1.0), "weapon": (1.0, 0.45, 0.05, 1.0)}
+
+
+def place_plates(context, material=None, lift=PLATE_LIFT):
+    """A plate mesh on every pad Empty: a quad `lift` above the pad's origin over its box's
+    lateral and forward extent, tagged `oag_pad`, receiving shadows, with `material` (a
+    Material, or none: the kind's chosen colour as its baked light). Replaces the plates a
+    previous run placed. Returns the plates."""
+    from .scene import _kind, _link
+
+    scene = context.scene
+    for o in [o for o in scene.objects if o.get("oag_plate_of")]:
+        bpy.data.objects.remove(o, do_unlink=True)
+    plates = []
+    pads = sorted((o for o in scene.objects if _kind(o) in ("speedup", "weapon")), key=lambda o: _natural(o.name))
+    for pad in pads:
+        kind = _kind(pad)
+        (x0, _, y0), (x1, _, y1) = pad.oag_min, pad.oag_max
+        me = bpy.data.meshes.new(f"plate {pad.name}")
+        me.from_pydata([(x0, y0, lift), (x1, y0, lift), (x1, y1, lift), (x0, y1, lift)], [], [(0, 1, 2, 3)])
+        uv = me.uv_layers.new(name="UVMap")
+        for loop, co in zip(me.loops, ((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0))):
+            uv.data[loop.index].uv = co
+        col = me.color_attributes.new("Col", "FLOAT_COLOR", "CORNER")
+        for c in col.data:
+            c.color = (1.0, 1.0, 1.0, 1.0) if material is not None else PLATE_COLOURS[kind]
+        me.color_attributes.active_color = col
+        if material is not None:
+            me.materials.append(material)
+        obj = bpy.data.objects.new(f"oag/plate/{pad.name}", me)
+        _link(scene, obj)
+        # The pad Empty's basis is unit (scale is ignored, the box is the size), so its
+        # world matrix places the quad: local X lateral, Y forward, Z up.
+        obj.matrix_world = pad.matrix_world.normalized()
+        obj["oag_plate_of"] = pad.name
+        obj.oag_pad = kind
+        obj.oag_shadow = "receive"
+        plates.append(obj)
+    context.view_layer.update()
+    return plates

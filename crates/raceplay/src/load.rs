@@ -616,7 +616,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let pad_model = if ps3_pad_model.is_some() {
         ps3_pad_model
     } else if !vex_geometry {
-        None
+        foreign_art.pads.take()
     } else {
         let pads = mesh::build_pads(&track, &track_blob, ps2_track_textures.as_ref())?;
         if pads.indices.is_empty() {
@@ -651,7 +651,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let weapon_pad_model = if rcs_drawn {
         geometry::weapon_pad_model(ps3_weapon_pad_model, options.weapons_on(), &mut report)
     } else if !vex_geometry {
-        None
+        crate::foreign::art::weapon_pads(&mut foreign_art, options.weapons_on(), &mut report)
     } else {
         let pads = mesh::build_weapon_pads(&track, &track_blob, ps2_track_textures.as_ref())?;
         if pads.indices.is_empty() {

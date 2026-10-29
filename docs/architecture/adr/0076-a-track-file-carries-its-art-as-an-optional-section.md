@@ -222,6 +222,13 @@ reason to author visibility by hand.
       one image per face. The committed `blender_loop` fixture carries one (gradient, its
       generated checker overhead), borrows nothing, and loads natively on HD with its art.
 
+15. **Pad plates are art tagged `oag_pad`** (`speedup` or `weapon`; lead, 2026-10-29, built on
+    branch `motion-pads`). The loader routes a tagged mesh into the host's pad model of that kind
+    instead of the track model, so the existing rule holds unchanged: a weapon plate is decoded in
+    every mode and drawn only where weapons are on. A plate is visual only (the pad volumes are
+    the pads) and never moves. The disc exporter writes each circuit's own plates, and decision
+    7's proof holds them equal to the `.vex` build draw for draw.
+
 ## Consequences
 
 - **A sun on our own tracks is what `docs/rendering/shadows.md` lists first among the three things

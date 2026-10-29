@@ -240,6 +240,12 @@ pub(crate) fn validate(art: &crate::art::Art) -> Result<(), Error> {
                         format!("mesh {m}, the file has {}", art.meshes.len()),
                     ));
                 }
+                Target::Mesh(m) if art.meshes[m].pad.is_some() => {
+                    return Err(range(
+                        &what,
+                        format!("mesh {m} is a pad plate, and pads never move"),
+                    ));
+                }
                 Target::Sun if art.sun.is_none() => {
                     return Err(range(&what, "it turns the sun and the file has no sun"));
                 }

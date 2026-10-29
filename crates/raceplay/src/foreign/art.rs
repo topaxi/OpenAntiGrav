@@ -20,7 +20,7 @@ use oag_assets::Archives;
 use oag_mesh::mesh::{self, Bounds, DrawCall, GpuVertex, Model, ModelTexture, TextureSlots};
 use oag_mesh::mesh_render::{HULL_LIGHTS, HullLights, ge_byte};
 use oag_trackfile::art::{
-    Art, ArtMaterial, ArtMesh, Blend, LensFlare, Light, ShadowRole, Sun, TextureSource,
+    Art, ArtMaterial, ArtMesh, Blend, LensFlare, Light, PadPlate, ShadowRole, Sun, TextureSource,
 };
 use oag_vex::vex::{self, BlendClass};
 
@@ -49,6 +49,13 @@ pub struct Extras {
     /// Whether the flare follows the turning sun (it names no direction of
     /// its own).
     pub flare_turns: bool,
+    /// The speed pads' plates (`oag_pad = "speedup"`): the loader's pad model.
+    pub pads: Option<Model>,
+    /// The weapon pads' plates (`oag_pad = "weapon"`): the loader's weapon pad
+    /// model, which a mode without weapons does not draw.
+    pub weapon_pads: Option<Model>,
+    /// Whether these come from a track file's art section (default: not).
+    pub from_art: bool,
 }
 
 /// A host circuit's texture table: one name and one decoded slot per
@@ -292,12 +299,49 @@ fn vertex(mesh: &ArtMesh, i: usize, glow: f32) -> GpuVertex {
 /// file order (`Model::sort_by_layer`, a stable sort), colours converted to the
 /// gamma bytes the renderer draws. A mesh whose texture did not resolve is left
 /// out and counted in `report`.
+///
+/// Pad plates (`oag_pad`) are left out: they are [`pad_model`]'s.
 #[must_use]
 pub fn model(label: &str, art: &Art, textures: TextureSlots, report: &mut Vec<String>) -> Model {
+    build(label, art, textures, None, report)
+}
+
+/// The plates of one pad kind as a pad model, built as [`model`] builds the
+/// track's, or `None` when the art tags none.
+#[must_use]
+pub fn pad_model(
+    label: &str,
+    art: &Art,
+    textures: TextureSlots,
+    which: PadPlate,
+    report: &mut Vec<String>,
+) -> Option<Model> {
+    art.meshes
+        .iter()
+        .any(|m| m.pad == Some(which))
+        .then(|| build(label, art, textures, Some(which), report))
+}
+
+fn build(
+    label: &str,
+    art: &Art,
+    textures: TextureSlots,
+    plates: Option<PadPlate>,
+    report: &mut Vec<String>,
+) -> Model {
     let mut model = Model::none(label);
     let mut skipped = 0usize;
-    let (anim_nodes, slots) = motion::nodes(art, report);
+    // Pad plates never move (`oag_trackfile` refuses it), so only the track
+    // model has nodes.
+    let (anim_nodes, slots) = if plates.is_none() {
+        motion::nodes(art, report)
+    } else {
+        (Vec::new(), vec![0; art.meshes.len()])
+    };
     for (m, &xform) in art.meshes.iter().zip(&slots) {
+        if m.pad != plates {
+            continue;
+        }
         let texture = match m.material.texture {
             None => None,
             Some(t) if textures.get(t).is_some_and(Option::is_some) => Some(t),
@@ -385,7 +429,12 @@ pub fn model(label: &str, art: &Art, textures: TextureSlots, report: &mut Vec<St
         .fold(0.0f32, f32::max)
         .max(0.001);
     report.push(format!(
-        "art: {} mesh(es), {} triangle(s), {} texture(s){}",
+        "art{}: {} mesh(es), {} triangle(s), {} texture(s){}",
+        match plates {
+            None => "",
+            Some(PadPlate::Speedup) => " speed pad plates",
+            Some(PadPlate::Weapon) => " weapon pad plates",
+        },
         model.mesh_count,
         model.indices.len() / 3,
         model.textures.iter().filter(|t| t.is_some()).count(),
@@ -486,7 +535,24 @@ pub fn extras(art: &Art, textures: &TextureSlots, report: &mut Vec<String>) -> E
         );
     }
     let lens_flare = lens_flare(art, textures, report);
+    let pads = pad_model(
+        "pad plates",
+        art,
+        textures.clone(),
+        PadPlate::Speedup,
+        report,
+    );
+    let weapon_pads = pad_model(
+        "weapon pad plates",
+        art,
+        textures.clone(),
+        PadPlate::Weapon,
+        report,
+    );
     Extras {
+        from_art: true,
+        pads,
+        weapon_pads,
         sky: art.sky.clone(),
         own_sky,
         flare_turns: sun_turn.is_some()
@@ -542,6 +608,32 @@ pub fn own_sky(art: &Art, textures: &TextureSlots, report: &mut Vec<String>) -> 
         }
     ));
     Some(mesh::sky_cube::own("art skybox", faces, gradient))
+}
+/// The weapon pad plates for the loader's weapon pad model, reported as the
+/// disc path reports its own: decoded either way, drawn only where the mode
+/// has weapons (`Scene::new` holds them back otherwise).
+pub fn weapon_pads(
+    extras: &mut Extras,
+    weapons_on: bool,
+    report: &mut Vec<String>,
+) -> Option<Model> {
+    let pads = extras.weapon_pads.take();
+    report.push(match &pads {
+        Some(p) => format!(
+            "{} the track file's weapon pad plates: {} triangle(s)",
+            if weapons_on {
+                "drawing"
+            } else {
+                "decoded but not drawing (weapons off in this mode)"
+            },
+            p.indices.len() / 3
+        ),
+        None if extras.from_art => {
+            "the track file tags no weapon pad plate (oag_pad); none is drawn".into()
+        }
+        None => return None,
+    });
+    pads
 }
 
 /// The GE light list Pulse and Pure on the PSP light a hull with
@@ -667,6 +759,7 @@ pub fn from_model(model: &Model, entry: &str, names: &[Option<String>]) -> Art {
             shadow: ShadowRole::Both,
             layer: draw.layer,
             transform: None,
+            pad: None,
         });
     }
     let textures = (0..model.textures.len())

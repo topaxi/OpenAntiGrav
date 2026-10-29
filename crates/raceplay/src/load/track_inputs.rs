@@ -7,6 +7,8 @@
 
 use super::*;
 use oag_assets::Archives;
+#[cfg(feature = "view")]
+use oag_trackfile::art::PadPlate;
 use oag_vex::collision::CollisionNode;
 use oag_vex::pads::PadVolume;
 use oag_vex::vex::classes::Classes;
@@ -447,6 +449,19 @@ pub(super) fn circuit_art(
     let model = circuit_model(archives, track, blob)?;
     let names = art::texture_names(blob)?;
     let mut out = art::from_model(&model, track, &names);
+    for which in [PadPlate::Speedup, PadPlate::Weapon] {
+        let pads = circuit_pads(archives, track, blob, which)?;
+        out.meshes.extend(
+            art::from_model(&pads, track, &names)
+                .meshes
+                .into_iter()
+                .map(|mut m| {
+                    m.name = format!("{} pad {}", which_name(which), m.name);
+                    m.pad = Some(which);
+                    m
+                }),
+        );
+    }
     art::lights_from_track(&mut out, blob, &oag_vex::vex::nodes(blob)?);
     let moving = model.vertices.iter().filter(|v| v.xform != 0).count();
     let scrolling = model.vertices.iter().filter(|v| v.anim != 0).count();
@@ -472,6 +487,39 @@ pub(super) fn circuit_art(
         }
     }
     Ok(Some(out))
+}
+
+#[cfg(feature = "view")]
+fn which_name(which: PadPlate) -> &'static str {
+    match which {
+        PadPlate::Speedup => "speed",
+        PadPlate::Weapon => "weapon",
+    }
+}
+
+/// A circuit's pad plates of one kind as the race loader builds them
+/// (`mesh::build_pads`, `mesh::build_weapon_pads`, the PS2's texture set beside
+/// it when the file embeds none). Their texture slots index the same `Texture`
+/// nodes the track model's do.
+#[cfg(feature = "view")]
+pub fn circuit_pads(
+    archives: &mut Archives,
+    track: &str,
+    blob: &[u8],
+    which: PadPlate,
+) -> Result<Model> {
+    let build = match which {
+        PadPlate::Speedup => mesh::build_pads,
+        PadPlate::Weapon => mesh::build_weapon_pads,
+    };
+    let mut model = build(track, blob, None)?;
+    if !model.textures.is_empty()
+        && model.textures.iter().all(Option::is_none)
+        && let Some(external) = ps2_texture_set(archives, track)
+    {
+        model = build(track, blob, Some(&external))?;
+    }
+    Ok(model)
 }
 
 /// A circuit's track model as the race loader builds it (the PS2's texture set

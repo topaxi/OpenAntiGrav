@@ -24,6 +24,7 @@ fn quad(at: f32, texture: Option<usize>, blend: Blend, lit: bool) -> ArtMesh {
         shadow: ShadowRole::Both,
         layer: 0,
         transform: None,
+        pad: None,
     }
 }
 

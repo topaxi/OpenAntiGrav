@@ -131,8 +131,10 @@ class ArtMesh:
     # Rest pose ((tx, ty, tz), (qx, qy, qz, qw), (sx, sy, sz)) in the format's axes, only on a mesh an
     # animation moves; its vertices are then in the node's own space.
     transform: tuple = None
+    pad: str = None  # "speedup" or "weapon": a pad plate, drawn with the host's pad models
 
 
+PAD_PLATES = ("speedup", "weapon")
 REPEATS = ("loop", "clamp")
 PATHS = ("translation", "rotation", "scale")
 

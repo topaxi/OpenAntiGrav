@@ -74,6 +74,34 @@ pub struct ArtMesh {
     /// are then in the node's own space. `None` is the identity (a static
     /// mesh's vertices are always in world space).
     pub transform: Option<motion::Trs>,
+    /// A pad plate: drawn with the host's pad models instead of the track
+    /// model, so a weapon plate hides where weapons are off. `oag_pad`.
+    pub pad: Option<PadPlate>,
+}
+
+/// Which pad a plate mesh shows (`oag_pad`). Purely visual: what a pad does is
+/// the pad volumes (`oag/pads/*`), which never move.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PadPlate {
+    /// A speed pad's plate (`"speedup"`).
+    Speedup,
+    /// A weapon pad's plate (`"weapon"`): not drawn in a mode without weapons.
+    Weapon,
+}
+
+impl PadPlate {
+    pub(crate) fn tag(self) -> &'static str {
+        match self {
+            Self::Speedup => "speedup",
+            Self::Weapon => "weapon",
+        }
+    }
+
+    pub(crate) fn from_tag(tag: &str) -> Option<Self> {
+        [Self::Speedup, Self::Weapon]
+            .into_iter()
+            .find(|p| p.tag() == tag)
+    }
 }
 
 /// A mesh's material.

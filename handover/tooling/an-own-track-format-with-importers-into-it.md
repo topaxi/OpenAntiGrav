@@ -71,7 +71,7 @@ are committed fixtures (`just blender-fixtures`), read by `crates/trackfile/test
 - **What an export loses** (named in its notes): per-batch alpha-test reference (0x10 / 0x7f on Pulse and Pure; the art
   draws with the shader default), texture animation, `Anim Transform` motion (written at time zero), LOD tiers (finest
   written), render layer and depth order, the PSP glow stamp, the shine pass (visible: Vineta K's building windows draw
-  black, not blue), the gantry panel. Pad plates are separate models and are not exported, so a track file draws none.
+  black, not blue), the gantry panel. Pad plates travel since 2026-10-29 (`oag_pad`, branch `motion-pads`).
 - `COLOR_0` holds the renderer's vertex colour verbatim (byte/255 on PSP), not linear light as glTF reads it.
 - Remaining absent records: fog, point lights, clouds, scenery animation, emitters, PVS, Zone.
 - Hosts other than Pulse (HD, 2048, Omega physics) are not exercised for a raced track file.

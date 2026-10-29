@@ -181,7 +181,7 @@ fn the_art_authored_in_blender_reads_back_as_authored() {
     use oag_trackfile::art::{Blend, Light, ShadowRole, TextureSource};
     let l = load("blender_loop.track.toml");
     let art = l.track.art.as_ref().expect("the loop carries art");
-    assert_eq!(art.meshes.len(), 1);
+    assert_eq!(art.meshes.len(), 3, "the canopy and a plate on each pad");
     let m = &art.meshes[0];
     assert_eq!(m.name, "canopy");
     assert_eq!(m.material.blend, Blend::Cutout);
@@ -243,6 +243,27 @@ fn the_art_authored_in_blender_reads_back_as_authored() {
     );
     assert_eq!(art.lens_flare.and_then(|f| f.atlas), Some(0));
 
+    // *Place Pad Plates*: a quad 0.3 above each pad's origin over its box, tagged with the
+    // pad's kind, receiving shadows, untextured, in the kind's chosen colour.
+    use oag_trackfile::art::PadPlate;
+    for (plate, kind, pad) in [
+        (&art.meshes[1], PadPlate::Speedup, &l.track.speedup_pads[0]),
+        (&art.meshes[2], PadPlate::Weapon, &l.track.weapon_pads[0]),
+    ] {
+        assert_eq!((plate.pad, plate.shadow), (Some(kind), ShadowRole::Receive));
+        assert_eq!((plate.positions.len(), plate.material.texture), (4, None));
+        let up = [pad.to_world[4], pad.to_world[5], pad.to_world[6]];
+        let origin = [pad.to_world[12], pad.to_world[13], pad.to_world[14]];
+        for p in &plate.positions {
+            let lift: f32 = (0..3).map(|k| (p[k] - origin[k]) * up[k]).sum();
+            assert!(
+                (lift - 0.3).abs() < 1e-3,
+                "{kind:?} plate at {p:?}, lift {lift}"
+            );
+        }
+    }
+    assert_eq!(art.meshes[2].colours[0], [1.0, 0.45, 0.05, 1.0]);
+
     // The canopy casts over the line: the points under it are darkened, the rest are not.
     let light: Vec<[u8; 4]> = l.track.ai.paths[0]
         .points
@@ -291,7 +312,11 @@ fn motion_authored_in_blender_reads_back_as_keyed() {
     let l = load("blender_motion.track.toml");
     assert!(l.unread.is_empty(), "{:?}", l.unread);
     let art = l.track.art.as_ref().expect("art");
-    assert_eq!(art.meshes.len(), 3, "canopy plus the airship's two slots");
+    assert_eq!(
+        art.meshes.len(),
+        5,
+        "the airship's two slots, the canopy, two plates"
+    );
     for m in &art.meshes[..2] {
         let t = m.transform.expect("the airship moves");
         assert_eq!(t.translation, [-200.0, 60.0, -500.0], "{}", m.name);
@@ -302,7 +327,10 @@ fn motion_authored_in_blender_reads_back_as_keyed() {
                 .all(|p| p[0].abs() == 40.0 && p[1].abs() == 20.0)
         );
     }
-    assert!(art.meshes[2].transform.is_none(), "the canopy stands still");
+    assert!(
+        art.meshes[2..].iter().all(|m| m.transform.is_none()),
+        "the canopy and the plates stand still"
+    );
     let [ship, sun] = art.animations.as_slice() else {
         panic!("{:?}", art.animations);
     };

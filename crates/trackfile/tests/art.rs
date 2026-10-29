@@ -30,6 +30,7 @@ fn quad(name: &str, texture: Option<usize>) -> ArtMesh {
         shadow: ShadowRole::Cast,
         layer: 0,
         transform: None,
+        pad: None,
     }
 }
 
@@ -236,4 +237,35 @@ fn an_own_skybox_round_trips_and_is_refused_where_it_cannot_draw() {
         (s.zenith, s.horizon) = (None, None);
     });
     refused(&|b| b.skybox.as_mut().unwrap().faces[0] = Some(9));
+}
+/// A pad plate (`oag_pad`) reads back as tagged; an unknown tag and a plate an
+/// animation moves are refused by name.
+#[test]
+fn a_pad_plate_round_trips_and_is_refused_when_wrong() {
+    use oag_trackfile::art::PadPlate;
+    let mut a = art();
+    a.meshes[1].pad = Some(PadPlate::Weapon);
+    let track = with_art(a);
+    let back = round(&track);
+    assert_eq!(
+        back.art.as_ref().unwrap().meshes[1].pad,
+        Some(PadPlate::Weapon)
+    );
+    assert_eq!(back, track);
+
+    let p = to_parts(&track, "t.glb").unwrap();
+    let mut glb = p.glb.clone();
+    let from = b"\"oag_pad\":\"weapon\"";
+    let at = glb
+        .windows(from.len())
+        .position(|w| w == from)
+        .expect("tagged");
+    glb[at..at + from.len()].copy_from_slice(b"\"oag_pad\":\"wobble\"");
+    let err = from_parts(&p.manifest, &glb).unwrap_err();
+    assert!(err.to_string().contains("oag_pad"), "{err}");
+
+    let mut moving = crate::motion::moving();
+    moving.art.as_mut().unwrap().meshes[1].pad = Some(PadPlate::Speedup);
+    let err = to_parts(&moving, "t.glb").unwrap_err();
+    assert!(err.to_string().contains("pads never move"), "{err}");
 }

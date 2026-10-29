@@ -53,6 +53,8 @@ def validate(art):
                     raise MotionError(f"{what}: the sun takes rotation only, and needs a sun")
             elif not 0 <= ch.target < len(art.meshes):
                 raise MotionError(f"{what}: mesh {ch.target}, the file has {len(art.meshes)}")
+            elif art.meshes[ch.target].pad is not None:
+                raise MotionError(f"{what}: mesh {ch.target} is a pad plate, and pads never move")
             key = (ch.target, ch.path)
             if key in driven:
                 raise MotionError(f"{what}: a second channel drives {key}")

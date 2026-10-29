@@ -8,7 +8,7 @@ use serde_json::{Value, json};
 use super::{
     Bin, ELEMENT_ARRAY_BUFFER, Error, TRIANGLES, UINT, anim, extras_of, identity, same_len,
 };
-use crate::art::{Art, ArtMaterial, ArtMesh, Blend, ShadowRole};
+use crate::art::{Art, ArtMaterial, ArtMesh, Blend, PadPlate, ShadowRole};
 
 pub(super) const PREFIX: &str = "oag/art/";
 
@@ -52,6 +52,9 @@ pub(super) fn write(
         }
         if m.layer != 0 {
             extras["oag_layer"] = json!(m.layer);
+        }
+        if let Some(pad) = m.pad {
+            extras["oag_pad"] = json!(pad.tag());
         }
         nodes.push(push(
             &format!("{PREFIX}{n}"),
@@ -138,6 +141,17 @@ pub(super) fn read(index: usize, node: &gltf::Node<'_>, blob: &[u8]) -> Result<A
             )
         })?,
     };
+    let pad = text("oag_pad")
+        .map(|tag| {
+            PadPlate::from_tag(tag).ok_or_else(|| {
+                Error::accessor(
+                    &record,
+                    "oag_pad",
+                    format!("{tag:?} is not \"speedup\" or \"weapon\""),
+                )
+            })
+        })
+        .transpose()?;
     let texture = extras
         .get("oag_texture")
         .map(|v| {
@@ -182,5 +196,6 @@ pub(super) fn read(index: usize, node: &gltf::Node<'_>, blob: &[u8]) -> Result<A
         shadow,
         layer,
         transform,
+        pad,
     })
 }

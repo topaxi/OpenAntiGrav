@@ -7,8 +7,8 @@
 
 `loop` builds a track from scratch (8 control points, floor, walls, start, one pad
 of each kind, and art: a canopy over the line textured with a generated checker,
-a sun, a fill light, an ambient, its own sky (gradient, checker overhead) and a
-lens flare) and exports
+a sun, a fill light, an ambient, its own sky (gradient, checker overhead), a
+lens flare and a plate on each pad) and exports
 `blender_loop.track.toml` with `blender_checker.png` beside it. `motion` is the
 same loop with keyframed motion (ADR-0076 decision 10): an airship box that flies
 and spins on a loop, and a sun that turns and holds, as `blender_motion.track.toml`.
@@ -231,6 +231,7 @@ def build_loop(out_dir, motion=False):
     ctx.scene.cursor.location = (-900.0, 0.0, 0.0)
     assert bpy.ops.oag.add_pad(kind="weapon") == {"FINISHED"}
     add_art(ctx, out_dir)
+    assert bpy.ops.oag.add_pad_plates() == {"FINISHED"}
     obj.oag_cover_light = 96
     if motion:
         add_motion(ctx)
