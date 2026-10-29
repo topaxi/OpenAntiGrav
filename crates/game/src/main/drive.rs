@@ -78,6 +78,7 @@ pub(crate) fn run(app: &mut App, script: Script, state_log: Option<&Path>) -> Re
     for (number, (line, step)) in script.steps.iter().enumerate() {
         driver.reset_budget();
         if let Err(why) = driver.exec(step) {
+            driver.session.finish_endrace_prefetch();
             driver.out.flush().ok();
             bail!(
                 "drive: step {} (line {line}): {step}: {why}\n  last state: {}",
@@ -89,6 +90,7 @@ pub(crate) fn run(app: &mut App, script: Script, state_log: Option<&Path>) -> Re
             break;
         }
     }
+    driver.session.finish_endrace_prefetch();
     driver.out.flush()?;
     Ok(())
 }

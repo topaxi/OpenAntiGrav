@@ -190,6 +190,18 @@ impl Session {
         stage.endrace_prefetch_started = true;
     }
 
+    /// Waits for the EndRace worker, if one runs, and drops what it built. A run that ends
+    /// (`--drive`) calls this before the process exits: the worker holds clones of the device
+    /// and queue, and a process that exits under it tears the Vulkan driver down mid-submit
+    /// (a SIGSEGV on a loaded machine).
+    pub(crate) fn finish_endrace_prefetch(&mut self) {
+        if let Stage::Race(stage) = &mut self.stage
+            && let Some(mut task) = stage.endrace_prefetch.take()
+        {
+            drop(task.join());
+        }
+    }
+
     /// The prepared screens: the worker's when it ran and succeeded, else built here. `None`
     /// when they cannot be built, which has been said already.
     pub(super) fn take_endrace_prep(&mut self) -> Option<EndRacePrep> {

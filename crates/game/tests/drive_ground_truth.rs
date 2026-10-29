@@ -29,6 +29,11 @@ impl Run {
         self.states.last().expect("the game reported no state")
     }
 
+    /// Why the run did not succeed: its exit status and the lines that are not driver log noise.
+    fn why_not_success(&self) -> String {
+        format!("{:?}\n{}", self.output.status, self.stderr())
+    }
+
     fn stderr(&self) -> String {
         String::from_utf8_lossy(&self.output.stderr).into_owned()
     }
@@ -94,7 +99,7 @@ fn the_race_box_launches_the_track_and_craft_it_was_told_to_pick() {
          until stage=race within 3000; ticks 30",
         None,
     );
-    assert!(run.output.status.success(), "{}", run.stderr());
+    assert!(run.output.status.success(), "{}", run.why_not_success());
     let last = run.last();
     assert_eq!(text(last, &["stage"]), Some("race"));
     assert_eq!(text(last, &["race", "title"]), Some("Wipeout Pulse"));
@@ -141,7 +146,7 @@ fn race_remix_launches_a_track_file_from_its_custom_title() {
          select launch_remix; press cross; until stage=race within 3000; ticks 30",
         Some(&tracks),
     );
-    assert!(run.output.status.success(), "{}", run.stderr());
+    assert!(run.output.status.success(), "{}", run.why_not_success());
     let last = run.last();
     assert_eq!(text(last, &["stage"]), Some("race"));
     assert!(
@@ -168,7 +173,7 @@ fn race_remix_launches_a_track_file_in_zone_mode() {
          select launch_remix; press cross; until stage=race within 3000; ticks 30",
         Some(&tracks),
     );
-    assert!(run.output.status.success(), "{}", run.stderr());
+    assert!(run.output.status.success(), "{}", run.why_not_success());
     let last = run.last();
     assert_eq!(text(last, &["stage"]), Some("race"));
     assert_eq!(text(last, &["race", "mode"]), Some("zone"));
