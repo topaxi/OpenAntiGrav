@@ -165,6 +165,30 @@ below OPTIONS with the pad or pointer. `--menu-page mods` draws the page headles
 profile's switches, and `--menu-page mods:<mod id>` puts the MOD row on that mod. `just mods-list`
 (`oag-mod`) does not read the game's settings and lists every mod it finds.
 
+## Simulation modules: `[extension]`
+
+A mod may carry one WebAssembly rules module that runs in every race it is on for
+(its `titles`), except the original campaigns:
+
+```toml
+[extension]
+simulation = true        # required with a rules module
+api = 1                  # the ABI the module was built against
+memory_pages = 2         # its maximum memory, 64 KiB pages (1 to 256; default 16)
+state_bytes = 16         # its state blob, at most 1,024 bytes
+
+[extension.rules]
+module = "ext/kiss_curse.wasm"
+```
+
+The game must be built with the `extensions` feature
+(`cargo run -p oag-game --features extensions`); without it no module is looked for.
+The manifest is read with the others; the `.wasm` is opened only by the race that
+runs it. No module runs in an original campaign or a network race. A race running a
+module is MODDED and records no replay. The ABI, the event and the command are in
+[docs/architecture/wasm-extensions/](../architecture/wasm-extensions/README.md)
+("What is built"); `assets/mods/examples/kiss-curse/` is the worked example.
+
 ## Packaging
 
 Entries may be **stored, deflate or zstd** (zip method 93); the reader takes all three.

@@ -36,6 +36,7 @@ oag-hud = { workspace = true, optional = true }
 oag-input = { workspace = true, optional = true }
 oag-livery = { workspace = true, optional = true }
 oag-mesh = { workspace = true, optional = true }
+oag-modhost = { workspace = true, optional = true }
 oag-physics.workspace = true
 oag-pob.workspace = true
 oag-post = { workspace = true, optional = true }
@@ -102,6 +103,10 @@ view = [
 # (maintainer, 2026-10-27: it does not render enough to ship); `just check`
 # builds it so it does not rot. Own-format track files need none of it.
 ballisticng = ["dep:oag-ballisticng", "dep:oag-unity"]
+# Simulation mods: WebAssembly modules called once per tick through `oag-modhost`
+# (wasmtime). Off by default; off, nothing of wasmtime is compiled or linked and a
+# race offered a module says it was left out. See `crate::extensions`.
+extensions = ["dep:oag-modhost"]
 # See `oag-render`'s feature of the same name. Off by default.
 perf-probe = ["view", "oag-render/perf-probe"]
 
@@ -110,10 +115,14 @@ workspace = true
 
 [dev-dependencies]
 oag-audio.workspace = true
+# `kiss_curse_ground_truth` reads the example mod as the game does.
+oag-mod.workspace = true
 oag-omega.workspace = true
 oag-schema = { workspace = true, features = ["validate"] }
 oag-testdata.workspace = true
 pollster.workspace = true
+# The extension tests' guests, in the text format.
+wat = "1.262.0"
 
 [[test]]
 name = "it_a_g"

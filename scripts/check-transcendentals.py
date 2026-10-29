@@ -66,6 +66,8 @@ ROOT = Path(__file__).resolve().parent.parent
 SCANNED_CRATES = (
     "core", "physics", "weapons", "gameplay", "ai", "race", "formats", "video", "tables",
     "texture", "vex", "pob", "rcs", "display", "ui", "ui-screens", "replay", "trackfile", "bytes",
+    # The WebAssembly host: range checks only, no float law of its own.
+    "modhost",
 )
 
 # Not required by IEEE-754 to be correctly rounded, so not portable. `sqrt` is

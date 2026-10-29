@@ -43,6 +43,7 @@ mod hud_style_ground_truth;
 mod hull_gather_ground_truth;
 mod hull_light_scale_ground_truth;
 mod intro_camera_ground_truth;
+mod kiss_curse_ground_truth;
 mod language_offered_ground_truth;
 mod lap_times_ground_truth;
 mod launch_boost_ground_truth;

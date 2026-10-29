@@ -525,7 +525,19 @@ fn run(cli: Cli) -> Result<()> {
             cli.net.connect(&source)?;
             None
         };
-        let options = pending.race_options(&source, Vec::new());
+        #[cfg_attr(not(feature = "extensions"), expect(unused_mut, reason = "extensions off"))]
+        let mut options = pending.race_options(&source, Vec::new());
+        // The rules modules of the mods that are on. None in a network race (the host's
+        // race runs vanilla, and the lobby's fingerprint leaves the examples out), an
+        // original campaign's cell (`--campaign-cell`) or a 2048 event (`--event`).
+        #[cfg(feature = "extensions")]
+        {
+            let vanilla = net.is_some() || cli.wreck.campaign_cell.is_some() || cli.event.is_some();
+            match oag_game::mods::Mods::load(&settings.mods.disabled) {
+                Ok(mods) => oag_game::mod_extensions::attach(&mut options, &mods, vanilla),
+                Err(e) => warn!("mods: {e:#}; the race runs no simulation mod"),
+            }
+        }
         let options = match &net {
             Some(net) => net.race_options(options)?,
             None => options,

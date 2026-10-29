@@ -79,7 +79,14 @@ impl Race {
     /// be refused at tick zero. `header` carries the key and whatever else
     /// the caller needs to rebuild this race; its slots are replaced by the
     /// slots a person flies here.
+    ///
+    /// A MODDED race ([`Self::is_modded`]) records nothing: a simulation mod's race
+    /// has no replay in this phase (`docs/architecture/wasm-extensions/README.md` 4.4).
     pub fn start_recording(&mut self, mut header: Header) {
+        if self.is_modded() {
+            log::info!("replay: not recorded, a simulation mod runs in this race");
+            return;
+        }
         header.slots = self
             .sim
             .world

@@ -154,6 +154,9 @@ impl RaceSim {
             }
         }
 
+        // Last, and nothing at all with no module: a vanilla stream keeps its shape.
+        self.extensions.hash_into(&mut hasher);
+
         hasher.finish()
     }
 }

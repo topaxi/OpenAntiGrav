@@ -76,6 +76,34 @@ pub struct Manifest {
     pub titles: Vec<String>,
     /// The game versions it works with.
     pub oag: Option<semver::VersionReq>,
+    /// `[extension]`: the WebAssembly modules the mod runs, if any.
+    pub extension: Option<Extension>,
+}
+
+/// `[extension]` (`docs/architecture/wasm-extensions/README.md`, section 1.1). Read
+/// here; the `.wasm` it names is opened only by the race that runs it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Extension {
+    /// `simulation = true`: the mod changes the race, so the session is MODDED.
+    pub simulation: bool,
+    /// The ABI major the modules were built against.
+    pub api: u32,
+    /// The guest's maximum linear memory, 64 KiB pages.
+    pub memory_pages: u32,
+    /// The host-owned state blob's length, bytes.
+    pub state_bytes: u32,
+    /// `[extension.rules]`: a rules module, which may act on every craft of a race.
+    pub rules: Option<Rules>,
+}
+
+/// `[extension.rules]`: one module that runs in every race the mod is on for, on any
+/// grid slot. The README binds a rules module to a mode file (`modes/*.toml`), which
+/// does not exist yet; until it does, a mod's rules module applies to every race but
+/// the original campaigns.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Rules {
+    /// The module's path in the mod.
+    pub module: String,
 }
 
 #[derive(Deserialize)]
@@ -85,6 +113,31 @@ struct File {
     header: Option<oag_schema::Header>,
     #[serde(rename = "mod")]
     module: Table,
+    extension: Option<ExtensionTable>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ExtensionTable {
+    #[serde(default)]
+    simulation: bool,
+    api: u32,
+    #[serde(default = "default_memory_pages")]
+    memory_pages: u32,
+    #[serde(default)]
+    state_bytes: u32,
+    rules: Option<RulesTable>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RulesTable {
+    module: String,
+}
+
+/// 1 MiB. Chosen.
+fn default_memory_pages() -> u32 {
+    16
 }
 
 #[derive(Deserialize)]
@@ -124,6 +177,7 @@ impl Manifest {
     pub fn parse(text: &str, has: &dyn Fn(&str) -> bool) -> Result<Self, Error> {
         let file: File = toml::from_str(text)?;
         oag_schema::check(file.header.as_ref(), SCHEMA_KIND, SCHEMA_MAJOR)?;
+        let extension = file.extension.map(|e| extension(e, has)).transpose()?;
         let t = file.module;
 
         if !valid_id(&t.id) {
@@ -185,6 +239,7 @@ impl Manifest {
             keywords: t.keywords,
             titles: t.titles,
             oag,
+            extension,
         })
     }
 
@@ -193,6 +248,35 @@ impl Manifest {
     pub fn works_with(&self, game: &semver::Version) -> bool {
         self.oag.as_ref().is_none_or(|req| req.matches(game))
     }
+}
+
+fn extension(e: ExtensionTable, has: &dyn Fn(&str) -> bool) -> Result<Extension, Error> {
+    let bad_extension = |key: &'static str, problem: String| Error::Bad { key, problem };
+    let rules = e.rules.map(|r| Rules { module: r.module });
+    if let Some(rules) = &rules {
+        if !e.simulation {
+            return Err(bad_extension(
+                "extension.simulation",
+                format!(
+                    "{} is a simulation module; say `simulation = true`",
+                    rules.module
+                ),
+            ));
+        }
+        if !has(&rules.module) {
+            return Err(bad_extension(
+                "extension.rules.module",
+                format!("{:?} is not in the mod", rules.module),
+            ));
+        }
+    }
+    Ok(Extension {
+        simulation: e.simulation,
+        api: e.api,
+        memory_pages: e.memory_pages,
+        state_bytes: e.state_bytes,
+        rules,
+    })
 }
 
 pub(crate) fn valid_id(id: &str) -> bool {

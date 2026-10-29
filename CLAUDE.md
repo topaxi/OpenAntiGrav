@@ -196,6 +196,7 @@ Add a crate only when its milestone opens; no placeholder crates.
 | `oag-log` | Binaries' log sink: terminal plus a pruned timestamped file. |
 | `oag-mobile` | Android/iOS app glue under `oag-game` ([ADR-0065](docs/architecture/adr/0065-one-mobile-crate-for-every-phone-os.md)). |
 | `oag-mod` | Mods (folder, `.zip`, `.oagmod`), `oag-mod.toml`, search path, built-in `oag-extras` ([ADR-0066](docs/architecture/adr/0066-the-menu-is-the-disc-plus-mods.md)). |
+| `oag-modhost` | WebAssembly extension host behind the `extensions` feature: wasmtime (Cranelift, fuel, NaN canonicalisation), the I/O buffer ABI, a fresh pooled instance per tick, the fault path; no engine until a module loads. Knows no game ([`docs/architecture/wasm-extensions/`](docs/architecture/wasm-extensions/README.md)). |
 | `oag-net` | Network play: wire messages, WebTransport `Link`, authoritative `host`, predicting `client` (feature), the `oag-server` binary ([ADR-0070](docs/architecture/adr/0070-the-network-transport-is-webtransport.md)). |
 | `oag-input` | Real devices to the abstract button layer and an `InputSnapshot`. |
 | `oag-view` | Asset viewer: CLI, window, texture browser. |
