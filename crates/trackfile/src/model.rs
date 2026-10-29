@@ -1,3 +1,4 @@
+use crate::art::Art;
 use oag_vex::collision::CollisionNode;
 use oag_vex::pads::PadVolume;
 use oag_vex::track::{AiTrack, StartPosition};
@@ -5,13 +6,13 @@ use oag_vex::track::{AiTrack, StartPosition};
 /// What format 1.x has no field for. A loader that reads a track file names
 /// these in its report rather than borrowing them from the host title: absent
 /// means absent (CLAUDE.md, "Never invent what the assets already author").
-pub const ABSENT: [&str; 10] = [
-    "sky",
+/// The art meshes, their textures, the sky, the sun, the ambient and the lens
+/// flare are [`Track::art`] (ADR-0076), present or not per file.
+pub const ABSENT: [&str; 8] = [
     "fog",
-    "lights",
+    "point lights",
     "clouds",
-    "art meshes and materials",
-    "scenery and its animation",
+    "scenery animation",
     "track particle emitters",
     "sound emitters",
     "visibility sets (PVS)",
@@ -40,6 +41,9 @@ pub struct Track {
     pub speedup_pads: Vec<PadVolume>,
     /// Weapon pads.
     pub weapon_pads: Vec<PadVolume>,
+    /// The art: meshes, textures, sun, sky, flare. `None` races as flat-shaded
+    /// collision. The simulation never reads it, so it is in no world hash.
+    pub art: Option<Art>,
     /// Free text the producer recorded: what it chose, ignored or could not map.
     /// Carried through a round trip so a loader report can print it.
     pub notes: Vec<String>,

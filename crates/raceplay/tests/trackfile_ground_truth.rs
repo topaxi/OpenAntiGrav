@@ -12,10 +12,34 @@ const IMAGES: [&str; 3] = [
     "data/images/pulse-ps2-eu.chd",
 ];
 
-fn circuits(image: &str) -> Vec<String> {
-    let mut archives = oag_pulse::open(image).expect("mounting the disc");
+/// Pure's images, walked by the same export check: its circuits are the other
+/// half of ADR-0076's art proof.
+const PURE_IMAGES: [&str; 2] = [
+    "data/images/pure-psp-eu.chd",
+    "data/images/pure-psp-usa.chd",
+];
+
+fn is_pure(image: &str) -> bool {
+    PURE_IMAGES.contains(&image)
+}
+
+fn open(image: &str, path: &str) -> oag_assets::Archives {
+    if is_pure(image) {
+        oag_pure::open(path).expect("mounting the disc")
+    } else {
+        oag_pulse::open(path).expect("mounting the disc")
+    }
+}
+
+fn circuits(image: &str, path: &str) -> Vec<String> {
+    let mut archives = open(image, path);
+    let definition = if is_pure(image) {
+        oag_pure::names::GAME_PLUGIN_DEFINITION
+    } else {
+        oag_pulse::names::GAME_PLUGIN_DEFINITION
+    };
     let blob = archives
-        .read_name(oag_pulse::names::GAME_PLUGIN_DEFINITION)
+        .read_name(definition)
         .expect("the game plugin definition");
     let definition = oag_tables::fexml::expand(&blob)
         .or_else(|_| oag_tables::fexml::text(&blob))
@@ -25,6 +49,9 @@ fn circuits(image: &str) -> Vec<String> {
         .map(race::catalogue::Track::entry_name)
         .collect()
 }
+
+#[path = "trackfile_ground_truth/art_proof.rs"]
+mod art_proof;
 
 fn options(image: &str, track: &str) -> race::Options {
     race::Options {
@@ -54,6 +81,7 @@ fn same(a: &Track, b: &Track) -> Result<(), String> {
     eq!("speedup pads", a.speedup_pads, b.speedup_pads);
     eq!("weapon pads", a.weapon_pads, b.weapon_pads);
     eq!("notes", a.notes, b.notes);
+    eq!("art", a.art, b.art);
     eq!("collision node count", a.nodes.len(), b.nodes.len());
     for (i, (x, y)) in a.nodes.iter().zip(&b.nodes).enumerate() {
         eq!("node kind", x.kind, y.kind);
@@ -76,19 +104,20 @@ fn same(a: &Track, b: &Track) -> Result<(), String> {
     Ok(())
 }
 
-#[test]
-#[ignore = "needs the Pulse images"]
-fn every_pulse_circuit_exports_and_reads_back_the_same() {
+/// Every circuit of one image: export, write, read back, compare, and the art
+/// proof (`art_proof`). One test per image, because the walk is the slow part
+/// and nextest runs tests, not loop iterations, in parallel.
+fn every_circuit_exports_and_reads_back_the_same(image: &str) {
     let mut total = 0;
     let mut refused = Vec::new();
-    let mut checked_images = 0;
-    for image in IMAGES {
+    let mut art = art_proof::Tally::default();
+    {
         let Some(path) = oag_testdata::image(image) else {
-            continue;
+            return;
         };
-        checked_images += 1;
         let path = path.display().to_string();
-        for track in circuits(&path) {
+        let mut archives = open(image, &path);
+        for track in circuits(image, &path) {
             total += 1;
             let exported = match race::export_track(&options(&path, &track)) {
                 Ok(t) => t,
@@ -104,6 +133,8 @@ fn every_pulse_circuit_exports_and_reads_back_the_same() {
                     continue;
                 }
             };
+            oag_schema::validate::accepts("track", 1, &parts.manifest)
+                .unwrap_or_else(|e| panic!("{image} {track}: schema: {e:?}"));
             let loaded = from_parts(&parts.manifest, &parts.glb)
                 .unwrap_or_else(|e| panic!("{image} {track}: reads back: {e}"));
             same(&exported, &loaded.track)
@@ -114,13 +145,43 @@ fn every_pulse_circuit_exports_and_reads_back_the_same() {
                 to_parts(&loaded.track, "x.glb").unwrap(),
                 "{image} {track}: not byte-stable"
             );
+            art_proof::art_draws_as_the_circuit(&mut archives, &track, &loaded.track, &mut art)
+                .unwrap_or_else(|e| panic!("{image} {track}: art: {e}"));
         }
     }
-    if checked_images == 0 {
-        return;
-    }
-    println!("{total} circuit(s) across {checked_images} image(s); refused: {refused:#?}");
+    println!("{image}: {total} circuit(s); refused: {refused:#?}");
+    println!("art: {art:#?}");
     assert!(refused.is_empty(), "{refused:#?}");
+}
+
+#[test]
+#[ignore = "needs the Pulse PSP EU image"]
+fn every_pulse_psp_eu_circuit_exports_and_reads_back_the_same() {
+    every_circuit_exports_and_reads_back_the_same(IMAGES[0]);
+}
+
+#[test]
+#[ignore = "needs the Pulse PSP USA image"]
+fn every_pulse_psp_usa_circuit_exports_and_reads_back_the_same() {
+    every_circuit_exports_and_reads_back_the_same(IMAGES[1]);
+}
+
+#[test]
+#[ignore = "needs the Pulse PS2 image"]
+fn every_pulse_ps2_circuit_exports_and_reads_back_the_same() {
+    every_circuit_exports_and_reads_back_the_same(IMAGES[2]);
+}
+
+#[test]
+#[ignore = "needs the Pure PSP EU image"]
+fn every_pure_eu_circuit_exports_and_reads_back_the_same() {
+    every_circuit_exports_and_reads_back_the_same(PURE_IMAGES[0]);
+}
+
+#[test]
+#[ignore = "needs the Pure PSP USA image"]
+fn every_pure_usa_circuit_exports_and_reads_back_the_same() {
+    every_circuit_exports_and_reads_back_the_same(PURE_IMAGES[1]);
 }
 
 /// A lone craft on a disc circuit and on the same circuit through its track
@@ -143,12 +204,37 @@ fn a_lone_craft_races_a_disc_circuit_and_its_exported_file_identically() {
         oag_trackfile::write(&exported, &manifest).unwrap();
         let mut native_options = options(&image, track);
         native_options.difficulty = oag_ai::Difficulty::Ace;
-        let mut native = race::Race::start(race::load(&native_options).unwrap().setup);
+        let native_loaded = race::load(&native_options).unwrap();
+        let native_sky = native_loaded
+            .sky_model
+            .as_ref()
+            .map(|m| (m.vertices.len(), m.indices.len(), m.draws.len()));
+        let mut native = race::Race::start(native_loaded.setup);
         let mut from_file = {
             let mut o = native_options.clone();
             o.track = None;
             o.foreign_track = Some(manifest);
-            race::Race::start(race::load(&o).unwrap().setup)
+            let loaded = race::load(&o).unwrap();
+            // The exported art draws through the foreign path: the circuit's
+            // own meshes over its own textures, and its own sky.
+            let report = loaded.report.join("\n");
+            assert!(!report.contains("not drawn, their texture"), "{report}");
+            assert!(report.contains("art sky:"), "{report}");
+            assert_eq!(
+                loaded.sky_model.as_ref().map(|m| (
+                    m.vertices.len(),
+                    m.indices.len(),
+                    m.draws.len()
+                )),
+                native_sky,
+                "{track}: the file's sky is not the circuit's"
+            );
+            assert!(!report.contains("draws nothing"), "{report}");
+            assert!(
+                loaded.track_model.draws.len() > 1_000,
+                "{track}: the art model is not the circuit's"
+            );
+            race::Race::start(loaded.setup)
         };
         for race in [&mut native, &mut from_file] {
             for slot in 2..8 {
@@ -306,7 +392,13 @@ fn lone_craft_gets_round(file: &str, id: &str, title: &str) {
     };
     let loaded = race::load(&o).expect("loads");
     let report = loaded.report.join("\n");
-    for needle in [title, "schema v1", "not authored by schema v1", "sky, fog"] {
+    for needle in [
+        title,
+        "schema v1",
+        "not authored by schema v1",
+        "fog, point lights",
+        "no art section",
+    ] {
         assert!(
             report.contains(needle),
             "report lacks {needle:?}:\n{report}"
@@ -356,7 +448,8 @@ fn a_lone_craft_gets_round_the_oval_re_exported_from_blender() {
 }
 
 /// The other titles' default circuits through the same exporter: Pure, HD,
-/// Omega and 2048 (a DLC `.vpk`, the only plain-file 2048 source here).
+/// Omega and 2048 (a DLC `.vpk`, and the base game's package decrypted and
+/// extracted offline: the `.pkg` itself is PFS-encrypted and not read in place).
 #[test]
 #[ignore = "needs the other titles' images"]
 fn the_other_titles_default_circuits_round_trip_too() {
@@ -366,6 +459,7 @@ fn the_other_titles_default_circuits_round_trip_too() {
         "data/images/hdfury-ps3-eu.iso",
         "data/images/omega-ps4-eu.pkg",
         "data/test-vpk/2048-PCSF00007-dlc1.vpk",
+        "data/extracted/vita/PCSF00007",
     ] {
         let Some(path) = oag_testdata::exact(image) else {
             continue;

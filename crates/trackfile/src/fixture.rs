@@ -238,6 +238,7 @@ pub fn oval() -> Track {
         nodes,
         speedup_pads: vec![pad_at(n / 4)],
         weapon_pads: vec![pad_at(n * 3 / 4)],
+        art: None,
         notes: vec![
             "authored by this project: a rounded octagon, 40 units wide (chosen, not measured)"
                 .to_string(),

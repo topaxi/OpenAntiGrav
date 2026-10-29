@@ -56,6 +56,10 @@ pub struct Plan {
     /// The PSP bloom's composite lands before the HUD, on a title whose
     /// `Looks::bloom_under_hud` applies.
     pub bloom_under_hud: bool,
+    /// Towards a track file's sun, when it may cast (ADR-0076): the `mapped`
+    /// shadows' direction in place of the host title's own axis. `None` on
+    /// every disc circuit.
+    pub sun: Option<[f32; 3]>,
 }
 
 /// Seed for the scenery effects' own spawn parameters. Any constant: render
@@ -73,6 +77,7 @@ pub struct SceneryFx {
     weather: Weather,
     lens_flare: Option<Box<oag_fx::lens_flare::Setup>>,
     bloom_under_hud: bool,
+    sun: Option<[f32; 3]>,
     placed: Vec<Placed>,
     playing: Vec<Option<psys::Playing>>,
     stage: psys::Stage,
@@ -95,10 +100,12 @@ impl SceneryFx {
             weather,
             lens_flare,
             bloom_under_hud,
+            sun,
         } = plan;
         Self {
             lens_flare,
             bloom_under_hud,
+            sun,
             weather: Weather::new(weather),
             playing: vec![None; placed.len()],
             placed,
@@ -138,6 +145,12 @@ impl SceneryFx {
     #[must_use]
     pub fn lens_flare(&self) -> Option<&oag_fx::lens_flare::Setup> {
         self.lens_flare.as_deref()
+    }
+
+    /// Towards the track's own sun, where a track file authors one that casts.
+    #[must_use]
+    pub fn sun(&self) -> Option<[f32; 3]> {
+        self.sun
     }
 
     /// Whether the bloom's composite lands before the HUD (`Looks::bloom_under_hud`)

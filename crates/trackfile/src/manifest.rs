@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 use oag_vex::track::Junction;
 use serde::{Deserialize, Serialize};
 
+use crate::art::ArtTable;
 use crate::{Error, Track};
 
 /// The schema kind a manifest declares in its `[toml-schema]` header.
@@ -23,6 +24,8 @@ pub(crate) struct Manifest {
     pub track: TrackTable,
     pub spline: Spline,
     pub counts: Counts,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub art: Option<ArtTable>,
     #[serde(flatten)]
     pub extra: BTreeMap<String, toml::Value>,
 }
@@ -79,6 +82,13 @@ pub(crate) struct Counts {
     pub collision_nodes: usize,
     pub speedup_pads: usize,
     pub weapon_pads: usize,
+    /// Written only when the track has art, so a file without it is what 1.0 wrote.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub art_meshes: usize,
+}
+
+fn is_zero(n: &usize) -> bool {
+    *n == 0
 }
 
 /// What a manifest read produced for the glb half to finish.
@@ -92,6 +102,7 @@ pub(crate) struct Parsed {
     pub paths: Vec<PathRow>,
     pub junctions: Vec<Junction>,
     pub counts: Counts,
+    pub art: Option<ArtTable>,
     pub unread: Vec<String>,
 }
 
@@ -146,7 +157,9 @@ pub(crate) fn write(track: &Track, glb_name: &str) -> Result<String, Error> {
             collision_nodes: track.nodes.len(),
             speedup_pads: track.speedup_pads.len(),
             weapon_pads: track.weapon_pads.len(),
+            art_meshes: track.art.as_ref().map_or(0, |a| a.meshes.len()),
         },
+        art: track.art.as_ref().map(ArtTable::of),
         extra: BTreeMap::new(),
     };
     toml::to_string(&manifest).map_err(|e| Error::Unwritable(e.to_string()))
@@ -169,6 +182,14 @@ pub(crate) fn read(text: &str) -> Result<Parsed, Error> {
             .keys()
             .map(|k| format!("manifest key track.{k}")),
     );
+    let mut art = m.art;
+    if let Some(table) = &mut art {
+        unread.extend(
+            std::mem::take(&mut table.extra)
+                .into_keys()
+                .map(|k| format!("manifest key art.{k}")),
+        );
+    }
     let n = m.spline.path.len();
     let range = |what: &str, v: i64, limit: usize| -> Result<Option<usize>, Error> {
         if v == -1 {
@@ -221,6 +242,7 @@ pub(crate) fn read(text: &str) -> Result<Parsed, Error> {
         paths: m.spline.path,
         junctions,
         counts: m.counts,
+        art,
         unread,
     })
 }

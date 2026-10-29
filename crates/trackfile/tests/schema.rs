@@ -115,3 +115,63 @@ fn what_the_blender_add_on_writes_is_valid_and_reads() {
         from_parts(&text, &glb).unwrap_or_else(|e| panic!("{name}: {e}"));
     }
 }
+
+/// The art section (ADR-0076): the two forms of a texture row are exclusive,
+/// and the sun's keys are all required.
+#[test]
+fn the_schema_and_the_reader_agree_on_the_art_section() {
+    let p = to_parts(&crate::art::with_art(crate::art::art()), "t.glb").expect("writable");
+    let m = &p.manifest;
+    let image = "[[art.texture]]\nimage = \"checker.png\"\n";
+    assert!(m.contains(image), "{m}");
+    let cut = |from: &str, to: &str| {
+        assert!(m.contains(from), "{from:?} is not in\n{m}");
+        m.replacen(from, to, 1)
+    };
+    let cases = [
+        ("as written", m.clone(), true),
+        (
+            "a texture row with both forms",
+            cut(
+                image,
+                "[[art.texture]]\nimage = \"checker.png\"\nhost = { entry = \"a\", name = \"b\" }\n",
+            ),
+            false,
+        ),
+        (
+            "a texture row with neither",
+            cut(image, "[[art.texture]]\n"),
+            false,
+        ),
+        (
+            "a sun with no shadows key",
+            cut("shadows = true\n", ""),
+            false,
+        ),
+        (
+            "an atlas index that is negative",
+            cut("atlas = 1", "atlas = -1"),
+            false,
+        ),
+        (
+            "an art mesh count that is negative",
+            cut("art_meshes = 2", "art_meshes = -2"),
+            false,
+        ),
+    ];
+    for (what, text, accepted) in cases {
+        let schema = oag_schema::validate::accepts("track", 1, &text);
+        let reader = from_parts(&text, &p.glb);
+        assert_eq!(
+            schema.is_ok(),
+            accepted,
+            "schema, {what}: {schema:?}\n{text}"
+        );
+        assert_eq!(
+            reader.is_ok(),
+            accepted,
+            "reader, {what}: {:?}",
+            reader.err()
+        );
+    }
+}
