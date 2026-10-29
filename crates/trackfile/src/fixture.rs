@@ -32,6 +32,9 @@ const WALL_HEIGHT: f32 = 15.0;
 /// because this crate must not depend on the simulation.
 const START_BEHIND: f32 = 154.0;
 const SMOOTHINGS: usize = 3;
+/// The title the fixture names as its host (`Track::host`): Pulse, which its
+/// ground-truth races run on. Chosen, not measured.
+pub const FIXTURE_HOST: &str = "wipeout-pulse";
 
 fn chaikin(ring: &[[f32; 2]]) -> Vec<[f32; 2]> {
     let n = ring.len();
@@ -216,6 +219,7 @@ pub fn oval() -> Track {
     Track {
         id: "fixture-octagon".to_string(),
         title: "Fixture Octagon".to_string(),
+        host: Some(FIXTURE_HOST.to_string()),
         ai: AiTrack {
             version: SHORT_POINT_VERSION,
             paths: vec![Path {

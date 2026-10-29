@@ -5,6 +5,7 @@ version = "1.0.0"
 [track]
 id = "blender-loop"
 title = "Blender Loop"
+host = "wipeout-pulse"
 glb = "blender_loop.glb"
 notes = ["authored headless in Blender with the OAG add-on: 8 control points (chosen, not measured)"]
 

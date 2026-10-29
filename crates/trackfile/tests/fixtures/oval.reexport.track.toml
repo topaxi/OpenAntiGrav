@@ -5,6 +5,7 @@ version = "1.0.0"
 [track]
 id = "fixture-octagon"
 title = "Fixture Octagon"
+host = "wipeout-pulse"
 glb = "oval.reexport.glb"
 notes = ["authored by this project: a rounded octagon, 40 units wide (chosen, not measured)"]
 

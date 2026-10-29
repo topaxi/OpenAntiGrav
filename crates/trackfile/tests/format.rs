@@ -219,6 +219,32 @@ fn an_unwritable_track_is_refused_before_a_file_exists() {
     let mut t = fixture::oval();
     t.id.clear();
     assert!(matches!(to_parts(&t, "x.glb"), Err(Error::Unwritable(_))));
+    let mut t = fixture::oval();
+    t.host = None;
+    assert!(matches!(to_parts(&t, "x.glb"), Err(Error::Unwritable(_))));
+}
+
+/// Every track file names the title it runs on (ADR-0076, decision 13): a
+/// manifest without `track.host`, or with an empty one, is refused by name.
+#[test]
+fn a_manifest_that_names_no_host_title_is_refused() {
+    let p = parts();
+    let line = format!("host = \"{}\"\n", fixture::FIXTURE_HOST);
+    assert!(p.manifest.contains(&line), "{}", p.manifest);
+    let missing = p.manifest.replace(&line, "");
+    let err = from_parts(&missing, &p.glb).unwrap_err();
+    assert!(
+        matches!(&err, Error::Manifest(m) if m.contains("host")),
+        "{err}"
+    );
+    let empty = p.manifest.replace(&line, "host = \"\"\n");
+    let err = from_parts(&empty, &p.glb).unwrap_err();
+    assert!(
+        matches!(&err, Error::Manifest(m) if m.contains("track.host")),
+        "{err}"
+    );
+    let loaded = from_parts(&p.manifest, &p.glb).unwrap();
+    assert_eq!(loaded.track.host.as_deref(), Some(fixture::FIXTURE_HOST));
 }
 
 #[test]

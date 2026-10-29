@@ -588,6 +588,7 @@ pub(crate) fn read(m: Parsed, bytes: &[u8]) -> Result<Loaded, Error> {
         track: Track {
             id: m.id,
             title: m.title,
+            host: Some(m.host),
             ai: AiTrack {
                 version: m.point_version,
                 paths,

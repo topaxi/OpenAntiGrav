@@ -34,6 +34,7 @@ pub(crate) struct Manifest {
 pub(crate) struct TrackTable {
     pub id: String,
     pub title: String,
+    pub host: String,
     pub glb: String,
     #[serde(default)]
     pub notes: Vec<String>,
@@ -97,6 +98,7 @@ pub(crate) struct Parsed {
     pub glb: String,
     pub id: String,
     pub title: String,
+    pub host: String,
     pub notes: Vec<String>,
     pub point_version: u32,
     pub paths: Vec<PathRow>,
@@ -118,6 +120,14 @@ pub(crate) fn write(track: &Track, glb_name: &str) -> Result<String, Error> {
     if track.id.is_empty() {
         return Err(Error::Unwritable("the track has no id".into()));
     }
+    let host = match track.host.as_deref() {
+        Some(h) if !h.trim().is_empty() => h.to_string(),
+        _ => {
+            return Err(Error::Unwritable(
+                "the track names no host title (track.host, e.g. \"wipeout-pulse\")".into(),
+            ));
+        }
+    };
     let manifest = Manifest {
         toml_schema: Some(oag_schema::Header {
             location: oag_schema::location(SCHEMA_KIND, FORMAT_MAJOR),
@@ -126,6 +136,7 @@ pub(crate) fn write(track: &Track, glb_name: &str) -> Result<String, Error> {
         track: TrackTable {
             id: track.id.clone(),
             title: track.title.clone(),
+            host,
             glb: glb_name.to_string(),
             notes: track.notes.clone(),
             extra: BTreeMap::new(),
@@ -170,6 +181,12 @@ pub(crate) fn read(text: &str) -> Result<Parsed, Error> {
     oag_schema::check(m.toml_schema.as_ref(), SCHEMA_KIND, FORMAT_MAJOR)?;
     if m.track.id.is_empty() {
         return Err(Error::Manifest("track.id is empty".into()));
+    }
+    if m.track.host.trim().is_empty() {
+        return Err(Error::Manifest(
+            "track.host is empty; it names the title the track runs on, e.g. \"wipeout-pulse\""
+                .into(),
+        ));
     }
     let mut unread: Vec<String> = m
         .extra
@@ -237,6 +254,7 @@ pub(crate) fn read(text: &str) -> Result<Parsed, Error> {
         glb: m.track.glb,
         id: m.track.id,
         title: m.track.title,
+        host: m.track.host,
         notes: m.track.notes,
         point_version: m.spline.point_version,
         paths: m.spline.path,

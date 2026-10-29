@@ -303,6 +303,8 @@ def write_manifest(track, glb_name):
     """The `.track.toml` text. Integers and strings only: no float is written."""
     if not track.id:
         raise TrackFileError("the track has no id")
+    if not track.host:
+        raise TrackFileError("the track names no host title (track.host, e.g. \"wipeout-pulse\")")
     lines = [
         "[toml-schema]",
         f"location = {_quote(SCHEMA_LOCATION)}",
@@ -311,6 +313,7 @@ def write_manifest(track, glb_name):
         "[track]",
         f"id = {_quote(track.id)}",
         f"title = {_quote(track.title)}",
+        f"host = {_quote(track.host)}",
         f"glb = {_quote(glb_name)}",
     ]
     if track.notes:
@@ -560,9 +563,13 @@ def read(manifest_path):
     track_art = None
     if "art" in m or art:
         track_art = artfile.from_manifest(m.get("art"), [a for _, a in art])
+    host = t.get("host", "")
+    if not host:
+        raise TrackFileError("track.host is missing; it names the title the track runs on")
     return Track(
         t["id"],
         t["title"],
+        host,
         m["spline"]["point_version"],
         paths,
         junctions,

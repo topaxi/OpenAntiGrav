@@ -80,10 +80,17 @@ class CollisionNode:
     version: int = HEADER_WORD
 
 
+# The titles a track may name as its host (`[track] host`), spelled the way
+# `oag_source::layers::slug` spells a title's name. A track loads natively only on
+# its host; another title races it only as a Race Remix (ADR-0076, decision 13).
+HOSTS = ("wipeout-pulse", "wipeout-pure", "wipeout-hd", "wipeout-omega-collection", "wipeout-2048")
+
+
 @dataclass
 class Track:
     id: str
     title: str
+    host: str
     point_version: int
     paths: list
     junctions: list

@@ -28,6 +28,7 @@ from . import derive, f32, scene_art, trackfile
 from .model import (
     COLLISION_KINDS,
     HEADER_WORD,
+    HOSTS,
     SHORT_POINT_VERSION,
     CollisionMesh,
     CollisionNode,
@@ -403,6 +404,7 @@ def collect(context):
     return Track(
         track_id,
         scene.oag_track_title or track_id,
+        scene.oag_track_host,
         int(scene.get("oag_point_version", SHORT_POINT_VERSION)),
         paths,
         _junctions(scene, paths),
@@ -549,6 +551,9 @@ def populate(context, track, manifest_dir="."):
     scene = context.scene
     scene.oag_track_id = track.id
     scene.oag_track_title = track.title
+    if track.host not in HOSTS:
+        raise TrackFileError(f"track.host {track.host!r} is not a title this add-on knows: {', '.join(HOSTS)}")
+    scene.oag_track_host = track.host
     scene.oag_track_notes = "\n".join(track.notes)
     scene["oag_point_version"] = track.point_version
     scene["oag_junctions"] = json.dumps(

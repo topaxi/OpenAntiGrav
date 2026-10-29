@@ -31,6 +31,16 @@ pub struct Track {
     pub id: String,
     /// The author's title.
     pub title: String,
+    /// The title this track runs on, as `oag_source::layers::slug` spells it
+    /// (`wipeout-pulse`): the release whose disc supplies what the track borrows
+    /// by name (host textures, the sky circuit) and the only one a race loads
+    /// it on natively. Another title races it only as a Race Remix with this
+    /// one as the track source (ADR-0076, decision 13).
+    ///
+    /// Every track file names one; the writer refuses `None`. `None` is a
+    /// Workshop track mapped in memory (`.wtrk`), which borrows nothing from a
+    /// disc and so races on any source.
+    pub host: Option<String>,
     /// The spline graph.
     pub ai: AiTrack,
     /// The start slot (the engine lays its own grid from it).
