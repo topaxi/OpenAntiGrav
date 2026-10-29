@@ -187,7 +187,7 @@ clamps are the README's.
 
 ### `scale-thrust{slot, factor, ticks}`
 
-- **Built without `ticks` (Kiss Curse, 2026-10-29)**: `factor` in `[0, 1]` only, sent
+- **Built without `ticks` (Kiss Curse, 2026-10-29)**: `factor` in `[0, 1]` only (`[0, 2]` since Energy Turbo, below), sent
   each tick it should hold, multiplied into `pending_thrust_scale` at phase C. The
   timer and factors above 1.0 below are still the Feisar walk's engine change.
 
@@ -253,6 +253,27 @@ clamps are the README's.
 - **Lands in** the ordering `oag_race::places` computes (`standing.rs:322`, read by
   `Race::places` in `field.rs`): a per-slot key sorted before progress and time.
   **Engine change:** `places` takes standings and the course only today.
+
+### Built for Energy Turbo (2026-10-29)
+
+- **`pickup-fire{slot}` / `pickup-absorbed{slot}`**: raised in `Race::spend_pickup`
+  (`crates/raceplay/src/weapons.rs`, a person's fire or absorb press) and
+  `Race::spend_opponent_pickup` (`crates/raceplay/src/field/opponent_weapons.rs`, the
+  driver's fire decision on a straight or its absorb) for a slot whose pickup a module
+  claimed. Delivered at the same tick's call (phase 2 is before C).
+- **`pad-energy{slot}`**: raised at the speed pad's entry edge in
+  `Race::test_speedup_pads` (`crates/raceplay/src/pads.rs`) for a slot in `pad-mode`.
+  The pad's force, plume and pad cue are skipped for that slot; its edge, cache and
+  Zone score are the pad's as ever.
+- **`shield-delta`** lands at C: a loss through `oag_physics::damage::apply_weapon`, a
+  gain through `damage::add`.
+- **`claim-pickup`** is host state, `RaceSim::extensions`, hashed.
+- **`scale-thrust` above 1.0** lands in `Environment::extension_thrust`, taken by the
+  step (`player_step.rs`, `field.rs`).
+- **`play-cue`** pushes onto `RaceSim::cues`. **`fire-effect`** queues for
+  `Race::draw_extension_effects` (`tick.rs`'s drawn-tick block, beside the hit sparks).
+  **`pickup-tint`** feeds `oag_hud::Readout::pickup_tint`.
+- None of the three outputs is hashed. The README's "What is built" has the table.
 
 ### `message{slot, string-id}` and `publish{key, value}`: outputs, not state
 

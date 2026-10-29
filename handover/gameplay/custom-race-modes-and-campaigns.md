@@ -325,13 +325,22 @@ Still open from this slice:
 - The README's second no-engine test (menus and the MODS page with a module mod
   installed build no engine) is not written.
 
-**Next example mod (maintainer, 2026-10-29): a turbo.** A button held boosts the
-craft and spends shield energy while it does; absorbing a pickup gives back either
-nothing or more energy the more was spent, at most 50 % of what was consumed, so a
-player who burns their shield risks being wrecked by a hit. Needs, beyond Kiss
-Curse: the held buttons in the observation (README 2.1's `input` record), a
-`shield-delta` command through the damage path, a pickup-absorbed event, and a thrust
-factor above 1.0 (the Feisar walk's engine change, or a boost command of its own).
+**Second example built: Energy Turbo (maintainer, 2026-10-29).** The maintainer's words:
+"boosts while pressing the button but consuming shield energy while doing so,
+absorbing it does either nothing or restores more energy the more energy you use ...
+but only returning 50 % of the energy consumed". With the correction that "held" means
+carrying the pickup, it is built as follows:
+- the energy turbo is the title's Turbo, claimed by the mod and drawn with a red
+  backdrop;
+- fire held boosts it on shield;
+- absorbing **the turbo itself** returns half of what it cost;
+- while it is carried, pads refill instead of boosting.
+
+What landed and its proof: `docs/architecture/wasm-extensions/README.md`, "And Energy
+Turbo". Open:
+- An AI craft's turbo bursts are not covered by a disc test.
+- A pickup of a mod's own (README 7.5) is not built; the mod reuses the title's Turbo,
+  so every Turbo becomes an energy turbo.
 
 The smallest increment that a player feels, ahead of the README's phase 1 and 2: a
 craft that touches a wall slows far more than a normal craft.
