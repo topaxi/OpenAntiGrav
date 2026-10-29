@@ -270,12 +270,23 @@ fn in_a_full_field_every_second_turbo_is_the_mods_and_the_ai_boosts_on_it() {
     let mut carried: Vec<Option<Weapon>> = vec![None; ships];
     let (mut turbos, mut energy) = (0_u32, 0_u32);
     let mut boost_ticks = 0_u32;
+    // What the pads handed the player, whose pickup is spent the tick it arrives (the
+    // driver flying it fires nothing), so it keeps drawing.
+    let mut player: Vec<Weapon> = Vec::new();
     let mut prior: Vec<f32> = race.sim.world.ships[..ships]
         .iter()
         .map(|ship| ship.physics.shield)
         .collect();
     for _ in 0..10_800 {
         race.tick(&held(&[Button::Cross], &[]));
+        if let Some(weapon) = race.sim.world.ships[0].pickup.take() {
+            player.push(weapon);
+            match weapon {
+                Weapon::Turbo => turbos += 1,
+                Weapon::Extension => energy += 1,
+                _ => {}
+            }
+        }
         for slot in 1..ships {
             let ship = &race.sim.world.ships[slot];
             let now = ship.pickup.weapon;
@@ -298,7 +309,7 @@ fn in_a_full_field_every_second_turbo_is_the_mods_and_the_ai_boosts_on_it() {
         }
     }
     println!(
-        "in 180 s: {turbos} Turbos and {energy} energy turbos handed out to the AI; {boost_ticks} AI boost ticks"
+        "in 180 s: {turbos} Turbos and {energy} energy turbos handed out; {boost_ticks} AI boost ticks; the player drew {player:?}"
     );
     assert!(
         turbos > 0 && energy > 0,
@@ -311,4 +322,8 @@ fn in_a_full_field_every_second_turbo_is_the_mods_and_the_ai_boosts_on_it() {
         "every second Turbo: {turbos} against {energy}"
     );
     assert!(boost_ticks > 0, "no AI craft boosted on the energy turbo");
+    assert!(
+        player.contains(&Weapon::Extension),
+        "a weapon pad handed the player the energy turbo: {player:?}"
+    );
 }
