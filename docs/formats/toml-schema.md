@@ -51,6 +51,7 @@ compatible addition goes into the same `v1` schema, a breaking change gets `v2/`
 
 | `mod` | `oag-mod.toml` at the root of a mod ([mods](../tools/mods.md)) | `oag_mod` manifest reader | [`mod.tosd`](../../schemas/v1/mod.tosd) |
 | `mod-menu` | a mod's `menu.toml` ([mods](../tools/mods.md)) | `oag_ui::menu` mod rows | [`mod-menu.tosd`](../../schemas/v1/mod-menu.tosd) |
+| `campaign` | a mod's `campaigns/<id>.toml` ([custom campaign](custom-campaign.md)) | `oag_mod::campaign`, compiled by `oag_game::campaign::custom` | [`campaign.tosd`](../../schemas/v1/campaign.tosd) |
 
 Craft files get theirs when that format lands.
 

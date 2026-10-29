@@ -8,6 +8,16 @@
 
 use anyhow::{Context, Result};
 
+/// Which Race Campaign screen a `--menu-page` name asks for, and whose: a
+/// trailing `=<mod id>/<campaign id>` draws a mod campaign (ADR-0077) found on
+/// the mod search path, e.g. `cell-select@1=oag.example-campaign/night-run`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct CampaignPage {
+    pub(super) kind: CampaignKind,
+    /// The mod campaign's key, `None` for the disc's own.
+    pub(super) custom: Option<String>,
+}
+
 /// Which Race Campaign screen a `--menu-page` name asks for, if either.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum CampaignKind {
@@ -23,12 +33,20 @@ pub(super) enum CampaignKind {
     /// `grid-select`, `grid-select-hd` and `grid-select-hd@3`.
     Grid { hd_base: bool, tier: usize },
     /// `hd_base` as on `Grid`: `cell-select-hd` draws the base campaign's first
-    /// grid, `cell-select` Fury's.
-    Cell { hd_base: bool },
+    /// grid, `cell-select` Fury's. `tier` picks another grid (`cell-select@2`).
+    Cell { hd_base: bool, tier: usize },
 }
 
 #[must_use]
-pub(super) fn campaign_kind(page: &str) -> Option<CampaignKind> {
+pub(super) fn campaign_kind(page: &str) -> Option<CampaignPage> {
+    let (page, custom) = match page.split_once('=') {
+        Some((page, key)) => (page, Some(key.to_string())),
+        None => (page, None),
+    };
+    campaign_kind_of(page).map(|kind| CampaignPage { kind, custom })
+}
+
+fn campaign_kind_of(page: &str) -> Option<CampaignKind> {
     let (name, tier) = match page.split_once('@') {
         Some((name, tier)) => (name, tier.parse().ok()?),
         None => (page, 0),
@@ -43,8 +61,14 @@ pub(super) fn campaign_kind(page: &str) -> Option<CampaignKind> {
             hd_base: true,
             tier,
         }),
-        "cell-select" | "cell_select" => Some(CampaignKind::Cell { hd_base: false }),
-        "cell-select-hd" | "cell_select_hd" => Some(CampaignKind::Cell { hd_base: true }),
+        "cell-select" | "cell_select" => Some(CampaignKind::Cell {
+            hd_base: false,
+            tier,
+        }),
+        "cell-select-hd" | "cell_select_hd" => Some(CampaignKind::Cell {
+            hd_base: true,
+            tier,
+        }),
         _ => None,
     }
 }
@@ -125,7 +149,7 @@ use crate::unlock::{to_campaign_difficulty, to_campaign_medal};
               the page needs"
 )]
 pub(super) fn campaign_page(
-    kind: CampaignKind,
+    page: CampaignPage,
     archives: &mut oag_assets::Archives,
     strings: &oag_ui::language::StringTable,
     // The boot's own circuit-name column - the one `crate::main::session::campaign::open_campaign`
@@ -180,6 +204,32 @@ pub(super) fn campaign_page(
         tracks,
     )
     .context("this source has no Race Campaign to show")?;
+    let kind = page.kind;
+    // A mod campaign: the disc's screens, its grids replaced, as
+    // `Session::open_campaign` does live.
+    let custom = match &page.custom {
+        Some(key) => {
+            let mods = crate::mods::Mods::load()?;
+            let installed =
+                crate::campaign::custom::Installed::for_title(mods.player(), title, &|_| true);
+            for (mod_id, reason) in &installed.failed {
+                log::error!("mod {mod_id}: campaign left out: {reason}");
+            }
+            Some(
+                installed
+                    .get(key)
+                    .cloned()
+                    .with_context(|| format!("no mod campaign {key} for {}", title.name))?,
+            )
+        }
+        None => None,
+    };
+    let mut campaign = campaign;
+    if let Some(custom) = &custom {
+        campaign.grids.clone_from(&custom.grids);
+        campaign.selection_layout = None;
+        campaign.grid_layout_fury = None;
+    }
     // No per-session tip rotation, the same gap `circuit_names` below has -
     // see `crate::campaign::static_footer_overlay`. Read before
     // `campaign.sprites` moves out below.
@@ -188,7 +238,46 @@ pub(super) fn campaign_page(
     let is_hd = crate::campaign::draws_hd_campaign(title);
     // A cell's own best saved medal, by `name` - see `records`' own doc
     // above for why this reads the real file rather than always `None`.
-    let campaign_title = crate::records::campaign_title(title, platform);
+    let campaign_title = custom.as_ref().map_or_else(
+        || crate::records::campaign_title(title, platform),
+        |custom| custom.records_title.clone(),
+    );
+    // A mod campaign's `open`/`requires` locks and hidden cells, as
+    // `CampaignStage::open_cell_selection` applies them.
+    let cell_model = |cells: Vec<oag_tables::race_campaign::Cell>, which: usize| {
+        let build = |cells: Vec<oag_tables::race_campaign::Cell>| {
+            let model = oag_ui_screens::campaign::CellSelection::with_medals(cells, &|name| {
+                records
+                    .campaign_medal(&campaign_title, name)?
+                    .best_medal
+                    .map(to_campaign_medal)
+            });
+            match &custom {
+                Some(custom) => model.with_fixed_locks(&|name| {
+                    custom.fixed_lock(
+                        name,
+                        &crate::unlock::campaign_medal_of(records, &campaign_title),
+                    )
+                }),
+                None => model,
+            }
+        };
+        let mut model = build(cells.clone());
+        if let Some(custom) = &custom
+            && custom.reveal(which) == oag_mod::campaign::Reveal::Hidden
+        {
+            let locked = model.locked_names();
+            if !locked.is_empty() && locked.len() < cells.len() {
+                model = build(
+                    cells
+                        .into_iter()
+                        .filter(|c| !locked.contains(&c.name))
+                        .collect(),
+                );
+            }
+        }
+        model
+    };
     let medal_of = |cell_name: &str| {
         records
             .campaign_medal(&campaign_title, cell_name)?
@@ -235,9 +324,11 @@ pub(super) fn campaign_page(
     // own doc: the two are `Some`/`None` together).
     let base_hd = matches!(
         kind,
-        CampaignKind::Grid { hd_base: true, .. } | CampaignKind::Cell { hd_base: true }
+        CampaignKind::Grid { hd_base: true, .. } | CampaignKind::Cell { hd_base: true, .. }
     );
     let (hd_grids, hd_grid_layout) = match campaign.grid_layout_fury.as_ref().filter(|_| !base_hd) {
+        // A mod campaign pages all of its own grids on the base layout.
+        _ if custom.is_some() => (&campaign.grids[..], &campaign.grid_layout),
         Some(layout) => (
             campaign
                 .grids
@@ -332,14 +423,14 @@ pub(super) fn campaign_page(
                     &footer_overlay,
                 )
             }
-            CampaignKind::Cell { .. } => {
+            CampaignKind::Cell { tier, .. } => {
                 // `crate::campaign::load` already refuses an empty grid
-                // list (`"no grid in ... parsed"`), so `first()` is `None`
-                // only if that changes; the fallback below is a zeroed
+                // list (`"no grid in ... parsed"`), so `get` is `None`
+                // only on a tier past the end; the fallback below is a zeroed
                 // summary rather than a panic, on the same "a still draws
                 // something honest rather than crashing" terms the rest of
                 // this module follows.
-                let grid = hd_grids.first();
+                let grid = hd_grids.get(tier);
                 flyer_name = grid.and_then(|grid| grid.flyer_name.clone());
                 cell_page = true;
                 let cells = grid.map(|grid| grid.cells.clone()).unwrap_or_default();
@@ -349,8 +440,7 @@ pub(super) fn campaign_page(
                 // the RPCS3 measurement. Already inside `is_hd` here, so
                 // unconditional.
                 let model = crate::campaign::with_opening_difficulty(
-                    oag_ui_screens::campaign::CellSelection::with_medals(cells, &medal_of)
-                        .with_difficulty(&difficulty_of),
+                    cell_model(cells, tier).with_difficulty(&difficulty_of),
                     records,
                     &campaign_title,
                     true,
@@ -368,11 +458,13 @@ pub(super) fn campaign_page(
                     frame,
                     strings,
                     circuit_names,
-                    0,
+                    tier,
                     hd_grids.len().max(1),
                     &grid_summary,
                     &oag_ui_screens::campaign::hd::CellArt {
-                        next_flyer: hd_grids.get(1).and_then(|grid| grid.flyer_name.as_deref()),
+                        next_flyer: hd_grids
+                            .get(tier + 1)
+                            .and_then(|grid| grid.flyer_name.as_deref()),
                         fury: !base_hd && campaign.grid_layout_fury.is_some(),
                         track_emblems: &campaign.circuit_emblems,
                     },
@@ -414,17 +506,15 @@ pub(super) fn campaign_page(
                     &footer_overlay,
                 )
             }
-            CampaignKind::Cell { .. } => {
-                // The first grid `Definition.xml` lists - `--menu-page` has
-                // no way to name a tier, and a still needs something to
-                // show.
+            CampaignKind::Cell { tier, .. } => {
+                // The grid `@N` names, the first by default.
                 let cells = campaign
                     .grids
-                    .first()
+                    .get(tier)
                     .map(|grid| grid.cells.clone())
                     .unwrap_or_default();
                 let model = crate::campaign::with_opening_difficulty(
-                    oag_ui_screens::campaign::CellSelection::with_medals(cells, &medal_of),
+                    cell_model(cells, tier),
                     records,
                     &campaign_title,
                     false,

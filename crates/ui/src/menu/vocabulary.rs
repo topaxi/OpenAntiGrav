@@ -57,6 +57,11 @@ pub enum Action {
     /// screen launches a race here - see `oag_ui_screens::campaign`'s own module doc
     /// for why, and the `campaign` handover thread's "Next Steps".
     OpenCampaign,
+    /// A row of the campaign picker (`super::Definition::add_campaign_picker`):
+    /// opens a mod's campaign, which the row names by its id
+    /// ([`super::CUSTOM_CAMPAIGN_ROW`] and the campaign's key). Never written in
+    /// a menu file: the picker exists only when a mod adds a campaign.
+    OpenCustomCampaign,
     /// The MULTIPLAYER page's LOCAL MULTIPLAYER row: starts the multiplayer flow, which seats
     /// the people ("press a button to join"), lays out the windows and goes on to the RACE
     /// page and Track and Ship Select - see `oag_ui_screens::join` and
@@ -91,6 +96,7 @@ impl Action {
             Self::RenamePilot => "rename_pilot",
             Self::DeletePilot => "delete_pilot",
             Self::OpenCampaign => "open_campaign",
+            Self::OpenCustomCampaign => "open_custom_campaign",
             Self::OpenMultiplayerLocal => "multiplayer_local",
             Self::HostLan => "lan_host",
             Self::JoinLan => "lan_join",
@@ -123,6 +129,7 @@ impl Action {
             "rename_pilot" => Some(Self::RenamePilot),
             "delete_pilot" => Some(Self::DeletePilot),
             "open_campaign" => Some(Self::OpenCampaign),
+            "open_custom_campaign" => Some(Self::OpenCustomCampaign),
             "multiplayer_local" => Some(Self::OpenMultiplayerLocal),
             "lan_host" => Some(Self::HostLan),
             "lan_join" => Some(Self::JoinLan),
@@ -135,7 +142,7 @@ impl Action {
 
     /// Every action, for error messages and for the integrity check.
     #[must_use]
-    pub fn all() -> [Self; 14] {
+    pub fn all() -> [Self; 15] {
         [
             Self::LaunchRace,
             Self::LaunchRemix,
@@ -145,6 +152,7 @@ impl Action {
             Self::RenamePilot,
             Self::DeletePilot,
             Self::OpenCampaign,
+            Self::OpenCustomCampaign,
             Self::OpenMultiplayerLocal,
             Self::HostLan,
             Self::JoinLan,

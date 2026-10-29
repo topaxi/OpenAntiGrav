@@ -79,6 +79,8 @@ pub mod words {
     pub const LICENSE_FILE: (&str, &str) = ("OAG_MODS_LICENSE_FILE", "SEE %s");
     /// A mod that added no row.
     pub const NOTHING: (&str, &str) = ("OAG_MODS_NOTHING", "NOTHING");
+    /// The page RACE CAMPAIGN opens once a mod adds a campaign (ADR-0077).
+    pub const CAMPAIGN_PICKER: (&str, &str) = ("OAG_MENU_CAMPAIGN_PICKER", "CAMPAIGNS");
     /// The built-in mod's mark after its name.
     pub const BUILT_IN: (&str, &str) = ("OAG_MODS_BUILT_IN", "BUILT IN");
 }
@@ -252,15 +254,24 @@ impl Mods {
 
     /// A fingerprint of the player mods loaded (id and release of each, in id order; the built-in
     /// extras are the build's own). Mods may change the simulation, so a LAN host and a joiner
-    /// must agree on it (`oag_net::discovery::compat`). FNV-1a, **chosen**.
+    /// must agree on it (`oag_net::discovery::compat`). FNV-1a, **chosen**. The repository's
+    /// own examples ([`oag_mod::EXAMPLES`], found when the game runs from a checkout) are left
+    /// out: they change no race a LAN session plays, and an installed joiner has none.
     #[must_use]
     pub fn content_fingerprint(&self) -> u64 {
         let named: Vec<String> = self
             .player
             .iter()
+            .filter(|m| !std::path::Path::new(&m.label()).starts_with(oag_mod::EXAMPLES))
             .map(|m| format!("{}@{}", m.manifest.id, m.manifest.version))
             .collect();
         oag_net::discovery::content_fingerprint(&named)
+    }
+
+    /// The mods the search loaded, without the built-in extras.
+    #[must_use]
+    pub fn player(&self) -> &[oag_mod::Mod] {
+        &self.player
     }
 
     /// Whether any mod beside the extras is loaded.

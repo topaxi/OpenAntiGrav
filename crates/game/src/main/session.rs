@@ -643,6 +643,16 @@ pub(crate) struct Session {
     /// `Session::launch_remix`) so a cell abandoned by backing out of `Team
     /// Selection` cannot leak into the next unrelated race.
     pub(crate) campaign_cell: Option<oag_tables::race_campaign::Cell>,
+    /// A mod campaign event's extras for the race [`Self::campaign_cell`]
+    /// launches (ADR-0077), drained beside it; `None` for the disc's own.
+    pub(crate) campaign_custom: Option<oag_game::campaign::custom::Launch>,
+    /// The mod campaign the campaign screens show, by
+    /// `oag_game::campaign::custom::Custom::key`; `None` is the disc's own. Kept
+    /// across a race so RETURN TO GRID reopens the same campaign.
+    pub(crate) custom_campaign: Option<String>,
+    /// What a mod campaign event replaced in the race options, put back when
+    /// the menus return (`Session::open_menus`) or the next cell launches.
+    pub(crate) campaign_home: Option<CampaignHome>,
     /// Wipeout Pure's campaign list: the class it was left on, as an index into
     /// `PureClass::ALL`, so reopening it lands where the player was.
     pub(crate) pure_chain_class: usize,
@@ -814,6 +824,14 @@ pub(crate) struct BackdropShape {
     rect: [f32; 4],
 }
 
+/// The race options a mod campaign event replaces: a cross-disc event's
+/// sources, an event's AI level.
+pub(crate) struct CampaignHome {
+    pub(crate) source: String,
+    pub(crate) craft_source: Option<String>,
+    pub(crate) difficulty: oag_ai::Difficulty,
+}
+
 /// Everything the menus need, gathered where it is loaded.
 ///
 /// `None` on the `--race` path, which opens a window straight onto a track and
@@ -825,6 +843,9 @@ pub(crate) struct Shell {
     pub(crate) definition: menu::Definition,
     /// The mods the MODS page lists, built with [`Self::definition`].
     pub(crate) mods: Vec<oag_game::mods::Listing>,
+    /// The mod campaigns this title can play, compiled with
+    /// [`Self::definition`]'s campaign picker.
+    pub(crate) custom_campaigns: std::sync::Arc<oag_game::campaign::custom::Installed>,
     /// The front end's navigation sounds, decoded at boot from the title's
     /// front-end bank. `None` where the boot never read one; a title without
     /// the bank holds an empty [`oag_sound::sfx::MenuSfx`] and plays nothing.
@@ -991,6 +1012,7 @@ impl Shell {
         Self {
             definition,
             mods: Vec::new(),
+            custom_campaigns: std::sync::Arc::default(),
             menu_sfx: None,
             title,
             platform: boot_shell.platform,

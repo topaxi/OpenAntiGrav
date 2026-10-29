@@ -74,6 +74,16 @@ impl Session {
         // `strings` above is already a clone rather than a borrow.
         let title_ref = shell.title;
         let platform = shell.platform;
+        // A mod campaign (ADR-0077): the disc's screens, its grids replaced.
+        let custom = self
+            .custom_campaign
+            .as_ref()
+            .and_then(|key| shell.custom_campaigns.get(key).cloned());
+        if let Some(key) = &self.custom_campaign
+            && custom.is_none()
+        {
+            warn!("campaign {key} is not installed for {} - opening the disc's own", title_ref.name);
+        }
         let circuit_names = shell.circuit_names.clone();
         let tracks: Vec<oag_raceplay::catalogue::Track> = shell
             .tracks
@@ -100,6 +110,27 @@ impl Session {
                 if let Some(flyers) = campaign.flyers.as_mut() {
                     flyers.anisotropy = self.anisotropy;
                 }
+                // A mod campaign has no `Campaign Selection` of its own: HD's
+                // two campaigns are the disc's.
+                if let Some(custom) = &custom {
+                    // An event in a slot this title draws no hex at is never
+                    // seen: say so rather than leave it silently missing.
+                    let slots = campaign.cell_layout.hex_slots();
+                    for cell in custom.grids.iter().flat_map(|grid| &grid.cells) {
+                        if cell.grid_coords().is_none_or(|at| !slots.contains(&at)) {
+                            log::error!(
+                                "mod {} campaign {}: {} is in a slot {} draws no hex at - it cannot be reached",
+                                custom.mod_id,
+                                custom.id,
+                                cell.name,
+                                title_ref.name
+                            );
+                        }
+                    }
+                    campaign.grids.clone_from(&custom.grids);
+                    campaign.selection_layout = None;
+                    campaign.grid_layout_fury = None;
+                }
                 // The extended sheet - `hex_filled.mip`/`hex_outline.mip`,
                 // neither of which `Skin.xml`'s own sheet carries - has to
                 // reach the renderer once before anything drawn from it is
@@ -125,10 +156,23 @@ impl Session {
                         campaign.flyers,
                         campaign.circuit_emblems,
                         self.campaign_cursor,
+                        custom,
                     ));
                 }
             }
             Err(error) => warn!("{error:#} - RACE CAMPAIGN has nothing to show"),
+        }
+    }
+
+    /// Puts back what a mod campaign event replaced in the race options (the
+    /// sources a cross-disc event swapped, the AI level); a no-op when none did.
+    pub(crate) fn restore_campaign_home(&mut self) {
+        if let Some(home) = self.campaign_home.take()
+            && let Some(options) = self.race_options.as_mut()
+        {
+            options.source = home.source;
+            options.craft_source = home.craft_source;
+            options.difficulty = home.difficulty;
         }
     }
 
@@ -308,6 +352,11 @@ impl Session {
     pub(super) fn plan_cell(
         &self,
         cell: &oag_tables::race_campaign::Cell,
+        // A cross-disc mod campaign event's circuits (ADR-0077), in place of
+        // this source's.
+        other_disc: Option<&oag_game::remix::Catalogue>,
+        // A mod campaign event's own track file, which is its only circuit.
+        track_file: Option<&oag_game::campaign::custom::TrackFile>,
     ) -> Option<Result<oag_game::campaign::launch::CellPlan, Refusal>> {
         let shell = self.shell.as_ref()?;
         // The pure half - mode, circuits, class, laps, kill target - is
@@ -326,13 +375,17 @@ impl Session {
             cell,
             &self.settings.race.class,
             ladder,
-            |mode, id| {
-                shell
+            |mode, id| match (track_file, other_disc) {
+                (Some(file), _) => Some(file.path.display().to_string()),
+                (None, Some(catalogue)) => catalogue
+                    .track(id)
+                    .map(oag_raceplay::catalogue::Track::entry_name),
+                (None, None) => shell
                     .track(mode, id)
                     .map(oag_raceplay::catalogue::Track::entry_name)
                     // A Pure campaign's Classic circuits are not in the
                     // shell's catalogue, which lists the ordinary ones.
-                    .or_else(|| self.pure_classic_entries.get(id).cloned())
+                    .or_else(|| self.pure_classic_entries.get(id).cloned()),
             },
         ))
     }
@@ -366,7 +419,40 @@ impl Session {
         cell: oag_tables::race_campaign::Cell,
         difficulty: Option<oag_tables::race_campaign::Difficulty>,
     ) {
-        let Some(plan) = self.plan_cell(&cell) else {
+        self.restore_campaign_home();
+        // A mod campaign event's extras (ADR-0077), resolved before anything
+        // changes so a refusal leaves the screen as it was.
+        let custom = self
+            .custom_campaign
+            .as_ref()
+            .zip(self.shell.as_ref())
+            .and_then(|(key, shell)| shell.custom_campaigns.get(key))
+            .and_then(|custom| {
+                Some((custom.records_title.clone(), custom.event(&cell.name)?.clone()))
+            });
+        let extras = match custom
+            .as_ref()
+            .map(|(_, event)| self.resolve_custom_event(event))
+            .transpose()
+        {
+            Ok(extras) => extras,
+            Err(why) => {
+                warn!("{}: {why}", cell.name);
+                self.campaign_notice(
+                    "OAG_CAMPAIGN_EVENT_UNAVAILABLE",
+                    "THIS EVENT CANNOT BE RACED WITH WHAT THIS MACHINE HAS",
+                );
+                return;
+            }
+        };
+        let other_disc = extras
+            .as_ref()
+            .and_then(|e| e.other_disc.as_ref())
+            .map(|(_, catalogue)| catalogue);
+        let track_file = custom
+            .as_ref()
+            .and_then(|(_, event)| event.track_file.clone());
+        let Some(plan) = self.plan_cell(&cell, other_disc, track_file.as_ref()) else {
             return;
         };
         let plan = match plan {
@@ -383,12 +469,7 @@ impl Session {
                         "THIS EVENT'S CIRCUIT IS NOT ON THIS DISC",
                     ),
                 };
-                if let Stage::Menu(stage) = &mut self.stage
-                    && let Some(campaign) = stage.campaign.as_mut()
-                {
-                    campaign.notice =
-                        Some(campaign.strings.get_or_fallback(id, literal).to_string());
-                }
+                self.campaign_notice(id, literal);
                 return;
             }
         };
@@ -421,6 +502,36 @@ impl Session {
         race_options.class = plan.class;
         race_options.no_driver_for_class = false;
         race_options.weapons_override = None;
+        race_options.grid_teams = Vec::new();
+        let preset_team = extras.as_ref().and_then(|e| e.team.clone());
+        if let Some(extras) = &extras {
+            // What the event replaces, put back when the menus return.
+            self.campaign_home = Some(super::CampaignHome {
+                source: race_options.source.clone(),
+                craft_source: race_options.craft_source.clone(),
+                difficulty: race_options.difficulty,
+            });
+            race_options.weapons_override = extras.weapons;
+            race_options.grid_teams = extras.grid_teams.iter().cloned().map(Some).collect();
+            if let Some(difficulty) = extras.difficulty {
+                race_options.difficulty = difficulty;
+            }
+            if let Some((source, _)) = &extras.other_disc {
+                // The craft stay this disc's; the circuit is the other's.
+                race_options.craft_source =
+                    Some(race_options.craft_source.clone().unwrap_or_else(|| race_options.source.clone()));
+                race_options.source.clone_from(source);
+            }
+            // The mod's own circuit, raced the way `--track-file` races one.
+            if let Some(file) = &track_file {
+                oag_game::custom_tracks::apply(&mut race_options, &file.path);
+            }
+            if let Some(team) = &preset_team {
+                race_options.team = Some(team.clone());
+                race_options.hull_variant = None;
+                race_options.skin = None;
+            }
+        }
         race_options.eliminator_kill_target = plan.eliminator_kill_target;
         race_options.laps_override = plan.laps_override;
         let leg_entries = plan.leg_entries;
@@ -434,12 +545,23 @@ impl Session {
         // `race_options` is out of `self` until just below, so the source is
         // handed over rather than read back off `self` (which read `None`
         // here and so never resolved a cell's skill, until 2026-10-12).
-        let ai_skill_scale = difficulty.and_then(|rung| {
+        let ours = extras
+            .as_ref()
+            .is_some_and(|e| e.ai == oag_game::campaign::custom::Ai::Ours);
+        let ai_skill_scale = difficulty.filter(|_| !ours && other_disc.is_none() && track_file.is_none()).and_then(|rung| {
             let location = shell.track(mode, &first_track)?.location.clone();
             self.resolve_campaign_ai_skill_scale(&cell, rung, &location, &race_options.source)
         });
         self.race_options = Some(race_options);
         self.campaign_cell = Some(cell);
+        self.campaign_custom = custom.zip(extras).map(|((records_title, event), extras)| {
+            oag_game::campaign::custom::Launch {
+                records_title,
+                ai: event.ai,
+                level: event.level,
+                pilot: extras.pilot,
+            }
+        });
         self.campaign_difficulty = difficulty;
         self.campaign_ai_skill_scale = ai_skill_scale;
         // `None` for every ordinary cell, clearing whatever a previous
@@ -462,7 +584,10 @@ impl Session {
                 .shell
                 .as_ref()
                 .is_some_and(|shell| super::picker::skips_team_step(shell.title, mode));
-        if skipped || !self.open_ship_picker() {
+        // A preset craft: no Team Selection, and nothing of its pick copied in.
+        if preset_team.is_some() {
+            self.finish_launch();
+        } else if skipped || !self.open_ship_picker() {
             self.launch_campaign_race();
         }
     }
@@ -538,5 +663,91 @@ impl Session {
         };
         let stats = blob.and_then(|blob| oag_tables::track_stats::from_blob(&blob).ok());
         oag_tables::track_stats::resolve_skill_scale(cell, rung, stats.as_ref())
+    }
+}
+
+/// A mod campaign event's extras, checked against what this machine has.
+pub(super) struct Extras {
+    /// The other disc's source and circuits, for a cross-disc event.
+    other_disc: Option<(String, oag_game::remix::Catalogue)>,
+    /// The preset team, by the id this source spells it with.
+    team: Option<String>,
+    /// The opponents' teams, grid slot 1 first.
+    grid_teams: Vec<String>,
+    weapons: Option<bool>,
+    difficulty: Option<oag_ai::Difficulty>,
+    ai: oag_game::campaign::custom::Ai,
+    pilot: Option<oag_raceplay::pilots::Entry>,
+}
+
+impl Session {
+    /// Shows `literal` (or the string `id` names) a row above the campaign
+    /// screen's footer until the player does anything else.
+    fn campaign_notice(&mut self, id: &str, literal: &str) {
+        if let Stage::Menu(stage) = &mut self.stage
+            && let Some(campaign) = stage.campaign.as_mut()
+        {
+            campaign.notice = Some(campaign.strings.get_or_fallback(id, literal).to_string());
+        }
+    }
+
+    /// Resolves an event's names against this source, the roster and the discs
+    /// this machine can open; an unknown one is refused by name, never swapped.
+    fn resolve_custom_event(
+        &self,
+        event: &oag_game::campaign::custom::Event,
+    ) -> Result<Extras, String> {
+        let shell = self.shell.as_ref().ok_or("no menus are loaded")?;
+        let team_id = |team: &str| {
+            shell
+                .teams
+                .iter()
+                .find(|choice| choice.value.eq_ignore_ascii_case(team))
+                .map(|choice| choice.value.clone())
+                .ok_or_else(|| format!("this source has no team {team:?}"))
+        };
+        let team = event.team.as_deref().map(team_id).transpose()?;
+        let grid_teams = event
+            .teams
+            .iter()
+            .map(|team| team_id(team))
+            .collect::<Result<Vec<_>, _>>()?;
+        let pilot = match &event.pilot {
+            None => None,
+            Some(oag_game::campaign::custom::Pilot::Built(entry)) => Some(entry.clone()),
+            Some(oag_game::campaign::custom::Pilot::Named(name)) => Some(
+                self.pilot_roster
+                    .find(name)
+                    .cloned()
+                    .ok_or_else(|| format!("no pilot {name:?} in the mod or the roster"))?,
+            ),
+        };
+        let other_disc = match &event.track_title {
+            Some(slug) if *slug != shell.title.slug() => {
+                let candidate = self
+                    .titles
+                    .iter()
+                    .find(|candidate| {
+                        matches!(
+                            &candidate.state,
+                            oag_game::launcher::State::Playable(title) if title.slug() == *slug
+                        )
+                    })
+                    .ok_or_else(|| format!("the circuit is on {slug}, and no disc of it is here"))?;
+                let catalogue = oag_game::remix::catalogue(&candidate.source)
+                    .map_err(|e| format!("{slug}: {e:#}"))?;
+                Some((candidate.source.clone(), catalogue))
+            }
+            _ => None,
+        };
+        Ok(Extras {
+            other_disc,
+            team,
+            grid_teams,
+            weapons: event.weapons,
+            difficulty: event.difficulty,
+            ai: event.ai,
+            pilot,
+        })
     }
 }

@@ -510,13 +510,15 @@ impl Session {
                     self.campaign_cell,
                     self.campaign_difficulty,
                     self.campaign_ai_skill_scale,
+                    self.campaign_custom,
                 ) = match &self.stage {
                     Stage::Race(stage) => (
                         stage.campaign_cell.clone(),
                         stage.campaign_difficulty,
                         stage.campaign_ai_skill_scale,
+                        stage.campaign_custom.clone(),
                     ),
-                    _ => (None, None, None),
+                    _ => (None, None, None, None),
                 };
                 self.finish_launch();
             }

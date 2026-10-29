@@ -383,6 +383,7 @@ impl Session {
         // cell abandoned mid-`Team Selection` must never leak its own
         // eliminator target or lap override into an unrelated launch.
         self.campaign_cell = None;
+        self.campaign_custom = None;
         self.campaign_difficulty = None;
         self.campaign_ai_skill_scale = None;
         let Some(mut race_options) = self.race_options.take() else {

@@ -373,3 +373,45 @@ fn a_mode_that_takes_fewer_people_than_are_seated_is_marked_unusable() {
     assert_eq!(capped[1].unavailable.as_deref(), Some("2 AT MOST"));
     assert_eq!(capped[2], modes[2]);
 }
+
+/// A mod campaign turns RACE CAMPAIGN into a page: the disc's own campaign
+/// first, worded as the row was, then one row per campaign carrying its key.
+/// With none the tree is untouched.
+#[test]
+fn the_campaign_picker_appears_only_with_a_mod_campaign() {
+    let strings = crate::language::StringTable::default();
+    let built_in = Definition::built_in(&strings).unwrap();
+    let mut untouched = built_in.clone();
+    untouched.add_campaign_picker("CAMPAIGNS", &[]);
+    assert_eq!(untouched, built_in);
+
+    let mut picked = built_in;
+    picked.add_campaign_picker(
+        "CAMPAIGNS",
+        &[(
+            "oag.example-campaign/night-run".to_string(),
+            "NIGHT RUN".to_string(),
+            "Five events".to_string(),
+        )],
+    );
+    let page = picked.page(crate::menu::CAMPAIGN_PICKER_PAGE).unwrap();
+    assert_eq!(page.title, "CAMPAIGNS");
+    assert!(matches!(
+        &page.entries[0],
+        Entry::Run { label, action: Action::OpenCampaign } if label == "RACE CAMPAIGN"
+    ));
+    assert!(matches!(
+        &page.entries[1],
+        Entry::Run { label, action: Action::OpenCustomCampaign } if label == "NIGHT RUN"
+    ));
+    assert_eq!(
+        page.meta[1].id.as_deref(),
+        Some("campaign-custom:oag.example-campaign/night-run")
+    );
+    assert_eq!(page.subtitles[1].as_deref(), Some("Five events"));
+    let main = picked.page("main").unwrap();
+    let row = main.row_with_id("campaign").unwrap();
+    assert!(matches!(&main.entries[row], Entry::Submenu { label, .. } if label == "RACE CAMPAIGN"));
+    let menu = Menu::new(picked);
+    assert!(!menu.definition().pages.is_empty());
+}

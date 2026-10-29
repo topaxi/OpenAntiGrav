@@ -87,6 +87,24 @@ impl Scan {
         self.held.store(held, Ordering::Relaxed);
     }
 
+    /// Adds track files found elsewhere (installed mods'), after the search
+    /// path's own. Only before [`Scan::begin`]: a scan already reading keeps
+    /// the list it started with.
+    pub fn add_files(&mut self, files: &[PathBuf]) {
+        if self.begun {
+            log::warn!(
+                "{} mod track file(s) found after the custom track scan began; not listed",
+                files.len()
+            );
+            return;
+        }
+        for file in files {
+            if !self.files.contains(file) {
+                self.files.push(file.clone());
+            }
+        }
+    }
+
     /// Starts reading the files on a thread of their own, once. A later call is
     /// a no-op, so a caller may ask every frame the CUSTOM title is showing.
     pub fn begin(&mut self) {

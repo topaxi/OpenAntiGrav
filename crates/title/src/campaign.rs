@@ -170,4 +170,9 @@ pub struct Campaign {
     /// Where the dialect, grids file, selection flag, screen archive and grid
     /// archive came from.
     pub origin: Origin,
+    /// Whether a mod's custom campaigns (`campaigns/*.toml`, ADR-0077) can be
+    /// played on this title: its campaign draws the hex grid they compile to.
+    /// **Chosen**: Pulse, HD/Fury and Omega; Pure draws a list and 2048 has no
+    /// hex screens to draw them on yet.
+    pub custom_campaigns: bool,
 }

@@ -137,6 +137,8 @@ Put the `*.track.toml` and its `.glb` in a track directory (`$OAG_TRACKS`, `data
 `<data dir>/oag/tracks`; one level of subdirectory is read too), then RACE REMIX, TRACK TITLE
 `CUSTOM`, TRACK `<title> (TRACK FILE)` (the manifest's own title), START
 ([menus.md](../architecture/menus.md#race-remix-custom-tracks)); or `oag-game --track-file <manifest>`.
+A folder mod's `tracks/*.track.toml` is listed on CUSTOM the same way, on the titles the
+mod is for, and a campaign can race it ([mods.md](../tools/mods.md#campaigns-pilots-and-tracks-campaigns-pilots-tracks)).
 A manifest or glb that will not read is listed dimmed with the reader's reason. The format carries no
 author field, so none is shown.
 

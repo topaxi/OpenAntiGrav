@@ -61,6 +61,13 @@ use oag_core::buttons::{Button, Input};
 /// [`Definition::parse`] available for an override path - see `--menu`.
 pub const BUILT_IN: &str = include_str!("../../../assets/ui/menu.toml");
 
+/// The id of the page [`Definition::add_campaign_picker`] adds.
+pub const CAMPAIGN_PICKER_PAGE: &str = "campaigns";
+/// The id of that page's row for the disc's own campaign.
+pub const ORIGINAL_CAMPAIGN_ROW: &str = "campaign-original";
+/// The prefix of that page's row ids for a mod campaign; the key follows.
+pub const CUSTOM_CAMPAIGN_ROW: &str = "campaign-custom:";
+
 mod vocabulary;
 pub use vocabulary::{Action, ValueSource};
 

@@ -75,13 +75,15 @@ impl Session {
             self.campaign_cell,
             self.campaign_difficulty,
             self.campaign_ai_skill_scale,
+            self.campaign_custom,
         ) = match &self.stage {
             Stage::Race(stage) => (
                 stage.campaign_cell.clone(),
                 stage.campaign_difficulty,
                 stage.campaign_ai_skill_scale,
+                stage.campaign_custom.clone(),
             ),
-            _ => (None, None, None),
+            _ => (None, None, None, None),
         };
         let Some(progress) = self.tournament.as_mut() else {
             warn!("ER_NEXT_RACE pressed with no tournament in progress - ignoring");

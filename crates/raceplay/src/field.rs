@@ -58,6 +58,29 @@ impl Race {
         }
     }
 
+    /// Flies every opponent as `entry`, tempered by `difficulty` - a mod
+    /// campaign event's pilot (ADR-0077), set once after [`Self::start`] and
+    /// before the first tick. The pilot's digest replaces each opponent's in
+    /// the world, so the state hash names the pilot as `start`'s own deal does.
+    pub fn set_opponent_pilot(
+        &mut self,
+        entry: &crate::pilots::Entry,
+        difficulty: oag_ai::Difficulty,
+    ) {
+        let tempered = difficulty.temper(&entry.pilot);
+        for pilot in self.sim.ai_pilots.iter_mut().skip(1) {
+            *pilot = tempered;
+        }
+        let world = &mut self.sim.world;
+        for ship in 1..usize::from(world.ship_count) {
+            if world.controllers.get(ship).is_some_and(|c| c.is_human()) {
+                continue;
+            }
+            world.ships[ship].driver.pilot = entry.digest;
+        }
+        log::info!("pilots on the grid: every opponent flies {}", entry.name);
+    }
+
     /// Tempers `pilot` by `skill` and assigns it to the player's slot, for
     /// `--autopilot-pilot`.
     ///
