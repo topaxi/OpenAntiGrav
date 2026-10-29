@@ -609,7 +609,7 @@ impl Scene {
         // external view doing.
         oag_gpu::perfprobe::mark("flame-scene");
         if let Some(sky) = &self.sky {
-            sky.write(
+            sky.write_hull(
                 queue,
                 view_projection,
                 Mat4::from_translation(race.camera_position()),
@@ -618,6 +618,11 @@ impl Scene {
                 // against this one, leaving the sky with rotation-only
                 // velocity - a horizon pans, it does not approach.
                 prev_vp * prev.camera_translation,
+                crate::drawable::HullLayers {
+                    // `grade-sky`: `0.0` unless a track module sent it.
+                    sky_grey: race.extension_sky().grey,
+                    ..Default::default()
+                },
             );
         }
         // The circuit's own materials that read the engine's reflection map (scenery glass) take their

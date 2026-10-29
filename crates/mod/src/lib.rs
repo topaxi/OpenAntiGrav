@@ -26,7 +26,7 @@ pub use container::{Container, Origin};
 pub use discover::{EXAMPLES, Failed, Found, Loaded, SEARCH_ENV, load, mods_search_path, search};
 pub use manifest::{
     Error as ManifestError, Extension, License, MANIFEST, Manifest, Rules, SCHEMA_KIND,
-    SCHEMA_MAJOR,
+    SCHEMA_MAJOR, Track,
 };
 
 /// Why a mod could not be opened or read.

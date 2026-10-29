@@ -73,7 +73,10 @@ pub(crate) fn read(
             | Command::PadMode { .. }
             | Command::PlayCue { .. }
             | Command::FireEffect { .. }
-            | Command::PickupTint { .. } => {}
+            | Command::PickupTint { .. }
+            | Command::SetWeather { .. }
+            | Command::SetSun { .. }
+            | Command::GradeSky { .. } => {}
         }
         commands.push(command);
     }

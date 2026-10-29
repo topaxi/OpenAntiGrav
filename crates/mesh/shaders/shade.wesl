@@ -1480,6 +1480,14 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
             sun_delta = scene.light.enabled * in.lit * sun_removed;
             sun_known = 1.0;
         }
+        // `grade-sky`: the sky draw only, and only when a track module asked, so every
+        // other pixel keeps the path above untouched. The authored picture is flattened
+        // toward an overcast grey, darker and slightly cool, keeping its own structure.
+        if uniforms.sky_grey > 0.0 {
+            let luma = dot(composed.rgb, vec3<f32>(0.299, 0.587, 0.114));
+            let overcast = vec3<f32>(luma * 0.45) + vec3<f32>(0.16, 0.18, 0.21);
+            return vec4<f32>(mix(composed.rgb, overcast, uniforms.sky_grey), composed.a);
+        }
         return composed;
     }
     let rim_noise = textureSample(

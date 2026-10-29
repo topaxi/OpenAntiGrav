@@ -134,6 +134,11 @@ pub struct Setup {
     /// it was found and placed; `None` and the enhanced weather draws no
     /// splash (see [`super::splash`]).
     pub splash_cell: Option<[f32; 4]>,
+    /// A track module's rain rather than the circuit's own: idle until a module
+    /// sends `set-weather` ([`Weather::drive`]), then played at that strength, drawn
+    /// with the enhanced effects whatever the player's setting. `false` for a
+    /// circuit's authored weather, which plays from the first frame as it always did.
+    pub driven: bool,
 }
 
 /// The weather of a race: inert unless the circuit authors one.
@@ -165,6 +170,11 @@ pub struct Weather {
     spray: Spray,
     /// The last frame's wind step, a drop's move in the world a tick.
     step: Vec3,
+    /// A driven setup's strength this tick, `0.0..=1.0`; `1.0` and never read for an
+    /// authored weather.
+    strength: f32,
+    /// The effect's authored emissions per tick, to scale by [`Self::strength`].
+    emission: Option<Vec<(u32, u32)>>,
 }
 
 impl Default for Weather {
@@ -177,6 +187,7 @@ impl Weather {
     /// Nothing plays until the first [`Self::advance`].
     #[must_use]
     pub fn new(setup: Option<Setup>) -> Self {
+        let driven = setup.as_ref().is_some_and(|s| s.driven);
         let mut rng = Rng::new(SEED);
         let config = setup.as_ref().map(|s| &s.config);
         let wind = Wind::new(
@@ -210,6 +221,40 @@ impl Weather {
             splashes: Splashes::default(),
             spray: Spray::default(),
             step: Vec3::ZERO,
+            strength: if driven { 0.0 } else { 1.0 },
+            emission: None,
+        }
+    }
+
+    /// Whether a track module drives this weather rather than the circuit.
+    #[must_use]
+    pub fn is_driven(&self) -> bool {
+        self.setup.as_ref().is_some_and(|s| s.driven)
+    }
+
+    /// Whether a driven weather is raining now: the enhanced effects are forced on for
+    /// it. Always `false` for a circuit's authored weather.
+    #[must_use]
+    pub fn is_driven_active(&self) -> bool {
+        self.is_driven() && self.strength > 0.0
+    }
+
+    /// Whether anything of this weather is drawn and run: an authored weather always,
+    /// a driven one while its strength is above zero.
+    fn is_active(&self) -> bool {
+        !self.is_driven() || self.strength > 0.0
+    }
+
+    /// Sets a driven weather's strength for this tick (`set-weather`, `0.0` when none
+    /// was sent). The weather, once started, keeps its pool and clock; at `0.0` it
+    /// neither runs nor draws.
+    pub fn drive(&mut self, strength: f32) {
+        if self.is_driven() {
+            self.strength = strength.clamp(0.0, 1.0);
+            self.lens.set_gain(self.strength);
+            if let Some(mist) = &mut self.mist {
+                mist.set_gain(self.strength);
+            }
         }
     }
 
@@ -246,7 +291,7 @@ impl Weather {
     /// The mist overlay, when the circuit authors one and its texture decoded.
     #[must_use]
     pub fn mist(&self) -> Option<&Mist> {
-        self.mist.as_ref()
+        self.mist.as_ref().filter(|_| self.is_active())
     }
 
     /// The mist overlay's decoded texture, for the renderer.
@@ -282,10 +327,10 @@ impl Weather {
     /// `0.0` for a circuit with no playing weather.
     #[must_use]
     pub fn wet_road(&self) -> f32 {
-        if !self.is_playing() {
+        if !self.is_playing() || !self.is_active() {
             return 0.0;
         }
-        wetness(self.clock, self.is_snow())
+        wetness(self.clock, self.is_snow()) * self.strength
     }
 
     /// The enhanced weather's splashes.
@@ -317,7 +362,8 @@ impl Weather {
     /// the pool plays, and for a circuit with no field. The pool is not touched.
     #[must_use]
     pub fn drop_segments(&self) -> Vec<(Vec3, Vec3)> {
-        let (Some(effect), Some(previous), false) = (&self.effect, self.previous, self.anchored)
+        let (Some(effect), Some(previous), false, true) =
+            (&self.effect, self.previous, self.anchored, self.is_active())
         else {
             return Vec::new();
         };
@@ -342,7 +388,7 @@ impl Weather {
         right: Vec3,
         up: Vec3,
     ) {
-        if let Some(cell) = self.splash_cell() {
+        if let Some(cell) = self.splash_cell().filter(|_| self.is_active()) {
             self.splashes
                 .extend_vertices(additive, alpha_over, right, up, cell);
             self.spray.extend_vertices(alpha_over, right, up, cell);
@@ -360,6 +406,9 @@ impl Weather {
         let Some(setup) = &self.setup else {
             return;
         };
+        if !self.is_active() {
+            return;
+        }
         if !self.resolved {
             self.resolved = true;
             self.effect = setup
@@ -370,7 +419,9 @@ impl Weather {
                 .cloned();
             if let Some(effect) = &self.effect {
                 self.pool.ignite(effect, Vec3::ZERO, 1.0);
+                self.emission = Some(effect.emitters.iter().map(|e| e.per_emission).collect());
             }
+            let gain = self.lens.gain();
             self.lens = Lens::new(
                 setup
                     .config
@@ -378,6 +429,7 @@ impl Weather {
                     .as_deref()
                     .and_then(|path| effects.get(effect_name(path))),
             );
+            self.lens.set_gain(gain);
         }
         self.clock += dt;
         self.sections = (self.sections.1, section);
@@ -416,9 +468,22 @@ impl Weather {
         }
         self.lens
             .advance(dt, self.clock, camera, self.wind.vector());
-        if let Some(effect) = self.effect.clone()
-            && let Some(field) = effect.field
+        if let Some(authored) = self.effect.clone()
+            && let Some(field) = authored.field
         {
+            let driven;
+            let effect: &Effect = match &self.emission {
+                Some(emission) if self.is_driven() => {
+                    let mut scaled = (*authored).clone();
+                    for (emitter, (low, high)) in scaled.emitters.iter_mut().zip(emission) {
+                        let by = |n: u32| (n as f32 * self.strength).round() as u32;
+                        emitter.per_emission = (by(*low), by(*high));
+                    }
+                    driven = scaled;
+                    &driven
+                }
+                _ => &authored,
+            };
             let spec = FieldSpec {
                 half_extent: field.half_extent,
                 depth: effect.view_depth,
@@ -427,7 +492,7 @@ impl Weather {
             let anchor = self.anchor_for(camera);
             self.step = spec.wind;
             self.pool
-                .advance_field(&effect, dt, &anchor, &spec, &mut self.rng);
+                .advance_field(effect, dt, &anchor, &spec, &mut self.rng);
         }
         self.previous = Some(camera);
     }
@@ -452,6 +517,9 @@ impl Weather {
         right: Vec3,
         up: Vec3,
     ) {
+        if !self.is_active() {
+            return;
+        }
         self.lens
             .extend_vertices(additive, alpha_over, camera, right, up);
         let Some(effect) = &self.effect else {

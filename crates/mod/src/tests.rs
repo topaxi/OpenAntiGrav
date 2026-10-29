@@ -210,6 +210,7 @@ fn an_extension_table_names_its_rules_module_and_opens_nothing() {
             rules: Some(Rules {
                 module: "ext/curse.wasm".to_string()
             }),
+            track: None,
         })
     );
     assert_eq!(
@@ -233,4 +234,29 @@ fn a_rules_module_without_simulation_or_missing_is_refused_by_name() {
         .unwrap_err()
         .to_string();
     assert!(error.contains("not in the mod"), "{error}");
+}
+
+#[test]
+fn a_track_module_names_its_module_and_its_track_file() {
+    let text = format!(
+        "{MANIFEST_TEXT}\n[extension]\nsimulation = true\napi = 1\nstate_bytes = 3\n\n[extension.track]\nmodule = \"ext/rain.wasm\"\ntrack = \"tracks/a.track.toml\"\n"
+    );
+    let all = |path: &str| matches!(path, "ext/rain.wasm" | "tracks/a.track.toml");
+    let extension = Manifest::parse(&text, &all).unwrap().extension.unwrap();
+    assert_eq!(extension.rules, None);
+    assert_eq!(
+        extension.track,
+        Some(Track {
+            module: "ext/rain.wasm".to_string(),
+            track: "tracks/a.track.toml".to_string(),
+        })
+    );
+    let no_track_file = |path: &str| path == "ext/rain.wasm";
+    let error = Manifest::parse(&text, &no_track_file)
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("extension.track.track"), "{error}");
+    let unsaid = text.replace("simulation = true\n", "");
+    let error = Manifest::parse(&unsaid, &all).unwrap_err().to_string();
+    assert!(error.contains("simulation = true"), "{error}");
 }

@@ -187,6 +187,50 @@ fn place_weather(
         anchors,
         mist_texture,
         splash_cell,
+        driven: false,
+    });
+}
+
+#[cfg(feature = "view")]
+/// The host title's own rain for a track module's `set-weather`: its rain circuit's
+/// `<Weather>` element (Pulse: Fort Gale's), with **no cover anchors**, so the whole
+/// track is open and a covered bend rains too. Nothing is invented: a title with no
+/// rain circuit, a circuit whose `trackstartup.xml` will not read, or one that authors
+/// no `<Weather>` says so in the report and the module's rain draws nothing.
+pub(super) fn place_driven_weather(
+    loaded: &mut Loaded,
+    title: &oag_title::Title,
+    archives: &mut oag_assets::Archives,
+) {
+    let Some(circuit) = title.weather.rain_circuit() else {
+        loaded.report.push(
+            "weather: a track module asked for rain and this title ships none, nothing draws"
+                .into(),
+        );
+        return;
+    };
+    let Some(config) =
+        oag_sound::sfx::circuit_manifest(archives, circuit).and_then(|manifest| manifest.weather)
+    else {
+        loaded.report.push(format!(
+            "weather: a track module asked for rain and {circuit}'s trackstartup.xml authors no \
+             <Weather>, nothing draws"
+        ));
+        return;
+    };
+    loaded.report.push(format!(
+        "weather: {} from {circuit} for the track module's rain, no cover anchors (the whole \
+         track is open), drawn with the enhanced effects whatever the setting (ours)",
+        config.env_psys.as_deref().unwrap_or("no EnvPsys"),
+    ));
+    let mist_texture = mist_texture(archives, config.tex.as_deref(), &mut loaded.report);
+    let splash_cell = splash_art(loaded, archives);
+    loaded.setup.scenery_fx.weather = Some(crate::scenery_fx::weather::Setup {
+        config,
+        anchors: Vec::new(),
+        mist_texture,
+        splash_cell,
+        driven: true,
     });
 }
 

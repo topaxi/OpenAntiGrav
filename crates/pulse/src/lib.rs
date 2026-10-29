@@ -79,7 +79,11 @@ pub const TITLE: &Title = &Title {
     // Built 2026-09-04: the craft's own `Dynamic Shadow Occluder` hull, projected on the road.
     original_shadows: oag_title::shadow::OriginalShadows::Built,
     // Read on the PSP (`weather.md`); the PS2 pressing plays the same law.
-    weather: oag_title::weather::Weather::Played,
+    weather: oag_title::weather::Weather::Played {
+        // Fort Gale authors the rain (`<Weather EnvPsys="WO_RAIN">`, `ScreenPsys` the
+        // lens); Outpost 7's is snow.
+        rain_circuit: Some(r"Data\Environments\14_Track\track.vex"),
+    },
     // The two tables Pulse picks between by race mode. `DAT_08b32428` is what
     // selects the file - measured `0` in a single race and `1` in Eliminator,
     // at Venom both times, so it is the *file* and not the speed class. See

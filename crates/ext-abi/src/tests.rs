@@ -17,7 +17,7 @@ fn slot(index: usize) -> Slot {
 }
 
 /// One of every command, with arguments that touch every field.
-fn every_command() -> [Command; 9] {
+fn every_command() -> [Command; 12] {
     [
         Command::ScaleThrust {
             slot: slot(1),
@@ -46,6 +46,12 @@ fn every_command() -> [Command; 9] {
             slot: slot(15),
             rgba: Rgba::new(0xE0, 0x20, 0x21, 0xFF),
         },
+        Command::SetWeather {
+            kind: WeatherKind::Rain,
+            strength: 0.75,
+        },
+        Command::SetSun { intensity: 0.5 },
+        Command::GradeSky { grey: 0.25 },
     ]
 }
 
@@ -150,7 +156,8 @@ fn layout_fold() -> u64 {
         ]
         .map(|cue| u32::from(cue.code())),
     )
-    .chain([Effect::CollisionSpark, Effect::HitSpark].map(|effect| u32::from(effect.code())));
+    .chain([Effect::CollisionSpark, Effect::HitSpark].map(|effect| u32::from(effect.code())))
+    .chain([WeatherKind::Rain].map(|kind| u32::from(kind.code())));
     let commands = every_command().into_iter().flat_map(|c| c.encode());
     let events = every_event().into_iter().flat_map(Event::encode);
     let craft = a_craft().encode();
@@ -162,7 +169,7 @@ fn layout_fold() -> u64 {
 
 /// The revision and the layout it names. Edit the layout and this fails: bump
 /// [`REVISION`] and record the new fold beside it, in the same change.
-const REVISION_AND_FOLD: (u32, u64) = (2, 0x6496_c099_9726_777e);
+const REVISION_AND_FOLD: (u32, u64) = (3, 0x17c5_e77e_3f17_49ed);
 
 #[test]
 fn the_layout_is_the_revision_it_says() {
@@ -260,6 +267,31 @@ fn a_record_breaking_its_own_rules_is_malformed() {
         Command::decode(&roll),
         Err(Malformed::Roll { .. })
     ));
+    for bad in [-0.1, 1.5, f32::NAN, f32::INFINITY] {
+        for command in [
+            Command::SetWeather {
+                kind: WeatherKind::Rain,
+                strength: bad,
+            },
+            Command::SetSun { intensity: bad },
+            Command::GradeSky { grey: bad },
+        ] {
+            assert!(matches!(
+                Command::decode(&command.encode()),
+                Err(Malformed::Unit { .. })
+            ));
+        }
+    }
+    let mut sun = Command::SetSun { intensity: 0.5 }.encode();
+    sun[COMMAND_SLOT] = 1;
+    assert!(matches!(Command::decode(&sun), Err(Malformed::Unit { .. })));
+    let mut weather = Command::SetWeather {
+        kind: WeatherKind::Rain,
+        strength: 1.0,
+    }
+    .encode();
+    weather[COMMAND_ARG] = 1;
+    assert_eq!(Command::decode(&weather), Err(Malformed::Weather(1)));
     let mut unknown = [0; COMMAND_LEN];
     unknown[COMMAND_KIND] = 200;
     assert_eq!(Command::decode(&unknown), Err(Malformed::Kind(200)));

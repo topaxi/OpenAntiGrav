@@ -47,6 +47,8 @@ pub struct Mist {
     target: f32,
     layers: Layers,
     rng: Rng,
+    /// A track module's rain strength scaling the drawn alpha; `1.0` otherwise.
+    gain: f32,
 }
 
 impl Mist {
@@ -70,7 +72,13 @@ impl Mist {
             target: config.alpha,
             layers: Layers::new(&mut rng),
             rng,
+            gain: 1.0,
         })
+    }
+
+    /// Scales the drawn alpha (a driven weather's strength).
+    pub fn set_gain(&mut self, gain: f32) {
+        self.gain = gain;
     }
 
     /// The opacity now, `node+0x450`.
@@ -123,7 +131,11 @@ impl Mist {
         let quads = self
             .layers
             .quads(self.layout.display_scale * tan_half_fov, draw_alpha);
-        Some(mist::vertices(&quads, self.layers.alphas(draw_alpha)))
+        let gain = self.gain;
+        Some(mist::vertices(
+            &quads,
+            self.layers.alphas(draw_alpha).map(|alpha| alpha * gain),
+        ))
     }
 }
 

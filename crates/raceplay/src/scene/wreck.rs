@@ -143,6 +143,7 @@ impl Scene {
                         point: race.ship_hull_points(slot, self.anim_clock.get()),
                         env: None,
                         env_tint: crate::env_probes::ProbeTint::ENGINE,
+                        ..Default::default()
                     },
                 );
             }

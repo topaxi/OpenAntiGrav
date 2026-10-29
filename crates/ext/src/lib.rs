@@ -38,7 +38,7 @@ pub mod test;
 pub use blob::Blob;
 pub use oag_ext_abi::{
     ABI_WORD, Command, Cue, Effect, Event, IO_LEN, MAX_CRAFTS, MAX_STATE_BYTES, MAX_THRUST_FACTOR,
-    Pickup, Rgba, Slot, Weapon,
+    Pickup, Rgba, Slot, Weapon, WeatherKind,
 };
 pub use reply::{Refused, Reply};
 

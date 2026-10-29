@@ -1044,8 +1044,11 @@ pub fn load(options: &Options) -> Result<Loaded> {
             &mut report,
         ),
         &title.slug(),
+        options.foreign_track.as_deref(),
         &mut report,
     );
+    #[cfg(feature = "view")]
+    let track_module = extensions.has_track_module();
     let mut loaded = Loaded {
         #[cfg(feature = "view")]
         started: None,
@@ -1363,6 +1366,9 @@ pub fn load(options: &Options) -> Result<Loaded> {
             lens_flare::read(&track_blob, &mut loaded.report).map(Box::new);
     }
     #[cfg(feature = "view")]
+    if track_module && loaded.setup.scenery_fx.weather.is_none() {
+        pulse_psp::place_driven_weather(&mut loaded, title, &mut archives);
+    }
     if foreign_art.lens_flare.is_some() {
         loaded.setup.scenery_fx.lens_flare = foreign_art.lens_flare.map(Box::new);
     }

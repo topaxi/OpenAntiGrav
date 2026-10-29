@@ -94,6 +94,19 @@ pub struct Extension {
     pub state_bytes: u32,
     /// `[extension.rules]`: a rules module, which may act on every craft of a race.
     pub rules: Option<Rules>,
+    /// `[extension.track]`: a module that runs only on one track file the mod ships.
+    pub track: Option<Track>,
+}
+
+/// `[extension.track]`: one module bound to one track file of the mod. It runs only in
+/// a race of that file, never on a disc circuit, and may send the same commands as a
+/// rules module (the race-wide outputs are what it is for).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Track {
+    /// The module's path in the mod.
+    pub module: String,
+    /// The `.track.toml` it runs on, as a path in the mod.
+    pub track: String,
 }
 
 /// `[extension.rules]`: one module that runs in every race the mod is on for, on any
@@ -127,6 +140,14 @@ struct ExtensionTable {
     #[serde(default)]
     state_bytes: u32,
     rules: Option<RulesTable>,
+    track: Option<TrackTable>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TrackTable {
+    module: String,
+    track: String,
 }
 
 #[derive(Deserialize)]
@@ -270,12 +291,36 @@ fn extension(e: ExtensionTable, has: &dyn Fn(&str) -> bool) -> Result<Extension,
             ));
         }
     }
+    let track = e.track.map(|t| Track {
+        module: t.module,
+        track: t.track,
+    });
+    if let Some(track) = &track {
+        if !e.simulation {
+            return Err(bad_extension(
+                "extension.simulation",
+                format!(
+                    "{} is a simulation module; say `simulation = true`",
+                    track.module
+                ),
+            ));
+        }
+        for (key, name) in [
+            ("extension.track.module", &track.module),
+            ("extension.track.track", &track.track),
+        ] {
+            if !has(name) {
+                return Err(bad_extension(key, format!("{name:?} is not in the mod")));
+            }
+        }
+    }
     Ok(Extension {
         simulation: e.simulation,
         api: e.api,
         memory_pages: e.memory_pages,
         state_bytes: e.state_bytes,
         rules,
+        track,
     })
 }
 

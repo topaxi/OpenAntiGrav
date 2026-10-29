@@ -89,6 +89,7 @@ mod on {
             api: 1,
             memory_pages: 1,
             state_bytes: 8,
+            scope: crate::extensions::Scope::Rules,
             read: Arc::new(move || Ok(wasm.clone())),
         }
     }
@@ -339,17 +340,27 @@ mod on {
         assert_eq!(setup_race.sim.world.ships[0].pickup.weapon, None);
     }
 
-    /// Every tick: a Turbo cue, the wall sparks and a red pickup backdrop for slot 1.
+    /// Every tick: a Turbo cue, the wall sparks, a red pickup backdrop for slot 1, and
+    /// the three race-wide outputs (rain at 0.5, sun at 0.5, sky grey at 0.25).
     fn outputter(id: &str, outputs: bool) -> Source {
         let body = if outputs {
+            let race_wide = |index: i32, kind: i32, value: f32| {
+                let at = REPLY + 4 + 12 * index;
+                format!(
+                    "(i32.store8 (i32.const {at}) (i32.const {kind}))
+                     (f32.store (i32.const {v}) (f32.const {value}))",
+                    v = at + 4,
+                )
+            };
             format!(
-                "(i32.store (i32.const {REPLY}) (i32.const 3))
+                "(i32.store (i32.const {REPLY}) (i32.const 6))
                  (i32.store8 (i32.const {c0}) (i32.const 5)) (i32.store8 (i32.const {s0}) (i32.const 1))
                  (i32.store16 (i32.const {a0}) (i32.const 1))
                  (i32.store8 (i32.const {c1}) (i32.const 6)) (i32.store8 (i32.const {s1}) (i32.const 1))
                  (i32.store16 (i32.const {a1}) (i32.const 0))
                  (i32.store8 (i32.const {c2}) (i32.const 7)) (i32.store8 (i32.const {s2}) (i32.const 1))
                  (i32.store (i32.const {b2}) (i32.const 0xff0000ff))
+                 {weather} {sun} {grade}
                  i32.const 0",
                 c0 = REPLY + 4,
                 s0 = REPLY + 5,
@@ -360,6 +371,9 @@ mod on {
                 c2 = REPLY + 28,
                 s2 = REPLY + 29,
                 b2 = REPLY + 36,
+                weather = race_wide(3, 10, 0.5),
+                sun = race_wide(4, 11, 0.5),
+                grade = race_wide(5, 12, 0.25),
             )
         } else {
             "i32.const 0".to_string()
@@ -395,6 +409,50 @@ mod on {
             Some([1.0, 0.0, 0.0, 1.0])
         );
         assert_eq!(quiet.sim.extensions.pickup_tint(1), None);
+        // The race-wide outputs are held for the view half and absent without a module.
+        assert_eq!(
+            loud.extension_sky(),
+            crate::extensions::Sky {
+                rain: Some(0.5),
+                sun: 0.5,
+                grey: 0.25
+            }
+        );
+        assert_eq!(quiet.extension_sky(), crate::extensions::Sky::default());
+        assert_eq!(
+            grid(Prepared::default()).extension_sky(),
+            crate::extensions::Sky::default()
+        );
+    }
+
+    /// Copies slot 1's lap and laps target, as its craft record carries them, into the
+    /// first two blob bytes every tick.
+    fn lap_reader() -> Source {
+        module(
+            "test.laps",
+            &format!(
+                "(i32.store8 (i32.const {STATE}) (i32.load8_u (i32.const {lap})))
+                 (i32.store8 (i32.const {target}) (i32.load8_u (i32.const {laps})))
+                 i32.const 0",
+                lap = CRAFTS + 16 + 2,
+                laps = CRAFTS + 16 + 3,
+                target = STATE + 1,
+            ),
+        )
+    }
+
+    #[test]
+    fn the_craft_record_carries_the_lap_and_the_laps_target() {
+        let mut race = grid(prepared(&[lap_reader()]));
+        let target = race
+            .sim
+            .world
+            .laps_target()
+            .expect("a single race has laps");
+        race.sim.world.ships[1].standing.lap = 2;
+        race.tick(&PlayerInputs::none());
+        let blob = race.sim.extensions.blob_for_tests(0);
+        assert_eq!(blob[..2], [2, u8::try_from(target).unwrap()]);
     }
 
     /// Counts its calls in the blob and halves slot 1's thrust every tick.
@@ -430,7 +488,7 @@ mod on {
 
     fn prepared(sources: &[Source]) -> Prepared {
         let mut report = Vec::new();
-        let prepared = prepare(sources, "wipeout-pulse", &mut report);
+        let prepared = prepare(sources, "wipeout-pulse", None, &mut report);
         assert!(
             report.iter().all(|line| !line.contains("left out")),
             "{report:?}"
