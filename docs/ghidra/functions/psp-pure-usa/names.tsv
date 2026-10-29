@@ -275,3 +275,4 @@
 0x088630c4	function	Bloom_EmitBlurTaps	85	bloom.md
 0x08a8e898	data	g_bloom_composite_strength	90	bloom.md
 0x08a8e89c	data	g_bloom_blur_weights	92	bloom.md
+0x08821838	function	Hud_BindWidgets	75	pickup-icons.md

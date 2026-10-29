@@ -522,6 +522,18 @@ impl Definition {
         }
     }
 
+    /// Drops the WEATHER row on a title whose weather is not played
+    /// (`oag_title::weather::Weather::is_played`): every title but Pulse. Same
+    /// once-before-read timing as [`Self::drop_unavailable_boost_zoom`].
+    pub fn drop_unavailable_weather(&mut self, title: &oag_title::Title) {
+        if title.weather.is_played() {
+            return;
+        }
+        for page in &mut self.pages {
+            page.retain_rows(|entry| entry.setting() != Some("graphics.weather"));
+        }
+    }
+
     /// Drops every QUIT row, for a platform whose apps are not quit from
     /// inside (Android: the player leaves with the system's home or app
     /// switcher, and the app is suspended, not ended). Same once-before-read

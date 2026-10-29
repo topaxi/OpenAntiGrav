@@ -293,6 +293,16 @@ pub struct RenderProfile {
     /// applies live.
     #[serde(default)]
     pub trail_order: oag_display::display::TrailOrder,
+    /// What a played weather adds to the original's: `original` or `enhanced`
+    /// (splashes where a drop meets the track, snow that settles).
+    ///
+    /// **`original` is the default**: the frame is byte-identical to a build
+    /// without the row. `enhanced` is this project's own, chosen, not
+    /// measured. Only a title whose weather is played offers it
+    /// (`Definition::drop_unavailable_weather`). Read fresh every frame, so
+    /// the row applies live. See [`oag_display::display::Weather`].
+    #[serde(default)]
+    pub weather: oag_display::display::Weather,
 }
 
 impl RenderProfile {
@@ -442,6 +452,7 @@ impl Default for RenderProfile {
             model_detail: oag_mesh::mesh::ModelDetail::default(),
             texture_detail: oag_mesh::mesh_render::TextureDetail::default(),
             trail_order: oag_display::display::TrailOrder::default(),
+            weather: oag_display::display::Weather::default(),
         }
     }
 }
@@ -473,7 +484,7 @@ pub(super) fn ensure_known_titles(settings: &mut Settings) {
 /// hold", because the struct answers that. What needs it is the sweep that
 /// checks every menu seed lands in a table the settings file actually writes.
 #[cfg(test)]
-pub(super) const PROFILE_KEYS: [&str; 15] = [
+pub(super) const PROFILE_KEYS: [&str; 16] = [
     "render_scale",
     "render_scale_chosen",
     "target_fps",
@@ -489,6 +500,7 @@ pub(super) const PROFILE_KEYS: [&str; 15] = [
     "model_detail",
     "texture_detail",
     "trail_order",
+    "weather",
 ];
 
 /// The keys that used to live flat in `[graphics]` and now live in one

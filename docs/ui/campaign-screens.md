@@ -4633,7 +4633,7 @@ confidence 85): a triangle wave from `0xff33a6b9` to white, phase `elapsed * 2.0
 - **Period 1.00 s, measured** (confidence 80): 24 PPSSPP frames 83 ms apart of `Grid Selection`'s selected hex, red channel
   of the ring: minima at t = 0.08 s and 1.08 s, plateau at white 0.50-0.75 s and 1.50-1.67 s (the original's `SelectorGlow`
   saturates the plateau).
-- **Entry hold 0.35 s, fitted, not read** (confidence 40): frames 0.04-0.9 s after `Grid Selection` replaced `Main Menu` (3 entries
+- **Entry hold 0.35 s, fitted, not read** (confidence 40; **superseded 2026-10-29, `pulse-selector-entry`: there is no hold, see "The pulse has no entry hold" below**): frames 0.04-0.9 s after `Grid Selection` replaced `Main Menu` (3 entries
   x 14 frames, `scripts/psp-menu-pair.py`'s entry clock) read cyan until 0.28-0.40 s, then rise to white by 0.65-0.9 s.
   The entrance animation that holds it is not located. The spread between entries is about +-0.12 s (one entry rose 0.2 s later
   than the other two), so no constant matches a pair better than that.
@@ -4646,6 +4646,46 @@ confidence 85): a triangle wave from `0xff33a6b9` to white, phase `elapsed * 2.0
   peak, ours a thin ring. Controlled score on the same `theirs.png` (mean grey difference in the cursor-hex box, `main`'s static
   cyan against the pulse at the recorded 2.07 s): grid 66.3 to 59.3, cell 77.2 to 69.2; the best ours-seconds on a sweep gives
   56.6 and 65.1, so the clock closes about two thirds of what the pulse alone can, the rest is the glow and a ~0.2 s phase miss.
+
+#### The pulse has no entry hold (2026-10-29, `pulse-selector-entry`)
+
+**Confidence 85.** The `Selector` pulse is not driven by `GridController_UpdateSelectorPulse` (`0x088a5700`) on Grid and Cell
+Selection: that breakpoint never fired (also in `pulse-menu-clock`). The live update is `GridController_UpdateSelectorStamp`
+(`0x088a3e8c`, slot `+0x18` of the vtable at `0x08accca0`; `0x088a5700` fills the same slot of the sibling vtable `0x08accd70`),
+which has the same body plus the glow-mask stamp: `*(Selector + 0xf4) = (int)(phase * 150 + 80)` (falling half
+`(2 - phase) * 150 + 80`), the stamp `SelectorPulse::stamp` reads off EDRAM. Its cached `Selector` is `*(widget + 0xbc)`.
+
+Conditional breakpoint `[a0+0x2c] & 0x200` on `0x088a3e8c` (PPSSPP 1.20.4, software renderer, USA CHD; `a0` is the widget, phase at
+`+0x9c`, front-end clock `*(0x08b317b0)+0x40`), armed on Main Menu and a `cross` press into Grid Selection:
+
+| Run | First hit | Phase at first hit | Then |
+| --- | --- | --- | --- |
+| Cold boot, Grid Selection (widget `0x8d38320`) | clock 10.983, 0.034 s after the press | `0.0000` | `+0.0667` per 33 ms hit (`2 * dt`), `1.0023` at 11.484 |
+| Cold boot, Cell Selection (widget `0x8d75510`) | 25.965 | `0.0000` | same ramp |
+| Grid re-entry after earlier visits | 93.099 | `1.1388` (frozen value) | wraps at `2.0` to cyan 0.43 s after the press, white 0.97 s |
+| Cell second entry | 36.242 | `0.2801` | same ramp |
+
+- **No hold and no transition gate**: the phase advances from the first frame the widget's flag word has `0x200`; the widget's fade
+  `+0x64` already reads `1.0` and the delay `+0x90` `0.0`. The function does nothing but the input polls while `0x200` is clear
+  (Main Menu: flags `0xf102`), and the phase stays frozen.
+- **The phase persists in the widget across visits** (both widgets live for the whole front end). A first entry since boot starts at
+  `0.0`, cyan, and rises at once; a re-entry resumes from the leftover phase. That is what the old "cyan until 0.3-0.4 s, white by
+  0.7-0.9 s" fit saw: its repeated back-and-forth trials started from stale phases (1.1388 wraps to cyan at 0.43 s and peaks at
+  0.97 s), hence the +-0.12 s spread between entries.
+- **Wired**: `ENTRY_HOLD` is gone; ours starts at cyan and rises at once (the original's first entry since boot). `psp-menu-pair.py`
+  places a recorded stamp level `t` at `t / 2` s.
+- **Re-entry resumes (2026-10-29, `pulse-selector-resume`)**: `CampaignStage` writes each screen's clock back every tick
+  (`SelectorPhases`, one for Grid and one for Cell) and puts it on the model it builds next; the session keeps the pair between
+  `RACE CAMPAIGN` openings, in memory only (a relaunch is a cold start at `0.0`, as a reboot is). It is frozen while away because
+  nothing ticks it off screen. **Chosen: only construction resets it** (the session keeps it through a race and a title change
+  alike); what else zeroes `+0x9c` stays untraced, so that part carries no confidence score. Gated on `Campaign::frontend_glow`
+  (Pulse PSP; Pulse PS2 inherits PSP's law); the other titles' screens keep a fresh phase. Test:
+  `campaign_cursor_ground_truth::the_selector_pulse_resumes_where_the_screen_was_left` (`--drive` reports `screen.pulse_ms`; it
+  fails with the wiring dropped). `stamp()` rounds where the original truncates (`trunc.w.s` at `0x088a4074`/`0x088a40b4`),
+  a one-step difference inside the measurement.
+- **PS2**: `0x001905d8` is the PS2 twin of `0x088a5700`; the PS2 twin of `0x088a3e8c` was not located (checked: not checkable
+  from the `pulse-ps2-hex-align` page alone). **Not checkable against the other titles here**: this is Pulse PSP's widget code; Pure,
+  HD, 2048 and Omega front ends were not run.
 
 #### The halo is the front end's bloom, not a `SelectorGlow` image (2026-10-29, `pulse-selector-glow`)
 

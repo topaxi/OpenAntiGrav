@@ -461,6 +461,9 @@ pub(crate) struct Session {
     /// this exists at all, and `Session::frame`/`Session::escape` for the two
     /// places that ever call [`records::Store::record`].
     pub(crate) records: records::Store,
+    /// Where the campaign's `Selector` pulses stood when the screens were last left; a new
+    /// `RACE CAMPAIGN` resumes them. Memory only: a relaunch is a cold start.
+    pub(crate) selector_phases: oag_ui_screens::campaign::pulse::SelectorPhases,
     /// `--anim-seconds`: pins the trackside animation clock instead of deriving
     /// it from the tick.
     ///

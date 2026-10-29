@@ -332,3 +332,78 @@ fn the_2048_map_reopens_on_the_event_last_started() {
         "the map reopens on the event started after a relaunch"
     );
 }
+
+/// The pulse clocks (`screen.pulse_ms`) the campaign reported on level `id`, in order.
+fn pulses(states: &[Value], id: &str) -> Vec<u64> {
+    states
+        .iter()
+        .filter_map(|state| {
+            let screen = state.get("screen").filter(|s| s["kind"] == "campaign")?;
+            (screen["id"] == id).then(|| screen["pulse_ms"].as_u64())?
+        })
+        .collect()
+}
+
+/// `Selector`'s pulse resumes where the screen was left, as the original's widget does (Pulse's
+/// `0x088a3e8c` keeps its phase in the widget): `Grid Selection` through the main menu and back,
+/// and `Cell Selection` through `Grid Selection` and back, each with its own phase, frozen while
+/// away. A cold first entry starts at 0.
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd"]
+fn the_selector_pulse_resumes_where_the_screen_was_left() {
+    if !pulse_present() {
+        return;
+    }
+    let profile = Profile::fresh("pulse");
+    let states = profile.drive(
+        &format!(
+            "{OPEN}; ticks 40; press cross; until screen.id=cell; ticks 25; \
+             press circle; until screen.id=grid; ticks 90; \
+             press cross; until screen.id=cell; ticks 5; \
+             press circle; until screen.id=grid; ticks 5; \
+             press circle; until screen!=campaign; ticks 120; \
+             select campaign; press cross; until screen=campaign; ticks 5"
+        ),
+        "a.jsonl",
+    );
+    let grid = pulses(&states, "grid");
+    let cell = pulses(&states, "cell");
+    assert!(
+        grid[0] < 100,
+        "a cold first entry starts at phase 0: {}",
+        grid[0]
+    );
+    assert!(
+        cell[0] < 100,
+        "Cell's first entry starts at phase 0: {}",
+        cell[0]
+    );
+    // Cell: left at `cell_left` after ~25 ticks, re-entered after 90 ticks on Grid.
+    let cell_left = cell
+        .iter()
+        .copied()
+        .take_while(|ms| *ms < 5000)
+        .max()
+        .unwrap();
+    let reentry = cell
+        .iter()
+        .position(|ms| *ms >= 300 && *ms + 5 >= cell_left)
+        .expect("Cell resumed");
+    assert!(
+        cell_left > 300,
+        "the first Cell visit ran long enough: {cell_left}"
+    );
+    assert!(
+        cell[reentry] >= cell_left && cell[reentry] < cell_left + 100,
+        "Cell resumed at {} after leaving at {cell_left}, not restarted and not run while away",
+        cell[reentry]
+    );
+    // Grid: its phase is not Cell's, and survives Cell's visit and the trip to the main menu.
+    let grid_at_end = *grid.last().unwrap();
+    assert!(
+        grid_at_end > 1100,
+        "Grid ran about 1.9 s in total across its visits, 2 s of main menu not counted: {grid_at_end}"
+    );
+    let jump = grid.windows(2).filter(|w| w[1] + 100 < w[0]).count();
+    assert_eq!(jump, 0, "the Grid clock never fell back to 0: {grid:?}");
+}

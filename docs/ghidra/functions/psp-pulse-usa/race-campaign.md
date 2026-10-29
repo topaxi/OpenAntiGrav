@@ -2216,3 +2216,15 @@ quad (no second draw) whose texture holds no halo, and the frame's tail is `Bloo
 update uses the literals `5.0` and `7.0`: the quad's top-left is the hex's top-left minus (5,7), measured `(60,138)` over `(65,145)`.
 See `docs/ui/campaign-screens.md`, "The halo is the front end's bloom".
 
+
+## `GridController_UpdateSelectorStamp` (`0x088a3e8c`, 2026-10-29, `pulse-selector-entry`)
+
+**Confidence 85** (live conditional breakpoint plus decompile). The widget update that actually runs on Grid Selection (widget
+`0x8d38320`) and Cell Selection (`0x8d75510`) on Pulse PSP: slot `+0x18` of the vtable at `0x08accca0`, where
+`GridController_UpdateSelectorPulse` (`0x088a5700`, slot `+0x18` of `0x08accd70`) is the sibling that the pair-lane
+breakpoint never saw fire. Same body (flags `& 0x200`, position update with `5.0`/`7.0`, phase `+0x9c += 2 * dt` wrapped at
+`2.0`, `lerp` cyan/white) but it reaches `Selector` through the cached `*(widget + 0xbc)` instead of a name lookup and also
+stores `*(Selector + 0xf4) = (int)(phase * 150 + 80)` (`(2 - phase) * 150 + 80` above 1.0), truncating (`trunc.w.s` at
+`0x088a4074`, `0x088a40b4`): the glow-mask stamp. Nothing in it delays the phase; the evidence table is in
+`docs/ui/campaign-screens.md`, "The pulse has no entry hold". The phase persists in the widget between visits.
+`0x088a5700` was never observed running on Race Campaign; its row stays as is.

@@ -937,6 +937,7 @@ impl Race {
                 model_detail: oag_mesh::mesh::ModelDetail::default(),
                 texture_detail: oag_mesh::mesh_render::TextureDetail::default(),
                 trail_order: oag_display::display::TrailOrder::default(),
+                weather: oag_display::display::Weather::default(),
                 boost_kick: 0.0,
                 boost_fov_kick: oag_display::display::BoostFovKick::DEFAULT,
                 flaps: [[0.0; 2]; MAX_SHIPS],

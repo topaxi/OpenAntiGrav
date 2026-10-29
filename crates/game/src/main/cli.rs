@@ -756,6 +756,12 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) trail_order: Option<oag_display::display::TrailOrder>,
 
+    /// What a played weather adds: `original` or `enhanced`, overriding
+    /// `[render_profiles.<title>] weather` for this run only. See
+    /// `oag_display::display::Weather`.
+    #[arg(long)]
+    pub(crate) weather: Option<oag_display::display::Weather>,
+
     /// Whether the track's authored visibility set culls this run: `true` or
     /// `false`.
     ///

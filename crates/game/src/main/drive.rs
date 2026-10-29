@@ -437,6 +437,7 @@ fn campaign_screen(campaign: &crate::campaign_stage::CampaignStage) -> Screen {
             label: name,
             setting: None,
         }),
+        pulse_ms: campaign.selector_seconds().map(|s| (s * 1000.0).round() as u32),
         ..Screen::default()
     }
 }
@@ -478,6 +479,7 @@ fn picker_screen(picker: &oag_ui_screens::picker::Picker) -> Screen {
         }),
         rows,
         busy: false,
+        pulse_ms: None,
     }
 }
 
@@ -553,5 +555,6 @@ fn page_screen(stage: &MenuStage) -> Screen {
         step: None,
         rows,
         busy: stage.change.is_some(),
+        pulse_ms: None,
     }
 }

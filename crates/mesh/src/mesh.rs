@@ -337,7 +337,8 @@ pub use anim_track::AnimTrack;
 
 mod vertex;
 pub use vertex::{
-    DEFAULT_SPECULAR_EXPONENT, GpuVertex, NO_SPECULAR, TangentFrame, factor_sun_mask, slots,
+    DEFAULT_SPECULAR_EXPONENT, GpuVertex, NO_SPECULAR, ROAD_MARK, TangentFrame, factor_sun_mask,
+    road_texture, slots,
 };
 
 mod anim_node;
@@ -787,6 +788,10 @@ fn build_class(
                     })
                     .map_or(0, |at| u32::try_from(at + 1).unwrap_or(0));
 
+                let road = texture
+                    .and_then(|t| textures.get(t))
+                    .and_then(Option::as_ref)
+                    .is_some_and(|t| road_texture(&t.label));
                 let mut lo = [f32::MAX; 3];
                 let mut hi = [f32::MIN; 3];
                 for v in &batch.vertices {
@@ -830,7 +835,7 @@ fn build_class(
                         },
                         specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
                         glow: glow::batch_value(&batch, material_texture, &glow_bytes),
-                        texcoord2: [0.0, 0.0],
+                        texcoord2: [if road { ROAD_MARK } else { 0.0 }, 0.0],
                         tangent: 0,
                     });
                 }

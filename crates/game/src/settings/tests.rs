@@ -1079,6 +1079,35 @@ fn trail_order_defaults_to_the_original_and_round_trips_its_names() {
     }
 }
 
+/// WEATHER is seeded only where the weather is played (Pulse); elsewhere its row is
+/// dropped (`Definition::drop_unavailable_weather`).
+#[test]
+fn weather_is_seeded_only_where_the_weather_is_played() {
+    let seeded = |title, platform| {
+        menu_seeds(&Settings::default(), Anisotropy::default(), title, platform)
+            .into_iter()
+            .any(|(key, _)| key == "graphics.weather")
+    };
+    assert!(seeded(oag_pulse::TITLE, oag_disc::Platform::Psp));
+    assert!(!seeded(oag_pure::TITLE, oag_disc::Platform::Psp));
+    assert!(!seeded(oag_hd::TITLE, oag_disc::Platform::Ps3));
+}
+
+/// `original` is the default, what a profile without the key reads, and the
+/// spelling round trips.
+#[test]
+fn weather_defaults_to_the_original_and_round_trips_its_names() {
+    assert_eq!(
+        RenderProfile::default().weather,
+        oag_display::display::Weather::Original
+    );
+    let profile: RenderProfile = toml::from_str("weather = \"enhanced\"").expect("parse");
+    assert_eq!(profile.weather, oag_display::display::Weather::Enhanced);
+    for weather in oag_display::display::Weather::ALL {
+        assert_eq!(weather.name().parse(), Ok(weather));
+    }
+}
+
 /// Writes `text` as a settings file in a scratch directory, loads it, and
 /// returns what loaded with the file's contents afterwards.
 fn load_text(text: &str) -> (Settings, String) {

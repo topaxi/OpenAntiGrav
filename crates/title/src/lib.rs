@@ -69,6 +69,7 @@ pub mod team;
 pub mod touch;
 pub mod weapon_pad;
 pub mod weapons;
+pub mod weather;
 pub mod zone_handling;
 pub mod zoom;
 
@@ -278,6 +279,9 @@ pub struct Title {
     /// whether the shadow setting defaults to it. See
     /// [`shadow::OriginalShadows`].
     pub original_shadows: shadow::OriginalShadows,
+    /// Whether a circuit's rain and snow are played, and so whether the
+    /// weather setting is offered. See [`weather::Weather`].
+    pub weather: weather::Weather,
 }
 
 /// Where a title keeps the music its front end and its races play.

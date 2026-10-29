@@ -239,19 +239,12 @@ impl Race {
     ///    379 on HD's hulls, which put every craft inside every trail from tick
     ///    0, fired 24 bursts on the grid and then never re-armed for the rest
     ///    of the race.
-    /// 2. **The rate: every tick a craft is inside, not once on entry.** The
-    ///    asset settles this and a first pass got it wrong. `WO_TRAIL_HITSHIP`
-    ///    is authored as a **one-shot**: duration 1 tick, `looping` false,
-    ///    5 particles of 0.2..0.5 units whose size channel is down to a third
-    ///    by 17 % of its life. A system shaped like that is meant to be
-    ///    re-fired while the condition holds - fired once per entry it is five
-    ///    streaks and all but invisible, which is exactly how this first
-    ///    behaved. It also matches the original's own shape, where the flag is
-    ///    consumed *and cleared every frame*, so a craft that stays inside
-    ///    re-raises it. Against the emitter's 2,000 live cap, a continuous
-    ///    stream is a few hundred particles. What stays unread is whether the
-    ///    SPU job really does re-raise it every frame, which is why this is
-    ///    still listed as an approximation.
+    /// 2. **The rate: every tick a craft is inside - measured.** A breakpoint
+    ///    on the spawn call (`0x002e3b98`) in a running race fired once per
+    ///    frame while the player sat in a rival's ribbon: 2.0 units of travel
+    ///    between hits at 121.6 units a second. `WO_TRAIL_HITSHIP` is a
+    ///    one-shot (duration 1 tick, 16 particles of 0.2..0.5 units), so the
+    ///    stream is the re-firing.
     /// 3. **The attachment point.** The original picks the nearest of ten hull
     ///    nodes at `craft + 0x79d0..+0x79f4` and *parents* the system to it, so
     ///    the burst rides the ship. This engine has no such nodes, so it takes
@@ -261,14 +254,12 @@ impl Race {
     ///    on the ribbon was the first attempt and is wrong**: it reads as sparks
     ///    on the trail rather than on the craft, which is how it was caught.
     ///
-    /// **Which craft it lands on is settled by observation, not by the code.**
-    /// The disassembly ties the attachment node, the colour and the float all
-    /// to the craft at `+0x11f0`, and nothing read says whether that is the
-    /// trail's owner or the craft that flew through it. A sighting in the
-    /// running original - sparks on the *ship*, in the trail's colours -
-    /// resolves it: the intruder. So the burst plays on the intruder and takes
-    /// the intruder's own red flag, which on a uniformly Fury or classic grid
-    /// is the same answer either way.
+    /// **Which craft it lands on, and whose colour, measured live.** The node
+    /// the burst parents to belongs to the intruder (the trail block's
+    /// `+0x11f0`; its `+0xe4` is the player's craft in the breakpoint run),
+    /// while the variant byte is read off the craft at `+0x1204`, the ribbon's
+    /// owner. So the burst plays on the intruder in the *owner's* colours, and
+    /// carries the intruder's velocity (see the `play_carried` call below).
     ///
     /// A craft is never tested against its own trail: its nozzle *is* the head
     /// sample, so it would be permanently inside it.
@@ -294,7 +285,13 @@ impl Race {
                     self.view.trail_inside[owner] &= !bit;
                     continue;
                 }
-                let trigger = if self.view.hd_trail_red[intruder] > 0.5 {
+                // **The trail's owner picks the colour, measured.** At the call
+                // (`0x002e3b88`) the variant byte is read off the craft at the
+                // trail block's `+0x1204`, which a live run showed is the
+                // ribbon's owner, while the node it parents to is the
+                // intruder's (`+0x11f0`): sparks on the intruder, in the
+                // ribbon's colours.
+                let trigger = if self.view.hd_trail_red[owner] > 0.5 {
                     Trigger::TrailHitshipRed
                 } else {
                     Trigger::TrailHitship
@@ -317,11 +314,16 @@ impl Race {
                 let point = self.spark_anchor_of(intruder, owner).unwrap_or_else(|| {
                     hull_contact_point(at, contact, self.view.hull_reach[intruder])
                 });
-                // Neutral severity, as the rocket blast uses: the scale the
-                // collision sparks derive from an impulse has no counterpart
-                // here, and the float the original carries into the spawner
-                // (`+0x11dc`) is unread.
-                self.view.stage.play(&effect, point, 1.0);
+                // Neutral severity: the spawn passes none (`0x002c9108(.., 0, 0,
+                // 0)`). The float the original carries in (`+0x11dc`, the
+                // contact's sample index over 54, measured) lands as `1 - f1` on
+                // instance `+0x40`/`+0x4c`, whose HD consumer is unread, so it
+                // is not applied here. The craft's own velocity is: its
+                // particles inherit it times the record's `+0x4d0`
+                // ([`psys::Stage::play_carried`]), so the burst keeps up with the
+                // hull instead of piling up behind it.
+                let velocity = self.sim.world.ships[intruder].physics.body.linear_velocity;
+                self.view.stage.play_carried(&effect, point, 1.0, velocity);
             }
         }
     }
@@ -374,7 +376,9 @@ impl Race {
         let Some(effect) = self.view.handles.get(trigger).cloned() else {
             return;
         };
-        self.view.stage.play(&effect, probe, 1.0);
+        self.view
+            .stage
+            .play_carried(&effect, probe, 1.0, body.linear_velocity);
     }
 
     /// Whether any of the craft's own authored hull points is inside the
