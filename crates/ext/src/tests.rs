@@ -84,7 +84,7 @@ impl Extension for Probe {
             {
                 *count += 1;
                 if let Some(craft) = obs.craft(slot) {
-                    reply.scale_thrust(craft, 0.5).unwrap();
+                    reply.scale_thrust(&craft, 0.5).unwrap();
                 }
             }
         }
@@ -157,12 +157,14 @@ fn the_observation_lists_active_crafts_and_skips_unknown_events() {
 fn the_reply_refuses_what_the_host_would_fault_on() {
     let mut buffer = [0_u8; 4 + oag_ext_abi::COMMAND_LEN * oag_ext_abi::MAX_COMMANDS];
     let mut reply = Reply::new(&mut buffer);
+    let record = CraftRecord {
+        pickup: Pickup::Ours,
+        ..racer(50.0)
+    }
+    .encode();
     let held = Craft {
         slot: slot(2),
-        record: CraftRecord {
-            pickup: Pickup::Ours,
-            ..racer(50.0)
-        },
+        record: &record,
     };
     for bad in [2.5, -0.1, f32::NAN, f32::INFINITY] {
         assert_eq!(reply.scale_thrust(&held, bad), Err(Refused::Range));

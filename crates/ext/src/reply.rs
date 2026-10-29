@@ -72,7 +72,7 @@ impl<'a> Reply<'a> {
     /// # Errors
     ///
     /// [`Refused::Full`], [`Refused::Repeated`], [`Refused::Range`].
-    pub fn scale_thrust(&mut self, craft: &Craft, factor: f32) -> Result<(), Refused> {
+    pub fn scale_thrust(&mut self, craft: &Craft<'_>, factor: f32) -> Result<(), Refused> {
         if !(0.0..=MAX_THRUST_FACTOR).contains(&factor) {
             return Err(Refused::Range);
         }
@@ -95,7 +95,7 @@ impl<'a> Reply<'a> {
     /// # Errors
     ///
     /// [`Refused::Full`], [`Refused::Repeated`], [`Refused::Range`].
-    pub fn shield_delta(&mut self, craft: &Craft, amount: f32) -> Result<(), Refused> {
+    pub fn shield_delta(&mut self, craft: &Craft<'_>, amount: f32) -> Result<(), Refused> {
         if !amount.is_finite() || amount.abs() > craft.shield_max() {
             return Err(Refused::Range);
         }
@@ -116,7 +116,7 @@ impl<'a> Reply<'a> {
     /// # Errors
     ///
     /// [`Refused::Full`], [`Refused::Pickup`].
-    pub fn give_pickup(&mut self, craft: &Craft) -> Result<(), Refused> {
+    pub fn give_pickup(&mut self, craft: &Craft<'_>) -> Result<(), Refused> {
         if craft.pickup() != Pickup::None {
             return Err(Refused::Pickup);
         }
@@ -128,7 +128,7 @@ impl<'a> Reply<'a> {
     /// # Errors
     ///
     /// [`Refused::Full`], [`Refused::Pickup`].
-    pub fn clear_pickup(&mut self, craft: &Craft) -> Result<(), Refused> {
+    pub fn clear_pickup(&mut self, craft: &Craft<'_>) -> Result<(), Refused> {
         if craft.pickup() != Pickup::Ours {
             return Err(Refused::Pickup);
         }
@@ -155,7 +155,7 @@ impl<'a> Reply<'a> {
     /// # Errors
     ///
     /// [`Refused::Full`].
-    pub fn pad_mode(&mut self, craft: &Craft) -> Result<(), Refused> {
+    pub fn pad_mode(&mut self, craft: &Craft<'_>) -> Result<(), Refused> {
         self.push(&Command::PadMode { slot: craft.slot() })
     }
 
@@ -164,7 +164,7 @@ impl<'a> Reply<'a> {
     /// # Errors
     ///
     /// [`Refused::Full`].
-    pub fn play_cue(&mut self, craft: &Craft, cue: Cue) -> Result<(), Refused> {
+    pub fn play_cue(&mut self, craft: &Craft<'_>, cue: Cue) -> Result<(), Refused> {
         self.push(&Command::PlayCue {
             slot: craft.slot(),
             cue,
@@ -177,7 +177,7 @@ impl<'a> Reply<'a> {
     /// # Errors
     ///
     /// [`Refused::Full`].
-    pub fn fire_effect(&mut self, craft: &Craft, effect: Effect) -> Result<(), Refused> {
+    pub fn fire_effect(&mut self, craft: &Craft<'_>, effect: Effect) -> Result<(), Refused> {
         self.push(&Command::FireEffect {
             slot: craft.slot(),
             effect,
@@ -190,7 +190,7 @@ impl<'a> Reply<'a> {
     /// # Errors
     ///
     /// [`Refused::Full`].
-    pub fn pickup_tint(&mut self, craft: &Craft, rgba: Rgba) -> Result<(), Refused> {
+    pub fn pickup_tint(&mut self, craft: &Craft<'_>, rgba: Rgba) -> Result<(), Refused> {
         self.push(&Command::PickupTint {
             slot: craft.slot(),
             rgba,

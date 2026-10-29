@@ -64,14 +64,19 @@ pub trait Extension {
 }
 
 /// One grid slot that holds a craft this tick. Only an [`Observation`] hands one out,
-/// so a command taking a `&Craft` cannot name an empty slot.
+/// so a command taking a `&Craft` cannot name an empty slot. A view: each accessor
+/// reads its field from the buffer, so a craft costs nothing until it is asked.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Craft {
+pub struct Craft<'a> {
     slot: Slot,
-    record: oag_ext_abi::Craft,
+    record: &'a [u8; oag_ext_abi::CRAFT_LEN],
 }
 
-impl Craft {
+impl Craft<'_> {
+    fn read(&self) -> oag_ext_abi::Craft {
+        oag_ext_abi::Craft::decode(self.record)
+    }
+
     /// Its grid slot.
     #[must_use]
     pub fn slot(&self) -> Slot {
@@ -81,66 +86,62 @@ impl Craft {
     /// A person flies it (else the AI).
     #[must_use]
     pub fn is_person(&self) -> bool {
-        self.record.person
+        self.read().person
     }
 
     /// A person flying it holds the fire button this tick.
     #[must_use]
     pub fn fire_held(&self) -> bool {
-        self.record.fire_held
+        self.read().fire_held
     }
 
     /// Racing: past the start, not wrecked, not respawning.
     #[must_use]
     pub fn is_racing(&self) -> bool {
-        self.record.racing
+        self.read().racing
     }
 
     /// The energy pool.
     #[must_use]
     pub fn shield(&self) -> f32 {
-        self.record.shield
+        self.read().shield
     }
 
     /// The pool's maximum: the bound of a [`Reply::shield_delta`].
     #[must_use]
     pub fn shield_max(&self) -> f32 {
-        self.record.shield_max
+        self.read().shield_max
     }
 
     /// The body's speed, km/h.
     #[must_use]
     pub fn speed_kmh(&self) -> f32 {
-        self.record.speed_kmh
+        self.read().speed_kmh
     }
 
     /// What it holds.
     #[must_use]
     pub fn pickup(&self) -> Pickup {
-        self.record.pickup
+        self.read().pickup
     }
 }
 
 /// One tick's observation: the tick, the crafts on the grid, the events since the last
-/// call.
+/// call. Nothing is decoded until asked for.
 #[derive(Debug)]
 pub struct Observation<'a> {
     head: &'a [u8],
-    crafts: [Option<Craft>; MAX_CRAFTS],
+    records: &'a [u8],
+    active: u32,
 }
 
 impl<'a> Observation<'a> {
-    fn read(head: &'a [u8], records: &[u8]) -> Self {
-        let active = Sections::active(head);
-        let crafts = core::array::from_fn(|index| {
-            let slot = Slot::new(index)?;
-            if active & slot.bit() == 0 {
-                return None;
-            }
-            let record = oag_ext_abi::Craft::decode(Sections::craft_record(records, slot)?);
-            Some(Craft { slot, record })
-        });
-        Self { head, crafts }
+    fn read(head: &'a [u8], records: &'a [u8]) -> Self {
+        Self {
+            head,
+            records,
+            active: Sections::active(head),
+        }
     }
 
     /// The world tick.
@@ -151,13 +152,17 @@ impl<'a> Observation<'a> {
 
     /// The craft in `slot`, if the slot holds one.
     #[must_use]
-    pub fn craft(&self, slot: Slot) -> Option<&Craft> {
-        self.crafts.get(slot.index())?.as_ref()
+    pub fn craft(&self, slot: Slot) -> Option<Craft<'a>> {
+        if self.active & slot.bit() == 0 {
+            return None;
+        }
+        let record = Sections::craft_record(self.records, slot)?;
+        Some(Craft { slot, record })
     }
 
     /// Every slot holding a craft, in slot order.
-    pub fn crafts(&self) -> impl Iterator<Item = &Craft> {
-        self.crafts.iter().flatten()
+    pub fn crafts(&self) -> impl Iterator<Item = Craft<'a>> + '_ {
+        Slot::all().filter_map(|slot| self.craft(slot))
     }
 
     /// What happened since the last call, in engine order. A kind this SDK does not
