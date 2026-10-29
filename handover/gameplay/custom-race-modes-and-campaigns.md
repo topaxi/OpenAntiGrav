@@ -284,6 +284,30 @@ Owed before the ADR can be accepted:
   language's runtime by **feasibility and ease of use** for a mod author (e.g. Wasmoon
   or lua2wasm, whichever fits the ABI with less glue), and say why in its README.
 
+## The first player-facing mod: Kiss Curse (maintainer, 2026-10-29)
+
+The smallest increment that a player feels, ahead of the README's phase 1 and 2: a
+craft that touches a wall slows far more than a normal craft.
+
+- **Event**: `wall-contact`, at `Race::count_wall_contact` (`field.rs:545`, from
+  `step_player` and `step_opponents`), so AI craft are cursed too.
+- **Command**: `scale-thrust{slot, factor}` with `factor` in `[0, 1]` only, written
+  into `pending_thrust_scale`, the per-tick slow the Leach Beam already arms
+  (`crates/weapons/src/projectile/leach_beam.rs:359`). The guest keeps the curse's
+  countdown in its own blob and re-sends the command each tick it runs, so the
+  engine needs no timer and no factor above 1.0 (both are the Feisar walk's changes).
+- **Host**: a minimal `oag-modhost` behind `extensions`: wasmtime with Cranelift on
+  desktop, fuel, NaN canonicalisation, the I/O buffer, a pooled instance per tick, no
+  engine built while no mod is loaded; the one `tick` call between `advance_cannons`
+  and `step_player`; the blob in the race state and the hash.
+- **Mod**: Rust, in `mod-examples`, e.g. thrust x0.25 for 1.5 s after each contact.
+- **Proof**: a modded race run twice hashes identically; a vanilla race with the
+  feature on matches the feature-off build; the determinism references untouched;
+  out of fuel falls back to vanilla deterministically; a ground-truth test that a
+  cursed craft's speed after a scrape is below an uncursed one's.
+- **Out**: HUD world, the Pilot Assist move, browser, iOS, replays, lobby. The race is
+  MODDED and records no replay (phase 2's rule).
+
 ## Next Steps
 
 1. Refactor the lap modes into race rules as data, every existing hash unchanged.
