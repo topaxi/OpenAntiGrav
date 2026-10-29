@@ -477,13 +477,13 @@ fn label_draw(text: &Text) -> Option<Draw> {
 
 /// The `Mode3D` model directly under the `Screen` named `start`, anywhere in the tree.
 fn start_model(node: &oag_ui::screen::Node, start: &str, location: &str) -> Option<Model> {
-    if node.name.eq_ignore_ascii_case("Screen") && node.attr("name") == Some(start) {
-        if let Some(model) = node
+    if node.name.eq_ignore_ascii_case("Screen")
+        && node.attr("name") == Some(start)
+        && let Some(model) = node
             .children_named("Mode3D")
             .find_map(|mode3d| model_from(mode3d, location))
-        {
-            return Some(model);
-        }
+    {
+        return Some(model);
     }
     node.children
         .iter()
