@@ -105,7 +105,7 @@ in the simulation: **`hud.readout`** and **`hud.widget`**.
 ### `craft.environment`: change the forces on a craft this tick
 
 - **Where.** The `Environment` the force law reads, built in `Race::step_player` at
-  `player_step.rs:229` to `:250` and passed to `oag_physics::step` at
+  `player_step.rs:232` to `:250` and passed to `oag_physics::step` at
   `player_step.rs:258`; for AI craft built at `field.rs:851` and passed at
   `field.rs:871`. The hook runs after the pads (so it sees this tick's pad edge) and
   before the step.
@@ -170,8 +170,13 @@ in the simulation: **`hud.readout`** and **`hud.widget`**.
 
 ### `weapon.fire`: a pickup was spent
 
-- **Where.** `Race::spend_pickup` (`weapons.rs:148`), called per person at
-  `tick.rs:168` and under autopilot for AI craft; edge-triggered on fire/absorb.
+- **Where.** A person's craft: `Race::spend_pickup` (`weapons.rs:148`), called at
+  `tick.rs:168`, edge-triggered on fire/absorb. An AI craft:
+  `Race::spend_opponent_pickup` (`crates/raceplay/src/field/opponent_weapons.rs:329`),
+  called from `step_opponents` at `field.rs:826`, where the driver's weapon decision
+  (`oag_ai::Driver::wants_to_fire`, `crates/ai/src/driver/weapons.rs:72`) is acted on.
+  (`spend_pickup_under_autopilot`, `field.rs:357`, is the Autopilot pickup's path,
+  not a fire decision.)
 - **Sees.** Slot, the weapon held, fire or absorb, the craft's pose and speed, the
   other craft (as `craft.controls`), the blob.
 - **Writes.** For a **mod weapon** only (see below): a timed effect on the firing
@@ -189,6 +194,10 @@ in the simulation: **`hud.readout`** and **`hud.widget`**.
   a row in the weapon-lineage table, and the network weapons path of
   [ADR-0071](../adr/0071-weapons-are-predicted-simulation-with-a-discrete-state-correction-trigger.md)
   to treat it like any other weapon.
+- **Open: AI craft and mod weapons.** Our driver's weapon decision knows the
+  titles' weapons only; an AI craft holding a mod weapon would never fire it. Either
+  a mod weapon declares which original weapon's AI use it borrows, or only mod
+  controllers (`craft.controls` on AI slots) fire it. Not decided.
 
 ### `weapon.hit`: a projectile hit a craft or a wall
 
@@ -204,10 +213,18 @@ in the simulation: **`hud.readout`** and **`hud.widget`**.
 
 ### `race.lap`: a lap edge
 
-- **Where.** `Race::advance_player_rules` (`player_step.rs:381`) calls
-  `RaceState::update` (`crates/race/src/state.rs:410`) and reads its `Outcome`
-  (`state.rs:590`: `lap_completed`, `first_crossing`, `lap_ticks`, `finished`,
-  `zone_advanced`, `perfect_zone`). The hook runs right after, with that outcome.
+- **Where: two sites, because a person and an AI craft count laps through two
+  structs.**
+  - A person's slot: `Race::advance_player_rules` (`player_step.rs:381`), run only
+    for the slots stepped as people (`tick.rs:452` to `:494`), calls
+    `RaceState::update` (`crates/race/src/state.rs:410`) and reads its `Outcome`
+    (`state.rs:590`: `lap_completed`, `first_crossing`, `lap_ticks`, `finished`,
+    `zone_advanced`, `perfect_zone`). The hook runs right after, with that outcome.
+  - Every craft, AI included: `Race::update_standings` (`field.rs:1019`) runs
+    `advance_standings` (`field.rs:1258`), which calls `Standing::update`
+    (`crates/race/src/standing.rs:175`) per active craft; it returns whether a lap
+    completed. An AI craft's `RaceState` is deliberately not advanced (the comment
+    at `field.rs:1274` to `:1278`), so for AI slots the hook hangs off this return.
 - **Sees.** The slot's `RaceState` (lap, best lap, splits, zone, score) and the
   outcome; the blob.
 - **Writes.** `race.tick_end`'s commands.
@@ -217,12 +234,17 @@ in the simulation: **`hud.readout`** and **`hud.widget`**.
 - **Where.** Today the rule is in `oag-race`: `RaceState::complete_lap` finishes a
   craft when `lap > laps_target` (`state.rs:538`), Zone on `zone_target`
   (`state.rs:520`), elimination through `RaceState::eliminate`. Standings are
-  `Standing` (`crates/race/src/standing.rs`, `finished` at `:133`).
+  `Standing` (`crates/race/src/standing.rs`): `Standing::update` finishes a craft
+  on its own `laps_target` argument and records `finish_tick`; `finished()` at
+  `:133` reads it. AI craft finish only there.
 - **What it is.** Not a callback inside `oag-race`: a mod's finish rule is a
   **command** from `race.lap` or `race.tick_end` (`finish(slot)`), and a race whose
   mode declares `finish = "mod"` turns the lap-count rule off (`laps_target: None`,
   which already means "never ends on its own", `state.rs:154`). So `oag-race` keeps
-  one rule set; the mod decides from outside, through the same `finished` flag.
+  one rule set; the mod decides from outside. **`finish(slot)` sets both flags**:
+  `Standing::finish_tick` for every craft, and `RaceState::finished` for a person's
+  slot (whose results, HUD and records read it). With a lap target of `None`
+  passed to both, neither finishes a craft on its own.
 - **Refuses.** Finishing a craft twice (the flag is an edge, as `eliminate` is),
   un-finishing one.
 
@@ -244,7 +266,7 @@ in the simulation: **`hud.readout`** and **`hud.widget`**.
 
 - **Where.** `spawn_pose` (`spawn.rs:65`, a pose from the track's authored start
   position or the spline's start sample) and the grid walk after it
-  (`spawn.rs:139`, `oag_gameplay::grid_pose`, `crates/gameplay/src/spawn.rs:435`);
+  (`grid_poses`, `spawn.rs:274`; `oag_gameplay::grid_pose`, `crates/gameplay/src/spawn.rs:435`);
   `Race::respawn` (`respawn.rs:280`), which puts a craft back on a spline sample.
 - **Sees.** Slot, grid rank, the spline start, the track's authored spawn points
   (to be added for arenas), the blob.

@@ -75,12 +75,21 @@ Measured in the spike:
   at iteration 47 under 1,000 units and 475 under 10,000, on both engines.
 - **The fuel total is identical too**: 6,059,436 units over a 36,000-tick race on
   both, about 168 a tick.
-- **Fuel is checked at function entry and loop back-edges, not per instruction.**
-  The loop-free tick hook ran a whole race on budgets of 20 and of 100 units without
-  trapping (identically on both engines); a budget of 1 trapped at entry. So the
-  budget bounds loops and calls, and straight-line code may overrun it by its own
-  length. That is deterministic, but it means **the budget is not a precise
-  instruction count**, and a design must not treat "fuel used" as one.
+- **Fuel is checked at function entry and loop headers, not per instruction.**
+  wasmtime's translator emits the check in `fuel_function_entry` and
+  `translate_loop_header` (crate `wasmtime-internal-cranelift` 50.0.0,
+  `src/func_environ.rs`); between checks it only accumulates the cost. The spike
+  shows the consequence: the loop-free tick hook ran a whole race on budgets of 20
+  and of 100 units without trapping (identically on both engines); a budget of 1
+  trapped at entry. So the budget bounds loops and calls, and straight-line code may
+  overrun it by its own length. Deterministic, but **the budget is not a precise
+  instruction count**.
+- **wasmtime's fuel count is not state.** Its per-operator costs are wasmtime's own
+  (configurable through `Config::operator_cost`) and the browser has no equivalent,
+  so a fuel total must never reach the state hash or a replay: only **the fault
+  edge** does (the mod's fault flag and the tick it faulted on). The spike hashed
+  its fuel total, which is fine for comparing two wasmtime engines and nothing
+  more.
 - **The browser has no fuel.** For the web host to fault at the same tick, the same
   metering has to run there, which means **instrumenting the module at load** (a
   counter decremented at function entries and loop headers, trapping at zero) rather
@@ -158,7 +167,8 @@ arrays, so a snapshot is one copy. A mod's state follows that rule:
 `oag_gameplay::hash::write_world` (`crates/gameplay/src/hash.rs:62`) destructures
 `World` exhaustively, so a new field cannot be forgotten by the hash; the race adds
 its own fields in `Race::state_hash` (`crates/raceplay/src/hash.rs:46`). The mod
-slots are hashed there: blob bytes, `Rng` state, fault flag, and the fuel used.
+slots are hashed there: blob bytes, `Rng` state, and the fault flag with its
+tick. Not the fuel used (see [Fuel, not time](#fuel-not-time)).
 
 **A race with no simulation mod writes nothing for them**, so every vanilla hash,
 including `crates/core/tests/determinism.rs`'s committed references, stays
@@ -194,7 +204,7 @@ through a lobby is never auto-run").
   modules; `oag-server` links the host (wasmtime is not a renderer; rule 6 is
   unaffected).
 - **The lobby already refuses differing mods**: `Edition::content`
-  (`crates/net/src/wire/online.rs:33`) is a fingerprint of the mods a machine runs,
+  (`crates/net/src/wire/online.rs:34`) is a fingerprint of the mods a machine runs,
   and `content_refusal` (`crates/net/src/online/rooms.rs:288`) refuses "your mods
   differ from the server's". **But the fingerprint is FNV-1a over `id@version`**
   (`oag_net::discovery::content_fingerprint`, `crates/net/src/discovery.rs:168`, fed
@@ -259,6 +269,14 @@ through a lobby is never auto-run").
     so mods would ship per build; brittle.
 
   Recommended: the first. Pulley costs 3.4 times Cranelift per call (spike).
+
+  **Not checked on iOS.** `cargo check --target aarch64-apple-ios` of wasmtime 50
+  (Pulley only, and with Cranelift) stops in a build script that needs Apple's
+  `xcrun` (`cc-rs`: `failed to find tool "xcrun"`), the same macOS-only toolchain
+  `just ios-app` needs. So whether the crates build for iOS, and whether
+  `Config::signals_based_traps` must be off there (it registers signal handlers by
+  default; wasmtime's own doc names it for environments that cannot), is owed to a
+  macOS machine.
 
 ## The conformance test
 
