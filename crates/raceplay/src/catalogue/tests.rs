@@ -391,7 +391,6 @@ fn a_team_label_prefers_the_table_then_the_declared_name_then_the_folder() {
         name: name.map(str::to_string),
         location: format!(r"Data\Ships\{id}"),
         help_text: None,
-        glow: None,
         sound_register: None,
         skins: Vec::new(),
         rating: None,
