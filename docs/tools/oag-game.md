@@ -216,8 +216,10 @@ or label - any of them holds) and `race.title|track|track_file|team|variant|mode
 ```json
 {"tick":66,"stage":"menu","page":"race","screen":{"kind":"picker","id":"track-select",
  "focus":{"index":0,"id":"16_Track","label":"Talon's Junction White"},"step":["down","up"],
- "rows":[{"index":0,"id":"16_Track","label":"Talon's Junction White","kind":"entry","enabled":true}, ...]},
- "race":{"source":"data/images/pulse-psp-eu.chd","mode":"time_trial"}}
+ "rows":[{"index":0,"id":"16_Track","label":"Talon's Junction White","kind":"entry","enabled":true}, ...]}}
+{"tick":64,"stage":"menu","page":"race","screen":{"kind":"page","id":"race","title":"RACE",
+ "focus":{"index":5,"label":"START"},"rows":[ ...,
+ {"index":5,"label":"START","kind":"action","action":"launch_race","enabled":true}, ...]}}
 ```
 
 A choice row carries `setting`, `value` and `values` (`value`, `label`, `unavailable` when the
@@ -236,8 +238,8 @@ start (the custom-track check, the picker's distance worker) get the time a wind
 that are:
 
 ```text
-Error: drive: step 12 (line 1): select "nonesuch" within 1800: no row "nonesuch": page "race" has rows ["race.mode", "race.class", ..., "START", "BACK"]
-  last state: {"tick":87,"stage":"menu","page":"race", ...}
+Error: drive: step 5 (line 1): select "nonesuch" within 1800: no row "nonesuch": page "race" has rows ["race.mode", "race.class", "race.weapons", "ai.difficulty", "race.kill_target", "launch_race", "BACK"]
+  last state: {"tick":55,"stage":"menu","page":"race","screen":{"kind":"page","id":"race", ...}}
 ```
 
 RACE REMIX with a track file (`OAG_TRACKS` names the directory the CUSTOM title scans):
