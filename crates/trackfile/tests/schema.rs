@@ -107,7 +107,7 @@ fn the_committed_fixture_is_valid_and_reads() {
 #[test]
 fn what_the_blender_add_on_writes_is_valid_and_reads() {
     let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures");
-    for name in ["blender_loop", "oval.reexport"] {
+    for name in ["blender_loop", "blender_loop.reexport", "oval.reexport"] {
         let text = std::fs::read_to_string(format!("{dir}/{name}.track.toml")).unwrap();
         oag_schema::validate::accepts("track", 1, &text)
             .unwrap_or_else(|e| panic!("{name}: {e:?}"));

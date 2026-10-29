@@ -384,8 +384,10 @@ fn lions_den_races_the_same_converted_as_loaded_directly() {
 }
 
 /// A committed track file on Pulse's physics: it loads, the report says what the
-/// format carries nothing for, and a lone AI craft gets round it.
-fn lone_craft_gets_round(file: &str, id: &str, title: &str) {
+/// format carries nothing for, and a lone AI craft gets round it. `art` names the
+/// report lines a file with an art section must print (none of them a miss);
+/// empty, the file must have none.
+fn lone_craft_gets_round(file: &str, id: &str, title: &str, art: &[&str]) {
     let Some(image) = oag_testdata::image(IMAGES[1]) else {
         return;
     };
@@ -402,17 +404,29 @@ fn lone_craft_gets_round(file: &str, id: &str, title: &str) {
     };
     let loaded = race::load(&o).expect("loads");
     let report = loaded.report.join("\n");
+    let no_art = ["no art section"];
+    let art_lines = if art.is_empty() { &no_art[..] } else { art };
     for needle in [
         title,
         "schema v1",
         "not authored by schema v1",
         "fog, point lights",
-        "no art section",
-    ] {
+    ]
+    .iter()
+    .chain(art_lines)
+    {
         assert!(
             report.contains(needle),
             "report lacks {needle:?}:\n{report}"
         );
+    }
+    for miss in [
+        "draws nothing",
+        "does not read",
+        "did not resolve",
+        "none drawn",
+    ] {
+        assert!(!report.contains(miss), "report has {miss:?}:\n{report}");
     }
     assert_eq!(loaded.setup.foreign.as_deref(), Some(id));
     let mut race = race::Race::start(loaded.setup);
@@ -435,16 +449,29 @@ fn lone_craft_gets_round(file: &str, id: &str, title: &str) {
 #[test]
 #[ignore = "needs a Pulse image"]
 fn a_lone_craft_gets_round_the_committed_fixture() {
-    lone_craft_gets_round("oval.track.toml", "fixture-octagon", "Fixture Octagon");
+    lone_craft_gets_round("oval.track.toml", "fixture-octagon", "Fixture Octagon", &[]);
 }
 
 /// The add-on's own output (`scripts/blender/oag_track`, `just blender-fixtures`):
 /// a loop authored in Blender from eight control points, raced as the committed
-/// file. Drop the add-on's spline, start or ribbon and this craft does not get round.
+/// file. Drop the add-on's spline, start or ribbon and this craft does not get round;
+/// drop its art and the report lines below go missing: the generated checker
+/// draws, 03_Track's sky resolves on the disc, the Sun lamp lights the hulls and
+/// the shadows, and the flare takes the checker as its atlas.
 #[test]
 #[ignore = "needs a Pulse image"]
 fn a_lone_craft_gets_round_a_loop_authored_in_blender() {
-    lone_craft_gets_round("blender_loop.track.toml", "blender-loop", "Blender Loop");
+    lone_craft_gets_round(
+        "blender_loop.track.toml",
+        "blender-loop",
+        "Blender Loop",
+        &[
+            "art: 1 mesh(es), 2 triangle(s), 1 texture(s)\n",
+            "art: the sun (0.000, 1.000, -0.000) sets the mapped shadows' direction",
+            "art hull lights: the PSP rig from the ambient, the sun and 1 further directional(s)",
+            "art lens flare: along (0.000, 1.000, -0.000), the track's sun, atlas 64x64",
+        ],
+    );
 }
 
 #[test]
@@ -454,6 +481,7 @@ fn a_lone_craft_gets_round_the_oval_re_exported_from_blender() {
         "oval.reexport.track.toml",
         "fixture-octagon",
         "Fixture Octagon",
+        &[],
     );
 }
 

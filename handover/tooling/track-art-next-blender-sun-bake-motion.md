@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [pulse, pure]
 updated: 2026-10-29
-summary: "Track art landing 2: decision-12 format and hull rig landed (2a); next the Blender art export, sun lamp, vertex-colour bake, keyframed motion (2b)"
+summary: "Track art: format, hull rig (2a) and Blender art export, sun, cover light (2b) landed; next a Bake operator, motion, HD sun"
 size: L (60)
 difficulty: medium (50)
 categories: [tooling, rendering]
@@ -57,6 +57,24 @@ agreed in conversation and not yet built**, so nothing is re-derived. The decisi
 
 ## Open
 
+- **Landing 2b is in** (branch `track-art-2b`, 2026-10-29): the add-on writes and reads the art
+  section (`scripts/blender/oag_track/scene_art.py`, `artfile.py`; mapping table in
+  `docs/tools/blender.md`, "Art"): untagged meshes per material slot, linear `.color`, host and
+  own-image textures, alpha clip from a Greater Than Math node (Blender 5.2 turns
+  `blend_method = 'CLIP'` into Hashed), the Sun lamp (`oag_intensity`, not strength), further Sun
+  lamps as `[[art.light]]`, world colour as ambient, sky, flare, `oag_shadow`/`oag_layer`/`oag_lit`,
+  and a *Cover light* that derives `_OAG_LIGHT_SCALE` from art over the line. Fixture
+  `blender_loop` (+ `blender_checker.png`, generated) and its re-export, read by
+  `crates/trackfile/tests/blender.rs`; the lone-craft ground truth asserts its art resolves on Pulse.
+- **Hillside** (data/tracks, not committed) is re-skinned with all of it; builder at
+  `~/.cache/oag-scratch/hillside.py` (not committed). Its simulation half is bit-equal to the plain
+  track's. Its `OAG_ADDON_DIR` defaults to the main checkout's `scripts/blender`, which has the art
+  export once this merges. The example campaign's copy (`assets/mods/examples/example-campaign/tracks/`)
+  holds only the old toml, glb and blend: the new Hillside needs `hillside_chevron.png` and
+  `hillside_flare.png` beside it too, and committing those needs the `ALLOWED_TRACKED` and
+  `.gitignore` treatment `blender_checker.png` got.
+- The bake is a builder-script step, not an operator. Recipe in `docs/tools/blender.md`.
+
 - **Landing 2a is in** (branch `track-art-2`, 2026-10-29): linear `COLOR_0` (sRGB curve, rounded to
   the byte, in `oag_raceplay::foreign::art::colour`), `oag_alpha_ref` and `oag_layer` per art node,
   `[[art.light]]` directional rows, `[art.lensflare] direction`, `shadows` absent meaning `true` (a
@@ -90,11 +108,12 @@ agreed in conversation and not yet built**, so nothing is re-derived. The decisi
 
 ## Next Steps
 
-1. Blender art export and import (item 1), with a generated checker texture as the committed fixture
-   (never disc pixels; `just audit-leakage`). A day.
-2. Sun lamp to `[art.sun]` and the hull-light decision, then the Bake operator (items 2, 3). A day
-   each, the second needs the first.
+1. ~~Blender art export and import~~ (2b). ~~Sun lamp to `[art.sun]`~~ (2b).
+2. The *Bake lighting* operator (item 3): lift the builder's bake into the add-on (swap to albedo
+   materials, hide collision, `DIFFUSE` direct + indirect to `VERTEX_COLORS`, report vertices per
+   area, warn on an animated sun). Half a day.
 3. Keyframed motion (items 4, 5): glTF animation read and write, the sampler against the race clock.
    Half a day to a day.
 4. HD-family host: the sun into `Light::authored` (about half a day with a screenshot check).
-5. Re-skin Hillside with a Pulse sky, host textures and a baked sun as the demonstration.
+5. ~~Re-skin Hillside~~ (2b). A launch of Hillside from the campaign menu is still unverified (the
+   lane raced it with `--race --track-file`).

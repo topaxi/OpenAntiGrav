@@ -102,3 +102,106 @@ fn a_loop_built_in_blender_reads_with_every_record_the_race_needs() {
     let f = path.points[0].tangent;
     assert!(t.start.forward[0] * f[0] + t.start.forward[2] * f[2] > 0.9);
 }
+
+/// The art the add-on writes (`scripts/blender/oag_track/scene_art.py`, ADR-0076),
+/// read by the real reader. Each assertion pins one mapping, so dropping or
+/// changing it fails here: the colour attribute's linear `.color` (one corner was
+/// set through `.color_srgb = 0.5`, which is linear 0.214), v flipped to v-down,
+/// Blender's Z-up axes, the Math node alpha clip as `oag_alpha_ref`, the object's
+/// layer and shadow role, the Sun lamps, the world colour and the cover-darkened
+/// light scale.
+#[test]
+fn the_art_authored_in_blender_reads_back_as_authored() {
+    use oag_trackfile::art::{Blend, Light, ShadowRole, TextureSource};
+    let l = load("blender_loop.track.toml");
+    let art = l.track.art.as_ref().expect("the loop carries art");
+    assert_eq!(art.meshes.len(), 1);
+    let m = &art.meshes[0];
+    assert_eq!(m.name, "canopy");
+    assert_eq!(m.material.blend, Blend::Cutout);
+    assert_eq!(m.material.alpha_ref, Some(128));
+    assert_eq!(m.material.texture, Some(0));
+    assert!(!m.material.culled && !m.material.lit);
+    assert_eq!((m.shadow, m.layer), (ShadowRole::Cast, 2));
+    assert_eq!(
+        art.textures,
+        [TextureSource::Image("blender_checker.png".into())]
+    );
+    // One quad: four corners, two triangles, every corner a vertex of its own.
+    assert_eq!((m.positions.len(), m.indices.len()), (4, 6));
+    // Blender (950, -60, 40) is the format's (950, 40, 60); the face points up.
+    assert!(
+        m.positions.contains(&[950.0, 40.0, 60.0]),
+        "{:?}",
+        m.positions
+    );
+    assert!(m.normals.iter().all(|n| n[1] == 1.0), "{:?}", m.normals);
+    // Blender v 0.25 is the disc's v-down 0.75.
+    assert!(m.texcoords.contains(&[1.0, 0.75]), "{:?}", m.texcoords);
+    let srgb_half = m.colours[0];
+    assert!(
+        (srgb_half[0] - 0.214_041).abs() < 1e-5,
+        "the colour is .color (linear), not .color_srgb: {srgb_half:?}"
+    );
+    assert_eq!(&m.colours[1..], [[0.25, 0.5, 1.0, 1.0]; 3]);
+
+    let sun = art.sun.expect("the Sun lamp is the sun");
+    assert!((sun.direction[1] - 1.0).abs() < 1e-6, "{:?}", sun.direction);
+    assert_eq!(sun.colour, [1.0, 0.9, 0.7]);
+    assert_eq!(
+        (sun.intensity, sun.angular_diameter, sun.shadows),
+        (1.0, 2.0, true)
+    );
+    assert_eq!(art.ambient, Some([0.1, 0.12, 0.15]));
+    let [
+        Light::Directional {
+            direction,
+            colour,
+            intensity,
+        },
+    ] = art.lights.as_slice()
+    else {
+        panic!("one fill light: {:?}", art.lights);
+    };
+    assert!((direction[2] + 1.0).abs() < 1e-6, "{direction:?}");
+    assert_eq!((*colour, *intensity), ([0.2, 0.25, 0.4], 0.5));
+    assert_eq!(
+        art.sky.as_deref(),
+        Some(r"Data\Environments\03_Track\track.vex")
+    );
+    assert_eq!(art.lens_flare.and_then(|f| f.atlas), Some(0));
+
+    // The canopy casts over the line: the points under it are darkened, the rest are not.
+    let light: Vec<[u8; 4]> = l.track.ai.paths[0]
+        .points
+        .iter()
+        .map(|p| p.light_scale)
+        .collect();
+    let covered = light.iter().filter(|b| **b == [96, 96, 255, 255]).count();
+    let open = light.iter().filter(|b| **b == [255; 4]).count();
+    assert!(covered >= 1 && covered + open == light.len(), "{light:?}");
+
+    // The texture is the generated checker beside the manifest: a 64x64 RGBA PNG.
+    let png = std::fs::read(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/blender_checker.png"),
+    )
+    .expect("the checker sits beside the manifest");
+    assert_eq!(&png[12..16], b"IHDR");
+    assert_eq!(
+        (&png[16..20], &png[20..24], png[25]),
+        (&[0, 0, 0, 64][..], &[0, 0, 0, 64][..], 6)
+    );
+}
+
+/// The loop, imported by the add-on and exported again, is the same track: the
+/// importer's art (meshes, materials, lamps, world, flare) writes back what it read.
+#[test]
+fn the_loop_imported_into_blender_and_exported_again_is_the_same_track() {
+    let (a, b) = (
+        load("blender_loop.track.toml"),
+        load("blender_loop.reexport.track.toml"),
+    );
+    assert!(b.unread.is_empty(), "{:?}", b.unread);
+    assert!(b.track.art.is_some());
+    assert_eq!(a.track, b.track);
+}

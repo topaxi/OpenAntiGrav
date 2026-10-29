@@ -92,3 +92,71 @@ class Track:
     speedup_pads: list = field(default_factory=list)
     weapon_pads: list = field(default_factory=list)
     notes: list = field(default_factory=list)
+    art: "Art" = None
+
+
+# The art section (ADR-0076): what the renderer draws and the simulation never reads.
+
+BLENDS = ("opaque", "cutout", "alpha", "additive", "unblended")
+SHADOW_ROLES = ("both", "cast", "receive", "none")
+
+
+@dataclass
+class ArtMesh:
+    """One draw: `oag/art/<n>`. Colours are linear RGB plus coverage alpha."""
+
+    name: str
+    positions: list
+    normals: list
+    texcoords: list  # texture v down, as the disc's
+    colours: list
+    indices: list
+    texture: int = None
+    blend: str = "opaque"
+    culled: bool = True
+    lit: bool = False
+    shadow: str = "both"
+    alpha_ref: int = None
+    layer: int = 0
+
+
+@dataclass
+class Sun:
+    direction: tuple  # unit, towards the sun
+    colour: tuple  # linear RGB
+    intensity: float = 1.0
+    angular_diameter: float = 0.0  # degrees
+    shadows: bool = True
+
+
+@dataclass
+class DirectionalLight:
+    direction: tuple
+    colour: tuple
+    intensity: float = 1.0
+
+
+@dataclass
+class LensFlare:
+    atlas: int = None
+    colour: tuple = None
+    direction: tuple = None
+
+
+@dataclass
+class Texture:
+    """Exactly one of `image` (a file beside the manifest) or `host` (entry, name)."""
+
+    image: str = None
+    host: tuple = None
+
+
+@dataclass
+class Art:
+    meshes: list = field(default_factory=list)
+    textures: list = field(default_factory=list)
+    sky: str = None
+    sun: Sun = None
+    ambient: tuple = None
+    lights: list = field(default_factory=list)
+    lens_flare: LensFlare = None

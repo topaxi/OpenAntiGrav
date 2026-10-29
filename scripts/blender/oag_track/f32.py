@@ -55,3 +55,15 @@ def cross(a, b):
 
 def dist(a, b):
     return length(sub(a, b))
+
+
+def text(x):
+    """The shortest decimal that reads back as the `f32` nearest `x`, as a TOML float."""
+    x = r(x)
+    for p in range(1, 10):
+        s = f"{x:.{p}g}"
+        if r(float(s)) == x:
+            break
+    if "e" not in s and "." not in s and "n" not in s:
+        s += ".0"
+    return s

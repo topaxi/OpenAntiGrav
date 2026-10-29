@@ -95,7 +95,10 @@ console, see [Vita packages](../formats/vita-package.md).
 ## Test fixtures
 
 Tests must not depend on game content. Where a test needs a structure to parse,
-it builds one by hand, as the ISO 9660 tests do.
+it builds one by hand, as the ISO 9660 tests do. A picture a test needs is
+generated, never extracted: the Blender add-on's texture fixture
+(`crates/trackfile/tests/fixtures/blender_checker.png`) is a grey checker its
+script writes byte by byte, and is listed by path in `scripts/check-leakage.py`.
 
 Tests that genuinely need a real disc image are marked `#[ignore]` and run only
 via `just test-data`, with images the developer supplies. CI never runs them.
