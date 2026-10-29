@@ -46,6 +46,9 @@ pub struct Options {
     /// The simulation modules of the mods that are on for this race
     /// ([`crate::extensions`]); empty is a vanilla race. The composition root fills it.
     pub extensions: Vec<crate::extensions::Source>,
+    /// Finds more of them on the load thread ([`crate::extensions::Finder`]); `None`
+    /// looks for none.
+    pub find_extensions: Option<crate::extensions::Finder>,
     /// The ring the player's `graphics.boost_zoom` borrows, handed in by the composition
     /// root (the one place that may name HD's); `None` is off. Used only where
     /// `oag_title::RaceDefaults::borrows_zoom_ring`.

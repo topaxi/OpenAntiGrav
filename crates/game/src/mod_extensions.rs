@@ -52,14 +52,22 @@ fn reader(module: &oag_mod::Mod, name: &str) -> oag_raceplay::extensions::Reader
     })
 }
 
-/// Fills `options.extensions` for a race: the rules modules of the mods that are on,
-/// or none for a race that stays `vanilla` (an original campaign, a network race).
-pub fn attach(options: &mut oag_raceplay::Options, mods: &crate::mods::Mods, vanilla: bool) {
-    options.extensions = if vanilla {
-        Vec::new()
-    } else {
-        sources(mods.player())
-    };
+/// Sets `options.find_extensions` for a race: the load thread searches the mods that are
+/// on (switched off by `disabled`) for rules modules, or none for a race that stays
+/// `vanilla` (an original campaign, a network race). Nothing is read here.
+pub fn attach(
+    options: &mut oag_raceplay::Options,
+    disabled: &std::collections::BTreeSet<String>,
+    vanilla: bool,
+) {
+    options.find_extensions = (!vanilla).then(|| {
+        let disabled = disabled.clone();
+        oag_raceplay::extensions::Finder(Arc::new(move || {
+            crate::mods::Mods::load(&disabled)
+                .map(|mods| sources(mods.player()))
+                .map_err(|e| format!("{e:#}"))
+        }))
+    });
 }
 
 /// The dev overlay's `mods` block for `race`, `None` in a race with no simulation mod.

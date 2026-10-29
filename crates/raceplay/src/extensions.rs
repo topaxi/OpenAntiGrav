@@ -60,6 +60,40 @@ impl std::fmt::Debug for Source {
     }
 }
 
+/// Finds the [`Source`]s at race load, on the load thread: the composition root's
+/// search of the mods that are on, so not even a manifest is read on the thread that
+/// draws (`Session::launch_race` runs on it).
+#[derive(Clone)]
+pub struct Finder(pub Arc<dyn Fn() -> Result<Vec<Source>, String> + Send + Sync>);
+
+impl std::fmt::Debug for Finder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Finder")
+    }
+}
+
+/// [`Options::extensions`](crate::Options::extensions) plus what
+/// [`Options::find_extensions`](crate::Options::find_extensions) finds, its failure
+/// in `report`.
+#[must_use]
+pub fn gather(
+    sources: &[Source],
+    finder: Option<&Finder>,
+    report: &mut Vec<String>,
+) -> Vec<Source> {
+    let mut all = sources.to_vec();
+    if let Some(finder) = finder {
+        match (finder.0)() {
+            Ok(found) => all.extend(found),
+            Err(e) => push(
+                report,
+                format!("mods: {e}; the race runs no simulation mod"),
+            ),
+        }
+    }
+    all
+}
+
 /// The modules the load compiled, for [`Race::start`](crate::Race::start).
 #[derive(Debug, Clone, Default)]
 pub struct Prepared {

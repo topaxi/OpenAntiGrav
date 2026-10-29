@@ -322,9 +322,6 @@ Still open from this slice:
   network race (LAN or online) attaches no module on either side; the lobby
   fingerprint leaves `assets/mods/examples` out, so modules in a lobby need the
   phase 3 module hashes first.
-- With the feature on, `Session::launch_race` reads the mods' manifests on the frame
-  thread at LAUNCH (`Mods::load`, as the LAN and online screens already do); the
-  `.wasm` itself is read on the load worker. A default build does neither.
 - The README's second no-engine test (menus and the MODS page with a module mod
   installed build no engine) is not written.
 
