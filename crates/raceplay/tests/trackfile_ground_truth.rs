@@ -159,6 +159,9 @@ fn every_circuit_exports_and_reads_back_the_same(image: &str) {
     println!("{image}: {total} circuit(s); refused: {refused:#?}");
     println!("art: {art:#?}");
     assert!(refused.is_empty(), "{refused:#?}");
+    // The host's pad art on a circuit's volumes alone covers every circuit whose
+    // own plates the proof compared.
+    assert_eq!(art.host_pad_models, art.pad_models, "{image}");
 }
 
 #[test]
@@ -865,6 +868,14 @@ fn a_zone_race_on_a_track_file_loads_and_climbs_on_every_title() {
             "{image}"
         );
         assert!(loaded.setup.zone.is_some(), "{image}: no Zone ramp");
+        // The oval declares pad volumes and no plate: every host answers in its
+        // report, a drawn pad or the reason none is.
+        let pads = loaded
+            .report
+            .iter()
+            .find(|l| l.starts_with("host speed pads:"))
+            .unwrap_or_else(|| panic!("{image}: no host speed pads line: {:#?}", loaded.report));
+        println!("{image}: {pads}");
         let mut race = race::Race::start(loaded.setup);
         race.set_autopilot(true);
         let inputs = oag_gameplay::PlayerInputs::none();
@@ -876,4 +887,69 @@ fn a_zone_race_on_a_track_file_loads_and_climbs_on_every_title() {
         checked.push(image);
     }
     println!("checked: {checked:?}");
+}
+
+/// A track file with pad volumes and no plate races with the host's own pads on
+/// them: one drawn pad per volume, the weapon pad held back in Time Trial.
+#[test]
+#[ignore = "needs the Pulse PSP USA image"]
+fn a_track_file_with_pad_volumes_and_no_plate_draws_the_hosts_pads() {
+    let Some(image) = oag_testdata::image(IMAGES[1]) else {
+        return;
+    };
+    let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../trackfile/tests/fixtures/oval.track.toml");
+    let load = |mode| {
+        race::load(&race::Options {
+            source: image.display().to_string(),
+            class: "VENOM".to_string(),
+            mode,
+            foreign_track: Some(manifest.clone()),
+            ..race::Options::default()
+        })
+        .expect("loads")
+    };
+    let single = load(oag_race::Mode::SingleRace);
+    let report = single.report.join("\n");
+    for needle in [
+        "host speed pads: ",
+        "host weapon pads: ",
+        "drawing the track file's weapon pad plates",
+    ] {
+        assert!(
+            report.contains(needle),
+            "report lacks {needle:?}:\n{report}"
+        );
+    }
+    for (name, model) in [
+        ("speed", &single.pad_model),
+        ("weapon", &single.weapon_pad_model),
+    ] {
+        let model = model
+            .as_ref()
+            .unwrap_or_else(|| panic!("no {name} pad model:\n{report}"));
+        assert_eq!(
+            model.node_vertex_ranges.len(),
+            1,
+            "{name}: one pad per volume"
+        );
+        assert!(
+            model
+                .draws
+                .iter()
+                .chain(&model.alpha_tested_draws)
+                .chain(&model.transparent_draws)
+                .any(|d| d.texture.is_some()),
+            "{name}: the disc's pad is textured"
+        );
+    }
+    let trial = load(oag_race::Mode::TimeTrial);
+    assert!(
+        trial
+            .report
+            .iter()
+            .any(|l| l.contains("decoded but not drawing (weapons off in this mode)")),
+        "{:#?}",
+        trial.report
+    );
 }

@@ -407,7 +407,7 @@ pub fn build_with_textures(
     data: &[u8],
     external: Option<&Ps2TextureSet>,
 ) -> Result<Model> {
-    build_class(label, data, external, |c| c.mesh)
+    build_class(label, data, external, |c| c.mesh, None)
 }
 
 /// The track's sky, as a model in its own right.
@@ -429,7 +429,7 @@ pub fn build_with_textures(
 /// error: 4 of the 40 PSP track files have no `fogCube` and a `.vex` that is not
 /// a track has neither.
 pub fn build_sky(label: &str, data: &[u8], external: Option<&Ps2TextureSet>) -> Result<Model> {
-    build_optional_class(label, data, external, |c| c.skycube)
+    build_optional_class(label, data, external, |c| c.skycube, None)
 }
 
 /// The track's speedup pads, as a model in their own right.
@@ -453,7 +453,7 @@ pub fn build_sky(label: &str, data: &[u8], external: Option<&Ps2TextureSet>) -> 
 /// Returns a model with no meshes when the file authors no pads, which is
 /// ordinary: every Pure track and every `.vex` that is not a track.
 pub fn build_pads(label: &str, data: &[u8], external: Option<&Ps2TextureSet>) -> Result<Model> {
-    build_optional_class(label, data, external, |c| c.speedup_pad)
+    build_optional_class(label, data, external, |c| c.speedup_pad, None)
 }
 
 /// The track's `Weapon Pad` geometry, the same way as [`build_pads`].
@@ -472,7 +472,44 @@ pub fn build_weapon_pads(
     data: &[u8],
     external: Option<&Ps2TextureSet>,
 ) -> Result<Model> {
-    build_optional_class(label, data, external, |c| c.weapon_pad)
+    build_optional_class(label, data, external, |c| c.weapon_pad, None)
+}
+
+/// The first `Speedup Pad` of `data`, drawn once at each matrix of `places`
+/// (row-major, row-vector, as `oag_vex::pads::PadVolume::to_world`): a circuit's
+/// own pad art, its materials, texture coordinates, blends and texture
+/// animation, set on pads that are not its own. The model carries one
+/// [`Model::node_vertex_ranges`] entry per placement, in order, as
+/// [`build_pads`] does per node. Empty when `data` authors no such pad.
+///
+/// A pad payload is one authored size and shape (`docs/formats/pads.md`), so
+/// the first node stands for the circuit's kind; a circuit with more than one
+/// payload shape is named by the caller, not decided here.
+///
+/// # Errors
+///
+/// As [`build_pads`].
+pub fn build_pads_placed(
+    label: &str,
+    data: &[u8],
+    external: Option<&Ps2TextureSet>,
+    places: &[[f32; 16]],
+) -> Result<Model> {
+    build_optional_class(label, data, external, |c| c.speedup_pad, Some(places))
+}
+
+/// [`build_pads_placed`] for the `Weapon Pad` class.
+///
+/// # Errors
+///
+/// As [`build_pads`].
+pub fn build_weapon_pads_placed(
+    label: &str,
+    data: &[u8],
+    external: Option<&Ps2TextureSet>,
+    places: &[[f32; 16]],
+) -> Result<Model> {
+    build_optional_class(label, data, external, |c| c.weapon_pad, Some(places))
 }
 
 /// [`build_class`] for a node type whose absence is ordinary.
@@ -493,11 +530,12 @@ fn build_optional_class(
     data: &[u8],
     external: Option<&Ps2TextureSet>,
     pick: fn(vex::classes::Classes) -> Option<u32>,
+    placements: Option<&[[f32; 16]]>,
 ) -> Result<Model> {
     let Ok(classes) = vex::classes_of(data) else {
         // Let `build_class` produce the real complaint about the file rather
         // than swallowing it as "authors none".
-        return build_class(label, data, external, pick).map(|mut model| {
+        return build_class(label, data, external, pick, placements).map(|mut model| {
             model.keep_nearest();
             model
         });
@@ -528,7 +566,7 @@ fn build_optional_class(
     // No race camera switches these models per frame, so they keep the
     // finest tier of any `LodGroup` they sit under, as the track model does
     // up close. Chosen, not measured: none has been seen under a group.
-    let mut model = build_class(label, data, external, pick)?;
+    let mut model = build_class(label, data, external, pick, placements)?;
     model.keep_nearest();
     Ok(model)
 }
@@ -542,6 +580,7 @@ fn build_class(
     data: &[u8],
     external: Option<&Ps2TextureSet>,
     pick: fn(vex::classes::Classes) -> Option<u32>,
+    placements: Option<&[[f32; 16]]>,
 ) -> Result<Model> {
     if !vex::has_magic(data) {
         bail!("{label} is not a .vex file (no VEXX magic)");
@@ -613,17 +652,38 @@ fn build_class(
     let mut anim_tracks: Vec<AnimTrack> = Vec::new();
     let mut node_vertex_ranges: Vec<std::ops::Range<u32>> = Vec::new();
 
-    for (index, node) in nodes
-        .iter()
-        .enumerate()
-        .filter(|(_, n)| n.class_id == class_id)
-    {
+    // One entry per node drawn: its index and, for an instanced build, the world
+    // matrix it is drawn at instead of its own chain's.
+    let class_nodes: Vec<(usize, Option<[f32; 16]>)> = match placements {
+        None => nodes
+            .iter()
+            .enumerate()
+            .filter(|(_, n)| n.class_id == class_id)
+            .map(|(i, _)| (i, None))
+            .collect(),
+        Some(places) => nodes
+            .iter()
+            .position(|n| n.class_id == class_id)
+            .map(|first| places.iter().map(|m| (first, Some(*m))).collect())
+            .unwrap_or_default(),
+    };
+    for (index, placed) in class_nodes {
+        let node = &nodes[index];
         let payload = &data[node.payload()];
         let anim_node::Placement {
             to_world,
             xform,
             bounds_matrix,
-        } = anim_node::placement(&anchors, &anchor_world, &anim_slot, index);
+        } = match placed {
+            // An instance is a rest-pose copy of the first node, set where the
+            // caller says: no anchor, so it never moves.
+            Some(to_world) => anim_node::Placement {
+                to_world,
+                xform: 0,
+                bounds_matrix: None,
+            },
+            None => anim_node::placement(&anchors, &anchor_world, &anim_slot, index),
+        };
         let mut contributed = false;
         // **A vertex normal is authored in the node's own space, like its
         // position**, and the original carries both through the node's world

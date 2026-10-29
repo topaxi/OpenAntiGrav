@@ -65,6 +65,10 @@ pub struct Tally {
     pub pad_models: [usize; 2],
     /// Their draws, summed.
     pub pad_draws: usize,
+    /// Circuits whose speed pads and weapon pads (each, when the circuit authors
+    /// them), drawn from the host's own art on the file's volumes alone
+    /// (`art::host_pads`, no plates), are the circuit's first pad on each volume.
+    pub host_pad_models: [usize; 2],
 }
 
 fn reference(archives: &mut oag_assets::Archives, track: &str, blob: &[u8]) -> Model {
@@ -271,6 +275,18 @@ pub fn art_draws_as_the_circuit(
     let got = art::model(entry, a, textures.clone(), &mut report);
     let poses = want.sample_anim_nodes(0.0);
 
+    // The host's pad art on the file's pad volumes, with no plate to say otherwise.
+    let mut host = art::Extras::default();
+    art::host_pads(
+        &mut host,
+        None,
+        &track.speedup_pads,
+        &track.weapon_pads,
+        entry,
+        archives,
+        &mut report,
+    );
+
     for (k, which) in [PadPlate::Speedup, PadPlate::Weapon]
         .into_iter()
         .enumerate()
@@ -304,6 +320,20 @@ pub fn art_draws_as_the_circuit(
                 tally.pad_models[k] += 1;
                 tally.pad_draws += draws;
             }
+        }
+        let (volumes, host_model) = match which {
+            PadPlate::Speedup => (&track.speedup_pads, host.pads.as_ref()),
+            PadPlate::Weapon => (&track.weapon_pads, host.weapon_pads.as_ref()),
+        };
+        if !want.indices.is_empty() {
+            let m = host_model.ok_or_else(|| format!("{which:?}: no host pad art\n{report:#?}"))?;
+            host_pads_are_the_circuits(&want, m, volumes)
+                .map_err(|e| format!("{which:?} host pads: {e}"))?;
+            tally.host_pad_models[k] += 1;
+        } else if host_model.is_some() {
+            return Err(format!(
+                "{which:?}: host pads drawn from a circuit with none"
+            ));
         }
     }
 
@@ -492,4 +522,129 @@ fn kept_only(model: &Model) -> Model {
             .range = first..out.indices.len() as u32;
     }
     out
+}
+
+/// The host pads `got`, one per volume, against the circuit's own pad model `want`:
+/// one vertex range per volume, the first pad's vertices equal in everything but
+/// position (lifted along the volume's up by `art::HOST_PAD_LIFT`), and every
+/// texture the pads use the circuit's pixels.
+fn host_pads_are_the_circuits(
+    want: &Model,
+    got: &Model,
+    volumes: &[oag_vex::pads::PadVolume],
+) -> Result<(), String> {
+    if got.node_vertex_ranges.len() != volumes.len() {
+        return Err(format!(
+            "{} vertex ranges for {} volumes",
+            got.node_vertex_ranges.len(),
+            volumes.len()
+        ));
+    }
+    let (Some(w), Some(g)) = (
+        want.node_vertex_ranges.first(),
+        got.node_vertex_ranges.first(),
+    ) else {
+        return Err("no first pad".into());
+    };
+    let (w, g) = (
+        &want.vertices[w.start as usize..w.end as usize],
+        &got.vertices[g.start as usize..g.end as usize],
+    );
+    if w.len() != g.len() {
+        return Err(format!(
+            "first pad: {} vertices against {}",
+            g.len(),
+            w.len()
+        ));
+    }
+    let m = volumes[0].to_world;
+    let up = [m[4], m[5], m[6]];
+    for (i, (w, g)) in w.iter().zip(g).enumerate() {
+        let lifted: [f32; 3] = std::array::from_fn(|k| w.position[k] + up[k] * art::HOST_PAD_LIFT);
+        if (0..3).any(|k| (lifted[k] - g.position[k]).abs() > 1e-2)
+            || (w.normal, w.colour, w.texcoord, w.lit, w.anim)
+                != (g.normal, g.colour, g.texcoord, g.lit, g.anim)
+        {
+            return Err(format!("first pad vertex {i}: {g:?} against {w:?}"));
+        }
+    }
+    // The first pad's draws, list by list: the circuit's draws of its first pad
+    // node against the host's draws whose first vertex lies in its first range.
+    fn lists(m: &Model) -> [&Vec<DrawCall>; 3] {
+        [&m.draws, &m.alpha_tested_draws, &m.transparent_draws]
+    }
+    let first_node = lists(want)
+        .into_iter()
+        .flatten()
+        .filter_map(|d| d.node)
+        .min()
+        .ok_or("the circuit's pads have no draw")?;
+    let range = got.node_vertex_ranges[0].clone();
+    for (list, (wl, gl)) in lists(want).into_iter().zip(lists(got)).enumerate() {
+        let w: Vec<&DrawCall> = wl.iter().filter(|d| d.node == Some(first_node)).collect();
+        let g: Vec<&DrawCall> = gl
+            .iter()
+            .filter(|d| range.contains(&got.indices[d.range.start as usize]))
+            .collect();
+        if w.len() != g.len() {
+            return Err(format!(
+                "list {list}: {} draws against {}",
+                g.len(),
+                w.len()
+            ));
+        }
+        for (n, (w, g)) in w.iter().zip(&g).enumerate() {
+            let key = |d: &DrawCall| {
+                (
+                    d.texture,
+                    d.blend,
+                    d.culled,
+                    d.layer,
+                    d.alpha_test_ref,
+                    d.range.len(),
+                    d.moving,
+                )
+            };
+            if key(w) != key(g) {
+                return Err(format!(
+                    "list {list} draw {n}: {:?} against {:?}",
+                    key(g),
+                    key(w)
+                ));
+            }
+        }
+        for (w, g) in w.iter().zip(&g) {
+            if let Some(slot) = g.texture {
+                match (&want.textures[slot], &got.textures[slot]) {
+                    (Some(a), Some(b)) if same_texels(a, b) => {}
+                    _ => return Err(format!("texture {slot} differs")),
+                }
+            }
+            // Rebased triangles, and the texture animation the draw's vertices name.
+            let rebase = |m: &Model, d: &DrawCall, first: u32| -> Vec<u32> {
+                m.indices[d.range.start as usize..d.range.end as usize]
+                    .iter()
+                    .map(|i| i - first)
+                    .collect()
+            };
+            let (wf, gf) = (
+                want.node_vertex_ranges[0].start,
+                got.node_vertex_ranges[0].start,
+            );
+            if rebase(want, w, wf) != rebase(got, g, gf) {
+                return Err("a draw's triangles differ".into());
+            }
+            let track = |m: &Model, v: &GpuVertex| {
+                (v.anim as usize)
+                    .checked_sub(1)
+                    .map(|at| format!("{:?}", m.anim_tracks[at]))
+            };
+            let first =
+                |m: &Model, d: &DrawCall| m.vertices[m.indices[d.range.start as usize] as usize];
+            if track(want, &first(want, w)) != track(got, &first(got, g)) {
+                return Err("a draw's texture animation differs".into());
+            }
+        }
+    }
+    Ok(())
 }

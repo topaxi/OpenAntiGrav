@@ -39,8 +39,7 @@ holds only what is open. Hillside, the demonstration track, lives in the mod-exa
 - **Re-timing.** NIGHT RUN's Hillside Sprint medals (62/68/78 s) were set before Hillside took the
   computed racing line; the Octagon Zone medals (24/18/12 zones) are chosen, not measured (the
   autopilot never wrecks before zone 626).
-- **Pad plates on Hillside**: weapon plates hiding in Time Trial was proven on the fixture by
-  screenshot, not on Hillside (the frames taken there show no pad).
+- **Pad plates on Hillside**: now drawn as the host's own pads (`trackfile-original-pads`, 2026-10-29); its plates carry no material so the host's pad replaces them. The example script keeps its quads.
 - **rcsmodel art** for HD, 2048 and Omega disc exports: *checked, applies, not wired*.
 - A foreign track with **no** art lost its hull-lights line in the loader report (one-line fix in
   `pulse_psp::light_hulls`' caller).

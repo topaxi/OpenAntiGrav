@@ -513,6 +513,187 @@ pub fn lens_flare(
     })
 }
 
+/// How far above a pad volume's frame the host's pad is set, along the pad's up.
+/// A track file's volume frame sits on the collision floor and its road art a
+/// little above it, so a disc pad's thin plate set exactly there would sink
+/// into the road. **Chosen, not measured**: the add-on's own default plate lift
+/// (`scene_art.PLATE_LIFT`), which is what its plates sit at.
+pub const HOST_PAD_LIFT: f32 = 0.3;
+
+/// `mesh::build_pads_placed` or its weapon twin.
+type PlacedBuild =
+    fn(&str, &[u8], Option<&mesh::Ps2TextureSet>, &[[f32; 16]]) -> anyhow::Result<Model>;
+
+/// How many distinct pad payloads of one class `blob` authors.
+fn distinct_pads(blob: &[u8], class: fn(oag_vex::vex::classes::Classes) -> Option<u32>) -> usize {
+    let (Ok(classes), Ok(nodes)) = (vex::classes_of(blob), vex::nodes(blob)) else {
+        return 0;
+    };
+    let id = class(classes);
+    nodes
+        .iter()
+        .filter(|n| id.is_some() && Some(n.class_id) == id)
+        .filter_map(|n| blob.get(n.payload()))
+        .collect::<std::collections::BTreeSet<_>>()
+        .len()
+}
+
+/// Which kind of pad `host_pads` is giving the host's art to.
+#[derive(Clone, Copy)]
+struct PadKind {
+    plate: PadPlate,
+    what: &'static str,
+    class: fn(oag_vex::vex::classes::Classes) -> Option<u32>,
+    build: PlacedBuild,
+}
+
+/// The host title's own pad art on the pads a track file declares, in place of
+/// plates that carry no picture and for pads with no plate at all.
+///
+/// For each kind (speed, weapon): a plate with a texture is the author's (a disc
+/// export writes them over the circuit's own texture rows) and stands untouched;
+/// otherwise, when the file declares volumes of the kind, the first pad of the
+/// donor circuit is drawn once on each volume's frame
+/// (`mesh::build_pads_placed`), so the texture, texture coordinates, blend and
+/// texture animation are the disc's. Replacing a picture-less plate by the host's
+/// pad, and generating a pad from a volume that has no plate, are both **chosen,
+/// not measured**: the format has no way to say "the host's pad", and the volume's
+/// frame sits on the road surface as a disc pad's does.
+///
+/// The donor is the first circuit the art itself borrows from (a host texture,
+/// then its sky), else the title's default circuit. A donor that authors no pad of
+/// the kind, will not read, or keeps its geometry in a `.rcsmodel` (HD, 2048 and
+/// Omega: the pads are baked in world space there, *checked, applies, not
+/// wired*) draws nothing, and `report` says which.
+pub fn host_pads(
+    extras: &mut Extras,
+    art: Option<&Art>,
+    speedup: &[oag_vex::pads::PadVolume],
+    weapon: &[oag_vex::pads::PadVolume],
+    default_entry: &str,
+    archives: &mut Archives,
+    report: &mut Vec<String>,
+) {
+    let kinds = [
+        (
+            PadKind {
+                plate: PadPlate::Speedup,
+                what: "speed",
+                class: |c| c.speedup_pad,
+                build: mesh::build_pads_placed,
+            },
+            speedup,
+        ),
+        (
+            PadKind {
+                plate: PadPlate::Weapon,
+                what: "weapon",
+                class: |c| c.weapon_pad,
+                build: mesh::build_weapon_pads_placed,
+            },
+            weapon,
+        ),
+    ];
+    let donor = art
+        .and_then(|a| {
+            a.meshes
+                .iter()
+                .filter_map(|m| m.material.texture)
+                .find_map(|t| match a.textures.get(t) {
+                    Some(TextureSource::Host { entry, .. }) => Some(entry.clone()),
+                    _ => None,
+                })
+                .or_else(|| a.sky.clone())
+        })
+        .unwrap_or_else(|| default_entry.to_string());
+    let mut blob: Option<Option<Vec<u8>>> = None;
+    for (kind, volumes) in kinds {
+        let authored = art.is_some_and(|a| {
+            a.meshes
+                .iter()
+                .any(|m| m.pad == Some(kind.plate) && m.material.texture.is_some())
+        });
+        let plain_plates = art.is_some_and(|a| {
+            a.meshes
+                .iter()
+                .any(|m| m.pad == Some(kind.plate) && m.material.texture.is_none())
+        });
+        if authored || (volumes.is_empty() && !plain_plates) {
+            continue;
+        }
+        let slot = match kind.plate {
+            PadPlate::Speedup => &mut extras.pads,
+            PadPlate::Weapon => &mut extras.weapon_pads,
+        };
+        *slot = None;
+        if volumes.is_empty() {
+            report.push(format!(
+                "host {} pads: the file declares no {} pad volume, so its picture-less plates \
+                 draw nothing",
+                kind.what, kind.what
+            ));
+            continue;
+        }
+        let blob = blob.get_or_insert_with(|| match archives.read_name(&donor) {
+            Ok(b) => Some(b),
+            Err(e) => {
+                report.push(format!(
+                    "host pads: {donor} does not read ({e}); no pad is drawn"
+                ));
+                None
+            }
+        });
+        let Some(blob) = blob else { continue };
+        let places: Vec<[f32; 16]> = volumes
+            .iter()
+            .map(|v| {
+                let mut m = v.to_world;
+                for k in 0..3 {
+                    m[12 + k] += m[4 + k] * HOST_PAD_LIFT;
+                }
+                m
+            })
+            .collect();
+        let mut built = (kind.build)(&donor, blob, None, &places);
+        if let Ok(m) = &built
+            && !m.textures.is_empty()
+            && m.textures.iter().all(Option::is_none)
+            && let Some(set) = oag_livery::entry::ps2_texture_set(archives, &donor)
+        {
+            built = (kind.build)(&donor, blob, Some(&set), &places);
+        }
+        match built {
+            Ok(m) if m.indices.is_empty() => report.push(format!(
+                "host {} pads: {donor} authors none; no {} pad is drawn",
+                kind.what, kind.what
+            )),
+            Ok(m) => {
+                let shapes = distinct_pads(blob, kind.class);
+                report.push(format!(
+                    "host {} pads: {donor}'s first {} pad on each of the file's {} volume(s), {} \
+                     triangle(s), {} texture(s) (chosen: the file names no pad art; lifted {HOST_PAD_LIFT} above the volume){}",
+                    kind.what,
+                    kind.what,
+                    volumes.len(),
+                    m.indices.len() / 3,
+                    m.textures.iter().filter(|t| t.is_some()).count(),
+                    if shapes > 1 {
+                        format!("; the donor has {shapes} distinct {} pads, the first node's is drawn", kind.what)
+                    } else {
+                        String::new()
+                    }
+                ));
+                *slot = Some(m);
+            }
+            Err(e) => report.push(format!(
+                "host {} pads: {donor}: {e:#}; no {} pad is drawn (a pad is read out of a `.vex`'s own \
+                 geometry; a circuit whose pads are in a `.rcsmodel` is not wired)",
+                kind.what, kind.what
+            )),
+        }
+    }
+}
+
 /// Everything of `art` beside the track model, reported part by part.
 #[must_use]
 pub fn extras(art: &Art, textures: &TextureSlots, report: &mut Vec<String>) -> Extras {
