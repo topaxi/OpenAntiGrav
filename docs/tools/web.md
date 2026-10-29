@@ -577,6 +577,13 @@ a Pulse race run there (2026-10-09). `actionlint` passes on the workflow.
 
 ## Threads
 
+### Exit and GPU workers
+
+Natively, `oag_game::gpu_workers` is the one place the process waits for threads that hold the
+`wgpu` device (EndRace prefetch, race build, a parked race's drop) before `main` returns. The web
+build has nothing to wait for: the race build runs inline, the EndRace prefetch type is
+uninhabited, and closing the page ends every Web Worker with it.
+
 The browser build is threaded since 2026-10-09, for one job: **the race load.**
 Before it, starting a Wipeout HD race froze the page for the whole load: the
 loading screen never drew, Firefox offered to stop the page, and a reload

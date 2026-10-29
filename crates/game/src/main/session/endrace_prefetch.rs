@@ -56,6 +56,20 @@ impl EndRacePrepArgs {
     /// Opens the source, reads the screens and builds the GPU side. `None` after saying why:
     /// the caller then keeps the built-in results table for this race.
     pub(crate) fn run(self) -> Option<EndRacePrep> {
+        // Between its phases the worker looks at whether the process is leaving, so an exit
+        // does not wait out a disc read and a GPU build nobody will see.
+        // Debug builds only: the exit-while-prefetching test holds the worker up so the process
+        // is leaving while it runs (`drive_ground_truth`).
+        #[cfg(debug_assertions)]
+        if let Some(ms) = std::env::var("OAG_TEST_PREFETCH_DELAY_MS")
+            .ok()
+            .and_then(|ms| ms.parse().ok())
+        {
+            std::thread::sleep(std::time::Duration::from_millis(ms));
+        }
+        if oag_game::gpu_workers::stopping() {
+            return None;
+        }
         let (packs, pure_packs, problems) = oag_source::dlc::packs_from_defaults(
             &self.dlc,
             &oag_source::cache::default_dlc_cache_dir(),
@@ -73,6 +87,9 @@ impl EndRacePrepArgs {
                 return None;
             }
         };
+        if oag_game::gpu_workers::stopping() {
+            return None;
+        }
         let global_refs: Vec<(&str, &str)> = self
             .globals
             .iter()
@@ -101,6 +118,9 @@ impl EndRacePrepArgs {
                 return None;
             }
         };
+        if oag_game::gpu_workers::stopping() {
+            return None;
+        }
         match EndRacePrep::build(
             &self.device,
             &self.queue,
@@ -181,25 +201,18 @@ impl Session {
             let Stage::Race(stage) = &mut self.stage else {
                 return;
             };
-            stage.endrace_prefetch =
-                args.map(|args| oag_thread::Task::spawn("endrace-prefetch", move || args.run()));
+            stage.endrace_prefetch = args.map(|args| {
+                let guard = oag_game::gpu_workers::Guard::enter("endrace-prefetch");
+                oag_thread::Task::spawn("endrace-prefetch", move || {
+                    let _guard = guard;
+                    args.run()
+                })
+            });
         }
         let Stage::Race(stage) = &mut self.stage else {
             return;
         };
         stage.endrace_prefetch_started = true;
-    }
-
-    /// Waits for the EndRace worker, if one runs, and drops what it built. A run that ends
-    /// (`--drive`) calls this before the process exits: the worker holds clones of the device
-    /// and queue, and a process that exits under it tears the Vulkan driver down mid-submit
-    /// (a SIGSEGV on a loaded machine).
-    pub(crate) fn finish_endrace_prefetch(&mut self) {
-        if let Stage::Race(stage) = &mut self.stage
-            && let Some(mut task) = stage.endrace_prefetch.take()
-        {
-            drop(task.join());
-        }
     }
 
     /// The prepared screens: the worker's when it ran and succeeded, else built here. `None`

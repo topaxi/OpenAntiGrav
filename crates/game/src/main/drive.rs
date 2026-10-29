@@ -78,7 +78,6 @@ pub(crate) fn run(app: &mut App, script: Script, state_log: Option<&Path>) -> Re
     for (number, (line, step)) in script.steps.iter().enumerate() {
         driver.reset_budget();
         if let Err(why) = driver.exec(step) {
-            driver.session.finish_endrace_prefetch();
             oag_game::records::finish_background_saves();
             driver.out.flush().ok();
             bail!(
@@ -91,7 +90,6 @@ pub(crate) fn run(app: &mut App, script: Script, state_log: Option<&Path>) -> Re
             break;
         }
     }
-    driver.session.finish_endrace_prefetch();
     driver.session.keep_campaign_position();
     oag_game::records::finish_background_saves();
     driver.out.flush()?;
@@ -238,9 +236,6 @@ impl Driver {
                 }
             }
             Step::Escape => {
-                // Leaving the race drops its EndRace worker unjoined, and a process that exits
-                // under it tears the driver down mid-submit (see `finish_endrace_prefetch`).
-                self.session.finish_endrace_prefetch();
                 self.session.escape();
                 self.frame(None)?;
             }
