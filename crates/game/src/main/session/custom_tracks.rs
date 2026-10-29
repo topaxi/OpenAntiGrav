@@ -33,6 +33,25 @@ impl Session {
         Ok(())
     }
 
+    /// The source a CUSTOM file's track side loads from: the first disc this
+    /// machine opens of the title the file names as its host (ADR-0076,
+    /// decision 13), never a guest standing in for it, since only that disc holds
+    /// what the file borrows by name. `Ok(None)` for a file that names no host
+    /// (a Workshop track), which races on the CRAFT TITLE's source.
+    pub(super) fn custom_track_host(
+        &self,
+        value: &str,
+    ) -> Result<Option<&oag_game::launcher::Candidate>, String> {
+        let Some(host) = self
+            .custom_tracks
+            .listing(value)
+            .and_then(|l| l.host.as_deref())
+        else {
+            return Ok(None);
+        };
+        oag_game::custom_tracks::host_disc(&self.titles, host).map(Some)
+    }
+
     /// CUSTOM, as TRACK TITLE offers it - none when the scan found no file.
     pub(super) fn custom_title_choice(&self) -> Option<Choice> {
         use oag_game::custom_tracks::CUSTOM;
@@ -48,7 +67,15 @@ impl Session {
         let title = &self.settings.remix.track_title;
             if title == oag_game::custom_tracks::CUSTOM {
             let strings = oag_ui::strings::project_table(self.settings.language.as_deref());
-            return Some(self.custom_tracks.choices(&strings));
+            let mut choices = self.custom_tracks.choices(&strings);
+            for choice in &mut choices {
+                if choice.unavailable.is_none()
+                    && let Err(why) = self.custom_track_host(&choice.value)
+                {
+                    choice.unavailable = Some(why);
+                }
+            }
+            return Some(choices);
         }
         let catalogue = self.remix_catalogue_for(title)?;
         Some(remix_menu::remix_track_choices(&catalogue))

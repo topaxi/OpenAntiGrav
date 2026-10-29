@@ -19,6 +19,8 @@ directory. Raced with `oag-game --track-file <manifest>` (host title's ship, rul
 | --- | --- |
 | `[toml-schema]` | `location` ending `v1/track.tosd`, `version = "1.0.0"`: the kind and major, per [ADR-0064](../architecture/adr/0064-project-toml-files-declare-a-toml-schema.md) and [TOML Schema](toml-schema.md). Missing, another kind or an unknown major: refused by name. This replaced `track.format` and `track.version`; there is no minor. A key the reader does not know is read and reported as unread. |
 | `track.id`, `track.title` | Identifier (keys records and ghosts as `foreign:<id>`) and display title. |
+| `track.host` | The title whose disc the art borrows from, spelled as `oag_source::layers::slug` spells its name (`wipeout-pulse`, `wipeout-pure`, `wipeout-hd`, `wipeout-omega-collection`, `wipeout-2048`; a mod's `titles` vocabulary). **Required exactly when the art borrows** (a `host` texture or a `sky`), optional otherwise. A track that names one loads only with that title's disc as the track source; on another title it races as a Race Remix with the host's disc as the track source ([ADR-0076](../architecture/adr/0076-a-track-file-carries-its-art-as-an-optional-section.md) decision 13). The disc exporter writes its source's title. |
+| `track.titles` | Optional. The titles the author offers the track on (same slugs); absent is every title. Checked against the craft's title (chosen, not measured). |
 | `track.glb` | The glb's file name, relative to the manifest. |
 | `track.notes` | The producer's free text (what it chose, ignored, could not map). Printed in the loader report. |
 | `spline.point_version` | The `WO Track` point version (`SHORT_POINT_VERSION` = `0x107` = 263 for importer output). |
@@ -136,6 +138,15 @@ Put the `*.track.toml` and its `.glb` in a track directory (`$OAG_TRACKS`, `data
 ([menus.md](../architecture/menus.md#race-remix-custom-tracks)); or `oag-game --track-file <manifest>`.
 A manifest or glb that will not read is listed dimmed with the reader's reason. The format carries no
 author field, so none is shown.
+
+A track that borrows nothing from a disc (only its own images, or no art) races on any title. One
+whose art borrows from a disc (`track.host`) races with that disc as the track source: on its host's
+own title natively, on any other as a Race Remix, which the game arranges itself when this machine has
+a disc of the host (`--track-file` on an HD disc with a Pulse disc present races Pulse's track side
+under HD's craft and says so in the log). With no disc of the host the race is refused by name. RACE
+REMIX's CUSTOM always takes the track side from the host's disc and lists a file whose host this
+machine has no disc of dimmed. `track.titles`, when present, limits the titles whose craft may race
+it.
 
 ## Open
 

@@ -451,6 +451,25 @@ impl Session {
         // See `race::Options::language`'s own doc.
         options.language = self.settings.language.clone();
         options.hud_style = self.settings.display.hud_style_choice();
+        // A track file that borrows from another title's disc races as a remix
+        // with that disc as the track source (ADR-0076 decision 13); RACE, a
+        // campaign event and RACE AGAIN all launch here.
+        let titles = &self.titles;
+        match oag_game::custom_tracks::route_to_host(
+            &mut options,
+            |source| {
+                titles
+                    .iter()
+                    .find(|c| c.source == source)
+                    .and_then(oag_game::launcher::Candidate::playable)
+                    .or_else(|| oag_source::title::identify(source))
+            },
+            || titles.clone(),
+        ) {
+            Ok(Some(line)) => log::info!("{line}"),
+            Ok(None) => {}
+            Err(why) => log::warn!("{why}"),
+        }
         // A saved skin still locked draws the default. The menu launch only: `--race` and
         // `--hud-style` name a skin outright and pass, as `--unlock-all` does.
         if let Some(shell) = self.shell.as_ref() {

@@ -303,6 +303,18 @@ fn range(what: &str, why: String) -> Error {
 }
 
 impl Art {
+    /// Whether the art borrows anything from a title's disc by name: a host
+    /// texture or a host circuit's sky. Such a track must name its host
+    /// (`Track::host`, ADR-0076 decision 13).
+    #[must_use]
+    pub fn borrows_from_a_disc(&self) -> bool {
+        self.sky.is_some()
+            || self
+                .textures
+                .iter()
+                .any(|t| matches!(t, TextureSource::Host { .. }))
+    }
+
     /// Checks everything a reader or writer relies on: lengths agree, indices and
     /// texture references are in range, numbers are finite, a direction is a unit
     /// vector.

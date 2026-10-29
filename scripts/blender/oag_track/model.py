@@ -80,10 +80,20 @@ class CollisionNode:
     version: int = HEADER_WORD
 
 
+# The titles a track may name as its host (`[track] host`) or offer itself on
+# (`[track] titles`), spelled the way `oag_source::layers::slug` spells a title's
+# name. The host is the disc the art borrows from (host textures, the sky);
+# required exactly when it borrows, and on another title such a track runs as a
+# Race Remix with the host as the track source (ADR-0076, decision 13).
+HOSTS = ("wipeout-pulse", "wipeout-pure", "wipeout-hd", "wipeout-omega-collection", "wipeout-2048")
+
+
 @dataclass
 class Track:
     id: str
     title: str
+    host: str
+    titles: list
     point_version: int
     paths: list
     junctions: list
@@ -160,3 +170,7 @@ class Art:
     ambient: tuple = None
     lights: list = field(default_factory=list)
     lens_flare: LensFlare = None
+
+    def borrows_from_a_disc(self):
+        """A host texture or a sky: the track must name its host."""
+        return self.sky is not None or any(t.host is not None for t in self.textures)

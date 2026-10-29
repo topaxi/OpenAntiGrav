@@ -303,6 +303,10 @@ def write_manifest(track, glb_name):
     """The `.track.toml` text. Integers and strings only: no float is written."""
     if not track.id:
         raise TrackFileError("the track has no id")
+    if not track.host and track.art is not None and track.art.borrows_from_a_disc():
+        raise TrackFileError(
+            "the art borrows from a disc (a host texture or a sky): set Runs on to the title it borrows from"
+        )
     lines = [
         "[toml-schema]",
         f"location = {_quote(SCHEMA_LOCATION)}",
@@ -311,6 +315,12 @@ def write_manifest(track, glb_name):
         "[track]",
         f"id = {_quote(track.id)}",
         f"title = {_quote(track.title)}",
+    ]
+    if track.host:
+        lines.append(f"host = {_quote(track.host)}")
+    if track.titles:
+        lines.append("titles = [" + ", ".join(_quote(n) for n in track.titles) + "]")
+    lines += [
         f"glb = {_quote(glb_name)}",
     ]
     if track.notes:
@@ -560,9 +570,14 @@ def read(manifest_path):
     track_art = None
     if "art" in m or art:
         track_art = artfile.from_manifest(m.get("art"), [a for _, a in art])
+    host = t.get("host", "")
+    if not host and track_art is not None and track_art.borrows_from_a_disc():
+        raise TrackFileError("the art borrows from a disc but track.host names no title")
     return Track(
         t["id"],
         t["title"],
+        host,
+        list(t.get("titles", [])),
         m["spline"]["point_version"],
         paths,
         junctions,

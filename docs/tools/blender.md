@@ -50,7 +50,7 @@ Steps (the same ones `scripts/blender/roundtrip.py loop` runs headless):
 4. **Add speedup pad** / **Add weapon pad** put a pad on the spline point nearest the 3D
    cursor. The pad's box (`oag_min`, `oag_max`, in the format's pad-local axes lateral, up,
    forward) defaults to the fixture's.
-5. Set the track id, title and notes at the top of the panel, then **Export OAG Track**
+5. Set the track id, title, **Runs on**, **Offered on** and notes at the top of the panel, then **Export OAG Track**
    and choose `name.track.toml`; `name.glb` is written beside it.
 
 ### What the add-on derives (chosen, not measured)
@@ -71,6 +71,8 @@ matches what that generator would write.
 | Start slot | 154 units back along the ring from point 0, level, facing along the line. The race puts the **lap line** 154 units ahead of the start slot (`oag_race::Course::START_LINE_ADVANCE`), so spline point 0, the curve's first control point, is the lap line |
 | Pad matrix | the Empty's unit basis in rows (lateral, up, forward) and its position; scale is ignored, the size is the box |
 | Track id | the scene's id, else the scene name slugged |
+| `track.host` | the scene's **Runs on** (`oag_track_host`: `none`, default, or one of the five title slugs): the title whose disc the art's host textures and sky resolve from; export refuses `none` when the art borrows ([ADR-0076](../architecture/adr/0076-a-track-file-carries-its-art-as-an-optional-section.md) decision 13). Import refuses an unknown value |
+| `track.titles` | the scene's **Offered on** (`oag_track_titles`), comma-separated slugs; empty writes no key (every title) |
 
 "Tiles", "AI line" and "start grid" in other tools map to fields that exist here: the pad lists,
 the spline with its `ai_bound`/`racing_line`, and the start slot (the engine lays its own grid from it).

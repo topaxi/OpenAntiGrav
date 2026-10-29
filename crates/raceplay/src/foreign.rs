@@ -92,6 +92,95 @@ pub fn read_any(path: &Path) -> anyhow::Result<(Track, Vec<String>)> {
     Ok((loaded.track, report))
 }
 
+/// The title a track's art borrows from (`Track::host`, ADR-0076 decision 13),
+/// or `None` for a track that borrows nothing and so runs on any title.
+///
+/// # Errors
+///
+/// A host spelled as no title this build knows, named with the ones it does.
+pub fn host_title(track: &Track) -> anyhow::Result<Option<&'static oag_title::Title>> {
+    track.host.as_deref().map(known_title).transpose()
+}
+
+fn known_title(slug: &str) -> anyhow::Result<&'static oag_title::Title> {
+    oag_source::title::by_slug(slug).ok_or_else(|| {
+        anyhow::anyhow!(
+            "{slug:?} is no title this build knows (it knows {})",
+            oag_source::title::ALL
+                .iter()
+                .map(|t| oag_source::layers::slug(t))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    })
+}
+
+/// Refuses a track whose art borrows from one title's disc raced with another
+/// title's as the track source: what it borrows by name (host textures, the
+/// sky) resolves only there, and would draw black elsewhere. Another title's
+/// craft fly it as a Race Remix with the host's disc as the track source, which
+/// the game's launches arrange when this machine has that disc.
+///
+/// # Errors
+///
+/// As [`host_title`], and the mismatch, naming both titles and the remix.
+pub fn check_host(track: &Track, source: &oag_title::Title) -> anyhow::Result<()> {
+    let Some(host) = host_title(track)? else {
+        return Ok(());
+    };
+    if oag_source::layers::slug(host) == oag_source::layers::slug(source) {
+        return Ok(());
+    }
+    anyhow::bail!(
+        "{:?} borrows its art from the {} disc (track.host = {:?}); this race's track source is \
+         {}. Race it with a {} disc as the track source: on {}'s craft that is a Race Remix \
+         (the {} disc as the source with --craft-source <{} disc>)",
+        track.title,
+        host.name,
+        track.host.as_deref().unwrap_or_default(),
+        source.name,
+        host.name,
+        source.name,
+        host.name,
+        source.name,
+    )
+}
+
+/// Refuses a track raced in a title its author did not offer it on
+/// (`Track::titles`, empty is every title). The title asked is the craft's,
+/// the game the player is in (chosen, not measured; ADR-0076 decision 13).
+///
+/// # Errors
+///
+/// A `titles` entry naming no known title, or the craft's title not listed.
+pub fn check_titles(track: &Track, craft: &oag_title::Title) -> anyhow::Result<()> {
+    if track.titles.is_empty() {
+        return Ok(());
+    }
+    let offered = track
+        .titles
+        .iter()
+        .map(|t| known_title(t))
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    let wanted = oag_source::layers::slug(craft);
+    if offered
+        .iter()
+        .any(|t| oag_source::layers::slug(t) == wanted)
+    {
+        return Ok(());
+    }
+    anyhow::bail!(
+        "{:?} is offered on {} (track.titles), not on {}",
+        track.title,
+        offered
+            .iter()
+            .map(|t| t.name)
+            .collect::<Vec<_>>()
+            .join(", "),
+        craft.name
+    )
+}
+
 /// The catalogue entry for the track at `path` (a `.wtrk` or a track-file
 /// manifest): a synthetic [`catalogue::Track`](crate::catalogue::Track) carrying
 /// the file as data, so nothing downstream branches on a title or a name to tell

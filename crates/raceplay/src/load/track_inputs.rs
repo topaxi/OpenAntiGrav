@@ -37,10 +37,11 @@ pub(super) fn resolve(
     options: &Options,
     archives: &mut Archives,
     title: &'static oag_title::Title,
+    craft_title: &'static oag_title::Title,
     report: &mut Vec<String>,
 ) -> Result<Inputs> {
     if let Some(path) = &options.foreign_track {
-        return foreign(path, options, archives, report);
+        return foreign(path, options, archives, title, craft_title, report);
     }
     // **The circuit this source actually offers**, resolved here because this is
     // the first point the title is known - see [`Options::track`]. Reported
@@ -235,6 +236,8 @@ fn foreign(
     path: &std::path::Path,
     options: &Options,
     archives: &mut Archives,
+    title: &'static oag_title::Title,
+    craft_title: &'static oag_title::Title,
     report: &mut Vec<String>,
 ) -> Result<Inputs> {
     if options.mode == Mode::Zone {
@@ -242,7 +245,16 @@ fn foreign(
     }
     #[cfg_attr(not(feature = "view"), allow(unused_mut))]
     let (mut f, lines) = crate::foreign::read_any(path)?;
+    crate::foreign::check_host(&f, title)
+        .and_then(|()| crate::foreign::check_titles(&f, craft_title))
+        .map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))?;
     report.extend(lines);
+    if let Some(host) = &f.host {
+        report.push(format!(
+            "track file borrows from {host}'s disc; the track source is {}",
+            title.name
+        ));
+    }
     let collision = collision_world(&f.nodes);
     report.push(format!(
         "{} collision node(s) -> {} collider(s), {} triangle(s)",
@@ -317,7 +329,7 @@ pub(super) fn export(
     title: &'static oag_title::Title,
 ) -> Result<oag_trackfile::Track> {
     let mut report = Vec::new();
-    let inputs = resolve(options, archives, title, &mut report)?;
+    let inputs = resolve(options, archives, title, title, &mut report)?;
     if inputs.track.starts_with("foreign:") {
         anyhow::bail!(
             "{}: already a foreign track, nothing to export from a disc",
@@ -345,6 +357,8 @@ pub(super) fn export(
     Ok(oag_trackfile::Track {
         id: inputs.track,
         title: inputs.label,
+        host: Some(oag_source::layers::slug(title)),
+        titles: Vec::new(),
         ai: inputs.ai,
         start,
         nodes: inputs.nodes,

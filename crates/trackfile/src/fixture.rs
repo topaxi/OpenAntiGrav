@@ -216,6 +216,8 @@ pub fn oval() -> Track {
     Track {
         id: "fixture-octagon".to_string(),
         title: "Fixture Octagon".to_string(),
+        host: None,
+        titles: Vec::new(),
         ai: AiTrack {
             version: SHORT_POINT_VERSION,
             paths: vec![Path {

@@ -32,6 +32,23 @@ minlength = 1
 [types.track.title]
 type = "string"
 
+# The title whose disc the art borrows from (host textures, the sky), spelled
+# as oag_source::layers::slug spells a title's name (a mod's `titles`
+# vocabulary). Required when the art borrows (the reader's rule, not this
+# schema's); on another title such a track runs as a Race Remix with this disc
+# as the track source (ADR-0076, decision 13).
+[types.track.host]
+type = "string"
+allowedvalues = ["wipeout-pulse", "wipeout-pure", "wipeout-hd", "wipeout-omega-collection", "wipeout-2048"]
+optional = true
+
+# The titles the author offers the track on, the same slugs; absent is every
+# title.
+[types.track.titles]
+type = "array"
+itemtype = "string"
+optional = true
+
 [types.track.glb]
 type = "string"
 

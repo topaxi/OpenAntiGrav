@@ -18,7 +18,7 @@ from bpy.props import (
 from bpy.types import Operator, Panel
 from bpy_extras.io_utils import ExportHelper, ImportHelper
 
-from . import artfile, derive, scene, scene_art, trackfile
+from . import artfile, derive, model, scene, scene_art, trackfile
 
 ERRORS = (trackfile.TrackFileError, derive.AuthoringError, artfile.ArtError)
 
@@ -200,6 +200,8 @@ class OAG_PT_track(Panel):
         box = layout.box()
         box.prop(sc, "oag_track_id")
         box.prop(sc, "oag_track_title")
+        box.prop(sc, "oag_track_host")
+        box.prop(sc, "oag_track_titles")
         box.prop(sc, "oag_track_notes")
         row = layout.row(align=True)
         row.operator("oag.import_track", text="Import", icon="IMPORT")
@@ -290,6 +292,17 @@ def _props():
     sc, ob = bpy.types.Scene, bpy.types.Object
     sc.oag_track_id = StringProperty(name="Track id", description="Stable id; keys records and ghosts")
     sc.oag_track_title = StringProperty(name="Title")
+    sc.oag_track_host = EnumProperty(
+        name="Runs on",
+        description="The title whose disc the art borrows host textures and the sky from (required when it does); "
+        "another title races the track as a Race Remix with this disc as the track source",
+        items=[("none", "none (borrows nothing)", "")] + [(h, h, "") for h in model.HOSTS],
+        default="none",
+    )
+    sc.oag_track_titles = StringProperty(
+        name="Offered on",
+        description="Comma-separated title slugs the track is offered on (e.g. wipeout-pulse, wipeout-hd); empty is every title",
+    )
     sc.oag_track_notes = StringProperty(name="Notes", description="Free text printed in the loader report")
     ob.oag_points = IntProperty(name="Spline points", default=64, min=3, max=4096)
     ob.oag_half_width = FloatProperty(name="Half width", default=derive.HALF_WIDTH, min=0.01)
@@ -337,6 +350,8 @@ def _unprops():
     for name in (
         "oag_track_id",
         "oag_track_title",
+        "oag_track_host",
+        "oag_track_titles",
         "oag_track_notes",
         "oag_sun",
         "oag_sky",

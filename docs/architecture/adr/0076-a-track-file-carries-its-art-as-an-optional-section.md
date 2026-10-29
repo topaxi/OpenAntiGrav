@@ -157,6 +157,35 @@ reason to author visibility by hand.
       directional, as for Pulse, and `[art.lensflare]` carries its own `direction` (lead,
       2026-10-29, relayed to the maintainer).
 
+13. **What a track borrows from a disc pins that disc; `titles` is the author's filter**
+    (maintainer, 2026-10-29). Found when Hillside, whose art borrows Pulse 03_Track's textures and
+    sky by name, raced on HD and Omega: every host texture missed, one own-PNG mesh kept the
+    flat-collision fallback off, and the track drew black. The maintainer first said "The track
+    shall name the title it runs on, it only loads in another title via remix", then settled the
+    rule as it stands here: a host is needed only where the art borrows, and a track with only its
+    own art runs on any title.
+    - **`[track] host`** names the title whose disc the art borrows from, spelled as
+      `oag_source::layers::slug` spells its name (`wipeout-pulse`, `wipeout-pure`, `wipeout-hd`,
+      `wipeout-omega-collection`, `wipeout-2048`), the vocabulary a mod's `titles` already uses.
+      **Required exactly when the art borrows** (a `host` texture or a `sky`;
+      `oag_trackfile::art::Art::borrows_from_a_disc`), refused by name when missing then or empty;
+      optional otherwise. The disc exporter writes its source's title. The loader refuses a value
+      naming no title it knows.
+    - **A pinned track loads only with its host's disc as the track source.** On another title it
+      runs as a Race Remix: `Options::source` (collision, environment, host textures, sky) is a
+      disc of the host title, never a guest standing in for it (2048 for HD), and `craft_source`
+      is the title asked for. The game arranges this itself
+      (`oag_game::custom_tracks::route_to_host`, run where every launch passes: the command line's
+      `Pending::race_options` and the session's `launch_race`, so RACE, a campaign event, RACE
+      AGAIN and `--track-file` alike), and RACE REMIX's CUSTOM takes its track source from the file's
+      host directly. With no disc of the host on the machine the launch is left as asked and the
+      loader (`oag_raceplay::foreign::check_host`) refuses it by name, naming both titles.
+    - **`[track] titles`**, optional, lists the titles the author offers the track on; absent is
+      every title. The title it is checked against is the **craft's** (the game the player is in),
+      chosen, not measured; `oag_raceplay::foreign::check_titles` refuses the rest by name.
+    - **`Track::host` is `None`** for a track that borrows nothing, which includes every BallisticNG
+      Workshop track mapped from its `.wtrk`.
+
 ## Consequences
 
 - **A sun on our own tracks is what `docs/rendering/shadows.md` lists first among the three things

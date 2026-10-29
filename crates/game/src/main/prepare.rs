@@ -141,7 +141,7 @@ impl Pending {
     /// empty everywhere else, which is the whole grid in the player's own hull -
     /// see [`race::Options::opponent_teams`].
     pub(crate) fn race_options(&self, source: &str, opponent_teams: Vec<String>) -> race::Options {
-        race::Options {
+        let mut options = race::Options {
             source: source.to_string(),
             // `None` outside a Race Remix - the ordinary CLI/menu route names
             // one source, and `race::load` treats that as "craft comes from
@@ -263,7 +263,23 @@ impl Pending {
             world_clock_offset: self.cli.world_clock_offset.unwrap_or(0.0),
             gantry_seconds: self.cli.gantry_seconds,
             camera: self.camera,
+        };
+        // A track file that borrows from another title's disc races as a remix
+        // with that disc as the track source (ADR-0076 decision 13).
+        match oag_game::custom_tracks::route_to_host(
+            &mut options,
+            oag_source::title::identify,
+            || {
+                oag_game::launcher::distinct_titles(&oag_game::launcher::survey(
+                    &oag_source::source::candidates(),
+                ))
+            },
+        ) {
+            Ok(Some(line)) => log::info!("{line}"),
+            Ok(None) => {}
+            Err(why) => log::warn!("{why}"),
         }
+        options
     }
 
     /// The control scheme every race this run starts is driven with.
