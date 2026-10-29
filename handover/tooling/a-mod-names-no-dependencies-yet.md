@@ -18,10 +18,12 @@ use it: `example-campaign/` races Hillside out of the track-only `hillside/`
 The reference is the only dependency. Nothing in `oag-mod.toml` says that
 `oag.example-campaign` needs `oag.hillside`. That has three consequences.
 
-1. **Breakage is found per campaign, late.** A missing mod leaves the campaign out
-   when it compiles for a title, and the log names the mod. The MODS page does not
-   say that the campaign mod is incomplete, and nothing installs or names the
-   missing mod beforehand.
+1. **Breakage is found per campaign, late.** A missing mod, or one the player turned
+   off on the MODS page (ADR-0078, 2026-10-29), leaves the campaign out when it
+   compiles for a title; the log names the mod and the campaign mod's MODS entry says
+   `NEEDS HILLSIDE, OFF` or `NEEDS <id>, MISSING` (`oag_game::mods::note_left_out`).
+   Nothing installs or names the missing mod beforehand, and the whole campaign goes,
+   not only the events racing the missing track.
 2. **Any mod can reach any other.** An event may name any installed mod's file. When
    that mod changes its layout or is removed, every mod pointing into it partly
    breaks, and no declaration says which mods are affected.
@@ -39,8 +41,9 @@ now.
 - A reach rule: may a `<mod id>:` reference name only a declared dependency? A
   reference to an undeclared mod would then be a shape error when the mod is read
   (`oag_mod::campaign`), not a compile-time miss.
-- What the MODS page shows for a mod with an unmet dependency, and whether a
-  dependency's `titles` must cover the dependent's.
+- What the MODS page shows for a mod with an unmet dependency beyond today's NEEDS
+  line, whether turning a mod off should offer to turn its dependents off too, and
+  whether a dependency's `titles` must cover the dependent's.
 - Load order and conflicts: none today, since mods only add. They matter once a mod
   can replace another's file.
 - Other asset kinds: pilots are per mod (`pilots/`); a cross-mod pilot reference would

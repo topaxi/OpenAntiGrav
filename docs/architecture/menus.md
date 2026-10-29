@@ -1026,6 +1026,12 @@ the shipped file alone reports the `remix` and `records` pages unreachable, beca
 the extras' rows open them; every caller builds (`oag_game::mods::Mods::build`, the same
 call the live menu and `--menu-page` make, so a captured page shows what a player sees).
 
+A mod the player turned off on the MODS page is left out of that build, and a switch rebuilds the
+tree live, `prepare::mods_menu` then `prepare::finish_definition` as a boot does, the menu model
+reopened by `Menu::trail`/`Menu::restore_trail`
+([ADR-0078](adr/0078-a-mod-is-turned-off-by-id-live-and-the-built-in-never.md),
+[mods](../tools/mods.md#the-mods-page)).
+
 ### Revealed rows on HD and Omega
 
 A horizontal strip has no room for more tabs, so an attached row is **revealed below its
