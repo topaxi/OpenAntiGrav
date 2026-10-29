@@ -36,8 +36,8 @@ const DROPLETS: usize = 3;
 const SEED: u64 = 0x5b1a_5e07;
 
 /// Seconds a rain splash lasts, and the ring's radius at its start and end.
-const RAIN_LIFE: f32 = 0.30;
-const RING_RADIUS: (f32, f32) = (0.4, 1.9);
+const RAIN_LIFE: f32 = 0.35;
+const RING_RADIUS: (f32, f32) = (0.5, 2.6);
 
 /// A droplet's launch speed along the surface normal and across it, and the
 /// gravity pulling it back, in world units a second.
@@ -46,7 +46,7 @@ const SPRAY_OUT: f32 = 4.0;
 const GRAVITY: f32 = 55.0;
 
 /// A droplet's and a settled flake's half-size, in world units.
-const DROPLET_SIZE: f32 = 0.22;
+const DROPLET_SIZE: f32 = 0.3;
 const FLAKE_SIZE: f32 = 0.42;
 
 /// Seconds a flake stays settled, with the share of it spent fading in and out.

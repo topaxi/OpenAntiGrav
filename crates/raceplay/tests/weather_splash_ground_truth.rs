@@ -168,3 +168,30 @@ fn splash_cost_sweep() {
         }
     }
 }
+
+/// The PS2 pressing plays the same circuit's weather (`circuit_effects`), so it
+/// loads the splash art too and inherits the setting from the PSP.
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd"]
+fn the_ps2_pressing_loads_the_splash_art_with_its_weather() {
+    let Some(image) = oag_testdata::image("data/images/pulse-ps2-eu.chd") else {
+        return;
+    };
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::TimeTrial,
+        track: Some(r"Data\Environments\14_Track\track.vex".to_string()),
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    let has = |text: &str| loaded.report.iter().any(|line| line.contains(text));
+    assert!(
+        has("WO_RAIN.POB on 16 covered section(s)"),
+        "{}",
+        loaded.report.join("\n")
+    );
+    assert!(has("splash art"), "{}", loaded.report.join("\n"));
+    let weather = loaded.setup.scenery_fx.weather.expect("weather");
+    assert!(weather.splash_cell.is_some(), "the art did not place");
+}
