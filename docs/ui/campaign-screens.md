@@ -4613,7 +4613,6 @@ lookup stays dead on this screen (confidence 85; the string has one xref, no aut
 - **2048/Omega**: not applicable (this widget routine is Pulse's `GridController`; HD's `Selector` keeps `centred_selector_draw`,
   unmeasured). Checked, differs by lack of measurement, not wired.
 
-<<<<<<< HEAD
 #### PS2: the selector sits at the hex's top-left minus (11, 14) (2026-10-29, `pulse-ps2-hex-align`)
 
 **Measured off PCSX2 GS dumps, not scaled from the PSP.** Both PS2 screens author the `Selector` as
@@ -4636,10 +4635,6 @@ px; y: a constant `-3.68 px` = 2.3 grid units, cause not isolated), and **agains
 0.07 px for the unselected hexes (the transform is fitted on them, so that only shows the field is rigid) and 0.28 px for the selected ring (independent)**, both axes, both screens. In the original's own coordinates the placement is exact: selector `(76,233)` / `(144,129)` equal the GS quads. Whether the frame-level offset is PCSX2's presentation or ours is open.
 - **2048/Omega**: not applicable (Pulse's `GridController` and Pulse PS2's skin). Pure PSP and Pulse PSP keep `(-5, -7)`.
 
-
-||||||| 40efc8be2
-
-=======
 
 #### The front end's bloom, wired for the cursor (2026-10-29, `pulse-frontend-bloom`)
 
@@ -4710,4 +4705,3 @@ other screens' stamps still to wire (below).
   Whether Pure's front end stamps, and where, is **not measured** (an EDRAM readout was tried and landed on PPSSPP's own load dialog, alpha flat at 4), so nothing is wired for it. 2048 and
   Omega: not applicable here (HD's front end draws through its own pipeline, `frontend_glow` is `None`).
 
->>>>>>> main
