@@ -234,16 +234,6 @@ struct Prompt {
     /// than replacing it, so Pulse's font-keyed answer is unchanged (`1.0`
     /// there, a no-op) and HD's own authored shrink applies on top of it.
     scale: f32,
-    /// `Some` overrides [`Self::x`]/left alignment: draw right-aligned so
-    /// the text *ends* here instead of starting at `x`. See
-    /// [`NavigationLegend::read`]'s own doc for the one prompt this is
-    /// built for.
-    align_right_to: Option<f32>,
-    /// `Some` alongside [`Self::align_right_to`]: the leftmost native pixel
-    /// this prompt's own text may start at before [`NavigationLegend::draw`]
-    /// shrinks its scale to fit, rather than let it run past this bound the
-    /// way it otherwise would into whatever sits to its own left.
-    left_bound: Option<f32>,
     /// Whether this is the button glyph half of a `Confirm`/`Back` pair, not its word.
     glyph: bool,
 }
@@ -364,8 +354,6 @@ impl NavigationLegend {
                     color: color_of(globals, text),
                     kind,
                     scale: number(globals, text, "scale").unwrap_or(1.0),
-                    align_right_to: None,
-                    left_bound: None,
                     glyph: text
                         .attr("name")
                         .is_some_and(|name| name.ends_with("Button")),
@@ -400,8 +388,6 @@ impl NavigationLegend {
                         color: color_of(globals, text),
                         kind: PromptKind::Navigation,
                         scale: number(globals, text, "scale").unwrap_or(1.0),
-                        align_right_to: None,
-                        left_bound: None,
                         glyph: key.ends_with("_BUTTON"),
                     },
                 ));
@@ -409,58 +395,6 @@ impl NavigationLegend {
         }
         if prompts.is_empty() {
             return None;
-        }
-        // `FE_CONFIRM`'s own word left-aligned at its authored `x="368"`
-        // runs into `FE_BACK_BUTTON`'s own glyph at `x="415"` even at this
-        // build's smallest available role scale - measured directly,
-        // "CONFIRM"
-        // draws straight through the back button's own circle. This
-        // build's only loaded menu-face atlas (`Pulse_20.fnt`, the `menu`
-        // role every campaign-screen `Draw::Text` scales rather than
-        // switches) is simply wider per glyph than whatever compact face
-        // authored these 47 native pixels for - not a role this crate can
-        // pick its way out of, see the module doc's own "not reachable"
-        // note. Right-aligning to end just short of the back glyph fixed
-        // that edge, but then ran the word into its *own* confirm-button
-        // glyph instead (`crop-legend3-zoom.png`) - the word is simply
-        // wider than the gap at any of this build's two available scales,
-        // whichever side it is anchored from. [`NavigationLegend::draw`]
-        // shrinks it to fit between both glyphs as a last resort, once
-        // `measure` is in hand. **Chosen, not measured**: nothing on disc
-        // says where the word should end or how far it may shrink, only
-        // that the original's own (narrower) rendering fits without either.
-        //
-        // **Gated on the word's own authored scale, not on the title.**
-        // Wipeout HD/Fury's own `ControlTextConfirm` authors `scale="0.8"`
-        // (`Skin.xml`'s `<Values idstring="FE_CONFIRM" x="534" ... scale="0.8">`),
-        // unlike Pulse's, which authors none (`1.0` by default, see
-        // [`Prompt::scale`]'s own doc) - a disc-authored fact, not a title
-        // check this crate would otherwise have to invent one of. RPCS3
-        // draws HD's own `CONFIRM` left-aligned at that authored `x="534"`,
-        // 186 native pixels short of `BACK`'s own `x="720"`
-        // (the RPCS3 difficulty-icon zoom and the clean square and triangle captures) - plenty
-        // of room at `scale="0.8"`, so applying Pulse's own shrink-to-fit
-        // hack there would move `CONFIRM` to a position and alignment RPCS3
-        // never shows, not fix an overlap that does not exist on this title.
-        const GAP: f32 = 6.0;
-        if let Some(back_button_x) = prompts
-            .iter()
-            .find(|(id, _)| id == "FE_BACK_BUTTON")
-            .map(|(_, p)| p.x)
-            && let Some(confirm_button_x) = prompts
-                .iter()
-                .find(|(id, _)| id == "FE_CONFIRM_BUTTON")
-                .map(|(_, p)| p.x)
-            && let Some((_, confirm)) = prompts.iter_mut().find(|(id, _)| id == "FE_CONFIRM")
-            && confirm.scale > 0.99
-        {
-            confirm.align_right_to = Some(back_button_x - GAP);
-            // The confirm-button glyph is one character - `measure` is not
-            // reachable at parse time (no font atlas exists yet), so this
-            // is a flat native-pixel estimate of one glyph's own width at
-            // its `small`-role scale, not a measurement of `"ε"` itself.
-            const GLYPH_WIDTH_ESTIMATE: f32 = 20.0;
-            confirm.left_bound = Some(confirm_button_x + GLYPH_WIDTH_ESTIMATE + GAP);
         }
         // The `<MiniText idstring="FE_SCREEN_TITLE">` the root authors at
         // `(160, 48)`: RPCS3 draws the string itself, `SCREEN TITLE`, a
@@ -489,11 +423,11 @@ impl NavigationLegend {
     /// same indirection `crate::marquee::apply`'s own `measure` argument
     /// is, so this module never has to know what a font atlas is either.
     #[must_use]
-    pub fn draw(&self, faces: &FaceScales, measure: &dyn Fn(&str) -> f32) -> Vec<Draw> {
+    pub fn draw(&self, faces: &FaceScales) -> Vec<Draw> {
         let mut out: Vec<Draw> = self
             .prompts
             .iter()
-            .map(|prompt| Self::draw_prompt(prompt, faces, measure))
+            .map(|prompt| Self::draw_prompt(prompt, faces))
             .collect();
         self.draw_caption(&mut out);
         out
@@ -516,52 +450,26 @@ impl NavigationLegend {
     /// and a finger" section for the full census and where this rule is
     /// used).
     #[must_use]
-    pub fn draw_gated(
-        &self,
-        faces: &FaceScales,
-        measure: &dyn Fn(&str) -> f32,
-        show_back: bool,
-    ) -> Vec<Draw> {
+    pub fn draw_gated(&self, faces: &FaceScales, show_back: bool) -> Vec<Draw> {
         let mut out: Vec<Draw> = self
             .prompts
             .iter()
             .filter(|prompt| show_back || prompt.kind != PromptKind::Back)
-            .map(|prompt| Self::draw_prompt(prompt, faces, measure))
+            .map(|prompt| Self::draw_prompt(prompt, faces))
             .collect();
         self.draw_caption(&mut out);
         out
     }
 
-    fn draw_prompt(prompt: &Prompt, faces: &FaceScales, measure: &dyn Fn(&str) -> f32) -> Draw {
-        let mut scale = face_scale(faces, &prompt.font) * prompt.scale;
-        let x = match prompt.align_right_to {
-            Some(right_to) => {
-                // Shrink just enough that the right-aligned text's own left
-                // edge does not cross `left_bound` - see
-                // `NavigationLegend::read`'s own doc for why this exists at
-                // all.
-                if let Some(left_bound) = prompt.left_bound {
-                    let width = measure(&prompt.text) * scale;
-                    let available = right_to - left_bound;
-                    if width > available && width > 0.0 {
-                        scale *= available.max(0.0) / width;
-                    }
-                }
-                right_to
-            }
-            None => prompt.x,
-        };
+    fn draw_prompt(prompt: &Prompt, faces: &FaceScales) -> Draw {
+        let scale = face_scale(faces, &prompt.font) * prompt.scale;
         Draw::in_role(
             face_role(&prompt.font),
-            x,
+            prompt.x,
             prompt.y,
             scale,
             prompt.color,
-            if prompt.align_right_to.is_some() {
-                Align::Right
-            } else {
-                Align::Left
-            },
+            Align::Left,
             prompt.text.clone(),
         )
     }
@@ -594,10 +502,7 @@ impl NavigationLegend {
                     return (prompt.x, prompt.x + glyph_width);
                 }
                 let width = measure(&prompt.text) * face_scale(faces, &prompt.font) * prompt.scale;
-                match prompt.align_right_to {
-                    Some(end) => (end - width, end),
-                    None => (prompt.x, prompt.x + width),
-                }
+                (prompt.x, prompt.x + width)
             })
             .collect()
     }
@@ -638,9 +543,8 @@ impl NavigationLegend {
         let margin = first.min(width - last).max(0.0);
         // The spacing between two of the legend's own prompts: from `Confirm`'s word to
         // whatever starts after it, else from what ends before its glyph.
-        let confirm_end = label.align_right_to.unwrap_or_else(|| {
-            label.x + measure(&label.text) * face_scale(faces, &label.font) * label.scale
-        });
+        let confirm_end =
+            label.x + measure(&label.text) * face_scale(faces, &label.font) * label.scale;
         let spacing = spans
             .iter()
             .map(|span| span.0 - confirm_end)
@@ -700,12 +604,9 @@ impl NavigationLegend {
                     text: glyph.to_string(),
                     x: left,
                     y: button.y - lift,
-                    align_right_to: None,
-                    left_bound: None,
                     ..button.clone()
                 },
                 faces,
-                measure,
             ));
         }
         out.push(Self::draw_prompt(
@@ -713,12 +614,9 @@ impl NavigationLegend {
                 text: word.to_string(),
                 x: left + lead,
                 y: label.y - lift,
-                align_right_to: None,
-                left_bound: None,
                 ..label.clone()
             },
             faces,
-            measure,
         ));
         Some((out, [left, y - lift, total, RESET_HEIGHT]))
     }
@@ -745,11 +643,9 @@ impl NavigationLegend {
             text: text.to_string(),
             x: left,
             y: base.y - NOTICE_LIFT,
-            align_right_to: None,
-            left_bound: None,
             ..base.clone()
         };
-        Some(Self::draw_prompt(&prompt, faces, &|_| 0.0))
+        Some(Self::draw_prompt(&prompt, faces))
     }
 
     /// One line saying which halves this legend actually has to draw - for

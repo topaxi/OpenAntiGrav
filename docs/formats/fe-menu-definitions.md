@@ -168,8 +168,11 @@ question.
 | `Dialog` | `Icon`, `TextID`, `NumOptions` |
 | `AreaController` | names an `area` |
 
-`Text` widgets carry `RealGlow`, which is undecoded. So is `CalcBlur` on the
-[HUD](../ui/hud.md).
+`Text` widgets carry `RealGlow`: the stencil reference the widget stamps into the glow mask the frame-end bloom reads (decoded
+2026-10-29 off `Text_Draw` and `Text_ParseValues`, `docs/ui/campaign-screens.md`, "The front end's bloom, wired for the cursor"; values
+`128`, `1`, `100`, `64` on `Text` and `Image` elements in Pulse's front-end `.cod` files; only the `Text` reading is decoded, and
+our loader does not read it yet). `CalcBlur` on the
+[HUD](../ui/hud.md) is still undecoded.
 
 **`pulse`/`delay`, censused 2026-09-05 across all 17 GUI files, carry no
 oscillation parameters.** `delay` is a reveal-offset timer - it appears on

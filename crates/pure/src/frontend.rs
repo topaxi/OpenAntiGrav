@@ -400,6 +400,7 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     // Pulse's period must never be filled in here. See
     // `oag_title::MenuSkin::selected_pulse_period_secs`.
     selected_pulse_period_secs: None,
+    selector_origin: None,
     // Authored, but as one of four values this disc uses (0, 0.25, 0.3, 0.5)
     // rather than the single dominant one Pulse has. 0.5 is the most common of
     // them in the five definition files read; which value a *menu* page change

@@ -18,13 +18,11 @@ use super::MenuStage;
 /// title's picker, whose screens author their own footer text.
 pub(super) fn hd_nav(
     legend: &Option<oag_ui_screens::campaign::footer::NavigationLegend>,
-    atlas: &font::Atlas,
     picker: &crate::picker_stage::PickerStage,
 ) -> Vec<Draw> {
     match legend {
         Some(legend) if picker.layout.is_hd() => legend.draw_gated(
             &picker::FaceScales::default(),
-            &|text: &str| font::measure(atlas, text),
             true,
         ),
         _ => Vec::new(),
@@ -52,12 +50,7 @@ impl MenuStage {
         let Some(legend) = &self.nav_legend else {
             return Vec::new();
         };
-        let measure = |text: &str| font::measure(&self.default_atlas, text);
-        legend.draw_gated(
-            &picker::FaceScales::default(),
-            &measure,
-            self.menu.depth() > 1,
-        )
+        legend.draw_gated(&picker::FaceScales::default(), self.menu.depth() > 1)
     }
 
     /// The footer's own scrolling tip ticker, at [`Self::ticker_elapsed`] -

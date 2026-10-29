@@ -253,6 +253,7 @@
 0x002dab3c	data	g_split_mode	92	head2head.md
 # 2026-10-17 medal-tier-colour: Grid Selection tier tiles and their medal colour (grid-selection.md)
 0x001b6490	function	GridSelection_PopulateTiles	88	grid-selection.md
+0x001905d8	function	GridController_UpdateSelectorPulse	85	grid-selection.md
 # 2026-10-20 ps2-plume: the PS2 engine trail (engine-trail.md)
 0x001f0a08	function	Trail_DrawRibbon	80	engine-trail.md
 0x001f0090	function	Trail_InitPreset	80	engine-trail.md

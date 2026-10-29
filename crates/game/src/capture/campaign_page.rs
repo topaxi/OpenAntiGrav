@@ -180,8 +180,6 @@ pub(super) fn campaign_page(
     title: &'static oag_title::Title,
     platform: oag_disc::Platform,
     tracks: &[oag_raceplay::catalogue::Track],
-    // The `Confirm`/`Back` fit-to-gap shrink's own text-width function.
-    measure: &dyn Fn(&str) -> f32,
     // Read-only, off whatever `<config dir>/oag/records.toml` already holds -
     // the same "read, never write" rule the `records` `--menu-page` and
     // `crate::race_capture::CaptureOptions::previous_best` both already follow, applied
@@ -236,7 +234,7 @@ pub(super) fn campaign_page(
     // No per-session tip rotation, the same gap `circuit_names` below has -
     // see `crate::campaign::static_footer_overlay`. Read before
     // `campaign.sprites` moves out below.
-    let footer_overlay = crate::campaign::static_footer_overlay(&campaign, &faces, measure);
+    let footer_overlay = crate::campaign::static_footer_overlay(&campaign, &faces);
     *sprites = campaign.sprites;
     let is_hd = crate::campaign::draws_hd_campaign(title);
     // A cell's own best saved medal, by `name` - see `records`' own doc
@@ -540,6 +538,7 @@ pub(super) fn campaign_page(
             }
         }
     };
+    let layers = crate::campaign::gate_glow(campaign.frontend_glow, layers);
     let split = layers.backdrop.len();
     let shot = campaign.flyers.and_then(|flyers| {
         let shows = match (flyer_name, selected_campaign) {

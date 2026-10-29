@@ -102,6 +102,8 @@ impl CellCursor {
 /// needs that tier's own cells - reading sixteen small XML files once on
 /// open is cheaper than reopening the disc archive on every confirm.
 pub(crate) struct CampaignStage {
+    /// Whether this title's front end blooms ([`oag_title::Campaign::frontend_glow`]).
+    pub(crate) frontend_glow: bool,
     grids: Vec<race_campaign::Grid>,
     grid_layout: oag_ui_screens::campaign::Layout,
     cell_layout: oag_ui_screens::campaign::Layout,
@@ -261,6 +263,7 @@ impl CampaignStage {
             Screen::Grid(model)
         };
         Self {
+            frontend_glow: title_ref.campaign.frontend_glow.is_some(),
             grids,
             grid_layout,
             cell_layout,
@@ -361,12 +364,11 @@ impl CampaignStage {
     pub(crate) fn nav_legend_draw(
         &self,
         faces: &oag_ui_screens::picker::FaceScales,
-        measure: &dyn Fn(&str) -> f32,
     ) -> Vec<oag_ui::frontend::Draw> {
         let Some(legend) = self.nav_legend.as_ref() else {
             return Vec::new();
         };
-        let mut draws = legend.draw(faces, measure);
+        let mut draws = legend.draw(faces);
         draws.extend(
             self.notice
                 .as_deref()

@@ -580,6 +580,54 @@ fn the_selector_is_centred_on_the_selected_hex_not_top_left_aligned() {
     assert_eq!(selector_rect, [60.0, 138.0, 42.0, 43.0]);
 }
 
+/// Pulse PS2's `Selector` sits at the selected hex's top-left minus (11,14): a PCSX2 GS dump of
+/// Grid Selection and Cell Selection draws its 56x56 quad there (`MenuSkin::selector_origin`). The
+/// same layout drawn with the PSP skin stays at (5,7), so dropping the skin field fails this.
+#[test]
+fn the_ps2_selector_sits_at_the_measured_ps2_offset_not_the_psp_one() {
+    let layout = grid_layout();
+    let model = GridSelection::new(vec![GridSummary {
+        name: "grid0".to_string(),
+        cell_count: 8,
+        max_points: 24,
+        required_points: 12,
+        gold_medals: 0,
+        points_earned: 0,
+        locked: false,
+        flyer_name: None,
+    }]);
+    let selector_at = |skin: &Skin| {
+        let layers = grid_draw_list(
+            &model,
+            &layout,
+            skin,
+            &Frame::default(),
+            &strings(),
+            None,
+            false,
+            &|_| placed32(),
+            &[],
+        );
+        layers
+            .body
+            .iter()
+            .find_map(|draw| match draw {
+                Draw::Sprite { rect, .. } if rect[2] == 42.0 && rect[3] == 43.0 => {
+                    Some([rect[0], rect[1]])
+                }
+                _ => None,
+            })
+            .expect("the Selector draws as a 42x43 sprite")
+    };
+    let ps2 = Skin::new(
+        oag_pulse::FRONT_END.menu_ps2.unwrap(),
+        oag_display::space::Space::PS2,
+        22.0,
+    );
+    assert_eq!(selector_at(&skin()), [60.0, 138.0]);
+    assert_eq!(selector_at(&ps2), [65.0 - 11.0, 145.0 - 14.0]);
+}
+
 #[test]
 fn targets_are_hidden_for_race_and_shown_as_a_time_for_time_trial() {
     let layout = cell_layout();
