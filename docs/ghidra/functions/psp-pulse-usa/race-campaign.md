@@ -1358,10 +1358,9 @@ So `Selector` is a continuous ~1s triangle wave between white and
 second, separate widget - **not authored anywhere in `CellMode_Definition.xml`**
 (only `Selector` itself is; `SelectorGlow` is created procedurally, the same
 way the generic `GridController` widget class itself is never authored as
-XML content either). `crate::campaign::draw` implements the colour half of
-this (`SELECTOR_TINT = 0xff33a6b9`, a static draw of one endpoint rather than
-the animation - the draw-list builder has no clock) and does not implement
-`SelectorGlow` at all, since this pass did not locate its own geometry/texture
+XML content either). `oag_ui_screens::campaign::pulse::SelectorPulse` implements the colour half
+(a model-owned clock, `tint()` = the triangle below; see `docs/ui/campaign-screens.md`, "The `Selector` pulse")
+and does not implement `SelectorGlow` at all, since this pass did not locate its own geometry/texture
 - drawing a halo shape this build never measured would be exactly the
 "plausible-looking stand-in" this project's CLAUDE.md warns against.
 `docs/ui/campaign-screens.md`'s own comparison names the gap.
@@ -2210,4 +2209,10 @@ and [`docs/ui/campaign-screens.md`](../../../ui/campaign-screens.md)'s "Where th
   while `grid0_2_2` (byte `+0xb9` still 1) beside a gold `grid0_3_2` keeps the cursor. Confidence 90 (shared slot,
   persistence), 85 (the glyph filter: one boot, one control). `CellCursor` in `campaign_stage.rs` now implements it
   (the screen's own lock predicate) - not the byte, which a first draft used and the gold-neighbour row refuted.
+
+**`pulse-selector-glow` lane, 2026-10-29: the halo is the bloom.** A GE dump of the original's Grid and Cell Selection shows one cursor
+quad (no second draw) whose texture holds no halo, and the frame's tail is `Bloom_Draw`; `Selector` stamps the stencil
+(ref `0x98` and `0xb5` on the two dumps) that the bloom reads. `SelectorGlow` stays dead code here. The same function's position
+update uses the literals `5.0` and `7.0`: the quad's top-left is the hex's top-left minus (5,7), measured `(60,138)` over `(65,145)`.
+See `docs/ui/campaign-screens.md`, "The halo is the front end's bloom".
 

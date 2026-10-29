@@ -1,8 +1,8 @@
 ---
 status: re-first
 titles: [pulse]
-updated: 2026-10-02
-summary: "SelectorGlow is not drawn: a phase-synced halo is seen on the original; refine against it"
+updated: 2026-10-29
+summary: "Pulse cursor halo is the front end bloom (GE dump), not a SelectorGlow image; a front-end bloom pass is open; Selector position fixed"
 ---
 
 # The campaign grid draws and does not launch
@@ -298,9 +298,8 @@ tinted by native code at runtime (`GridController_UpdateSelectorPulse`,
 `GridSelection_PopulateTiles`, `GridSelection_UpdatePageTransition` - the
 first and third renamed and documented this pass, `race-campaign.md`'s own
 new "The runtime tint layer" section has the full decompile). Fixed:
-`Selector` now draws the measured cyan endpoint of its own real pulse
-animation (the pulse itself is not implemented - no clock reaches the
-draw-list builder); `Grid Selection`'s tier hexes now draw the measured dim
+`Selector` now pulses on its own real animation (2026-10-29,
+`SelectorPulse`, a clock on the grid/cell model); `Grid Selection`'s tier hexes now draw the measured dim
 cyan-teal tint; the page arrows now grey out at their own boundary. **Left
 open, not guessed at**: `Cell Selection`'s own hex-outline tint (its XML
 routes through an unresolved `FEGlobals->CM_HEX_Outline` this project has
@@ -454,6 +453,14 @@ read), `crates/game/src/main/campaign_stage.rs` and
   independently settled by a different pass the same day; this file's bullet
   above still describes this build's own choice not to implement it, which
   stands unless whoever picks this thread up next decides otherwise.
+
+## Next Steps (2026-10-29 update, `pulse-selector-glow`)
+
+- **Front-end bloom on Pulse** (top item; supersedes every `SelectorGlow` item below): the halo is `Bloom_Draw` reading the stencil
+  that the footer tab (ref 0x40), card title (0x73) and `Selector` (0x98 grid / 0xb5 cell, varies per frame) stamp; see
+  `docs/ui/campaign-screens.md`, "The halo is the front end's bloom". Read first: the front end's bloom parameters, whether the
+  Selector ref follows the pulse, and the mask of every other stamped draw; then run `oag_post::bloom` over the front-end frame.
+  Cursor-box mean grey now 52.4 (grid), 65.1 (cell).
 
 ## Next Steps
 

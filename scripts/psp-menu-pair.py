@@ -73,6 +73,12 @@ def orange_share(png):
 
 
 #: Frame predicates for `pu:`; each takes the grabbed png.
+#: Seconds between state reads while waiting for a screen: the screen-entry clock (`original.seconds_since_entry`) is good to half of it.
+ENTRY_POLL = 0.03
+
+#: The `WALK` ids whose ours is drawn at the original's seconds since entry (`--menu-picker-seconds`): the pages with a measured clock law.
+CLOCKED = ("grid", "cell")
+
 PREDICATES = {"title": lambda png: orange_share(png) > 0.03}
 
 
@@ -82,6 +88,7 @@ class Rig:
         self.shots = shots
         self.title = title
         self.seen = {}
+        self.entered = None  # (state, time.monotonic() when `expect` saw it replace another): the screen-entry clock
         if self.dbg.is_stepping():
             self.dbg.call("cpu.resume")
             time.sleep(0.5)
@@ -98,11 +105,17 @@ class Rig:
     def expect(self, wanted, timeout=20.0):
         end = time.time() + timeout
         seen = None
+        last_other = None
         while time.time() < end:
             seen = self.state()
             if named(seen, wanted):
+                # entry lies between the last poll that saw another screen and this one: take the midpoint (+-ENTRY_POLL/2)
+                # Seen already on the first poll: the entry was not watched, so there is no clock (`None`), never "now".
+                now = time.monotonic()
+                self.entered = (seen, None if last_other is None else (last_other + now) / 2)
                 return
-            time.sleep(0.4)
+            last_other = time.monotonic()
+            time.sleep(ENTRY_POLL)
         sys.exit("STALLED: front end is in %r, not %r" % (seen, wanted))
 
     def back_to(self, wanted, timeout=30.0):
@@ -127,8 +140,13 @@ class Rig:
     def shot(self, name):
         wid, x, y, w, h = set_window(480, 272)
         dst = self.shots / (name + ".png")
+        before = time.monotonic()
         subprocess.run(["import", "-window", "root", "-crop", "%dx%d+%d+%d" % (w, h, x, y), "+repage", str(dst)], check=True)
-        self.seen[name] = {"png": dst, "at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"), "state": self.state()}
+        after = time.monotonic()
+        state = self.state()
+        # The grab takes `after - before`; the frame is read about the middle of it. Only when the entry was watched and the screen is still it.
+        since = (before + after) / 2 - self.entered[1] if self.entered and self.entered[0] == state and self.entered[1] is not None else None
+        self.seen[name] = {"png": dst, "at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"), "state": state, "since_entry": since}
         return dst
 
     def boot(self, timeout=240.0):
@@ -157,7 +175,8 @@ class Rig:
 
     def run(self, plan):
         """Plan steps: boot, wait:S, key:BUTTON[*N], pu:BUTTON:PREDICATE, st:STATE, back:STATE (Pulse state wait), shot:NAME."""
-        for item in filter(None, plan.split(",")):
+        steps = list(filter(None, plan.split(",")))
+        for at, item in enumerate(steps):
             kind, _, rest = item.partition(":")
             if kind == "boot":
                 self.boot()
@@ -165,7 +184,9 @@ class Rig:
                 time.sleep(float(rest))
             elif kind == "key":
                 button, _, n = rest.partition("*")
-                self.tap(button, int(n or 1))
+                # A key straight before `st:` skips the tap's 0.7 s settle so `expect` sees the screen change itself (the entry clock).
+                watched = steps[at + 1:at + 2] and steps[at + 1].startswith("st:") and int(n or 1) == 1
+                self.tap(button, 1, wait=0.0) if watched else self.tap(button, int(n or 1))
             elif kind == "pu":
                 button, _, pred = rest.partition(":")
                 self.press_until(button, pred)
@@ -183,8 +204,8 @@ class Rig:
 #: One walk per title, from `Main Menu` (Pulse; Pure is walked from its own main page): `shot:ID` photographs the screen `WALK` names.
 PULSE_PLAN = ",".join([
     "back:Main Menu", "wait:2", "shot:main",
-    "key:cross", "wait:2", "st:Grid Selection", "wait:3", "shot:grid",
-    "key:cross", "wait:2", "st:Cell Selection", "wait:3", "shot:cell", "back:Main Menu", "wait:1",
+    "key:cross", "st:Grid Selection", "wait:3", "shot:grid",
+    "key:cross", "st:Cell Selection", "wait:3", "shot:cell", "back:Main Menu", "wait:1",
     "key:down", "key:cross", "wait:2", "st:Racebox", "wait:2", "shot:racebox",
     "key:cross", "wait:2", "st:Single Player", "wait:2", "shot:single",
     "key:cross", "wait:3", "st:Track Creation", "wait:2", "shot:track",
@@ -287,6 +308,8 @@ def build_pairs(args, seen, out, plat, walk):
         pair.rec["original"]["captured_at"] = shot["at"]
         pair.rec["original"]["capture_path"] = "walked by pad from Main Menu (no savestate)"
         pair.rec["original"]["selection_basis"] = "read by eye from the frame; the cursor is where the walk left it"
+        if shot.get("since_entry") is not None:
+            pair.rec["original"]["seconds_since_entry"] = {"value": round(shot["since_entry"], 3), "basis": "measured: wall clock from the poll that saw the state name change (+-%.2f s) to the middle of the frame grab; PPSSPP runs at 60 fps, its pulse period reads 1 s on this clock" % (ENTRY_POLL / 2)}
         pair.rec["original"]["screen_basis"] = ("the game's own state machine (0x08b31784+0x18c): %r" % shot["state"]) if shot["state"] else "read by eye from the frame (no recovered state name for this title)"
         prepare_profile(plat, profile, args.campaign_title, args.difficulty, item.get("race"))
         cp.build(pair, args, "menu", "cold_boot", None, {"value": None, "unit": None, "basis": "not applicable: a menu is a still"})
@@ -294,7 +317,8 @@ def build_pairs(args, seen, out, plat, walk):
             cm.menu_pair(pair, theirs_png=shot["png"], oag_game=args.oag_game, image=args.source, page=item["page"], drawn_from="xml",
                          xml_file=item["xml"], screen_seen=shot["state"] or item["screen"], screen_wanted=item["screen"], profile_dir=profile,
                          size=ce.size_text(plat), front_end_style="the disc's own", language="English", original_language="English",
-                         selection=item["selection"], route=item.get("route"), screen_source="PPSSPP, the front end's state name" if shot["state"] else "read by eye")
+                         selection=item["selection"], route=item.get("route"),
+                         extra_args=("--menu-picker-seconds", "%.3f" % shot["since_entry"]) if item["id"] in CLOCKED and shot.get("since_entry") is not None else (), screen_source="PPSSPP, the front end's state name" if shot["state"] else "read by eye")
             pair.finish()
         except SystemExit as exc:
             if exc.code == 3:

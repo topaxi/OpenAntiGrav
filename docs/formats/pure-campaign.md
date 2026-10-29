@@ -104,13 +104,14 @@ height), and `Team Selection` lists eight teams (Feisar to Harimau) with its fou
 **This build lists what the profile has opened and nothing else** (`Chain::view`), draws the rows
 on the skin as Pure's own menu pages are drawn (the same frame, title and selected ink,
 `oag_ui_screens::pure_chain::draw_list`), draws the right-hand art the disc authors for the focused row
-([below](#the-art-on-the-right-hand-side)) and does not draw the help line. Chosen, not measured: the medal word and its inks at a row's right
+([below](#the-art-on-the-right-hand-side)) and draws the help line settled, not typed in (the disc's `Text->SCREEN->ITEM->VALUE` string, [`compare-page.md`](../tools/compare-page.md), "Menu pairs: Wipeout Pulse and Wipeout Pure"). Chosen, not measured: the medal word and its inks at a row's right
 edge, the context line (`SINGLE RACE - VENOM - ALPHA`) between the title and the first row,
 and (not captured) what `Zone Track Selection` hides on a fresh profile: Zone 2, 3 and 4
 are gated by medals and are hidden by the same rule. `Team Selection` is the race box's own
 screen (`oag_ui_screens::picker`), with the disc's two gated teams dropped until they open;
-a fresh profile there lists 16 teams here against the original's 8, because the other
-eight are gated in the original's code, not in `Definition.xml` (unread).
+a fresh profile there lists the original's eight (Feisar to Harimau), the roster's ten less `Zone` and `Medievil`
+(`pure_list::locked_teams_on`, shared by the live screen and `--menu-page ship-select`; 2026-10-29). The 16 and 17 teams the pair once showed were
+the seven DLC teams of the maintainer's `data/dlc` plus those two gated ones, not a gate in the original's code.
 
 **The modes.** Arcade is a single race, Tournament a tournament, Time Trial the time
 trial and Zone a Zone event: each ends in one `Cell` (the tables above) that the
@@ -163,7 +164,8 @@ do; the tests pin the authored positions on both pressings.
 and `Stats` roles, which both resolve to `LTe50325.fnt` (`PI000`'s `<Font>` blocks); this build
 draws them in the menu face, so they are larger than the original's and crowd at the panel's
 columns. The renderer's third glyph slot is unused on Pure and is where that face goes; the
-same face is the `Confirm`/`Back` legend's, whose `Back` reads `BACK BUTTON` here.
+same face is the `Confirm`/`Back` legend's. Its `Back` glyph resolves since 2026-10-29: the skin's `Back button` is the string table's `Back Button`
+(`Ϊ`, the triangle), found case-folded; the legend used to draw the id as `BACK BUTTON` over `Back`.
 
 ## The class gate
 

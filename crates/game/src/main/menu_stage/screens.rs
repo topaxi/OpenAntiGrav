@@ -62,7 +62,13 @@ impl MenuStage {
             .ticker
             .is_some()
             .then(|| self.footer_overlay(Vec::new(), ticker_tips));
-        let (list, ticker_clip) = footer::append(layers.flatten(), footer);
+        let (mut list, ticker_clip) = footer::append(layers.flatten(), footer);
+        if let Some(open) = self.pure_chain.as_ref()
+            && let Some(row) = open.choice().selected_row()
+            && !frozen_race
+        {
+            list.extend(self.description_overlay(&row.description));
+        }
         self.renderer.render_with(
             wgpu::LoadOp::Clear(wgpu::Color::BLACK),
             &gpu.device,

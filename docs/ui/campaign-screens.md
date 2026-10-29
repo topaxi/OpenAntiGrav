@@ -4556,3 +4556,60 @@ emulator), so flagged for the lead rather than scoped away.
 right column 0.35 to 0.625 s, `EnableTransition` 0.3/0.5), not curves, and the
 page-in is a vertical wipe (`transitiontype="vwipe"`) on the emblems; nothing here
 plays them. A tween measured off `trans-campsel-original.png` remains the next step.
+
+### The `Selector` pulse (2026-10-29, `pulse-menu-clock`)
+
+`oag_ui_screens::campaign::pulse::SelectorPulse` is a seconds clock owned by `GridSelection` and `CellSelection`
+(`pulse()`/`pulse_mut()`), ticked off the fixed tick by `CampaignStage::tick_ticker` and set by `--menu-picker-seconds`
+for `--menu-page grid-select|cell-select`. `tint()` is the law of `GridController_UpdateSelectorPulse` (`0x088a5700`,
+confidence 85): a triangle wave from `0xff33a6b9` to white, phase `elapsed * 2.0` wrapped at `2.0`.
+
+- **Period 1.00 s, measured** (confidence 80): 24 PPSSPP frames 83 ms apart of `Grid Selection`'s selected hex, red channel
+  of the ring: minima at t = 0.08 s and 1.08 s, plateau at white 0.50-0.75 s and 1.50-1.67 s (the original's `SelectorGlow`
+  saturates the plateau).
+- **Entry hold 0.35 s, fitted, not read** (confidence 40): frames 0.04-0.9 s after `Grid Selection` replaced `Main Menu` (3 entries
+  x 14 frames, `scripts/psp-menu-pair.py`'s entry clock) read cyan until 0.28-0.40 s, then rise to white by 0.65-0.9 s.
+  The entrance animation that holds it is not located. The spread between entries is about +-0.12 s (one entry rose 0.2 s later
+  than the other two), so no constant matches a pair better than that.
+- **Wall clock stands for game time**: PPSSPP reports `gpu.stats.get` 60 fps actual and 59.94 vblanks/s, and the game keeps no
+  frame counter (it measures a delta per frame, `main-loop.md`). Entry hitches are the likely source of the spread.
+- The breakpoint on `0x088a5700` never fired in 20 s on a settled `Grid Selection` (armed, listed, CPU running): whether the
+  function runs per frame or sets up a looping animation is **not established**; the law is the decompile's, the period is
+  confirmed by pixels.
+- **`SelectorGlow` is still undrawn**, and it dominates the cursor-hex box: the original reads white-filled with a halo at the
+  peak, ours a thin ring. Controlled score on the same `theirs.png` (mean grey difference in the cursor-hex box, `main`'s static
+  cyan against the pulse at the recorded 2.07 s): grid 66.3 to 59.3, cell 77.2 to 69.2; the best ours-seconds on a sweep gives
+  56.6 and 65.1, so the clock closes about two thirds of what the pulse alone can, the rest is the glow and a ~0.2 s phase miss.
+
+#### The halo is the front end's bloom, not a `SelectorGlow` image (2026-10-29, `pulse-selector-glow`)
+
+A GE dump (`scripts/psp-ge-dump.py dump`, PPSSPP software renderer, settled `Grid Selection` and `Cell Selection`) lists every
+draw of the original's frame. **There is no second draw for the cursor**: one quad, 42x43, `pulse_assets.mip` uv `(114,75)`,
+alpha blend (`blendmode` 50), and the sprite's own alpha (decoded from the `.mip`: 15 alpha levels, all of them the ring) holds no
+halo pixel. The halo the pair shows (soft, 5 to 12 px wide, bright inside and outside the ring) is the frame's bloom: the
+dump ends with the `Bloom_Draw` passes (a 1,320-vertex blur into a second buffer, an 8-vertex composite). `SelectorGlow`'s
+lookup stays dead on this screen (confidence 85; the string has one xref, no authored widget).
+
+- **What feeds the bloom is the stencil.** Three prims of the front end's frame write it (`stenciltestenable` 1, `stencilop`
+  zpass REPLACE): the footer's tab (ref `0x40`), the card title (ref `0x73`) and `Selector`. `Selector`'s ref differs per frame:
+  `0x98` (152) on the Grid Selection dump, `0xb5` (181) on the Cell Selection one, so the glow strength follows something that
+  moves (the pulse is the candidate; **not established**, two samples). The mask rules are `docs/rendering/glow-mask.md`'s
+  (alpha is the stencil, blending never writes it).
+- **Not drawn in ours.** Ours has no bloom on the Pulse front end. Drawing it is a front-end bloom pass over a mask only these
+  measured stamps write, using `oag_post::bloom`'s constants; that is a lane of its own (the mask values of the other stamped
+  draws, the front end's bloom parameters and where the pass sits in the front-end frame are unread). Drawing a halo shape
+  instead would be the stand-in the project forbids. Confidence 80 on the mechanism, 40 on the ref law.
+- **Position, measured: `Selector`'s top-left is the hex's top-left minus (5,7).** The same function's literals `5.0` and `7.0`
+  (`GridController_UpdateSelectorPulse`, confidence 85). GE dumps: Grid Selection quad `(60,138)` over the hex `(65,145)`,
+  Cell Selection `(120,90)` over `(125,97)`. Plain centring of the 42x43 canvas (this build before 2026-10-29) put it at `(60,139.5)`,
+  1.5 px low; the ring is 32x28 at `(5,9)` in the canvas, so it now lands on the hex's 32 px width and 2 px down inside its height.
+  `oag_ui_screens::campaign::draw::SELECTOR_ORIGIN`. Edge alignment (gradient-magnitude correlation of the 48x48 window around the
+  cursor, parabolic sub-pixel peak, `Selector`'s ring against the original's): ours had to move `dx 0.00, dy -1.33` (grid) and
+  `dx 0.00, dy -1.17` (cell) before, `0.00, 0.00` on both after. **The maintainer's 1-2 px horizontal offset was not
+  reproduced**: the columns agree to well under a pixel before and after; the vertical 1.2 to 1.3 px was the whole error.
+- **Score, controlled** (same `theirs.png` as the previous lane, ours at the recorded 2.07 s, mean grey difference in the
+  cursor-hex box): grid 59.33 to 52.36, cell 69.25 to 65.05. What remains is the bloom (the original is white-filled with a
+  halo at this phase, ours a thin cyan ring).
+- **2048/Omega**: not applicable (this widget routine is Pulse's `GridController`; HD's `Selector` keeps `centred_selector_draw`,
+  unmeasured). Checked, differs by lack of measurement, not wired.
+

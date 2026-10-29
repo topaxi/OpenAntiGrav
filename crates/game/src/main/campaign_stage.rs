@@ -346,6 +346,11 @@ impl CampaignStage {
     /// sibling clock for a menu row's overflowing value) is driven from.
     pub(crate) fn tick_ticker(&mut self, dt: f32) {
         self.ticker_elapsed += dt.max(0.0);
+        match &mut self.screen {
+            Screen::Grid(model) => model.pulse_mut().tick(dt),
+            Screen::Cell { model, .. } => model.pulse_mut().tick(dt),
+            Screen::Selection(_) => {}
+        }
     }
 
     /// The `Confirm`/`Back` legend's own draw list, or empty when this

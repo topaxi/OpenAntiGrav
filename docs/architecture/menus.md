@@ -129,6 +129,7 @@ mechanism is `oag_game::unlock::Gate`; `--unlock-all` lifts it and is ours, a
 developer and capture escape. The original's mode-gated per-track byte
 (`+0x16e`) is not modelled and stays open. Every other title's race box still
 offers everything: HD and Omega are not wired, and Pure's own gates (17 `<Unlock>` rows of other shapes) gate its SINGLE PLAYER chain and its team picker, not the race box ([Pure's SINGLE PLAYER](#pures-single-player-is-the-discs-chain)).
+A fresh Pure profile's Team Selection holds eight teams: the roster's ten less `Zone` and `Medievil` (`oag_game::campaign::pure_list::locked_teams_on`, the live screen and the `--menu-page` still alike). A list longer than the original's on a fresh profile with `unlock_everything = false` is a mounted DLC pack (`data/dlc` is searched from the working directory unless `$OAG_DLC` or `--dlc` says otherwise), not a missing gate: Pulse showed 11 circuits and 12 craft that way, Pure 17 teams.
 
 **Craft variants (Pulse): gated, since 2026-10-02.** Each `PI_ModelSkin` and
 `PI_TeamModel` carries an own-team and a `Team="any"` `Exclusive` loyalty row;

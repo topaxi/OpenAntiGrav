@@ -47,6 +47,10 @@ pub struct Row {
     pub status_text: String,
     /// The caller's own index for this row, handed back on confirm.
     pub tag: usize,
+    /// The disc's description of this row (`Text->SCREEN->ITEM->VALUE` in its
+    /// string table), typed along the screen's bottom while the row is
+    /// selected. Empty where the disc authors none.
+    pub description: String,
 }
 
 impl Row {
@@ -63,7 +67,15 @@ impl Row {
             status,
             status_text,
             tag,
+            description: String::new(),
         }
+    }
+
+    /// This row with `description` as its bottom line.
+    #[must_use]
+    pub fn described(mut self, description: String) -> Self {
+        self.description = description;
+        self
     }
 }
 

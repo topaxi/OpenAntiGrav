@@ -88,7 +88,11 @@ def ours_menu_command(oag_game, image, plat, page, size, route=None):
 def render_ours(oag_game, image, plat, page, out_png, profile_dir, size, extra_args=(), route=None):
     """Render ours' page into `out_png`; returns the command that did. Runs under the pair's private XDG profile."""
     cmd = ours_menu_command(oag_game, image, plat, page, size, route) + list(extra_args) + ["--screenshot", str(out_png)]
-    env = dict(os.environ, **ce.ours_env(profile_dir), RUST_LOG="warn")
+    # The original's fresh profile holds no downloaded pack: an empty `$OAG_DLC` keeps the maintainer's `data/dlc` circuits and teams
+    # out of ours' lists (they made Pulse's Track Select 11 circuits, not 3, and Ship Select 12 teams, not 8).
+    no_dlc = Path(profile_dir) / "no-dlc"
+    no_dlc.mkdir(parents=True, exist_ok=True)
+    env = dict(os.environ, **ce.ours_env(profile_dir), RUST_LOG="warn", OAG_DLC=str(no_dlc))
     log("+ " + " ".join(cmd[2:]))
     subprocess.run(cmd, check=True, env=env, stdout=subprocess.DEVNULL)
     return cmd

@@ -104,11 +104,11 @@ pub fn grid_draw_list(
         };
         if image.name.as_deref() == Some("Selector") {
             if let Some(hex) = hex_rect(screen, slot, 0, sprites) {
-                out.push(centred_selector_tinted_draw(
+                out.push(selector_tinted_draw(
                     image,
                     placed,
                     hex,
-                    SELECTOR_TINT,
+                    model.pulse().tint(),
                 ));
             }
             continue;
@@ -281,11 +281,11 @@ pub fn cell_draw_list(
             && let Some((sx, sy)) = selected_coords
             && let Some(hex) = hex_rect(screen, sx as usize, sy as usize, sprites)
         {
-            out.push(centred_selector_tinted_draw(
+            out.push(selector_tinted_draw(
                 image,
                 placed,
                 hex,
-                SELECTOR_TINT,
+                model.pulse().tint(),
             ));
             continue;
         }
@@ -688,41 +688,34 @@ pub(super) fn centred_selector_draw(image: &Image, placed: Placed, hex: [f32; 4]
 
 /// [`centred_selector_draw`], but with the tint overridden rather than taken
 /// from `image.color` - `Pulse`'s own `grid_draw_list`/`cell_draw_list` want
-/// [`SELECTOR_TINT`] here, but [`super::hd::hd_grid_draw_list`] still calls
+/// [`super::pulse::SelectorPulse::tint`] here, but [`super::hd::hd_grid_draw_list`] still calls
 /// [`centred_selector_draw`] itself unchanged, so that function's own
 /// signature (and HD's own, unmeasured, selected-tile look) is left alone
 /// rather than threading a tint parameter through a call this crate does not
 /// own the other end of.
-pub(super) fn centred_selector_tinted_draw(
+pub(super) fn selector_tinted_draw(
     image: &Image,
     placed: Placed,
     hex: [f32; 4],
     argb: u32,
 ) -> Draw {
-    let width = image.width.unwrap_or(placed.width as f32);
-    let height = image.height.unwrap_or(placed.height as f32);
-    let x = hex[0] + (hex[2] - width) * 0.5;
-    let y = hex[1] + (hex[3] - height) * 0.5;
-    sprite_draw(image, placed, x, y, argb)
+    sprite_draw(
+        image,
+        placed,
+        hex[0] + SELECTOR_ORIGIN[0],
+        hex[1] + SELECTOR_ORIGIN[1],
+        argb,
+    )
 }
 
-/// `Selector`'s own runtime colour, one of two endpoints a shared,
-/// non-PI001 widget routine (`FUN_088a5700`, xref'd off the `Selector`/
-/// `SelectorGlow` widget-name strings at `0x08a7f130`/`0x08a7f178`) pulses
-/// the selected tile's outline between on a continuous ~1s triangle wave:
-/// `lerp(t, 0xff33a6b9, 0xffffffff)` one half of the cycle and the reverse
-/// the other half - `CellMode_Definition.xml` itself only authors `Selector`
-/// at a fixed `i="0xffffffff"` (multiply-neutral), so the pulse is entirely
-/// this routine's doing. Measured (the colour constant is a literal
-/// decompiled off `0x088a5700`, confidence 85), but the animation itself is
-/// **not implemented** - `grid_draw_list`/`cell_draw_list` build a draw list
-/// with no clock, so this always draws the cyan endpoint rather than
-/// oscillating. Picked over the white endpoint because it is what
-/// `data/reference/psp-campaign-screens/grid-selection-page1-grid0-unlocked.png`
-/// (this build's own comparison frame) happens to show; a capture taken at a
-/// different phase would show closer to white instead. See
-/// `docs/ui/campaign-screens.md`.
-const SELECTOR_TINT: u32 = 0xff33_a6b9;
+/// `Selector`'s top-left relative to the selected hex's own top-left on Pulse PSP,
+/// `GridController_UpdateSelectorPulse` (`0x088a5700`): the literals `5.0` and `7.0` in
+/// its position update. **Measured**, confidence 85: a GE dump of Grid Selection draws the
+/// 42x43 quad at (60,138) over the hex at (65,145), Cell Selection at (120,90) over
+/// (125,97). The sprite's visible ring is 32x28 at (5,9) in its canvas, so
+/// this lands it on the hex's own 32 px width and 2 px down inside its 32 px height; plain
+/// centring of the canvas sat 1.5 px too low.
+pub(super) const SELECTOR_ORIGIN: [f32; 2] = [-5.0, -7.0];
 
 /// `Outline_x_y`'s own runtime tint on `Grid Selection` - **not** on `Cell
 /// Selection`, whose own `CellSelection_PopulateGrid` never calls
