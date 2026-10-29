@@ -524,11 +524,26 @@ pub const HOST_PAD_LIFT: f32 = 0.3;
 type PlacedBuild =
     fn(&str, &[u8], Option<&mesh::Ps2TextureSet>, &[[f32; 16]]) -> anyhow::Result<Model>;
 
+/// How many distinct pad payloads of one class `blob` authors.
+fn distinct_pads(blob: &[u8], class: fn(oag_vex::vex::classes::Classes) -> Option<u32>) -> usize {
+    let (Ok(classes), Ok(nodes)) = (vex::classes_of(blob), vex::nodes(blob)) else {
+        return 0;
+    };
+    let id = class(classes);
+    nodes
+        .iter()
+        .filter(|n| id.is_some() && Some(n.class_id) == id)
+        .filter_map(|n| blob.get(n.payload()))
+        .collect::<std::collections::BTreeSet<_>>()
+        .len()
+}
+
 /// Which kind of pad `host_pads` is giving the host's art to.
 #[derive(Clone, Copy)]
 struct PadKind {
     plate: PadPlate,
     what: &'static str,
+    class: fn(oag_vex::vex::classes::Classes) -> Option<u32>,
     build: PlacedBuild,
 }
 
@@ -564,6 +579,7 @@ pub fn host_pads(
             PadKind {
                 plate: PadPlate::Speedup,
                 what: "speed",
+                class: |c| c.speedup_pad,
                 build: mesh::build_pads_placed,
             },
             speedup,
@@ -572,6 +588,7 @@ pub fn host_pads(
             PadKind {
                 plate: PadPlate::Weapon,
                 what: "weapon",
+                class: |c| c.weapon_pad,
                 build: mesh::build_weapon_pads_placed,
             },
             weapon,
@@ -651,19 +668,26 @@ pub fn host_pads(
                 kind.what, kind.what
             )),
             Ok(m) => {
+                let shapes = distinct_pads(blob, kind.class);
                 report.push(format!(
                     "host {} pads: {donor}'s first {} pad on each of the file's {} volume(s), {} \
-                     triangle(s), {} texture(s) (chosen: the file names no pad art; lifted {HOST_PAD_LIFT} above the volume)",
+                     triangle(s), {} texture(s) (chosen: the file names no pad art; lifted {HOST_PAD_LIFT} above the volume){}",
                     kind.what,
                     kind.what,
                     volumes.len(),
                     m.indices.len() / 3,
-                    m.textures.iter().filter(|t| t.is_some()).count()
+                    m.textures.iter().filter(|t| t.is_some()).count(),
+                    if shapes > 1 {
+                        format!("; the donor has {shapes} distinct {} pads, the first node's is drawn", kind.what)
+                    } else {
+                        String::new()
+                    }
                 ));
                 *slot = Some(m);
             }
             Err(e) => report.push(format!(
-                "host {} pads: {donor}: {e}; no {} pad is drawn",
+                "host {} pads: {donor}: {e:#}; no {} pad is drawn (a pad is read out of a `.vex`'s own \
+                 geometry; a circuit whose pads are in a `.rcsmodel` is not wired)",
                 kind.what, kind.what
             )),
         }

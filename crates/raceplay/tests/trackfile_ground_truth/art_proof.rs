@@ -568,16 +568,81 @@ fn host_pads_are_the_circuits(
             return Err(format!("first pad vertex {i}: {g:?} against {w:?}"));
         }
     }
-    for d in got
-        .draws
-        .iter()
-        .chain(&got.alpha_tested_draws)
-        .chain(&got.transparent_draws)
-    {
-        if let Some(slot) = d.texture {
-            match (&want.textures[slot], &got.textures[slot]) {
-                (Some(a), Some(b)) if same_texels(a, b) => {}
-                _ => return Err(format!("texture {slot} differs")),
+    // The first pad's draws, list by list: the circuit's draws of its first pad
+    // node against the host's draws whose first vertex lies in its first range.
+    fn lists(m: &Model) -> [&Vec<DrawCall>; 3] {
+        [&m.draws, &m.alpha_tested_draws, &m.transparent_draws]
+    }
+    let first_node = lists(want)
+        .into_iter()
+        .flatten()
+        .filter_map(|d| d.node)
+        .min()
+        .ok_or("the circuit's pads have no draw")?;
+    let range = got.node_vertex_ranges[0].clone();
+    for (list, (wl, gl)) in lists(want).into_iter().zip(lists(got)).enumerate() {
+        let w: Vec<&DrawCall> = wl.iter().filter(|d| d.node == Some(first_node)).collect();
+        let g: Vec<&DrawCall> = gl
+            .iter()
+            .filter(|d| range.contains(&got.indices[d.range.start as usize]))
+            .collect();
+        if w.len() != g.len() {
+            return Err(format!(
+                "list {list}: {} draws against {}",
+                g.len(),
+                w.len()
+            ));
+        }
+        for (n, (w, g)) in w.iter().zip(&g).enumerate() {
+            let key = |d: &DrawCall| {
+                (
+                    d.texture,
+                    d.blend,
+                    d.culled,
+                    d.layer,
+                    d.alpha_test_ref,
+                    d.range.len(),
+                    d.moving,
+                )
+            };
+            if key(w) != key(g) {
+                return Err(format!(
+                    "list {list} draw {n}: {:?} against {:?}",
+                    key(g),
+                    key(w)
+                ));
+            }
+        }
+        for (w, g) in w.iter().zip(&g) {
+            if let Some(slot) = g.texture {
+                match (&want.textures[slot], &got.textures[slot]) {
+                    (Some(a), Some(b)) if same_texels(a, b) => {}
+                    _ => return Err(format!("texture {slot} differs")),
+                }
+            }
+            // Rebased triangles, and the texture animation the draw's vertices name.
+            let rebase = |m: &Model, d: &DrawCall, first: u32| -> Vec<u32> {
+                m.indices[d.range.start as usize..d.range.end as usize]
+                    .iter()
+                    .map(|i| i - first)
+                    .collect()
+            };
+            let (wf, gf) = (
+                want.node_vertex_ranges[0].start,
+                got.node_vertex_ranges[0].start,
+            );
+            if rebase(want, w, wf) != rebase(got, g, gf) {
+                return Err("a draw's triangles differ".into());
+            }
+            let track = |m: &Model, v: &GpuVertex| {
+                (v.anim as usize)
+                    .checked_sub(1)
+                    .map(|at| format!("{:?}", m.anim_tracks[at]))
+            };
+            let first =
+                |m: &Model, d: &DrawCall| m.vertices[m.indices[d.range.start as usize] as usize];
+            if track(want, &first(want, w)) != track(got, &first(got, g)) {
+                return Err("a draw's texture animation differs".into());
             }
         }
     }
