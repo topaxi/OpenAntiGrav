@@ -144,6 +144,7 @@ impl Session {
     /// a rectangle. A stage that is not the front end leaves the menus where
     /// they are, which is what makes this safe to call from the frame loop.
     pub(crate) fn open_menus(&mut self) -> Result<()> {
+        self.restore_campaign_home();
         let shell = self
             .shell
             .clone()
@@ -762,7 +763,26 @@ impl Session {
             menu::MenuEvent::Fired(menu::Action::RenamePilot) => self.rename_pilot(),
             menu::MenuEvent::Fired(menu::Action::DeletePilot) => self.delete_pilot(),
             // RACE CAMPAIGN - see `session::campaign`.
-            menu::MenuEvent::Fired(menu::Action::OpenCampaign) => self.open_campaign(),
+            menu::MenuEvent::Fired(menu::Action::OpenCampaign) => {
+                self.custom_campaign = None;
+                self.open_campaign();
+            }
+            // A row of the campaign picker: the row's id names the mod campaign.
+            menu::MenuEvent::Fired(menu::Action::OpenCustomCampaign) => {
+                let key = match &self.stage {
+                    Stage::Menu(stage) => stage
+                        .menu
+                        .page()
+                        .meta
+                        .get(stage.menu.selected())
+                        .and_then(|meta| meta.id.as_deref())
+                        .and_then(|id| id.strip_prefix(menu::CUSTOM_CAMPAIGN_ROW))
+                        .map(str::to_string),
+                    _ => None,
+                };
+                self.custom_campaign = key;
+                self.open_campaign();
+            }
             // Backing out of the root page used to always mean the same thing
             // as QUIT: there was nothing behind the menus to go back to. Now
             // there can be - a race `escape` parked rather than discarded -
@@ -820,6 +840,7 @@ impl Session {
         // launch can never inherit a stale cell whatever path reached this
         // function.
         self.campaign_cell = None;
+        self.campaign_custom = None;
         self.campaign_difficulty = None;
         self.campaign_ai_skill_scale = None;
         let Some(mut race_options) = self.race_options.take() else {

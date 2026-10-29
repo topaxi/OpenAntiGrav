@@ -85,6 +85,7 @@ out to be wrong.
 | [0074](0074-curated-screenshots-may-be-published-no-content-may-be-shipped.md) | Curated screenshots may be published, game content may not be shipped | Accepted (2026-10-20); adds a publishing permission beside ADR-0006, which stands |
 | [0075](0075-dynamic-resolution-sheds-the-blur-gather-before-pixels.md) | Dynamic resolution sheds the blur gather before pixels | **Proposed** (2026-10-25); a second, discrete controller output beside ADR-0040/0042/0044/0073, which stand |
 | [0076](0076-a-track-file-carries-its-art-as-an-optional-section.md) | A track file carries its art as an optional section | **Proposed** |
+| [0077](0077-a-custom-campaign-compiles-to-the-titles-own-grid.md) | A custom campaign is a mod file that compiles to the title's own grid | Accepted |
 
 ## Format
 

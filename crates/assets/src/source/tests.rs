@@ -174,6 +174,7 @@ const TITLE: &Title = &Title {
         fury_card_gain: None,
         grid_card_pose: None,
         origin: oag_title::Origin::Chosen,
+        custom_campaigns: false,
     },
     pressings: None,
     pre_race: None,

@@ -139,6 +139,18 @@ impl Container {
         }
     }
 
+    /// The file `name` on disk, for a folder mod; `None` for a zip, a
+    /// `.oagmod` or an embedded mod, whose files are not on disk, and for a
+    /// name that escapes the mod.
+    #[must_use]
+    pub fn local_path(&self, name: &str) -> Option<PathBuf> {
+        let name = clean(&self.label, name).ok()?;
+        match &self.kind {
+            Kind::Folder(root) => Some(root.join(name)),
+            Kind::Zip { .. } | Kind::Memory(_) => None,
+        }
+    }
+
     /// The path, or the name of an embedded mod.
     #[must_use]
     pub fn label(&self) -> String {

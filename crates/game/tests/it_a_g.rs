@@ -22,6 +22,7 @@ mod campaign_medal;
 mod campaign_pointer_ground_truth;
 mod cockpit_hit_ground_truth;
 mod countdown_voice_ground_truth;
+mod custom_campaign_ground_truth;
 mod dlc_ground_truth;
 mod drive_ground_truth;
 mod endrace_split_ground_truth;

@@ -274,6 +274,8 @@ OAG_LOADING_COUNTS_CACHED_SUFFIX = { text = ", {cached} bereits im Cache", human
 OAG_LOADING_COUNTS_FAILED_SUFFIX = { text = ", {failed} fehlgeschlagen", human = false }
 OAG_CAMPAIGN_MODE_UNSUPPORTED = { text = "DER MODUS DIESES EVENTS KANN IN DIESER VERSION NOCH NICHT GEFAHREN WERDEN", human = false }
 OAG_CAMPAIGN_TRACK_UNAVAILABLE = { text = "DIE STRECKE DIESES EVENTS IST NICHT AUF DIESER DISC", human = false }
+OAG_CAMPAIGN_EVENT_UNAVAILABLE = { text = "DIESES EVENT KANN MIT DEM, WAS HIER VORHANDEN IST, NICHT GEFAHREN WERDEN", human = false }
+OAG_MENU_CAMPAIGN_PICKER = { text = "KAMPAGNEN", human = false }
 OAG_MENU_SINGLE_PLAYER = { text = "EINZELSPIELER", human = false }
 OAG_MENU_SINGLE_PLAYER_SUBTITLE = { text = "Arcade, Turniere, Zeitfahren und Zone, Klasse für Klasse", human = false }
 OAG_MEDAL_GOLD = { text = "GOLD", human = false }

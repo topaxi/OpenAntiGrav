@@ -393,6 +393,9 @@ ids = [
     # Cell Selection's refusal lines, new with them; no translation pass yet.
     "OAG_CAMPAIGN_MODE_UNSUPPORTED",
     "OAG_CAMPAIGN_TRACK_UNAVAILABLE",
+    # Mod campaigns (ADR-0077), new 2026-10-29; no translation pass yet.
+    "OAG_CAMPAIGN_EVENT_UNAVAILABLE",
+    "OAG_MENU_CAMPAIGN_PICKER",
     # The line under a split race's pause, new 2026-10-14; no translation pass yet.
     "OAG_PAUSE_OWNED",
     "OAG_PAUSE_OPEN",

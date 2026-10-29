@@ -102,6 +102,9 @@ pub(crate) struct RaceStage {
     /// `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "how a
     /// campaign event launches". Read by [`RaceStage::observation`] alone.
     pub(crate) campaign_cell: Option<oag_tables::race_campaign::Cell>,
+    /// A mod campaign event's extras, drained from `Session::campaign_custom`
+    /// with [`Self::campaign_cell`]: where its medal is kept, and its AI.
+    pub(crate) campaign_custom: Option<oag_game::campaign::custom::Launch>,
     /// [`Self::campaign_cell`]'s own difficulty rung - `None` on every
     /// non-campaign launch, same as that field, and also `None` on a
     /// campaign cell with no rung to run at, per

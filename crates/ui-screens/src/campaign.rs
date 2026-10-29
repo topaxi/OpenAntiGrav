@@ -486,6 +486,11 @@ pub struct CellSelection {
     /// [`Self::difficulty_at`]/[`Self::selected_difficulty`]'s own docs for
     /// how a caller reads this.
     difficulties: Vec<Option<Difficulty>>,
+    /// Parallel to [`Self::cells`]: a lock a caller decided outright, which
+    /// replaces the title's own three-term rule for that cell - a mod
+    /// campaign's `open` or `requires` event (ADR-0077). Empty, or `None` at
+    /// an index, keeps the rule. Only [`Self::with_fixed_locks`] sets it.
+    fixed_locks: Vec<Option<bool>>,
     index: usize,
     help_open: bool,
     /// The rung the `DifficultyButton` widget's square-button prompt
@@ -579,6 +584,7 @@ impl CellSelection {
             records,
             index,
             difficulties,
+            fixed_locks: Vec::new(),
             help_open: false,
             difficulty: Difficulty::Medium,
         }
@@ -598,6 +604,33 @@ impl CellSelection {
             .map(|cell| difficulty_of(&cell.name))
             .collect();
         self
+    }
+
+    /// Decides each cell's lock outright where `lock_of` answers `Some`, in
+    /// place of the title's own rule; see [`Self::fixed_locks`]. The cursor
+    /// moves to the first cell this leaves unlocked when the one it starts on
+    /// is locked.
+    #[must_use]
+    pub fn with_fixed_locks(mut self, lock_of: &dyn Fn(&str) -> Option<bool>) -> Self {
+        self.fixed_locks = self.cells.iter().map(|cell| lock_of(&cell.name)).collect();
+        if self.selected_is_locked()
+            && let Some(open) =
+                (0..self.cells.len()).find(|&i| !self.cell_shows_lock_cell(&self.cells[i]))
+        {
+            self.index = open;
+        }
+        self
+    }
+
+    /// The names of the cells that show their lock, in document order - what a
+    /// caller hiding unopened cells leaves out.
+    #[must_use]
+    pub fn locked_names(&self) -> Vec<String> {
+        self.cells
+            .iter()
+            .filter(|cell| self.cell_shows_lock_cell(cell))
+            .map(|cell| cell.name.clone())
+            .collect()
     }
 
     /// Overrides [`Self::difficulty`]'s own starting rung - the browsed one
@@ -766,6 +799,14 @@ impl CellSelection {
     /// all, on a live capture with zero medals anywhere to trigger the
     /// neighbour clause instead.
     fn cell_shows_lock_cell(&self, cell: &Cell) -> bool {
+        if let Some(fixed) = self
+            .cells
+            .iter()
+            .position(|c| c.name == cell.name)
+            .and_then(|i| self.fixed_locks.get(i).copied().flatten())
+        {
+            return fixed;
+        }
         if !cell.locked.unwrap_or(true) {
             return false;
         }
@@ -929,6 +970,22 @@ pub struct Layout {
 }
 
 impl Layout {
+    /// The hex slots `(x, y)` this `Cell Selection` layout places a hex at
+    /// (an `Outline_x_y` widget, Pulse's and HD's alike): a cell in any other
+    /// slot is never drawn. Sorted.
+    #[must_use]
+    pub fn hex_slots(&self) -> Vec<(u32, u32)> {
+        let mut slots: Vec<(u32, u32)> = self
+            .screen
+            .images
+            .iter()
+            .filter_map(|image| draw::hex_slot_xy(image.name.as_deref()?, "Outline_"))
+            .collect();
+        slots.sort_unstable();
+        slots.dedup();
+        slots
+    }
+
     /// Reads `Grid Selection` or `Cell Selection` off the parsed
     /// `CellMode_Definition.xml`, resolving every `idstring` through
     /// `strings` - the same second pass `crate::picker::Layout::read` makes,

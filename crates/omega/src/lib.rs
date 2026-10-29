@@ -197,6 +197,7 @@ pub const TITLE: &Title = &Title {
             offset: [29.0, 13.3, -129.0],
         }),
         origin: oag_title::Origin::InheritedFrom("Wipeout HD"),
+        custom_campaigns: true,
     },
     pressings: None,
     pre_race: None,

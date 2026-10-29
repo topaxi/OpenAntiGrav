@@ -35,7 +35,12 @@ jobs:
             /usr/share/swift /usr/local/julia* /opt/microsoft /opt/google
           sudo docker image prune --all --force || true
           df -h /
+      # The example mods (github.com/OpenAntiGrav/mod-examples) are a submodule
+      # whose tracks are in Git LFS; the campaign and schema tests read them.
       - uses: actions/checkout@v7
+        with:
+          submodules: true
+          lfs: true
       - uses: dtolnay/rust-toolchain@1.99.0
         with:
           components: rustfmt, clippy

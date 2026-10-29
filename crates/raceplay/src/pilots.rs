@@ -645,7 +645,7 @@ pub fn write_pilot(dir: &Path, name: &str, text: &str) -> Result<()> {
 }
 
 /// One entry the grid may draw from.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Entry {
     /// What to call it, from the file stem.
     pub name: String,
