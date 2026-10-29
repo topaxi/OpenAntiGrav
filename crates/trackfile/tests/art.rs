@@ -69,6 +69,10 @@ pub(crate) fn art() -> Art {
 
 pub(crate) fn with_art(art: Art) -> Track {
     Track {
+        // The art borrows host textures, so the track names their disc.
+        host: art
+            .borrows_from_a_disc()
+            .then(|| "wipeout-pulse".to_string()),
         art: Some(art),
         ..fixture::oval()
     }

@@ -62,6 +62,7 @@ fn a_loop_built_in_blender_reads_with_every_record_the_race_needs() {
     assert!(l.unread.is_empty(), "{:?}", l.unread);
     let t = &l.track;
     assert_eq!(t.id, "blender-loop");
+    // Its art borrows 03_Track's sky from the Pulse disc.
     assert_eq!(t.host.as_deref(), Some("wipeout-pulse"));
     let path = &t.ai.paths[0];
     assert_eq!(path.points.len(), 64);

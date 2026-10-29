@@ -150,7 +150,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         mut drawn,
         #[cfg(feature = "view")]
             art: foreign_art,
-    } = track_inputs::resolve(options, &mut archives, title, &mut report)?;
+    } = track_inputs::resolve(options, &mut archives, title, craft_title, &mut report)?;
     let read = |archives: &mut oag_assets::Archives, name: &str| -> Result<Vec<u8>> {
         archives
             .read_name(name)

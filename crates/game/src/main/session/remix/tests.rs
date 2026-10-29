@@ -545,13 +545,13 @@ fn a_track_file_loads_its_track_side_from_its_hosts_own_disc() {
         candidate(oag_pulse::TITLE),
         candidate(oag_2048::TITLE),
     ];
-    let found = resolve_host_candidate(&titles, "wipeout-pulse").unwrap();
+    let found = oag_game::custom_tracks::host_disc(&titles, "wipeout-pulse").unwrap();
     assert_eq!(found.playable().map(|t| t.name), Some(oag_pulse::TITLE.name));
-    let found = resolve_host_candidate(&titles, "wipeout-hd").unwrap();
+    let found = oag_game::custom_tracks::host_disc(&titles, "wipeout-hd").unwrap();
     assert_eq!(found.playable().map(|t| t.name), Some(oag_hd::TITLE.name));
     let only_2048 = [candidate(oag_2048::TITLE)];
-    let why = resolve_host_candidate(&only_2048, "wipeout-hd").unwrap_err();
+    let why = oag_game::custom_tracks::host_disc(&only_2048, "wipeout-hd").unwrap_err();
     assert!(why.contains("Wipeout HD"), "{why}");
-    let why = resolve_host_candidate(&titles, "wipeout-pure").unwrap_err();
+    let why = oag_game::custom_tracks::host_disc(&titles, "wipeout-pure").unwrap_err();
     assert!(why.contains("Wipeout Pure"), "{why}");
 }

@@ -201,6 +201,7 @@ class OAG_PT_track(Panel):
         box.prop(sc, "oag_track_id")
         box.prop(sc, "oag_track_title")
         box.prop(sc, "oag_track_host")
+        box.prop(sc, "oag_track_titles")
         box.prop(sc, "oag_track_notes")
         row = layout.row(align=True)
         row.operator("oag.import_track", text="Import", icon="IMPORT")
@@ -293,9 +294,14 @@ def _props():
     sc.oag_track_title = StringProperty(name="Title")
     sc.oag_track_host = EnumProperty(
         name="Runs on",
-        description="The title the track runs on and borrows host textures from; another title races it only as a Race Remix",
-        items=[(h, h, "") for h in model.HOSTS],
-        default="wipeout-pulse",
+        description="The title whose disc the art borrows host textures and the sky from (required when it does); "
+        "another title races the track as a Race Remix with this disc as the track source",
+        items=[("none", "none (borrows nothing)", "")] + [(h, h, "") for h in model.HOSTS],
+        default="none",
+    )
+    sc.oag_track_titles = StringProperty(
+        name="Offered on",
+        description="Comma-separated title slugs the track is offered on (e.g. wipeout-pulse, wipeout-hd); empty is every title",
     )
     sc.oag_track_notes = StringProperty(name="Notes", description="Free text printed in the loader report")
     ob.oag_points = IntProperty(name="Spline points", default=64, min=3, max=4096)
@@ -345,6 +351,7 @@ def _unprops():
         "oag_track_id",
         "oag_track_title",
         "oag_track_host",
+        "oag_track_titles",
         "oag_track_notes",
         "oag_sun",
         "oag_sky",

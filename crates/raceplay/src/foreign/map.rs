@@ -77,6 +77,7 @@ pub(super) fn map(wtrk: &Wtrk, track: &Track) -> anyhow::Result<OagTrack> {
         // A Workshop track borrows nothing from a disc, so it names no host
         // and races on any source; a converter writing it as a file names one.
         host: None,
+        titles: Vec::new(),
         ai,
         start,
         nodes,

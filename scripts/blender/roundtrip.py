@@ -149,7 +149,7 @@ def build_loop(out_dir):
     ctx.view_layer.objects.active = obj
     ctx.scene.oag_track_id = "blender-loop"
     ctx.scene.oag_track_title = "Blender Loop"
-    ctx.scene.oag_track_host = "wipeout-pulse"
+    ctx.scene.oag_track_host = "wipeout-pulse"  # its art borrows 03_Track's sky
     ctx.scene.oag_track_notes = "authored headless in Blender with the OAG add-on: 8 control points (chosen, not measured)"
     assert bpy.ops.oag.build_ribbon() == {"FINISHED"}
     assert bpy.ops.oag.add_start() == {"FINISHED"}

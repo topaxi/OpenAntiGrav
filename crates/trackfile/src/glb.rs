@@ -582,13 +582,16 @@ pub(crate) fn read(m: Parsed, bytes: &[u8]) -> Result<Loaded, Error> {
     } else {
         None
     };
+    crate::manifest::host_rule(m.host.as_deref(), art.as_ref(), &m.titles)
+        .map_err(Error::Manifest)?;
     let mut notes = m.notes;
     notes.shrink_to_fit();
     Ok(Loaded {
         track: Track {
             id: m.id,
             title: m.title,
-            host: Some(m.host),
+            host: m.host,
+            titles: m.titles,
             ai: AiTrack {
                 version: m.point_version,
                 paths,

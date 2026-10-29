@@ -391,3 +391,72 @@ mod disc {
         assert!(menu.sim.world.ships[1].physics.body.position.length() > 100.0);
     }
 }
+
+fn disc(title: &'static oag_title::Title) -> crate::launcher::Candidate {
+    crate::launcher::Candidate {
+        source: format!("fixture:{}", title.name),
+        name: title.name.to_string(),
+        platform: oag_disc::Platform::Unknown,
+        serial: None,
+        state: crate::launcher::State::Playable(title),
+    }
+}
+
+fn trackfile_fixture(name: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../trackfile/tests/fixtures")
+        .join(name)
+}
+
+fn launched_on(title: &'static oag_title::Title, track: &str) -> oag_raceplay::Options {
+    oag_raceplay::Options {
+        source: format!("fixture:{}", title.name),
+        foreign_track: Some(trackfile_fixture(track)),
+        ..oag_raceplay::Options::default()
+    }
+}
+
+fn title_of(source: &str) -> Option<&'static oag_title::Title> {
+    oag_source::title::ALL
+        .into_iter()
+        .find(|t| source == format!("fixture:{}", t.name))
+}
+
+/// A track whose art borrows from the Pulse disc (the Blender loop's sky),
+/// launched on HD, becomes a remix: track from the Pulse disc, craft from HD's
+/// (ADR-0076 decision 13). On Pulse it is left alone, and with no Pulse disc it
+/// is refused naming the title it needs.
+#[test]
+fn a_pinned_track_launched_on_another_title_becomes_a_remix_on_its_hosts_disc() {
+    let discs = || {
+        vec![
+            disc(oag_hd::TITLE),
+            disc(oag_2048::TITLE),
+            disc(oag_pulse::TITLE),
+        ]
+    };
+    let mut options = launched_on(oag_hd::TITLE, "blender_loop.track.toml");
+    let line = route_to_host(&mut options, title_of, discs).unwrap();
+    assert!(line.is_some());
+    assert_eq!(options.source, "fixture:Wipeout Pulse");
+    assert_eq!(options.craft_source.as_deref(), Some("fixture:Wipeout HD"));
+
+    let mut options = launched_on(oag_pulse::TITLE, "blender_loop.track.toml");
+    assert_eq!(route_to_host(&mut options, title_of, discs), Ok(None));
+    assert_eq!(options.source, "fixture:Wipeout Pulse");
+    assert_eq!(options.craft_source, None);
+
+    let mut options = launched_on(oag_hd::TITLE, "blender_loop.track.toml");
+    let why = route_to_host(&mut options, title_of, || vec![disc(oag_hd::TITLE)]).unwrap_err();
+    assert!(why.contains("Wipeout Pulse"), "{why}");
+    assert_eq!(options.source, "fixture:Wipeout HD");
+}
+
+/// A track that borrows nothing from a disc (the oval) runs on any title as it is.
+#[test]
+fn a_track_that_borrows_nothing_is_raced_on_the_source_it_was_launched_on() {
+    let mut options = launched_on(oag_hd::TITLE, "oval.track.toml");
+    let asked = || -> Vec<crate::launcher::Candidate> { panic!("no disc is looked for") };
+    assert_eq!(route_to_host(&mut options, title_of, asked), Ok(None));
+    assert_eq!(options.source, "fixture:Wipeout HD");
+}

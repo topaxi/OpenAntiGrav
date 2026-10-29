@@ -92,19 +92,20 @@ pub fn read_any(path: &Path) -> anyhow::Result<(Track, Vec<String>)> {
     Ok((loaded.track, report))
 }
 
-/// The title a track names as its host (`Track::host`, ADR-0076 decision 13),
-/// or `None` for a track that names none (a Workshop track mapped in memory).
+/// The title a track's art borrows from (`Track::host`, ADR-0076 decision 13),
+/// or `None` for a track that borrows nothing and so runs on any title.
 ///
 /// # Errors
 ///
 /// A host spelled as no title this build knows, named with the ones it does.
 pub fn host_title(track: &Track) -> anyhow::Result<Option<&'static oag_title::Title>> {
-    let Some(host) = track.host.as_deref() else {
-        return Ok(None);
-    };
-    oag_source::title::by_slug(host).map(Some).ok_or_else(|| {
+    track.host.as_deref().map(known_title).transpose()
+}
+
+fn known_title(slug: &str) -> anyhow::Result<&'static oag_title::Title> {
+    oag_source::title::by_slug(slug).ok_or_else(|| {
         anyhow::anyhow!(
-            "track.host {host:?} is no title this build knows (it knows {})",
+            "{slug:?} is no title this build knows (it knows {})",
             oag_source::title::ALL
                 .iter()
                 .map(|t| oag_source::layers::slug(t))
@@ -114,16 +115,15 @@ pub fn host_title(track: &Track) -> anyhow::Result<Option<&'static oag_title::Ti
     })
 }
 
-/// Refuses a track raced with a track source of another title than its host.
-/// What it borrows by name (host textures, the sky circuit) resolves only from
-/// its host's disc, so on another source it would draw black; another title
-/// races it only as a Race Remix, the host as the track source and the other
-/// title's craft.
+/// Refuses a track whose art borrows from one title's disc raced with another
+/// title's as the track source: what it borrows by name (host textures, the
+/// sky) resolves only there, and would draw black elsewhere. Another title's
+/// craft fly it as a Race Remix with the host's disc as the track source, which
+/// the game's launches arrange when this machine has that disc.
 ///
 /// # Errors
 ///
-/// As [`host_title`], and the mismatch, naming both titles and the remix
-/// that races it.
+/// As [`host_title`], and the mismatch, naming both titles and the remix.
 pub fn check_host(track: &Track, source: &oag_title::Title) -> anyhow::Result<()> {
     let Some(host) = host_title(track)? else {
         return Ok(());
@@ -132,9 +132,9 @@ pub fn check_host(track: &Track, source: &oag_title::Title) -> anyhow::Result<()
         return Ok(());
     }
     anyhow::bail!(
-        "{:?} runs on {} (track.host = {:?}); this race's track source is {}. Race it on \
-         {}, or on {}'s craft as a Race Remix with {} as the track source (RACE REMIX, or \
-         the {} disc as the source with --craft-source <{} disc>)",
+        "{:?} borrows its art from the {} disc (track.host = {:?}); this race's track source is \
+         {}. Race it with a {} disc as the track source: on {}'s craft that is a Race Remix \
+         (the {} disc as the source with --craft-source <{} disc>)",
         track.title,
         host.name,
         track.host.as_deref().unwrap_or_default(),
@@ -142,8 +142,42 @@ pub fn check_host(track: &Track, source: &oag_title::Title) -> anyhow::Result<()
         host.name,
         source.name,
         host.name,
-        host.name,
         source.name,
+    )
+}
+
+/// Refuses a track raced in a title its author did not offer it on
+/// (`Track::titles`, empty is every title). The title asked is the craft's,
+/// the game the player is in (chosen, not measured; ADR-0076 decision 13).
+///
+/// # Errors
+///
+/// A `titles` entry naming no known title, or the craft's title not listed.
+pub fn check_titles(track: &Track, craft: &oag_title::Title) -> anyhow::Result<()> {
+    if track.titles.is_empty() {
+        return Ok(());
+    }
+    let offered = track
+        .titles
+        .iter()
+        .map(|t| known_title(t))
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    let wanted = oag_source::layers::slug(craft);
+    if offered
+        .iter()
+        .any(|t| oag_source::layers::slug(t) == wanted)
+    {
+        return Ok(());
+    }
+    anyhow::bail!(
+        "{:?} is offered on {} (track.titles), not on {}",
+        track.title,
+        offered
+            .iter()
+            .map(|t| t.name)
+            .collect::<Vec<_>>()
+            .join(", "),
+        craft.name
     )
 }
 

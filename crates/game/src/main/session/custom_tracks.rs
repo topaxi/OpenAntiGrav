@@ -49,7 +49,7 @@ impl Session {
         else {
             return Ok(None);
         };
-        remix_menu::resolve_host_candidate(&self.titles, host).map(Some)
+        oag_game::custom_tracks::host_disc(&self.titles, host).map(Some)
     }
 
     /// CUSTOM, as TRACK TITLE offers it - none when the scan found no file.

@@ -34,7 +34,10 @@ pub(crate) struct Manifest {
 pub(crate) struct TrackTable {
     pub id: String,
     pub title: String,
-    pub host: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub titles: Vec<String>,
     pub glb: String,
     #[serde(default)]
     pub notes: Vec<String>,
@@ -98,7 +101,8 @@ pub(crate) struct Parsed {
     pub glb: String,
     pub id: String,
     pub title: String,
-    pub host: String,
+    pub host: Option<String>,
+    pub titles: Vec<String>,
     pub notes: Vec<String>,
     pub point_version: u32,
     pub paths: Vec<PathRow>,
@@ -106,6 +110,37 @@ pub(crate) struct Parsed {
     pub counts: Counts,
     pub art: Option<ArtTable>,
     pub unread: Vec<String>,
+}
+
+/// `track.host` is required when the art borrows from a disc and never empty;
+/// no entry of `titles` is empty (ADR-0076 decision 13). The reader runs this
+/// once the art is read, the writer before anything is written.
+pub(crate) fn host_rule(
+    host: Option<&str>,
+    art: Option<&crate::art::Art>,
+    titles: &[String],
+) -> Result<(), String> {
+    match host {
+        Some(h) if h.trim().is_empty() => {
+            return Err(
+                "track.host is empty; name the title the art borrows from, e.g. \
+                        \"wipeout-pulse\", or leave the key out"
+                    .into(),
+            );
+        }
+        None if art.is_some_and(crate::art::Art::borrows_from_a_disc) => {
+            return Err(
+                "the art borrows from a disc (a host texture or a sky) but track.host \
+                        names no title it borrows from, e.g. \"wipeout-pulse\""
+                    .into(),
+            );
+        }
+        _ => {}
+    }
+    if titles.iter().any(|t| t.trim().is_empty()) {
+        return Err("track.titles has an empty entry".into());
+    }
+    Ok(())
 }
 
 pub(crate) fn opt(v: i64) -> Option<usize> {
@@ -120,14 +155,8 @@ pub(crate) fn write(track: &Track, glb_name: &str) -> Result<String, Error> {
     if track.id.is_empty() {
         return Err(Error::Unwritable("the track has no id".into()));
     }
-    let host = match track.host.as_deref() {
-        Some(h) if !h.trim().is_empty() => h.to_string(),
-        _ => {
-            return Err(Error::Unwritable(
-                "the track names no host title (track.host, e.g. \"wipeout-pulse\")".into(),
-            ));
-        }
-    };
+    host_rule(track.host.as_deref(), track.art.as_ref(), &track.titles)
+        .map_err(Error::Unwritable)?;
     let manifest = Manifest {
         toml_schema: Some(oag_schema::Header {
             location: oag_schema::location(SCHEMA_KIND, FORMAT_MAJOR),
@@ -136,7 +165,8 @@ pub(crate) fn write(track: &Track, glb_name: &str) -> Result<String, Error> {
         track: TrackTable {
             id: track.id.clone(),
             title: track.title.clone(),
-            host,
+            host: track.host.clone(),
+            titles: track.titles.clone(),
             glb: glb_name.to_string(),
             notes: track.notes.clone(),
             extra: BTreeMap::new(),
@@ -181,12 +211,6 @@ pub(crate) fn read(text: &str) -> Result<Parsed, Error> {
     oag_schema::check(m.toml_schema.as_ref(), SCHEMA_KIND, FORMAT_MAJOR)?;
     if m.track.id.is_empty() {
         return Err(Error::Manifest("track.id is empty".into()));
-    }
-    if m.track.host.trim().is_empty() {
-        return Err(Error::Manifest(
-            "track.host is empty; it names the title the track runs on, e.g. \"wipeout-pulse\""
-                .into(),
-        ));
     }
     let mut unread: Vec<String> = m
         .extra
@@ -255,6 +279,7 @@ pub(crate) fn read(text: &str) -> Result<Parsed, Error> {
         id: m.track.id,
         title: m.track.title,
         host: m.track.host,
+        titles: m.track.titles,
         notes: m.track.notes,
         point_version: m.spline.point_version,
         paths: m.spline.path,

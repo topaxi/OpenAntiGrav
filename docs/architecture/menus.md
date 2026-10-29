@@ -284,11 +284,11 @@ empty grid. Campaign launches clear it.
 TRACK TITLE offers **CUSTOM** (`OAG_REMIX_CUSTOM`) after the titles this machine can open, whenever
 the track directories hold at least one file; none found, no entry. Choosing it fills TRACK with those
 files (`oag_game::custom_tracks`, drawn the same by the live session and `--menu-page remix`). A track
-file's track side (collision, host textures, sky) loads from the disc of the title its `track.host` names,
-never a guest standing in for it, and its craft from the **CRAFT TITLE** row's source (an unpicked CRAFT
-TITLE flies the host's own craft); a file whose host this machine has no disc of is listed dimmed with
-"runs on <title>, which this machine has no disc of" ([ADR-0076](adr/0076-a-track-file-carries-its-art-as-an-optional-section.md)
-decision 13). A Workshop track names no host and is flown on the CRAFT TITLE row's source, ship and
+file whose art borrows from a disc (`track.host`) loads its track side (collision, host textures, sky)
+from a disc of that title, never a guest standing in for it, and its craft from the **CRAFT TITLE** row's
+source (an unpicked CRAFT TITLE flies the host's own craft); a file whose host this machine has no disc of
+is listed dimmed with "borrows from the <title> disc, which this machine does not have" ([ADR-0076](adr/0076-a-track-file-carries-its-art-as-an-optional-section.md)
+decision 13). A track file that borrows nothing, and a Workshop track, name no host and is flown on the CRAFT TITLE row's source, ship and
 physics, exactly as `--ballisticng-track` flies it on `--craft-source`; RACEBOX is unchanged.
 
 - **Where it looks**: `oag_source::tracks::all_in`, the lister `--ballisticng-track` resolves names with:
