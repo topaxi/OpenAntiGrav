@@ -54,6 +54,37 @@ const ALPHA: f32 = 0.4;
 
 const SEED: u64 = 0x5b2a_7c19;
 
+/// The mist: a slower, softer, larger puff a craft leaves in the air behind it,
+/// **chosen, not measured**, in addition to the droplets. It rises and widens
+/// over [`MIST_LIFE`] seconds so the chase camera sees it above and behind the
+/// hull, where a droplet's 0.35 s life ends under it.
+///
+/// Alive at once, over every craft; past it a new puff is dropped (the player's
+/// craft is thrown first, so a full pool starves the field, not the player).
+pub const MIST_CAPACITY: usize = 240;
+
+/// The most puffs one craft throws a tick at full speed on a fully wet road.
+pub const MIST_MAX_PER_TICK: f32 = 1.0;
+
+/// Seconds a puff lasts, its half-size at birth and at death (world units),
+/// and the most opaque it gets (it fades in over the first
+/// [`MIST_FADE_IN`] of its life and out over the rest).
+const MIST_LIFE: f32 = 1.4;
+const MIST_SIZE: (f32, f32) = (0.8, 3.0);
+const MIST_ALPHA: f32 = 0.12;
+const MIST_FADE_IN: f32 = 0.08;
+
+/// Its rise in world units a second (up the road's normal), the sideways spread
+/// either way, the share of the craft's speed it is born with and the drag per
+/// second that stops it, and how far above the road it starts.
+const MIST_RISE: (f32, f32) = (2.0, 4.0);
+const MIST_SPREAD: f32 = 4.0;
+const MIST_CARRY: f32 = 0.98;
+const MIST_DRAG: f32 = 0.3;
+const MIST_LIFT: f32 = 0.8;
+
+const MIST_SEED: u64 = 0x3c71_e5a3;
+
 /// One craft's mouth: where its road is, which way it faces and how fast.
 #[derive(Debug, Clone, Copy)]
 pub struct Emitter {
@@ -73,11 +104,36 @@ struct Droplet {
     age: f32,
 }
 
-/// The droplets alive now.
+#[derive(Debug, Clone, Copy)]
+struct Puff {
+    at: Vec3,
+    carry: Vec3,
+    velocity: Vec3,
+    age: f32,
+}
+
+/// A puff's opacity at `age` seconds: in over the first [`MIST_FADE_IN`] of its
+/// life, out over the rest.
+fn mist_alpha(age: f32) -> f32 {
+    let t = (age / MIST_LIFE).clamp(0.0, 1.0);
+    MIST_ALPHA * (t / MIST_FADE_IN).min(1.0) * (1.0 - t)
+}
+
+impl Puff {
+    /// Where it is: carried forward until the air stops it, risen and spread.
+    fn position(&self) -> Vec3 {
+        let slid = (1.0 - (-MIST_DRAG * self.age).exp()) / MIST_DRAG;
+        self.at + self.carry * slid + self.velocity * self.age
+    }
+}
+
+/// The droplets and the mist alive now.
 #[derive(Debug, Clone)]
 pub struct Spray {
     live: Vec<Droplet>,
     rng: Rng,
+    mist: Vec<Puff>,
+    mist_rng: Rng,
 }
 
 impl Default for Spray {
@@ -85,8 +141,17 @@ impl Default for Spray {
         Self {
             live: Vec::with_capacity(CAPACITY),
             rng: Rng::new(SEED),
+            mist: Vec::with_capacity(MIST_CAPACITY),
+            mist_rng: Rng::new(MIST_SEED),
         }
     }
+}
+
+/// How many mist puffs one craft throws a tick: the droplets' rule, scaled to
+/// [`MIST_MAX_PER_TICK`].
+#[must_use]
+pub fn mist_rate(speed_kmh: f32, wet: f32) -> f32 {
+    rate(speed_kmh, wet) / MAX_PER_TICK * MIST_MAX_PER_TICK
 }
 
 /// How many droplets one craft throws a tick: zero when the road is dry or
@@ -106,15 +171,22 @@ impl Spray {
         self.live.len()
     }
 
-    /// Whether none is.
+    /// Whether no droplet and no mist is.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.live.is_empty()
+        self.live.is_empty() && self.mist.is_empty()
     }
 
-    /// Drops every droplet, as the setting going back to `original` does.
+    /// How many mist puffs are alive.
+    #[must_use]
+    pub fn mist_len(&self) -> usize {
+        self.mist.len()
+    }
+
+    /// Drops every droplet and puff, as the setting going back to `original` does.
     pub fn clear(&mut self) {
         self.live.clear();
+        self.mist.clear();
     }
 
     /// Ages every droplet `dt` seconds, removes the finished and throws the
@@ -124,6 +196,20 @@ impl Spray {
             drop.age += dt;
         }
         self.live.retain(|drop| drop.age < LIFE);
+        for puff in &mut self.mist {
+            puff.age += dt;
+        }
+        self.mist.retain(|puff| puff.age < MIST_LIFE);
+        for emitter in emitters {
+            let expected = mist_rate(emitter.speed_kmh, wet);
+            let mut count = expected.floor() as usize;
+            if self.mist_rng.next_f32() < expected.fract() {
+                count += 1;
+            }
+            for _ in 0..count {
+                self.breathe(emitter, dt);
+            }
+        }
         for emitter in emitters {
             let expected = rate(emitter.speed_kmh, wet);
             let mut count = expected.floor() as usize;
@@ -134,6 +220,25 @@ impl Spray {
                 self.throw(emitter, dt);
             }
         }
+    }
+
+    fn breathe(&mut self, emitter: &Emitter, dt: f32) {
+        if self.mist.len() >= MIST_CAPACITY {
+            return;
+        }
+        let normal = emitter.normal.normalize_or_zero();
+        let side = normal.cross(emitter.forward).normalize_or_zero();
+        let rise = MIST_RISE.0 + (MIST_RISE.1 - MIST_RISE.0) * self.mist_rng.next_f32();
+        let spread = (self.mist_rng.next_f32() * 2.0 - 1.0) * MIST_SPREAD;
+        let lateral = (self.mist_rng.next_f32() * 2.0 - 1.0) * emitter.half_width;
+        let speed = emitter.speed_kmh / SPEED_TO_KMH;
+        let along = emitter.forward * (speed * dt * self.mist_rng.next_f32());
+        self.mist.push(Puff {
+            at: emitter.at + side * lateral + normal * MIST_LIFT - along,
+            carry: emitter.forward * (speed * MIST_CARRY),
+            velocity: normal * rise + side * spread,
+            age: 0.0,
+        });
     }
 
     fn throw(&mut self, emitter: &Emitter, dt: f32) {
@@ -168,6 +273,18 @@ impl Spray {
     ) {
         let width = cell[2] - cell[0];
         let dot = [cell[0] + width * 0.5, cell[1], cell[2], cell[3]];
+        for puff in &self.mist {
+            let t = puff.age / MIST_LIFE;
+            let size = MIST_SIZE.0 + (MIST_SIZE.1 - MIST_SIZE.0) * t;
+            alpha_over.extend(quad(
+                puff.position(),
+                right * size,
+                up * size,
+                [0.85, 0.92, 1.0],
+                mist_alpha(puff.age),
+                dot,
+            ));
+        }
         for drop in &self.live {
             let t = drop.age / LIFE;
             let height = drop.age * drop.age * -0.5 * GRAVITY;
