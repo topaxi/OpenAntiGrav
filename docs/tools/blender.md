@@ -26,6 +26,7 @@ property `oag_kind` on the object (the panel's buttons set it; so does adding th
 | `oag_kind` | Object | What it becomes |
 | --- | --- | --- |
 | `spline` | a closed (cyclic) Curve, or a Mesh of baked points | the AI line / racing spline: one record per sampled point |
+| `racing_line` | a closed Curve beside a spline (`oag_path` = the spline's index, default 0) | that spline's `racing_line` offsets, [hand-editable](#the-racing-line) |
 | `floor`, `wall`, `reset`, `mag_floor`, `cage`, `track_wall` | a Mesh | a collision node of that kind, triangulated, transforms baked |
 | `start` | an Empty: +Y forward, +Z up | the start slot |
 | `speedup`, `weapon` | an Empty: X lateral, +Y forward, +Z up | a pad |
@@ -65,7 +66,8 @@ matches what that generator would write.
 | `lateral`, `down` | `lateral` = unit(tangent x world up); `down` = -up, with up = lateral x tangent (the lateral axis stays level, up follows a slope; **banking is not authored**) |
 | `progress` | cumulative gap over the total, 0 at point 0 |
 | `half_width`, `ai_bound` | the object's half width; AI bound = -/+ half width x AI fraction |
-| `racing_line`, `section`, `flags`, `light_scale` | 0, `0xff`, 0, 255 (`light_scale` lowered under art when the spline sets *Cover light*, see [Art](#art-meshes-textures-the-sun-and-baked-light)) |
+| `racing_line` | computed by default (minimum curvature inside the AI bound), or read off a racing-line curve you edit; see [The racing line](#the-racing-line) |
+| `section`, `flags`, `light_scale` | `0xff`, 0, 255 (`light_scale` lowered under art when the spline sets *Cover light*, see [Art](#art-meshes-textures-the-sun-and-baked-light)) |
 | path `entry`/`exit`, junction | `0`/`0` and one junction `[0, -1]` -> `[0, -1]`: a single closed loop |
 | `max_spacing` | the largest gap between neighbours |
 | Start slot | 154 units back along the ring from point 0, level, facing along the line. The race puts the **lap line** 154 units ahead of the start slot (`oag_race::Course::START_LINE_ADVANCE`), so spline point 0, the curve's first control point, is the lap line |
@@ -83,6 +85,64 @@ negation, so exact `f32` values and winding survive in both directions. Mesh tra
 into the vertices on export (`matrix_world`; an identity transform is not multiplied, so bits do not move).
 A mesh over 65,535 vertices is split into several collision meshes of one node, because the format's
 indices are `u16`.
+
+## The racing line
+
+`racing_line` is one number per spline point: a signed distance **along that point's own
+`lateral` axis, positive to the driver's right**, from the spline point (the centre) to
+the line the AI aims at (`oag_vex::track::Sample`, `oag_raceplay::spline::racing_line`:
+the driven point is `pos - lift * down + racing_line * lateral`). The AI corridor
+(`ai_bound_left`, `ai_bound_right`, also offsets along `lateral`) is cut around that line,
+and Pulse's loader forces it to straddle the line by at least 0.1
+([track.md](../formats/track.md#the-curve), "the load pass"). Before 2026-10-29 the add-on
+wrote 0 here, so opponents took every bend down the middle. (Pulse's own circuits mostly
+author 0 too, [track.md](../formats/track.md#wipeout-2048-authors-version-0x107-and-the-control-point-shrank-to-96-bytes);
+a line off the centre is this add-on's own choice, not something the discs show.)
+
+**Default: computed at export (chosen, not measured).** A spline drawn as a Curve gets the
+minimum-curvature line inside its AI corridor, unless the spline's *Compute racing line*
+(`oag_auto_racing_line`) is off, which writes the centre as before. The method is in the
+docstring of `scripts/blender/oag_track/racing_line.py`: the sideways second difference of the
+driven line over the square of its gap, integrated along the line (gaps re-measured on the
+line itself, six fixed rounds), minimised inside the **middle 40 percent of the corridor**
+(the box: 30 percent of the corridor's width in from each bound, never under 0.1) by an active
+set over a sparse banded solve. Pure Python, no numpy, fixed order over doubles,
+offsets rounded to `f32` at the end, so the same scene gives the same bytes on every machine.
+A ring of more than 64 points is solved on every `m`-th point and joined by a cyclic cubic
+(the sampled polyline has a kink at every vertex, which a minimiser would otherwise fit).
+A line is only as good as the centre line is smooth.
+
+*Why the middle 40 percent, not the whole corridor.* The original driver (`oag_ai::original`) measures
+its lane across the room between the line and each bound (`TrackPoint::lane_of` divides by it), so a
+line near a bound leaves one side with almost none; that is the likely reason for what follows, not a
+traced one (nobody looked at which sample went unresolved). Measured on `blender_loop` (corridor +-12), headless, Pulse physics: a line
+allowed to 0.1 from the bounds, and one allowed to 20 percent of the width in, both leave
+the opponents' speed plan unable to learn a lap (`1 unresolved`, no lap in 256,000 steps);
+25, 30 and 40 percent get round. 30 keeps a margin from that cliff. **Chosen, not measured**,
+and it caps the gain: the line may use only +-7.2 of a +-12 corridor.
+
+**By hand.** *Compute Racing Line* (panel, spline selected) makes, or replaces, one closed
+poly **Curve** tagged `racing_line`, `oag_path` = the spline's index, one point per spline
+point at its computed offset. It never renders. Edit it like any curve: move points
+sideways (G, then X/Y along the track's width), add or delete points, or replace it with a
+Bezier. Export reads it:
+
+| What you did to the curve | What is written |
+| --- | --- |
+| nothing (every point where the operator put it) | the stored offsets, bit for bit |
+| anything else | for each spline point, the curve cut by the plane through the point whose normal is its tangent (the cut nearest the point, going forward), the distance of the cut along the point's `lateral`, boxed to the same middle-40-percent box |
+
+A curve that never crosses a spline point's cross-section is refused by name. Two racing-line
+curves for one spline are refused. Delete the curve and the default is back. An imported
+track whose file carries a nonzero `racing_line` arrives with the curve already made (a
+file with the centre everywhere gets none), and a baked spline with no curve keeps the
+imported records verbatim: **the computed default applies to Curve splines only**, so
+importing and exporting a track never moves its line. To give an imported track a computed
+line, select its spline and run *Compute Racing Line*.
+
+Headless, the same two calls the panel makes: set `curve_obj.oag_auto_racing_line = False`
+to opt out, or `bpy.ops.oag.compute_racing_line()` with the spline active to make the
+editable curve (a builder that only wants the default needs neither).
 
 ## Art: meshes, textures, the sun and baked light
 
@@ -197,6 +257,7 @@ physics, and draws flat-shaded collision unless the file has an art section. A f
 | A loop built from scratch in Blender: 8 Bezier control points, 64 samples, floor, walls, start, one pad of each kind (`blender_loop.*`) | reads, nothing unread, schema-valid (`schema.rs`) |
 | Lone AI craft on Pulse's physics, 7,200 ticks (`trackfile_ground_truth`) | `blender_loop`: lap 3, no respawns; the re-exported oval: lap 4, no respawns (the committed oval: lap 4) |
 | `oag-game --race --autopilot --track-file blender_loop.track.toml` | the player gets round at 127 speed; frames at ticks 400, 1200, 2400, 3600 read at 1280x720 |
+| Racing line (2026-10-29), AI speed plan lap on Pulse EU, `--race --opponents`, centre then computed | `blender_loop` 2,383 -> 2,373 ticks (-0.4 %); the same loop at 0.35 scale 845 -> 835 (-1.2 %), at 0.2 scale 501 -> 506 (+1.0 %, slower); Hillside's shape (12 control points, rises to 90, half width 28, 160 points, no art) 3,447 -> 3,424 (-0.7 %): small, and not always faster (every plan verified clean) |
 | Art (2026-10-29): the loop's canopy, checker, sun, fill light, ambient, sky and flare (`blender_loop.*`, `blender_checker.png`) | every mapping read back as authored (`blender.rs`); the loop imported and exported again is byte-identical (`blender_loop.reexport.*`); on Pulse PSP the art resolves with no miss in the loader report (`trackfile_ground_truth`) |
 
 The Blender-driven part cannot run in CI (no Blender), so it is a local recipe whose output is
@@ -207,6 +268,9 @@ differently; regenerate with `--update` and review the diff.
 
 ## Open
 
+- The racing line's gain is small (see Proof) and the box is a chosen cliff-avoider: a driver-aware
+  line (one that weighs the original driver's lane model, or the speed plan's own lap time) could use
+  more of the corridor. A tight track (0.2 scale of `blender_loop`) came out 1 % slower than the centre.
 - Banking (a per-point tilt feeding `up`/`lateral`) and a per-point width; both need an authoring
   surface on the curve.
 - More than one path and junction authoring beyond the scene property `oag_junctions` (a JSON list
