@@ -269,6 +269,30 @@ pub fn offered_on(
     }
 }
 
+/// `teams` as Team Selection lists them from `archives`: Pure's disc-gated teams dropped
+/// when `kind` is Ship and a source is at hand (the live screen's
+/// `pure_locked_teams`, one rule), whole otherwise, against `records`.
+#[must_use]
+pub fn teams_offered_on(
+    kind: oag_ui_screens::picker::Kind,
+    archives: Option<&mut oag_assets::Archives>,
+    title: &oag_title::Title,
+    records: &Store,
+    teams: &[oag_raceplay::catalogue::Team],
+) -> Vec<oag_raceplay::catalogue::Team> {
+    match archives {
+        Some(archives) if kind == oag_ui_screens::picker::Kind::Ship => {
+            let locked = crate::campaign::pure_list::locked_teams_on(title, archives, records);
+            teams
+                .iter()
+                .filter(|team| !locked.contains(&team.id))
+                .cloned()
+                .collect()
+        }
+        _ => teams.to_vec(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

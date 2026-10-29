@@ -255,6 +255,8 @@ impl Chain {
     #[must_use]
     pub fn view(&self, profile: &Profile<'_>, names: &Names<'_>) -> View {
         let say = names.name_of;
+        let screen = self.at.screen();
+        let note = |item: &str, value: &str| (names.describe)(screen, item, value);
         let mode_name = self
             .flow
             .modes
@@ -278,7 +280,10 @@ impl Chain {
                     .iter()
                     .enumerate()
                     .filter(|(_, name)| offered.iter().any(|c| c.title() == name.as_str()))
-                    .map(|(tag, name)| Row::event(say(name), tag, Status::Open, String::new()))
+                    .map(|(tag, name)| {
+                        Row::event(say(name), tag, Status::Open, String::new())
+                            .described(note("Class", name))
+                    })
                     .collect()
             }
             Step::League => {
@@ -294,6 +299,7 @@ impl Chain {
                     })
                     .map(|(tag, league)| {
                         Row::event(say(&league.name), tag, Status::Open, String::new())
+                            .described(note("League", &league.name))
                     })
                     .collect()
             }
@@ -303,7 +309,9 @@ impl Chain {
                     .iter()
                     .enumerate()
                     .filter_map(|(tag, event)| {
+                        let described = note("Tournament", &event.subject);
                         self.event_row(say(&event.subject), tag, event, profile, names, true)
+                            .map(|row| row.described(described))
                     })
                     .collect()
             }
@@ -327,7 +335,9 @@ impl Chain {
                         // event only carries the circuit's gate.
                         let event = events.iter().find(|e| &e.subject == track)?;
                         let show = self.mode_kind() != Some(ModeKind::FreePlay);
+                        let described = note("Track", track);
                         self.event_row(say(track), tag, event, profile, names, show)
+                            .map(|row| row.described(described))
                     })
                     .collect()
             }
@@ -337,7 +347,9 @@ impl Chain {
                     .iter()
                     .enumerate()
                     .filter_map(|(tag, event)| {
+                        let described = note("Track", &event.subject);
                         self.event_row(say(&event.subject), tag, event, profile, names, true)
+                            .map(|row| row.described(described))
                     })
                     .collect()
             }
@@ -610,6 +622,12 @@ pub fn present(
     records: &crate::records::Store,
 ) -> View {
     let say = |name: &str| strings.get(name).unwrap_or(name).to_uppercase();
+    let describe = |screen: &str, item: &str, value: &str| {
+        strings
+            .get(&format!("Text->{screen}->{item}->{value}"))
+            .unwrap_or_default()
+            .to_string()
+    };
     let words = super::pure_list::wording(strings);
     let medal_of = crate::unlock::campaign_medal_of(records, title.name);
     let profile = Profile {
@@ -622,6 +640,7 @@ pub fn present(
         &Names {
             name_of: &say,
             words: &words,
+            describe: &describe,
         },
     );
     view.pitch = title

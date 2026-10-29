@@ -128,5 +128,13 @@ pub(super) fn capture(
     list.extend(art.draws());
     let (legend, ticker, font) = footer;
     let clip = menu_page::picker_footer(&mut list, legend, ticker, strings, font);
+    if let (Some(layout), Some(row)) = (ticker, choice.selected_row()) {
+        let measure = |text: &str| oag_ui::font::measure(font, text);
+        list.extend(oag_ui_screens::campaign::footer::description_draws(
+            layout,
+            &row.description,
+            &measure,
+        ));
+    }
     Ok((list, clip))
 }

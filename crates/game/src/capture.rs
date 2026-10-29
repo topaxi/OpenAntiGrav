@@ -631,6 +631,14 @@ pub fn run(
                 // The live screen's list: locked circuits are absent.
                 let tracks =
                     crate::unlock::offered_on(kind, archives.as_mut(), title, platform, &tracks);
+                // Pure's gated teams are absent from Team Selection too.
+                let teams = crate::unlock::teams_offered_on(
+                    kind,
+                    archives.as_mut(),
+                    title,
+                    &crate::records::load(),
+                    &teams,
+                );
                 let selected = tracks
                     .iter()
                     .find(|track| track.id == options.settings.race.track);

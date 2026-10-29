@@ -89,6 +89,7 @@ fn view(chain: &Chain, held: &[(&str, Medal)], unlock_all: bool) -> View {
         &Names {
             name_of: &say,
             words: &words,
+            describe: &|screen, item, value| format!("{screen}>{item}>{value}"),
         },
     )
 }
@@ -319,4 +320,28 @@ fn every_mode_the_flow_names_is_one_this_chain_knows() {
     for mode in chain().modes() {
         assert!(ModeKind::of(mode).is_some(), "{mode}");
     }
+}
+
+#[test]
+fn each_screens_rows_carry_the_disc_description_keyed_by_screen_item_and_value() {
+    let mut chain = chain();
+    let descriptions = |chain: &Chain| {
+        view(chain, &[], false)
+            .rows
+            .into_iter()
+            .map(|row| row.description)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(pick(&mut chain, 0, &[]), Chosen::Advanced);
+    assert_eq!(
+        descriptions(&chain),
+        [
+            "Class Selection>Class>Vector",
+            "Class Selection>Class>Venom"
+        ]
+    );
+    assert_eq!(pick(&mut chain, 1, &[]), Chosen::Advanced);
+    assert_eq!(descriptions(&chain), ["League Selection>League>Alpha"]);
+    assert_eq!(pick(&mut chain, 0, &[]), Chosen::Advanced);
+    assert_eq!(descriptions(&chain), ["Track Selection>Track>Vineta K"]);
 }
