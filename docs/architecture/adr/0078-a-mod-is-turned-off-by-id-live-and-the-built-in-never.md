@@ -35,8 +35,9 @@ content fingerprint.
    front end: a race reads its options at launch, a campaign when it opens.
 4. **`oag-extras` cannot be turned off.** It carries OPTIONS, the MODS row, QUIT,
    RACEBOX and MULTIPLAYER (`assets/mods/oag-extras/menu.toml`); off, the player would
-   have no way back to the page that turns it on. Its ENABLED row holds one dimmed ON
-   with the reason, and `mods::switch` refuses its id.
+   have no way back to the page that turns it on. Its ENABLED row holds one value,
+   ALWAYS ON (not dimmed: a dimmed value's reason draws in the note slot, over Pulse's
+   detail lines), and `mods::switch` refuses its id.
 5. **A campaign racing a track of a mod that is off or missing is left out whole**,
    named in the log with the reason (`mod "oag.hillside" is turned off on the MODS
    page`), and its mod's MODS entry gains a detail line: `NEEDS HILLSIDE, OFF` or

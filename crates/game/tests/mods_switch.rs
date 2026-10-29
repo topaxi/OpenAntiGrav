@@ -130,11 +130,10 @@ fn the_built_in_cannot_be_turned_off() {
     let (choices, value) = mods::switch_for(&built.listing[0], &StringTable::default());
     assert_eq!(value, "on");
     assert_eq!(choices.len(), 1, "one value: nothing to step to");
+    assert_eq!(choices[0].label, "ALWAYS ON", "the one value says why");
     assert!(
-        choices[0]
-            .unavailable
-            .as_deref()
-            .is_some_and(|r| r.contains("ALWAYS ON"))
+        choices[0].unavailable.is_none(),
+        "no note to draw over the detail lines"
     );
 }
 

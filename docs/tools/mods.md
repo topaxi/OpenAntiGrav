@@ -148,8 +148,8 @@ three rows), AUTHORS goes first, then VERSION, then LICENSE (`Listing::table_wit
 - **It applies at once.** The menus are rebuilt as a boot builds them and reopen on the MODS page
   with BACK leading where it led. A race parked under the menus keeps what it started with.
 - **`oag-extras` cannot be turned off**: it carries OPTIONS, this page's row and QUIT. Its
-  ENABLED row holds one dimmed ON with the reason. A candidate that never opened has one dimmed
-  OFF: there is nothing to switch.
+  ENABLED row holds one value, **ALWAYS ON**. A candidate that never opened has one dimmed OFF:
+  there is nothing to switch.
 - **A campaign that races a track of a mod that is off or missing is left out whole**, the log
   names the reason (`mod "oag.hillside" is turned off on the MODS page`), and its mod's entry
   gains a line: **NEEDS HILLSIDE, OFF**, or **NEEDS &lt;id&gt;, MISSING**. Another campaign that

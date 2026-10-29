@@ -99,7 +99,7 @@ kind = "submenu"
 label = "MODS"
 string_id = "OAG_MENU_MODS"
 target = "mods"
-subtitle = "The mods this game loaded, their licences and the rows they add"
+subtitle = "Turn each mod on or off; who made it, its licence and what it adds"
 subtitle_string_id = "OAG_MENU_MODS_SUBTITLE"
 
 [[entry]]

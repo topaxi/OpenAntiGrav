@@ -88,7 +88,7 @@ impl Session {
             return;
         };
         let trail = stage.menu.trail();
-        let skin = stage.skin.clone();
+        let skin = stage.skin;
         let mut model = self.menu_model(&shell, &skin);
         if !model.restore_trail(&trail) {
             error!("the rebuilt menus lack a page the player was on: {trail:?}");

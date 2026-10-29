@@ -102,12 +102,10 @@ pub mod words {
     pub const ON: (&str, &str) = ("OAG_MODS_ON", "ON");
     /// See [`ON`].
     pub const OFF: (&str, &str) = ("OAG_MODS_OFF", "OFF");
-    /// Why the built-in's ENABLED row does not step: it carries OPTIONS, this page's own
-    /// row and QUIT, so turning it off would leave no way back here.
-    pub const ALWAYS_ON: (&str, &str) = (
-        "OAG_MODS_ALWAYS_ON",
-        "BUILT IN: CARRIES OPTIONS AND THIS PAGE, ALWAYS ON",
-    );
+    /// The built-in's ENABLED row, one value: it carries OPTIONS, this page's own row and
+    /// QUIT, so turning it off would leave no way back here. Not dimmed: a dimmed value's
+    /// reason draws in the note slot, over the first detail line on Pulse.
+    pub const ALWAYS_ON: (&str, &str) = ("OAG_MODS_ALWAYS_ON", "ALWAYS ON");
     /// Why a candidate that never opened has no switch.
     pub const NOT_LOADED: (&str, &str) = ("OAG_MODS_NOT_LOADED", "DID NOT LOAD: NOTHING TO SWITCH");
     /// The detail line of a campaign file that did not compile; the value is the file.
@@ -156,7 +154,10 @@ pub fn switch_for(
     let on = oag_ui::menu::Choice::labelled("on", say(words::ON));
     let off = oag_ui::menu::Choice::labelled("off", say(words::OFF));
     match listing.enabled {
-        _ if listing.builtin => (vec![on.unusable(say(words::ALWAYS_ON))], "on"),
+        _ if listing.builtin => (
+            vec![oag_ui::menu::Choice::labelled("on", say(words::ALWAYS_ON))],
+            "on",
+        ),
         None => (vec![off.unusable(say(words::NOT_LOADED))], "off"),
         Some(enabled) => (vec![on, off], if enabled { "on" } else { "off" }),
     }
