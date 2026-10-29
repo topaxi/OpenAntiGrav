@@ -1483,6 +1483,7 @@ mod pipeline;
 pub use pipeline::{BLEND, BLEND_ALPHA_OVER, Drawer, Drawn, MAX_VERTICES, Pipeline};
 
 mod between_ticks;
+mod carried;
 mod particle;
 mod release;
 mod riding;

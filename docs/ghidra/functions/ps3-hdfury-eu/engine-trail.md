@@ -550,6 +550,134 @@ intruder's own red flag. On a uniformly Fury or classic grid the two readings
 give the same picture, which is why the code could not distinguish them and an
 observation could.
 
+## The trail-hit burst, measured (2026-10-29, `hd-trail-sparks`)
+
+A live pass over the chain above, prompted by a player who found ours too big and
+blurry. It **corrects two things above**: the rate is read now, not an assumption,
+and the colour comes from the ribbon's *owner*, not the intruder.
+
+**Setup.** `data/saves/hd-fury/hd-race-talons-venom-pack` (Single Race, Talon's
+Junction, Venom, Feisar Fury, Autopilot flying, every craft's `+0x7d2c` = 1).
+`scripts/rpcs3-hd-trail-tuck.py` pauses, writes the player's body 8 units behind the
+nearest rival ahead, on its basis rows and at its speed (121.6 units/s), and steps.
+`scripts/rpcs3-hd-trail-hit-log.py` (served `--interpreter`) breaks on
+`0x002e3b98`, the `bl Trail_HitShipEffect` in `Trail_SpawnHitEffect`.
+
+### What the breakpoint read (confidence 85)
+
+20 hits, one session:
+
+| quantity | value | reading |
+| --- | --- | --- |
+| player travel between consecutive hits | 2.0 units at 121.6 units/s | **one hit per 60 Hz frame** while inside: the flag is re-raised every frame |
+| `r3`'s `+0xe4` (the node's craft) | the player, grid slot 7 | the node is the **intruder's**; the block's `+0x11f0` read `7` throughout |
+| `r11` = block `+0x1204` | the rival ahead (slot 5), later slots 1 and 2 | the **owner** of the ribbon; `r5`, the variant, is *its* `+0x7d2c` |
+| `f1` = block `+0x11dc` | `0.018519` (1/54) tucked; `18/54`, `19/54`, `20/54`, `44/54` later | exact multiples of 1/54: the contact's **sample index along the ribbon over 54**, 0 at the owner's nozzle |
+| node | the first or second of the player's ten `+0x79d0` slots | the nose, nearest a contact one sample behind the owner |
+
+So the burst plays **on the intruder, in the owner's colour**. The earlier "intruder's
+own red flag" agreed only because a grid is uniformly Fury or classic.
+
+### What the float and the velocity do
+
+After the spawn `Trail_HitShipEffect` looks the new system up by handle
+(`0x0027c288` on `*(mgr)+0x468c`, key `*0x00ad5fd4`). It then writes two things to it:
+
+- **The craft's velocity, times 1/60**, at instance `+0x160`
+  (`0x002d9fb4`-`0x002d9ff4`; the vec from `*(node+0xe4)+0x6944` body `+0x190`, the
+  1/60 at `0x008b3f44`).
+- **`1.0 - f1`** (`1.0` at `0x008b3f48`) into the scale block's slots 4 and 7.
+  `0x00280ca8` reads instance `+0x30..+0x4c` out, `0x002da01c`/`0x002da020` store
+  `+0x10`/`+0x1c`, and `0x002846d0` writes the block back, so the slots land at
+  instance `+0x40`/`+0x4c`.
+
+**The object is the particle instance, not a sound voice (confidence 80).**
+`0x002846d0` recomputes `+0x64..+0x7c` from the emitter record's `+0x34/+0x38/+0x40`
+(extent), `+0x48/+0x4c` (speed), `+0x74` (gravity) and `+0x4cc` (playback rate).
+Those are `.pob` emitter offsets. `ShipCollisionFx_Trigger` runs the same
+get-modify-set on the system it spawns (`0x002d9b68`-`0x002d9bb8`, and `0x002d9bd0`
+-`0x002d9d0c` writing slot 5 from the impact speed). Omega's twin settles it: its
+lookup key is the spawned object's own handle (`+0xc0`). This contradicts
+[particle-triggers.md](particle-triggers.md)'s reading of the `+0x468c` table as
+sound handles. That page is left for its own lane to revisit.
+
+**`+0x160` reaches each newborn particle (confidence 75).** In `FUN_00289890`,
+`0x002899d4`-`0x00289a18` adds `instance+0x160 * record+0x4d0` to the newborn's
+velocity (`r28`). The same register feeds a child's inherited velocity, times the
+child's `+0x4d0`, at `0x0028a344`-`0x0028a358`: two sites, one meaning.
+`WO_TRAIL_HITSHIP`'s root authors `+0x4d0 = 0.5`, so **the burst keeps half the
+craft's speed**. Wired as `oag_fx::psys::Stage::play_carried`.
+
+**What slots 4 and 7 mean on HD is unread.** On Pulse instance `+0x40` scales the
+alpha ([pob.md](../../../formats/pob.md), "Alpha comes from the alpha channel
+scaled by an instance field"). If HD kept that layout the burst fades with the
+contact's distance down the ribbon: 0.98 a sample behind the nozzle, 0.19 at sample
+44. The consumer may run on the SPU and is not found, so this stays at 50 and is not
+wired.
+
+### The A/B that separates the burst from everything else
+
+`scripts/rpcs3-hd-trail-hit-names.py both` overwrites the first byte of the bare
+names (`0x007a1cc8` `_RED`, `0x007a1ce0`). Each has one TOC slot (`0x008b3f7c`,
+`0x008b3f80`), read only by `Trail_HitShipEffect`, and `0x0027f178` hashes the
+name at call time, so the spawn finds nothing.
+
+Writing a NOP over the call instead stalls the PPU interpreter on that word: the main
+thread sat at `0x002e3b98` until the `bl` was restored.
+
+Same restore, same tuck, twelve frames each:
+
+- **The purple lightning arcs over the road are not this effect.** They are just as
+  dense with both names broken, they surround rivals no ribbon touches, and they
+  follow stretches of track. What they are is open.
+- **The burst is at the nose.** Pink-white pixels (the `_RED` palette, 255,242,242
+  down to 255,159,156) in a 500x370 window on the nose: 7,537 on, 4,989 off, over
+  the 12 frames. The largest single gap is 2,106 against 45.
+- **What it looks like, at 2000x1200:** a soft additive glow on the nose. One frame
+  shows it about 48 px round; another shows about 90x40 px across the nose with one
+  sharp streak about 30x5 px. The softness is the original's own.
+
+### Against ours, and what is left
+
+| axis | original | ours, before | ours, now |
+| --- | --- | --- | --- |
+| rate | every frame inside (read) | every tick inside | unchanged |
+| node | intruder's, nearest the contact (nose) | intruder's nearest authored anchor | unchanged |
+| colour | owner's `+0x7d2c` | intruder's flag | owner's |
+| motion | newborns + 0.5 x craft velocity | none: left behind, piling up toward the camera | carried |
+| size | soft glow about 48-90 px at the nose | soft blobs 30-60 px (`--trail-sparks`) | unchanged |
+| alpha by contact depth | `1 - f1` on `+0x40` (unread consumer) | none | none |
+| streak shape | one sharp streak seen | procedural profile (HD class 6 unread) | unchanged |
+
+**The "too big, too blurry" memory is not supported on size.** The original's glow
+is within about 1.5x of our blobs, and it is soft too. What a player sees differ is:
+
+- **where it sits:** at the nose, not falling back past the camera;
+- **its colour:** the owner's.
+
+Both are fixed from readings. `--trail-sparks` places its burst on the topmost anchor
+(chosen), so its pixel counts are not a pair.
+
+Still unread, with where to look:
+
+- HD's class-6 draw: the batch builder that consumes the render-mode table.
+- The size channel's unit on HD.
+- The consumer of instance `+0x40`/`+0x4c`: search the SPU particle job for the
+  scale block.
+
+Listing the effect in `oag_hd::effects::SPRITES` was tried and changes nothing on
+screen: a class-6 emitter under `StreakDraw::Procedural` never samples its sprite.
+
+**Checked, applies, not wired:** `ShipCollisionFx_Trigger` gives its spawned sparks
+the craft's velocity the same way. Our HD collision sparks are not carried.
+
+**Omega: checked, applies.** `eboot-ps4-omega-eu.bin`'s `FUN_01724f50` (called from
+`FUN_016f60e0`) has the same signature `(f1, node, variant)` and the same tags
+(`0x494c5254`, `0x524c5254`). It spawns through `FUN_017136d0` with no scale, writes
+the craft's velocity times `0.016666668`, and stores `1.0 - param_1` into the same two
+slots. The strings `WO_TRAIL_HITSHIP(_RED)(.POB)` are at `0x01837a37`-`0x01837b50`.
+Ours is title-generic in `Race::advance_trail_hits`; an Omega race was not run here.
+
 ## The third sampler is the lightmap slot, empty
 
 `enginetrail_bluered_triangle.rcsmodel`'s material record names a third
