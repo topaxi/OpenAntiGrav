@@ -123,11 +123,19 @@ impl Space {
         size: SCREEN,
         display_aspect: SCREEN.0 / SCREEN.1,
     };
-    /// PAL's 640x448, shown as the PSP's own 480/272 - anamorphic, and 0.74%
-    /// off the 16:9 the disc's menu calls it.
+    /// PAL's 640x448, shown as the 16:9 the console outputs - anamorphic.
+    ///
+    /// **16:9 exactly, not the PSP's 480/272 this used to be** (0.74 % narrower,
+    /// 4 px of bar at 1280x720). The game's own 640x448 frame fills the whole
+    /// 16:9 raster; PCSX2's 16:9 screenshot of Grid Selection has the panel's
+    /// right edge flush (frame x 613 at 2.4875 screenshot px per frame px, no
+    /// offset) and every left-layer element of ours sat `4.19 - 0.00728 x` px
+    /// from it at 1280x720, which is that bar (`docs/ps2/aspect-ratio.md`,
+    /// "Measured against PCSX2's frame"). The art is undistorted at 480/272 and
+    /// 0.74 % off that at 16:9; that is what the console shows.
     pub const PS2: Self = Self {
         size: (640.0, 448.0),
-        display_aspect: SCREEN.0 / SCREEN.1,
+        display_aspect: 16.0 / 9.0,
     };
     /// Wipeout HD's 1920x1080 square pixels, shown as itself.
     ///

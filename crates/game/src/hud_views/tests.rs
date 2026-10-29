@@ -112,8 +112,10 @@ fn a_non_square_grids_views_are_measured_in_each_axis_own_units() {
 /// the group's lowest grid row, once placed, is the view's last row less the margin.
 #[test]
 fn a_piece_pinned_to_the_bottom_sits_at_the_bottom_of_a_ps2_view() {
-    let view = oag_render::viewport::layout(2, SCREEN, Cut::Horizontal)[1];
-    let rect = grid_rect(view, SCREEN, Space::PS2);
+    // The PS2's grid is shown at 16:9, so the viewport is that shape: a PSP-shaped one letterboxes it.
+    const WIDE: (f32, f32, f32, f32) = (0.0, 0.0, 1440.0, 810.0);
+    let view = oag_render::viewport::layout(2, WIDE, Cut::Horizontal)[1];
+    let rect = grid_rect(view, WIDE, Space::PS2);
     let piece = oag_hud::split_hud::Piece {
         layout: oag_hud::Layout::default(),
         source: [0.0, 400.0],
@@ -127,7 +129,7 @@ fn a_piece_pinned_to_the_bottom_sits_at_the_bottom_of_a_ps2_view() {
     let placed = piece.placement(rect, Space::PS2.size);
     // In screen pixels, which is where the player looks: the grid is 1.82 pixels a row here.
     let low_row = placed.scale * 400.0 + placed.offset[1];
-    let low = low_row * SCREEN.3 / Space::PS2.size.1;
+    let low = low_row * WIDE.3 / Space::PS2.size.1;
     let want = view.1 + view.3 * 0.96;
     assert!(
         (low - want).abs() < 2.0,

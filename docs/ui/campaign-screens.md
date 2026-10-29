@@ -4624,13 +4624,15 @@ the PSP's `SELECTOR_ORIGIN`; `oag_pulse::frontend::PS2_MENU_SKIN` is `Some((-11,
 function (`FUN_001905d8`, [grid-selection.md](../ghidra/functions/ps2-pulse-eu/grid-selection.md)) keeps the `5.0` and `7.0`
 literals and the pulse law, so the extra `(-6, -7)` is the stretched art (x: `(56-43)/2 = 6.5`; y: not explained).
 **Pulse colour and period on the PS2: the same law as the PSP by the decompile** (phase `2*dt`, wrap `2.0`, `0xff33a6b9` to white),
-not yet measured on PCSX2 pixels. Measured against PCSX2's frames
+now **measured on PCSX2** (`pulse-ps2-frame-offset`, 2026-10-29): the four ring quads of a Grid dump carry vertex colours `(47,44,41,37), (92,91,89,88), (100,99,97,96)` (GS 0x80 = 1.0; x2 for 8 bits) and the three channels give one lerp parameter between `0xff33a6b9` and white each frame (`0.21, 0.18, 0.15, 0.11`), so the endpoints are the PSP's; stepping a Grid state in PCSX2 and reading the ring stroke gives minima at frames 18 and 78: a **60-frame period** (1.00 s at the dump's NTSC-timed 60 Hz). Halo strength: not measured (ours' phase is the rest one). Measured against PCSX2's frames
 (`scripts/pcsx2-menu-pair.py`, `scripts/menu_hex_offsets.py`, [compare-page.md](../tools/compare-page.md), "Menu pairs: Wipeout
 Pulse (PS2)"): the selected ring's gradient offset to the original, **before** `+15.4 / +8.2 px` (grid) and `+13.9 / +7.7`
 (cell), **after** `+2.5 / -3.4` and `+1.8 / -3.4`; the unselected hexes (8 of them over both screens) sit at `+0.6..+2.9 / -3.7`,
-a **frame-level transform** between PCSX2's screenshot and ours (x: the documented 480/272 pillar of `Space::PS2`, `-0.0073` px per
-px; y: a constant `-3.68 px` = 2.3 grid units, cause not isolated), and **against that transform the residual is within
-0.07 px for the unselected hexes (the transform is fitted on them, so that only shows the field is rigid) and 0.28 px for the selected ring (independent)**, both axes, both screens. In the original's own coordinates the placement is exact: selector `(76,233)` / `(144,129)` equal the GS quads. Whether the frame-level offset is PCSX2's presentation or ours is open.
+a frame-level offset to PCSX2's screenshot that `pulse-ps2-frame-offset` settled (2026-10-29): x was `Space::PS2`'s 480/272 pillar, now `16/9` (the
+hexes read `-0.3..-0.5 px`); y, a constant `-3.65 px` (2.27 grid units), is the game's own `DISPLAY1/2.DY = 52` that PCSX2 honours (replaying
+the dump with `DY` rewritten moves the picture 1 frame row per unit, `DX` and `DBY` do nothing) and that ours does not apply
+([compare-page.md](../tools/compare-page.md), "Menu pairs: Wipeout Pulse (PS2)"). In the original's own coordinates the placement is exact:
+selector `(76,233)` / `(144,129)` equal the GS quads.
 - **2048/Omega**: not applicable (Pulse's `GridController` and Pulse PS2's skin). Pure PSP and Pulse PSP keep `(-5, -7)`.
 
 
