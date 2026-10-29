@@ -298,9 +298,8 @@ tinted by native code at runtime (`GridController_UpdateSelectorPulse`,
 `GridSelection_PopulateTiles`, `GridSelection_UpdatePageTransition` - the
 first and third renamed and documented this pass, `race-campaign.md`'s own
 new "The runtime tint layer" section has the full decompile). Fixed:
-`Selector` now draws the measured cyan endpoint of its own real pulse
-animation (the pulse itself is not implemented - no clock reaches the
-draw-list builder); `Grid Selection`'s tier hexes now draw the measured dim
+`Selector` now pulses on its own real animation (2026-10-29,
+`SelectorPulse`, a clock on the grid/cell model); `Grid Selection`'s tier hexes now draw the measured dim
 cyan-teal tint; the page arrows now grey out at their own boundary. **Left
 open, not guessed at**: `Cell Selection`'s own hex-outline tint (its XML
 routes through an unresolved `FEGlobals->CM_HEX_Outline` this project has

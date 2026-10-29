@@ -7,10 +7,17 @@
 const CYAN: u32 = 0xff33_a6b9;
 const WHITE: u32 = 0xffff_ffff;
 
-/// Seconds the pulse has run, owned by the `Grid Selection`/`Cell Selection`
-/// model so the draw list needs no clock argument. The origin (phase 0 at the
-/// screen opening, so cyan first) is **chosen, not measured**: the decompile
-/// gives the rate and the endpoints, not the tile's initial `+0x9c` phase.
+/// Seconds after the screen opened that the original holds the selector at
+/// cyan before the triangle starts: PPSSPP frames grabbed 0.04-0.9 s after
+/// `Grid Selection` replaced `Main Menu` (7 entries, `scripts/psp-menu-pair.py`'s
+/// entry clock) read cyan until 0.3-0.4 s, then rise to white by 0.7-0.9 s.
+/// Fitted to those frames (+-0.1 s, wall clock), not read from the executable:
+/// the entrance animation that holds it is not located. Confidence 50.
+const ENTRY_HOLD: f32 = 0.35;
+
+/// Seconds since the screen opened, owned by the `Grid Selection`/`Cell
+/// Selection` model so the draw list needs no clock argument. The law (rate,
+/// endpoints) is `0x088a5700`'s; [`ENTRY_HOLD`] is the fitted entry delay.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct SelectorPulse {
     seconds: f32,
@@ -34,7 +41,7 @@ impl SelectorPulse {
     /// half of the 2.0-wide phase, `lerp(phase - 1, white, cyan)` for the rest.
     #[must_use]
     pub fn tint(&self) -> u32 {
-        let phase = (self.seconds * 2.0) % 2.0;
+        let phase = ((self.seconds - ENTRY_HOLD).max(0.0) * 2.0) % 2.0;
         if phase > 1.0 {
             lerp_argb(phase - 1.0, WHITE, CYAN)
         } else {
@@ -63,14 +70,16 @@ mod tests {
     fn tint_is_a_one_second_triangle_between_cyan_and_white() {
         let mut p = SelectorPulse::default();
         assert_eq!(p.tint(), CYAN);
-        p.set_seconds(0.5);
+        p.set_seconds(ENTRY_HOLD);
+        assert_eq!(p.tint(), CYAN, "held cyan through the entry");
+        p.set_seconds(ENTRY_HOLD + 0.5);
         assert_eq!(p.tint(), WHITE);
-        p.set_seconds(1.0);
+        p.set_seconds(ENTRY_HOLD + 1.0);
         assert_eq!(p.tint(), CYAN);
-        p.set_seconds(0.25);
+        p.set_seconds(ENTRY_HOLD + 0.25);
         let quarter = p.tint();
         assert!(quarter != CYAN && quarter != WHITE);
-        p.set_seconds(0.75);
+        p.set_seconds(ENTRY_HOLD + 0.75);
         assert_eq!(p.tint(), quarter, "the wave is symmetric about 0.5 s");
     }
 
@@ -78,7 +87,7 @@ mod tests {
     fn tick_moves_the_tint() {
         let mut p = SelectorPulse::default();
         let before = p.tint();
-        for _ in 0..15 {
+        for _ in 0..40 {
             p.tick(1.0 / 60.0);
         }
         assert_ne!(p.tint(), before);

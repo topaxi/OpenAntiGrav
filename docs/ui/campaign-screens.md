@@ -4556,3 +4556,27 @@ emulator), so flagged for the lead rather than scoped away.
 right column 0.35 to 0.625 s, `EnableTransition` 0.3/0.5), not curves, and the
 page-in is a vertical wipe (`transitiontype="vwipe"`) on the emblems; nothing here
 plays them. A tween measured off `trans-campsel-original.png` remains the next step.
+
+### The `Selector` pulse (2026-10-29, `pulse-menu-clock`)
+
+`oag_ui_screens::campaign::pulse::SelectorPulse` is a seconds clock owned by `GridSelection` and `CellSelection`
+(`pulse()`/`pulse_mut()`), ticked off the fixed tick by `CampaignStage::tick_ticker` and set by `--menu-picker-seconds`
+for `--menu-page grid-select|cell-select`. `tint()` is the law of `GridController_UpdateSelectorPulse` (`0x088a5700`,
+confidence 85): a triangle wave from `0xff33a6b9` to white, phase `elapsed * 2.0` wrapped at `2.0`.
+
+- **Period 1.00 s, measured** (confidence 80): 24 PPSSPP frames 83 ms apart of `Grid Selection`'s selected hex, red channel
+  of the ring: minima at t = 0.08 s and 1.08 s, plateau at white 0.50-0.75 s and 1.50-1.67 s (the original's `SelectorGlow`
+  saturates the plateau).
+- **Entry hold 0.35 s, fitted, not read** (confidence 40): frames 0.04-0.9 s after `Grid Selection` replaced `Main Menu` (3 entries
+  x 14 frames, `scripts/psp-menu-pair.py`'s entry clock) read cyan until 0.28-0.40 s, then rise to white by 0.65-0.9 s.
+  The entrance animation that holds it is not located. The spread between entries is about +-0.12 s (one entry rose 0.2 s later
+  than the other two), so no constant matches a pair better than that.
+- **Wall clock stands for game time**: PPSSPP reports `gpu.stats.get` 60 fps actual and 59.94 vblanks/s, and the game keeps no
+  frame counter (it measures a delta per frame, `main-loop.md`). Entry hitches are the likely source of the spread.
+- The breakpoint on `0x088a5700` never fired in 20 s on a settled `Grid Selection` (armed, listed, CPU running): whether the
+  function runs per frame or sets up a looping animation is **not established**; the law is the decompile's, the period is
+  confirmed by pixels.
+- **`SelectorGlow` is still undrawn**, and it dominates the cursor-hex box: the original reads white-filled with a halo at the
+  peak, ours a thin ring. Controlled score on the same `theirs.png` (mean grey difference in the cursor-hex box, `main`'s static
+  cyan against the pulse at the recorded 2.07 s): grid 66.3 to 59.3, cell 77.2 to 69.2; the best ours-seconds on a sweep gives
+  56.6 and 65.1, so the clock closes about two thirds of what the pulse alone can, the rest is the glow and a ~0.2 s phase miss.
