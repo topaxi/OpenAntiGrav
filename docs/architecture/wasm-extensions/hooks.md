@@ -259,15 +259,19 @@ clamps are the README's.
 - **`pickup-fire{slot}` / `pickup-absorbed{slot}`**: raised in `Race::spend_pickup`
   (`crates/raceplay/src/weapons.rs`, a person's fire or absorb press) and
   `Race::spend_opponent_pickup` (`crates/raceplay/src/field/opponent_weapons.rs`, the
-  driver's fire decision on a straight or its absorb) for a slot whose pickup a module
-  claimed. Delivered at the same tick's call (phase 2 is before C).
+  driver's fire wherever the Turbo's gate passes; it never absorbs) for a slot holding
+  the mod's own pickup (`Weapon::Extension`). Delivered at the same tick's call (phase
+  2 is before C).
 - **`pad-energy{slot}`**: raised at the speed pad's entry edge in
   `Race::test_speedup_pads` (`crates/raceplay/src/pads.rs`) for a slot in `pad-mode`.
   The pad's force, plume and pad cue are skipped for that slot; its edge, cache and
   Zone score are the pad's as ever.
 - **`shield-delta`** lands at C: a loss through `oag_physics::damage::apply_weapon`, a
   gain through `damage::add`.
-- **`claim-pickup`** is host state, `RaceSim::extensions`, hashed.
+- **`give-pickup` / `clear-pickup`** write the slot's pickup at C. **`pickup-roll`**
+  is host state (`RaceSim::extensions`: the rule, its count and the owning module),
+  hashed, and is read at the weapon pad's grant in `Race::test_weapon_pads`
+  (`crates/raceplay/src/pads.rs`).
 - **`scale-thrust` above 1.0** lands in `Environment::extension_thrust`, taken by the
   step (`player_step.rs`, `field.rs`).
 - **`play-cue`** pushes onto `RaceSim::cues`. **`fire-effect`** queues for

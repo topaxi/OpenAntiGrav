@@ -1,6 +1,8 @@
 //! Energy Turbo on a real circuit: holding fire with the turbo boosts and costs shield,
 //! an absorb gives back at most half of what was spent, a speed pad fills the pool
-//! instead of boosting, and a craft without the turbo is untouched.
+//! instead of boosting, a craft without the turbo is untouched, and in a full field the
+//! weapon pads hand out the mod's pickup in place of every second Turbo and the AI
+//! boosts with it.
 //!
 //! **`#[ignore]`d and never run in CI**: it needs `data/images/pulse-psp-eu.chd`, the
 //! `assets/mods/examples` submodule and the `extensions` feature:
@@ -11,8 +13,8 @@
 //! ```
 //!
 //! Single Race (weapons and damage on) with an empty grid, so two races differ only by
-//! the player's craft. The Turbo is put in the craft's hands at the start, which is what a
-//! weapon pad would do. This project's driver flies the craft (`Race::set_autopilot`);
+//! the player's craft. The mod's pickup (`Weapon::Extension`) is put in the craft's hands
+//! at the start, which is what a weapon pad does under the mod's `pickup-roll`. This project's driver flies the craft (`Race::set_autopilot`);
 //! fire and absorb are pressed by the script.
 #![cfg(feature = "extensions")]
 
@@ -52,16 +54,20 @@ fn energy_turbo() -> Option<race::extensions::Source> {
     })
 }
 
-/// A Single Race with nobody else on the grid; `turbo` hands the player a Turbo and
-/// starts it at half a pool, so a gain shows.
-fn race_with(module: Option<&race::extensions::Source>, turbo: bool) -> Option<race::Race> {
+/// A Single Race with nobody else on the grid, or a full one (`field`); `turbo` hands
+/// the player the energy turbo and starts it at half a pool, so a gain shows.
+fn race_on(
+    module: Option<&race::extensions::Source>,
+    turbo: bool,
+    field: bool,
+) -> Option<race::Race> {
     let image = oag_testdata::image("data/images/pulse-psp-eu.chd")?;
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
         track: Some(TRACK.to_string()),
         class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
-        no_driver_for_class: true,
+        no_driver_for_class: !field,
         extensions: module.into_iter().cloned().collect(),
         ..race::Options::default()
     })
@@ -73,9 +79,13 @@ fn race_with(module: Option<&race::extensions::Source>, turbo: bool) -> Option<r
     let ship = &mut race.sim.world.ships[0];
     ship.physics.shield = ship.handling.dimensions.shield * 0.5;
     if turbo {
-        ship.pickup.weapon = Some(Weapon::Turbo);
+        ship.pickup.weapon = Some(Weapon::Extension);
     }
     Some(race)
+}
+
+fn race_with(module: Option<&race::extensions::Source>, turbo: bool) -> Option<race::Race> {
+    race_on(module, turbo, false)
 }
 
 fn held(buttons: &[Button], pressed: &[Button]) -> PlayerInputs {
@@ -142,7 +152,7 @@ fn holding_fire_boosts_on_shield_and_an_absorb_pays_back_at_most_half() {
     const FIRE: std::ops::Range<u32> = 360..480;
     let a = drive(&mut boosted, 0..480, FIRE, None);
     let b = drive(&mut carried, 0..480, 0..0, None);
-    for t in [359, 390, 420, 479] {
+    for t in [359, 380, 400, 420, 479] {
         let t = t as usize;
         println!(
             "tick {t}: fire held {:.1} km/h shield {:.2} / carried {:.1} km/h shield {:.2}",
@@ -154,7 +164,7 @@ fn holding_fire_boosts_on_shield_and_an_absorb_pays_back_at_most_half() {
     assert!(a[479].shield < b[479].shield, "and paid for in shield");
     assert_eq!(
         boosted.sim.world.ships[0].pickup.weapon,
-        Some(Weapon::Turbo),
+        Some(Weapon::Extension),
         "firing keeps it"
     );
 
@@ -243,4 +253,77 @@ fn an_energy_turbo_race_run_twice_hashes_the_same_every_tick() {
         second.tick(&inputs);
         assert_eq!(first.sim.state_hash(), second.sim.state_hash(), "tick {t}");
     }
+}
+
+/// The mod's own numbers (`guest/src/lib.rs`): every second Turbo rolled, the drain.
+const ROLL_EVERY: u32 = 2;
+const DRAIN_SHARE: f32 = 0.008;
+
+#[test]
+#[ignore = "needs a Pulse disc image, the mod examples and --features extensions"]
+fn in_a_full_field_every_second_turbo_is_the_mods_and_the_ai_boosts_on_it() {
+    let Some(source) = energy_turbo() else { return };
+    let Some(mut race) = race_on(Some(&source), false, true) else {
+        return;
+    };
+    let ships = usize::from(race.sim.world.ship_count);
+    let mut carried: Vec<Option<Weapon>> = vec![None; ships];
+    let (mut turbos, mut energy) = (0_u32, 0_u32);
+    let mut boost_ticks = 0_u32;
+    // What the pads handed the player, whose pickup is spent the tick it arrives (the
+    // driver flying it fires nothing), so it keeps drawing.
+    let mut player: Vec<Weapon> = Vec::new();
+    let mut prior: Vec<f32> = race.sim.world.ships[..ships]
+        .iter()
+        .map(|ship| ship.physics.shield)
+        .collect();
+    for _ in 0..10_800 {
+        race.tick(&held(&[Button::Cross], &[]));
+        if let Some(weapon) = race.sim.world.ships[0].pickup.take() {
+            player.push(weapon);
+            match weapon {
+                Weapon::Turbo => turbos += 1,
+                Weapon::Extension => energy += 1,
+                _ => {}
+            }
+        }
+        for slot in 1..ships {
+            let ship = &race.sim.world.ships[slot];
+            let now = ship.pickup.weapon;
+            if carried[slot].is_none() {
+                match now {
+                    Some(Weapon::Turbo) => turbos += 1,
+                    Some(Weapon::Extension) => energy += 1,
+                    _ => {}
+                }
+            }
+            // A boosting tick costs exactly the drain share and nothing else touches
+            // the pool on most ticks: a drop of that size while carrying it is a boost.
+            let drop = prior[slot] - ship.physics.shield;
+            let drain = ship.handling.dimensions.shield * DRAIN_SHARE;
+            if now == Some(Weapon::Extension) && (drop - drain).abs() < 1e-4 {
+                boost_ticks += 1;
+            }
+            carried[slot] = now;
+            prior[slot] = ship.physics.shield;
+        }
+    }
+    println!(
+        "in 180 s: {turbos} Turbos and {energy} energy turbos handed out; {boost_ticks} AI boost ticks; the player drew {player:?}"
+    );
+    assert!(
+        turbos > 0 && energy > 0,
+        "{turbos} Turbos, {energy} energy turbos"
+    );
+    // The count is race-wide over every weapon pad's Turbo draw, so the two can differ
+    // by one at most.
+    assert!(
+        turbos.abs_diff(energy * (ROLL_EVERY - 1)) <= 1,
+        "every second Turbo: {turbos} against {energy}"
+    );
+    assert!(boost_ticks > 0, "no AI craft boosted on the energy turbo");
+    // The player's own draws are printed, not asserted: one grant path serves every
+    // slot (`Race::test_weapon_pads`), and whether the human column's odds deal the
+    // player a Turbo in one race is luck of the race (one energy turbo at x1.6, none
+    // at x1.9).
 }

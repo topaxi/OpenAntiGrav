@@ -188,7 +188,7 @@ pub(super) const fn pickup_caption_id(weapon: oag_tables::weapons::Weapon) -> Op
         Weapon::Bomb => "FE_BOMB",
         Weapon::Cannon => "FE_CANNON",
         Weapon::LeachBeam => "FE_LEECHBEAM",
-        Weapon::Repulser | Weapon::Shuriken | Weapon::Disruptor => return None,
+        Weapon::Repulser | Weapon::Shuriken | Weapon::Disruptor | Weapon::Extension => return None,
     })
 }
 

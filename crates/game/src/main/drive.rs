@@ -344,7 +344,22 @@ fn state_of(session: &Session) -> State {
 /// The race the loader was handed; its `title` once it is loaded.
 fn resolved(session: &Session) -> Option<Resolved> {
     let options = session.race_options.as_ref()?;
+    let race = match &session.stage {
+        Stage::Race(stage) => Some(&stage.race),
+        _ => None,
+    };
     Some(Resolved {
+        mods: race.map_or_else(Vec::new, |race| {
+            race.extension_reports().into_iter().map(|r| r.mod_id).collect()
+        }),
+        pickup: race.and_then(|race| {
+            let slot = (0..usize::from(race.sim.world.ship_count))
+                .find(|&slot| race.sim.world.person_flown(slot))?;
+            race.sim.world.ships[slot]
+                .pickup
+                .weapon
+                .map(|weapon| weapon.as_type().to_string())
+        }),
         source: options.source.clone(),
         craft_source: options.craft_source.clone(),
         title: matches!(session.stage, Stage::Race(_))

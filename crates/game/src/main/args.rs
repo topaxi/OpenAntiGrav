@@ -384,8 +384,10 @@ pub(crate) fn leach_path(path: Option<&std::path::Path>) -> Result<Option<Vec<oa
 /// actually holds, so a typo is one read away from fixed.
 pub(crate) fn give_weapon(name: Option<&str>) -> Result<Option<oag_tables::weapons::Weapon>> {
     let Some(name) = name else { return Ok(None) };
+    // `extension` is a simulation mod's own pickup: inert without a mod that owns it.
     let found = oag_tables::weapons::Weapon::ALL
         .into_iter()
+        .chain([oag_tables::weapons::Weapon::Extension])
         .find(|weapon| weapon.as_type().eq_ignore_ascii_case(name));
     match found {
         Some(weapon) => Ok(Some(weapon)),

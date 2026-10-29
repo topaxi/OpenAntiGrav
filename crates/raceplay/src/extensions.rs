@@ -263,16 +263,16 @@ impl Extensions {
         }
     }
 
-    /// Whether a module claimed `slot`'s pickup: the engine must neither fire nor absorb
-    /// it, and calls [`Self::pickup_used`] instead. `false` in every race without one.
-    pub(super) fn claimed(&self, slot: usize) -> bool {
+    /// A weapon pad just drew `weapon`: whether a module's `pickup-roll` turns this grant
+    /// into the mod's own pickup. Counts the grant. `false` in every race without one.
+    pub(super) fn rolls(&mut self, weapon: oag_tables::weapons::Weapon) -> bool {
         #[cfg(feature = "extensions")]
         {
-            self.on.claimed(slot)
+            self.on.rolls(weapon)
         }
         #[cfg(not(feature = "extensions"))]
         {
-            let _ = slot;
+            let _ = weapon;
             false
         }
     }
@@ -327,7 +327,7 @@ impl Extensions {
         let _ = slot;
     }
 
-    /// A claimed pickup's fire (`absorbed == false`) or absorb, raised for the module.
+    /// The mod's own pickup's fire (`absorbed == false`) or absorb, raised for the module.
     pub(super) fn pickup_used(&mut self, slot: usize, absorbed: bool) {
         #[cfg(feature = "extensions")]
         self.on.pickup_used(slot, absorbed);
@@ -462,10 +462,13 @@ mod on {
         /// Each slot's engine scale above 1.0 for this tick's step
         /// (`Environment::extension_thrust`), set at the call and taken by the step.
         pub(super) boost: [f32; oag_gameplay::MAX_SHIPS],
-        /// Which module claimed each slot's pickup (its index plus one, 0 for none), and
-        /// the weapon it claimed: the claim lasts while that weapon stays in the slot.
-        claims: [u8; oag_gameplay::MAX_SHIPS],
-        claimed: [Option<oag_tables::weapons::Weapon>; oag_gameplay::MAX_SHIPS],
+        /// The module that owns the mod pickup kind (its index plus one, 0 for none):
+        /// the first to give, clear or roll it. Another module doing so faults.
+        owner: u8,
+        /// The `pickup-roll` rule (weapon, every) and how many grants of that weapon
+        /// it has counted.
+        roll: Option<(oag_tables::weapons::Weapon, u8)>,
+        rolled: u32,
         /// `pickup-fire` / `pickup-absorbed` raised since the last call, one bit a slot.
         fires: u32,
         absorbs: u32,
@@ -495,8 +498,9 @@ mod on {
                     .collect(),
                 walls: 0,
                 boost: [1.0; oag_gameplay::MAX_SHIPS],
-                claims: [0; oag_gameplay::MAX_SHIPS],
-                claimed: [None; oag_gameplay::MAX_SHIPS],
+                owner: 0,
+                roll: None,
+                rolled: 0,
                 fires: 0,
                 absorbs: 0,
                 pad_mode: 0,
@@ -511,8 +515,15 @@ mod on {
             self.slots[index].blob.clone()
         }
 
-        pub(super) fn claimed(&self, slot: usize) -> bool {
-            self.claims[slot] != 0
+        pub(super) fn rolls(&mut self, weapon: oag_tables::weapons::Weapon) -> bool {
+            let Some((rolled, every)) = self.roll else {
+                return false;
+            };
+            if weapon != rolled {
+                return false;
+            }
+            self.rolled += 1;
+            self.rolled.is_multiple_of(u32::from(every))
         }
 
         pub(super) fn pickup_used(&mut self, slot: usize, absorbed: bool) {
@@ -538,10 +549,15 @@ mod on {
             for boost in self.boost {
                 hasher.write_f32(boost);
             }
-            for (claim, weapon) in self.claims.iter().zip(self.claimed) {
-                hasher.write_u8(*claim);
-                hasher.write_u8(weapon.map_or(0, |w| w as u8 + 1));
+            hasher.write_u8(self.owner);
+            match self.roll {
+                None => hasher.write_u8(0),
+                Some((weapon, every)) => {
+                    hasher.write_u8(weapon as u8 + 1);
+                    hasher.write_u8(every);
+                }
             }
+            hasher.write_u32(self.rolled);
             hasher.write_u32(self.fires);
             hasher.write_u32(self.absorbs);
             hasher.write_u32(self.pad_mode);
@@ -575,7 +591,6 @@ mod on {
 
     /// The observation's craft records: copies of the world, never a pointer into it.
     fn crafts(sim: &RaceSim, inputs: &oag_gameplay::PlayerInputs) -> Vec<abi::Craft> {
-        let claims = sim.extensions.on.claims;
         sim.world
             .ships
             .iter()
@@ -592,6 +607,9 @@ mod on {
                     && !oag_race::RaceState::thrust_gated(sim.world.tick);
                 abi::Craft {
                     pickup: ship.pickup.weapon.map_or(0, |weapon| {
+                        if weapon == oag_tables::weapons::Weapon::Extension {
+                            return abi::PICKUP_EXTENSION;
+                        }
                         oag_tables::weapons::Weapon::ALL
                             .iter()
                             .position(|w| *w == weapon)
@@ -601,7 +619,6 @@ mod on {
                         (person, abi::CRAFT_PERSON),
                         (fire_held, abi::CRAFT_FIRE_HELD),
                         (racing, abi::CRAFT_RACING),
-                        (claims[slot] != 0, abi::CRAFT_CLAIMED),
                     ]
                     .into_iter()
                     .filter(|(on, _)| *on)
@@ -639,18 +656,61 @@ mod on {
         }
     }
 
+    /// `give-pickup`, `clear-pickup` and `pickup-roll` from module `index`: the first
+    /// module to send one owns the mod pickup kind for the race, and another one sending
+    /// one faults. A race without weapons gives nothing and rolls nothing.
+    fn pickup_command(sim: &mut RaceSim, index: usize, command: Command) {
+        let tick = sim.world.tick;
+        let on = &mut sim.extensions.on;
+        let me = index as u8 + 1;
+        if on.owner != 0 && on.owner != me {
+            let owner = on.slots[usize::from(on.owner - 1)].mod_id.clone();
+            let module = &mut on.slots[index];
+            if module.faulted.is_none() {
+                let why = format!("the mod pickup belongs to mod {owner}");
+                log::warn!(
+                    "mod {}: {why}, at tick {tick}; off for the rest of the race",
+                    module.mod_id
+                );
+                module.faulted = Some((tick, why));
+            }
+            return;
+        }
+        on.owner = me;
+        if !sim.weapons_on {
+            return;
+        }
+        let extension = oag_tables::weapons::Weapon::Extension;
+        match command {
+            // The slot's `last` stays what it was: the repeat rule is about the title's
+            // own weapons.
+            Command::GivePickup { slot } => {
+                let pickup = &mut sim.world.ships[usize::from(slot)].pickup;
+                if pickup.weapon.is_none() {
+                    pickup.weapon = Some(extension);
+                }
+            }
+            Command::ClearPickup { slot } => {
+                let pickup = &mut sim.world.ships[usize::from(slot)].pickup;
+                if pickup.weapon == Some(extension) {
+                    pickup.take();
+                }
+            }
+            Command::PickupRoll { weapon, every } => {
+                let weapon = oag_tables::weapons::Weapon::ALL[usize::from(weapon) - 1];
+                let on = &mut sim.extensions.on;
+                if on.roll != Some((weapon, every)) {
+                    on.roll = Some((weapon, every));
+                    on.rolled = 0;
+                }
+            }
+            _ => {}
+        }
+    }
+
     pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs) {
         if sim.extensions.on.slots.is_empty() {
             return;
-        }
-        // A claim ends when its pickup leaves the slot (absorbed, cleared by a respawn,
-        // replaced by another).
-        for slot in 0..oag_gameplay::MAX_SHIPS {
-            let on = &mut sim.extensions.on;
-            if on.claims[slot] != 0 && sim.world.ships[slot].pickup.weapon != on.claimed[slot] {
-                on.claims[slot] = 0;
-                on.claimed[slot] = None;
-            }
         }
         let crafts = crafts(sim, inputs);
         let tick = sim.world.tick;
@@ -757,29 +817,9 @@ mod on {
                     sim.extensions.on.tints[usize::from(slot)] =
                         Some([r, g, b, a].map(|c| f32::from(c) / 255.0));
                 }
-                Command::ClaimPickup { slot } => {
-                    let slot = slot as usize;
-                    let weapon = sim.world.ships[slot].pickup.weapon;
-                    let on = &mut sim.extensions.on;
-                    let owner = index as u8 + 1;
-                    if on.claims[slot] == 0 || on.claims[slot] == owner {
-                        on.claims[slot] = owner;
-                        on.claimed[slot] = weapon;
-                    } else {
-                        // One module's claim at a time: a second is a refused command.
-                        let module = &mut on.slots[index];
-                        if module.faulted.is_none() {
-                            log::warn!(
-                                "mod {}: claim-pickup for slot {slot}, already claimed, at tick {tick}; off for the rest of the race",
-                                module.mod_id
-                            );
-                            module.faulted = Some((
-                                tick,
-                                format!("claim-pickup for slot {slot}, already claimed"),
-                            ));
-                        }
-                    }
-                }
+                Command::GivePickup { .. }
+                | Command::ClearPickup { .. }
+                | Command::PickupRoll { .. } => pickup_command(sim, index, command),
             }
         }
     }

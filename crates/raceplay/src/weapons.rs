@@ -162,9 +162,9 @@ impl Race {
         let Some(weapon) = self.sim.world.ships[slot].pickup.weapon else {
             return;
         };
-        // A simulation mod claimed this pickup: the button is the mod's, and an absorb
-        // takes the pickup away with no energy paid (`crate::extensions`).
-        if self.sim.extensions.claimed(slot) {
+        // A simulation mod's own pickup (`Weapon::Extension`): the button is the mod's,
+        // and an absorb takes the pickup away with no energy paid (`crate::extensions`).
+        if weapon == oag_tables::weapons::Weapon::Extension {
             if !fire {
                 self.sim.world.ships[slot].pickup.take();
             }
@@ -181,6 +181,8 @@ impl Race {
         // both.
         if fire {
             match weapon {
+                // Routed to its mod above, before any table is read.
+                oag_tables::weapons::Weapon::Extension => {}
                 oag_tables::weapons::Weapon::Turbo => {
                     let Some(simple) = weapons.simple(weapon) else {
                         // The file authors no Turbo. Nothing to fire *with*, so

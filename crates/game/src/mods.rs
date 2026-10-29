@@ -720,6 +720,20 @@ impl Mods {
                 text
             });
             lines.push(format!("mod {} - {rows}", module.describe()));
+            // A simulation mod in a build that cannot run it: said at boot, or the race
+            // looks vanilla with the mod listed as loaded.
+            if !cfg!(feature = "extensions")
+                && module
+                    .manifest
+                    .extension
+                    .as_ref()
+                    .is_some_and(|e| e.rules.is_some())
+            {
+                lines.push(format!(
+                    "mod {}: its simulation module does not run, this build has no `extensions` feature (`just play-mods`)",
+                    module.manifest.id
+                ));
+            }
         }
         for module in self
             .player
