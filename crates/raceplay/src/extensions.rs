@@ -254,6 +254,29 @@ impl Extensions {
         }
     }
 
+    /// Whether a module put `slot` in `pad-mode` this tick: a speed pad gives it no boost.
+    pub(super) fn pad_mode(&self, slot: usize) -> bool {
+        #[cfg(feature = "extensions")]
+        {
+            self.on.pad_mode & (1 << slot) != 0
+        }
+        #[cfg(not(feature = "extensions"))]
+        {
+            let _ = slot;
+            false
+        }
+    }
+
+    /// A craft in `pad-mode` entered a speed pad.
+    pub(super) fn pad_energy(&mut self, slot: usize) {
+        #[cfg(feature = "extensions")]
+        {
+            self.on.pad_energy |= 1 << slot;
+        }
+        #[cfg(not(feature = "extensions"))]
+        let _ = slot;
+    }
+
     /// A claimed pickup's fire (`absorbed == false`) or absorb, raised for the module.
     pub(super) fn pickup_used(&mut self, slot: usize, absorbed: bool) {
         #[cfg(feature = "extensions")]
@@ -372,6 +395,9 @@ mod on {
         /// `pickup-fire` / `pickup-absorbed` raised since the last call, one bit a slot.
         fires: u32,
         absorbs: u32,
+        /// Slots in `pad-mode` this tick, and `pad-energy` raised since the last call.
+        pub(super) pad_mode: u32,
+        pub(super) pad_energy: u32,
     }
 
     impl On {
@@ -395,6 +421,8 @@ mod on {
                 claimed: [None; oag_gameplay::MAX_SHIPS],
                 fires: 0,
                 absorbs: 0,
+                pad_mode: 0,
+                pad_energy: 0,
             }
         }
 
@@ -436,6 +464,8 @@ mod on {
             }
             hasher.write_u32(self.fires);
             hasher.write_u32(self.absorbs);
+            hasher.write_u32(self.pad_mode);
+            hasher.write_u32(self.pad_energy);
             for slot in &self.slots {
                 hasher.write(&slot.blob);
                 match &slot.faulted {
@@ -557,6 +587,7 @@ mod on {
                     bit(on.walls).then_some(Event::WallContact { slot: slot8 }),
                     bit(on.fires).then_some(Event::PickupFire { slot: slot8 }),
                     bit(on.absorbs).then_some(Event::PickupAbsorbed { slot: slot8 }),
+                    bit(on.pad_energy).then_some(Event::PadEnergy { slot: slot8 }),
                 ]
             })
             .flatten()
@@ -565,6 +596,8 @@ mod on {
         on.walls = 0;
         on.fires = 0;
         on.absorbs = 0;
+        on.pad_energy = 0;
+        on.pad_mode = 0;
         let observation = Observation {
             tick,
             active,
@@ -616,6 +649,7 @@ mod on {
                     *boost = (*boost * factor).min(abi::MAX_THRUST_FACTOR);
                 }
                 Command::ShieldDelta { slot, amount } => shield_delta(sim, slot as usize, amount),
+                Command::PadMode { slot } => sim.extensions.on.pad_mode |= 1 << slot,
                 Command::ClaimPickup { slot } => {
                     let slot = slot as usize;
                     let weapon = sim.world.ships[slot].pickup.weapon;

@@ -71,12 +71,16 @@ pub const EVENT_WALL_CONTACT: u8 = 1;
 pub const EVENT_PICKUP_FIRE: u8 = 2;
 /// `pickup-absorbed{slot}`.
 pub const EVENT_PICKUP_ABSORBED: u8 = 3;
+/// `pad-energy{slot}`.
+pub const EVENT_PAD_ENERGY: u8 = 4;
 /// Command kind codes.
 pub const COMMAND_SCALE_THRUST: u8 = 1;
 /// `shield-delta{slot, amount}`.
 pub const COMMAND_SHIELD_DELTA: u8 = 2;
 /// `claim-pickup{slot}`.
 pub const COMMAND_CLAIM_PICKUP: u8 = 3;
+/// `pad-mode{slot}`.
+pub const COMMAND_PAD_MODE: u8 = 4;
 
 /// One grid slot as a guest reads it: copies of what the HUD already shows.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -115,6 +119,11 @@ pub enum Event {
         /// The grid slot.
         slot: u8,
     },
+    /// A craft in `pad-mode` entered a speed pad and was given no boost for it.
+    PadEnergy {
+        /// The grid slot.
+        slot: u8,
+    },
 }
 
 /// What a guest asked for, checked (README 2.1, `command`).
@@ -142,6 +151,12 @@ pub enum Command {
     /// neither fires nor absorbs it, and raises `pickup-fire` / `pickup-absorbed` for the
     /// module instead. The slot must hold a pickup; one module's claim at a time.
     ClaimPickup {
+        /// The grid slot.
+        slot: u8,
+    },
+    /// This tick, a speed pad gives the slot no boost: on entering one the engine raises
+    /// `pad-energy` instead. Sent each tick it should hold.
+    PadMode {
         /// The grid slot.
         slot: u8,
     },
@@ -176,6 +191,10 @@ pub(crate) fn write_observation(buffer: &mut [u8], observation: &Observation<'_>
             }
             Event::PickupAbsorbed { slot } => {
                 buffer[at] = EVENT_PICKUP_ABSORBED;
+                buffer[at + 1] = slot;
+            }
+            Event::PadEnergy { slot } => {
+                buffer[at] = EVENT_PAD_ENERGY;
                 buffer[at + 1] = slot;
             }
         }
@@ -266,6 +285,7 @@ pub(crate) fn read_reply(
                 }
                 commands.push(Command::ClaimPickup { slot });
             }
+            COMMAND_PAD_MODE => commands.push(Command::PadMode { slot }),
             other => {
                 return Err(Fault::Reply(format!(
                     "command {i} has unknown kind {other}"
