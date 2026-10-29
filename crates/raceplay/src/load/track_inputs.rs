@@ -291,7 +291,16 @@ fn foreign(
             use crate::foreign::art;
             let dir = path.parent().unwrap_or_else(|| std::path::Path::new(""));
             let textures = art::resolve_textures(&art, dir, archives, report);
-            let extras = art::extras(&art, &textures, report);
+            let mut extras = art::extras(&art, &textures, report);
+            art::host_pads(
+                &mut extras,
+                Some(&art),
+                &f.speedup_pads,
+                &f.weapon_pads,
+                title.race.track,
+                archives,
+                report,
+            );
             let mut model = art::model(&f.title, &art, textures, report);
             if art.draw_collision && !model.indices.is_empty() {
                 model = art::under_collision(&flat, model, report);
@@ -312,7 +321,17 @@ fn foreign(
                  sky, sun or lens flare"
                     .into(),
             );
-            (flat, Default::default())
+            let mut extras = crate::foreign::art::Extras::default();
+            crate::foreign::art::host_pads(
+                &mut extras,
+                None,
+                &f.speedup_pads,
+                &f.weapon_pads,
+                title.race.track,
+                archives,
+                report,
+            );
+            (flat, extras)
         }
     };
     Ok(Inputs {

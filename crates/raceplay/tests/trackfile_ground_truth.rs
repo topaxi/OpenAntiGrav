@@ -159,6 +159,9 @@ fn every_circuit_exports_and_reads_back_the_same(image: &str) {
     println!("{image}: {total} circuit(s); refused: {refused:#?}");
     println!("art: {art:#?}");
     assert!(refused.is_empty(), "{refused:#?}");
+    // The host's pad art on a circuit's volumes alone covers every circuit whose
+    // own plates the proof compared.
+    assert_eq!(art.host_pad_models, art.pad_models, "{image}");
 }
 
 #[test]
