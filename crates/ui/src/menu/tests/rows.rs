@@ -455,7 +455,7 @@ fn a_menus_rows_stamp_their_glyph_quads_idle_selected_and_help() {
     }
 
     // At the pulse's peak the selected row stamps `70 + 150`.
-    let mut peak = skin.clone();
+    let mut peak = skin;
     peak.tick_pulse(peak.selected_pulse_period_secs().unwrap_or(0.0) / 2.0);
     let draws = draw_list(
         &menu,
