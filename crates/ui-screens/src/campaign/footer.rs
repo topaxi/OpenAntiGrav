@@ -716,14 +716,18 @@ impl NavigationLegend {
     #[must_use]
     pub fn describe(&self) -> String {
         let has = |kind: PromptKind| self.prompts.iter().any(|prompt| prompt.kind == kind);
-        match (has(PromptKind::Confirm), has(PromptKind::Back)) {
-            (true, true) => "Confirm+Back".to_string(),
-            (true, false) => "Confirm only".to_string(),
-            (false, true) => "Back only".to_string(),
+        let prompts = match (has(PromptKind::Confirm), has(PromptKind::Back)) {
+            (true, true) => "Confirm+Back",
+            (true, false) => "Confirm only",
+            (false, true) => "Back only",
             // Unreachable in practice - `Self::read` returns `None` rather
             // than a legend with no prompts at all - kept exhaustive rather
             // than a `_` so a future prompt kind cannot silently fall here.
-            (false, false) => "no prompts".to_string(),
+            (false, false) => "no prompts",
+        };
+        match self.tag_glow {
+            Some(glow) => format!("{prompts}, tag glow {}", glow.value),
+            None => prompts.to_string(),
         }
     }
 }

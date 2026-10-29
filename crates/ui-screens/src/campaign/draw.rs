@@ -708,10 +708,8 @@ pub(super) fn selector_tinted_draw(
     sprite_draw(image, placed, hex[0] + dx, hex[1] + dy, argb)
 }
 
-/// `text`'s draw and, after it, what `Text_Draw` stamps into the glow mask for it: the authored
-/// `RealGlow` (times the colour's alpha, `RealGlow * alpha / 255`), or while the widget is
-/// `pulse="true"` the ladder [`super::pulse::SelectorPulse::text_stamp`] over its glyph quads.
-/// Nothing for a text that authors neither. The title gates whether the frame blooms.
+/// `text`'s draw and, after it, what `Text_Draw` stamps into the glow mask for it
+/// ([`Text::glow_stamp`]) over its glyph quads. The title gates whether the frame blooms.
 pub(super) fn push_text(
     out: &mut Vec<Draw>,
     text: &Text,
@@ -720,12 +718,7 @@ pub(super) fn push_text(
     pulse: &super::pulse::SelectorPulse,
 ) {
     out.push(text_draw(text, content, layout));
-    let value = if text.pulse {
-        pulse.text_stamp(text.pulse_multiplier)
-    } else {
-        let alpha = (text.color >> 24) as f32;
-        (f32::from(text.real_glow) * alpha / 255.0) as u8
-    };
+    let value = text.glow_stamp(pulse.seconds());
     if value > 0 {
         out.push(Draw::GlowText { value });
     }

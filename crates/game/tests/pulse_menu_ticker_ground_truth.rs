@@ -134,3 +134,75 @@ fn a_fresh_saves_ticker_tips_actually_draw() {
         "{label}: the ticker should draw something at elapsed = 0.0 with real tips in hand"
     );
 }
+
+/// **The footer tag's glow is the disc's authored `RealGlow`, and the card titles author `pulse`.**
+/// `NewsItemTagText` carries `RealGlow="64"` in Pulse's front-end root (the one widget authoring that
+/// value) and `Grid Selection`'s `Title` (`GRID 1`) and `Cell
+/// Selection`'s (`SINGLE RACE`) are `pulse="true"` Menu-font texts. Wipeout Pure's root authors no
+/// glow on its tag. A reader that drops either attribute stamps nothing.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn pulses_footer_tag_and_card_titles_author_their_glow() {
+    use oag_ui::frontend::Draw;
+    use oag_ui_screens::picker::FaceScales;
+
+    let images = images();
+    assert!(
+        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none() || !images.is_empty(),
+        "OAG_REQUIRE_GAME_DATA is set but neither Pulse PSP image is present"
+    );
+    for (label, path) in images {
+        let mut archives = oag_assets::Archives::open(&path.to_string_lossy(), oag_pulse::TITLE)
+            .unwrap_or_else(|e| panic!("{label}: the archives open: {e}"));
+        let xml = front_end_root_xml(&mut archives);
+        let screens = Screens::from_xml(&xml);
+        let legend = oag_ui_screens::campaign::footer::NavigationLegend::read(
+            &parse(&xml),
+            &screens.globals,
+            &oag_ui::language::StringTable::default(),
+        )
+        .unwrap_or_else(|| panic!("{label}: Skin.xml authors a NavigationController"));
+        let stamps: Vec<_> = legend
+            .draw(&FaceScales::default())
+            .into_iter()
+            .filter_map(|draw| match draw {
+                Draw::GlowStamp { rect, value } => Some((rect, value)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            stamps,
+            [([29.0, 234.0, 28.0, 14.0], 64)],
+            "{label}: the tag's stamp"
+        );
+
+        let cell = archives
+            .read_name(oag_game::campaign::SCREEN_ENTRY)
+            .unwrap_or_else(|e| panic!("{label}: {e}"));
+        let cell = Screens::from_xml(&fexml::text(&cell).expect("text"));
+        for (screen, string) in [
+            ("Grid Selection", "GRID 1"),
+            ("Cell Selection", "SINGLE RACE"),
+        ] {
+            let screen = cell
+                .screens
+                .iter()
+                .find(|candidate| candidate.name == screen)
+                .unwrap_or_else(|| panic!("{label}: {screen} is authored"));
+            let title = screen
+                .texts
+                .iter()
+                .find(|text| text.name.as_deref() == Some("Title"))
+                .unwrap_or_else(|| panic!("{label}: {} has a Title", screen.name));
+            assert!(
+                title.pulse,
+                "{label}: {string} title is authored pulse=\"true\""
+            );
+            assert_eq!(
+                title.glow_stamp(0.0),
+                220,
+                "{label}: a pulsing title opens at the ladder's top"
+            );
+        }
+    }
+}

@@ -553,6 +553,7 @@ impl Session {
                 picker: None,
                 partner: None,
                 campaign: None,
+                frontend_glow: shell.title.campaign.frontend_glow.is_some(),
                 pure_chain: None,
                 join: None,
                 lan: None,
