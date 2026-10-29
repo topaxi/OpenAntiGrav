@@ -187,12 +187,12 @@ A mod's code is part of what re-simulates, so a replay must name it:
 - **Today the header has no mod field** (`oag_replay::Header`,
   `crates/replay/src/header.rs:20`); `options` is an opaque string map for the
   composition root and `build` is informational, never compared.
-- **Proposal (agreed with the README): a `mods` key in `Header::options`**
-  (`header.rs:58`), listing each simulation module's mod id, version and the SHA-256
-  of its bytes. `options` is opaque to `oag-replay`, so the composition root writes
-  it and refuses playback, by name, unless the identical modules are installed and
-  on; the stored hashes still decide validity. Nothing is released, so format v1 is
-  edited in place if a dedicated field is wanted later.
+- **Proposal (agreed with the README): a dedicated `mods` list in the header**:
+  each simulation module's mod id, version, the SHA-256 of its bytes, and its blob
+  layout version; not the opaque `options` map (`header.rs:58`), which `oag-replay`
+  never interprets. Playback refuses a replay whose modules are not present with
+  those exact hashes, by name; the stored state hashes still decide validity.
+  Nothing is released, so this edits format v1 in place rather than adding a v2.
 - **The phases decided on 2026-10-12** come first: in phase 2 a session with a
   simulation mod is **modded** and records no replays or ghosts at all; the header
   field is phase 3, once the conformance test below holds.
