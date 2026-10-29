@@ -36,7 +36,7 @@ fn rows(definition: &Definition, id: &str) -> Vec<String> {
         .collect()
 }
 
-fn advanced(pulse_like: bool) -> Vec<&'static str> {
+fn advanced(pulse_like: bool, weather: bool) -> Vec<&'static str> {
     let mut rows = vec![
         "graphics.motion_blur",
         "graphics.motion_blur_resolution",
@@ -46,6 +46,9 @@ fn advanced(pulse_like: bool) -> Vec<&'static str> {
     ];
     if pulse_like {
         rows.push("graphics.trail_order");
+    }
+    if weather {
+        rows.push("graphics.weather");
     }
     rows.extend([
         "graphics.screen_filter",
@@ -66,6 +69,7 @@ fn the_graphics_page_keeps_the_original_and_performance_rows_and_opens_advanced(
         let mut definition = built_in();
         definition.drop_unavailable_boost_zoom(title);
         definition.drop_unavailable_trail_order(title);
+        definition.drop_unavailable_weather(title);
         assert_eq!(rows(&definition, "graphics"), TOP, "{}", title.name);
     }
 }
@@ -82,9 +86,10 @@ fn advanced_holds_the_look_extras_and_the_mixed_rows_in_order() {
         let mut definition = built_in();
         definition.drop_unavailable_boost_zoom(title);
         definition.drop_unavailable_trail_order(title);
+        definition.drop_unavailable_weather(title);
         assert_eq!(
             rows(&definition, "graphics_advanced"),
-            advanced(pulse_like),
+            advanced(pulse_like, title.weather.is_played()),
             "{}",
             title.name
         );

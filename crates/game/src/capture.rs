@@ -515,6 +515,7 @@ pub fn run(
                 model_detail: render_profile.model_detail,
                 texture_detail: render_profile.texture_detail,
                 trail_order: render_profile.trail_order,
+                weather: render_profile.weather,
                 hull_shake: true,
                 // The front-end capture path never poses a ship, so there is
                 // nothing for a forced boost state to be aged relative to.

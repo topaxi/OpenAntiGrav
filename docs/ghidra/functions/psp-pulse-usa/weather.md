@@ -243,6 +243,39 @@ frame to frame. The first sampler step and the layers' starting `t` are chosen (
 `oag_fx::mist`). Not compared: a climb or a dive, and Fort Gale's rain lens over
 the mist.
 
+## The enhanced weather (ours, 2026-10-29)
+
+**Chosen, not measured; no confidence score.** The original's drops and flakes never
+touch geometry (`Modifier_WrapBox` only wraps and blows them), so it has no splash.
+`[render_profiles.<title>] weather` (menu row WEATHER, `--weather`) is `original`
+(the default, the frame as above, byte-identical to a build without the row) or
+`enhanced`. The row is offered where `Title::weather` says the weather is played
+(Pulse, both pressings; hidden elsewhere).
+
+- **Hits.** Once a tick, in the open only (no hits while the box sits at a covered
+  section's anchor, as the original's cover says), each live drop's last move in the
+  world (`[p - wind, p]`, `oag_fx::psys::System::world_positions` and the pool's wind
+  step) is cast against the circuit's collision with the same read-only floor cast the
+  blob shadows use (`Race::floor_crossing`, hoverable surfaces, from above). The pool is
+  not touched and the simulation never knows.
+- **Rain**: a ring flat on the road, fading over 0.3 s, and three droplets thrown up
+  and back under a chosen gravity. **Snow**: one flake that settles on the road and
+  fades in and out over 1.6 s. At most `splash::CAPACITY` (48) alive; a hit past it is
+  dropped. Own `Rng` seed, so the drops' stream is the original's either way.
+- **Art.** The disc has no splash sprite, so the ring and the dot are this project's:
+  `assets/fallback/Data/Psys/Tex/OAGSplash.oagmask` (`scripts/gen-fallback-splash-art.py`),
+  served by the fallback layer ([asset-layers.md](../../../architecture/asset-layers.md))
+  and placed on the particle sheet after every effect's sprite. The loader report
+  says `weather: splash art ... (ours)`.
+- **Cost** (`weather_splash_ground_truth::splash_cost_sweep`, machine load average 64,
+  so relative): Fort Gale 0.031 to 0.034 ms a tick and 0.011 to 0.013 ms a draw gather,
+  Outpost 7 0.061 to 0.063 and 0.045; the `original` path runs nothing.
+- **Evidence.** `crates/raceplay/tests/weather_splash_ground_truth.rs`: an original and
+  an enhanced race stepped together hash identically every tick, the enhanced draw lists
+  begin with the original's byte for byte, every splash lies on a floor, and the enhanced
+  race throws splashes on 1,041 of 1,500 ticks on Fort Gale and 569 on Outpost 7.
+- **PS2** plays the same circuits' weather by the same rule and inherits this unchanged.
+
 ## Not done, and why
 
 - **The noise clock** is the manager's `0x08ab224c` (seconds, measured: it ran `0.57` per

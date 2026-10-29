@@ -1,0 +1,170 @@
+//! The enhanced weather's splashes on Pulse's two weather circuits
+//! (`oag_raceplay::scenery_fx::splash`): this project's own, so the claim is
+//! about what `original` leaves alone and what `enhanced` adds, not about a
+//! measurement of the original.
+//!
+//! Drop the wiring (`Race::set_weather`, the cast in `advance_splashes`, the
+//! draw hook, the loader's art placement) and `enhanced` throws nothing.
+
+use oag_core::math::Vec3;
+use oag_display::display::Weather;
+use oag_gameplay::PlayerInputs;
+use oag_mesh::mesh::GpuVertex;
+use oag_raceplay as race;
+
+fn started(track: &str) -> Option<race::Race> {
+    let image = oag_testdata::image("pulse-psp-usa.chd")?;
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::TimeTrial,
+        track: Some(format!(r"Data\Environments\{track}")),
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    let mut race = race::Race::start(loaded.setup);
+    race.set_autopilot(true);
+    Some(race)
+}
+
+fn lists(race: &race::Race) -> (Vec<GpuVertex>, Vec<GpuVertex>) {
+    let (mut additive, mut alpha) = (Vec::new(), Vec::new());
+    race.extend_stage_vertices(&mut additive, &mut alpha, Vec3::X, Vec3::Y);
+    (additive, alpha)
+}
+
+fn bytes(vertices: &[GpuVertex]) -> &[u8] {
+    bytemuck::cast_slice(vertices)
+}
+
+struct Census {
+    ticks_with_splashes: usize,
+    most_at_once: usize,
+    spawned_points: usize,
+}
+
+/// Runs an original race and an enhanced one in step and checks, every tick,
+/// that the enhanced draw lists begin with the original's byte for byte and
+/// that each splash lies on a floor.
+fn compare(track: &str, ticks: u32) -> Option<Census> {
+    let mut original = started(track)?;
+    let mut enhanced = started(track)?;
+    original.set_weather(Weather::Original);
+    enhanced.set_weather(Weather::Enhanced);
+    let mut census = Census {
+        ticks_with_splashes: 0,
+        most_at_once: 0,
+        spawned_points: 0,
+    };
+    for tick in 0..ticks {
+        original.tick(&PlayerInputs::none());
+        enhanced.tick(&PlayerInputs::none());
+        assert_eq!(
+            original.sim.state_hash(),
+            enhanced.sim.state_hash(),
+            "the setting is render-side: the simulation must not notice it"
+        );
+        assert!(original.scenery_fx().weather().splashes().is_empty());
+        let (o_add, o_alpha) = lists(&original);
+        let (e_add, e_alpha) = lists(&enhanced);
+        assert!(
+            bytes(&e_add).starts_with(bytes(&o_add))
+                && bytes(&e_alpha).starts_with(bytes(&o_alpha)),
+            "enhanced only appends to the original's geometry"
+        );
+        let splashes = enhanced.scenery_fx().weather().splashes();
+        if splashes.is_empty() {
+            assert_eq!((e_add.len(), e_alpha.len()), (o_add.len(), o_alpha.len()));
+            continue;
+        }
+        assert!(e_add.len() > o_add.len(), "a live splash draws");
+        census.ticks_with_splashes += 1;
+        if std::env::var_os("OAG_SWEEP").is_some() && splashes.len() >= 4 {
+            eprintln!("tick {tick}: {} splashes", splashes.len());
+        }
+        census.most_at_once = census.most_at_once.max(splashes.len());
+        for point in splashes.points() {
+            census.spawned_points += 1;
+            let above = enhanced
+                .floor_above(point, Vec3::Y)
+                .or_else(|| enhanced.floor_above(point, -Vec3::Y));
+            assert!(above.is_some(), "{point:?} is not on a floor");
+        }
+    }
+    Some(census)
+}
+
+/// Fort Gale's rain: 32 drops, a splash where one crosses the road.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn rain_splashes_on_fort_gales_road_and_original_draws_none() {
+    let Some(census) = compare(r"14_Track\track.vex", 1500) else {
+        return;
+    };
+    assert!(
+        census.ticks_with_splashes > 100,
+        "{} ticks with a splash in 1500",
+        census.ticks_with_splashes
+    );
+    assert!(
+        census.most_at_once <= race::scenery_fx::splash::CAPACITY,
+        "{} at once",
+        census.most_at_once
+    );
+    eprintln!(
+        "Fort Gale: splashes on {} of 1500 ticks, at most {} at once",
+        census.ticks_with_splashes, census.most_at_once
+    );
+}
+
+/// Outpost 7's snow: 64 flakes, one settles where it meets the road.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn snow_settles_on_outpost_7s_road_and_original_draws_none() {
+    let Some(census) = compare(r"07_Track\track.vex", 1500) else {
+        return;
+    };
+    assert!(
+        census.ticks_with_splashes > 100,
+        "{} ticks with a flake in 1500",
+        census.ticks_with_splashes
+    );
+    eprintln!(
+        "Outpost 7: flakes on {} of 1500 ticks, at most {} at once",
+        census.ticks_with_splashes, census.most_at_once
+    );
+}
+
+/// A scratch sweep, not a check: the milliseconds a tick and a draw-list
+/// gather cost at each setting, printed. Needs `OAG_SWEEP`.
+#[test]
+#[ignore = "a sweep that only prints; needs OAG_SWEEP and data/images/pulse-psp-usa.chd"]
+fn splash_cost_sweep() {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
+    for track in [r"14_Track\track.vex", r"07_Track\track.vex"] {
+        for round in 0..2 {
+            for setting in [Weather::Original, Weather::Enhanced] {
+                let Some(mut race) = started(track) else {
+                    return;
+                };
+                race.set_weather(setting);
+                let (mut tick, mut gather) = (std::time::Duration::ZERO, std::time::Duration::ZERO);
+                for _ in 0..1500 {
+                    let start = std::time::Instant::now();
+                    race.tick(&PlayerInputs::none());
+                    tick += start.elapsed();
+                    let start = std::time::Instant::now();
+                    std::hint::black_box(lists(&race));
+                    gather += start.elapsed();
+                }
+                eprintln!(
+                    "{track} round {round} {setting}: tick {:.4} ms, gather {:.4} ms (per tick, mean of 1500)",
+                    tick.as_secs_f64() * 1000.0 / 1500.0,
+                    gather.as_secs_f64() * 1000.0 / 1500.0
+                );
+            }
+        }
+    }
+}

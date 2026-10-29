@@ -30,6 +30,7 @@
 pub mod lens;
 pub mod mist;
 mod noise;
+pub mod splash;
 pub mod weather;
 mod wind;
 
@@ -204,6 +205,11 @@ impl SceneryFx {
         self.weather.advance(effects, dt, camera, section);
     }
 
+    /// The weather, to age and add splashes to.
+    pub(crate) fn weather_mut(&mut self) -> &mut Weather {
+        &mut self.weather
+    }
+
     /// [`psys::Stage::hold_still`] on the pool, at the start of a tick path.
     pub fn hold_still(&mut self) {
         self.stage.hold_still();
@@ -247,6 +253,57 @@ impl super::Race {
         self.view
             .scenery_fx
             .advance_weather(&self.view.effects, dt, camera, section);
+        self.advance_splashes(dt);
+    }
+
+    /// The enhanced weather's one step: ages the splashes and throws one
+    /// where a drop's last move crossed a floor. **Nothing runs at `original`**
+    /// beyond clearing what a switch back left behind, so that frame is the
+    /// original's. See [`splash`].
+    fn advance_splashes(&mut self, dt: f32) {
+        if !self.view.weather.is_enhanced() {
+            if !self.view.scenery_fx.weather().splashes().is_empty() {
+                self.view.scenery_fx.weather_mut().splashes_mut().clear();
+            }
+            return;
+        }
+        let weather = self.view.scenery_fx.weather();
+        let snow = weather.is_snow();
+        let hits: Vec<(Vec3, Vec3)> = weather
+            .drop_segments()
+            .into_iter()
+            .filter_map(|(from, to)| self.floor_crossing(from, to))
+            .collect();
+        let splashes = self.view.scenery_fx.weather_mut().splashes_mut();
+        splashes.advance(dt);
+        for (at, normal) in hits {
+            splashes.spawn(at, normal, snow);
+        }
+    }
+
+    /// Where the segment `from..to` crosses a floor from above, and that
+    /// floor's normal: the same read-only cast the blob shadows make.
+    fn floor_crossing(&self, from: Vec3, to: Vec3) -> Option<(Vec3, Vec3)> {
+        use oag_physics::collide::{Ray, Raycaster};
+        let along = to - from;
+        let length = along.length();
+        if length <= f32::EPSILON {
+            return None;
+        }
+        let direction = along / length;
+        let mut hits = [None; 4];
+        let found = self.sim.collision.raycast_all(
+            Ray::new(from, direction, length),
+            None,
+            false,
+            &mut hits,
+        );
+        hits.iter()
+            .flatten()
+            .take(found)
+            .filter(|hit| hit.surface.is_hoverable() && hit.normal.dot(direction) < 0.0)
+            .min_by(|a, b| a.distance.total_cmp(&b.distance))
+            .map(|hit| (hit.point, hit.normal))
     }
 
     /// The lens as a world frame: where it is and where its axes point.

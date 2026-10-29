@@ -78,6 +78,8 @@ pub const TITLE: &Title = &Title {
     cursor: include_str!("../../../assets/cursors/pulse.svg"),
     // Built 2026-09-04: the craft's own `Dynamic Shadow Occluder` hull, projected on the road.
     original_shadows: oag_title::shadow::OriginalShadows::Built,
+    // Read on the PSP (`weather.md`); the PS2 pressing plays the same law.
+    weather: oag_title::weather::Weather::Played,
     // The two tables Pulse picks between by race mode. `DAT_08b32428` is what
     // selects the file - measured `0` in a single race and `1` in Eliminator,
     // at Venom both times, so it is the *file* and not the speed class. See

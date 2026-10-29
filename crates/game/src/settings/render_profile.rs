@@ -293,6 +293,16 @@ pub struct RenderProfile {
     /// applies live.
     #[serde(default)]
     pub trail_order: oag_display::display::TrailOrder,
+    /// What a played weather adds to the original's: `original` or `enhanced`
+    /// (splashes where a drop meets the track, snow that settles).
+    ///
+    /// **`original` is the default**: the frame is byte-identical to a build
+    /// without the row. `enhanced` is this project's own, chosen, not
+    /// measured. Only a title whose weather is played offers it
+    /// (`Definition::drop_unavailable_weather`). Read fresh every frame, so
+    /// the row applies live. See [`oag_display::display::Weather`].
+    #[serde(default)]
+    pub weather: oag_display::display::Weather,
 }
 
 impl RenderProfile {
@@ -442,6 +452,7 @@ impl Default for RenderProfile {
             model_detail: oag_mesh::mesh::ModelDetail::default(),
             texture_detail: oag_mesh::mesh_render::TextureDetail::default(),
             trail_order: oag_display::display::TrailOrder::default(),
+            weather: oag_display::display::Weather::default(),
         }
     }
 }

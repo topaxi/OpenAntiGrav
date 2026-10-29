@@ -1,7 +1,7 @@
 ---
 status: re-first
 titles: [pulse]
-updated: 2026-10-06
+updated: 2026-10-29
 summary: "Pulse particle effects: 2 of 35 wait on a trigger; mist pitch term and NODAMAGE live checks open"
 ---
 
@@ -94,6 +94,11 @@ Pulse's `WO_PLASMA_FLASH`, `WO_SHIP_ENGINEFLARE`, `WO_LEACHBEAM_ENERGY`, `WO_BLU
 names that 2048 and Omega never authors") and no longer load there.
 
 ## Open
+
+- **Enhanced weather splashes (ours, 2026-10-29, `weather-enhanced` branch):** wired, evidence in
+  `docs/ghidra/functions/psp-pulse-usa/weather.md`. Open: no Deck or phone frame-time check
+  (the headless sweep says 0.002 to 0.005 ms a tick); snow flakes are brighter than the
+  original's faint specks and look best judged on a real window.
 
 - **The weather is wired** (Fort Gale rain and lens, Outpost 7 snow), see
   [weather.md](../../docs/ghidra/functions/psp-pulse-usa/weather.md). Open:

@@ -47,6 +47,13 @@ impl Library {
         }
     }
 
+    /// Places a sprite of this project's own on the sheet, after every effect's, and
+    /// returns its rectangle as [`Sheet::place`] does. Appended last so no
+    /// effect's own rectangle moves.
+    pub fn place_sprite(&mut self, sprite: &super::Sprite) -> Option<[f32; 4]> {
+        self.sheet.place(sprite)
+    }
+
     /// The effect loaded under `name`, if it loaded at all.
     ///
     /// `None` is the normal answer in a headless test with no disc, and the
