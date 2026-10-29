@@ -67,7 +67,7 @@ easy = { gold = 2, silver = 3, bronze = 5 }   # optional per-rung overrides
 | What | Rule |
 | --- | --- |
 | Slot | Cell `gridN_x_y`, the name the title's screens place a hex by (`Cell::grid_coords`). Pulse, HD and Omega all draw the same field: x `0`-`6`, y `0`-`4` on even columns and `0`-`3` on odd ones, odd columns half a hex lower. A neighbour is one of the six hexes around a cell. An event in a slot the layout lacks is logged as unreachable when the campaign opens. |
-| Track file | `file = "tracks/<name>.track.toml"` races a [track file](track-file.md) the mod carries (the manifest and the `.glb` beside it), the way `--track-file` and RACE REMIX's CUSTOM do. `file = "<mod id>:<path>"` races one in another installed mod, which must be for the same title; a mod that is not installed leaves the campaign out, and the log names it. The reference is the dependency: nothing in the manifest declares it yet. Cell Selection names it by the manifest's `track.title`; its records and ghosts key as `foreign:<track.id>`. **Folder mods only** (the reader takes a path on disk): in a `.zip` or `.oagmod` the campaign is not offered and the log says why. Not a tournament leg and not Zone. |
+| Track file | `file = "tracks/<name>.track.toml"` races a [track file](track-file.md) the mod carries (the manifest and the `.glb` beside it), the way `--track-file` and RACE REMIX's CUSTOM do. `file = "<mod id>:<path>"` races one in another installed mod, which must be for the same title; a mod that is not installed leaves the campaign out, and the log names it. The reference is the dependency: nothing in the manifest declares it yet. Cell Selection names it by the manifest's `track.title`; its records and ghosts key as `foreign:<track.id>`. **Folder mods only** (the reader takes a path on disk): in a `.zip` or `.oagmod` the campaign is not offered and the log says why. Not a tournament leg. A `zone` event takes one too: the file's loop is the Zone circuit, flown with the title's Zone craft, speed ramp, HUD and sound ([track-file.md](track-file.md#zone-mode-on-a-track-file)). |
 | Medal targets | A finishing place (race, tournament, head2head); **seconds** (time_trial, speed_lap; stored as centiseconds); a count (zone, elimination; more is better). |
 | Absent tier | Never awarded: stored as `0` on a lower-is-better mode and `i64::MAX` on a counting one, values the evaluator can never meet. No `[medals]` awards nothing. |
 | Rungs | Any of `easy`/`medium`/`hard` fills the cell's per-rung targets (HD's shape); an absent rung takes the flat triple. On Pulse the screen judges at medium. |
@@ -100,6 +100,7 @@ says so, and no other team or pilot is substituted.
 - A flyer card shipped in the mod: only the disc's own cards are named.
 - The in-game editor: the grid itself, saving into a slot (the plan's step 9).
 - A track file in a zipped mod: the track reader takes a path on disk.
+- A track file as a tournament leg (a Zone `file` event is supported).
 
 ## Cross-check: 2048 and Omega
 
@@ -131,10 +132,10 @@ the repository mounts `mod-examples` as a submodule. An installed game does not.
 | Tier | Reveal | Events |
 | --- | --- | --- |
 | Opening | locked | Warm-up (time trial, open), Gate Run (race, preset Feisar, named opponents, per-rung medals), Hot Lap (speed lap, neighbour rule), Duel (head to head against the mod's `rival` pilot, needs silver on the gate), Hillside Sprint (time trial on `oag.hillside:tracks/hillside.track.toml`, open from the start), Clean Race (weapons off, original driver on hard) |
-| Final (6 points on Opening) | hidden | Night Tour (tournament, our driver with the roster's `aggressive`), Last Stand (elimination, inline pilot), Octagon Trial (time trial on the bundled `tracks/practice-octagon.track.toml`, a bare loop with no art), Rapier Duel (head to head), Finale (needs a silver on tier 1's Hillside Sprint and the rapier duel) |
+| Final (6 points on Opening) | hidden | Night Tour (tournament, our driver with the roster's `aggressive`), Last Stand (elimination, inline pilot), Octagon Zone (a Zone event on the bundled `tracks/practice-octagon.track.toml`, a bare loop with no art), Rapier Duel (head to head), Finale (needs a silver on tier 1's Hillside Sprint and the rapier duel) |
 
 Hillside Sprint's medal times come from the autopilot on Pulse at Phantom (best lap
-30.23 s on the padded Hillside); Octagon Trial's from its run at Venom (1:38.86 for three laps). Circuits
+30.23 s on the padded Hillside); Octagon Zone's medals are 24 / 18 / 12 zones, **chosen, not measured**: inside the 18 to 24 gold range Pulse's own 16 Zone cells author. The autopilot on the Octagon clears zone 24 in a little over four minutes and does not wreck until zone 626 (about 104 minutes, 2026-10-29), so it is a ceiling and not a target. Circuits
 and teams are on Pulse's base disc (Pulse's Auricom comes with a DLC pack, so it is not
 used).
 

@@ -62,7 +62,7 @@ refused (`Transformed`): bake it before export.
 
 `oag_trackfile::ABSENT`, named in every loader report and **drawn as nothing**: fog, point
 lights, clouds, scenery animation, track particle emitters, sound emitters, visibility sets
-(PVS), the Zone variant.
+(PVS), the Zone variant (see [Zone mode on a track file](#zone-mode-on-a-track-file)).
 
 A file with **no art section** races on flat-shaded floor and wall collision, with no sky, sun
 or lens flare, and its report says so. With one, the loader (`oag_raceplay::foreign::art`)
@@ -150,6 +150,36 @@ under HD's craft and says so in the log). With no disc of the host the race is r
 REMIX's CUSTOM always takes the track side from the host's disc and lists a file whose host this
 machine has no disc of dimmed. `track.titles`, when present, limits the titles whose craft may race
 it.
+
+## Zone mode on a track file
+
+`--mode zone` on a track file, RACE REMIX's MODE Zone on CUSTOM and a campaign `zone` event with
+`file` all race the file's own loop and spline as the Zone circuit (2026-10-29; before it the loader
+refused it by name). A disc keeps a Zone circuit's look in a file of its own (Pulse's `zone_` variant,
+Pure's and HD's separate circuits), and a track file has no such file, so **nothing of that is borrowed
+from a disc circuit and nothing is invented**:
+
+| Part | On a track file |
+| --- | --- |
+| Geometry, spline, collision, start | the file's own |
+| Craft, handling, speed ramp (`<Zone>`: Pulse's start 34, increment 4.4, recharge 10), Zone HUD, ship and speech sound banks, stage names | the host title's own Zone ones, as for any Zone race |
+| Zone circuit environment (a circuit's Zone meshes, lights, fog, `Skycube`) | drawn as nothing; the file's own art and sky, if it has them, stand |
+| HD's `ZoneSky.gtf` (a title-wide Zone default) | drawn when the file carries no sky of its own; a file with its own sky keeps it and the report says the Zone sky is not drawn over it |
+| HD's stage grade (`zonemode.effectsettings`, per-stage textures; title-wide) | applied over the file's model, as on an HD Zone circuit |
+| The title's Zone start-gantry board, track sound emitters | not placed (a file has no gantry node or emitters; a gantry in its own art stands) |
+
+The report carries `zone: a track file has no Zone variant, ...` and the schema's absent list.
+Ground truth: `trackfile_ground_truth::a_zone_race_on_a_track_file_*` (Pulse: the autopilot flies the
+ramp to zone 24 round the fixture and the example Octagon with no respawn; HD: the Zone sky and grade).
+The autopilot is not a physics reference: it only shows the loop can be flown. On the Octagon it
+clears zone 24 in a little over four minutes and wrecks at zone 626 (about 104 minutes).
+
+**Cross-check, 2048 and Omega: ported on load.** The oval fixture loads in Zone and runs the ramp on
+Pure, HD, Omega, the 2048 base package and Pulse's PS2 disc (Zone craft, ramp and HUD are each
+title's own; only HD has a Zone sky or a title-wide grade to draw). Not checked: how Omega's and
+2048's own per-circuit Zone environment would map onto a file (they keep none that a file could
+name). One thing seen on the way and not Zone-specific: with the autopilot on a track file, every
+host but Pulse PSP respawns once at tick 44 (a time trial shows it too).
 
 ## Open
 

@@ -258,13 +258,9 @@ law. The lane confirms Pulley's iOS status and the crates before the ADR.
    **The examples are a submodule (2026-10-29):** github.com/OpenAntiGrav/mod-examples at
    `assets/mods/examples`, Pulse-only (Hillside borrows Pulse 03_Track art). NIGHT RUN
    races Hillside out of the track-only `oag.hillside` (`file = "<mod id>:<path>"`) and
-   bundles Practice Octagon. Open: the maintainer wants Practice Octagon as a **Zone**
-   event; the loader refuses Zone on a track file (`raceplay::load::track_inputs`,
-   `fn foreign`). The track-art session agreed to lift it after track-host merges:
-   the file's own geometry and spline, Zone-only parts from the host's Zone defaults
-   or drawn as nothing and reported, plus a lone-craft Zone test on the oval fixture.
-   Then drop the compiler's refusal (`custom.rs`, "a track file has no Zone circuit")
-   and RACE REMIX's warn. Mod dependencies: `handover/tooling/a-mod-names-no-dependencies-yet.md`.
+   bundles Practice Octagon as a **Zone** event (2026-10-29: Zone on a track file landed,
+   `docs/formats/track-file.md#zone-mode-on-a-track-file`; its medals are chosen, not
+   measured). Mod dependencies: `handover/tooling/a-mod-names-no-dependencies-yet.md`.
    HD/Omega have no disc-backed example (flyers, slots); an HD-only example would
    restore it.
 6. Later: open (point-to-point) tracks in the track format, the spline and the AI plan.

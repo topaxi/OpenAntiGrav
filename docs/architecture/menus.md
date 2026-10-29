@@ -325,7 +325,7 @@ physics, exactly as `--ballisticng-track` flies it on `--craft-source`; RACEBOX 
 - **Opponents** fly this project's driver. A track whose AI line does not read cannot load at all (the
   spline is the track), so it is listed unusable rather than raced without opponents; the class rule
   that keeps the AI to classes the driver covers is the SPEED CLASS row's, not this one's.
-- **MODE Zone** with CUSTOM: START logs "a custom track has no Zone circuit" and stays on the page (the loader refuses a foreign Zone race too).
+- **MODE Zone** with CUSTOM races the file's loop as the Zone circuit (2026-10-29): the title's Zone craft, speed ramp, HUD and sound, and the report names what a file has no Zone variant of ([track-file.md](../formats/track-file.md#zone-mode-on-a-track-file)).
 - `remix.track` stores the file's path (known before the file is read, unique, survives a restart);
   moved or deleted, the row falls back to the first track.
 
