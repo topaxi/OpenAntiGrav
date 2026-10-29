@@ -60,9 +60,9 @@ fn a_tick_returns_the_blob_and_a_checked_command() {
 }
 
 #[test]
-fn a_factor_outside_zero_to_one_or_nan_is_a_fault_not_a_clamp() {
+fn a_factor_outside_zero_to_two_or_nan_is_a_fault_not_a_clamp() {
     for factor in [
-        "(f32.const 1.5)",
+        "(f32.const 2.5)",
         "(f32.const -0.1)",
         "(f32.div (f32.const 0) (f32.const 0))",
     ] {

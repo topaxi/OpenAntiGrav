@@ -240,6 +240,23 @@ impl Extensions {
         }
     }
 
+    /// `slot`'s mod engine scale for this tick's step, reset to `1.0` as it is taken:
+    /// `1.0` in every race without a module.
+    pub(super) fn take_boost(&mut self, slot: usize) -> f32 {
+        #[cfg(feature = "extensions")]
+        {
+            if self.on.slots.is_empty() {
+                return 1.0;
+            }
+            std::mem::replace(&mut self.on.boost[slot], 1.0)
+        }
+        #[cfg(not(feature = "extensions"))]
+        {
+            let _ = slot;
+            1.0
+        }
+    }
+
     /// Records a wall contact for `slot` this tick (at most once per slot per tick).
     pub(super) fn wall_contact(&mut self, slot: usize) {
         #[cfg(feature = "extensions")]
@@ -315,6 +332,9 @@ mod on {
         /// One bit per slot that touched a wall since the last call: the event buffer,
         /// at most one `wall-contact` per craft per tick, raised in slot order.
         walls: u32,
+        /// Each slot's engine scale above 1.0 for this tick's step
+        /// (`Environment::extension_thrust`), set at the call and taken by the step.
+        pub(super) boost: [f32; oag_gameplay::MAX_SHIPS],
     }
 
     impl On {
@@ -333,6 +353,7 @@ mod on {
                     })
                     .collect(),
                 walls: 0,
+                boost: [1.0; oag_gameplay::MAX_SHIPS],
             }
         }
 
@@ -348,6 +369,9 @@ mod on {
             }
             hasher.write_u32(self.slots.len() as u32);
             hasher.write_u32(self.walls);
+            for boost in self.boost {
+                hasher.write_f32(boost);
+            }
             for slot in &self.slots {
                 hasher.write(&slot.blob);
                 match &slot.faulted {
@@ -389,6 +413,8 @@ mod on {
                 mask | u32::from(ship.active) << slot
             });
         let on = &mut sim.extensions.on;
+        // A boost the step never took (a craft that did not step) does not carry over.
+        on.boost = [1.0; oag_gameplay::MAX_SHIPS];
         let events: Vec<Event> = (0..oag_gameplay::MAX_SHIPS)
             .filter(|slot| on.walls & (1 << slot) != 0)
             .map(|slot| Event::WallContact { slot: slot as u8 })
@@ -401,6 +427,7 @@ mod on {
             events: &events,
         };
         let mut commands = Vec::new();
+        let on_boost = &mut on.boost;
         for slot in &mut on.slots {
             if slot.faulted.is_some() {
                 slot.fuel_used = 0;
@@ -416,8 +443,15 @@ mod on {
                 Ok(cost) => {
                     for command in &commands {
                         match *command {
-                            Command::ScaleThrust { slot, factor } => {
+                            // Below 1.0 the Leach Beam's path, multiplied so a drain is
+                            // kept; above it the mod's own engine scale, multiplied so two
+                            // modules compose. Both are consumed by this tick's step.
+                            Command::ScaleThrust { slot, factor } if factor <= 1.0 => {
                                 sim.world.ships[slot as usize].pending_thrust_scale *= factor;
+                            }
+                            Command::ScaleThrust { slot, factor } => {
+                                let boost = &mut on_boost[slot as usize];
+                                *boost = (*boost * factor).min(oag_modhost::abi::MAX_THRUST_FACTOR);
                             }
                         }
                     }

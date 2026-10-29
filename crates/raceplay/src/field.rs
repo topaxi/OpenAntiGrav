@@ -841,10 +841,12 @@ impl Race {
             // the player.
             let thrust_scale =
                 std::mem::replace(&mut self.sim.world.ships[slot].pending_thrust_scale, 1.0);
+            let extension_thrust = self.sim.extensions.take_boost(slot);
             let env = Environment {
                 track_sample,
                 track_sample_next,
                 thrust_scale,
+                extension_thrust,
                 // **The same pads the player crosses.** Measured from the
                 // position the tick started at and swept to where the craft is
                 // now, exactly as slot 0's are - see `Race::pad_sweep`. Without

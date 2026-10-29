@@ -92,6 +92,48 @@ mod on {
         }
     }
 
+    /// Asks for slot 1's thrust at `factor` every tick.
+    fn scaler(id: &str, factor: f32) -> Source {
+        module(
+            id,
+            &format!(
+                "(i32.store (i32.const {REPLY}) (i32.const 1))
+                 (i32.store8 (i32.const {cmd}) (i32.const 1))
+                 (i32.store8 (i32.const {slot}) (i32.const 1))
+                 (f32.store (i32.const {f}) (f32.const {factor}))
+                 i32.const 0",
+                cmd = REPLY + 4,
+                slot = REPLY + 5,
+                f = REPLY + 8,
+            ),
+        )
+    }
+
+    #[test]
+    fn a_factor_above_one_makes_a_craft_faster_and_one_changes_nothing() {
+        let speed = |race: &Race| {
+            race.sim.world.ships[1]
+                .physics
+                .body
+                .linear_velocity
+                .length()
+        };
+        let (vanilla, plain) = run(grid(Prepared::default()), 600);
+        let (boosted, _) = run(grid(prepared(&[scaler("test.boost", 1.5)])), 600);
+        assert!(
+            speed(&boosted) > speed(&vanilla),
+            "{} against {}",
+            speed(&boosted),
+            speed(&vanilla)
+        );
+        // A factor of exactly 1.0 is no command at all for the craft: its whole
+        // trajectory is the vanilla one (the race hash differs only by the module's
+        // own state).
+        let (neutral, _) = run(grid(prepared(&[scaler("test.neutral", 1.0)])), 600);
+        assert_eq!(neutral.sim.world.ships, vanilla.sim.world.ships);
+        assert_eq!(fold(&plain), VANILLA_FOLD);
+    }
+
     /// Counts its calls in the blob and halves slot 1's thrust every tick.
     fn halver() -> Source {
         module(

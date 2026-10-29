@@ -46,6 +46,10 @@ pub const REPLY_AT: usize = STATE_AT + MAX_STATE_BYTES;
 const COMMAND_LEN: usize = 12;
 const _: () = assert!(REPLY_AT + 4 + COMMAND_LEN * MAX_COMMANDS <= IO_LEN);
 
+/// The largest `scale-thrust` factor: a mod may double an engine's thrust, no more.
+/// Chosen (README 2.1 proposed `[0.25, 2.0]`; the lower end is `0` here).
+pub const MAX_THRUST_FACTOR: f32 = 2.0;
+
 /// Event kind codes.
 pub const EVENT_WALL_CONTACT: u8 = 1;
 /// Command kind codes.
@@ -64,12 +68,13 @@ pub enum Event {
 /// What a guest asked for, checked (README 2.1, `command`).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Command {
-    /// Scale the slot's engine output this tick, `factor` in `[0, 1]`
-    /// (`Ship::pending_thrust_scale`). No timer: a guest re-sends it each tick.
+    /// Scale the slot's engine output this tick, `factor` in `[0, MAX_THRUST_FACTOR]`:
+    /// below `1.0` through `Ship::pending_thrust_scale`, above it through
+    /// `Environment::extension_thrust`. No timer: a guest re-sends it each tick.
     ScaleThrust {
         /// The grid slot.
         slot: u8,
-        /// The scale, finite and in `[0, 1]`.
+        /// The scale, finite and in `[0, MAX_THRUST_FACTOR]`.
         factor: f32,
     },
 }
@@ -128,9 +133,9 @@ pub(crate) fn read_reply(buffer: &[u8], active: u32) -> Result<Vec<Command>, Fau
         match kind {
             COMMAND_SCALE_THRUST => {
                 let factor = f32::from_bits(get_u32(buffer, at + 4));
-                if !(0.0..=1.0).contains(&factor) {
+                if !(0.0..=MAX_THRUST_FACTOR).contains(&factor) {
                     return Err(Fault::Reply(format!(
-                        "scale-thrust factor {factor} for slot {slot} is not in [0, 1]"
+                        "scale-thrust factor {factor} for slot {slot} is not in [0, {MAX_THRUST_FACTOR}]"
                     )));
                 }
                 if thrust_seen & (1 << slot) != 0 {
