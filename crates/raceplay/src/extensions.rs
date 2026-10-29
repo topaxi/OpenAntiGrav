@@ -292,6 +292,7 @@ impl Extensions {
     }
 
     /// The `fire-effect`s queued since the view last drew them.
+    #[cfg(feature = "view")]
     pub(super) fn take_effects(&mut self) -> Vec<(usize, oag_title::effects::Trigger)> {
         #[cfg(feature = "extensions")]
         {
