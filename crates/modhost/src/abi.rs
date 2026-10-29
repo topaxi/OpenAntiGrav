@@ -95,12 +95,15 @@ pub const CUES: u16 = 6;
 /// contact's sparks (`CollisionSpark`), 1 a weapon hit's (`HitSpark`).
 pub const EFFECTS: u16 = 2;
 
+/// [`Craft::pickup`] for a simulation mod's own pickup (`give-pickup`).
+pub const PICKUP_EXTENSION: u8 = u8::MAX;
+
 /// One grid slot as a guest reads it: copies of what the HUD already shows.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Craft {
     /// The held pickup: 0 for none, else its place in the title's weapon list plus one
     /// (`oag_tables::weapons::Weapon::ALL`: Rocket 1, Missile 2, Quake 3, Cannon 4,
-    /// Turbo 5, ...).
+    /// Turbo 5, ...), or [`PICKUP_EXTENSION`] for a mod's own.
     pub pickup: u8,
     /// [`CRAFT_PERSON`], [`CRAFT_FIRE_HELD`], [`CRAFT_RACING`], [`CRAFT_CLAIMED`].
     pub flags: u8,

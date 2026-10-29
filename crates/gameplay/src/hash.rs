@@ -417,6 +417,9 @@ fn write_held(hasher: &mut StateHasher, held: &Held) {
 fn write_weapon(hasher: &mut StateHasher, weapon: Option<Weapon>) {
     let discriminant = match weapon {
         None => 0,
+        // A mod's pickup: outside the titles' pool, so a code no position in it reaches
+        // (no vanilla race holds one, so no committed hash moves).
+        Some(Weapon::Extension) => u8::MAX,
         Some(weapon) => Weapon::ALL
             .iter()
             .position(|&candidate| candidate == weapon)

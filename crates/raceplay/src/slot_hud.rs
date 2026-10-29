@@ -162,7 +162,14 @@ impl Race {
     /// running bit is set and the held id maps to none).
     pub(super) fn held_for_hud(&self, slot: usize) -> Option<oag_tables::weapons::Weapon> {
         let ship = &self.sim.world.ships[slot];
-        ship.pickup.weapon.or_else(|| {
+        // A mod's own pickup (`Weapon::Extension`) has no icon of its own on any disc: it
+        // borrows the title's Turbo icon, and the mod's `pickup-tint` recolours its
+        // backdrop (`crate::extensions`). No new art.
+        let held = ship.pickup.weapon.map(|weapon| match weapon {
+            oag_tables::weapons::Weapon::Extension => oag_tables::weapons::Weapon::Turbo,
+            weapon => weapon,
+        });
+        held.or_else(|| {
             (ship.autopilot_timer > 0.0).then_some(oag_tables::weapons::Weapon::Autopilot)
         })
     }

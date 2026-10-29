@@ -592,6 +592,9 @@ mod on {
                     && !oag_race::RaceState::thrust_gated(sim.world.tick);
                 abi::Craft {
                     pickup: ship.pickup.weapon.map_or(0, |weapon| {
+                        if weapon == oag_tables::weapons::Weapon::Extension {
+                            return abi::PICKUP_EXTENSION;
+                        }
                         oag_tables::weapons::Weapon::ALL
                             .iter()
                             .position(|w| *w == weapon)
