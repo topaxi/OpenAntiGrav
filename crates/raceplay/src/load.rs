@@ -1037,6 +1037,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     #[cfg(feature = "view")]
     let models = &craft_title.weapon_models;
     #[cfg_attr(not(feature = "view"), allow(unused_mut))]
+    let extensions = crate::extensions::prepare(&options.extensions, &mut report);
     let mut loaded = Loaded {
         #[cfg(feature = "view")]
         started: None,
@@ -1061,6 +1062,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             seed: options.seed.unwrap_or(SEED),
             zone,
             foreign: track.strip_prefix("foreign:").map(str::to_string),
+            extensions,
             ai,
             spline,
             course,

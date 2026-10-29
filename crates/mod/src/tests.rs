@@ -193,3 +193,44 @@ fn the_built_in_extras_open_and_carry_the_projects_own_license() {
     );
     assert!(extras.menu().unwrap().is_some());
 }
+
+#[test]
+fn an_extension_table_names_its_rules_module_and_opens_nothing() {
+    let text = format!(
+        "{MANIFEST_TEXT}\n[extension]\nsimulation = true\napi = 1\nstate_bytes = 64\n\n[extension.rules]\nmodule = \"ext/curse.wasm\"\n"
+    );
+    let manifest = Manifest::parse(&text, &|path| path == "ext/curse.wasm").unwrap();
+    assert_eq!(
+        manifest.extension,
+        Some(Extension {
+            simulation: true,
+            api: 1,
+            memory_pages: 16,
+            state_bytes: 64,
+            rules: Some(Rules {
+                module: "ext/curse.wasm".to_string()
+            }),
+        })
+    );
+    assert_eq!(
+        Manifest::parse(MANIFEST_TEXT, &|_| false)
+            .unwrap()
+            .extension,
+        None
+    );
+}
+
+#[test]
+fn a_rules_module_without_simulation_or_missing_is_refused_by_name() {
+    let unsaid =
+        format!("{MANIFEST_TEXT}\n[extension]\napi = 1\n[extension.rules]\nmodule = \"a.wasm\"\n");
+    let error = Manifest::parse(&unsaid, &|_| true).unwrap_err().to_string();
+    assert!(error.contains("simulation = true"), "{error}");
+    let missing = format!(
+        "{MANIFEST_TEXT}\n[extension]\nsimulation = true\napi = 1\n[extension.rules]\nmodule = \"a.wasm\"\n"
+    );
+    let error = Manifest::parse(&missing, &|_| false)
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("not in the mod"), "{error}");
+}

@@ -184,6 +184,8 @@ impl Race {
         // the *held* state of fire rather than the press edge `spend_pickup`
         // above consumes - see `Race::advance_cannons`'s own doc comment.
         self.advance_cannons(inputs);
+        // Phase C: each simulation mod's one call, its commands into the steps below.
+        self.tick_extensions();
 
         // Each person's craft, in slot order, against the same unmoved
         // projectile pool and the same unspent field-wide effects: the force law

@@ -32,6 +32,7 @@ impl Setup {
         };
         Self {
             foreign: None,
+            extensions: crate::extensions::Prepared::default(),
             mode,
             eliminator_kill_target: None,
             laps_override: None,

@@ -202,6 +202,7 @@ fn setup(handling: Handling) -> Setup {
     let course = Course::from_track(&ai, None);
     Setup {
         foreign: None,
+        extensions: crate::extensions::Prepared::default(),
         airbrake_graphics: oag_gameplay::AirbrakeGraphics {
             amount: 0.4363323,
             up_speed: 30.0,

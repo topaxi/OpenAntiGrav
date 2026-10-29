@@ -555,6 +555,7 @@ impl Race {
         self.sim.wall_racing_ticks[slot] += 1;
         if wall.contacts > wall.floor_contacts {
             self.sim.wall_contact_ticks[slot] += 1;
+            self.sim.extensions.wall_contact(slot);
             if wall.impact {
                 self.sim.wall_inbound_ticks[slot] += 1;
             }

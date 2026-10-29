@@ -16,6 +16,7 @@ impl Default for Options {
             dlc: Vec::new(),
             track: None,
             foreign_track: None,
+            extensions: Vec::new(),
             boost_zoom: None,
             team: None,
             hull_variant: None,

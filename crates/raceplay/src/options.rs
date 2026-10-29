@@ -43,6 +43,9 @@ pub struct Options {
     /// A foreign (Unity) track to race instead of any circuit of the source
     /// (`crate::foreign`); the source still supplies craft, rules and physics.
     pub foreign_track: Option<PathBuf>,
+    /// The simulation modules of the mods that are on for this race
+    /// ([`crate::extensions`]); empty is a vanilla race. The composition root fills it.
+    pub extensions: Vec<crate::extensions::Source>,
     /// The ring the player's `graphics.boost_zoom` borrows, handed in by the composition
     /// root (the one place that may name HD's); `None` is off. Used only where
     /// `oag_title::RaceDefaults::borrows_zoom_ring`.
@@ -448,6 +451,8 @@ pub struct Setup {
     pub spline: Spline,
     /// The Workshop id of a foreign track, which keys its records and ghosts.
     pub foreign: Option<String>,
+    /// The simulation modules the load compiled ([`crate::extensions::prepare`]).
+    pub extensions: crate::extensions::Prepared,
     /// Zone mode's speed law and recharge, when the source carries them.
     pub zone: Option<oag_tables::handling::Zone>,
     /// The same graph walked into a closed ring, for lap counting.
