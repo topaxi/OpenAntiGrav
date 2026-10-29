@@ -4673,9 +4673,15 @@ Conditional breakpoint `[a0+0x2c] & 0x200` on `0x088a3e8c` (PPSSPP 1.20.4, softw
   0.7-0.9 s" fit saw: its repeated back-and-forth trials started from stale phases (1.1388 wraps to cyan at 0.43 s and peaks at
   0.97 s), hence the +-0.12 s spread between entries.
 - **Wired**: `ENTRY_HOLD` is gone; ours starts at cyan and rises at once (the original's first entry since boot). `psp-menu-pair.py`
-  places a recorded stamp level `t` at `t / 2` s. **Open**: ours rebuilds the Grid and Cell models per visit, so a re-entry restarts at
-  cyan where the original resumes (a per-screen clock that persists, frozen while off screen, is the follow-up); what zeroes `+0x9c`
-  besides construction is not traced. `stamp()` rounds where the original truncates (`trunc.w.s` at `0x088a4074`/`0x088a40b4`),
+  places a recorded stamp level `t` at `t / 2` s.
+- **Re-entry resumes (2026-10-29, `pulse-selector-resume`)**: `CampaignStage` writes each screen's clock back every tick
+  (`SelectorPhases`, one for Grid and one for Cell) and puts it on the model it builds next; the session keeps the pair between
+  `RACE CAMPAIGN` openings, in memory only (a relaunch is a cold start at `0.0`, as a reboot is). It is frozen while away because
+  nothing ticks it off screen. **Chosen: only construction resets it** (the session keeps it through a race and a title change
+  alike); what else zeroes `+0x9c` stays untraced, so that part carries no confidence score. Gated on `Campaign::frontend_glow`
+  (Pulse PSP; Pulse PS2 inherits PSP's law); the other titles' screens keep a fresh phase. Test:
+  `campaign_cursor_ground_truth::the_selector_pulse_resumes_where_the_screen_was_left` (`--drive` reports `screen.pulse_ms`; it
+  fails with the wiring dropped). `stamp()` rounds where the original truncates (`trunc.w.s` at `0x088a4074`/`0x088a40b4`),
   a one-step difference inside the measurement.
 - **PS2**: `0x001905d8` is the PS2 twin of `0x088a5700`; the PS2 twin of `0x088a3e8c` was not located (checked: not checkable
   from the `pulse-ps2-hex-align` page alone). **Not checkable against the other titles here**: this is Pulse PSP's widget code; Pure,

@@ -4,8 +4,8 @@
 //! `elapsed * 2.0` and wrapped at `2.0`, a 1 s triangle wave between
 //! [`CYAN`] and white. The phase starts at `0.0` and runs from the first
 //! frame: there is no entry hold. The original keeps the phase in the widget
-//! across visits, so a re-entry resumes where it was left; ours restarts at
-//! cyan, which is the original's first entry since boot. See
+//! across visits, so a re-entry resumes where it was left; [`SelectorPhases`]
+//! carries it between visits, and a cold first entry since boot is `0.0`. See
 //! `docs/ui/campaign-screens.md`.
 
 /// The pulse's low endpoint, a literal in `0x088a5700`.
@@ -66,6 +66,17 @@ impl SelectorPulse {
     }
 }
 
+/// Where `Grid Selection`'s and `Cell Selection`'s pulses stand, kept by whoever outlives both
+/// screens (the front end's session) so a re-entry resumes the phase it left. The original's
+/// two `Selector` widgets are built once per boot and keep `+0x9c` while the screen is away
+/// (frozen: the update runs but the flags bit `0x200` is clear), so each screen has its own
+/// phase and a relaunch is a cold start at `0.0`. Not saved to disk.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct SelectorPhases {
+    pub grid: SelectorPulse,
+    pub cell: SelectorPulse,
+}
+
 fn lerp_argb(t: f32, from: u32, to: u32) -> u32 {
     let t = t.clamp(0.0, 1.0);
     let mut out = 0u32;
@@ -112,6 +123,15 @@ mod tests {
         p.set_seconds(0.75);
         assert_eq!(p.stamp(), rising, "the same triangle as the tint");
         assert_eq!(rising, 155);
+    }
+
+    #[test]
+    fn the_two_screens_keep_separate_phases_and_default_to_cold() {
+        let mut phases = SelectorPhases::default();
+        assert_eq!(phases.grid.seconds(), 0.0);
+        assert_eq!(phases.cell.seconds(), 0.0);
+        phases.grid.set_seconds(1.1388 / 2.0);
+        assert_eq!(phases.cell.seconds(), 0.0, "Cell's widget is not Grid's");
     }
 
     #[test]

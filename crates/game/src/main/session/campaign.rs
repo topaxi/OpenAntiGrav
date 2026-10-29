@@ -137,8 +137,9 @@ impl Session {
                 // on screen, the same upload `PickerStage::take_sheet` does
                 // for a slideshow's own stills.
                 self.renderer_set_sprites(&campaign.sprites);
+                let phases = self.selector_phases;
                 if let Stage::Menu(menu_stage) = &mut self.stage {
-                    menu_stage.campaign = Some(CampaignStage::new(
+                    let mut stage = CampaignStage::new(
                         campaign.grids,
                         campaign.grid_layout,
                         campaign.cell_layout,
@@ -156,7 +157,9 @@ impl Session {
                         campaign.flyers,
                         campaign.circuit_emblems,
                         custom,
-                    ));
+                    );
+                    stage.resume_selector(phases);
+                    menu_stage.campaign = Some(stage);
                 }
             }
             Err(error) => warn!("{error:#} - RACE CAMPAIGN has nothing to show"),
@@ -169,7 +172,7 @@ impl Session {
         if let Stage::Menu(stage) = &mut self.stage
             && let Some(campaign) = stage.campaign.as_mut()
         {
-            keep_cursor(&mut self.records, campaign);
+            keep_cursor(&mut self.records, &mut self.selector_phases, campaign);
         }
     }
 
@@ -270,7 +273,7 @@ impl Session {
                     campaign.open_grid_selection(chosen);
                 }
                 (Screen::Selection(_), Event::Back) => {
-                    keep_cursor(&mut self.records, campaign);
+                    keep_cursor(&mut self.records, &mut self.selector_phases, campaign);
                     stage.campaign = None;
                 }
                 (Screen::Grid(model), Event::Confirmed) => {
@@ -303,7 +306,7 @@ impl Session {
                     campaign.open_selection();
                 }
                 (Screen::Grid(_), Event::Back) => {
-                    keep_cursor(&mut self.records, campaign);
+                    keep_cursor(&mut self.records, &mut self.selector_phases, campaign);
                     stage.campaign = None;
                 }
                 (Screen::Cell { model, .. }, Event::Confirmed) => {
@@ -580,7 +583,7 @@ impl Session {
         if let Stage::Menu(stage) = &mut self.stage {
             stage.pure_chain = None;
             if let Some(mut campaign) = stage.campaign.take() {
-                keep_cursor(&mut self.records, &mut campaign);
+                keep_cursor(&mut self.records, &mut self.selector_phases, &mut campaign);
             }
         }
         // A title whose own chain has no team step in Zone launches without the screen, as the
@@ -779,7 +782,12 @@ impl Session {
 /// Keeps where `campaign`'s screens stand as that campaign's position and
 /// writes the store off the render thread, as the campaign closes or a race
 /// launches from it.
-fn keep_cursor(records: &mut oag_game::records::Store, campaign: &mut CampaignStage) {
+fn keep_cursor(
+    records: &mut oag_game::records::Store,
+    phases: &mut oag_ui_screens::campaign::pulse::SelectorPhases,
+    campaign: &mut CampaignStage,
+) {
+    *phases = campaign.selector_phases();
     let (title, kept) = campaign.cursor_on_close();
     records.set_campaign_cursor(&title, &kept);
     oag_game::records::save_in_background(records);
