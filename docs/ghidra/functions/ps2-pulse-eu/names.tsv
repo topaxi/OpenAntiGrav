@@ -257,3 +257,10 @@
 # 2026-10-20 ps2-plume: the PS2 engine trail (engine-trail.md)
 0x001f0a08	function	Trail_DrawRibbon	80	engine-trail.md
 0x001f0090	function	Trail_InitPreset	80	engine-trail.md
+# 2026-10-29 pulse-ps2-ship-pose: the PS2 Mode3D widget (mode3d.md)
+0x00199550	function	Mode3D_ReadValues	85	mode3d.md
+0x00199718	function	Mode3D_EnterView	75	mode3d.md
+0x001999c8	function	Mode3D_DrawQueued	75	mode3d.md
+0x00199940	function	Mode3D_LeaveView	70	mode3d.md
+0x001993a8	function	Mode3D_SetOriginMapping	75	mode3d.md
+0x0027f0f4	data	g_mode3d_origin_enabled	75	mode3d.md

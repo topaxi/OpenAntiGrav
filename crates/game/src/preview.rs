@@ -236,14 +236,15 @@ pub fn frame_hull(model: &mut Model) {
         .max(0.001);
 }
 
-/// How the ship preview on `Team Selection` is framed at `seconds` into the
-/// screen.
+/// How a preview is framed at `seconds` into the screen when its own `screen.xml` authors no
+/// `<Mode3D>` to place it (Pulse's craft on both pressings and its circuits author one, so
+/// they never reach this).
 ///
-/// **This build's own number, read off the capture rather than recovered
-/// from the executable**: the craft turns once every twelve seconds seen
-/// slightly from above - see `docs/ui/selection-screens.md`. `Track
-/// Creation`'s outline ribbon no longer goes through this: see
-/// [`mode3d_view_projection`] for the disc's own camera, now read instead.
+/// **This build's own number, read off the capture rather than recovered from the
+/// executable**: the craft turns once every twelve seconds seen slightly from above. That
+/// turntable is a stand-in; the disc's craft pose is static and the hull sways on its own
+/// `Anim Transform` - see `docs/ui/selection-screens.md`. See [`placed_mode3d`] and
+/// [`mode3d_view_projection`] for the disc's own camera.
 #[must_use]
 pub fn orbit_for(kind: oag_ui_screens::picker::Kind, seconds: f32) -> Orbit {
     match kind {
@@ -313,7 +314,8 @@ pub fn mode3d_view_projection(model: &oag_ui::screen::Model, space: Space) -> Op
         return None;
     }
     let fov_y = 1.0; // radians, fixed - see this function's own doc.
-    let projection = camera::perspective(fov_y, space.display_aspect, near, far);
+    // The aspect is the grid's own, not the glass's: the PS2 draws 640x448 stretched to 16:9.
+    let projection = camera::perspective(fov_y, space.size.0 / space.size.1, near, far);
     // The PS2 pressing's own OriginX/OriginY read negated relative to the
     // PSP's - see this function's own doc - confirmed live 2026-09-28:
     // applying the PSP sign to the PS2's raw values landed the outline
@@ -339,13 +341,35 @@ pub fn mode3d_view_projection(model: &oag_ui::screen::Model, space: Space) -> Op
     Some((view_projection, model_matrix))
 }
 
-/// Whether a screen's authored `Mode3D` places its model: always, except a craft on the PS2
-/// pressing, whose `Origin` sign is unmeasured (it authors the PSP's `120` on a 640 wide grid
-/// and the circuit rule of negating it put the hull on top of the stat panel). PS2 keeps
-/// [`orbit_for`]'s capture-read orbit until a PCSX2 capture settles it.
+/// The `<Mode3D>` placement a picker draws a preview with: the screen's own, except that the
+/// PS2's `Team Selection` draws its craft with **no `OriginX`/`OriginY` shift**.
+///
+/// The PS2's `Mode3D` draw callback (`FUN_001999c8`) adds `Origin * (scale, scale) + offset` to the
+/// GS viewport offset only while the global at `0x0027f0f4` is set. `FUN_001993a8` writes it:
+/// the circuit screen's controller (`FUN_001c11f8`, which loads the `%s\FE\%s.vex` circuit
+/// model) sets it, and the generic screen setup clears it. A PCSX2 capture of `Ship Select`
+/// reached from `Track Select` puts Assegai's hull where the authored `x -6 y 2 z -15` alone
+/// places it (centroid 159 of 640 against the original's 148 to 164 over a sway cycle); the
+/// authored `Origin 120, 20` would shift it a further 120 px, onto the stat panel with the
+/// circuit's sign and off the left edge with the PSP's. The PSP applies the craft's `Origin`
+/// (its frames match with it), so this is a PS2 fact. Which controller a screen name selects is
+/// not traced, so the rule is per screen kind: confidence 70 for the craft, the circuit's
+/// `Origin` stays applied (see [`mode3d_view_projection`]).
 #[must_use]
-pub fn craft_mode3d_applies(kind: oag_ui_screens::picker::Kind, space: Space) -> bool {
-    kind != oag_ui_screens::picker::Kind::Ship || space.size != Space::PS2.size
+pub fn placed_mode3d(
+    model: &oag_ui::screen::Model,
+    kind: oag_ui_screens::picker::Kind,
+    space: Space,
+) -> oag_ui::screen::Model {
+    let origin = if kind == oag_ui_screens::picker::Kind::Ship && space.size == Space::PS2.size {
+        [0.0, 0.0]
+    } else {
+        model.origin
+    };
+    oag_ui::screen::Model {
+        origin,
+        ..model.clone()
+    }
 }
 
 /// One still of a slideshow as read off the disc: its entry name and its
@@ -1132,6 +1156,7 @@ impl Preview {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use oag_core::math::Vec4;
 
     #[test]
     fn a_grid_rect_lands_where_the_ui_draws_it() {
@@ -1147,5 +1172,56 @@ mod tests {
             (w - 960.0).abs() < 0.5 && (h - 544.0).abs() < 0.5,
             "{w} {h}"
         );
+    }
+
+    fn assegai_on_the_ps2() -> oag_ui::screen::Model {
+        oag_ui::screen::Model {
+            src: r"Data\Ships\Assegai\ship_FE.vex".into(),
+            position: [-6.0, 2.0, -15.0],
+            rotation: [0.4, 0.7],
+            origin: [120.0, 20.0],
+            depth: [1.0, 100.0],
+        }
+    }
+
+    /// Where the model's own origin lands, in the grid's pixels.
+    fn landing(model: &oag_ui::screen::Model, space: Space) -> (f32, f32) {
+        let (view_projection, placed) = mode3d_view_projection(model, space).expect("usable");
+        let clip = view_projection * placed * Vec4::new(0.0, 0.0, 0.0, 1.0);
+        (
+            (clip.x / clip.w + 1.0) * 0.5 * space.size.0,
+            (1.0 - clip.y / clip.w) * 0.5 * space.size.1,
+        )
+    }
+
+    #[test]
+    fn the_ps2s_ship_select_places_its_hull_from_the_authored_mode3d_without_the_origin() {
+        use oag_ui_screens::picker::Kind;
+        let authored = assegai_on_the_ps2();
+        let placed = placed_mode3d(&authored, Kind::Ship, Space::PS2);
+        assert_eq!(placed.origin, [0.0, 0.0]);
+        assert_eq!(
+            (placed.position, placed.rotation),
+            (authored.position, authored.rotation),
+            "the hull's own authored pose is played"
+        );
+        // The PCSX2 capture puts the hull's middle near x 159 of 640, left of the stat panel
+        // (x 387): `x -6` at depth 15 under the 640x448 grid's aspect, and nothing else.
+        let (x, y) = landing(&placed, Space::PS2);
+        assert!(
+            (140.0..180.0).contains(&x) && (150.0..210.0).contains(&y),
+            "({x}, {y})"
+        );
+        // With the circuit's sign rule and the authored `Origin` the hull is 120 px further right.
+        let (shifted, _) = landing(&authored, Space::PS2);
+        assert!(shifted > x + 100.0, "{shifted} against {x}");
+    }
+
+    #[test]
+    fn only_the_ps2_craft_drops_its_origin() {
+        use oag_ui_screens::picker::Kind;
+        let authored = assegai_on_the_ps2();
+        assert_eq!(placed_mode3d(&authored, Kind::Ship, Space::PSP), authored);
+        assert_eq!(placed_mode3d(&authored, Kind::Track, Space::PS2), authored);
     }
 }
