@@ -30,6 +30,8 @@
 pub mod lens;
 pub mod mist;
 mod noise;
+pub mod splash;
+pub mod spray;
 pub mod weather;
 mod wind;
 
@@ -204,6 +206,11 @@ impl SceneryFx {
         self.weather.advance(effects, dt, camera, section);
     }
 
+    /// The weather, to age and add splashes to.
+    pub(crate) fn weather_mut(&mut self) -> &mut Weather {
+        &mut self.weather
+    }
+
     /// [`psys::Stage::hold_still`] on the pool, at the start of a tick path.
     pub fn hold_still(&mut self) {
         self.stage.hold_still();
@@ -247,6 +254,90 @@ impl super::Race {
         self.view
             .scenery_fx
             .advance_weather(&self.view.effects, dt, camera, section);
+        self.advance_splashes(dt);
+    }
+
+    /// The enhanced weather's one step: ages the splashes and throws one
+    /// where a drop's last move crossed a floor. **Nothing runs at `original`**
+    /// beyond clearing what a switch back left behind, so that frame is the
+    /// original's. See [`splash`].
+    fn advance_splashes(&mut self, dt: f32) {
+        if !self.view.weather.is_enhanced() {
+            if !self.view.scenery_fx.weather().splashes().is_empty() {
+                self.view.scenery_fx.weather_mut().splashes_mut().clear();
+            }
+            if !self.view.scenery_fx.weather().spray().is_empty() {
+                self.view.scenery_fx.weather_mut().spray_mut().clear();
+            }
+            return;
+        }
+        let weather = self.view.scenery_fx.weather();
+        let snow = weather.is_snow();
+        let hits: Vec<(Vec3, Vec3)> = weather
+            .drop_segments()
+            .into_iter()
+            .filter_map(|(from, to)| self.floor_crossing(from, to))
+            .filter(|&(at, _)| !self.point_is_under_cover(at))
+            .collect();
+        let wet = self.view.scenery_fx.weather().wet_road();
+        let emitters = if wet > 0.0 {
+            self.spray_emitters()
+        } else {
+            Vec::new()
+        };
+        self.view
+            .scenery_fx
+            .weather_mut()
+            .spray_mut()
+            .advance(dt, wet, &emitters);
+        let splashes = self.view.scenery_fx.weather_mut().splashes_mut();
+        splashes.advance(dt);
+        for (at, normal) in hits {
+            splashes.spawn(at, normal, snow);
+        }
+    }
+
+    /// Whether `point`, a hit on the track, lies in a covered section: the
+    /// section of the spline sample nearest it, tested with the original's
+    /// own mask (`Section_IsCovered`), wherever the camera is. **A point the
+    /// spline cannot place (off the track) counts as open**: no cover is
+    /// evidence for it. Chosen, not measured.
+    pub fn point_is_under_cover(&self, point: Vec3) -> bool {
+        let Some((index, _, _)) = self.sim.spline.nearest(point) else {
+            return false;
+        };
+        let section = self.section_of(index, point);
+        section != oag_render::pvs::UNPLACED
+            && self
+                .view
+                .scenery_fx
+                .weather()
+                .section_is_covered(i32::from(section))
+    }
+
+    /// Where the segment `from..to` crosses a floor from above, and that
+    /// floor's normal: the same read-only cast the blob shadows make.
+    fn floor_crossing(&self, from: Vec3, to: Vec3) -> Option<(Vec3, Vec3)> {
+        use oag_physics::collide::{Ray, Raycaster};
+        let along = to - from;
+        let length = along.length();
+        if length <= f32::EPSILON {
+            return None;
+        }
+        let direction = along / length;
+        let mut hits = [None; 4];
+        let found = self.sim.collision.raycast_all(
+            Ray::new(from, direction, length),
+            None,
+            false,
+            &mut hits,
+        );
+        hits.iter()
+            .flatten()
+            .take(found)
+            .filter(|hit| hit.surface.is_hoverable() && hit.normal.dot(direction) < 0.0)
+            .min_by(|a, b| a.distance.total_cmp(&b.distance))
+            .map(|hit| (hit.point, hit.normal))
     }
 
     /// The lens as a world frame: where it is and where its axes point.

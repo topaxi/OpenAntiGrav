@@ -109,6 +109,19 @@ impl Sprite {
         })
     }
 
+    /// An `OAGMASK` text mask (this project's own art, `oag_texture::mask`) as
+    /// a white sprite whose alpha is the mask. `None` for a blob that is not
+    /// a mask or does not decode.
+    #[must_use]
+    pub fn from_mask(blob: &[u8]) -> Option<Self> {
+        let mask = oag_texture::mask::parse(blob).ok()?;
+        Some(Self {
+            width: mask.width,
+            height: mask.height,
+            rgba: mask.rgba.into(),
+        })
+    }
+
     /// A PS2 `.pct` texture, the sprite a PS2 `.pob` names by path and embeds
     /// none of. `None` for a blob [`oag_texture::ps2_texture`] does not read.
     #[must_use]

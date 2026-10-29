@@ -509,6 +509,7 @@ fn json(frames: &[Frame], facts: &Facts<'_>) -> String {
         ("model_detail", format!("{:?}", o.model_detail)),
         ("texture_detail", format!("{:?}", o.texture_detail)),
         ("trail_order", format!("{:?}", o.trail_order)),
+        ("weather", format!("{:?}", o.weather)),
         ("frustum_culling", format!("{:?}", o.frustum_culling)),
         ("pvs_culling", format!("{:?}", o.pvs_culling)),
         ("camera_view", format!("{:?}", o.camera_view)),

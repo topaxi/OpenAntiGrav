@@ -171,6 +171,21 @@ impl System {
         }
     }
 
+    /// Where every live particle is in the world, as drawn.
+    ///
+    /// The enhanced weather reads it to find where a drop meets the track; the
+    /// pool itself is untouched.
+    pub fn world_positions<'a>(
+        &'a self,
+        anchor: &'a Anchor,
+        depth: f32,
+    ) -> impl Iterator<Item = Vec3> + 'a {
+        self.particles
+            .iter()
+            .filter(|particle| particle.alive())
+            .map(move |particle| anchor.to_world(particle.position, depth))
+    }
+
     /// This pool with every particle moved from field coordinates to the
     /// world, for drawing: [`System::extend_vertices`] reads world positions.
     #[must_use]

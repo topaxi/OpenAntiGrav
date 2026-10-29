@@ -103,6 +103,27 @@ impl Race {
     }
 
     #[cfg(feature = "view")]
+    /// What the weather adds to the original's - `[render_profiles.<title>] weather`.
+    /// Render-only and idempotent like [`Self::set_trail_order`], so the frame
+    /// loop sets it every frame and the menu row applies live.
+    pub fn set_weather(&mut self, weather: oag_display::display::Weather) {
+        self.view.weather = weather;
+    }
+
+    #[cfg(feature = "view")]
+    /// The wet road the scene uniform carries, `0.0..=1.0`: the circuit's rain
+    /// (see [`crate::scenery_fx::weather::wetness`]) under the enhanced weather
+    /// setting, and exactly `0.0` at `original`, whatever the weather.
+    #[must_use]
+    pub fn wet_road(&self) -> f32 {
+        if self.view.weather.is_enhanced() {
+            self.view.scenery_fx.weather().wet_road()
+        } else {
+            0.0
+        }
+    }
+
+    #[cfg(feature = "view")]
     /// Where the PSP ribbons draw against the circuit's blended list -
     /// `[render_profiles.<title>] trail_order`. Render-only and idempotent like
     /// [`Self::set_texture_detail`], so the frame loop sets it every frame and

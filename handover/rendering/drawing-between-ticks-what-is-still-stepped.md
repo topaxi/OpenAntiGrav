@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-10-27
+updated: 2026-10-29
 summary: "Trails, particles, reticle, flaps, swell, flare axis, mist landed 2026-10-27; Deck CPU re-measured, no rise; open: a 240 Hz look, extrapolation"
 ---
 
@@ -17,6 +17,10 @@ motion blur measures per drawn frame now, see
 ("Blur length"). This thread is only what is left.
 
 ## Open
+
+- **Enhanced weather splashes** (`weather-enhanced` branch, ours) are placed and aged per tick, so
+  the ring and droplets step at 60 Hz like the particles they come from; their motion is
+  analytic (age and gravity), so drawing at `age + draw_alpha / 60` is a few lines when wanted.
 
 Landed 2026-10-27 (`between-ticks` lane; how each works is on
 `docs/rendering/between-ticks.md`): trail ribbon bodies at fractional ages

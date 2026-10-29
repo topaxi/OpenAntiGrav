@@ -39,11 +39,86 @@ use oag_vex::weather::{self as covered, Anchor as CoveredAnchor};
 
 use super::lens::{Edge, Lens};
 use super::mist::Mist;
+use super::splash::Splashes;
+use super::spray::Spray;
 use super::wind::Wind;
 
 /// Seed for the weather's own spawn draws, wind table and phases. Any
 /// constant: render state, never hashed.
 const SEED: u64 = 0x7a1e_b01d;
+
+/// Seconds of rain it takes the enhanced weather's road to go fully wet. Chosen,
+/// not measured: the original has no wet road.
+pub const WET_RAMP_SECONDS: f32 = 40.0;
+
+/// How wet the road is after `clock` seconds of weather, `0.0..=1.0`: rising
+/// linearly over [`WET_RAMP_SECONDS`] for rain, never for snow. **Not decided by
+/// where the camera is**: a roofed road is kept dry per draw at load
+/// ([`dry_covered_road`]), so the open road seen from inside a tunnel is wet
+/// and the roofed road seen from outside is not.
+#[must_use]
+pub fn wetness(clock: f32, snow: bool) -> f32 {
+    if snow {
+        return 0.0;
+    }
+    (clock / WET_RAMP_SECONDS).clamp(0.0, 1.0)
+}
+
+/// Marks every road vertex of a covered section dry: clears
+/// [`oag_mesh::mesh::ROAD_MARK`] on the vertices of each draw call whose scene
+/// node a covered section governs (`oag_vex::pvs::governing_sections`, the
+/// rule the PVS places draws by). A section the file declares no anchor for
+/// stays open. Returns how many vertices it cleared. Chosen, not measured:
+/// the original has no wet road.
+pub fn dry_covered_road(
+    model: &mut oag_mesh::mesh::Model,
+    governing: &[Option<u8>],
+    anchors: &[CoveredAnchor],
+) -> usize {
+    let mask = covered::covered_mask(anchors);
+    if mask == 0 {
+        return 0;
+    }
+    let lists = [
+        &model.draws,
+        &model.alpha_tested_draws,
+        &model.transparent_draws,
+    ];
+    let mut ranges = Vec::new();
+    for draw in lists.into_iter().flatten() {
+        let section = draw
+            .node
+            .and_then(|node| governing.get(node as usize).copied().flatten());
+        if section.is_some_and(|id| covered::covered(mask, i32::from(id))) {
+            ranges.push(draw.range.clone());
+        }
+    }
+    clear_road_marks(&mut model.vertices, &model.indices, &ranges)
+}
+
+/// Clears the road mark of every vertex the index `ranges` reference, and
+/// counts the marks it cleared.
+fn clear_road_marks(
+    vertices: &mut [oag_mesh::mesh::GpuVertex],
+    indices: &[u32],
+    ranges: &[std::ops::Range<u32>],
+) -> usize {
+    let mut cleared = 0;
+    for range in ranges {
+        let Some(indices) = indices.get(range.start as usize..range.end as usize) else {
+            continue;
+        };
+        for &index in indices {
+            if let Some(vertex) = vertices.get_mut(index as usize)
+                && vertex.texcoord2[0] != 0.0
+            {
+                vertex.texcoord2[0] = 0.0;
+                cleared += 1;
+            }
+        }
+    }
+    cleared
+}
 
 /// What a circuit asks for and where it is covered, read at load.
 #[derive(Debug, Clone, PartialEq)]
@@ -55,6 +130,10 @@ pub struct Setup {
     /// `Tex` decoded, the mist overlay's texture; `None` when the circuit
     /// names none or it did not decode, and then the mist draws nothing.
     pub mist_texture: Option<oag_fx::exhaust::FlareTexture>,
+    /// Where this project's own splash art sits on the particle sheet, when
+    /// it was found and placed; `None` and the enhanced weather draws no
+    /// splash (see [`super::splash`]).
+    pub splash_cell: Option<[f32; 4]>,
 }
 
 /// The weather of a race: inert unless the circuit authors one.
@@ -79,6 +158,13 @@ pub struct Weather {
     mist: Option<Mist>,
     clock: f32,
     rng: Rng,
+    /// The enhanced weather's splashes: empty and never touched at
+    /// `original`. Own random stream, so they never move the drops'.
+    splashes: Splashes,
+    /// The enhanced weather's road spray: same rules, own stream.
+    spray: Spray,
+    /// The last frame's wind step, a drop's move in the world a tick.
+    step: Vec3,
 }
 
 impl Default for Weather {
@@ -121,6 +207,9 @@ impl Weather {
             mist,
             clock: 0.0,
             rng,
+            splashes: Splashes::default(),
+            spray: Spray::default(),
+            step: Vec3::ZERO,
         }
     }
 
@@ -164,6 +253,100 @@ impl Weather {
     #[must_use]
     pub fn mist_texture(&self) -> Option<&oag_fx::exhaust::FlareTexture> {
         self.setup.as_ref()?.mist_texture.as_ref()
+    }
+
+    /// Where the splash art sits on the particle sheet.
+    #[must_use]
+    pub fn splash_cell(&self) -> Option<[f32; 4]> {
+        self.setup.as_ref()?.splash_cell
+    }
+
+    /// Whether the env effect is the snow rather than the rain.
+    #[must_use]
+    pub fn is_snow(&self) -> bool {
+        self.setup
+            .as_ref()
+            .and_then(|s| s.config.env_psys.as_deref())
+            .is_some_and(|path| effect_name(path) == oag_title::engine_effects::SNOW_EFFECT)
+    }
+
+    /// Whether `section` is a covered one: the original's own test
+    /// (`Section_IsCovered`), read here for a hit's or a draw's section rather
+    /// than the camera's. A section below zero counts as covered, as there.
+    #[must_use]
+    pub fn section_is_covered(&self, section: i32) -> bool {
+        covered::covered(self.mask, section)
+    }
+
+    /// How wet the enhanced weather's road is now, `0.0..=1.0`; see [`wetness`].
+    /// `0.0` for a circuit with no playing weather.
+    #[must_use]
+    pub fn wet_road(&self) -> f32 {
+        if !self.is_playing() {
+            return 0.0;
+        }
+        wetness(self.clock, self.is_snow())
+    }
+
+    /// The enhanced weather's splashes.
+    #[must_use]
+    pub fn splashes(&self) -> &Splashes {
+        &self.splashes
+    }
+
+    /// The enhanced weather's road spray.
+    #[must_use]
+    pub fn spray(&self) -> &Spray {
+        &self.spray
+    }
+
+    /// The spray, to age and add to.
+    pub fn spray_mut(&mut self) -> &mut Spray {
+        &mut self.spray
+    }
+
+    /// The splashes, to age and add to.
+    pub fn splashes_mut(&mut self) -> &mut Splashes {
+        &mut self.splashes
+    }
+
+    /// The last move of every drop in the open, as a world segment from where
+    /// it was a tick ago to where it is drawn: what a splash is found on.
+    ///
+    /// Empty under cover (the original's anchored box: no hits there), before
+    /// the pool plays, and for a circuit with no field. The pool is not touched.
+    #[must_use]
+    pub fn drop_segments(&self) -> Vec<(Vec3, Vec3)> {
+        let (Some(effect), Some(previous), false) = (&self.effect, self.previous, self.anchored)
+        else {
+            return Vec::new();
+        };
+        if effect.field.is_none() || !self.pool.is_running() {
+            return Vec::new();
+        }
+        let anchor = Anchor::Camera {
+            previous,
+            current: previous,
+        };
+        self.pool
+            .world_positions(&anchor, effect.view_depth)
+            .map(|at| (at - self.step, at))
+            .collect()
+    }
+
+    /// Appends the splashes' geometry, when their art is placed.
+    pub fn extend_splash_vertices(
+        &self,
+        additive: &mut Vec<GpuVertex>,
+        alpha_over: &mut Vec<GpuVertex>,
+        right: Vec3,
+        up: Vec3,
+    ) {
+        if let Some(cell) = self.splash_cell() {
+            self.splashes
+                .extend_vertices(additive, alpha_over, right, up, cell);
+            self.spray.extend_vertices(alpha_over, right, up, cell);
+        }
     }
 
     /// The pool, for tests.
@@ -242,6 +425,7 @@ impl Weather {
                 wind: self.wind.modifier(),
             };
             let anchor = self.anchor_for(camera);
+            self.step = spec.wind;
             self.pool
                 .advance_field(&effect, dt, &anchor, &spec, &mut self.rng);
         }
@@ -298,5 +482,39 @@ fn frame_of(world: &[f32; 16]) -> Frame {
         right: row(0),
         up: row(4),
         back: row(8),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rain_wets_the_road_over_time_and_snow_does_not() {
+        assert_eq!(wetness(0.0, false), 0.0);
+        let early = wetness(10.0, false);
+        let later = wetness(30.0, false);
+        assert!(0.0 < early && early < later && later < 1.0);
+        assert_eq!(wetness(WET_RAMP_SECONDS * 3.0, false), 1.0);
+        assert_eq!(wetness(100.0, true), 0.0, "snow leaves the road dry");
+    }
+
+    #[test]
+    fn only_the_vertices_of_a_covered_draw_lose_the_road_mark() {
+        let road = oag_mesh::mesh::GpuVertex {
+            texcoord2: [oag_mesh::mesh::ROAD_MARK, 0.0],
+            ..bytemuck::Zeroable::zeroed()
+        };
+        let mut vertices = [road; 6];
+        let indices = [0, 1, 2, 3, 4, 5];
+        let cleared = clear_road_marks(&mut vertices, &indices, std::slice::from_ref(&(3..6)));
+        assert_eq!(cleared, 3);
+        let marked: Vec<bool> = vertices.iter().map(|v| v.texcoord2[0] != 0.0).collect();
+        assert_eq!(marked, [true, true, true, false, false, false]);
+    }
+
+    #[test]
+    fn a_circuit_with_no_weather_is_dry() {
+        assert_eq!(Weather::default().wet_road(), 0.0);
     }
 }

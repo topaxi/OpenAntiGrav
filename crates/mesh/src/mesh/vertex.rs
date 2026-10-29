@@ -132,6 +132,12 @@ pub struct GpuVertex {
     /// through it - HD's Sebenco ice pool, whose pond mask lives on this set
     /// (`mesh::rcs::ice`) - and `[0, 0]` everywhere else. Last, for the reason
     /// [`Self::lightmap_texcoord`] gives.
+    ///
+    /// **On a PSP/PS2 `.vex` model, `x` is [`ROAD_MARK`] on a road surface** (ours,
+    /// not the disc's): a `.vex` authors no second set, so the lane is free, and
+    /// the enhanced weather's wet road (`mesh.wesl`'s `wet_road`) reads it. It
+    /// reads it only when the scene's `Fog::wet` is above zero, which is Pulse
+    /// with the weather setting at `enhanced`, so no other draw looks at it.
     pub texcoord2: [f32; 2],
     /// `1.0` where this surface's material ships a `StaticQuake` vertex
     /// program, so the Quake's travelling displacement reaches it
@@ -185,6 +191,20 @@ impl TangentFrame {
     pub fn carried(self) -> bool {
         self != Self::Absent
     }
+}
+
+/// [`GpuVertex::texcoord2`]`[0]` on a `.vex` vertex whose batch draws a road
+/// surface; see [`road_texture`].
+pub const ROAD_MARK: f32 = 1.0;
+
+/// Whether a texture's label names a road surface: the disc's own name for the
+/// tarmac, `Dsurface6_1.tga` on Fort Gale, so a name test and not a guess at
+/// geometry. Chosen, not measured: no field on the disc says "road", this reads
+/// the artists' naming. Walls (`Dwall6_1`), pit walls and the rest do not
+/// contain the word.
+#[must_use]
+pub fn road_texture(label: &str) -> bool {
+    label.to_ascii_lowercase().contains("surface")
 }
 
 /// [`GpuVertex::specular_exponent`]'s fallback - every title but Wipeout HD,
@@ -519,4 +539,18 @@ pub mod slots {
     /// whose microcode this reading could not follow - so a zero-information
     /// answer leaves the picture exactly as it was rather than guessing.
     pub const DEFAULT: u32 = alpha_channel(3);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::road_texture;
+
+    #[test]
+    fn a_road_texture_is_named_for_a_surface_and_a_wall_is_not() {
+        assert!(road_texture("Dsurface6_1.tga"));
+        assert!(road_texture("Dsurface6_endlineB.tga"));
+        assert!(!road_texture("Dwall6_1.tga"));
+        assert!(!road_texture("Dpitwall6_1.tga"));
+        assert!(!road_texture("Concrete01.tga"));
+    }
 }

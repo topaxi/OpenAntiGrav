@@ -243,6 +243,99 @@ frame to frame. The first sampler step and the layers' starting `t` are chosen (
 `oag_fx::mist`). Not compared: a climb or a dive, and Fort Gale's rain lens over
 the mist.
 
+## The enhanced weather (ours, 2026-10-29)
+
+**Chosen, not measured; no confidence score.** The original's drops and flakes never
+touch geometry (`Modifier_WrapBox` only wraps and blows them), so it has no splash.
+`[render_profiles.<title>] weather` (menu row WEATHER, `--weather`) is `original`
+(the default, the frame as above, byte-identical to a build without the row) or
+`enhanced`. The row is offered where `Title::weather` says the weather is played
+(Pulse, both pressings; hidden elsewhere).
+
+- **Hits.** Once a tick, in the open only (no hits while the box sits at a covered
+  section's anchor, as the original's cover says, and **none whose own point lies in a
+  covered section**: `Race::point_is_under_cover` takes the section of the spline sample
+  nearest the hit and tests it with `Section_IsCovered`'s mask, so the drops the open
+  box throws past a tunnel mouth splash nowhere under the roof; a point the spline cannot
+  place counts as open, chosen), each live drop's last move in the
+  world (`[p - wind, p]`, `oag_fx::psys::System::world_positions` and the pool's wind
+  step) is cast against the circuit's collision with the same read-only floor cast the
+  blob shadows use (`Race::floor_crossing`, hoverable surfaces, from above). The pool is
+  not touched and the simulation never knows.
+- **Rain**: a ring flat on the road, fading over 0.35 s, and three droplets thrown up
+  and back under a chosen gravity. Sizes (chosen; a quarter of the first version's, on the
+  maintainer's play report 2026-10-29): `RING_RADIUS` 0.125 to 0.65, `DROPLET_SIZE` 0.075,
+  `FLAKE_SIZE` 0.105, `LIFT` 0.03, `SPRAY_UP` 1.75 to 3.0, `SPRAY_OUT` 1.0, `GRAVITY`
+  13.75 (speeds and gravity scale with the lengths, so a droplet's flight time is as before). **Snow**: one flake that settles on the road and
+  fades in and out over 1.6 s. At most `splash::CAPACITY` (48) alive; a hit past it is
+  dropped. Own `Rng` seed, so the drops' stream is the original's either way.
+- **Art.** The disc has no splash sprite, so the ring and the dot are this project's:
+  `assets/fallback/Data/Psys/Tex/OAGSplash.oagmask` (`scripts/gen-fallback-splash-art.py`),
+  served by the fallback layer ([asset-layers.md](../../../architecture/asset-layers.md))
+  and placed on the particle sheet after every effect's sprite. The loader report
+  says `weather: splash art ... (ours)`.
+- **The wet road** (`oag_mesh` `wet.wesl`, `Fog::wet`, `Race::wet_road`). The original has no
+  wet road either, so this is ours too. At `enhanced`, a rain circuit's road is darkened
+  and given a Fresnel reflection of the sky (the circuit's own fog colour), growing
+  linearly over `WET_RAMP_SECONDS` (40 s of weather clock) from dry to full. The road is
+  the batches whose texture label contains `surface` (`Dsurface6_*` on Fort Gale; 9
+  textures, 185 of 1,394 draws), marked per vertex in `GpuVertex::texcoord2.x`
+  (`ROAD_MARK`) at load: a name test on the artists' own naming, chosen because no field on
+  the disc says "road". Snow stays dry. **Cover is decided per draw at load, not by the camera**:
+  `scenery_fx::weather::dry_covered_road` clears `ROAD_MARK` on every vertex of a draw
+  whose scene node a covered section governs (`oag_vex::pvs::governing_sections`, the
+  rule the PVS places draws by; Fort Gale: 12,867 of 34,150 marked vertices), so roofed
+  road is dry wherever the camera is and the open road seen from inside a tunnel is wet.
+  A tunnel's road in a section with no `weatherPos` anchor stays open, as in the
+  original's own cover test. The other circuits' road texture names are unchecked
+  (Outpost 7 is snow and unaffected).
+  Constants (`WET_DARKEN` 0.42, grazing sky share 0.85, face-on 0.06) are chosen, not
+  measured. At `original` `Fog::wet` is exactly `0.0`; the shader takes a branch on it, so
+  the frame is byte-identical (8 of 8 `cmp` on `14_Track` and `07_Track` at ticks 600,
+  1000, 1500 and 2000).
+- **The road spray** (`scenery_fx::spray`, `Race::spray_emitters`). The original's craft
+  throw no spray off a wet road either; ours (chosen, not measured, no confidence score).
+  At `enhanced` every racing craft, player and AI, throws small translucent droplets from
+  the road under its two rear corners (a ray along its own down axis within 2.5 hull
+  heights, so a craft off a jump throws none), at `MAX_PER_TICK` (5) times the road's
+  `wet_road()` times its speed over `FULL_SPEED_KMH` (600 km/h) per tick, none below 60 km/h.
+  Droplets are born anywhere along the path the craft covered that tick, carry a tenth of
+  its speed and are stopped by drag, kick up 1 to 3 units a second and live 0.35 s at
+  0.15 half-size and at most 0.4 alpha: a fine mist, not a cloud. Dry road (rain not yet
+  fallen, snow, or a covered section by `Race::point_is_under_cover`) throws nothing.
+  Capped at `spray::CAPACITY` (320 droplets, 1,920 vertices against the particle buffer's
+  49,152), own random stream, drawn through the splash art's dot cell into the alpha list
+  from the craft's between-ticks pose; nothing runs at `original`. The spawn is stepped per
+  tick, only the pose it reads is interpolated. Cost on `14_Track` (same recipe as above,
+  seed 1): CPU p50 5.51 and 5.51 ms before, 5.87 and 5.54 ms after (the unchanged build
+  moves 0.0 to 0.4 ms between runs); final state hash the same.
+  **The mist** (`spray::Spray::mist`, chosen, not measured, no confidence score), added
+  because the droplets die under the hull and the far chase camera never saw a craft's own
+  spray: at `MIST_MAX_PER_TICK` (1) per craft per tick on the droplets' wet-and-speed rule,
+  from the same emitters (so none on a covered section), the soft dot of the splash art as a
+  puff of 0.8 growing to 3 half-size, alpha at most 0.12 (in over the first 8 % of its 1.4 s,
+  out over the rest), born above the road at the rear corners, rising 2 to 4 units a second
+  with a 4-unit sideways spread and carried at 98 % of the craft's speed (so it trails the
+  craft instead of being left behind the camera in a tenth of a second). Capped at
+  `MIST_CAPACITY` (240 puffs), own random stream apart from the droplets' (the droplets are
+  unchanged). A close or cockpit view mostly sees none: the camera sits inside the gap the
+  puffs open.
+- **Cost**, whole-race bench recipe (`OAG_RENDER_BENCH_RACE`, single race, seed 1,
+  autopilot, 1280x720, first 3,000 ticks, debug profile at opt-level 2, taken under the gate lock,
+  load average 2 to 10 at start, adapter RADV). CPU ms a frame, p50 (mean): Fort Gale
+  `14_Track\track.vex` before 4.30 to 4.33 (4.45 to 4.51), `original` 4.36 (4.47), `enhanced`
+  4.40 (4.54); Outpost 7 `07_Track\track.vex` before 5.67 (5.74 to 5.75), `original` 5.61 (5.71),
+  `enhanced` 5.63 (5.68). Two runs of the unchanged build differ by about 0.07 ms, so
+  `enhanced` is within a tenth of a millisecond of `original`; GPU p50 is unchanged
+  (0.305 and 0.389 ms) and the final state hash is the same in all runs. The `original`
+  path runs nothing. Not measured on a Deck or a phone.
+- **Evidence.** `crates/raceplay/tests/weather_splash_ground_truth.rs`: an original and
+  an enhanced race stepped together hash identically every tick, the enhanced draw lists
+  begin with the original's byte for byte, every splash lies on a floor, and the enhanced
+  race throws splashes on 1,041 of 1,500 ticks on Fort Gale and 569 on Outpost 7.
+- **PS2** loads the same circuits' weather (`circuit_effects`) and the art (a load test on
+  `14_Track`); inherited from the PSP, not seen on a PS2 frame.
+
 ## Not done, and why
 
 - **The noise clock** is the manager's `0x08ab224c` (seconds, measured: it ran `0.57` per
@@ -250,7 +343,8 @@ the mist.
 - **The original updates at its frame rate**: the wind step is not scaled by `dt`, so on the
   PSP's 30 fps the fall is half as fast in time. Ours is 60 Hz.
 - **Other titles.** The PS2 disc authors `<Weather>` on `07`, `11` (not on the PSP disc) and
-  `14`; none is played. Wipeout HD carries neither effect.
+  `14`; since 2026-10-17 it is loaded and reported there (`circuit_effects`), not yet seen on a
+  PS2 frame. Wipeout HD carries neither effect.
 - **The PS2 executable has the same law** (2026-10-04, static, confidence **75**). In
   `SCES_547.48` the `TrackStartup` parser `FUN_00146668` reads the same attribute list
   (`MistInside` at `0x002a46f8`, referenced at `0x00146870`). Under the same gate

@@ -59,6 +59,10 @@ Nothing extracted from a disc may be placed there, and `just audit-leakage` cove
 the tree. It is **chosen, not measured** wherever it is described, and the loader
 report says so.
 
+Besides the Pilot Assist art and the layouts it carries `Data\Psys\Tex\OAGSplash.oagmask`
+(2026-10-29): the ring and dot the enhanced weather's splashes draw, 64 x 32, made by
+`scripts/gen-fallback-splash-art.py`; see `docs/ghidra/functions/psp-pulse-usa/weather.md`.
+
 ### The `OAGMASK` art format
 
 A plain-text alpha mask (`oag_texture::mask`): the header `OAGMASK <w> <h>`, then one

@@ -50,6 +50,7 @@ mod weapon_floor_sweep;
 mod weapon_slowdown_ground_truth;
 mod weapons_row_ground_truth;
 mod weather_ground_truth;
+mod weather_splash_ground_truth;
 mod web_picker_table;
 mod window_flyby_ground_truth;
 mod zone_announcer_ground_truth;
