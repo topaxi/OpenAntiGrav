@@ -147,6 +147,11 @@ Four properties of this engine constrain any answer:
   for free, and one module runs on every target.
 - **Native plugins (`dlopen`, cdylib).** No sandbox, no web, no iOS, and a crash in a
   mod is a crash in the game. Rejected outright.
+- **wasmtime in the browser** (built for `wasm32`, Pulley as its only backend). One
+  host and wasmtime's fuel and NaN canonicalisation everywhere, but it interprets wasm
+  inside wasm, far slower than the browser's own engine, and grows the web binary.
+  Rejected by the maintainer (2026-10-29) unless a serious reason shows up, such as
+  the load-time rewrite failing to match the native hosts.
 - **The component model and WIT as the wire ABI.** Cleaner bindings; but browsers do
   not run components natively, so the web host would need a transpiler layer and the
   three engines would no longer run the same bytes. Core wasm with a buffer is what

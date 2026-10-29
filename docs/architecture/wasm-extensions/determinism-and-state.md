@@ -263,17 +263,20 @@ through a lobby is never auto-run").
 
 ## Web and iOS
 
-- **Web: open (the README's open question 1).** The game itself is a wasm32 module
-  in the browser (`docs/tools/web.md`). Either (a) wasmtime built for `wasm32` with
-  Pulley as its only backend, the guest interpreted inside our module: one host, one
-  proof, wasmtime's NaN canonicalisation and fuel included, if wasmtime builds for
-  that target (not checked); or (b) the browser's own `WebAssembly`, compiled
-  asynchronously at race load, never per tick: faster, but the browser has neither
-  NaN canonicalisation nor fuel, so both move into a load-time rewrite of the module
-  (above), and the component model the README sketches does not run natively in a
-  browser (a guest component would be transpiled to a core module first). The spike
-  used a core-WebAssembly I/O buffer, which runs on all three; it does not decide
-  the interface language.
+- **Web: the browser's own `WebAssembly`** (maintainer, 2026-10-29). The game itself
+  is a wasm32 module in the browser (`docs/tools/web.md`); it hands each guest to the
+  browser's engine through `js-sys`, compiled asynchronously at race load, never per
+  tick. The browser has neither NaN canonicalisation nor fuel, so both, and the call
+  depth limit, move into the load-time rewrite of the module (above); the same
+  rewritten bytes then run on every host. The component model does not run natively
+  in a browser, which is one reason the ABI is core WebAssembly with an I/O buffer.
+  Proving the browser matches is the README's open question 1.
+  - **Rejected: wasmtime built for `wasm32`** with Pulley as its only backend, the
+    guest interpreted inside our own module. It would give one host and wasmtime's
+    NaN canonicalisation and fuel for free, but it interprets wasm inside wasm (far
+    slower than the browser's compiler) and adds wasmtime to the web binary; whether
+    wasmtime even builds for that target was never checked. Reopened only if a
+    serious reason shows up, such as the load-time rewrite proving unable to match.
 - **iOS.** No executable memory, so no Cranelift-to-native. Two options:
   - **Cranelift compiling to Pulley bytecode on the device** (no native code is
     generated, which is what the spike's Pulley runs did on x86): one code path,
