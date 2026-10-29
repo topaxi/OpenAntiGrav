@@ -28,7 +28,7 @@ pub(super) fn picker_footer(
     let faces = oag_ui_screens::picker::FaceScales::default();
     let measure = |text: &str| oag_ui::font::measure(default_font, text);
     if let Some(legend) = nav_legend {
-        list.extend(legend.draw_gated(&faces, &measure, true));
+        list.extend(legend.draw_gated(&faces, true));
     }
     let draw = oag_ui_screens::campaign::footer::ticker_draw(layout, 0.0, &tips, &faces, &measure)?;
     let at = list.len();
@@ -410,7 +410,6 @@ pub(super) fn menu_page(
         nav_legend.map_or_else(Vec::new, |legend| {
             legend.draw_gated(
                 &oag_ui_screens::picker::FaceScales::default(),
-                default_measure,
                 model.depth() > 1,
             )
         });

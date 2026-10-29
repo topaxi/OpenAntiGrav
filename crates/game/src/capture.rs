@@ -741,9 +741,8 @@ pub fn run(
                 // HD's ship screen's footer legend, as the live one draws it
                 // (`main::menu_stage::footer::hd_nav`).
                 if let Some(legend) = nav_legend.as_ref().filter(|_| layout.is_hd()) {
-                    let measure = |text: &str| oag_ui::font::measure(&font, text);
                     let faces = oag_ui_screens::picker::FaceScales::default();
-                    list.extend(legend.draw_gated(&faces, &measure, true));
+                    list.extend(legend.draw_gated(&faces, true));
                 }
                 if !layout.is_hd() {
                     let (legend, ticker) = (nav_legend.as_ref(), ticker.as_ref());
@@ -821,16 +820,6 @@ pub fn run(
                     title,
                     platform,
                     &tracks,
-                    // `Default`-role, not `menu_font.unwrap_or(&font)`: this
-                    // measures `FE_CONFIRM`'s own shrink-to-fit, and
-                    // `NavigationLegend::draw` routes that text through the
-                    // `Default`-role atlas now (`Draw::in_role`, see
-                    // `boot::fonts::face_atlas_slot`) - mirrors
-                    // `crate::main::menu_stage::MenuStage`'s own
-                    // `default_measure`, which this capture-only path has to
-                    // match by hand rather than share, having no `MenuStage`
-                    // of its own to read `default_atlas` off.
-                    &|text| oag_ui::font::measure(&font, text),
                     &records,
                     options.menu_picker_seconds,
                 )?;

@@ -45,7 +45,7 @@ pub(crate) struct MenuStage {
     /// The `Default`-role face `oag_ui_screens::campaign::footer`'s own prompts and
     /// tips draw through when their own `font` routes there (see
     /// `Draw::in_role`) - kept a second time for the same reason
-    /// [`Self::text_atlas`] is: measuring `FE_CONFIRM`'s own shrink-to-fit
+    /// [`Self::text_atlas`] is: measuring a tip's
     /// width needs the atlas it will actually render in, not
     /// [`Self::text_atlas`]'s `menu`-role one. Not `Option`: every title has
     /// a `Default`-role atlas (`boot::load_font`'s own fallback is the
@@ -520,7 +520,6 @@ impl MenuStage {
             }
             layers.chrome.extend(footer::hd_nav(
                 &self.nav_legend,
-                &self.default_atlas,
                 picker,
             ));
             let (flat, ticker_clip) = footer::append(layers.flatten(), picker_footer);
@@ -608,8 +607,6 @@ impl MenuStage {
             let mut ticker_draw: Option<Draw> = None;
             // Wipeout HD/Fury draws a completely different screen behind the
             // same two names - see `oag_ui_screens::campaign::hd`'s own module doc.
-            // `default_measure` is the footer legend's fit-to-gap measure.
-            let default_measure = |text: &str| font::measure(&self.default_atlas, text);
             let layers = if campaign.is_hd() {
                 match &campaign.screen {
                     // **HD only** - `Campaign Selection` ahead of `Grid
@@ -624,7 +621,7 @@ impl MenuStage {
                             Some(layout) => {
                                 let (fury_gold, hd_gold) = campaign.campaign_gold_medals();
                                 let footer_overlay =
-                                    campaign.nav_legend_draw(&layout.faces, &default_measure);
+                                    campaign.nav_legend_draw(&layout.faces);
                                 oag_ui_screens::campaign::selection::draw_list(
                                     model,
                                     layout,
@@ -645,7 +642,7 @@ impl MenuStage {
                     }
                     crate::campaign_stage::Screen::Grid(model) => {
                         let footer_overlay = campaign
-                            .nav_legend_draw(&campaign.grid_layout().faces, &default_measure);
+                            .nav_legend_draw(&campaign.grid_layout().faces);
                         oag_ui_screens::campaign::hd::hd_grid_draw_list(
                             model,
                             campaign.grid_layout(),
@@ -666,7 +663,7 @@ impl MenuStage {
                             });
                         // No ticker: HD's shared `Skin.xml` has no `TextInfoIsAlwaysLast` viewport.
                         let footer_overlay = campaign
-                            .nav_legend_draw(&campaign.cell_layout().faces, &default_measure);
+                            .nav_legend_draw(&campaign.cell_layout().faces);
                         oag_ui_screens::campaign::hd::hd_cell_draw_list(
                             model,
                             campaign.cell_layout(),
@@ -686,8 +683,7 @@ impl MenuStage {
                     }
                 }
             } else {
-                // Both the legend's `FE_CONFIRM` shrink-to-fit and the ticker's
-                // tips draw in the `Default` role, so one measure serves.
+                // The ticker's tips draw in the `Default` role.
                 let default_measure = |text: &str| font::measure(&self.default_atlas, text);
                 match &campaign.screen {
                     // Never built for a non-HD title - see
@@ -711,7 +707,7 @@ impl MenuStage {
                     }
                     crate::campaign_stage::Screen::Cell { model, .. } => {
                         let faces = &campaign.cell_layout().faces;
-                        let mut footer_overlay = campaign.nav_legend_draw(faces, &default_measure);
+                        let mut footer_overlay = campaign.nav_legend_draw(faces);
                         let ticker = campaign.ticker_draw(faces, &default_measure);
                         ticker_draw = ticker.clone();
                         footer_overlay.extend(ticker);

@@ -80,7 +80,7 @@ fn the_navigation_controller_s_four_prompts_resolve_through_the_string_table() {
     let strings = StringTable::from_xml(ENTRIES);
     let legend = NavigationLegend::read(&root, &globals(), &strings)
         .expect("Skin.xml authors a NavigationController");
-    let draws = legend.draw(&FaceScales::default(), &|_| 100.0);
+    let draws = legend.draw(&FaceScales::default());
     assert_eq!(draws.len(), 4);
     let texts: Vec<&str> = draws.iter().map(|draw| text_and_y(draw).0).collect();
     assert_eq!(texts, ["ε", "Confirm", "γ", "Back"]);
@@ -106,31 +106,33 @@ fn the_navigation_controller_s_four_prompts_resolve_through_the_string_table() {
     }
 }
 
-/// `Confirm` overlapping `Back`'s own button glyph at the authored,
-/// left-aligned `x="368"` was measured live - this pins the
-/// fix: `Confirm` draws right-aligned, ending a few pixels short of the
-/// back glyph's own `x="415"`, not left-aligned at its own authored start.
+/// Pulse's `Confirm` draws as authored: left-aligned at `x="368"`, at the face's own scale
+/// (`1.0`), like every other footer word. It once right-aligned to the back glyph and shrank
+/// to fit, a workaround for a menu face wider than the original's; the face now matches the
+/// original pixel for pixel, so dropping the authored x or scale is a regression (the PSP
+/// `Cell Selection` pair measures the word 40 px wide at x 369, not 34 px at x 375).
 #[test]
-fn confirm_ends_before_the_back_glyph_rather_than_starting_at_its_own_authored_x() {
+fn pulses_confirm_keeps_its_authored_x_and_full_scale() {
     let root = parse(XML);
     let strings = StringTable::from_xml(ENTRIES);
     let legend = NavigationLegend::read(&root, &globals(), &strings).expect("controller");
-    let draws = legend.draw(&FaceScales::default(), &|_| 100.0);
-    // `FE_CONFIRM` authors no `font=`, falls to `"default"`, and now draws
-    // as `Draw::FacedText` - see [`face_role`] and `text_and_y`'s own doc.
+    // A word wider than the 47 px between the confirm and back glyphs: the old fit-to-gap path
+    // would have shrunk it, and right-aligned it, at any width over about 20 px.
+    let draws = legend.draw(&FaceScales::default());
     let Draw::FacedText {
         x: confirm_x,
+        scale: confirm_scale,
         align: confirm_align,
         ..
     } = &draws[1]
     else {
         unreachable!("index 1 is FE_CONFIRM - see the fixture's own document order");
     };
-    assert_eq!(*confirm_align, Align::Right);
+    assert_eq!(*confirm_align, Align::Left);
+    assert_eq!(*confirm_x, 368.0, "authored x, not moved to fit");
     assert!(
-        *confirm_x < 415.0,
-        "Confirm's own right edge ({confirm_x}) must end before the back glyph's x=415, \
-         or nothing was fixed"
+        (*confirm_scale - 1.0).abs() < f32::EPSILON,
+        "Confirm draws at the face's own scale like Back, got {confirm_scale}"
     );
     // `ControlTextBack`'s own word is untouched - it had room in the live
     // capture already, so it still starts at its own authored x. Also
@@ -291,7 +293,7 @@ fn a_local_controllers_online_only_records_cycle_pair_never_resolves() {
     );
     let legend =
         NavigationLegend::read(&root, &HashMap::new(), &strings).expect("controller present");
-    let draws = legend.draw(&FaceScales::default(), &|_| 100.0);
+    let draws = legend.draw(&FaceScales::default());
     assert_eq!(draws.len(), 2);
     let texts: Vec<&str> = draws.iter().map(|draw| text_and_y(draw).0).collect();
     assert_eq!(texts, ["e", "CONFIRM"]);
@@ -312,7 +314,7 @@ fn wipeout_hds_own_buttons_font_icon_and_word_both_draw() {
     );
     let legend =
         NavigationLegend::read(&root, &HashMap::new(), &strings).expect("controller present");
-    let draws = legend.draw(&FaceScales::default(), &|_| 100.0);
+    let draws = legend.draw(&FaceScales::default());
     let texts: Vec<&str> = draws.iter().map(|draw| text_and_y(draw).0).collect();
     assert_eq!(texts, ["e", "CONFIRM", "g", "BACK"]);
     // The icon draws through the `Buttons` role, not a fallback.
@@ -337,16 +339,8 @@ fn wipeout_hds_own_buttons_font_icon_and_word_both_draw() {
     );
 }
 
-/// **The Pulse-only shrink-to-fit block does not fire for HD.** Once
-/// `FE_CONFIRM_BUTTON`'s `font="buttons"` no longer excludes it from
-/// `prompts`, both `FE_BACK_BUTTON` and `FE_CONFIRM_BUTTON` are present and
-/// the shrink/right-align block (`read`'s own `GAP`/`GLYPH_WIDTH_ESTIMATE`
-/// note) would trigger on HD too if it were not gated - moving `CONFIRM`
-/// off its authored `x="534"` and right-aligning it, which RPCS3 never
-/// shows (the RPCS3 atlas and the clean square and triangle captures both show it
-/// left-aligned, well short of `BACK`'s own `x="720"`). The gate is
-/// `confirm.scale > 0.99`: HD's own `ControlTextConfirm` authors
-/// `scale="0.8"`, Pulse's authors none (`1.0`).
+/// HD's own `CONFIRM` stays left-aligned at its authored `x="534"`, well short of `BACK`'s
+/// `x="720"`, as the RPCS3 captures show.
 #[test]
 fn hds_own_confirm_stays_left_aligned_at_its_authored_x() {
     let root = parse(HD_XML);
@@ -355,7 +349,7 @@ fn hds_own_confirm_stays_left_aligned_at_its_authored_x() {
     );
     let legend =
         NavigationLegend::read(&root, &HashMap::new(), &strings).expect("controller present");
-    let draws = legend.draw(&FaceScales::default(), &|_| 100.0);
+    let draws = legend.draw(&FaceScales::default());
     let Draw::FacedText {
         x: confirm_x,
         align: confirm_align,
@@ -382,9 +376,9 @@ fn draw_gated_drops_back_but_never_confirm() {
     let root = parse(XML);
     let strings = StringTable::from_xml(ENTRIES);
     let legend = NavigationLegend::read(&root, &globals(), &strings).expect("controller");
-    let with_back = legend.draw_gated(&FaceScales::default(), &|_| 100.0, true);
+    let with_back = legend.draw_gated(&FaceScales::default(), true);
     assert_eq!(with_back.len(), 4, "unchanged from draw() when show_back");
-    let without_back = legend.draw_gated(&FaceScales::default(), &|_| 100.0, false);
+    let without_back = legend.draw_gated(&FaceScales::default(), false);
     let texts: Vec<&str> = without_back.iter().map(|draw| text_and_y(draw).0).collect();
     assert_eq!(
         texts,
@@ -517,9 +511,9 @@ fn the_reset_prompt_goes_after_back_where_the_footer_has_room() {
     let (draws, rect) = legend
         .reset_prompt(None, "RESET", &FaceScales::default(), &measure, 960.0, &[])
         .expect("a Confirm pair");
-    // Back's word starts at 435 and ends 24 on: the prompt starts after it by the 6 the legend
-    // leaves between Confirm's word and Back's glyph.
-    assert!((rect[0] - (435.0 + 24.0 + 6.0)).abs() < 0.01, "{rect:?}");
+    // Back's word starts at 435 and ends 24 on: the prompt starts after it by the 5 the legend
+    // leaves between Confirm's word (368 + 42 wide, as authored) and Back's glyph at 415.
+    assert!((rect[0] - (435.0 + 24.0 + 5.0)).abs() < 0.01, "{rect:?}");
     assert!(rect[0] + rect[2] <= 960.0);
     assert_eq!(draws.len(), 1);
 }
@@ -599,7 +593,7 @@ fn a_prompt_idstring_differing_only_in_case_still_resolves() {
     );
     let legend =
         NavigationLegend::read(&root, &HashMap::new(), &strings).expect("controller present");
-    let draws = legend.draw(&FaceScales::default(), &|_| 10.0);
+    let draws = legend.draw(&FaceScales::default());
     let texts: Vec<&str> = draws.iter().map(|draw| text_and_y(draw).0).collect();
     assert_eq!(texts, ["g", "Back"]);
 }
