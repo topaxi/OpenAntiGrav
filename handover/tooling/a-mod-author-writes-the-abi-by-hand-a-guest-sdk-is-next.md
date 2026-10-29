@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-10-30
-summary: "oag-ext-abi (checked revision) and the oag-ext Rust SDK landed, examples rewritten; open: check/run tool, C header, C++ example, template, git dep"
+summary: "SDK rev 3 + track module + Hillside rain landed locally; open: check/run tool, C header, C++ example, template, git dep, MODDED rule"
 categories: [gameplay]
 size: M (55)
 difficulty: medium (60)
