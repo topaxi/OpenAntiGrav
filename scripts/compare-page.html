@@ -16,6 +16,11 @@ nav a { display:block; padding:7px 14px; color:var(--fg); text-decoration:none; 
 nav a:hover { background:#222933; }
 nav a.on { border-left-color:var(--acc); background:#222933; }
 main { flex:1; min-width:0; padding:12px 16px 40px; }
+.tabs { display:flex; flex-wrap:wrap; gap:4px; margin:0 0 12px; border-bottom:1px solid var(--line); }
+.tabs button { background:none; color:var(--dim); border:0; border-bottom:3px solid transparent; padding:9px 16px; font:inherit; font-size:15px; font-weight:600; cursor:pointer; }
+.tabs button:hover { color:var(--fg); }
+.tabs button.on { color:var(--fg); border-bottom-color:var(--acc); }
+.tabs button span { color:var(--dim); font-weight:400; font-size:12px; margin-left:6px; }
 .bar { display:flex; flex-wrap:wrap; gap:8px 16px; align-items:center; margin-bottom:10px; }
 .seg { display:inline-flex; border:1px solid var(--line); border-radius:6px; overflow:hidden; }
 .seg button { background:var(--panel); color:var(--fg); border:0; padding:7px 12px; font:inherit; cursor:pointer; border-right:1px solid var(--line); }
@@ -58,6 +63,7 @@ main { flex:1; min-width:0; padding:12px 16px 40px; }
 <body>
 <nav id="nav"></nav>
 <main>
+  <div class="tabs" id="tabs" role="tablist"></div>
   <div class="bar">
     <div class="seg" id="pairs"></div>
     <div class="seg" id="views"></div>
@@ -87,17 +93,31 @@ function credit(e, slot) {
   return e.game + " \u00b7 " + (e.platform || "platform not recorded") + " \u00b7 " + src;
 }
 
-function buildNav() {
+const GAMES = [...new Set(DATA.entries.map(e => e.game))];
+// The entry last shown per title, so a tab returns to where it was left.
+const lastOf = {};
+
+// One tab per title; the sidebar lists the selected title's pairs only.
+function buildTabs() {
+  const tabs = $("tabs"); tabs.innerHTML = "";
+  for (const g of GAMES) {
+    const b = document.createElement("button"); b.setAttribute("role", "tab"); b.dataset.game = g;
+    const n = document.createElement("span"); n.textContent = DATA.entries.filter(x => x.game === g).length;
+    b.append(g, n);
+    b.onclick = () => select(lastOf[g] || DATA.entries.find(x => x.game === g).id);
+    tabs.append(b);
+  }
+}
+
+function buildNav(game) {
   const nav = $("nav");
   nav.innerHTML = "<h1></h1><p class=intro></p>";
+  nav.dataset.game = game;
   nav.querySelector("h1").textContent = DATA.title;
   nav.querySelector("p").textContent = DATA.intro;
-  const games = [...new Set(DATA.entries.map(e => e.game))];
-  for (const g of games) {
-    const h = document.createElement("h2"); h.textContent = g; nav.append(h);
-    for (const e of DATA.entries.filter(x => x.game === g)) {
-      const a = document.createElement("a"); a.href = "#" + e.id; a.textContent = e.title; a.dataset.id = e.id; nav.append(a);
-    }
+  const h = document.createElement("h2"); h.textContent = game; nav.append(h);
+  for (const e of DATA.entries.filter(x => x.game === game)) {
+    const a = document.createElement("a"); a.href = "#" + e.id; a.textContent = e.title; a.dataset.id = e.id; nav.append(a);
   }
 }
 
@@ -113,6 +133,9 @@ function select(id) {
 function render() {
   const e = entry();
   document.title = e.title + " - " + DATA.title;
+  lastOf[e.game] = e.id;
+  if ($("nav").dataset.game !== e.game) buildNav(e.game);
+  document.querySelectorAll("#tabs button").forEach(b => { const on = b.dataset.game === e.game; b.classList.toggle("on", on); b.setAttribute("aria-selected", on); });
   document.querySelectorAll("nav a").forEach(a => a.classList.toggle("on", a.dataset.id === e.id));
   const ps = pairsOf(e);
   $("pairs").innerHTML = "";
@@ -223,7 +246,7 @@ addEventListener("keydown", ev => {
 });
 addEventListener("hashchange", () => { const id = location.hash.slice(1); if (id !== st.id) select(id); });
 { const q = new URLSearchParams(location.search); if (VIEWS.some(v => v[0] === q.get("view"))) st.view = q.get("view"); if (q.get("split")) st.split = +q.get("split"); }
-buildNav();
+buildTabs();
 select(location.hash.slice(1));
 </script>
 </body>
