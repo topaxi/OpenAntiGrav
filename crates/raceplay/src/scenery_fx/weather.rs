@@ -40,6 +40,7 @@ use oag_vex::weather::{self as covered, Anchor as CoveredAnchor};
 use super::lens::{Edge, Lens};
 use super::mist::Mist;
 use super::splash::Splashes;
+use super::spray::Spray;
 use super::wind::Wind;
 
 /// Seed for the weather's own spawn draws, wind table and phases. Any
@@ -160,6 +161,8 @@ pub struct Weather {
     /// The enhanced weather's splashes: empty and never touched at
     /// `original`. Own random stream, so they never move the drops'.
     splashes: Splashes,
+    /// The enhanced weather's road spray: same rules, own stream.
+    spray: Spray,
     /// The last frame's wind step, a drop's move in the world a tick.
     step: Vec3,
 }
@@ -205,6 +208,7 @@ impl Weather {
             clock: 0.0,
             rng,
             splashes: Splashes::default(),
+            spray: Spray::default(),
             step: Vec3::ZERO,
         }
     }
@@ -290,6 +294,17 @@ impl Weather {
         &self.splashes
     }
 
+    /// The enhanced weather's road spray.
+    #[must_use]
+    pub fn spray(&self) -> &Spray {
+        &self.spray
+    }
+
+    /// The spray, to age and add to.
+    pub fn spray_mut(&mut self) -> &mut Spray {
+        &mut self.spray
+    }
+
     /// The splashes, to age and add to.
     pub fn splashes_mut(&mut self) -> &mut Splashes {
         &mut self.splashes
@@ -330,6 +345,7 @@ impl Weather {
         if let Some(cell) = self.splash_cell() {
             self.splashes
                 .extend_vertices(additive, alpha_over, right, up, cell);
+            self.spray.extend_vertices(alpha_over, right, up, cell);
         }
     }
 

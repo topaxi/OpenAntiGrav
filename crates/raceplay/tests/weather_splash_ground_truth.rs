@@ -83,7 +83,10 @@ fn compare(track: &str, ticks: u32) -> Option<Census> {
         );
         let splashes = enhanced.scenery_fx().weather().splashes();
         if splashes.is_empty() {
-            assert_eq!((e_add.len(), e_alpha.len()), (o_add.len(), o_alpha.len()));
+            assert_eq!(e_add.len(), o_add.len());
+            let spray = enhanced.scenery_fx().weather().spray().is_empty();
+            assert!(spray || e_alpha.len() > o_alpha.len());
+            assert!(spray || enhanced.wet_road() > 0.0, "spray on a dry road");
             continue;
         }
         assert!(e_add.len() > o_add.len(), "a live splash draws");
@@ -308,4 +311,65 @@ fn the_ps2_pressing_loads_the_splash_art_with_its_weather() {
     assert!(has("splash art"), "{}", loaded.report.join("\n"));
     let weather = loaded.setup.scenery_fx.weather.expect("weather");
     assert!(weather.splash_cell.is_some(), "the art did not place");
+}
+
+/// The road spray on Fort Gale (`oag_raceplay::scenery_fx::spray`): none at
+/// `original` or on a dry road, a mist behind the craft once the road is wet,
+/// and none where the road lies in a covered section.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn the_craft_throws_spray_on_wet_open_road_only() {
+    let (Some(mut original), Some(mut enhanced)) = (
+        started(r"14_Track\track.vex"),
+        started(r"14_Track\track.vex"),
+    ) else {
+        return;
+    };
+    original.set_weather(Weather::Original);
+    enhanced.set_weather(Weather::Enhanced);
+    let (mut sprayed, mut covered_ticks, mut open_emitting, mut peak) = (0, 0, 0, 0);
+    for tick in 0..3200 {
+        original.tick(&PlayerInputs::none());
+        enhanced.tick(&PlayerInputs::none());
+        assert!(original.scenery_fx().weather().spray().is_empty());
+        let spray = enhanced.scenery_fx().weather().spray();
+        if enhanced.wet_road() == 0.0 {
+            assert!(spray.is_empty(), "tick {tick}: spray on a dry road");
+        }
+        peak = peak.max(spray.len());
+        if !spray.is_empty() {
+            sprayed += 1;
+            let (o_add, o_alpha) = lists(&original);
+            let (e_add, e_alpha) = lists(&enhanced);
+            assert_eq!(e_add.len() >= o_add.len(), true);
+            assert!(
+                e_alpha.len() > o_alpha.len(),
+                "spray draws: tick {tick} n={} {} vs {} cell {:?}",
+                spray.len(),
+                e_alpha.len(),
+                o_alpha.len(),
+                enhanced.scenery_fx().weather().splash_cell()
+            );
+        }
+        let under = enhanced.point_is_under_cover(enhanced.ship_tick_body(0).position);
+        let emitters = enhanced.spray_emitters();
+        if under {
+            covered_ticks += 1;
+            assert!(
+                emitters.is_empty(),
+                "tick {tick}: spray source under a roof"
+            );
+        } else if !emitters.is_empty() {
+            open_emitting += 1;
+        }
+    }
+    assert!(sprayed > 200, "{sprayed} ticks with spray in 3200");
+    assert!(
+        covered_ticks > 100 && open_emitting > 500,
+        "{covered_ticks} covered, {open_emitting} open"
+    );
+    assert!(peak <= race::scenery_fx::spray::CAPACITY);
+    eprintln!(
+        "spray on {sprayed} ticks, peak {peak}, {covered_ticks} covered ticks, {open_emitting} open emitting"
+    );
 }

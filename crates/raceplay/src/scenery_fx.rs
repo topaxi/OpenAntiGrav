@@ -31,6 +31,7 @@ pub mod lens;
 pub mod mist;
 mod noise;
 pub mod splash;
+pub mod spray;
 pub mod weather;
 mod wind;
 
@@ -265,6 +266,9 @@ impl super::Race {
             if !self.view.scenery_fx.weather().splashes().is_empty() {
                 self.view.scenery_fx.weather_mut().splashes_mut().clear();
             }
+            if !self.view.scenery_fx.weather().spray().is_empty() {
+                self.view.scenery_fx.weather_mut().spray_mut().clear();
+            }
             return;
         }
         let weather = self.view.scenery_fx.weather();
@@ -275,6 +279,24 @@ impl super::Race {
             .filter_map(|(from, to)| self.floor_crossing(from, to))
             .filter(|&(at, _)| !self.point_is_under_cover(at))
             .collect();
+        let wet = self.view.scenery_fx.weather().wet_road();
+        let emitters = if wet > 0.0 {
+            self.spray_emitters()
+        } else {
+            Vec::new()
+        };
+        if std::env::var_os("DBGSPRAY").is_some() {
+            eprintln!(
+                "DBGE {:?} cam {:?}",
+                emitters.first().map(|e| e.at),
+                self.camera_frame().position
+            );
+        }
+        self.view
+            .scenery_fx
+            .weather_mut()
+            .spray_mut()
+            .advance(dt, wet, &emitters);
         let splashes = self.view.scenery_fx.weather_mut().splashes_mut();
         splashes.advance(dt);
         for (at, normal) in hits {
