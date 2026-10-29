@@ -125,9 +125,9 @@ fn unlock_all_offers_every_circuit() {
     assert_eq!(all.len(), 24);
 }
 
-/// The team ids a title's disc-only source lists on a fresh profile, in order: the roster its
-/// definition declares, less the teams the disc gates ([`oag_game::campaign::pure_list`]). No
-/// pack is mounted, as on the original's fresh profile.
+/// The team ids Team Selection lists on a fresh profile off a disc-only source (no pack mounted,
+/// as on the original's fresh profile), in order: the definition's roster through
+/// `unlock::teams_offered_on`, the call `--menu-page ship-select` makes.
 fn fresh_team_ids(image: &str, title: &'static oag_title::Title) -> Option<Vec<String>> {
     let image = oag_testdata::image(image)?;
     let mut opened =
@@ -138,29 +138,40 @@ fn fresh_team_ids(image: &str, title: &'static oag_title::Title) -> Option<Vec<S
         .read_name(title.plugin_definition)
         .expect("the definition");
     let xml = oag_tables::fexml::text(&blob).expect("the definition expands");
-    let locked = oag_game::campaign::pure_list::locked_teams_on(
+    let roster = catalogue::all_teams(&[xml]);
+    let offered = unlock::teams_offered_on(
+        oag_ui_screens::picker::Kind::Ship,
+        Some(&mut opened.archives),
         title,
-        &mut opened.archives,
         &Store::default(),
+        &roster,
     );
-    Some(
-        catalogue::all_teams(&[xml])
-            .into_iter()
-            .filter(|team| !locked.contains(&team.id))
-            .map(|team| team.id)
-            .collect(),
-    )
+    Some(offered.into_iter().map(|team| team.id).collect())
 }
 
 /// Pulse's Ship Select lists eight craft on a fresh profile (the original's `1/8`): the disc's
-/// own roster, none gated at team level.
+/// own roster in its order, none gated at team level. The pair script's empty `$OAG_DLC`
+/// (`compare_menu.render_ours`) keeps DLC teams out of the screen; no Rust test covers that.
 #[test]
 #[ignore = "needs data/images/pulse-psp-usa.chd"]
 fn pulses_fresh_ship_select_lists_the_eight_teams_the_disc_declares() {
     let Some(ids) = fresh_team_ids("data/images/pulse-psp-usa.chd", oag_pulse::TITLE) else {
         return;
     };
-    assert_eq!(ids.len(), 8, "{ids:?}");
+    assert_eq!(
+        ids,
+        [
+            "Assegai",
+            "Qirex",
+            "Feisar",
+            "AG_Systems",
+            "EGX",
+            "Goteki",
+            "Triakis",
+            "Piranha"
+        ],
+        "the original's eight, in the disc's order"
+    );
 }
 
 /// Pure's Team Selection lists eight teams on a fresh profile (the original's walk): the roster

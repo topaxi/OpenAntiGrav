@@ -632,21 +632,13 @@ pub fn run(
                 let tracks =
                     crate::unlock::offered_on(kind, archives.as_mut(), title, platform, &tracks);
                 // Pure's gated teams are absent from Team Selection too.
-                let teams: Vec<_> = match (kind, archives.as_mut()) {
-                    (oag_ui_screens::picker::Kind::Ship, Some(archives)) => {
-                        let locked = crate::campaign::pure_list::locked_teams_on(
-                            title,
-                            archives,
-                            &crate::records::load(),
-                        );
-                        teams
-                            .iter()
-                            .filter(|team| !locked.contains(&team.id))
-                            .cloned()
-                            .collect()
-                    }
-                    _ => teams.clone(),
-                };
+                let teams = crate::unlock::teams_offered_on(
+                    kind,
+                    archives.as_mut(),
+                    title,
+                    &crate::records::load(),
+                    &teams,
+                );
                 let selected = tracks
                     .iter()
                     .find(|track| track.id == options.settings.race.track);
