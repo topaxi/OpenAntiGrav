@@ -72,13 +72,12 @@ agreed in conversation and not yet built**, so nothing is re-derived. The decisi
   and a *Cover light* that derives `_OAG_LIGHT_SCALE` from art over the line. Fixture
   `blender_loop` (+ `blender_checker.png`, generated) and its re-export, read by
   `crates/trackfile/tests/blender.rs`; the lone-craft ground truth asserts its art resolves on Pulse.
-- **Hillside** (data/tracks, not committed) is re-skinned with all of it; builder at
-  `~/.cache/oag-scratch/hillside.py` (not committed). Its simulation half is bit-equal to the plain
-  track's. Its `OAG_ADDON_DIR` defaults to the main checkout's `scripts/blender`, which has the art
-  export once this merges. The example campaign's copy (`assets/mods/examples/example-campaign/tracks/`)
-  holds only the old toml, glb and blend: the new Hillside needs `hillside_chevron.png` and
-  `hillside_flare.png` beside it too, and committing those needs the `ALLOWED_TRACKED` and
-  `.gitignore` treatment `blender_checker.png` got.
+- **Hillside** lives in the public mod-examples repository (`hillside/`, mod `oag.hillside`,
+  mounted at `assets/mods/examples`), with its builder `hillside/hillside.py` and an in-game
+  screenshot in that repository's README. Since 2026-10-29 it carries a lake, a mountain range,
+  airships (static until motion lands), a start gantry with painted grid slots, 4 speed and 5
+  weapon pads and `[track] host = "wipeout-pulse"`. The example campaign races it as
+  `oag.hillside:tracks/hillside.track.toml`; nothing of it is in this repository.
 - The bake is a builder-script step, not an operator. Recipe in `docs/tools/blender.md`.
 
 - **Landing 2a is in** (branch `track-art-2`, 2026-10-29): linear `COLOR_0` (sRGB curve, rounded to
