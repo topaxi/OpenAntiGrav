@@ -1,14 +1,14 @@
 use super::*;
 
-/// A PS2 front end is fitted as 480/272, not as its own 640x448.
+/// A PS2 front end is fitted as 16:9, not as its own 640x448.
 ///
 /// The difference is 24%, it is a horizontal squeeze of the entire front
 /// end, and it is invisible on the PSP because there the two numbers agree.
 /// See `oag_display::space::Space` and `docs/ps2/aspect-ratio.md`.
 #[test]
 fn a_ps2_screen_is_letterboxed_by_what_it_is_shown_as() {
-    // A window of the shape the artwork was stretched for: it fills.
-    let window = (480 * 3, 272 * 3);
+    // A window of the shape the console outputs: it fills.
+    let window = (16 * 80, 9 * 80);
     let fitted = letterbox_in(window, Space::PS2.display_aspect);
     assert!((fitted[0] - 1.0).abs() < 1e-6, "{fitted:?}");
     assert!((fitted[1] - 1.0).abs() < 1e-6, "{fitted:?}");
