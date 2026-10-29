@@ -71,6 +71,7 @@ use oag_ui::frontend::{Align, Draw};
 pub mod chain;
 pub mod cost;
 pub mod memory;
+pub mod mods;
 pub mod net;
 pub mod scene;
 pub mod transition;
@@ -744,7 +745,8 @@ impl RenderSize {
 /// so a size there would name a texture nothing on screen came from. Same
 /// discipline as `scene`: absent rather than stale.
 ///
-/// `net` is the network block of a network race ([`net::Readout`]), `None` otherwise.
+/// `net` is the network block of a network race ([`net::Readout`]), `None` otherwise;
+/// `mods` the simulation mods block of a modded race ([`mods::Readout`]), under it.
 ///
 /// `gpu` and `cpu` are the two clocks a frame can be asked about, and they
 /// share one panel because they are read as one answer - see [`cost`] for why
@@ -762,6 +764,7 @@ pub fn draw_list(
     gpu: GpuCost,
     cpu: CpuCost,
     net: Option<&net::Readout>,
+    mods: Option<&mods::Readout>,
     width: f32,
 ) -> Vec<Draw> {
     if !mode.is_on() {
@@ -880,8 +883,10 @@ pub fn draw_list(
     // The network block, under the frame-time panel and `Dev`-only like the
     // rest of what names an internal. A race with no server passes `None`.
     if mode == Overlay::Dev {
-        let (panel, _) = net::draw_list(net, right, TOP + panel_h + 2.0);
+        let (panel, net_h) = net::draw_list(net, right, TOP + panel_h + 2.0);
         out.extend(panel);
+        let mods_top = TOP + panel_h + 2.0 + if net_h > 0.0 { net_h + 2.0 } else { 0.0 };
+        out.extend(mods::draw_list(mods, right, mods_top).0);
     }
 
     // **Its own panel, top left** - see [`GPU_LEFT`] for why it is not a

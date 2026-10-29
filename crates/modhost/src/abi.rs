@@ -111,7 +111,9 @@ pub(crate) fn state(buffer: &[u8], len: usize) -> &[u8] {
 pub(crate) fn read_reply(buffer: &[u8], active: u32) -> Result<Vec<Command>, Fault> {
     let count = get_u32(buffer, REPLY_AT) as usize;
     if count > MAX_COMMANDS {
-        return Err(Fault::Reply(format!("{count} commands, the most is {MAX_COMMANDS}")));
+        return Err(Fault::Reply(format!(
+            "{count} commands, the most is {MAX_COMMANDS}"
+        )));
     }
     let mut thrust_seen = 0_u32;
     let mut commands = Vec::with_capacity(count);
@@ -119,7 +121,9 @@ pub(crate) fn read_reply(buffer: &[u8], active: u32) -> Result<Vec<Command>, Fau
         let at = REPLY_AT + 4 + i * COMMAND_LEN;
         let (kind, slot) = (buffer[at], buffer[at + 1]);
         if u32::from(slot) >= MAX_SLOTS || active & (1 << slot) == 0 {
-            return Err(Fault::Reply(format!("command {i} names slot {slot}, which holds no craft")));
+            return Err(Fault::Reply(format!(
+                "command {i} names slot {slot}, which holds no craft"
+            )));
         }
         match kind {
             COMMAND_SCALE_THRUST => {
@@ -130,12 +134,18 @@ pub(crate) fn read_reply(buffer: &[u8], active: u32) -> Result<Vec<Command>, Fau
                     )));
                 }
                 if thrust_seen & (1 << slot) != 0 {
-                    return Err(Fault::Reply(format!("two scale-thrust commands for slot {slot}")));
+                    return Err(Fault::Reply(format!(
+                        "two scale-thrust commands for slot {slot}"
+                    )));
                 }
                 thrust_seen |= 1 << slot;
                 commands.push(Command::ScaleThrust { slot, factor });
             }
-            other => return Err(Fault::Reply(format!("command {i} has unknown kind {other}"))),
+            other => {
+                return Err(Fault::Reply(format!(
+                    "command {i} has unknown kind {other}"
+                )));
+            }
         }
     }
     Ok(commands)

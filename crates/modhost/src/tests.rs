@@ -44,7 +44,9 @@ fn a_tick_returns_the_blob_and_a_checked_command() {
     let mut state = vec![0; 8];
     let mut commands = Vec::new();
     for tick in 0..3 {
-        module.tick(&observe(tick), &mut state, &mut commands).unwrap();
+        module
+            .tick(&observe(tick), &mut state, &mut commands)
+            .unwrap();
     }
     assert_eq!(&state[..4], &3_u32.to_le_bytes());
     assert_eq!(
@@ -59,7 +61,11 @@ fn a_tick_returns_the_blob_and_a_checked_command() {
 
 #[test]
 fn a_factor_outside_zero_to_one_or_nan_is_a_fault_not_a_clamp() {
-    for factor in ["(f32.const 1.5)", "(f32.const -0.1)", "(f32.div (f32.const 0) (f32.const 0))"] {
+    for factor in [
+        "(f32.const 1.5)",
+        "(f32.const -0.1)",
+        "(f32.div (f32.const 0) (f32.const 0))",
+    ] {
         let module = Module::compile(&counter(factor), Limits::default()).unwrap();
         let mut state = vec![7; 8];
         let mut commands = Vec::new();
@@ -67,7 +73,10 @@ fn a_factor_outside_zero_to_one_or_nan_is_a_fault_not_a_clamp() {
             .tick(&observe(0), &mut state, &mut commands)
             .unwrap_err();
         assert!(matches!(fault, Fault::Reply(_)), "{factor}: {fault:?}");
-        assert_eq!(state, [7; 8], "{factor}: the blob keeps its value from before the call");
+        assert_eq!(
+            state, [7; 8],
+            "{factor}: the blob keeps its value from before the call"
+        );
         assert!(commands.is_empty());
     }
 }
@@ -104,7 +113,9 @@ fn an_instance_is_fresh_every_tick() {
     let module = Module::compile(&leaky, Limits::default()).unwrap();
     let mut state = vec![0; 4];
     for tick in 0..3 {
-        module.tick(&observe(tick), &mut state, &mut Vec::new()).unwrap();
+        module
+            .tick(&observe(tick), &mut state, &mut Vec::new())
+            .unwrap();
         assert_eq!(state, 1_u32.to_le_bytes());
     }
 }
@@ -177,7 +188,10 @@ fn events_reach_the_guest() {
         slot = 1024 + abi::EVENTS_AT as i32 + 1,
     ));
     let module = Module::compile(&echo, Limits::default()).unwrap();
-    let events = [Event::WallContact { slot: 5 }, Event::WallContact { slot: 2 }];
+    let events = [
+        Event::WallContact { slot: 5 },
+        Event::WallContact { slot: 2 },
+    ];
     let mut state = vec![0; 8];
     module
         .tick(

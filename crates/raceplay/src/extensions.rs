@@ -35,6 +35,11 @@ pub struct Source {
     pub mod_id: String,
     /// The module's path in the mod, for the load report.
     pub module: String,
+    /// `[mod] titles`, lowercased and hyphenated: the module runs only on these; empty
+    /// is every title.
+    pub titles: Vec<String>,
+    /// `[extension] api`: the ABI major the module was built against.
+    pub api: u32,
     /// `[extension] memory_pages`.
     pub memory_pages: u32,
     /// `[extension] state_bytes`.
@@ -48,6 +53,7 @@ impl std::fmt::Debug for Source {
         f.debug_struct("Source")
             .field("mod_id", &self.mod_id)
             .field("module", &self.module)
+            .field("api", &self.api)
             .field("memory_pages", &self.memory_pages)
             .field("state_bytes", &self.state_bytes)
             .finish_non_exhaustive()
@@ -61,10 +67,15 @@ pub struct Prepared {
     modules: Vec<(String, oag_modhost::Module)>,
 }
 
-/// Reads and compiles `sources`, at race load. A module that fails leaves its mod out
-/// and says why in `report`; the race runs without it.
+/// Reads and compiles the `sources` that are for `title` (its slug), at race load. A
+/// module that fails leaves its mod out and says why in `report`; the race runs
+/// without it.
 #[must_use]
-pub fn prepare(sources: &[Source], report: &mut Vec<String>) -> Prepared {
+pub fn prepare(sources: &[Source], title: &str, report: &mut Vec<String>) -> Prepared {
+    let sources: Vec<&Source> = sources
+        .iter()
+        .filter(|s| s.titles.is_empty() || s.titles.iter().any(|t| t.eq_ignore_ascii_case(title)))
+        .collect();
     #[cfg(not(feature = "extensions"))]
     {
         for source in sources {
@@ -77,7 +88,7 @@ pub fn prepare(sources: &[Source], report: &mut Vec<String>) -> Prepared {
     }
     #[cfg(feature = "extensions")]
     {
-        let mut sorted: Vec<&Source> = sources.iter().collect();
+        let mut sorted = sources;
         sorted.sort_by(|a, b| a.mod_id.cmp(&b.mod_id));
         let mut modules = Vec::new();
         for source in sorted {
@@ -85,6 +96,14 @@ pub fn prepare(sources: &[Source], report: &mut Vec<String>) -> Prepared {
             if modules.len() == MAX_SIM_MODS {
                 report.push(format!(
                     "{label} left out: a race runs at most {MAX_SIM_MODS} simulation modules"
+                ));
+                continue;
+            }
+            if source.api != oag_modhost::ABI {
+                report.push(format!(
+                    "{label} left out: built for API {}, this host is API {}",
+                    source.api,
+                    oag_modhost::ABI
                 ));
                 continue;
             }

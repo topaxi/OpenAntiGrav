@@ -225,8 +225,8 @@ impl Module {
             )));
         }
         let engine = engine()?;
-        let module =
-            wasmtime::Module::new(engine, wasm).map_err(|e| LoadError::Compile(format!("{e:#}")))?;
+        let module = wasmtime::Module::new(engine, wasm)
+            .map_err(|e| LoadError::Compile(format!("{e:#}")))?;
         // The linker holds the `oag` namespace, which is empty in ABI 1: any import at
         // all is refused by name.
         if let Some(import) = module.imports().next() {
@@ -244,7 +244,9 @@ impl Module {
         ] {
             match (module.get_export(name), want_func) {
                 (Some(ExternType::Memory(_)), false) | (Some(ExternType::Func(_)), true) => {}
-                (Some(_), _) => return Err(LoadError::Export(format!("`{name}` has the wrong kind"))),
+                (Some(_), _) => {
+                    return Err(LoadError::Export(format!("`{name}` has the wrong kind")));
+                }
                 (None, _) => return Err(LoadError::Export(format!("`{name}` is missing"))),
             }
         }

@@ -525,7 +525,12 @@ fn run(cli: Cli) -> Result<()> {
             cli.net.connect(&source)?;
             None
         };
-        let options = pending.race_options(&source, Vec::new());
+        let mut options = pending.race_options(&source, Vec::new());
+        // The rules modules of the mods that are on; `--race` is never an original campaign.
+        match oag_game::mods::Mods::load(&settings.mods.disabled) {
+            Ok(mods) => oag_game::mod_extensions::attach(&mut options, &mods, false),
+            Err(e) => warn!("mods: {e:#}; the race runs no simulation mod"),
+        }
         let options = match &net {
             Some(net) => net.race_options(options)?,
             None => options,

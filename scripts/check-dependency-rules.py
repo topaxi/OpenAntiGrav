@@ -81,6 +81,11 @@ FORBIDDEN_FOR_GAMEPLAY = {
     # race. The simulation never knows the network exists; what reaches it is an
     # InputSnapshot per slot per tick, the same as from a pad. ADR-0070.
     "oag-net",
+    # The WebAssembly extension host. A mod's commands reach the simulation as plain
+    # inputs `oag-raceplay` writes (`Ship::pending_thrust_scale`), so the simulation
+    # crates keep their determinism scan and their wasm32 test run.
+    # docs/architecture/wasm-extensions/determinism-and-state.md, "Dependency rules".
+    "oag-modhost",
 }
 
 # The crates that link `oag-title` without being title packages: the reader of
@@ -152,6 +157,8 @@ TITLE_FREE_RENDER_CRATES = {
 # ADR-0062.
 GENERIC_READERS = {
     "oag-unity": {"oag-bytes"},
+    # The extension host knows no game and no title: wasmtime and nothing of ours.
+    "oag-modhost": set(),
 }
 
 # Rule 5: a game-specific Unity layer builds on `oag-unity` and the texture
@@ -193,6 +200,10 @@ FORBIDDEN_FOR_SERVER = {
     "oag-ui-screens",
     "oag-hud",
     "oag-input",
+    # Simulation mods stay out of the server until the lobby carries module hashes
+    # (phase 3, docs/architecture/wasm-extensions/README.md section 9): `oag-net`
+    # never turns on `oag-raceplay/extensions`.
+    "wasmtime",
 }
 
 

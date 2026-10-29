@@ -152,6 +152,10 @@ android = []
 # Off by default and enabled by no build (maintainer, 2026-10-27: it does not
 # render enough to ship); `just lint` builds it so it does not rot.
 ballisticng = ["oag-raceplay/ballisticng"]
+# Simulation mods (WebAssembly, wasmtime): `oag_raceplay::extensions`. Off by default;
+# off, a mod's module is named in the load report as left out and nothing of wasmtime
+# is linked. docs/architecture/wasm-extensions/.
+extensions = ["oag-raceplay/extensions"]
 native-video = ["dep:gstreamer", "dep:gstreamer-app", "dep:gstreamer-video"]
 # See `oag-render`'s feature of the same name. Off by default.
 perf-probe = ["oag-render/perf-probe", "oag-raceplay/perf-probe"]

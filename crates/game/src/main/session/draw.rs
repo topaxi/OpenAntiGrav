@@ -904,6 +904,11 @@ impl Session {
         self.overlay.set_space(overlay_space);
         // The network block, only in a network race. `Dev` shows it; `draw_list` gates.
         let net_readout = self.net.as_ref().and_then(oag_game::net_play::NetPlay::readout);
+        // The simulation mods block, only in a modded race.
+        let mods_readout = match &self.stage {
+            Stage::Race(stage) => oag_game::mod_extensions::readout(&stage.race),
+            _ => None,
+        };
         let mut list = perf::draw_list(
             &self.meter,
             self.settings.graphics.perf_overlay,
@@ -945,6 +950,7 @@ impl Session {
                 present: self.present_cost.stats().map(|s| s.mean_ms / 1000.0),
             },
             net_readout.as_ref(),
+            mods_readout.as_ref(),
             perf::panel_width(overlay_space.size.0),
         );
         perf::shrink(&mut list);

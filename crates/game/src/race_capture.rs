@@ -106,8 +106,9 @@ pub struct CaptureOptions {
     /// [`crate::net_play::NetPlay`] on the wall clock. See [`crate::net_play`].
     pub net: Option<std::rc::Rc<crate::net_play::NetPlay>>,
     /// Draw the network block of the `Dev` performance overlay into a `--connect`
-    /// capture (`--overlay`, or `[graphics] perf_overlay = "dev"`). A capture has no
-    /// frame loop, so no other part of that overlay exists here.
+    /// capture, and the simulation mods block into a modded one (`--overlay`, or
+    /// `[graphics] perf_overlay = "dev"`). A capture has no frame loop, so no other
+    /// part of that overlay exists here.
     pub net_overlay: bool,
     /// `--no-weapon-lights`.
     pub no_weapon_lights: bool,
@@ -1365,6 +1366,18 @@ pub fn capture(
                 &mut encoder,
                 &hud_view,
                 (width, height),
+            )?;
+        }
+        // The simulation mods block, on the same switch: a modded race only.
+        if options.net_overlay
+            && let Some(readout) = crate::mod_extensions::readout(&race)
+        {
+            crate::touch_controls::overlay_pass(
+                (&device, &queue, format),
+                &mut encoder,
+                &hud_view,
+                (width, height),
+                |_, space| oag_present::perf::mods::draw_list(Some(&readout), space.size.0, 0.0).0,
             )?;
         }
         if let Some(demo) = options.touch_demo {
