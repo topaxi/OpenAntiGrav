@@ -170,6 +170,7 @@ A scene with no art mesh, no Sun lamp and no sky writes no art section: the file
 | Every other Sun lamp | an `[[art.light]]` directional row |
 | The world's Background colour times its strength | `[art.ambient]` |
 | *Sky* (a host circuit's `.vex` entry), *Lens flare* and its atlas image | `[art] sky`, `[art.lensflare] atlas` |
+| The Art panel's *Draw collision* (`oag_draw_collision`) | `[art] draw_collision = true`: the flat-shaded floor and walls drawn under the art, for art that does not cover the road (`blender_loop` sets it: its art is a canopy and two plates) |
 | A Curve spline's *Cover light* below 255 | `_OAG_LIGHT_SCALE` per spline point, see below |
 
 **Intensity is not Blender's strength.** The file's `intensity` multiplies the colour the PSP hull

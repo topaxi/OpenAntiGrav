@@ -163,6 +163,8 @@ def manifest_lines(art):
         out.append(f"sky = {_q(art.sky)}")
     if art.ambient is not None:
         out.append(f"ambient = {_vec(art.ambient)}")
+    if art.draw_collision:
+        out.append("draw_collision = true")
     if art.skybox is not None:
         sb = art.skybox
         out += ["", "[art.skybox]"]
@@ -236,6 +238,7 @@ def from_manifest(table, meshes):
         meshes=meshes,
         textures=textures,
         sky=table.get("sky"),
+        draw_collision=bool(table.get("draw_collision", False)),
         skybox=None
         if "skybox" not in table
         else Skybox(

@@ -211,6 +211,7 @@ class Art:
     lens_flare: LensFlare = None
     animations: list = field(default_factory=list)
     sun_rotation: tuple = None  # the oag/sun node's rest rotation, exactly when the sun turns
+    draw_collision: bool = False  # [art] draw_collision: the flat-shaded collision under the art
 
     def borrows_from_a_disc(self):
         """A host texture or a sky: the track must name its host."""

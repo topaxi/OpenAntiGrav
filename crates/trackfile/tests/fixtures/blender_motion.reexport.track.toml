@@ -29,6 +29,7 @@ art_meshes = 5
 
 [art]
 ambient = [0.1, 0.12, 0.15]
+draw_collision = true
 
 [art.skybox]
 faces = [-1, -1, 0, -1, -1, -1]

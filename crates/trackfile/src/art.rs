@@ -41,6 +41,10 @@ pub struct Art {
     /// Keyframed motion of the meshes and the sun, played against the race
     /// clock (decision 10). Visual only.
     pub animations: Vec<motion::Animation>,
+    /// Draw the flat-shaded collision (floor and walls) under the art
+    /// (`[art] draw_collision`), for a track whose art is not the road. `false`
+    /// when absent: the art alone is drawn.
+    pub draw_collision: bool,
     /// The sun node's rest rotation (`x, y, z, w`), present exactly when an
     /// animation turns the sun: its direction at a time is [`Sun::direction`]
     /// turned by the rotation from this to the node's rotation then.
@@ -339,6 +343,8 @@ pub(crate) struct ArtTable {
     pub sky: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub skybox: Option<SkyboxTable>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub draw_collision: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ambient: Option<[f32; 3]>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -358,6 +364,7 @@ impl ArtTable {
         Self {
             sky: art.sky.clone(),
             skybox: art.skybox.as_ref().map(SkyboxTable::of),
+            draw_collision: art.draw_collision,
             ambient: art.ambient,
             sun: art.sun,
             lensflare: art.lens_flare,
@@ -377,6 +384,7 @@ impl ArtTable {
             ambient: self.ambient,
             lights: self.light,
             lens_flare: self.lensflare,
+            draw_collision: self.draw_collision,
             animations: Vec::new(),
             sun_rotation: None,
         })

@@ -269,6 +269,12 @@ optional = true
 type = "types.skybox"
 optional = true
 
+# Draw the flat-shaded collision (floor and walls) under the art; absent is
+# false, the art alone (ADR-0076).
+[types.art.draw_collision]
+type = "boolean"
+optional = true
+
 # Linear RGB.
 [types.art.ambient]
 type = "types.vec3"

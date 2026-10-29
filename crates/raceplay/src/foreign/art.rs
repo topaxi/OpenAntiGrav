@@ -447,6 +447,24 @@ fn build(
     model
 }
 
+/// The flat-shaded collision (`flat`) with the art model over it, one model
+/// (`[art] draw_collision`): for a track whose art does not cover the road. The
+/// art keeps its draws, nodes and textures (rebased); the sphere is the wider of
+/// the merge's and the art's own, which reaches what moves.
+#[must_use]
+pub fn under_collision(flat: &Model, art: Model, report: &mut Vec<String>) -> Model {
+    let (centre, radius) = (art.centre, art.radius);
+    let label = art.label.clone();
+    let mut merged = mesh::merge(&label, vec![flat.clone(), art]);
+    if radius > merged.radius {
+        (merged.centre, merged.radius) = (centre, radius);
+    }
+    report.push(
+        "art: draw_collision: the flat-shaded floor and walls are drawn under the art".into(),
+    );
+    merged
+}
+
 /// Pure's flare from the track's sun and its atlas slot, or `None` with the
 /// reason in `report`.
 #[must_use]

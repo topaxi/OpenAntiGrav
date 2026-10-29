@@ -532,6 +532,7 @@ fn a_lone_craft_gets_round_a_loop_authored_in_blender() {
         "Blender Loop",
         &[
             "art: 1 mesh(es), 2 triangle(s), 1 texture(s)\n",
+            "art: draw_collision: the flat-shaded floor and walls are drawn under the art",
             "art skybox: the track's own sky, 1 face picture(s), 5 face(s) of zenith-to-horizon gradient",
             "art: the sun (0.000, 1.000, -0.000) sets the mapped shadows' direction",
             "art hull lights: the PSP rig from the ambient, the sun and 1 further directional(s)",

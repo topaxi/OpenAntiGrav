@@ -330,6 +330,7 @@ class OAG_PT_art(Panel):
         sc = context.scene
         layout.prop(sc, "oag_sun")
         layout.prop(sc, "oag_sky")
+        layout.prop(sc, "oag_draw_collision")
         layout.prop(sc, "oag_skybox")
         if sc.oag_skybox:
             box = layout.box()
@@ -435,6 +436,12 @@ def _props():
         poll=lambda self, o: o.type == "LIGHT" and o.data.type == "SUN",
     )
     sc.oag_sky = StringProperty(name="Sky", description="A host circuit's .vex entry whose Skycube is drawn")
+    sc.oag_draw_collision = BoolProperty(
+        name="Draw collision",
+        description="Draw the flat-shaded floor and walls under the art ([art] draw_collision), for art "
+        "that does not cover the road",
+        default=False,
+    )
     sc.oag_skybox = BoolProperty(
         name="Own sky",
         description="The track's own sky: a cube of the author's images and/or a zenith-to-horizon gradient "
@@ -467,6 +474,7 @@ def _unprops():
         "oag_track_notes",
         "oag_sun",
         "oag_sky",
+        "oag_draw_collision",
         "oag_skybox",
         "oag_sky_gradient",
         "oag_sky_zenith",

@@ -232,6 +232,8 @@ def build_loop(out_dir, motion=False):
     add_art(ctx, out_dir)
     assert bpy.ops.oag.add_pad_plates() == {"FINISHED"}
     obj.oag_cover_light = 96
+    # Its art is a canopy and two plates, not the road: draw the collision under it.
+    ctx.scene.oag_draw_collision = True
     if motion:
         add_motion(ctx)
     export(os.path.join(out_dir, "blender_motion.track.toml" if motion else "blender_loop.track.toml"))

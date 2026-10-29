@@ -68,6 +68,7 @@ pub(crate) fn art() -> Art {
             atlas: Some(1),
         }),
         animations: Vec::new(),
+        draw_collision: false,
         sun_rotation: None,
     }
 }
@@ -268,4 +269,23 @@ fn a_pad_plate_round_trips_and_is_refused_when_wrong() {
     moving.art.as_mut().unwrap().meshes[1].pad = Some(PadPlate::Speedup);
     let err = to_parts(&moving, "t.glb").unwrap_err();
     assert!(err.to_string().contains("pads never move"), "{err}");
+}
+
+/// `[art] draw_collision`: absent reads as false and writes no key; true round
+/// trips and is schema-valid.
+#[test]
+fn draw_collision_is_a_switch_absent_meaning_off() {
+    let off = to_parts(&with_art(art()), "t.glb").unwrap();
+    assert!(!off.manifest.contains("draw_collision"), "{}", off.manifest);
+    let mut a = art();
+    a.draw_collision = true;
+    let track = with_art(a);
+    let on = to_parts(&track, "t.glb").unwrap();
+    assert!(
+        on.manifest.contains("draw_collision = true"),
+        "{}",
+        on.manifest
+    );
+    oag_schema::validate::accepts("track", 1, &on.manifest).expect("schema-valid");
+    assert_eq!(round(&track), track);
 }

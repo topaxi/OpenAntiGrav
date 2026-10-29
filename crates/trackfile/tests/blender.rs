@@ -182,6 +182,8 @@ fn the_art_authored_in_blender_reads_back_as_authored() {
     let l = load("blender_loop.track.toml");
     let art = l.track.art.as_ref().expect("the loop carries art");
     assert_eq!(art.meshes.len(), 3, "the canopy and a plate on each pad");
+    // Its art is not the road, so the add-on's *Draw collision* is on.
+    assert!(art.draw_collision);
     let m = &art.meshes[0];
     assert_eq!(m.name, "canopy");
     assert_eq!(m.material.blend, Blend::Cutout);

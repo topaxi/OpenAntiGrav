@@ -61,6 +61,10 @@ agreed in conversation and not yet built**, so nothing is re-derived. The decisi
   zenith/horizon gradient on HD's sky cube; add-on Own sky panel; `blender_loop` carries one and
   races on HD natively. Open: images inside the glb (no texture form for them in 1.x), and a
   Blender world Sky Texture or Environment Texture is not mapped (the panel's colours and images are).
+- **`[art] draw_collision` is in** (branch `motion-pads`, 2026-10-29; ADR-0076 decision 16): the
+  flat-shaded collision under the art; `blender_loop` sets it. Hillside covers its road with art
+  and needs nothing; the builder sets `scene.oag_draw_collision = True` only for art that leaves
+  the road bare.
 - **Pad plates are in** (branch `motion-pads`, 2026-10-29; ADR-0076 decision 15): `oag_pad` on
   an art mesh routes it into the host's pad models, so weapon plates hide where weapons are off;
   the disc export writes each circuit's plates (proof extended, draw for draw); the add-on has a

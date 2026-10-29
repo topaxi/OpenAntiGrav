@@ -230,6 +230,12 @@ reason to author visibility by hand.
     the pads) and never moves. The disc exporter writes each circuit's own plates, and decision
     7's proof holds them equal to the `.vex` build draw for draw.
 
+16. **`[art] draw_collision`** (maintainer, 2026-10-29; built on branch `motion-pads`): `true`
+    draws the flat-shaded collision (floor and walls) under the art, merged into one model; absent
+    is `false`, the art alone, as before. An explicit switch rather than a guess at whether the art
+    covers the road: a track of a few decals or a canopy shows no road without it. The Blender
+    add-on's *Draw collision* checkbox writes it.
+
 ## Consequences
 
 - **A sun on our own tracks is what `docs/rendering/shadows.md` lists first among the three things

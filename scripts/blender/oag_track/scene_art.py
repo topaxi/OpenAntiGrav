@@ -414,6 +414,7 @@ def collect(context, depsgraph):
         lens_flare=flare,
         animations=animations,
         sun_rotation=sun_rotation,
+        draw_collision=bool(scene.oag_draw_collision),
     )
 
 
@@ -578,6 +579,7 @@ def populate(context, art, manifest_dir):
         bg.inputs[1].default_value = 1.0
         w["oag_ambient"] = list(art.ambient)
     scene.oag_sky = art.sky or ""
+    scene.oag_draw_collision = art.draw_collision
     scene.oag_skybox = art.skybox is not None
     if art.skybox is not None:
         sb = art.skybox

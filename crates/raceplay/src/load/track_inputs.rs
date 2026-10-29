@@ -279,6 +279,9 @@ fn foreign(
             let textures = art::resolve_textures(&art, dir, archives, report);
             let extras = art::extras(&art, &textures, report);
             let mut model = art::model(&f.title, &art, textures, report);
+            if art.draw_collision && !model.indices.is_empty() {
+                model = art::under_collision(&flat, model, report);
+            }
             if model.indices.is_empty() {
                 report.push("art: no mesh drawn; the collision is drawn flat-shaded".into());
                 model = flat;
