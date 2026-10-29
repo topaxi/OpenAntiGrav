@@ -221,15 +221,16 @@ An `IPUF` backdrop declares no aspect at all and inherits this reading with it.
 
 ## What this project does about it
 
-`oag_display::space::Space::PS2` now carries `display_aspect = 480/272` rather
-than `4/3`, so the front end, the menus and the in-race HUD are all fitted the
-way the artwork was built. **There is no setting for it**: the original's option
+`oag_display::space::Space::PS2` carries `display_aspect = 16/9` (it was `4/3`,
+then `480/272`; see "Measured against PCSX2's frame" below), so the front end,
+the menus and the in-race HUD fill the frame the way the console's 16:9 output
+does. **There is no setting for it**: the original's option
 exists because a PS2 could be plugged into either kind of television, and this
 build draws into a window whose shape it already knows.
 
 Consequences, all of them in `crates/game`:
 
-- `Space::PS2.display_aspect` is `SCREEN.0 / SCREEN.1`, and the grid stays
+- `Space::PS2.display_aspect` is `16/9`, and the grid stays
   640x448. The two numbers still disagree - by 24% now instead of 7% - which is
   the whole reason [`Space`](../architecture/frontend-boot.md) carries both.
 - `Space::texture_scale` is `(640/480, 448/272)` for the PS2 and `(1, 1)`
@@ -306,3 +307,45 @@ them was scaled, and both are the disc's own doing rather than a decision here:
   measurement this page's stretch factors come from
 - [`ipf.md`](../formats/ipf.md) - the backdrop container
 - [PSP vs PS2](../comparisons/pulse-psp-vs-ps2.md)
+
+## Measured against PCSX2's frame
+
+Read off a Grid Selection GS dump (`pulse-ps2-frame-offset`, 2026-10-29) and
+PCSX2's 16:9 screenshot of it (`1592x896` = 2.4875 x 2 screenshot px per frame
+px, the 640x448 frame at 16:9).
+
+- **x: the console fills the 16:9 raster.** The panel quad's right edge is frame
+  x 613 (dump) and sits at screenshot x 1525 = 613.1 frame px, with no offset
+  (the display's `DX` does not move PCSX2's picture: patching `DISPLAY1/2.DX`
+  from 640 to 600 in a copy of the dump and replaying it changed nothing).
+  `Space::PS2` showed the grid at `480/272`, a 0.74 % narrower pillar: 4 px each
+  side at 1280x720, the whole of the `dx = 4.19 - 0.00728 x` the first PS2
+  menu pairs measured. It is `16/9` now. Confidence 85 (one flush edge on two
+  screens, plus the fit of the pair transform to the same numbers).
+- **y: a constant 2.3 frame rows lower than the dump's own coordinates, and
+  that is the game's `DISPLAY` register, not ours.** Every draw's coordinates
+  are frame rows (`XYOFFSET_1` is the window centre `(1728, 1824)`; the title
+  bar's quad starts at row 0), and the screenshot puts them `4.6` screenshot
+  rows (2.3 frame rows) lower. Replaying copies of the dump with `DISPLAY1/2.DY`
+  rewritten moves the screenshot by 2 screenshot rows per unit of `DY`: `DY`
+  40, 50, 51, 52 (the game's), 53 gave shifts of +24, +4, +2, 0, -2 rows
+  against the unpatched replay, linear, 1 frame row per `DY`; the game's
+  `DISPLAY2` reads `DY = 52` (`DISPLAY1` too), `DH = 446`, `MAGH = 3`, `DBY = 1`.
+  `DBY` rewritten to 0 changed nothing (identical image). So the picture sits
+  `DY - D0` rows down, with `D0` PCSX2's own default; 2.3 rows measured makes
+  `D0` about 49.7 (the NTSC 448-line `DY` of 50 would give 2.0). A real
+  television shows the same register: the PS2 front end is drawn 2 to 2.3
+  frame rows (about 3.2 px at 720p) below the frame's centre. Confidence 70
+  that it is `DY` (the sweep is exact), 45 on the 0.3-row remainder.
+  **Play does not apply it** (maintainer ruling, 2026-10-29: the port stays
+  centred; a PS2 race would need the 3D view shifted the same way). **The PS2
+  compare pairs do**: `compare_env.DISPLAY_OFFSETS` shifts ours down 2.3 frame
+  rows (3.70 px at 720p) after rendering, recorded as `ours.display_offset` in
+  `pair.json`; the hexes then read `dy +0.01 / -0.01 / +0.00` (Grid) and
+  `+0.01` (Cell) against `-3.65` and `-3.7`. `D0` is not determinable here, so
+  the 2.3 is recorded as measured, not computed from `DY - D0`.
+- The decoded frame buffer is not the picture: the dump's VRAM is the state
+  *before* the packets, so FBP 0 and FBP 140 hold the previous frame (the
+  loading card). The 4 MiB VRAM starts 425 bytes into the state (`state_size -
+  4 MiB = 509`; the sweep's smoothest decode) and `scripts/gs_fb_decode.py`
+  decodes PSMCT32 through it.

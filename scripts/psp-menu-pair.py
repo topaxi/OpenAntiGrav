@@ -20,6 +20,7 @@ import datetime
 import importlib.util
 import json
 import os
+import struct
 import subprocess
 import sys
 import time
@@ -77,7 +78,17 @@ def orange_share(png):
 ENTRY_POLL = 0.03
 
 #: The `WALK` ids whose ours is drawn at the original's seconds since entry (`--menu-picker-seconds`): the pages with a measured clock law.
-CLOCKED = ("grid", "cell")
+CLOCKED = ("grid", "cell", "team", "track")
+
+#: The front end's animation clock: `*(0x08b317b0) + 0x40`, seconds of emulated time (`AnimTransform_Update`'s fallback clock while
+#: `g_ingame` is null; `docs/ghidra/functions/psp-pulse-usa/anim-transform.md`). It stops with the CPU, so unlike a wall clock it does not
+#: depend on how fast the software renderer runs. `team` and `track` read their seconds since entry off it.
+FE_CLOCK_PTR = 0x08B317B0
+FE_CLOCK_FIELD = 0x40
+#: A shot of these ids is grabbed with the CPU stopped, so the frame and the clock read are one moment.
+STOPPED = ("grid", "cell", "team", "track")
+#: `team`: the ship's own `Anim Transform` node (loop `LoopEnd` 5.9833336 s on Assegai's `ship_FE.vex`) holds its own time at `+0x40`.
+SHIP_NODE_LOOP = 5.9833336
 
 #: Where the `Selector`'s quad is on `grid` and `cell` (a GE dump: 42x43 at (60,138) and (120,90)): its centre pixel's alpha in the
 #: displayed EDRAM buffer is the glow-mask byte the quad stamps, `80 + 150 * t` of the pulse (`docs/ui/campaign-screens.md`, "The front
@@ -96,6 +107,8 @@ class Rig:
         self.shots = shots
         self.title = title
         self.seen = {}
+        self.pressed_clock = None  # the front end's animation clock at the press straight before an `st:` step
+        self.entered_clock = None  # the front end's animation clock at the poll that saw the state name change
         self.entered = None  # (state, time.monotonic() when `expect` saw it replace another): the screen-entry clock
         self.pressed_at = None  # time.monotonic() of the press straight before an `st:` step: the entry cannot be earlier
         if self.dbg.is_stepping():
@@ -127,6 +140,8 @@ class Rig:
                 before = last_other if last_other is not None else self.pressed_at
                 self.pressed_at = None
                 self.entered = (seen, None if before is None else (before + now) / 2)
+                self.entered_clock = (self.pressed_clock if last_other is None and self.pressed_clock is not None else self.fe_clock()) if self.title == "pulse" else None
+                self.pressed_clock = None
                 return
             last_other = time.monotonic()
             time.sleep(ENTRY_POLL)
@@ -151,6 +166,27 @@ class Rig:
             self.tap(button, wait=3.0)
         sys.exit("STALLED pressing %s until %s" % (button, predicate))
 
+    def fe_clock(self):
+        """The front end's animation clock, seconds (emulated time), or `None` when its object is not there."""
+        obj = self.dbg.read_u32(FE_CLOCK_PTR)
+        return self.dbg.read_f32(obj + FE_CLOCK_FIELD) if obj else None
+
+    def ship_node_time(self):
+        """`team`: the live ship `Anim Transform`'s own time (`node+0x40`) - the one node with this loop whose time moves with the clock
+        (`node+0x80` equals the front end's clock), or `None`. The CPU must be stopped."""
+        clock = self.fe_clock()
+        key = struct.pack("<f", SHIP_NODE_LOOP)
+        best = None
+        for base in range(0x08800000, 0x0A000000, 0x400000):
+            raw = self.dbg.read(base, 0x400000)
+            at = raw.find(key)
+            while at >= 0:
+                node = base + at - 0x54
+                if node >= 0x08800000 and node % 4 == 0 and clock is not None and abs(self.dbg.read_f32(node + 0x80) - clock) < 0.1 and self.dbg.read_u32(node + 0x84) == 0:
+                    best = self.dbg.read_f32(node + 0x40)
+                at = raw.find(key, at + 1)
+        return best
+
     def selector_stamp(self, name):
         """The pulse level `t` (0 cyan, 1 white) read off the displayed buffer's `Selector` stamp, or `None`. The CPU must be stopped."""
         cx, cy = SELECTOR_CENTRE[name]
@@ -164,7 +200,7 @@ class Rig:
     def shot(self, name):
         wid, x, y, w, h = set_window(480, 272)
         dst = self.shots / (name + ".png")
-        stopped = name in SELECTOR_CENTRE
+        stopped = name.split("@")[0] in STOPPED
         if stopped:
             # Frozen for the grab and the read, so the frame and the stamp are one pulse phase.
             self.dbg.call("cpu.stepping")
@@ -173,15 +209,23 @@ class Rig:
         subprocess.run(["import", "-window", "root", "-crop", "%dx%d+%d+%d" % (w, h, x, y), "+repage", str(dst)], check=True)
         after = time.monotonic()
         level = None
+        clock = ship_t = None
         if stopped:
-            level = self.selector_stamp(name)
+            if name in SELECTOR_CENTRE:
+                level = self.selector_stamp(name)
+            clock = self.fe_clock()
+            if name.split("@")[0] == "team":
+                ship_t = self.ship_node_time()
             self.dbg.call("cpu.resume")
         state = self.state()
         # The grab takes `after - before`; the frame is read about the middle of it. Only when the entry was watched and the screen is still it.
         since = (before + after) / 2 - self.entered[1] if self.entered and self.entered[0] == state and self.entered[1] is not None else None
         phase = None if level is None else ENTRY_HOLD + level / 2
+        if phase is None and clock is not None and self.entered_clock is not None and self.entered and self.entered[0] == state:
+            since = clock - self.entered_clock
         self.seen[name] = {"png": dst, "at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"), "state": state,
-                           "since_entry": phase if phase is not None else since, "from_stamp": phase is not None, "level": level}
+                           "since_entry": phase if phase is not None else since, "from_stamp": phase is not None, "level": level, "from_clock": phase is None and clock is not None, "ship_t": ship_t}
+        print("shot", name, "since_entry", self.seen[name]["since_entry"], "ship_node_time", ship_t, "clock", clock, flush=True)
         return dst
 
     def boot(self, timeout=240.0):
@@ -222,6 +266,9 @@ class Rig:
                 # A key straight before `st:` skips the tap's 0.7 s settle so `expect` sees the screen change itself (the entry clock).
                 watched = steps[at + 1:at + 2] and steps[at + 1].startswith("st:") and int(n or 1) == 1
                 self.pressed_at = time.monotonic() if watched else None
+                # The press call returns only after the button's six frames, by which time the screen has long changed: the entry clock is
+                # the front end's clock as the press starts (the screen changes a frame or two after it), not the clock at the poll.
+                self.pressed_clock = self.fe_clock() if watched and self.title == "pulse" else None
                 self.tap(button, 1, wait=0.0) if watched else self.tap(button, int(n or 1))
             elif kind == "pu":
                 button, _, pred = rest.partition(":")
@@ -244,8 +291,8 @@ PULSE_PLAN = ",".join([
     "key:cross", "st:Cell Selection", "wait:3", "shot:cell", "back:Main Menu", "wait:1",
     "key:down", "key:cross", "wait:2", "st:Racebox", "wait:2", "shot:racebox",
     "key:cross", "wait:2", "st:Single Player", "wait:2", "shot:single",
-    "key:cross", "wait:3", "st:Track Creation", "wait:2", "shot:track",
-    "key:cross", "wait:3", "st:Team Selection", "wait:3", "shot:team", "back:Main Menu", "wait:1",
+    "key:cross", "st:Track Creation", "wait:3", "shot:track",
+    "key:cross", "st:Team Selection", "wait:3", "shot:team", "back:Main Menu", "wait:1",
     "key:down*5", "wait:1", "key:cross", "wait:2", "st:Additional", "wait:2", "shot:options", "back:Main Menu", "wait:1",
 ])
 
@@ -346,6 +393,8 @@ def build_pairs(args, seen, out, plat, walk):
         pair.rec["original"]["selection_basis"] = "read by eye from the frame; the cursor is where the walk left it"
         if shot.get("from_stamp"):
             pair.rec["original"]["seconds_since_entry"] = {"value": round(shot["since_entry"], 3), "basis": "not a wall clock: the pulse level %.3f the Selector's own glow-mask stamp reads in EDRAM (80 + 150 t, CPU stopped for the grab), as the seconds at which ours shows that level (entry hold + t / 2); good to one game frame" % shot["level"]}
+        elif shot.get("from_clock") and shot.get("since_entry") is not None:
+            pair.rec["original"]["seconds_since_entry"] = {"value": round(shot["since_entry"], 3), "basis": "not a wall clock: the front end's own animation clock (*(0x08b317b0)+0x40, emulated seconds, CPU stopped for the grab) at the grab minus its value at the poll that saw the state name change; good to one poll (a frame or two)" + ("; the ship's Anim Transform node time read %.3f s (loop 5.983 s)" % shot["ship_t"] if shot.get("ship_t") is not None else "")}
         elif shot.get("since_entry") is not None:
             pair.rec["original"]["seconds_since_entry"] = {"value": round(shot["since_entry"], 3), "basis": "measured: wall clock from the poll that saw the state name change (+-%.2f s; when the first poll already saw the new name, from the midpoint between the press and that poll, wider) to the middle of the frame grab; PPSSPP runs at 60 fps, its pulse period reads 1 s on this clock" % (ENTRY_POLL / 2)}
         pair.rec["original"]["screen_basis"] = ("the game's own state machine (0x08b31784+0x18c): %r" % shot["state"]) if shot["state"] else "read by eye from the frame (no recovered state name for this title)"
@@ -356,7 +405,7 @@ def build_pairs(args, seen, out, plat, walk):
                          xml_file=item["xml"], screen_seen=shot["state"] or item["screen"], screen_wanted=item["screen"], profile_dir=profile,
                          size=ce.size_text(plat), front_end_style="the disc's own", language="English", original_language="English",
                          selection=item["selection"], route=item.get("route"),
-                         extra_args=("--menu-picker-seconds", "%.3f" % shot["since_entry"]) if item["id"] in CLOCKED and shot.get("since_entry") is not None else (), screen_source="PPSSPP, the front end's state name" if shot["state"] else "read by eye")
+                         extra_args=(("--menu-picker-seconds", "%.3f" % shot["since_entry"]) + (("--menu-model-seconds", "%.3f" % shot["ship_t"]) if shot.get("ship_t") is not None else ())) if item["id"] in CLOCKED and shot.get("since_entry") is not None else (), screen_source="PPSSPP, the front end's state name" if shot["state"] else "read by eye")
             pair.finish()
         except SystemExit as exc:
             if exc.code == 3:

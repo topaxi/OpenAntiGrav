@@ -28,6 +28,12 @@ frames. Everything else the original stamps is read and not wired.
 - Pulse PS2 shares the title record and now draws the cursor bloom; its original shows a halo too, but the PS2 chain's strength is not compared.
 - Not seen in a window: the live `menu_stage` path was read (one `render_with`, Clear) but a lavapipe Xvfb grab came back black.
 
+## Picker clock (2026-10-29, pulse-picker-clock)
+
+Ship Select (authored `Mode3D` pose plus the hull's own sway) and Track Select (0.70 s step cross-fade) are wired and clocked off the
+game's animation clock; PS2's craft placement is unmeasured (keeps the old orbit, `craft_mode3d_applies`). Open: the footer ticker
+(scrolls in the original, empty in ours at tick 0) on the same clock; the Assegai `Classic` arrows and the footer tag differ in the pair.
+
 ## Next Steps
 
 1. Read `RealGlow`/`PulseMultiplier`/`pulse` onto `oag_ui::screen`'s `Text` and `Image` (15 minutes to find the parser, an afternoon

@@ -143,6 +143,10 @@ def menu_pair(pair, *, theirs_png, oag_game, image, page, drawn_from, xml_file, 
         return False  # a doomed pair is not rendered; `Pair.finish` names every failed check
     cmd = render_ours(oag_game, image, plat, page, out / "ours.png", profile_dir, size, extra_args, route)
     pair.rec["ours"]["flags"] = [str(c) for c in cmd[2:]]
+    offset = ce.display_offset_record(plat["key"], "menu")
+    if offset:
+        offset["pixels"] = ce.apply_display_offset(out / "ours.png", offset)
+        pair.rec["ours"]["display_offset"] = offset
     got, bad = ce.read_back(plat, profile_dir, safe_area)
     pair.rec["ours"]["settings_readback"] = got
     for b in bad:

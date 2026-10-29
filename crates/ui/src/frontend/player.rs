@@ -22,10 +22,10 @@ pub const FRAME_RATE: (u64, u64) = (30_000, 1001);
 /// draws that texture and 4.23 with the film scaled to 16:9, against 3.14 at
 /// the declared 4:3. The PS2 draws its `Movie` widget with no size of its own
 /// over a `640x448` black `Image`, so the film fills the frame - and spelling
-/// this `(480, 272)` says whose frame: [`oag_display::space::Space::PS2`]'s. An
+/// this `(16, 9)` says whose frame: [`oag_display::space::Space::PS2`]'s. An
 /// `IPUF` declares no aspect and takes this as it takes its rate. See
 /// `docs/ps2/aspect-ratio.md`.
-pub const PS2_DISPLAY_ASPECT: (u32, u32) = (480, 272);
+pub const PS2_DISPLAY_ASPECT: (u32, u32) = (16, 9);
 
 /// Plays a movie: a frame counter, a pause flag, and the pacing rules.
 ///

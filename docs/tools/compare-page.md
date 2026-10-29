@@ -1017,7 +1017,15 @@ over the dimmed race). Pure has no Options or Racebox screen in its main menu.
 that saw the screen replace another (polled every 0.03 s, so +-0.015 s) to the middle of the frame grab; PPSSPP holds 60 fps, but entries
 spread about +-0.1 s in the first second (`docs/ui/campaign-screens.md`, "The `Selector` pulse"). It exists only when the walk watched the
 change (a plan step `key:BUTTON,st:SCREEN`, which skips the tap's 0.7 s settle); otherwise it is absent, never guessed. Ours gets it as
-`--menu-picker-seconds` for the pages in `CLOCKED` (`grid`, `cell`) only.
+`--menu-picker-seconds` for the pages in `CLOCKED` (`grid`, `cell`, `team`, `track`) only.
+
+**The wall clock is replaced on `team` and `track` (2026-10-29, `pulse-picker-clock`).** Their `seconds_since_entry` is the front end's own
+animation clock (`*(0x08b317b0) + 0x40`, emulated seconds, read with the CPU stopped for the grab) minus its value as the entering press
+starts (the screen changes a frame or two later; sampling at the poll that saw the new name is 0.15 s late, because the press call
+returns after the button's six frames). `team` also reads the live ship `Anim Transform` node's own time (`node+0x40`, the node whose
+`+0x80` equals the clock and whose loop is 5.9833 s) and passes it as `--menu-model-seconds`: the hull's sway started when the model
+loaded, 0.5 to 1.9 s before the screen entry, so it is not `--menu-picker-seconds`. Against the wall clock the Track Select photo box went
+from a mean abs diff of 44.9 grey to 0.28 and the Ship Select hull box from 29.0 to 5.2.
 
 **Reproduce:** `scripts/ppsspp-start.sh <lane> 91 <port> <image>` with `PPSSPP_EXTRA_INI` from `compare_env.py ppsspp-ini pulse-psp|pure-psp`,
 `source <scratch>/pp/env.sh`, ours' `XDG_*` under `data/scratch/<lane>/`, then `uv run --with websocket-client --with pillow python3
@@ -1043,13 +1051,28 @@ patches by gradient cross-correlation (Gaussian, strongest edges, parabolic sub-
 (`scripts/pcsx2-gsdump.py`), the exact quads. The selected hex mixes the outline and the ring: measure the ring alone with a brightness mask
 (ring pixels above 140 in the pair; the outline is dimmer).
 
-**Result (1280x720).** Ours' unselected hexes (3 on Grid Selection, 5 on Cell Selection) lie a **frame-level** `dx = +4.19 - 0.00728 x`,
-`dy = -3.68` (sd 0.04) px from PCSX2's: x is `Space::PS2`'s documented 480/272 pillar (0.74 % against the 16:9 the screenshot fills), y is a constant
-2.3 grid units that the right-hand panel's rules (-3.4, -3.6), the footer bars (-2.4 to -4.3) and the Main Menu rows (-3.6 to -3.9) share (so it is not hex placement; the title bar reads -0.3 by correlation but 4 px low by its bright-row extent, a slanted shape); the GS dump puts the original's outlines exactly on
-the XML's coordinates, and its registers read `DISPLAY2.DBY = 1`, `DY = 52` (a field offset is one candidate, PCSX2's PAL crop another; **cause
-not isolated**). After that transform the selected ring agrees within 0.28 px on both axes (the unselected hexes within 0.07 px, but the transform is fitted on them, so that only shows the field is rigid). Before the
-fix the ring was `+15.4 / +8.2` (grid) and `+13.9 / +7.7` (cell) px off the original's, 12 px and 11 px of that the PSP's `(-5, -7)` used on the PS2's `(-11, -14)`
-(`docs/ui/campaign-screens.md`, "PS2: the selector sits at...").
+**Display offset (2026-10-29, `pulse-ps2-pair-dy`).** The PS2 menu pairs score ours with the game's `DISPLAY1/2.DY = 52` applied: `compare_env.DISPLAY_OFFSETS[("pulse-ps2", "menu")]` is 2.3 frame rows (3.70 px at 1280x720, measured, confidence 70, the DY sweep in `docs/ps2/aspect-ratio.md`). `compare_menu.menu_pair` and `compare-rerender-ours.py` shift `ours.png` down by it after the render (bicubic, black above) and record `ours.display_offset` in `pair.json`; a rerender applies it even to a pair that predates the field. Compare shots only: play stays centred. After it the hexes read `dy` within 0.02 px (Grid `+0.01/-0.01/+0.00`, Cell `+0.01`), `dx` unchanged at `-0.45..-0.50` (whole-frame Cell patch `-0.64`). Other platforms are untouched.
+
+**Result (1280x720), cause settled 2026-10-29 (`pulse-ps2-frame-offset`).** Against PCSX2's frame ours' unselected hexes (3 on Grid Selection, 5
+on Cell Selection) lay a frame-level `dx = +4.19 - 0.00728 x`, `dy = -3.68` (sd 0.04) px off, from **two separate causes**:
+
+- **x was ours**: `Space::PS2` showed the 640-column grid at 480/272, a 0.74 % pillar (4 px a side) while the console's 16:9 output, and so
+  PCSX2's screenshot, fills the raster edge to edge. `Space::PS2.display_aspect` is now `16/9`; the three Grid hexes read `dx -0.49 / -0.48 /
+  -0.50` and the three Cell hexes `-0.45 / -0.47 / -0.26` (was `+2.08 / +1.56 / +0.93` and `+2.90 / +2.24 / +1.90`), a uniform
+  `-0.5 px` left, inside the half pixel.
+- **y is the original's, and ours does not apply it**: the game's own `DISPLAY1/2.DY = 52` puts the picture below the frame's centre.
+  PCSX2 honours `DY`: copies of the Grid dump with `DY` rewritten to 40, 50, 51, 52, 53 and replayed (`pcsx2-qt -batch -nogui -- dump.gs`) move
+  the GS screenshot by `+24, +4, +2, 0, -2` screenshot rows (2 rows per `DY`, one frame row per unit); `DX` (640 to 600) and
+  `DBY` (1 to 0) change nothing. The draws themselves are at the XML's coordinates (title bar quad at frame row 0, `XYOFFSET_1` the window
+  centre). So `dy` stays `-3.6 to -3.7` px (2.27 frame rows; `DY - 50` would be 2.0) on all eight hexes, the rules, the footer and the
+  Main Menu rows: that is the console's own display position, which ours does not model (no display offset in `Space` or the viewport).
+  Confidence 70 that it is `DY`; the remainder over two rows is not explained.
+
+`menu_hex_offsets.py` therefore reads **`dy -3.65` as the console's display offset, not a layout error**, and `dx -0.5` as the pair's
+residual. (The decoded frame buffer cannot arbitrate: a dump's VRAM is the state before its packets, so FBP 0 and 140 hold the previous
+frame. `scripts/gs_fb_decode.py` decodes PSMCT32 from it, VRAM at byte 425 of the state; `scripts/gs_patch_display.py` rewrites the display
+registers of a dump for the replay above.) The selected ring: before the selector fix `+15.4 / +8.2` (grid) and `+13.9 / +7.7` (cell) px, 12 px
+and 11 px of that the PSP's `(-5, -7)` used on the PS2's `(-11, -14)` (`docs/ui/campaign-screens.md`, "PS2: the selector sits at...").
 
 ## Provenance: the trust model (2026-10-21, `ref-provenance`)
 
