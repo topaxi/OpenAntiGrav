@@ -441,3 +441,42 @@ fn the_ps2_draws_the_psps_own_textures_stretched_by_the_grid_ratio() {
         ps2_space.display_aspect
     );
 }
+
+/// **The PS2 `Selector` is authored 56 square, and the skin places it where the GS draws it.**
+///
+/// A PCSX2 GS dump of Grid Selection and Cell Selection draws the 56x56 quad at the outline's top-left
+/// minus (11, 14): outline `(87,247)` (`Outline_0_0`: the `<Item OffsetX="47" OffsetY="82">` plus the
+/// `Item (40,31)` plus `y="134"`), selector `(76,233)`. Dropping `MenuSkin::selector_origin` puts it back
+/// on the PSP's (5, 7), 12 px and 11 px off at 1280x720 (`docs/ui/campaign-screens.md`, "PS2: the
+/// selector sits at the hex's top-left minus (11, 14)").
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd"]
+fn the_ps2_selector_is_authored_56_square_and_the_ps2_skin_carries_the_gs_offset() {
+    let Some(text) = xml(PS2, "Data\\Plugins\\PI001\\GUI\\CellMode_Definition.xml") else {
+        return;
+    };
+    // Both screens author it, 56x56 over a 43x43 texture region (the PSP authors 42x43 over 42x43).
+    let selectors = text
+        .lines()
+        .filter(|line| line.contains("<Image name=\"Selector\">"))
+        .count();
+    assert_eq!(selectors, 2, "Grid Selection and Cell Selection each author one Selector");
+    assert_eq!(
+        text.matches("txtrwidth=\"43\" txtrheight=\"43\" width=\"56\" height=\"56\"")
+            .count(),
+        2,
+        "the Selector is 56x56 over a 43x43 region on both screens"
+    );
+    let outline = text
+        .split("<Image name=\"Outline_0_0\">")
+        .nth(1)
+        .expect("Grid Selection authors Outline_0_0");
+    assert!(
+        outline.split("</Image>").next().unwrap().contains("y=\"134\""),
+        "Outline_0_0 authors y=134 under the (47,82)+(40,31) items"
+    );
+    let ps2 = oag_pulse::FRONT_END.menu_ps2.expect("Pulse authors a PS2 skin");
+    assert_eq!(ps2.selector_origin, Some((-11.0, -14.0)));
+    // The PSP pressings keep the GE-dump value (`None`: `SELECTOR_ORIGIN` = (-5, -7)).
+    assert_eq!(oag_pulse::FRONT_END.menu.expect("the PSP skin").selector_origin, None);
+}
