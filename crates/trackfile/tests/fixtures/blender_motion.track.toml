@@ -1,0 +1,52 @@
+[toml-schema]
+location = "https://oag.topaxi.com/mods/schemas/v1/track.tosd"
+version = "1.0.0"
+
+[track]
+id = "blender-motion"
+title = "Blender Motion"
+host = "wipeout-pulse"
+glb = "blender_motion.glb"
+notes = ["authored headless in Blender with the OAG add-on: 8 control points (chosen, not measured)"]
+
+[spline]
+point_version = 263
+
+[[spline.path]]
+points = 64
+entry = 0
+exit = 0
+max_spacing_bits = 1117777394
+
+[[spline.junction]]
+prev = [0, -1]
+next = [0, -1]
+
+[counts]
+collision_nodes = 2
+speedup_pads = 1
+weapon_pads = 1
+art_meshes = 3
+
+[art]
+sky = "Data\\Environments\\03_Track\\track.vex"
+ambient = [0.1, 0.12, 0.15]
+
+[art.sun]
+direction = [0.0, 1.0, -0.0]
+colour = [1.0, 0.9, 0.7]
+intensity = 1.0
+angular_diameter = 2.0
+shadows = true
+
+[art.lensflare]
+atlas = 0
+
+[[art.light]]
+kind = "directional"
+direction = [0.0, -1.3435884e-07, -1.0]
+colour = [0.2, 0.25, 0.4]
+intensity = 0.5
+
+[[art.texture]]
+image = "blender_checker.png"

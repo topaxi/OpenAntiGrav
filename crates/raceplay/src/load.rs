@@ -1354,6 +1354,10 @@ pub fn load(options: &Options) -> Result<Loaded> {
     #[cfg(feature = "view")]
     {
         loaded.setup.scenery_fx.sun = foreign_art.sun_shadow;
+        (
+            loaded.setup.scenery_fx.sun_turn,
+            loaded.setup.scenery_fx.flare_turns,
+        ) = (foreign_art.sun_turn, foreign_art.flare_turns);
         if let Some(hull) = foreign_art.hull
             && title.looks.hull_lights.applies(archives.layout.platform)
         {

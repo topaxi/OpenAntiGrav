@@ -343,6 +343,9 @@ pub use vertex::{
 mod anim_node;
 pub use anim_node::{AnimNode, Motion, NODE_ANIM_LIMIT};
 
+pub mod keyed;
+pub use keyed::{KeyTrack, Keyed, slerp};
+
 mod emissive;
 pub use emissive::{
     Emissive, PROGRAM_BILLBOARD, PROGRAM_BW_GLASS, PROGRAM_CHEVRON, PROGRAM_SHINE_MASK,

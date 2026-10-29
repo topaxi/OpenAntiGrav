@@ -60,6 +60,11 @@ pub struct Plan {
     /// shadows' direction in place of the host title's own axis. `None` on
     /// every disc circuit.
     pub sun: Option<[f32; 3]>,
+    /// A track file's sun turning over time (ADR-0076 decision 10): it turns
+    /// [`Self::sun`] and, when [`Self::flare_turns`], the flare's direction.
+    pub sun_turn: Option<crate::foreign::art::motion::SunTurn>,
+    /// The flare follows the turning sun.
+    pub flare_turns: bool,
 }
 
 /// Seed for the scenery effects' own spawn parameters. Any constant: render
@@ -78,6 +83,8 @@ pub struct SceneryFx {
     lens_flare: Option<Box<oag_fx::lens_flare::Setup>>,
     bloom_under_hud: bool,
     sun: Option<[f32; 3]>,
+    sun_turn: Option<crate::foreign::art::motion::SunTurn>,
+    flare_turns: bool,
     placed: Vec<Placed>,
     playing: Vec<Option<psys::Playing>>,
     stage: psys::Stage,
@@ -101,11 +108,15 @@ impl SceneryFx {
             lens_flare,
             bloom_under_hud,
             sun,
+            sun_turn,
+            flare_turns,
         } = plan;
         Self {
             lens_flare,
             bloom_under_hud,
             sun,
+            sun_turn,
+            flare_turns,
             weather: Weather::new(weather),
             playing: vec![None; placed.len()],
             placed,
@@ -147,10 +158,26 @@ impl SceneryFx {
         self.lens_flare.as_deref()
     }
 
-    /// Towards the track's own sun, where a track file authors one that casts.
+    /// Towards the track's own sun at `seconds` on the animation clock, where
+    /// a track file authors one that casts.
     #[must_use]
-    pub fn sun(&self) -> Option<[f32; 3]> {
-        self.sun
+    pub fn sun(&self, seconds: f32) -> Option<[f32; 3]> {
+        let rest = self.sun?;
+        Some(
+            self.sun_turn
+                .as_ref()
+                .map_or(rest, |turn| turn.direction_at(seconds)),
+        )
+    }
+
+    /// The flare's direction at `seconds`: its own, or the turning sun's.
+    #[must_use]
+    pub fn lens_flare_direction(&self, seconds: f32) -> Option<[f32; 3]> {
+        let setup = self.lens_flare.as_deref()?;
+        Some(match (&self.sun_turn, self.flare_turns) {
+            (Some(turn), true) => turn.direction_at(seconds),
+            _ => setup.direction,
+        })
     }
 
     /// Whether the bloom's composite lands before the HUD (`Looks::bloom_under_hud`)

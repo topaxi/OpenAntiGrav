@@ -128,6 +128,31 @@ class ArtMesh:
     shadow: str = "both"
     alpha_ref: int = None
     layer: int = 0
+    # Rest pose ((tx, ty, tz), (qx, qy, qz, qw), (sx, sy, sz)) in the format's axes, only on a mesh an
+    # animation moves; its vertices are then in the node's own space.
+    transform: tuple = None
+
+
+REPEATS = ("loop", "clamp")
+PATHS = ("translation", "rotation", "scale")
+
+
+@dataclass
+class Channel:
+    """One glTF animation channel. `target` is an art mesh index or "sun"; `values` are tuples."""
+
+    target: object
+    path: str
+    times: list
+    values: list
+    interpolation: str = "LINEAR"
+
+
+@dataclass
+class Animation:
+    name: str
+    channels: list = field(default_factory=list)
+    repeat: str = "loop"
 
 
 @dataclass
@@ -182,6 +207,8 @@ class Art:
     ambient: tuple = None
     lights: list = field(default_factory=list)
     lens_flare: LensFlare = None
+    animations: list = field(default_factory=list)
+    sun_rotation: tuple = None  # the oag/sun node's rest rotation, exactly when the sun turns
 
     def borrows_from_a_disc(self):
         """A host texture or a sky: the track must name its host."""

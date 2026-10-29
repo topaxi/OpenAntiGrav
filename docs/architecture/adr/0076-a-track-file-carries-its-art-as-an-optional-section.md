@@ -108,6 +108,18 @@ reason to author visibility by hand.
       time (a day cycle) is a later minor version.
     - Playback is the race clock in ticks, looping or clamped per animation (`oag_loop`), never
       the wall clock; `--anim-seconds` pins it as it does for a disc circuit.
+    - **Built 2026-10-29** (branch `motion-pads`), as settled there: a moving art node carries
+      its rest pose as glTF `translation`/`rotation`/`scale` and its vertices in its own space (a
+      still one keeps the identity, and a rest pose with no animation is refused); the sun is an
+      `oag/sun` node of a rest rotation, and its direction at a time is `[art.sun] direction`
+      turned by the rotation from rest, so no lamp axis convention is assumed. Channels are
+      `LINEAR` (rotation by slerp) or `STEP`; `CUBICSPLINE` is refused, and so is a channel on
+      anything but an art node or the sun. The renderer samples through a third `Motion`
+      (`oag_mesh::mesh::Keyed`): the `.rcsanimclip` form's evenly spaced, always-wrapping keys
+      cannot carry uneven times or a held end. The Blender add-on samples the world pose per
+      frame (easing, constraints and parents arrive as seen) and imports keys back. The lens
+      flare follows a turning sun unless it names its own direction, which does not turn; the hull
+      rig keeps the pose at time zero (open). Format: `docs/formats/track-file.md`, "Motion".
 
 11. **No trigger events in 1.x** (maintainer, 2026-10-29). Animations are time-driven against the
     race clock and nothing else starts them: "after lap one, move X" is not expressible, and the

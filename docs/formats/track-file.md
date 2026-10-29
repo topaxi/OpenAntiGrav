@@ -47,6 +47,7 @@ One scene, flat nodes, tightly packed little-endian accessors. Right-handed, Y u
 | `oag/spline/<i>` | `POINTS`, one vertex per control point | `POSITION` (pos), `_OAG_TANGENT`, `_OAG_DOWN`, `_OAG_LATERAL` (VEC3), `_OAG_PROGRESS`, `_OAG_RACING_LINE` (SCALAR), `_OAG_HALF_WIDTH`, `_OAG_AI_BOUND` (VEC2 left, right), `_OAG_SECTION_FLAGS` (u8 VEC4: section, flags, 0, 0), `_OAG_LIGHT_SCALE` (u8 VEC4), and optionally `_OAG_AI_BYTES` (u8 VEC4: lane band low, lane band high, speed-floor byte, 1 when the point carries them; absent reads as none), and optionally `_OAG_CAGE_A`, `_OAG_CAGE_B` (u8 VEC4 each: the collision cage's eight signed bytes `+0x68..+0x6f` in order, two's complement; absent reads as all zero) |
 | `oag/pads/speedup`, `oag/pads/weapon` | `POINTS`, one vertex per pad | `POSITION` (informational: the pad's world centre), `_OAG_TO_WORLD` (MAT4, the row-major row-vector matrix as stored), `_OAG_MIN`, `_OAG_MAX` (VEC3), `_OAG_DISABLED` (SCALAR) |
 | `oag/collision/<n>` | `TRIANGLES`, u16 indices, one primitive per mesh | `POSITION`, `_OAG_SCALAR` (per-vertex scalar, `1.0` when absent); node extras `oag_kind` (`floor`, `wall`, `reset`, `mag_floor`, `cage`, `track_wall`), `oag_name`, `oag_version` |
+| `oag/sun` | no mesh; only a rest `rotation` | present exactly when an animation turns the sun (below) |
 | `oag/art/<n>` | `TRIANGLES`, one primitive per draw | `POSITION`, `NORMAL`, `TEXCOORD_0` (v down, as the disc's), `COLOR_0` (VEC4 float: the baked light, RGB **linear** as glTF reads it, alpha coverage); node extras `oag_name`, `oag_texture` (texture row, absent for untextured), `oag_blend` (`opaque`, `cutout`, `alpha`, `additive`, `unblended`), `oag_culled`, `oag_lit`, `oag_shadow` (`both`, `cast`, `receive`, `none`), `oag_alpha_ref` (`0..=255`, the alpha-test reference; absent is the renderer's default), `oag_layer` (unsigned integer render layer, absent is `0`) |
 
 The cage bytes travel, but the `WO Track` header flag that turns the cage on
@@ -56,13 +57,29 @@ collision cage ([collision-cage.md](../ghidra/functions/psp-pulse-usa/collision-
 A reader finds a collision node by its `oag_kind` extra (so a Blender object tagged with a
 custom property qualifies whatever it is named), the rest by name. Mesh nodes without either
 are counted as unread, never dropped silently. A non-identity node transform on a record is
-refused (`Transformed`): bake it before export.
+refused (`Transformed`): bake it before export. The one exception is an art node an animation
+moves (below).
+
+### Motion (glTF `animations`, ADR-0076 decision 10, since 2026-10-29)
+
+| Field | Meaning |
+| --- | --- |
+| A moving `oag/art/<n>` node's `translation`, `rotation`, `scale` | its rest pose (glTF's decomposed form; a `matrix` is refused). Its vertices are then in the node's own space. A rest pose on an art node no animation moves is refused (`Transformed`) |
+| `animations[]` | glTF animations. A channel targets an art node or `oag/sun` (anything else is refused by name: collision, pads and the spline never move), path `translation`, `rotation` (`x, y, z, w`) or `scale` (the sun: rotation only). Samplers are float accessors, `LINEAR` (rotation by spherical interpolation, shorter arc) or `STEP`; `CUBICSPLINE`, normalised-integer keys and morph weights are refused. Times start at or after 0 and strictly increase; one channel per node property in the whole file |
+| An animation's `extras.oag_loop` | `loop` (absent too): wraps on the animation's length, its latest key; `clamp`: holds its last keys. Before a channel's first key it holds the first |
+| `oag/sun`'s rotation | the sun's direction at time *t* is `[art.sun] direction` turned by the rotation from this rest rotation to the channel's rotation at *t*, so a lamp's own axis convention never enters |
+
+The clock is the race's animation clock: the tick over 60, or `--anim-seconds`, never the wall
+clock. `oag-trackfile` stores the keys bit for bit and samples nothing (it is in
+`check-determinism`'s scan); the renderer samples (`oag_mesh::mesh::Keyed`, a third
+`Motion` beside the `.vex` and `.rcsanimclip` forms, because their keys are evenly spaced and always
+wrap). A file with no motion writes no `animations` and no `oag/sun`, byte for byte as before.
 
 ## What format 1.x carries no field for
 
 `oag_trackfile::ABSENT`, named in every loader report and **drawn as nothing**: fog, point
-lights, clouds, scenery animation, track particle emitters, sound emitters, visibility sets
-(PVS), the Zone variant.
+lights, clouds, track particle emitters, sound emitters, visibility sets (PVS), the Zone variant.
+Keyframed node motion is carried since 2026-10-29 (above); texture animation is not.
 
 A file with **no art section** races on flat-shaded floor and wall collision, with no sky, sun
 or lens flare, and its report says so. With one, the loader (`oag_raceplay::foreign::art`)
@@ -77,6 +94,7 @@ draws:
 | Sun | Its direction is the `mapped` shadow tier's when `shadows` is set; otherwise that tier keeps the host title's axis. |
 | Hull lights | Pulse and Pure on the PSP (the host title's `hull_lights` rule): the GE rig (`oag_mesh::mesh_render::HullLights`) from `[art.ambient]`, the sun as directional 0 and the directional `[[art.light]]` rows after it, four at most, each colour times its intensity converted to its gamma byte and clipped to `255`, built at the bare scale as `HullLights::from_track` builds a circuit's; a direction is taken as written. The craft's own darkening is the spline's `_OAG_LIGHT_SCALE` bytes, read through `oag_race::Course::light_scale_at` as on a disc circuit. An HD-family host's authored-light equation (`Light::authored`) is not fed the sun yet. |
 | Lens flare | Pure's flare (`oag_fx::lens_flare`) along the sun, or its own `direction`, in the sun's colour unless the flare names one (converted from linear to the gamma float the ring law steps), with the atlas row's picture. |
+| Motion | Each moving mesh becomes a node of the model's `anim_nodes` table, its vertices tagged with the slot (`GpuVertex::xform`), so the per-frame node matrices, the unculled moving-draw path and the `mapped` tier's moving casters take it as they take a disc circuit's `Anim Transform`. Meshes with identical rest pose and channels (one Blender object's material slots) share a node; past the table's 384 the rest stand at their rest pose, reported. The model sphere reaches every moving vertex at each key time. A turning sun turns the `mapped` shadows' direction and a flare without its own direction (`SceneryFx::sun`, `lens_flare_direction`); the hull rig keeps the pose at time zero. The loader report says `art motion: N animation(s), M mesh(es) on K node(s)`. |
 
 What a mesh carries and the disc's draws have more of, so is lost by an export: texture
 animation, geometry motion (an `Anim Transform`'s vertices are written at their time-zero
@@ -156,7 +174,9 @@ it.
 - Authoring: [the Blender add-on](../tools/blender.md) writes this form (2026-10-12). Blender 5.2.2's own
   glTF importer cannot open the file (it raises on the pad `_OAG_TO_WORLD` `MAT4`); the add-on has its
   own importer. Banking and per-point width are not authored yet.
-- The Blender add-on's art export (ADR-0076's second landing).
+- Motion on a disc export: an `Anim Transform`'s geometry is still written at its time-zero pose;
+  writing it as an animation is open.
+- `oag_shadow` is not honoured by the `mapped` tier's moving casters (every opaque moving mesh casts).
 - The absent list above, and what an export loses (texture animation, motion, level of detail,
   list B's depth order, glow, point lights), as optional records in a later revision.
 - An HD-family host feeding `[art.sun]` and `[art.ambient]` to its own authored-light equation

@@ -266,6 +266,8 @@ class OAG_PT_track(Panel):
             layout.prop(obj, "oag_shadow")
             layout.prop(obj, "oag_layer")
             layout.prop(obj, "oag_lit")
+            if obj.animation_data is not None:
+                layout.prop(obj, "oag_loop")
             mat = obj.active_material
             if mat is not None:
                 layout.prop(mat, "oag_blend")
@@ -280,6 +282,8 @@ class OAG_PT_track(Panel):
             layout.prop(obj, "oag_intensity")
             layout.prop(obj.data, "angle", text="Angular diameter")
             layout.prop(obj.data, "use_shadow", text="Shadows")
+            if obj.animation_data is not None:
+                layout.prop(obj, "oag_loop")
 
 
 class OAG_PT_art(Panel):
@@ -368,6 +372,13 @@ def _props():
     )
     ob.oag_layer = IntProperty(name="Layer", description="Render layer: draws go by layer, then file order", default=0, min=0)
     ob.oag_lit = BoolProperty(name="Lit", description="The light rig applies on top of the baked colour", default=False)
+    ob.oag_loop = EnumProperty(
+        name="Motion",
+        description="Past its last key the object's animation loops or holds (glTF oag_loop); objects "
+        "sharing an oag_anim name share one animation",
+        items=[("loop", "loop", ""), ("clamp", "clamp", "")],
+        default="loop",
+    )
     ob.oag_intensity = FloatProperty(
         name="Intensity",
         description="The file's intensity (a multiplier on the colour for the ships' light), not Blender's strength",
@@ -440,6 +451,7 @@ def _unprops():
         "oag_shadow",
         "oag_layer",
         "oag_lit",
+        "oag_loop",
         "oag_intensity",
     ):
         delattr(bpy.types.Object, name)

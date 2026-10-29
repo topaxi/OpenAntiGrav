@@ -44,7 +44,9 @@ impl Scene {
             .and(race.scenery_fx().lens_flare())
             .and_then(|setup| {
                 oag_fx::lens_flare::Placement::new(
-                    setup.direction,
+                    race.scenery_fx()
+                        .lens_flare_direction(self.anim_clock.get())
+                        .unwrap_or(setup.direction),
                     setup.colour,
                     race.view(),
                     projection,

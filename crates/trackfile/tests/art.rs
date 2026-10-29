@@ -29,6 +29,7 @@ fn quad(name: &str, texture: Option<usize>) -> ArtMesh {
         },
         shadow: ShadowRole::Cast,
         layer: 0,
+        transform: None,
     }
 }
 
@@ -65,6 +66,8 @@ pub(crate) fn art() -> Art {
             colour: None,
             atlas: Some(1),
         }),
+        animations: Vec::new(),
+        sun_rotation: None,
     }
 }
 

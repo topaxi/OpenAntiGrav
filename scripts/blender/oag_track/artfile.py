@@ -12,7 +12,7 @@ same `f32`.
 import json
 import struct
 
-from . import f32
+from . import f32, motionfile
 from .model import (
     BLENDS,
     SHADOW_ROLES,
@@ -113,8 +113,10 @@ def validate(art):
 
 
 def write_nodes(b, art, push):
-    """Appends the `oag/art/<n>` nodes to a glb under construction (`trackfile._Bin`)."""
+    """Appends the `oag/art/<n>` nodes to a glb under construction (`trackfile._Bin`)
+    and answers their node indices."""
     validate(art)
+    out = []
     for n, m in enumerate(art.meshes):
         attrs = {
             "POSITION": b.positions(m.positions),
@@ -137,7 +139,8 @@ def write_nodes(b, art, push):
             extras["oag_alpha_ref"] = m.alpha_ref
         if m.layer:
             extras["oag_layer"] = m.layer
-        push(f"{PREFIX}{n}", [{"attributes": attrs, "indices": indices, "mode": 4}], extras)
+        out.append(push(f"{PREFIX}{n}", [{"attributes": attrs, "indices": indices, "mode": 4}], extras))
+    return out
 
 
 def _vec(v):
@@ -259,8 +262,10 @@ def from_manifest(table, meshes):
 def read_node(g, node, float_kind):
     """An `ArtMesh` out of an `oag/art/<n>` node of a parsed glb (`trackfile._Glb`)."""
     name = node["name"]
-    if any(k in node for k in ("matrix", "translation", "rotation", "scale")):
-        raise ArtError(f"{name}: a node transform (bake it before export)")
+    try:
+        transform = motionfile.trs_of(node)
+    except motionfile.MotionError as e:
+        raise ArtError(str(e)) from e
     prims = g.doc["meshes"][node["mesh"]]["primitives"]
     if len(prims) != 1:
         raise ArtError(f"{name}: expected exactly one primitive")
@@ -280,4 +285,5 @@ def read_node(g, node, float_kind):
         shadow=e.get("oag_shadow", "both"),
         alpha_ref=e.get("oag_alpha_ref"),
         layer=e.get("oag_layer", 0),
+        transform=transform,
     )

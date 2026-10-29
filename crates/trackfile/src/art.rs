@@ -12,6 +12,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::Error;
 
+pub mod motion;
+
 /// How far a direction may be from unit length before it is refused.
 const UNIT_TOLERANCE: f32 = 1e-3;
 
@@ -36,6 +38,13 @@ pub struct Art {
     pub lights: Vec<Light>,
     /// Pure's sun flare along the sun's direction.
     pub lens_flare: Option<LensFlare>,
+    /// Keyframed motion of the meshes and the sun, played against the race
+    /// clock (decision 10). Visual only.
+    pub animations: Vec<motion::Animation>,
+    /// The sun node's rest rotation (`x, y, z, w`), present exactly when an
+    /// animation turns the sun: its direction at a time is [`Sun::direction`]
+    /// turned by the rotation from this to the node's rotation then.
+    pub sun_rotation: Option<[f32; 4]>,
 }
 
 /// One draw: a run of triangles with one material.
@@ -61,6 +70,10 @@ pub struct ArtMesh {
     /// The render layer it is drawn in: draws go by layer, then by file order.
     /// `0` unless authored; a disc export writes the `.vex` layer.
     pub layer: u32,
+    /// The node's rest pose, only on a mesh an animation moves: its vertices
+    /// are then in the node's own space. `None` is the identity (a static
+    /// mesh's vertices are always in world space).
+    pub transform: Option<motion::Trs>,
 }
 
 /// A mesh's material.
@@ -336,6 +349,8 @@ impl ArtTable {
             ambient: self.ambient,
             lights: self.light,
             lens_flare: self.lensflare,
+            animations: Vec::new(),
+            sun_rotation: None,
         })
     }
 }
@@ -543,6 +558,6 @@ impl Art {
                 ));
             }
         }
-        Ok(())
+        motion::validate(self)
     }
 }

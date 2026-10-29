@@ -28,6 +28,7 @@ const ELEMENT_ARRAY_BUFFER: u32 = 34963;
 const POINTS: u32 = 0;
 const TRIANGLES: u32 = 4;
 
+mod anim;
 mod art;
 
 const START: &str = "oag/start";
@@ -159,6 +160,7 @@ pub(crate) fn write(track: &Track) -> Result<Vec<u8>, Error> {
             node["extras"] = e;
         }
         nodes.push(node);
+        nodes.len() - 1
     };
 
     let s = &track.start;
@@ -342,15 +344,26 @@ pub(crate) fn write(track: &Track) -> Result<Vec<u8>, Error> {
         push(&name, prims, Some(extras));
     }
 
+    let mut animations = Vec::new();
     if let Some(art) = &track.art {
-        art::write(&mut bin, art, &mut push)?;
+        let art_nodes = art::write(&mut bin, art, &mut push)?;
+        let sun_node = art.sun_rotation.map(|_| push(anim::SUN, Vec::new(), None));
+        for (m, &at) in art.meshes.iter().zip(&art_nodes) {
+            if let Some(trs) = &m.transform {
+                anim::set_trs(&mut nodes[at], trs);
+            }
+        }
+        if let (Some(at), Some(q)) = (sun_node, art.sun_rotation) {
+            nodes[at]["rotation"] = json!(q);
+        }
+        animations = anim::write(&mut bin, art, &art_nodes, sun_node);
     }
 
     while !bin.data.len().is_multiple_of(4) {
         bin.data.push(0);
     }
     let count = nodes.len();
-    let doc = json!({
+    let mut doc = json!({
         "asset": { "version": "2.0", "generator": "oag-trackfile 1.0" },
         "scene": 0,
         "scenes": [{ "nodes": (0..count).collect::<Vec<_>>() }],
@@ -358,6 +371,9 @@ pub(crate) fn write(track: &Track) -> Result<Vec<u8>, Error> {
         "buffers": [{ "byteLength": bin.data.len() }],
         "bufferViews": bin.views, "accessors": bin.accessors,
     });
+    if !animations.is_empty() {
+        doc["animations"] = json!(animations);
+    }
     let mut text = serde_json::to_vec(&doc).map_err(|e| Error::Unwritable(e.to_string()))?;
     while !text.len().is_multiple_of(4) {
         text.push(b' ');
@@ -480,6 +496,8 @@ pub(crate) fn read(m: Parsed, bytes: &[u8]) -> Result<Loaded, Error> {
     let (mut speedup, mut weapon) = (Vec::new(), Vec::new());
     let mut nodes = Vec::new();
     let mut art_meshes: Vec<(usize, crate::art::ArtMesh)> = Vec::new();
+    let mut art_nodes: Vec<(usize, usize)> = Vec::new();
+    let mut sun: Option<(usize, [f32; 4])> = None;
     let mut other = 0usize;
 
     for node in &all {
@@ -518,6 +536,12 @@ pub(crate) fn read(m: Parsed, bytes: &[u8]) -> Result<Loaded, Error> {
                 .parse()
                 .map_err(|_| Error::Glb(format!("{name}: bad art mesh index")))?;
             art_meshes.push((i, art::read(i, node, blob)?));
+            art_nodes.push((node.index(), i));
+        } else if name == anim::SUN {
+            let trs = anim::trs_of(node).ok_or_else(|| Error::Transformed {
+                record: name.to_string(),
+            })?;
+            sun = Some((node.index(), trs.rotation));
         } else if name == SPEEDUP {
             speedup = read_pads(name, node, blob)?;
         } else if name == WEAPON {
@@ -572,11 +596,33 @@ pub(crate) fn read(m: Parsed, bytes: &[u8]) -> Result<Loaded, Error> {
     if art_meshes.iter().enumerate().any(|(n, (i, _))| n != *i) {
         return Err(Error::Glb("the art meshes are not numbered 0..n".into()));
     }
+    let animations = anim::read(&g.document, blob, |at| {
+        if sun.is_some_and(|(n, _)| n == at) {
+            return Some(crate::art::motion::Target::Sun);
+        }
+        art_nodes
+            .iter()
+            .find(|(n, _)| *n == at)
+            .map(|&(_, i)| crate::art::motion::Target::Mesh(i))
+    })?;
+    for (i, mesh) in &art_meshes {
+        let moved = animations
+            .iter()
+            .flat_map(|a| &a.channels)
+            .any(|c| c.target == crate::art::motion::Target::Mesh(*i));
+        if mesh.transform.is_some() && !moved {
+            return Err(Error::Transformed {
+                record: format!("{}{i}", art::PREFIX),
+            });
+        }
+    }
     let art = if m.art.is_some() || !art_meshes.is_empty() {
-        let art = m
+        let mut art = m
             .art
             .unwrap_or_default()
             .into_art(art_meshes.into_iter().map(|(_, a)| a).collect())?;
+        art.animations = animations;
+        art.sun_rotation = sun.map(|(_, q)| q);
         art.validate()?;
         Some(art)
     } else {

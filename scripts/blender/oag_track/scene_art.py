@@ -33,9 +33,9 @@ import re
 import shutil
 
 import bpy
-from mathutils import Vector
+from mathutils import Matrix, Vector
 
-from . import f32
+from . import f32, scene_motion
 from .artfile import ArtError
 from .model import Art, ArtMesh, DirectionalLight, LensFlare, Skybox, Sun, Texture
 
@@ -158,13 +158,16 @@ def _close(a, b):
     return all(abs(x - y) <= CACHE_TOLERANCE for x, y in zip(a, b))
 
 
-def art_meshes(obj, depsgraph, textures):
-    """One `ArtMesh` per material slot `obj` draws with. `textures` collects rows."""
+def art_meshes(obj, depsgraph, textures, local=False):
+    """One `ArtMesh` per material slot `obj` draws with. `textures` collects rows.
+
+    `local`: the vertices in the object's own space (a moving object, whose pose is the
+    node's), else in the world."""
     ev = obj.evaluated_get(depsgraph)
     me = ev.to_mesh()
     try:
         me.calc_loop_triangles()
-        m = obj.matrix_world
+        m = Matrix.Identity(4) if local else obj.matrix_world
         ident = _is_identity(m)
         normal_m = m.inverted_safe().transposed().to_3x3()
         n = len(me.vertices)
@@ -335,9 +338,36 @@ def collect(context, depsgraph):
     sun_obj = the_sun(scene)
     if not objs and sun_obj is None and not scene.oag_sky and not scene.oag_skybox:
         return None
-    textures, meshes = [], []
-    for o in objs:
-        meshes += art_meshes(o, depsgraph, textures)
+    keep = scene.frame_current
+    try:
+        moving = scene_motion.sample(scene, objs + ([sun_obj] if sun_obj is not None else []))
+        textures, meshes, groups = [], [], []
+        for o in objs:
+            pose = moving.get(o)
+            first = len(meshes)
+            meshes += art_meshes(o, depsgraph, textures, local=pose is not None)
+            if pose is None:
+                continue
+            times, trs = pose
+            chans = []
+            for n in range(first, len(meshes)):
+                meshes[n].transform = trs[0]
+                chans += scene_motion.channels(n, times, trs)
+            groups.append((scene_motion.anim_name(o), o.oag_loop, chans))
+        sun_rotation = None
+        sun_pose = moving.get(sun_obj) if sun_obj is not None else None
+        if sun_pose is not None:
+            chans = scene_motion.channels("sun", *sun_pose, paths=("rotation",))
+            if chans:
+                sun_rotation = sun_pose[1][0][1]
+                groups.append((scene_motion.anim_name(sun_obj), sun_obj.oag_loop, chans))
+        try:
+            animations = scene_motion.build(groups)
+        except ValueError as e:
+            raise ArtError(str(e)) from e
+        sun = None if sun_obj is None else _sun_record(sun_obj)
+    finally:
+        scene.frame_set(keep)
     flare = None
     if scene.oag_lensflare:
         atlas = None
@@ -376,10 +406,12 @@ def collect(context, depsgraph):
         textures=textures,
         sky=scene.oag_sky or None,
         skybox=skybox,
-        sun=None if sun_obj is None else _sun_record(sun_obj),
+        sun=sun,
         ambient=ambient(scene),
         lights=lights,
         lens_flare=flare,
+        animations=animations,
+        sun_rotation=sun_rotation,
     )
 
 
@@ -450,6 +482,7 @@ def populate(context, art, manifest_dir):
             path = os.path.join(manifest_dir, t.image)
             img = bpy.data.images.load(path, check_existing=True) if os.path.isfile(path) else bpy.data.images.new(t.image, 8, 8)
         images.append(img)
+    objs = []
     for n, a in enumerate(art.meshes):
         me = bpy.data.meshes.new(f"oag/art/{n}")
         tris = [tuple(a.indices[i : i + 3]) for i in range(0, len(a.indices), 3)]
@@ -505,6 +538,7 @@ def populate(context, art, manifest_dir):
         obj.oag_layer = a.layer
         obj.oag_lit = a.lit
         _link(scene, obj)
+        objs.append(obj)
     context.view_layer.update()
 
     def lamp(name, direction, colour, intensity):
@@ -522,9 +556,10 @@ def populate(context, art, manifest_dir):
         obj["oag_matrix_at"] = [obj.matrix_world[r][c] for r in range(4) for c in range(4)]
         return obj
 
+    sun_obj = None
     if art.sun is not None:
         s = art.sun
-        obj = lamp("oag/sun", s.direction, s.colour, s.intensity)
+        obj = sun_obj = lamp("oag/sun", s.direction, s.colour, s.intensity)
         obj.data.angle = math.radians(s.angular_diameter)
         obj.data.use_shadow = s.shadows
         obj["oag_angular_diameter"] = s.angular_diameter
@@ -556,3 +591,4 @@ def populate(context, art, manifest_dir):
         for key, v in (("colour", art.lens_flare.colour), ("direction", art.lens_flare.direction)):
             if v is not None:
                 scene[f"oag_lensflare_{key}"] = list(v)
+    scene_motion.apply(context, art, objs, sun_obj)

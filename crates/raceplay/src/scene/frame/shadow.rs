@@ -632,7 +632,7 @@ impl super::super::Scene {
     pub(crate) fn mapped_fit_for(&self, race: &Race, slot: usize) -> oag_render::shadow::map::Fit {
         mapped_fit(
             race.ship_model_matrix_of(slot),
-            mapped_light(&self.light, race.scenery_fx().sun()),
+            mapped_light(&self.light, race.scenery_fx().sun(self.anim_clock.get())),
         )
     }
 
@@ -644,7 +644,7 @@ impl super::super::Scene {
     ) -> oag_render::shadow::map::Fit {
         mapped_far_fit(
             race.ship_model_matrix_of(slot),
-            mapped_light(&self.light, race.scenery_fx().sun()),
+            mapped_light(&self.light, race.scenery_fx().sun(self.anim_clock.get())),
         )
     }
 
