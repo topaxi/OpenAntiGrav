@@ -25,6 +25,8 @@ pub struct Art {
     pub textures: Vec<TextureSource>,
     /// A host circuit's `.vex` entry whose authored `Skycube` is drawn, or none.
     pub sky: Option<String>,
+    /// The track's own sky, or none: never together with [`Self::sky`].
+    pub skybox: Option<Skybox>,
     /// The track's one real light.
     pub sun: Option<Sun>,
     /// The ambient light, linear RGB.
@@ -201,6 +203,78 @@ pub enum Light {
     },
 }
 
+/// A track's own sky (ADR-0076 decision 14): a camera-centred cube, each face
+/// one of the author's textures or the vertical gradient from `horizon` to
+/// `zenith`. At least one of the two forms is given; a face with no texture
+/// needs the gradient.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Skybox {
+    /// A texture row per face, in cubemap order `+X, -X, +Y (zenith), -Y
+    /// (nadir), +Z, -Z` (the GL cubemap face table HD's own sky reads), or
+    /// `None` for a face drawn as the gradient. All `None` when the file
+    /// gives only a gradient.
+    pub faces: [Option<usize>; 6],
+    /// The gradient's colour overhead, linear RGB.
+    pub zenith: Option<[f32; 3]>,
+    /// The gradient's colour at and below the horizon, linear RGB.
+    pub horizon: Option<[f32; 3]>,
+}
+
+impl Skybox {
+    /// Whether it carries the gradient (both colours).
+    #[must_use]
+    pub fn gradient(&self) -> Option<([f32; 3], [f32; 3])> {
+        self.zenith.zip(self.horizon)
+    }
+}
+
+/// The manifest's `[art.skybox]`: `faces` as texture rows with `-1` for none
+/// (TOML has no null), absent when no face has a texture.
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub(crate) struct SkyboxTable {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub faces: Option<[i64; 6]>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub zenith: Option<[f32; 3]>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub horizon: Option<[f32; 3]>,
+}
+
+impl SkyboxTable {
+    fn of(sky: &Skybox) -> Self {
+        Self {
+            faces: sky.faces.iter().any(Option::is_some).then(|| {
+                sky.faces
+                    .map(|f| f.map_or(-1, |i| i64::try_from(i).unwrap_or(i64::MAX)))
+            }),
+            zenith: sky.zenith,
+            horizon: sky.horizon,
+        }
+    }
+
+    fn into_skybox(self) -> Result<Skybox, Error> {
+        let mut faces = [None; 6];
+        if let Some(given) = self.faces {
+            for (i, v) in given.into_iter().enumerate() {
+                faces[i] = match v {
+                    -1 => None,
+                    v => Some(usize::try_from(v).map_err(|_| {
+                        range(
+                            &format!("art.skybox.faces[{i}]"),
+                            format!("{v} is not -1 or a texture row"),
+                        )
+                    })?),
+                };
+            }
+        }
+        Ok(Skybox {
+            faces,
+            zenith: self.zenith,
+            horizon: self.horizon,
+        })
+    }
+}
+
 /// Pure's sun flare. The ten-ring layout, the fade by angle and the occlusion
 /// probe are the renderer's own law.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
@@ -223,6 +297,8 @@ pub(crate) struct ArtTable {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sky: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skybox: Option<SkyboxTable>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ambient: Option<[f32; 3]>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sun: Option<Sun>,
@@ -240,6 +316,7 @@ impl ArtTable {
     pub(crate) fn of(art: &Art) -> Self {
         Self {
             sky: art.sky.clone(),
+            skybox: art.skybox.as_ref().map(SkyboxTable::of),
             ambient: art.ambient,
             sun: art.sun,
             lensflare: art.lens_flare,
@@ -249,16 +326,17 @@ impl ArtTable {
         }
     }
 
-    pub(crate) fn into_art(self, meshes: Vec<ArtMesh>) -> Art {
-        Art {
+    pub(crate) fn into_art(self, meshes: Vec<ArtMesh>) -> Result<Art, Error> {
+        Ok(Art {
             meshes,
             textures: self.texture,
             sky: self.sky,
+            skybox: self.skybox.map(SkyboxTable::into_skybox).transpose()?,
             sun: self.sun,
             ambient: self.ambient,
             lights: self.light,
             lens_flare: self.lensflare,
-        }
+        })
     }
 }
 
@@ -348,6 +426,40 @@ impl Art {
                 ))
             }
         };
+        if let Some(sky) = &self.skybox {
+            let what = "art.skybox";
+            if self.sky.is_some() {
+                return Err(range(
+                    what,
+                    "a track draws one sky: the host form (art.sky) or its own (art.skybox), not both"
+                        .into(),
+                ));
+            }
+            if sky.zenith.is_some() != sky.horizon.is_some() {
+                return Err(range(
+                    what,
+                    "the gradient needs both zenith and horizon".into(),
+                ));
+            }
+            if let Some((zenith, horizon)) = sky.gradient() {
+                finite(what, "gradient", zenith.iter().chain(&horizon).copied())?;
+                if zenith.iter().chain(&horizon).any(|&c| c < 0.0) {
+                    return Err(range(what, "a negative colour".into()));
+                }
+            }
+            for (i, face) in sky.faces.iter().enumerate() {
+                match face {
+                    Some(t) => texture(&format!("art.skybox.faces[{i}]"), *t)?,
+                    None if sky.gradient().is_none() => {
+                        return Err(range(
+                            &format!("art.skybox.faces[{i}]"),
+                            "a face with no texture needs the gradient (zenith and horizon)".into(),
+                        ));
+                    }
+                    None => {}
+                }
+            }
+        }
         for (n, m) in self.meshes.iter().enumerate() {
             let what = format!("art mesh {n} ({})", m.name);
             let v = m.positions.len();

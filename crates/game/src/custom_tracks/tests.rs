@@ -8,6 +8,7 @@ fn listing(title: &str, problem: Option<&str>) -> Listing {
         title: title.to_string(),
         author: None,
         host: None,
+        titles: Vec::new(),
         kind: Kind::Workshop,
         tags: Vec::new(),
         problem: problem.map(str::to_string),
@@ -408,12 +409,34 @@ fn trackfile_fixture(name: &str) -> PathBuf {
         .join(name)
 }
 
-fn launched_on(title: &'static oag_title::Title, track: &str) -> oag_raceplay::Options {
+fn launched_on(title: &'static oag_title::Title, track: &Path) -> oag_raceplay::Options {
     oag_raceplay::Options {
         source: format!("fixture:{}", title.name),
-        foreign_track: Some(trackfile_fixture(track)),
+        foreign_track: Some(track.to_path_buf()),
         ..oag_raceplay::Options::default()
     }
+}
+
+/// The Blender loop re-pointed at Pulse 03_Track's sky, so it pins the Pulse
+/// disc: written beside its glb and checker in a fresh directory under `dir`.
+fn pinned_loop(dir: &Path) -> PathBuf {
+    let text = std::fs::read_to_string(trackfile_fixture("blender_loop.track.toml")).unwrap();
+    let start = text.find("[art.skybox]").expect("the loop has its own sky");
+    let end = start + text[start..].find("\n\n").expect("a table after it");
+    let pinned = format!("{}{}", &text[..start], &text[end + 2..])
+        .replacen(
+            "[art]\n",
+            "[art]\nsky = 'Data\\Environments\\03_Track\\track.vex'\n",
+            1,
+        )
+        .replacen("glb = ", "host = \"wipeout-pulse\"\nglb = ", 1);
+    std::fs::create_dir_all(dir).unwrap();
+    for f in ["blender_loop.glb", "blender_checker.png"] {
+        std::fs::copy(trackfile_fixture(f), dir.join(f)).unwrap();
+    }
+    let path = dir.join("blender_loop.track.toml");
+    std::fs::write(&path, pinned).unwrap();
+    path
 }
 
 fn title_of(source: &str) -> Option<&'static oag_title::Title> {
@@ -435,28 +458,45 @@ fn a_pinned_track_launched_on_another_title_becomes_a_remix_on_its_hosts_disc() 
             disc(oag_pulse::TITLE),
         ]
     };
-    let mut options = launched_on(oag_hd::TITLE, "blender_loop.track.toml");
+    let dir = std::env::temp_dir().join(format!("oag-route-host-{}", std::process::id()));
+    let pinned = pinned_loop(&dir);
+    let mut options = launched_on(oag_hd::TITLE, &pinned);
     let line = route_to_host(&mut options, title_of, discs).unwrap();
     assert!(line.is_some());
     assert_eq!(options.source, "fixture:Wipeout Pulse");
     assert_eq!(options.craft_source.as_deref(), Some("fixture:Wipeout HD"));
 
-    let mut options = launched_on(oag_pulse::TITLE, "blender_loop.track.toml");
+    let mut options = launched_on(oag_pulse::TITLE, &pinned);
     assert_eq!(route_to_host(&mut options, title_of, discs), Ok(None));
     assert_eq!(options.source, "fixture:Wipeout Pulse");
     assert_eq!(options.craft_source, None);
 
-    let mut options = launched_on(oag_hd::TITLE, "blender_loop.track.toml");
+    let mut options = launched_on(oag_hd::TITLE, &pinned);
     let why = route_to_host(&mut options, title_of, || vec![disc(oag_hd::TITLE)]).unwrap_err();
     assert!(why.contains("Wipeout Pulse"), "{why}");
     assert_eq!(options.source, "fixture:Wipeout HD");
+    std::fs::remove_dir_all(&dir).ok();
 }
 
-/// A track that borrows nothing from a disc (the oval) runs on any title as it is.
+/// A track that borrows nothing from a disc (the Blender loop: its own checker
+/// and its own sky) runs on any title as it is.
 #[test]
 fn a_track_that_borrows_nothing_is_raced_on_the_source_it_was_launched_on() {
-    let mut options = launched_on(oag_hd::TITLE, "oval.track.toml");
+    let mut options = launched_on(oag_hd::TITLE, &trackfile_fixture("blender_loop.track.toml"));
     let asked = || -> Vec<crate::launcher::Candidate> { panic!("no disc is looked for") };
     assert_eq!(route_to_host(&mut options, title_of, asked), Ok(None));
     assert_eq!(options.source, "fixture:Wipeout HD");
+}
+
+/// A file whose `titles` leaves out the craft's title is not offered for it
+/// (ADR-0076 decision 13); one listing none is offered everywhere.
+#[test]
+fn a_file_is_offered_only_for_the_titles_it_lists() {
+    let mut l = listing("Hill", None);
+    assert_eq!(not_offered(&l, Some(oag_hd::TITLE)), None);
+    l.titles = vec!["wipeout-pulse".into()];
+    assert_eq!(not_offered(&l, Some(oag_pulse::TITLE)), None);
+    let why = not_offered(&l, Some(oag_hd::TITLE)).unwrap();
+    assert!(why.contains("Wipeout Pulse"), "{why}");
+    assert_eq!(not_offered(&l, None), None);
 }

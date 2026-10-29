@@ -31,6 +31,8 @@ pub mod colour;
 pub struct Extras {
     /// The circuit `.vex` entry whose `Skycube` is the sky.
     pub sky: Option<String>,
+    /// The track's own sky (`[art.skybox]`), built: [`own_sky`].
+    pub own_sky: Option<Model>,
     /// Pure's sun flare along the track's sun.
     pub lens_flare: Option<oag_fx::lens_flare::Setup>,
     /// Towards the sun, when the track's sun may cast: the `mapped` shadow
@@ -418,7 +420,8 @@ pub fn lens_flare(
 /// Everything of `art` beside the track model, reported part by part.
 #[must_use]
 pub fn extras(art: &Art, textures: &TextureSlots, report: &mut Vec<String>) -> Extras {
-    if art.sky.is_none() {
+    let own_sky = own_sky(art, textures, report);
+    if art.sky.is_none() && own_sky.is_none() {
         report.push("art: no sky named; the sky stays black".into());
     }
     let sun_shadow = art.sun.filter(|s| s.shadows).map(|s| s.direction);
@@ -448,10 +451,56 @@ pub fn extras(art: &Art, textures: &TextureSlots, report: &mut Vec<String>) -> E
     });
     Extras {
         sky: art.sky.clone(),
+        own_sky,
         lens_flare: lens_flare(art, textures, report),
         sun_shadow,
         hull,
     }
+}
+
+/// The track's own sky (`[art.skybox]`, ADR-0076 decision 14) on the
+/// camera-centred cube HD's `sky.gtf` draws on (`mesh::sky_cube::own`): each
+/// face its texture row's picture, or the gradient from the file's linear
+/// colours converted the way a vertex colour is ([`colour::vertex`]). `None`,
+/// with the reason in `report`, when the file gives none, or when a face's
+/// texture did not resolve and there is no gradient to stand in for it.
+pub fn own_sky(art: &Art, textures: &TextureSlots, report: &mut Vec<String>) -> Option<Model> {
+    let sky = art.skybox?;
+    let gradient = sky.gradient().map(|(zenith, horizon)| {
+        let display = |c: [f32; 3]| {
+            let v = colour::vertex([c[0], c[1], c[2], 1.0]);
+            [v[0], v[1], v[2]]
+        };
+        (display(zenith), display(horizon))
+    });
+    let mut missing = 0usize;
+    let faces: [Option<std::sync::Arc<ModelTexture>>; 6] = std::array::from_fn(|i| {
+        let picture = sky.faces[i].and_then(|t| textures.get(t).cloned().flatten());
+        missing += usize::from(sky.faces[i].is_some() && picture.is_none());
+        picture
+    });
+    if missing > 0 && gradient.is_none() {
+        report.push(format!(
+            "art skybox: {missing} face texture(s) did not resolve and there is no gradient; \
+             the sky stays black"
+        ));
+        return None;
+    }
+    let pictures = faces.iter().filter(|f| f.is_some()).count();
+    report.push(format!(
+        "art skybox: the track's own sky, {pictures} face picture(s){}{} on a camera-centred cube",
+        if gradient.is_some() {
+            format!(", {} face(s) of zenith-to-horizon gradient", 6 - pictures)
+        } else {
+            String::new()
+        },
+        if missing > 0 {
+            format!(" ({missing} face texture(s) did not resolve, drawn as the gradient)")
+        } else {
+            String::new()
+        }
+    ));
+    Some(mesh::sky_cube::own("art skybox", faces, gradient))
 }
 
 /// The GE light list Pulse and Pure on the PSP light a hull with

@@ -268,6 +268,15 @@ class OAG_PT_art(Panel):
         sc = context.scene
         layout.prop(sc, "oag_sun")
         layout.prop(sc, "oag_sky")
+        layout.prop(sc, "oag_skybox")
+        if sc.oag_skybox:
+            box = layout.box()
+            box.prop(sc, "oag_sky_gradient")
+            if sc.oag_sky_gradient:
+                box.prop(sc, "oag_sky_zenith")
+                box.prop(sc, "oag_sky_horizon")
+            for i in range(6):
+                box.prop(sc, f"oag_sky_face_{i}")
         layout.prop(sc, "oag_lensflare")
         if sc.oag_lensflare:
             layout.prop(sc, "oag_lensflare_atlas")
@@ -342,6 +351,25 @@ def _props():
         poll=lambda self, o: o.type == "LIGHT" and o.data.type == "SUN",
     )
     sc.oag_sky = StringProperty(name="Sky", description="A host circuit's .vex entry whose Skycube is drawn")
+    sc.oag_skybox = BoolProperty(
+        name="Own sky",
+        description="The track's own sky: a cube of the author's images and/or a zenith-to-horizon gradient "
+        "(never together with a host Sky)",
+        default=False,
+    )
+    sc.oag_sky_gradient = BoolProperty(name="Gradient", default=True)
+    sc.oag_sky_zenith = FloatVectorProperty(
+        name="Zenith", subtype="COLOR", size=3, min=0.0, default=(0.18, 0.36, 0.75)
+    )
+    sc.oag_sky_horizon = FloatVectorProperty(
+        name="Horizon", subtype="COLOR", size=3, min=0.0, default=(0.75, 0.82, 0.9)
+    )
+    for i, face in enumerate(("+X", "-X", "+Y (zenith)", "-Y (nadir)", "+Z", "-Z")):
+        setattr(
+            sc,
+            f"oag_sky_face_{i}",
+            PointerProperty(name=f"Face {face}", type=bpy.types.Image, description="Empty draws the gradient"),
+        )
     sc.oag_lensflare = BoolProperty(name="Lens flare", default=False)
     sc.oag_lensflare_atlas = PointerProperty(name="Flare atlas", type=bpy.types.Image)
 
@@ -355,6 +383,11 @@ def _unprops():
         "oag_track_notes",
         "oag_sun",
         "oag_sky",
+        "oag_skybox",
+        "oag_sky_gradient",
+        "oag_sky_zenith",
+        "oag_sky_horizon",
+        *(f"oag_sky_face_{i}" for i in range(6)),
         "oag_lensflare",
         "oag_lensflare_atlas",
     ):

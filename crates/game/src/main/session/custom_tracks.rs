@@ -68,9 +68,19 @@ impl Session {
             if title == oag_game::custom_tracks::CUSTOM {
             let strings = oag_ui::strings::project_table(self.settings.language.as_deref());
             let mut choices = self.custom_tracks.choices(&strings);
+            // The title whose craft would race it: CRAFT TITLE's, or with none
+            // picked the file's host (its craft follow the track source).
+            let craft = self.craft_title();
             for choice in &mut choices {
-                if choice.unavailable.is_none()
-                    && let Err(why) = self.custom_track_host(&choice.value)
+                if choice.unavailable.is_some() {
+                    continue;
+                }
+                if let Err(why) = self.custom_track_host(&choice.value) {
+                    choice.unavailable = Some(why);
+                } else if let Some(why) = self
+                    .custom_tracks
+                    .listing(&choice.value)
+                    .and_then(|l| oag_game::custom_tracks::not_offered(l, craft))
                 {
                     choice.unavailable = Some(why);
                 }

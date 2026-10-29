@@ -5,7 +5,6 @@ version = "1.0.0"
 [track]
 id = "blender-loop"
 title = "Blender Loop"
-host = "wipeout-pulse"
 glb = "blender_loop.glb"
 notes = ["authored headless in Blender with the OAG add-on: 8 control points (chosen, not measured)"]
 
@@ -29,8 +28,12 @@ weapon_pads = 1
 art_meshes = 1
 
 [art]
-sky = "Data\\Environments\\03_Track\\track.vex"
 ambient = [0.1, 0.12, 0.15]
+
+[art.skybox]
+faces = [-1, -1, 0, -1, -1, -1]
+zenith = [0.1, 0.25, 0.6]
+horizon = [0.7, 0.75, 0.8]
 
 [art.sun]
 direction = [0.0, 1.0, -0.0]

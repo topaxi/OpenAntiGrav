@@ -149,7 +149,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         #[cfg(feature = "view")]
         mut drawn,
         #[cfg(feature = "view")]
-            art: foreign_art,
+            art: mut foreign_art,
     } = track_inputs::resolve(options, &mut archives, title, craft_title, &mut report)?;
     let read = |archives: &mut oag_assets::Archives, name: &str| -> Result<Vec<u8>> {
         archives
@@ -580,6 +580,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
         } else {
             hd_sky_model(&mut archives, &track, title.race, options.mode, &mut report)
         }
+    } else if let Some(sky) = foreign_art.own_sky.take() {
+        Some(sky)
     } else if let Some(entry) = &foreign_art.sky {
         track_inputs::foreign_sky(&mut archives, entry, &mut report)
     } else if !vex_geometry {

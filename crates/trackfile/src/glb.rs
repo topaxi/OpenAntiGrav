@@ -576,7 +576,7 @@ pub(crate) fn read(m: Parsed, bytes: &[u8]) -> Result<Loaded, Error> {
         let art = m
             .art
             .unwrap_or_default()
-            .into_art(art_meshes.into_iter().map(|(_, a)| a).collect());
+            .into_art(art_meshes.into_iter().map(|(_, a)| a).collect())?;
         art.validate()?;
         Some(art)
     } else {

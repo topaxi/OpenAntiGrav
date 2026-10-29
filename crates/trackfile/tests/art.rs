@@ -46,6 +46,7 @@ pub(crate) fn art() -> Art {
             },
         ],
         sky: Some(r"Data\Tracks\01_Track.vex".into()),
+        skybox: None,
         sun: Some(Sun {
             direction: [0.0, 1.0, 0.0],
             colour: [1.0, 0.9, 0.7],
@@ -192,4 +193,44 @@ fn absent_layer_and_alpha_ref_read_as_zero_and_none() {
         (0x4a00_0000, Some(0))
     );
     assert_eq!((meshes[1].layer, meshes[1].material.alpha_ref), (0, None));
+}
+
+/// The own sky (ADR-0076 decision 14) round-trips, and every way it can be
+/// wrong is refused by name: beside a host sky, half a gradient, a face with
+/// neither a texture nor the gradient, a face row past the textures.
+#[test]
+fn an_own_skybox_round_trips_and_is_refused_where_it_cannot_draw() {
+    use oag_trackfile::art::Skybox;
+    let mut a = art();
+    a.sky = None;
+    a.skybox = Some(Skybox {
+        faces: [None, None, Some(0), None, None, None],
+        zenith: Some([0.1, 0.2, 0.6]),
+        horizon: Some([0.7, 0.8, 0.9]),
+    });
+    let track = with_art(a.clone());
+    assert_eq!(round(&track), track);
+    let gradient_only = Skybox {
+        faces: [None; 6],
+        ..a.skybox.unwrap()
+    };
+    let mut g = a.clone();
+    g.skybox = Some(gradient_only);
+    assert_eq!(round(&with_art(g.clone())), with_art(g));
+
+    let refused = |edit: &dyn Fn(&mut Art)| {
+        let mut bad = a.clone();
+        edit(&mut bad);
+        assert!(
+            matches!(to_parts(&with_art(bad), "t.glb"), Err(Error::Range { .. })),
+            "accepted"
+        );
+    };
+    refused(&|b| b.sky = Some(r"Data\Tracks\01_Track.vex".into()));
+    refused(&|b| b.skybox.as_mut().unwrap().zenith = None);
+    refused(&|b| {
+        let s = b.skybox.as_mut().unwrap();
+        (s.zenith, s.horizon) = (None, None);
+    });
+    refused(&|b| b.skybox.as_mut().unwrap().faces[0] = Some(9));
 }

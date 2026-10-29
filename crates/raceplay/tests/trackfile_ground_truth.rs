@@ -465,7 +465,7 @@ fn a_lone_craft_gets_round_the_committed_fixture() {
 /// a loop authored in Blender from eight control points, raced as the committed
 /// file. Drop the add-on's spline, start or ribbon and this craft does not get round;
 /// drop its art and the report lines below go missing: the generated checker
-/// draws, 03_Track's sky resolves on the disc, the Sun lamp lights the hulls and
+/// draws, its own sky (gradient, checker overhead) is built, the Sun lamp lights the hulls and
 /// the shadows, and the flare takes the checker as its atlas.
 #[test]
 #[ignore = "needs a Pulse image"]
@@ -476,6 +476,7 @@ fn a_lone_craft_gets_round_a_loop_authored_in_blender() {
         "Blender Loop",
         &[
             "art: 1 mesh(es), 2 triangle(s), 1 texture(s)\n",
+            "art skybox: the track's own sky, 1 face picture(s), 5 face(s) of zenith-to-horizon gradient",
             "art: the sun (0.000, 1.000, -0.000) sets the mapped shadows' direction",
             "art hull lights: the PSP rig from the ambient, the sun and 1 further directional(s)",
             "art lens flare: along (0.000, 1.000, -0.000), the track's sun, atlas 64x64",
@@ -494,14 +495,15 @@ fn a_lone_craft_gets_round_the_oval_re_exported_from_blender() {
     );
 }
 
-/// Which title a track file loads on (ADR-0076 decision 13). The Blender loop
-/// borrows 03_Track's sky from the Pulse disc, so it pins that disc: with HD's
-/// disc as the track source it is refused by name rather than drawn without
-/// it, and as a remix (Pulse track source, HD craft, what the game's launches
-/// arrange) it loads with nothing missed. The oval borrows nothing and loads
-/// on HD's own disc; offered on Pulse alone (`titles`), it is refused there.
-/// Drop the host check, the titles filter, or route the track side through
-/// the craft's disc, and one half fails.
+/// Which title a track file loads on (ADR-0076 decisions 13 and 14). The Blender
+/// loop draws only its own art (a checker and its own sky), so it loads with its
+/// art on HD's own disc. Re-pointed at Pulse 03_Track's sky, it pins the Pulse
+/// disc: with HD's as the track source it is refused by name rather than drawn
+/// without it, and as a remix (Pulse track source, HD craft, what the game's
+/// launches arrange) it loads with nothing missed. The oval, offered on Pulse
+/// alone (`titles`), is refused on HD. Drop the host check, the titles filter,
+/// the own sky, or route the track side through the craft's disc, and one part
+/// fails.
 #[test]
 #[ignore = "needs a Pulse and an HD image"]
 fn a_track_file_loads_on_the_disc_it_borrows_from_and_where_its_author_offers_it() {
@@ -511,18 +513,68 @@ fn a_track_file_loads_on_the_disc_it_borrows_from_and_where_its_author_offers_it
     ) else {
         return;
     };
-    let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../trackfile/tests/fixtures/blender_loop.track.toml");
-    let options = |source: &std::path::Path, craft: Option<&std::path::Path>| race::Options {
+    let fixtures =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../trackfile/tests/fixtures");
+    let options = |source: &std::path::Path,
+                   craft: Option<&std::path::Path>,
+                   track: &std::path::Path| race::Options {
         source: source.display().to_string(),
         craft_source: craft.map(|c| c.display().to_string()),
         class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
-        foreign_track: Some(manifest.clone()),
+        foreign_track: Some(track.to_path_buf()),
         ..race::Options::default()
     };
-    let Err(refused) = race::load(&options(&hd, None)) else {
-        panic!("a Pulse track on HD's own source is refused");
+    let no_art_miss = |report: &str| {
+        // The craft side (HD's engine flares) reports on its own lines; the
+        // track's art is what the track source must answer.
+        for line in report.lines().filter(|l| l.starts_with("art")) {
+            for miss in [
+                "draws nothing",
+                "does not read",
+                "did not resolve",
+                "none drawn",
+                "stays black",
+            ] {
+                assert!(!line.contains(miss), "art line has {miss:?}: {line}");
+            }
+        }
+    };
+
+    // Own art only: natively on HD, art and own sky drawn.
+    let own = fixtures.join("blender_loop.track.toml");
+    let loaded = race::load(&options(&hd, None, &own))
+        .unwrap_or_else(|e| panic!("own art loads on HD natively: {e:#}"));
+    let report = loaded.report.join("\n");
+    for needle in [
+        "racing on Wipeout HD",
+        "art: 1 mesh(es), 2 triangle(s), 1 texture(s)\n",
+        "art skybox: the track's own sky, 1 face picture(s), 5 face(s) of zenith-to-horizon gradient",
+    ] {
+        assert!(
+            report.contains(needle),
+            "report lacks {needle:?}:\n{report}"
+        );
+    }
+    no_art_miss(&report);
+
+    // The same loop pinned to Pulse by a host sky.
+    let dir = std::env::temp_dir().join(format!("oag-trackfile-host-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut pinned = oag_trackfile::read(&own).unwrap().track;
+    let art = pinned.art.as_mut().unwrap();
+    art.skybox = None;
+    art.sky = Some(r"Data\Environments\03_Track\track.vex".to_string());
+    pinned.host = Some("wipeout-pulse".to_string());
+    let pinned_path = dir.join("pinned.track.toml");
+    oag_trackfile::write(&pinned, &pinned_path).unwrap();
+    std::fs::copy(
+        fixtures.join("blender_checker.png"),
+        dir.join("blender_checker.png"),
+    )
+    .unwrap();
+    let Err(refused) = race::load(&options(&hd, None, &pinned_path)) else {
+        panic!("a Pulse-pinned track with HD's disc as the track source is refused");
     };
     let why = format!("{refused:#}");
     for needle in [
@@ -532,42 +584,21 @@ fn a_track_file_loads_on_the_disc_it_borrows_from_and_where_its_author_offers_it
     ] {
         assert!(why.contains(needle), "refusal lacks {needle:?}: {why}");
     }
-    let loaded = race::load(&options(&pulse, Some(&hd))).expect("the remix loads");
+    let loaded = race::load(&options(&pulse, Some(&hd), &pinned_path)).expect("the remix loads");
     let report = loaded.report.join("\n");
-    assert!(
-        report.contains(
-            "track file borrows from wipeout-pulse's disc; the track source is Wipeout Pulse"
-        ),
-        "{report}"
-    );
-    assert!(
-        report.contains(r"art sky: Data\Environments\03_Track\track.vex's Skycube"),
-        "the Pulse sky resolves on the track source:\n{report}"
-    );
-    // The craft side (HD's engine flares) reports on its own lines; the track's
-    // art is what the track source must answer.
-    for line in report.lines().filter(|l| l.starts_with("art")) {
-        for miss in [
-            "draws nothing",
-            "does not read",
-            "did not resolve",
-            "none drawn",
-        ] {
-            assert!(!line.contains(miss), "art line has {miss:?}: {line}");
-        }
+    for needle in [
+        "track file borrows from wipeout-pulse's disc; the track source is Wipeout Pulse",
+        r"art sky: Data\Environments\03_Track\track.vex's Skycube",
+    ] {
+        assert!(
+            report.contains(needle),
+            "report lacks {needle:?}:\n{report}"
+        );
     }
+    no_art_miss(&report);
     assert_eq!(loaded.setup.foreign.as_deref(), Some("blender-loop"));
 
-    let fixtures = manifest.parent().unwrap().to_path_buf();
-    let oval = |track: std::path::PathBuf| race::Options {
-        foreign_track: Some(track),
-        ..options(&hd, None)
-    };
-    let loaded = race::load(&oval(fixtures.join("oval.track.toml")))
-        .unwrap_or_else(|e| panic!("a track that borrows nothing loads on HD: {e:#}"));
-    assert_eq!(loaded.setup.foreign.as_deref(), Some("fixture-octagon"));
-    let dir = std::env::temp_dir().join(format!("oag-trackfile-titles-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    // A filter: the oval offered on Pulse alone is refused on HD.
     let text = std::fs::read_to_string(fixtures.join("oval.track.toml")).unwrap();
     let offered = text.replacen(
         "glb = \"oval.glb\"",
@@ -577,11 +608,12 @@ fn a_track_file_loads_on_the_disc_it_borrows_from_and_where_its_author_offers_it
     assert_ne!(offered, text);
     std::fs::write(dir.join("oval.track.toml"), offered).unwrap();
     std::fs::copy(fixtures.join("oval.glb"), dir.join("oval.glb")).unwrap();
-    let Err(refused) = race::load(&oval(dir.join("oval.track.toml"))) else {
+    let refused = race::load(&options(&hd, None, &dir.join("oval.track.toml")));
+    std::fs::remove_dir_all(&dir).ok();
+    let Err(refused) = refused else {
         panic!("a track offered on Pulse alone is refused on HD");
     };
     let why = format!("{refused:#}");
-    std::fs::remove_dir_all(&dir).ok();
     assert!(
         why.contains("offered on Wipeout Pulse") && why.contains("not on Wipeout HD"),
         "{why}"

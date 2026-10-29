@@ -37,7 +37,7 @@ from mathutils import Vector
 
 from . import f32
 from .artfile import ArtError
-from .model import Art, ArtMesh, DirectionalLight, LensFlare, Sun, Texture
+from .model import Art, ArtMesh, DirectionalLight, LensFlare, Skybox, Sun, Texture
 
 CACHE_TOLERANCE = 1e-5
 HOST_ENTRY, HOST_NAME = "oag_host_entry", "oag_host_name"
@@ -333,7 +333,7 @@ def collect(context, depsgraph):
     scene = context.scene
     objs = sorted((o for o in scene.objects if is_art(o)), key=lambda o: (o.get("oag_art_index", 1 << 30), _natural(o.name)))
     sun_obj = the_sun(scene)
-    if not objs and sun_obj is None and not scene.oag_sky:
+    if not objs and sun_obj is None and not scene.oag_sky and not scene.oag_skybox:
         return None
     textures, meshes = [], []
     for o in objs:
@@ -348,6 +348,24 @@ def collect(context, depsgraph):
             atlas = textures.index(row)
         over = {k: scene.get(f"oag_lensflare_{k}") for k in ("colour", "direction")}
         flare = LensFlare(atlas, *(None if v is None else tuple(float(c) for c in v) for v in over.values()))
+    skybox = None
+    if scene.oag_skybox:
+        faces = []
+        for i in range(6):
+            image = getattr(scene, f"oag_sky_face_{i}")
+            if image is None:
+                faces.append(None)
+                continue
+            row = texture_of(image)
+            if row not in textures:
+                textures.append(row)
+            faces.append(textures.index(row))
+        gradient = scene.oag_sky_gradient
+        skybox = Skybox(
+            tuple(faces),
+            _r3(tuple(scene.oag_sky_zenith)) if gradient else None,
+            _r3(tuple(scene.oag_sky_horizon)) if gradient else None,
+        )
     lights = []
     for o in sun_lamps(scene):
         if o is sun_obj:
@@ -357,6 +375,7 @@ def collect(context, depsgraph):
         meshes=meshes,
         textures=textures,
         sky=scene.oag_sky or None,
+        skybox=skybox,
         sun=None if sun_obj is None else _sun_record(sun_obj),
         ambient=ambient(scene),
         lights=lights,
@@ -521,6 +540,15 @@ def populate(context, art, manifest_dir):
         bg.inputs[1].default_value = 1.0
         w["oag_ambient"] = list(art.ambient)
     scene.oag_sky = art.sky or ""
+    scene.oag_skybox = art.skybox is not None
+    if art.skybox is not None:
+        sb = art.skybox
+        for i, f in enumerate(sb.faces):
+            setattr(scene, f"oag_sky_face_{i}", None if f is None else images[f])
+        scene.oag_sky_gradient = sb.zenith is not None
+        if sb.zenith is not None:
+            scene.oag_sky_zenith = sb.zenith
+            scene.oag_sky_horizon = sb.horizon
     if art.lens_flare is not None:
         scene.oag_lensflare = True
         if art.lens_flare.atlas is not None:

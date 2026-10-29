@@ -203,6 +203,30 @@ type = "integer"
 min = 0
 optional = true
 
+# The track's own sky (ADR-0076 decision 14), never together with `sky`: a
+# camera-centred cube whose faces are texture rows (order +X, -X, +Y zenith,
+# -Y nadir, +Z, -Z; -1 a face drawn as the gradient) and/or a gradient from
+# `horizon` (eye level and below) to `zenith` (overhead), linear RGB. The
+# reader checks what this cannot: one of the two forms is given, both colours
+# come together, and a -1 face has the gradient.
+[types.skybox]
+type = "table"
+
+[types.skybox.faces]
+type = "array"
+itemtype = "integer"
+minlength = 6
+maxlength = 6
+optional = true
+
+[types.skybox.zenith]
+type = "types.vec3"
+optional = true
+
+[types.skybox.horizon]
+type = "types.vec3"
+optional = true
+
 # A texture row is exactly one of the two: the author's own picture beside the
 # manifest, or a host title's circuit texture named by entry and node name.
 [types.image-texture]
@@ -239,6 +263,10 @@ type = "table"
 [types.art.sky]
 type = "string"
 minlength = 1
+optional = true
+
+[types.art.skybox]
+type = "types.skybox"
 optional = true
 
 # Linear RGB.

@@ -288,7 +288,8 @@ file whose art borrows from a disc (`track.host`) loads its track side (collisio
 from a disc of that title, never a guest standing in for it, and its craft from the **CRAFT TITLE** row's
 source (an unpicked CRAFT TITLE flies the host's own craft); a file whose host this machine has no disc of
 is listed dimmed with "borrows from the <title> disc, which this machine does not have" ([ADR-0076](adr/0076-a-track-file-carries-its-art-as-an-optional-section.md)
-decision 13). A track file that borrows nothing, and a Workshop track, name no host and is flown on the CRAFT TITLE row's source, ship and
+decision 13). A file whose `track.titles` leaves out the craft's title is listed dimmed, "offered on
+<titles> only". A track file that borrows nothing, and a Workshop track, name no host and is flown on the CRAFT TITLE row's source, ship and
 physics, exactly as `--ballisticng-track` flies it on `--craft-source`; RACEBOX is unchanged.
 
 - **Where it looks**: `oag_source::tracks::all_in`, the lister `--ballisticng-track` resolves names with:

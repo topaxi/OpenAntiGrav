@@ -171,6 +171,11 @@ reason to author visibility by hand.
       `oag_trackfile::art::Art::borrows_from_a_disc`), refused by name when missing then or empty;
       optional otherwise. The disc exporter writes its source's title. The loader refuses a value
       naming no title it knows.
+    - **Recorded once per file, in `[track]`, not on each host reference**: a race opens exactly
+      one track source, so every host texture and the sky must resolve from the same disc; a
+      per-reference title could name two discs no race can hold at once, and would repeat one
+      value on every row. `[track]` rather than `[art]` because the launch reads it to pick the
+      track source before anything draws, beside the other per-track facts (`id`, `titles`).
     - **A pinned track loads only with its host's disc as the track source.** On another title it
       runs as a Race Remix: `Options::source` (collision, environment, host textures, sky) is a
       disc of the host title, never a guest standing in for it (2048 for HD), and `craft_source`
@@ -182,9 +187,28 @@ reason to author visibility by hand.
       loader (`oag_raceplay::foreign::check_host`) refuses it by name, naming both titles.
     - **`[track] titles`**, optional, lists the titles the author offers the track on; absent is
       every title. The title it is checked against is the **craft's** (the game the player is in),
-      chosen, not measured; `oag_raceplay::foreign::check_titles` refuses the rest by name.
+      chosen, not measured; `oag_raceplay::foreign::check_titles` refuses the rest by name, and
+      RACE REMIX's CUSTOM lists such a file dimmed, "offered on <titles> only".
     - **`Track::host` is `None`** for a track that borrows nothing, which includes every BallisticNG
       Workshop track mapped from its `.wtrk`.
+
+14. **A track may carry its own sky** (maintainer, 2026-10-29), so a track with only its own art
+    is complete on every title. `[art.skybox]`, never together with the host form `[art] sky`:
+    - `faces`, six texture rows in the GL cubemap order HD's `sky.gtf` uses (`+X, -X, +Y` zenith,
+      `-Y` nadir, `+Z, -Z`), `-1` for a face drawn as the gradient. Rows are ordinary
+      `[[art.texture]]` rows, so an own face is a PNG beside the manifest; a host row would pin
+      the disc like any host texture. Images inside the glb are not a texture form in 1.x.
+    - `zenith` and `horizon`, linear RGB, both or neither: the colour overhead fading to the
+      horizon's at eye level, by elevation (the sine of the view's angle above the horizon), and
+      the horizon's below it. Chosen, not measured.
+    - At least one of the two forms; a face with no texture needs the gradient. The reader refuses
+      the rest by name.
+    - Drawn on the camera-centred cube HD's own sky draws on (`oag_mesh::mesh::sky_cube::own`, the
+      same builder as `build` for a `.gtf`), unlit, no rotation and no glow mask. A gradient face
+      is an 8x8 grid so the per-vertex colour shows no crease at the cube's corners (chosen).
+    - The Blender add-on writes it from the Art panel's **Own sky**: a gradient's two colours and
+      one image per face. The committed `blender_loop` fixture carries one (gradient, its
+      generated checker overhead), borrows nothing, and loads natively on HD with its art.
 
 ## Consequences
 

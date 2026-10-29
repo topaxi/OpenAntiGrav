@@ -62,8 +62,8 @@ fn a_loop_built_in_blender_reads_with_every_record_the_race_needs() {
     assert!(l.unread.is_empty(), "{:?}", l.unread);
     let t = &l.track;
     assert_eq!(t.id, "blender-loop");
-    // Its art borrows 03_Track's sky from the Pulse disc.
-    assert_eq!(t.host.as_deref(), Some("wipeout-pulse"));
+    // Its art is all its own (the checker, its own sky), so it names no host.
+    assert_eq!(t.host, None);
     let path = &t.ai.paths[0];
     assert_eq!(path.points.len(), 64);
     assert_eq!((path.entry, path.exit), (Some(0), Some(0)));
@@ -167,9 +167,15 @@ fn the_art_authored_in_blender_reads_back_as_authored() {
     };
     assert!((direction[2] + 1.0).abs() < 1e-6, "{direction:?}");
     assert_eq!((*colour, *intensity), ([0.2, 0.25, 0.4], 0.5));
+    assert_eq!(art.sky, None);
+    // Its own sky: the gradient, with the checker overhead (face 2, +Y).
     assert_eq!(
-        art.sky.as_deref(),
-        Some(r"Data\Environments\03_Track\track.vex")
+        art.skybox,
+        Some(oag_trackfile::art::Skybox {
+            faces: [None, None, Some(0), None, None, None],
+            zenith: Some([0.1, 0.25, 0.6]),
+            horizon: Some([0.7, 0.75, 0.8]),
+        })
     );
     assert_eq!(art.lens_flare.and_then(|f| f.atlas), Some(0));
 
