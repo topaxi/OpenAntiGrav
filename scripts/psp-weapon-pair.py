@@ -67,6 +67,7 @@ BITS = {
     "bomb": 0x0100,
     "backward": 0x0100,
     "quake": 0x0008,
+    "plasma": 0x0004,
     "repulser": 0x10000,
 }
 
