@@ -187,6 +187,30 @@ mod tests {
         a.iter().zip(&b).all(|(x, y)| (x - y).abs() < 1e-5)
     }
 
+    /// A node a channel starts reads the clock since the channel fired (zero before it has),
+    /// and a node no channel starts reads the world clock.
+    #[test]
+    fn a_channel_started_node_reads_the_time_since_its_channel_fired() {
+        let node = |on| Keyed {
+            translation: [0.0; 3],
+            rotation: [0.0, 0.0, 0.0, 1.0],
+            scale: [1.0; 3],
+            translation_keys: Some(track(&[0.0, 2.0], &[[0.0; 3], [10.0, 0.0, 0.0]], false)),
+            rotation_keys: None,
+            scale_keys: None,
+            on,
+        };
+        let fired_at = |channel: u32| (channel == 7).then_some(10.0);
+        assert_eq!(node(None).clock(11.0, &fired_at), 11.0);
+        assert_eq!(node(Some(7)).clock(11.0, &fired_at), 1.0);
+        assert_eq!(node(Some(7)).clock(9.0, &fired_at), 0.0, "before the fire");
+        assert_eq!(
+            node(Some(8)).clock(11.0, &fired_at),
+            0.0,
+            "its channel never fired"
+        );
+    }
+
     /// glTF's `T * R * S` applied to a column vector is this matrix applied to
     /// a row vector: a point one unit along +X, scaled by 2, turned 90 degrees
     /// about +Y (to -Z) and moved by the translation halfway between its keys.
@@ -200,6 +224,7 @@ mod tests {
             translation_keys: Some(track(&[0.0, 2.0], &[[0.0; 3], [10.0, 4.0, 0.0]], false)),
             rotation_keys: None,
             scale_keys: None,
+            on: None,
         };
         let m = node.sample(1.0);
         assert!(near(point(&m, [1.0, 0.0, 0.0]), [5.0, 2.0, -2.0]), "{m:?}");
