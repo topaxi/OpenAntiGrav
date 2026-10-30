@@ -284,6 +284,19 @@ impl Race {
                 impact.struck.map(usize::from),
                 orientations_before[slot],
             );
+            // A Pulse Plasma craft hit detonates twice in the same tick: the
+            // bolt's own blast above, and one at the struck craft.
+            #[cfg(feature = "view")]
+            if let Some(at) =
+                self.plasma_craft_hit_blast_point(impact.kind, impact.struck.map(usize::from))
+            {
+                self.note_blast(
+                    impact.kind,
+                    at,
+                    impact.struck.map(usize::from),
+                    orientations_before[slot],
+                );
+            }
             // `Plasma_SweepCraftHit` (`0x0886afb8`) plays `PLASMAHITSHIP` on a
             // craft hit and clears the bolt's own emitter before
             // `Plasmas_Update`'s pass-two teardown would otherwise play

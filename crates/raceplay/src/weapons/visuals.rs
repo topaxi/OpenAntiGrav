@@ -464,6 +464,32 @@ impl Race {
         }
     }
 
+    /// The second detonation a Pulse Plasma craft hit spawns, at the struck
+    /// craft's body position, or `None` when the hit has no second one.
+    ///
+    /// `Plasma_SweepCraftHit` (`0x0886afb8`) calls `Plasma_SpawnDetonation`
+    /// (`0x0886ac88`) at the craft, and `Plasmas_Update`'s teardown
+    /// (`0x0886b490`) calls it again at the bolt: two independent blasts in the
+    /// same tick (`docs/ghidra/functions/psp-pulse-usa/plasma.md`, confidence
+    /// 88). The caller plays the bolt's own blast as for any ending and this
+    /// one on top. A wall hit and a timeout have no craft, so exactly one.
+    /// **Pulse only:** HD and Omega set a destroy flag on a craft hit and run
+    /// their one explosion from the shared destroy path, so
+    /// `hd_plasma_blast` gets none. Pure, unmeasured, inherits Pulse's.
+    pub(crate) fn plasma_craft_hit_blast_point(
+        &self,
+        kind: oag_tables::weapons::Weapon,
+        struck: Option<usize>,
+    ) -> Option<Vec3> {
+        let slot = struck?;
+        if kind != oag_tables::weapons::Weapon::Plasma || self.view.hd_plasma_blast {
+            return None;
+        }
+        // A craft gone inactive since the hit has no pose to read.
+        let ship = self.sim.world.ships.get(slot).filter(|ship| ship.active)?;
+        Some(ship.physics.body.position)
+    }
+
     /// Plays [`Trigger::MissileBounce`] at every wall a missile glanced off
     /// this tick.
     ///
