@@ -55,7 +55,7 @@ under `cargo test`; no tool runs a built `.wasm` yet).
 
 ## What a mod author writes today (the review, 2026-10-29)
 
-Reviewed: `mod-examples` at `43d45b9` (the mod's first branch), `wall-penalty/guest/src/lib.rs`
+Reviewed: `mod-examples` at `43d45b9` (branch `wasm-extensions`), `wall-penalty/guest/src/lib.rs`
 (119 lines) and `energy-turbo/guest/src/lib.rs` (271 lines), against the host's
 `crates/modhost/src/abi.rs` on this branch.
 

@@ -303,7 +303,7 @@ decision 4 for wasm screens only), detailed in README section 2.3. Owed items:
 
 ## The first player-facing mod: Wall Penalty (maintainer, 2026-10-29)
 
-**Landed on `wasm-extensions` (2026-10-29, the mod's first lane).** What was built and
+**Landed on `wasm-extensions` (2026-10-29, lane wall-penalty).** What was built and
 its proof: `docs/architecture/wasm-extensions/README.md`, "What is built". Final
 numbers: thrust x0.25 for 90 ticks (1.5 s), renewed each tick of wall contact
 (**chosen**); on Pulse PSP EU `16_Track` the cursed craft is at 50.7 km/h a second

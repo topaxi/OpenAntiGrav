@@ -1,7 +1,5 @@
 # WebAssembly extensions: who may extend what, through which surface, and what stays closed
 
-Wall Penalty was called Kiss Curse until 2026-10-30.
-
 **Status: a design, with its first slice built** (2026-10-29): Wall Penalty, below. The decision record is
 [ADR-0079](../adr/0079-extensions-are-sandboxed-webassembly-guests-behind-two-worlds.md),
 status *Proposed*; the `frontend` world (mod screens) is
