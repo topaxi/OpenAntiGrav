@@ -1,5 +1,5 @@
 ---
-status: partial
+status: measure
 titles: [pulse]
 updated: 2026-10-30
 summary: "Backdrop colour table wired (PICKUP_COLOURS, alpha 0x80); open: fade-in/hold/size pulse, Pure, 2048, Omega tables"
