@@ -61,7 +61,7 @@ impl Projectiles {
                 // the bolt where the craft is now.
                 let ship = ships.get(projectile.owner as usize);
                 let heading = ship.map(|ship| {
-                    let (position, heading) = plasma::muzzle(ship.physics(), &ship.dimensions());
+                    let (position, heading) = plasma::muzzle(ship.physics());
                     projectile.position = position;
                     projectile.velocity = heading * projectile.velocity.length();
                     // `Plasma_Launch` writes `-craft+0xb10` as the ridden normal;
@@ -71,6 +71,14 @@ impl Projectiles {
                     heading
                 });
                 projectile.charge = (projectile.charge - dt).max(0.0);
+                // Sixty subtractions of f32 `1/60` from `1.0` leave `2.8e-7`, so the
+                // countdown would end on the 61st tick. The original ends it on the
+                // 60th update (`Plasma_Launch` at fire+59 counting the fire frame as
+                // the first, two probe runs), its `dt` being a little over `1/60`.
+                // Under half a tick left is the 60th.
+                if projectile.charge < dt * 0.5 {
+                    projectile.charge = 0.0;
+                }
                 // Release on the tick the countdown crosses zero: `Plasmas_Update`
                 // takes `Plasma_Launch` instead of `Plasma_Update` on that tick
                 // alone, and it re-reads the craft's current velocity,
@@ -88,7 +96,12 @@ impl Projectiles {
                         * KMH_PER_UNIT_PER_SECOND
                         + stats.launch_speed;
                     projectile.launch_speed_kmh = launch_kmh;
-                    projectile.velocity = heading * (launch_kmh / KMH_PER_UNIT_PER_SECOND);
+                    // The bolt leaves at 0.75 x the release speed and holds it until
+                    // its first floor ride, as the Rocket does: `Plasma_Launch`
+                    // takes the weapon-node matrix, which carries the craft's display
+                    // scale. See [`plasma::LAUNCH_SPEED_SCALE`].
+                    projectile.velocity = heading
+                        * (launch_kmh / KMH_PER_UNIT_PER_SECOND * plasma::LAUNCH_SPEED_SCALE);
                 }
                 continue;
             }
@@ -158,6 +171,13 @@ impl Projectiles {
 
             let from = projectile.position;
             let mut to = from + projectile.velocity * dt;
+            // The Plasma's `g_ride_height` is not the Rocket's literal `3.0`; see
+            // [`plasma::RIDE_HEIGHT`].
+            let ride_height = if kind == Weapon::Plasma {
+                plasma::RIDE_HEIGHT
+            } else {
+                RIDE_HEIGHT
+            };
 
             // The surface probe runs before the flight sweep, as in the original:
             // look along the ridden normal; conform if floor-like, fall if
@@ -174,7 +194,9 @@ impl Projectiles {
             // moves `position + velocity * dt` and sweeps that segment, with no
             // surface probe, no ride height and no fall. A probe along a seeded
             // world up snapped a round off the muzzle on any banked track.
-            let probe = if kind == Weapon::Cannon {
+            let probe = if kind == Weapon::Cannon
+                || (kind == Weapon::Plasma && age < plasma::UNPINNED_SECONDS)
+            {
                 None
             } else {
                 Raycaster::raycast(
@@ -197,7 +219,7 @@ impl Projectiles {
                 // follows a rolling track instead of bouncing down it.
                 Some(hit) if hit.surface.is_hoverable() => {
                     projectile.surface = hit.normal;
-                    to = hit.point + hit.normal * RIDE_HEIGHT;
+                    to = hit.point + hit.normal * ride_height;
                     // A missile or plasma bolt re-pins its speed here:
                     // `Missile_Update` and `Plasma_Update` (`0x0885c6cc`, `default:`
                     // arm, `plasma.md`) normalise and rescale on this branch, by a
@@ -211,11 +233,15 @@ impl Projectiles {
                         || projectile.velocity.length(),
                         missile::speed_units_on_surface,
                     );
-                    if kind == Weapon::Rocket {
-                        // The Rocket steers toward the ride point: `Rocket_Update`
-                        // sets velocity to `(ride point - from) / dt`, rescales to
-                        // the class speed and re-integrates from `from`. See
-                        // `rocket-visuals.md`, 2026-10-01 second pass.
+                    if matches!(kind, Weapon::Rocket | Weapon::Plasma) {
+                        // The Rocket and the Plasma steer toward the ride point:
+                        // `Rocket_Update` sets velocity to `(ride point - from) / dt`,
+                        // rescales to the class speed and re-integrates from `from`
+                        // (`rocket-visuals.md`, 2026-10-01 second pass).
+                        // `Plasma_Update`'s `default:` arm is the same two lines
+                        // (`plasma.md`, "`Plasma_Update` is `Rocket_Update`'s floor
+                        // follower"): it is not the parallel-to-the-floor turn below,
+                        // which left a Plasma 0.8 unit off the original's line.
                         let toward = (to - from) / dt;
                         if toward.length_squared() > 0.0 {
                             projectile.velocity = toward.normalize() * speed;
@@ -299,7 +325,7 @@ impl Projectiles {
                         && hit.struck.is_none()
                         && hit.surface.is_some_and(Surface::is_hoverable) =>
                 {
-                    projectile.position = hit.point + hit.normal * RIDE_HEIGHT;
+                    projectile.position = hit.point + hit.normal * ride_height;
                     if !guided {
                         projectile.surface = hit.normal;
                         let along =

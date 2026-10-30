@@ -188,6 +188,11 @@ def probe_after_fire(dbg, kind, frames, log, detonate=None, condition=None):
         print("probe quiet: no further hit within 20 s of wall clock", file=sys.stderr)
 
 
+# The firing craft's body, set once the fire is armed, so every probe hit also records where the
+# craft itself is (`craft_pos`): the bolt's launch point is only meaningful against it.
+PROBE_BODY = 0
+
+
 def _probe_loop(dbg, kind, address, frames, start, out, detonate=None, condition=None):
     for _, _ in dbg.each_hit(address, 100000, timeout=20.0, condition=condition):
         now = (dbg.call("cpu.status")["ticks"] - start) / CYCLES_PER_FRAME
@@ -195,6 +200,8 @@ def _probe_loop(dbg, kind, address, frames, start, out, detonate=None, condition
             break
         regs = gpr(dbg)
         entry = {"frame": round(now, 2), "ra": regs["ra"]}
+        if PROBE_BODY:
+            entry["craft_pos"] = list(struct.unpack("<3f", dbg.read(PROBE_BODY + 0x30, 12)))
         if detonate and not detonate["done"] and now >= detonate["at"]:
             detonate["done"] = True
             body = detonate["body"]
@@ -575,6 +582,8 @@ def main():
             log["frames"].append(row)
             frame += 1
         if probe_pending:
+            global PROBE_BODY
+            PROBE_BODY = body
             detonate = None
             if args.detonate_bomb_at is not None and not args.probe_after_detonation:
                 # `previous` is where the craft was a frame before the fire: the direction of
