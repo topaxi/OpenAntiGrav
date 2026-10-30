@@ -347,7 +347,7 @@ mod with_modules {
     }
 
     #[test]
-    fn emitting_past_the_cap_faults_the_module_by_name_and_the_first_four_stand() {
+    fn emitting_past_the_cap_faults_the_module_by_name_and_none_of_its_emits_land() {
         let ping = "test.a/ping";
         let at_cap = ["a", "b", "c", "d"].map(|_| (ping, 1.0));
         let mut over = at_cap.to_vec();
@@ -366,7 +366,11 @@ mod with_modules {
         let (tick, why) = broken.extension_reports()[0].faulted.clone().unwrap();
         assert_eq!(tick, 3);
         assert!(why.contains("emit past the cap of 4"), "{why}");
-        assert_eq!(heard(&broken, 1).count, 4, "the four within the cap landed");
+        assert_eq!(
+            heard(&broken, 1).count,
+            0,
+            "a reply that faults lands none of its emits, the four within the cap included"
+        );
     }
 
     #[test]

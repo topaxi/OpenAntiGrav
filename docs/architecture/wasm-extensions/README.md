@@ -29,7 +29,7 @@ compiled and a race offered a module names it as left out in its load report.
 | The host | `crates/modhost` | Section 4.1's configuration minus Pulley and the load-time rewrite (desktop Cranelift only); one process-wide `Engine`, built at the first compile and counted (`engines_created`); a fresh pooled instance per tick; fuel per tick `FUEL_PER_TICK` = 200,000, **chosen**; a trap or a refused reply is a `Fault` |
 | The ABI | `crates/ext-abi` (`oag_ext_abi`) | Core wasm: exports `memory`, `oag_abi` (the major and the layout revision, below), `oag_io` (a 4,096-byte buffer), `tick`, optionally `oag_state_len` and `oag_track` (the [track region](#and-track-properties-2026-10-30)); **no imports at all** (the `oag` namespace is empty in ABI 1, so `rng-next` and `log` are not offered yet). The buffer's fixed little-endian layout is on that crate's page, the one definition the host and the guest SDK both compile against (it moved out of `oag-modhost` with the SDK, below); it carries the README's records only as far as the examples need: the tick, the active-slot mask, the events, the blob, the reply, the craft records |
 | Event | `wall-contact{slot}` | Raised in `Race::count_wall_contact` for a person's craft and an AI craft alike, **on every tick the craft touches a wall** (`contacts > floor_contacts`, the test `wall_contact_ticks` counts), at most once per craft per tick; delivered the next tick (the one-tick latency) |
-| Command | `scale-thrust{slot, factor}` | No `ticks` field and no host timer: the guest re-sends it each tick it wants it. `factor` finite and in `[0, 1]` for Wall Penalty (`[0, 2]` since Energy Turbo, below); anything else, a slot with no craft, or two for one slot is a fault, never a clamp. Below 1.0 **multiplied** into `Ship::pending_thrust_scale`, so a Leach Beam drain armed the tick before is kept |
+| Command | `scale-thrust{slot, factor}` | No `ticks` field and no host timer: the guest re-sends it each tick it wants it. `factor` finite and in `[0, 2]` (`MAX_THRUST_FACTOR`); anything else, a slot with no craft, or two for one slot is a fault, never a clamp. Below 1.0 **multiplied** into `Ship::pending_thrust_scale`, so a Leach Beam drain armed the tick before is kept |
 | Kind | `[extension.rules]` in `oag-mod.toml` | A rules module, because section 2.1 lets a rules module touch any slot and a craft module only slots flying its hull: a curse on every craft would otherwise be one craft row per team. Section 1.1 names a rules module from a mode file; `modes/*.toml` does not exist yet, so until it does a mod's rules module runs in every race the mod is on for, on its titles, **except the original campaigns** (section 1.2) **and network races** (the host's race runs vanilla until phase 3; the lobby's fingerprint leaves the repository's examples out) |
 | State | `RaceSim::extensions` | Each module's blob (the manifest's `state_bytes`, at most 1,024), its fault tick, and the pending wall-contact bits, cloned with a snapshot and hashed last in `RaceSim::state_hash`; a race with no module hashes nothing there |
 | No replay | `Race::start_recording` | A modded race records none (section 4.4, phase 2's rule) |
@@ -71,7 +71,7 @@ added to the engine and the ABI, each its own commit with the vanilla fold uncha
 | `pickup-roll{weapon, every}` | command | Race-wide (sent on slot 0): every `every`-th time a weapon pad (`Race::test_weapon_pads`) draws that weapon, it hands out the mod's pickup instead, with the drawn weapon still the slot's last grant. The count is hashed; re-sending the same rule keeps it. The first module to send any of the three pickup commands owns the kind for the race; another one faults |
 | `scale-pad{slot, 0}` and **`speed-pad{slot, pad}`** | command, event | The turbo holds its slot's speed pads at 0 while carried, so a pad gives no push, plume or pad sound, and pays the pool on the `speed-pad` the entry raises ([track properties](#and-track-properties-2026-10-30)) |
 | `play-cue{slot, cue}` | output | One of six of the engine's cues (`oag_ext_abi::Cue`, matched to the engine's in `oag_raceplay::extensions`), pushed beside the tick's own |
-| `fire-effect{slot, effect}` | output | The title's own `CollisionSpark` or `HitSpark` `.pob`, at the hull's back end, drawn by the view half; a title without it draws nothing |
+| `fire-effect{slot, effect}` | output | The title's own `CollisionSpark` or `HitSpark` `.pob`, at the hull's back end, drawn by the view half; a title without it draws nothing. A module may send at most `MAX_FIRE_EFFECTS_PER_TICK` = **8** `fire-effect`s of either kind a tick (**chosen, not measured**); the 9th faults the module, because a full stage evicts the title's own one-shot sparks. SDK: `Refused::Effects` |
 | `fire-effect{slot, own index}` | output | The sending mod's own particle effect (`[effects]` of its manifest, `docs/formats/mod-effect.md`), arg bit 15 set, at the hull's back end; one that did not load draws nothing |
 | `hud-tint{slot, element, rgba}` | output | Recolours a HUD element of that slot. `Pickup` is **not** tintable any more: a `hud-tint` of it is a malformed record (`pickup-look` colours the pickup). Elements are title-agnostic (`Speed`, `Thrust`, `Energy`, `Pickup`, `Position`, `Lap`, `Time`) and `oag_hud::ext_draws::element_of` maps each to the title's widgets; an element the title has no widget for draws nothing |
 | `pickup-look{slot, icon, colour}` | output | Command 22. The look of that slot's held mod pickup: `icon` is `{title: weapon}` (the title's own icon sprite for the weapon; a title with none draws none) or `{mod: name}` (a PNG of the mod's `[icons]`), `colour` is `{title: weapon}` (the title's own backdrop row for the weapon: Pulse's recovered table, HD's and Omega's own) or `{rgba}` (a colour of the mod's own). Re-sent each tick it should hold; with none sent the manifest's `[pickup]` is the look, and the last look is kept while the pickup fades out after use. The title's fade-in, overshoot, size pulse, hold and fade-out (Pulse, HD, Omega) play on any look. **Per title:** Pulse, HD and Omega draw both colour kinds; **Pure has no backdrop widget, so both colour kinds draw nothing there** (its icon is the title's model for the weapon, or nothing for a mod icon); 2048 has no backdrop colour table, so its backdrop stays as authored and a `rgba` or title colour draws nothing there (its icon goes through the UV table, a mod icon is fitted inside `PickupBgFrame`). A mod icon is fitted, aspect kept, in the slot the title's weapon icons share (**chosen, not measured**). An output: drawn, never hashed |
@@ -1289,8 +1289,18 @@ with wasmtime's own switches left on as a second line
 - **One answer for every failure** ([hooks.md](hooks.md#the-shape-one-call-per-tick-events-in-commands-out)):
   a trap (out of fuel, `unreachable`, out-of-bounds memory, stack overflow) or a
   refused command **turns the module off for the rest of the race**. That call's
-  commands are discarded, the blob keeps its value from before the call, every
-  later call is skipped. The race goes on: a player two laps in keeps the race; the
+  commands are discarded (a rule only the apply step can check, an emit past its cap, on
+  a channel the mod does not publish, or a pickup command that breaks the ownership or
+  `[pickup]` rule, discards the whole reply, whichever command is first), the blob keeps
+  its value from before the call, every later call is skipped.
+- **What a fault gives back.** Held race-wide state goes back to the title's at the
+  fault: the module's `scale-pad`s return to 1.0, and if it owned the mod pickup, the
+  `pickup-roll` ends, the kind is free for another module, and every craft still
+  holding the mod pickup is handed the title's: a pickup that came from a roll becomes
+  the weapon the pad drew (the craft's `last`; the AI and the person use it as if no
+  module had run), and one that came from `give-pickup` replaced nothing and is taken
+  away. Per-tick outputs (`scale-thrust`, HUD, sky) end because the module is no longer
+  called. Mail it already queued is delivered once. All of it is hashed state. The race goes on: a player two laps in keeps the race; the
   author gets the tick.
 - **The fault edge is simulation state**: the fault flag and the tick are hashed;
   the fuel total is not (its per-operator costs are wasmtime's own and the browser
@@ -1301,8 +1311,25 @@ with wasmtime's own switches left on as a second line
 - **A HUD module that faults** is hidden for the rest of the race; the title's own
   HUD is untouched.
 - **A module that will not validate at load** (an import outside `oag`, a missing
-  export, a refused feature, another `api` major) leaves its mod out of the race,
-  named in the load report; the race runs vanilla.
+  export, an export with the wrong signature (`tick`, `oag_io`, `oag_track`,
+  `oag_state_len` and `oag_abi` are each `() -> i32`), a refused feature, another `api`
+  major) leaves its mod out of the race, named in the load report; the race runs
+  vanilla. An `[extension]` whose `api`, `memory_pages` or `state_bytes` is out of range,
+  or that names neither `rules` nor `track`, is refused earlier still, when the manifest
+  parses, so the MODS page shows it.
+- **Machine-local failures become hashed faults.** Three failures depend on the machine
+  the race runs on, not on the module, and each still ends as a `Fault::Trap` whose
+  tick is hashed: the host failing to make an instance (the pool of 64 instances for
+  the whole process, or an mmap or commit failure), and a native stack overflow (the
+  open risk in [determinism-and-state.md](determinism-and-state.md)). Two machines
+  running the same modded race can therefore fault the same module at different ticks,
+  or one of them not at all. That is harmless today: network races force vanilla
+  (`find_extensions` is never set for them) and a MODDED race records no replay, so no
+  two machines ever compare a modded race's hash. The day either changes (a modded
+  network race, a modded replay), the race would need the failure moved out of the
+  hash: a host-local failure must not fault the module (retry, or end the race for that
+  machine alone), and the stack-depth counter in determinism-and-state.md must exist so
+  a deep guest traps at a fixed depth on every engine.
 
 ### 4.3 Versioning
 

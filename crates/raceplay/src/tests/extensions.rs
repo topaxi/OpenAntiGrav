@@ -63,17 +63,17 @@ fn a_vanilla_race_hashes_the_same_with_the_feature_on_or_off_and_builds_no_engin
 }
 
 #[cfg(feature = "extensions")]
-mod on {
+pub(super) mod on {
     use std::sync::Arc;
 
     use super::*;
     use crate::extensions::{Prepared, Source, prepare};
 
-    const STATE: i32 = 1024 + oag_ext_abi::STATE_AT as i32;
-    const REPLY: i32 = 1024 + oag_ext_abi::REPLY_AT as i32;
+    pub(in crate::tests) const STATE: i32 = 1024 + oag_ext_abi::STATE_AT as i32;
+    pub(in crate::tests) const REPLY: i32 = 1024 + oag_ext_abi::REPLY_AT as i32;
     const POOL: i32 = 1024 + oag_ext_abi::POOL_AT as i32;
 
-    fn module(id: &str, body: &str) -> Source {
+    pub(in crate::tests) fn module(id: &str, body: &str) -> Source {
         let wasm = wat::parse_str(format!(
             r#"(module
                 (memory (export "memory") 1)
@@ -192,7 +192,7 @@ mod on {
     /// Gives slot 0 the mod pickup while it holds nothing and nothing has been fired or
     /// absorbed yet, and counts the `pickup-fire` (blob word 0) and `pickup-absorbed`
     /// (word 1) events it is sent.
-    fn giver(id: &str) -> Source {
+    pub(in crate::tests) fn giver(id: &str) -> Source {
         module(
             id,
             &format!(
@@ -223,7 +223,7 @@ mod on {
     }
 
     /// Every tick: `pickup-roll` every second Turbo.
-    fn roller() -> Source {
+    pub(in crate::tests) fn roller() -> Source {
         module(
             "test.roller",
             &format!(
@@ -298,7 +298,7 @@ mod on {
         use oag_tables::weapons::Weapon;
         let mut race = grid(prepared(&[roller()]));
         assert!(
-            !race.sim.extensions.rolls(Weapon::Turbo),
+            !race.sim.extensions.rolls(0, Weapon::Turbo),
             "no rule before the first call"
         );
         race.tick(&PlayerInputs::none());
@@ -310,7 +310,7 @@ mod on {
             Weapon::Turbo,
         ]
         .into_iter()
-        .map(|weapon| race.sim.extensions.rolls(weapon))
+        .map(|weapon| race.sim.extensions.rolls(0, weapon))
         .collect();
         assert_eq!(
             rolled,
@@ -319,8 +319,8 @@ mod on {
         );
         // Re-sent every tick, the same rule keeps its count.
         race.tick(&PlayerInputs::none());
-        assert!(!race.sim.extensions.rolls(Weapon::Turbo));
-        assert!(race.sim.extensions.rolls(Weapon::Turbo));
+        assert!(!race.sim.extensions.rolls(0, Weapon::Turbo));
+        assert!(race.sim.extensions.rolls(0, Weapon::Turbo));
     }
 
     #[test]
@@ -928,7 +928,7 @@ colour = "#ff2010"
         )
     }
 
-    fn prepared(sources: &[Source]) -> Prepared {
+    pub(in crate::tests) fn prepared(sources: &[Source]) -> Prepared {
         let mut report = Vec::new();
         let props = crate::extensions::TrackProps::default();
         let track = crate::extensions::Track {

@@ -348,7 +348,7 @@ impl Race {
             pickup.grant(weapon);
             // A simulation mod's `pickup-roll`: this grant becomes the mod's own pickup,
             // with `last` still the drawn weapon, so the title's repeat rule is unchanged.
-            if self.sim.extensions.rolls(weapon) {
+            if self.sim.extensions.rolls(slot, weapon) {
                 pickup.weapon = Some(oag_tables::weapons::Weapon::Extension);
             }
         }

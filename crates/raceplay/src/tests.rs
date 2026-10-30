@@ -38,6 +38,8 @@ mod extension_armor;
 mod extension_channels;
 #[cfg(feature = "extensions")]
 mod extension_examples;
+#[cfg(feature = "extensions")]
+mod extension_faults;
 mod extensions;
 mod field;
 mod hash;
