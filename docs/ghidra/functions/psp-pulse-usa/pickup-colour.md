@@ -38,15 +38,21 @@ Row 0 is the backdrop itself; rows 1-13 are the weapons.
 `Hud_UpdatePickupWidgets` (`0x0881cdc4`), per frame, with `idx = *(*(status+0x3c)+0x48)`
 (the icon index below; 0 = nothing held):
 
-- **Backdrop** (row 0's widget, `0x08ab0848`): colour word at `+0xac/+0xb0/+0xb4/+0xb8` (all four
-  corners) is set to **row `idx`'s word 3 verbatim** once the fade has finished
-  (`0x0881d198` reads `0x08ab0850 + idx*0x18`; the store sits just after, live PC `0x0881cf9c`).
-- **Fade in**: while the pickup is arriving the word is unpacked to four floats
-  (`Colour_UnpackToFloat4`: `x = byte2, y = byte1, z = byte0, w = byte3`), scaled **all four
-  including alpha** by `clamp(t * 3, 0, 1)` (`t` = the seconds-since-grant timer at `status+0x44`,
-  so full strength after one third of a second), and repacked (`Colour_PackFromFloat4`, the same
-  byte order). Nothing held: the word is `0`.
-- **Icon** (row `idx`'s widget): the same scaled fade of word 2 (white), so `0xFFFFFFFF` at rest.
+- **Backdrop** (row 0's widget, `0x08ab0848`): while a weapon is held the colour word at
+  `+0xac/+0xb0/+0xb4/+0xb8` (all four corners) is rewritten every frame from **row `idx`'s word 3**:
+  `Colour_UnpackToFloat4` (`x = byte2, y = byte1, z = byte0, w = byte3`), all four scaled **alpha
+  included** by `clamp(T * 2 * 1.5, 0, 1)`, then `Colour_PackFromFloat4` (same byte order). `T` is
+  `status+0x44`, which accumulates `dt * 1.2` per frame and is capped at `0.5`, so the scale is `1.0`
+  (the table word verbatim) from `T = 1/3` (about 0.28 s after the grant) and stays there. The
+  store is `0x0881cf9c..0x0881cfa8`, `sw s1,0xb8/0xb4/0xb0/0xac(a0)` with `a0` the backdrop widget
+  and `s1` the repacked word, in the first branch of `Hud_UpdatePickupWidgets` (the `T <= 0.5`
+  held branch, right after the `0x9c`/`0xa0` scale-pair stores); **live PC `0x0881cf9c`** (below).
+  Nothing held: the word is stored as `0`.
+- **After use** (decompile-only, not watched): the per-row timers at `status+0x48+4*i` count down and
+  the backdrop keeps the last weapon's row colour (the direct-store path through
+  `table[last*6+3]`) while that row's timer is above `0.1`, then fades as `(2 - 2t) * 1.5`.
+- **Icon** (row `idx`'s widget, word 2, white): the same scaled form, gated on `T >= 0.4`
+  (decompile-only). Hold white `0xFFFFFFFF` at rest.
 - **The word is `0xAARRGGBB`**: byte 2 is red. Confirmed on screen (below): the Mine's word
   `0x802B1CBC` draws **blue**, which `0xAABBGGRR` would have made red.
 
@@ -55,7 +61,7 @@ Row 0 is the backdrop itself; rows 1-13 are the weapons.
 `PlayerStatus_Update` (`0x0883b3b8`, its `switch` on `pickup+0x1bc` writing `status+0x90`) maps the held id to
 the icon index; the table row order is the icon index.
 
-| Held id (`pickup+0x1bc`) | Icon index | Weapon | Word | A | R | G | B |
+| Held id (`pickup+0x1bc`) | Icon index | Weapon (row name; Mine/Bomb labels inferred from it, not measured) | Word | A | R | G | B |
 | ---: | ---: | --- | --- | ---: | ---: | ---: | ---: |
 | 0 | 1 | Rocket | `0x80BE1E69` | 128 | 190 | 30 | 105 |
 | 1 | 2 | Missile | `0x80BE1E69` | 128 | 190 | 30 | 105 |
@@ -79,7 +85,7 @@ hypothesis in `pickups.md` guessed: Turbo has the same green as Shield and Autop
 
 ## Evidence
 
-Confidence **92** for the table and the 13 words, **88** for the function's name and the fade.
+Confidence **92** for the table and the 13 words, **88** for the function's name; the fade timing is decompile-only.
 
 1. **Static**: the table bytes (`read_memory 0x08ab0844 +336`), the single reader of word 3
    (`0x0881cf90`/`0x0881d198`, `FUN_0881cdc4`), and `Colour_UnpackToFloat4`/`Colour_PackFromFloat4`
@@ -94,13 +100,16 @@ Confidence **92** for the table and the 13 words, **88** for the function's name
    non-halting read watchpoint on the craft clock counting beside it as the positive control
    (4 hits). The same watchpoint armed non-halting counted 0 hits in an earlier run, so the halting
    form is the one to trust here.
-4. **On screen** (software renderer, `import -window root`, 2026-10-30): over open sky the Mine
-   hexagon reads `(138, 141, 217)`, Shield `(134, 216, 139)`. Blending the table colour at 50 %
-   with a sky of about `(230, 240, 250)` predicts `(136, 134, 219)` and `(134, 214, 139)`. Missile
-   and Turbo read pink and green on the same scale.
+4. **On screen** (software renderer, `import -window root`, 2026-10-30): the Mine hexagon over open
+   sky reads `(138, 141, 217)` and Shield `(134, 216, 139)`: blue and green, so byte 2 is red.
+   Blending the table colour at 50 % over a sky estimated at `(230, 240, 250)` predicts
+   `(136, 134, 219)` and `(134, 214, 139)`; that is **consistent with 50 % source-over, with the
+   background estimated and not measured** (Missile `(134, 78, 133)` and Turbo were sampled once
+   each and not fitted). The alpha *byte* is read straight from the table and the widget (confidence
+   92); the on-screen blend factor is about 70.
 
-Not measured: the **size pulse** (`+0x9c`/`+0xa0` scaled by `1/f`, `f`) on the backdrop during the
-fade is read statically only, and the **PS2** binary was not searched (PSP is the reference).
+Not measured: the fade-in, hold and fade-out sequence (decompile only), the **size pulse** (`+0x9c`/`+0xa0` scaled by `1/f`, `f`) on the backdrop during the
+fade is read statically only, and the **PS2** binary was not searched (PSP is the reference); a byte search of `SCES_547.48` for the PSP words found nothing, so PS2 stores them in another form.
 
 ## Checked on the other titles
 
