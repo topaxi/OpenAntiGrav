@@ -29,8 +29,18 @@ pub(crate) struct Manifest {
     pub props: BTreeMap<String, toml::Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub art: Option<ArtTable>,
+    /// The event channels the track publishes; written only when it publishes any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub channels: Option<ChannelsTable>,
     #[serde(flatten)]
     pub extra: BTreeMap<String, toml::Value>,
+}
+
+/// `[channels]`: what a trigger's `oag_emit` may name.
+#[derive(Debug, Serialize, Deserialize)]
+pub(crate) struct ChannelsTable {
+    #[serde(default)]
+    pub publishes: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -116,6 +126,7 @@ pub(crate) struct Parsed {
     pub counts: Counts,
     pub art: Option<ArtTable>,
     pub props: crate::props::Props,
+    pub channels: Vec<String>,
     pub unread: Vec<String>,
 }
 
@@ -210,6 +221,9 @@ pub(crate) fn write(track: &Track, glb_name: &str) -> Result<String, Error> {
         },
         props: crate::props::to_toml(&track.props),
         art: track.art.as_ref().map(ArtTable::of),
+        channels: (!track.channels.is_empty()).then(|| ChannelsTable {
+            publishes: track.channels.clone(),
+        }),
         extra: BTreeMap::new(),
     };
     toml::to_string(&manifest).map_err(|e| Error::Unwritable(e.to_string()))
@@ -296,6 +310,7 @@ pub(crate) fn read(text: &str) -> Result<Parsed, Error> {
         counts: m.counts,
         art,
         props: crate::props::from_toml(m.props)?,
+        channels: m.channels.map(|c| c.publishes).unwrap_or_default(),
         unread,
     })
 }

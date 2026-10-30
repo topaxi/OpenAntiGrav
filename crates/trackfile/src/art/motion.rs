@@ -21,6 +21,10 @@ pub struct Animation {
     pub repeat: Repeat,
     /// Its channels, in file order.
     pub channels: Vec<Channel>,
+    /// `oag_on`: the channel that starts it. Until that channel fires, the animation
+    /// holds its first key; it then plays from its start on the race clock. `None`
+    /// plays from the clock's zero, as before. Visual only, like the rest of it.
+    pub on: Option<String>,
 }
 
 impl Animation {

@@ -334,6 +334,20 @@ type = "types.counts"
 type = "types.props"
 optional = true
 
+# The event channels the track publishes, `<id>/<name>`: a trigger's `oag_emit` (in the glb)
+# names one of them.
+[types.channels]
+type = "table"
+
+[types.channels.publishes]
+type = "array"
+itemtype = "string"
+optional = true
+
+[elements.channels]
+type = "types.channels"
+optional = true
+
 [elements.art]
 type = "types.art"
 optional = true

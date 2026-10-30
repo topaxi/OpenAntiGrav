@@ -66,6 +66,9 @@ pub struct Track {
     /// Boxes a mod hears a craft enter and leave. The engine does nothing else with
     /// them.
     pub triggers: Vec<Trigger>,
+    /// The channels the track publishes (`[channels] publishes`): a trigger's `oag_emit`
+    /// names one of them. `<id>/<name>`, validated by `oag_ext_abi::check_channel`.
+    pub channels: Vec<String>,
     /// The art: meshes, textures, sun, sky, flare. `None` races as flat-shaded
     /// collision. The simulation never reads it, so it is in no world hash.
     pub art: Option<Art>,

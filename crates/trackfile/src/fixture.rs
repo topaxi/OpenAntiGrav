@@ -241,6 +241,7 @@ pub fn oval() -> Track {
         speedup_pads: vec![pad_at(n / 4)],
         weapon_pads: vec![pad_at(n * 3 / 4)],
         props: crate::props::Props::new(),
+        channels: Vec::new(),
         speedup_pad_props: Vec::new(),
         weapon_pad_props: Vec::new(),
         path_props: Vec::new(),

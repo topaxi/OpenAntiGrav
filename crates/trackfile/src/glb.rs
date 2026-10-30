@@ -318,6 +318,13 @@ pub(crate) fn write(track: &Track) -> Result<Vec<u8>, Error> {
         });
         let mut extras =
             json!({ "oag_names": t.iter().map(|t| t.name.clone()).collect::<Vec<_>>() });
+        if t.iter().any(|t| t.emits.is_some()) {
+            extras["oag_emits"] = json!(
+                t.iter()
+                    .map(|t| t.emits.clone().unwrap_or_default())
+                    .collect::<Vec<_>>()
+            );
+        }
         if t.iter().any(|t| !t.props.is_empty()) {
             extras["oag_props"] = json!(
                 t.iter()
@@ -699,6 +706,7 @@ pub(crate) fn read(m: Parsed, bytes: &[u8]) -> Result<Loaded, Error> {
         speedup_pads: speedup,
         weapon_pads: weapon,
         props: m.props,
+        channels: m.channels,
         speedup_pad_props: speedup_props,
         weapon_pad_props: weapon_props,
         path_props: if path_props.iter().all(BTreeMap::is_empty) {
@@ -901,6 +909,26 @@ fn props_list(
         .collect()
 }
 
+/// A trigger node's `oag_emits` extra: one channel name per trigger, `""` for none.
+fn emits_list(name: &str, extras: Option<&Value>, n: usize) -> Result<Vec<Option<String>>, Error> {
+    let Some(list) = extras.and_then(|e| e.get("oag_emits")) else {
+        return Ok(Vec::new());
+    };
+    let list = list
+        .as_array()
+        .ok_or_else(|| Error::Glb(format!("{name}: oag_emits is not an array")))?;
+    same_len(name, "oag_emits", list.len(), n)?;
+    list.iter()
+        .enumerate()
+        .map(|(i, v)| {
+            let text = v
+                .as_str()
+                .ok_or_else(|| Error::Glb(format!("{name}: oag_emits[{i}] is not a string")))?;
+            Ok((!text.is_empty()).then(|| text.to_owned()))
+        })
+        .collect()
+}
+
 fn read_triggers(
     node: &gltf::Node<'_>,
     extras: Option<&Value>,
@@ -922,6 +950,7 @@ fn read_triggers(
     same_len(name, "oag_names", names.len(), n)?;
     let mut props = props_list(name, extras, n)?;
     props.resize(n, crate::props::Props::new());
+    let emits = emits_list(name, extras, n)?;
     let mut out = Vec::with_capacity(n);
     for (i, props) in props.into_iter().enumerate() {
         let mut to_world = [0.0f32; 16];
@@ -937,6 +966,7 @@ fn read_triggers(
             min: min[i],
             max: max[i],
             props,
+            emits: emits.get(i).cloned().flatten(),
         });
     }
     Ok(out)

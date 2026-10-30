@@ -86,7 +86,7 @@ pub(super) fn write(
             "name": anim.name,
             "channels": channels,
             "samplers": samplers,
-            "extras": { "oag_loop": anim.repeat.tag() },
+            "extras": anim_extras(anim),
         }));
     }
     out
@@ -181,11 +181,27 @@ pub(super) fn read(
                 keys,
             });
         }
+        let on = match extras.as_ref().and_then(|e| e.get("oag_on")) {
+            None => None,
+            Some(v) => Some(v.as_str().map(str::to_owned).ok_or_else(|| {
+                Error::accessor(&what, "oag_on", format!("{v} is not a channel name"))
+            })?),
+        };
         out.push(Animation {
             name,
             repeat,
             channels,
+            on,
         });
     }
     Ok(out)
+}
+
+/// An animation's extras: `oag_loop`, and `oag_on` when a channel starts it.
+fn anim_extras(anim: &Animation) -> Value {
+    let mut extras = json!({ "oag_loop": anim.repeat.tag() });
+    if let Some(on) = &anim.on {
+        extras["oag_on"] = json!(on);
+    }
+    extras
 }
