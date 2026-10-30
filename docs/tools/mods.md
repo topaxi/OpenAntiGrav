@@ -193,6 +193,16 @@ It needs `simulation = true` too, loads only in a race of that file (never a dis
 and may send the same commands as a rules module, including the race-wide `set-weather`,
 `set-sun` and `grade-sky` outputs. Hillside's rain is one.
 
+A simulation module can also change the title's HUD through outputs that are never
+hashed: `hud-tint`, `hud-shake` and `hud-bar-extra` on a HUD element (`Speed`, `Thrust`,
+`Energy`, `Pickup`, `Position`, `Lap`, `Time`), and `hud-text` and `hud-icon` at one of
+nine anchors of the HUD grid, up to 32 per slot per tick. Re-send each every tick it
+should hold; a title with no widget for an element draws nothing. Energy Turbo tints its
+pickup backdrop, shows its added thrust as a red share of the speed bar (Pulse has no
+thrust bar) and shakes the energy bar while it drains. Guests format times with
+`oag_ext::Line`. The commands are in
+[docs/architecture/wasm-extensions/](../architecture/wasm-extensions/README.md).
+
 The game must be built with the `extensions` feature: `just play-mods` (`just play`
 with it), or `cargo run --release -p oag-game --features extensions`. Plain
 `just play` runs no module; its boot log says so for each mod that ships one.

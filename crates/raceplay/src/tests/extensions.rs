@@ -71,6 +71,7 @@ mod on {
 
     const STATE: i32 = 1024 + oag_ext_abi::STATE_AT as i32;
     const REPLY: i32 = 1024 + oag_ext_abi::REPLY_AT as i32;
+    const POOL: i32 = 1024 + oag_ext_abi::POOL_AT as i32;
 
     fn module(id: &str, body: &str) -> Source {
         let wasm = wat::parse_str(format!(
@@ -340,10 +341,26 @@ mod on {
         assert_eq!(setup_race.sim.world.ships[0].pickup.weapon, None);
     }
 
-    /// Every tick: a Turbo cue, the wall sparks, a red pickup backdrop for slot 1, and
-    /// the three race-wide outputs (rain at 0.5, sun at 0.5, sky grey at 0.25).
+    /// Every tick: a Turbo cue, the wall sparks, a red pickup backdrop for slot 1, the
+    /// three race-wide outputs (rain at 0.5, sun at 0.5, sky grey at 0.25), and for slot 1
+    /// an energy-bar shake of 2, a thrust-bar share of 0.5 into red, the text "hi" and the
+    /// icon "Ab", both at the centre.
     fn outputter(id: &str, outputs: bool) -> Source {
         let body = if outputs {
+            let hud = |index: i32, kind: i32, arg: i32, value: u32, word: u32| {
+                let at = REPLY + 4 + 12 * index;
+                let pooled = if kind >= 19 && index == 9 { 3 } else { 0 };
+                let arg = if kind >= 19 { pooled } else { arg };
+                format!(
+                    "(i32.store8 (i32.const {at}) (i32.const {kind})) (i32.store8 (i32.const {s}) (i32.const 1))
+                     (i32.store16 (i32.const {a}) (i32.const {arg}))
+                     (i32.store (i32.const {v}) (i32.const {value})) (i32.store (i32.const {w}) (i32.const {word}))",
+                    s = at + 1,
+                    a = at + 2,
+                    v = at + 4,
+                    w = at + 8,
+                )
+            };
             let race_wide = |index: i32, kind: i32, value: f32| {
                 let at = REPLY + 4 + 12 * index;
                 format!(
@@ -353,14 +370,16 @@ mod on {
                 )
             };
             format!(
-                "(i32.store (i32.const {REPLY}) (i32.const 6))
+                "(i32.store (i32.const {REPLY}) (i32.const 10))
                  (i32.store8 (i32.const {c0}) (i32.const 5)) (i32.store8 (i32.const {s0}) (i32.const 1))
                  (i32.store16 (i32.const {a0}) (i32.const 1))
                  (i32.store8 (i32.const {c1}) (i32.const 6)) (i32.store8 (i32.const {s1}) (i32.const 1))
                  (i32.store16 (i32.const {a1}) (i32.const 0))
-                 (i32.store8 (i32.const {c2}) (i32.const 7)) (i32.store8 (i32.const {s2}) (i32.const 1))
+                 (i32.store8 (i32.const {c2}) (i32.const 16)) (i32.store8 (i32.const {s2}) (i32.const 1))
+                 (i32.store16 (i32.const {a2}) (i32.const 4))
                  (i32.store (i32.const {b2}) (i32.const 0xff0000ff))
                  {weather} {sun} {grade}
+                 {shake} {extra} {text} {icon} {pool}
                  i32.const 0",
                 c0 = REPLY + 4,
                 s0 = REPLY + 5,
@@ -370,7 +389,22 @@ mod on {
                 a1 = REPLY + 18,
                 c2 = REPLY + 28,
                 s2 = REPLY + 29,
+                a2 = REPLY + 30,
                 b2 = REPLY + 36,
+                shake = hud(6, 17, 3, 2.0_f32.to_bits(), 0),
+                extra = hud(7, 18, 2, 0.5_f32.to_bits(), 0xff20_20e0),
+                text = hud(8, 19, 0, 0x0050_0344, 0xffff_ffff),
+                icon = hud(9, 20, 3, 0x0050_0344, 0xffff_ffff),
+                pool = format!(
+                    "(i32.store8 (i32.const {p}) (i32.const 2)) (i32.store8 (i32.const {q}) (i32.const 104)) (i32.store8 (i32.const {r}) (i32.const 105))
+                     (i32.store8 (i32.const {u}) (i32.const 2)) (i32.store8 (i32.const {v}) (i32.const 65)) (i32.store8 (i32.const {w}) (i32.const 98))",
+                    p = POOL,
+                    q = POOL + 1,
+                    r = POOL + 2,
+                    u = POOL + 3,
+                    v = POOL + 4,
+                    w = POOL + 5,
+                ),
                 weather = race_wide(3, 10, 0.5),
                 sun = race_wide(4, 11, 0.5),
                 grade = race_wide(5, 12, 0.25),
@@ -404,11 +438,46 @@ mod on {
             loud.sim.extensions.effects_for_tests(),
             [(1, oag_title::effects::Trigger::CollisionSpark)]
         );
+        let tick = loud.sim.world.tick;
+        let hud = loud.sim.extensions.hud(1, tick);
         assert_eq!(
-            loud.sim.extensions.pickup_tint(1),
+            hud.tint(oag_hud::ext_draws::Element::Pickup),
             Some([1.0, 0.0, 0.0, 1.0])
         );
-        assert_eq!(quiet.sim.extensions.pickup_tint(1), None);
+        assert_eq!(hud.shake[oag_hud::ext_draws::Element::Energy as usize], 2.0);
+        let extra = hud.extra(oag_hud::ext_draws::Element::Thrust).unwrap();
+        assert_eq!(extra.extra, 0.5);
+        assert_eq!(
+            extra.color,
+            [224.0 / 255.0, 32.0 / 255.0, 32.0 / 255.0, 1.0]
+        );
+        assert_eq!(
+            hud.items
+                .iter()
+                .map(|item| (item.anchor, item.x, item.y, item.scale, item.what.clone()))
+                .collect::<Vec<_>>(),
+            [
+                (
+                    oag_hud::ext_draws::Anchor::Center,
+                    3.0,
+                    5.0,
+                    1.0,
+                    oag_hud::ext_draws::What::Text("hi".into())
+                ),
+                (
+                    oag_hud::ext_draws::Anchor::Center,
+                    3.0,
+                    5.0,
+                    1.0,
+                    oag_hud::ext_draws::What::Icon("Ab".into())
+                ),
+            ]
+        );
+        assert!(
+            loud.sim.extensions.hud(0, tick).is_quiet(),
+            "only the slot it names"
+        );
+        assert!(quiet.sim.extensions.hud(1, tick).is_quiet());
         // The race-wide outputs are held for the view half and absent without a module.
         assert_eq!(
             loud.extension_sky(),

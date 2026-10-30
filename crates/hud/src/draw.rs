@@ -867,6 +867,7 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
         // `ShieldBar`'s absorb flash, painted *under* the bar - see
         // `shield_bar::tint`. `None` outside the absorb window.
         let mut flash = None;
+        let mut added = None;
         let is_bar = bar_fraction(&sprite.name, readout, cx.art).is_some();
         let drawn = match bar_fraction(&sprite.name, readout, cx.art) {
             // A bar at zero is not drawn at all: a zero-width quad is a
@@ -874,12 +875,24 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
             // is worse than not asking.
             Some(fraction) if fraction <= 0.0 => None,
             Some(fraction) => {
-                let mut cropped = if cx
+                let tipped = cx
                     .art
                     .bar_tip
-                    .is_some_and(|law| law.bars.iter().any(|bar| bar.fill == sprite.name))
-                {
-                    super::bar_tip::crop(sprite, fraction)
+                    .is_some_and(|law| law.bars.iter().any(|bar| bar.fill == sprite.name));
+                let extra = super::ext_draws::bar_extra(cx, &readout.ext, &sprite.name);
+                // A tipped bar's cropped fill ends in the art's pointed tip, so the added
+                // share is split off that fill whole.
+                let (whole, share) = if tipped {
+                    (super::bar_tip::crop(sprite, fraction), 1.0)
+                } else {
+                    (sprite.clone(), fraction)
+                };
+                let mut cropped = if let Some(extra) = extra {
+                    let (base, tail) = super::ext_draws::split_bar(&whole, share, extra);
+                    added = tail.and_then(|tail| sprite_draw(&tail, cx.sheet));
+                    base
+                } else if tipped {
+                    whole
                 } else {
                     crop_horizontally(sprite, fraction)
                 };
@@ -903,7 +916,14 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
                 None => sprite_draw(sprite, cx.sheet),
             },
         };
-        frame.sprites.extend(flash);
+        let element = super::ext_draws::element_of(&sprite.name);
+        let recolour = !sprite.name.ends_with("Bg") && !sprite.name.ends_with("BG");
+        let styled = |draw: Draw, recolour: bool| {
+            element.map_or(draw.clone(), |element| {
+                super::ext_draws::style(&readout.ext, element, recolour, draw)
+            })
+        };
+        frame.sprites.extend(flash.map(|draw| styled(draw, false)));
         if cx
             .art
             .boost_smear
@@ -913,10 +933,15 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
             stamped.push((*rect, *color));
         }
         // A bar's fill keeps its own alpha, as does the shield fill; every other lit panel scales.
+        frame.sprites.extend(
+            drawn
+                .map(|draw| if is_bar { draw } else { lit_draw(cx, draw) })
+                .map(|draw| styled(draw, recolour)),
+        );
+        frame.sprites.extend(added.map(|draw| styled(draw, false)));
         frame
             .sprites
-            .extend(drawn.map(|draw| if is_bar { draw } else { lit_draw(cx, draw) }));
-        frame.sprites.extend(fill);
+            .extend(fill.map(|draw| styled(draw, recolour)));
     }
     frame.sprites.extend(
         super::runtime::arc_sprites(cx, readout)
@@ -950,12 +975,21 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
     // the craft is holding - see `pickup_sprites`.
     if let Some(weapon) = readout.pickup {
         for mut sprite in pickup_sprites(cx.layout, weapon, cx.art, readout.pickup_announcing) {
-            if let Some(tint) = readout.pickup_tint
+            if let Some(tint) = readout.ext.tint(super::ext_draws::Element::Pickup)
                 && sprite.name == super::pickup::PICKUP_BACKGROUND
             {
                 sprite.color = tint;
             }
-            frame.sprites.extend(sprite_draw(&sprite, cx.sheet));
+            frame
+                .sprites
+                .extend(sprite_draw(&sprite, cx.sheet).map(|draw| {
+                    super::ext_draws::style(
+                        &readout.ext,
+                        super::ext_draws::Element::Pickup,
+                        false,
+                        draw,
+                    )
+                }));
         }
         frame.sprites.extend(pickup_model_draws(cx, weapon));
     }
@@ -1098,6 +1132,10 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
             text,
             wrap_width: None,
         };
+        let draw = match super::ext_draws::element_of(&label.name) {
+            Some(element) => super::ext_draws::style(&readout.ext, element, true, draw),
+            None => draw,
+        };
         let shadow = text_shadow(cx, &draw);
         let list = match label.font {
             Font::Small => &mut frame.small_text,
@@ -1131,7 +1169,7 @@ pub(super) fn lit_colour(cx: &Context<'_>, mut color: [f32; 4]) -> [f32; 4] {
 /// same string `dx`, `dy` layout units over, in the string's own border colour (`HudBGColour`
 /// unless the widget authors one), at that colour's own alpha rather than [`lit_colour`]'s. `None`
 /// for a title that draws none.
-fn text_shadow(cx: &Context<'_>, draw: &Draw) -> Option<Draw> {
+pub(super) fn text_shadow(cx: &Context<'_>, draw: &Draw) -> Option<Draw> {
     let shadow = cx.art.text_shadow?.value;
     let Draw::Text {
         x,

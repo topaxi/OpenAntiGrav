@@ -40,8 +40,10 @@
 
 use core::fmt;
 
-pub use hud::{Anchor, HudElement, HudPlace, HudStr, MAX_HUD_EXTRA, MAX_HUD_ITEMS, MAX_HUD_SHAKE, MAX_HUD_TEXT};
 use hud::pool_string;
+pub use hud::{
+    Anchor, HudElement, HudPlace, HudStr, MAX_HUD_EXTRA, MAX_HUD_ITEMS, MAX_HUD_SHAKE, MAX_HUD_TEXT,
+};
 
 /// The ABI major. A manifest's `[extension] api` names it.
 pub const ABI: u32 = 1;
@@ -794,7 +796,9 @@ impl Command {
             Self::HudIcon { place, rgba, .. } => {
                 (COMMAND_HUD_ICON, pool_at, place.to_bits(), rgba.to_u32())
             }
-            Self::SetWeather { kind, strength } => (COMMAND_SET_WEATHER, kind.code(), strength.to_bits(), 0),
+            Self::SetWeather { kind, strength } => {
+                (COMMAND_SET_WEATHER, kind.code(), strength.to_bits(), 0)
+            }
             Self::SetSun { intensity } => (COMMAND_SET_SUN, 0, intensity.to_bits(), 0),
             Self::GradeSky { grey } => (COMMAND_GRADE_SKY, 0, grey.to_bits(), 0),
         };

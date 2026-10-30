@@ -16,10 +16,14 @@ pub(crate) fn read(
     let mut shield_seen = 0_u32;
     let mut slot_pads_seen = 0_u32;
     let mut pads_seen: Vec<u16> = Vec::new();
+    let mut hud_items = [0_usize; oag_ext_abi::MAX_CRAFTS];
     let mut commands = Vec::with_capacity(count);
     for i in 0..count {
-        let command = oag_ext_abi::Command::decode(&oag_ext_abi::command_record(io, i))
-            .map_err(|e| Fault::Reply(format!("command {i}: {e}")))?;
+        let command = oag_ext_abi::Command::decode_in(
+            &oag_ext_abi::command_record(io, i),
+            oag_ext_abi::hud::pool(io),
+        )
+        .map_err(|e| Fault::Reply(format!("command {i}: {e}")))?;
         if let Some(slot) = command.slot()
             && observation.active & slot.bit() == 0
         {
@@ -94,10 +98,22 @@ pub(crate) fn read(
                 }
                 slot_pads_seen |= slot.bit();
             }
+            Command::HudText { slot, .. } | Command::HudIcon { slot, .. } => {
+                hud_items[slot.index()] += 1;
+                if hud_items[slot.index()] > oag_ext_abi::MAX_HUD_ITEMS {
+                    return Err(Fault::Reply(format!(
+                        "more than {} hud-text and hud-icon items for slot {}",
+                        oag_ext_abi::MAX_HUD_ITEMS,
+                        slot.index()
+                    )));
+                }
+            }
             Command::PickupRoll { .. }
             | Command::PlayCue { .. }
             | Command::FireEffect { .. }
-            | Command::PickupTint { .. }
+            | Command::HudTint { .. }
+            | Command::HudShake { .. }
+            | Command::HudBarExtra { .. }
             | Command::SetWeather { .. }
             | Command::SetSun { .. }
             | Command::GradeSky { .. } => {}

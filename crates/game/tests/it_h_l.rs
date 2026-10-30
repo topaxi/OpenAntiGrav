@@ -36,6 +36,7 @@ mod hd_track_model_ground_truth;
 mod hd_weapon_scene_ground_truth;
 mod hillside_rain_frame_ground_truth;
 mod hud_boost_glow_ground_truth;
+mod hud_ext_items;
 mod hud_safe_area_gate;
 mod hud_scale_gate;
 mod ipf_ground_truth;

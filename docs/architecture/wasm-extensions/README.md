@@ -71,9 +71,27 @@ added to the engine and the ABI, each its own commit with the vanilla fold uncha
 | `scale-pad{slot, 0}` and **`speed-pad{slot, pad}`** | command, event | The turbo holds its slot's speed pads at 0 while carried, so a pad gives no push, plume or pad sound, and pays the pool on the `speed-pad` the entry raises ([track properties](#and-track-properties-2026-10-30)) |
 | `play-cue{slot, cue}` | output | One of six of the engine's cues (`oag_ext_abi::Cue`, matched to the engine's in `oag_raceplay::extensions`), pushed beside the tick's own |
 | `fire-effect{slot, effect}` | output | The title's own `CollisionSpark` or `HitSpark` `.pob`, at the hull's back end, drawn by the view half; a title without it draws nothing |
-| `pickup-tint{slot, rgba}` | output | The HUD's `PickupBackground` drawn in that colour instead of the weapon's measured one (`oag_hud::Readout::pickup_tint`): the disc's sprite, recoloured through the tint it is already drawn with |
+| `hud-tint{slot, element, rgba}` | output | Recolours a HUD element of that slot: `Pickup` draws `PickupBackground` in `rgba` instead of the weapon's measured colour (the disc's sprite, recoloured through the tint it is already drawn with). Elements are title-agnostic (`Speed`, `Thrust`, `Energy`, `Pickup`, `Position`, `Lap`, `Time`) and `oag_hud::ext_draws::element_of` maps each to the title's widgets; an element the title has no widget for draws nothing |
+| `hud-shake{slot, element, amplitude}` | output | Jitters the element's widgets by up to `amplitude` HUD pixels (at most 16) this tick. The offset is an integer hash of tick, slot and element, never zero while `amplitude` is above 0 (chosen, not measured) |
+| `hud-bar-extra{slot, element, extra, rgba}` | output | A bar shows `extra` times its value on top: it is rescaled so value x (1 + extra) fills it, the base share keeps the bar's colour and the added share (`extra / (1 + extra)` of the fill, 47 % at 0.9) blends from the bar's colour into `rgba`. A title with no thrust bar (Pulse) shows the `Thrust` share on its speed bar (chosen) |
+| `hud-text{slot, anchor, x, y, text, rgba, size}` | output | Text in the title's HUD font at one of nine anchors of the HUD layout grid, offset `x`, `y` HUD pixels (12-bit signed), `size` in quarters of the title's own text height. The string is at most 48 bytes, carried in the reply's string pool |
+| `hud-icon{slot, anchor, x, y, sprite, rgba, size}` | output | The title's HUD sprite of that name (`TimeDiffIcon`, `TurboIcon`) at an anchor, `rgba` its modulating colour; a name the layout lacks draws nothing |
 
-Outputs are never `RaceSim` state: a test runs a module sending all three against one
+The HUD outputs are re-sent each tick they should hold, are per slot (in split screen
+each lands in the view of the slot it names, since each view draws its own slot's
+HUD), and sit inside the title's safe area because the safe area scales the whole HUD
+frame after the items are placed. A slot may send at most 32 `hud-text` and `hud-icon`
+items per tick; the 33rd faults the module naming the cap. Text and icons do not take
+a string-table id or a manifest PNG yet.
+
+**The string pool.** A command record is 12 bytes, so a text or sprite name does not fit
+in one. The reply section carries a 768-byte pool after the commands (`POOL_AT`): entries
+of a length byte then UTF-8, named by their offset in the command's `u16` argument. The
+placement (anchor in 4 bits, size in 4, x and y 12 each) is packed in the record's
+`f32` word and the colour in the `u32`. One record per item keeps the per-slot cap
+independent of the 96-command reply cap (`MAX_COMMANDS`).
+
+Outputs are never `RaceSim` state: a test runs a module sending all of them against one
 sending none and the state hashes match every tick.
 
 **Timing and edge cases.** The call is at phase C, after the people's pickups are

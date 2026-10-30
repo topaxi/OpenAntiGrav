@@ -363,17 +363,19 @@ impl Extensions {
         }
     }
 
-    /// `slot`'s `pickup-tint` this tick: an output for the HUD, `None` without one.
+    /// `slot`'s `hud-*` outputs this tick, for the HUD: recolours, shakes, a bar's added
+    /// share, text and icons. Quiet without a module. Never hashed.
+    #[cfg(feature = "view")]
     #[must_use]
-    pub fn pickup_tint(&self, slot: usize) -> Option<[f32; 4]> {
+    pub fn hud(&self, slot: usize, tick: u64) -> oag_hud::ext_draws::Outputs {
         #[cfg(feature = "extensions")]
         {
-            self.on.tints.get(slot).copied().flatten()
+            on::hud_outputs(&self.on.hud, slot, tick)
         }
         #[cfg(not(feature = "extensions"))]
         {
-            let _ = slot;
-            None
+            let _ = (slot, tick);
+            oag_hud::ext_draws::Outputs::default()
         }
     }
 
@@ -579,6 +581,96 @@ mod on {
     use super::Report;
     use crate::sim::RaceSim;
 
+    /// The `hud-*` commands of `slot` as the HUD's own vocabulary. A later command for
+    /// the same element replaces an earlier one (modules run in id order).
+    #[cfg(feature = "view")]
+    pub(super) fn hud_outputs(
+        commands: &[Command],
+        slot: usize,
+        tick: u64,
+    ) -> oag_hud::ext_draws::Outputs {
+        use oag_ext_abi::{Anchor as A, HudElement as E, Rgba};
+        use oag_hud::ext_draws::{Anchor, BarExtra, Element, Item, Outputs, What};
+        let element = |e: E| match e {
+            E::Speed => Element::Speed,
+            E::Thrust => Element::Thrust,
+            E::Energy => Element::Energy,
+            E::Pickup => Element::Pickup,
+            E::Position => Element::Position,
+            E::Lap => Element::Lap,
+            E::Time => Element::Time,
+        };
+        let index = |e: E| element(e) as usize;
+        let colour = |Rgba { r, g, b, a }: Rgba| [r, g, b, a].map(|c| f32::from(c) / 255.0);
+        let anchor = |a: A| match a {
+            A::TopLeft => Anchor::TopLeft,
+            A::Top => Anchor::Top,
+            A::TopRight => Anchor::TopRight,
+            A::Left => Anchor::Left,
+            A::Center => Anchor::Center,
+            A::Right => Anchor::Right,
+            A::BottomLeft => Anchor::BottomLeft,
+            A::Bottom => Anchor::Bottom,
+            A::BottomRight => Anchor::BottomRight,
+        };
+        let mut out = Outputs {
+            tick,
+            slot: slot as u8,
+            ..Outputs::default()
+        };
+        for command in commands
+            .iter()
+            .filter(|c| c.slot().map(|s| s.index()) == Some(slot))
+        {
+            match *command {
+                Command::HudTint {
+                    element: e, rgba, ..
+                } => out.tint[index(e)] = Some(colour(rgba)),
+                Command::HudShake {
+                    element: e,
+                    amplitude,
+                    ..
+                } => out.shake[index(e)] = amplitude,
+                Command::HudBarExtra {
+                    element: e,
+                    extra,
+                    rgba,
+                    ..
+                } => {
+                    out.bar_extra[index(e)] = Some(BarExtra {
+                        extra,
+                        color: colour(rgba),
+                    });
+                }
+                Command::HudText {
+                    place, rgba, text, ..
+                } => out.items.push(Item {
+                    anchor: anchor(place.anchor),
+                    x: f32::from(place.x),
+                    y: f32::from(place.y),
+                    scale: place.scale(),
+                    color: colour(rgba),
+                    what: What::Text(text.as_str().to_owned()),
+                }),
+                Command::HudIcon {
+                    place,
+                    rgba,
+                    sprite,
+                    ..
+                } => out.items.push(Item {
+                    anchor: anchor(place.anchor),
+                    x: f32::from(place.x),
+                    y: f32::from(place.y),
+                    scale: place.scale(),
+                    color: colour(rgba),
+                    what: What::Icon(sprite.as_str().to_owned()),
+                }),
+                _ => {}
+            }
+        }
+        out
+    }
+
     #[derive(Debug, Clone)]
     pub(super) struct Slot {
         mod_id: String,
@@ -622,9 +714,9 @@ mod on {
         /// difference is the `trigger-enter` and `trigger-exit` events.
         inside: [u64; oag_gameplay::MAX_SHIPS],
         reported: [u64; oag_gameplay::MAX_SHIPS],
-        /// Outputs, never hashed: each slot's `pickup-tint` this tick, and the
+        /// Outputs, never hashed: this tick's `hud-*` commands, and the
         /// `fire-effect`s the view has still to draw.
-        pub(super) tints: [Option<[f32; 4]>; oag_gameplay::MAX_SHIPS],
+        pub(super) hud: Vec<Command>,
         pub(super) effects: Vec<(usize, oag_title::effects::Trigger)>,
         /// The race-wide outputs of this tick.
         pub(super) sky: super::Sky,
@@ -659,7 +751,7 @@ mod on {
                 weapon_entered: [None; oag_gameplay::MAX_SHIPS],
                 inside: [0; oag_gameplay::MAX_SHIPS],
                 reported: [0; oag_gameplay::MAX_SHIPS],
-                tints: [None; oag_gameplay::MAX_SHIPS],
+                hud: Vec::new(),
                 effects: Vec::new(),
                 sky: super::Sky::default(),
             }
@@ -1021,7 +1113,7 @@ mod on {
         on.speed_entered = [None; oag_gameplay::MAX_SHIPS];
         on.weapon_entered = [None; oag_gameplay::MAX_SHIPS];
         on.reported = on.inside;
-        on.tints = [None; oag_gameplay::MAX_SHIPS];
+        on.hud.clear();
         on.sky = super::Sky::default();
         // This tick's alone: a tick that draws nothing (a replayed one, a server's) drops
         // them rather than piling them up.
@@ -1100,11 +1192,11 @@ mod on {
                     .on
                     .effects
                     .push((slot.index(), self::effect(effect))),
-                Command::PickupTint { slot, rgba } => {
-                    let oag_ext_abi::Rgba { r, g, b, a } = rgba;
-                    sim.extensions.on.tints[slot.index()] =
-                        Some([r, g, b, a].map(|c| f32::from(c) / 255.0));
-                }
+                Command::HudTint { .. }
+                | Command::HudShake { .. }
+                | Command::HudBarExtra { .. }
+                | Command::HudText { .. }
+                | Command::HudIcon { .. } => sim.extensions.on.hud.push(command),
                 Command::SetWeather { strength, .. } => {
                     sim.extensions.on.sky.rain = Some(strength);
                 }

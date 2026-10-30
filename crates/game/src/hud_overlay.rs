@@ -57,6 +57,9 @@ pub struct ViewDraw<'a> {
     /// places each group of widgets on its own, so the reticle, which is not a
     /// widget of any group, is one more draw of the view's own.
     pub sight_only: bool,
+    /// Draw only the slot's `hud-text` and `hud-icon` items, anchored in this grid
+    /// (`oag_hud::ext_draws`).
+    pub items: Option<(f32, f32)>,
 }
 
 /// The draw list of a split screen: each view's HUD from its own `Readout`, moved
@@ -73,6 +76,18 @@ pub fn views_frame(views: &[ViewDraw<'_>]) -> Frame {
                     .filter_map(|draw| oag_hud::place(draw, at))
                     .collect()
             };
+        if let Some(grid) = view.items {
+            let mut mine = Frame::default();
+            oag_hud::ext_draws::append(&mut mine, &view.cx, &view.readout.ext, grid);
+            let mut mine = mine.placed(&view.placement);
+            mine.spans.clear();
+            mine.spans.push(Span {
+                clip: view.placement.clip,
+                start: [0; 5],
+            });
+            frame.extend(mine);
+            continue;
+        }
         if view.sight_only {
             let mut mine = Frame::default();
             if let (Some(sight), Some(at)) = (&view.readout.sight, &view.sight) {
@@ -343,7 +358,10 @@ impl Overlay {
         viewport: (f32, f32, f32, f32),
     ) -> Vec<oag_hud::boost_smear::GlowStamp> {
         let mut frame = if self.hud_shown {
-            self.safe_area(draw_list(&self.context(), readout))
+            let cx = self.context();
+            let mut list = draw_list(&cx, readout);
+            oag_hud::ext_draws::append(&mut list, &cx, &readout.ext, self.space.size);
+            self.safe_area(list)
         } else {
             Frame::default()
         };
