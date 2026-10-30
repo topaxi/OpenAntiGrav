@@ -119,3 +119,14 @@ type = "string"
 [elements.extension]
 type = "types.extension"
 optional = true
+
+# `[strings.<language>]`: a table of key = "text" per language, and `[icons]`: name =
+# "path.png". Both have keys the author chooses, so the schema says "any"; the loader
+# checks that every icon is a .png in the mod and every name is letters, digits, '-', '_'.
+[elements.strings]
+type = "any"
+optional = true
+
+[elements.icons]
+type = "any"
+optional = true

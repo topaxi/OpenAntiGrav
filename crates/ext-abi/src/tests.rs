@@ -78,6 +78,7 @@ fn every_command() -> [Command; 17] {
             },
             rgba: Rgba::new(1, 2, 3, 4),
             text: HudStr::new("BOOST 1:23.4").unwrap(),
+            own: true,
         },
         Command::HudIcon {
             slot: slot(4),
@@ -89,6 +90,7 @@ fn every_command() -> [Command; 17] {
             },
             rgba: Rgba::new(255, 255, 255, 255),
             sprite: HudStr::new("TimeDiffIcon").unwrap(),
+            own: false,
         },
         Command::SetWeather {
             kind: WeatherKind::Rain,
@@ -217,6 +219,7 @@ fn layout_fold() -> u64 {
         u32::from(CRAFT_RACING),
         MAX_THRUST_FACTOR.to_bits(),
         POOL_AT as u32,
+        u32::from(OWN_FLAG),
         POOL_LEN as u32,
         MAX_HUD_ITEMS as u32,
         MAX_HUD_TEXT as u32,
@@ -275,7 +278,7 @@ fn layout_fold() -> u64 {
 /// [`REVISION`] and record the new fold beside it, in the same change. (Until the first
 /// release the maintainer has ABI 1 edited in place: the fold is re-recorded, the
 /// revision stays.)
-const REVISION_AND_FOLD: (u32, u64) = (3, 0x79d9_84a4_85f6_ffa4);
+const REVISION_AND_FOLD: (u32, u64) = (3, 0x7815_701a_dc40_af64);
 
 #[test]
 fn the_layout_is_the_revision_it_says() {

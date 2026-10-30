@@ -185,6 +185,9 @@ const COMMAND_HUD_SHAKE: u8 = 17;
 const COMMAND_HUD_BAR_EXTRA: u8 = 18;
 const COMMAND_HUD_TEXT: u8 = 19;
 const COMMAND_HUD_ICON: u8 = 20;
+/// Bit 15 of a `hud-text` or `hud-icon` argument: the string is a key of the sending
+/// mod's own tables, not the text or a title sprite. The pool offset is the rest.
+const OWN_FLAG: u16 = 1 << 15;
 /// The craft record's pickup code for a simulation mod's own pickup.
 const PICKUP_OURS: u8 = u8::MAX;
 
@@ -684,8 +687,11 @@ pub enum Command {
         place: HudPlace,
         /// The colour.
         rgba: Rgba,
-        /// The text.
+        /// The text, or with `own` the key of a `[strings]` entry of the sending mod.
         text: HudStr,
+        /// `text` is a key into the mod's own string table, resolved by the host in the
+        /// game's language (English when the language lacks the key).
+        own: bool,
     },
     /// This tick, draw the title's HUD sprite named `sprite` on the slot's HUD at
     /// `place`, `rgba` its modulating colour. An output, never hashed.
@@ -696,8 +702,11 @@ pub enum Command {
         place: HudPlace,
         /// The colour.
         rgba: Rgba,
-        /// The sprite's name in the title's HUD layout.
+        /// The sprite's name in the title's HUD layout, or with `own` the name of an
+        /// `[icons]` entry of the sending mod.
         sprite: HudStr,
+        /// `sprite` names one of the mod's own PNGs.
+        own: bool,
     },
     /// Race-wide (written with slot 0): play the host title's own `kind` of weather at
     /// `strength`, drawn with the enhanced weather whatever the player's setting. An
@@ -790,12 +799,22 @@ impl Command {
                 extra.to_bits(),
                 rgba.to_u32(),
             ),
-            Self::HudText { place, rgba, .. } => {
-                (COMMAND_HUD_TEXT, pool_at, place.to_bits(), rgba.to_u32())
-            }
-            Self::HudIcon { place, rgba, .. } => {
-                (COMMAND_HUD_ICON, pool_at, place.to_bits(), rgba.to_u32())
-            }
+            Self::HudText {
+                place, rgba, own, ..
+            } => (
+                COMMAND_HUD_TEXT,
+                pool_at | if own { OWN_FLAG } else { 0 },
+                place.to_bits(),
+                rgba.to_u32(),
+            ),
+            Self::HudIcon {
+                place, rgba, own, ..
+            } => (
+                COMMAND_HUD_ICON,
+                pool_at | if own { OWN_FLAG } else { 0 },
+                place.to_bits(),
+                rgba.to_u32(),
+            ),
             Self::SetWeather { kind, strength } => {
                 (COMMAND_SET_WEATHER, kind.code(), strength.to_bits(), 0)
             }
@@ -955,7 +974,9 @@ impl Command {
             COMMAND_HUD_TEXT | COMMAND_HUD_ICON => {
                 let place = HudPlace::from_bits(get_u32(record, COMMAND_VALUE))
                     .ok_or(Malformed::HudPlace)?;
-                let string = pool_string(pool, arg).ok_or(Malformed::Pool(arg))?;
+                let own = arg & OWN_FLAG != 0;
+                let at = arg & !OWN_FLAG;
+                let string = pool_string(pool, at).ok_or(Malformed::Pool(at))?;
                 let rgba = Rgba::from_u32(word);
                 if kind == COMMAND_HUD_TEXT {
                     Self::HudText {
@@ -963,6 +984,7 @@ impl Command {
                         place,
                         rgba,
                         text: string,
+                        own,
                     }
                 } else {
                     Self::HudIcon {
@@ -970,6 +992,7 @@ impl Command {
                         place,
                         rgba,
                         sprite: string,
+                        own,
                     }
                 }
             }

@@ -317,6 +317,34 @@ impl<'a> Reply<'a> {
         rgba: Rgba,
         text: &str,
     ) -> Result<(), Refused> {
+        self.text(craft, place, rgba, text, false)
+    }
+
+    /// `hud-text` with the text named by `key` in the mod's own `[strings]` tables: the
+    /// host shows the entry of the game's language, or English's when the language lacks
+    /// it, or nothing when no table has it.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::hud_text`].
+    pub fn hud_string(
+        &mut self,
+        craft: &Craft<'_>,
+        place: HudPlace,
+        rgba: Rgba,
+        key: &str,
+    ) -> Result<(), Refused> {
+        self.text(craft, place, rgba, key, true)
+    }
+
+    fn text(
+        &mut self,
+        craft: &Craft<'_>,
+        place: HudPlace,
+        rgba: Rgba,
+        text: &str,
+        own: bool,
+    ) -> Result<(), Refused> {
         let text = HudStr::new(text).ok_or(Refused::Range)?;
         self.push_pooled(
             craft,
@@ -326,6 +354,7 @@ impl<'a> Reply<'a> {
                 place,
                 rgba,
                 text,
+                own,
             },
             text,
         )
@@ -344,6 +373,34 @@ impl<'a> Reply<'a> {
         rgba: Rgba,
         sprite: &str,
     ) -> Result<(), Refused> {
+        self.icon(craft, place, rgba, sprite, false)
+    }
+
+    /// `hud-icon` with the image named by `name` in the mod's own `[icons]`: a PNG the
+    /// manifest declares, drawn at its own size times the placement's. One the mod
+    /// lacks or the host could not read draws nothing, and the load report says so.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::hud_text`].
+    pub fn hud_mod_icon(
+        &mut self,
+        craft: &Craft<'_>,
+        place: HudPlace,
+        rgba: Rgba,
+        name: &str,
+    ) -> Result<(), Refused> {
+        self.icon(craft, place, rgba, name, true)
+    }
+
+    fn icon(
+        &mut self,
+        craft: &Craft<'_>,
+        place: HudPlace,
+        rgba: Rgba,
+        sprite: &str,
+        own: bool,
+    ) -> Result<(), Refused> {
         let sprite = HudStr::new(sprite).ok_or(Refused::Range)?;
         self.push_pooled(
             craft,
@@ -353,6 +410,7 @@ impl<'a> Reply<'a> {
                 place,
                 rgba,
                 sprite,
+                own,
             },
             sprite,
         )
