@@ -347,6 +347,13 @@ impl Race {
     /// table lacks their ids, so no line queues and no `MESSAGE` cue plays for
     /// words nothing draws.
     pub fn watch_laps(&mut self, hud: &oag_hud::Assets, stored_best_ticks: Option<u32>) {
+        let fade_rate = hud
+            .art
+            .pickup_fade
+            .map_or(0.0, |fade| f32::from(fade.rate_percent) * 0.01);
+        for slot_hud in &mut self.view.huds {
+            slot_hud.pickup_fade_rate = fade_rate;
+        }
         for hud in &mut self.view.huds {
             hud.lap_watch = None;
         }

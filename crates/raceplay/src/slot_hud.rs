@@ -44,6 +44,11 @@ pub(super) struct SlotHud {
     /// 2048's `hud+0x228`: seconds of the grant announcement left
     /// ([`oag_hud::Readout::pickup_announcing`]).
     pub(super) pickup_announce_left: f32,
+    /// The held pickup's backdrop and icon fade ([`oag_hud::Readout::pickup_fade`]).
+    pub(super) pickup_fade: oag_hud::pickup_fade::Fade,
+    /// The fade's timer rate in units per second, `0.0` for a title that plays none. Set by
+    /// `Race::watch_laps` from the title's art, the one place a loaded race meets it.
+    pub(super) pickup_fade_rate: f32,
     /// Pilot Assist's HUD indicator timers, off this slot's own assist state.
     pub(super) assist_indicator: oag_hud::assist::Indicator,
     /// The reticle of a split-screen view on a slot that is not the primary.
@@ -126,6 +131,9 @@ impl SlotHud {
             (fraction - self.energy_bar_delay_fraction) * ENERGY_BAR_DELAY_RATE;
 
         self.advance_pickup_announcement(held, dt);
+        if self.pickup_fade_rate > 0.0 {
+            self.pickup_fade.advance(held, self.pickup_fade_rate, dt);
+        }
 
         let tick = 1.0 / 60.0;
         let value = self.thrust_chase_percent;
