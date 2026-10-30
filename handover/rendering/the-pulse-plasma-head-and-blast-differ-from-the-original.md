@@ -1,11 +1,11 @@
 ---
-status: ready-to-wire
+status: re-first
 titles: [pulse]
-updated: 2026-10-30
-summary: "Plasma blast and head laws read off GE dumps, ready to wire; onset flash emitter and the detonation distance leg still open"
+updated: 2026-10-31
+summary: "Plasma blast wired from the GE dumps (tail matches); the head's template playback, the onset flash and the detonation distance leg are open"
 ---
 
-'s head and blast differ from the original's
+# The Pulse Plasma head and blast differ from the original's
 
 2026-10-30 (`pulse-plasma-fidelity`, measure lane). Matched pairs on Talon's Junction, Time
 Trial, Venom, Assegai, fire at GO + 120 (speed 106.2), original on PPSSPP software, ours at tick
@@ -21,26 +21,25 @@ Read 2026-10-30 (`pulse-plasma-blast-law`): `docs/ghidra/functions/psp-pulse-usa
 blast and the head read off GE dumps of the original" has the draw lists, per-frame laws,
 confidence scores and the replay evidence. What is left is wiring and two unread leaves.
 
-1. **Blast envelope (3.7 M + 1.9 M px-grey): law read, ready to wire.** Three models, all additive
-   (`0xa2`, fixed white destination): scale curve, UV scroll (`hemisphere2` u = v = 0.4987 age,
-   `hemisphere1` v = 0.0202 - 1.2205 age, halo (0.503, -1.008) age), a grey ambient **tint ramp**
-   per model (`hemisphere1` 1 - age; halo min(1, 1.25 (1 - age)); `hemisphere2` min(1, (1.5 -
-   age) / 1.2); the old "dead ramps" reading is wrong), spin (`hemisphere2` 182 deg/s, halo 58
-   deg/s, `hemisphere1` none), halo gone by age 0.72, hemispheres to 1.5 s. **The purple tail is
-   `hemisphere2` alone.** **The white-out is `hemisphere1` alone, one
-   sided (back-face culled) and world-fixed: it ends when the eye passes through its wall** (dump
-   k91 to k92, shot k93 to k94; cull-off replay recovers it, removing the model gives the post-cut
-   frame). Wire: draw `hemisphere1` culled with a world-fixed basis at the construct anchor; keep the
-   scale curve exact; stop using the camera-facing billboard for it. **Unread:** the scale curve is
-   not a function of age alone (neighbouring steps on different boots), and its source is open
-   (conf 60); the onset flash at shots k78-k82 is **not** these models (removing all six leaves it):
-   a 125 x 67 unit additive quad at craft z -28.8 and a 192-vertex `0x32` prim, emitter ownership
-   open (conf 45; byte-match against `WO_PLASMA_FLASH.POB` not completed).
-2. **Head and charge orb (0.24 M): law read, ready to wire.** Five draws per frame from the
-   `WO_PLASMA_HEAD` pob's own embedded textures (crescent-arc atlas strip, dark-disc quad under
-   source-alpha blend, ring quad, spike strip, soft glow quad) with the extents in the plasma.md
-   table (about 2.3x growth k20 to k36, then slower); ours draws none of the arcs, the dark disc
-   and the ring.
+1. ~~Blast envelope~~ **wired 2026-10-30 (`pulse-plasma-blast-wire`), `plasma.md` "the blast wired from the dumps"**:
+   tracks at the age, the per-tick scale ease, the tint ramps, the world-fixed hemispheres and the
+   camera-oriented halo. The tail (k96-140) area x excess went 1.95 M to 0.92 M. **Open inside it**:
+   (a) the onset k76-92 reads 4.02 M against 3.69 M because our bolt detonates 10 units short and 3
+   ticks early, so the eye is inside `hemisphere1` by shot 88 where the original's is at 94 (item 3);
+   re-score the onset after that lands; (b) the ease targets (135.3, 112.75, 320) and the 0.025 model
+   unit are fitted (conf 70-75), and the halo's end (0.65 s, chosen inside 0.55-0.717); (c) the frame
+   is the nearest spline sample's, inferred from `PlasmaBlast_Construct`'s track fit; (d) the tint
+   multiplies vertex colour where the original's lit pass ignores it; (e) the onset flash at shots
+   k78-k82 is **not** these models (a 125 x 67 unit additive quad at craft z -28.8 and a 192-vertex
+   `0x32` prim, emitter ownership open, conf 45; byte-match against `WO_PLASMA_FLASH.POB` not completed).
+2. **Head and charge orb (0.24 M): the loader is not the gap.** `WO_PLASMA_HEAD` builds all five draws
+   on their own textures and blends (two emitters, three sprite templates, none skipped; pinned).
+   Open is the **templates' playback**: in the original their extents scale exactly with the charge
+   severity (glow quad 7.0 to 21.0 units, ring 1.7 to 5.1, dark disc 1.0 to 3.3), i.e. the size
+   channels read as constant, where ours samples their keys over a 60000-65535 tick life (the glow
+   and ring sit at 0.007, the dark disc's looping channel decays to 0.02 in five ticks), so only the
+   star shows. Which age a template samples its channels at, and what else scales its size, is the
+   next read (a `ParticleSystem_DrawParticle` probe on `glow2` at two severities).
 3. **Detonation 3 ticks early: half isolated.** Original: released fire+59 at launch speed 634.61
    km/h, **first four flight ticks at 0.75 x that (475.9 km/h)**, then pinned to the ramp
    (850 km/h class), detonating 50.4 units on at fire+76. Ours flies the first four ticks at the
@@ -51,6 +50,6 @@ confidence scores and the replay evidence. What is left is wiring and two unread
 
 ## Next Steps
 
-- Spawn an `oag-wire` member on items 1 and 2 (they are independent), then a small lane for item 3
-  that logs our bolt per tick first.
+- Item 2 needs an `oag-re` read of the template age/size rule; then item 3 (log our bolt per tick
+  first), then re-score the blast onset.
 - Pulse PS2 is unmeasured here; its pair is `scripts/pcsx2-pulse-pair.py`.
