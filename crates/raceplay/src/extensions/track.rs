@@ -24,6 +24,8 @@ pub struct TrackProps {
 /// The track a race's modules read: its properties and its pads.
 #[derive(Debug, Clone, Copy)]
 pub struct Track<'a> {
+    /// The track's name for the load report (its circuit or `foreign:<id>`).
+    pub name: &'a str,
     /// The properties and triggers.
     pub props: &'a TrackProps,
     /// The speed pads, in the race's order.

@@ -490,6 +490,7 @@ mod on {
         let mut report = Vec::new();
         let props = crate::extensions::TrackProps::default();
         let track = crate::extensions::Track {
+            name: "test",
             props: &props,
             speedup_pads: &[],
             weapon_pads: &[],
@@ -633,6 +634,7 @@ mod triggers {
     fn prepared_on(props: &TrackProps) -> Prepared {
         let mut report = Vec::new();
         let track = Track {
+            name: "test",
             props,
             speedup_pads: &[],
             weapon_pads: &[],
@@ -668,5 +670,26 @@ mod triggers {
         // A gate the craft never reaches is never entered.
         let (race, _) = run(grid(prepared_on(&gate(to + 1000.0, to + 1010.0))), 380);
         assert_eq!(race.extension_state(0).unwrap()[..2], [0, 0]);
+    }
+
+    #[test]
+    fn a_track_past_a_cap_leaves_every_module_out_naming_the_track() {
+        let mut props = gate(0.0, 10.0);
+        props.triggers = vec![props.triggers[0].clone(); oag_ext_abi::track::MAX_TRIGGERS + 1];
+        let mut report = Vec::new();
+        let track = Track {
+            name: "foreign:crowded",
+            props: &props,
+            speedup_pads: &[],
+            weapon_pads: &[],
+        };
+        let prepared = prepare(&[counter()], "wipeout-pulse", None, track, &mut report);
+        assert!(!crate::extensions::Extensions::new(prepared).any());
+        assert!(
+            report
+                .iter()
+                .any(|l| l.contains("track foreign:crowded carries 65 triggers")),
+            "{report:?}"
+        );
     }
 }

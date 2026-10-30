@@ -93,8 +93,8 @@ empty grid, this project's driver flying, the pool at half):
   energy.
 - A craft without the turbo flies the vanilla race tick for tick.
 - Two runs hash the same every tick.
-- A full field over 180 s: the pads handed the AI 3 Turbos and 2 energy turbos (every
-  second), and AI craft boosted on theirs for 538 ticks.
+- A full field over 180 s: the pads handed out 4 Turbos and 3 energy turbos (every
+  second), and AI craft boosted on theirs for 487 ticks.
 
 **Rules modules per race**: both examples are rules modules and run together. A race
 runs up to four (`MAX_SIM_MODS`, chosen), not section 1.2's one. The two compose:
@@ -208,10 +208,11 @@ a table after the entities. **The key** is the FNV-1a 32 hash of the name's UTF-
 computed at compile time by the SDK's `prop!("boost")`; two names of one entity hashing
 alike are refused at authoring and at load. **Caps** (chosen): 256 entities, 64 triggers,
 1,024 properties, so the region is 32,776 bytes in the guest (zeroed `.bss`, no wasm
-bytes). A disc circuit exposes its pads and the track with no properties (the largest
-counted, Pulse PSP: 544 speed and 218 weapon pads over 40 track files; HD's Talon's
-Junction: 18 speed pads). A track past a cap leaves every module out, named in the load
-report. SDK: `Observation::track()`, then `speed_pad(i)`, `weapon_pad(i)`, `trigger(i)`,
+bytes). A disc circuit exposes its pads and the track with no properties. What was
+counted: Pulse PSP's 40 track files carry 544 speed and 218 weapon pads in all (19 a
+file on average), HD's Talon's Junction 18 speed pads; no per-circuit maximum was taken
+and 2048 and Omega were not counted. A track past a cap, a disc circuit included, leaves
+every module out (Wall Penalty too), named in the load report. SDK: `Observation::track()`, then `speed_pad(i)`, `weapon_pad(i)`, `trigger(i)`,
 `whole()`, each `prop(prop!("name")) -> Option<f32>`, `to_world()`, `bounds()`.
 
 | Piece | Kind | What it is |

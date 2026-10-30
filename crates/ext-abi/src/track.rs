@@ -18,10 +18,10 @@
 //! | [`ENTITIES_AT`] | [`ENTITY_LEN`] x [`MAX_ENTITIES`] | entities: kind `u8`, zero `u8`, index `u16`, first property `u16`, property count `u16`, local-to-world 16 x `f32` (row-major, translation in row 3), box minimum 3 x `f32`, box maximum 3 x `f32` (local space) |
 //! | [`PROPS_AT`] | [`PROP_LEN`] x [`MAX_PROPS`] | properties: key `u32` ([`prop_key`]), value `f32` |
 //!
-//! The caps are chosen: the largest disc circuit counted carries a few dozen pads
-//! (Pulse PSP: 544 speed and 218 weapon pads over 40 track files; HD's Talon's
-//! Junction 18 speed pads), so [`MAX_ENTITIES`] leaves a track file room to author.
-//! A track over a cap is refused by name at load.
+//! The caps are chosen. What was counted: Pulse PSP's 40 track files carry 544 speed
+//! and 218 weapon pads in all, HD's Talon's Junction 18 speed pads; no per-circuit
+//! maximum was taken, and 2048 and Omega were not counted. A track over a cap is
+//! refused by name at load.
 
 /// Entities in one region: the track, its pads and its triggers.
 pub const MAX_ENTITIES: usize = 256;

@@ -193,7 +193,10 @@ pub fn prepare(
             Err(e) => {
                 push(
                     report,
-                    format!("mods: the track carries {e}; the race runs no simulation mod"),
+                    format!(
+                        "mods: track {} carries {e}; the race runs no simulation mod",
+                        track.name
+                    ),
                 );
                 return Prepared::default();
             }

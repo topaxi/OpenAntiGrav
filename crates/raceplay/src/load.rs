@@ -1047,6 +1047,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &title.slug(),
         options.foreign_track.as_deref(),
         crate::extensions::Track {
+            name: &track,
             props: &track_props,
             speedup_pads: &speedup_pads,
             weapon_pads: &weapon_pads,
