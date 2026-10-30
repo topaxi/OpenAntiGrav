@@ -710,17 +710,15 @@ backdrop and `TurboIcon` alone** - which is the disc's own event text
 (*"a free turbo pickup once per lap"*) recorded a second time. See
 [pickups](../gameplay/pickups.md).
 
-**The backdrop's colour is substituted, and it has to be.** `PickupBackground`
-and every `<Type>Icon` are authored `HudColour1`, which is `0xFFFFFFFF`, and
-their art is a solid white hexagon and a white glyph - so drawn as authored the
-icon is invisible inside an opaque white hexagon. The original sets a colour at
-runtime, and the *exact* mechanism is still unrecovered, but **the picture is
-not**: reference frames taken 2026-09-04 show eleven of the thirteen weapons
-sharing one of two colours, green or magenta, corroborated by the disc's own
-loading-screen art for the other nine. This build draws those eleven in the
-colour their frames show and the remaining two (`Bomb`, `Mine`, no frame taken)
-in the layout's own `HudBGColour` still. The measurement, the confidence and
-what is and is not claimed are on [pickups](../gameplay/pickups.md).
+**The backdrop's colour is a recovered per-weapon table.** `PickupBackground`
+and every `<Type>Icon` are authored `HudColour1`, which is `0xFFFFFFFF`, so as
+authored the icon is invisible inside an opaque white hexagon. The original
+overrides the backdrop at runtime from a 14-row table at `0x08ab0844`, alpha
+`0x80` (pink for the eight attack weapons, green for Turbo, Shield and
+Autopilot, blue for Bomb and Mine); the icon stays white. This build draws those
+words source-over. Law, evidence and confidence 92:
+[pickup-colour.md](../ghidra/functions/psp-pulse-usa/pickup-colour.md); the
+page [pickups](../gameplay/pickups.md) carries the summary.
 
 ### The place and the total time are authored at one anchor, so one of them has to go
 

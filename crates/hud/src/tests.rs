@@ -552,14 +552,13 @@ fn the_pickup_backdrop_takes_its_weapons_own_colour_and_the_icon_keeps_its_autho
         drawn[0].color, authored.color,
         "the backdrop must not keep the authored white"
     );
-    // `PICKUP_COLOURS`' green, opaque - Turbo is one of the three weapons
-    // that category covers.
+    // The recovered green word, alpha 0x80 kept: translucent, not opaque.
     assert_eq!(
         drawn[0].color,
-        oag_ui::screen::argb_to_rgba(
-            oag_pulse::hud::PICKUP_COLOURS[Weapon::Turbo as usize].unwrap()
-        )
+        oag_ui::screen::argb_to_rgba(0x801C_BC1C),
+        "Turbo's backdrop is the recovered green word"
     );
+    assert_eq!(drawn[0].color[3], 0x80 as f32 / 255.0, "alpha is kept");
     assert_eq!(
         drawn[1].color, icon.color,
         "the icon keeps what the disc authored"
@@ -667,27 +666,44 @@ fn the_2048_grant_announcement_is_the_icon_at_its_authored_rect_with_a_caption()
     assert_eq!(text(&readout).as_deref(), Some("FE_MISSILE"));
 }
 
-/// **A weapon `PICKUP_COLOURS` has not measured falls back to
-/// `pickup_backdrop_colour`**, the single quarter-alpha substitute this
-/// build drew for every weapon before 2026-09-04 - see
-/// [`oag_pulse::hud::PICKUP_BACKDROP_COLOUR`]. `Bomb` and `Mine` are that
-/// case today: no weapon pad placement taken came up either, so this table
-/// has no frame to draw them in.
+/// **Every Pulse weapon draws its recovered translucent word, in three groups**,
+/// and `Bomb`/`Mine` no longer fall back to `HudBGColour`. Fails if the alpha
+/// is dropped, a grouping moves, or a weapon loses its row.
 #[test]
-fn a_weapon_with_no_measured_colour_falls_back_to_the_single_substitute() {
+fn every_pulse_weapon_draws_its_recovered_translucent_backdrop_word() {
     use oag_tables::weapons::Weapon;
     let layout = Layout::from_xml(SAMPLE);
-
-    assert_eq!(
-        oag_pulse::hud::PICKUP_COLOURS[Weapon::Bomb as usize],
-        None,
-        "this test is asserting the fallback path, which only fires when this is None"
+    let pink = 0x80BE_1E69;
+    let green = 0x801C_BC1C;
+    let blue = 0x802B_1CBC;
+    let expected = |w: Weapon| match w {
+        Weapon::Turbo | Weapon::Shield | Weapon::Autopilot => green,
+        Weapon::Bomb | Weapon::Mine => blue,
+        _ => pink,
+    };
+    for weapon in Weapon::ALL
+        .into_iter()
+        .filter(|w| oag_pulse::hud::PICKUP_COLOURS[*w as usize].is_some())
+    {
+        let drawn = pickup_sprites(&layout, weapon, oag_pulse::hud::ART, false);
+        assert_eq!(
+            drawn[0].color,
+            oag_ui::screen::argb_to_rgba(expected(weapon)),
+            "{weapon:?}"
+        );
+        assert_eq!(drawn[0].color[3], 0x80 as f32 / 255.0, "{weapon:?} alpha");
+    }
+    let blue_drawn = pickup_sprites(&layout, Weapon::Mine, oag_pulse::hud::ART, false);
+    assert_ne!(
+        blue_drawn[0].color[3],
+        0x40 as f32 / 255.0,
+        "Mine is not HudBGColour any more"
     );
-
-    let drawn = pickup_sprites(&layout, Weapon::Bomb, oag_pulse::hud::ART, false);
-    // `HudBGColour` is `0x40000000` - a quarter-alpha black.
-    assert_eq!(drawn[0].color[3], 0x40 as f32 / 255.0);
-    assert_eq!(drawn[0].color[0..3], [0.0, 0.0, 0.0]);
+    assert_eq!(
+        oag_pulse::hud::PICKUP_COLOURS.iter().flatten().count(),
+        13,
+        "all thirteen Pulse weapons carry a word; Disruptor stays None"
+    );
 }
 
 #[test]
