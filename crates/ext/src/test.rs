@@ -155,7 +155,7 @@ impl<E: Extension> Race<E> {
         let count = oag_ext_abi::reply_count(&io).expect("a reply within MAX_COMMANDS");
         let commands = (0..count)
             .map(|i| {
-                Command::decode(&oag_ext_abi::command_record(&io, i))
+                Command::decode_in(&oag_ext_abi::command_record(&io, i), oag_ext_abi::hud::pool(&io))
                     .unwrap_or_else(|e| panic!("command {i}: {e}"))
             })
             .collect();
