@@ -293,7 +293,7 @@ fn layout_fold() -> u64 {
 
 /// The revision and the layout it names. The ABI changes in place before release (no
 /// revision bump); the fold is recorded again with each layout edit.
-const REVISION_AND_FOLD: (u32, u64) = (3, 0x863a_0632_fbef_b91a);
+const REVISION_AND_FOLD: (u32, u64) = (3, 0x98dd_e7a7_c5ce_fb1e);
 
 #[test]
 fn the_layout_is_the_revision_it_says() {
