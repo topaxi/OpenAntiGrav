@@ -41,7 +41,7 @@ const ORIGINAL_RELEASE: usize = 59;
 fn snap(input: &mut Input, buttons: u32) -> oag_gameplay::InputSnapshot {
     input.begin_frame(buttons);
     oag_gameplay::InputSnapshot {
-        buttons: input.clone(),
+        buttons: *input,
         ..oag_gameplay::InputSnapshot::new()
     }
 }
