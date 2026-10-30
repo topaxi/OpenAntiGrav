@@ -446,7 +446,7 @@ host's own engine configuration), 2026-10-30:
 | Module size | 627 bytes | 1,367,899 bytes (Javy's static module: QuickJS plus its runtime) |
 | Imports of Javy's raw output | none | 9, all `wasi_snapshot_preview1`: `environ_get`, `environ_sizes_get`, `clock_time_get`, `fd_close`, `fd_fdstat_get`, `fd_read`, `fd_seek`, `fd_write`, `proc_exit`. **After the shim: none** |
 | Exports of the raw output | | `memory`, `cabi_realloc`, `config-schema`, `_start`, and the WIT functions (kebab-case, no arguments, no result). The ABI wants `oag_abi`, `oag_io`, `tick() -> u32`: the shim adds them |
-| Fuel a tick (`FUEL_PER_TICK` 200,000) | 663 peak, 524 mean over a 900-tick race | 155,810 with nothing to do, 168,717 peak in the same race, 178,791 peak across a 3,600-tick 12-craft field, **229,032 in a random stress (up to 8 cursed slots at once: out of fuel)**. An empty `jsTick` costs 29,792; one `Javy.IO.readSync` about 30,000; the work between them is QuickJS bytecode at roughly 350 fuel an operation |
+| Fuel a tick (`FUEL_PER_TICK` 200,000) | 663 peak, 524 mean over a 900-tick race | 154,772 with nothing to do, 167,679 peak in the same race, 177,753 peak across a 3,600-tick 12-craft field, **227,994 in a random stress (up to 8 cursed slots at once: out of fuel)**. An empty `jsTick` costs 29,792; one `Javy.IO.readSync` about 30,000; the work between them is QuickJS bytecode at roughly 350 fuel an operation |
 | Call time, debug host, mean | 19 us | 89 us (the instance is fresh every tick: 22 pages, one memory image) |
 | Compile at race load | negligible | about 1.1 s of Cranelift (release probe), once per race, on the loading thread |
 | Memory | 2 pages | 22 pages at instantiation, none grown in a tick (`memory_pages = 24`) |
