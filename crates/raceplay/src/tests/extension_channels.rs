@@ -5,8 +5,7 @@
 //! The guests are hand-written WebAssembly, as in `extensions.rs`.
 
 use super::extensions::{grid, run};
-use super::*;
-use crate::extensions::{Declared, Prepared, Track, TrackProps, prepare};
+use crate::extensions::{Prepared, Track, TrackProps, prepare};
 
 fn key(name: &str) -> u32 {
     oag_ext_abi::channel_key(name)
@@ -90,7 +89,8 @@ mod with_modules {
     use std::sync::Arc;
 
     use super::*;
-    use crate::extensions::{Scope, Source};
+    use crate::Race;
+    use crate::extensions::{Declared, Scope, Source};
     use oag_gameplay::PlayerInputs;
 
     const IO: i32 = 1024;

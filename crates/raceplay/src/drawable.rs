@@ -780,13 +780,31 @@ impl Drawable {
     /// and is placed entirely by them.
     #[track_caller]
     pub(super) fn write_node_anims(&self, queue: &dyn oag_gpu::writes::Writes, seconds: f32) {
+        self.write_node_anims_started(queue, seconds, &|_| None);
+    }
+
+    /// [`Self::write_node_anims`] for a model whose art can start on a channel
+    /// (`Keyed::on`): `started(channel)` is the clock reading at which the channel last
+    /// fired. A table that depends on it is a function of more than the clock, so such a
+    /// model is written every frame, not once per clock value; every other model keeps the
+    /// once-per-clock rule.
+    #[track_caller]
+    pub(super) fn write_node_anims_started(
+        &self,
+        queue: &dyn oag_gpu::writes::Writes,
+        seconds: f32,
+        started: &dyn Fn(u32) -> Option<f32>,
+    ) {
         if self.model.anim_nodes.is_empty() {
             return;
         }
-        if !remember(&self.node_anims_at, seconds) {
+        let channel_driven = self.model.anim_nodes.iter().any(
+            |node| matches!(&node.transform, oag_mesh::mesh::Motion::Keyed(k) if k.on.is_some()),
+        );
+        if !channel_driven && !remember(&self.node_anims_at, seconds) {
             return;
         }
-        let anims = mesh_render::NodeAnims::sample(&self.model, seconds);
+        let anims = mesh_render::NodeAnims::sample_started(&self.model, seconds, started);
         oag_gpu::perfprobe::write_buffer(
             queue,
             &self.node_anims,

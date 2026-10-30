@@ -512,7 +512,7 @@ impl Scene {
         // race. See `Scene::render_viewports` and `Scene::does_frame_work`.
         let first_view = self.does_frame_work();
         if first_view {
-            self.write_scenery_anims(queue, seconds);
+            self.write_scenery_anims(queue, seconds, race);
             self.frame_work.update(|w| super::FrameWork {
                 scenery_clocks: w.scenery_clocks + 1,
                 ..w
