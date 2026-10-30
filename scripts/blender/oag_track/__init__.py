@@ -377,6 +377,7 @@ class OAG_PT_track(Panel):
             if obj.animation_data is not None:
                 layout.prop(obj, "oag_loop")
                 layout.prop(obj, "oag_on")
+                layout.prop(obj, "oag_on_value")
             mat = obj.active_material
             if mat is not None:
                 layout.prop(mat, "oag_blend")
@@ -394,6 +395,7 @@ class OAG_PT_track(Panel):
             if obj.animation_data is not None:
                 layout.prop(obj, "oag_loop")
                 layout.prop(obj, "oag_on")
+                layout.prop(obj, "oag_on_value")
 
 
 class OAG_PT_art(Panel):
@@ -516,6 +518,11 @@ def _props():
         "its first key until the channel fires. Empty plays from the start of the race. Objects sharing an "
         "oag_anim name must agree",
     )
+    ob.oag_on_value = StringProperty(
+        name="Start on value",
+        description="With Start on: only an event carrying exactly this number (glTF oag_on_value) starts the "
+        "animation, e.g. a checkpoint's gate number. Empty starts on any value",
+    )
     ob.oag_intensity = FloatProperty(
         name="Intensity",
         description="The file's intensity (a multiplier on the colour for the ships' light), not Blender's strength",
@@ -599,6 +606,7 @@ def _unprops():
         "oag_loop",
         "oag_emit",
         "oag_on",
+        "oag_on_value",
         "oag_pad",
         "oag_intensity",
     ):

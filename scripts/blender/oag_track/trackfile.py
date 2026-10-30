@@ -118,6 +118,8 @@ def _check_all(track):
         for a in track.art.animations:
             if a.on is not None:
                 check_channel(f"animation {a.name!r} oag_on", a.on)
+            elif a.on_value is not None:
+                raise TrackFileError(f"animation {a.name!r}: oag_on_value needs an oag_on")
     total = len(track.props) + sum(
         len(p.props) for p in (*track.speedup_pads, *track.weapon_pads, *track.triggers, *track.paths)
     )

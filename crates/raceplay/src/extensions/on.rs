@@ -618,7 +618,7 @@ fn emit(
         channel,
         value,
     });
-    sim.extensions.note_fired(channel, tick);
+    sim.extensions.note_fired(channel, value, tick);
 }
 
 pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs) {

@@ -793,7 +793,7 @@ impl Drawable {
         &self,
         queue: &dyn oag_gpu::writes::Writes,
         seconds: f32,
-        started: &dyn Fn(u32) -> Option<f32>,
+        started: &dyn Fn(oag_mesh::mesh::Start) -> Option<f32>,
     ) {
         if self.model.anim_nodes.is_empty() {
             return;

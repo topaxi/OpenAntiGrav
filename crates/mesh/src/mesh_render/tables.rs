@@ -111,7 +111,7 @@ impl NodeAnims {
     pub fn sample_started(
         model: &Model,
         seconds: f32,
-        started: &dyn Fn(u32) -> Option<f32>,
+        started: &dyn Fn(crate::mesh::Start) -> Option<f32>,
     ) -> Self {
         let mut out = Self::default();
         for (slot, matrix) in model

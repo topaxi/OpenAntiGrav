@@ -325,12 +325,14 @@ fn moving() -> Art {
             name: "slide".into(),
             repeat: Repeat::Clamp,
             on: None,
+            on_value: None,
             channels: vec![slide(0), slide(1)],
         },
         Animation {
             name: "sun".into(),
             repeat: Repeat::Loop,
             on: None,
+            on_value: None,
             channels: vec![Channel {
                 target: Target::Sun,
                 interpolation: Interpolation::Linear,
@@ -378,7 +380,8 @@ fn an_animation_that_starts_on_a_channel_holds_until_it_fires_then_plays_from_th
     let m = model("t", &art, vec![texel("t.png")], &mut report);
     let channel = oag_ext_abi::channel_key("test.track/open");
     let z = |seconds: f32, fired: Option<f32>| {
-        let started = move |c: u32| (c == channel).then_some(fired).flatten();
+        let started =
+            move |s: oag_mesh::mesh::Start| (s.channel == channel).then_some(fired).flatten();
         let matrices = m.sample_anim_nodes_started(seconds, &started);
         vex::transform_point(&matrices[0], m.vertices[0].position)[2]
     };
@@ -400,12 +403,62 @@ fn an_animation_that_starts_on_a_channel_holds_until_it_fires_then_plays_from_th
         "a clamped animation holds its last key"
     );
     let plain = model("t", &moving(), vec![texel("t.png")], &mut Vec::new());
-    let unstarted = |c: u32| (c == channel).then_some(10.0);
+    let unstarted = |s: oag_mesh::mesh::Start| (s.channel == channel).then_some(10.0);
     let at = plain.sample_anim_nodes_started(1.0, &unstarted);
     assert_eq!(
         vex::transform_point(&at[0], plain.vertices[0].position)[2],
         20.0,
         "no oag_on: the clock itself"
+    );
+}
+
+/// `oag_on_value` narrows the start to one value: an event carrying another value does
+/// not start the animation, its own value does, and an animation with no value still
+/// starts on any.
+#[test]
+fn a_value_filtered_animation_starts_only_on_its_own_value() {
+    let channel = oag_ext_abi::channel_key("test.track/open");
+    let model_for = |value: Option<f32>| {
+        let mut art = moving();
+        art.animations[0].on = Some("test.track/open".into());
+        art.animations[0].on_value = value;
+        model("t", &art, vec![texel("t.png")], &mut Vec::new())
+    };
+    // The log: value 2 fired at clock 10, value 3 at clock 20.
+    let log = |s: oag_mesh::mesh::Start| {
+        if s.channel != channel {
+            return None;
+        }
+        [(2.0, 10.0), (3.0, 20.0)]
+            .into_iter()
+            .filter(|(v, _)| s.value.is_none_or(|want| want == *v))
+            .map(|(_, at)| at)
+            .reduce(f32::max)
+    };
+    let z = |m: &Model, seconds: f32| {
+        let matrices = m.sample_anim_nodes_started(seconds, &log);
+        vex::transform_point(&matrices[0], m.vertices[0].position)[2]
+    };
+    assert_eq!(
+        z(&model_for(Some(2.0)), 11.0),
+        20.0,
+        "its own value, one second in"
+    );
+    assert_eq!(z(&model_for(Some(3.0)), 21.0), 20.0, "the later value");
+    assert_eq!(
+        z(&model_for(Some(3.0)), 19.0),
+        0.0,
+        "before its value fired"
+    );
+    assert_eq!(
+        z(&model_for(Some(7.0)), 30.0),
+        0.0,
+        "a value that never fired"
+    );
+    assert_eq!(
+        z(&model_for(None), 21.0),
+        20.0,
+        "no filter: the latest event of any value"
     );
 }
 

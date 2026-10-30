@@ -181,6 +181,8 @@ class Animation:
     repeat: str = "loop"
     # The channel that starts it (`oag_on`); None plays from the clock's zero.
     on: str = None
+    # With `on`: only an event carrying exactly this value starts it (`oag_on_value`); None, any.
+    on_value: float = None
 
 
 @dataclass

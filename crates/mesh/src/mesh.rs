@@ -345,7 +345,7 @@ mod anim_node;
 pub use anim_node::{AnimNode, Motion, NODE_ANIM_LIMIT};
 
 pub mod keyed;
-pub use keyed::{KeyTrack, Keyed, slerp};
+pub use keyed::{KeyTrack, Keyed, Start, slerp};
 
 mod emissive;
 pub use emissive::{

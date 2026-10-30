@@ -7,6 +7,7 @@ node with only a rest rotation; glTF `animations` hold float samplers (`LINEAR` 
 `STEP`) and an `oag_loop` extra (`loop` or `clamp`).
 """
 
+import math
 import struct
 
 from . import f32
@@ -103,7 +104,11 @@ def write(b, art, nodes, mesh_nodes, push):
                 "name": anim.name,
                 "channels": channels,
                 "samplers": samplers,
-                "extras": {"oag_loop": anim.repeat, **({"oag_on": anim.on} if anim.on else {})},
+                "extras": {
+                    "oag_loop": anim.repeat,
+                    **({"oag_on": anim.on} if anim.on else {}),
+                    **({"oag_on_value": anim.on_value} if anim.on and anim.on_value is not None else {}),
+                },
             }
         )
     return out
@@ -146,5 +151,12 @@ def read(g, target_of):
         on = (anim.get("extras") or {}).get("oag_on")
         if on is not None and not isinstance(on, str):
             raise MotionError(f"animation {a}: oag_on {on!r} is not a channel name")
-        out.append(Animation(anim.get("name", ""), channels, repeat, on or None))
+        on_value = (anim.get("extras") or {}).get("oag_on_value")
+        if on_value is not None:
+            if isinstance(on_value, bool) or not isinstance(on_value, (int, float)) or not math.isfinite(on_value):
+                raise MotionError(f"animation {a}: oag_on_value {on_value!r} is not a finite number")
+            if not on:
+                raise MotionError(f"animation {a}: oag_on_value needs an oag_on")
+            on_value = float(on_value)
+        out.append(Animation(anim.get("name", ""), channels, repeat, on or None, on_value))
     return out

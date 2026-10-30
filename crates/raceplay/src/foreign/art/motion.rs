@@ -29,7 +29,10 @@ fn keyed(art: &Art, target: Target, rest: Trs) -> Option<Keyed> {
         for ch in anim.channels.iter().filter(|c| c.target == target) {
             any = true;
             if let Some(channel) = &anim.on {
-                out.on = Some(oag_ext_abi::channel_key(channel));
+                out.on = Some(oag_mesh::mesh::Start {
+                    channel: oag_ext_abi::channel_key(channel),
+                    value: anim.on_value,
+                });
             }
             let step = ch.interpolation == Interpolation::Step;
             let times = ch.times.clone();

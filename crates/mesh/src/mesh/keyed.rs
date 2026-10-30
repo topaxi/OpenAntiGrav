@@ -117,7 +117,17 @@ pub struct Keyed {
     /// The channel (`oag_ext_abi::channel_key`) that starts the tracks: they hold their
     /// first key until it fires, then play from the moment it did. `None` plays from
     /// the clock's zero.
-    pub on: Option<u32>,
+    pub on: Option<Start>,
+}
+
+/// What starts a channel-driven animation: a channel, and optionally the one value
+/// the event must carry (`oag_on_value`). `value: None` starts on any event.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Start {
+    /// `oag_ext_abi::channel_key` of the channel.
+    pub channel: u32,
+    /// The value the event must carry; `None` for any.
+    pub value: Option<f32>,
 }
 
 impl Keyed {
@@ -132,12 +142,12 @@ impl Keyed {
 
     /// The clock the tracks read at world clock `seconds`, given when each channel last
     /// fired (`started`): the world clock itself for a node no channel starts, else the
-    /// time since its channel fired, `0` before it has.
+    /// time since its channel fired (with its value, if it names one), `0` before it has.
     #[must_use]
-    pub fn clock(&self, seconds: f32, started: &dyn Fn(u32) -> Option<f32>) -> f32 {
+    pub fn clock(&self, seconds: f32, started: &dyn Fn(Start) -> Option<f32>) -> f32 {
         match self.on {
             None => seconds,
-            Some(channel) => started(channel).map_or(0.0, |at| (seconds - at).max(0.0)),
+            Some(start) => started(start).map_or(0.0, |at| (seconds - at).max(0.0)),
         }
     }
 
@@ -200,14 +210,33 @@ mod tests {
             scale_keys: None,
             on,
         };
-        let fired_at = |channel: u32| (channel == 7).then_some(10.0);
+        let any = |channel| Start {
+            channel,
+            value: None,
+        };
+        let only = |channel, value| Start {
+            channel,
+            value: Some(value),
+        };
+        let fired_at =
+            |s: Start| (s.channel == 7 && s.value.is_none_or(|v| v == 2.0)).then_some(10.0);
         assert_eq!(node(None).clock(11.0, &fired_at), 11.0);
-        assert_eq!(node(Some(7)).clock(11.0, &fired_at), 1.0);
-        assert_eq!(node(Some(7)).clock(9.0, &fired_at), 0.0, "before the fire");
+        assert_eq!(node(Some(any(7))).clock(11.0, &fired_at), 1.0);
         assert_eq!(
-            node(Some(8)).clock(11.0, &fired_at),
+            node(Some(any(7))).clock(9.0, &fired_at),
+            0.0,
+            "before the fire"
+        );
+        assert_eq!(
+            node(Some(any(8))).clock(11.0, &fired_at),
             0.0,
             "its channel never fired"
+        );
+        assert_eq!(node(Some(only(7, 2.0))).clock(11.0, &fired_at), 1.0);
+        assert_eq!(
+            node(Some(only(7, 3.0))).clock(11.0, &fired_at),
+            0.0,
+            "another value"
         );
     }
 

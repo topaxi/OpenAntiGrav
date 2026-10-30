@@ -459,6 +459,7 @@ def channel_checks(out_dir):
     ctx = author_loop(out_dir, motion=True)
     channel = "test.gate/open"
     bpy.data.objects["airship"].oag_on = channel
+    bpy.data.objects["airship"].oag_on_value = "2"
     # A gate over spline point 8 (about 500 units on, well clear of the grid): a box 120 wide
     # either way and 80 tall, so a craft driving the road passes through it.
     ahead = scene.to_blender(scene.collect(ctx).paths[0].points[8].pos)
@@ -486,13 +487,16 @@ def channel_checks(out_dir):
     track = scene.write_track(ctx, path)
     assert [t.emits for t in track.triggers] == [channel] and track.channels == [channel]
     assert [a.on for a in track.art.animations] == [channel, None], [a.on for a in track.art.animations]
+    assert [a.on_value for a in track.art.animations] == [2.0, None], [a.on_value for a in track.art.animations]
     again = trackfile.read(path)
     assert [t.emits for t in again.triggers] == [channel] and again.channels == [channel]
     assert [a.on for a in again.art.animations] == [channel, None]
+    assert [a.on_value for a in again.art.animations] == [2.0, None]
     fresh()
     scene.populate(bpy.context, again, out_dir)
     assert bpy.data.objects["oag/triggers/gate"].oag_emit == channel
     assert any(o.oag_on == channel for o in bpy.data.objects), "no imported object starts on the channel"
+    assert any(o.oag_on_value == "2.0" for o in bpy.data.objects), "no imported object keeps its start value"
     assert bpy.context.scene.oag_track_channels == channel
     path2 = os.path.join(out_dir, "channels.reexport.track.toml")
     scene.write_track(bpy.context, path2)
