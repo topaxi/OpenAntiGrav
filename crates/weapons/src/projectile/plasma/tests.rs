@@ -675,7 +675,10 @@ fn a_plasma_bolt_keeps_three_quarters_of_its_speed_for_three_updates_then_rides(
     }
     advance_one(&mut projectiles, &ships, &geometry, &stats);
     let speed = projectiles.slots[0].velocity.length();
-    assert!(speed > launch * 0.99, "the first ride did not pin the speed: {speed}");
+    assert!(
+        speed > launch * 0.99,
+        "the first ride did not pin the speed: {speed}"
+    );
 }
 
 /// The riding bolt sits [`RIDE_HEIGHT`] above the floor, the Plasma's own, not the

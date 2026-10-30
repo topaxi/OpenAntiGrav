@@ -37,11 +37,7 @@ use super::KMH_PER_UNIT_PER_SECOND;
 ///
 /// [`MUZZLE_FORWARD`] ahead of the craft's body (measured, Assegai Venom).
 #[must_use]
-pub fn launch(
-    state: &ShipState,
-    stats: &PlasmaStats,
-    class: &str,
-) -> Option<(Vec3, Vec3)> {
+pub fn launch(state: &ShipState, stats: &PlasmaStats, class: &str) -> Option<(Vec3, Vec3)> {
     let (nose, forward) = muzzle(state);
     let speed = (stats.speed_for_named(class)? + stats.launch_speed) / KMH_PER_UNIT_PER_SECOND;
     Some((nose, forward * speed))
