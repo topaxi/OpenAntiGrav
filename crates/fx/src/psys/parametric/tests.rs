@@ -20,8 +20,8 @@ alpha = [[0.0, 1.0], [1.0, 0.0]]
 colour = [[0.0, "#ffffff"], [0.3, "#ff3010"], [1.0, "#400000"]]
 "##;
 
-fn none(_: &str) -> Option<Sprite> {
-    None
+fn none(_: &TextureRef<'_>) -> Result<Sprite, String> {
+    Err("no such picture".to_string())
 }
 
 fn file(body: &str) -> String {
@@ -110,9 +110,23 @@ fn a_texture_of_the_mod_reaches_the_emitter() {
         rgba: vec![255; 4].into(),
     };
     let text = file(&GOOD.replace("drag = 0.95", "drag = 0.95\ntexture = \"fx/glow.png\""));
-    let parsed = parse(&text, &mut |path| {
-        (path == "fx/glow.png").then(|| sprite.clone())
+    let parsed = parse(&text, &mut |wanted| match wanted {
+        TextureRef::Mod("fx/glow.png") => Ok(sprite.clone()),
+        _ => Err("no".to_string()),
     })
     .unwrap();
     assert_eq!(parsed.effect.emitters[0].sprite.as_ref(), Some(&sprite));
+
+    let host = file(&GOOD.replace(
+        "drag = 0.95",
+        "drag = 0.95\ntexture = { entry = \"Data\\\\x.vex\", name = \"spark.tga\" }",
+    ));
+    let mut asked = None;
+    let parsed = parse(&host, &mut |wanted| {
+        asked = Some(format!("{wanted:?}"));
+        Ok(sprite.clone())
+    })
+    .unwrap();
+    assert!(asked.unwrap().contains("spark.tga"));
+    assert!(parsed.effect.emitters[0].sprite.is_some());
 }

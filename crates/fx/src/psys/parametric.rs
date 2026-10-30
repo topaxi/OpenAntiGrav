@@ -117,8 +117,32 @@ struct Emitter {
     alpha: Curve,
     /// `"#rrggbb"`, or `[[age, "#rrggbb"], ...]` over a particle's life.
     colour: Colour,
-    /// A PNG of the mod, drawn on every particle; none draws the soft round default.
-    texture: Option<String>,
+    /// A PNG of the mod (a path), or `{ entry = "<circuit .vex>", name = "<texture>" }`,
+    /// a texture of a circuit on the player's disc; drawn on every particle. None draws
+    /// the soft round default.
+    texture: Option<TextureName>,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum TextureName {
+    Mod(String),
+    Host { entry: String, name: String },
+}
+
+/// Which picture an emitter wants, for the caller to find.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TextureRef<'a> {
+    /// A PNG of the mod, by its path in the mod.
+    Mod(&'a str),
+    /// A `Texture` node of a circuit of the player's disc: the lookup a track file's
+    /// host references use.
+    Host {
+        /// The circuit's entry name.
+        entry: &'a str,
+        /// The texture's name.
+        name: &'a str,
+    },
 }
 
 #[derive(Deserialize, Clone, Copy)]
@@ -171,15 +195,14 @@ impl Pair {
     }
 }
 
-/// Parses `text`. `texture` is given a path of the mod and returns the decoded PNG,
-/// or `None` when the mod has none there.
+/// Parses `text`. `texture` finds a picture an emitter names, or says why it cannot.
 ///
 /// # Errors
 ///
 /// A [`ParseError`] naming the first thing wrong; the caller draws nothing.
 pub fn parse(
     text: &str,
-    texture: &mut dyn FnMut(&str) -> Option<Sprite>,
+    texture: &mut dyn FnMut(&TextureRef<'_>) -> Result<Sprite, String>,
 ) -> Result<Parsed, ParseError> {
     let file: File = toml::from_str(text).map_err(|e| ParseError(e.to_string()))?;
     oag_schema::check(file.header.as_ref(), SCHEMA_KIND, SCHEMA_MAJOR)
@@ -228,7 +251,7 @@ fn finite(value: f64, what: &str) -> Result<f32, ParseError> {
 fn build(
     e: &Emitter,
     label: &str,
-    texture: &mut dyn FnMut(&str) -> Option<Sprite>,
+    texture: &mut dyn FnMut(&TextureRef<'_>) -> Result<Sprite, String>,
 ) -> Result<EmitterSpec, ParseError> {
     let duration = finite(e.duration, "duration")?;
     if !(0.0..=MAX_DURATION_TICKS).contains(&duration) || (!e.looping && duration < 1.0) {
@@ -278,10 +301,16 @@ fn build(
     let alpha = curve(&e.alpha, "alpha", 255.0)?;
     let sprite = match &e.texture {
         None => None,
-        Some(path) => match texture(path) {
-            Some(sprite) => Some(sprite),
-            None => return bad(format!("texture {path:?} is not a PNG of the mod")),
-        },
+        Some(name) => {
+            let wanted = match name {
+                TextureName::Mod(path) => TextureRef::Mod(path),
+                TextureName::Host { entry, name } => TextureRef::Host { entry, name },
+            };
+            match texture(&wanted) {
+                Ok(sprite) => Some(sprite),
+                Err(why) => return bad(format!("texture {wanted:?}: {why}")),
+            }
+        }
     };
     Ok(EmitterSpec {
         name: label.to_string(),

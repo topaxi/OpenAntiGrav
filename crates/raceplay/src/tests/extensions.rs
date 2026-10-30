@@ -698,9 +698,16 @@ colour = "#ff2010"
     #[test]
     fn a_mods_effect_files_are_loaded_and_a_broken_one_draws_nothing_and_is_named() {
         let mut source = namer();
-        source.effects = ["a_good", "b_broken", "c_no_texture", "d_gone"]
-            .map(|name| (name.to_string(), format!("fx/{name}.toml")))
-            .to_vec();
+        source.effects = [
+            "a_good",
+            "b_broken",
+            "c_no_texture",
+            "d_gone",
+            "e_host",
+            "f_no_host",
+        ]
+        .map(|name| (name.to_string(), format!("fx/{name}.toml")))
+        .to_vec();
         source.files = Arc::new(|path| match path {
             "fx/a_good.toml" => Ok(GOOD_EFFECT.as_bytes().to_vec()),
             "fx/b_broken.toml" => Ok(GOOD_EFFECT
@@ -708,6 +715,18 @@ colour = "#ff2010"
                 .into_bytes()),
             "fx/c_no_texture.toml" => Ok(GOOD_EFFECT
                 .replace("size = 0.1", "size = 0.1\ntexture = \"fx/x.png\"")
+                .into_bytes()),
+            "fx/e_host.toml" => Ok(GOOD_EFFECT
+                .replace(
+                    "size = 0.1",
+                    "size = 0.1\ntexture = { entry = \"Track.vex\", name = \"spark.tga\" }",
+                )
+                .into_bytes()),
+            "fx/f_no_host.toml" => Ok(GOOD_EFFECT
+                .replace(
+                    "size = 0.1",
+                    "size = 0.1\ntexture = { entry = \"Track.vex\", name = \"nope.tga\" }",
+                )
                 .into_bytes()),
             other => Err(format!("{other}: not in the mod")),
         });
@@ -718,19 +737,40 @@ colour = "#ff2010"
             "wipeout-pulse",
             None,
             &mut library,
+            &mut |entry, name| match (entry, name) {
+                ("Track.vex", "spark.tga") => Ok(oag_fx::psys::sprite::Sprite {
+                    width: 1,
+                    height: 1,
+                    rgba: vec![255; 4].into(),
+                }),
+                _ => Err(format!("{entry} has no texture node {name}")),
+            },
             &mut report,
         );
         assert!(loaded.get("test.names", 0).is_some(), "the good file plays");
-        for index in 1..4 {
+        assert!(
+            loaded.get("test.names", 4).is_some(),
+            "a disc texture by name plays"
+        );
+        for index in [1, 2, 3, 5] {
             assert!(
                 loaded.get("test.names", index).is_none(),
                 "{index} draws nothing"
             );
         }
         assert!(library.get("mod:test.names/a_good").is_some());
-        assert_eq!(library.len(), 1, "only the good one reached the library");
+        assert_eq!(
+            library.len(),
+            2,
+            "only the two good ones reached the library"
+        );
         let said = report.join("\n");
-        for name in ["effect b_broken", "effect c_no_texture", "effect d_gone"] {
+        for name in [
+            "effect b_broken",
+            "effect c_no_texture",
+            "effect d_gone",
+            "effect f_no_host",
+        ] {
             assert!(said.contains(name), "{name} is named: {said}");
         }
         assert!(
@@ -746,6 +786,7 @@ colour = "#ff2010"
             "wipeout-pure",
             None,
             &mut oag_fx::psys::Library::new(),
+            &mut |_, _| Err("none".to_string()),
             &mut Vec::new(),
         );
         assert!(

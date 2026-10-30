@@ -32,7 +32,6 @@ mod view {
     use oag_core::math::Vec3;
     #[cfg(feature = "extensions")]
     use oag_fx::psys::parametric;
-    #[cfg(feature = "extensions")]
     use oag_fx::psys::sprite::Sprite;
     use oag_fx::psys::{Effect, Library};
 
@@ -68,6 +67,33 @@ mod view {
         }
     }
 
+    /// A disc texture as the particle sprite it is: its base level, where that is plain
+    /// RGBA8 (a block-compressed or GPU-resident one is refused by name).
+    ///
+    /// # Errors
+    ///
+    /// A texture this cannot read the pixels of.
+    pub fn sprite_of(texture: &oag_mesh::mesh::ModelTexture) -> Result<Sprite, String> {
+        use oag_mesh::mesh::Texels;
+        let base = match &texture.texels {
+            Texels::Rgba8(texels) => texels.as_slice(),
+            Texels::Chain(levels) => levels.first().map_or(&[][..], Vec::as_slice),
+            _ => return Err(format!("{} is not stored as plain RGBA8", texture.label)),
+        };
+        let (width, height) = (
+            u16::try_from(texture.width).map_err(|e| e.to_string())?,
+            u16::try_from(texture.height).map_err(|e| e.to_string())?,
+        );
+        if base.len() != usize::from(width) * usize::from(height) * 4 {
+            return Err(format!("{}: unexpected texel count", texture.label));
+        }
+        Ok(Sprite {
+            width,
+            height,
+            rgba: base.into(),
+        })
+    }
+
     /// The key an effect has in the race's [`Library`].
     #[cfg(feature = "extensions")]
     fn key(mod_id: &str, name: &str) -> String {
@@ -84,11 +110,12 @@ mod view {
         title: &str,
         foreign_track: Option<&std::path::Path>,
         library: &mut Library,
+        host: &mut dyn FnMut(&str, &str) -> Result<Sprite, String>,
         report: &mut Vec<String>,
     ) -> ModEffects {
         #[cfg(not(feature = "extensions"))]
         {
-            let _ = (sources, title, foreign_track, library, report);
+            let _ = (sources, title, foreign_track, library, host, report);
             ModEffects::default()
         }
         #[cfg(feature = "extensions")]
@@ -102,7 +129,7 @@ mod view {
                 let mut loaded = Vec::new();
                 for (name, path) in &source.effects {
                     let label = format!("mod {}: effect {name}", source.mod_id);
-                    match read(source, path, library, &key(&source.mod_id, name)) {
+                    match read(source, path, library, host, &key(&source.mod_id, name)) {
                         Ok(own) => {
                             report.push(format!("{label}: {path} loaded"));
                             report.extend(crate::assets::sheet_note(
@@ -130,18 +157,24 @@ mod view {
         source: &Source,
         path: &str,
         library: &mut Library,
+        host: &mut dyn FnMut(&str, &str) -> Result<Sprite, String>,
         key: &str,
     ) -> Result<OwnEffect, String> {
         let bytes = (source.files)(path)?;
         let text = String::from_utf8(bytes).map_err(|e| format!("{path}: {e}"))?;
-        let mut texture = |png: &str| -> Option<Sprite> {
-            let bytes = (source.files)(png).ok()?;
-            let (width, height, rgba) = crate::extensions::decode_png(&bytes).ok()?;
-            Some(Sprite {
-                width: u16::try_from(width).ok()?,
-                height: u16::try_from(height).ok()?,
-                rgba: rgba.into(),
-            })
+        let mut texture = |wanted: &parametric::TextureRef<'_>| -> Result<Sprite, String> {
+            match *wanted {
+                parametric::TextureRef::Mod(png) => {
+                    let bytes = (source.files)(png)?;
+                    let (width, height, rgba) = crate::extensions::decode_png(&bytes)?;
+                    Ok(Sprite {
+                        width: u16::try_from(width).map_err(|e| e.to_string())?,
+                        height: u16::try_from(height).map_err(|e| e.to_string())?,
+                        rgba: rgba.into(),
+                    })
+                }
+                parametric::TextureRef::Host { entry, name } => host(entry, name),
+            }
         };
         let parsed = parametric::parse(&text, &mut texture).map_err(|e| format!("{path}: {e}"))?;
         library.insert(key, parsed.effect);
@@ -174,20 +207,13 @@ mod view {
                 return;
             };
             let ship = &self.sim.world.ships[slot];
-            if matches!(fired, Fired::Title(_)) {
-                let model = crate::drawable::model_matrix_of(ship);
-                let tail = Vec3::new(0.0, 0.0, ship.handling.dimensions.length * 0.5);
-                self.view
-                    .stage
-                    .play(&effect, model.transform_point3(tail), 1.0);
-                return;
-            }
-            // The mod's own: the nozzle is the hull's back end along the body's
-            // heading, and a rear effect's cone axis points away from the nose.
+            // The nozzle is the hull's back end along the body's heading; a mod's rear
+            // effect points its cone axis away from the nose.
             let body = &ship.physics.body;
             let back = -body.forward();
             let at = body.position + back * (ship.handling.dimensions.length * 0.5);
-            if let Some(playing) = self.view.stage.play(&effect, at, 1.0) {
+            let playing = self.view.stage.play(&effect, at, 1.0);
+            if let (Some(playing), Fired::Own { .. }) = (playing, fired) {
                 let up = if axis == Axis::Rear { back } else { body.up() };
                 self.view.stage.orient(playing, up);
             }

@@ -858,6 +858,10 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &title.slug(),
         options.foreign_track.as_deref(),
         &mut effects,
+        &mut |entry, name| {
+            crate::foreign::art::host_texture(&mut archives, entry, name)
+                .and_then(|texture| crate::extension_effects::sprite_of(&texture))
+        },
         &mut report,
     );
     #[cfg(feature = "view")]

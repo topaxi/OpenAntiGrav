@@ -38,7 +38,9 @@ blend = "additive"       # or "alpha-over"
 size = [[0.0, 0.55], [1.0, 0.1]]   # half-size over life: a number or [age, value] keys
 alpha = [[0.0, 1.0], [1.0, 0.0]]   # 0..1 over life
 colour = [[0.0, "#ff6a48"], [1.0, "#600008"]]  # "#rrggbb" or stops over life
-texture = "fx/glow.png"  # optional PNG of the mod; none draws the soft round default
+texture = "fx/glow.png"  # optional: a PNG of the mod, or a disc texture by name:
+#   texture = { entry = "Data\\Environments\\16_Track\\track.vex", name = "energy_GLOW.tga" }
+# none draws the soft round default
 ```
 
 Ranges are the loader's (`parametric.rs`); the schema carries the shape. A file that fails to
@@ -47,13 +49,23 @@ read, parse or validate **draws nothing**, the load report names it
 (`a_mods_effect_files_are_loaded_and_a_broken_one_draws_nothing_and_is_named`).
 Mod effects join the race's effect library after every title effect, so no title sprite moves.
 
+A disc texture is found by the lookup a track file's host references use
+(`oag_raceplay::foreign::art::host_texture`: a `Texture` node of a circuit on the player's disc, by
+name); one that does not resolve, or is not plain RGBA8, refuses the effect by name
+(`the_discharge_finds_the_discs_energy_glow_by_name`, Pulse PSP EU).
+
+## Anchor
+
+A `fire-effect`, the title's or the mod's, plays at the hull's back end along the body's heading
+(`position - forward * length / 2`). The title's effects used to be placed through the hull
+model's `+Z`, which put them near the nose (seen 2026-10-30 on Pulse PSP's Energy Turbo); both
+now share the body anchor. The orange sparks at the nose of a craft scraping a wall are the
+vanilla wall-scrape sparks (a run without the mod shows them).
+
 ## Open
 
-- **A title texture by name** is not wired: `texture` names a PNG of the mod only. Needs a
-  per-title name-to-texture lookup the effects library does not have.
 - Only billboard emitters, cone directions and point spawns: no child emitters, streaks,
   spawn shapes or sprite atlases. A disc `.pob` effect is not yet describable in full.
 - The Blender preview is approximate (`docs/tools/blender.md`).
-- The nozzle anchor is the body's back end. The title's own `fire-effect` still places its
-  effect through the hull model's `+Z`, which put sparks near the nose in a screenshot of
-  Pulse PSP's Energy Turbo (2026-10-30); unchanged here, worth a look.
+- Effects are left where they were emitted: a craft at 500 km/h outruns its own sparks, so a
+  burst reads for a few ticks near the nozzle. Fire often (Energy Turbo fires every 2 ticks).

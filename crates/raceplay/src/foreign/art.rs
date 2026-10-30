@@ -65,6 +65,52 @@ struct HostTable {
     slots: TextureSlots,
 }
 
+fn host_table(archives: &mut Archives, entry: &str) -> anyhow::Result<HostTable> {
+    let blob = archives.read_name(entry)?;
+    Ok(HostTable {
+        names: texture_names(&blob)?,
+        slots: texture_slots(archives, entry, &blob)?,
+    })
+}
+
+impl HostTable {
+    /// The first node `name` spells, and how many more it spells.
+    fn find(&self, name: &str) -> Option<(usize, usize)> {
+        let mut hits = self
+            .names
+            .iter()
+            .enumerate()
+            .filter(|(_, n)| n.as_deref().is_some_and(|n| spells(name, n)))
+            .map(|(at, _)| at);
+        let first = hits.next()?;
+        Some((first, hits.count()))
+    }
+}
+
+/// The decoded `Texture` node `name` of the host circuit `entry` on this disc, the
+/// lookup a track file's host references use. Read for a mod's particle effect.
+///
+/// # Errors
+///
+/// The circuit not reading, or no decodable texture of that name in it.
+pub fn host_texture(
+    archives: &mut Archives,
+    entry: &str,
+    name: &str,
+) -> Result<Arc<ModelTexture>, String> {
+    let table = host_table(archives, entry)
+        .map_err(|e| format!("host circuit {entry} does not read on this disc ({e})"))?;
+    let (first, _) = table
+        .find(name)
+        .ok_or_else(|| format!("{entry} has no texture node {name}"))?;
+    table
+        .slots
+        .get(first)
+        .cloned()
+        .flatten()
+        .ok_or_else(|| format!("{entry}: {name} is not decodable"))
+}
+
 /// Each `Texture` node's runtime asset path, in node order: the name a host
 /// reference spells. `None` for a node that carries none.
 ///
@@ -149,32 +195,17 @@ pub fn resolve_textures(
             },
             TextureSource::Host { entry, name } => {
                 let table = hosts.entry(entry.clone()).or_insert_with(|| {
-                    let read = archives
-                        .read_name(entry)
-                        .map_err(anyhow::Error::from)
-                        .and_then(|blob| {
-                            Ok(HostTable {
-                                names: texture_names(&blob)?,
-                                slots: texture_slots(archives, entry, &blob)?,
-                            })
-                        });
-                    read.map_err(|e| {
-                        report.push(format!(
-                            "art: host circuit {entry} does not read on this disc ({e}); \
-                             every texture named in it draws nothing"
-                        ));
-                    })
-                    .ok()
+                    host_table(archives, entry)
+                        .map_err(|e| {
+                            report.push(format!(
+                                "art: host circuit {entry} does not read on this disc ({e}); \
+                                 every texture named in it draws nothing"
+                            ));
+                        })
+                        .ok()
                 });
                 let found = table.as_ref().and_then(|t| {
-                    let mut hits = t
-                        .names
-                        .iter()
-                        .enumerate()
-                        .filter(|(_, n)| n.as_deref().is_some_and(|n| spells(name, n)))
-                        .map(|(at, _)| at);
-                    let first = hits.next()?;
-                    let more = hits.count();
+                    let (first, more) = t.find(name)?;
                     if more > 0 {
                         report.push(format!(
                             "art texture {i}: {name} names {} nodes of {entry}; the first is drawn",
