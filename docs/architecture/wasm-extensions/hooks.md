@@ -204,8 +204,8 @@ returns `Err(Refused)` where the host would fault:
 | `hud-tint{slot, element, rgba}` | `HudTint` | `hud_tint(&craft, element, rgba)` | |
 | `hud-shake{slot, element, amplitude}` | `HudShake` | `hud_shake(&craft, element, amplitude)` | `amplitude` outside `[0, 16]` or not finite |
 | `hud-bar-extra{slot, element, extra, rgba}` | `HudBarExtra` | `hud_bar_extra(&craft, element, extra, rgba)` | `extra` outside `(0, 4]` or not finite |
-| `hud-text{slot, anchor, x, y, text, rgba, size}` | `HudText` | `hud_text(&craft, place, rgba, text)` | text over 48 bytes, an offset past 2047, a size outside 1..=15 quarters; a 33rd item for the craft (`Refused::HudItems`) |
-| `hud-icon{slot, anchor, x, y, sprite, rgba, size}` | `HudIcon` | `hud_icon(&craft, place, rgba, sprite)` | as `hud-text` |
+| `hud-text{slot, anchor, x, y, text, rgba, size}` | `HudText` | `hud_text(&craft, place, rgba, text)` | text over 48 bytes, an offset past 2047, a size outside 1..=15 quarters; a 33rd item for the craft (`Refused::HudItems`); `hud_string(&craft, place, rgba, key)` names a `[strings]` key instead of carrying the text |
+| `hud-icon{slot, anchor, x, y, sprite, rgba, size}` | `HudIcon` | `hud_icon(&craft, place, rgba, sprite)`, `hud_mod_icon(&craft, place, rgba, name)` for the mod's own PNG | as `hud-text` |
 | `set-weather{kind, strength}` | `SetWeather` | `set_weather(kind, strength)` | `strength` outside `[0, 1]` or not finite |
 | `set-sun{intensity}` | `SetSun` | `set_sun(intensity)` | outside `[0, 1]` or not finite |
 | `grade-sky{grey}` | `GradeSky` | `grade_sky(grey)` | outside `[0, 1]` or not finite |

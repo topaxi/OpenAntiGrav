@@ -82,7 +82,14 @@ pub struct Source {
     pub scope: Scope,
     /// Reads the module.
     pub read: Reader,
+    /// The mod's `[strings.<language>]` tables, languages lowercased.
+    pub strings: Strings,
+    /// The mod's `[icons]`: name and a reader for the PNG.
+    pub icons: Vec<(String, Reader)>,
 }
+
+/// A mod's own text: language (lowercased) then key.
+pub type Strings = std::collections::BTreeMap<String, std::collections::BTreeMap<String, String>>;
 
 impl std::fmt::Debug for Source {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -141,6 +148,11 @@ pub struct Prepared {
     /// The track as the modules read it.
     #[cfg(feature = "extensions")]
     region: track::Region,
+    /// Each module's mod's own text, in module order, and the language it is shown in.
+    #[cfg(feature = "extensions")]
+    strings: Vec<Strings>,
+    #[cfg(feature = "extensions")]
+    language: Option<String>,
 }
 
 impl Prepared {
@@ -162,6 +174,7 @@ pub fn prepare(
     title: &str,
     foreign_track: Option<&std::path::Path>,
     track: Track<'_>,
+    language: Option<&str>,
     report: &mut Vec<String>,
 ) -> Prepared {
     let sources: Vec<&Source> = sources
@@ -171,7 +184,7 @@ pub fn prepare(
         .collect();
     #[cfg(not(feature = "extensions"))]
     {
-        let _ = track;
+        let _ = (track, language);
         for source in sources {
             push(
                 report,
@@ -204,6 +217,7 @@ pub fn prepare(
         let mut sorted = sources;
         sorted.sort_by(|a, b| a.mod_id.cmp(&b.mod_id));
         let mut modules = Vec::new();
+        let mut strings = Vec::new();
         let mut track_module = false;
         for source in sorted {
             let label = format!("mod {}: {}", source.mod_id, source.module);
@@ -252,6 +266,7 @@ pub fn prepare(
                     );
                     track_module |= matches!(source.scope, Scope::Track(_));
                     modules.push((source.mod_id.clone(), module));
+                    strings.push(source.strings.clone());
                 }
                 Err(e) => push(report, format!("{label} left out: {e}")),
             }
@@ -260,8 +275,113 @@ pub fn prepare(
             modules,
             track_module,
             region,
+            strings,
+            language: language.map(str::to_owned),
         }
     }
+}
+
+/// The PNGs of the `[icons]` of every mod that is on for this race (`title`, and
+/// `foreign_track` for a track module), decoded for the HUD's sheet under the keys
+/// [`mod_icon_src`] gives. Read on the load thread with the rest of the load. One that
+/// is missing or does not decode draws nothing, and `report` names it.
+#[cfg(feature = "view")]
+#[must_use]
+pub fn mod_icons(
+    sources: &[Source],
+    title: &str,
+    foreign_track: Option<&std::path::Path>,
+    report: &mut Vec<String>,
+) -> Vec<oag_hud::sprite::DecodedImage> {
+    #[cfg(not(feature = "extensions"))]
+    {
+        let _ = (sources, title, foreign_track, report);
+        Vec::new()
+    }
+    #[cfg(feature = "extensions")]
+    {
+        let mut seen = std::collections::BTreeSet::new();
+        let mut out = Vec::new();
+        for source in sources
+            .iter()
+            .filter(|s| {
+                s.titles.is_empty() || s.titles.iter().any(|t| t.eq_ignore_ascii_case(title))
+            })
+            .filter(|s| s.scope.runs_on(foreign_track))
+        {
+            if !seen.insert(source.mod_id.clone()) {
+                continue;
+            }
+            for (name, read) in &source.icons {
+                let label = format!("mod {}: icon {name}", source.mod_id);
+                match read().and_then(|bytes| decode_png(&bytes)) {
+                    Ok((width, height, rgba)) => out.push(oag_hud::sprite::DecodedImage {
+                        src: mod_icon_src(&source.mod_id, name),
+                        width,
+                        height,
+                        rgba,
+                        quad_extent: None,
+                        quad_centre: None,
+                        blend: None,
+                    }),
+                    Err(e) => push(report, format!("{label} left out: {e}; draws nothing")),
+                }
+            }
+        }
+        out
+    }
+}
+
+/// A PNG as RGBA8: `(width, height, pixels)`.
+#[cfg(all(feature = "view", feature = "extensions"))]
+fn decode_png(bytes: &[u8]) -> Result<(u32, u32, Vec<u8>), String> {
+    let mut decoder = png::Decoder::new(std::io::Cursor::new(bytes));
+    decoder.set_transformations(png::Transformations::normalize_to_color8());
+    let mut reader = decoder.read_info().map_err(|e| e.to_string())?;
+    let mut buf = vec![0; reader.output_buffer_size().unwrap_or(0)];
+    let frame = reader.next_frame(&mut buf).map_err(|e| e.to_string())?;
+    let pixels = &buf[..frame.buffer_size()];
+    let rgba: Vec<u8> = match frame.color_type {
+        png::ColorType::Rgba => pixels.to_vec(),
+        png::ColorType::Rgb => pixels
+            .as_chunks::<3>()
+            .0
+            .iter()
+            .flat_map(|p| [p[0], p[1], p[2], 0xff])
+            .collect(),
+        png::ColorType::GrayscaleAlpha => pixels
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .flat_map(|p| [p[0], p[0], p[0], p[1]])
+            .collect(),
+        png::ColorType::Grayscale => pixels.iter().flat_map(|&g| [g, g, g, 0xff]).collect(),
+        png::ColorType::Indexed => return Err("an indexed PNG survived expansion".into()),
+    };
+    Ok((frame.width, frame.height, rgba))
+}
+
+/// The sheet key of a mod's own icon.
+#[must_use]
+pub fn mod_icon_src(mod_id: &str, name: &str) -> String {
+    format!("mod:{mod_id}/{name}")
+}
+
+/// The text `key` names in a mod's `strings`, in `language` (case-insensitive) or else
+/// English; `None` when neither table has it, and the item draws nothing.
+#[must_use]
+pub fn resolve_string(
+    strings: Option<&Strings>,
+    language: Option<&str>,
+    key: &str,
+) -> Option<String> {
+    let strings = strings?;
+    let find = |name: &str| {
+        strings
+            .get(&name.to_ascii_lowercase())
+            .and_then(|t| t.get(key))
+    };
+    language.and_then(find).or_else(|| find("english")).cloned()
 }
 
 /// A load report line, also logged at `info`: a modded race says so at the default
@@ -331,7 +451,12 @@ impl Extensions {
         #[cfg(feature = "extensions")]
         {
             Self {
-                on: on::On::new(prepared.modules, prepared.region),
+                on: on::On::new(
+                    prepared.modules,
+                    prepared.region,
+                    prepared.strings,
+                    prepared.language,
+                ),
             }
         }
     }
@@ -370,7 +495,7 @@ impl Extensions {
     pub fn hud(&self, slot: usize, tick: u64) -> oag_hud::ext_draws::Outputs {
         #[cfg(feature = "extensions")]
         {
-            on::hud_outputs(&self.on.hud, slot, tick)
+            self.on.hud_outputs(slot, tick)
         }
         #[cfg(not(feature = "extensions"))]
         {
@@ -581,96 +706,6 @@ mod on {
     use super::Report;
     use crate::sim::RaceSim;
 
-    /// The `hud-*` commands of `slot` as the HUD's own vocabulary. A later command for
-    /// the same element replaces an earlier one (modules run in id order).
-    #[cfg(feature = "view")]
-    pub(super) fn hud_outputs(
-        commands: &[Command],
-        slot: usize,
-        tick: u64,
-    ) -> oag_hud::ext_draws::Outputs {
-        use oag_ext_abi::{Anchor as A, HudElement as E, Rgba};
-        use oag_hud::ext_draws::{Anchor, BarExtra, Element, Item, Outputs, What};
-        let element = |e: E| match e {
-            E::Speed => Element::Speed,
-            E::Thrust => Element::Thrust,
-            E::Energy => Element::Energy,
-            E::Pickup => Element::Pickup,
-            E::Position => Element::Position,
-            E::Lap => Element::Lap,
-            E::Time => Element::Time,
-        };
-        let index = |e: E| element(e) as usize;
-        let colour = |Rgba { r, g, b, a }: Rgba| [r, g, b, a].map(|c| f32::from(c) / 255.0);
-        let anchor = |a: A| match a {
-            A::TopLeft => Anchor::TopLeft,
-            A::Top => Anchor::Top,
-            A::TopRight => Anchor::TopRight,
-            A::Left => Anchor::Left,
-            A::Center => Anchor::Center,
-            A::Right => Anchor::Right,
-            A::BottomLeft => Anchor::BottomLeft,
-            A::Bottom => Anchor::Bottom,
-            A::BottomRight => Anchor::BottomRight,
-        };
-        let mut out = Outputs {
-            tick,
-            slot: slot as u8,
-            ..Outputs::default()
-        };
-        for command in commands
-            .iter()
-            .filter(|c| c.slot().map(|s| s.index()) == Some(slot))
-        {
-            match *command {
-                Command::HudTint {
-                    element: e, rgba, ..
-                } => out.tint[index(e)] = Some(colour(rgba)),
-                Command::HudShake {
-                    element: e,
-                    amplitude,
-                    ..
-                } => out.shake[index(e)] = amplitude,
-                Command::HudBarExtra {
-                    element: e,
-                    extra,
-                    rgba,
-                    ..
-                } => {
-                    out.bar_extra[index(e)] = Some(BarExtra {
-                        extra,
-                        color: colour(rgba),
-                    });
-                }
-                Command::HudText {
-                    place, rgba, text, ..
-                } => out.items.push(Item {
-                    anchor: anchor(place.anchor),
-                    x: f32::from(place.x),
-                    y: f32::from(place.y),
-                    scale: place.scale(),
-                    color: colour(rgba),
-                    what: What::Text(text.as_str().to_owned()),
-                }),
-                Command::HudIcon {
-                    place,
-                    rgba,
-                    sprite,
-                    ..
-                } => out.items.push(Item {
-                    anchor: anchor(place.anchor),
-                    x: f32::from(place.x),
-                    y: f32::from(place.y),
-                    scale: place.scale(),
-                    color: colour(rgba),
-                    what: What::Icon(sprite.as_str().to_owned()),
-                }),
-                _ => {}
-            }
-        }
-        out
-    }
-
     #[derive(Debug, Clone)]
     pub(super) struct Slot {
         mod_id: String,
@@ -716,14 +751,132 @@ mod on {
         reported: [u64; oag_gameplay::MAX_SHIPS],
         /// Outputs, never hashed: this tick's `hud-*` commands, and the
         /// `fire-effect`s the view has still to draw.
-        pub(super) hud: Vec<Command>,
+        pub(super) hud: Vec<(usize, Command)>,
+        /// Each module's own text, and the language it is shown in.
+        strings: Vec<super::Strings>,
+        language: Option<String>,
         pub(super) effects: Vec<(usize, oag_title::effects::Trigger)>,
         /// The race-wide outputs of this tick.
         pub(super) sky: super::Sky,
     }
 
     impl On {
-        pub(super) fn new(modules: Vec<(String, Module)>, region: super::track::Region) -> Self {
+        /// The `hud-*` commands of `slot` as the HUD's own vocabulary. A later command for
+        /// the same element replaces an earlier one (modules run in id order).
+        #[cfg(feature = "view")]
+        pub(super) fn hud_outputs(&self, slot: usize, tick: u64) -> oag_hud::ext_draws::Outputs {
+            use oag_ext_abi::{Anchor as A, HudElement as E, Rgba};
+            use oag_hud::ext_draws::{Anchor, BarExtra, Element, Item, Outputs, What};
+            let element = |e: E| match e {
+                E::Speed => Element::Speed,
+                E::Thrust => Element::Thrust,
+                E::Energy => Element::Energy,
+                E::Pickup => Element::Pickup,
+                E::Position => Element::Position,
+                E::Lap => Element::Lap,
+                E::Time => Element::Time,
+            };
+            let index = |e: E| element(e) as usize;
+            let colour = |Rgba { r, g, b, a }: Rgba| [r, g, b, a].map(|c| f32::from(c) / 255.0);
+            let anchor = |a: A| match a {
+                A::TopLeft => Anchor::TopLeft,
+                A::Top => Anchor::Top,
+                A::TopRight => Anchor::TopRight,
+                A::Left => Anchor::Left,
+                A::Center => Anchor::Center,
+                A::Right => Anchor::Right,
+                A::BottomLeft => Anchor::BottomLeft,
+                A::Bottom => Anchor::Bottom,
+                A::BottomRight => Anchor::BottomRight,
+            };
+            let mut out = Outputs {
+                tick,
+                slot: slot as u8,
+                ..Outputs::default()
+            };
+            for &(module, command) in self
+                .hud
+                .iter()
+                .filter(|(_, c)| c.slot().map(|s| s.index()) == Some(slot))
+            {
+                match command {
+                    Command::HudTint {
+                        element: e, rgba, ..
+                    } => out.tint[index(e)] = Some(colour(rgba)),
+                    Command::HudShake {
+                        element: e,
+                        amplitude,
+                        ..
+                    } => out.shake[index(e)] = amplitude,
+                    Command::HudBarExtra {
+                        element: e,
+                        extra,
+                        rgba,
+                        ..
+                    } => {
+                        out.bar_extra[index(e)] = Some(BarExtra {
+                            extra,
+                            color: colour(rgba),
+                        });
+                    }
+                    Command::HudText {
+                        place,
+                        rgba,
+                        text,
+                        own,
+                        ..
+                    } => {
+                        let shown = if own {
+                            super::resolve_string(
+                                self.strings.get(module),
+                                self.language.as_deref(),
+                                text.as_str(),
+                            )
+                        } else {
+                            Some(text.as_str().to_owned())
+                        };
+                        out.items.extend(shown.map(|shown| Item {
+                            anchor: anchor(place.anchor),
+                            x: f32::from(place.x),
+                            y: f32::from(place.y),
+                            scale: place.scale(),
+                            color: colour(rgba),
+                            what: What::Text(shown),
+                        }));
+                    }
+                    Command::HudIcon {
+                        place,
+                        rgba,
+                        sprite,
+                        own,
+                        ..
+                    } => out.items.push(Item {
+                        anchor: anchor(place.anchor),
+                        x: f32::from(place.x),
+                        y: f32::from(place.y),
+                        scale: place.scale(),
+                        color: colour(rgba),
+                        what: if own {
+                            What::ModIcon(super::mod_icon_src(
+                                &self.slots[module].mod_id,
+                                sprite.as_str(),
+                            ))
+                        } else {
+                            What::Icon(sprite.as_str().to_owned())
+                        },
+                    }),
+                    _ => {}
+                }
+            }
+            out
+        }
+
+        pub(super) fn new(
+            modules: Vec<(String, Module)>,
+            region: super::track::Region,
+            strings: Vec<super::Strings>,
+            language: Option<String>,
+        ) -> Self {
             Self {
                 slots: modules
                     .into_iter()
@@ -752,6 +905,8 @@ mod on {
                 inside: [0; oag_gameplay::MAX_SHIPS],
                 reported: [0; oag_gameplay::MAX_SHIPS],
                 hud: Vec::new(),
+                strings,
+                language,
                 effects: Vec::new(),
                 sky: super::Sky::default(),
             }
@@ -1196,7 +1351,7 @@ mod on {
                 | Command::HudShake { .. }
                 | Command::HudBarExtra { .. }
                 | Command::HudText { .. }
-                | Command::HudIcon { .. } => sim.extensions.on.hud.push(command),
+                | Command::HudIcon { .. } => sim.extensions.on.hud.push((index, command)),
                 Command::SetWeather { strength, .. } => {
                     sim.extensions.on.sky.rain = Some(strength);
                 }

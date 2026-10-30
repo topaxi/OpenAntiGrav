@@ -88,6 +88,8 @@ fn module(id: &str, body: &str) -> race::extensions::Source {
         state_bytes: 4,
         scope: race::extensions::Scope::Rules,
         read: Arc::new(move || Ok(wasm.clone())),
+        strings: Default::default(),
+        icons: Vec::new(),
     }
 }
 

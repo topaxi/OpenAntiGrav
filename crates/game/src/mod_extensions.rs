@@ -28,6 +28,13 @@ pub fn sources<'a>(mods: impl IntoIterator<Item = &'a oag_mod::Mod>) -> Vec<Sour
                 state_bytes: extension.state_bytes,
                 scope,
                 read: reader(m, module),
+                strings: m.manifest.strings.clone(),
+                icons: m
+                    .manifest
+                    .icons
+                    .iter()
+                    .map(|(name, path)| (name.clone(), reader(m, path)))
+                    .collect(),
             };
             let rules = extension
                 .rules
@@ -98,4 +105,60 @@ pub fn readout(race: &oag_raceplay::Race) -> Option<oag_present::perf::mods::Rea
             })
             .collect(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A mod's `[strings]` and `[icons]` reach the race's source, and an icon is read
+    /// through its reader, from a folder and from a zip alike.
+    #[test]
+    fn a_mods_strings_and_icons_reach_its_source() {
+        let dir = std::env::temp_dir().join(format!("oag-modext-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("ext")).unwrap();
+        std::fs::create_dir_all(dir.join("ui")).unwrap();
+        std::fs::write(dir.join("ext/m.wasm"), b"\0asm").unwrap();
+        std::fs::write(dir.join("ui/badge.png"), b"png bytes").unwrap();
+        std::fs::write(
+            dir.join("oag-mod.toml"),
+            r#"
+toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/mod.tosd", version = "1.0.0" }
+
+[mod]
+id = "test.hudmod"
+name = "Hud mod"
+version = "1.0.0"
+authors = ["A. Modder"]
+license = "MIT"
+description = "Strings and icons."
+
+[extension]
+simulation = true
+api = 1
+
+[extension.rules]
+module = "ext/m.wasm"
+
+[strings.english]
+boost = "BOOST"
+[strings.german]
+boost = "SCHUB"
+
+[icons]
+badge = "ui/badge.png"
+"#,
+        )
+        .unwrap();
+        let module = oag_mod::Mod::open(&dir).unwrap();
+        let found = sources([&module]);
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].strings["german"]["boost"], "SCHUB");
+        assert_eq!(found[0].strings["english"]["boost"], "BOOST");
+        assert_eq!(found[0].icons.len(), 1);
+        assert_eq!(found[0].icons[0].0, "badge");
+        assert_eq!((found[0].icons[0].1)().unwrap(), b"png bytes");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

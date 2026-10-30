@@ -70,6 +70,8 @@ pub enum What {
     Text(String),
     /// The title's HUD sprite of this name; nothing if the layout has none.
     Icon(String),
+    /// A mod's own PNG, by its key in the HUD sheet; nothing if the sheet lacks it.
+    ModIcon(String),
 }
 
 /// One `hud-text` or `hud-icon`.
@@ -323,6 +325,30 @@ pub fn append(frame: &mut Frame, cx: &Context<'_>, outputs: &Outputs, grid: (f32
                 };
                 frame.hud_text.extend(text_shadow(cx, &draw));
                 frame.hud_text.push(draw);
+            }
+            What::ModIcon(src) => {
+                let Some(placed) = cx.sheet.get(src) else {
+                    continue;
+                };
+                let (w, h) = (
+                    placed.width as f32 * item.scale,
+                    placed.height as f32 * item.scale,
+                );
+                frame.sprites.push(Draw::Sprite {
+                    rect: [
+                        ax - w * 0.5 * f32::from(col),
+                        ay - h * 0.5 * f32::from(row),
+                        w,
+                        h,
+                    ],
+                    uv: [
+                        placed.x as f32,
+                        placed.y as f32,
+                        placed.width as f32,
+                        placed.height as f32,
+                    ],
+                    color: item.color,
+                });
             }
             What::Icon(name) => {
                 let Some(sprite) = cx.layout.sprite(name) else {

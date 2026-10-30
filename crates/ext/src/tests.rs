@@ -399,3 +399,41 @@ fn a_guest_draws_text_and_an_icon_and_the_cap_refuses_by_name() {
         Err(Refused::Range)
     );
 }
+
+/// Names the mod's own string and icon.
+struct HudNamer;
+
+impl Extension for HudNamer {
+    type State = NoState;
+
+    fn tick(obs: &Observation<'_>, _: &mut NoState, reply: &mut Reply<'_>) {
+        for craft in obs.crafts() {
+            let place = HudPlace {
+                anchor: Anchor::Top,
+                quarters: 4,
+                x: 0,
+                y: 0,
+            };
+            reply
+                .hud_string(&craft, place, Rgba::default(), "boost")
+                .unwrap();
+            reply
+                .hud_mod_icon(&craft, place, Rgba::default(), "badge")
+                .unwrap();
+        }
+    }
+}
+
+#[test]
+fn a_guest_names_its_own_string_and_icon_by_key() {
+    let mut race = Race::<HudNamer>::new().with_craft(slot(0), racer(10.0));
+    let commands = race.tick();
+    assert!(matches!(
+        commands[0],
+        Command::HudText { text, own: true, .. } if text.as_str() == "boost"
+    ));
+    assert!(matches!(
+        commands[1],
+        Command::HudIcon { sprite, own: true, .. } if sprite.as_str() == "badge"
+    ));
+}

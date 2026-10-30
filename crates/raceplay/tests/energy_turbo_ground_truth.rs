@@ -52,6 +52,8 @@ fn energy_turbo() -> Option<race::extensions::Source> {
         state_bytes: extension.state_bytes,
         scope: race::extensions::Scope::Rules,
         read: Arc::new(move || Ok(wasm.clone())),
+        strings: Default::default(),
+        icons: Vec::new(),
     })
 }
 

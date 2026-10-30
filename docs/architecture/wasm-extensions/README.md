@@ -81,8 +81,14 @@ The HUD outputs are re-sent each tick they should hold, are per slot (in split s
 each lands in the view of the slot it names, since each view draws its own slot's
 HUD), and sit inside the title's safe area because the safe area scales the whole HUD
 frame after the items are placed. A slot may send at most 32 `hud-text` and `hud-icon`
-items per tick; the 33rd faults the module naming the cap. Text and icons do not take
-a string-table id or a manifest PNG yet.
+items per tick; the 33rd faults the module naming the cap. Text may be a literal or a key
+of the sending mod's own `[strings.<language>]` tables (`hud_string`), shown in the
+game's language and else English's, and nothing if neither has the key; an icon may be a
+title sprite by name or one of the mod's own `[icons]` PNGs (`hud_mod_icon`), read and
+decoded with the race load (all IO off the render thread), packed in the HUD's sheet,
+drawn at its own pixel size times the placement's. A PNG that is missing or does not
+decode draws nothing and the load report names it. The flag is bit 15 of the command's
+`u16`.
 
 **The string pool.** A command record is 12 bytes, so a text or sprite name does not fit
 in one. The reply section carries a 768-byte pool after the commands (`POOL_AT`): entries

@@ -92,6 +92,8 @@ mod on {
             state_bytes: 8,
             scope: crate::extensions::Scope::Rules,
             read: Arc::new(move || Ok(wasm.clone())),
+            strings: Default::default(),
+            icons: Vec::new(),
         }
     }
 
@@ -494,6 +496,146 @@ mod on {
         );
     }
 
+    /// Slot 1 says the mod's own string "boost" and shows its own icon "badge", both at
+    /// the centre.
+    fn namer() -> Source {
+        let at = |index: i32| REPLY + 4 + 12 * index;
+        let body = format!(
+            "(i32.store (i32.const {REPLY}) (i32.const 2))
+             (i32.store8 (i32.const {t}) (i32.const 19)) (i32.store8 (i32.const {ts}) (i32.const 1))
+             (i32.store16 (i32.const {ta}) (i32.const 32768))
+             (i32.store (i32.const {tv}) (i32.const 68)) (i32.store (i32.const {tw}) (i32.const 4294967295))
+             (i32.store8 (i32.const {i}) (i32.const 20)) (i32.store8 (i32.const {is}) (i32.const 1))
+             (i32.store16 (i32.const {ia}) (i32.const 32774))
+             (i32.store (i32.const {iv}) (i32.const 68)) (i32.store (i32.const {iw}) (i32.const 4294967295))
+             (i32.store8 (i32.const {p0}) (i32.const 5))
+             (i32.store8 (i32.const {p1}) (i32.const 98)) (i32.store8 (i32.const {p2}) (i32.const 111))
+             (i32.store8 (i32.const {p3}) (i32.const 111)) (i32.store8 (i32.const {p4}) (i32.const 115))
+             (i32.store8 (i32.const {p5}) (i32.const 116))
+             (i32.store8 (i32.const {q0}) (i32.const 5))
+             (i32.store8 (i32.const {q1}) (i32.const 98)) (i32.store8 (i32.const {q2}) (i32.const 97))
+             (i32.store8 (i32.const {q3}) (i32.const 100)) (i32.store8 (i32.const {q4}) (i32.const 103))
+             (i32.store8 (i32.const {q5}) (i32.const 101))
+             i32.const 0",
+            t = at(0),
+            ts = at(0) + 1,
+            ta = at(0) + 2,
+            tv = at(0) + 4,
+            tw = at(0) + 8,
+            i = at(1),
+            is = at(1) + 1,
+            ia = at(1) + 2,
+            iv = at(1) + 4,
+            iw = at(1) + 8,
+            p0 = POOL,
+            p1 = POOL + 1,
+            p2 = POOL + 2,
+            p3 = POOL + 3,
+            p4 = POOL + 4,
+            p5 = POOL + 5,
+            q0 = POOL + 6,
+            q1 = POOL + 7,
+            q2 = POOL + 8,
+            q3 = POOL + 9,
+            q4 = POOL + 10,
+            q5 = POOL + 11,
+        );
+        let mut source = module("test.names", &body);
+        let table = |text: &str| [("boost".to_string(), text.to_string())].into();
+        source.strings = [
+            ("english".to_string(), table("BOOST")),
+            ("german".to_string(), table("SCHUB")),
+        ]
+        .into();
+        source
+    }
+
+    #[test]
+    fn a_mods_own_string_is_shown_in_the_games_language_or_english_and_its_icon_is_its_own() {
+        let shown = |language: Option<&str>, sources: &[Source]| {
+            let mut report = Vec::new();
+            let props = crate::extensions::TrackProps::default();
+            let track = crate::extensions::Track {
+                name: "test",
+                props: &props,
+                speedup_pads: &[],
+                weapon_pads: &[],
+            };
+            let prepared = prepare(sources, "wipeout-pulse", None, track, language, &mut report);
+            let mut race = grid(prepared);
+            race.tick(&PlayerInputs::none());
+            let tick = race.sim.world.tick;
+            race.sim.extensions.hud(1, tick).items
+        };
+        let text = |items: &[oag_hud::ext_draws::Item]| {
+            items.iter().find_map(|item| match &item.what {
+                oag_hud::ext_draws::What::Text(text) => Some(text.clone()),
+                _ => None,
+            })
+        };
+        for (language, want) in [
+            (Some("German"), "SCHUB"),
+            (Some("english"), "BOOST"),
+            (Some("French"), "BOOST"),
+            (None, "BOOST"),
+        ] {
+            assert_eq!(
+                text(&shown(language, &[namer()])).as_deref(),
+                Some(want),
+                "{language:?}"
+            );
+        }
+        let items = shown(Some("German"), &[namer()]);
+        assert_eq!(
+            items[1].what,
+            oag_hud::ext_draws::What::ModIcon("mod:test.names/badge".into())
+        );
+        let mut bare = namer();
+        bare.strings.clear();
+        assert_eq!(
+            text(&shown(Some("German"), &[bare])),
+            None,
+            "no table, no text"
+        );
+    }
+
+    #[test]
+    fn a_mods_icons_are_read_and_decoded_for_the_sheet_and_a_bad_one_is_named() {
+        let png = oag_texture::png::encode_rgba(2, 1, &[255, 0, 0, 255, 0, 0, 255, 128]);
+        let mut source = namer();
+        source.icons = vec![
+            ("badge".to_string(), Arc::new(move || Ok(png.clone()))),
+            ("broken".to_string(), Arc::new(|| Ok(b"not a png".to_vec()))),
+            (
+                "gone".to_string(),
+                Arc::new(|| Err("no such file".to_string())),
+            ),
+        ];
+        let mut report = Vec::new();
+        let icons =
+            crate::extensions::mod_icons(&[source.clone()], "wipeout-pulse", None, &mut report);
+        assert_eq!(icons.len(), 1);
+        assert_eq!(icons[0].src, "mod:test.names/badge");
+        assert_eq!((icons[0].width, icons[0].height), (2, 1));
+        assert_eq!(icons[0].rgba, [255, 0, 0, 255, 0, 0, 255, 128]);
+        let said = report.join("\n");
+        assert!(
+            said.contains("icon broken") && said.contains("icon gone"),
+            "{said}"
+        );
+        assert!(said.contains("draws nothing"));
+        let mut other = source;
+        other.titles = vec!["wipeout-pulse".to_string()];
+        assert!(
+            crate::extensions::mod_icons(&[other], "wipeout-pure", None, &mut Vec::new())
+                .is_empty(),
+            "a mod for another title loads none of its icons"
+        );
+        let mut notes = Vec::new();
+        let sheet = oag_hud::sprite::Sheet::build_with(&[], icons, &mut notes);
+        assert!(sheet.get("mod:test.names/badge").is_some(), "{notes:?}");
+    }
+
     /// Copies slot 1's lap and laps target, as its craft record carries them, into the
     /// first two blob bytes every tick.
     fn lap_reader() -> Source {
@@ -564,7 +706,7 @@ mod on {
             speedup_pads: &[],
             weapon_pads: &[],
         };
-        let prepared = prepare(sources, "wipeout-pulse", None, track, &mut report);
+        let prepared = prepare(sources, "wipeout-pulse", None, track, None, &mut report);
         assert!(
             report.iter().all(|line| !line.contains("left out")),
             "{report:?}"
@@ -681,6 +823,8 @@ mod triggers {
             state_bytes: 8,
             scope: crate::extensions::Scope::Rules,
             read: Arc::new(move || Ok(wasm.clone())),
+            strings: Default::default(),
+            icons: Vec::new(),
         }
     }
 
@@ -708,7 +852,14 @@ mod triggers {
             speedup_pads: &[],
             weapon_pads: &[],
         };
-        let prepared = prepare(&[counter()], "wipeout-pulse", None, track, &mut report);
+        let prepared = prepare(
+            &[counter()],
+            "wipeout-pulse",
+            None,
+            track,
+            None,
+            &mut report,
+        );
         assert!(report.iter().all(|l| !l.contains("left out")), "{report:?}");
         prepared
     }
@@ -752,7 +903,14 @@ mod triggers {
             speedup_pads: &[],
             weapon_pads: &[],
         };
-        let prepared = prepare(&[counter()], "wipeout-pulse", None, track, &mut report);
+        let prepared = prepare(
+            &[counter()],
+            "wipeout-pulse",
+            None,
+            track,
+            None,
+            &mut report,
+        );
         assert!(!crate::extensions::Extensions::new(prepared).any());
         assert!(
             report

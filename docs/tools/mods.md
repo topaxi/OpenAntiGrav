@@ -193,6 +193,12 @@ It needs `simulation = true` too, loads only in a race of that file (never a dis
 and may send the same commands as a rules module, including the race-wide `set-weather`,
 `set-sun` and `grade-sky` outputs. Hillside's rain is one.
 
+A mod may ship text and images for its module's HUD: `[strings.<language>]` tables
+(`key = "text"`, the language named as the game lists it, matched case-insensitively,
+English the fallback) and `[icons]` (`name = "path/in/the/mod.png"`). A module's
+`hud_string` and `hud_mod_icon` name them; a PNG that is missing or unreadable draws
+nothing and the load report says so.
+
 A simulation module can also change the title's HUD through outputs that are never
 hashed: `hud-tint`, `hud-shake` and `hud-bar-extra` on a HUD element (`Speed`, `Thrust`,
 `Energy`, `Pickup`, `Position`, `Lap`, `Time`), and `hud-text` and `hud-icon` at one of

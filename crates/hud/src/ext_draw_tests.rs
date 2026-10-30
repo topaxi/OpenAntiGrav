@@ -282,3 +282,47 @@ fn thrust_is_the_thrust_bar_where_a_title_has_one_and_nothing_where_it_has_not()
         "no thrust bar: nothing"
     );
 }
+
+#[test]
+fn a_mods_own_icon_is_drawn_from_its_place_in_the_sheet_at_its_own_size() {
+    let layout = layout();
+    let strings = oag_ui::language::StringTable::default();
+    let icon = crate::sprite::DecodedImage {
+        src: "mod:test/badge".into(),
+        width: 8,
+        height: 4,
+        rgba: vec![255; 8 * 4 * 4],
+        quad_extent: None,
+        quad_centre: None,
+        blend: None,
+    };
+    let sheet = crate::sprite::Sheet::build_with(&[], vec![icon], &mut Vec::new());
+    let placed = sheet.get("mod:test/badge").expect("in the sheet");
+    let cx = Context {
+        sheet: &sheet,
+        ..crate::tests::context(&layout, &strings)
+    };
+    let item = |src: &str| Item {
+        anchor: Anchor::TopRight,
+        x: -2.0,
+        y: 3.0,
+        scale: 2.0,
+        color: [1.0, 1.0, 0.5, 1.0],
+        what: What::ModIcon(src.into()),
+    };
+    let ext = Outputs {
+        items: vec![item("mod:test/badge"), item("mod:test/missing")],
+        ..Outputs::default()
+    };
+    let mut frame = Frame::default();
+    ext_draws::append(&mut frame, &cx, &ext, (480.0, 272.0));
+    assert_eq!(frame.sprites.len(), 1, "a missing icon draws nothing");
+    assert_eq!(
+        frame.sprites[0],
+        Draw::Sprite {
+            rect: [480.0 - 2.0 - 16.0, 3.0, 16.0, 8.0],
+            uv: [placed.x as f32, placed.y as f32, 8.0, 4.0],
+            color: [1.0, 1.0, 0.5, 1.0],
+        }
+    );
+}
