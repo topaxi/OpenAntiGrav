@@ -60,6 +60,9 @@ pub struct Track {
     pub speedup_pad_props: Vec<Props>,
     /// One property list per weapon pad, or none at all.
     pub weapon_pad_props: Vec<Props>,
+    /// One property list per spline path (`ai.paths`' order), or none at all. A mod
+    /// finds a way round a fork by them (a pit lane's `pit`).
+    pub path_props: Vec<Props>,
     /// Boxes a mod hears a craft enter and leave. The engine does nothing else with
     /// them.
     pub triggers: Vec<Trigger>,

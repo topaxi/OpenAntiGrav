@@ -24,6 +24,11 @@ pub struct TrackRecord {
     pub weapon_pads: Vec<Vec<(u32, f32)>>,
     /// One list per trigger.
     pub triggers: Vec<Vec<(u32, f32)>>,
+    /// One list per spline path.
+    pub paths: Vec<Vec<(u32, f32)>>,
+    /// One list per route: the properties of the paths it drives, as the host merges
+    /// them.
+    pub routes: Vec<Vec<(u32, f32)>>,
 }
 
 impl TrackRecord {
@@ -53,6 +58,8 @@ impl TrackRecord {
             &entities(&self.speed_pads),
             &entities(&self.weapon_pads),
             &entities(&self.triggers),
+            &entities(&self.paths),
+            &entities(&self.routes),
         )
         .unwrap_or_else(|e| panic!("the host would refuse this track: {e}"));
         region.truncate(used);

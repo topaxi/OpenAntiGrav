@@ -225,7 +225,8 @@ pub fn run<E: Extension>(io: &mut [u8; IO_LEN], track: &[u8]) -> u32 {
     };
     let observation = Observation::read(sections.head, sections.crafts, track);
     let mut state = E::State::from_bytes(blob);
-    let mut reply = Reply::new(sections.reply, observation.track().speed_pads());
+    let track = observation.track();
+    let mut reply = Reply::new(sections.reply, track.speed_pads(), track.routes());
     E::tick(&observation, &mut state, &mut reply);
     state.to_bytes(blob);
     reply.finish();

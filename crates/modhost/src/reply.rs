@@ -17,6 +17,7 @@ pub(crate) fn read(
     let mut slot_pads_seen = 0_u32;
     let mut shield_cmd_seen = 0_u32;
     let mut pads_seen: Vec<u16> = Vec::new();
+    let mut route_seen = 0_u32;
     let mut hud_items = [0_usize; oag_ext_abi::MAX_CRAFTS];
     let mut commands = Vec::with_capacity(count);
     for i in 0..count {
@@ -109,6 +110,21 @@ pub(crate) fn read(
                     )));
                 }
                 shield_cmd_seen |= slot.bit();
+            }
+            Command::PreferRoute { slot, route } => {
+                if usize::from(route) >= observation.routes {
+                    return Err(Fault::Reply(format!(
+                        "prefer-route for route {route}, the track has {}",
+                        observation.routes
+                    )));
+                }
+                if route_seen & slot.bit() != 0 {
+                    return Err(Fault::Reply(format!(
+                        "two prefer-route commands for slot {}",
+                        slot.index()
+                    )));
+                }
+                route_seen |= slot.bit();
             }
             Command::HudText { slot, .. } | Command::HudIcon { slot, .. } => {
                 hud_items[slot.index()] += 1;

@@ -1,6 +1,7 @@
 //! The track as simulation modules read it: the region `oag_ext_abi::track` lays out,
-//! built once at load from the track's pads, its triggers and their author-defined
-//! properties, and the trigger boxes the race tests crafts against.
+//! built once at load from the track's pads, its triggers, its spline paths, its routes
+//! and their author-defined properties, and the trigger boxes the race tests crafts
+//! against.
 //!
 //! A disc circuit carries its pads with no properties; a track file adds what its
 //! author set (`oag_trackfile::props`). The engine gives no property a meaning.
@@ -19,6 +20,8 @@ pub struct TrackProps {
     pub weapon_pads: Vec<Props>,
     /// The trigger volumes.
     pub triggers: Vec<Trigger>,
+    /// One list per spline path, or none.
+    pub paths: Vec<Props>,
 }
 
 /// The track a race's modules read: its properties and its pads.
@@ -32,6 +35,11 @@ pub struct Track<'a> {
     pub speedup_pads: &'a [PadVolume],
     /// The weapon pads.
     pub weapon_pads: &'a [PadVolume],
+    /// The spline graph's paths, in the track's order.
+    pub paths: &'a [oag_vex::track::Path],
+    /// The ways from a fork back to the lap, in the course's order: the numbering a
+    /// `prefer-route` names.
+    pub routes: &'a [oag_race::course::Route],
 }
 
 /// The encoded region and what the race tests against, shared by every snapshot.
@@ -42,6 +50,8 @@ pub(super) struct Region {
     pub bytes: std::sync::Arc<[u8]>,
     /// The track's speed pads: the bound of a race-wide `scale-pad`.
     pub speed_pads: usize,
+    /// The track's routes: the bound of a `prefer-route`.
+    pub routes: usize,
     /// The trigger boxes, as pad volumes (armed, unexpanded: the author's box).
     pub triggers: std::sync::Arc<[PadVolume]>,
 }
@@ -98,6 +108,38 @@ pub(super) fn encode(track: Track<'_>) -> Result<Region, oag_ext_abi::track::Too
             disabled: 0.0,
         })
         .collect();
+    let path_props: Vec<Vec<(u32, f32)>> = (0..track.paths.len())
+        .map(|i| keyed(track.props.paths.get(i).unwrap_or(&none)))
+        .collect();
+    // A route carries the properties of the paths it drives, in order; where two set
+    // one name the first path's value is kept.
+    let route_props: Vec<Vec<(u32, f32)>> = track
+        .routes
+        .iter()
+        .map(|route| {
+            let mut merged: Vec<(u32, f32)> = Vec::new();
+            for &path in &route.paths {
+                for &(key, value) in path_props.get(usize::from(path)).into_iter().flatten() {
+                    if merged.iter().all(|(k, _)| *k != key) {
+                        merged.push((key, value));
+                    }
+                }
+            }
+            merged
+        })
+        .collect();
+    let paths: Vec<Entity<'_>> = track
+        .paths
+        .iter()
+        .zip(&path_props)
+        .map(|(path, props)| bounded(path.points.iter().map(|p| p.pos), props))
+        .collect();
+    let routes: Vec<Entity<'_>> = track
+        .routes
+        .iter()
+        .zip(&route_props)
+        .map(|(route, props)| bounded(route.positions.iter().map(|p| p.to_array()), props))
+        .collect();
     let mut bytes = vec![0; TRACK_LEN];
     let used = write(
         &mut bytes,
@@ -105,11 +147,38 @@ pub(super) fn encode(track: Track<'_>) -> Result<Region, oag_ext_abi::track::Too
         &entities(track.speedup_pads, &speed),
         &entities(track.weapon_pads, &weapon),
         &entities(&boxes, &triggers),
+        &paths,
+        &routes,
     )?;
     bytes.truncate(used);
     Ok(Region {
         bytes: bytes.into(),
         speed_pads: track.speedup_pads.len(),
+        routes: track.routes.len(),
         triggers: boxes.into(),
     })
+}
+
+/// An entity placed at the identity, its box the bounds of `points` in world space.
+#[cfg(feature = "extensions")]
+fn bounded<'a>(
+    points: impl Iterator<Item = [f32; 3]>,
+    props: &'a [(u32, f32)],
+) -> oag_ext_abi::track::Entity<'a> {
+    let (mut min, mut max) = ([f32::INFINITY; 3], [f32::NEG_INFINITY; 3]);
+    for p in points {
+        for axis in 0..3 {
+            min[axis] = min[axis].min(p[axis]);
+            max[axis] = max[axis].max(p[axis]);
+        }
+    }
+    if min[0] > max[0] {
+        (min, max) = ([0.0; 3], [0.0; 3]);
+    }
+    oag_ext_abi::track::Entity {
+        to_world: oag_ext_abi::track::IDENTITY,
+        min,
+        max,
+        props,
+    }
 }

@@ -228,13 +228,14 @@ revision stays 3 and the layout fold is re-recorded.
 **The track region.** A second buffer, read-only, no imports: a guest exporting
 `oag_track() -> u32` has the host write the race's track there before each call (the
 same bytes every tick, built once at load, never hashed; `oag_ext_abi::track`). Entities
-in a fixed order: the track, each speed pad, each weapon pad, each trigger, so speed pad
+in a fixed order: the track, each speed pad, each weapon pad, each trigger, each spline path
+and each route ([Checkpoint Circuit](#and-checkpoint-circuit-2026-10-30)), so speed pad
 `i` is entity `1 + i`. Each is 96 bytes (kind, index, first property, property count,
 local-to-world 4x4, box minimum and maximum) and its properties are `(key, f32)` pairs in
 a table after the entities. **The key** is the FNV-1a 32 hash of the name's UTF-8 bytes,
 computed at compile time by the SDK's `prop!("boost")`; two names of one entity hashing
 alike are refused at authoring and at load. **Caps** (chosen): 256 entities, 64 triggers,
-1,024 properties, so the region is 32,776 bytes in the guest (zeroed `.bss`, no wasm
+1,024 properties, so the region is 32,780 bytes in the guest (zeroed `.bss`, no wasm
 bytes). A disc circuit exposes its pads and the track with no properties. What was
 counted: Pulse PSP's 40 track files carry 544 speed and 218 weapon pads in all (19 a
 file on average), HD's Talon's Junction 18 speed pads; no per-circuit maximum was taken
@@ -369,6 +370,66 @@ revision bump, the layout fold in `ext-abi` re-recorded.
 own weapon table. They were exercised only on the synthetic Pulse fixture of the
 `oag-raceplay` tests; no disc-backed race on Pulse, HD, 2048 or Omega was run, and no
 census of those titles' Shield tables was taken for this change.
+
+
+### And Checkpoint Circuit (2026-10-30)
+
+The fourth example, `oag.checkpoint-circuit` (`assets/mods/examples/checkpoint-circuit/`, a
+track module of 9,046 bytes on `oag-ext`, and its own track file built by
+`checkpoint_circuit.py` in Blender): the example of triggers, track properties, HUD text from a
+mod's own strings, and the AI route hook. Each craft has **20 s** to its next checkpoint gate
+(`oag/triggers/checkpoint <n>`, `mod_checkpoint = n`, 1 to 4 in lap order); reaching it resets
+the clock; past zero it loses **1/240** of its maximum energy a tick (`shield-delta`) until it
+reaches the gate or is wrecked. The pit lane (the trigger `mod_pit = 1`) gives **1/300** of
+the maximum a tick, never past it. An AI craft below **40 %** asks for the pit route. All four
+numbers are the guest's constants, **chosen, not measured**. A person's HUD shows the clock
+under `CPC_CHECKPOINT` (red in the last 3 s; past zero the energy bar turns red and shakes) and
+`CPC_RECHARGING` in the pit, both from the mod's `strings/english.toml`.
+
+The pit lane is **a real fork in the spline**: three paths and two junctions, the pattern
+Pulse's own forked circuits use (`05_Track`, `07_Track`: the primary and the alternate leave
+one junction and meet at the next, sharing their first and last point bit for bit). So the
+course builds it as a route (`oag_race::course::Route`), our AI plans it like any other route
+(its speed plan verified clean on the first load, so the coin offers it) and drives it with the
+player's physics. What it added, each with the vanilla fold unchanged:
+
+| Piece | Kind | What it is |
+| --- | --- | --- |
+| Path properties | track file | `mod_*` on a Blender spline object, written as the glb spline node's `oag_props` extra (one object); `oag_trackfile::Track::path_props`, one list per path or none. A file without any writes nothing new |
+| Paths and routes in the region | observation | Entity kinds 5 (`Path`) and 6 (`Route`) after the triggers; their counts at `PATHS_AT` (6) and `ROUTES_AT` (8), so the entities start at 12. A path's box bounds its points, a route's its samples (world space, the identity placement). A route carries the properties of the paths it drives, the first path's value kept where two set one name, so a guest finds the pit lane's route by `route(r).prop(prop!("pit"))`. SDK: `Track::paths()`, `routes()`, `path(i)`, `route(i)` |
+| `prefer-route{slot, route}` | command (21) | Re-sent each tick it should hold; `route` below the region's route count (the course's numbering, `Course::routes`), one per slot per tick, else a fault. Held in `Extensions` for the tick and **hashed** after the no-module early return. SDK: `Reply::prefer_route(&craft, route)`. Code 22 is `pickup-look`, 23 stays free |
+
+**Where it lands.** `Race::steer_branching` (`crates/raceplay/src/routes.rs`), `Ai_ChooseBranch`'s
+states 0 to 2: the coin is thrown exactly as before on entering the pre-fork path
+(`oag_ai::branch::choose`, the driver's own seed and visit count), and where the driver moves
+onto a route's line, within `SWITCH_SAMPLES` of the split, a preference held that tick wins over
+the coin's draw if the route leaves that fork and its speed plan verified. So the race's random
+streams never move, a preference dropped before the switch leaves the coin's draw, and a person
+steering ignores it (it moves the driver only; under Autopilot it moves the Autopilot's). The
+hook picks a way; the AI drives it with the same physics as every other craft. `RouteLine`
+keeps its course index, because `route_lines` skips a route it cannot match onto the spline.
+
+**Proof** (`checkpoint_circuit_ground_truth`, Pulse PSP EU, Venom, Single Race on the track
+file, the committed module):
+- Alone on the grid and never flown, the clock runs out at tick 1,471 (1,200 ticks after GO),
+  then the craft loses 0.396 of its 95 a tick, every tick, and is wrecked at tick 1,710 (239
+  draining ticks); the vanilla craft keeps 95 throughout.
+- Flown round by this project's driver it reaches the gates in order 1, 2, 3, 4, 1, 2 with
+  468 to 526 ticks to spare, each resetting the clock to 1,199, and its energy equals the
+  vanilla race's bit for bit every tick of 5,000.
+- In a full field with weapons off, AI slot 1 started at 39 % is in the pit trigger from tick
+  1,681 to 2,083 and goes from 42.90 to 110.00 of 110, gaining 1/300 a tick and never past it.
+- At full energy every AI craft's route and coin draws equal the vanilla race's every tick of
+  2,400 (six of seven take the pit lane by their coin there); slot 7, whose coin keeps it on the
+  main line, takes the pit route at tick 840 when started at 41.0 of 105, its draws unchanged.
+  Dropping the hook (`take = branching.pending`) fails this test.
+- Two runs hash the same every tick.
+- Two full-field races that differ only in a module holding `prefer-route` on a slot whose
+  coin already takes the pit lane agree on every craft's position and route every tick of
+  1,500 and hash differently from the first call: the held preference is state. Dropping
+  `Preferred::hash_into` fails it at tick 0.
+
+Fuel (`tests::extension_examples`, a full grid): 14,443 on the loud tick, 10,499 after.
 
 
 ## Keeping the mod author skill current

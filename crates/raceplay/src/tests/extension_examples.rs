@@ -67,8 +67,13 @@ fn full_grid_fuel(module: &Module) -> Vec<u64> {
             ]
         })
         .collect();
-    // A track with two speed pads, a weapon pad and a trigger, a property on each.
-    let props = [(oag_ext_abi::track::prop_key("boost"), 1.5)];
+    // A track with two speed pads, a weapon pad, a trigger and a route, the same
+    // properties on each: Checkpoint Circuit's gate and pit on the trigger.
+    let props = [
+        (oag_ext_abi::track::prop_key("boost"), 1.5),
+        (oag_ext_abi::track::prop_key("checkpoint"), 1.0),
+        (oag_ext_abi::track::prop_key("pit"), 1.0),
+    ];
     let entity = oag_ext_abi::track::Entity {
         to_world: oag_ext_abi::track::IDENTITY,
         min: [0.0; 3],
@@ -76,8 +81,16 @@ fn full_grid_fuel(module: &Module) -> Vec<u64> {
         props: &props,
     };
     let mut region = vec![0; oag_ext_abi::track::TRACK_LEN];
-    let used = oag_ext_abi::track::write(&mut region, &props, &[entity; 2], &[entity], &[entity])
-        .expect("within the caps");
+    let used = oag_ext_abi::track::write(
+        &mut region,
+        &props,
+        &[entity; 2],
+        &[entity],
+        &[entity],
+        &[],
+        &[entity],
+    )
+    .expect("within the caps");
     let mut state = vec![0; module.limits().state_bytes as usize];
     let mut commands = Vec::new();
     (0..3_u64)
@@ -90,6 +103,7 @@ fn full_grid_fuel(module: &Module) -> Vec<u64> {
                 crafts: &crafts,
                 track: &region[..used],
                 speed_pads: 2,
+                routes: 1,
             };
             module
                 .tick(&observation, &mut state, &mut commands)
@@ -101,7 +115,12 @@ fn full_grid_fuel(module: &Module) -> Vec<u64> {
 
 #[test]
 fn the_committed_examples_load_and_run_a_full_grid_in_budget() {
-    for dir in ["wall-penalty", "energy-turbo", "hillside"] {
+    for dir in [
+        "wall-penalty",
+        "energy-turbo",
+        "hillside",
+        "checkpoint-circuit",
+    ] {
         let Some(module) = example(dir) else {
             eprintln!("{dir}: the mod-examples submodule is not checked out; skipped");
             continue;

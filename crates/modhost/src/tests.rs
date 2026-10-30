@@ -44,6 +44,7 @@ fn observe(tick: u64) -> Observation<'static> {
         crafts: &[],
         track: &[],
         speed_pads: 0,
+        routes: 0,
     }
 }
 
@@ -178,6 +179,7 @@ fn a_slot_with_no_craft_is_refused() {
         crafts: &[],
         track: &[],
         speed_pads: 0,
+        routes: 0,
     };
     let (fault, _) = module
         .tick(&only_slot_0, &mut [0; 4], &mut Vec::new())
@@ -215,6 +217,7 @@ fn events_reach_the_guest() {
                 crafts: &[],
                 track: &[],
                 speed_pads: 0,
+                routes: 0,
             },
             &mut state,
             &mut Vec::new(),
@@ -320,7 +323,7 @@ fn scale_pad(pad: u16) -> String {
 fn the_track_region_reaches_a_guest_that_exports_its_buffer() {
     let mut region = vec![0_u8; oag_ext_abi::track::TRACK_LEN];
     let props = [(oag_ext_abi::track::prop_key("boost"), 1.5_f32)];
-    let used = oag_ext_abi::track::write(&mut region, &props, &[], &[], &[]).unwrap();
+    let used = oag_ext_abi::track::write(&mut region, &props, &[], &[], &[], &[], &[]).unwrap();
     let module = Module::compile(&track_reader(""), Limits::default()).unwrap();
     let mut state = vec![0; 4];
     let observation = Observation {
@@ -353,6 +356,53 @@ fn a_scale_pad_for_a_pad_the_track_lacks_is_refused() {
         .tick(&with(3), &mut [0; 4], &mut commands)
         .unwrap_err();
     assert!(matches!(fault, Fault::Reply(e) if e.contains("speed pad 3")));
+}
+
+#[test]
+fn a_prefer_route_past_the_tracks_routes_or_twice_for_a_slot_is_refused() {
+    let prefer = |count: i32| {
+        let mut body = format!("(i32.store (i32.const {REPLY}) (i32.const {count}))");
+        for i in 0..count {
+            let at = REPLY + 4 + i * oag_ext_abi::COMMAND_LEN as i32;
+            body += &format!(
+                "(i32.store8 (i32.const {at}) (i32.const 21))
+                 (i32.store8 (i32.const {s}) (i32.const 1))
+                 (i32.store16 (i32.const {arg}) (i32.const 1))",
+                s = at + 1,
+                arg = at + 2,
+            );
+        }
+        Module::compile(&track_reader(&body), Limits::default()).unwrap()
+    };
+    let with = |routes| Observation {
+        routes,
+        ..observe(0)
+    };
+    let mut commands = Vec::new();
+    prefer(1)
+        .tick(&with(2), &mut [0; 4], &mut commands)
+        .unwrap();
+    assert_eq!(
+        commands,
+        [Command::PreferRoute {
+            slot: oag_ext_abi::Slot::new(1).unwrap(),
+            route: 1
+        }]
+    );
+    let (fault, _) = prefer(1)
+        .tick(&with(1), &mut [0; 4], &mut commands)
+        .unwrap_err();
+    assert!(
+        matches!(&fault, Fault::Reply(e) if e.contains("route 1")),
+        "{fault}"
+    );
+    let (fault, _) = prefer(2)
+        .tick(&with(2), &mut [0; 4], &mut commands)
+        .unwrap_err();
+    assert!(
+        matches!(&fault, Fault::Reply(e) if e.contains("two prefer-route")),
+        "{fault}"
+    );
 }
 
 #[test]

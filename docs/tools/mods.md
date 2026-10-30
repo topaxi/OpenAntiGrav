@@ -229,6 +229,17 @@ absorbed one included, with the craft's `shielded` flag) and can start, hold and
 title's Shield (`give-shield`, `hold-shield`, `clear-shield`): enough to write a breakable
 armour. See [wasm-extensions](../architecture/wasm-extensions/README.md#breakable-armour-from-the-shield-2026-10-30).
 
+**The example of triggers, track properties, HUD text and the AI hook is
+`checkpoint-circuit/`** in the mod examples (`oag.checkpoint-circuit`): a track of its own
+whose pit lane is a fork in the spline, built by `checkpoint_circuit.py` in Blender, and a
+track module that reads `mod_checkpoint` off its checkpoint triggers and `mod_pit` off its pit
+trigger and pit-lane path, drains a craft's energy past its checkpoint clock, recharges it in
+the pit lane, draws the clock and `RECHARGING` from its own `strings/english.toml`, and sends
+an AI craft low on energy down the pit lane with `prefer-route{slot, route}`: the host still
+throws the fork's coin and the AI drives the route with the player's physics; the module only
+picks the way. See
+[wasm-extensions](../architecture/wasm-extensions/README.md#and-checkpoint-circuit-2026-10-30).
+
 The game must be built with the `extensions` feature. `just play` builds with it by
 default (`OAG_NO_EXTENSIONS=1 just play` builds without); by hand it is
 `cargo run --release -p oag-game --features extensions`. A build without it runs no

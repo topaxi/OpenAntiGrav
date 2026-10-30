@@ -1075,6 +1075,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
             props: &track_props,
             speedup_pads: &speedup_pads,
             weapon_pads: &weapon_pads,
+            paths: &ai.paths,
+            routes: course.as_ref().map_or(&[], |course| course.routes()),
         },
         options.language.as_deref(),
         &mut report,

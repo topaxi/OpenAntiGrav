@@ -387,7 +387,8 @@ def effect_checks(src, out_dir):
 
 
 def props_checks(out_dir):
-    """`mod_*` properties on pads and the scene, trigger Empties, make-trigger, export, import."""
+    """`mod_*` properties on pads, the spline and the scene, trigger Empties, make-trigger,
+    export, import."""
     fresh()
     ctx = bpy.context
     make_loop(ctx)
@@ -401,6 +402,7 @@ def props_checks(out_dir):
     pad["mod_boost"] = 1.5
     pad["mod_armed"] = True
     ctx.scene["mod_laps_bonus"] = 3.0
+    next(o for o in ctx.scene.objects if o.get("oag_kind") == "spline")["mod_pit"] = True
     bpy.ops.mesh.primitive_cube_add(size=2.0, location=(10.0, 20.0, 5.0))
     box = ctx.active_object
     box.name = "gate"
@@ -417,19 +419,22 @@ def props_checks(out_dir):
     assert track.triggers[0].props == {"points": 10.0}
     assert track.speedup_pads[0].props == {"boost": 1.5, "armed": 1.0}
     assert track.props == {"laps_bonus": 3.0}
+    assert track.paths[0].props == {"pit": 1.0}
     t = track.triggers[0]
     assert t.min == (-3.0, -1.0, -4.0) and t.max == (3.0, 1.0, 4.0), (t.min, t.max)
     again = trackfile.read(path)
     assert again.triggers[0].props == t.props and again.props == track.props
+    assert again.paths[0].props == track.paths[0].props
     fresh()
     scene.populate(bpy.context, again, out_dir)
     path2 = os.path.join(out_dir, "props.reexport.track.toml")
     track2 = scene.write_track(bpy.context, path2)
     assert track2.triggers[0].props == t.props and track2.speedup_pads[0].props == track.speedup_pads[0].props
     assert track2.props == track.props
+    assert track2.paths[0].props == track.paths[0].props
     same = open(path).read() == open(path2).read().replace("props.reexport.glb", "props.glb")
     assert same, "the re-export differs from the export"
-    print("track props: pad and scene mod_*, trigger Empty, make-trigger-from-mesh, export, import, re-export: ok")
+    print("track props: pad, spline and scene mod_*, trigger Empty, make-trigger-from-mesh, export, import, re-export: ok")
 
 
 def main():

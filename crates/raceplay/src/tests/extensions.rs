@@ -676,6 +676,8 @@ mod on {
                 props: &props,
                 speedup_pads: &[],
                 weapon_pads: &[],
+                paths: &[],
+                routes: &[],
             };
             let prepared = prepare(sources, "wipeout-pulse", None, track, language, &mut report);
             let mut race = grid(prepared);
@@ -932,6 +934,8 @@ colour = "#ff2010"
             props: &props,
             speedup_pads: &[],
             weapon_pads: &[],
+            paths: &[],
+            routes: &[],
         };
         let prepared = prepare(sources, "wipeout-pulse", None, track, None, &mut report);
         assert!(
@@ -1081,6 +1085,8 @@ mod triggers {
             props,
             speedup_pads: &[],
             weapon_pads: &[],
+            paths: &[],
+            routes: &[],
         };
         let prepared = prepare(
             &[counter()],
@@ -1132,6 +1138,8 @@ mod triggers {
             props: &props,
             speedup_pads: &[],
             weapon_pads: &[],
+            paths: &[],
+            routes: &[],
         };
         let prepared = prepare(
             &[counter()],

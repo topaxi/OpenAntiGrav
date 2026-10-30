@@ -75,6 +75,11 @@ one entity whose FNV-1a 32 hashes (the key a mod reads by) are equal, a pad prop
 whose length is not the pad count, more than 64 triggers or more than 1,024 properties in
 all (the ABI's caps, `oag_ext_abi::track`).
 
+A **spline path** carries properties too: the glb spline node's `oag_props` extra is one
+property object for that path (`Track::path_props`, one list per path or none). A mod reads them
+off the path, and off every route that drives the path (the track region merges a route's paths'
+properties), so a pit lane's `pit` finds its route (Checkpoint Circuit, the mod examples).
+
 A **trigger** is a box placed like a pad (`_OAG_TO_WORLD`, `_OAG_MIN`, `_OAG_MAX`, local
 space) with a name, but without a pad's vertical expansion: the box is the author's. A mod
 hears a craft enter and leave it (`trigger-enter`, `trigger-exit`); the race does nothing
@@ -82,8 +87,8 @@ else with it.
 
 In Blender ([the add-on](../tools/blender.md)): a custom property `mod_<name>` on a pad
 empty (`oag/pads/<kind>/<i>`), on a trigger empty (`oag/triggers/<name>`, tagged
-`oag_kind = "trigger"`, its box in **Box min** and **Box max**) or on the scene is exported
-as `<name>`; anything else, a string or an array, is refused naming the object and the key.
+`oag_kind = "trigger"`, its box in **Box min** and **Box max**), on a spline object (tagged
+`oag_kind = "spline"`) or on the scene is exported as `<name>`; anything else, a string or an array, is refused naming the object and the key.
 A track without any writes none of these keys, so every earlier file is byte for byte what
 it was (the disc exports in `trackfile_ground_truth` included). Round trip, refusals and the
 schema: `crates/trackfile/tests/props.rs`.
