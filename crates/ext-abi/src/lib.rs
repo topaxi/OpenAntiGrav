@@ -41,6 +41,7 @@
 use core::fmt;
 
 use hud::pool_string;
+pub use pickup::{Colour, Icon, ModIcon};
 pub use hud::{
     Anchor, HudElement, HudPlace, HudStr, MAX_HUD_EXTRA, MAX_HUD_ITEMS, MAX_HUD_SHAKE, MAX_HUD_TEXT,
 };
@@ -190,6 +191,7 @@ const COMMAND_HUD_SHAKE: u8 = 17;
 const COMMAND_HUD_BAR_EXTRA: u8 = 18;
 const COMMAND_HUD_TEXT: u8 = 19;
 const COMMAND_HUD_ICON: u8 = 20;
+const COMMAND_PICKUP_LOOK: u8 = 22;
 /// Bit 15 of a `hud-text`, `hud-icon` or `fire-effect` argument: the string or effect is
 /// the sending mod's own, not the title's. The pool offset or effect index is the rest.
 const OWN_FLAG: u16 = 1 << 15;
@@ -751,6 +753,19 @@ pub enum Command {
         /// `sprite` names one of the mod's own PNGs.
         own: bool,
     },
+    /// This tick, the look of the slot's held mod pickup: its icon and its backdrop's
+    /// colour, each naming its source. An output, re-sent each tick it should hold
+    /// (else the manifest's `[pickup]` holds): drawn, never hashed. The title's own
+    /// fade, overshoot and size pulse play on whatever look it is. `hud-tint` no longer
+    /// reaches the pickup.
+    PickupLook {
+        /// The grid slot.
+        slot: Slot,
+        /// The icon.
+        icon: Icon,
+        /// The backdrop's colour.
+        colour: Colour,
+    },
     /// Race-wide (written with slot 0): play the host title's own `kind` of weather at
     /// `strength`, drawn with the enhanced weather whatever the player's setting. An
     /// output, re-sent each tick it should hold: drawn, never hashed.
@@ -811,6 +826,7 @@ impl Command {
             | Self::HudBarExtra { slot, .. }
             | Self::HudText { slot, .. }
             | Self::HudIcon { slot, .. }
+            | Self::PickupLook { slot, .. }
             | Self::GiveShield { slot }
             | Self::HoldShield { slot }
             | Self::ClearShield { slot } => Some(slot),
@@ -882,6 +898,17 @@ impl Command {
                 place.to_bits(),
                 rgba.to_u32(),
             ),
+            Self::PickupLook { icon, colour, .. } => {
+                let (value, word) = match colour {
+                    Colour::Title(weapon) => (u32::from(weapon.code()), 0),
+                    Colour::Rgba(rgba) => (0, rgba.to_u32()),
+                };
+                let arg = match icon {
+                    Icon::Title(weapon) => u16::from(weapon.code()),
+                    Icon::Mod(_) => pool_at | OWN_FLAG,
+                };
+                (COMMAND_PICKUP_LOOK, arg, value, word)
+            }
             Self::SetWeather { kind, strength } => {
                 (COMMAND_SET_WEATHER, kind.code(), strength.to_bits(), 0)
             }
@@ -1019,6 +1046,9 @@ impl Command {
                 slot,
                 effect: Effect::from_code(arg).ok_or(Malformed::Effect(arg))?,
             },
+            COMMAND_HUD_TINT if arg == HudElement::Pickup.code() => {
+                return Err(Malformed::PickupTint);
+            }
             COMMAND_HUD_TINT => Self::HudTint {
                 slot,
                 element: hud_element()?,
@@ -1069,6 +1099,33 @@ impl Command {
                         own,
                     }
                 }
+            }
+            COMMAND_PICKUP_LOOK => {
+                let raw = get_u32(record, COMMAND_VALUE);
+                let bad = Malformed::PickupLook { arg, value: raw };
+                let icon = if arg & OWN_FLAG != 0 {
+                    let at = arg & !OWN_FLAG;
+                    Icon::Mod(ModIcon::from_string(
+                        pool_string(pool, at).ok_or(Malformed::Pool(at))?,
+                    ))
+                } else {
+                    Icon::Title(
+                        u8::try_from(arg)
+                            .ok()
+                            .and_then(Weapon::from_code)
+                            .ok_or(bad)?,
+                    )
+                };
+                let colour = match raw {
+                    0 => Colour::Rgba(Rgba::from_u32(word)),
+                    code => Colour::Title(
+                        u8::try_from(code)
+                            .ok()
+                            .and_then(Weapon::from_code)
+                            .ok_or(bad)?,
+                    ),
+                };
+                Self::PickupLook { slot, icon, colour }
             }
             COMMAND_GIVE_SHIELD => Self::GiveShield { slot },
             COMMAND_HOLD_SHIELD => Self::HoldShield { slot },
@@ -1147,6 +1204,16 @@ pub enum Malformed {
     },
     /// A `hud-text` or `hud-icon` anchor or scale out of range.
     HudPlace,
+    /// A `hud-tint` of the pickup element: a mod's pickup is coloured by `pickup-look`.
+    PickupTint,
+    /// A `pickup-look` naming no weapon, as its icon (`arg`) or its backdrop colour
+    /// (`value`).
+    PickupLook {
+        /// The record's argument.
+        arg: u16,
+        /// The record's value.
+        value: u32,
+    },
     /// A `hud-text` or `hud-icon` whose pool offset holds no whole string of at most
     /// [`MAX_HUD_TEXT`] bytes of UTF-8.
     Pool(u16),
@@ -1193,6 +1260,15 @@ impl fmt::Display for Malformed {
             Self::HudValue { kind, value } => write!(
                 f,
                 "hud command {kind} value {value}: hud-shake in [0, {MAX_HUD_SHAKE}], hud-bar-extra in (0, {MAX_HUD_EXTRA}]"
+            ),
+            Self::PickupTint => write!(
+                f,
+                "hud-tint no longer reaches the pickup: use pickup-look to give a mod pickup its colour"
+            ),
+            Self::PickupLook { arg, value } => write!(
+                f,
+                "pickup-look icon argument {arg} and colour value {value}: each a weapon in 1..={} (or an own icon, or an rgba)",
+                Weapon::ALL.len()
             ),
             Self::HudPlace => write!(
                 f,
@@ -1360,6 +1436,7 @@ fn get_u32(buffer: &[u8], at: usize) -> u32 {
 }
 
 pub mod hud;
+mod pickup;
 pub mod track;
 
 #[cfg(test)]

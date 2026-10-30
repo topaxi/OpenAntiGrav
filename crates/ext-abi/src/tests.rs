@@ -20,7 +20,7 @@ fn slot(index: usize) -> Slot {
 }
 
 /// One of every command, with arguments that touch every field.
-fn every_command() -> [Command; 20] {
+fn every_command() -> [Command; 22] {
     [
         Command::ScaleThrust {
             slot: slot(1),
@@ -54,8 +54,18 @@ fn every_command() -> [Command; 20] {
         },
         Command::HudTint {
             slot: slot(15),
-            element: HudElement::Pickup,
+            element: HudElement::Position,
             rgba: Rgba::new(0xE0, 0x20, 0x21, 0xFF),
+        },
+        Command::PickupLook {
+            slot: slot(3),
+            icon: Icon::Title(Weapon::Turbo),
+            colour: Colour::Rgba(Rgba::new(0xE0, 0x20, 0x20, 0x80)),
+        },
+        Command::PickupLook {
+            slot: slot(9),
+            icon: Icon::Mod(ModIcon::new("bolt").unwrap()),
+            colour: Colour::Title(Weapon::Shield),
         },
         Command::HudShake {
             slot: slot(1),
@@ -153,6 +163,10 @@ fn pool_for(command: &Command) -> Vec<u8> {
     let text = match command {
         Command::HudText { text, .. } => text.as_str(),
         Command::HudIcon { sprite, .. } => sprite.as_str(),
+        Command::PickupLook {
+            icon: Icon::Mod(name),
+            ..
+        } => name.as_str(),
         _ => return Vec::new(),
     };
     let mut pool = vec![text.len() as u8];
@@ -585,6 +599,45 @@ fn a_track_past_a_cap_or_with_a_key_twice_does_not_fit() {
             key: 7
         })
     );
+}
+
+#[test]
+fn a_hud_tint_of_the_pickup_is_malformed_and_points_at_pickup_look() {
+    let record = Command::HudTint {
+        slot: slot(0),
+        element: HudElement::Pickup,
+        rgba: Rgba::default(),
+    }
+    .encode();
+    let error = Command::decode(&record).unwrap_err();
+    assert_eq!(error, Malformed::PickupTint);
+    assert!(std::format!("{error}").contains("pickup-look"));
+}
+
+#[test]
+fn a_pickup_look_naming_no_weapon_is_malformed_by_name() {
+    let mut record = Command::PickupLook {
+        slot: slot(0),
+        icon: Icon::Title(Weapon::Turbo),
+        colour: Colour::Title(Weapon::Shield),
+    }
+    .encode();
+    record[COMMAND_ARG] = 200;
+    assert!(matches!(
+        Command::decode(&record),
+        Err(Malformed::PickupLook { arg: 200, .. })
+    ));
+    let mut record = Command::PickupLook {
+        slot: slot(0),
+        icon: Icon::Title(Weapon::Turbo),
+        colour: Colour::Title(Weapon::Shield),
+    }
+    .encode();
+    record[COMMAND_VALUE] = 99;
+    assert!(matches!(
+        Command::decode(&record),
+        Err(Malformed::PickupLook { value: 99, .. })
+    ));
 }
 
 #[test]

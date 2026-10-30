@@ -33,6 +33,7 @@
 
 mod blob;
 mod line;
+mod look;
 mod reply;
 #[cfg(any(test, feature = "test"))]
 pub mod test;
@@ -42,10 +43,11 @@ pub use blob::Blob;
 pub use line::Line;
 pub use oag_ext_abi::track::{Kind, TRACK_LEN, prop_key};
 pub use oag_ext_abi::{
-    ABI_WORD, Anchor, Command, Cue, Effect, Event, HudElement, HudPlace, IO_LEN, MAX_CRAFTS,
+    ABI_WORD, Anchor, Colour, Command, Cue, Effect, Event, HudElement, HudPlace, Icon, IO_LEN, MAX_CRAFTS,
     MAX_HUD_EXTRA, MAX_HUD_ITEMS, MAX_HUD_SHAKE, MAX_HUD_TEXT, MAX_STATE_BYTES, MAX_THRUST_FACTOR,
-    Pickup, Rgba, Slot, Weapon, WeatherKind,
+    ModIcon, Pickup, Rgba, Slot, Weapon, WeatherKind,
 };
+pub use look::{colour, icon};
 pub use reply::{Refused, Reply};
 pub use track::{Entity, Track};
 
