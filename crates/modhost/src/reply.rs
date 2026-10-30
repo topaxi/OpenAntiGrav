@@ -123,6 +123,7 @@ pub(crate) fn read(
             Command::PickupRoll { .. }
             | Command::PlayCue { .. }
             | Command::FireEffect { .. }
+            | Command::FireModEffect { .. }
             | Command::HudTint { .. }
             | Command::HudShake { .. }
             | Command::HudBarExtra { .. }

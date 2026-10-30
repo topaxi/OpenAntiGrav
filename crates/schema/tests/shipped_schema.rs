@@ -38,6 +38,10 @@ fn shipped() -> Vec<(&'static str, &'static str)> {
             "assets/mods/examples/example-campaign/pilots/rival.toml",
             "pilot",
         ),
+        (
+            "assets/mods/examples/energy-turbo/fx/discharge.toml",
+            "effect",
+        ),
         ("crates/trackfile/tests/fixtures/oval.track.toml", "track"),
         ("crates/game/tests/fixtures/music-state.toml", "music-state"),
         ("assets/fallback/Data/XML/SplitHud_Pulse.toml", "split-hud"),

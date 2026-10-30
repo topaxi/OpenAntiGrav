@@ -677,6 +677,24 @@ def make_trigger_object(context, trigger):
     return obj
 
 
+def trigger_from_bounds(context, mesh_obj):
+    """A trigger Empty on `mesh_obj`'s world bounds (axis-aligned, no rotation)."""
+    corners = [mesh_obj.matrix_world @ Vector(c) for c in mesh_obj.bound_box]
+    lo = [min(c[i] for c in corners) for i in range(3)]
+    hi = [max(c[i] for c in corners) for i in range(3)]
+    centre = [(a + b) / 2 for a, b in zip(lo, hi)]
+    half = [(b - a) / 2 for a, b in zip(lo, hi)]
+    # The box is (lateral, up, forward) in the empty's frame: Blender X, Z, Y.
+    box_min = tuple(f32.r(v) for v in (-half[0], -half[2], -half[1]))
+    box_max = tuple(f32.r(v) for v in (half[0], half[2], half[1]))
+    t = to_format(centre)
+    # An unrotated empty: its rows are format x, y, z (what `_to_world` reads).
+    to_world = (1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0)
+    to_world += tuple(f32.r(v) for v in t) + (1.0,)
+    name = mesh_obj.name.removeprefix("oag/triggers/")
+    return make_trigger_object(context, Trigger(name, to_world, box_min, box_max))
+
+
 def make_start_object(context, start):
     cols = [
         tuple(-c for c in to_blender(start.left)),

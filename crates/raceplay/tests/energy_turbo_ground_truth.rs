@@ -54,6 +54,8 @@ fn energy_turbo() -> Option<race::extensions::Source> {
         read: Arc::new(move || Ok(wasm.clone())),
         strings: Arc::new(|_| Default::default()),
         icons: Vec::new(),
+        effects: Vec::new(),
+        files: Arc::new(|_| Err("no files".into())),
     })
 }
 
@@ -329,4 +331,47 @@ fn in_a_full_field_every_second_turbo_is_the_mods_and_the_ai_boosts_on_it() {
     // slot (`Race::test_weapon_pads`), and whether the human column's odds deal the
     // player a Turbo in one race is luck of the race (one energy turbo at x1.6, none
     // at x1.9).
+}
+
+/// The mod's effect names a disc texture; it resolves through the lookup a track file's host
+/// references use, on the real disc, and a name the circuit lacks is refused by name.
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd and the examples submodule"]
+fn the_discharge_finds_the_discs_energy_glow_by_name() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
+        return;
+    };
+    let Some(file) = oag_testdata::exact(&format!("{MOD}/fx/discharge.toml")) else {
+        return;
+    };
+    let text = std::fs::read_to_string(file).unwrap();
+    let mut archives =
+        oag_assets::Archives::open(&image.to_string_lossy(), oag_pulse::TITLE).expect("archives");
+    let mut asked = Vec::new();
+    let parsed = oag_fx::psys::parametric::parse(&text, &mut |wanted| match *wanted {
+        oag_fx::psys::parametric::TextureRef::Host { entry, name } => {
+            asked.push(name.to_string());
+            race::foreign::art::host_texture(&mut archives, entry, name)
+                .and_then(|texture| race::extension_effects::sprite_of(&texture))
+        }
+        oag_fx::psys::parametric::TextureRef::Mod(path) => {
+            Err(format!("{path}: no mod files here"))
+        }
+    })
+    .expect("the example's effect parses with its disc texture");
+    assert_eq!(asked, ["energy_GLOW.tga"]);
+    let sprite = parsed
+        .effect
+        .emitters
+        .iter()
+        .find_map(|e| e.sprite.as_ref())
+        .expect("the flicker carries the disc's picture");
+    assert!(sprite.width > 0 && sprite.rgba.iter().any(|&b| b != 0));
+    let missing = race::foreign::art::host_texture(
+        &mut archives,
+        "Data\\Environments\\16_Track\\track.vex",
+        "no_such_texture.tga",
+    )
+    .unwrap_err();
+    assert!(missing.contains("no_such_texture.tga"), "{missing}");
 }

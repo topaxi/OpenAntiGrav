@@ -280,6 +280,24 @@ impl<'a> Reply<'a> {
         })
     }
 
+    /// `fire-effect` with the effect at place `index` of the mod's own `[effects]`
+    /// (name order): a parametric TOML the manifest declares, played at the craft's
+    /// nozzle. One the mod lacks or that did not load draws nothing, and the load
+    /// report says so. Drawn, never hashed.
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`], or [`Refused::Range`] for an index past 15 bits.
+    pub fn fire_mod_effect(&mut self, craft: &Craft<'_>, index: u16) -> Result<(), Refused> {
+        if index >= 1 << 15 {
+            return Err(Refused::Range);
+        }
+        self.push(&Command::FireModEffect {
+            slot: craft.slot(),
+            index,
+        })
+    }
+
     /// `hud-tint`: this tick, recolour the craft's HUD `element`. Drawn, never hashed;
     /// a title without the element draws nothing.
     ///

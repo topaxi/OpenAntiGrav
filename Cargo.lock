@@ -3043,11 +3043,14 @@ dependencies = [
  "oag-mesh",
  "oag-pob",
  "oag-pulse",
+ "oag-schema",
  "oag-shader-check",
  "oag-testdata",
  "oag-texture",
  "oag-vex",
  "pollster",
+ "serde",
+ "toml",
  "wgpu",
 ]
 

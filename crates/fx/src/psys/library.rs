@@ -105,3 +105,21 @@ impl Effect {
             .map(|spec| spec.name.as_str())
     }
 }
+
+impl Effect {
+    /// The emitters [`System::ignite`] starts: everything reachable as a child starts
+    /// with its parent's particles, so what is left is a root or one of its siblings
+    /// (the parser already flattened those in order).
+    pub(super) fn roots_of(emitters: &[super::EmitterSpec]) -> Vec<usize> {
+        let mut is_child = vec![false; emitters.len()];
+        for spec in emitters {
+            for child in [spec.particle_child, spec.death_child]
+                .into_iter()
+                .flatten()
+            {
+                is_child[child] = true;
+            }
+        }
+        (0..emitters.len()).filter(|&i| !is_child[i]).collect()
+    }
+}

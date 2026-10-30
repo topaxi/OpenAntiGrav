@@ -35,6 +35,13 @@ pub fn sources<'a>(mods: impl IntoIterator<Item = &'a oag_mod::Mod>) -> Vec<Sour
                     .iter()
                     .map(|(name, path)| (name.clone(), reader(m, path)))
                     .collect(),
+                effects: m
+                    .manifest
+                    .effects
+                    .iter()
+                    .map(|(name, path)| (name.clone(), path.clone()))
+                    .collect(),
+                files: files_reader(m),
             };
             let rules = extension
                 .rules
@@ -95,6 +102,18 @@ fn reader(module: &oag_mod::Mod, name: &str) -> oag_raceplay::extensions::Reader
             .read(&name)
             .map_err(|e| format!("{label}: {e}"))?
             .ok_or_else(|| format!("{label}: not in the mod"))
+    })
+}
+
+/// Reads any file of the mod by its path, reopening the mod on the load thread.
+fn files_reader(module: &oag_mod::Mod) -> oag_raceplay::extensions::Files {
+    let label = std::path::PathBuf::from(module.label());
+    Arc::new(move |name| {
+        oag_mod::Mod::open(&label)
+            .map_err(|e| format!("{}: {e}", label.display()))?
+            .read(name)
+            .map_err(|e| format!("{name}: {e}"))?
+            .ok_or_else(|| format!("{name}: not in the mod"))
     })
 }
 

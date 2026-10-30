@@ -81,6 +81,10 @@ pub struct Manifest {
     /// `[icons]`: the mod's own PNGs by name, as paths in the mod. A module's `hud-icon`
     /// may name one.
     pub icons: std::collections::BTreeMap<String, String>,
+    /// `[effects]`: the mod's own particle effects by name, as `.toml` paths in the mod
+    /// (`schemas/v1/effect.tosd`). A module's `fire-mod-effect` names one by its index in
+    /// this map's name order.
+    pub effects: std::collections::BTreeMap<String, String>,
 }
 
 /// `[extension]` (`docs/architecture/wasm-extensions/README.md`, section 1.1). Read
@@ -132,6 +136,8 @@ struct File {
     extension: Option<ExtensionTable>,
     #[serde(default)]
     icons: std::collections::BTreeMap<String, String>,
+    #[serde(default)]
+    effects: std::collections::BTreeMap<String, String>,
 }
 
 #[derive(Deserialize)]
@@ -220,6 +226,27 @@ impl Manifest {
             }
         }
 
+        for (name, path) in &file.effects {
+            if !valid_key(name) {
+                return Err(bad(
+                    "effects",
+                    format!("{name:?} is not a name: letters, digits, '-', '_'"),
+                ));
+            }
+            if !path.to_ascii_lowercase().ends_with(".toml") || !has(path) {
+                return Err(bad(
+                    "effects",
+                    format!("{name}: {path:?} is not a .toml in the mod"),
+                ));
+            }
+        }
+        if file.effects.len() > MAX_EFFECTS {
+            return Err(bad(
+                "effects",
+                format!("{} effects, at most {MAX_EFFECTS}", file.effects.len()),
+            ));
+        }
+
         if !valid_id(&t.id) {
             return Err(bad(
                 "id",
@@ -281,6 +308,7 @@ impl Manifest {
             oag,
             extension,
             icons: file.icons,
+            effects: file.effects,
         })
     }
 
@@ -345,6 +373,9 @@ fn extension(e: ExtensionTable, has: &dyn Fn(&str) -> bool) -> Result<Extension,
 }
 
 /// A string key or icon name: letters, digits, '-', '_'.
+/// What `fire-mod-effect`'s index (15 bits of an argument) can name, kept well inside it.
+const MAX_EFFECTS: usize = 256;
+
 fn valid_key(key: &str) -> bool {
     !key.is_empty()
         && key

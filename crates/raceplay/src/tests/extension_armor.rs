@@ -47,6 +47,8 @@ fn source(id: &str, body: &str) -> Source {
         read: Arc::new(move || Ok(wasm.clone())),
         strings: Arc::new(|_| Default::default()),
         icons: Vec::new(),
+        effects: Vec::new(),
+        files: Arc::new(|_| Err("no files".into())),
     }
 }
 

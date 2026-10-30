@@ -345,6 +345,93 @@ def line_checks(out_dir):
     print("racing line: default, switch, operator, nudge, clamp, import round trip, imported edit, operator on an import: ok")
 
 
+def effect_checks(src, out_dir):
+    """A mod effect TOML into a preview and back out (docs/tools/blender.md, "Mod effects")."""
+    import tomllib
+
+    from oag_track import effectfile
+
+    fresh()
+    bpy.ops.mesh.primitive_cube_add()
+    cube = bpy.context.active_object
+    assert bpy.ops.oag.preview_effect(filepath=src) == {"FINISHED"}
+    systems = [m for m in cube.modifiers if m.type == "PARTICLE_SYSTEM"]
+    with open(src, "rb") as f:
+        want = tomllib.load(f)
+    assert len(systems) == len(want["emitter"]), "one particle system per emitter"
+    first = systems[0].particle_system.settings
+    assert first.lifetime == want["emitter"][0]["lifetime"][0] and first.frame_end > first.frame_start
+    out = os.path.join(out_dir, "effect.reexport.toml")
+    assert bpy.ops.oag.export_effect(filepath=out) == {"FINISHED"}
+    with open(out, "rb") as f:
+        got = tomllib.load(f)
+    assert got == want, "export gave a different effect than import took"
+    # Edited in the Text Editor, then exported again.
+    block = bpy.data.texts[cube[effectfile.PROP]]
+    block.clear()
+    block.write(effectfile.dumps(want).replace("duration = 3", "duration = 5"))
+    assert bpy.ops.oag.export_effect(filepath=out) == {"FINISHED"}
+    with open(out, "rb") as f:
+        edited = tomllib.load(f)
+    assert edited["emitter"][0]["duration"] == 5
+    # A broken one is refused and writes nothing.
+    block.clear()
+    block.write("not toml [")
+    try:
+        bpy.ops.oag.export_effect(filepath=os.path.join(out_dir, "never.toml"))
+        raise AssertionError("a broken effect was exported")
+    except RuntimeError:
+        pass
+    assert not os.path.exists(os.path.join(out_dir, "never.toml"))
+    print("mod effect: preview, export equal on import, text edit, broken refused: ok")
+
+
+def props_checks(out_dir):
+    """`mod_*` properties on pads and the scene, trigger Empties, make-trigger, export, import."""
+    fresh()
+    ctx = bpy.context
+    make_loop(ctx)
+    assert bpy.ops.oag.build_ribbon() == {"FINISHED"}
+    assert bpy.ops.oag.add_start() == {"FINISHED"}
+    ctx.scene.cursor.location = (900.0, 0.0, 0.0)
+    assert bpy.ops.oag.add_pad(kind="speedup") == {"FINISHED"}
+    pad = ctx.active_object if ctx.active_object and ctx.active_object.get("oag_kind") == "speedup" else next(
+        o for o in ctx.scene.objects if o.get("oag_kind") == "speedup"
+    )
+    pad["mod_boost"] = 1.5
+    pad["mod_armed"] = True
+    ctx.scene["mod_laps_bonus"] = 3.0
+    bpy.ops.mesh.primitive_cube_add(size=2.0, location=(10.0, 20.0, 5.0))
+    box = ctx.active_object
+    box.name = "gate"
+    box.scale = (3.0, 4.0, 1.0)
+    for o in ctx.scene.objects:
+        o.select_set(False)
+    box.select_set(True)
+    assert bpy.ops.oag.trigger_from_mesh() == {"FINISHED"}
+    trigger = bpy.data.objects["oag/triggers/gate"]
+    trigger["mod_points"] = 10.0
+    path = os.path.join(out_dir, "props.track.toml")
+    track = scene.write_track(ctx, path)
+    assert [t.name for t in track.triggers] == ["gate"]
+    assert track.triggers[0].props == {"points": 10.0}
+    assert track.speedup_pads[0].props == {"boost": 1.5, "armed": 1.0}
+    assert track.props == {"laps_bonus": 3.0}
+    t = track.triggers[0]
+    assert t.min == (-3.0, -1.0, -4.0) and t.max == (3.0, 1.0, 4.0), (t.min, t.max)
+    again = trackfile.read(path)
+    assert again.triggers[0].props == t.props and again.props == track.props
+    fresh()
+    scene.populate(bpy.context, again, out_dir)
+    path2 = os.path.join(out_dir, "props.reexport.track.toml")
+    track2 = scene.write_track(bpy.context, path2)
+    assert track2.triggers[0].props == t.props and track2.speedup_pads[0].props == track.speedup_pads[0].props
+    assert track2.props == track.props
+    same = open(path).read() == open(path2).read().replace("props.reexport.glb", "props.glb")
+    assert same, "the re-export differs from the export"
+    print("track props: pad and scene mod_*, trigger Empty, make-trigger-from-mesh, export, import, re-export: ok")
+
+
 def main():
     args = sys.argv[sys.argv.index("--") + 1 :]
     if args[:1] == ["loop"]:
@@ -353,6 +440,10 @@ def main():
         build_loop(args[1], motion=True)
     elif args[:1] == ["line"]:
         line_checks(args[1])
+    elif args[:1] == ["effect"]:
+        effect_checks(args[1], args[2])
+    elif args[:1] == ["props"]:
+        props_checks(args[1])
     elif args[:1] == ["reexport"]:
         reexport(args[1], args[2])
     else:
