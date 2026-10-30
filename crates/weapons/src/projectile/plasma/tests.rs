@@ -657,9 +657,9 @@ fn the_muzzle_is_the_weapon_node_ahead_of_the_body() {
 /// The measured first four updates (`plasma.md`, "the detonation leg"): three that
 /// fall without riding and keep 0.75 x the release speed, then the first floor ride,
 /// which pins to the ramp. Fails with the launch scale dropped (full speed at once),
-/// with the probe not gated (the ride on the first tick), or with the ride steered
-/// parallel to the floor instead of toward the ride point (not a speed, so see
-/// `a_riding_plasma_bolt_steers_toward_the_ride_point`).
+/// or with the probe not gated (the ride on the first tick). The steer toward the
+/// ride point is not a speed; `plasma_timing_ground_truth.rs` pins it by the
+/// distance flown.
 #[test]
 fn a_plasma_bolt_keeps_three_quarters_of_its_speed_for_three_updates_then_rides() {
     let (mut projectiles, ships, geometry, stats, _) = released_over_a_floor();
