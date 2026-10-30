@@ -361,3 +361,36 @@ fn a_manifest_pickup_names_its_icon_and_colour_sources_and_a_bad_one_is_refused_
         None
     );
 }
+
+#[test]
+fn a_channels_table_declares_what_the_mod_publishes_and_listens_to() {
+    let text = format!(
+        "{MANIFEST_TEXT}\n[channels]\npublishes = [\"test.example/gate\"]\nlistens = [\"other.mod/open\", \"test.example/gate\"]\n"
+    );
+    let channels = Manifest::parse(&text, &|_| true).unwrap().channels;
+    assert_eq!(channels.publishes, ["test.example/gate"]);
+    assert_eq!(channels.listens, ["other.mod/open", "test.example/gate"]);
+    assert_eq!(
+        Manifest::parse(MANIFEST_TEXT, &|_| true).unwrap().channels,
+        Channels::default()
+    );
+}
+
+#[test]
+fn a_malformed_or_foreign_channel_is_refused_by_name() {
+    for (body, names) in [
+        ("publishes = [\"gate\"]", "\"gate\""),
+        ("listens = [\"a/b/c\"]", "\"a/b/c\""),
+        ("listens = [\"Other/Gate\"]", "\"Other/Gate\""),
+        ("publishes = [\"someone.else/gate\"]", "someone.else/gate"),
+        (
+            "publishes = [\"test.example/a\", \"test.example/a\"]",
+            "listed twice",
+        ),
+    ] {
+        let text = format!("{MANIFEST_TEXT}\n[channels]\n{body}\n");
+        let error = Manifest::parse(&text, &|_| true).unwrap_err().to_string();
+        assert!(error.contains("channels."), "{body}: {error}");
+        assert!(error.contains(names), "{body}: {error}");
+    }
+}
