@@ -215,7 +215,8 @@ returns `Err(Refused)` where the host would fault:
 | `scale-pad{slot, factor}` | `ScaleSlotPads` | `scale_slot_pads(&craft, factor)` | a factor outside `[0, 2]` or not finite; a second for the craft this tick |
 | `play-cue{slot, cue}` | `PlayCue` | `play_cue(&craft, cue)` | |
 | `fire-effect{slot, effect}` | `FireEffect` | `fire_effect(&craft, effect)` | |
-| `hud-tint{slot, element, rgba}` | `HudTint` | `hud_tint(&craft, element, rgba)` | |
+| `hud-tint{slot, element, rgba}` | `HudTint` | `hud_tint(&craft, element, rgba)` | the `Pickup` element (`Refused::PickupTint`; use `pickup_look`); the host decodes one as malformed |
+| `pickup-look{slot, icon, colour}` (22) | `PickupLook` | `pickup_look(&craft, icon, colour)` | |
 | `hud-shake{slot, element, amplitude}` | `HudShake` | `hud_shake(&craft, element, amplitude)` | `amplitude` outside `[0, 16]` or not finite |
 | `hud-bar-extra{slot, element, extra, rgba}` | `HudBarExtra` | `hud_bar_extra(&craft, element, extra, rgba)` | `extra` outside `(0, 4]` or not finite |
 | `hud-text{slot, anchor, x, y, text, rgba, size}` | `HudText` | `hud_text(&craft, place, rgba, text)` | text over 48 bytes, an offset past 2047, a size outside 1..=15 quarters; a 33rd item for the craft (`Refused::HudItems`); `hud_string(&craft, place, rgba, key)` names a string id of the mod's `strings/<language>.toml` instead of carrying the text |
@@ -225,6 +226,26 @@ returns `Err(Refused)` where the host would fault:
 | `grade-sky{grey}` | `GradeSky` | `grade_sky(grey)` | outside `[0, 1]` or not finite |
 | `give-shield{slot}`, `hold-shield{slot}`, `clear-shield{slot}` | `GiveShield`, `HoldShield`, `ClearShield` | `give_shield(&craft)`, `hold_shield(&craft)`, `clear_shield(&craft)` | a second Shield command for the craft this tick |
 | `prefer-route{slot, route}` | `PreferRoute` | `prefer_route(&craft, route)` | a route at or past the region's route count; a second for the craft this tick |
+
+### `pickup-look{slot, icon, colour}`
+
+A mod that hands out its own pickup (`give-pickup`, `pickup-roll`) declares its look in
+`oag-mod.toml`; a mod that does not is faulted for the race on its first such command, naming
+the table:
+
+```toml
+[pickup]
+icon = { title = "turbo" }          # or { mod = "<key in [icons]>" }
+colour = { rgba = "E0202080" }      # RRGGBBAA, or { title = "shield" }
+```
+
+`pickup-look` overrides it for one tick and slot (record: `arg` the icon's weapon code, or
+bit 15 and a pool offset for a mod icon; `value` 0 for an rgba or the colour weapon's code;
+`word` the rgba). The SDK's `Icon::{Title(Weapon), Mod(ModIcon)}` and
+`Colour::{Title(Weapon), Rgba(Rgba)}` name the sources, with the per-weapon constants
+`icon::title::TURBO`, `colour::title::SHIELD` and so on for all fourteen weapons. A bad
+weapon in a record is malformed by name. An output, never hashed; `hud-shake` of the
+`Pickup` element still works.
 
 Every method also refuses a 97th command (`Refused::Full`). The host's checks stay
 the backstop for a guest written without the SDK.

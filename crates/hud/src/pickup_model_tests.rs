@@ -119,7 +119,7 @@ fn pure_draws_the_backdrop_grid_and_the_held_weapons_own_coloured_icon() {
         Some("TURBO_icon")
     );
 
-    let drawn = pickup_model_draws(&cx, Weapon::Turbo);
+    let drawn = pickup_model_draws(&cx, Weapon::Turbo, &super::ext_draws::Outputs::default());
     assert_eq!(
         drawn.len(),
         2,
@@ -175,7 +175,7 @@ fn an_icon_model_with_no_authored_colour_draws_white() {
     let sheet = pure_pickup_sheet();
     let cx = pure_pickup_context(&layout, &strings, &sheet);
 
-    let drawn = pickup_model_draws(&cx, Weapon::Quake);
+    let drawn = pickup_model_draws(&cx, Weapon::Quake, &super::ext_draws::Outputs::default());
     assert_eq!(drawn.len(), 2, "{drawn:?}");
     let Draw::BlendedSprite { color, .. } = drawn[1] else {
         panic!("expected a sprite draw: {:?}", drawn[1]);
@@ -201,7 +201,7 @@ fn a_weapon_with_no_icon_model_still_draws_the_backdrop_and_nothing_else() {
         None,
         "this test is asserting the no-icon path, which only fires when this is None"
     );
-    let drawn = pickup_model_draws(&cx, Weapon::Shuriken);
+    let drawn = pickup_model_draws(&cx, Weapon::Shuriken, &super::ext_draws::Outputs::default());
     assert_eq!(drawn.len(), 1, "the grid alone: {drawn:?}");
 }
 
@@ -227,5 +227,7 @@ fn a_title_with_no_icon_model_table_draws_nothing_through_this_path() {
         skin_line_height: 10.0,
     };
     assert!(oag_pulse::hud::ART.pickup_icon_models.is_none());
-    assert!(pickup_model_draws(&cx, Weapon::Turbo).is_empty());
+    assert!(
+        pickup_model_draws(&cx, Weapon::Turbo, &super::ext_draws::Outputs::default()).is_empty()
+    );
 }

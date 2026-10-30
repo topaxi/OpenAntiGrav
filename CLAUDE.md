@@ -333,6 +333,13 @@ adding its name and its **trigger**, and the trigger needs reverse-engineering;
 an effect with no recovered trigger stays unwired rather than fired on a guess
 (`HANDOVER.md` lists them).
 
+### A mod API change updates the mod author skill
+
+A change to the wasm extension ABI (`oag-ext-abi`), the guest SDK (`oag-ext`),
+`oag-mod.toml`, or an effect, track or string format a mod writes updates
+`assets/mods/examples/.claude/skills/oag-mod-author/SKILL.md` in the same change
+(commit it on the submodule branch, then the pointer).
+
 ## Documentation tree
 
 Start at [`docs/README.md`](docs/README.md). Entry points:

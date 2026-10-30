@@ -131,12 +131,16 @@ pub(super) const PICKUP_BG_FRAME_2048: &str = "PickupBgFrame";
 /// one weapon.
 pub(super) fn pickup_sprites_uv_rewrite(
     layout: &Layout,
-    weapon: oag_tables::weapons::Weapon,
+    weapon: Option<oag_tables::weapons::Weapon>,
+    backdrop: bool,
     uv_table: [Option<[u16; 4]>; 14],
     announcing: bool,
 ) -> Vec<Sprite> {
+    let uv_of = |weapon: Option<oag_tables::weapons::Weapon>| {
+        weapon.and_then(|weapon| uv_table.get(weapon as usize).copied().flatten())
+    };
     if announcing {
-        return match (uv_table[weapon as usize], layout.sprite(PICKUP_ICON_2048)) {
+        return match (uv_of(weapon), layout.sprite(PICKUP_ICON_2048)) {
             (Some(uv), Some(icon)) => {
                 let mut icon = icon.clone();
                 icon.uv = uv.map(f32::from);
@@ -145,7 +149,7 @@ pub(super) fn pickup_sprites_uv_rewrite(
             _ => Vec::new(),
         };
     }
-    let frame = layout.sprite(PICKUP_BG_FRAME_2048);
+    let frame = layout.sprite(PICKUP_BG_FRAME_2048).filter(|_| backdrop);
 
     let mut sprites = Vec::new();
     // The backdrop draws whenever a weapon is held, whether or not this title
@@ -156,7 +160,7 @@ pub(super) fn pickup_sprites_uv_rewrite(
         sprites.push(frame.clone());
     }
 
-    if let (Some(uv), Some(icon)) = (uv_table[weapon as usize], layout.sprite(PICKUP_ICON_2048)) {
+    if let (Some(uv), Some(icon)) = (uv_of(weapon), layout.sprite(PICKUP_ICON_2048)) {
         let mut icon = icon.clone();
         icon.uv = uv.map(f32::from);
         if let Some(frame) = frame {

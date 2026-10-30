@@ -42,6 +42,7 @@ pub fn sources<'a>(mods: impl IntoIterator<Item = &'a oag_mod::Mod>) -> Vec<Sour
                     .map(|(name, path)| (name.clone(), path.clone()))
                     .collect(),
                 files: files_reader(m),
+                pickup: m.manifest.pickup.clone(),
             };
             let rules = extension
                 .rules

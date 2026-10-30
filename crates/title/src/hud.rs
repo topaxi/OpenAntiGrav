@@ -469,6 +469,10 @@ pub struct HudArt {
     /// layout is written in, so a reader comparing this table against one
     /// does not have to convert anything by hand.
     pub pickup_colours: Option<[Option<u32>; 14]>,
+    /// How [`Self::pickup_colours`]' backdrop word fades in on a grant, holds, and fades out
+    /// after use, or `None` for a title that draws no per-weapon backdrop (Pure, 2048).
+    /// See [`PickupFade`].
+    pub pickup_fade: Option<PickupFade>,
     /// The `<Mode3D><Model>` widget that draws a weapon's own icon, when this
     /// title has one, or `None` for a title whose icons are `<Image>` sprites
     /// (or unmeasured).
@@ -1016,6 +1020,22 @@ pub enum TipSource {
     /// The shield as a percentage of the pool; the label is the percentage
     /// truncated, then `%`.
     Shield,
+}
+
+/// The eased fade a held pickup's backdrop and icon play: `Hud_UpdatePickupWidgets` on Pulse
+/// (`0x0881cdc4`), `Hud_UpdatePickupBar` on HD (`0x0008df30`).
+///
+/// The law itself (the easing shape, the `0.5` cap, the `0.4` icon gate, the `0.1` hold) lives
+/// in `oag_hud::pickup_fade`; this is the per-title part. Each title's provenance is on its
+/// own `ART` and in `docs/ghidra/functions/psp-pulse-usa/pickup-colour.md`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PickupFade {
+    /// The timer's rate in hundredths of a unit per second (`u16` rather than `f32` so the art
+    /// stays `Eq`): the timer gains `dt * rate / 100` per update. Pulse `120`, HD `150`.
+    pub rate_percent: u16,
+    /// Whether the backdrop also folds out in width and height as it grows (Pulse's
+    /// `+0x9c`/`+0xa0` pair). HD's matching store is unread, so HD and Omega keep it `false`.
+    pub size_pulse: bool,
 }
 
 /// The dim the pickup bar is drawn in while it has nothing to show: the

@@ -166,6 +166,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // has nothing to attach to yet - see `docs/formats/2048-hud.md`'s "What
     // is not done".
     pickup_colours: None,
+    pickup_fade: None,
     // 2048's `PickupIcon` is a single `<Image>` widget whose UV rect the
     // runtime rewrites, the same widget kind `pickup_colours`' comment above
     // names - not `<Mode3D><Model>`s, so this field is moot here too.

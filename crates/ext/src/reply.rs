@@ -1,9 +1,9 @@
 //! The reply: one typed method per command, refusing what the host would fault on.
 
 use oag_ext_abi::{
-    Command, Cue, Effect, HudElement, HudPlace, HudStr, MAX_COMMANDS, MAX_HUD_EXTRA, MAX_HUD_ITEMS,
-    MAX_HUD_SHAKE, MAX_PAD_FACTOR, MAX_THRUST_FACTOR, POOL_AT, POOL_LEN, Pickup, REPLY_AT, Rgba,
-    Sections, Weapon, WeatherKind,
+    Colour, Command, Cue, Effect, HudElement, HudPlace, HudStr, Icon, MAX_COMMANDS, MAX_HUD_EXTRA,
+    MAX_HUD_ITEMS, MAX_HUD_SHAKE, MAX_PAD_FACTOR, MAX_THRUST_FACTOR, POOL_AT, POOL_LEN, Pickup,
+    REPLY_AT, Rgba, Sections, Weapon, WeatherKind,
 };
 
 use crate::Craft;
@@ -28,6 +28,8 @@ pub enum Refused {
     /// `give_pickup` to a craft holding something, or `clear_pickup` from one not
     /// holding the mod's own pickup.
     Pickup,
+    /// `hud_tint` of the pickup element: a mod pickup's colour is `pickup_look`'s.
+    PickupTint,
 }
 
 /// This tick's commands. The count is written when the tick returns.
@@ -333,13 +335,17 @@ impl<'a> Reply<'a> {
     ///
     /// # Errors
     ///
-    /// [`Refused::Full`].
+    /// [`Refused::Full`], [`Refused::PickupTint`] for the pickup element (use
+    /// [`Self::pickup_look`]).
     pub fn hud_tint(
         &mut self,
         craft: &Craft<'_>,
         element: HudElement,
         rgba: Rgba,
     ) -> Result<(), Refused> {
+        if element == HudElement::Pickup {
+            return Err(Refused::PickupTint);
+        }
         self.push(&Command::HudTint {
             slot: craft.slot(),
             element,
@@ -522,9 +528,19 @@ impl<'a> Reply<'a> {
             return Err(Refused::Range);
         }
         let slot = craft.slot().index();
-        let bytes = string.as_str().as_bytes();
+        if usize::from(self.items[slot]) >= MAX_HUD_ITEMS {
+            return Err(Refused::HudItems);
+        }
+        self.push_string(command, string.as_str())?;
+        self.items[slot] += 1;
+        Ok(())
+    }
+
+    /// A command whose record names `text` in the reply's pool.
+    fn push_string(&mut self, command: &Command, text: &str) -> Result<(), Refused> {
+        let bytes = text.as_bytes();
         let at = self.pool_used;
-        if usize::from(self.items[slot]) >= MAX_HUD_ITEMS || at + 1 + bytes.len() > POOL_LEN {
+        if at + 1 + bytes.len() > POOL_LEN {
             return Err(Refused::HudItems);
         }
         if self.count >= MAX_COMMANDS {
@@ -542,8 +558,33 @@ impl<'a> Reply<'a> {
         }
         self.count += 1;
         self.pool_used += 1 + bytes.len();
-        self.items[slot] += 1;
         Ok(())
+    }
+
+    /// `pickup-look`: this tick, the look of the craft's held mod pickup: the `icon`
+    /// and the backdrop `colour`, each naming its source (the title's own, or the
+    /// mod's). Re-send it each tick it should hold; without one the manifest's
+    /// `[pickup]` is the look. The title's fade, overshoot and size pulse play on it.
+    /// Drawn, never hashed.
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`], [`Refused::HudItems`] when the string pool is full.
+    pub fn pickup_look(
+        &mut self,
+        craft: &Craft<'_>,
+        icon: Icon,
+        colour: Colour,
+    ) -> Result<(), Refused> {
+        let command = Command::PickupLook {
+            slot: craft.slot(),
+            icon,
+            colour,
+        };
+        match icon {
+            Icon::Title(_) => self.push(&command),
+            Icon::Mod(name) => self.push_string(&command, name.as_str()),
+        }
     }
 
     /// `set-weather`: race-wide, play the host title's own `kind` of weather at

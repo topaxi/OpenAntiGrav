@@ -49,8 +49,9 @@ the host's and `oag-raceplay`'s unit tests with it on.
 
 The second example, `oag.energy-turbo` (`assets/mods/examples/energy-turbo/`, 3,040
 bytes): a pickup of its own, which the weapon pads hand out in place of **every second
-Turbo** (the other half stay the title's Turbo), drawn as the Turbo's icon on a red
-backdrop. Hold fire to boost (thrust x1.9) for as long as the pool lasts, paid at
+Turbo** (the other half stay the title's Turbo), drawn as the title's Turbo icon on a translucent red backdrop (`[pickup]` in its manifest:
+`icon = { title = "turbo" }`, `colour = { rgba = "E0202080" }`; the title's own fade-in, overshoot,
+size pulse, hold and fade-out play on it). Hold fire to boost (thrust x1.9) for as long as the pool lasts, paid at
 0.8 % of the pool a tick (a full pool lasts about 2 s) and stopping at 5 % so the drain
 alone never wrecks; the title's wall sparks burst at the nozzle three times a second. An AI
 craft holds no button: its driver asks to fire wherever the Turbo's own AI gate would
@@ -65,14 +66,15 @@ added to the engine and the ABI, each its own commit with the vanilla fold uncha
 | Craft records | observation | One 16-byte record per slot (`oag_ext_abi::Craft`): the held pickup (its place in `Weapon::ALL` plus one, 255 for the mod's own), flags (person-flown, fire button held, racing past GO), shield, its maximum, speed. Copies; the held input is the `InputSnapshot` the tick already has |
 | `scale-thrust` up to 2.0 | command | Above 1.0 through a new `Environment::extension_thrust` (`oag-physics`, applied to the engine's thrust after the Leach Beam's scale; `1.0` skips the multiply, so no vanilla bit moves). Below 1.0 still the Leach Beam's path |
 | `shield-delta{slot, amount}` | command | A loss through `oag_physics::damage::apply_weapon` at its full amount, so the destroyed edge, the Shield pickup's immunity and the critical crossing are a hit's (a drained pool wrecks: proven); a gain through `damage::add`'s clamp. `|amount|` at most the slot's maximum; refused where the mode takes no damage |
-| The mod's own pickup | engine | `oag_tables::weapons::Weapon::Extension` (7.5): a fieldless arm outside `Weapon::ALL`, so `Option<Weapon>` stays one byte and the World snapshot does not grow; hashed as 255, which no vanilla race writes. The engine never fires or absorbs it: a person's press (`Race::spend_pickup`) and the AI's fire (`Race::spend_opponent_pickup`, through the Turbo's gate; the AI never absorbs it) raise **`pickup-fire{slot}`** / **`pickup-absorbed{slot}`**; an absorb clears it and pays no pool. The HUD draws the title's Turbo icon for it |
+| The mod's own pickup | engine | `oag_tables::weapons::Weapon::Extension` (7.5): a fieldless arm outside `Weapon::ALL`, so `Option<Weapon>` stays one byte and the World snapshot does not grow; hashed as 255, which no vanilla race writes. The engine never fires or absorbs it: a person's press (`Race::spend_pickup`) and the AI's fire (`Race::spend_opponent_pickup`, through the Turbo's gate; the AI never absorbs it) raise **`pickup-fire{slot}`** / **`pickup-absorbed{slot}`**; an absorb clears it and pays no pool. The HUD draws the look the mod declares for it: its manifest's `[pickup]`, or this tick's `pickup-look` (below). A mod that hands one out with no `[pickup]` is faulted for the race on its first `give-pickup` or `pickup-roll`, naming the missing table |
 | `give-pickup{slot}` / `clear-pickup{slot}` | command | Puts the mod's pickup in an empty slot / takes it out of a slot holding it (a fault otherwise). A race without weapons gives nothing. The slot's last-granted weapon is left alone, so the title's repeat rule is unchanged |
 | `pickup-roll{weapon, every}` | command | Race-wide (sent on slot 0): every `every`-th time a weapon pad (`Race::test_weapon_pads`) draws that weapon, it hands out the mod's pickup instead, with the drawn weapon still the slot's last grant. The count is hashed; re-sending the same rule keeps it. The first module to send any of the three pickup commands owns the kind for the race; another one faults |
 | `scale-pad{slot, 0}` and **`speed-pad{slot, pad}`** | command, event | The turbo holds its slot's speed pads at 0 while carried, so a pad gives no push, plume or pad sound, and pays the pool on the `speed-pad` the entry raises ([track properties](#and-track-properties-2026-10-30)) |
 | `play-cue{slot, cue}` | output | One of six of the engine's cues (`oag_ext_abi::Cue`, matched to the engine's in `oag_raceplay::extensions`), pushed beside the tick's own |
 | `fire-effect{slot, effect}` | output | The title's own `CollisionSpark` or `HitSpark` `.pob`, at the hull's back end, drawn by the view half; a title without it draws nothing |
 | `fire-effect{slot, own index}` | output | The sending mod's own particle effect (`[effects]` of its manifest, `docs/formats/mod-effect.md`), arg bit 15 set, at the hull's back end; one that did not load draws nothing |
-| `hud-tint{slot, element, rgba}` | output | Recolours a HUD element of that slot: `Pickup` draws `PickupBackground` in `rgba` instead of the weapon's measured colour (the disc's sprite, recoloured through the tint it is already drawn with). Elements are title-agnostic (`Speed`, `Thrust`, `Energy`, `Pickup`, `Position`, `Lap`, `Time`) and `oag_hud::ext_draws::element_of` maps each to the title's widgets; an element the title has no widget for draws nothing |
+| `hud-tint{slot, element, rgba}` | output | Recolours a HUD element of that slot. `Pickup` is **not** tintable any more: a `hud-tint` of it is a malformed record (`pickup-look` colours the pickup). Elements are title-agnostic (`Speed`, `Thrust`, `Energy`, `Pickup`, `Position`, `Lap`, `Time`) and `oag_hud::ext_draws::element_of` maps each to the title's widgets; an element the title has no widget for draws nothing |
+| `pickup-look{slot, icon, colour}` | output | Command 22. The look of that slot's held mod pickup: `icon` is `{title: weapon}` (the title's own icon sprite for the weapon; a title with none draws none) or `{mod: name}` (a PNG of the mod's `[icons]`), `colour` is `{title: weapon}` (the title's own backdrop row for the weapon: Pulse's recovered table, HD's and Omega's own) or `{rgba}` (a colour of the mod's own). Re-sent each tick it should hold; with none sent the manifest's `[pickup]` is the look, and the last look is kept while the pickup fades out after use. The title's fade-in, overshoot, size pulse, hold and fade-out (Pulse, HD, Omega) play on any look. **Per title:** Pulse, HD and Omega draw both colour kinds; **Pure has no backdrop widget, so both colour kinds draw nothing there** (its icon is the title's model for the weapon, or nothing for a mod icon); 2048 has no backdrop colour table, so its backdrop stays as authored and a `rgba` or title colour draws nothing there (its icon goes through the UV table, a mod icon is fitted inside `PickupBgFrame`). A mod icon is fitted, aspect kept, in the slot the title's weapon icons share (**chosen, not measured**). An output: drawn, never hashed |
 | `hud-shake{slot, element, amplitude}` | output | Jitters the element's widgets by up to `amplitude` HUD pixels (at most 16) this tick. The offset is an integer hash of tick, slot and element, never zero while `amplitude` is above 0 (chosen, not measured) |
 | `hud-bar-extra{slot, element, extra, rgba}` | output | A bar shows `extra` times its value on top: it is rescaled so value x (1 + extra) fills it, the base share keeps the bar's colour and the added share (`extra / (1 + extra)` of the fill, 47 % at 0.9) blends from the bar's colour into `rgba`. Each element means the same on every title: `Thrust` is the thrust bar and draws nothing on a title without one (Pulse); `Speed` is the speed bar |
 | `hud-text{slot, anchor, x, y, text, rgba, size}` | output | Text in the title's HUD font at one of nine anchors of the HUD layout grid, offset `x`, `y` HUD pixels (12-bit signed), `size` in quarters of the title's own text height. The string is at most 48 bytes, carried in the reply's string pool |
@@ -128,7 +130,7 @@ Wall Penalty scales below 1.0 and the turbo above it.
 Not built from this page yet: the HUD MODDED tag and the results screen naming a
 faulted mod (4.2), the modded records table, `race-start`/`race-end`, the
 observation's craft records and spline samples, every other event and command,
-the other five kinds, a mod pickup's own icon art (it borrows the Turbo's), the HUD and frontend worlds, Pulley, the browser and the
+the other five kinds, the HUD and frontend worlds, Pulley, the browser and the
 load-time rewrite, and `oag-server` linking the host (rule 6 forbids `wasmtime` to
 it until phase 3).
 
@@ -424,6 +426,12 @@ file, the committed module):
 - Two runs hash the same every tick.
 
 Fuel (`tests::extension_examples`, a full grid): 14,443 on the loud tick, 10,499 after.
+
+
+## Keeping the mod author skill current
+
+A change to the ABI, the guest SDK, `oag-mod.toml` or a mod-facing format updates
+`assets/mods/examples/.claude/skills/oag-mod-author/SKILL.md` in the same change.
 
 ## What is already decided, and not reopened here
 

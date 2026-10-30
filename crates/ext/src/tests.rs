@@ -213,7 +213,7 @@ fn the_reply_refuses_what_the_host_would_fault_on() {
     assert_eq!(reply.len(), 6);
     while reply.len() < MAX_COMMANDS_FOR_TEST {
         reply
-            .hud_tint(&held, oag_ext_abi::HudElement::Pickup, Rgba::default())
+            .hud_tint(&held, oag_ext_abi::HudElement::Lap, Rgba::default())
             .unwrap();
     }
     assert_eq!(reply.play_cue(&held, Cue::Turbo), Err(Refused::Full));
@@ -469,4 +469,30 @@ fn a_guest_finds_a_route_by_a_property_of_a_path_it_drives() {
         (0..track.routes() as u16).find(|&r| track.route(r).and_then(|e| e.prop(pit)).is_some());
     assert_eq!(found, Some(0));
     assert!(track.route(1).is_none());
+}
+#[test]
+fn a_pickup_look_is_one_record_and_a_mod_icon_rides_the_pool() {
+    let mut buffer = [0_u8; 4 + oag_ext_abi::COMMAND_LEN * oag_ext_abi::MAX_COMMANDS];
+    let mut reply = Reply::new(&mut buffer, 0, 0);
+    let record = CraftRecord {
+        pickup: Pickup::Ours,
+        ..racer(50.0)
+    }
+    .encode();
+    let held = Craft {
+        slot: slot(2),
+        record: &record,
+    };
+    let red = Colour::Rgba(Rgba::new(0xE0, 0x20, 0x20, 0x80));
+    assert_eq!(reply.pickup_look(&held, icon::title::TURBO, red), Ok(()));
+    let bolt = Icon::Mod(ModIcon::new("bolt").unwrap());
+    assert_eq!(
+        reply.pickup_look(&held, bolt, colour::title::SHIELD),
+        Ok(())
+    );
+    assert_eq!(
+        reply.hud_tint(&held, HudElement::Pickup, Rgba::default()),
+        Err(Refused::PickupTint)
+    );
+    assert_eq!(reply.len(), 2);
 }
