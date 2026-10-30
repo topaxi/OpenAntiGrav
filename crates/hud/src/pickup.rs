@@ -184,10 +184,17 @@ fn model_draw(cx: &Context<'_>, name: &str, color: [f32; 4]) -> Option<Draw> {
     let placed = cx.sheet.get(&model.src)?;
     let [w, h] = placed.quad_extent?;
     let [x, y, _z] = model.position;
+    // Orthographic `y` counts up from the bottom of the screen, as the gauge's
+    // models do (`bar_models`): (240, 250) is the top middle, where the
+    // original draws the pickup box.
+    let y = oag_display::space::SCREEN.1 - y;
+    // A flat-rasterised model (Pure's icons) says where its canvas sits from
+    // the model's origin; a plain quad is centred on it.
+    let [dx, dy] = placed.quad_centre.unwrap_or([0.0, 0.0]);
     Some(Draw::BlendedSprite {
         // Centred on its own authored position, the same convention the sight
         // brackets' quads use - see `bracket_draws`.
-        rect: [x - w * 0.5, y - h * 0.5, w, h],
+        rect: [x + dx - w * 0.5, y + dy - h * 0.5, w, h],
         uv: [
             placed.x as f32,
             placed.y as f32,

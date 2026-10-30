@@ -151,13 +151,14 @@ fn pure_draws_the_backdrop_grid_and_the_held_weapons_own_coloured_icon() {
         argb_to_rgba(0xff40_ff40),
         "TURBO_icon's own colour"
     );
-    // Centred on the model's authored (240, 250), the quad's own width and
-    // height either side.
+    // Centred on the model's authored (240, 250) with `y` counted up from the
+    // bottom of the 272-high screen (the original draws the box at the top
+    // middle), the quad's own width and height either side.
     assert_eq!(
         rect,
         [
             240.0 - 31.423_908 / 2.0,
-            250.0 - 6.484_658_2 / 2.0,
+            (272.0 - 250.0) - 6.484_658_2 / 2.0,
             31.423_908,
             6.484_658_2
         ]

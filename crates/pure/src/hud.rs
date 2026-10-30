@@ -36,7 +36,7 @@
 //! widget of any kind to colour". That was checked by grepping `<Image
 //! name=` alone, and it was wrong, not merely incomplete - `Arcade_HUD.xml`'s
 //! and `TimeTrial_HUD.xml`'s own `<Mode3D>` block authors ten weapon icons as
-//! `<Model>` widgets, each with an authored `colour="0xAARRGGBB"` beside its
+//! `<Model>` widgets, each with an authored `colour="0xAABBGGRR"` beside its
 //! `.vex`, e.g. `<Model name="TURBO_icon"><Values
 //! Src="Data\HUD\Weapon_turbo.vex" colour="0xff40ff40" .../></Model>`. Byte-
 //! identical between the two files, so this is the played mode's data, not a
