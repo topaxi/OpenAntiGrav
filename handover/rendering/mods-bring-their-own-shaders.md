@@ -2,7 +2,7 @@
 status: parked
 titles: [all]
 updated: 2026-10-30
-summary: "Mod-supplied WGSL at fixed render hooks (post-process, craft overlay, particle fragment), naga-validated; after mod-shipped particle effects"
+summary: "Mod-supplied WGSL at fixed render hooks (post-process, craft overlay, particle, trail), naga-validated; exhaust trail tint idea; after mod-shipped particle effects"
 categories: [tooling]
 size: XL (30)
 difficulty: hard (40)
@@ -32,6 +32,21 @@ Today a module can only fire the title's own effects: `fire-effect{slot, effect}
   come from an output command (`set-shader-param{hook, index, value}`), never hashed.
 - **Off by default** behind a setting: a mod shader can be slow or hang the GPU, and
   the Steam Deck and phones have tight budgets.
+
+## Idea: the exhaust trail (maintainer, 2026-10-30)
+
+A mod recolours a craft's exhaust trail: a fixed colour, or one taken from the craft's
+own livery (its most prominent or average texture colour). Two cuts:
+
+- **Without shaders**: an output `trail-tint{slot, rgba}`, plus a host-computed colour
+  the mod can ask for by name (`trail-tint{slot, Livery}`). The livery colour is
+  computed render-side when the hull's textures load (`oag-livery`), so the simulation
+  never sees a texture; a module cannot read pixels and should not need to.
+- **With shaders**: a trail fragment hook, so a mod can do more than tint (a gradient
+  along the trail, a pulse with speed).
+
+The tint cut needs none of this thread's shader work and could land with the HUD and
+effect outputs; it is parked here only because the queue was full on 2026-10-30.
 
 ## Open
 
