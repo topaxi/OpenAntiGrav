@@ -30,6 +30,8 @@
 use std::sync::Arc;
 
 mod route;
+#[cfg(feature = "extensions")]
+mod shield;
 mod track;
 
 pub use track::{Track, TrackProps};
@@ -1192,62 +1194,6 @@ mod on {
             .collect()
     }
 
-    /// `shield-delta`'s sink: a loss through the weapon-damage path (so the destroyed
-    /// edge, the shield pickup's immunity and the critical crossing behave as a hit's),
-    /// at its full amount; a gain through the pool's clamp. A race whose rules take no
-    /// damage (Time Trial, Speed Lap) refuses a loss: the mod cannot wreck a craft where
-    /// nothing else can.
-    fn shield_delta(sim: &mut RaceSim, slot: usize, amount: f32) {
-        let rules = sim.damage_rules();
-        let ship = &mut sim.world.ships[slot];
-        let dimensions = ship.handling.dimensions;
-        if amount >= 0.0 {
-            oag_physics::damage::add(&mut ship.physics, &dimensions, amount);
-        } else if rules.damage {
-            oag_physics::damage::apply_weapon(
-                &mut ship.physics,
-                &dimensions,
-                -amount,
-                oag_physics::damage::DamageRules {
-                    weapons: true,
-                    ..rules
-                },
-            );
-        }
-    }
-
-    /// `give-shield`: the title's Shield on the slot for its authored time, as firing a
-    /// held Shield pickup does, and under the same rule: one already running is not
-    /// refreshed. A race without weapons, or a title table with no Shield, gives nothing.
-    fn give_shield(sim: &mut RaceSim, slot: usize) {
-        let Some(simple) = sim
-            .weapons
-            .as_ref()
-            .filter(|_| sim.weapons_on)
-            .and_then(|weapons| weapons.simple(oag_tables::weapons::Weapon::Shield))
-        else {
-            return;
-        };
-        let timer = &mut sim.world.ships[slot].physics.shield_pickup_timer;
-        if *timer <= 0.0 {
-            *timer = simple.time;
-            sim.extensions.on.gave |= 1 << slot;
-        }
-    }
-
-    /// `hold-shield`: floors a running Shield's timer at two ticks, so this tick's step
-    /// leaves it running and a module that stops sending sees it end within two ticks.
-    /// It never starts one.
-    ///
-    /// **Chosen, not measured:** nothing in the originals holds a Shield.
-    fn hold_shield(sim: &mut RaceSim, slot: usize) {
-        let floor = 2.0 * sim.dt;
-        let timer = &mut sim.world.ships[slot].physics.shield_pickup_timer;
-        if *timer > 0.0 {
-            *timer = timer.max(floor);
-        }
-    }
-
     /// `give-pickup`, `clear-pickup` and `pickup-roll` from module `index`: the first
     /// module to send one owns the mod pickup kind for the race, and another one sending
     /// one faults. A race without weapons gives nothing and rolls nothing.
@@ -1446,7 +1392,9 @@ mod on {
                     let boost = &mut sim.extensions.on.boost[slot.index()];
                     *boost = (*boost * factor).min(oag_ext_abi::MAX_THRUST_FACTOR);
                 }
-                Command::ShieldDelta { slot, amount } => shield_delta(sim, slot.index(), amount),
+                Command::ShieldDelta { slot, amount } => {
+                    super::shield::delta(sim, slot.index(), amount)
+                }
                 // Race-wide and held: the later module in id order wins.
                 Command::ScalePad { pad, factor } => {
                     sim.extensions.on.pad_scale[usize::from(pad)] = factor;
@@ -1485,8 +1433,8 @@ mod on {
                 }
                 Command::SetSun { intensity } => sim.extensions.on.sky.sun = intensity,
                 Command::GradeSky { grey } => sim.extensions.on.sky.grey = grey,
-                Command::GiveShield { slot } => give_shield(sim, slot.index()),
-                Command::HoldShield { slot } => hold_shield(sim, slot.index()),
+                Command::GiveShield { slot } => super::shield::give(sim, slot.index()),
+                Command::HoldShield { slot } => super::shield::hold(sim, slot.index()),
                 Command::ClearShield { slot } => {
                     sim.world.ships[slot.index()].physics.shield_pickup_timer = 0.0;
                 }
