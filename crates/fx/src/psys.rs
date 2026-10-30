@@ -53,6 +53,7 @@ pub mod field;
 pub mod frames;
 pub mod guard;
 mod library;
+pub mod parametric;
 mod path;
 pub mod playback;
 mod pre_age;
@@ -411,19 +412,7 @@ impl Effect {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        // Everything reachable as a child starts with its parent's
-        // particles, not with the effect; whatever is left is a root or one
-        // of its siblings, which the parser already flattened in order.
-        let mut is_child = vec![false; emitters.len()];
-        for spec in &emitters {
-            for child in [spec.particle_child, spec.death_child]
-                .into_iter()
-                .flatten()
-            {
-                is_child[child] = true;
-            }
-        }
-        let roots = (0..emitters.len()).filter(|&i| !is_child[i]).collect();
+        let roots = Self::roots_of(&emitters);
 
         let mut effect = Self {
             name: system.name.clone(),

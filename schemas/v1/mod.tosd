@@ -127,3 +127,11 @@ optional = true
 [elements.icons]
 type = "any"
 optional = true
+
+# `[effects]`: name = "path.toml", the mod's own particle effects (effect.tosd). The
+# loader checks the names (letters, digits, '-', '_') and that each is a .toml in the
+# mod; the file itself is read, and refused by name, when a race loads it.
+
+[elements.effects]
+type = "any"
+optional = true

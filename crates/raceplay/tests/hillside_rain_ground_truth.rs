@@ -41,6 +41,8 @@ fn hillside_rain() -> Option<(race::extensions::Source, std::path::PathBuf)> {
         read: Arc::new(move || Ok(wasm.clone())),
         strings: Arc::new(|_| Default::default()),
         icons: Vec::new(),
+        effects: Vec::new(),
+        files: Arc::new(|_| Err("no files".into())),
     };
     Some((source, file))
 }

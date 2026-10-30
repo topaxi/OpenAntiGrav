@@ -93,7 +93,15 @@ pub struct Source {
     pub strings: StringsReader,
     /// The mod's `[icons]`: name and a reader for the PNG.
     pub icons: Vec<(String, Reader)>,
+    /// The mod's `[effects]`, in name order: name and the TOML's path in the mod. A
+    /// module's `fire-mod-effect` names one by its place in this list.
+    pub effects: Vec<(String, String)>,
+    /// Reads any file of the mod by its path (an effect's TOML and PNGs).
+    pub files: Files,
 }
+
+/// Reads a file of a mod by its path in the mod, on the load thread.
+pub type Files = Arc<dyn Fn(&str) -> Result<Vec<u8>, String> + Send + Sync>;
 
 /// A mod's own text by string id.
 pub type Strings = std::collections::BTreeMap<String, String>;
@@ -310,13 +318,7 @@ pub fn mod_icons(
     {
         let mut seen = std::collections::BTreeSet::new();
         let mut out = Vec::new();
-        for source in sources
-            .iter()
-            .filter(|s| {
-                s.titles.is_empty() || s.titles.iter().any(|t| t.eq_ignore_ascii_case(title))
-            })
-            .filter(|s| s.scope.runs_on(foreign_track))
-        {
+        for source in for_race(sources, title, foreign_track) {
             if !seen.insert(source.mod_id.clone()) {
                 continue;
             }
@@ -340,9 +342,25 @@ pub fn mod_icons(
     }
 }
 
+/// The sources of the mods that are on for a race of `title` (and `foreign_track`, for a
+/// track module).
+#[cfg(feature = "view")]
+pub(crate) fn for_race<'a>(
+    sources: &'a [Source],
+    title: &'a str,
+    foreign_track: Option<&'a std::path::Path>,
+) -> impl Iterator<Item = &'a Source> {
+    sources
+        .iter()
+        .filter(move |s| {
+            s.titles.is_empty() || s.titles.iter().any(|t| t.eq_ignore_ascii_case(title))
+        })
+        .filter(move |s| s.scope.runs_on(foreign_track))
+}
+
 /// A PNG as RGBA8: `(width, height, pixels)`.
 #[cfg(all(feature = "view", feature = "extensions"))]
-fn decode_png(bytes: &[u8]) -> Result<(u32, u32, Vec<u8>), String> {
+pub(crate) fn decode_png(bytes: &[u8]) -> Result<(u32, u32, Vec<u8>), String> {
     let mut decoder = png::Decoder::new(std::io::Cursor::new(bytes));
     decoder.set_transformations(png::Transformations::normalize_to_color8());
     let mut reader = decoder.read_info().map_err(|e| e.to_string())?;
@@ -513,7 +531,7 @@ impl Extensions {
 
     /// The `fire-effect`s queued since the view last drew them.
     #[cfg(feature = "view")]
-    pub(super) fn take_effects(&mut self) -> Vec<(usize, oag_title::effects::Trigger)> {
+    pub(super) fn take_effects(&mut self) -> Vec<(usize, crate::extension_effects::Fired)> {
         #[cfg(feature = "extensions")]
         {
             std::mem::take(&mut self.on.effects)
@@ -627,7 +645,7 @@ impl Extensions {
 
     /// The `fire-effect`s queued this tick, not yet drawn.
     #[cfg(all(test, feature = "extensions"))]
-    pub(crate) fn effects_for_tests(&self) -> Vec<(usize, oag_title::effects::Trigger)> {
+    pub(crate) fn effects_for_tests(&self) -> Vec<(usize, crate::extension_effects::Fired)> {
         self.on.effects.clone()
     }
 
@@ -668,20 +686,12 @@ impl crate::Race {
     }
 
     /// The modules' `fire-effect`s, each at its craft's nozzle (the hull's back end),
-    /// played from the title's own effect for that trigger; a title without one draws
-    /// nothing (the load report names every absent effect).
+    /// played from the title's own effect for that trigger or the mod's own effect file;
+    /// one that is absent draws nothing (the load report names every one).
     #[cfg(feature = "view")]
     pub(super) fn draw_extension_effects(&mut self) {
-        for (slot, trigger) in self.sim.extensions.take_effects() {
-            let Some(effect) = self.view.handles.get(trigger).cloned() else {
-                continue;
-            };
-            let ship = &self.sim.world.ships[slot];
-            let model = crate::drawable::model_matrix_of(ship);
-            let tail = oag_core::math::Vec3::new(0.0, 0.0, ship.handling.dimensions.length * 0.5);
-            self.view
-                .stage
-                .play(&effect, model.transform_point3(tail), 1.0);
+        for (slot, fired) in self.sim.extensions.take_effects() {
+            self.play_fired(slot, &fired);
         }
     }
 
@@ -714,6 +724,8 @@ impl crate::Race {
 #[cfg(feature = "extensions")]
 mod on {
     use oag_ext_abi::{Command, Event, MAX_EVENTS, Pickup};
+
+    use crate::extension_effects::Fired;
     use oag_modhost::{Module, Observation};
 
     use super::Report;
@@ -775,7 +787,7 @@ mod on {
         pub(super) hud: Vec<(usize, Command)>,
         /// Each module's own text, in the race's language.
         strings: Vec<super::Strings>,
-        pub(super) effects: Vec<(usize, oag_title::effects::Trigger)>,
+        pub(super) effects: Vec<(usize, crate::extension_effects::Fired)>,
         /// The race-wide outputs of this tick.
         pub(super) sky: super::Sky,
     }
@@ -1425,7 +1437,14 @@ mod on {
                     .extensions
                     .on
                     .effects
-                    .push((slot.index(), self::effect(effect))),
+                    .push((slot.index(), Fired::Title(self::effect(effect)))),
+                Command::FireModEffect { slot, index: own } => {
+                    let mod_id = sim.extensions.on.slots[index].mod_id.clone();
+                    sim.extensions
+                        .on
+                        .effects
+                        .push((slot.index(), Fired::Own { mod_id, index: own }));
+                }
                 Command::HudTint { .. }
                 | Command::HudShake { .. }
                 | Command::HudBarExtra { .. }

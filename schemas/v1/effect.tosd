@@ -1,0 +1,112 @@
+# A mod's own particle effect: crates/fx/src/psys/parametric.rs plays it through the
+# same system as a disc .pob (units: ticks, world units per tick, degrees). What the
+# shape of a file cannot say and the loader holds: ranges (duration 1 to 600 ticks,
+# lifetime centre at least 1 and at most 600 with spread no more than the centre,
+# at most 64 per emission and 512 live, spread 0 to 180, drag 0 to 1), that a curve's
+# or gradient's ages ascend strictly within 0 to 1, that a colour is "#rrggbb", that
+# `texture` is a PNG of the mod, and that the header names this kind at a major the
+# build reads. A file that fails any of it draws nothing and the load report names it.
+
+[toml-schema]
+version = "1.0.0"
+
+[types.toml-schema-reference]
+type = "table"
+
+[types.toml-schema-reference.location]
+type = "string"
+pattern = "/v1/effect[.]tosd$"
+
+[types.toml-schema-reference.version]
+type = "string"
+allowedvalues = ["1.0.0"]
+
+[types.number]
+oneof = ["integer", "float"]
+
+[types.pair]
+type = "array"
+itemtype = "types.number"
+minlength = 2
+maxlength = 2
+
+# `interval` and `per-emission` are one integer or `[min, max]`; `size` and `alpha` are
+# one number or `[[age, value], ...]`; `colour` is "#rrggbb" or `[[age, "#rrggbb"], ...]`.
+# The loader reads the shapes, which a schema cannot say as one type.
+[types.emitter]
+type = "table"
+
+[types.emitter.name]
+type = "string"
+optional = true
+
+[types.emitter.duration]
+type = "types.number"
+
+[types.emitter.looping]
+type = "boolean"
+optional = true
+
+[types.emitter.interval]
+type = "any"
+optional = true
+
+[types.emitter.per-emission]
+type = "any"
+optional = true
+
+[types.emitter.lifetime]
+type = "types.pair"
+
+[types.emitter.speed]
+type = "types.pair"
+optional = true
+
+[types.emitter.spread]
+type = "types.number"
+optional = true
+
+[types.emitter.drag]
+type = "types.number"
+optional = true
+
+[types.emitter.gravity]
+type = "types.number"
+optional = true
+
+[types.emitter.live-cap]
+type = "integer"
+optional = true
+
+[types.emitter.blend]
+type = "string"
+allowedvalues = ["additive", "alpha-over"]
+optional = true
+
+[types.emitter.size]
+type = "any"
+
+[types.emitter.alpha]
+type = "any"
+
+[types.emitter.colour]
+type = "any"
+
+[types.emitter.texture]
+type = "string"
+optional = true
+
+[elements]
+
+[elements.toml-schema]
+type = "types.toml-schema-reference"
+optional = true
+
+[elements.axis]
+type = "string"
+allowedvalues = ["rear", "up"]
+optional = true
+
+[elements.emitter]
+type = "array"
+itemtype = "types.emitter"

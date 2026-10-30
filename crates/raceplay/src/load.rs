@@ -798,6 +798,13 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // One loop, one report line each: an effect is a name in the craft title's
     // `Effects` table, resolved to its trigger once below. Pulse's PSP laws only - see `psys::Effect::without_extents`,
     // `without_pulse_psp_draw` and `oag_fx::flash` for what others keep.
+    // The mods' sources are found once, here, and read again by `prepare` below; their
+    // own PNGs go into the HUD's sheet, so they are read and decoded first.
+    let extension_sources = crate::extensions::gather(
+        &options.extensions,
+        options.find_extensions.as_ref(),
+        &mut report,
+    );
     #[cfg(feature = "view")]
     let mut effects = psys::Library::new();
     let extents = pulse_psp::is_pulse_psp(title, &archives);
@@ -844,8 +851,17 @@ pub fn load(options: &Options) -> Result<Loaded> {
             Err(why) => report.push(format!("{why} - {name} will not be drawn")),
         }
     }
+    // The mods' own effects land after every title effect, so no title sprite moves.
     #[cfg(feature = "view")]
-    let handles = super::EffectHandles::resolve(craft_title, &effects);
+    let mod_effects = crate::extension_effects::load(
+        &extension_sources,
+        &title.slug(),
+        options.foreign_track.as_deref(),
+        &mut effects,
+        &mut report,
+    );
+    #[cfg(feature = "view")]
+    let handles = super::EffectHandles::resolve(craft_title, &effects).with_own(mod_effects);
 
     #[cfg(feature = "view")]
     let (sounds, announcer, class_announcer) = audio::banks_and_announcers(
@@ -946,13 +962,6 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // **`options.language`, not `None`** - see that field's own doc for the
     // bug this closes: every launch site now sets it from the live
     // `settings::Settings::language` before `load` ever runs.
-    // The mods' sources are found once, here, and read again by `prepare` below; their
-    // own PNGs go into the HUD's sheet, so they are read and decoded first.
-    let extension_sources = crate::extensions::gather(
-        &options.extensions,
-        options.find_extensions.as_ref(),
-        &mut report,
-    );
     #[cfg(feature = "view")]
     let mod_icons = crate::extensions::mod_icons(
         &extension_sources,

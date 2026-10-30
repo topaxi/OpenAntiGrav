@@ -94,6 +94,8 @@ mod on {
             read: Arc::new(move || Ok(wasm.clone())),
             strings: Arc::new(|_| Default::default()),
             icons: Vec::new(),
+            effects: Vec::new(),
+            files: Arc::new(|_| Err("no files".into())),
         }
     }
 
@@ -343,6 +345,47 @@ mod on {
         assert_eq!(setup_race.sim.world.ships[0].pickup.weapon, None);
     }
 
+    /// Every tick: `fire-effect` with bit 15 set, the mod's own effect 2, for slot 1.
+    fn mod_effect_firer(id: &str, fires: bool) -> Source {
+        let body = if fires {
+            format!(
+                "(i32.store (i32.const {REPLY}) (i32.const 1))
+                 (i32.store8 (i32.const {c}) (i32.const 6)) (i32.store8 (i32.const {s}) (i32.const 1))
+                 (i32.store16 (i32.const {a}) (i32.const 0x8002))
+                 i32.const 0",
+                c = REPLY + 4,
+                s = REPLY + 5,
+                a = REPLY + 6,
+            )
+        } else {
+            "i32.const 0".to_string()
+        };
+        module(id, &body)
+    }
+
+    #[test]
+    fn a_mod_effect_is_queued_under_its_mod_and_a_race_firing_one_hashes_like_one_firing_none() {
+        let mut loud = grid(prepared(&[mod_effect_firer("test.loud", true)]));
+        let mut quiet = grid(prepared(&[mod_effect_firer("test.quiet", false)]));
+        for _ in 0..120 {
+            loud.tick(&PlayerInputs::none());
+            quiet.tick(&PlayerInputs::none());
+            assert_eq!(loud.sim.state_hash(), quiet.sim.state_hash());
+        }
+        loud.tick_sim_only(&PlayerInputs::none());
+        assert_eq!(
+            loud.sim.extensions.effects_for_tests(),
+            [(
+                1,
+                crate::extension_effects::Fired::Own {
+                    mod_id: "test.loud".to_string(),
+                    index: 2
+                }
+            )]
+        );
+        assert!(quiet.sim.extensions.effects_for_tests().is_empty());
+    }
+
     /// Every tick: a Turbo cue, the wall sparks, a red pickup backdrop for slot 1, the
     /// three race-wide outputs (rain at 0.5, sun at 0.5, sky grey at 0.25), and for slot 1
     /// an energy-bar shake of 2, a thrust-bar share of 0.5 into red, the text "hi" and the
@@ -438,7 +481,10 @@ mod on {
         loud.tick_sim_only(&PlayerInputs::none());
         assert_eq!(
             loud.sim.extensions.effects_for_tests(),
-            [(1, oag_title::effects::Trigger::CollisionSpark)]
+            [(
+                1,
+                crate::extension_effects::Fired::Title(oag_title::effects::Trigger::CollisionSpark)
+            )]
         );
         let tick = loud.sim.world.tick;
         let hud = loud.sim.extensions.hud(1, tick);
@@ -638,6 +684,76 @@ mod on {
         assert!(sheet.get("mod:test.names/badge").is_some(), "{notes:?}");
     }
 
+    const GOOD_EFFECT: &str = r##"toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/effect.tosd", version = "1.0.0" }
+[[emitter]]
+duration = 4
+lifetime = [10, 2]
+speed = [0.5, 0.1]
+spread = 20
+size = 0.1
+alpha = [[0.0, 1.0], [1.0, 0.0]]
+colour = "#ff2010"
+"##;
+
+    #[test]
+    fn a_mods_effect_files_are_loaded_and_a_broken_one_draws_nothing_and_is_named() {
+        let mut source = namer();
+        source.effects = ["a_good", "b_broken", "c_no_texture", "d_gone"]
+            .map(|name| (name.to_string(), format!("fx/{name}.toml")))
+            .to_vec();
+        source.files = Arc::new(|path| match path {
+            "fx/a_good.toml" => Ok(GOOD_EFFECT.as_bytes().to_vec()),
+            "fx/b_broken.toml" => Ok(GOOD_EFFECT
+                .replace("duration = 4", "duration = 0")
+                .into_bytes()),
+            "fx/c_no_texture.toml" => Ok(GOOD_EFFECT
+                .replace("size = 0.1", "size = 0.1\ntexture = \"fx/x.png\"")
+                .into_bytes()),
+            other => Err(format!("{other}: not in the mod")),
+        });
+        let mut library = oag_fx::psys::Library::new();
+        let mut report = Vec::new();
+        let loaded = crate::extension_effects::load(
+            &[source.clone()],
+            "wipeout-pulse",
+            None,
+            &mut library,
+            &mut report,
+        );
+        assert!(loaded.get("test.names", 0).is_some(), "the good file plays");
+        for index in 1..4 {
+            assert!(
+                loaded.get("test.names", index).is_none(),
+                "{index} draws nothing"
+            );
+        }
+        assert!(library.get("mod:test.names/a_good").is_some());
+        assert_eq!(library.len(), 1, "only the good one reached the library");
+        let said = report.join("\n");
+        for name in ["effect b_broken", "effect c_no_texture", "effect d_gone"] {
+            assert!(said.contains(name), "{name} is named: {said}");
+        }
+        assert!(
+            said.contains("duration") && said.contains("fx/x.png"),
+            "{said}"
+        );
+        assert!(said.contains("draws nothing"));
+
+        let mut other = source;
+        other.titles = vec!["wipeout-pulse".to_string()];
+        let none = crate::extension_effects::load(
+            &[other],
+            "wipeout-pure",
+            None,
+            &mut oag_fx::psys::Library::new(),
+            &mut Vec::new(),
+        );
+        assert!(
+            none.get("test.names", 0).is_none(),
+            "another title's mod loads none"
+        );
+    }
+
     /// Copies slot 1's lap and laps target, as its craft record carries them, into the
     /// first two blob bytes every tick.
     fn lap_reader() -> Source {
@@ -827,6 +943,8 @@ mod triggers {
             read: Arc::new(move || Ok(wasm.clone())),
             strings: Arc::new(|_| Default::default()),
             icons: Vec::new(),
+            effects: Vec::new(),
+            files: Arc::new(|_| Err("no files".into())),
         }
     }
 

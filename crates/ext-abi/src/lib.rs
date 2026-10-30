@@ -190,8 +190,8 @@ const COMMAND_HUD_SHAKE: u8 = 17;
 const COMMAND_HUD_BAR_EXTRA: u8 = 18;
 const COMMAND_HUD_TEXT: u8 = 19;
 const COMMAND_HUD_ICON: u8 = 20;
-/// Bit 15 of a `hud-text` or `hud-icon` argument: the string is a key of the sending
-/// mod's own tables, not the text or a title sprite. The pool offset is the rest.
+/// Bit 15 of a `hud-text`, `hud-icon` or `fire-effect` argument: the string or effect is
+/// the sending mod's own, not the title's. The pool offset or effect index is the rest.
 const OWN_FLAG: u16 = 1 << 15;
 const COMMAND_GIVE_SHIELD: u8 = 24;
 const COMMAND_HOLD_SHIELD: u8 = 25;
@@ -677,6 +677,16 @@ pub enum Command {
         /// The effect.
         effect: Effect,
     },
+    /// Fire one of the sending mod's own particle effects (`[effects]` of its manifest)
+    /// at the craft's nozzle. An output: drawn, never hashed. Shares `fire-effect`'s
+    /// code, told apart by bit 15 of the argument; an `index` the mod has no effect at
+    /// draws nothing, and the load report names the effects that did not load.
+    FireModEffect {
+        /// The grid slot.
+        slot: Slot,
+        /// The effect's place in the mod's `[effects]`, in name order (15 bits).
+        index: u16,
+    },
     /// This tick, recolour the slot's HUD `element`. An output, re-sent each tick it
     /// should hold: drawn, never hashed. A title without the element draws nothing.
     HudTint {
@@ -795,6 +805,7 @@ impl Command {
             | Self::ScaleSlotPads { slot, .. }
             | Self::PlayCue { slot, .. }
             | Self::FireEffect { slot, .. }
+            | Self::FireModEffect { slot, .. }
             | Self::HudTint { slot, .. }
             | Self::HudShake { slot, .. }
             | Self::HudBarExtra { slot, .. }
@@ -837,6 +848,7 @@ impl Command {
             Self::ScaleSlotPads { factor, .. } => (COMMAND_SCALE_SLOT_PADS, 0, factor.to_bits(), 0),
             Self::PlayCue { cue, .. } => (COMMAND_PLAY_CUE, cue.code(), 0, 0),
             Self::FireEffect { effect, .. } => (COMMAND_FIRE_EFFECT, effect.code(), 0, 0),
+            Self::FireModEffect { index, .. } => (COMMAND_FIRE_EFFECT, index | OWN_FLAG, 0, 0),
             Self::HudTint { element, rgba, .. } => {
                 (COMMAND_HUD_TINT, element.code(), 0, rgba.to_u32())
             }
@@ -998,6 +1010,10 @@ impl Command {
             COMMAND_PLAY_CUE => Self::PlayCue {
                 slot,
                 cue: Cue::from_code(arg).ok_or(Malformed::Cue(arg))?,
+            },
+            COMMAND_FIRE_EFFECT if arg & OWN_FLAG != 0 => Self::FireModEffect {
+                slot,
+                index: arg & !OWN_FLAG,
             },
             COMMAND_FIRE_EFFECT => Self::FireEffect {
                 slot,

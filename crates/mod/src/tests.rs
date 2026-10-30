@@ -282,3 +282,25 @@ fn a_manifest_carries_icons_that_are_pngs_in_the_mod() {
             .is_empty()
     );
 }
+
+#[test]
+fn a_manifest_carries_effects_that_are_tomls_in_the_mod() {
+    let text = format!("{MANIFEST_TEXT}\n[effects]\nspark = \"fx/spark.toml\"\n");
+    let parsed = Manifest::parse(&text, &|path| path == "fx/spark.toml").unwrap();
+    assert_eq!(parsed.effects["spark"], "fx/spark.toml");
+    let missing = Manifest::parse(&text, &|_| false).unwrap_err().to_string();
+    assert!(
+        missing.contains("spark") && missing.contains("not a .toml in the mod"),
+        "{missing}"
+    );
+    let wrong = text.replace("spark.toml", "spark.png");
+    assert!(Manifest::parse(&wrong, &|_| true).is_err(), "only a TOML");
+    let spaced = text.replace("spark =", "\"bad name\" =");
+    assert!(Manifest::parse(&spaced, &|_| true).is_err());
+    assert!(
+        Manifest::parse(MANIFEST_TEXT, &|_| true)
+            .unwrap()
+            .effects
+            .is_empty()
+    );
+}

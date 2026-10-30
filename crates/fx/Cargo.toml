@@ -17,6 +17,9 @@ oag-formats.workspace = true
 oag-texture.workspace = true
 oag-mesh.workspace = true
 oag-gpu.workspace = true
+oag-schema.workspace = true
+serde.workspace = true
+toml.workspace = true
 bytemuck = { workspace = true, features = ["derive"] }
 wgpu.workspace = true
 
