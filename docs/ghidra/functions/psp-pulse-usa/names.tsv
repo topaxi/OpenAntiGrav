@@ -1443,3 +1443,6 @@
 0x08ab0844	data	g_hud_pickup_widget_table	92	pickup-colour.md
 0x08819644	function	Colour_UnpackToFloat4	85	pickup-colour.md
 0x088194b8	function	Colour_PackFromFloat4	85	pickup-colour.md
+0x08819374	function	Ease_Cosine	90	pickup-colour.md
+0x088193ec	function	Ease_GaussianBump	90	pickup-colour.md
+0x08819458	function	Ease_CosineWithBump	90	pickup-colour.md

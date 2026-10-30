@@ -239,3 +239,4 @@
 0x811035a8	function	TouchScroll_ParseValues	85	canvas3d-lattice.md
 0x81103b46	function	TouchScroll_Update	70	canvas3d-lattice.md
 0x811042ae	function	TouchScroll_SetScroll	65	canvas3d-lattice.md
+0x811505a8	function	Hud_SetPickupWidgetsVisible	75	pickup-backdrop.md

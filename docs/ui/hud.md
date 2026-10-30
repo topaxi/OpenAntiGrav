@@ -719,6 +719,10 @@ Autopilot, blue for Bomb and Mine); the icon stays white. This build draws those
 words source-over. Law, evidence and confidence 92:
 [pickup-colour.md](../ghidra/functions/psp-pulse-usa/pickup-colour.md); the
 page [pickups](../gameplay/pickups.md) carries the summary.
+The fade is measured too (2026-10-30): the word is scaled by an eased
+overshooting curve over 0.42 s after the grant, held 0.33 s and played
+backwards after use. HD and Omega carry the same table, 2048 does not, Pure has
+no backdrop (same page, "Checked on the other titles").
 
 ### The place and the total time are authored at one anchor, so one of them has to go
 

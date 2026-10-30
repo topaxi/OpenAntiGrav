@@ -134,3 +134,4 @@
 0x012539b0	function	Collision_TestObbSphere	72	mp-time-trial-collision.md
 0x016544a0	function	Race_ComputeLoyaltyAward	80	endrace-loyalty.md
 0x012f7200	function	HullShake_Update	80	hull-shake.md
+0x0193f750	data	g_hud_pickup_widget_table	90	omega-pickup-table.md
