@@ -127,7 +127,7 @@ pub fn direct_hit<S: Craft>(
         stats.damage_per_bullet,
         rules,
     );
-    super::hit::record(hits, slot, &report);
+    super::hit::record(hits, slot, oag_tables::weapons::Weapon::Cannon, &report);
 }
 
 /// What one Cannon round's impact does, called from

@@ -168,6 +168,11 @@ pub struct Shield {
     /// Set only when there was something to swallow: a zero-energy graze is not a hit, and
     /// would strobe the shell every scrape tick (`shield-pickup.md`).
     pub absorbed: bool,
+    /// The energy the hit asked for, after every scale, whether or not a fired Shield
+    /// swallowed it. Equals [`Self::lost`] on a landed hit; zero when the craft was not
+    /// racing (the state gate refuses before anything is asked). The amount a mod's `hit`
+    /// event reports.
+    pub asked: f32,
 }
 
 impl Shield {
@@ -355,6 +360,7 @@ fn subtract(state: &mut ShipState, dimensions: &Dimensions, lost: f32) -> Shield
     if state.shield_pickup_timer > 0.0 {
         return Shield {
             absorbed: lost > 0.0,
+            asked: lost,
             ..Shield::default()
         };
     }
@@ -379,6 +385,7 @@ fn subtract(state: &mut ShipState, dimensions: &Dimensions, lost: f32) -> Shield
         crossed_critical,
         depleted,
         absorbed: false,
+        asked: lost,
     }
 }
 

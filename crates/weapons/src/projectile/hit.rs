@@ -7,7 +7,7 @@
 /// two hits are both reported. A caller with nothing to draw passes a scratch
 /// array; a short slice is written as far as it goes, so `&mut []` is a legal "do
 /// not tell me".
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct WeaponHit {
     /// A fired Shield pickup swallowed a hit. The original's
     /// `Ship_ApplyPendingWeaponDamage` (`0x0883f13c`) discards the amount and calls
@@ -21,19 +21,39 @@ pub struct WeaponHit {
     /// so the killing hit sparks too. See `docs/ghidra/functions/psp-pulse-usa/shield.md`,
     /// "`Ship_Damage`'s weapon branch throws the hit sparks".
     pub landed: bool,
+    /// What this tick's hits asked of the craft's energy, summed, whether they landed or
+    /// a Shield swallowed them (`oag_physics::damage::Shield::asked`). A hit the weapon
+    /// gates out before `Ship_Damage` (a Quake wave or a LeachBeam link meeting a running
+    /// Shield) asks nothing and adds nothing. Read by a simulation mod's `hit` event.
+    pub amount: f32,
+    /// The weapon of the first hit folded in this tick, with an `amount` above zero.
+    pub weapon: Option<oag_tables::weapons::Weapon>,
 }
 
 impl WeaponHit {
-    /// Folds one `Ship_Damage` outcome into this slot's report.
-    pub fn record(&mut self, report: &oag_physics::damage::Shield) {
+    /// Folds one `Ship_Damage` outcome from `weapon` into this slot's report.
+    pub fn record(
+        &mut self,
+        weapon: oag_tables::weapons::Weapon,
+        report: &oag_physics::damage::Shield,
+    ) {
         self.absorbed |= report.absorbed;
         self.landed |= report.landed();
+        if report.asked > 0.0 {
+            self.amount += report.asked;
+            self.weapon.get_or_insert(weapon);
+        }
     }
 }
 
 /// Folds `report` into `hits[slot]`, when the slice reaches that far.
-pub(crate) fn record(hits: &mut [WeaponHit], slot: usize, report: &oag_physics::damage::Shield) {
+pub(crate) fn record(
+    hits: &mut [WeaponHit],
+    slot: usize,
+    weapon: oag_tables::weapons::Weapon,
+    report: &oag_physics::damage::Shield,
+) {
     if let Some(hit) = hits.get_mut(slot) {
-        hit.record(report);
+        hit.record(weapon, report);
     }
 }

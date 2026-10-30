@@ -193,6 +193,11 @@ It needs `simulation = true` too, loads only in a race of that file (never a dis
 and may send the same commands as a rules module, including the race-wide `set-weather`,
 `set-sun` and `grade-sky` outputs. Hillside's rain is one.
 
+A rules module also sees every weapon hit on a craft (`hit{slot, amount, weapon}`, an
+absorbed one included, with the craft's `shielded` flag) and can start, hold and end the
+title's Shield (`give-shield`, `hold-shield`, `clear-shield`): enough to write a breakable
+armour. See [wasm-extensions](../architecture/wasm-extensions/README.md#breakable-armour-from-the-shield-2026-10-30).
+
 The game must be built with the `extensions` feature: `just play-mods` (`just play`
 with it), or `cargo run --release -p oag-game --features extensions`. Plain
 `just play` runs no module; its boot log says so for each mod that ships one.

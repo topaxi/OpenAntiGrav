@@ -30,6 +30,7 @@ fn a_blast_reaches_inside_the_radius_and_stops_at_it() {
         &mut grid,
         Vec3::ZERO,
         &BlastStats {
+            weapon: oag_tables::weapons::Weapon::Rocket,
             radius: 10.0,
             damage: 30.0,
             force: 100.0,
@@ -88,6 +89,7 @@ fn a_shielded_craft_keeps_its_energy_and_still_gets_shoved() {
         &mut grid,
         Vec3::ZERO,
         &BlastStats {
+            weapon: oag_tables::weapons::Weapon::Rocket,
             radius: 10.0,
             damage: 30.0,
             force: 10.0,
@@ -121,6 +123,7 @@ fn a_tripped_mine_spends_itself_on_the_tripping_craft_only() {
         ship.physics.body.mass = 2.0;
     }
     let stats = BlastStats {
+        weapon: oag_tables::weapons::Weapon::Rocket,
         radius: 10.0,
         damage: 30.0,
         force: 100.0,

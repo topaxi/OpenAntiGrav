@@ -177,7 +177,7 @@ pub mod trip {
 
 /// What one tick of a beam did, for the composition root to draw and play: a
 /// per-tick output, never state (`docs/architecture/adr/0018-audio-mixer-architecture.md`).
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Report {
     /// The link transferred energy this tick.
     pub drained: bool,
@@ -193,6 +193,8 @@ pub struct Report {
     /// `craft+0x138 == 7`, the one weapon throwing
     /// `WO_SHIP_SPARK_DAMAGE_LEACHBEAM` instead of `WO_SHIP_COLL_SPARK_DAMAGE`.
     pub landed: bool,
+    /// What the drain asked of the target, see [`super::WeaponHit::amount`].
+    pub asked: f32,
 }
 
 impl Beam {
@@ -289,6 +291,7 @@ impl Beam {
         let hit = self.drain(ships, rules);
         report.absorbed = hit.absorbed;
         report.landed = hit.landed();
+        report.asked = hit.asked;
         report.drained = true;
         report
     }
