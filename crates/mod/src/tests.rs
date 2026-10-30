@@ -307,6 +307,7 @@ fn a_manifest_carries_effects_that_are_tomls_in_the_mod() {
 
 #[test]
 fn a_manifest_pickup_names_its_icon_and_colour_sources_and_a_bad_one_is_refused_by_name() {
+    use oag_tables::pickup_look::{Colour, Icon};
     use oag_tables::weapons::Weapon;
     let with = |pickup: &str| {
         let text =
@@ -316,19 +317,19 @@ fn a_manifest_pickup_names_its_icon_and_colour_sources_and_a_bad_one_is_refused_
     let look = with("icon = { title = \"turbo\" }\ncolour = { rgba = \"E0202080\" }")
         .unwrap()
         .unwrap();
-    assert_eq!(look.icon, PickupIcon::Title(Weapon::Turbo));
-    assert_eq!(look.colour, PickupColour::Rgba([0xE0, 0x20, 0x20, 0x80]));
+    assert_eq!(look.icon, Icon::Title(Weapon::Turbo));
+    assert_eq!(look.colour, Colour::Rgba([0xE0, 0x20, 0x20, 0x80]));
     let look = with("icon = { mod = \"bolt\" }\ncolour = { title = \"shield\" }")
         .unwrap()
         .unwrap();
-    assert_eq!(look.icon, PickupIcon::Mod("bolt".into()));
-    assert_eq!(look.colour, PickupColour::Title(Weapon::Shield));
+    assert_eq!(look.icon, Icon::Mod("bolt".into()));
+    assert_eq!(look.colour, Colour::Title(Weapon::Shield));
     assert_eq!(
         with("icon = { title = \"leachbeam\" }\ncolour = { title = \"repulser\" }")
             .unwrap()
             .unwrap()
             .icon,
-        PickupIcon::Title(Weapon::LeachBeam)
+        Icon::Title(Weapon::LeachBeam)
     );
     for (pickup, named) in [
         (

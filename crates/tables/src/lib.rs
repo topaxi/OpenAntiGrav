@@ -35,6 +35,7 @@ pub mod fexml;
 pub mod fury_backdrop;
 pub mod handling;
 pub mod mjolnir;
+pub mod pickup_look;
 pub mod pure_ai_stats;
 pub mod pure_campaign;
 pub mod pure_flow;

@@ -98,6 +98,9 @@ pub struct Source {
     pub effects: Vec<(String, String)>,
     /// Reads any file of the mod by its path (an effect's TOML and PNGs).
     pub files: Files,
+    /// The mod's `[pickup]`: the look of the pickup it hands out. A mod without one that
+    /// sends `give-pickup` or `pickup-roll` is faulted for the race, naming the table.
+    pub pickup: Option<oag_tables::pickup_look::PickupLook>,
 }
 
 /// Reads a file of a mod by its path in the mod, on the load thread.
@@ -170,6 +173,9 @@ pub struct Prepared {
     /// Each module's mod's own text for the race's language, in module order.
     #[cfg(feature = "extensions")]
     strings: Vec<Strings>,
+    /// Each module's mod's `[pickup]`, in module order.
+    #[cfg(feature = "extensions")]
+    pickups: Vec<Option<oag_tables::pickup_look::PickupLook>>,
 }
 
 impl Prepared {
@@ -235,6 +241,7 @@ pub fn prepare(
         sorted.sort_by(|a, b| a.mod_id.cmp(&b.mod_id));
         let mut modules = Vec::new();
         let mut strings = Vec::new();
+        let mut pickups = Vec::new();
         let mut track_module = false;
         for source in sorted {
             let label = format!("mod {}: {}", source.mod_id, source.module);
@@ -284,6 +291,7 @@ pub fn prepare(
                     track_module |= matches!(source.scope, Scope::Track(_));
                     modules.push((source.mod_id.clone(), module));
                     strings.push((source.strings)(language));
+                    pickups.push(source.pickup.clone());
                 }
                 Err(e) => push(report, format!("{label} left out: {e}")),
             }
@@ -293,6 +301,7 @@ pub fn prepare(
             track_module,
             region,
             strings,
+            pickups,
         }
     }
 }
@@ -467,7 +476,12 @@ impl Extensions {
         #[cfg(feature = "extensions")]
         {
             Self {
-                on: on::On::new(prepared.modules, prepared.region, prepared.strings),
+                on: on::On::new(
+                    prepared.modules,
+                    prepared.region,
+                    prepared.strings,
+                    prepared.pickups,
+                ),
             }
         }
     }
@@ -512,6 +526,21 @@ impl Extensions {
         {
             let _ = (slot, tick);
             oag_hud::ext_draws::Outputs::default()
+        }
+    }
+
+    /// The look of `slot`'s held mod pickup this tick, for the HUD to keep while the pickup
+    /// fades out after its use. Never hashed.
+    #[must_use]
+    pub fn pickup_look(&self, slot: usize) -> Option<oag_tables::pickup_look::PickupLook> {
+        #[cfg(feature = "extensions")]
+        {
+            self.on.pickup_look(slot)
+        }
+        #[cfg(not(feature = "extensions"))]
+        {
+            let _ = slot;
+            None
         }
     }
 
@@ -729,6 +758,7 @@ mod on {
     use oag_modhost::{Module, Observation};
 
     use super::Report;
+    use crate::extension_pickup::pickup;
     use crate::sim::RaceSim;
 
     #[derive(Debug, Clone)]
@@ -787,6 +817,8 @@ mod on {
         pub(super) hud: Vec<(usize, Command)>,
         /// Each module's own text, in the race's language.
         strings: Vec<super::Strings>,
+        /// Each module's `[pickup]`, in module order.
+        pickups: Vec<Option<oag_tables::pickup_look::PickupLook>>,
         pub(super) effects: Vec<(usize, crate::extension_effects::Fired)>,
         /// The race-wide outputs of this tick.
         pub(super) sky: super::Sky,
@@ -835,6 +867,12 @@ mod on {
                     Command::HudTint {
                         element: e, rgba, ..
                     } => out.tint[index(e)] = Some(colour(rgba)),
+                    Command::PickupLook { .. } => {
+                        out.pickup_look = crate::extension_pickup::from_command(
+                            &command,
+                            &self.slots[module].mod_id,
+                        );
+                    }
                     Command::HudShake {
                         element: e,
                         amplitude,
@@ -899,10 +937,36 @@ mod on {
             out
         }
 
+        /// The look of `slot`'s mod pickup this tick: the last `pickup-look` a module sent
+        /// for it, else the `[pickup]` of the module that owns the mod pickup. `None` in a
+        /// race without one.
+        pub(super) fn pickup_look(
+            &self,
+            slot: usize,
+        ) -> Option<oag_tables::pickup_look::PickupLook> {
+            let sent = self
+                .hud
+                .iter()
+                .rev()
+                .filter(|(_, c)| c.slot().map(|s| s.index()) == Some(slot))
+                .find_map(|(module, c)| {
+                    crate::extension_pickup::from_command(c, &self.slots[*module].mod_id)
+                });
+            sent.or_else(|| {
+                let owner = usize::from(self.owner).checked_sub(1)?;
+                let declared = self.pickups.get(owner)?.as_ref()?;
+                Some(crate::extension_pickup::from_manifest(
+                    declared,
+                    &self.slots[owner].mod_id,
+                ))
+            })
+        }
+
         pub(super) fn new(
             modules: Vec<(String, Module)>,
             region: super::track::Region,
             strings: Vec<super::Strings>,
+            pickups: Vec<Option<oag_tables::pickup_look::PickupLook>>,
         ) -> Self {
             Self {
                 slots: modules
@@ -936,6 +1000,7 @@ mod on {
                 reported: [0; oag_gameplay::MAX_SHIPS],
                 hud: Vec::new(),
                 strings,
+                pickups,
                 effects: Vec::new(),
                 sky: super::Sky::default(),
             }
@@ -1101,51 +1166,6 @@ mod on {
         }
     }
 
-    /// The ABI's weapon vocabulary and the tables' weapons, both ways. The tables' own
-    /// `Extension` is the mod's pickup, which the ABI names [`Pickup::Ours`].
-    fn pickup(weapon: oag_tables::weapons::Weapon) -> Pickup {
-        use oag_ext_abi::Weapon as Abi;
-        use oag_tables::weapons::Weapon;
-        Pickup::Weapon(match weapon {
-            Weapon::Rocket => Abi::Rocket,
-            Weapon::Missile => Abi::Missile,
-            Weapon::Quake => Abi::Quake,
-            Weapon::Cannon => Abi::Cannon,
-            Weapon::Turbo => Abi::Turbo,
-            Weapon::Shield => Abi::Shield,
-            Weapon::Autopilot => Abi::Autopilot,
-            Weapon::Plasma => Abi::Plasma,
-            Weapon::Bomb => Abi::Bomb,
-            Weapon::Mine => Abi::Mine,
-            Weapon::LeachBeam => Abi::LeachBeam,
-            Weapon::Repulser => Abi::Repulser,
-            Weapon::Shuriken => Abi::Shuriken,
-            Weapon::Disruptor => Abi::Disruptor,
-            Weapon::Extension => return Pickup::Ours,
-        })
-    }
-
-    fn weapon(weapon: oag_ext_abi::Weapon) -> oag_tables::weapons::Weapon {
-        use oag_ext_abi::Weapon as Abi;
-        use oag_tables::weapons::Weapon;
-        match weapon {
-            Abi::Rocket => Weapon::Rocket,
-            Abi::Missile => Weapon::Missile,
-            Abi::Quake => Weapon::Quake,
-            Abi::Cannon => Weapon::Cannon,
-            Abi::Turbo => Weapon::Turbo,
-            Abi::Shield => Weapon::Shield,
-            Abi::Autopilot => Weapon::Autopilot,
-            Abi::Plasma => Weapon::Plasma,
-            Abi::Bomb => Weapon::Bomb,
-            Abi::Mine => Weapon::Mine,
-            Abi::LeachBeam => Weapon::LeachBeam,
-            Abi::Repulser => Weapon::Repulser,
-            Abi::Shuriken => Weapon::Shuriken,
-            Abi::Disruptor => Weapon::Disruptor,
-        }
-    }
-
     /// The observation's craft records: copies of the world, never a pointer into it.
     fn crafts(sim: &RaceSim, inputs: &oag_gameplay::PlayerInputs) -> Vec<oag_ext_abi::Craft> {
         sim.world
@@ -1258,6 +1278,23 @@ mod on {
             }
             return;
         }
+        let hands_out = matches!(
+            command,
+            Command::GivePickup { .. } | Command::PickupRoll { .. }
+        );
+        if hands_out && on.pickups[index].is_none() {
+            let module = &mut on.slots[index];
+            if module.faulted.is_none() {
+                let why = "it hands out its own pickup but its oag-mod.toml has no [pickup] table \
+                           (icon and colour, each naming its source)";
+                log::warn!(
+                    "mod {}: {why}, at tick {tick}; off for the rest of the race",
+                    module.mod_id
+                );
+                module.faulted = Some((tick, why.to_string()));
+            }
+            return;
+        }
         on.owner = me;
         if !sim.weapons_on {
             return;
@@ -1279,7 +1316,7 @@ mod on {
                 }
             }
             Command::PickupRoll { weapon, every } => {
-                let weapon = self::weapon(weapon);
+                let weapon = crate::extension_pickup::weapon(weapon);
                 let on = &mut sim.extensions.on;
                 if on.roll != Some((weapon, every)) {
                     on.roll = Some((weapon, every));
@@ -1445,7 +1482,8 @@ mod on {
                         .effects
                         .push((slot.index(), Fired::Own { mod_id, index: own }));
                 }
-                Command::HudTint { .. }
+                Command::PickupLook { .. }
+                | Command::HudTint { .. }
                 | Command::HudShake { .. }
                 | Command::HudBarExtra { .. }
                 | Command::HudText { .. }

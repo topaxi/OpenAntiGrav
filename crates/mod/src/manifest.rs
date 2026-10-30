@@ -1,5 +1,6 @@
 //! `oag-mod.toml`: who a mod is, and under what licence it travels.
 
+use oag_tables::pickup_look::{Colour, Icon, PickupLook};
 use serde::Deserialize;
 
 /// The manifest's name at a mod's root.
@@ -87,35 +88,7 @@ pub struct Manifest {
     pub effects: std::collections::BTreeMap<String, String>,
     /// `[pickup]`: the look of the mod's own pickup, required of a simulation mod that
     /// hands one out.
-    pub pickup: Option<Pickup>,
-}
-
-/// `[pickup]`: the icon and the backdrop colour of a mod's own pickup, each naming its
-/// source.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Pickup {
-    /// `icon`.
-    pub icon: PickupIcon,
-    /// `colour`.
-    pub colour: PickupColour,
-}
-
-/// `[pickup] icon`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PickupIcon {
-    /// `{ title = "turbo" }`: the title's own icon for a weapon.
-    Title(oag_tables::weapons::Weapon),
-    /// `{ mod = "name" }`: a key of the mod's `[icons]`.
-    Mod(String),
-}
-
-/// `[pickup] colour`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PickupColour {
-    /// `{ title = "shield" }`: the title's own backdrop colour for a weapon.
-    Title(oag_tables::weapons::Weapon),
-    /// `{ rgba = "E0202080" }`: red, green, blue, alpha.
-    Rgba([u8; 4]),
+    pub pickup: Option<PickupLook>,
 }
 
 /// `[extension]` (`docs/architecture/wasm-extensions/README.md`, section 1.1). Read
@@ -215,10 +188,10 @@ fn weapon(key: &'static str, name: &str) -> Result<oag_tables::weapons::Weapon, 
 fn pickup(
     table: PickupTable,
     icons: &std::collections::BTreeMap<String, String>,
-) -> Result<Pickup, Error> {
+) -> Result<PickupLook, Error> {
     let icon = match (table.icon.title, table.icon.module) {
-        (Some(title), None) => PickupIcon::Title(weapon("pickup.icon", &title)?),
-        (None, Some(name)) if icons.contains_key(&name) => PickupIcon::Mod(name),
+        (Some(title), None) => Icon::Title(weapon("pickup.icon", &title)?),
+        (None, Some(name)) if icons.contains_key(&name) => Icon::Mod(name),
         (None, Some(name)) => {
             return Err(bad(
                 "pickup.icon",
@@ -233,7 +206,7 @@ fn pickup(
         }
     };
     let colour = match (table.colour.title, table.colour.rgba) {
-        (Some(title), None) => PickupColour::Title(weapon("pickup.colour", &title)?),
+        (Some(title), None) => Colour::Title(weapon("pickup.colour", &title)?),
         (None, Some(hex)) => {
             let digits = hex.len() == 8 && hex.bytes().all(|b| b.is_ascii_hexdigit());
             let word = digits
@@ -245,7 +218,7 @@ fn pickup(
                         format!("rgba = {hex:?} is not eight hex digits, RRGGBBAA"),
                     )
                 })?;
-            PickupColour::Rgba(word.to_be_bytes())
+            Colour::Rgba(word.to_be_bytes())
         }
         _ => {
             return Err(bad(
@@ -254,7 +227,7 @@ fn pickup(
             ));
         }
     };
-    Ok(Pickup { icon, colour })
+    Ok(PickupLook { icon, colour })
 }
 
 #[derive(Deserialize)]

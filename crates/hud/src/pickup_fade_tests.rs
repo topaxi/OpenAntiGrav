@@ -205,7 +205,14 @@ fn pulse_draws_the_fade_in_the_backdrop_word_the_size_and_the_icon() {
         let look = fade.look(Some(Weapon::Missile)).unwrap();
         (
             look,
-            pickup_sprites(&layout, Weapon::Missile, art, false, Some(look)),
+            pickup_sprites(
+                &layout,
+                Weapon::Missile,
+                &super::ext_draws::Outputs::default(),
+                art,
+                false,
+                Some(look),
+            ),
         )
     };
 

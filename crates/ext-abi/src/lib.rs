@@ -41,10 +41,10 @@
 use core::fmt;
 
 use hud::pool_string;
-pub use pickup::{Colour, Icon, ModIcon};
 pub use hud::{
     Anchor, HudElement, HudPlace, HudStr, MAX_HUD_EXTRA, MAX_HUD_ITEMS, MAX_HUD_SHAKE, MAX_HUD_TEXT,
 };
+pub use pickup::{Colour, Icon, ModIcon};
 
 /// The ABI major. A manifest's `[extension] api` names it.
 pub const ABI: u32 = 1;

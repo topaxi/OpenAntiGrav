@@ -975,12 +975,14 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
     // the craft is holding - see `pickup_sprites`.
     let look = super::pickup::look(cx.art, readout);
     if let Some(weapon) = look.map(|look| look.weapon).or(readout.pickup) {
-        for mut sprite in pickup_sprites(cx.layout, weapon, cx.art, readout.pickup_announcing, look) {
-            if let Some(tint) = readout.ext.tint(super::ext_draws::Element::Pickup)
-                && sprite.name == super::pickup::PICKUP_BACKGROUND
-            {
-                sprite.color = tint;
-            }
+        for sprite in pickup_sprites(
+            cx.layout,
+            weapon,
+            &readout.ext,
+            cx.art,
+            readout.pickup_announcing,
+            look,
+        ) {
             frame
                 .sprites
                 .extend(sprite_draw(&sprite, cx.sheet).map(|draw| {
@@ -992,7 +994,14 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
                     )
                 }));
         }
-        frame.sprites.extend(pickup_model_draws(cx, weapon));
+        frame
+            .sprites
+            .extend(pickup_model_draws(cx, weapon, &readout.ext));
+        frame.sprites.extend(
+            super::pickup::shown(weapon, &readout.ext)
+                .mod_icon
+                .and_then(|src| super::pickup::mod_icon_draw(cx, src, look)),
+        );
     }
 
     // Zone's next-class bar, which is conditional twice over and so cannot be

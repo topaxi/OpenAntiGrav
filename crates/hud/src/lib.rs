@@ -1055,6 +1055,8 @@ mod ext_draw_tests;
 #[cfg(test)]
 mod pickup_fade_tests;
 #[cfg(test)]
+mod pickup_look_tests;
+#[cfg(test)]
 mod pickup_model_tests;
 #[cfg(test)]
 mod readout_tests;

@@ -111,6 +111,9 @@ pub struct Outputs {
     pub bar_extra: [Option<BarExtra>; Element::COUNT],
     /// The text and icons.
     pub items: Vec<Item>,
+    /// The look of the slot's held mod pickup: this tick's `pickup-look`, else the
+    /// manifest's `[pickup]`, kept while the pickup fades out after its use.
+    pub pickup_look: Option<oag_tables::pickup_look::PickupLook>,
     /// The world tick, which seeds the jitter.
     pub tick: u64,
     /// The slot, which seeds the jitter.
@@ -125,6 +128,7 @@ impl Outputs {
             && self.shake.iter().all(|a| *a == 0.0)
             && self.bar_extra.iter().all(Option::is_none)
             && self.items.is_empty()
+            && self.pickup_look.is_none()
     }
 
     /// The recolour of `element`.
