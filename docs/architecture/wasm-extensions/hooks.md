@@ -66,8 +66,8 @@ does (`oag_physics::forces::Environment::auto_speed`,
 | 2 | Pickups spent, autopilot | `Race::spend_pickup`, `tick.rs:166` to `:173` (`crates/raceplay/src/weapons.rs:148`) | `weapon-fired` (person slots) | |
 | 3 | Mines, cannons | `tick.rs:180`, `:186` | | |
 | **C** | **The call** (to be added) | between `tick.rs:186` and `:193` | | commands validated and queued |
-| 4 | Each person's craft | `Race::step_player`, `tick.rs:196` (`crates/raceplay/src/player_step.rs:136`) | `pad-crossed`, `volume-entered`/`-left`, `wall-contact` | `scale-thrust`, `impulse`, `hold-mag-lock`, `shield-delta`, `give-pickup`/`clear-pickup`, `assist` |
-| 5 | Projectiles fly, hit | `oag_weapons::projectile::step`, `tick.rs:235`; impacts `tick.rs:267` | `weapon-hit` | |
+| 4 | Each person's craft | `Race::step_player`, `tick.rs:196` (`crates/raceplay/src/player_step.rs:136`) | `pad-crossed`, `volume-entered`/`-left`, `wall-contact` | `scale-thrust`, `impulse`, `hold-mag-lock`, `shield-delta`, `give-pickup`/`clear-pickup`, `give-shield`/`hold-shield`/`clear-shield`, `assist` |
+| 5 | Projectiles fly, hit | `oag_weapons::projectile::step`, `tick.rs:235`; impacts `tick.rs:267` | `hit` (the Quake, Leach Beam and Repulser steps raise it later in the tick; every source runs after the call) | |
 | 6 | Rescue, AI craft, pairs | `tick.rs:415` to `:422`; `Race::step_opponents` (`crates/raceplay/src/field.rs:689`) | `respawned`, `reset`; phase 4's events and `weapon-fired` for AI craft | phase 4's commands for AI craft |
 | 7 | Clock | `self.sim.world.tick += 1`, `tick.rs:446` | | |
 | 8 | Race rules per person | `Race::advance_player_rules`, `tick.rs:493` (`player_step.rs:381`); `eliminate_if_wrecked` at `tick.rs:476` | `lap-completed`, `eliminated` | `set-finished` |
@@ -134,6 +134,20 @@ rollback replays it. Names are the README's `event` variants.
   counts `wall_contact_ticks`), so a craft that stays on the wall keeps reporting
   it and a curse can be renewed while it scrapes. `evaluated.wall.impact` alone
   would end a long scrape's curse 1.5 s after its first tick.
+
+### `hit`
+
+- **Raised at** every weapon hit on a craft, one that a running Shield absorbed included:
+  `WeaponHit` (`crates/weapons/src/projectile/hit.rs`) carries the `asked` amount and the
+  weapon out of each `oag_physics::damage::apply_weapon` call site;
+  `Extensions::weapon_hits` folds them in at `tick.rs` (`projectile::step`),
+  `weapons/single_instance.rs` (Quake, Leach Beam) and `weapons/repulser.rs`.
+- **One event per craft per tick**: `amount` summed, `weapon` the first. Delivered at the
+  next call (N+1), which runs before step N+1; every hit source runs after the call.
+- **A Quake wave or a Leach Beam link meeting a running Shield raises none** (they gate
+  on the Shield before `Ship_Damage`). `shield-delta` raises none.
+- **Companions:** the `shielded` craft flag, and `give-shield`, `hold-shield` and
+  `clear-shield` ([README](README.md#breakable-armour-from-the-shield-2026-10-30)).
 
 ### `weapon-fired`
 
@@ -209,6 +223,7 @@ returns `Err(Refused)` where the host would fault:
 | `set-weather{kind, strength}` | `SetWeather` | `set_weather(kind, strength)` | `strength` outside `[0, 1]` or not finite |
 | `set-sun{intensity}` | `SetSun` | `set_sun(intensity)` | outside `[0, 1]` or not finite |
 | `grade-sky{grey}` | `GradeSky` | `grade_sky(grey)` | outside `[0, 1]` or not finite |
+| `give-shield{slot}`, `hold-shield{slot}`, `clear-shield{slot}` | `GiveShield`, `HoldShield`, `ClearShield` | `give_shield(&craft)`, `hold_shield(&craft)`, `clear_shield(&craft)` | a second Shield command for the craft this tick |
 
 Every method also refuses a 97th command (`Refused::Full`). The host's checks stay
 the backstop for a guest written without the SDK.
@@ -409,7 +424,7 @@ The README walks each end to end; this is what each needs from the engine.
 | **A gravity switch** (drive from the top of the track to the bottom) | `volume-entered`, a gravity command (README open question 3) | **No**: gravity acts on world `y` only (`oag_physics::passive::gravity`, `crates/physics/src/passive.rs:309`; `forces.rs:221` says so). Needs a gravity direction in `Environment` (default `-Y`, bit-identical for every race that does not set it) and per-craft gravity state in `World`'s `Ship` (`world.rs:82`). The hover already casts along the craft's own `-up` (`crates/physics/src/hover.rs:610`) and the magstrip hold slaves attitude to the track (`oag_physics::maglock`), so the craft side follows; the camera and the AI's line need their own check. |
 | **A-to-B instead of a circuit** | `set-finished` from progress | **Partly.** A sprint over part of a closed circuit needs only `set-finished` when progress passes a sample. A truly open track does not work: the lap is a wrap of distance along a closed `Course` (`crates/race/src/course.rs:61`; `wrapped_forward`, `state.rs:35`), and the spawner, the respawn, the AI speed plan (a ring) and the flyby assume a loop. Rules as data in `oag-race` first (finish by laps or by distance); a drag race then needs no code. |
 | **Custom track rules** (lives, a time limit, checkpoints) | `weapon-hit`, `volume-entered`, `set-finished`, `set-standing-key`, `message` | **Mostly**, once `set-standing-key` reaches `places`. Kills read what `credit_blast` already credits. |
-| **Custom weapons** | `weapon-fired`, `weapon-hit`, `give-pickup`, `scale-thrust`, `shield-delta` | **No**: `Weapon` is a closed enum. Timed self-effects (a Turbo-like boost, a shield) are the easy first case; projectiles of a mod's own are open. |
+| **Custom weapons** | `weapon-fired`, `hit`, `give-pickup`, `scale-thrust`, `shield-delta` | **No**: `Weapon` is a closed enum. Timed self-effects (a Turbo-like boost, a shield) are the easy first case; projectiles of a mod's own are open. |
 | **Custom HUDs and extensions** | the `hud` world, `publish` | **Mostly**: needs the HUD module host and the published-keys channel. |
 | **Pilot Assist as a mod** (the phase 2 proof) | `assist` | **Yes**, once the command exists (above). |
 

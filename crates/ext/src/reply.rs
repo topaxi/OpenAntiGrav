@@ -14,7 +14,8 @@ use crate::Craft;
 pub enum Refused {
     /// The reply already holds `MAX_COMMANDS` commands.
     Full,
-    /// A second `scale_thrust`, `shield_delta` or `scale_slot_pads` for one craft, or a
+    /// A second `scale_thrust`, `shield_delta`, `scale_slot_pads` or Shield command
+    /// (`give_shield`, `hold_shield`, `clear_shield`) for one craft, or a
     /// second `scale_pad` for one pad, this tick.
     Repeated,
     /// A value out of its range: a factor outside `[0, MAX_THRUST_FACTOR]` or
@@ -36,6 +37,7 @@ pub struct Reply<'a> {
     count: usize,
     thrust: u32,
     shield: u32,
+    shield_cmd: u32,
     slot_pads: u32,
     pads: [u32; oag_ext_abi::track::MAX_ENTITIES / 32],
     speed_pads: usize,
@@ -50,6 +52,7 @@ impl<'a> Reply<'a> {
             count: 0,
             thrust: 0,
             shield: 0,
+            shield_cmd: 0,
             slot_pads: 0,
             pads: [0; oag_ext_abi::track::MAX_ENTITIES / 32],
             speed_pads,
@@ -209,6 +212,46 @@ impl<'a> Reply<'a> {
             factor,
         })?;
         self.slot_pads |= bit;
+        Ok(())
+    }
+
+    /// `give-shield`: start the title's own Shield on the craft, as firing a held Shield
+    /// pickup does. One already running is not refreshed.
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`], [`Refused::Repeated`] for a second shield command for the
+    /// craft this tick.
+    pub fn give_shield(&mut self, craft: &Craft<'_>) -> Result<(), Refused> {
+        self.shield_command(craft, Command::GiveShield { slot: craft.slot() })
+    }
+
+    /// `hold-shield`: the craft's running Shield does not run out this tick. Re-send it
+    /// each tick it should hold; a Shield not held ends within two ticks.
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`], [`Refused::Repeated`].
+    pub fn hold_shield(&mut self, craft: &Craft<'_>) -> Result<(), Refused> {
+        self.shield_command(craft, Command::HoldShield { slot: craft.slot() })
+    }
+
+    /// `clear-shield`: end the craft's running Shield before this tick's step.
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`], [`Refused::Repeated`].
+    pub fn clear_shield(&mut self, craft: &Craft<'_>) -> Result<(), Refused> {
+        self.shield_command(craft, Command::ClearShield { slot: craft.slot() })
+    }
+
+    fn shield_command(&mut self, craft: &Craft<'_>, command: Command) -> Result<(), Refused> {
+        let bit = craft.slot().bit();
+        if self.shield_cmd & bit != 0 {
+            return Err(Refused::Repeated);
+        }
+        self.push(&command)?;
+        self.shield_cmd |= bit;
         Ok(())
     }
 

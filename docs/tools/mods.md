@@ -209,6 +209,11 @@ thrust bar, and `Thrust` draws nothing there) and shakes the energy bar while it
 `oag_ext::Line`. The commands are in
 [docs/architecture/wasm-extensions/](../architecture/wasm-extensions/README.md).
 
+A rules module also sees every weapon hit on a craft (`hit{slot, amount, weapon}`, an
+absorbed one included, with the craft's `shielded` flag) and can start, hold and end the
+title's Shield (`give-shield`, `hold-shield`, `clear-shield`): enough to write a breakable
+armour. See [wasm-extensions](../architecture/wasm-extensions/README.md#breakable-armour-from-the-shield-2026-10-30).
+
 The game must be built with the `extensions` feature: `just play-mods` (`just play`
 with it), or `cargo run --release -p oag-game --features extensions`. Plain
 `just play` runs no module; its boot log says so for each mod that ships one.

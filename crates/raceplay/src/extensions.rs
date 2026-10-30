@@ -5,6 +5,12 @@
 //!   racing craft, a person's or the AI's, on each tick it touches a wall (the same test
 //!   [`RaceSim::wall_contact_ticks`] counts). Raised after the call, so it reaches the
 //!   guest in the next tick's observation: a one-tick latency, identical everywhere.
+//! - **Event**: `hit{slot, amount, weapon}`, folded in by [`Extensions::weapon_hits`] from the
+//!   `WeaponHit` each weapon site fills, a hit a Shield absorbed included; one per craft
+//!   per tick, delivered at the next call. Every hit source runs after the call.
+//! - **Commands**: `give-shield` (the title's Shield for its authored time, never
+//!   refreshing a running one), `hold-shield` (floors the timer at two ticks) and
+//!   `clear-shield` (zeroes it), all landing at the call, before the step.
 //! - **The call**: [`Race::tick_extensions`], between `advance_cannons` and the people's
 //!   steps (phase C of `hooks.md`). Modules run in id order; each sees the same events.
 //! - **Command**: `scale-thrust{slot, factor}`, `factor` in `[0, 1]`, **multiplied** into
@@ -587,6 +593,20 @@ impl Extensions {
         }
     }
 
+    /// Records this step's weapon hits for the modules' `hit` event.
+    pub(super) fn weapon_hits(&mut self, hits: &[oag_weapons::projectile::WeaponHit]) {
+        #[cfg(feature = "extensions")]
+        self.on.weapon_hits(hits);
+        #[cfg(not(feature = "extensions"))]
+        let _ = hits;
+    }
+
+    /// The slots a `give-shield` started this tick, one bit each, cleared as taken.
+    #[cfg(feature = "extensions")]
+    pub(super) fn take_shield_gives(&mut self) -> u32 {
+        std::mem::take(&mut self.on.gave)
+    }
+
     /// Records a wall contact for `slot` this tick (at most once per slot per tick).
     pub(super) fn wall_contact(&mut self, slot: usize) {
         #[cfg(feature = "extensions")]
@@ -649,7 +669,13 @@ impl crate::Race {
     /// module, returns at once and touches nothing.
     pub(super) fn tick_extensions(&mut self, inputs: &oag_gameplay::PlayerInputs) {
         #[cfg(feature = "extensions")]
-        on::tick(&mut self.sim, inputs);
+        {
+            on::tick(&mut self.sim, inputs);
+            let gave = self.sim.extensions.take_shield_gives();
+            for slot in (0..oag_gameplay::MAX_SHIPS).filter(|slot| gave & (1 << slot) != 0) {
+                self.shield_activate(slot);
+            }
+        }
         #[cfg(not(feature = "extensions"))]
         let _ = inputs;
     }
@@ -742,6 +768,14 @@ mod on {
         pad_scale: Vec<f32>,
         /// Each slot's `scale-pad` this tick.
         slot_pad_scale: [f32; oag_gameplay::MAX_SHIPS],
+        /// What weapons asked of each slot since the last call (a hit a Shield absorbed
+        /// included) and the weapon of the first: the `hit` event's buffer, raised after
+        /// the call like `walls`.
+        hit_amount: [f32; oag_gameplay::MAX_SHIPS],
+        hit_weapon: [Option<oag_tables::weapons::Weapon>; oag_gameplay::MAX_SHIPS],
+        /// One bit per slot a `give-shield` started this tick, for the shell's rise
+        /// (an output, never hashed).
+        pub(super) gave: u32,
         /// The speed pad and the weapon pad each slot entered since the last call.
         speed_entered: [Option<u16>; oag_gameplay::MAX_SHIPS],
         weapon_entered: [Option<u16>; oag_gameplay::MAX_SHIPS],
@@ -891,6 +925,9 @@ mod on {
                     })
                     .collect(),
                 walls: 0,
+                hit_amount: [0.0; oag_gameplay::MAX_SHIPS],
+                hit_weapon: [None; oag_gameplay::MAX_SHIPS],
+                gave: 0,
                 boost: [1.0; oag_gameplay::MAX_SHIPS],
                 owner: 0,
                 roll: None,
@@ -968,6 +1005,21 @@ mod on {
             }
         }
 
+        /// Folds a step's weapon hits into the `hit` event buffer: per slot the amounts
+        /// sum and the first weapon stays. A hit with no weapon (nothing asked) adds
+        /// nothing.
+        pub(super) fn weapon_hits(&mut self, hits: &[oag_weapons::projectile::WeaponHit]) {
+            if self.slots.is_empty() {
+                return;
+            }
+            for (slot, hit) in hits.iter().enumerate().take(oag_gameplay::MAX_SHIPS) {
+                if let Some(weapon) = hit.weapon.filter(|_| hit.amount > 0.0) {
+                    self.hit_amount[slot] += hit.amount;
+                    self.hit_weapon[slot].get_or_insert(weapon);
+                }
+            }
+        }
+
         pub(super) fn wall_contact(&mut self, slot: usize) {
             if !self.slots.is_empty() {
                 self.walls |= 1 << slot;
@@ -980,6 +1032,10 @@ mod on {
             }
             hasher.write_u32(self.slots.len() as u32);
             hasher.write_u32(self.walls);
+            for (amount, weapon) in self.hit_amount.iter().zip(&self.hit_weapon) {
+                hasher.write_f32(*amount);
+                hasher.write_u8(weapon.map_or(0, |weapon| weapon as u8 + 1));
+            }
             for boost in self.boost {
                 hasher.write_f32(boost);
             }
@@ -1119,6 +1175,7 @@ mod on {
                     person,
                     fire_held,
                     racing,
+                    shielded: ship.physics.shield_pickup_timer > 0.0,
                     lap: u8::try_from(ship.standing.lap).unwrap_or(u8::MAX),
                     laps_target: sim
                         .world
@@ -1154,6 +1211,38 @@ mod on {
                     ..rules
                 },
             );
+        }
+    }
+
+    /// `give-shield`: the title's Shield on the slot for its authored time, as firing a
+    /// held Shield pickup does, and under the same rule: one already running is not
+    /// refreshed. A race without weapons, or a title table with no Shield, gives nothing.
+    fn give_shield(sim: &mut RaceSim, slot: usize) {
+        let Some(simple) = sim
+            .weapons
+            .as_ref()
+            .filter(|_| sim.weapons_on)
+            .and_then(|weapons| weapons.simple(oag_tables::weapons::Weapon::Shield))
+        else {
+            return;
+        };
+        let timer = &mut sim.world.ships[slot].physics.shield_pickup_timer;
+        if *timer <= 0.0 {
+            *timer = simple.time;
+            sim.extensions.on.gave |= 1 << slot;
+        }
+    }
+
+    /// `hold-shield`: floors a running Shield's timer at two ticks, so this tick's step
+    /// leaves it running and a module that stops sending sees it end within two ticks.
+    /// It never starts one.
+    ///
+    /// **Chosen, not measured:** nothing in the originals holds a Shield.
+    fn hold_shield(sim: &mut RaceSim, slot: usize) {
+        let floor = 2.0 * sim.dt;
+        let timer = &mut sim.world.ships[slot].physics.shield_pickup_timer;
+        if *timer > 0.0 {
+            *timer = timer.max(floor);
         }
     }
 
@@ -1227,6 +1316,14 @@ mod on {
                     bit(on.absorbs).then_some(Event::PickupAbsorbed { slot }),
                     on.speed_entered[i].map(|pad| Event::SpeedPad { slot, pad }),
                     on.weapon_entered[i].map(|pad| Event::WeaponPad { slot, pad }),
+                    on.hit_weapon[i].and_then(|weapon| match pickup(weapon) {
+                        Pickup::Weapon(weapon) => Some(Event::Hit {
+                            slot,
+                            amount: on.hit_amount[i],
+                            weapon,
+                        }),
+                        _ => None,
+                    }),
                 ]
                 .into_iter()
                 .flatten()
@@ -1263,6 +1360,8 @@ mod on {
         on.slot_pad_scale = [1.0; oag_gameplay::MAX_SHIPS];
         let events = events(on);
         on.walls = 0;
+        on.hit_amount = [0.0; oag_gameplay::MAX_SHIPS];
+        on.hit_weapon = [None; oag_gameplay::MAX_SHIPS];
         on.fires = 0;
         on.absorbs = 0;
         on.speed_entered = [None; oag_gameplay::MAX_SHIPS];
@@ -1357,6 +1456,11 @@ mod on {
                 }
                 Command::SetSun { intensity } => sim.extensions.on.sky.sun = intensity,
                 Command::GradeSky { grey } => sim.extensions.on.sky.grey = grey,
+                Command::GiveShield { slot } => give_shield(sim, slot.index()),
+                Command::HoldShield { slot } => hold_shield(sim, slot.index()),
+                Command::ClearShield { slot } => {
+                    sim.world.ships[slot.index()].physics.shield_pickup_timer = 0.0;
+                }
                 Command::GivePickup { .. }
                 | Command::ClearPickup { .. }
                 | Command::PickupRoll { .. } => pickup_command(sim, index, command),

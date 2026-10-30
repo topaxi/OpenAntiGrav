@@ -108,6 +108,12 @@ impl Craft<'_> {
         self.read().racing
     }
 
+    /// The craft's Shield is running: a weapon hit this tick is absorbed.
+    #[must_use]
+    pub fn is_shielded(&self) -> bool {
+        self.read().shielded
+    }
+
     /// The lap being driven, 1-based, saturating at 255.
     #[must_use]
     pub fn lap(&self) -> u8 {

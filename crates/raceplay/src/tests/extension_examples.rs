@@ -45,6 +45,7 @@ fn full_grid_fuel(module: &Module) -> Vec<u64> {
             person: slot == 0,
             fire_held: slot == 0,
             racing: true,
+            shielded: false,
             // One craft on its final lap, so a track module that starts there is measured
             // on its busy ticks.
             lap: if slot == 7 { 3 } else { 2 },

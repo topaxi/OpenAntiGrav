@@ -20,7 +20,7 @@ fn slot(index: usize) -> Slot {
 }
 
 /// One of every command, with arguments that touch every field.
-fn every_command() -> [Command; 17] {
+fn every_command() -> [Command; 20] {
     [
         Command::ScaleThrust {
             slot: slot(1),
@@ -98,10 +98,13 @@ fn every_command() -> [Command; 17] {
         },
         Command::SetSun { intensity: 0.5 },
         Command::GradeSky { grey: 0.25 },
+        Command::GiveShield { slot: slot(8) },
+        Command::HoldShield { slot: slot(9) },
+        Command::ClearShield { slot: slot(10) },
     ]
 }
 
-fn every_event() -> [Event; 7] {
+fn every_event() -> [Event; 8] {
     [
         Event::WallContact { slot: slot(0) },
         Event::PickupFire { slot: slot(1) },
@@ -122,6 +125,11 @@ fn every_event() -> [Event; 7] {
             slot: slot(5),
             trigger: 1,
         },
+        Event::Hit {
+            slot: slot(6),
+            amount: 17.5,
+            weapon: Weapon::Cannon,
+        },
     ]
 }
 
@@ -131,6 +139,7 @@ fn a_craft() -> Craft {
         person: true,
         fire_held: false,
         racing: true,
+        shielded: true,
         lap: 3,
         laps_target: 5,
         shield: 12.5,
@@ -274,11 +283,9 @@ fn layout_fold() -> u64 {
         .chain(commands.chain(events).chain(craft).map(u32::from)))
 }
 
-/// The revision and the layout it names. Edit the layout and this fails: bump
-/// [`REVISION`] and record the new fold beside it, in the same change. (Until the first
-/// release the maintainer has ABI 1 edited in place: the fold is re-recorded, the
-/// revision stays.)
-const REVISION_AND_FOLD: (u32, u64) = (3, 0x7815_701a_dc40_af64);
+/// The revision and the layout it names. The ABI changes in place before release (no
+/// revision bump); the fold is recorded again with each layout edit.
+const REVISION_AND_FOLD: (u32, u64) = (3, 0x863a_0632_fbef_b91a);
 
 #[test]
 fn the_layout_is_the_revision_it_says() {
@@ -286,7 +293,7 @@ fn the_layout_is_the_revision_it_says() {
     assert_eq!(
         (REVISION, fold),
         REVISION_AND_FOLD,
-        "the ABI 1 layout changed ({fold:#018x}): bump REVISION and record the fold"
+        "the ABI 1 layout changed ({fold:#018x}): record the new fold beside the revision"
     );
 }
 
@@ -458,10 +465,10 @@ fn the_observation_reads_back_through_the_guest_sections() {
     assert_eq!(Sections::active(sections.head), 0b11);
     assert_eq!(Sections::state_len(sections.head), 3);
     assert_eq!(&sections.state[..3], &[9, 8, 7]);
-    let events: [Option<Event>; 7] =
+    let events: [Option<Event>; 8] =
         core::array::from_fn(|i| Sections::event_record(sections.head, i).and_then(Event::decode));
     assert_eq!(events, every_event().map(Some));
-    assert_eq!(Sections::event_count(sections.head), 7);
+    assert_eq!(Sections::event_count(sections.head), 8);
     let craft = Sections::craft_record(sections.crafts, slot(1)).map(Craft::decode);
     assert_eq!(craft, Some(a_craft()));
     Sections::put_command(sections.reply, 0, &every_command()[4]);

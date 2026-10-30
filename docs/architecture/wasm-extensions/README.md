@@ -316,6 +316,58 @@ against the rebuilt modules, and the vanilla fold did not move.
 Not built yet: an `oag-ext check` tool, a generated C header and a C++ example
 built from it, a template mod, and the git dependency.
 
+### Breakable armour from the Shield (2026-10-30)
+
+A mod turns the title's Shield into armour with generic pieces; the armour itself is a
+test fixture (`crates/raceplay/src/tests/extension_armor.rs`, a WAT guest, and
+`crates/ext/src/tests/armor.rs`, the same logic through `oag_ext::test::Race`), never an
+example mod.
+
+| Piece | Kind | What it is |
+| --- | --- | --- |
+| `hit{slot, amount, weapon}` | event (code 9) | Weapons hit a craft, **a hit its Shield absorbed included**. `amount` is the sum of what the tick's hits asked of the pool (`oag_physics::damage::Shield::asked`: the weapon's damage after the weapons-off scale, whether or not the Shield swallowed it); `weapon` is the first of them. One event per craft per tick. The weapon code sits in the event's index field and the `f32` in bytes 4-7 (`EVENT_VALUE`) |
+| craft flag `shielded` | observation | Bit 8 of the craft record's flags (`CRAFT_SHIELDED`): the Shield is running, so a hit this tick is absorbed. Without it a guest could not tell an absorbed `hit` from a landed one |
+| `give-shield{slot}` | command (24) | Starts the title's Shield for its authored `<Shield time>`, as firing a held Shield pickup does (`Race::spend_pickup`), including its rule that one already running is not refreshed. A race without weapons, or a title with no Shield table, gives nothing |
+| `hold-shield{slot}` | command (25) | Floors a running Shield's timer at two ticks, so the step leaves it running. Re-sent each tick it should hold; never starts one. Once the module stops, the Shield ends within two ticks |
+| `clear-shield{slot}` | command (26) | Zeroes the timer at the call, before the step |
+
+**`give-shield`, not a generalised `give-pickup`.** The Shield is a timed state, not a
+held pickup: `give-pickup` has no argument and one owner per race, and a held Shield
+would need the player's fire press. `give-shield` reuses the fire arm's rule and table.
+
+**Timing.** Every hit source runs after the call (`projectile::step`, `advance_quake`,
+`advance_leach_beam`, `advance_repulsers`), so a hit in step N reaches the call at N+1,
+which runs before step N+1. A `clear-shield` sent there protects nothing in step N+1:
+the first hit after the call that sent it lands on the energy. A second weapon hitting in
+the same step N as the breaking one is still absorbed (the Shield is up for the whole
+step); a module cannot close that, and the armour fixture does not claim it. Proven by
+`a_hit_on_a_held_shield_takes_nothing_and_reaches_the_module_one_call_later` and
+`the_hit_that_breaks_the_armour_costs_nothing_and_the_next_one_lands` with real Rocket
+impacts, and each test fails when the hit buffer or the hold is dropped.
+
+**What raises `hit` (a limit).** Rocket, Missile, Plasma, Shuriken, Mine and Bomb blasts,
+Cannon rounds, the Repulser and a Leach Beam drain that reaches `apply_weapon`. The Quake
+wave and the Leach Beam link skip a craft under a running Shield before `Ship_Damage`
+(the Quake's `lifted && !shielded` test, the link's break on the target's Shield), as the
+original's does: a skipped craft is not hit, so they raise nothing against a running
+Shield and raise `hit` when they land. `shield-delta` goes through `apply_weapon` but is not a weapon and raises
+none. Slowdown and the Disruptor are not damage and raise none.
+
+**Chosen, not measured:** the two-tick floor of `hold-shield` and the one-event-per-tick
+merge. No original holds a Shield. **The Eliminator's respawn Shield** (`eliminator.rs`)
+uses the same timer, so `hold-shield` and `clear-shield` act on it too.
+
+**State.** The hit buffer (amount and first weapon per slot) is `Extensions` state,
+hashed after the `slots.is_empty()` early return, so a race with no module hashes as
+before (`VANILLA_FOLD`). The `ShipState` hash is untouched. The ABI changed in place: no
+revision bump, the layout fold in `ext-abi` re-recorded.
+
+**Titles.** The engine pieces name no title, and the Shield time is read from the race's
+own weapon table. They were exercised only on the synthetic Pulse fixture of the
+`oag-raceplay` tests; no disc-backed race on Pulse, HD, 2048 or Omega was run, and no
+census of those titles' Shield tables was taken for this change.
+
+
 ## What is already decided, and not reopened here
 
 Quoted from the handover thread on custom race modes and the ADRs it cites; the
@@ -1444,8 +1496,9 @@ channel; the HUD layout files are planned separately.
    from the mod's files, or a disc weapon's visuals the mod names without a stand-in
    for what the disc authors.
 5. **Event granularity**: `pad-crossed` on entry only (the edge that exists today)
-   is settled; `wall-contact` per contact edge; whether a scripted hit
-   (`shield-delta` from a mod weapon) raises `weapon-hit` for the victim's modules.
+   is settled; `wall-contact` per contact edge; a scripted hit
+   (`shield-delta` from a mod weapon) raises no `hit` for the victim's modules: `hit` is
+   a weapon's, settled with the armour fixture.
 6. **Sound**: a cue command naming a disc cue by id, or a cue from the mod's own WAV;
    both need the audio architecture (ADR-0018) to accept a mod-provided bank.
 7. **A `deny.toml`** allowlist for the workspace, so section 6 is checked by the gate.

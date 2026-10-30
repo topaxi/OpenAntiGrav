@@ -266,6 +266,7 @@ fn a_running_shield_refuses_the_hit_and_both_its_signals() {
         report,
         Shield {
             absorbed: true,
+            asked: contact_damage(1000.0, DamageRules::default()),
             ..Shield::default()
         },
         "a shielded craft took a hit"
@@ -370,6 +371,7 @@ fn a_running_shield_refuses_a_weapon_hit_too() {
         apply_weapon(&mut s, &d, 100.0, DamageRules::default()),
         Shield {
             absorbed: true,
+            asked: 100.0,
             ..Shield::default()
         }
     );
@@ -419,4 +421,27 @@ fn turning_weapons_off_halves_a_weapon_hit_as_well() {
 fn a_zero_pool_reads_as_zero_percent_rather_than_nan() {
     assert_eq!(percent(0.0, 0.0), 0.0);
     assert!(percent(0.0, 0.0).is_finite());
+}
+
+/// `asked` is the amount a hit would have taken: what a mod's `hit` event reports, so a
+/// swallowed hit carries its damage even though `lost` is zero. A craft that is not racing
+/// is refused before anything is asked.
+#[test]
+fn a_hit_reports_what_it_asked_whether_or_not_a_shield_swallowed_it() {
+    let d = dimensions(100.0);
+    let mut open = state(100.0);
+    let landed = apply_weapon(&mut open, &d, 30.0, DamageRules::default());
+    assert_eq!((landed.asked, landed.lost), (30.0, 30.0));
+
+    let mut covered = state(100.0);
+    covered.shield_pickup_timer = 0.5;
+    let swallowed = apply_weapon(&mut covered, &d, 30.0, DamageRules::default());
+    assert_eq!((swallowed.asked, swallowed.lost), (30.0, 0.0));
+
+    let mut wrecked = state(100.0);
+    wrecked.craft_state = CraftState::Eliminated;
+    assert_eq!(
+        apply_weapon(&mut wrecked, &d, 30.0, DamageRules::default()).asked,
+        0.0
+    );
 }

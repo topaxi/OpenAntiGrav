@@ -103,6 +103,7 @@ impl Race {
             }
             self.sim.world.repulsers[index] = alive.then_some(repulser);
         }
+        self.sim.extensions.weapon_hits(&hits);
         for (slot, hit) in hits.iter().enumerate() {
             if hit.absorbed {
                 self.shield_hit(slot);

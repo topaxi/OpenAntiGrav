@@ -15,6 +15,7 @@ pub(crate) fn read(
     let mut thrust_seen = 0_u32;
     let mut shield_seen = 0_u32;
     let mut slot_pads_seen = 0_u32;
+    let mut shield_cmd_seen = 0_u32;
     let mut pads_seen: Vec<u16> = Vec::new();
     let mut hud_items = [0_usize; oag_ext_abi::MAX_CRAFTS];
     let mut commands = Vec::with_capacity(count);
@@ -97,6 +98,17 @@ pub(crate) fn read(
                     )));
                 }
                 slot_pads_seen |= slot.bit();
+            }
+            Command::GiveShield { slot }
+            | Command::HoldShield { slot }
+            | Command::ClearShield { slot } => {
+                if shield_cmd_seen & slot.bit() != 0 {
+                    return Err(Fault::Reply(format!(
+                        "two shield commands (give, hold or clear) for slot {}",
+                        slot.index()
+                    )));
+                }
+                shield_cmd_seen |= slot.bit();
             }
             Command::HudText { slot, .. } | Command::HudIcon { slot, .. } => {
                 hud_items[slot.index()] += 1;

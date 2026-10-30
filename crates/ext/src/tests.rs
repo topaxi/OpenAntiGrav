@@ -437,3 +437,5 @@ fn a_guest_names_its_own_string_and_icon_by_key() {
         Command::HudIcon { sprite, own: true, .. } if sprite.as_str() == "badge"
     ));
 }
+
+mod armor;

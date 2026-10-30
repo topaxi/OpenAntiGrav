@@ -102,6 +102,7 @@ fn held(button: Button) -> oag_gameplay::InputSnapshot {
 fn plasma_blast(race: &race::Race) -> BlastStats {
     let plasma = race.plasma_stats().expect("the disc authors a Plasma");
     BlastStats {
+        weapon: oag_tables::weapons::Weapon::Plasma,
         radius: plasma.blastradius,
         damage: plasma.damage,
         force: plasma.blastforce,
