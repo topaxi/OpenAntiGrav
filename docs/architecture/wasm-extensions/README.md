@@ -432,6 +432,84 @@ file, the committed module):
 Fuel (`tests::extension_examples`, a full grid): 14,443 on the loud tick, 10,499 after.
 
 
+### And a language other than Rust: JavaScript through Javy (2026-10-30)
+
+**Outcome: it runs, inside the rules, without widening the host, at about 80 % of the fuel
+budget for the smallest mod.** The example is `oag.wall-penalty-js`
+(`assets/mods/examples/wall-penalty-js/`), a port of Wall Penalty; it lives on the engine branch
+`wasm-javy`, never merged into `wasm-extensions`. Tool: Javy 9.1.0 (tag `v9.1.0`, `d9b6139`), built
+from source (a release binary was not fetched). Measured with `oag-modhost` (wasmtime 50, the
+host's own engine configuration), 2026-10-30:
+
+| | Rust `wall-penalty` | JavaScript `wall-penalty-js` |
+| --- | --- | --- |
+| Module size | 627 bytes | 1,367,899 bytes (Javy's static module: QuickJS plus its runtime) |
+| Imports of Javy's raw output | none | 9, all `wasi_snapshot_preview1`: `environ_get`, `environ_sizes_get`, `clock_time_get`, `fd_close`, `fd_fdstat_get`, `fd_read`, `fd_seek`, `fd_write`, `proc_exit`. **After the shim: none** |
+| Exports of the raw output | | `memory`, `cabi_realloc`, `config-schema`, `_start`, and the WIT functions (kebab-case, no arguments, no result). The ABI wants `oag_abi`, `oag_io`, `tick() -> u32`: the shim adds them |
+| Fuel a tick (`FUEL_PER_TICK` 200,000) | 663 peak, 524 mean over a 900-tick race | 155,810 with nothing to do, 168,717 peak in the same race, 178,791 peak across a 3,600-tick 12-craft field, **229,032 in a random stress (up to 8 cursed slots at once: out of fuel)**. An empty `jsTick` costs 29,792; one `Javy.IO.readSync` about 30,000; the work between them is QuickJS bytecode at roughly 350 fuel an operation |
+| Call time, debug host, mean | 19 us | 89 us (the instance is fresh every tick: 22 pages, one memory image) |
+| Compile at race load | negligible | about 1.1 s of Cranelift (release probe), once per race, on the loading thread |
+| Memory | 2 pages | 22 pages at instantiation, none grown in a tick (`memory_pages = 24`) |
+
+Findings, in the order the question was asked:
+
+- **WASI.** Javy's output imports the nine functions above whatever is asked: the pre-initialised
+  (Wizer) static build is Javy 9.1's default, and `-C deterministic=y` fixes the clock and
+  randomness at snapshot time, but neither removes the imports. Dynamic linking (`-C dynamic`) was not built:
+  it imports the runtime from a plugin module, an import namespace the host refuses by construction.
+- **SIMD.** Stock Javy's plugin is built with `+simd128` (`.cargo/config.toml` of Javy), and the
+  host's `wasm_simd(false)` refuses the module at compile (`SIMD support is not enabled`). Rebuilding
+  the plugin with `RUSTFLAGS="-C target-feature=-simd128"` and embedding it in a rebuilt CLI
+  removes it (a stock `javy` binary cannot be used).
+- **The shim, in the guest.** `wall-penalty-js/tools/shim.py` rewrites the module's text form
+  (`wasm-dis`, then `wasm-as`): each WASI import becomes a function inside the module. Standard input
+  is the host's I/O buffer, taken once from the module's own allocator by `oag_io` (a block the
+  runtime will not use); standard output is one byte stream whose first `state_bytes` land on the
+  state blob and the rest on the reply (the buffer's 1,024-byte gap between them is not written).
+  Standard output is line buffered, so a `0x0A` byte splits a write (a count of 10 did): the stream
+  is appended by byte. `clock_time_get` is 0, `environ_*` are empty, the rest are errors or `unreachable`.
+  No capability is added: no import, no persistent instance, nothing the Rust module could not do.
+  The JavaScript can use only what Javy gives it: no memory access, so no way to read the buffer except
+  through those streams.
+- **Start-up per tick.** The host re-instantiates every tick; Javy's snapshot already holds the
+  initialised QuickJS heap, so instantiation itself is cheap (it costs no fuel; the whole
+  instantiate, `oag_io`, `tick` is about 60 us on a release engine). What a tick costs is the call: 30,000 fuel
+  to enter and leave QuickJS, about 30,000 to read, 40,000 or more to write, and the logic.
+- **Determinism.** Same bits every run: the build is byte-reproducible (the same SHA-256 twice), and the
+  JavaScript module returns the Rust module's state and commands on 20,000 random observations
+  (`crates/modhost/tests/javascript_module.rs` runs 3,000) and flies its race tick for tick
+  (`wall_penalty_ground_truth`). `Math.random` is the snapshot's, so identical every tick; `Date.now` is 0.
+  JavaScript numbers are `f64`: a script that computes a command's factor in `f64` and casts to
+  `f32` is deterministic (IEEE) but the SDK's "no `f64` that feeds a command" rule cannot be enforced on it.
+
+**Verdict on the claim:** a JavaScript mod runs, but only a light one. The fixed floor (about 115,000
+of 200,000) leaves room for a few hundred bytecode operations, so Wall Penalty fits with a thin margin
+and any mod that loops over craft or builds text does not. The smallest changes that would give a
+JavaScript mod room, **none made here (the maintainer's decision)**:
+
+1. **A per-module fuel budget.** `[extension] fuel = n` in the manifest, clamped to a host ceiling
+   (for example 600,000, about 220 us a tick on this machine's measured rate; up to four modules a
+   race). Fuel is an instruction count, so it stays deterministic across machines; the budget would
+   join the lobby fingerprint and the replay's module identity, because a different budget moves the
+   fault tick. Safety cost: more wall time a tick per module, bounded by the ceiling.
+2. **A cache of the compiled module** (`Module::serialize`, keyed by the wasm hash and the engine's
+   settings). Removes the 1.1 s at race load; no determinism cost (the same code), an I/O and disk
+   cost, and a cache to keep honest.
+3. **A host-provided `wasi_snapshot_preview1` subset** (`fd_read` of the observation, `fd_write` of
+   the reply, the rest empty) would let the shim go. It widens the import namespace and the engine's
+   attack surface for no new ability, and a shim that does it already exists, so it is not
+   recommended.
+4. **`wasm_simd(true)`** would let a stock Javy binary load. Fixed-width SIMD is deterministic and the
+   engine canonicalises NaN, but section 4.1 disabled it to keep the subset small; the rebuilt
+   plugin makes it unnecessary.
+
+TypeScript typings of the ABI (`types/oag-abi.d.ts`: every offset, length and code as a literal type,
+and the event, craft, command and reply records) are generated from `crates/ext-abi/src/lib.rs` by
+`scripts/gen-ext-typings.py`; `just check-extensions` fails on a stale file and on a JavaScript example
+whose own `const NAME = n;` differs from the ABI. **Other languages:** anything that compiles to core
+wasm with no import and no WASI meets the rules, with C or C++ the likeliest; AssemblyScript and
+Zig produce modules of the Rust module's size. Those are not measured here.
+
 ## Keeping the mod author skill current
 
 A change to the ABI, the guest SDK, `oag-mod.toml` or a mod-facing format updates
