@@ -797,3 +797,33 @@ AppImage could not symbolise). A player scrolling to a late circuit such as Outp
 (index 22 of 32 in the list) sees 22 of them. It is the one thing on the way to this race that
 could be felt as a stutter. **Not measured:** a race started from the campaign grid (it goes
 through the same `launch_race`, with the campaign's own AI field and rules), and the Black layout.
+
+## Pressing Cross during the pre-race flyby on the Deck (2026-10-31, `flyby-skip-stall`)
+
+Claim tested: "pressing X during the Outpost 7 White flyby stalls the game for a second or more".
+**Not reproduced.** Steam Deck, gaming-mode gamescope, release AppImage of `1972e2d` (and the
+2026-10-24 Deck build), Pulse PSP EU, audio on, the maintainer's settings copied (vsync off, no
+limit), menus walked with `--script`, Outpost 7 White (22 Down steps from Talon's) and Talon's
+Junction White as control, Deck load average 1.3 to 2.1.
+
+| Press | Circuit | Flyby ended after | Frames over 40 ms from the press to GO+5 s | Worst per-second p99 after |
+| --- | --- | --- | --- | --- |
+| 1.5 s into the flyby (mashed 8 times) | Outpost 7 White | 68 ticks | 0 | 11.3 ms |
+| 3 s | Outpost 7 White | 191 ticks | 0 | 11.2 ms |
+| 5 s | Outpost 7 White | 240, 343 ticks | 0 | 11.3 ms |
+| 3.5 s, 5 s | Talon's Junction White | 243, 333 ticks | 0 | not parsed |
+| Square, Circle, Triangle, Start (4 runs) | Outpost 7 White | no skip | 0 | n/a |
+
+The skip is a held Cross read in `Race::tick_intro` (`IntroCamera::step`), so it runs the same
+code as the flyby running out. Nothing it calls waits on a worker: the soundtrack fetch applies
+on a later tick (`Audio::finish_race_music` never waits), and the race load finished before the
+flyby began (`CraftsBuilt` after about 940 ms). The same `--race --track` path on the lavapipe
+software renderer, pressed at 2 s, 7 s and 21 s into the flyby, shows no frame at the press above
+its neighbours either.
+
+What the runs do show, on a fresh profile only: the first entry to the track picker costs one
+frame of 0.92 to 1.06 s (the profile has no cache yet). With the profile kept, the second and
+third runs cost 271 ms (the figure of the 2026-10-30 section). A maintainer's warm profile
+therefore sees 271 ms, not a second, unless an update invalidates that cache; **what that cache
+is has not been identified**. Not tested: a touch press (`pointer.clicked` calls `skip_intro`)
+and a real held press on the Deck's own controls.
