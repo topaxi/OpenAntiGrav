@@ -228,6 +228,8 @@ pub struct Observation<'a> {
     pub track: &'a [u8],
     /// The track's speed pads: the bound of a race-wide `scale-pad`'s pad.
     pub speed_pads: usize,
+    /// The track's routes: the bound of a `prefer-route`'s route.
+    pub routes: usize,
 }
 
 /// What a call cost, for the dev overlay. An output, never simulation state.

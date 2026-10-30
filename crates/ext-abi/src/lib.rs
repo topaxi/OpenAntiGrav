@@ -190,6 +190,7 @@ const COMMAND_HUD_SHAKE: u8 = 17;
 const COMMAND_HUD_BAR_EXTRA: u8 = 18;
 const COMMAND_HUD_TEXT: u8 = 19;
 const COMMAND_HUD_ICON: u8 = 20;
+const COMMAND_PREFER_ROUTE: u8 = 21;
 /// Bit 15 of a `hud-text`, `hud-icon` or `fire-effect` argument: the string or effect is
 /// the sending mod's own, not the title's. The pool offset or effect index is the rest.
 const OWN_FLAG: u16 = 1 << 15;
@@ -791,6 +792,17 @@ pub enum Command {
         /// The grid slot.
         slot: Slot,
     },
+    /// At its next fork, the slot's driver takes route `route` (an index into the track
+    /// region's routes) instead of the one its coin drew, if the route leaves that fork
+    /// and the driver can drive it. Re-sent each tick it should hold; hashed. The coin is
+    /// still thrown, so the race's random streams are unchanged. An AI craft's alone: a
+    /// person steers.
+    PreferRoute {
+        /// The grid slot.
+        slot: Slot,
+        /// The route, below the region's route count.
+        route: u16,
+    },
 }
 
 impl Command {
@@ -813,7 +825,8 @@ impl Command {
             | Self::HudIcon { slot, .. }
             | Self::GiveShield { slot }
             | Self::HoldShield { slot }
-            | Self::ClearShield { slot } => Some(slot),
+            | Self::ClearShield { slot }
+            | Self::PreferRoute { slot, .. } => Some(slot),
             Self::PickupRoll { .. }
             | Self::ScalePad { .. }
             | Self::SetWeather { .. }
@@ -890,6 +903,7 @@ impl Command {
             Self::GiveShield { .. } => (COMMAND_GIVE_SHIELD, 0, 0, 0),
             Self::HoldShield { .. } => (COMMAND_HOLD_SHIELD, 0, 0, 0),
             Self::ClearShield { .. } => (COMMAND_CLEAR_SHIELD, 0, 0, 0),
+            Self::PreferRoute { route, .. } => (COMMAND_PREFER_ROUTE, route, 0, 0),
         };
         let mut record = [0; COMMAND_LEN];
         record[COMMAND_KIND] = kind;
@@ -1073,6 +1087,7 @@ impl Command {
             COMMAND_GIVE_SHIELD => Self::GiveShield { slot },
             COMMAND_HOLD_SHIELD => Self::HoldShield { slot },
             COMMAND_CLEAR_SHIELD => Self::ClearShield { slot },
+            COMMAND_PREFER_ROUTE => Self::PreferRoute { slot, route: arg },
             other => return Err(Malformed::Kind(other)),
         })
     }

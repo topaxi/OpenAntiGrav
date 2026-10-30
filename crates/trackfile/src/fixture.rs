@@ -243,6 +243,7 @@ pub fn oval() -> Track {
         props: crate::props::Props::new(),
         speedup_pad_props: Vec::new(),
         weapon_pad_props: Vec::new(),
+        path_props: Vec::new(),
         triggers: Vec::new(),
         art: None,
         notes: vec![

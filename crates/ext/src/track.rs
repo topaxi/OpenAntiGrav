@@ -1,6 +1,6 @@
-//! The track region as a guest reads it: the track, its pads and its triggers, each
-//! with its box and the properties a track file authors (`mod_*` in the Blender
-//! add-on). The engine gives no property a meaning; a mod reads one by
+//! The track region as a guest reads it: the track, its pads, its triggers, its spline
+//! paths and its routes, each with its box and the properties a track file authors
+//! (`mod_*` in the Blender add-on). The engine gives no property a meaning; a mod reads one by
 //! [`prop!`](crate::prop).
 
 use oag_ext_abi::track::{EntityView, Kind, Region};
@@ -47,6 +47,19 @@ impl<'a> Track<'a> {
         self.region.count(Kind::Trigger)
     }
 
+    /// How many paths its spline graph has: one for a plain loop.
+    #[must_use]
+    pub fn paths(&self) -> usize {
+        self.region.count(Kind::Path)
+    }
+
+    /// How many routes it has: ways from a fork on the lap back to it, none for a plain
+    /// loop. A [`Reply::prefer_route`](crate::Reply::prefer_route)'s route is below it.
+    #[must_use]
+    pub fn routes(&self) -> usize {
+        self.region.count(Kind::Route)
+    }
+
     /// The `pad`-th speed pad.
     #[must_use]
     pub fn speed_pad(&self, pad: u16) -> Option<Entity<'a>> {
@@ -63,6 +76,20 @@ impl<'a> Track<'a> {
     #[must_use]
     pub fn trigger(&self, trigger: u16) -> Option<Entity<'a>> {
         self.entity(Kind::Trigger, usize::from(trigger))
+    }
+
+    /// The `path`-th spline path: its properties (`mod_*` on the Blender spline) and
+    /// the bounds of its points.
+    #[must_use]
+    pub fn path(&self, path: u16) -> Option<Entity<'a>> {
+        self.entity(Kind::Path, usize::from(path))
+    }
+
+    /// The `route`-th route: the properties of the paths it drives (the first path's
+    /// value where two set one name) and the bounds of its samples.
+    #[must_use]
+    pub fn route(&self, route: u16) -> Option<Entity<'a>> {
+        self.entity(Kind::Route, usize::from(route))
     }
 
     fn entity(&self, kind: Kind, index: usize) -> Option<Entity<'a>> {

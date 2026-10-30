@@ -41,6 +41,9 @@ class Path:
     max_spacing: float
     entry: int = None
     exit: int = None
+    # A simulation mod's properties (`mod_*` on the spline object, prefix stripped), as
+    # a pad's: a mod finds a way round a fork by them (a pit lane's `pit`).
+    props: dict = field(default_factory=dict)
 
 
 @dataclass

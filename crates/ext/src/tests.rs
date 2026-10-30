@@ -160,7 +160,7 @@ fn the_observation_lists_active_crafts_and_skips_unknown_events() {
 #[test]
 fn the_reply_refuses_what_the_host_would_fault_on() {
     let mut buffer = [0_u8; 4 + oag_ext_abi::COMMAND_LEN * oag_ext_abi::MAX_COMMANDS];
-    let mut reply = Reply::new(&mut buffer, 2);
+    let mut reply = Reply::new(&mut buffer, 2, 1);
     let record = CraftRecord {
         pickup: Pickup::Ours,
         ..racer(50.0)
@@ -203,7 +203,14 @@ fn the_reply_refuses_what_the_host_would_fault_on() {
     assert_eq!(reply.scale_pad(1, 1.0), Err(Refused::Repeated));
     assert_eq!(reply.scale_slot_pads(&held, 0.0), Ok(()));
     assert_eq!(reply.scale_slot_pads(&held, 1.0), Err(Refused::Repeated));
-    assert_eq!(reply.len(), 5);
+    assert_eq!(
+        reply.prefer_route(&held, 1),
+        Err(Refused::Range),
+        "the track has one route"
+    );
+    assert_eq!(reply.prefer_route(&held, 0), Ok(()));
+    assert_eq!(reply.prefer_route(&held, 0), Err(Refused::Repeated));
+    assert_eq!(reply.len(), 6);
     while reply.len() < MAX_COMMANDS_FOR_TEST {
         reply
             .hud_tint(&held, oag_ext_abi::HudElement::Pickup, Rgba::default())
@@ -280,6 +287,7 @@ fn a_guest_reads_a_pads_property_by_its_compile_time_key_and_hears_pads_and_trig
         speed_pads: vec![vec![(prop_key("lit"), 1.0)], vec![(boost, 1.5)]],
         weapon_pads: vec![vec![], vec![], vec![]],
         triggers: vec![vec![], vec![(prop_key("gate"), 0.0)], vec![]],
+        ..TrackRecord::default()
     };
     let mut race = Race::<PadReader>::new()
         .with_craft(slot(4), racer(50.0))
@@ -370,7 +378,7 @@ fn a_guest_draws_text_and_an_icon_and_the_cap_refuses_by_name() {
     ));
 
     let mut buffer = [0_u8; oag_ext_abi::CRAFTS_AT - oag_ext_abi::REPLY_AT];
-    let mut reply = Reply::new(&mut buffer, 0);
+    let mut reply = Reply::new(&mut buffer, 0, 0);
     let held = Craft {
         slot: slot(1),
         record: &[0; oag_ext_abi::CRAFT_LEN],
@@ -439,3 +447,26 @@ fn a_guest_names_its_own_string_and_icon_by_key() {
 }
 
 mod armor;
+
+#[test]
+fn a_guest_finds_a_route_by_a_property_of_a_path_it_drives() {
+    let pit = crate::prop!("pit");
+    let track = crate::test::TrackRecord {
+        paths: vec![vec![], vec![(pit, 1.0)], vec![]],
+        routes: vec![vec![(pit, 1.0)]],
+        ..crate::test::TrackRecord::default()
+    };
+    let region = track.region();
+    let mut io = Box::new([0_u8; IO_LEN]);
+    oag_ext_abi::write_observation(&mut io, 0, 0b1, &[], &[racer(1.0)], &[]);
+    let sections = Sections::split(&mut io);
+    let obs = Observation::read(sections.head, sections.crafts, &region);
+    let track = obs.track();
+    assert_eq!((track.paths(), track.routes()), (3, 1));
+    assert_eq!(track.path(1).and_then(|p| p.prop(pit)), Some(1.0));
+    assert_eq!(track.path(0).and_then(|p| p.prop(pit)), None);
+    let found =
+        (0..track.routes() as u16).find(|&r| track.route(r).and_then(|e| e.prop(pit)).is_some());
+    assert_eq!(found, Some(0));
+    assert!(track.route(1).is_none());
+}

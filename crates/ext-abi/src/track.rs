@@ -2,19 +2,28 @@
 //! the guest's `oag_track() -> u32` buffer before each call. Read-only by contract, the
 //! same every tick of a race, and no state: nothing in it is hashed.
 //!
-//! Every entity is one record: the track itself, then each speed pad, each weapon pad
-//! and each trigger, in that order and in the track's own order within a kind. So the
-//! `i`-th speed pad is entity `1 + i`. Each entity carries its box and the
-//! author-defined properties of a track file (`mod_*` in the Blender add-on), as
-//! `(key hash, f32)` pairs; the engine gives none of them a meaning. A disc circuit
-//! carries its pads with no properties.
+//! Every entity is one record: the track itself, then each speed pad, each weapon pad,
+//! each trigger, each spline path and each route, in that order and in the track's own
+//! order within a kind. So the `i`-th speed pad is entity `1 + i`. Each entity carries
+//! its box and the author-defined properties of a track file (`mod_*` in the Blender
+//! add-on), as `(key hash, f32)` pairs; the engine gives none of them a meaning. A disc
+//! circuit carries its pads, paths and routes with no properties.
+//!
+//! A **path** is one path of the spline graph (`[[spline.path]]`), its box the bounds of
+//! its points in world space (the identity placement). A **route** is one way from a
+//! fork on the lap back to it, in the order `oag_race::course::Route`s are built; its
+//! index is what `prefer-route` names. A route carries the properties of the paths it
+//! drives, in order, the first path's value kept where two set one name, and its box
+//! bounds its samples, so a module finds the pit lane's route by the pit lane's `pit`.
 //!
 //! | Offset | Size | Field |
 //! | --- | --- | --- |
 //! | [`SPEED_PADS_AT`] | 2 | speed pads, `u16` |
 //! | [`WEAPON_PADS_AT`] | 2 | weapon pads, `u16` |
 //! | [`TRIGGERS_AT`] | 2 | triggers, `u16` |
-//! | 6 | 2 | zero |
+//! | [`PATHS_AT`] | 2 | spline paths, `u16` |
+//! | [`ROUTES_AT`] | 2 | routes, `u16` |
+//! | 10 | 2 | zero |
 //! | [`ENTITIES_AT`] | [`ENTITY_LEN`] x [`MAX_ENTITIES`] | entities: kind `u8`, zero `u8`, index `u16`, first property `u16`, property count `u16`, local-to-world 16 x `f32` (row-major, translation in row 3), box minimum 3 x `f32`, box maximum 3 x `f32` (local space) |
 //! | [`PROPS_AT`] | [`PROP_LEN`] x [`MAX_PROPS`] | properties: key `u32` ([`prop_key`]), value `f32` |
 //!
@@ -23,7 +32,7 @@
 //! maximum was taken, and 2048 and Omega were not counted. A track over a cap is
 //! refused by name at load.
 
-/// Entities in one region: the track, its pads and its triggers.
+/// Entities in one region: the track, its pads, its triggers, its paths and routes.
 pub const MAX_ENTITIES: usize = 256;
 /// Triggers one track may carry: one bit each in the engine's per-craft mask.
 pub const MAX_TRIGGERS: usize = 64;
@@ -36,8 +45,12 @@ pub const SPEED_PADS_AT: usize = 0;
 pub const WEAPON_PADS_AT: usize = 2;
 /// Where the trigger count is written.
 pub const TRIGGERS_AT: usize = 4;
+/// Where the spline path count is written.
+pub const PATHS_AT: usize = 6;
+/// Where the route count is written.
+pub const ROUTES_AT: usize = 8;
 /// Where the entity records start.
-pub const ENTITIES_AT: usize = 8;
+pub const ENTITIES_AT: usize = 12;
 /// One entity record.
 pub const ENTITY_LEN: usize = 96;
 /// Where the property records start.
@@ -91,6 +104,10 @@ pub enum Kind {
     WeaponPad,
     /// A trigger volume of a track file.
     Trigger,
+    /// A path of the spline graph.
+    Path,
+    /// A way from a fork back to the lap.
+    Route,
 }
 
 impl Kind {
@@ -108,6 +125,8 @@ impl Kind {
             2 => Some(Self::SpeedPad),
             3 => Some(Self::WeaponPad),
             4 => Some(Self::Trigger),
+            5 => Some(Self::Path),
+            6 => Some(Self::Route),
             _ => None,
         }
     }
@@ -156,7 +175,7 @@ impl core::fmt::Display for TooBig {
         match *self {
             Self::Entities(n) => write!(
                 f,
-                "{n} entities (the track, its pads and triggers), a mod reads at most {MAX_ENTITIES}"
+                "{n} entities (the track, its pads, triggers, paths and routes), a mod reads at most {MAX_ENTITIES}"
             ),
             Self::Triggers(n) => write!(f, "{n} triggers, a mod reads at most {MAX_TRIGGERS}"),
             Self::Props(n) => write!(f, "{n} properties, a mod reads at most {MAX_PROPS}"),
@@ -184,9 +203,12 @@ pub fn write(
     speed_pads: &[Entity<'_>],
     weapon_pads: &[Entity<'_>],
     triggers: &[Entity<'_>],
+    paths: &[Entity<'_>],
+    routes: &[Entity<'_>],
 ) -> Result<usize, TooBig> {
     let out = &mut out[..TRACK_LEN];
-    let entities = 1 + speed_pads.len() + weapon_pads.len() + triggers.len();
+    let entities =
+        1 + speed_pads.len() + weapon_pads.len() + triggers.len() + paths.len() + routes.len();
     if triggers.len() > MAX_TRIGGERS {
         return Err(TooBig::Triggers(triggers.len()));
     }
@@ -204,6 +226,8 @@ pub fn write(
         (Kind::SpeedPad, speed_pads),
         (Kind::WeaponPad, weapon_pads),
         (Kind::Trigger, triggers),
+        (Kind::Path, paths),
+        (Kind::Route, routes),
     ];
     let props: usize = all
         .iter()
@@ -216,6 +240,8 @@ pub fn write(
     put_u16(out, SPEED_PADS_AT, speed_pads.len());
     put_u16(out, WEAPON_PADS_AT, weapon_pads.len());
     put_u16(out, TRIGGERS_AT, triggers.len());
+    put_u16(out, PATHS_AT, paths.len());
+    put_u16(out, ROUTES_AT, routes.len());
     let (mut at, mut prop) = (0, 0);
     for (kind, list) in all {
         for (index, entity) in list.iter().enumerate() {
@@ -275,6 +301,8 @@ impl<'a> Region<'a> {
             Kind::SpeedPad => get_u16(self.bytes, SPEED_PADS_AT),
             Kind::WeaponPad => get_u16(self.bytes, WEAPON_PADS_AT),
             Kind::Trigger => get_u16(self.bytes, TRIGGERS_AT),
+            Kind::Path => get_u16(self.bytes, PATHS_AT),
+            Kind::Route => get_u16(self.bytes, ROUTES_AT),
         }
     }
 
@@ -284,11 +312,23 @@ impl<'a> Region<'a> {
         if index >= self.count(kind) {
             return None;
         }
+        // Every kind before this one, in the region's order.
         let before = match kind {
             Kind::Track => 0,
             Kind::SpeedPad => 1,
             Kind::WeaponPad => 1 + self.count(Kind::SpeedPad),
             Kind::Trigger => 1 + self.count(Kind::SpeedPad) + self.count(Kind::WeaponPad),
+            Kind::Path => {
+                1 + self.count(Kind::SpeedPad)
+                    + self.count(Kind::WeaponPad)
+                    + self.count(Kind::Trigger)
+            }
+            Kind::Route => {
+                1 + self.count(Kind::SpeedPad)
+                    + self.count(Kind::WeaponPad)
+                    + self.count(Kind::Trigger)
+                    + self.count(Kind::Path)
+            }
         };
         let at = ENTITIES_AT + (before + index) * ENTITY_LEN;
         let record = self.bytes.get(at..at + ENTITY_LEN)?;

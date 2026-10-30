@@ -355,6 +355,7 @@ fn foreign(
             speedup_pads: f.speedup_pad_props,
             weapon_pads: f.weapon_pad_props,
             triggers: f.triggers,
+            paths: f.path_props,
         },
         #[cfg(feature = "view")]
         drawn: Some(drawn),
@@ -415,6 +416,7 @@ pub(super) fn export(
         props: oag_trackfile::props::Props::new(),
         speedup_pad_props: Vec::new(),
         weapon_pad_props: Vec::new(),
+        path_props: Vec::new(),
         triggers: Vec::new(),
         art,
         notes,

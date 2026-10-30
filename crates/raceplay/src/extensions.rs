@@ -29,6 +29,7 @@
 
 use std::sync::Arc;
 
+mod route;
 mod track;
 
 pub use track::{Track, TrackProps};
@@ -782,6 +783,8 @@ mod on {
         /// difference is the `trigger-enter` and `trigger-exit` events.
         inside: [u64; oag_gameplay::MAX_SHIPS],
         reported: [u64; oag_gameplay::MAX_SHIPS],
+        /// Each slot's `prefer-route` this tick (`super::route`), held for the step.
+        pub(super) prefer: super::route::Preferred,
         /// Outputs, never hashed: this tick's `hud-*` commands, and the
         /// `fire-effect`s the view has still to draw.
         pub(super) hud: Vec<(usize, Command)>,
@@ -934,6 +937,7 @@ mod on {
                 weapon_entered: [None; oag_gameplay::MAX_SHIPS],
                 inside: [0; oag_gameplay::MAX_SHIPS],
                 reported: [0; oag_gameplay::MAX_SHIPS],
+                prefer: super::route::Preferred::default(),
                 hud: Vec::new(),
                 strings,
                 effects: Vec::new(),
@@ -1051,6 +1055,7 @@ mod on {
             for mask in self.inside.iter().chain(&self.reported) {
                 hasher.write_u64(*mask);
             }
+            self.prefer.hash_into(hasher);
             for slot in &self.slots {
                 hasher.write(&slot.blob);
                 match &slot.faulted {
@@ -1359,6 +1364,7 @@ mod on {
         on.speed_entered = [None; oag_gameplay::MAX_SHIPS];
         on.weapon_entered = [None; oag_gameplay::MAX_SHIPS];
         on.reported = on.inside;
+        on.prefer = super::route::Preferred::default();
         on.hud.clear();
         on.sky = super::Sky::default();
         // This tick's alone: a tick that draws nothing (a replayed one, a server's) drops
@@ -1372,6 +1378,7 @@ mod on {
             crafts: &crafts,
             track: &region.bytes,
             speed_pads: region.speed_pads,
+            routes: region.routes,
         };
         let mut commands = Vec::new();
         // Every module's checked commands, in id order: applied once all have run, so
@@ -1463,6 +1470,9 @@ mod on {
                 Command::GivePickup { .. }
                 | Command::ClearPickup { .. }
                 | Command::PickupRoll { .. } => pickup_command(sim, index, command),
+                Command::PreferRoute { slot, route } => {
+                    sim.extensions.on.prefer.set(slot.index(), route);
+                }
             }
         }
     }

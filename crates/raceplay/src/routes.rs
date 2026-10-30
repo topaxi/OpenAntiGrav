@@ -55,6 +55,9 @@ pub(super) struct RouteLine {
     pub(super) pre_fork: u16,
     /// The coins that pick it - `oag_race::course::Route::choices`.
     pub(super) choices: Vec<bool>,
+    /// Its index in `Course::routes`: the numbering a mod's `prefer-route` names (a
+    /// route that could not be matched onto the spline is skipped here, not there).
+    pub(super) course_route: usize,
     /// This line's speed plan, built after the field is seated
     /// ([`Race::route_speed_plans`]); `None` drives the corner model.
     pub(super) plan: Option<oag_ai::SpeedPlan>,
@@ -146,6 +149,7 @@ pub(super) fn route_lines(
             merge: route.merge,
             pre_fork: route.pre_fork,
             choices: route.choices.clone(),
+            course_route: k,
             plan: None,
         });
     }
@@ -325,6 +329,7 @@ impl Race {
             return;
         }
         let routes = &self.sim.routes;
+        let preferred = self.sim.extensions.preferred_route(slot);
         let driver = &mut self.sim.world.ships[slot].driver;
         let mut branching = driver.branching;
         let index = driver.index as usize;
@@ -333,6 +338,12 @@ impl Race {
                 let Some(path) = course.path_of(index % n) else {
                     return;
                 };
+                // A mod's `prefer-route` (`crate::extensions`): a route leaving this
+                // fork that the coin could have drawn. Ours.
+                let preferred = preferred
+                    .and_then(|c| routes.iter().position(|r| r.course_route == usize::from(c)))
+                    .filter(|&k| routes[k].pre_fork == path && routes[k].plan.is_some())
+                    .and_then(|k| u16::try_from(k + 1).ok());
                 if !routes.iter().any(|r| r.pre_fork == path) {
                     branching.decided_at = 0;
                     branching.pending = 0;
@@ -355,13 +366,15 @@ impl Race {
                 // The coin is thrown on entering the pre-fork path; the driver
                 // moves onto the route's line only within `SWITCH_SAMPLES` of
                 // the split, so the shared stretch is driven on the ring's line
-                // and plan.
-                if let Some(k) = branching.pending.checked_sub(1).map(usize::from)
+                // and plan. A preference held then wins over the coin's draw, which
+                // is still made above, so the coin's stream does not move.
+                let take = preferred.unwrap_or(branching.pending);
+                if let Some(k) = take.checked_sub(1).map(usize::from)
                     && let Some(r) = routes.get(k)
                 {
                     let into = (index % n + n - r.merge) % n;
                     if into < r.kept && r.kept - into <= SWITCH_SAMPLES {
-                        branching.route = branching.pending;
+                        branching.route = take;
                         branching.pending = 0;
                         branching.entered = false;
                         driver.index = u32::try_from(into).unwrap_or(0);

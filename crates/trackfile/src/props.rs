@@ -158,6 +158,19 @@ pub(crate) fn check(track: &Track) -> Result<(), Error> {
             check_one(&format!("{what} {i}"), p)?;
         }
     }
+    if !track.path_props.is_empty() && track.path_props.len() != track.ai.paths.len() {
+        return Err(refuse(
+            "spline paths",
+            format!(
+                "{} property lists for {} paths",
+                track.path_props.len(),
+                track.ai.paths.len()
+            ),
+        ));
+    }
+    for (i, p) in track.path_props.iter().enumerate() {
+        check_one(&format!("spline path {i}"), p)?;
+    }
     check_one("props", &track.props)?;
     if track.triggers.len() > MAX_TRIGGERS {
         return Err(refuse(
@@ -189,6 +202,7 @@ pub(crate) fn check(track: &Track) -> Result<(), Error> {
             .speedup_pad_props
             .iter()
             .chain(&track.weapon_pad_props)
+            .chain(&track.path_props)
             .map(BTreeMap::len)
             .sum::<usize>()
         + track.triggers.iter().map(|t| t.props.len()).sum::<usize>();

@@ -87,6 +87,8 @@ def check_props(what, props):
 
 def _check_all(track):
     check_props("props", track.props)
+    for i, path in enumerate(track.paths):
+        check_props(f"spline path {i}", path.props)
     for what, pads in (("speed pads", track.speedup_pads), ("weapon pads", track.weapon_pads)):
         for i, pad in enumerate(pads):
             check_props(f"{what} {i}", pad.props)
@@ -95,7 +97,7 @@ def _check_all(track):
     for t in track.triggers:
         check_props(f"trigger {t.name}", t.props)
     total = len(track.props) + sum(
-        len(p.props) for p in (*track.speedup_pads, *track.weapon_pads, *track.triggers)
+        len(p.props) for p in (*track.speedup_pads, *track.weapon_pads, *track.triggers, *track.paths)
     )
     if total > MAX_PROPS:
         raise TrackFileError(f"{total} properties, a mod reads at most {MAX_PROPS}")
@@ -263,7 +265,8 @@ def write_glb(track):
             raw = [tuple(v & 0xFF for v in (q.cage or (0,) * 8)) for q in p]
             attrs["_OAG_CAGE_A"] = b.bytes4([r[:4] for r in raw])
             attrs["_OAG_CAGE_B"] = b.bytes4([r[4:] for r in raw])
-        push(name, [{"attributes": attrs, "mode": POINTS}])
+        extras = {"oag_props": _props_json(path.props)} if path.props else None
+        push(name, [{"attributes": attrs, "mode": POINTS}], extras)
 
     for name, pads in ((SPEEDUP, track.speedup_pads), (WEAPON, track.weapon_pads)):
         if not pads:
@@ -634,6 +637,7 @@ def read(manifest_path):
         g = _Glb(fh.read())
     rows = m.get("spline", {}).get("path", [])
     splines = [None] * len(rows)
+    path_props = [{} for _ in rows]
     start, speedup, weapon, nodes, art, triggers = None, [], [], [], [], []
     art_nodes, sun = {}, None
     for at, node in enumerate(g.doc["nodes"]):
@@ -647,7 +651,11 @@ def read(manifest_path):
         elif name == START:
             start = _read_start(g, node)
         elif name.startswith(SPLINE):
-            splines[int(name[len(SPLINE) :])] = _read_spline(g, node, name)
+            i = int(name[len(SPLINE) :])
+            splines[i] = _read_spline(g, node, name)
+            row = (node.get("extras") or {}).get("oag_props")
+            if row is not None:
+                path_props[i] = {k: prop_value(name, k, v) for k, v in row.items()}
         elif name == SPEEDUP:
             speedup = _read_pads(g, node, name)
         elif name == WEAPON:
@@ -663,7 +671,7 @@ def read(manifest_path):
     if start is None:
         raise TrackFileError(f"no {START} node")
     paths = []
-    for row, points in zip(rows, splines):
+    for row, points, props in zip(rows, splines, path_props):
         points = points or []
         if len(points) != row["points"]:
             raise TrackFileError("a spline's point count disagrees with the manifest")
@@ -673,6 +681,7 @@ def read(manifest_path):
                 f32.from_bits(row["max_spacing_bits"]),
                 _index(row["entry"]),
                 _index(row["exit"]),
+                props,
             )
         )
     junctions = [

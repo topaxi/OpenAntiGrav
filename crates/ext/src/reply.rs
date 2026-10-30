@@ -14,12 +14,12 @@ use crate::Craft;
 pub enum Refused {
     /// The reply already holds `MAX_COMMANDS` commands.
     Full,
-    /// A second `scale_thrust`, `shield_delta`, `scale_slot_pads` or Shield command
-    /// (`give_shield`, `hold_shield`, `clear_shield`) for one craft, or a
+    /// A second `scale_thrust`, `shield_delta`, `scale_slot_pads`, `prefer_route` or
+    /// Shield command (`give_shield`, `hold_shield`, `clear_shield`) for one craft, or a
     /// second `scale_pad` for one pad, this tick.
     Repeated,
     /// A value out of its range: a factor outside `[0, MAX_THRUST_FACTOR]` or
-    /// `[0, MAX_PAD_FACTOR]`, a pad the track does not have, a shield
+    /// `[0, MAX_PAD_FACTOR]`, a pad or route the track does not have, a shield
     /// change past the craft's maximum, a non-finite number, a roll period of 0.
     Range,
     /// More than `MAX_HUD_ITEMS` `hud_text` and `hud_icon` items for one craft this
@@ -41,12 +41,14 @@ pub struct Reply<'a> {
     slot_pads: u32,
     pads: [u32; oag_ext_abi::track::MAX_ENTITIES / 32],
     speed_pads: usize,
+    routes: usize,
+    route_cmd: u32,
     pool_used: usize,
     items: [u8; oag_ext_abi::MAX_CRAFTS],
 }
 
 impl<'a> Reply<'a> {
-    pub(crate) fn new(reply: &'a mut [u8], speed_pads: usize) -> Self {
+    pub(crate) fn new(reply: &'a mut [u8], speed_pads: usize, routes: usize) -> Self {
         Self {
             reply,
             count: 0,
@@ -56,6 +58,8 @@ impl<'a> Reply<'a> {
             slot_pads: 0,
             pads: [0; oag_ext_abi::track::MAX_ENTITIES / 32],
             speed_pads,
+            routes,
+            route_cmd: 0,
             pool_used: 0,
             items: [0; oag_ext_abi::MAX_CRAFTS],
         }
@@ -243,6 +247,32 @@ impl<'a> Reply<'a> {
     /// [`Refused::Full`], [`Refused::Repeated`].
     pub fn clear_shield(&mut self, craft: &Craft<'_>) -> Result<(), Refused> {
         self.shield_command(craft, Command::ClearShield { slot: craft.slot() })
+    }
+
+    /// `prefer-route`: at its next fork the craft's driver takes route `route` (an index
+    /// into [`Track::route`](crate::Track::route)) instead of the one its coin drew, if
+    /// the route leaves that fork and the driver can drive it; the coin is still thrown.
+    /// Re-sent each tick it should hold: a preference dropped before the fork leaves
+    /// the coin's draw. Moves the driver only, so a person steering ignores it.
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`], [`Refused::Repeated`], [`Refused::Range`] for a route the
+    /// track does not have.
+    pub fn prefer_route(&mut self, craft: &Craft<'_>, route: u16) -> Result<(), Refused> {
+        if usize::from(route) >= self.routes {
+            return Err(Refused::Range);
+        }
+        let bit = craft.slot().bit();
+        if self.route_cmd & bit != 0 {
+            return Err(Refused::Repeated);
+        }
+        self.push(&Command::PreferRoute {
+            slot: craft.slot(),
+            route,
+        })?;
+        self.route_cmd |= bit;
+        Ok(())
     }
 
     fn shield_command(&mut self, craft: &Craft<'_>, command: Command) -> Result<(), Refused> {

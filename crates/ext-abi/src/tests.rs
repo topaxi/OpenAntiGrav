@@ -20,7 +20,7 @@ fn slot(index: usize) -> Slot {
 }
 
 /// One of every command, with arguments that touch every field.
-fn every_command() -> [Command; 20] {
+fn every_command() -> [Command; 21] {
     [
         Command::ScaleThrust {
             slot: slot(1),
@@ -101,6 +101,10 @@ fn every_command() -> [Command; 20] {
         Command::GiveShield { slot: slot(8) },
         Command::HoldShield { slot: slot(9) },
         Command::ClearShield { slot: slot(10) },
+        Command::PreferRoute {
+            slot: slot(11),
+            route: 3,
+        },
     ]
 }
 
@@ -194,6 +198,8 @@ fn layout_fold() -> u64 {
         track::SPEED_PADS_AT as u32,
         track::WEAPON_PADS_AT as u32,
         track::TRIGGERS_AT as u32,
+        track::PATHS_AT as u32,
+        track::ROUTES_AT as u32,
         track::ENTITIES_AT as u32,
         track::ENTITY_LEN as u32,
         track::PROPS_AT as u32,
@@ -210,6 +216,8 @@ fn layout_fold() -> u64 {
         u32::from(track::Kind::SpeedPad.code()),
         u32::from(track::Kind::WeaponPad.code()),
         u32::from(track::Kind::Trigger.code()),
+        u32::from(track::Kind::Path.code()),
+        u32::from(track::Kind::Route.code()),
         track::prop_key("boost"),
         COMMAND_KIND as u32,
         COMMAND_SLOT as u32,
@@ -492,6 +500,7 @@ fn a_track_region_reads_back_entity_by_entity() {
     use track::{Entity, Kind, Region, TRACK_LEN, prop_key, write};
     let boost = [(prop_key("boost"), 1.5), (prop_key("lit"), 1.0)];
     let gate = [(prop_key("gate"), 0.1)];
+    let pit = [(prop_key("pit"), 1.0)];
     let pad = |x: f32, props| Entity {
         to_world: core::array::from_fn(|i| if i == 12 { x } else { track::IDENTITY[i] }),
         min: [-1.0, -2.0, -3.0],
@@ -505,14 +514,34 @@ fn a_track_region_reads_back_entity_by_entity() {
         &[pad(10.0, &[]), pad(20.0, &boost)],
         &[pad(30.0, &[])],
         &[pad(40.0, &gate)],
+        &[pad(50.0, &[]), pad(60.0, &pit)],
+        &[pad(70.0, &pit)],
     )
     .unwrap();
-    assert_eq!(used, track::PROPS_AT + 4 * track::PROP_LEN);
+    assert_eq!(used, track::PROPS_AT + 6 * track::PROP_LEN);
     let region = Region::new(&out);
     assert_eq!(
-        [Kind::SpeedPad, Kind::WeaponPad, Kind::Trigger].map(|k| region.count(k)),
-        [2, 1, 1]
+        [
+            Kind::SpeedPad,
+            Kind::WeaponPad,
+            Kind::Trigger,
+            Kind::Path,
+            Kind::Route
+        ]
+        .map(|k| region.count(k)),
+        [2, 1, 1, 2, 1]
     );
+    let path = region.entity(Kind::Path, 1).unwrap();
+    assert_eq!((path.kind(), path.index()), (Some(Kind::Path), 1));
+    assert_eq!(path.to_world()[12], 60.0);
+    assert_eq!(path.prop(prop_key("pit")), Some(1.0));
+    let route = region.entity(Kind::Route, 0).unwrap();
+    assert_eq!(
+        (route.kind(), route.to_world()[12]),
+        (Some(Kind::Route), 70.0)
+    );
+    assert_eq!(route.prop(prop_key("pit")), Some(1.0));
+    assert!(region.entity(Kind::Route, 1).is_none());
     let second = region.entity(Kind::SpeedPad, 1).unwrap();
     assert_eq!((second.kind(), second.index()), (Some(Kind::SpeedPad), 1));
     assert_eq!(second.to_world()[12], 20.0);
@@ -560,16 +589,24 @@ fn a_track_past_a_cap_or_with_a_key_twice_does_not_fit() {
     };
     let many = [none; track::MAX_ENTITIES];
     assert_eq!(
-        write(&mut out, &[], &many, &[], &[]),
+        write(&mut out, &[], &many, &[], &[], &[], &[]),
         Err(TooBig::Entities(track::MAX_ENTITIES + 1))
     );
     assert_eq!(
-        write(&mut out, &[], &[], &[], &many[..track::MAX_TRIGGERS + 1]),
+        write(
+            &mut out,
+            &[],
+            &[],
+            &[],
+            &many[..track::MAX_TRIGGERS + 1],
+            &[],
+            &[]
+        ),
         Err(TooBig::Triggers(track::MAX_TRIGGERS + 1))
     );
     let props = [(1_u32, 0.0_f32); track::MAX_PROPS + 1];
     assert_eq!(
-        write(&mut out, &props, &[], &[], &[]),
+        write(&mut out, &props, &[], &[], &[], &[], &[]),
         Err(TooBig::Props(track::MAX_PROPS + 1))
     );
     let twice = [(7, 1.0), (7, 2.0)];
@@ -578,7 +615,7 @@ fn a_track_past_a_cap_or_with_a_key_twice_does_not_fit() {
         ..none
     };
     assert_eq!(
-        write(&mut out, &[], &[none], &[clash], &[]),
+        write(&mut out, &[], &[none], &[clash], &[], &[], &[]),
         Err(TooBig::Clash {
             kind: Kind::WeaponPad,
             index: 0,

@@ -46,7 +46,7 @@ from .trackfile import MAX_VERTICES, TrackFileError
 
 LINE_KIND = "racing_line"
 KINDS = (*COLLISION_KINDS, "spline", LINE_KIND, "start", "speedup", "weapon", "trigger")
-# A custom property with this prefix on a pad or trigger empty, or on the scene, is a
+# A custom property with this prefix on a pad or trigger empty, a spline, or the scene, is a
 # simulation mod's: exported with the prefix stripped, given no meaning by the engine.
 MOD_PREFIX = "mod_"
 COLLECTION = "OAG Track"
@@ -452,6 +452,8 @@ def collect(context):
     if not splines:
         raise TrackFileError("no object is tagged spline")
     paths = [path_of(o, depsgraph, i) for i, o in enumerate(splines)]
+    for o, path in zip(splines, paths):
+        path.props = mod_props(o, o.name)
     lines = _line_objects(by((LINE_KIND,)), len(splines))
     for i, (o, path) in enumerate(zip(splines, paths)):
         offsets = line_for(o, path, lines.get(i), depsgraph)
@@ -586,6 +588,8 @@ def make_spline_object(scene, path, index):
     obj["oag_max_spacing"] = path.max_spacing
     obj["oag_entry"] = -1 if path.entry is None else path.entry
     obj["oag_exit"] = -1 if path.exit is None else path.exit
+    for key, value in path.props.items():
+        obj[MOD_PREFIX + key] = value
     return _link(scene, obj)
 
 

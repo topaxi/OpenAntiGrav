@@ -4,10 +4,13 @@
 //! `oag/pads/speedup`, `oag/pads/weapon`, `oag/triggers`, then one node per
 //! collision node with an `oag_kind` extra. A pad node's `oag_props` extra is one
 //! property object per pad; the trigger node's extras carry `oag_names` and
-//! `oag_props`, one per trigger (`crate::props`). Every record is a mesh primitive; numbers beyond
+//! `oag_props`, one per trigger; a spline node's `oag_props` is that path's one object
+//! (`crate::props`). Every record is a mesh primitive; numbers beyond
 //! positions are custom `_OAG_*` attributes, so a stock glTF viewer shows the
 //! points and triangles. Coordinates are this engine's world: right-handed,
 //! Y up, in world units (not metres).
+
+use std::collections::BTreeMap;
 
 use gltf::Semantic;
 use gltf::accessor::{Item, Iter};
@@ -253,10 +256,15 @@ pub(crate) fn write(track: &Track) -> Result<Vec<u8>, Error> {
             attrs["_OAG_CAGE_A"] = json!(bin.bytes4(&half(0)));
             attrs["_OAG_CAGE_B"] = json!(bin.bytes4(&half(4)));
         }
+        let extras = track
+            .path_props
+            .get(i)
+            .filter(|props| !props.is_empty())
+            .map(|props| json!({ "oag_props": crate::props::to_json(props) }));
         push(
             &name,
             vec![json!({ "attributes": attrs, "mode": POINTS })],
-            None,
+            extras,
         );
     }
 
@@ -526,6 +534,7 @@ pub(crate) fn read(m: Parsed, bytes: &[u8]) -> Result<Loaded, Error> {
     let mut unread = m.unread.clone();
     let mut start = None;
     let mut spline: Vec<Option<Vec<SplinePoint>>> = vec![None; m.paths.len()];
+    let mut path_props = vec![crate::props::Props::new(); m.paths.len()];
     let (mut speedup, mut weapon) = (Vec::new(), Vec::new());
     let (mut speedup_props, mut weapon_props) = (Vec::new(), Vec::new());
     let mut triggers = Vec::new();
@@ -566,6 +575,9 @@ pub(crate) fn read(m: Parsed, bytes: &[u8]) -> Result<Loaded, Error> {
                 why: "the manifest has no such path".into(),
             })?;
             *slot = Some(read_spline(name, node, blob)?);
+            if let Some(props) = extras.as_ref().and_then(|e| e.get("oag_props")) {
+                path_props[i] = crate::props::from_json(name, props)?;
+            }
         } else if let Some(i) = name.strip_prefix(art::PREFIX) {
             let i: usize = i
                 .parse()
@@ -689,6 +701,11 @@ pub(crate) fn read(m: Parsed, bytes: &[u8]) -> Result<Loaded, Error> {
         props: m.props,
         speedup_pad_props: speedup_props,
         weapon_pad_props: weapon_props,
+        path_props: if path_props.iter().all(BTreeMap::is_empty) {
+            Vec::new()
+        } else {
+            path_props
+        },
         triggers,
         art,
         notes,

@@ -144,6 +144,8 @@ fn prepared(sources: &[Source]) -> Prepared {
         props: &props,
         speedup_pads: &[],
         weapon_pads: &[],
+        paths: &[],
+        routes: &[],
     };
     let prepared = prepare(sources, "wipeout-pulse", None, track, None, &mut report);
     assert!(

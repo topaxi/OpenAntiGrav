@@ -1,5 +1,6 @@
 //! Author-defined properties and trigger volumes (`oag_trackfile::props`): a track
-//! carrying them on its pads, on a trigger and on itself writes and reads back equal,
+//! carrying them on its pads, on a trigger, on a spline path and on itself writes and
+//! reads back equal,
 //! and what a mod could not read (a string, two names hashing alike, a list that does
 //! not match its pads) is refused by name.
 
@@ -11,7 +12,7 @@ fn props(pairs: &[(&str, f32)]) -> Props {
 }
 
 /// The fixture with a second speed pad, properties on both, on the weapon pad, on
-/// one trigger and on the track. 0.1 is not dyadic: a decimal detour would move it.
+/// one trigger, on its spline path and on the track. 0.1 is not dyadic: a decimal detour would move it.
 fn with_props() -> Track {
     let mut track = fixture::oval();
     let mut second = track.speedup_pads[0];
@@ -23,6 +24,7 @@ fn with_props() -> Track {
     ];
     track.weapon_pad_props = vec![Props::new()];
     track.props = props(&[("laps", 3.0), ("gravity", 0.1)]);
+    track.path_props = vec![props(&[("pit", 1.0), ("limit", 0.1)]); track.ai.paths.len()];
     track.triggers = vec![Trigger {
         name: "tunnel".into(),
         to_world: second.to_world,
@@ -34,7 +36,7 @@ fn with_props() -> Track {
 }
 
 #[test]
-fn props_on_two_pads_a_trigger_and_the_track_round_trip_exactly() {
+fn props_on_two_pads_a_trigger_a_path_and_the_track_round_trip_exactly() {
     let track = with_props();
     let parts = to_parts(&track, "t.glb").expect("writable");
     assert!(parts.manifest.contains("[props]"), "{}", parts.manifest);
@@ -98,6 +100,13 @@ fn what_a_mod_could_not_read_is_refused_naming_it() {
         to_parts(&short, "t.glb"),
         Err(Error::Props { .. })
     ));
+    let mut paths = with_props();
+    paths.path_props.push(Props::new());
+    let err = to_parts(&paths, "t.glb").unwrap_err();
+    assert!(
+        matches!(&err, Error::Props { what, .. } if what == "spline paths"),
+        "{err}"
+    );
     let mut empty = with_props();
     empty.props.insert(String::new(), 1.0);
     assert!(matches!(

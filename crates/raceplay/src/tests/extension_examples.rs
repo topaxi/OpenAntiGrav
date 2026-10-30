@@ -76,8 +76,16 @@ fn full_grid_fuel(module: &Module) -> Vec<u64> {
         props: &props,
     };
     let mut region = vec![0; oag_ext_abi::track::TRACK_LEN];
-    let used = oag_ext_abi::track::write(&mut region, &props, &[entity; 2], &[entity], &[entity])
-        .expect("within the caps");
+    let used = oag_ext_abi::track::write(
+        &mut region,
+        &props,
+        &[entity; 2],
+        &[entity],
+        &[entity],
+        &[],
+        &[],
+    )
+    .expect("within the caps");
     let mut state = vec![0; module.limits().state_bytes as usize];
     let mut commands = Vec::new();
     (0..3_u64)
@@ -90,6 +98,7 @@ fn full_grid_fuel(module: &Module) -> Vec<u64> {
                 crafts: &crafts,
                 track: &region[..used],
                 speed_pads: 2,
+                routes: 0,
             };
             module
                 .tick(&observation, &mut state, &mut commands)
