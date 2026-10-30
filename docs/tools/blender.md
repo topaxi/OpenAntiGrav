@@ -73,7 +73,7 @@ matches what that generator would write.
 | `max_spacing` | the largest gap between neighbours |
 | Start slot | 154 units back along the ring from point 0, level, facing along the line. The race puts the **lap line** 154 units ahead of the start slot (`oag_race::Course::START_LINE_ADVANCE`), so spline point 0, the curve's first control point, is the lap line |
 | Pad matrix | the Empty's unit basis in rows (lateral, up, forward) and its position; scale is ignored, the size is the box. A trigger's the same |
-| Mod properties | every custom property `mod_<name>` on a pad or trigger Empty, or on the scene, as `<name>` ([track file](../formats/track-file.md#properties-and-triggers-for-simulation-mods)): a number as its `f32`, a bool as 1.0 or 0.0; a string or an array refuses the export naming the object and the key. Import writes them back as `mod_*` properties |
+| Mod properties | every custom property `mod_<name>` on a pad or trigger Empty, a spline object, or the scene, as `<name>` ([track file](../formats/track-file.md#properties-and-triggers-for-simulation-mods)): a number as its `f32`, a bool as 1.0 or 0.0; a string or an array refuses the export naming the object and the key. Import writes them back as `mod_*` properties |
 | Track id | the scene's id, else the scene name slugged |
 | `track.host` | the scene's **Runs on** (`oag_track_host`: `none`, default, or one of the five title slugs): the title whose disc the art's host textures and sky resolve from; export refuses `none` when the art borrows ([ADR-0076](../architecture/adr/0076-a-track-file-carries-its-art-as-an-optional-section.md) decision 13). Import refuses an unknown value |
 | `track.titles` | the scene's **Offered on** (`oag_track_titles`), comma-separated slugs; empty writes no key (every title) |
@@ -279,7 +279,7 @@ that follows the sun; the baked `COLOR_0` and the ships' hull rig keep the pose 
   canonically. The text, not Blender's `float32` particle settings, is the truth.
 - **Make trigger from mesh** (`oag.trigger_from_mesh`) turns each selected mesh's world bounds into
   an `oag/triggers/<mesh name>` Empty (unrotated, box centred on the bounds).
-- `mod_*` custom properties on pad Empties, trigger Empties and the scene export and import as the
+- `mod_*` custom properties on pad Empties, trigger Empties, spline objects and the scene export and import as the
   track format says. Proven headless on 5.2.3: `roundtrip.py props` (properties, trigger, make
   trigger, export, import, re-export equal bar the `.glb` name) and `roundtrip.py effect`
   (import then export gives an equal TOML, a Text edit exports, a broken text is refused); both run

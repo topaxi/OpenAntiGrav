@@ -224,6 +224,7 @@ returns `Err(Refused)` where the host would fault:
 | `set-sun{intensity}` | `SetSun` | `set_sun(intensity)` | outside `[0, 1]` or not finite |
 | `grade-sky{grey}` | `GradeSky` | `grade_sky(grey)` | outside `[0, 1]` or not finite |
 | `give-shield{slot}`, `hold-shield{slot}`, `clear-shield{slot}` | `GiveShield`, `HoldShield`, `ClearShield` | `give_shield(&craft)`, `hold_shield(&craft)`, `clear_shield(&craft)` | a second Shield command for the craft this tick |
+| `prefer-route{slot, route}` | `PreferRoute` | `prefer_route(&craft, route)` | a route at or past the region's route count; a second for the craft this tick |
 
 Every method also refuses a 97th command (`Refused::Full`). The host's checks stay
 the backstop for a guest written without the SDK.
@@ -338,6 +339,22 @@ the backstop for a guest written without the SDK.
   `Race::advance_weather` drives the track module's rain (`Weather::drive`), `Scene`'s lens
   flare placement scales the rings' alpha, and the sky draw writes `Uniforms::sky_grey`.
 - None of the outputs is hashed. The README's "What is built" has the table.
+
+### `prefer-route{slot, route}` (Checkpoint Circuit, 2026-10-30)
+
+- **Lands in** `Extensions` (`crates/raceplay/src/extensions/route.rs`): the slot's route for
+  this tick, cleared at each call, hashed after the no-module early return. `route` is the
+  course's numbering (`Course::routes`, the region's route entities); the host faults a route
+  at or past the count and two for one slot; two modules for one slot, the later in id order
+  wins.
+- **Read by** `Race::steer_branching` (`crates/raceplay/src/routes.rs`), run for every craft
+  a driver flies before it drives (`Ai_ChooseBranch`'s states 0 to 2): the coin is drawn as
+  before on entering the pre-fork path, then where the driver moves onto a route's line
+  (within `SWITCH_SAMPLES` of the split) a held preference replaces the coin's draw, if the
+  route leaves that fork and its speed plan verified. The coin's stream (the driver's seed and
+  visit count) never moves.
+- **One tick, not one fork.** Sent at C, read in phase 6 of the same tick; a guest re-sends it
+  every tick until the switch. A person steering is not moved by it.
 
 ### `message{slot, string-id}` and `publish{key, value}`: outputs, not state
 
