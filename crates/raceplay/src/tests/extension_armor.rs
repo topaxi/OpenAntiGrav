@@ -45,6 +45,8 @@ fn source(id: &str, body: &str) -> Source {
         state_bytes: 32,
         scope: Scope::Rules,
         read: Arc::new(move || Ok(wasm.clone())),
+        strings: Default::default(),
+        icons: Vec::new(),
     }
 }
 
@@ -141,7 +143,7 @@ fn prepared(sources: &[Source]) -> Prepared {
         speedup_pads: &[],
         weapon_pads: &[],
     };
-    let prepared = prepare(sources, "wipeout-pulse", None, track, &mut report);
+    let prepared = prepare(sources, "wipeout-pulse", None, track, None, &mut report);
     assert!(
         report.iter().all(|line| !line.contains("left out")),
         "{report:?}"
