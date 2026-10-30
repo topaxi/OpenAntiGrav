@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-10-30
-summary: "SDK, track module, Hillside rain, track props landed locally; open: Blender props run, check tool, C header, template, git dep, MODDED"
+summary: "SDK, track module, Hillside rain, track props, mod events landed locally; open: check tool, C header, template, git dep, MODDED, gate animation"
 categories: [gameplay]
 size: M (55)
 difficulty: medium (60)
@@ -20,6 +20,20 @@ The wire ABI itself (one I/O buffer, three exports, core wasm, no component mode
 settled by `docs/architecture/wasm-extensions/README.md` section 2 and
 `determinism-and-state.md` ("Web and iOS") and is **not** what this thread changes. The
 problem is that the buffer's bytes are the *only* interface a mod author has.
+
+## Landed since (2026-10-30, lane `ext-mod-events`, local `ext-mod-events` branch)
+
+Mods and tracks send each other events over declared channels: command 23 `emit`, event 10
+`mod` (events are 16 bytes now, ABI 1 edited in place, fold re-recorded), `[channels]` in
+`oag-mod.toml` and `.track.toml`, a trigger's `oag_emit` and an animation's `oag_on` (Blender
+fields, `roundtrip.py channels`), the MODS page's SENDS, HEARS and NO ONE SENDS lines. The README's
+"And events between mods" has the proof and the **Later** note on event urgency levels (next tick
+as built; immediate in the mod, async by a fixed tick delay, lazy latest-per-channel and a priority
+past the cap are notes only). Open: Checkpoint Circuit's gate animation (the example publishes the
+channel; its Blender builder has no animated gate yet), a track file's channel namespace is only
+shape-checked (a mod-shipped track is not required to publish under its mod's id), and `oag_render`'s
+shine pass (`render/src/shine.rs`) samples node motion without the channel clock
+(`Model::sample_anim_nodes`, not the `_started` form).
 
 ## Landed since (2026-10-30, lane `hillside-rain`, local `wasm-extensions` branch)
 

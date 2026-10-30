@@ -55,6 +55,10 @@ fn checkpoint_circuit() -> Option<(race::extensions::Source, std::path::PathBuf)
         effects: Vec::new(),
         files: Arc::new(|_| Err("no files".into())),
         pickup: module.manifest.pickup.clone(),
+        channels: race::extensions::Declared {
+            publishes: module.manifest.channels.publishes.clone(),
+            listens: module.manifest.channels.listens.clone(),
+        },
     };
     Some((source, file))
 }
@@ -216,6 +220,16 @@ fn a_craft_that_reaches_its_checkpoint_in_time_has_its_clock_reset_and_loses_not
         "the gates in lap order, wrapping: {numbers:?}"
     );
     assert!(lowest > 0, "the clock never ran out");
+    // Each gate cleared is announced on the channel the manifest publishes (an undeclared
+    // one would have faulted the module), for a listener or a track animation to hear.
+    assert_eq!(modded.extension_reports()[0].faulted, None);
+    let announced = modded.channel_started(oag_ext_abi::channel_key(
+        "oag.checkpoint-circuit/checkpoint",
+    ));
+    assert!(
+        announced.is_some_and(|s| s > 0.0),
+        "no checkpoint was announced: {announced:?}"
+    );
 }
 
 /// A full field, weapons off, the person's craft flown by this project's driver; each
@@ -420,6 +434,7 @@ fn preferring(slot: Option<u8>) -> race::extensions::Source {
         effects: Vec::new(),
         files: Arc::new(|_| Err("no files".into())),
         pickup: None,
+        channels: race::extensions::Declared::default(),
     }
 }
 

@@ -13,6 +13,7 @@ Coordinates here are the format's: right-handed, Y up. The Blender side
 import json
 import math
 import os
+import re
 import struct
 import tomllib
 
@@ -85,6 +86,15 @@ def check_props(what, props):
         seen[h] = key
 
 
+CHANNEL = re.compile(r"^[a-z0-9._-]+/[a-z0-9_-]+$")
+
+
+def check_channel(what, name):
+    """`<mod id>/<name>`: the id of lowercase letters, digits, `.`, `-`, `_`, the name without the `.`."""
+    if len(name) > 64 or not CHANNEL.match(name):
+        raise TrackFileError(f"{what}: {name!r} is not a channel name (write `<mod id>/<name>`)")
+
+
 def _check_all(track):
     check_props("props", track.props)
     for i, path in enumerate(track.paths):
@@ -96,6 +106,18 @@ def _check_all(track):
         raise TrackFileError(f"{len(track.triggers)} triggers, a mod reads at most {MAX_TRIGGERS}")
     for t in track.triggers:
         check_props(f"trigger {t.name}", t.props)
+        if t.emits is not None:
+            check_channel(f"trigger {t.name} oag_emit", t.emits)
+            if t.emits not in track.channels:
+                raise TrackFileError(
+                    f"trigger {t.name}: oag_emit {t.emits!r} is not in the track's channels (publishes)"
+                )
+    for name in track.channels:
+        check_channel("channels publishes", name)
+    if track.art is not None:
+        for a in track.art.animations:
+            if a.on is not None:
+                check_channel(f"animation {a.name!r} oag_on", a.on)
     total = len(track.props) + sum(
         len(p.props) for p in (*track.speedup_pads, *track.weapon_pads, *track.triggers, *track.paths)
     )
@@ -297,6 +319,8 @@ def write_glb(track):
             "_OAG_MAX": b.floats([q.max for q in t], "VEC3"),
         }
         extras = {"oag_names": [q.name for q in t]}
+        if any(q.emits for q in t):
+            extras["oag_emits"] = [q.emits or "" for q in t]
         if any(q.props for q in t):
             extras["oag_props"] = [_props_json(q.props) for q in t]
         push(TRIGGERS, [{"attributes": attrs, "mode": POINTS}], extras)
@@ -439,6 +463,8 @@ def write_manifest(track, glb_name):
         lines.append(f"art_meshes = {len(track.art.meshes)}")
     if track.triggers:
         lines.append(f"triggers = {len(track.triggers)}")
+    if track.channels:
+        lines += ["", "[channels]", "publishes = [" + ", ".join(_quote(n) for n in track.channels) + "]"]
     if track.props:
         lines += ["", "[props]"]
         lines += [f"{_key(k)} = {float(track.props[k])!r}" for k in sorted(track.props)]
@@ -598,7 +624,14 @@ def _read_triggers(g, node):
     if len(names) != len(matrix):
         raise TrackFileError(f"{TRIGGERS}: {len(names)} names for {len(matrix)} triggers")
     props = _read_props(node, TRIGGERS, len(matrix))
-    return [Trigger(names[i], matrix[i], lo[i], hi[i], props[i]) for i in range(len(matrix))]
+    emits = (node.get("extras") or {}).get("oag_emits", [])
+    if emits and len(emits) != len(matrix):
+        raise TrackFileError(f"{TRIGGERS}: {len(emits)} oag_emits for {len(matrix)} triggers")
+    emits = list(emits) + [""] * (len(matrix) - len(emits))
+    return [
+        Trigger(names[i], matrix[i], lo[i], hi[i], props[i], emits[i] or None)
+        for i in range(len(matrix))
+    ]
 
 
 def _read_collision(g, node, kind, extras):
@@ -725,4 +758,5 @@ def read(manifest_path):
         track_art,
         {k: prop_value("props", k, v) for k, v in (m.get("props") or {}).items()},
         triggers,
+        list((m.get("channels") or {}).get("publishes", [])),
     )

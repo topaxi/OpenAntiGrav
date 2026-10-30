@@ -36,7 +36,7 @@ oag-hud = { workspace = true, optional = true }
 oag-input = { workspace = true, optional = true }
 oag-livery = { workspace = true, optional = true }
 oag-mesh = { workspace = true, optional = true }
-oag-ext-abi = { workspace = true, optional = true }
+oag-ext-abi.workspace = true
 oag-modhost = { workspace = true, optional = true }
 oag-physics.workspace = true
 oag-pob.workspace = true
@@ -107,7 +107,7 @@ ballisticng = ["dep:oag-ballisticng", "dep:oag-unity"]
 # Simulation mods: WebAssembly modules called once per tick through `oag-modhost`
 # (wasmtime). Off by default; off, nothing of wasmtime is compiled or linked and a
 # race offered a module says it was left out. See `crate::extensions`.
-extensions = ["dep:oag-modhost", "dep:oag-ext-abi"]
+extensions = ["dep:oag-modhost"]
 # See `oag-render`'s feature of the same name. Off by default.
 perf-probe = ["view", "oag-render/perf-probe"]
 

@@ -240,6 +240,8 @@ rotation, scale, in the Dope Sheet or with `keyframe_insert`); the export does t
 | The scene's `frame_start` | time zero of the race clock; frame `f` is `(f - frame_start) / fps` seconds, `fps = render.fps / render.fps_base` |
 | The object's `oag_anim` (default its name) | the glTF animation it belongs to: an object's material slots, and objects sharing a name, share one |
 | *Motion* (`oag_loop`: `loop`, `clamp`) | the animation's `oag_loop` extra |
+| *Start on* (`oag_on`, a channel `<mod id>/<name>`) | the animation's `oag_on` extra: it holds its first key until the channel fires ([track-file.md](../formats/track-file.md#channels-events-between-a-track-and-mods)). Objects sharing an `oag_anim` name must agree |
+| a trigger Empty's *Emit* (`oag_emit`) | the glb's `oag_emits` entry: the channel a craft entering it sends; the scene's *Channels published* (`oag_track_channels`, comma-separated) is the manifest's `[channels] publishes` and must name it |
 | The sun lamp's rotation over time | an `oag/sun` node with the rest rotation and a rotation channel; `[art.sun] direction` is the direction at `frame_start`, turned in the race by the rotation from rest |
 
 **Sampled, not copied (chosen).** The exporter evaluates every whole frame from `frame_start` to
@@ -284,6 +286,15 @@ that follows the sun; the baked `COLOR_0` and the ships' hull rig keep the pose 
   trigger, export, import, re-export equal bar the `.glb` name) and `roundtrip.py effect`
   (import then export gives an equal TOML, a Text edit exports, a broken text is refused); both run
   in `just blender-fixtures`. Nothing in the track-props code needed a fix.
+- **Event channels (2026-10-30):** a trigger Empty's **Emit**, an object's **Start on** and the scene's
+  **Channels published** (table above). `roundtrip.py channels` proves, on 5.2.3, that they survive export,
+  import and a re-export (equal bar the `.glb` name), that a trigger naming a channel the track does not
+  publish and a malformed name are refused by name, and writes `channels.track.toml`: the motion loop with
+  its airship starting on a gate across the road past the start (raced headless; the wasm-extensions
+  README's "And events between mods" has the screenshots). The committed fixtures are byte-neutral: the output of
+  `loop` and `motion` equals what the unchanged add-on writes. (`just blender-fixtures` already stops at its
+  `effect` step on 5.2.3 before this lane, an `assert` on the effect TOML's duration; the other steps are
+  run by hand in the lane's report.)
 
 ## Import, and baked records
 

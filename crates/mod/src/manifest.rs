@@ -89,7 +89,25 @@ pub struct Manifest {
     /// `[pickup]`: the look of the mod's own pickup, required of a simulation mod that
     /// hands one out.
     pub pickup: Option<PickupLook>,
+    /// `[channels]`: the event channels the mod's modules publish and listen to.
+    pub channels: Channels,
 }
+
+/// `[channels]` (`docs/architecture/wasm-extensions/hooks.md`, "Events between mods"):
+/// namespaced names, `<mod id>/<name>`. A module may `emit` only on a channel in
+/// `publishes`, which lies in the mod's own namespace; `listens` is what the mod hears,
+/// from any mod or track. Listening to a channel no loaded mod or track publishes is
+/// warned about on the mods page, never refused: the publisher may simply be off.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Channels {
+    /// Channels the mod sends on.
+    pub publishes: Vec<String>,
+    /// Channels the mod hears.
+    pub listens: Vec<String>,
+}
+
+/// Most channels one mod publishes, or one listens to. Chosen.
+pub const MAX_CHANNELS: usize = 32;
 
 /// `[extension]` (`docs/architecture/wasm-extensions/README.md`, section 1.1). Read
 /// here; the `.wasm` it names is opened only by the race that runs it.
@@ -138,6 +156,7 @@ struct File {
     #[serde(rename = "mod")]
     module: Table,
     extension: Option<ExtensionTable>,
+    channels: Option<ChannelsTable>,
     #[serde(default)]
     icons: std::collections::BTreeMap<String, String>,
     #[serde(default)]
@@ -228,6 +247,15 @@ fn pickup(
         }
     };
     Ok(PickupLook { icon, colour })
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ChannelsTable {
+    #[serde(default)]
+    publishes: Vec<String>,
+    #[serde(default)]
+    listens: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -350,6 +378,15 @@ impl Manifest {
                 ),
             ));
         }
+        if oag_ext_abi::channel_key(&t.id) == oag_ext_abi::TRACK_SENDER {
+            return Err(bad(
+                "id",
+                format!(
+                    "{:?} hashes to the track's sender key; rename the mod",
+                    t.id
+                ),
+            ));
+        }
         if t.name.trim().is_empty() {
             return Err(bad("name", "empty"));
         }
@@ -388,6 +425,7 @@ impl Manifest {
                     .map_err(|e| bad("oag", format!("{req:?} is not a version requirement: {e}")))
             })
             .transpose()?;
+        let channels = channels(file.channels, &t.id)?;
         Ok(Self {
             id: t.id,
             name: t.name,
@@ -404,6 +442,7 @@ impl Manifest {
             icons: file.icons,
             effects: file.effects,
             pickup,
+            channels,
         })
     }
 
@@ -412,6 +451,62 @@ impl Manifest {
     pub fn works_with(&self, game: &semver::Version) -> bool {
         self.oag.as_ref().is_none_or(|req| req.matches(game))
     }
+}
+
+/// The `[channels]` table, each name checked by `oag_ext_abi::check_channel`; a published
+/// one must lie in the mod's own namespace, and none may repeat or hash like another.
+fn channels(table: Option<ChannelsTable>, id: &str) -> Result<Channels, Error> {
+    let Some(table) = table else {
+        return Ok(Channels::default());
+    };
+    for (key, list) in [
+        ("channels.publishes", &table.publishes),
+        ("channels.listens", &table.listens),
+    ] {
+        if list.len() > MAX_CHANNELS {
+            return Err(bad(
+                key,
+                format!("{} channels, at most {MAX_CHANNELS}", list.len()),
+            ));
+        }
+        for (i, name) in list.iter().enumerate() {
+            oag_ext_abi::check_channel(name).map_err(|why| {
+                bad(
+                    key,
+                    format!("{name:?} is not a channel name ({why}); write `<mod id>/<name>`"),
+                )
+            })?;
+            if list[..i].iter().any(|seen| seen == name) {
+                return Err(bad(key, format!("{name:?} is listed twice")));
+            }
+            let hash = oag_ext_abi::channel_key(name);
+            if let Some(other) = list[..i]
+                .iter()
+                .find(|seen| oag_ext_abi::channel_key(seen) == hash)
+            {
+                return Err(bad(
+                    key,
+                    format!("{name:?} and {other:?} hash alike; rename one"),
+                ));
+            }
+        }
+    }
+    if let Some(name) = table
+        .publishes
+        .iter()
+        .find(|name| oag_ext_abi::namespace(name) != id)
+    {
+        return Err(bad(
+            "channels.publishes",
+            format!(
+                "{name:?} is not in this mod's namespace; a channel it publishes starts `{id}/`"
+            ),
+        ));
+    }
+    Ok(Channels {
+        publishes: table.publishes,
+        listens: table.listens,
+    })
 }
 
 fn extension(e: ExtensionTable, has: &dyn Fn(&str) -> bool) -> Result<Extension, Error> {

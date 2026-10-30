@@ -43,6 +43,10 @@ pub fn sources<'a>(mods: impl IntoIterator<Item = &'a oag_mod::Mod>) -> Vec<Sour
                     .collect(),
                 files: files_reader(m),
                 pickup: m.manifest.pickup.clone(),
+                channels: oag_raceplay::extensions::Declared {
+                    publishes: m.manifest.channels.publishes.clone(),
+                    listens: m.manifest.channels.listens.clone(),
+                },
             };
             let rules = extension
                 .rules

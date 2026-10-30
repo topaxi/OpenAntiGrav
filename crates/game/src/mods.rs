@@ -76,6 +76,11 @@ pub struct Listing {
     /// value): the mod a campaign needs that is off or missing, or a campaign file that
     /// did not compile ([`note_left_out`]). The log has the whole reason.
     pub problems: Vec<(String, String)>,
+    /// The channels its modules and its track files send, and the ones it hears
+    /// (`[channels]`; the track files' own `publishes` count as sent).
+    pub publishes: Vec<String>,
+    /// See [`Self::publishes`].
+    pub listens: Vec<String>,
 }
 
 /// The string id and English text of each label and word the MODS page draws.
@@ -116,6 +121,12 @@ pub mod words {
     pub const NEEDS_OFF: (&str, &str) = ("OAG_MODS_NEEDS_OFF", "%s, OFF");
     /// After the needed mod's id: no such mod is installed.
     pub const NEEDS_MISSING: (&str, &str) = ("OAG_MODS_NEEDS_MISSING", "%s, MISSING");
+    /// The detail line naming the event channels a mod sends.
+    pub const SENDS: (&str, &str) = ("OAG_MODS_SENDS", "SENDS");
+    /// The detail line naming the event channels a mod hears.
+    pub const HEARS: (&str, &str) = ("OAG_MODS_HEARS", "HEARS");
+    /// The warning line naming a channel a mod hears that no loaded mod or track sends.
+    pub const NO_ONE_SENDS: (&str, &str) = ("OAG_MODS_NO_ONE_SENDS", "NO ONE SENDS");
     /// The page RACE CAMPAIGN opens once a mod adds a campaign (ADR-0077).
     pub const CAMPAIGN_PICKER: (&str, &str) = ("OAG_MENU_CAMPAIGN_PICKER", "CAMPAIGNS");
     /// The built-in mod's mark after its name.
@@ -196,6 +207,27 @@ pub fn note_left_out(
         {
             let name = file.rsplit('/').next().unwrap_or(file).to_string();
             entry.problems.push((say(words::LEFT_OUT), name));
+        }
+    }
+}
+
+/// Puts a NO ONE SENDS line on each mod that is on and hears a channel no mod that is on
+/// (or track file of one) sends. A warning, never a refusal: the sender may simply be off.
+pub fn note_channels(listing: &mut [Listing], strings: &StringTable) {
+    let say = |(id, english): (&str, &str)| strings.get_or_fallback(id, english).to_string();
+    let on = |entry: &Listing| entry.error.is_none() && entry.enabled != Some(false);
+    let sent: BTreeSet<String> = (listing.iter())
+        .filter(|entry| on(entry))
+        .flat_map(|entry| entry.publishes.iter().cloned())
+        .collect();
+    for entry in listing.iter_mut().filter(|entry| on(entry)) {
+        for channel in entry.listens.clone() {
+            if !sent.contains(&channel) {
+                let line = (say(words::NO_ONE_SENDS), channel);
+                if !entry.problems.contains(&line) {
+                    entry.problems.push(line);
+                }
+            }
         }
     }
 }
@@ -281,6 +313,14 @@ impl Listing {
             enabled: Some(enabled || builtin),
             error,
             problems: Vec::new(),
+            publishes: m
+                .channels
+                .publishes
+                .iter()
+                .cloned()
+                .chain(module.track_channels())
+                .collect(),
+            listens: m.channels.listens.clone(),
         }
     }
 
@@ -296,6 +336,8 @@ impl Listing {
             enabled: None,
             error: Some(failed.cause().to_string()),
             problems: Vec::new(),
+            publishes: Vec::new(),
+            listens: Vec::new(),
         }
     }
 
@@ -343,19 +385,34 @@ impl Listing {
             (say(words::LICENSE), fit(&license)),
             (say(words::ADDS), fit(&adds)),
         ];
+        for (word, channels) in [
+            (words::SENDS, &self.publishes),
+            (words::HEARS, &self.listens),
+        ] {
+            if self.enabled != Some(false) && !channels.is_empty() {
+                lines.push((say(word), fit(&channels.join(", "))));
+            }
+        }
         lines.extend((self.problems.iter()).map(|(label, value)| (label.clone(), fit(value))));
         lines
     }
 
     /// [`Self::table`] cut to `room` lines: the ones a player can do least with go
-    /// first (AUTHORS, then VERSION, then LICENSE), the rest keep their order. A
+    /// first (AUTHORS, then VERSION, then LICENSE, then SENDS and HEARS, so a warning line
+    /// such as NO ONE SENDS outlasts the channels it is about), the rest keep their order. A
     /// flat-list front end (Pulse) has room for four under the MODS page's rows, HD
     /// for all.
     #[must_use]
     pub fn table_within(&self, strings: &StringTable, room: usize) -> Vec<(String, String)> {
         let say = |(id, english): (&str, &str)| strings.get_or_fallback(id, english).to_string();
         let mut lines = self.table(strings);
-        for least in [words::AUTHORS, words::VERSION, words::LICENSE] {
+        for least in [
+            words::AUTHORS,
+            words::VERSION,
+            words::LICENSE,
+            words::SENDS,
+            words::HEARS,
+        ] {
             if lines.len() <= room {
                 break;
             }
@@ -522,6 +579,7 @@ impl Mods {
                     built
                         .listing
                         .extend(self.failed.iter().map(Listing::failed));
+                    note_channels(&mut built.listing, &built.strings);
                     return Ok(built);
                 }
                 Err(error) => self.leave_out(&error, &mut left_out, &mut problems, &mut listed)?,
@@ -590,6 +648,7 @@ impl Mods {
                     built
                         .listing
                         .extend(self.failed.iter().map(Listing::failed));
+                    note_channels(&mut built.listing, &built.strings);
                     return Ok(built);
                 }
                 Err(error) => self.leave_out(&error, &mut left_out, &mut problems, &mut listed)?,

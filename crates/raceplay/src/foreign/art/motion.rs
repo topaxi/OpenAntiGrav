@@ -20,6 +20,7 @@ fn keyed(art: &Art, target: Target, rest: Trs) -> Option<Keyed> {
         translation_keys: None,
         rotation_keys: None,
         scale_keys: None,
+        on: None,
     };
     let mut any = false;
     for anim in &art.animations {
@@ -27,6 +28,9 @@ fn keyed(art: &Art, target: Target, rest: Trs) -> Option<Keyed> {
         let clamp = anim.repeat == Repeat::Clamp;
         for ch in anim.channels.iter().filter(|c| c.target == target) {
             any = true;
+            if let Some(channel) = &anim.on {
+                out.on = Some(oag_ext_abi::channel_key(channel));
+            }
             let step = ch.interpolation == Interpolation::Step;
             let times = ch.times.clone();
             match &ch.keys {

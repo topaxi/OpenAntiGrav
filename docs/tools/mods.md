@@ -165,6 +165,29 @@ below OPTIONS with the pad or pointer. `--menu-page mods` draws the page headles
 profile's switches, and `--menu-page mods:<mod id>` puts the MOD row on that mod. `just mods-list`
 (`oag-mod`) does not read the game's settings and lists every mod it finds.
 
+## Event channels: `[channels]`
+
+A mod's modules and a track's triggers send each other events over named channels
+([hooks.md](../architecture/wasm-extensions/hooks.md#events-between-mods-emit-and-mod)):
+
+```toml
+[channels]
+publishes = ["oag.checkpoint-circuit/checkpoint"]   # what its modules may `emit` on
+listens = ["oag.other/open"]                        # what it hears (for the MODS page)
+```
+
+Names are `<mod id>/<name>` (lowercase letters, digits, `-`, `_`; the id may also carry `.`; at
+most 64 bytes). A published name starts with this mod's own id; a malformed, repeated or foreign
+one, or more than 32 of a list, refuses the mod at load naming the key
+(`channels.publishes`, `channels.listens`). A mod whose id hashes to the track's sender key (0) is
+refused too. `schemas/v1/mod.tosd` has the table. A module's `emit` on a channel its mod does not
+publish, or more than 4 `emit`s a tick, faults it for the race, naming the rule.
+
+The MODS page shows a **SENDS** line (the mod's published channels and those of its track files'
+`[channels] publishes`) and a **HEARS** line, and a **NO ONE SENDS** line naming each channel the mod
+listens to that no mod that is on (or track file of one) sends. A warning, never a refusal: the
+sender may simply be turned off. Turned-off mods show neither line.
+
 ## Simulation modules: `[extension]`
 
 A mod may carry one WebAssembly rules module that runs in every race it is on for

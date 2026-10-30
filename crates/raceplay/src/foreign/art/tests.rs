@@ -324,11 +324,13 @@ fn moving() -> Art {
         Animation {
             name: "slide".into(),
             repeat: Repeat::Clamp,
+            on: None,
             channels: vec![slide(0), slide(1)],
         },
         Animation {
             name: "sun".into(),
             repeat: Repeat::Loop,
+            on: None,
             channels: vec![Channel {
                 target: Target::Sun,
                 interpolation: Interpolation::Linear,
@@ -362,6 +364,48 @@ fn a_moving_mesh_rides_a_node_slot_on_the_animation_clock() {
     assert!(
         report.iter().any(|l| l.contains("2 mesh(es) on 1 node(s)")),
         "{report:?}"
+    );
+}
+
+/// An animation with an `oag_on` channel holds its first key until the channel fires
+/// and then plays from the moment it did, on the same clock: a node no channel starts
+/// still reads the clock itself.
+#[test]
+fn an_animation_that_starts_on_a_channel_holds_until_it_fires_then_plays_from_there() {
+    let mut art = moving();
+    art.animations[0].on = Some("test.track/open".into());
+    let mut report = Vec::new();
+    let m = model("t", &art, vec![texel("t.png")], &mut report);
+    let channel = oag_ext_abi::channel_key("test.track/open");
+    let z = |seconds: f32, fired: Option<f32>| {
+        let started = move |c: u32| (c == channel).then_some(fired).flatten();
+        let matrices = m.sample_anim_nodes_started(seconds, &started);
+        vex::transform_point(&matrices[0], m.vertices[0].position)[2]
+    };
+    assert_eq!(
+        z(5.0, None),
+        0.0,
+        "unfired: the first key, whatever the clock"
+    );
+    assert_eq!(
+        z(9.0, Some(10.0)),
+        0.0,
+        "a clock before the fire holds the first key"
+    );
+    assert_eq!(z(10.0, Some(10.0)), 0.0);
+    assert_eq!(z(11.0, Some(10.0)), 20.0, "one second in");
+    assert_eq!(
+        z(30.0, Some(10.0)),
+        40.0,
+        "a clamped animation holds its last key"
+    );
+    let plain = model("t", &moving(), vec![texel("t.png")], &mut Vec::new());
+    let unstarted = |c: u32| (c == channel).then_some(10.0);
+    let at = plain.sample_anim_nodes_started(1.0, &unstarted);
+    assert_eq!(
+        vex::transform_point(&at[0], plain.vertices[0].position)[2],
+        20.0,
+        "no oag_on: the clock itself"
     );
 }
 

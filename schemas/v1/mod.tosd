@@ -120,6 +120,27 @@ type = "string"
 type = "types.extension"
 optional = true
 
+# `[channels]`: the event channels the mod's modules publish and listen to
+# (docs/architecture/wasm-extensions/hooks.md, "Events between mods"). Each is a
+# namespaced name, `<mod id>/<name>`; a published one starts with this mod's own id.
+# The loader checks the shape, the namespace, repeats and hash collisions.
+[types.channels]
+type = "table"
+
+[types.channels.publishes]
+type = "array"
+itemtype = "string"
+optional = true
+
+[types.channels.listens]
+type = "array"
+itemtype = "string"
+optional = true
+
+[elements.channels]
+type = "types.channels"
+optional = true
+
 # `[icons]`: name = "path.png". The keys are the author's, so the schema says "any"; the
 # loader checks that every icon is a .png in the mod and every name is letters, digits,
 # '-', '_'. A mod's text is its `strings/<language>.toml`, not the manifest.

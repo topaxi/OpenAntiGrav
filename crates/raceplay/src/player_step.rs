@@ -213,7 +213,9 @@ impl Race {
         // and this one returns nothing, because a pickup is an event rather than
         // a per-tick force.
         self.test_weapon_pads(slot, before, moved, &sweep);
-        self.sim.extensions.test_triggers(slot, &sweep);
+        self.sim
+            .extensions
+            .test_triggers(slot, &sweep, self.sim.world.tick);
         // The mode's rules, read before the craft is borrowed: `World::mode`
         // asks the whole world and the borrow checker will not have both.
         let env_damage_rules = self.sim.damage_rules();

@@ -50,6 +50,7 @@ fn source(id: &str, body: &str) -> Source {
         effects: Vec::new(),
         files: Arc::new(|_| Err("no files".into())),
         pickup: Some(crate::extension_pickup::a_look()),
+        channels: crate::extensions::Declared::default(),
     }
 }
 
@@ -73,11 +74,11 @@ fn armour(points: f32) -> Source {
          (block $done (loop $next
            (br_if $done (i32.ge_u (local.get $i) (i32.load (i32.const {count}))))
            (if (i32.and
-                 (i32.eq (i32.load8_u (i32.add (i32.const {EVENTS}) (i32.mul (local.get $i) (i32.const 8)))) (i32.const 9))
-                 (i32.eq (i32.load8_u (i32.add (i32.const {EVENTS_SLOT}) (i32.mul (local.get $i) (i32.const 8)))) (i32.const 1)))
+                 (i32.eq (i32.load8_u (i32.add (i32.const {EVENTS}) (i32.mul (local.get $i) (i32.const {EVENT_LEN})))) (i32.const 9))
+                 (i32.eq (i32.load8_u (i32.add (i32.const {EVENTS_SLOT}) (i32.mul (local.get $i) (i32.const {EVENT_LEN})))) (i32.const 1)))
              (then
                (i32.store (i32.const {HITS}) (i32.add (i32.load (i32.const {HITS})) (i32.const 1)))
-               (f32.store (i32.const {LAST}) (f32.load (i32.add (i32.const {EVENTS_VALUE}) (i32.mul (local.get $i) (i32.const 8)))))
+               (f32.store (i32.const {LAST}) (f32.load (i32.add (i32.const {EVENTS_VALUE}) (i32.mul (local.get $i) (i32.const {EVENT_LEN})))))
                (i32.store (i32.const {HIT_TICK}) (i32.load (i32.const {TICK})))
                (if (i32.eq (i32.load (i32.const {PHASE})) (i32.const 1))
                  (then
@@ -102,6 +103,7 @@ fn armour(points: f32) -> Source {
                         (i32.ne (i32.and (i32.load8_u (i32.const {FLAGS})) (i32.const {SHIELDED})) (i32.const 0))))
            (then {hold}))
          i32.const 0",
+        EVENT_LEN = oag_ext_abi::EVENT_LEN,
         count = IO + oag_ext_abi::EVENT_COUNT_AT as i32,
         EVENTS_SLOT = EVENTS + oag_ext_abi::EVENT_SLOT as i32,
         EVENTS_VALUE = EVENTS + oag_ext_abi::EVENT_VALUE as i32,

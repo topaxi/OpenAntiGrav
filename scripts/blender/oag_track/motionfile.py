@@ -99,7 +99,12 @@ def write(b, art, nodes, mesh_nodes, push):
             samplers.append({"input": inp, "output": out_acc, "interpolation": ch.interpolation})
             channels.append({"sampler": len(samplers) - 1, "target": {"node": node, "path": ch.path}})
         out.append(
-            {"name": anim.name, "channels": channels, "samplers": samplers, "extras": {"oag_loop": anim.repeat}}
+            {
+                "name": anim.name,
+                "channels": channels,
+                "samplers": samplers,
+                "extras": {"oag_loop": anim.repeat, **({"oag_on": anim.on} if anim.on else {})},
+            }
         )
     return out
 
@@ -138,5 +143,8 @@ def read(g, target_of):
             times = g.accessor(s["input"], FLOAT, "SCALAR")
             values = g.accessor(s["output"], FLOAT, "VEC4" if path == "rotation" else "VEC3")
             channels.append(Channel(target, path, list(times), list(values), interp))
-        out.append(Animation(anim.get("name", ""), channels, repeat))
+        on = (anim.get("extras") or {}).get("oag_on")
+        if on is not None and not isinstance(on, str):
+            raise MotionError(f"animation {a}: oag_on {on!r} is not a channel name")
+        out.append(Animation(anim.get("name", ""), channels, repeat, on or None))
     return out

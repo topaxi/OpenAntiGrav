@@ -154,17 +154,19 @@ def anim_name(obj):
 
 
 def build(groups):
-    """Animations from [(name, repeat, [Channel])] in first-seen order, merged by name."""
+    """Animations from [(name, repeat, [Channel], on)] in first-seen order, merged by name."""
     out, by_name = [], {}
-    for name, repeat, chans in groups:
+    for name, repeat, chans, on in groups:
         if not chans:
             continue
         anim = by_name.get(name)
         if anim is None:
-            anim = by_name[name] = Animation(name, [], repeat)
+            anim = by_name[name] = Animation(name, [], repeat, on)
             out.append(anim)
         elif anim.repeat != repeat:
             raise ValueError(f"animation {name!r}: objects disagree on oag_loop")
+        elif anim.on != on:
+            raise ValueError(f"animation {name!r}: objects disagree on oag_on")
         anim.channels += chans
     return out
 
@@ -214,6 +216,7 @@ def apply(context, art, objs, sun_obj):
                 continue
             o["oag_anim"] = anim.name
             o.oag_loop = anim.repeat
+            o.oag_on = anim.on or ""
             o.rotation_mode = "QUATERNION"
             prop = {"translation": "location", "rotation": "rotation_quaternion", "scale": "scale"}[ch.path]
             for t, v in zip(ch.times, ch.values):

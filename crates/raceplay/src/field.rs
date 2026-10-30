@@ -826,7 +826,9 @@ impl Race {
             let (moved, sweep) = self.pad_sweep(slot, position);
             let pad_hit = self.test_speedup_pads(slot, position, moved, &sweep);
             self.test_weapon_pads(slot, position, moved, &sweep);
-            self.sim.extensions.test_triggers(slot, &sweep);
+            self.sim
+                .extensions
+                .test_triggers(slot, &sweep, self.sim.world.tick);
             self.spend_opponent_pickup(slot, &controls, &field);
 
             // The driver just located itself, and the line is index-parallel to

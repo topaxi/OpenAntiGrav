@@ -18,7 +18,7 @@
 //! | [`ACTIVE_AT`] | 4 | active mask, one bit per slot holding a craft |
 //! | [`EVENT_COUNT_AT`] | 4 | event count |
 //! | [`STATE_LEN_AT`] | 4 | state length |
-//! | [`EVENTS_AT`] | [`EVENT_LEN`] x [`MAX_EVENTS`] | events ([`Event`]): kind `u8`, slot `u8`, index `u16`, 4 bytes zero |
+//! | [`EVENTS_AT`] | [`EVENT_LEN`] x [`MAX_EVENTS`] | events ([`Event`]): kind `u8`, slot `u8`, index `u16`, value `f32`, then for a `mod` event the channel key `u32` and the sender key `u32` (zero in the others) |
 //! | [`STATE_AT`] | [`MAX_STATE_BYTES`] | the module's state blob, in and out |
 //! | [`REPLY_AT`] | 4 | command count, written by the guest |
 //! | [`REPLY_AT`] + 4 | [`COMMAND_LEN`] x [`MAX_COMMANDS`] | commands ([`Command`]): kind `u8`, slot `u8`, `u16` argument, `f32`, `u32` |
@@ -38,12 +38,15 @@
 #![no_std]
 #![forbid(unsafe_code)]
 
-use core::fmt;
-
+pub use channel::{
+    BadChannel, MAX_CHANNEL_LEN, MAX_EMITS_PER_TICK, MAX_MOD_EVENTS, TRACK_SENDER, channel_key,
+    check_channel, namespace,
+};
 use hud::pool_string;
 pub use hud::{
     Anchor, HudElement, HudPlace, HudStr, MAX_HUD_EXTRA, MAX_HUD_ITEMS, MAX_HUD_SHAKE, MAX_HUD_TEXT,
 };
+pub use malformed::Malformed;
 pub use pickup::{Colour, Icon, ModIcon};
 
 /// The ABI major. A manifest's `[extension] api` names it.
@@ -97,7 +100,7 @@ pub const STATE_LEN_AT: usize = 28;
 /// Where the events start.
 pub const EVENTS_AT: usize = 32;
 /// One event record.
-pub const EVENT_LEN: usize = 8;
+pub const EVENT_LEN: usize = 16;
 /// Where the state blob starts.
 pub const STATE_AT: usize = EVENTS_AT + EVENT_LEN * MAX_EVENTS;
 /// Where the guest writes its reply: the count, then the records.
@@ -146,6 +149,11 @@ pub const CRAFT_SHIELD_MAX: usize = 8;
 pub const CRAFT_SPEED: usize = 12;
 /// Within an event record: the `f32` of an event that carries an amount (`hit`).
 pub const EVENT_VALUE: usize = 4;
+/// Offset of a `mod` event's channel key, a `u32` ([`channel_key`]).
+pub const EVENT_CHANNEL: usize = 8;
+/// Offset of a `mod` event's sender, a `u32`: the key of the sending mod's id, or
+/// [`TRACK_SENDER`].
+pub const EVENT_FROM: usize = 12;
 
 /// Craft flag: a person flies the slot.
 pub const CRAFT_PERSON: u8 = 1;
@@ -173,6 +181,7 @@ const EVENT_WEAPON_PAD: u8 = 6;
 const EVENT_TRIGGER_ENTER: u8 = 7;
 const EVENT_TRIGGER_EXIT: u8 = 8;
 const EVENT_HIT: u8 = 9;
+const EVENT_MOD: u8 = 10;
 /// Command kind codes.
 const COMMAND_SCALE_THRUST: u8 = 1;
 const COMMAND_SHIELD_DELTA: u8 = 2;
@@ -193,6 +202,7 @@ const COMMAND_HUD_TEXT: u8 = 19;
 const COMMAND_HUD_ICON: u8 = 20;
 const COMMAND_PREFER_ROUTE: u8 = 21;
 const COMMAND_PICKUP_LOOK: u8 = 22;
+const COMMAND_EMIT: u8 = 23;
 /// Bit 15 of a `hud-text`, `hud-icon` or `fire-effect` argument: the string or effect is
 /// the sending mod's own, not the title's. The pool offset or effect index is the rest.
 const OWN_FLAG: u16 = 1 << 15;
@@ -530,6 +540,18 @@ pub enum Event {
         /// The weapon that hit first.
         weapon: Weapon,
     },
+    /// A mod's `emit`, or a trigger's `oag_emit`, sent on the tick before: delivered to
+    /// every module, whoever sent it, whether or not it listens to the channel.
+    Mod {
+        /// The craft the sender named; for a trigger, the craft that entered it.
+        slot: Slot,
+        /// The key of the sending mod's id (`channel_key` of it), or [`TRACK_SENDER`].
+        from: u32,
+        /// The channel ([`channel_key`]).
+        channel: u32,
+        /// What the sender attached.
+        value: f32,
+    },
 }
 
 impl Event {
@@ -544,7 +566,8 @@ impl Event {
             | Self::WeaponPad { slot, .. }
             | Self::TriggerEnter { slot, .. }
             | Self::TriggerExit { slot, .. }
-            | Self::Hit { slot, .. } => slot,
+            | Self::Hit { slot, .. }
+            | Self::Mod { slot, .. } => slot,
         }
     }
 
@@ -560,6 +583,7 @@ impl Event {
             Self::TriggerEnter { trigger, .. } => (EVENT_TRIGGER_ENTER, trigger),
             Self::TriggerExit { trigger, .. } => (EVENT_TRIGGER_EXIT, trigger),
             Self::Hit { weapon, .. } => (EVENT_HIT, weapon.code() as u16),
+            Self::Mod { .. } => (EVENT_MOD, 0),
         };
         let mut record = [0; EVENT_LEN];
         record[EVENT_KIND] = kind;
@@ -567,8 +591,19 @@ impl Event {
         let [lo, hi] = index.to_le_bytes();
         record[EVENT_INDEX] = lo;
         record[EVENT_INDEX + 1] = hi;
-        if let Self::Hit { amount, .. } = self {
-            put_u32(&mut record, EVENT_VALUE, amount.to_bits());
+        match self {
+            Self::Hit { amount, .. } => put_u32(&mut record, EVENT_VALUE, amount.to_bits()),
+            Self::Mod {
+                from,
+                channel,
+                value,
+                ..
+            } => {
+                put_u32(&mut record, EVENT_VALUE, value.to_bits());
+                put_u32(&mut record, EVENT_CHANNEL, channel);
+                put_u32(&mut record, EVENT_FROM, from);
+            }
+            _ => {}
         }
         record
     }
@@ -597,6 +632,12 @@ impl Event {
                 slot,
                 amount: f32::from_bits(get_u32(record, EVENT_VALUE)),
                 weapon: u8::try_from(index).ok().and_then(Weapon::from_code)?,
+            },
+            EVENT_MOD => Self::Mod {
+                slot,
+                from: get_u32(record, EVENT_FROM),
+                channel: get_u32(record, EVENT_CHANNEL),
+                value: f32::from_bits(get_u32(record, EVENT_VALUE)),
             },
             _ => return None,
         })
@@ -818,6 +859,19 @@ pub enum Command {
         /// The route, below the region's route count.
         route: u16,
     },
+    /// Send `value` on `channel` about the slot: every module receives a `mod` event for
+    /// it on the next tick, the track's and the mods' together, in an order that does not
+    /// depend on which module sent. The channel must be one the sending mod publishes
+    /// (`oag-mod.toml` `[channels]`), at most [`MAX_EMITS_PER_TICK`] a module a tick;
+    /// either rule broken faults the module. The queue is race state: hashed.
+    Emit {
+        /// The craft it is about.
+        slot: Slot,
+        /// The channel ([`channel_key`]).
+        channel: u32,
+        /// What to attach, finite.
+        value: f32,
+    },
 }
 
 impl Command {
@@ -842,7 +896,8 @@ impl Command {
             | Self::GiveShield { slot }
             | Self::HoldShield { slot }
             | Self::ClearShield { slot }
-            | Self::PreferRoute { slot, .. } => Some(slot),
+            | Self::PreferRoute { slot, .. }
+            | Self::Emit { slot, .. } => Some(slot),
             Self::PickupRoll { .. }
             | Self::ScalePad { .. }
             | Self::SetWeather { .. }
@@ -931,6 +986,7 @@ impl Command {
             Self::HoldShield { .. } => (COMMAND_HOLD_SHIELD, 0, 0, 0),
             Self::ClearShield { .. } => (COMMAND_CLEAR_SHIELD, 0, 0, 0),
             Self::PreferRoute { route, .. } => (COMMAND_PREFER_ROUTE, route, 0, 0),
+            Self::Emit { channel, value, .. } => (COMMAND_EMIT, 0, value.to_bits(), channel),
         };
         let mut record = [0; COMMAND_LEN];
         record[COMMAND_KIND] = kind;
@@ -1145,167 +1201,20 @@ impl Command {
             COMMAND_HOLD_SHIELD => Self::HoldShield { slot },
             COMMAND_CLEAR_SHIELD => Self::ClearShield { slot },
             COMMAND_PREFER_ROUTE => Self::PreferRoute { slot, route: arg },
+            COMMAND_EMIT => {
+                if !value.is_finite() {
+                    return Err(Malformed::EmitValue { slot, value });
+                }
+                Self::Emit {
+                    slot,
+                    channel: word,
+                    value,
+                }
+            }
             other => return Err(Malformed::Kind(other)),
         })
     }
 }
-
-/// A reply record that breaks a rule of its own. The host faults the module; it never
-/// clamps.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Malformed {
-    /// More commands than [`MAX_COMMANDS`].
-    TooMany(u32),
-    /// A kind code this revision does not know.
-    Kind(u8),
-    /// A slot with no record.
-    Slot(u8),
-    /// A `scale-thrust` factor outside `[0, MAX_THRUST_FACTOR]`, or not a number.
-    Factor {
-        /// The slot.
-        slot: Slot,
-        /// The factor sent.
-        factor: f32,
-    },
-    /// A `scale-pad` factor outside `[0, MAX_PAD_FACTOR]` (NaN included), or a
-    /// race-wide one with a slot other than 0.
-    PadFactor {
-        /// The slot byte.
-        slot: u8,
-        /// The factor sent.
-        factor: f32,
-    },
-    /// A `shield-delta` that is not finite.
-    Amount {
-        /// The slot.
-        slot: Slot,
-        /// The amount sent.
-        amount: f32,
-    },
-    /// A `play-cue` code outside [`Cue::ALL`].
-    Cue(u16),
-    /// A `fire-effect` code outside [`Effect::ALL`].
-    Effect(u16),
-    /// A `pickup-roll` with a slot other than 0, an unknown weapon, or a period
-    /// outside `1..=MAX_ROLL_EVERY`.
-    Roll {
-        /// The slot byte.
-        slot: u8,
-        /// The weapon code.
-        weapon: u16,
-        /// The period.
-        every: u32,
-    },
-    /// A race-wide `set-weather`, `set-sun` or `grade-sky` with a slot other than 0, or a
-    /// value outside `[0, 1]` (NaN included).
-    Unit {
-        /// The command kind code.
-        kind: u8,
-        /// The slot byte.
-        slot: u8,
-        /// The value sent.
-        value: f32,
-    },
-    /// A `set-weather` kind code outside [`WeatherKind::ALL`].
-    Weather(u16),
-    /// A `hud-*` element code outside [`HudElement::ALL`].
-    HudElement(u16),
-    /// A `hud-shake` amplitude or `hud-bar-extra` share out of range, or not a number.
-    HudValue {
-        /// The command kind code.
-        kind: u8,
-        /// The value sent.
-        value: f32,
-    },
-    /// A `hud-text` or `hud-icon` anchor or scale out of range.
-    HudPlace,
-    /// A `hud-tint` of the pickup element: a mod's pickup is coloured by `pickup-look`.
-    PickupTint,
-    /// A `pickup-look` naming no weapon, as its icon (`arg`) or its backdrop colour
-    /// (`value`).
-    PickupLook {
-        /// The record's argument.
-        arg: u16,
-        /// The record's value.
-        value: u32,
-    },
-    /// A `hud-text` or `hud-icon` whose pool offset holds no whole string of at most
-    /// [`MAX_HUD_TEXT`] bytes of UTF-8.
-    Pool(u16),
-}
-
-impl fmt::Display for Malformed {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match *self {
-            Self::TooMany(count) => write!(f, "{count} commands, the most is {MAX_COMMANDS}"),
-            Self::Kind(kind) => write!(f, "unknown command kind {kind}"),
-            Self::Slot(slot) => write!(f, "slot {slot} is not a grid slot"),
-            Self::Factor { slot, factor } => write!(
-                f,
-                "scale-thrust factor {factor} for slot {} is not in [0, {MAX_THRUST_FACTOR}]",
-                slot.0
-            ),
-            Self::PadFactor { slot, factor } => write!(
-                f,
-                "scale-pad factor {factor} (slot byte {slot}) is not in [0, {MAX_PAD_FACTOR}], or a race-wide one names a slot"
-            ),
-            Self::Amount { slot, amount } => {
-                write!(f, "shield-delta {amount} for slot {} is not finite", slot.0)
-            }
-            Self::Cue(code) => write!(f, "play-cue code {code} is not one of {}", Cue::ALL.len()),
-            Self::Effect(code) => write!(
-                f,
-                "fire-effect code {code} is not one of {}",
-                Effect::ALL.len()
-            ),
-            Self::Unit { kind, slot, value } => write!(
-                f,
-                "race-wide command {kind} slot {slot} value {value}: slot 0 and a value in [0, 1]"
-            ),
-            Self::Weather(code) => write!(
-                f,
-                "set-weather kind {code} is not one of {}",
-                WeatherKind::ALL.len()
-            ),
-            Self::HudElement(code) => write!(
-                f,
-                "hud element {code} is not one of {}",
-                HudElement::ALL.len()
-            ),
-            Self::HudValue { kind, value } => write!(
-                f,
-                "hud command {kind} value {value}: hud-shake in [0, {MAX_HUD_SHAKE}], hud-bar-extra in (0, {MAX_HUD_EXTRA}]"
-            ),
-            Self::PickupTint => write!(
-                f,
-                "hud-tint no longer reaches the pickup: use pickup-look to give a mod pickup its colour"
-            ),
-            Self::PickupLook { arg, value } => write!(
-                f,
-                "pickup-look icon argument {arg} and colour value {value}: each a weapon in 1..={} (or an own icon, or an rgba)",
-                Weapon::ALL.len()
-            ),
-            Self::HudPlace => write!(
-                f,
-                "hud placement: an anchor of the nine and a scale of 1..=15 quarters"
-            ),
-            Self::Pool(at) => write!(
-                f,
-                "hud string at pool offset {at} is not whole UTF-8 of at most {MAX_HUD_TEXT} bytes"
-            ),
-            Self::Roll {
-                slot,
-                weapon,
-                every,
-            } => write!(
-                f,
-                "pickup-roll slot {slot} weapon {weapon} every {every}: slot 0, a weapon in 1..={}, every in 1..={MAX_ROLL_EVERY}",
-                Weapon::ALL.len()
-            ),
-        }
-    }
-}
-
 /// Writes one tick's observation into a whole buffer, the state blob included. Events
 /// past [`MAX_EVENTS`] and crafts past [`MAX_CRAFTS`] are left out.
 pub fn write_observation(
@@ -1450,7 +1359,9 @@ fn get_u32(buffer: &[u8], at: usize) -> u32 {
     }
 }
 
+mod channel;
 pub mod hud;
+mod malformed;
 mod pickup;
 pub mod track;
 

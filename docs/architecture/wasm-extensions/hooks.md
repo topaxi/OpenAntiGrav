@@ -226,6 +226,7 @@ returns `Err(Refused)` where the host would fault:
 | `grade-sky{grey}` | `GradeSky` | `grade_sky(grey)` | outside `[0, 1]` or not finite |
 | `give-shield{slot}`, `hold-shield{slot}`, `clear-shield{slot}` | `GiveShield`, `HoldShield`, `ClearShield` | `give_shield(&craft)`, `hold_shield(&craft)`, `clear_shield(&craft)` | a second Shield command for the craft this tick |
 | `prefer-route{slot, route}` | `PreferRoute` | `prefer_route(&craft, route)` | a route at or past the region's route count; a second for the craft this tick |
+| `emit{slot, channel, value}` (23) | `Emit` | `emit(&craft, channel!("<mod id>/<name>"), value)` | a non-finite value (`Refused::Range`); a fifth in one tick (`Refused::Emits`; the host faults the module); a channel the sending mod's `[channels] publishes` does not name (the host faults it) |
 
 ### `pickup-look{slot, icon, colour}`
 
@@ -376,6 +377,40 @@ the backstop for a guest written without the SDK.
   visit count) never moves.
 - **One tick, not one fork.** Sent at C, read in phase 6 of the same tick; a guest re-sends it
   every tick until the switch. A person steering is not moved by it.
+
+### Events between mods: `emit` and `mod`
+
+- **Command** `emit{slot, channel, value}` (23, `Command::Emit`; record: `slot` byte, `value` at 4,
+  the channel key at 8). `channel` is `channel_key("<mod id>/<name>")`, the FNV-1a 32 hash a property's
+  name has (SDK `channel!`). The slot must hold a craft, like any slot-bearing command.
+- **Event** `mod{slot, from, channel, value}` (kind 10, `Event::Mod`): `from` is `channel_key` of the
+  sending mod's id, or `TRACK_SENDER` (0) when a track's trigger sent it. Events grew to **16 bytes**
+  for it: kind `u8`, slot `u8`, index `u16`, `value` `f32` at 4, channel `u32` at 8, sender `u32` at 12
+  (zero in every other kind).
+- **Lands in** `Extensions` (`crates/raceplay/src/extensions/channel.rs`, `on.rs`): the queue
+  `mail`, filled by the modules' emits (applied after every module has run, so each saw the same
+  observation) and by `Extensions::test_triggers` for a trigger that sends a channel. At the
+  **next** call it is taken, **sorted** by channel, slot, sender and value, held to
+  `MAX_MOD_EVENTS` (16) and written **ahead of** the engine's own events, so a crowd of wall contacts
+  cannot push one out of `MAX_EVENTS`. Every module hears every `mod` event, whoever sent it: the
+  order modules run in (id order) changes nothing any of them sees. Module ids still differ in
+  `from`, so a pair of mods that swap ids hear different senders, not different events.
+- **Hashed.** The queue is race state, sorted and written in `On::hash_into` with the modules'
+  state, so it is in the hash from the end of the tick that raised it (before any module has seen
+  it); `a_race_with_no_module_hashes_as_before` and `the_queue_is_in_the_hash_before_anyone_has_heard_it`
+  (`tests/extension_channels.rs`) hold both ends. The beacons' inside masks are hashed when a module
+  runs and never otherwise.
+- **Faults, each by name.** The module's mod must publish the channel (`oag-mod.toml` `[channels]`:
+  `emit on channel 0x..., which its oag-mod.toml [channels] publishes does not name (it publishes
+  [...])`), and a module may send at most `MAX_EMITS_PER_TICK` = **4** a tick (`emit past the cap
+  of 4 a tick`). The four within the cap are delivered; the module is off for the rest of the race.
+  Caps are **chosen, not measured**: 4 a module a tick, 16 events a tick.
+- **A track needs no module.** `Beacons` (always built, with or without the `extensions` feature)
+  tests the track's emitting triggers against every craft's sweep each tick, notes when each channel
+  last fired (`Extensions::fired`, an output, never hashed) and, when a module runs, queues a
+  `mod` event from `TRACK_SENDER` (value `1.0`). `Race::channel_started(channel)` turns that tick
+  into the scenery's clock for the view's `oag_on` animations (`Keyed::on`,
+  `Model::sample_anim_nodes_started`): render only, collision never moves.
 
 ### `message{slot, string-id}` and `publish{key, value}`: outputs, not state
 

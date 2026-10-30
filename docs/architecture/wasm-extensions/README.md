@@ -375,7 +375,7 @@ census of those titles' Shield tables was taken for this change.
 ### And Checkpoint Circuit (2026-10-30)
 
 The fourth example, `oag.checkpoint-circuit` (`assets/mods/examples/checkpoint-circuit/`, a
-track module of 9,046 bytes on `oag-ext`, and its own track file built by
+track module of 9,303 bytes on `oag-ext`, and its own track file built by
 `checkpoint_circuit.py` in Blender): the example of triggers, track properties, HUD text from a
 mod's own strings, and the AI route hook. Each craft has **20 s** to its next checkpoint gate
 (`oag/triggers/checkpoint <n>`, `mod_checkpoint = n`, 1 to 4 in lap order); reaching it resets
@@ -397,7 +397,7 @@ player's physics. What it added, each with the vanilla fold unchanged:
 | --- | --- | --- |
 | Path properties | track file | `mod_*` on a Blender spline object, written as the glb spline node's `oag_props` extra (one object); `oag_trackfile::Track::path_props`, one list per path or none. A file without any writes nothing new |
 | Paths and routes in the region | observation | Entity kinds 5 (`Path`) and 6 (`Route`) after the triggers; their counts at `PATHS_AT` (6) and `ROUTES_AT` (8), so the entities start at 12. A path's box bounds its points, a route's its samples (world space, the identity placement). A route carries the properties of the paths it drives, the first path's value kept where two set one name, so a guest finds the pit lane's route by `route(r).prop(prop!("pit"))`. SDK: `Track::paths()`, `routes()`, `path(i)`, `route(i)` |
-| `prefer-route{slot, route}` | command (21) | Re-sent each tick it should hold; `route` below the region's route count (the course's numbering, `Course::routes`), one per slot per tick, else a fault. Held in `Extensions` for the tick and **hashed** after the no-module early return. SDK: `Reply::prefer_route(&craft, route)`. Code 22 is `pickup-look`, 23 stays free |
+| `prefer-route{slot, route}` | command (21) | Re-sent each tick it should hold; `route` below the region's route count (the course's numbering, `Course::routes`), one per slot per tick, else a fault. Held in `Extensions` for the tick and **hashed** after the no-module early return. SDK: `Reply::prefer_route(&craft, route)`. Code 22 is `pickup-look`, 23 is `emit` ([below](#and-events-between-mods-2026-10-30)) |
 
 **Where it lands.** `Race::steer_branching` (`crates/raceplay/src/routes.rs`), `Ai_ChooseBranch`'s
 states 0 to 2: the coin is thrown exactly as before on entering the pre-fork path
@@ -431,6 +431,62 @@ file, the committed module):
 
 Fuel (`tests::extension_examples`, a full grid): 14,443 on the loud tick, 10,499 after.
 
+
+### And events between mods (2026-10-30)
+
+Mods, and tracks authored in Blender, send each other events over declared channels. ABI 1 was
+edited in place (no revision bump; the layout fold re-recorded in its own commit, every example
+module rebuilt), so **events are 16 bytes now** and every module built before it still loads (the revision
+stays 3) and **misreads every event**: rebuild against the engine you run.
+
+| Piece | Kind | What it is |
+| --- | --- | --- |
+| `emit{slot, channel, value}` | command (23) | `channel!("<mod id>/<name>")`, the compile-time FNV-1a 32 hash a property's name has. The mod must publish the channel and a module may send **4** a tick, else a fault by name. SDK: `Reply::emit`, `Refused::Emits` |
+| `mod{slot, from, channel, value}` | event (10) | Every module hears it on the **next** tick, sorted, ahead of the engine's events; the queue is **hashed**. `from` is the sender mod id's key, or `TRACK_SENDER` |
+| a trigger's `oag_emit` | track file | A craft entering it sends the channel, no module needed; any module hears it from `TRACK_SENDER` |
+| an animation's `oag_on` | track file | The art animation holds its first key until the channel fires, then plays from there. Render only |
+| `[channels] publishes, listens` | `oag-mod.toml` | Namespaced names, refused by name when malformed or foreign; the MODS page shows SENDS, HEARS and **NO ONE SENDS** |
+| `[channels] publishes` | `.track.toml` | What its triggers may send |
+
+The caps (**4** a module a tick, **16** `mod` events a tick) are **chosen, not measured**.
+[hooks.md](hooks.md#events-between-mods-emit-and-mod) has where it lands.
+
+**Proof.** `tests/extension_channels.rs` (hand-written guests): an emit on tick 3 reaches the
+listener with slot, value, sender and channel intact on tick 4 and once only; the result is the same
+with the emitter before or after the listener (swapped mod ids); two emitters' events arrive in
+channel-key order whichever sent first; a race that differs from another only in a queued value
+hashes differently at the end of the emitting tick (dropping `hash_mail` fails it); a race with no
+module hashes as the same race without the feature, tick for tick; a fifth emit and an undeclared
+channel each fault the module naming the rule, with the four delivered or none queued; a trigger
+reaches a listening module from `TRACK_SENDER` and, with no module, still raises its channel
+(`Race::channel_started`) and leaves every hash as it was. `oag-ext`'s own pair of guests
+(`Race::hear`) proves the SDK end. The render side's clock
+(`foreign::art::tests`, `an_animation_that_starts_on_a_channel_holds_until_it_fires_then_plays_from_there`)
+holds the first key before the channel fires and plays from it after, a node no channel starts keeps
+reading the world clock, and `write_node_anims_started` writes a channel-driven model every frame
+(a table that depends on more than the clock). Checkpoint Circuit announces each gate on
+`oag.checkpoint-circuit/checkpoint` (`checkpoint_circuit_ground_truth`: never faulted, the channel
+fired). **Screenshots** (headless, `--race --track-file channels.track.toml --autopilot --camera-pose` at a
+fixed camera; the track is `roundtrip.py channels`'s: the motion loop with its airship starting on a
+gate's channel, the gate a 120 by 120 by 80 box over spline point 8, clear of the grid). The first
+craft crosses it at tick 623 and the field by 732. The airship's own keys run a 3.2 s loop, so a
+frame is only evidence of the hold if it would differ were the animation free: at tick 200 with
+`--anim-seconds 0` **and** `--anim-seconds 1.6` the airship sits at its first key, far left, in
+both (identical frames), while the same track with `oag_on` renamed to a key the reader ignores
+(same bytes) has it already gone from that spot at 1.6. At tick 600, before anyone crossed on
+the natural clock, it is at its first key; at tick 700, 77 ticks after the first craft crossed, it
+has flown on towards the right and turned (its dark gondola side to the camera). A forced
+`--anim-seconds` below the fire time freezes a channel-started animation again: its clock is the
+time since the channel fired, clamped at zero.
+
+**Later: event urgency levels (a note, not built).** Today every event is delivered on the next
+tick, which is what keeps the result independent of module order. A later revision might name
+levels per channel: *next tick* (the default, as built), *immediate in the mod* (a module's own
+event seen at once in the same call; it needs no host), *async* (only a fixed delay in ticks, never
+a wall-clock one), *lazy* (only the latest value per channel and slot is kept, for a gauge that
+need not queue) and a *priority* that decides what is dropped past the cap, in place of today's
+sort order. Each stays deterministic by the same rule: delivery order and drops are a function of
+the queued events alone, never of which module ran first.
 
 ## Keeping the mod author skill current
 

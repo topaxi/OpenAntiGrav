@@ -1,9 +1,9 @@
 //! The reply: one typed method per command, refusing what the host would fault on.
 
 use oag_ext_abi::{
-    Colour, Command, Cue, Effect, HudElement, HudPlace, HudStr, Icon, MAX_COMMANDS, MAX_HUD_EXTRA,
-    MAX_HUD_ITEMS, MAX_HUD_SHAKE, MAX_PAD_FACTOR, MAX_THRUST_FACTOR, POOL_AT, POOL_LEN, Pickup,
-    REPLY_AT, Rgba, Sections, Weapon, WeatherKind,
+    Colour, Command, Cue, Effect, HudElement, HudPlace, HudStr, Icon, MAX_COMMANDS,
+    MAX_EMITS_PER_TICK, MAX_HUD_EXTRA, MAX_HUD_ITEMS, MAX_HUD_SHAKE, MAX_PAD_FACTOR,
+    MAX_THRUST_FACTOR, POOL_AT, POOL_LEN, Pickup, REPLY_AT, Rgba, Sections, Weapon, WeatherKind,
 };
 
 use crate::Craft;
@@ -30,6 +30,9 @@ pub enum Refused {
     Pickup,
     /// `hud_tint` of the pickup element: a mod pickup's colour is `pickup_look`'s.
     PickupTint,
+    /// More than `MAX_EMITS_PER_TICK` `emit`s this tick: the host faults the module on the
+    /// next one.
+    Emits,
 }
 
 /// This tick's commands. The count is written when the tick returns.
@@ -47,6 +50,7 @@ pub struct Reply<'a> {
     route_cmd: u32,
     pool_used: usize,
     items: [u8; oag_ext_abi::MAX_CRAFTS],
+    emits: usize,
 }
 
 impl<'a> Reply<'a> {
@@ -64,6 +68,7 @@ impl<'a> Reply<'a> {
             route_cmd: 0,
             pool_used: 0,
             items: [0; oag_ext_abi::MAX_CRAFTS],
+            emits: 0,
         }
     }
 
@@ -274,6 +279,31 @@ impl<'a> Reply<'a> {
             route,
         })?;
         self.route_cmd |= bit;
+        Ok(())
+    }
+
+    /// `emit`: send `value` on `channel` ([`channel!`](crate::channel)) about the craft.
+    /// Every module, this one included, receives an [`Event::Mod`](crate::Event::Mod) for
+    /// it on the next tick. The channel must be one the mod's `oag-mod.toml` publishes
+    /// (the host faults the module for an undeclared one, which the SDK cannot see), at
+    /// most [`MAX_EMITS_PER_TICK`] a tick.
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`], [`Refused::Emits`], [`Refused::Range`] for a non-finite value.
+    pub fn emit(&mut self, craft: &Craft<'_>, channel: u32, value: f32) -> Result<(), Refused> {
+        if !value.is_finite() {
+            return Err(Refused::Range);
+        }
+        if self.emits >= MAX_EMITS_PER_TICK {
+            return Err(Refused::Emits);
+        }
+        self.push(&Command::Emit {
+            slot: craft.slot(),
+            channel,
+            value,
+        })?;
+        self.emits += 1;
         Ok(())
     }
 

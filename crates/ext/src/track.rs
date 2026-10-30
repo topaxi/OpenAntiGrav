@@ -145,3 +145,16 @@ macro_rules! prop {
         KEY
     }};
 }
+
+/// A channel's key, hashed at compile time: `channel!("oag.my-mod/boost")` is the key of
+/// the channel `oag.my-mod/boost` (`<mod id>/<name>`), for [`Reply::emit`](crate::Reply::emit)
+/// and for matching an [`Event::Mod`](crate::Event::Mod)'s `channel`. A `mod` event's
+/// `from` is the same hash of the sender's mod id (`channel!("oag.my-mod")`), or
+/// [`TRACK_SENDER`](crate::TRACK_SENDER) for a track's trigger.
+#[macro_export]
+macro_rules! channel {
+    ($name:literal) => {{
+        const KEY: u32 = $crate::channel_key($name);
+        KEY
+    }};
+}

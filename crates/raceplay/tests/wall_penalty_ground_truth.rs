@@ -77,6 +77,10 @@ fn wall_penalty() -> Option<race::extensions::Source> {
         effects: Vec::new(),
         files: Arc::new(|_| Err("no files".into())),
         pickup: module.manifest.pickup.clone(),
+        channels: race::extensions::Declared {
+            publishes: module.manifest.channels.publishes.clone(),
+            listens: module.manifest.channels.listens.clone(),
+        },
     })
 }
 

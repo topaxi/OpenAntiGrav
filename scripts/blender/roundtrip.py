@@ -4,6 +4,7 @@
     blender -b --factory-startup --python-exit-code 1 --python roundtrip.py -- motion <out-dir>
     blender -b --factory-startup --python-exit-code 1 --python roundtrip.py -- reexport <in.track.toml> <out-dir>
     blender -b --factory-startup --python-exit-code 1 --python roundtrip.py -- line <out-dir>
+    blender -b --factory-startup --python-exit-code 1 --python roundtrip.py -- channels <out-dir>
 
 `loop` builds a track from scratch (8 control points, floor, walls, start, one pad
 of each kind, and art: a canopy over the line textured with a generated checker,
@@ -17,6 +18,10 @@ written here, byte for byte: never disc pixels. `reexport` imports a track
 file with the add-on's importer and exports it again as `<stem>.reexport.track.toml`.
 `line` writes no fixture: it asserts the racing-line paths (computed by default, off by
 switch, the operator's editable curve, a nudged point, the import round trip).
+`channels` writes no committed fixture (its `channels.track.toml` has a gate over spline point 8, well
+clear of the grid, and the airship starting on the gate's channel, for a headless
+screenshot pair): it asserts a trigger's `oag_emit`, an animation's
+`oag_on` and the track's published channels through export, import and a re-export.
 The add-on is registered from this directory, never installed: nothing is written
 to the Blender user directory.
 """
@@ -216,7 +221,8 @@ def add_motion(ctx):
     scene.frame_set(1)
 
 
-def build_loop(out_dir, motion=False):
+def author_loop(out_dir, motion=False):
+    """The loop (with motion, if asked) authored in the open scene, not yet exported."""
     fresh()
     ctx = bpy.context
     obj = make_loop(ctx)
@@ -236,6 +242,11 @@ def build_loop(out_dir, motion=False):
     ctx.scene.oag_draw_collision = True
     if motion:
         add_motion(ctx)
+    return ctx
+
+
+def build_loop(out_dir, motion=False):
+    author_loop(out_dir, motion)
     export(os.path.join(out_dir, "blender_motion.track.toml" if motion else "blender_loop.track.toml"))
 
 
@@ -369,11 +380,15 @@ def effect_checks(src, out_dir):
     # Edited in the Text Editor, then exported again.
     block = bpy.data.texts[cube[effectfile.PROP]]
     block.clear()
-    block.write(effectfile.dumps(want).replace("duration = 3", "duration = 5"))
+    old = want["emitter"][0]["duration"]
+    new = old + 2
+    text = effectfile.dumps(want)
+    assert f"duration = {old}" in text, "the first emitter's duration is in the text"
+    block.write(text.replace(f"duration = {old}", f"duration = {new}", 1))
     assert bpy.ops.oag.export_effect(filepath=out) == {"FINISHED"}
     with open(out, "rb") as f:
         edited = tomllib.load(f)
-    assert edited["emitter"][0]["duration"] == 5
+    assert edited["emitter"][0]["duration"] == new
     # A broken one is refused and writes nothing.
     block.clear()
     block.write("not toml [")
@@ -437,6 +452,62 @@ def props_checks(out_dir):
     print("track props: pad, spline and scene mod_*, trigger Empty, make-trigger-from-mesh, export, import, re-export: ok")
 
 
+def channel_checks(out_dir):
+    """Event channels: a trigger Empty's `oag_emit`, an animation's `oag_on` and the track's
+    published channels survive export, import and a re-export; a trigger naming a channel the
+    track does not publish, and a malformed name, are refused by name."""
+    ctx = author_loop(out_dir, motion=True)
+    channel = "test.gate/open"
+    bpy.data.objects["airship"].oag_on = channel
+    # A gate over spline point 8 (about 500 units on, well clear of the grid): a box 120 wide
+    # either way and 80 tall, so a craft driving the road passes through it.
+    ahead = scene.to_blender(scene.collect(ctx).paths[0].points[8].pos)
+    # The airship flies its loop above the gate (its keys fly 400 units about x = 0, y = 500, z = 60).
+    airship = bpy.data.objects["airship"]
+    airship.delta_location = (ahead[0], ahead[1] - 500.0, ahead[2] + 25.0 - 60.0)
+    bpy.ops.mesh.primitive_cube_add(size=2.0, location=ahead)
+    box = ctx.active_object
+    box.name = "gate"
+    box.scale = (60.0, 60.0, 40.0)
+    for o in ctx.scene.objects:
+        o.select_set(False)
+    box.select_set(True)
+    assert bpy.ops.oag.trigger_from_mesh() == {"FINISHED"}
+    trigger = bpy.data.objects["oag/triggers/gate"]
+    trigger.oag_emit = channel
+    path = os.path.join(out_dir, "channels.track.toml")
+    try:
+        scene.write_track(ctx, path)
+    except trackfile.TrackFileError as e:
+        assert channel in str(e) and "publishes" in str(e), str(e)
+    else:
+        raise AssertionError("a trigger naming an unpublished channel was written")
+    ctx.scene.oag_track_channels = channel
+    track = scene.write_track(ctx, path)
+    assert [t.emits for t in track.triggers] == [channel] and track.channels == [channel]
+    assert [a.on for a in track.art.animations] == [channel, None], [a.on for a in track.art.animations]
+    again = trackfile.read(path)
+    assert [t.emits for t in again.triggers] == [channel] and again.channels == [channel]
+    assert [a.on for a in again.art.animations] == [channel, None]
+    fresh()
+    scene.populate(bpy.context, again, out_dir)
+    assert bpy.data.objects["oag/triggers/gate"].oag_emit == channel
+    assert any(o.oag_on == channel for o in bpy.data.objects), "no imported object starts on the channel"
+    assert bpy.context.scene.oag_track_channels == channel
+    path2 = os.path.join(out_dir, "channels.reexport.track.toml")
+    scene.write_track(bpy.context, path2)
+    same = open(path).read() == open(path2).read().replace("channels.reexport.glb", "channels.glb")
+    assert same, "the re-export differs from the export"
+    bpy.data.objects["oag/triggers/gate"].oag_emit = "gate"
+    try:
+        scene.write_track(bpy.context, path2)
+    except trackfile.TrackFileError as e:
+        assert "'gate'" in str(e) and "<mod id>/<name>" in str(e), str(e)
+    else:
+        raise AssertionError("a malformed channel name was written")
+    print("event channels: trigger oag_emit, animation oag_on, track publishes, export, import, re-export: ok")
+
+
 def main():
     args = sys.argv[sys.argv.index("--") + 1 :]
     if args[:1] == ["loop"]:
@@ -449,6 +520,8 @@ def main():
         effect_checks(args[1], args[2])
     elif args[:1] == ["props"]:
         props_checks(args[1])
+    elif args[:1] == ["channels"]:
+        channel_checks(args[1])
     elif args[:1] == ["reexport"]:
         reexport(args[1], args[2])
     else:

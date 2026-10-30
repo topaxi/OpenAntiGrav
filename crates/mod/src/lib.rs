@@ -25,8 +25,8 @@ pub mod pack;
 pub use container::{Container, Origin};
 pub use discover::{EXAMPLES, Failed, Found, Loaded, SEARCH_ENV, load, mods_search_path, search};
 pub use manifest::{
-    Error as ManifestError, Extension, License, MANIFEST, Manifest, Rules, SCHEMA_KIND,
-    SCHEMA_MAJOR, Track,
+    Channels, Error as ManifestError, Extension, License, MANIFEST, MAX_CHANNELS, Manifest, Rules,
+    SCHEMA_KIND, SCHEMA_MAJOR, Track,
 };
 
 /// Why a mod could not be opened or read.
@@ -150,6 +150,36 @@ impl Mod {
     #[must_use]
     pub fn names(&self) -> Vec<String> {
         self.container.names()
+    }
+
+    /// The event channels the mod's track files publish (`[channels] publishes` of each
+    /// `*.track.toml`), in file order: what a listener in another mod hears from a track
+    /// without a module. A file that does not read or parse publishes nothing here; loading
+    /// the track says why.
+    #[must_use]
+    pub fn track_channels(&self) -> Vec<String> {
+        #[derive(serde::Deserialize)]
+        struct Table {
+            #[serde(default)]
+            publishes: Vec<String>,
+        }
+        #[derive(serde::Deserialize)]
+        struct File {
+            channels: Option<Table>,
+        }
+        let mut out = Vec::new();
+        for name in self.names().iter().filter(|n| n.ends_with(".track.toml")) {
+            let Ok(Some(text)) = self.read_text(name) else {
+                continue;
+            };
+            if let Ok(File {
+                channels: Some(table),
+            }) = toml::from_str::<File>(&text)
+            {
+                out.extend(table.publishes);
+            }
+        }
+        out
     }
 
     /// The mod's menu file, `menu.toml`, when it has one.

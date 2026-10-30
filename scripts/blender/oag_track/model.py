@@ -80,6 +80,8 @@ class Trigger:
     min: tuple
     max: tuple
     props: dict = field(default_factory=dict)
+    # The channel a craft entering it sends (`oag_emit`), `<id>/<name>`; None sends nothing.
+    emits: str = None
 
 
 @dataclass
@@ -123,6 +125,8 @@ class Track:
     # The track's own properties for a simulation mod (`[props]`), and its triggers.
     props: dict = field(default_factory=dict)
     triggers: list = field(default_factory=list)
+    # The channels the track publishes (`[channels] publishes`): a trigger's `oag_emit` names one.
+    channels: list = field(default_factory=list)
 
 
 # The art section (ADR-0076): what the renderer draws and the simulation never reads.
@@ -175,6 +179,8 @@ class Animation:
     name: str
     channels: list = field(default_factory=list)
     repeat: str = "loop"
+    # The channel that starts it (`oag_on`); None plays from the clock's zero.
+    on: str = None
 
 
 @dataclass

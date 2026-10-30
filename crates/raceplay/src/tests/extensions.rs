@@ -9,7 +9,7 @@ use super::*;
 use oag_gameplay::PlayerInputs;
 
 /// The fixture grid, with an engine on slot 1 so the race has something to scale.
-fn grid(extensions: crate::extensions::Prepared) -> Race {
+pub(super) fn grid(extensions: crate::extensions::Prepared) -> Race {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
     setup.extensions = extensions;
@@ -27,7 +27,7 @@ fn grid(extensions: crate::extensions::Prepared) -> Race {
 }
 
 /// Every tick's state hash over `ticks` ticks, folded into one, and the hashes.
-fn run(mut race: Race, ticks: u32) -> (Race, Vec<u64>) {
+pub(super) fn run(mut race: Race, ticks: u32) -> (Race, Vec<u64>) {
     let hashes = (0..ticks)
         .map(|_| {
             race.tick(&PlayerInputs::none());
@@ -97,6 +97,7 @@ mod on {
             effects: Vec::new(),
             files: Arc::new(|_| Err("no files".into())),
             pickup: Some(crate::extension_pickup::a_look()),
+            channels: crate::extensions::Declared::default(),
         }
     }
 
@@ -198,7 +199,7 @@ mod on {
                 "(local $i i32) (local $kind i32)
                  (block $done (loop $next
                    (br_if $done (i32.ge_u (local.get $i) (i32.load (i32.const {count}))))
-                   (local.set $kind (i32.load8_u (i32.add (i32.const {EVENTS}) (i32.mul (local.get $i) (i32.const 8)))))
+                   (local.set $kind (i32.load8_u (i32.add (i32.const {EVENTS}) (i32.mul (local.get $i) (i32.const {EVENT_LEN})))))
                    (if (i32.eq (local.get $kind) (i32.const 2))
                      (then (i32.store (i32.const {STATE}) (i32.add (i32.load (i32.const {STATE})) (i32.const 1)))))
                    (if (i32.eq (local.get $kind) (i32.const 3))
@@ -212,6 +213,7 @@ mod on {
                      (i32.store8 (i32.const {cmd}) (i32.const 3))
                      (i32.store8 (i32.const {slot}) (i32.const 0))))
                  i32.const 0",
+                EVENT_LEN = oag_ext_abi::EVENT_LEN,
                 count = 1024 + 24,
                 s4 = STATE + 4,
                 cmd = REPLY + 4,
@@ -1024,7 +1026,7 @@ mod triggers {
                 (func (export "tick") (result i32) (local $i i32) (local $p i32)
                   (block $done (loop $next
                     (br_if $done (i32.ge_u (local.get $i) (i32.load (i32.const {count}))))
-                    (local.set $p (i32.add (i32.const {events}) (i32.mul (local.get $i) (i32.const 8))))
+                    (local.set $p (i32.add (i32.const {events}) (i32.mul (local.get $i) (i32.const {EVENT_LEN}))))
                     (if (i32.eq (i32.load8_u (i32.add (local.get $p) (i32.const 1))) (i32.const 1))
                       (then
                         (if (i32.eq (i32.load8_u (local.get $p)) (i32.const 7))
@@ -1037,6 +1039,7 @@ mod triggers {
                   (i32.store (i32.const {value}) (i32.load (i32.const {first_value})))
                   i32.const 0))"#,
             word = oag_ext_abi::ABI_WORD,
+            EVENT_LEN = oag_ext_abi::EVENT_LEN,
             count = IO + oag_ext_abi::EVENT_COUNT_AT,
             exit = state + 1,
             triggers = state + 2,
@@ -1059,6 +1062,7 @@ mod triggers {
             effects: Vec::new(),
             files: Arc::new(|_| Err("no files".into())),
             pickup: Some(crate::extension_pickup::a_look()),
+            channels: crate::extensions::Declared::default(),
         }
     }
 
@@ -1073,6 +1077,7 @@ mod triggers {
                 min: [(from - to) * 0.5, -100.0, -100.0],
                 max: [(to - from) * 0.5, 100.0, 100.0],
                 props: [("gate".to_string(), 0.25)].into(),
+                emits: None,
             }],
             ..TrackProps::default()
         }

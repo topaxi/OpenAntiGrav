@@ -496,3 +496,96 @@ fn a_pickup_look_is_one_record_and_a_mod_icon_rides_the_pool() {
     );
     assert_eq!(reply.len(), 2);
 }
+
+crate::blob! {
+    #[derive(Debug, Clone, Copy, PartialEq, Default)]
+    struct Heard {
+        from: u32,
+        channel: u32,
+        slot: u8,
+        value: f32,
+        count: u8,
+    }
+}
+
+struct Pinger;
+
+impl Extension for Pinger {
+    type State = Heard;
+    fn tick(obs: &Observation<'_>, _: &mut Heard, reply: &mut Reply<'_>) {
+        if let Some(craft) = obs.craft(slot(2)) {
+            reply
+                .emit(&craft, crate::channel!("oag.test-a/ping"), 7.5)
+                .unwrap();
+        }
+    }
+}
+
+struct Listener;
+
+impl Extension for Listener {
+    type State = Heard;
+    fn tick(obs: &Observation<'_>, state: &mut Heard, _: &mut Reply<'_>) {
+        for event in obs.events() {
+            if let Event::Mod {
+                slot,
+                from,
+                channel,
+                value,
+            } = event
+            {
+                *state = Heard {
+                    from,
+                    channel,
+                    slot: slot.index() as u8,
+                    value,
+                    count: state.count + 1,
+                };
+            }
+        }
+    }
+}
+
+#[test]
+fn an_emit_reaches_a_listener_as_a_mod_event_with_everything_intact() {
+    let mut a = Race::<Pinger>::new().with_craft(slot(2), racer(1.0));
+    let mut b = Race::<Listener>::new().with_craft(slot(2), racer(1.0));
+    let sent = a.tick();
+    assert_eq!(
+        sent,
+        [Command::Emit {
+            slot: slot(2),
+            channel: crate::channel_key("oag.test-a/ping"),
+            value: 7.5
+        }]
+    );
+    b.hear(crate::channel!("oag.test-a"), &sent[0]);
+    b.tick();
+    assert_eq!(
+        b.state(),
+        Heard {
+            from: crate::channel_key("oag.test-a"),
+            channel: crate::channel_key("oag.test-a/ping"),
+            slot: 2,
+            value: 7.5,
+            count: 1
+        }
+    );
+}
+
+#[test]
+fn the_reply_refuses_an_emit_past_the_cap_and_a_non_finite_value() {
+    let mut io = [0_u8; oag_ext_abi::IO_LEN];
+    let mut reply = Reply::new(&mut io[oag_ext_abi::REPLY_AT..], 0, 0);
+    let record = racer(1.0).encode();
+    let craft = Craft {
+        slot: slot(0),
+        record: &record,
+    };
+    for _ in 0..crate::MAX_EMITS_PER_TICK {
+        assert_eq!(reply.emit(&craft, 1, 0.0), Ok(()));
+    }
+    assert_eq!(reply.emit(&craft, 1, 0.0), Err(Refused::Emits));
+    let mut other = Reply::new(&mut io[oag_ext_abi::REPLY_AT..], 0, 0);
+    assert_eq!(other.emit(&craft, 1, f32::NAN), Err(Refused::Range));
+}
