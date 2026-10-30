@@ -33,14 +33,9 @@ so these are effect gaps, not scene gaps.
    detonation at +76). Probe ours' launch tick and the bolt's per-tick distance against the
    original's `--probe plasma_launch` / `plasma_det` (and `Plasma_Update`, `0x0885c6cc`). Ready
    to wire once the short leg is found; confidence 60.
-4. **Craft hit spawns two detonations in the original and one in ours** (`Plasma_SweepCraftHit`
-   and the teardown pass, `plasma.md`, confidence 88): `Race::blast_for` returns a single
-   `(Trigger, Vec3)` and `ignite_blast` spawns one model blast. Ready to wire (about 1 h with a
-   test). Not captured on the original: Time Trial has no opponent; a capture needs a race with a
-   craft ahead on the bolt's line.
+4. Craft hit: see `the-pulse-plasma-craft-hit-spawns-two-detonations.md` (ready-to-wire, own thread).
 
 ## Next Steps
 
 - Spawn a `oag-re` member on item 1 (GE dump of the blast frames), then a wire lane for 1-3.
-- A wire lane may take item 4 alone.
 - Pulse PS2 is unmeasured here; its pair is `scripts/pcsx2-pulse-pair.py`.
