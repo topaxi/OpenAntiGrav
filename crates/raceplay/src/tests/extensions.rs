@@ -369,6 +369,16 @@ mod on {
                     v = at + 4,
                 )
             };
+            let pool = format!(
+                    "(i32.store8 (i32.const {p}) (i32.const 2)) (i32.store8 (i32.const {q}) (i32.const 104)) (i32.store8 (i32.const {r}) (i32.const 105))
+                     (i32.store8 (i32.const {u}) (i32.const 2)) (i32.store8 (i32.const {v}) (i32.const 65)) (i32.store8 (i32.const {w}) (i32.const 98))",
+                    p = POOL,
+                    q = POOL + 1,
+                    r = POOL + 2,
+                    u = POOL + 3,
+                    v = POOL + 4,
+                    w = POOL + 5,
+                );
             format!(
                 "(i32.store (i32.const {REPLY}) (i32.const 10))
                  (i32.store8 (i32.const {c0}) (i32.const 5)) (i32.store8 (i32.const {s0}) (i32.const 1))
@@ -395,16 +405,6 @@ mod on {
                 extra = hud(7, 18, 2, 0.5_f32.to_bits(), 0xff20_20e0),
                 text = hud(8, 19, 0, 0x0050_0344, 0xffff_ffff),
                 icon = hud(9, 20, 3, 0x0050_0344, 0xffff_ffff),
-                pool = format!(
-                    "(i32.store8 (i32.const {p}) (i32.const 2)) (i32.store8 (i32.const {q}) (i32.const 104)) (i32.store8 (i32.const {r}) (i32.const 105))
-                     (i32.store8 (i32.const {u}) (i32.const 2)) (i32.store8 (i32.const {v}) (i32.const 65)) (i32.store8 (i32.const {w}) (i32.const 98))",
-                    p = POOL,
-                    q = POOL + 1,
-                    r = POOL + 2,
-                    u = POOL + 3,
-                    v = POOL + 4,
-                    w = POOL + 5,
-                ),
                 weather = race_wide(3, 10, 0.5),
                 sun = race_wide(4, 11, 0.5),
                 grade = race_wide(5, 12, 0.25),
