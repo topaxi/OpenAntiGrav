@@ -32,6 +32,13 @@ pub enum Malformed {
         /// The factor sent.
         factor: f32,
     },
+    /// An `emit` whose value is not finite.
+    EmitValue {
+        /// The slot.
+        slot: Slot,
+        /// The value sent.
+        value: f32,
+    },
     /// A `shield-delta` that is not finite.
     Amount {
         /// The slot.
@@ -106,6 +113,9 @@ impl fmt::Display for Malformed {
                 f,
                 "scale-pad factor {factor} (slot byte {slot}) is not in [0, {MAX_PAD_FACTOR}], or a race-wide one names a slot"
             ),
+            Self::EmitValue { slot, value } => {
+                write!(f, "emit value {value} for slot {} is not finite", slot.0)
+            }
             Self::Amount { slot, amount } => {
                 write!(f, "shield-delta {amount} for slot {} is not finite", slot.0)
             }

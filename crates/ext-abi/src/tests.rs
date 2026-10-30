@@ -1,5 +1,5 @@
 extern crate std;
-use std::{vec, vec::Vec};
+use std::{format, string::ToString, vec, vec::Vec};
 
 use super::*;
 
@@ -20,7 +20,7 @@ fn slot(index: usize) -> Slot {
 }
 
 /// One of every command, with arguments that touch every field.
-fn every_command() -> [Command; 23] {
+fn every_command() -> [Command; 24] {
     [
         Command::ScaleThrust {
             slot: slot(1),
@@ -115,10 +115,15 @@ fn every_command() -> [Command; 23] {
             slot: slot(11),
             route: 3,
         },
+        Command::Emit {
+            slot: slot(12),
+            channel: channel_key("oag.example/gate"),
+            value: -2.5,
+        },
     ]
 }
 
-fn every_event() -> [Event; 8] {
+fn every_event() -> [Event; 9] {
     [
         Event::WallContact { slot: slot(0) },
         Event::PickupFire { slot: slot(1) },
@@ -143,6 +148,12 @@ fn every_event() -> [Event; 8] {
             slot: slot(6),
             amount: 17.5,
             weapon: Weapon::Cannon,
+        },
+        Event::Mod {
+            slot: slot(7),
+            from: channel_key("oag.example"),
+            channel: channel_key("oag.example/gate"),
+            value: 4.25,
         },
     ]
 }
@@ -205,6 +216,13 @@ fn layout_fold() -> u64 {
         EVENT_KIND as u32,
         EVENT_SLOT as u32,
         EVENT_INDEX as u32,
+        EVENT_CHANNEL as u32,
+        EVENT_FROM as u32,
+        MAX_EMITS_PER_TICK as u32,
+        MAX_MOD_EVENTS as u32,
+        MAX_CHANNEL_LEN as u32,
+        TRACK_SENDER,
+        channel_key("oag.example/gate"),
         MAX_PAD_FACTOR.to_bits(),
         track::MAX_ENTITIES as u32,
         track::MAX_TRIGGERS as u32,
@@ -487,10 +505,10 @@ fn the_observation_reads_back_through_the_guest_sections() {
     assert_eq!(Sections::active(sections.head), 0b11);
     assert_eq!(Sections::state_len(sections.head), 3);
     assert_eq!(&sections.state[..3], &[9, 8, 7]);
-    let events: [Option<Event>; 8] =
+    let events: [Option<Event>; 9] =
         core::array::from_fn(|i| Sections::event_record(sections.head, i).and_then(Event::decode));
     assert_eq!(events, every_event().map(Some));
-    assert_eq!(Sections::event_count(sections.head), 8);
+    assert_eq!(Sections::event_count(sections.head), 9);
     let craft = Sections::craft_record(sections.crafts, slot(1)).map(Craft::decode);
     assert_eq!(craft, Some(a_craft()));
     Sections::put_command(sections.reply, 0, &every_command()[4]);
@@ -746,4 +764,59 @@ fn a_hud_record_out_of_range_is_malformed_by_name() {
         Err(Malformed::HudPlace),
         "the ninth anchor does not exist"
     );
+}
+
+#[test]
+fn a_non_finite_emit_value_is_refused_by_name() {
+    let mut record = Command::Emit {
+        slot: slot(1),
+        channel: channel_key("oag.example/gate"),
+        value: 1.0,
+    }
+    .encode();
+    record[COMMAND_VALUE..COMMAND_VALUE + 4].copy_from_slice(&f32::NAN.to_bits().to_le_bytes());
+    let err = Command::decode(&record).unwrap_err();
+    assert!(matches!(err, Malformed::EmitValue { .. }), "{err:?}");
+    assert!(err.to_string().contains("emit value"), "{err}");
+}
+
+#[test]
+fn a_mod_event_carries_its_channel_sender_and_value_through_the_record() {
+    let event = Event::Mod {
+        slot: slot(9),
+        from: 0xdead_beef,
+        channel: channel_key("oag.a/b"),
+        value: f32::from_bits(0x3f80_0001),
+    };
+    let record = event.encode();
+    assert_eq!(record.len(), EVENT_LEN);
+    assert_eq!(Event::decode(&record), Some(event));
+    let track = Event::Mod {
+        slot: slot(0),
+        from: TRACK_SENDER,
+        channel: 1,
+        value: 0.0,
+    };
+    assert_eq!(Event::decode(&track.encode()), Some(track));
+}
+
+#[test]
+fn a_channel_name_is_a_mod_id_a_slash_and_a_name() {
+    for good in ["oag.example/gate", "a/b", "my-mod_2/x-1"] {
+        assert_eq!(check_channel(good), Ok(()), "{good}");
+    }
+    for (bad, why) in [
+        ("gate", BadChannel::Shape),
+        ("a/b/c", BadChannel::Shape),
+        ("/b", BadChannel::Shape),
+        ("a/", BadChannel::Shape),
+        ("Oag/gate", BadChannel::Character('O')),
+        ("a/ga.te", BadChannel::Character('.')),
+        ("a/ga te", BadChannel::Character(' ')),
+    ] {
+        assert_eq!(check_channel(bad), Err(why), "{bad}");
+    }
+    let long = format!("a/{}", "b".repeat(MAX_CHANNEL_LEN));
+    assert_eq!(check_channel(&long), Err(BadChannel::TooLong));
+    assert_eq!(namespace("oag.example/gate"), "oag.example");
 }

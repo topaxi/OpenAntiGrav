@@ -18,7 +18,7 @@
 //! | [`ACTIVE_AT`] | 4 | active mask, one bit per slot holding a craft |
 //! | [`EVENT_COUNT_AT`] | 4 | event count |
 //! | [`STATE_LEN_AT`] | 4 | state length |
-//! | [`EVENTS_AT`] | [`EVENT_LEN`] x [`MAX_EVENTS`] | events ([`Event`]): kind `u8`, slot `u8`, index `u16`, 4 bytes zero |
+//! | [`EVENTS_AT`] | [`EVENT_LEN`] x [`MAX_EVENTS`] | events ([`Event`]): kind `u8`, slot `u8`, index `u16`, value `f32`, then for a `mod` event the channel key `u32` and the sender key `u32` (zero in the others) |
 //! | [`STATE_AT`] | [`MAX_STATE_BYTES`] | the module's state blob, in and out |
 //! | [`REPLY_AT`] | 4 | command count, written by the guest |
 //! | [`REPLY_AT`] + 4 | [`COMMAND_LEN`] x [`MAX_COMMANDS`] | commands ([`Command`]): kind `u8`, slot `u8`, `u16` argument, `f32`, `u32` |
@@ -38,7 +38,10 @@
 #![no_std]
 #![forbid(unsafe_code)]
 
-
+pub use channel::{
+    BadChannel, MAX_CHANNEL_LEN, MAX_EMITS_PER_TICK, MAX_MOD_EVENTS, TRACK_SENDER, channel_key,
+    check_channel, namespace,
+};
 use hud::pool_string;
 pub use hud::{
     Anchor, HudElement, HudPlace, HudStr, MAX_HUD_EXTRA, MAX_HUD_ITEMS, MAX_HUD_SHAKE, MAX_HUD_TEXT,
@@ -97,7 +100,7 @@ pub const STATE_LEN_AT: usize = 28;
 /// Where the events start.
 pub const EVENTS_AT: usize = 32;
 /// One event record.
-pub const EVENT_LEN: usize = 8;
+pub const EVENT_LEN: usize = 16;
 /// Where the state blob starts.
 pub const STATE_AT: usize = EVENTS_AT + EVENT_LEN * MAX_EVENTS;
 /// Where the guest writes its reply: the count, then the records.
@@ -146,6 +149,11 @@ pub const CRAFT_SHIELD_MAX: usize = 8;
 pub const CRAFT_SPEED: usize = 12;
 /// Within an event record: the `f32` of an event that carries an amount (`hit`).
 pub const EVENT_VALUE: usize = 4;
+/// Offset of a `mod` event's channel key, a `u32` ([`channel_key`]).
+pub const EVENT_CHANNEL: usize = 8;
+/// Offset of a `mod` event's sender, a `u32`: the key of the sending mod's id, or
+/// [`TRACK_SENDER`].
+pub const EVENT_FROM: usize = 12;
 
 /// Craft flag: a person flies the slot.
 pub const CRAFT_PERSON: u8 = 1;
@@ -173,6 +181,7 @@ const EVENT_WEAPON_PAD: u8 = 6;
 const EVENT_TRIGGER_ENTER: u8 = 7;
 const EVENT_TRIGGER_EXIT: u8 = 8;
 const EVENT_HIT: u8 = 9;
+const EVENT_MOD: u8 = 10;
 /// Command kind codes.
 const COMMAND_SCALE_THRUST: u8 = 1;
 const COMMAND_SHIELD_DELTA: u8 = 2;
@@ -193,6 +202,7 @@ const COMMAND_HUD_TEXT: u8 = 19;
 const COMMAND_HUD_ICON: u8 = 20;
 const COMMAND_PREFER_ROUTE: u8 = 21;
 const COMMAND_PICKUP_LOOK: u8 = 22;
+const COMMAND_EMIT: u8 = 23;
 /// Bit 15 of a `hud-text`, `hud-icon` or `fire-effect` argument: the string or effect is
 /// the sending mod's own, not the title's. The pool offset or effect index is the rest.
 const OWN_FLAG: u16 = 1 << 15;
@@ -530,6 +540,18 @@ pub enum Event {
         /// The weapon that hit first.
         weapon: Weapon,
     },
+    /// A mod's `emit`, or a trigger's `oag_emit`, sent on the tick before: delivered to
+    /// every module, whoever sent it, whether or not it listens to the channel.
+    Mod {
+        /// The craft the sender named; for a trigger, the craft that entered it.
+        slot: Slot,
+        /// The key of the sending mod's id (`channel_key` of it), or [`TRACK_SENDER`].
+        from: u32,
+        /// The channel ([`channel_key`]).
+        channel: u32,
+        /// What the sender attached.
+        value: f32,
+    },
 }
 
 impl Event {
@@ -544,7 +566,8 @@ impl Event {
             | Self::WeaponPad { slot, .. }
             | Self::TriggerEnter { slot, .. }
             | Self::TriggerExit { slot, .. }
-            | Self::Hit { slot, .. } => slot,
+            | Self::Hit { slot, .. }
+            | Self::Mod { slot, .. } => slot,
         }
     }
 
@@ -560,6 +583,7 @@ impl Event {
             Self::TriggerEnter { trigger, .. } => (EVENT_TRIGGER_ENTER, trigger),
             Self::TriggerExit { trigger, .. } => (EVENT_TRIGGER_EXIT, trigger),
             Self::Hit { weapon, .. } => (EVENT_HIT, weapon.code() as u16),
+            Self::Mod { .. } => (EVENT_MOD, 0),
         };
         let mut record = [0; EVENT_LEN];
         record[EVENT_KIND] = kind;
@@ -567,8 +591,19 @@ impl Event {
         let [lo, hi] = index.to_le_bytes();
         record[EVENT_INDEX] = lo;
         record[EVENT_INDEX + 1] = hi;
-        if let Self::Hit { amount, .. } = self {
-            put_u32(&mut record, EVENT_VALUE, amount.to_bits());
+        match self {
+            Self::Hit { amount, .. } => put_u32(&mut record, EVENT_VALUE, amount.to_bits()),
+            Self::Mod {
+                from,
+                channel,
+                value,
+                ..
+            } => {
+                put_u32(&mut record, EVENT_VALUE, value.to_bits());
+                put_u32(&mut record, EVENT_CHANNEL, channel);
+                put_u32(&mut record, EVENT_FROM, from);
+            }
+            _ => {}
         }
         record
     }
@@ -597,6 +632,12 @@ impl Event {
                 slot,
                 amount: f32::from_bits(get_u32(record, EVENT_VALUE)),
                 weapon: u8::try_from(index).ok().and_then(Weapon::from_code)?,
+            },
+            EVENT_MOD => Self::Mod {
+                slot,
+                from: get_u32(record, EVENT_FROM),
+                channel: get_u32(record, EVENT_CHANNEL),
+                value: f32::from_bits(get_u32(record, EVENT_VALUE)),
             },
             _ => return None,
         })
@@ -818,6 +859,19 @@ pub enum Command {
         /// The route, below the region's route count.
         route: u16,
     },
+    /// Send `value` on `channel` about the slot: every module receives a `mod` event for
+    /// it on the next tick, the track's and the mods' together, in an order that does not
+    /// depend on which module sent. The channel must be one the sending mod publishes
+    /// (`oag-mod.toml` `[channels]`), at most [`MAX_EMITS_PER_TICK`] a module a tick;
+    /// either rule broken faults the module. The queue is race state: hashed.
+    Emit {
+        /// The craft it is about.
+        slot: Slot,
+        /// The channel ([`channel_key`]).
+        channel: u32,
+        /// What to attach, finite.
+        value: f32,
+    },
 }
 
 impl Command {
@@ -842,7 +896,8 @@ impl Command {
             | Self::GiveShield { slot }
             | Self::HoldShield { slot }
             | Self::ClearShield { slot }
-            | Self::PreferRoute { slot, .. } => Some(slot),
+            | Self::PreferRoute { slot, .. }
+            | Self::Emit { slot, .. } => Some(slot),
             Self::PickupRoll { .. }
             | Self::ScalePad { .. }
             | Self::SetWeather { .. }
@@ -931,6 +986,7 @@ impl Command {
             Self::HoldShield { .. } => (COMMAND_HOLD_SHIELD, 0, 0, 0),
             Self::ClearShield { .. } => (COMMAND_CLEAR_SHIELD, 0, 0, 0),
             Self::PreferRoute { route, .. } => (COMMAND_PREFER_ROUTE, route, 0, 0),
+            Self::Emit { channel, value, .. } => (COMMAND_EMIT, 0, value.to_bits(), channel),
         };
         let mut record = [0; COMMAND_LEN];
         record[COMMAND_KIND] = kind;
@@ -1145,6 +1201,16 @@ impl Command {
             COMMAND_HOLD_SHIELD => Self::HoldShield { slot },
             COMMAND_CLEAR_SHIELD => Self::ClearShield { slot },
             COMMAND_PREFER_ROUTE => Self::PreferRoute { slot, route: arg },
+            COMMAND_EMIT => {
+                if !value.is_finite() {
+                    return Err(Malformed::EmitValue { slot, value });
+                }
+                Self::Emit {
+                    slot,
+                    channel: word,
+                    value,
+                }
+            }
             other => return Err(Malformed::Kind(other)),
         })
     }
@@ -1293,6 +1359,7 @@ fn get_u32(buffer: &[u8], at: usize) -> u32 {
     }
 }
 
+mod channel;
 pub mod hud;
 mod malformed;
 mod pickup;
