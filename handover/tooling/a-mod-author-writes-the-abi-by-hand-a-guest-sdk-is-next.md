@@ -31,8 +31,9 @@ fields, `roundtrip.py channels`), the MODS page's SENDS, HEARS and NO ONE SENDS 
 as built; immediate in the mod, async by a fixed tick delay, lazy latest-per-channel and a priority
 past the cap are notes only). Open: Checkpoint Circuit's gate animation (the example publishes the
 channel; its Blender builder has no animated gate yet), a track file's channel namespace is only
-shape-checked (a mod-shipped track is not required to publish under its mod's id), and shadow and
-shine passes sample node motion without the channel clock (`Model::sample_anim_nodes`).
+shape-checked (a mod-shipped track is not required to publish under its mod's id), and `oag_render`'s
+shine pass (`render/src/shine.rs`) samples node motion without the channel clock
+(`Model::sample_anim_nodes`, not the `_started` form).
 
 ## Landed since (2026-10-30, lane `hillside-rain`, local `wasm-extensions` branch)
 
