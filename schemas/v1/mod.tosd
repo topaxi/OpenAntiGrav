@@ -135,3 +135,39 @@ optional = true
 [elements.effects]
 type = "any"
 optional = true
+
+# `[pickup]`: the look of the mod's own pickup, required of a simulation mod that hands
+# one out (give-pickup, pickup-roll). Each of `icon` and `colour` names its source:
+#   icon   = { title = "turbo" }  or  { mod = "<key of [icons]>" }
+#   colour = { rgba = "E0202080" } or { title = "shield" }
+# The loader checks that exactly one key is given, that a `title` is a weapon (turbo,
+# shield, rocket, ...), that a `mod` is a key of [icons] and that `rgba` is RRGGBBAA hex.
+
+[types.pickup]
+type = "table"
+
+[types.pickup.icon]
+type = "table"
+
+[types.pickup.icon.title]
+type = "string"
+optional = true
+
+[types.pickup.icon.mod]
+type = "string"
+optional = true
+
+[types.pickup.colour]
+type = "table"
+
+[types.pickup.colour.title]
+type = "string"
+optional = true
+
+[types.pickup.colour.rgba]
+type = "string"
+optional = true
+
+[elements.pickup]
+type = "types.pickup"
+optional = true

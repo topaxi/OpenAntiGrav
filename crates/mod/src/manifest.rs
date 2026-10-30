@@ -85,6 +85,37 @@ pub struct Manifest {
     /// (`schemas/v1/effect.tosd`). A module's `fire-mod-effect` names one by its index in
     /// this map's name order.
     pub effects: std::collections::BTreeMap<String, String>,
+    /// `[pickup]`: the look of the mod's own pickup, required of a simulation mod that
+    /// hands one out.
+    pub pickup: Option<Pickup>,
+}
+
+/// `[pickup]`: the icon and the backdrop colour of a mod's own pickup, each naming its
+/// source.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Pickup {
+    /// `icon`.
+    pub icon: PickupIcon,
+    /// `colour`.
+    pub colour: PickupColour,
+}
+
+/// `[pickup] icon`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PickupIcon {
+    /// `{ title = "turbo" }`: the title's own icon for a weapon.
+    Title(oag_tables::weapons::Weapon),
+    /// `{ mod = "name" }`: a key of the mod's `[icons]`.
+    Mod(String),
+}
+
+/// `[pickup] colour`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PickupColour {
+    /// `{ title = "shield" }`: the title's own backdrop colour for a weapon.
+    Title(oag_tables::weapons::Weapon),
+    /// `{ rgba = "E0202080" }`: red, green, blue, alpha.
+    Rgba([u8; 4]),
 }
 
 /// `[extension]` (`docs/architecture/wasm-extensions/README.md`, section 1.1). Read
@@ -138,6 +169,92 @@ struct File {
     icons: std::collections::BTreeMap<String, String>,
     #[serde(default)]
     effects: std::collections::BTreeMap<String, String>,
+    pickup: Option<PickupTable>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PickupTable {
+    icon: IconTable,
+    colour: ColourTable,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct IconTable {
+    title: Option<String>,
+    #[serde(rename = "mod")]
+    module: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ColourTable {
+    title: Option<String>,
+    rgba: Option<String>,
+}
+
+/// The weapon a lowercase `title =` names, in the spelling of
+/// `Weapon::as_type` lowercased (`leachbeam`, `repulser`).
+fn weapon(key: &'static str, name: &str) -> Result<oag_tables::weapons::Weapon, Error> {
+    oag_tables::weapons::Weapon::ALL
+        .into_iter()
+        .find(|weapon| weapon.as_type().eq_ignore_ascii_case(name))
+        .ok_or_else(|| {
+            let known: Vec<String> = oag_tables::weapons::Weapon::ALL
+                .iter()
+                .map(|weapon| weapon.as_type().to_ascii_lowercase())
+                .collect();
+            bad(
+                key,
+                format!("{name:?} is not a weapon: {}", known.join(", ")),
+            )
+        })
+}
+
+fn pickup(
+    table: PickupTable,
+    icons: &std::collections::BTreeMap<String, String>,
+) -> Result<Pickup, Error> {
+    let icon = match (table.icon.title, table.icon.module) {
+        (Some(title), None) => PickupIcon::Title(weapon("pickup.icon", &title)?),
+        (None, Some(name)) if icons.contains_key(&name) => PickupIcon::Mod(name),
+        (None, Some(name)) => {
+            return Err(bad(
+                "pickup.icon",
+                format!("mod = {name:?} is not a key of [icons]"),
+            ));
+        }
+        _ => {
+            return Err(bad(
+                "pickup.icon",
+                "exactly one of `title = \"<weapon>\"` and `mod = \"<icon>\"`",
+            ));
+        }
+    };
+    let colour = match (table.colour.title, table.colour.rgba) {
+        (Some(title), None) => PickupColour::Title(weapon("pickup.colour", &title)?),
+        (None, Some(hex)) => {
+            let digits = hex.len() == 8 && hex.bytes().all(|b| b.is_ascii_hexdigit());
+            let word = digits
+                .then(|| u32::from_str_radix(&hex, 16).ok())
+                .flatten()
+                .ok_or_else(|| {
+                    bad(
+                        "pickup.colour",
+                        format!("rgba = {hex:?} is not eight hex digits, RRGGBBAA"),
+                    )
+                })?;
+            PickupColour::Rgba(word.to_be_bytes())
+        }
+        _ => {
+            return Err(bad(
+                "pickup.colour",
+                "exactly one of `title = \"<weapon>\"` and `rgba = \"RRGGBBAA\"`",
+            ));
+        }
+    };
+    Ok(Pickup { icon, colour })
 }
 
 #[derive(Deserialize)]
@@ -210,6 +327,10 @@ impl Manifest {
         let file: File = toml::from_str(text)?;
         oag_schema::check(file.header.as_ref(), SCHEMA_KIND, SCHEMA_MAJOR)?;
         let extension = file.extension.map(|e| extension(e, has)).transpose()?;
+        let pickup = file
+            .pickup
+            .map(|table| pickup(table, &file.icons))
+            .transpose()?;
         let t = file.module;
         for (name, path) in &file.icons {
             if !valid_key(name) {
@@ -309,6 +430,7 @@ impl Manifest {
             extension,
             icons: file.icons,
             effects: file.effects,
+            pickup,
         })
     }
 
