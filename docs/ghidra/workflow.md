@@ -400,6 +400,8 @@ one. Two habits keep this useful:
 
 - **Pass `program=` on every call.** With both `BOOT.BIN` and `SCES_547.48`
   open, omitting it silently targets whichever is active.
+- **There is no `get_disassembly` endpoint** (404 over HTTP); disassembly is
+  `disassemble_function`.
 - **`dry_run` is not honoured by the rename endpoints.** They report what they
   would do and do it anyway.
 - **Global names without a Hungarian type prefix are rejected**, which is not
