@@ -286,9 +286,13 @@ same words, inherited from PSP. Earlier frame sampling (2026-09-04) read the
 same three groups as opaque approximations; `Turbo`'s brighter read over sky is
 this translucency, not a different colour.
 
-Not implemented (decompile-only, unverified): the fade-in (the word scaled by
-`clamp(T * 3, 0, 1)`, full at about 0.28 s), the hold after use and the
-backdrop's size pulse.
+**Wired (2026-10-30, `oag_hud::pickup_fade`)**: the fade-in with the eased
+overshoot (the word scaled by `Ease_CosineWithBump(3T, 1)`, not a clamp), the
+icon gate at `T >= 0.4`, the hold after use, the reverse fade-out and, on Pulse,
+the size pulse (width `w / f`, height `h * f`). HD and Omega play the same
+colour fade at their own rate, `1.5` (HD read, Omega inherited from HD), without
+the size pulse; Pure draws no backdrop and 2048 is not wired. PS2 Pulse shares
+Pulse's art, so it plays PSP's law, inherited.
 
 Two ground-truth assertions still guard the authored layout against the shipped
 file: the backdrop and the icon are authored in one colour, and the layout

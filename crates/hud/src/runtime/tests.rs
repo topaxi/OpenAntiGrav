@@ -363,9 +363,52 @@ fn the_pickup_bar_is_dim_while_idle() {
         for name in ["PickupDamageBG", "PickupAbsorbBG", "PickupBackground"] {
             assert_eq!(colour(cx, &none, name), Some(idle), "{name}");
         }
-        assert_eq!(colour(cx, &held, "PickupBackground"), None);
+        assert_eq!(
+            colour(cx, &held, "PickupBackground"),
+            Some(argb(0x80BE_1E69)),
+            "a held weapon takes its table word, not the dim"
+        );
         assert_eq!(colour(cx, &held, "PickupDamageBG"), Some(idle));
         assert_eq!(colour(cx, &none, "PickupFarBackground"), None);
+    });
+}
+
+/// HD's held backdrop plays the fade: the table word scaled by the eased overshoot while it
+/// grows, and the last weapon's word fading out after use. Fails if the draw ignores the fade
+/// state or reads the layout's colour again.
+#[test]
+fn the_held_backdrop_plays_the_fade_on_hd() {
+    use crate::pickup_fade::{Fade, scale_word};
+    use oag_tables::weapons::Weapon;
+    let mut fade = Fade::default();
+    let step = |fade: &mut Fade, held: Option<Weapon>, ticks: u32| {
+        for _ in 0..ticks {
+            fade.advance(held, 1.5, 1.0 / 60.0);
+        }
+    };
+    step(&mut fade, Some(Weapon::Missile), 10);
+    let growing = Readout {
+        pickup: Some(Weapon::Missile),
+        pickup_fade: fade,
+        ..readout(98.0)
+    };
+    step(&mut fade, None, 1);
+    let after_use = Readout {
+        pickup: None,
+        pickup_fade: fade,
+        ..readout(98.0)
+    };
+    with_hd(oag_hd::hud::ART, |cx| {
+        let word = |readout: &Readout| colour(cx, readout, "PickupBackground").unwrap();
+        let look = growing.pickup_fade.look(growing.pickup).unwrap();
+        assert!(look.backdrop > 1.2, "mid-overshoot {}", look.backdrop);
+        assert_eq!(word(&growing), argb(scale_word(0x80BE_1E69, look.backdrop)));
+        assert_ne!(word(&growing), argb(0x80BE_1E69));
+        assert_ne!(
+            word(&after_use),
+            argb(0x5aff_ffff),
+            "fading out, not the idle dim"
+        );
     });
 }
 

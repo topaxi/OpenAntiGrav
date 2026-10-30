@@ -107,3 +107,44 @@ fn a_grant_announces_for_one_second_and_a_regrant_announces_again() {
     race.tick(&PlayerInputs::none());
     assert!(race.readout().pickup_announcing);
 }
+
+/// The pickup fade ([`oag_hud::Readout::pickup_fade`]) advances per tick off the held weapon
+/// once a title's rate is seeded, runs on after use with `pickup` itself `None`, and stays idle
+/// for a title that seeds none. Fails if the slot's state is dropped from the readout.
+#[test]
+fn a_held_weapon_plays_the_fade_and_the_last_one_fades_out_after_use() {
+    use oag_tables::weapons::Weapon;
+    let mut race = race_with_a_grid();
+    let slot = race.player_slot();
+    race.sim.world.ships[slot].pickup.weapon = Some(Weapon::Missile);
+    for _ in 0..30 {
+        race.tick(&PlayerInputs::none());
+    }
+    assert!(
+        !race.readout().pickup_fade.is_active(),
+        "no rate seeded, no fade"
+    );
+
+    race.sim.world.ships[slot].pickup.weapon = None;
+    for _ in 0..200 {
+        race.tick(&PlayerInputs::none());
+    }
+    race.view.huds[slot].pickup_fade_rate = 1.2;
+    race.sim.world.ships[slot].pickup.weapon = Some(Weapon::Missile);
+    for _ in 0..12 {
+        race.tick(&PlayerInputs::none());
+    }
+    let readout = race.readout();
+    let look = readout.pickup_fade.look(readout.pickup).unwrap();
+    assert_eq!(look.weapon, Weapon::Missile);
+    assert!(look.backdrop > 1.5, "mid-overshoot, got {}", look.backdrop);
+
+    race.sim.world.ships[slot].pickup.weapon = None;
+    for _ in 0..30 {
+        race.tick(&PlayerInputs::none());
+    }
+    let readout = race.readout();
+    assert_eq!(readout.pickup, None);
+    let after = readout.pickup_fade.look(None).unwrap();
+    assert_eq!(after.weapon, Weapon::Missile, "the last weapon fades out");
+}

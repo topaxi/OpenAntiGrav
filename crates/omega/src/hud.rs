@@ -210,6 +210,24 @@ pub const SPLIT: oag_title::hud::SplitLayouts = oag_title::hud::SplitLayouts {
     }),
 };
 
+/// The pickup backdrop's held word per weapon, off ``0x0193f750`` (rows of `0x20` bytes): 14 rows of
+/// `g_hud_pickup_widget_table`, the backdrop word at each row's `+0xc`. Byte for byte
+/// Pulse's thirteen (`0x80BE1E69` pink, `0x801CBC1C` green, `0x802B1CBC` blue; alpha `0x80`),
+/// read from this title's own executable, static, confidence 90. Positional in
+/// `Weapon::ALL` order like [`oag_title::HudArt::pickup_colours`]; Disruptor (Pure's) has no row.
+/// See `docs/ghidra/functions/ps4-omega-eu/omega-pickup-table.md`.
+pub const PICKUP_COLOURS: [Option<u32>; 14] = {
+    const PINK: Option<u32> = Some(0x80BE_1E69);
+    const GREEN: Option<u32> = Some(0x801C_BC1C);
+    const BLUE: Option<u32> = Some(0x802B_1CBC);
+    [
+        PINK, PINK, PINK, PINK, GREEN, GREEN, GREEN, PINK, BLUE, BLUE, PINK, PINK, PINK, None,
+    ]
+};
+
+/// The pickup fade's timer rate. **Inherited from HD** (`1.5`): Omega's HUD update `FUN_0125e9b0` was not read for it, and Omega's front end and HUD are HD's lineage.
+pub const PICKUP_FADE_RATE_PERCENT: u16 = 150;
+
 /// How Omega's HUD sprites reach the screen, [`oag_title::Title::hud_art`].
 ///
 /// **Measured**: `texture_extension` (every atlas of the five roots resolves
@@ -253,7 +271,11 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
         ]),
     },
     pickup_backdrop_colour: None,
-    pickup_colours: None,
+    pickup_colours: Some(PICKUP_COLOURS),
+    pickup_fade: Some(oag_title::hud::PickupFade {
+        rate_percent: PICKUP_FADE_RATE_PERCENT,
+        size_pulse: false,
+    }),
     pickup_icon_models: None,
     pickup_icon_backdrop_model: None,
     bar_models: None,

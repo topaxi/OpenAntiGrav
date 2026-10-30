@@ -83,6 +83,10 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     },
     pickup_backdrop_colour: Some(PICKUP_BACKDROP_COLOUR),
     pickup_colours: Some(PICKUP_COLOURS),
+    pickup_fade: Some(oag_title::hud::PickupFade {
+        rate_percent: PICKUP_FADE_RATE_PERCENT,
+        size_pulse: true,
+    }),
     // Pulse's icons are `<Image>` sprites (`pickup_icon_name`'s `<Type>Icon`),
     // not `<Mode3D><Model>`s - this field is Pure's own dialect.
     pickup_icon_models: None,
@@ -250,6 +254,12 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
 /// now only the fallback for a weapon with no row.
 pub const PICKUP_BACKDROP_COLOUR: &str = "HudBGColour";
 
+/// `Hud_UpdatePickupWidgets`' timer rate: `T` advances by `dt * 1.2` per update. Measured live
+/// (`T` grew `0.0200..0.0202` per update at `dt` `0.0160..0.0175` s), confidence 90; see
+/// `docs/ghidra/functions/psp-pulse-usa/pickup-colour.md`. The PS2 pressing shares [`ART`],
+/// so it **inherits** this from PSP.
+pub const PICKUP_FADE_RATE_PERCENT: u16 = 120;
+
 /// The pickup backdrop's own colour word, per weapon, as `Hud_UpdatePickupWidgets`
 /// (`0x0881cdc4`) reads it from the 14-row widget table at `0x08ab0844`.
 ///
@@ -264,8 +274,9 @@ pub const PICKUP_BACKDROP_COLOUR: &str = "HudBGColour";
 /// The PS2 pressing reads this same table: its HUD art is this crate's
 /// [`ART`], and PS2 has no value of its own, so it is **inherited from PSP**.
 ///
-/// Not implemented: the fade-in (the word scaled by `clamp(T * 3, 0, 1)`),
-/// the hold after use and the size pulse; they are decompile-only so far.
+/// The word is the held strength: `oag_hud::pickup_fade` scales it by the eased overshoot on a
+/// grant, holds it after use, and fades it back out (law and live evidence in the same page,
+/// confidence 90).
 ///
 /// Positional rather than keyed by `oag_tables::weapons::Weapon`: this crate
 /// is deliberately tables only, with no non-test edge to `oag-formats` (see
