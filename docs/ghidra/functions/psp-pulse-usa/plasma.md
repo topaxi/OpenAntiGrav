@@ -1435,3 +1435,70 @@ and `crates/raceplay/src/weapons/visuals.rs` are `plasma-speed-blend`'s and
 need to act on: a Plasma craft hit should spawn **two** `Impact`-triggered
 flash/blast instances, one at the struck craft's position and one at the
 bolt's, not one.
+
+## 2026-10-30: the Plasma matched against the original, and what differs (pulse-plasma-fidelity)
+
+The handover's "the Plasma was re-shot after the sprite templates and read right" (2026-09-30)
+was an eyeball. This is the per-frame, per-region version, and it does not hold for the bolt's
+head or the blast's shape and timing.
+
+**Method.** Same state both sides: Talon's Junction (`16_Track`), Time Trial, Venom, Assegai,
+`scripts/psp-weapon-pair.py plasma` on PPSSPP v1.20.4 software renderer (Pulse PSP USA), fire 120
+frames after GO at speed 106.2, x 124.5. Ours: `oag-game --race --mode time_trial --team Assegai
+--class venom --give plasma --input-script verification/scenarios/weapon-after-go-matched.inputs`
+at tick `391 + k` (two frames of display lag, as for the Rocket). A no-fire control on each side
+(ours: the same script without `square`, still `--give plasma`). Two fire restarts of the
+original plus one more for frames 86-98; scoring by `scripts/weapon-pair-score.py` (mean absolute
+grey difference, HUD boxes masked, 87,625 px). Pairs kept under `data/reference/pulse-plasma-pairs/`.
+Two new probes in `psp-weapon-pair.py`: `--probe plasma_launch` (`Plasma_Launch`, `0x0885bf84`) and
+`--probe plasma_det` (`PlasmaBlast_Construct`, `0x0885fd90`).
+
+**The state is matched, and the original is reproducible.** The craft's speed and x agree through
+fire+180 (121.9 against 122.7 u/s and x 259.8 against 256.9 at k70, 23.9 against 23.7 at k180;
+ours trails by about 3 units, 1.5 frames) and both craft slow identically after the blast
+(116 to 24 u/s), so every residual below is the effect, not the scene. Two restarts of the
+original agree to 1 count per channel in the flash frames (the `floor` column: 2-8 grey, against
+the gaps below). Confidence **60** on the timeline: one PPSSPP boot, three restarts (a second boot was not run), so the numbers are reported as seen once per boot.
+
+| Event | Original | Ours |
+| --- | --- | --- |
+| `Plasma_Launch` | fire+59.0 frames (two probe runs: 59.01, 58.96) | not probed (charge is 60 ticks) |
+| `PlasmaBlast_Construct` | fire+76.0 frames (two probe runs, 76.01 twice) | detonates about 3 ticks earlier |
+| first flash frame (mean R, HUD masked) | k78 (215), peak k80 (239,210,253) | k76 already at 241,214,253 |
+| second, white-out peak | ramps k86 (216,157,247) to k91-93 (254-255,250-253,255), **cuts to 215,157,247 at k94** | none: 199,142,246 at k92 |
+| purple tail, mean RGB | k100 199,150,243; k110 187,146,240; k120 190,160,238; k130 139,133,205; k140 120,124,182; base 103,118,128 at k160 | 154,120,217; 137,122,203; 125,122,188; 116,123,172; 110,122,152; base at k160 |
+
+Re-confirmed: the first flash peak matches within 3 counts per channel (239,210,253 against
+241,214,253), so the screen-flash colour stands. What does not stand is its envelope.
+
+### The ranked gaps
+
+| # | Region, frames | Area (px) | Grey error (fire - control) | Area x error | Driven by | Fix estimate |
+| ---: | --- | ---: | ---: | ---: | --- | --- |
+| 1 | (`PlasmaBlast_Update` `0x0885f680`; camera fields `DAT_08ab10b0 + 0x48/0x58/0x68`) Blast, whole frame, k76-92 (the 3.69 M includes gap 4's 3-frame shift: aligned by 3 frames, k80 drops from 26 to 10.6 grey): onset 2 frames early and instant (original ramps over 2), and **no white-out k89-93** (original G 211 to 253 over five frames, ours 142-193) | 87,625 | 42.2 | 3.69 M | The blast object's three models and their tint (`PlasmaBlast_Update`, this page: anim-time scrub at `age * rate`, constant tints 0.07/0/0, **camera basis conf 55, ours is a stand-in billboard**). The hard cut at k94 reads as a model hidden or a camera crossing a hemisphere: unread | re-first: conf 40 on cause; GE dumps at k88, k93 and k94 (`--ge-dump-k`) and diff the censuses: what stops drawing between 93 and 94 names the draw |
+| 2 | (`0x0885f680`) Blast tail, whole frame, k96-140: purple lingers longer (R at k120 190 against 125, B 238 against 188) | 87,625 | 22.2 | 1.95 M | The same three models; the scrubbed baked animation or the tint (0.07 on the halo only) decays faster in ours | re-first: conf 40 |
+| 3 | (`Plasma_Init` `0x0885bd18`, texture bind `FUN_08916610`) Bolt head and charge glow, head box (200,112,90,80), k36-72 (k64-72: 40.6): the original is a **growing purple orb with a dark core and swirling arcs, about 50 px at k44-72**; ours is a 6 px white-blue star and one thin arc | 7,200 | 32.8 | 0.24 M (box) | `WO_PLASMA_HEAD`: root emitter (2x2 atlas, 39 tick life) and `plasma_spikes` (4 per tick, 10 tick life, cap 256) plus three child sprites. The charge scale `(1 - remaining) * 0.75` is ported, yet ours does not grow. **The root emitter's texture is the open item** (`oag_pob::texture`: its slot names `shuriken_trail_anim.tga`, the positional texture is a dark arc pattern): the dark core and the arc ring are probably it | re-first: needs a GE dump of the head's prims at fire+36 (recipe below), conf 55 |
+| 4 | (`Plasma_SpeedForClass` `0x0885c5a4`, `Plasma_Update` `0x0885c6cc`) Detonation timing: ours 3 ticks early (73 against 76 ticks after the press) | whole frame | 26 against 10.6 aligned | | The bolt's flight: original launches at +59 and detonates at +76 (17 frames), ours 12-13. The launch ramp and speed law are read (`Plasma_SpeedForClass`, this page); which one is short is not isolated | ready-to-wire after one probe on ours; conf 60 |
+| 5 | (`Plasma_SweepCraftHit` `0x0886afb8`, `Plasmas_Update` `0x0886b490`) Craft hit: **not captured** (Time Trial has no opponent, and the bolt is not aimed) | | | | Two `Plasma_SpawnDetonation` calls (the struck craft's body position, then the bolt's), read at conf 88 above; ours spawns **one** (`Race::blast_for` returns a single `(Trigger, Vec3)`, `ignite_blast` spawns one model blast) | ready-to-wire, about 1 h with a test; conf 85 |
+
+Not findings: the HUD weapon hexagon (ours keeps the held-pickup icon because `--give` refills
+the slot, as the Rocket's pair found); the "Running slow" toast on some original frames
+(PPSSPP's overlay); the k74 frame, where two restarts of the original disagree by 22 grey (one
+presented frame, excluded); the scene gap with no weapon (7 grey before the blast, 12-19 after:
+bloom and road detail, the `ctl` column).
+
+**Craft glow on the firing craft** is gap 3: the same instance, parented to the craft's weapon
+node until `Plasma_Launch`. Its time matches (the orb in the original is on the nose from about
+k20, ours a spark from k3); its size and look do not.
+
+**The recipe for gap 3's law** (not run): `psp-weapon-pair.py --ge-dump-k 36 --shots 36 plasma`
+and the same with `--no-fire`, then `psp-ge-dump.py census` on both and diff the prims. A
+first pass at fire+50 (this lane) listed 5 fire-only blended prims (vertex counts 4/58/4/238/4
+and a 44-vertex strip, blend `0x2a`/`0xa2`) among 40 noisy differences; the scene moves between
+the two runs, so the key must be the screen-space box of the head. The root emitter's texture
+bind is the answer `oag_pob::texture` leaves open.
+
+**Cross-title check.** HD and Omega draw their own blast (`WO_PLASMA_LIGHTNING_*`, ring, sphere
+and halo on eased scales) and hold the head back; none of this applies there (**checked, differs**,
+`ps3-hdfury-eu/plasma.md`). Pure's Plasma visual is unwired and 2048 authors none (`docs/gameplay/weapon-lineage.md`). Pulse PS2 inherits PSP's measured law and is unmeasured here
+(**not checkable** without a PCSX2 pair; `scripts/pcsx2-pulse-pair.py` exists).
