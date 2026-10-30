@@ -378,3 +378,87 @@ fn a_checkpoint_race_run_twice_hashes_the_same_every_tick() {
         assert_eq!(first.sim.state_hash(), second.sim.state_hash(), "tick {t}");
     }
 }
+
+/// A WAT module of `state_bytes` 4 that, with `slot`, sends `prefer-route{slot, 0}` every
+/// tick, and without sends nothing.
+fn preferring(slot: Option<u8>) -> race::extensions::Source {
+    use oag_ext_abi::{COMMAND_ARG, COMMAND_KIND, COMMAND_SLOT, REPLY_AT};
+    const IO: usize = 1024;
+    let body = match slot {
+        Some(slot) => format!(
+            "(i32.store (i32.const {reply}) (i32.const 1))
+             (i32.store8 (i32.const {kind}) (i32.const 21))
+             (i32.store8 (i32.const {at}) (i32.const {slot}))
+             (i32.store16 (i32.const {arg}) (i32.const 0))",
+            reply = IO + REPLY_AT,
+            kind = IO + REPLY_AT + 4 + COMMAND_KIND,
+            at = IO + REPLY_AT + 4 + COMMAND_SLOT,
+            arg = IO + REPLY_AT + 4 + COMMAND_ARG,
+        ),
+        None => String::new(),
+    };
+    let wasm = wat::parse_str(format!(
+        r#"(module
+            (memory (export "memory") 1)
+            (func (export "oag_abi") (result i32) i32.const {word})
+            (func (export "oag_io") (result i32) i32.const {IO})
+            (func (export "tick") (result i32) {body} i32.const 0))"#,
+        word = oag_ext_abi::ABI_WORD,
+    ))
+    .unwrap();
+    race::extensions::Source {
+        mod_id: "test.prefer".into(),
+        module: "test.wasm".into(),
+        titles: Vec::new(),
+        api: oag_ext_abi::ABI,
+        memory_pages: 1,
+        state_bytes: 4,
+        scope: race::extensions::Scope::Rules,
+        read: Arc::new(move || Ok(wasm.clone())),
+        strings: Arc::new(|_| Default::default()),
+        icons: Vec::new(),
+        effects: Vec::new(),
+        files: Arc::new(|_| Err("no files".into())),
+        pickup: None,
+    }
+}
+
+#[test]
+#[ignore = "needs a Pulse disc image, the mod examples and --features extensions"]
+fn a_held_preference_is_hashed_even_where_it_changes_no_craft() {
+    let Some((_, file)) = ready() else {
+        return;
+    };
+    // Slot 1's coin takes the pit lane on its first pass (the vanilla race above), so a
+    // module preferring the pit route for it moves nothing on the track: only the held
+    // preference tells the two races apart.
+    let slot = 1;
+    let mut holding = start(&file, Some(&preferring(Some(slot as u8))), true);
+    let mut silent = start(&file, Some(&preferring(None)), true);
+    let mut took_pit = false;
+    for t in 0..1500 {
+        holding.tick(&PlayerInputs::none());
+        silent.tick(&PlayerInputs::none());
+        for s in 0..8 {
+            let (a, b) = (&holding.sim.world.ships[s], &silent.sim.world.ships[s]);
+            assert_eq!(
+                a.physics.body.position, b.physics.body.position,
+                "tick {t}: slot {s} moved; the preference must match the coin here"
+            );
+            assert_eq!(
+                a.driver.branching.route, b.driver.branching.route,
+                "tick {t}"
+            );
+        }
+        took_pit |= holding.sim.world.ships[slot].driver.branching.route == PIT_ROUTE;
+        assert_ne!(
+            holding.sim.state_hash(),
+            silent.sim.state_hash(),
+            "tick {t}: the held preference is simulation state"
+        );
+    }
+    assert!(
+        took_pit,
+        "slot {slot}'s coin took the pit lane, as in the vanilla race"
+    );
+}
