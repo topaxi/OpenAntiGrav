@@ -177,7 +177,7 @@ aes = "0.8"
 # Big-integer modular exponentiation for the PS4 package's two RSA-2048 key
 # unwraps (`oag-disc`'s `ps4_pkg`), two exponentiations per package. Already in the
 # lock file as a transitive dependency, so this adds no crate. MIT OR Apache-2.0.
-num-bigint = "0.4"
+num-bigint = "0.5"
 bytemuck = "1"
 # Reads an author's own PNG beside a track manifest (ADR-0076); already in the
 # lockfile through resvg.
