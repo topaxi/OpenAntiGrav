@@ -147,6 +147,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         collision,
         speedup_pads,
         weapon_pads,
+        props: track_props,
         #[cfg(feature = "view")]
         mut drawn,
         #[cfg(feature = "view")]
@@ -1045,6 +1046,12 @@ pub fn load(options: &Options) -> Result<Loaded> {
         ),
         &title.slug(),
         options.foreign_track.as_deref(),
+        crate::extensions::Track {
+            name: &track,
+            props: &track_props,
+            speedup_pads: &speedup_pads,
+            weapon_pads: &weapon_pads,
+        },
         &mut report,
     );
     #[cfg(feature = "view")]

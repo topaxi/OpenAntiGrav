@@ -18,11 +18,14 @@
 //! | [`ACTIVE_AT`] | 4 | active mask, one bit per slot holding a craft |
 //! | [`EVENT_COUNT_AT`] | 4 | event count |
 //! | [`STATE_LEN_AT`] | 4 | state length |
-//! | [`EVENTS_AT`] | [`EVENT_LEN`] x [`MAX_EVENTS`] | events ([`Event`]): kind `u8`, slot `u8`, 6 bytes zero |
+//! | [`EVENTS_AT`] | [`EVENT_LEN`] x [`MAX_EVENTS`] | events ([`Event`]): kind `u8`, slot `u8`, index `u16`, 4 bytes zero |
 //! | [`STATE_AT`] | [`MAX_STATE_BYTES`] | the module's state blob, in and out |
 //! | [`REPLY_AT`] | 4 | command count, written by the guest |
 //! | [`REPLY_AT`] + 4 | [`COMMAND_LEN`] x [`MAX_COMMANDS`] | commands ([`Command`]): kind `u8`, slot `u8`, `u16` argument, `f32`, `u32` |
 //! | [`CRAFTS_AT`] | [`CRAFT_LEN`] x [`MAX_CRAFTS`] | one record per grid slot ([`Craft`]): pickup `u8`, flags `u8`, lap `u8`, laps target `u8`, shield `f32`, shield maximum `f32`, speed km/h `f32` |
+//!
+//! The track region is a second buffer, written by the host before each call when the
+//! guest exports `oag_track() -> u32`: [`track`] lays it out.
 //!
 //! The README's WIT (`docs/architecture/wasm-extensions/README.md`, section 2.1) is
 //! the documentation of the records; this is what is built of it.
@@ -102,6 +105,8 @@ const _: () = assert!(MAX_CRAFTS <= MAX_SLOTS as usize);
 pub const EVENT_KIND: usize = 0;
 /// Within an event record: the slot.
 pub const EVENT_SLOT: usize = 1;
+/// Within an event record: the pad or trigger index, `u16`.
+pub const EVENT_INDEX: usize = 2;
 /// Within a command record: the kind code.
 pub const COMMAND_KIND: usize = 0;
 /// Within a command record: the slot.
@@ -134,6 +139,8 @@ pub const CRAFT_FIRE_HELD: u8 = 2;
 /// Craft flag: the craft is racing: past the start, not wrecked, not respawning.
 pub const CRAFT_RACING: u8 = 4;
 
+/// The largest `scale-pad` factor, race-wide or per slot. Chosen.
+pub const MAX_PAD_FACTOR: f32 = 2.0;
 /// The largest `scale-thrust` factor: a mod may double an engine's thrust, no more.
 /// Chosen (README 2.1 proposed `[0.25, 2.0]`; the lower end is `0` here).
 pub const MAX_THRUST_FACTOR: f32 = 2.0;
@@ -144,12 +151,14 @@ pub const MAX_ROLL_EVERY: u32 = 255;
 const EVENT_WALL_CONTACT: u8 = 1;
 const EVENT_PICKUP_FIRE: u8 = 2;
 const EVENT_PICKUP_ABSORBED: u8 = 3;
-const EVENT_PAD_ENERGY: u8 = 4;
+const EVENT_SPEED_PAD: u8 = 5;
+const EVENT_WEAPON_PAD: u8 = 6;
+const EVENT_TRIGGER_ENTER: u8 = 7;
+const EVENT_TRIGGER_EXIT: u8 = 8;
 /// Command kind codes.
 const COMMAND_SCALE_THRUST: u8 = 1;
 const COMMAND_SHIELD_DELTA: u8 = 2;
 const COMMAND_GIVE_PICKUP: u8 = 3;
-const COMMAND_PAD_MODE: u8 = 4;
 const COMMAND_PLAY_CUE: u8 = 5;
 const COMMAND_FIRE_EFFECT: u8 = 6;
 const COMMAND_PICKUP_TINT: u8 = 7;
@@ -158,6 +167,8 @@ const COMMAND_PICKUP_ROLL: u8 = 9;
 const COMMAND_SET_WEATHER: u8 = 10;
 const COMMAND_SET_SUN: u8 = 11;
 const COMMAND_GRADE_SKY: u8 = 12;
+const COMMAND_SCALE_PAD: u8 = 13;
+const COMMAND_SCALE_SLOT_PADS: u8 = 14;
 /// The craft record's pickup code for a simulation mod's own pickup.
 const PICKUP_OURS: u8 = u8::MAX;
 
@@ -444,10 +455,35 @@ pub enum Event {
         /// The grid slot.
         slot: Slot,
     },
-    /// A craft in `pad-mode` entered a speed pad and was given no boost for it.
-    PadEnergy {
+    /// A craft entered a speed pad: its index among the track's speed pads, the order
+    /// of the track region's speed-pad entities. Raised on every entry, whatever the
+    /// pad's `scale-pad` factor.
+    SpeedPad {
         /// The grid slot.
         slot: Slot,
+        /// The pad.
+        pad: u16,
+    },
+    /// A craft entered a weapon pad, cooling down or not, granting or not.
+    WeaponPad {
+        /// The grid slot.
+        slot: Slot,
+        /// The pad, among the track's weapon pads.
+        pad: u16,
+    },
+    /// A craft entered a trigger volume of the track file.
+    TriggerEnter {
+        /// The grid slot.
+        slot: Slot,
+        /// The trigger, among the track's triggers.
+        trigger: u16,
+    },
+    /// A craft left a trigger volume.
+    TriggerExit {
+        /// The grid slot.
+        slot: Slot,
+        /// The trigger.
+        trigger: u16,
     },
 }
 
@@ -459,22 +495,31 @@ impl Event {
             Self::WallContact { slot }
             | Self::PickupFire { slot }
             | Self::PickupAbsorbed { slot }
-            | Self::PadEnergy { slot } => slot,
+            | Self::SpeedPad { slot, .. }
+            | Self::WeaponPad { slot, .. }
+            | Self::TriggerEnter { slot, .. }
+            | Self::TriggerExit { slot, .. } => slot,
         }
     }
 
     /// The record.
     #[must_use]
     pub const fn encode(self) -> [u8; EVENT_LEN] {
-        let kind = match self {
-            Self::WallContact { .. } => EVENT_WALL_CONTACT,
-            Self::PickupFire { .. } => EVENT_PICKUP_FIRE,
-            Self::PickupAbsorbed { .. } => EVENT_PICKUP_ABSORBED,
-            Self::PadEnergy { .. } => EVENT_PAD_ENERGY,
+        let (kind, index) = match self {
+            Self::WallContact { .. } => (EVENT_WALL_CONTACT, 0),
+            Self::PickupFire { .. } => (EVENT_PICKUP_FIRE, 0),
+            Self::PickupAbsorbed { .. } => (EVENT_PICKUP_ABSORBED, 0),
+            Self::SpeedPad { pad, .. } => (EVENT_SPEED_PAD, pad),
+            Self::WeaponPad { pad, .. } => (EVENT_WEAPON_PAD, pad),
+            Self::TriggerEnter { trigger, .. } => (EVENT_TRIGGER_ENTER, trigger),
+            Self::TriggerExit { trigger, .. } => (EVENT_TRIGGER_EXIT, trigger),
         };
         let mut record = [0; EVENT_LEN];
         record[EVENT_KIND] = kind;
         record[EVENT_SLOT] = self.slot().0;
+        let [lo, hi] = index.to_le_bytes();
+        record[EVENT_INDEX] = lo;
+        record[EVENT_INDEX + 1] = hi;
         record
     }
 
@@ -483,11 +528,21 @@ impl Event {
     #[must_use]
     pub fn decode(record: &[u8; EVENT_LEN]) -> Option<Self> {
         let slot = Slot::new(usize::from(record[EVENT_SLOT]))?;
+        let index = u16::from_le_bytes([record[EVENT_INDEX], record[EVENT_INDEX + 1]]);
         Some(match record[EVENT_KIND] {
             EVENT_WALL_CONTACT => Self::WallContact { slot },
             EVENT_PICKUP_FIRE => Self::PickupFire { slot },
             EVENT_PICKUP_ABSORBED => Self::PickupAbsorbed { slot },
-            EVENT_PAD_ENERGY => Self::PadEnergy { slot },
+            EVENT_SPEED_PAD => Self::SpeedPad { slot, pad: index },
+            EVENT_WEAPON_PAD => Self::WeaponPad { slot, pad: index },
+            EVENT_TRIGGER_ENTER => Self::TriggerEnter {
+                slot,
+                trigger: index,
+            },
+            EVENT_TRIGGER_EXIT => Self::TriggerExit {
+                slot,
+                trigger: index,
+            },
             _ => return None,
         })
     }
@@ -537,11 +592,22 @@ pub enum Command {
         /// `1..=MAX_ROLL_EVERY`.
         every: u8,
     },
-    /// This tick, a speed pad gives the slot no boost: on entering one the engine raises
-    /// `pad-energy` instead. Sent each tick it should hold.
-    PadMode {
+    /// Race-wide (written with slot 0): from now on, speed pad `pad` pushes `factor`
+    /// times its own push, held until replaced. The engine's, hashed.
+    ScalePad {
+        /// The pad, among the track's speed pads.
+        pad: u16,
+        /// Finite, in `[0, MAX_PAD_FACTOR]`.
+        factor: f32,
+    },
+    /// This tick, every speed pad pushes the slot `factor` times as hard. Re-sent each
+    /// tick it should hold; hashed. The push is the pad's factor times the slot's; at
+    /// 0 the pad gives no push, no plume and no sound, and `speed-pad` still fires.
+    ScaleSlotPads {
         /// The grid slot.
         slot: Slot,
+        /// Finite, in `[0, MAX_PAD_FACTOR]`.
+        factor: f32,
     },
     /// Play one of the title's own sounds from the craft. An output: queued beside the
     /// engine's cues, heard, never hashed.
@@ -599,11 +665,12 @@ impl Command {
             | Self::ShieldDelta { slot, .. }
             | Self::GivePickup { slot }
             | Self::ClearPickup { slot }
-            | Self::PadMode { slot }
+            | Self::ScaleSlotPads { slot, .. }
             | Self::PlayCue { slot, .. }
             | Self::FireEffect { slot, .. }
             | Self::PickupTint { slot, .. } => Some(slot),
             Self::PickupRoll { .. }
+            | Self::ScalePad { .. }
             | Self::SetWeather { .. }
             | Self::SetSun { .. }
             | Self::GradeSky { .. } => None,
@@ -624,7 +691,8 @@ impl Command {
                 0.0,
                 u32::from(every),
             ),
-            Self::PadMode { .. } => (COMMAND_PAD_MODE, 0, 0.0, 0),
+            Self::ScalePad { pad, factor } => (COMMAND_SCALE_PAD, pad, factor, 0),
+            Self::ScaleSlotPads { factor, .. } => (COMMAND_SCALE_SLOT_PADS, 0, factor, 0),
             Self::PlayCue { cue, .. } => (COMMAND_PLAY_CUE, cue.code(), 0.0, 0),
             Self::FireEffect { effect, .. } => (COMMAND_FIRE_EFFECT, effect.code(), 0.0, 0),
             Self::PickupTint { rgba, .. } => (COMMAND_PICKUP_TINT, 0, 0.0, rgba.to_u32()),
@@ -664,6 +732,26 @@ impl Command {
                     every: word,
                 }),
             };
+        }
+        if matches!(kind, COMMAND_SCALE_PAD | COMMAND_SCALE_SLOT_PADS)
+            && !(0.0..=MAX_PAD_FACTOR).contains(&value)
+        {
+            return Err(Malformed::PadFactor {
+                slot: raw_slot,
+                factor: value,
+            });
+        }
+        if kind == COMMAND_SCALE_PAD {
+            if raw_slot != 0 {
+                return Err(Malformed::PadFactor {
+                    slot: raw_slot,
+                    factor: value,
+                });
+            }
+            return Ok(Self::ScalePad {
+                pad: arg,
+                factor: value,
+            });
         }
         if matches!(
             kind,
@@ -713,7 +801,10 @@ impl Command {
             }
             COMMAND_GIVE_PICKUP => Self::GivePickup { slot },
             COMMAND_CLEAR_PICKUP => Self::ClearPickup { slot },
-            COMMAND_PAD_MODE => Self::PadMode { slot },
+            COMMAND_SCALE_SLOT_PADS => Self::ScaleSlotPads {
+                slot,
+                factor: value,
+            },
             COMMAND_PLAY_CUE => Self::PlayCue {
                 slot,
                 cue: Cue::from_code(arg).ok_or(Malformed::Cue(arg))?,
@@ -745,6 +836,14 @@ pub enum Malformed {
     Factor {
         /// The slot.
         slot: Slot,
+        /// The factor sent.
+        factor: f32,
+    },
+    /// A `scale-pad` factor outside `[0, MAX_PAD_FACTOR]` (NaN included), or a
+    /// race-wide one with a slot other than 0.
+    PadFactor {
+        /// The slot byte.
+        slot: u8,
         /// The factor sent.
         factor: f32,
     },
@@ -793,6 +892,10 @@ impl fmt::Display for Malformed {
                 f,
                 "scale-thrust factor {factor} for slot {} is not in [0, {MAX_THRUST_FACTOR}]",
                 slot.0
+            ),
+            Self::PadFactor { slot, factor } => write!(
+                f,
+                "scale-pad factor {factor} (slot byte {slot}) is not in [0, {MAX_PAD_FACTOR}], or a race-wide one names a slot"
             ),
             Self::Amount { slot, amount } => {
                 write!(f, "shield-delta {amount} for slot {} is not finite", slot.0)
@@ -968,6 +1071,8 @@ fn get_u32(buffer: &[u8], at: usize) -> u32 {
         _ => 0,
     }
 }
+
+pub mod track;
 
 #[cfg(test)]
 mod tests;

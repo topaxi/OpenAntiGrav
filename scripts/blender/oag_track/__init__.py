@@ -291,6 +291,11 @@ class OAG_PT_track(Panel):
             layout.prop(obj, "oag_min")
             layout.prop(obj, "oag_max")
             layout.prop(obj, "oag_disabled")
+            layout.label(text="mod_* custom properties go to simulation mods")
+        elif kind == "trigger":
+            layout.prop(obj, "oag_min")
+            layout.prop(obj, "oag_max")
+            layout.label(text="mod_* custom properties go to simulation mods")
         elif scene_art.is_art(obj):
             layout.label(text="Art mesh (untagged):")
             layout.prop(obj, "oag_shadow")

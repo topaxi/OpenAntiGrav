@@ -11,6 +11,9 @@
 //!   `Ship::pending_thrust_scale`, which this tick's step consumes for a person's craft
 //!   (`player_step.rs`) and an AI craft (`field.rs`) alike. Multiplied, not assigned, so a
 //!   Leach Beam drain armed at the end of the last tick is kept.
+//! - **Track**: the region [`prepare`] lays out at load for a guest's `oag_track` buffer
+//!   (pads, triggers, author-defined properties; `track`). Pad entries and trigger
+//!   enters and exits are events; `scale-pad` is read by `Race::test_speedup_pads`.
 //! - **State**: each module's blob and fault tick live in [`RaceSim`], cloned with a
 //!   snapshot and hashed by [`Extensions::hash_into`]. A race with no module hashes
 //!   nothing here, so every vanilla hash is unchanged.
@@ -19,6 +22,10 @@
 //! and nothing of wasmtime is built or linked.
 
 use std::sync::Arc;
+
+mod track;
+
+pub use track::{Track, TrackProps};
 
 /// The most simulation modules one race runs. Chosen.
 pub const MAX_SIM_MODS: usize = 4;
@@ -131,6 +138,9 @@ pub struct Prepared {
     /// Whether a track module is among them: the load then builds the host title's
     /// rain for it ([`Self::has_track_module`]).
     track_module: bool,
+    /// The track as the modules read it.
+    #[cfg(feature = "extensions")]
+    region: track::Region,
 }
 
 impl Prepared {
@@ -142,13 +152,16 @@ impl Prepared {
 }
 
 /// Reads and compiles the `sources` that are for `title` (its slug) and, for a track
-/// module, for `foreign_track` (the track file raced), at race load. A module that
-/// fails leaves its mod out and says why in `report`; the race runs without it.
+/// module, for `foreign_track` (the track file raced), at race load, and lays out
+/// `track` for them. A module that fails leaves its mod out and says why in `report`;
+/// the race runs without it. A track past the ABI's caps leaves every module out, by
+/// name.
 #[must_use]
 pub fn prepare(
     sources: &[Source],
     title: &str,
     foreign_track: Option<&std::path::Path>,
+    track: Track<'_>,
     report: &mut Vec<String>,
 ) -> Prepared {
     let sources: Vec<&Source> = sources
@@ -158,6 +171,7 @@ pub fn prepare(
         .collect();
     #[cfg(not(feature = "extensions"))]
     {
+        let _ = track;
         for source in sources {
             push(
                 report,
@@ -171,6 +185,22 @@ pub fn prepare(
     }
     #[cfg(feature = "extensions")]
     {
+        if sources.is_empty() {
+            return Prepared::default();
+        }
+        let region = match track::encode(track) {
+            Ok(region) => region,
+            Err(e) => {
+                push(
+                    report,
+                    format!(
+                        "mods: track {} carries {e}; the race runs no simulation mod",
+                        track.name
+                    ),
+                );
+                return Prepared::default();
+            }
+        };
         let mut sorted = sources;
         sorted.sort_by(|a, b| a.mod_id.cmp(&b.mod_id));
         let mut modules = Vec::new();
@@ -229,6 +259,7 @@ pub fn prepare(
         Prepared {
             modules,
             track_module,
+            region,
         }
     }
 }
@@ -300,7 +331,7 @@ impl Extensions {
         #[cfg(feature = "extensions")]
         {
             Self {
-                on: on::On::new(prepared.modules),
+                on: on::On::new(prepared.modules, prepared.region),
             }
         }
     }
@@ -373,27 +404,35 @@ impl Extensions {
         }
     }
 
-    /// Whether a module put `slot` in `pad-mode` this tick: a speed pad gives it no boost.
-    pub(super) fn pad_mode(&self, slot: usize) -> bool {
+    /// What speed pad `pad` pushes `slot` by this tick: the pad's race-wide
+    /// `scale-pad` times the slot's. Exactly `1.0` in every race without a module.
+    pub(super) fn pad_factor(&self, slot: usize, pad: usize) -> f32 {
         #[cfg(feature = "extensions")]
         {
-            self.on.pad_mode & (1 << slot) != 0
+            self.on.pad_factor(slot, pad)
         }
         #[cfg(not(feature = "extensions"))]
         {
-            let _ = slot;
-            false
+            let _ = (slot, pad);
+            1.0
         }
     }
 
-    /// A craft in `pad-mode` entered a speed pad.
-    pub(super) fn pad_energy(&mut self, slot: usize) {
+    /// `slot` entered speed pad `pad` (`speed-pad`), or, `weapon`, weapon pad `pad`.
+    pub(super) fn pad_entered(&mut self, slot: usize, pad: usize, weapon: bool) {
         #[cfg(feature = "extensions")]
-        {
-            self.on.pad_energy |= 1 << slot;
-        }
+        self.on.pad_entered(slot, pad, weapon);
         #[cfg(not(feature = "extensions"))]
-        let _ = slot;
+        let _ = (slot, pad, weapon);
+    }
+
+    /// Which of the track's triggers `slot` is inside this tick: any point of its
+    /// sweep (`Race::pad_sweep`) in the box. Tested only while a module runs.
+    pub(super) fn test_triggers(&mut self, slot: usize, sweep: &[oag_core::math::Vec3]) {
+        #[cfg(feature = "extensions")]
+        self.on.test_triggers(slot, sweep);
+        #[cfg(not(feature = "extensions"))]
+        let _ = (slot, sweep);
     }
 
     /// The mod's own pickup's fire (`absorbed == false`) or absorb, raised for the module.
@@ -435,6 +474,21 @@ impl Extensions {
         self.on.hash_into(hasher);
         #[cfg(not(feature = "extensions"))]
         let _ = hasher;
+    }
+
+    /// Module `index`'s state blob (id order), as its last call left it: for tests and
+    /// tools; nothing simulated reads it from here.
+    #[must_use]
+    pub fn state(&self, index: usize) -> Option<&[u8]> {
+        #[cfg(feature = "extensions")]
+        {
+            self.on.slots.get(index).map(|slot| slot.blob.as_slice())
+        }
+        #[cfg(not(feature = "extensions"))]
+        {
+            let _ = index;
+            None
+        }
     }
 
     /// The `fire-effect`s queued this tick, not yet drawn.
@@ -504,6 +558,12 @@ impl crate::Race {
         self.sim.extensions.reports()
     }
 
+    /// Module `index`'s state blob ([`Extensions::state`]).
+    #[must_use]
+    pub fn extension_state(&self, index: usize) -> Option<&[u8]> {
+        self.sim.extensions.state(index)
+    }
+
     /// Whether a simulation module runs in this race (MODDED: no replay, README 4.4).
     #[must_use]
     pub fn is_modded(&self) -> bool {
@@ -523,7 +583,7 @@ mod on {
     pub(super) struct Slot {
         mod_id: String,
         module: Module,
-        blob: Vec<u8>,
+        pub(super) blob: Vec<u8>,
         faulted: Option<(u64, String)>,
         fuel_used: u64,
         fuel_peak: u64,
@@ -549,9 +609,19 @@ mod on {
         /// `pickup-fire` / `pickup-absorbed` raised since the last call, one bit a slot.
         fires: u32,
         absorbs: u32,
-        /// Slots in `pad-mode` this tick, and `pad-energy` raised since the last call.
-        pub(super) pad_mode: u32,
-        pub(super) pad_energy: u32,
+        /// The track as the modules read it.
+        region: super::track::Region,
+        /// Each speed pad's race-wide `scale-pad`, held until replaced.
+        pad_scale: Vec<f32>,
+        /// Each slot's `scale-pad` this tick.
+        slot_pad_scale: [f32; oag_gameplay::MAX_SHIPS],
+        /// The speed pad and the weapon pad each slot entered since the last call.
+        speed_entered: [Option<u16>; oag_gameplay::MAX_SHIPS],
+        weapon_entered: [Option<u16>; oag_gameplay::MAX_SHIPS],
+        /// The triggers each slot is inside now, and was inside at the last call: the
+        /// difference is the `trigger-enter` and `trigger-exit` events.
+        inside: [u64; oag_gameplay::MAX_SHIPS],
+        reported: [u64; oag_gameplay::MAX_SHIPS],
         /// Outputs, never hashed: each slot's `pickup-tint` this tick, and the
         /// `fire-effect`s the view has still to draw.
         pub(super) tints: [Option<[f32; 4]>; oag_gameplay::MAX_SHIPS],
@@ -561,7 +631,7 @@ mod on {
     }
 
     impl On {
-        pub(super) fn new(modules: Vec<(String, Module)>) -> Self {
+        pub(super) fn new(modules: Vec<(String, Module)>, region: super::track::Region) -> Self {
             Self {
                 slots: modules
                     .into_iter()
@@ -582,8 +652,13 @@ mod on {
                 rolled: 0,
                 fires: 0,
                 absorbs: 0,
-                pad_mode: 0,
-                pad_energy: 0,
+                pad_scale: vec![1.0; region.speed_pads],
+                region,
+                slot_pad_scale: [1.0; oag_gameplay::MAX_SHIPS],
+                speed_entered: [None; oag_gameplay::MAX_SHIPS],
+                weapon_entered: [None; oag_gameplay::MAX_SHIPS],
+                inside: [0; oag_gameplay::MAX_SHIPS],
+                reported: [0; oag_gameplay::MAX_SHIPS],
                 tints: [None; oag_gameplay::MAX_SHIPS],
                 effects: Vec::new(),
                 sky: super::Sky::default(),
@@ -604,6 +679,38 @@ mod on {
             }
             self.rolled += 1;
             self.rolled.is_multiple_of(u32::from(every))
+        }
+
+        pub(super) fn pad_factor(&self, slot: usize, pad: usize) -> f32 {
+            if self.slots.is_empty() {
+                return 1.0;
+            }
+            self.pad_scale.get(pad).copied().unwrap_or(1.0) * self.slot_pad_scale[slot]
+        }
+
+        pub(super) fn pad_entered(&mut self, slot: usize, pad: usize, weapon: bool) {
+            if self.slots.is_empty() {
+                return;
+            }
+            let entered = if weapon {
+                &mut self.weapon_entered
+            } else {
+                &mut self.speed_entered
+            };
+            entered[slot] = u16::try_from(pad).ok();
+        }
+
+        pub(super) fn test_triggers(&mut self, slot: usize, sweep: &[oag_core::math::Vec3]) {
+            if self.slots.is_empty() || self.region.triggers.is_empty() {
+                return;
+            }
+            self.inside[slot] = self
+                .region
+                .triggers
+                .iter()
+                .enumerate()
+                .filter(|(_, b)| sweep.iter().any(|p| b.contains(p.to_array())))
+                .fold(0, |mask, (i, _)| mask | 1 << i);
         }
 
         pub(super) fn pickup_used(&mut self, slot: usize, absorbed: bool) {
@@ -640,8 +747,15 @@ mod on {
             hasher.write_u32(self.rolled);
             hasher.write_u32(self.fires);
             hasher.write_u32(self.absorbs);
-            hasher.write_u32(self.pad_mode);
-            hasher.write_u32(self.pad_energy);
+            for scale in self.pad_scale.iter().chain(&self.slot_pad_scale) {
+                hasher.write_f32(*scale);
+            }
+            for entered in self.speed_entered.iter().chain(&self.weapon_entered) {
+                hasher.write_u32(entered.map_or(0, |pad| u32::from(pad) + 1));
+            }
+            for mask in self.inside.iter().chain(&self.reported) {
+                hasher.write_u64(*mask);
+            }
             for slot in &self.slots {
                 hasher.write(&slot.blob);
                 match &slot.faulted {
@@ -848,6 +962,40 @@ mod on {
         }
     }
 
+    /// What happened since the last call, per slot in slot order: a wall contact, a
+    /// fire, an absorb, the speed pad and the weapon pad entered, the triggers left and
+    /// the triggers entered (each in index order). Past `MAX_EVENTS` the rest are
+    /// dropped.
+    fn events(on: &On) -> Vec<Event> {
+        (0..oag_gameplay::MAX_SHIPS)
+            .filter_map(oag_ext_abi::Slot::new)
+            .flat_map(|slot| {
+                let i = slot.index();
+                let bit = |mask: u32| mask & slot.bit() != 0;
+                let (inside, before) = (on.inside[i], on.reported[i]);
+                let triggers = |mask: u64| (0..64_u16).filter(move |t| mask & (1 << t) != 0);
+                [
+                    bit(on.walls).then_some(Event::WallContact { slot }),
+                    bit(on.fires).then_some(Event::PickupFire { slot }),
+                    bit(on.absorbs).then_some(Event::PickupAbsorbed { slot }),
+                    on.speed_entered[i].map(|pad| Event::SpeedPad { slot, pad }),
+                    on.weapon_entered[i].map(|pad| Event::WeaponPad { slot, pad }),
+                ]
+                .into_iter()
+                .flatten()
+                .chain(
+                    triggers(before & !inside)
+                        .map(move |trigger| Event::TriggerExit { slot, trigger }),
+                )
+                .chain(
+                    triggers(inside & !before)
+                        .map(move |trigger| Event::TriggerEnter { slot, trigger }),
+                )
+            })
+            .take(MAX_EVENTS)
+            .collect()
+    }
+
     pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs) {
         if sim.extensions.on.slots.is_empty() {
             return;
@@ -865,36 +1013,27 @@ mod on {
         let on = &mut sim.extensions.on;
         // A boost the step never took (a craft that did not step) does not carry over.
         on.boost = [1.0; oag_gameplay::MAX_SHIPS];
-        // Per slot in slot order: a wall contact, a fire, an absorb.
-        let events: Vec<Event> = (0..oag_gameplay::MAX_SHIPS)
-            .filter_map(oag_ext_abi::Slot::new)
-            .flat_map(|slot| {
-                let bit = |mask: u32| mask & slot.bit() != 0;
-                [
-                    bit(on.walls).then_some(Event::WallContact { slot }),
-                    bit(on.fires).then_some(Event::PickupFire { slot }),
-                    bit(on.absorbs).then_some(Event::PickupAbsorbed { slot }),
-                    bit(on.pad_energy).then_some(Event::PadEnergy { slot }),
-                ]
-            })
-            .flatten()
-            .take(MAX_EVENTS)
-            .collect();
+        on.slot_pad_scale = [1.0; oag_gameplay::MAX_SHIPS];
+        let events = events(on);
         on.walls = 0;
         on.fires = 0;
         on.absorbs = 0;
-        on.pad_energy = 0;
-        on.pad_mode = 0;
+        on.speed_entered = [None; oag_gameplay::MAX_SHIPS];
+        on.weapon_entered = [None; oag_gameplay::MAX_SHIPS];
+        on.reported = on.inside;
         on.tints = [None; oag_gameplay::MAX_SHIPS];
         on.sky = super::Sky::default();
         // This tick's alone: a tick that draws nothing (a replayed one, a server's) drops
         // them rather than piling them up.
         on.effects.clear();
+        let region = on.region.clone();
         let observation = Observation {
             tick,
             active,
             events: &events,
             crafts: &crafts,
+            track: &region.bytes,
+            speed_pads: region.speed_pads,
         };
         let mut commands = Vec::new();
         // Every module's checked commands, in id order: applied once all have run, so
@@ -941,7 +1080,15 @@ mod on {
                     *boost = (*boost * factor).min(oag_ext_abi::MAX_THRUST_FACTOR);
                 }
                 Command::ShieldDelta { slot, amount } => shield_delta(sim, slot.index(), amount),
-                Command::PadMode { slot } => sim.extensions.on.pad_mode |= slot.bit(),
+                // Race-wide and held: the later module in id order wins.
+                Command::ScalePad { pad, factor } => {
+                    sim.extensions.on.pad_scale[usize::from(pad)] = factor;
+                }
+                // Per slot, this tick: two modules compose, bounded as a factor is.
+                Command::ScaleSlotPads { slot, factor } => {
+                    let scale = &mut sim.extensions.on.slot_pad_scale[slot.index()];
+                    *scale = (*scale * factor).min(oag_ext_abi::MAX_PAD_FACTOR);
+                }
                 Command::PlayCue { slot, cue } => {
                     sim.cues.push(oag_gameplay::cue::CueEvent::new(
                         self::cue(cue),

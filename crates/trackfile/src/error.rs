@@ -73,6 +73,15 @@ pub enum Error {
         /// Why.
         why: String,
     },
+    /// A property or trigger a mod could not read: a string, an empty or clashing
+    /// name, a list that does not match its pads, a cap passed.
+    #[error("{what}: {why}")]
+    Props {
+        /// Where.
+        what: String,
+        /// Why.
+        why: String,
+    },
     /// The track cannot be held by this format.
     #[error("cannot write: {0}")]
     Unwritable(String),

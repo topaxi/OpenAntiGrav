@@ -219,6 +219,17 @@ Copy either one's `guest/` to start inside a `mod-examples` checkout; elsewhere,
 its `oag-ext` dependency at your engine checkout's `crates/ext` (the example's is a
 relative `path` into the engine the submodule sits in).
 
+**A track's own properties.** A track file can carry numbers for a mod on its speed
+pads, weapon pads, triggers and itself (a `mod_<name>` custom property in Blender,
+[track file](../formats/track-file.md#properties-and-triggers-for-simulation-mods)); the
+engine gives them no meaning. Read one with
+`obs.track().speed_pad(pad).and_then(|p| p.prop(oag_ext::prop!("boost")))`, and hear
+entries as `Event::SpeedPad`, `WeaponPad`, `TriggerEnter` and `TriggerExit`. The SDK's
+track buffer is 32 KiB of zeroed memory: with a 16 KiB stack, `memory_pages = 2` holds
+it. `Reply::scale_pad(pad, factor)` (race-wide, held) and `scale_slot_pads(&craft,
+factor)` (this tick) scale a pad's push, both in `[0, 2]`
+([what they scale](../architecture/wasm-extensions/README.md#and-track-properties-2026-10-30)).
+
 A module built for another layout revision of ABI 1 is refused at load, by name
 (`built for ABI 1 rev N, this host is ABI 1 rev M`): rebuild it against the SDK of
 the engine you run. A module in another language writes the buffer itself; the layout

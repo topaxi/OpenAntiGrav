@@ -24,6 +24,9 @@ pub(crate) struct Manifest {
     pub track: TrackTable,
     pub spline: Spline,
     pub counts: Counts,
+    /// The track's own properties for a simulation mod; written only when it has some.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub props: BTreeMap<String, toml::Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub art: Option<ArtTable>,
     #[serde(flatten)]
@@ -89,6 +92,9 @@ pub(crate) struct Counts {
     /// Written only when the track has art, so a file without it is what 1.0 wrote.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub art_meshes: usize,
+    /// Written only when the track has triggers.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub triggers: usize,
 }
 
 fn is_zero(n: &usize) -> bool {
@@ -109,6 +115,7 @@ pub(crate) struct Parsed {
     pub junctions: Vec<Junction>,
     pub counts: Counts,
     pub art: Option<ArtTable>,
+    pub props: crate::props::Props,
     pub unread: Vec<String>,
 }
 
@@ -199,7 +206,9 @@ pub(crate) fn write(track: &Track, glb_name: &str) -> Result<String, Error> {
             speedup_pads: track.speedup_pads.len(),
             weapon_pads: track.weapon_pads.len(),
             art_meshes: track.art.as_ref().map_or(0, |a| a.meshes.len()),
+            triggers: track.triggers.len(),
         },
+        props: crate::props::to_toml(&track.props),
         art: track.art.as_ref().map(ArtTable::of),
         extra: BTreeMap::new(),
     };
@@ -286,6 +295,7 @@ pub(crate) fn read(text: &str) -> Result<Parsed, Error> {
         junctions,
         counts: m.counts,
         art,
+        props: crate::props::from_toml(m.props)?,
         unread,
     })
 }

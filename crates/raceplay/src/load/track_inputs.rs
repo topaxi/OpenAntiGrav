@@ -25,6 +25,9 @@ pub(super) struct Inputs {
     pub collision: CollisionWorld,
     pub speedup_pads: Vec<PadVolume>,
     pub weapon_pads: Vec<PadVolume>,
+    /// What the track carries for simulation mods: a track file's properties and
+    /// triggers, nothing for a disc circuit.
+    pub props: crate::extensions::TrackProps,
     /// A foreign track's drawn model: its art meshes (ADR-0076), or its
     /// flat-shaded floor and wall when it has none. `None` for a disc circuit.
     #[cfg(feature = "view")]
@@ -221,6 +224,7 @@ pub(super) fn resolve(
         collision,
         speedup_pads,
         weapon_pads,
+        props: crate::extensions::TrackProps::default(),
         #[cfg(feature = "view")]
         drawn: None,
         #[cfg(feature = "view")]
@@ -346,6 +350,12 @@ fn foreign(
         collision,
         speedup_pads: f.speedup_pads,
         weapon_pads: f.weapon_pads,
+        props: crate::extensions::TrackProps {
+            track: f.props,
+            speedup_pads: f.speedup_pad_props,
+            weapon_pads: f.weapon_pad_props,
+            triggers: f.triggers,
+        },
         #[cfg(feature = "view")]
         drawn: Some(drawn),
         #[cfg(feature = "view")]
@@ -402,6 +412,10 @@ pub(super) fn export(
         nodes: inputs.nodes,
         speedup_pads: inputs.speedup_pads,
         weapon_pads: inputs.weapon_pads,
+        props: oag_trackfile::props::Props::new(),
+        speedup_pad_props: Vec::new(),
+        weapon_pad_props: Vec::new(),
+        triggers: Vec::new(),
         art,
         notes,
     })

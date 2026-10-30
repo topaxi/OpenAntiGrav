@@ -1,8 +1,10 @@
 //! The glTF binary half: writer and reader.
 //!
 //! One scene, flat nodes, in this order: `oag/start`, `oag/spline/<i>` per path,
-//! `oag/pads/speedup`, `oag/pads/weapon`, then one node per collision node with
-//! an `oag_kind` extra. Every record is a mesh primitive; numbers beyond
+//! `oag/pads/speedup`, `oag/pads/weapon`, `oag/triggers`, then one node per
+//! collision node with an `oag_kind` extra. A pad node's `oag_props` extra is one
+//! property object per pad; the trigger node's extras carry `oag_names` and
+//! `oag_props`, one per trigger (`crate::props`). Every record is a mesh primitive; numbers beyond
 //! positions are custom `_OAG_*` attributes, so a stock glTF viewer shows the
 //! points and triangles. Coordinates are this engine's world: right-handed,
 //! Y up, in world units (not metres).
@@ -34,6 +36,7 @@ mod art;
 const START: &str = "oag/start";
 const SPEEDUP: &str = "oag/pads/speedup";
 const WEAPON: &str = "oag/pads/weapon";
+const TRIGGERS: &str = "oag/triggers";
 const SPLINE: &str = "oag/spline/";
 
 const KINDS: [(SurfaceKind, &str); 6] = [
@@ -257,7 +260,10 @@ pub(crate) fn write(track: &Track) -> Result<Vec<u8>, Error> {
         );
     }
 
-    for (name, pads) in [(SPEEDUP, &track.speedup_pads), (WEAPON, &track.weapon_pads)] {
+    for (name, pads, props) in [
+        (SPEEDUP, &track.speedup_pads, &track.speedup_pad_props),
+        (WEAPON, &track.weapon_pads, &track.weapon_pad_props),
+    ] {
         if pads.is_empty() {
             continue;
         }
@@ -284,10 +290,37 @@ pub(crate) fn write(track: &Track) -> Result<Vec<u8>, Error> {
             "_OAG_MAX": bin.floats(&pads.iter().map(|p| p.max).collect::<Vec<_>>(), "VEC3"),
             "_OAG_DISABLED": bin.scalars(&pads.iter().map(|p| p.disabled).collect::<Vec<_>>()),
         });
+        let extras = (!props.is_empty()).then(
+            || json!({ "oag_props": props.iter().map(crate::props::to_json).collect::<Vec<_>>() }),
+        );
         push(
             name,
             vec![json!({ "attributes": attrs, "mode": POINTS })],
-            None,
+            extras,
+        );
+    }
+
+    if !track.triggers.is_empty() {
+        let t = &track.triggers;
+        let attrs = json!({
+            "POSITION": bin.positions(&t.iter().map(|t| [t.to_world[12], t.to_world[13], t.to_world[14]]).collect::<Vec<_>>()),
+            "_OAG_TO_WORLD": bin.floats(&t.iter().map(|t| t.to_world).collect::<Vec<_>>(), "MAT4"),
+            "_OAG_MIN": bin.floats(&t.iter().map(|t| t.min).collect::<Vec<_>>(), "VEC3"),
+            "_OAG_MAX": bin.floats(&t.iter().map(|t| t.max).collect::<Vec<_>>(), "VEC3"),
+        });
+        let mut extras =
+            json!({ "oag_names": t.iter().map(|t| t.name.clone()).collect::<Vec<_>>() });
+        if t.iter().any(|t| !t.props.is_empty()) {
+            extras["oag_props"] = json!(
+                t.iter()
+                    .map(|t| crate::props::to_json(&t.props))
+                    .collect::<Vec<_>>()
+            );
+        }
+        push(
+            TRIGGERS,
+            vec![json!({ "attributes": attrs, "mode": POINTS })],
+            Some(extras),
         );
     }
 
@@ -494,6 +527,8 @@ pub(crate) fn read(m: Parsed, bytes: &[u8]) -> Result<Loaded, Error> {
     let mut start = None;
     let mut spline: Vec<Option<Vec<SplinePoint>>> = vec![None; m.paths.len()];
     let (mut speedup, mut weapon) = (Vec::new(), Vec::new());
+    let (mut speedup_props, mut weapon_props) = (Vec::new(), Vec::new());
+    let mut triggers = Vec::new();
     let mut nodes = Vec::new();
     let mut art_meshes: Vec<(usize, crate::art::ArtMesh)> = Vec::new();
     let mut art_nodes: Vec<(usize, usize)> = Vec::new();
@@ -544,8 +579,12 @@ pub(crate) fn read(m: Parsed, bytes: &[u8]) -> Result<Loaded, Error> {
             sun = Some((node.index(), trs.rotation));
         } else if name == SPEEDUP {
             speedup = read_pads(name, node, blob)?;
+            speedup_props = props_list(name, extras.as_ref(), speedup.len())?;
         } else if name == WEAPON {
             weapon = read_pads(name, node, blob)?;
+            weapon_props = props_list(name, extras.as_ref(), weapon.len())?;
+        } else if name == TRIGGERS {
+            triggers = read_triggers(node, extras.as_ref(), blob)?;
         } else if node.mesh().is_some() {
             other += 1;
         }
@@ -582,6 +621,7 @@ pub(crate) fn read(m: Parsed, bytes: &[u8]) -> Result<Loaded, Error> {
         ("collision nodes", m.counts.collision_nodes, nodes.len()),
         ("speedup pads", m.counts.speedup_pads, speedup.len()),
         ("weapon pads", m.counts.weapon_pads, weapon.len()),
+        ("triggers", m.counts.triggers, triggers.len()),
         ("art meshes", m.counts.art_meshes, art_meshes.len()),
     ] {
         if manifest != glb {
@@ -632,26 +672,29 @@ pub(crate) fn read(m: Parsed, bytes: &[u8]) -> Result<Loaded, Error> {
         .map_err(Error::Manifest)?;
     let mut notes = m.notes;
     notes.shrink_to_fit();
-    Ok(Loaded {
-        track: Track {
-            id: m.id,
-            title: m.title,
-            host: m.host,
-            titles: m.titles,
-            ai: AiTrack {
-                version: m.point_version,
-                paths,
-                junctions: m.junctions,
-            },
-            start,
-            nodes,
-            speedup_pads: speedup,
-            weapon_pads: weapon,
-            art,
-            notes,
+    let track = Track {
+        id: m.id,
+        title: m.title,
+        host: m.host,
+        titles: m.titles,
+        ai: AiTrack {
+            version: m.point_version,
+            paths,
+            junctions: m.junctions,
         },
-        unread,
-    })
+        start,
+        nodes,
+        speedup_pads: speedup,
+        weapon_pads: weapon,
+        props: m.props,
+        speedup_pad_props: speedup_props,
+        weapon_pad_props: weapon_props,
+        triggers,
+        art,
+        notes,
+    };
+    crate::props::check(&track)?;
+    Ok(Loaded { track, unread })
 }
 
 fn read_start(node: &gltf::Node<'_>, blob: &[u8]) -> Result<StartPosition, Error> {
@@ -818,6 +861,66 @@ fn read_pads(name: &str, node: &gltf::Node<'_>, blob: &[u8]) -> Result<Vec<PadVo
                 .copied(),
         )?;
         out.push(pad);
+    }
+    Ok(out)
+}
+
+/// A node's `oag_props` extra: one property object per record, or none at all.
+fn props_list(
+    name: &str,
+    extras: Option<&Value>,
+    n: usize,
+) -> Result<Vec<crate::props::Props>, Error> {
+    let Some(list) = extras.and_then(|e| e.get("oag_props")) else {
+        return Ok(Vec::new());
+    };
+    let list = list
+        .as_array()
+        .ok_or_else(|| Error::Glb(format!("{name}: oag_props is not an array")))?;
+    same_len(name, "oag_props", list.len(), n)?;
+    list.iter()
+        .enumerate()
+        .map(|(i, v)| crate::props::from_json(&format!("{name} {i}"), v))
+        .collect()
+}
+
+fn read_triggers(
+    node: &gltf::Node<'_>,
+    extras: Option<&Value>,
+    blob: &[u8],
+) -> Result<Vec<crate::props::Trigger>, Error> {
+    let name = TRIGGERS;
+    let prim = single_prim(name, node)?;
+    let n = positions(name, &prim, blob)?.len();
+    let matrix = items::<[[f32; 4]; 4]>(name, "_OAG_TO_WORLD", &prim, blob, "float MAT4")?;
+    let min = items::<[f32; 3]>(name, "_OAG_MIN", &prim, blob, "float VEC3")?;
+    let max = items::<[f32; 3]>(name, "_OAG_MAX", &prim, blob, "float VEC3")?;
+    same_len(name, "_OAG_TO_WORLD", matrix.len(), n)?;
+    same_len(name, "_OAG_MIN", min.len(), n)?;
+    same_len(name, "_OAG_MAX", max.len(), n)?;
+    let names = extras
+        .and_then(|e| e.get("oag_names"))
+        .and_then(Value::as_array)
+        .ok_or_else(|| Error::Glb(format!("{name}: no oag_names array")))?;
+    same_len(name, "oag_names", names.len(), n)?;
+    let mut props = props_list(name, extras, n)?;
+    props.resize(n, crate::props::Props::new());
+    let mut out = Vec::with_capacity(n);
+    for (i, props) in props.into_iter().enumerate() {
+        let mut to_world = [0.0f32; 16];
+        for (r, row) in matrix[i].iter().enumerate() {
+            to_world[r * 4..r * 4 + 4].copy_from_slice(row);
+        }
+        let label = names[i]
+            .as_str()
+            .ok_or_else(|| Error::Glb(format!("{name}: oag_names[{i}] is not a string")))?;
+        out.push(crate::props::Trigger {
+            name: label.to_string(),
+            to_world,
+            min: min[i],
+            max: max[i],
+            props,
+        });
     }
     Ok(out)
 }

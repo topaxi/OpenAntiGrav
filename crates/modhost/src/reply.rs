@@ -14,6 +14,8 @@ pub(crate) fn read(
     let craft = |slot: Slot| observation.crafts.get(slot.index());
     let mut thrust_seen = 0_u32;
     let mut shield_seen = 0_u32;
+    let mut slot_pads_seen = 0_u32;
+    let mut pads_seen: Vec<u16> = Vec::new();
     let mut commands = Vec::with_capacity(count);
     for i in 0..count {
         let command = oag_ext_abi::Command::decode(&oag_ext_abi::command_record(io, i))
@@ -69,8 +71,30 @@ pub(crate) fn read(
                     )));
                 }
             }
+            Command::ScalePad { pad, .. } => {
+                if usize::from(pad) >= observation.speed_pads {
+                    return Err(Fault::Reply(format!(
+                        "scale-pad for speed pad {pad}, the track has {}",
+                        observation.speed_pads
+                    )));
+                }
+                if pads_seen.contains(&pad) {
+                    return Err(Fault::Reply(format!(
+                        "two scale-pad commands for pad {pad}"
+                    )));
+                }
+                pads_seen.push(pad);
+            }
+            Command::ScaleSlotPads { slot, .. } => {
+                if slot_pads_seen & slot.bit() != 0 {
+                    return Err(Fault::Reply(format!(
+                        "two scale-pad commands for slot {}",
+                        slot.index()
+                    )));
+                }
+                slot_pads_seen |= slot.bit();
+            }
             Command::PickupRoll { .. }
-            | Command::PadMode { .. }
             | Command::PlayCue { .. }
             | Command::FireEffect { .. }
             | Command::PickupTint { .. }

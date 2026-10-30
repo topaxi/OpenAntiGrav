@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-10-30
-summary: "SDK rev 3 + track module + Hillside rain landed locally; open: check/run tool, C header, C++ example, template, git dep, MODDED rule"
+summary: "SDK, track module, Hillside rain, track props landed locally; open: Blender props run, check tool, C header, template, git dep, MODDED"
 categories: [gameplay]
 size: M (55)
 difficulty: medium (60)
@@ -304,6 +304,14 @@ one generic record, and the documentation table names them per kind.
 
 ## Open
 
+- **Track properties' Blender side never ran in Blender** (lane `ext-track-props`,
+  2026-10-30: this machine's `blender` fails to start, `libsycl.so.9` missing). The
+  add-on's pure-Python writer and reader (`trackfile.py`: `[props]`, pad `oag_props`,
+  `oag/triggers`) were run outside Blender and the engine reads what they write; the
+  scene paths (`scene.mod_props` on pad and trigger Empties and the scene, trigger
+  collect and import, the panel rows) are unexercised. Next: add a trigger and a few
+  `mod_*` properties to `roundtrip.py loop`, run `just blender-fixtures --update`, and
+  check `crates/trackfile/tests/blender.rs` reads them.
 - **The examples' SDK dependency is a `path`** into the engine checkout the
   submodule sits in (`../../../../../crates/ext`, five levels from `guest/`). A
   stand-alone clone of `mod-examples` does not build until it is a git dependency on
