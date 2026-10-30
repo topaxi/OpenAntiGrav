@@ -1003,3 +1003,167 @@ slowdown differing, the `ctl` column), and the 2-frame display lag.
 and an HD pair is not run here): **checked, differs** by file, not re-measured. Pure's Rocket visual and 2048's:
 not checked in this lane (`docs/gameplay/weapon-lineage.md` unchanged, no cell moved). Pulse PS2 inherits PSP's
 measured law and has no pair (**not checkable** without a PCSX2 pair).
+
+## 2026-10-31: the flare haze and the fireball read off GE dumps of the original (pulse-rocket-look-law)
+
+Method as the Plasma's ([plasma.md](plasma.md), "2026-10-30: the blast and the head read off GE dumps"):
+`scripts/psp-weapon-pair.py --ge-dump-k K --shots K rocket` (Talon's Junction, Time Trial, Venom, Assegai, fire at
+GO + 120, speed 106.21 on every boot), `scripts/psp-ge-dump.py census`, replays of edited dumps
+(`scripts/psp-ge-replay.py`), PPSSPP v1.20.4 software renderer. 14 dumps in 12 boots (k10, 16 x3, 22, 28, 56, 60 x2,
+64, 72, plus no-fire controls k16 and k60). Ours is not dumped; "ours" is `oag-game --race ... --ticks 391 + k`
+with temporary, reverted `eprintln!`s on the particle pool, plus screenshots with a draw switched off (reverted).
+
+**Falsifiers written before the capture.** (1) "The original's flare haze is only a tight band": falsified. The
+original's own GE list carries, per rocket, one additive triangle-strip of 20-33 flare quads (up to 10 units wide,
+the nearest 1.1-3.7 units from the eye) and one to two SHAZZAM quads; removing the strips in a replay takes the
+whole-frame grey excess over the no-fire control from 7.1 to 2.4, removing the SHAZZAM quads to 6.1, both to 0.8 (the
+floor). The excess is the strips', not a band. Prims far from the rocket (a 75-unit additive quad at x 536-611, the
+many 4-vertex rows at x 492) are scenery that differs between boots and are excluded by position. (2) "The brown
+smoke is not additive and matches a `WO_ROCKET_EXPLO_TRACK` embedded texture": held (below).
+
+### What each draw is (texture byte-matched to the `.pob`)
+
+Texture identity is by byte match of each draw's texture chunks against the `.pob`'s embedded texels; the dump's
+RAM-resident textures arrive as chunk types 16-19 (levels 0-3, no header), not 24-28 (VRAM-address uploads, 16-byte
+header), which the `psp-ge-dump.py` docstring does not say. A match counts only with a mip chain (levels 1-3 at the
+sizes the dimensions give: +0x400, +0x100 for 64x64 CLUT8 and 128x64 CLUT4).
+
+| Draw (vertex type) | Texture | `.pob` and offset | Blend | State |
+| --- | --- | --- | --- | --- |
+| flare strip, one per rocket (`0x19f`: float uv, 8888, float xyz; 4 vertices a particle plus 2 stitch vertices) | 128x64 CLUT4, 4x4 atlas (uv on a 0.25 grid) | `WO_ROCKET_FLARE.pob` levels 1-3 at `+0x2a30`, `+0x2e30`, `+0x2f30` (level 0 `+0x1a30`) | `0xa2` additive | texfunc modulate, ztest on |
+| SHAZZAM quads (`0x11e`: u16 uv, 8888, s16 xyz at `/8`, stride 16) | 64x64 CLUT8 | `WO_ROCKET_FLARE.pob` levels 1-3 at `+0x43b0`, `+0x47b0`, `+0x48b0` (level 0 `+0x33b0`) | `0xa2` | 1-2 quads a rocket, 14-30 wide |
+| blast root glow, one quad (spec 0) | 64x64 CLUT8, whole texture | `WO_ROCKET_EXPLO_TRACK.pob` `+0x49a0`... | `0xa2` | 139-264 wide |
+| blast sparks (spec 1) | 32x32 CLUT8 | `WO_ROCKET_EXPLO_TRACK.pob` `+0x5720`, `+0x5820` | `0xa2` | 10-36 wide, wide-flat |
+| **blast smoke (spec 2)** | 64x64 CLUT8, 4x4 atlas | `WO_ROCKET_EXPLO_TRACK.pob` `+0x6ca0`, `+0x70a0`, `+0x71a0` (level 0 `+0x5ca0`) | **`0x32` alpha-over**, not additive | 5 quads a blast |
+| blast fire (spec 3) | 128x64 CLUT8, 4x4 atlas | `WO_ROCKET_EXPLO_TRACK.pob` `+0x9620`, `+0x9e20`, `+0xa020` | `0xa2` | 4 quads a blast |
+
+So **ours' texture and blend binds are not misread**: `psys` spec 0-3 of `WO_ROCKET_EXPLO_TRACK` are additive,
+additive, alpha-over, additive, the same four. The smoke is the only non-additive draw, and it is what the pair shows
+as brown. Confidence **85** (byte match with mip chain, three boots for the flare, two for the blast at k60).
+
+### Gap 1: the flare law, per particle, original against ours
+
+Particles of the flare strip; three boots of k16 agree (oldest particle age 12, 12, 11 ticks), sorted by age. Width is
+the quad's side in view units; **width = 2.10 + 0.4583 x age ticks** (half-size `1.05 + 0.229 x age`, the size
+channel's own line), two particles a tick. The same table for ours is read off its pool at tick 409 (`391 + 18`), alpha
+printed to four places:
+
+| Age (ticks) | Width | Original rgba | Ours rgb, alpha |
+| ---: | ---: | --- | --- |
+| 0 | 2.10 | 245, 245, 191, 255 | 255, 255, 255, 255 |
+| 1 | 2.56 | 233, 233, 119, 246 | 245, 245, 191, 247 |
+| 2 | 3.02 | 223, 223, 55, 237 | 233, 233, 119, 238 |
+| 3 | 3.49 | 212, 208, 0, 229 | 223, 223, 55, 229 |
+| 5 | 4.42 | 196, 156, 0, 212 | 204, 184, 0, 212 |
+| 9 | 6.27 | 154, 65, 3, 178 | 172, 81, 0, 178 |
+| 12 | 7.66 | 82, 47, 23, 152 | 107, 53, 16, 153 |
+| 14 | 8.59 | 35, 35, 35, 135 | 60, 41, 29, 136 |
+
+**Alpha agrees** (`255 x (1 - age / 30)` in both; an earlier draft of this section read ours' alpha as stepped, which was
+the `{:.1}` of the debug print, not the pool). **Ours' palette index is one tick younger than its size**: at a given
+width ours shows the colour the original shows one tick earlier (ours' age 1 colour (245, 245, 191) is the original's
+age 0). Small (a tick of colour, brighter in ours) and not the haze. Confidence **80** (20 matched ages, ours
+deterministic).
+
+The SHAZZAM quads read as before (14 / 30 / 28 wide at k16, `(255, 255, 255)`, half-size 5-15): they carry about 1.0
+of the 7.1 grey excess (replay), so they are not "the glow" (the 2026-10-01 reading above), the strips are.
+
+### Gap 1: the haze is the root flare drawn at the particle's moving position; the original draws it at the spawn point
+
+Ours at tick 409 (fire + 18, the pair's shot k18): temporarily skipping particles of the pool before they draw and
+re-rendering, excess over ours' no-fire control (grey; mean over the frame above the HUD, over the upper-right box
+`y 20-110, x 270-480`, over the central band `y 110-200, x 120-420`):
+
+| Ours | Whole | Upper right | Central band | Error to the original's fire frame |
+| --- | ---: | ---: | ---: | ---: |
+| original (fire minus control) | 7.7 | 0.4 | 18.8 | 0 |
+| ours, all draws | 15.2 | **17.1** | 27.3 | 16.6 |
+| ours, without the root flare (spec 0) | 2.2 | 0.2 | 8.6 | 13.7 |
+| ours, without the SHAZZAM quads (spec 1) | 14.5 | 17.0 | 24.7 | 16.6 |
+| ours, root flare of age 7 ticks and over skipped | 2.6 | 0.2 | 10.2 | 13.4 |
+| **ours, root flare spawned with velocity 0** | **8.0** | **0.2** | **19.1** | **10.7** |
+
+The wash up the right wall and across the sky is the **old root particles (age 7-10, 2-14 units from the camera, 2.7-3.4
+units across, so each covers most of the screen), and they are in the wrong place**: ours gives the root flare an
+ejection velocity of `speed_per_tick = (0.0, 1.009)` over a full sphere (`Cone`, half-angle pi, `velocity_inherit 100`,
+no drag, no gravity: the authored `+0x48`/`+0x4c` pair) and integrates it, so a particle of age 10 has wandered up to 10
+units (view `y` from -11 to +3.4 at age 10, `x` up to +8); with the velocity set to zero at spawn the excess falls
+to 8.0 / 0.2 / 19.1, the original's 7.7 / 0.4 / 18.8. In the original the strip's two particles of a tick sit at the same
+view `(x, y)` to 0.03-0.1 units up to age 12, and the near ones (`z -1.1` to `-3.7`) all hang within 0.3 units of one
+another under the eye line (centres `y -3.0 to -3.8`, `x -0.7 / +0.4 / +1.5` for the three rockets, three boots), so
+they blanket the lower half of the screen and nothing above it.
+
+**But the original's pool does move the particles** (`psp-weapon-pair.py --probe flare`, one boot, 22 frames, the pool
+position at `particle + 0x40`): the nearest same-slot particle between consecutive frames is 0.38-0.99 units away, the
+ceiling being the authored spread 1.009. So the pool carries the same ejection velocity as ours, and **the GE list
+draws the root flare at a position that does not move: the spawn point** (`ParticleSystem_DrawPoolSquares`'s position
+read; which field it reads, the particle's `origin` or the position before the velocity step, is **unread**). Ours
+draws the integrated position. Confidence **85** that the draw is static (three boots of k16, ages 0-12, plus the
+zero-velocity replay recovering the frame), **60** that the rule is the draw's alone and not the spawn (the pool
+probe moves, one boot). Only the root flare (`WO_ROCKET_FLARE` spec 0, `ParticleSystem_DrawPoolSquares`) was measured:
+**do not generalise** to the other emitters; a draw class that moves them (the blast's debris) was not dumped.
+
+**Wire recipe (ready-to-wire, confidence 85 for the flare):** draw `WO_ROCKET_FLARE`'s root particles at their spawn
+position (`Particle::origin` in `oag_fx::psys`, which already exists), keep the pool integrating (children and
+the death-child anchor read the moving position); scope it to the one emitter the dumps measured, per this
+lane's rule on shared readers. Not changed here: `psys` is shared by every effect. Also: shift the root flare's palette
+index one tick (above). **Open:** ours' rocket 3 flies 15.4 u/s laterally at tick 2 against the original's 7.1, and has
+no first-four-tick 166.6 u/s phase (flies 211.9 with a first-tick `y` velocity of -66.8 from its nose-point spawn): both
+belong to the flight-timing lane's shared `projectile::advance` and are not changed here.
+
+### Gap 2: the fireball and smoke, where ours' alpha is five to fifteen times the original's
+
+The original blast (`WO_ROCKET_EXPLO_TRACK`, one per detonation at fire + 51, 61, 70; blast age `a` = dump k minus
+detonation) draws five smoke quads (alpha-over), four fire quads and one root glow quad plus sparks. Smoke law, two
+boots at k60 (identical to the byte) and single boots at the other ages:
+
+| Blast age `a` | Smoke width | rgb | **Alpha** | Fire quad rgba, width |
+| ---: | ---: | --- | ---: | --- |
+| 2 | 8.1 | 246, 189, 2 | 2 | 255, 237, 210, 255; 12.2 |
+| 3 | 8.8 | 242, 186, 2 | 3 | 255, 211, 124, 255; 14.8 |
+| 5 | 10.5 | 233, 179, 2 | 5 | 255, 119, 7, 255; 22.2 |
+| 9 | 14.0 | 213, 164, 2 | **44** | 255, 151, 48, 225; 26.8 |
+| 11 | 15.8 | 204, 157, 1 | 64 | 255, 229, 172, 196; 30.1 |
+| 13 | 17.6 | 196, 150, 1 | 84 | 255, 186, 92, 174; 33.8 |
+| 21 | 25.5 | 160, 123, 1 | 125 | 255, 238, 214, 69; 29.9 |
+
+Width is `6.3 + 0.9 a` (to 0.5). The five smoke quads of a blast are identical in size, colour and alpha and differ only
+in position (a 3-8 unit scatter); the texture cell is one of sixteen, the same for all five.
+
+Ours (`--ticks 453`, `457`, `463`, tick = 393 + dump k, alpha printed to five places): the smoke widths agree (12.1 at
+age 0.07 of 100 ticks, 14.9 at 0.11) but **ours' alpha is 0.910 at 6 ticks and 0.775 at 7.5, the original's about 0.06
+and 0.10 at those widths** (and the two agree at ticks 2-3, 0.010 against 0.008): the authored
+alpha channel of spec 2 is `(0, 0.007), (0.041, 0.021), (0.0436, 1.0), (0.177, 0.548), (0.497, 0.178), (1, 0)`, a spike
+to full opacity at tick 4.4 that decays; the original's alpha **rises** instead, from about nothing to 125 at tick 21
+(`44 / 64 / 84 / 125` at `a = 9 / 11 / 13 / 21`, about +10 a tick from `a = 5` to 13, +5 after), in the same
+yellow-brown that ours draws. Ours' smoke is therefore a saturated, nearly opaque yellow-orange disc for the
+first ten ticks where the original's is a thin brown veil with the additive fire seen through it: this is the "saturated
+yellow-orange solid" of gap 2. The fire quads (alpha 225 then falling, 255 -> 69 over 21 ticks) and root glow have the
+same palettes and sizes in ours, so the smoke alpha is the one draw to fix; ours' root glow is dimmer at the same age
+(width 102 against 139, rgb 41-50 against 51-152) and was not pursued.
+
+**The palette's own alpha is not the missing factor**: `palette[idx][3]` (which `extend_vertices` discards) is 0.92 at tick
+6, 0.77 at 11 and 0.57 at 17, the authored curve again, so channel x palette alpha would be lower than ours by
+a third at most and cannot make 0.06. The original's alpha is not the authored channel read at the particle's age, and what it is was **not isolated**: a
+fade-in multiplier of `(a - 5) / 16.5` (0 at tick 5, 1 at tick 21) reproduces 44, 64, 84 and 125 to 20 % against
+the authored curve (0.84, 0.78, 0.70, 0.51 of 255 there), and a table that smears the one-tick spike across a coarse
+cell would give the same rise; the data stop at `a = 21`, so the peak and the fall are unread. Confidence **60** for
+the table, **35** for any closed form.
+
+**Recipe to finish it (not run):** dumps at k80, k90, k110 (blast age 29, 39, 59 for rocket 1) and the smoke quads'
+alpha from each, plus a breakpoint probe on the particle update's alpha write for `WO_ROCKET_EXPLO_TRACK` spec 2
+(the particle's alpha field offset is unread; `FUN_089194d0` draws the pool).
+
+### Detonation tick, and what the dumps add to it
+
+Read only. The blast spawn is at fire + 51, 61, 70 (probe, two runs) and ours' +52, +62, +71; the dump series gives
+nothing against it (blast age 9 at k60 on the original). Ours' rocket 3 early velocity (above) is the one more
+datum for the flight-timing lane.
+
+### Cross-title
+
+HD and Omega fire a different Rocket (`ps3-hdfury-eu/` pages): **checked, differs**. Pure: `Data\Psys\WO_ROCKET_FLARE.POB`
+ships (32,352 bytes against Pulse's 18,752, a different file) and `WO_ROCKET_EXPLO_TRACK.POB` does not: **checked,
+differs**; whether Pure's draw law matches is unread. 2048 loads Pulse's `WO_ROCKET_FLARE`/`_EXPLO` from
+`data/particles2048` through the same `psys`: **not checked** against 2048's own draw (no 2048 GE dump). Pulse PS2
+inherits PSP's law and has no pair (**not checkable** without a PCSX2 dump).
