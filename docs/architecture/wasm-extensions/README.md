@@ -375,7 +375,7 @@ census of those titles' Shield tables was taken for this change.
 ### And Checkpoint Circuit (2026-10-30)
 
 The fourth example, `oag.checkpoint-circuit` (`assets/mods/examples/checkpoint-circuit/`, a
-track module of 9,046 bytes on `oag-ext`, and its own track file built by
+track module of 9,303 bytes on `oag-ext`, and its own track file built by
 `checkpoint_circuit.py` in Blender): the example of triggers, track properties, HUD text from a
 mod's own strings, and the AI route hook. Each craft has **20 s** to its next checkpoint gate
 (`oag/triggers/checkpoint <n>`, `mod_checkpoint = n`, 1 to 4 in lap order); reaching it resets
@@ -436,8 +436,8 @@ Fuel (`tests::extension_examples`, a full grid): 14,443 on the loud tick, 10,499
 
 Mods, and tracks authored in Blender, send each other events over declared channels. ABI 1 was
 edited in place (no revision bump; the layout fold re-recorded in its own commit, every example
-module rebuilt), so **events are 16 bytes now** and every module built before it is refused only by
-its stale reading of them: rebuild against the engine you run.
+module rebuilt), so **events are 16 bytes now** and every module built before it still loads (the revision
+stays 3) and **misreads every event**: rebuild against the engine you run.
 
 | Piece | Kind | What it is |
 | --- | --- | --- |
@@ -466,11 +466,18 @@ holds the first key before the channel fires and plays from it after, a node no 
 reading the world clock, and `write_node_anims_started` writes a channel-driven model every frame
 (a table that depends on more than the clock). Checkpoint Circuit announces each gate on
 `oag.checkpoint-circuit/checkpoint` (`checkpoint_circuit_ground_truth`: never faulted, the channel
-fired). **Screenshots** (headless, `--race --track-file channels.track.toml --autopilot` with a fixed
-camera at the gate, built by `roundtrip.py channels`: the loop with its airship starting on a
-gate's channel): at tick 200 the airship rests at its first key, far left; it holds there until the
-first craft crosses the gate (one of the field, not necessarily the person); at ticks 340 and
-400 it has flown on along its loop.
+fired). **Screenshots** (headless, `--race --track-file channels.track.toml --autopilot --camera-pose` at a
+fixed camera; the track is `roundtrip.py channels`'s: the motion loop with its airship starting on a
+gate's channel, the gate a 120 by 120 by 80 box over spline point 8, clear of the grid). The first
+craft crosses it at tick 623 and the field by 732. The airship's own keys run a 3.2 s loop, so a
+frame is only evidence of the hold if it would differ were the animation free: at tick 200 with
+`--anim-seconds 0` **and** `--anim-seconds 1.6` the airship sits at its first key, far left, in
+both (identical frames), while the same track with `oag_on` renamed to a key the reader ignores
+(same bytes) has it already gone from that spot at 1.6. At tick 600, before anyone crossed on
+the natural clock, it is at its first key; at tick 700, 77 ticks after the first craft crossed, it
+has flown on towards the right and turned (its dark gondola side to the camera). A forced
+`--anim-seconds` below the fire time freezes a channel-started animation again: its clock is the
+time since the channel fired, clamped at zero.
 
 **Later: event urgency levels (a note, not built).** Today every event is delivered on the next
 tick, which is what keeps the result independent of module order. A later revision might name

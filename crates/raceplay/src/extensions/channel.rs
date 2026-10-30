@@ -162,6 +162,7 @@ impl super::Extensions {
 
     /// Notes that `channel` fired at `tick`.
     pub(super) fn note_fired(&mut self, channel: u32, tick: u64) {
+        log::debug!("channel {channel:#010x} fired at tick {tick}");
         match self.fired.iter_mut().find(|(c, _)| *c == channel) {
             Some(entry) => entry.1 = tick,
             None => self.fired.push((channel, tick)),

@@ -18,8 +18,8 @@ written here, byte for byte: never disc pixels. `reexport` imports a track
 file with the add-on's importer and exports it again as `<stem>.reexport.track.toml`.
 `line` writes no fixture: it asserts the racing-line paths (computed by default, off by
 switch, the operator's editable curve, a nudged point, the import round trip).
-`channels` writes no committed fixture (its `channels.track.toml` has a gate across the road
-80 units past the start and the airship starting on the gate's channel, for a headless
+`channels` writes no committed fixture (its `channels.track.toml` has a gate over spline point 8, well
+clear of the grid, and the airship starting on the gate's channel, for a headless
 screenshot pair): it asserts a trigger's `oag_emit`, an animation's
 `oag_on` and the track's published channels through export, import and a re-export.
 The add-on is registered from this directory, never installed: nothing is written
@@ -455,18 +455,16 @@ def channel_checks(out_dir):
     ctx = author_loop(out_dir, motion=True)
     channel = "test.gate/open"
     bpy.data.objects["airship"].oag_on = channel
-    # A gate across the road 80 units past the start line, wide and tall enough for any craft.
-    start = scene.collect(ctx).start
-    ahead = scene.to_blender([p + 80.0 * f for p, f in zip(start.position, start.forward)])
-    forward = scene.to_blender(start.forward)
-    along_x = abs(forward[0]) > abs(forward[1])
+    # A gate over spline point 8 (about 500 units on, well clear of the grid): a box 120 wide
+    # either way and 80 tall, so a craft driving the road passes through it.
+    ahead = scene.to_blender(scene.collect(ctx).paths[0].points[8].pos)
     # The airship flies its loop above the gate (its keys fly 400 units about x = 0, y = 500, z = 60).
     airship = bpy.data.objects["airship"]
     airship.delta_location = (ahead[0], ahead[1] - 500.0, ahead[2] + 25.0 - 60.0)
     bpy.ops.mesh.primitive_cube_add(size=2.0, location=ahead)
     box = ctx.active_object
     box.name = "gate"
-    box.scale = (10.0, 70.0, 40.0) if along_x else (70.0, 10.0, 40.0)
+    box.scale = (60.0, 60.0, 40.0)
     for o in ctx.scene.objects:
         o.select_set(False)
     box.select_set(True)
