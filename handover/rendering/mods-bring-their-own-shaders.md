@@ -2,7 +2,7 @@
 status: parked
 titles: [all]
 updated: 2026-10-30
-summary: "Mod-supplied WGSL at fixed render hooks (post-process, craft overlay, particle, trail), naga-validated; exhaust trail tint idea; after mod-shipped particle effects"
+summary: "Mod WGSL at fixed render hooks (post-process, overlay, particle, trail), naga-validated; trail tint idea; after mod effects"
 categories: [tooling]
 size: XL (30)
 difficulty: hard (40)
