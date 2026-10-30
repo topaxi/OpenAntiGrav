@@ -200,13 +200,29 @@ nothing and the load report says so.
 
 A simulation module can also change the title's HUD through outputs that are never
 hashed: `hud-tint`, `hud-shake` and `hud-bar-extra` on a HUD element (`Speed`, `Thrust`,
-`Energy`, `Pickup`, `Position`, `Lap`, `Time`), and `hud-text` and `hud-icon` at one of
+`Energy`, `Pickup`, `Position`, `Lap`, `Time`; the pickup is shaken but coloured by `pickup-look`), and `hud-text` and `hud-icon` at one of
 nine anchors of the HUD grid, up to 32 per slot per tick. Re-send each every tick it
-should hold; a title with no widget for an element draws nothing. Energy Turbo tints its
-pickup backdrop, shows its added thrust as a red share of the speed bar (`Speed`; Pulse has no
+should hold; a title with no widget for an element draws nothing. Energy Turbo's pickup look
+is its manifest's `[pickup]`, shows its added thrust as a red share of the speed bar (`Speed`; Pulse has no
 thrust bar, and `Thrust` draws nothing there) and shakes the energy bar while it drains. Guests format times with
 `oag_ext::Line`. The commands are in
 [docs/architecture/wasm-extensions/](../architecture/wasm-extensions/README.md).
+
+A mod that hands out a pickup of its own (`give-pickup`, `pickup-roll`) declares its look in
+`oag-mod.toml`, and is faulted for the race at the first such command without it:
+
+```toml
+[pickup]
+icon = { title = "turbo" }       # the title's own icon for a weapon, or { mod = "<key of [icons]>" }
+colour = { rgba = "E0202080" }   # RRGGBBAA, or { title = "shield" }: the title's own backdrop row
+```
+
+`title` is a weapon (`rocket`, `missile`, `quake`, `cannon`, `turbo`, `shield`, `autopilot`,
+`plasma`, `bomb`, `mine`, `leachbeam`, `repulser`, `shuriken`, `disruptor`); a bad weapon, a
+`mod` that is no key of `[icons]` or an `rgba` that is not eight hex digits refuses the mod by name.
+The title's fade-in, overshoot, size pulse and fade-out play on it (Pulse, HD, Omega). Pure has no
+backdrop widget, so a colour draws nothing there; 2048 keeps its backdrop as authored. A module can
+override the look per tick with `pickup-look`.
 
 A rules module also sees every weapon hit on a craft (`hit{slot, amount, weapon}`, an
 absorbed one included, with the craft's `shielded` flag) and can start, hold and end the
