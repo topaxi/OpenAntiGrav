@@ -108,7 +108,15 @@ ROLLED_DRAW = 0x089178C0
 # to the bolt; `PlasmaBlast_Construct` runs once per detonation object (two on a craft hit).
 PLASMA_LAUNCH = 0x0885BF84
 PLASMA_BLAST_CONSTRUCT = 0x0885FD90
+# `PlasmaBlast_Update` (dt in `f12`, the blast in `a0`): once a tick; `+0x50` is the age the models'
+# scrub (`age * rate`) and the hard 1.5 s retirement read.
+PLASMA_BLAST_UPDATE = 0x0885F680
+# `Plasma_Update` (dt in `f12`, the bolt in `a0`): once a tick of flight. `+0x48` the launch speed in
+# km/h, `+0x54` the age, `+0xa0` the position, `+0xf0` the velocity (the default probe's words dump).
+PLASMA_UPDATE = 0x0885C6CC
 PROBES = {
+    "plasma_fly": PLASMA_UPDATE,
+    "plasma_blast": PLASMA_BLAST_UPDATE,
     "plasma_launch": PLASMA_LAUNCH,
     "plasma_det": PLASMA_BLAST_CONSTRUCT,
     "flare": FLARE_DRAW,
@@ -244,6 +252,16 @@ def _probe_loop(dbg, kind, address, frames, start, out, detonate=None, condition
                     time_now = struct.unpack("<f", dbg.read(node + 0x40, 4))[0]
                     cached = struct.unpack("<f", dbg.read(node + 0x194, 4))[0]
                     entry[name] = {"node": node, "time": time_now, "cached_clock": cached}
+        elif kind == "plasma_blast":
+            blast = regs["a0"]
+            if not ram(blast):
+                continue
+            ingame = dbg.read_u32(G_INGAME)
+            entry["clock"] = struct.unpack("<f", dbg.read(ingame + INGAME_CLOCK, 4))[0]
+            entry["blast"] = blast
+            entry["dt"] = struct.unpack("<f", struct.pack("<I", fpu(dbg)["f12"]))[0]
+            entry["age"] = struct.unpack("<f", dbg.read(blast + 0x50, 4))[0]
+            entry["flags"] = dbg.read_u32(blast + 0x2C)
         elif kind == "bomb":
             # `Bomb_Init (entity a0, position a1, direction a2, ...)`: the drop point.
             entry["entity"] = regs["a0"]
