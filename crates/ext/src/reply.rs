@@ -1,8 +1,8 @@
 //! The reply: one typed method per command, refusing what the host would fault on.
 
 use oag_ext_abi::{
-    Command, Cue, Effect, MAX_COMMANDS, MAX_THRUST_FACTOR, Pickup, Rgba, Sections, Weapon,
-    WeatherKind,
+    Command, Cue, Effect, MAX_COMMANDS, MAX_PAD_FACTOR, MAX_THRUST_FACTOR, Pickup, Rgba, Sections,
+    Weapon, WeatherKind,
 };
 
 use crate::Craft;
@@ -13,9 +13,11 @@ use crate::Craft;
 pub enum Refused {
     /// The reply already holds `MAX_COMMANDS` commands.
     Full,
-    /// A second `scale_thrust` or `shield_delta` for one craft this tick.
+    /// A second `scale_thrust`, `shield_delta` or `scale_slot_pads` for one craft, or a
+    /// second `scale_pad` for one pad, this tick.
     Repeated,
-    /// A value out of its range: a factor outside `[0, MAX_THRUST_FACTOR]`, a shield
+    /// A value out of its range: a factor outside `[0, MAX_THRUST_FACTOR]` or
+    /// `[0, MAX_PAD_FACTOR]`, a pad the track does not have, a shield
     /// change past the craft's maximum, a non-finite number, a roll period of 0.
     Range,
     /// `give_pickup` to a craft holding something, or `clear_pickup` from one not
@@ -30,15 +32,21 @@ pub struct Reply<'a> {
     count: usize,
     thrust: u32,
     shield: u32,
+    slot_pads: u32,
+    pads: [u32; oag_ext_abi::track::MAX_ENTITIES / 32],
+    speed_pads: usize,
 }
 
 impl<'a> Reply<'a> {
-    pub(crate) fn new(reply: &'a mut [u8]) -> Self {
+    pub(crate) fn new(reply: &'a mut [u8], speed_pads: usize) -> Self {
         Self {
             reply,
             count: 0,
             thrust: 0,
             shield: 0,
+            slot_pads: 0,
+            pads: [0; oag_ext_abi::track::MAX_ENTITIES / 32],
+            speed_pads,
         }
     }
 
@@ -150,14 +158,50 @@ impl<'a> Reply<'a> {
         self.push(&Command::PickupRoll { weapon, every })
     }
 
-    /// `pad-mode`: this tick, a speed pad gives the craft no boost and raises
-    /// [`Event::PadEnergy`](crate::Event::PadEnergy) instead.
+    /// `scale-pad{pad, factor}`: race-wide, from now on speed pad `pad` (its index
+    /// among the track's speed pads) pushes `factor` times its own push, `factor` in
+    /// `[0, MAX_PAD_FACTOR]`. Held until replaced; once per pad per tick.
     ///
     /// # Errors
     ///
-    /// [`Refused::Full`].
-    pub fn pad_mode(&mut self, craft: &Craft<'_>) -> Result<(), Refused> {
-        self.push(&Command::PadMode { slot: craft.slot() })
+    /// [`Refused::Full`], [`Refused::Repeated`], [`Refused::Range`] for a factor out
+    /// of range or a pad the track does not have.
+    pub fn scale_pad(&mut self, pad: u16, factor: f32) -> Result<(), Refused> {
+        let index = usize::from(pad);
+        if !(0.0..=MAX_PAD_FACTOR).contains(&factor) || index >= self.speed_pads {
+            return Err(Refused::Range);
+        }
+        let (word, bit) = (index / 32, 1 << (index % 32));
+        if self.pads[word] & bit != 0 {
+            return Err(Refused::Repeated);
+        }
+        self.push(&Command::ScalePad { pad, factor })?;
+        self.pads[word] |= bit;
+        Ok(())
+    }
+
+    /// `scale-pad{slot, factor}`: this tick, every speed pad pushes the craft `factor`
+    /// times as hard, on top of the pad's own factor. At 0 the pad gives no push, no
+    /// plume and no sound; [`Event::SpeedPad`](crate::Event::SpeedPad) still fires.
+    /// Once per craft per tick; re-sent each tick it holds.
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`], [`Refused::Repeated`], [`Refused::Range`].
+    pub fn scale_slot_pads(&mut self, craft: &Craft<'_>, factor: f32) -> Result<(), Refused> {
+        if !(0.0..=MAX_PAD_FACTOR).contains(&factor) {
+            return Err(Refused::Range);
+        }
+        let bit = craft.slot().bit();
+        if self.slot_pads & bit != 0 {
+            return Err(Refused::Repeated);
+        }
+        self.push(&Command::ScaleSlotPads {
+            slot: craft.slot(),
+            factor,
+        })?;
+        self.slot_pads |= bit;
+        Ok(())
     }
 
     /// `play-cue`: one of the title's own sounds from the craft. Heard, never hashed.

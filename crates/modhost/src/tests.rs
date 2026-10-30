@@ -42,6 +42,8 @@ fn observe(tick: u64) -> Observation<'static> {
         active: 0b11,
         events: &[],
         crafts: &[],
+        track: &[],
+        speed_pads: 0,
     }
 }
 
@@ -174,6 +176,8 @@ fn a_slot_with_no_craft_is_refused() {
         active: 0b1,
         events: &[],
         crafts: &[],
+        track: &[],
+        speed_pads: 0,
     };
     let (fault, _) = module
         .tick(&only_slot_0, &mut [0; 4], &mut Vec::new())
@@ -209,6 +213,8 @@ fn events_reach_the_guest() {
                 active: 0xff,
                 events: &events,
                 crafts: &[],
+                track: &[],
+                speed_pads: 0,
             },
             &mut state,
             &mut Vec::new(),
@@ -277,4 +283,74 @@ fn a_state_length_export_must_agree_with_the_manifest() {
         }
     );
     assert!(error.to_string().contains("state_bytes = 96"), "{error}");
+}
+
+/// A guest whose track buffer is at 8192: copies the region's first property value
+/// into the blob and sends the reply `$reply` writes.
+fn track_reader(reply: &str) -> Vec<u8> {
+    wat::parse_str(format!(
+        r#"(module
+            (memory (export "memory") 1)
+            (func (export "oag_abi") (result i32) i32.const {ABI_WORD})
+            (func (export "oag_io") (result i32) i32.const 1024)
+            (func (export "oag_track") (result i32) i32.const 8192)
+            (func (export "tick") (result i32)
+              (i32.store (i32.const {STATE}) (i32.load (i32.const {value})))
+              {reply}
+              i32.const 0))"#,
+        value = 8192 + oag_ext_abi::track::PROPS_AT + 4,
+    ))
+    .unwrap()
+}
+
+/// One race-wide `scale-pad` for `pad`.
+fn scale_pad(pad: u16) -> String {
+    format!(
+        "(i32.store (i32.const {REPLY}) (i32.const 1))
+         (i32.store8 (i32.const {cmd}) (i32.const 13))
+         (i32.store16 (i32.const {arg}) (i32.const {pad}))
+         (f32.store (i32.const {f}) (f32.const 2.0))",
+        cmd = REPLY + 4,
+        arg = REPLY + 6,
+        f = REPLY + 8,
+    )
+}
+
+#[test]
+fn the_track_region_reaches_a_guest_that_exports_its_buffer() {
+    let mut region = vec![0_u8; oag_ext_abi::track::TRACK_LEN];
+    let props = [(oag_ext_abi::track::prop_key("boost"), 1.5_f32)];
+    let used = oag_ext_abi::track::write(&mut region, &props, &[], &[], &[]).unwrap();
+    let module = Module::compile(&track_reader(""), Limits::default()).unwrap();
+    let mut state = vec![0; 4];
+    let observation = Observation {
+        track: &region[..used],
+        ..observe(0)
+    };
+    module
+        .tick(&observation, &mut state, &mut Vec::new())
+        .unwrap();
+    assert_eq!(state, 1.5_f32.to_le_bytes());
+}
+
+#[test]
+fn a_scale_pad_for_a_pad_the_track_lacks_is_refused() {
+    let module = Module::compile(&track_reader(&scale_pad(3)), Limits::default()).unwrap();
+    let mut commands = Vec::new();
+    let with = |speed_pads| Observation {
+        speed_pads,
+        ..observe(0)
+    };
+    module.tick(&with(4), &mut [0; 4], &mut commands).unwrap();
+    assert_eq!(
+        commands,
+        [Command::ScalePad {
+            pad: 3,
+            factor: 2.0
+        }]
+    );
+    let (fault, _) = module
+        .tick(&with(3), &mut [0; 4], &mut commands)
+        .unwrap_err();
+    assert!(matches!(fault, Fault::Reply(e) if e.contains("speed pad 3")));
 }

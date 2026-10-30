@@ -17,7 +17,7 @@ fn slot(index: usize) -> Slot {
 }
 
 /// One of every command, with arguments that touch every field.
-fn every_command() -> [Command; 12] {
+fn every_command() -> [Command; 13] {
     [
         Command::ScaleThrust {
             slot: slot(1),
@@ -33,7 +33,14 @@ fn every_command() -> [Command; 12] {
             weapon: Weapon::Turbo,
             every: 2,
         },
-        Command::PadMode { slot: slot(5) },
+        Command::ScalePad {
+            pad: 300,
+            factor: 1.5,
+        },
+        Command::ScaleSlotPads {
+            slot: slot(5),
+            factor: 0.0,
+        },
         Command::PlayCue {
             slot: slot(6),
             cue: Cue::Absorb,
@@ -55,12 +62,27 @@ fn every_command() -> [Command; 12] {
     ]
 }
 
-fn every_event() -> [Event; 4] {
+fn every_event() -> [Event; 7] {
     [
         Event::WallContact { slot: slot(0) },
         Event::PickupFire { slot: slot(1) },
         Event::PickupAbsorbed { slot: slot(2) },
-        Event::PadEnergy { slot: slot(15) },
+        Event::SpeedPad {
+            slot: slot(15),
+            pad: 258,
+        },
+        Event::WeaponPad {
+            slot: slot(3),
+            pad: 7,
+        },
+        Event::TriggerEnter {
+            slot: slot(4),
+            trigger: 63,
+        },
+        Event::TriggerExit {
+            slot: slot(5),
+            trigger: 1,
+        },
     ]
 }
 
@@ -104,6 +126,31 @@ fn layout_fold() -> u64 {
         CRAFT_LEN as u32,
         EVENT_KIND as u32,
         EVENT_SLOT as u32,
+        EVENT_INDEX as u32,
+        MAX_PAD_FACTOR.to_bits(),
+        track::MAX_ENTITIES as u32,
+        track::MAX_TRIGGERS as u32,
+        track::MAX_PROPS as u32,
+        track::SPEED_PADS_AT as u32,
+        track::WEAPON_PADS_AT as u32,
+        track::TRIGGERS_AT as u32,
+        track::ENTITIES_AT as u32,
+        track::ENTITY_LEN as u32,
+        track::PROPS_AT as u32,
+        track::PROP_LEN as u32,
+        track::TRACK_LEN as u32,
+        track::ENTITY_KIND as u32,
+        track::ENTITY_INDEX as u32,
+        track::ENTITY_FIRST_PROP as u32,
+        track::ENTITY_PROP_COUNT as u32,
+        track::ENTITY_TO_WORLD as u32,
+        track::ENTITY_MIN as u32,
+        track::ENTITY_MAX as u32,
+        u32::from(track::Kind::Track.code()),
+        u32::from(track::Kind::SpeedPad.code()),
+        u32::from(track::Kind::WeaponPad.code()),
+        u32::from(track::Kind::Trigger.code()),
+        track::prop_key("boost"),
         COMMAND_KIND as u32,
         COMMAND_SLOT as u32,
         COMMAND_ARG as u32,
@@ -169,7 +216,7 @@ fn layout_fold() -> u64 {
 
 /// The revision and the layout it names. Edit the layout and this fails: bump
 /// [`REVISION`] and record the new fold beside it, in the same change.
-const REVISION_AND_FOLD: (u32, u64) = (3, 0x17c5_e77e_3f17_49ed);
+const REVISION_AND_FOLD: (u32, u64) = (3, 0xfcd9_c2ff_a469_658a);
 
 #[test]
 fn the_layout_is_the_revision_it_says() {
@@ -247,9 +294,40 @@ fn a_record_breaking_its_own_rules_is_malformed() {
         Command::decode(&shield),
         Err(Malformed::Amount { .. })
     ));
-    let mut far = Command::PadMode { slot: slot(0) }.encode();
+    let mut far = Command::ScaleSlotPads {
+        slot: slot(0),
+        factor: 1.0,
+    }
+    .encode();
     far[COMMAND_SLOT] = MAX_CRAFTS as u8;
     assert_eq!(Command::decode(&far), Err(Malformed::Slot(16)));
+    for bad in [2.5_f32, -0.1, f32::NAN] {
+        for command in [
+            Command::ScalePad {
+                pad: 0,
+                factor: bad,
+            },
+            Command::ScaleSlotPads {
+                slot: slot(1),
+                factor: bad,
+            },
+        ] {
+            assert!(matches!(
+                Command::decode(&command.encode()),
+                Err(Malformed::PadFactor { .. })
+            ));
+        }
+    }
+    let mut pad = Command::ScalePad {
+        pad: 0,
+        factor: 1.0,
+    }
+    .encode();
+    pad[COMMAND_SLOT] = 2;
+    assert!(matches!(
+        Command::decode(&pad),
+        Err(Malformed::PadFactor { slot: 2, .. })
+    ));
     let mut cue = Command::PlayCue {
         slot: slot(0),
         cue: Cue::Turbo,
@@ -314,10 +392,10 @@ fn the_observation_reads_back_through_the_guest_sections() {
     assert_eq!(Sections::active(sections.head), 0b11);
     assert_eq!(Sections::state_len(sections.head), 3);
     assert_eq!(&sections.state[..3], &[9, 8, 7]);
-    let events: [Option<Event>; 4] =
+    let events: [Option<Event>; 7] =
         core::array::from_fn(|i| Sections::event_record(sections.head, i).and_then(Event::decode));
     assert_eq!(events, every_event().map(Some));
-    assert_eq!(Sections::event_count(sections.head), 4);
+    assert_eq!(Sections::event_count(sections.head), 7);
     let craft = Sections::craft_record(sections.crafts, slot(1)).map(Craft::decode);
     assert_eq!(craft, Some(a_craft()));
     Sections::put_command(sections.reply, 0, &every_command()[4]);
@@ -326,5 +404,112 @@ fn the_observation_reads_back_through_the_guest_sections() {
     assert_eq!(
         Command::decode(&command_record(&io, 0)),
         Ok(every_command()[4])
+    );
+}
+
+#[test]
+fn a_prop_key_is_fnv_1a_32_of_the_name() {
+    assert_eq!(track::prop_key(""), 0x811c_9dc5);
+    assert_eq!(track::prop_key("a"), 0xe40c_292c);
+    assert_eq!(track::prop_key("foobar"), 0xbf9c_f968);
+}
+
+#[test]
+fn a_track_region_reads_back_entity_by_entity() {
+    use track::{Entity, Kind, Region, TRACK_LEN, prop_key, write};
+    let boost = [(prop_key("boost"), 1.5), (prop_key("lit"), 1.0)];
+    let gate = [(prop_key("gate"), 0.1)];
+    let pad = |x: f32, props| Entity {
+        to_world: core::array::from_fn(|i| if i == 12 { x } else { track::IDENTITY[i] }),
+        min: [-1.0, -2.0, -3.0],
+        max: [1.0, 8.0, 3.0],
+        props,
+    };
+    let mut out = [0_u8; TRACK_LEN];
+    let used = write(
+        &mut out,
+        &[(prop_key("laps"), 3.0)],
+        &[pad(10.0, &[]), pad(20.0, &boost)],
+        &[pad(30.0, &[])],
+        &[pad(40.0, &gate)],
+    )
+    .unwrap();
+    assert_eq!(used, track::PROPS_AT + 4 * track::PROP_LEN);
+    let region = Region::new(&out);
+    assert_eq!(
+        [Kind::SpeedPad, Kind::WeaponPad, Kind::Trigger].map(|k| region.count(k)),
+        [2, 1, 1]
+    );
+    let second = region.entity(Kind::SpeedPad, 1).unwrap();
+    assert_eq!((second.kind(), second.index()), (Some(Kind::SpeedPad), 1));
+    assert_eq!(second.to_world()[12], 20.0);
+    assert_eq!(
+        (second.min(), second.max()),
+        ([-1.0, -2.0, -3.0], [1.0, 8.0, 3.0])
+    );
+    assert_eq!(second.prop(prop_key("boost")), Some(1.5));
+    assert_eq!(
+        region
+            .entity(Kind::SpeedPad, 0)
+            .unwrap()
+            .prop(prop_key("boost")),
+        None
+    );
+    assert!(region.entity(Kind::SpeedPad, 2).is_none());
+    assert_eq!(
+        region.entity(Kind::WeaponPad, 0).unwrap().to_world()[12],
+        30.0
+    );
+    let trigger = region.entity(Kind::Trigger, 0).unwrap();
+    assert_eq!(trigger.prop(prop_key("gate")), Some(0.1));
+    assert_eq!(
+        region
+            .entity(Kind::Track, 0)
+            .unwrap()
+            .prop(prop_key("laps")),
+        Some(3.0)
+    );
+    // A zeroed region is a track with nothing on it.
+    let empty = Region::new(&[0; 8]);
+    assert!(empty.entity(Kind::SpeedPad, 0).is_none());
+    assert_eq!(empty.entity(Kind::Track, 0).map(|t| t.prop(1)), None);
+}
+
+#[test]
+fn a_track_past_a_cap_or_with_a_key_twice_does_not_fit() {
+    use track::{Entity, Kind, TRACK_LEN, TooBig, write};
+    let mut out = [0_u8; TRACK_LEN];
+    let none = Entity {
+        to_world: track::IDENTITY,
+        min: [0.0; 3],
+        max: [0.0; 3],
+        props: &[],
+    };
+    let many = [none; track::MAX_ENTITIES];
+    assert_eq!(
+        write(&mut out, &[], &many, &[], &[]),
+        Err(TooBig::Entities(track::MAX_ENTITIES + 1))
+    );
+    assert_eq!(
+        write(&mut out, &[], &[], &[], &many[..track::MAX_TRIGGERS + 1]),
+        Err(TooBig::Triggers(track::MAX_TRIGGERS + 1))
+    );
+    let props = [(1_u32, 0.0_f32); track::MAX_PROPS + 1];
+    assert_eq!(
+        write(&mut out, &props, &[], &[], &[]),
+        Err(TooBig::Props(track::MAX_PROPS + 1))
+    );
+    let twice = [(7, 1.0), (7, 2.0)];
+    let clash = Entity {
+        props: &twice,
+        ..none
+    };
+    assert_eq!(
+        write(&mut out, &[], &[none], &[clash], &[]),
+        Err(TooBig::Clash {
+            kind: Kind::WeaponPad,
+            index: 0,
+            key: 7
+        })
     );
 }

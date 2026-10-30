@@ -25,6 +25,7 @@ use wasmtime::{
     StoreLimitsBuilder, Trap,
 };
 
+use oag_ext_abi::track::TRACK_LEN;
 use oag_ext_abi::{ABI, ABI_WORD, Command, Craft, Event, IO_LEN, MAX_STATE_BYTES, REVISION};
 
 mod reply;
@@ -222,6 +223,11 @@ pub struct Observation<'a> {
     pub events: &'a [Event],
     /// Each grid slot, in slot order.
     pub crafts: &'a [Craft],
+    /// The track region (`oag_ext_abi::track`), as many bytes of it as were used: the
+    /// same every tick of a race. Written only to a guest exporting `oag_track`.
+    pub track: &'a [u8],
+    /// The track's speed pads: the bound of a race-wide `scale-pad`'s pad.
+    pub speed_pads: usize,
 }
 
 /// What a call cost, for the dev overlay. An output, never simulation state.
@@ -295,6 +301,14 @@ impl Module {
         if word != ABI_WORD {
             let (major, revision) = oag_ext_abi::split_abi_word(word);
             return Err(LoadError::Abi { major, revision });
+        }
+        // Optional: a module that reads the track region exports its buffer.
+        if let Some(export) = module.get_export("oag_track")
+            && !matches!(export, ExternType::Func(_))
+        {
+            return Err(LoadError::Export(
+                "`oag_track` has the wrong kind".to_string(),
+            ));
         }
         // Optional: a module that says how long its state is must agree with its manifest.
         if module.get_export("oag_state_len").is_some() {
@@ -389,6 +403,21 @@ impl Module {
             memory.write(&mut store, io, &buffer[..]).map_err(|e| {
                 Fault::Trap(format!("the I/O buffer at {io:#x} is outside memory: {e}"))
             })?;
+            if !observation.track.is_empty()
+                && let Ok(export) = instance.get_typed_func::<(), u32>(&mut store, "oag_track")
+            {
+                let at = export.call(&mut store, ()).map_err(trap)? as usize;
+                // The whole region must fit, not only the bytes written.
+                let end = at.checked_add(TRACK_LEN).unwrap_or(usize::MAX);
+                if end > memory.data_size(&store) {
+                    return Err(Fault::Trap(format!(
+                        "the track region at {at:#x} is outside memory"
+                    )));
+                }
+                memory
+                    .write(&mut store, at, observation.track)
+                    .map_err(|e| Fault::Trap(e.to_string()))?;
+            }
             let status = instance
                 .get_typed_func::<(), u32>(&mut store, "tick")
                 .and_then(|f| f.call(&mut store, ()))

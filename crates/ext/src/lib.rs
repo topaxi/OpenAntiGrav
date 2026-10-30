@@ -23,10 +23,11 @@
 //! ```
 //!
 //! Everything here is a typed view over ABI 1's I/O buffer, laid out once in
-//! `oag-ext-abi` for the host and this crate alike: an [`Observation`] reads it, a
+//! `oag-ext-abi` for the host and this crate alike: an [`Observation`] reads it and the
+//! [`Track`] the host writes beside it, a
 //! [`Reply`] writes commands that name a slot only through a [`Craft`] the observation
 //! handed out, and the state is a [`blob!`] struct. The exports (`oag_abi`, `oag_io`,
-//! `oag_state_len`, `tick`) and the panic handler exist only when built for wasm32; the
+//! `oag_track`, `oag_state_len`, `tick`) and the panic handler exist only when built for wasm32; the
 //! same `tick` runs natively under the `test` feature's [`test::Race`].
 #![cfg_attr(not(any(test, feature = "test")), no_std)]
 
@@ -34,13 +35,16 @@ mod blob;
 mod reply;
 #[cfg(any(test, feature = "test"))]
 pub mod test;
+mod track;
 
 pub use blob::Blob;
+pub use oag_ext_abi::track::{Kind, TRACK_LEN, prop_key};
 pub use oag_ext_abi::{
     ABI_WORD, Command, Cue, Effect, Event, IO_LEN, MAX_CRAFTS, MAX_STATE_BYTES, MAX_THRUST_FACTOR,
     Pickup, Rgba, Slot, Weapon, WeatherKind,
 };
 pub use reply::{Refused, Reply};
+pub use track::{Entity, Track};
 
 use oag_ext_abi::Sections;
 
@@ -146,15 +150,24 @@ pub struct Observation<'a> {
     head: &'a [u8],
     records: &'a [u8],
     active: u32,
+    track: &'a [u8],
 }
 
 impl<'a> Observation<'a> {
-    fn read(head: &'a [u8], records: &'a [u8]) -> Self {
+    fn read(head: &'a [u8], records: &'a [u8], track: &'a [u8]) -> Self {
         Self {
             head,
             records,
             active: Sections::active(head),
+            track,
         }
+    }
+
+    /// The race's track: its pads, its triggers and their properties. The same every
+    /// tick of a race.
+    #[must_use]
+    pub fn track(&self) -> Track<'a> {
+        Track::new(self.track)
     }
 
     /// The world tick.
@@ -190,7 +203,7 @@ impl<'a> Observation<'a> {
 /// the export's status: 0, or 1 when the host's state length is not `E::State`'s
 /// (the host faults the module on it).
 #[doc(hidden)]
-pub fn run<E: Extension>(io: &mut [u8; IO_LEN]) -> u32 {
+pub fn run<E: Extension>(io: &mut [u8; IO_LEN], track: &[u8]) -> u32 {
     let sections = Sections::split(io);
     let bytes = <E::State as Blob>::BYTES;
     if Sections::state_len(sections.head) != bytes {
@@ -199,9 +212,9 @@ pub fn run<E: Extension>(io: &mut [u8; IO_LEN]) -> u32 {
     let Some(blob) = sections.state.get_mut(..bytes) else {
         return 1;
     };
-    let observation = Observation::read(sections.head, sections.crafts);
+    let observation = Observation::read(sections.head, sections.crafts, track);
     let mut state = E::State::from_bytes(blob);
-    let mut reply = Reply::new(sections.reply);
+    let mut reply = Reply::new(sections.reply, observation.track().speed_pads());
     E::tick(&observation, &mut state, &mut reply);
     state.to_bytes(blob);
     reply.finish();
@@ -213,9 +226,10 @@ pub fn run<E: Extension>(io: &mut [u8; IO_LEN]) -> u32 {
 #[doc(hidden)]
 #[allow(unsafe_code)]
 pub mod wasm {
-    use super::{Extension, IO_LEN};
+    use super::{Extension, IO_LEN, TRACK_LEN};
 
     static mut IO: [u8; IO_LEN] = [0; IO_LEN];
+    static mut TRACK: [u8; TRACK_LEN] = [0; TRACK_LEN];
 
     /// `oag_io`: the buffer's address in linear memory.
     #[must_use]
@@ -223,16 +237,23 @@ pub mod wasm {
         core::ptr::addr_of!(IO) as u32
     }
 
+    /// `oag_track`: the track region's address in linear memory.
+    #[must_use]
+    pub fn track_address() -> u32 {
+        core::ptr::addr_of!(TRACK) as u32
+    }
+
     /// `tick`.
     pub fn tick<E: Extension>() -> u32 {
-        // SAFETY: wasm32 has one thread and this is the only reference to `IO` made
-        // during a call; the host writes the buffer only between calls.
+        // SAFETY: wasm32 has one thread and these are the only references to `IO` and
+        // `TRACK` made during a call; the host writes both only between calls.
         let io = unsafe { &mut *core::ptr::addr_of_mut!(IO) };
-        super::run::<E>(io)
+        let track = unsafe { &*core::ptr::addr_of!(TRACK) };
+        super::run::<E>(io, track)
     }
 }
 
-/// Exports `E` as the module's extension: `oag_abi`, `oag_io`, `oag_state_len`,
+/// Exports `E` as the module's extension: `oag_abi`, `oag_io`, `oag_track`, `oag_state_len`,
 /// `tick` and the panic handler (`unreachable`, which the host turns into a fault),
 /// all only on wasm32.
 #[macro_export]
@@ -248,6 +269,12 @@ macro_rules! export {
         #[unsafe(no_mangle)]
         pub extern "C" fn oag_io() -> u32 {
             $crate::wasm::io_address()
+        }
+
+        #[cfg(target_arch = "wasm32")]
+        #[unsafe(no_mangle)]
+        pub extern "C" fn oag_track() -> u32 {
+            $crate::wasm::track_address()
         }
 
         #[cfg(target_arch = "wasm32")]
