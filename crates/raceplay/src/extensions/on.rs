@@ -3,7 +3,7 @@ use oag_ext_abi::{Command, Event, MAX_EVENTS, Pickup};
 use crate::extension_effects::Fired;
 use oag_modhost::{Module, Observation};
 
-use super::Report;
+use super::{Drops, Report};
 use crate::extension_pickup::pickup;
 use crate::sim::RaceSim;
 
@@ -22,6 +22,19 @@ pub(super) struct Slot {
     call_us: f32,
 }
 
+impl Slot {
+    /// Turns the module off for the race, once: the first fault stands.
+    fn fault(&mut self, tick: u64, why: String) {
+        if self.faulted.is_none() {
+            log::warn!(
+                "mod {}: {why}, at tick {tick}; off for the rest of the race",
+                self.mod_id
+            );
+            self.faulted = Some((tick, why));
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub(super) struct On {
     pub(super) slots: Vec<Slot>,
@@ -38,6 +51,10 @@ pub(super) struct On {
     /// it has counted.
     roll: Option<(oag_tables::weapons::Weapon, u8)>,
     rolled: u32,
+    /// One bit per slot whose held mod pickup came from a `pickup-roll` (the grant's
+    /// weapon is the craft's `last`), not from a `give-pickup`: what a fault of the
+    /// owner turns it back into.
+    from_roll: u32,
     /// `pickup-fire` / `pickup-absorbed` raised since the last call, one bit a slot.
     fires: u32,
     absorbs: u32,
@@ -48,6 +65,8 @@ pub(super) struct On {
     region: super::track::Region,
     /// Each speed pad's race-wide `scale-pad`, held until replaced.
     pad_scale: Vec<f32>,
+    /// The module (index plus one, 0 for none) whose `scale-pad` holds each pad.
+    pad_by: Vec<u8>,
     /// Each slot's `scale-pad` this tick.
     slot_pad_scale: [f32; oag_gameplay::MAX_SHIPS],
     /// What weapons asked of each slot since the last call (a hit a Shield absorbed
@@ -75,6 +94,8 @@ pub(super) struct On {
     /// Each module's `[pickup]`, in module order.
     pickups: Vec<Option<oag_tables::pickup_look::PickupLook>>,
     pub(super) effects: Vec<(usize, crate::extension_effects::Fired)>,
+    /// Events dropped past a cap, counted for the report: an output, never hashed.
+    pub(super) drops: Drops,
     /// The race-wide outputs of this tick.
     pub(super) sky: super::Sky,
 }
@@ -229,9 +250,11 @@ impl On {
             owner: 0,
             roll: None,
             rolled: 0,
+            from_roll: 0,
             fires: 0,
             absorbs: 0,
             pad_scale: vec![1.0; region.speed_pads],
+            pad_by: vec![0; region.speed_pads],
             region,
             slot_pad_scale: [1.0; oag_gameplay::MAX_SHIPS],
             speed_entered: [None; oag_gameplay::MAX_SHIPS],
@@ -243,6 +266,7 @@ impl On {
             strings,
             pickups,
             effects: Vec::new(),
+            drops: Drops::default(),
             sky: super::Sky::default(),
         }
     }
@@ -252,7 +276,7 @@ impl On {
         self.slots[index].blob.clone()
     }
 
-    pub(super) fn rolls(&mut self, weapon: oag_tables::weapons::Weapon) -> bool {
+    pub(super) fn rolls(&mut self, slot: usize, weapon: oag_tables::weapons::Weapon) -> bool {
         let Some((rolled, every)) = self.roll else {
             return false;
         };
@@ -260,7 +284,11 @@ impl On {
             return false;
         }
         self.rolled += 1;
-        self.rolled.is_multiple_of(u32::from(every))
+        let turns = self.rolled.is_multiple_of(u32::from(every));
+        if turns {
+            self.from_roll |= 1 << slot;
+        }
+        turns
     }
 
     pub(super) fn pad_factor(&self, slot: usize, pad: usize) -> f32 {
@@ -360,11 +388,13 @@ impl On {
             }
         }
         hasher.write_u32(self.rolled);
+        hasher.write_u32(self.from_roll);
         hasher.write_u32(self.fires);
         hasher.write_u32(self.absorbs);
         for scale in self.pad_scale.iter().chain(&self.slot_pad_scale) {
             hasher.write_f32(*scale);
         }
+        hasher.write(&self.pad_by);
         for entered in self.speed_entered.iter().chain(&self.weapon_entered) {
             hasher.write_u32(entered.map_or(0, |pad| u32::from(pad) + 1));
         }
@@ -458,44 +488,12 @@ fn crafts(sim: &RaceSim, inputs: &oag_gameplay::PlayerInputs) -> Vec<oag_ext_abi
         .collect()
 }
 
-/// `give-pickup`, `clear-pickup` and `pickup-roll` from module `index`: the first
-/// module to send one owns the mod pickup kind for the race, and another one sending
-/// one faults. A race without weapons gives nothing and rolls nothing.
+/// `give-pickup`, `clear-pickup` and `pickup-roll` from module `index`, already checked
+/// by [`refusal`]: the first module to send one owns the mod pickup kind for the race. A
+/// race without weapons gives nothing and rolls nothing.
 fn pickup_command(sim: &mut RaceSim, index: usize, command: Command) {
-    let tick = sim.world.tick;
     let on = &mut sim.extensions.on;
-    let me = index as u8 + 1;
-    if on.owner != 0 && on.owner != me {
-        let owner = on.slots[usize::from(on.owner - 1)].mod_id.clone();
-        let module = &mut on.slots[index];
-        if module.faulted.is_none() {
-            let why = format!("the mod pickup belongs to mod {owner}");
-            log::warn!(
-                "mod {}: {why}, at tick {tick}; off for the rest of the race",
-                module.mod_id
-            );
-            module.faulted = Some((tick, why));
-        }
-        return;
-    }
-    let hands_out = matches!(
-        command,
-        Command::GivePickup { .. } | Command::PickupRoll { .. }
-    );
-    if hands_out && on.pickups[index].is_none() {
-        let module = &mut on.slots[index];
-        if module.faulted.is_none() {
-            let why = "it hands out its own pickup but its oag-mod.toml has no [pickup] table \
-                       (icon and colour, each naming its source)";
-            log::warn!(
-                "mod {}: {why}, at tick {tick}; off for the rest of the race",
-                module.mod_id
-            );
-            module.faulted = Some((tick, why.to_string()));
-        }
-        return;
-    }
-    on.owner = me;
+    on.owner = index as u8 + 1;
     if !sim.weapons_on {
         return;
     }
@@ -507,6 +505,7 @@ fn pickup_command(sim: &mut RaceSim, index: usize, command: Command) {
             let pickup = &mut sim.world.ships[slot.index()].pickup;
             if pickup.weapon.is_none() {
                 pickup.weapon = Some(extension);
+                on.from_roll &= !(1 << slot.index());
             }
         }
         Command::ClearPickup { slot } => {
@@ -517,7 +516,6 @@ fn pickup_command(sim: &mut RaceSim, index: usize, command: Command) {
         }
         Command::PickupRoll { weapon, every } => {
             let weapon = crate::extension_pickup::weapon(weapon);
-            let on = &mut sim.extensions.on;
             if on.roll != Some((weapon, every)) {
                 on.roll = Some((weapon, every));
                 on.rolled = 0;
@@ -527,17 +525,108 @@ fn pickup_command(sim: &mut RaceSim, index: usize, command: Command) {
     }
 }
 
+/// Why module `index`'s commands this tick are refused, if any is: an `emit` past the
+/// cap or on a channel its mod does not publish, a pickup command from a module that
+/// does not own the mod pickup, or one that hands out a pickup its `oag-mod.toml`
+/// does not describe. Checked over the whole reply before any of it lands, so a refused
+/// reply lands nothing (the module's other commands included).
+fn refusal(on: &On, index: usize, commands: &[Command]) -> Option<String> {
+    let module = &on.slots[index];
+    let me = index as u8 + 1;
+    let mut emits = 0;
+    for command in commands {
+        match command {
+            Command::Emit { channel, .. } => {
+                emits += 1;
+                if emits > oag_ext_abi::MAX_EMITS_PER_TICK {
+                    return Some(format!(
+                        "emit past the cap of {} a tick",
+                        oag_ext_abi::MAX_EMITS_PER_TICK
+                    ));
+                }
+                if !module.publishes.iter().any(|(key, _)| key == channel) {
+                    let declared: Vec<&str> =
+                        module.publishes.iter().map(|(_, n)| n.as_str()).collect();
+                    return Some(format!(
+                        "emit on channel {channel:#010x}, which its oag-mod.toml [channels] publishes does not name (it publishes {declared:?})"
+                    ));
+                }
+            }
+            Command::GivePickup { .. }
+            | Command::ClearPickup { .. }
+            | Command::PickupRoll { .. } => {
+                if on.owner != 0 && on.owner != me {
+                    let owner = &on.slots[usize::from(on.owner - 1)].mod_id;
+                    return Some(format!("the mod pickup belongs to mod {owner}"));
+                }
+                let hands_out = matches!(
+                    command,
+                    Command::GivePickup { .. } | Command::PickupRoll { .. }
+                );
+                if hands_out && on.pickups[index].is_none() {
+                    return Some(
+                        "it hands out its own pickup but its oag-mod.toml has no [pickup] table \
+                         (icon and colour, each naming its source)"
+                            .to_string(),
+                    );
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Takes back everything module `index` holds for the rest of the race, as it faults:
+/// the pads it scaled go back to 1.0, and if it owned the mod pickup, the roll ends and
+/// the pickups crafts still hold become the title's again. A pickup that came from a
+/// roll is the weapon the pad drew (the craft's `last`), so the AI and the person can
+/// use it as if the module had never run; one that was given has no such weapon and is
+/// taken away. (Mail the module already sent stays: one tick of events.)
+fn release(sim: &mut RaceSim, index: usize) {
+    let on = &mut sim.extensions.on;
+    let me = index as u8 + 1;
+    for (scale, by) in on.pad_scale.iter_mut().zip(&mut on.pad_by) {
+        if *by == me {
+            *scale = 1.0;
+            *by = 0;
+        }
+    }
+    if on.owner != me {
+        return;
+    }
+    on.owner = 0;
+    on.roll = None;
+    on.rolled = 0;
+    let from_roll = std::mem::take(&mut on.from_roll);
+    let extension = Some(oag_tables::weapons::Weapon::Extension);
+    for (slot, ship) in sim.world.ships.iter_mut().enumerate() {
+        if ship.pickup.weapon != extension {
+            continue;
+        }
+        match ship.pickup.last.filter(|_| from_roll & (1 << slot) != 0) {
+            Some(drawn) => ship.pickup.weapon = Some(drawn),
+            None => {
+                ship.pickup.take();
+            }
+        }
+    }
+}
+
 /// What happened since the last call, per slot in slot order: a wall contact, a
 /// fire, an absorb, the speed pad and the weapon pad entered, the triggers left and
 /// the triggers entered (each in index order). Past `MAX_EVENTS` the rest are
 /// dropped. The `mod` events (`mail`, sorted) come first, so a crowd of engine events
 /// cannot crowd out a mod's.
-fn events(on: &On, mail: &[super::channel::Mail]) -> Vec<Event> {
-    mail.iter()
+fn events(on: &On, mail: &[super::channel::Mail]) -> (Vec<Event>, usize) {
+    let mut all: Vec<Event> = mail
+        .iter()
         .filter_map(|m| m.event())
         .chain(engine_events(on))
-        .take(MAX_EVENTS)
-        .collect()
+        .collect();
+    let dropped = all.len().saturating_sub(MAX_EVENTS);
+    all.truncate(MAX_EVENTS);
+    (all, dropped)
 }
 
 fn engine_events(on: &On) -> impl Iterator<Item = Event> + '_ {
@@ -575,43 +664,11 @@ fn engine_events(on: &On) -> impl Iterator<Item = Event> + '_ {
         })
 }
 
-/// A module's `emit`: queued for every module's next call if the module's mod publishes
-/// the channel and the module is within its per-tick cap, else the module faults for the
-/// race, naming which.
-fn emit(
-    sim: &mut RaceSim,
-    index: usize,
-    emitted: &mut [usize; super::MAX_SIM_MODS],
-    (slot, channel, value): (oag_ext_abi::Slot, u32, f32),
-) {
+/// A module's `emit` (checked by [`refusal`]): queued for every module's next call.
+fn emit(sim: &mut RaceSim, index: usize, (slot, channel, value): (oag_ext_abi::Slot, u32, f32)) {
     let tick = sim.world.tick;
     let on = &mut sim.extensions.on;
-    let module = &mut on.slots[index];
-    emitted[index] += 1;
-    let why = if emitted[index] > oag_ext_abi::MAX_EMITS_PER_TICK {
-        Some(format!(
-            "emit past the cap of {} a tick",
-            oag_ext_abi::MAX_EMITS_PER_TICK
-        ))
-    } else if !module.publishes.iter().any(|(key, _)| *key == channel) {
-        let declared: Vec<&str> = module.publishes.iter().map(|(_, n)| n.as_str()).collect();
-        Some(format!(
-            "emit on channel {channel:#010x}, which its oag-mod.toml [channels] publishes does not name (it publishes {declared:?})"
-        ))
-    } else {
-        None
-    };
-    if let Some(why) = why {
-        if module.faulted.is_none() {
-            log::warn!(
-                "mod {}: {why}, at tick {tick}; off for the rest of the race",
-                module.mod_id
-            );
-            module.faulted = Some((tick, why));
-        }
-        return;
-    }
-    let from = module.sender;
+    let from = on.slots[index].sender;
     on.mail.push(super::channel::Mail {
         slot: slot.index() as u8,
         from,
@@ -639,8 +696,12 @@ pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs) {
     // A boost the step never took (a craft that did not step) does not carry over.
     on.boost = [1.0; oag_gameplay::MAX_SHIPS];
     on.slot_pad_scale = [1.0; oag_gameplay::MAX_SHIPS];
-    let mail = super::channel::sorted(&std::mem::take(&mut on.mail));
-    let events = events(on, &mail);
+    let queued = std::mem::take(&mut on.mail);
+    let mail = super::channel::sorted(&queued);
+    let (events, engine_dropped) = events(on, &mail);
+    let (mods_dropped, track_dropped) = super::channel::dropped(&queued);
+    on.drops
+        .note(tick, mods_dropped, track_dropped, engine_dropped);
     on.walls = 0;
     on.hit_amount = [0.0; oag_gameplay::MAX_SHIPS];
     on.hit_weapon = [None; oag_gameplay::MAX_SHIPS];
@@ -666,14 +727,16 @@ pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs) {
         routes: region.routes,
     };
     let mut commands = Vec::new();
-    // Every module's checked commands, in id order: applied once all have run, so
-    // each saw the same observation.
+    // Every module's checked commands, in id order, with the blob it had before the call:
+    // applied once all have run, so each saw the same observation.
     let mut applied = Vec::new();
+    let mut faulted = Vec::new();
     for (index, slot) in on.slots.iter_mut().enumerate() {
         if slot.faulted.is_some() {
             slot.fuel_used = 0;
             continue;
         }
+        let prior = slot.blob.clone();
         // Timed for the overlay only; nothing simulated reads it.
         let started = web_time::Instant::now();
         let outcome = slot
@@ -682,91 +745,105 @@ pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs) {
         slot.call_us = started.elapsed().as_secs_f32() * 1.0e6;
         let cost = match outcome {
             Ok(cost) => {
-                applied.extend(commands.drain(..).map(|command| (index, command)));
+                applied.push((index, prior, std::mem::take(&mut commands)));
                 cost
             }
             Err((fault, cost)) => {
-                log::warn!(
-                    "mod {}: {fault} at tick {tick}; off for the rest of the race",
-                    slot.mod_id
-                );
-                slot.faulted = Some((tick, fault.to_string()));
+                slot.fault(tick, fault.to_string());
+                faulted.push(index);
                 cost
             }
         };
         slot.fuel_used = cost.fuel_used;
         slot.fuel_peak = slot.fuel_peak.max(cost.fuel_used);
     }
-    let mut emitted = [0_usize; super::MAX_SIM_MODS];
-    for (index, command) in applied {
-        match command {
-            Command::Emit {
-                slot,
-                channel,
-                value,
-            } => emit(sim, index, &mut emitted, (slot, channel, value)),
-            // Below 1.0 the Leach Beam's path, multiplied so a drain is kept; above it
-            // the mod's own engine scale, multiplied so two modules compose. Both are
-            // consumed by this tick's step.
-            Command::ScaleThrust { slot, factor } if factor <= 1.0 => {
-                sim.world.ships[slot.index()].pending_thrust_scale *= factor;
-            }
-            Command::ScaleThrust { slot, factor } => {
-                let boost = &mut sim.extensions.on.boost[slot.index()];
-                *boost = (*boost * factor).min(oag_ext_abi::MAX_THRUST_FACTOR);
-            }
-            Command::ShieldDelta { slot, amount } => {
-                super::shield::delta(sim, slot.index(), amount)
-            }
-            // Race-wide and held: the later module in id order wins.
-            Command::ScalePad { pad, factor } => {
-                sim.extensions.on.pad_scale[usize::from(pad)] = factor;
-            }
-            // Per slot, this tick: two modules compose, bounded as a factor is.
-            Command::ScaleSlotPads { slot, factor } => {
-                let scale = &mut sim.extensions.on.slot_pad_scale[slot.index()];
-                *scale = (*scale * factor).min(oag_ext_abi::MAX_PAD_FACTOR);
-            }
-            Command::PlayCue { slot, cue } => {
-                sim.cues.push(oag_gameplay::cue::CueEvent::new(
-                    self::cue(cue),
-                    slot.index(),
-                ));
-            }
-            Command::FireEffect { slot, effect } => sim
-                .extensions
+    for index in faulted {
+        release(sim, index);
+    }
+    for (index, prior, commands) in applied {
+        if let Some(why) = refusal(&sim.extensions.on, index, &commands) {
+            let slot = &mut sim.extensions.on.slots[index];
+            slot.fault(tick, why);
+            // The faulted call's new blob is not kept, as for a fault in the call itself.
+            slot.blob = prior;
+            release(sim, index);
+            continue;
+        }
+        for command in commands {
+            apply(sim, index, command);
+        }
+    }
+}
+
+fn apply(sim: &mut RaceSim, index: usize, command: Command) {
+    match command {
+        Command::Emit {
+            slot,
+            channel,
+            value,
+        } => emit(sim, index, (slot, channel, value)),
+        // Below 1.0 the Leach Beam's path, multiplied so a drain is kept; above it
+        // the mod's own engine scale, multiplied so two modules compose. Both are
+        // consumed by this tick's step.
+        Command::ScaleThrust { slot, factor } if factor <= 1.0 => {
+            sim.world.ships[slot.index()].pending_thrust_scale *= factor;
+        }
+        Command::ScaleThrust { slot, factor } => {
+            let boost = &mut sim.extensions.on.boost[slot.index()];
+            *boost = (*boost * factor).min(oag_ext_abi::MAX_THRUST_FACTOR);
+        }
+        Command::ShieldDelta { slot, amount } => super::shield::delta(sim, slot.index(), amount),
+        // Race-wide and held until replaced (the later module in id order wins) or its
+        // module faults, which puts it back.
+        Command::ScalePad { pad, factor } => {
+            let on = &mut sim.extensions.on;
+            on.pad_scale[usize::from(pad)] = factor;
+            on.pad_by[usize::from(pad)] = index as u8 + 1;
+        }
+        // Per slot, this tick: two modules compose, bounded as a factor is.
+        Command::ScaleSlotPads { slot, factor } => {
+            let scale = &mut sim.extensions.on.slot_pad_scale[slot.index()];
+            *scale = (*scale * factor).min(oag_ext_abi::MAX_PAD_FACTOR);
+        }
+        Command::PlayCue { slot, cue } => {
+            sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                self::cue(cue),
+                slot.index(),
+            ));
+        }
+        Command::FireEffect { slot, effect } => sim
+            .extensions
+            .on
+            .effects
+            .push((slot.index(), Fired::Title(self::effect(effect)))),
+        Command::FireModEffect { slot, index: own } => {
+            let mod_id = sim.extensions.on.slots[index].mod_id.clone();
+            sim.extensions
                 .on
                 .effects
-                .push((slot.index(), Fired::Title(self::effect(effect)))),
-            Command::FireModEffect { slot, index: own } => {
-                let mod_id = sim.extensions.on.slots[index].mod_id.clone();
-                sim.extensions
-                    .on
-                    .effects
-                    .push((slot.index(), Fired::Own { mod_id, index: own }));
-            }
-            Command::PickupLook { .. }
-            | Command::HudTint { .. }
-            | Command::HudShake { .. }
-            | Command::HudBarExtra { .. }
-            | Command::HudText { .. }
-            | Command::HudIcon { .. } => sim.extensions.on.hud.push((index, command)),
-            Command::SetWeather { strength, .. } => {
-                sim.extensions.on.sky.rain = Some(strength);
-            }
-            Command::SetSun { intensity } => sim.extensions.on.sky.sun = intensity,
-            Command::GradeSky { grey } => sim.extensions.on.sky.grey = grey,
-            Command::GiveShield { slot } => super::shield::give(sim, slot.index()),
-            Command::HoldShield { slot } => super::shield::hold(sim, slot.index()),
-            Command::ClearShield { slot } => {
-                sim.world.ships[slot.index()].physics.shield_pickup_timer = 0.0;
-            }
-            Command::GivePickup { .. }
-            | Command::ClearPickup { .. }
-            | Command::PickupRoll { .. } => pickup_command(sim, index, command),
-            Command::PreferRoute { slot, route } => {
-                sim.extensions.on.prefer.set(slot.index(), route);
-            }
+                .push((slot.index(), Fired::Own { mod_id, index: own }));
+        }
+        Command::PickupLook { .. }
+        | Command::HudTint { .. }
+        | Command::HudShake { .. }
+        | Command::HudBarExtra { .. }
+        | Command::HudText { .. }
+        | Command::HudIcon { .. } => sim.extensions.on.hud.push((index, command)),
+        Command::SetWeather { strength, .. } => {
+            sim.extensions.on.sky.rain = Some(strength);
+        }
+        Command::SetSun { intensity } => sim.extensions.on.sky.sun = intensity,
+        Command::GradeSky { grey } => sim.extensions.on.sky.grey = grey,
+        Command::GiveShield { slot } => super::shield::give(sim, slot.index()),
+        Command::HoldShield { slot } => super::shield::hold(sim, slot.index()),
+        Command::ClearShield { slot } => {
+            sim.world.ships[slot.index()].physics.shield_pickup_timer = 0.0;
+        }
+        Command::GivePickup { .. } | Command::ClearPickup { .. } | Command::PickupRoll { .. } => {
+            pickup_command(sim, index, command);
+        }
+        Command::PreferRoute { slot, route } => {
+            sim.extensions.on.prefer.set(slot.index(), route);
         }
     }
 }

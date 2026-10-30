@@ -33,6 +33,9 @@ pub enum Refused {
     /// More than `MAX_EMITS_PER_TICK` `emit`s this tick: the host faults the module on the
     /// next one.
     Emits,
+    /// More than `MAX_FIRE_EFFECTS_PER_TICK` `fire_effect` and `fire_mod_effect` commands
+    /// this tick: the host faults the module on the next one.
+    Effects,
 }
 
 /// This tick's commands. The count is written when the tick returns.
@@ -51,6 +54,7 @@ pub struct Reply<'a> {
     pool_used: usize,
     items: [u8; oag_ext_abi::MAX_CRAFTS],
     emits: usize,
+    effects: usize,
 }
 
 impl<'a> Reply<'a> {
@@ -69,6 +73,7 @@ impl<'a> Reply<'a> {
             pool_used: 0,
             items: [0; oag_ext_abi::MAX_CRAFTS],
             emits: 0,
+            effects: 0,
         }
     }
 
@@ -334,12 +339,22 @@ impl<'a> Reply<'a> {
     ///
     /// # Errors
     ///
-    /// [`Refused::Full`].
+    /// [`Refused::Full`], [`Refused::Effects`] past `MAX_FIRE_EFFECTS_PER_TICK` a tick.
     pub fn fire_effect(&mut self, craft: &Craft<'_>, effect: Effect) -> Result<(), Refused> {
+        self.room_for_effect()?;
         self.push(&Command::FireEffect {
             slot: craft.slot(),
             effect,
-        })
+        })?;
+        self.effects += 1;
+        Ok(())
+    }
+
+    fn room_for_effect(&self) -> Result<(), Refused> {
+        if self.effects >= oag_ext_abi::MAX_FIRE_EFFECTS_PER_TICK {
+            return Err(Refused::Effects);
+        }
+        Ok(())
     }
 
     /// `fire-effect` with the effect at place `index` of the mod's own `[effects]`
@@ -349,15 +364,20 @@ impl<'a> Reply<'a> {
     ///
     /// # Errors
     ///
-    /// [`Refused::Full`], or [`Refused::Range`] for an index past 15 bits.
+    /// [`Refused::Full`], [`Refused::Effects`] past `MAX_FIRE_EFFECTS_PER_TICK` a tick
+    /// (counting [`Self::fire_effect`] too), or [`Refused::Range`] for an index past 15
+    /// bits.
     pub fn fire_mod_effect(&mut self, craft: &Craft<'_>, index: u16) -> Result<(), Refused> {
         if index >= 1 << 15 {
             return Err(Refused::Range);
         }
+        self.room_for_effect()?;
         self.push(&Command::FireModEffect {
             slot: craft.slot(),
             index,
-        })
+        })?;
+        self.effects += 1;
+        Ok(())
     }
 
     /// `hud-tint`: this tick, recolour the craft's HUD `element`. Drawn, never hashed;

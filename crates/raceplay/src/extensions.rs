@@ -13,7 +13,7 @@
 //!   `clear-shield` (zeroes it), all landing at the call, before the step.
 //! - **The call**: [`Race::tick_extensions`], between `advance_cannons` and the people's
 //!   steps (phase C of `hooks.md`). Modules run in id order; each sees the same events.
-//! - **Command**: `scale-thrust{slot, factor}`, `factor` in `[0, 1]`, **multiplied** into
+//! - **Command**: `scale-thrust{slot, factor}`, `factor` in `[0, 2]` (`MAX_THRUST_FACTOR`; below 1 slows, above 1 is the mod's own engine scale), **multiplied** into
 //!   `Ship::pending_thrust_scale`, which this tick's step consumes for a person's craft
 //!   (`player_step.rs`) and an AI craft (`field.rs`) alike. Multiplied, not assigned, so a
 //!   Leach Beam drain armed at the end of the last tick is kept.
@@ -485,6 +485,54 @@ pub struct Report {
     pub faulted: Option<(u64, String)>,
 }
 
+/// Events a cap dropped over the race, per kind. A report, never hashed: it is a count of
+/// what was dropped, and the drop itself is deterministic (sorted order, fixed caps), so
+/// every machine drops the same events at the same tick.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Drops {
+    /// Modules' `mod` events past `MAX_MOD_EVENTS` in a tick.
+    pub mod_events: u64,
+    /// The track's `mod` events past `MAX_TRACK_EVENTS` in a tick.
+    pub track_events: u64,
+    /// Engine events past `MAX_EVENTS` (after the `mod` events) in a tick.
+    pub engine_events: u64,
+}
+
+#[cfg(feature = "extensions")]
+impl Drops {
+    /// Adds one tick's drops, saying so in the log the first time each kind drops.
+    pub(super) fn note(&mut self, tick: u64, mods: usize, track: usize, engine: usize) {
+        let kinds = [
+            (
+                &mut self.mod_events,
+                mods,
+                "module",
+                oag_ext_abi::MAX_MOD_EVENTS,
+            ),
+            (
+                &mut self.track_events,
+                track,
+                "track",
+                oag_ext_abi::MAX_TRACK_EVENTS,
+            ),
+            (
+                &mut self.engine_events,
+                engine,
+                "engine",
+                oag_ext_abi::MAX_EVENTS,
+            ),
+        ];
+        for (total, dropped, kind, cap) in kinds {
+            if dropped > 0 && *total == 0 {
+                log::warn!(
+                    "mods: {dropped} {kind} events past the cap of {cap} a tick dropped at tick {tick} (counted in Extensions::drops; later drops are not logged)"
+                );
+            }
+            *total += dropped as u64;
+        }
+    }
+}
+
 /// The race's simulation modules: their state (hashed) and their reports (not).
 #[derive(Debug, Clone, Default)]
 pub struct Extensions {
@@ -538,14 +586,14 @@ impl Extensions {
 
     /// A weapon pad just drew `weapon`: whether a module's `pickup-roll` turns this grant
     /// into the mod's own pickup. Counts the grant. `false` in every race without one.
-    pub(super) fn rolls(&mut self, weapon: oag_tables::weapons::Weapon) -> bool {
+    pub(super) fn rolls(&mut self, slot: usize, weapon: oag_tables::weapons::Weapon) -> bool {
         #[cfg(feature = "extensions")]
         {
-            self.on.rolls(weapon)
+            self.on.rolls(slot, weapon)
         }
         #[cfg(not(feature = "extensions"))]
         {
-            let _ = weapon;
+            let _ = (slot, weapon);
             false
         }
     }
@@ -728,6 +776,19 @@ impl Extensions {
     #[cfg(all(test, feature = "extensions"))]
     pub(crate) fn blob_for_tests(&self, index: usize) -> Vec<u8> {
         self.on.slot_blob(index)
+    }
+
+    /// The events the caps dropped so far: all zero in a race that stays inside them.
+    #[must_use]
+    pub fn drops(&self) -> Drops {
+        #[cfg(feature = "extensions")]
+        {
+            self.on.drops
+        }
+        #[cfg(not(feature = "extensions"))]
+        {
+            Drops::default()
+        }
     }
 
     /// Each module's numbers after the last tick, in id order.

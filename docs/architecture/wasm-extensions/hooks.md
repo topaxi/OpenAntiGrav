@@ -214,7 +214,7 @@ returns `Err(Refused)` where the host would fault:
 | `scale-pad{pad, factor}` | `ScalePad` | `scale_pad(pad, factor)` | a factor outside `[0, 2]` or not finite; a pad the track does not have; a second for the pad this tick |
 | `scale-pad{slot, factor}` | `ScaleSlotPads` | `scale_slot_pads(&craft, factor)` | a factor outside `[0, 2]` or not finite; a second for the craft this tick |
 | `play-cue{slot, cue}` | `PlayCue` | `play_cue(&craft, cue)` | |
-| `fire-effect{slot, effect}` | `FireEffect` | `fire_effect(&craft, effect)` | |
+| `fire-effect{slot, effect}` | `FireEffect` | `fire_effect(&craft, effect)` | a 17th `fire-effect` or `fire-mod-effect` in one tick (`Refused::Effects`; the host faults the module) |
 | `hud-tint{slot, element, rgba}` | `HudTint` | `hud_tint(&craft, element, rgba)` | the `Pickup` element (`Refused::PickupTint`; use `pickup_look`); the host decodes one as malformed |
 | `pickup-look{slot, icon, colour}` (22) | `PickupLook` | `pickup_look(&craft, icon, colour)` | |
 | `hud-shake{slot, element, amplitude}` | `HudShake` | `hud_shake(&craft, element, amplitude)` | `amplitude` outside `[0, 16]` or not finite |
@@ -251,11 +251,13 @@ weapon in a record is malformed by name. An output, never hashed; `hud-shake` of
 Every method also refuses a 97th command (`Refused::Full`). The host's checks stay
 the backstop for a guest written without the SDK.
 
-### `scale-thrust{slot, factor, ticks}`
+### `scale-thrust{slot, factor}`
 
-- **Built without `ticks` (Wall Penalty, 2026-10-29)**: `factor` in `[0, 1]` only (`[0, 2]` since Energy Turbo, below), sent
-  each tick it should hold, multiplied into `pending_thrust_scale` at phase C. The
-  timer and factors above 1.0 below are still the Feisar walk's engine change.
+- **As built**: `factor` in `[0, MAX_THRUST_FACTOR]` (`[0, 2]`), sent each tick it should
+  hold, no `ticks` field and no host timer. At or below 1.0 it is multiplied into
+  `pending_thrust_scale` at phase C; above 1.0 it is the mod's own engine scale,
+  multiplied across modules and capped. The timer and the true top-speed scale below
+  are the Feisar walk's engine change, not built.
 
 - **Lands in** `Ship::pending_thrust_scale` (`crates/gameplay/src/world.rs:204`),
   which the step consumes and resets to 1.0 (`player_step.rs:231`, and the same for
@@ -391,8 +393,11 @@ the backstop for a guest written without the SDK.
   `mail`, filled by the modules' emits (applied after every module has run, so each saw the same
   observation) and by `Extensions::test_triggers` for a trigger that sends a channel. At the
   **next** call it is taken, **sorted** by channel, slot, sender and value, held to
-  `MAX_MOD_EVENTS` (16) and written **ahead of** the engine's own events, so a crowd of wall contacts
-  cannot push one out of `MAX_EVENTS`. Every module hears every `mod` event, whoever sent it: the
+  `MAX_MOD_EVENTS` (16) for the modules' and `MAX_TRACK_EVENTS` (8) for the track's triggers, each class
+  in its own cap so neither starves the other, and written **ahead of** the engine's own events, so a
+  crowd of wall contacts cannot push one out of `MAX_EVENTS`. A drop past a cap (and past `MAX_EVENTS`)
+  is deterministic (the later in sorted order) and counted in `Extensions::drops()`, with one `warn!`
+  in the race log the first time each kind drops; the counters are outputs, never hashed. Every module hears every `mod` event, whoever sent it: the
   order modules run in (id order) changes nothing any of them sees. Module ids still differ in
   `from`, so a pair of mods that swap ids hear different senders, not different events.
 - **Hashed.** The queue is race state, sorted and written in `On::hash_into` with the modules'
@@ -403,8 +408,8 @@ the backstop for a guest written without the SDK.
 - **Faults, each by name.** The module's mod must publish the channel (`oag-mod.toml` `[channels]`:
   `emit on channel 0x..., which its oag-mod.toml [channels] publishes does not name (it publishes
   [...])`), and a module may send at most `MAX_EMITS_PER_TICK` = **4** a tick (`emit past the cap
-  of 4 a tick`). The four within the cap are delivered; the module is off for the rest of the race.
-  Caps are **chosen, not measured**: 4 a module a tick, 16 events a tick.
+  of 4 a tick`). The module is off for the rest of the race and **none** of that reply lands (README section 4.2). Caps are **chosen, not measured**: 4 a module a tick, 16 module
+  events and 8 track events a tick.
 - **A track needs no module.** `Beacons` (always built, with or without the `extensions` feature)
   tests the track's emitting triggers against every craft's sweep each tick, notes when each channel
   last fired (`Extensions::fired`, an output, never hashed) and, when a module runs, queues a
@@ -492,7 +497,7 @@ The README walks each end to end; this is what each needs from the engine.
 
 | Example | Events and commands | Works on today's engine? |
 | --- | --- | --- |
-| **A craft that gets faster on each speed pad** (2048's prototype craft as the inspiration) | `pad-crossed` counted in the state blob; `scale-thrust` from the count | **Nearly**: `pending_thrust_scale` exists, but needs the per-slot timer and a factor above 1.0 (above). A true top-speed scale is one new `Environment` field. See the note on 2048 below. |
+| **A craft that gets faster on each speed pad** (2048's prototype craft as the inspiration) | `pad-crossed` counted in the state blob; `scale-thrust` from the count | **Yes for thrust**: `scale-thrust` above 1.0 is the mod's engine scale, re-sent each tick (no host timer). A true top-speed scale is one new `Environment` field, not built. See the note on 2048 below. |
 | **Spring jumps** on a custom track | `volume-entered`, `impulse` | **No**: needs the volume node kind and the velocity write point. |
 | **A gravity switch** (drive from the top of the track to the bottom) | `volume-entered`, a gravity command (README open question 3) | **No**: gravity acts on world `y` only (`oag_physics::passive::gravity`, `crates/physics/src/passive.rs:309`; `forces.rs:221` says so). Needs a gravity direction in `Environment` (default `-Y`, bit-identical for every race that does not set it) and per-craft gravity state in `World`'s `Ship` (`world.rs:82`). The hover already casts along the craft's own `-up` (`crates/physics/src/hover.rs:610`) and the magstrip hold slaves attitude to the track (`oag_physics::maglock`), so the craft side follows; the camera and the AI's line need their own check. |
 | **A-to-B instead of a circuit** | `set-finished` from progress | **Partly.** A sprint over part of a closed circuit needs only `set-finished` when progress passes a sample. A truly open track does not work: the lap is a wrap of distance along a closed `Course` (`crates/race/src/course.rs:61`; `wrapped_forward`, `state.rs:35`), and the spawner, the respawn, the AI speed plan (a ring) and the flyby assume a loop. Rules as data in `oag-race` first (finish by laps or by distance); a drag race then needs no code. |

@@ -347,7 +347,7 @@ mod with_modules {
     }
 
     #[test]
-    fn emitting_past_the_cap_faults_the_module_by_name_and_the_first_four_stand() {
+    fn emitting_past_the_cap_faults_the_module_by_name_and_none_of_its_emits_land() {
         let ping = "test.a/ping";
         let at_cap = ["a", "b", "c", "d"].map(|_| (ping, 1.0));
         let mut over = at_cap.to_vec();
@@ -366,7 +366,11 @@ mod with_modules {
         let (tick, why) = broken.extension_reports()[0].faulted.clone().unwrap();
         assert_eq!(tick, 3);
         assert!(why.contains("emit past the cap of 4"), "{why}");
-        assert_eq!(heard(&broken, 1).count, 4, "the four within the cap landed");
+        assert_eq!(
+            heard(&broken, 1).count,
+            0,
+            "a reply that faults lands none of its emits, the four within the cap included"
+        );
     }
 
     #[test]
@@ -385,6 +389,43 @@ mod with_modules {
             "{why}"
         );
         assert_eq!(heard(&race, 1).count, 0, "nothing was queued");
+    }
+
+    #[test]
+    fn more_trigger_events_than_the_track_cap_are_delivered_to_the_cap_and_counted() {
+        let cap = oag_ext_abi::MAX_TRACK_EVENTS;
+        // Boxes around the whole grid, each sending its own channel: every craft enters
+        // every one on the first tick.
+        let everywhere = |channel: String| oag_trackfile::props::Trigger {
+            name: channel.clone(),
+            to_world: oag_ext_abi::track::IDENTITY,
+            min: [-1.0e5; 3],
+            max: [1.0e5; 3],
+            props: Default::default(),
+            emits: Some(channel),
+        };
+        let props = TrackProps {
+            triggers: (0..cap + 1)
+                .map(|i| everywhere(format!("test.track/t{i}")))
+                .collect(),
+            ..TrackProps::default()
+        };
+        let mut race = grid(prepared_on(&[listener("test.b")], &props));
+        for _ in 0..6 {
+            race.tick(&PlayerInputs::none());
+        }
+        assert_eq!(
+            heard(&race, 0).count,
+            cap as u32,
+            "the listener hears the cap's worth, whoever is first in sorted order"
+        );
+        let drops = race.sim.extensions.drops();
+        assert!(drops.track_events > 0, "{drops:?}");
+        assert_eq!(drops.mod_events, 0);
+        assert!(
+            drops.engine_events > 0,
+            "the crowd of trigger-enter events overflows MAX_EVENTS too: {drops:?}"
+        );
     }
 
     #[test]

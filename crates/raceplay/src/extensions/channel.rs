@@ -120,14 +120,38 @@ impl Mail {
     }
 }
 
-/// The queue ready for delivery or hashing: sorted, and held to
-/// [`oag_ext_abi::MAX_MOD_EVENTS`] (the later in sorted order are dropped).
+/// The queue ready for delivery or hashing: sorted, the modules' events held to
+/// [`oag_ext_abi::MAX_MOD_EVENTS`] and the track's to [`oag_ext_abi::MAX_TRACK_EVENTS`]
+/// (in each class the later in sorted order are dropped), so neither can starve the other.
 #[cfg(feature = "extensions")]
 pub(super) fn sorted(mail: &[Mail]) -> Vec<Mail> {
     let mut out = mail.to_vec();
     out.sort_by_key(Mail::sort_key);
-    out.truncate(oag_ext_abi::MAX_MOD_EVENTS);
+    let (mut mods, mut track) = (0, 0);
+    out.retain(|m| {
+        let (count, cap) = if m.from == oag_ext_abi::TRACK_SENDER {
+            (&mut track, oag_ext_abi::MAX_TRACK_EVENTS)
+        } else {
+            (&mut mods, oag_ext_abi::MAX_MOD_EVENTS)
+        };
+        *count += 1;
+        *count <= cap
+    });
     out
+}
+
+/// How many of `mail` [`sorted`] drops: the modules' past their cap and the track's past
+/// its own.
+#[cfg(feature = "extensions")]
+pub(super) fn dropped(mail: &[Mail]) -> (usize, usize) {
+    let track = mail
+        .iter()
+        .filter(|m| m.from == oag_ext_abi::TRACK_SENDER)
+        .count();
+    (
+        (mail.len() - track).saturating_sub(oag_ext_abi::MAX_MOD_EVENTS),
+        track.saturating_sub(oag_ext_abi::MAX_TRACK_EVENTS),
+    )
 }
 
 #[cfg(feature = "extensions")]
@@ -191,5 +215,58 @@ impl super::Extensions {
         } else if let Some(oldest) = self.fired.iter_mut().min_by_key(|(_, _, t)| *t) {
             *oldest = (channel, value, tick);
         }
+    }
+}
+
+#[cfg(all(test, feature = "extensions"))]
+mod tests {
+    use super::*;
+
+    fn mail(from: u32, channel: u32) -> Mail {
+        Mail {
+            slot: 0,
+            from,
+            channel,
+            value: 1.0,
+        }
+    }
+
+    #[test]
+    fn a_crowd_of_module_mail_cannot_starve_a_trigger_and_each_class_has_its_own_cap() {
+        let mods = oag_ext_abi::MAX_MOD_EVENTS;
+        let track = oag_ext_abi::MAX_TRACK_EVENTS;
+        // Every module event sorts before the trigger's (lower channel): under one shared
+        // cap the trigger would be the one dropped.
+        let mut queue: Vec<Mail> = (0..mods as u32).map(|i| mail(7, i)).collect();
+        queue.push(mail(oag_ext_abi::TRACK_SENDER, 1000));
+        let kept = sorted(&queue);
+        assert_eq!(kept.len(), mods + 1, "the trigger's event is delivered");
+        assert!(kept.iter().any(|m| m.from == oag_ext_abi::TRACK_SENDER));
+        assert_eq!(dropped(&queue), (0, 0));
+
+        queue.extend((0..track as u32 + 3).map(|i| mail(oag_ext_abi::TRACK_SENDER, 2000 + i)));
+        queue.push(mail(7, 5000));
+        assert_eq!(dropped(&queue), (1, 4), "past each cap, counted apart");
+        let kept = sorted(&queue);
+        assert_eq!(kept.len(), mods + track);
+        assert!(
+            !kept.iter().any(|m| m.channel == 5000),
+            "the later module event in sorted order is the one dropped"
+        );
+    }
+
+    #[test]
+    fn drops_accumulate_per_kind() {
+        let mut drops = super::super::Drops::default();
+        drops.note(3, 1, 0, 0);
+        drops.note(4, 2, 5, 1);
+        assert_eq!(
+            drops,
+            super::super::Drops {
+                mod_events: 3,
+                track_events: 5,
+                engine_events: 1
+            }
+        );
     }
 }

@@ -39,12 +39,13 @@
 #![forbid(unsafe_code)]
 
 pub use channel::{
-    BadChannel, MAX_CHANNEL_LEN, MAX_EMITS_PER_TICK, MAX_MOD_EVENTS, TRACK_SENDER, channel_key,
-    check_channel, namespace,
+    BadChannel, MAX_CHANNEL_LEN, MAX_EMITS_PER_TICK, MAX_MOD_EVENTS, MAX_TRACK_EVENTS,
+    TRACK_SENDER, channel_key, check_channel, namespace,
 };
 use hud::pool_string;
 pub use hud::{
-    Anchor, HudElement, HudPlace, HudStr, MAX_HUD_EXTRA, MAX_HUD_ITEMS, MAX_HUD_SHAKE, MAX_HUD_TEXT,
+    Anchor, HudElement, HudPlace, HudStr, MAX_FIRE_EFFECTS_PER_TICK, MAX_HUD_EXTRA, MAX_HUD_ITEMS,
+    MAX_HUD_SHAKE, MAX_HUD_TEXT,
 };
 pub use malformed::Malformed;
 pub use pickup::{Colour, Icon, ModIcon};
@@ -75,8 +76,12 @@ pub const fn split_abi_word(word: u32) -> (u32, Option<u32>) {
 pub const IO_LEN: usize = 4096;
 /// Grid slots the active mask can name.
 pub const MAX_SLOTS: u32 = 32;
-/// Events per call. Past it the newest are dropped by the caller, which counts them.
+/// Events per call. Past it the later are dropped by the caller, which counts and logs
+/// them (the mod events come first, so only the engine's own can be).
 pub const MAX_EVENTS: usize = 32;
+/// The most linear memory a module may ask for, in 64 KiB pages (16 MiB). Proposed in the
+/// README (section 4.1), chosen.
+pub const MAX_MEMORY_PAGES: u32 = 256;
 /// The longest state blob.
 pub const MAX_STATE_BYTES: usize = 1024;
 /// Commands per reply; more is a fault (README 2.1 proposed 64; 96 leaves a slot's
@@ -1041,10 +1046,7 @@ impl Command {
         }
         if kind == COMMAND_SCALE_PAD {
             if raw_slot != 0 {
-                return Err(Malformed::PadFactor {
-                    slot: raw_slot,
-                    factor: value,
-                });
+                return Err(Malformed::PadSlot { slot: raw_slot });
             }
             return Ok(Self::ScalePad {
                 pad: arg,

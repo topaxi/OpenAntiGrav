@@ -445,3 +445,93 @@ fn two_shield_commands_for_one_slot_in_a_tick_are_refused() {
         );
     }
 }
+
+/// A guest whose exports are the ABI's, each with the signature in `signatures` that
+/// names it, and no body that matters.
+fn with_signature(export: &str, wrong: &str) -> Vec<u8> {
+    let func = |name: &str, body: &str| {
+        if name == export {
+            format!(r#"(func (export "{name}") {wrong})"#)
+        } else {
+            format!(r#"(func (export "{name}") (result i32) {body})"#)
+        }
+    };
+    wat::parse_str(format!(
+        r#"(module
+            (memory (export "memory") 1)
+            {abi}
+            {io}
+            {tick}
+            {track}
+            {len})"#,
+        abi = func("oag_abi", &format!("i32.const {ABI_WORD}")),
+        io = func("oag_io", "i32.const 1024"),
+        tick = func("tick", "i32.const 0"),
+        track = func("oag_track", "i32.const 8192"),
+        len = func("oag_state_len", "i32.const 8"),
+    ))
+    .unwrap()
+}
+
+#[test]
+fn an_export_with_the_wrong_signature_is_refused_at_load_by_name() {
+    let limits = Limits {
+        state_bytes: 8,
+        ..Limits::default()
+    };
+    assert!(
+        Module::compile(&with_signature("none", "(result i32) i32.const 0"), limits).is_ok(),
+        "the fixture with every signature right loads"
+    );
+    for (name, wrong) in [
+        ("tick", "(param i32) (result i32) i32.const 0"),
+        ("tick", "(result i64) i64.const 0"),
+        ("tick", "nop"),
+        ("oag_io", "(result i64) i64.const 1024"),
+        ("oag_io", "(param i32) (result i32) i32.const 1024"),
+        ("oag_track", "(result i64) i64.const 8192"),
+        ("oag_state_len", "(result i64) i64.const 8"),
+        ("oag_abi", "(result i64) i64.const 0"),
+    ] {
+        let error = Module::compile(&with_signature(name, wrong), limits).unwrap_err();
+        assert!(
+            matches!(&error, LoadError::Export(e) if e.contains(&format!("`{name}`")) && e.contains("() -> i32")),
+            "{name} {wrong}: {error}"
+        );
+    }
+}
+
+#[test]
+fn a_reply_past_the_fire_effect_cap_is_a_fault_and_the_cap_itself_is_fine() {
+    let fire = |count: usize| {
+        let body: String = (0..count)
+            .map(|i| {
+                format!(
+                    "(i32.store8 (i32.const {kind}) (i32.const 6)) (i32.store8 (i32.const {slot}) (i32.const 1))
+                     (i32.store16 (i32.const {arg}) (i32.const {effect}))",
+                    kind = REPLY + 4 + i as i32 * oag_ext_abi::COMMAND_LEN as i32,
+                    slot = REPLY + 5 + i as i32 * oag_ext_abi::COMMAND_LEN as i32,
+                    arg = REPLY + 6 + i as i32 * oag_ext_abi::COMMAND_LEN as i32,
+                    effect = i % 2,
+                )
+            })
+            .collect();
+        let wasm = guest(&format!(
+            "(i32.store (i32.const {REPLY}) (i32.const {count})) {body} i32.const 0"
+        ));
+        let module = Module::compile(&wasm, Limits::default()).unwrap();
+        let mut commands = Vec::new();
+        module
+            .tick(&observe(0), &mut [0; 8], &mut commands)
+            .map(|_| commands.len())
+    };
+    assert_eq!(
+        fire(oag_ext_abi::MAX_FIRE_EFFECTS_PER_TICK),
+        Ok(oag_ext_abi::MAX_FIRE_EFFECTS_PER_TICK)
+    );
+    let (fault, _) = fire(oag_ext_abi::MAX_FIRE_EFFECTS_PER_TICK + 1).unwrap_err();
+    assert!(
+        matches!(&fault, Fault::Reply(e) if e.contains("fire-effect")),
+        "{fault}"
+    );
+}

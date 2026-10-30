@@ -108,6 +108,8 @@ Two more exhaustion cases:
   the same instrumentation pass: a call-depth counter that traps at a fixed depth
   well below any engine's native limit. Until it exists, a guest that recurses
   deeply is non-deterministic in principle.
+  The same failure, with the instance pool and mmap failures, is written up as a
+  machine-local fault in [the README](README.md#42-faults) (section 4.2).
 
 ## No threads, no clock, no WASI
 
