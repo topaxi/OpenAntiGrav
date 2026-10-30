@@ -355,14 +355,16 @@ def collect(context, depsgraph):
             for n in range(first, len(meshes)):
                 meshes[n].transform = trs[0]
                 chans += scene_motion.channels(n, times, trs)
-            groups.append((scene_motion.anim_name(o), o.oag_loop, chans))
+            groups.append((scene_motion.anim_name(o), o.oag_loop, chans, o.oag_on.strip() or None))
         sun_rotation = None
         sun_pose = moving.get(sun_obj) if sun_obj is not None else None
         if sun_pose is not None:
             chans = scene_motion.channels("sun", *sun_pose, paths=("rotation",))
             if chans:
                 sun_rotation = sun_pose[1][0][1]
-                groups.append((scene_motion.anim_name(sun_obj), sun_obj.oag_loop, chans))
+                groups.append(
+                    (scene_motion.anim_name(sun_obj), sun_obj.oag_loop, chans, sun_obj.oag_on.strip() or None)
+                )
         try:
             animations = scene_motion.build(groups)
         except ValueError as e:
