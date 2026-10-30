@@ -88,6 +88,7 @@ impl Race {
             rules,
             &mut hits,
         );
+        self.sim.extensions.weapon_hits(&hits);
         #[cfg(feature = "view")]
         for (slot, hit) in hits.iter().enumerate() {
             // `self.quiet` rather than `shield_hit`: `course` above borrows
@@ -191,6 +192,14 @@ impl Race {
         // on `self.view.shield[slot].hit()`, narrowed to the beam's one victim.
         if report.absorbed {
             self.shield_hit(beam.target as usize);
+        }
+        if report.asked > 0.0 {
+            let mut hits = [oag_weapons::projectile::WeaponHit::default(); MAX_SHIPS];
+            if let Some(hit) = hits.get_mut(beam.target as usize) {
+                hit.amount = report.asked;
+                hit.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
+            }
+            self.sim.extensions.weapon_hits(&hits);
         }
         // A drain that got through sparks the target's hull with the
         // LeachBeam's own variant, once per locator per 0.8 s like every

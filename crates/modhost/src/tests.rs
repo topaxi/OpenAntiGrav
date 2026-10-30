@@ -354,3 +354,44 @@ fn a_scale_pad_for_a_pad_the_track_lacks_is_refused() {
         .unwrap_err();
     assert!(matches!(fault, Fault::Reply(e) if e.contains("speed pad 3")));
 }
+
+#[test]
+fn two_shield_commands_for_one_slot_in_a_tick_are_refused() {
+    let one = |kinds: &[u8]| {
+        let body = format!(
+            "(i32.store (i32.const {REPLY}) (i32.const {count}))\n{commands}",
+            count = kinds.len(),
+            commands = kinds
+                .iter()
+                .enumerate()
+                .map(|(i, kind)| {
+                    let at = i as i32 * oag_ext_abi::COMMAND_LEN as i32;
+                    format!(
+                        "(i32.store8 (i32.const {c}) (i32.const {kind}))
+                         (i32.store8 (i32.const {s}) (i32.const 1))",
+                        c = REPLY + 4 + at,
+                        s = REPLY + 5 + at,
+                    )
+                })
+                .collect::<String>(),
+        );
+        let module = Module::compile(&track_reader(&body), Limits::default()).unwrap();
+        let mut commands = Vec::new();
+        module
+            .tick(&observe(0), &mut [0; 4], &mut commands)
+            .map(|_| commands)
+    };
+    assert_eq!(
+        one(&[25]).unwrap(),
+        [Command::HoldShield {
+            slot: oag_ext_abi::Slot::new(1).unwrap()
+        }]
+    );
+    for pair in [[24, 25], [25, 26], [26, 26]] {
+        let (fault, _) = one(&pair).unwrap_err();
+        assert!(
+            matches!(&fault, Fault::Reply(e) if e.contains("two shield commands")),
+            "{pair:?}: {fault}"
+        );
+    }
+}

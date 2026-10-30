@@ -131,6 +131,8 @@ pub const CRAFT_SHIELD: usize = 4;
 pub const CRAFT_SHIELD_MAX: usize = 8;
 /// Within a craft record: the speed in km/h, `f32`.
 pub const CRAFT_SPEED: usize = 12;
+/// Within an event record: the `f32` of an event that carries an amount (`hit`).
+pub const EVENT_VALUE: usize = 4;
 
 /// Craft flag: a person flies the slot.
 pub const CRAFT_PERSON: u8 = 1;
@@ -138,6 +140,8 @@ pub const CRAFT_PERSON: u8 = 1;
 pub const CRAFT_FIRE_HELD: u8 = 2;
 /// Craft flag: the craft is racing: past the start, not wrecked, not respawning.
 pub const CRAFT_RACING: u8 = 4;
+/// Craft flag: the craft's Shield is running, so a weapon hit this tick is absorbed.
+pub const CRAFT_SHIELDED: u8 = 8;
 
 /// The largest `scale-pad` factor, race-wide or per slot. Chosen.
 pub const MAX_PAD_FACTOR: f32 = 2.0;
@@ -155,6 +159,7 @@ const EVENT_SPEED_PAD: u8 = 5;
 const EVENT_WEAPON_PAD: u8 = 6;
 const EVENT_TRIGGER_ENTER: u8 = 7;
 const EVENT_TRIGGER_EXIT: u8 = 8;
+const EVENT_HIT: u8 = 9;
 /// Command kind codes.
 const COMMAND_SCALE_THRUST: u8 = 1;
 const COMMAND_SHIELD_DELTA: u8 = 2;
@@ -169,6 +174,9 @@ const COMMAND_SET_SUN: u8 = 11;
 const COMMAND_GRADE_SKY: u8 = 12;
 const COMMAND_SCALE_PAD: u8 = 13;
 const COMMAND_SCALE_SLOT_PADS: u8 = 14;
+const COMMAND_GIVE_SHIELD: u8 = 24;
+const COMMAND_HOLD_SHIELD: u8 = 25;
+const COMMAND_CLEAR_SHIELD: u8 = 26;
 /// The craft record's pickup code for a simulation mod's own pickup.
 const PICKUP_OURS: u8 = u8::MAX;
 
@@ -383,6 +391,8 @@ pub struct Craft {
     pub fire_held: bool,
     /// Racing: past the start, not wrecked, not respawning.
     pub racing: bool,
+    /// The craft's Shield is running: a weapon hit is absorbed (it still raises `hit`).
+    pub shielded: bool,
     /// The lap being driven, 1-based, saturating at 255.
     pub lap: u8,
     /// The laps the race ends after; 0 when it has no target.
@@ -405,6 +415,7 @@ impl Craft {
             (self.person, CRAFT_PERSON),
             (self.fire_held, CRAFT_FIRE_HELD),
             (self.racing, CRAFT_RACING),
+            (self.shielded, CRAFT_SHIELDED),
         ]
         .into_iter()
         .fold(0, |flags, (on, bit)| if on { flags | bit } else { flags });
@@ -426,6 +437,7 @@ impl Craft {
             person: flags & CRAFT_PERSON != 0,
             fire_held: flags & CRAFT_FIRE_HELD != 0,
             racing: flags & CRAFT_RACING != 0,
+            shielded: flags & CRAFT_SHIELDED != 0,
             lap: record[CRAFT_LAP],
             laps_target: record[CRAFT_LAPS_TARGET],
             shield: f32::from_bits(get_u32(record, CRAFT_SHIELD)),
@@ -436,7 +448,7 @@ impl Craft {
 }
 
 /// Something that happened in the race since the last call (README 2.1, `event`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Event {
     /// A craft touched a wall (`hooks.md`, `wall-contact`).
     WallContact {
@@ -485,6 +497,17 @@ pub enum Event {
         /// The trigger.
         trigger: u16,
     },
+    /// Weapons hit a craft since the last call, a hit the craft's Shield absorbed
+    /// included. At most one per craft per tick: `amount` is the sum of what the tick's
+    /// hits would have dealt, `weapon` the first of them.
+    Hit {
+        /// The grid slot struck.
+        slot: Slot,
+        /// The energy the hits would have taken, before any Shield.
+        amount: f32,
+        /// The weapon that hit first.
+        weapon: Weapon,
+    },
 }
 
 impl Event {
@@ -498,13 +521,14 @@ impl Event {
             | Self::SpeedPad { slot, .. }
             | Self::WeaponPad { slot, .. }
             | Self::TriggerEnter { slot, .. }
-            | Self::TriggerExit { slot, .. } => slot,
+            | Self::TriggerExit { slot, .. }
+            | Self::Hit { slot, .. } => slot,
         }
     }
 
     /// The record.
     #[must_use]
-    pub const fn encode(self) -> [u8; EVENT_LEN] {
+    pub fn encode(self) -> [u8; EVENT_LEN] {
         let (kind, index) = match self {
             Self::WallContact { .. } => (EVENT_WALL_CONTACT, 0),
             Self::PickupFire { .. } => (EVENT_PICKUP_FIRE, 0),
@@ -513,6 +537,7 @@ impl Event {
             Self::WeaponPad { pad, .. } => (EVENT_WEAPON_PAD, pad),
             Self::TriggerEnter { trigger, .. } => (EVENT_TRIGGER_ENTER, trigger),
             Self::TriggerExit { trigger, .. } => (EVENT_TRIGGER_EXIT, trigger),
+            Self::Hit { weapon, .. } => (EVENT_HIT, weapon.code() as u16),
         };
         let mut record = [0; EVENT_LEN];
         record[EVENT_KIND] = kind;
@@ -520,6 +545,9 @@ impl Event {
         let [lo, hi] = index.to_le_bytes();
         record[EVENT_INDEX] = lo;
         record[EVENT_INDEX + 1] = hi;
+        if let Self::Hit { amount, .. } = self {
+            put_u32(&mut record, EVENT_VALUE, amount.to_bits());
+        }
         record
     }
 
@@ -542,6 +570,11 @@ impl Event {
             EVENT_TRIGGER_EXIT => Self::TriggerExit {
                 slot,
                 trigger: index,
+            },
+            EVENT_HIT => Self::Hit {
+                slot,
+                amount: f32::from_bits(get_u32(record, EVENT_VALUE)),
+                weapon: u8::try_from(index).ok().and_then(Weapon::from_code)?,
             },
             _ => return None,
         })
@@ -654,6 +687,25 @@ pub enum Command {
         /// Finite, in `[0, 1]`.
         grey: f32,
     },
+    /// Start the title's own Shield on the slot, for the title's authored time, as
+    /// firing a held Shield pickup does. A Shield already running is not refreshed (the
+    /// original's rule); a race without weapons refuses it.
+    GiveShield {
+        /// The grid slot.
+        slot: Slot,
+    },
+    /// Keep the slot's running Shield from running out this tick. Re-sent each tick it
+    /// should hold; hashed. It never starts one, and a Shield not held ends within two
+    /// ticks of the last send.
+    HoldShield {
+        /// The grid slot.
+        slot: Slot,
+    },
+    /// End the slot's running Shield now, before the tick's step.
+    ClearShield {
+        /// The grid slot.
+        slot: Slot,
+    },
 }
 
 impl Command {
@@ -668,7 +720,10 @@ impl Command {
             | Self::ScaleSlotPads { slot, .. }
             | Self::PlayCue { slot, .. }
             | Self::FireEffect { slot, .. }
-            | Self::PickupTint { slot, .. } => Some(slot),
+            | Self::PickupTint { slot, .. }
+            | Self::GiveShield { slot }
+            | Self::HoldShield { slot }
+            | Self::ClearShield { slot } => Some(slot),
             Self::PickupRoll { .. }
             | Self::ScalePad { .. }
             | Self::SetWeather { .. }
@@ -699,6 +754,9 @@ impl Command {
             Self::SetWeather { kind, strength } => (COMMAND_SET_WEATHER, kind.code(), strength, 0),
             Self::SetSun { intensity } => (COMMAND_SET_SUN, 0, intensity, 0),
             Self::GradeSky { grey } => (COMMAND_GRADE_SKY, 0, grey, 0),
+            Self::GiveShield { .. } => (COMMAND_GIVE_SHIELD, 0, 0.0, 0),
+            Self::HoldShield { .. } => (COMMAND_HOLD_SHIELD, 0, 0.0, 0),
+            Self::ClearShield { .. } => (COMMAND_CLEAR_SHIELD, 0, 0.0, 0),
         };
         let mut record = [0; COMMAND_LEN];
         record[COMMAND_KIND] = kind;
@@ -817,6 +875,9 @@ impl Command {
                 slot,
                 rgba: Rgba::from_u32(word),
             },
+            COMMAND_GIVE_SHIELD => Self::GiveShield { slot },
+            COMMAND_HOLD_SHIELD => Self::HoldShield { slot },
+            COMMAND_CLEAR_SHIELD => Self::ClearShield { slot },
             other => return Err(Malformed::Kind(other)),
         })
     }

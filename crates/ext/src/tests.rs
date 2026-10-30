@@ -315,3 +315,5 @@ fn a_guest_reads_a_pads_property_by_its_compile_time_key_and_hears_pads_and_trig
     assert_eq!((log.speed, log.weapon, log.entered, log.left), (1, 2, 2, 1));
     assert_eq!(log.whole, 5.0);
 }
+
+mod armor;

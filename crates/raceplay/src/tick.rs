@@ -244,6 +244,7 @@ impl Race {
             damage_rules,
             &mut hits,
         );
+        self.sim.extensions.weapon_hits(&hits);
         for (slot, hit) in hits.iter().enumerate() {
             if hit.absorbed {
                 self.shield_hit(slot);
