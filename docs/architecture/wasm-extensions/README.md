@@ -445,6 +445,7 @@ stays 3) and **misreads every event**: rebuild against the engine you run.
 | `mod{slot, from, channel, value}` | event (10) | Every module hears it on the **next** tick, sorted, ahead of the engine's events; the queue is **hashed**. `from` is the sender mod id's key, or `TRACK_SENDER` |
 | a trigger's `oag_emit` | track file | A craft entering it sends the channel, no module needed; any module hears it from `TRACK_SENDER` |
 | an animation's `oag_on` | track file | The art animation holds its first key until the channel fires, then plays from there. Render only |
+| an animation's `oag_on_value` | track file | With `oag_on`: start only on an event carrying exactly this value (`Race::channel_started` looks up the last tick of the (channel, value) pair; the log keeps up to 256 pairs). Absent: any value. Render only, nothing hashed. A per-viewer filter is not possible: the scene is shared across split-screen views (per-view animation state would be needed) |
 | `[channels] publishes, listens` | `oag-mod.toml` | Namespaced names, refused by name when malformed or foreign; the MODS page shows SENDS, HEARS and **NO ONE SENDS** |
 | `[channels] publishes` | `.track.toml` | What its triggers may send |
 
@@ -466,7 +467,9 @@ holds the first key before the channel fires and plays from it after, a node no 
 reading the world clock, and `write_node_anims_started` writes a channel-driven model every frame
 (a table that depends on more than the clock). Checkpoint Circuit announces each gate on
 `oag.checkpoint-circuit/checkpoint` (`checkpoint_circuit_ground_truth`: never faulted, the channel
-fired). **Screenshots** (headless, `--race --track-file channels.track.toml --autopilot --camera-pose` at a
+fired); each gate's lamp carries `oag_on_value` = its gate number, so it swells only when a craft
+clears that gate (`a_value_filtered_animation_starts_only_on_its_own_value`: another value does not
+start it, its own does, no filter starts on any). **Screenshots** (headless, `--race --track-file channels.track.toml --autopilot --camera-pose` at a
 fixed camera; the track is `roundtrip.py channels`'s: the motion loop with its airship starting on a
 gate's channel, the gate a 120 by 120 by 80 box over spline point 8, clear of the grid). The first
 craft crosses it at tick 623 and the field by 732. The airship's own keys run a 3.2 s loop, so a

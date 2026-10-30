@@ -241,6 +241,7 @@ rotation, scale, in the Dope Sheet or with `keyframe_insert`); the export does t
 | The object's `oag_anim` (default its name) | the glTF animation it belongs to: an object's material slots, and objects sharing a name, share one |
 | *Motion* (`oag_loop`: `loop`, `clamp`) | the animation's `oag_loop` extra |
 | *Start on* (`oag_on`, a channel `<mod id>/<name>`) | the animation's `oag_on` extra: it holds its first key until the channel fires ([track-file.md](../formats/track-file.md#channels-events-between-a-track-and-mods)). Objects sharing an `oag_anim` name must agree |
+| *Start on value* (`oag_on_value`, a number) | the animation's `oag_on_value` extra: with *Start on*, only an event carrying exactly this value starts it (a checkpoint's gate number); empty starts on any. Objects sharing an `oag_anim` name must agree |
 | a trigger Empty's *Emit* (`oag_emit`) | the glb's `oag_emits` entry: the channel a craft entering it sends; the scene's *Channels published* (`oag_track_channels`, comma-separated) is the manifest's `[channels] publishes` and must name it |
 | The sun lamp's rotation over time | an `oag/sun` node with the rest rotation and a rotation channel; `[art.sun] direction` is the direction at `frame_start`, turned in the race by the rotation from rest |
 

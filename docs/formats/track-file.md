@@ -106,13 +106,14 @@ with no module at all:
 | `[channels] publishes` (manifest) | the channels the track sends. Repeats and names hashing alike are refused |
 | a trigger's `oag_emits[i]` (glb, on `oag/triggers`) | the channel a craft sends by **entering** trigger *i*; it must be in `publishes`. Raised for every craft, a person's or the AI's, on the tick it enters; the race raises it itself (`oag_raceplay::extensions`, `Beacons`) |
 | an animation's `oag_on` (glb, see Motion) | the channel that starts it; any valid name, from a mod or from this track |
+| an animation's `oag_on_value` (glb, with `oag_on`) | optional: start only on an event whose value equals this number (a finite float, compared exactly); absent starts on any value. A trigger's event carries `1` |
 
 Every module that runs in the race hears a trigger's channel on the next tick as an `Event::Mod`
 whose `from` is `TRACK_SENDER`; the view starts each `oag_on` animation at the tick its channel
 last fired (`Race::channel_started`), render only: collision never moves, and nothing here is in a
 hash of a race with no module. Refused by name on read and write (`oag_trackfile::props`): a
 malformed name, a trigger naming a channel the track does not publish. In Blender: a trigger's
-**Emit**, an object's **Start on** and the scene's **Channels published**
+**Emit**, an object's **Start on**, **Start on value** and the scene's **Channels published**
 ([the add-on](../tools/blender.md)); `roundtrip.py channels` proves the round trip headless.
 The manifest key is in `schemas/v1/track.tosd`.
 
@@ -123,6 +124,7 @@ The manifest key is in `schemas/v1/track.tosd`.
 | A moving `oag/art/<n>` node's `translation`, `rotation`, `scale` | its rest pose (glTF's decomposed form; a `matrix` is refused). Its vertices are then in the node's own space. A rest pose on an art node no animation moves is refused (`Transformed`) |
 | `animations[]` | glTF animations. A channel targets an art node or `oag/sun` (anything else is refused by name: collision, pads and the spline never move), path `translation`, `rotation` (`x, y, z, w`) or `scale` (the sun: rotation only). Samplers are float accessors, `LINEAR` (rotation by spherical interpolation, shorter arc) or `STEP`; `CUBICSPLINE`, normalised-integer keys and morph weights are refused. Times start at or after 0 and strictly increase; one channel per node property in the whole file |
 | An animation's `extras.oag_on` | Optional: a channel name (`<mod id>/<name>`). The animation holds its first key until that channel fires (a trigger's `oag_emit`, or a mod's `emit`), then plays from the moment it did, on the same clock ([below](#channels-events-between-a-track-and-mods)). Absent: it plays from the clock's zero, as before |
+| An animation's `extras.oag_on_value` | Optional, needs `oag_on`: a finite number. The animation starts only when the channel fires with exactly that value (a mod's `emit` value, such as Checkpoint Circuit's gate number; a trigger's event carries `1`); other values leave it holding its first key. Absent: any value starts it. Not a per-viewer filter: the scene is shared across split-screen views, so "only for the viewing player's craft" would need per-view animation state. Refused on read and write when not a finite number or without `oag_on` |
 | An animation's `extras.oag_loop` | `loop` (absent too): wraps on the animation's length, its latest key; `clamp`: holds its last keys. Before a channel's first key it holds the first |
 | `oag/sun`'s rotation | the sun's direction at time *t* is `[art.sun] direction` turned by the rotation from this rest rotation to the channel's rotation at *t*, so a lamp's own axis convention never enters |
 
