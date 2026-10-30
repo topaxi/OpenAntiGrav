@@ -791,6 +791,7 @@ impl crate::Race {
 
     /// The world-clock reading at which `channel` (`oag_ext_abi::channel_key`) last fired,
     /// the clock the scenery's animations ride: `None` before it has fired.
+    #[cfg(feature = "view")]
     #[must_use]
     pub fn channel_started(&self, channel: u32) -> Option<f32> {
         let (_, tick) = *self
