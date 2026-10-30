@@ -1181,11 +1181,25 @@ onward) scored as one event:
   bonus. Confidence 88, a direct table read (`g_tournament_points_by_position`,
   `0x08ab0ba4`) - implemented in [`oag_race::tournament`], with the running
   per-slot totals and the standings rank in the same module.
-  **Chosen, not measured:** the original zeroes points for a craft whose
-  own race-state byte reads "destroyed"/"retired" (state `7`), a byte this
-  engine does not carry; not having finished the leg when it ended is the
-  closest honest stand-in, and is what `Progress::record_leg`
-  (`crates/raceplay/src/tournament.rs`) actually reads off the board.
+  Every craft scores the place it holds **when the leg ends**: a leg ends on
+  the person's finish and the original's `Race_BuildEndRaceResult` scores
+  every craft off `craft+0xbd8`, the live rank `Race_UpdatePositions` writes
+  each tick (`race-progress.md`, confidence 90), so an opponent still racing
+  scores its running place. (Until 2026-10-30 an unfinished opponent scored
+  `0`, so a person winning every leg saw 8 and everyone else 0.) The
+  original's two zero conditions are the destroyed flag and `Ship_State` 7;
+  `Row::in_the_race` (`crates/raceplay/src/scoreboard.rs`) maps them onto
+  the one case this engine ends a leg without a finish, a wrecked person.
+  **Chosen, not measured:** an opponent wrecked at that exact tick is not
+  zeroed (this engine respawns it and the board row carries no state).
+  **Other titles (checked 2026-10-30):** `Session::frame` folds every title's
+  Tournament leg into the same `Progress`, so HD/Fury, Omega and 2048 shared
+  the zero-for-unfinished fault: it fed their campaign medal's standings rank
+  (`RaceStage::tournament_final_rank`), and is fixed there by the same change.
+  HD authors no Tournament standings table (`hd-endrace-screens.md`), so there is
+  no page to read; their per-place points are unmeasured and inherit Pulse's
+  table (**checked, applies**, not separately measured). The carry across legs
+  was already right (two-leg live run, 14/11/8 totals after leg 2).
 - **A leg advances when the player picks `Race Again`'s mid-tournament
   sibling, `ER_NEXT_RACE`**, offered on `EndRace Menu` for every leg but
   the last (`endrace-screens.md`) - `Session::advance_tournament_leg`

@@ -60,6 +60,21 @@ impl Row {
     pub fn finished(&self) -> bool {
         self.finish_tick.is_some()
     }
+
+    /// Whether this craft is still in the race when the board is taken, which
+    /// is what a Tournament leg's points ask
+    /// (`oag_race::tournament::points_for_place`).
+    ///
+    /// A leg ends on a person's finish, so an opponent that has not crossed yet
+    /// is still in it and scores its running place. The one craft that ends a
+    /// leg without finishing is a person's, wrecked: the original's destroyed
+    /// guard (`Tournament_PointsForCraft`) zeroes it. An opponent wrecked at
+    /// that exact tick is not zeroed (this engine respawns it, and the row
+    /// carries no state): chosen, not measured.
+    #[must_use]
+    pub fn in_the_race(&self) -> bool {
+        !self.player || self.finished()
+    }
 }
 
 /// A finished race's results, ordered by place.

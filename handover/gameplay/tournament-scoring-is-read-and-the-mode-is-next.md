@@ -1,7 +1,7 @@
 ---
 status: re-first
 titles: [pulse]
-updated: 2026-10-08
+updated: 2026-10-30
 summary: "Four RE gaps: DAT_08b30fa0 writer, DAT_08b31158+0xdc meaning, leg-hash resolution; none changes this build"
 ---
 
@@ -21,10 +21,13 @@ than re-derived, per this project's own rule.
 Three things this build chose rather than measured, each flagged at its own
 site too:
 
-- **A craft that has not finished a leg when it ends scores `0`**, standing
-  in for the original's own "destroyed, or race-state 7" guard - a byte
-  this engine's `oag_race::Standing` does not carry. See
-  `oag_race::tournament::points_for_finish`'s own doc.
+- **Fixed 2026-10-30: every craft scores its running place when the leg
+  ends**, as the original does (`craft+0xbd8`, `race-progress.md`); an
+  unfinished opponent used to score `0`, so a person winning every leg saw 8
+  and everyone else 0. Still chosen: only a wrecked *person* is zeroed (the
+  original's destroyed guard); an opponent wrecked at that exact tick is
+  not, because the board row carries no ship state. See
+  `oag_race::tournament::points_for_place`.
 - **No save/resume between legs.** `Session::tournament` is discarded the
   moment its `EndRace Menu` is left, whichever option is picked -
   `Tournament_SaveProgress`/`_LoadProgress` are read but not reproduced.

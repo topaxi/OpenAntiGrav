@@ -119,7 +119,7 @@ field).
 | `lap0.0`/`lap0.1`/`lap0.2` (header) | Yes | `PRO_POS`/`ER_TEAM`/`ER_POINTS` |
 | `lap{n}.0` | Yes, one row per grid slot | the row's own 1-based index - `EndRaceResults_PopulateTournamentTable` does not sort, so this is simply which row a craft's own data landed on |
 | `lap{n}.1` | Yes, when a team is known | the craft's own team, **resolved to its display name** (`AG_Systems` -> `AG Systems`) through the string table at draw time, 2026-09-30 - the original's `localise(craft+0x798)`. `None` (a launch that named no team) draws the cell absent, never a guessed `"SLOT n"` |
-| `lap{n}.2` | Yes | this leg's own points (leg page) or the running total (standings page) - `oag_race::tournament::points_for_finish`/`Progress::points` |
+| `lap{n}.2` | Yes | this leg's own points (leg page) or the running total (standings page) - `oag_race::tournament::points_for_place`/`Progress::points` |
 | `tablehighlight` | Yes, on the player's own row | `93 + 20 * (row - 1)` - the same step every populate uses, since 2026-09-30 (the lap table's own was `92 + ...`, chosen, until then) |
 | `perfectlap{n}`/`boostimg` | **No** | per-lap concepts, no reading on a per-craft table |
 | `ContinueButton`/`ControlTextConfirm` | Yes | direct idstrings, unchanged |

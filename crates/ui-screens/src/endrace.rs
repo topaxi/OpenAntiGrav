@@ -178,7 +178,7 @@ pub struct TournamentRow {
     /// label on this screen follows.
     pub team_name: Option<String>,
     /// This row's own points: this leg's
-    /// (`oag_race::tournament::points_for_finish`, [`TournamentResults::leg`])
+    /// (`oag_race::tournament::points_for_place`, [`TournamentResults::leg`])
     /// or the running total across every leg so far
     /// (`crate::race::tournament::Progress::points`,
     /// [`TournamentResults::standings`]) - which one depends on which table

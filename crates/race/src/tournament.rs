@@ -10,30 +10,34 @@
 
 /// `g_tournament_points_by_position` (`0x08ab0ba4`), read for positions
 /// 1..8: **8, 6, 5, 4, 3, 2, 1, 0.** Confidence 88 - a direct table read.
-/// Indexed `[position - 1]`; see [`points_for_finish`] for the 1-based
+/// Indexed `[position - 1]`; see [`points_for_place`] for the 1-based
 /// wrapper every caller should use instead of indexing this directly.
 pub const POINTS_BY_POSITION: [u32; 8] = [8, 6, 5, 4, 3, 2, 1, 0];
 
-/// A leg's own points for one entrant: [`POINTS_BY_POSITION`] by finishing
-/// place when `finished`, `0` otherwise.
+/// A leg's own points for one entrant: [`POINTS_BY_POSITION`] by the place it
+/// holds when the leg ends, `0` for a craft that is out of the race.
 ///
-/// **`!finished` stands in for the original's own two zero conditions**
-/// (`Tournament_PointsForCraft`, `0x08826ef4`): a destroyed craft, or one
-/// whose race-state reads as retired/DNF, scores `0` regardless of where it
-/// stopped. This engine has no permanent "destroyed for the rest of the
-/// race" state of its own - an opponent that dies comes back
-/// (`crate::state`'s own respawn law) - so the equivalent fact here is
-/// simply "did not cross the line before the leg ended", which is exactly
-/// what `finished` (`oag_race::Standing::finished`) already answers.
-/// **Chosen, not measured**: the original's own guard is a race-state byte
-/// this engine does not carry, not a finish flag, so this is the closest
-/// honest translation rather than a re-derivation of that byte.
+/// **The place is the live one, not the finishing one.** A leg ends on the
+/// person's own finish (`Race_BuildEndRaceResult` runs on the tick after it,
+/// `docs/gameplay/after-the-finish.md`), and the rest of the field is still
+/// racing then. The original scores every craft off `craft+0xbd8`, the rank
+/// `Race_UpdatePositions` writes every tick (racing craft ranked by progress,
+/// finishers by time - `docs/ghidra/functions/psp-pulse-usa/race-progress.md`,
+/// confidence 90), so an opponent that has not crossed yet scores the place it
+/// is running in. Gating on "has finished" scored every opponent `0` whenever
+/// the person won.
+///
+/// `in_race` is `false` for the original's two zero conditions
+/// (`Tournament_PointsForCraft`, `0x08826ef4`): the destroyed flag
+/// (`craft+0x860 & 0x1000`) and `Ship_State` 7. The caller decides what that
+/// means for its board; this engine ends a leg without a finish only when the
+/// person's craft is wrecked, and its opponents respawn rather than stay out.
 ///
 /// `place` outside `1..=8` (should not happen on an eight-slot grid) scores
 /// `0` rather than panicking.
 #[must_use]
-pub fn points_for_finish(place: u8, finished: bool) -> u32 {
-    if !finished {
+pub fn points_for_place(place: u8, in_race: bool) -> u32 {
+    if !in_race {
         return 0;
     }
     match place {
@@ -73,11 +77,11 @@ impl<const N: usize> Standings<N> {
     /// leg previously held rather than adding to a running total - see the
     /// struct's own doc for why that matters.
     ///
-    /// `places`/`finished` are indexed by grid slot, in the current leg's
+    /// `places`/`in_race` are indexed by grid slot, in the current leg's
     /// own slot order - the same order the original's bubble sort walks
     /// before tie-breaking on it, per [`Self::ranks`].
-    pub fn record_leg(&mut self, leg: usize, places: &[u8; N], finished: &[bool; N]) {
-        let points = std::array::from_fn(|slot| points_for_finish(places[slot], finished[slot]));
+    pub fn record_leg(&mut self, leg: usize, places: &[u8; N], in_race: &[bool; N]) {
+        let points = std::array::from_fn(|slot| points_for_place(places[slot], in_race[slot]));
         match leg.cmp(&self.leg_points.len()) {
             std::cmp::Ordering::Less => self.leg_points[leg] = points,
             std::cmp::Ordering::Equal => self.leg_points.push(points),
