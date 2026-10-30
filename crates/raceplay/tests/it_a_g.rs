@@ -44,6 +44,7 @@ mod campaign_skill_scale_ground_truth;
 mod cannon_ground_truth;
 mod cannon_tilt_ground_truth;
 mod chase_camera_ground_truth;
+mod checkpoint_circuit_ground_truth;
 mod circuit_length_ground_truth;
 mod cockpit_hit_noise_ground_truth;
 mod countdown_voice_hd_ground_truth;
