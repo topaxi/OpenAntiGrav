@@ -46,6 +46,7 @@ mod vita_2048_lighting_ground_truth;
 mod vita_2048_original_ai_ground_truth;
 mod vita_2048_zone_scenery_ground_truth;
 mod wall_collision_ground_truth;
+mod wall_penalty_ground_truth;
 mod weapon_floor_sweep;
 mod weapon_slowdown_ground_truth;
 mod weapons_row_ground_truth;

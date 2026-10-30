@@ -141,8 +141,8 @@ check-ballisticng:
 # wasmtime) is off by default, so nothing above compiles it. This lints the code
 # behind it and runs, with it on, the host's tests and every `oag-raceplay` unit
 # test (the hash goldens among them, which a vanilla race must still meet with the
-# feature on). The disc-backed Kiss Curse test runs by hand:
-# `cargo nextest run -p oag-raceplay --features extensions --run-ignored only -E 'test(/kiss_curse_ground_truth::/)'`.
+# feature on). The disc-backed Wall Penalty test runs by hand:
+# `cargo nextest run -p oag-raceplay --features extensions --run-ignored only -E 'test(/wall_penalty_ground_truth::/)'`.
 check-extensions:
     cargo clippy -p oag-modhost -p oag-raceplay -p oag-game --features oag-game/extensions,oag-raceplay/extensions --all-targets -- -D warnings
     cargo nextest run -p oag-modhost -p oag-raceplay --features oag-raceplay/extensions --lib --cargo-profile quick
@@ -596,7 +596,7 @@ play-mangohud *ARGS:
     OAG_PLAY_WRAPPER={{mangohud_bin}} just play "$@"
 
 # `just play` with simulation mods running (the `extensions` feature, wasmtime): the
-# example mods' Kiss Curse and Energy Turbo. docs/architecture/wasm-extensions/.
+# example mods' Wall Penalty and Energy Turbo. docs/architecture/wasm-extensions/.
 play-mods *ARGS:
     OAG_PLAY_FEATURES=extensions just play "$@"
 

@@ -1,6 +1,8 @@
 # WebAssembly extensions: who may extend what, through which surface, and what stays closed
 
-**Status: a design, with its first slice built** (2026-10-29): Kiss Curse, below. The decision record is
+Wall Penalty was called Kiss Curse until 2026-10-30.
+
+**Status: a design, with its first slice built** (2026-10-29): Wall Penalty, below. The decision record is
 [ADR-0079](../adr/0079-extensions-are-sandboxed-webassembly-guests-behind-two-worlds.md),
 status *Proposed*; the `frontend` world (mod screens) is
 [ADR-0080](../adr/0080-a-wasm-mod-may-own-a-screen-and-save-a-small-blob.md), also
@@ -15,10 +17,10 @@ blob, the hash, replays, network play, web and iOS, the spike's measurements).
 Where this page and those two disagree, they own the engine facts and this page
 is to be corrected.
 
-## What is built: Kiss Curse (2026-10-29)
+## What is built: Wall Penalty (2026-10-29)
 
 The smallest slice a player feels, ahead of the rollout's phases: the example mod
-`oag.kiss-curse` (`assets/mods/examples/kiss-curse/`, Rust, 627 bytes of wasm) makes a
+`oag.wall-penalty` (`assets/mods/examples/wall-penalty/`, Rust, 627 bytes of wasm) makes a
 craft that touches a wall keep a quarter of its thrust for 1.5 s, renewed each tick it
 stays on the wall. All behind the `extensions` cargo feature (`oag-game` turns on
 `oag-raceplay/extensions`, which links `oag-modhost`); off, nothing of wasmtime is
@@ -29,7 +31,7 @@ compiled and a race offered a module names it as left out in its load report.
 | The host | `crates/modhost` | Section 4.1's configuration minus Pulley and the load-time rewrite (desktop Cranelift only); one process-wide `Engine`, built at the first compile and counted (`engines_created`); a fresh pooled instance per tick; fuel per tick `FUEL_PER_TICK` = 200,000, **chosen**; a trap or a refused reply is a `Fault` |
 | The ABI | `crates/ext-abi` (`oag_ext_abi`) | Core wasm: exports `memory`, `oag_abi` (the major and the layout revision, below), `oag_io` (a 4,096-byte buffer), `tick`, optionally `oag_state_len`; **no imports at all** (the `oag` namespace is empty in ABI 1, so `rng-next` and `log` are not offered yet). The buffer's fixed little-endian layout is on that crate's page, the one definition the host and the guest SDK both compile against (it moved out of `oag-modhost` with the SDK, below); it carries the README's records only as far as the examples need: the tick, the active-slot mask, the events, the blob, the reply, the craft records |
 | Event | `wall-contact{slot}` | Raised in `Race::count_wall_contact` for a person's craft and an AI craft alike, **on every tick the craft touches a wall** (`contacts > floor_contacts`, the test `wall_contact_ticks` counts), at most once per craft per tick; delivered the next tick (the one-tick latency) |
-| Command | `scale-thrust{slot, factor}` | No `ticks` field and no host timer: the guest re-sends it each tick it wants it. `factor` finite and in `[0, 1]` for Kiss Curse (`[0, 2]` since Energy Turbo, below); anything else, a slot with no craft, or two for one slot is a fault, never a clamp. Below 1.0 **multiplied** into `Ship::pending_thrust_scale`, so a Leach Beam drain armed the tick before is kept |
+| Command | `scale-thrust{slot, factor}` | No `ticks` field and no host timer: the guest re-sends it each tick it wants it. `factor` finite and in `[0, 1]` for Wall Penalty (`[0, 2]` since Energy Turbo, below); anything else, a slot with no craft, or two for one slot is a fault, never a clamp. Below 1.0 **multiplied** into `Ship::pending_thrust_scale`, so a Leach Beam drain armed the tick before is kept |
 | Kind | `[extension.rules]` in `oag-mod.toml` | A rules module, because section 2.1 lets a rules module touch any slot and a craft module only slots flying its hull: a curse on every craft would otherwise be one craft row per team. Section 1.1 names a rules module from a mode file; `modes/*.toml` does not exist yet, so until it does a mod's rules module runs in every race the mod is on for, on its titles, **except the original campaigns** (section 1.2) **and network races** (the host's race runs vanilla until phase 3; the lobby's fingerprint leaves the repository's examples out) |
 | State | `RaceSim::extensions` | Each module's blob (the manifest's `state_bytes`, at most 1,024), its fault tick, and the pending wall-contact bits, cloned with a snapshot and hashed last in `RaceSim::state_hash`; a race with no module hashes nothing there |
 | No replay | `Race::start_recording` | A modded race records none (section 4.4, phase 2's rule) |
@@ -39,7 +41,7 @@ Proof: `oag_raceplay`'s `tests::extensions` (a vanilla race's 600 tick hashes fo
 to one constant in both builds and build no engine; a modded race hashes the same
 twice; a runaway module faults on the same tick twice while the race and the other
 module go on), `oag_modhost`'s unit tests, and the disc-backed
-`kiss_curse_ground_truth` (Pulse PSP EU, `16_Track`, Venom, throttle held: a second after
+`wall_penalty_ground_truth` (Pulse PSP EU, `16_Track`, Venom, throttle held: a second after
 the first wall contact the cursed craft is at 50.7 km/h against 115.6 km/h, two
 seconds after 15.6 against 81.7; in a Single Race an AI craft's first contact
 leaves it at 255.3 km/h a second later against 410.7 km/h). `just check-extensions` lints the feature and runs
@@ -97,7 +99,7 @@ empty grid, this project's driver flying, the pool at half):
 
 **Rules modules per race**: both examples are rules modules and run together. A race
 runs up to four (`MAX_SIM_MODS`, chosen), not section 1.2's one. The two compose:
-Kiss Curse scales below 1.0 and the turbo above it.
+Wall Penalty scales below 1.0 and the turbo above it.
 
 Not built from this page yet: the HUD MODDED tag and the results screen naming a
 faulted mod (4.2), the modded records table, `race-start`/`race-end`, the
@@ -202,7 +204,7 @@ rewritten on them with **no `unsafe`, no offsets and no ABI codes**:
 | The revision | `oag_ext_abi::REVISION` | Bumped by hand on any edit to the layout; a unit test folds every offset, size, code and one encoding of each record into a committed `(REVISION, fold)` pair, so a layout edit without a bump fails the gate. `oag_abi()` returns `(ABI << 8) \| REVISION`; the host refuses another revision **by name** ("built for ABI 1 rev 2, this host is ABI 1 rev 1"), and a value below 256 as a module "without a layout revision". Revision 1 is the layout the pre-SDK examples were built against, so the old `.wasm` files are refused |
 | The state length | `oag_state_len` | An optional export; when present it must equal the manifest's `state_bytes` (refused by name otherwise). `state_bytes` stays required in the manifest and its schema |
 | The guest SDK | `crates/ext` (`oag-ext`) | `no_std`, no `alloc`, depends on `oag-ext-abi` only; no engine crate may depend on it (`just check-deps`, rule 2). `Observation` (`tick()`, `crafts()` over occupied slots, `craft(slot)`, `events()` skipping unknown kinds); `Craft`, a view whose accessors (`is_person`, `fire_held`, `is_racing`, `shield`, `shield_max`, `speed_kmh`, `pickup`) read their field when asked; `Reply` with one method per command, taking a `&Craft` where the slot must hold one and returning `Err(Refused)` where the host would fault; the count written by the glue; `blob!` for the state (a plain-data struct, field order, little-endian, no padding, a `const` assert against `MAX_STATE_BYTES`); the `Extension` trait carrying the fresh-instance and one-tick-late rules; `export!` emitting `oag_abi`, `oag_io`, `oag_state_len`, `tick` and the panic handler on wasm32 only. Its `test` feature's `test::Race` runs an extension natively through the host's own writer and decoder |
-| The examples | `mod-examples`, branch `ext-sdk` | Kiss Curse 87 lines (its blob `[u16; 8]`), Energy Turbo 271 (its record kept at 12 bytes with a spare `u16`), each with native tests under `cargo test`. The dependency is a `path` into the engine checkout the submodule sits in; a stand-alone clone needs a git dependency pinned to the revision, which waits until the branch is public |
+| The examples | `mod-examples`, branch `ext-sdk` | Wall Penalty 87 lines (its blob `[u16; 8]`), Energy Turbo 271 (its record kept at 12 bytes with a spare `u16`), each with native tests under `cargo test`. The dependency is a `path` into the engine checkout the submodule sits in; a stand-alone clone needs a git dependency pinned to the revision, which waits until the branch is public |
 
 Measured on the rebuilt modules (`opt-level = "s"`, LTO, stripped). Fuel is from
 `oag_raceplay`'s `tests::extension_examples`: a full grid of eight racing crafts
@@ -211,10 +213,10 @@ touching a wall, firing and crossing a pad), then a quiet one:
 
 | Module | Bytes before | Bytes after | Fuel, loud tick | Fuel, quiet tick |
 | --- | --- | --- | --- | --- |
-| Kiss Curse | 627 | 638 | 1,968 to 2,586 | 1,207 to 834 |
+| Wall Penalty | 627 | 638 | 1,968 to 2,586 | 1,207 to 834 |
 | Energy Turbo | 1,774 | 2,395 | 14,267 to 11,722 | 10,027 to 8,432 |
 
-A first cut that decoded every occupied slot up front cost Kiss Curse 2.25 times its
+A first cut that decoded every occupied slot up front cost Wall Penalty 2.25 times its
 hand-written fuel on the quiet tick; the craft view is why it now costs less.
 
 Proof: `oag_ext_abi`'s unit tests (the fold, record round trips, the malformed
@@ -224,7 +226,7 @@ named; an `oag_state_len` disagreeing with the manifest refused), `oag_ext`'s
 refusals, an extension run natively), the examples' own `cargo test`, and
 `tests::extension_examples`, which compiles each committed example `.wasm` in
 `just check-extensions`: a module built against another revision fails there by
-name. `kiss_curse_ground_truth` and `energy_turbo_ground_truth` pass unchanged
+name. `wall_penalty_ground_truth` and `energy_turbo_ground_truth` pass unchanged
 against the rebuilt modules, and the vanilla fold did not move.
 
 Not built yet: an `oag-ext check` tool, a generated C header and a C++ example

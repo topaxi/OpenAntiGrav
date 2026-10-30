@@ -85,7 +85,7 @@ fn full_grid_fuel(module: &Module) -> Vec<u64> {
 
 #[test]
 fn the_committed_examples_load_and_run_a_full_grid_in_budget() {
-    for dir in ["kiss-curse", "energy-turbo", "hillside"] {
+    for dir in ["wall-penalty", "energy-turbo", "hillside"] {
         let Some(module) = example(dir) else {
             eprintln!("{dir}: the mod-examples submodule is not checked out; skipped");
             continue;
