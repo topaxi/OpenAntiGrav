@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-10-30
-summary: "SDK rev 3 + track module + Hillside rain + track props landed locally; open: Blender-side props run, check/run tool, C header, C++ example, template, git dep, MODDED rule"
+summary: "SDK, track module, Hillside rain, track props landed locally; open: Blender props run, check tool, C header, template, git dep, MODDED"
 categories: [gameplay]
 size: M (55)
 difficulty: medium (60)
