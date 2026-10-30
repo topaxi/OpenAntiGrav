@@ -98,7 +98,7 @@ Reviewed: `mod-examples` at `43d45b9` (branch `wasm-extensions`), `wall-penalty/
    The two mods' `Cargo.toml`, `config.toml` and `build.sh` differ by the package name
    only.
 9. **No way to run a mod outside the game.** The author's loop is build, copy, `just
-   play-mods`, race. `oag_modhost::Module::compile` + `tick` exist but are not reachable
+   play`, race. `oag_modhost::Module::compile` + `tick` exist but are not reachable
    as a tool, and the mod's logic cannot be unit-tested natively because it is welded
    to the buffer.
 
@@ -225,7 +225,7 @@ crate (`crates/mod`, ADR-0066). Pieces:
   full grid against `FUEL_PER_TICK`. The first thing a C or Zig author runs.
 - `oag-tools`: `oag-ext run <mod dir> --ticks N [--events ...]` (or a flag on `check`):
   the same harness fed a scripted observation, printing the typed commands per tick.
-  Replaces "build, copy, `just play-mods`, race" for the first ten minutes of a mod.
+  Replaces "build, copy, `just play`, race" for the first ten minutes of a mod.
 - A template in `mod-examples` (`template/` or `cargo generate`): `Cargo.toml`,
   `.cargo/config.toml` (the 16 KiB stack), `build.sh`, `oag-mod.toml`, `src/lib.rs` on
   `oag-ext`. Finding 8.

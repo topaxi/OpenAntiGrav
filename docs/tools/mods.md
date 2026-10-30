@@ -213,9 +213,10 @@ absorbed one included, with the craft's `shielded` flag) and can start, hold and
 title's Shield (`give-shield`, `hold-shield`, `clear-shield`): enough to write a breakable
 armour. See [wasm-extensions](../architecture/wasm-extensions/README.md#breakable-armour-from-the-shield-2026-10-30).
 
-The game must be built with the `extensions` feature: `just play-mods` (`just play`
-with it), or `cargo run --release -p oag-game --features extensions`. Plain
-`just play` runs no module; its boot log says so for each mod that ships one.
+The game must be built with the `extensions` feature. `just play` builds with it by
+default (`OAG_NO_EXTENSIONS=1 just play` builds without); by hand it is
+`cargo run --release -p oag-game --features extensions`. A build without it runs no
+module, and its boot log says so for each mod that ships one.
 The manifest is read with the others; the `.wasm` is opened only by the race that
 runs it. No module runs in an original campaign or a network race. A race running a
 module is MODDED and records no replay. The ABI, the event and the command are in

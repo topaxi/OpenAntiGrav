@@ -554,7 +554,11 @@ play *ARGS:
             args=("$img" "${args[@]:1}")
             ;;
     esac
-    ${OAG_PLAY_WRAPPER:-} cargo run --release -p oag-game {{native_video_flags}} ${OAG_PLAY_FEATURES:+--features "$OAG_PLAY_FEATURES"} -- "${args[@]}"
+    # Simulation mods run by default (the `extensions` feature, wasmtime);
+    # `OAG_NO_EXTENSIONS=1` builds without it. `OAG_PLAY_FEATURES` adds more.
+    features="${OAG_PLAY_FEATURES:-}"
+    [ -n "${OAG_NO_EXTENSIONS:-}" ] || features="extensions${features:+,$features}"
+    ${OAG_PLAY_WRAPPER:-} cargo run --release -p oag-game {{native_video_flags}} ${features:+--features "$features"} -- "${args[@]}"
 
 # `just bench-render [title ...] [--tag NAME] [--repeat] [--profile debug] [--views 1,2h,2v] [--size WxH]`, titles from
 # pulse pure hd 2048 omega (default all). Builds a release `oag-game` OUTSIDE the lock, then
@@ -594,11 +598,6 @@ launch *ARGS:
 # `mangohud` installed; override the binary with `MANGOHUD_BIN`.
 play-mangohud *ARGS:
     OAG_PLAY_WRAPPER={{mangohud_bin}} just play "$@"
-
-# `just play` with simulation mods running (the `extensions` feature, wasmtime): the
-# example mods' Wall Penalty and Energy Turbo. docs/architecture/wasm-extensions/.
-play-mods *ARGS:
-    OAG_PLAY_FEATURES=extensions just play "$@"
 
 # Capture the boot sequence, the menu and the race it launches, without a display
 #
