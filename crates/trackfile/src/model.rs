@@ -1,4 +1,5 @@
 use crate::art::Art;
+use crate::props::{Props, Trigger};
 use oag_vex::collision::CollisionNode;
 use oag_vex::pads::PadVolume;
 use oag_vex::track::{AiTrack, StartPosition};
@@ -53,6 +54,15 @@ pub struct Track {
     pub speedup_pads: Vec<PadVolume>,
     /// Weapon pads.
     pub weapon_pads: Vec<PadVolume>,
+    /// The track's own properties, for a simulation mod (`crate::props`).
+    pub props: Props,
+    /// One property list per speed pad, or none at all.
+    pub speedup_pad_props: Vec<Props>,
+    /// One property list per weapon pad, or none at all.
+    pub weapon_pad_props: Vec<Props>,
+    /// Boxes a mod hears a craft enter and leave. The engine does nothing else with
+    /// them.
+    pub triggers: Vec<Trigger>,
     /// The art: meshes, textures, sun, sky, flare. `None` races as flat-shaded
     /// collision. The simulation never reads it, so it is in no world hash.
     pub art: Option<Art>,

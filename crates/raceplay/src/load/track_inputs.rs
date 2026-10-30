@@ -402,6 +402,10 @@ pub(super) fn export(
         nodes: inputs.nodes,
         speedup_pads: inputs.speedup_pads,
         weapon_pads: inputs.weapon_pads,
+        props: oag_trackfile::props::Props::new(),
+        speedup_pad_props: Vec::new(),
+        weapon_pad_props: Vec::new(),
+        triggers: Vec::new(),
         art,
         notes,
     })

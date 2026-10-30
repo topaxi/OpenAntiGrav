@@ -63,6 +63,20 @@ class Pad:
     min: tuple
     max: tuple
     disabled: float = 0.0
+    # A simulation mod's properties (`mod_*` on the empty, prefix stripped): name to
+    # float, a bool already 1.0 or 0.0. The engine gives none a meaning.
+    props: dict = field(default_factory=dict)
+
+
+@dataclass
+class Trigger:
+    """A box a simulation mod hears a craft enter and leave (`oag/triggers/<name>`)."""
+
+    name: str
+    to_world: tuple  # 16 floats, like a pad's
+    min: tuple
+    max: tuple
+    props: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -103,6 +117,9 @@ class Track:
     weapon_pads: list = field(default_factory=list)
     notes: list = field(default_factory=list)
     art: "Art" = None
+    # The track's own properties for a simulation mod (`[props]`), and its triggers.
+    props: dict = field(default_factory=dict)
+    triggers: list = field(default_factory=list)
 
 
 # The art section (ADR-0076): what the renderer draws and the simulation never reads.
