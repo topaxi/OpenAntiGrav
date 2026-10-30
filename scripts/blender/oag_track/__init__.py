@@ -18,7 +18,7 @@ from bpy.props import (
 from bpy.types import Operator, Panel
 from bpy_extras.io_utils import ExportHelper, ImportHelper
 
-from . import artfile, derive, model, scene, scene_art, trackfile
+from . import artfile, derive, effectfile, model, scene, scene_art, trackfile
 
 ERRORS = (trackfile.TrackFileError, derive.AuthoringError, artfile.ArtError)
 
@@ -238,6 +238,71 @@ class OAG_OT_import(Operator, ImportHelper):
         return {"FINISHED"}
 
 
+class OAG_OT_preview_effect(Operator, ImportHelper):
+    bl_idname = "oag.preview_effect"
+    bl_label = "Preview mod effect"
+    bl_description = (
+        "Read a mod effect TOML (schemas/v1/effect.tosd) onto the active object as an editable "
+        "Text, and build particle systems from it that play in the viewport"
+    )
+    bl_options = {"REGISTER", "UNDO"}
+
+    filename_ext = ".toml"
+    filter_glob: StringProperty(default="*.toml", options={"HIDDEN"})
+
+    def execute(self, context):
+        obj = context.active_object
+        if obj is None:
+            self.report({"ERROR"}, "select the object the effect plays on")
+            return {"CANCELLED"}
+        try:
+            with open(self.filepath, encoding="utf-8") as f:
+                text = f.read()
+            name = os.path.basename(self.filepath).removesuffix(".toml")
+            effectfile.attach(obj, name, text)
+            effectfile.preview(context, obj, text)
+        except (effectfile.EffectError, OSError) as e:
+            self.report({"ERROR"}, f"{self.filepath}: {e}")
+            return {"CANCELLED"}
+        return {"FINISHED"}
+
+
+class OAG_OT_export_effect(Operator, ExportHelper):
+    bl_idname = "oag.export_effect"
+    bl_label = "Export mod effect"
+    bl_description = "Write the active object's effect text back as a mod effect TOML"
+
+    filename_ext = ".toml"
+    filter_glob: StringProperty(default="*.toml", options={"HIDDEN"})
+
+    def execute(self, context):
+        obj = context.active_object
+        try:
+            data = effectfile.parse(effectfile.text_of(obj))
+            with open(self.filepath, "w", encoding="utf-8", newline="\n") as f:
+                f.write(effectfile.dumps(data))
+        except (effectfile.EffectError, OSError, AttributeError) as e:
+            self.report({"ERROR"}, str(e))
+            return {"CANCELLED"}
+        return {"FINISHED"}
+
+
+class OAG_OT_trigger_from_mesh(Operator):
+    bl_idname = "oag.trigger_from_mesh"
+    bl_label = "Make trigger from mesh"
+    bl_description = "Turn each selected mesh's bounds into a trigger box (oag/triggers/<mesh name>)"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        meshes = [o for o in context.selected_objects if o.type == "MESH"]
+        if not meshes:
+            self.report({"ERROR"}, "select a mesh")
+            return {"CANCELLED"}
+        for obj in meshes:
+            scene.trigger_from_bounds(context, obj)
+        return {"FINISHED"}
+
+
 class OAG_PT_track(Panel):
     bl_label = "OpenAntiGrav Track"
     bl_idname = "OAG_PT_track"
@@ -257,6 +322,11 @@ class OAG_PT_track(Panel):
         row = layout.row(align=True)
         row.operator("oag.import_track", text="Import", icon="IMPORT")
         row.operator("oag.export_track", text="Export", icon="EXPORT")
+
+        row = layout.row(align=True)
+        row.operator("oag.preview_effect", text="Preview effect", icon="PARTICLES")
+        row.operator("oag.export_effect", text="Export effect")
+        layout.operator("oag.trigger_from_mesh")
 
         layout.label(text="Tag selected objects:")
         col = layout.column(align=True)
@@ -362,6 +432,9 @@ CLASSES = (
     OAG_OT_host_texture,
     OAG_OT_export,
     OAG_OT_import,
+    OAG_OT_preview_effect,
+    OAG_OT_export_effect,
+    OAG_OT_trigger_from_mesh,
     OAG_PT_track,
     OAG_PT_art,
 )

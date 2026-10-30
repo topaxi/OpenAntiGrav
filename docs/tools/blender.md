@@ -270,6 +270,21 @@ writes the file's direction (the import's cached direction).
 collider is simulation state, its own decision). A turning sun turns the `mapped` shadows and a flare
 that follows the sun; the baked `COLOR_0` and the ships' hull rig keep the pose at time zero.
 
+## Mod effects and triggers (2026-10-30)
+
+- **Preview effect** (`oag.preview_effect`) reads a mod effect TOML ([mod-effect.md](../formats/mod-effect.md))
+  onto the active object: the text becomes an editable Text datablock (`oag/effect/<name>`) and one
+  particle system per emitter plays in the viewport (approximate: count, timing, speed, size; not
+  colour or blend). **Export effect** parses the text, checks the shape and writes it back
+  canonically. The text, not Blender's `float32` particle settings, is the truth.
+- **Make trigger from mesh** (`oag.trigger_from_mesh`) turns each selected mesh's world bounds into
+  an `oag/triggers/<mesh name>` Empty (unrotated, box centred on the bounds).
+- `mod_*` custom properties on pad Empties, trigger Empties and the scene export and import as the
+  track format says. Proven headless on 5.2.3: `roundtrip.py props` (properties, trigger, make
+  trigger, export, import, re-export equal bar the `.glb` name) and `roundtrip.py effect`
+  (import then export gives an equal TOML, a Text edit exports, a broken text is refused); both run
+  in `just blender-fixtures`. Nothing in the track-props code needed a fix.
+
 ## Import, and baked records
 
 **Import OAG Track** reads a `.track.toml` + `.glb` into tagged objects. A spline arrives as a
