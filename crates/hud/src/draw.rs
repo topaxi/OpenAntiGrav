@@ -879,7 +879,7 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
                     .art
                     .bar_tip
                     .is_some_and(|law| law.bars.iter().any(|bar| bar.fill == sprite.name));
-                let extra = super::ext_draws::bar_extra(cx, &readout.ext, &sprite.name);
+                let extra = super::ext_draws::bar_extra(&readout.ext, &sprite.name);
                 // A tipped bar's cropped fill ends in the art's pointed tip, so the added
                 // share is split off that fill whole.
                 let (whole, share) = if tipped {

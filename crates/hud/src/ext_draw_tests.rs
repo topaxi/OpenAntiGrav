@@ -95,7 +95,7 @@ fn a_bars_added_share_is_the_rest_of_the_fill_and_blends_into_the_colour() {
     let plain = frame_of(&readout(400.0, Outputs::default()));
     let extra = 0.9;
     let mut ext = Outputs::default();
-    ext.bar_extra[Element::Thrust as usize] = Some(BarExtra { extra, color: RED });
+    ext.bar_extra[Element::Speed as usize] = Some(BarExtra { extra, color: RED });
     let boosted = frame_of(&readout(400.0, ext));
     let (plain, boosted) = (rects(&plain), rects(&boosted));
     assert_eq!(
@@ -103,7 +103,7 @@ fn a_bars_added_share_is_the_rest_of_the_fill_and_blends_into_the_colour() {
         plain.len() + 1,
         "one more draw: the added share"
     );
-    // Pulse has no thrust bar, so the share rides the speed bar: the first sprite.
+    // The speed bar is the first sprite.
     let fill = plain[0];
     let (base, added) = (boosted[0], boosted[1]);
     assert_eq!(base[0], fill[0], "the base starts where the fill did");
@@ -131,7 +131,7 @@ fn a_bars_added_share_is_the_rest_of_the_fill_and_blends_into_the_colour() {
         Outputs {
             bar_extra: {
                 let mut a = Outputs::default().bar_extra;
-                a[Element::Thrust as usize] = Some(BarExtra { extra, color: RED });
+                a[Element::Speed as usize] = Some(BarExtra { extra, color: RED });
                 a
             },
             ..Outputs::default()
@@ -236,4 +236,49 @@ fn text_and_icons_land_at_their_anchor_inside_the_grid() {
         panic!("a sprite");
     };
     assert_eq!(rect, [240.0 - 8.0 - 7.0, 136.0 - 6.0 - 6.0, 14.0, 12.0]);
+}
+
+#[test]
+fn thrust_is_the_thrust_bar_where_a_title_has_one_and_nothing_where_it_has_not() {
+    let thrust = |ext_on: bool, xml: &str| {
+        let layout = Layout::from_xml(xml);
+        let strings = oag_ui::language::StringTable::default();
+        let sheet = sheet();
+        let cx = Context {
+            sheet: &sheet,
+            art: oag_hd::hud::ART,
+            ..crate::tests::context(&layout, &strings)
+        };
+        let mut ext = Outputs::default();
+        if ext_on {
+            ext.bar_extra[Element::Thrust as usize] = Some(BarExtra {
+                extra: 0.9,
+                color: RED,
+            });
+        }
+        let readout = Readout {
+            thrust_percent: 100.0,
+            ext,
+            ..Readout::blank()
+        };
+        draw_list(&cx, &readout).sprites
+    };
+    let bar = |name: &str| {
+        format!(
+            r#"<Screen><Image name="{name}"><Values x="10" y="20" width="200" height="10" U="0" V="20"
+               TxtrWidth="200" TxtrHeight="10" Color="0xFF7DEFC0" Src="Data\HUD\Textures\PulseHUD.mip"/></Image></Screen>"#
+        )
+    };
+    let with = thrust(true, &bar("ThrustBar"));
+    assert_eq!(with.len(), 2, "base and added share");
+    assert!(matches!(
+        &with[1],
+        Draw::GradientSprite { right, .. } if *right == RED
+    ));
+    let pulse_like = thrust(true, &bar("SpeedBar"));
+    assert_eq!(
+        pulse_like,
+        thrust(false, &bar("SpeedBar")),
+        "no thrust bar: nothing"
+    );
 }

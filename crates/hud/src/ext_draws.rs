@@ -191,20 +191,11 @@ pub fn element_of(name: &str) -> Option<Element> {
     }
 }
 
-/// The added share a bar named `name` shows, if the mod asked for one.
-///
-/// A title whose layout authors no thrust bar (Pulse: `SpeedBar` and `ShieldBar` only)
-/// shows the [`Element::Thrust`] share on its speed bar, the one bar the engine's
-/// output moves. **Chosen, not measured**: the speed bar is rescaled the same way.
-pub(super) fn bar_extra(cx: &Context<'_>, outputs: &Outputs, name: &str) -> Option<BarExtra> {
-    let element = element_of(name)?;
-    outputs.extra(element).or_else(|| {
-        let no_thrust_bar =
-            cx.layout.sprite("ThrustBar").is_none() && cx.layout.sprite("ThrustBarWo3").is_none();
-        (element == Element::Speed && no_thrust_bar)
-            .then(|| outputs.extra(Element::Thrust))
-            .flatten()
-    })
+/// The added share a bar named `name` shows, if the mod asked for one for its element.
+/// Each element means the same on every title: a title with no thrust bar draws nothing
+/// for [`Element::Thrust`].
+pub(super) fn bar_extra(outputs: &Outputs, name: &str) -> Option<BarExtra> {
+    outputs.extra(element_of(name)?)
 }
 
 /// `draw` recoloured and shaken by what the mod asked of `element`.
