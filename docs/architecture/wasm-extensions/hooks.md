@@ -214,7 +214,7 @@ returns `Err(Refused)` where the host would fault:
 | `scale-pad{pad, factor}` | `ScalePad` | `scale_pad(pad, factor)` | a factor outside `[0, 2]` or not finite; a pad the track does not have; a second for the pad this tick |
 | `scale-pad{slot, factor}` | `ScaleSlotPads` | `scale_slot_pads(&craft, factor)` | a factor outside `[0, 2]` or not finite; a second for the craft this tick |
 | `play-cue{slot, cue}` | `PlayCue` | `play_cue(&craft, cue)` | |
-| `fire-effect{slot, effect}` | `FireEffect` | `fire_effect(&craft, effect)` | a ninth `fire-effect` or `fire-mod-effect` in one tick (`Refused::Effects`; the host faults the module) |
+| `fire-effect{slot, effect}` | `FireEffect` | `fire_effect(&craft, effect)` | a 17th `fire-effect` or `fire-mod-effect` in one tick (`Refused::Effects`; the host faults the module) |
 | `hud-tint{slot, element, rgba}` | `HudTint` | `hud_tint(&craft, element, rgba)` | the `Pickup` element (`Refused::PickupTint`; use `pickup_look`); the host decodes one as malformed |
 | `pickup-look{slot, icon, colour}` (22) | `PickupLook` | `pickup_look(&craft, icon, colour)` | |
 | `hud-shake{slot, element, amplitude}` | `HudShake` | `hud_shake(&craft, element, amplitude)` | `amplitude` outside `[0, 16]` or not finite |

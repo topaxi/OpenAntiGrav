@@ -392,6 +392,43 @@ mod with_modules {
     }
 
     #[test]
+    fn more_trigger_events_than_the_track_cap_are_delivered_to_the_cap_and_counted() {
+        let cap = oag_ext_abi::MAX_TRACK_EVENTS;
+        // Boxes around the whole grid, each sending its own channel: every craft enters
+        // every one on the first tick.
+        let everywhere = |channel: String| oag_trackfile::props::Trigger {
+            name: channel.clone(),
+            to_world: oag_ext_abi::track::IDENTITY,
+            min: [-1.0e5; 3],
+            max: [1.0e5; 3],
+            props: Default::default(),
+            emits: Some(channel),
+        };
+        let props = TrackProps {
+            triggers: (0..cap + 1)
+                .map(|i| everywhere(format!("test.track/t{i}")))
+                .collect(),
+            ..TrackProps::default()
+        };
+        let mut race = grid(prepared_on(&[listener("test.b")], &props));
+        for _ in 0..6 {
+            race.tick(&PlayerInputs::none());
+        }
+        assert_eq!(
+            heard(&race, 0).count,
+            cap as u32,
+            "the listener hears the cap's worth, whoever is first in sorted order"
+        );
+        let drops = race.sim.extensions.drops();
+        assert!(drops.track_events > 0, "{drops:?}");
+        assert_eq!(drops.mod_events, 0);
+        assert!(
+            drops.engine_events > 0,
+            "the crowd of trigger-enter events overflows MAX_EVENTS too: {drops:?}"
+        );
+    }
+
+    #[test]
     fn a_trigger_reaches_a_listening_module_from_the_track_with_no_module_on_the_track() {
         let channel = "test.track/passed";
         let props = gate_on_the_road(channel);
