@@ -104,7 +104,13 @@ BOMB_BLAST_UPDATE = 0x0887250C
 # 2 (the rolled quad). Hit once per live instance per frame.
 FLARE_DRAW = 0x089194D0
 ROLLED_DRAW = 0x089178C0
+# The Plasma's own landmarks (plasma.md): `Plasma_Launch` ends the charge and re-parents the head
+# to the bolt; `PlasmaBlast_Construct` runs once per detonation object (two on a craft hit).
+PLASMA_LAUNCH = 0x0885BF84
+PLASMA_BLAST_CONSTRUCT = 0x0885FD90
 PROBES = {
+    "plasma_launch": PLASMA_LAUNCH,
+    "plasma_det": PLASMA_BLAST_CONSTRUCT,
     "flare": FLARE_DRAW,
     "rolled": ROLLED_DRAW,
     "spawns": PSYS_SPAWN,

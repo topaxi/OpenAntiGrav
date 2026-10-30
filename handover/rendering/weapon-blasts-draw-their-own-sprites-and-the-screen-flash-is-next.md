@@ -146,7 +146,7 @@ Frames are in a scratch directory, not kept (gitignored):
 
 ## Next Steps
 
-- **Effects that gained sprite templates 2026-09-30** (Plasma, Mine, Missile, Quake, Repulser, Shuriken, absorb, ship explosions; see the hull-sparks thread): Plasma, Mine and the Quake were re-shot against the original and read right, the others were not.
+- **Effects that gained sprite templates 2026-09-30** (Plasma, Mine, Missile, Quake, Repulser, Shuriken, absorb, ship explosions; see the hull-sparks thread): Plasma, Mine and the Quake were re-shot against the original and read right, the others were not. **Struck for the Plasma, 2026-10-30**: a per-region score shows the head, the blast's onset, its white-out and its tail differ; see the Plasma thread in this directory.
 
 - Play the craft explosion's own effects and shake off the triggers in
   `screen-flash-callers.md`, and port the destroy camera: the player's state-5
