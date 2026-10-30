@@ -1208,7 +1208,9 @@ For each of the three models (index 0 = the halo, 1 = `hemisphere2`, 2 =
   than hardcoded here - the two mechanisms sit side by side in the same
   function and this page did not find the second one wired to anything.
 - **The `+0x90`..`+0x114` "three ramps" are a real keyframe-curve mechanism
-  that ships dead.** `PlasmaBlast_Construct` spends real effort precomputing
+  that ships dead.** **Corrected 2026-10-30: the GE stream shows three live tint ramps (linear,
+  end times 1.0, 1.0 and 1.5 s) as a grey AMBIENTCOLOR per model - see "the blast and the head read
+  off GE dumps" below; the dead-count reading and the constant `0.07 / 0.0` are wrong.** `PlasmaBlast_Construct` spends real effort precomputing
   per-keyframe reciprocal rates (`1.0f / (time[k+1] - time[k])`, stored at
   `+0xac`/`+0xb0` per ramp) for exactly the shape a multi-key ease would need,
   gated on each ramp's own keyframe count at `+0xb4`/`+0xe4`/`+0x114`. That
@@ -1512,3 +1514,213 @@ bind is the answer `oag_pob::texture` leaves open.
 and halo on eased scales) and hold the head back; none of this applies there (**checked, differs**,
 `ps3-hdfury-eu/plasma.md`). Pure's Plasma visual is unwired and 2048 authors none (`docs/gameplay/weapon-lineage.md`). Pulse PS2 inherits PSP's measured law and is unmeasured here
 (**not checkable** without a PCSX2 pair; `scripts/pcsx2-pulse-pair.py` exists).
+
+## 2026-10-30: the blast and the head read off GE dumps of the original (pulse-plasma-blast-law)
+
+The two largest gaps of the matched pair above (the blast's white-out and tail, the head's orb)
+read from `gpu.record.dump` frames of the original, the same Talon's Junction / Time Trial / Venom /
+Assegai fire at GO + 120 (speed 106.2), PPSSPP v1.20.4 software renderer. 26 dumps (k36-k140), five
+replays of edited dumps per question (`scripts/psp-ge-replay.py`), three probes. Ours was **not**
+dumped (no GE on our side): "ours" below is read from `crates/raceplay/src/blast_models.rs` and the
+pair PNGs.
+
+Reproducing: `scripts/psp-weapon-pair.py --ge-dump-k K --shots K plasma` (add `--timeout 300`; the
+default 60 s dies on a software-rendered frame), then `scripts/psp-ge-dump.py census`, then
+`scripts/psp-ge-replay.py` for an edit. Two probes added to the pair script:
+`--probe plasma_blast` (`PlasmaBlast_Update`, age at `+0x50`, `dt` in `f12`) and `--probe plasma_fly`
+(`Plasma_Update`: launch speed `+0x48`, age `+0x54`, position `+0xa0`, velocity `+0xf0`).
+
+### The dump's frame number is the blast's age, and the shot lags it by two
+
+`PlasmaBlast_Update` runs once per 1/60 s tick with `dt = 0.0167` and `age = 0.0, 0.0167, ...`
+(24 hits, `plasma_blast` probe, first hit at fire+76.96). A dump taken at stop frame `k` draws the
+blast at **age `(k - 77) / 60` s** (the A model's UV offset reads `0.4987 * age` to three digits in
+all 16 blast dumps, so the age is exact, not fitted). A screenshot at `k` is the frame two stops
+earlier, so **shot `k` = dump `k - 2`**: the white-out shots k89-93 are dumps k87-91 and the "cut at
+k94" is the cut between dumps k91 and k92 (replayed below). Confidence **85** (one boot for the
+probe, 16 dumps from 16 boots agree).
+
+### Which draw is which model
+
+Vertex counts of the three `.vex` files (`oag-view --mesh ... --draws`: 169, 215, 431) sum the
+census's per-model prims exactly, so the identity is by count:
+
+| Model (load order, `rate`) | `.vex` | GE prims (verts) | State read | Texture |
+| --- | --- | --- | --- | --- |
+| 1 `hemisphere2` (0.07) | `pulse_plasma_hemisphere2.vex`, 431 verts | 143 + 288, drawn first | cull **off**, lighting off to dump 94 and on from dump 96, stencil off | 64x64 CLUT4 `pulse_plasma_hemi1fade_ADD` |
+| 2 `hemisphere1` (0.07) | `pulse_plasma_hemisphere1.vex`, 215 verts | 72 + 143, drawn second | cull **on**, lighting on, stencil test on (zpass op 2) | 8x32 `pulse_plasma_core_ADD_GLOW` (a V ramp, white at the bottom three rows, lavender above) |
+| 0 `halo` (0.1) | `pulse_plasma_halo1.vex`, 169 verts | 78 + 91, drawn last | cull off, lighting off to dump 88 and on from dump 90 | 128x64 `pulse_plasma_halo1_ADD` |
+
+Every one of the six is **additive**: `BLENDMODE` `0xa2` (source factor source-alpha, destination
+fixed, equation add) with `FIXB = 0xffffff`, `ztest` 6, depth writes on, texture function 0 (modulate),
+vertex colours constant across all dumps (`0xffffffff` and `0xb70035`, the baked alpha ramp), material
+ambient, diffuse and alpha white and 255 (`0x55`, `0x56`, `0x58`; opcodes from PPSSPP's GE list, not
+`TEX_STATE_OPS`, whose `0x55 materialdiffuse` is the ambient). **What does change with age is the
+lighting state: each model gets a grey AMBIENTCOLOR (`0x5C`) with lighting on and no lights lit,
+which multiplies the texture: that is the per-model tint, and it is a live ramp, not the constant
+`0.07 / 0.0` the "dead ramps" reading above predicted.** The look over time is geometry scale,
+texture scroll and this tint.
+
+### The per-frame law (16 dumps, one boot each)
+
+| Quantity | Law | Fit |
+| --- | --- | --- |
+| `hemisphere2` UV offset (u = v) | `0.4987 * age` | linear, residual below 0.001 to age 1.05 |
+| `hemisphere1` UV offset v (u = 0) | `0.0202 - 1.2205 * age`, clamps at `-1.1992` from age about 0.98 | linear for age below 0.9 |
+| halo UV offset | `u = 0.503 * age - 0.0083`, `v = -1.008 * age + 0.0167` | linear to age 0.55 |
+| scale (norm of the world matrix's first row) | `hemisphere2` 9.5 (age 0.017), 26.5, 47.8, 59.6, 64.9 (0.183), 74.4 (0.217), 78.7 (0.25), 92.9 (0.32), 109.8 (0.55), 121.0, 128.4, 130.5 (1.05); `hemisphere1` = 0.8333 x that; halo about 2.95 x that | **not a function of age alone**: 74.4 at ages 0.217 and 0.267, 78.7 at 0.25 and 0.283, 92.9 at 0.317 and 0.383 (a step curve with the same age on different boots landing on neighbouring steps) |
+| halo lifetime | present at age 0.55 (one prim), gone at 0.717; the hemispheres stay to the 1.5 s retire | two dumps bracket it |
+| anchor | world `(292.1, -42.7, -194.4)` for `hemisphere2/1`, `(292.0, -39.3, -193.6)` for the halo, fixed for the life | |
+| model basis | `hemisphere1` keeps the same normalised row 0 `(0.9954, 0.0954, 0)` in every dump while the view turns about 1 degree: its basis is **world-fixed**; `hemisphere2` turns about 6 degrees in two frames | |
+
+**The tint ramps (AMBIENTCOLOR grey, 16 dumps, exact to the byte where tested):**
+`hemisphere1` `t = 1 - age` (lit at all ages: 0xfa at 0.017, 0x9d at 0.383, 0x72 at 0.55, 0x48 at
+0.717, 0x1d at 0.883, 0 from 1.0 s); the halo `t = min(1, 1.25 * (1 - age))` (lighting turns on
+the first dump with `t < 1`, dump 90, age 0.217: 0xf9, then 0xc4 at 0.383, 0x8f at 0.55);
+`hemisphere2` `t = min(1, (1.5 - age) / 1.2)` (lighting on from dump 96, age 0.317: 0xfb, 0xed at
+0.383, 0xc9 at 0.55, 0xa6 at 0.717, 0x82 at 0.883, 0x5f at 1.05, reaching 0 at the 1.5 s retire).
+Three linear ramps with their own end times (1.0, 1.0, 1.5 s) and clamps; confidence **85**. The
+ambient colour reads as the "tint" `FUN_089122b4` writes per submesh group, so **the ramps
+`PlasmaBlast_Construct` builds are not dead** (this page's earlier "ships dead" conclusion, from a
+fallback read of an uninitialised count, is contradicted by the GE stream; confidence **80** that
+the three curves above are those ramps, the address of their key table is unread).
+
+**Per-model spin (world-space basis over all 16 dumps):** `hemisphere1`'s world basis is
+**exactly constant** (max difference 0.000, while its view-space basis moves 11 degrees);
+`hemisphere2` turns about a world axis at a steady **182 degrees per second** (24 degrees at age
+0.15, 39 at 0.233, 48 at 0.283, 97 at 0.55: 181-182 degrees per second each time); the halo turns
+at 56-61 degrees per second. None of the three is camera-facing; the camera basis the update
+function reads (confidence 55) is not what orients any of them in the GE stream (the view-space
+change is the camera's own motion). Confidence **80**.
+
+The offsets match `Node_SetAnimTimeTree(age * rate)` playing each model's own authored UV track
+(the slopes in anim-time units are 5.0 / -17.4 / (7.1, -14.3) per unit, so the tracks are linear
+ramps). Confidence **80** for the offsets, **60** for the scale. The scale's non-monotone samples
+are one variable, not three: the halo / `hemisphere2` ratio falls smoothly from 3.38 to 2.66 as
+`hemisphere2` grows, so a single non-age quantity drives them; render-time interpolation against
+the update clock is the lead (the Bomb's `+0x194` cached clock reads), unread here. The recipe:
+a probe on `PlasmaBlast_Update`'s node-matrix writes on two boots, logging age and the matrix.
+
+### What "cuts at k94" is: hemisphere1 is back-face culled once the eye is inside it
+
+The white-out is **one model**, `hemisphere1`, and the cut is **not a draw ending**: all six prims
+are present in every dump k78-k100 (k93 and k94 carry the same list). Replays of the edited dumps
+(HUD rows masked, mean over y 50-200, same batch as its own baseline):
+
+| Replay | Mean RGB | Reading |
+| --- | --- | --- |
+| dump 90 | 255, 255, 255 | white |
+| dump 91 | 255, 254, 255 (three batches) | white |
+| dump 92 | 210, 149, 246 | cut |
+| dump 90, `hemisphere1` prims removed | 214, 154, 246 | equals dump 92: that model alone is the white-out |
+| dump 92, `hemisphere1` removed | 210, 149, 246 | no change after the cut |
+| dump 93 (211, 151, 246), cull off on both `hemisphere1` submeshes | 237, 225, 250 | most of the white returns |
+| dump 90, cull off on `hemisphere1` | 255, 255, 255 | no change before the cut |
+
+The eye (`-t * R^T` of the dump's view matrix) against `hemisphere1`'s world box: offset from the
+box centre over its half-width is **-1.42 (k88), -0.99 (k90), -1.04 (k91), -0.77 (k92)**, -0.62
+(k94), -0.16 (k100), +0.24 (k110): the eye enters the shell between dumps k91 and k92, the same
+two dumps the replay flips on. Inside a one-sided shell the culled faces are the ones the eye sees.
+The falsifier written down first was "setting `hemisphere1`'s V offset to the value of the cut frame
+removes the white at dump 91": it did not (the edit changes nothing, and a 0.5 sentinel on every
+model moves the mean by 4-13 only), so the cause is not the texture scroll or the ramp's alpha.
+Confidence **80** for the cause (the dump-93 cull-off replay recovers 237,225,250 of 255; the
+remainder is not attributed: the stencil `zpass` write of `hemisphere1`, or its tint falling from
+0xc3 to 0xb6 over the same frames, are the candidates). One caveat on the falsifier: a PRIM's
+state words sit in the *previous* PRIM's command chunk, and the V-offset edit that did nothing was
+applied to a chunk range that may have missed the first submesh's offset word; a wider edit moved
+the mean by 1-13 on every model, still not the cut.
+
+**What this means for a wire lane.** The blast is **world-fixed and one-sided**: `hemisphere1` must
+draw with the authored back-face cull (`cull_as_authored` already exists in `blast_models.rs`) and
+a world-fixed basis, at its construct anchor, growing with the scale curve, so that the craft's own
+travel carries the eye through its wall. A camera-facing billboard cannot produce a cut at all
+(a billboard keeps its face to the eye). The `PlasmaBlast_Update` camera-basis read (confidence 55
+above) is, on this evidence, **not what orients any of the three models**: see the spin rates
+above.
+
+### What the original shows over the blast's life (what a wire lane must reproduce)
+
+Shot k, HUD masked (mean RGB, from the pair above): first flash at shot k78 (215), peak k80
+(239,210,253). **That early flash is not the three models**: replaying dump 78 (shot 80) with all
+six model PRIMs removed gives 238,210,252 against 239,210,252 with them, and dump 80 (shot 82)
+238,196,252 against 238,200,252. What draws it, fire-only against a no-fire dump at k78: a
+**4-vertex additive quad `0xa2` of 125 x 67 units at craft-frame z -28.8** (texture bound at
+`0x15f8f0`, 64x64 CLUT4, the same 2:1 shape as the head's glow quad), a 192-vertex `0x32` prim
+62 x 35 x 57 units (texture `0x15e330`, 128x64, also present in every later dump), and the head's
+arcs (58 vertices) and spikes (166) enlarged to 11 units at z -30. `WO_PLASMA_FLASH.POB` carries
+two embedded textures (`plasma_particle.tga` and `plasma_glow_64x64x4.tga` slots, emitter
+`PLASMA_GLOW`); the byte match of the quad's and the 192-vertex prim's texels to it was **not
+completed** (their texels were recorded earlier in the frame than the cut chunk), so which
+emitter owns each is open, confidence 45. Shots k86 216,157,247 and k89-93 the white-out (the eye is inside the
+halo and `hemisphere2` throughout, which draw both sides, and outside `hemisphere1` until dump
+91, shot 93); from shot k94 the eye is inside all three and only the two double-sided models
+show; shots k100-k140 the purple tail. **The tail is `hemisphere2` alone**: dump 120 (shot 122)
+replayed with it removed reads 120,114,181 (the scene with no blast), with `hemisphere1` removed
+187,154,237 (unchanged from 187,154,237). It is lit with the tint ramp above (0xa6 at age 0.717,
+0x5f at 1.05), its scale grows 121 -> 130 and its UV offset runs 0.36 -> 0.52. Our tail is
+weaker (R at k120 125 against 190): either the tint ramp or the scale is not played as measured.
+
+### The head and the charge orb: five draws, each matched to a `.pob` embedded texture
+
+Dumps at k20, 36, 44, 56, 68, 74 against no-fire controls (k36, k50). The head's five prims, drawn
+in this order each frame, are in the craft's own frame at `(0, -1.4, -15.7)` while charging (the
+pickup box); after `Plasma_Launch` (frame 59) they ride the bolt (z -22.2 at k68, -29.0 at k74).
+**Every texture is one of the five embedded in `WO_PLASMA_HEAD.POB`**: the first 32 bytes of the
+dump's level-0 texel data of each draw were found verbatim in the file (5 of 5), at the offsets
+below, which is the open item `oag_pob::texture` named:
+
+| # | Prim | Texture (pob offset, size, look) | Blend | Extent (units): k20, 36, 44, 56, 68, 74 |
+| ---: | --- | --- | --- | --- |
+| 1 | 58-vertex strip (46 at k56), vt `0x11e` | `+0x3a80`, 64x64 CLUT8: a **2x2 atlas of four white crescent arcs** (the "swirling arcs"); first embedded texture, the root emitter's | `0xa2` additive | 2.4, 5.4, 7.5, 8.4, 9.9, 11.2 |
+| 2 | quad | `+0x6d90`, 64x64 CLUT8: a **dark disc with a purple halo ring** (the dark core) | `0x32` source-alpha, **not** additive | 1.0, 2.2, 2.4, 3.0, 3.3, 3.3 |
+| 3 | quad | `+0x54d0`, 64x64 CLUT8: a grey noisy ring (`WO_RING_BW`) | `0xa2` | 1.7, 2.8, 3.0, 3.8, 4.4, 5.1 |
+| 4 | 238-vertex strip (262 at k44), vt `0x11e` | `+0x84c0`, 128x64 CLUT4: two frames of a purple spike star, one dark-cored, one white-cored (`plasma_spikes`) | `0xa2` | 0.9, 1.6, 2.1, 2.5, 3.0, 3.4 |
+| 5 | quad, 2:1 in x | `+0x9c50`, 32x32 CLUT8: a soft white glow | `0xa2` | 7.0x3.5, 12.6x6.3, 15.4x7.7, 19.6x9.8, 21.0x10.5, 21.0x10.5 |
+
+So the "growing purple orb with a dark core" is draws 2, 1 and 3 stacked (a dark disc under
+bright arcs and a ring, with the glow behind). The earlier read of the root emitter as a 2x2
+atlas is draw 1's texture exactly. Whether ours draws each of the five was not checked against its
+psys loader report; the pair frame shows a 6 px star. The sizes grow about 2.3x between k20 and k36 and then slow;
+`(1 - remaining) * 0.75` (ported) reads as that growth only for the first and the fifth. Confidence
+**75** for the texture-to-draw map (byte match), **70** for the sizes (one boot per k).
+The pob slot names (`shuriken_trail_anim.tga`, `glow3`, `WO_RING_BW_64x64.tga`,
+`plasma_glow_64x64.tga`, `plasma_spikes`, `plasma_particle.tga`, `glow2`, `psysed_default_glow.tga`)
+do not name the bind: each emitter's own embedded texture is what the GE draws.
+
+### The detonation leg: the original, tick by tick
+
+`plasma_fly` probe (Plasma_Update, one boot): the bolt is released at fire+59 at `(241.76, -42.12,
+-196.82)` with `launch_kmh = 634.61` (`3.6 * |craft velocity| + launchspeed` at release; the craft was at 106.2
+u/s at the *fire* frame and a different speed 59 ticks later, so launchspeed is not backed out
+here); **for the first
+four flight ticks (age 0 to 0.050) it flies at 475.9 km/h = 0.75 x launch_kmh**, then from age
+0.0667 on its speed is pinned to the ramp `634.61 * (1 - age) + 850 * age` (649.0 km/h at age 0.0667,
+692.1 at 0.267: venom class speed 850), +3.6 km/h per tick; position x 288.6 at age 0.267 and the
+`PlasmaBlast_Construct` hit at fire+76.01 puts the blast at x 292.1, **50.4 units from the launch
+point in 17 ticks**. Ours launches at `launch_kmh / 3.6 = 176.3` u/s from the first tick
+(`flight.rs`'s charging branch), so it covers the first four ticks 33% faster: +2.9 units, about
+one tick of the three it is early. **The other two ticks are not isolated**: ours has no per-tick
+projectile log (the lead's note says 73 ticks; the launch tick of ours and the wall it hits were
+not read). **A bound**: ours counts the same 1.0 s at 1/60, so it releases near tick 60; thirteen
+flight ticks at about 3 units each cover roughly 38-40 units, not the original's 50.4, so unless
+ours releases at least three ticks early, the missing ticks are the **distance leg** (a nearer
+detonation point or a muzzle that starts farther forward), not the speed law. The 0.75 may be the
+launch matrix's forward row length (16 floats at `a1` of `Plasma_Launch`, unread). Confidence **85** for the original's timeline; **55** that the first-four-ticks speed is
+part of the gap. Not fixed here (no constant-sized fix isolated; the 0.75 is the measured
+initial speed, its cause - why the first ticks are unpinned - is the floor probe finding no floor
+for four ticks, plausibly the muzzle being above the surface).
+
+### Side check: the pickup backdrop at k036
+
+The original's green wide flat hexagon at top centre in `orig-k036.png` is the **held pickup's own
+hexagon in its release animation** (the no-fire control, `orig-ctl-k036.png`, shows the same green
+hexagon, tall, with its chevron icon: the pickup the original actually held), while ours holds the
+Plasma it was `--give`n and shows the Plasma's pink hexagon. A state mismatch (different held
+pickup), not the Plasma's backdrop colour or fade. Not fixed.
+
+### Cross-title
+
+HD and Omega draw their own blast (`WO_PLASMA_LIGHTNING_*`; **checked, differs**,
+`ps3-hdfury-eu/plasma.md`); Pure's Plasma visual is unwired and 2048 authors none. Pulse PS2 inherits
+PSP's law and is unmeasured here (**not checkable** without a PCSX2 dump of the same frames).
