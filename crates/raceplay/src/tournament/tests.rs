@@ -53,15 +53,36 @@ fn a_two_leg_tournament_accumulates_and_ranks_correctly() {
     assert!(progress.is_last_leg());
 }
 
+/// The maintainer's report (2026-10-30): winning a leg ends it on the person's
+/// finish, so every opponent is still racing and used to score 0.
 #[test]
-fn a_craft_that_never_finishes_a_leg_scores_nothing_for_it() {
-    let mut progress = Progress::new(vec!["leg_a.vex".to_string()]);
-    progress.record_leg(&board(&[(0, 1, true), (1, 3, false)]));
-    assert_eq!(progress.points(0), 8);
+fn an_opponent_still_racing_when_the_leg_ends_scores_its_running_place() {
+    let mut progress = Progress::new(vec!["leg_a.vex".to_string(), "leg_b.vex".to_string()]);
+    // Slot 0 (the person) has won; slots 1 and 2 are running 2nd and 3rd.
+    progress.record_leg(&board(&[(0, 1, true), (1, 2, false), (2, 3, false)]));
     assert_eq!(
-        progress.points(1),
+        [progress.points(0), progress.points(1), progress.points(2)],
+        [8, 6, 5]
+    );
+    assert!(progress.advance());
+    progress.record_leg(&board(&[(0, 1, true), (1, 3, false), (2, 2, false)]));
+    assert_eq!(
+        [progress.points(0), progress.points(1), progress.points(2)],
+        [16, 11, 11],
+        "totals carry across the legs for the person and the opponents"
+    );
+}
+
+#[test]
+fn a_person_wrecked_out_of_a_leg_scores_nothing_for_it() {
+    let mut progress = Progress::new(vec!["leg_a.vex".to_string()]);
+    // The person (slot 0) has no finish: the leg ended on their wreck.
+    progress.record_leg(&board(&[(1, 1, false), (0, 2, false)]));
+    assert_eq!(progress.points(1), 8);
+    assert_eq!(
+        progress.points(0),
         0,
-        "did not finish - a race state 7/destroyed craft scores 0"
+        "the original's destroyed guard zeroes a wrecked craft"
     );
 }
 

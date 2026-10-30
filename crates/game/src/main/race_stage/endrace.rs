@@ -625,7 +625,7 @@ pub(crate) fn menu_options(campaign: bool, tournament_next_leg: bool) -> Vec<Men
 
 /// Pulse's own Tournament standings, off this project's `oag_race::tournament`
 /// law: [`Board`](oag_raceplay::scoreboard::Board) for this leg's own finish
-/// order and leg points (`oag_race::tournament::points_for_finish`, the same
+/// order and leg points (`oag_race::tournament::points_for_place`, the same
 /// law already folded into the running totals a moment earlier -
 /// `crate::main::session::tournament::record_finished_leg` runs before
 /// `Session::build_endrace` in the same frame), and
@@ -650,7 +650,7 @@ pub(crate) fn tournament_results(
         .iter()
         .map(|row| TournamentRow {
             team_name: team_name(row.slot),
-            points: oag_race::tournament::points_for_finish(row.place, row.finished()),
+            points: oag_race::tournament::points_for_place(row.place, row.in_the_race()),
             player: row.player,
         })
         .collect();

@@ -125,9 +125,8 @@ pub fn results_draw_list(
 /// `EndRaceResults_OnEnter` - which is false for Tournament's own mode `4`
 /// (only `16`, an unimplemented sibling this project has no evidence is
 /// reachable through any launch path it drives, sets it true). A
-/// non-finisher's own points read `0` (`oag_race::tournament::points_for_finish`)
-/// exactly as the original's own unsorted leg row would, with no DNF text
-/// standing in for it.
+/// craft's points are its place's (`oag_race::tournament::points_for_place`),
+/// a still-racing opponent's included, with no DNF text standing in for it.
 #[must_use]
 #[allow(
     clippy::too_many_arguments,

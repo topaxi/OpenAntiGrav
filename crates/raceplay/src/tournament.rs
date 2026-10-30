@@ -98,16 +98,16 @@ impl Progress {
     /// asserting a fact this module has no way to check.
     pub fn record_leg(&mut self, board: &Board) {
         let mut places = [0u8; MAX_SHIPS];
-        let mut finished = [false; MAX_SHIPS];
+        let mut in_race = [false; MAX_SHIPS];
         for row in &board.rows {
             let slot = usize::from(row.slot);
             if slot < MAX_SHIPS {
                 places[slot] = row.place;
-                finished[slot] = row.finished();
+                in_race[slot] = row.in_the_race();
             }
         }
         self.standings
-            .record_leg(self.current_leg, &places, &finished);
+            .record_leg(self.current_leg, &places, &in_race);
     }
 
     /// `slot`'s own points total so far, across every leg recorded.
