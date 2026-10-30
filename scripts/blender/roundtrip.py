@@ -380,11 +380,15 @@ def effect_checks(src, out_dir):
     # Edited in the Text Editor, then exported again.
     block = bpy.data.texts[cube[effectfile.PROP]]
     block.clear()
-    block.write(effectfile.dumps(want).replace("duration = 3", "duration = 5"))
+    old = want["emitter"][0]["duration"]
+    new = old + 2
+    text = effectfile.dumps(want)
+    assert f"duration = {old}" in text, "the first emitter's duration is in the text"
+    block.write(text.replace(f"duration = {old}", f"duration = {new}", 1))
     assert bpy.ops.oag.export_effect(filepath=out) == {"FINISHED"}
     with open(out, "rb") as f:
         edited = tomllib.load(f)
-    assert edited["emitter"][0]["duration"] == 5
+    assert edited["emitter"][0]["duration"] == new
     # A broken one is refused and writes nothing.
     block.clear()
     block.write("not toml [")
