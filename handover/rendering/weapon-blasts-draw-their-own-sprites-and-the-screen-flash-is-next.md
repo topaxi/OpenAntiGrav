@@ -1,8 +1,8 @@
 ---
 status: measure
 titles: [pulse]
-updated: 2026-10-12
-summary: "Rocket detonates a few ticks early and the fireball is smaller; re-shoot Plasma, Mine and Quake against the original"
+updated: 2026-10-30
+summary: "Rocket measured against the original 2026-10-30: detonation is one tick late, not early; ranked gaps are the in-flight flare haze and the fireball/smoke look (re-first); craft-hit fireball still unmeasured"
 ---
 
 # Weapon blasts draw their own sprites and wash the screen; every flash kind with a caller is wired
@@ -75,7 +75,7 @@ Frames are in a scratch directory, not kept (gitignored):
 
 - **The Rocket wash now reads as the original's** (`rocket-main-vs-flash.png`).
   What is left on the Rocket:
-  - Ours detonates a few ticks early against the capture's frame count.
+  - **Corrected 2026-10-30 (rocket-visuals.md, "the Rocket matched against the original"): ours detonates one tick LATE (+52/+62/+71 against +51/+61/+70), not early.** Ranked gaps and recipes are on that page: in-flight flare haze (re-first), fireball/smoke look (re-first), craft-hit blast still not captured (needs an aimed hit in a Single Race).
   - The fireball is a little smaller than the original's 85x110 PSP px at
     k=25.
     (2026-10-08: that is the **craft-hit** blast `WO_ROCKET_EXPLO`; a Time Trial pair has none before tick ~49, so it is not measurable there. A Single Race pair puts the grid craft ahead on ours and gone on the original.)

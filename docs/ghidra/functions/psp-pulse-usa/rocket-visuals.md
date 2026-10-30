@@ -962,3 +962,44 @@ Cross-title: Pure's `WO_ROCKET_FLARE` is one emitter (`pure-status.md`) and its 
 **checked, nothing changed, nothing to port**. `pure-weapon-gfx` fired at tick 404 of the same old file; the 393-against-403
 offset is Pulse's standing start against Pulse's original, so whether Pure's timing is off **was not checked** (it has its own
 handling and its own original).
+
+## 2026-10-30: the Rocket matched against the original, and what differs (pulse-rocket-fidelity)
+
+Method as the Plasma's ([plasma.md](plasma.md), "2026-10-30: the Plasma matched against the original"):
+Talon's Junction, Time Trial, Venom, Assegai; `scripts/psp-weapon-pair.py rocket` on PPSSPP v1.20.4 software
+renderer (Pulse PSP USA), fire 120 frames after GO at speed 106.21, x 124.5; ours is `oag-game --race --mode
+time_trial --team Assegai --class venom --give rocket --input-script
+verification/scenarios/weapon-after-go-matched.inputs` at tick `391 + k`. A no-fire control on each side, three
+fire restarts of the original (a, b and c; a/b at 30 frames, c every second frame k46-98), scoring by
+`scripts/weapon-pair-score.py` (HUD masked, 87,625 px). Pairs under `data/reference/pulse-rocket-pairs/`.
+The original is repeatable (the floor column, restart against restart: 1.4-5.4 grey), the state is matched (speed
+106.21 on every boot). Confidence **55** on the numbers: one PPSSPP boot.
+
+**Detonation tick: the handover's "ours detonates a few ticks early" is false on this scenario.** The probe
+(`--probe spawns`, two runs) puts the three rockets' `WO_ROCKET_FLARE` at fire+0 and `WO_ROCKET_EXPLO_TRACK`
+(`Rocket_Update`, `ra 0x0885dad4`) at **fire+51.0, +61.0, +70.0** frames (second run 51.0, 61.03, 70.0); the
+craft's `WO_SHIP_COLL_SPARK_DAMAGE` follows at +72-73. Ours (airborne count of the three, per tick) drops at ticks
+446, 456, 465 after a fire at tick 394: **+52, +62, +71, one tick late** on all three, with the same 10 and 9 tick
+gaps. The original's `Rocket_Update` positions at the end: rocket 2 (first to go) x 309.8, y -39.0, z -188.1,
+velocity (218.8, 27.9, 27.0); launch speed 166.3 u/s for three frames, then 213-221 u/s. Which of the launch ramp
+or the sweep length costs the tick is not isolated (ours' rocket positions were not read per tick). Confidence 55.
+
+### Ranked gaps (excess = fire minus no-fire control, grey)
+
+| # | Region, frames | Area (px) | Grey error | Area x error | Driven by | Fix estimate |
+| ---: | --- | ---: | ---: | ---: | --- | --- |
+| 1 | In-flight trail and flare, k12-24, whole frame (box 120,30,280,170: 12.2): ours throws a wide orange-white haze up the right wall and over the track by the rocket; the original is a tight orange band along the line of fire | 87,625 | 7.7 | 0.67 M | `WO_ROCKET_FLARE` (`ROFL`, carried by each rocket, `Rocket_Init` `0x0885cdb8`), drawn by `ParticleSystem_DrawRolledQuads`/`FUN_089194d0`. Either its size/colour law or the rockets' sideways drift differs (the original's three rockets carry +27 to +45 u/s on z) | re-first, conf 40: `--probe flare` on the original for per-particle size/alpha, and ours' per-tick rocket position, then diff |
+| 2 | Fireball and smoke, k54-72, box 150,40,250,110: ours is a saturated yellow-orange solid with a hard edge; the original is brown smoke with orange mottling that darkens and thins by k80-98 | 24,680 | 9.3 | 0.23 M | `WO_ROCKET_EXPLO_TRACK` (`ROD2`) emitters, texture or colour ramp at age; k54 and k64 spikes (7.4, 5.1) are the one-tick-late onsets | re-first, conf 45: `--probe spawns` already gives the trigger; the smoke texture bind and ramp need a GE dump at k58 |
+| 3 | Launch, k1-10, box 120,30,280,170 | 43,730 | 3.1 | 0.14 M | Same flare; the white launch blowout is within noise of the floor (4.2) from k1-3 | no action |
+| 4 | Detonation one tick late, +52/+62/+71 against +51/+61/+70 | whole frame | k54: 7.4, k64: 5.1 | | Rocket launch ramp or sweep length (`Rocket_SpeedForClass` `0x0885d1b0`, `Rocket_Update` `0x0885d2a8`, read) | ready-to-wire after a per-tick position read on ours, conf 50 |
+| 5 | Craft damage onset, k74: ours' red shield bar one sample earlier (k74 against k78 of every second frame) | HUD | 7.8 | | Blast force on the craft (`Rocket_ApplyBlastForce` `0x0886ee88`) follows gap 4 plus the original's 2-frame display lag; likely the same tick | follows gap 4 |
+| 6 | Craft-hit blast `WO_ROCKET_EXPLO`, fireball size (85x110 at k=25) and the kind-0 wash | | | | **Not captured**: Time Trial has no opponent. A Single Race pair puts the grid craft in different places each boot | re-first: needs an aimed hit; recipe in the handover thread |
+
+Not findings: the HUD weapon hexagon (ours keeps the held-pickup icon because `--give` refills the slot), the
+song-title ticker, the scene gap with no weapon (6-8 grey in every frame, 12-22 after k74 from the craft's
+slowdown differing, the `ctl` column), and the 2-frame display lag.
+
+**Cross-title.** HD and Omega fire a different Rocket (`ps3-hdfury-eu/` pages; model, trail and blast are their own
+and an HD pair is not run here): **checked, differs** by file, not re-measured. Pure's Rocket visual and 2048's:
+not checked in this lane (`docs/gameplay/weapon-lineage.md` unchanged, no cell moved). Pulse PS2 inherits PSP's
+measured law and has no pair (**not checkable** without a PCSX2 pair).
