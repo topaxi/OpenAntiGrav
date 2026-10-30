@@ -23,7 +23,8 @@
 //! - the carried normal agrees with the floor's (angle, degrees), and
 //! - the projectile sits near [`RIDE_HEIGHT`] above it.
 //!
-//! The Plasma is exempt from both on the tick it is released: it leaves the nose
+//! The Plasma is exempt from both on the tick it is released and the three updates
+//! after it, which do not ride (2026-10-31): it leaves the nose
 //! at the craft's hover height and attitude and settles a tick later.
 //!
 //! A projectile born riding world up fails both within a few ticks of a bank
@@ -50,6 +51,8 @@ const HD: (&str, &str) = (
 /// How far above the floor a projectile rides, and how far off it may be.
 const RIDE_HEIGHT: f32 = oag_weapons::projectile::RIDE_HEIGHT;
 const HEIGHT_TOLERANCE: f32 = 2.0;
+/// The release tick and the three updates after it, in which a Plasma does not ride; see `plasma::UNPINNED_SECONDS`.
+const PLASMA_UNRIDDEN_UPDATES: u32 = 4;
 const ANGLE_TOLERANCE_DEGREES: f32 = 20.0;
 
 fn snapshot(bits: u32, previous: Option<&Input>) -> oag_gameplay::InputSnapshot {
@@ -110,7 +113,7 @@ fn ride(title: (&str, &str), weapon: Weapon, ticks: u32) -> Option<Ride> {
         // A Plasma bolt winds up for a second on the nose before it flies.
         let span = if weapon == Weapon::Plasma { 75 } else { 14 };
         next_shot = tick + 30;
-        let mut released = false;
+        let mut flown = 0_u32;
         let mut was_airborne = false;
         for k in 0..span {
             let bits = if k == 0 {
@@ -136,7 +139,8 @@ fn ride(title: (&str, &str), weapon: Weapon, ticks: u32) -> Option<Ride> {
             if shot.charge > 0.0 {
                 continue;
             }
-            let first_flying_tick = !std::mem::replace(&mut released, true);
+            // Counted before any `continue` below: a miss is still an update.
+            flown += 1;
             let reach = if weapon == Weapon::Rocket {
                 oag_weapons::projectile::SURFACE_PROBE_LENGTH
             } else {
@@ -164,6 +168,11 @@ fn ride(title: (&str, &str), weapon: Weapon, ticks: u32) -> Option<Ride> {
                 continue;
             }
             out.judged_ticks += 1;
+            let ride_height = if weapon == Weapon::Plasma {
+                oag_weapons::projectile::plasma::RIDE_HEIGHT
+            } else {
+                RIDE_HEIGHT
+            };
             // The Plasma's release tick carries the craft's own attitude, not a
             // ridden normal, for the angle as for the height. Since the
             // autopilot carries the original's engine bits (2026-10-19) it
@@ -171,7 +180,12 @@ fn ride(title: (&str, &str), weapon: Weapon, ticks: u32) -> Option<Ride> {
             // there with its nose up: 21 to 28 degrees on the release tick on
             // four laps, under 15 on every tick after. A world-up seed stays
             // wrong for ticks, so the later ticks still catch it.
-            if weapon == Weapon::Plasma && first_flying_tick {
+            // **Re-judged 2026-10-31 (`pulse-plasma-timing`).** The original's first
+            // three `Plasma_Update`s after the release do not ride (`plasma.md`, "the
+            // detonation leg fixed"): the bolt falls at the release attitude, so the
+            // angle and the height are judged from the fourth update on, and
+            // against the Plasma's own ride height.
+            if weapon == Weapon::Plasma && flown <= PLASMA_UNRIDDEN_UPDATES {
                 continue;
             }
             out.worst_angle = out.worst_angle.max(
@@ -182,10 +196,16 @@ fn ride(title: (&str, &str), weapon: Weapon, ticks: u32) -> Option<Ride> {
                     .acos()
                     .to_degrees(),
             );
-            if !reattaching {
+            // The first ride steers toward a ride point that can be metres above a
+            // slow bolt (HD's fires at a crawl, `launch_kmh` of a craft barely moving):
+            // `velocity = normalize(ride point - position) * speed` climbs at once and
+            // overshoots for two updates before it settles, the law's own shape. So the
+            // height is judged from the third update after the first ride.
+            let settling = weapon == Weapon::Plasma && flown <= PLASMA_UNRIDDEN_UPDATES + 2;
+            if !reattaching && !settling {
                 out.worst_height_error = out
                     .worst_height_error
-                    .max((floor.distance - RIDE_HEIGHT).abs());
+                    .max((floor.distance - ride_height).abs());
             }
         }
     }

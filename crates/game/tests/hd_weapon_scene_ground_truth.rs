@@ -212,13 +212,16 @@ fn the_cannons_muzzle_flash_takes_the_circuits_scene() {
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU adapter"]
 fn a_plasma_explosions_shells_glow_violet_from_the_real_eye() {
-    // The bolt bursts at (278.9, -40.6, -196.6) and its halo, ring and sphere
-    // are 46 across at tick 490; the camera is 90 units off. Violet pixels:
-    // 10,521 written, 38 dropped.
+    // The bolt bursts at (449.2, -27.5, -105.3) on tick 477 and its halo, ring and
+    // sphere are about 46 across ten ticks on, at 487; the camera is 90 units off.
+    // **Re-aimed 2026-10-31 (`pulse-plasma-timing`)**: the bolt used to burst at
+    // (278.9, -40.6, -196.6) on a wall edge that the Plasma's ride-point steer and
+    // 4.0 ride height now carry it past; same viewing direction, the camera moved
+    // to keep the 90 units. Violet pixels: 14,583 written.
     let Some(frame) = frame_of(
         "plasma",
-        490,
-        Some("190.00,-20.00,-170.00,0.94,-0.22,-0.28,0.00,1.00,0.00"),
+        487,
+        Some("364.60,-7.70,-80.10,0.94,-0.22,-0.28,0.00,1.00,0.00"),
     ) else {
         return;
     };
