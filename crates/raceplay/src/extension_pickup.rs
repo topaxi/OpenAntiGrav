@@ -71,6 +71,27 @@ pub(crate) fn from_command(command: &Command, mod_id: &str) -> Option<PickupLook
     })
 }
 
+/// The look of `slot`'s mod pickup this tick: the last `pickup-look` among `hud` named for
+/// it, else the `[pickup]` of the module that owns the mod pickup (`owner`, its index plus
+/// one). `None` in a race without one.
+pub(crate) fn resolve<'a>(
+    hud: &[(usize, Command)],
+    slot: usize,
+    owner: u8,
+    pickups: &[Option<PickupLook>],
+    mod_id: impl Fn(usize) -> &'a str,
+) -> Option<PickupLook> {
+    let sent = hud
+        .iter()
+        .rev()
+        .filter(|(_, command)| command.slot().map(|s| s.index()) == Some(slot))
+        .find_map(|(module, command)| from_command(command, mod_id(*module)));
+    sent.or_else(|| {
+        let owner = usize::from(owner).checked_sub(1)?;
+        Some(from_manifest(pickups.get(owner)?.as_ref()?, mod_id(owner)))
+    })
+}
+
 /// A manifest's `[pickup]` with its `[icons]` key turned into the HUD sheet's key.
 pub(crate) fn from_manifest(look: &PickupLook, mod_id: &str) -> PickupLook {
     PickupLook {

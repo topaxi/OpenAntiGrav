@@ -937,28 +937,13 @@ mod on {
             out
         }
 
-        /// The look of `slot`'s mod pickup this tick: the last `pickup-look` a module sent
-        /// for it, else the `[pickup]` of the module that owns the mod pickup. `None` in a
-        /// race without one.
+        /// The look of `slot`'s mod pickup this tick ([`crate::extension_pickup::resolve`]).
         pub(super) fn pickup_look(
             &self,
             slot: usize,
         ) -> Option<oag_tables::pickup_look::PickupLook> {
-            let sent = self
-                .hud
-                .iter()
-                .rev()
-                .filter(|(_, c)| c.slot().map(|s| s.index()) == Some(slot))
-                .find_map(|(module, c)| {
-                    crate::extension_pickup::from_command(c, &self.slots[*module].mod_id)
-                });
-            sent.or_else(|| {
-                let owner = usize::from(self.owner).checked_sub(1)?;
-                let declared = self.pickups.get(owner)?.as_ref()?;
-                Some(crate::extension_pickup::from_manifest(
-                    declared,
-                    &self.slots[owner].mod_id,
-                ))
+            crate::extension_pickup::resolve(&self.hud, slot, self.owner, &self.pickups, |m| {
+                &self.slots[m].mod_id
             })
         }
 
