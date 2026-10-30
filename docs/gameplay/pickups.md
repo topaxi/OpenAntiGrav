@@ -395,6 +395,63 @@ all nine implemented icons plus the grid decode with a real quad extent, and
 turbo --screenshot out.png` shows a green `TURBO_icon` in its own backdrop -
 the first time this build has drawn any part of Pure's pickup on screen.
 
+### Pure's icons are the mesh, not a stretched strip (2026-10-30, `pure-hud-weapon-icons`)
+
+The maintainer's report from play was "all icons look the same except for
+their color", and it was true: `model_draw` drew each icon as its whole
+128x16 texture strip squeezed into the mesh's bounding box, at the model's `y`
+read downwards. Three things were wrong, each read off the original (PPSSPP
+software renderer, Pure USA, Vineta K from the saved Time Trial state, each
+weapon id written into the holder's `+0x1d8`, ten frames at 2x):
+
+- **Shape.** Each `Weapon_*.vex` quad windows ten texels of its strip through a
+  texture-offset track (`0, 217/256, 217/256, 0` over keys 1, 30, 31, 60 at
+  60 keys a second), so the glyph is a *scrolled* view of the strip, drawn
+  nearest-filtered. The held state is the track's peak, key 30. The loader now
+  rasterises each icon and the grid flat (`model_raster`, the gauge's path)
+  at `held_at`, so the sheet entry is the glyph with the model's own vertex
+  colour and alpha, and the draw uses the canvas centre.
+- **Colour.** The `colour=` word is a vertex colour, **ABGR**, not the
+  `<Image>` dialect's `0xAARRGGBB`: `0xFF40ACFF` is orange (Rocket, Missile,
+  Disruptor), `0xFF0000FF` red (Quake, Plasma), `0xFF40FF40` green (Turbo,
+  Shield, Autopilot), `0xFFFFC040` light blue (Mine, Bomb). The 2026-10-30
+  note "authored colour, never recoloured" stands; only its channel order was
+  read the wrong way round.
+- **Position.** Orthographic `y` counts up, as the gauge's models do: the box
+  is at the top middle, `(240, 272 - 250)`, not the bottom middle where it hid
+  behind the craft.
+
+The grid is rasterised the same way, which carries its own dark translucent
+vertex colour (a plain white-tinted quad drew it light); the rasteriser
+samples a hair off the pixel centre so the diagonal of a quad is blended once
+(a translucent backdrop showed it as a dark seam, an opaque gauge hid it).
+
+Matched pairs (ours vs original, box `x=208, y=2, w=64, h=40` at 480x272, the
+glyph pixels of either, mean absolute grey error on 0-255; "before" is the box
+with the glyph absent, which is what the old draw put in it):
+
+| Weapon | glyph px (orig / ours) | mask overlap | grey error before | after |
+| --- | ---: | ---: | ---: | ---: |
+| Rocket | 354 / 354 | 1.000 | 53.3 | 2.3 |
+| Missile | 384 / 384 | 1.000 | 53.0 | 2.6 |
+| Quake | 386 / 386 | 0.990 | 49.6 | 4.0 |
+| Disruptor | 337 / 336 | 0.997 | 51.9 | 2.5 |
+| Turbo | 168 / 168 | 1.000 | 45.0 | 2.3 |
+| Shield | 428 / 428 | 0.986 | 45.1 | 2.6 |
+| Autopilot | 315 / 314 | 0.997 | 44.4 | 2.0 |
+| Plasma | 278 / 278 | 1.000 | 49.7 | 3.9 |
+| Mine | 320 / 320 | 1.000 | 31.7 | 1.4 |
+| Bomb | 400 / 400 | 1.000 | 30.4 | 1.6 |
+
+`each_held_weapon_draws_its_own_glyph_in_its_own_colour_at_the_top_middle`
+pins colour, position and pairwise-distinct glyph masks per weapon. **Not
+wired:** the grant animation (the offset track's 0 to 217 scroll when a pickup
+arrives, and the reverse on use) - only the held state draws; Pulse's own
+fade-in/out and size pulse were measured separately and Pure's equivalents are
+open. **Other titles:** HD, 2048 and Omega never took this path (`HudArt::
+pickup_icon_models` is `None` for them, their icons are `<Image>` sprites), so
+the flat quad never applied; checked, differs.
+
 ## Only what has an effect is handed out
 
 `oag_weapons::pickup::IMPLEMENTED` is the pool a pad draws from, and it holds

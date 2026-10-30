@@ -437,7 +437,14 @@ impl Layout {
                 .value("colour")
                 .and_then(|v| resolve(&self.constants, v))
                 .and_then(parse_argb)
-                .map(argb_to_rgba),
+                .map(|word| {
+                    // The engine hands a model's word to the GPU as a vertex
+                    // colour, which is ABGR in memory: `0xFF40ACFF` draws
+                    // orange (measured on PPSSPP, Pure's ten icons), unlike an
+                    // `<Image>`'s `color`, which is `0xAARRGGBB`.
+                    let [r, g, b, a] = argb_to_rgba(word);
+                    [b, g, r, a]
+                }),
             orthographic,
             origin,
         })

@@ -238,3 +238,79 @@ fn the_speed_gauge_is_three_models_drawn_flat_where_the_original_draws_them() {
     let texts: Vec<String> = digits(123.4).into_iter().map(|(text, _)| text).collect();
     assert_eq!(texts, vec!["1".to_string(), "23".to_string()]);
 }
+
+/// Each weapon's icon is its own picture, drawn where and in the colour the original draws it.
+///
+/// Measured on PPSSPP (software renderer, Pure USA, Vineta K, each weapon poked into the held
+/// slot, 2026-10-30): the pickup box sits at the top middle (the model's orthographic `y` counts
+/// up), the glyphs differ per weapon, and the authored colour word is ABGR (rocket, missile and
+/// disruptor draw orange, quake and plasma red, mine and bomb light blue, the rest green).
+///
+/// Before this the ten icons were one stretched 128x16 strip each, drawn as a plain rectangle
+/// the size of the mesh's bounding box at the bottom middle, so they differed by tint alone.
+/// Dropping `icon_srcs` in `oag_raceplay::hud::vex_model_art` leaves the strips and fails the
+/// pairwise-mask check.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn each_held_weapon_draws_its_own_glyph_in_its_own_colour_at_the_top_middle() {
+    use oag_tables::weapons::Weapon as W;
+    use oag_ui::frontend::Draw;
+    let Some(loaded) = single_race() else { return };
+    let context = loaded.hud.context().expect("a context is buildable");
+    let sheet = &loaded.hud.sheet;
+    let weapons = [
+        (W::Rocket, [1.0, 0.6745098, 0.2509804]),
+        (W::Missile, [1.0, 0.6745098, 0.2509804]),
+        (W::Quake, [1.0, 0.0, 0.0]),
+        (W::Disruptor, [1.0, 0.6745098, 0.2509804]),
+        (W::Turbo, [0.2509804, 1.0, 0.2509804]),
+        (W::Shield, [0.2509804, 1.0, 0.2509804]),
+        (W::Autopilot, [0.2509804, 1.0, 0.2509804]),
+        (W::Plasma, [1.0, 0.0, 0.0]),
+        (W::Mine, [0.2509804, 0.7529412, 1.0]),
+        (W::Bomb, [0.2509804, 0.7529412, 1.0]),
+    ];
+    let mut masks: Vec<(W, Vec<bool>)> = Vec::new();
+    for (weapon, rgb) in weapons {
+        let mut race = race::Race::start(loaded.setup.clone());
+        race.sim.world.ships[0].pickup.weapon = Some(weapon);
+        race.tick(&PlayerInputs::none());
+        let frame = oag_hud::draw_list(&context, &race.readout());
+        let draws: Vec<_> = frame
+            .sprites
+            .iter()
+            .filter_map(|d| match d {
+                Draw::BlendedSprite {
+                    rect, uv, color, ..
+                } => Some((*rect, *uv, *color)),
+                _ => None,
+            })
+            .collect();
+        let (rect, uv, color) = *draws.last().expect("the icon draws after its grid");
+        assert_eq!(&color[..3], &rgb, "{weapon:?}'s colour (ABGR word)");
+        let (cx, cy) = (rect[0] + rect[2] * 0.5, rect[1] + rect[3] * 0.5);
+        assert!(
+            (cx - 240.0).abs() < 8.0 && (cy - 22.0).abs() < 4.0,
+            "{weapon:?} centred at ({cx}, {cy}); the original's box is at the top middle (240, 22), a glyph may sit off-centre in its canvas"
+        );
+        let mask: Vec<bool> = (0..uv[3] as usize)
+            .flat_map(|row| (0..uv[2] as usize).map(move |col| (row, col)))
+            .map(|(row, col)| {
+                let at = ((uv[1] as usize + row) * sheet.width as usize + uv[0] as usize + col) * 4;
+                sheet.rgba[at + 3] > 0
+            })
+            .collect();
+        let lit = mask.iter().filter(|&&on| on).count();
+        assert!(
+            lit > 20 && lit < mask.len() * 9 / 10,
+            "{weapon:?}'s icon is {lit} of {} texels: empty or a plain rectangle",
+            mask.len()
+        );
+        masks.push((weapon, mask));
+    }
+    for (i, (a, ma)) in masks.iter().enumerate() {
+        for (b, mb) in &masks[i + 1..] {
+            assert!(ma != mb, "{a:?} and {b:?} draw the same icon");
+        }
+    }
+}

@@ -733,11 +733,20 @@ fn vex_model_art(
     let bars = title.hud_art.bar_models;
     let bar_names = bars.map_or(Vec::new(), |b| vec![b.speed, b.shield, b.outline]);
     let mut bar_srcs: Vec<&str> = Vec::new();
+    let mut icon_srcs: Vec<&str> = Vec::new();
     let mut wanted: Vec<&str> = Vec::new();
     for model in &layout.models {
         let is_bar = bar_names.contains(&model.name.as_str());
         if is_bar && !model.src.is_empty() {
             bar_srcs.push(model.src.as_str());
+        }
+        if !model.src.is_empty()
+            && (title.hud_art.pickup_icon_backdrop_model == Some(model.name.as_str())
+                || title.hud_art.pickup_icon_models.is_some_and(|names| {
+                    names.into_iter().flatten().any(|name| name == model.name)
+                }))
+        {
+            icon_srcs.push(model.src.as_str());
         }
         let is_wanted = is_bar
             || oag_race::sight::is_sight_widget(&model.name)
@@ -769,9 +778,18 @@ fn vex_model_art(
             }
         };
         // A gauge model is a polygon strip, not a quad: rasterised flat, in the state of a full
-        // bar (the model's own texture track at its end) so the draw can crop it.
-        if bar_srcs.contains(&src) {
-            match model_raster::raster(&model, model_raster::end_of_tracks(&model)) {
+        // bar (the model's own texture track at its end) so the draw can crop it. A weapon icon
+        // is a shaped mesh over a strip of several glyphs (Pure's are 128x16 sheets), so it is
+        // rasterised too, at the state its offset track holds the glyph in (`held_at`), rather than stretching the whole texture over its
+        // bounding box.
+        let is_icon = icon_srcs.contains(&src);
+        if bar_srcs.contains(&src) || is_icon {
+            let seconds = if is_icon {
+                model_raster::held_at(&model)
+            } else {
+                model_raster::end_of_tracks(&model)
+            };
+            match model_raster::raster(&model, seconds) {
                 Some(flat) => {
                     report.push(format!(
                         "HUD model {src}: drawn flat, {}x{} at {:?} from its origin",
@@ -784,7 +802,11 @@ fn vex_model_art(
                         rgba: flat.rgba,
                         quad_extent: Some([flat.width as f32, flat.height as f32]),
                         quad_centre: Some(flat.centre),
-                        blend: None,
+                        blend: if is_icon {
+                            quad_blend(src, &model, report)
+                        } else {
+                            None
+                        },
                     });
                 }
                 None => report.push(format!(
