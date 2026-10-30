@@ -1,8 +1,8 @@
 ---
 status: measure
 titles: [pulse]
-updated: 2026-10-08
-summary: "Rocket, Mine, Bomb and shield looks not verified frame by frame; why the original's first Rocket updates miss the floor"
+updated: 2026-10-31
+summary: "Rocket flare/smoke read from GE dumps 2026-10-31 (smoke alpha ready-to-wire, haze cause open); Mine, Bomb, shield looks unverified"
 ---
 
 # Rockets, mines, the bomb and the shield look close, and none is verified frame-by-frame
@@ -73,6 +73,7 @@ a scratch directory, not kept.
   thread's).
 - *Pulse Mine's explosion, 2026-10-08 (pulse-weapon-look)* - **the cluster is the round counter, and our drop was a tick slow: LANDED 2026-10-08 (pulse-mine-drop), six-tick drop, three Black ceilings raised (seed divergence, 40 against 41 deaths over 80 races).** One round on the original is one blast, five rounds four bumps (the fifth mine's owner is out of the trigger radius); the "hue" gap was a single blast against a five-mine stack (cluster against cluster the mean RGB agrees within 3 %). Ours dropped the cluster at seven-tick spacing (a strict `> 0` on the `0.1` s reload at an exact `1/60` step), so only three blasts go off; at six ticks (`DROP_TIMER_SLACK`, chosen) they go at k=32/38/44/50 against 32/38/44/51. **Not landed: it raises three `ai_dekonstruct_black_ground_truth` cells over their "may only fall" ceilings** (the AI Aces play with weapons on; mine kills or chaotic per-seed divergence, not checked); patch `mine-drop-six-ticks.patch`, decision: land it and regenerate those ceilings in their own commit, or have the AI avoid its field's mines first. Left: ours' blasts 8-14 % brighter, the original's debris larger and tan. `mine.md`'s 2026-10-08 section.
 - *Pulse Rocket glow, 2026-10-08 (pulse-weapon-look)* - **item (b) above is closed as stated, and a new episodic excess is left.** At fire+3..+8 ours is 2.20M warm light against the original's 2.46M/2.53M (two restarts in one boot), so "larger on the original" is false; from fire+9 ours is about 1.5x in spikes at fire+9/16/20/25. The flare pool (count, size, alpha, colour, position) and the blend equal the original's, so the excess is not the effect's law: the SHAZZAM draw's random sizes or the road's bloom, not isolated. The scenario `weapon-after-go.inputs` was ten ticks late (our start now reaches x 124.9 on tick 393): `weapon-after-go-matched.inputs`, ours at tick `391 + k`. `rocket-visuals.md`'s 2026-10-08 section.
+- *Pulse Rocket look, 2026-10-31 (pulse-rocket-look-law)* - **the draws are read off GE dumps** (`rocket-visuals.md`, 2026-10-31 section). Textures and blends are not misread (four `WO_ROCKET_EXPLO_TRACK` emitters additive/additive/alpha-over/additive in both). **ready-to-wire**: (1) the blast smoke's alpha rises 2, 5, 44, 64, 84, 125 at blast age 2, 5, 9, 11, 13, 21 where ours' is 230 at tick 6 (the saturated yellow-orange solid); (2) the flare root's alpha is `255 (1 - age/30)` smooth where ours steps, and its colour runs one tick ahead of its size. **Open**: the original's smoke alpha past blast age 21 (recipe in the section); why the original's age 7-10 flare particles wash only the lower screen while ours' wash the sky (the early path of rocket 3, 40 confidence).
 - *Pulse Mine's explosion, 2026-10-01 (pulse-fx-3)* - **first picture of the original's**: a stationary craft trips its own Mine at fire+30
   (the arming delay; ours now exempts the owner for the same 0.5 s, 2026-10-07), and the burst runs about twenty frames of yellow-white wash, rays and orange debris
   where ours' lasts sixteen and leans green. The `ring` and `BANG` templates were drawn with the wrong sprite and are fixed
