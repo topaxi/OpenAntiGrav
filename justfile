@@ -65,7 +65,7 @@ native_video_flags := if os() == "linux" { "--features native-video" } else { ""
 # order they get there, so nothing here changes what either asserts. Output of
 # the recipes interleaves; a failure names its recipe.
 [parallel]
-check: fmt-check lint check-ballisticng check-extensions test check-docs check-deps check-unused-deps check-determinism check-size check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-schemas
+check: fmt-check lint check-ballisticng check-extensions test check-docs check-deps check-unused-deps check-determinism check-size check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-schemas check-ext-pin
 
 # Documentation is a deliverable, so its links are checked like any other build output
 check-docs:
@@ -195,7 +195,7 @@ test-data *ARGS:
 # selects nothing. The lead still runs the full `just` and `just test-data` once
 # per merge batch - see `.claude/skills/oag-drive/member-rules.md`.
 [parallel]
-gate-affected: fmt-check lint check-ballisticng check-extensions test-affected check-docs check-deps check-unused-deps check-determinism check-size check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-schemas
+gate-affected: fmt-check lint check-ballisticng check-extensions test-affected check-docs check-deps check-unused-deps check-determinism check-size check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-schemas check-ext-pin
 
 # `just test`, narrowed to what `scripts/affected.py` selects.
 test-affected:
@@ -1283,6 +1283,13 @@ check-weapon-lineage:
 # stage to the path the Pages site serves them at. docs/formats/toml-schema.md
 check-schemas:
     scripts/check-schemas.sh
+
+# The example guests pin the guest SDK as a git dependency on this repository (so a
+# stand-alone clone of the examples builds); inside this checkout
+# assets/mods/.cargo/config.toml patches it to crates/ext. This fails when a pin is
+# not a commit whose crates/ext and crates/ext-abi equal this tree's.
+check-ext-pin:
+    python3 scripts/check-ext-pin.py
 
 # Every WGSL module the web build emits, created by a real browser's compiler
 # (Chromium on a CPU adapter, no GPU needed). naga passes shaders Chrome's Tint

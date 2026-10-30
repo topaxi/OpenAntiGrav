@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-10-30
-summary: "SDK, track module, Hillside rain, track props, mod events landed locally; open: check tool, C header, template, git dep, MODDED, gate animation"
+summary: "SDK, track module, Hillside rain, track props, mod events landed locally; open: check tool, C header, template, MODDED, gate animation"
 categories: [gameplay]
 size: M (55)
 difficulty: medium (60)
@@ -274,8 +274,9 @@ one generic record, and the documentation table names them per kind.
    the host and the guest compile against one definition and the gate covers both.
    `mod-examples` takes `oag-ext` as a **git dependency on the engine repository with a
    pinned `rev`** (the submodule layout would allow a `path`, but a stand-alone clone
-   must build). The pin is bumped with each ABI revision; the committed `.wasm` is
-   refused by name until it is.
+   must build). Landed 2026-10-30: inside the engine `assets/mods/.cargo/config.toml`
+   patches the pin to `crates/ext`, and `just check-ext-pin` fails until the pin is a
+   commit carrying this tree's SDK. Not on crates.io (maintainer: not ready to publish).
 2. **`blob!` as a `macro_rules!` first**, a `#[derive(Blob)]` proc macro only when a
    second need for a proc-macro crate shows up (the maintainer's two-enums rule for
    macros). The declarative form covers both examples.
@@ -326,11 +327,6 @@ one generic record, and the documentation table names them per kind.
   collect and import, the panel rows) are unexercised. Next: add a trigger and a few
   `mod_*` properties to `roundtrip.py loop`, run `just blender-fixtures --update`, and
   check `crates/trackfile/tests/blender.rs` reads them.
-- **The examples' SDK dependency is a `path`** into the engine checkout the
-  submodule sits in (`../../../../../crates/ext`, five levels from `guest/`). A
-  stand-alone clone of `mod-examples` does not build until it is a git dependency on
-  the engine with a pinned `rev`, which waits until the `wasm-extensions` branch is
-  public. Bump the pin with each `REVISION`.
 - **No `oag-ext check` / `run` tool** (layer 2): exports, revision, state length,
   memory, size and fuel for a built module, and a scripted run printing the typed
   commands. `tests::extension_examples` holds the fuel harness to start from.
@@ -351,5 +347,4 @@ one generic record, and the documentation table names them per kind.
    `oag_ext_abi`; then the C++ example in `mod-examples` from the header, with its size
    and fuel beside the Rust ones, checked by `oag-ext check`.
 3. The `mod-examples` template on `oag-ext`.
-4. When the branch is public: the examples' git dependency, pinned.
-5. Move what is left of this thread into the README and delete it.
+4. Move what is left of this thread into the README and delete it.

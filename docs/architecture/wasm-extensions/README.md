@@ -292,7 +292,7 @@ rewritten on them with **no `unsafe`, no offsets and no ABI codes**:
 | The revision | `oag_ext_abi::REVISION` | Bumped by hand on any edit to the layout; a unit test folds every offset, size, code and one encoding of each record into a committed `(REVISION, fold)` pair, so a layout edit without a bump fails the gate. `oag_abi()` returns `(ABI << 8) \| REVISION`; the host refuses another revision **by name** ("built for ABI 1 rev 2, this host is ABI 1 rev 1"), and a value below 256 as a module "without a layout revision". Revision 1 is the layout the pre-SDK examples were built against, so the old `.wasm` files are refused |
 | The state length | `oag_state_len` | An optional export; when present it must equal the manifest's `state_bytes` (refused by name otherwise). `state_bytes` stays required in the manifest and its schema |
 | The guest SDK | `crates/ext` (`oag-ext`) | `no_std`, no `alloc`, depends on `oag-ext-abi` only; no engine crate may depend on it (`just check-deps`, rule 2). `Observation` (`tick()`, `crafts()` over occupied slots, `craft(slot)`, `events()` skipping unknown kinds); `Craft`, a view whose accessors (`is_person`, `fire_held`, `is_racing`, `shield`, `shield_max`, `speed_kmh`, `pickup`) read their field when asked; `Reply` with one method per command, taking a `&Craft` where the slot must hold one and returning `Err(Refused)` where the host would fault; the count written by the glue; `blob!` for the state (a plain-data struct, field order, little-endian, no padding, a `const` assert against `MAX_STATE_BYTES`); the `Extension` trait carrying the fresh-instance and one-tick-late rules; `export!` emitting `oag_abi`, `oag_io`, `oag_track`, `oag_state_len`, `tick` and the panic handler on wasm32 only; `Observation::track()` and `prop!` read the track region. Its `test` feature's `test::Race` runs an extension natively through the host's own writer and decoder |
-| The examples | `mod-examples`, branch `ext-sdk` | Wall Penalty 87 lines (its blob `[u16; 8]`), Energy Turbo 307 (its record kept at 12 bytes with a spare `u16`), each with native tests under `cargo test`. The dependency is a `path` into the engine checkout the submodule sits in; a stand-alone clone needs a git dependency pinned to the revision, which waits until the branch is public |
+| The examples | `mod-examples`, branch `ext-sdk` | Wall Penalty 87 lines (its blob `[u16; 8]`), Energy Turbo 307 (its record kept at 12 bytes with a spare `u16`), each with native tests under `cargo test`. The dependency is a git dependency on this repository pinned to a `rev` (a stand-alone clone builds); inside the engine `assets/mods/.cargo/config.toml` patches it to `crates/ext`, and `just check-ext-pin` fails while the pin lags the SDK. Not published to crates.io |
 
 Measured on the rebuilt modules (`opt-level = "s"`, LTO, stripped). Fuel is from
 `oag_raceplay`'s `tests::extension_examples`: a full grid of eight racing crafts
@@ -318,7 +318,7 @@ name. `wall_penalty_ground_truth` and `energy_turbo_ground_truth` pass unchanged
 against the rebuilt modules, and the vanilla fold did not move.
 
 Not built yet: an `oag-ext check` tool, a generated C header and a C++ example
-built from it, a template mod, and the git dependency.
+built from it, and a template mod.
 
 ### Breakable armour from the Shield (2026-10-30)
 
