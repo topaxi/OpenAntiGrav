@@ -1724,3 +1724,114 @@ pickup), not the Plasma's backdrop colour or fade. Not fixed.
 HD and Omega draw their own blast (`WO_PLASMA_LIGHTNING_*`; **checked, differs**,
 `ps3-hdfury-eu/plasma.md`); Pure's Plasma visual is unwired and 2048 authors none. Pulse PS2 inherits
 PSP's law and is unmeasured here (**not checkable** without a PCSX2 dump of the same frames).
+
+## 2026-10-30: the blast wired from the dumps (pulse-plasma-blast-wire)
+
+What `PlasmaBlast_Update`'s dumps (section above) changed in `crates/raceplay/src/blast_models.rs`
+and what the wiring found that the dump read did not say. Tests: `blast_models/tests.rs` (unit) and
+`crates/raceplay/tests/plasma_blast_models_ground_truth.rs` (disc-backed).
+
+### The `age * rate` scrub was wrong; the rates are a scale ease
+
+Sampling each model's own node and texture tracks (`Model::sample_anim_nodes`, `AnimTrack::sample`)
+at **the blast's age** (rate 1) lands on every dump value: `hemisphere2` turns 127 degrees at 0.7167
+s (the dump's 182 deg/s over the age less one tick) with UV `(0.357, 0.357)`; `hemisphere1`'s V runs
+`0.0202 - 1.2205 age` and clamps at `-1.1992`; the halo is **two parts**, one turning +177 and one
+-59 deg/s, with UV `(0.352, -0.705)`. At `age * 0.07` the same tracks give 6 degrees and `0.025`. So
+`Node_SetAnimTimeTree` is handed the age (confidence 85), and the three small constants `0.1`, `0.07`,
+`0.07` (`DAT_08ab0f6c/70/74`) are something else: **the per-tick scale ease**, `cur += (target - cur) *
+rate` from `cur = 0`, the HD blast's own shape (`WeaponExplosions_Draw`). The first drawn tick is
+one step in, which is what the dumps' first scale is: `hemisphere2` 9.47 = 135.3 x 0.07, `hemisphere1`
+7.9 = 112.75 x 0.07, the halo 32.0 = 320 x 0.1; and three and six ticks on, 26.47 and 47.76
+(`135.3 (1 - 0.93^n)`); `hemisphere2` increments fall by 0.93 per tick (4.93, 4.58, 4.27), the halo's
+by 0.9 (12.4, 11.2, 10.0). The 135.3, 112.75 and 320 targets are **fitted** (confidence 70); the late
+samples sit below the ease on the boots whose frames stalled (130.5 at age 1.05 against 133.9), which
+is the "not a function of age alone" the dump table noted: the ease counts updates, not seconds.
+Where the rate constants are read in the executable is not re-read here.
+
+**The dump's matrix norm is not a world size on our decoded model.** The GE draws these models with
+positions near a quarter of a unit; our decoder returns the `.vex`'s extent (halo 10.0, `hemisphere2`
+8.65, `hemisphere1` 7.6). World bounding boxes against `norm x extent x 0.025`: `hemisphere2` 40.2
+against 40.2 (age 0.38), the halo 130.4 against 129.4, `hemisphere1` 29.4 against 31.3 (a rotated
+box reads wide). `PULSE_MODEL_UNIT = 0.025`, fitted, confidence 75. Without it the shells were 40x
+too large and, being behind every road pixel, drew nothing.
+
+### Placement
+
+- **`hemisphere1` and `hemisphere2` share one world-fixed frame** (both models' rows agree at the
+  first dump). The frame's axes are the track's at the detonation: heading `(0.995, 0.095, 0)`, up
+  `(-0.093, 0.968, 0.234)`, right `(0.022, -0.232, 0.972)`. Ours is read off the nearest spline
+  sample (`Race::track_frame_at`: tangent, the sample's up, `heading x up`); on the matched pair its
+  up is `(-0.063, 0.970, 0.233)` against the dumps' (the 0.233 z component agrees) and its heading is
+  11 degrees from the dump's, which our early detonation point (x 282 against 292) accounts for. That
+  the original's frame is the track fit `PlasmaBlast_Construct` builds is **inferred**.
+- **The halo takes the camera's orientation and none of its position**: its `z` is the way the camera
+  looks (`(0.998, -0.049, 0.044)` while the camera heads `+x`), `y` the camera's up, `x` the camera's
+  left; this is what the `PlasmaBlast_Update` read of the camera's three `+0x48/+0x58/+0x68` `z`
+  components fits, and it explains the 5 degree drift over 0.37 s while the eye passes through the
+  shell. Confidence 70 (one heading).
+- The halo stops drawing at 0.65 s, **chosen, not measured**: the dumps bracket it (drawn at 0.55,
+  gone at 0.717).
+- `hemisphere1` is single-sided in the `.vex` itself (`pass_mask`, every batch culled; the other two
+  none), and its winding shows nothing from inside its dome and the near side from outside
+  (`hemisphere1_shows_nothing_from_inside_its_shell_and_something_from_outside`). With a world-fixed
+  frame the craft's own travel carries the eye through it: the white-out's cut is wired, and it falls
+  earlier than the original's because our detonation is early and near (below).
+
+### Tint
+
+`pulse_tints`: `hemisphere1` `1 - age`, the halo `min(1, 1.25 (1 - age))`, `hemisphere2` `min(1, (1.5 -
+age) / 1.2)`, floored at 0, to the byte at the dumps' ages (the GE truncates). Applied through
+`Drawable::tint`, the shield's vertex-colour multiply. **Approximation, chosen**: the original lights
+these models (ambient only) once the ramp drops below 1, which ignores vertex colour, where ours
+multiplies it; the baked edge ramp (`0xb70035`) therefore stays in ours.
+
+### Measured, matched pair (same setup as the section above)
+
+Raw, regions of `scripts/weapon-pair-score.py`'s method, ours at tick `391 + k`, area x excess grey
+(fire minus the no-fire control):
+
+| Region | Before | After |
+| --- | ---: | ---: |
+| Blast onset and peak, k76-92 | 3.69 M | 4.02 M |
+| Blast tail, k96-140 | 1.95 M | 0.92 M |
+| Head box, k20-74 | 0.20 M | 0.20 M (unchanged: not wired) |
+
+Aligned by our detonation's 3 early ticks (ours frame `k - 3` against the original's `k`, controls
+likewise; **ours is still 10 units short of the original's detonation point**, so this is not a
+position match): onset 1.43 M before, 1.79 M after; tail 1.80 M before, 0.86 M after. The tail is the
+`hemisphere2` shell and reads as the original's at k100-140. **The onset got worse**: with the shells
+at their real size and the cut wired, ours' white-out starts and ends earlier (the eye is inside
+`hemisphere1` by shot 88, the original's at 94) because the bolt detonates 10 units short and 3 ticks
+early. That gap (the detonation distance leg and the first four flight ticks, thread item 3) is what
+the onset score now measures; it is not this lane's.
+
+### The head's loader census
+
+`WO_PLASMA_HEAD` already builds all five of the original's draws, each on its own embedded texture
+and the dump's blend (`the_plasma_heads_five_draws_load_with_their_own_textures_and_blends`): the
+root's 64x64 arc atlas and `plasma_spikes`' 128x64 star (additive emitters), and three **sprite
+templates** (`glow3`, 64x64 additive: the ring; `Glow`, 64x64 **alpha-over**: the dark disc; `glow2`,
+32x32 additive: the glow quad), none skipped. So the "root emitter's texture bind" the earlier read
+left open is not the gap. What is: in the original the three templates' extents scale exactly with the
+charge severity from the press to release (the glow quad 7.0 to 21.0 units, the ring 1.7 to 5.1, the
+dark disc 1.0 to 3.3: each x3.0-3.3 against severity 0.25 to 0.75), i.e. their size channels read as
+constant, where ours samples keys that run over a life of 60000/65535 ticks (`glow3` and `glow2`
+0.007 to 1.0, `Glow` a size decaying to 0.02 within five ticks as a looping channel). Their absolute
+sizes (the glow quad's 21 units against a channel value of 1.0 at severity 0.75) say the template
+size is also scaled by something the channels do not carry. Not changed here: the rule for which age a
+template samples its channels at is the open item (thread, `the-pulse-plasma-head-and-blast-differ-from-the-original.md`,
+item 2), and playing a guess is the stand-in the project forbids.
+
+### Cross-title
+
+HD and Omega run `hd_plasma_blast` (`WO_PLASMA_LIGHTNING_*`, an HD-shaped ease, a camera-facing
+billboard, no tint ramp) and are untouched: the HD path keeps `facing_away(billboard_matrix)` and its
+`HD_BLAST_TARGETS`/`RATES`, now in the shared `ease`/`matrices` fields (`an_hd_blast_draws_with_its_age_as_the_model_clock_and_pulse_with_none`
+and the HD tests still pass). **Checked, differs**: HD's blast models carry their own cull bit per
+material (`cull_as_authored`) and no spin was read for them; the Pulse spin, tint ramps and
+world-fixed frame are not HD's. **Checked, applies, not wired**: HD's ease `cur += (target - cur) *
+rate` is the same shape Pulse's rates turn out to be, which supports reading them as an ease rather than
+an anim-time rate. Pure (unwired Plasma visual) and Pulse PS2 share this code path where they load
+`plasma_blast_pulse`: **inherited from PSP**, not separately measured (the PS2 hemisphere `.vex`
+extents were not compared with the PSP's, so a different unit there would show as a size error).

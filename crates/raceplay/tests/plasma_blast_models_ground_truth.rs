@@ -161,3 +161,47 @@ fn hemisphere1_shows_nothing_from_inside_its_shell_and_something_from_outside() 
         "an eye outside sees the near side"
     );
 }
+
+/// `WO_PLASMA_HEAD` builds all five of the original's head draws, each on its
+/// own embedded texture and blend class: the root's 64x64 arc atlas and
+/// `plasma_spikes`' 128x64 star (both additive emitters), the `glow3` ring and
+/// `glow2` soft glow (additive templates) and the `Glow` dark disc (an
+/// alpha-over template, the one draw that is not additive). What is left of the
+/// head gap is playback (the templates' sizes), not a missing or mis-bound
+/// texture: plasma.md, "the head's loader census".
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_plasma_heads_five_draws_load_with_their_own_textures_and_blends() {
+    use oag_fx::psys::{Blend, ColourScale, Effect};
+    let Some(image) = oag_testdata::image("pulse-psp-usa.chd") else {
+        return;
+    };
+    let mut archives = pulse::open(&image.display().to_string()).expect("opening the PSP archives");
+    let blob = archives
+        .read_name(r"Data\Psys\WO_PLASMA_HEAD.POB")
+        .expect("the head is on the disc");
+    let effect = Effect::parse(&blob, ColourScale::Full).expect("the head parses");
+    let seen: Vec<_> = effect
+        .emitters
+        .iter()
+        .map(|e| {
+            (
+                e.name.as_str(),
+                e.template,
+                e.blend,
+                e.sprite.as_ref().map(|s| (s.width, s.height)),
+            )
+        })
+        .collect();
+    assert_eq!(
+        seen,
+        [
+            ("WO_PLASMA_HEAD", false, Blend::Additive, Some((64, 64))),
+            ("plasma_spikes", false, Blend::Additive, Some((128, 64))),
+            ("glow3", true, Blend::Additive, Some((64, 64))),
+            ("Glow", true, Blend::AlphaOver, Some((64, 64))),
+            ("glow2", true, Blend::Additive, Some((32, 32))),
+        ]
+    );
+    assert_eq!(effect.skipped_templates(), 0);
+}
