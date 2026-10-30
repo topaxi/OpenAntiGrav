@@ -730,7 +730,7 @@ impl Mods {
                     .is_some_and(|e| e.rules.is_some() || e.track.is_some())
             {
                 lines.push(format!(
-                    "mod {}: its simulation module does not run, this build has no `extensions` feature (`just play-mods`)",
+                    "mod {}: its simulation module does not run, this build has no `extensions` feature (`just play` has it unless `OAG_NO_EXTENSIONS` is set)",
                     module.manifest.id
                 ));
             }

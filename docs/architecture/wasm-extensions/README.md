@@ -371,6 +371,11 @@ own weapon table. They were exercised only on the synthetic Pulse fixture of the
 census of those titles' Shield tables was taken for this change.
 
 
+## Keeping the mod author skill current
+
+A change to the ABI, the guest SDK, `oag-mod.toml` or a mod-facing format updates
+`assets/mods/examples/.claude/skills/oag-mod-author/SKILL.md` in the same change.
+
 ## What is already decided, and not reopened here
 
 Quoted from the handover thread on custom race modes and the ADRs it cites; the
