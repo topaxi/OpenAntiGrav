@@ -28,6 +28,7 @@ directory. Raced with `oag-game --track-file <manifest>` (host title's ship, rul
 | `[[spline.junction]]` | `prev`, `next`: two path indices each, `-1` none (primary, then alternate). |
 | `[counts]` | `collision_nodes`, `speedup_pads`, `weapon_pads`, checked against the glb; `art_meshes` only when the track has art; `triggers` only when it has triggers. |
 | `[props]` | Optional: the track's own properties for a simulation mod, name to number or bool ([below](#properties-and-triggers-for-simulation-mods)). Absent when there are none. |
+| `[channels]` | Optional: `publishes = ["<mod id>/<name>", ...]`, the event channels the track sends ([below](#channels-events-between-a-track-and-mods)). Absent when it sends none. |
 | `[art]` | Optional (ADR-0076). Absent, the file is byte for byte what 1.0 wrote. `sky`: a host circuit's `.vex` entry whose `Skycube` is drawn (it pins the disc, so `track.host` is required). `ambient`: linear RGB, the hull rig's ambient. `draw_collision`: `true` draws the flat-shaded floor and walls under the art (decision 16); absent is `false`, the art alone. |
 | `[art.skybox]` | Optional, never with `[art] sky`: the track's own sky (ADR-0076 decision 14). `faces`: six `[[art.texture]]` rows in cubemap order `+X, -X, +Y` (zenith), `-Y` (nadir), `+Z, -Z`, `-1` for a face drawn as the gradient. `zenith`, `horizon`: linear RGB, both or neither, the gradient by elevation. At least one form; a face without a texture needs the gradient. Drawn on every title: `blender_loop` (its gradient, the checker overhead) raced with its own sky on Pulse PSP EU, Pure PSP EU, HD/Fury PS3 EU, Omega PS4 EU and 2048 (the decrypted base folder), 2026-10-29. |
 | `[art.sun]` | `direction` (unit, towards the sun), `colour` (linear RGB), `intensity`, `angular_diameter` (degrees, 0 a point sun), all required when the table is present; `shadows`, absent meaning `true` (an authored sun is the shadow light; a disc export writes `false`). |
@@ -49,7 +50,7 @@ One scene, flat nodes, tightly packed little-endian accessors. Right-handed, Y u
 | `oag/start` | one `POINTS` vertex | `POSITION`, `_OAG_LEFT`, `_OAG_UP`, `_OAG_FORWARD` (VEC3) |
 | `oag/spline/<i>` | `POINTS`, one vertex per control point | `POSITION` (pos), `_OAG_TANGENT`, `_OAG_DOWN`, `_OAG_LATERAL` (VEC3), `_OAG_PROGRESS`, `_OAG_RACING_LINE` (SCALAR), `_OAG_HALF_WIDTH`, `_OAG_AI_BOUND` (VEC2 left, right), `_OAG_SECTION_FLAGS` (u8 VEC4: section, flags, 0, 0), `_OAG_LIGHT_SCALE` (u8 VEC4), and optionally `_OAG_AI_BYTES` (u8 VEC4: lane band low, lane band high, speed-floor byte, 1 when the point carries them; absent reads as none), and optionally `_OAG_CAGE_A`, `_OAG_CAGE_B` (u8 VEC4 each: the collision cage's eight signed bytes `+0x68..+0x6f` in order, two's complement; absent reads as all zero) |
 | `oag/pads/speedup`, `oag/pads/weapon` | `POINTS`, one vertex per pad | `POSITION` (informational: the pad's world centre), `_OAG_TO_WORLD` (MAT4, the row-major row-vector matrix as stored), `_OAG_MIN`, `_OAG_MAX` (VEC3), `_OAG_DISABLED` (SCALAR); node extras `oag_props`, one property object per pad, only when the track carries pad properties |
-| `oag/triggers` | `POINTS`, one vertex per trigger | as a pad's, without `_OAG_DISABLED`; node extras `oag_names` (one string per trigger) and, when any trigger has properties, `oag_props` (one object per trigger) |
+| `oag/triggers` | `POINTS`, one vertex per trigger | as a pad's, without `_OAG_DISABLED`; node extras `oag_names` (one string per trigger) and, when any trigger has properties, `oag_props` (one object per trigger) and, when any sends a channel, `oag_emits` (one string per trigger, `""` for none) |
 | `oag/collision/<n>` | `TRIANGLES`, u16 indices, one primitive per mesh | `POSITION`, `_OAG_SCALAR` (per-vertex scalar, `1.0` when absent); node extras `oag_kind` (`floor`, `wall`, `reset`, `mag_floor`, `cage`, `track_wall`), `oag_name`, `oag_version` |
 | `oag/sun` | no mesh; only a rest `rotation` | present exactly when an animation turns the sun (below) |
 | `oag/art/<n>` | `TRIANGLES`, one primitive per draw | `POSITION`, `NORMAL`, `TEXCOORD_0` (v down, as the disc's), `COLOR_0` (VEC4 float: the baked light, RGB **linear** as glTF reads it, alpha coverage); node extras `oag_name`, `oag_texture` (texture row, absent for untextured), `oag_blend` (`opaque`, `cutout`, `alpha`, `additive`, `unblended`), `oag_culled`, `oag_lit`, `oag_shadow` (`both`, `cast`, `receive`, `none`), `oag_alpha_ref` (`0..=255`, the alpha-test reference; absent is the renderer's default), `oag_layer` (unsigned integer render layer, absent is `0`), `oag_pad` (`speedup` or `weapon`: a pad plate, below; absent is track art) |
@@ -93,12 +94,35 @@ A track without any writes none of these keys, so every earlier file is byte for
 it was (the disc exports in `trackfile_ground_truth` included). Round trip, refusals and the
 schema: `crates/trackfile/tests/props.rs`.
 
+### Channels: events between a track and mods
+
+A **channel** is a name, `<mod id>/<name>` (the id of lowercase letters, digits, `.`, `-`, `_`; the
+name the same without the `.`; at most 64 bytes), that travels as its FNV-1a 32 hash
+(`oag_ext_abi::channel_key`, the hash a property's name has). A track sends and starts on them
+with no module at all:
+
+| Field | Meaning |
+| --- | --- |
+| `[channels] publishes` (manifest) | the channels the track sends. Repeats and names hashing alike are refused |
+| a trigger's `oag_emits[i]` (glb, on `oag/triggers`) | the channel a craft sends by **entering** trigger *i*; it must be in `publishes`. Raised for every craft, a person's or the AI's, on the tick it enters; the race raises it itself (`oag_raceplay::extensions`, `Beacons`) |
+| an animation's `oag_on` (glb, see Motion) | the channel that starts it; any valid name, from a mod or from this track |
+
+Every module that runs in the race hears a trigger's channel on the next tick as an `Event::Mod`
+whose `from` is `TRACK_SENDER`; the view starts each `oag_on` animation at the tick its channel
+last fired (`Race::channel_started`), render only: collision never moves, and nothing here is in a
+hash of a race with no module. Refused by name on read and write (`oag_trackfile::props`): a
+malformed name, a trigger naming a channel the track does not publish. In Blender: a trigger's
+**Emit**, an object's **Start on** and the scene's **Channels published**
+([the add-on](../tools/blender.md)); `roundtrip.py channels` proves the round trip headless.
+The manifest key is in `schemas/v1/track.tosd`.
+
 ### Motion (glTF `animations`, ADR-0076 decision 10, since 2026-10-29)
 
 | Field | Meaning |
 | --- | --- |
 | A moving `oag/art/<n>` node's `translation`, `rotation`, `scale` | its rest pose (glTF's decomposed form; a `matrix` is refused). Its vertices are then in the node's own space. A rest pose on an art node no animation moves is refused (`Transformed`) |
 | `animations[]` | glTF animations. A channel targets an art node or `oag/sun` (anything else is refused by name: collision, pads and the spline never move), path `translation`, `rotation` (`x, y, z, w`) or `scale` (the sun: rotation only). Samplers are float accessors, `LINEAR` (rotation by spherical interpolation, shorter arc) or `STEP`; `CUBICSPLINE`, normalised-integer keys and morph weights are refused. Times start at or after 0 and strictly increase; one channel per node property in the whole file |
+| An animation's `extras.oag_on` | Optional: a channel name (`<mod id>/<name>`). The animation holds its first key until that channel fires (a trigger's `oag_emit`, or a mod's `emit`), then plays from the moment it did, on the same clock ([below](#channels-events-between-a-track-and-mods)). Absent: it plays from the clock's zero, as before |
 | An animation's `extras.oag_loop` | `loop` (absent too): wraps on the animation's length, its latest key; `clamp`: holds its last keys. Before a channel's first key it holds the first |
 | `oag/sun`'s rotation | the sun's direction at time *t* is `[art.sun] direction` turned by the rotation from this rest rotation to the channel's rotation at *t*, so a lamp's own axis convention never enters |
 
