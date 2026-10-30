@@ -334,6 +334,9 @@ ids = [
     "OAG_MODS_NEEDS",
     "OAG_MODS_NEEDS_OFF",
     "OAG_MODS_NEEDS_MISSING",
+    "OAG_MODS_SENDS",
+    "OAG_MODS_HEARS",
+    "OAG_MODS_NO_ONE_SENDS",
     # BLUR RESOLUTION, new 2026-10-03 with the half-resolution blur; no
     # translation pass yet.
     "OAG_GRAPHICS_MOTION_BLUR_RESOLUTION",
