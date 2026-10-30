@@ -7,7 +7,7 @@
 //! committed `.wasm` files the tests return early, so the gate passes where the
 //! submodule is not checked out.
 
-use oag_ext_abi::{Command, Event, Slot};
+use oag_ext_abi::{Event, Slot};
 use oag_modhost::{FUEL_PER_TICK, Limits, Module, Observation};
 
 const EXAMPLES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/mods/examples");
