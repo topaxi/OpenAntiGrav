@@ -4,6 +4,7 @@
 //! ratchet; nothing about it changed.
 
 use super::draw::Context;
+use super::pickup_fade::{Look, scale_word};
 use super::{Draw, Layout, Sprite, argb_to_rgba, colour};
 
 /// The backdrop the held pickup's icon sits on.
@@ -29,6 +30,14 @@ pub fn pickup_icon_name(weapon: oag_tables::weapons::Weapon) -> String {
     format!("{}Icon", weapon.as_type())
 }
 
+/// The fade's look this frame on a title that plays one ([`oag_title::HudArt::pickup_fade`]),
+/// or `None` to draw the held weapon as authored.
+pub(super) fn look(art: &oag_title::HudArt, readout: &super::Readout) -> Option<Look> {
+    art.pickup_fade?;
+    art.pickup_colours?;
+    readout.pickup_fade.look(readout.pickup)
+}
+
 /// The sprites a held pickup adds to the frame, in paint order.
 ///
 /// Empty when nothing is held. The backdrop takes the held weapon's own colour
@@ -44,6 +53,7 @@ pub(super) fn pickup_sprites(
     weapon: oag_tables::weapons::Weapon,
     art: &oag_title::HudArt,
     announcing: bool,
+    look: Option<Look>,
 ) -> Vec<Sprite> {
     if let Some(uv_table) = art.pickup_icon_uv {
         return super::dialect_2048::pickup_sprites_uv_rewrite(
@@ -67,7 +77,15 @@ pub(super) fn pickup_sprites(
                     .pickup_colours
                     .and_then(|colours| colours[weapon as usize])
                 {
-                    sprite.color = argb_to_rgba(argb);
+                    sprite.color = argb_to_rgba(match look {
+                        Some(look) => scale_word(argb, look.backdrop),
+                        None => argb,
+                    });
+                    if let Some(look) = look
+                        && art.pickup_fade.is_some_and(|fade| fade.size_pulse)
+                    {
+                        pulse_size(&mut sprite, look.size);
+                    }
                 } else if let Some(raw) = art
                     .pickup_backdrop_colour
                     .and_then(|key| layout.constants.get(key))
@@ -82,9 +100,27 @@ pub(super) fn pickup_sprites(
                     sprite.color = colour(&layout.constants, Some(raw));
                 }
             }
+            if let Some(look) = look
+                && sprite.name != PICKUP_BACKGROUND
+            {
+                for channel in &mut sprite.color {
+                    *channel = (*channel * look.icon).min(1.0);
+                }
+            }
             sprite
         })
         .collect()
+}
+
+/// The backdrop folded to `width / f` by `height * f` about its own centre
+/// (`Hud_UpdatePickupWidgets`' `+0x9c`/`+0xa0` pair). The anchor is `Centred="true"`, so the
+/// centre is the fixed point; the original's frames show the shape hanging from the top of the
+/// box, which is a **chosen** reading of the anchor, not a measured one.
+fn pulse_size(sprite: &mut Sprite, f: f32) {
+    let [x, y, w, h] = sprite.rect;
+    let (cx, cy) = (x + w * 0.5, y + h * 0.5);
+    let (w, h) = (w / f, h * f);
+    sprite.rect = [cx - w * 0.5, cy - h * 0.5, w, h];
 }
 
 /// [`pickup_sprites`]'s counterpart for Pure's dialect: the held pickup's

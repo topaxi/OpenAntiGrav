@@ -152,6 +152,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // field exists to override a single sprite's colour; Pure's icons need no
     // override, so `None` is the disc's own answer, not a placeholder for one.
     pickup_colours: None,
+    pickup_fade: None,
     pickup_icon_models: Some(PICKUP_ICON_MODELS),
     // `weapon_icon_grid`, authored beside the ten icons at the same
     // placeholder position (`Data\HUD\grid.vex`, `x="240" y="250.0" z="0"` -

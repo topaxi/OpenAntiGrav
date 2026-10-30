@@ -498,25 +498,27 @@ fn the_pickup_widgets_are_drawn_only_for_what_is_held() {
     use oag_tables::weapons::Weapon;
     let layout = Layout::from_xml(SAMPLE);
 
-    let empty = pickup_sprites(&layout, Weapon::Turbo, oag_pulse::hud::ART, false);
+    let empty = pickup_sprites(&layout, Weapon::Turbo, oag_pulse::hud::ART, false, None);
     assert_eq!(empty.len(), 2, "the fixture must author both widgets");
 
-    let names: Vec<String> = pickup_sprites(&layout, Weapon::Turbo, oag_pulse::hud::ART, false)
-        .iter()
-        .map(|s| s.name.clone())
-        .collect();
+    let names: Vec<String> =
+        pickup_sprites(&layout, Weapon::Turbo, oag_pulse::hud::ART, false, None)
+            .iter()
+            .map(|s| s.name.clone())
+            .collect();
     assert_eq!(names, ["PickupBackground", "TurboIcon"]);
 
-    let rocket: Vec<String> = pickup_sprites(&layout, Weapon::Rocket, oag_pulse::hud::ART, false)
-        .iter()
-        .map(|s| s.name.clone())
-        .collect();
+    let rocket: Vec<String> =
+        pickup_sprites(&layout, Weapon::Rocket, oag_pulse::hud::ART, false, None)
+            .iter()
+            .map(|s| s.name.clone())
+            .collect();
     assert_eq!(rocket, ["PickupBackground", "RocketIcon"]);
 
     // A weapon whose icon this layout does not author draws the backdrop and
     // no icon, rather than nothing or a panic: a layout carrying one and not
     // the other is the case that would otherwise crash a race.
-    let absent = pickup_sprites(&layout, Weapon::Quake, oag_pulse::hud::ART, false);
+    let absent = pickup_sprites(&layout, Weapon::Quake, oag_pulse::hud::ART, false, None);
     assert_eq!(absent.len(), 1);
     assert_eq!(absent[0].name, "PickupBackground");
 }
@@ -547,7 +549,7 @@ fn the_pickup_backdrop_takes_its_weapons_own_colour_and_the_icon_keeps_its_autho
         "and that colour is white"
     );
 
-    let drawn = pickup_sprites(&layout, Weapon::Turbo, oag_pulse::hud::ART, false);
+    let drawn = pickup_sprites(&layout, Weapon::Turbo, oag_pulse::hud::ART, false, None);
     assert_ne!(
         drawn[0].color, authored.color,
         "the backdrop must not keep the authored white"
@@ -596,7 +598,7 @@ fn the_2048_pickup_icon_is_uv_rewritten_and_recentred_in_its_frame() {
     use oag_tables::weapons::Weapon;
     let layout = Layout::from_xml(SAMPLE_2048_PICKUP);
 
-    let drawn = pickup_sprites(&layout, Weapon::Rocket, oag_2048::hud::ART, false);
+    let drawn = pickup_sprites(&layout, Weapon::Rocket, oag_2048::hud::ART, false, None);
     assert_eq!(drawn.len(), 2, "the fixture must author both widgets");
     assert_eq!(drawn[0].name, "PickupBgFrame");
     assert_eq!(drawn[1].name, "PickupIcon");
@@ -617,7 +619,7 @@ fn the_2048_pickup_icon_is_uv_rewritten_and_recentred_in_its_frame() {
     // same "draw what is held, nothing invented for what is not" rule
     // `the_pickup_widgets_are_drawn_only_for_what_is_held` already covers
     // for Pulse's dialect.
-    let unimplemented = pickup_sprites(&layout, Weapon::Repulser, oag_2048::hud::ART, false);
+    let unimplemented = pickup_sprites(&layout, Weapon::Repulser, oag_2048::hud::ART, false, None);
     assert_eq!(unimplemented.len(), 1);
     assert_eq!(unimplemented[0].name, "PickupBgFrame");
 }
@@ -629,7 +631,7 @@ fn the_2048_pickup_icon_is_uv_rewritten_and_recentred_in_its_frame() {
 fn the_2048_grant_announcement_is_the_icon_at_its_authored_rect_with_a_caption() {
     use oag_tables::weapons::Weapon;
     let layout = Layout::from_xml(SAMPLE_2048_PICKUP);
-    let announced = pickup_sprites(&layout, Weapon::Rocket, oag_2048::hud::ART, true);
+    let announced = pickup_sprites(&layout, Weapon::Rocket, oag_2048::hud::ART, true, None);
     assert_eq!(announced.len(), 1, "no PickupBgFrame while announcing");
     assert_eq!(announced[0].name, "PickupIcon");
     assert_eq!(announced[0].uv, [203.0, 201.0, 85.0, 86.0]);
@@ -685,7 +687,7 @@ fn every_pulse_weapon_draws_its_recovered_translucent_backdrop_word() {
         .into_iter()
         .filter(|w| oag_pulse::hud::PICKUP_COLOURS[*w as usize].is_some())
     {
-        let drawn = pickup_sprites(&layout, weapon, oag_pulse::hud::ART, false);
+        let drawn = pickup_sprites(&layout, weapon, oag_pulse::hud::ART, false, None);
         assert_eq!(
             drawn[0].color,
             oag_ui::screen::argb_to_rgba(expected(weapon)),
@@ -693,7 +695,7 @@ fn every_pulse_weapon_draws_its_recovered_translucent_backdrop_word() {
         );
         assert_eq!(drawn[0].color[3], 0x80 as f32 / 255.0, "{weapon:?} alpha");
     }
-    let blue_drawn = pickup_sprites(&layout, Weapon::Mine, oag_pulse::hud::ART, false);
+    let blue_drawn = pickup_sprites(&layout, Weapon::Mine, oag_pulse::hud::ART, false, None);
     assert_ne!(
         blue_drawn[0].color[3],
         0x40 as f32 / 255.0,

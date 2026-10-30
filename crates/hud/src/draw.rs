@@ -973,8 +973,9 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
     // The pickup, after the always-on sprites and before the text. Conditional
     // rather than allow-listed, because *which* icon is live changes with what
     // the craft is holding - see `pickup_sprites`.
-    if let Some(weapon) = readout.pickup {
-        for mut sprite in pickup_sprites(cx.layout, weapon, cx.art, readout.pickup_announcing) {
+    let look = super::pickup::look(cx.art, readout);
+    if let Some(weapon) = look.map(|look| look.weapon).or(readout.pickup) {
+        for mut sprite in pickup_sprites(cx.layout, weapon, cx.art, readout.pickup_announcing, look) {
             if let Some(tint) = readout.ext.tint(super::ext_draws::Element::Pickup)
                 && sprite.name == super::pickup::PICKUP_BACKGROUND
             {

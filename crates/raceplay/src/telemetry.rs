@@ -222,6 +222,7 @@ impl Race {
             shield_blink_phase_whole: hud.shield_blink_timer_whole,
             energy_bar_delay_fraction: hud.energy_bar_delay_fraction,
             pickup_announcing: hud.pickup_announce_left > 0.0,
+            pickup_fade: hud.pickup_fade,
             thrust_chase_percent: hud.thrust_chase_percent,
             thrust_percent: ship.physics.thrust.max(0.0),
             pilot_assist: self.pilot_assist_shown(slot),

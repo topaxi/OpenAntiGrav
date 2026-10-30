@@ -525,7 +525,7 @@ as a `const` and served it to every title. All three are now
 | --- | --- | --- |
 | `texture_extension` | `None` - the layouts name shipped entries | `.gtf` |
 | `always_on` | seven widget names | fifteen |
-| `pickup_backdrop_colour` | `HudBGColour` | `None` - drawn as authored (**HD carries Pulse's per-weapon table and fades it in while a weapon is held**, [hd-pickup-table.md](../ghidra/functions/ps3-hdfury-eu/hd-pickup-table.md); not wired) |
+| `pickup_backdrop_colour` | `HudBGColour` | `None` - drawn as authored (**HD carries Pulse's per-weapon table and fades it in while a weapon is held**, [hd-pickup-table.md](../ghidra/functions/ps3-hdfury-eu/hd-pickup-table.md); **wired 2026-10-30** through `HudArt::pickup_colours` and `pickup_fade`, the held backdrop tinted by the table word) |
 
 **A sprite is offset by its own texture's placement.** `Layout::atlas()` returned
 *the* texture a layout samples - true of all nine Pulse and Pure layouts, still

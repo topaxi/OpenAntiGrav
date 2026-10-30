@@ -25,7 +25,9 @@ decompile; I did not rename either function.
 
 ## Verdict
 
-Omega: **checked, applies, not wired** (static, confidence 90 for the table, unread for the fade). It
-inherits HD's behaviour, which carries Pulse's table. The 2048 half of the cross-check:
+Omega: **ported, wired 2026-10-30** (static, confidence 90 for the table, unread for the fade). It
+inherits HD's behaviour, which carries Pulse's table: the held backdrop takes the table word through
+the fade at HD's rate `1.5`, **inherited from HD** (`FUN_0125e9b0` was not read for it; no Omega frame
+was taken, shadPS4 race shots being untrusted). The 2048 half of the cross-check:
 [pickup-backdrop.md](../vita-2048-eu-v104/pickup-backdrop.md) (**the same table and update, a `1.5`
 rate; ported by data**).
