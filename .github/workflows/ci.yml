@@ -36,13 +36,11 @@ jobs:
           sudo docker image prune --all --force || true
           df -h /
       # The example mods (github.com/OpenAntiGrav/mod-examples) are a submodule
-      # whose tracks are in Git LFS; the campaign and schema tests read them. Full
-      # history: check-ext-pin needs the commit the example guests pin.
+      # whose tracks are in Git LFS; the campaign and schema tests read them.
       - uses: actions/checkout@v7
         with:
           submodules: true
           lfs: true
-          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@1.99.0
         with:
           components: rustfmt, clippy
@@ -90,8 +88,6 @@ jobs:
         run: python3 scripts/check-strings.py
       - name: Assert every shipped TOML validates against its schema and the schemas stage for Pages
         run: scripts/check-schemas.sh
-      - name: Assert the example guests pin the guest SDK this tree carries
-        run: python3 scripts/check-ext-pin.py
 
   docs:
     name: documentation links

@@ -1,8 +1,7 @@
-# A mod's guest crate under assets/mods/ (the examples submodule among them) pins the
-# guest SDK as a git dependency on this repository, so a stand-alone clone builds.
-# Inside this checkout Cargo finds this file walking up from the guest, and builds it
-# against the SDK in this tree instead of the pinned commit. Paths are relative to
-# assets/mods/. `just check-ext-pin` keeps the pins on the SDK this tree carries.
+# A mod's guest crate under assets/mods/ (the examples submodule among them) takes the
+# guest SDK as a git dependency on this repository's `main`, so a stand-alone clone
+# builds. Inside this checkout Cargo finds this file walking up from the guest and
+# builds it against the SDK in this tree instead. Paths are relative to assets/mods/.
 [patch."https://github.com/topaxi/OpenAntiGrav"]
 oag-ext = { path = "../../crates/ext" }
 oag-ext-abi = { path = "../../crates/ext-abi" }

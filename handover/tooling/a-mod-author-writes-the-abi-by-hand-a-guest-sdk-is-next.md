@@ -274,9 +274,10 @@ one generic record, and the documentation table names them per kind.
    the host and the guest compile against one definition and the gate covers both.
    `mod-examples` takes `oag-ext` as a **git dependency on the engine repository with a
    pinned `rev`** (the submodule layout would allow a `path`, but a stand-alone clone
-   must build). Landed 2026-10-30: inside the engine `assets/mods/.cargo/config.toml`
-   patches the pin to `crates/ext`, and `just check-ext-pin` fails until the pin is a
-   commit carrying this tree's SDK. Not on crates.io (maintainer: not ready to publish).
+   must build). Landed 2026-10-30 as `branch = "main"`, not a `rev` (maintainer: a pin
+   bump on every SDK commit is too much friction while ABI 1 is edited in place; pin a
+   `rev` at the first release). Inside the engine `assets/mods/.cargo/config.toml`
+   patches it to `crates/ext`. Not on crates.io (maintainer: not ready to publish).
 2. **`blob!` as a `macro_rules!` first**, a `#[derive(Blob)]` proc macro only when a
    second need for a proc-macro crate shows up (the maintainer's two-enums rule for
    macros). The declarative form covers both examples.
