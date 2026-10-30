@@ -124,6 +124,26 @@ impl<E: Extension> Race<E> {
         self
     }
 
+    /// Queues for the next call what the host would deliver for `command`, an
+    /// [`Command::Emit`] another extension's [`Race::tick`] returned, as sent by the mod
+    /// whose id is `sender` (`channel!` of it). Any other command is ignored.
+    pub fn hear(&mut self, sender: u32, command: &Command) -> &mut Self {
+        if let Command::Emit {
+            slot,
+            channel,
+            value,
+        } = *command
+        {
+            self.events.push(Event::Mod {
+                slot,
+                from: sender,
+                channel,
+                value,
+            });
+        }
+        self
+    }
+
     /// The state as the last call left it.
     #[must_use]
     pub fn state(&self) -> E::State {
