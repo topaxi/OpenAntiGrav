@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [pulse, hd, omega, pure, 2048]
 updated: 2026-10-30
-summary: "Pulse pickup fade law measured (90): wire fade-in, hold, fade-out; HD and Omega share the table; 2048 and Pure do not"
+summary: "Pulse pickup fade law measured (90): wire fade-in, hold, fade-out; HD, Omega and 2048 share the table; Pure has no backdrop"
 ---
 
 # Pulse's pickup backdrop colours and fade are recovered: wire them
@@ -35,8 +35,10 @@ Nothing is unread on Pulse's backdrop except a natural pad grant and fire (the l
    rate and the bump width before inheriting Pulse's curve, or inherit it labelled as such.
    [hd-pickup-table.md](../../docs/ghidra/functions/ps3-hdfury-eu/hd-pickup-table.md),
    [omega-pickup-table.md](../../docs/ghidra/functions/ps4-omega-eu/omega-pickup-table.md).
-3. **2048: do not inherit the table.** `PickupBgFrame` is a fixed `0xFFA7A5A7` plus an 8 Hz white
-   blink, and its slot widget is alpha-blinked; there is no per-weapon backdrop colour in the race HUD.
+3. **2048: the table and update exist, drawing unverified.** The same two tables sit in the ELF
+   (`0x8151f104`) and `FUN_81154172` fades them with a `1.5` rate. But the layout authors `PickupBackground`
+   with no `<Values>` and the visible arc is `PickupBgFrame` (fixed `0xFFA7A5A7` plus an 8 Hz white blink,
+   `Hud_UpdatePickupIcon`): take one Vita3K frame with a weapon held before wiring the table.
    [pickup-backdrop.md](../../docs/ghidra/functions/vita-2048-eu-v104/pickup-backdrop.md).
 4. **Pure: nothing to wire.** No backdrop widget exists; the ten icon models draw in their authored
    colours and are only shown and hidden.

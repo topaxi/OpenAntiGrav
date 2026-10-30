@@ -25,6 +25,7 @@ decompile; I did not rename either function.
 
 ## Verdict
 
-Omega: **checked, applies, not wired** (static, confidence 80 for the table, unread for the fade). It
+Omega: **checked, applies, not wired** (static, confidence 90 for the table, unread for the fade). It
 inherits HD's behaviour, which carries Pulse's table. The 2048 half of the cross-check:
-[pickup-backdrop.md](../vita-2048-eu-v104/pickup-backdrop.md) (**differs**).
+[pickup-backdrop.md](../vita-2048-eu-v104/pickup-backdrop.md) (**the same table and update, a `1.5`
+rate; ported by data**).

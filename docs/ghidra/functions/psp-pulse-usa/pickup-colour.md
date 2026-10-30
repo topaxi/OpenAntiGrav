@@ -178,11 +178,113 @@ Confidence **92** for the table and the 13 words, **88** for the function's name
    reproduced here (the previous lane's Square did not reach the restored state either), so whether a
    real use clears the held id in one update or lingers is unread.
 
+6. **On screen, the size axes (2026-10-30)**: the same clean-slate grant, the CPU stopped at the call whose
+   `T` first reached 0.10, 0.26 and 0.50 (grant) and 0.72, 0.86 (after use), the software renderer's frame
+   read with `import -window root`. At `T = 0.10` (`f = 0.0245`, `66/f` wide, `60 f` tall) nothing is
+   visible; at `T = 0.26` a **pink hexagon about 1.5 times wider and about half as tall** as the settled
+   one hangs at the top centre (`+0x9c` is the width, `+0xa0` the height; the settled size at `T = 0.50`
+   is the layout's 66 x 60 hexagon, pink); at `T = 0.72` after use it is back to a wide flat shape in
+   fading pink and at `T = 0.86` it is gone. This fixes the axes the words alone left open. Confidence 80
+   for the drawn picture (five frames, one weapon, one circuit).
+
 Not measured: the edge case of **a new grant during the fade-out** (decompile only: with `T` in
 `(0.5, 1]` the held branch is skipped entirely, so the new weapon gets no fade-in until `T` has run
 out and reset), and the **PS2** binary, which was not searched (PSP is the reference); a byte search of
 `SCES_547.48` for the PSP words found nothing, so PS2 stores them in another form. PS2 inherits PSP's
 law.
+
+### Live samples (a test fixture for the wire)
+
+Missile (row 2, word `0x80BE1E69`), one row per `Hud_UpdatePickupWidgets` call, the state at the call's
+entry (so the word was written by the previous call from this `T`). Layout size 66 x 60.
+
+Fade-in, from `T = 0` (the grant):
+
+| `T` | backdrop word | `+0x9c` | `+0xa0` |
+| ---: | --- | ---: | ---: |
+| 0.0000 | `0x00000000` | 267495.16 | 0.015 |
+| 0.0202 | `0x01010000` | 10735.80 | 0.369 |
+| 0.0401 | `0x04060103` | 3362.22 | 1.178 |
+| 0.0602 | `0x0A0E0208` | 1626.40 | 2.435 |
+| 0.0801 | `0x1119040E` | 962.64 | 4.114 |
+| 0.1001 | `0x1A270615` | 639.15 | 6.196 |
+| 0.1204 | `0x2436081E` | 456.27 | 8.679 |
+| 0.1402 | `0x30470B27` | 346.44 | 11.431 |
+| 0.1602 | `0x3C590E31` | 273.06 | 14.502 |
+| 0.1806 | `0x4A6D113C` | 221.41 | 17.886 |
+| 0.2002 | `0x61901650` | 185.88 | 21.304 |
+| 0.2202 | `0x98E2237D` | 158.79 | 24.938 |
+| 0.2402 | `0xDEFF34B6` | 138.22 | 28.650 |
+| 0.2603 | `0xE5FF35BC` | 122.27 | 32.388 |
+| 0.2802 | `0xB0FF2990` | 109.78 | 36.072 |
+| 0.3003 | `0x8ACC2071` | 99.82 | 39.673 |
+| 0.3203 | `0x81BF1E69` | 91.82 | 43.126 |
+| 0.3403 | `0x80BE1E69` | 85.39 | 46.374 |
+| 0.3603 | `0x80BE1E69` | 80.21 | 49.371 |
+| 0.3803 | `0x80BE1E69` | 76.06 | 52.065 |
+| 0.4011 | `0x80BE1E69` | 72.66 | 54.502 |
+| 0.4204 | `0x80BE1E69` | 70.22 | 56.394 |
+| 0.4404 | `0x80BE1E69` | 68.32 | 57.961 |
+| 0.4607 | `0x80BE1E69` | 67.00 | 59.107 |
+| 0.4804 | `0x80BE1E69` | 66.25 | 59.778 |
+| 0.5000 | `0x80BE1E69` | 66.00 | 60.000 |
+| 0.5000 | `0x80BE1E69` | 66.00 | 60.000 |
+
+After use (idx back to 0; `T` continues from 0.5, the row timer counts down from 0.4202):
+
+| `T` | row timer | backdrop word | `+0x9c` | `+0xa0` |
+| ---: | ---: | --- | ---: | ---: |
+| 0.5201 | 0.1397 | `0x80BE1E69` | 66.00 | 60.000 |
+| 0.5201 | 0.1198 | `0x80BE1E69` | 66.00 | 60.000 |
+| 0.5402 | 0.0997 | `0x80BE1E69` | 67.04 | 59.067 |
+| 0.5602 | 0.0797 | `0x80BE1E69` | 68.37 | 57.924 |
+| 0.5808 | 0.0591 | `0x80BE1E69` | 70.35 | 56.287 |
+| 0.6002 | 0.0397 | `0x80BE1E69` | 72.86 | 54.354 |
+| 0.6204 | 0.0195 | `0x80BE1E69` | 76.19 | 51.975 |
+| 0.6407 | 0 | `0x80BE1E69` | 80.45 | 49.225 |
+| 0.6603 | 0 | `0x80BE1E69` | 85.57 | 46.278 |
+| 0.6803 | 0 | `0x81BF1E69` | 92.04 | 43.023 |
+| 0.7003 | 0 | `0x8ACD2071` | 100.08 | 39.568 |
+| 0.7204 | 0 | `0xB2FF2992` | 110.14 | 35.955 |
+| 0.7404 | 0 | `0xE6FF36BD` | 122.74 | 32.263 |
+| 0.7603 | 0 | `0xDCFF33B5` | 138.75 | 28.540 |
+| 0.7804 | 0 | `0x96DF237B` | 159.56 | 24.819 |
+| 0.8005 | 0 | `0x608F164F` | 187.01 | 21.176 |
+| 0.8204 | 0 | `0x496C113C` | 223.73 | 17.700 |
+| 0.8407 | 0 | `0x3B580D30` | 275.84 | 14.356 |
+| 0.8612 | 0 | `0x2F460B26` | 352.45 | 11.236 |
+| 0.8806 | 0 | `0x2436081D` | 463.21 | 8.549 |
+| 0.9006 | 0 | `0x1A260615` | 647.90 | 6.112 |
+| 0.9209 | 0 | `0x1019030D` | 985.47 | 4.018 |
+| 0.9407 | 0 | `0x090E0207` | 1670.96 | 2.370 |
+| 0.9608 | 0 | `0x04060103` | 3501.11 | 1.131 |
+| 0.9807 | 0 | `0x01010000` | 11574.18 | 0.342 |
+| 1.0000 | 0 | `0x00000000` | 267495.16 | 0.015 |
+
+Icon word (white scaled by `Ease_CosineWithBump(3 * timer, 1)`), growing then falling timer, every 2nd update:
+
+| phase | row timer | icon word |
+| --- | ---: | --- |
+| held | 0.0208 | `0x2020202` |
+| held | 0.0601 | `0x13131313` |
+| held | 0.1001 | `0x34343434` |
+| held | 0.1402 | `0x5F5F5F5F` |
+| held | 0.1802 | `0x92929292` |
+| held | 0.2203 | `0xFFFFFFFF` |
+| held | 0.2602 | `0xFFFFFFFF` |
+| held | 0.3009 | `0xFFFFFFFF` |
+| held | 0.3403 | `0xFFFFFFFF` |
+| held | 0.3804 | `0xFFFFFFFF` |
+| used | 0.4202 | `0xFFFFFFFF` |
+| used | 0.3599 | `0xFFFFFFFF` |
+| used | 0.3199 | `0xFFFFFFFF` |
+| used | 0.2791 | `0xFFFFFFFF` |
+| used | 0.2398 | `0xFFFFFFFF` |
+| used | 0.1998 | `0xC1C1C1C1` |
+| used | 0.1597 | `0x77777777` |
+| used | 0.1198 | `0x48484848` |
+| used | 0.0797 | `0x22222222` |
+| used | 0.0397 | `0x8080808` |
 
 ## Checked on the other titles
 
@@ -197,8 +299,9 @@ Read 2026-10-30 (`pickup-fade-titles`); the static readings are labelled as such
 - **Omega**: **checked, applies, not wired** (static). Same table at `0x0193f750` (rows of `0x20`
   bytes: 8-byte name and widget pointers, then the same four words); the HD-lineage update walks it.
   [omega-pickup-table.md](../ps4-omega-eu/omega-pickup-table.md).
-- **2048**: **checked, differs** (static). No per-weapon colour on the in-race pickup widgets:
-  `PickupBgFrame` takes a fixed grey and a blink. The three colours exist in its front end only, as
-  the weapon-toggle swatches. [pickup-backdrop.md](../vita-2048-eu-v104/pickup-backdrop.md).
+- **2048**: **checked, applies, not wired** (static). The same table twice in the ELF (`0x8151f104`),
+  and `FUN_81154172` has the same fade with a `1.5` rate where Pulse has `1.2`; what draws it in the
+  race HUD is unverified, the visible arc being `PickupBgFrame` with fixed colours.
+  [pickup-backdrop.md](../vita-2048-eu-v104/pickup-backdrop.md).
 - **Pure**: **checked, differs** (live, USA disc). No `PickupBackground`; ten authored `<Model>` icons,
   never recoloured at runtime. [pickup-icons.md](../psp-pure-usa/pickup-icons.md).

@@ -10,7 +10,7 @@ are the USA binary's; the EU twin (`/pure/BOOT-psp-pure-eu.BIN`) was read for st
 
 `Hud_BindWidgets` looks up `HUD->ROCKET_icon` ... `HUD->BOMB_icon` (strings `0x08a46468`.., table of 11
 name pointers at `0x08a8ca40`, slot 0 empty) and `weapon_icon_grid`, storing the widgets at
-`hud+0x124 + 4*i` and `hud+0x150`. There is **no `PickupBackground` string in either Pure binary** (the
+`hud+0x124 + 4*i` and `hud+0x150`. There is **no `PickupBackground` string in either Pure binary** (`search_strings` on `/pure/BOOT-psp-pure-usa.BIN` and `-eu.BIN`, 0 matches; the
 brief's question has the answer "none"); there is no backdrop widget to colour.
 
 ## What the widgets hold

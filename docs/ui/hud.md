@@ -721,8 +721,8 @@ words source-over. Law, evidence and confidence 92:
 page [pickups](../gameplay/pickups.md) carries the summary.
 The fade is measured too (2026-10-30): the word is scaled by an eased
 overshooting curve over 0.42 s after the grant, held 0.33 s and played
-backwards after use. HD and Omega carry the same table, 2048 does not, Pure has
-no backdrop (same page, "Checked on the other titles").
+backwards after use. HD, Omega and 2048 carry the same table (2048 with a different rate, what draws it
+there unverified), Pure has no backdrop (same page, "Checked on the other titles").
 
 ### The place and the total time are authored at one anchor, so one of them has to go
 

@@ -435,7 +435,7 @@ a case-specific pair of offsets (case 1 `+0x8/+0x2c`, 2 `+0x34/+0x5c`, 3 `+0x64/
 the tail walks the pickup table rows (`PTR_008a7800 + hud*0x150 + row*0x18`, an ARGB pair at `+8`/`+0xc`), advances a
 per-row timer at `hud+0x50+4*row` by `dt`, shapes it with the easing helpers `0x00676fe8` and `0x00677528`, scales the
 row colour's channels by it (clamped to `0..1`) and writes it to the hexagon and the pickup text `hud+0x2a4`. The row
-colours, the easing constants and what each record field is (ammo, cooldown, heat) are **not read**, and ours has no
+colours are read since ([hd-pickup-table.md](hd-pickup-table.md)); the easing constants and what each record field is (ammo, cooldown, heat) are **not read**, and ours has no
 per-pickup count or timer in `Readout`, so a held pickup's hexagon stays as authored.
 
 2048: `HUD_pickups.xml` is not this layout, not checked.

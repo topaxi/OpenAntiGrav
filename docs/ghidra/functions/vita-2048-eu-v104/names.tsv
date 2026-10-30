@@ -240,3 +240,5 @@
 0x81103b46	function	TouchScroll_Update	70	canvas3d-lattice.md
 0x811042ae	function	TouchScroll_SetScroll	65	canvas3d-lattice.md
 0x811505a8	function	Hud_SetPickupWidgetsVisible	75	pickup-backdrop.md
+0x8151f104	data	g_hud_pickup_widget_table	90	pickup-backdrop.md
+0x81154172	function	Hud_UpdatePickupBar	70	pickup-backdrop.md
