@@ -2,7 +2,7 @@
 status: measure
 titles: [pulse]
 updated: 2026-10-30
-summary: "Rocket measured against the original 2026-10-30: detonation is one tick late, not early; ranked gaps are the in-flight flare haze and the fireball/smoke look (re-first); craft-hit fireball still unmeasured"
+summary: "Rocket measured 2026-10-30: detonation one tick late; open: flare haze, fireball look, craft-hit blast unmeasured"
 ---
 
 # Weapon blasts draw their own sprites and wash the screen; every flash kind with a caller is wired
