@@ -92,8 +92,9 @@ type = "any"
 [types.emitter.colour]
 type = "any"
 
+# A PNG path of the mod, or `{ entry = "<circuit .vex>", name = "<texture>" }`, a disc texture.
 [types.emitter.texture]
-type = "string"
+type = "any"
 optional = true
 
 [elements]
