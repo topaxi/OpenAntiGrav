@@ -9,7 +9,7 @@ use super::*;
 use oag_gameplay::PlayerInputs;
 
 /// The fixture grid, with an engine on slot 1 so the race has something to scale.
-fn grid(extensions: crate::extensions::Prepared) -> Race {
+pub(super) fn grid(extensions: crate::extensions::Prepared) -> Race {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
     setup.extensions = extensions;
@@ -27,7 +27,7 @@ fn grid(extensions: crate::extensions::Prepared) -> Race {
 }
 
 /// Every tick's state hash over `ticks` ticks, folded into one, and the hashes.
-fn run(mut race: Race, ticks: u32) -> (Race, Vec<u64>) {
+pub(super) fn run(mut race: Race, ticks: u32) -> (Race, Vec<u64>) {
     let hashes = (0..ticks)
         .map(|_| {
             race.tick(&PlayerInputs::none());

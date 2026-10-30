@@ -35,6 +35,7 @@ mod eliminator;
 mod energy_bar_delay;
 #[cfg(feature = "extensions")]
 mod extension_armor;
+mod extension_channels;
 #[cfg(feature = "extensions")]
 mod extension_examples;
 mod extensions;
