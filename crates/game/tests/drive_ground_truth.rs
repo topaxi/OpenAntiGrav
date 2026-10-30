@@ -189,7 +189,7 @@ fn a_race_box_race_runs_the_simulation_mods_only_with_the_extensions_feature() {
         .map(|mods| mods.iter().filter_map(Value::as_str).collect())
         .unwrap_or_default();
     if cfg!(feature = "extensions") {
-        assert_eq!(mods, ["oag.energy-turbo", "oag.kiss-curse"], "{race}");
+        assert_eq!(mods, ["oag.energy-turbo", "oag.wall-penalty"], "{race}");
         assert_eq!(text(race, &["pickup"]), Some("Extension"), "{race}");
     } else {
         assert!(mods.is_empty(), "{race}");

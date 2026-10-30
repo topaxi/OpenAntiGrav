@@ -42,8 +42,8 @@ has the pieces, sizes and fuel:
 - ~~`oag-ext`: `Observation`, `Craft`, `Reply`, `blob!`, `Extension`, `export!`,
   `test::Race`.~~ Deviation: `Observation::craft` returns `Option<Craft<'_>>` by
   value, a view over the record, not `Option<&Craft>`: decoding every slot up front
-  put Kiss Curse at 2.25x its old fuel; the view brought it under.
-- ~~Kiss Curse and Energy Turbo rewritten (mod-examples branch `ext-sdk`); ground
+  put Wall Penalty at 2.25x its old fuel; the view brought it under.
+- ~~Wall Penalty and Energy Turbo rewritten (mod-examples branch `ext-sdk`); ground
   truths unchanged; sizes 627 to 638 and 1,774 to 2,395 bytes.~~
 - ~~Decision 4's committed-examples test~~: `oag_raceplay`'s
   `tests::extension_examples` compiles each committed `.wasm` in
@@ -55,17 +55,17 @@ under `cargo test`; no tool runs a built `.wasm` yet).
 
 ## What a mod author writes today (the review, 2026-10-29)
 
-Reviewed: `mod-examples` at `43d45b9` (branch `wasm-kiss-curse`), `kiss-curse/guest/src/lib.rs`
+Reviewed: `mod-examples` at `43d45b9` (branch `wasm-extensions`), `wall-penalty/guest/src/lib.rs`
 (119 lines) and `energy-turbo/guest/src/lib.rs` (271 lines), against the host's
 `crates/modhost/src/abi.rs` on this branch.
 
-1. **Every layout constant is copied by hand from `oag_modhost::abi`.** Kiss Curse carries
+1. **Every layout constant is copied by hand from `oag_modhost::abi`.** Wall Penalty carries
    13 lines of them (`IO_LEN`, `ACTIVE_AT`, `EVENT_COUNT_AT`, `EVENTS_AT`, `STATE_AT`,
    `REPLY_AT`, codes); Energy Turbo 21, and derives `CRAFTS_AT` with its own arithmetic
    (`REPLY_AT + 4 + 12 * MAX_COMMANDS`). Nothing checks the copies. The ABI is edited in
    place before the first release (README 4.3), and it already moved on this branch
-   (craft records and six commands were added after Kiss Curse was built). The 627-byte
-   Kiss Curse module kept working only because every edit appended. The host checks
+   (craft records and six commands were added after Wall Penalty was built). The 627-byte
+   Wall Penalty module kept working only because every edit appended. The host checks
    `oag_abi() == 1` and nothing else; a module built against a stale layout runs and
    misreads silently. The gate would not notice either: `oag_raceplay`'s
    `tests::extensions` use WAT guests, and the committed `.wasm` files are loaded only by
@@ -73,7 +73,7 @@ Reviewed: `mod-examples` at `43d45b9` (branch `wasm-kiss-curse`), `kiss-curse/gu
 2. **Raw byte plumbing in every mod.** `static mut IO`, `addr_of_mut`, `read_volatile`,
    `write_volatile`, and `get_u8`/`put_u8`/`get_u32`/`put_u32`/`get_f32` are written out
    in both files (24 to 28 lines each, identical). `unsafe` in a mod that needs none.
-3. **The state blob is serialised by hand.** Kiss Curse's `countdown`/`set_countdown`
+3. **The state blob is serialised by hand.** Wall Penalty's `countdown`/`set_countdown`
    split a `u16` into bytes; Energy Turbo's `load`/`store` lay a five-field struct out
    at offsets 0, 4, 6, 7, 8 with "2 spare", and `oag-mod.toml`'s `state_bytes = 96`
    repeats `12 x 8` in a comment. Nothing ties the struct to the manifest number.
@@ -87,7 +87,7 @@ Reviewed: `mod-examples` at `43d45b9` (branch `wasm-kiss-curse`), `kiss-curse/gu
    `u32` with red low.
 6. **The host's rules are the author's job.** A command for an inactive slot, two
    `scale-thrust` for one slot, a `shield-delta` past the pool, a non-finite `f32`, or a
-   65th command faults the module mid-race. Kiss Curse has a comment explaining why it
+   65th command faults the module mid-race. Wall Penalty has a comment explaining why it
    masks `active` before sending. The guest gets no help; a mistake is a race-time
    fault, not a compile error.
 7. **The reply count is a trailing side effect.** `put_u32(REPLY_AT, count)` at the end
@@ -102,13 +102,13 @@ Reviewed: `mod-examples` at `43d45b9` (branch `wasm-kiss-curse`), `kiss-curse/gu
    as a tool, and the mod's logic cannot be unit-tested natively because it is welded
    to the buffer.
 
-Roughly **half of Kiss Curse and two fifths of Energy Turbo** is ABI plumbing that is
+Roughly **half of Wall Penalty and two fifths of Energy Turbo** is ABI plumbing that is
 identical between the two files. The logic a modder actually wants to write (a
 countdown per slot; a pool, a burst and a payback) is 35 and 150 lines.
 
 ## What a mod should look like
 
-The target, as the Kiss Curse author would write it (names are a sketch; the lane
+The target, as the Wall Penalty author would write it (names are a sketch; the lane
 settles them):
 
 ```rust
@@ -123,9 +123,9 @@ oag_ext::blob! {
     struct Curses { countdown: [u16; MAX_SHIPS] }
 }
 
-struct KissCurse;
+struct WallPenalty;
 
-impl Extension for KissCurse {
+impl Extension for WallPenalty {
     type State = Curses;
 
     fn tick(obs: &Observation, state: &mut Curses, reply: &mut Reply) {
@@ -148,7 +148,7 @@ impl Extension for KissCurse {
     }
 }
 
-oag_ext::export!(KissCurse);
+oag_ext::export!(WallPenalty);
 ```
 
 What changed: no constants copied, no `unsafe`, no bytes, the blob is a struct, a
@@ -214,7 +214,7 @@ crate (`crates/mod`, ADR-0066). Pieces:
   panic handler (`unreachable`), all behind `cfg(target_arch = "wasm32")`.
 - A `test` feature (std): `oag_ext::test::Race` builds an `Observation` from typed parts
   (`with_craft(slot, Craft {..})`, `event(Event::WallContact { slot })`), runs
-  `KissCurse::tick` **natively**, and returns the typed commands and the next state. No
+  `WallPenalty::tick` **natively**, and returns the typed commands and the next state. No
   wasm toolchain needed for `cargo test` in the mod's own crate.
 
 **Layer 2, tooling for authors of any language.**
@@ -284,12 +284,12 @@ one generic record, and the documentation table names them per kind.
 
 ## Acceptance
 
-- Kiss Curse and Energy Turbo rewritten on `oag-ext` in `mod-examples`, each under 60
+- Wall Penalty and Energy Turbo rewritten on `oag-ext` in `mod-examples`, each under 60
   and 160 lines of logic with **no `unsafe`, no offsets and no codes**; module sizes
   within 2x of today's 627 and 1,774 bytes; fuel per tick on a full grid within 2x of
   today's (the `Dev` overlay's `mods` block shows both).
-- `kiss_curse_ground_truth` and `energy_turbo_ground_truth` pass unchanged against the
-  rewritten modules. Kiss Curse's blob (`[u16; 8]`) is byte-identical, so its race
+- `wall_penalty_ground_truth` and `energy_turbo_ground_truth` pass unchanged against the
+  rewritten modules. Wall Penalty's blob (`[u16; 8]`) is byte-identical, so its race
   hashes are too; Energy Turbo's record drops its two spare bytes (12 to 10 per slot)
   unless the rewrite keeps a `_spare: u16`, in which case its hashes hold as well.
   Either way the vanilla fold in `tests::extensions` does not move.

@@ -1,4 +1,4 @@
-//! Kiss Curse on a real circuit: a craft steered into a wall is slower a second
+//! Wall Penalty on a real circuit: a craft steered into a wall is slower a second
 //! later with the curse than without it.
 //!
 //! **`#[ignore]`d and never run in CI**: it needs `data/images/pulse-psp-eu.chd`, the
@@ -6,11 +6,11 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-raceplay --features extensions \
-//!     --run-ignored only -E 'test(/kiss_curse_ground_truth::/)' --no-capture
+//!     --run-ignored only -E 'test(/wall_penalty_ground_truth::/)' --no-capture
 //! ```
 //!
 //! The module is the committed build of the example mod
-//! (`assets/mods/examples/kiss-curse/ext/kiss_curse.wasm`), loaded as the game loads
+//! (`assets/mods/examples/wall-penalty/ext/wall_penalty.wasm`), loaded as the game loads
 //! it: its manifest through `oag-mod`, its bytes through the race load. Two races,
 //! identical inputs (throttle held from the start, the stick centred), one with the
 //! mod. The craft goes straight on into the wall of the first bend at about 405 km/h
@@ -36,7 +36,7 @@ use oag_gameplay::PlayerInputs;
 use oag_raceplay as race;
 
 const TRACK: &str = "Data\\Environments\\16_Track\\track.vex";
-const MOD: &str = "assets/mods/examples/kiss-curse";
+const MOD: &str = "assets/mods/examples/wall-penalty";
 
 fn held(stick_x: f32) -> oag_gameplay::InputSnapshot {
     let mut buttons = oag_gameplay::input::Input::new();
@@ -50,7 +50,7 @@ fn held(stick_x: f32) -> oag_gameplay::InputSnapshot {
 }
 
 /// The example mod's rules module, as `oag_game::mod_extensions::sources` builds it.
-fn kiss_curse() -> Option<race::extensions::Source> {
+fn wall_penalty() -> Option<race::extensions::Source> {
     let manifest = oag_testdata::exact(&format!("{MOD}/oag-mod.toml"))?;
     let module = oag_mod::Mod::open(manifest.parent().unwrap()).expect("the example mod opens");
     let extension = module
@@ -106,7 +106,7 @@ fn speeds(mut race: race::Race, ticks: usize) -> Vec<f32> {
 #[test]
 #[ignore = "needs a Pulse disc image, the mod examples and --features extensions"]
 fn a_craft_scraping_a_wall_is_slower_with_the_curse() {
-    let Some(source) = kiss_curse() else { return };
+    let Some(source) = wall_penalty() else { return };
     let Some(cursed) = race_with(vec![source]) else {
         return;
     };
@@ -153,7 +153,7 @@ fn field_speeds(mut race: race::Race, ticks: usize) -> Vec<[f32; oag_gameplay::M
 #[test]
 #[ignore = "needs a Pulse disc image, the mod examples and --features extensions"]
 fn an_ai_craft_touching_a_wall_is_cursed_too() {
-    let Some(source) = kiss_curse() else { return };
+    let Some(source) = wall_penalty() else { return };
     let Some(cursed) = race_in(oag_race::Mode::SingleRace, vec![source]) else {
         return;
     };

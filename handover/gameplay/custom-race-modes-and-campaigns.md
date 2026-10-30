@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-10-29
-summary: "Custom campaigns landed (ADR-0077); Kiss Curse (first wasm sim mod) landed on wasm-extensions; open: 2048, grid editor, drag race, a turbo mod"
+summary: "Custom campaigns landed (ADR-0077); Wall Penalty (first wasm sim mod) landed on wasm-extensions; open: 2048, grid editor, drag race, a turbo mod"
 size: XL (20)
 difficulty: hard (35)
 ---
@@ -301,9 +301,9 @@ decision 4 for wasm screens only), detailed in README section 2.3. Owed items:
   (README section 4.5). Owed with the host: a test that a vanilla race with
   `extensions` on matches the feature-off hashes and creates no Engine.
 
-## The first player-facing mod: Kiss Curse (maintainer, 2026-10-29)
+## The first player-facing mod: Wall Penalty (maintainer, 2026-10-29)
 
-**Landed on `wasm-extensions` (2026-10-29, lane wasm-kiss-curse).** What was built and
+**Landed on `wasm-extensions` (2026-10-29, lane wall-penalty).** What was built and
 its proof: `docs/architecture/wasm-extensions/README.md`, "What is built". Final
 numbers: thrust x0.25 for 90 ticks (1.5 s), renewed each tick of wall contact
 (**chosen**); on Pulse PSP EU `16_Track` the cursed craft is at 50.7 km/h a second

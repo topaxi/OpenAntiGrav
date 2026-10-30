@@ -178,7 +178,7 @@ memory_pages = 2         # its maximum memory, 64 KiB pages (1 to 256; default 1
 state_bytes = 16         # its state blob, at most 1,024 bytes
 
 [extension.rules]
-module = "ext/kiss_curse.wasm"
+module = "ext/wall_penalty.wasm"
 ```
 
 A mod may instead (or also) bind a module to one of its own track files:
@@ -213,7 +213,7 @@ exported as `oag_state_len` and must equal `state_bytes` above. With the SDK's
 natively under `cargo test`, with no wasm toolchain. Build with
 `cargo build --release --target wasm32-unknown-unknown`, a 16 KiB stack
 (`-C link-arg=-zstack-size=16384`) and `panic = "abort"`.
-`assets/mods/examples/kiss-curse/` (one event, one command) and
+`assets/mods/examples/wall-penalty/` (one event, one command) and
 `assets/mods/examples/energy-turbo/` (a pickup of its own) are the worked examples.
 Copy either one's `guest/` to start inside a `mod-examples` checkout; elsewhere, point
 its `oag-ext` dependency at your engine checkout's `crates/ext` (the example's is a

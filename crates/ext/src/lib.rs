@@ -10,16 +10,16 @@
 //!     pub struct Curses { pub countdown: [u16; 8] }
 //! }
 //!
-//! struct KissCurse;
+//! struct WallPenalty;
 //!
-//! impl Extension for KissCurse {
+//! impl Extension for WallPenalty {
 //!     type State = Curses;
 //!     fn tick(obs: &Observation<'_>, state: &mut Curses, reply: &mut Reply<'_>) {
 //!         // ...
 //!     }
 //! }
 //!
-//! oag_ext::export!(KissCurse);
+//! oag_ext::export!(WallPenalty);
 //! ```
 //!
 //! Everything here is a typed view over ABI 1's I/O buffer, laid out once in

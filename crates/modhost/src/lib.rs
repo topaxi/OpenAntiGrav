@@ -33,7 +33,7 @@ mod reply;
 /// (section 4.1), chosen.
 pub const MAX_MEMORY_PAGES: u32 = 256;
 
-/// Fuel for one tick's call, instantiation included. Chosen: Kiss Curse uses a few
+/// Fuel for one tick's call, instantiation included. Chosen: Wall Penalty uses a few
 /// thousand units on a full grid; fuel is checked at function entries and loop
 /// headers, so this bounds loops and calls, not straight-line length
 /// (`determinism-and-state.md`, "Fuel, not time").

@@ -116,7 +116,7 @@ workspace = true
 
 [dev-dependencies]
 oag-audio.workspace = true
-# `kiss_curse_ground_truth` reads the example mod as the game does.
+# `wall_penalty_ground_truth` reads the example mod as the game does.
 oag-mod.workspace = true
 oag-omega.workspace = true
 oag-schema = { workspace = true, features = ["validate"] }

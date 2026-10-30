@@ -130,7 +130,7 @@ mod tests {
     fn a_module_shows_its_fuel_its_share_and_its_call_time() {
         let readout = Readout {
             modules: vec![Module {
-                id: "oag.kiss-curse".to_string(),
+                id: "oag.wall-penalty".to_string(),
                 fuel_used: 1_000,
                 fuel_peak: 3_000,
                 fuel_budget: 200_000,
@@ -144,7 +144,7 @@ mod tests {
             texts(&list),
             [
                 "MODS",
-                "OAG.KISS-CURSE",
+                "OAG.WALL-PENALTY",
                 " FUEL 1000 PEAK 3000",
                 " 0.5% OF 200000  7 US"
             ]
