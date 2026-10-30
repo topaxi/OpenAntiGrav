@@ -22,15 +22,20 @@ blast and the head read off GE dumps of the original" has the draw lists, per-fr
 confidence scores and the replay evidence. What is left is wiring and two unread leaves.
 
 1. **Blast envelope (3.7 M + 1.9 M px-grey): law read, ready to wire.** Three models, all additive
-   (`0xa2`, fixed white destination), no tint or alpha state: scale curve plus UV scroll
-   (`hemisphere2` u = v = 0.4987 age, `hemisphere1` v = 0.0202 - 1.2205 age, halo (0.503, -1.008)
-   age), halo gone by age 0.72, hemispheres to 1.5 s. **The white-out is `hemisphere1` alone, one
+   (`0xa2`, fixed white destination): scale curve, UV scroll (`hemisphere2` u = v = 0.4987 age,
+   `hemisphere1` v = 0.0202 - 1.2205 age, halo (0.503, -1.008) age), a grey ambient **tint ramp**
+   per model (`hemisphere1` 1 - age; halo min(1, 1.25 (1 - age)); `hemisphere2` min(1, (1.5 -
+   age) / 1.2); the old "dead ramps" reading is wrong), spin (`hemisphere2` 182 deg/s, halo 58
+   deg/s, `hemisphere1` none), halo gone by age 0.72, hemispheres to 1.5 s. **The purple tail is
+   `hemisphere2` alone.** **The white-out is `hemisphere1` alone, one
    sided (back-face culled) and world-fixed: it ends when the eye passes through its wall** (dump
    k91 to k92, shot k93 to k94; cull-off replay recovers it, removing the model gives the post-cut
    frame). Wire: draw `hemisphere1` culled with a world-fixed basis at the construct anchor; keep the
    scale curve exact; stop using the camera-facing billboard for it. **Unread:** the scale curve is
    not a function of age alone (neighbouring steps on different boots), and its source is open
-   (conf 60); the flash at shots k78-k80 is the `WO_PLASMA_FLASH` effect, not these models.
+   (conf 60); the onset flash at shots k78-k82 is **not** these models (removing all six leaves it):
+   a 125 x 67 unit additive quad at craft z -28.8 and a 192-vertex `0x32` prim, emitter ownership
+   open (conf 45; byte-match against `WO_PLASMA_FLASH.POB` not completed).
 2. **Head and charge orb (0.24 M): law read, ready to wire.** Five draws per frame from the
    `WO_PLASMA_HEAD` pob's own embedded textures (crescent-arc atlas strip, dark-disc quad under
    source-alpha blend, ring quad, spike strip, soft glow quad) with the extents in the plasma.md
@@ -39,8 +44,9 @@ confidence scores and the replay evidence. What is left is wiring and two unread
 3. **Detonation 3 ticks early: half isolated.** Original: released fire+59 at launch speed 634.61
    km/h, **first four flight ticks at 0.75 x that (475.9 km/h)**, then pinned to the ramp
    (850 km/h class), detonating 50.4 units on at fire+76. Ours flies the first four ticks at the
-   full launch speed (about 1 tick of the 3). The remaining 2 ticks need a per-tick projectile
-   log on ours (position at launch and detonation); `--probe plasma_fly` is the original side.
+   full launch speed (about 1 tick of the 3); the rest is most likely the distance leg (nearer
+   detonation or farther-forward muzzle). Needs a per-tick projectile log on ours (position at
+   launch and detonation); `--probe plasma_fly` is the original side.
 4. Craft hit: see `the-pulse-plasma-craft-hit-spawns-two-detonations.md` (ready-to-wire, own thread).
 
 ## Next Steps
