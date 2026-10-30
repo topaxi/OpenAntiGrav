@@ -755,3 +755,45 @@ directory, one `--script "8:quit"` launch to write `settings.toml`, then `[displ
 and `frame_limit = "unlimited"`), `OAG_PHASE_SPIKE_MS=11 --frame-log --autopilot`, audio on, the
 menus walked by hand to a race, and read the first `frame-spike` line after `race finished` in
 that profile's log.
+
+## Outpost 7 White race start on the Deck, from the menus (2026-10-31, `outpost7-deck-repro`)
+
+The maintainer reported a very noticeable stutter or hang on the race start of Outpost 7 White
+(`07_Track`) on Pulse PSP. **Not reproduced.** Talon's Junction White (`16_Track`) was the control.
+
+Method: Steam Deck, gaming-mode gamescope (`DISPLAY=:1`, Steam's `GAMESCOPE_*` env), release
+AppImage built from main `1c1451296` (`just appimage-deck`), Pulse PSP EU, audio on. The menus were
+walked by `--script` (timed taps: START twice, RACEBOX, MODE right x3 to SINGLE RACE, five downs to
+START, 22 downs to Outpost 7 White or none for Talon's, CROSS twice for the track and the ship) with
+`--unlock-all` so the circuit is in the list. A copy of the maintainer's `settings.toml` and
+`music.toml` in private `XDG_*` dirs (Pulse PSP profile: `weather = "enhanced"`, shadows `mapped`,
+msaa 4x, motion blur `high`, FSR 1), only `pause_on_focus_loss = false` changed, and `[race] track`
+reset so the picker starts at the top. The movie, soundtrack and DLC caches were copied in
+(a cold movie cache transcodes the intro and holds the boot in `loading`). `--frame-log`, a race
+started with the intro flyby left to play, `--script ...:quit` 70 s after the ship pick (load, 25 s
+flyby, countdown, GO and about 35 s of racing).
+
+| Variant | Circuit | WARN frames (over 40 ms) from the load onward | Worst per-second p99 in the race |
+| --- | --- | --- | --- |
+| vsync off, no limit, weather enhanced, cold then warm Mesa cache | Outpost 7 White | 0 and 0 | 14.4 and 11.6 ms |
+| same, weather original | Outpost 7 White | 0 and 0 | 11.8 and 16.1 ms |
+| same, weather enhanced | Talon's Junction White | 0 and 0 | 22.3 and 22.3 ms |
+| same plus `--autopilot` (the ship flies through GO and the start line) | Outpost 7 / Talon's | 0 / 0, 0 / 0 | 22.3 / 22.3 ms |
+| maintainer's own vsync `smooth`, `frame_limit` 90, `--autopilot`, cold then warm | Outpost 7 White | 0 and 0 | 11.2 ms |
+| page cache evicted for the image, extracted data, DLC and caches (`posix_fadvise DONTNEED`) | both | 0 | 11.2 ms |
+
+The load (press on the ship to the first race frame) takes 1.0 s to `CraftsBuilt` and the first
+race frame about 1.6 s after the press, on a worker, with the loading screen drawing at 90 fps.
+No `frame-spike`, soundtrack or first-draw stall appears at the flyby, the countdown or GO. The
+2026-10-19 off-thread soundtrack start has not regressed: `race music started in 25 us`.
+A Mesa shader cache emptied before the run changes nothing, so no first-draw pipeline on RADV is
+involved for this circuit with these settings.
+
+What the runs do show, on every circuit and unrelated to the race start: the menus run slow frames
+on the Deck. Entering the track picker costs one 266 ms frame, the ship screen one 163 ms frame,
+and every Down step in the picker one 66.6 ms frame (4 vblanks at 60 Hz, so a wait rather than
+CPU work; the frame thread was not on-CPU in a `perf record` of the scroll, which the stripped
+AppImage could not symbolise). A player scrolling to a late circuit such as Outpost 7 White
+(index 22 of 32 in the list) sees 22 of them. It is the one thing on the way to this race that
+could be felt as a stutter. **Not measured:** a race started from the campaign grid (it goes
+through the same `launch_race`, with the campaign's own AI field and rules), and the Black layout.
