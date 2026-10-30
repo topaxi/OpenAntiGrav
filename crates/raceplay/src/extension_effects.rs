@@ -30,8 +30,11 @@ mod view {
     use std::sync::Arc;
 
     use oag_core::math::Vec3;
+    #[cfg(feature = "extensions")]
+    use oag_fx::psys::parametric;
+    #[cfg(feature = "extensions")]
     use oag_fx::psys::sprite::Sprite;
-    use oag_fx::psys::{Effect, Library, parametric};
+    use oag_fx::psys::{Effect, Library};
 
     use oag_fx::psys::parametric::Axis;
 
@@ -66,6 +69,7 @@ mod view {
     }
 
     /// The key an effect has in the race's [`Library`].
+    #[cfg(feature = "extensions")]
     fn key(mod_id: &str, name: &str) -> String {
         format!("mod:{mod_id}/{name}")
     }

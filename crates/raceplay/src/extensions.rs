@@ -344,7 +344,7 @@ pub fn mod_icons(
 
 /// The sources of the mods that are on for a race of `title` (and `foreign_track`, for a
 /// track module).
-#[cfg(feature = "view")]
+#[cfg(all(feature = "view", feature = "extensions"))]
 pub(crate) fn for_race<'a>(
     sources: &'a [Source],
     title: &'a str,
