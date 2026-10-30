@@ -290,8 +290,8 @@ that follows the sun; the baked `COLOR_0` and the ships' hull rig keep the pose 
   **Channels published** (table above). `roundtrip.py channels` proves, on 5.2.3, that they survive export,
   import and a re-export (equal bar the `.glb` name), that a trigger naming a channel the track does not
   publish and a malformed name are refused by name, and writes `channels.track.toml`: the motion loop with
-  its airship starting on a gate across the road past the start (raced headless in the proof below the
-  README's "And events between mods"). The committed fixtures are byte-neutral: the output of
+  its airship starting on a gate across the road past the start (raced headless; the wasm-extensions
+  README's "And events between mods" has the screenshots). The committed fixtures are byte-neutral: the output of
   `loop` and `motion` equals what the unchanged add-on writes. (`just blender-fixtures` already stops at its
   `effect` step on 5.2.3 before this lane, an `assert` on the effect TOML's duration; the other steps are
   run by hand in the lane's report.)

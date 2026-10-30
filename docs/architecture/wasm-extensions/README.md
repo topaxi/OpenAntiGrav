@@ -469,7 +469,7 @@ reading the world clock, and `write_node_anims_started` writes a channel-driven 
 fired). **Screenshots** (headless, `--race --track-file channels.track.toml --autopilot` with a fixed
 camera at the gate, built by `roundtrip.py channels`: the loop with its airship starting on a
 gate's channel): at tick 200 the airship rests at its first key, far left; it holds there until the
-first craft crosses the gate (an AI craft, ahead on the grid, at about tick 270); by tick 340 and
+first craft crosses the gate (one of the field, not necessarily the person); at ticks 340 and
 400 it has flown on along its loop.
 
 **Later: event urgency levels (a note, not built).** Today every event is delivered on the next
