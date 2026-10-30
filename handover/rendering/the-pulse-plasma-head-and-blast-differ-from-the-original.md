@@ -1,8 +1,8 @@
 ---
-status: re-first
+status: ready-to-wire
 titles: [pulse]
 updated: 2026-10-30
-summary: "Plasma matched pair ranked: blast envelope and head orb differ, detonation 3 ticks early, craft-hit second blast unwired; head and blast law unread"
+summary: "Plasma blast and head laws read off GE dumps, ready to wire; onset flash emitter and the detonation distance leg still open"
 ---
 
 's head and blast differ from the original's
