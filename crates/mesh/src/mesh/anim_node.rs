@@ -59,7 +59,11 @@ impl Motion {
     /// [`Self::sample`] for a model whose channel-started animations (`Keyed::on`) read
     /// `started`: when each channel last fired, on the same clock as `seconds`.
     #[must_use]
-    pub fn sample_started(&self, seconds: f32, started: &dyn Fn(u32) -> Option<f32>) -> [f32; 16] {
+    pub fn sample_started(
+        &self,
+        seconds: f32,
+        started: &dyn Fn(Start) -> Option<f32>,
+    ) -> [f32; 16] {
         match self {
             Self::Vex(transform) => transform.sample(seconds),
             Self::Rig(motion) => motion.sample(seconds),
@@ -104,7 +108,7 @@ impl Model {
     pub fn sample_anim_nodes_started(
         &self,
         seconds: f32,
-        started: &dyn Fn(u32) -> Option<f32>,
+        started: &dyn Fn(Start) -> Option<f32>,
     ) -> Vec<[f32; 16]> {
         let mut out: Vec<[f32; 16]> = Vec::with_capacity(self.anim_nodes.len());
         for node in self.anim_nodes.iter().take(NODE_ANIM_LIMIT - 1) {

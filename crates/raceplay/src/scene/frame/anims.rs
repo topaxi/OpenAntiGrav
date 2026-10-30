@@ -11,7 +11,7 @@ impl super::super::Scene {
         seconds: f32,
         race: &crate::Race,
     ) {
-        let started = |channel| race.channel_started(channel);
+        let started = |start| race.channel_started(start);
         for drawable in [
             Some(&self.track),
             self.sky.as_ref(),

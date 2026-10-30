@@ -7,6 +7,13 @@
 use super::extensions::{grid, run};
 use crate::extensions::{Prepared, Track, TrackProps, prepare};
 
+fn any(channel: u32) -> oag_mesh::mesh::Start {
+    oag_mesh::mesh::Start {
+        channel,
+        value: None,
+    }
+}
+
 fn key(name: &str) -> u32 {
     oag_ext_abi::channel_key(name)
 }
@@ -66,15 +73,15 @@ fn a_trigger_raises_its_channel_with_no_module_and_a_race_without_one_hashes_as_
     let (_, without) = run(grid(Prepared::default()), 400);
     assert_eq!(with, without, "an emitting trigger moved a hash");
     assert!(!race.is_modded());
-    let started = race.channel_started(key("test.track/passed"));
+    let started = race.channel_started(any(key("test.track/passed")));
     assert!(
         started.is_some_and(|s| (300.0 / 60.0..400.0 / 60.0).contains(&s)),
         "the trigger fired while the craft crossed it: {started:?}"
     );
-    assert_eq!(race.channel_started(key("test.track/other")), None);
+    assert_eq!(race.channel_started(any(key("test.track/other"))), None);
     let unreached = prepared_on(&[], &gate(1.0e6, 1.0e6 + 10.0, "test.track/passed"));
     let (race, _) = run(grid(unreached), 400);
-    assert_eq!(race.channel_started(key("test.track/passed")), None);
+    assert_eq!(race.channel_started(any(key("test.track/passed"))), None);
 }
 
 #[test]
@@ -394,6 +401,6 @@ mod with_modules {
         assert_eq!(h.from, oag_ext_abi::TRACK_SENDER);
         assert_eq!(h.slot, 1);
         assert!(h.tick > 300, "{h:?}");
-        assert!(race.channel_started(key(channel)).is_some());
+        assert!(race.channel_started(any(key(channel))).is_some());
     }
 }

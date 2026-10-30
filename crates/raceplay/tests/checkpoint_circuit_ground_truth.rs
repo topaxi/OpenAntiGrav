@@ -223,9 +223,10 @@ fn a_craft_that_reaches_its_checkpoint_in_time_has_its_clock_reset_and_loses_not
     // Each gate cleared is announced on the channel the manifest publishes (an undeclared
     // one would have faulted the module), for a listener or a track animation to hear.
     assert_eq!(modded.extension_reports()[0].faulted, None);
-    let announced = modded.channel_started(oag_ext_abi::channel_key(
-        "oag.checkpoint-circuit/checkpoint",
-    ));
+    let announced = modded.channel_started(oag_mesh::mesh::Start {
+        channel: oag_ext_abi::channel_key("oag.checkpoint-circuit/checkpoint"),
+        value: None,
+    });
     assert!(
         announced.is_some_and(|s| s > 0.0),
         "no checkpoint was announced: {announced:?}"

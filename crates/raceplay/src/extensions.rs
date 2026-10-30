@@ -493,7 +493,7 @@ pub struct Extensions {
     /// The track's triggers that send a channel.
     beacons: channel::Beacons,
     /// When each channel last fired (`channel`).
-    fired: Vec<(u32, u64)>,
+    fired: Vec<(u32, f32, u64)>,
 }
 
 impl Extensions {
@@ -636,7 +636,7 @@ impl Extensions {
     /// modules (next tick) and for `oag_on` animations (`tick` is when it fired).
     pub(super) fn test_triggers(&mut self, slot: usize, sweep: &[oag_core::math::Vec3], tick: u64) {
         for channel in self.beacons.entered(slot, sweep) {
-            self.note_fired(channel, tick);
+            self.note_fired(channel, 1.0, tick);
             #[cfg(feature = "extensions")]
             self.on.mail_from_track(slot, channel);
         }
@@ -789,17 +789,12 @@ impl crate::Race {
         self.sim.extensions.state(index)
     }
 
-    /// The world-clock reading at which `channel` (`oag_ext_abi::channel_key`) last fired,
-    /// the clock the scenery's animations ride: `None` before it has fired.
+    /// The world-clock reading at which `start.channel` (`oag_ext_abi::channel_key`) last
+    /// fired, with `start.value` if it names one (any value if not), the clock the scenery's animations ride: `None` before it has fired.
     #[cfg(feature = "view")]
     #[must_use]
-    pub fn channel_started(&self, channel: u32) -> Option<f32> {
-        let (_, tick) = *self
-            .sim
-            .extensions
-            .fired()
-            .iter()
-            .find(|(c, _)| *c == channel)?;
+    pub fn channel_started(&self, start: oag_mesh::mesh::Start) -> Option<f32> {
+        let tick = self.sim.extensions.last_fired(start.channel, start.value)?;
         Some(tick as f32 / 60.0 + self.flyby_seconds() + self.world_clock_offset())
     }
 

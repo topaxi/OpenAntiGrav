@@ -152,20 +152,44 @@ pub(super) fn publishes(declared: &Declared) -> Vec<(u32, String)> {
         .collect()
 }
 
+/// The most (channel, value) pairs [`Extensions::fired`] keeps.
+const FIRED_LIMIT: usize = 256;
+
 impl super::Extensions {
-    /// When each channel last fired, as `(channel key, tick)`: mods' emits and triggers'
-    /// alike. An output for the view's `oag_on` animations; never hashed.
+    /// When each channel last fired with each value, as `(channel key, value, tick)`:
+    /// mods' emits and triggers' alike. An output for the view's `oag_on` animations;
+    /// never hashed.
     #[must_use]
-    pub fn fired(&self) -> &[(u32, u64)] {
+    pub fn fired(&self) -> &[(u32, f32, u64)] {
         &self.fired
     }
 
-    /// Notes that `channel` fired at `tick`.
-    pub(super) fn note_fired(&mut self, channel: u32, tick: u64) {
-        log::debug!("channel {channel:#010x} fired at tick {tick}");
-        match self.fired.iter_mut().find(|(c, _)| *c == channel) {
-            Some(entry) => entry.1 = tick,
-            None => self.fired.push((channel, tick)),
+    /// The tick `channel` last fired at: with exactly `value` when one is named, with
+    /// any value otherwise.
+    #[must_use]
+    pub fn last_fired(&self, channel: u32, value: Option<f32>) -> Option<u64> {
+        self.fired
+            .iter()
+            .filter(|(c, v, _)| *c == channel && value.is_none_or(|want| *v == want))
+            .map(|(_, _, tick)| *tick)
+            .max()
+    }
+
+    /// Notes that `channel` fired with `value` at `tick`. The log holds at most
+    /// [`FIRED_LIMIT`] (channel, value) pairs; a module that emits a new value every tick
+    /// pushes out the oldest, which no animation can still be waiting on.
+    pub(super) fn note_fired(&mut self, channel: u32, value: f32, tick: u64) {
+        log::debug!("channel {channel:#010x} = {value} fired at tick {tick}");
+        if let Some(entry) = self
+            .fired
+            .iter_mut()
+            .find(|(c, v, _)| *c == channel && *v == value)
+        {
+            entry.2 = tick;
+        } else if self.fired.len() < FIRED_LIMIT {
+            self.fired.push((channel, value, tick));
+        } else if let Some(oldest) = self.fired.iter_mut().min_by_key(|(_, _, t)| *t) {
+            *oldest = (channel, value, tick);
         }
     }
 }
