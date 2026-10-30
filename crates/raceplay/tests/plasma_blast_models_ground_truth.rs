@@ -132,11 +132,13 @@ fn hemisphere1_shows_nothing_from_inside_its_shell_and_something_from_outside() 
             .chain(&model.alpha_tested_draws)
             .chain(&model.transparent_draws)
         {
-            for triangle in
-                model.indices[draw.range.start as usize..draw.range.end as usize].chunks_exact(3)
+            for triangle in model.indices[draw.range.start as usize..draw.range.end as usize]
+                .as_chunks::<3>()
+                .0
+                .iter()
             {
                 let p = |i: u32| model.vertices[i as usize].position;
-                let (a, b, c) = (p(triangle[0]), p(triangle[1]), p(triangle[2]));
+                let [a, b, c] = triangle.map(p);
                 let sub = |u: [f32; 3], v: [f32; 3]| [u[0] - v[0], u[1] - v[1], u[2] - v[2]];
                 let (e1, e2, to_eye) = (sub(b, a), sub(c, a), sub(eye, a));
                 let normal = [
