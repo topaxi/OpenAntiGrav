@@ -375,7 +375,7 @@ census of those titles' Shield tables was taken for this change.
 ### And Checkpoint Circuit (2026-10-30)
 
 The fourth example, `oag.checkpoint-circuit` (`assets/mods/examples/checkpoint-circuit/`, a
-track module of 8,918 bytes on `oag-ext`, and its own track file built by
+track module of 9,046 bytes on `oag-ext`, and its own track file built by
 `checkpoint_circuit.py` in Blender): the example of triggers, track properties, HUD text from a
 mod's own strings, and the AI route hook. Each craft has **20 s** to its next checkpoint gate
 (`oag/triggers/checkpoint <n>`, `mod_checkpoint = n`, 1 to 4 in lap order); reaching it resets
@@ -397,7 +397,7 @@ player's physics. What it added, each with the vanilla fold unchanged:
 | --- | --- | --- |
 | Path properties | track file | `mod_*` on a Blender spline object, written as the glb spline node's `oag_props` extra (one object); `oag_trackfile::Track::path_props`, one list per path or none. A file without any writes nothing new |
 | Paths and routes in the region | observation | Entity kinds 5 (`Path`) and 6 (`Route`) after the triggers; their counts at `PATHS_AT` (6) and `ROUTES_AT` (8), so the entities start at 12. A path's box bounds its points, a route's its samples (world space, the identity placement). A route carries the properties of the paths it drives, the first path's value kept where two set one name, so a guest finds the pit lane's route by `route(r).prop(prop!("pit"))`. SDK: `Track::paths()`, `routes()`, `path(i)`, `route(i)` |
-| `prefer-route{slot, route}` | command (21) | Re-sent each tick it should hold; `route` below the region's route count (the course's numbering, `Course::routes`), one per slot per tick, else a fault. Held in `Extensions` for the tick and **hashed** after the no-module early return. SDK: `Reply::prefer_route(&craft, route)`. Codes 22 and 23 stay free |
+| `prefer-route{slot, route}` | command (21) | Re-sent each tick it should hold; `route` below the region's route count (the course's numbering, `Course::routes`), one per slot per tick, else a fault. Held in `Extensions` for the tick and **hashed** after the no-module early return. SDK: `Reply::prefer_route(&craft, route)`. Code 22 is `pickup-look`, 23 stays free |
 
 **Where it lands.** `Race::steer_branching` (`crates/raceplay/src/routes.rs`), `Ai_ChooseBranch`'s
 states 0 to 2: the coin is thrown exactly as before on entering the pre-fork path
@@ -424,6 +424,10 @@ file, the committed module):
   main line, takes the pit route at tick 840 when started at 41.0 of 105, its draws unchanged.
   Dropping the hook (`take = branching.pending`) fails this test.
 - Two runs hash the same every tick.
+- Two full-field races that differ only in a module holding `prefer-route` on a slot whose
+  coin already takes the pit lane agree on every craft's position and route every tick of
+  1,500 and hash differently from the first call: the held preference is state. Dropping
+  `Preferred::hash_into` fails it at tick 0.
 
 Fuel (`tests::extension_examples`, a full grid): 14,443 on the loud tick, 10,499 after.
 
