@@ -37,6 +37,7 @@ use oag_raceplay as race;
 
 const TRACK: &str = "Data\\Environments\\16_Track\\track.vex";
 const MOD: &str = "assets/mods/examples/wall-penalty";
+const MOD_JS: &str = "assets/mods/examples/wall-penalty-js";
 
 fn held(stick_x: f32) -> oag_gameplay::InputSnapshot {
     let mut buttons = oag_gameplay::input::Input::new();
@@ -51,7 +52,12 @@ fn held(stick_x: f32) -> oag_gameplay::InputSnapshot {
 
 /// The example mod's rules module, as `oag_game::mod_extensions::sources` builds it.
 fn wall_penalty() -> Option<race::extensions::Source> {
-    let manifest = oag_testdata::exact(&format!("{MOD}/oag-mod.toml"))?;
+    module_in(MOD)
+}
+
+/// A rules module of an example mod in `dir`, as the game builds it.
+fn module_in(dir: &str) -> Option<race::extensions::Source> {
+    let manifest = oag_testdata::exact(&format!("{dir}/oag-mod.toml"))?;
     let module = oag_mod::Mod::open(manifest.parent().unwrap()).expect("the example mod opens");
     let extension = module
         .manifest
@@ -190,4 +196,97 @@ fn an_ai_craft_touching_a_wall_is_cursed_too() {
         cursed[t][slot],
         plain[t][slot]
     );
+}
+
+/// The JavaScript port (Javy's QuickJS under a guest-side shim, `wall-penalty-js/`) flies
+/// the same race as the Rust module: every tick's speed identical, since the law is the
+/// same and the reply is checked by the same host. Prints what each costs a tick.
+#[test]
+#[ignore = "needs a Pulse disc image, the mod examples and --features extensions"]
+fn the_javascript_module_flies_the_rust_modules_race_tick_for_tick() {
+    let (Some(rust), Some(js)) = (wall_penalty(), module_in(MOD_JS)) else {
+        return;
+    };
+    let (Some(mut rust_race), Some(mut js_race)) = (race_with(vec![rust]), race_with(vec![js]))
+    else {
+        return;
+    };
+    assert!(js_race.is_modded(), "the JavaScript module loaded");
+    const TICKS: usize = 900;
+    let (mut cost_rust, mut cost_js) = ((0_u64, 0_u64, 0_f32), (0_u64, 0_u64, 0_f32));
+    let (mut cursed_ticks, mut diverged) = (0, None);
+    for t in 0..TICKS {
+        rust_race.tick(&PlayerInputs::single(held(0.0)));
+        js_race.tick(&PlayerInputs::single(held(0.0)));
+        let speed = |r: &race::Race| {
+            r.ship().physics.body.linear_velocity.length() * oag_core::math::SPEED_TO_KMH
+        };
+        if speed(&rust_race) != speed(&js_race) && diverged.is_none() {
+            diverged = Some(t);
+        }
+        for (race, cost) in [(&rust_race, &mut cost_rust), (&js_race, &mut cost_js)] {
+            let report = &race.extension_reports()[0];
+            assert!(report.faulted.is_none(), "{:?}", report.faulted);
+            cost.0 = cost.0.max(report.fuel_used);
+            cost.1 += report.fuel_used;
+            cost.2 += report.call_us;
+        }
+        if js_race.extension_reports()[0].fuel_used > 0 {
+            cursed_ticks += 1;
+        }
+    }
+    println!(
+        "Rust: fuel peak {} mean {:.0}, call {:.1} us mean; JavaScript: fuel peak {} mean {:.0}, call {:.1} us mean ({cursed_ticks} ticks)",
+        cost_rust.0,
+        cost_rust.1 as f64 / TICKS as f64,
+        cost_rust.2 / TICKS as f32,
+        cost_js.0,
+        cost_js.1 as f64 / TICKS as f64,
+        cost_js.2 / TICKS as f32,
+    );
+    assert_eq!(diverged, None, "the two modules fly different races");
+}
+
+/// The same comparison across a whole field: the AI craft that scrape walls are cursed
+/// by the JavaScript module as by the Rust one, every craft's speed identical every
+/// tick, and the JavaScript module's fuel peak (the most cursed craft at once) is
+/// printed against the host's budget.
+#[test]
+#[ignore = "needs a Pulse disc image, the mod examples and --features extensions"]
+fn the_javascript_module_curses_an_ai_field_as_the_rust_module_does() {
+    let (Some(rust), Some(js)) = (wall_penalty(), module_in(MOD_JS)) else {
+        return;
+    };
+    let (Some(mut rust_race), Some(mut js_race)) = (
+        race_in(oag_race::Mode::SingleRace, vec![rust]),
+        race_in(oag_race::Mode::SingleRace, vec![js]),
+    ) else {
+        return;
+    };
+    const TICKS: usize = 3600;
+    let (mut peak, mut faulted, mut diverged) = (0_u64, None, None);
+    for t in 0..TICKS {
+        rust_race.tick(&PlayerInputs::none());
+        js_race.tick(&PlayerInputs::none());
+        let speeds = |r: &race::Race| -> [f32; oag_gameplay::MAX_SHIPS] {
+            std::array::from_fn(|s| {
+                r.sim.world.ships[s].physics.body.linear_velocity.length()
+                    * oag_core::math::SPEED_TO_KMH
+            })
+        };
+        if diverged.is_none() && speeds(&rust_race) != speeds(&js_race) {
+            diverged = Some(t);
+        }
+        let report = &js_race.extension_reports()[0];
+        peak = peak.max(report.fuel_used);
+        if faulted.is_none() {
+            faulted.clone_from(&report.faulted);
+        }
+    }
+    println!(
+        "JavaScript fuel peak {peak} of {}, fault {faulted:?}, first divergence {diverged:?}",
+        oag_modhost::FUEL_PER_TICK
+    );
+    assert_eq!(faulted, None);
+    assert_eq!(diverged, None);
 }

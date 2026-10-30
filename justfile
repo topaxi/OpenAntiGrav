@@ -143,7 +143,12 @@ check-ballisticng:
 # test (the hash goldens among them, which a vanilla race must still meet with the
 # feature on). The disc-backed Wall Penalty test runs by hand:
 # `cargo nextest run -p oag-raceplay --features extensions --run-ignored only -E 'test(/wall_penalty_ground_truth::/)'`.
+#
+# The TypeScript typings of the ABI (`assets/mods/examples/types/oag-abi.d.ts`) are
+# generated from `oag-ext-abi`'s layout by `scripts/gen-ext-typings.py`; its `--check` fails
+# on a stale file or a JavaScript example whose own copy of an ABI number differs.
 check-extensions:
+    python3 -I scripts/gen-ext-typings.py --check
     cargo clippy -p oag-modhost -p oag-raceplay -p oag-game --features oag-game/extensions,oag-raceplay/extensions --all-targets -- -D warnings
     cargo nextest run -p oag-modhost -p oag-raceplay --features oag-raceplay/extensions --lib --cargo-profile quick
 
