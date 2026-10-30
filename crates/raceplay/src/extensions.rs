@@ -11,6 +11,9 @@
 //!   `Ship::pending_thrust_scale`, which this tick's step consumes for a person's craft
 //!   (`player_step.rs`) and an AI craft (`field.rs`) alike. Multiplied, not assigned, so a
 //!   Leach Beam drain armed at the end of the last tick is kept.
+//! - **Track**: the region [`prepare`] lays out at load for a guest's `oag_track` buffer
+//!   (pads, triggers, author-defined properties; `track`). Pad entries and trigger
+//!   enters and exits are events; `scale-pad` is read by `Race::test_speedup_pads`.
 //! - **State**: each module's blob and fault tick live in [`RaceSim`], cloned with a
 //!   snapshot and hashed by [`Extensions::hash_into`]. A race with no module hashes
 //!   nothing here, so every vanilla hash is unchanged.

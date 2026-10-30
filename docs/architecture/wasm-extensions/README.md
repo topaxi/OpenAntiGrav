@@ -27,7 +27,7 @@ compiled and a race offered a module names it as left out in its load report.
 | Piece | Where | What it is |
 | --- | --- | --- |
 | The host | `crates/modhost` | Section 4.1's configuration minus Pulley and the load-time rewrite (desktop Cranelift only); one process-wide `Engine`, built at the first compile and counted (`engines_created`); a fresh pooled instance per tick; fuel per tick `FUEL_PER_TICK` = 200,000, **chosen**; a trap or a refused reply is a `Fault` |
-| The ABI | `crates/ext-abi` (`oag_ext_abi`) | Core wasm: exports `memory`, `oag_abi` (the major and the layout revision, below), `oag_io` (a 4,096-byte buffer), `tick`, optionally `oag_state_len`; **no imports at all** (the `oag` namespace is empty in ABI 1, so `rng-next` and `log` are not offered yet). The buffer's fixed little-endian layout is on that crate's page, the one definition the host and the guest SDK both compile against (it moved out of `oag-modhost` with the SDK, below); it carries the README's records only as far as the examples need: the tick, the active-slot mask, the events, the blob, the reply, the craft records |
+| The ABI | `crates/ext-abi` (`oag_ext_abi`) | Core wasm: exports `memory`, `oag_abi` (the major and the layout revision, below), `oag_io` (a 4,096-byte buffer), `tick`, optionally `oag_state_len` and `oag_track` (the [track region](#and-track-properties-2026-10-30)); **no imports at all** (the `oag` namespace is empty in ABI 1, so `rng-next` and `log` are not offered yet). The buffer's fixed little-endian layout is on that crate's page, the one definition the host and the guest SDK both compile against (it moved out of `oag-modhost` with the SDK, below); it carries the README's records only as far as the examples need: the tick, the active-slot mask, the events, the blob, the reply, the craft records |
 | Event | `wall-contact{slot}` | Raised in `Race::count_wall_contact` for a person's craft and an AI craft alike, **on every tick the craft touches a wall** (`contacts > floor_contacts`, the test `wall_contact_ticks` counts), at most once per craft per tick; delivered the next tick (the one-tick latency) |
 | Command | `scale-thrust{slot, factor}` | No `ticks` field and no host timer: the guest re-sends it each tick it wants it. `factor` finite and in `[0, 1]` for Wall Penalty (`[0, 2]` since Energy Turbo, below); anything else, a slot with no craft, or two for one slot is a fault, never a clamp. Below 1.0 **multiplied** into `Ship::pending_thrust_scale`, so a Leach Beam drain armed the tick before is kept |
 | Kind | `[extension.rules]` in `oag-mod.toml` | A rules module, because section 2.1 lets a rules module touch any slot and a craft module only slots flying its hull: a curse on every craft would otherwise be one craft row per team. Section 1.1 names a rules module from a mode file; `modes/*.toml` does not exist yet, so until it does a mod's rules module runs in every race the mod is on for, on its titles, **except the original campaigns** (section 1.2) **and network races** (the host's race runs vanilla until phase 3; the lobby's fingerprint leaves the repository's examples out) |
@@ -47,7 +47,7 @@ the host's and `oag-raceplay`'s unit tests with it on.
 
 ### And Energy Turbo (2026-10-29)
 
-The second example, `oag.energy-turbo` (`assets/mods/examples/energy-turbo/`, 1,676
+The second example, `oag.energy-turbo` (`assets/mods/examples/energy-turbo/`, 3,040
 bytes): a pickup of its own, which the weapon pads hand out in place of **every second
 Turbo** (the other half stay the title's Turbo), drawn as the Turbo's icon on a red
 backdrop. Hold fire to boost (thrust x1.9) for as long as the pool lasts, paid at
@@ -68,7 +68,7 @@ added to the engine and the ABI, each its own commit with the vanilla fold uncha
 | The mod's own pickup | engine | `oag_tables::weapons::Weapon::Extension` (7.5): a fieldless arm outside `Weapon::ALL`, so `Option<Weapon>` stays one byte and the World snapshot does not grow; hashed as 255, which no vanilla race writes. The engine never fires or absorbs it: a person's press (`Race::spend_pickup`) and the AI's fire (`Race::spend_opponent_pickup`, through the Turbo's gate; the AI never absorbs it) raise **`pickup-fire{slot}`** / **`pickup-absorbed{slot}`**; an absorb clears it and pays no pool. The HUD draws the title's Turbo icon for it |
 | `give-pickup{slot}` / `clear-pickup{slot}` | command | Puts the mod's pickup in an empty slot / takes it out of a slot holding it (a fault otherwise). A race without weapons gives nothing. The slot's last-granted weapon is left alone, so the title's repeat rule is unchanged |
 | `pickup-roll{weapon, every}` | command | Race-wide (sent on slot 0): every `every`-th time a weapon pad (`Race::test_weapon_pads`) draws that weapon, it hands out the mod's pickup instead, with the drawn weapon still the slot's last grant. The count is hashed; re-sending the same rule keeps it. The first module to send any of the three pickup commands owns the kind for the race; another one faults |
-| `pad-mode{slot}` | command | This tick the slot's speed pads (`Race::test_speedup_pads`) give no force, plume or pad sound, and the entry edge raises **`pad-energy{slot}`** |
+| `scale-pad{slot, 0}` and **`speed-pad{slot, pad}`** | command, event | The turbo holds its slot's speed pads at 0 while carried, so a pad gives no push, plume or pad sound, and pays the pool on the `speed-pad` the entry raises ([track properties](#and-track-properties-2026-10-30)) |
 | `play-cue{slot, cue}` | output | One of six of the engine's cues (`oag_ext_abi::Cue`, matched to the engine's in `oag_raceplay::extensions`), pushed beside the tick's own |
 | `fire-effect{slot, effect}` | output | The title's own `CollisionSpark` or `HitSpark` `.pob`, at the hull's back end, drawn by the view half; a title without it draws nothing |
 | `pickup-tint{slot, rgba}` | output | The HUD's `PickupBackground` drawn in that colour instead of the weapon's measured one (`oag_hud::Readout::pickup_tint`): the disc's sprite, recoloured through the tint it is already drawn with |
@@ -79,9 +79,10 @@ sending none and the state hashes match every tick.
 **Timing and edge cases.** The call is at phase C, after the people's pickups are
 spent (phase 2) and before any step. A `pickup-roll` sent at tick N's call applies from
 N+1's pads; a `give-pickup` lands at N's call, so a fire pressed on N+1 is already the
-mod's. A speed pad entered on tick N itself boosts as ever, because `pad-mode` starts
-at N+1. An absorb on tick N reaches the module the same tick, so `pad-mode` has already
-stopped for N's pads.
+mod's. A speed pad entered on tick N itself boosts as ever, because the module's
+`scale-pad{slot, 0}` starts at N+1; the module pays energy only for a `speed-pad` entered
+on a tick it held the slot at 0 (a bit in its record). An absorb on tick N reaches the
+module the same tick, so the pads are already the title's for N.
 
 **Proof** (`energy_turbo_ground_truth`, Pulse PSP EU, `16_Track`, Single Race with an
 empty grid, this project's driver flying, the pool at half):
@@ -188,6 +189,66 @@ holds 32), 49 on the glass, a wet road of 0.26 and 32 drop segments for the spla
 Fuel (`tests::extension_examples`, a full grid with one craft on its final lap): 2,363 on the
 tick it starts, 292 after, against the 200,000 budget.
 
+### And track properties (2026-10-30)
+
+A mod reads arbitrary **author-defined properties** off a track's pads, its triggers and
+the track itself, and hears which pad or trigger a craft entered. The engine gives no
+property a meaning: what `boost` or `gate` does is the mod's. The authoring side is the
+[track file](../../formats/track-file.md#properties-and-triggers-for-simulation-mods)
+(`mod_*` custom properties in Blender). ABI 1 is edited in place (nothing is released): the
+revision stays 3 and the layout fold is re-recorded.
+
+**The track region.** A second buffer, read-only, no imports: a guest exporting
+`oag_track() -> u32` has the host write the race's track there before each call (the
+same bytes every tick, built once at load, never hashed; `oag_ext_abi::track`). Entities
+in a fixed order: the track, each speed pad, each weapon pad, each trigger, so speed pad
+`i` is entity `1 + i`. Each is 96 bytes (kind, index, first property, property count,
+local-to-world 4x4, box minimum and maximum) and its properties are `(key, f32)` pairs in
+a table after the entities. **The key** is the FNV-1a 32 hash of the name's UTF-8 bytes,
+computed at compile time by the SDK's `prop!("boost")`; two names of one entity hashing
+alike are refused at authoring and at load. **Caps** (chosen): 256 entities, 64 triggers,
+1,024 properties, so the region is 32,776 bytes in the guest (zeroed `.bss`, no wasm
+bytes). A disc circuit exposes its pads and the track with no properties (the largest
+counted, Pulse PSP: 544 speed and 218 weapon pads over 40 track files; HD's Talon's
+Junction: 18 speed pads). A track past a cap leaves every module out, named in the load
+report. SDK: `Observation::track()`, then `speed_pad(i)`, `weapon_pad(i)`, `trigger(i)`,
+`whole()`, each `prop(prop!("name")) -> Option<f32>`, `to_world()`, `bounds()`.
+
+| Piece | Kind | What it is |
+| --- | --- | --- |
+| `speed-pad{slot, pad}` | event | Every entry into a speed pad (`Race::test_speedup_pads`' edge), whatever its factor |
+| `weapon-pad{slot, pad}` | event | Every entry into a weapon pad (`Race::test_weapon_pads`' edge), cooling down or not, granting or not |
+| `trigger-enter{slot, trigger}`, `trigger-exit{slot, trigger}` | event | A trigger box against the craft's pad sweep (the four points `Race::pad_sweep` tests a pad with), once a tick for each craft that steps, only while a module runs; inside is any point in the box. Exits come before enters |
+| `scale-pad{pad, factor}` | command | Race-wide (slot 0), held until replaced, hashed. `pad` below the track's speed pads, else a fault; the later module in id order wins |
+| `scale-pad{slot, factor}` | command | This tick (re-sent each tick it holds), hashed. Two modules multiply, bounded at 2 |
+
+Both factors are in `[0, 2]`; a pad pushes the slot by the pad's factor times the slot's
+(so up to 4). **What a factor scales (chosen, not measured):** the pad's push alone, as the
+length of the direction the pad hands the physics (`Environment::pad_hit` reads an
+unnormalised direction as a scaled boost), so `oag-physics` is untouched; the jump lift
+added to it when the pilot pitches up is not scaled. At a product of 0 the pad gives no
+push at all (no `pad_hit`), and the entry pays no plume, pad sound, lap boost count or Zone
+score; above 0 they are the pad's as ever. Exactly 1.0 without a module, so a vanilla race
+hashes as before (`a_vanilla_race_hashes_the_same_with_the_feature_on_or_off_and_builds_no_engine`).
+
+Events carry the pad or trigger index in the record's bytes 2..4 (zero for the others), in
+slot order, each slot's wall contact, fire, absorb, speed pad, weapon pad, trigger exits and
+trigger enters; past 32 in one call the rest are dropped.
+
+**Proof.** `crates/ext/src/tests.rs` (a guest reads `prop!("boost")` as 1.5 off pad 1 and
+none off pad 0, and hears all four events); `oag_modhost`'s region and `scale-pad` checks;
+`crates/raceplay/src/tests/extensions.rs` (`triggers::`: a craft drives through a trigger,
+one enter and one exit, and the guest reads its property out of the region);
+`track_props_ground_truth` (Pulse PSP EU, Hillside with its speed pads widened 20 units
+either side so this project's driver crosses them, Venom, throttle held):
+
+- `boost = 2.0` authored on pad 0, read by a WAT module that sends `scale-pad{0, boost}`:
+  entered at tick 1,242 the push is 2.0 against 1.0 vanilla, the same race up to it;
+  720.9 km/h 30 ticks later against 618.0; pad 2, entered at tick 1,777, pushes 1.0.
+- `scale-pad{slot 0, 0}` every tick: over 2,400 ticks no push arms, no plume, no pad
+  sound (vanilla: 2 pushes, 3 pad sounds), and the module heard 3 `speed-pad` events for
+  the 3 pads entered.
+
 ### And the SDK (2026-10-29)
 
 Both examples wrote ABI 1 by hand: copied offsets, `unsafe` byte plumbing, a state
@@ -201,7 +262,7 @@ rewritten on them with **no `unsafe`, no offsets and no ABI codes**:
 | The layout | `crates/ext-abi` (`oag-ext-abi`) | `no_std`, zero dependencies, `#![forbid(unsafe_code)]`. Offsets, sizes, caps, flag bits, and the records `Craft`, `Event`, `Command` with their encode and decode; the shared vocabulary `Slot`, `Weapon` (the 14 codes in `Weapon::ALL`'s order), `Pickup` (`None`, `Weapon`, `Ours`), `Cue`, `Effect`, `Rgba`. `oag-modhost` depends on it and keeps only the checks that need the observation (the slot holds a craft, the shield maximum, the pickup held, one of a kind per slot); `oag-raceplay` maps the vocabulary to the engine's with exhaustive `match`es, so either side growing is a compile error |
 | The revision | `oag_ext_abi::REVISION` | Bumped by hand on any edit to the layout; a unit test folds every offset, size, code and one encoding of each record into a committed `(REVISION, fold)` pair, so a layout edit without a bump fails the gate. `oag_abi()` returns `(ABI << 8) \| REVISION`; the host refuses another revision **by name** ("built for ABI 1 rev 2, this host is ABI 1 rev 1"), and a value below 256 as a module "without a layout revision". Revision 1 is the layout the pre-SDK examples were built against, so the old `.wasm` files are refused |
 | The state length | `oag_state_len` | An optional export; when present it must equal the manifest's `state_bytes` (refused by name otherwise). `state_bytes` stays required in the manifest and its schema |
-| The guest SDK | `crates/ext` (`oag-ext`) | `no_std`, no `alloc`, depends on `oag-ext-abi` only; no engine crate may depend on it (`just check-deps`, rule 2). `Observation` (`tick()`, `crafts()` over occupied slots, `craft(slot)`, `events()` skipping unknown kinds); `Craft`, a view whose accessors (`is_person`, `fire_held`, `is_racing`, `shield`, `shield_max`, `speed_kmh`, `pickup`) read their field when asked; `Reply` with one method per command, taking a `&Craft` where the slot must hold one and returning `Err(Refused)` where the host would fault; the count written by the glue; `blob!` for the state (a plain-data struct, field order, little-endian, no padding, a `const` assert against `MAX_STATE_BYTES`); the `Extension` trait carrying the fresh-instance and one-tick-late rules; `export!` emitting `oag_abi`, `oag_io`, `oag_state_len`, `tick` and the panic handler on wasm32 only. Its `test` feature's `test::Race` runs an extension natively through the host's own writer and decoder |
+| The guest SDK | `crates/ext` (`oag-ext`) | `no_std`, no `alloc`, depends on `oag-ext-abi` only; no engine crate may depend on it (`just check-deps`, rule 2). `Observation` (`tick()`, `crafts()` over occupied slots, `craft(slot)`, `events()` skipping unknown kinds); `Craft`, a view whose accessors (`is_person`, `fire_held`, `is_racing`, `shield`, `shield_max`, `speed_kmh`, `pickup`) read their field when asked; `Reply` with one method per command, taking a `&Craft` where the slot must hold one and returning `Err(Refused)` where the host would fault; the count written by the glue; `blob!` for the state (a plain-data struct, field order, little-endian, no padding, a `const` assert against `MAX_STATE_BYTES`); the `Extension` trait carrying the fresh-instance and one-tick-late rules; `export!` emitting `oag_abi`, `oag_io`, `oag_track`, `oag_state_len`, `tick` and the panic handler on wasm32 only; `Observation::track()` and `prop!` read the track region. Its `test` feature's `test::Race` runs an extension natively through the host's own writer and decoder |
 | The examples | `mod-examples`, branch `ext-sdk` | Wall Penalty 87 lines (its blob `[u16; 8]`), Energy Turbo 307 (its record kept at 12 bytes with a spare `u16`), each with native tests under `cargo test`. The dependency is a `path` into the engine checkout the submodule sits in; a stand-alone clone needs a git dependency pinned to the revision, which waits until the branch is public |
 
 Measured on the rebuilt modules (`opt-level = "s"`, LTO, stripped). Fuel is from

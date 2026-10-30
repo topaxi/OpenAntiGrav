@@ -197,7 +197,8 @@ returns `Err(Refused)` where the host would fault:
 | `give-pickup{slot}` | `GivePickup` | `give_pickup(&craft)` | a craft holding anything |
 | `clear-pickup{slot}` | `ClearPickup` | `clear_pickup(&craft)` | a craft not holding `Pickup::Ours` |
 | `pickup-roll{weapon, every}` | `PickupRoll` | `pickup_roll(weapon, every)` | `every` 0 |
-| `pad-mode{slot}` | `PadMode` | `pad_mode(&craft)` | |
+| `scale-pad{pad, factor}` | `ScalePad` | `scale_pad(pad, factor)` | a factor outside `[0, 2]` or not finite; a pad the track does not have; a second for the pad this tick |
+| `scale-pad{slot, factor}` | `ScaleSlotPads` | `scale_slot_pads(&craft, factor)` | a factor outside `[0, 2]` or not finite; a second for the craft this tick |
 | `play-cue{slot, cue}` | `PlayCue` | `play_cue(&craft, cue)` | |
 | `fire-effect{slot, effect}` | `FireEffect` | `fire_effect(&craft, effect)` | |
 | `pickup-tint{slot, rgba}` | `PickupTint` | `pickup_tint(&craft, rgba)` | |
@@ -285,10 +286,18 @@ the backstop for a guest written without the SDK.
   driver's fire wherever the Turbo's gate passes; it never absorbs) for a slot holding
   the mod's own pickup (`Weapon::Extension`). Delivered at the same tick's call (phase
   2 is before C).
-- **`pad-energy{slot}`**: raised at the speed pad's entry edge in
-  `Race::test_speedup_pads` (`crates/raceplay/src/pads.rs`) for a slot in `pad-mode`.
-  The pad's force, plume and pad cue are skipped for that slot; its edge, cache and
-  Zone score are the pad's as ever.
+- **`speed-pad{slot, pad}`** / **`weapon-pad{slot, pad}`**: raised at the entry edge
+  of `Race::test_speedup_pads` and `Race::test_weapon_pads`
+  (`crates/raceplay/src/pads.rs`) for every craft, whatever the pad's factor or
+  cooldown; delivered at the next tick's call. **`trigger-enter` / `trigger-exit`**:
+  `Extensions::test_triggers`, called beside the pad tests in the people's step and the
+  field's with the same sweep, keeps each slot's inside mask; the call reports the
+  difference from the last call's ([README](README.md#and-track-properties-2026-10-30)).
+- **`scale-pad`** is host state (`RaceSim::extensions`: each pad's held factor, each
+  slot's factor this tick), hashed, read by `Race::test_speedup_pads` as
+  `Extensions::pad_factor`: the product scales the direction handed to
+  `Environment::pad_hit`; at 0 no push and no plume, pad cue, boost count or Zone
+  score, the edge and the cache the pad's as ever.
 - **`shield-delta`** lands at C: a loss through `oag_physics::damage::apply_weapon`, a
   gain through `damage::add`.
 - **`give-pickup` / `clear-pickup`** write the slot's pickup at C. **`pickup-roll`**
