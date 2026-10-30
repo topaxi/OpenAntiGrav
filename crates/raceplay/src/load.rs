@@ -946,6 +946,20 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // **`options.language`, not `None`** - see that field's own doc for the
     // bug this closes: every launch site now sets it from the live
     // `settings::Settings::language` before `load` ever runs.
+    // The mods' sources are found once, here, and read again by `prepare` below; their
+    // own PNGs go into the HUD's sheet, so they are read and decoded first.
+    let extension_sources = crate::extensions::gather(
+        &options.extensions,
+        options.find_extensions.as_ref(),
+        &mut report,
+    );
+    #[cfg(feature = "view")]
+    let mod_icons = crate::extensions::mod_icons(
+        &extension_sources,
+        &title.slug(),
+        options.foreign_track.as_deref(),
+        &mut report,
+    );
     #[cfg(feature = "view")]
     let hud = load_hud(
         craft_of(&mut craft, &mut archives),
@@ -959,6 +973,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             count: options.views,
             people: usize::from(options.people_flying()),
         },
+        &mod_icons,
         &mut report,
     );
 
@@ -1039,11 +1054,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let models = &craft_title.weapon_models;
     #[cfg_attr(not(feature = "view"), allow(unused_mut))]
     let extensions = crate::extensions::prepare(
-        &crate::extensions::gather(
-            &options.extensions,
-            options.find_extensions.as_ref(),
-            &mut report,
-        ),
+        &extension_sources,
         &title.slug(),
         options.foreign_track.as_deref(),
         crate::extensions::Track {
@@ -1052,6 +1063,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             speedup_pads: &speedup_pads,
             weapon_pads: &weapon_pads,
         },
+        options.language.as_deref(),
         &mut report,
     );
     #[cfg(feature = "view")]

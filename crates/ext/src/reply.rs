@@ -1,8 +1,9 @@
 //! The reply: one typed method per command, refusing what the host would fault on.
 
 use oag_ext_abi::{
-    Command, Cue, Effect, MAX_COMMANDS, MAX_PAD_FACTOR, MAX_THRUST_FACTOR, Pickup, Rgba, Sections,
-    Weapon, WeatherKind,
+    Command, Cue, Effect, HudElement, HudPlace, HudStr, MAX_COMMANDS, MAX_HUD_EXTRA, MAX_HUD_ITEMS,
+    MAX_HUD_SHAKE, MAX_PAD_FACTOR, MAX_THRUST_FACTOR, POOL_AT, POOL_LEN, Pickup, REPLY_AT, Rgba,
+    Sections, Weapon, WeatherKind,
 };
 
 use crate::Craft;
@@ -21,6 +22,9 @@ pub enum Refused {
     /// `[0, MAX_PAD_FACTOR]`, a pad the track does not have, a shield
     /// change past the craft's maximum, a non-finite number, a roll period of 0.
     Range,
+    /// More than `MAX_HUD_ITEMS` `hud_text` and `hud_icon` items for one craft this
+    /// tick, or a string pool already full.
+    HudItems,
     /// `give_pickup` to a craft holding something, or `clear_pickup` from one not
     /// holding the mod's own pickup.
     Pickup,
@@ -37,6 +41,8 @@ pub struct Reply<'a> {
     slot_pads: u32,
     pads: [u32; oag_ext_abi::track::MAX_ENTITIES / 32],
     speed_pads: usize,
+    pool_used: usize,
+    items: [u8; oag_ext_abi::MAX_CRAFTS],
 }
 
 impl<'a> Reply<'a> {
@@ -50,6 +56,8 @@ impl<'a> Reply<'a> {
             slot_pads: 0,
             pads: [0; oag_ext_abi::track::MAX_ENTITIES / 32],
             speed_pads,
+            pool_used: 0,
+            items: [0; oag_ext_abi::MAX_CRAFTS],
         }
     }
 
@@ -272,17 +280,222 @@ impl<'a> Reply<'a> {
         })
     }
 
-    /// `pickup-tint`: this tick, the craft's held-pickup backdrop in `rgba`. Drawn,
-    /// never hashed.
+    /// `hud-tint`: this tick, recolour the craft's HUD `element`. Drawn, never hashed;
+    /// a title without the element draws nothing.
     ///
     /// # Errors
     ///
     /// [`Refused::Full`].
-    pub fn pickup_tint(&mut self, craft: &Craft<'_>, rgba: Rgba) -> Result<(), Refused> {
-        self.push(&Command::PickupTint {
+    pub fn hud_tint(
+        &mut self,
+        craft: &Craft<'_>,
+        element: HudElement,
+        rgba: Rgba,
+    ) -> Result<(), Refused> {
+        self.push(&Command::HudTint {
             slot: craft.slot(),
+            element,
             rgba,
         })
+    }
+
+    /// `hud-shake`: this tick, jitter the craft's HUD `element` by up to `amplitude`
+    /// HUD pixels, in `[0, MAX_HUD_SHAKE]`. Drawn, never hashed.
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`], [`Refused::Range`].
+    pub fn hud_shake(
+        &mut self,
+        craft: &Craft<'_>,
+        element: HudElement,
+        amplitude: f32,
+    ) -> Result<(), Refused> {
+        if !(0.0..=MAX_HUD_SHAKE).contains(&amplitude) {
+            return Err(Refused::Range);
+        }
+        self.push(&Command::HudShake {
+            slot: craft.slot(),
+            element,
+            amplitude,
+        })
+    }
+
+    /// `hud-bar-extra`: this tick, the craft's bar `element` also shows `extra` times
+    /// its value on top (0.9 for a turbo of x1.9), the added share blending into
+    /// `rgba`. `extra` in `(0, MAX_HUD_EXTRA]`. Drawn, never hashed.
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`], [`Refused::Range`].
+    pub fn hud_bar_extra(
+        &mut self,
+        craft: &Craft<'_>,
+        element: HudElement,
+        extra: f32,
+        rgba: Rgba,
+    ) -> Result<(), Refused> {
+        if !(extra > 0.0 && extra <= MAX_HUD_EXTRA) {
+            return Err(Refused::Range);
+        }
+        self.push(&Command::HudBarExtra {
+            slot: craft.slot(),
+            element,
+            extra,
+            rgba,
+        })
+    }
+
+    /// `hud-text`: this tick, `text` (at most `MAX_HUD_TEXT` bytes) on the craft's HUD
+    /// at `place`, in the title's HUD font. Drawn, never hashed.
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`], [`Refused::Range`] for a string too long or a placement out
+    /// of range, [`Refused::HudItems`] past `MAX_HUD_ITEMS` for the craft or the pool.
+    pub fn hud_text(
+        &mut self,
+        craft: &Craft<'_>,
+        place: HudPlace,
+        rgba: Rgba,
+        text: &str,
+    ) -> Result<(), Refused> {
+        self.text(craft, place, rgba, text, false)
+    }
+
+    /// `hud-text` with the text named by string id `key` in the mod's own
+    /// `strings/<language>.toml`: the host shows the entry of the game's language, or
+    /// English's when the language lacks it, or nothing when no file has it.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::hud_text`].
+    pub fn hud_string(
+        &mut self,
+        craft: &Craft<'_>,
+        place: HudPlace,
+        rgba: Rgba,
+        key: &str,
+    ) -> Result<(), Refused> {
+        self.text(craft, place, rgba, key, true)
+    }
+
+    fn text(
+        &mut self,
+        craft: &Craft<'_>,
+        place: HudPlace,
+        rgba: Rgba,
+        text: &str,
+        own: bool,
+    ) -> Result<(), Refused> {
+        let text = HudStr::new(text).ok_or(Refused::Range)?;
+        self.push_pooled(
+            craft,
+            place,
+            &Command::HudText {
+                slot: craft.slot(),
+                place,
+                rgba,
+                text,
+                own,
+            },
+            text,
+        )
+    }
+
+    /// `hud-icon`: this tick, the title's HUD sprite `sprite` on the craft's HUD at
+    /// `place`, `rgba` its modulating colour. Drawn, never hashed.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::hud_text`].
+    pub fn hud_icon(
+        &mut self,
+        craft: &Craft<'_>,
+        place: HudPlace,
+        rgba: Rgba,
+        sprite: &str,
+    ) -> Result<(), Refused> {
+        self.icon(craft, place, rgba, sprite, false)
+    }
+
+    /// `hud-icon` with the image named by `name` in the mod's own `[icons]`: a PNG the
+    /// manifest declares, drawn at its own size times the placement's. One the mod
+    /// lacks or the host could not read draws nothing, and the load report says so.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::hud_text`].
+    pub fn hud_mod_icon(
+        &mut self,
+        craft: &Craft<'_>,
+        place: HudPlace,
+        rgba: Rgba,
+        name: &str,
+    ) -> Result<(), Refused> {
+        self.icon(craft, place, rgba, name, true)
+    }
+
+    fn icon(
+        &mut self,
+        craft: &Craft<'_>,
+        place: HudPlace,
+        rgba: Rgba,
+        sprite: &str,
+        own: bool,
+    ) -> Result<(), Refused> {
+        let sprite = HudStr::new(sprite).ok_or(Refused::Range)?;
+        self.push_pooled(
+            craft,
+            place,
+            &Command::HudIcon {
+                slot: craft.slot(),
+                place,
+                rgba,
+                sprite,
+                own,
+            },
+            sprite,
+        )
+    }
+
+    fn push_pooled(
+        &mut self,
+        craft: &Craft<'_>,
+        place: HudPlace,
+        command: &Command,
+        string: HudStr,
+    ) -> Result<(), Refused> {
+        let max = oag_ext_abi::hud::MAX_HUD_OFFSET;
+        if HudPlace::from_bits(place.to_bits()) != Some(place)
+            || place.x.abs() > max
+            || place.y.abs() > max
+        {
+            return Err(Refused::Range);
+        }
+        let slot = craft.slot().index();
+        let bytes = string.as_str().as_bytes();
+        let at = self.pool_used;
+        if usize::from(self.items[slot]) >= MAX_HUD_ITEMS || at + 1 + bytes.len() > POOL_LEN {
+            return Err(Refused::HudItems);
+        }
+        if self.count >= MAX_COMMANDS {
+            return Err(Refused::Full);
+        }
+        let base = POOL_AT - REPLY_AT + at;
+        if let Some(entry) = self.reply.get_mut(base..base + 1 + bytes.len()) {
+            entry[0] = bytes.len() as u8;
+            entry[1..].copy_from_slice(bytes);
+        }
+        let record = command.encode_pooled(at as u16);
+        let start = 4 + self.count * oag_ext_abi::COMMAND_LEN;
+        if let Some(out) = self.reply.get_mut(start..start + oag_ext_abi::COMMAND_LEN) {
+            out.copy_from_slice(&record);
+        }
+        self.count += 1;
+        self.pool_used += 1 + bytes.len();
+        self.items[slot] += 1;
+        Ok(())
     }
 
     /// `set-weather`: race-wide, play the host title's own `kind` of weather at

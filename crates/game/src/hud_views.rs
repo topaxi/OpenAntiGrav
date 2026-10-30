@@ -224,6 +224,10 @@ pub fn view_draws<'a>(
         if let Some(gap) = readout.head_to_head.as_mut() {
             gap.stacked = count == 2 && cut == oag_render::viewport::Cut::Horizontal;
         }
+        let items_readout = Readout {
+            ext: readout.ext.clone(),
+            ..Readout::default()
+        };
         match oag_hud::split_hud::source(split, split_hud, readout.mode, count, aspect) {
             oag_hud::split_hud::Source::Authored(split) => {
                 let layout = &split.layouts[slot];
@@ -239,7 +243,18 @@ pub fn view_draws<'a>(
                     placement: place_into(view, region, viewport, space),
                     sight: Some(place_into(view, [0.0, 0.0, width, height], viewport, space)),
                     sight_only: false,
+                    items: None,
                 });
+                out.extend(item_view(
+                    Context {
+                        layout,
+                        default_border: layout.default_border(),
+                        ..cx
+                    },
+                    &items_readout,
+                    place_into(view, [0.0, 0.0, width, height], viewport, space),
+                    (width, height),
+                ));
             }
             oag_hud::split_hud::Source::File(_, pieces, _) => {
                 let rect = grid_rect(view, viewport, space);
@@ -256,6 +271,7 @@ pub fn view_draws<'a>(
                         placement: piece.placement(rect, space.size),
                         sight: None,
                         sight_only: false,
+                        items: None,
                     });
                 }
                 out.push(ViewDraw {
@@ -264,7 +280,14 @@ pub fn view_draws<'a>(
                     sight: Some(place_into(view, whole, viewport, space)),
                     readout,
                     sight_only: true,
+                    items: None,
                 });
+                out.extend(item_view(
+                    cx,
+                    &items_readout,
+                    place_into(view, whole, viewport, space),
+                    space.size,
+                ));
             }
             oag_hud::split_hud::Source::Scaled => out.push(ViewDraw {
                 cx,
@@ -272,10 +295,30 @@ pub fn view_draws<'a>(
                 placement: place_into(view, whole, viewport, space),
                 sight: None,
                 sight_only: false,
+                items: None,
             }),
         }
     }
     out
+}
+
+/// The draw of one view's `hud-text` and `hud-icon` items, anchored in `grid` and moved by
+/// `placement`; `None` when the slot has none. A view of its own so a layout split into
+/// pieces draws each item once.
+fn item_view<'a>(
+    cx: Context<'a>,
+    readout: &Readout,
+    placement: Placement,
+    grid: (f32, f32),
+) -> Option<ViewDraw<'a>> {
+    (!readout.ext.items.is_empty()).then(|| ViewDraw {
+        cx,
+        readout: readout.clone(),
+        placement,
+        sight: None,
+        sight_only: false,
+        items: Some(grid),
+    })
 }
 
 /// Where the track-description panel goes: the whole `viewport`, or under a split

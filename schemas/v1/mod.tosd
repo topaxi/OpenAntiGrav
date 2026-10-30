@@ -119,3 +119,11 @@ type = "string"
 [elements.extension]
 type = "types.extension"
 optional = true
+
+# `[icons]`: name = "path.png". The keys are the author's, so the schema says "any"; the
+# loader checks that every icon is a .png in the mod and every name is letters, digits,
+# '-', '_'. A mod's text is its `strings/<language>.toml`, not the manifest.
+
+[elements.icons]
+type = "any"
+optional = true

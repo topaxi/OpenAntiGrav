@@ -78,6 +78,9 @@ pub struct Manifest {
     pub oag: Option<semver::VersionReq>,
     /// `[extension]`: the WebAssembly modules the mod runs, if any.
     pub extension: Option<Extension>,
+    /// `[icons]`: the mod's own PNGs by name, as paths in the mod. A module's `hud-icon`
+    /// may name one.
+    pub icons: std::collections::BTreeMap<String, String>,
 }
 
 /// `[extension]` (`docs/architecture/wasm-extensions/README.md`, section 1.1). Read
@@ -127,6 +130,8 @@ struct File {
     #[serde(rename = "mod")]
     module: Table,
     extension: Option<ExtensionTable>,
+    #[serde(default)]
+    icons: std::collections::BTreeMap<String, String>,
 }
 
 #[derive(Deserialize)]
@@ -200,6 +205,20 @@ impl Manifest {
         oag_schema::check(file.header.as_ref(), SCHEMA_KIND, SCHEMA_MAJOR)?;
         let extension = file.extension.map(|e| extension(e, has)).transpose()?;
         let t = file.module;
+        for (name, path) in &file.icons {
+            if !valid_key(name) {
+                return Err(bad(
+                    "icons",
+                    format!("{name:?} is not a name: letters, digits, '-', '_'"),
+                ));
+            }
+            if !path.to_ascii_lowercase().ends_with(".png") || !has(path) {
+                return Err(bad(
+                    "icons",
+                    format!("{name}: {path:?} is not a .png in the mod"),
+                ));
+            }
+        }
 
         if !valid_id(&t.id) {
             return Err(bad(
@@ -261,6 +280,7 @@ impl Manifest {
             titles: t.titles,
             oag,
             extension,
+            icons: file.icons,
         })
     }
 
@@ -322,6 +342,14 @@ fn extension(e: ExtensionTable, has: &dyn Fn(&str) -> bool) -> Result<Extension,
         rules,
         track,
     })
+}
+
+/// A string key or icon name: letters, digits, '-', '_'.
+fn valid_key(key: &str) -> bool {
+    !key.is_empty()
+        && key
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
 pub(crate) fn valid_id(id: &str) -> bool {

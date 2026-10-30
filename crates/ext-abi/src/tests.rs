@@ -1,3 +1,6 @@
+extern crate std;
+use std::{vec, vec::Vec};
+
 use super::*;
 
 /// FNV-1a over little-endian words: no dependency, and every byte counts.
@@ -17,7 +20,7 @@ fn slot(index: usize) -> Slot {
 }
 
 /// One of every command, with arguments that touch every field.
-fn every_command() -> [Command; 16] {
+fn every_command() -> [Command; 20] {
     [
         Command::ScaleThrust {
             slot: slot(1),
@@ -49,9 +52,45 @@ fn every_command() -> [Command; 16] {
             slot: slot(7),
             effect: Effect::HitSpark,
         },
-        Command::PickupTint {
+        Command::HudTint {
             slot: slot(15),
+            element: HudElement::Pickup,
             rgba: Rgba::new(0xE0, 0x20, 0x21, 0xFF),
+        },
+        Command::HudShake {
+            slot: slot(1),
+            element: HudElement::Energy,
+            amplitude: 2.5,
+        },
+        Command::HudBarExtra {
+            slot: slot(2),
+            element: HudElement::Thrust,
+            extra: 0.9,
+            rgba: Rgba::new(0xFF, 0x20, 0x20, 0xFF),
+        },
+        Command::HudText {
+            slot: slot(3),
+            place: HudPlace {
+                anchor: Anchor::BottomRight,
+                quarters: 6,
+                x: -40,
+                y: 2047,
+            },
+            rgba: Rgba::new(1, 2, 3, 4),
+            text: HudStr::new("BOOST 1:23.4").unwrap(),
+            own: true,
+        },
+        Command::HudIcon {
+            slot: slot(4),
+            place: HudPlace {
+                anchor: Anchor::Center,
+                quarters: 4,
+                x: 0,
+                y: -2047,
+            },
+            rgba: Rgba::new(255, 255, 255, 255),
+            sprite: HudStr::new("TimeDiffIcon").unwrap(),
+            own: false,
         },
         Command::SetWeather {
             kind: WeatherKind::Rain,
@@ -107,6 +146,18 @@ fn a_craft() -> Craft {
         shield_max: 100.0,
         speed_kmh: 401.25,
     }
+}
+
+/// The pool a command's string reads from: its entry at offset 0.
+fn pool_for(command: &Command) -> Vec<u8> {
+    let text = match command {
+        Command::HudText { text, .. } => text.as_str(),
+        Command::HudIcon { sprite, .. } => sprite.as_str(),
+        _ => return Vec::new(),
+    };
+    let mut pool = vec![text.len() as u8];
+    pool.extend_from_slice(text.as_bytes());
+    pool
 }
 
 /// Every offset, size, cap, code and flag of the layout, and the bytes of one of
@@ -176,6 +227,13 @@ fn layout_fold() -> u64 {
         u32::from(CRAFT_FIRE_HELD),
         u32::from(CRAFT_RACING),
         MAX_THRUST_FACTOR.to_bits(),
+        POOL_AT as u32,
+        u32::from(OWN_FLAG),
+        POOL_LEN as u32,
+        MAX_HUD_ITEMS as u32,
+        MAX_HUD_TEXT as u32,
+        MAX_HUD_SHAKE.to_bits(),
+        MAX_HUD_EXTRA.to_bits(),
         MAX_ROLL_EVERY,
         Weapon::ALL.len() as u32,
         Cue::ALL.len() as u32,
@@ -213,8 +271,10 @@ fn layout_fold() -> u64 {
         .map(|cue| u32::from(cue.code())),
     )
     .chain([Effect::CollisionSpark, Effect::HitSpark].map(|effect| u32::from(effect.code())))
-    .chain([WeatherKind::Rain].map(|kind| u32::from(kind.code())));
-    let commands = every_command().into_iter().flat_map(|c| c.encode());
+    .chain([WeatherKind::Rain].map(|kind| u32::from(kind.code())))
+    .chain(HudElement::ALL.iter().map(|e| u32::from(e.code())))
+    .chain(Anchor::ALL.iter().map(|a| u32::from(a.code())));
+    let commands = every_command().into_iter().flat_map(|c| c.encode_pooled(0));
     let events = every_event().into_iter().flat_map(Event::encode);
     let craft = a_craft().encode();
     fnv(consts
@@ -225,7 +285,7 @@ fn layout_fold() -> u64 {
 
 /// The revision and the layout it names. The ABI changes in place before release (no
 /// revision bump); the fold is recorded again with each layout edit.
-const REVISION_AND_FOLD: (u32, u64) = (3, 0xb0fe_1175_4317_d134);
+const REVISION_AND_FOLD: (u32, u64) = (3, 0x863a_0632_fbef_b91a);
 
 #[test]
 fn the_layout_is_the_revision_it_says() {
@@ -247,7 +307,11 @@ fn the_abi_word_carries_major_and_revision_and_a_bare_major_has_none() {
 #[test]
 fn every_record_decodes_to_what_was_encoded() {
     for command in every_command() {
-        assert_eq!(Command::decode(&command.encode()), Ok(command));
+        let pool = pool_for(&command);
+        assert_eq!(
+            Command::decode_in(&command.encode_pooled(0), &pool),
+            Ok(command)
+        );
     }
     for event in every_event() {
         assert_eq!(Event::decode(&event.encode()), Some(event));
@@ -520,5 +584,76 @@ fn a_track_past_a_cap_or_with_a_key_twice_does_not_fit() {
             index: 0,
             key: 7
         })
+    );
+}
+
+#[test]
+fn the_old_pickup_tint_code_is_unknown_not_a_tint() {
+    let mut record = Command::HudTint {
+        slot: slot(0),
+        element: HudElement::Pickup,
+        rgba: Rgba::default(),
+    }
+    .encode();
+    record[COMMAND_KIND] = 7;
+    assert_eq!(Command::decode(&record), Err(Malformed::Kind(7)));
+}
+
+#[test]
+fn a_hud_record_out_of_range_is_malformed_by_name() {
+    let base = |kind: u8, arg: u16, value: u32, word: u32| {
+        let mut record = [0; COMMAND_LEN];
+        record[COMMAND_KIND] = kind;
+        record[COMMAND_ARG..COMMAND_ARG + 2].copy_from_slice(&arg.to_le_bytes());
+        record[COMMAND_VALUE..COMMAND_VALUE + 4].copy_from_slice(&value.to_le_bytes());
+        record[COMMAND_WORD..COMMAND_WORD + 4].copy_from_slice(&word.to_le_bytes());
+        record
+    };
+    assert_eq!(
+        Command::decode(&base(16, 0, 0, 0)),
+        Err(Malformed::HudElement(0))
+    );
+    assert_eq!(
+        Command::decode(&base(17, 3, 40.0_f32.to_bits(), 0)),
+        Err(Malformed::HudValue {
+            kind: 17,
+            value: 40.0
+        })
+    );
+    assert!(matches!(
+        Command::decode(&base(18, 2, 0.0_f32.to_bits(), 0)),
+        Err(Malformed::HudValue { kind: 18, .. })
+    ));
+    assert!(matches!(
+        Command::decode(&base(18, 2, f32::NAN.to_bits(), 0)),
+        Err(Malformed::HudValue { kind: 18, .. })
+    ));
+    let pool = [2, b'h', b'i', 0xff, 0xff];
+    let place = HudPlace {
+        anchor: Anchor::Top,
+        quarters: 4,
+        x: 0,
+        y: 0,
+    }
+    .to_bits();
+    assert!(Command::decode_in(&base(19, 0, place, 0), &pool).is_ok());
+    assert_eq!(
+        Command::decode_in(&base(19, 3, place, 0), &pool),
+        Err(Malformed::Pool(3)),
+        "a length past the pool"
+    );
+    assert_eq!(
+        Command::decode_in(&base(19, 9, place, 0), &pool),
+        Err(Malformed::Pool(9))
+    );
+    assert_eq!(
+        Command::decode_in(&base(19, 0, 0, 0), &pool),
+        Err(Malformed::HudPlace),
+        "a size of 0 quarters"
+    );
+    assert_eq!(
+        Command::decode_in(&base(19, 0, 9, 0), &pool),
+        Err(Malformed::HudPlace),
+        "the ninth anchor does not exist"
     );
 }

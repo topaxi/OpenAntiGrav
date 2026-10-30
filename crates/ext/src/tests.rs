@@ -205,11 +205,13 @@ fn the_reply_refuses_what_the_host_would_fault_on() {
     assert_eq!(reply.scale_slot_pads(&held, 1.0), Err(Refused::Repeated));
     assert_eq!(reply.len(), 5);
     while reply.len() < MAX_COMMANDS_FOR_TEST {
-        reply.pickup_tint(&held, Rgba::default()).unwrap();
+        reply
+            .hud_tint(&held, oag_ext_abi::HudElement::Pickup, Rgba::default())
+            .unwrap();
     }
     assert_eq!(reply.play_cue(&held, Cue::Turbo), Err(Refused::Full));
     reply.finish();
-    assert_eq!(buffer[..4], 64_u32.to_le_bytes());
+    assert_eq!(buffer[..4], (MAX_COMMANDS_FOR_TEST as u32).to_le_bytes());
 }
 
 const MAX_COMMANDS_FOR_TEST: usize = oag_ext_abi::MAX_COMMANDS;
@@ -314,6 +316,126 @@ fn a_guest_reads_a_pads_property_by_its_compile_time_key_and_hears_pads_and_trig
     );
     assert_eq!((log.speed, log.weapon, log.entered, log.left), (1, 2, 2, 1));
     assert_eq!(log.whole, 5.0);
+}
+
+crate::blob! {
+    #[derive(Debug, Default)]
+    struct NoState {
+        spare: u8,
+    }
+}
+
+/// Puts a lap time and a sprite on every craft's HUD, then floods one craft past the
+/// cap.
+struct HudDrawer;
+
+impl Extension for HudDrawer {
+    type State = NoState;
+
+    fn tick(obs: &Observation<'_>, _: &mut NoState, reply: &mut Reply<'_>) {
+        for craft in obs.crafts() {
+            let place = HudPlace {
+                anchor: Anchor::BottomRight,
+                quarters: 4,
+                x: -8,
+                y: -6,
+            };
+            let mut line = Line::new();
+            line.time(3725).unwrap();
+            reply
+                .hud_text(&craft, place, Rgba::new(255, 255, 255, 255), line.as_str())
+                .unwrap();
+            reply
+                .hud_icon(&craft, place, Rgba::default(), "TimeDiffIcon")
+                .unwrap();
+        }
+    }
+}
+
+#[test]
+fn a_guest_draws_text_and_an_icon_and_the_cap_refuses_by_name() {
+    let mut race = Race::<HudDrawer>::new()
+        .with_craft(slot(0), racer(10.0))
+        .with_craft(slot(2), racer(10.0));
+    let commands = race.tick();
+    assert_eq!(commands.len(), 4);
+    assert!(matches!(
+        commands[0],
+        Command::HudText { slot: s, text, place, .. }
+            if s == slot(0) && text.as_str() == "1:02.0" && place.anchor == Anchor::BottomRight
+    ));
+    assert!(matches!(
+        commands[3],
+        Command::HudIcon { slot: s, sprite, .. } if s == slot(2) && sprite.as_str() == "TimeDiffIcon"
+    ));
+
+    let mut buffer = [0_u8; oag_ext_abi::CRAFTS_AT - oag_ext_abi::REPLY_AT];
+    let mut reply = Reply::new(&mut buffer, 0);
+    let held = Craft {
+        slot: slot(1),
+        record: &[0; oag_ext_abi::CRAFT_LEN],
+    };
+    let place = HudPlace {
+        anchor: Anchor::Top,
+        quarters: 4,
+        x: 0,
+        y: 0,
+    };
+    for _ in 0..MAX_HUD_ITEMS {
+        reply.hud_text(&held, place, Rgba::default(), "x").unwrap();
+    }
+    assert_eq!(
+        reply.hud_text(&held, place, Rgba::default(), "x"),
+        Err(Refused::HudItems)
+    );
+    let long = "x".repeat(MAX_HUD_TEXT + 1);
+    assert_eq!(
+        reply.hud_text(&held, place, Rgba::default(), &long),
+        Err(Refused::Range)
+    );
+    let far = HudPlace { x: 2048, ..place };
+    assert_eq!(
+        reply.hud_icon(&held, far, Rgba::default(), "x"),
+        Err(Refused::Range)
+    );
+}
+
+/// Names the mod's own string and icon.
+struct HudNamer;
+
+impl Extension for HudNamer {
+    type State = NoState;
+
+    fn tick(obs: &Observation<'_>, _: &mut NoState, reply: &mut Reply<'_>) {
+        for craft in obs.crafts() {
+            let place = HudPlace {
+                anchor: Anchor::Top,
+                quarters: 4,
+                x: 0,
+                y: 0,
+            };
+            reply
+                .hud_string(&craft, place, Rgba::default(), "boost")
+                .unwrap();
+            reply
+                .hud_mod_icon(&craft, place, Rgba::default(), "badge")
+                .unwrap();
+        }
+    }
+}
+
+#[test]
+fn a_guest_names_its_own_string_and_icon_by_key() {
+    let mut race = Race::<HudNamer>::new().with_craft(slot(0), racer(10.0));
+    let commands = race.tick();
+    assert!(matches!(
+        commands[0],
+        Command::HudText { text, own: true, .. } if text.as_str() == "boost"
+    ));
+    assert!(matches!(
+        commands[1],
+        Command::HudIcon { sprite, own: true, .. } if sprite.as_str() == "badge"
+    ));
 }
 
 mod armor;

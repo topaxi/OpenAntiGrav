@@ -79,7 +79,7 @@ Reviewed: `mod-examples` at `43d45b9` (branch `wasm-extensions`), `wall-penalty/
    repeats `12 x 8` in a comment. Nothing ties the struct to the manifest number.
 4. **Commands are positional tuples.** `reply.push(kind, slot, arg, value, word)`: a
    `u8` code plus three fields whose meaning depends on the code. `pickup-roll` puts the
-   weapon in the `u16` and the period in the `u32`; `pickup-tint` puts the colour in the
+   weapon in the `u16` and the period in the `u32`; `hud-tint` puts the colour in the
    `u32`; `scale-thrust` uses the `f32`. The host decodes them into a typed `Command`
    enum; the guest sees none of that.
 5. **Magic numbers.** `TURBO = 5` ("`Weapon::ALL`'s Turbo, plus one"), `EXTENSION = 255`,
@@ -154,8 +154,8 @@ oag_ext::export!(WallPenalty);
 What changed: no constants copied, no `unsafe`, no bytes, the blob is a struct, a
 command cannot name an empty slot, the reply count is written by the glue, and the
 whole `impl` runs natively under `cargo test` because nothing in it is wasm-specific.
-Energy Turbo's `reply.push(PICKUP_TINT, slot, 0, 0.0, RED)` becomes
-`reply.pickup_tint(craft, Rgba::new(0xE0, 0x20, 0x20, 0xFF))`,
+Energy Turbo's `reply.push(HUD_TINT, slot, 4, 0.0, RED)` becomes
+`reply.hud_tint(craft, HudElement::Pickup, Rgba::new(0xE0, 0x20, 0x20, 0xFF))`,
 `reply.push(PICKUP_ROLL, 0, TURBO, 0.0, 2)` becomes `reply.pickup_roll(Weapon::Turbo, 2)`,
 `flags & CRAFT_FIRE_HELD != 0` becomes `craft.fire_held()`, and
 `pickup == EXTENSION` becomes `craft.pickup() == Pickup::Ours`.

@@ -72,6 +72,8 @@ fn wall_penalty() -> Option<race::extensions::Source> {
         state_bytes: extension.state_bytes,
         scope: race::extensions::Scope::Rules,
         read: Arc::new(move || Ok(wasm.clone())),
+        strings: Arc::new(|_| Default::default()),
+        icons: Vec::new(),
     })
 }
 

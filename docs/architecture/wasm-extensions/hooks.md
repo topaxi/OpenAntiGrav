@@ -215,13 +215,17 @@ returns `Err(Refused)` where the host would fault:
 | `scale-pad{slot, factor}` | `ScaleSlotPads` | `scale_slot_pads(&craft, factor)` | a factor outside `[0, 2]` or not finite; a second for the craft this tick |
 | `play-cue{slot, cue}` | `PlayCue` | `play_cue(&craft, cue)` | |
 | `fire-effect{slot, effect}` | `FireEffect` | `fire_effect(&craft, effect)` | |
-| `pickup-tint{slot, rgba}` | `PickupTint` | `pickup_tint(&craft, rgba)` | |
+| `hud-tint{slot, element, rgba}` | `HudTint` | `hud_tint(&craft, element, rgba)` | |
+| `hud-shake{slot, element, amplitude}` | `HudShake` | `hud_shake(&craft, element, amplitude)` | `amplitude` outside `[0, 16]` or not finite |
+| `hud-bar-extra{slot, element, extra, rgba}` | `HudBarExtra` | `hud_bar_extra(&craft, element, extra, rgba)` | `extra` outside `(0, 4]` or not finite |
+| `hud-text{slot, anchor, x, y, text, rgba, size}` | `HudText` | `hud_text(&craft, place, rgba, text)` | text over 48 bytes, an offset past 2047, a size outside 1..=15 quarters; a 33rd item for the craft (`Refused::HudItems`); `hud_string(&craft, place, rgba, key)` names a string id of the mod's `strings/<language>.toml` instead of carrying the text |
+| `hud-icon{slot, anchor, x, y, sprite, rgba, size}` | `HudIcon` | `hud_icon(&craft, place, rgba, sprite)`, `hud_mod_icon(&craft, place, rgba, name)` for the mod's own PNG | as `hud-text` |
 | `set-weather{kind, strength}` | `SetWeather` | `set_weather(kind, strength)` | `strength` outside `[0, 1]` or not finite |
 | `set-sun{intensity}` | `SetSun` | `set_sun(intensity)` | outside `[0, 1]` or not finite |
 | `grade-sky{grey}` | `GradeSky` | `grade_sky(grey)` | outside `[0, 1]` or not finite |
 | `give-shield{slot}`, `hold-shield{slot}`, `clear-shield{slot}` | `GiveShield`, `HoldShield`, `ClearShield` | `give_shield(&craft)`, `hold_shield(&craft)`, `clear_shield(&craft)` | a second Shield command for the craft this tick |
 
-Every method also refuses a 65th command (`Refused::Full`). The host's checks stay
+Every method also refuses a 97th command (`Refused::Full`). The host's checks stay
 the backstop for a guest written without the SDK.
 
 ### `scale-thrust{slot, factor, ticks}`
@@ -323,7 +327,12 @@ the backstop for a guest written without the SDK.
   step (`player_step.rs`, `field.rs`).
 - **`play-cue`** pushes onto `RaceSim::cues`. **`fire-effect`** queues for
   `Race::draw_extension_effects` (`tick.rs`'s drawn-tick block, beside the hit sparks).
-  **`pickup-tint`** feeds `oag_hud::Readout::pickup_tint`.
+  The five **`hud-*`** commands are collected per tick in `Extensions` and become one
+  `oag_hud::ext_draws::Outputs` per slot in `Race::readout_for`
+  (`Readout::ext`); `draw_list` applies the recolours, shakes and bar shares where it
+  builds each widget, and `oag_game::hud_overlay` appends the text and icons
+  (`ext_draws::append`) in the layout's grid, as a view of their own per slot in a split
+  screen. Guests format numbers and times with `oag_ext::Line`.
 - **`set-weather`, `set-sun`, `grade-sky`** are race-wide (slot 0), held in
   `Extensions` (`Sky`) for the tick, cleared at the next call, and read by the view half:
   `Race::advance_weather` drives the track module's rain (`Weather::drive`), `Scene`'s lens

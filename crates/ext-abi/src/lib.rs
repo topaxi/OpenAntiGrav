@@ -22,6 +22,7 @@
 //! | [`STATE_AT`] | [`MAX_STATE_BYTES`] | the module's state blob, in and out |
 //! | [`REPLY_AT`] | 4 | command count, written by the guest |
 //! | [`REPLY_AT`] + 4 | [`COMMAND_LEN`] x [`MAX_COMMANDS`] | commands ([`Command`]): kind `u8`, slot `u8`, `u16` argument, `f32`, `u32` |
+//! | [`POOL_AT`] | [`POOL_LEN`] | the reply's string pool: entries of a length byte then UTF-8, named by offset from a `hud-text` or `hud-icon` command |
 //! | [`CRAFTS_AT`] | [`CRAFT_LEN`] x [`MAX_CRAFTS`] | one record per grid slot ([`Craft`]): pickup `u8`, flags `u8`, lap `u8`, laps target `u8`, shield `f32`, shield maximum `f32`, speed km/h `f32` |
 //!
 //! The track region is a second buffer, written by the host before each call when the
@@ -39,12 +40,19 @@
 
 use core::fmt;
 
+use hud::pool_string;
+pub use hud::{
+    Anchor, HudElement, HudPlace, HudStr, MAX_HUD_EXTRA, MAX_HUD_ITEMS, MAX_HUD_SHAKE, MAX_HUD_TEXT,
+};
+
 /// The ABI major. A manifest's `[extension] api` names it.
 pub const ABI: u32 = 1;
 /// The layout revision within [`ABI`]: bumped by hand on any edit to the layout. A
 /// module built before revisions existed returns the bare major and is revision 0.
 pub const REVISION: u32 = 3;
 const _: () = assert!(REVISION > 0 && REVISION < 256);
+const _: () = assert!(CRAFTS_AT + CRAFT_LEN * MAX_CRAFTS <= IO_LEN);
+const _: () = assert!(MAX_CRAFTS <= MAX_SLOTS as usize);
 /// What a guest's `oag_abi` returns: the major above the revision's 8 bits.
 pub const ABI_WORD: u32 = (ABI << 8) | REVISION;
 
@@ -67,8 +75,9 @@ pub const MAX_SLOTS: u32 = 32;
 pub const MAX_EVENTS: usize = 32;
 /// The longest state blob.
 pub const MAX_STATE_BYTES: usize = 1024;
-/// Commands per reply; more is a fault (README 2.1: 64, proposed).
-pub const MAX_COMMANDS: usize = 64;
+/// Commands per reply; more is a fault (README 2.1 proposed 64; 96 leaves a slot's
+/// [`MAX_HUD_ITEMS`] draw items room beside the rest). Chosen.
+pub const MAX_COMMANDS: usize = 96;
 /// Craft records per observation: a grid's slots. A [`Slot`] is below it.
 pub const MAX_CRAFTS: usize = 16;
 
@@ -94,12 +103,15 @@ pub const STATE_AT: usize = EVENTS_AT + EVENT_LEN * MAX_EVENTS;
 pub const REPLY_AT: usize = STATE_AT + MAX_STATE_BYTES;
 /// One command record.
 pub const COMMAND_LEN: usize = 12;
+/// Where the reply's string pool starts: after the commands, inside the reply section.
+/// A `hud-text` or `hud-icon` command names its string by offset into it.
+pub const POOL_AT: usize = REPLY_AT + 4 + COMMAND_LEN * MAX_COMMANDS;
+/// The pool's length. Chosen.
+pub const POOL_LEN: usize = 768;
 /// Where the craft records start.
-pub const CRAFTS_AT: usize = REPLY_AT + 4 + COMMAND_LEN * MAX_COMMANDS;
+pub const CRAFTS_AT: usize = POOL_AT + POOL_LEN;
 /// One craft record.
 pub const CRAFT_LEN: usize = 16;
-const _: () = assert!(CRAFTS_AT + CRAFT_LEN * MAX_CRAFTS <= IO_LEN);
-const _: () = assert!(MAX_CRAFTS <= MAX_SLOTS as usize);
 
 /// Within an event record: the kind code.
 pub const EVENT_KIND: usize = 0;
@@ -166,7 +178,6 @@ const COMMAND_SHIELD_DELTA: u8 = 2;
 const COMMAND_GIVE_PICKUP: u8 = 3;
 const COMMAND_PLAY_CUE: u8 = 5;
 const COMMAND_FIRE_EFFECT: u8 = 6;
-const COMMAND_PICKUP_TINT: u8 = 7;
 const COMMAND_CLEAR_PICKUP: u8 = 8;
 const COMMAND_PICKUP_ROLL: u8 = 9;
 const COMMAND_SET_WEATHER: u8 = 10;
@@ -174,6 +185,14 @@ const COMMAND_SET_SUN: u8 = 11;
 const COMMAND_GRADE_SKY: u8 = 12;
 const COMMAND_SCALE_PAD: u8 = 13;
 const COMMAND_SCALE_SLOT_PADS: u8 = 14;
+const COMMAND_HUD_TINT: u8 = 16;
+const COMMAND_HUD_SHAKE: u8 = 17;
+const COMMAND_HUD_BAR_EXTRA: u8 = 18;
+const COMMAND_HUD_TEXT: u8 = 19;
+const COMMAND_HUD_ICON: u8 = 20;
+/// Bit 15 of a `hud-text` or `hud-icon` argument: the string is a key of the sending
+/// mod's own tables, not the text or a title sprite. The pool offset is the rest.
+const OWN_FLAG: u16 = 1 << 15;
 const COMMAND_GIVE_SHIELD: u8 = 24;
 const COMMAND_HOLD_SHIELD: u8 = 25;
 const COMMAND_CLEAR_SHIELD: u8 = 26;
@@ -658,13 +677,69 @@ pub enum Command {
         /// The effect.
         effect: Effect,
     },
-    /// This tick, draw the slot's held-pickup backdrop in `rgba` instead of the
-    /// weapon's own colour. An output: drawn, never hashed.
-    PickupTint {
+    /// This tick, recolour the slot's HUD `element`. An output, re-sent each tick it
+    /// should hold: drawn, never hashed. A title without the element draws nothing.
+    HudTint {
         /// The grid slot.
         slot: Slot,
+        /// The element.
+        element: HudElement,
         /// The colour.
         rgba: Rgba,
+    },
+    /// This tick, jitter the slot's HUD `element` by up to `amplitude` HUD pixels
+    /// (finite, in `[0, MAX_HUD_SHAKE]`). An output, never hashed.
+    HudShake {
+        /// The grid slot.
+        slot: Slot,
+        /// The element.
+        element: HudElement,
+        /// HUD pixels.
+        amplitude: f32,
+    },
+    /// This tick, the slot's bar `element` also shows `extra` times its value on top,
+    /// the bar rescaled so value x (1 + extra) fills it: the base keeps its colour and
+    /// the added share blends into `rgba`. `extra` finite, in `(0, MAX_HUD_EXTRA]`.
+    /// An output, never hashed.
+    HudBarExtra {
+        /// The grid slot.
+        slot: Slot,
+        /// The element, a bar.
+        element: HudElement,
+        /// The added share of the value, 0.9 for a turbo of x1.9.
+        extra: f32,
+        /// The colour the added share blends to.
+        rgba: Rgba,
+    },
+    /// This tick, draw `text` on the slot's HUD at `place`, in the title's HUD font. An
+    /// output, never hashed.
+    HudText {
+        /// The grid slot, and the view of it in split screen.
+        slot: Slot,
+        /// Where.
+        place: HudPlace,
+        /// The colour.
+        rgba: Rgba,
+        /// The text, or with `own` the id of a string in the sending mod's `strings/<language>.toml`.
+        text: HudStr,
+        /// `text` is a key into the mod's own string table, resolved by the host in the
+        /// game's language (English when the language lacks the key).
+        own: bool,
+    },
+    /// This tick, draw the title's HUD sprite named `sprite` on the slot's HUD at
+    /// `place`, `rgba` its modulating colour. An output, never hashed.
+    HudIcon {
+        /// The grid slot, and the view of it in split screen.
+        slot: Slot,
+        /// Where.
+        place: HudPlace,
+        /// The colour.
+        rgba: Rgba,
+        /// The sprite's name in the title's HUD layout, or with `own` the name of an
+        /// `[icons]` entry of the sending mod.
+        sprite: HudStr,
+        /// `sprite` names one of the mod's own PNGs.
+        own: bool,
     },
     /// Race-wide (written with slot 0): play the host title's own `kind` of weather at
     /// `strength`, drawn with the enhanced weather whatever the player's setting. An
@@ -720,7 +795,11 @@ impl Command {
             | Self::ScaleSlotPads { slot, .. }
             | Self::PlayCue { slot, .. }
             | Self::FireEffect { slot, .. }
-            | Self::PickupTint { slot, .. }
+            | Self::HudTint { slot, .. }
+            | Self::HudShake { slot, .. }
+            | Self::HudBarExtra { slot, .. }
+            | Self::HudText { slot, .. }
+            | Self::HudIcon { slot, .. }
             | Self::GiveShield { slot }
             | Self::HoldShield { slot }
             | Self::ClearShield { slot } => Some(slot),
@@ -732,31 +811,73 @@ impl Command {
         }
     }
 
-    /// The record.
+    /// The record, with a pool offset of 0: a `hud-text` or `hud-icon` record is only
+    /// whole through [`Self::encode_pooled`].
     #[must_use]
     pub fn encode(&self) -> [u8; COMMAND_LEN] {
+        self.encode_pooled(0)
+    }
+
+    /// The record, a `hud-text` or `hud-icon` naming its string at `pool_at` in the
+    /// reply's pool.
+    #[must_use]
+    pub fn encode_pooled(&self, pool_at: u16) -> [u8; COMMAND_LEN] {
         let (kind, arg, value, word) = match *self {
-            Self::ScaleThrust { factor, .. } => (COMMAND_SCALE_THRUST, 0, factor, 0),
-            Self::ShieldDelta { amount, .. } => (COMMAND_SHIELD_DELTA, 0, amount, 0),
-            Self::GivePickup { .. } => (COMMAND_GIVE_PICKUP, 0, 0.0, 0),
-            Self::ClearPickup { .. } => (COMMAND_CLEAR_PICKUP, 0, 0.0, 0),
+            Self::ScaleThrust { factor, .. } => (COMMAND_SCALE_THRUST, 0, factor.to_bits(), 0),
+            Self::ShieldDelta { amount, .. } => (COMMAND_SHIELD_DELTA, 0, amount.to_bits(), 0),
+            Self::GivePickup { .. } => (COMMAND_GIVE_PICKUP, 0, 0, 0),
+            Self::ClearPickup { .. } => (COMMAND_CLEAR_PICKUP, 0, 0, 0),
             Self::PickupRoll { weapon, every } => (
                 COMMAND_PICKUP_ROLL,
                 u16::from(weapon.code()),
-                0.0,
+                0,
                 u32::from(every),
             ),
-            Self::ScalePad { pad, factor } => (COMMAND_SCALE_PAD, pad, factor, 0),
-            Self::ScaleSlotPads { factor, .. } => (COMMAND_SCALE_SLOT_PADS, 0, factor, 0),
-            Self::PlayCue { cue, .. } => (COMMAND_PLAY_CUE, cue.code(), 0.0, 0),
-            Self::FireEffect { effect, .. } => (COMMAND_FIRE_EFFECT, effect.code(), 0.0, 0),
-            Self::PickupTint { rgba, .. } => (COMMAND_PICKUP_TINT, 0, 0.0, rgba.to_u32()),
-            Self::SetWeather { kind, strength } => (COMMAND_SET_WEATHER, kind.code(), strength, 0),
-            Self::SetSun { intensity } => (COMMAND_SET_SUN, 0, intensity, 0),
-            Self::GradeSky { grey } => (COMMAND_GRADE_SKY, 0, grey, 0),
-            Self::GiveShield { .. } => (COMMAND_GIVE_SHIELD, 0, 0.0, 0),
-            Self::HoldShield { .. } => (COMMAND_HOLD_SHIELD, 0, 0.0, 0),
-            Self::ClearShield { .. } => (COMMAND_CLEAR_SHIELD, 0, 0.0, 0),
+            Self::ScalePad { pad, factor } => (COMMAND_SCALE_PAD, pad, factor.to_bits(), 0),
+            Self::ScaleSlotPads { factor, .. } => (COMMAND_SCALE_SLOT_PADS, 0, factor.to_bits(), 0),
+            Self::PlayCue { cue, .. } => (COMMAND_PLAY_CUE, cue.code(), 0, 0),
+            Self::FireEffect { effect, .. } => (COMMAND_FIRE_EFFECT, effect.code(), 0, 0),
+            Self::HudTint { element, rgba, .. } => {
+                (COMMAND_HUD_TINT, element.code(), 0, rgba.to_u32())
+            }
+            Self::HudShake {
+                element, amplitude, ..
+            } => (COMMAND_HUD_SHAKE, element.code(), amplitude.to_bits(), 0),
+            Self::HudBarExtra {
+                element,
+                extra,
+                rgba,
+                ..
+            } => (
+                COMMAND_HUD_BAR_EXTRA,
+                element.code(),
+                extra.to_bits(),
+                rgba.to_u32(),
+            ),
+            Self::HudText {
+                place, rgba, own, ..
+            } => (
+                COMMAND_HUD_TEXT,
+                pool_at | if own { OWN_FLAG } else { 0 },
+                place.to_bits(),
+                rgba.to_u32(),
+            ),
+            Self::HudIcon {
+                place, rgba, own, ..
+            } => (
+                COMMAND_HUD_ICON,
+                pool_at | if own { OWN_FLAG } else { 0 },
+                place.to_bits(),
+                rgba.to_u32(),
+            ),
+            Self::SetWeather { kind, strength } => {
+                (COMMAND_SET_WEATHER, kind.code(), strength.to_bits(), 0)
+            }
+            Self::SetSun { intensity } => (COMMAND_SET_SUN, 0, intensity.to_bits(), 0),
+            Self::GradeSky { grey } => (COMMAND_GRADE_SKY, 0, grey.to_bits(), 0),
+            Self::GiveShield { .. } => (COMMAND_GIVE_SHIELD, 0, 0, 0),
+            Self::HoldShield { .. } => (COMMAND_HOLD_SHIELD, 0, 0, 0),
+            Self::ClearShield { .. } => (COMMAND_CLEAR_SHIELD, 0, 0, 0),
         };
         let mut record = [0; COMMAND_LEN];
         record[COMMAND_KIND] = kind;
@@ -764,7 +885,7 @@ impl Command {
         let [lo, hi] = arg.to_le_bytes();
         record[COMMAND_ARG] = lo;
         record[COMMAND_ARG + 1] = hi;
-        put_u32(&mut record, COMMAND_VALUE, value.to_bits());
+        put_u32(&mut record, COMMAND_VALUE, value);
         put_u32(&mut record, COMMAND_WORD, word);
         record
     }
@@ -775,6 +896,16 @@ impl Command {
     ///
     /// A [`Malformed`] naming the broken rule.
     pub fn decode(record: &[u8; COMMAND_LEN]) -> Result<Self, Malformed> {
+        Self::decode_in(record, &[])
+    }
+
+    /// [`Self::decode`] with the reply's string pool, which a `hud-text` or `hud-icon`
+    /// record reads its string from.
+    ///
+    /// # Errors
+    ///
+    /// A [`Malformed`] naming the broken rule.
+    pub fn decode_in(record: &[u8; COMMAND_LEN], pool: &[u8]) -> Result<Self, Malformed> {
         let (kind, raw_slot) = (record[COMMAND_KIND], record[COMMAND_SLOT]);
         let arg = u16::from_le_bytes([record[COMMAND_ARG], record[COMMAND_ARG + 1]]);
         let value = f32::from_bits(get_u32(record, COMMAND_VALUE));
@@ -832,6 +963,7 @@ impl Command {
             });
         }
         let slot = Slot::new(usize::from(raw_slot)).ok_or(Malformed::Slot(raw_slot))?;
+        let hud_element = || HudElement::from_code(arg).ok_or(Malformed::HudElement(arg));
         Ok(match kind {
             COMMAND_SCALE_THRUST => {
                 if !(0.0..=MAX_THRUST_FACTOR).contains(&value) {
@@ -871,10 +1003,57 @@ impl Command {
                 slot,
                 effect: Effect::from_code(arg).ok_or(Malformed::Effect(arg))?,
             },
-            COMMAND_PICKUP_TINT => Self::PickupTint {
+            COMMAND_HUD_TINT => Self::HudTint {
                 slot,
+                element: hud_element()?,
                 rgba: Rgba::from_u32(word),
             },
+            COMMAND_HUD_SHAKE => {
+                if !(0.0..=MAX_HUD_SHAKE).contains(&value) {
+                    return Err(Malformed::HudValue { kind, value });
+                }
+                Self::HudShake {
+                    slot,
+                    element: hud_element()?,
+                    amplitude: value,
+                }
+            }
+            COMMAND_HUD_BAR_EXTRA => {
+                if !(value > 0.0 && value <= MAX_HUD_EXTRA) {
+                    return Err(Malformed::HudValue { kind, value });
+                }
+                Self::HudBarExtra {
+                    slot,
+                    element: hud_element()?,
+                    extra: value,
+                    rgba: Rgba::from_u32(word),
+                }
+            }
+            COMMAND_HUD_TEXT | COMMAND_HUD_ICON => {
+                let place = HudPlace::from_bits(get_u32(record, COMMAND_VALUE))
+                    .ok_or(Malformed::HudPlace)?;
+                let own = arg & OWN_FLAG != 0;
+                let at = arg & !OWN_FLAG;
+                let string = pool_string(pool, at).ok_or(Malformed::Pool(at))?;
+                let rgba = Rgba::from_u32(word);
+                if kind == COMMAND_HUD_TEXT {
+                    Self::HudText {
+                        slot,
+                        place,
+                        rgba,
+                        text: string,
+                        own,
+                    }
+                } else {
+                    Self::HudIcon {
+                        slot,
+                        place,
+                        rgba,
+                        sprite: string,
+                        own,
+                    }
+                }
+            }
             COMMAND_GIVE_SHIELD => Self::GiveShield { slot },
             COMMAND_HOLD_SHIELD => Self::HoldShield { slot },
             COMMAND_CLEAR_SHIELD => Self::ClearShield { slot },
@@ -941,6 +1120,20 @@ pub enum Malformed {
     },
     /// A `set-weather` kind code outside [`WeatherKind::ALL`].
     Weather(u16),
+    /// A `hud-*` element code outside [`HudElement::ALL`].
+    HudElement(u16),
+    /// A `hud-shake` amplitude or `hud-bar-extra` share out of range, or not a number.
+    HudValue {
+        /// The command kind code.
+        kind: u8,
+        /// The value sent.
+        value: f32,
+    },
+    /// A `hud-text` or `hud-icon` anchor or scale out of range.
+    HudPlace,
+    /// A `hud-text` or `hud-icon` whose pool offset holds no whole string of at most
+    /// [`MAX_HUD_TEXT`] bytes of UTF-8.
+    Pool(u16),
 }
 
 impl fmt::Display for Malformed {
@@ -975,6 +1168,23 @@ impl fmt::Display for Malformed {
                 f,
                 "set-weather kind {code} is not one of {}",
                 WeatherKind::ALL.len()
+            ),
+            Self::HudElement(code) => write!(
+                f,
+                "hud element {code} is not one of {}",
+                HudElement::ALL.len()
+            ),
+            Self::HudValue { kind, value } => write!(
+                f,
+                "hud command {kind} value {value}: hud-shake in [0, {MAX_HUD_SHAKE}], hud-bar-extra in (0, {MAX_HUD_EXTRA}]"
+            ),
+            Self::HudPlace => write!(
+                f,
+                "hud placement: an anchor of the nine and a scale of 1..=15 quarters"
+            ),
+            Self::Pool(at) => write!(
+                f,
+                "hud string at pool offset {at} is not whole UTF-8 of at most {MAX_HUD_TEXT} bytes"
             ),
             Self::Roll {
                 slot,
@@ -1133,6 +1343,7 @@ fn get_u32(buffer: &[u8], at: usize) -> u32 {
     }
 }
 
+pub mod hud;
 pub mod track;
 
 #[cfg(test)]

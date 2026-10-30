@@ -193,6 +193,21 @@ It needs `simulation = true` too, loads only in a race of that file (never a dis
 and may send the same commands as a rules module, including the race-wide `set-weather`,
 `set-sun` and `grade-sky` outputs. Hillside's rain is one.
 
+A mod may ship text and images for its module's HUD: its own `strings/<language>.toml`
+(the same files its menu rows use, English the fallback) and `[icons]` (`name = "path/in/the/mod.png"`). A module's
+`hud_string` and `hud_mod_icon` name them; a PNG that is missing or unreadable draws
+nothing and the load report says so.
+
+A simulation module can also change the title's HUD through outputs that are never
+hashed: `hud-tint`, `hud-shake` and `hud-bar-extra` on a HUD element (`Speed`, `Thrust`,
+`Energy`, `Pickup`, `Position`, `Lap`, `Time`), and `hud-text` and `hud-icon` at one of
+nine anchors of the HUD grid, up to 32 per slot per tick. Re-send each every tick it
+should hold; a title with no widget for an element draws nothing. Energy Turbo tints its
+pickup backdrop, shows its added thrust as a red share of the speed bar (`Speed`; Pulse has no
+thrust bar, and `Thrust` draws nothing there) and shakes the energy bar while it drains. Guests format times with
+`oag_ext::Line`. The commands are in
+[docs/architecture/wasm-extensions/](../architecture/wasm-extensions/README.md).
+
 A rules module also sees every weapon hit on a craft (`hit{slot, amount, weapon}`, an
 absorbed one included, with the craft's `shielded` flag) and can start, hold and end the
 title's Shield (`give-shield`, `hold-shield`, `clear-shield`): enough to write a breakable

@@ -53,6 +53,7 @@ pub mod boost_smear;
 mod compose;
 mod dialect_2048;
 mod draw;
+pub mod ext_draws;
 mod head_to_head;
 pub mod kill_tags;
 mod lap_splits;
@@ -622,11 +623,10 @@ pub struct Readout {
     /// `None` on every tick of a race with weapons off, which is every mode but
     /// the single race - see `oag_race::Mode::weapons_enabled`.
     pub pickup: Option<oag_tables::weapons::Weapon>,
-    /// A colour for the pickup's backdrop (`PickupBackground`) instead of the held
-    /// weapon's own: a simulation mod's `pickup-tint` (a red Turbo is the turbo mod's
-    /// energy turbo). The title's own sprites, recoloured through the tint they are
-    /// already drawn with; `None` draws them as ever.
-    pub pickup_tint: Option<[f32; 4]>,
+    /// What a simulation mod does to this slot's HUD this tick: recolours, shakes, a
+    /// bar's added share, text and icons ([`ext_draws`]). `Default` changes nothing, and
+    /// the draw list is then byte-identical to a race with no mod.
+    pub ext: ext_draws::Outputs,
     /// The `SubWeapon` line under the pickup's icon: the Cannon's rounds left, or the
     /// Autopilot's seconds left, or nothing. See [`SubWeapon`].
     pub sub_weapon: Option<SubWeapon>,
@@ -1044,6 +1044,8 @@ mod bar_tip_tests;
 mod campaign_event_tests;
 #[cfg(test)]
 mod curve_bar_tests;
+#[cfg(test)]
+mod ext_draw_tests;
 #[cfg(test)]
 mod pickup_model_tests;
 #[cfg(test)]

@@ -71,6 +71,7 @@ mod on {
 
     const STATE: i32 = 1024 + oag_ext_abi::STATE_AT as i32;
     const REPLY: i32 = 1024 + oag_ext_abi::REPLY_AT as i32;
+    const POOL: i32 = 1024 + oag_ext_abi::POOL_AT as i32;
 
     fn module(id: &str, body: &str) -> Source {
         let wasm = wat::parse_str(format!(
@@ -91,6 +92,8 @@ mod on {
             state_bytes: 8,
             scope: crate::extensions::Scope::Rules,
             read: Arc::new(move || Ok(wasm.clone())),
+            strings: Arc::new(|_| Default::default()),
+            icons: Vec::new(),
         }
     }
 
@@ -340,10 +343,26 @@ mod on {
         assert_eq!(setup_race.sim.world.ships[0].pickup.weapon, None);
     }
 
-    /// Every tick: a Turbo cue, the wall sparks, a red pickup backdrop for slot 1, and
-    /// the three race-wide outputs (rain at 0.5, sun at 0.5, sky grey at 0.25).
+    /// Every tick: a Turbo cue, the wall sparks, a red pickup backdrop for slot 1, the
+    /// three race-wide outputs (rain at 0.5, sun at 0.5, sky grey at 0.25), and for slot 1
+    /// an energy-bar shake of 2, a thrust-bar share of 0.5 into red, the text "hi" and the
+    /// icon "Ab", both at the centre.
     fn outputter(id: &str, outputs: bool) -> Source {
         let body = if outputs {
+            let hud = |index: i32, kind: i32, arg: i32, value: u32, word: u32| {
+                let at = REPLY + 4 + 12 * index;
+                let pooled = if kind >= 19 && index == 9 { 3 } else { 0 };
+                let arg = if kind >= 19 { pooled } else { arg };
+                format!(
+                    "(i32.store8 (i32.const {at}) (i32.const {kind})) (i32.store8 (i32.const {s}) (i32.const 1))
+                     (i32.store16 (i32.const {a}) (i32.const {arg}))
+                     (i32.store (i32.const {v}) (i32.const {value})) (i32.store (i32.const {w}) (i32.const {word}))",
+                    s = at + 1,
+                    a = at + 2,
+                    v = at + 4,
+                    w = at + 8,
+                )
+            };
             let race_wide = |index: i32, kind: i32, value: f32| {
                 let at = REPLY + 4 + 12 * index;
                 format!(
@@ -352,15 +371,27 @@ mod on {
                     v = at + 4,
                 )
             };
+            let pool = format!(
+                    "(i32.store8 (i32.const {p}) (i32.const 2)) (i32.store8 (i32.const {q}) (i32.const 104)) (i32.store8 (i32.const {r}) (i32.const 105))
+                     (i32.store8 (i32.const {u}) (i32.const 2)) (i32.store8 (i32.const {v}) (i32.const 65)) (i32.store8 (i32.const {w}) (i32.const 98))",
+                    p = POOL,
+                    q = POOL + 1,
+                    r = POOL + 2,
+                    u = POOL + 3,
+                    v = POOL + 4,
+                    w = POOL + 5,
+                );
             format!(
-                "(i32.store (i32.const {REPLY}) (i32.const 6))
+                "(i32.store (i32.const {REPLY}) (i32.const 10))
                  (i32.store8 (i32.const {c0}) (i32.const 5)) (i32.store8 (i32.const {s0}) (i32.const 1))
                  (i32.store16 (i32.const {a0}) (i32.const 1))
                  (i32.store8 (i32.const {c1}) (i32.const 6)) (i32.store8 (i32.const {s1}) (i32.const 1))
                  (i32.store16 (i32.const {a1}) (i32.const 0))
-                 (i32.store8 (i32.const {c2}) (i32.const 7)) (i32.store8 (i32.const {s2}) (i32.const 1))
+                 (i32.store8 (i32.const {c2}) (i32.const 16)) (i32.store8 (i32.const {s2}) (i32.const 1))
+                 (i32.store16 (i32.const {a2}) (i32.const 4))
                  (i32.store (i32.const {b2}) (i32.const 0xff0000ff))
                  {weather} {sun} {grade}
+                 {shake} {extra} {text} {icon} {pool}
                  i32.const 0",
                 c0 = REPLY + 4,
                 s0 = REPLY + 5,
@@ -370,7 +401,12 @@ mod on {
                 a1 = REPLY + 18,
                 c2 = REPLY + 28,
                 s2 = REPLY + 29,
+                a2 = REPLY + 30,
                 b2 = REPLY + 36,
+                shake = hud(6, 17, 3, 2.0_f32.to_bits(), 0),
+                extra = hud(7, 18, 2, 0.5_f32.to_bits(), 0xff20_20e0),
+                text = hud(8, 19, 0, 0x0050_0344, 0xffff_ffff),
+                icon = hud(9, 20, 3, 0x0050_0344, 0xffff_ffff),
                 weather = race_wide(3, 10, 0.5),
                 sun = race_wide(4, 11, 0.5),
                 grade = race_wide(5, 12, 0.25),
@@ -404,11 +440,46 @@ mod on {
             loud.sim.extensions.effects_for_tests(),
             [(1, oag_title::effects::Trigger::CollisionSpark)]
         );
+        let tick = loud.sim.world.tick;
+        let hud = loud.sim.extensions.hud(1, tick);
         assert_eq!(
-            loud.sim.extensions.pickup_tint(1),
+            hud.tint(oag_hud::ext_draws::Element::Pickup),
             Some([1.0, 0.0, 0.0, 1.0])
         );
-        assert_eq!(quiet.sim.extensions.pickup_tint(1), None);
+        assert_eq!(hud.shake[oag_hud::ext_draws::Element::Energy as usize], 2.0);
+        let extra = hud.extra(oag_hud::ext_draws::Element::Thrust).unwrap();
+        assert_eq!(extra.extra, 0.5);
+        assert_eq!(
+            extra.color,
+            [224.0 / 255.0, 32.0 / 255.0, 32.0 / 255.0, 1.0]
+        );
+        assert_eq!(
+            hud.items
+                .iter()
+                .map(|item| (item.anchor, item.x, item.y, item.scale, item.what.clone()))
+                .collect::<Vec<_>>(),
+            [
+                (
+                    oag_hud::ext_draws::Anchor::Center,
+                    3.0,
+                    5.0,
+                    1.0,
+                    oag_hud::ext_draws::What::Text("hi".into())
+                ),
+                (
+                    oag_hud::ext_draws::Anchor::Center,
+                    3.0,
+                    5.0,
+                    1.0,
+                    oag_hud::ext_draws::What::Icon("Ab".into())
+                ),
+            ]
+        );
+        assert!(
+            loud.sim.extensions.hud(0, tick).is_quiet(),
+            "only the slot it names"
+        );
+        assert!(quiet.sim.extensions.hud(1, tick).is_quiet());
         // The race-wide outputs are held for the view half and absent without a module.
         assert_eq!(
             loud.extension_sky(),
@@ -423,6 +494,148 @@ mod on {
             grid(Prepared::default()).extension_sky(),
             crate::extensions::Sky::default()
         );
+    }
+
+    /// Slot 1 says the mod's own string "boost" and shows its own icon "badge", both at
+    /// the centre.
+    fn namer() -> Source {
+        let at = |index: i32| REPLY + 4 + 12 * index;
+        let body = format!(
+            "(i32.store (i32.const {REPLY}) (i32.const 2))
+             (i32.store8 (i32.const {t}) (i32.const 19)) (i32.store8 (i32.const {ts}) (i32.const 1))
+             (i32.store16 (i32.const {ta}) (i32.const 32768))
+             (i32.store (i32.const {tv}) (i32.const 68)) (i32.store (i32.const {tw}) (i32.const 4294967295))
+             (i32.store8 (i32.const {i}) (i32.const 20)) (i32.store8 (i32.const {is}) (i32.const 1))
+             (i32.store16 (i32.const {ia}) (i32.const 32774))
+             (i32.store (i32.const {iv}) (i32.const 68)) (i32.store (i32.const {iw}) (i32.const 4294967295))
+             (i32.store8 (i32.const {p0}) (i32.const 5))
+             (i32.store8 (i32.const {p1}) (i32.const 98)) (i32.store8 (i32.const {p2}) (i32.const 111))
+             (i32.store8 (i32.const {p3}) (i32.const 111)) (i32.store8 (i32.const {p4}) (i32.const 115))
+             (i32.store8 (i32.const {p5}) (i32.const 116))
+             (i32.store8 (i32.const {q0}) (i32.const 5))
+             (i32.store8 (i32.const {q1}) (i32.const 98)) (i32.store8 (i32.const {q2}) (i32.const 97))
+             (i32.store8 (i32.const {q3}) (i32.const 100)) (i32.store8 (i32.const {q4}) (i32.const 103))
+             (i32.store8 (i32.const {q5}) (i32.const 101))
+             i32.const 0",
+            t = at(0),
+            ts = at(0) + 1,
+            ta = at(0) + 2,
+            tv = at(0) + 4,
+            tw = at(0) + 8,
+            i = at(1),
+            is = at(1) + 1,
+            ia = at(1) + 2,
+            iv = at(1) + 4,
+            iw = at(1) + 8,
+            p0 = POOL,
+            p1 = POOL + 1,
+            p2 = POOL + 2,
+            p3 = POOL + 3,
+            p4 = POOL + 4,
+            p5 = POOL + 5,
+            q0 = POOL + 6,
+            q1 = POOL + 7,
+            q2 = POOL + 8,
+            q3 = POOL + 9,
+            q4 = POOL + 10,
+            q5 = POOL + 11,
+        );
+        let mut source = module("test.names", &body);
+        source.strings = Arc::new(|language| {
+            let text = if language.is_some_and(|l| l.eq_ignore_ascii_case("german")) {
+                "SCHUB"
+            } else {
+                "BOOST"
+            };
+            [("boost".to_string(), text.to_string())].into()
+        });
+        source
+    }
+
+    #[test]
+    fn a_mods_own_string_is_shown_in_the_games_language_or_english_and_its_icon_is_its_own() {
+        let shown = |language: Option<&str>, sources: &[Source]| {
+            let mut report = Vec::new();
+            let props = crate::extensions::TrackProps::default();
+            let track = crate::extensions::Track {
+                name: "test",
+                props: &props,
+                speedup_pads: &[],
+                weapon_pads: &[],
+            };
+            let prepared = prepare(sources, "wipeout-pulse", None, track, language, &mut report);
+            let mut race = grid(prepared);
+            race.tick(&PlayerInputs::none());
+            let tick = race.sim.world.tick;
+            race.sim.extensions.hud(1, tick).items
+        };
+        let text = |items: &[oag_hud::ext_draws::Item]| {
+            items.iter().find_map(|item| match &item.what {
+                oag_hud::ext_draws::What::Text(text) => Some(text.clone()),
+                _ => None,
+            })
+        };
+        for (language, want) in [
+            (Some("German"), "SCHUB"),
+            (Some("english"), "BOOST"),
+            (Some("French"), "BOOST"),
+            (None, "BOOST"),
+        ] {
+            assert_eq!(
+                text(&shown(language, &[namer()])).as_deref(),
+                Some(want),
+                "{language:?}"
+            );
+        }
+        let items = shown(Some("German"), &[namer()]);
+        assert_eq!(
+            items[1].what,
+            oag_hud::ext_draws::What::ModIcon("mod:test.names/badge".into())
+        );
+        let mut bare = namer();
+        bare.strings = Arc::new(|_| Default::default());
+        assert_eq!(
+            text(&shown(Some("German"), &[bare])),
+            None,
+            "no table, no text"
+        );
+    }
+
+    #[test]
+    fn a_mods_icons_are_read_and_decoded_for_the_sheet_and_a_bad_one_is_named() {
+        let png = oag_texture::png::encode_rgba(2, 1, &[255, 0, 0, 255, 0, 0, 255, 128]);
+        let mut source = namer();
+        source.icons = vec![
+            ("badge".to_string(), Arc::new(move || Ok(png.clone()))),
+            ("broken".to_string(), Arc::new(|| Ok(b"not a png".to_vec()))),
+            (
+                "gone".to_string(),
+                Arc::new(|| Err("no such file".to_string())),
+            ),
+        ];
+        let mut report = Vec::new();
+        let icons =
+            crate::extensions::mod_icons(&[source.clone()], "wipeout-pulse", None, &mut report);
+        assert_eq!(icons.len(), 1);
+        assert_eq!(icons[0].src, "mod:test.names/badge");
+        assert_eq!((icons[0].width, icons[0].height), (2, 1));
+        assert_eq!(icons[0].rgba, [255, 0, 0, 255, 0, 0, 255, 128]);
+        let said = report.join("\n");
+        assert!(
+            said.contains("icon broken") && said.contains("icon gone"),
+            "{said}"
+        );
+        assert!(said.contains("draws nothing"));
+        let mut other = source;
+        other.titles = vec!["wipeout-pulse".to_string()];
+        assert!(
+            crate::extensions::mod_icons(&[other], "wipeout-pure", None, &mut Vec::new())
+                .is_empty(),
+            "a mod for another title loads none of its icons"
+        );
+        let mut notes = Vec::new();
+        let sheet = oag_hud::sprite::Sheet::build_with(&[], icons, &mut notes);
+        assert!(sheet.get("mod:test.names/badge").is_some(), "{notes:?}");
     }
 
     /// Copies slot 1's lap and laps target, as its craft record carries them, into the
@@ -495,7 +708,7 @@ mod on {
             speedup_pads: &[],
             weapon_pads: &[],
         };
-        let prepared = prepare(sources, "wipeout-pulse", None, track, &mut report);
+        let prepared = prepare(sources, "wipeout-pulse", None, track, None, &mut report);
         assert!(
             report.iter().all(|line| !line.contains("left out")),
             "{report:?}"
@@ -612,6 +825,8 @@ mod triggers {
             state_bytes: 8,
             scope: crate::extensions::Scope::Rules,
             read: Arc::new(move || Ok(wasm.clone())),
+            strings: Arc::new(|_| Default::default()),
+            icons: Vec::new(),
         }
     }
 
@@ -639,7 +854,14 @@ mod triggers {
             speedup_pads: &[],
             weapon_pads: &[],
         };
-        let prepared = prepare(&[counter()], "wipeout-pulse", None, track, &mut report);
+        let prepared = prepare(
+            &[counter()],
+            "wipeout-pulse",
+            None,
+            track,
+            None,
+            &mut report,
+        );
         assert!(report.iter().all(|l| !l.contains("left out")), "{report:?}");
         prepared
     }
@@ -683,7 +905,14 @@ mod triggers {
             speedup_pads: &[],
             weapon_pads: &[],
         };
-        let prepared = prepare(&[counter()], "wipeout-pulse", None, track, &mut report);
+        let prepared = prepare(
+            &[counter()],
+            "wipeout-pulse",
+            None,
+            track,
+            None,
+            &mut report,
+        );
         assert!(!crate::extensions::Extensions::new(prepared).any());
         assert!(
             report
