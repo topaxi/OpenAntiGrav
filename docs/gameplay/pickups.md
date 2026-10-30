@@ -290,6 +290,8 @@ per the next section.
 
 ### The backdrop is colour-coded per weapon, and a reference frame settled it
 
+**Superseded 2026-10-30:** the colour is a 14-row table, alpha `0x80`, three colours exactly as the loading screens group them - [pickup-colour.md](../ghidra/functions/psp-pulse-usa/pickup-colour.md), confidence 92. The paragraphs below are the earlier measured-frame account; `Turbo`'s brighter read is that translucency over sky.
+
 **2026-09-04.** The reference frame this page asked for above has now been
 taken - a PSP under Xvfb (`docs/reverse-engineering/ppsspp-debugger.md`)
 driven onto Talon's Junction's own weapon pads and, once, sat on its Time
