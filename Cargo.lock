@@ -3272,6 +3272,7 @@ name = "oag-mod"
 version = "0.1.0"
 dependencies = [
  "dirs",
+ "oag-ext-abi",
  "oag-schema",
  "oag-tables",
  "semver",
