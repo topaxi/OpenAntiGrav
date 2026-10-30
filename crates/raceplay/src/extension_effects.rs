@@ -29,7 +29,6 @@ pub use view::*;
 mod view {
     use std::sync::Arc;
 
-    use oag_core::math::Vec3;
     #[cfg(feature = "extensions")]
     use oag_fx::psys::parametric;
     use oag_fx::psys::sprite::Sprite;
