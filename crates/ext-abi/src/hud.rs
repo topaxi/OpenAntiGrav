@@ -6,6 +6,11 @@ use crate::{POOL_AT, POOL_LEN};
 /// The most `hud-text` and `hud-icon` items one slot may draw in a tick. Past it the
 /// module is faulted, naming the cap. Chosen.
 pub const MAX_HUD_ITEMS: usize = 32;
+/// The `fire-effect` and `fire-mod-effect` commands one module may send in one tick;
+/// a further one faults it. Each is a particle emission the view plays, and a stage
+/// that is full evicts the title's own one-shot effects, so a mod cannot flood it.
+/// Chosen.
+pub const MAX_FIRE_EFFECTS_PER_TICK: usize = 8;
 /// The longest `hud-text` string or `hud-icon` sprite name, in bytes. Chosen.
 pub const MAX_HUD_TEXT: usize = 48;
 /// The largest `hud-shake` amplitude, in HUD pixels. Chosen.

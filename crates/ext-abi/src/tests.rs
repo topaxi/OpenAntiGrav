@@ -198,6 +198,7 @@ fn layout_fold() -> u64 {
         MAX_SLOTS,
         MAX_EVENTS as u32,
         MAX_STATE_BYTES as u32,
+        MAX_MEMORY_PAGES,
         MAX_COMMANDS as u32,
         MAX_CRAFTS as u32,
         ABI_AT as u32,
@@ -220,6 +221,8 @@ fn layout_fold() -> u64 {
         EVENT_FROM as u32,
         MAX_EMITS_PER_TICK as u32,
         MAX_MOD_EVENTS as u32,
+        MAX_TRACK_EVENTS as u32,
+        MAX_FIRE_EFFECTS_PER_TICK as u32,
         MAX_CHANNEL_LEN as u32,
         TRACK_SENDER,
         channel_key("oag.example/gate"),
@@ -439,7 +442,7 @@ fn a_record_breaking_its_own_rules_is_malformed() {
     pad[COMMAND_SLOT] = 2;
     assert!(matches!(
         Command::decode(&pad),
-        Err(Malformed::PadFactor { slot: 2, .. })
+        Err(Malformed::PadSlot { slot: 2 })
     ));
     let mut cue = Command::PlayCue {
         slot: slot(0),

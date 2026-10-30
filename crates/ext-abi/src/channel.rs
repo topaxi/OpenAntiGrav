@@ -14,11 +14,16 @@ use crate::track::prop_key;
 pub const TRACK_SENDER: u32 = 0;
 /// The `emit` commands one module may send in one tick; a further one faults it.
 pub const MAX_EMITS_PER_TICK: usize = 4;
-/// The `mod` events one tick delivers, mods' and the track's together: every module's
-/// share of [`MAX_EMITS_PER_TICK`] at the most modules a race runs, with room left for a
-/// trigger's. They are delivered ahead of the engine's own events, which share the rest
-/// of [`MAX_EVENTS`](crate::MAX_EVENTS).
+/// The `mod` events one tick delivers that modules sent: every module's share of
+/// [`MAX_EMITS_PER_TICK`] at the most modules a race runs. In sorted order (channel,
+/// slot, sender, value) the later are dropped, counted and logged by the host. Chosen.
 pub const MAX_MOD_EVENTS: usize = 16;
+/// The `mod` events one tick delivers that the track's triggers sent (`from` is
+/// [`TRACK_SENDER`]), held apart from [`MAX_MOD_EVENTS`] so a crowd of module emits cannot
+/// starve a trigger. In sorted order the later are dropped, counted and logged. Together
+/// with [`MAX_MOD_EVENTS`] they are delivered ahead of the engine's own events, which
+/// share the rest of [`MAX_EVENTS`](crate::MAX_EVENTS). Chosen.
+pub const MAX_TRACK_EVENTS: usize = 8;
 /// The longest channel name, bytes.
 pub const MAX_CHANNEL_LEN: usize = 64;
 

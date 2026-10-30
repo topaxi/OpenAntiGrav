@@ -334,6 +334,15 @@ impl Manifest {
             .transpose()?;
         let t = file.module;
         for (name, path) in &file.icons {
+            if name.len() > oag_ext_abi::MAX_HUD_TEXT {
+                return Err(bad(
+                    "icons",
+                    format!(
+                        "{name:?} is over {} bytes, the longest name hud-icon can send",
+                        oag_ext_abi::MAX_HUD_TEXT
+                    ),
+                ));
+            }
             if !valid_key(name) {
                 return Err(bad(
                     "icons",
@@ -511,6 +520,38 @@ fn channels(table: Option<ChannelsTable>, id: &str) -> Result<Channels, Error> {
 
 fn extension(e: ExtensionTable, has: &dyn Fn(&str) -> bool) -> Result<Extension, Error> {
     let bad_extension = |key: &'static str, problem: String| Error::Bad { key, problem };
+    if e.api != oag_ext_abi::ABI {
+        return Err(bad_extension(
+            "extension.api",
+            format!(
+                "{} is not an API this build runs ({})",
+                e.api,
+                oag_ext_abi::ABI
+            ),
+        ));
+    }
+    if e.memory_pages == 0 || e.memory_pages > oag_ext_abi::MAX_MEMORY_PAGES {
+        return Err(bad_extension(
+            "extension.memory_pages",
+            format!(
+                "{} is not in 1..={} (64 KiB pages)",
+                e.memory_pages,
+                oag_ext_abi::MAX_MEMORY_PAGES
+            ),
+        ));
+    }
+    if e.state_bytes as usize > oag_ext_abi::MAX_STATE_BYTES {
+        return Err(bad_extension(
+            "extension.state_bytes",
+            format!("{} is over {}", e.state_bytes, oag_ext_abi::MAX_STATE_BYTES),
+        ));
+    }
+    if e.rules.is_none() && e.track.is_none() {
+        return Err(bad_extension(
+            "extension",
+            "names no module: add [extension.rules] or [extension.track]".to_string(),
+        ));
+    }
     let rules = e.rules.map(|r| Rules { module: r.module });
     if let Some(rules) = &rules {
         if !e.simulation {
@@ -562,10 +603,10 @@ fn extension(e: ExtensionTable, has: &dyn Fn(&str) -> bool) -> Result<Extension,
     })
 }
 
-/// A string key or icon name: letters, digits, '-', '_'.
 /// What `fire-mod-effect`'s index (15 bits of an argument) can name, kept well inside it.
 const MAX_EFFECTS: usize = 256;
 
+/// A string key or icon name: letters, digits, '-', '_'.
 fn valid_key(key: &str) -> bool {
     !key.is_empty()
         && key

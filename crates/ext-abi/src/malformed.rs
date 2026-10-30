@@ -24,13 +24,17 @@ pub enum Malformed {
         /// The factor sent.
         factor: f32,
     },
-    /// A `scale-pad` factor outside `[0, MAX_PAD_FACTOR]` (NaN included), or a
-    /// race-wide one with a slot other than 0.
+    /// A `scale-pad` factor outside `[0, MAX_PAD_FACTOR]` (NaN included).
     PadFactor {
         /// The slot byte.
         slot: u8,
         /// The factor sent.
         factor: f32,
+    },
+    /// A race-wide `scale-pad` (a pad, not a slot) with a slot byte other than 0.
+    PadSlot {
+        /// The slot byte.
+        slot: u8,
     },
     /// An `emit` whose value is not finite.
     EmitValue {
@@ -111,7 +115,11 @@ impl fmt::Display for Malformed {
             ),
             Self::PadFactor { slot, factor } => write!(
                 f,
-                "scale-pad factor {factor} (slot byte {slot}) is not in [0, {MAX_PAD_FACTOR}], or a race-wide one names a slot"
+                "scale-pad factor {factor} (slot byte {slot}) is not in [0, {MAX_PAD_FACTOR}]"
+            ),
+            Self::PadSlot { slot } => write!(
+                f,
+                "scale-pad for a pad carries slot byte {slot}; a race-wide scale-pad names slot 0"
             ),
             Self::EmitValue { slot, value } => {
                 write!(f, "emit value {value} for slot {} is not finite", slot.0)

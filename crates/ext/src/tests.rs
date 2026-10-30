@@ -589,3 +589,27 @@ fn the_reply_refuses_an_emit_past_the_cap_and_a_non_finite_value() {
     let mut other = Reply::new(&mut io[oag_ext_abi::REPLY_AT..], 0, 0);
     assert_eq!(other.emit(&craft, 1, f32::NAN), Err(Refused::Range));
 }
+
+#[test]
+fn the_reply_refuses_a_fire_effect_past_the_cap_counting_both_kinds() {
+    let mut io = [0_u8; oag_ext_abi::IO_LEN];
+    let mut reply = Reply::new(&mut io[oag_ext_abi::REPLY_AT..], 0, 0);
+    let record = racer(1.0).encode();
+    let craft = Craft {
+        slot: slot(0),
+        record: &record,
+    };
+    for i in 0..oag_ext_abi::MAX_FIRE_EFFECTS_PER_TICK {
+        let sent = if i % 2 == 0 {
+            reply.fire_effect(&craft, oag_ext_abi::Effect::HitSpark)
+        } else {
+            reply.fire_mod_effect(&craft, 0)
+        };
+        assert_eq!(sent, Ok(()));
+    }
+    assert_eq!(
+        reply.fire_effect(&craft, oag_ext_abi::Effect::HitSpark),
+        Err(Refused::Effects)
+    );
+    assert_eq!(reply.fire_mod_effect(&craft, 0), Err(Refused::Effects));
+}

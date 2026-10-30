@@ -26,13 +26,11 @@ use wasmtime::{
 };
 
 use oag_ext_abi::track::TRACK_LEN;
-use oag_ext_abi::{ABI, ABI_WORD, Command, Craft, Event, IO_LEN, MAX_STATE_BYTES, REVISION};
+use oag_ext_abi::{
+    ABI, ABI_WORD, Command, Craft, Event, IO_LEN, MAX_MEMORY_PAGES, MAX_STATE_BYTES, REVISION,
+};
 
 mod reply;
-
-/// The most a module may ask for, in 64 KiB pages (16 MiB). Proposed in the README
-/// (section 4.1), chosen.
-pub const MAX_MEMORY_PAGES: u32 = 256;
 
 /// Fuel for one tick's call, instantiation included. Chosen: Wall Penalty uses a few
 /// thousand units on a full grid; fuel is checked at function entries and loop
@@ -241,6 +239,21 @@ pub struct Cost {
     pub fuel_budget: u64,
 }
 
+/// Refuses an export that is not `() -> i32`, the shape of every function the ABI names,
+/// so a wrong signature is a load refusal by name and never a mid-race fault.
+fn returns_a_word(name: &str, func: &wasmtime::FuncType) -> Result<(), LoadError> {
+    let word = func.params().len() == 0
+        && func.results().len() == 1
+        && matches!(func.results().next(), Some(wasmtime::ValType::I32));
+    if word {
+        Ok(())
+    } else {
+        Err(LoadError::Export(format!(
+            "`{name}` must be `() -> i32`, it has another signature"
+        )))
+    }
+}
+
 impl Module {
     /// Compiles and checks `wasm`. Builds the process's engine on the first call.
     ///
@@ -279,7 +292,8 @@ impl Module {
             ("tick", true),
         ] {
             match (module.get_export(name), want_func) {
-                (Some(ExternType::Memory(_)), false) | (Some(ExternType::Func(_)), true) => {}
+                (Some(ExternType::Memory(_)), false) => {}
+                (Some(ExternType::Func(func)), true) => returns_a_word(name, &func)?,
                 (Some(_), _) => {
                     return Err(LoadError::Export(format!("`{name}` has the wrong kind")));
                 }
@@ -305,15 +319,23 @@ impl Module {
             return Err(LoadError::Abi { major, revision });
         }
         // Optional: a module that reads the track region exports its buffer.
-        if let Some(export) = module.get_export("oag_track")
-            && !matches!(export, ExternType::Func(_))
-        {
-            return Err(LoadError::Export(
-                "`oag_track` has the wrong kind".to_string(),
-            ));
+        match module.get_export("oag_track") {
+            None => {}
+            Some(ExternType::Func(func)) => returns_a_word("oag_track", &func)?,
+            Some(_) => {
+                return Err(LoadError::Export(
+                    "`oag_track` has the wrong kind".to_string(),
+                ));
+            }
         }
         // Optional: a module that says how long its state is must agree with its manifest.
-        if module.get_export("oag_state_len").is_some() {
+        if let Some(export) = module.get_export("oag_state_len") {
+            let ExternType::Func(func) = export else {
+                return Err(LoadError::Export(
+                    "`oag_state_len` has the wrong kind".to_string(),
+                ));
+            };
+            returns_a_word("oag_state_len", &func)?;
             let len = instance
                 .get_typed_func::<(), u32>(&mut store, "oag_state_len")
                 .and_then(|f| f.call(&mut store, ()))

@@ -394,3 +394,48 @@ fn a_malformed_or_foreign_channel_is_refused_by_name() {
         assert!(error.contains(names), "{body}: {error}");
     }
 }
+
+#[test]
+fn an_extension_with_limits_out_of_range_or_no_module_is_refused_at_parse_by_key() {
+    let rules = |table: &str| {
+        format!(
+            "{MANIFEST_TEXT}\n[extension]\nsimulation = true\n{table}\n[extension.rules]\nmodule = \"a.wasm\"\n"
+        )
+    };
+    assert!(
+        Manifest::parse(
+            &rules("api = 1\nmemory_pages = 256\nstate_bytes = 1024"),
+            &|_| true
+        )
+        .is_ok()
+    );
+    for (table, key) in [
+        ("api = 2", "extension.api"),
+        ("api = 1\nmemory_pages = 0", "extension.memory_pages"),
+        ("api = 1\nmemory_pages = 257", "extension.memory_pages"),
+        ("api = 1\nstate_bytes = 1025", "extension.state_bytes"),
+    ] {
+        let error = Manifest::parse(&rules(table), &|_| true)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains(key), "{table}: {error}");
+    }
+    let empty = format!("{MANIFEST_TEXT}\n[extension]\nsimulation = true\napi = 1\n");
+    let error = Manifest::parse(&empty, &|_| true).unwrap_err().to_string();
+    assert!(error.contains("names no module"), "{error}");
+}
+
+#[test]
+fn an_icon_name_longer_than_a_hud_icon_can_send_is_refused_at_parse() {
+    let name = |len: usize| "a".repeat(len);
+    let text = |len: usize| format!("{MANIFEST_TEXT}\n[icons]\n{} = \"ui/a.png\"\n", name(len));
+    let fits = oag_ext_abi::MAX_HUD_TEXT;
+    assert!(Manifest::parse(&text(fits), &|_| true).is_ok());
+    let error = Manifest::parse(&text(fits + 1), &|_| true)
+        .unwrap_err()
+        .to_string();
+    assert!(
+        error.contains("icons") && error.contains("hud-icon"),
+        "{error}"
+    );
+}
