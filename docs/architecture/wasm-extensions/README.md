@@ -82,7 +82,7 @@ each lands in the view of the slot it names, since each view draws its own slot'
 HUD), and sit inside the title's safe area because the safe area scales the whole HUD
 frame after the items are placed. A slot may send at most 32 `hud-text` and `hud-icon`
 items per tick; the 33rd faults the module naming the cap. Text may be a literal or a key
-of the sending mod's own `[strings.<language>]` tables (`hud_string`), shown in the
+(`hud_string`) of the sending mod's own `strings/<language>.toml`, the files its menu rows use, shown in the
 game's language and else English's, and nothing if neither has the key; an icon may be a
 title sprite by name or one of the mod's own `[icons]` PNGs (`hud_mod_icon`), read and
 decoded with the race load (all IO off the render thread), packed in the HUD's sheet,

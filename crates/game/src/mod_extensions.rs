@@ -28,7 +28,7 @@ pub fn sources<'a>(mods: impl IntoIterator<Item = &'a oag_mod::Mod>) -> Vec<Sour
                 state_bytes: extension.state_bytes,
                 scope,
                 read: reader(m, module),
-                strings: m.manifest.strings.clone(),
+                strings: strings_reader(m),
                 icons: m
                     .manifest
                     .icons
@@ -49,6 +49,34 @@ pub fn sources<'a>(mods: impl IntoIterator<Item = &'a oag_mod::Mod>) -> Vec<Sour
         .collect();
     found.sort_by(|a, b| a.mod_id.cmp(&b.mod_id));
     found
+}
+
+/// The mod's own text for a language: `strings/english.toml` with `strings/<language>.toml`
+/// over it, the files its menu rows already use ([`oag_mod::Mod::strings`]). Opened when
+/// the race loads; a file that is missing or does not parse is skipped.
+fn strings_reader(module: &oag_mod::Mod) -> oag_raceplay::extensions::StringsReader {
+    let label = std::path::PathBuf::from(module.label());
+    Arc::new(move |language| {
+        let Ok(module) = oag_mod::Mod::open(&label) else {
+            return std::collections::BTreeMap::new();
+        };
+        let mut table = oag_ui::language::StringTable::default();
+        let mut languages = vec!["english".to_string()];
+        languages.extend(
+            language
+                .map(str::to_ascii_lowercase)
+                .filter(|l| l != "english"),
+        );
+        for language in languages {
+            if let Ok(Some(text)) = module.strings(&language) {
+                let _ = oag_ui::strings::overlay_text(&mut table, &text);
+            }
+        }
+        table
+            .ids()
+            .filter_map(|id| table.get(id).map(|text| (id.to_string(), text.to_string())))
+            .collect()
+    })
 }
 
 /// Reads `module` later: from disk for a folder mod, else by reopening the archive.
@@ -114,13 +142,24 @@ mod tests {
     /// A mod's `[strings]` and `[icons]` reach the race's source, and an icon is read
     /// through its reader, from a folder and from a zip alike.
     #[test]
-    fn a_mods_strings_and_icons_reach_its_source() {
+    fn a_mods_strings_files_and_icons_reach_its_source() {
         let dir = std::env::temp_dir().join(format!("oag-modext-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join("ext")).unwrap();
         std::fs::create_dir_all(dir.join("ui")).unwrap();
         std::fs::write(dir.join("ext/m.wasm"), b"\0asm").unwrap();
         std::fs::write(dir.join("ui/badge.png"), b"png bytes").unwrap();
+        std::fs::create_dir_all(dir.join("strings")).unwrap();
+        std::fs::write(
+            dir.join("strings/english.toml"),
+            "[strings]\nboost = { text = \"BOOST\", human = true }\nonly_english = { text = \"E\", human = true }\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("strings/german.toml"),
+            "[strings]\nboost = { text = \"SCHUB\", human = true }\n",
+        )
+        .unwrap();
         std::fs::write(
             dir.join("oag-mod.toml"),
             r#"
@@ -141,11 +180,6 @@ api = 1
 [extension.rules]
 module = "ext/m.wasm"
 
-[strings.english]
-boost = "BOOST"
-[strings.german]
-boost = "SCHUB"
-
 [icons]
 badge = "ui/badge.png"
 "#,
@@ -154,8 +188,20 @@ badge = "ui/badge.png"
         let module = oag_mod::Mod::open(&dir).unwrap();
         let found = sources([&module]);
         assert_eq!(found.len(), 1);
-        assert_eq!(found[0].strings["german"]["boost"], "SCHUB");
-        assert_eq!(found[0].strings["english"]["boost"], "BOOST");
+        let text = |language: Option<&str>, id: &str| (found[0].strings)(language).get(id).cloned();
+        assert_eq!(text(Some("German"), "boost").as_deref(), Some("SCHUB"));
+        assert_eq!(
+            text(Some("French"), "boost").as_deref(),
+            Some("BOOST"),
+            "English"
+        );
+        assert_eq!(text(None, "boost").as_deref(), Some("BOOST"));
+        assert_eq!(
+            text(Some("german"), "only_english").as_deref(),
+            Some("E"),
+            "over English"
+        );
+        assert_eq!(text(Some("german"), "nope"), None);
         assert_eq!(found[0].icons.len(), 1);
         assert_eq!(found[0].icons[0].0, "badge");
         assert_eq!((found[0].icons[0].1)().unwrap(), b"png bytes");

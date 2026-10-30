@@ -88,14 +88,19 @@ pub struct Source {
     pub scope: Scope,
     /// Reads the module.
     pub read: Reader,
-    /// The mod's `[strings.<language>]` tables, languages lowercased.
-    pub strings: Strings,
+    /// The mod's own text for a language: its `strings/<language>.toml` over its
+    /// `strings/english.toml`, by string id (the same files its menu rows use).
+    pub strings: StringsReader,
     /// The mod's `[icons]`: name and a reader for the PNG.
     pub icons: Vec<(String, Reader)>,
 }
 
-/// A mod's own text: language (lowercased) then key.
-pub type Strings = std::collections::BTreeMap<String, std::collections::BTreeMap<String, String>>;
+/// A mod's own text by string id.
+pub type Strings = std::collections::BTreeMap<String, String>;
+
+/// Reads a mod's [`Strings`] for the game's language (`None`: English alone), on the
+/// load thread. A language the mod ships no file for gives English's.
+pub type StringsReader = Arc<dyn Fn(Option<&str>) -> Strings + Send + Sync>;
 
 impl std::fmt::Debug for Source {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -154,11 +159,9 @@ pub struct Prepared {
     /// The track as the modules read it.
     #[cfg(feature = "extensions")]
     region: track::Region,
-    /// Each module's mod's own text, in module order, and the language it is shown in.
+    /// Each module's mod's own text for the race's language, in module order.
     #[cfg(feature = "extensions")]
     strings: Vec<Strings>,
-    #[cfg(feature = "extensions")]
-    language: Option<String>,
 }
 
 impl Prepared {
@@ -272,7 +275,7 @@ pub fn prepare(
                     );
                     track_module |= matches!(source.scope, Scope::Track(_));
                     modules.push((source.mod_id.clone(), module));
-                    strings.push(source.strings.clone());
+                    strings.push((source.strings)(language));
                 }
                 Err(e) => push(report, format!("{label} left out: {e}")),
             }
@@ -282,7 +285,6 @@ pub fn prepare(
             track_module,
             region,
             strings,
-            language: language.map(str::to_owned),
         }
     }
 }
@@ -373,21 +375,11 @@ pub fn mod_icon_src(mod_id: &str, name: &str) -> String {
     format!("mod:{mod_id}/{name}")
 }
 
-/// The text `key` names in a mod's `strings`, in `language` (case-insensitive) or else
-/// English; `None` when neither table has it, and the item draws nothing.
+/// The text the string id `key` names in a mod's `strings`; `None` when it has none,
+/// and the item draws nothing.
 #[must_use]
-pub fn resolve_string(
-    strings: Option<&Strings>,
-    language: Option<&str>,
-    key: &str,
-) -> Option<String> {
-    let strings = strings?;
-    let find = |name: &str| {
-        strings
-            .get(&name.to_ascii_lowercase())
-            .and_then(|t| t.get(key))
-    };
-    language.and_then(find).or_else(|| find("english")).cloned()
+pub fn resolve_string(strings: Option<&Strings>, key: &str) -> Option<String> {
+    strings?.get(key).cloned()
 }
 
 /// A load report line, also logged at `info`: a modded race says so at the default
@@ -457,12 +449,7 @@ impl Extensions {
         #[cfg(feature = "extensions")]
         {
             Self {
-                on: on::On::new(
-                    prepared.modules,
-                    prepared.region,
-                    prepared.strings,
-                    prepared.language,
-                ),
+                on: on::On::new(prepared.modules, prepared.region, prepared.strings),
             }
         }
     }
@@ -786,9 +773,8 @@ mod on {
         /// Outputs, never hashed: this tick's `hud-*` commands, and the
         /// `fire-effect`s the view has still to draw.
         pub(super) hud: Vec<(usize, Command)>,
-        /// Each module's own text, and the language it is shown in.
+        /// Each module's own text, in the race's language.
         strings: Vec<super::Strings>,
-        language: Option<String>,
         pub(super) effects: Vec<(usize, oag_title::effects::Trigger)>,
         /// The race-wide outputs of this tick.
         pub(super) sky: super::Sky,
@@ -861,11 +847,7 @@ mod on {
                         ..
                     } => {
                         let shown = if own {
-                            super::resolve_string(
-                                self.strings.get(module),
-                                self.language.as_deref(),
-                                text.as_str(),
-                            )
+                            super::resolve_string(self.strings.get(module), text.as_str())
                         } else {
                             Some(text.as_str().to_owned())
                         };
@@ -909,7 +891,6 @@ mod on {
             modules: Vec<(String, Module)>,
             region: super::track::Region,
             strings: Vec<super::Strings>,
-            language: Option<String>,
         ) -> Self {
             Self {
                 slots: modules
@@ -943,7 +924,6 @@ mod on {
                 reported: [0; oag_gameplay::MAX_SHIPS],
                 hud: Vec::new(),
                 strings,
-                language,
                 effects: Vec::new(),
                 sky: super::Sky::default(),
             }

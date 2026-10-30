@@ -92,7 +92,7 @@ mod on {
             state_bytes: 8,
             scope: crate::extensions::Scope::Rules,
             read: Arc::new(move || Ok(wasm.clone())),
-            strings: Default::default(),
+            strings: Arc::new(|_| Default::default()),
             icons: Vec::new(),
         }
     }
@@ -541,12 +541,14 @@ mod on {
             q5 = POOL + 11,
         );
         let mut source = module("test.names", &body);
-        let table = |text: &str| [("boost".to_string(), text.to_string())].into();
-        source.strings = [
-            ("english".to_string(), table("BOOST")),
-            ("german".to_string(), table("SCHUB")),
-        ]
-        .into();
+        source.strings = Arc::new(|language| {
+            let text = if language.is_some_and(|l| l.eq_ignore_ascii_case("german")) {
+                "SCHUB"
+            } else {
+                "BOOST"
+            };
+            [("boost".to_string(), text.to_string())].into()
+        });
         source
     }
 
@@ -591,7 +593,7 @@ mod on {
             oag_hud::ext_draws::What::ModIcon("mod:test.names/badge".into())
         );
         let mut bare = namer();
-        bare.strings.clear();
+        bare.strings = Arc::new(|_| Default::default());
         assert_eq!(
             text(&shown(Some("German"), &[bare])),
             None,
@@ -823,7 +825,7 @@ mod triggers {
             state_bytes: 8,
             scope: crate::extensions::Scope::Rules,
             read: Arc::new(move || Ok(wasm.clone())),
-            strings: Default::default(),
+            strings: Arc::new(|_| Default::default()),
             icons: Vec::new(),
         }
     }

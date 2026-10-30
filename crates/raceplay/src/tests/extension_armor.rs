@@ -45,7 +45,7 @@ fn source(id: &str, body: &str) -> Source {
         state_bytes: 32,
         scope: Scope::Rules,
         read: Arc::new(move || Ok(wasm.clone())),
-        strings: Default::default(),
+        strings: Arc::new(|_| Default::default()),
         icons: Vec::new(),
     }
 }

@@ -262,13 +262,9 @@ fn a_track_module_names_its_module_and_its_track_file() {
 }
 
 #[test]
-fn a_manifest_carries_strings_per_language_and_icons_that_are_pngs_in_the_mod() {
-    let text = format!(
-        "{MANIFEST_TEXT}\n[strings.English]\nboost = \"BOOST\"\n[strings.german]\nboost = \"SCHUB\"\n[icons]\nbadge = \"ui/badge.png\"\n"
-    );
+fn a_manifest_carries_icons_that_are_pngs_in_the_mod() {
+    let text = format!("{MANIFEST_TEXT}\n[icons]\nbadge = \"ui/badge.png\"\n");
     let parsed = Manifest::parse(&text, &|path| path == "ui/badge.png").unwrap();
-    assert_eq!(parsed.strings["english"]["boost"], "BOOST");
-    assert_eq!(parsed.strings["german"]["boost"], "SCHUB");
     assert_eq!(parsed.icons["badge"], "ui/badge.png");
     let missing = Manifest::parse(&text, &|_| false).unwrap_err().to_string();
     assert!(

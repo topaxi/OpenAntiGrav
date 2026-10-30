@@ -363,9 +363,9 @@ impl<'a> Reply<'a> {
         self.text(craft, place, rgba, text, false)
     }
 
-    /// `hud-text` with the text named by `key` in the mod's own `[strings]` tables: the
-    /// host shows the entry of the game's language, or English's when the language lacks
-    /// it, or nothing when no table has it.
+    /// `hud-text` with the text named by string id `key` in the mod's own
+    /// `strings/<language>.toml`: the host shows the entry of the game's language, or
+    /// English's when the language lacks it, or nothing when no file has it.
     ///
     /// # Errors
     ///

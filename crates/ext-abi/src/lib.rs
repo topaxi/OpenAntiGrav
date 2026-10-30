@@ -720,7 +720,7 @@ pub enum Command {
         place: HudPlace,
         /// The colour.
         rgba: Rgba,
-        /// The text, or with `own` the key of a `[strings]` entry of the sending mod.
+        /// The text, or with `own` the id of a string in the sending mod's `strings/<language>.toml`.
         text: HudStr,
         /// `text` is a key into the mod's own string table, resolved by the host in the
         /// game's language (English when the language lacks the key).

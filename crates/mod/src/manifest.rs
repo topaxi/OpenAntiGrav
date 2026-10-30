@@ -78,10 +78,6 @@ pub struct Manifest {
     pub oag: Option<semver::VersionReq>,
     /// `[extension]`: the WebAssembly modules the mod runs, if any.
     pub extension: Option<Extension>,
-    /// `[strings.<language>]`: the mod's own text by key, per language (the language's
-    /// name as the game lists it, lowercased). A module's `hud-text` may name a key
-    /// instead of carrying the text.
-    pub strings: std::collections::BTreeMap<String, std::collections::BTreeMap<String, String>>,
     /// `[icons]`: the mod's own PNGs by name, as paths in the mod. A module's `hud-icon`
     /// may name one.
     pub icons: std::collections::BTreeMap<String, String>,
@@ -134,8 +130,6 @@ struct File {
     #[serde(rename = "mod")]
     module: Table,
     extension: Option<ExtensionTable>,
-    #[serde(default)]
-    strings: std::collections::BTreeMap<String, std::collections::BTreeMap<String, String>>,
     #[serde(default)]
     icons: std::collections::BTreeMap<String, String>,
 }
@@ -211,11 +205,6 @@ impl Manifest {
         oag_schema::check(file.header.as_ref(), SCHEMA_KIND, SCHEMA_MAJOR)?;
         let extension = file.extension.map(|e| extension(e, has)).transpose()?;
         let t = file.module;
-        let strings = file
-            .strings
-            .into_iter()
-            .map(|(language, table)| (language.to_ascii_lowercase(), table))
-            .collect();
         for (name, path) in &file.icons {
             if !valid_key(name) {
                 return Err(bad(
@@ -291,7 +280,6 @@ impl Manifest {
             titles: t.titles,
             oag,
             extension,
-            strings,
             icons: file.icons,
         })
     }

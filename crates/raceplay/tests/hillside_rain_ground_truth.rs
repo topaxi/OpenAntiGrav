@@ -39,7 +39,7 @@ fn hillside_rain() -> Option<(race::extensions::Source, std::path::PathBuf)> {
         state_bytes: extension.state_bytes,
         scope: race::extensions::Scope::Track(Some(file.clone())),
         read: Arc::new(move || Ok(wasm.clone())),
-        strings: Default::default(),
+        strings: Arc::new(|_| Default::default()),
         icons: Vec::new(),
     };
     Some((source, file))
