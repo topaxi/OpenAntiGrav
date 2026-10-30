@@ -408,7 +408,7 @@ impl Module {
             {
                 let at = export.call(&mut store, ()).map_err(trap)? as usize;
                 // The whole region must fit, not only the bytes written.
-                let end = at.checked_add(TRACK_LEN).unwrap_or(usize::MAX);
+                let end = at.saturating_add(TRACK_LEN);
                 if end > memory.data_size(&store) {
                     return Err(Fault::Trap(format!(
                         "the track region at {at:#x} is outside memory"

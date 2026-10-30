@@ -60,10 +60,23 @@ fn full_grid_fuel(module: &Module) -> Vec<u64> {
             [
                 Event::WallContact { slot },
                 Event::PickupFire { slot },
-                Event::PadEnergy { slot },
+                Event::SpeedPad { slot, pad: 1 },
+                Event::WeaponPad { slot, pad: 0 },
+                Event::TriggerEnter { slot, trigger: 0 },
             ]
         })
         .collect();
+    // A track with two speed pads, a weapon pad and a trigger, a property on each.
+    let props = [(oag_ext_abi::track::prop_key("boost"), 1.5)];
+    let entity = oag_ext_abi::track::Entity {
+        to_world: oag_ext_abi::track::IDENTITY,
+        min: [0.0; 3],
+        max: [0.0; 3],
+        props: &props,
+    };
+    let mut region = vec![0; oag_ext_abi::track::TRACK_LEN];
+    let used = oag_ext_abi::track::write(&mut region, &props, &[entity; 2], &[entity], &[entity])
+        .expect("within the caps");
     let mut state = vec![0; module.limits().state_bytes as usize];
     let mut commands = Vec::new();
     (0..3_u64)
@@ -74,6 +87,8 @@ fn full_grid_fuel(module: &Module) -> Vec<u64> {
                 active: 0xff,
                 events,
                 crafts: &crafts,
+                track: &region[..used],
+                speed_pads: 2,
             };
             module
                 .tick(&observation, &mut state, &mut commands)

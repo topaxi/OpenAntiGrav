@@ -38,6 +38,7 @@ mod start_pose_ground_truth;
 mod survey;
 mod texture_stream_ground_truth;
 mod track_audio_hd_ground_truth;
+mod track_props_ground_truth;
 mod trackfile_ground_truth;
 mod vita_2048_campaign_grid_ground_truth;
 mod vita_2048_countdown_ground_truth;

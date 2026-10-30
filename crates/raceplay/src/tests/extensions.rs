@@ -488,7 +488,13 @@ mod on {
 
     fn prepared(sources: &[Source]) -> Prepared {
         let mut report = Vec::new();
-        let prepared = prepare(sources, "wipeout-pulse", None, &mut report);
+        let props = crate::extensions::TrackProps::default();
+        let track = crate::extensions::Track {
+            props: &props,
+            speedup_pads: &[],
+            weapon_pads: &[],
+        };
+        let prepared = prepare(sources, "wipeout-pulse", None, track, &mut report);
         assert!(
             report.iter().all(|line| !line.contains("left out")),
             "{report:?}"
@@ -545,5 +551,122 @@ mod on {
             first.sim.world.tick > tick + 400,
             "the race went on past the fault"
         );
+    }
+}
+
+#[cfg(feature = "extensions")]
+mod triggers {
+    use std::sync::Arc;
+
+    use super::*;
+    use crate::extensions::{Prepared, Source, Track, TrackProps, prepare};
+
+    const IO: usize = 1024;
+    const TRACK: usize = 8192;
+
+    /// Counts slot 1's `trigger-enter` (blob byte 0) and `trigger-exit` (byte 1), and
+    /// copies the track region's trigger count (byte 2) and its first property's value
+    /// (bytes 4..8).
+    fn counter() -> Source {
+        let events = IO + oag_ext_abi::EVENTS_AT;
+        let state = IO + oag_ext_abi::STATE_AT;
+        let wasm = wat::parse_str(format!(
+            r#"(module
+                (memory (export "memory") 1)
+                (func (export "oag_abi") (result i32) i32.const {word})
+                (func (export "oag_io") (result i32) i32.const {IO})
+                (func (export "oag_track") (result i32) i32.const {TRACK})
+                (func $bump (param $at i32)
+                  (i32.store8 (local.get $at) (i32.add (i32.load8_u (local.get $at)) (i32.const 1))))
+                (func (export "tick") (result i32) (local $i i32) (local $p i32)
+                  (block $done (loop $next
+                    (br_if $done (i32.ge_u (local.get $i) (i32.load (i32.const {count}))))
+                    (local.set $p (i32.add (i32.const {events}) (i32.mul (local.get $i) (i32.const 8))))
+                    (if (i32.eq (i32.load8_u (i32.add (local.get $p) (i32.const 1))) (i32.const 1))
+                      (then
+                        (if (i32.eq (i32.load8_u (local.get $p)) (i32.const 7))
+                          (then (call $bump (i32.const {state}))))
+                        (if (i32.eq (i32.load8_u (local.get $p)) (i32.const 8))
+                          (then (call $bump (i32.const {exit}))))))
+                    (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                    (br $next)))
+                  (i32.store8 (i32.const {triggers}) (i32.load16_u (i32.const {trigger_count})))
+                  (i32.store (i32.const {value}) (i32.load (i32.const {first_value})))
+                  i32.const 0))"#,
+            word = oag_ext_abi::ABI_WORD,
+            count = IO + oag_ext_abi::EVENT_COUNT_AT,
+            exit = state + 1,
+            triggers = state + 2,
+            value = state + 4,
+            trigger_count = TRACK + oag_ext_abi::track::TRIGGERS_AT,
+            first_value = TRACK + oag_ext_abi::track::PROPS_AT + 4,
+        ))
+        .unwrap();
+        Source {
+            mod_id: "test.triggers".to_string(),
+            module: "test.wasm".to_string(),
+            titles: Vec::new(),
+            api: 1,
+            memory_pages: 1,
+            state_bytes: 8,
+            scope: crate::extensions::Scope::Rules,
+            read: Arc::new(move || Ok(wasm.clone())),
+        }
+    }
+
+    /// A box straddling the road between `from` and `to` along x, with `gate = 0.25`.
+    fn gate(from: f32, to: f32) -> TrackProps {
+        let mut to_world = oag_ext_abi::track::IDENTITY;
+        to_world[12] = (from + to) * 0.5;
+        TrackProps {
+            triggers: vec![oag_trackfile::props::Trigger {
+                name: "gate".into(),
+                to_world,
+                min: [(from - to) * 0.5, -100.0, -100.0],
+                max: [(to - from) * 0.5, 100.0, 100.0],
+                props: [("gate".to_string(), 0.25)].into(),
+            }],
+            ..TrackProps::default()
+        }
+    }
+
+    fn prepared_on(props: &TrackProps) -> Prepared {
+        let mut report = Vec::new();
+        let track = Track {
+            props,
+            speedup_pads: &[],
+            weapon_pads: &[],
+        };
+        let prepared = prepare(&[counter()], "wipeout-pulse", None, track, &mut report);
+        assert!(report.iter().all(|l| !l.contains("left out")), "{report:?}");
+        prepared
+    }
+
+    #[test]
+    fn a_craft_passing_through_a_trigger_enters_and_leaves_it_once_and_the_guest_reads_it() {
+        // Where slot 1 is at 300 and at 380 ticks of the fixture race: the gate sits
+        // between, so it is driven into and out of once (the fixture's ring sends the
+        // craft back round after that).
+        let x_at = |ticks| {
+            run(grid(Prepared::default()), ticks).0.sim.world.ships[1]
+                .physics
+                .body
+                .position
+                .x
+        };
+        let (from, to) = (x_at(300), x_at(380));
+        assert!(to > from + 10.0, "slot 1 drives along +x: {from} to {to}");
+        let props = gate(from + (to - from) * 0.25, from + (to - from) * 0.5);
+        let (race, _) = run(grid(prepared_on(&props)), 380);
+        let blob = race.extension_state(0).unwrap();
+        assert_eq!(
+            blob[..3],
+            [1, 1, 1],
+            "one enter, one exit, one trigger in the region"
+        );
+        assert_eq!(blob[4..8], 0.25_f32.to_le_bytes(), "its gate property");
+        // A gate the craft never reaches is never entered.
+        let (race, _) = run(grid(prepared_on(&gate(to + 1000.0, to + 1010.0))), 380);
+        assert_eq!(race.extension_state(0).unwrap()[..2], [0, 0]);
     }
 }
