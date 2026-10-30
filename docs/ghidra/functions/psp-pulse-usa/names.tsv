@@ -1439,3 +1439,7 @@
 0x088d1384	function	Ticker_AdvanceWeighted	72	race-box-screens.md
 0x088d22ac	function	Ticker_BuildStatMessage	72	race-box-screens.md
 0x088a3e8c	function	GridController_UpdateSelectorStamp	85	race-campaign.md
+0x0881cdc4	function	Hud_UpdatePickupWidgets	88	pickup-colour.md
+0x08ab0844	data	g_hud_pickup_widget_table	92	pickup-colour.md
+0x08819644	function	Colour_UnpackToFloat4	85	pickup-colour.md
+0x088194b8	function	Colour_PackFromFloat4	85	pickup-colour.md
