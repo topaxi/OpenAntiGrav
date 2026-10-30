@@ -55,6 +55,10 @@ fn checkpoint_circuit() -> Option<(race::extensions::Source, std::path::PathBuf)
         effects: Vec::new(),
         files: Arc::new(|_| Err("no files".into())),
         pickup: module.manifest.pickup.clone(),
+        channels: race::extensions::Declared {
+            publishes: module.manifest.channels.publishes.clone(),
+            listens: module.manifest.channels.listens.clone(),
+        },
     };
     Some((source, file))
 }
@@ -420,6 +424,7 @@ fn preferring(slot: Option<u8>) -> race::extensions::Source {
         effects: Vec::new(),
         files: Arc::new(|_| Err("no files".into())),
         pickup: None,
+        channels: race::extensions::Declared::default(),
     }
 }
 

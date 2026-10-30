@@ -324,11 +324,13 @@ fn moving() -> Art {
         Animation {
             name: "slide".into(),
             repeat: Repeat::Clamp,
+            on: None,
             channels: vec![slide(0), slide(1)],
         },
         Animation {
             name: "sun".into(),
             repeat: Repeat::Loop,
+            on: None,
             channels: vec![Channel {
                 target: Target::Sun,
                 interpolation: Interpolation::Linear,

@@ -114,6 +114,10 @@ pub struct Keyed {
     pub rotation_keys: Option<KeyTrack<4>>,
     /// Scale keys.
     pub scale_keys: Option<KeyTrack<3>>,
+    /// The channel (`oag_ext_abi::channel_key`) that starts the tracks: they hold their
+    /// first key until it fires, then play from the moment it did. `None` plays from
+    /// the clock's zero.
+    pub on: Option<u32>,
 }
 
 impl Keyed {
@@ -124,6 +128,17 @@ impl Keyed {
             .as_ref()
             .and_then(|k| k.slerp(seconds))
             .unwrap_or(self.rotation)
+    }
+
+    /// The clock the tracks read at world clock `seconds`, given when each channel last
+    /// fired (`started`): the world clock itself for a node no channel starts, else the
+    /// time since its channel fired, `0` before it has.
+    #[must_use]
+    pub fn clock(&self, seconds: f32, started: &dyn Fn(u32) -> Option<f32>) -> f32 {
+        match self.on {
+            None => seconds,
+            Some(channel) => started(channel).map_or(0.0, |at| (seconds - at).max(0.0)),
+        }
     }
 
     /// The local matrix at `seconds`: scale, then rotate, then translate,

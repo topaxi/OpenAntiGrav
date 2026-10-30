@@ -146,7 +146,8 @@ pub(crate) fn read(
             | Command::HudBarExtra { .. }
             | Command::SetWeather { .. }
             | Command::SetSun { .. }
-            | Command::GradeSky { .. } => {}
+            | Command::GradeSky { .. }
+            | Command::Emit { .. } => {}
         }
         commands.push(command);
     }

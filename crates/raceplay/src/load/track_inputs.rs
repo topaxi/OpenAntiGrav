@@ -404,6 +404,7 @@ pub(super) fn export(
     let art = None;
     notes.extend(report);
     Ok(oag_trackfile::Track {
+        channels: Vec::new(),
         id: inputs.track,
         title: inputs.label,
         host: Some(oag_source::layers::slug(title)),

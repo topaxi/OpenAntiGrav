@@ -103,8 +103,22 @@ impl NodeAnims {
     /// own authored `LoopEnd`.
     #[must_use]
     pub fn sample(model: &Model, seconds: f32) -> Self {
+        Self::sample_started(model, seconds, &|_| None)
+    }
+
+    /// [`Self::sample`] with the channels that start animations ([`Model::sample_anim_nodes_started`]).
+    #[must_use]
+    pub fn sample_started(
+        model: &Model,
+        seconds: f32,
+        started: &dyn Fn(u32) -> Option<f32>,
+    ) -> Self {
         let mut out = Self::default();
-        for (slot, matrix) in model.sample_anim_nodes(seconds).into_iter().enumerate() {
+        for (slot, matrix) in model
+            .sample_anim_nodes_started(seconds, started)
+            .into_iter()
+            .enumerate()
+        {
             out.transform[slot + 1] = matrix;
         }
         out

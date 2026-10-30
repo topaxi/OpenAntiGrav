@@ -10,6 +10,10 @@ use crate::sim::RaceSim;
 #[derive(Debug, Clone)]
 pub(super) struct Slot {
     mod_id: String,
+    /// `channel_key` of the mod's id: a `mod` event's `from`.
+    sender: u32,
+    /// The channels its `emit` may name.
+    publishes: Vec<(u32, String)>,
     module: Module,
     pub(super) blob: Vec<u8>,
     faulted: Option<(u64, String)>,
@@ -37,6 +41,9 @@ pub(super) struct On {
     /// `pickup-fire` / `pickup-absorbed` raised since the last call, one bit a slot.
     fires: u32,
     absorbs: u32,
+    /// The `mod` events raised since the last call (the modules' `emit`s and the track's
+    /// triggers'), delivered at the next one: race state, hashed.
+    mail: Vec<super::channel::Mail>,
     /// The track as the modules read it.
     region: super::track::Region,
     /// Each speed pad's race-wide `scale-pad`, held until replaced.
@@ -195,12 +202,16 @@ impl On {
         region: super::track::Region,
         strings: Vec<super::Strings>,
         pickups: Vec<Option<oag_tables::pickup_look::PickupLook>>,
+        publishes: Vec<Vec<(u32, String)>>,
     ) -> Self {
         Self {
             slots: modules
                 .into_iter()
-                .map(|(mod_id, module)| Slot {
+                .zip(publishes)
+                .map(|((mod_id, module), publishes)| Slot {
                     blob: vec![0; module.limits().state_bytes as usize],
+                    sender: oag_ext_abi::channel_key(&mod_id),
+                    publishes,
                     mod_id,
                     module,
                     faulted: None,
@@ -210,6 +221,7 @@ impl On {
                 })
                 .collect(),
             walls: 0,
+            mail: Vec::new(),
             hit_amount: [0.0; oag_gameplay::MAX_SHIPS],
             hit_weapon: [None; oag_gameplay::MAX_SHIPS],
             gave: 0,
@@ -306,6 +318,19 @@ impl On {
         }
     }
 
+    /// A craft entered a trigger that sends `channel`: queued for the next call, from
+    /// the track.
+    pub(super) fn mail_from_track(&mut self, slot: usize, channel: u32) {
+        if !self.slots.is_empty() {
+            self.mail.push(super::channel::Mail {
+                slot: slot as u8,
+                from: oag_ext_abi::TRACK_SENDER,
+                channel,
+                value: 1.0,
+            });
+        }
+    }
+
     pub(super) fn wall_contact(&mut self, slot: usize) {
         if !self.slots.is_empty() {
             self.walls |= 1 << slot;
@@ -318,6 +343,7 @@ impl On {
         }
         hasher.write_u32(self.slots.len() as u32);
         hasher.write_u32(self.walls);
+        super::channel::hash_mail(&self.mail, hasher);
         for (amount, weapon) in self.hit_amount.iter().zip(&self.hit_weapon) {
             hasher.write_f32(*amount);
             hasher.write_u8(weapon.map_or(0, |weapon| weapon as u8 + 1));
@@ -504,8 +530,17 @@ fn pickup_command(sim: &mut RaceSim, index: usize, command: Command) {
 /// What happened since the last call, per slot in slot order: a wall contact, a
 /// fire, an absorb, the speed pad and the weapon pad entered, the triggers left and
 /// the triggers entered (each in index order). Past `MAX_EVENTS` the rest are
-/// dropped.
-fn events(on: &On) -> Vec<Event> {
+/// dropped. The `mod` events (`mail`, sorted) come first, so a crowd of engine events
+/// cannot crowd out a mod's.
+fn events(on: &On, mail: &[super::channel::Mail]) -> Vec<Event> {
+    mail.iter()
+        .filter_map(|m| m.event())
+        .chain(engine_events(on))
+        .take(MAX_EVENTS)
+        .collect()
+}
+
+fn engine_events(on: &On) -> impl Iterator<Item = Event> + '_ {
     (0..oag_gameplay::MAX_SHIPS)
         .filter_map(oag_ext_abi::Slot::new)
         .flat_map(|slot| {
@@ -538,8 +573,52 @@ fn events(on: &On) -> Vec<Event> {
                     .map(move |trigger| Event::TriggerEnter { slot, trigger }),
             )
         })
-        .take(MAX_EVENTS)
-        .collect()
+}
+
+/// A module's `emit`: queued for every module's next call if the module's mod publishes
+/// the channel and the module is within its per-tick cap, else the module faults for the
+/// race, naming which.
+fn emit(
+    sim: &mut RaceSim,
+    index: usize,
+    emitted: &mut [usize; super::MAX_SIM_MODS],
+    (slot, channel, value): (oag_ext_abi::Slot, u32, f32),
+) {
+    let tick = sim.world.tick;
+    let on = &mut sim.extensions.on;
+    let module = &mut on.slots[index];
+    emitted[index] += 1;
+    let why = if emitted[index] > oag_ext_abi::MAX_EMITS_PER_TICK {
+        Some(format!(
+            "emit past the cap of {} a tick",
+            oag_ext_abi::MAX_EMITS_PER_TICK
+        ))
+    } else if !module.publishes.iter().any(|(key, _)| *key == channel) {
+        let declared: Vec<&str> = module.publishes.iter().map(|(_, n)| n.as_str()).collect();
+        Some(format!(
+            "emit on channel {channel:#010x}, which its oag-mod.toml [channels] publishes does not name (it publishes {declared:?})"
+        ))
+    } else {
+        None
+    };
+    if let Some(why) = why {
+        if module.faulted.is_none() {
+            log::warn!(
+                "mod {}: {why}, at tick {tick}; off for the rest of the race",
+                module.mod_id
+            );
+            module.faulted = Some((tick, why));
+        }
+        return;
+    }
+    let from = module.sender;
+    on.mail.push(super::channel::Mail {
+        slot: slot.index() as u8,
+        from,
+        channel,
+        value,
+    });
+    sim.extensions.note_fired(channel, tick);
 }
 
 pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs) {
@@ -560,7 +639,8 @@ pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs) {
     // A boost the step never took (a craft that did not step) does not carry over.
     on.boost = [1.0; oag_gameplay::MAX_SHIPS];
     on.slot_pad_scale = [1.0; oag_gameplay::MAX_SHIPS];
-    let events = events(on);
+    let mail = super::channel::sorted(&std::mem::take(&mut on.mail));
+    let events = events(on, &mail);
     on.walls = 0;
     on.hit_amount = [0.0; oag_gameplay::MAX_SHIPS];
     on.hit_weapon = [None; oag_gameplay::MAX_SHIPS];
@@ -617,8 +697,14 @@ pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs) {
         slot.fuel_used = cost.fuel_used;
         slot.fuel_peak = slot.fuel_peak.max(cost.fuel_used);
     }
+    let mut emitted = [0_usize; super::MAX_SIM_MODS];
     for (index, command) in applied {
         match command {
+            Command::Emit {
+                slot,
+                channel,
+                value,
+            } => emit(sim, index, &mut emitted, (slot, channel, value)),
             // Below 1.0 the Leach Beam's path, multiplied so a drain is kept; above it
             // the mod's own engine scale, multiplied so two modules compose. Both are
             // consumed by this tick's step.

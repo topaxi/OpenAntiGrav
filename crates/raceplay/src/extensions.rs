@@ -29,6 +29,7 @@
 
 use std::sync::Arc;
 
+mod channel;
 #[cfg(feature = "extensions")]
 mod on;
 mod route;
@@ -36,6 +37,7 @@ mod route;
 mod shield;
 mod track;
 
+pub use channel::Declared;
 pub use track::{Track, TrackProps};
 
 /// The most simulation modules one race runs. Chosen.
@@ -106,6 +108,8 @@ pub struct Source {
     /// The mod's `[pickup]`: the look of the pickup it hands out. A mod without one that
     /// sends `give-pickup` or `pickup-roll` is faulted for the race, naming the table.
     pub pickup: Option<oag_tables::pickup_look::PickupLook>,
+    /// The mod's `[channels]`.
+    pub channels: Declared,
 }
 
 /// Reads a file of a mod by its path in the mod, on the load thread.
@@ -181,6 +185,11 @@ pub struct Prepared {
     /// Each module's mod's `[pickup]`, in module order.
     #[cfg(feature = "extensions")]
     pickups: Vec<Option<oag_tables::pickup_look::PickupLook>>,
+    /// Each module's mod's `[channels]` publishes, in module order.
+    #[cfg(feature = "extensions")]
+    publishes: Vec<Vec<(u32, String)>>,
+    /// The track's triggers that send a channel: with no module too.
+    beacons: channel::Beacons,
 }
 
 impl Prepared {
@@ -205,6 +214,7 @@ pub fn prepare(
     language: Option<&str>,
     report: &mut Vec<String>,
 ) -> Prepared {
+    let beacons = channel::Beacons::new(&track.props.triggers);
     let sources: Vec<&Source> = sources
         .iter()
         .filter(|s| s.titles.is_empty() || s.titles.iter().any(|t| t.eq_ignore_ascii_case(title)))
@@ -222,12 +232,18 @@ pub fn prepare(
                 ),
             );
         }
-        Prepared::default()
+        Prepared {
+            beacons,
+            ..Prepared::default()
+        }
     }
     #[cfg(feature = "extensions")]
     {
         if sources.is_empty() {
-            return Prepared::default();
+            return Prepared {
+                beacons,
+                ..Prepared::default()
+            };
         }
         let region = match track::encode(track) {
             Ok(region) => region,
@@ -239,7 +255,10 @@ pub fn prepare(
                         track.name
                     ),
                 );
-                return Prepared::default();
+                return Prepared {
+                    beacons,
+                    ..Prepared::default()
+                };
             }
         };
         let mut sorted = sources;
@@ -247,6 +266,7 @@ pub fn prepare(
         let mut modules = Vec::new();
         let mut strings = Vec::new();
         let mut pickups = Vec::new();
+        let mut publishes = Vec::new();
         let mut track_module = false;
         for source in sorted {
             let label = format!("mod {}: {}", source.mod_id, source.module);
@@ -297,6 +317,7 @@ pub fn prepare(
                     modules.push((source.mod_id.clone(), module));
                     strings.push((source.strings)(language));
                     pickups.push(source.pickup.clone());
+                    publishes.push(channel::publishes(&source.channels));
                 }
                 Err(e) => push(report, format!("{label} left out: {e}")),
             }
@@ -307,6 +328,8 @@ pub fn prepare(
             region,
             strings,
             pickups,
+            publishes,
+            beacons,
         }
     }
 }
@@ -467,6 +490,10 @@ pub struct Report {
 pub struct Extensions {
     #[cfg(feature = "extensions")]
     on: on::On,
+    /// The track's triggers that send a channel.
+    beacons: channel::Beacons,
+    /// When each channel last fired (`channel`).
+    fired: Vec<(u32, u64)>,
 }
 
 impl Extensions {
@@ -475,8 +502,10 @@ impl Extensions {
     pub fn new(prepared: Prepared) -> Self {
         #[cfg(not(feature = "extensions"))]
         {
-            let _ = prepared;
-            Self::default()
+            Self {
+                beacons: prepared.beacons,
+                fired: Vec::new(),
+            }
         }
         #[cfg(feature = "extensions")]
         {
@@ -486,7 +515,10 @@ impl Extensions {
                     prepared.region,
                     prepared.strings,
                     prepared.pickups,
+                    prepared.publishes,
                 ),
+                beacons: prepared.beacons,
+                fired: Vec::new(),
             }
         }
     }
@@ -599,12 +631,17 @@ impl Extensions {
     }
 
     /// Which of the track's triggers `slot` is inside this tick: any point of its
-    /// sweep (`Race::pad_sweep`) in the box. Tested only while a module runs.
-    pub(super) fn test_triggers(&mut self, slot: usize, sweep: &[oag_core::math::Vec3]) {
+    /// sweep (`Race::pad_sweep`) in the box. The modules' events are tested only while a
+    /// module runs; a trigger that sends a channel is tested always, and raises it for the
+    /// modules (next tick) and for `oag_on` animations (`tick` is when it fired).
+    pub(super) fn test_triggers(&mut self, slot: usize, sweep: &[oag_core::math::Vec3], tick: u64) {
+        for channel in self.beacons.entered(slot, sweep) {
+            self.note_fired(channel, tick);
+            #[cfg(feature = "extensions")]
+            self.on.mail_from_track(slot, channel);
+        }
         #[cfg(feature = "extensions")]
         self.on.test_triggers(slot, sweep);
-        #[cfg(not(feature = "extensions"))]
-        let _ = (slot, sweep);
     }
 
     /// The mod's own pickup's fire (`absorbed == false`) or absorb, raised for the module.
@@ -656,6 +693,10 @@ impl Extensions {
 
     /// The modules' state into the race hash: nothing at all when no module runs.
     pub(super) fn hash_into(&self, hasher: &mut oag_core::hash::StateHasher) {
+        #[cfg(feature = "extensions")]
+        if self.any() {
+            self.beacons.hash_into(hasher);
+        }
         #[cfg(feature = "extensions")]
         self.on.hash_into(hasher);
         #[cfg(not(feature = "extensions"))]
@@ -746,6 +787,19 @@ impl crate::Race {
     #[must_use]
     pub fn extension_state(&self, index: usize) -> Option<&[u8]> {
         self.sim.extensions.state(index)
+    }
+
+    /// The world-clock reading at which `channel` (`oag_ext_abi::channel_key`) last fired,
+    /// the clock the scenery's animations ride: `None` before it has fired.
+    #[must_use]
+    pub fn channel_started(&self, channel: u32) -> Option<f32> {
+        let (_, tick) = *self
+            .sim
+            .extensions
+            .fired()
+            .iter()
+            .find(|(c, _)| *c == channel)?;
+        Some(tick as f32 / 60.0 + self.flyby_seconds() + self.world_clock_offset())
     }
 
     /// Whether a simulation module runs in this race (MODDED: no replay, README 4.4).
