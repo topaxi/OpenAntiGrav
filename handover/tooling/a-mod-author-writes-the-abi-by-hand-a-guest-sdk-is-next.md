@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-10-30
-summary: "SDK, track module, Hillside rain, track props, mod events landed locally; open: check tool, C header, template, git dep, MODDED, a gate animation example"
+summary: "SDK, track module, Hillside rain, track props, mod events landed locally; open: check tool, C header, template, git dep, MODDED, gate animation"
 categories: [gameplay]
 size: M (55)
 difficulty: medium (60)
