@@ -256,3 +256,24 @@ fn a_channel_nobody_loaded_sends_is_warned_about_by_name_on_the_listener() {
         lines(&silent, "test.ear")
     );
 }
+
+#[test]
+fn a_flat_list_front_end_with_four_lines_keeps_the_no_one_sends_warning() {
+    let dir = base("narrow");
+    channel_mod(
+        &dir,
+        "ear",
+        "test.ear",
+        "listens = [\"test.mouth/hello\"]\n",
+    );
+    let strings = StringTable::default();
+    let built = build(&load(&dir, &BTreeSet::new()));
+    let ear = built.listing.iter().find(|m| m.id == "test.ear").unwrap();
+    let lines = ear.table_within(&strings, 4);
+    assert!(lines.len() <= 4, "{lines:?}");
+    assert!(
+        lines.contains(&("NO ONE SENDS".into(), "test.mouth/hello".into())),
+        "{lines:?}"
+    );
+    assert!(lines.iter().any(|(l, _)| l == "ADDS"), "{lines:?}");
+}

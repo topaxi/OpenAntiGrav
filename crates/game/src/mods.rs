@@ -398,14 +398,21 @@ impl Listing {
     }
 
     /// [`Self::table`] cut to `room` lines: the ones a player can do least with go
-    /// first (AUTHORS, then VERSION, then LICENSE), the rest keep their order. A
+    /// first (AUTHORS, then VERSION, then LICENSE, then SENDS and HEARS, so a warning line
+    /// such as NO ONE SENDS outlasts the channels it is about), the rest keep their order. A
     /// flat-list front end (Pulse) has room for four under the MODS page's rows, HD
     /// for all.
     #[must_use]
     pub fn table_within(&self, strings: &StringTable, room: usize) -> Vec<(String, String)> {
         let say = |(id, english): (&str, &str)| strings.get_or_fallback(id, english).to_string();
         let mut lines = self.table(strings);
-        for least in [words::AUTHORS, words::VERSION, words::LICENSE] {
+        for least in [
+            words::AUTHORS,
+            words::VERSION,
+            words::LICENSE,
+            words::SENDS,
+            words::HEARS,
+        ] {
             if lines.len() <= room {
                 break;
             }
