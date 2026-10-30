@@ -193,6 +193,7 @@ const TITLE: &Title = &Title {
         sights: &oag_title::hud::Sights::Unread,
         pickup_backdrop_colour: None,
         pickup_colours: None,
+        pickup_fade: None,
         pickup_icon_models: None,
         pickup_icon_backdrop_model: None,
         bar_models: None,

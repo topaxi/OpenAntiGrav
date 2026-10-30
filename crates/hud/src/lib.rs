@@ -60,6 +60,7 @@ mod lap_splits;
 pub mod messages;
 pub mod now_playing;
 mod pickup;
+pub mod pickup_fade;
 mod placement;
 mod runtime;
 mod shield_bar;
@@ -730,6 +731,11 @@ pub struct Readout {
     /// [`Self::blank`], and drawn only by a title whose art carries
     /// [`oag_title::HudArt::pickup_icon_uv`].
     pub pickup_announcing: bool,
+    /// The held pickup's backdrop and icon fade, on a title whose art carries
+    /// [`oag_title::HudArt::pickup_fade`]: advanced per rendered tick by
+    /// `oag_raceplay`'s `SlotHud` and read by the draw. Its idle default draws
+    /// [`Self::pickup`] fully grown, so a readout built without it still shows its weapon.
+    pub pickup_fade: pickup_fade::Fade,
     /// 2048's `ThrustBar` fill, in percent: the HUD's own chase toward the
     /// ship's thrust level, `Hud_Update` (`0x81195cdc`, dirty bit `0x80`).
     ///
@@ -1046,6 +1052,10 @@ mod campaign_event_tests;
 mod curve_bar_tests;
 #[cfg(test)]
 mod ext_draw_tests;
+#[cfg(test)]
+mod pickup_fade_tests;
+#[cfg(test)]
+mod pickup_look_tests;
 #[cfg(test)]
 mod pickup_model_tests;
 #[cfg(test)]

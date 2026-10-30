@@ -125,6 +125,7 @@ pub(crate) fn read(
             | Command::FireEffect { .. }
             | Command::FireModEffect { .. }
             | Command::HudTint { .. }
+            | Command::PickupLook { .. }
             | Command::HudShake { .. }
             | Command::HudBarExtra { .. }
             | Command::SetWeather { .. }

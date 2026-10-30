@@ -56,6 +56,7 @@ fn energy_turbo() -> Option<race::extensions::Source> {
         icons: Vec::new(),
         effects: Vec::new(),
         files: Arc::new(|_| Err("no files".into())),
+        pickup: module.manifest.pickup.clone(),
     })
 }
 

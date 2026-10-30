@@ -304,3 +304,60 @@ fn a_manifest_carries_effects_that_are_tomls_in_the_mod() {
             .is_empty()
     );
 }
+
+#[test]
+fn a_manifest_pickup_names_its_icon_and_colour_sources_and_a_bad_one_is_refused_by_name() {
+    use oag_tables::pickup_look::{Colour, Icon};
+    use oag_tables::weapons::Weapon;
+    let with = |pickup: &str| {
+        let text =
+            format!("{MANIFEST_TEXT}\n[icons]\nbolt = \"ui/bolt.png\"\n\n[pickup]\n{pickup}");
+        Manifest::parse(&text, &|_| true).map(|m| m.pickup)
+    };
+    let look = with("icon = { title = \"turbo\" }\ncolour = { rgba = \"E0202080\" }")
+        .unwrap()
+        .unwrap();
+    assert_eq!(look.icon, Icon::Title(Weapon::Turbo));
+    assert_eq!(look.colour, Colour::Rgba([0xE0, 0x20, 0x20, 0x80]));
+    let look = with("icon = { mod = \"bolt\" }\ncolour = { title = \"shield\" }")
+        .unwrap()
+        .unwrap();
+    assert_eq!(look.icon, Icon::Mod("bolt".into()));
+    assert_eq!(look.colour, Colour::Title(Weapon::Shield));
+    assert_eq!(
+        with("icon = { title = \"leachbeam\" }\ncolour = { title = \"repulser\" }")
+            .unwrap()
+            .unwrap()
+            .icon,
+        Icon::Title(Weapon::LeachBeam)
+    );
+    for (pickup, named) in [
+        (
+            "icon = { title = \"laser\" }\ncolour = { rgba = \"E0202080\" }",
+            "laser",
+        ),
+        (
+            "icon = { mod = \"nope\" }\ncolour = { rgba = \"E0202080\" }",
+            "[icons]",
+        ),
+        (
+            "icon = { title = \"turbo\" }\ncolour = { rgba = \"E02020\" }",
+            "RRGGBBAA",
+        ),
+        (
+            "icon = { title = \"turbo\", mod = \"bolt\" }\ncolour = { rgba = \"E0202080\" }",
+            "exactly one",
+        ),
+        (
+            "icon = { title = \"turbo\" }\ncolour = { title = \"extension\" }",
+            "extension",
+        ),
+    ] {
+        let error = with(pickup).unwrap_err().to_string();
+        assert!(error.contains("pickup") && error.contains(named), "{error}");
+    }
+    assert_eq!(
+        Manifest::parse(MANIFEST_TEXT, &|_| true).unwrap().pickup,
+        None
+    );
+}

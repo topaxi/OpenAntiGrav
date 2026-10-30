@@ -104,6 +104,17 @@ pub(super) fn colour(cx: &Context<'_>, readout: &Readout, name: &str) -> Option<
         return Some(argb_to_rgba(argb));
     }
     let idle = cx.art.runtime?.pickup_idle?;
+    // A weapon held, or fading out after use: the backdrop is the weapon's table word through
+    // the eased fade, not the dim.
+    if name == idle.backdrop
+        && let Some(look) = super::pickup::look(cx.art, readout)
+        && let Some(word) = super::pickup::backdrop_word(cx.art, look.weapon, &readout.ext)
+    {
+        return Some(argb_to_rgba(super::pickup_fade::scale_word(
+            word,
+            look.backdrop,
+        )));
+    }
     // No recent-hit state exists to light the pills, so they are idle throughout.
     if idle.hit_pills.contains(&name) || (name == idle.backdrop && readout.pickup.is_none()) {
         return Some(argb_to_rgba(idle.argb));

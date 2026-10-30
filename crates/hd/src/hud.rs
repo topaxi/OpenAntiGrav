@@ -211,6 +211,24 @@ pub const SPLIT: oag_title::hud::SplitLayouts = oag_title::hud::SplitLayouts {
     }),
 };
 
+/// The pickup backdrop's held word per weapon, off ``0x00920598`` (the TOC slot `0x008a7800`'s pointee): 14 rows of
+/// `g_hud_pickup_widget_table`, the backdrop word at each row's `+0xc`. Byte for byte
+/// Pulse's thirteen (`0x80BE1E69` pink, `0x801CBC1C` green, `0x802B1CBC` blue; alpha `0x80`),
+/// read from this title's own executable, static, confidence 90. Positional in
+/// `Weapon::ALL` order like [`oag_title::HudArt::pickup_colours`]; Disruptor (Pure's) has no row.
+/// See `docs/ghidra/functions/ps3-hdfury-eu/hd-pickup-table.md`.
+pub const PICKUP_COLOURS: [Option<u32>; 14] = {
+    const PINK: Option<u32> = Some(0x80BE_1E69);
+    const GREEN: Option<u32> = Some(0x801C_BC1C);
+    const BLUE: Option<u32> = Some(0x802B_1CBC);
+    [
+        PINK, PINK, PINK, PINK, GREEN, GREEN, GREEN, PINK, BLUE, BLUE, PINK, PINK, PINK, None,
+    ]
+};
+
+/// The pickup fade's timer rate. HD's `Hud_UpdatePickupBar` (`0x0008df30`) scales `dt` by the float at `0x008a776c`, `0x3fc00000` = `1.5` (static read, confidence 80); the cap `0.5`, the `x3` and `pi` it shares with Pulse's law, and the bump's `-25.0` sits at `0x008a780c`. The hold threshold and the fade-out branch's constants are **inherited from Pulse**, not read.
+pub const PICKUP_FADE_RATE_PERCENT: u16 = 150;
+
 /// How HD's HUD sprites reach the screen, as [`oag_title::Title::hud_art`]
 /// carries it.
 ///
@@ -286,9 +304,16 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // whatever `HUD_Components.gtf` bakes at that UV rect, with nothing for a
     // runtime tint to override.
     pickup_backdrop_colour: None,
-    // Same reasoning: an outline needs no colour substituted into it, per
-    // weapon or otherwise.
-    pickup_colours: None,
+    // An outline drawn at the layout's colour while idle; with a weapon held the backdrop takes
+    // its table word through the eased fade (`oag_hud::pickup_fade`), `PICKUP_COLOURS`. The
+    // whole pulse is the executable's `Hud_UpdatePickupBar` tail, not a substitution of a
+    // colour the layout lacks.
+    pickup_colours: Some(PICKUP_COLOURS),
+    // No size pulse: HD's store of it is unread.
+    pickup_fade: Some(oag_title::hud::PickupFade {
+        rate_percent: PICKUP_FADE_RATE_PERCENT,
+        size_pulse: false,
+    }),
     // HD's icons are `<Image>` sprites (the `<Type>Icon` widgets the comment
     // above names), the same kind as Pulse's - not `<Mode3D><Model>`s, so this
     // field is moot on the same terms `pickup_colours` is above it.

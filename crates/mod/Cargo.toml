@@ -10,6 +10,7 @@ publish = false
 
 [dependencies]
 oag-schema.workspace = true
+oag-tables.workspace = true
 dirs = "7"
 semver = "1"
 serde.workspace = true

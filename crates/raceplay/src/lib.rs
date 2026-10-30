@@ -211,6 +211,8 @@ pub mod engine_light;
 #[cfg(feature = "view")]
 pub mod env_probes;
 pub mod extension_effects;
+#[cfg(feature = "extensions")]
+mod extension_pickup;
 pub mod extensions;
 mod field;
 #[cfg(feature = "view")]

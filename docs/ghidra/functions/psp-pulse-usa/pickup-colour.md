@@ -286,22 +286,35 @@ Icon word (white scaled by `Ease_CosineWithBump(3 * timer, 1)`), growing then fa
 | used | 0.0797 | `0x22222222` |
 | used | 0.0397 | `0x8080808` |
 
+## Wired (2026-10-30, `pickup-fade-wire`)
+
+`oag_hud::pickup_fade` ports the law (`Fade::advance` per rendered tick off the held weapon and `dt`,
+`Fade::look` for the factors); `oag_hud::pickup` draws it (`scale_word`, the size pulse about the
+widget's centre, the icon scaled by its own timer); `oag_raceplay`'s `SlotHud` holds the per-slot state,
+render-side and out of the hash. Tests: the 27 fade-in and 24 fade-out words above are reproduced from
+the law (within the table's four-decimal `T`), a linear clamp cannot make the overshoot, the size axes,
+and the drawn sprites. Headless Pulse PSP frames (`--give missile`, grant at tick 0): tick 3 nothing, 8
+a faint wide flat strip, 13 the wide flat bright pink peak, 19 the hexagon settling, 24 the icon
+appearing, 30 and 45 settled. **Chosen, not measured**: the size pulse's fixed point is the widget's
+centre (the sprite is `Centred`), and a grant during the fade-out run-on waits for it to finish. The
+first idle update's extra `dt` (`0.5201`) is not modelled (it moves the fade-out by one update).
+PS2 shares Pulse's `ART`, so it plays this law **inherited from PSP**.
+
 ## Checked on the other titles
 
 Read 2026-10-30 (`pickup-fade-titles`); the static readings are labelled as such.
 
-- **HD/Fury**: **checked, applies, not wired. This corrects an earlier claim**: HD does carry this
-  table. `PTR_008a7800`'s pointee (`0x00920598`) holds the same 14 rows of 6 words, row 0 the
-  backdrop and rows 1-13 the weapons, with the same 13 words (`0x80BE1E69`, `0x801CBC1C`, `0x802B1CBC`,
-  alpha `0x80`) in the same order. `Hud_UpdatePickupBar`'s idle `0x5AFFFFFF` is the *nothing-held*
-  value only. The fade tail shares the easing's shape (a trig function and `expf`, `0x00676fe8`,
-  `0x00677528`); the constants were not compared. [hd-pickup-table.md](../ps3-hdfury-eu/hd-pickup-table.md).
-- **Omega**: **checked, applies, not wired** (static). Same table at `0x0193f750` (rows of `0x20`
-  bytes: 8-byte name and widget pointers, then the same four words); the HD-lineage update walks it.
+- **HD/Fury**: **ported 2026-10-30**. HD does carry this table (this corrects an earlier claim).
+  `PTR_008a7800`'s pointee (`0x00920598`) holds the same 14 rows of 6 words with the same 13 words.
+  `Hud_UpdatePickupBar`'s idle `0x5AFFFFFF` is the *nothing-held* value only. The fade's constants were
+  read: rate **1.5** (Pulse 1.2), cap `0.5`, `x3`, `pi`, `-25` the same; the hold, icon gate and
+  fade-out branch are inherited from Pulse. [hd-pickup-table.md](../ps3-hdfury-eu/hd-pickup-table.md).
+- **Omega**: **ported 2026-10-30**, rate inherited from HD, static. Same table at `0x0193f750`.
   [omega-pickup-table.md](../ps4-omega-eu/omega-pickup-table.md).
 - **2048**: **checked, applies, not wired** (static). The same table twice in the ELF (`0x8151f104`),
-  and `FUN_81154172` has the same fade with a `1.5` rate where Pulse has `1.2`; what draws it in the
-  race HUD is unverified, the visible arc being `PickupBgFrame` with fixed colours.
+  and `FUN_81154172` has the same fade with a `1.5` rate where Pulse has `1.2` (HD's rate is `1.5` too);
+  what draws it in the race HUD is unverified, the visible arc being `PickupBgFrame` with fixed
+  colours. Needs one Vita3K frame first.
   [pickup-backdrop.md](../vita-2048-eu-v104/pickup-backdrop.md).
 - **Pure**: **checked, differs** (live, USA disc). No `PickupBackground`; ten authored `<Model>` icons,
   never recoloured at runtime. [pickup-icons.md](../psp-pure-usa/pickup-icons.md).

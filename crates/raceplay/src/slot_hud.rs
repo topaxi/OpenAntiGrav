@@ -44,6 +44,14 @@ pub(super) struct SlotHud {
     /// 2048's `hud+0x228`: seconds of the grant announcement left
     /// ([`oag_hud::Readout::pickup_announcing`]).
     pub(super) pickup_announce_left: f32,
+    /// The held pickup's backdrop and icon fade ([`oag_hud::Readout::pickup_fade`]).
+    pub(super) pickup_fade: oag_hud::pickup_fade::Fade,
+    /// The look of the mod pickup last held, kept so its fade-out after use draws what its
+    /// fade-in drew ([`oag_hud::ext_draws::Outputs::pickup_look`]). Display only.
+    pub(super) pickup_look: Option<oag_tables::pickup_look::PickupLook>,
+    /// The fade's timer rate in units per second, `0.0` for a title that plays none. Set by
+    /// `Race::watch_laps` from the title's art, the one place a loaded race meets it.
+    pub(super) pickup_fade_rate: f32,
     /// Pilot Assist's HUD indicator timers, off this slot's own assist state.
     pub(super) assist_indicator: oag_hud::assist::Indicator,
     /// The reticle of a split-screen view on a slot that is not the primary.
@@ -126,6 +134,9 @@ impl SlotHud {
             (fraction - self.energy_bar_delay_fraction) * ENERGY_BAR_DELAY_RATE;
 
         self.advance_pickup_announcement(held, dt);
+        if self.pickup_fade_rate > 0.0 {
+            self.pickup_fade.advance(held, self.pickup_fade_rate, dt);
+        }
 
         let tick = 1.0 / 60.0;
         let value = self.thrust_chase_percent;
@@ -162,14 +173,10 @@ impl Race {
     /// running bit is set and the held id maps to none).
     pub(super) fn held_for_hud(&self, slot: usize) -> Option<oag_tables::weapons::Weapon> {
         let ship = &self.sim.world.ships[slot];
-        // A mod's own pickup (`Weapon::Extension`) has no icon of its own on any disc: it
-        // borrows the title's Turbo icon, and the mod's `hud-tint` recolours its
-        // backdrop (`crate::extensions`). No new art.
-        let held = ship.pickup.weapon.map(|weapon| match weapon {
-            oag_tables::weapons::Weapon::Extension => oag_tables::weapons::Weapon::Turbo,
-            weapon => weapon,
-        });
-        held.or_else(|| {
+        // A mod's own pickup (`Weapon::Extension`) is held as itself: the HUD draws the icon
+        // and backdrop its look names (`crate::extension_pickup`), none on a mod that
+        // declares none.
+        ship.pickup.weapon.or_else(|| {
             (ship.autopilot_timer > 0.0).then_some(oag_tables::weapons::Weapon::Autopilot)
         })
     }
@@ -195,10 +202,14 @@ impl Race {
             let thrust = ship.physics.thrust.clamp(0.0, 100.0);
             let absorbing = self.absorb_window_active(slot);
             let held = self.held_for_hud(slot);
+            let look = self.sim.extensions.pickup_look(slot);
             let acting = ship.physics.pilot_assist.acting;
             let (shown, dt) = (self.pilot_assist_shown(slot), self.sim.dt);
             let hud = &mut self.view.huds[slot];
             hud.advance(percent, fraction, thrust, absorbing, held, dt);
+            if held == Some(oag_tables::weapons::Weapon::Extension) && look.is_some() {
+                hud.pickup_look = look;
+            }
             hud.assist_indicator.advance(shown, acting, dt);
         }
     }

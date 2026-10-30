@@ -3273,6 +3273,7 @@ version = "0.1.0"
 dependencies = [
  "dirs",
  "oag-schema",
+ "oag-tables",
  "semver",
  "serde",
  "thiserror 2.0.21",

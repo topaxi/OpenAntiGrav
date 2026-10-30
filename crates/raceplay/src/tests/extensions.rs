@@ -96,6 +96,7 @@ mod on {
             icons: Vec::new(),
             effects: Vec::new(),
             files: Arc::new(|_| Err("no files".into())),
+            pickup: Some(crate::extension_pickup::a_look()),
         }
     }
 
@@ -345,6 +346,68 @@ mod on {
         assert_eq!(setup_race.sim.world.ships[0].pickup.weapon, None);
     }
 
+    #[test]
+    fn a_mod_that_hands_out_a_pickup_without_a_pickup_table_is_faulted_by_name() {
+        let mut bare = giver("test.bare");
+        bare.pickup = None;
+        let mut race = grid(prepared(&[bare]));
+        race.tick(&PlayerInputs::none());
+        let (_, why) = race.extension_reports()[0]
+            .faulted
+            .clone()
+            .expect("a mod with no [pickup] is faulted on its first give-pickup");
+        assert!(
+            why.contains("[pickup]") && why.contains("oag-mod.toml"),
+            "{why}"
+        );
+        assert_eq!(
+            race.sim.world.ships[0].pickup.weapon, None,
+            "and the pickup is not given"
+        );
+        let mut roll = roller();
+        roll.pickup = None;
+        let mut race = grid(prepared(&[roll]));
+        race.tick(&PlayerInputs::none());
+        assert!(
+            race.extension_reports()[0].faulted.is_some(),
+            "pickup-roll is the same"
+        );
+    }
+
+    #[test]
+    fn the_held_mod_pickups_look_is_the_manifests_kept_for_its_fade_out() {
+        use oag_gameplay::input::Button;
+        use oag_tables::pickup_look::{Colour, Icon, PickupLook};
+        let declared = PickupLook {
+            icon: Icon::Mod("bolt".to_string()),
+            colour: Colour::Rgba([1, 2, 3, 4]),
+        };
+        let mut source = giver("test.giver");
+        source.pickup = Some(declared.clone());
+        let mut race = grid(prepared(&[source]));
+        assert_eq!(race.sim.extensions.pickup_look(0), None, "no owner yet");
+        race.tick(&PlayerInputs::none());
+        let mut resolved = declared;
+        resolved.icon = Icon::Mod(crate::extensions::mod_icon_src("test.giver", "bolt"));
+        assert_eq!(
+            race.sim.extensions.pickup_look(0),
+            Some(resolved.clone()),
+            "the manifest's icon key is the HUD sheet's key"
+        );
+        assert_eq!(
+            race.view.huds[0].pickup_look,
+            Some(resolved.clone()),
+            "latched while it is held"
+        );
+        race.tick(&pressed(Button::Circle));
+        assert_eq!(race.sim.world.ships[0].pickup.weapon, None);
+        assert_eq!(
+            race.view.huds[0].pickup_look,
+            Some(resolved),
+            "kept after use, so the fade-out draws what the fade-in drew"
+        );
+    }
+
     /// Every tick: `fire-effect` with bit 15 set, the mod's own effect 2, for slot 1.
     fn mod_effect_firer(id: &str, fires: bool) -> Source {
         let body = if fires {
@@ -386,10 +449,10 @@ mod on {
         assert!(quiet.sim.extensions.effects_for_tests().is_empty());
     }
 
-    /// Every tick: a Turbo cue, the wall sparks, a red pickup backdrop for slot 1, the
-    /// three race-wide outputs (rain at 0.5, sun at 0.5, sky grey at 0.25), and for slot 1
-    /// an energy-bar shake of 2, a thrust-bar share of 0.5 into red, the text "hi" and the
-    /// icon "Ab", both at the centre.
+    /// Every tick: a Turbo cue, the wall sparks, the three race-wide outputs (rain at 0.5,
+    /// sun at 0.5, sky grey at 0.25), and for slot 1 a pickup-look (the Shield's icon on
+    /// red), an energy-bar shake of 2, a thrust-bar share of 0.5 into red, the text "hi"
+    /// and the icon "Ab", both at the centre.
     fn outputter(id: &str, outputs: bool) -> Source {
         let body = if outputs {
             let hud = |index: i32, kind: i32, arg: i32, value: u32, word: u32| {
@@ -430,8 +493,8 @@ mod on {
                  (i32.store16 (i32.const {a0}) (i32.const 1))
                  (i32.store8 (i32.const {c1}) (i32.const 6)) (i32.store8 (i32.const {s1}) (i32.const 1))
                  (i32.store16 (i32.const {a1}) (i32.const 0))
-                 (i32.store8 (i32.const {c2}) (i32.const 16)) (i32.store8 (i32.const {s2}) (i32.const 1))
-                 (i32.store16 (i32.const {a2}) (i32.const 4))
+                 (i32.store8 (i32.const {c2}) (i32.const 22)) (i32.store8 (i32.const {s2}) (i32.const 1))
+                 (i32.store16 (i32.const {a2}) (i32.const 6))
                  (i32.store (i32.const {b2}) (i32.const 0xff0000ff))
                  {weather} {sun} {grade}
                  {shake} {extra} {text} {icon} {pool}
@@ -489,8 +552,13 @@ mod on {
         let tick = loud.sim.world.tick;
         let hud = loud.sim.extensions.hud(1, tick);
         assert_eq!(
-            hud.tint(oag_hud::ext_draws::Element::Pickup),
-            Some([1.0, 0.0, 0.0, 1.0])
+            hud.pickup_look,
+            Some(oag_tables::pickup_look::PickupLook {
+                icon: oag_tables::pickup_look::Icon::Title(oag_tables::weapons::Weapon::Shield),
+                colour: oag_tables::pickup_look::Colour::Rgba([255, 0, 0, 255]),
+            }),
+            "pickup-look reaches the HUD as the title-agnostic look, and the hash above is \
+             the quiet module's: it is an output"
         );
         assert_eq!(hud.shake[oag_hud::ext_draws::Element::Energy as usize], 2.0);
         let extra = hud.extra(oag_hud::ext_draws::Element::Thrust).unwrap();
@@ -986,6 +1054,7 @@ mod triggers {
             icons: Vec::new(),
             effects: Vec::new(),
             files: Arc::new(|_| Err("no files".into())),
+            pickup: Some(crate::extension_pickup::a_look()),
         }
     }
 
