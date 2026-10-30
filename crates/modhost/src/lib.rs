@@ -17,6 +17,14 @@
 //! Wall time is not measured here (`docs/architecture/determinism.md`): the caller
 //! times the call if it wants to show it.
 
+// Cranelift only: the web build runs modules on the browser's own engine and iOS needs
+// Pulley (no JIT), neither built yet (README, section 5). `oag-game` builds both with
+// `--no-default-features`.
+#[cfg(any(target_arch = "wasm32", target_os = "ios"))]
+compile_error!(
+    "oag-modhost runs modules on wasmtime's Cranelift, which the web and iOS builds cannot use; build oag-game with --no-default-features there"
+);
+
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
 

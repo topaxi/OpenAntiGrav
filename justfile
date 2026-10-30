@@ -138,8 +138,9 @@ check-ballisticng:
     cargo nextest run -p oag-game -p oag-raceplay --features oag-game/ballisticng,oag-raceplay/ballisticng --tests --cargo-profile quick -E 'test(custom_tracks::) | test(survey::)'
 
 # The `extensions` feature (simulation mods in WebAssembly through `oag-modhost` and
-# wasmtime) is off by default, so nothing above compiles it. This lints the code
-# behind it and runs, with it on, the host's tests and every `oag-raceplay` unit
+# wasmtime) is `oag-game`'s default, so `test` compiles it through feature unification;
+# this keeps it covered package by package. It lints the code behind it and runs, with
+# it on, the host's tests and every `oag-raceplay` unit
 # test (the hash goldens among them, which a vanilla race must still meet with the
 # feature on). The disc-backed Wall Penalty test runs by hand:
 # `cargo nextest run -p oag-raceplay --features extensions --run-ignored only -E 'test(/wall_penalty_ground_truth::/)'`.
@@ -554,11 +555,12 @@ play *ARGS:
             args=("$img" "${args[@]:1}")
             ;;
     esac
-    # Simulation mods run by default (the `extensions` feature, wasmtime);
-    # `OAG_NO_EXTENSIONS=1` builds without it. `OAG_PLAY_FEATURES` adds more.
+    # Simulation mods run by default (`oag-game`'s default `extensions` feature,
+    # wasmtime); `OAG_NO_EXTENSIONS=1` builds without it. `OAG_PLAY_FEATURES` adds more.
     features="${OAG_PLAY_FEATURES:-}"
-    [ -n "${OAG_NO_EXTENSIONS:-}" ] || features="extensions${features:+,$features}"
-    ${OAG_PLAY_WRAPPER:-} cargo run --release -p oag-game {{native_video_flags}} ${features:+--features "$features"} -- "${args[@]}"
+    no_default=""
+    [ -z "${OAG_NO_EXTENSIONS:-}" ] || no_default="--no-default-features"
+    ${OAG_PLAY_WRAPPER:-} cargo run --release -p oag-game $no_default {{native_video_flags}} ${features:+--features "$features"} -- "${args[@]}"
 
 # `just bench-render [title ...] [--tag NAME] [--repeat] [--profile debug] [--views 1,2h,2v] [--size WxH]`, titles from
 # pulse pure hd 2048 omega (default all). Builds a release `oag-game` OUTSIDE the lock, then
@@ -688,7 +690,7 @@ mac-app *ARGS:
 # OpenAntiGrav.app inside an unsigned-for-the-store .ipa, for aarch64-apple-ios
 # (macOS only: needs the iOS SDK; the layout assembles anywhere). See docs/tools/ios.md.
 ios-app *ARGS:
-    cargo build --profile dist --target aarch64-apple-ios -p oag-game
+    cargo build --profile dist --target aarch64-apple-ios -p oag-game --no-default-features
     cargo build -p oag-game
     ./scripts/build-ios-app.sh {{ARGS}}
 

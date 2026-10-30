@@ -105,8 +105,9 @@ view = [
 # builds it so it does not rot. Own-format track files need none of it.
 ballisticng = ["dep:oag-ballisticng", "dep:oag-unity"]
 # Simulation mods: WebAssembly modules called once per tick through `oag-modhost`
-# (wasmtime). Off by default; off, nothing of wasmtime is compiled or linked and a
-# race offered a module says it was left out. See `crate::extensions`.
+# (wasmtime). Off here; `oag-game` turns it on by default (not on the web or iOS).
+# Off, nothing of wasmtime is compiled or linked and a race offered a module says it
+# was left out. See `crate::extensions`.
 extensions = ["dep:oag-modhost"]
 # See `oag-render`'s feature of the same name. Off by default.
 perf-probe = ["view", "oag-render/perf-probe"]

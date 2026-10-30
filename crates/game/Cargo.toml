@@ -152,9 +152,13 @@ android = []
 # Off by default and enabled by no build (maintainer, 2026-10-27: it does not
 # render enough to ship); `just lint` builds it so it does not rot.
 ballisticng = ["oag-raceplay/ballisticng"]
-# Simulation mods (WebAssembly, wasmtime): `oag_raceplay::extensions`. Off by default;
-# off, a mod's module is named in the load report as left out and nothing of wasmtime
+# Simulation mods (WebAssembly, wasmtime with Cranelift): `oag_raceplay::extensions`.
+# On by default on Linux, Windows, macOS and Android. The web build (`just web`) and iOS
+# (`just ios-app`) pass `--no-default-features`: the browser's own engine and wasmtime's
+# Pulley interpreter are not built, and `oag-modhost` refuses to compile for either.
+# Off, a mod's module is named in the load report as left out and nothing of wasmtime
 # is linked. docs/architecture/wasm-extensions/.
+default = ["extensions"]
 extensions = ["oag-raceplay/extensions"]
 native-video = ["dep:gstreamer", "dep:gstreamer-app", "dep:gstreamer-video"]
 # See `oag-render`'s feature of the same name. Off by default.

@@ -5,7 +5,7 @@
 #   scripts/build-ios-app.sh [--version V] [--binary PATH] [--host-game PATH] [--out IPA]
 #
 # Defaults: --binary target/aarch64-apple-ios/dist/oag-game (`cargo build
-# --profile dist --target aarch64-apple-ios -p oag-game`), --host-game
+# --profile dist --target aarch64-apple-ios -p oag-game --no-default-features`), --host-game
 # target/debug/oag-game (a host build; an iOS binary cannot run here, so the
 # icons come from the host one), --version the workspace version, --out
 # target/ios/OpenAntiGrav-<version>-ios-arm64.ipa. `just ios-app` runs it.
@@ -34,7 +34,7 @@ while [ $# -gt 0 ]; do
         *) echo "unknown argument: $1" >&2; exit 2 ;;
     esac
 done
-[ -f "$binary" ] || { echo "no binary at $binary (cargo build --profile dist --target aarch64-apple-ios -p oag-game)" >&2; exit 1; }
+[ -f "$binary" ] || { echo "no binary at $binary (cargo build --profile dist --target aarch64-apple-ios -p oag-game --no-default-features)" >&2; exit 1; }
 [ -x "$host_game" ] || { echo "no host oag-game at $host_game (cargo build -p oag-game), needed for the icons" >&2; exit 1; }
 cargo_version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
 [ -n "$version" ] || version="$cargo_version"

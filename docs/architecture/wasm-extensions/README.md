@@ -1388,7 +1388,10 @@ with wasmtime's own switches left on as a second line
 registered? **No.**
 
 - **Without the `extensions` feature**, wasmtime is not linked at all, and the web
-  build never links it (section 5): nothing to run.
+  build never links it (section 5): nothing to run. Since 2026-10-30 the feature is
+  `oag-game`'s default on Linux, Windows, macOS and Android; the web build and iOS
+  build with `--no-default-features`, and `oag-modhost` refuses to compile for either
+  (Cranelift only until the browser path and Pulley are built).
 - **With the feature on and no module loaded**, no wasmtime `Engine`, `Store` or
   instance exists. The host is built **lazily**, at the first load of a module by a
   race (a sim or HUD module of a mod that is on for it) or by a screen (the first

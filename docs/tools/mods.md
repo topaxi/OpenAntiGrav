@@ -263,10 +263,12 @@ throws the fork's coin and the AI drives the route with the player's physics; th
 picks the way. See
 [wasm-extensions](../architecture/wasm-extensions/README.md#and-checkpoint-circuit-2026-10-30).
 
-The game must be built with the `extensions` feature. `just play` builds with it by
-default (`OAG_NO_EXTENSIONS=1 just play` builds without); by hand it is
-`cargo run --release -p oag-game --features extensions`. A build without it runs no
-module, and its boot log says so for each mod that ships one.
+The game runs modules through its `extensions` feature, on by default on Linux,
+Windows, macOS and Android (`cargo run --release -p oag-game`, `just play`, `just apk`).
+`OAG_NO_EXTENSIONS=1 just play` or `--no-default-features` builds without it; the web
+build and iOS always do (the browser's own engine and wasmtime's Pulley interpreter
+are not built yet). A build without it runs no module, and its boot log says so for
+each mod that ships one.
 The manifest is read with the others; the `.wasm` is opened only by the race that
 runs it. No module runs in an original campaign or a network race. A race running a
 module is MODDED and records no replay. The ABI, the event and the command are in

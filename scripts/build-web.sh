@@ -56,7 +56,7 @@ CARGO_TARGET_DIR=$target_dir \
   RUSTFLAGS="-C target-feature=+atomics,+bulk-memory,+mutable-globals $link" \
   cargo "+$toolchain" build -Z build-std=std,panic_abort \
   --target wasm32-unknown-unknown --profile "$profile" \
-  -p oag-game --example oag_web --features web
+  -p oag-game --no-default-features --example oag_web --features web
 dir=$profile
 [[ $profile == dev ]] && dir=debug
 wasm="$target_dir/wasm32-unknown-unknown/$dir/examples/oag_web.wasm"
