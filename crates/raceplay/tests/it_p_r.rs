@@ -17,6 +17,7 @@ mod perturb;
 mod pickup_icon_ground_truth;
 mod pilot_assist_ground_truth;
 mod pilot_assist_levels_ground_truth;
+mod plasma_blast_models_ground_truth;
 mod plasma_ground_truth;
 mod portuguese_br_ground_truth;
 mod posed_visibility_ground_truth;

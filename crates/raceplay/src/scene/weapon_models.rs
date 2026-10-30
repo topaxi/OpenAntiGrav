@@ -272,10 +272,9 @@ impl super::Scene {
     /// runs out, independent of every other slot, so this hands back which
     /// slots are live rather than how many.
     ///
-    /// **One `matrix` writes all three drawables** - see
-    /// [`blast_models::PlasmaBlastDraw`]'s own doc comment for why - so only
-    /// the anim-time scrub passed to [`Drawable::write_node_anims`] differs
-    /// per model.
+    /// **Each drawable takes its own matrix and tint**, see
+    /// [`blast_models::PlasmaBlastDraw`]; the clock is the blast's age for
+    /// all three.
     ///
     /// **No previous-frame matrix is tracked for this pool**, so a blast
     /// draws with no motion blur of its own: `prev_mvp` is passed as this
@@ -291,15 +290,15 @@ impl super::Scene {
         view_projection: Mat4,
         weapon_scene: &mesh_render::Scene,
     ) -> [bool; blast_models::PLASMA_BLAST_SLOTS] {
-        let draws = race.plasma_blast_draws(race.camera_position());
+        let draws = race.plasma_blast_draws(race.view().inverse());
         let mut active = [false; blast_models::PLASMA_BLAST_SLOTS];
         for (slot, draw) in draws.iter().enumerate() {
             let Some(draw) = draw else { continue };
             active[slot] = true;
-            for (index, (drawables, seconds)) in [
-                (&self.plasma_blast.halo, draw.halo_seconds),
-                (&self.plasma_blast.hemisphere2, draw.hemisphere2_seconds),
-                (&self.plasma_blast.hemisphere1, draw.hemisphere1_seconds),
+            for (index, drawables) in [
+                &self.plasma_blast.halo,
+                &self.plasma_blast.hemisphere2,
+                &self.plasma_blast.hemisphere1,
             ]
             .into_iter()
             .enumerate()
@@ -307,29 +306,26 @@ impl super::Scene {
                 let Some(drawable) = drawables.get(slot) else {
                     continue;
                 };
-                // **HD scales each model on top of the shared billboard
-                // basis; Pulse scrubs a baked anim-time track on the basis
-                // alone.** See `blast_models`'s own module doc comment for
-                // why these do not fold into one branch.
-                let matrix = match draw.hd_scale {
-                    Some(scale) => draw.matrix * Mat4::from_scale(Vec3::splat(scale[index])),
-                    None => draw.matrix,
-                };
+                let matrix = draw.matrices[index];
                 let mvp = view_projection * matrix;
                 write_fog(drawable, queue, weapon_scene);
-                if draw.hd_scale.is_some() {
-                    drawable.write_clocked(queue, view_projection, matrix, mvp, draw.hd_clock);
+                if draw.hd {
+                    drawable.write_clocked(queue, view_projection, matrix, mvp, draw.clock);
                 } else {
                     drawable.write(queue, view_projection, matrix, mvp);
-                }
-                if draw.hd_scale.is_none() {
-                    drawable.write_node_anims(queue, seconds);
+                    drawable.write_node_anims(queue, draw.clock);
                     // `Node_SetAnimTimeTree` hands the one scrubbed time to
                     // the `Anim Transform` and `Mesh` nodes of the tree alike
                     // (anim-transform.md), so the texture offsets ride the
-                    // same `age * rate`. `hemisphere1` has no node animation
-                    // at all: this is the only thing it writes.
-                    drawable.write_anims(queue, seconds);
+                    // same clock. `hemisphere1` has no node animation at
+                    // all: this is the only thing it writes.
+                    drawable.write_anims(queue, draw.clock);
+                    // The model's grey ambient, which multiplies its texture
+                    // in the original (lighting on, no light lit). Rewrites
+                    // the vertex colours from the authored ones every frame,
+                    // so a slot's next blast starts at full again.
+                    let tint = draw.tints[index];
+                    drawable.tint(queue, [tint, tint, tint, 1.0], &mut Vec::new());
                 }
             }
         }
