@@ -33,7 +33,7 @@ so these are effect gaps, not scene gaps.
    detonation at +76). Probe ours' launch tick and the bolt's per-tick distance against the
    original's `--probe plasma_launch` / `plasma_det` (and `Plasma_Update`, `0x0885c6cc`). Ready
    to wire once the short leg is found; confidence 60.
-4. Craft hit: see `the-pulse-plasma-craft-hit-spawns-two-detonations.md` (ready-to-wire, own thread).
+4. ~~Craft hit~~: the second blast is wired (2026-10-30, `plasma.md`); still uncaptured on the original (needs a craft ahead on the bolt line).
 
 ## Next Steps
 

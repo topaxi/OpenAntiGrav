@@ -323,3 +323,52 @@ fn a_second_person_draws_from_the_human_column_of_a_weapon_pad() {
         "the second person was dealt from the AI column"
     );
 }
+
+/// A Pulse Plasma bolt that sweeps into a craft detonates twice in one tick,
+/// at the bolt and at the struck craft (`Plasma_SweepCraftHit` and
+/// `Plasmas_Update`'s teardown, `plasma.md`); one that does not strike a craft
+/// detonates once; HD's single explosion is not doubled.
+#[test]
+fn a_plasma_craft_hit_spawns_two_blasts_at_the_bolt_and_the_craft() {
+    let live = |race: &Race| race.view.plasma_blasts.iter().flatten().count();
+    let aimed_at_slot_1 = |hd: bool| {
+        let mut race = second_person_holding(Weapon::Plasma, one_plasma_table());
+        race.view.hd_plasma_blast = hd;
+        let craft = race.sim.world.ships[1].physics.body.position;
+        // Slot 1 is not the firer, and the bolt starts 3 units short of it.
+        let speed = Vec3::Z * 60.0;
+        race.sim
+            .world
+            .projectiles
+            .spawn(Weapon::Plasma, craft - Vec3::Z * 3.0, speed, 0);
+        race
+    };
+
+    let mut race = aimed_at_slot_1(false);
+    let before = live(&race);
+    let craft = race.sim.world.ships[1].physics.body.position;
+    race.tick(&PlayerInputs::none());
+    let at: Vec<Vec3> = race
+        .view
+        .plasma_blasts
+        .iter()
+        .flatten()
+        .map(|blast| blast.position)
+        .collect();
+    assert_eq!(at.len() - before, 2, "a craft hit is two blasts: {at:?}");
+    assert!(
+        at.iter().any(|p| (*p - craft).length() < 1e-3),
+        "one blast is at the struck craft {craft:?}: {at:?}"
+    );
+
+    let mut hd = aimed_at_slot_1(true);
+    hd.tick(&PlayerInputs::none());
+    assert_eq!(live(&hd), 1, "HD's one explosion is not doubled");
+
+    let race = second_person_holding(Weapon::Plasma, one_plasma_table());
+    assert_eq!(
+        race.plasma_craft_hit_blast_point(Weapon::Plasma, None),
+        None,
+        "a wall hit has no second blast"
+    );
+}

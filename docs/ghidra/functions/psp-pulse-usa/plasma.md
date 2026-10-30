@@ -1427,14 +1427,24 @@ struct nor `+0x60`'s exact meaning ("local player index", guessed) is
 corroborated anywhere else, so it is left as `FUN_0883e37c` rather than
 renamed on one reading.
 
-**Not ported.** The fix belongs in `oag_weapons::projectile::blast` /
-`Impact` and the visuals that consume it (`blast_direct_hit`, the render
-side) - both outside this pass's owned files (`crates/weapons/src/projectile/**`
-and `crates/raceplay/src/weapons/visuals.rs` are `plasma-speed-blend`'s and
-`blast_models`'s lanes respectively). This section is the read those lanes
-need to act on: a Plasma craft hit should spawn **two** `Impact`-triggered
-flash/blast instances, one at the struck craft's position and one at the
-bolt's, not one.
+**Ported 2026-10-30 (`pulse-plasma-craft-hit`).** `Race::plasma_craft_hit_blast_point`
+(`crates/raceplay/src/weapons/visuals.rs`) returns the struck craft's body position for a
+Plasma impact with `struck: Some(_)`, and `Race::tick` plays a second `note_blast` there on top
+of the bolt's own: each is a model blast plus its `WO_PLASMA_FLASH` and screen flash. A wall hit
+or a timeout stays one. Only the visual count changed; damage and push are untouched. Test:
+`tests::second_person::a_plasma_craft_hit_spawns_two_blasts_at_the_bolt_and_the_craft` (fails with
+the call dropped). Not captured on the original (no opponent in Time Trial), so the pair is
+unseen.
+
+**Cross-title check.**
+
+- **HD/Fury: checked, differs** (confidence 85). `Plasma_Update` runs `if (p->destroy)
+  Plasma_Detonate(p, &p->position)` once per bolt; a craft hit only sets the destroy state, so
+  `WeaponExplosions_Start` runs once, at the bolt. Not wired, gated off by `hd_plasma_blast`.
+- **Omega: checked, differs** (confidence 88). The craft-hit block sets `p->destroy`; the one
+  destroy path starts the bolt's own slot explosion. One explosion, at the bolt.
+- **Pure: not checked.** No Pure page reads the double call; Pure inherits Pulse's blast (I:Pulse),
+  so it gets the second blast until measured.
 
 ## 2026-10-30: the Plasma matched against the original, and what differs (pulse-plasma-fidelity)
 
