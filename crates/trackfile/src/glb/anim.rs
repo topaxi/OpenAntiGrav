@@ -86,7 +86,7 @@ pub(super) fn write(
             "name": anim.name,
             "channels": channels,
             "samplers": samplers,
-            "extras": { "oag_loop": anim.repeat.tag() },
+            "extras": anim_extras(anim),
         }));
     }
     out
@@ -181,11 +181,43 @@ pub(super) fn read(
                 keys,
             });
         }
+        let on = match extras.as_ref().and_then(|e| e.get("oag_on")) {
+            None => None,
+            Some(v) => Some(v.as_str().map(str::to_owned).ok_or_else(|| {
+                Error::accessor(&what, "oag_on", format!("{v} is not a channel name"))
+            })?),
+        };
+        let on_value = match extras.as_ref().and_then(|e| e.get("oag_on_value")) {
+            None => None,
+            Some(v) => {
+                let value = v.as_f64().map(|f| f as f32).filter(|f| f.is_finite());
+                if on.is_none() {
+                    return Err(Error::accessor(&what, "oag_on_value", "needs an oag_on"));
+                }
+                Some(value.ok_or_else(|| {
+                    Error::accessor(&what, "oag_on_value", format!("{v} is not a finite number"))
+                })?)
+            }
+        };
         out.push(Animation {
             name,
             repeat,
             channels,
+            on,
+            on_value,
         });
     }
     Ok(out)
+}
+
+/// An animation's extras: `oag_loop`, and `oag_on` when a channel starts it.
+fn anim_extras(anim: &Animation) -> Value {
+    let mut extras = json!({ "oag_loop": anim.repeat.tag() });
+    if let Some(on) = &anim.on {
+        extras["oag_on"] = json!(on);
+        if let Some(value) = anim.on_value {
+            extras["oag_on_value"] = json!(value);
+        }
+    }
+    extras
 }

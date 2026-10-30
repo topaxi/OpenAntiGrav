@@ -105,6 +105,11 @@ pub enum Weapon {
     /// Pure's disruption bolt: hurts nobody, hands its victim one of eight
     /// control effects. Authored on no Pulse or HD table.
     Disruptor,
+    /// A simulation mod's own pickup (`oag_raceplay::extensions`, README 7.5): no title
+    /// authors it, no table row describes it, and the engine neither fires nor absorbs
+    /// it - the mod that gives it does. **Not in [`Self::ALL`]**, which is the titles'
+    /// pool and indexes their per-weapon tables; a race with no mod never holds one.
+    Extension,
 }
 
 impl Weapon {
@@ -148,6 +153,8 @@ impl Weapon {
             Self::Repulser => "Repulser",
             Self::Shuriken => "Shuriken",
             Self::Disruptor => "Disruptor",
+            // No disc file spells it, so `from_type` never answers it.
+            Self::Extension => "Extension",
         }
     }
 
@@ -168,7 +175,7 @@ impl Weapon {
     pub fn damages(self) -> bool {
         !matches!(
             self,
-            Self::Turbo | Self::Shield | Self::Autopilot | Self::Disruptor
+            Self::Turbo | Self::Shield | Self::Autopilot | Self::Disruptor | Self::Extension
         )
     }
 }

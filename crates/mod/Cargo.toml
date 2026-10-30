@@ -9,7 +9,9 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+oag-ext-abi.workspace = true
 oag-schema.workspace = true
+oag-tables.workspace = true
 dirs = "7"
 semver = "1"
 serde.workspace = true

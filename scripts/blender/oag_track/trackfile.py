@@ -11,7 +11,9 @@ Coordinates here are the format's: right-handed, Y up. The Blender side
 """
 
 import json
+import math
 import os
+import re
 import struct
 import tomllib
 
@@ -27,6 +29,7 @@ from .model import (
     SplinePoint,
     Start,
     Track,
+    Trigger,
 )
 
 SCHEMA_LOCATION = "https://oag.topaxi.com/mods/schemas/v1/track.tosd"
@@ -40,6 +43,9 @@ MAX_VERTICES = 65535
 START = "oag/start"
 SPEEDUP = "oag/pads/speedup"
 WEAPON = "oag/pads/weapon"
+TRIGGERS = "oag/triggers"
+MAX_TRIGGERS = 64
+MAX_PROPS = 1024
 SPLINE = "oag/spline/"
 
 _WIDTH = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4, "MAT4": 16}
@@ -48,6 +54,81 @@ _COMPONENT = {FLOAT: ("f", 4), UBYTE: ("B", 1), USHORT: ("H", 2), artfile.UINT: 
 
 class TrackFileError(Exception):
     """A track the format cannot hold, or a file this reader refuses."""
+
+
+def prop_key(name):
+    """FNV-1a 32 of the name: the key a mod reads a property by (`oag_ext_abi::track`)."""
+    h = 0x811C9DC5
+    for b in name.encode("utf-8"):
+        h = ((h ^ b) * 0x01000193) & 0xFFFFFFFF
+    return h
+
+
+def prop_value(what, key, v):
+    """A property's value as the f32 the race hands a mod: numbers and bools only."""
+    if isinstance(v, bool):
+        return 1.0 if v else 0.0
+    if isinstance(v, (int, float)):
+        return f32.r(float(v))
+    raise TrackFileError(f"{what}: property {key!r} is a {type(v).__name__}; properties are numbers and bools")
+
+
+def check_props(what, props):
+    seen = {}
+    for key, v in props.items():
+        if not key:
+            raise TrackFileError(f"{what}: a property has an empty name")
+        if not math.isfinite(v):
+            raise TrackFileError(f"{what}: property {key!r} is not finite")
+        h = prop_key(key)
+        if h in seen:
+            raise TrackFileError(f"{what}: properties {seen[h]!r} and {key!r} hash alike; rename one")
+        seen[h] = key
+
+
+CHANNEL = re.compile(r"^[a-z0-9._-]+/[a-z0-9_-]+$")
+
+
+def check_channel(what, name):
+    """`<mod id>/<name>`: the id of lowercase letters, digits, `.`, `-`, `_`, the name without the `.`."""
+    if len(name) > 64 or not CHANNEL.match(name):
+        raise TrackFileError(f"{what}: {name!r} is not a channel name (write `<mod id>/<name>`)")
+
+
+def _check_all(track):
+    check_props("props", track.props)
+    for i, path in enumerate(track.paths):
+        check_props(f"spline path {i}", path.props)
+    for what, pads in (("speed pads", track.speedup_pads), ("weapon pads", track.weapon_pads)):
+        for i, pad in enumerate(pads):
+            check_props(f"{what} {i}", pad.props)
+    if len(track.triggers) > MAX_TRIGGERS:
+        raise TrackFileError(f"{len(track.triggers)} triggers, a mod reads at most {MAX_TRIGGERS}")
+    for t in track.triggers:
+        check_props(f"trigger {t.name}", t.props)
+        if t.emits is not None:
+            check_channel(f"trigger {t.name} oag_emit", t.emits)
+            if t.emits not in track.channels:
+                raise TrackFileError(
+                    f"trigger {t.name}: oag_emit {t.emits!r} is not in the track's channels (publishes)"
+                )
+    for name in track.channels:
+        check_channel("channels publishes", name)
+    if track.art is not None:
+        for a in track.art.animations:
+            if a.on is not None:
+                check_channel(f"animation {a.name!r} oag_on", a.on)
+            elif a.on_value is not None:
+                raise TrackFileError(f"animation {a.name!r}: oag_on_value needs an oag_on")
+    total = len(track.props) + sum(
+        len(p.props) for p in (*track.speedup_pads, *track.weapon_pads, *track.triggers, *track.paths)
+    )
+    if total > MAX_PROPS:
+        raise TrackFileError(f"{total} properties, a mod reads at most {MAX_PROPS}")
+
+
+def _props_json(props):
+    return {k: props[k] for k in sorted(props)}
 
 
 def _flat(rows):
@@ -208,7 +289,8 @@ def write_glb(track):
             raw = [tuple(v & 0xFF for v in (q.cage or (0,) * 8)) for q in p]
             attrs["_OAG_CAGE_A"] = b.bytes4([r[:4] for r in raw])
             attrs["_OAG_CAGE_B"] = b.bytes4([r[4:] for r in raw])
-        push(name, [{"attributes": attrs, "mode": POINTS}])
+        extras = {"oag_props": _props_json(path.props)} if path.props else None
+        push(name, [{"attributes": attrs, "mode": POINTS}], extras)
 
     for name, pads in ((SPEEDUP, track.speedup_pads), (WEAPON, track.weapon_pads)):
         if not pads:
@@ -223,7 +305,27 @@ def write_glb(track):
             "_OAG_MAX": b.floats([q.max for q in pads], "VEC3"),
             "_OAG_DISABLED": b.floats([(q.disabled,) for q in pads], "SCALAR"),
         }
-        push(name, [{"attributes": attrs, "mode": POINTS}])
+        extras = None
+        if any(q.props for q in pads):
+            extras = {"oag_props": [_props_json(q.props) for q in pads]}
+        push(name, [{"attributes": attrs, "mode": POINTS}], extras)
+
+    if track.triggers:
+        t = track.triggers
+        for q in t:
+            _finite(f"{TRIGGERS} {q.name}", [*q.to_world, *q.min, *q.max])
+        attrs = {
+            "POSITION": b.positions([(q.to_world[12], q.to_world[13], q.to_world[14]) for q in t]),
+            "_OAG_TO_WORLD": b.floats([q.to_world for q in t], "MAT4"),
+            "_OAG_MIN": b.floats([q.min for q in t], "VEC3"),
+            "_OAG_MAX": b.floats([q.max for q in t], "VEC3"),
+        }
+        extras = {"oag_names": [q.name for q in t]}
+        if any(q.emits for q in t):
+            extras["oag_emits"] = [q.emits or "" for q in t]
+        if any(q.props for q in t):
+            extras["oag_props"] = [_props_json(q.props) for q in t]
+        push(TRIGGERS, [{"attributes": attrs, "mode": POINTS}], extras)
 
     for n, node in enumerate(track.nodes):
         name = f"oag/collision/{n}"
@@ -304,8 +406,13 @@ def _quote(s):
     return json.dumps(s, ensure_ascii=False)
 
 
+def _key(s):
+    return s if s and all(c.isascii() and (c.isalnum() or c in "_-") for c in s) else _quote(s)
+
+
 def write_manifest(track, glb_name):
-    """The `.track.toml` text. Integers and strings only: no float is written."""
+    """The `.track.toml` text. Integers and strings only, but for `[props]`: an f32
+    written as the shortest decimal of its exact double, which reads back the same."""
     if not track.id:
         raise TrackFileError("the track has no id")
     if not track.host and track.art is not None and track.art.borrows_from_a_disc():
@@ -356,6 +463,14 @@ def write_manifest(track, glb_name):
     ]
     if track.art is not None:
         lines.append(f"art_meshes = {len(track.art.meshes)}")
+    if track.triggers:
+        lines.append(f"triggers = {len(track.triggers)}")
+    if track.channels:
+        lines += ["", "[channels]", "publishes = [" + ", ".join(_quote(n) for n in track.channels) + "]"]
+    if track.props:
+        lines += ["", "[props]"]
+        lines += [f"{_key(k)} = {float(track.props[k])!r}" for k in sorted(track.props)]
+    if track.art is not None:
         lines += ["", *artfile.manifest_lines(track.art)]
     else:
         lines.append("")
@@ -368,6 +483,7 @@ def write(track, manifest_path):
     if not manifest_path.endswith(".track.toml"):
         raise TrackFileError("the manifest name must end in .track.toml")
     glb_path = manifest_path[: -len(".track.toml")] + ".glb"
+    _check_all(track)
     glb = write_glb(track)
     text = write_manifest(track, os.path.basename(glb_path))
     with open(glb_path, "wb") as fh:
@@ -488,7 +604,36 @@ def _read_pads(g, node, name):
     lo = g.accessor(a["_OAG_MIN"], FLOAT, "VEC3")
     hi = g.accessor(a["_OAG_MAX"], FLOAT, "VEC3")
     off = g.accessor(a["_OAG_DISABLED"], FLOAT, "SCALAR")
-    return [Pad(matrix[i], lo[i], hi[i], off[i]) for i in range(len(matrix))]
+    props = _read_props(node, name, len(matrix))
+    return [Pad(matrix[i], lo[i], hi[i], off[i], props[i]) for i in range(len(matrix))]
+
+
+def _read_props(node, name, n):
+    rows = (node.get("extras") or {}).get("oag_props")
+    if rows is None:
+        return [{} for _ in range(n)]
+    if len(rows) != n:
+        raise TrackFileError(f"{name}: {len(rows)} oag_props entries for {n} records")
+    return [{k: prop_value(f"{name} {i}", k, v) for k, v in row.items()} for i, row in enumerate(rows)]
+
+
+def _read_triggers(g, node):
+    a = g.prim(node, TRIGGERS)["attributes"]
+    matrix = g.accessor(a["_OAG_TO_WORLD"], FLOAT, "MAT4")
+    lo = g.accessor(a["_OAG_MIN"], FLOAT, "VEC3")
+    hi = g.accessor(a["_OAG_MAX"], FLOAT, "VEC3")
+    names = (node.get("extras") or {}).get("oag_names", [])
+    if len(names) != len(matrix):
+        raise TrackFileError(f"{TRIGGERS}: {len(names)} names for {len(matrix)} triggers")
+    props = _read_props(node, TRIGGERS, len(matrix))
+    emits = (node.get("extras") or {}).get("oag_emits", [])
+    if emits and len(emits) != len(matrix):
+        raise TrackFileError(f"{TRIGGERS}: {len(emits)} oag_emits for {len(matrix)} triggers")
+    emits = list(emits) + [""] * (len(matrix) - len(emits))
+    return [
+        Trigger(names[i], matrix[i], lo[i], hi[i], props[i], emits[i] or None)
+        for i in range(len(matrix))
+    ]
 
 
 def _read_collision(g, node, kind, extras):
@@ -527,7 +672,8 @@ def read(manifest_path):
         g = _Glb(fh.read())
     rows = m.get("spline", {}).get("path", [])
     splines = [None] * len(rows)
-    start, speedup, weapon, nodes, art = None, [], [], [], []
+    path_props = [{} for _ in rows]
+    start, speedup, weapon, nodes, art, triggers = None, [], [], [], [], []
     art_nodes, sun = {}, None
     for at, node in enumerate(g.doc["nodes"]):
         name = node.get("name", "")
@@ -540,11 +686,17 @@ def read(manifest_path):
         elif name == START:
             start = _read_start(g, node)
         elif name.startswith(SPLINE):
-            splines[int(name[len(SPLINE) :])] = _read_spline(g, node, name)
+            i = int(name[len(SPLINE) :])
+            splines[i] = _read_spline(g, node, name)
+            row = (node.get("extras") or {}).get("oag_props")
+            if row is not None:
+                path_props[i] = {k: prop_value(name, k, v) for k, v in row.items()}
         elif name == SPEEDUP:
             speedup = _read_pads(g, node, name)
         elif name == WEAPON:
             weapon = _read_pads(g, node, name)
+        elif name == TRIGGERS:
+            triggers = _read_triggers(g, node)
         elif name.startswith(artfile.PREFIX):
             i = int(name[len(artfile.PREFIX) :])
             art.append((i, artfile.read_node(g, node, FLOAT)))
@@ -554,7 +706,7 @@ def read(manifest_path):
     if start is None:
         raise TrackFileError(f"no {START} node")
     paths = []
-    for row, points in zip(rows, splines):
+    for row, points, props in zip(rows, splines, path_props):
         points = points or []
         if len(points) != row["points"]:
             raise TrackFileError("a spline's point count disagrees with the manifest")
@@ -564,6 +716,7 @@ def read(manifest_path):
                 f32.from_bits(row["max_spacing_bits"]),
                 _index(row["entry"]),
                 _index(row["exit"]),
+                props,
             )
         )
     junctions = [
@@ -605,4 +758,7 @@ def read(manifest_path):
         weapon,
         list(t.get("notes", [])),
         track_art,
+        {k: prop_value("props", k, v) for k, v in (m.get("props") or {}).items()},
+        triggers,
+        list((m.get("channels") or {}).get("publishes", [])),
     )

@@ -213,6 +213,9 @@ impl Race {
         // and this one returns nothing, because a pickup is an event rather than
         // a per-tick force.
         self.test_weapon_pads(slot, before, moved, &sweep);
+        self.sim
+            .extensions
+            .test_triggers(slot, &sweep, self.sim.world.tick);
         // The mode's rules, read before the craft is borrowed: `World::mode`
         // asks the whole world and the borrow checker will not have both.
         let env_damage_rules = self.sim.damage_rules();
@@ -229,12 +232,14 @@ impl Race {
         // holds, so the two differ only on the tick a stun ends after the
         // link has already broken - one tick of throttle, not chased.
         let thrust_scale = std::mem::replace(&mut ship.pending_thrust_scale, 1.0);
+        let extension_thrust = self.sim.extensions.take_boost(slot);
         let env = Environment {
             track_sample,
             track_sample_next,
             auto_speed,
             pad_hit,
             thrust_scale,
+            extension_thrust,
             class_gravity_scale: self.sim.class_gravity_scale,
             class_gravity_term: self.sim.class_gravity_term,
             laws: self.sim.physics_laws,

@@ -1,0 +1,13 @@
+[package]
+name = "spike-sizeprobe"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[features]
+runtime = ["dep:wasmtime"]
+pulley = ["runtime", "wasmtime/pulley"]
+jit = ["runtime", "wasmtime/cranelift"]
+
+[dependencies]
+wasmtime = { version = "=50.0.0", default-features = false, features = ["runtime", "std"], optional = true }

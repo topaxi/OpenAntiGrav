@@ -315,6 +315,7 @@ mod tests {
                 GpuCost::default(),
                 CpuCost::default(),
                 net,
+                None,
                 480.0,
             )
         };

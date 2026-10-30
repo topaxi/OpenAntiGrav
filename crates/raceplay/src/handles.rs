@@ -19,6 +19,7 @@ use std::sync::Arc;
 pub struct EffectHandles {
     slots: [Option<Arc<Effect>>; Trigger::COUNT],
     quake_look: oag_title::QuakeLook,
+    own: crate::extension_effects::ModEffects,
 }
 
 impl Default for EffectHandles {
@@ -26,6 +27,7 @@ impl Default for EffectHandles {
         Self {
             slots: std::array::from_fn(|_| None),
             quake_look: oag_title::QuakeLook::track(oag_title::Origin::Measured),
+            own: crate::extension_effects::ModEffects::default(),
         }
     }
 }
@@ -47,6 +49,19 @@ impl EffectHandles {
                 .cloned();
         }
         handles
+    }
+
+    /// Adds the effects the race's mods ship (`fire-effect`'s own half).
+    #[must_use]
+    pub fn with_own(mut self, own: crate::extension_effects::ModEffects) -> Self {
+        self.own = own;
+        self
+    }
+
+    /// The effect `index` of mod `mod_id`, if it loaded.
+    #[must_use]
+    pub fn own(&self, mod_id: &str, index: u16) -> Option<&crate::extension_effects::OwnEffect> {
+        self.own.get(mod_id, index)
     }
 
     /// The effect `trigger` plays, if it loaded.

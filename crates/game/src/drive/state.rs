@@ -108,6 +108,12 @@ pub struct Resolved {
     pub variant: Option<String>,
     /// The mode, as the menus name it (`time_trial`).
     pub mode: String,
+    /// The simulation mods the race runs (`oag_raceplay::extensions`), on `stage=race`.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub mods: Vec<String>,
+    /// What the first person's craft holds (`Weapon::as_type`), on `stage=race`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pickup: Option<String>,
 }
 
 /// Everything reported after one frame.

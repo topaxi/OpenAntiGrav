@@ -108,10 +108,7 @@ pub(super) fn colour(cx: &Context<'_>, readout: &Readout, name: &str) -> Option<
     // the eased fade, not the dim.
     if name == idle.backdrop
         && let Some(look) = super::pickup::look(cx.art, readout)
-        && let Some(word) = cx
-            .art
-            .pickup_colours
-            .and_then(|words| words[look.weapon as usize])
+        && let Some(word) = super::pickup::backdrop_word(cx.art, look.weapon, &readout.ext)
     {
         return Some(argb_to_rgba(super::pickup_fade::scale_word(
             word,

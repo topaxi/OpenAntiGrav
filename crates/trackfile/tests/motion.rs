@@ -22,6 +22,8 @@ pub(crate) fn moving() -> Track {
         Animation {
             name: "airship".into(),
             repeat: Repeat::Clamp,
+            on: Some("test.gate/open".into()),
+            on_value: Some(2.0),
             channels: vec![
                 Channel {
                     target: Target::Mesh(1),
@@ -44,6 +46,8 @@ pub(crate) fn moving() -> Track {
         Animation {
             name: "day".into(),
             repeat: Repeat::Loop,
+            on_value: None,
+            on: None,
             channels: vec![Channel {
                 target: Target::Sun,
                 interpolation: Interpolation::Linear,

@@ -18,6 +18,7 @@ pub mod fixture;
 mod glb;
 mod manifest;
 mod model;
+pub mod props;
 
 use std::path::{Path, PathBuf};
 
@@ -44,6 +45,7 @@ pub struct Parts {
 /// A track the format cannot hold: an empty id, an empty collision mesh, a
 /// non-finite number, a count past what the format indexes.
 pub fn to_parts(track: &Track, glb_name: &str) -> Result<Parts, Error> {
+    props::check(track)?;
     let glb = glb::write(track)?;
     let manifest = manifest::write(track, glb_name)?;
     Ok(Parts { manifest, glb })

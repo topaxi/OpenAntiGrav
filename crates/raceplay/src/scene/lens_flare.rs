@@ -37,6 +37,7 @@ impl Scene {
         projection: Mat4,
         viewport: (f32, f32, f32, f32),
     ) {
+        let sun = race.extension_sky().sun;
         let placement = self
             .lens_flare
             .borrow()
@@ -53,6 +54,16 @@ impl Scene {
                     [viewport.0, viewport.1, viewport.2, viewport.3],
                     oag_fx::lens_flare::Random::FLAGGED,
                 )
+            })
+            .map(|mut placement| {
+                // `set-sun`: the flare's alpha scales; `1.0` is not touched at all, so
+                // a race without a module draws the vanilla flare bit for bit.
+                if sun < 1.0 {
+                    for ring in &mut placement.rings {
+                        ring.rgba[3] *= sun;
+                    }
+                }
+                placement
             });
         self.history().lens_flare.set(placement);
     }

@@ -147,6 +147,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         collision,
         speedup_pads,
         weapon_pads,
+        props: track_props,
         #[cfg(feature = "view")]
         mut drawn,
         #[cfg(feature = "view")]
@@ -797,6 +798,13 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // One loop, one report line each: an effect is a name in the craft title's
     // `Effects` table, resolved to its trigger once below. Pulse's PSP laws only - see `psys::Effect::without_extents`,
     // `without_pulse_psp_draw` and `oag_fx::flash` for what others keep.
+    // The mods' sources are found once, here, and read again by `prepare` below; their
+    // own PNGs go into the HUD's sheet, so they are read and decoded first.
+    let extension_sources = crate::extensions::gather(
+        &options.extensions,
+        options.find_extensions.as_ref(),
+        &mut report,
+    );
     #[cfg(feature = "view")]
     let mut effects = psys::Library::new();
     let extents = pulse_psp::is_pulse_psp(title, &archives);
@@ -843,8 +851,21 @@ pub fn load(options: &Options) -> Result<Loaded> {
             Err(why) => report.push(format!("{why} - {name} will not be drawn")),
         }
     }
+    // The mods' own effects land after every title effect, so no title sprite moves.
     #[cfg(feature = "view")]
-    let handles = super::EffectHandles::resolve(craft_title, &effects);
+    let mod_effects = crate::extension_effects::load(
+        &extension_sources,
+        &title.slug(),
+        options.foreign_track.as_deref(),
+        &mut effects,
+        &mut |entry, name| {
+            crate::foreign::art::host_texture(&mut archives, entry, name)
+                .and_then(|texture| crate::extension_effects::sprite_of(&texture))
+        },
+        &mut report,
+    );
+    #[cfg(feature = "view")]
+    let handles = super::EffectHandles::resolve(craft_title, &effects).with_own(mod_effects);
 
     #[cfg(feature = "view")]
     let (sounds, announcer, class_announcer) = audio::banks_and_announcers(
@@ -946,6 +967,13 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // bug this closes: every launch site now sets it from the live
     // `settings::Settings::language` before `load` ever runs.
     #[cfg(feature = "view")]
+    let mod_icons = crate::extensions::mod_icons(
+        &extension_sources,
+        &title.slug(),
+        options.foreign_track.as_deref(),
+        &mut report,
+    );
+    #[cfg(feature = "view")]
     let hud = load_hud(
         craft_of(&mut craft, &mut archives),
         craft_title,
@@ -958,6 +986,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             count: options.views,
             people: usize::from(options.people_flying()),
         },
+        &mod_icons,
         &mut report,
     );
 
@@ -1037,6 +1066,23 @@ pub fn load(options: &Options) -> Result<Loaded> {
     #[cfg(feature = "view")]
     let models = &craft_title.weapon_models;
     #[cfg_attr(not(feature = "view"), allow(unused_mut))]
+    let extensions = crate::extensions::prepare(
+        &extension_sources,
+        &title.slug(),
+        options.foreign_track.as_deref(),
+        crate::extensions::Track {
+            name: &track,
+            props: &track_props,
+            speedup_pads: &speedup_pads,
+            weapon_pads: &weapon_pads,
+            paths: &ai.paths,
+            routes: course.as_ref().map_or(&[], |course| course.routes()),
+        },
+        options.language.as_deref(),
+        &mut report,
+    );
+    #[cfg(feature = "view")]
+    let track_module = extensions.has_track_module();
     let mut loaded = Loaded {
         #[cfg(feature = "view")]
         started: None,
@@ -1061,6 +1107,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             seed: options.seed.unwrap_or(SEED),
             zone,
             foreign: track.strip_prefix("foreign:").map(str::to_string),
+            extensions,
             ai,
             spline,
             course,
@@ -1351,6 +1398,10 @@ pub fn load(options: &Options) -> Result<Loaded> {
     if vex_geometry && title.looks.lens_flare.applies(archives.layout.platform) {
         loaded.setup.scenery_fx.lens_flare =
             lens_flare::read(&track_blob, &mut loaded.report).map(Box::new);
+    }
+    #[cfg(feature = "view")]
+    if track_module && loaded.setup.scenery_fx.weather.is_none() {
+        pulse_psp::place_driven_weather(&mut loaded, title, &mut archives);
     }
     #[cfg(feature = "view")]
     if foreign_art.lens_flare.is_some() {

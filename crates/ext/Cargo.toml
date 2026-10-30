@@ -1,0 +1,22 @@
+[package]
+name = "oag-ext"
+description = "The Rust guest SDK for OpenAntiGrav's WebAssembly extensions: typed observation, reply and state over ABI 1, and the exports"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+# A guest crate: a mod depends on it, no engine crate does
+# (scripts/check-dependency-rules.py). `no_std`, no `alloc`; the exports exist only on
+# wasm32, so it builds and tests natively too.
+[dependencies]
+oag-ext-abi.workspace = true
+
+[features]
+# `oag_ext::test::Race`: run an extension's tick natively under `cargo test` (std).
+test = []
+
+[lints]
+workspace = true

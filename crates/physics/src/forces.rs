@@ -290,6 +290,11 @@ pub struct Environment {
     /// armed value, like `oag_gameplay::world::Ship::pending_slowdown`. See
     /// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
     pub thrust_scale: f32,
+    /// A simulation mod's engine scale above `1.0` (`scale-thrust`, `oag_raceplay::extensions`),
+    /// multiplied into the engine's thrust after [`Self::thrust_scale`]; lift is not scaled.
+    /// No original has it: `1.0` (every race without a mod) skips the multiply, so nothing
+    /// changes bit for bit. Bounded by the host, never above `2.0`.
+    pub extension_thrust: f32,
     /// The disc's `<StartBoost>`, or `None` for a title that authors none and for callers
     /// that have not read it. `None` leaves [`crate::ship::ShipState::launch`] idle and the
     /// engine multiplier at `1.0` ([`crate::launch`]).
@@ -323,6 +328,7 @@ impl Default for Environment {
             pad_hit: None,
             damage_rules: crate::damage::DamageRules::default(),
             thrust_scale: 1.0,
+            extension_thrust: 1.0,
             start_boost: None,
             pilot_assist: None,
             barrel_rolls: true,
@@ -501,6 +507,14 @@ pub fn evaluate<R: Raycaster + ?Sized>(
         env.thrust_scale,
         env.engine_flags,
     );
+    let engine_force = if env.extension_thrust == 1.0 {
+        engine_force
+    } else {
+        engine::EngineForce {
+            thrust: engine_force.thrust * env.extension_thrust,
+            ..engine_force
+        }
+    };
     let engine_force = if env.laws.engine_output_double {
         engine_force
     } else {

@@ -253,7 +253,7 @@ impl Repulser {
                 self.damage,
                 rules,
             );
-            super::hit::record(hits, slot, &report);
+            super::hit::record(hits, slot, oag_tables::weapons::Weapon::Repulser, &report);
             self.hit[slot] = true;
             struck[slot] = true;
         }

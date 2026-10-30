@@ -158,6 +158,7 @@ pub(super) fn load_hud(
     style: Option<&str>,
     add_on_campaign: Option<&str>,
     views: SplitViews,
+    mod_icons: &[oag_hud::sprite::DecodedImage],
     report: &mut Vec<String>,
 ) -> oag_hud::Assets {
     let (hud, skin) = hud_roots(title, style, add_on_campaign, report);
@@ -220,9 +221,9 @@ pub(super) fn load_hud(
                 every.sprites.extend(authored.sprites.iter().cloned());
                 every.models.extend(authored.models.iter().cloned());
             }
-            load_atlases(archives, title, Some(&every), entry, report)
+            load_atlases(archives, title, Some(&every), entry, mod_icons, report)
         }
-        _ => load_atlases(archives, title, layout.as_ref(), entry, report),
+        _ => load_atlases(archives, title, layout.as_ref(), entry, mod_icons, report),
     };
 
     // The HUD's captions are `idstring` keys - `IG_HUD_LAP` on Pulse,
@@ -606,6 +607,7 @@ fn load_atlases(
     title: &'static oag_title::Title,
     layout: Option<&oag_hud::Layout>,
     entry: &str,
+    mod_icons: &[oag_hud::sprite::DecodedImage],
     report: &mut Vec<String>,
 ) -> oag_hud::sprite::Sheet {
     let references = layout.map(oag_hud::Layout::textures).unwrap_or_default();
@@ -620,7 +622,8 @@ fn load_atlases(
             "HUD {entry} names no texture; its sprites are drawn from <Model> \
              geometry rather than an atlas"
         ));
-        let extra = vex_model_art(archives, title, layout, report);
+        let mut extra = vex_model_art(archives, title, layout, report);
+        extra.extend(mod_icons.iter().cloned());
         if extra.is_empty() {
             return oag_hud::sprite::Sheet::default();
         }
@@ -639,11 +642,9 @@ fn load_atlases(
     }
 
     let mut notes = Vec::new();
-    let sheet = oag_hud::sprite::Sheet::build_with(
-        &blobs,
-        vex_model_art(archives, title, layout, report),
-        &mut notes,
-    );
+    let mut extra = vex_model_art(archives, title, layout, report);
+    extra.extend(mod_icons.iter().cloned());
+    let sheet = oag_hud::sprite::Sheet::build_with(&blobs, extra, &mut notes);
     report.extend(notes);
     report.push(format!(
         "HUD {entry}: {} of {} texture(s) in a {}x{} sheet",

@@ -338,6 +338,15 @@ impl Race {
         let Some(weapon) = self.sim.world.ships[slot].pickup.weapon else {
             return;
         };
+        // A simulation mod's own pickup: the driver asks to fire it wherever it would
+        // fire a Turbo (the Turbo's own gate below, on the Turbo's boost time), every tick
+        // that gate passes, and never absorbs it. What a fire does is the mod's.
+        let extension = weapon == oag_tables::weapons::Weapon::Extension;
+        let looked_up = if extension {
+            oag_tables::weapons::Weapon::Turbo
+        } else {
+            weapon
+        };
         // Looked up and copied out before the branches, so the borrow of
         // `self.sim.weapons` ends here: the Rocket arm needs `&mut self` to put
         // anything in the air, and every one of these returns an owned value.
@@ -345,18 +354,18 @@ impl Race {
             .sim
             .weapons
             .as_ref()
-            .map(|weapons| (weapons.simple(weapon), weapons.absorb(weapon)))
+            .map(|weapons| (weapons.simple(looked_up), weapons.absorb(looked_up)))
         else {
             return;
         };
         // **The original's absorb half** (`WeaponAi_DecideFireOrAbsorb`): only
         // a forward weapon under `FireLaw::Original` is ever answered with it.
-        if decision == oag_ai::weapon_ai::Decision::Absorb {
+        if decision == oag_ai::weapon_ai::Decision::Absorb && !extension {
             self.absorb_opponent_pickup(slot, absorb);
             return;
         }
 
-        if weapon == oag_tables::weapons::Weapon::Turbo {
+        if looked_up == oag_tables::weapons::Weapon::Turbo {
             // Full throttle means the speed target is not asking it to slow for
             // anything it can see, which is the only "is this a straight?" this
             // engine has. **The controls the driver chose this tick**, not
@@ -426,6 +435,10 @@ impl Race {
             };
             let ticks = simple.time * 60.0;
             if !ship.driver.affords_boost(&context, boosted, ticks) {
+                return;
+            }
+            if extension {
+                self.sim.extensions.pickup_used(slot, false);
                 return;
             }
             self.sim.world.ships[slot].physics.turbo_timer = simple.time;

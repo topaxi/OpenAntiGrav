@@ -46,6 +46,9 @@ pub(super) struct SlotHud {
     pub(super) pickup_announce_left: f32,
     /// The held pickup's backdrop and icon fade ([`oag_hud::Readout::pickup_fade`]).
     pub(super) pickup_fade: oag_hud::pickup_fade::Fade,
+    /// The look of the mod pickup last held, kept so its fade-out after use draws what its
+    /// fade-in drew ([`oag_hud::ext_draws::Outputs::pickup_look`]). Display only.
+    pub(super) pickup_look: Option<oag_tables::pickup_look::PickupLook>,
     /// The fade's timer rate in units per second, `0.0` for a title that plays none. Set by
     /// `Race::watch_laps` from the title's art, the one place a loaded race meets it.
     pub(super) pickup_fade_rate: f32,
@@ -170,6 +173,9 @@ impl Race {
     /// running bit is set and the held id maps to none).
     pub(super) fn held_for_hud(&self, slot: usize) -> Option<oag_tables::weapons::Weapon> {
         let ship = &self.sim.world.ships[slot];
+        // A mod's own pickup (`Weapon::Extension`) is held as itself: the HUD draws the icon
+        // and backdrop its look names (`crate::extension_pickup`), none on a mod that
+        // declares none.
         ship.pickup.weapon.or_else(|| {
             (ship.autopilot_timer > 0.0).then_some(oag_tables::weapons::Weapon::Autopilot)
         })
@@ -196,10 +202,14 @@ impl Race {
             let thrust = ship.physics.thrust.clamp(0.0, 100.0);
             let absorbing = self.absorb_window_active(slot);
             let held = self.held_for_hud(slot);
+            let look = self.sim.extensions.pickup_look(slot);
             let acting = ship.physics.pilot_assist.acting;
             let (shown, dt) = (self.pilot_assist_shown(slot), self.sim.dt);
             let hud = &mut self.view.huds[slot];
             hud.advance(percent, fraction, thrust, absorbing, held, dt);
+            if held == Some(oag_tables::weapons::Weapon::Extension) && look.is_some() {
+                hud.pickup_look = look;
+            }
             hud.assist_indicator.advance(shown, acting, dt);
         }
     }

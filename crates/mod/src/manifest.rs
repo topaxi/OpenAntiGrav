@@ -1,5 +1,6 @@
 //! `oag-mod.toml`: who a mod is, and under what licence it travels.
 
+use oag_tables::pickup_look::{Colour, Icon, PickupLook};
 use serde::Deserialize;
 
 /// The manifest's name at a mod's root.
@@ -76,6 +77,75 @@ pub struct Manifest {
     pub titles: Vec<String>,
     /// The game versions it works with.
     pub oag: Option<semver::VersionReq>,
+    /// `[extension]`: the WebAssembly modules the mod runs, if any.
+    pub extension: Option<Extension>,
+    /// `[icons]`: the mod's own PNGs by name, as paths in the mod. A module's `hud-icon`
+    /// may name one.
+    pub icons: std::collections::BTreeMap<String, String>,
+    /// `[effects]`: the mod's own particle effects by name, as `.toml` paths in the mod
+    /// (`schemas/v1/effect.tosd`). A module's `fire-mod-effect` names one by its index in
+    /// this map's name order.
+    pub effects: std::collections::BTreeMap<String, String>,
+    /// `[pickup]`: the look of the mod's own pickup, required of a simulation mod that
+    /// hands one out.
+    pub pickup: Option<PickupLook>,
+    /// `[channels]`: the event channels the mod's modules publish and listen to.
+    pub channels: Channels,
+}
+
+/// `[channels]` (`docs/architecture/wasm-extensions/hooks.md`, "Events between mods"):
+/// namespaced names, `<mod id>/<name>`. A module may `emit` only on a channel in
+/// `publishes`, which lies in the mod's own namespace; `listens` is what the mod hears,
+/// from any mod or track. Listening to a channel no loaded mod or track publishes is
+/// warned about on the mods page, never refused: the publisher may simply be off.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Channels {
+    /// Channels the mod sends on.
+    pub publishes: Vec<String>,
+    /// Channels the mod hears.
+    pub listens: Vec<String>,
+}
+
+/// Most channels one mod publishes, or one listens to. Chosen.
+pub const MAX_CHANNELS: usize = 32;
+
+/// `[extension]` (`docs/architecture/wasm-extensions/README.md`, section 1.1). Read
+/// here; the `.wasm` it names is opened only by the race that runs it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Extension {
+    /// `simulation = true`: the mod changes the race, so the session is MODDED.
+    pub simulation: bool,
+    /// The ABI major the modules were built against.
+    pub api: u32,
+    /// The guest's maximum linear memory, 64 KiB pages.
+    pub memory_pages: u32,
+    /// The host-owned state blob's length, bytes.
+    pub state_bytes: u32,
+    /// `[extension.rules]`: a rules module, which may act on every craft of a race.
+    pub rules: Option<Rules>,
+    /// `[extension.track]`: a module that runs only on one track file the mod ships.
+    pub track: Option<Track>,
+}
+
+/// `[extension.track]`: one module bound to one track file of the mod. It runs only in
+/// a race of that file, never on a disc circuit, and may send the same commands as a
+/// rules module (the race-wide outputs are what it is for).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Track {
+    /// The module's path in the mod.
+    pub module: String,
+    /// The `.track.toml` it runs on, as a path in the mod.
+    pub track: String,
+}
+
+/// `[extension.rules]`: one module that runs in every race the mod is on for, on any
+/// grid slot. The README binds a rules module to a mode file (`modes/*.toml`), which
+/// does not exist yet; until it does, a mod's rules module applies to every race but
+/// the original campaigns.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Rules {
+    /// The module's path in the mod.
+    pub module: String,
 }
 
 #[derive(Deserialize)]
@@ -85,6 +155,139 @@ struct File {
     header: Option<oag_schema::Header>,
     #[serde(rename = "mod")]
     module: Table,
+    extension: Option<ExtensionTable>,
+    channels: Option<ChannelsTable>,
+    #[serde(default)]
+    icons: std::collections::BTreeMap<String, String>,
+    #[serde(default)]
+    effects: std::collections::BTreeMap<String, String>,
+    pickup: Option<PickupTable>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PickupTable {
+    icon: IconTable,
+    colour: ColourTable,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct IconTable {
+    title: Option<String>,
+    #[serde(rename = "mod")]
+    module: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ColourTable {
+    title: Option<String>,
+    rgba: Option<String>,
+}
+
+/// The weapon a lowercase `title =` names, in the spelling of
+/// `Weapon::as_type` lowercased (`leachbeam`, `repulser`).
+fn weapon(key: &'static str, name: &str) -> Result<oag_tables::weapons::Weapon, Error> {
+    oag_tables::weapons::Weapon::ALL
+        .into_iter()
+        .find(|weapon| weapon.as_type().eq_ignore_ascii_case(name))
+        .ok_or_else(|| {
+            let known: Vec<String> = oag_tables::weapons::Weapon::ALL
+                .iter()
+                .map(|weapon| weapon.as_type().to_ascii_lowercase())
+                .collect();
+            bad(
+                key,
+                format!("{name:?} is not a weapon: {}", known.join(", ")),
+            )
+        })
+}
+
+fn pickup(
+    table: PickupTable,
+    icons: &std::collections::BTreeMap<String, String>,
+) -> Result<PickupLook, Error> {
+    let icon = match (table.icon.title, table.icon.module) {
+        (Some(title), None) => Icon::Title(weapon("pickup.icon", &title)?),
+        (None, Some(name)) if icons.contains_key(&name) => Icon::Mod(name),
+        (None, Some(name)) => {
+            return Err(bad(
+                "pickup.icon",
+                format!("mod = {name:?} is not a key of [icons]"),
+            ));
+        }
+        _ => {
+            return Err(bad(
+                "pickup.icon",
+                "exactly one of `title = \"<weapon>\"` and `mod = \"<icon>\"`",
+            ));
+        }
+    };
+    let colour = match (table.colour.title, table.colour.rgba) {
+        (Some(title), None) => Colour::Title(weapon("pickup.colour", &title)?),
+        (None, Some(hex)) => {
+            let digits = hex.len() == 8 && hex.bytes().all(|b| b.is_ascii_hexdigit());
+            let word = digits
+                .then(|| u32::from_str_radix(&hex, 16).ok())
+                .flatten()
+                .ok_or_else(|| {
+                    bad(
+                        "pickup.colour",
+                        format!("rgba = {hex:?} is not eight hex digits, RRGGBBAA"),
+                    )
+                })?;
+            Colour::Rgba(word.to_be_bytes())
+        }
+        _ => {
+            return Err(bad(
+                "pickup.colour",
+                "exactly one of `title = \"<weapon>\"` and `rgba = \"RRGGBBAA\"`",
+            ));
+        }
+    };
+    Ok(PickupLook { icon, colour })
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ChannelsTable {
+    #[serde(default)]
+    publishes: Vec<String>,
+    #[serde(default)]
+    listens: Vec<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ExtensionTable {
+    #[serde(default)]
+    simulation: bool,
+    api: u32,
+    #[serde(default = "default_memory_pages")]
+    memory_pages: u32,
+    #[serde(default)]
+    state_bytes: u32,
+    rules: Option<RulesTable>,
+    track: Option<TrackTable>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TrackTable {
+    module: String,
+    track: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RulesTable {
+    module: String,
+}
+
+/// 1 MiB. Chosen.
+fn default_memory_pages() -> u32 {
+    16
 }
 
 #[derive(Deserialize)]
@@ -124,13 +327,71 @@ impl Manifest {
     pub fn parse(text: &str, has: &dyn Fn(&str) -> bool) -> Result<Self, Error> {
         let file: File = toml::from_str(text)?;
         oag_schema::check(file.header.as_ref(), SCHEMA_KIND, SCHEMA_MAJOR)?;
+        let extension = file.extension.map(|e| extension(e, has)).transpose()?;
+        let pickup = file
+            .pickup
+            .map(|table| pickup(table, &file.icons))
+            .transpose()?;
         let t = file.module;
+        for (name, path) in &file.icons {
+            if name.len() > oag_ext_abi::MAX_HUD_TEXT {
+                return Err(bad(
+                    "icons",
+                    format!(
+                        "{name:?} is over {} bytes, the longest name hud-icon can send",
+                        oag_ext_abi::MAX_HUD_TEXT
+                    ),
+                ));
+            }
+            if !valid_key(name) {
+                return Err(bad(
+                    "icons",
+                    format!("{name:?} is not a name: letters, digits, '-', '_'"),
+                ));
+            }
+            if !path.to_ascii_lowercase().ends_with(".png") || !has(path) {
+                return Err(bad(
+                    "icons",
+                    format!("{name}: {path:?} is not a .png in the mod"),
+                ));
+            }
+        }
+
+        for (name, path) in &file.effects {
+            if !valid_key(name) {
+                return Err(bad(
+                    "effects",
+                    format!("{name:?} is not a name: letters, digits, '-', '_'"),
+                ));
+            }
+            if !path.to_ascii_lowercase().ends_with(".toml") || !has(path) {
+                return Err(bad(
+                    "effects",
+                    format!("{name}: {path:?} is not a .toml in the mod"),
+                ));
+            }
+        }
+        if file.effects.len() > MAX_EFFECTS {
+            return Err(bad(
+                "effects",
+                format!("{} effects, at most {MAX_EFFECTS}", file.effects.len()),
+            ));
+        }
 
         if !valid_id(&t.id) {
             return Err(bad(
                 "id",
                 format!(
                     "{:?} is not an id: lowercase letters, digits, '.', '-' and '_', starting with a letter",
+                    t.id
+                ),
+            ));
+        }
+        if oag_ext_abi::channel_key(&t.id) == oag_ext_abi::TRACK_SENDER {
+            return Err(bad(
+                "id",
+                format!(
+                    "{:?} hashes to the track's sender key; rename the mod",
                     t.id
                 ),
             ));
@@ -173,6 +434,7 @@ impl Manifest {
                     .map_err(|e| bad("oag", format!("{req:?} is not a version requirement: {e}")))
             })
             .transpose()?;
+        let channels = channels(file.channels, &t.id)?;
         Ok(Self {
             id: t.id,
             name: t.name,
@@ -185,6 +447,11 @@ impl Manifest {
             keywords: t.keywords,
             titles: t.titles,
             oag,
+            extension,
+            icons: file.icons,
+            effects: file.effects,
+            pickup,
+            channels,
         })
     }
 
@@ -193,6 +460,158 @@ impl Manifest {
     pub fn works_with(&self, game: &semver::Version) -> bool {
         self.oag.as_ref().is_none_or(|req| req.matches(game))
     }
+}
+
+/// The `[channels]` table, each name checked by `oag_ext_abi::check_channel`; a published
+/// one must lie in the mod's own namespace, and none may repeat or hash like another.
+fn channels(table: Option<ChannelsTable>, id: &str) -> Result<Channels, Error> {
+    let Some(table) = table else {
+        return Ok(Channels::default());
+    };
+    for (key, list) in [
+        ("channels.publishes", &table.publishes),
+        ("channels.listens", &table.listens),
+    ] {
+        if list.len() > MAX_CHANNELS {
+            return Err(bad(
+                key,
+                format!("{} channels, at most {MAX_CHANNELS}", list.len()),
+            ));
+        }
+        for (i, name) in list.iter().enumerate() {
+            oag_ext_abi::check_channel(name).map_err(|why| {
+                bad(
+                    key,
+                    format!("{name:?} is not a channel name ({why}); write `<mod id>/<name>`"),
+                )
+            })?;
+            if list[..i].iter().any(|seen| seen == name) {
+                return Err(bad(key, format!("{name:?} is listed twice")));
+            }
+            let hash = oag_ext_abi::channel_key(name);
+            if let Some(other) = list[..i]
+                .iter()
+                .find(|seen| oag_ext_abi::channel_key(seen) == hash)
+            {
+                return Err(bad(
+                    key,
+                    format!("{name:?} and {other:?} hash alike; rename one"),
+                ));
+            }
+        }
+    }
+    if let Some(name) = table
+        .publishes
+        .iter()
+        .find(|name| oag_ext_abi::namespace(name) != id)
+    {
+        return Err(bad(
+            "channels.publishes",
+            format!(
+                "{name:?} is not in this mod's namespace; a channel it publishes starts `{id}/`"
+            ),
+        ));
+    }
+    Ok(Channels {
+        publishes: table.publishes,
+        listens: table.listens,
+    })
+}
+
+fn extension(e: ExtensionTable, has: &dyn Fn(&str) -> bool) -> Result<Extension, Error> {
+    let bad_extension = |key: &'static str, problem: String| Error::Bad { key, problem };
+    if e.api != oag_ext_abi::ABI {
+        return Err(bad_extension(
+            "extension.api",
+            format!(
+                "{} is not an API this build runs ({})",
+                e.api,
+                oag_ext_abi::ABI
+            ),
+        ));
+    }
+    if e.memory_pages == 0 || e.memory_pages > oag_ext_abi::MAX_MEMORY_PAGES {
+        return Err(bad_extension(
+            "extension.memory_pages",
+            format!(
+                "{} is not in 1..={} (64 KiB pages)",
+                e.memory_pages,
+                oag_ext_abi::MAX_MEMORY_PAGES
+            ),
+        ));
+    }
+    if e.state_bytes as usize > oag_ext_abi::MAX_STATE_BYTES {
+        return Err(bad_extension(
+            "extension.state_bytes",
+            format!("{} is over {}", e.state_bytes, oag_ext_abi::MAX_STATE_BYTES),
+        ));
+    }
+    if e.rules.is_none() && e.track.is_none() {
+        return Err(bad_extension(
+            "extension",
+            "names no module: add [extension.rules] or [extension.track]".to_string(),
+        ));
+    }
+    let rules = e.rules.map(|r| Rules { module: r.module });
+    if let Some(rules) = &rules {
+        if !e.simulation {
+            return Err(bad_extension(
+                "extension.simulation",
+                format!(
+                    "{} is a simulation module; say `simulation = true`",
+                    rules.module
+                ),
+            ));
+        }
+        if !has(&rules.module) {
+            return Err(bad_extension(
+                "extension.rules.module",
+                format!("{:?} is not in the mod", rules.module),
+            ));
+        }
+    }
+    let track = e.track.map(|t| Track {
+        module: t.module,
+        track: t.track,
+    });
+    if let Some(track) = &track {
+        if !e.simulation {
+            return Err(bad_extension(
+                "extension.simulation",
+                format!(
+                    "{} is a simulation module; say `simulation = true`",
+                    track.module
+                ),
+            ));
+        }
+        for (key, name) in [
+            ("extension.track.module", &track.module),
+            ("extension.track.track", &track.track),
+        ] {
+            if !has(name) {
+                return Err(bad_extension(key, format!("{name:?} is not in the mod")));
+            }
+        }
+    }
+    Ok(Extension {
+        simulation: e.simulation,
+        api: e.api,
+        memory_pages: e.memory_pages,
+        state_bytes: e.state_bytes,
+        rules,
+        track,
+    })
+}
+
+/// What `fire-mod-effect`'s index (15 bits of an argument) can name, kept well inside it.
+const MAX_EFFECTS: usize = 256;
+
+/// A string key or icon name: letters, digits, '-', '_'.
+fn valid_key(key: &str) -> bool {
+    !key.is_empty()
+        && key
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
 pub(crate) fn valid_id(id: &str) -> bool {

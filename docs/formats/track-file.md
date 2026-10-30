@@ -26,7 +26,9 @@ directory. Raced with `oag-game --track-file <manifest>` (host title's ship, rul
 | `spline.point_version` | The `WO Track` point version (`SHORT_POINT_VERSION` = `0x107` = 263 for importer output). |
 | `[[spline.path]]` | `points` (count, checked against the glb), `entry`/`exit` (junction index, `-1` none), `max_spacing_bits` (the `f32` bit pattern, an integer so exact). |
 | `[[spline.junction]]` | `prev`, `next`: two path indices each, `-1` none (primary, then alternate). |
-| `[counts]` | `collision_nodes`, `speedup_pads`, `weapon_pads`, checked against the glb; `art_meshes` only when the track has art. |
+| `[counts]` | `collision_nodes`, `speedup_pads`, `weapon_pads`, checked against the glb; `art_meshes` only when the track has art; `triggers` only when it has triggers. |
+| `[props]` | Optional: the track's own properties for a simulation mod, name to number or bool ([below](#properties-and-triggers-for-simulation-mods)). Absent when there are none. |
+| `[channels]` | Optional: `publishes = ["<mod id>/<name>", ...]`, the event channels the track sends ([below](#channels-events-between-a-track-and-mods)). Absent when it sends none. |
 | `[art]` | Optional (ADR-0076). Absent, the file is byte for byte what 1.0 wrote. `sky`: a host circuit's `.vex` entry whose `Skycube` is drawn (it pins the disc, so `track.host` is required). `ambient`: linear RGB, the hull rig's ambient. `draw_collision`: `true` draws the flat-shaded floor and walls under the art (decision 16); absent is `false`, the art alone. |
 | `[art.skybox]` | Optional, never with `[art] sky`: the track's own sky (ADR-0076 decision 14). `faces`: six `[[art.texture]]` rows in cubemap order `+X, -X, +Y` (zenith), `-Y` (nadir), `+Z, -Z`, `-1` for a face drawn as the gradient. `zenith`, `horizon`: linear RGB, both or neither, the gradient by elevation. At least one form; a face without a texture needs the gradient. Drawn on every title: `blender_loop` (its gradient, the checker overhead) raced with its own sky on Pulse PSP EU, Pure PSP EU, HD/Fury PS3 EU, Omega PS4 EU and 2048 (the decrypted base folder), 2026-10-29. |
 | `[art.sun]` | `direction` (unit, towards the sun), `colour` (linear RGB), `intensity`, `angular_diameter` (degrees, 0 a point sun), all required when the table is present; `shadows`, absent meaning `true` (an authored sun is the shadow light; a disc export writes `false`). |
@@ -35,7 +37,9 @@ directory. Raced with `oag-game --track-file <manifest>` (host title's ship, rul
 | `[[art.texture]]` | Exactly one of `image = "file.png"` (the author's picture beside the manifest; the only form a committed fixture may use) or `host = { entry = "...", name = "..." }` (a `Texture` node of a circuit on the host title's disc, by its runtime asset path, or by file name alone when `name` has no directory). |
 
 No simulation float is in the manifest: a decimal float is an `f64` round trip. The art's
-numbers are render-side only, so they are TOML floats (an integer reads too).
+numbers are render-side only, so they are TOML floats (an integer reads too). `[props]` is the
+one exception a mod reads: each value is written as its `f32` widened to `f64` (the shortest
+decimal of that double), which reads back to the same `f32`.
 
 ### Glb (glTF 2.0 binary)
 
@@ -45,7 +49,8 @@ One scene, flat nodes, tightly packed little-endian accessors. Right-handed, Y u
 | --- | --- | --- |
 | `oag/start` | one `POINTS` vertex | `POSITION`, `_OAG_LEFT`, `_OAG_UP`, `_OAG_FORWARD` (VEC3) |
 | `oag/spline/<i>` | `POINTS`, one vertex per control point | `POSITION` (pos), `_OAG_TANGENT`, `_OAG_DOWN`, `_OAG_LATERAL` (VEC3), `_OAG_PROGRESS`, `_OAG_RACING_LINE` (SCALAR), `_OAG_HALF_WIDTH`, `_OAG_AI_BOUND` (VEC2 left, right), `_OAG_SECTION_FLAGS` (u8 VEC4: section, flags, 0, 0), `_OAG_LIGHT_SCALE` (u8 VEC4), and optionally `_OAG_AI_BYTES` (u8 VEC4: lane band low, lane band high, speed-floor byte, 1 when the point carries them; absent reads as none), and optionally `_OAG_CAGE_A`, `_OAG_CAGE_B` (u8 VEC4 each: the collision cage's eight signed bytes `+0x68..+0x6f` in order, two's complement; absent reads as all zero) |
-| `oag/pads/speedup`, `oag/pads/weapon` | `POINTS`, one vertex per pad | `POSITION` (informational: the pad's world centre), `_OAG_TO_WORLD` (MAT4, the row-major row-vector matrix as stored), `_OAG_MIN`, `_OAG_MAX` (VEC3), `_OAG_DISABLED` (SCALAR) |
+| `oag/pads/speedup`, `oag/pads/weapon` | `POINTS`, one vertex per pad | `POSITION` (informational: the pad's world centre), `_OAG_TO_WORLD` (MAT4, the row-major row-vector matrix as stored), `_OAG_MIN`, `_OAG_MAX` (VEC3), `_OAG_DISABLED` (SCALAR); node extras `oag_props`, one property object per pad, only when the track carries pad properties |
+| `oag/triggers` | `POINTS`, one vertex per trigger | as a pad's, without `_OAG_DISABLED`; node extras `oag_names` (one string per trigger) and, when any trigger has properties, `oag_props` (one object per trigger) and, when any sends a channel, `oag_emits` (one string per trigger, `""` for none) |
 | `oag/collision/<n>` | `TRIANGLES`, u16 indices, one primitive per mesh | `POSITION`, `_OAG_SCALAR` (per-vertex scalar, `1.0` when absent); node extras `oag_kind` (`floor`, `wall`, `reset`, `mag_floor`, `cage`, `track_wall`), `oag_name`, `oag_version` |
 | `oag/sun` | no mesh; only a rest `rotation` | present exactly when an animation turns the sun (below) |
 | `oag/art/<n>` | `TRIANGLES`, one primitive per draw | `POSITION`, `NORMAL`, `TEXCOORD_0` (v down, as the disc's), `COLOR_0` (VEC4 float: the baked light, RGB **linear** as glTF reads it, alpha coverage); node extras `oag_name`, `oag_texture` (texture row, absent for untextured), `oag_blend` (`opaque`, `cutout`, `alpha`, `additive`, `unblended`), `oag_culled`, `oag_lit`, `oag_shadow` (`both`, `cast`, `receive`, `none`), `oag_alpha_ref` (`0..=255`, the alpha-test reference; absent is the renderer's default), `oag_layer` (unsigned integer render layer, absent is `0`), `oag_pad` (`speedup` or `weapon`: a pad plate, below; absent is track art) |
@@ -60,12 +65,66 @@ are counted as unread, never dropped silently. A non-identity node transform on 
 refused (`Transformed`): bake it before export. The one exception is an art node an animation
 moves (below).
 
+### Properties and triggers (for simulation mods)
+
+A track file may carry **author-defined properties** for a [simulation
+mod](../architecture/wasm-extensions/README.md#and-track-properties-2026-10-30) to read:
+on a speed or weapon pad, on a trigger, and on the track itself. The engine gives none of
+them a meaning. A property is a name and an `f32`; a bool is `1.0` or `0.0`. Refused by
+name, on read and on write (`oag_trackfile::props`): a string, an empty name, two names on
+one entity whose FNV-1a 32 hashes (the key a mod reads by) are equal, a pad property list
+whose length is not the pad count, more than 64 triggers or more than 1,024 properties in
+all (the ABI's caps, `oag_ext_abi::track`).
+
+A **spline path** carries properties too: the glb spline node's `oag_props` extra is one
+property object for that path (`Track::path_props`, one list per path or none). A mod reads them
+off the path, and off every route that drives the path (the track region merges a route's paths'
+properties), so a pit lane's `pit` finds its route (Checkpoint Circuit, the mod examples).
+
+A **trigger** is a box placed like a pad (`_OAG_TO_WORLD`, `_OAG_MIN`, `_OAG_MAX`, local
+space) with a name, but without a pad's vertical expansion: the box is the author's. A mod
+hears a craft enter and leave it (`trigger-enter`, `trigger-exit`); the race does nothing
+else with it.
+
+In Blender ([the add-on](../tools/blender.md)): a custom property `mod_<name>` on a pad
+empty (`oag/pads/<kind>/<i>`), on a trigger empty (`oag/triggers/<name>`, tagged
+`oag_kind = "trigger"`, its box in **Box min** and **Box max**), on a spline object (tagged
+`oag_kind = "spline"`) or on the scene is exported as `<name>`; anything else, a string or an array, is refused naming the object and the key.
+A track without any writes none of these keys, so every earlier file is byte for byte what
+it was (the disc exports in `trackfile_ground_truth` included). Round trip, refusals and the
+schema: `crates/trackfile/tests/props.rs`.
+
+### Channels: events between a track and mods
+
+A **channel** is a name, `<mod id>/<name>` (the id of lowercase letters, digits, `.`, `-`, `_`; the
+name the same without the `.`; at most 64 bytes), that travels as its FNV-1a 32 hash
+(`oag_ext_abi::channel_key`, the hash a property's name has). A track sends and starts on them
+with no module at all:
+
+| Field | Meaning |
+| --- | --- |
+| `[channels] publishes` (manifest) | the channels the track sends. Repeats and names hashing alike are refused |
+| a trigger's `oag_emits[i]` (glb, on `oag/triggers`) | the channel a craft sends by **entering** trigger *i*; it must be in `publishes`. Raised for every craft, a person's or the AI's, on the tick it enters; the race raises it itself (`oag_raceplay::extensions`, `Beacons`) |
+| an animation's `oag_on` (glb, see Motion) | the channel that starts it; any valid name, from a mod or from this track |
+| an animation's `oag_on_value` (glb, with `oag_on`) | optional: start only on an event whose value equals this number (a finite float, compared exactly); absent starts on any value. A trigger's event carries `1` |
+
+Every module that runs in the race hears a trigger's channel on the next tick as an `Event::Mod`
+whose `from` is `TRACK_SENDER`; the view starts each `oag_on` animation at the tick its channel
+last fired (`Race::channel_started`), render only: collision never moves, and nothing here is in a
+hash of a race with no module. Refused by name on read and write (`oag_trackfile::props`): a
+malformed name, a trigger naming a channel the track does not publish. In Blender: a trigger's
+**Emit**, an object's **Start on**, **Start on value** and the scene's **Channels published**
+([the add-on](../tools/blender.md)); `roundtrip.py channels` proves the round trip headless.
+The manifest key is in `schemas/v1/track.tosd`.
+
 ### Motion (glTF `animations`, ADR-0076 decision 10, since 2026-10-29)
 
 | Field | Meaning |
 | --- | --- |
 | A moving `oag/art/<n>` node's `translation`, `rotation`, `scale` | its rest pose (glTF's decomposed form; a `matrix` is refused). Its vertices are then in the node's own space. A rest pose on an art node no animation moves is refused (`Transformed`) |
 | `animations[]` | glTF animations. A channel targets an art node or `oag/sun` (anything else is refused by name: collision, pads and the spline never move), path `translation`, `rotation` (`x, y, z, w`) or `scale` (the sun: rotation only). Samplers are float accessors, `LINEAR` (rotation by spherical interpolation, shorter arc) or `STEP`; `CUBICSPLINE`, normalised-integer keys and morph weights are refused. Times start at or after 0 and strictly increase; one channel per node property in the whole file |
+| An animation's `extras.oag_on` | Optional: a channel name (`<mod id>/<name>`). The animation holds its first key until that channel fires (a trigger's `oag_emit`, or a mod's `emit`), then plays from the moment it did, on the same clock ([below](#channels-events-between-a-track-and-mods)). Absent: it plays from the clock's zero, as before |
+| An animation's `extras.oag_on_value` | Optional, needs `oag_on`: a finite number. The animation starts only when the channel fires with exactly that value (a mod's `emit` value, such as Checkpoint Circuit's gate number; a trigger's event carries `1`); other values leave it holding its first key. Absent: any value starts it. Not a per-viewer filter: the scene is shared across split-screen views, so "only for the viewing player's craft" would need per-view animation state. Refused on read and write when not a finite number or without `oag_on` |
 | An animation's `extras.oag_loop` | `loop` (absent too): wraps on the animation's length, its latest key; `clamp`: holds its last keys. Before a channel's first key it holds the first |
 | `oag/sun`'s rotation | the sun's direction at time *t* is `[art.sun] direction` turned by the rotation from this rest rotation to the channel's rotation at *t*, so a lamp's own axis convention never enters |
 

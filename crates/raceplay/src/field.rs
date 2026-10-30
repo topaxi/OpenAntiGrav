@@ -541,7 +541,9 @@ impl Race {
     /// The wall counters for `slot` after its step: bookkeeping outside
     /// `state_hash`, for opponents and the player alike. See
     /// [`RaceSim::wall_contact_ticks`]; `was_racing` is the craft's state
-    /// before the step, so a wreck accrues nothing.
+    /// before the step, so a wreck accrues nothing. Also where a simulation mod's
+    /// `wall-contact` event is raised, which *is* hashed state when a module runs
+    /// ([`crate::extensions`]).
     pub(super) fn count_wall_contact(
         &mut self,
         slot: usize,
@@ -555,6 +557,7 @@ impl Race {
         self.sim.wall_racing_ticks[slot] += 1;
         if wall.contacts > wall.floor_contacts {
             self.sim.wall_contact_ticks[slot] += 1;
+            self.sim.extensions.wall_contact(slot);
             if wall.impact {
                 self.sim.wall_inbound_ticks[slot] += 1;
             }
@@ -823,6 +826,9 @@ impl Race {
             let (moved, sweep) = self.pad_sweep(slot, position);
             let pad_hit = self.test_speedup_pads(slot, position, moved, &sweep);
             self.test_weapon_pads(slot, position, moved, &sweep);
+            self.sim
+                .extensions
+                .test_triggers(slot, &sweep, self.sim.world.tick);
             self.spend_opponent_pickup(slot, &controls, &field);
 
             // The driver just located itself, and the line is index-parallel to
@@ -838,10 +844,12 @@ impl Race {
             // the player.
             let thrust_scale =
                 std::mem::replace(&mut self.sim.world.ships[slot].pending_thrust_scale, 1.0);
+            let extension_thrust = self.sim.extensions.take_boost(slot);
             let env = Environment {
                 track_sample,
                 track_sample_next,
                 thrust_scale,
+                extension_thrust,
                 // **The same pads the player crosses.** Measured from the
                 // position the tick started at and swept to where the craft is
                 // now, exactly as slot 0's are - see `Race::pad_sweep`. Without

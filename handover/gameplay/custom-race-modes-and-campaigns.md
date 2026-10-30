@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-10-29
-summary: "Custom campaigns v1.0 landed for Pulse/HD/Omega (ADR-0077); open: 2048, grid editor, opponent variants; drag race still design only"
+summary: "Custom campaigns landed (ADR-0077); Wall Penalty (first wasm sim mod) landed on wasm-extensions; open: 2048, grid editor, drag race, a turbo mod"
 size: XL (20)
 difficulty: hard (35)
 ---
@@ -241,6 +241,140 @@ the mod (NaN payloads differ between engines; wasmtime's NaN canonicalisation on
 conformance test running the same module and inputs on Cranelift, Pulley and a headless browser
 (`wasm-bindgen-test`) with identical outputs - Pilot Assist first, also against the built-in Rust
 law. The lane confirms Pulley's iOS status and the crates before the ADR.
+
+## WebAssembly extensions design (2026-10-29, `wasm-extensions` branch only)
+
+A design lane (two members) wrote the proposal the phases above call for; it lives on
+the local `wasm-extensions` branch, not on main (maintainer's rule). Pages:
+`docs/architecture/wasm-extensions/README.md` (capability surface, the `sim` and `hud`
+worlds, non-capabilities, packaging, trust, licences),
+[hooks.md](../../docs/architecture/wasm-extensions/hooks.md) (one `tick` call per
+module per tick between `advance_cannons` and `step_player`; every event's source and
+every command's sink at a pinned `file:line`; the maintainer's examples mapped, with
+the engine changes each needs),
+[determinism-and-state.md](../../docs/architecture/wasm-extensions/determinism-and-state.md)
+(NaN, fuel, state blob, hash, replays, lobby, rollback cost), and ADR-0079 (Proposed).
+The spike `spikes/wasm-extensions/` (own `[workspace]`, root `Cargo.lock` untouched):
+wasmtime 50.0.0 Cranelift and Pulley bit-identical under fuel on one x86-64 host,
+including the out-of-fuel trap point; a guest keeping state in its own memory diverges
+after a rollback unless the instance is fresh per tick.
+
+Owed before the ADR can be accepted:
+
+- **The same spike on AArch64** (Android) and **a browser run**; the browser needs the
+  load-time NaN and fuel rewrite (README open question 1); wasmtime on `wasm32` is
+  rejected unless a serious reason shows up (maintainer, 2026-10-29).
+- **iOS**: `cargo check --target aarch64-apple-ios` of wasmtime needs Apple's `xcrun`;
+  check on a macOS machine, with `signals_based_traps` on and off.
+- **A call-depth counter** (stack overflow traps at an engine-dependent depth).
+- **The lobby fingerprint** hashes `id@version` only
+  (`oag_net::discovery::content_fingerprint`): fold each sim module's SHA-256 in.
+- **Example mods in several guest languages** (maintainer, 2026-10-29): the same mod,
+  or a close variant (e.g. Feisar faster per speed pad), written once each in **Rust**,
+  **C++**, **JavaScript through Javy**, **Python through Pyodide** and **Lua through
+  Wasmoon or lua2wasm**, as `mod-examples` entries. Each must load under the design's
+  rules: core wasm, the one `oag` import namespace, no WASI, fuel and NaN
+  canonicalisation, a host-owned state blob. Expect the ABI to be tested hard by the
+  interpreter-based ones: Javy emits WASI preview-1 imports, Pyodide and Wasmoon are
+  Emscripten builds that expect a JavaScript host and are tens of MB, and lua2wasm's
+  output is unverified. Record per language whether it loads as-is, needs a shim (and
+  which), or cannot meet the rules, and the module size and per-tick cost; a language
+  that cannot is a finding for the README, not a reason to widen the capabilities.
+  The list is a starting set, not a mandate (maintainer, 2026-10-29): pick each
+  language's runtime by **feasibility and ease of use** for a mod author (e.g. Wasmoon
+  or lua2wasm, whichever fits the ABI with less glue), and say why in its README.
+
+**The frontend world and the no-mods rule (2026-10-29, proposed):** a third world for
+mod-owned screens (editors, pickers), ADR-0080 (Proposed; supersedes ADR-0066
+decision 4 for wasm screens only), detailed in README section 2.3. Owed items:
+
+- **Maintainer's decision** on ADR-0080: one new `Action`, `open-mod-screen`; host
+  widgets plus a display-only canvas rather than raw draws; fuel (not a deadline) for
+  the world; a 4 KiB blob per mod and title as a records `Store` table.
+- **Build order**: the `frontend` world lands with the HUD world (rollout step 2b),
+  pad and pointer from the first change; `setup.tune` waits for the craft kind.
+- **Open questions it raises** (README 13 to 18): per-seat tune on the wire, animated
+  canvas, which disc data a screen may read, blob lifetime on uninstall, a screen
+  during a race, a craft-tune editor and a craft mod as separate mods.
+- **No mods loaded, no host:** no wasmtime Engine, Store or instance until a race or a
+  screen loads a module; an empty per-tick list does no call and no buffer copy
+  (README section 4.5). Owed with the host: a test that a vanilla race with
+  `extensions` on matches the feature-off hashes and creates no Engine.
+
+## The first player-facing mod: Wall Penalty (maintainer, 2026-10-29)
+
+**Landed on `wasm-extensions` (2026-10-29, lane wall-penalty).** What was built and
+its proof: `docs/architecture/wasm-extensions/README.md`, "What is built". Final
+numbers: thrust x0.25 for 90 ticks (1.5 s), renewed each tick of wall contact
+(**chosen**); on Pulse PSP EU `16_Track` the cursed craft is at 50.7 km/h a second
+after its first contact against 115.6 km/h. Choices the spec left open, made there:
+the event fires every tick of contact, not only the edge; an out-of-range or NaN
+factor faults the module (README 1.2's "never a silent clamp") rather than being
+clamped; the kind is `[extension.rules]`, running in every race but the original
+campaigns until `modes/*.toml` exists; ABI 1 offers no imports (no `rng-next`).
+Still open from this slice:
+
+- The HUD's MODDED tag and the results screen naming a faulted mod and its tick
+  (README 4.2); the modded records table.
+- With the feature on and the examples submodule checked out, every race of a checkout
+  run is cursed (the examples are on by default); turn it off on the MODS page.
+- `oag-server` keeps the feature off (rule 6 lists `wasmtime`) until phase 3, and a
+  network race (LAN or online) attaches no module on either side; the lobby
+  fingerprint leaves `assets/mods/examples` out, so modules in a lobby need the
+  phase 3 module hashes first.
+- The README's second no-engine test (menus and the MODS page with a module mod
+  installed build no engine) is not written.
+- **The guest API is cumbersome (maintainer, 2026-10-29):** both examples hand-roll ABI 1
+  (copied offsets and codes, volatile byte I/O, the blob by hand). A shared layout crate,
+  a Rust guest SDK, a C header and an `oag-ext check` tool are the thread
+  `handover/tooling/a-mod-author-writes-the-abi-by-hand-a-guest-sdk-is-next.md`.
+
+**Second example built: Energy Turbo (maintainer, 2026-10-29).** The maintainer's words:
+"boosts while pressing the button but consuming shield energy while doing so,
+absorbing it does either nothing or restores more energy the more energy you use ...
+but only returning 50 % of the energy consumed". With the correction that "held" means
+carrying the pickup, it is built as follows:
+- the energy turbo is a pickup of the mod's own (`Weapon::Extension`), handed out by
+  the weapon pads in place of every second Turbo and drawn as the Turbo on a red
+  backdrop;
+- fire held boosts it on shield; an AI craft fires a 1 s burst where it would fire a
+  Turbo, then rests 2 s;
+- absorbing **the energy turbo pickup** returns half of what it cost;
+- while it is carried, pads refill instead of boosting.
+
+What landed and its proof: `docs/architecture/wasm-extensions/README.md`, "And Energy
+Turbo". Open:
+- The mod pickup borrows the Turbo's icon; a mod shipping its own icon art is not built.
+- An Eliminator absorb under a running Autopilot takes the mod pickup without raising
+  `pickup-absorbed` (`Race::spend_pickup_under_autopilot`); the mod closes its account
+  when the slot empties, but pays nothing back.
+
+The smallest increment that a player feels, ahead of the README's phase 1 and 2: a
+craft that touches a wall slows far more than a normal craft.
+
+- **Event**: `wall-contact`, at `Race::count_wall_contact` (`field.rs:545`, from
+  `step_player` and `step_opponents`), so AI craft are cursed too.
+- **Command**: `scale-thrust{slot, factor}` with `factor` in `[0, 1]` only, written
+  into `pending_thrust_scale`, the per-tick slow the Leach Beam already arms
+  (`crates/weapons/src/projectile/leach_beam.rs:359`). The guest keeps the curse's
+  countdown in its own blob and re-sends the command each tick it runs, so the
+  engine needs no timer and no factor above 1.0 (both are the Feisar walk's changes).
+- **Host**: a minimal `oag-modhost` behind `extensions`: wasmtime with Cranelift on
+  desktop, fuel, NaN canonicalisation, the I/O buffer, a pooled instance per tick, no
+  engine built while no mod is loaded; the one `tick` call between `advance_cannons`
+  and `step_player`; the blob in the race state and the hash.
+- **Mod**: Rust, in `mod-examples`, e.g. thrust x0.25 for 1.5 s after each contact.
+- **Proof**: a modded race run twice hashes identically; a vanilla race with the
+  feature on matches the feature-off build; the determinism references untouched;
+  out of fuel falls back to vanilla deterministically; a ground-truth test that a
+  cursed craft's speed after a scrape is below an uncursed one's.
+- **Dev overlay** (maintainer, 2026-10-29): a `mods` section in the perf overlay
+  (`crates/present/src/perf.rs`, beside `perf/net.rs` and `perf/memory.rs`): per module,
+  fuel used last tick, its peak, the budget's share, and the call's wall time; a
+  faulted module shown with its tick. A per-tick *output* of the host, like the
+  audio cues, never `World` state and never hashed.
+- **Out**: HUD world, the Pilot Assist move, browser, iOS, replays, lobby. The race is
+  MODDED and records no replay (phase 2's rule).
 
 ## Next Steps
 

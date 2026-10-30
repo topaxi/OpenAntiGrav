@@ -37,7 +37,10 @@ struct Uniforms {
     // The probe tint `iblScalePower`: `.x` the rgb scale, `.y` the desaturation lerp.
     env_gain: f32,
     env_desat: f32,
-    env_pad: f32,
+    // A track module's `grade-sky`: how far this draw's colour is mixed toward a grey,
+    // rainy one, `0.0..=1.0`. Written for the sky alone; `0.0` is the identity and
+    // skips the branch. Was padding until 2026-10-30.
+    sky_grey: f32,
     // Pulse's point and spot lights for a hull, `mesh_render::HullPointLights`:
     // per slot the unit vector towards the light, `.w` its colour bytes packed
     // `r | g << 8 | b << 16` as an integer-valued float, `0.0` for none.

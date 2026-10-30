@@ -229,6 +229,9 @@ pub struct RaceSim {
     pub(super) rolls_armed: [u32; oag_gameplay::MAX_SHIPS],
     /// The shield those rolls cost, in pool units.
     pub(super) rolls_spent: [f32; oag_gameplay::MAX_SHIPS],
+    /// The simulation modules, their blobs and fault ticks; hashed, and nothing at
+    /// all when the race has none. See [`crate::extensions`].
+    pub(super) extensions: crate::extensions::Extensions,
     /// How many ticks each craft has spent **in contact with a wall**: every
     /// opponent, and since 2026-10-19 every person's craft too
     /// (`Race::count_wall_contact`, from `Race::step_player` as well).

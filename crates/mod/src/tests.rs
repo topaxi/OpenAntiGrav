@@ -193,3 +193,249 @@ fn the_built_in_extras_open_and_carry_the_projects_own_license() {
     );
     assert!(extras.menu().unwrap().is_some());
 }
+
+#[test]
+fn an_extension_table_names_its_rules_module_and_opens_nothing() {
+    let text = format!(
+        "{MANIFEST_TEXT}\n[extension]\nsimulation = true\napi = 1\nstate_bytes = 64\n\n[extension.rules]\nmodule = \"ext/curse.wasm\"\n"
+    );
+    let manifest = Manifest::parse(&text, &|path| path == "ext/curse.wasm").unwrap();
+    assert_eq!(
+        manifest.extension,
+        Some(Extension {
+            simulation: true,
+            api: 1,
+            memory_pages: 16,
+            state_bytes: 64,
+            rules: Some(Rules {
+                module: "ext/curse.wasm".to_string()
+            }),
+            track: None,
+        })
+    );
+    assert_eq!(
+        Manifest::parse(MANIFEST_TEXT, &|_| false)
+            .unwrap()
+            .extension,
+        None
+    );
+}
+
+#[test]
+fn a_rules_module_without_simulation_or_missing_is_refused_by_name() {
+    let unsaid =
+        format!("{MANIFEST_TEXT}\n[extension]\napi = 1\n[extension.rules]\nmodule = \"a.wasm\"\n");
+    let error = Manifest::parse(&unsaid, &|_| true).unwrap_err().to_string();
+    assert!(error.contains("simulation = true"), "{error}");
+    let missing = format!(
+        "{MANIFEST_TEXT}\n[extension]\nsimulation = true\napi = 1\n[extension.rules]\nmodule = \"a.wasm\"\n"
+    );
+    let error = Manifest::parse(&missing, &|_| false)
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("not in the mod"), "{error}");
+}
+
+#[test]
+fn a_track_module_names_its_module_and_its_track_file() {
+    let text = format!(
+        "{MANIFEST_TEXT}\n[extension]\nsimulation = true\napi = 1\nstate_bytes = 3\n\n[extension.track]\nmodule = \"ext/rain.wasm\"\ntrack = \"tracks/a.track.toml\"\n"
+    );
+    let all = |path: &str| matches!(path, "ext/rain.wasm" | "tracks/a.track.toml");
+    let extension = Manifest::parse(&text, &all).unwrap().extension.unwrap();
+    assert_eq!(extension.rules, None);
+    assert_eq!(
+        extension.track,
+        Some(Track {
+            module: "ext/rain.wasm".to_string(),
+            track: "tracks/a.track.toml".to_string(),
+        })
+    );
+    let no_track_file = |path: &str| path == "ext/rain.wasm";
+    let error = Manifest::parse(&text, &no_track_file)
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("extension.track.track"), "{error}");
+    let unsaid = text.replace("simulation = true\n", "");
+    let error = Manifest::parse(&unsaid, &all).unwrap_err().to_string();
+    assert!(error.contains("simulation = true"), "{error}");
+}
+
+#[test]
+fn a_manifest_carries_icons_that_are_pngs_in_the_mod() {
+    let text = format!("{MANIFEST_TEXT}\n[icons]\nbadge = \"ui/badge.png\"\n");
+    let parsed = Manifest::parse(&text, &|path| path == "ui/badge.png").unwrap();
+    assert_eq!(parsed.icons["badge"], "ui/badge.png");
+    let missing = Manifest::parse(&text, &|_| false).unwrap_err().to_string();
+    assert!(
+        missing.contains("badge") && missing.contains("not a .png in the mod"),
+        "{missing}"
+    );
+    let wrong = text.replace("ui/badge.png", "ui/badge.jpg");
+    assert!(Manifest::parse(&wrong, &|_| true).is_err(), "only a PNG");
+    let spaced = text.replace("badge =", "\"bad name\" =");
+    assert!(Manifest::parse(&spaced, &|_| true).is_err());
+    assert!(
+        Manifest::parse(MANIFEST_TEXT, &|_| true)
+            .unwrap()
+            .icons
+            .is_empty()
+    );
+}
+
+#[test]
+fn a_manifest_carries_effects_that_are_tomls_in_the_mod() {
+    let text = format!("{MANIFEST_TEXT}\n[effects]\nspark = \"fx/spark.toml\"\n");
+    let parsed = Manifest::parse(&text, &|path| path == "fx/spark.toml").unwrap();
+    assert_eq!(parsed.effects["spark"], "fx/spark.toml");
+    let missing = Manifest::parse(&text, &|_| false).unwrap_err().to_string();
+    assert!(
+        missing.contains("spark") && missing.contains("not a .toml in the mod"),
+        "{missing}"
+    );
+    let wrong = text.replace("spark.toml", "spark.png");
+    assert!(Manifest::parse(&wrong, &|_| true).is_err(), "only a TOML");
+    let spaced = text.replace("spark =", "\"bad name\" =");
+    assert!(Manifest::parse(&spaced, &|_| true).is_err());
+    assert!(
+        Manifest::parse(MANIFEST_TEXT, &|_| true)
+            .unwrap()
+            .effects
+            .is_empty()
+    );
+}
+
+#[test]
+fn a_manifest_pickup_names_its_icon_and_colour_sources_and_a_bad_one_is_refused_by_name() {
+    use oag_tables::pickup_look::{Colour, Icon};
+    use oag_tables::weapons::Weapon;
+    let with = |pickup: &str| {
+        let text =
+            format!("{MANIFEST_TEXT}\n[icons]\nbolt = \"ui/bolt.png\"\n\n[pickup]\n{pickup}");
+        Manifest::parse(&text, &|_| true).map(|m| m.pickup)
+    };
+    let look = with("icon = { title = \"turbo\" }\ncolour = { rgba = \"E0202080\" }")
+        .unwrap()
+        .unwrap();
+    assert_eq!(look.icon, Icon::Title(Weapon::Turbo));
+    assert_eq!(look.colour, Colour::Rgba([0xE0, 0x20, 0x20, 0x80]));
+    let look = with("icon = { mod = \"bolt\" }\ncolour = { title = \"shield\" }")
+        .unwrap()
+        .unwrap();
+    assert_eq!(look.icon, Icon::Mod("bolt".into()));
+    assert_eq!(look.colour, Colour::Title(Weapon::Shield));
+    assert_eq!(
+        with("icon = { title = \"leachbeam\" }\ncolour = { title = \"repulser\" }")
+            .unwrap()
+            .unwrap()
+            .icon,
+        Icon::Title(Weapon::LeachBeam)
+    );
+    for (pickup, named) in [
+        (
+            "icon = { title = \"laser\" }\ncolour = { rgba = \"E0202080\" }",
+            "laser",
+        ),
+        (
+            "icon = { mod = \"nope\" }\ncolour = { rgba = \"E0202080\" }",
+            "[icons]",
+        ),
+        (
+            "icon = { title = \"turbo\" }\ncolour = { rgba = \"E02020\" }",
+            "RRGGBBAA",
+        ),
+        (
+            "icon = { title = \"turbo\", mod = \"bolt\" }\ncolour = { rgba = \"E0202080\" }",
+            "exactly one",
+        ),
+        (
+            "icon = { title = \"turbo\" }\ncolour = { title = \"extension\" }",
+            "extension",
+        ),
+    ] {
+        let error = with(pickup).unwrap_err().to_string();
+        assert!(error.contains("pickup") && error.contains(named), "{error}");
+    }
+    assert_eq!(
+        Manifest::parse(MANIFEST_TEXT, &|_| true).unwrap().pickup,
+        None
+    );
+}
+
+#[test]
+fn a_channels_table_declares_what_the_mod_publishes_and_listens_to() {
+    let text = format!(
+        "{MANIFEST_TEXT}\n[channels]\npublishes = [\"test.example/gate\"]\nlistens = [\"other.mod/open\", \"test.example/gate\"]\n"
+    );
+    let channels = Manifest::parse(&text, &|_| true).unwrap().channels;
+    assert_eq!(channels.publishes, ["test.example/gate"]);
+    assert_eq!(channels.listens, ["other.mod/open", "test.example/gate"]);
+    assert_eq!(
+        Manifest::parse(MANIFEST_TEXT, &|_| true).unwrap().channels,
+        Channels::default()
+    );
+}
+
+#[test]
+fn a_malformed_or_foreign_channel_is_refused_by_name() {
+    for (body, names) in [
+        ("publishes = [\"gate\"]", "\"gate\""),
+        ("listens = [\"a/b/c\"]", "\"a/b/c\""),
+        ("listens = [\"Other/Gate\"]", "\"Other/Gate\""),
+        ("publishes = [\"someone.else/gate\"]", "someone.else/gate"),
+        (
+            "publishes = [\"test.example/a\", \"test.example/a\"]",
+            "listed twice",
+        ),
+    ] {
+        let text = format!("{MANIFEST_TEXT}\n[channels]\n{body}\n");
+        let error = Manifest::parse(&text, &|_| true).unwrap_err().to_string();
+        assert!(error.contains("channels."), "{body}: {error}");
+        assert!(error.contains(names), "{body}: {error}");
+    }
+}
+
+#[test]
+fn an_extension_with_limits_out_of_range_or_no_module_is_refused_at_parse_by_key() {
+    let rules = |table: &str| {
+        format!(
+            "{MANIFEST_TEXT}\n[extension]\nsimulation = true\n{table}\n[extension.rules]\nmodule = \"a.wasm\"\n"
+        )
+    };
+    assert!(
+        Manifest::parse(
+            &rules("api = 1\nmemory_pages = 256\nstate_bytes = 1024"),
+            &|_| true
+        )
+        .is_ok()
+    );
+    for (table, key) in [
+        ("api = 2", "extension.api"),
+        ("api = 1\nmemory_pages = 0", "extension.memory_pages"),
+        ("api = 1\nmemory_pages = 257", "extension.memory_pages"),
+        ("api = 1\nstate_bytes = 1025", "extension.state_bytes"),
+    ] {
+        let error = Manifest::parse(&rules(table), &|_| true)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains(key), "{table}: {error}");
+    }
+    let empty = format!("{MANIFEST_TEXT}\n[extension]\nsimulation = true\napi = 1\n");
+    let error = Manifest::parse(&empty, &|_| true).unwrap_err().to_string();
+    assert!(error.contains("names no module"), "{error}");
+}
+
+#[test]
+fn an_icon_name_longer_than_a_hud_icon_can_send_is_refused_at_parse() {
+    let name = |len: usize| "a".repeat(len);
+    let text = |len: usize| format!("{MANIFEST_TEXT}\n[icons]\n{} = \"ui/a.png\"\n", name(len));
+    let fits = oag_ext_abi::MAX_HUD_TEXT;
+    assert!(Manifest::parse(&text(fits), &|_| true).is_ok());
+    let error = Manifest::parse(&text(fits + 1), &|_| true)
+        .unwrap_err()
+        .to_string();
+    assert!(
+        error.contains("icons") && error.contains("hud-icon"),
+        "{error}"
+    );
+}

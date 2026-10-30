@@ -710,7 +710,7 @@ impl Drawable {
             hull_scale: hull.scale,
             env_layer: hull.env.map_or(0.0, |layer| layer as f32 + 1.0),
             env_tint: hull.env_tint.to_array(),
-            env_pad: 0.0,
+            sky_grey: hull.sky_grey,
             hull_point: hull.point,
             prev_mvp: prev_mvp.to_cols_array_2d(),
         };
@@ -780,13 +780,31 @@ impl Drawable {
     /// and is placed entirely by them.
     #[track_caller]
     pub(super) fn write_node_anims(&self, queue: &dyn oag_gpu::writes::Writes, seconds: f32) {
+        self.write_node_anims_started(queue, seconds, &|_| None);
+    }
+
+    /// [`Self::write_node_anims`] for a model whose art can start on a channel
+    /// (`Keyed::on`): `started(channel)` is the clock reading at which the channel last
+    /// fired. A table that depends on it is a function of more than the clock, so such a
+    /// model is written every frame, not once per clock value; every other model keeps the
+    /// once-per-clock rule.
+    #[track_caller]
+    pub(super) fn write_node_anims_started(
+        &self,
+        queue: &dyn oag_gpu::writes::Writes,
+        seconds: f32,
+        started: &dyn Fn(oag_mesh::mesh::Start) -> Option<f32>,
+    ) {
         if self.model.anim_nodes.is_empty() {
             return;
         }
-        if !remember(&self.node_anims_at, seconds) {
+        let channel_driven = self.model.anim_nodes.iter().any(
+            |node| matches!(&node.transform, oag_mesh::mesh::Motion::Keyed(k) if k.on.is_some()),
+        );
+        if !channel_driven && !remember(&self.node_anims_at, seconds) {
             return;
         }
-        let anims = mesh_render::NodeAnims::sample(&self.model, seconds);
+        let anims = mesh_render::NodeAnims::sample_started(&self.model, seconds, started);
         oag_gpu::perfprobe::write_buffer(
             queue,
             &self.node_anims,
@@ -1123,6 +1141,8 @@ pub(crate) struct HullLayers {
     pub(crate) env: Option<usize>,
     /// The tint those probes are multiplied by, see [`crate::env_probes::ProbeTint`].
     pub(crate) env_tint: crate::env_probes::ProbeTint,
+    /// `grade-sky`'s grey for the sky draw, `0.0` (the identity) for everything else.
+    pub(crate) sky_grey: f32,
 }
 
 /// Uniforms shared with `oag-render`'s `mesh.wgsl`.
@@ -1151,7 +1171,8 @@ pub(crate) struct Uniforms {
     /// See `mesh_render`'s own mirror: the environment-probe layer plus one, `0.0` for none.
     env_layer: f32,
     env_tint: [f32; 2],
-    env_pad: f32,
+    /// See `mesh_render`'s own mirror: the sky's `grade-sky` mix, `0.0` for every other draw.
+    sky_grey: f32,
     /// See `mesh_render`'s own mirror: Pulse's point and spot lights for a hull.
     hull_point: [[f32; 4]; mesh_render::HULL_POINT_SLOTS],
     /// The previous tick's `view_projection * model`, premultiplied - one

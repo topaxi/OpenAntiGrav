@@ -196,6 +196,9 @@ Add a crate only when its milestone opens; no placeholder crates.
 | `oag-log` | Binaries' log sink: terminal plus a pruned timestamped file. |
 | `oag-mobile` | Android/iOS app glue under `oag-game` ([ADR-0065](docs/architecture/adr/0065-one-mobile-crate-for-every-phone-os.md)). |
 | `oag-mod` | Mods (folder, `.zip`, `.oagmod`), `oag-mod.toml`, search path, built-in `oag-extras` ([ADR-0066](docs/architecture/adr/0066-the-menu-is-the-disc-plus-mods.md)). |
+| `oag-modhost` | WebAssembly extension host behind the `extensions` feature: wasmtime (Cranelift, fuel, NaN canonicalisation), the ABI word and layout revision checked by name, a fresh pooled instance per tick, the fault path; no engine until a module loads. Knows no game ([`docs/architecture/wasm-extensions/`](docs/architecture/wasm-extensions/README.md)). |
+| `oag-ext-abi` | ABI 1 defined once: the I/O buffer's layout, records and shared vocabulary, and its `REVISION`. `no_std`, no dependencies; host and guest SDK compile against it. |
+| `oag-ext` | The Rust guest SDK a mod is built on (`Extension`, `Observation`, `Reply`, `blob!`, `export!`, `test::Race`). No engine crate may depend on it. |
 | `oag-net` | Network play: wire messages, WebTransport `Link`, authoritative `host`, predicting `client` (feature), the `oag-server` binary ([ADR-0070](docs/architecture/adr/0070-the-network-transport-is-webtransport.md)). |
 | `oag-input` | Real devices to the abstract button layer and an `InputSnapshot`. |
 | `oag-view` | Asset viewer: CLI, window, texture browser. |
@@ -218,7 +221,7 @@ Six dependency rules, enforced by `just check-deps`
 (`scripts/check-dependency-rules.py`):
 
 1. No gameplay crate depends on `oag-render`, `oag-fx`, `oag-audio`, `oag-input`, `oag-net`, `winit` or `wgpu`. The simulation consumes an input *snapshot type* owned by `oag-gameplay`.
-2. No crate depends on `oag-game`.
+2. No crate depends on `oag-game`, and no engine crate on the guest SDK `oag-ext`.
 3. No generic render-side crate (`oag-fx`, `oag-gpu`, `oag-mesh`, `oag-post`) reaches a title package (`oag-pulse`, `oag-pure`, `oag-hd`, `oag-omega`, `oag-2048`); tables are injected by the caller. `oag-render` still reads `oag-pulse`'s presentation tables and is not listed.
 4. `oag-unity` depends on no workspace crate but `oag-bytes` (allowlist). A content layer is a separate crate on top, never the reverse.
 5. `oag-ballisticng` reaches `oag-unity`, `oag-texture`, `oag-formats`, `oag-bytes` only; no gameplay crate may depend on it or on `oag-unity`. How a foreign track maps into this engine is the consumer's choice.
@@ -329,6 +332,13 @@ Effects load generically: `oag_fx::psys::Library` loads any
 adding its name and its **trigger**, and the trigger needs reverse-engineering;
 an effect with no recovered trigger stays unwired rather than fired on a guess
 (`HANDOVER.md` lists them).
+
+### A mod API change updates the mod author skill
+
+A change to the wasm extension ABI (`oag-ext-abi`), the guest SDK (`oag-ext`),
+`oag-mod.toml`, or an effect, track or string format a mod writes updates
+`assets/mods/examples/.claude/skills/oag-mod-author/SKILL.md` in the same change
+(commit it on the submodule branch, then the pointer).
 
 ## Documentation tree
 

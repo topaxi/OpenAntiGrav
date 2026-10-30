@@ -132,10 +132,28 @@ type = "integer"
 min = 0
 optional = true
 
+# Written only when the track has triggers (`oag/triggers` in the glb).
+[types.counts.triggers]
+type = "integer"
+min = 0
+optional = true
+
 # The art section (ADR-0076). Its numbers are render-side only, so they are
 # decimal here: nothing simulates them. A reader also takes `2` for `2.0`.
 [types.number]
 oneof = ["integer", "float"]
+
+# The track's own properties for a simulation mod: name to number or bool (a
+# bool reads as 1.0 or 0.0). The engine gives none a meaning; a string is
+# refused. Written as a float widened from the f32 the race hands a mod, so it
+# reads back exact.
+[types.prop-value]
+oneof = ["integer", "float", "boolean"]
+
+[types.props]
+type = "collection"
+itemtype = "types.prop-value"
+keypattern = "^.+$"
 
 [types.vec3]
 type = "array"
@@ -311,6 +329,24 @@ type = "types.spline"
 
 [elements.counts]
 type = "types.counts"
+
+[elements.props]
+type = "types.props"
+optional = true
+
+# The event channels the track publishes, `<id>/<name>`: a trigger's `oag_emit` (in the glb)
+# names one of them.
+[types.channels]
+type = "table"
+
+[types.channels.publishes]
+type = "array"
+itemtype = "string"
+optional = true
+
+[elements.channels]
+type = "types.channels"
+optional = true
 
 [elements.art]
 type = "types.art"

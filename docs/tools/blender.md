@@ -30,8 +30,9 @@ property `oag_kind` on the object (the panel's buttons set it; so does adding th
 | `floor`, `wall`, `reset`, `mag_floor`, `cage`, `track_wall` | a Mesh | a collision node of that kind, triangulated, transforms baked |
 | `start` | an Empty: +Y forward, +Z up | the start slot |
 | `speedup`, `weapon` | an Empty: X lateral, +Y forward, +Z up | a pad |
+| `trigger` | an Empty named `oag/triggers/<name>`: X lateral, +Y forward, +Z up, its box in **Box min** / **Box max** | a trigger volume a simulation mod hears craft enter and leave |
 
-The six collision kinds and the four above are the whole list: the format has no `scenery`
+The six collision kinds and the five above are the whole list: the format has no `scenery`
 kind (a reader refuses an unknown tag by name). An **untagged** mesh that renders is **art**
 (see [Art](#art-meshes-textures-the-sun-and-baked-light) below); fog, point lights and scenery
 animation are not in the format
@@ -71,7 +72,8 @@ matches what that generator would write.
 | path `entry`/`exit`, junction | `0`/`0` and one junction `[0, -1]` -> `[0, -1]`: a single closed loop |
 | `max_spacing` | the largest gap between neighbours |
 | Start slot | 154 units back along the ring from point 0, level, facing along the line. The race puts the **lap line** 154 units ahead of the start slot (`oag_race::Course::START_LINE_ADVANCE`), so spline point 0, the curve's first control point, is the lap line |
-| Pad matrix | the Empty's unit basis in rows (lateral, up, forward) and its position; scale is ignored, the size is the box |
+| Pad matrix | the Empty's unit basis in rows (lateral, up, forward) and its position; scale is ignored, the size is the box. A trigger's the same |
+| Mod properties | every custom property `mod_<name>` on a pad or trigger Empty, a spline object, or the scene, as `<name>` ([track file](../formats/track-file.md#properties-and-triggers-for-simulation-mods)): a number as its `f32`, a bool as 1.0 or 0.0; a string or an array refuses the export naming the object and the key. Import writes them back as `mod_*` properties |
 | Track id | the scene's id, else the scene name slugged |
 | `track.host` | the scene's **Runs on** (`oag_track_host`: `none`, default, or one of the five title slugs): the title whose disc the art's host textures and sky resolve from; export refuses `none` when the art borrows ([ADR-0076](../architecture/adr/0076-a-track-file-carries-its-art-as-an-optional-section.md) decision 13). Import refuses an unknown value |
 | `track.titles` | the scene's **Offered on** (`oag_track_titles`), comma-separated slugs; empty writes no key (every title) |
@@ -238,6 +240,9 @@ rotation, scale, in the Dope Sheet or with `keyframe_insert`); the export does t
 | The scene's `frame_start` | time zero of the race clock; frame `f` is `(f - frame_start) / fps` seconds, `fps = render.fps / render.fps_base` |
 | The object's `oag_anim` (default its name) | the glTF animation it belongs to: an object's material slots, and objects sharing a name, share one |
 | *Motion* (`oag_loop`: `loop`, `clamp`) | the animation's `oag_loop` extra |
+| *Start on* (`oag_on`, a channel `<mod id>/<name>`) | the animation's `oag_on` extra: it holds its first key until the channel fires ([track-file.md](../formats/track-file.md#channels-events-between-a-track-and-mods)). Objects sharing an `oag_anim` name must agree |
+| *Start on value* (`oag_on_value`, a number) | the animation's `oag_on_value` extra: with *Start on*, only an event carrying exactly this value starts it (a checkpoint's gate number); empty starts on any. Objects sharing an `oag_anim` name must agree |
+| a trigger Empty's *Emit* (`oag_emit`) | the glb's `oag_emits` entry: the channel a craft entering it sends; the scene's *Channels published* (`oag_track_channels`, comma-separated) is the manifest's `[channels] publishes` and must name it |
 | The sun lamp's rotation over time | an `oag/sun` node with the rest rotation and a rotation channel; `[art.sun] direction` is the direction at `frame_start`, turned in the race by the rotation from rest |
 
 **Sampled, not copied (chosen).** The exporter evaluates every whole frame from `frame_start` to
@@ -267,6 +272,30 @@ writes the file's direction (the import's cached direction).
 **What moves, and what does not.** Visual only: collision, pads and the spline never move (a moving
 collider is simulation state, its own decision). A turning sun turns the `mapped` shadows and a flare
 that follows the sun; the baked `COLOR_0` and the ships' hull rig keep the pose at time zero.
+
+## Mod effects and triggers (2026-10-30)
+
+- **Preview effect** (`oag.preview_effect`) reads a mod effect TOML ([mod-effect.md](../formats/mod-effect.md))
+  onto the active object: the text becomes an editable Text datablock (`oag/effect/<name>`) and one
+  particle system per emitter plays in the viewport (approximate: count, timing, speed, size; not
+  colour or blend). **Export effect** parses the text, checks the shape and writes it back
+  canonically. The text, not Blender's `float32` particle settings, is the truth.
+- **Make trigger from mesh** (`oag.trigger_from_mesh`) turns each selected mesh's world bounds into
+  an `oag/triggers/<mesh name>` Empty (unrotated, box centred on the bounds).
+- `mod_*` custom properties on pad Empties, trigger Empties, spline objects and the scene export and import as the
+  track format says. Proven headless on 5.2.3: `roundtrip.py props` (properties, trigger, make
+  trigger, export, import, re-export equal bar the `.glb` name) and `roundtrip.py effect`
+  (import then export gives an equal TOML, a Text edit exports, a broken text is refused); both run
+  in `just blender-fixtures`. Nothing in the track-props code needed a fix.
+- **Event channels (2026-10-30):** a trigger Empty's **Emit**, an object's **Start on** and the scene's
+  **Channels published** (table above). `roundtrip.py channels` proves, on 5.2.3, that they survive export,
+  import and a re-export (equal bar the `.glb` name), that a trigger naming a channel the track does not
+  publish and a malformed name are refused by name, and writes `channels.track.toml`: the motion loop with
+  its airship starting on a gate across the road past the start (raced headless; the wasm-extensions
+  README's "And events between mods" has the screenshots). The committed fixtures are byte-neutral: the output of
+  `loop` and `motion` equals what the unchanged add-on writes. (`just blender-fixtures` already stops at its
+  `effect` step on 5.2.3 before this lane, an `assert` on the effect TOML's duration; the other steps are
+  run by hand in the lane's report.)
 
 ## Import, and baked records
 

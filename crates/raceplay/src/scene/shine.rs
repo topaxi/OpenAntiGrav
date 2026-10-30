@@ -126,7 +126,9 @@ impl Scene {
             track
                 .drawable
                 .write(queue, view_projection, Mat4::IDENTITY, prev_vp);
-            track.drawable.write_node_anims(queue, seconds);
+            track
+                .drawable
+                .write_node_anims_started(queue, seconds, &|start| race.channel_started(start));
             track.drawable.write_view_map(
                 queue,
                 view,

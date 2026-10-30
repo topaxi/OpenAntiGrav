@@ -52,6 +52,18 @@ fn drive_with(
     tracks: Option<&Path>,
     env: &[(&str, &str)],
 ) -> Run {
+    drive_args(image, tag, script, tracks, env, &[])
+}
+
+/// [`drive_with`] with `args` added to the game's command line.
+fn drive_args(
+    image: &Path,
+    tag: &str,
+    script: &str,
+    tracks: Option<&Path>,
+    env: &[(&str, &str)],
+    args: &[&str],
+) -> Run {
     let scratch = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("drive-{tag}"));
     let _ = std::fs::remove_dir_all(&scratch);
     std::fs::create_dir_all(&scratch).expect("a scratch directory");
@@ -60,6 +72,7 @@ fn drive_with(
     command
         .arg(image)
         .args(["--no-audio", "--no-intro", "--drive", script])
+        .args(args)
         .arg("--state-log")
         .arg(&log)
         .env("XDG_CONFIG_HOME", scratch.join("config"))
@@ -141,6 +154,52 @@ fn the_race_box_launches_the_track_and_craft_it_was_told_to_pick() {
         screens.contains(&"track-select") && screens.contains(&"ship-select"),
         "{screens:?}"
     );
+}
+
+/// A Race Box race runs the example simulation mods in a build with the `extensions`
+/// feature, and none without it: the launch through the menus attaches what `--race` does.
+/// With the feature, the energy turbo `--give extension` hands over is held and not spent.
+/// (2026-10-29: a Race Box race played on `just play`, a build without the feature, ran
+/// no module while the log listed the mods as loaded.)
+#[test]
+#[ignore = "needs a disc image in data/images/ and the assets/mods/examples submodule"]
+fn a_race_box_race_runs_the_simulation_mods_only_with_the_extensions_feature() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    if oag_testdata::exact("assets/mods/examples/energy-turbo/oag-mod.toml").is_none() {
+        return;
+    }
+    let run = drive_args(
+        &image,
+        "racebox-mods",
+        "boot; select racebox; press cross; until page=race; \
+         set race.mode=single_race; select launch_race; press cross; \
+         until screen=picker; select 16_Track; press cross; \
+         until screen.id=ship-select; select Feisar; press cross; \
+         until stage=race within 3000; ticks 300",
+        None,
+        &[],
+        &["--give", "extension"],
+    );
+    assert!(run.output.status.success(), "{}", run.why_not_success());
+    let race = &run.last()["race"];
+    let mods: Vec<&str> = race["mods"]
+        .as_array()
+        .map(|mods| mods.iter().filter_map(Value::as_str).collect())
+        .unwrap_or_default();
+    if cfg!(feature = "extensions") {
+        assert_eq!(mods, ["oag.energy-turbo", "oag.wall-penalty"], "{race}");
+        assert_eq!(text(race, &["pickup"]), Some("Extension"), "{race}");
+    } else {
+        assert!(mods.is_empty(), "{race}");
+        assert!(
+            run.stderr().contains(
+                "its simulation module does not run, this build has no `extensions` feature"
+            ),
+            "a build without the feature says so"
+        );
+    }
 }
 
 /// The process does not exit under a GPU worker: the race's EndRace prefetch is held up for three

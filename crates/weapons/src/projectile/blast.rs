@@ -15,6 +15,8 @@ use super::cannon;
 /// same-typed numbers cannot be swapped.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BlastStats {
+    /// The weapon that made the blast, named in a hit it records ([`super::WeaponHit`]).
+    pub weapon: Weapon,
     /// `<Stats blastradius>`: how far the blast reaches.
     pub radius: f32,
     /// `<Stats damage>`: what it costs a craft's energy, with no falloff.
@@ -40,18 +42,21 @@ pub fn blast_stats(
     let weapons = weapons?;
     match kind {
         Weapon::Rocket => weapons.rocket().map(|s| BlastStats {
+            weapon: Weapon::Rocket,
             radius: s.blastradius,
             damage: s.damage,
             force: s.blastforce,
             slowdown_time: s.slowdown_time,
         }),
         Weapon::Missile => weapons.missile().map(|s| BlastStats {
+            weapon: Weapon::Missile,
             radius: s.blastradius,
             damage: s.damage,
             force: s.blastforce,
             slowdown_time: s.slowdown_time,
         }),
         Weapon::Plasma => weapons.plasma().map(|s| BlastStats {
+            weapon: Weapon::Plasma,
             radius: s.blastradius,
             damage: s.damage,
             force: s.blastforce,
@@ -61,12 +66,14 @@ pub fn blast_stats(
         // authors a second damage and force and nothing read says when those are
         // spent; see `oag_tables::weapons::ShurikenStats`.
         Weapon::Shuriken => weapons.shuriken().map(|s| BlastStats {
+            weapon: Weapon::Shuriken,
             radius: s.blastradius,
             damage: s.blastdamage,
             force: s.blastforce,
             slowdown_time: s.slowdown_time,
         }),
         Weapon::Mine => weapons.mine().map(|s| BlastStats {
+            weapon: Weapon::Mine,
             radius: s.blastradius,
             damage: s.damage,
             force: s.blastforce,
@@ -76,6 +83,7 @@ pub fn blast_stats(
         // instruction level spends `blastradius` for both halves; see
         // `oag_tables::weapons::BombStats`.
         Weapon::Bomb => weapons.bomb().map(|s| BlastStats {
+            weapon: Weapon::Bomb,
             radius: s.blastradius,
             damage: s.damage,
             force: s.blastforce,
@@ -131,7 +139,7 @@ pub fn blast<S: Craft>(
         let dimensions = ship.dimensions();
         let report =
             oag_physics::damage::apply_weapon(ship.physics_mut(), &dimensions, stats.damage, rules);
-        super::hit::record(hits, slot, &report);
+        super::hit::record(hits, slot, stats.weapon, &report);
 
         // A craft on the blast centre has no direction: push up, which depends on
         // no axis of the craft or track.
@@ -187,7 +195,7 @@ pub(super) fn blast_mine_trip<S: Craft>(
     let dimensions = ship.dimensions();
     let report =
         oag_physics::damage::apply_weapon(ship.physics_mut(), &dimensions, stats.damage, rules);
-    super::hit::record(hits, struck as usize, &report);
+    super::hit::record(hits, struck as usize, stats.weapon, &report);
     let direction = if distance > 1e-4 {
         offset.normalize()
     } else {
@@ -236,7 +244,7 @@ pub(super) fn blast_direct_hit<S: Craft>(
         let dimensions = ship.dimensions();
         let report =
             oag_physics::damage::apply_weapon(ship.physics_mut(), &dimensions, stats.damage, rules);
-        super::hit::record(hits, struck as usize, &report);
+        super::hit::record(hits, struck as usize, stats.weapon, &report);
     }
 
     let radius = stats.radius;

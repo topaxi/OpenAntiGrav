@@ -110,9 +110,18 @@ impl Race {
         // original's single `craft+0x1d0` slot and its single `DAT_08b3435c` flag,
         // which `Zone_Update` (`0x0882f5cc`) consumes and clears once per tick.
         let entered = hit.map(|(index, _)| index);
+        // A simulation mod's `scale-pad` (`crate::extensions`), the pad's race-wide factor
+        // times the slot's: exactly 1.0 without a module. It scales the push alone; at 0
+        // the pad gives no push, and the entry below pays no plume, sound, boost count
+        // or Zone score (chosen). The edge and the cache are the pad's as ever, and the
+        // module hears every entry.
+        let factor = entered.map_or(1.0, |index| self.sim.extensions.pad_factor(slot, index));
         if entered != self.sim.pad_current[slot] {
             self.sim.pad_current[slot] = entered;
-            if entered.is_some() {
+            if let Some(index) = entered {
+                self.sim.extensions.pad_entered(slot, index, false);
+            }
+            if entered.is_some() && factor > 0.0 {
                 // The lap table's third column: `Ship_ApplySpeedupPad` adds one to the
                 // human craft's own per-lap counter on this same edge (`craft+0x900 +
                 // lap * 0x10 + 0x94`, its only writer). See [`RunStats`].
@@ -175,7 +184,18 @@ impl Race {
             }
         }
 
-        hit.map(|(_, direction)| direction)
+        if factor == 0.0 {
+            return None;
+        }
+        // The direction's length is the push's scale (`Environment::pad_hit`); the jump
+        // lift the physics adds to it is not scaled (chosen).
+        hit.map(|(_, direction)| {
+            if factor == 1.0 {
+                direction
+            } else {
+                direction * factor
+            }
+        })
     }
 
     /// Crosses the ship against the track's weapon pads, granting a pickup.
@@ -262,6 +282,8 @@ impl Race {
         let Some(index) = hit else {
             return;
         };
+        // A simulation mod hears every entry, cooling down or not.
+        self.sim.extensions.pad_entered(slot, index, true);
 
         // Point 1 above. Unconditional, and before the grant, so a pad that
         // hands nothing over is still spent.
@@ -322,7 +344,13 @@ impl Race {
             (!self.sim.allowed_weapons.is_empty()).then_some(self.sim.allowed_weapons.as_slice());
         let drawn = oag_weapons::pickup::draw(&mut self.sim.world.rng, table, who, last, allowed);
         if let Some(weapon) = drawn {
-            self.sim.world.ships[slot].pickup.grant(weapon);
+            let pickup = &mut self.sim.world.ships[slot].pickup;
+            pickup.grant(weapon);
+            // A simulation mod's `pickup-roll`: this grant becomes the mod's own pickup,
+            // with `last` still the drawn weapon, so the title's repeat rule is unchanged.
+            if self.sim.extensions.rolls(slot, weapon) {
+                pickup.weapon = Some(oag_tables::weapons::Weapon::Extension);
+            }
         }
     }
 }

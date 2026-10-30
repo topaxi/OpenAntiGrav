@@ -40,11 +40,15 @@ from .model import (
     SplinePoint,
     Start,
     Track,
+    Trigger,
 )
 from .trackfile import MAX_VERTICES, TrackFileError
 
 LINE_KIND = "racing_line"
-KINDS = (*COLLISION_KINDS, "spline", LINE_KIND, "start", "speedup", "weapon")
+KINDS = (*COLLISION_KINDS, "spline", LINE_KIND, "start", "speedup", "weapon", "trigger")
+# A custom property with this prefix on a pad or trigger empty, a spline, or the scene, is a
+# simulation mod's: exported with the prefix stripped, given no meaning by the engine.
+MOD_PREFIX = "mod_"
 COLLECTION = "OAG Track"
 CACHE_TOLERANCE = 1e-6
 # How far a racing-line curve point may sit from where the operator put it and still
@@ -319,7 +323,20 @@ def _start(objs, path):
     return derive.start_frame(path.points)
 
 
-def _pad(obj):
+def mod_props(holder, what):
+    """The `mod_*` custom properties of an object or the scene, prefix stripped."""
+    out = {}
+    for key in holder.keys():
+        if not key.startswith(MOD_PREFIX):
+            continue
+        name = key[len(MOD_PREFIX) :]
+        if not name:
+            raise TrackFileError(f"{what}: {key!r} has no name after {MOD_PREFIX!r}")
+        out[name] = trackfile.prop_value(what, name, holder[key])
+    return out
+
+
+def _to_world(obj):
     cache = obj.get("oag_to_world")
     if cache is not None and len(cache) == 16 and _matrix_unmoved(obj, "oag_matrix_at"):
         to_world = tuple(float(v) for v in cache)
@@ -332,11 +349,28 @@ def _pad(obj):
         t = to_format((m[0][3], m[1][3], m[2][3]))
         to_world += [f32.r(t[0]), f32.r(t[1]), f32.r(t[2]), 1.0]
         to_world = tuple(to_world)
+    return to_world
+
+
+def _pad(obj):
     return Pad(
-        to_world,
+        _to_world(obj),
         tuple(f32.r(v) for v in obj.oag_min),
         tuple(f32.r(v) for v in obj.oag_max),
         f32.r(obj.oag_disabled),
+        mod_props(obj, obj.name),
+    )
+
+
+def _trigger(obj):
+    name = obj.get("oag_name") or obj.name.removeprefix("oag/triggers/")
+    return Trigger(
+        name,
+        _to_world(obj),
+        tuple(f32.r(v) for v in obj.oag_min),
+        tuple(f32.r(v) for v in obj.oag_max),
+        mod_props(obj, obj.name),
+        obj.oag_emit.strip() or None,
     )
 
 
@@ -419,6 +453,8 @@ def collect(context):
     if not splines:
         raise TrackFileError("no object is tagged spline")
     paths = [path_of(o, depsgraph, i) for i, o in enumerate(splines)]
+    for o, path in zip(splines, paths):
+        path.props = mod_props(o, o.name)
     lines = _line_objects(by((LINE_KIND,)), len(splines))
     for i, (o, path) in enumerate(zip(splines, paths)):
         offsets = line_for(o, path, lines.get(i), depsgraph)
@@ -484,6 +520,9 @@ def collect(context):
         pads["weapon"],
         notes,
         art,
+        mod_props(scene, "scene"),
+        [_trigger(o) for o in sorted(by(("trigger",)), key=lambda o: _natural(o.name))],
+        [n.strip() for n in scene.oag_track_channels.split(",") if n.strip()],
     )
 
 
@@ -551,6 +590,8 @@ def make_spline_object(scene, path, index):
     obj["oag_max_spacing"] = path.max_spacing
     obj["oag_entry"] = -1 if path.entry is None else path.entry
     obj["oag_exit"] = -1 if path.exit is None else path.exit
+    for key, value in path.props.items():
+        obj[MOD_PREFIX + key] = value
     return _link(scene, obj)
 
 
@@ -619,9 +660,46 @@ def make_pad_object(context, pad, kind, index):
     obj["oag_kind"] = kind
     obj["oag_index"] = index
     obj.oag_min, obj.oag_max, obj.oag_disabled = pad.min, pad.max, pad.disabled
+    for key, value in pad.props.items():
+        obj[MOD_PREFIX + key] = value
     _link(context.scene, obj)
     _place(context, obj, _matrix_from(cols), "oag_to_world", list(pad.to_world))
     return obj
+
+
+def make_trigger_object(context, trigger):
+    r = [trigger.to_world[i : i + 4] for i in range(0, 16, 4)]
+    cols = [to_blender(r[0][:3]), to_blender(r[2][:3]), to_blender(r[1][:3]), to_blender(r[3][:3])]
+    obj = bpy.data.objects.new(f"oag/triggers/{trigger.name}", None)
+    obj.empty_display_type = "CUBE"
+    obj.empty_display_size = max(1.0, *(abs(v) for v in (*trigger.min, *trigger.max))) / 2
+    obj["oag_kind"] = "trigger"
+    obj["oag_name"] = trigger.name
+    obj.oag_min, obj.oag_max = trigger.min, trigger.max
+    obj.oag_emit = trigger.emits or ""
+    for key, value in trigger.props.items():
+        obj[MOD_PREFIX + key] = value
+    _link(context.scene, obj)
+    _place(context, obj, _matrix_from(cols), "oag_to_world", list(trigger.to_world))
+    return obj
+
+
+def trigger_from_bounds(context, mesh_obj):
+    """A trigger Empty on `mesh_obj`'s world bounds (axis-aligned, no rotation)."""
+    corners = [mesh_obj.matrix_world @ Vector(c) for c in mesh_obj.bound_box]
+    lo = [min(c[i] for c in corners) for i in range(3)]
+    hi = [max(c[i] for c in corners) for i in range(3)]
+    centre = [(a + b) / 2 for a, b in zip(lo, hi)]
+    half = [(b - a) / 2 for a, b in zip(lo, hi)]
+    # The box is (lateral, up, forward) in the empty's frame: Blender X, Z, Y.
+    box_min = tuple(f32.r(v) for v in (-half[0], -half[2], -half[1]))
+    box_max = tuple(f32.r(v) for v in (half[0], half[2], half[1]))
+    t = to_format(centre)
+    # An unrotated empty: its rows are format x, y, z (what `_to_world` reads).
+    to_world = (1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0)
+    to_world += tuple(f32.r(v) for v in t) + (1.0,)
+    name = mesh_obj.name.removeprefix("oag/triggers/")
+    return make_trigger_object(context, Trigger(name, to_world, box_min, box_max))
 
 
 def make_start_object(context, start):
@@ -667,6 +745,7 @@ def populate(context, track, manifest_dir="."):
             raise TrackFileError(f"{name!r} is not a title this add-on knows: {', '.join(HOSTS)}")
     scene.oag_track_host = track.host or "none"
     scene.oag_track_titles = ", ".join(track.titles)
+    scene.oag_track_channels = ", ".join(track.channels)
     scene.oag_track_notes = "\n".join(track.notes)
     scene["oag_point_version"] = track.point_version
     scene["oag_junctions"] = json.dumps(
@@ -683,6 +762,10 @@ def populate(context, track, manifest_dir="."):
     for kind, pads in (("speedup", track.speedup_pads), ("weapon", track.weapon_pads)):
         for i, pad in enumerate(pads):
             make_pad_object(context, pad, kind, i)
+    for trigger in track.triggers:
+        make_trigger_object(context, trigger)
+    for key, value in track.props.items():
+        scene[MOD_PREFIX + key] = value
     for n, node in enumerate(track.nodes):
         for m, mesh in enumerate(node.meshes):
             make_collision_object(scene, node.kind, mesh, node, n, m, len(node.meshes) > 1)

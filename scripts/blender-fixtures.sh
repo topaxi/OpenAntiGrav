@@ -9,7 +9,9 @@
 #   blender_motion.reexport.* that imported and exported again
 #   oval.reexport.*         the committed oval, imported by the add-on and exported again
 #
-# It also runs `roundtrip.py line`, which asserts the racing-line paths and writes no fixture.
+# It also runs `roundtrip.py line`, which asserts the racing-line paths and writes no fixture,
+# `channels` (a trigger's oag_emit, an animation's oag_on, the track's published channels), `props` (mod_* properties, trigger Empties, Make trigger from mesh) and `effect` (a mod effect
+# TOML previewed and exported again; needs the examples submodule).
 #
 # Needs Blender 4.2 or later on PATH (or $BLENDER). The gate does not run this (CI has
 # no Blender); crates/trackfile/tests/blender.rs and trackfile_ground_truth.rs read the
@@ -31,6 +33,9 @@ run() {
 "$blender" --command extension validate scripts/blender/oag_track
 run loop "$out"
 run line "$out"
+run props "$out"
+run channels "$out"
+run effect assets/mods/examples/energy-turbo/fx/discharge.toml "$out"
 run reexport "$out/blender_loop.track.toml" "$out"
 run motion "$out"
 run reexport "$out/blender_motion.track.toml" "$out"

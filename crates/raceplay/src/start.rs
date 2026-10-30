@@ -175,6 +175,7 @@ impl Race {
             intro_camera,
             slot_teams,
             sight,
+            extensions,
             ..
         } = setup;
 
@@ -646,6 +647,7 @@ impl Race {
         });
         let race = Self {
             sim: RaceSim {
+                extensions: crate::extensions::Extensions::new(extensions),
                 racing_line: line,
                 ai_order: order,
                 routes,

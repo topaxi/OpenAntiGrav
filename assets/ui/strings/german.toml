@@ -305,6 +305,9 @@ OAG_MODS_LEFT_OUT = { text = "AUSGELASSEN", human = false }
 OAG_MODS_NEEDS = { text = "BRAUCHT", human = false }
 OAG_MODS_NEEDS_OFF = { text = "%s, AUS", human = false }
 OAG_MODS_NEEDS_MISSING = { text = "%s, FEHLT", human = false }
+OAG_MODS_SENDS = { text = "SENDET", human = false }
+OAG_MODS_HEARS = { text = "HOERT", human = false }
+OAG_MODS_NO_ONE_SENDS = { text = "NIEMAND SENDET", human = false }
 OAG_PAUSE_OWNED = { text = "SPIELER %s HAT PAUSIERT - JEDER KANN IN %s FORTSETZEN", human = false }
 OAG_PAUSE_OPEN = { text = "SPIELER %s HAT PAUSIERT - JEDER KANN FORTSETZEN", human = false }
 OAG_PAUSE_OPEN_UNOWNED = { text = "PAUSIERT - JEDER KANN FORTSETZEN", human = false }

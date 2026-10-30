@@ -165,6 +165,148 @@ below OPTIONS with the pad or pointer. `--menu-page mods` draws the page headles
 profile's switches, and `--menu-page mods:<mod id>` puts the MOD row on that mod. `just mods-list`
 (`oag-mod`) does not read the game's settings and lists every mod it finds.
 
+## Event channels: `[channels]`
+
+A mod's modules and a track's triggers send each other events over named channels
+([hooks.md](../architecture/wasm-extensions/hooks.md#events-between-mods-emit-and-mod)):
+
+```toml
+[channels]
+publishes = ["oag.checkpoint-circuit/checkpoint"]   # what its modules may `emit` on
+listens = ["oag.other/open"]                        # what it hears (for the MODS page)
+```
+
+Names are `<mod id>/<name>` (lowercase letters, digits, `-`, `_`; the id may also carry `.`; at
+most 64 bytes). A published name starts with this mod's own id; a malformed, repeated or foreign
+one, or more than 32 of a list, refuses the mod at load naming the key
+(`channels.publishes`, `channels.listens`). A mod whose id hashes to the track's sender key (0) is
+refused too. `schemas/v1/mod.tosd` has the table. A module's `emit` on a channel its mod does not
+publish, or more than 4 `emit`s a tick, faults it for the race, naming the rule.
+
+The MODS page shows a **SENDS** line (the mod's published channels and those of its track files'
+`[channels] publishes`) and a **HEARS** line, and a **NO ONE SENDS** line naming each channel the mod
+listens to that no mod that is on (or track file of one) sends. A warning, never a refusal: the
+sender may simply be turned off. Turned-off mods show neither line.
+
+## Simulation modules: `[extension]`
+
+A mod may carry one WebAssembly rules module that runs in every race it is on for
+(its `titles`), except the original campaigns:
+
+```toml
+[extension]
+simulation = true        # required with a rules module
+api = 1                  # the ABI the module was built against
+memory_pages = 2         # its maximum memory, 64 KiB pages (1 to 256; default 16)
+state_bytes = 16         # its state blob, at most 1,024 bytes
+
+[extension.rules]
+module = "ext/wall_penalty.wasm"
+```
+
+A mod may instead (or also) bind a module to one of its own track files:
+
+```toml
+[extension.track]
+module = "ext/hillside_rain.wasm"
+track = "tracks/hillside.track.toml"   # a .track.toml of this mod; the module runs only there
+```
+
+It needs `simulation = true` too, loads only in a race of that file (never a disc circuit)
+and may send the same commands as a rules module, including the race-wide `set-weather`,
+`set-sun` and `grade-sky` outputs. Hillside's rain is one.
+
+A mod may ship text and images for its module's HUD: its own `strings/<language>.toml`
+(the same files its menu rows use, English the fallback) and `[icons]` (`name = "path/in/the/mod.png"`). A module's
+`hud_string` and `hud_mod_icon` name them; a PNG that is missing or unreadable draws
+nothing and the load report says so.
+
+A simulation module can also change the title's HUD through outputs that are never
+hashed: `hud-tint`, `hud-shake` and `hud-bar-extra` on a HUD element (`Speed`, `Thrust`,
+`Energy`, `Pickup`, `Position`, `Lap`, `Time`; the pickup is shaken but coloured by `pickup-look`), and `hud-text` and `hud-icon` at one of
+nine anchors of the HUD grid, up to 32 per slot per tick. Re-send each every tick it
+should hold; a title with no widget for an element draws nothing. Energy Turbo's pickup look
+is its manifest's `[pickup]`, shows its added thrust as a red share of the speed bar (`Speed`; Pulse has no
+thrust bar, and `Thrust` draws nothing there) and shakes the energy bar while it drains. Guests format times with
+`oag_ext::Line`. The commands are in
+[docs/architecture/wasm-extensions/](../architecture/wasm-extensions/README.md).
+
+A mod that hands out a pickup of its own (`give-pickup`, `pickup-roll`) declares its look in
+`oag-mod.toml`, and is faulted for the race at the first such command without it:
+
+```toml
+[pickup]
+icon = { title = "turbo" }       # the title's own icon for a weapon, or { mod = "<key of [icons]>" }
+colour = { rgba = "E0202080" }   # RRGGBBAA, or { title = "shield" }: the title's own backdrop row
+```
+
+`title` is a weapon (`rocket`, `missile`, `quake`, `cannon`, `turbo`, `shield`, `autopilot`,
+`plasma`, `bomb`, `mine`, `leachbeam`, `repulser`, `shuriken`, `disruptor`); a bad weapon, a
+`mod` that is no key of `[icons]` or an `rgba` that is not eight hex digits refuses the mod by name.
+The title's fade-in, overshoot, size pulse and fade-out play on it (Pulse, HD, Omega). Pure has no
+backdrop widget, so a colour draws nothing there; 2048 keeps its backdrop as authored. A module can
+override the look per tick with `pickup-look`.
+
+A rules module also sees every weapon hit on a craft (`hit{slot, amount, weapon}`, an
+absorbed one included, with the craft's `shielded` flag) and can start, hold and end the
+title's Shield (`give-shield`, `hold-shield`, `clear-shield`): enough to write a breakable
+armour. See [wasm-extensions](../architecture/wasm-extensions/README.md#breakable-armour-from-the-shield-2026-10-30).
+
+**The example of triggers, track properties, HUD text and the AI hook is
+`checkpoint-circuit/`** in the mod examples (`oag.checkpoint-circuit`): a track of its own
+whose pit lane is a fork in the spline, built by `checkpoint_circuit.py` in Blender, and a
+track module that reads `mod_checkpoint` off its checkpoint triggers and `mod_pit` off its pit
+trigger and pit-lane path, drains a craft's energy past its checkpoint clock, recharges it in
+the pit lane, draws the clock and `RECHARGING` from its own `strings/english.toml`, and sends
+an AI craft low on energy down the pit lane with `prefer-route{slot, route}`: the host still
+throws the fork's coin and the AI drives the route with the player's physics; the module only
+picks the way. See
+[wasm-extensions](../architecture/wasm-extensions/README.md#and-checkpoint-circuit-2026-10-30).
+
+The game must be built with the `extensions` feature. `just play` builds with it by
+default (`OAG_NO_EXTENSIONS=1 just play` builds without); by hand it is
+`cargo run --release -p oag-game --features extensions`. A build without it runs no
+module, and its boot log says so for each mod that ships one.
+The manifest is read with the others; the `.wasm` is opened only by the race that
+runs it. No module runs in an original campaign or a network race. A race running a
+module is MODDED and records no replay. The ABI, the event and the command are in
+[docs/architecture/wasm-extensions/](../architecture/wasm-extensions/README.md)
+("What is built").
+
+**Write a module on the guest SDK, `oag-ext` (`crates/ext`), first.** It is the
+whole interface a Rust mod needs: implement `oag_ext::Extension` (a `tick` reading an
+`Observation`, updating the state, sending commands through a `Reply`), declare the
+state with `oag_ext::blob!`, and name the type in `oag_ext::export!`. No offsets, no
+codes, no `unsafe`; a command for an empty slot does not compile, and the common
+mistakes the host would fault on come back as `Err(Refused)`. The state's length is
+exported as `oag_state_len` and must equal `state_bytes` above. With the SDK's
+`test` feature as a dev-dependency, `oag_ext::test::Race` runs the mod's `tick`
+natively under `cargo test`, with no wasm toolchain. Build with
+`cargo build --release --target wasm32-unknown-unknown`, a 16 KiB stack
+(`-C link-arg=-zstack-size=16384`) and `panic = "abort"`.
+`assets/mods/examples/wall-penalty/` (one event, one command) and
+`assets/mods/examples/energy-turbo/` (a pickup of its own) are the worked examples.
+Copy either one's `guest/` to start inside a `mod-examples` checkout; elsewhere, point
+its `oag-ext` dependency at your engine checkout's `crates/ext` (the example's is a
+relative `path` into the engine the submodule sits in).
+
+**A track's own properties.** A track file can carry numbers for a mod on its speed
+pads, weapon pads, triggers and itself (a `mod_<name>` custom property in Blender,
+[track file](../formats/track-file.md#properties-and-triggers-for-simulation-mods)); the
+engine gives them no meaning. Read one with
+`obs.track().speed_pad(pad).and_then(|p| p.prop(oag_ext::prop!("boost")))`, and hear
+entries as `Event::SpeedPad`, `WeaponPad`, `TriggerEnter` and `TriggerExit`. The SDK's
+track buffer is 32 KiB of zeroed memory: with a 16 KiB stack, `memory_pages = 2` holds
+it. `Reply::scale_pad(pad, factor)` (race-wide, held) and `scale_slot_pads(&craft,
+factor)` (this tick) scale a pad's push, both in `[0, 2]`
+([what they scale](../architecture/wasm-extensions/README.md#and-track-properties-2026-10-30)).
+
+A module built for another layout revision of ABI 1 is refused at load, by name
+(`built for ABI 1 rev N, this host is ABI 1 rev M`): rebuild it against the SDK of
+the engine you run. A module in another language writes the buffer itself; the layout
+is `oag-ext-abi`'s (`crates/ext-abi`), and its `oag_abi` must return
+`(1 << 8) | REVISION`.
+
 ## Packaging
 
 Entries may be **stored, deflate or zstd** (zip method 93); the reader takes all three.

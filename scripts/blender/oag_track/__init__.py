@@ -18,7 +18,7 @@ from bpy.props import (
 from bpy.types import Operator, Panel
 from bpy_extras.io_utils import ExportHelper, ImportHelper
 
-from . import artfile, derive, model, scene, scene_art, trackfile
+from . import artfile, derive, effectfile, model, scene, scene_art, trackfile
 
 ERRORS = (trackfile.TrackFileError, derive.AuthoringError, artfile.ArtError)
 
@@ -238,6 +238,71 @@ class OAG_OT_import(Operator, ImportHelper):
         return {"FINISHED"}
 
 
+class OAG_OT_preview_effect(Operator, ImportHelper):
+    bl_idname = "oag.preview_effect"
+    bl_label = "Preview mod effect"
+    bl_description = (
+        "Read a mod effect TOML (schemas/v1/effect.tosd) onto the active object as an editable "
+        "Text, and build particle systems from it that play in the viewport"
+    )
+    bl_options = {"REGISTER", "UNDO"}
+
+    filename_ext = ".toml"
+    filter_glob: StringProperty(default="*.toml", options={"HIDDEN"})
+
+    def execute(self, context):
+        obj = context.active_object
+        if obj is None:
+            self.report({"ERROR"}, "select the object the effect plays on")
+            return {"CANCELLED"}
+        try:
+            with open(self.filepath, encoding="utf-8") as f:
+                text = f.read()
+            name = os.path.basename(self.filepath).removesuffix(".toml")
+            effectfile.attach(obj, name, text)
+            effectfile.preview(context, obj, text)
+        except (effectfile.EffectError, OSError) as e:
+            self.report({"ERROR"}, f"{self.filepath}: {e}")
+            return {"CANCELLED"}
+        return {"FINISHED"}
+
+
+class OAG_OT_export_effect(Operator, ExportHelper):
+    bl_idname = "oag.export_effect"
+    bl_label = "Export mod effect"
+    bl_description = "Write the active object's effect text back as a mod effect TOML"
+
+    filename_ext = ".toml"
+    filter_glob: StringProperty(default="*.toml", options={"HIDDEN"})
+
+    def execute(self, context):
+        obj = context.active_object
+        try:
+            data = effectfile.parse(effectfile.text_of(obj))
+            with open(self.filepath, "w", encoding="utf-8", newline="\n") as f:
+                f.write(effectfile.dumps(data))
+        except (effectfile.EffectError, OSError, AttributeError) as e:
+            self.report({"ERROR"}, str(e))
+            return {"CANCELLED"}
+        return {"FINISHED"}
+
+
+class OAG_OT_trigger_from_mesh(Operator):
+    bl_idname = "oag.trigger_from_mesh"
+    bl_label = "Make trigger from mesh"
+    bl_description = "Turn each selected mesh's bounds into a trigger box (oag/triggers/<mesh name>)"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        meshes = [o for o in context.selected_objects if o.type == "MESH"]
+        if not meshes:
+            self.report({"ERROR"}, "select a mesh")
+            return {"CANCELLED"}
+        for obj in meshes:
+            scene.trigger_from_bounds(context, obj)
+        return {"FINISHED"}
+
+
 class OAG_PT_track(Panel):
     bl_label = "OpenAntiGrav Track"
     bl_idname = "OAG_PT_track"
@@ -253,10 +318,16 @@ class OAG_PT_track(Panel):
         box.prop(sc, "oag_track_title")
         box.prop(sc, "oag_track_host")
         box.prop(sc, "oag_track_titles")
+        box.prop(sc, "oag_track_channels")
         box.prop(sc, "oag_track_notes")
         row = layout.row(align=True)
         row.operator("oag.import_track", text="Import", icon="IMPORT")
         row.operator("oag.export_track", text="Export", icon="EXPORT")
+
+        row = layout.row(align=True)
+        row.operator("oag.preview_effect", text="Preview effect", icon="PARTICLES")
+        row.operator("oag.export_effect", text="Export effect")
+        layout.operator("oag.trigger_from_mesh")
 
         layout.label(text="Tag selected objects:")
         col = layout.column(align=True)
@@ -291,6 +362,12 @@ class OAG_PT_track(Panel):
             layout.prop(obj, "oag_min")
             layout.prop(obj, "oag_max")
             layout.prop(obj, "oag_disabled")
+            layout.label(text="mod_* custom properties go to simulation mods")
+        elif kind == "trigger":
+            layout.prop(obj, "oag_min")
+            layout.prop(obj, "oag_max")
+            layout.prop(obj, "oag_emit")
+            layout.label(text="mod_* custom properties go to simulation mods")
         elif scene_art.is_art(obj):
             layout.label(text="Art mesh (untagged):")
             layout.prop(obj, "oag_shadow")
@@ -299,6 +376,8 @@ class OAG_PT_track(Panel):
             layout.prop(obj, "oag_pad")
             if obj.animation_data is not None:
                 layout.prop(obj, "oag_loop")
+                layout.prop(obj, "oag_on")
+                layout.prop(obj, "oag_on_value")
             mat = obj.active_material
             if mat is not None:
                 layout.prop(mat, "oag_blend")
@@ -315,6 +394,8 @@ class OAG_PT_track(Panel):
             layout.prop(obj.data, "use_shadow", text="Shadows")
             if obj.animation_data is not None:
                 layout.prop(obj, "oag_loop")
+                layout.prop(obj, "oag_on")
+                layout.prop(obj, "oag_on_value")
 
 
 class OAG_PT_art(Panel):
@@ -357,6 +438,9 @@ CLASSES = (
     OAG_OT_host_texture,
     OAG_OT_export,
     OAG_OT_import,
+    OAG_OT_preview_effect,
+    OAG_OT_export_effect,
+    OAG_OT_trigger_from_mesh,
     OAG_PT_track,
     OAG_PT_art,
 )
@@ -376,6 +460,10 @@ def _props():
     sc.oag_track_titles = StringProperty(
         name="Offered on",
         description="Comma-separated title slugs the track is offered on (e.g. wipeout-pulse, wipeout-hd); empty is every title",
+    )
+    sc.oag_track_channels = StringProperty(
+        name="Channels published",
+        description="Comma-separated event channels the track sends (`<mod id>/<name>`); a trigger's Emit names one",
     )
     sc.oag_track_notes = StringProperty(name="Notes", description="Free text printed in the loader report")
     ob.oag_points = IntProperty(name="Spline points", default=64, min=3, max=4096)
@@ -418,6 +506,22 @@ def _props():
         "sharing an oag_anim name share one animation",
         items=[("loop", "loop", ""), ("clamp", "clamp", "")],
         default="loop",
+    )
+    ob.oag_emit = StringProperty(
+        name="Emit",
+        description="The channel (`<mod id>/<name>`, one of the track's) a craft entering this trigger sends: "
+        "mods hear it, and animations set to start on it play. Empty sends nothing",
+    )
+    ob.oag_on = StringProperty(
+        name="Start on",
+        description="The channel (`<mod id>/<name>`) that starts this object's animation (glTF oag_on): it holds "
+        "its first key until the channel fires. Empty plays from the start of the race. Objects sharing an "
+        "oag_anim name must agree",
+    )
+    ob.oag_on_value = StringProperty(
+        name="Start on value",
+        description="With Start on: only an event carrying exactly this number (glTF oag_on_value) starts the "
+        "animation, e.g. a checkpoint's gate number. Empty starts on any value",
     )
     ob.oag_intensity = FloatProperty(
         name="Intensity",
@@ -471,6 +575,7 @@ def _unprops():
         "oag_track_title",
         "oag_track_host",
         "oag_track_titles",
+        "oag_track_channels",
         "oag_track_notes",
         "oag_sun",
         "oag_sky",
@@ -499,6 +604,9 @@ def _unprops():
         "oag_layer",
         "oag_lit",
         "oag_loop",
+        "oag_emit",
+        "oag_on",
+        "oag_on_value",
         "oag_pad",
         "oag_intensity",
     ):
