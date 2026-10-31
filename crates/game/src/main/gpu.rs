@@ -195,6 +195,10 @@ pub(crate) struct Gpu {
     /// re-requesting an adapter to ask it a second time, which is the same
     /// argument `offered` above already makes.
     pub(crate) temporal: bool,
+    /// The menu previews' shader and pipelines, kept between one selection and the next so a
+    /// step in a picker compiles nothing it compiled before - see
+    /// `oag_mesh::mesh_render::KeptBuildCache`. Built for [`Self::device`] and gone with it.
+    pub(crate) preview_pipelines: std::cell::RefCell<oag_mesh::mesh_render::KeptBuildCache>,
 }
 
 /// What one adapter has to hand over before it can be drawn with.
@@ -418,6 +422,7 @@ impl Gpu {
 
         let mut gpu = Self {
             temporal,
+            preview_pipelines: std::cell::RefCell::default(),
             output: Output {
                 window: Host::window(window),
                 held: None,
@@ -467,6 +472,7 @@ impl Gpu {
         } = Self::bring_up(&instance, None, size, renderer)?;
         let mut gpu = Self {
             temporal,
+            preview_pipelines: std::cell::RefCell::default(),
             output: Output {
                 window: Host::headless(size),
                 held: None,

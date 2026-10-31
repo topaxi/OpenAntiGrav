@@ -5,7 +5,7 @@
 //! Its own file rather than an inline `#[cfg(test)] mod`, per the 200-line
 //! rule in `scripts/check-file-size.py`.
 
-use super::{Scope, shared_shader_module};
+use super::{Kept, Scope, shared_shader_module};
 use crate::mesh::{Bounds, DrawCall, GpuVertex, Model};
 use crate::mesh_render::{self, Anisotropy};
 
@@ -337,4 +337,52 @@ fn only_a_model_with_state_and_a_culled_draw_builds_the_culling_twin() {
     assert!(build_once(&device, &queue, &model).culled.is_some());
     model.draws[0].culled = false;
     assert!(build_once(&device, &queue, &model).culled.is_none());
+}
+
+/// Two builds a frame apart, each in its own [`Kept::build`], share the pipelines the first
+/// compiled, and nothing stays open on the thread between them.
+#[test]
+fn a_kept_cache_shares_pipelines_across_separate_builds_and_leaves_no_scope_open() {
+    let Some((device, queue)) = device() else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let model = triangle_model();
+    let mut kept = Kept::default();
+
+    let first = kept.build(|| build_once(&device, &queue, &model));
+    let compiled = kept.pipelines();
+    assert!(compiled > 0, "the first build compiles into the kept cache");
+    assert!(
+        super::CACHE.with(|cell| cell.borrow().is_none()),
+        "no scope stays open between builds"
+    );
+    let second = kept.build(|| build_once(&device, &queue, &model));
+
+    assert_eq!(first.pipeline, second.pipeline);
+    assert_eq!(first.alpha_test_pipeline, second.alpha_test_pipeline);
+    assert_eq!(
+        kept.pipelines(),
+        compiled,
+        "the second build compiled nothing new"
+    );
+}
+
+/// Inside an open [`Scope`] a kept cache defers to it and is left untouched.
+#[test]
+fn a_kept_cache_defers_to_an_open_scope() {
+    let Some((device, queue)) = device() else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let model = triangle_model();
+    let mut kept = Kept::default();
+
+    let scope = Scope::open();
+    kept.build(|| build_once(&device, &queue, &model));
+    let (_, _, in_scope) = scope.pipeline_counts();
+    drop(scope);
+
+    assert!(in_scope > 0, "the build went to the open scope");
+    assert_eq!(kept.pipelines(), 0, "and not to the kept cache");
 }

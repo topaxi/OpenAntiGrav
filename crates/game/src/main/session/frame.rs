@@ -1018,6 +1018,7 @@ impl Session {
         // reopened its disc image once a frame and warned once a frame.
         self.phases.mark(super::phases::Phase::Ticks);
         self.start_endrace_prefetch();
+        self.start_menu_source();
         self.build_endrace();
 
         self.begin_scene_frame();

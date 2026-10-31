@@ -146,6 +146,9 @@ pub(crate) enum LiveryAxis {
     Variant,
 }
 
+/// One opened source the menus' screens share - see `session::menu_source`.
+pub(crate) type SharedArchives = Arc<Mutex<oag_assets::Archives>>;
+
 /// Lap lengths measured off the disc on a worker, by track id, filling in as
 /// each circuit is read. See [`PickerStage::refresh_info`].
 pub(crate) type Distances = Arc<Mutex<HashMap<String, f32>>>;
@@ -157,10 +160,10 @@ pub(crate) struct PickerStage {
     pub(crate) livery_axis: LiveryAxis,
     /// Parallel to the model's entries: where each one's preview comes from.
     sources: Vec<PreviewSource>,
-    /// The archives the previews are read out of, opened once when the
-    /// screen does and kept for its life - a selection change is one archive
-    /// read, not a disc reopen.
-    archives: oag_assets::Archives,
+    /// The archives the previews are read out of: the menus' own, opened on a worker while
+    /// they were up (`session::menu_source`), so neither this screen's opening nor a
+    /// selection change opens the disc.
+    archives: SharedArchives,
     /// The selected entry's preview, or `None` when its mesh did not load -
     /// which draws nothing there and says so in the log, per this project's
     /// rule for an asset that will not play.
@@ -209,7 +212,7 @@ impl PickerStage {
         layout: picker::Layout,
         livery_axis: LiveryAxis,
         sources: Vec<PreviewSource>,
-        archives: oag_assets::Archives,
+        archives: SharedArchives,
         distances: Option<Distances>,
         anisotropy: Anisotropy,
         base: Sheet,
@@ -343,8 +346,12 @@ impl PickerStage {
             .iter()
             .map(|(key, value)| (key.as_str(), value.as_str()))
             .collect();
+        let Ok(mut archives) = oag_thread::lock(&self.archives) else {
+            warn!("the menu archives' lock is poisoned - the hexagonal window draws nothing");
+            return;
+        };
         let loaded = oag_game::preview::slideshow(
-            &mut self.archives,
+            &mut archives,
             &location,
             zone,
             &globals,
@@ -389,96 +396,24 @@ impl PickerStage {
         let source = self
             .sources
             .get(index)
-            .with_context(|| format!("entry {index} has no preview source"))?
-            .clone();
-        let name = source
-            .entry_name(self.previews.ship_hull, self.previews.front_end)
-            .with_context(|| format!("entry {index} has no circuit model on the disc"))?;
-        let circuit_model =
-            oag_game::preview::draws_circuit_model(self.previews.front_end, self.model.kind());
-        // The variant row picks the directory the hull is read from; the
-        // skin row picks a paint over it.
-        let (skin, variant) = match axis {
-            LiveryAxis::Skin => (livery, None),
-            LiveryAxis::Variant => (None, livery.filter(|id| !id.is_empty())),
-        };
-        let variant_name = match (&source, variant) {
-            (PreviewSource::Ship { location, join, .. }, Some(variant))
-                if self.previews.ship_hull.is_some() =>
-            {
-                let located = oag_game::preview::variant::variant_location(*join, location, variant);
-                PreviewSource::Ship {
-                    location: located,
-                    skins: Vec::new(),
-                    join: None,
-                    hull_file: None,
-                    zone_entry: None,
-                    race_hull: None,
-                }
-                .entry_name(self.previews.ship_hull, self.previews.front_end)
-            }
-            _ => None,
-        };
-        let mut model = if circuit_model {
-            oag_game::preview::psp2_scene::model(&mut self.archives, &name)
-                .with_context(|| format!("{name} did not resolve as a preview mesh"))?
-        } else {
-            let entry = variant_name.as_deref().unwrap_or(&name);
-            let race_hull = match &source {
-                PreviewSource::Ship { race_hull, .. } => race_hull.as_deref(),
-                PreviewSource::Track { .. } => None,
-            };
-            oag_game::preview::variant::model_or_default(
-                &mut self.archives,
-                entry,
-                Some(&name),
-                race_hull,
-            )
-                .with_context(|| format!("{entry} did not resolve as a preview mesh"))?
-                .0
-        };
-        // The chosen paint over the hull's own texture slots - the same
-        // swap a race makes (`oag_livery::ship_skin`), and the same
-        // rule when it fails: the hull keeps its own paint, and the log
-        // says so.
-        if let (PreviewSource::Ship { skins, .. }, Some(skin)) =
-            (&source, skin.filter(|s| !s.is_empty()))
-            && let Some((_, entry)) = skins.iter().find(|(id, _)| id == skin)
-        {
-            for line in oag_game::preview::paint(&mut self.archives, entry, &name, &mut model) {
-                debug!("preview {name}: {line}");
-            }
-        }
-        if self.previews.ship_hull.is_some() && matches!(source, PreviewSource::Ship { .. }) {
-            oag_game::preview::frame_hull(&mut model);
-        }
-        // The circuit model's own material: the ramp comes out of the model
-        // and the preview recolours its vertices every frame.
-        let ramp = if circuit_model {
-            Some(
-                oag_game::preview::track_model::Ramp::of(&mut self.archives, &name, &mut model)
-                    .with_context(|| format!("{name}: reading its material"))?,
-            )
-        } else {
-            None
-        };
-        debug!(
-            "preview {name}: {} vertices, {} triangles",
-            model.vertices.len(),
-            model.indices.len() / 3
-        );
-        let preview = Preview::new(
-            &gpu.device,
-            &gpu.queue,
-            gpu.output.config.format,
-            self.anisotropy,
-            model,
+            .with_context(|| format!("entry {index} has no preview source"))?;
+        let mut archives = oag_thread::lock(&self.archives).map_err(|_| anyhow::anyhow!("the menu archives' lock is poisoned"))?;
+        build_preview(
+            &mut archives,
+            &self.previews,
+            self.model.kind(),
+            source,
+            livery,
+            axis,
+            &PreviewTarget {
+                device: &gpu.device,
+                queue: &gpu.queue,
+                format: gpu.output.config.format,
+                anisotropy: self.anisotropy,
+            },
+            &mut gpu.preview_pipelines.borrow_mut(),
         )
-        .with_context(|| format!("building the preview for {name}"))?;
-        Ok(match ramp {
-            Some(ramp) => preview.with_ramp(ramp),
-            None => preview,
-        })
+        .with_context(|| format!("entry {index}"))
     }
 
     /// Copies whatever the distance worker has measured so far onto the
@@ -602,6 +537,129 @@ impl PickerStage {
         }
         oag_game::preview::orbit_for(self.model.kind(), self.model.seconds())
     }
+}
+
+
+/// Where [`build_preview`] builds: the device, the target the pass draws into, and the
+/// sampling the menus use.
+pub(crate) struct PreviewTarget<'a> {
+    pub(crate) device: &'a wgpu::Device,
+    pub(crate) queue: &'a wgpu::Queue,
+    pub(crate) format: wgpu::TextureFormat,
+    pub(crate) anisotropy: Anisotropy,
+}
+
+/// Reads `source`'s preview mesh in `livery` and builds it, with `pipelines` kept for the next.
+///
+/// The picker calls it on the frame thread for each selection; the menus' prefetch
+/// (`session::menu_source`) calls it on a worker for the entries a picker opens on, so the
+/// first one compiles nothing on the frame thread.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the screen's facts (archives, rules, kind), the entry's (source, livery, axis), \
+              and where it is built"
+)]
+pub(crate) fn build_preview(
+    archives: &mut oag_assets::Archives,
+    previews: &Previews,
+    kind: picker::Kind,
+    source: &PreviewSource,
+    livery: Option<&str>,
+    axis: LiveryAxis,
+    target: &PreviewTarget<'_>,
+    pipelines: &mut oag_mesh::mesh_render::KeptBuildCache,
+) -> Result<Preview> {
+    let source = source.clone();
+    let name = source
+        .entry_name(previews.ship_hull, previews.front_end)
+        .context("no circuit model on the disc")?;
+    let circuit_model =
+        oag_game::preview::draws_circuit_model(previews.front_end, kind);
+    // The variant row picks the directory the hull is read from; the
+    // skin row picks a paint over it.
+    let (skin, variant) = match axis {
+        LiveryAxis::Skin => (livery, None),
+        LiveryAxis::Variant => (None, livery.filter(|id| !id.is_empty())),
+    };
+    let variant_name = match (&source, variant) {
+        (PreviewSource::Ship { location, join, .. }, Some(variant))
+            if previews.ship_hull.is_some() =>
+        {
+            let located = oag_game::preview::variant::variant_location(*join, location, variant);
+            PreviewSource::Ship {
+                location: located,
+                skins: Vec::new(),
+                join: None,
+                hull_file: None,
+                zone_entry: None,
+                race_hull: None,
+            }
+            .entry_name(previews.ship_hull, previews.front_end)
+        }
+        _ => None,
+    };
+    let mut model = if circuit_model {
+        oag_game::preview::psp2_scene::model(archives, &name)
+            .with_context(|| format!("{name} did not resolve as a preview mesh"))?
+    } else {
+        let entry = variant_name.as_deref().unwrap_or(&name);
+        let race_hull = match &source {
+            PreviewSource::Ship { race_hull, .. } => race_hull.as_deref(),
+            PreviewSource::Track { .. } => None,
+        };
+        oag_game::preview::variant::model_or_default(
+            archives,
+            entry,
+            Some(&name),
+            race_hull,
+        )
+            .with_context(|| format!("{entry} did not resolve as a preview mesh"))?
+            .0
+    };
+    // The chosen paint over the hull's own texture slots - the same
+    // swap a race makes (`oag_livery::ship_skin`), and the same
+    // rule when it fails: the hull keeps its own paint, and the log
+    // says so.
+    if let (PreviewSource::Ship { skins, .. }, Some(skin)) =
+        (&source, skin.filter(|s| !s.is_empty()))
+        && let Some((_, entry)) = skins.iter().find(|(id, _)| id == skin)
+    {
+        for line in oag_game::preview::paint(archives, entry, &name, &mut model) {
+            debug!("preview {name}: {line}");
+        }
+    }
+    if previews.ship_hull.is_some() && matches!(source, PreviewSource::Ship { .. }) {
+        oag_game::preview::frame_hull(&mut model);
+    }
+    // The circuit model's own material: the ramp comes out of the model
+    // and the preview recolours its vertices every frame.
+    let ramp = if circuit_model {
+        Some(
+            oag_game::preview::track_model::Ramp::of(archives, &name, &mut model)
+                .with_context(|| format!("{name}: reading its material"))?,
+        )
+    } else {
+        None
+    };
+    debug!(
+        "preview {name}: {} vertices, {} triangles",
+        model.vertices.len(),
+        model.indices.len() / 3
+    );
+    let preview = pipelines.build(|| {
+        Preview::new(
+            target.device,
+            target.queue,
+            target.format,
+            target.anisotropy,
+            model,
+        )
+    })
+    .with_context(|| format!("building the preview for {name}"))?;
+    Ok(match ramp {
+        Some(ramp) => preview.with_ramp(ramp),
+        None => preview,
+    })
 }
 
 #[cfg(test)]

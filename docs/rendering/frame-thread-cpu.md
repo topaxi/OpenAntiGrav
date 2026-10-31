@@ -920,3 +920,119 @@ The learner alone (`tests::speed_plan_overlap`, release, `--no-capture`, 5 runs 
 The "before" there is `learn_speed_plans_serially`, main's learner rebuilt in the test (the
 routes one after another, then each hull on a thread), not main's binary; the link to main
 itself is the identical plan lines of the end-to-end runs.
+
+## The race box's selection screens on the Deck (2026-10-31, `deck-menu-stalls`)
+
+Claim: "walking the menus from a fresh profile to a race on the Steam Deck (main menu, Track
+Select, 22 Down steps, Ship Select) has no frame over 50 ms caused by our code". **True**: after
+the change no frame from the menus opening to the quit on the ship screen passes 36 ms (worst at
+3840x2160) or 18 ms (1280x800 and 1920x1080); before, every walk had 24 such frames.
+
+Method: Steam Deck, gaming-mode gamescope (`DISPLAY=:1`, Steam's `GAMESCOPE_*` env) for 1280x800,
+a headless `gamescope --backend headless -W W -H H -w W -h H` for 1920x1080 and 3840x2160, Pulse PSP
+EU, audio on, the maintainer's settings copied with `vsync = "off"` and `frame_limit = "unlimited"`,
+`[race] track` reset to `16_Track`. The walk is the earlier sections' `--script` (START twice,
+RACEBOX, MODE right x3, five downs, CROSS into Track Select at 19 s, 22 Downs 0.4 s apart, CROSS
+into Ship Select). "Fresh" is new `XDG_CONFIG_HOME`, `XDG_STATE_HOME` and `XDG_CACHE_HOME` (the
+movie, audio and DLC caches hardlinked in); "warm" re-runs the same profile. `--frame-log` with
+`OAG_PHASE_SPIKE_MS=0` prints every frame's phases; the worst `total` between one script tap and
+the next is the transition's frame. Before is the main AppImage `5a1373f`, after is this branch on
+`d3a7a8e6d`; the walks interleave. Deck load average 0.7 to 1.4.
+
+| Output | Profile | Track Select entry | Ship Select entry | Down step, worst of 22 | Down step, mean |
+| --- | --- | --- | --- | --- | --- |
+| 1280x800, before (2 walks) | fresh | 1064 to 1115 ms | 167 to 170 ms | 71 to 73 ms | 70 ms |
+| 1280x800, after (2 walks) | fresh | **16.5 to 17.3 ms** | 12.4 to 13.0 ms | 15.0 ms | 13.2 ms |
+| 1280x800, before | warm | 288 to 290 ms | 169 ms | 71.5 ms | 70 ms |
+| 1280x800, after | warm | **15.3 ms** | 12.3 to 12.9 ms | 15.1 ms | 13.4 ms |
+| 1920x1080, before / after | fresh | 1064 / **16.7 ms** | 169 / 12.5 ms | 71.8 / 14.9 ms | 70 / 13 ms |
+| 1920x1080, before / after | warm | 280 / **14.8 ms** | 173 / 14.9 ms | 72.2 / 14.8 ms | 70 / 13 ms |
+| 3840x2160, before / after | fresh | 1141 / **35.6 ms** | 182 / 20.6 ms | 83.0 / 25.3 ms | 74 / 22 ms |
+| 3840x2160, before / after | warm | 291 / **34.2 ms** | 179 / 20.5 ms | 85.0 / 24.4 ms | 73 / 22 ms |
+
+Attribution. The frame-phase clock put every slow frame in the `ticks` phase (the stage update),
+not in submit or present, so the 66.6 ms Down step was CPU work on the frame thread, not a
+vblank wait (the 2026-10-30 section guessed a wait from its length). `perf record` on the Deck
+(`perf_event_paranoid` 2, unstripped binary of the same BuildID in the build-id cache) named
+`DiscImage::open` and the CHD map's LZMA and bit reader as the frame thread's top own symbols,
+but its DWARF unwinding did not resolve our call chains, so the split below comes from wall-clock
+probes around each step (one walk, fresh profile, removed again before the commit):
+
+| Step (frame thread) | Track Select entry | Each Down | Ship Select entry |
+| --- | --- | --- | --- |
+| `unlock_gate`: `open_source` and `Gate::read` | 104 ms | | |
+| `open_picker`: `packs_from_defaults` then `open_source` | 9 + 88 ms | | 9 + 88 ms |
+| `load_slideshow` (stills read, sheet extended) | 9 ms | 8 to 10 ms | 0.4 ms |
+| preview model read | 3 ms | 1 ms | 7 ms |
+| `Preview::new` | **711 ms** fresh, 63 ms warm | **57 ms** | 60 ms |
+
+`Preview::new` calls `mesh_render::build` with no `BuildCacheScope` open, so every selection
+recreated the shader module and every pipeline (not split further between naga and the driver). The fresh-profile second is
+the driver's shader cache, which lives under `XDG_CACHE_HOME` (`mesa_shader_cache`,
+`radv_builtin_shaders`): a fresh profile whose cache directory is seeded with only those two from
+a warm run enters Track Select in 283 ms, the warm figure. A player sees it once after an install
+or a driver update; the earlier section's "cache not identified" is this one.
+
+Fix, in two parts:
+
+1. **The previews keep their pipelines** (`oag_mesh::mesh_render::KeptBuildCache`, held on
+   `Gpu::preview_pipelines`). It opens a build scope on its shader module and pipelines for one
+   `Preview::new` and takes them back afterwards; textures are not kept. Inside an already open
+   scope it defers to that one. A Down step's `Preview::new` went from 57 ms to 0.8 to 1.3 ms.
+2. **The race box's disc reads move to a worker** (`session::menu_source`): on the first menu
+   frame it opens the source once, reads the unlock gate and builds the preview the two screens
+   open on (the current circuit and team) into its own kept cache, which the frame thread adopts.
+   Track Select and Ship Select share those archives (`picker_stage::SharedArchives`) instead of
+   opening the disc each. On the Deck the worker takes 105 ms to open and 760 to 820 ms (cold
+   driver cache) or 75 ms (warm) for the 9 pipelines, long before the player can reach Track
+   Select; if a screen opens first it waits for the worker and logs `menu source: waited`. No walk
+   logged a wait. The web build opens on demand as before (wgpu's web types are not `Send`).
+   The archives carry the player's override layer (`oag_source::layers::mount`) as read when the
+   worker opened them: an edit to the override directory now reaches the selection screens'
+   previews after a restart, not on the next screen opening (a race load still opens afresh).
+   The MODS page's switches do not touch the archives.
+
+The walk, run on the Deck as `walk.sh LABEL BINARY fresh|keep [W H]` with a profile directory
+of its own (`OAG_PHASE_SPIKE_MS=0` in the environment), then the per-transition summary:
+
+```sh
+# walk.sh: the profile setup is omitted (new XDG_* dirs, the settings copied with vsync off,
+# no frame limit, pause_on_focus_loss false, [race] track = "16_Track", and for W H
+# window_size = "WxH")
+S="3:start,6:start,9:down,11:cross,14:right,14.5:right,15:right"
+t=16; for i in 1 2 3 4 5; do S="$S,$t:down"; t=$(awk "BEGIN{print $t + 0.5}"); done
+S="$S,19:cross"
+t=22; for i in $(seq 1 22); do S="$S,$t:down"; t=$(awk "BEGIN{print $t + 0.4}"); done
+t=$(awk "BEGIN{print $t + 2}"); S="$S,$t:cross"; t=$(awk "BEGIN{print $t + 4}"); S="$S,$t:quit"
+while IFS= read -r -d '' kv; do
+  case $kv in GAMESCOPE_*|XDG_CURRENT_DESKTOP=*|ENABLE_GAMESCOPE_WSI=*|XDG_RUNTIME_DIR=*|SteamDeck=*) export "$kv";; esac
+done < /proc/$(pgrep -x -o steam)/environ
+unset WAYLAND_DISPLAY; export DISPLAY=:1
+gs=""; [ -n "$W" ] && { unset DISPLAY GAMESCOPE_WAYLAND_DISPLAY; gs="gamescope --backend headless -W $W -H $H -w $W -h $H --"; }
+flock ~/.cache/oag/deck.lock $gs "$BIN" ~/.local/share/oag/images/pulse-psp-eu.chd \
+  --unlock-all --frame-log --script "$S" > "$LABEL.log" 2>&1
+```
+
+```awk
+# the worst frame-phase total (ms) per transition of one walk's log
+/script: tap Cross on menu:race/ {cur="picker-entry"; next}
+/script: tap Down on menu:picker/ {cur="down"; nd++; next}
+/script: tap Cross on menu:picker/ {cur="ship-entry"; next}
+/script: tap/ || /script: quit/ {cur=""; next}
+/frame-spike/ && cur!="" { for (i = 1; i <= NF; i++) if ($i ~ /^total=/) v = substr($i, 7) + 0
+  if (cur == "down") { if (v > dmax[nd]) dmax[nd] = v } else if (v > m[cur]) m[cur] = v }
+END { for (k = 1; k <= nd; k++) { s += dmax[k]; if (dmax[k] > w) w = dmax[k] }
+  printf "picker-entry %.1f ship-entry %.1f down-worst %.1f down-mean %.1f\n", m["picker-entry"], m["ship-entry"], w, s / nd }
+```
+
+Pictures: a headless `--drive` walk on this machine (RX 7800 XT, release, input devices hidden)
+wrote Track Select after 0, 1 and 4 Downs and Ship Select after 0 and 1, before and after. Ship
+Select and Track Select after 4 Downs are byte-identical; the other frames differ only in the
+Distance(m) value, which the circuit-lengths worker fills in when it lands (a dash at load 28 to
+34, the number at a lighter moment), with the same pixels everywhere else. The same runs put the
+worst menu frame-phase total at 652 ms before and 18 to 34 ms after.
+
+**Open:** each selection still reads its stills (8 to 10 ms) and its model (1 to 7 ms) on the
+frame thread, under 50 ms but against the rule that disc reads leave the render thread; the
+campaign screens and Pure's team gate (`Session::open_title_archives`) still open the disc on the
+frame that opens them.
