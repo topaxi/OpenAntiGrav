@@ -422,6 +422,89 @@ impl Race {
         })
     }
 
+    /// Route `k`'s reference plan learned again exactly as the race learns it
+    /// (the ring's plans first, for their reference hull), its report, and its
+    /// verification replayed tick by tick. A diagnostic for a route that is not
+    /// offered to the coin: the plan is returned whether or not it verified.
+    #[must_use]
+    ///
+    /// `stages_at` also re-steps that verification tick stage by stage
+    /// (`oag_ai::plan::probe::stages`); `stuck` is `probe::verify`'s.
+    pub fn probe_route_plan(
+        &mut self,
+        k: usize,
+        stages_at: Option<u32>,
+        stuck: Option<u32>,
+    ) -> Option<RouteProbe> {
+        self.ensure_speed_plans();
+        let sim = &self.sim;
+        let route = sim.routes.get(k)?;
+        let (plan, report, rows, stages) = Self::with_plan_course_on(
+            sim,
+            &route.line,
+            &route.order,
+            1,
+            Some(0),
+            sim.plan_reference,
+            |c, craft| {
+                let tuning = oag_ai::Tuning::default();
+                let (plan, report) =
+                    oag_ai::SpeedPlan::build_within(c, craft, &tuning, ROUTE_PLAN_BUDGET);
+                let rows = oag_ai::plan::probe::verify(c, craft, &tuning, &plan, stuck);
+                let stages =
+                    stages_at.map(|at| oag_ai::plan::probe::stages(c, craft, &tuning, &plan, at));
+                (plan, report, rows, stages)
+            },
+        );
+        Some(RouteProbe {
+            plan,
+            report,
+            rows,
+            stages,
+            order: route.order.clone(),
+            kept: route.kept,
+            merge: route.merge,
+            ring_len: sim.racing_line.len(),
+            line: route.line.clone(),
+        })
+    }
+
+    /// The ring's plan learned again on the hull the race's ring plan is
+    /// learned for (`RaceSim::plan_reference`, the route plans' too; the ring
+    /// plans are learned first to find it), from slot 1's grid pose, its
+    /// report, and its verification replayed tick by tick, whether or not it
+    /// verified. Read with `kept` equal to the ring's length: every index is
+    /// ring.
+    #[must_use]
+    pub fn probe_ring_plan(&mut self, stuck: Option<u32>) -> RouteProbe {
+        self.ensure_speed_plans();
+        let (plan, report, rows) = Self::with_plan_course_on(
+            &self.sim,
+            &self.sim.racing_line,
+            &self.sim.ai_order,
+            1,
+            None,
+            self.sim.plan_reference,
+            |c, craft| {
+                let tuning = oag_ai::Tuning::default();
+                let (plan, report) = oag_ai::SpeedPlan::build(c, craft, &tuning);
+                let rows = oag_ai::plan::probe::verify(c, craft, &tuning, &plan, stuck);
+                (plan, report, rows)
+            },
+        );
+        RouteProbe {
+            plan,
+            report,
+            rows,
+            stages: None,
+            order: self.sim.ai_order.clone(),
+            kept: self.sim.racing_line.len(),
+            merge: 0,
+            ring_len: self.sim.racing_line.len(),
+            line: self.sim.racing_line.clone(),
+        }
+    }
+
     /// The plan's `Course` and `Craft` for slot `slot`, handed to `f`.
     fn with_plan_course<T>(
         &self,
@@ -1007,4 +1090,22 @@ impl Race {
         self.ensure_speed_plans();
         &self.sim.plan_steps
     }
+}
+
+/// What [`Race::probe_route_plan`] found for one route.
+#[derive(Debug, Clone)]
+pub struct RouteProbe {
+    pub plan: oag_ai::SpeedPlan,
+    pub report: oag_ai::plan::Report,
+    pub rows: Vec<oag_ai::plan::probe::Followed>,
+    /// The re-stepped tick, when asked for.
+    pub stages: Option<oag_ai::plan::probe::Restep>,
+    /// Route line index `i < kept` is ring index `(merge + i) % ring_len`;
+    /// from `kept` on it is the route's own sample `i - kept`.
+    pub kept: usize,
+    pub merge: usize,
+    pub ring_len: usize,
+    pub line: oag_ai::Line,
+    /// The spline sample each line index stands on.
+    pub order: Vec<u32>,
 }

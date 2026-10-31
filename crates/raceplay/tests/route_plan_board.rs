@@ -446,3 +446,453 @@ fn route_plan_board() {
         board(circuit);
     }
 }
+
+/// Where a route's reference plan fails its verification: per circuit
+/// (`OAG_ROUTE_BOARD_ONLY`), class and seed, each route's learning report and
+/// every failure tick of its verification replayed (`Race::probe_route_plan`),
+/// with the line index read as ring or route sample. `OAG_ROUTE_PROBE_DUMP`
+/// names a directory that gets every tick of every route as a TSV;
+/// `OAG_ROUTE_PROBE_STAGES=<tick>` re-steps that verification tick stage by
+/// stage and prints the craft's position after each;
+/// `OAG_ROUTE_PROBE_STUCK=<ticks>` counts that long without progress as a
+/// stall and puts the craft back on, to find every place it parks;
+/// `OAG_ROUTE_PROBE_RING` alone probes the ring's own plan instead (printed as
+/// `route=18446744073709551615`, every index a ring sample).
+///
+/// ```sh
+/// OAG_SWEEP=1 OAG_REQUIRE_GAME_DATA=1 OAG_ROUTE_BOARD_ONLY=pulse/07_Track \
+///   OAG_ROUTE_BOARD_CLASSES=VENOM OAG_ROUTE_BOARD_SEEDS=1 \
+///   cargo nextest run --release -p oag-raceplay --run-ignored all \
+///   --no-capture route_verify_probe
+/// ```
+#[test]
+#[ignore = "a probe over forked circuits: OAG_SWEEP=1, needs the discs"]
+fn route_verify_probe() {
+    if !sweeping() {
+        return;
+    }
+    let dump = std::env::var("OAG_ROUTE_PROBE_DUMP").ok();
+    let circuits = probe_circuits();
+    for circuit in &circuits {
+        if only().is_some_and(|only| !only.split(',').any(|o| circuit.label == o)) {
+            continue;
+        }
+        for class in classes() {
+            for seed in seeds() {
+                let Some(setup) = load(circuit, &class, seed) else {
+                    continue;
+                };
+                let mut race = race::Race::start(setup);
+                if std::env::var_os("OAG_ROUTE_PROBE_RING").is_some()
+                    && std::env::var_os("OAG_ROUTE_PROBE_FLOOR").is_none()
+                {
+                    let probe = race.probe_ring_plan(var_u32("OAG_ROUTE_PROBE_STUCK"));
+                    report_route(
+                        &race,
+                        &circuit.label,
+                        &class,
+                        seed,
+                        usize::MAX,
+                        &probe,
+                        dump.as_deref(),
+                    );
+                    continue;
+                }
+                for k in 0..race.route_count() {
+                    let at = std::env::var("OAG_ROUTE_PROBE_STAGES")
+                        .ok()
+                        .and_then(|t| t.parse().ok());
+                    let Some(probe) =
+                        race.probe_route_plan(k, at, var_u32("OAG_ROUTE_PROBE_STUCK"))
+                    else {
+                        continue;
+                    };
+                    report_route(
+                        &race,
+                        &circuit.label,
+                        &class,
+                        seed,
+                        k,
+                        &probe,
+                        dump.as_deref(),
+                    );
+                }
+            }
+        }
+    }
+}
+
+fn where_on(probe: &race::RouteProbe, index: u32) -> String {
+    let i = index as usize;
+    if i < probe.kept {
+        // A racing craft moves onto the route's line 320 samples short of the
+        // split (`routes::SWITCH_SAMPLES`, or later at the pre-fork path's
+        // start), so only that lead-in is a stretch the race drives on it.
+        let zone = if i + 320 >= probe.kept {
+            "lead-in"
+        } else {
+            "ring"
+        };
+        format!("{zone} {}", (probe.merge + i) % probe.ring_len.max(1))
+    } else {
+        format!("route {}", i - probe.kept)
+    }
+}
+
+fn report_route(
+    race: &race::Race,
+    label: &str,
+    class: &str,
+    seed: u64,
+    k: usize,
+    probe: &race::RouteProbe,
+    dump: Option<&str>,
+) {
+    let r = &probe.report;
+    let unresolved: Vec<String> = r
+        .unresolved
+        .iter()
+        .map(|&(i, f)| format!("{i}({}) {f:?}", where_on(probe, i)))
+        .collect();
+    emit(&format!(
+        "route\t{label}\t{class}\t{seed}\troute={k}\tlen={}\tkept={}\tmerge={}\tsteps={}\tpasses={}\tlowerings={}\trespawns={}\tverify_failures={}\tverify_contacts={}\tverify_respawns={}\tlap={:?}\tunresolved=[{}]",
+        probe.line.len(),
+        probe.kept,
+        probe.merge,
+        r.steps,
+        r.passes,
+        r.lowerings,
+        r.respawns,
+        r.verify_failures,
+        r.verify_contacts,
+        r.verify_respawns,
+        r.verify_lap_ticks,
+        unresolved.join(", ")
+    ));
+    let n = probe.line.len() as i64;
+    for f in probe.rows.iter().filter(|f| f.row.failure.is_some()) {
+        emit(&format!(
+            "fail\t{label}\t{class}\t{seed}\troute={k}\ttick={}\tlap={}\tidx={}({})\t{:?}\tspeed={:.1}\ttarget={:.1}\tceiling={:.1}\thold={}\tthrust={:.2}\tbrake={:.2}\toffset={:.2}\theight={:.2}\tair={}\tclimb={:.2}",
+            f.row.tick,
+            if f.progress >= n { 2 } else { 1 },
+            f.row.index,
+            where_on(probe, f.row.index),
+            f.row.failure,
+            f.row.speed,
+            f.target,
+            f.ceiling,
+            u8::from(f.hold),
+            f.thrust,
+            f.brake,
+            f.row.offset,
+            f.row.height,
+            u8::from(f.row.airborne),
+            f.row.climb,
+        ));
+    }
+    if let Some(restep) = &probe.stages {
+        let (stages, wall) = (&restep.stages, &restep.wall);
+        emit(&format!(
+            "stage\t{label}\t{class}\t{seed}\troute={k}\tmag_lock={:?}\tescape={:?}\ttrack_sample={:?}\tmag_contact={:?}",
+            restep.mag_lock, restep.escape, restep.track_sample, restep.mag_contact
+        ));
+        for stage in stages {
+            emit(&format!(
+                "stage\t{label}\t{class}\t{seed}\troute={k}\t{}\tposition={:?}\tvelocity={:?}",
+                stage.name, stage.position, stage.velocity
+            ));
+        }
+        emit(&format!(
+            "stage\t{label}\t{class}\t{seed}\troute={k}\twall={wall:?}"
+        ));
+        if let Some(start) = stages.first() {
+            use oag_physics::{Ray, Raycaster};
+            let along = start.velocity.normalize_or_zero();
+            let mut out = [None; 8];
+            let count = race.collision().raycast_all(
+                Ray::new(start.position, along, 30.0),
+                None,
+                true,
+                &mut out,
+            );
+            for hit in out[..count].iter().flatten() {
+                emit(&format!(
+                    "stage\t{label}\t{class}\t{seed}\troute={k}\tahead\tdistance={:.3}\tpoint={:?}\tnormal={:?}\tsurface={:?}",
+                    hit.distance, hit.point, hit.normal, hit.surface
+                ));
+            }
+        }
+    }
+    if let Some((from, to)) = std::env::var("OAG_ROUTE_PROBE_FLOOR")
+        .ok()
+        .and_then(|r| {
+            r.split_once("..")
+                .map(|(a, b)| (a.parse().ok(), b.parse().ok()))
+        })
+        .and_then(|(a, b): (Option<usize>, Option<usize>)| a.zip(b))
+    {
+        floor_along(race, label, k, probe, from, to);
+    }
+    if let Some(dir) = dump {
+        let name = format!(
+            "{dir}/{}-{class}-{seed}-route{k}.tsv",
+            label.replace('/', "_")
+        );
+        let mut text = String::from(
+            "tick\tprogress\tindex\twhere\tspeed\ttarget\tceiling\thold\tthrust\tbrake\toffset\theight\tleft\tright\tsteer\tcontact\tair\tclimb\tpitch\tfailure\n",
+        );
+        for f in &probe.rows {
+            text.push_str(&format!(
+                "{}\t{}\t{}\t{}\t{:.2}\t{:.2}\t{:.2}\t{}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\t{:.3}\t{}\t{}\t{:.2}\t{:.3}\t{:?}\n",
+                f.row.tick,
+                f.progress,
+                f.row.index,
+                where_on(probe, f.row.index),
+                f.row.speed,
+                f.target,
+                f.ceiling,
+                u8::from(f.hold),
+                f.thrust,
+                f.brake,
+                f.row.offset,
+                f.row.height,
+                f.row.left,
+                f.row.right,
+                f.row.steer,
+                u8::from(f.row.contact),
+                u8::from(f.row.airborne),
+                f.row.climb,
+                f.row.pitch,
+                f.row.failure,
+            ));
+        }
+        let _ = std::fs::write(name, text);
+    }
+}
+
+/// Every surface under and over route `k`'s line points `from..to` (line
+/// indices): a cast from 30 units above to 30 below, per hit its height
+/// against the line point, surface and normal's Y.
+fn floor_along(
+    race: &race::Race,
+    label: &str,
+    k: usize,
+    probe: &race::RouteProbe,
+    from: usize,
+    to: usize,
+) {
+    use oag_core::math::Vec3;
+    use oag_physics::{Ray, Raycaster};
+    for i in from..to.min(probe.line.len()) {
+        let p = probe.line.point(i);
+        let mut out = [None; 8];
+        let count = race.collision().raycast_all(
+            Ray::new(p + Vec3::Y * 30.0, -Vec3::Y, 60.0),
+            None,
+            true,
+            &mut out,
+        );
+        if std::env::var_os("OAG_ROUTE_PROBE_ACROSS").is_some() {
+            across(race, label, k, probe, i);
+            continue;
+        }
+        let hits: Vec<String> = out[..count]
+            .iter()
+            .flatten()
+            .map(|h| {
+                format!(
+                    "{:+.2}:{:?}:ny{:.2}:n({:.2},{:.2})",
+                    h.point.y - p.y,
+                    h.surface,
+                    h.normal.y,
+                    h.normal.x,
+                    h.normal.z
+                )
+            })
+            .collect();
+        if std::env::var_os("OAG_ROUTE_PROBE_RING").is_some() {
+            let ring = race.racing_line();
+            let (j, d) = (0..ring.len())
+                .map(|j| (j, ring.point(j).distance(p)))
+                .min_by(|a, b| a.1.total_cmp(&b.1))
+                .unwrap_or((0, f32::NAN));
+            let q = ring.point(j);
+            let ring_path = race
+                .ai_sample_index(j)
+                .and_then(|s| race.spline().path_of(s));
+            let route_path = probe
+                .order
+                .get(i)
+                .and_then(|&s| race.spline().path_of(s as usize));
+            emit(&format!(
+                "ring\t{label}\troute={k}\t{i}({})\tpaths route {route_path:?} ring {ring_path:?}\tnearest ring {j}\tdistance={d:.1}\tdy={:.1}\tring=({:.1},{:.1},{:.1})",
+                where_on(probe, i as u32),
+                q.y - p.y,
+                q.x,
+                q.y,
+                q.z
+            ));
+            continue;
+        }
+        let spline_index = probe.order.get(i).map_or(0, |&s| s as usize);
+        let sample = race.spline().sample(spline_index);
+        emit(&format!(
+            "floor\t{label}\troute={k}\t{i}({})\tspline={spline_index}\tpath={:?}\tsample_y={:.1}\twidth={:?}\tai={:?}\tline_offset={:?}\tsection={:?}\tflags={:?}\tp=({:.1},{:.1},{:.1})\t{}",
+            where_on(probe, i as u32),
+            race.spline().path_of(spline_index),
+            sample.map_or(f32::NAN, |s| s.pos[1]),
+            sample.map(|s| (s.half_width_left, s.half_width_right)),
+            sample.map(|s| (s.ai_bound_left, s.ai_bound_right)),
+            sample.map(|s| s.racing_line),
+            sample.map(|s| s.section_id),
+            sample.map(|s| s.flags),
+            p.x,
+            p.y,
+            p.z,
+            hits.join(" ")
+        ));
+    }
+}
+
+/// Line point `i` of route `k`, across its corridor every 2 units from -30 to
+/// +30: per offset, the first surface a cast from 6 units above the line down
+/// to 2.5 below meets (the hull's reach; the road is 3 below the line), as
+/// `W` (wall), `M` (magstrip), `F` (floor), `R` (reset) or `.` (none).
+fn across(race: &race::Race, label: &str, k: usize, probe: &race::RouteProbe, i: usize) {
+    use oag_core::math::Vec3;
+    use oag_physics::{Ray, Raycaster, Surface};
+    let p = probe.line.point(i);
+    let lateral = probe
+        .line
+        .aim(i, 0.0)
+        .corridor
+        .map_or(Vec3::X, |f| f.lateral);
+    let mut row = String::new();
+    for o in (-30..=30).step_by(2) {
+        let q = p + lateral * o as f32;
+        let hit = race
+            .collision()
+            .raycast(Ray::new(q + Vec3::Y * 6.0, -Vec3::Y, 8.5), None, true);
+        row.push(match hit.map(|h| h.surface) {
+            Some(Surface::Wall) => 'W',
+            Some(Surface::MagFloor) => 'M',
+            Some(Surface::Floor) => 'F',
+            Some(Surface::Reset) => 'R',
+            None => '.',
+        });
+    }
+    emit(&format!(
+        "across\t{label}\troute={k}\t{i}({})\t{row}",
+        where_on(probe, i as u32)
+    ));
+}
+
+fn var_u32(name: &str) -> Option<u32> {
+    std::env::var(name).ok().and_then(|t| t.parse().ok())
+}
+
+/// One craft alone in slot 0 on the player's autopilot, which flies the
+/// original's driver (`oag_ai::original`) unless `OAG_ROUTE_BOARD_OURS` is
+/// set, sent down route `OAG_ROUTE_PROBE_ROUTE` (default 1, the first route)
+/// at every visit to its fork. Every `OAG_ROUTE_PROBE_EVERY` ticks (default 10)
+/// while on the route it prints the line index, the craft's offset across and
+/// height over its line point, speed, and the respawn count.
+///
+/// ```sh
+/// OAG_SWEEP=1 OAG_REQUIRE_GAME_DATA=1 OAG_ROUTE_BOARD_ONLY=pulse/07_Track \
+///   OAG_ROUTE_BOARD_CLASSES=VENOM OAG_ROUTE_BOARD_SEEDS=1 \
+///   cargo nextest run --release -p oag-raceplay --run-ignored all \
+///   --no-capture route_original_probe
+/// ```
+#[test]
+#[ignore = "a probe over forked circuits: OAG_SWEEP=1, needs the discs"]
+fn route_original_probe() {
+    if !sweeping() {
+        return;
+    }
+    let circuits = probe_circuits();
+    let want = var_u32("OAG_ROUTE_PROBE_ROUTE").map_or(1, |r| r as u16);
+    let every = var_u32("OAG_ROUTE_PROBE_EVERY").unwrap_or(10);
+    for circuit in &circuits {
+        if only().is_some_and(|only| !only.split(',').any(|o| circuit.label == o)) {
+            continue;
+        }
+        for class in classes() {
+            for seed in seeds() {
+                let Some(setup) = load(circuit, &class, seed) else {
+                    continue;
+                };
+                let mut race = race::Race::start(setup);
+                for other in 1..race.ship_count() as usize {
+                    race.sim.world.ships[other].active = false;
+                }
+                if std::env::var_os("OAG_ROUTE_BOARD_OURS").is_some() {
+                    fly_ours(&mut race);
+                } else {
+                    race.set_autopilot(true);
+                }
+                let Some(course) = race.course().cloned() else {
+                    continue;
+                };
+                let Some(pre_fork) = course
+                    .routes()
+                    .get(usize::from(want - 1))
+                    .map(|r| r.pre_fork)
+                else {
+                    continue;
+                };
+                let label = &circuit.label;
+                for tick in 0..SOLO_TICKS {
+                    {
+                        let branching = &mut race.sim.world.ships[0].driver.branching;
+                        if branching.route == 0 && branching.decided_at == pre_fork + 1 {
+                            branching.pending = want;
+                        }
+                    }
+                    race.tick(&PlayerInputs::none());
+                    let ship = &race.sim.world.ships[0];
+                    let route = ship.driver.branching.route;
+                    if route == 0 || tick % every != 0 {
+                        continue;
+                    }
+                    let index = ship.driver.index as usize;
+                    let line = race.line_of(0);
+                    let p = line.point(index);
+                    let lateral = line
+                        .aim(index, 0.0)
+                        .corridor
+                        .map_or(oag_core::math::Vec3::X, |f| f.lateral);
+                    let b = &ship.physics.body;
+                    emit(&format!(
+                        "original\t{label}\t{class}\t{seed}\ttick={tick}\troute={route}\tindex={index}\toffset={:.1}\theight={:.1}\tspeed={:.1}\tair={}\trespawns={}\tlap={}\tstate={:?}",
+                        (b.position - p).dot(lateral),
+                        b.position.y - p.y,
+                        b.linear_velocity.length(),
+                        u8::from(ship.physics.time_airborne > 0.0),
+                        race.respawns_of(0),
+                        ship.standing.lap,
+                        ship.physics.craft_state,
+                    ));
+                }
+            }
+        }
+    }
+}
+
+/// The board's circuits plus Omega's re-shipped `cathedral` and `square`, for the probes
+/// only (the board's own list, and so its run time, is unchanged).
+fn probe_circuits() -> Vec<Circuit> {
+    let mut circuits = pulse_circuits();
+    circuits.extend(circuits_omega());
+    if let Some(source) = oag_testdata::exact("data/extracted/ps4") {
+        for name in ["cathedral", "square"] {
+            circuits.push(Circuit {
+                label: format!("omega/{name}"),
+                source: source.display().to_string(),
+                track: format!(r"Data\environments2048\{name}\track.vex"),
+            });
+        }
+    }
+    circuits.extend(circuits_2048());
+    circuits
+}

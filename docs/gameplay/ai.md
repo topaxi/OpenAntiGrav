@@ -5794,8 +5794,9 @@ is ported. See [the 2048 page](../ghidra/functions/vita-2048-eu-v104/ai-branch-c
     on the ring's line and plan;
   - each route has its own speed plan, and **a route whose plan does not lap
     clean and contact-free is not offered to the coin** (its share stays on the
-    ring): `07_Track`'s centre ramp parks our craft at route sample 196 without
-    a wall touch, so 07's route is never taken;
+    ring): `07_Track`'s route parks our craft under the ring's bridge without
+    a wall touch, so 07's route is never taken ([where each undriven route
+    fails](#where-each-undriven-route-fails-its-verification-2026-10-31));
   - across the stretch where a route is still within 8 units of the ring, its
     corridor is held to 1 unit either side of its line: a Novice on the far
     side of path 1's corridor rode the ring's take-off ramp and met the divider
@@ -5812,7 +5813,8 @@ is ported. See [the 2048 page](../ghidra/functions/vita-2048-eu-v104/ai-branch-c
 Which routes are driven (Ace, VENOM, 2026-10-05): Pulse 05 and 14 yes, 07 no;
 Omega's copy of `altima` both.
 2048: every route on `square`, `park`, `tower`, `mall`, `bridge`, `arena`,
-`subway` and `altima`; none on `cathedral` (both verify with failures) or `sol`
+`subway` and `altima`; none on `cathedral` (both fail only their standing start,
+[below](#where-each-undriven-route-fails-its-verification-2026-10-31)) or `sol`
 (no route laps, and the ring's own plan does not verify there either).
 Re-measured 2026-10-31 at Elite over four classes and seeds 1-3 (`route_plan_board`):
 the same except `square`, whose ring plan verifies at no class and whose routes 1-3
@@ -5919,6 +5921,158 @@ OAG_SWEEP=1 OAG_REQUIRE_GAME_DATA=1 OAG_ROUTE_BOARD_OUT=board.tsv \
   cargo nextest run --release -p oag-raceplay --run-ignored all \
   --no-capture route_plan_board
 ```
+
+### Where each undriven route fails its verification (2026-10-31)
+
+Lane `route-coverage`, a measurement: nothing a race does changed. The tool is
+`route_verify_probe` in `crates/raceplay/tests/route_plan_board.rs`. It learns a
+route's reference plan exactly as the race does (`Race::probe_route_plan`: the ring
+plans first, for their reference hull, then `SpeedPlan::build_within` on the
+route's line) and replays the plan's final verification tick by tick
+(`oag_ai::plan::probe::verify`, the same loop as `SpeedPlan::verify`). Each
+failure is printed with its line index read as **ring** (the ring from the merge
+round to 320 samples short of the split, which a racing craft drives on the
+ring's line), **lead-in** (the last 320 ring samples, where a racing craft is
+already on the route's line) or **route** (the route's own samples). Options:
+`OAG_ROUTE_PROBE_STAGES=<tick>` re-steps one tick stage by stage
+(`probe::stages`), `OAG_ROUTE_PROBE_STUCK=<ticks>` counts no progress as a stall,
+`OAG_ROUTE_PROBE_FLOOR=a..b` maps the surfaces under the line,
+`OAG_ROUTE_PROBE_RING` probes the ring's own plan. `route_original_probe` forces
+the route on slot 0 under the autopilot, which flies the ported original driver.
+Release, seed 1, Elite unless said, load 1.3-2.1:
+
+```sh
+OAG_SWEEP=1 OAG_REQUIRE_GAME_DATA=1 OAG_ROUTE_BOARD_ONLY=pulse/07_Track \
+  OAG_ROUTE_BOARD_SEEDS=1 cargo nextest run --release -p oag-raceplay \
+  --run-ignored all --no-capture route_verify_probe
+```
+
+**The census** (every forked circuit of every title, four classes, seed 1; 168
+route plans, 3.5 minutes): 122 verify clean. Of the 46 that do not, 16 fail only
+on a lap-1 rescue on the ring stretch (all and only `cathedral`'s two routes, 2048
+and Omega, every class), 8 are Pulse `07_Track` both ways, 12 are `sol`, and 10 are
+`square`.
+
+#### Pulse `07_Track` (Outpost 7): the route runs into the ring's bridge
+
+The route (spline path 1, 992 samples) is a lower road. Over it the ring (path 0,
+the excluded sibling for a craft that drew the route) climbs a `MagFloor` ramp from
+route sample 195, crosses a bridge about 26 units up and comes back down at sample
+792. The ramp foot and its supports stand **in the middle of the lower road, on the
+route's own line**: the authored racing-line offset of path 1 is 0 there and its AI
+corridor is about -33 to +27 wide, while the structure is about 18 units wide
+(ramp foot offsets -8 to +4 at samples 196-208, wedges -10 to +8 at 252-269 and -14
+to +4 at 716-731, the descending ramp's foot -2 to +8 at 784-792; a cast through
+the hull's reach every 2 units across the corridor). Beside it the road is clear.
+
+What the forward VENOM verification does, tick by tick:
+
+1. Ticks 2175-2184, route samples 193-201: the craft rides onto the ramp foot at
+   121 u/s on full throttle (the plan's target there is 718, nothing limits it),
+   climbing 31-37 u/s, and slows to 76 u/s.
+2. Tick 2185, sample 201: **the magstrip hold pulls it down through the ramp.** The
+   step's `forces::evaluate` moves the body -3.89 in Y and zeroes its climb. The
+   hold ran at blend 1 on the route's own track sample (the lower road, flat
+   normal), section height 7.85 against a measured 3.88 off the ramp's `MagFloor`
+   hit: a mismatch of 3.97, under `HEIGHT_MISMATCH_LIMIT` (5.0), so the section
+   wins over the ray (`maglock::Hold::from_sections`). The craft is now under the
+   ramp's sheet, inside the structure.
+3. Ticks 2186-2246: it drives on the lower road inside the structure to route
+   sample 264 (line index 2488).
+4. From tick 2246: **parked, at speed.** A `Wall` face 4.65 units ahead of the centre
+   (the wedge's back, normal (0.79, 0.61, 0), facing away from the craft) is met by
+   `wall::pre_integration_clip`'s ray every tick, which puts the body back 0.9 of
+   the overshoot, exactly one tick's travel (2.04 units at 122 u/s), and leaves the
+   velocity alone. No hull probe touches the wall, so there is no contact; the
+   forward speed reads 112 to 128 u/s, so the stall test (under 4 u/s) never fires;
+   and `NEVER_STUCK` turns the progress test off. Nothing fails, and the run sits
+   there until the verification's own cap (8 x the line's 3,216 samples = 25,728
+   ticks): `verify_failures` 0, `verify_contacts` 0, `verify_respawns` 0, lap
+   `None`. That cap is 25,728 of the 131,456 steps this route plan costs at VENOM.
+
+Every class parks at the same face: forward at sample 264 at 126 (VENOM), 148
+(FLASH), 180 (RAPIER) and 220 u/s (PHANTOM); reversed at 267 at 124-219 u/s. With a
+probe-only no-progress rule (`OAG_ROUTE_PROBE_STUCK=120`) the craft is put past it,
+and the far structure fails too: forward, wall contact at 713-724 (the far wedge,
+26-177 u/s) and 756-791 (under the descending ramp, 10-84 u/s) at VENOM to RAPIER;
+reversed, 8,429 wall ticks pinned at 193-194 at 8-10 u/s (VENOM; 110 at FLASH) and
+contact or a rescue at 716-788. Its speed plan is not the input that fails it:
+nothing in the plan slows the craft before the ramp, and the hold pulls it down
+at any speed that rides the foot inside the 5-unit band.
+
+**The ported original driver gets further, for a reason of ours.** Forced down the
+route on slot 0 under the autopilot (`route_original_probe`, VENOM), it rides the
+ramp, crosses the bridge, takes off near route 400, lands near 510 and drives on.
+The player's track sample is the nearest of every path (`player_step`), so its hold
+follows the ring's ramp; an opponent's is its own line's (`field.rs`,
+`ai_sample_for`), as the original's is (`Craft_UpdateLapProgress`, `0x08842a18`,
+locates with the AI's excluded path, which is path 0 here,
+[ai-branch-choice.md](../ghidra/functions/psp-pulse-usa/ai-branch-choice.md#who-honours-the-excluded-path)).
+It then meets the far wedge at route 715 on every lap, is thrown to offset +20 and
+crawls at 9-11 u/s for about 6 s, and on lap 4 it is eliminated there.
+
+**Verdict**: not drivable on its authored line with today's physics, at any class.
+The magstrip hold and the clip are both recovered laws, and the route's track
+sample is the one the original's locate would give. Taken together, that says
+the original's opponents would be snapped under the ramp too whenever they ride
+its foot, and a shipped game would park half its field on Outpost 7. That is
+implausible, so the likelier reading is a gap in our chain of hold, locate and
+line: the original's opponents may never ride the foot (a lateral law of theirs
+we do not have), or its hold or locate differs from ours there. **A hypothesis,
+confidence 35**: nobody has watched an original opponent take this road. A line
+of ours beside the structures avoids all four faces, but it is chosen, not
+measured, and waits on that capture.
+
+The 2026-10-05 note had the craft "parked at route sample 196, about 15 u/s". That
+was before `wall::pre_integration_clip` landed (2026-10-06); 196 is the snap site.
+
+#### 2048 and Omega `cathedral`: only the standing start fails
+
+Both routes, every class, both titles: `verify_failures` 0, `verify_contacts` 0,
+a completed flying lap (2,402 to 4,090 ticks), and `verify_respawns` 1, which is
+the whole failure. That one rescue is on lap 1 at line index 0-3, the merge, 4-17
+u/s after the standing start: at the merge the road is above the line point
+(+2.13 at route 0's merge, ring 1436; route 1 merges at ring 612 and the road is
+still +0.32 above the line two samples on, at ring 614),
+with a reset volume 12.6 and 7.0 below. The craft is placed at rest inside the
+road, its probes find nothing below, it falls for 32 ticks and the reset volume
+rescues it. No racing craft is ever at rest there, and the stretch it drives on
+the route (from the lead-in to the merge) has no failure on either lap. The route
+plans are drivable; only the verification's start is wrong. **Omega**: checked,
+applies. Its re-shipped copy fails the same way at the same indices.
+
+`route_clean` (`crates/raceplay/src/speed_plan.rs`) asks for `verify_respawns == 0`
+over both laps. A flying-lap rescue already counts in `verify_failures` and clears
+the lap time, so dropping lap-1 rescues before the lead-in from that test changes,
+at seed 1, exactly these 16 reference plans and no other. The other hulls' copies
+(`hull_routes_for`, `SpeedPlan::adapt`) start at rest at the same merge and are
+judged by the same `route_clean`, so they would follow. Today they are never
+learned, since the reference is `None`; after the change they cost their adaptation
+steps, which the cost board has to count.
+
+#### 2048 `square`: the ring plan never sees the corner it runs wide at
+
+Its ring plan (`OAG_ROUTE_PROBE_RING`) and its routes fail at the same two sites,
+all on the ring:
+
+- **FLASH, RAPIER, PHANTOM**: 576-612 wall ticks, all at samples 1591-1671 at 0-52
+  u/s. The cause is 950 samples earlier: through 577-641 the craft runs wide at
+  153-156 u/s with no plan limit (ceiling infinite), its offset growing from 5.6
+  to 14.4 while the corridor's right bound shrinks from 7.1 to 5.5, steering
+  -0.55 to -0.82. At 641 it leaves the edge, falls about 20 units onto a lower
+  level and lands within the rescue distance. **Nothing counts as a failure**:
+  no wall, no rescue, not off the line by distance. It then drives the lower level
+  20 units below its line and grinds the walls at 1592 on. The learner lowers the
+  ceilings there, 1,092 to 1,660 times, to the 16 u/s floor, and cannot help.
+- **VENOM**: 5 wall ticks over the two laps at 3392-3405, 148-162 u/s, left
+  unresolved after 14 lowerings.
+
+`route=0`'s lead-in shares the first site. These are on the reference hull
+(`RaceSim::plan_reference`, `Race::probe_ring_plan`). **Omega**: checked, applies.
+Its re-shipped `square` fails at the same two sites (3389-3406 and 1591-1674), with a
+different split by class: VENOM 15 and FLASH 4 wall ticks at 3389-3406 only;
+RAPIER and PHANTOM add the 1591-1674 site, with rescues and no completed lap. `sol`
+is out of scope.
 
 ## Each title's craft laws (2026-10-09)
 
