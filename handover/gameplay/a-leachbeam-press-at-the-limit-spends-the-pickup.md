@@ -44,22 +44,27 @@ pool is needed. What the read did find, in order of how sure it is:
    (an opponent that does not press is not a law; the original AI's own LeachBeam decision is
    unread). Revisit both once 2048 and Omega get the pool of eight (step 3): there a fizzled beam
    holds one entry of eight and the argument mostly goes away.
-3. **2048 and Omega: a pool of eight.**
+3. **A pool of eight on every title that ships a LeachBeam (maintainer, 2026-10-31: "8 everywhere").**
+   2048 and Omega measure 8; Pulse (PSP and PS2) and HD/Fury measure 1 and take 8 as a **chosen,
+   intended divergence**: label their `leach_beams` value chosen in `docs/gameplay/weapon-lineage.md`
+   with the reason (the later titles' rule), keeping the measured 1 recorded beside it. Pure ships no
+   LeachBeam and stays absent. The determinism references for Pulse and HD runs may then move only
+   where a second beam is fired; regenerate them in a separate commit naming this change, never to
+   make a test pass.
    - `oag_gameplay::World::leach_beam: Option<Beam>` becomes a fixed pool (`[Option<Beam>; 8]` or
      an array plus a live count). The fire arms the next free entry while `live < limit`, and the
      retire swap-removes like the originals' `LeachBeamManager_Update`.
-   - The limit is per title data, not a `title.name` branch (ADR-0058): a new
-     `oag_title::weapons::Weapons` field, e.g. `leach_beams: u8`, Pulse 1 (measured), HD 1
-     (measured), 2048 8 (measured), Omega 8 (measured), Pure absent.
+   - The limit stays per title data, not a `title.name` branch (ADR-0058): a new
+     `oag_title::weapons::Weapons` field, e.g. `leach_beams: u8`: 8 on every title that has the
+     weapon (2048, Omega measured; Pulse, HD chosen against a measured 1), Pure absent.
    - A new `Weapons` field needs its "Checked axes" row in `docs/gameplay/weapon-lineage.md`
      (`just check-weapon-lineage`).
    - The World grows by seven `Option<Beam>`, so `the_world_snapshot_does_not_grow`
      (`crates/gameplay/src/world.rs`) fires. Raise its ceiling on purpose, in the same commit, saying
      why.
    - Every reader of `world.leach_beam` loops over the pool: the drain, the HUD sight, the strip and
-     ball draw (`oag_raceplay::leach_strip`), the cues, the replay and the net state hash. The
-     determinism references must not move for Pulse and HD runs; a 2048 or Omega run with no second
-     beam must not move either.
+     ball draw (`oag_raceplay::leach_strip`), the cues, the replay and the net state hash. A run on
+     any title with never more than one beam live must not move.
 4. **The Quake press stays armed (measure first, or wire at 65).** Ours drops a press made while a
    wave is up. The originals leave the request bit set, so the next wave fires the update after
    the first wave's last span ends. Wiring it means a per-slot "Quake requested" flag that the fire
