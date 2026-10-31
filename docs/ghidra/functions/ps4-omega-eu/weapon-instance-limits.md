@@ -9,7 +9,9 @@ the HD reading it is checked against:
 
 **Result: checked, differs from HD on the LeachBeam** (8 live at once against HD's 1). It matches
 HD on the Quake (1, same guard) and on what a LeachBeam press does at the limit (spends the
-pickup).
+pickup). **Against 2048: checked, applies, not wired**: the same pool of eight and the same guard
+order; this project runs HD's one beam on both, and the wiring is open in the handover thread on
+the LeachBeam press at the limit.
 
 ## Names
 

@@ -31,7 +31,7 @@ well (see "What this project does" below).
 
 | Address | Name | Confidence | Evidence |
 | --- | --- | ---: | --- |
-| `0x0012b2c0` | `WeaponManager_DispatchFire` | 75 | Walks the per-craft slot records (stride `0x230` from `this + 0x90`) and, per set bit of slot `+0x200`, calls that weapon's manager: bit `0x8` -> `QuakeManager_Fire(this->+0x74, slot, craft)` at `0x0012bb7c`, bit `0x8000` -> `LeachBeamManager_Fire(this->+0x78, slot, craft)` at `0x0012ba8c`. The only code caller of either. Pulse's `Weapons_DispatchFire` (`0x08861b60` calls `Weapon_FireQuake`) has the same role. |
+| `0x0012b2c0` | `WeaponManager_DispatchFire` | 75 | Walks the per-craft slot records (stride `0x230` from `this + 0x90`) and, per set bit of slot `+0x200`, calls that weapon's manager: bit `0x8` -> `QuakeManager_Fire(this->+0x74, slot, craft)` at `0x0012bb7c`, bit `0x8000` -> `LeachBeamManager_Fire(this->+0x78, slot, craft)` at `0x0012ba8c`. The only code caller of either. Pulse's `Weapons_DispatchFire` (the call to `Weapon_FireQuake` at `0x08861b60`) has the same role. |
 | `0x000ea0c8` | `Ship_FireHeldWeapon` | 75 | Pulse's `Ship_FireHeldWeapon` (`0x08844ae8`) shape: needs the slot `+0x204 != -1`, refuses only state `6` with bit `0x800`, then calls `Weapon_FireFromSlot` (`0x0012d970`) with the lock target when craft `+0x6a60 != -1` and `+0x6a64 & 1`. **No check of any weapon manager's busy state.** |
 | `0x0012d970` | `Weapon_FireFromSlot` | 85 | Already cited by [quake.md](quake.md) and [leach-beam-strips.md](leach-beam-strips.md): the sixteen-way jump on slot `+0x204`. State 2's handler (`0x0012daa0`) only ORs `0x8` into `+0x200`; state 10's (`0x0012dba8`) only ORs `0x8000` and stores the lock (`+0x1a8`, `+0x1ac`). Neither tests a manager. |
 | `0x00147ca0` | `QuakeManager_Update` | 75 | QuakeManager vtable `0x008647a8` slot 3 (OPD `0x00877498`): `if (quake->busy) Quake_Tick(quake)`, returns 1. |
@@ -104,7 +104,11 @@ if (manager->live == 0) {               // + 0x88
 **So a press while any craft's beam is up spends the pickup and fires nothing.** Nothing upstream
 refuses the press first: `Ship_FireHeldWeapon` (`0x000ea0c8`) and the state-10 handler
 (`0x0012dba8`) test no manager state. The manager's `+0x34 & 2` flag is set here and cleared by
-`LeachBeamManager_Update`; neither of the two paths above reads it.
+`LeachBeamManager_Update`; neither of the two paths above reads it. Nothing sounds on such a
+press: HD's press-time switch case 10 (`0x000ea6f4`, table at TOC `-0x441c`) and Pulse's
+`Ship_FireHeldWeapon` case 10 only bump stats counters, and HD's LeachBeam cue `0x0012d820(2)` is
+inside the armed branch. The dispatcher's `FUN_006778d8(..., 0x1d)` after the call runs on every
+press; what it drives is unread.
 
 Pulse's `Weapon_FireLeachBeam` (`0x08866658`) is the same order, re-read this pass in the
 disassembly: `sw a1(-1), 0x1bc(s1)` at `0x08866680` and the masked `sw` to `0x1b8` at

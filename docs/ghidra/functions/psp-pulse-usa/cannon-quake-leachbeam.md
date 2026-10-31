@@ -3780,7 +3780,7 @@ Re-read from the disassembly this pass, with HD, 2048 and Omega read side by sid
   the pickup is wrong about the original. HD, 2048 and Omega spend it the same way.
 - **A Quake press while a wave is up keeps the pickup and leaves the request armed (65).**
   `Weapon_FireQuake` returns before `held = -1` and before `fire_flags &= ~8`, and
-  `Weapons_DispatchFire` (`0x08861b60`) calls it again on that bit. A store search for `sw` to
+  `Weapons_DispatchFire` calls it again on that bit (the call at `0x08861b60`). A store search for `sw` to
   `+0x1b8` finds no clear of bit 3 apart from the fire handlers, `Weapon_RequestFire` and the
   whole-slot reset `FUN_088629f8`. So the original fires the second Quake by itself once the
   first ends. Static, the same reading as HD's; not seen live.

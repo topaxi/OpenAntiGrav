@@ -29,18 +29,21 @@ pool is needed. What the read did find, in order of how sure it is:
 1. **Spend the LeachBeam pickup on a press at the limit** (player). `crates/raceplay/src/weapons.rs`,
    the `Weapon::LeachBeam` arm of the pickup spend: the `if self.sim.world.leach_beam.is_some()
    { return; }` guard runs before the spend. Move it after the spend, so the slot empties and
-   nothing fires (no cue, no beam). Fix the comment there, which claims the original keeps the
+   nothing fires: no beam and no fire cue. The press-time switches play nothing for a LeachBeam
+   (Pulse `Ship_FireHeldWeapon` case 10 and HD's case 10 at `0x000ea6f4` only bump stats
+   counters), and HD's LeachBeam cue (`0x0012d820(2)`) sits inside `LeachBeamManager_Fire`'s armed
+   branch. One unread event, `FUN_006778d8(..., 0x1d)` after the HD call in
+   `WeaponManager_DispatchFire`, runs on every press, the spent one included. Fix the comment there, which claims the original keeps the
    pickup. Test: a race with a beam up, the player presses with a LeachBeam held, and the pickup is
    gone with `leach_beam` unchanged. It must fail if the guard goes back above the spend.
 2. **The opponents' choice, revisited.** `fire_opponent_leach_beam`
-   (`crates/raceplay/src/field/opponent_weapons.rs`) holds the pickup while a beam is up, labelled
-   chosen. Its reasoning was that a wasted shot locks the weapon out for everyone. It does not: in
-   the original a press at the limit wastes only the presser's pickup and blocks no one. Two
-   faithful options: (a) keep the hold (an AI that does not press is not unfaithful, as the original
-   AI's own fire decision is a separate read); (b) let the fire law press, and the pickup is spent
-   as for the player. Pick (a) unless the original AI's LeachBeam decision is read, and update the
-   comment's reasoning either way. Also re-check its lock-only choice (it fires only with a lock):
-   on 2048/Omega, with eight beams, the "costs somebody else their turn" argument goes away entirely.
+   (`crates/raceplay/src/field/opponent_weapons.rs`) holds the pickup while a beam is up and fires
+   only with a lock, both labelled chosen. The lock-only reasoning is that an unlocked beam fizzles
+   but still holds the race's only pool entry until it retires, locking the player out too. On
+   Pulse and HD (capacity 1) that still holds, and the hold-while-busy stays a chosen behaviour
+   (an opponent that does not press is not a law; the original AI's own LeachBeam decision is
+   unread). Revisit both once 2048 and Omega get the pool of eight (step 3): there a fizzled beam
+   holds one entry of eight and the argument mostly goes away.
 3. **2048 and Omega: a pool of eight.**
    - `oag_gameplay::World::leach_beam: Option<Beam>` becomes a fixed pool (`[Option<Beam>; 8]` or
      an array plus a live count). The fire arms the next free entry while `live < limit`, and the

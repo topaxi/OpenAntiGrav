@@ -8,8 +8,9 @@ Omega, which agrees with this page:
 [`../ps4-omega-eu/weapon-instance-limits.md`](../ps4-omega-eu/weapon-instance-limits.md).
 
 **Result: differs from HD on the LeachBeam** (8 live at once against HD's 1). It matches HD on the
-Quake and on the spend. **Omega: ported**: the same pool of eight, the same `< 8` guard after the
-spend, the same single Quake.
+Quake and on the spend. **Omega: checked, applies, not wired**: the same pool of eight, the same
+`< 8` guard after the spend, the same single Quake; this project runs HD's one beam on both, and
+the wiring is open in the handover thread on the LeachBeam press at the limit.
 
 ## Names
 
