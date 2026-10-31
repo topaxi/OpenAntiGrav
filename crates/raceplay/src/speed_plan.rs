@@ -11,6 +11,7 @@ use oag_physics::Environment;
 use log::{info, warn};
 
 use super::*;
+use crate::routes::RouteLine;
 
 /// The step budget a route's plan gets, against the ring's 120,000. **Chosen,
 /// not measured**: Pulse's routes that lap clean build in 8,000-13,000 steps,
@@ -284,15 +285,15 @@ impl Race {
     }
 
     /// The same on any line and its sample order - the ring's or a route's
-    /// (`crate::routes`). `start` places a fresh craft at that line index
-    /// instead of starting from `slot`'s own pose, for a line the grid is not
-    /// on.
+    /// (`crate::routes`). `start` places a fresh craft at that line index,
+    /// moving forward at that speed, instead of starting from `slot`'s own
+    /// pose, for a line the grid is not on.
     fn with_plan_course_on<T>(
         sim: &RaceSim,
         line: &oag_ai::Line,
         order: &[u32],
         slot: usize,
-        start: Option<usize>,
+        start: Option<(usize, f32)>,
         flown_by: Option<oag_physics::Handling>,
         f: impl FnOnce(&oag_ai::plan::Course<'_, CollisionWorld>, &oag_ai::plan::Craft) -> T,
     ) -> T {
@@ -367,11 +368,18 @@ impl Race {
             pad: &pad,
         };
         let craft = match start {
-            Some(index) => oag_ai::plan::Craft {
-                handling: ship.handling,
-                start: respawn(index),
-                start_index: u32::try_from(index).unwrap_or(0),
-            },
+            Some((index, speed)) => {
+                let mut placed = respawn(index);
+                if speed > 0.0 {
+                    placed.body.linear_velocity = placed.body.forward() * speed;
+                    placed.thrust = 1.0;
+                }
+                oag_ai::plan::Craft {
+                    handling: ship.handling,
+                    start: placed,
+                    start_index: u32::try_from(index).unwrap_or(0),
+                }
+            }
             None => oag_ai::plan::Craft {
                 handling: ship.handling,
                 start: ship.physics,
@@ -659,6 +667,7 @@ impl Race {
         handling: oag_physics::Handling,
     ) -> HullPlans {
         let tuning = oag_ai::Tuning::default();
+        let decel: Option<oag_ai::plan::Decel>;
         let ring = {
             let (adapted, report) = Self::with_plan_course_on(
                 sim,
@@ -683,12 +692,25 @@ impl Race {
                     "the reference's checked at its yaw share"
                 }
             );
+            decel = Some(*adapted.decel());
             if clean {
                 HullRing::Own(Box::new(adapted))
             } else {
                 Self::fallback_ring(sim, reference_plan, handling)
             }
         };
+        // What this hull drives round the ring, at the share it follows it at:
+        // what it arrives at a route's switch doing.
+        let yaw = {
+            let mut flown = sim.world.ships[1];
+            flown.handling = handling;
+            oag_ai::hull_yaw_ceiling(&flown.handling, &flown.physics.body)
+        };
+        let followed = match &ring {
+            HullRing::Own(plan) => plan.as_ref(),
+            HullRing::Reference => reference_plan,
+        };
+        let share = followed.share_for(Some(yaw));
         let (routes, route_steps) = sim
             .routes
             .iter()
@@ -697,17 +719,38 @@ impl Race {
                 let Some(reference_route) = route.plan.as_ref() else {
                     return (None, 0);
                 };
-                let (plan, report) = Self::with_plan_course_on(
-                    sim,
-                    &route.line,
-                    &route.order,
-                    1,
-                    Some(0),
-                    Some(handling),
-                    |course, craft| {
-                        reference_route.adapt(course, craft, &tuning, ROUTE_PLAN_BUDGET)
-                    },
-                );
+                let stretch = route_stretch(sim, route, followed, share);
+                let (plan, report) = match (stretch, decel.as_ref()) {
+                    (Some((stretch, speed)), Some(decel)) => Self::with_plan_course_on(
+                        sim,
+                        &route.line,
+                        &route.order,
+                        1,
+                        Some((stretch.start, speed)),
+                        Some(handling),
+                        |course, craft| {
+                            reference_route.adapt_stretch(
+                                course,
+                                craft,
+                                &tuning,
+                                ROUTE_PLAN_BUDGET,
+                                &stretch,
+                                decel,
+                            )
+                        },
+                    ),
+                    _ => Self::with_plan_course_on(
+                        sim,
+                        &route.line,
+                        &route.order,
+                        1,
+                        Some((0, 0.0)),
+                        Some(handling),
+                        |course, craft| {
+                            reference_route.adapt(course, craft, &tuning, ROUTE_PLAN_BUDGET)
+                        },
+                    ),
+                };
                 let clean = route_clean(&report);
                 info!(
                     "ai speed plan for a hull of turn {:.3}, route {k}, adapted: {} steps, \
@@ -752,23 +795,51 @@ impl Race {
             .iter()
             .enumerate()
             .map(|(k, route)| {
-                let start = 0;
-                let (plan, report) = Self::with_plan_course_on(
-                    sim,
-                    &route.line,
-                    &route.order,
-                    1,
-                    Some(start),
-                    sim.plan_reference,
-                    |c, craft| {
-                        oag_ai::SpeedPlan::build_within(
-                            c,
-                            craft,
-                            &oag_ai::Tuning::default(),
-                            ROUTE_PLAN_BUDGET,
+                let ring = sim.speed_plan.as_ref();
+                let stretch = ring.and_then(|ring| route_stretch(sim, route, ring, 1.0));
+                let (plan, report) = match (ring, stretch) {
+                    (Some(ring), Some((stretch, speed))) => {
+                        let n = sim.racing_line.len();
+                        let seed = ring.carried_onto(&route.line, |i| {
+                            (i < route.kept).then_some((route.merge + i) % n)
+                        });
+                        Self::with_plan_course_on(
+                            sim,
+                            &route.line,
+                            &route.order,
+                            1,
+                            Some((stretch.start, speed)),
+                            sim.plan_reference,
+                            |c, craft| {
+                                oag_ai::SpeedPlan::build_stretch(
+                                    &seed,
+                                    c,
+                                    craft,
+                                    &oag_ai::Tuning::default(),
+                                    ROUTE_PLAN_BUDGET,
+                                    &stretch,
+                                )
+                            },
                         )
-                    },
-                );
+                    }
+                    // No ring plan to arrive on: the whole lap, as before.
+                    _ => Self::with_plan_course_on(
+                        sim,
+                        &route.line,
+                        &route.order,
+                        1,
+                        Some((0, 0.0)),
+                        sim.plan_reference,
+                        |c, craft| {
+                            oag_ai::SpeedPlan::build_within(
+                                c,
+                                craft,
+                                &oag_ai::Tuning::default(),
+                                ROUTE_PLAN_BUDGET,
+                            )
+                        },
+                    ),
+                };
                 let clean = report.verify_failures == 0
                     && report.verify_respawns == 0
                     && report.verify_contacts == 0
@@ -807,4 +878,52 @@ impl Race {
         self.ensure_speed_plans();
         &self.sim.plan_steps
     }
+}
+
+/// Samples before a route's switch a learning run starts, driven on the ring
+/// plan's targets, so the craft reaches the switch settled on the line at the
+/// speed it carries there. **Chosen, not measured.**
+const LEAD_IN: usize = 120;
+
+/// Samples past a route's merge a learning run carries on into the ring, so a
+/// corner just after the merge still lowers the route's tail. **Chosen, not
+/// measured.**
+const RUN_OUT: usize = 120;
+
+/// Where on `route`'s line its plan is learned ([`oag_ai::plan::Stretch`]),
+/// arriving on `ring` (the ring plan a craft follows there, at `share`), and the
+/// speed the run starts at: from [`LEAD_IN`] samples before the switch
+/// ([`RouteLine::switch_index`]) to [`RUN_OUT`] past the merge. `None` where
+/// `ring` is not on the ring's line.
+fn route_stretch(
+    sim: &RaceSim,
+    route: &RouteLine,
+    ring: &oag_ai::SpeedPlan,
+    share: f32,
+) -> Option<(oag_ai::plan::Stretch, f32)> {
+    let course = sim.course.as_ref()?;
+    let n = sim.racing_line.len();
+    if n == 0 || ring.len() != n || route.kept == 0 {
+        return None;
+    }
+    let from = route.switch_index(course);
+    let start = from.saturating_sub(LEAD_IN);
+    let len = route.line.len();
+    let span = len - start + RUN_OUT.min(start);
+    let ring_index = |i: usize| (route.merge + i) % n;
+    let lead_targets = (start..from)
+        .map(|i| ring.target(ring_index(i)) * share)
+        .collect();
+    let j = ring_index(start);
+    let speed = ring.pace(j).min(ring.target(j)) * share;
+    let speed = if speed.is_finite() { speed } else { 0.0 };
+    Some((
+        oag_ai::plan::Stretch {
+            start,
+            from,
+            span,
+            lead_targets,
+        },
+        speed,
+    ))
 }

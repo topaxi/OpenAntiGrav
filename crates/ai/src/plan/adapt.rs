@@ -60,6 +60,7 @@ impl SpeedPlan {
                     stuck: STUCK_TICKS,
                     lowering: Lowering::Window,
                     margin: 1.0,
+                    stretch: None,
                 },
             );
             failures = plan.verify_stuck(course, craft, tuning, yaw, &mut report, 1.0, STUCK_TICKS);

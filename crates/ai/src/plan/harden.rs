@@ -122,6 +122,7 @@ impl SpeedPlan {
                 stuck: super::NEVER_STUCK,
                 lowering: Lowering::FromTrough,
                 margin: MARGIN,
+                stretch: None,
             };
             self.learn(course, craft, tuning, yaw, report, pass);
             self.verify(course, craft, tuning, yaw, report, MARGIN);

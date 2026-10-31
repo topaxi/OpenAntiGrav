@@ -64,6 +64,24 @@ pub(super) struct RouteLine {
 }
 
 impl RouteLine {
+    /// The first line index a racing driver that drew this route can be on
+    /// once it has moved onto its line ([`Race::steer_branching`]): within
+    /// [`SWITCH_SAMPLES`] of the split and on the pre-fork path, where the coin
+    /// is thrown. Where the route's speed plan starts to be followed, so where
+    /// its learning starts ([`Race::route_speed_plans`]).
+    pub(super) fn switch_index(&self, course: &Course) -> usize {
+        let n = course.len();
+        let window = self.kept.saturating_sub(SWITCH_SAMPLES)..self.kept;
+        let first = window.start;
+        if n == 0 {
+            return first;
+        }
+        window
+            .into_iter()
+            .find(|&into| course.path_of((self.merge + into) % n) == Some(self.pre_fork))
+            .unwrap_or(first)
+    }
+
     /// `branching` for a craft found on this route's own samples (route
     /// number `route`, `k + 1`): past the split, its fork decided. The visit
     /// count is kept, so the next coin is fresh. Ours, as
