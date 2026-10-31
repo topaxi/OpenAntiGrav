@@ -145,9 +145,9 @@ the table's spread cannot show it. The race-pass rows at 800p and 1080p are stab
 
 ## Ranked levers
 
-Ranked by what each costs the Deck between 1080p and 4K, then by what it gives back; the
-three lanes are in the handover thread `hires-gpu-levers` (ready to measure, each with its claim and
-acceptance metric). Estimates are **estimates, not measurements**.
+Ranked by what each costs the Deck between 1080p and 4K, then by what it gives back. Craft (+2.9 ms)
+and bloom (+2.0 ms) grow about as much as lever 3 but are held to exactness, so they are not
+levers; lever 3 is one we can pull. Estimates are **estimates, not measurements**.
 
 1. **Track solid fragment cost** (+18.1 ms HD, +9.0 Pulse, 4K-1080p; 8.2 ms of 10.4 at 1080p HD). Anisotropy is 0.3 ms of it,
    MSAA is not the cause, the velocity write is already gated. Lane: bisect the cost into ALU, texture and ROP with
@@ -159,6 +159,8 @@ acceptance metric). Estimates are **estimates, not measurements**.
 3. **Our own 4K present** (+1.5 to +3.0 ms of game frame time against a 1080p window scaled by gamescope).
    Lane: measure gamescope's own pass to know whether the work moves or goes away, then decide
    between keeping our composite (sharp HUD) and a 1080p window with the HUD scaled.
+
+Passes the brief named that this tooling cannot separate or that are small: **fog** has no span (it is shaded inside track solid); **MSAA resolve** lands inside the race pass span (the +2.8 ms HD at 1080p is in the pass, while the rest of `Scene::render` does not grow with it); **glass and transparent overdraw** is the `track blended` span, +0.4 ms 4K-1080p on the Deck HD, small; **render-target formats and bandwidth** are not measured directly, the iGPU's bloom and composite growing faster than the dGPU's is the indirect evidence.
 
 Also open, not top three: the 2.0 to 3.7 ms of `Scene::render` no span names on the Deck, MSAA 4x
 (+2.8 ms HD at 1080p), and the iGPU's bandwidth-shaped bloom and composite (+3.6 and +2.0 ms at 4K).
