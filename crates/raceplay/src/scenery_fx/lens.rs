@@ -278,8 +278,7 @@ impl Lens {
         if self.boost > 0.0 {
             // The glass is the field's x-z plane (see `Anchor::Lens`).
             let k = BOOST_DRIFT * self.boost * dt;
-            self.pool
-                .displace(|at| Vec3::new(at.x * k, 0.0, at.z * k));
+            self.pool.displace(|at| Vec3::new(at.x * k, 0.0, at.z * k));
         }
     }
 
