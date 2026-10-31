@@ -6,7 +6,7 @@ stalled frame at race start, see the last section) and what can
 come off it without changing the picture. **One cut landed (craft outside the
 frustum are not drawn, byte-identical, 1 to 4 % of the GPU on the iGPU); the velocity
 attachment, first thought to be about 10 % of the race pass, measured as nothing
-once repeated; and three more suspects were measured and cleared.** Everything is
+on Intel and NVIDIA once repeated but 2 to 7 % on AMD (gate merged, 2026-10-31); and three more suspects were measured and cleared.** Everything is
 `chosen` workload, not measured against the original. The per-piece costs below are
 **shares of this frame on this machine, not a Deck forecast**: the Arc 140T is not
 the Deck's 8-CU RDNA2 APU and favours different things.
@@ -142,9 +142,55 @@ it buys nothing measurable on the Intel iGPU and a few percent on the NVIDIA car
 second set of pipelines and a reversal of the documented "always written" rule. It is
 kept as the branch `hd-gpu-velocity-gate` (commit `e58a38d0e`) for the maintainer to try
 on the Deck, where a shared-memory APU is the most likely place for a bandwidth saving
-to show.
+to show. **Measured on AMD 2026-10-31 and merged: see the next section.**
 
-## Measure on the Deck (the maintainer runs this)
+## The velocity gate on AMD (2026-10-31, `hd-velocity-gate-amd`)
+
+**Verdict: merge.** On every AMD target the gate cuts the HD race pass by 2 to 7 % at 1280x800
+and 1080p, outside run-to-run noise, with a byte-identical picture; at 4K it is noise or
+small; with the blur on it changes nothing, as designed. The earlier doubt (Intel and NVIDIA
+inside drift) was about hardware where the write is nearly free; it was never measured on AMD.
+
+**Method.** `OAG_RENDER_GPU_BENCH=150 OAG_RENDER_PERF=1 oag-game <hd iso> --race --mode
+single_race --seed 1 --autopilot --no-audio --size WxH --ticks 2500 --screenshot out.png`
+(release `--features perf-probe`; the Deck's binary is the `dist` profile, znver2, built in the
+`oag-appimage-build` container). **One binary per device, A/B by an uncommitted env switch that
+forces the gate open** (`main` rows) against the real gate (`gated` rows), alternated A B A B
+so drift hits both; the switch is not in the tree. Race pass GPU span, median of 150 redraws of
+the tick-2,500 frame, then the median of n runs; the paired delta is each gated run against the
+main run right before it. Single view, MSAA and settings at the defaults, blur off unless
+noted. Picture: `cmp` of the two screenshots, identical in all 62 pairs. Load averages 1 to 7
+(the host was shared; the pairs sit seconds apart).
+
+| Device (adapter) | Size | n | main race pass us | gated us | paired delta |
+| --- | --- | --- | --- | --- | --- |
+| this host dGPU (RADV NAVI32, RX 7800 XT) | 1280x800 | 6 | 782 | 763 | -2.4 % (-2.5 .. -2.0) |
+| | 1920x1080 | 6 | 1,154 | 1,128 | -2.2 % (-2.3 .. -2.1) |
+| | 3840x2160 | 6 | 2,972 | 2,964 | -0.2 % (-0.9 .. +0.1), none |
+| | 1920x1080, blur high | 3 | 1,156 | 1,157 | +0.1 %, none (blur read) |
+| this host iGPU (RADV RAPHAEL_MENDOCINO) | 1280x800 | 6 | 14,567 | 13,932 | -4.3 % (-10.0 .. -1.9) |
+| | 1920x1080 | 6 | 25,609 | 24,961 | -3.1 % (-4.2 .. -1.7) |
+| | 3840x2160 | 6 | 77,039 | 75,542 | -1.9 % (-2.7 .. -1.8) |
+| | 1920x1080, blur high | 3 | 25,687 | 25,806 | +0.5 %, none |
+| Steam Deck (RADV VANGOGH) | 1280x800 | 6 | 6,404 | 5,960 | -7.0 % (-7.8 .. -5.3) |
+| | 1920x1080 | 6 | 10,608 | 10,419 | -1.9 % (-2.1 .. -1.7) |
+| | 3840x2160 | 5 | 31,162 | 30,944 | +0.2 % (-8.3 .. +3.3), noise |
+| | 1920x1080, blur high | 3 | 10,613 | 10,618 | 0.0 %, none |
+
+- The gate saves 20 to 650 us of the race pass (the dGPU's 25 us is 2 % of a 1.1 ms pass; the
+  Deck's 440 us at 800p is 7 %). A bigger win in absolute terms needs a slow GPU at a small size.
+- The NAVI32 has two clock states (a 1080p pass reads 879 or 1,154 us between launches); the
+  rows above are all in the high state, pairs adjacent. An earlier unpaired sweep that mixed the
+  states was dropped.
+- The first sweep masked **every** depth-writing velocity pipeline (an upper bound, not the gate)
+  and read 2.6 to 3.8 % on the same devices; the real gate (track and hulls) gets about 2.2 to
+  7 %, i.e. all of it. Not repeated here.
+- The blur-on rows show the gate opens for a reader: the blur pass is timed in them (637 us on
+  the dGPU) and the race pass does not move.
+- Deck notes: SteamOS governor `powersave`, GPU `auto`, headless offscreen runs (no gamescope
+  frame limit); the 4K row has one 3,840 us outlier pair (-8.3 %), hence "noise".
+
+## Measure on the Deck (recipe; the velocity gate's Deck run is in its section above)
 
 1. `just bench-render hd --size 1920x1080 --views 1,2h --tag deck-hd` and again
    with `--size 1280x800` (no `MESA_VK_DEVICE_SELECT`; the adapter must read

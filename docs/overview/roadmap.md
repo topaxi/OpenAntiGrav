@@ -1319,8 +1319,9 @@ recipe and its three traps.
       behind one live `[graphics] motion_blur` strength row
       ([ADR-0028](../architecture/adr/0028-camera-motion-blur-first.md),
       [ADR-0030](../architecture/adr/0030-velocity-buffer-motion-blur.md)).
-      The velocity attachment is always written in a race, deliberately, so
-      FSR 3.1 can rely on it.
+      The velocity attachment is written on every frame that reads it (the
+      blur, a temporal upscaler: `scene::velocity_gate`) and masked off the
+      track and hulls otherwise; FSR 3.1 is a reader.
       **Dynamic resolution works, and is off by default**: the scene target is
       allocated once at the `render_scale` ceiling and the frame is drawn into a
       sub-rectangle of it, so moving the resolution costs a uniform write
