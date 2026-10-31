@@ -1,7 +1,7 @@
 ---
 status: re-first
 titles: [2048]
-updated: 2026-10-26
+updated: 2026-10-31
 summary: "2048 composite: vignette, screen tint, alphaTex, other texel programs"
 ---
 
@@ -36,9 +36,10 @@ Held at 1.15, ours' frame means are 54.9 / 61.4 / 36.7 against the original's
   2048's own combine (`docs/formats/2048-material-params.md`, "Vertex-lit and lightmapped
   combines"), and the baked roof shadow shows on Vineta K's wall. Ours is now **darker** than the
   original (Vineta K floor 24/23/22 against 32/38/43, Empire Climb road 111/92/73 against
-  141/111/88). Next, in this order: (1) the **emissive** layer of `diffuse_normal_specular_emmissive`
-  and its kin on the floor (the original's blue panels), which ours does not draw on the lightmapped
-  family; (2) the `occlusionMap`/`shadowMap` terms the 40-odd programs with both declare; (3) why
+  141/111/88). Next, in this order: (1) **read, not wired** (2026-10-31, `2048-floor-emissive`): the panels are
+  `diffuse_normal_specular_emmissive_alpha`, whose program adds `Texture2Alpha.rgb^2 * Constant1`
+  outside the lit product (`fc06_lambert_emmissive_alpha`: `Tint * D.a`); law and wiring recipe in
+  `docs/formats/2048-material-params.md`, "The emissive add of the `*_emmissive_alpha` family"; (2) the `occlusionMap`/`shadowMap` terms the 40-odd programs with both declare; (3) why
   the whole frame is dark once the constant ambient is gone (exposure keys reach the composite
   only; check the sun colour feeding `liveLighting0diffuse`, the engine may not hand the
   `Sun diffuse colour` key over unscaled). Omega's `NOVAColor` vertex variant is the same family,
