@@ -164,3 +164,94 @@ Passes the brief named that this tooling cannot separate or that are small: **fo
 
 Also open, not top three: the 2.0 to 3.7 ms of `Scene::render` no span names on the Deck, MSAA 4x
 (+2.8 ms HD at 1080p), and the iGPU's bandwidth-shaped bloom and composite (+3.6 and +2.0 ms at 4K).
+
+## The three levers measured (2026-10-31, `hires-track-and-present`)
+
+Deck `RADV VANGOGH`, `dist` `znver2` builds with `perf-probe` from the `oag-appimage-build`
+container, offscreen over ssh, load 0.8 to 2.0. Same command as the span tables above
+(`--race --mode single_race --seed 1 --autopilot --ticks 2500`, 100 redraws), baseline and
+candidate run interleaved, A B A B.
+
+### Lever 1, track solid: landed, the shader's own branches were the cost
+
+**Bisect** (diagnostic switch, not committed: a pipeline constant that returns a constant colour, a
+constant colour plus one albedo tap, or turns the colour write off), Deck 1080p, 2 rounds that
+agree to 0.5 %:
+
+| track solid, ms | full shader | constant colour | constant + one tap | colour write off |
+|---|---|---|---|---|
+| HD | 8.21 | 1.69 | 1.83 | 1.47 |
+| Pulse | 3.37 | 0.70 | 0.76 | 0.35 |
+
+So shading is 79 to 80 % of the pass (ALU and the latency of its fetches), one texture tap costs
+0.06 to 0.15 ms, ROP and depth 0.2 to 0.35 ms. The host iGPU (also RDNA2) agrees: HD 19.7, 3.1,
+4.4, 3.3 ms. `RADV_DEBUG=shaderstats` on the iGPU shows why: every `mesh.wesl` pixel shader is
+2,500 to 4,700 instructions at 128 VGPRs (8 waves a SIMD), 168 VGPRs (6 waves) for the largest.
+`lit_texel` branches on the flat `slots` word, and the compiler sizes registers and code for every
+branch whether a model's vertices can reach it or not.
+
+**Cut.** `shade.wesl` ANDs a per-model override, `slots_present`, into its copy of `slots` before
+any branch reads it (`mesh_render::slots_present`): the OR of every vertex's word, so
+`x & present == x` for each vertex and the picture cannot change, while every branch on a bit no
+vertex carries folds away. Four bit groups are always set (alpha channel, `NO_AMBIENT`/`NO_SUN`,
+`LIT_ALPHA`, material index) and a weapon effect model (any of `RIM_GLOW`, `RIM_EDGE`,
+`CLOCK_SCROLL_RING`, `CLOCK_SCROLL_HALO`, `BOMB_HALO`) keeps all bits: those choices hold the extra
+pipelines to HD 112 (from 90; 196 with a bare OR) and Pulse 116 (from 96).
+
+| Deck, ms, medians | 800p before / after | 1080p before / after (3 rounds) | 4K before / after |
+|---|---|---|---|
+| HD track solid | 4.62 / 4.30 (-7 %) | 8.23 / 7.65 (-7.0 %) | 22.7 to 26.5 / 24.2 to 24.5 (bimodal clock) |
+| HD craft, weapons, shields | 1.14 / 0.62 | 1.85 / 0.93 (-50 %) | 4.0 to 4.8 / 2.28 |
+| HD race pass | 5.99 / 5.13 | 10.43 / 8.89 (-15 %) | 27.6 to 32.3 / 27.4 to 27.7 |
+| HD `Scene::render` GPU | 11.7 / 10.0 | 16.75 / 14.34 | 35.0 to 40.0 / 34.4 to 35.4 |
+| Pulse track solid | 1.66 / 0.83 | 3.38 / 1.64 (-52 %) | 12.35 / 5.82 |
+| Pulse race pass | 2.43 / 1.24 | 4.81 / 2.37 (-51 %) | 17.25 / 8.18 |
+| Pulse `Scene::render` GPU | 4.8 / 3.2 | 7.33 / 4.60 | 19.1 / 10.4 |
+
+The pipelined per-frame bench (HD 1080p) went 10.09 to 8.69 ms. Picture: 24 frames byte-identical
+(`cmp`) against the baseline binary on the Deck, HD and Pulse at ticks 600, 1200, 1800, 2500, 3000
+and 3600, with the defaults and with `--msaa 4x --motion-blur high`. Cost: race load with a cold
+shader cache (`MESA_SHADER_CACHE_DISABLE=true`, `--ticks 1`, 3 runs) HD 8.8 to 10.1 s to 9.8 to
+9.9 s, Pulse 7.0 to 7.1 s; with a warm cache +0.08 s HD, +0.05 s Pulse.
+
+### Lever 3, our 4K present against a 1080p gamescope window: dropped
+
+The Deck has no 4K display (`DP-1` disconnected), so the real output path was not measured. Per
+process GPU time came from DRM fdinfo (`drm-engine-gfx` plus `-compute`, the `gamescope` binary
+copied to drop its file capability so its `/proc` is readable), with the game at a 60 fps frame
+limit, vsync off, the default profile, interleaved rounds. HD at 60 fps sat at 1040 MHz with the
+1080p window and 1,352 to 1,600 MHz with the 4K one, which hid its cost (its `gpu_ms` even fell),
+so HD was re-run at a 40 fps limit, 3 rounds, all six at 1040 MHz:
+
+| GPU time a frame, ms | HD window 1080p / 4K | Pulse window 1080p / 4K |
+|---|---|---|
+| game, headless gamescope 4K output, 1040 MHz | 14.40 / 16.76 (+2.4, 40 fps) | 10.55 / 13.45 (+2.9, 60 fps) |
+| headless gamescope itself | 0 / 0 | 0 / 0 |
+| nested gamescope (Wayland backend in the Deck's session), its own composite | 3.8 / 3.4 to 3.7 (1,352 to 1,600 MHz) | 3.8 to 4.3 / 4.3 to 5.3 (1040 MHz) |
+
+fdinfo counts the time a job occupies the ring, so the game's numbers exceed its timestamp spans
+(HD `gpu_ms` 10.7). Headless gamescope does no GPU work at all, even with `--force-composition`,
+so it cannot price the scale. A nested gamescope composites in both cases (it cannot pass the
+game's buffer through) and its 1080p to 4K scale costs 3.8 to 4.3 ms at 1040 MHz: more than our own
+4K present adds (2.4 HD, 2.9 Pulse). On a real 4K output gamescope is expected to scan a 4K window
+out directly (not measured), and whether it scales a 1080p window with a display plane (near-free)
+or a composite (the nested cost) was not observable here. The earlier table's frame-time gap (+1.7 HD, +3.0 Pulse) is `present_ms`, not GPU:
+the game's `gpu_ms` moved by 0.1 ms between the two windows.
+
+HUD both ways (host, tick 1,800, scene at 1920x1080 in both): our 4K composite against the 1080p
+frame scaled bilinearly to 4K, mean absolute difference per channel. HD's vector HUD is visibly
+softer scaled: 2.94/255 over the speed readout and 1.32 over the lap counter against 0.22 over a
+scene-only box. Pulse's pixel-art HUD barely moves: 0.43 and 0.27 against 0.13 (`just frame-compare`
+is built for 480x272 emulator pairs and flags every pixel of a 4K pair, so it was not used). Keeping ADR-0036's presentation-size
+composite; no setting change proposed.
+
+### Lever 2, skip the blur gather where a tile cannot smear: dropped, the skip already exists
+
+`fs_reconstruct`'s gather already returns early per pixel when the bilinear blend of the four
+nearest neighbour-max tiles is under 0.5 px of reach (`motion_blur.wesl`, `gather`), which is the
+per-tile test the lane proposed and the right one (a tile's own max would stop the smear bleeding
+into still tiles). Counted with a marker colour on that branch (diagnostic, not committed), host,
+`--msaa 4x --motion-blur high`, 1920x1080: **0.0 % of pixels** take it on HD and Pulse at ticks 300
+(160 km/h), 600, 1200, 1800 (a full-speed corner), 2500 and 3000, against 75 % on the stationary
+grid at tick 60. In a race every neighbourhood moves, so a skip saves nothing; prediction 0 ms,
+not implemented.

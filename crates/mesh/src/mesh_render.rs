@@ -244,6 +244,35 @@ pub enum Depth {
     Overlay,
 }
 
+/// The value of `shade.wesl`'s `slots_present` override for `model`: every `slots` bit one of
+/// its vertices carries, so the driver compiles out the branches none of them takes. Any superset
+/// draws the same picture (`x & present == x` for every vertex), so two choices trade a little of
+/// that folding for pipelines shared between models, each specialised pipeline being a fresh
+/// compile when the driver's shader cache is cold:
+///
+/// - **Always set:** the alpha channel, `NO_AMBIENT`/`NO_SUN`, `LIT_ALPHA` and the material
+///   index. They tell apart HD's sky, hulls and engine flares, which branch on little else.
+/// - **All bits for a weapon effect** (a model carrying one of the five weapon-only role bits):
+///   each has a role set of its own and covers a few pixels. Specialising them took HD's race
+///   from 90 to 168 distinct pipelines.
+fn slots_present(model: &Model) -> u32 {
+    use crate::mesh::slots;
+    const ALWAYS: u32 = slots::alpha_channel(3)
+        | slots::EMISSIVE
+        | slots::LIT_ALPHA
+        | (0x7f << slots::MATERIAL_SHIFT);
+    const WEAPON_ONLY: u32 = slots::RIM_GLOW
+        | slots::RIM_EDGE
+        | slots::CLOCK_SCROLL_RING
+        | slots::CLOCK_SCROLL_HALO
+        | slots::BOMB_HALO;
+    let carried = model.vertices.iter().fold(0, |all, v| all | v.slots);
+    if carried & WEAPON_ONLY != 0 {
+        return u32::MAX;
+    }
+    carried | ALWAYS
+}
+
 /// Builds the pipeline, geometry and texture bindings for `model`.
 ///
 /// Shared by the offscreen capture path and the interactive orbit window, so
@@ -433,6 +462,7 @@ pub fn build_with(
     if model.absorb_shell {
         constants.push(("absorb_shading", 1.0));
     }
+    constants.push(("slots_present", f64::from(slots_present(model))));
     constants.extend(pipeline_cache::scope_constants());
     let constants = constants.as_slice();
 

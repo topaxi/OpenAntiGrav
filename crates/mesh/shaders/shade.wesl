@@ -57,8 +57,17 @@ fn env_probe_irradiance_uv(uv: vec2<f32>) -> vec2<f32> {
 // same side of the branch. An implicit-derivative fetch inside it therefore
 // has the neighbours it needs. WGSL's analysis cannot see that about a
 // varying, so it is told here.
+// **Every `slots` bit some vertex of this model carries** (`mesh_render::build_with`), and all
+// ones for a pipeline that does not set it. ANDed in before any branch reads the word, which
+// changes nothing (`x & present == x` for every vertex of the model) but lets the driver drop
+// every branch the model can never take. On the Steam Deck at 1080p HD's track solid pass went
+// 8.23 to 7.65 ms and Pulse's 3.38 to 1.64, byte-identical (`docs/rendering/hires-gpu-levers.md`).
+override slots_present: u32 = 4294967295u;
+
 @diagnostic(off, derivative_uniformity)
-fn lit_texel(in: VertexOutput) -> vec4<f32> {
+fn lit_texel(raw: VertexOutput) -> vec4<f32> {
+    var in = raw;
+    in.slots = raw.slots & slots_present;
     // The `bindless` variant: this draw's slot of each group 1 array, under the
     // names the per-draw variant binds them by - see `bindings.wesl`.
     @if(bindless) {
