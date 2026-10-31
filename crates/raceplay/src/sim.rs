@@ -106,6 +106,8 @@ pub struct RaceSim {
     /// Which of [`Self::hull_plans`] each slot follows on the ring, `None` for
     /// [`Self::speed_plan`] itself.
     pub(super) ship_plan: [Option<u8>; oag_gameplay::MAX_SHIPS],
+    /// What learning the plans cost, for a diagnostic; see [`super::speed_plan::PlanSteps`].
+    pub(super) plan_steps: super::speed_plan::PlanSteps,
     /// What the opponents' drivers are flown with. One set for the whole field:
     /// per-craft variation is the skill work, and this is the basic driver.
     pub(super) ai_tuning: oag_ai::Tuning,

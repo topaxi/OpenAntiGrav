@@ -1909,7 +1909,8 @@ always learns them**, though the original reads no plan: a route is offered to
 the coin only if its plan verified, and the route plans are learned on the ring
 plan's reference hull, so skipping them would change which way an original
 opponent goes round a fork. That cost stays on forked circuits (Pulse `05_Track`,
-`07_Track` and others) and is open. Release start (`--race --ticks 1`, load 10 to
+`07_Track` and others) and is open; learning a route's plan on its driven stretch
+only was measured and not adopted ([below](#a-routes-plan-learned-on-its-driven-stretch-only-built-measured-not-adopted-2026-10-31)). Release start (`--race --ticks 1`, load 10 to
 20, three runs each), `--ai ours` (the old cost) against `--ai original`:
 Pulse `16_Track` 2.4 to 2.9 s against 0.65 s, HD's default track 6.7 to 8.1 s
 against 1.5 s.
@@ -5786,6 +5787,10 @@ Omega's copy of `altima` both.
 2048: every route on `square`, `park`, `tower`, `mall`, `bridge`, `arena`,
 `subway` and `altima`; none on `cathedral` (both verify with failures) or `sol`
 (no route laps, and the ring's own plan does not verify there either).
+Re-measured 2026-10-31 at Elite over four classes and seeds 1-3 (`route_plan_board`):
+the same except `square`, whose ring plan verifies at no class and whose routes 1-3
+verify only at RAPIER and in two of three PHANTOM seeds; Pulse's reversed
+`07_Track` forks too and its route never verifies.
 
 Measured on the result: a full field on `05_Track` over a race decided 17 times
 for the ring and 24 for the route; on 2048's `altima` over three laps, 13/7 at
@@ -5798,6 +5803,95 @@ loss on the route (`ai_dekonstruct_black_ground_truth.rs`).
 **Not ported**: 2048's per-circuit override (circuit record `+0x150`), its
 per-craft construction coin and its own re-commit; pad-seeking while on a route
 (the pads sit on ring indices).
+
+### A route's plan learned on its driven stretch only: built, measured, not adopted (2026-10-31)
+
+**Today's law stands**: a route's plan is learned over a whole lap of its line
+(the ring from the merge round to the split, then the route), from the merge at
+rest, though a craft only follows it from the switch (`SWITCH_SAMPLES` = 320 short
+of the split, or the first sample of the pre-fork path if that is later) to the
+merge. What a route plan's `steps` count (`oag_ai::plan::Report::steps`): the brake
+calibration, every learning tick including rewound ones, and every verification
+tick, for both searches where the whole-window one verified; verification is not
+bounded by `ROUTE_PLAN_BUDGET`, which is how Pulse `07_Track` (Outpost 7)'s
+unlappable centre ramp spends 131,456 steps at VENOM (65,600 to 131,200 on its
+reversed layout, which forks too). Each other hull then adapts each route plan
+over the whole lap again.
+
+**What was built** (lane `route-plan-trim`, in its branch history; ours, chosen):
+the reference route plan learned only from 120 samples before the switch to 120
+past the merge, seeded with the ring plan's ceilings outside it; the craft starting
+from the reference's own state on its ring plan's flying lap where it reaches that
+point; the ring's line up to the switch and from the merge, the route's line
+between (the two lines a racing craft is moved between); braking calibrated on
+the route line as before. A circuit with no ring plan (2048 `square`, `sol`) keeps
+the whole-lap path.
+
+**Cost** (reference route plans per circuit, all its routes summed, mean over
+four classes x seeds 1-3; the stretch column includes the one arrival run the
+routes share; release, the `route_plan_board` sweep, Elite, load 1.2-9; Outpost 7's
+131,456 is `07_Track` at VENOM alone, the row is the mean over classes):
+
+| circuit | main | stretch | ratio |
+| --- | ---: | ---: | ---: |
+| Pulse `05_Track` | 17,882 | 8,324 | 0.47 |
+| Pulse `07_Track` | 126,487 | 56,240 | 0.44 |
+| Pulse `14_Track` | 24,589 | 7,395 | 0.30 |
+| 2048 `altima` | 78,292 | 16,114 | 0.21 |
+| 2048 `bridge` | 180,705 | 27,576 | 0.15 |
+| 2048 `mall` | 160,088 | 38,465 | 0.24 |
+| Omega `altima` | 72,212 | 16,134 | 0.22 |
+
+Over the whole board the reference route plans fell from 19.3 M to 8.6 M steps
+(0.45x); with the hulls' copies, which stayed whole-lap, 38.5 M to 29.9 M (0.78x).
+2048 `cathedral`'s two routes verified at every class (none do today) and a full
+field drove them: 390 traversals, wrecked craft 9 to 5 over the twelve races.
+
+**Why it was not adopted**:
+
+- **de Konstruct Black** (`ai_dekonstruct_black_ground_truth`, Pulse `05_Track`
+  forward, PHANTOM) destroyed 3, 2 and 3 craft against main's 0, 1 and 1: seed 1
+  over its bound of 2. Its bound is fragile: main itself destroys 5, 4, 5 and 5
+  (seed 3 hitting 3) under `OAG_PERTURB` of +-1e-5 and +-2e-5, and the stretch
+  build 6, 3, 4, 4; 25 against 21 craft over the same 15 runs. A gate that fails
+  is still a regression, and a bound may only fall.
+- **The route itself drove worse there**: the reference hull on 05's route at
+  PHANTOM, alone and forced down it, 594.0 to 607.3 ticks a traversal with 4 to 8
+  wall ticks; a full field's wall ticks on it 145 to 308 (seed 1).
+- **Per-route solo rows moved both ways** (113 better, 89 worse of 726), inside the
+  spread a 1e-5 gravity perturbation of main alone gives (243 better, 276 worse);
+  summed, traversal ticks -0.15 % and wall ticks 1,131 to 976. **Field wall ticks
+  on the routes rose outside that spread** on 2048 `altima` (main 435, perturbed
+  429-442, stretch 625), `arena` (248, 228-255, 430) and Pulse `14_Track` (783,
+  736-756, 945); `subway`'s rise (578 to 781) is inside its (490-1,100).
+- **2048 `altima` PHANTOM**, a craft forced down route 0 unperturbed fell into a
+  rescue-placement loop on the ring near sample 1,550 (34 rescues; the family of
+  `sol`'s and the `29_Track` reversed loop above), which main never reached in
+  six perturbed runs and the stretch build reached in one of four.
+
+**Three findings that hold whatever the learner**:
+
+- **A route copy for another hull must not be adapted on the stretch alone.**
+  Every hull's copy on Pulse `14_Track` PHANTOM verified clean on its stretch
+  without lowering anything and then scraped the approach wall at route samples
+  2678-2720 in a lone race (0 to 60 and 90 wall ticks at Ace). The whole-lap
+  adaptation lowers that approach to 143-156 u/s against 168-188; the learner
+  steers without the plan and the race's driver with it, so a stretch-clean copy
+  is not race-clean.
+- **A synthetic arrival is not enough**: starting the stretch at the ring plan's
+  speed on the route's line flipped 2048 `arena`'s routes clean or not with the
+  lead-in's length (120 samples: route 2 failed at the switch; 320: route 1 did).
+- **The player's autopilot flies the original's driver**, which reads no plan: a
+  measurement of the plans has to set `Race::set_autopilot_tuning`, as
+  `route_plan_board` now does.
+
+The measuring command (`crates/raceplay/tests/route_plan_board.rs`):
+
+```sh
+OAG_SWEEP=1 OAG_REQUIRE_GAME_DATA=1 OAG_ROUTE_BOARD_OUT=board.tsv \
+  cargo nextest run --release -p oag-raceplay --run-ignored all \
+  --no-capture route_plan_board
+```
 
 ## Each title's craft laws (2026-10-09)
 
