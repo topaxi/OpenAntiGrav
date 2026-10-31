@@ -338,22 +338,25 @@ impl Session {
                 },
             });
         }
-        let team = shell
-            .teams
-            .iter()
-            .find(|choice| choice.value == self.settings.race.team)
-            .or_else(|| shell.teams.first());
-        if let Some(choice) = team
-            && draws(Kind::Ship)
-        {
-            let details = shell
-                .team_details
-                .iter()
-                .find(|team| team.id == choice.value);
-            warm.push(Warm {
-                kind: Kind::Ship,
-                source: super::picker::ship_source(title, details, &choice.value, mode, Vec::new()),
-            });
+        // Every team, not only the current one: each hull may need a pipeline the others do not,
+        // and a pipeline first built on the frame thread is a 30 to 50 ms Down step on the Deck.
+        if draws(Kind::Ship) {
+            for choice in &shell.teams {
+                let details = shell
+                    .team_details
+                    .iter()
+                    .find(|team| team.id == choice.value);
+                warm.push(Warm {
+                    kind: Kind::Ship,
+                    source: super::picker::ship_source(
+                        title,
+                        details,
+                        &choice.value,
+                        mode,
+                        Vec::new(),
+                    ),
+                });
+            }
         }
         warm
     }
