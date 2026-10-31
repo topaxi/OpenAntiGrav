@@ -893,25 +893,30 @@ Method: release, Xvfb `:91` with lavapipe, Pulse PSP EU and HD EU, `--no-audio -
 of each process's six races dropped (cold cache), two processes per binary interleaved
 before/after: 10 races per row. `--measure-race-load` now prints "confirm to first race
 frame" (from the press to the end of the first race frame, the first tick). The machine
-was otherwise idle (load 0.6 between runs); the load average at each process start, 0.5 to
-13, is the previous process's lavapipe threads. Before is main `1633cbb39` plus that
+was otherwise idle (load 0.6 between runs); the load average at each process start, 2.6 to
+15, is the previous process's lavapipe threads. Before is main `1633cbb39` plus that
 probe line.
 
 | Circuit | Binary | Confirm to first race frame, median [range] | Loading worst frame | First race frame |
 | --- | --- | --- | --- | --- |
-| Outpost 7 (`07_Track`) | before | 5844 ms [5463-5955] | 77.4 ms [75.5-107.9] | 46.5 ms |
-| Outpost 7 (`07_Track`) | after | **4313 ms** [3910-4374] | 101.2 ms [75.0-109.2] | 44.2 ms |
-| Talon's Junction (`16_Track`, no job) | before | 4264 ms [4007-4390] | 88.0 ms | 31.1 ms |
-| Talon's Junction (`16_Track`, no job) | after | 4309 ms [4017-4467] | 67.4 ms | 29.8 ms |
-| HD Talon's Junction (no job) | before | 5339 ms [5253-5450] | 180.4 ms | 196.2 ms |
-| HD Talon's Junction (no job) | after | 5488 ms [5092-7101] | 169.1 ms | 197.9 ms |
+| Outpost 7 (`07_Track`) | before | 5840 ms [5484-5949] | 100.5 ms [73.2-118.4] | 45.5 ms |
+| Outpost 7 (`07_Track`) | after | **4312 ms** [3993-4435] | 102.9 ms [73.1-111.4] | 44.0 ms |
+| Talon's Junction (`16_Track`, no job) | before | 4325 ms [3995-4431] | 89.3 ms | 30.3 ms |
+| Talon's Junction (`16_Track`, no job) | after | 4286 ms [3956-4424] | 87.1 ms | 29.9 ms |
+| HD Talon's Junction (no job) | before | 5358 ms [5014-5471] | 179.2 ms | 196.4 ms |
+| HD Talon's Junction (no job) | after | 5348 ms [5010-5504] | 178.1 ms | 194.2 ms |
 
 Outpost 7 now loads as fast as a circuit without a fork: the plans finish inside the scene
 build (3.5 s of `build_race_stage` on lavapipe). The plan lines are the same set before and
-after; no run logged a relearn or a restart. The cost: Outpost 7's worst loading frame rose
-from 77 to 101 ms median, the plan threads sharing the cores with lavapipe drawing the
-loading screen. On the Deck's four cores that share is larger; not measured there.
+after; no run logged a relearn or a restart. A first build also started the race on the
+load thread for a circuit without a fork, which only added a copy of the setup there: HD
+Talon's Junction measured 5488 against 5339 ms, so the load thread now starts it only on a
+fork. The loading screen's worst frame on Outpost 7 read 77 against 101 ms median in the
+first two rounds and 100 against 103 ms in these, so any cost of the plan threads sharing
+the cores with lavapipe is inside the noise here; the Deck's four cores are not measured.
 
 The learner alone (`tests::speed_plan_overlap`, release, `--no-capture`, 5 runs each, load
-7 to 9): Outpost 7 1.56 s before (the routes one after another, then the hulls) against
-1.17 s overlapped; 2048 `altima` 1.91 s against 1.28 s.
+7 to 9): Outpost 7 1.56 s against 1.17 s overlapped; 2048 `altima` 1.91 s against 1.28 s.
+The "before" there is `learn_speed_plans_serially`, main's learner rebuilt in the test (the
+routes one after another, then each hull on a thread), not main's binary; the link to main
+itself is the identical plan lines of the end-to-end runs.
