@@ -29,10 +29,24 @@ type Key = (String, Vec<PathBuf>);
 pub(crate) struct Opened {
     key: Key,
     archives: SharedArchives,
+    /// A second, owned open for the one screen that keeps its archives (the campaign's art
+    /// player): taking it costs nothing, and a refill is opened on another worker.
+    spare: Spare,
+    /// `FEData.wad` of a PSP source, opened ahead for the campaign's per-cell skill read (it
+    /// is no part of the mounted archives). `None` where the source has no such file.
+    fedata: Option<Arc<Mutex<oag_assets::Archive>>>,
     gate: oag_game::unlock::Gate,
     /// The previews' pipelines, built on `device`.
     pipelines: KeptBuildCache,
     device: wgpu::Device,
+}
+
+/// The owned archives a campaign screen takes.
+pub(crate) enum Spare {
+    None,
+    Ready(Box<oag_assets::Archives>),
+    #[cfg(not(target_arch = "wasm32"))]
+    Opening(oag_thread::Task<Option<oag_assets::Archives>>),
 }
 
 /// The menus' source: not started, being opened, or open.
@@ -42,7 +56,7 @@ pub(crate) enum MenuSource {
     Idle,
     #[cfg(not(target_arch = "wasm32"))]
     Opening(Key, oag_thread::Task<Option<Opened>>),
-    Open(Opened),
+    Open(Box<Opened>),
     /// Opening failed for this key, which was said; the screens open on demand as before.
     Failed(Key),
 }
@@ -66,24 +80,36 @@ struct Job {
     anisotropy: oag_mesh::mesh_render::Anisotropy,
 }
 
+/// Opens the key's source with its DLC packs.
+#[cfg(not(target_arch = "wasm32"))]
+fn open_key((source, dlc): &Key) -> Option<oag_assets::Archives> {
+    let (packs, pure_packs, problems) =
+        oag_source::dlc::packs_from_defaults(dlc, &oag_source::cache::default_dlc_cache_dir());
+    for problem in problems {
+        warn!("{problem}");
+    }
+    match oag_source::title::open_source(source, packs, pure_packs) {
+        Ok(opened) => Some(opened.archives),
+        Err(error) => {
+            warn!("cannot open {source} for the menus: {error:#}");
+            None
+        }
+    }
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 impl Job {
     fn run(self) -> Option<Opened> {
         let started = web_time::Instant::now();
-        let (source, dlc) = &self.key;
-        let (packs, pure_packs, problems) =
-            oag_source::dlc::packs_from_defaults(dlc, &oag_source::cache::default_dlc_cache_dir());
-        for problem in problems {
-            warn!("{problem}");
-        }
-        let mut archives = match oag_source::title::open_source(source, packs, pure_packs) {
-            Ok(opened) => opened.archives,
-            Err(error) => {
-                warn!("cannot open {source} for the selection screens: {error:#}");
-                return None;
-            }
-        };
+        let mut archives = open_key(&self.key)?;
         let gate = oag_game::unlock::Gate::read(self.title, &mut archives);
+        // Before the previews' pipelines (0.8 s on a cold driver cache): the campaign screens
+        // take this one, and a player reaches them sooner than a preview.
+        let spare = open_key(&self.key).map_or(Spare::None, |archives| Spare::Ready(Box::new(archives)));
+        let fedata =
+            oag_assets::Archive::open(&super::campaign::fedata_spec(&self.key.0))
+                .ok()
+                .map(|archive| Arc::new(Mutex::new(archive)));
         let opened_in = started.elapsed();
         let mut pipelines = KeptBuildCache::default();
         let target = PreviewTarget {
@@ -119,6 +145,8 @@ impl Job {
         Some(Opened {
             key: self.key,
             archives: Arc::new(Mutex::new(archives)),
+            spare,
+            fedata,
             gate,
             pipelines,
             device: self.device,
@@ -206,7 +234,7 @@ impl Session {
                         );
                     }
                     self.adopt_preview_pipelines(&mut opened);
-                    MenuSource::Open(opened)
+                    MenuSource::Open(Box::new(opened))
                 }
                 Some(Err(_)) => {
                     warn!("the menu source worker panicked; the screens open the disc themselves");
@@ -221,6 +249,60 @@ impl Session {
             }
             _ => None,
         }
+    }
+
+    /// Owned archives for a screen that keeps them, from the worker's spare when the menus'
+    /// source is open for the current options (a refill is opened on a worker at once), else
+    /// `None`: the caller opens its own.
+    pub(crate) fn take_menu_archives(&mut self) -> Option<oag_assets::Archives> {
+        self.menu_source()?;
+        let MenuSource::Open(opened) = &mut self.menu_source else {
+            return None;
+        };
+        let taken = match std::mem::replace(&mut opened.spare, Spare::None) {
+            Spare::Ready(archives) => Some(*archives),
+            #[cfg(not(target_arch = "wasm32"))]
+            Spare::Opening(mut task) => task.join().and_then(Result::ok).flatten(),
+            Spare::None => None,
+        };
+        #[cfg(not(target_arch = "wasm32"))]
+        if taken.is_some() {
+            let key = opened.key.clone();
+            opened.spare = Spare::Opening(oag_thread::Task::spawn("menu-spare", move || {
+                open_key(&key)
+            }));
+        }
+        taken
+    }
+
+    /// What a campaign cell's launch reads off the disc, from the menus' source when it is
+    /// open: `FEData.wad` and the shared archives. Both `None` where there is no such source.
+    pub(crate) fn menu_campaign_reads(
+        &mut self,
+    ) -> (Option<Arc<Mutex<oag_assets::Archive>>>, Option<SharedArchives>) {
+        let Some((archives, _)) = self.menu_source() else {
+            return (None, None);
+        };
+        let fedata = match &self.menu_source {
+            MenuSource::Open(opened) => opened.fedata.clone(),
+            _ => None,
+        };
+        (fedata, Some(archives))
+    }
+
+    /// Runs `read` on the menus' shared archives (opened on the worker), or on a fresh open
+    /// where there are none (the web, a changed source).
+    pub(crate) fn with_menu_archives<R>(
+        &mut self,
+        what: &str,
+        read: impl FnOnce(&mut oag_assets::Archives) -> R,
+    ) -> Option<R> {
+        if let Some((archives, _)) = self.menu_source() {
+            let mut archives = archives.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            return Some(read(&mut archives));
+        }
+        let mut archives = self.open_title_archives(what)?;
+        Some(read(&mut archives))
     }
 
     /// The worker's pipelines become the previews' own, where they were built for this device
@@ -279,22 +361,25 @@ impl Session {
                 },
             });
         }
-        let team = shell
-            .teams
-            .iter()
-            .find(|choice| choice.value == self.settings.race.team)
-            .or_else(|| shell.teams.first());
-        if let Some(choice) = team
-            && draws(Kind::Ship)
-        {
-            let details = shell
-                .team_details
-                .iter()
-                .find(|team| team.id == choice.value);
-            warm.push(Warm {
-                kind: Kind::Ship,
-                source: super::picker::ship_source(title, details, &choice.value, mode, Vec::new()),
-            });
+        // Every team, not only the current one: each hull may need a pipeline the others do not,
+        // and a pipeline first built on the frame thread is a 30 to 50 ms Down step on the Deck.
+        if draws(Kind::Ship) {
+            for choice in &shell.teams {
+                let details = shell
+                    .team_details
+                    .iter()
+                    .find(|team| team.id == choice.value);
+                warm.push(Warm {
+                    kind: Kind::Ship,
+                    source: super::picker::ship_source(
+                        title,
+                        details,
+                        &choice.value,
+                        mode,
+                        Vec::new(),
+                    ),
+                });
+            }
         }
         warm
     }

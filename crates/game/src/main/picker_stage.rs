@@ -110,6 +110,155 @@ impl PreviewSource {
     }
 }
 
+type Key = (usize, Option<String>);
+
+/// What one selection's read needs, owned.
+struct ReadJob {
+    key: Key,
+    kind: picker::Kind,
+    axis: LiveryAxis,
+    source: Option<PreviewSource>,
+    previews: Previews,
+    archives: SharedArchives,
+    /// The sheet to extend with the entry's stills, when the entry changed.
+    base: Option<Sheet>,
+    slideshow: bool,
+    mesh: bool,
+}
+
+enum ShowRead {
+    /// The entry did not change, or the title draws no stills.
+    Unchanged,
+    Loaded(Slideshow, Sheet),
+    Failed,
+}
+
+/// What a worker read for one selection.
+struct Read {
+    key: Key,
+    show: ShowRead,
+    preview: Option<Result<PreviewData>>,
+}
+
+impl ReadJob {
+    /// The disc half of a selection: its stills (on a sheet) and its mesh, parsed.
+    fn run(self) -> Read {
+        let ReadJob { key, kind, axis, source, previews, archives, base, slideshow, mesh } = self;
+        let Some(source) = source else {
+            warn!("entry {} has no preview source", key.0);
+            return Read { key, show: ShowRead::Unchanged, preview: None };
+        };
+        let Ok(mut archives) = oag_thread::lock(&archives) else {
+            warn!("the menu archives' lock is poisoned - the preview draws nothing");
+            return Read { key, show: ShowRead::Failed, preview: None };
+        };
+        let show = match base {
+            Some(base) if slideshow => read_slideshow(&mut archives, &previews, &source, &base),
+            _ => ShowRead::Unchanged,
+        };
+        let preview = mesh.then(|| {
+            read_preview(&mut archives, &previews, kind, &source, key.1.as_deref(), axis)
+                .with_context(|| format!("entry {}", key.0))
+        });
+        Read { key, show, preview }
+    }
+}
+
+/// Reads the entry's stills and puts them on a sheet of the screen's own - see
+/// [`PickerStage::refresh_preview`].
+///
+/// **A craft entry as much as a circuit one**: Pure's craft preview is its team's own
+/// `screen.xml` chain, and Pulse's and HD's craft files author no stills, so asking costs
+/// an already-open archive read and returns an empty list there.
+fn read_slideshow(
+    archives: &mut oag_assets::Archives,
+    previews: &Previews,
+    source: &PreviewSource,
+    base: &Sheet,
+) -> ShowRead {
+    let (location, zone) = match source {
+        PreviewSource::Track { location, zone, .. } => (location.clone(), *zone),
+        PreviewSource::Ship { location, .. } => (location.clone(), false),
+    };
+    let mut report = Vec::new();
+    let globals: Vec<(&str, &str)> = previews
+        .globals
+        .iter()
+        .map(|(key, value)| (key.as_str(), value.as_str()))
+        .collect();
+    let loaded = oag_game::preview::slideshow(
+        archives,
+        &location,
+        zone,
+        &globals,
+        &previews.strings,
+        &mut report,
+    );
+    for line in report {
+        warn!("{line}");
+    }
+    match loaded {
+        Ok((show, blobs)) => {
+            let mut report = Vec::new();
+            let sheet = base.extended(&blobs, &mut report);
+            for line in report {
+                debug!("slideshow {line}");
+            }
+            debug!(
+                "slideshow {location}: {} state(s), {} still(s) on a {}x{} sheet",
+                show.states().len(),
+                blobs.len(),
+                sheet.width,
+                sheet.height
+            );
+            ShowRead::Loaded(show, sheet)
+        }
+        Err(error) => {
+            warn!("{error:#} - the hexagonal window draws nothing");
+            ShowRead::Failed
+        }
+    }
+}
+
+/// A selection's read, on a worker where there is one.
+enum Pending {
+    #[cfg(not(target_arch = "wasm32"))]
+    Task(oag_thread::Task<Read>),
+    #[cfg(target_arch = "wasm32")]
+    Done(Box<Read>),
+}
+
+impl Pending {
+    fn start(job: ReadJob) -> Self {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            Self::Task(oag_thread::Task::spawn("preview-read", move || job.run()))
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            Self::Done(Box::new(job.run()))
+        }
+    }
+
+    fn finished(&self) -> bool {
+        match self {
+            #[cfg(not(target_arch = "wasm32"))]
+            Self::Task(task) => task.is_finished(),
+            #[cfg(target_arch = "wasm32")]
+            Self::Done(_) => true,
+        }
+    }
+
+    fn join(self) -> Option<Read> {
+        match self {
+            #[cfg(not(target_arch = "wasm32"))]
+            Self::Task(mut task) => task.join().and_then(Result::ok),
+            #[cfg(target_arch = "wasm32")]
+            Self::Done(read) => Some(*read),
+        }
+    }
+}
+
 /// What a title's front end says about how its selection screens preview an
 /// entry - the two facts [`PickerStage`] cannot read off the entry itself.
 #[derive(Debug, Clone, Default)]
@@ -171,6 +320,10 @@ pub(crate) struct PickerStage {
     /// Which entry and livery `preview` was built for, so a tick that
     /// changed nothing rebuilds nothing.
     built_for: Option<(usize, Option<String>)>,
+    /// The latest entry and livery asked for; `built_for` catches up when the read lands.
+    requested: Option<(usize, Option<String>)>,
+    /// The worker reading `requested` (or the request before it) off the disc.
+    pending: Option<Pending>,
     /// The worker's measurements, on a track picker; `None` on a ship one.
     distances: Option<Distances>,
     anisotropy: Anisotropy,
@@ -226,6 +379,8 @@ impl PickerStage {
             archives,
             preview: None,
             built_for: None,
+            requested: None,
+            pending: None,
             distances,
             anisotropy,
             previews,
@@ -283,137 +438,113 @@ impl PickerStage {
         self.slideshow.as_ref()?.model.as_ref()
     }
 
-    /// Loads the selected entry's preview, in the selected livery, if it is
-    /// not the one already built.
+    /// Asks for the selected entry's stills and preview mesh, in the selected livery, if they
+    /// are not the ones already built or being read. The disc is read and parsed on a worker
+    /// ([`Self::poll_preview`] lands the result), and the previous entry's picture stays up
+    /// until then.
     pub(crate) fn refresh_preview(&mut self, gpu: &Gpu) {
         let index = self.model.index();
-        let livery = match self.livery_axis {
-            LiveryAxis::Skin => self.model.variant().map(|(id, _)| id.clone()),
-            LiveryAxis::Variant => self.model.variant().map(|(id, _)| id.clone()),
-        };
+        let livery = self.model.variant().map(|(id, _)| id.clone());
         let key = (index, livery);
+        if self.requested.as_ref() == Some(&key) {
+            return;
+        }
+        self.requested = Some(key);
+        self.poll_preview(gpu);
+        // The screen's first picture has no earlier one to stay up: a screen that opens on
+        // nothing where the original shows its stills is a hole, so the opening frame waits
+        // for the first read (the one read left on the frame thread's clock).
+        if self.built_for.is_none()
+            && let Some(pending) = self.pending.take()
+        {
+            self.finish(gpu, pending);
+        }
+    }
+
+    fn finish(&mut self, gpu: &Gpu, pending: Pending) {
+        match pending.join() {
+            Some(read) => self.land(gpu, read),
+            None => {
+                warn!("the preview worker panicked - the preview keeps its last picture");
+                self.built_for = self.requested.clone();
+            }
+        }
+    }
+
+    /// Lands a finished read and starts the one for the latest request, if it differs.
+    /// Called every tick and by [`Self::refresh_preview`].
+    pub(crate) fn poll_preview(&mut self, gpu: &Gpu) {
+        if let Some(pending) = &mut self.pending {
+            if !pending.finished() {
+                return;
+            }
+            let Some(pending) = self.pending.take() else {
+                return;
+            };
+            self.finish(gpu, pending);
+        }
+        let Some(key) = self.requested.clone() else {
+            return;
+        };
         if self.built_for.as_ref() == Some(&key) {
             return;
         }
         let entry_changed = self
             .built_for
             .as_ref()
-            .is_none_or(|(built, _)| *built != index);
-        self.built_for = Some(key.clone());
-        if entry_changed {
-            self.load_slideshow(index);
-        }
-        // A title that previews with stills alone has no mesh to fail to
-        // load, so there is nothing here to report as missing.
+            .is_none_or(|(built, _)| *built != key.0);
         let hull_only = self.model.kind() == picker::Kind::Ship && self.previews.ship_hull.is_some();
         let circuit_model =
             oag_game::preview::draws_circuit_model(self.previews.front_end, self.model.kind());
-        self.preview = if self.previews.meshes || hull_only || circuit_model {
-            match self.load_preview(gpu, index, key.1.as_deref(), self.livery_axis) {
-                Ok(preview) => Some(preview),
-                Err(error) => {
-                    warn!("{error:#} - the preview draws nothing");
-                    None
-                }
-            }
-        } else {
-            None
+        let source = self.sources.get(key.0).cloned();
+        let job = ReadJob {
+            key,
+            kind: self.model.kind(),
+            axis: self.livery_axis,
+            source,
+            previews: self.previews.clone(),
+            archives: Arc::clone(&self.archives),
+            base: entry_changed.then(|| self.base.clone()),
+            slideshow: entry_changed && self.layout.hd_track.is_none(),
+            mesh: self.previews.meshes || hull_only || circuit_model,
         };
+        self.pending = Some(Pending::start(job));
     }
 
-    /// Reads the selected entry's stills and puts them on a sheet of this
-    /// screen's own, for the renderer to pick up on its next frame.
-    ///
-    /// **A craft entry as much as a circuit one**: Pure's craft preview is
-    /// its team's own `screen.xml` chain, and Pulse's and HD's craft files
-    /// author no stills, so asking costs an already-open archive read and
-    /// returns an empty list there.
-    fn load_slideshow(&mut self, index: usize) {
-        // HD's track screen authors no hexagonal window: its `Emblem` and
-        // `FlyByMovie` are the widgets that show a circuit.
-        if self.layout.hd_track.is_some() {
-            return;
-        }
-        let (location, zone) = match self.sources.get(index).cloned() {
-            Some(PreviewSource::Track { location, zone, .. }) => (location, zone),
-            Some(PreviewSource::Ship { location, .. }) => (location, false),
-            None => return,
-        };
-        let mut report = Vec::new();
-        let globals: Vec<(&str, &str)> = self
-            .previews
-            .globals
-            .iter()
-            .map(|(key, value)| (key.as_str(), value.as_str()))
-            .collect();
-        let Ok(mut archives) = oag_thread::lock(&self.archives) else {
-            warn!("the menu archives' lock is poisoned - the hexagonal window draws nothing");
-            return;
-        };
-        let loaded = oag_game::preview::slideshow(
-            &mut archives,
-            &location,
-            zone,
-            &globals,
-            &self.previews.strings,
-            &mut report,
-        );
-        for line in report {
-            warn!("{line}");
-        }
-        match loaded {
-            Ok((show, blobs)) => {
-                let mut report = Vec::new();
-                let sheet = self.base.extended(&blobs, &mut report);
-                for line in report {
-                    debug!("slideshow {line}");
-                }
-                debug!(
-                    "slideshow {location}: {} state(s), {} still(s) on a {}x{} sheet",
-                    show.states().len(),
-                    blobs.len(),
-                    sheet.width,
-                    sheet.height
-                );
+    fn land(&mut self, gpu: &Gpu, read: Read) {
+        let Read { key, show, preview } = read;
+        self.built_for = Some(key);
+        match show {
+            ShowRead::Unchanged => {}
+            ShowRead::Loaded(show, sheet) => {
                 self.slideshow = Some(show);
                 self.sheet = Some(sheet);
                 self.sheet_uploaded = false;
             }
-            Err(error) => {
-                warn!("{error:#} - the hexagonal window draws nothing");
-                self.slideshow = None;
-            }
+            ShowRead::Failed => self.slideshow = None,
         }
-    }
-
-    fn load_preview(
-        &mut self,
-        gpu: &Gpu,
-        index: usize,
-        livery: Option<&str>,
-        axis: LiveryAxis,
-    ) -> Result<Preview> {
-        let source = self
-            .sources
-            .get(index)
-            .with_context(|| format!("entry {index} has no preview source"))?;
-        let mut archives = oag_thread::lock(&self.archives).map_err(|_| anyhow::anyhow!("the menu archives' lock is poisoned"))?;
-        build_preview(
-            &mut archives,
-            &self.previews,
-            self.model.kind(),
-            source,
-            livery,
-            axis,
-            &PreviewTarget {
-                device: &gpu.device,
-                queue: &gpu.queue,
-                format: gpu.output.config.format,
-                anisotropy: self.anisotropy,
-            },
-            &mut gpu.preview_pipelines.borrow_mut(),
-        )
-        .with_context(|| format!("entry {index}"))
+        self.preview = match preview {
+            None => None,
+            Some(Err(error)) => {
+                warn!("{error:#} - the preview draws nothing");
+                None
+            }
+            Some(Ok(data)) => {
+                let target = PreviewTarget {
+                    device: &gpu.device,
+                    queue: &gpu.queue,
+                    format: gpu.output.config.format,
+                    anisotropy: self.anisotropy,
+                };
+                match finish_preview(data, &target, &mut gpu.preview_pipelines.borrow_mut()) {
+                    Ok(preview) => Some(preview),
+                    Err(error) => {
+                        warn!("{error:#} - the preview draws nothing");
+                        None
+                    }
+                }
+            }
+        };
     }
 
     /// Copies whatever the distance worker has measured so far onto the
@@ -569,6 +700,27 @@ pub(crate) fn build_preview(
     target: &PreviewTarget<'_>,
     pipelines: &mut oag_mesh::mesh_render::KeptBuildCache,
 ) -> Result<Preview> {
+    let data = read_preview(archives, previews, kind, source, livery, axis)?;
+    finish_preview(data, target, pipelines)
+}
+
+/// A preview mesh read and parsed off the disc, not yet on the GPU: everything
+/// [`build_preview`] does that is not the upload, so it can run on a worker.
+pub(crate) struct PreviewData {
+    name: String,
+    model: oag_mesh::mesh::Model,
+    ramp: Option<oag_game::preview::track_model::Ramp>,
+}
+
+/// The disc half of [`build_preview`].
+pub(crate) fn read_preview(
+    archives: &mut oag_assets::Archives,
+    previews: &Previews,
+    kind: picker::Kind,
+    source: &PreviewSource,
+    livery: Option<&str>,
+    axis: LiveryAxis,
+) -> Result<PreviewData> {
     let source = source.clone();
     let name = source
         .entry_name(previews.ship_hull, previews.front_end)
@@ -646,6 +798,16 @@ pub(crate) fn build_preview(
         model.vertices.len(),
         model.indices.len() / 3
     );
+    Ok(PreviewData { name, model, ramp })
+}
+
+/// The GPU half of [`build_preview`], on the thread that owns `pipelines`.
+pub(crate) fn finish_preview(
+    data: PreviewData,
+    target: &PreviewTarget<'_>,
+    pipelines: &mut oag_mesh::mesh_render::KeptBuildCache,
+) -> Result<Preview> {
+    let PreviewData { name, model, ramp } = data;
     let preview = pipelines.build(|| {
         Preview::new(
             target.device,

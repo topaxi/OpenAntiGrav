@@ -521,6 +521,7 @@ impl Session {
             return;
         };
         picker.refresh_info();
+        picker.poll_preview(&self.gpu);
         // A split-screen seat's screen reads its own device and no other.
         let mut events = match picker.seat {
             Some((seat, _)) => picker
@@ -537,6 +538,7 @@ impl Session {
         let mut partner_events = Vec::new();
         if let Some(partner) = stage.partner.as_deref_mut() {
             partner.refresh_info();
+            partner.poll_preview(&self.gpu);
             let seat = partner.seat.map_or(1, |(seat, _)| seat);
             partner_events = partner.model.update(&mut seat::input(
                 self.split_lobby.as_ref(),

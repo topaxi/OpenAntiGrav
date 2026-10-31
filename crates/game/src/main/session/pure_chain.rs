@@ -93,7 +93,7 @@ impl Session {
     /// The ship directories `Team Selection` must not offer yet: the teams
     /// the disc gates (`PI_Team`'s `<Unlock>` rows) that the profile has not
     /// opened. Empty on a title with no list campaign, and under `--unlock-all`.
-    pub(crate) fn pure_locked_teams(&self) -> Vec<String> {
+    pub(crate) fn pure_locked_teams(&mut self) -> Vec<String> {
         let Some(shell) = self.shell.as_ref() else {
             return Vec::new();
         };
@@ -101,10 +101,12 @@ impl Session {
         if shell.title.campaign.list_entry.is_none() || oag_game::unlock::unlock_all() {
             return Vec::new();
         }
-        let Some(mut archives) = self.open_title_archives("Team Selection") else {
-            return Vec::new();
-        };
-        pure_list::locked_teams_on(shell.title, &mut archives, &self.records)
+        let title = shell.title;
+        let records = self.records.clone();
+        self.with_menu_archives("Team Selection", |archives| {
+            pure_list::locked_teams_on(title, archives, &records)
+        })
+        .unwrap_or_default()
     }
 
     /// Opens the chain again on the screen that picked the event named `name`,

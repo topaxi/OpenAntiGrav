@@ -1032,7 +1032,68 @@ Distance(m) value, which the circuit-lengths worker fills in when it lands (a da
 34, the number at a lighter moment), with the same pixels everywhere else. The same runs put the
 worst menu frame-phase total at 652 ms before and 18 to 34 ms after.
 
-**Open:** each selection still reads its stills (8 to 10 ms) and its model (1 to 7 ms) on the
-frame thread, under 50 ms but against the rule that disc reads leave the render thread; the
-campaign screens and Pure's team gate (`Session::open_title_archives`) still open the disc on the
-frame that opens them.
+**Open (closed by the next section):** each selection still read its stills and its model on the
+frame thread; the campaign screens and Pure's team gate (`Session::open_title_archives`) still
+opened the disc on the frame that opens them.
+
+## The remaining menu reads off the frame thread (2026-10-31, `menu-io-remaining`)
+
+Four reads were still on the frame thread after the section above. All four are off it now:
+
+1. **Each selection's stills and model** (`PickerStage::refresh_preview`): `picker_stage::ReadJob`
+   reads the stills, extends the sheet and reads and parses the mesh and its ramp on an
+   `oag_thread::Task`; the frame thread only does the GPU half (`finish_preview`, with the kept
+   pipelines) when `poll_preview` sees the task finished. Until then the previous entry's picture
+   stays up. A newer request waits for the task in flight and replaces any older one. The screen's
+   **first** read is the exception: the opening frame joins its task, because nothing earlier
+   exists to keep up and a hexagonal window or a hull missing for a few frames is a hole the
+   original does not have (a first version without the wait drew a Track Select with no stills in
+   a headless walk). That one read is 13 to 17 ms on the Deck (37 ms at 4K with the first GPU
+   upload), the remaining frame-thread disc read of the race box.
+2. **The campaign screens' disc open** (`Session::open_title_archives`): the menus' worker opens a
+   second, owned `Archives` right after the first (before the previews' pipelines), and RACE
+   CAMPAIGN takes it (`take_menu_archives`); a refill is opened on another worker at once. The
+   Pure chain keeps its archives for its art player, which is why it needs an owned one and not
+   the shared one. Pure's team gate (`pure_locked_teams`) and a 2048 DLC campaign cell read
+   through the shared archives (`with_menu_archives`), the web build and a changed source open
+   inline as before.
+3. **A cell's launch**: `resolve_campaign_ai_skill_scale` opened `FEData.wad` fresh to read the
+   circuit's `stats.xml`. That is a 35 ms frame on the Deck, found by timing the pieces of
+   `launch_campaign_cell` (49.5 ms against 12 for the Ship Select it opens). The worker opens the
+   file with the source now. HD's fallback (its `stats.xml` lives in the mounted archives) reads
+   through the shared archives, so it now sees the DLC packs and the override layer as the other
+   menu reads do; the bytes of the shipped file are the same.
+4. **Pipelines for every team's hull.** The first Down in the campaign's Ship Select cost 50 ms on
+   the Deck: the worker only built the current team, and another hull's first `Preview::new`
+   compiled a pipeline on the frame thread. The worker now builds all teams' hulls (with no skins
+   or variant, which draw through the same pipelines).
+
+Method: the section above's (`deckwalk.sh`, `OAG_PHASE_SPIKE_MS=0`, Deck at vsync off and no
+frame limit, `gamescope --backend headless` at 1280x800, 1920x1080 and 3840x2160; Pulse PSP EU,
+`--unlock-all`, `OAG_MODS` empty). The race walk is the one above plus seven Downs on Ship
+Select; the campaign walk is START, START, then Cross three times (Grid Selection, the cell
+screen, the cell: Ship Select opens) and a Down on Ship Select. Worst frame-phase `total`
+before and after, ms, one run each (the Deck was otherwise idle):
+
+| Step | 800p before | 800p after | 1080p before | 1080p after | 4K before | 4K after |
+| --- | --- | --- | --- | --- | --- | --- |
+| RACE CAMPAIGN opens | 112.6 | 16.9 | 111.0 | 15.4 | 126.5 | 30.5 |
+| worst menu frame, campaign walk to the race launch | 112.6 | 16.9 | 111.0 | 17.8 | 126.5 | 33.7 |
+| Track Select entry | 16.0 | 18.3 | 17.3 | 18.1 | 38.3 | 37.8 |
+| Ship Select entry | 12.5 | 14.5 | 12.1 | 16.7 | 20.2 | 23.3 |
+| worst picker Down (Track and Ship Select) | 50.1 | 5.2 | 50.7 | 4.2 | 64.0 | 16.8 |
+| mean picker Down | 13.9 | 3.6 | 13.8 | 3.6 | 22.8 | 7.8 |
+
+The entries are flat or slightly up (the opening read is joined, and the worker's second archive
+open competes for the disc during the walk's early seconds). No campaign or race-box menu frame
+passes 50 ms at any of the three sizes now.
+
+Pictures: a headless `--drive` walk on this machine (Track Select after 0, 1 and 5 Downs, Ship
+Select after 0 and 1, RACE CAMPAIGN's first two screens), before and after, with ticks enough for
+the worker to land: byte-identical. With too few ticks the after pictures differ only where the
+previous entry's picture is still up, as designed.
+
+**Open:** the opening read above; a variant or skin the worker did not build (HD's per-circuit
+models, a Zone hull) may still compile on the frame thread once; the Pure chain's art player and
+HD's campaign screens read the disc on the frame thread from their own archives (not measured:
+only Pulse's campaign was walked).
