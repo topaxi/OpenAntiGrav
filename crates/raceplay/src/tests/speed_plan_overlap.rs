@@ -25,11 +25,18 @@ fn pulse_outpost_7() -> Option<Race> {
 }
 
 /// The two learners on the same race, every field they write compared.
-fn assert_overlapped_is_serial(race: &Race) -> LearnedPlans {
+fn assert_overlapped_is_serial(label: &str, race: &Race) -> LearnedPlans {
     let mut overlapped = race.sim.clone();
     let mut serial = race.sim.clone();
+    let started = std::time::Instant::now();
     learn_speed_plans(&mut overlapped);
+    let took = started.elapsed();
+    let started = std::time::Instant::now();
     learn_speed_plans_serially(&mut serial);
+    println!(
+        "{label}: learning overlapped {took:?}, as before 2026-10-31 {:?}",
+        started.elapsed()
+    );
     let overlapped = LearnedPlans::of(overlapped);
     assert_eq!(overlapped, LearnedPlans::of(serial));
     overlapped
@@ -42,7 +49,7 @@ fn overlapped_plans_are_the_serial_plans_on_outpost_7() {
         return;
     };
     assert!(!race.sim.routes.is_empty(), "07_Track has a fork");
-    let learned = assert_overlapped_is_serial(&race);
+    let learned = assert_overlapped_is_serial("07_Track", &race);
     assert!(learned.speed_plan().is_some(), "the ring's plan verifies");
 }
 
@@ -64,7 +71,7 @@ fn overlapped_plans_are_the_serial_plans_on_2048_altima() {
     .expect("loading altima");
     let race = Race::start(loaded.setup);
     assert!(!race.sim.routes.is_empty(), "altima has forks");
-    let learned = assert_overlapped_is_serial(&race);
+    let learned = assert_overlapped_is_serial("altima", &race);
     assert!(
         learned.route_plan_count() > 0,
         "a route verifies, so the hulls adapt it"

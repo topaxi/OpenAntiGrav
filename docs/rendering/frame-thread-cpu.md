@@ -869,3 +869,49 @@ are cold-cache noise (8.5 s first run against 0.6 s) and not a comparison.
 Deck confirmation, for the maintainer: a build of this branch, the same menu route to Outpost 7
 White with `--frame-log`: the `WARN frame: 1639 ms` after `ai speed plan` lines should be gone and
 the plan lines should print during the loading screen.
+
+## The speed plans started on the race-load thread (2026-10-31, `speed-plan-overlap`)
+
+Claim: "on a menu-started race on Pulse Outpost 7 (`07_Track`) and HD Talon's Junction, the
+total time from confirming the race to its first tick drops on an idle machine, with the speed
+plans still bit-identical and never relearned on the first tick". **True for Outpost 7; HD
+Talon's Junction learns no plans** (no fork, the original driver flies: no `ai speed plan`
+line before or after), so it is a control and stays unchanged, as does Pulse Talon's Junction
+(`16_Track`).
+
+Cause: the previous section's job started after the race-build thread joined, so it
+overlapped nothing and Outpost 7's loading screen grew by the whole learn. Fix
+(`docs/gameplay/ai.md`, "Started on the race-load thread, overlapped"): on a forked circuit
+the race-load thread starts the race and the plans as soon as the circuit is read, so they
+learn beside `build_race_stage` and `warm_up`; the job is kept by its plan inputs, not the
+state hash, so the menus' setters keep it; the learner runs routes and hull ring copies at
+once.
+
+Method: release, Xvfb `:91` with lavapipe, Pulse PSP EU and HD EU, `--no-audio --no-intro
+--mode single_race --measure-race-load 6` (`--class rapier --track
+'Data\Environments\07_Track\track.vex'` or `16_Track`; HD its default circuit), the first
+of each process's six races dropped (cold cache), two processes per binary interleaved
+before/after: 10 races per row. `--measure-race-load` now prints "confirm to first race
+frame" (from the press to the end of the first race frame, the first tick). The machine
+was otherwise idle (load 0.6 between runs); the load average at each process start, 0.5 to
+13, is the previous process's lavapipe threads. Before is main `1633cbb39` plus that
+probe line.
+
+| Circuit | Binary | Confirm to first race frame, median [range] | Loading worst frame | First race frame |
+| --- | --- | --- | --- | --- |
+| Outpost 7 (`07_Track`) | before | 5844 ms [5463-5955] | 77.4 ms [75.5-107.9] | 46.5 ms |
+| Outpost 7 (`07_Track`) | after | **4313 ms** [3910-4374] | 101.2 ms [75.0-109.2] | 44.2 ms |
+| Talon's Junction (`16_Track`, no job) | before | 4264 ms [4007-4390] | 88.0 ms | 31.1 ms |
+| Talon's Junction (`16_Track`, no job) | after | 4309 ms [4017-4467] | 67.4 ms | 29.8 ms |
+| HD Talon's Junction (no job) | before | 5339 ms [5253-5450] | 180.4 ms | 196.2 ms |
+| HD Talon's Junction (no job) | after | 5488 ms [5092-7101] | 169.1 ms | 197.9 ms |
+
+Outpost 7 now loads as fast as a circuit without a fork: the plans finish inside the scene
+build (3.5 s of `build_race_stage` on lavapipe). The plan lines are the same set before and
+after; no run logged a relearn or a restart. The cost: Outpost 7's worst loading frame rose
+from 77 to 101 ms median, the plan threads sharing the cores with lavapipe drawing the
+loading screen. On the Deck's four cores that share is larger; not measured there.
+
+The learner alone (`tests::speed_plan_overlap`, release, `--no-capture`, 5 runs each, load
+7 to 9): Outpost 7 1.56 s before (the routes one after another, then the hulls) against
+1.17 s overlapped; 2048 `altima` 1.91 s against 1.28 s.

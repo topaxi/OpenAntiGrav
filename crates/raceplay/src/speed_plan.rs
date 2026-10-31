@@ -165,9 +165,9 @@ pub(super) fn learn_speed_plans(sim: &mut RaceSim) {
         .collect();
 }
 
-/// [`learn_speed_plans`] as it ran before 2026-10-31, one stage after another
-/// and the routes one after another: what the overlapped learner is checked
-/// against.
+/// [`learn_speed_plans`] as it ran before 2026-10-31: the routes one after
+/// another, then each hull on a thread of its own, its ring and then its route
+/// copies. What the overlapped learner is checked against.
 #[cfg(test)]
 pub(super) fn learn_speed_plans_serially(sim: &mut RaceSim) {
     sim.plans_built = true;
@@ -184,18 +184,16 @@ pub(super) fn learn_speed_plans_serially(sim: &mut RaceSim) {
         return;
     };
     let (hulls, owner) = Race::other_hulls(sim);
-    sim.hull_plans = hulls
-        .iter()
-        .map(|&handling| {
-            let ring = Race::hull_ring_for(sim, &reference_plan, handling);
-            let (routes, route_steps) = Race::hull_routes_for(sim, handling);
-            HullPlans {
-                ring,
-                routes,
-                route_steps,
-            }
-        })
-        .collect();
+    let shared = &*sim;
+    sim.hull_plans = par_map(&hulls, |&handling| {
+        let ring = Race::hull_ring_for(shared, &reference_plan, handling);
+        let (routes, route_steps) = Race::hull_routes_for(shared, handling);
+        HullPlans {
+            ring,
+            routes,
+            route_steps,
+        }
+    });
     sim.ship_plan = owner;
     sim.plan_steps.hull_routes = sim
         .hull_plans
