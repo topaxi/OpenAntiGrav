@@ -37,7 +37,6 @@ mod brake;
 mod clearance;
 mod harden;
 mod lower;
-mod stretch;
 
 use lower::Lowering;
 
@@ -50,7 +49,7 @@ const TROUGH_WIN: (u64, u64) = (49, 50);
 
 /// What one learning pass may spend, and how it lowers.
 #[derive(Debug, Clone, Copy)]
-struct Pass<'a> {
+struct Pass {
     /// The build's step budget.
     budget: u64,
     /// [`Run::stuck_limit`] for this pass's runs.
@@ -58,16 +57,12 @@ struct Pass<'a> {
     lowering: Lowering,
     /// The share of the plan the craft drives, one but in [`Self::harden`].
     margin: f32,
-    /// Learn only a stretch of the line, not two laps ([`stretch`]); `None`
-    /// everywhere but [`SpeedPlan::build_stretch`] and [`SpeedPlan::adapt_stretch`].
-    stretch: Option<&'a stretch::Mask>,
 }
 pub mod probe;
 #[cfg(test)]
 mod tests;
 
 pub use brake::Decel;
-pub use stretch::Stretch;
 
 /// Where the plan is driven: the line, what is under it, and how the world
 /// reads to the physics.
@@ -714,7 +709,6 @@ impl SpeedPlan {
                     stuck: NEVER_STUCK,
                     lowering,
                     margin: 1.0,
-                    stretch: None,
                 },
             );
             let verify = plan.verify(course, craft, tuning, yaw, &mut report, 1.0);
@@ -880,13 +874,9 @@ impl SpeedPlan {
             stuck,
             lowering,
             margin,
-            stretch,
         } = pass;
         let n = self.len();
-        let goal = stretch.map_or(2 * n as i64, |mask| mask.goal);
-        // On a stretch, the lead-in is driven on the ring's targets, which this
-        // search does not own: a wall there is not answered.
-        let lead = stretch.map_or(i64::MIN, |mask| mask.lead);
+        let goal = 2 * n as i64;
         let mut run = Self::start_run(craft);
         run.stuck_limit = stuck;
         let mut checkpoints: Vec<Run> = vec![run];
@@ -923,7 +913,7 @@ impl SpeedPlan {
             let Some(failure) = tick.failure else {
                 continue;
             };
-            if (run.progress <= forgive_until || run.progress < lead) && failure == Failure::Wall {
+            if run.progress <= forgive_until && failure == Failure::Wall {
                 continue;
             }
             let site = run.driver.index / SITE;
@@ -937,7 +927,7 @@ impl SpeedPlan {
                 continue;
             }
             if exhausted || cause == Cause::Underpowered {
-                if run.progress >= n as i64 || exhausted || stretch.is_some() {
+                if run.progress >= n as i64 || exhausted {
                     note_unresolved(report, run.driver.index, failure);
                 }
                 report.respawns += 1;
@@ -963,20 +953,11 @@ impl SpeedPlan {
             }
 
             let old = self.target.clone();
-            let lowerable = stretch.map(|mask| mask.lowerable.as_slice());
             report.lowerings += match cause {
-                Cause::ShortOfTheLip(takeoff) => self.hold_run_up(&recent[..takeoff], lowerable),
-                _ => self.lower(
-                    &recent,
-                    tries.get(&site).copied().unwrap_or(1),
-                    lowering,
-                    lowerable,
-                ),
+                Cause::ShortOfTheLip(takeoff) => self.hold_run_up(&recent[..takeoff]),
+                _ => self.lower(&recent, tries.get(&site).copied().unwrap_or(1), lowering),
             };
             self.derive_targets();
-            if let Some(mask) = stretch {
-                mask.pin(self);
-            }
 
             // Rewind to before the earliest sample whose target moved, so the
             // craft meets the new braking zone from its start.
@@ -997,15 +978,11 @@ impl SpeedPlan {
 
     /// Marks the run-up to a takeoff as a stretch nothing brakes through, and
     /// lifts its ceilings. `run_up` ends at the last grounded tick before it.
-    /// `lowerable`, where given, names the only samples it may touch.
-    fn hold_run_up(&mut self, run_up: &[Trace], lowerable: Option<&[bool]>) -> u32 {
+    fn hold_run_up(&mut self, run_up: &[Trace]) -> u32 {
         let from = run_up.len().saturating_sub(LOOKBACK_TICKS * 2);
         let mut moved = 0;
         for trace in &run_up[from..] {
             let i = trace.index as usize;
-            if lowerable.is_some_and(|mask| !mask[i]) {
-                continue;
-            }
             if !self.hold[i] {
                 self.hold[i] = true;
                 self.ceiling[i] = f32::INFINITY;

@@ -292,11 +292,44 @@ fn solo(setup: &race::Setup, plans: &race::Race, slot: usize, want: u16) -> Tall
                 "contact\tslot{slot}\troute{route}\tindex={index}\tspeed={speed:.1}\ttarget={target:.1}"
             ));
         }
+        if std::env::var_os("OAG_ROUTE_BOARD_WHERE").is_some() && tick % 300 == 0 {
+            let ship = &race.sim.world.ships[slot];
+            emit(&format!(
+                "at\tslot{slot}\ttick={tick}\troute={}\tindex={}\tlap={}\tspeed={:.1}\tstate={:?}\trespawns={}",
+                ship.driver.branching.route,
+                ship.driver.index,
+                ship.standing.lap,
+                ship.physics.body.linear_velocity.length(),
+                ship.physics.craft_state,
+                race.respawns_of(slot),
+            ));
+        }
+        if std::env::var_os("OAG_ROUTE_BOARD_WHERE").is_some() {
+            let ship = &race.sim.world.ships[slot];
+            let route = ship.driver.branching.route;
+            if w.open.map(|o| o.0) != (route != 0).then_some(route) {
+                emit(&format!(
+                    "switch\tslot{slot}\ttick={tick}\troute={route}\tindex={}\tlap={}\tpending={}\tdecided={}",
+                    ship.driver.index,
+                    ship.standing.lap,
+                    ship.driver.branching.pending,
+                    ship.driver.branching.decided_at
+                ));
+            }
+        }
         watch(&race, slot, tick, &mut w, &mut tally);
         if tally[usize::from(want)].visits as usize >= VISITS {
             break;
         }
         if race.sim.world.ships[slot].physics.craft_state != oag_physics::CraftState::Racing {
+            let ship = &race.sim.world.ships[slot];
+            emit(&format!(
+                "ended\tslot{slot}\ttick={tick}\tstate={:?}\troute={}\tindex={}\tlap={}",
+                ship.physics.craft_state,
+                ship.driver.branching.route,
+                ship.driver.index,
+                ship.standing.lap
+            ));
             break;
         }
     }
@@ -361,10 +394,6 @@ fn board_at(circuit: &Circuit, class: &str, seed: u64) {
                 hulls.join(","),
             ));
         }
-        emit(&format!(
-            "arrivals\t{}\t{class}\t{seed}\tsteps={:?}",
-            circuit.label, steps.arrivals
-        ));
         for k in 0..routes {
             if !steps.routes_clean.get(k).copied().unwrap_or(false) {
                 continue;

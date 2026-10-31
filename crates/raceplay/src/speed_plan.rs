@@ -11,7 +11,6 @@ use oag_physics::Environment;
 use log::{info, warn};
 
 use super::*;
-use crate::routes::RouteLine;
 
 /// The step budget a route's plan gets, against the ring's 120,000. **Chosen,
 /// not measured**: Pulse's routes that lap clean build in 8,000-13,000 steps,
@@ -75,9 +74,6 @@ pub struct PlanSteps {
     pub hull_routes: Vec<Vec<u64>>,
     /// Whether each route's reference plan verified (is offered to the coin).
     pub routes_clean: Vec<bool>,
-    /// Finding where the reference arrives at the routes
-    /// ([`Race::route_arrivals`]): one ring run, shared by every route.
-    pub arrivals: u64,
 }
 
 /// The plans of the hull `chosen` names in `hull_plans`, if any.
@@ -114,7 +110,7 @@ impl RaceSim {
 pub(super) fn learn_speed_plans(sim: &mut RaceSim) {
     sim.plans_built = true;
     sim.speed_plan = Race::field_speed_plan(sim);
-    let (learned, arrival_steps) = Race::route_speed_plans(sim);
+    let learned = Race::route_speed_plans(sim);
     sim.plan_steps.routes = learned.iter().map(|(_, steps)| *steps).collect();
     sim.plan_steps.routes_clean = learned.iter().map(|(plan, _)| plan.is_some()).collect();
     for (route, (plan, _)) in learned.into_iter().enumerate() {
@@ -126,7 +122,6 @@ pub(super) fn learn_speed_plans(sim: &mut RaceSim) {
         .iter()
         .map(|h| h.route_steps.clone())
         .collect();
-    sim.plan_steps.arrivals = arrival_steps;
 }
 
 /// What [`learn_speed_plans`] wrote into a [`RaceSim`], and nothing else of it.
@@ -289,15 +284,15 @@ impl Race {
     }
 
     /// The same on any line and its sample order - the ring's or a route's
-    /// (`crate::routes`). `start` places a craft at that line index instead of
-    /// starting from `slot`'s own pose, for a line the grid is not on: in the
-    /// state given, or at rest on the line.
+    /// (`crate::routes`). `start` places a fresh craft at that line index
+    /// instead of starting from `slot`'s own pose, for a line the grid is not
+    /// on.
     fn with_plan_course_on<T>(
         sim: &RaceSim,
         line: &oag_ai::Line,
         order: &[u32],
         slot: usize,
-        start: Option<(usize, Option<oag_physics::ShipState>)>,
+        start: Option<usize>,
         flown_by: Option<oag_physics::Handling>,
         f: impl FnOnce(&oag_ai::plan::Course<'_, CollisionWorld>, &oag_ai::plan::Craft) -> T,
     ) -> T {
@@ -372,9 +367,9 @@ impl Race {
             pad: &pad,
         };
         let craft = match start {
-            Some((index, state)) => oag_ai::plan::Craft {
+            Some(index) => oag_ai::plan::Craft {
                 handling: ship.handling,
-                start: state.unwrap_or_else(|| respawn(index)),
+                start: respawn(index),
                 start_index: u32::try_from(index).unwrap_or(0),
             },
             None => oag_ai::plan::Craft {
@@ -694,18 +689,6 @@ impl Race {
                 Self::fallback_ring(sim, reference_plan, handling)
             }
         };
-        // **A hull's route copies are adapted over the whole lap, from the
-        // route's merge at rest, as before 2026-10-31**, though the reference
-        // route plan they start from is learned on its stretch only
-        // (`Race::route_speed_plans`). Adapting them on the stretch too was
-        // built and measured worse: it verified clean on every hull of Pulse
-        // `14_Track` PHANTOM without lowering anything, and the hulls then
-        // scraped the approach wall at samples 2678-2720 in a lone race, 0 to
-        // 60 and 90 wall ticks over three visits at Ace. The whole-lap
-        // verification arrives faster than a race does and lowers that
-        // approach to 143-156 u/s against the stretch's 168-188; a learner
-        // steers without the plan and the race's driver with it, so a
-        // stretch-clean copy is not race-clean. **Ours, chosen.**
         let (routes, route_steps) = sim
             .routes
             .iter()
@@ -719,7 +702,7 @@ impl Race {
                     &route.line,
                     &route.order,
                     1,
-                    Some((0, None)),
+                    Some(0),
                     Some(handling),
                     |course, craft| {
                         reference_route.adapt(course, craft, &tuning, ROUTE_PLAN_BUDGET)
@@ -761,72 +744,31 @@ impl Race {
     /// start is inside its fork), and a craft placed off its own line is a
     /// rescue, not a lap. Line index 0 is the route's merge, so the craft runs
     /// the whole shared stretch before it reaches the fork. Ours.
-    #[allow(clippy::type_complexity)]
-    fn route_speed_plans(sim: &RaceSim) -> (Vec<(Option<oag_ai::SpeedPlan>, u64)>, u64) {
+    fn route_speed_plans(sim: &RaceSim) -> Vec<(Option<oag_ai::SpeedPlan>, u64)> {
         if sim.world.ship_count < 2 {
-            return (vec![(None, 0); sim.routes.len()], 0);
+            return vec![(None, 0); sim.routes.len()];
         }
-        let ring = sim.speed_plan.as_ref();
-        let (arrivals, arrival_steps) = ring.map_or_else(
-            || (vec![None; sim.routes.len()], 0),
-            |ring| Self::route_arrivals(sim, ring, sim.plan_reference, 1.0),
-        );
-        let plans = sim
-            .routes
+        sim.routes
             .iter()
             .enumerate()
             .map(|(k, route)| {
-                let stretch =
-                    ring.and_then(|ring| route_stretch(sim, route, ring, 1.0, arrivals[k]));
-                let (plan, report) = match (ring, stretch) {
-                    (Some(ring), Some((stretch, state, driven))) => {
-                        let n = sim.racing_line.len();
-                        let (decel, calibration) =
-                            Self::route_decel(sim, route, sim.plan_reference);
-                        let seed = ring
-                            .carried_onto(&driven, |i| {
-                                (i < route.kept).then_some((route.merge + i) % n)
-                            })
-                            .with_decel(decel);
-                        let (plan, mut report) = Self::with_plan_course_on(
-                            sim,
-                            &driven,
-                            &route.order,
-                            1,
-                            Some((stretch.start, Some(state))),
-                            sim.plan_reference,
-                            |c, craft| {
-                                oag_ai::SpeedPlan::build_stretch(
-                                    &seed,
-                                    c,
-                                    craft,
-                                    &oag_ai::Tuning::default(),
-                                    ROUTE_PLAN_BUDGET,
-                                    &stretch,
-                                )
-                            },
-                        );
-                        report.steps += calibration;
-                        (plan, report)
-                    }
-                    // No ring plan to arrive on: the whole lap, as before.
-                    _ => Self::with_plan_course_on(
-                        sim,
-                        &route.line,
-                        &route.order,
-                        1,
-                        Some((0, None)),
-                        sim.plan_reference,
-                        |c, craft| {
-                            oag_ai::SpeedPlan::build_within(
-                                c,
-                                craft,
-                                &oag_ai::Tuning::default(),
-                                ROUTE_PLAN_BUDGET,
-                            )
-                        },
-                    ),
-                };
+                let start = 0;
+                let (plan, report) = Self::with_plan_course_on(
+                    sim,
+                    &route.line,
+                    &route.order,
+                    1,
+                    Some(start),
+                    sim.plan_reference,
+                    |c, craft| {
+                        oag_ai::SpeedPlan::build_within(
+                            c,
+                            craft,
+                            &oag_ai::Tuning::default(),
+                            ROUTE_PLAN_BUDGET,
+                        )
+                    },
+                );
                 let clean = report.verify_failures == 0
                     && report.verify_respawns == 0
                     && report.verify_contacts == 0
@@ -845,64 +787,7 @@ impl Race {
                 );
                 (clean.then_some(plan), report.steps)
             })
-            .collect();
-        (plans, arrival_steps)
-    }
-
-    /// The braking `handling` (slot 1's own where `None`) measures on
-    /// `route`'s line from its first sample at rest, and its physics steps:
-    /// where the whole-lap build of the route's plan calibrated it, so a plan
-    /// learned on its stretch brakes as that build's did rather than on the
-    /// ring plan's braking. At most 1,600 steps. **Ours, chosen, not
-    /// measured.**
-    fn route_decel(
-        sim: &RaceSim,
-        route: &RouteLine,
-        handling: Option<oag_physics::Handling>,
-    ) -> (oag_ai::plan::Decel, u64) {
-        Self::with_plan_course_on(
-            sim,
-            &route.line,
-            &route.order,
-            1,
-            Some((0, None)),
-            handling,
-            |course, craft| oag_ai::SpeedPlan::calibrate(course, craft, &oag_ai::Tuning::default()),
-        )
-    }
-
-    /// Where a craft following `ring` at `share`, flown by `handling` (slot
-    /// 1's own where `None`) from slot 1's grid, is on its flying lap as it
-    /// reaches each route's learning stretch ([`route_start`]): one run round
-    /// the ring shared by every route, and its physics steps. What a route's
-    /// stretch starts from, so the craft meets the switch as a racing craft
-    /// does. **Ours, chosen, not measured.**
-    #[allow(clippy::type_complexity)]
-    fn route_arrivals(
-        sim: &RaceSim,
-        ring: &oag_ai::SpeedPlan,
-        handling: Option<oag_physics::Handling>,
-        share: f32,
-    ) -> (Vec<Option<(usize, oag_physics::ShipState)>>, u64) {
-        let n = sim.racing_line.len();
-        let wanted: Vec<usize> = sim
-            .routes
-            .iter()
-            .map(|route| {
-                route_start(sim, route).map_or(usize::MAX, |(start, _)| (route.merge + start) % n)
-            })
-            .collect();
-        Self::with_plan_course_on(
-            sim,
-            &sim.racing_line,
-            &sim.ai_order,
-            1,
-            None,
-            handling,
-            |course, craft| {
-                ring.arrivals(course, craft, &oag_ai::Tuning::default(), share, &wanted)
-            },
-        )
+            .collect()
     }
 
     /// The plan the field is following, if any, learned first if nothing has
@@ -921,113 +806,5 @@ impl Race {
     pub fn plan_steps(&mut self) -> &PlanSteps {
         self.ensure_speed_plans();
         &self.sim.plan_steps
-    }
-}
-
-/// Samples before a route's switch a learning run starts, driven on the ring
-/// plan's targets, so the craft reaches the switch settled on the line at the
-/// speed it carries there. **Chosen, not measured.**
-const LEAD_IN: usize = 120;
-
-/// Samples past a route's merge a learning run carries on into the ring, so a
-/// corner just after the merge still lowers the route's tail. **Chosen, not
-/// measured.**
-const RUN_OUT: usize = 120;
-
-/// Where `route`'s learning stretch starts and where its plan starts to be
-/// followed, as line indices: [`LEAD_IN`] samples before the switch
-/// ([`RouteLine::switch_index`]), and the switch. `None` with no course.
-fn route_start(sim: &RaceSim, route: &RouteLine) -> Option<(usize, usize)> {
-    let course = sim.course.as_ref()?;
-    if sim.racing_line.is_empty() || route.kept == 0 {
-        return None;
-    }
-    let from = route.switch_index(course);
-    Some((from.saturating_sub(LEAD_IN), from))
-}
-
-/// Where on `route`'s line its plan is learned ([`oag_ai::plan::Stretch`]),
-/// for a craft on `ring` at `share` that arrived there as `arrival` (a ring
-/// index and its state, [`Race::route_arrivals`]): from there through the
-/// switch to [`RUN_OUT`] past the merge, on the line a racing craft drives
-/// ([`driven_line`]). `None` where it never arrived.
-fn route_stretch(
-    sim: &RaceSim,
-    route: &RouteLine,
-    ring: &oag_ai::SpeedPlan,
-    share: f32,
-    arrival: Option<(usize, oag_physics::ShipState)>,
-) -> Option<(oag_ai::plan::Stretch, oag_physics::ShipState, oag_ai::Line)> {
-    let n = sim.racing_line.len();
-    let (_, from) = route_start(sim, route)?;
-    let (found, state) = arrival?;
-    if ring.len() != n {
-        return None;
-    }
-    let start = (found + n - route.merge % n) % n;
-    if start > from {
-        return None;
-    }
-    let len = route.line.len();
-    let span = len - start + RUN_OUT.min(start);
-    let lead_targets = (start..from)
-        .map(|i| ring.target((route.merge + i) % n) * share)
-        .collect();
-    Some((
-        oag_ai::plan::Stretch {
-            start,
-            from,
-            span,
-            lead_targets,
-        },
-        state,
-        driven_line(&sim.racing_line, route, from),
-    ))
-}
-
-/// `route`'s line as a racing craft that drew it drives it: the ring's own
-/// line up to the switch `from` and again from the merge, the route's line
-/// from the switch to the merge. Index-parallel to the route's line, so a plan
-/// learned on it is the route's. The race moves a driver between the two lines
-/// at those two indices ([`Race::steer_branching`]); a learner on the route's
-/// line alone met walls at the switch that no racing craft meets (2048 `arena`
-/// route 1 at RAPIER, 2026-10-31).
-fn driven_line(ring: &oag_ai::Line, route: &RouteLine, from: usize) -> oag_ai::Line {
-    let n = ring.len();
-    let line = &route.line;
-    let on_route = |i: usize| i >= from || n == 0;
-    let source = |i: usize| {
-        if on_route(i) {
-            (line, i)
-        } else {
-            (ring, (route.merge + i) % n)
-        }
-    };
-    let points = (0..line.len())
-        .map(|i| {
-            let (l, j) = source(i);
-            l.point(j)
-        })
-        .collect();
-    let corridor = (0..line.len())
-        .map(|i| {
-            let (l, j) = source(i);
-            l.corridor_at(j).unwrap_or(oag_ai::Frame {
-                lateral: Vec3::X,
-                left: 0.0,
-                right: 0.0,
-            })
-        })
-        .collect();
-    let unsupported = (0..line.len())
-        .map(|i| {
-            let (l, j) = source(i);
-            l.is_unsupported(j)
-        })
-        .collect();
-    if line.has_corridor() && ring.has_corridor() {
-        oag_ai::Line::with_corridor(points, corridor).with_unsupported(unsupported)
-    } else {
-        oag_ai::Line::new(points).with_unsupported(unsupported)
     }
 }

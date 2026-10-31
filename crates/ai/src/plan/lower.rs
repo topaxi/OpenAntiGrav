@@ -35,14 +35,7 @@ const TROUGH_TRIES: u32 = 3;
 impl SpeedPlan {
     /// Lowers the ceilings over the stretch `recent` covers, to [`LOWER`] of the
     /// speed the craft actually did there. Returns how many moved.
-    /// `lowerable`, where given, names the only samples it may lower.
-    pub(super) fn lower(
-        &mut self,
-        recent: &[Trace],
-        tries: u32,
-        lowering: Lowering,
-        lowerable: Option<&[bool]>,
-    ) -> u32 {
+    pub(super) fn lower(&mut self, recent: &[Trace], tries: u32, lowering: Lowering) -> u32 {
         // Harder the more often this spot has failed: one [`LOWER`] for the
         // first three tries, two for the next three, and so on, so a corner
         // needing half the top speed fits inside [`super::MAX_TRIES`]. A loop of
@@ -93,7 +86,7 @@ impl SpeedPlan {
         };
         for trace in window.into_iter().take(reach) {
             let i = trace.index as usize;
-            if self.hold[i] || lowerable.is_some_and(|mask| !mask[i]) {
+            if self.hold[i] {
                 continue;
             }
             // Of the lower of what it did and what it was allowed, so a retry
