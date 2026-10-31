@@ -1857,12 +1857,12 @@ Five faults, the first four in the flight, none of them the distance leg's wall:
 | 1 | The floor arm turned the velocity parallel to the floor; `Plasma_Update`'s `default:` arm (this page, "is `Rocket_Update`'s floor follower") steers to the ride point, `(next - prev) / dt`, and rescales | bolt z 0.8 unit further along the bank after sixteen updates, so it passed the wall edge ours hit at x 282 | the parallel turn (detonated k72 on a wall sweep at x 282.2) | `flight.rs` gives the Plasma the Rocket's steer arm | 85 (the decompile) |
 | 2 | Launch speed: the first updates fly at **0.75 x** the release speed (`launch_kmh` 634.61 gives 132.2 u/s; the matrix `Plasma_Launch` takes has rows of length 0.7500, words 28-39 of the entity read at the launch probe) | 132.2 u/s, 3 updates | full 176.3 u/s | `plasma::LAUNCH_SPEED_SCALE`, the Rocket's `LAUNCH_SPEED_SCALE` | 85 |
 | 3 | The first three updates do not ride: they fall (`velocity -= surface * dt * 50`, y drops 0.82 a tick) and keep the 0.75 speed; the fourth rides and pins. The Rocket does the same four updates at another place on the track, so it reads as age, not position | 3 slow steps of 2.2 units, then 3.0 | rode from the first update | `plasma::UNPINNED_SECONDS` 0.04, **chosen inside the bracket 0.0334 to 0.0501**; what gates it is unread (probe reach, collision kind, the bounds the query takes) | 60 for "age", the bracket measured |
-| 4 | Ride height `g_ride_height`: the bolt rides **4.04** above the floor along the normal, the Rocket's literal is 3.0. Its value was never sampled (this page, open list) | 4.04 to 4.05 over five records | 3.0 | `plasma::RIDE_HEIGHT` 4.0 | 70 (measured against our collision world's floor, not read from the global) |
+| 4 | Ride height `g_ride_height`: the bolt rides **4.04** above the floor along the normal, the Rocket's literal is 3.0. Its value was never sampled (this page, open list) | 4.04 to 4.05 over five records | 3.0 | `plasma::RIDE_HEIGHT` 4.0 | 80 (measured against our collision world's floor, not read from the global; HD's `Plasma_Update` reads a literal 4.0 at `0x008a9fd8`, Omega 4.0 too) |
 | 5 | Muzzle: the bolt leaves **2.23** ahead of the craft body (craft `(239.54, -42.22, -196.91)`, bolt `(241.77, -42.11, -196.86)` at release), not at the hull's far edge (4.87 on this craft) | 2.23 | 4.87 | `plasma::MUZZLE_FORWARD`; the charging head sits there too | 75, Assegai Venom only |
 
 Plus the release tick: sixty subtractions of f32 `1/60` from `1.0` leave `2.8e-7`, so the hold
 ended on the sixty-first update where the original's ends on the sixtieth (its `dt` is a little
-over `1/60`). The hold now ends when under half a tick is left.
+over `1/60`). The hold now ends when under half a tick is left (**chosen**, to reproduce the measured 60th-update release; no confidence score).
 
 **What is still different, and why it is not this lane's.** The whole flight sits **1.1 units
 ahead** of the original's in absolute x (289.69 against 288.61 after sixteen updates): our craft
@@ -1879,6 +1879,17 @@ Missile and Shuriken read the same `g_ride_height` and keep 3.0 until each is me
 The head's position during the hold moved 2.6 units toward the craft (4.87 to 2.23); the
 look wiring in `oag_fx`/`oag_raceplay` is `pulse-plasma-blast-wire`'s.
 
+**Seen as a player would (2026-10-31, headless, `--ticks 391 + k`, the pair PNGs in
+`data/reference/pulse-plasma-pairs/`).** Mean RGB of the whole frame: k44 original 101,115,120 and
+ours 100,114,119; k60 101,116,126 and 100,114,122; **k80 226,188,245 and 227,188,243** (the flash
+peak now matches to 2 counts). The flash begins at shot k79 in ours (228,189,244 at once; k78 is
+104,113,120) against the original's k78 (209) ramping to k80: one shot late and instant, where it
+used to start at k76, three early. The sim agrees to the tick (release 59, detonation 76), so the
+shot's one-tick lateness is the `391 + k` mapping's: ticks run include the press tick, so shot k is
+the state k-2 ticks after the press against the original's two frames of display lag, the same one
+tick the Rocket lane found for the Rocket. The head at k44 and k60 sits at the craft's nose (a small
+star and arc, not hidden by the hull); the orb's size is the head gap above, untouched here.
+
 **Side effects, seen in `just test-data-affected` and fixed in the tests, not the law.** (1) HD's
 plasma-explosion scene fixture (`hd_weapon_scene_ground_truth.rs`) fired its bolt on Talon's
 Junction and burst on a wall edge at (278.9, -40.6, -196.6); the steer and the 4.0 ride height carry
@@ -1891,8 +1902,13 @@ unmeasured, so whether it does this is open.
 
 **Cross-title.** HD and Omega share `flight.rs` and `plasma::launch` (no title gate), so they
 inherit every row above: **checked, applies, not measured there** (the Plasma flight law is
-I:Pulse in `weapon-lineage.md`). Their own bolt is a different object (`WO_PLASMA_LIGHTNING_*`),
-and HD's `Plasma_Update` is the same follower (this page, the HD check above), so the steer is
-the same code; the launch scale, the ride height and the muzzle node are **not checkable** from
+I:Pulse in `weapon-lineage.md`). Their own bolt is a different object (`WO_PLASMA_LIGHTNING_*`).
+**Ride height: ported, agrees** - HD's `Plasma_Update` (`ps3-hdfury-eu/plasma.md`) rides at a
+literal 4.0 (`0x008a9fd8`, Omega 4.0), which is the 4.04 measured here. **Steer: HD's page reads
+"ride: surface = normal; next = hit + normal * 4.0; renormalise", the same follower, but its
+velocity line is not read at the `(next - prev) / dt` level (checked, not confirmed).** HD differs
+from Pulse in its probe (6.0 against 12.0) and its fall axis (world Y), which this engine still
+runs Pulse's way on HD. The launch scale, the no-ride window and the muzzle node are **not
+checkable** from
 this lane (no HD probe of the bolt's records). Pure: inherits Pulse (I:Pulse), unprobed.
 

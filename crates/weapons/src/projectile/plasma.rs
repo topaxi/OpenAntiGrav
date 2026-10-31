@@ -111,8 +111,9 @@ pub const LAUNCH_SPEED_SCALE: f32 = super::rocket::LAUNCH_SPEED_SCALE;
 
 /// How far above the floor a Plasma bolt rides: `g_ride_height` (`_DAT_002acf08`).
 ///
-/// **Measured 2026-10-31, confidence 70, not read from the constant** (its value was
-/// never sampled; `plasma.md`). `--probe plasma_fly` on the original puts the bolt's
+/// **Measured 2026-10-31, confidence 80, not read from Pulse's constant** (its value was
+/// never sampled; `plasma.md`). HD's and Omega's own `Plasma_Update` read a literal 4.0
+/// (`ps3-hdfury-eu/plasma.md`, the TOC constant `0x008a9fd8`), which agrees. `--probe plasma_fly` on the original puts the bolt's
 /// riding position 4.04 units along the floor normal above the floor this engine's
 /// collision world finds under it (five records, 4.04 to 4.05), where the Rocket's
 /// own literal is `3.0` ([`super::RIDE_HEIGHT`]). On a banked track the extra unit is
