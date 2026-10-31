@@ -60,8 +60,8 @@ fn env_probe_irradiance_uv(uv: vec2<f32>) -> vec2<f32> {
 // **Every `slots` bit some vertex of this model carries** (`mesh_render::build_with`), and all
 // ones for a pipeline that does not set it. ANDed in before any branch reads the word, which
 // changes nothing (`x & present == x` for every vertex of the model) but lets the driver drop
-// every branch the model can never take. HD's Talon's Junction track drew its solid pass 21 %
-// faster on an RDNA2 iGPU with the picture byte-identical (`docs/rendering/hires-gpu-levers.md`).
+// every branch the model can never take. On the Steam Deck at 1080p HD's track solid pass went
+// 8.23 to 7.65 ms and Pulse's 3.38 to 1.64, byte-identical (`docs/rendering/hires-gpu-levers.md`).
 override slots_present: u32 = 4294967295u;
 
 @diagnostic(off, derivative_uniformity)

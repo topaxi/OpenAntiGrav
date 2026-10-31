@@ -67,7 +67,10 @@
   see [`hd-gpu-cost.md`](hd-gpu-cost.md)
 - **Which passes grow with the output size** (2026-10-31, `hires-gpu-levers`): spans per pass for HD and
   Pulse at 800p, 1080p and 4K on the AMD dGPU, iGPU and the Steam Deck, the presented 4K cost under
-  gamescope, and three ranked levers - see [`hires-gpu-levers.md`](hires-gpu-levers.md)
+  gamescope, and three ranked levers; the track lever landed (2026-10-31: per-model `slots_present`
+  folds `lit_texel`'s unused branches, Deck 1080p HD track solid -7 %, Pulse -52 %, byte-identical),
+  the blur skip and the 1080p gamescope window were measured and dropped - see
+  [`hires-gpu-levers.md`](hires-gpu-levers.md)
 - **Where the frame thread's CPU goes** (2026-10-21): `--frame-log` prints a per-phase line; a
   paused race costs nearly what a racing one does, about half of it in wgpu's submit, and two
   redundant per-frame uploads were removed (byte-identical) - see
