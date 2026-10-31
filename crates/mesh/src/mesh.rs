@@ -864,22 +864,22 @@ fn build_class(
                     // one instant - which is all it can ever be, and why
                     // `moving` turns the tests off rather than trusting it.
                     let centre = bounds_matrix.map_or(centre, |m| vex::transform_point(&m, centre));
-                    // PSP batches only: the PS2 executable's submit was not read.
+                    // The PSP's list-B key, **inherited from PSP** for PS2 VIF
+                    // batches too: the PS2 executable's submit was not read, and
+                    // file order drew Talon's Junction's Zone grid out of depth order.
                     // Transparent ones only: the depth key reorders list B, but
                     // an opaque or cutout batch is depth-tested with depth
                     // written and lands the same picture in any order.
-                    let depth_point = (batch_list == 1
-                        && batch.is_transparent()
-                        && !vex::is_vif_batch(batch.vertex_type))
-                    .then_some(box_centre)
-                    .flatten()
-                    .map(|c| vex::transform_point(&to_world, c))
-                    // Lifted like `centre` above: under an `Anim Transform` the
-                    // point is in anchor space. The time-zero pose, **chosen,
-                    // not measured**: whether the original refreshes `mesh+0xb0`
-                    // as the node moves turns on the `0x40000` flag, whose
-                    // setter was not read.
-                    .map(|c| bounds_matrix.map_or(c, |m| vex::transform_point(&m, c)));
+                    let depth_point = (batch_list == 1 && batch.is_transparent())
+                        .then_some(box_centre)
+                        .flatten()
+                        .map(|c| vex::transform_point(&to_world, c))
+                        // Lifted like `centre` above: under an `Anim Transform` the
+                        // point is in anchor space. The time-zero pose, **chosen,
+                        // not measured**: whether the original refreshes `mesh+0xb0`
+                        // as the node moves turns on the `0x40000` flag, whose
+                        // setter was not read.
+                        .map(|c| bounds_matrix.map_or(c, |m| vex::transform_point(&m, c)));
                     let draw = DrawCall {
                         writes_depth: false,
                         range: first_index..last_index,

@@ -223,3 +223,16 @@ Four ways this is not the original, all of them ours:
    (list A) has no depth term, which is right.
 4. **No `0x40000000` set and no reflection layers.** Neither is built, so
    neither is ordered.
+
+## PS2: list B takes the PSP's depth key (inherited, 2026-10-31)
+
+The PS2 executable's mesh submit is not read, and until this change PS2 VIF
+batches carried no `DrawCall::depth_point`, so a PS2 circuit's blended meshes
+drew in file order. In Talon's Junction (`16_Track\zone_track.vex`, Zone) that
+put a far row of dark window panels in front of the nearer translucent grid
+(maintainer report, tick 2100 near `[-198.8, -50.5, -769.8]`; our frame at that
+pose shows a dark panel band where PSP shows white glow). PS2 list-B batches now
+get the PSP's key (`Model::blended_order`), **inherited from PSP, no PS2
+confidence**: the PS2 law itself stays open (read the submit in `SCES_547.48`
+beside `Gfx_BuildBatchStateList` at `0x001e9088`). Pinned by
+`crates/render/tests/ps2_blended_depth_ground_truth.rs`.
