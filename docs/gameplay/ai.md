@@ -5827,8 +5827,10 @@ between (the two lines a racing craft is moved between); braking calibrated on
 the route line as before. A circuit with no ring plan (2048 `square`, `sol`) keeps
 the whole-lap path.
 
-**Cost** (reference route plans, mean steps per class and seed, release, the
-`route_plan_board` sweep, four classes x seeds 1-3, Elite, load 1.2-9):
+**Cost** (reference route plans per circuit, all its routes summed, mean over
+four classes x seeds 1-3; the stretch column includes the one arrival run the
+routes share; release, the `route_plan_board` sweep, Elite, load 1.2-9; Outpost 7's
+131,456 is `07_Track` at VENOM alone, the row is the mean over classes):
 
 | circuit | main | stretch | ratio |
 | --- | ---: | ---: | ---: |
@@ -5858,7 +5860,10 @@ field drove them: 390 traversals, wrecked craft 9 to 5 over the twelve races.
   wall ticks; a full field's wall ticks on it 145 to 308 (seed 1).
 - **Per-route solo rows moved both ways** (113 better, 89 worse of 726), inside the
   spread a 1e-5 gravity perturbation of main alone gives (243 better, 276 worse);
-  summed, traversal ticks -0.15 % and wall ticks 1,131 to 976.
+  summed, traversal ticks -0.15 % and wall ticks 1,131 to 976. **Field wall ticks
+  on the routes rose outside that spread** on 2048 `altima` (main 435, perturbed
+  429-442, stretch 625), `arena` (248, 228-255, 430) and Pulse `14_Track` (783,
+  736-756, 945); `subway`'s rise (578 to 781) is inside its (490-1,100).
 - **2048 `altima` PHANTOM**, a craft forced down route 0 unperturbed fell into a
   rescue-placement loop on the ring near sample 1,550 (34 rescues; the family of
   `sol`'s and the `29_Track` reversed loop above), which main never reached in
