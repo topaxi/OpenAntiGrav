@@ -616,7 +616,8 @@ GXP container):
   programs of sibling families, its second word has the fog-mix shape (`pa2.xxxx` factor,
   `fogColour` as `sa4`) and its first word reads `pa0.wwww`, the sampled texel's alpha.
   So the sample's **alpha** reaches the colour, not an rgb picture; what it multiplies is
-  not decoded (confidence 40). It is not classified.
+  not decoded (confidence 40). It is not classified. **Superseded 2026-10-31**: decoded
+  below, the alpha multiplies `Constant1 * constantAmbientColour` (confidence 88).
 - The texture is `ds_pipe_nc.gxt` (Vineta K, Moa Therma, Anulpha, Chenghou). The suffixes
   on the start-line set read `_cs` colour+spec, `_ne` normal+emissive, `_ns` normal+spec,
   `_nc` normal+constant; the texels read as a tangent-space normal map
@@ -634,6 +635,83 @@ GXP container):
 
 To close it: a Vita3K race on a circuit whose start line is reachable at a matched pose
 (Chenghou's `ds_sf_ne`/trench draws are the largest set), then label words 1 and 2 of #1.
+**2026-10-31: the words are labelled by the decoder (below), no race needed for the law.
+The Chenghou `ds_sf_ne`/`ds_sfline_trench_ne` draws are not this family**: their material is
+`diffuse_normal_specular_emmissivenew` (7 of the 41 slots, open on its own). Whether the
+original draws the pipe strip in a race at all is still the Vita3K question above.
+
+## `m_diffuse_normal_constantspecular` colours by `Texture1`'s alpha (2026-10-31, `2048-normal-maps-re`)
+
+**The law: the ambient-only program's colour is `mix(fogColour, Constant1 *
+constantAmbientColour * T.a, v)`, with `T` the `Texture1` (`Norm` on `New`) texel and `v` the
+vertex program's fog visibility; `T.rgb` never reaches it. The lit permutation unpacks
+`T.rgb` as `2T - 1` into the light dots and multiplies the light sum by `Constant1 * T.a`.**
+So the texture is a normal map whose alpha is the grey the constant scales: HD's
+`AlphaUse::Product` (`rcsmaterial.md`, "Scenery that is a constant"; `mesh::rcs::skin`'s
+`ALPHA_DIFFUSE`), now read on 2048's own programs and on Omega's. **Confidence 88**: an
+unambiguous operand listing on two independent compiles of the shader source, on two
+instruction sets (USSE, GCN), agreeing term for term and with HD's RSX block; no live run.
+
+**2048, USSE** (`python3 scripts/vita-usse.py disasm
+"data/extracted/vita/PCSF00007/base/PSP2/data.psarc:Vineta_K/materials/m_diffuse_normal_constantspecular.rcsmaterial" 1`;
+the operand decode is the one checked against Vita3K's logs above, `mad2` 908 of 908 and
+`nmad` 2,215 of 2,215 lines agreeing). Program #1 declares `Constant1` at `sa0`,
+`constantAmbientColour` at `sa2`, `fogColour` at `sa4` (parameter `resource` = `sa`
+register) and the one sampler `Texture1`:
+
+```text
+secondary  0  10a44386a0040001  mul.f16 sa0.xyz, sa0.xyz, sa2.xyz        ; Constant1 * ambient
+primary    1  0480928ef00c0002  mad.f16 pa0.xyzw, pa0.wwww, sa0.xyzw, -sa4.xyzw   ; T.a * k - fog
+           2  04809286b0001002  mad.f16 pa0.xyzw, pa2.xxxx, pa0.xyzw, sa4.xyzw    ; v * (...) + fog
+           3  10c117869004000f  mul.f16 pa0.xyzw, pa0.xyz0, c15.yyyy             ; * 1.0, alpha 0
+```
+
+`pa0` is the texel (the program's only four-component input; it issues no `smp`, so the
+fetch is the non-dependent one) and `pa2.x` the fog visibility (vertex program #0 writes
+`o4.xy` = `Uv1` and `o6.x` = `min(sa36.x, exp2(-(sa32.w * z)^2 * sa36.z))`, the shape of the
+fog interpolant read for `fc01_dummy` above). That mapping is read off the program's
+shape (confidence 80 alone); Omega's listing, where the inputs are named, is what backs it.
+The same four words, byte for byte, are #1 of Anulpha Pass, Moa Therma and Chenghou's
+`NEW` (where the sampler is `Norm`). The lit program #3 (29 words) unpacks the texel's
+rgb with `mad r0 = T * sa18.z - 1` (the `2T - 1` literal) into the tangent frame, and
+word 23, `mul pa0.xyz = sa0.xyz * pa2.www`, is `Constant1 * T.a` (`pa2.w` is the texel's
+alpha, no instruction before it writes that lane), which multiplies `ambient + N.L *
+diffuse` (word 24); specular `pow(N.H, Constant2) * liveLighting0specular` is added unmasked.
+
+**Omega, GCN: checked, applies, not wired** (`cargo run -p oag-rcs --example gcn_dump --
+data/extracted/ps4/omega-eu/uroot/data01.psarc
+Data/environments/01_vineta_k/Materials/M_Diffuse_Normal_ConstantSpecular.rcsmaterial`).
+The ambient pixel program (`Shdr @0x3244`, 55 instructions, constants `Constant1`,
+`constantAmbientColour`, `fogColour`, `fadeResCoeffs`, one sampler `Texture1Sampler`)
+fetches **`image_sample v6, v5, ... dmask:0x8`: the alpha channel alone**, so the rgb cannot
+reach the colour. It then computes `C1 * amb * v` per channel, `(C1 * amb * v) * T.a + fog -
+fog * v`: the same mix. Every lit pixel program of the file samples `Texture1` with `dmask:0xf`
+(the normal). Omega's lit programs were not taken apart further.
+
+**What the 41 and 149 are** (`omega_transparency_ground_truth.rs`, run `--no-capture`, slots
+attributed to materials by the `.rcsmaterial` name ahead of each texture path in the model):
+
+| Title | Slots | `ds_pipe_nc` (this family) | Rest |
+| --- | ---: | ---: | --- |
+| 2048 | 41 | **31** (Vineta K 3 + 4, Moa Therma 4 + 8, Anulpha 4, Chenghou 4 + 4) | 7 `diffuse_normal_specular_emmissivenew` (Chenghou `ds_sf_ne`, `ds_sfline_trench_ne`), Altima water edge 1, `temp_diffuse` 2 |
+| Omega | 149 | **82** (all twelve HD/Fury circuits Omega ships; 82 of the 87 `ds_pipe_nc` references in the models follow this family's name) | `jd_ubermall_gold_n` 16, `rocks_01_normal_alpha` 12, `amb_glass` 8, 12 other files of 1 to 4 |
+
+`ds_pipe_nc`'s alpha is a real grey, not a constant (decoded `.gxt`, 128x128 on Anulpha,
+Chenghou, Moa Therma and 64x64 on Vineta K: min 0, max 233-255, mean 93 of 255, about 29% of
+texels under 32), so the strip draws as a dark, patterned `Constant1` band.
+
+**The binding rule, for the wire.** For `m_diffuse_normal_constantspecular` (and `New`) on 2048
+and Omega, bind no picture from `Texture1`/`Norm`'s rgb: the colour slot is `Constant1 * T.a`
+per texel, opaque, HD's `AlphaUse::Product` picture. Expected census: 2048 **41 to 10**, Omega
+**149 to 67**, *provided the colour slot no longer holds the map itself*;
+`track_albedo::is_normal_map` judges a bound texture's rgb, so a build that keeps the map
+bound and masks it in the shader still counts as a fault unless the detector learns alpha
+use. Notes for the wire: the program's output alpha is 0 in both compiles (`xyz0`; `mrt0`'s
+alpha lane 0), harmless under the family's state word 124 (opaque) but wrong if anything
+blends on it; the encode of the product (`skin::raw_to_texel` on HD, `psp2.rs`'s unorm
+constant on 2048) is the renderer's choice and stays **checked, applies, not wired**, as on
+`rcsmaterial.md`. On Omega the family sits on all twelve HD/Fury circuits (the 2048 DLC
+four among them), and the same rule covers every one.
 
 ## The composite family, and the Zone one
 

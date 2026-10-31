@@ -3309,10 +3309,10 @@ number, not a material one, and is named in the thread.
 
 **Cross-title (CLAUDE.md, 2048 and Omega).** `ds_booth_glass`: **checked, already wired** - 2048's `lighting_only`
 table already names `Constant1` (`0x7611a2d8`, the same hash HD's block names) as its colour and Omega's instance is
-2048's record for record. `m_diffuse_normal_constantspecular`: **checked, applies, not wired** - 2048's ambient-only
-program samples `Texture1` and the instance carries `0x7611a2d8`, the shape HD's `MUL H.xyz, R.w, C` reads; 2048's
-programs are declared-interface only (no decoder), so the alpha product is unverified there and the family keeps what
-it drew. The `metallic` family and its siblings: not looked up in 2048's materials this lane (open). **The encode:**
+2048's record for record. `m_diffuse_normal_constantspecular`: **checked, applies** - 2048's ambient-only
+program samples `Texture1` and the instance carries `0x7611a2d8`, the shape HD's `MUL H.xyz, R.w, C` reads.
+**Verified 2026-10-31** on 2048's USSE program and Omega's GCN one (Omega fetches alpha alone, `dmask:0x8`):
+[gxp.md](gxp.md), "`m_diffuse_normal_constantspecular` colours by `Texture1`'s alpha". The `metallic` family and its siblings: not looked up in 2048's materials this lane (open). **The encode:**
 `psp2.rs` binds its constants as unorm bytes "the way `skin::constant_diffuse` binds HD's"; the reasoning (an
 sRGB-decoding binding against a raw multiply) is the renderer's, not HD's, but no 2048 frame was compared, so it is
 **checked, applies, not wired**.
