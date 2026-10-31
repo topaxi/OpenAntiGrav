@@ -192,7 +192,10 @@ impl Session {
     /// screen that reads the disc on every opening rather than keeping it from
     /// boot - see [`Self::open_campaign`]. `None` (logged, as `what` could not
     /// be shown) with no source chosen yet or one that will not open.
-    pub(crate) fn open_title_archives(&self, what: &str) -> Option<oag_assets::Archives> {
+    pub(crate) fn open_title_archives(&mut self, what: &str) -> Option<oag_assets::Archives> {
+        if let Some(archives) = self.take_menu_archives() {
+            return Some(archives);
+        }
         let options = self.race_options.as_ref()?;
         let (packs, pure_packs, problems) = oag_source::dlc::packs_from_defaults(
             &options.dlc,

@@ -50,10 +50,11 @@ impl Session {
     /// then launched the way every other title's campaign cell is, flying the
     /// campaign's own craft (`oag_title::AddOn::default_team`).
     fn launch_tier_cell(&mut self, name: &str) {
-        let Some(mut archives) = self.open_title_archives("a downloadable campaign's cell") else {
+        let Some(tiers) = self.with_menu_archives("a downloadable campaign's cell", |archives| {
+            boot::tiers2048::read(archives, &mut Vec::new())
+        }) else {
             return;
         };
-        let tiers = boot::tiers2048::read(&mut archives, &mut Vec::new());
         let Some((tier, _, cell)) = boot::tiers2048::find(&tiers, name) else {
             warn!("no cell named {name:?} in the campaigns this source mounts");
             return;
