@@ -33,8 +33,9 @@ disc reads and parses leave the render thread, though none of it passes 50 ms on
 
 ## Next Steps
 
-1. Measure: `deck-walk` recipe in the doc section above, `OAG_PHASE_SPIKE_MS=0`, worst
-   frame-phase total per transition; for the campaign, walk START, RACE CAMPAIGN instead.
+1. Measure: the `walk.sh` and awk blocks in that doc section (Deck, `OAG_PHASE_SPIKE_MS=0`,
+   worst frame-phase total per transition); for the campaign, script START, RACE CAMPAIGN
+   instead of the race box taps.
 2. Make `open_title_archives` use `Session::menu_source()` first, with the inline open as the
    fallback it is in `open_picker`.
 3. Load a selection's stills and model on an `oag_thread::Task`, keep drawing the previous

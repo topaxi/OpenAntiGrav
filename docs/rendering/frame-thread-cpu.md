@@ -967,7 +967,7 @@ probes around each step (one walk, fresh profile, removed again before the commi
 | `Preview::new` | **711 ms** fresh, 63 ms warm | **57 ms** | 60 ms |
 
 `Preview::new` calls `mesh_render::build` with no `BuildCacheScope` open, so every selection
-re-parsed `mesh.wesl` through naga and created every pipeline again. The fresh-profile second is
+recreated the shader module and every pipeline (not split further between naga and the driver). The fresh-profile second is
 the driver's shader cache, which lives under `XDG_CACHE_HOME` (`mesa_shader_cache`,
 `radv_builtin_shaders`): a fresh profile whose cache directory is seeded with only those two from
 a warm run enters Track Select in 283 ms, the warm figure. A player sees it once after an install
@@ -987,6 +987,43 @@ Fix, in two parts:
    driver cache) or 75 ms (warm) for the 9 pipelines, long before the player can reach Track
    Select; if a screen opens first it waits for the worker and logs `menu source: waited`. No walk
    logged a wait. The web build opens on demand as before (wgpu's web types are not `Send`).
+   The archives carry the player's override layer (`oag_source::layers::mount`) as read when the
+   worker opened them: an edit to the override directory now reaches the selection screens'
+   previews after a restart, not on the next screen opening (a race load still opens afresh).
+   The MODS page's switches do not touch the archives.
+
+The walk, run on the Deck as `walk.sh LABEL BINARY fresh|keep [W H]` with a profile directory
+of its own (`OAG_PHASE_SPIKE_MS=0` in the environment), then the per-transition summary:
+
+```sh
+# walk.sh: the profile setup is omitted (new XDG_* dirs, the settings copied with vsync off,
+# no frame limit, pause_on_focus_loss false, [race] track = "16_Track", and for W H
+# window_size = "WxH")
+S="3:start,6:start,9:down,11:cross,14:right,14.5:right,15:right"
+t=16; for i in 1 2 3 4 5; do S="$S,$t:down"; t=$(awk "BEGIN{print $t + 0.5}"); done
+S="$S,19:cross"
+t=22; for i in $(seq 1 22); do S="$S,$t:down"; t=$(awk "BEGIN{print $t + 0.4}"); done
+t=$(awk "BEGIN{print $t + 2}"); S="$S,$t:cross"; t=$(awk "BEGIN{print $t + 4}"); S="$S,$t:quit"
+while IFS= read -r -d '' kv; do
+  case $kv in GAMESCOPE_*|XDG_CURRENT_DESKTOP=*|ENABLE_GAMESCOPE_WSI=*|XDG_RUNTIME_DIR=*|SteamDeck=*) export "$kv";; esac
+done < /proc/$(pgrep -x -o steam)/environ
+unset WAYLAND_DISPLAY; export DISPLAY=:1
+gs=""; [ -n "$W" ] && { unset DISPLAY GAMESCOPE_WAYLAND_DISPLAY; gs="gamescope --backend headless -W $W -H $H -w $W -h $H --"; }
+flock ~/.cache/oag/deck.lock $gs "$BIN" ~/.local/share/oag/images/pulse-psp-eu.chd \
+  --unlock-all --frame-log --script "$S" > "$LABEL.log" 2>&1
+```
+
+```awk
+# the worst frame-phase total (ms) per transition of one walk's log
+/script: tap Cross on menu:race/ {cur="picker-entry"; next}
+/script: tap Down on menu:picker/ {cur="down"; nd++; next}
+/script: tap Cross on menu:picker/ {cur="ship-entry"; next}
+/script: tap/ || /script: quit/ {cur=""; next}
+/frame-spike/ && cur!="" { for (i = 1; i <= NF; i++) if ($i ~ /^total=/) v = substr($i, 7) + 0
+  if (cur == "down") { if (v > dmax[nd]) dmax[nd] = v } else if (v > m[cur]) m[cur] = v }
+END { for (k = 1; k <= nd; k++) { s += dmax[k]; if (dmax[k] > w) w = dmax[k] }
+  printf "picker-entry %.1f ship-entry %.1f down-worst %.1f down-mean %.1f\n", m["picker-entry"], m["ship-entry"], w, s / nd }
+```
 
 Pictures: a headless `--drive` walk on this machine (RX 7800 XT, release, input devices hidden)
 wrote Track Select after 0, 1 and 4 Downs and Ship Select after 0 and 1, before and after. Ship
