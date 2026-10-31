@@ -1879,6 +1879,16 @@ Missile and Shuriken read the same `g_ride_height` and keep 3.0 until each is me
 The head's position during the hold moved 2.6 units toward the craft (4.87 to 2.23); the
 look wiring in `oag_fx`/`oag_raceplay` is `pulse-plasma-blast-wire`'s.
 
+**Side effects, seen in `just test-data-affected` and fixed in the tests, not the law.** (1) HD's
+plasma-explosion scene fixture (`hd_weapon_scene_ground_truth.rs`) fired its bolt on Talon's
+Junction and burst on a wall edge at (278.9, -40.6, -196.6); the steer and the 4.0 ride height carry
+it past, to (449.2, -27.5, -105.3) on tick 477, so the camera was re-aimed (violet pixels 14,583
+against 10,521). (2) HD fires at a crawl (the craft barely moves, `launch_kmh` small), and the
+ride-point steer then climbs at once toward a ride point metres above the bolt and overshoots for two
+updates before it settles; `projectile_tilt_ground_truth.rs` now judges a Plasma's height from the
+third update after the first ride and its angle from the fourth update. HD's real bolt is
+unmeasured, so whether it does this is open.
+
 **Cross-title.** HD and Omega share `flight.rs` and `plasma::launch` (no title gate), so they
 inherit every row above: **checked, applies, not measured there** (the Plasma flight law is
 I:Pulse in `weapon-lineage.md`). Their own bolt is a different object (`WO_PLASMA_LIGHTNING_*`),
