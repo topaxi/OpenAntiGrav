@@ -59,6 +59,10 @@ fn compare(track: &str, ticks: u32) -> Option<Census> {
         spawned_points: 0,
         wettest: 0.0,
     };
+    // The lens's boost drift (ours, enhanced only) moves the lens drops, which stay moved for
+    // their lives (a lens drop lives at most 80 ticks), so the byte-for-byte prefix holds only
+    // outside that window.
+    let mut drifted_until = 0;
     for tick in 0..ticks {
         original.tick(&PlayerInputs::none());
         enhanced.tick(&PlayerInputs::none());
@@ -76,9 +80,13 @@ fn compare(track: &str, ticks: u32) -> Option<Census> {
         census.wettest = census.wettest.max(enhanced.wet_road());
         let (o_add, o_alpha) = lists(&original);
         let (e_add, e_alpha) = lists(&enhanced);
+        if enhanced.scenery_fx().weather().lens().boost() > 0.0 {
+            drifted_until = tick + 120;
+        }
         assert!(
-            bytes(&e_add).starts_with(bytes(&o_add))
-                && bytes(&e_alpha).starts_with(bytes(&o_alpha)),
+            tick < drifted_until
+                || (bytes(&e_add).starts_with(bytes(&o_add))
+                    && bytes(&e_alpha).starts_with(bytes(&o_alpha))),
             "enhanced only appends to the original's geometry"
         );
         let splashes = enhanced.scenery_fx().weather().splashes();
