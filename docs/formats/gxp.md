@@ -600,7 +600,8 @@ draw opaque there; the other 2048 water files' words were not read.
 **A permutation that does sample in the ambient-only case is a colour or a mask, not a
 lookup, and the rule leaves it alone**: `m_diffuse_normal_constantspecular` declares
 `Texture1` (`Norm` on `New`) there, and the Altima water edge declares `NormalMap` there
-(beside an `Opacity` uniform). Both stay open.
+(beside an `Opacity` uniform). The water edge stays open; the first family is **closed
+2026-10-31** (its colour is `Constant1` times the map's alpha, read and wired below).
 
 **Omega: checked, applies, inherited** (`rcsmaterial.md`): its programs are PS4 and unread;
 three of these families carry 2048's instance record exactly and take the answer.
@@ -678,7 +679,8 @@ word 23, `mul pa0.xyz = sa0.xyz * pa2.www`, is `Constant1 * T.a` (`pa2.w` is the
 alpha, no instruction before it writes that lane), which multiplies `ambient + N.L *
 diffuse` (word 24); specular `pow(N.H, Constant2) * liveLighting0specular` is added unmasked.
 
-**Omega, GCN: checked, applies, not wired** (`cargo run -p oag-rcs --example gcn_dump --
+**Omega, GCN: ported** (wired with 2048, Omega's ground truth the per-circuit ratchets of
+`omega_transparency_ground_truth.rs`; `cargo run -p oag-rcs --example gcn_dump --
 data/extracted/ps4/omega-eu/uroot/data01.psarc
 Data/environments/01_vineta_k/Materials/M_Diffuse_Normal_ConstantSpecular.rcsmaterial`).
 The ambient pixel program (`Shdr @0x3244`, 55 instructions, constants `Constant1`,

@@ -61,7 +61,9 @@ non-lightmap texture) and so still draw it.
 - **2026-10-31 (`2048-normal-maps-re`): `m_diffuse_normal_constantspecular` read and wired.**
   Its colour is `Constant1 * T.a` (rgb a normal) on 2048's USSE programs and Omega's GCN ones
   (Omega fetches alpha alone, `dmask:0x8`); `mesh::rcs::psp2::alpha_product` binds that product,
-  unorm bytes (chosen). Census 2048 41 -> 10, Omega 149 -> 67, ratchets re-set. Evidence:
+  unorm bytes (chosen; it must move together with `psp2.rs`'s `constant_colour`, and HD measured
+  unorm on this same family too dark against the original, 24/23/2 against 50/61/21, sRGB-encoded
+  46/58/15, `docs/formats/rcsmaterial.md`, "Scenery that is a constant"). Census 2048 41 -> 10, Omega 149 -> 67, ratchets re-set. Evidence:
   `docs/formats/gxp.md`, "`m_diffuse_normal_constantspecular` colours by `Texture1`'s alpha".
   Not compared against an original frame; whether the original draws the pipe strip in a race at
   all (Vita3K never compiled its programs in two Vineta K laps) is still open.
