@@ -100,6 +100,9 @@ impl Job {
         let started = web_time::Instant::now();
         let mut archives = open_key(&self.key)?;
         let gate = oag_game::unlock::Gate::read(self.title, &mut archives);
+        // Before the previews' pipelines (0.8 s on a cold driver cache): the campaign screens
+        // take this one, and a player reaches them sooner than a preview.
+        let spare = open_key(&self.key).map_or(Spare::None, Spare::Ready);
         let opened_in = started.elapsed();
         let mut pipelines = KeptBuildCache::default();
         let target = PreviewTarget {
@@ -132,7 +135,6 @@ impl Job {
             pipelines.pipelines(),
             (started.elapsed() - opened_in).as_secs_f64() * 1e3
         );
-        let spare = open_key(&self.key).map_or(Spare::None, Spare::Ready);
         Some(Opened {
             key: self.key,
             archives: Arc::new(Mutex::new(archives)),

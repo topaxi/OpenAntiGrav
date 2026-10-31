@@ -451,6 +451,24 @@ impl PickerStage {
         }
         self.requested = Some(key);
         self.poll_preview(gpu);
+        // The screen's first picture has no earlier one to stay up: a screen that opens on
+        // nothing where the original shows its stills is a hole, so the opening frame waits
+        // for the first read (the one read left on the frame thread's clock).
+        if self.built_for.is_none()
+            && let Some(pending) = self.pending.take()
+        {
+            self.finish(gpu, pending);
+        }
+    }
+
+    fn finish(&mut self, gpu: &Gpu, pending: Pending) {
+        match pending.join() {
+            Some(read) => self.land(gpu, read),
+            None => {
+                warn!("the preview worker panicked - the preview keeps its last picture");
+                self.built_for = self.requested.clone();
+            }
+        }
     }
 
     /// Lands a finished read and starts the one for the latest request, if it differs.
@@ -463,10 +481,7 @@ impl PickerStage {
             let Some(pending) = self.pending.take() else {
                 return;
             };
-            match pending.join() {
-                Some(read) => self.land(gpu, read),
-                None => warn!("the preview worker panicked - the preview keeps its last picture"),
-            }
+            self.finish(gpu, pending);
         }
         let Some(key) = self.requested.clone() else {
             return;
