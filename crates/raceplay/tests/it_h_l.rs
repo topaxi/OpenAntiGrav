@@ -48,6 +48,7 @@ mod language_offered_ground_truth;
 mod lap_times_ground_truth;
 mod launch_boost_ground_truth;
 mod leach_energy_ground_truth;
+mod leach_pool_ground_truth;
 mod leach_tube_ground_truth;
 mod livery_ground_truth;
 mod lock_sight_ground_truth;
