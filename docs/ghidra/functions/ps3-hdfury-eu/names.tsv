@@ -807,3 +807,10 @@
 0x002fae30	function	MusicManager_ClearHold	75	now-playing.md
 0x005d7590	function	RenderOps_DrawChunkSurface	80	chunk-cull.md
 0x00920598	data	g_hud_pickup_widget_table	90	hd-pickup-table.md
+
+# 2026-10-31 hd-quake-leach-instances: weapon instance limits and the fire path (weapon-instance-limits.md)
+0x0012b2c0	function	WeaponManager_DispatchFire	75	weapon-instance-limits.md
+0x000ea0c8	function	Ship_FireHeldWeapon	75	weapon-instance-limits.md
+0x0012d970	function	Weapon_FireFromSlot	85	weapon-instance-limits.md
+0x00147ca0	function	QuakeManager_Update	75	weapon-instance-limits.md
+0x00155e70	function	Quake_Tick	75	weapon-instance-limits.md

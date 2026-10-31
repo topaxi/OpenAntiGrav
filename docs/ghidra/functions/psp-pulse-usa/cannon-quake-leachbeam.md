@@ -3765,3 +3765,22 @@ what a Quake hit shows and sounds.
 | HD / Fury | checked, applies, not wired: `.COLLISIONS` is named once, reached through a data pointer at `0x008a8e34`; the call site of the Cannon's craft-hit path (`Ship_DispatchCollisionFx` kind 1) is unread | checked, differs: no `noisematt` string in `EBOOT.elf`, so it draws none |
 | 2048 | checked, applies, not wired: `.COLLISIONS` is named twice in the decrypted `eboot.elf`; no call site read | checked, differs: no `noisematt` string in the decrypted `eboot.elf`, so it draws none |
 | Omega | not checkable: the executable cannot be read here | not checkable, follows HD: draws none |
+
+## 2026-10-31 (`hd-quake-leach-instances`): a press at the limit, re-read against HD, 2048 and Omega
+
+Re-read from the disassembly this pass, with HD, 2048 and Omega read side by side
+([`../ps3-hdfury-eu/weapon-instance-limits.md`](../ps3-hdfury-eu/weapon-instance-limits.md)):
+
+- **A LeachBeam press while a beam is up spends the pickup and fires nothing (88).**
+  `Weapon_FireLeachBeam` stores `held = -1` (`sw a1, 0x1bc(s1)` at `0x08866680`) and clears
+  `0x8000` (`0x08866688`) before it loads the live count (`lw s2, 0x68(a0)`) and branches on it
+  (`0x088666a8`); the decompile above shows the same order. `Ship_FireHeldWeapon` (`0x08844ae8`)
+  has no busy gate in front of it. The prose under "fires world-wide, not per-craft" says only that
+  one beam is up per race; the in-code comment in `crates/raceplay/src/weapons.rs` that this keeps
+  the pickup is wrong about the original. HD, 2048 and Omega spend it the same way.
+- **A Quake press while a wave is up keeps the pickup and leaves the request armed (65).**
+  `Weapon_FireQuake` returns before `held = -1` and before `fire_flags &= ~8`, and
+  `Weapons_DispatchFire` calls it again on that bit (the call at `0x08861b60`). A store search for `sw` to
+  `+0x1b8` finds no clear of bit 3 apart from the fire handlers, `Weapon_RequestFire` and the
+  whole-slot reset `FUN_088629f8`. So the original fires the second Quake by itself once the
+  first ends. Static, the same reading as HD's; not seen live.

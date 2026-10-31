@@ -242,3 +242,9 @@
 0x811505a8	function	Hud_SetPickupWidgetsVisible	75	pickup-backdrop.md
 0x8151f104	data	g_hud_pickup_widget_table	90	pickup-backdrop.md
 0x81154172	function	Hud_UpdatePickupBar	70	pickup-backdrop.md
+
+# 2026-10-31 hd-quake-leach-instances (weapon-instance-limits.md)
+0x81202568	function	QuakeManager_Construct	85	weapon-instance-limits.md
+0x812028f8	function	QuakeManager_Fire	80	weapon-instance-limits.md
+0x811ed368	function	LeachBeamManager_Construct	85	weapon-instance-limits.md
+0x811ee2c4	function	LeachBeamManager_Fire	85	weapon-instance-limits.md
