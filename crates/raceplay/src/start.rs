@@ -658,6 +658,7 @@ impl Race {
                 plan_reference: None,
                 hull_plans: Vec::new(),
                 ship_plan: [None; oag_gameplay::MAX_SHIPS],
+                plan_steps: super::speed_plan::PlanSteps::default(),
                 // **Degraded from the measured tuning**, never boosted toward it -
                 // see `oag_ai::Difficulty`. At the top level this is the
                 // measurement unchanged.

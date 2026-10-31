@@ -47,6 +47,7 @@ mod reset_zone_ground_truth;
 mod reversed_grid_ground_truth;
 mod rocket_floor_trace;
 mod rocket_launch_ground_truth;
+mod route_plan_board;
 
 mod pilot_schema;
 

@@ -59,6 +59,21 @@ pub(super) enum HullRing {
 pub(super) struct HullPlans {
     pub(super) ring: HullRing,
     pub(super) routes: Vec<Option<oag_ai::SpeedPlan>>,
+    /// Physics steps adapting each route's plan to this hull took.
+    pub(super) route_steps: Vec<u64>,
+}
+
+/// Physics steps learning a race's plans took, as `oag_ai::plan::Report::steps`
+/// counts them (calibration, every learning tick including rewound ones, every
+/// verification tick, both searches where both ran). A diagnostic.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PlanSteps {
+    /// Each route's reference plan, in route order.
+    pub routes: Vec<u64>,
+    /// Each other hull's adaptation of each route's plan, hull by hull.
+    pub hull_routes: Vec<Vec<u64>>,
+    /// Whether each route's reference plan verified (is offered to the coin).
+    pub routes_clean: Vec<bool>,
 }
 
 /// The plans of the hull `chosen` names in `hull_plans`, if any.
@@ -81,6 +96,7 @@ impl RaceSim {
         self.plan_reference = learned.plan_reference;
         self.hull_plans = learned.hull_plans;
         self.ship_plan = learned.ship_plan;
+        self.plan_steps = learned.plan_steps;
         for (route, plan) in self.routes.iter_mut().zip(learned.route_plans) {
             route.plan = plan;
         }
@@ -94,14 +110,18 @@ impl RaceSim {
 pub(super) fn learn_speed_plans(sim: &mut RaceSim) {
     sim.plans_built = true;
     sim.speed_plan = Race::field_speed_plan(sim);
-    for (route, plan) in Race::route_speed_plans(sim)
-        .into_iter()
-        .enumerate()
-        .collect::<Vec<_>>()
-    {
+    let learned = Race::route_speed_plans(sim);
+    sim.plan_steps.routes = learned.iter().map(|(_, steps)| *steps).collect();
+    sim.plan_steps.routes_clean = learned.iter().map(|(plan, _)| plan.is_some()).collect();
+    for (route, (plan, _)) in learned.into_iter().enumerate() {
         sim.routes[route].plan = plan;
     }
     Race::adapt_hull_plans(sim);
+    sim.plan_steps.hull_routes = sim
+        .hull_plans
+        .iter()
+        .map(|h| h.route_steps.clone())
+        .collect();
 }
 
 /// What [`learn_speed_plans`] wrote into a [`RaceSim`], and nothing else of it.
@@ -112,6 +132,7 @@ pub(super) struct LearnedPlans {
     hull_plans: Vec<HullPlans>,
     ship_plan: [Option<u8>; oag_gameplay::MAX_SHIPS],
     route_plans: Vec<Option<oag_ai::SpeedPlan>>,
+    plan_steps: PlanSteps,
 }
 
 impl LearnedPlans {
@@ -121,6 +142,7 @@ impl LearnedPlans {
             plan_reference: sim.plan_reference,
             hull_plans: sim.hull_plans,
             ship_plan: sim.ship_plan,
+            plan_steps: sim.plan_steps,
             route_plans: sim.routes.into_iter().map(|route| route.plan).collect(),
         }
     }
@@ -667,12 +689,14 @@ impl Race {
                 Self::fallback_ring(sim, reference_plan, handling)
             }
         };
-        let routes = sim
+        let (routes, route_steps) = sim
             .routes
             .iter()
             .enumerate()
             .map(|(k, route)| {
-                let reference_route = route.plan.as_ref()?;
+                let Some(reference_route) = route.plan.as_ref() else {
+                    return (None, 0);
+                };
                 let (plan, report) = Self::with_plan_course_on(
                     sim,
                     &route.line,
@@ -696,10 +720,14 @@ impl Race {
                         "not clean, the reference's driven"
                     }
                 );
-                clean.then_some(plan)
+                (clean.then_some(plan), report.steps)
             })
-            .collect();
-        HullPlans { ring, routes }
+            .unzip();
+        HullPlans {
+            ring,
+            routes,
+            route_steps,
+        }
     }
 
     /// One plan per route (`crate::routes`), built and verified the way the
@@ -716,9 +744,9 @@ impl Race {
     /// start is inside its fork), and a craft placed off its own line is a
     /// rescue, not a lap. Line index 0 is the route's merge, so the craft runs
     /// the whole shared stretch before it reaches the fork. Ours.
-    fn route_speed_plans(sim: &RaceSim) -> Vec<Option<oag_ai::SpeedPlan>> {
+    fn route_speed_plans(sim: &RaceSim) -> Vec<(Option<oag_ai::SpeedPlan>, u64)> {
         if sim.world.ship_count < 2 {
-            return vec![None; sim.routes.len()];
+            return vec![(None, 0); sim.routes.len()];
         }
         sim.routes
             .iter()
@@ -757,7 +785,7 @@ impl Race {
                         "did not lap clean, so no craft is sent down it"
                     }
                 );
-                clean.then_some(plan)
+                (clean.then_some(plan), report.steps)
             })
             .collect()
     }
@@ -770,5 +798,13 @@ impl Race {
     pub fn speed_plan(&mut self) -> Option<&oag_ai::SpeedPlan> {
         self.ensure_speed_plans();
         self.sim.speed_plan.as_ref()
+    }
+
+    /// What learning this race's route plans cost, learned first if nothing
+    /// has yet. A diagnostic for `route_plan_board`.
+    #[must_use]
+    pub fn plan_steps(&mut self) -> &PlanSteps {
+        self.ensure_speed_plans();
+        &self.sim.plan_steps
     }
 }
