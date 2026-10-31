@@ -26,7 +26,7 @@ gamescope window) were measured and dropped.
   display connected, so whether gamescope scales a 1080p window with a display plane (near-free) or
   a composite (3.8 to 4.3 ms measured nested) is unknown. Measure: a 4K TV on the dock, the game in
   Game Mode at a 1080p and a 4K window, `gpu_busy_percent` and `pp_dpm_sclk` at a 60 fps limit.
-  Only worth doing if the answer is a plane: then a 1080p window saves 0.5 (HD) to 2.9 (Pulse) ms of
+  Only worth doing if the answer is a plane: then a 1080p window saves 2.4 (HD) to 2.9 (Pulse) ms of
   GPU at the price of a softer HD HUD.
 - The Deck's 4K clock bimodality (27 to 33 ms in one run) hides real 4K differences; a 4K Deck
   comparison needs a fixed clock or interleaved A B A B with many rounds.

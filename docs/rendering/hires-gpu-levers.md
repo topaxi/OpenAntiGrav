@@ -219,26 +219,30 @@ shader cache (`MESA_SHADER_CACHE_DISABLE=true`, `--ticks 1`, 3 runs) HD 8.8 to 1
 The Deck has no 4K display (`DP-1` disconnected), so the real output path was not measured. Per
 process GPU time came from DRM fdinfo (`drm-engine-gfx` plus `-compute`, the `gamescope` binary
 copied to drop its file capability so its `/proc` is readable), with the game at a 60 fps frame
-limit, vsync off, the default profile, 2 interleaved rounds:
+limit, vsync off, the default profile, interleaved rounds. HD at 60 fps sat at 1040 MHz with the
+1080p window and 1,352 to 1,600 MHz with the 4K one, which hid its cost (its `gpu_ms` even fell),
+so HD was re-run at a 40 fps limit, 3 rounds, all six at 1040 MHz:
 
 | GPU time a frame, ms | HD window 1080p / 4K | Pulse window 1080p / 4K |
 |---|---|---|
-| game, headless gamescope 4K output | 13.65 / 14.15 (+0.5) | 10.55 / 13.45 (+2.9) |
+| game, headless gamescope 4K output, 1040 MHz | 14.40 / 16.76 (+2.4, 40 fps) | 10.55 / 13.45 (+2.9, 60 fps) |
 | headless gamescope itself | 0 / 0 | 0 / 0 |
-| nested gamescope (Wayland backend in the Deck's session), its own composite | 3.8 / 3.4 to 3.7 | 4.1 / 4.3 to 5.3 |
+| nested gamescope (Wayland backend in the Deck's session), its own composite | 3.8 / 3.4 to 3.7 (1,352 to 1,600 MHz) | 3.8 to 4.3 / 4.3 to 5.3 (1040 MHz) |
 
 fdinfo counts the time a job occupies the ring, so the game's numbers exceed its timestamp spans
 (HD `gpu_ms` 10.7). Headless gamescope does no GPU work at all, even with `--force-composition`,
 so it cannot price the scale. A nested gamescope composites in both cases (it cannot pass the
-game's buffer through) and its 1080p to 4K scale costs 3.8 to 4.3 ms: more than our own 4K present
-adds (0.5 HD, 2.9 Pulse). On a real 4K output gamescope scans a 4K window out directly; whether it
-scales a 1080p window with a display plane (near-free) or a composite (the nested cost) was not
-observable here. The earlier table's frame-time gap (+1.7 HD, +3.0 Pulse) is `present_ms`, not GPU:
+game's buffer through) and its 1080p to 4K scale costs 3.8 to 4.3 ms at 1040 MHz: more than our own
+4K present adds (2.4 HD, 2.9 Pulse). On a real 4K output gamescope is expected to scan a 4K window
+out directly (not measured), and whether it scales a 1080p window with a display plane (near-free)
+or a composite (the nested cost) was not observable here. The earlier table's frame-time gap (+1.7 HD, +3.0 Pulse) is `present_ms`, not GPU:
 the game's `gpu_ms` moved by 0.1 ms between the two windows.
 
 HUD both ways (host, tick 1,800, scene at 1920x1080 in both): our 4K composite against the 1080p
-frame scaled bilinearly to 4K. HD's vector HUD (speed readout, lap and position) is visibly softer
-scaled; Pulse's pixel-art HUD looks the same either way. Keeping ADR-0036's presentation-size
+frame scaled bilinearly to 4K, mean absolute difference per channel. HD's vector HUD is visibly
+softer scaled: 2.94/255 over the speed readout and 1.32 over the lap counter against 0.22 over a
+scene-only box. Pulse's pixel-art HUD barely moves: 0.43 and 0.27 against 0.13 (`just frame-compare`
+is built for 480x272 emulator pairs and flags every pixel of a 4K pair, so it was not used). Keeping ADR-0036's presentation-size
 composite; no setting change proposed.
 
 ### Lever 2, skip the blur gather where a tile cannot smear: dropped, the skip already exists
