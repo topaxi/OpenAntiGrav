@@ -12,12 +12,12 @@
 //! part of the stretch. Verification is one clean run over the stretch: no wall
 //! touched, nothing rescued, the end reached. **Ours, chosen, not measured.**
 
-use oag_physics::Raycaster;
+use oag_physics::{Raycaster, ShipState};
 
 use super::lower::Lowering;
 use super::{
     Course, Craft, Decel, Failure, MAX_PASSES, NEVER_STUCK, Pass, RESPAWN_SKIP, Report, Run,
-    STUCK_TICKS, SpeedPlan, TROUGH_WIN, clearance, forward_speed,
+    SpeedPlan, TROUGH_WIN, clearance, forward_speed,
 };
 use crate::{Driver, Line, Tuning};
 
@@ -80,7 +80,103 @@ impl Mask {
     }
 }
 
+/// How far past a wanted index, in samples, a craft passing it may be found
+/// ([`SpeedPlan::arrivals`]): a fast craft covers several samples a tick.
+const ARRIVAL_WINDOW: usize = 16;
+
 impl SpeedPlan {
+    /// Where a craft following this plan on `course` (its own line) from
+    /// `craft`'s grid pose is on its flying lap as it passes each of `at`:
+    /// the line index it was found on and its state, `None` where it never
+    /// passed. Followed at `share` of its targets but on a takeoff's run-up, as
+    /// [`Self::verify_at`] follows it: what a racing craft on this plan carries
+    /// into a fork ([`Self::build_stretch`]). Also the physics steps it took.
+    #[must_use]
+    pub fn arrivals<R: Raycaster + ?Sized>(
+        &self,
+        course: &Course<'_, R>,
+        craft: &Craft,
+        tuning: &Tuning,
+        share: f32,
+        at: &[usize],
+    ) -> (Vec<Option<(usize, ShipState)>>, u64) {
+        let n = self.len();
+        let mut found: Vec<Option<(usize, ShipState)>> = vec![None; at.len()];
+        if n < 3 || n != course.line.len() {
+            return (found, 0);
+        }
+        let mut plan = self.clone();
+        for (index, target) in plan.target.iter_mut().enumerate() {
+            if !course
+                .line
+                .takeoff_within(index, crate::driver::planned::RUN_UP_REACH)
+            {
+                *target *= share;
+            }
+        }
+        let yaw = crate::hull_yaw_ceiling(&craft.handling, &craft.start.body);
+        let mut run = Self::start_run(craft);
+        let mut steps = 0u64;
+        let limit = (4 * n as u64).max(4_000) as u32 * 2;
+        while run.progress < 2 * n as i64 && run.tick < limit && found.iter().any(Option::is_none) {
+            let tick = course.tick(&mut run, craft, tuning, yaw, |run, _| {
+                plan.follow(run, course.dt, 1.0)
+            });
+            steps += 1;
+            let index = run.driver.index as usize;
+            if run.progress >= n as i64 {
+                for (want, slot) in at.iter().zip(found.iter_mut()) {
+                    if slot.is_none() && (index + n - want % n) % n < ARRIVAL_WINDOW {
+                        *slot = Some((index, run.state));
+                    }
+                }
+            }
+            match tick.failure {
+                None | Some(Failure::Wall) => {}
+                Some(_) => {
+                    let to = (index + RESPAWN_SKIP) % n;
+                    run = Run {
+                        state: (course.respawn)(to),
+                        driver: Driver {
+                            index: to as u32,
+                            ..Driver::default()
+                        },
+                        progress: run.progress + RESPAWN_SKIP as i64,
+                        tick: run.tick,
+                        slow: 0,
+                        best: run.progress + RESPAWN_SKIP as i64,
+                        best_tick: run.tick,
+                        stuck_limit: run.stuck_limit,
+                        last_position: None,
+                    };
+                }
+            }
+        }
+        (found, steps)
+    }
+
+    /// The braking `craft` measures on `course` from its start, as every
+    /// whole-line build calibrates it, and the physics steps it took. For a
+    /// stretch's caller, which calibrates where the whole-line build of the
+    /// same line would have ([`Self::build_stretch`]).
+    #[must_use]
+    pub fn calibrate<R: Raycaster + ?Sized>(
+        course: &Course<'_, R>,
+        craft: &Craft,
+        tuning: &Tuning,
+    ) -> (Decel, u64) {
+        let yaw = crate::hull_yaw_ceiling(&craft.handling, &craft.start.body);
+        super::brake::calibrate(course, craft, tuning, yaw)
+    }
+
+    /// This plan with `decel` as its braking, its targets re-derived.
+    #[must_use]
+    pub fn with_decel(mut self, decel: Decel) -> Self {
+        self.decel = decel;
+        self.derive_targets();
+        self
+    }
+
     /// This plan carried onto `line`: sample `i` takes the ceiling, run-up
     /// hold, pace and tightness of this plan's sample `map(i)`, and a sample
     /// that maps to none starts unlimited. The braking, yaw and share are
@@ -203,55 +299,6 @@ impl SpeedPlan {
             if failures == 0 || report.steps >= budget {
                 break;
             }
-        }
-        (plan, report)
-    }
-
-    /// This plan (a route's, learned on another hull) re-learned for `craft`'s
-    /// hull over `stretch`, with `decel` (this hull's own braking, measured on
-    /// its ring plan): verified as it stands first, then up to [`MAX_PASSES`]
-    /// whole-window passes where it fails. [`Self::adapt`] on a stretch.
-    #[must_use]
-    pub fn adapt_stretch<R: Raycaster + ?Sized>(
-        &self,
-        course: &Course<'_, R>,
-        craft: &Craft,
-        tuning: &Tuning,
-        budget: u64,
-        stretch: &Stretch,
-        decel: &Decel,
-    ) -> (Self, Report) {
-        let mut plan = self.clone();
-        let mut report = Report::default();
-        let n = plan.len();
-        if n < 3 || n != course.line.len() {
-            return (plan, report);
-        }
-        let mask = Mask::of(stretch, n);
-        let yaw = crate::hull_yaw_ceiling(&craft.handling, &craft.start.body);
-        plan.decel = *decel;
-        plan.yaw = Some(yaw);
-        plan.share = 1.0;
-        plan.derive_targets();
-        mask.pin(&mut plan);
-        let mut failures = plan.verify_stretch(course, craft, tuning, yaw, &mut report, &mask);
-        while failures > 0 && report.passes < MAX_PASSES && report.steps < budget {
-            report.passes += 1;
-            plan.learn(
-                course,
-                craft,
-                tuning,
-                yaw,
-                &mut report,
-                Pass {
-                    budget,
-                    stuck: STUCK_TICKS,
-                    lowering: Lowering::Window,
-                    margin: 1.0,
-                    stretch: Some(&mask),
-                },
-            );
-            failures = plan.verify_stretch(course, craft, tuning, yaw, &mut report, &mask);
         }
         (plan, report)
     }

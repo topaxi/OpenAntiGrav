@@ -12,17 +12,23 @@
 //!   --no-capture route_plan_board
 //! ```
 //!
-//! Per circuit and seed (`OAG_ROUTE_BOARD_SEEDS`, default `1,2,3`):
+//! Per circuit, class (`OAG_ROUTE_BOARD_CLASSES`, default all four) and seed
+//! (`OAG_ROUTE_BOARD_SEEDS`, default `1,2,3`), at the AI level
+//! `OAG_ROUTE_BOARD_DIFFICULTY` (default the race's); `OAG_ROUTE_BOARD_ONLY`
+//! names circuits by label, `OAG_ROUTE_BOARD_WHERE` prints every wall
+//! contact of a solo run:
 //!
 //! - `plan`: per route, whether its reference plan verified, the physics steps
 //!   it took (`Race::plan_steps`), the steps each other hull's adaptation took,
 //!   and the wall clock of learning every plan of the race.
-//! - `solo`: per route (and the ring at the same fork), one craft alone, forced
-//!   down it at every visit (the coin's draw overwritten), as slot 0 on the
-//!   player's autopilot (the reference hull) and as slot 1 (an adapted hull):
+//! - `solo`: per route, one craft alone, forced down it at every visit (the
+//!   coin's draw overwritten), as slot 0 (the player's hull, the plans'
+//!   reference where its plan verified) and as slot 1 (an opponent's hull),
+//!   both on this project's driver at the race's level:
 //!   ticks from moving onto the route's line to back on the ring, wall contact
 //!   ticks and respawns over that stretch.
-//! - `field`: a full field with the coin as it is, per route: traversals, mean
+//! - `field`: a full field with the coin as it is, every craft on this
+//!   project's driver, per route: traversals, mean
 //!   ticks, wall contact ticks, respawns; and the field's lap spread.
 //!
 //! The plans are learned once per circuit and seed and copied into each run's
@@ -69,6 +75,26 @@ fn classes() -> Vec<String> {
         .split(',')
         .map(|s| s.trim().to_string())
         .collect()
+}
+
+/// The race's AI level (`OAG_ROUTE_BOARD_DIFFICULTY`, `Novice` to `Ace`),
+/// default the race's own default.
+fn difficulty() -> oag_ai::Difficulty {
+    match std::env::var("OAG_ROUTE_BOARD_DIFFICULTY").as_deref() {
+        Ok("Novice") => oag_ai::Difficulty::Novice,
+        Ok("Skilled") => oag_ai::Difficulty::Skilled,
+        Ok("Ace") => oag_ai::Difficulty::Ace,
+        Ok("Elite") => oag_ai::Difficulty::Elite,
+        _ => oag_ai::Difficulty::default(),
+    }
+}
+
+/// Slot 0 on the player's autopilot flown by this project's driver at the
+/// race's own level, as an opponent is: the autopilot otherwise flies the
+/// original's driver, which reads no speed plan.
+fn fly_ours(race: &mut race::Race) {
+    race.set_autopilot(true);
+    race.set_autopilot_tuning(difficulty().tune(&oag_ai::Tuning::default()));
 }
 
 fn only() -> Option<String> {
@@ -161,6 +187,7 @@ fn load(circuit: &Circuit, class: &str, seed: u64) -> Option<race::Setup> {
         track: Some(circuit.track.clone()),
         seed: Some(seed),
         class: class.to_string(),
+        difficulty: difficulty(),
         ..race::Options::default()
     });
     match loaded {
@@ -234,7 +261,7 @@ fn solo(setup: &race::Setup, plans: &race::Race, slot: usize, want: u16) -> Tall
         }
     }
     if slot == 0 {
-        race.set_autopilot(true);
+        fly_ours(&mut race);
     }
     let course = race
         .course()
@@ -250,7 +277,21 @@ fn solo(setup: &race::Setup, plans: &race::Race, slot: usize, want: u16) -> Tall
                 branching.pending = want;
             }
         }
+        let before = race.wall_contact_ticks_of(slot);
         race.tick(&PlayerInputs::none());
+        if std::env::var_os("OAG_ROUTE_BOARD_WHERE").is_some()
+            && race.wall_contact_ticks_of(slot) > before
+        {
+            let ship = &race.sim.world.ships[slot];
+            let speed = ship.physics.body.linear_velocity.length();
+            let (route, index) = (ship.driver.branching.route, ship.driver.index);
+            let target = race
+                .plan_of(slot)
+                .map_or(f32::INFINITY, |p| p.target(index as usize));
+            emit(&format!(
+                "contact\tslot{slot}\troute{route}\tindex={index}\tspeed={speed:.1}\ttarget={target:.1}"
+            ));
+        }
         watch(&race, slot, tick, &mut w, &mut tally);
         if tally[usize::from(want)].visits as usize >= VISITS {
             break;
@@ -264,7 +305,7 @@ fn solo(setup: &race::Setup, plans: &race::Race, slot: usize, want: u16) -> Tall
 
 fn field(setup: &race::Setup, plans: &race::Race) -> (Vec<Tally>, Vec<u32>, u32) {
     let mut race = with_plans(setup, plans);
-    race.set_autopilot(true);
+    fly_ours(&mut race);
     let count = race.ship_count() as usize;
     let mut tally = vec![Tally::default(); race.route_count() + 1];
     let mut watches: Vec<Watch> = (0..count).map(|_| Watch { open: None }).collect();
@@ -320,6 +361,10 @@ fn board_at(circuit: &Circuit, class: &str, seed: u64) {
                 hulls.join(","),
             ));
         }
+        emit(&format!(
+            "arrivals\t{}\t{class}\t{seed}\tsteps={:?}",
+            circuit.label, steps.arrivals
+        ));
         for k in 0..routes {
             if !steps.routes_clean.get(k).copied().unwrap_or(false) {
                 continue;
