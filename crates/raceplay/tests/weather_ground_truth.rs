@@ -212,6 +212,56 @@ mod race {
         assert!(weather.lens().is_emitting());
     }
 
+    /// Ours, chosen (enhanced weather): the lens's drops slide outward while boosting and the
+    /// original's law is untouched without it. A twin that is never asked to boost matches
+    /// one told `false` bit for bit; a boosting one spreads its drops from the centre, and
+    /// settles back once released.
+    #[test]
+    #[ignore = "needs data/images/pulse-psp-usa.chd"]
+    fn the_lens_drops_slide_outward_while_boosting() {
+        let Some(loaded) = load(r"14_Track\track_reversed.vex") else {
+            return;
+        };
+        let setup: Setup = loaded.setup.scenery_fx.weather.clone().expect("weather");
+        let open = (0..64u8)
+            .find(|s| !setup.anchors.iter().any(|a| a.section == *s))
+            .expect("an open section");
+        let library = &loaded.setup.effects;
+        let (camera, dt) = (Frame::IDENTITY, 1.0 / 60.0);
+        let mut plain = Weather::new(Some(setup.clone()));
+        let mut told_off = Weather::new(Some(setup.clone()));
+        let mut boosted = Weather::new(Some(setup));
+        for _ in 0..90 {
+            for w in [&mut plain, &mut told_off, &mut boosted] {
+                w.advance(library, dt, camera, i32::from(open));
+            }
+        }
+        for _ in 0..30 {
+            told_off.set_lens_boosting(false);
+            boosted.set_lens_boosting(true);
+            for w in [&mut plain, &mut told_off, &mut boosted] {
+                w.advance(library, dt, camera, i32::from(open));
+            }
+        }
+        let (a, b, c) = (plain.lens(), told_off.lens(), boosted.lens());
+        assert_eq!(a.alive_count(), b.alive_count());
+        assert_eq!(a.mean_radius().to_bits(), b.mean_radius().to_bits());
+        assert_eq!(b.boost(), 0.0);
+        assert!(c.boost() > 0.9, "eased in: {}", c.boost());
+        assert!(
+            c.mean_radius() > a.mean_radius() * 1.3,
+            "boosting {} vs plain {}",
+            c.mean_radius(),
+            a.mean_radius()
+        );
+        boosted.set_lens_boosting(false);
+        for _ in 0..90 {
+            plain.advance(library, dt, camera, i32::from(open));
+            boosted.advance(library, dt, camera, i32::from(open));
+        }
+        assert_eq!(boosted.lens().boost(), 0.0, "settles back");
+    }
+
     /// The mist overlay at the start line, read live 2026-10-04 on PPSSPP:
     /// Fort Gale White starts in an open section with the opacity at its
     /// `Alpha` of `0.3`; Outpost 7 White starts in section 1, covered, its

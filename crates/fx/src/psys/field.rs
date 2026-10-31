@@ -171,6 +171,27 @@ impl System {
         }
     }
 
+    /// Moves every live particle (and its streak end) by `shift` of its own position: a
+    /// caller's push on top of the pool's law, such as the lens's boost drift.
+    pub fn displace(&mut self, shift: impl Fn(Vec3) -> Vec3) {
+        for particle in &mut self.particles {
+            if particle.alive() {
+                let by = shift(particle.position);
+                particle.position += by;
+                particle.origin += by;
+                particle.before += by;
+            }
+        }
+    }
+
+    /// Where every live particle is in field coordinates; see [`Self::world_positions`].
+    pub fn positions(&self) -> impl Iterator<Item = Vec3> + '_ {
+        self.particles
+            .iter()
+            .filter(|particle| particle.alive())
+            .map(|particle| particle.position)
+    }
+
     /// Where every live particle is in the world, as drawn.
     ///
     /// The enhanced weather reads it to find where a drop meets the track; the

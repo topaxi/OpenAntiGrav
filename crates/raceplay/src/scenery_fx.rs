@@ -253,6 +253,16 @@ impl super::Race {
         let camera = self.camera_frame();
         let rain = self.sim.extensions.sky().rain.unwrap_or(0.0);
         self.view.scenery_fx.weather_mut().drive(rain);
+        // Ours, chosen: the lens's drops slide outward while the viewed craft boosts, with
+        // the enhanced weather on only; off, the lens keeps the original's law untouched.
+        let boosting = self.enhanced_weather() && {
+            let ship = &self.sim.world.ships[self.viewed_slot()].physics;
+            ship.pad_timer > 0.0 || ship.turbo_timer > 0.0
+        };
+        self.view
+            .scenery_fx
+            .weather_mut()
+            .set_lens_boosting(boosting);
         self.view
             .scenery_fx
             .advance_weather(&self.view.effects, dt, camera, section);

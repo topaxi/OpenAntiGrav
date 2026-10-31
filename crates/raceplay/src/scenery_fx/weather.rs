@@ -401,6 +401,12 @@ impl Weather {
         &self.pool
     }
 
+    /// Asks the lens for the enhanced weather's boost drift (ours, not the original's). The
+    /// caller passes `false` whenever the enhanced weather is off.
+    pub fn set_lens_boosting(&mut self, boosting: bool) {
+        self.lens.set_boosting(boosting);
+    }
+
     /// One frame: `camera` is where the lens is, `section` the one the craft is in.
     pub fn advance(&mut self, effects: &psys::Library, dt: f32, camera: Frame, section: i32) {
         let Some(setup) = &self.setup else {
@@ -421,7 +427,7 @@ impl Weather {
                 self.pool.ignite(effect, Vec3::ZERO, 1.0);
                 self.emission = Some(effect.emitters.iter().map(|e| e.per_emission).collect());
             }
-            let gain = self.lens.gain();
+            let (gain, boosting) = (self.lens.gain(), self.lens.is_boosting());
             self.lens = Lens::new(
                 setup
                     .config
@@ -430,6 +436,7 @@ impl Weather {
                     .and_then(|path| effects.get(effect_name(path))),
             );
             self.lens.set_gain(gain);
+            self.lens.set_boosting(boosting);
         }
         self.clock += dt;
         self.sections = (self.sections.1, section);

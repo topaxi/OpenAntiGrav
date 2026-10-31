@@ -23,6 +23,11 @@
 //!   `atan(-wx / wy)` of the wind in the camera's frame: down the glass,
 //!   leaning with the wind.
 //!
+//! - **Ours, chosen, not measured: the boost drift.** With the enhanced weather on, the
+//!   drops slide outward from the screen centre while the viewed craft boosts
+//!   ([`Lens::set_boosting`]); see [`BOOST_DRIFT`]. The original has no such thing, and with
+//!   the setting off the lens never takes this path.
+//!
 //! Not read: the lens's draw state beyond its placement (the `+0x98` depth,
 //! `6`, and the instance matrix, read live). The mist overlay is
 //! [`super::mist`].
@@ -56,6 +61,16 @@ const COVER_DRAG: f32 = 0.97;
 /// The speed factor entering cover sets (`0x3e99999a`).
 const COVER_SPEED: f32 = 0.3;
 
+/// Chosen, not measured (ours, not the original's): the outward flow of the drops on the glass
+/// at full boost, per second, as a fraction of a drop's offset from the screen centre. The
+/// flow is radial and proportional to the offset, so drops near the centre move slowest.
+const BOOST_DRIFT: f32 = 2.0;
+
+/// Chosen, not measured: how fast the boost drift eases in and out, per second (about 6 and 12
+/// ticks to settle).
+const BOOST_EASE_IN: f32 = 10.0;
+const BOOST_EASE_OUT: f32 = 5.0;
+
 /// What the weather's section edge did.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Edge {
@@ -87,6 +102,10 @@ pub struct Lens {
     /// A track module's rain strength scaling the open sections' target; `1.0`
     /// unless a driven weather ([`super::Weather::drive`]) says otherwise.
     gain: f32,
+    /// Whether the boost drift is asked for this frame, and how far it has eased in `0..=1`.
+    /// Both stay `false`/`0.0` unless the enhanced weather sets them.
+    boosting: bool,
+    boost: f32,
 }
 
 /// What the effect authors, to put back.
@@ -124,7 +143,27 @@ impl Lens {
             emitting: true,
             azimuth: 0.0,
             gain: 1.0,
+            boosting: false,
+            boost: 0.0,
         }
+    }
+
+    /// Asks for the boost drift (ours, enhanced weather only); the caller passes `false`
+    /// whenever the enhanced weather is off.
+    pub fn set_boosting(&mut self, boosting: bool) {
+        self.boosting = boosting;
+    }
+
+    /// Whether the boost drift is asked for.
+    #[must_use]
+    pub fn is_boosting(&self) -> bool {
+        self.boosting
+    }
+
+    /// How far the boost drift has eased in, `0.0..=1.0`.
+    #[must_use]
+    pub fn boost(&self) -> f32 {
+        self.boost
     }
 
     /// Scales the count the emitter eases toward (a track module's rain strength).
@@ -227,6 +266,31 @@ impl Lens {
         self.pool.set_azimuth(self.azimuth);
         self.pool
             .advance(effect, dt, Vec3::ZERO, Vec3::Y, &mut self.rng);
+        let (target, rate) = if self.boosting {
+            (1.0, BOOST_EASE_IN)
+        } else {
+            (0.0, BOOST_EASE_OUT)
+        };
+        self.boost += (target - self.boost) * (rate * dt).min(1.0);
+        if !self.boosting && self.boost < 1.0e-3 {
+            self.boost = 0.0;
+        }
+        if self.boost > 0.0 {
+            // The glass is the field's x-z plane (see `Anchor::Lens`).
+            let k = BOOST_DRIFT * self.boost * dt;
+            self.pool
+                .displace(|at| Vec3::new(at.x * k, 0.0, at.z * k));
+        }
+    }
+
+    /// Mean distance of the live drops from the screen centre on the glass, for tests.
+    #[must_use]
+    pub fn mean_radius(&self) -> f32 {
+        let (sum, n) = self
+            .pool
+            .positions()
+            .fold((0.0, 0u32), |(s, n), p| (s + p.x.hypot(p.z), n + 1));
+        if n == 0 { 0.0 } else { sum / n as f32 }
     }
 
     /// Appends this frame's geometry, on the glass of `camera`.

@@ -336,6 +336,24 @@ touch geometry (`Modifier_WrapBox` only wraps and blows them), so it has no spla
 - **PS2** loads the same circuits' weather (`circuit_effects`) and the art (a load test on
   `14_Track`); inherited from the PSP, not seen on a PS2 frame.
 
+### The lens drops slide outward while boosting (ours, 2026-10-31)
+
+**Chosen, not measured; the original has no such behaviour.** At `enhanced`, while the
+viewed craft's speed-pad timer (`pad_timer`) or Turbo timer (`turbo_timer`) runs, every live
+`WO_RAIN_LENS` droplet is pushed outward on the glass: each tick its position in the glass's
+x-z plane moves by `2.0 * ease * dt` of its own offset from the screen centre, so drops near
+the centre move slowest and the edge drops fastest. `ease` rises toward 1 at 10 per second
+while boosting and falls toward 0 at 5 per second afterwards (a few ticks either way); at 0
+the lens runs the original's law with nothing added. Render-side only: no `World` field, no
+hash input (`Lens::set_boosting`, `crates/raceplay/src/scenery_fx/lens.rs`). At `original` the
+caller never sets it, so the lens is the original's. A mod-driven weather forces the enhanced
+extras on and so this too. The single lens follows the viewed craft (the player's, or the
+spectated one); a split seat's lens is not separate in this code.
+Evidence: `weather_ground_truth::the_lens_drops_slide_outward_while_boosting` (never-asked
+and told-`false` lenses hash alike bit for bit; a boosting one's mean radius is more than
+1.3 times the plain one's; it settles to 0).
+Title check: HD, 2048 and Omega: not checkable here, the lens is Pulse-only code.
+
 ## Not done, and why
 
 - **The noise clock** is the manager's `0x08ab224c` (seconds, measured: it ran `0.57` per
