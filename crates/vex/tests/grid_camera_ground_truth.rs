@@ -237,7 +237,10 @@ fn dekonstructs_flyby_turns_smoothly_between_its_cuts() {
             })
             .fold(0.0_f32, f32::max);
         let cut = grid.cuts_between((tick - 1) as f32 / 60.0, tick as f32 / 60.0);
-        assert!(cut || turn < 3.0, "tick {tick}: turned {turn} degrees with no cut");
+        assert!(
+            cut || turn < 3.0,
+            "tick {tick}: turned {turn} degrees with no cut"
+        );
         previous = pose;
     }
 }
