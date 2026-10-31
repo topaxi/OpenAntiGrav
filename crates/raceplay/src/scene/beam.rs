@@ -8,7 +8,6 @@ const POOL_SIZE: usize = oag_weapons::projectile::leach_beam::POOL_SIZE;
 
 /// `None` when `texture` did not decode - `load`'s report already says why,
 /// and the ribbon draws nothing rather than a stand-in.
-
 pub(super) fn build(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
