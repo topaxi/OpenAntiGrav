@@ -210,12 +210,9 @@ impl Race {
             return false;
         };
         let ship = &self.sim.world.ships[slot];
-        let Some((position, velocity)) = oag_weapons::projectile::plasma::launch(
-            &ship.physics,
-            &ship.handling.dimensions,
-            &stats,
-            &self.sim.class,
-        ) else {
+        let Some((position, velocity)) =
+            oag_weapons::projectile::plasma::launch(&ship.physics, &stats, &self.sim.class)
+        else {
             return false;
         };
         // The same wind-up the player's bolt takes - see

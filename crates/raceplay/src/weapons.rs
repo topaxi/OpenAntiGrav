@@ -302,7 +302,6 @@ impl Race {
                     // with. See `oag_weapons::projectile::plasma::launch`.
                     let Some((position, velocity)) = oag_weapons::projectile::plasma::launch(
                         &ship.physics,
-                        &ship.handling.dimensions,
                         &stats,
                         &self.sim.class,
                     ) else {

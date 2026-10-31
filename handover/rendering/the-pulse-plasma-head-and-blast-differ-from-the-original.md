@@ -2,7 +2,7 @@
 status: re-first
 titles: [pulse]
 updated: 2026-10-31
-summary: "Plasma blast wired from the GE dumps (tail matches); the head's template playback, the onset flash and the detonation distance leg are open"
+summary: "Plasma blast wired from the GE dumps (tail matches); the head's template playback and the onset flash are open; detonation timing fixed"
 ---
 
 # The Pulse Plasma head and blast differ from the original's
@@ -40,16 +40,17 @@ confidence scores and the replay evidence. What is left is wiring and two unread
    and ring sit at 0.007, the dark disc's looping channel decays to 0.02 in five ticks), so only the
    star shows. Which age a template samples its channels at, and what else scales its size, is the
    next read (a `ParticleSystem_DrawParticle` probe on `glow2` at two severities).
-3. **Detonation 3 ticks early: half isolated.** Original: released fire+59 at launch speed 634.61
-   km/h, **first four flight ticks at 0.75 x that (475.9 km/h)**, then pinned to the ramp
-   (850 km/h class), detonating 50.4 units on at fire+76. Ours flies the first four ticks at the
-   full launch speed (about 1 tick of the 3); the rest is most likely the distance leg (nearer
-   detonation or farther-forward muzzle). Needs a per-tick projectile log on ours (position at
-   launch and detonation); `--probe plasma_fly` is the original side.
+3. ~~**Detonation 3 ticks early**~~ Closed 2026-10-31 (`pulse-plasma-timing`): k76 now, per-update
+   distance within 0.05 unit of the original. The cause was not the distance leg: the floor arm's
+   steer, the 0.75 launch scale, a 3-update no-ride window, the Plasma's ride height 4.0 and a 2.23
+   muzzle, plus one tick of f32 residue in the hold (`plasma.md`, "the detonation leg fixed").
+   Left open there: what gates the first three updates (Rocket shows it too), the speed ramp's age
+   being one update behind, Missile and Shuriken ride height, other crafts' muzzle node. The head's
+   hold position moved 2.6 units toward the craft; item 1(a)'s onset re-score can run now.
 4. ~~Craft hit~~: the second blast is wired (2026-10-30, `plasma.md`); still uncaptured on the original (needs a craft ahead on the bolt line).
 
 ## Next Steps
 
-- Item 2 needs an `oag-re` read of the template age/size rule; then item 3 (log our bolt per tick
-  first), then re-score the blast onset.
+- Item 2 needs an `oag-re` read of the template age/size rule; then re-score the blast onset (item 3
+  has landed).
 - Pulse PS2 is unmeasured here; its pair is `scripts/pcsx2-pulse-pair.py`.
