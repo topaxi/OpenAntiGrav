@@ -41,7 +41,7 @@ pub(crate) struct Opened {
 /// The owned archives a campaign screen takes.
 pub(crate) enum Spare {
     None,
-    Ready(oag_assets::Archives),
+    Ready(Box<oag_assets::Archives>),
     #[cfg(not(target_arch = "wasm32"))]
     Opening(oag_thread::Task<Option<oag_assets::Archives>>),
 }
@@ -53,7 +53,7 @@ pub(crate) enum MenuSource {
     Idle,
     #[cfg(not(target_arch = "wasm32"))]
     Opening(Key, oag_thread::Task<Option<Opened>>),
-    Open(Opened),
+    Open(Box<Opened>),
     /// Opening failed for this key, which was said; the screens open on demand as before.
     Failed(Key),
 }
@@ -102,7 +102,7 @@ impl Job {
         let gate = oag_game::unlock::Gate::read(self.title, &mut archives);
         // Before the previews' pipelines (0.8 s on a cold driver cache): the campaign screens
         // take this one, and a player reaches them sooner than a preview.
-        let spare = open_key(&self.key).map_or(Spare::None, Spare::Ready);
+        let spare = open_key(&self.key).map_or(Spare::None, |archives| Spare::Ready(Box::new(archives)));
         let opened_in = started.elapsed();
         let mut pipelines = KeptBuildCache::default();
         let target = PreviewTarget {
@@ -226,7 +226,7 @@ impl Session {
                         );
                     }
                     self.adopt_preview_pipelines(&mut opened);
-                    MenuSource::Open(opened)
+                    MenuSource::Open(Box::new(opened))
                 }
                 Some(Err(_)) => {
                     warn!("the menu source worker panicked; the screens open the disc themselves");
@@ -252,7 +252,7 @@ impl Session {
             return None;
         };
         let taken = match std::mem::replace(&mut opened.spare, Spare::None) {
-            Spare::Ready(archives) => Some(archives),
+            Spare::Ready(archives) => Some(*archives),
             #[cfg(not(target_arch = "wasm32"))]
             Spare::Opening(mut task) => task.join().and_then(Result::ok).flatten(),
             Spare::None => None,
