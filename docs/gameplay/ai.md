@@ -1898,13 +1898,40 @@ once the race is fully set up (after `ai_choice::apply`): the plans are learned 
 the same function (`speed_plan::learn_speed_plans`) on a copy of the simulation on a
 `speed-plans` thread, the hand-over from the loading screen waits for
 `Race::speed_plans_ready`, and the first tick adopts them
-(`ensure_speed_plans`, 25 us). The job carries the world's state hash and the two
-flags `needs_speed_plans` reads; if the race differs at adoption the result is
-dropped and they are learned on the tick as before. Callers that build a race another
+(`ensure_speed_plans`, 25 us). Callers that build a race another
 way (headless, `--race`, tests, a mid-race autopilot) keep the lazy path. Bit-identity:
 `speed_plan_ground_truth::plans_learned_ahead_are_the_plans_the_first_tick_learns`
 (Outpost 7, RAPIER: the ring plan, every slot's plan and 120 ticks of state hashes
-equal). Measured in `docs/rendering/frame-thread-cpu.md`. **A fork
+equal). Measured in `docs/rendering/frame-thread-cpu.md`.
+
+**Started on the race-load thread, overlapped (2026-10-31, `speed-plan-overlap`).**
+On a forked circuit the job starts as soon as the circuit is read: the race-load
+thread runs `Race::start` (natively too, as the web worker always did) and
+`Race::begin_speed_plans_ahead`, so the plans learn beside the scene build and its
+warm-up instead of after them. A fork reads the plans whichever driver flies, so
+nothing the launch decides later can make the job unwanted. A circuit without a
+fork waits for the launch's own `begin_speed_plans`, which knows whether anything
+reads them (the original driver alone does not). Not for a launch whose seats or
+race are changed afterwards: split seating or a network host's race
+(`plan_ahead` in `Session::launch_race`). The job is keyed on its **plan inputs**
+(`speed_plan::PlanInputs`: per grid slot the handling, the physics state, the line
+index, active and person-flown), no longer the state hash, which the launch's
+setters move without touching a plan: a mod event's pilot writes `driver.pilot`,
+the original driver only decides whether a plan is read. The hand-over's
+`begin_speed_plans` keeps a job that still fits and starts a new one when an input
+moved (a second person seated), so the relearn stays behind the loading screen; the
+first-tick relearn and its warning remain only for a race changed after the
+hand-over. `tests::speed_plan_overlap::a_job_started_on_the_load_thread_survives_the_launch`
+runs the menus' setters over an early job.
+
+The learner itself runs in three stages (`speed_plan::learn_speed_plans`): the
+ring plan (it picks the reference); then every route's plan and every other hull's
+ring copy at once, a thread each (neither reads the other); then every hull's copy
+of each route plan, which needs that route's plan. Until then the routes were
+learned one after another and the hulls after them. Results are written back in
+route and hull order; `tests::speed_plan_overlap` checks the overlapped learner
+equal to the serial one (every plan, the reference, `ship_plan`, `plan_steps`) on
+Pulse `07_Track` and 2048 `altima` RAPIER. **A fork
 always learns them**, though the original reads no plan: a route is offered to
 the coin only if its plan verified, and the route plans are learned on the ring
 plan's reference hull, so skipping them would change which way an original
@@ -6120,10 +6147,11 @@ ratio of the yaw ceilings. **Ours, chosen, not measured.**
 2. **Every other distinct hull re-learns it** (`SpeedPlan::adapt`): the reference's
    ceilings and takeoff run-ups kept, the braking re-measured on this hull, the plan
    verified as it stands, then up to four whole-window learning passes that lower only
-   where this hull fails. Each route plan is adapted the same way. A hull's copies are
-   built on a thread each natively (`par_map`; one after another on the web, whose race
-   already starts on a worker) and written back in slot order, so the race is the same
-   either way.
+   where this hull fails. Each route plan is adapted the same way. A hull's ring copy
+   is built on a thread each natively beside the route plans, and its route copies on
+   a thread each once those are in (`par_map`, `par_join`; one after another on the
+   web, whose race already starts on a worker), written back in slot order, so the race
+   is the same either way.
 3. **Followed where it verifies**: no wall on either verification lap and a flying lap
    completed without a rescue. A rescue from the grid is allowed, the underpowered case
    the search itself accepts; without that, Triakis at `01_Track` RAPIER fell back to

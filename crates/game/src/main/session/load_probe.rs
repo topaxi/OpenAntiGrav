@@ -31,6 +31,9 @@ pub(crate) struct LoadProbe {
     race_frames: u32,
     recorder: Recorder,
     frame_start: Instant,
+    /// When `LAUNCH RACE` was pressed, for the confirm-to-first-race-frame
+    /// line.
+    launched: Instant,
 }
 
 impl LoadProbe {
@@ -43,6 +46,7 @@ impl LoadProbe {
             race_frames: 0,
             recorder: Recorder::default(),
             frame_start: Instant::now(),
+            launched: Instant::now(),
         })
     }
 
@@ -89,6 +93,9 @@ impl Session {
         probe.recorder = Recorder::default();
         debug!("--measure-race-load: run {} launching", probe.run);
         let start = Instant::now();
+        if let Some(probe) = self.load_probe.as_mut() {
+            probe.launched = start;
+        }
         if let Err(e) = self.launch_race() {
             log::error!("--measure-race-load: cannot launch a race: {e:#}");
             self.quit = true;
@@ -116,6 +123,16 @@ impl Session {
             return;
         }
         probe.race_frames += 1;
+        if probe.race_frames == 1 {
+            // The race's first frame, the first tick in it: the whole wait a
+            // player sees from pressing confirm.
+            println!(
+                "race load run {}: confirm to first race frame {:.1} ms, that frame's work {:.1} ms",
+                probe.run,
+                probe.launched.elapsed().as_secs_f64() * 1000.0,
+                probe.frame_start.elapsed().as_secs_f64() * 1000.0,
+            );
+        }
         if probe.race_frames < RACE_FRAMES {
             return;
         }

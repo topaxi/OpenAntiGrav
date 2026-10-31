@@ -88,10 +88,9 @@ pub fn loading(
     // A live capture is one real load, paced at the window's own 60 Hz so the
     // frame the capture stops on is a moment of that load. Detached when the
     // capture returns, as a window's own worker is.
-    let mut worker = options
-        .live
-        .clone()
-        .map(|race| oag_raceplay::LoadWorker::spawn(race, options.progress.current.clone(), None));
+    let mut worker = options.live.clone().map(|race| {
+        oag_raceplay::LoadWorker::spawn(race, options.progress.current.clone(), None, false)
+    });
     for _ in 0..options.ticks {
         let finished = match &worker {
             Some(worker) => {

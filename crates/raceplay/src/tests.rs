@@ -78,6 +78,7 @@ mod shield_flash;
 mod slot_hud;
 mod spawn;
 mod spectator_press;
+mod speed_plan_overlap;
 mod spline;
 mod split_bloom;
 mod split_blur;
