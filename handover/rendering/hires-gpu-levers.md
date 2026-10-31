@@ -2,7 +2,7 @@
 status: measure
 titles: [hd, pulse]
 updated: 2026-10-31
-summary: "Leftovers of the hi-res GPU pass table after the three levers (track solid landed, blur skip and 1080p gamescope window dropped): unnamed Scene::render time, MSAA cost, gamescope on a real 4K output"
+summary: "Hi-res GPU leftovers after the three levers: unnamed Scene::render time on the Deck, MSAA cost, gamescope on a real 4K output"
 categories: [rendering, tooling]
 ---
 
