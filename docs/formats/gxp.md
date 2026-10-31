@@ -700,7 +700,13 @@ attributed to materials by the `.rcsmaterial` name ahead of each texture path in
 Chenghou, Moa Therma and 64x64 on Vineta K: min 0, max 233-255, mean 93 of 255, about 29% of
 texels under 32), so the strip draws as a dark, patterned `Constant1` band.
 
-**The binding rule, for the wire.** For `m_diffuse_normal_constantspecular` (and `New`) on 2048
+**Wired 2026-10-31, same lane** (maintainer's instruction): `mesh::rcs::psp2::alpha_product`
+binds the product picture for the family on both titles; the census moved as predicted, **2048
+41 to 10 and Omega 149 to 67** (every Omega circuit's ratchet re-set in
+`omega_transparency_ground_truth.rs`). Not compared against an original frame (no Vita3K race pose
+of a start line; shadPS4 race frames are not trusted here).
+
+**The binding rule.** For `m_diffuse_normal_constantspecular` (and `New`) on 2048
 and Omega, bind no picture from `Texture1`/`Norm`'s rgb: the colour slot is `Constant1 * T.a`
 per texel, opaque, HD's `AlphaUse::Product` picture. Expected census: 2048 **41 to 10**, Omega
 **149 to 67**, *provided the colour slot no longer holds the map itself*;
@@ -709,7 +715,8 @@ bound and masks it in the shader still counts as a fault unless the detector lea
 use. Notes for the wire: the program's output alpha is 0 in both compiles (`xyz0`; `mrt0`'s
 alpha lane 0), harmless under the family's state word 124 (opaque) but wrong if anything
 blends on it; the encode of the product (`skin::raw_to_texel` on HD, `psp2.rs`'s unorm
-constant on 2048) is the renderer's choice and stays **checked, applies, not wired**, as on
+constant on 2048) is the renderer's choice: the wire binds unorm bytes like 2048's other
+constants, **chosen, not measured**; HD's sRGB encode is **checked, applies, not wired**, as on
 `rcsmaterial.md`. On Omega the family sits on all twelve HD/Fury circuits (the 2048 DLC
 four among them), and the same rule covers every one.
 

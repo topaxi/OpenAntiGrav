@@ -1,8 +1,8 @@
 ---
 status: re-first
 titles: [2048, omega]
-updated: 2026-10-20
-summary: "m_diffuse_normal_constantspecular ambient-only use of Norm and Texture1 unread; most of the 41 2048 slots"
+updated: 2026-10-31
+summary: "pipe strip wired (2048 41 to 10, Omega 149 to 67); left: Chenghou emmissivenew, water edge, temp_diffuse, Omega jd_*_n/rocks/amb_glass"
 categories: [rendering]
 ---
 
@@ -58,10 +58,25 @@ non-lightmap texture) and so still draw it.
   `ColourConstant`; no matched frame taken), the water edge, `rocks_01`, `jd_*_n`,
   `amb_glass`, `temp_diffuse`, Omega.
 
+- **2026-10-31 (`2048-normal-maps-re`): `m_diffuse_normal_constantspecular` read and wired.**
+  Its colour is `Constant1 * T.a` (rgb a normal) on 2048's USSE programs and Omega's GCN ones
+  (Omega fetches alpha alone, `dmask:0x8`); `mesh::rcs::psp2::alpha_product` binds that product,
+  unorm bytes (chosen). Census 2048 41 -> 10, Omega 149 -> 67, ratchets re-set. Evidence:
+  `docs/formats/gxp.md`, "`m_diffuse_normal_constantspecular` colours by `Texture1`'s alpha".
+  Not compared against an original frame; whether the original draws the pipe strip in a race at
+  all (Vita3K never compiled its programs in two Vineta K laps) is still open.
+- **What is left.** 2048 (10): Chenghou's `diffuse_normal_specular_emmissivenew`
+  (`ds_sf_ne`, `ds_sfline_trench_ne`, 7 slots; its ambient program is the next to list with
+  `scripts/vita-usse.py disasm`), the Altima water edge (1), `temp_diffuse` on Square and Subway
+  (2). Omega (67): `jd_ubermall_gold_n` 16, `rocks_01_normal_alpha` 12, `amb_glass` 8 and twelve
+  files of 1 to 4 (`omega_transparency_ground_truth.rs --no-capture` lists them); Omega's
+  programs are now listable with `cargo run -p oag-rcs --example gcn_dump`, so a `dmask` read
+  per family is the cheap first step.
+
 ## Next Steps
 
-1. Read what `m_diffuse_normal_constantspecular` does with `Norm`/`Texture1` in its
-   ambient-only permutation: a Vita3K `.dsm` of the `Anulpha_Pass` material, or the USSE
-   `SMP` consumer. The family is most of the 41 2048 slots and 82 of Omega's materials.
+1. List Chenghou's `diffuse_normal_specular_emmissivenew` ambient program (2048, USSE) and
+   the Omega families above (GCN `dmask` and the colour path), the way
+   `m_diffuse_normal_constantspecular` was read (`docs/formats/gxp.md`).
 2. Pose-match an RPCS3 frame on Talon's start line and Modesto's bowl; a Vita3K frame of a
    2048 DLC start line for the dark strip.

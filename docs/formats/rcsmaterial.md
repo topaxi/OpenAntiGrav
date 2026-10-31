@@ -2847,8 +2847,9 @@ constant (`Constant1`, `ColourConstant`, `Watercolour`, named by the program) as
 picture, as HD's `constant_diffuse` does. The rule and its numbers are in
 [gxp.md](gxp.md#which-sampler-carries-the-colour-2026-10-19-normal-maps-as-colour);
 `oag_rcs::gxp::sampler_use`. **Not changed, and why:** `m_diffuse_normal_constantspecular`
-(and `New`) samples `Texture1`/`Norm` in its ambient-only program too, so its map feeds the
-colour somehow - open; the Altima water edge (`fc17_..._wateredge_vertexcol`) samples
+(and `New`) samples `Texture1`/`Norm` in its ambient-only program too: **wired 2026-10-31** as
+`Constant1` times the map's alpha (`mesh::rcs::psp2::alpha_product`; the law is in gxp.md, read on
+both titles' programs); the Altima water edge (`fc17_..._wateredge_vertexcol`) samples
 `NormalMap` in its ambient-only program (an opacity term, unread) - open; `temp_diffuse` on
 Square and Subway reads as a normal map by texel and has no program evidence.
 
@@ -3312,7 +3313,8 @@ table already names `Constant1` (`0x7611a2d8`, the same hash HD's block names) a
 2048's record for record. `m_diffuse_normal_constantspecular`: **checked, applies** - 2048's ambient-only
 program samples `Texture1` and the instance carries `0x7611a2d8`, the shape HD's `MUL H.xyz, R.w, C` reads.
 **Verified 2026-10-31** on 2048's USSE program and Omega's GCN one (Omega fetches alpha alone, `dmask:0x8`):
-[gxp.md](gxp.md), "`m_diffuse_normal_constantspecular` colours by `Texture1`'s alpha". The `metallic` family and its siblings: not looked up in 2048's materials this lane (open). **The encode:**
+[gxp.md](gxp.md), "`m_diffuse_normal_constantspecular` colours by `Texture1`'s alpha". **Wired** on both, 2026-10-31
+(`mesh::rcs::psp2::alpha_product`). The `metallic` family and its siblings: not looked up in 2048's materials this lane (open). **The encode:**
 `psp2.rs` binds its constants as unorm bytes "the way `skin::constant_diffuse` binds HD's"; the reasoning (an
 sRGB-decoding binding against a raw multiply) is the renderer's, not HD's, but no 2048 frame was compared, so it is
 **checked, applies, not wired**.
