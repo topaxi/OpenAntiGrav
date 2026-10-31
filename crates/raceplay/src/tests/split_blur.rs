@@ -421,7 +421,8 @@ fn under_msaa_the_view_that_moves_blurs_and_the_one_that_sits_still_does_not() {
     assert!(second[0] == second[1], "the view at rest is not touched");
 }
 
-/// A frame starts with nothing of the one before it: the same state drawn twice leaves the same
+/// A frame starts with nothing of the one before it (drawn with the blur on, the frame whose
+/// velocity is in the attachment: with it off the gate writes none): the same state drawn twice leaves the same
 /// depth and velocity, whatever the first draw left, and the same picture. A later view loads
 /// both and relies on the first view's whole-attachment clear: without it the second draw would
 /// fail the depth test against the first's depth (equal is not less) and draw nothing.
@@ -436,7 +437,7 @@ fn a_frame_reads_nothing_of_the_frame_before_it() {
         (
             pixels(gpu.0, gpu.1, velocity),
             pixels(gpu.0, gpu.1, depth),
-            pixels(gpu.0, gpu.1, &frames.off),
+            pixels(gpu.0, gpu.1, &frames.on),
         )
     };
     let once = read();
@@ -444,8 +445,8 @@ fn a_frame_reads_nothing_of_the_frame_before_it() {
         gpu,
         &frames.scene,
         &frames.race,
-        &frames.off,
-        MotionBlur::Off,
+        &frames.on,
+        MotionBlur::High,
     );
     let twice = read();
     assert!(
@@ -461,4 +462,22 @@ fn a_frame_reads_nothing_of_the_frame_before_it() {
         "the picture of a repeated frame is the same"
     );
     assert!(drawn(&twice.2), "and it is not because nothing was drawn");
+}
+
+/// A split draws each view with the blur off and blurs after the last, so the velocity gate
+/// has to read the split's own strength: with the blur on every view writes velocity, with
+/// it off none does.
+#[test]
+fn a_split_with_the_blur_on_keeps_the_velocity_write() {
+    let Some((device, queue)) = test_gpu() else {
+        return;
+    };
+    let mut race = race_with_a_grid();
+    assert_eq!(race.set_viewport_count(2), 2);
+    let scene = scene(&device, &queue, &race, Msaa::Off);
+    let target = target(&device);
+    for (blur, open) in [(MotionBlur::Off, false), (MotionBlur::Medium, true)] {
+        draw((&device, &queue), &scene, &race, &target, blur);
+        assert_eq!(scene.velocity_gate_open(), open, "split blur {blur:?}");
+    }
 }

@@ -36,6 +36,11 @@ pub enum Velocity {
     /// blended model stays on [`Self::Write`], which keeps blurring with the
     /// world. Chosen, not measured.
     Attached,
+    /// [`Self::Write`], and [`super::Built::unwritten`] holds the opaque, prepass
+    /// and cutout pipelines again with the velocity write masked, for a frame in
+    /// which nothing reads the buffer. The race's track and hulls: where nearly
+    /// all of a frame's velocity fragments are.
+    Gated,
 }
 
 impl Velocity {
@@ -44,7 +49,7 @@ impl Velocity {
     pub fn target(self, masked: bool) -> Option<Option<wgpu::ColorTargetState>> {
         match self {
             Self::None => None,
-            Self::Write | Self::Attached => Some(Some(wgpu::ColorTargetState {
+            Self::Write | Self::Attached | Self::Gated => Some(Some(wgpu::ColorTargetState {
                 format: oag_gpu::formats::VELOCITY_FORMAT,
                 blend: None,
                 write_mask: if masked {
@@ -95,7 +100,7 @@ impl Velocity {
     pub(crate) fn entry(self, base: &'static str, velocity: &'static str) -> &'static str {
         match self {
             Self::None => base,
-            Self::Write | Self::Attached => velocity,
+            Self::Write | Self::Attached | Self::Gated => velocity,
         }
     }
 }

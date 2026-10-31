@@ -88,6 +88,18 @@ pub struct SolidSet {
     pub cutout_pipelines: Vec<(f32, wgpu::RenderPipeline)>,
 }
 
+/// The [`SolidSet`]s of a [`Velocity::Gated`] model again with the velocity target's
+/// write masked: what a frame draws with when nothing reads the velocity buffer.
+/// The same shaders and state as [`Built::pipeline`] and [`Built::culled`] but for
+/// that mask, so colour and depth are bit-identical.
+#[derive(Debug, Clone)]
+pub struct Unwritten {
+    /// As the unculled set (`Built::pipeline`, `Built::prepass`, ...).
+    pub base: SolidSet,
+    /// As [`Built::culled`].
+    pub culled: Option<SolidSet>,
+}
+
 /// Everything [`build`] hands back: geometry, texture bindings, and the three
 /// pipelines a `Model` draws through.
 #[derive(Debug)]
@@ -122,6 +134,9 @@ pub struct Built {
     /// [`crate::mesh::render_state::STATE_CULL`]). The pipelines above stay
     /// two-sided, for the draws that are not culled.
     pub culled: Option<SolidSet>,
+    /// The sets above again with the velocity write masked, for a
+    /// [`Velocity::Gated`] model - see [`Unwritten`].
+    pub unwritten: Option<Unwritten>,
     /// Blended pass: depth write off, the `blend` the caller passed to
     /// [`build`] - [`TRANSPARENT_BLEND`] for ordinary scene geometry. Draws
     /// [`Model::transparent_draws`] last, as a third `set_pipeline` in the
@@ -600,13 +615,23 @@ pub fn build_with(
     // The opaque pipeline, its depth prepass and the cutout pipelines, built
     // for one cull mode so a model whose draws mix single- and double-sided
     // (HD's track, from material state bit 4) gets a culling twin of each.
-    let solid_set = |primitive: wgpu::PrimitiveState| {
+    // `masked` builds the set with the velocity write masked (see [`Unwritten`]).
+    let masked_targets = velocity_targets(
+        wgpu::ColorTargetState {
+            format,
+            blend: None,
+            write_mask: glow.writes(),
+        },
+        velocity.target(true),
+    );
+    let solid_set = |primitive: wgpu::PrimitiveState, masked: bool| {
+        let targets = if masked { &masked_targets } else { &targets };
         let pipeline = pipeline_cache::cached_pipeline(
             shader,
             "vs_main",
             &vertex_buffers,
             fragment_entry,
-            &targets,
+            targets,
             primitive,
             Some(depth_stencil.clone()),
             multisample,
@@ -624,7 +649,7 @@ pub fn build_with(
                     fragment: Some(wgpu::FragmentState {
                         module: shader,
                         entry_point: Some(fragment_entry),
-                        targets: &targets,
+                        targets,
                         compilation_options: wgpu::PipelineCompilationOptions {
                             constants,
                             ..Default::default()
@@ -647,7 +672,7 @@ pub fn build_with(
                 vertex_buffers: &vertex_buffers,
                 constants,
                 velocity,
-                targets: &targets,
+                targets,
                 fragment_entry,
                 primitive,
                 multisample,
@@ -676,7 +701,7 @@ pub fn build_with(
                     blend: None,
                     write_mask: glow.blend_writes(),
                 },
-                velocity.target(false),
+                velocity.target(masked),
             )
         } else {
             targets.clone()
@@ -763,12 +788,15 @@ pub fn build_with(
         prepass,
         alpha_test_pipeline,
         cutout_pipelines,
-    } = solid_set(primitive);
-    let culled = per_draw_cull.then(|| {
-        solid_set(wgpu::PrimitiveState {
-            cull_mode: Some(wgpu::Face::Back),
-            ..primitive
-        })
+    } = solid_set(primitive, false);
+    let culling = wgpu::PrimitiveState {
+        cull_mode: Some(wgpu::Face::Back),
+        ..primitive
+    };
+    let culled = per_draw_cull.then(|| solid_set(culling, false));
+    let unwritten = (velocity == Velocity::Gated).then(|| Unwritten {
+        base: solid_set(primitive, true),
+        culled: per_draw_cull.then(|| solid_set(culling, true)),
     });
 
     // Third pipeline for `Model::transparent_draws` (list B): same shader
@@ -1147,6 +1175,7 @@ pub fn build_with(
         alpha_test_pipeline,
         cutout_pipelines,
         culled,
+        unwritten,
         blend_pipeline,
         additive_pipeline,
         unblended_pipeline,

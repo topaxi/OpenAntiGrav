@@ -118,12 +118,14 @@ it.
 
 ## Decisions, and why
 
-**The velocity buffer is always written in the game path.** The setting gates
-only the blur passes, not the buffer. This keeps the menu row live-applying -
-no `restart_required`, so the deliberate deferred-row tripwire in
-`crates/game/src/menu.rs` stays untouched - and it leaves the velocity target
-unconditionally available to FSR 3.1, which is half the reason for choosing the
-expensive tier. The cost is one `Rg16Float` write per fragment.
+**The velocity buffer is written on the frames that read it** (changed 2026-10-31, was
+"always written"). The track and the hulls, where nearly every velocity fragment is, draw
+with the write masked on a frame with no reader (`scene::velocity_gate::Readers`: the blur at
+any strength, a temporal upscaler; a split with the blur on counts as a reader). The row
+still live-applies (the gate is decided from the frame's own arguments, the buffer is cleared
+every frame, so a reader never sees the last frame's), and a new reader is a new field in
+`Readers`. The saving on AMD is 2 to 7 % of the HD race pass at 1280x800 and 1080p
+([hd-gpu-cost](hd-gpu-cost.md)). The cost when read is still one `Rg16Float` write per fragment.
 
 **The setting is strength, not technique.** `off | low | medium | high`, mapping
 to a shutter fraction of the drawn frame's travel (a tick, in a capture). Offering `camera` and `full` as user-facing

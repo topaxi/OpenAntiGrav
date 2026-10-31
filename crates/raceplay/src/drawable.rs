@@ -30,6 +30,13 @@ pub(super) struct Drawable {
     /// The same four with back faces culled, for the draws that ask - see
     /// `mesh_render::Built::culled`.
     culled: Option<mesh_render::SolidSet>,
+    /// The sets above with the velocity write masked, for a drawable built
+    /// [`mesh_render::Velocity::Gated`] - see [`Self::set_velocity_read`].
+    unwritten: Option<mesh_render::Unwritten>,
+    /// Whether the frame being drawn reads the velocity buffer; set before each frame by
+    /// [`Self::set_velocity_read`]. `true` until told otherwise, so a drawable nobody
+    /// gates writes velocity as it always did.
+    velocity_read: std::sync::atomic::AtomicBool,
     blend_pipeline: [wgpu::RenderPipeline; 2],
     /// The other two recovered transparent blend classes. Selected per draw
     /// call, because a single model mixes them - see
@@ -240,6 +247,7 @@ impl Drawable {
             alpha_test_pipeline,
             cutout_pipelines,
             culled,
+            unwritten,
             blend_pipeline,
             additive_pipeline,
             unblended_pipeline,
@@ -367,6 +375,8 @@ impl Drawable {
             alpha_test_pipeline,
             cutout_pipelines,
             culled,
+            unwritten,
+            velocity_read: std::sync::atomic::AtomicBool::new(true),
             blend_pipeline,
             additive_pipeline,
             unblended_pipeline,
@@ -517,6 +527,21 @@ impl Drawable {
     ) {
         self.fog_bind =
             mesh_render::zone::rebind(device, queue, &self.fog, &self.zone_rebind, stage);
+    }
+
+    /// Tells a gated drawable whether this frame's draws write the velocity buffer:
+    /// `false` swaps in the pipelines with the write masked (see
+    /// [`mesh_render::Velocity::Gated`]); a drawable that is not gated ignores it.
+    pub(super) fn set_velocity_read(&self, read: bool) {
+        self.velocity_read
+            .store(read, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Whether the last [`Self::set_velocity_read`] said the frame reads velocity.
+    #[cfg(test)]
+    pub(super) fn velocity_read(&self) -> bool {
+        self.velocity_read
+            .load(std::sync::atomic::Ordering::Relaxed)
     }
 
     /// A sphere, in model space, that holds every vertex: the centre of the

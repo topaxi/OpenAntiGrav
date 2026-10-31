@@ -185,6 +185,7 @@ pub fn capture_pixels_from(
         stamp_pipeline: _,
         prepass: _,
         culled: _,
+        unwritten: _,
     } = build(
         &device,
         &queue,

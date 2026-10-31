@@ -36,6 +36,7 @@ mod split_blur;
 mod split_exposure;
 mod split_record;
 pub use split_record::Recording;
+mod velocity_gate;
 mod viewports;
 mod weapon_models;
 mod weapon_quads;
@@ -420,10 +421,11 @@ pub struct Scene {
     /// The scene's velocity attachment: every draw's screen-space motion
     /// since the previous tick, in uv units -
     /// `oag_gpu::formats::VELOCITY_FORMAT`, at the scene's own sample
-    /// count. **Always written in the game path**, whatever the blur setting
-    /// says, per the design: the buffer is an FSR 3.1/TAA prerequisite as
-    /// much as a blur input, and gating it on a setting would make it a
-    /// sometimes-there artefact nothing downstream could rely on.
+    /// count. **Written for the frames that read it.** Its readers are the motion
+    /// blur and a temporal upscaler (`scene::velocity_gate::Readers`); the track and
+    /// the hulls, where nearly every velocity fragment is, draw with the write masked
+    /// on a frame with none, which is every frame at the defaults. The buffer is cleared
+    /// every frame, so a reader never finds the previous frame's.
     velocity: wgpu::Texture,
     /// Each camera's frame-to-frame history: the previous tick's camera and model
     /// matrices for the `prev_mvp` every drawable's velocity is measured against
@@ -442,6 +444,10 @@ pub struct Scene {
     /// Whether the split-screen seats' histories hold a frame the last split drew, so the
     /// first single-view frame after it forgets them ([`Scene::retire_split_histories`]).
     split_live: std::cell::Cell<bool>,
+    /// Whether the split being drawn will run the motion blur after its last view
+    /// ([`Scene::blur_split_views`]): each view is drawn with the blur off, so the velocity
+    /// gate reads this instead. Set and cleared by [`Scene::render_viewports`].
+    split_blur_reads: std::cell::Cell<bool>,
     /// The views each window's last split drew, `(seat, rectangle of the scene target)`, and
     /// nothing for a window whose last frame was a picture of its own: what [`Scene::temporal`]
     /// answers per view.
@@ -703,7 +709,7 @@ impl Scene {
             mesh_render::Texcoords::Interleaved,
             true,
             false,
-            mesh_render::Velocity::Write,
+            mesh_render::Velocity::Gated,
             true,
         )?;
         let adverts = if adverts.is_empty() {
@@ -736,7 +742,7 @@ impl Scene {
                 zone_art,
                 shadow_maps,
                 mesh_render::ShadowReceiver::Mapped,
-                mesh_render::Velocity::Write,
+                mesh_render::Velocity::Gated,
             )?);
         }
         let collision = collision_model
@@ -1083,6 +1089,7 @@ impl Scene {
                 .collect(),
             history: std::cell::Cell::new(0),
             split_live: std::cell::Cell::new(false),
+            split_blur_reads: std::cell::Cell::new(false),
             split_views: std::cell::RefCell::default(),
             split_frame: std::cell::Cell::new(0),
             seat_drawn: Default::default(),
