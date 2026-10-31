@@ -78,6 +78,12 @@ pub const UV1_HASH: u32 = 0x4272_14fc;
 pub const VERTEX_COLOUR1_HASH: u32 = 0x7493_d450;
 /// `~crc32("lightmapUV")`.
 pub const LIGHTMAP_HASH: u32 = 0x26a7_b665;
+/// `~crc32("NOVAColor")`: the baked per-vertex light of a Vita circuit's vertex-lit surfaces, four
+/// unsigned normalised bytes (type `0x44`). The name is the vertex programs' own attribute
+/// (`scripts/vita-gxp.py grep ... NOVAColor`), and its hash is this value (confidence 95).
+pub const NOVA_COLOUR_HASH: u32 = 0x1aaf_7631;
+/// The type nibble of [`NOVA_COLOUR_HASH`] on the Vita: four unsigned normalised bytes.
+pub const VITA_UBYTE4_NORM: u8 = 4;
 
 /// `~crc32("barsUV_blendUV")`: one four-lane half attribute, the bars' pair in `.xy` and the
 /// wipe's in `.zw`. The same hash HD's `nr_twinblend` names its `v[8]` by.
@@ -159,6 +165,14 @@ impl VertexDecl {
     pub fn vertex_colour1(&self) -> Option<&Attribute> {
         self.attribute(VERTEX_COLOUR1_HASH)
             .filter(|a| a.components == 4 && a.gxm_type == PS4_UBYTE4_NORM)
+    }
+
+    /// `NOVAColor`, four unsigned normalised bytes on the Vita. Only sound on a declaration
+    /// reached through the record's own pointer.
+    #[must_use]
+    pub fn nova_colour(&self) -> Option<&Attribute> {
+        self.attribute(NOVA_COLOUR_HASH)
+            .filter(|a| a.components == 4 && a.gxm_type == VITA_UBYTE4_NORM)
     }
 
     /// The `nr_twinblend` pair attribute, four halves. Only sound on a declaration reached

@@ -339,3 +339,75 @@ compare.
   0.001)`, referenced by no Omega code) has the shape of this triple, a hypothesis below 50 and not applied.
   No term was scaled on a guess, so Tower is unchanged.
 - **Fragment-program blend in the executable:** [fragment-programs.md](../ghidra/functions/vita-2048-eu-v104/fragment-programs.md).
+
+## Vertex-lit and lightmapped combines (2026-10-31, `2048-track-lighting`)
+
+**Method.** Vita3K caches the SPIR-V it translates each program to under the SHA-256 of the GXP
+container (`~/.cache/Vita3K/shaders/<title>/eboot.bin/vk13-<sha>.spv`), so hashing every container
+`scripts/vita-gxp.py` finds (`patch-v104/eboot.elf`, `data.psarc`, `dlc1.psarc`, `data1.psarc`)
+names the translation of a program a race actually ran: 940 of 984 cached programs matched. The
+SPIR-V was walked symbolically over its half-register files (the same walker as the exposure read,
+with `FMax`'s second argument kept). Vita3K is a behaviour oracle only; the formulas below are
+written by hand. Conf. in brackets.
+
+**The lightmapped family** (every program that declares `lightmap`: 123 of 473 cached fragment
+programs; all take `novaScaleBiasPower`, `liveLighting0diffuse`, `liveLighting0direction`,
+`fogColour`, and **none declares `constantAmbientColour`**) [90]. For `fc06_lambert_simple` +
+`DiffuseMap` + `lightmap` (sha `efaebb76...`):
+
+```text
+N      = normalize(interpolated normal)
+L      = lightmap texel (rgba, raw, no decode)
+prelit = L.rgb * scale + bias + sunDiffuse * max(0, N . liveLighting0direction) * L.a
+rgb    = mix(fogColour, prelit * D*D, fogVisibility)        D = DiffuseMap texel
+```
+
+`(scale, bias)` are the first two lanes of `novaScaleBiasPower`; **the third lane (power) is read by
+no instruction**, unlike Omega's, whose GCN applies `pow(lightmap, power)`
+([lightmap-prelit.md](../ghidra/functions/ps4-omega-eu/lightmap-prelit.md)). So the combine is
+Omega's law with the power fixed at 1: *ported*, with the Omega-only power left out. The lightmap's
+alpha is the sun mask, as on HD and Omega.
+
+**The vertex-lit family** (a submesh whose vertex declaration carries `NOVAColor`, no lightmap; the
+variants `fc06_lambert_simple` `45dd7539...` and its vertex program `e0625aba...`) [88]. The vertex
+program writes `rgb = NOVAColor.rgb * scale + bias` and `a = NOVAColor.a` as varyings (no power, no
+log/exp), and the fragment program computes `(sunDiffuse * max(0, N . dir) * a + rgb) * D*D`,
+fogged. No constant ambient either. The attribute name is proved: `~crc32("NOVAColor") =
+0x1aaf7631`, a four-byte attribute `rcsmodel_decl_ground_truth.rs` had counted as unnamed (type `0x44`,
+four unsigned normalised bytes, at stride offset 0x14 on Vineta K's 24-byte layout).
+
+**The ambient family** (`constantAmbientColour`, no lightmap, no `NOVAColor`; `2a9a18e3...`):
+`(ambient + sunDiffuse * max(0, N . dir)) * D*D`, fogged. This is what ours drew everywhere.
+
+**Two reader bugs this turned up** (both fixed here):
+
+1. `Material::lightmap` was hard-coded `None` on the Vita, so no atlas was ever bound
+   (no `lightmap atlas(es) bound` report line at all on Vineta K, though its floor materials name
+   `nova_mesh_combine_track_N-lmap.gxt`). It is now the sampler table's
+   `LIGHTMAP_SAMPLER` entry: 20 atlases bound on Vineta K.
+2. `SubMesh::lightmap_texcoords` filtered on the PS4's half type (`1`), so no Vita submesh ever
+   yielded a lightmap coordinate; the Vita's half type is `8`. Fixed (`half_type`).
+
+**What changed in the picture** (ours only, three 2048 race pairs at 960x544, `--hold-exposure
+1.15`; boxes `x0,y0,x1,y1`):
+
+| Region | Original | Before | After |
+| --- | --- | --- | --- |
+| Vineta K floor `(0,330,960,544)` | 32/38/43 | 29/28/28 | 24/23/22 |
+| Vineta K right wall `(600,140,960,330)` | 69/55/50 | 56/43/44 | 46/36/33 |
+| Empire Climb road `(150,250,800,544)` | 141/111/88 | 116/99/84 | 111/92/73 |
+| Mall, mean grey distance (lower is nearer) | - | 25.92 | 23.51 |
+| Vineta K, mean grey distance | - | 23.29 | 20.64 |
+| Empire Climb, mean grey distance | - | 32.16 | 25.94 |
+
+The wall's large baked roof shadow now appears (it was absent: the atlas was unbound). The mean
+grey distance to the original fell on all three pairs, the colour targets (floor B-R >= +8, road
+R >= 130) were **not** met: ours is now darker than the original. Left over, none of it read yet:
+the floor's blue panels are an **emissive** layer (`diffuse_normal_specular_emmissive`: `DiffuseMap`,
+`EmissiveMap`, `lightmap`) that ours does not draw on this family; `Lighting.Exposure*`/`BloomFactor`
+act on the composite only; the floor's own normal map and `shadowMap`/`occlusionMap` terms.
+
+**Against Omega:** the lightmapped law is *ported* (shared `with_nova_prelit` path, power held at
+1 for 2048). The vertex-lit `NOVAColor` family is wired for 2048 only (`slots`: `sun_mask >= 2`
+marker in `shade.wesl`); Omega's `NOVAColor` variant stays *checked, applies, not wired* (its
+declaration reader differs, type nibble `11` is the PS4 colour, and the 2048 filter excludes it).

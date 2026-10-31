@@ -398,7 +398,7 @@ fn the_diffuse_coordinate_is_rarely_the_last_four_bytes() {
 ///
 /// Every `0x44` attribute is four normalised bytes and they are not one thing:
 /// `tangent` is a packed direction, `colorSet1` is painted vertex colour, and
-/// `0x1aaf7631` - the commonest of them disc-wide, 13,485 uses, still unnamed -
+/// `0x1aaf7631` - the commonest of them disc-wide, 13,485 uses, named `NOVAColor` since 2026-10-31 (`~crc32` of the Vita vertex programs' attribute) -
 /// is neither a direction nor an opaque colour.
 ///
 /// The discriminator is the one
