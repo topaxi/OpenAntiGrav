@@ -411,3 +411,62 @@ act on the composite only; the floor's own normal map and `shadowMap`/`occlusion
 1 for 2048). The vertex-lit `NOVAColor` family is wired for 2048 only (`slots`: `sun_mask >= 2`
 marker in `shade.wesl`); Omega's `NOVAColor` variant stays *checked, applies, not wired* (its
 declaration reader differs, type nibble `11` is the PS4 colour, and the 2048 filter excludes it).
+
+## The emissive add of the `*_emmissive_alpha` family (2026-10-31, `2048-floor-emissive`)
+
+**The lane's premise was off by one name.** The floor panels of Vineta K are not the
+`diffuse_normal_specular_emmissive` programs with an `EmissiveMap`, and not the lightmapped
+`diffuse_normal_specular` floor (`ds_floorplain_*`, which declares no emissive input at all). They are
+`diffuse_normal_specular_emmissive_alpha` (`ds_wall_cs`, `ds_wall_n`, `ds_wall_a`: 17 + 11 + 10 submeshes
+with a blue `Constant1`), opaque (state 124, mode `Opaque`, no `OpKill` in the program). Method as in the
+section above (Vita3K's cached SPIR-V by container SHA-256, walked symbolically; handles mapped to
+bindings through their `OpLoad %fragTex_*`). Conf. in brackets.
+
+**Isolation, the picture.** A temporary needle on the material name (not kept) hid one family at a time
+on the `dlc-vineta-k` pair frame (960x544, tick 179, exposure held 1.15):
+
+| Hidden | Floor box `(0,330,960,544)` mean | What shows |
+| --- | --- | --- |
+| nothing (main `84ba82deb`) | 24/23/22 | black panels in a grey grid |
+| `diffuse_normal_specular_emmissive*` | - | a large blue-teal surface underneath, where the original draws its blue panels [90] |
+| `fc06_lambert_emmissive*` | unchanged | the floor is not this one |
+| `fc17_phong*`, `diffuse_normal_specular` | 24.7/24.6/23.2, 24.3/25.2/24.9 | no panel change |
+
+So ours draws the panel opaque and black over a blue layer; the original's panel is itself blue.
+
+**The law** (program `f7b139cf...`, `diffuse_normal_specular_emmissive_alpha`, binding order `Texture1`,
+`Texture2`, `Texture2Alpha`, `lightmap`, `occlusionMap`, `shadowMap`) [80]:
+
+```text
+lit  = the lightmapped combine of the section above (L = lightmap, D = Texture1, N from Texture2)
+rgb  = mix(fogColour, spec + Texture2Alpha.rgb^2 * Constant1 + lit * D*D, fogVisibility)
+```
+
+`Texture2Alpha` is `0x21745d36` (`~crc32("Texture2Alpha")`, verified); `Constant1` is `0x7611a2d8`
+(`~crc32("Constant1")`, the same hash the HD pad doc names). The emissive term sits **outside** the
+lightmap product: it is neither lit nor shadowed, so a dark baked panel still glows. `Constant1` is
+`(0.0, 0.7686, 0.9922)` on the 38 blue submeshes (the panel colour) and `0.9912` grey on the `_lh`
+variants. The `lightmap` alpha times `Texture1.a` (gloss) gates the `liveLighting0specular` term,
+unchanged from the section above.
+
+**Its sibling, `fc06_lambert_emmissive_alpha`** (program `d8bd89a9...`, `DiffuseMap` + `lightmap`, uniform
+`Tint`, `0x71c4bbb5`) [80]:
+
+```text
+rgb = mix(fogColour, Tint * D.a + prelit_sun * D*D, fogVisibility)
+```
+
+`D.a` is the glow mask here (no second texture), the add again outside the light. Vineta K authors 23 tints
+such as `1.0 0.858 0.604` (`and_tunnellights`), `0.008 0.807 0.930` (`j_lampost`).
+
+**Not done.** Wiring needs a third texture (`Texture2Alpha`) in a per-material slot ours has free
+(`pad_mask`, group 1 binding 3, or the fifth map), an `Emissive` entry carrying `Constant1` with a
+program mode, and a branch in `shade.wesl` that adds `tint * texel^2` after the lit product and before the
+fog; the `fc06` sibling needs only `Tint` and `D.a`. The picture target (B-R >= +8 on the floor) is
+unmeasured, since nothing is drawn yet.
+
+**Against Omega:** *checked, applies, not wired*. Omega ships the same material names
+(`diffuse_normal_specular_emmissive`, `fc06_lambert_emmissive_alpha`: 63 and 33 entries per variant over
+its packages), but its GCN programs were not read here, so whether Omega applies the same
+outside-the-light add is open. `diffuse_normal_specular_emmissivenew` (Chenghou, 7 slots) was not
+covered either.
