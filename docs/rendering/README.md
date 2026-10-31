@@ -65,6 +65,9 @@
   per-piece costs at 1080p, one cut landed (craft outside the frustum are no longer drawn,
   byte-identical), the velocity attachment's "10 %" measured as noise, and three suspects cleared -
   see [`hd-gpu-cost.md`](hd-gpu-cost.md)
+- **Which passes grow with the output size** (2026-10-31, `hires-gpu-levers`): spans per pass for HD and
+  Pulse at 800p, 1080p and 4K on the AMD dGPU, iGPU and the Steam Deck, the presented 4K cost under
+  gamescope, and three ranked levers - see [`hires-gpu-levers.md`](hires-gpu-levers.md)
 - **Where the frame thread's CPU goes** (2026-10-21): `--frame-log` prints a per-phase line; a
   paused race costs nearly what a racing one does, about half of it in wgpu's submit, and two
   redundant per-frame uploads were removed (byte-identical) - see
