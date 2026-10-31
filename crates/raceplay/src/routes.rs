@@ -28,7 +28,7 @@ use super::*;
 /// moves onto its line: about 480 units, past the furthest a driver looks or
 /// brakes ahead. **Chosen, not measured**: the original has no second line to
 /// move onto, its lookahead walks the excluded path from the moment it draws.
-const SWITCH_SAMPLES: usize = 320;
+pub(crate) const SWITCH_SAMPLES: usize = 320;
 
 /// Line samples either side of a driver's index its own line is scored over
 /// when deciding a re-commit - the driver's own search window. Ours.

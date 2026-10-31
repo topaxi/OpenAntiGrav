@@ -166,6 +166,10 @@ pub struct Report {
     pub verify_contacts: u32,
     /// Times the verification run was put back on the line, either lap.
     pub verify_respawns: u32,
+    /// Line index of each rescue on the verification's first (standing) lap,
+    /// in order. A subset of `verify_respawns`; flying-lap rescues are not
+    /// listed, they are failures.
+    pub verify_standing_rescues: Vec<u32>,
     /// Ticks the verification run's second lap took, when it completed one
     /// without being put back.
     pub verify_lap_ticks: Option<u32>,
@@ -769,6 +773,7 @@ impl SpeedPlan {
         let mut lap_mark: Option<u32> = None;
         report.verify_lap_ticks = None;
         report.verify_respawns = 0;
+        report.verify_standing_rescues.clear();
         let mut pace = vec![f32::INFINITY; self.len()];
         let mut tight = vec![false; self.len()];
         let mut respawned_on_flying_lap = false;
@@ -810,6 +815,8 @@ impl SpeedPlan {
             if run.progress >= n {
                 failures += 1;
                 respawned_on_flying_lap = true;
+            } else {
+                report.verify_standing_rescues.push(run.driver.index);
             }
             let to = (run.driver.index as usize + RESPAWN_SKIP) % n as usize;
             run = Run {

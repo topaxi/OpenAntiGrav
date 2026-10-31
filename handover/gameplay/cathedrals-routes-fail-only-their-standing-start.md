@@ -2,8 +2,8 @@
 status: ready-to-wire
 titles: [2048, omega]
 updated: 2026-10-31
-summary: "cathedral's routes verify except one lap-1 rescue at the merge, where the line lies under the road; a narrow clean rule admits them"
-size: S (60)
+summary: "cathedral's routes are offered since 2026-10-31 (route_clean forgives a lap-1 rescue on the ring stretch); the full-field cost board on them is open"
+size: S (50)
 difficulty: easy (60)
 ---
 
@@ -22,17 +22,7 @@ the plan for `verify_respawns == 1`.
 
 ## Next Steps
 
-1. Wire: in `route_clean` (`crates/raceplay/src/speed_plan.rs`, used by `Race::route_speed_plan` and
-   `hull_routes_for`), stop failing a route plan for
-   a rescue on lap 1 on the ring stretch before the lead-in (line index below `kept - 320`). That needs the
-   verification to say where it rescued: a list of lap-1 rescue indices on `oag_ai::plan::Report`, filled by
-   `SpeedPlan::verify_stuck`, read by nothing else. Flying-lap rescues already count in `verify_failures` and
-   clear the lap time, so they stay fatal.
-2. Predicted (census, seed 1, every forked circuit, four classes): exactly the 16 `cathedral` reference route
-   plans change verdict, and no other route or ring plan changes a bit. Their other hulls' copies, never
-   learned today because the reference is `None`, are then adapted from the same at-rest merge start and
-   judged by the same rule. Count their verdicts and their adaptation steps (`Race::plan_steps`) for the
-   cost board. Check with `route_verify_probe` across all circuits
-   (3.5 min) before and after, then seeds 2-3.
+1. ~~Wire `route_clean`~~ landed 2026-10-31 (lane `cathedral-route-start`), census in `docs/gameplay/ai.md`.
+2. ~~Census~~ exactly the 16 cathedral plans change verdict, seed 1 (seeds 2-3 in the report). Their other hulls' adapted copies are now judged by the same rule: count their verdicts and `Race::plan_steps` for the board.
 3. Then the board (`route-plans-cost-a-whole-lap-each.md`, Next Steps 1-3) for what full fields do on the two
    routes with the whole-lap plans (the stretch learner's 390 traversals were with different plans).
