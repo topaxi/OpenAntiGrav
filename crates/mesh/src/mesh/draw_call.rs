@@ -99,8 +99,9 @@ pub struct DrawCall {
     /// [`oag_vex::vex::list_b_layer`] OR-ed with a 20-bit view depth of this
     /// point, so within that layer the order is far to near and **depends on the
     /// camera**; [`Model::blended_order`] applies it per frame. `None` for list A
-    /// (a batch set, queued with its bare layer), for PS2 batches (another
-    /// executable, not read) and for every draw with no mesh behind it.
+    /// (a batch set, queued with its bare layer) and for every draw with no mesh
+    /// behind it. PS2 batches carry it too, **inherited from PSP**: the PS2
+    /// executable's submit is not read.
     /// Shared by every batch of one mesh, so a mesh stays together.
     pub depth_point: Option<[f32; 3]>,
     /// The alpha-test reference this batch's own file authors, normalised to
