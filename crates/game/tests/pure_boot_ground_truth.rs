@@ -237,21 +237,22 @@ fn pures_picker_leads_to_its_second_boot_movie_then_the_title_screen() {
             "{label}: the movie is over by Title Screen, so its sound has to stop"
         );
 
-        // **`Title Screen` waits for START and for nothing else.** Its
-        // `TitleRedirect` carries no `forward` at all, so the button is not
+        // **`Title Screen` waits for START and for nothing else on the disc.**
+        // Its `TitleRedirect` carries no `forward` at all, so the button is not
         // authored there - it comes from the screen's own `idstring="PRESS
         // START"` widget and from watching the real firmware sit on this screen
-        // until START. Ten seconds of every other button the abstract layer
-        // carries, alternated with none, must leave it exactly where it is; a
-        // hidden timeout would show up here.
+        // until START. CROSS advances it too in this build, an intended
+        // divergence (`Frontend::update_title_screen`). Ten seconds of every
+        // other button the abstract layer carries, alternated with none, must
+        // leave it exactly where it is; a hidden timeout would show up here.
         for tick in 0..600 {
-            let held = !Button::Start.bit();
+            let held = !(Button::Start.bit() | Button::Cross.bit());
             input.begin_frame(if tick % 2 == 0 { held } else { 0 });
             loaded.frontend.update(1.0 / 60.0, &mut input, None);
         }
         assert!(
             loaded.frontend.machine().is(pure_states::TITLE_SCREEN),
-            "{label}: only START leaves Title Screen, and it does not time out; got {:?}",
+            "{label}: only START or CROSS leaves Title Screen, and it does not time out; got {:?}",
             loaded.frontend.machine().current()
         );
         assert!(
