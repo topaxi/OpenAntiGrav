@@ -358,7 +358,7 @@ pub use scene::WindowEffects;
 #[cfg(feature = "view")]
 pub use scene::behind_glass::BehindGlassModels;
 pub use sim::RaceSim;
-pub use speed_plan::PlanSteps;
+pub use speed_plan::{PlanSteps, RouteProbe};
 pub use spline::{Spline, circuit_length};
 pub use telemetry::{Telemetry, describe};
 #[cfg(feature = "view")]

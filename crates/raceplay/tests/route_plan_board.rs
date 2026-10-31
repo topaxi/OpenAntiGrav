@@ -446,3 +446,323 @@ fn route_plan_board() {
         board(circuit);
     }
 }
+
+/// Where a route's reference plan fails its verification: per circuit
+/// (`OAG_ROUTE_BOARD_ONLY`), class and seed, each route's learning report and
+/// every failure tick of its verification replayed (`Race::probe_route_plan`),
+/// with the line index read as ring or route sample. `OAG_ROUTE_PROBE_DUMP`
+/// names a directory that gets every tick of every route as a TSV;
+/// `OAG_ROUTE_PROBE_STAGES=<tick>` re-steps that verification tick stage by
+/// stage and prints the craft's position after each.
+///
+/// ```sh
+/// OAG_SWEEP=1 OAG_REQUIRE_GAME_DATA=1 OAG_ROUTE_BOARD_ONLY=pulse/07_Track \
+///   OAG_ROUTE_BOARD_CLASSES=VENOM OAG_ROUTE_BOARD_SEEDS=1 \
+///   cargo nextest run --release -p oag-raceplay --run-ignored all \
+///   --no-capture route_verify_probe
+/// ```
+#[test]
+#[ignore = "a probe over forked circuits: OAG_SWEEP=1, needs the discs"]
+fn route_verify_probe() {
+    if !sweeping() {
+        return;
+    }
+    let mut circuits = pulse_circuits();
+    circuits.extend(circuits_omega());
+    circuits.extend(circuits_2048());
+    let dump = std::env::var("OAG_ROUTE_PROBE_DUMP").ok();
+    for circuit in &circuits {
+        if only().is_some_and(|only| !only.split(',').any(|o| circuit.label == o)) {
+            continue;
+        }
+        for class in classes() {
+            for seed in seeds() {
+                let Some(setup) = load(circuit, &class, seed) else {
+                    continue;
+                };
+                let mut race = race::Race::start(setup);
+                for k in 0..race.route_count() {
+                    let at = std::env::var("OAG_ROUTE_PROBE_STAGES")
+                        .ok()
+                        .and_then(|t| t.parse().ok());
+                    let Some(probe) = race.probe_route_plan(k, at) else {
+                        continue;
+                    };
+                    report_route(
+                        &race,
+                        &circuit.label,
+                        &class,
+                        seed,
+                        k,
+                        &probe,
+                        dump.as_deref(),
+                    );
+                }
+            }
+        }
+    }
+}
+
+fn where_on(probe: &race::RouteProbe, index: u32) -> String {
+    let i = index as usize;
+    if i < probe.kept {
+        format!("ring {}", (probe.merge + i) % probe.ring_len.max(1))
+    } else {
+        format!("route {}", i - probe.kept)
+    }
+}
+
+fn report_route(
+    race: &race::Race,
+    label: &str,
+    class: &str,
+    seed: u64,
+    k: usize,
+    probe: &race::RouteProbe,
+    dump: Option<&str>,
+) {
+    let r = &probe.report;
+    let unresolved: Vec<String> = r
+        .unresolved
+        .iter()
+        .map(|&(i, f)| format!("{i}({}) {f:?}", where_on(probe, i)))
+        .collect();
+    emit(&format!(
+        "route\t{label}\t{class}\t{seed}\troute={k}\tlen={}\tkept={}\tmerge={}\tsteps={}\tpasses={}\tlowerings={}\trespawns={}\tverify_failures={}\tverify_contacts={}\tverify_respawns={}\tlap={:?}\tunresolved=[{}]",
+        probe.line.len(),
+        probe.kept,
+        probe.merge,
+        r.steps,
+        r.passes,
+        r.lowerings,
+        r.respawns,
+        r.verify_failures,
+        r.verify_contacts,
+        r.verify_respawns,
+        r.verify_lap_ticks,
+        unresolved.join(", ")
+    ));
+    let n = probe.line.len() as i64;
+    for f in probe.rows.iter().filter(|f| f.row.failure.is_some()) {
+        emit(&format!(
+            "fail\t{label}\t{class}\t{seed}\troute={k}\ttick={}\tlap={}\tidx={}({})\t{:?}\tspeed={:.1}\ttarget={:.1}\tceiling={:.1}\thold={}\tthrust={:.2}\tbrake={:.2}\toffset={:.2}\theight={:.2}\tair={}\tclimb={:.2}",
+            f.row.tick,
+            if f.progress >= n { 2 } else { 1 },
+            f.row.index,
+            where_on(probe, f.row.index),
+            f.row.failure,
+            f.row.speed,
+            f.target,
+            f.ceiling,
+            u8::from(f.hold),
+            f.thrust,
+            f.brake,
+            f.row.offset,
+            f.row.height,
+            u8::from(f.row.airborne),
+            f.row.climb,
+        ));
+    }
+    if let Some(restep) = &probe.stages {
+        let (stages, wall) = (&restep.stages, &restep.wall);
+        emit(&format!(
+            "stage\t{label}\t{class}\t{seed}\troute={k}\tmag_lock={:?}\tescape={:?}\ttrack_sample={:?}\tmag_contact={:?}",
+            restep.mag_lock, restep.escape, restep.track_sample, restep.mag_contact
+        ));
+        for stage in stages {
+            emit(&format!(
+                "stage\t{label}\t{class}\t{seed}\troute={k}\t{}\tposition={:?}\tvelocity={:?}",
+                stage.name, stage.position, stage.velocity
+            ));
+        }
+        emit(&format!(
+            "stage\t{label}\t{class}\t{seed}\troute={k}\twall={wall:?}"
+        ));
+        if let Some(start) = stages.first() {
+            use oag_physics::{Ray, Raycaster};
+            let along = start.velocity.normalize_or_zero();
+            let mut out = [None; 8];
+            let count = race.collision().raycast_all(
+                Ray::new(start.position, along, 30.0),
+                None,
+                true,
+                &mut out,
+            );
+            for hit in out[..count].iter().flatten() {
+                emit(&format!(
+                    "stage\t{label}\t{class}\t{seed}\troute={k}\tahead\tdistance={:.3}\tpoint={:?}\tnormal={:?}\tsurface={:?}",
+                    hit.distance, hit.point, hit.normal, hit.surface
+                ));
+            }
+        }
+    }
+    if let Some((from, to)) = std::env::var("OAG_ROUTE_PROBE_FLOOR")
+        .ok()
+        .and_then(|r| {
+            r.split_once("..")
+                .map(|(a, b)| (a.parse().ok(), b.parse().ok()))
+        })
+        .and_then(|(a, b): (Option<usize>, Option<usize>)| a.zip(b))
+    {
+        floor_along(race, label, k, probe, from, to);
+    }
+    if let Some(dir) = dump {
+        let name = format!(
+            "{dir}/{}-{class}-{seed}-route{k}.tsv",
+            label.replace('/', "_")
+        );
+        let mut text = String::from(
+            "tick\tprogress\tindex\twhere\tspeed\ttarget\tceiling\thold\tthrust\tbrake\toffset\theight\tleft\tright\tsteer\tcontact\tair\tclimb\tpitch\tfailure\n",
+        );
+        for f in &probe.rows {
+            text.push_str(&format!(
+                "{}\t{}\t{}\t{}\t{:.2}\t{:.2}\t{:.2}\t{}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\t{:.3}\t{}\t{}\t{:.2}\t{:.3}\t{:?}\n",
+                f.row.tick,
+                f.progress,
+                f.row.index,
+                where_on(probe, f.row.index),
+                f.row.speed,
+                f.target,
+                f.ceiling,
+                u8::from(f.hold),
+                f.thrust,
+                f.brake,
+                f.row.offset,
+                f.row.height,
+                f.row.left,
+                f.row.right,
+                f.row.steer,
+                u8::from(f.row.contact),
+                u8::from(f.row.airborne),
+                f.row.climb,
+                f.row.pitch,
+                f.row.failure,
+            ));
+        }
+        let _ = std::fs::write(name, text);
+    }
+}
+
+/// Every surface under and over route `k`'s line points `from..to` (line
+/// indices): a cast from 30 units above to 30 below, per hit its height
+/// against the line point, surface and normal's Y.
+fn floor_along(
+    race: &race::Race,
+    label: &str,
+    k: usize,
+    probe: &race::RouteProbe,
+    from: usize,
+    to: usize,
+) {
+    use oag_core::math::Vec3;
+    use oag_physics::{Ray, Raycaster};
+    for i in from..to.min(probe.line.len()) {
+        let p = probe.line.point(i);
+        let mut out = [None; 8];
+        let count = race.collision().raycast_all(
+            Ray::new(p + Vec3::Y * 30.0, -Vec3::Y, 60.0),
+            None,
+            true,
+            &mut out,
+        );
+        if std::env::var_os("OAG_ROUTE_PROBE_ACROSS").is_some() {
+            across(race, label, k, probe, i);
+            continue;
+        }
+        let hits: Vec<String> = out[..count]
+            .iter()
+            .flatten()
+            .map(|h| {
+                format!(
+                    "{:+.2}:{:?}:ny{:.2}:n({:.2},{:.2})",
+                    h.point.y - p.y,
+                    h.surface,
+                    h.normal.y,
+                    h.normal.x,
+                    h.normal.z
+                )
+            })
+            .collect();
+        if std::env::var_os("OAG_ROUTE_PROBE_RING").is_some() {
+            let ring = race.racing_line();
+            let (j, d) = (0..ring.len())
+                .map(|j| (j, ring.point(j).distance(p)))
+                .min_by(|a, b| a.1.total_cmp(&b.1))
+                .unwrap_or((0, f32::NAN));
+            let q = ring.point(j);
+            let ring_path = race
+                .ai_sample_index(j)
+                .and_then(|s| race.spline().path_of(s));
+            let route_path = probe
+                .order
+                .get(i)
+                .and_then(|&s| race.spline().path_of(s as usize));
+            emit(&format!(
+                "ring\t{label}\troute={k}\t{i}({})\tpaths route {route_path:?} ring {ring_path:?}\tnearest ring {j}\tdistance={d:.1}\tdy={:.1}\tring=({:.1},{:.1},{:.1})",
+                where_on(probe, i as u32),
+                q.y - p.y,
+                q.x,
+                q.y,
+                q.z
+            ));
+            continue;
+        }
+        let spline_index = probe.order.get(i).map_or(0, |&s| s as usize);
+        let sample = race.spline().sample(spline_index);
+        emit(&format!(
+            "floor\t{label}\troute={k}\t{i}({})\tspline={spline_index}\tpath={:?}\tsample_y={:.1}\twidth={:?}\tai={:?}\tline_offset={:?}\tsection={:?}\tflags={:?}\tp=({:.1},{:.1},{:.1})\t{}",
+            where_on(probe, i as u32),
+            race.spline().path_of(spline_index),
+            sample.map_or(f32::NAN, |s| s.pos[1]),
+            sample.map(|s| (s.half_width_left, s.half_width_right)),
+            sample.map(|s| (s.ai_bound_left, s.ai_bound_right)),
+            sample.map(|s| s.racing_line),
+            sample.map(|s| s.section_id),
+            sample.map(|s| s.flags),
+            p.x,
+            p.y,
+            p.z,
+            hits.join(" ")
+        ));
+    }
+}
+
+/// Line point `i` of route `k`, across its corridor every 2 units from -30 to
+/// +30: per offset, the lowest non-floor hit of a cast from 20 above the line
+/// down to 5 below, as `W` (wall, with its height) or `.` (none).
+fn across(race: &race::Race, label: &str, k: usize, probe: &race::RouteProbe, i: usize) {
+    use oag_core::math::Vec3;
+    use oag_physics::{Ray, Raycaster, Surface};
+    let p = probe.line.point(i);
+    let lateral = probe
+        .line
+        .aim(i, 0.0)
+        .corridor
+        .map_or(Vec3::X, |f| f.lateral);
+    let mut row = String::new();
+    for o in (-30..=30).step_by(2) {
+        let q = p + lateral * o as f32;
+        let mut out = [None; 8];
+        let count = race.collision().raycast_all(
+            Ray::new(q + Vec3::Y * 20.0, -Vec3::Y, 25.0),
+            None,
+            true,
+            &mut out,
+        );
+        let wall = out[..count]
+            .iter()
+            .flatten()
+            .filter(|h| h.surface == Surface::Wall)
+            .map(|h| h.point.y - p.y)
+            .fold(f32::INFINITY, f32::min);
+        if wall.is_finite() {
+            row.push_str(&format!("{wall:>4.0}"));
+        } else {
+            row.push_str("   .");
+        }
+    }
+    emit(&format!(
+        "across\t{label}\troute={k}\t{i}({})\t{row}",
+        where_on(probe, i as u32)
+    ));
+}
