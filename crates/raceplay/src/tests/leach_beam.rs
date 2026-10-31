@@ -34,7 +34,7 @@ fn a_leach_beam_fired_at_nobody_is_spent_and_expires_on_its_own_clock() {
     race.tick(&PlayerInputs::single(buttons.tick(SQUARE)));
 
     assert_eq!(race.ship_pickup(), None, "the beam must spend the pickup");
-    let beam = race.sim.world.leach_beam.expect("a fired beam must exist");
+    let beam = race.sim.world.leach_beams[0].expect("a fired beam must exist");
     assert_eq!(beam.owner, 0);
     assert_eq!(
         beam.kind,
@@ -52,41 +52,85 @@ fn a_leach_beam_fired_at_nobody_is_spent_and_expires_on_its_own_clock() {
         race.tick(&PlayerInputs::single(buttons.tick(0)));
     }
     assert!(
-        race.sim.world.leach_beam.is_none(),
+        race.sim.world.leach_beams[0].is_none(),
         "an unlocked beam must retire rather than hold the whole race's only slot"
     );
 }
 
-/// The busy check is whole-race: a second press while a beam is up keeps the
-/// pickup rather than spending it on nothing.
-///
-/// This is the gate that differs from every other weapon here - the original's
-/// `pool->live` is a world cursor, not a per-craft cooldown - so it gets a test
-/// of its own rather than riding on the fire test above.
+/// A press at the limit spends the pickup and fires nothing: `Weapon_FireLeachBeam`
+/// returns on `pool->live` after the press has cleared the held slot, on every
+/// title (`weapon-instance-limits.md`). No beam arms and no `LEACH`/`LEACHFAIL`
+/// cue plays. Fails if the limit check moves back above the spend.
 #[test]
-fn a_second_leach_beam_press_while_one_is_up_keeps_the_pickup() {
+fn a_leach_beam_press_at_the_limit_spends_the_pickup_and_fires_nothing() {
     let mut race = race_with_weapon_table(
         Mode::SingleRace,
         enveloping_pad(),
         1.0,
         one_leach_beam_table(),
     );
+    race.sim.leach_beams = 1;
     race.tick(&PlayerInputs::none());
     race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
 
     let mut buttons = Buttons::new();
     buttons.tick(0);
     race.tick(&PlayerInputs::single(buttons.tick(SQUARE)));
-    assert!(race.sim.world.leach_beam.is_some());
+    assert_eq!(race.sim.world.leach_beams_live(), 1);
+    race.drain_cues();
 
     race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
+    let before = race.sim.world.leach_beams;
     race.tick(&PlayerInputs::single(buttons.tick(0)));
     race.tick(&PlayerInputs::single(buttons.tick(SQUARE)));
 
     assert_eq!(
         race.ship_pickup(),
-        Some(oag_tables::weapons::Weapon::LeachBeam),
-        "a press into somebody else's live beam must keep the pickup"
+        None,
+        "a press at the limit spends the pickup"
+    );
+    assert_eq!(race.sim.world.leach_beams_live(), 1, "nothing fires");
+    assert_eq!(
+        race.sim.world.leach_beams[1..],
+        before[1..],
+        "no further entry arms"
+    );
+    let fired = race.drain_cues().into_iter().any(|cue| {
+        matches!(
+            cue.cue,
+            oag_gameplay::cue::Cue::Leach | oag_gameplay::cue::Cue::LeachFail
+        )
+    });
+    assert!(!fired, "a spent press plays no fire cue");
+}
+
+/// Below the limit a second press arms the next free entry, so two beams are live
+/// and each ages on its own; the pool never goes past the title's limit.
+#[test]
+fn a_second_leach_beam_arms_the_next_free_entry_up_to_the_limit() {
+    let mut race = race_with_weapon_table(
+        Mode::SingleRace,
+        enveloping_pad(),
+        1.0,
+        one_leach_beam_table(),
+    );
+    race.sim.leach_beams = 2;
+    race.tick(&PlayerInputs::none());
+    let mut buttons = Buttons::new();
+    buttons.tick(0);
+    for press in 1..=3 {
+        race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
+        race.tick(&PlayerInputs::single(buttons.tick(0)));
+        race.tick(&PlayerInputs::single(buttons.tick(SQUARE)));
+        assert_eq!(
+            race.sim.world.leach_beams_live(),
+            press.min(2),
+            "press {press}"
+        );
+    }
+    assert!(race.sim.world.leach_beams[0].is_some() && race.sim.world.leach_beams[1].is_some());
+    assert!(
+        race.sim.world.leach_beams[0].unwrap().age > race.sim.world.leach_beams[1].unwrap().age
     );
 }
 
@@ -120,7 +164,7 @@ fn a_leach_beams_victim_is_throttled_by_the_authored_factor() {
     };
     let mut control = build();
     let mut beamed = build();
-    beamed.sim.world.leach_beam = Some(oag_weapons::projectile::leach_beam::Beam::locked(
+    beamed.sim.world.leach_beams[0] = Some(oag_weapons::projectile::leach_beam::Beam::locked(
         0, 1, &stats,
     ));
 
@@ -137,11 +181,7 @@ fn a_leach_beams_victim_is_throttled_by_the_authored_factor() {
         beamed.tick(&PlayerInputs::none());
     }
     assert!(
-        beamed
-            .sim
-            .world
-            .leach_beam
-            .is_some_and(|beam| beam.connected()),
+        beamed.sim.world.leach_beams[0].is_some_and(|beam| beam.connected()),
         "the link broke before the throttle could be measured"
     );
     let speed = |race: &Race| {
@@ -159,6 +199,41 @@ fn a_leach_beams_victim_is_throttled_by_the_authored_factor() {
         speed(&beamed),
         speed(&control)
     );
+}
+
+/// Two beams live at once each drain their own victim and age on their own
+/// clocks: the pool is read by the drain, not only by the fire.
+#[test]
+fn two_live_leach_beams_each_drain_their_own_victim() {
+    let table = one_leach_beam_table();
+    let stats = oag_tables::weapons::LeachBeamStats {
+        damage: 0.1,
+        active_time: 3.0,
+        ..table.leach_beam().expect("the fixture authors a LeachBeam")
+    };
+    let mut race = race_with_a_grid();
+    race.sim.weapons = Some(table);
+    while RaceState::thrust_gated(race.sim.world.tick) {
+        race.tick(&PlayerInputs::none());
+    }
+    let beam =
+        |owner, target| oag_weapons::projectile::leach_beam::Beam::locked(owner, target, &stats);
+    assert!(race.arm_leach_beam(beam(0, 1)));
+    assert!(race.arm_leach_beam(beam(0, 2)));
+    assert_eq!(race.sim.world.leach_beams_live(), 2);
+
+    race.tick(&PlayerInputs::none());
+
+    for (entry, target) in [(0, 1), (1, 2)] {
+        let beam = race.sim.world.leach_beams[entry].expect("still linked");
+        assert!(!beam.first_drain, "entry {entry} never drained");
+        assert_eq!(beam.target, target);
+        assert_eq!(
+            race.sim.world.ships[usize::from(target)].pending_thrust_scale,
+            0.44,
+            "victim {target} was not drained"
+        );
+    }
 }
 
 /// `FUN_0883f540` lights `WO_LEACHBEAM_CHARGING` on **any** craft holding id
@@ -266,7 +341,10 @@ fn firing_the_leach_beam_takes_the_reticle_down_while_the_beam_is_live() {
     }
     assert!(race.sight().locked(), "never locked before the shot");
     tick(&mut race, buttons.tick(SQUARE));
-    assert!(race.sim.world.leach_beam.is_some(), "the shot did not fire");
+    assert!(
+        race.sim.world.leach_beams[0].is_some(),
+        "the shot did not fire"
+    );
     assert_eq!(
         race.sight_state(),
         oag_race::sight::State::Absent,
@@ -276,7 +354,7 @@ fn firing_the_leach_beam_takes_the_reticle_down_while_the_beam_is_live() {
         tick(&mut race, buttons.tick(0));
     }
     assert!(
-        race.sim.world.leach_beam.is_some(),
+        race.sim.world.leach_beams[0].is_some(),
         "the beam ended before the check"
     );
     assert!(
@@ -307,7 +385,9 @@ fn the_pulse_leach_beam_locks_only_once_its_reticle_has() {
             let input = buttons.tick(if tick == press { SQUARE } else { 0 });
             race.tick(&PlayerInputs::single(input));
         }
-        race.sim.world.leach_beam.expect("the press must fire").kind
+        race.sim.world.leach_beams[0]
+            .expect("the press must fire")
+            .kind
     };
     use oag_weapons::projectile::leach_beam::Kind;
     // The Pulse arrowheads close in about 0.34 s (20 ticks); 5 ticks is a first
@@ -376,7 +456,7 @@ fn a_second_persons_leach_beam_locks_on_what_is_ahead_of_their_craft() {
         inputs.set(1, buttons.tick(if tick == 40 { SQUARE } else { 0 }));
         race.tick(&inputs);
     }
-    let beam = race.sim.world.leach_beam.expect("slot 1's press must fire");
+    let beam = race.sim.world.leach_beams[0].expect("slot 1's press must fire");
     assert_eq!(beam.owner, 1);
     assert_eq!(
         beam.kind,
@@ -407,7 +487,7 @@ fn the_players_locked_beam_takes_the_titles_drain_cadence() {
             let input = buttons.tick(if tick == 5 { SQUARE } else { 0 });
             race.tick(&PlayerInputs::single(input));
         }
-        race.sim.world.leach_beam.expect("the press must fire")
+        race.sim.world.leach_beams[0].expect("the press must fire")
     };
     let per_trip = fire(oag_title::weapons::LeachDrain::PerTrip);
     assert_eq!(

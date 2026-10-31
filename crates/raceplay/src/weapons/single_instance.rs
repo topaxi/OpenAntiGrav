@@ -163,8 +163,8 @@ impl Race {
         self.sim.world.quake = Some(wave);
     }
 
-    /// One tick of the single LeachBeam link: age it, test it, drain it, retire
-    /// it.
+    /// One tick of every live LeachBeam link, in pool order: age it, test it,
+    /// drain it, retire it.
     ///
     /// A no-op with no beam in flight - see `Race::spend_pickup`'s own
     /// LeachBeam arm for what fires one, and
@@ -177,9 +177,50 @@ impl Race {
     /// last tick's stale reading" rule every other per-craft weapon update in
     /// this module follows.
     pub(crate) fn advance_leach_beam(&mut self) {
-        let Some(mut beam) = self.sim.world.leach_beam else {
-            return;
-        };
+        for at in 0..self.sim.world.leach_beams.len() {
+            if let Some(beam) = self.sim.world.leach_beams[at] {
+                self.advance_one_leach_beam(at, beam);
+            }
+        }
+    }
+
+    /// Whether the title's limit of LeachBeams is reached: a press now fires
+    /// nothing and still spends the pickup.
+    pub(crate) fn leach_beams_at_limit(&self) -> bool {
+        self.sim.world.leach_beams_live() >= usize::from(self.sim.leach_beams)
+    }
+
+    /// Arms `beam` in the first free pool entry, or hands nothing back when the
+    /// limit is reached (or the pool is full). The entry is the beam's index
+    /// until it retires.
+    pub(crate) fn arm_leach_beam(
+        &mut self,
+        beam: oag_weapons::projectile::leach_beam::Beam,
+    ) -> bool {
+        if self.leach_beams_at_limit() {
+            return false;
+        }
+        match self
+            .sim
+            .world
+            .leach_beams
+            .iter_mut()
+            .find(|entry| entry.is_none())
+        {
+            Some(entry) => {
+                *entry = Some(beam);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// One tick of the beam in pool entry `at`.
+    fn advance_one_leach_beam(
+        &mut self,
+        at: usize,
+        mut beam: oag_weapons::projectile::leach_beam::Beam,
+    ) {
         let rules = self.sim.damage_rules();
         let report = beam.advance(
             &mut self.sim.world.ships,
@@ -213,6 +254,6 @@ impl Race {
             #[cfg(feature = "view")]
             self.throw_hit_sparks(&hits, true);
         }
-        self.sim.world.leach_beam = if report.retired { None } else { Some(beam) };
+        self.sim.world.leach_beams[at] = if report.retired { None } else { Some(beam) };
     }
 }

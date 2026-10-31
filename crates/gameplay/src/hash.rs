@@ -69,7 +69,7 @@ pub fn write_world(hasher: &mut StateHasher, world: &World) {
         controllers,
         projectiles,
         quake,
-        leach_beam,
+        leach_beams,
         repulsers,
     } = world;
 
@@ -108,7 +108,17 @@ pub fn write_world(hasher: &mut StateHasher, world: &World) {
     }
     write_projectiles(hasher, projectiles);
     write_quake(hasher, quake);
-    write_leach_beam(hasher, leach_beam);
+    // Entry 0 exactly as the single beam always hashed, so a race that never
+    // has two beams up keeps its hash; a further entry adds its index and body
+    // only when live.
+    let [first, rest @ ..] = leach_beams;
+    write_leach_beam(hasher, first);
+    for (at, beam) in rest.iter().enumerate() {
+        if beam.is_some() {
+            hasher.write_u8(u8::try_from(at + 1).unwrap_or(u8::MAX));
+            write_leach_beam(hasher, beam);
+        }
+    }
     for repulser in repulsers {
         write_repulser(hasher, repulser);
     }

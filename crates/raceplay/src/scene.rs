@@ -243,13 +243,13 @@ pub struct Scene {
     plasma_blast: blast_models::PlasmaBlastDrawables,
     /// The Bomb's own - a hemisphere and a shockwave; see [`bomb_blast::BombBlastDrawables`].
     bomb_blast: bomb_blast::BombBlastDrawables,
-    /// The LeachBeam's own ball, HD only - `None` when
+    /// The LeachBeam's own balls, HD only - one per pool entry, empty when
     /// `Data\Weapons\hd_leachbeam_ball_bloomring.vex` did not load. Drawn
     /// at `oag_fx::beam::hd_ball::position` each tick a beam is locked
     /// (see [`Race::leach_ball_model_matrix`] and `scene/frame/beam.rs`),
     /// through its own material's program, `mesh::rcs::rim_glow`'s
     /// `RIM_GLOW` (docs/rendering/hd-unlit-programs.md).
-    leach_ball: Option<Drawable>,
+    leach_ball: Vec<Drawable>,
     /// Each slot's own plume's authored texture-transform keyframes, sampled
     /// per frame and applied to that plume's authored UVs - the recovered
     /// mechanism (`TEXMAPMODE` 0 plus the animated `TEXOFFSET` u-scroll; see
@@ -931,34 +931,32 @@ impl Scene {
                 zone_art,
                 shadow_maps,
             )?;
-        // The LeachBeam's own ball, HD only - one instance, not a pool: unlike
-        // the Rocket/Mine/Bomb/Cannon above there is never more than one live
-        // beam at once (`oag_gameplay::World::leach_beam` is a single
-        // `Option`, not a slotted pool), so this takes the same
-        // one-drawable shape `Self::shield_cockpit` does rather than
-        // `weapon_models::build`'s per-slot one. Same transparent blend and
-        // protected glow mask every other weapon body above takes - see
-        // `oag_fx::beam::hd_ball`'s own doc comment for what is measured
-        // about this model's placement and what is chosen.
-        let leach_ball = match leach_ball_model.filter(|model| !model.indices.is_empty()) {
-            Some(model) => Some(Drawable::new(
-                device,
-                queue,
-                model,
-                format,
-                store,
-                anisotropy,
-                sample_count,
-                scene_depth,
-                mesh_render::TRANSPARENT_BLEND,
-                mesh_render::GlowMask::Protected,
-                zone_art,
-                shadow_maps,
-                mesh_render::ShadowReceiver::Mapped,
-                mesh_render::Velocity::Write,
-            )?),
-            None => None,
-        };
+        // The LeachBeam's own ball, HD only: one drawable per pool entry, since each
+        // live locked beam carries its own ball (`Race::leach_ball_model_matrix`).
+        // Same transparent blend and protected glow mask every other weapon body
+        // above takes - see `oag_fx::beam::hd_ball`'s own doc comment for what is
+        // measured about this model's placement and what is chosen.
+        let mut leach_ball = Vec::new();
+        if let Some(model) = leach_ball_model.filter(|model| !model.indices.is_empty()) {
+            for _ in 0..oag_weapons::projectile::leach_beam::POOL_SIZE {
+                leach_ball.push(Drawable::new(
+                    device,
+                    queue,
+                    model.clone(),
+                    format,
+                    store,
+                    anisotropy,
+                    sample_count,
+                    scene_depth,
+                    mesh_render::TRANSPARENT_BLEND,
+                    mesh_render::GlowMask::Protected,
+                    zone_art,
+                    shadow_maps,
+                    mesh_render::ShadowReceiver::Mapped,
+                    mesh_render::Velocity::Write,
+                )?);
+            }
+        }
         // 64 is a stand-in size only, and only when the disc's own texture did not
         // decode; `load` has already reported that when it happens.
         let flare = flare.unwrap_or_else(|| FlareTexture::placeholder(64));

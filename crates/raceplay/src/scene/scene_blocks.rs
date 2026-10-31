@@ -141,7 +141,7 @@ impl Scene {
         ] {
             share_all(device, blocks, pool);
         }
-        share_all(device, blocks, self.leach_ball.as_mut());
+        share_all(device, blocks, self.leach_ball.iter_mut());
     }
 
     /// The blocks of the view following the craft `race` is drawing, one kind each.

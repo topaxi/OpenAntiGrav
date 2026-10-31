@@ -385,15 +385,17 @@ pub struct World {
     /// covered by [`crate::hash::hash_world`] exactly as [`Self::projectiles`]
     /// is.
     pub quake: Option<oag_weapons::projectile::quake::Wave>,
-    /// The single LeachBeam link, or `None` when none is in flight.
+    /// The LeachBeam links in flight, `None` for a free entry.
     ///
-    /// Beside [`Self::quake`] and for the same reason - see
-    /// `oag_weapons::projectile::leach_beam`'s module doc comment: the original's own
-    /// pool cursor allows exactly one beam **in the whole race** at a time, a
-    /// stricter gate than any other weapon has, and a beam carries a link
-    /// between two craft rather than a position and a velocity. Simulation
+    /// Beside [`Self::quake`]: a beam carries a link between two craft rather
+    /// than a position and a velocity. A fire arms the first free entry while
+    /// fewer than the title's limit are live
+    /// (`oag_title::weapons::Weapons::leach_beams`, at most the pool's eight);
+    /// a retired entry is left empty where it is, so a beam keeps its index (and
+    /// the render-side state that follows it) for as long as it lives. Simulation
     /// state, so [`crate::hash::hash_world`] covers it.
-    pub leach_beam: Option<oag_weapons::projectile::leach_beam::Beam>,
+    pub leach_beams: [Option<oag_weapons::projectile::leach_beam::Beam>;
+        oag_weapons::projectile::leach_beam::POOL_SIZE],
     /// The live Repulsers, in pool order, `None` for a free slot.
     ///
     /// Sixteen, `Weapon_FireRepulser`'s own cap. Beside [`Self::quake`] rather
@@ -405,6 +407,19 @@ pub struct World {
 }
 
 impl World {
+    /// How many LeachBeams are live.
+    #[must_use]
+    pub fn leach_beams_live(&self) -> usize {
+        self.leach_beams.iter().flatten().count()
+    }
+
+    /// The live LeachBeams, in pool order.
+    pub fn leach_beams_iter(
+        &self,
+    ) -> impl Iterator<Item = &oag_weapons::projectile::leach_beam::Beam> {
+        self.leach_beams.iter().flatten()
+    }
+
     /// An empty world with the given seed.
     #[must_use]
     pub fn new(seed: u64) -> Self {
@@ -417,7 +432,7 @@ impl World {
             controllers: Self::SINGLE_PLAYER,
             projectiles: oag_weapons::projectile::Projectiles::new(),
             quake: None,
-            leach_beam: None,
+            leach_beams: [None; oag_weapons::projectile::leach_beam::POOL_SIZE],
             repulsers: [None; oag_weapons::projectile::repulser::POOL_SIZE],
         }
     }
@@ -545,7 +560,7 @@ mod tests {
     #[cfg(target_pointer_width = "64")]
     #[test]
     fn the_world_snapshot_does_not_grow() {
-        const LIMIT: usize = 19_392; // +24 bytes x 8 crafts: Handling::camera_lean
+        const LIMIT: usize = 19_752; // +360 bytes: the LeachBeam pool of eight (was one Option<Beam>), 2026-10-31
         let size = std::mem::size_of::<World>();
         assert!(
             size <= LIMIT,

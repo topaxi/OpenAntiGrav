@@ -148,6 +148,8 @@ pub const TITLE: &Title = &Title {
         ai: Some(r"Data\XML\WeaponAIstats.xml"),
         // HD's law, inherited: Omega's own executable is not checkable here.
         leach_drain: oag_title::weapons::LeachDrain::PerTrip,
+        // Measured: eight entries in `LeachBeamManager_Update`'s pool (`weapon-instance-limits.md`).
+        leach_beams: oag_title::pre_race::Sourced::measured(8),
         // HD's law, inherited: Omega's own executable is not checkable here.
         quake_hit: oag_title::weapons::QuakeHit::WaveHeight {
             origin: oag_title::Origin::InheritedFrom("Wipeout HD"),

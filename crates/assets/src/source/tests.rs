@@ -135,6 +135,7 @@ const TITLE: &Title = &Title {
         elimination: None,
         ai: None,
         leach_drain: oag_title::weapons::LeachDrain::PerTick,
+        leach_beams: oag_title::pre_race::Sourced::chosen(8),
         quake_hit: oag_title::weapons::QuakeHit::WaveHeight {
             origin: oag_title::Origin::Chosen,
         },

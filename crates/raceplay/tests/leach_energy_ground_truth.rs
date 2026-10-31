@@ -60,7 +60,7 @@ fn a_retired_beam_takes_its_energy_particles_with_it() {
     assert!(handle.is_some(), "the beam never attached its ENERGY");
     assert!(alive > 0, "the ENERGY effect drew nothing");
 
-    race.sim.world.leach_beam = None;
+    race.sim.world.leach_beams[0] = None;
     race.tick(&PlayerInputs::single(throttle()));
     let (handle, alive) = race.leach_energy_for_tests();
     assert!(handle.is_none(), "the retired beam kept its handle");

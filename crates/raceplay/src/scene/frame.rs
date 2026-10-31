@@ -740,7 +740,7 @@ impl Scene {
             self.write_plasma_blasts(race, queue, view_projection, &weapon_scene);
         let blasts_active =
             self.write_bomb_blasts(race, queue, view_projection, seconds, &weapon_scene);
-        let leach_ball_active = self.write_leach_ball(race, queue, view_projection, &weapon_scene);
+        let leach_balls = self.write_leach_ball(race, queue, view_projection, &weapon_scene);
         // Same model matrix as the ship: the original parents the plume to the
         // craft, not to the flare - see `Loaded::boost_model`. Skipped while
         // hidden rather than written and left undrawn, since there is nothing
@@ -1109,7 +1109,7 @@ impl Scene {
         self.draw_shurikens(race.shuriken_model_matrices().len(), &mut draws);
         self.draw_plasma_blasts(&plasma_blast_active, &mut draws);
         self.draw_bomb_blasts(&blasts_active, &mut draws);
-        self.draw_leach_ball(leach_ball_active, &mut draws);
+        self.draw_leach_balls(leach_balls, &mut draws);
         // After the ships, so the hulls' depth is already in the buffer: a
         // plume's own blend pipeline writes no depth, the same reasoning as
         // the flares below. One draw per boosting craft, gated on the same

@@ -36,7 +36,7 @@ pub fn digest(sim: &RaceSim) -> u64 {
     let mut h = oag_core::hash::StateHasher::new();
     h.write_u64(shots);
     h.write_u8(u8::from(world.quake.is_some()));
-    if let Some(beam) = &world.leach_beam {
+    for beam in world.leach_beams_iter() {
         h.write_u8(1 + beam.owner);
         h.write_u8(beam.target);
     }

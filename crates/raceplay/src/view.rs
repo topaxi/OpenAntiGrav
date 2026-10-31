@@ -315,13 +315,11 @@ pub struct RaceView {
     /// The road's lift under that wave, for the surfaces the title's
     /// materials mark - see [`Race::quake_wave`]. `None` with no wave.
     pub(super) quake_surface: Option<oag_mesh::mesh_render::QuakeWave>,
-    /// The [`Trigger::LeachbeamEnergy`] instance riding the
-    /// craft a beam is fastened to, or `None` when no link is connected.
-    ///
-    /// One slot for the same reason [`Self::quake_effect`] is one: the
-    /// original allows a single beam in the whole race, so
-    /// [`oag_gameplay::World::leach_beam`] is one `Option` and this follows it.
-    pub(super) leach_beam_effect: Option<psys::Playing>,
+    /// The [`Trigger::LeachbeamEnergy`] instance riding the craft a beam is
+    /// fastened to, or `None` when no link is connected: one per entry of
+    /// [`oag_gameplay::World::leach_beams`], which it follows by index.
+    pub(super) leach_beam_effect:
+        [Option<psys::Playing>; oag_weapons::projectile::leach_beam::POOL_SIZE],
     /// Per craft slot, the [`Trigger::LeachbeamCharging`]
     /// instance riding that craft while it is *holding* a LeachBeam, or `None`.
     ///
@@ -334,9 +332,11 @@ pub struct RaceView {
     /// The LeachBeam ribbon's own render-side state - the amplitude table and
     /// scroll phase [`oag_weapons::projectile::leach_beam::Beam`]
     /// deliberately does not carry, see `oag_fx::beam`'s module doc
-    /// comment. `Some` for exactly as long as [`oag_gameplay::World::leach_beam`]
-    /// is `Some(Kind::Locked)`, rebuilt fresh each time a new beam locks on.
-    pub(super) leach_beam_ribbon: Option<oag_fx::beam::Ribbon>,
+    /// comment. Per entry of [`oag_gameplay::World::leach_beams`], `Some` for exactly
+    /// as long as that entry is `Some(Kind::Locked)`, rebuilt fresh each time a new
+    /// beam locks on.
+    pub(super) leach_beam_ribbon:
+        [Option<oag_fx::beam::Ribbon>; oag_weapons::projectile::leach_beam::POOL_SIZE],
     /// The LeachBeam ribbon's own generator, deliberately **not** `world.rng` -
     /// see [`Self::exhaust_rng`].
     pub(super) leach_beam_rng: Rng,
@@ -346,8 +346,8 @@ pub struct RaceView {
     /// which the burst's timing reads; on a per-tick title the view keeps it
     /// on the same law. Reset to `0.0` whenever no beam is locked, the same way
     /// [`Self::leach_beam_ribbon`] is torn down - see
-    /// [`weapons::visuals::advance_leach_beam_ribbon`].
-    pub(super) leach_ball_elapsed: f32,
+    /// [`weapons::visuals::advance_leach_beam_ribbon`]. Per pool entry.
+    pub(super) leach_ball_elapsed: [f32; oag_weapons::projectile::leach_beam::POOL_SIZE],
     /// The Rocket's smoke ribbons - see [`crate::rocket_smoke`].
     pub(super) rocket_smoke: crate::rocket_smoke::Smoke,
     /// The Plasma's own render-side detonation instances, one per

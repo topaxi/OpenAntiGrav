@@ -1241,6 +1241,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             zoom_borrowed: borrowed_zoom.is_some(),
             weapon_pad_glow: title.weapon_pad_glow,
             leach_drain: title.weapons.leach_drain,
+            leach_beams: title.weapons.leach_beams.value,
             quake_hit: title.weapons.quake_hit,
             autopilot_absorb_cancels: title.weapons.autopilot_absorb_cancels.value,
             autopilot_pad_grants: title.weapons.autopilot_pad_grants.value,

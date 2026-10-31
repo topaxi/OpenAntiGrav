@@ -182,10 +182,10 @@ pub(super) struct SfxVoices {
     quake_travel: TravelVoices,
     /// `~LEACHATTACH`'s held voice, while a **locked** beam instance exists
     /// ([`Cue::LeachAttach`]). `Option<VoiceId>` because the LeachBeam is the
-    /// race's single world-wide instance, not a slot in
+    /// race's world-wide pool, not a slot in
     /// [`oag_weapons::projectile::Projectiles`] (see
     /// `oag_weapons::projectile::leach_beam`); driven directly off
-    /// `race.sim.world.leach_beam` for this tick's position.
+    /// `race.sim.world.leach_beams` (the first locked beam) for this tick's position.
     leach_attach: Option<VoiceId>,
     /// The magstrip hum, per grid slot. See [`Cue::Magstrip`].
     magstrip: magstrip::Voices,
@@ -235,7 +235,7 @@ impl Audio {
             thrust_gated,
             sight,
             quake_point,
-            leach_beam,
+            leach_beams,
         } = frame;
         self.hd_race_mix(banks.mix.as_deref(), thrust_gated);
         // The step that voices `go` is the first the race is not gated: the held song starts on it.
@@ -554,8 +554,15 @@ impl Audio {
             // outlives `Beam::connected` through the disconnect linger
             // ([`Cue::LeachAttach`]). Position is the chosen midpoint between the
             // two craft, updated every tick like the Plasma bolt above.
-            let leach_locked = leach_beam
-                .filter(|beam| beam.kind == oag_weapons::projectile::leach_beam::Kind::Locked);
+            //
+            // **One held voice for the whole pool, on the first locked beam in pool
+            // order** (chosen, not measured: the pool of eight is a later-title
+            // law and the original's loop count per beam is unread).
+            let leach_locked = leach_beams
+                .iter()
+                .flatten()
+                .copied()
+                .find(|beam| beam.kind == oag_weapons::projectile::leach_beam::Kind::Locked);
             match (leach_locked, voices.leach_attach) {
                 (Some(beam), None) => {
                     if let Some(started) = banks.voices(Cue::LeachAttach, &mut voices.rng)

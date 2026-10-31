@@ -168,7 +168,7 @@ fn a_second_persons_early_leach_press_fires_unlocked() {
         inputs.set(1, buttons.tick(if tick == 5 { SQUARE } else { 0 }));
         race.tick(&inputs);
     }
-    let beam = race.sim.world.leach_beam.expect("slot 1's press must fire");
+    let beam = race.sim.world.leach_beams[0].expect("slot 1's press must fire");
     assert_eq!(beam.owner, 1);
     assert_eq!(
         beam.kind,

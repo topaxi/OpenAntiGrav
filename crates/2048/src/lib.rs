@@ -151,6 +151,8 @@ pub const TITLE: &Title = &Title {
         ai: Some(r"Data\XML\WeaponAIStats2048.xml"),
         // HD's law, inherited through Omega: 2048's own drain is unread.
         leach_drain: oag_title::weapons::LeachDrain::PerTrip,
+        // Measured: eight entries in `LeachBeamManager_Update`'s pool (`weapon-instance-limits.md`).
+        leach_beams: oag_title::pre_race::Sourced::measured(8),
         // HD's law, inherited through Omega: 2048's own gate is unread.
         quake_hit: oag_title::weapons::QuakeHit::WaveHeight {
             origin: oag_title::Origin::InheritedFrom("Wipeout Omega Collection"),
