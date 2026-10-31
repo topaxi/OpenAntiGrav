@@ -946,6 +946,7 @@ impl Race {
             #[cfg(feature = "view")]
             replay: replay::ReplayState::default(),
             quiet: false,
+            speed_plan_job: None,
             #[cfg(feature = "view")]
             journal: Default::default(),
             #[cfg(test)]

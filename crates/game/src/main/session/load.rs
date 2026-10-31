@@ -782,6 +782,11 @@ impl Session {
                             "AI: this project's driver flies (the campaign event asks for it)"
                         ),
                     }
+                    // Last, once nothing else will change the race before its first
+                    // tick: the speed plans are learned on a thread while the loading
+                    // screen runs out, and the hand-over below waits for them, so the
+                    // first tick does not (a fork's route plans cost 1.6 s on the Deck).
+                    race_stage.race.begin_speed_plans();
                 }
             }
             if let Some(e) = join_error {
@@ -884,10 +889,19 @@ impl Session {
             }
         }
         let Some((built, music)) = (match &mut self.stage {
-            Stage::Loading(stage) if stage.screen.is_done() => stage
+            Stage::Loading(stage)
+                if stage.screen.is_done()
+                    && stage
+                        .built_race
+                        .as_ref()
+                        .and_then(|built| built.as_ref().ok())
+                        .is_none_or(|ready| ready.race.speed_plans_ready()) =>
+            {
+                stage
                 .built_race
                 .take()
-                .map(|built| (built, stage.music.take())),
+                .map(|built| (built, stage.music.take()))
+            }
             _ => None,
         }) else {
             return Ok(());
