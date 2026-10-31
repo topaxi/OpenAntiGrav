@@ -66,19 +66,35 @@ impl Drawable {
         &wgpu::RenderPipeline,
         &[(f32, wgpu::RenderPipeline)],
     ) {
-        match &self.culled {
+        let write_velocity = self.unwritten.is_none()
+            || self
+                .velocity_read
+                .load(std::sync::atomic::Ordering::Relaxed);
+        let culled_set = match (&self.unwritten, write_velocity) {
+            (Some(unwritten), false) => unwritten.culled.as_ref(),
+            _ => self.culled.as_ref(),
+        };
+        match culled_set {
             Some(set) if culled => (
                 &set.pipeline,
                 set.prepass.as_ref(),
                 &set.alpha_test_pipeline,
                 &set.cutout_pipelines,
             ),
-            _ => (
-                &self.pipeline,
-                self.prepass.as_ref(),
-                &self.alpha_test_pipeline,
-                &self.cutout_pipelines,
-            ),
+            _ => match &self.unwritten {
+                Some(unwritten) if !write_velocity => (
+                    &unwritten.base.pipeline,
+                    unwritten.base.prepass.as_ref(),
+                    &unwritten.base.alpha_test_pipeline,
+                    &unwritten.base.cutout_pipelines,
+                ),
+                _ => (
+                    &self.pipeline,
+                    self.prepass.as_ref(),
+                    &self.alpha_test_pipeline,
+                    &self.cutout_pipelines,
+                ),
+            },
         }
     }
 
@@ -205,7 +221,8 @@ impl Drawable {
         };
         let shows = self.shows(block);
         oag_gpu::perfprobe::pipeline_set();
-        pass.set_pipeline(&self.pipeline);
+        let (base_pipeline, base_prepass, _, _) = self.solid(false);
+        pass.set_pipeline(base_pipeline);
         pass.set_bind_group(0, &self.uniform_bind, &self.uniform_offset(block));
         // Bound once for the whole drawable: fog is per-frame, not per draw call,
         // and group 2 survives the `set_pipeline` calls below.
@@ -244,7 +261,7 @@ impl Drawable {
         // it arrives in, so nearest first only lets the depth test reject
         // sooner - it cannot change a pixel.
         depth_order.clear();
-        if let Some(order) = order.filter(|_| self.prepass.is_some()) {
+        if let Some(order) = order.filter(|_| base_prepass.is_some()) {
             flags.clear();
             flags.resize(opaque_draws.len(), false);
             for &index in shown.iter() {
@@ -267,7 +284,7 @@ impl Drawable {
         // draws go out without switching it: half of HD's circuit binds, and what the wgpu
         // encoder validates at `finish`. The shade half binds as usual from this state.
         // With the arrays bound ([`Self::bind_materials`]) there is nothing to bind.
-        if self.bindless.is_none() && self.prepass.is_some() && !shown.is_empty() {
+        if self.bindless.is_none() && base_prepass.is_some() && !shown.is_empty() {
             pass.set_bind_group(1, &self.textures[0], &[]);
             last_bound = Some(0);
         }
@@ -320,7 +337,7 @@ impl Drawable {
             };
             pass.draw_indexed(range, 0, 0..1);
         };
-        match &self.prepass {
+        match base_prepass {
             // Depth first, then the shading against it, **backwards** - see
             // `mesh_render::Prepass` for why the reversal keeps every
             // coplanar tie where the plain pipeline puts it.

@@ -299,6 +299,7 @@ impl Session {
             stamp_pipeline: _,
             prepass: _,
             culled: _,
+            unwritten: _,
         } = mesh_render::build(
             &device,
             &queue,

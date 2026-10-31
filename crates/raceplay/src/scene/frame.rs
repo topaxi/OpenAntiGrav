@@ -83,6 +83,9 @@ impl Scene {
     ) -> SceneStats {
         // Every drawable's matrices of this view are staged here and written once, in runs,
         // before the scene pass (`UniformBlocks`); anything else goes through to the queue.
+        // Before anything draws: whether this frame has a reader of the velocity buffer
+        // decides which pipelines the track and the hulls draw with.
+        self.gate_velocity(self.velocity_readers(motion_blur, camera_jitter));
         let uploads = Uploads::begin(
             queue,
             &self.uniform_blocks,
@@ -231,9 +234,9 @@ impl Scene {
         // runs before the caller composites the HUD over `view`, so the
         // readouts stay sharp however the world moves. `motion_blur` is the
         // strength read fresh off the settings this frame, so the row
-        // applies live; at `off` the pass encodes nothing. The velocity
-        // buffer it reads was written by the scene pass above either way -
-        // see `Scene::velocity`.
+        // applies live; at `off` the pass encodes nothing. The scene pass
+        // above wrote the velocity buffer for it because the same strength
+        // opened the gate before drawing - see `scene::velocity_gate`.
         let blur_encoded = self.encode_motion_blur(
             device,
             queue,

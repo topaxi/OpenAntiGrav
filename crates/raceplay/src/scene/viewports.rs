@@ -406,6 +406,11 @@ impl Scene {
     ) -> SceneStats {
         let mut stats = SceneStats::default();
         self.reuse_frame_work.set(shared);
+        // The blur of a split runs after its last view, so its strength opens the velocity
+        // gate for every view (`Scene::render` is told `Off` for each).
+        self.split_blur_reads
+            .set(effects.motion_blur.shutter() > 0.0);
+        self.gate_velocity(self.velocity_readers(effects.motion_blur, effects.camera_jitter));
         // Each view jitters and records its frame in its seat's history, and the upscaler
         // resolves each view from that (`Scene::temporal`); the window's own record is not
         // one of them, so it is cleared.
@@ -519,6 +524,7 @@ impl Scene {
             effects.motion_blur.shutter(),
             effects.blur_timestamps,
         );
+        self.split_blur_reads.set(false);
         stats
     }
 }
