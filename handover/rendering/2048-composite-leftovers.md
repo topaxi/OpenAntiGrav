@@ -31,8 +31,18 @@ Held at 1.15, ours' frame means are 54.9 / 61.4 / 36.7 against the original's
   (meshes, clouds, exhaust, beams, ghosts); `oag-fx`'s particles, mist, flash and
   weapon quads keep 2.2. Read the ship, sky and particle programs the same way
   (Vita3K's SPIR-V by the container's SHA-256).
-- **Empire Climb's track and walls draw flat** in ours; that, not exposure, is
-  most of its remaining gap.
+- **2048 track lighting, what is left after `2048-track-lighting` (2026-10-31)**: lightmaps are
+  now bound and decoded (two reader bugs), lightmapped and `NOVAColor` vertex-lit surfaces take
+  2048's own combine (`docs/formats/2048-material-params.md`, "Vertex-lit and lightmapped
+  combines"), and the baked roof shadow shows on Vineta K's wall. Ours is now **darker** than the
+  original (Vineta K floor 24/23/22 against 32/38/43, Empire Climb road 111/92/73 against
+  141/111/88). Next, in this order: (1) the **emissive** layer of `diffuse_normal_specular_emmissive`
+  and its kin on the floor (the original's blue panels), which ours does not draw on the lightmapped
+  family; (2) the `occlusionMap`/`shadowMap` terms the 40-odd programs with both declare; (3) why
+  the whole frame is dark once the constant ambient is gone (exposure keys reach the composite
+  only; check the sun colour feeding `liveLighting0diffuse`, the engine may not hand the
+  `Sun diffuse colour` key over unscaled). Omega's `NOVAColor` vertex variant is the same family,
+  not wired.
 - **The default 2048 race's near-white track at tick 1500 did not reproduce**
   (2026-10-26, `w2048-white-floor`, main `9c166f405`): `just play 2048 --race
   --no-audio --ticks 1500 --screenshot` on a clean profile and on a copy of the
