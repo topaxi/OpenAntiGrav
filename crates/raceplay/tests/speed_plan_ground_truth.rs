@@ -180,7 +180,9 @@ fn plans_learned_ahead_are_the_plans_the_first_tick_learns() {
         "the original driver flies, so only the fork asks for plans"
     );
 
+    let starting = Instant::now();
     ahead.begin_speed_plans();
+    println!("starting the job took {:?}", starting.elapsed());
     let waited = Instant::now();
     while !ahead.speed_plans_ready() {
         assert!(

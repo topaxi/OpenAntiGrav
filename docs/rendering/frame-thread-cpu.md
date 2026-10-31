@@ -827,3 +827,45 @@ third runs cost 271 ms (the figure of the 2026-10-30 section). A maintainer's wa
 therefore sees 271 ms, not a second, unless an update invalidates that cache; **what that cache
 is has not been identified**. Not tested: a touch press (`pointer.clicked` calls `skip_intro`)
 and a real held press on the Deck's own controls.
+
+## The speed plans off the frame thread (2026-10-31, `speed-plan-off-frame`)
+
+Claim: "no speed plan is learned on the frame thread: a menu-started Pulse Outpost 7 race's
+first ticks contain no frame over the control circuit's bound, and the plans the race drives are
+bit-identical to today's".
+
+Cause (the maintainer's Deck log, reproduced here): `Race::ensure_speed_plans` ran at the head of
+the first `Race::tick`. Outpost 7 (`07_Track`) has a fork, so it learns the ring, route and ten
+hull plans even under the original driver (`needs_speed_plans`), 1.3 to 1.7 s of one frame.
+Earlier lanes measured other paths: the flyby does not tick the race (`tick_intro`), so the cost
+lands at the end of the flyby or on the first tick under `--no-intro`.
+
+Fix: `Race::begin_speed_plans` after the launch's last setter (`session/load.rs`), a `speed-plans`
+thread on a copy of `RaceSim`, the loading screen's hand-over waits for it. Starting the job
+takes 0.13 ms (the copy), adopting it 25 us; learning on the frame thread took 1.34 to 1.74 s
+(release-like debug test run, `plans_learned_ahead_are_the_plans_the_first_tick_learns`).
+
+Method: release build, Xvfb with lavapipe, `--no-intro --mode single_race --class rapier
+--track 'Data\Environments\07_Track\track.vex' --measure-race-load 1`, Pulse PSP EU, 3 s of
+race frames. The machine was contended (load noted per row), so only the large effect is read.
+
+| Binary | Circuit | Load average at start | Worst race-stage frame | Loading frames |
+| --- | --- | --- | --- | --- |
+| main (before) | Outpost 7 | 7.9 | **1549.0 ms** (first tick) | 456 |
+| branch (after) | Outpost 7 | 14.5 | 481.9 ms (once, frame 141 of the race, not a plan: no plan line follows the first tick) | 783 |
+| branch (after) | Outpost 7 | 19.6 | 76.9 ms | 781 |
+| branch (after) | Outpost 7 | 7.6 | 50.0 ms | 639 |
+| main | Talon's Junction (control) | 7.9 | 37.3 ms | 460 |
+| branch | Talon's Junction (control) | 6.9 | 40.0 ms | 457 |
+
+The loading screen is held about 1.3 s longer on Outpost 7 (plans now finish before the swap, on
+a thread, the screen drawing). One loading frame of 880 ms appeared in one of five after-runs
+(load 7.6); the others read 156 to 171 ms, as before. The plan thread and its per-hull threads share the
+cores with the loading frame, so a Deck with fewer cores may show a slower loading bar.
+HD's default track (original driver, no fork): `needs_speed_plans` is false, the job is not
+started, and neither binary logs a plan line (`--mode single_race`, HD EU); load numbers there
+are cold-cache noise (8.5 s first run against 0.6 s) and not a comparison.
+
+Deck confirmation, for the maintainer: a build of this branch, the same menu route to Outpost 7
+White with `--frame-log`: the `WARN frame: 1639 ms` after `ai speed plan` lines should be gone and
+the plan lines should print during the loading screen.

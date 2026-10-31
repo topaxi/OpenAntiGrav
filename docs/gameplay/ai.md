@@ -1891,7 +1891,20 @@ first, so a reader never sees a plan missing that used to be there. (Until
 2026-10-14 `start` learned it at once, which made every race-starting test pay
 for it: see the test-data budget in `docs/architecture/workspace-layout.md`.) A
 test shows the plans are the same whether asked for before the first tick or at
-it. **A fork
+it.
+
+**Off the frame thread (2026-10-31).** A menu launch calls `Race::begin_speed_plans`
+once the race is fully set up (after `ai_choice::apply`): the plans are learned by
+the same function (`speed_plan::learn_speed_plans`) on a copy of the simulation on a
+`speed-plans` thread, the hand-over from the loading screen waits for
+`Race::speed_plans_ready`, and the first tick adopts them
+(`ensure_speed_plans`, 25 us). The job carries the world's state hash and the two
+flags `needs_speed_plans` reads; if the race differs at adoption the result is
+dropped and they are learned on the tick as before. Callers that build a race another
+way (headless, `--race`, tests, a mid-race autopilot) keep the lazy path. Bit-identity:
+`speed_plan_ground_truth::plans_learned_ahead_are_the_plans_the_first_tick_learns`
+(Outpost 7, RAPIER: the ring plan, every slot's plan and 120 ticks of state hashes
+equal). Measured in `docs/rendering/frame-thread-cpu.md`. **A fork
 always learns them**, though the original reads no plan: a route is offered to
 the coin only if its plan verified, and the route plans are learned on the ring
 plan's reference hull, so skipping them would change which way an original
