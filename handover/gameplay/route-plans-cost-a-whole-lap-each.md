@@ -2,7 +2,7 @@
 status: measure
 titles: [pulse, 2048, omega]
 updated: 2026-10-31
-summary: "Route plans learn a whole lap each; the stretch-only learner (0.45x) regressed de Konstruct Black PHANTOM; the learn now hides behind the load, Deck share unmeasured"
+summary: "Route plans learn a whole lap each; stretch learner regressed de Konstruct Black; learn now hidden behind the load, Deck unmeasured"
 size: M
 difficulty: hard
 ---
