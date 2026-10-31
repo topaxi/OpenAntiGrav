@@ -64,7 +64,7 @@ fn opponents_fire_under_the_original_driver(mut race: race::Race) -> (u32, Vec<b
     let mut was_up = false;
     while race.sim.world.tick < oag_race::COUNTDOWN_TICKS + SECONDS * 60 {
         race.tick(&PlayerInputs::none());
-        let beam = race.sim.world.leach_beam;
+        let beam = race.sim.world.leach_beams[0];
         if let Some(beam) = beam
             && beam.owner != 0
             && !was_up

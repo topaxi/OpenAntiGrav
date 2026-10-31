@@ -39,16 +39,16 @@ impl super::super::Scene {
         }
     }
 
-    /// Writes this tick's transform onto the LeachBall's own model, or
-    /// leaves it unwritten - and reports so, for the bounded draw below -
-    /// when [`super::super::Scene::leach_ball`] is `None` (the model did not
-    /// load) or [`Race::leach_ball_model_matrix`] is `None` (no beam locked).
+    /// Writes this tick's transform onto the LeachBall models, one per live
+    /// locked beam in pool order, and returns how many it wrote for the bounded
+    /// draw below. Zero when [`super::super::Scene::leach_ball`] is empty (the
+    /// model did not load) or no beam is locked.
     ///
     /// **No previous-frame matrix tracked**, the same choice
     /// [`super::super::Scene::write_plasma_blasts`] already makes for its
     /// own short-lived pool: `prev_mvp` is this frame's own
     /// `view_projection * matrix`, which zeroes the shader's velocity term
-    /// rather than smearing from a frame this single slot never recorded.
+    /// rather than smearing from a frame this slot never recorded.
     /// Chosen, not measured - the ball reaches its own top speed inside one
     /// drain trip's period (`0.3`-`1.0` s), well inside a velocity buffer's
     /// blur window, so an unsmeared frame at each reveal is the safer
@@ -59,25 +59,27 @@ impl super::super::Scene {
         queue: &Uploads<'_>,
         view_projection: Mat4,
         weapon_scene: &mesh_render::Scene,
-    ) -> bool {
-        let (Some(drawable), Some(matrix)) = (&self.leach_ball, race.leach_ball_model_matrix())
-        else {
-            return false;
-        };
-        let mvp = view_projection * matrix;
-        drawable.write(queue, view_projection, matrix, mvp);
-        super::super::weapon_models::write_fog(drawable, queue, weapon_scene);
-        true
+    ) -> usize {
+        let matrices = (0..oag_weapons::projectile::leach_beam::POOL_SIZE)
+            .filter_map(|entry| race.leach_ball_model_matrix(entry));
+        let mut written = 0;
+        for (drawable, matrix) in self.leach_ball.iter().zip(matrices) {
+            let mvp = view_projection * matrix;
+            drawable.write(queue, view_projection, matrix, mvp);
+            super::super::weapon_models::write_fog(drawable, queue, weapon_scene);
+            written += 1;
+        }
+        written
     }
 
-    /// Draws the LeachBall's own model, when [`Self::write_leach_ball`]'s
-    /// own return says it was written this frame.
-    pub(super) fn draw_leach_ball<'a>(
+    /// Draws the first `written` LeachBall models, [`Self::write_leach_ball`]'s
+    /// own return.
+    pub(super) fn draw_leach_balls<'a>(
         &'a self,
-        active: bool,
+        written: usize,
         list: &mut super::super::record::DrawList<'a>,
     ) {
-        if active && let Some(drawable) = &self.leach_ball {
+        for drawable in self.leach_ball.iter().take(written) {
             list.mesh(drawable);
         }
     }

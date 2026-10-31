@@ -128,7 +128,7 @@ fn every_cue_has_something_that_raises_it() {
     // join this for the same reason: each is read directly off the world's
     // own projectile array every tick in `Audio::race_tick`, never pushed as
     // a `CueEvent` - see `TravelVoices`. `LeachAttach` is the same shape
-    // again, read directly off `race.sim.world.leach_beam` instead of a
+    // again, read directly off `race.sim.world.leach_beams[0]` instead of a
     // projectile slot - see `SfxVoices::leach_attach`. `Autopilot` and
     // `Engaging` join `Blowup` for the same reason it is here: both are read
     // off `Race::autopilot_is_active` directly in `Audio::race_tick`'s own

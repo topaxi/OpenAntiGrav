@@ -787,6 +787,9 @@ pub struct Setup {
     /// When a locked LeachBeam moves energy,
     /// `oag_title::weapons::Weapons::leach_drain`.
     pub leach_drain: oag_title::weapons::LeachDrain,
+    /// How many LeachBeams may be live at once,
+    /// `oag_title::weapons::Weapons::leach_beams`.
+    pub leach_beams: u8,
     /// How a Quake's wave reaches a craft, `oag_title::weapons::Weapons::quake_hit`.
     pub quake_hit: oag_title::weapons::QuakeHit,
     /// Whether an absorb press cancels a running Autopilot,

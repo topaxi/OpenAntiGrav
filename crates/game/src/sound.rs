@@ -181,7 +181,7 @@ pub fn race_tick_keeping(
         thrust_gated: oag_race::RaceState::thrust_gated(race.sim.world.tick),
         sight: race.sight_state(),
         quake_point: race.quake_point(),
-        leach_beam: race.sim.world.leach_beam,
+        leach_beams: race.sim.world.leach_beams,
     };
     audio.race_tick(frame);
     // The song-name marquee shows each race song once, off the same audio state a `--no-audio`

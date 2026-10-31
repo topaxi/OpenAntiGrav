@@ -4,14 +4,15 @@
 //! [`super::Projectiles`]: `Weapon_FireLeachBeam` (`0x08866658`) spawns no body, it
 //! resolves a link to a craft the Missile's lock picked and transfers energy each
 //! tick. See `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`;
-//! the single instance lives in `oag_gameplay::World::leach_beam`.
+//! the instances live in `oag_gameplay::World::leach_beams`, at most [`POOL_SIZE`].
 //!
 //! # What is recovered and what is ours
 //!
 //! **Recovered.**
 //!
-//! - One beam in the whole race: `Weapon_FireLeachBeam`'s
-//!   `if (pool->live != 0) return;` on a world cursor.
+//! - A whole-race limit: `Weapon_FireLeachBeam`'s `if (pool->live != 0) return;` on a
+//!   world cursor (one beam on Pulse and HD; eight on 2048 and Omega). A press at the
+//!   limit spends the pickup and fires nothing.
 //! - Firing without a lock does nothing: `LeachBeam_InitUnlocked` (`0x08872da8`)
 //!   builds `kind = 2` targeting the shooter, and `LeachBeam_UpdatePool`
 //!   (`0x08866b08`) gives it no distance test, drain or damage, only expiry at
@@ -81,10 +82,14 @@ pub enum Kind {
     Unlocked,
 }
 
-/// The single LeachBeam a race ever has in flight, matching
-/// `Weapon_FireLeachBeam`'s pool cursor, so `oag_gameplay::World` carries
-/// `Option<Beam>` rather than a [`super::Projectiles`] slot, as for
-/// [`super::quake::Wave`].
+/// How many LeachBeams a race can hold at once at most: the pool 2048 and Omega
+/// measure (`LeachBeamManager_Update`'s eight entries, confidence 85). The
+/// per-title limit (`oag_title::weapons::Weapons::leach_beams`) is at or under it.
+pub const POOL_SIZE: usize = 8;
+
+/// One LeachBeam in flight, an entry of `oag_gameplay::World::leach_beams`
+/// (`Weapon_FireLeachBeam`'s pool), so a beam is not a [`super::Projectiles`]
+/// slot, as for [`super::quake::Wave`].
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Beam {
     /// Which ship slot fired it.
@@ -183,7 +188,7 @@ pub struct Report {
     pub drained: bool,
     /// The link broke this tick, having held at least one tick.
     pub disconnected: bool,
-    /// The beam retired this tick; `oag_gameplay::World::leach_beam` is now `None`.
+    /// The beam retired this tick; its `oag_gameplay::World::leach_beams` entry is now `None`.
     pub retired: bool,
     /// A hit landed on a target whose Shield pickup swallowed it: the only thing
     /// that makes the shell react. The same out-parameter shape as
@@ -250,7 +255,7 @@ impl Beam {
     /// finished.
     ///
     /// Returns `true`-style via [`Report::retired`] when the caller should set
-    /// `oag_gameplay::World::leach_beam` to `None`. The order is
+    /// its `oag_gameplay::World::leach_beams` entry to `None`. The order is
     /// `LeachBeam_UpdatePool`'s: age, link test, drain, retire.
     pub fn advance<S: Craft>(
         &mut self,

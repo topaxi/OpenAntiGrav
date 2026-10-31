@@ -45,7 +45,7 @@ fn step(audio: &mut Audio, gated: bool) {
         thrust_gated: gated,
         sight: oag_race::sight::State::Absent,
         quake_point: None,
-        leach_beam: None,
+        leach_beams: [None; oag_weapons::projectile::leach_beam::POOL_SIZE],
     });
 }
 

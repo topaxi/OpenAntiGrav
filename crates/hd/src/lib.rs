@@ -191,6 +191,9 @@ pub const TITLE: &Title = &Title {
         ai: Some(r"Data\XML\WeaponAIstats.xml"),
         // Read off HD's own EBOOT: one transfer per ball trip.
         leach_drain: oag_title::weapons::LeachDrain::PerTrip,
+        // **Chosen, not measured**: HD measures one (`LeachBeamManager_Fire`, `weapon-instance-limits.md`);
+        // it takes 2048's and Omega's eight as an intended divergence (maintainer, 2026-10-31).
+        leach_beams: oag_title::pre_race::Sourced::chosen(8),
         // Pulse's law, inherited: HD's `Quake_UpdateSpan` uses Pulse's span record and constants; its gate is unread.
         quake_hit: oag_title::weapons::QuakeHit::WaveHeight {
             origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),

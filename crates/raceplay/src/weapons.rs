@@ -450,13 +450,13 @@ impl Race {
                         // As the Rocket: nothing to fasten onto anybody.
                         return;
                     };
-                    // **The busy check first, and it is a whole-race one.**
-                    // `Weapon_FireLeachBeam` (`0x08866658`) returns on
-                    // `pool->live != 0` - a world cursor, not a per-craft
-                    // cooldown - so a press while *anybody's* beam is up keeps
-                    // the pickup. The strictest gate any weapon here has; see
-                    // `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
-                    if self.sim.world.leach_beam.is_some() {
+                    // **The limit check spends the pickup.** `Weapon_FireLeachBeam`
+                    // (`0x08866658`) returns on `pool->live != 0` after the press has
+                    // already cleared the held slot, and the same holds on HD,
+                    // 2048 and Omega (`weapon-instance-limits.md`): a press at the
+                    // limit fires nothing - no beam, no cue - and the pickup is gone.
+                    if self.leach_beams_at_limit() {
+                        self.sim.world.ships[slot].pickup.take();
                         return;
                     }
                     // The lock is the Missile's own, unmodified - the same
@@ -496,7 +496,7 @@ impl Race {
                     let target = self.sight_target(slot).filter(|_| {
                         !self.sim.locks[slot].leach_law() || self.lock_taken(slot).unwrap_or(true)
                     });
-                    self.sim.world.leach_beam = Some(match target {
+                    let beam = match target {
                         Some(target) => {
                             self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
                                 oag_gameplay::cue::Cue::Leach,
@@ -513,7 +513,8 @@ impl Race {
                             ));
                             oag_weapons::projectile::leach_beam::Beam::unlocked(slot as u8, &stats)
                         }
-                    });
+                    };
+                    self.arm_leach_beam(beam);
                 }
                 oag_tables::weapons::Weapon::Quake => {
                     let Some(stats) = weapons.quake() else {

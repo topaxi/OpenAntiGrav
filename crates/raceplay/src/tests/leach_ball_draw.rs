@@ -13,10 +13,10 @@ fn locked_race(owner_at: Vec3, target_at: Vec3, elapsed: f32) -> Race {
     let stats = one_leach_beam_table()
         .leach_beam()
         .expect("the fixture authors a LeachBeam");
-    race.sim.world.leach_beam = Some(Beam::locked(0, 1, &stats));
+    race.sim.world.leach_beams[0] = Some(Beam::locked(0, 1, &stats));
     race.sim.world.ships[0].physics.body.position = owner_at;
     race.sim.world.ships[1].physics.body.position = target_at;
-    race.view.leach_ball_elapsed = elapsed;
+    race.view.leach_ball_elapsed[0] = elapsed;
     race
 }
 
@@ -36,7 +36,7 @@ fn the_matrix_sits_where_hd_ball_position_says_it_should() {
         target,
     );
     let matrix = race
-        .leach_ball_model_matrix()
+        .leach_ball_model_matrix(0)
         .expect("a locked beam must place the ball");
     assert!(
         matrix.w_axis.truncate().distance(expected) < 1e-4,
@@ -55,8 +55,8 @@ fn the_matrix_sits_where_hd_ball_position_says_it_should() {
 #[test]
 fn nothing_locked_draws_no_ball() {
     let race = Race::start(setup(hulled_handling()));
-    assert!(race.sim.world.leach_beam.is_none());
-    assert!(race.leach_ball_model_matrix().is_none());
+    assert!(race.sim.world.leach_beams[0].is_none());
+    assert!(race.leach_ball_model_matrix(0).is_none());
 }
 
 /// Fired with no lock: a real `Beam` exists (see `leach_beam.rs`'s own
@@ -69,8 +69,8 @@ fn an_unlocked_beam_draws_no_ball_either() {
         .leach_beam()
         .expect("the fixture authors a LeachBeam");
     let mut race = Race::start(setup(hulled_handling()));
-    race.sim.world.leach_beam = Some(Beam::unlocked(0, &stats));
-    assert!(race.leach_ball_model_matrix().is_none());
+    race.sim.world.leach_beams[0] = Some(Beam::unlocked(0, &stats));
+    assert!(race.leach_ball_model_matrix(0).is_none());
 }
 
 /// **Only Wipeout HD authors this model.** `Race::leach_ball_model_matrix`

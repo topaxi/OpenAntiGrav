@@ -573,8 +573,9 @@ weapons the *pool* would hand out and the authored *odds* never do.
   returning `age < active_time`. Target selection is the Missile's lock
   outright, and `FUN_0883f540` confirms that directly by calling
   `Ship_AcquireLock` for held weapon ids `1` and `10` and no others.
-  `oag_weapons::projectile::leach_beam` holds the single link a race ever
-  has - a whole-race pool cursor, the strictest gate any weapon here has -
+  `oag_weapons::projectile::leach_beam` holds the links a race has in flight - a
+  whole-race pool (one on the originals' Pulse and HD, eight on 2048 and Omega, eight everywhere
+  here, `Weapons::leach_beams`), where a press at the limit spends the pickup -
   and `oag_tables::weapons::LeachBeamStats` now decodes all nine attributes.
   **And the throttle is wired as of 2026-09-16**: `slowShipFactor` lands on
   `craft+0x31c`, the one-shot thrust scale `Ship_UpdateEngine` reads once and

@@ -19,6 +19,9 @@ pub(crate) use flash::flash_for;
 
 use super::*;
 
+/// The LeachBeam pool's size: how many entries the render-side state has.
+const LEACH_POOL: usize = oag_weapons::projectile::leach_beam::POOL_SIZE;
+
 impl Race {
     /// Keeps [`Trigger::LeachbeamCharging`] on every craft that is holding a
     /// LeachBeam - the disc's own `Data\Psys\*.POB`, played through the same
@@ -79,15 +82,21 @@ impl Race {
     /// bit, and the manager frees the instance and its live particles on its
     /// next tick (read 2026-09-30, see `particle-system.md`).
     pub(crate) fn advance_leach_beam_ribbon(&mut self) {
-        let locked = self
-            .sim
-            .world
-            .leach_beam
+        for at in 0..LEACH_POOL {
+            self.advance_leach_beam_ribbon_at(at);
+        }
+    }
+
+    /// [`Self::advance_leach_beam_ribbon`] for the beam in pool entry `at`: the
+    /// ribbon, effect and ball clock of an entry follow its beam, and are torn
+    /// down when the entry holds none (or an unlocked one).
+    fn advance_leach_beam_ribbon_at(&mut self, at: usize) {
+        let locked = self.sim.world.leach_beams[at]
             .filter(|beam| beam.kind == oag_weapons::projectile::leach_beam::Kind::Locked);
         let Some(beam) = locked else {
-            self.view.leach_beam_ribbon = None;
-            self.view.leach_ball_elapsed = 0.0;
-            if let Some(playing) = self.view.leach_beam_effect.take() {
+            self.view.leach_beam_ribbon[at] = None;
+            self.view.leach_ball_elapsed[at] = 0.0;
+            if let Some(playing) = self.view.leach_beam_effect[at].take() {
                 self.view.stage.kill(playing);
             }
             return;
@@ -105,13 +114,13 @@ impl Race {
         // once - the same idiom `Race::force_trail_sparks`'s own
         // `(player, rng)` pair uses.
         let (ribbon, rng) = (
-            &mut self.view.leach_beam_ribbon,
+            &mut self.view.leach_beam_ribbon[at],
             &mut self.view.leach_beam_rng,
         );
         let ribbon = ribbon.get_or_insert_with(|| oag_fx::beam::Ribbon::new(rng));
         let pulsed = ribbon.advance(dt, (target - owner).length(), beam.range, rng);
         let spline = &self.sim.spline;
-        let at = ribbon.energy_point(owner, target, beam.range, &|p| spline.tube_frame(p));
+        let point = ribbon.energy_point(owner, target, beam.range, &|p| spline.tube_frame(p));
 
         // `LEACHENERGY`: the same pulse block that re-spawns
         // `WO_LEACHBEAM_ENERGY` below, per `LeachBeam_Advance`'s own reading
@@ -121,26 +130,26 @@ impl Race {
         // firing of the original's pulse block, and `Ribbon::new`'s `cursor: 0`
         // already makes the very first `advance` call pulse, so the two agree
         // on tick one anyway.
-        if pulsed && let Some(at) = at {
+        if pulsed && let Some(point) = point {
             self.sim.cues.push(oag_gameplay::cue::CueEvent::at_point(
                 oag_gameplay::cue::Cue::LeachEnergy,
-                at,
+                point,
             ));
         }
 
         let effect = self.view.handles.get(Trigger::LeachbeamEnergy).cloned();
-        match (effect, self.view.leach_beam_effect, at) {
-            (Some(effect), playing, Some(at)) if pulsed || playing.is_none() => {
+        match (effect, self.view.leach_beam_effect[at], point) {
+            (Some(effect), playing, Some(point)) if pulsed || playing.is_none() => {
                 if let Some(playing) = playing {
                     self.view.stage.kill(playing);
                 }
-                self.view.leach_beam_effect = self.view.stage.attach(&effect, at, 1.0);
+                self.view.leach_beam_effect[at] = self.view.stage.attach(&effect, point, 1.0);
             }
-            (_, Some(playing), Some(at)) => self.view.stage.follow(playing, at),
+            (_, Some(playing), Some(point)) => self.view.stage.follow(playing, point),
             _ => {}
         }
 
-        self.advance_leach_ball_hd(beam.trip, owner, target, dt);
+        self.advance_leach_ball_hd(at, beam.trip, owner, target, dt);
     }
 
     /// Wipeout HD's own LeachBall drain trip - `LeachBall_Advance`'s
@@ -158,18 +167,25 @@ impl Race {
     /// On a title that drains per trip the simulation carries the
     /// accumulator (`Beam::trip`) and this reads it, so the burst lands on the
     /// tick the drain does; elsewhere the view keeps its own on the same law.
-    fn advance_leach_ball_hd(&mut self, trip: Option<f32>, owner: Vec3, target: Vec3, dt: f32) {
+    fn advance_leach_ball_hd(
+        &mut self,
+        at: usize,
+        trip: Option<f32>,
+        owner: Vec3,
+        target: Vec3,
+        dt: f32,
+    ) {
         let length = (target - owner).length();
         let wrapped = match trip {
             // The simulation's clock wrapped this tick (the drain landed):
             // it went down since the last frame read it.
             Some(elapsed) => {
-                let wrapped = elapsed < self.view.leach_ball_elapsed;
-                self.view.leach_ball_elapsed = elapsed;
+                let wrapped = elapsed < self.view.leach_ball_elapsed[at];
+                self.view.leach_ball_elapsed[at] = elapsed;
                 wrapped
             }
             None => oag_weapons::projectile::leach_beam::trip::advance(
-                &mut self.view.leach_ball_elapsed,
+                &mut self.view.leach_ball_elapsed[at],
                 dt,
                 length,
             ),
@@ -177,18 +193,18 @@ impl Race {
         if !wrapped {
             return;
         }
-        let at = oag_fx::beam::hd_ball::position(
-            leach_ball_fraction(self.view.leach_ball_elapsed, length),
+        let point = oag_fx::beam::hd_ball::position(
+            leach_ball_fraction(self.view.leach_ball_elapsed[at], length),
             owner,
             target,
         );
         if let Some(effect) = self.view.handles.get(Trigger::LeachbeamAbsorb) {
-            self.view.stage.play(effect, at, 1.0);
+            self.view.stage.play(effect, point, 1.0);
         }
     }
 
-    /// Where the LeachBeam ball model sits this frame, or `None` when
-    /// nothing is drawn - no [`oag_weapons::projectile::leach_beam::Kind::Locked`]
+    /// Where the ball model of the beam in pool entry `entry` sits this frame,
+    /// or `None` when nothing is drawn - no [`oag_weapons::projectile::leach_beam::Kind::Locked`]
     /// beam this tick, the same gate [`Self::advance_leach_beam_ribbon`]
     /// takes for the ribbon.
     ///
@@ -207,11 +223,8 @@ impl Race {
     /// placement since 2026-09-24, so `load::weapon_models::cull_as_authored`
     /// still applies correctly if the model's own materials ask for it.
     #[must_use]
-    pub fn leach_ball_model_matrix(&self) -> Option<Mat4> {
-        let beam = self
-            .sim
-            .world
-            .leach_beam
+    pub fn leach_ball_model_matrix(&self, entry: usize) -> Option<Mat4> {
+        let beam = self.sim.world.leach_beams[entry]
             .filter(|beam| beam.kind == oag_weapons::projectile::leach_beam::Kind::Locked)?;
         let owner = self.sim.world.ships[beam.owner as usize]
             .physics
@@ -223,7 +236,7 @@ impl Race {
             .position;
         let length = (target - owner).length();
         let at = oag_fx::beam::hd_ball::position(
-            leach_ball_fraction(self.view.leach_ball_elapsed, length),
+            leach_ball_fraction(self.view.leach_ball_elapsed[entry], length),
             owner,
             target,
         );
@@ -239,11 +252,14 @@ impl Race {
     /// included. See [`oag_fx::beam::Ribbon::pulse_strength`].
     #[must_use]
     pub fn leach_overlay_pulse(&self, slot: usize) -> Option<f32> {
-        let beam = self.sim.world.leach_beam?;
-        if usize::from(beam.owner) != slot {
-            return None;
-        }
-        self.view.leach_beam_ribbon.as_ref()?.pulse_strength()
+        let (at, _) = self
+            .sim
+            .world
+            .leach_beams
+            .iter()
+            .enumerate()
+            .find(|(_, beam)| beam.is_some_and(|beam| usize::from(beam.owner) == slot))?;
+        self.view.leach_beam_ribbon[at].as_ref()?.pulse_strength()
     }
 
     /// The ribbon's geometry for this frame, or empty when there is no
@@ -260,10 +276,34 @@ impl Race {
         camera_right: oag_core::math::Vec3,
         camera_up: oag_core::math::Vec3,
     ) -> Vec<oag_mesh::mesh::GpuVertex> {
+        let mut out: Vec<oag_mesh::mesh::GpuVertex> = Vec::new();
+        for at in 0..LEACH_POOL {
+            let one = self.leach_beam_ribbon_vertices_at(at, camera_right, camera_up);
+            // One triangle strip for the whole pool: a degenerate pair (the last
+            // vertex so far, then the next ribbon's first) bridges two ribbons,
+            // as `oag_fx::beam::build` bridges its own two strips. Each ribbon is
+            // an even count, so the strip's winding parity survives.
+            if let (Some(&last), Some(&first)) = (out.last(), one.first()) {
+                out.extend([last, first]);
+            }
+            out.extend(one);
+        }
+        out
+    }
+
+    /// One pool entry's ribbon, empty when it holds no locked beam.
+    fn leach_beam_ribbon_vertices_at(
+        &self,
+        at: usize,
+        camera_right: oag_core::math::Vec3,
+        camera_up: oag_core::math::Vec3,
+    ) -> Vec<oag_mesh::mesh::GpuVertex> {
         use oag_weapons::projectile::leach_beam::{DISCONNECT_LINGER_SECONDS, Kind};
 
-        let (Some(beam), Some(ribbon)) = (self.sim.world.leach_beam, &self.view.leach_beam_ribbon)
-        else {
+        let (Some(beam), Some(ribbon)) = (
+            self.sim.world.leach_beams[at],
+            &self.view.leach_beam_ribbon[at],
+        ) else {
             return Vec::new();
         };
         if beam.kind != Kind::Locked {

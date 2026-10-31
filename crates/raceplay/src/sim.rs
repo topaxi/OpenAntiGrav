@@ -379,6 +379,8 @@ pub struct RaceSim {
     pub(super) weapon_pad_glow: &'static oag_title::weapon_pad::WeaponPadGlow,
     /// When a locked LeachBeam moves energy - see [`Setup::leach_drain`].
     pub(super) leach_drain: oag_title::weapons::LeachDrain,
+    /// How many LeachBeams may be live at once - see [`Setup::leach_beams`].
+    pub(super) leach_beams: u8,
     /// How a Quake's wave reaches a craft - see [`Setup::quake_hit`].
     pub(super) quake_hit: oag_title::weapons::QuakeHit,
     /// Whether an absorb cancels a running Autopilot - see [`Setup::autopilot_absorb_cancels`].

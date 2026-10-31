@@ -143,15 +143,16 @@ impl Race {
     /// instead**, keeping the pickup until it has somebody to fasten onto.
     ///
     /// **Chosen, not measured**, and tuned for a better race rather than for
-    /// fidelity - the licence `HANDOVER.md` records for opponent behaviour. The
-    /// reasoning: the LeachBeam's pool is a *global* cursor, so an opponent
-    /// burning it on nothing locks the weapon out of the whole race for three
-    /// seconds, the player included. That is the one weapon here where a wasted
-    /// AI shot costs somebody else their turn, and letting an opponent hold on
-    /// to it until it can actually use it makes it a threat instead of a
-    /// nuisance. No confidence score, because nothing was measured.
+    /// fidelity - the licence `HANDOVER.md` records for opponent behaviour. Revisited
+    /// with the pool of eight (2026-10-31): an unlocked beam no longer locks the weapon
+    /// out of the race, since it holds one entry of the title's limit, but it still
+    /// spends the opponent's pickup on nothing, and an opponent that holds the weapon
+    /// until it can fasten onto somebody is a threat instead of a nuisance. So both
+    /// stay: fire only with a lock, and hold the pickup (do not press) while the limit
+    /// is reached. Not pressing is a choice the player has too, so neither is a cheat
+    /// the player's physics lacks. No confidence score, because nothing was measured.
     fn fire_opponent_leach_beam(&mut self, slot: usize) -> bool {
-        if self.sim.world.leach_beam.is_some() {
+        if self.leach_beams_at_limit() {
             return false;
         }
         let Some(stats) = self
@@ -186,8 +187,8 @@ impl Race {
             oag_gameplay::cue::Cue::Leach,
             slot,
         ));
-        self.sim.world.leach_beam = Some(self.locked_leach_beam(slot as u8, target, &stats));
-        true
+        let beam = self.locked_leach_beam(slot as u8, target, &stats);
+        self.arm_leach_beam(beam)
     }
 
     /// Puts one plasma bolt in the air for an opponent, if its driver wants a

@@ -51,6 +51,6 @@ pub struct RaceFrame<'a> {
     pub sight: oag_race::sight::State,
     /// The quake wave's road midpoint, while one travels.
     pub quake_point: Option<Vec3>,
-    /// The world's one Leach beam, while one exists.
-    pub leach_beam: Option<Beam>,
+    /// The world's LeachBeam pool (`oag_gameplay::World::leach_beams`).
+    pub leach_beams: [Option<Beam>; oag_weapons::projectile::leach_beam::POOL_SIZE],
 }

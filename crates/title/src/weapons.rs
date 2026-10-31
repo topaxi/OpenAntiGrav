@@ -50,6 +50,12 @@ pub struct Weapons {
     pub ai: Option<&'static str>,
     /// When a locked LeachBeam moves energy: every tick, or once a ball trip.
     pub leach_drain: LeachDrain,
+    /// How many LeachBeams a race holds at once (at most
+    /// `oag_weapons::projectile::leach_beam::POOL_SIZE`, which the race clamps to).
+    ///
+    /// 2048 and Omega measure eight; Pulse and HD measure one and take eight as a chosen
+    /// divergence (maintainer, 2026-10-31), recorded in `docs/gameplay/weapon-lineage.md`.
+    pub leach_beams: crate::pre_race::Sourced<u8>,
     /// How a Quake's wave reaches a craft: what gates its hit and whether the
     /// cockpit eye rides it.
     pub quake_hit: QuakeHit,
