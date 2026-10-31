@@ -118,3 +118,12 @@ fn omega_carries_the_grid_hover_hd_does() {
             .value
     );
 }
+
+#[test]
+fn omega_culls_by_the_material_state_bit_as_hd_does() {
+    assert!(TITLE.looks.material_render_state.applies_everywhere());
+    assert_eq!(
+        TITLE.looks.material_render_state.origin,
+        oag_title::Origin::InheritedFrom("Wipeout HD")
+    );
+}

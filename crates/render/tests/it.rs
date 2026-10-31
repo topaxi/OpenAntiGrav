@@ -94,6 +94,7 @@ mod ps2_bloom_gain;
 mod ps2_start_gantry_ground_truth;
 mod ps2_texture_binding_ground_truth;
 mod psp2_airbrake_flaps_ground_truth;
+mod psp2_backface_cull_ground_truth;
 mod psp2_glow_ground_truth;
 mod psp2_scenery_animation_ground_truth;
 mod psp2_static_hologram_ground_truth;

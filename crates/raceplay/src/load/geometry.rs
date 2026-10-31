@@ -112,9 +112,15 @@ pub(super) fn track_model(
             match mesh::rcs::psp2::build(track, geometry, animation.as_ref(), &mut |path| {
                 archives.read_name(path).ok()
             }) {
-                Ok((model, built)) => {
+                Ok((mut model, built)) => {
                     report.push(format!("{track}: {}", built.describe()));
-                    (Some(biased(model)), none())
+                    // 2048 and Omega take the cull bit alone: the rest of the
+                    // word has no draw list on either (`Model::honour_cull`).
+                    model.material_lod_bias = material_lod_bias;
+                    if render_state {
+                        model.honour_cull();
+                    }
+                    (Some(model), none())
                 }
                 Err(error) => {
                     report.push(format!(

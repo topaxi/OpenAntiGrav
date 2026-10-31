@@ -168,11 +168,21 @@ pub const TITLE: &Title = &Title {
     // executable registers 2048's `wo_*` programs and binds none, running its
     // `Tonemap` chain instead (checked, differs: exposure.md, "Omega").
     effects: &EFFECTS,
-    looks: &oag_title::Looks::unread(oag_title::ShieldPalettes {
-        ps2: oag_title::ShieldPalette::Ps2Pulse,
-        elsewhere: oag_title::ShieldPalette::Pulse,
-        origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
-    }),
+    looks: &oag_title::Looks {
+        // State bit 4 (back-face culling) of the PS4 header's `+0x22` word, **inherited from
+        // HD**: 4,751 of 4,918 to 13,568 of 13,722 materials per base archive carry it
+        // (`docs/ghidra/functions/ps3-hdfury-eu/chunk-cull.md`, "2048 / Omega"). Only the cull
+        // bit is honoured (`Model::honour_cull`).
+        material_render_state: oag_title::Rule {
+            on: oag_title::Platforms::Any,
+            origin: oag_title::Origin::InheritedFrom("Wipeout HD"),
+        },
+        ..oag_title::Looks::unread(oag_title::ShieldPalettes {
+            ps2: oag_title::ShieldPalette::Ps2Pulse,
+            elsewhere: oag_title::ShieldPalette::Pulse,
+            origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
+        })
+    },
     // HD's `PI001` front end carried forward (`docs/formats/omega-frontend.md`),
     // read through its own `load_omega`; no grids file is read on its own and no
     // unlock row is wired.

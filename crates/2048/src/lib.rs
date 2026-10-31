@@ -192,6 +192,14 @@ pub const TITLE: &Title = &Title {
             on: oag_title::Platforms::Any,
             origin: oag_title::Origin::Measured,
         },
+        // State bit 4 (back-face culling) of the material word, **inherited from HD**: the
+        // Vita header's `+0x12` word is HD's, 22,483 of 22,994 materials carry the bit
+        // (`docs/ghidra/functions/ps3-hdfury-eu/chunk-cull.md`, "2048 / Omega"). Only the
+        // cull bit is honoured (`Model::honour_cull`); no 2048 draw list reads the rest.
+        material_render_state: oag_title::Rule {
+            on: oag_title::Platforms::Any,
+            origin: oag_title::Origin::InheritedFrom("Wipeout HD"),
+        },
         ..oag_title::Looks::unread(oag_title::ShieldPalettes {
             ps2: oag_title::ShieldPalette::Ps2Pulse,
             elsewhere: oag_title::ShieldPalette::Pulse,
@@ -457,4 +465,18 @@ const ADD_ONS: &[oag_title::AddOn] = &[
 /// Propagates [`Archives::open`].
 pub fn open(source: &str) -> Result<Archives> {
     Archives::open(source, TITLE)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_2048_culls_by_the_material_state_bit_as_hd_does() {
+        assert!(TITLE.looks.material_render_state.applies_everywhere());
+        assert_eq!(
+            TITLE.looks.material_render_state.origin,
+            oag_title::Origin::InheritedFrom("Wipeout HD")
+        );
+    }
 }
