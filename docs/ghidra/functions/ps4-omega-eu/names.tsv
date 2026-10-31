@@ -135,3 +135,9 @@
 0x016544a0	function	Race_ComputeLoyaltyAward	80	endrace-loyalty.md
 0x012f7200	function	HullShake_Update	80	hull-shake.md
 0x0193f750	data	g_hud_pickup_widget_table	90	omega-pickup-table.md
+
+# 2026-10-31 hd-quake-leach-instances (weapon-instance-limits.md)
+0x013674e0	function	QuakeManager_Fire	80	weapon-instance-limits.md
+0x01366150	function	Quake_Init	70	weapon-instance-limits.md
+0x01366760	function	QuakeManager_Update	65	weapon-instance-limits.md
+0x01372ee0	function	WeaponManager_DispatchFire	75	weapon-instance-limits.md
