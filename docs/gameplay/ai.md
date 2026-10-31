@@ -5953,6 +5953,20 @@ on a lap-1 rescue on the ring stretch (all and only `cathedral`'s two routes, 20
 and Omega, every class), 8 are Pulse `07_Track` both ways, 12 are `sol`, and 10 are
 `square`.
 
+#### `cathedral`'s two routes are offered (2026-10-31, lane `cathedral-route-start`)
+
+`route_clean` (`crates/raceplay/src/speed_plan.rs`) no longer fails a route plan for
+a rescue on the verification's standing lap at a line index below `kept - 320`
+(`routes::SWITCH_SAMPLES`), the ring stretch before the lead-in. The verification
+lists them (`oag_ai::plan::Report::verify_standing_rescues`, read only here); a
+flying-lap rescue is still a failure and clears the lap time. **Chosen, not
+measured**: the race's own rescue pose at the merge is unmeasured. Census, seed 1,
+every forked circuit, four classes (`route_verify_probe`, release, 7 minutes): the
+only plans with a clean verification except for standing-lap rescues are the 16
+`cathedral` ones (8 on 2048, 8 on Omega, one rescue each, lap-1 index 0-3); the
+verdict can change nowhere else, so no other route or ring plan changes a bit.
+2048 and Omega: one table, one rule, **ported** (both measured).
+
 #### Pulse `07_Track` (Outpost 7): the route runs into the ring's bridge
 
 The route (spline path 1, 992 samples) is a lower road. Over it the ring (path 0,

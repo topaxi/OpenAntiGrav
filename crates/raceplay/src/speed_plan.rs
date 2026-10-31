@@ -365,8 +365,23 @@ fn adapted_clean(report: &oag_ai::plan::Report) -> bool {
 }
 
 /// Whether a route plan's did: stricter, see [`Race::route_speed_plans`].
-fn route_clean(report: &oag_ai::plan::Report) -> bool {
-    ring_clean(report) && report.verify_contacts == 0 && report.verify_lap_ticks.is_some()
+///
+/// A rescue on the standing lap on the ring stretch before the lead-in (line
+/// index below `kept - SWITCH_SAMPLES`) does not fail it: `cathedral`'s merge
+/// has its line under the road, so the at-rest start falls into the reset
+/// volume, while the flying lap is clean (`docs/gameplay/ai.md`, "Where each
+/// undriven route fails its verification"). **Chosen, not measured.**
+fn route_clean(report: &oag_ai::plan::Report, kept: usize) -> bool {
+    let ring_end = kept.saturating_sub(super::routes::SWITCH_SAMPLES);
+    let forgiven = report
+        .verify_standing_rescues
+        .iter()
+        .filter(|&&i| (i as usize) < ring_end)
+        .count();
+    report.verify_failures == 0
+        && report.verify_respawns as usize == forgiven
+        && report.verify_contacts == 0
+        && report.verify_lap_ticks.is_some()
 }
 
 impl Race {
@@ -993,7 +1008,7 @@ impl Race {
                         reference_route.adapt(course, craft, &tuning, ROUTE_PLAN_BUDGET)
                     },
                 );
-                let clean = route_clean(&report);
+                let clean = route_clean(&report, route.kept);
                 info!(
                     "ai speed plan for a hull of turn {:.3}, route {k}, adapted: {} steps, \
                      verification {}",
@@ -1054,10 +1069,7 @@ impl Race {
                 )
             },
         );
-        let clean = report.verify_failures == 0
-            && report.verify_respawns == 0
-            && report.verify_contacts == 0
-            && report.verify_lap_ticks.is_some();
+        let clean = route_clean(&report, route.kept);
         info!(
             "ai speed plan, route {k}: {} steps, lap {:?} ticks, {} contact ticks, \
              verification {}",
@@ -1108,4 +1120,35 @@ pub struct RouteProbe {
     pub line: oag_ai::Line,
     /// The spline sample each line index stands on.
     pub order: Vec<u32>,
+}
+
+#[cfg(test)]
+mod route_clean_tests {
+    use super::route_clean;
+
+    fn report(standing: &[u32], flying_failures: u32) -> oag_ai::plan::Report {
+        oag_ai::plan::Report {
+            verify_failures: flying_failures,
+            verify_respawns: standing.len() as u32 + flying_failures,
+            verify_standing_rescues: standing.to_vec(),
+            verify_lap_ticks: Some(3000),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn a_standing_rescue_on_the_ring_stretch_is_forgiven() {
+        assert!(route_clean(&report(&[2], 0), 4432));
+    }
+
+    #[test]
+    fn a_standing_rescue_in_the_lead_in_or_route_is_not() {
+        assert!(!route_clean(&report(&[4432 - 100], 0), 4432));
+        assert!(!route_clean(&report(&[4500], 0), 4432));
+    }
+
+    #[test]
+    fn a_flying_lap_rescue_is_not() {
+        assert!(!route_clean(&report(&[2], 1), 4432));
+    }
 }
