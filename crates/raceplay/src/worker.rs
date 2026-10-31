@@ -75,16 +75,27 @@ impl LoadWorker {
     /// `sink` is the device the scene will be built from, where the caller has
     /// one: every texture is then uploaded as it is decoded instead of being
     /// held for the scene - see [`super::TextureSink`].
-    pub fn spawn(options: Options, label: Option<String>, sink: Option<TextureSink>) -> Self {
+    ///
+    /// `plan_ahead` starts the race on this thread once the circuit is read and
+    /// begins learning its speed plans there ([`crate::Race::begin_speed_plans_ahead`]),
+    /// for a launch that will seat no one else and take no network host's race:
+    /// the menus' own. The scene build then takes the started race
+    /// ([`Loaded::started`]).
+    pub fn spawn(
+        options: Options,
+        label: Option<String>,
+        sink: Option<TextureSink>,
+        plan_ahead: bool,
+    ) -> Self {
         // No sink on the web: the load runs on a worker there, and wgpu's web
         // types stay on the page's thread (docs/tools/web.md, "Threads").
         #[cfg(target_arch = "wasm32")]
         return {
             drop(sink);
-            Self::spawn_with(label, move || super::load(&options))
+            Self::spawn_with(label, plan_ahead, move || super::load(&options))
         };
         #[cfg(not(target_arch = "wasm32"))]
-        Self::spawn_with(label, move || {
+        Self::spawn_with(label, plan_ahead, move || {
             let _scope = TextureSink::open_if(sink.as_ref());
             super::load(&options)
         })
@@ -99,14 +110,17 @@ impl LoadWorker {
         event: String,
         label: Option<String>,
         sink: Option<TextureSink>,
+        plan_ahead: bool,
     ) -> Self {
         #[cfg(target_arch = "wasm32")]
         return {
             drop(sink);
-            Self::spawn_with(label, move || super::load_event(&options, &event))
+            Self::spawn_with(label, plan_ahead, move || {
+                super::load_event(&options, &event)
+            })
         };
         #[cfg(not(target_arch = "wasm32"))]
-        Self::spawn_with(label, move || {
+        Self::spawn_with(label, plan_ahead, move || {
             let _scope = TextureSink::open_if(sink.as_ref());
             super::load_event(&options, &event)
         })
@@ -114,6 +128,7 @@ impl LoadWorker {
 
     fn spawn_with(
         label: Option<String>,
+        plan_ahead: bool,
         load: impl FnOnce() -> anyhow::Result<Loaded> + Send + 'static,
     ) -> Self {
         let current = Arc::new(Mutex::new(label));
@@ -134,6 +149,19 @@ impl LoadWorker {
                     loaded.started = Some(Box::new(crate::Race::start(loaded.setup.clone())));
                     loaded
                 });
+                // Natively, so the speed plans learn beside the scene build
+                // rather than after it; see `Self::spawn`.
+                #[cfg(not(target_arch = "wasm32"))]
+                let loaded = loaded.map(|mut loaded| {
+                    if plan_ahead {
+                        let mut race = crate::Race::start(loaded.setup.clone());
+                        race.begin_speed_plans_ahead();
+                        loaded.started = Some(Box::new(race));
+                    }
+                    loaded
+                });
+                #[cfg(target_arch = "wasm32")]
+                let _ = plan_ahead;
                 loaded
             }
         });

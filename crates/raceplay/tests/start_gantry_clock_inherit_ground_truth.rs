@@ -199,6 +199,7 @@ fn hds_clock_is_found_on_the_loader_path_a_race_really_takes() {
         },
         None,
         Some(TextureSink { device, queue }),
+        false,
     )
     .join()
     .expect("a worker that was joined once")

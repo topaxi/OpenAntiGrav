@@ -66,7 +66,7 @@ fn totals(loaded: &Loaded) -> (usize, usize, u64) {
 }
 
 fn load(options: race::Options, sink: Option<TextureSink>) -> Loaded {
-    LoadWorker::spawn(options, None, sink)
+    LoadWorker::spawn(options, None, sink, false)
         .join()
         .expect("a worker that was joined once")
         .expect("the circuit loads")

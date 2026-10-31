@@ -582,9 +582,17 @@ impl Session {
         #[cfg(target_arch = "wasm32")]
         let sink = None;
         // A campaign event the front end asked for, or the menus' own race.
+        // The speed plans start learning on the load thread, beside the scene
+        // build, unless something below will change who flies which craft: a
+        // network host's race (`NetPlay::begin_join`) or split seating
+        // (`split_screen::seat_for_launch`). `Race::begin_speed_plans` at the
+        // hand-over keeps the job when the race still fits it.
+        let plan_ahead = self.net.is_none()
+            && self.split_lobby.is_none()
+            && self.controls.assignment().humans().is_none();
         let worker = match self.pending_event.take() {
-            Some(event) => race::LoadWorker::spawn_event(options, event, label, sink),
-            None => race::LoadWorker::spawn(options, label, sink),
+            Some(event) => race::LoadWorker::spawn_event(options, event, label, sink, plan_ahead),
+            None => race::LoadWorker::spawn(options, label, sink, plan_ahead),
         };
         // Spawned alongside the circuit read, for the same reason: fetching
         // this synchronously at the hand-off used to decode a full track on
@@ -786,6 +794,8 @@ impl Session {
                     // tick: the speed plans are learned on a thread while the loading
                     // screen runs out, and the hand-over below waits for them, so the
                     // first tick does not (a fork's route plans cost 1.6 s on the Deck).
+                    // A fork's job started on the load thread already
+                    // (`plan_ahead` in `launch_race`) and is kept if it still fits.
                     race_stage.race.begin_speed_plans();
                 }
             }
