@@ -2,7 +2,7 @@
 status: measure
 titles: [pulse, 2048, omega]
 updated: 2026-10-31
-summary: "Route plans learn a whole lap each; the stretch-only learner (0.45x) regressed de Konstruct Black PHANTOM, three leads"
+summary: "Route plans learn a whole lap each; the stretch-only learner (0.45x) regressed de Konstruct Black PHANTOM; the learn now hides behind the load, Deck share unmeasured"
 size: M
 difficulty: hard
 ---
@@ -29,7 +29,21 @@ on its driven stretch only". The attempt is commits `317b83bba` and `3a14dcf42` 
   route 0): 34 rescues with the placement creeping back about 60 samples each time. Main reaches the spot (2-3
   rescues) and escapes; the stretch build fell into the loop unperturbed. The same family as `sol`'s.
 
+- **When the plans learn (2026-10-31, lane `speed-plan-overlap`).** A forked circuit's plans now start on
+  the race-load thread and learn beside the scene build, routes and hull ring copies at once
+  (`docs/rendering/frame-thread-cpu.md`, "The speed plans started on the race-load thread"): Outpost 7's
+  confirm-to-first-race-frame 5844 to 4313 ms, as fast as a forkless circuit, on this 24-thread host. Still
+  open: (a) the Deck, whose 4 cores share the plan threads with the loading screen (the host's worst loading
+  frame rose 77 to 101 ms); (b) a circuit without a fork under this project's driver (`--ai ours`, a class
+  with no tables) and split-screen or LAN launches still start the job at the hand-over (`plan_ahead` in
+  `Session::launch_race`), as before.
+
 ## Next Steps
+
+4. Deck: build this branch's AppImage, walk the menus to Outpost 7 White with `--frame-log`, compare the
+   loading-screen frames and the press-to-first-race-frame time against main's (`--measure-race-load 6`
+   prints it on a desktop: `oag-game <image> --no-audio --no-intro --mode single_race --class rapier
+   --track 'Data\Environments\07_Track\track.vex' --measure-race-load 6`).
 
 1. Measure any route-plan change with the board, against main built the same way, over the four classes and
    seeds 1-3, plus `OAG_PERTURB` of +-1e-5 for the spread (`route_plan_board.rs`'s doc has the command; about
