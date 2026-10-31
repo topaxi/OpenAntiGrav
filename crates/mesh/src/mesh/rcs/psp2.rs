@@ -42,6 +42,7 @@ use oag_rcs::gxp::sampler_use;
 use oag_rcs::rcsmaterial::name_hash;
 use oag_rcs::rcsmodel::psp2::lighting_only;
 
+mod alpha_product;
 mod glow;
 mod normal_map;
 pub mod placement;
@@ -195,6 +196,10 @@ pub struct Report {
     /// material's record matches it exactly and its own programs (PS4) are
     /// unread - `oag_rcs::rcsmodel::psp2::lighting_only`.
     pub inherited_lighting_only: usize,
+    /// Materials of `m_diffuse_normal_constantspecular` whose picture is
+    /// `Constant1` times their map's alpha, the map's rgb a normal
+    /// (`psp2::alpha_product`).
+    pub alpha_product_materials: usize,
 }
 
 /// The vertex colour of a `fc01_dummy` submesh before the loader knows the
@@ -333,9 +338,17 @@ impl Report {
                 self.inherited_lighting_only
             )
         };
+        let alpha_product = if self.alpha_product_materials == 0 {
+            String::new()
+        } else {
+            format!(
+                "; {} material(s) draw Constant1 times their normal map's alpha",
+                self.alpha_product_materials
+            )
+        };
         format!(
             "{} triangle(s) over {} submesh(es), {texture}, {} authored \
-             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{scrolls}{twins}{holograms}{tangents}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}",
+             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{scrolls}{twins}{holograms}{tangents}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}",
             self.triangles, self.submeshes, self.authored_normals, self.unpaired
         )
     }
@@ -809,6 +822,12 @@ fn bind_textures(
     // 523 material slots to 164 distinct files. Each slot still gets its own
     // entry, so a lightmap stays positionally beside its diffuse.
     let mut diffuses: std::collections::HashMap<&str, Decoded> = std::collections::HashMap::new();
+    // One alpha-times-constant picture per (map, constant).
+    type AlphaKey<'p> = (&'p str, [u32; 3]);
+    let mut alpha_pictures: std::collections::HashMap<
+        AlphaKey<'_>,
+        Option<std::sync::Arc<ModelTexture>>,
+    > = std::collections::HashMap::new();
     for (draw, submesh) in model.draws.iter_mut().zip(&decoded.submeshes) {
         let Some(index) = submesh.material else {
             continue;
@@ -833,8 +852,25 @@ fn bind_textures(
                     .iter()
                     .any(|(hash, _)| refused.contains(hash));
             report.lighting_only_materials += usize::from(refused_here && path.is_none());
-            let (texture, form) = match path {
-                Some(path) => diffuses
+            let alpha = (layer.is_none() && twin_here.is_none())
+                .then(|| alpha_product::source(material))
+                .flatten()
+                .and_then(|(map, colour)| {
+                    alpha_pictures
+                        .entry((map, colour.map(f32::to_bits)))
+                        .or_insert_with(|| {
+                            let (texture, _) = decode_texture_form(map, &textures(map)?)?;
+                            let picture = alpha_product::picture(&texture, colour)?;
+                            Some(std::sync::Arc::new(
+                                crate::mesh_render::offer_to_texture_sink(picture),
+                            ))
+                        })
+                        .clone()
+                });
+            report.alpha_product_materials += usize::from(alpha.is_some());
+            let (texture, form) = match (alpha, path) {
+                (Some(picture), _) => (picture, None),
+                (None, Some(path)) => diffuses
                     .entry(path)
                     .or_insert_with(|| {
                         let blob = textures(path)?;
@@ -843,7 +879,7 @@ fn bind_textures(
                         Some((std::sync::Arc::new(texture), form))
                     })
                     .clone()?,
-                None => {
+                (None, None) => {
                     let colour = refused_here
                         .then(|| constant_colour(material, rule.as_ref()?.colour?))
                         .flatten()?;

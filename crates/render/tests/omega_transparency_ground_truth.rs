@@ -196,9 +196,14 @@ fn omega_altimas_road_binds_its_diffuse_map() {
 /// Altima water edge (same reason), and `temp_diffuse` on Square and Subway.
 /// Omega's PS4 programs are not read for sampler use, so it takes 2048's answer
 /// only for the three families whose Omega instance record is 2048's exactly
-/// (`oag_rcs::rcsmodel::psp2::lighting_only`): 223 slots fell to 149. The counts
-/// may shrink further and must never grow.
-const VITA_FAULTS: usize = 41;
+/// (`oag_rcs::rcsmodel::psp2::lighting_only`): 223 slots fell to 149.
+/// 2026-10-31 (`2048-normal-maps-re`): `m_diffuse_normal_constantspecular`
+/// draws `Constant1` times its map's alpha (`mesh::rcs::psp2::alpha_product`,
+/// read off both titles' programs): 2048 41 to 10, Omega 149 to 67. Left on
+/// 2048: Chenghou's `diffuse_normal_specular_emmissivenew` (7), the Altima
+/// water edge and `temp_diffuse` on Square and Subway. The counts may shrink
+/// further and must never grow.
+const VITA_FAULTS: usize = 10;
 
 /// One Omega circuit directory, both directions, against its known gap.
 fn omega_circuit(dir: &str, known: usize) {
@@ -229,58 +234,58 @@ macro_rules! omega_circuit_test {
 omega_circuit_test!(
     omega_vineta_k_binds_no_more_lookups_than_known,
     "01_vineta_k",
-    28
+    14
 );
 omega_circuit_test!(
     omega_metropia_binds_no_more_lookups_than_known,
     "02_metropia",
-    20
+    14
 );
 omega_circuit_test!(
     omega_moa_therma_binds_no_more_lookups_than_known,
     "03_moa_therma",
-    10
+    2
 );
 omega_circuit_test!(
     omega_chenghou_binds_no_more_lookups_than_known,
     "04_chenghou_project",
-    8
+    0
 );
 omega_circuit_test!(
     omega_ubermall_binds_no_more_lookups_than_known,
     "05_ubermall",
-    27
+    20
 );
 omega_circuit_test!(
     omega_sebenco_binds_no_more_lookups_than_known,
     "10_sebenco_climb",
-    7
+    0
 );
-omega_circuit_test!(omega_sol_2_binds_no_more_lookups_than_known, "12_sol_2", 10);
+omega_circuit_test!(omega_sol_2_binds_no_more_lookups_than_known, "12_sol_2", 2);
 omega_circuit_test!(
     omega_anulpha_binds_no_more_lookups_than_known,
     "15_anulpha_pass",
-    8
+    0
 );
 omega_circuit_test!(
     omega_amphiseum_binds_no_more_lookups_than_known,
     "amphiseum",
-    4
+    0
 );
 omega_circuit_test!(
     omega_modesto_binds_no_more_lookups_than_known,
     "modesto_heights",
-    4
+    0
 );
 omega_circuit_test!(
     omega_talons_binds_no_more_lookups_than_known,
     "talons_junction",
-    4
+    0
 );
 omega_circuit_test!(
     omega_tech_de_ra_binds_no_more_lookups_than_known,
     "tech_de_ra",
-    16
+    12
 );
 omega_circuit_test!(omega_altima_binds_no_more_lookups_than_known, "altima", 0);
 omega_circuit_test!(omega_mall_binds_no_more_lookups_than_known, "mall", 0);
