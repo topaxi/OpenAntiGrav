@@ -486,6 +486,8 @@ impl Session {
                 return;
             }
         };
+        // Opened on the menus' worker, read before `shell` is borrowed.
+        let (fedata, shared) = self.menu_campaign_reads();
         let Some(shell) = self.shell.as_ref() else {
             return;
         };
@@ -563,7 +565,14 @@ impl Session {
             .is_some_and(|e| e.ai == oag_game::campaign::custom::Ai::Ours);
         let ai_skill_scale = difficulty.filter(|_| !ours && other_disc.is_none() && track_file.is_none()).and_then(|rung| {
             let location = shell.track(mode, &first_track)?.location.clone();
-            self.resolve_campaign_ai_skill_scale(&cell, rung, &location, &race_options.source)
+            self.resolve_campaign_ai_skill_scale(
+                &cell,
+                rung,
+                &location,
+                &race_options.source,
+                fedata.as_ref(),
+                shared.as_ref(),
+            )
         });
         self.race_options = Some(race_options);
         self.campaign_cell = Some(cell);
@@ -652,11 +661,23 @@ impl Session {
         rung: oag_tables::race_campaign::Difficulty,
         location: &str,
         source: &str,
+        fedata: Option<&std::sync::Arc<std::sync::Mutex<oag_assets::Archive>>>,
+        shared: Option<&crate::picker_stage::SharedArchives>,
     ) -> Option<f32> {
         let entry = format!(r"{location}\stats.xml");
         let spec = oag_assets::source::archive_spec(source, oag_pulse::archives::FEDATA);
-        let blob = match oag_assets::Archive::open(&spec) {
-            Ok(mut archive) => archive.read_name(&entry).ok(),
+        // The menus' worker opened `FEData.wad` ahead (about 30 ms on the Deck, on the frame
+        // that launches a cell otherwise); the open here is for where it did not.
+        let opened = match fedata {
+            Some(archive) => Ok(oag_thread::lock(archive)
+                .ok()
+                .and_then(|mut archive| archive.read_name(&entry).ok())),
+            None => oag_assets::Archive::open(&spec)
+                .map(|mut archive| archive.read_name(&entry).ok())
+                .map_err(|_| ()),
+        };
+        let blob = match opened {
+            Ok(blob) => blob,
             // HD keeps each circuit's `stats.xml` in its own archives
             // (`/data/environments/<dir>/stats.xml`, seventeen of them) and
             // reads it through the same `%s\stats.xml` format string; its
@@ -665,14 +686,19 @@ impl Session {
             // Easy and `3.48` at Hard, which this reproduces
             // (`docs/ghidra/functions/ps3-hdfury-eu/ai-controls.md`). Read
             // there only for a title whose campaign flies the original's own
-            // opponent, so no other title's campaign tuning moves.
-            Err(_) if self.shell.as_ref()?.title.race.original_opponent => {
-                oag_assets::Archives::open(source, self.shell.as_ref()?.title)
+            // opponent, so no other title's campaign tuning moves. Through the
+            // menus' archives where the worker opened them.
+            Err(()) if self.shell.as_ref()?.title.race.original_opponent => match shared {
+                Some(archives) => oag_thread::lock(archives)
                     .ok()?
                     .read_name(&entry)
-                    .ok()
-            }
-            Err(_) => return None,
+                    .ok(),
+                None => oag_assets::Archives::open(source, self.shell.as_ref()?.title)
+                    .ok()?
+                    .read_name(&entry)
+                    .ok(),
+            },
+            Err(()) => return None,
         };
         let stats = blob.and_then(|blob| oag_tables::track_stats::from_blob(&blob).ok());
         oag_tables::track_stats::resolve_skill_scale(cell, rung, stats.as_ref())

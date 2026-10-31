@@ -32,6 +32,9 @@ pub(crate) struct Opened {
     /// A second, owned open for the one screen that keeps its archives (the campaign's art
     /// player): taking it costs nothing, and a refill is opened on another worker.
     spare: Spare,
+    /// `FEData.wad` of a PSP source, opened ahead for the campaign's per-cell skill read (it
+    /// is no part of the mounted archives). `None` where the source has no such file.
+    fedata: Option<Arc<Mutex<oag_assets::Archive>>>,
     gate: oag_game::unlock::Gate,
     /// The previews' pipelines, built on `device`.
     pipelines: KeptBuildCache,
@@ -103,6 +106,10 @@ impl Job {
         // Before the previews' pipelines (0.8 s on a cold driver cache): the campaign screens
         // take this one, and a player reaches them sooner than a preview.
         let spare = open_key(&self.key).map_or(Spare::None, |archives| Spare::Ready(Box::new(archives)));
+        let fedata =
+            oag_assets::Archive::open(&oag_assets::source::archive_spec(&self.key.0, oag_pulse::archives::FEDATA))
+                .ok()
+                .map(|archive| Arc::new(Mutex::new(archive)));
         let opened_in = started.elapsed();
         let mut pipelines = KeptBuildCache::default();
         let target = PreviewTarget {
@@ -139,6 +146,7 @@ impl Job {
             key: self.key,
             archives: Arc::new(Mutex::new(archives)),
             spare,
+            fedata,
             gate,
             pipelines,
             device: self.device,
@@ -265,6 +273,21 @@ impl Session {
             }));
         }
         taken
+    }
+
+    /// What a campaign cell's launch reads off the disc, from the menus' source when it is
+    /// open: `FEData.wad` and the shared archives. Both `None` where there is no such source.
+    pub(crate) fn menu_campaign_reads(
+        &mut self,
+    ) -> (Option<Arc<Mutex<oag_assets::Archive>>>, Option<SharedArchives>) {
+        let Some((archives, _)) = self.menu_source() else {
+            return (None, None);
+        };
+        let fedata = match &self.menu_source {
+            MenuSource::Open(opened) => opened.fedata.clone(),
+            _ => None,
+        };
+        (fedata, Some(archives))
     }
 
     /// Runs `read` on the menus' shared archives (opened on the worker), or on a fresh open
