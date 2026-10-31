@@ -88,6 +88,15 @@ pub const PROGRAM_TWIN_BLEND: f32 = 6.0;
 /// `super::rcs::static_hologram`.
 pub const PROGRAM_STATIC_HOLOGRAM: f32 = 7.0;
 
+/// [`Emissive::program`]'s mode for 2048's `diffuse_normal_specular_emmissive_alpha`: the
+/// third binding's rgb, squared, times the entry's tint (`Constant1`), added after the light
+/// and before the fog. See `super::rcs::psp2`'s `emissive_add`.
+pub const PROGRAM_EMISSIVE_ADD: f32 = 8.0;
+
+/// [`Emissive::program`]'s mode for 2048's plain `diffuse_normal_specular_emmissive`: the third
+/// binding's **alpha**, unsquared, times the entry's tint, added like [`PROGRAM_EMISSIVE_ADD`].
+pub const PROGRAM_EMISSIVE_ALPHA_MASK: f32 = 9.0;
+
 /// [`Emissive::program`]'s mode for a PSP hull's alpha-weighted extra pass: the
 /// picture (the environment map) multiplied by the **second** texture's alpha at
 /// the second coordinate set, which carry the batch's own texture and its

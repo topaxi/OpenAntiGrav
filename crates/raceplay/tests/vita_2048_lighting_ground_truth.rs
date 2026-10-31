@@ -274,3 +274,31 @@ fn a_dlc_circuit_lights_and_fogs_with_the_packs_copy() {
         }
     }
 }
+
+/// Vineta K's blue floor panels are `diffuse_normal_specular_emmissive_alpha`, whose program adds
+/// `Texture2Alpha.rgb^2 * Constant1` after the light. The load must admit them (38 blue
+/// submeshes share a few materials): the report carries the count, and none is left to the
+/// generic reading.
+#[test]
+#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
+fn vineta_ks_blue_panels_add_their_emissive_after_the_light() {
+    let Some(source) = source() else {
+        return;
+    };
+    let loaded = race::load(&race::Options {
+        source: source.display().to_string(),
+        mode: oag_race::Mode::TimeTrial,
+        track: Some("Data\\art\\published\\DLC1\\environments\\Vineta_K\\track.vex".to_string()),
+        ..race::Options::default()
+    })
+    .unwrap_or_else(|e| panic!("loading Vineta K: {e:#}"));
+    let line = loaded
+        .report
+        .iter()
+        .find(|line| line.contains("emissive-alpha material(s)"))
+        .unwrap_or_else(|| panic!("no emissive add admitted; was {:#?}", loaded.report));
+    assert!(
+        line.contains("(0 left to the generic reading)"),
+        "a family material was not admitted: {line}"
+    );
+}

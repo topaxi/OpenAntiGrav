@@ -43,6 +43,7 @@ use oag_rcs::rcsmaterial::name_hash;
 use oag_rcs::rcsmodel::psp2::lighting_only;
 
 mod alpha_product;
+mod emissive_add;
 mod glow;
 mod normal_map;
 pub mod placement;
@@ -202,6 +203,12 @@ pub struct Report {
     /// `Constant1` times their map's alpha, the map's rgb a normal
     /// (`psp2::alpha_product`).
     pub alpha_product_materials: usize,
+    /// Materials of `diffuse_normal_specular_emmissive_alpha` that add `Texture2Alpha^2 * Constant1`
+    /// after the light (`psp2::emissive_add`), Vita only.
+    pub emissive_add_materials: usize,
+    /// Of that family, materials left to the generic reading: no `Texture2Alpha`, no `Constant1`,
+    /// or a picture that would not decode.
+    pub emissive_add_unread: usize,
 }
 
 /// The vertex colour of a `fc01_dummy` submesh before the loader knows the
@@ -338,6 +345,14 @@ impl Report {
             )
         };
         let gnf = self.gnf.describe();
+        let emissive_add = if self.emissive_add_materials + self.emissive_add_unread == 0 {
+            String::new()
+        } else {
+            format!(
+                "; {} emissive-alpha material(s) add Texture2Alpha^2 * Constant1 after the light ({} left to the generic reading)",
+                self.emissive_add_materials, self.emissive_add_unread
+            )
+        };
         let lighting_only = if self.lighting_only_materials == 0 {
             String::new()
         } else {
@@ -358,7 +373,7 @@ impl Report {
         };
         format!(
             "{} triangle(s) over {} submesh(es), {texture}, {} authored \
-             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{scrolls}{twins}{holograms}{tangents}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}",
+             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{scrolls}{twins}{holograms}{tangents}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}{emissive_add}",
             self.triangles, self.submeshes, self.authored_normals, self.unpaired
         )
     }
@@ -557,6 +572,14 @@ fn build_planned(
         &mut *textures,
         &mut report,
     );
+    // `diffuse_normal_specular_emmissive_alpha` adds `Texture2Alpha^2 * Constant1` after the light.
+    let emissive_add = emissive_add::plan(
+        &decoded,
+        ps4,
+        &mut glow.emissive,
+        &mut *textures,
+        &mut report,
+    );
     // A PS4 submesh with a tangent reads a normal map, bound third.
     let normals = normal_map::plan(&decoded, ps4, &twin, &mut *textures, &mut report);
     model.emissive = glow.emissive.clone();
@@ -737,11 +760,11 @@ fn build_planned(
                 lit,
                 lightmap_texcoord,
                 anim: glow.anim(submesh.material),
-                slots: if submesh.lightmap_texcoords.is_empty() && twin_here.is_none() {
+                slots: (if submesh.lightmap_texcoords.is_empty() && twin_here.is_none() {
                     role | glow.role(submesh.material)
                 } else {
                     role
-                },
+                }) | emissive_add.role(submesh.material),
                 xform: place.xform,
                 sun_mask,
                 specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
@@ -817,7 +840,7 @@ fn build_planned(
 
     bind_textures(
         &decoded,
-        (&glow, &twin, &normals),
+        (&glow, &twin, &normals, &emissive_add),
         &mut model,
         &mut report,
         textures,
@@ -837,7 +860,12 @@ fn build_planned(
 /// missing archive entry costs one lookup rather than one per submesh.
 fn bind_textures(
     decoded: &psp2::Model,
-    (glow, twin, normals): (&glow::Plan, &twin_blend::Plan, &normal_map::Plan),
+    (glow, twin, normals, emissive_add): (
+        &glow::Plan,
+        &twin_blend::Plan,
+        &normal_map::Plan,
+        &emissive_add::Plan,
+    ),
     model: &mut Model,
     report: &mut Report,
     textures: Textures<'_>,
@@ -937,11 +965,12 @@ fn bind_textures(
             // Positionally beside the diffuse, as `Model::lightmaps` is
             // defined; left empty for a model no material of which names one,
             // which is every Vita model.
-            if twin.any() || normals.any() {
+            if twin.any() || normals.any() || emissive_add.any() {
                 debug_assert_eq!(model.pad_masks.len(), at);
                 model.pad_masks.push(
                     twin_here
                         .map(|t| t.wipe.clone())
+                        .or_else(|| emissive_add.of(Some(index)).map(|a| a.texture.clone()))
                         .or_else(|| normals.of(Some(index)).cloned()),
                 );
             }

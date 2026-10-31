@@ -459,13 +459,38 @@ rgb = mix(fogColour, Tint * D.a + prelit_sun * D*D, fogVisibility)
 `D.a` is the glow mask here (no second texture), the add again outside the light. Vineta K authors 23 tints
 such as `1.0 0.858 0.604` (`and_tunnellights`), `0.008 0.807 0.930` (`j_lampost`).
 
-**Not done.** Wiring needs a third texture (`Texture2Alpha`) in a per-material slot ours has free
-(`pad_mask`, group 1 binding 3, or the fifth map), an `Emissive` entry carrying `Constant1` with a
-program mode, and a branch in `shade.wesl` that adds `tint * texel^2` after the lit product and before the
-fog; the `fc06` sibling needs only `Tint` and `D.a`. The picture target (B-R >= +8 on the floor) is
-unmeasured, since nothing is drawn yet.
+**Wired (2026-10-31, `2048-emissive-wire`), and the floor was the plain family after all.** Painting
+each family's add a solid red on the `dlc-vineta-k` pair frame showed:
 
-**Against Omega:** *checked, applies, not wired*. Omega ships the same material names
+- the `*_emmissive_alpha` family (`ds_wall_cs`/`ds_wall_n`/`ds_wall_a`) covers the **side walls** and
+  nothing on the floor; its add (mode 8, `Texture2Alpha.rgb^2 * Constant1`) is wired and draws, but the
+  floor box does not move (24/23/22 -> 24/24/23);
+- the plain `diffuse_normal_specular_emmissive` (13 slots, techs `Track_Surface_New3`...) is exactly the
+  panel shape in the original's floor. Its programs (`a17f5c52...` vertex-lit, `419db654...` lightmapped,
+  `Constant1`, `Texture1`, `Texture2`, the same symbolic walk) add **`Texture2.a * Constant1`**, the
+  normal map's alpha as the mask, **unsquared**, outside the lit terms and under the fog mix [70: the
+  lane order of `Constant1`'s packed halves is read, not tested against a capture; the picture decides it].
+  Mode 9.
+
+| `dlc-vineta-k` (960x544, held exposure 1.15) | Original | Main `b7b08dd80` | Wired |
+| --- | --- | --- | --- |
+| floor `(0,330,960,544)` mean R/G/B | 32/38/43 (B-R +11) | 24/23/22 | 26/31/37 (B-R +11) |
+| right wall `(600,140,960,330)` | 69/55/50 | 46/36/33 | 49/39/36 |
+| mean-grey distance | - | 20.64 | 18.66 |
+| Empire Climb, Queens Mall distance | - | 25.94, 23.51 | 25.94, 23.51 (unchanged) |
+
+Wiring: `mesh::rcs::psp2::emissive_add` (`Texture2`/`Texture2Alpha` in `Model::pad_masks`, the tint
+(`Constant1`) in a glow-table entry of `PROGRAM_EMISSIVE_ADD`/`PROGRAM_EMISSIVE_ALPHA_MASK`, the vertex's
+material-index bits), added to `shade.wesl`'s `pad_glow`. Vita only. `fc06_lambert_emmissive_alpha`'s
+`Tint * D.a` is **not wired** (unchanged: read, open). The add is dimmer than the original's (floor G/B
+31/37 against 38/43) with the rest of the frame, the open darkness item.
+
+**Against Omega: checked, differs, not wired.** Omega's `diffuse_normal_specular_emmissive` pixel programs
+(`data01.psarc`, `0x6bcbd09c`: `Constant1`, `novaScaleBiasPower`, `Texture1Sampler`, `lightmapSampler`,
+`shadowMapSampler`) sample **one** diffuse map and name no `Texture2` (normal) or `Texture2Alpha`
+sampler, so the mask source is not 2048's `Texture2.a`; the GCN body is unread [conf 60]. Not the same
+few lines; left to the generic reading.
+
 (`diffuse_normal_specular_emmissive`, `fc06_lambert_emmissive_alpha`: 63 and 33 entries per variant over
 its packages), but its GCN programs were not read here, so whether Omega applies the same
 outside-the-light add is open. `diffuse_normal_specular_emmissivenew` (Chenghou, 7 slots) was not

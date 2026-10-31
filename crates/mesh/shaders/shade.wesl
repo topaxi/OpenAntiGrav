@@ -751,7 +751,16 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // own authored `W_Cycle`/`Colour`, riding in this material's glow-table
     // tint; zero for every other material. Fog follows in `fogged`, which is
     // where the program's own final `MAD` puts it too.
-    let pad_glow = pad_ne_texel.a * glow_tint_offset.rgb * select(0.0, 1.0, pad_ne);
+    // **2048's `*_emmissive_alpha` add** (`Emissive::program` mode 8, `mesh::rcs::psp2::emissive_add`):
+    // `Texture2Alpha.rgb^2 * Constant1` joins the pad glow, added after the light and before the
+    // fog, so it is neither lit nor shadowed (mode 9, the plain `*_emmissive`: `Texture2.a * Constant1`, unsquared). The picture is the third binding, the tint the
+    // entry's. `decode` is the square on 2048.
+    var emissive_add = vec3<f32>(0.0);
+    if glow_program > 7.5 && glow_program < 9.5 {
+        let mask = material_sample(MATERIAL_PAD_MASK, in.texcoord);
+        emissive_add = select(vec3<f32>(mask.a), decode(mask.rgb), glow_program < 8.5) * glow_tint_offset.rgb;
+    }
+    let pad_glow = pad_ne_texel.a * glow_tint_offset.rgb * select(0.0, 1.0, pad_ne) + emissive_add;
 
     // **HD's magstrip wave** (`slots::MAG_WAVE`, `oag_mesh::mesh::rcs::mag_wave`):
     //
