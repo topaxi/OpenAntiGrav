@@ -88,7 +88,7 @@ Values: a path is the exact string in the source; `set` is `Some(..)` (or
 | `weapons.elimination` | `Data\XML\WeaponStats_Elimination.xml` - measured | `none` - measured | `Data\XML\WeaponStats_Elimination.xml` - measured | `Data\XML\weaponstats_Elimination_2048.xml` - chosen | `Data\XML\WeaponStats_Elimination.xml` - chosen |
 | `weapons.ai` | `Data\XML\WeaponAIstats.xml` - measured | `Data\XML\WeaponAIstats.xml` - measured | `Data\XML\WeaponAIstats.xml` - measured | `Data\XML\WeaponAIStats2048.xml` - chosen | `Data\XML\WeaponAIstats.xml` - chosen |
 | `weapons.leach_drain` | `PerTick` - measured | `PerTick` - absent | `PerTrip` - measured | `PerTrip` - inherited | `PerTrip` - inherited |
-| `weapons.leach_beams` | `8` - chosen (measured 1) | `8` - absent | `8` - chosen (measured 1) | `8` - measured | `8` - measured |
+| `weapons.leach_beams` | `8` - chosen | `8` - chosen | `8` - chosen | `8` - measured | `8` - measured |
 | `weapons.quake_hit` | `WaveHeight` - measured | `WaveHeightEyeLevel` - inherited | `WaveHeight` - inherited | `WaveHeight` - inherited | `WaveHeight` - inherited |
 | `weapons.autopilot_absorb_cancels` | `set` - measured | `none` - measured | `set` - measured | `set` - inherited | `set` - inherited |
 | `weapons.autopilot_pad_grants` | `none` - measured | `none` - inherited | `none` - inherited | `none` - inherited | `none` - inherited |

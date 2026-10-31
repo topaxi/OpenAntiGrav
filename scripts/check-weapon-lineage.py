@@ -11,7 +11,8 @@ the five title crates (text only, no compiler) and fails when
   and `set`/`none` for a model field or an effect trigger;
 - the provenance word differs from the source, **where the source carries an
   `Origin`**: `ghost_static`, `cockpit_hit`, the `effects.*` rows and the two `Sourced`
-  bools of `Weapons` (`autopilot_absorb_cancels`, `autopilot_pad_grants`).
+  bools of `Weapons` (`autopilot_absorb_cancels`, `autopilot_pad_grants`) and the
+  `Sourced` count `leach_beams`.
 
 What it does not check, and the page says so: the provenance of a `Weapons`
 axis or of any other `WeaponModels` field (comments only), every cell of the
@@ -185,6 +186,11 @@ def code_cells() -> dict[str, dict[str, tuple[str, str | None]]]:
             cells.setdefault(f"weapons.{field}", {})[title] = (path_of(weapons[field]), None)
         drain = weapons["leach_drain"].rsplit("::", 1)[-1]
         cells.setdefault("weapons.leach_drain", {})[title] = (drain, None)
+        # `Sourced::chosen(8)`: the count is the value, the constructor the provenance.
+        beams = re.search(r"Sourced::(\w+)\(\s*(\d+)", weapons["leach_beams"])
+        if beams is None:
+            raise SystemExit(f"check-weapon-lineage: {title}: `leach_beams` is not a `Sourced` count")
+        cells.setdefault("weapons.leach_beams", {})[title] = (beams.group(2), beams.group(1))
         # `QuakeHit::WaveHeight { origin: Origin::X }`: the variant is the value,
         # and the source carries an `Origin`, so the provenance is checked.
         quake = weapons["quake_hit"]
