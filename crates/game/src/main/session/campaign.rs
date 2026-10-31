@@ -665,7 +665,7 @@ impl Session {
         shared: Option<&crate::picker_stage::SharedArchives>,
     ) -> Option<f32> {
         let entry = format!(r"{location}\stats.xml");
-        let spec = oag_assets::source::archive_spec(source, oag_pulse::archives::FEDATA);
+        let spec = fedata_spec(source);
         // The menus' worker opened `FEData.wad` ahead (about 30 ms on the Deck, on the frame
         // that launches a cell otherwise); the open here is for where it did not.
         let opened = match fedata {
@@ -703,6 +703,11 @@ impl Session {
         let stats = blob.and_then(|blob| oag_tables::track_stats::from_blob(&blob).ok());
         oag_tables::track_stats::resolve_skill_scale(cell, rung, stats.as_ref())
     }
+}
+
+/// The PSP titles' `FEData.wad` on `source`: where a circuit's `stats.xml` is read from.
+pub(super) fn fedata_spec(source: &str) -> String {
+    oag_assets::source::archive_spec(source, oag_pulse::archives::FEDATA)
 }
 
 /// A mod campaign event's extras, checked against what this machine has.

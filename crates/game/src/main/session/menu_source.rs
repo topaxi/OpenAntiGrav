@@ -107,7 +107,7 @@ impl Job {
         // take this one, and a player reaches them sooner than a preview.
         let spare = open_key(&self.key).map_or(Spare::None, |archives| Spare::Ready(Box::new(archives)));
         let fedata =
-            oag_assets::Archive::open(&oag_assets::source::archive_spec(&self.key.0, oag_pulse::archives::FEDATA))
+            oag_assets::Archive::open(&super::campaign::fedata_spec(&self.key.0))
                 .ok()
                 .map(|archive| Arc::new(Mutex::new(archive)));
         let opened_in = started.elapsed();
