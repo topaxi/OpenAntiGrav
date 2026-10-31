@@ -75,13 +75,17 @@ impl Frontend {
         }
     }
 
-    /// Whether `tile` opens a map: the package behind it is mounted.
+    /// Whether `tile` opens a map: the package behind it is mounted. The map
+    /// on screen counts too: [`Self::show_campaign_map`] takes it out of
+    /// `parked`, and asking only there hid the last opened campaign's tile.
     #[must_use]
     pub fn has_campaign_tier(&self, tile: &str) -> bool {
-        self.campaign
-            .parked
-            .iter()
-            .any(|map| map.tile.as_deref() == Some(tile))
+        self.campaign.tile.as_deref() == Some(tile)
+            || self
+                .campaign
+                .parked
+                .iter()
+                .any(|map| map.tile.as_deref() == Some(tile))
     }
 
     /// The tile of the map on screen, `None` for the single-player one.

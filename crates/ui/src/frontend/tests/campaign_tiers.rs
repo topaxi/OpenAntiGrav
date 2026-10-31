@@ -172,6 +172,23 @@ fn leaving_for_the_mode_grid_and_choosing_single_player_brings_its_map_back() {
     );
 }
 
+/// Back on the grid with HD's map still the one on screen, its tile is still
+/// drawn and opens it again (it was hidden: only parked maps were asked).
+#[test]
+fn back_from_a_campaign_map_its_tile_still_shows_and_opens_it_again() {
+    let hd_rect = [500.0, 95.0, 135.0, 135.0];
+    let (mut frontend, mut input) = on_the_grid(vec![hd()]);
+    choose(&mut frontend, &mut input, 1);
+    assert_eq!(frontend.campaign_tile(), Some("FE_RC_HD"));
+    press(&mut frontend, &mut input, Button::Circle);
+    assert!(frontend.machine().is(w2048::GAME_MODE_CHOICE));
+    assert!(frontend.has_campaign_tier("FE_RC_HD"));
+    tile_fill(&frontend, hd_rect);
+    choose(&mut frontend, &mut input, 1);
+    assert!(frontend.machine().is(w2048::NEW_FE_SHELL));
+    assert_eq!(frontend.campaign_tile(), Some("FE_RC_HD"));
+}
+
 /// The tile's own colour on the grid: the fill of its rect.
 fn tile_fill(frontend: &Frontend, rect: [f32; 4]) -> [f32; 4] {
     frontend
