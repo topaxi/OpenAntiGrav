@@ -147,3 +147,71 @@ slice_test!(speed_plan_rapier_forward, "RAPIER", false);
 slice_test!(speed_plan_rapier_reversed, "RAPIER", true);
 slice_test!(speed_plan_phantom_forward, "PHANTOM", false);
 slice_test!(speed_plan_phantom_reversed, "PHANTOM", true);
+
+/// Plans learned ahead on a thread (`Race::begin_speed_plans`, what the load
+/// screen starts) are the plans the first tick would have learned, and adopting
+/// them is not the cost of learning them. Outpost 7 (`07_Track`) has a fork, so
+/// its race learns plans even under the original driver; run to 120 ticks, the
+/// two races have the same state hash.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn plans_learned_ahead_are_the_plans_the_first_tick_learns() {
+    use std::time::{Duration, Instant};
+
+    let Some(image) = image() else {
+        return;
+    };
+    let (_, entry) = layouts(false)
+        .into_iter()
+        .find(|(id, _)| id == "07_Track")
+        .expect("07_Track is on the disc");
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: "RAPIER".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        track: Some(entry),
+        ..race::Options::default()
+    })
+    .expect("loading 07_Track");
+    let mut lazy = race::Race::start(loaded.setup.clone());
+    let mut ahead = race::Race::start(loaded.setup);
+    assert!(
+        lazy.use_original_ai(None, 1) && ahead.use_original_ai(None, 1),
+        "the original driver flies, so only the fork asks for plans"
+    );
+
+    ahead.begin_speed_plans();
+    let waited = Instant::now();
+    while !ahead.speed_plans_ready() {
+        assert!(
+            waited.elapsed() < Duration::from_secs(300),
+            "the plans never landed"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let adopting = Instant::now();
+    ahead.ensure_speed_plans();
+    let adopted = adopting.elapsed();
+    let learning = Instant::now();
+    lazy.ensure_speed_plans();
+    let learned = learning.elapsed();
+    println!("adopting {adopted:?}, learning on the frame thread {learned:?}");
+    assert!(
+        adopted * 20 < learned,
+        "a first tick after the plans landed must not learn them: adopting {adopted:?}, learning {learned:?}"
+    );
+
+    assert_eq!(ahead.speed_plan().cloned(), lazy.speed_plan().cloned());
+    for slot in 0..8 {
+        assert_eq!(
+            ahead.plan_of(slot).cloned(),
+            lazy.plan_of(slot).cloned(),
+            "slot {slot}"
+        );
+    }
+    for tick in 0..120 {
+        ahead.tick(&oag_gameplay::PlayerInputs::none());
+        lazy.tick(&oag_gameplay::PlayerInputs::none());
+        assert_eq!(ahead.sim.state_hash(), lazy.sim.state_hash(), "tick {tick}");
+    }
+}

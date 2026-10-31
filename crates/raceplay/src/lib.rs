@@ -754,6 +754,10 @@ pub struct Race {
     /// half's state: it is the caller's statement that this tick is a replay
     /// whose picture and sound already happened. Read through [`Race::draws`].
     quiet: bool,
+    /// Speed plans being learned on a thread, see [`Race::begin_speed_plans`]. Not
+    /// state: it only moves work off the frame thread, and its result is adopted
+    /// only if the race still matches what it was learned from.
+    speed_plan_job: Option<speed_plan::SpeedPlanJob>,
     /// The weapon events a replay raised and a drawn tick presented, matched by
     /// [`Race::settle_presentation`]. Neither half's state: no hash reads it.
     #[cfg(feature = "view")]
