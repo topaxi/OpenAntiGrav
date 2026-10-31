@@ -545,6 +545,7 @@ impl App {
             launched: false,
             pending_event: None,
             races_launched: 0,
+            menu_source: Default::default(),
             settings: self.settings.clone(),
             // Loaded fresh here rather than carried on `App`: there is one
             // window per run and `App::open` only ever runs once for it, so

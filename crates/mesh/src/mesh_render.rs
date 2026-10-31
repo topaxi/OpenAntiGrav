@@ -56,7 +56,7 @@ mod anisotropy;
 pub use anisotropy::Anisotropy;
 
 mod pipeline_cache;
-pub use pipeline_cache::Scope as BuildCacheScope;
+pub use pipeline_cache::{Kept as KeptBuildCache, Scope as BuildCacheScope};
 
 mod shadow_map;
 pub use shadow_map::{

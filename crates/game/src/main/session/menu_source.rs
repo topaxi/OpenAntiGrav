@@ -1,0 +1,301 @@
+//! The race box's disc reads, done on a worker while the menus are up.
+//!
+//! Track Select and Ship Select each opened the source on the frame that opened them (88 ms on
+//! the Steam Deck, mostly the CHD's hunk map), Track Select a second time for its unlock gate,
+//! and the first preview mesh compiled its pipelines there (63 ms, 0.7 s on a cold driver
+//! cache). Here one worker, started on the first menu frame, opens the source once, reads the
+//! gate and builds the previews the two screens open on, so their pipelines are compiled before
+//! either screen is. The screens then share its archives. See
+//! `docs/rendering/frame-thread-cpu.md` (2026-10-31, "The race box's selection screens").
+//!
+//! Natively only: wgpu's web types are not `Send`, so the web build opens on demand as before.
+
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+
+use log::{debug, info, warn};
+use oag_mesh::mesh_render::KeptBuildCache;
+use oag_ui_screens::picker::Kind;
+
+use crate::picker_stage::{LiveryAxis, PreviewSource, PreviewTarget, Previews, SharedArchives};
+use crate::stage::Stage;
+
+use super::Session;
+
+/// Which source the menus' archives were opened from: a changed source or DLC set is another.
+type Key = (String, Vec<PathBuf>);
+
+/// What the worker hands back.
+pub(crate) struct Opened {
+    key: Key,
+    archives: SharedArchives,
+    gate: oag_game::unlock::Gate,
+    /// The previews' pipelines, built on `device`.
+    pipelines: KeptBuildCache,
+    device: wgpu::Device,
+}
+
+/// The menus' source: not started, being opened, or open.
+#[derive(Default)]
+pub(crate) enum MenuSource {
+    #[default]
+    Idle,
+    #[cfg(not(target_arch = "wasm32"))]
+    Opening(Key, oag_thread::Task<Option<Opened>>),
+    Open(Opened),
+    /// Opening failed for this key, which was said; the screens open on demand as before.
+    Failed(Key),
+}
+
+/// One preview the worker builds to compile its pipelines.
+struct Warm {
+    kind: Kind,
+    source: PreviewSource,
+}
+
+/// Everything the worker needs, owned.
+#[cfg(not(target_arch = "wasm32"))]
+struct Job {
+    key: Key,
+    title: &'static oag_title::Title,
+    previews: Previews,
+    warm: Vec<Warm>,
+    device: wgpu::Device,
+    queue: wgpu::Queue,
+    format: wgpu::TextureFormat,
+    anisotropy: oag_mesh::mesh_render::Anisotropy,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl Job {
+    fn run(self) -> Option<Opened> {
+        let started = web_time::Instant::now();
+        let (source, dlc) = &self.key;
+        let (packs, pure_packs, problems) =
+            oag_source::dlc::packs_from_defaults(dlc, &oag_source::cache::default_dlc_cache_dir());
+        for problem in problems {
+            warn!("{problem}");
+        }
+        let mut archives = match oag_source::title::open_source(source, packs, pure_packs) {
+            Ok(opened) => opened.archives,
+            Err(error) => {
+                warn!("cannot open {source} for the selection screens: {error:#}");
+                return None;
+            }
+        };
+        let gate = oag_game::unlock::Gate::read(self.title, &mut archives);
+        let opened_in = started.elapsed();
+        let mut pipelines = KeptBuildCache::default();
+        let target = PreviewTarget {
+            device: &self.device,
+            queue: &self.queue,
+            format: self.format,
+            anisotropy: self.anisotropy,
+        };
+        for warm in &self.warm {
+            if oag_game::gpu_workers::stopping() {
+                return None;
+            }
+            if let Err(error) = crate::picker_stage::build_preview(
+                &mut archives,
+                &self.previews,
+                warm.kind,
+                &warm.source,
+                None,
+                LiveryAxis::Variant,
+                &target,
+                &mut pipelines,
+            ) {
+                // The screen reports its own previews; this one only compiles ahead.
+                debug!("menu source: no {:?} preview to build ahead: {error:#}", warm.kind);
+            }
+        }
+        info!(
+            "menu source: opened in {:.0} ms, {} preview pipeline(s) built in {:.0} ms more",
+            opened_in.as_secs_f64() * 1e3,
+            pipelines.pipelines(),
+            (started.elapsed() - opened_in).as_secs_f64() * 1e3
+        );
+        Some(Opened {
+            key: self.key,
+            archives: Arc::new(Mutex::new(archives)),
+            gate,
+            pipelines,
+            device: self.device,
+        })
+    }
+}
+
+impl Session {
+    /// The source the menus would open now, `None` with no source chosen.
+    fn menu_source_key(&self) -> Option<Key> {
+        let options = self.race_options.as_ref()?;
+        Some((options.source.clone(), options.dlc.clone()))
+    }
+
+    /// Starts the worker on a menu frame, once per source. A no-op on every later frame.
+    pub(crate) fn start_menu_source(&mut self) {
+        if !matches!(self.stage, Stage::Menu(_)) {
+            return;
+        }
+        let Some(key) = self.menu_source_key() else {
+            return;
+        };
+        let current = match &self.menu_source {
+            MenuSource::Idle => None,
+            #[cfg(not(target_arch = "wasm32"))]
+            MenuSource::Opening(opening, _) => Some(opening),
+            MenuSource::Open(opened) => Some(&opened.key),
+            MenuSource::Failed(failed) => Some(failed),
+        };
+        if current == Some(&key) {
+            return;
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let Some(shell) = self.shell.as_ref() else {
+                return;
+            };
+            let Some(previews) = self.picker_previews() else {
+                return;
+            };
+            let job = Job {
+                key: key.clone(),
+                title: shell.title,
+                previews,
+                warm: self.warm_previews(),
+                device: self.gpu.device.clone(),
+                queue: self.gpu.queue.clone(),
+                format: self.gpu.output.config.format,
+                anisotropy: self.anisotropy,
+            };
+            let guard = oag_game::gpu_workers::Guard::enter("menu-source");
+            let task = oag_thread::Task::spawn("menu-source", move || {
+                let _guard = guard;
+                job.run()
+            });
+            self.menu_source = MenuSource::Opening(key, task);
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            self.menu_source = MenuSource::Failed(key);
+        }
+    }
+
+    /// The menus' opened source for the current options, waiting for the worker if it is still
+    /// running. `None` where there is none (the web, a failed open, a changed source): the
+    /// caller opens its own as it always did.
+    pub(crate) fn menu_source(&mut self) -> Option<(SharedArchives, oag_game::unlock::Gate)> {
+        let key = self.menu_source_key()?;
+        #[cfg(not(target_arch = "wasm32"))]
+        if let MenuSource::Opening(opening, _) = &self.menu_source
+            && opening == &key
+        {
+            let MenuSource::Opening(opening, mut task) = std::mem::take(&mut self.menu_source)
+            else {
+                unreachable!("matched just above");
+            };
+            let waited = web_time::Instant::now();
+            let finished = task.is_finished();
+            self.menu_source = match task.join() {
+                Some(Ok(Some(mut opened))) => {
+                    if !finished {
+                        info!(
+                            "menu source: waited {:.0} ms for the worker",
+                            waited.elapsed().as_secs_f64() * 1e3
+                        );
+                    }
+                    self.adopt_preview_pipelines(&mut opened);
+                    MenuSource::Open(opened)
+                }
+                Some(Err(_)) => {
+                    warn!("the menu source worker panicked; the screens open the disc themselves");
+                    MenuSource::Failed(opening)
+                }
+                _ => MenuSource::Failed(opening),
+            };
+        }
+        match &self.menu_source {
+            MenuSource::Open(opened) if opened.key == key => {
+                Some((Arc::clone(&opened.archives), opened.gate.clone()))
+            }
+            _ => None,
+        }
+    }
+
+    /// The worker's pipelines become the previews' own, where they were built for this device
+    /// and the frame thread has not built its own meanwhile.
+    fn adopt_preview_pipelines(&self, opened: &mut Opened) {
+        let mut kept = self.gpu.preview_pipelines.borrow_mut();
+        if opened.device == self.gpu.device && kept.pipelines() == 0 {
+            *kept = std::mem::take(&mut opened.pipelines);
+        }
+    }
+
+    /// The selection screens' preview rules, off the shell. `None` with no shell.
+    pub(crate) fn picker_previews(&self) -> Option<Previews> {
+        let shell = self.shell.as_ref()?;
+        let front_end = shell.title.front_end;
+        Some(Previews {
+            meshes: front_end.is_some_and(|front_end| front_end.preview_meshes),
+            ship_hull: front_end.and_then(|front_end| front_end.ship_preview_hull),
+            front_end,
+            globals: shell.globals.clone(),
+            strings: shell.strings.clone(),
+        })
+    }
+
+    /// The circuit and the team the two screens would open on now: the previews whose
+    /// pipelines are worth compiling ahead. Another entry of the same screen draws through the
+    /// same pipelines.
+    fn warm_previews(&self) -> Vec<Warm> {
+        let Some(shell) = self.shell.as_ref() else {
+            return Vec::new();
+        };
+        let title = shell.title;
+        let mode = self.race_mode();
+        let draws = |kind| {
+            oag_game::preview::draws_mesh(title, kind)
+                || (kind == Kind::Ship
+                    && title
+                        .front_end
+                        .is_some_and(|front_end| front_end.ship_preview_hull.is_some()))
+        };
+        let mut warm = Vec::new();
+        let tracks = shell.tracks_for(mode);
+        let track = tracks
+            .iter()
+            .find(|(track, _)| track.id == self.settings.race.track)
+            .or_else(|| tracks.first());
+        if let Some((track, _)) = track
+            && draws(Kind::Track)
+        {
+            warm.push(Warm {
+                kind: Kind::Track,
+                source: PreviewSource::Track {
+                    location: track.location.clone(),
+                    reversed: track.reversed,
+                    zone: mode == oag_race::Mode::Zone,
+                },
+            });
+        }
+        let team = shell
+            .teams
+            .iter()
+            .find(|choice| choice.value == self.settings.race.team)
+            .or_else(|| shell.teams.first());
+        if let Some(choice) = team
+            && draws(Kind::Ship)
+        {
+            let details = shell
+                .team_details
+                .iter()
+                .find(|team| team.id == choice.value);
+            warm.push(Warm {
+                kind: Kind::Ship,
+                source: super::picker::ship_source(title, details, &choice.value, mode, Vec::new()),
+            });
+        }
+        warm
+    }
+}

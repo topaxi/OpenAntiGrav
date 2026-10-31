@@ -52,6 +52,8 @@ mod load;
 mod load_probe;
 #[path = "session/menu_sound.rs"]
 mod menu_sound;
+#[path = "session/menu_source.rs"]
+mod menu_source;
 #[path = "session/music.rs"]
 mod music;
 #[path = "session/mods_page.rs"]
@@ -515,6 +517,9 @@ pub(crate) struct Session {
     pub(crate) quit: bool,
     /// What the menus need, when this run has menus at all.
     pub(crate) shell: Option<Shell>,
+    /// The source the race box's selection screens read, opened on a worker on the first menu
+    /// frame - see `session::menu_source`.
+    pub(crate) menu_source: menu_source::MenuSource,
     pub(crate) prompt: oag_game::prompts::PromptState,
     /// Every screen filter this run can offer: the built-ins and the player's
     /// own `shaders/` directory, polled once a second by the frame loop so a

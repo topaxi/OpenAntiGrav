@@ -52,10 +52,16 @@ impl Session {
     /// `false` when this title has no such screen, which is the caller's cue
     /// to launch straight away.
     pub(crate) fn open_track_picker(&mut self) -> bool {
-        let Some(shell) = self.shell.as_ref() else {
+        let Some(layout) = self
+            .shell
+            .as_ref()
+            .and_then(|shell| shell.track_select.clone())
+        else {
             return false;
         };
-        let Some(layout) = shell.track_select.clone() else {
+        // Before `shell` is borrowed for the rest: it may wait for the menus' source.
+        let gate = self.unlock_gate();
+        let Some(shell) = self.shell.as_ref() else {
             return false;
         };
         let mode = self.race_mode();
@@ -63,7 +69,6 @@ impl Session {
         let hd = layout.hd_track.is_some();
         let zone = mode == oag_race::Mode::Zone;
         let offered: Vec<_> = shell.tracks_for(mode).to_vec();
-        let gate = self.unlock_gate();
         let campaign_title = records::campaign_title(title, shell.platform);
         let offered: Vec<_> = offered
             .into_iter()
@@ -134,7 +139,10 @@ impl Session {
 
     /// The circuit gate, read off the source's own archives. Open (nothing
     /// locked) when no source is at hand to read grids from.
-    fn unlock_gate(&self) -> oag_game::unlock::Gate {
+    fn unlock_gate(&mut self) -> oag_game::unlock::Gate {
+        if let Some((_, gate)) = self.menu_source() {
+            return gate;
+        }
         let title = self.shell.as_ref().map(|shell| shell.title);
         let opened = self.race_options.as_ref().and_then(|options| {
             let (packs, pure_packs, _) = oag_source::dlc::packs_from_defaults(
@@ -305,17 +313,7 @@ impl Session {
                                 .then(|| records.loyalty_total(title, &choice.value)),
                         },
                     },
-                    PreviewSource::Ship {
-                        location: details.map_or_else(
-                            || format!(r"Data\Ships\{}", choice.value),
-                            |team| team.location.clone(),
-                        ),
-                        skins,
-                        join: title.race.team_variants_for(&choice.value).map(|v| v.join),
-                        hull_file: oag_game::preview::zone_hull_file(title, mode),
-                        zone_entry,
-                        race_hull: oag_game::preview::race_hull_entry(title, &choice.value, mode),
-                    },
+                    ship_source(title, details, &choice.value, mode, skins),
                 )
             })
             .unzip();
@@ -450,24 +448,29 @@ impl Session {
         let partner =
             seat.is_some_and(|(index, _)| index == 1) && self.pair_layouts().is_some();
         let layout = self.seat_layout(layout, seat);
-        let Some(options) = self.race_options.as_ref() else {
-            return false;
-        };
-        let (packs, pure_packs, problems) = oag_source::dlc::packs_from_defaults(
-            &options.dlc,
-            &oag_source::cache::default_dlc_cache_dir(),
-        );
-        for problem in problems {
-            warn!("{problem}");
-        }
-        let archives = match oag_source::title::open_source(&options.source, packs, pure_packs) {
-            Ok(opened) => opened.archives,
-            Err(error) => {
-                warn!(
-                    "cannot open {} for the selection screen's previews: {error:#}",
-                    options.source
+        let archives = match self.menu_source() {
+            Some((archives, _)) => archives,
+            None => {
+                let Some(options) = self.race_options.as_ref() else {
+                    return false;
+                };
+                let (packs, pure_packs, problems) = oag_source::dlc::packs_from_defaults(
+                    &options.dlc,
+                    &oag_source::cache::default_dlc_cache_dir(),
                 );
-                return false;
+                for problem in problems {
+                    warn!("{problem}");
+                }
+                match oag_source::title::open_source(&options.source, packs, pure_packs) {
+                    Ok(opened) => Arc::new(Mutex::new(opened.archives)),
+                    Err(error) => {
+                        warn!(
+                            "cannot open {} for the selection screen's previews: {error:#}",
+                            options.source
+                        );
+                        return false;
+                    }
+                }
             }
         };
         let laps = {
@@ -479,34 +482,11 @@ impl Session {
             .as_ref()
             .map(|shell| shell.sprites.clone())
             .unwrap_or_default();
-        let Stage::Menu(stage) = &mut self.stage else {
+        let Some(previews) = self.picker_previews() else {
             return false;
         };
-        let previews = crate::picker_stage::Previews {
-            meshes: self
-                .shell
-                .as_ref()
-                .and_then(|shell| shell.title.front_end)
-                .is_some_and(|front_end| front_end.preview_meshes),
-            ship_hull: self
-                .shell
-                .as_ref()
-                .and_then(|shell| shell.title.front_end)
-                .and_then(|front_end| front_end.ship_preview_hull),
-            front_end: self
-                .shell
-                .as_ref()
-                .and_then(|shell| shell.title.front_end),
-            globals: self
-                .shell
-                .as_ref()
-                .map_or_else(Vec::new, |shell| shell.globals.clone()),
-            strings: self
-                .shell
-                .as_ref()
-                .map_or_else(oag_ui::language::StringTable::default, |shell| {
-                    shell.strings.clone()
-                }),
+        let Stage::Menu(stage) = &mut self.stage else {
+            return false;
         };
         let mut picker = PickerStage::new(
             model,
@@ -721,5 +701,27 @@ impl Session {
                 }
             }
         }
+    }
+}
+
+/// Where a team's Ship Select preview comes from: its front-end hull, `skins` its paints. The
+/// screen and the menus' prefetch (`session::menu_source`) name it by this one rule.
+pub(super) fn ship_source(
+    title: &'static oag_title::Title,
+    details: Option<&catalogue::Team>,
+    team: &str,
+    mode: oag_race::Mode,
+    skins: Vec<(String, String)>,
+) -> PreviewSource {
+    PreviewSource::Ship {
+        location: details.map_or_else(
+            || format!(r"Data\Ships\{team}"),
+            |details| details.location.clone(),
+        ),
+        skins,
+        join: title.race.team_variants_for(team).map(|v| v.join),
+        hull_file: oag_game::preview::zone_hull_file(title, mode),
+        zone_entry: oag_game::preview::zone_race_hull_entry(title, team, mode),
+        race_hull: oag_game::preview::race_hull_entry(title, team, mode),
     }
 }
