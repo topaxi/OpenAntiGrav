@@ -457,10 +457,12 @@ pub struct SubMesh {
     /// title's mesh path samples a tangent-space normal map, so this is
     /// carried for a future consumer rather than drawn with today.
     pub tangents: Vec<[f32; 4]>,
-    /// `VertexColour1`, one RGBA per vertex, from the record's own declaration.
+    /// `VertexColour1` (PS4) or `NOVAColor` (Vita), one RGBA per vertex, from the record's own
+    /// declaration. On the Vita it is the baked per-vertex light of a vertex-lit surface: the
+    /// vertex program lays `scale * rgb + bias` on it and passes `a` on as the sun's mask.
     ///
-    /// Empty on a Vita submesh and on a PS4 one whose declaration names none (only the PS4
-    /// flyer shell's reflection is measured to carry one).
+    /// Empty on a submesh whose declaration names neither (on the PS4 only the flyer shell's
+    /// reflection is measured to carry one).
     pub colours: Vec<[u8; 4]>,
     /// Bytes per vertex, derived from the buffer's own length rather than read
     /// from a field - see [`Model::parse`].
@@ -850,7 +852,7 @@ fn one(
     let mut lightmap_texcoords = Vec::new();
     if let Some(off) = own
         .and_then(|decl| decl.lightmap_texcoord())
-        .filter(|attr| attr.components == 2 && attr.gxm_type == vertex_decl::PS4_HALF2)
+        .filter(|attr| attr.components == 2 && attr.gxm_type == half_type)
         .map(|attr| usize::from(attr.offset))
         && stride >= off + 4
     {
@@ -909,7 +911,7 @@ fn one(
     }
     let mut colours = Vec::new();
     if let Some(off) = own
-        .and_then(|decl| decl.vertex_colour1())
+        .and_then(|decl| decl.vertex_colour1().or_else(|| decl.nova_colour()))
         .map(|attr| usize::from(attr.offset))
         && stride >= off + 4
     {

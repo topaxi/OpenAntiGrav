@@ -79,11 +79,12 @@ fn altimas_own_sun_and_ambient_are_drawn_not_the_stand_in_rig() {
         light_line.contains("ambient [0.15, 0.25, 0.38]"),
         "expected Altima's own Constant ambient colour (0.15, 0.25, 0.38); was {light_line}"
     );
-    // 2048 authors the Nova triple too (`1 0 1 0`), but its shader is unread:
-    // only Wipeout: Omega Collection's PS4 container takes the Nova path.
+    // 2048's lightmapped and vertex-lit programs take the Nova triple too (`novaScaleBiasPower`,
+    // read off the USSE programs): the rig is flagged, with the power held at 1 because those
+    // programs never read it.
     assert_eq!(
-        loaded.light.nova, 0.0,
-        "2048 must not take Omega's prelit combination"
+        loaded.light.nova, 1.0,
+        "2048 takes the Nova combine (scale * lightmap + bias, no constant ambient)"
     );
     altima_draws_its_own_wo_composite(&loaded);
 }

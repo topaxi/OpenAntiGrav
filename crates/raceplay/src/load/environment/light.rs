@@ -112,7 +112,20 @@ pub(in crate::load) fn envsettings_light(
     // `Lighting.Nova prelit scale bias power` triple, or the executable's own
     // static default `(1.4, 0.2, 1.5)` for a file that omits it - 9 of the
     // title's 97 files do, none of them a circuit's.
-    let nova = ps4.then(|| env.vec3(NOVA_PRELIT).unwrap_or(NOVA_PRELIT_DEFAULT));
+    // **2048's combination is the same law without the power**, read out of its own USSE
+    // fragment programs (Vita3K's translation of the `fc06_lambert_simple` family, 2026-10-31,
+    // docs/formats/2048-material-params.md "Vertex-lit and lightmapped combines"): `scale *
+    // lightmap + bias + sun * max(N.L, 0) * lightmap.a` multiplies the squared texel, with no
+    // constant ambient; the `power` lane of `novaScaleBiasPower` is never read, so it is held at 1.
+    // A file with no key takes the identity (2048 has no executable default read).
+    let nova = if ps4 {
+        Some(env.vec3(NOVA_PRELIT).unwrap_or(NOVA_PRELIT_DEFAULT))
+    } else if psp2 {
+        let [scale, bias, _] = env.vec3(NOVA_PRELIT).unwrap_or([1.0, 0.0, 1.0]);
+        Some([scale, bias, 1.0])
+    } else {
+        None
+    };
     let light = match nova {
         Some([scale, bias, power]) => light.with_nova_prelit(scale, bias, power),
         None => light,
@@ -125,7 +138,8 @@ pub(in crate::load) fn envsettings_light(
         "Omega's own: pow(lightmap, power) * scale + bias on the raw atlas, no constant \
          ambient on a lightmapped draw"
     } else if psp2 {
-        "2048 authors no equivalent prelit or specular keys, so both stay at the identity"
+        "2048's own: scale * lightmap + bias on the raw atlas (its programs never read the \
+         power), no constant ambient on a lightmapped or vertex-lit draw, no specular key"
     } else {
         "the combination is the microcode's own; the render target's saturation stands in \
          for HD's tonemap"

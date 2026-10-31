@@ -115,6 +115,8 @@ pub struct Report {
     /// would not decode. Such a draw binds the black placeholder, which is the
     /// same picture as no lightmap at all.
     pub lightmap_misses: usize,
+    /// Submeshes lit by their `NOVAColor` vertex stream (a Vita circuit's vertex-lit surfaces).
+    pub nova_vertex_submeshes: usize,
     /// Textured draws routed to the blended list by their material's state word
     /// (alpha-over, chosen) - see [`transparency`].
     pub blended_draws: usize,
@@ -294,6 +296,14 @@ impl Report {
             format!(
                 "; {} lightmap atlas(es) bound, {} unresolved",
                 self.lightmaps, self.lightmap_misses
+            )
+        };
+        let lightmaps = if self.nova_vertex_submeshes == 0 {
+            lightmaps
+        } else {
+            format!(
+                "{lightmaps}; {} submesh(es) lit by their NOVAColor vertex stream",
+                self.nova_vertex_submeshes
             )
         };
         let nodes = if self.node_bound == 0 {
@@ -617,6 +627,23 @@ fn build_planned(
             ),
             None => ([1.0; 4], 1.0, role),
         };
+        // **A vertex-lit surface**: a submesh whose declaration names `NOVAColor` and no
+        // lightmap. Its vertex program lays `scale * rgb + bias` on the baked colour and passes
+        // `a` on as the sun's mask, and its fragment program adds the two to the sun and
+        // multiplies the albedo - **no constant ambient** (docs/formats/2048-material-params.md,
+        // "Vertex-lit and lightmapped combines"). The marker rides `sun_mask`, which
+        // `shade.wesl` reads as `2 + mask`.
+        let nova_vertex = !ps4
+            && lit > 0.5
+            && twin_here.is_none()
+            && !submesh.colours.is_empty()
+            && submesh.lightmap_texcoords.is_empty();
+        let role = if nova_vertex {
+            role | crate::mesh::slots::NO_AMBIENT
+        } else {
+            role
+        };
+        report.nova_vertex_submeshes += usize::from(nova_vertex && !place.hidden);
         let to_world = Mat4::from_cols_array(&place.to_world);
         let at_zero = Mat4::from_cols_array(&place.world_at_zero);
         // Normals through the bake's inverse transpose: 166 skeleton nodes
@@ -689,6 +716,18 @@ fn build_planned(
             let pair = twin_here.and_then(|_| submesh.bars_blend_texcoords.get(i));
             let lightmap_texcoord = pair.map_or(lightmap_texcoord, |p| [p[2], p[3]]);
             let texcoord2 = pair.map_or([0.0, 0.0], |p| [p[0], p[1]]);
+            let (colour, sun_mask) = match submesh.colours.get(i) {
+                Some(&[r, g, b, a]) if nova_vertex => (
+                    [
+                        f32::from(r) / 255.0,
+                        f32::from(g) / 255.0,
+                        f32::from(b) / 255.0,
+                        1.0,
+                    ],
+                    2.0 + f32::from(a) / 255.0,
+                ),
+                _ => (colour, 1.0),
+            };
             model.vertices.push(GpuVertex {
                 quake: 0.0,
                 position,
@@ -704,7 +743,7 @@ fn build_planned(
                     role
                 },
                 xform: place.xform,
-                sun_mask: 1.0,
+                sun_mask,
                 specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
                 glow: 0.0,
                 texcoord2,

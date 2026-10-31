@@ -205,9 +205,9 @@ pub struct Material {
     /// byte extent, in ascending address order - see the module doc for why
     /// this is a scan rather than a decoded sampler array.
     pub textures: Vec<String>,
-    /// The `.gnf` bound to the material's **`lightmap` sampler**, by the
-    /// sampler's own name hash - a PS4 material only; `None` on every Vita
-    /// one, whose sampler table is not read (see [`read`]).
+    /// The `.gnf` (PS4) or `.gxt` (Vita) bound to the material's **`lightmap` sampler**, by the
+    /// sampler's own name hash. On the Vita it is the entry of the sampler table
+    /// ([`Self::samplers`]) named by `LIGHTMAP_SAMPLER`.
     ///
     /// Also one of [`Self::textures`], last in its ranking. A submesh's
     /// declaration carries `lightmapUV` if and only if its material has one of
@@ -615,13 +615,18 @@ pub fn read(cpu: &[u8]) -> Vec<Material> {
                 .copied()
                 .unwrap_or_else(|| header_at.saturating_add(TAIL_SCAN_LIMIT));
             let textures = textures_in(cpu, header_at + HEADER_LEN, next);
+            let samplers = samplers_at(cpu, header_at);
+            let lightmap = samplers
+                .iter()
+                .find(|(hash, _)| *hash == crate::rcsmaterial::LIGHTMAP_SAMPLER)
+                .map(|(_, path)| path.clone());
             Material {
                 name,
                 technique,
                 textures,
-                lightmap: None,
+                lightmap,
                 params: params_at(cpu, header_at),
-                samplers: samplers_at(cpu, header_at),
+                samplers,
                 state: cpu
                     .get(header_at + VITA_STATE..header_at + VITA_STATE + 2)
                     .map(|b| u16::from_le_bytes([b[0], b[1]])),

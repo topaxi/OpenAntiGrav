@@ -172,7 +172,14 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // measured against its own references.
     let marked = in.sun_mask < 0.0;
     let colour_factor = marked && receives_shadow != 2.0;
-    let sun_mask = select(in.sun_mask, -1.0 - in.sun_mask, marked);
+    // `sun_mask` at 2 or above marks a 2048 vertex-lit surface (`NOVAColor`): `colour` is its
+    // baked light and `sun_mask - 2` the sun's mask (oag_mesh::mesh::rcs::psp2).
+    let nova_vertex = in.sun_mask >= 2.0;
+    let sun_mask = select(
+        select(in.sun_mask, -1.0 - in.sun_mask, marked),
+        in.sun_mask - 2.0,
+        nova_vertex,
+    );
     var authored = vec3<f32>(0.0);
     // The sun's share of `authored`, kept apart so the track's shadowed redraw
     // can take exactly that out - see `sun_removed` below.
@@ -237,7 +244,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         // to the frame either way - both forms move the same 9 pixels of 1,175,040
         // by one level, and that movement is the `tint` line below rather than this
         // one. Kept because not multiplying is the clearer statement.)
-        let vertex_light = select(vec3<f32>(0.0), in.colour.rgb, colour_is_light > 0.5);
+        let vertex_light = select(vec3<f32>(0.0), in.colour.rgb, colour_is_light > 0.5 || nova_vertex);
 
         // `slots::NO_AMBIENT`/`slots::NO_SUN`, bits 6/7 - read here, ahead of
         // `emissive`'s own paragraph below, because the ambient fix that follows
@@ -283,8 +290,13 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         // lightmap's `pow(_, 2.2)` step. `EMISSIVE` chunks (`no_ambient &&
         // no_sun`) are excluded from the curve below - this is additive to that
         // branch, not a rewrite of it.
-        let vertex_light_curved = scene.light.prelit_scale
-            * pow(vertex_light, scene.light.prelit_power);
+        // A 2048 vertex-lit surface's curve is its vertex program's `scale * rgb + bias`
+        // (no power), the Nova triple the lightmapped programs read as well.
+        let vertex_light_curved = select(
+            scene.light.prelit_scale * pow(vertex_light, scene.light.prelit_power),
+            scene.light.prelit_scale * vertex_light + vec3<f32>(scene.light.prelit_bias),
+            nova_vertex,
+        );
         let vertex_light_term = select(vertex_light, vertex_light_curved, no_ambient && !emissive);
         let ambient_term = select(scene.light.ambient, vec3<f32>(0.0), no_ambient || nova);
 
@@ -1081,7 +1093,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // cube, whose vertex colour genuinely is a tint because `mesh/sky_cube.rs`
     // builds it rather than the HD loader. `colour_is_light` is a property of
     // the model and answers both.
-    let tint = mix(in.colour.rgb, vec3<f32>(1.0), colour_is_light);
+    let tint = mix(in.colour.rgb, vec3<f32>(1.0), select(colour_is_light, 1.0, nova_vertex));
     // The gamma-domain sum, for the same reason this whole path is gamma: a
     // prelit surface's light is baked into its vertex colours in the space the
     // asset authors, so a linear summand would be the one term shaded twice.

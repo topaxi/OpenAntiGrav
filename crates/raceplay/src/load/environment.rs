@@ -627,7 +627,7 @@ pub(super) enum GeometryKind {
     /// pixel shaders are not 2048's**: Omega's lightmapped surfaces are lit by
     /// the `Lighting.Nova prelit scale bias power` triple - see
     /// [`mesh_render::Light::with_nova_prelit`] - which the Vita files author
-    /// (as `1 0 1 0`) and whose Vita shader is unread.
+    /// too (2048's shader reads the scale and the bias, never the power).
     Ps4,
 }
 
