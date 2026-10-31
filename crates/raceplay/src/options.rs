@@ -882,8 +882,9 @@ pub struct Loaded {
     /// loader had a thread to spare: the web build's load worker runs
     /// [`crate::Race::start`] (the AI's speed plans, 0.65 s for an HD circuit
     /// in the browser) so the page's thread does not (docs/tools/web.md,
-    /// "Threads"). Natively the load worker starts one when asked to learn
-    /// the speed plans ahead ([`crate::LoadWorker::spawn`]'s `plan_ahead`).
+    /// "Threads"). Natively the load worker starts one on a forked circuit when
+    /// asked to learn the speed plans ahead ([`crate::LoadWorker::spawn`]'s
+    /// `plan_ahead`).
     /// `None` from [`crate::load`]; the scene build starts one itself then.
     pub started: Option<Box<crate::Race>>,
     /// Which title the source turned out to be.

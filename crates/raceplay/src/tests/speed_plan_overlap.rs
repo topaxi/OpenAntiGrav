@@ -78,19 +78,9 @@ fn overlapped_plans_are_the_serial_plans_on_2048_altima() {
     );
 }
 
-/// The menus' setters between the load thread's start and the hand-over move
-/// no plan input: the job is kept. A second person seated moves one: the
-/// hand-over's call starts again rather than the first tick.
-#[test]
-#[ignore = "needs data/images/pulse-psp-usa.chd"]
-fn a_job_started_on_the_load_thread_survives_the_launch() {
-    let Some(mut race) = pulse_outpost_7() else {
-        return;
-    };
-    assert!(!race.sim.routes.is_empty(), "07_Track has a fork");
-    race.begin_speed_plans_ahead();
-    assert_eq!(race.speed_plan_job_fits(), Some(true));
-    // `build_race_stage`'s and the hand-over's setters, as a campaign cell runs them.
+/// The menus' setters as a campaign cell runs them, between the load
+/// thread's start and the hand-over.
+fn launch_setters(race: &mut Race) {
     race.set_autopilot(false);
     race.set_control_scheme(crate::ControlScheme::default());
     race.set_ai_tuning(oag_ai::Difficulty::tune_at_scale(
@@ -106,14 +96,56 @@ fn a_job_started_on_the_load_thread_survives_the_launch() {
         race.use_original_ai(None, 1),
         "Pulse has the original tables"
     );
+}
+
+/// The menus' setters move no plan input, so a job started on the load thread
+/// is kept and its plans are the ones the first tick of the set-up race would
+/// learn. A second person seated moves one: the hand-over's call starts again
+/// rather than the first tick.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn a_job_started_on_the_load_thread_survives_the_launch() {
+    let Some(mut ahead) = pulse_outpost_7() else {
+        return;
+    };
+    let mut lazy = pulse_outpost_7().expect("loaded once already");
+    assert!(!ahead.sim.routes.is_empty(), "07_Track has a fork");
+    ahead.begin_speed_plans_ahead();
+    assert_eq!(ahead.speed_plan_job_fits(), Some(true));
+    launch_setters(&mut ahead);
+    launch_setters(&mut lazy);
     assert_eq!(
-        race.speed_plan_job_fits(),
+        ahead.speed_plan_job_fits(),
         Some(true),
         "no plan input moved"
     );
-    race.begin_speed_plans();
-    assert_eq!(race.speed_plan_job_fits(), Some(true));
+    ahead.begin_speed_plans();
+    assert_eq!(ahead.speed_plan_job_fits(), Some(true), "kept");
 
+    ahead.ensure_speed_plans();
+    lazy.ensure_speed_plans();
+    assert_eq!(ahead.speed_plan().cloned(), lazy.speed_plan().cloned());
+    for slot in 0..8 {
+        assert_eq!(
+            ahead.plan_of(slot).cloned(),
+            lazy.plan_of(slot).cloned(),
+            "slot {slot}"
+        );
+    }
+    for tick in 0..120 {
+        ahead.tick(&oag_gameplay::PlayerInputs::none());
+        lazy.tick(&oag_gameplay::PlayerInputs::none());
+        assert_eq!(ahead.sim.state_hash(), lazy.sim.state_hash(), "tick {tick}");
+    }
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn a_second_person_seated_restarts_the_job_at_the_hand_over() {
+    let Some(mut race) = pulse_outpost_7() else {
+        return;
+    };
+    race.begin_speed_plans_ahead();
     race.sim.world.controllers[1] = Controller::Local;
     assert_eq!(
         race.speed_plan_job_fits(),

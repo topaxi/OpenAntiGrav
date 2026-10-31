@@ -225,6 +225,8 @@ impl LearnedPlans {
         self.route_plans.iter().flatten().count()
     }
 
+    // Only a job reads it, and the web starts none (`Race::begin_speed_plans`).
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     pub(super) fn of(sim: RaceSim) -> Self {
         Self {
             speed_plan: sim.speed_plan,

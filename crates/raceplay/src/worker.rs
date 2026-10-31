@@ -153,7 +153,14 @@ impl LoadWorker {
                 // rather than after it; see `Self::spawn`.
                 #[cfg(not(target_arch = "wasm32"))]
                 let loaded = loaded.map(|mut loaded| {
-                    if plan_ahead {
+                    // Only where there is a fork: elsewhere this would only
+                    // add a copy of the setup to the load and change nothing.
+                    let forked = loaded
+                        .setup
+                        .course
+                        .as_ref()
+                        .is_some_and(|course| !course.routes().is_empty());
+                    if plan_ahead && forked {
                         let mut race = crate::Race::start(loaded.setup.clone());
                         race.begin_speed_plans_ahead();
                         loaded.started = Some(Box::new(race));
