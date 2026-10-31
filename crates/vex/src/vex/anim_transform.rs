@@ -153,12 +153,15 @@ impl AnimChannel {
         let (w0, w1) = if dot >= SLERP_LERP_DOT {
             (1.0 - f, f)
         } else {
-            let angle = dot.min(1.0).acos();
-            let sin = angle.sin();
+            let angle = libm::acosf(dot.min(1.0));
+            let sin = libm::sinf(angle);
             if sin < SLERP_MIN_SIN {
                 return normalised(q0);
             }
-            (((1.0 - f) * angle).sin() / sin, (f * angle).sin() / sin)
+            (
+                libm::sinf((1.0 - f) * angle) / sin,
+                libm::sinf(f * angle) / sin,
+            )
         };
         normalised(std::array::from_fn(|k| q0[k] * w0 + q1[k] * w1))
     }
