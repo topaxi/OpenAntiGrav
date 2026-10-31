@@ -128,16 +128,25 @@ pub struct Followed {
 /// following the plan at full share, nothing learned, every tick logged. The
 /// same loop as the plan's own verification (`SpeedPlan::verify`), so the
 /// failures it logs are the ones that kept the plan from verifying clean.
+///
+/// `stuck`, when given, also counts that many ticks without progress as a
+/// [`Failure::Stalled`] and puts the craft back on, which the verification
+/// itself never does: a craft held in place by the pre-integration clip keeps
+/// its velocity, so it is never slow enough to stall.
 #[must_use]
 pub fn verify<R: Raycaster + ?Sized>(
     course: &Course<'_, R>,
     craft: &Craft,
     tuning: &Tuning,
     plan: &SpeedPlan,
+    stuck: Option<u32>,
 ) -> Vec<Followed> {
     let yaw = crate::hull_yaw_ceiling(&craft.handling, &craft.start.body);
     let n = plan.len() as i64;
     let mut run = SpeedPlan::start_run(craft);
+    if let Some(stuck) = stuck {
+        run.stuck_limit = stuck;
+    }
     let mut rows = Vec::new();
     let limit = (4 * n as u64).max(4_000) as u32 * 2;
     while run.progress < 2 * n && run.tick < limit {

@@ -429,8 +429,13 @@ impl Race {
     #[must_use]
     ///
     /// `stages_at` also re-steps that verification tick stage by stage
-    /// (`oag_ai::plan::probe::stages`).
-    pub fn probe_route_plan(&mut self, k: usize, stages_at: Option<u32>) -> Option<RouteProbe> {
+    /// (`oag_ai::plan::probe::stages`); `stuck` is `probe::verify`'s.
+    pub fn probe_route_plan(
+        &mut self,
+        k: usize,
+        stages_at: Option<u32>,
+        stuck: Option<u32>,
+    ) -> Option<RouteProbe> {
         self.ensure_speed_plans();
         let sim = &self.sim;
         let route = sim.routes.get(k)?;
@@ -445,7 +450,7 @@ impl Race {
                 let tuning = oag_ai::Tuning::default();
                 let (plan, report) =
                     oag_ai::SpeedPlan::build_within(c, craft, &tuning, ROUTE_PLAN_BUDGET);
-                let rows = oag_ai::plan::probe::verify(c, craft, &tuning, &plan);
+                let rows = oag_ai::plan::probe::verify(c, craft, &tuning, &plan, stuck);
                 let stages =
                     stages_at.map(|at| oag_ai::plan::probe::stages(c, craft, &tuning, &plan, at));
                 (plan, report, rows, stages)
@@ -462,6 +467,31 @@ impl Race {
             ring_len: sim.racing_line.len(),
             line: route.line.clone(),
         })
+    }
+
+    /// The ring's reference plan learned again as [`Race::start`]'s learn
+    /// does (`SpeedPlan::build` on slot 1's grid pose), its report, and its
+    /// verification replayed tick by tick, whether or not it verified. Read
+    /// with `kept` equal to the ring's length: every index is ring.
+    #[must_use]
+    pub fn probe_ring_plan(&self, stuck: Option<u32>) -> RouteProbe {
+        let (plan, report, rows) = self.with_plan_course(1, |c, craft| {
+            let tuning = oag_ai::Tuning::default();
+            let (plan, report) = oag_ai::SpeedPlan::build(c, craft, &tuning);
+            let rows = oag_ai::plan::probe::verify(c, craft, &tuning, &plan, stuck);
+            (plan, report, rows)
+        });
+        RouteProbe {
+            plan,
+            report,
+            rows,
+            stages: None,
+            order: self.sim.ai_order.clone(),
+            kept: self.sim.racing_line.len(),
+            merge: 0,
+            ring_len: self.sim.racing_line.len(),
+            line: self.sim.racing_line.clone(),
+        }
     }
 
     /// The plan's `Course` and `Craft` for slot `slot`, handed to `f`.

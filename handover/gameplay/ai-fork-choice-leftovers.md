@@ -1,8 +1,8 @@
 ---
 status: re-first
 titles: [pulse, 2048]
-updated: 2026-10-05
-summary: "Fork routes our craft cannot drive (Pulse 07 centre ramp, 2048 cathedral, sol); the writer of 2048's +0x150 unread"
+updated: 2026-10-31
+summary: "2048's +0x150 override writer unread, 2048's re-commit, pad seeking on a route; undriven routes moved to their own threads"
 ---
 
 # AI fork choice: what is left after the coin
@@ -14,13 +14,10 @@ route. Evidence: `docs/ghidra/functions/psp-pulse-usa/ai-branch-choice.md`,
 
 ## Open
 
-- **Routes our craft cannot drive, so the coin never sends anyone down them.**
-  Pulse `07_Track` (the centre ramp: a lone Ace stalls at route sample 196,
-  about 15 units/s, no wall touch); 2048 `cathedral` (both routes verify with
-  failures) and `sol` (no route laps; the ring's own plan does not verify
-  either). The original sends half its field down each. A physics or driving
-  question on those roads, not a fork one: `cargo run --release -p oag-game
-  --example fork_trace -- <source> <track> <pre-fork path> <from> <to>`.
+- **Routes our craft cannot drive** are located (2026-10-31, `docs/gameplay/ai.md`, "Where each undriven
+  route fails its verification") and have threads of their own: `outpost-7s-route-runs-into-the-ring-bridge.md`,
+  `cathedrals-routes-fail-only-their-standing-start.md`, `squares-ring-plan-misses-the-corner-it-runs-wide-at.md`.
+  `sol` is not done.
 - **2048's per-circuit override.** `Ai_ChooseBranch` (`0x8119ae90`) can force a
   side after the coin from the circuit record's `+0x150`/`+0x154`/`+0x158`
   and a per-craft table at `+0x2b2c4`. What fills them is not found.
@@ -35,7 +32,5 @@ route. Evidence: `docs/ghidra/functions/psp-pulse-usa/ai-branch-choice.md`,
 
 ## Next Steps
 
-1. Look at 07's centre ramp under `fork_trace`: is it hover, the plan, or the
-   ramp's collision? If it is driveable, its route joins the coin by itself.
-2. Find the writer of 2048's circuit record `+0x150` (start from the
+1. Find the writer of 2048's circuit record `+0x150` (start from the
    `Definition.xml` track plugin parse).
