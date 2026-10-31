@@ -32,9 +32,9 @@ on its driven stretch only". The attempt is commits `317b83bba` and `3a14dcf42` 
 - **When the plans learn (2026-10-31, lane `speed-plan-overlap`).** A forked circuit's plans now start on
   the race-load thread and learn beside the scene build, routes and hull ring copies at once
   (`docs/rendering/frame-thread-cpu.md`, "The speed plans started on the race-load thread"): Outpost 7's
-  confirm-to-first-race-frame 5844 to 4313 ms, as fast as a forkless circuit, on this 24-thread host. Still
-  open: (a) the Deck, whose 4 cores share the plan threads with the loading screen (the host's worst loading
-  frame rose 77 to 101 ms); (b) a circuit without a fork under this project's driver (`--ai ours`, a class
+  confirm-to-first-race-frame 5840 to 4312 ms, as fast as a forkless circuit, on this 24-thread host. Still
+  open: (a) the Deck, whose 4 cores share the plan threads with the loading screen (on the host the worst loading
+  frame moved within noise); (b) a circuit without a fork under this project's driver (`--ai ours`, a class
   with no tables) and split-screen or LAN launches still start the job at the hand-over (`plan_ahead` in
   `Session::launch_race`), as before.
 
