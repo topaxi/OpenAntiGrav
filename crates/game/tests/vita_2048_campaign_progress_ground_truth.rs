@@ -113,6 +113,12 @@ fn a_fresh_save_opens_exactly_the_events_with_no_gate() {
          Challenge side events author no incoming edge and no M_PEVENTREQUIRED; got {open:#?}"
     );
     assert!(open.contains(&"2048 - Event 1"));
+    // `Frontend::set_campaign` opens the map on the first ungated event that
+    // another event requires, in the order `map_events` lists them.
+    let first_open = events.iter().map(|event| event.name.as_str()).find(|name| {
+        open.contains(name) && gates.iter().any(|(_, gate)| gate.as_deref() == Some(*name))
+    });
+    assert_eq!(first_open, Some("2048 - Event 1"));
     assert!(
         !open.contains(&"2048 - Event 2"),
         "Event 2 is reached by Event 1's own M_PNEXTEVENT"

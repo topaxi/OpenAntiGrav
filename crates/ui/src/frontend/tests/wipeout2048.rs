@@ -554,23 +554,28 @@ pub(super) fn reach_the_shell(frontend: &mut Frontend, input: &mut Input) {
 
 pub(super) fn three_events() -> Vec<MapEvent> {
     [
-        ("2048 - Event 2", 3.0, 5.0),
-        ("2048 - Event 1", 1.0, 5.0),
-        ("2049 - Event 1", 11.0, 9.0),
+        ("2048 - Event 2", 3.0, 5.0, Some("2048 - Event 1")),
+        ("2048 - Event 1", 1.0, 5.0, None),
+        ("2049 - Event 1", 11.0, 9.0, Some("2048 - Event 1")),
     ]
     .into_iter()
-    .map(|(name, x, y)| MapEvent {
+    .map(|(name, x, y, requires)| MapEvent {
         name: name.to_string(),
         x,
         y,
         detail: "circuit / mode".to_string(),
-        requires: None,
+        requires: requires.map(str::to_string),
         kind: EventIcon::Race,
         forced_craft: None,
         refused_craft: Vec::new(),
         card: crate::frontend::EventCard::default(),
     })
     .collect()
+}
+
+pub(super) fn pass_event_one(frontend: &mut Frontend) {
+    frontend
+        .refresh_campaign_progress(|name| (name == "2048 - Event 1").then_some(EarnedTier::Pass));
 }
 
 /// Two chained events - `"2048 - Event 2"` gated on `"2048 - Event 1"` -
@@ -700,9 +705,28 @@ fn a_click_on_the_race_box_tile_asks_for_the_race_box() {
 }
 
 #[test]
+fn a_campaign_opens_on_its_first_ungated_event_whatever_it_is_called() {
+    let mut events = three_events();
+    // "Side" is open from the start and listed first but gates nothing.
+    for (event, name) in events.iter_mut().zip(["Side", "Start", "Gate C"]) {
+        event.name = name.to_string();
+        event.requires = (name == "Gate C").then(|| "Start".to_string());
+    }
+    let mut frontend = boot(0);
+    frontend.set_campaign(events);
+    let mut input = Input::new();
+    reach_the_shell(&mut frontend, &mut input);
+    assert_eq!(
+        frontend.selected_event().map(|e| e.name.as_str()),
+        Some("Start")
+    );
+}
+
+#[test]
 fn the_map_opens_on_the_first_seasons_first_event_and_the_pad_walks_it() {
     let mut frontend = boot(0);
     frontend.set_campaign(three_events());
+    pass_event_one(&mut frontend);
     let mut input = Input::new();
     reach_the_shell(&mut frontend, &mut input);
     assert_eq!(
@@ -749,6 +773,7 @@ pub(super) fn launch_button_tap() -> Pointer {
 fn a_click_on_an_unselected_marker_selects_and_a_second_click_launches() {
     let mut frontend = boot(0);
     frontend.set_campaign(three_events());
+    pass_event_one(&mut frontend);
     let mut input = Input::new();
     reach_the_shell(&mut frontend, &mut input);
     // The markers of the first two events are in view: cell (3, 5) is at

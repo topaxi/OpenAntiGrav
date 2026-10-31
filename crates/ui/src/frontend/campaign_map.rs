@@ -528,19 +528,28 @@ impl CampaignMap {
 
 impl Frontend {
     /// Gives the map its events, in the order the file lists them. The
-    /// cursor starts on the first one named `2048 - Event 1` when there is
-    /// one - the first season's first event by name, which is a reading of
-    /// the names and not of the unlock graph - and on the first event
-    /// otherwise.
+    /// cursor starts on the unlock graph's root: the first event with no
+    /// [`MapEvent::requires`] that another event requires (2048's side
+    /// challenges are open from the start too, but gate nothing). Failing
+    /// that, the first ungated event, and failing that the first event. No
+    /// name is read, so a downloadable or mod campaign opens on its own
+    /// start.
     ///
     /// Every event reads [`ProgressState::Open`] or [`ProgressState::Locked`]
     /// (off its own [`MapEvent::requires`] alone, nothing earned yet) until
     /// [`Self::refresh_campaign_progress`] is called - a caller with a save
     /// to read should call it once, straight after this.
     pub fn set_campaign(&mut self, events: Vec<MapEvent>) {
+        let ungated = |event: &MapEvent| event.requires.is_none();
+        let gates_another = |event: &MapEvent| {
+            events
+                .iter()
+                .any(|other| other.requires.as_deref() == Some(event.name.as_str()))
+        };
         self.campaign.selected = events
             .iter()
-            .position(|event| event.name == "2048 - Event 1")
+            .position(|event| ungated(event) && gates_another(event))
+            .or_else(|| events.iter().position(ungated))
             .unwrap_or(0);
         self.campaign.earned = vec![None; events.len()];
         self.campaign.closed = Vec::new();
