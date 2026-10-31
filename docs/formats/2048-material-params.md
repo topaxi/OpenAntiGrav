@@ -373,7 +373,7 @@ variants `fc06_lambert_simple` `45dd7539...` and its vertex program `e0625aba...
 program writes `rgb = NOVAColor.rgb * scale + bias` and `a = NOVAColor.a` as varyings (no power, no
 log/exp), and the fragment program computes `(sunDiffuse * max(0, N . dir) * a + rgb) * D*D`,
 fogged. No constant ambient either. The attribute name is proved: `~crc32("NOVAColor") =
-0x1aaf7631`, the commonest still-unnamed four-byte attribute on the disc (13,485 uses; type `0x44`,
+0x1aaf7631`, a four-byte attribute `rcsmodel_decl_ground_truth.rs` had counted as unnamed (type `0x44`,
 four unsigned normalised bytes, at stride offset 0x14 on Vineta K's 24-byte layout).
 
 **The ambient family** (`constantAmbientColour`, no lightmap, no `NOVAColor`; `2a9a18e3...`):
@@ -396,8 +396,9 @@ four unsigned normalised bytes, at stride offset 0x14 on Vineta K's 24-byte layo
 | Vineta K floor `(0,330,960,544)` | 32/38/43 | 29/28/28 | 24/23/22 |
 | Vineta K right wall `(600,140,960,330)` | 69/55/50 | 56/43/44 | 46/36/33 |
 | Empire Climb road `(150,250,800,544)` | 141/111/88 | 116/99/84 | 111/92/73 |
-| Mall, whole frame mean grey distance | 25.92 | | 23.51 |
-| Vineta K, Empire Climb mean grey distance | 23.29, 32.16 | | 20.64, 25.94 |
+| Mall, mean grey distance (lower is nearer) | - | 25.92 | 23.51 |
+| Vineta K, mean grey distance | - | 23.29 | 20.64 |
+| Empire Climb, mean grey distance | - | 32.16 | 25.94 |
 
 The wall's large baked roof shadow now appears (it was absent: the atlas was unbound). The mean
 grey distance to the original fell on all three pairs, the colour targets (floor B-R >= +8, road
