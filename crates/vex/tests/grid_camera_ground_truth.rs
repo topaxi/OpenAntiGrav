@@ -214,3 +214,30 @@ fn every_hd_flyby_looks_at_its_aim_point_with_the_sky_up() {
     }
     assert!(checked >= 12 * 4, "only {checked} flybys read");
 }
+
+/// de Konstruct's flyby (`05_Track`, shared by White's `track_reversed.vex`) authors its camera
+/// rotation as `q` then `-q` keys around frames 0-40, 73-95, 402-462 and 623-671. A lerp turned
+/// each blend into a spin of up to 173 degrees a tick (the maintainer's "flickers and weird
+/// camera movements"); the original's slerp does not. Only the authored cuts may turn the view
+/// by more than a few degrees between ticks.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn dekonstructs_flyby_turns_smoothly_between_its_cuts() {
+    let Some(image) = image() else { return };
+    let mut archives = oag_pulse::open(&image.display().to_string()).expect("opening archives");
+    let grid = grid(&mut archives, 5).expect("05_Track's start_grid.vex");
+    let ticks = (grid.length() * 60.0) as usize;
+    let mut previous = grid.pose_at(0.0);
+    for tick in 1..=ticks {
+        let pose = grid.pose_at(tick as f32 / 60.0);
+        let turn = (0..3)
+            .map(|k| {
+                let dot: f32 = (0..3).map(|j| pose.rows[k][j] * previous.rows[k][j]).sum();
+                dot.clamp(-1.0, 1.0).acos().to_degrees()
+            })
+            .fold(0.0_f32, f32::max);
+        let cut = grid.cuts_between((tick - 1) as f32 / 60.0, tick as f32 / 60.0);
+        assert!(cut || turn < 3.0, "tick {tick}: turned {turn} degrees with no cut");
+        previous = pose;
+    }
+}

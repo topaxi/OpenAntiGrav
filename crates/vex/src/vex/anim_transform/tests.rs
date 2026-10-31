@@ -324,3 +324,24 @@ fn a_whole_float_quaternion_key_is_w_first() {
     assert!(m[0].abs() < 1e-3 && (m[2] + 1.0).abs() < 1e-3, "{m:?}");
     assert!((m[5] - 1.0).abs() < 1e-3, "y stays the axis: {m:?}");
 }
+
+/// `05_Track`'s flyby stores a 180 degree turn as `q`, then `-q`: the same rotation twice. The
+/// original's slerp takes the short arc, so the blend between them is that rotation too; a raw
+/// lerp passes through the identity half way.
+#[test]
+fn keys_that_differ_by_sign_blend_to_the_same_rotation() {
+    let channel = AnimChannel {
+        times: vec![0, 10],
+        values: vec![[0.0, -30738.0, 11351.0], [0.0, 30738.0, -11351.0]],
+        w: Vec::new(),
+        wide: false,
+    };
+    let at_key = channel.sample_rotation(0.0, false);
+    for t in [1.0, 5.0, 9.0] {
+        let q = channel.sample_rotation(t, false);
+        let dot: f32 = (0..4).map(|k| q[k] * at_key[k]).sum();
+        assert!(dot.abs() > 0.999, "t={t}: {q:?} is not {at_key:?}");
+        let length: f32 = q.iter().map(|c| c * c).sum();
+        assert!((length - 1.0).abs() < 1e-4, "t={t}: not a unit quaternion");
+    }
+}
