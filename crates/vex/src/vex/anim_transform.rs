@@ -123,11 +123,47 @@ impl AnimChannel {
         std::array::from_fn(|k| a[k] + (b[k] - a[k]) * f)
     }
 
-    /// The blended `w` at `t` frames, or `None` on a channel that stores none.
-    fn sample_w(&self, t: f32, step: bool) -> Option<f32> {
+    /// One key as a unit quaternion `(x, y, z, w)`: the `s16` form stores three components in
+    /// 1/32767 and reconstructs `w` as the evaluator does (a hair over 1 would root a negative);
+    /// the widened form stores all four.
+    fn key_quaternion(&self, index: usize) -> [f32; 4] {
+        let [x, y, z] = self.values[index];
+        if self.wide {
+            let w = self.w.get(index).copied().unwrap_or(1.0);
+            return [x, y, z, w];
+        }
+        let [x, y, z] = [x / 32767.0, y / 32767.0, z / 32767.0];
+        [x, y, z, (1.0 - x * x - y * y - z * z).max(0.0).sqrt()]
+    }
+
+    /// The rotation at `t` frames: `AnimTransform`'s rotation evaluator (`0x088ff1c8`) slerps
+    /// between the two keys (`0x08986060`) and renormalises. The slerp takes the **short arc**
+    /// (it negates the second key when the keys' dot is negative) and falls back to a lerp when
+    /// the keys nearly agree (dot at or above `0.998`). A raw lerp of the components is wrong
+    /// where a camera's keys alternate a quaternion's sign: `05_Track`'s flyby stores `q` then
+    /// `-q`, and the lerp between them passes through the identity.
+    fn sample_rotation(&self, t: f32, step: bool) -> [f32; 4] {
         let (a, b, f) = self.at(t, step);
-        let (a, b) = (*self.w.get(a)?, *self.w.get(b)?);
-        Some(a + (b - a) * f)
+        let (q0, mut q1) = (self.key_quaternion(a), self.key_quaternion(b));
+        let mut dot: f32 = (0..4).map(|k| q0[k] * q1[k]).sum();
+        if dot < 0.0 {
+            q1 = q1.map(|c| -c);
+            dot = -dot;
+        }
+        let (w0, w1) = if dot >= SLERP_LERP_DOT {
+            (1.0 - f, f)
+        } else {
+            let angle = libm::acosf(dot.min(1.0));
+            let sin = libm::sinf(angle);
+            if sin < SLERP_MIN_SIN {
+                return normalised(q0);
+            }
+            (
+                libm::sinf((1.0 - f) * angle) / sin,
+                libm::sinf(f * angle) / sin,
+            )
+        };
+        normalised(std::array::from_fn(|k| q0[k] * w0 + q1[k] * w1))
     }
 }
 
@@ -213,20 +249,7 @@ impl AnimTransform {
 
         let mut m = super::IDENTITY;
         if !self.rotation.is_empty() {
-            let q = self.rotation.sample(t, step);
-            // The widened form stores the quaternion outright; the `s16` form
-            // stores three components in 1/32767 and reconstructs `w`.
-            let [x, y, z] = if self.rotation.wide {
-                q
-            } else {
-                [q[0] / 32767.0, q[1] / 32767.0, q[2] / 32767.0]
-            };
-            let w = self.rotation.sample_w(t, step).unwrap_or_else(|| {
-                // The evaluator's own reconstruction (a blended pair can leave the
-                // sum a hair over 1, which would root a negative).
-                (1.0 - x * x - y * y - z * z).max(0.0).sqrt()
-            });
-            m = quaternion_matrix([x, y, z, w]);
+            m = quaternion_matrix(self.rotation.sample_rotation(t, step));
         }
         if !self.translation.is_empty() {
             let v = self.translation.sample(t, step);
@@ -245,6 +268,23 @@ impl AnimTransform {
             }
         }
         m
+    }
+}
+
+/// The slerp's lerp threshold: the original's `vfim` half-float `0x3bfc`.
+const SLERP_LERP_DOT: f32 = 0.998_046_9;
+
+/// The slerp's give-up threshold on `sin(angle)`: the original's `0x3851b717`.
+const SLERP_MIN_SIN: f32 = 4.999_999_6e-5;
+
+/// `q` scaled to unit length (the original's `vdot_q`/`vrsq_s`/`vscl_q`); left as is when it
+/// has no length.
+fn normalised(q: [f32; 4]) -> [f32; 4] {
+    let length = (q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3]).sqrt();
+    if length > 0.0 {
+        q.map(|c| c / length)
+    } else {
+        q
     }
 }
 

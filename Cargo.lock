@@ -3764,6 +3764,7 @@ dependencies = [
 name = "oag-vex"
 version = "0.1.0"
 dependencies = [
+ "libm",
  "oag-assets",
  "oag-bytes",
  "oag-disc",
