@@ -469,18 +469,29 @@ impl Race {
         })
     }
 
-    /// The ring's reference plan learned again as [`Race::start`]'s learn
-    /// does (`SpeedPlan::build` on slot 1's grid pose), its report, and its
-    /// verification replayed tick by tick, whether or not it verified. Read
-    /// with `kept` equal to the ring's length: every index is ring.
+    /// The ring's plan learned again on the hull the race's ring plan is
+    /// learned for (`RaceSim::plan_reference`, the route plans' too; the ring
+    /// plans are learned first to find it), from slot 1's grid pose, its
+    /// report, and its verification replayed tick by tick, whether or not it
+    /// verified. Read with `kept` equal to the ring's length: every index is
+    /// ring.
     #[must_use]
-    pub fn probe_ring_plan(&self, stuck: Option<u32>) -> RouteProbe {
-        let (plan, report, rows) = self.with_plan_course(1, |c, craft| {
-            let tuning = oag_ai::Tuning::default();
-            let (plan, report) = oag_ai::SpeedPlan::build(c, craft, &tuning);
-            let rows = oag_ai::plan::probe::verify(c, craft, &tuning, &plan, stuck);
-            (plan, report, rows)
-        });
+    pub fn probe_ring_plan(&mut self, stuck: Option<u32>) -> RouteProbe {
+        self.ensure_speed_plans();
+        let (plan, report, rows) = Self::with_plan_course_on(
+            &self.sim,
+            &self.sim.racing_line,
+            &self.sim.ai_order,
+            1,
+            None,
+            self.sim.plan_reference,
+            |c, craft| {
+                let tuning = oag_ai::Tuning::default();
+                let (plan, report) = oag_ai::SpeedPlan::build(c, craft, &tuning);
+                let rows = oag_ai::plan::probe::verify(c, craft, &tuning, &plan, stuck);
+                (plan, report, rows)
+            },
+        );
         RouteProbe {
             plan,
             report,

@@ -879,17 +879,19 @@ fn route_original_probe() {
     }
 }
 
-/// The board's circuits plus Omega's re-shipped `cathedral`, for the probes
+/// The board's circuits plus Omega's re-shipped `cathedral` and `square`, for the probes
 /// only (the board's own list, and so its run time, is unchanged).
 fn probe_circuits() -> Vec<Circuit> {
     let mut circuits = pulse_circuits();
     circuits.extend(circuits_omega());
     if let Some(source) = oag_testdata::exact("data/extracted/ps4") {
-        circuits.push(Circuit {
-            label: "omega/cathedral".into(),
-            source: source.display().to_string(),
-            track: r"Data\environments2048\cathedral\track.vex".into(),
-        });
+        for name in ["cathedral", "square"] {
+            circuits.push(Circuit {
+                label: format!("omega/{name}"),
+                source: source.display().to_string(),
+                track: format!(r"Data\environments2048\{name}\track.vex"),
+            });
+        }
     }
     circuits.extend(circuits_2048());
     circuits

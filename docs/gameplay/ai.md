@@ -5948,7 +5948,7 @@ OAG_SWEEP=1 OAG_REQUIRE_GAME_DATA=1 OAG_ROUTE_BOARD_ONLY=pulse/07_Track \
 ```
 
 **The census** (every forked circuit of every title, four classes, seed 1; 168
-route plans, 3.5 minutes): 120 verify clean. Of the 48 that do not, 16 fail only
+route plans, 3.5 minutes): 122 verify clean. Of the 46 that do not, 16 fail only
 on a lap-1 rescue on the ring stretch (all and only `cathedral`'s two routes, 2048
 and Omega, every class), 8 are Pulse `07_Track` both ways, 12 are `sol`, and 10 are
 `square`.
@@ -5962,7 +5962,7 @@ route sample 195, crosses a bridge about 26 units up and comes back down at samp
 route's own line**: the authored racing-line offset of path 1 is 0 there and its AI
 corridor is about -33 to +27 wide, while the structure is about 18 units wide
 (ramp foot offsets -8 to +4 at samples 196-208, wedges -10 to +8 at 252-269 and -14
-to +4 at 716-731, the descending ramp's foot -6 to +6 at 784-792; a cast through
+to +4 at 716-731, the descending ramp's foot -2 to +8 at 784-792; a cast through
 the hull's reach every 2 units across the corridor). Beside it the road is clear.
 
 What the forward VENOM verification does, tick by tick:
@@ -6013,11 +6013,15 @@ crawls at 9-11 u/s for about 6 s, and on lap 4 it is eliminated there.
 
 **Verdict**: not drivable on its authored line with today's physics, at any class.
 The magstrip hold and the clip are both recovered laws, and the route's track
-sample is the one the original's locate would give, so the original's opponents
-would meet the same snap if they ride the ramp foot. Whether they do (whether
-they go beside the structure) is not measured. A line of ours beside the
-structures avoids all four faces; that is the ready-to-wire candidate, chosen,
-not measured.
+sample is the one the original's locate would give. Taken together, that says
+the original's opponents would be snapped under the ramp too whenever they ride
+its foot, and a shipped game would park half its field on Outpost 7. That is
+implausible, so the likelier reading is a gap in our chain of hold, locate and
+line: the original's opponents may never ride the foot (a lateral law of theirs
+we do not have), or its hold or locate differs from ours there. **A hypothesis,
+confidence 35**: nobody has watched an original opponent take this road. A line
+of ours beside the structures avoids all four faces, but it is chosen, not
+measured, and waits on that capture.
 
 The 2026-10-05 note had the craft "parked at route sample 196, about 15 u/s". That
 was before `wall::pre_integration_clip` landed (2026-10-06); 196 is the snap site.
@@ -6028,7 +6032,8 @@ Both routes, every class, both titles: `verify_failures` 0, `verify_contacts` 0,
 a completed flying lap (2,402 to 4,090 ticks), and `verify_respawns` 1, which is
 the whole failure. That one rescue is on lap 1 at line index 0-3, the merge, 4-17
 u/s after the standing start: at the merge the road is above the line point
-(+2.13 at route 0's merge, ring 1436, and +0.32 at index 2 of route 1's, ring 612),
+(+2.13 at route 0's merge, ring 1436; route 1 merges at ring 612 and the road is
+still +0.32 above the line two samples on, at ring 614),
 with a reset volume 12.6 and 7.0 below. The craft is placed at rest inside the
 road, its probes find nothing below, it falls for 32 ticks and the reset volume
 rescues it. No racing craft is ever at rest there, and the stretch it drives on
@@ -6036,10 +6041,14 @@ the route (from the lead-in to the merge) has no failure on either lap. The rout
 plans are drivable; only the verification's start is wrong. **Omega**: checked,
 applies. Its re-shipped copy fails the same way at the same indices.
 
-`route_speed_plan`'s `clean` asks for `verify_respawns == 0` over both laps. A
-flying-lap rescue already counts in `verify_failures` and clears the lap time, so
-dropping lap-1 rescues before the lead-in from that test changes, at seed 1, exactly
-these 16 plans and no other.
+`route_clean` (`crates/raceplay/src/speed_plan.rs`) asks for `verify_respawns == 0`
+over both laps. A flying-lap rescue already counts in `verify_failures` and clears
+the lap time, so dropping lap-1 rescues before the lead-in from that test changes,
+at seed 1, exactly these 16 reference plans and no other. The other hulls' copies
+(`hull_routes_for`, `SpeedPlan::adapt`) start at rest at the same merge and are
+judged by the same `route_clean`, so they would follow. Today they are never
+learned, since the reference is `None`; after the change they cost their adaptation
+steps, which the cost board has to count.
 
 #### 2048 `square`: the ring plan never sees the corner it runs wide at
 
@@ -6058,7 +6067,12 @@ all on the ring:
 - **VENOM**: 5 wall ticks over the two laps at 3392-3405, 148-162 u/s, left
   unresolved after 14 lowerings.
 
-`route=0`'s lead-in shares the first site. `sol` is out of scope.
+`route=0`'s lead-in shares the first site. These are on the reference hull
+(`RaceSim::plan_reference`, `Race::probe_ring_plan`). **Omega**: checked, applies.
+Its re-shipped `square` fails at the same two sites (3389-3406 and 1591-1674), with a
+different split by class: VENOM 15 and FLASH 4 wall ticks at 3389-3406 only;
+RAPIER and PHANTOM add the 1591-1674 site, with rescues and no completed lap. `sol`
+is out of scope.
 
 ## Each title's craft laws (2026-10-09)
 

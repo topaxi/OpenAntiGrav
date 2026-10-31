@@ -1,8 +1,8 @@
 ---
-status: ready-to-wire
+status: measure
 titles: [pulse]
 updated: 2026-10-31
-summary: "07's route line runs through the ring bridge's ramp foot and wedges; a route line of ours beside them is the candidate fix"
+summary: "07's route line runs into the ring bridge; capture what an original opponent does there before any line of ours"
 size: M (40)
 difficulty: medium (40)
 ---
@@ -32,13 +32,16 @@ fail too.
 
 ## Next Steps
 
-1. Build the candidate (ours, chosen): give the route line a lateral offset clear of the structure
-   wherever a non-floor surface stands within the hull's reach of the line point. Map with
-   `OAG_ROUTE_PROBE_FLOOR=2400..3030 OAG_ROUTE_PROBE_ACROSS=1` on `route_verify_probe` (the hull-reach map,
-   offsets -30..+30). The clear lane is not one constant offset (isolated walls at +10, +14 and -8), so it
-   has to follow the map rather than a fixed shift. Gate it on that condition so no other line moves.
-2. Before building, run the same condition as a census over every line on every title (ring and routes).
-   If only 07 and 07-rev hit, the prediction is every other plan bit-identical.
-3. Measure: `route_verify_probe` on `pulse/07_Track,pulse/07_Track-rev` at four classes (target: lap
-   `Some`, 0 failures), then the no-regression board (`route-plans-cost-a-whole-lap-each.md`, Next Steps
-   1-3), plus `route_original_probe` for the far wedge at 715.
+1. Capture first: PPSSPP, Outpost 7 forward, an original opponent that drew path 1. Record its lateral offset
+   and height over route 190-800 (`docs/reverse-engineering/emulator-recipes.md`; player input, not
+   Autopilot). That shows whether the original rides the ramp foot, goes beside the structure, or parks, and
+   so whether our hold or locate differs there (the `ai.md` hypothesis, confidence 35).
+2. Only if it goes beside: build a line of ours (chosen) with a lateral offset clear of the structure wherever
+   a non-floor surface stands within the hull's reach of the line point. Map with
+   `OAG_ROUTE_PROBE_FLOOR=2400..3030 OAG_ROUTE_PROBE_ACROSS=1` on `route_verify_probe` (offsets -30..+30;
+   ramp foot -8..+4 at 196-208, wedges -10..+8 and -14..+4, descending foot -2..+8 at 784-792, isolated walls at
+   +10, +14 and -8). Before building, census the same condition over every line on every title; if only 07 and
+   07-rev hit, the prediction is every other plan bit-identical.
+3. Measure: `route_verify_probe` on `pulse/07_Track,pulse/07_Track-rev` at four classes (target: lap `Some`,
+   0 failures), then the no-regression board (`route-plans-cost-a-whole-lap-each.md`, Next Steps 1-3), plus
+   `route_original_probe` for the far wedge at 715.

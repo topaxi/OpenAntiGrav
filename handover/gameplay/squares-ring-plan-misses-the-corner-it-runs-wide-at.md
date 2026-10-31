@@ -1,6 +1,6 @@
 ---
 status: ready-to-wire
-titles: [2048]
+titles: [2048, omega]
 updated: 2026-10-31
 summary: "2048 square: the plan runs wide off the edge at 577-641 with no failure counted, then grinds walls 950 samples later"
 size: M (40)
@@ -14,7 +14,8 @@ verification". At FLASH and above, the craft runs wide through ring samples 577-
 limit. It goes 9 units past the corridor's right bound, steering near full, leaves the edge and drops about 20
 units onto a lower level. Nothing counts that as a failure (no wall, no rescue, within the off-line distance).
 The craft then grinds walls at 1592-1671, 20 units under its line, and the learner lowers the ceilings there
-(1,092 to 1,660 times) to no effect. The routes fail at the same place: it is on the ring.
+(1,092 to 1,660 times) to no effect. The routes fail at the same place: it is on the ring. Omega's re-shipped
+`square` fails at the same two sites (VENOM and FLASH only at 3389-3406; RAPIER and PHANTOM add 1591-1674).
 
 ## Open
 

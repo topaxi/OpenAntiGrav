@@ -22,13 +22,17 @@ the plan for `verify_respawns == 1`.
 
 ## Next Steps
 
-1. Wire: in `Race::route_speed_plan` (`crates/raceplay/src/speed_plan.rs`), stop failing a route plan for
+1. Wire: in `route_clean` (`crates/raceplay/src/speed_plan.rs`, used by `Race::route_speed_plan` and
+   `hull_routes_for`), stop failing a route plan for
    a rescue on lap 1 on the ring stretch before the lead-in (line index below `kept - 320`). That needs the
    verification to say where it rescued: a list of lap-1 rescue indices on `oag_ai::plan::Report`, filled by
    `SpeedPlan::verify_stuck`, read by nothing else. Flying-lap rescues already count in `verify_failures` and
    clear the lap time, so they stay fatal.
-2. Predicted (census, seed 1, every forked circuit, four classes): exactly the 16 `cathedral` route plans change
-   verdict, and no other route or ring plan changes a bit. Check with `route_verify_probe` across all circuits
+2. Predicted (census, seed 1, every forked circuit, four classes): exactly the 16 `cathedral` reference route
+   plans change verdict, and no other route or ring plan changes a bit. Their other hulls' copies, never
+   learned today because the reference is `None`, are then adapted from the same at-rest merge start and
+   judged by the same rule. Count their verdicts and their adaptation steps (`Race::plan_steps`) for the
+   cost board. Check with `route_verify_probe` across all circuits
    (3.5 min) before and after, then seeds 2-3.
 3. Then the board (`route-plans-cost-a-whole-lap-each.md`, Next Steps 1-3) for what full fields do on the two
    routes with the whole-lap plans (the stretch learner's 390 traversals were with different plans).
