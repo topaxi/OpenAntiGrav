@@ -962,6 +962,12 @@ fn bind_textures(
             }
             let at = model.textures.len();
             model.textures.push(Some(texture));
+            // The material's render-state word, positionally beside its
+            // texture as `Model::material_state` is defined (bit 4 culls).
+            debug_assert_eq!(model.material_state.len(), at);
+            model
+                .material_state
+                .push(material.state.map_or(0, u32::from));
             // Positionally beside the diffuse, as `Model::lightmaps` is
             // defined; left empty for a model no material of which names one,
             // which is every Vita model.
