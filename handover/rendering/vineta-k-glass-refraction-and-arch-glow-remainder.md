@@ -2,7 +2,7 @@
 status: re-first
 titles: [hd, 2048, omega]
 updated: 2026-11-01
-summary: "Vineta K: rock-to-sand mask blend (j_rockblend5) unread; the sea sheet ripple needs the paraboloid probe"
+summary: "Vineta K: HD rock-to-sand mask blend unread, sea ripple needs the paraboloid probe; 2048 has no refraction target yet, Omega pass filter unlocated"
 ---
 
 # Vineta K's glass refraction and arch glow: what is left
@@ -19,7 +19,10 @@ a scratch directory, not kept (`report.md`, `shots/`, `sweep/`).
 
 ## Open
 
-- **2048 and Omega Vineta K: no file field found for HD's behind-the-glass bit (negative result, 2026-11-01, `psp2-behind-glass`).** The maintainer sees extra meshes in the 2048 and Omega tunnels; HD's `0x10` bit lives in the chunk render block (`Mesh::render_flags`), a different record from the material render-state word whose bit 4 is the cull bit. The psp2 container has no located render block. Census over 2048 DLC1 Vineta_K `track.rcsmodel` (1,822 mesh objects) and Omega `01_vineta_k/track.final.rcsmodel` (2,878): mesh object `+0x0a` flags take 0x0101/0x0201 only (266 `0x0201` are all `trackpart_animations*`); every bit of the 64 words around each first submesh record, the mesh object's 16 words and the material state (6 values on 2048, 8 on Omega) were scored against the Maya export tags `refract` and `secondaryfog` in the names (273 meshes on 2048, 227 on Omega, the only oracle for HD's `0x10`/`0x20`): none splits them (best bit 70 errors against a 273 baseline, and that word is pointer or string bytes). Material state bit 4 (the cull lane's bit) is set on all six 2048 values, so it partitions nothing here. HD flagged chunks barely twin: 24 of 210 flagged HD chunks have a 2048 bbox twin, because 2048 re-splits them (HD chunk 1574, 2,488 vertices, is covered by ~170 small `tunnel_understruts*` pieces of 35 and 218 vertices that carry no tag). Nothing was wired and no name list used. **Next read recipe (opus RE):** find in the Vita `RcsModel_Load` object graph (and Omega's counterpart) what the render passes read per mesh to choose the glass-target pass, starting from the draw routing that consumes `tunnel_understruts*` meshes; or capture Vita3K draws into the glass target and tie them to submeshes by vertex buffer offset, as HD's RPCS3 census did.
+- **2048 Vineta K: the main view leaves out the meshes named `wohdmeshrefract` (wired 2026-11-01, `psp2-glass-re`).** It is not a file field. `Environment_Load` substring-matches each track mesh object's name and sets instance flag `0x20`. `TrackPass_FilterSubmesh` (`0x813b9670`) rejects that flag in the main view and draws flags `0x30` only into the half-size `screenSpaceRefractionTex` target. Confidence 82, evidence in `docs/ghidra/functions/vita-2048-eu-v104/refraction-pass.md`. There are 238 such meshes on Vineta K. The `tunnel_understruts*` are **not** among them, so the original 2048 draws them in its main view (HD's chunk 1574 has no 2048 counterpart in this rule). Wired for the Vita only (`psp2::refraction_only`, `psp2_refraction_only_ground_truth`).
+  - **Omega: checked, applies, not wired.** Omega's `FUN_015fb4c0` sets the same flags (record `+0xa0`, 212 meshes on `01_vineta_k`), but the pass filter that reads `+0xa0` is not located. Next: search the draw-list build callees for a `test` of `0x20`/`0x30` on `[reg+0xa0]`, then drop the `is_ps4` guard in `load::geometry::track_model`.
+  - **Neither title draws a refraction target**, so the glass panes now show nothing behind them where the original shows these meshes. Next: build them into a psp2 counterpart of HD's `build_scene_views` target.
+  - A Vita3K capture of the target's draws at the tunnel would take the confidence from 82 to 90+.
 - **The dunes inside the target are rock, the capture's are sand.** `and_rocktosand`'s red-channel blend mask
   (`j_rockblend5`) is read as the rock picture alone (rcsmaterial.md's table, "the red shape behind the glass"). It
   now shows through every pane that looks at the terrain.

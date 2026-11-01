@@ -248,3 +248,12 @@
 0x812028f8	function	QuakeManager_Fire	80	weapon-instance-limits.md
 0x811ed368	function	LeachBeamManager_Construct	85	weapon-instance-limits.md
 0x811ee2c4	function	LeachBeamManager_Fire	85	weapon-instance-limits.md
+# 2026-11-01 psp2-glass-re: the refraction pass (refraction-pass.md)
+0x813b9670	function	TrackPass_FilterSubmesh	82	refraction-pass.md
+0x812edd14	function	DrawList_BuildForTarget	72	refraction-pass.md
+0x812f3fec	function	DrawList_WalkSubmeshes	72	refraction-pass.md
+0x810362b2	function	Render_GetMainTarget	75	refraction-pass.md
+0x810363ae	function	Render_GetRefractionTarget	82	refraction-pass.md
+0x810363a4	function	Render_GetRefractionTexture	80	refraction-pass.md
+0x8151c574	data	g_track_mesh_instances	85	refraction-pass.md
+0x816a3c94	data	g_refraction_draw_list	80	refraction-pass.md

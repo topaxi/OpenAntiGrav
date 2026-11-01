@@ -47,6 +47,7 @@ mod emissive_add;
 mod glow;
 mod normal_map;
 pub mod placement;
+pub mod refraction_only;
 mod static_hologram;
 mod transparency;
 mod twin_blend;
