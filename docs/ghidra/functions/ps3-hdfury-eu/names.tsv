@@ -814,3 +814,7 @@
 0x0012d970	function	Weapon_FireFromSlot	85	weapon-instance-limits.md
 0x00147ca0	function	QuakeManager_Update	75	weapon-instance-limits.md
 0x00155e70	function	Quake_Tick	75	weapon-instance-limits.md
+# 2026-11-01 hd-zone-hull-light: the Zone circuits' DLC3 stage table selector (zone-palette-select.md)
+0x0043e838	function	Str_CompareNoCase	80	zone-palette-select.md
+0x008b8104	data	g_ZoneCircuitTrackIds	88	zone-palette-select.md
+0x008b8114	data	g_ZonePalettePaths	88	zone-palette-select.md

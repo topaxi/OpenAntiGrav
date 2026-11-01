@@ -73,11 +73,14 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     original_opponent: true,
     original_driver: Some(&ORIGINAL_DRIVER),
     zone_class_announcer: Some(ZONE_CLASS_ANNOUNCER),
-    // One title-wide table, layered over whichever circuit races - the shape
-    // `ZoneCircuit::Separate(_, true)` above already implies, since ordinary
-    // circuits are offered in the Zone picker too. `zonemodedlc3` is a second
-    // revision this does not point at; what selects it is unread.
-    zone_palette: Some(oag_title::ZonePalette::TitleWide(ZONE_PALETTE)),
+    // One title-wide table over an ordinary circuit, the DLC3 table on the
+    // four Zone circuits: `Environment_LoadRaceScene`'s own split. See
+    // `ZONE_CIRCUIT_PALETTE`.
+    zone_palette: Some(oag_title::ZonePalette::TitleWide {
+        entry: ZONE_PALETTE,
+        zone_circuits: ZONE_TRACKS,
+        zone_circuit_entry: ZONE_CIRCUIT_PALETTE,
+    }),
     // Recovered 2026-08-31, and the writer of `craftArray[n]->+0x640` with it.
     // See `ZONE_STAGES`.
     zone_stages: Some(ZONE_STAGES),
@@ -528,10 +531,26 @@ pub const ZONE_SHIP: &str = "zone";
 /// through `Supersonic`, parsed by `oag_tables::effectsettings` and checked
 /// against the disc in `effectsettings_ground_truth.rs`.
 ///
-/// **This is the base revision, not `zonemodedlc3.effectsettings`.** That file
-/// is a second, twice-as-large authoring of the same table; what selects
-/// between them is unread, so nothing here selects.
+/// **The base revision, which a Zone race takes on an ordinary circuit only.**
+/// The four Zone circuits take [`ZONE_CIRCUIT_PALETTE`].
 pub const ZONE_PALETTE: &str = "/data/environments/zonemode.effectsettings";
+
+/// The stage table a Zone race takes on one of the four [`ZONE_TRACKS`].
+///
+/// `Environment_LoadRaceScene` (`0x003f3fb0`) compares the race's track id
+/// against `25_Track`..`28_Track` (the table at `0x008b8104`, a case-blind
+/// compare at `0x0043e838`) and on a match loads
+/// `Data/Environments/ZoneModeDLC3.effectSettings`, otherwise
+/// `ZoneMode.effectSettings` (the path table at `0x008b8114`). Confidence 88:
+/// read off the branch, and this table's stage 3 `Sun colour`
+/// `1.143733 1.091405 1.906221` is the live `directionalLight0Colour` read on
+/// RPCS3 in a `zone_1` race at `Sub Flash`, where the base table authors
+/// `1 1 1`. Evidence: `docs/ghidra/functions/ps3-hdfury-eu/zone-palette-select.md`.
+///
+/// Its second half (the `Scene.*`/`Track.*` gradients and middle colours, the
+/// EQ, aurora and Detonator colours) is parsed and reported; it carries 48 keys
+/// a stage where the base file carries 23.
+pub const ZONE_CIRCUIT_PALETTE: &str = "/data/environments/zonemodedlc3.effectsettings";
 
 /// The circuit a Zone race loads when the caller names none.
 ///

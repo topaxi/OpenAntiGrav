@@ -36,7 +36,7 @@ just psarc cat data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA00.PSARC \
 | Title | Path | Size | Scope |
 | --- | --- | --- | --- |
 | HD/Fury | `/data/environments/zonemode.effectsettings` | 21,160 B | Zone, one file, title-wide |
-| HD/Fury | `/data/environments/zonemodedlc3.effectsettings` | 43,417 B | A second, larger revision of the same table |
+| HD/Fury | `/data/environments/zonemodedlc3.effectsettings` | 43,417 B | A second, larger revision of the same table: **what a Zone race on `zone_1`..`zone_4` loads** (below) |
 | HD/Fury | `/data/environments/detonatormode.effectsettings` | 43,240 B | Detonator, reusing Zone's own stage ladder |
 | HD/Fury | `/data/environments/detonatormodedlc3.effectsettings` | 43,230 B | Detonator's DLC3 revision |
 | 2048 | `Data\art\published\environments\<circuit>\ZoneMode2048.effectSettings` | 43,812 B | Zone. Ships in all 10 base circuits, **byte-identical** across every one |
@@ -143,6 +143,21 @@ short of the 85-94 band's ceiling rather than at it: the corpus is five
 distinct files (2048's ten are one file duplicated ten times, not ten
 independent authorings), and nothing here reads either title's executable -
 see [Open](#open) for what that leaves unsettled.
+
+## Which HD table a race loads (2026-11-01, `hd-zone-hull-light`)
+
+**A Zone race on one of HD's four Zone circuits (`25_Track`..`28_Track`, `zone_1`..`zone_4`)
+loads `zonemodedlc3.effectsettings`; on any other circuit, `zonemode.effectsettings`.**
+`Environment_LoadRaceScene` (`0x003f3fb0`) compares the track id against the four names
+and picks one of four paths (Detonator splits the same way). Confidence 88: read off the
+branch, and DLC3's stage 3 `Sun colour` `1.143733 1.091405 1.906221` is the hull's live
+`directionalLight0Colour` in a `zone_1` race at `Sub Flash`, where the base file authors
+`1 1 1`. Evidence: [zone-palette-select.md](../ghidra/functions/ps3-hdfury-eu/zone-palette-select.md).
+`oag_title::ZonePalette::TitleWide` carries the split (`zone_circuits`,
+`zone_circuit_entry`). The DLC3 table authors 48 keys a stage against the base file's 23,
+so the Zone circuits' whole grade moves with it, not the sun alone. Omega ships both HD
+tables (`Data/zoneenvironmenthdfury/`, the DLC3 one byte-identical) and draws no Zone grade
+yet: checked, applies, not wired.
 
 ## What is read and what is not
 

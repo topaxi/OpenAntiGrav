@@ -256,12 +256,26 @@ fn same_circuit_offers_the_race_list_unfiltered() {
 /// entry for the whole title, or one beside every circuit.
 #[test]
 fn a_zone_palette_resolves_per_title_or_per_circuit() {
-    let title_wide = ZonePalette::TitleWide("/data/environments/zonemode.effectsettings");
+    let title_wide = ZonePalette::TitleWide {
+        entry: "/data/environments/zonemode.effectsettings",
+        zone_circuits: &["/data/environments/zone_1/track.vex"],
+        zone_circuit_entry: "/data/environments/zonemodedlc3.effectsettings",
+    };
     assert_eq!(
         title_wide.entry_for("/data/environments/talons_junction/track.vex"),
         Some("/data/environments/zonemode.effectsettings".to_string()),
-        "the circuit does not enter into it"
+        "an ordinary circuit takes the title-wide table"
     );
+    for zone_circuit in [
+        "/data/environments/zone_1/track.vex",
+        r"Data\Environments\Zone_1\Track.vex",
+    ] {
+        assert_eq!(
+            title_wide.entry_for(zone_circuit),
+            Some("/data/environments/zonemodedlc3.effectsettings".to_string()),
+            "a Zone circuit takes the second table, however the name is spelled ({zone_circuit})"
+        );
+    }
 
     let beside = ZonePalette::BesideCircuit("ZoneMode2048.effectSettings");
     assert_eq!(

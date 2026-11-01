@@ -747,7 +747,7 @@ directory was not measured for it. **Open:** what the original does with the HD 
 Hull brightness: a headless Zone frame (Assegai, VENOM, `--camera-view far`) over the hull's bounding box went 75.1 to 73.6
 mean (tick 300) and 87.6 to 87.1 (tick 900): slightly darker, about 1-2 % (not isolated per piece; plausibly the Zone light's `Distance` 1.3 placing the
 light 1.3 behind the flare node where the team's 0.0 sat on it). It does not lighten the hull, so it is not the maintainer's
-"too dark" cause; the light-colour composition is the later `hd-zone-hull-light` lane's. 2048: **not checkable** (PFS-encrypted).
+"too dark" cause; that was the stage table's file (see "Zone hull brightness" above). 2048: **not checkable** (PFS-encrypted).
 
 ## Hull normal maps (2026-10-20, `hd-hull-normals`)
 
@@ -812,11 +812,18 @@ lighting level and the probe colour, not the normal, are what still separate the
 whiter - **retracted: that reference was a `Write Color Buffers`-off capture, see "Hull brightness" below**, the bloom halo ours draws around the paint is not there). **Not claimed a match**; the claim is the data path:
 authored tangent, authored map, the program's own formula.
 
-**Zone hull brightness (the brief's item 5): not a clear data miss, left open.** Ours feeds the stage's authored
-`Sun colour` (`zonemode.effectsettings`, stage 3 `Sub Flash`: `1 1 1`; `zone_1/track.envsettings` authors
-`1.5 1.294 1.0`, which the stage replaces). The live `directionalLight0Colour` `(1.144, 1.091, 1.906)` equals neither
-and no stage authors it (the stage's `EQ colour tint` is `123 154 253`, `Sky horizon colour` `0.055 0.004 0.365`), so
-what composes it, a blend with a bluish term, is unread. Feeding the live number would be a hand-transcribed constant.
+**Zone hull brightness (the brief's item 5): ~~not a clear data miss, left open~~ - answered 2026-11-01
+(`hd-zone-hull-light`): it was a data miss, the wrong file.** Ours fed `zonemode.effectsettings`' stage 3 `Sun
+colour` (`1 1 1`). On a Zone circuit the original loads `zonemodedlc3.effectsettings` instead
+(`Environment_LoadRaceScene` compares the track id against `25_Track`..`28_Track`), and in Zone
+`directionalLight0Colour` is the stage table's `Sun colour` cross-faded between two stages
+(`Environment_UpdateStageBlend` `0x003dc35c`-`0x003dc4a8` into `0x00c815d0`, published by `Scene_PrepareFrame`
+under `g_ZoneEffectsActive`). DLC3's stage 3 authors `1.143733 1.091405 1.906221`, the live value to every printed
+digit. Confidence 88, evidence on
+[zone-palette-select.md](../ghidra/functions/ps3-hdfury-eu/zone-palette-select.md); wired through
+`oag_title::ZonePalette::TitleWide`'s `zone_circuit_entry`, pinned by
+`zone_grade_ground_truth::a_zone_circuit_lights_the_hull_with_the_dlc3_sun`. The whole stage table changes with it
+on the Zone circuits (fog, ambient, Scene/Track recolour, sky), not the sun alone.
 
 **Cross-title.** Omega: **checked, applies, not wired.** `hdships/Zone` and the other hulls ship `*_N.gnf` normal maps
 (66 `_n.gnf` entries under `hdships/` in `data01.psarc`, `Zone_TP_1024_N.gnf` among them) beside the same hull

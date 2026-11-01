@@ -513,14 +513,25 @@ impl ZoneStages {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ZonePalette {
     /// One table for the whole title, at a fixed entry name, layered over
-    /// whichever circuit the race runs on. HD/Fury:
-    /// `/data/environments/zonemode.effectsettings`.
+    /// whichever circuit the race runs on, except on the title's own Zone
+    /// circuits, which take a second table. HD/Fury: `entry` is
+    /// `/data/environments/zonemode.effectsettings`, and the four `zone_N`
+    /// circuits take `zonemodedlc3.effectsettings`.
     ///
-    /// **`zonemodedlc3.effectsettings` is a second, larger revision of the
-    /// same table and is not what this points at**: what selects between the
-    /// base file and the DLC3 one is unread, so the base file is used and the
-    /// selector is left unresolved rather than guessed at.
-    TitleWide(&'static str),
+    /// The split is HD's own: `Environment_LoadRaceScene` (`0x003f4084`-`0x003f51b8`)
+    /// compares the race's track id against `25_Track`..`28_Track` and loads the
+    /// DLC3 table on a match, the base one otherwise
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/zone-palette-select.md`).
+    TitleWide {
+        /// The table an ordinary circuit takes.
+        entry: &'static str,
+        /// The circuits' own `.vex` entry names that take `zone_circuit_entry`
+        /// instead. Matched without regard to case, separator or a leading
+        /// slash, the way an archive folds names.
+        zone_circuits: &'static [&'static str],
+        /// The table the circuits in `zone_circuits` take.
+        zone_circuit_entry: &'static str,
+    },
     /// One copy per circuit, under the circuit's own directory, named by the
     /// file name here. 2048: `ZoneMode2048.effectSettings`, which every one of
     /// the ten base circuits ships a byte-identical copy of.
@@ -533,12 +544,31 @@ impl ZonePalette {
     ///
     /// [`Self::BesideCircuit`] rewrites the sibling path the same way
     /// `.envsettings` is found beside a `track.vex`; [`Self::TitleWide`]
-    /// ignores the circuit entirely, which is the whole of the difference
-    /// between the two shapes.
+    /// asks only whether the circuit is one of the title's Zone circuits.
     #[must_use]
     pub fn entry_for(&self, track: &str) -> Option<String> {
         match self {
-            Self::TitleWide(entry) => Some((*entry).to_string()),
+            Self::TitleWide {
+                entry,
+                zone_circuits,
+                zone_circuit_entry,
+            } => {
+                let fold = |name: &str| {
+                    name.trim_start_matches(['/', '\\'])
+                        .replace('\\', "/")
+                        .to_ascii_lowercase()
+                };
+                let track = fold(track);
+                let on_zone_circuit = zone_circuits.iter().any(|c| fold(c) == track);
+                Some(
+                    if on_zone_circuit {
+                        zone_circuit_entry
+                    } else {
+                        entry
+                    }
+                    .to_string(),
+                )
+            }
             Self::BesideCircuit(file) => {
                 let at = track.rfind(['/', '\\'])?;
                 Some(format!("{}{}", &track[..=at], file))
