@@ -823,7 +823,14 @@ digit. Confidence 88, evidence on
 [zone-palette-select.md](../ghidra/functions/ps3-hdfury-eu/zone-palette-select.md); wired through
 `oag_title::ZonePalette::TitleWide`'s `zone_circuit_entry`, pinned by
 `zone_grade_ground_truth::a_zone_circuit_lights_the_hull_with_the_dlc3_sun`. The whole stage table changes with it
-on the Zone circuits (fog, ambient, Scene/Track recolour, sky), not the sun alone.
+on the Zone circuits (fog, ambient, Scene/Track recolour, sky), not the sun alone. Measured on ours (headless,
+Assegai, VENOM, `--zone-stage 3`, `--camera-view far`, tick 300, 1440x816, held throttle): the hull's lit panels
+went from `(194.5, 196.7, 200.7)` to `(197.9, 199.0, 214.4)` mean RGB on the nose (60x40 box at 690,530) and
+`(161.1, 162.4, 159.5)` to `(164.0, 164.5, 171.0)` on the left wing: brighter by 1-2 % in red and green and 6-7 % in
+blue, a cool white where it was warm. Small, because the hull's ambient and probe terms carry most of its light. The
+road goes from blue-violet to grey with orange lines, as the original's Zone frame shows. **Whether the hull now
+matches the original's brightness is not measured**: that needs a `Write Color Buffers`-on, pose-matched Zone pair,
+which does not exist yet.
 
 **Cross-title.** Omega: **checked, applies, not wired.** `hdships/Zone` and the other hulls ship `*_N.gnf` normal maps
 (66 `_n.gnf` entries under `hdships/` in `data01.psarc`, `Zone_TP_1024_N.gnf` among them) beside the same hull
