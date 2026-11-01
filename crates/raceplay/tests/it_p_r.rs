@@ -27,6 +27,7 @@ mod projectile_tilt_ground_truth;
 mod prompt_pilots;
 mod ps2_hud_sights_ground_truth;
 mod ps2_shield_ground_truth;
+mod psp2_refraction_only_ground_truth;
 mod psp2_sky_fog_ground_truth;
 mod psys_inventory_ground_truth;
 mod pulse_gantry_circuits_ground_truth;

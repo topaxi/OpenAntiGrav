@@ -114,6 +114,21 @@ pub(super) fn track_model(
             }) {
                 Ok((mut model, built)) => {
                     report.push(format!("{track}: {}", built.describe()));
+                    // 2048 draws a mesh named `wohdmeshrefract` only into its refraction
+                    // target, never the main view (`psp2::refraction_only`). Omega's loader
+                    // sets the same flag but its pass filter is unread, so the Vita alone.
+                    if !oag_rcs::rcsmodel::psp2::is_ps4(geometry) {
+                        let out = mesh::rcs::psp2::refraction_only::leave_out_of_main_view(
+                            &mut model, geometry,
+                        );
+                        if out > 0 {
+                            report.push(format!(
+                                "{track}: {out} mesh(es) named `wohdmeshrefract` left out of the \
+                                 main view (the original draws them only into its refraction \
+                                 target, which this build does not draw)"
+                            ));
+                        }
+                    }
                     // 2048 and Omega take the cull bit alone: the rest of the
                     // word has no draw list on either (`Model::honour_cull`).
                     model.material_lod_bias = material_lod_bias;
