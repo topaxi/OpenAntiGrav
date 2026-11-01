@@ -423,3 +423,55 @@ fn the_string_table_names_the_race_modes() {
     println!("{hits} mode-ish entries in {entries}");
     assert!(hits > 0, "the string table names no race mode at all");
 }
+
+/// The `--until "Show Logo"` route `scripts/psp-menu-pair.py` makes the `menu-title`
+/// pair with, read out of the script rather than copied here.
+fn title_pair_route() -> Vec<String> {
+    let script = include_str!("../../../scripts/psp-menu-pair.py");
+    let row = script
+        .split("\"id\": \"title\"")
+        .nth(1)
+        .and_then(|rest| rest.split("\"route\": [").nth(1))
+        .and_then(|rest| rest.split(']').next())
+        .expect("the title row's route in psp-menu-pair.py");
+    row.split(',')
+        .map(|flag| flag.trim().trim_matches('"').to_string())
+        .collect()
+}
+
+/// A fresh profile on Pulse, run with the title pair's route, must stay on `Show
+/// Logo`. CROSS leaves `Show Logo` since 2026-10-31 (an intended divergence), so a
+/// route that keeps pulsing CROSS after the state is reached walks on to `Launch
+/// Game` and draws the held race instead of the title: that is what `menu-title`
+/// did until `--press-until-reached` joined its route.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd and a GPU adapter"]
+fn the_title_pair_route_stays_on_show_logo_on_a_fresh_profile() {
+    let Some(image) = image() else {
+        return;
+    };
+    let scratch = std::env::temp_dir().join(format!("oag-title-route-{}", std::process::id()));
+    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
+        .arg(&image)
+        .args(title_pair_route())
+        .args(["--no-audio", "--size", "480x272"])
+        .arg("--screenshot")
+        .arg(scratch.join("title.png"))
+        .env("XDG_CONFIG_HOME", scratch.join("config"))
+        .env("XDG_DATA_HOME", scratch.join("data"))
+        .env("XDG_STATE_HOME", scratch.join("state"))
+        .output()
+        .expect("running oag-game");
+    std::fs::remove_dir_all(&scratch).ok();
+    assert!(output.status.success(), "oag-game --until \"Show Logo\"");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("state \"Show Logo\""),
+        "the route left the title screen: {}",
+        stdout
+            .lines()
+            .find(|l| l.contains("tick(s)"))
+            .unwrap_or("no 'after N tick(s)' line")
+    );
+}
