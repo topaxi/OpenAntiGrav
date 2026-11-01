@@ -146,7 +146,7 @@ copy is at file `0x60a92f` (Ghidra `0x0160583f`). The patch also carries the
 
 ## Wired
 
-`oag_mesh::mesh::rcs::psp2::refraction_only::leave_out_of_main_view` now runs
+`oag_mesh::mesh::rcs::psp2::refraction_only::split_refraction_target` now runs
 on Omega as on 2048: the `is_ps4` guard in `track_model` is gone.
 `crates/raceplay/tests/psp2_refraction_only_ground_truth.rs` pins the census
 above and checks that the loaded Omega Vineta K draws none of the 212 outside
@@ -167,8 +167,15 @@ Frames are from `oag-game data/extracted/ps4 --race --no-audio --size 960x540
   (`ice_tunnel_wohdmeshrefract2Shape`) goes, and the sky behind shows. No
   other Sebenco frame of ticks 600 to 3600 moves.
 
-This project draws no Omega refraction target, so these meshes are drawn
-nowhere. The original draws them only into the glass's refraction texture.
+The original draws them only into the glass's refraction texture. **This project now draws that
+target** (2026-11-01, `psp2-refraction-target`): the left-out meshes are drawn into a 960x540
+target (half of 1920x1080, **inherited** from the Vita's halving, the Omega target's size is
+untraced), and the three `mt_`/`cl_tunnelrefraction` materials of Vineta K sample it. The
+rest is on [the 2048 page](../vita-2048-eu-v104/refraction-pass.md), "The target is drawn
+here": **ported** for the split, the camera and the glass law (inherited, Omega's GCN is unread).
+**Checked, applies, not wired: `rt_icetunnel`** (Sebenco Climb, one submesh) declares the same
+engine-bound `screenSpaceRefractionTex`, but its GCN pixel program is unread, so Sebenco's rock
+sheet is drawn into the target and nothing samples it: tick 1800's black above the track stays.
 
 ## Evidence still owed
 

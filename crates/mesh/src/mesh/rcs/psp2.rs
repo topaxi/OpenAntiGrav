@@ -47,6 +47,7 @@ mod emissive_add;
 mod glow;
 mod normal_map;
 pub mod placement;
+pub mod refraction;
 pub mod refraction_only;
 mod static_hologram;
 mod transparency;
@@ -210,6 +211,10 @@ pub struct Report {
     /// Of that family, materials left to the generic reading: no `Texture2Alpha`, no `Constant1`,
     /// or a picture that would not decode.
     pub emissive_add_unread: usize,
+    /// Tunnel-glass materials that read the refraction target (`psp2::refraction`).
+    pub refraction_bound: usize,
+    /// Of that family, materials without the grab's weight or a table slot.
+    pub refraction_unread: usize,
 }
 
 /// The vertex colour of a `fc01_dummy` submesh before the loader knows the
@@ -354,6 +359,14 @@ impl Report {
                 self.emissive_add_materials, self.emissive_add_unread
             )
         };
+        let refraction = if self.refraction_bound + self.refraction_unread == 0 {
+            String::new()
+        } else {
+            format!(
+                "; {} tunnel-glass material(s) read the refraction target ({} left to the generic reading)",
+                self.refraction_bound, self.refraction_unread
+            )
+        };
         let lighting_only = if self.lighting_only_materials == 0 {
             String::new()
         } else {
@@ -374,7 +387,7 @@ impl Report {
         };
         format!(
             "{} triangle(s) over {} submesh(es), {texture}, {} authored \
-             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{scrolls}{twins}{holograms}{tangents}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}{emissive_add}",
+             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{scrolls}{twins}{holograms}{tangents}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}{emissive_add}{refraction}",
             self.triangles, self.submeshes, self.authored_normals, self.unpaired
         )
     }
@@ -581,6 +594,8 @@ fn build_planned(
         &mut *textures,
         &mut report,
     );
+    // `mt_tunnelrefraction` and `cl_tunnelrefraction` read the refraction target.
+    let glass = refraction::plan(&decoded.materials, &mut glow.emissive, &mut report);
     // A PS4 submesh with a tangent reads a normal map, bound third.
     let normals = normal_map::plan(&decoded, ps4, &twin, &mut *textures, &mut report);
     model.emissive = glow.emissive.clone();
@@ -765,7 +780,8 @@ fn build_planned(
                     role | glow.role(submesh.material)
                 } else {
                     role
-                }) | emissive_add.role(submesh.material),
+                }) | emissive_add.role(submesh.material)
+                    | glass.role(submesh.material),
                 xform: place.xform,
                 sun_mask,
                 specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,

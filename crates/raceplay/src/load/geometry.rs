@@ -79,7 +79,8 @@ pub(super) fn sibling_model(
 /// behind-the-glass target - see `oag_mesh::mesh::rcs::build_scene_views`.
 ///
 /// `zone` is whether the race is in Zone mode: 2048's and Omega's Zone passes
-/// keep the `wohdmeshrefract` meshes in the main view (`psp2::refraction_only`).
+/// keep the `wohdmeshrefract` meshes in the main view and draw no refraction target
+/// (`psp2::refraction_only`).
 #[allow(clippy::too_many_arguments)]
 pub(super) fn track_model(
     archives: &mut oag_assets::Archives,
@@ -121,20 +122,34 @@ pub(super) fn track_model(
                     report.push(format!("{track}: {}", built.describe()));
                     // 2048 and Omega draw a mesh named `wohdmeshrefract` only into their
                     // refraction target, never the main view, outside Zone mode
-                    // (`psp2::refraction_only`).
-                    let out = if zone {
-                        0
+                    // (`psp2::refraction_only`); the target gets those meshes.
+                    let split = if zone {
+                        mesh::rcs::psp2::refraction_only::Split::default()
                     } else {
-                        mesh::rcs::psp2::refraction_only::leave_out_of_main_view(
+                        mesh::rcs::psp2::refraction_only::split_refraction_target(
                             &mut model, geometry,
                         )
                     };
-                    if out > 0 {
+                    let mut behind = none();
+                    if split.out > 0 {
                         report.push(format!(
-                            "{track}: {out} mesh(es) named `wohdmeshrefract` left out of the \
-                             main view (the original draws them only into its refraction \
-                             target, which this build does not draw)"
+                            "{track}: {} mesh(es) named `wohdmeshrefract` left out of the main \
+                             view and drawn into the refraction target with {} `0x30` mesh(es)",
+                            split.out, split.in_target
                         ));
+                        let mut groups = split.target;
+                        for group in [&mut groups.alternate_fog, &mut groups.primary_fog] {
+                            if let Some(group) = group {
+                                group.material_lod_bias = material_lod_bias;
+                            }
+                        }
+                        behind = crate::BehindGlassModels {
+                            groups,
+                            alternate_fog: None,
+                            size: mesh::rcs::psp2::refraction_only::target_size(
+                                oag_rcs::rcsmodel::psp2::is_ps4(geometry),
+                            ),
+                        };
                     }
                     // 2048 and Omega take the cull bit alone: the rest of the
                     // word has no draw list on either (`Model::honour_cull`).
@@ -142,7 +157,7 @@ pub(super) fn track_model(
                     if render_state {
                         model.honour_cull();
                     }
-                    (Some(model), none())
+                    (Some(model), behind)
                 }
                 Err(error) => {
                     report.push(format!(
@@ -173,6 +188,7 @@ pub(super) fn track_model(
                         crate::BehindGlassModels {
                             groups,
                             alternate_fog,
+                            ..crate::BehindGlassModels::default()
                         },
                     )
                 }

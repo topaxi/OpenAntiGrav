@@ -178,7 +178,7 @@ pub fn build_scene_views(
 /// It matters here and not there because the target's eye is inside shells
 /// authored to be seen from outside: drawn two-sided, the tunnel's outer
 /// concrete covers the target.
-fn single_sided(model: &mut Model) {
+pub(super) fn single_sided(model: &mut Model) {
     for draw in model
         .draws
         .iter_mut()
@@ -191,7 +191,7 @@ fn single_sided(model: &mut Model) {
 
 /// Empties every texture slot no draw of `model` names, keeping the slots in
 /// place because a draw names its material by position.
-fn keep_drawn_textures(model: &mut Model) {
+pub(super) fn keep_drawn_textures(model: &mut Model) {
     let mut drawn = vec![false; model.textures.len()];
     let lists = [
         &model.draws,
