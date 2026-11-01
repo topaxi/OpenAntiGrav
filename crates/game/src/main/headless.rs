@@ -213,6 +213,13 @@ pub(crate) fn run_windowless(
                 phase,
                 live: (cli.loading_live && phase == loading::Phase::Race)
                     .then(|| race_options.clone()),
+                mode: (phase == loading::Phase::Race)
+                    .then(|| loading::executable_mode(race_options.mode))
+                    .flatten(),
+                movies: cli
+                    .cache
+                    .clone()
+                    .unwrap_or_else(oag_source::cache::default_cache_dir),
                 renderer: settings.graphics.renderer.clone(),
                 aspect: settings.display.aspect,
             },

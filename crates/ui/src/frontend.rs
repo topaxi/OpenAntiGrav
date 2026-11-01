@@ -329,6 +329,9 @@ pub enum Video {
     /// `Data\Movies\Backdrop.PMF`, looped by `FE Screen` under
     /// [`states::SHOW_LOGO`].
     Backdrop,
+    /// The Bink clip in the race loading screen's mode icon panel. Not the
+    /// front end's: `oag_game::loading` draws it and its stage feeds it.
+    ModeIcon,
 }
 
 mod draw;

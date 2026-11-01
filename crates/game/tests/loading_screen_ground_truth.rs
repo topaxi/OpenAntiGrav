@@ -298,6 +298,35 @@ fn hd_draws_a_feature_and_a_caption_and_no_wave() {
 /// The regression guard for the title axis itself. Routing the loader through
 /// `oag_title::Loading` was meant to leave the one title that had a loading
 /// screen exactly where it was.
+/// The mode icon's clip for a single race is on the disc in both stylings,
+/// and is a 400 square, 60 frame Bink file the movie cache can make frames of.
+/// Dropping `FeatureStyle::mode_icons` or the read in `Assets::load` leaves
+/// `mode_icons` empty and fails here.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn hd_single_race_mode_icon_clip_is_on_the_disc_in_both_stylings() {
+    let Some(image) = image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let source = image.display().to_string();
+    let (table, entries) = table_and_entries(&image);
+    for style in ["HD", "FURY"] {
+        let assets = Assets::load(&source, &table, entries.as_deref(), Some(style));
+        let clip = oag_game::loading::icon::clip(&assets, Some(3))
+            .unwrap_or_else(|| panic!("{style}: no clip for mode 3: {:?}", assets.notes));
+        let format = oag_game::loading::icon::format(clip).expect("a Bink header");
+        assert_eq!((format.width, format.height), (400, 400), "{style}");
+        let cache = std::env::temp_dir().join("oag-loading-icon-gt");
+        let movie = oag_game::loading::icon::open(clip, &cache)
+            .unwrap_or_else(|e| panic!("{style}: {e:#}"));
+        assert_eq!(movie.frame_count, 60, "{style}");
+        assert!(
+            oag_game::loading::icon::clip(&assets, Some(5)).is_none(),
+            "an unmapped mode draws no icon"
+        );
+    }
+}
+
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn pulse_still_gets_its_tips_and_its_own_strip() {

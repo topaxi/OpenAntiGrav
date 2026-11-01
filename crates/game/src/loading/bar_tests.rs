@@ -179,3 +179,44 @@ fn the_bar_is_thirty_dot_rows_of_square_tiles() {
         "the box is the grid's height"
     );
 }
+
+/// The mode icon is a video draw in the panel right of the bar, once the stage
+/// says a picture is in the planes, and not before, and not while fading.
+#[test]
+fn the_mode_icon_is_a_video_in_its_panel_only_once_it_has_a_picture() {
+    use oag_ui::frontend::Video;
+    let video = |screen: &Screen| {
+        screen
+            .draw_list(Phase::Race, &Progress::default(), &Atlas::build())
+            .into_iter()
+            .find_map(|draw| match draw {
+                Draw::Video { rect, source, .. } => Some((rect, source)),
+                _ => None,
+            })
+    };
+    let mut screen = feature_screen_with(None);
+    assert!(video(&screen).is_none(), "no picture yet: no green quad");
+    screen.set_mode_icon(true);
+    let (rect, source) = video(&screen).expect("the icon is drawn");
+    assert_eq!(source, Video::ModeIcon);
+    assert!((rect[0] - bar::MODE_BOX.0).abs() < f32::EPSILON, "{rect:?}");
+    assert!(rect[0] + rect[2] <= PANEL_RIGHT + 0.01, "{rect:?}");
+    screen.advance(true);
+    assert!(video(&screen).is_none(), "gone once the screen fades");
+}
+
+/// A mode the title maps no clip for gets none.
+#[test]
+fn only_a_mapped_mode_has_a_clip() {
+    let assets = Assets {
+        mode_icons: vec![ModeIcon {
+            mode: 3,
+            entry: "x.bik".to_string(),
+            blob: Vec::new(),
+        }],
+        ..Assets::default()
+    };
+    assert!(super::icon::clip(&assets, Some(3)).is_some());
+    assert!(super::icon::clip(&assets, Some(5)).is_none());
+    assert!(super::icon::clip(&assets, None).is_none());
+}

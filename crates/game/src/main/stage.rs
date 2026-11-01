@@ -141,6 +141,7 @@ impl Stage {
             built_race: None,
             music: None,
             trace,
+            icon: None,
         })))
     }
 
@@ -172,11 +173,15 @@ impl Stage {
         // See `Stage::loading`'s own parameter of the same name.
         language: Option<&str>,
     ) -> Result<Self> {
+        // The mode icon's clip, where the title maps one for this mode: the
+        // renderer's planes are sized from its header, and the clip itself is
+        // opened on a thread of its own (`loading_icon::Icon`).
+        let clip = loading::icon::clip(assets, mode);
         let renderer = Renderer::new(
             &gpu.device,
             &gpu.queue,
             gpu.output.config.format,
-            None,
+            clip.and_then(loading::icon::format),
             font.clone(),
             // The illustration's own sheet where the title ships one; see
             // `Stage::loading`, which chooses the same way and for the same
@@ -202,6 +207,14 @@ impl Stage {
             built_race: None,
             music: Some(music),
             trace,
+            icon: clip
+                .filter(|clip| loading::icon::format(clip).is_some())
+                .map(|clip| {
+                    crate::loading_icon::Icon::spawn(
+                        clip.clone(),
+                        oag_source::cache::default_cache_dir(),
+                    )
+                }),
         })))
     }
 

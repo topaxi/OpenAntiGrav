@@ -63,8 +63,24 @@ pub struct Assets {
     /// The small labels the screen names its regions with, resolved. See
     /// [`Labels`].
     pub labels: Option<Labels>,
+    /// The mode icon clips this title's chosen style names, read whole: a few
+    /// tens of kilobytes each, and the movie cache decodes them off the frame
+    /// thread. See [`ModeIcon`].
+    pub mode_icons: Vec<ModeIcon>,
     /// Lines worth printing once, describing what was found or what was not.
     pub notes: Vec<String>,
+}
+
+/// A mode's icon clip: the Bink file the original plays in the loading
+/// screen's mode icon panel.
+#[derive(Debug, Clone)]
+pub struct ModeIcon {
+    /// The source executable's mode id this clip is for.
+    pub mode: u32,
+    /// The archive entry it was read from.
+    pub entry: String,
+    /// The file, undecoded.
+    pub blob: Vec<u8>,
 }
 
 /// The labels over the screen's regions, resolved out of the string table.
@@ -184,6 +200,7 @@ impl Default for Assets {
             progression: None,
             caption: None,
             labels: None,
+            mode_icons: Vec::new(),
             notes: Vec::new(),
         }
     }
@@ -379,6 +396,17 @@ impl Assets {
         for (_, entry) in loading.chrome {
             read(entry, &mut notes);
         }
+        let mut mode_icons = Vec::new();
+        for (mode, entry) in chosen.map(|style| style.mode_icons).unwrap_or_default() {
+            match archives.read_name(entry) {
+                Ok(blob) => mode_icons.push(ModeIcon {
+                    mode: *mode,
+                    entry: (*entry).to_string(),
+                    blob,
+                }),
+                Err(e) => notes.push(format!("{entry}: {e}; mode {mode} draws no icon")),
+            }
+        }
 
         let art = (!blobs.is_empty()).then(|| {
             let mut sheet_notes = Vec::new();
@@ -494,6 +522,7 @@ impl Assets {
             progression: loading.progression,
             caption,
             labels,
+            mode_icons,
             notes,
         }
     }

@@ -51,12 +51,17 @@ const BULLET: f32 = 4.0;
 const BULLET_GAP: f32 = 5.5;
 
 /// Where the mode icon's panel is: the gap right of the bar, to the rule's end.
-const MODE_BOX: (f32, f32, f32, f32) = (
+pub(super) const MODE_BOX: (f32, f32, f32, f32) = (
     BAR_BOX.0 + BAR_BOX.2 + 5.0,
     BAR_BOX.1,
     PANEL_RIGHT - (BAR_BOX.0 + BAR_BOX.2 + 5.0),
     BAR_BOX.3,
 );
+
+/// One output pixel's height over its width in this layout's units: the 272
+/// units tall frame is 1080 px and the 480 wide one 1920, so a square on the
+/// glass is a little taller than wide in units.
+const ICON_ASPECT: f32 = 1088.0 / 1080.0;
 
 /// How many whole columns a fraction of the load lights.
 #[must_use]
@@ -118,12 +123,40 @@ impl Screen {
         }
     }
 
+    /// Tells the screen the mode icon's clip has a picture in the renderer's
+    /// planes, or has not. See [`super::icon`].
+    pub fn set_mode_icon(&mut self, shown: bool) {
+        self.mode_icon = shown;
+    }
+
+    /// The mode icon's clip, looped, in its panel.
+    ///
+    /// The original's quad is 240 px square at (1488, 694) of a 1080 frame, the
+    /// 400 px clip at 0.6 (an RPCS3 frame, matched on the ring's red). In this
+    /// layout that is [`MODE_BOX`]'s width from its left edge, 2 units above
+    /// its top, and as tall in pixels as it is wide. Dropped once the screen is
+    /// fading: a video quad has no alpha to fade with, and would stay up over
+    /// a darkening screen.
+    ///
+    /// Nothing is drawn until [`Self::set_mode_icon`] says a picture is in
+    /// the planes: an empty plane set draws a green rectangle.
+    pub(super) fn draw_mode_icon(&self, out: &mut Vec<Draw>) {
+        if !self.mode_icon || self.fade > 0 {
+            return;
+        }
+        let side = MODE_BOX.2;
+        out.push(Draw::Video {
+            rect: [MODE_BOX.0, MODE_BOX.1 - 2.0, side, side * ICON_ASPECT],
+            frame: self.frames as usize,
+            position: u64::from(self.frames),
+            source: oag_ui::frontend::Video::ModeIcon,
+        });
+    }
+
     /// The five labels, each behind its square bullet.
     ///
-    /// **The mode icon itself is not drawn.** The original puts an animated
-    /// Bink clip chosen by the mode in that panel (the executable draws a
-    /// video widget's texture there); this build has no clip for it, so the
-    /// panel is its label and brackets and nothing else rather than a stand-in.
+    /// Not the mode icon: that is [`Self::draw_mode_icon`]'s, a clip the stage
+    /// feeds, and a screen with none shows its label and brackets alone.
     pub(super) fn draw_labels(&self, out: &mut Vec<Draw>, ink: [f32; 4], border: Option<[f32; 4]>) {
         let Some(labels) = &self.labels else { return };
         let above_corners = RULE_TOP_Y + 1.5;

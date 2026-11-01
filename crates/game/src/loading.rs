@@ -202,6 +202,9 @@ pub struct Screen {
     frames: u32,
     /// Frames since the work finished, counting to [`FADE_FRAMES`].
     fade: u32,
+    /// Whether the mode icon's clip has a picture to show: set by whoever
+    /// feeds the clip, once its first frame is in the renderer's planes.
+    mode_icon: bool,
     /// The bar's stage-driven fill, on a title whose loader drives it. `None`
     /// keeps the time estimate. See [`fill::Fill`].
     fill: Option<fill::Fill>,
@@ -291,6 +294,7 @@ impl Screen {
             },
             frames: 0,
             fade: 0,
+            mode_icon: false,
             fill: assets.progression.map(fill::Fill::new),
             strings: oag_ui::strings::project_table(language),
         }
@@ -318,6 +322,13 @@ impl Screen {
         } else {
             self.wave.advance();
         }
+    }
+
+    /// Frames since the screen opened: the playhead of the mode icon's clip,
+    /// which runs at the screen's own 60 Hz.
+    #[must_use]
+    pub fn playhead(&self) -> u64 {
+        u64::from(self.frames)
     }
 
     /// Tells the bar which stage the race load has reached, for a title whose
@@ -595,6 +606,7 @@ impl Screen {
             };
             self.draw_bar(&mut out, fraction, bar_trough, bar_fill, rule_ink);
             self.draw_labels(&mut out, ink(HEADING), border);
+            self.draw_mode_icon(&mut out);
         }
 
         if let Some(tip) = self.tip() {
@@ -974,8 +986,9 @@ const CENTRED_ROW_PITCH: f32 = 16.0;
 mod assets;
 mod bar;
 mod feature;
+pub mod icon;
 mod wording;
-pub use assets::{Art, Assets, Feature, Labels, tips};
+pub use assets::{Art, Assets, Feature, Labels, ModeIcon, tips};
 pub use feature::executable_mode;
 use wording::{counted, counts, estimated_fraction, fraction, heading, percentage, step_line};
 
