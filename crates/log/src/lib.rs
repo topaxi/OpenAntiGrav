@@ -15,6 +15,21 @@
 //! `RUST_LOG` syntax for free; `tracing` would add a second facade and a bridge
 //! for what this file already does.
 //!
+//! **Which level a message belongs at** (the full table with examples is
+//! `docs/architecture/logging.md`; the default terminal filter shows `info` and
+//! up from our crates, the file keeps `debug`):
+//!
+//! - `error`: something failed and the player loses something.
+//! - `warn`: wrong or degraded data, a fallback taken, a missing asset.
+//! - `info`: one line per milestone the player or maintainer acts on: which
+//!   title and image, which track and race starts, `wrote <file>`, a server
+//!   listening on an address, a mode chosen at startup or by a flag.
+//! - `debug`: per-asset and per-stage load detail, timings, chosen paths.
+//! - `trace`: per-tick or per-draw detail.
+//!
+//! A line that reports the result of a capture (`frame at tick N: ...`,
+//! `wrote ...`) stays at `info`: tests and pair scripts parse it.
+//!
 //! **Order of use.** [`install`] runs first thing in `main`, before the command
 //! line and the settings file exist, because the file's path depends on both.
 //! Lines logged before [`attach`] are held in memory and written then; that is
