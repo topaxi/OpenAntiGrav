@@ -1,7 +1,7 @@
 ---
 status: re-first
-titles: [hd]
-updated: 2026-10-21
+titles: [hd, 2048, omega]
+updated: 2026-11-01
 summary: "Vineta K: rock-to-sand mask blend (j_rockblend5) unread; the sea sheet ripple needs the paraboloid probe"
 ---
 
@@ -19,6 +19,7 @@ a scratch directory, not kept (`report.md`, `shots/`, `sweep/`).
 
 ## Open
 
+- **2048 and Omega Vineta K: no file field found for HD's behind-the-glass bit (negative result, 2026-11-01, `psp2-behind-glass`).** The maintainer sees extra meshes in the 2048 and Omega tunnels; HD's `0x10` bit lives in the chunk render block (`Mesh::render_flags`), a different record from the material render-state word whose bit 4 is the cull bit. The psp2 container has no located render block. Census over 2048 DLC1 Vineta_K `track.rcsmodel` (1,822 mesh objects) and Omega `01_vineta_k/track.final.rcsmodel` (2,878): mesh object `+0x0a` flags take 0x0101/0x0201 only (266 `0x0201` are all `trackpart_animations*`); every bit of the 64 words around each first submesh record, the mesh object's 16 words and the material state (6 values on 2048, 8 on Omega) were scored against the Maya export tags `refract` and `secondaryfog` in the names (273 meshes on 2048, 227 on Omega, the only oracle for HD's `0x10`/`0x20`): none splits them (best bit 70 errors against a 273 baseline, and that word is pointer or string bytes). Material state bit 4 (the cull lane's bit) is set on all six 2048 values, so it partitions nothing here. HD flagged chunks barely twin: 24 of 210 flagged HD chunks have a 2048 bbox twin, because 2048 re-splits them (HD chunk 1574, 2,488 vertices, is covered by ~170 small `tunnel_understruts*` pieces of 35 and 218 vertices that carry no tag). Nothing was wired and no name list used. **Next read recipe (opus RE):** find in the Vita `RcsModel_Load` object graph (and Omega's counterpart) what the render passes read per mesh to choose the glass-target pass, starting from the draw routing that consumes `tunnel_understruts*` meshes; or capture Vita3K draws into the glass target and tie them to submeshes by vertex buffer offset, as HD's RPCS3 census did.
 - **The dunes inside the target are rock, the capture's are sand.** `and_rocktosand`'s red-channel blend mask
   (`j_rockblend5`) is read as the rock picture alone (rcsmaterial.md's table, "the red shape behind the glass"). It
   now shows through every pane that looks at the terrain.
