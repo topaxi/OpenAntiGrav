@@ -173,9 +173,56 @@ target (half of 1920x1080, **inherited** from the Vita's halving, the Omega targ
 untraced), and the three `mt_`/`cl_tunnelrefraction` materials of Vineta K sample it. The
 rest is on [the 2048 page](../vita-2048-eu-v104/refraction-pass.md), "The target is drawn
 here": **ported** for the split, the camera and the glass law (inherited, Omega's GCN is unread).
-**Checked, applies, not wired: `rt_icetunnel`** (Sebenco Climb, one submesh) declares the same
-engine-bound `screenSpaceRefractionTex`, but its GCN pixel program is unread, so Sebenco's rock
-sheet is drawn into the target and nothing samples it: tick 1800's black above the track stays.
+### `rt_icetunnel` (Sebenco Climb): read and wired (2026-11-01, `omega-icetunnel-glass`)
+
+**Ported, law differs from the Vita glass.** The glass is the one submesh of `ice_tunnel1Shape`
+(9,889 vertices, `rt_icetunnel.rcsmaterial`, state 124 opaque); the rock sheet it shows is
+`ice_tunnel_wohdmeshrefract2Shape` (material `sebenco_snow`), drawn into the target. Skipping the
+glass (`OAG_SKIP_MATERIAL=rt_icetunnel`, now honoured by the psp2 builder) turns the dark region
+above the track at tick 1800 into blue sky; so that region is this glass, confidence 95.
+
+Program read with `cargo run -p oag-rcs --example gcn_dump -- <data05.psarc>
+data/environments/10_Sebenco_Climb/Materials/RT_icetunnel.rcsmaterial --at 0x4824` (pixel, 313
+instructions; vertex `0x41e4`, which carries `VertexColour1`: the submesh has a colour set, so this
+is the permutation, confidence 80; the other permutations differ by lightmap, nova and
+`DiffuseVertexLight` inputs the submesh does not declare). Sampler slot 5 is
+`screenSpaceRefractionTex` (T# loaded at `0x2d8` from offset `0x28`, one `image_sample`, `dmask`
+`0x7`, at `0x3e8`). Backward slice (confidence 85):
+
+- **Sample point** (`0x2e0`, `0x2e8`): `uv = (P.x, P.y) / max(P.w, 0.1) * distortion.w + distortion.xy`
+  with `P = refractProject * p`, `p = V - Refraction * distortion.z * a * N'`,
+  `V = eye - position` (vertex `0x174`), `N'` the normal-mapped unit normal (two normal-map taps at
+  `0x138`, `0x140`), `a` the interpolant `attr1.w` = the vertex's `VertexColour1` first channel
+  (vertex `0x1c4`, one fetched dword).
+  The eye-relative sign convention (`V = eye - position` against the rows of `refractProject`) is
+  not read live, so the drawn point stays the world position pushed along the normal, **inherited**
+  from HD's live read; only the `a` scaling is the program's.
+- **Use** (`0x56c` to `0x598`, `0x5f0` to `0x5f8`): `grab = G * Constant1 * a` added twice
+  (`v_mac ... 2.0`), then `+ lit terms`, then `mix(fogColour, rgb, attr0.w)` at `0x608` to
+  `0x630`. So the refraction term is **`2 * Constant1 * a * G`**, which is `W * 2 * D.a * G` of the
+  Vita glass with `W = Constant1` (`0x7611a2d8`, authored `0.8737` grey) and the picture's alpha
+  replaced by `a`; the Vita's `G^2` is not here (`G` is multiplied by constants only).
+- **Authored values** (record of the one submesh): `Constant1` `0.8737` grey, `Refraction`
+  (`0x2c1d4018`) `1.0`. The 311-instruction body also adds a `cubeReflectionTex` fresnel term, snow
+  and ice normal-map blends (`SnowIceAlphaBlend`, `snow1`, `icenormal`) and `SnowSpec`; none of those
+  is wired.
+- **What differs from the Vita**: the weight is the vertex colour, not a picture alpha; the sample
+  point scales with `a`; there is no `G^2`; the material is lit by `liveLighting0` inside its own
+  program.
+
+**Wired** (`psp2::refraction::ice_layer`, `PROGRAM_ICE_GLASS`, `refraction.wesl`): the glass vertex
+carries `a` in `colour.a`, its glow-table entry holds `Constant1`, the factor 2 and `Refraction`, and
+the shader adds `2 * Constant1 * a * grab` to the generic lit colour and pushes the sample point
+`Refraction * a` along the vertex normal. **Not drawn (generic or open):** the cube reflection, the
+snow and ice normal blends, the normal-map perturbation of the sample point, and the program's own
+lit combine (the generic lit path stands in for it); the target's size (960x540) is still inherited.
+Sebenco Climb tick 1800, the 67,662 pixels the glass changed: median (10, 15, 21) before, (52, 64, 69)
+after; the rock sheet shows through where the sky was black. The target's `G` decode reuses the other
+glass's (`target_in`), inherited. Test:
+`omega_sebenco_climb_ice_tunnel_glass_reads_the_refraction_target`.
+
+**Checked against 2048: differs.** 2048 ships no `rt_icetunnel` (Sebenco Climb is not a 2048
+circuit, `docs/formats/omega-status.md`), so there is nothing to port back.
 
 ## Evidence still owed
 

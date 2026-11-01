@@ -194,10 +194,7 @@ law, not that it matches a capture.
 of 1920x1080, **inherited**: the Omega target's size is untraced). Its `mt_tunnelrefraction` records
 are 2048's exactly (same two samplers, same two parameters and values) and take the Vita's law,
 labelled inherited; its GCN programs are unread. Omega's `cl_tunnelrefraction` (3 submeshes, no
-2048 counterpart) takes HD's picture-less law: its one sampler (`cl_tunnelhex_specv3`, a specular map) is not bound as a picture, the lit term is tinted by `DiffuseColour`, as HD's. Outside the target (Zone, or a circuit without tagged meshes) the glass keeps the generic reading: the refraction bit is cleared at load. **`rt_icetunnel` on Sebenco Climb also declares the
-grab and its law is unread**: its pixel program is GCN with five samplers and thirteen
-parameters, none of them HD's `0x78575769`, and 2048 has no such material. So Sebenco's rock
-sheet is in the target and nothing samples it yet.
+2048 counterpart) takes HD's picture-less law: its one sampler (`cl_tunnelhex_specv3`, a specular map) is not bound as a picture, the lit term is tinted by `DiffuseColour`, as HD's. Outside the target (Zone, or a circuit without tagged meshes) the glass keeps the generic reading: the refraction bit is cleared at load. **`rt_icetunnel` on Sebenco Climb** (Omega only, 2048 has no such material) is read and wired with its own law, `2 * Constant1 * a * G`, `a` the vertex colour: [the Omega page](../ps4-omega-eu/refraction-pass.md), "`rt_icetunnel`".
 
 ## Evidence still owed
 

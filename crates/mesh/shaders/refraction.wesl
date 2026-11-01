@@ -32,13 +32,18 @@ fn opaque_colour(in: VertexOutput, shaded: vec4<f32>) -> vec3<f32> {
     // `mt_tunnelrefraction` weights the grab by its picture's alpha (rate 1),
     // `cl_tunnelrefraction` by a constant 2 (scale) and its lit term by
     // `DiffuseColour` (offset).
-    let alpha_weight = select(1.0, shaded.a, weight.y > 0.5);
+    // Omega's `rt_icetunnel` (`PROGRAM_ICE_GLASS`, mode 10) weights the grab by the vertex
+    // colour's red (carried in `colour.a`) instead, and pushes the sample point
+    // `Refraction * a` along the normal (`weight.w`) rather than one unit.
+    let ice = weight.z > 9.5 && weight.z < 10.5;
+    let alpha_weight = select(select(1.0, shaded.a, weight.y > 0.5), in.colour.a, ice);
     let w = tint.rgb * weight.x * alpha_weight;
+    let reach = select(1.0, weight.w * in.colour.a, ice);
     // The point the program projects: the surface pushed one unit along its
     // normal (`distortion.z` = -1 negating a negated normal, live on the
     // capture). The normal map's perturbation of that normal is not drawn.
     let n = in.normal * inverseSqrt(max(dot(in.normal, in.normal), 1e-12));
-    let clip = scene.refraction * vec4<f32>(in.world + n, 1.0);
+    let clip = scene.refraction * vec4<f32>(in.world + n * reach, 1.0);
     let ndc = clip.xy / max(clip.w, 1e-6);
     let uv = vec2<f32>(0.5 + 0.5 * ndc.x, 0.5 - 0.5 * ndc.y);
     let grab = target_in(textureSampleLevel(behind_glass_tex, shadow_sampler, uv, 0.0).rgb);

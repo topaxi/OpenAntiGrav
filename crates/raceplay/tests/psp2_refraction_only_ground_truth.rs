@@ -323,3 +323,78 @@ fn omega_vineta_k_leaves_its_refraction_only_meshes_out_of_the_main_view() {
         "the load report names what it left out"
     );
 }
+
+/// Omega's Sebenco Climb: the ice tunnel's glass, `rt_icetunnel` (the one submesh of
+/// `ice_tunnel1Shape`), reads the refraction target that holds the rock sheet
+/// (`ice_tunnel_wohdmeshrefract2Shape`). Its GCN pixel program ends on
+/// `2 * Constant1 * a * grab` with `a` the baked vertex colour's red
+/// (`docs/ghidra/functions/ps4-omega-eu/refraction-pass.md`). Drop the glass entry in
+/// `psp2::refraction::plan` and no vertex carries the refraction bit or the entry; drop the
+/// vertex weight and `colour.a` stays 1 everywhere.
+#[test]
+#[ignore = "needs data/extracted/ps4"]
+fn omega_sebenco_climb_ice_tunnel_glass_reads_the_refraction_target() {
+    let Some(root) = oag_testdata::exact("data/extracted/ps4") else {
+        return;
+    };
+    let load = |mode: oag_race::Mode| {
+        race::load(&race::Options {
+            source: root.display().to_string(),
+            track: Some(r"Data\environments\10_sebenco_climb\track.vex".to_string()),
+            mode,
+            ..race::Options::default()
+        })
+        .expect("loading the race")
+    };
+    let main = load(race::Options::default().mode);
+    let model = &main.track_model;
+    let glass: Vec<_> = model
+        .vertices
+        .iter()
+        .filter(|v| v.slots & oag_mesh::mesh::slots::REFRACTION != 0)
+        .collect();
+    assert!(
+        glass.len() > 9_000,
+        "rt_icetunnel's 9,889 vertices read the target, got {}",
+        glass.len()
+    );
+    let entries: BTreeSet<u32> = glass
+        .iter()
+        .map(|v| v.slots >> oag_mesh::mesh::slots::MATERIAL_SHIFT)
+        .collect();
+    assert_eq!(
+        entries.len(),
+        1,
+        "one glow-table entry for the one material"
+    );
+    let entry = model.emissive[(*entries.first().expect("an entry") - 1) as usize];
+    assert_eq!(entry.program[0], oag_mesh::mesh::PROGRAM_ICE_GLASS);
+    assert_eq!(entry.program[1], 1.0, "`Refraction`, authored 1.0");
+    assert_eq!(entry.scale, 2.0, "the program's doubled grab");
+    assert!(
+        (entry.tint[0] - 0.873_705_7).abs() < 1e-5,
+        "Constant1 is the grab's colour: {:?}",
+        entry.tint
+    );
+    let (lo, hi) = glass.iter().fold((1.0f32, 0.0f32), |(lo, hi), v| {
+        (lo.min(v.colour[3]), hi.max(v.colour[3]))
+    });
+    assert!(
+        lo < 0.05 && hi > 0.95,
+        "`a` spans the baked ramp: {lo}..{hi}"
+    );
+    assert!(
+        main.behind_glass.groups.primary_fog.is_some(),
+        "the target the glass reads is drawn"
+    );
+    assert_eq!(
+        load(oag_race::Mode::Zone)
+            .track_model
+            .vertices
+            .iter()
+            .filter(|v| v.slots & oag_mesh::mesh::slots::REFRACTION != 0)
+            .count(),
+        0,
+        "with no target in Zone the glass keeps the generic reading"
+    );
+}

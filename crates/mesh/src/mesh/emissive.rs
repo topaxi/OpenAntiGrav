@@ -97,6 +97,12 @@ pub const PROGRAM_EMISSIVE_ADD: f32 = 8.0;
 /// binding's **alpha**, unsquared, times the entry's tint, added like [`PROGRAM_EMISSIVE_ADD`].
 pub const PROGRAM_EMISSIVE_ALPHA_MASK: f32 = 9.0;
 
+/// [`Emissive::program`]'s mode for Omega's `rt_icetunnel`: the tunnel glass's refraction term
+/// (`2 * Constant1 * a * grab`, `a` the vertex colour's red, carried in `colour.a`), with the
+/// sample point pushed `Refraction * a` along the normal (`program[1]` is `Refraction`). See
+/// `psp2::refraction::ice_layer`.
+pub const PROGRAM_ICE_GLASS: f32 = 10.0;
+
 /// [`Emissive::program`]'s mode for a PSP hull's alpha-weighted extra pass: the
 /// picture (the environment map) multiplied by the **second** texture's alpha at
 /// the second coordinate set, which carry the batch's own texture and its
