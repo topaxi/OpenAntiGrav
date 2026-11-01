@@ -513,7 +513,7 @@ fn one(
         // `shipboost.vex`; `EF_Boost` inside the flare model is what a speed
         // pad reveals, so both halves come out of one load. See
         // `flare::per_team`.
-        let lit = authored_flare(archives, team, ships.dir, ctx.flare, nozzle, report);
+        let lit = authored_flare(archives, team, ships, ctx.mode, ctx.flare, nozzle, report);
         return Ok(Livery {
             team: team.to_string(),
             nozzle,
@@ -577,7 +577,7 @@ fn one(
     // reaches this branch today - the match is here rather than at the PS3
     // branch alone so a fourth source is answered by its own axis and not by
     // which decoder its hull happened to take.
-    let lit = authored_flare(archives, team, ships.dir, ctx.flare, nozzle, report);
+    let lit = authored_flare(archives, team, ships, ctx.mode, ctx.flare, nozzle, report);
     let wreck = if ctx.hull_wreck {
         wreck::load(archives, team, ships.dir, ctx.mode, report)
     } else {
@@ -641,13 +641,17 @@ fn one(
 fn authored_flare(
     archives: &mut oag_assets::Archives,
     team: &str,
-    ship_dir: &str,
+    ships: oag_title::race::ShipPaths,
+    mode: Mode,
     flare: &oag_title::flare::Flare,
     nozzle: Option<Vec3>,
     report: &mut Vec<String>,
 ) -> flare::Flare {
     match flare {
         oag_title::flare::Flare::PerTeam(authored) => {
+            // The flare file is authored about its hull, so it comes from the
+            // directory the hull did: Zone's own on HD, not the player's team.
+            let (ship_dir, team) = entry::model_directory(ships, team, mode);
             flare::per_team(archives, team, ship_dir, authored, nozzle, report)
         }
         oag_title::flare::Flare::Sprite(_) | oag_title::flare::Flare::Unread => {

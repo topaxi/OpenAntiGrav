@@ -59,6 +59,22 @@ pub fn ship_entry_name(
     )
 }
 
+/// The ship tree and directory a craft's *other* model files (the engine
+/// flare) are read from: the same place [`ship_entry_name`] puts the hull.
+///
+/// A Zone race on a title whose Zone craft has a directory of its own (HD:
+/// `/data/ships/zone`) flies that hull, so its flare's `EF_Main` origin and
+/// shapes are that directory's `engineflare.vex`, authored about the Zone hull,
+/// not the player's team file authored about the team's. Any other mode, and
+/// a title whose Zone keeps the player's team, answers `(paths.dir, team)`.
+#[must_use]
+pub fn model_directory(paths: oag_title::race::ShipPaths, team: &str, mode: Mode) -> (&str, &str) {
+    if mode != Mode::Zone {
+        return (paths.dir, team);
+    }
+    (paths.zone.root(paths.dir), paths.zone.directory(team))
+}
+
 /// The boost plume that goes with [`ship_entry_name`]'s hull, or `None` when
 /// this title's own package names no standalone boost model at all.
 ///
