@@ -12,6 +12,10 @@
 //! filter `0x01605760` makes the same two tests (confidence 80,
 //! `docs/ghidra/functions/ps4-omega-eu/refraction-pass.md`).
 //!
+//! **Outside Zone mode only.** The Zone passes (kinds 2 to 4 on the Vita at
+//! `0x813b96e6`, 3 to 5 on Omega) never reach the `0x20` test, so a Zone race
+//! keeps these meshes in its main view; the caller skips this in Zone.
+//!
 //! The rule is the environment track model's alone: the original applies it
 //! in `Environment_Load` only, so a caller applies it to the circuit, never to
 //! a craft or prop. This project draws no 2048 or Omega refraction target, so

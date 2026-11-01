@@ -77,6 +77,10 @@ pub(super) fn sibling_model(
 /// **And the chunks the original draws only behind the glass** (Vineta K):
 /// they come back as their own two models, for the scene's
 /// behind-the-glass target - see `oag_mesh::mesh::rcs::build_scene_views`.
+///
+/// `zone` is whether the race is in Zone mode: 2048's and Omega's Zone passes
+/// keep the `wohdmeshrefract` meshes in the main view (`psp2::refraction_only`).
+#[allow(clippy::too_many_arguments)]
 pub(super) fn track_model(
     archives: &mut oag_assets::Archives,
     track: &str,
@@ -84,6 +88,7 @@ pub(super) fn track_model(
     geometry: &Option<Vec<u8>>,
     model_name: Option<&str>,
     looks: &oag_title::Looks,
+    zone: bool,
     report: &mut Vec<String>,
 ) -> (Option<Model>, crate::BehindGlassModels) {
     let none = crate::BehindGlassModels::default;
@@ -115,10 +120,15 @@ pub(super) fn track_model(
                 Ok((mut model, built)) => {
                     report.push(format!("{track}: {}", built.describe()));
                     // 2048 and Omega draw a mesh named `wohdmeshrefract` only into their
-                    // refraction target, never the main view (`psp2::refraction_only`).
-                    let out = mesh::rcs::psp2::refraction_only::leave_out_of_main_view(
-                        &mut model, geometry,
-                    );
+                    // refraction target, never the main view, outside Zone mode
+                    // (`psp2::refraction_only`).
+                    let out = if zone {
+                        0
+                    } else {
+                        mesh::rcs::psp2::refraction_only::leave_out_of_main_view(
+                            &mut model, geometry,
+                        )
+                    };
                     if out > 0 {
                         report.push(format!(
                             "{track}: {out} mesh(es) named `wohdmeshrefract` left out of the \

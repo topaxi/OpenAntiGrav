@@ -82,8 +82,12 @@ were read from the stores, not the decompiler's slot names:
   (`810306e8: mov.w r9,#0x1`, stored at `81030d60: strd r9,r7,[sp,#0x320]`).
   The target is `Render_GetRefractionTarget` (`0x810363ae` -> `0x816ae750`).
 
-In Zone mode (`0x816a4d80` set) the lists use kinds 2, 3 and 4 instead. This
-page does not cover them.
+In Zone mode (`0x816a4d80` set) the lists use kinds 2, 3 and 4 instead. **None
+of them rejects `0x20`** (read 2026-11-01, `omega-glass-re`). At
+`813b96e6..813b96f4`, kinds 0 and 1, or a mesh with flags `0x6`/`0xe`, go to
+`813b983e`. Only kind 1 (`0x30`) and kind 0 (`0x20`) are tested there, and
+every other kind draws. So a Zone race keeps these meshes in its main view, and
+this project skips them outside Zone only.
 
 ## `TrackPass_FilterSubmesh` - `0x813b9670`
 
@@ -135,9 +139,8 @@ Its `TrackPass_FilterSubmesh` (`0x01605760`, slot `+0x10` of context vtable
 The 1.07 patch eboot carries the same body. Confidence 80. The evidence and
 the census are on [the Omega page](../ps4-omega-eu/refraction-pass.md): 212
 meshes on `01_vineta_k/track.final.rcsmodel` of 2,878, and one on Sebenco
-Climb, which the Vita's copy lacks. The skip runs on both titles. Omega's Zone
-pass kinds (3 to 5) never test `0x20`, so Omega keeps these meshes in its main
-view in Zone.
+Climb, which the Vita's copy lacks. The skip runs on both titles, outside Zone
+only: Omega's Zone kinds (3 to 5) never test `0x20` either.
 
 ## Evidence still owed
 

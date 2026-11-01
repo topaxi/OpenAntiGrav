@@ -20,7 +20,7 @@ read at instruction level. The filter's tests and the kind stores match the
 Vita's at every step. The render target of the kind-1 list was not traced.)
 
 A mesh object whose name contains `wohdmeshrefract` (case-insensitive
-substring) is **not drawn in the main view** outside Zone mode. Pass kind 1
+substring) is **not drawn in the main view outside Zone mode**. In Zone it is. Pass kind 1
 draws only meshes flagged `0x30` (reflect or refract). By the Vita's reading,
 that is the refraction target.
 
@@ -122,9 +122,11 @@ This is slot `+0x10` of context vtable `0x01926470`. The other slots are
 The `0x20` test is reachable only from kind 0, and the `0x30` test only from
 kind 1. Kinds 2 to 5 never test `0x20`: kind 2 takes `[0x01f8f760]`, and
 kinds 3, 4 and 5 take their own program tables. **So in Zone mode the
-original keeps these meshes in its main view.** The build in
-`oag_raceplay::load::geometry::track_model` skips them in every mode (open,
-named in the handover thread).
+original keeps these meshes in its main view.** The Vita's filter agrees:
+its Zone kinds 2 to 4 never reach the `0x20` test either (`813b96e6..813b96f4`
+branch kinds 0 and 1, or flags `0x6`/`0xe`, to `813b983e`, and only kinds 1 and
+0 are tested there). So `oag_raceplay::load::geometry::track_model` skips them
+outside Zone only, on both titles.
 
 ## The 1.07 patch eboot
 
@@ -147,8 +149,10 @@ copy is at file `0x60a92f` (Ghidra `0x0160583f`). The patch also carries the
 `oag_mesh::mesh::rcs::psp2::refraction_only::leave_out_of_main_view` now runs
 on Omega as on 2048: the `is_ps4` guard in `track_model` is gone.
 `crates/raceplay/tests/psp2_refraction_only_ground_truth.rs` pins the census
-above and checks that the loaded Omega Vineta K draws none of the 212.
-Without the change it fails with `refraction-only meshes drawn: 212 of 212`.
+above and checks that the loaded Omega Vineta K draws none of the 212 outside
+Zone, and all of them in Zone. With the guard back it fails with
+`refraction-only meshes drawn: 212 of 212`. With the skip applied in Zone it
+fails with `Zone drops 212 refraction-only meshes`.
 
 Frames are from `oag-game data/extracted/ps4 --race --no-audio --size 960x540
 --track 'Data\environments\01_vineta_k\track.vex' --autopilot --ticks N

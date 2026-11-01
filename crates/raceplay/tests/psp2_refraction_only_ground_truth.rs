@@ -201,22 +201,35 @@ fn omega_vineta_k_leaves_its_refraction_only_meshes_out_of_the_main_view() {
         "no road mesh is refraction-only"
     );
 
-    let loaded = race::load(&race::Options {
-        source: root.display().to_string(),
-        track: Some(r"Data\environments\01_vineta_k\track.vex".to_string()),
-        ..race::Options::default()
-    })
-    .expect("loading the race");
-    let model = &loaded.track_model;
-    let drawn: BTreeSet<u32> = model
-        .draws
-        .iter()
-        .chain(&model.alpha_tested_draws)
-        .chain(&model.transparent_draws)
-        .chain(&model.shine_draws)
-        .filter(|d| !d.range.is_empty())
-        .filter_map(|d| d.chunk)
-        .collect();
+    let load = |mode: oag_race::Mode| {
+        let loaded = race::load(&race::Options {
+            source: root.display().to_string(),
+            track: Some(r"Data\environments\01_vineta_k\track.vex".to_string()),
+            mode,
+            ..race::Options::default()
+        })
+        .expect("loading the race");
+        let model = &loaded.track_model;
+        let drawn: BTreeSet<u32> = model
+            .draws
+            .iter()
+            .chain(&model.alpha_tested_draws)
+            .chain(&model.transparent_draws)
+            .chain(&model.shine_draws)
+            .filter(|d| !d.range.is_empty())
+            .filter_map(|d| d.chunk)
+            .collect();
+        (drawn, loaded.report)
+    };
+    // Omega's Zone passes (kinds 3 to 5) never test `0x20`: Zone keeps them in the main view.
+    let (zone_drawn, _) = load(oag_race::Mode::Zone);
+    assert!(
+        refract.is_subset(&zone_drawn),
+        "Zone drops {} refraction-only meshes",
+        refract.difference(&zone_drawn).count()
+    );
+
+    let (drawn, report) = load(race::Options::default().mode);
     let leaked: Vec<_> = refract.intersection(&drawn).collect();
     assert!(
         leaked.is_empty(),
@@ -229,7 +242,7 @@ fn omega_vineta_k_leaves_its_refraction_only_meshes_out_of_the_main_view() {
         "the road is drawn"
     );
     assert!(
-        loaded.report.iter().any(|l| l.contains("wohdmeshrefract")),
+        report.iter().any(|l| l.contains("wohdmeshrefract")),
         "the load report names what it left out"
     );
 }
