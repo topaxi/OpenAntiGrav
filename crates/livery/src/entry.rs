@@ -68,11 +68,7 @@ pub fn ship_entry_name(
 /// not the player's team file authored about the team's. Any other mode, and
 /// a title whose Zone keeps the player's team, answers `(paths.dir, team)`.
 #[must_use]
-pub fn model_directory<'a>(
-    paths: oag_title::race::ShipPaths,
-    team: &'a str,
-    mode: Mode,
-) -> (&'a str, &'a str) {
+pub fn model_directory(paths: oag_title::race::ShipPaths, team: &str, mode: Mode) -> (&str, &str) {
     if mode != Mode::Zone {
         return (paths.dir, team);
     }
