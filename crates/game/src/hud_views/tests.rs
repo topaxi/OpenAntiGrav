@@ -172,6 +172,7 @@ const SAMPLE: &str = r#"<Screen>
 </Screen>"#;
 
 const FILE: &str = r#"
+screen = "split-hud"
 [[layout]]
 name = "any"
 [[layout.group]]
