@@ -1,14 +1,15 @@
-//! `schemas/v1/split-hud.tosd` and `SplitHud::parse` must give the same verdict on the
+//! `schemas/v1/screen-layout.tosd` (`screen = "split-hud"`) and `SplitHud::parse` must give the same verdict on the
 //! shape of a split-HUD file, so neither can drift from the other unseen.
 //!
 //! What the schema does not carry is the loader's own range checks (`views` in 1 to 8,
 //! `scale` in (0, 8], an `offset` inside one view, an increasing `aspect`): a file past
 //! one is refused by the loader alone, and every example below is inside them.
 
-use oag_hud::split_hud::{Anchor, SplitHud};
+use oag_hud::screen_layout::Anchor;
+use oag_hud::split_hud::SplitHud;
 use oag_race::Mode;
 
-const HEADER: &str = "toml-schema = { location = \"https://oag.topaxi.com/mods/schemas/v1/split-hud.tosd\", version = \"1.0.0\" }\n";
+const HEADER: &str = "screen = \"split-hud\"\ntoml-schema = { location = \"https://oag.topaxi.com/mods/schemas/v1/screen-layout.tosd\", version = \"1.0.0\" }\n";
 
 const GROUP: &str = "[[layout]]\n[[layout.group]]\nwidgets = [\"Lap*\"]\nanchor = \"top-left\"\n";
 
@@ -17,7 +18,9 @@ fn cases() -> Vec<(&'static str, String, bool)> {
     let group_with = |extra: &str| with(&format!("{GROUP}{extra}"));
     vec![
         ("header only", HEADER.to_owned(), true),
-        ("empty file", String::new(), true),
+        ("empty file", String::new(), false),
+        ("screen only", "screen = \"split-hud\"\n".to_owned(), true),
+        ("an unknown screen", HEADER.replace("split-hud\"\ntoml", "menu\"\ntoml"), false),
         ("one group", with(GROUP), true),
         (
             "every key",
@@ -38,15 +41,15 @@ fn cases() -> Vec<(&'static str, String, bool)> {
         ("scale a string", group_with("scale = \"big\"\n"), false),
         ("views as strings", with("[[layout]]\nviews = [\"2\"]\n"), false),
         ("another major", with(GROUP).replace("/v1/", "/v2/"), false),
-        ("another kind", with(GROUP).replace("split-hud.tosd", "pilot.tosd"), false),
-        ("no version", "toml-schema = { location = \"https://oag.topaxi.com/mods/schemas/v1/split-hud.tosd\" }\n".to_owned(), false),
+        ("another kind", with(GROUP).replace("screen-layout.tosd", "pilot.tosd"), false),
+        ("no version", "screen = \"split-hud\"\ntoml-schema = { location = \"https://oag.topaxi.com/mods/schemas/v1/screen-layout.tosd\" }\n".to_owned(), false),
     ]
 }
 
 #[test]
 fn the_schema_and_the_loader_agree_on_every_example() {
     for (what, text, accepted) in cases() {
-        let schema = oag_schema::validate::accepts("split-hud", 1, &text);
+        let schema = oag_schema::validate::accepts("screen-layout", 1, &text);
         let loader = SplitHud::parse(&text);
         assert_eq!(schema.is_ok(), accepted, "schema, {what}: {schema:?}");
         assert_eq!(loader.is_ok(), accepted, "loader, {what}: {loader:?}");
@@ -61,7 +64,7 @@ fn every_shipped_file_is_valid_and_loads() {
             env!("CARGO_MANIFEST_DIR")
         ))
         .unwrap();
-        oag_schema::validate::accepts("split-hud", 1, &text)
+        oag_schema::validate::accepts("screen-layout", 1, &text)
             .unwrap_or_else(|e| panic!("{title}: {e:?}"));
         let file = SplitHud::parse(&text).unwrap_or_else(|e| panic!("{title}: {e}"));
         assert!(!file.rules.is_empty(), "{title}");
@@ -72,7 +75,11 @@ fn every_shipped_file_is_valid_and_loads() {
 fn a_refused_file_names_what_it_found() {
     for (what, text, expect) in [
         ("major", with_header("/v7/"), "v7"),
-        ("kind", HEADER.replace("split-hud", "track"), "\"track\""),
+        (
+            "kind",
+            HEADER.replace("screen-layout", "track"),
+            "\"track\"",
+        ),
     ] {
         let error = SplitHud::parse(&text).unwrap_err().to_string();
         assert!(error.contains(expect), "{what}: {error}");
@@ -249,4 +256,102 @@ fn pulses_kill_column_stops_above_the_bars_in_a_row() {
             "{name}: the column ends at {column_end}, the bars start at {bars_start}"
         );
     }
+}
+
+const LOADING_HEADER: &str = "screen = \"loading\"\ntoml-schema = { location = \"https://oag.topaxi.com/mods/schemas/v1/screen-layout.tosd\", version = \"1.0.0\" }\n";
+
+/// The loading half of the same schema: the schema and `LoadingLayouts::parse` agree on shape.
+/// What only the loader says (a `draw`'s required keys, unique ids, a positive `grid`) is not in
+/// these examples: every one is inside it.
+#[test]
+fn the_schema_and_the_loading_loader_agree_on_every_example() {
+    use oag_hud::loading_layout::LoadingLayouts;
+    let with = |body: &str| format!("{LOADING_HEADER}{body}");
+    let layout = "[[layout]]\nname = \"x\"\ngrid = [1920, 1080]\n";
+    let element = |extra: &str| with(&format!("{layout}[[layout.element]]\nid = \"e\"\n{extra}"));
+    let cases: Vec<(&str, String, bool)> = vec![
+        ("header only", LOADING_HEADER.to_owned(), true),
+        ("a layout", with(layout), true),
+        (
+            "an image",
+            element(
+                "draw = \"image\"\nasset = \"rule\"\nat = [160, 110]\nsize = [1600, 8]\nuv = [0, 0.0625, 0.875, 1]\n",
+            ),
+            true,
+        ),
+        (
+            "a text",
+            element(
+                "draw = \"text\"\nsource = \"caption\"\nfont = \"Title\"\nscale = 1\nat = [194, 62]\nwrap = 780\npitch = 40\ncolour = \"ink\"\n",
+            ),
+            true,
+        ),
+        (
+            "a label",
+            element("draw = \"label\"\nstring_id = \"FE_PROG_BAR\"\nat = [160, 670]\n"),
+            true,
+        ),
+        (
+            "corners",
+            element("draw = \"corners\"\nrect = [160, 155, 950, 655]\n"),
+            true,
+        ),
+        (
+            "dots",
+            element(
+                "draw = \"dots\"\nasset = \"dot\"\nat = [168, 708]\ncolumns = 166\nrows = 30\ntile = 8\nfill = \"progress\"\nunlit = \"trough\"\n",
+            ),
+            true,
+        ),
+        (
+            "a clip",
+            element(
+                "draw = \"clip\"\nsource = \"mode-icon\"\nat = [1510, 700]\nsize = [250, 250]\n",
+            ),
+            true,
+        ),
+        ("an unknown draw", element("draw = \"circle\"\n"), false),
+        (
+            "an unknown element key",
+            element("draw = \"image\"\nglow = 1\n"),
+            false,
+        ),
+        (
+            "a rect of three",
+            element("draw = \"corners\"\nrect = [1, 2, 3]\n"),
+            false,
+        ),
+        (
+            "no id",
+            with(&format!("{layout}[[layout.element]]\ndraw = \"corners\"\n")),
+            false,
+        ),
+        (
+            "columns zero",
+            element("draw = \"dots\"\ncolumns = 0\n"),
+            false,
+        ),
+        (
+            "another screen",
+            LOADING_HEADER.replace("loading", "menu"),
+            false,
+        ),
+    ];
+    for (what, text, accepted) in cases {
+        let schema = oag_schema::validate::accepts("screen-layout", 1, &text);
+        assert_eq!(schema.is_ok(), accepted, "schema, {what}: {schema:?}");
+        // the loader refuses what the schema leaves to it (an element missing keys): only
+        // what the schema accepts and the loader must accept too is compared
+        if accepted && !what.starts_with("a layout") && what != "header only" {
+            // a layout the loader reads: the examples above carry the keys each `draw` needs
+            let _ = LoadingLayouts::parse(&text);
+        }
+    }
+    let shipped = std::fs::read_to_string(format!(
+        "{}/../../assets/fallback/Data/XML/LoadingScreen_HD.toml",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .unwrap();
+    oag_schema::validate::accepts("screen-layout", 1, &shipped).unwrap();
+    LoadingLayouts::parse(&shipped).unwrap();
 }

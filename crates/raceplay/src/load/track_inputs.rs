@@ -420,6 +420,7 @@ pub(super) fn export(
         path_props: Vec::new(),
         triggers: Vec::new(),
         art,
+        loading: None,
         notes,
     })
 }

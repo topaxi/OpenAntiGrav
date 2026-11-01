@@ -121,12 +121,22 @@ exercises. The show and blink rules are HD's, unchanged
 ([`oag_hud::assist`](../../crates/hud/src/assist.rs)); `RuntimeHud` is untouched, so no
 HD shield or arc rule reaches Pulse or Pure.
 
+### A loading screen layout file
+
+The third use (2026-11-01, `hd-loading-layout`): `assets/fallback/Data/XML/LoadingScreen_HD.toml`, the
+same format with `screen = "loading"`, named by `oag_title::Loading::layout`. Wipeout HD's screen is
+code in the original (its `Definition.xml` plugin was cut), so no disc carries this name and the
+fallback answers when no player override does; an override at
+`overrides/wipeout-hd/Data/XML/LoadingScreen_HD.toml` replaces it whole. Its numbers are **measured**
+off the executable, with their addresses in the file's comments; see
+[screen-layout.md](../formats/screen-layout.md). A track's manifest may carry its own.
+
 ### A split-screen HUD layout file
 
 The second use of the fallback (2026-10-13): where each of a title's own HUD widgets
 goes inside one view of a split screen, as a TOML file with a `[toml-schema]` header
-(`schemas/v1/split-hud.tosd`, [ADR-0064](adr/0064-project-toml-files-declare-a-toml-schema.md)),
-read by `oag_hud::split_hud`. The shipped files are `assets/fallback/Data/XML/SplitHud_Pulse.toml`
+(`schemas/v1/screen-layout.tosd` with `screen = "split-hud"`, [ADR-0064](adr/0064-project-toml-files-declare-a-toml-schema.md),
+[screen-layout.md](../formats/screen-layout.md)), read by `oag_hud::split_hud`. The shipped files are `assets/fallback/Data/XML/SplitHud_Pulse.toml`
 (PSP and PS2, one file), `SplitHud_Pure.toml`, `SplitHud_HD.toml` and `SplitHud_2048.toml`
 (2026-10-13, `split-hud-vertical`; 2048's disc layouts are authored for another grid), named per title in
 `oag_title::HudLayouts::split_layout`. They place the title's own widgets and draw no art

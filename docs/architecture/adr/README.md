@@ -89,6 +89,7 @@ out to be wrong.
 | [0078](0078-a-mod-is-turned-off-by-id-live-and-the-built-in-never.md) | A mod is turned off by id, live, and the built-in never | **Proposed** |
 | [0079](0079-extensions-are-sandboxed-webassembly-guests-behind-two-worlds.md) | Extensions are sandboxed WebAssembly guests behind two worlds: a sim world of copies in and bounded commands out, and a HUD world that reaches no state | **Proposed** |
 | [0080](0080-a-wasm-mod-may-own-a-screen-and-save-a-small-blob.md) | A WebAssembly mod may own a screen in a third, frontend world and save one small blob; supersedes ADR-0066 decision 4 for wasm screens only | **Proposed** |
+| [0081](0081-screen-layouts-are-files-and-a-track-may-carry-its-loading-screen.md) | Screen layouts are files (`screen-layout.tosd`, a split HUD or a loading screen), and a track may carry its own loading screen in its manifest | **Accepted** |
 
 ## Format
 

@@ -121,7 +121,7 @@ fn a_piece_pinned_to_the_bottom_sits_at_the_bottom_of_a_ps2_view() {
         source: [0.0, 400.0],
         group: oag_hud::split_hud::Group {
             widgets: vec![],
-            anchor: oag_hud::split_hud::Anchor::Bottom,
+            anchor: oag_hud::screen_layout::Anchor::Bottom,
             offset: [0.0, -0.04],
             scale: 1.0,
         },
@@ -172,6 +172,7 @@ const SAMPLE: &str = r#"<Screen>
 </Screen>"#;
 
 const FILE: &str = r#"
+screen = "split-hud"
 [[layout]]
 name = "any"
 [[layout.group]]

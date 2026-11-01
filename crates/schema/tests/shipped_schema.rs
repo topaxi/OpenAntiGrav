@@ -44,10 +44,23 @@ fn shipped() -> Vec<(&'static str, &'static str)> {
         ),
         ("crates/trackfile/tests/fixtures/oval.track.toml", "track"),
         ("crates/game/tests/fixtures/music-state.toml", "music-state"),
-        ("assets/fallback/Data/XML/SplitHud_Pulse.toml", "split-hud"),
-        ("assets/fallback/Data/XML/SplitHud_Pure.toml", "split-hud"),
-        ("assets/fallback/Data/XML/SplitHud_HD.toml", "split-hud"),
-        ("assets/fallback/Data/XML/SplitHud_2048.toml", "split-hud"),
+        (
+            "assets/fallback/Data/XML/SplitHud_Pulse.toml",
+            "screen-layout",
+        ),
+        (
+            "assets/fallback/Data/XML/SplitHud_Pure.toml",
+            "screen-layout",
+        ),
+        ("assets/fallback/Data/XML/SplitHud_HD.toml", "screen-layout"),
+        (
+            "assets/fallback/Data/XML/SplitHud_2048.toml",
+            "screen-layout",
+        ),
+        (
+            "assets/fallback/Data/XML/LoadingScreen_HD.toml",
+            "screen-layout",
+        ),
     ]
 }
 

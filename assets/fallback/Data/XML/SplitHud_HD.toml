@@ -18,8 +18,10 @@
 # The first layout whose `views`, `aspect` (a view's width over height, [min, max)) and
 # `modes` all fit the view answers it.
 
+screen = "split-hud"
+
 [toml-schema]
-location = "https://oag.topaxi.com/mods/schemas/v1/split-hud.tosd"
+location = "https://oag.topaxi.com/mods/schemas/v1/screen-layout.tosd"
 version = "1.0.0"
 
 # A strip wider than 2.4:1: the top view of three, and two views in a mode the disc authors no split layout for.

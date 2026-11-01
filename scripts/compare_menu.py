@@ -158,6 +158,66 @@ def menu_pair(pair, *, theirs_png, oag_game, image, page, drawn_from, xml_file, 
     return True
 
 
+def loading_pair(pair, *, theirs_png, oag_game, image, profile_dir, size, front_end_style, language, original_language,
+                 screen_seen, screen_wanted, feature_seen, mode, track, ticks, safe_area=None, notes=()):
+    """Fill `pair` for HD's loading screen and check it. `kind = "loading"`: a still of the race load, ours drawn by
+    `oag-game --loading-screen 0/1 --loading-step race --loading-live --mode MODE --ticks TICKS --loading-draw N` (the
+    window's own `loading::Screen`, drawn from `LoadingScreen_HD.toml`). The screen name is **declared** by the walk
+    (`screen_wanted`; HD's `TTY.log` names no loading screen, only `Launch Game`/`InGame`, and `screen_seen` is that
+    line). The feature is the original's random draw (`Libc_Rand` in `LoadingScreen_Construct`), read from the
+    constructor's `Feature type == N` TTY line; ours takes the first `--loading-draw` seed whose feature slot is that
+    number (`oag-game` logs `draw D shows feature slot S`), and the pair is refused when none of the first 16 does."""
+    out = pair.out
+    plat = pair.plat
+    pair.rec["kind"] = "loading"
+    pair.rec["original"]["screen"] = {"seen": screen_seen, "wanted": screen_wanted,
+                                      "source": "declared: TTY.log names no loading screen (its last screen line is `%s`)" % screen_seen}
+    pair.rec["original"]["feature"] = {"index": feature_seen, "source": "TTY.log, `Feature type == N` (the last constructor line)"}
+    pair.rec["original"]["language"] = original_language
+    pair.rec["original"]["front_end_style"] = front_end_style
+    pair.rec["ours"]["language"] = language
+    pair.rec["ours"]["front_end_style"] = front_end_style
+    pair.rec["ours"]["drawn_from"] = {"kind": "layout", "xml": "LoadingScreen_HD.toml (the fallback layer's screen-layout file)"}
+    pair.rec["ours"]["mode"] = mode
+    pair.rec["ours"]["ticks"] = ticks
+    pair.rec["ours"]["binary"] = ce.binary_record(oag_game)
+    pair.check_equal("language", original_language, language)
+    shutil.copyfile(theirs_png, out / "theirs.png")
+    pair.check_size("original", out / "theirs.png")
+    if feature_seen is None:
+        pair.check("original feature read", False, "no `Feature type == N` line in TTY.log")
+    if pair.failed():
+        return False
+    flags = ce.ours_flags(plat)
+    flags[flags.index("--size") + 1] = size
+    flags += ["--loading-screen", "0/1", "--loading-step", "race", "--loading-live", "--mode", mode, "--ticks", str(ticks),
+              "--track", track]
+    env = dict(os.environ, **ce.ours_env(profile_dir), RUST_LOG="info")
+    slot = None
+    for draw in range(16):
+        cmd = [str(oag_game), str(image)] + flags + ["--loading-draw", str(draw), "--screenshot", str(out / "ours.png")]
+        log("+ " + " ".join(cmd[2:]))
+        done = subprocess.run(cmd, check=True, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+        hit = [l for l in done.stderr.splitlines() if "shows feature slot" in l]
+        slot = int(hit[-1].rsplit("Some(", 1)[1].rstrip(")")) if hit and "Some(" in hit[-1] else None
+        if slot == feature_seen:
+            pair.rec["ours"]["flags"] = [str(c) for c in cmd[2:]]
+            pair.rec["ours"]["feature"] = {"index": slot, "draw": draw, "source": "`--loading-draw %d`: the feature slot oag-game logs" % draw}
+            break
+    else:
+        pair.rec["ours"]["feature"] = {"index": slot, "source": "no `--loading-draw` in 0..16 shows the original's feature"}
+    pair.check_equal("feature", feature_seen, slot)
+    got, bad = ce.read_back(plat, profile_dir, safe_area)
+    pair.rec["ours"]["settings_readback"] = got
+    for b in bad:
+        pair.check("ours settings", False, b)
+    pair.check("ours settings read back", not bad, "%d keys equal the profile" % (len(got) - len(bad)))
+    pair.check_size("ours", out / "ours.png")
+    for note in notes:
+        pair.caveat(note)
+    return True
+
+
 def write_gap(out, theirs_png, page, drawn_from, why):
     """A screen ours draws from `menu.toml`: the original's frame is kept and `gap.json` says why there is no pair."""
     out = Path(out)

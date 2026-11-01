@@ -361,7 +361,7 @@ the first source that has a layout for the view's count, mode and shape wins:
 | Pulse (PSP, PS2), Pure, HD otherwise and 2048, any count 2 to 8 and every view shape, both cuts of two views | `SplitHud_Pulse.toml`, `SplitHud_Pure.toml`, `SplitHud_HD.toml`, `SplitHud_2048.toml` | **chosen, not measured** |
 | Omega's other cases | the whole-screen layout scaled to fit the view | **chosen, not measured** |
 
-**The file** (`schemas/v1/split-hud.tosd`, `oag_hud::split_hud`) is a list of
+**The file** (`schemas/v1/screen-layout.tosd` with `screen = "split-hud"`, [screen-layout.md](../formats/screen-layout.md), `oag_hud::split_hud`) is a list of
 `[[layout]]` rules, each with `views`, `aspect` (a *view's* width over height, so
 three, five and seven views, whose views differ in shape, pick a rule per view) and
 `modes`, and its `[[layout.group]]`s: a list of the title's own widget names (a

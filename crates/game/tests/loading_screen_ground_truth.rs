@@ -168,6 +168,45 @@ fn hd_draws_a_feature_and_a_caption_and_no_wave() {
             "{entry} is in the one sheet the screen draws from"
         );
     }
+    // The layout is the fallback layer's own file, found through the archives, and every
+    // role it names resolves against the real art: nothing in it is skipped.
+    let layouts = assets
+        .layout
+        .as_ref()
+        .expect("the fallback's LoadingScreen_HD.toml loads");
+    let layout = layouts
+        .for_race("single_race", 16.0 / 9.0)
+        .expect("it answers a single race");
+    assert_eq!(layout.grid, [1920.0, 1080.0]);
+    for element in &layout.elements {
+        if let Some(role) = element.asset.as_deref() {
+            let resolved = match role {
+                "rule" => art.rule.is_some(),
+                "corner" => art.corner.is_some(),
+                "dot" => art.dot.is_some(),
+                "square" => art.square.is_some(),
+                "title-arrow" => art.title_arrow.is_some(),
+                "subtitle-arrow" => art.subtitle_arrow.is_some(),
+                "@feature" => true,
+                other => panic!(
+                    "{}: an asset role this build does not know: {other}",
+                    element.id
+                ),
+            };
+            assert!(
+                resolved,
+                "{}: the art role {role} has no texture on the disc",
+                element.id
+            );
+        }
+        if let Some(id) = element.string_id.as_deref() {
+            assert!(
+                assets.layout_strings.iter().any(|(known, _)| known == id),
+                "{}: {id} is not in the disc's English table",
+                element.id
+            );
+        }
+    }
     // The marks the original frames the screen with are in the same sheet.
     assert!(art.title_arrow.is_some());
     assert!(art.subtitle_arrow.is_some());

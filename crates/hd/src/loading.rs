@@ -109,6 +109,7 @@ pub static LOADING: oag_title::Loading = oag_title::Loading {
     deck: Some(DECK),
     labels: Some(LABELS),
     progression: Some(PROGRESSION),
+    layout: Some(r"Data\XML\LoadingScreen_HD.toml"),
 };
 
 /// The Bink clip in the mode icon's panel, by mode id, in the Fury styling.

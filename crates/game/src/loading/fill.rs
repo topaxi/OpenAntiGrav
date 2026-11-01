@@ -153,7 +153,7 @@ mod tests {
     fn the_lit_count_is_the_integer_part_of_the_shown_columns() {
         let mut fill = Fill::new(LAW);
         fill.shown = 33.0;
-        let lit = super::super::bar::lit_columns(fill.fraction());
+        let lit = (fill.fraction() * 166.0).floor();
         assert!((lit - 33.0).abs() < f32::EPSILON, "{lit}");
     }
 }

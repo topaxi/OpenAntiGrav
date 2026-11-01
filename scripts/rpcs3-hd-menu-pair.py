@@ -23,6 +23,7 @@ import datetime
 import importlib
 import json
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -83,6 +84,28 @@ WALK = [
      "selection": {"original": "first row", "ours": "first row"}},
 ]
 
+#: The loading walk: Main Menu to a Racebox single race on Vineta K with Feisar, then CROSS on Team Selection starts the
+#: race load, and the one photograph is taken `settle` seconds after it (the old hand-grabbed frame l3 was 4 s after the
+#: CROSS, bar about 15 % filled, `Launch Game` then `InGame` on TTY.log). **The walk is one-way**: the race load ends in a
+#: race, so a later menu walk needs a fresh cold boot. The screen name is declared (`TTY.log` names none for this screen),
+#: the feature is read from the constructor's `Feature type == N` line.
+LOADING_WALK = [
+    "cross:5", "cross:5", "cross:5", "circle:5", "circle:5", "circle:5", "right", "cross:5", "cross:5", "cross:6",
+    "cross:0.2",
+    {"id": "loading", "kind": "loading", "title": "Race loading, Vineta K, Feisar", "screen": "Loading Screen (declared)",
+     "settle": 4.0, "mode": "single_race", "track": "Data\\Environments\\01_Vineta_K\\track.vex", "ticks": 100,
+     "race": {"team": "Feisar", "variant_chosen": True, "track": "01_Track"}},
+]
+
+FEATURE_LINE = re.compile(r"Feature type == (\d+)")
+
+
+def feature_read():
+    """The feature the last constructed loading screen drew (`Feature type == N`), or None."""
+    hits = FEATURE_LINE.findall(drive.tty_text())
+    return int(hits[-1]) if hits else None
+
+
 #: The language of the original: RPCS3's `System: Language` in the private config.
 def original_language(config_dir):
     for line in (Path(config_dir) / "config.yml").read_text().splitlines():
@@ -97,6 +120,8 @@ def main():
     ap.add_argument("--oag-game", default=str(ROOT / "target/release/oag-game"))
     ap.add_argument("--image", default=str(MAIN / "data/images/hdfury-ps3-eu.iso"))
     ap.add_argument("--platform", default="hd-fury")
+    ap.add_argument("--walk", choices=("menus", "loading"), default="menus",
+                    help="`menus` walks WALK (one pair per screen); `loading` walks LOADING_WALK to the race load (ends in a race)")
     ap.add_argument("--only", help="comma list of walk ids to pair (the walk still runs through all)")
     ap.add_argument("--settle", type=float, default=3.0, help="seconds after the last tap before a photograph")
     ap.add_argument("--front-end-style", default="FURY",
@@ -118,7 +143,8 @@ def main():
     shots = out / "shots"
     shots.mkdir(exist_ok=True)
     seen = {}
-    for item in WALK:
+    steps = LOADING_WALK if args.walk == "loading" else WALK
+    for item in steps:
         if isinstance(item, str):
             button, _, settle = item.partition(":")
             before = drive.current_screen()
@@ -126,18 +152,51 @@ def main():
             time.sleep(float(settle) if settle else 3.0)
             print("%-10s %-22s -> %s" % (item, before, drive.current_screen()), flush=True)
             continue
-        time.sleep(args.settle)
+        time.sleep(item.get("settle", args.settle))
         screen = drive.current_screen()
         png = shots / (item["id"] + ".png")
         walk.grab(png, w, h)
-        seen[item["id"]] = {"screen": screen, "png": png, "at": datetime.datetime.now().astimezone().isoformat(timespec="seconds")}
+        seen[item["id"]] = {"screen": screen, "feature": feature_read(), "png": png, "at": datetime.datetime.now().astimezone().isoformat(timespec="seconds")}
         print("shot %-16s screen %r" % (item["id"], screen), flush=True)
     refused = []
-    for item in (i for i in WALK if isinstance(i, dict)):
+    for item in (i for i in steps if isinstance(i, dict)):
         if only and item["id"] not in only:
             continue
         shot = seen[item["id"]]
         pdir = out / ("menu-" + item["id"])
+        if item.get("kind") == "loading":
+            pdir = out / ("loading-" + item["id"])
+            pdir.mkdir(parents=True, exist_ok=True)
+            pair = ce.Pair(args.platform, pdir)
+            pair.rec["meta"] = {"id": "hd-loading", "title": item["title"], "track": "Vineta K", "craft": "Feisar",
+                                "note": "Racebox single race, Vineta K, Feisar; ours is `--loading-live` at tick %d, drawn from LoadingScreen_HD.toml. Both sides "
+                                "English, front-end styling %s." % (item["ticks"], args.front_end_style),
+                                "state": "cold boot, walked from Main Menu with the pad; photographed %.0f s after CROSS on Team Selection"
+                                % item["settle"]}
+            pair.rec["original"]["emulator"] = dict(plat["emulator"])
+            pair.rec["original"]["captured_at"] = shot["at"]
+            pair.rec["original"]["capture_path"] = "cold boot, walked (no savestate)"
+            profile = pdir / "ours-profile" / "profile"
+            safe_area = ce.record_safe_area(pair)
+            ce.write_ours_settings(plat, profile, safe_area)
+            cm.extra_settings(profile, args.front_end_style, item.get("race"))
+            args.accept_provenance = list(args.accept_provenance)
+            cp.build(pair, args, "loading", "cold_boot", None,
+                     {"value": None, "unit": None, "basis": "not applicable: a loading screen is a still, the bar's fill is not locked"})
+            try:
+                cm.loading_pair(pair, theirs_png=shot["png"], oag_game=args.oag_game, image=args.image, profile_dir=profile,
+                                size=ce.size_text(plat), front_end_style=args.front_end_style, language="English",
+                                original_language=language.split(" ")[0], screen_seen=shot["screen"], screen_wanted=item["screen"],
+                                feature_seen=shot["feature"], mode=item["mode"], track=item["track"],
+                                ticks=item["ticks"], safe_area=safe_area)
+                pair.finish()
+            except SystemExit as exc:
+                if exc.code == 3:
+                    refused.append(item["id"])
+                    continue
+                raise
+            print("pair %s ok (feature %s)" % (item["id"], shot["feature"]))
+            continue
         if cm.is_gap(item["drawn_from"]):
             cm.write_gap(out / ("gap-" + item["id"]), shot["png"], item["page"], item["drawn_from"],
                          "ours draws %s from %s, not the disc's XML: %s"

@@ -151,13 +151,17 @@ pub struct Screen {
     /// The bar's dot, tiled across it, and the bullet before each label.
     dot: Option<[f32; 4]>,
     square: Option<[f32; 4]>,
-    /// The small labels over the screen's regions, when the title draws them.
-    labels: Option<assets::Labels>,
     /// The four colours this source tints the screen with, when it names them.
     ///
     /// `None` keeps the palette this build chose against a near-black frame,
     /// which is what both PSP titles get. See [`Assets::palette`].
     palette: Option<assets::Palette>,
+    /// The circuit's name a track supplied for the caption line, instead of the one the load
+    /// reports. See [`track`].
+    circuit: Option<String>,
+    /// The slot of the feature on show in the title's own table, which is the number the
+    /// original's `Feature type == N` line reports.
+    feature_slot: Option<u8>,
     /// The feature's own name, when its id was recovered.
     feature_title: Option<String>,
     /// The heading over the paragraph, drawn in the row the name shares.
@@ -208,6 +212,16 @@ pub struct Screen {
     /// The bar's stage-driven fill, on a title whose loader drives it. `None`
     /// keeps the time estimate. See [`fill::Fill`].
     fill: Option<fill::Fill>,
+    /// This title's loading layout file, when it names one that loaded. See [`layout`].
+    layouts: Option<oag_hud::loading_layout::LoadingLayouts>,
+    /// The strings the layout's labels name, resolved. See [`Assets::layout_strings`].
+    layout_strings: Vec<(String, String)>,
+    /// `oag_race::Mode::name` of the race the screen covers, which picks the layout.
+    mode_name: Option<&'static str>,
+    /// The player's Safe Area as a scale about the screen's centre.
+    safe_area: f32,
+    /// The surface's width over height, which picks among a file's layouts.
+    surface_aspect: f32,
     /// This project's own strings, layered over nothing: this screen runs
     /// before any disc's language plugin is read - `heading`'s "READING THE
     /// ARCHIVES" case fires while that read is still in flight - so there is
@@ -272,8 +286,11 @@ impl Screen {
             corner: assets.art.as_ref().and_then(|art| art.corner),
             dot: assets.art.as_ref().and_then(|art| art.dot),
             square: assets.art.as_ref().and_then(|art| art.square),
-            labels: assets.labels.clone(),
             palette: assets.palette,
+            circuit: None,
+            feature_slot: shown
+                .and_then(|at| assets.features.get(at))
+                .map(|feature| feature.slot),
             feature_title: shown
                 .and_then(|at| assets.features.get(at))
                 .and_then(|feature| feature.title.clone()),
@@ -296,6 +313,11 @@ impl Screen {
             fade: 0,
             mode_icon: false,
             fill: assets.progression.map(fill::Fill::new),
+            layouts: assets.layout.clone(),
+            layout_strings: assets.layout_strings.clone(),
+            mode_name: mode.and_then(feature::mode_name),
+            safe_area: 1.0,
+            surface_aspect: 16.0 / 9.0,
             strings: oag_ui::strings::project_table(language),
         }
     }
@@ -399,6 +421,13 @@ impl Screen {
         self.tips.get(at).map(String::as_str)
     }
 
+    /// The title's own slot of the feature on show: what the original's constructor logs as
+    /// `Feature type == N` for the same feature. `None` on a title with no features.
+    #[must_use]
+    pub fn feature_slot(&self) -> Option<u8> {
+        self.feature_slot
+    }
+
     /// The feature's own name, drawn above its prose. `None` on a title with no
     /// features, and on a feature whose title id was not recovered.
     #[must_use]
@@ -418,18 +447,9 @@ impl Screen {
             return heading(phase, progress, &self.strings);
         }
         let caption = self.caption.clone().unwrap_or_default();
-        match &progress.current {
+        match self.circuit.as_ref().or(progress.current.as_ref()) {
             Some(current) => format!("{caption} {current}"),
             None => caption,
-        }
-    }
-
-    /// Where the prose starts, which depends on what is above it.
-    fn tip_top(&self) -> f32 {
-        if self.illustration.is_some() {
-            FEATURE_TIP_Y
-        } else {
-            TIP_Y
         }
     }
 
@@ -438,267 +458,101 @@ impl Screen {
     /// The wave is not in here because it is not a [`Draw`]: it has its own
     /// pipeline and its own additive blend, and is drawn over this list in a
     /// second pass. See [`oag_render::loading::Pipeline`].
+    ///
+    /// **A title with art for its own arrangement is drawn from its layout file**
+    /// ([`layout`]): Wipeout HD's marked title over a rule, its illustration and prose, its
+    /// bar and mode icon, none of which is placed here. What this function lays out is the
+    /// centred screen both PSP discs have always drawn, which is this build's own.
     #[must_use]
     pub fn draw_list(&self, phase: Phase, progress: &Progress, atlas: &Atlas) -> Vec<Draw> {
+        if self.is_laid_out() {
+            return self.laid_out_list(phase, progress, atlas);
+        }
         let mut out = Vec::new();
         let fade = self.opacity();
         let dim = |colour: [f32; 4]| [colour[0], colour[1], colour[2], colour[3] * fade];
-        // **Over an illustration the text goes white and gains a dark
-        // outline**, and
-        // this is a legibility fix rather than a style. Every colour below was
-        // chosen against the cleared near-black frame this screen used to have,
-        // where the dim slate blues read as a hierarchy. Wipeout HD's still is a
-        // *pale* billboard - see `oag_hd::loading::BACKDROP` - and `CURRENT`'s
-        // blue-grey over its grey panel is close to invisible, which is exactly
-        // the line a race load puts the circuit's name on. Tried with the
-        // outline alone first: it lifts the white heading and does nothing for
-        // the dim rows, because the problem there is the fill and not the edge.
-        //
-        // The hierarchy is what is given up, and it is the right thing to give
-        // up: three shades of nearly-invisible is not a hierarchy. A title with
-        // no backdrop draws exactly what it drew before - both PSP discs, and
-        // any run with no title in hand.
-        let over_backdrop = self.illustration.is_some();
-        // **The disc's own tint where this source names one.** The four
-        // globals the original's loading screen resolves are read out of its
-        // own `FEGlobals` - see `oag_hd::loading::PALETTE` for the constructor
-        // they came off - so a screen drawn here is the colour that disc draws
-        // it, white-and-blue or black-and-red, rather than a scheme this build
-        // picked. A title that names none keeps what it always drew.
-        //
-        // An outline is still drawn over an illustration, because the picture
-        // underneath is not one of the four colours and the text crosses it.
-        let border = over_backdrop.then(|| dim(OUTLINE));
+        // **The disc's own tint where this source names one.** The four globals the original's
+        // loading screen resolves are read out of its own `FEGlobals`, so a screen drawn here is
+        // the colour that disc draws it. A title that names none keeps what it always drew.
         let tint = self.palette;
-        // **One ink for everything written and drawn**, which is a usage count
-        // rather than a preference: the original's own draw function reads
-        // `HD_Grey` about ten times per screen variant and its other three
-        // colours once each. The names mislead - "light grey" is the *dark*
-        // half-alpha one on the archive this disc serves - so the roles come
-        // from the values and the counts. See
-        // `docs/ghidra/functions/ps3-hdfury-eu/loading-screen.md`.
         let ink = |colour: [f32; 4]| match tint {
             Some(palette) => dim(palette.ink),
-            None if over_backdrop => dim(ON_BACKDROP),
             None => dim(colour),
         };
-        let rule_ink = tint.map_or(dim(RULE_INK), |palette| dim(palette.ink));
-        // `HD_LightGrey` is the unfilled dots of the progression bar: a live
-        // frame of the original's fade-in shows the whole bar as dark
-        // translucent dots with `HD_Blue` dots filling from the left. Confidence
-        // 88; see `docs/ghidra/functions/ps3-hdfury-eu/loading-screen.md`.
-        let bar_trough = tint.map_or(dim(BAR_DOTS), |palette| dim(palette.dim));
-        let bar_fill = tint.map_or(dim(BAR_FILL), |palette| dim(palette.accent));
 
-        // The frame is cleared either way: the backdrop is stretched over the
-        // whole of it, so this is only ever seen through the fade - but the
-        // fade is exactly when a hole in the list would show as whatever the
+        // The frame is cleared either way, so a hole in the list never shows as whatever the
         // last stage left behind.
         out.push(Draw::Fill {
             rect: [0.0, 0.0, SCREEN.0, SCREEN.1],
             color: tint.map_or(BACKDROP, |palette| dim(palette.background)),
         });
 
-        let (heading_x, heading_align) = if self.illustration.is_some() {
-            (PANEL_X, Align::Left)
-        } else {
-            (SCREEN.0 / 2.0, Align::Centre)
-        };
         out.push(Draw::Text {
-            x: heading_x,
+            x: SCREEN.0 / 2.0,
             y: HEADING_Y,
             scale: self.text(HEADING_SCALE),
             color: ink(HEADING),
-            border,
-            align: heading_align,
-            // **The caption and what is loading on one line**, which is how the
-            // original writes it: a running Fury race heads this screen
-            // `LOADING... VINETA K`, the disc's own word followed by the
-            // circuit's own name. So a title with a caption puts them together
-            // and draws no separate line below; a title without one keeps this
-            // build's heading and its own `current` row. A caption never
-            // replaces the *counted* headings, which say something the disc's
-            // single string cannot - see `heading`.
+            border: None,
+            align: Align::Centre,
+            // **The caption and what is loading on one line**, which is how the original writes
+            // it: a title with a caption puts them together and draws no separate line below; a
+            // title without one keeps this build's heading and its own `current` row. A caption
+            // never replaces the *counted* headings, which say something the disc's single
+            // string cannot - see `heading`.
             text: self.heading_text(phase, progress),
             wrap_width: None,
         });
 
-        // **The original's own arrangement**, where a title has the art for
-        // it: a marked title over a rule, the illustration on the left and its
-        // prose on the right, and the bar along the bottom. Read off a
-        // screenshot of a running Fury race - see `docs/formats/hd-loading.md`.
-        //
-        // A title with no art draws none of this and keeps the centred layout
-        // below, which is what both PSP discs have always drawn.
-        if self.illustration.is_some() {
-            if let Some(uv) = self.title_arrow {
-                out.push(Draw::Sprite {
-                    rect: [
-                        PANEL_X - MARKER_SIZE - 4.0,
-                        HEADING_Y + 2.0,
-                        MARKER_SIZE,
-                        MARKER_SIZE,
-                    ],
-                    uv,
-                    color: dim(ON_BACKDROP),
-                });
-            }
-            if let Some(uv) = self.rule {
-                for y in [RULE_TOP_Y, RULE_BOTTOM_Y] {
-                    out.push(Draw::Sprite {
-                        rect: [PANEL_X, y, PANEL_RIGHT - PANEL_X, RULE_HEIGHT],
-                        uv,
-                        color: rule_ink,
-                    });
-                }
-            }
-            for (x, y) in corners(IMAGE_BOX).into_iter().chain(corners(PROSE_BOX)) {
-                if let Some(uv) = self.corner {
-                    out.push(Draw::Sprite {
-                        rect: [x, y, CORNER_SIZE, CORNER_SIZE],
-                        uv,
-                        color: rule_ink,
-                    });
-                }
-            }
-        }
-
-        if let Some(uv) = self.illustration {
-            // **Fitted, not stretched.** The aspect is kept because an
-            // illustration squashed to a layout is a picture nobody authored.
-            let (w, h) = (uv[2].max(1.0), uv[3].max(1.0));
-            let scale = (IMAGE_FIT.2 / w).min(IMAGE_FIT.3 / h);
-            let (drawn_w, drawn_h) = (w * scale, h * scale);
-            out.push(Draw::Sprite {
-                rect: [
-                    IMAGE_FIT.0 + (IMAGE_FIT.2 - drawn_w) / 2.0,
-                    IMAGE_FIT.1 + (IMAGE_FIT.3 - drawn_h) / 2.0,
-                    drawn_w,
-                    drawn_h,
-                ],
-                uv,
-                color: dim([1.0, 1.0, 1.0, 1.0]),
-            });
-        }
-
-        feature::Rows {
-            arrow: self.subtitle_arrow,
-            arrow_color: dim(ON_BACKDROP),
-            color: ink(HEADING),
-            border,
-            scale: self.text(feature::TITLE_SCALE),
-            title: self.feature_title(),
-            heading: self.feature_heading.as_deref(),
-        }
-        .draw(&mut out);
-
-        if self.illustration.is_some() {
-            let fraction = if counted(progress) {
-                fraction(phase, progress)
-            } else if let (Phase::Race, Some(fill)) = (phase, &self.fill) {
-                // The whole bar once the work is over is this build's own
-                // (chosen, not measured); the steps before it are the loader's.
-                if self.fade > 0 { 1.0 } else { fill.fraction() }
-            } else if matches!(phase, Phase::Race) {
-                estimated_fraction(self.frames, self.fade > 0)
-            } else {
-                0.0
-            };
-            self.draw_bar(&mut out, fraction, bar_trough, bar_fill, rule_ink);
-            self.draw_labels(&mut out, ink(HEADING), border);
-            self.draw_mode_icon(&mut out);
-        }
-
         if let Some(tip) = self.tip() {
-            // Left-aligned in its own panel on a feature screen, centred over
-            // the wave on a title without one.
-            let boxed = self.illustration.is_some();
-            let (x, align, width) = if boxed {
-                (PROSE_BOX.0, Align::Left, PROSE_BOX.2)
-            } else {
-                (SCREEN.0 / 2.0, Align::Centre, TIP_WIDTH)
-            };
-            // A feature's paragraph is longer than a tip and has a taller panel
-            // to put it in; eliding it at four lines cut every one of HD's five
-            // mid-sentence.
-            let lines = if boxed { FEATURE_TIP_LINES } else { TIP_LINES };
-            for (row, line) in wrap(atlas, tip, self.text(TIP_SCALE), width)
+            for (row, line) in wrap(atlas, tip, self.text(TIP_SCALE), TIP_WIDTH)
                 .into_iter()
-                .take(lines)
+                .take(TIP_LINES)
                 .enumerate()
             {
                 out.push(Draw::Text {
-                    x,
-                    y: self.tip_top() + row as f32 * TIP_LINE_HEIGHT,
+                    x: SCREEN.0 / 2.0,
+                    y: TIP_Y + row as f32 * TIP_LINE_HEIGHT,
                     scale: self.text(TIP_SCALE),
                     color: ink(TIP_COLOUR),
-                    border,
-                    align,
+                    border: None,
+                    align: Align::Centre,
                     text: line,
                     wrap_width: None,
                 });
             }
         }
 
-        // **Where the counted rows go depends on which layout is up**, and
-        // getting that wrong drew two bars: the feature layout has a bar of its
-        // own, low and wide, and this block used to draw the centred layout's
-        // thin one on top of the prose whatever was on screen. Found by asking
-        // what a half-filled bar looks like, which is a state neither a race
-        // load nor a warm cache ever reaches.
-        let boxed = self.illustration.is_some();
-        let (rows_x, rows_width, counts_y, row_pitch) = if boxed {
-            // Under the bar and above the closing rule, which is 26 units of
-            // room for three rows - so they are pitched tighter here than on
-            // the centred layout, which has the whole lower half.
-            (
-                PANEL_X,
-                BAR_BOX.2,
-                BAR_BOX.1 + BAR_BOX.3 + 3.0,
-                BOXED_ROW_PITCH,
-            )
-        } else {
-            (BAR_X, BAR_WIDTH, COUNTS_Y, CENTRED_ROW_PITCH)
-        };
-
-        // The bar and the counts say the same thing twice on purpose: the bar is
-        // what is read at a glance across ten minutes, and the figures are what
-        // distinguish "slow" from "stuck" when the bar has not visibly moved.
-        //
-        // All of it together, or none of it: see [`counted`].
+        // The bar and the counts say the same thing twice on purpose: the bar is what is read at
+        // a glance across ten minutes, and the figures are what distinguish "slow" from "stuck"
+        // when the bar has not visibly moved. All of it together, or none of it: see [`counted`].
         if counted(progress) {
-            // The trough only where there is not one already. The feature
-            // layout draws its own above, in the disc's own colours.
-            if !boxed {
-                let filled = fraction(phase, progress) * BAR_WIDTH;
+            let filled = fraction(phase, progress) * BAR_WIDTH;
+            out.push(Draw::Fill {
+                rect: [BAR_X, BAR_Y, BAR_WIDTH, BAR_HEIGHT],
+                color: dim(BAR_TROUGH),
+            });
+            if filled > 0.0 && !progress.planning {
                 out.push(Draw::Fill {
-                    rect: [BAR_X, BAR_Y, BAR_WIDTH, BAR_HEIGHT],
-                    color: dim(BAR_TROUGH),
+                    rect: [BAR_X, BAR_Y, filled, BAR_HEIGHT],
+                    color: dim(BAR_FILL),
                 });
-                if filled > 0.0 && !progress.planning {
-                    out.push(Draw::Fill {
-                        rect: [BAR_X, BAR_Y, filled, BAR_HEIGHT],
-                        color: dim(BAR_FILL),
-                    });
-                }
             }
-
             out.push(Draw::Text {
-                x: rows_x,
-                y: counts_y,
+                x: BAR_X,
+                y: COUNTS_Y,
                 scale: self.text(COUNTS_SCALE),
                 color: ink(COUNTS),
-                border,
+                border: None,
                 align: Align::Left,
                 text: counts(phase, progress, &self.strings),
                 wrap_width: None,
             });
             out.push(Draw::Text {
-                x: rows_x + rows_width,
-                y: counts_y,
+                x: BAR_X + BAR_WIDTH,
+                y: COUNTS_Y,
                 scale: self.text(COUNTS_SCALE),
                 color: ink(COUNTS),
-                border,
+                border: None,
                 align: Align::Right,
                 text: percentage(phase, progress),
                 wrap_width: None,
@@ -711,28 +565,27 @@ impl Screen {
             .filter(|_| !self.caption_leads(progress))
         {
             out.push(Draw::Text {
-                x: rows_x,
-                y: counts_y + row_pitch,
+                x: BAR_X,
+                y: COUNTS_Y + CENTRED_ROW_PITCH,
                 scale: self.text(CURRENT_SCALE),
                 color: ink(CURRENT),
-                border,
+                border: None,
                 align: Align::Left,
-                text: elide(atlas, current, self.text(CURRENT_SCALE), rows_width),
+                text: elide(atlas, current, self.text(CURRENT_SCALE), BAR_WIDTH),
                 wrap_width: None,
             });
         }
 
-        // A line of its own rather than a suffix on the one above, because
-        // `elide` keeps a string's *tail*: appended, the state would survive and
-        // the entry name would be eaten from the left, which is the wrong half
-        // to lose. Two short lines are both legible at any name length.
+        // A line of its own rather than a suffix on the one above, because `elide` keeps a
+        // string's *tail*: appended, the state would survive and the entry name would be eaten
+        // from the left, which is the wrong half to lose.
         if let Some(step) = step_line(phase, &self.strings) {
             out.push(Draw::Text {
-                x: rows_x,
-                y: counts_y + row_pitch * 2.0,
+                x: BAR_X,
+                y: COUNTS_Y + CENTRED_ROW_PITCH * 2.0,
                 scale: self.text(CURRENT_SCALE),
                 color: ink(CURRENT),
-                border,
+                border: None,
                 align: Align::Left,
                 text: step,
                 wrap_width: None,
@@ -821,104 +674,10 @@ pub fn elide(atlas: &Atlas, text: &str, scale: f32, max_width: f32) -> String {
 /// *face* is the right axis.
 const AUTHORED_LINE_HEIGHT: f32 = 13.0;
 
-/// Where a feature illustration goes: `x, y, width, height` in this screen's
-/// own 480x272 grid.
-///
-/// Between the heading and the prose, and the picture is fitted inside it
-/// rather than filling it - see [`Screen::draw_list`]. The original puts the
-/// illustration left and the description right; this build's screen is one
-/// column, so the two stack. That is this build's layout, as the rest of this
-/// screen's layout is.
-/// The original's own arrangement, in this screen's 480x272 grid.
-///
-/// Measured off a screenshot of a running Fury race as *fractions* of its
-/// frame, then multiplied into this grid - so the proportions are the disc's
-/// and the pixel values are this build's. The labels in that shot
-/// (`FEATURE IMAGE`, `PROGRESSION BAR`, `MODE ICON`) are the game's own and are
-/// drawn by `bar::draw_labels`; the marked title, the rules, the two panels and
-/// the bar are the rest of the screen.
-///
-/// **Two columns rather than the original's exact two**, because our grid is
-/// 480 wide where HD's is 1920 and prose in the right-hand half of a 480-wide
-/// screen wraps to a column three words across. So the panels keep the
-/// original's *relationship* (picture left, prose right of it, bar under both)
-/// at proportions that stay readable here. That is this build's layout decision
-/// and is the same kind `oag_ui::menu::Skin` makes.
-const PANEL_X: f32 = 47.0;
-
-/// The right-hand edge every panel and rule stops at.
-const PANEL_RIGHT: f32 = 432.0;
-
-/// The rule under the title, and the one under the bar.
-const RULE_TOP_Y: f32 = 52.0;
-/// 242.0 where it was 236.0: the original's closing rule is at y 960 of 1080
-/// in an RPCS3 frame (`docs/formats/hd-loading.md`, "The pair"), 241.8 units.
-const RULE_BOTTOM_Y: f32 = 242.0;
-const RULE_HEIGHT: f32 = 1.0;
-
-/// What the rules and bracket marks are drawn in.
-const RULE_INK: [f32; 4] = [0.75, 0.78, 0.82, 1.0];
-
-/// The feature layout's bar trough.
-///
-/// Brighter than [`BAR_TROUGH`], which was picked for a thin rule on a near
-/// black frame rather than for a gauge a fifth of the screen tall. See
-/// [`Screen::draw_list`] for why this is a flat colour and not `dot.gtf`.
+/// The dots of an unlit bar when the title names no palette.
 const BAR_DOTS: [f32; 4] = [0.20, 0.23, 0.28, 1.0];
 
-/// The marker sprites' drawn size, and the bracket corners'.
-const MARKER_SIZE: f32 = 7.0;
-const CORNER_SIZE: f32 = 5.0;
-
-/// Where the illustration goes: `x, y, width, height`.
-const IMAGE_BOX: (f32, f32, f32, f32) = (PANEL_X, 60.0, 150.0, 84.0);
-
-/// Where the picture is fitted, inside [`IMAGE_BOX`] and under the row its name
-/// shares with the prose's heading.
-const IMAGE_FIT: (f32, f32, f32, f32) = (PANEL_X, 80.0, 150.0, 62.0);
-
-/// Where the feature's heading and prose go, right of the picture.
-const PROSE_BOX: (f32, f32, f32, f32) = (206.0, 60.0, PANEL_RIGHT - 206.0, 84.0);
-
-/// How far apart the counted rows sit under a feature layout's bar.
-///
-/// Tighter than the centred layout's, which has the lower half of the screen to
-/// itself; here there are 26 units between the bar and the closing rule.
-const BOXED_ROW_PITCH: f32 = 11.0;
-
-/// Where the progression bar goes: `x, y, width, height`.
-///
-/// The original's runs most of the width with the mode icon's panel to its
-/// right. The height is [`bar::ROWS`] square tiles of the width's
-/// [`bar::COLUMNS`], so the dots are square as `dot.gtf` draws them: 30 rows,
-/// the original's own count (`bar.rs`), about a fifth of the frame tall.
-///
-/// Its top is 177.0 where it was 172.0: the original's dot rows start at y 703
-/// of 1080 (177.1 units) and end at 929, 226 px against this build's 229.
-const BAR_BOX: (f32, f32, f32, f32) = (PANEL_X, 177.0, 320.0, bar::ROWS * 320.0 / bar::COLUMNS);
-
-/// The four bracket marks round a box.
-fn corners(bx: (f32, f32, f32, f32)) -> [(f32, f32); 4] {
-    [
-        (bx.0, bx.1),
-        (bx.0 + bx.2 - CORNER_SIZE, bx.1),
-        (bx.0, bx.1 + bx.3 - CORNER_SIZE),
-        (bx.0 + bx.2 - CORNER_SIZE, bx.1 + bx.3 - CORNER_SIZE),
-    ]
-}
-
-/// The outline drawn behind this screen's text when a backdrop is under it.
-///
-/// Near-black at four fifths, which is enough to lift the dim greys off a pale
-/// picture without reading as a second colour. Not drawn at all over a cleared
-/// frame; see [`Screen::draw_list`].
-const OUTLINE: [f32; 4] = [0.0, 0.0, 0.0, 0.8];
-
-/// What every line of text is drawn in when a backdrop is under it.
-///
-/// White, and one colour for all four rows rather than the four the cleared
-/// frame uses. See [`Screen::draw_list`] for why the hierarchy is the thing
-/// worth losing here.
+/// The ink a laid-out screen draws in when its title names no palette.
 const ON_BACKDROP: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 
 const BACKDROP: [f32; 4] = [0.02, 0.03, 0.05, 1.0];
@@ -929,12 +688,6 @@ const HEADING: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 
 const TIP_Y: f32 = 74.0;
 
-/// Where the prose starts on a title that draws an illustration above it.
-///
-/// The tip's own [`TIP_Y`] is where Pulse puts it, over a wave that occupies
-/// the bottom of the frame; a feature screen has a picture and a subheading in
-/// that space instead. See [`Screen::draw_list`].
-const FEATURE_TIP_Y: f32 = 80.0;
 const TIP_SCALE: f32 = 0.9;
 const TIP_LINE_HEIGHT: f32 = 14.0;
 const TIP_WIDTH: f32 = 380.0;
@@ -949,12 +702,6 @@ const TIP_WIDTH: f32 = 380.0;
 /// is a reason to shrink [`TIP_SCALE`], not to raise this.
 const TIP_LINES: usize = 4;
 
-/// And how many a feature's paragraph gets, in its own panel.
-///
-/// Six, which is what HD's longest - `FE_ABSORB_INST` - wraps to at
-/// [`TIP_SCALE`] in [`PROSE_BOX`]'s width. Measured rather than guessed: five
-/// cut it mid-sentence.
-const FEATURE_TIP_LINES: usize = 6;
 const TIP_COLOUR: [f32; 4] = [0.62, 0.72, 0.82, 1.0];
 
 const BAR_X: f32 = 50.0;
@@ -984,18 +731,22 @@ const CURRENT: [f32; 4] = [0.5, 0.58, 0.66, 1.0];
 const CENTRED_ROW_PITCH: f32 = 16.0;
 
 mod assets;
-mod bar;
 mod feature;
 pub mod icon;
+mod layout;
+pub mod track;
 mod wording;
 pub use assets::{Art, Assets, Feature, Labels, ModeIcon, tips};
 pub use feature::executable_mode;
+pub use track::TrackLoading;
 use wording::{counted, counts, estimated_fraction, fraction, heading, percentage, step_line};
 
-#[cfg(test)]
-mod bar_tests;
 #[cfg(test)]
 mod deck_tests;
 mod fill;
 #[cfg(test)]
+mod layout_tests;
+#[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod track_tests;

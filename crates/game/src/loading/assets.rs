@@ -67,6 +67,12 @@ pub struct Assets {
     /// tens of kilobytes each, and the movie cache decodes them off the frame
     /// thread. See [`ModeIcon`].
     pub mode_icons: Vec<ModeIcon>,
+    /// This title's loading layout file, read and parsed, when it names one and the file is
+    /// valid. `None` draws the layout this build chose in code. See [`super::layout`].
+    pub layout: Option<oag_hud::loading_layout::LoadingLayouts>,
+    /// Every string id the layout's labels name, resolved in the chosen language: an id the
+    /// table does not carry is absent and its label is not drawn.
+    pub layout_strings: Vec<(String, String)>,
     /// Lines worth printing once, describing what was found or what was not.
     pub notes: Vec<String>,
 }
@@ -198,6 +204,8 @@ impl Default for Assets {
             features: Vec::new(),
             deck: None,
             progression: None,
+            layout: None,
+            layout_strings: Vec::new(),
             caption: None,
             labels: None,
             mode_icons: Vec::new(),
@@ -501,6 +509,8 @@ impl Assets {
             }
         });
 
+        let layout = read_layout(&mut archives, loading.layout, strings, &mut notes);
+
         let strip = strip.unwrap_or_else(|| {
             if loading.wave.is_some() {
                 notes.push(
@@ -520,6 +530,8 @@ impl Assets {
             features,
             deck: loading.deck,
             progression: loading.progression,
+            layout: layout.0,
+            layout_strings: layout.1,
             caption,
             labels,
             mode_icons,
@@ -600,5 +612,62 @@ fn collect_tips(node: &fexml::Node, strings: &StringTable, out: &mut Vec<String>
             continue;
         }
         collect_tips(child, strings, out);
+    }
+}
+
+/// The title's loading layout file, through the asset layers, and the strings its labels name.
+///
+/// A file that is absent or refused is said in `notes` and the screen draws the layout this
+/// build chose in code: a bad override must not black out the screen.
+fn read_layout(
+    archives: &mut oag_assets::Archives,
+    entry: Option<&str>,
+    strings: &StringTable,
+    notes: &mut Vec<String>,
+) -> (
+    Option<oag_hud::loading_layout::LoadingLayouts>,
+    Vec<(String, String)>,
+) {
+    let Some(entry) = entry else {
+        return (None, Vec::new());
+    };
+    let text = match archives.read_name(entry) {
+        Ok(blob) => String::from_utf8_lossy(&blob).into_owned(),
+        Err(e) => {
+            notes.push(format!(
+                "{entry}: {e}; the loading layout of this build's code stands in"
+            ));
+            return (None, Vec::new());
+        }
+    };
+    match oag_hud::loading_layout::LoadingLayouts::parse(&text) {
+        Ok(layouts) => {
+            let mut ids: Vec<&str> = layouts
+                .layouts
+                .iter()
+                .flat_map(|layout| layout.elements.iter())
+                .filter_map(|element| element.string_id.as_deref())
+                .collect();
+            ids.sort_unstable();
+            ids.dedup();
+            let resolved = ids
+                .into_iter()
+                .filter_map(|id| match strings.get(id) {
+                    Some(text) => Some((id.to_string(), text.to_string())),
+                    None => {
+                        notes.push(format!("{id}: no such string; its label is not drawn"));
+                        None
+                    }
+                })
+                .collect();
+            notes.push(format!("loading layout from {entry}"));
+            (Some(layouts), resolved)
+        }
+        Err(e) => {
+            notes.push(format!(
+                "{entry}: {e}; the loading layout of this build's code stands in"
+            ));
+            (None, Vec::new())
+        }
     }
 }

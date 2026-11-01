@@ -79,6 +79,13 @@ pub struct Loading {
     /// How the progression bar fills, when the title's own loader drives it.
     /// See [`Progression`].
     pub progression: Option<Progression>,
+    /// The entry name of this title's loading layout file
+    /// (`screen = "loading"`, `schemas/v1/screen-layout.tosd`), read through the asset layers
+    /// so a player's override replaces it by path.
+    ///
+    /// `None` on a title whose screen is still drawn by code: the layout this build chose for
+    /// it, in the PSP's 480x272 grid. See `docs/formats/screen-layout.md`.
+    pub layout: Option<&'static str>,
 }
 
 /// How a progression bar fills: a first target, the loader's milestones, and

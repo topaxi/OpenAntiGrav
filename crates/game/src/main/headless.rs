@@ -220,6 +220,25 @@ pub(crate) fn run_windowless(
                     .cache
                     .clone()
                     .unwrap_or_else(oag_source::cache::default_cache_dir),
+                draw: cli.loading_draw,
+                track: race_options
+                    .foreign_track
+                    .as_deref()
+                    .filter(|path| oag_raceplay::foreign::is_track_file(path))
+                    .and_then(|path| {
+                        let loading = oag_trackfile::read_loading(path)
+                            .map_err(|why| log::warn!("{}: [loading]: {why}", path.display()))
+                            .ok()??;
+                        Some(loading::TrackLoading::read(
+                            path.parent().unwrap_or_else(|| std::path::Path::new("")),
+                            &loading,
+                        ))
+                    }),
+                safe_area: loaded
+                    .title
+                    .hud_art
+                    .safe_area_scale(settings.graphics.hud_safe_area),
+                title_font: loaded.title_font.clone(),
                 renderer: settings.graphics.renderer.clone(),
                 aspect: settings.display.aspect,
             },

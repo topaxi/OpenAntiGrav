@@ -351,3 +351,45 @@ optional = true
 [elements.art]
 type = "types.art"
 optional = true
+
+# The track's own loading screen: what it supplies of it, the rest being the running title's
+# (docs/formats/screen-layout.md). `layout` and `feature_image` are file names inside the
+# track's own folder, relative to this manifest (no `..`, never absolute): the loader's rule, not
+# this schema's. Naming any of the feature keys makes the track the feature: the title's random
+# draw is not run and a key left out draws blank.
+[types.loading]
+type = "table"
+
+[types.loading.layout]
+type = "string"
+minlength = 1
+optional = true
+
+[types.loading.caption]
+type = "string"
+minlength = 1
+optional = true
+
+[types.loading.feature_image]
+type = "string"
+minlength = 1
+optional = true
+
+[types.loading.feature_title]
+type = "string"
+minlength = 1
+optional = true
+
+[types.loading.feature_heading]
+type = "string"
+minlength = 1
+optional = true
+
+[types.loading.feature_text]
+type = "string"
+minlength = 1
+optional = true
+
+[elements.loading]
+type = "types.loading"
+optional = true

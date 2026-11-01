@@ -1,0 +1,210 @@
+# A screen's layout, one file per title and screen: see crates/hud/src/screen_layout.rs,
+# crates/hud/src/split_hud.rs, crates/hud/src/loading_layout.rs and docs/formats/screen-layout.md.
+# The top-level `screen` says which screen the file lays out. "split-hud" places a title's own
+# widgets, by name, inside a view (`group`s; it cannot add art); "loading" places the primitives
+# a loading screen is built from (`element`s, in a `grid` of the source's own pixels). What cannot
+# be said here and stays the loader's: that `views` hold 1 to 8, that `aspect` is an increasing
+# range from 0, that `scale` is in (0, 8] and an `offset` within one view, that a `widgets`
+# pattern is not empty, that a layout holds groups or elements and not both, that an element's
+# `draw` has the keys it needs, that element ids are unique, and that the header names this kind
+# at a major the build reads.
+
+[toml-schema]
+version = "1.0.0"
+
+[types.toml-schema-reference]
+type = "table"
+
+[types.toml-schema-reference.location]
+type = "string"
+pattern = "/v1/screen-layout[.]tosd$"
+
+[types.toml-schema-reference.version]
+type = "string"
+allowedvalues = ["1.0.0"]
+
+# The loader reads `[1, 2]` as well as `[1.0, 2.0]`.
+[types.number]
+oneof = ["integer", "float"]
+
+[types.pair]
+type = "array"
+itemtype = "types.number"
+minlength = 2
+maxlength = 2
+optional = true
+
+[types.group]
+type = "table"
+
+[types.group.widgets]
+type = "array"
+itemtype = "string"
+minlength = 1
+
+[types.group.anchor]
+type = "string"
+allowedvalues = [
+  "top-left", "top", "top-right",
+  "left", "centre", "right",
+  "bottom-left", "bottom", "bottom-right",
+]
+
+[types.group.offset]
+type = "types.pair"
+
+[types.group.scale]
+type = "types.number"
+optional = true
+
+[types.layout]
+type = "table"
+
+[types.screen]
+type = "string"
+allowedvalues = ["split-hud", "loading"]
+
+[types.quad]
+type = "array"
+itemtype = "types.number"
+minlength = 4
+maxlength = 4
+optional = true
+
+[types.element]
+type = "table"
+
+[types.element.id]
+type = "string"
+minlength = 1
+
+[types.element.draw]
+type = "string"
+allowedvalues = ["image", "text", "label", "corners", "dots", "clip"]
+
+[types.element.at]
+type = "types.pair"
+
+[types.element.size]
+type = "types.pair"
+
+[types.element.rect]
+type = "types.quad"
+
+[types.element.uv]
+type = "types.quad"
+
+[types.element.scale]
+type = "types.number"
+optional = true
+
+[types.element.asset]
+type = "string"
+optional = true
+
+[types.element.font]
+type = "string"
+optional = true
+
+[types.element.colour]
+type = "string"
+optional = true
+
+[types.element.unlit]
+type = "string"
+optional = true
+
+[types.element.string_id]
+type = "string"
+optional = true
+
+[types.element.text]
+type = "string"
+optional = true
+
+[types.element.source]
+type = "string"
+optional = true
+
+[types.element.wrap]
+type = "types.number"
+optional = true
+
+[types.element.pitch]
+type = "types.number"
+optional = true
+
+[types.element.gap]
+type = "types.number"
+optional = true
+
+[types.element.back]
+type = "types.number"
+optional = true
+
+[types.element.align]
+type = "string"
+allowedvalues = ["left", "centre", "right"]
+optional = true
+
+[types.element.columns]
+type = "integer"
+min = 1
+optional = true
+
+[types.element.rows]
+type = "integer"
+min = 1
+optional = true
+
+[types.element.tile]
+type = "types.number"
+optional = true
+
+[types.element.fill]
+type = "string"
+optional = true
+
+[types.layout.name]
+type = "string"
+optional = true
+
+[types.layout.grid]
+type = "types.pair"
+
+[types.layout.views]
+type = "array"
+itemtype = "integer"
+optional = true
+
+[types.layout.aspect]
+type = "types.pair"
+
+[types.layout.modes]
+type = "array"
+itemtype = "string"
+optional = true
+
+[types.layout.group]
+type = "array"
+itemtype = "types.group"
+optional = true
+
+[types.layout.element]
+type = "array"
+itemtype = "types.element"
+optional = true
+
+[elements]
+
+[elements.screen]
+type = "types.screen"
+
+[elements.toml-schema]
+type = "types.toml-schema-reference"
+optional = true
+
+[elements.layout]
+type = "array"
+itemtype = "types.layout"
+optional = true

@@ -491,20 +491,36 @@ impl Sheet {
     /// [`Self::build`] does.
     #[must_use]
     pub fn extended(&self, blobs: &[(String, Vec<u8>)], report: &mut Vec<String>) -> Self {
+        self.extended_with(blobs, Vec::new(), report)
+    }
+
+    /// [`Self::extended`], plus images somebody else already decoded (see
+    /// [`Self::build_with`]): an author's PNG, which no blob decoder here reads.
+    #[must_use]
+    pub fn extended_with(
+        &self,
+        blobs: &[(String, Vec<u8>)],
+        extra: Vec<DecodedImage>,
+        report: &mut Vec<String>,
+    ) -> Self {
         let fresh: Vec<(String, Vec<u8>)> = blobs
             .iter()
             .filter(|(src, _)| self.get(src).is_none())
             .cloned()
             .collect();
-        if fresh.is_empty() {
+        let extra: Vec<DecodedImage> = extra
+            .into_iter()
+            .filter(|image| self.get(&image.src).is_none())
+            .collect();
+        if fresh.is_empty() && extra.is_empty() {
             return self.clone();
         }
         // An empty sheet is one transparent texel with nothing placed in it,
         // so there is nothing to keep.
         if self.placed.is_empty() {
-            return Self::build(&fresh, report);
+            return Self::build_with(&fresh, extra, report);
         }
-        let below = Self::build(&fresh, report);
+        let below = Self::build_with(&fresh, extra, report);
         if below.placed.is_empty() {
             return self.clone();
         }
