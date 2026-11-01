@@ -18,6 +18,10 @@ summary: "HD loading screen is a measured screen-layout file; mode ids unnamed, 
 - The seven unnamed mode ids on `g_GameState` (`0`, `6`, `7`, `11`, `13`, `14`, `15`). Speed Lap and Zone draw from the default deck in this build, chosen, not measured.
 - The writer of the Fury-content flag at `0x00b979fd`; this build assumes `true` for every HD source.
 - Why one boot constructs two or three loading screens, only the last matching the frame.
+- Pulse's and Pure's code-laid loading screens are not yet files: their layouts still sit in code (`LoadingScreen_HD.toml` is the only loading layout); `Title::loading.layout` is `None` for them.
+- The loading layout is picked at a 16:9 default aspect; no per-aspect `[[layout]]` is authored (HD draws one 1920x1080 grid).
+- A track's `[loading]` caption/feature `string_id`s resolve only against the title layout's ids.
+- The paragraph wrap rule (a line plus its trailing space inside the width) is inferred from the pair, not read from the executable.
 
 ## Next Steps
 
