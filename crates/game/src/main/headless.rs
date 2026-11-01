@@ -220,6 +220,12 @@ pub(crate) fn run_windowless(
                     .cache
                     .clone()
                     .unwrap_or_else(oag_source::cache::default_cache_dir),
+                draw: cli.loading_draw,
+                safe_area: loaded
+                    .title
+                    .hud_art
+                    .safe_area_scale(settings.graphics.hud_safe_area),
+                title_font: loaded.title_font.clone(),
                 renderer: settings.graphics.renderer.clone(),
                 aspect: settings.display.aspect,
             },

@@ -205,6 +205,14 @@ pub(crate) struct Cli {
     #[arg(long, requires = "loading_screen")]
     pub(crate) loading_live: bool,
 
+    /// With `--loading-screen`, the seed the feature is drawn with (default 0). The
+    /// original draws a feature at random each time the screen goes up
+    /// (`LoadingScreen_Construct`, `Libc_Rand`), so a capture that sits beside one of its frames
+    /// names the draw the frame showed: the position in the mode's deck, modulo what the deck
+    /// holds, of this seed's first number. Prints the feature it drew.
+    #[arg(long, default_value_t = 0, requires = "loading_screen")]
+    pub(crate) loading_draw: u64,
+
     /// Write everything the mixer produced to a WAV instead of to a device.
     ///
     /// The audio counterpart of `--screenshot`, and for the same reason: this

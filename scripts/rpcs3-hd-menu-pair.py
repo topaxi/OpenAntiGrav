@@ -169,7 +169,7 @@ def main():
             pdir.mkdir(parents=True, exist_ok=True)
             pair = ce.Pair(args.platform, pdir)
             pair.rec["meta"] = {"id": "hd-loading", "title": item["title"], "track": "Vineta K", "craft": "Feisar",
-                                "note": "Racebox single race, Vineta K, Feisar; ours is `--loading-live` at tick %d, drawn from code. Both sides "
+                                "note": "Racebox single race, Vineta K, Feisar; ours is `--loading-live` at tick %d, drawn from LoadingScreen_HD.toml. Both sides "
                                 "English, front-end styling %s." % (item["ticks"], args.front_end_style),
                                 "state": "cold boot, walked from Main Menu with the pad; photographed %.0f s after CROSS on Team Selection"
                                 % item["settle"]}
@@ -187,7 +187,7 @@ def main():
                 cm.loading_pair(pair, theirs_png=shot["png"], oag_game=args.oag_game, image=args.image, profile_dir=profile,
                                 size=ce.size_text(plat), front_end_style=args.front_end_style, language="English",
                                 original_language=language.split(" ")[0], screen_seen=shot["screen"], screen_wanted=item["screen"],
-                                feature_seen=shot["feature"], feature_ours=0, mode=item["mode"], track=item["track"],
+                                feature_seen=shot["feature"], mode=item["mode"], track=item["track"],
                                 ticks=item["ticks"], safe_area=safe_area)
                 pair.finish()
             except SystemExit as exc:

@@ -47,6 +47,13 @@ pub struct LoadingOptions {
     pub mode: Option<u32>,
     /// The movie cache the mode icon's clip is opened through.
     pub movies: std::path::PathBuf,
+    /// The seed the feature is drawn with, `--loading-draw`: which of the deck's features a
+    /// capture shows, so a pair can match the original's own random draw. `0` by default.
+    pub draw: u64,
+    /// The title's Safe Area as a scale about the centre, for `[graphics] hud_safe_area`.
+    pub safe_area: f32,
+    /// The title's `Title`-role face, when it has one.
+    pub title_font: Option<oag_ui::font::Atlas>,
     /// Which adapter to draw with, from `[graphics] renderer`.
     pub renderer: oag_display::display::Renderer,
     /// The shape the game is drawn in, from `[display] aspect`.
@@ -86,8 +93,23 @@ pub fn loading(
     // CLI capture has no `Settings` to read one from, so it takes the same
     // English fallback `oag_ui::strings::project_table` gives any other
     // caller with nothing to name.
-    let mut screen =
-        crate::loading::Screen::for_mode(assets, font.line_height, 0, None, options.mode);
+    let mut screen = crate::loading::Screen::for_mode(
+        assets,
+        font.line_height,
+        options.draw,
+        None,
+        options.mode,
+    );
+    log::info!(
+        "loading screen: draw {} shows feature slot {:?}",
+        options.draw,
+        screen.feature_slot()
+    );
+    screen.set_safe_area(options.safe_area);
+    screen.set_surface_aspect(
+        oag_display::display::viewport((options.size.0, options.size.1), options.aspect).2
+            / oag_display::display::viewport((options.size.0, options.size.1), options.aspect).3,
+    );
     // Stepped rather than jumped to: the tip rotation counts frames, and the
     // wave draws from its own `Rng` on every one of them, so frame `n` is only
     // reachable by having drawn the `n - 1` before it.
@@ -173,6 +195,13 @@ pub fn loading(
     // Sample count 1, matching `upscale::Framebuffer`'s own target and this
     // capture's texture. The wave's pipeline bakes it in, so a mismatch here is
     // a validation error rather than a soft failure.
+    renderer.set_space(screen.space());
+    renderer.set_face_atlas(
+        &device,
+        &queue,
+        options.title_font.clone(),
+        options.title_font.as_ref().map(|_| "Title"),
+    );
     let mut wave = oag_render::loading::Pipeline::new(&device, &queue, format, &assets.strip, 1);
     wave.upload(&queue, [1.0, 1.0, 1.0, screen.opacity()], &vertices);
 

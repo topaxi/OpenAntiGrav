@@ -4,14 +4,7 @@
 //! pick is a law read off Wipeout HD's constructor while the drawing is this
 //! build's layout.
 
-use super::{Align, Assets, Draw, IMAGE_BOX, MARKER_SIZE, PROSE_BOX};
-
-/// Where a feature's name and its heading go: one row, over the picture and
-/// over the paragraph.
-pub(super) const TITLE_Y: f32 = 63.0;
-
-/// And how big.
-pub(super) const TITLE_SCALE: f32 = 1.1;
+use super::Assets;
 
 /// Which of `assets.features` this screen shows, as a position in that list.
 ///
@@ -40,48 +33,6 @@ pub(super) fn pick(assets: &Assets, mode: Option<u32>, draw: u64) -> Option<usiz
     (!candidates.is_empty()).then(|| candidates[draw % candidates.len()])
 }
 
-/// The two rows over the picture and over the paragraph, each behind its marker.
-///
-/// **The original's arrangement**: `PILOT ASSIST` sits over the illustration
-/// and `DESCRIPTION` over the prose, in the same row. Until 2026-10-04 this
-/// build drew the name over the prose alone and no heading, because the
-/// heading's id was unread.
-pub(super) struct Rows<'a> {
-    pub arrow: Option<[f32; 4]>,
-    pub arrow_color: [f32; 4],
-    pub color: [f32; 4],
-    pub border: Option<[f32; 4]>,
-    pub scale: f32,
-    pub title: Option<&'a str>,
-    pub heading: Option<&'a str>,
-}
-
-impl Rows<'_> {
-    pub(super) fn draw(&self, out: &mut Vec<Draw>) {
-        let columns = [(IMAGE_BOX.0, self.title), (PROSE_BOX.0, self.heading)];
-        for (x, text) in columns {
-            let Some(text) = text else { continue };
-            if let Some(uv) = self.arrow {
-                out.push(Draw::Sprite {
-                    rect: [x, TITLE_Y + 1.0, MARKER_SIZE * 0.75, MARKER_SIZE * 0.75],
-                    uv,
-                    color: self.arrow_color,
-                });
-            }
-            out.push(Draw::Text {
-                x: x + MARKER_SIZE,
-                y: TITLE_Y,
-                scale: self.scale,
-                color: self.color,
-                border: self.border,
-                align: Align::Left,
-                text: text.to_string(),
-                wrap_width: None,
-            });
-        }
-    }
-}
-
 /// The source executable's own mode id for a mode this build races, where it
 /// is named.
 ///
@@ -101,4 +52,20 @@ pub fn executable_mode(mode: oag_race::Mode) -> Option<u32> {
         Mode::Eliminator => Some(8),
         Mode::SpeedLap | Mode::Zone | Mode::Head2Head => None,
     }
+}
+
+/// The `oag_race::Mode::name` of the race the source executable's mode id `mode` covers: the
+/// inverse of [`executable_mode`], which is how a layout file's `modes` list is matched.
+#[must_use]
+pub(super) fn mode_name(mode: u32) -> Option<&'static str> {
+    use oag_race::Mode;
+    [
+        Mode::SingleRace,
+        Mode::Tournament,
+        Mode::TimeTrial,
+        Mode::Eliminator,
+    ]
+    .into_iter()
+    .find(|candidate| executable_mode(*candidate) == Some(mode))
+    .map(Mode::name)
 }

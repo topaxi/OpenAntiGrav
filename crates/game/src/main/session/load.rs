@@ -82,6 +82,7 @@ impl Session {
             &assets,
             self.trace,
             self.settings.language.as_deref(),
+            self.settings.graphics.hud_safe_area,
         )?;
         // Kept rather than dropped with the stage: the same screen goes up
         // again for every race this run launches. See `Session::loading_assets`.
@@ -626,6 +627,11 @@ impl Session {
             crate::loading::executable_mode(options_mode),
             self.trace,
             self.settings.language.as_deref(),
+            shell.title_font.as_ref(),
+            shell
+                .title
+                .hud_art
+                .safe_area_scale(self.settings.graphics.hud_safe_area),
         )?;
         Ok(())
     }

@@ -94,13 +94,16 @@ impl Stage {
         // language plugin does, so `Settings::language` is the only source
         // there is.
         language: Option<&str>,
+        // `[graphics] hud_safe_area`: the screen is drawn inside the title's `Safe Area
+        // Setting`, as the original draws it.
+        hud_safe_area: Option<u8>,
     ) -> Result<Self> {
         // The **disc's** font, not the built-in 5x7 set: the tips are the
         // disc's own prose in the player's own language, and `push_text` skips
         // a glyph the atlas has no cell for - so accented text would silently
         // lose characters rather than fail. No video pipeline, this screen
         // having no movie; there is no loading movie in either build.
-        let renderer = Renderer::new(
+        let mut renderer = Renderer::new(
             &gpu.device,
             &gpu.queue,
             gpu.output.config.format,
@@ -118,6 +121,16 @@ impl Stage {
         // against, so HD's much larger face draws at the size this layout was
         // written for. See `loading::Screen::new`.
         let line_height = shell.font.line_height;
+        renderer.set_face_atlas(
+            &gpu.device,
+            &gpu.queue,
+            shell.title_font.clone(),
+            shell.title_font.as_ref().map(|_| "Title"),
+        );
+        let safe_area = shell.title.hud_art.safe_area_scale(hud_safe_area);
+        let mut screen = loading::Screen::new(assets, line_height, 0, language);
+        screen.set_safe_area(safe_area);
+        renderer.set_space(screen.space());
         // Sample count 1, matching `upscale::Framebuffer`'s target, which is
         // what this draws into.
         let wave = oag_render::loading::Pipeline::new(
@@ -133,7 +146,7 @@ impl Stage {
             wave,
             // Seed 0 on the boot screen: it goes up once per run, and the
             // title that has features does not draw this one anyway.
-            screen: loading::Screen::new(assets, line_height, 0, language),
+            screen,
             shell: Some(shell),
             media,
             race: None,
@@ -172,12 +185,16 @@ impl Stage {
         trace: bool,
         // See `Stage::loading`'s own parameter of the same name.
         language: Option<&str>,
+        // The title's `Title`-role face, which a layout's caption is drawn in, and the
+        // title's Safe Area for the player's `hud_safe_area`. See `Stage::loading`.
+        title_font: Option<&oag_ui::font::Atlas>,
+        safe_area: f32,
     ) -> Result<Self> {
         // The mode icon's clip, where the title maps one for this mode: the
         // renderer's planes are sized from its header, and the clip itself is
         // opened on a thread of its own (`loading_icon::Icon`).
         let clip = loading::icon::clip(assets, mode);
-        let renderer = Renderer::new(
+        let mut renderer = Renderer::new(
             &gpu.device,
             &gpu.queue,
             gpu.output.config.format,
@@ -188,6 +205,15 @@ impl Stage {
             // reason.
             assets.art.as_ref().map_or(sprites, |art| &art.sheet),
         )?;
+        renderer.set_face_atlas(
+            &gpu.device,
+            &gpu.queue,
+            title_font.cloned(),
+            title_font.map(|_| "Title"),
+        );
+        let mut screen = loading::Screen::for_mode(assets, font.line_height, draw, language, mode);
+        screen.set_safe_area(safe_area);
+        renderer.set_space(screen.space());
         let wave = oag_render::loading::Pipeline::new(
             &gpu.device,
             &gpu.queue,
@@ -199,7 +225,7 @@ impl Stage {
             atlas: font.clone(),
             renderer,
             wave,
-            screen: loading::Screen::for_mode(assets, font.line_height, draw, language, mode),
+            screen,
             shell: None,
             media: None,
             race: Some(worker),

@@ -2,7 +2,7 @@ use super::*;
 use crate::{Context, Readout, draw_list};
 use oag_race::Mode;
 
-const HEADER: &str = "[toml-schema]\nlocation = \"https://oag.topaxi.com/mods/schemas/v1/split-hud.tosd\"\nversion = \"1.0.0\"\n";
+const HEADER: &str = "screen = \"split-hud\"\n[toml-schema]\nlocation = \"https://oag.topaxi.com/mods/schemas/v1/screen-layout.tosd\"\nversion = \"1.0.0\"\n";
 
 const HEIGHTS: LineHeights = LineHeights {
     hud: 25.0,
@@ -80,10 +80,10 @@ fn a_refused_file_names_what_is_wrong() {
     let refused = |text: String| SplitHud::parse(&text).unwrap_err().to_string();
     let major = refused(HEADER.replace("/v1/", "/v9/"));
     assert!(
-        major.contains("v9") && major.contains("split-hud"),
+        major.contains("v9") && major.contains("screen-layout"),
         "{major}"
     );
-    let kind = refused(HEADER.replace("split-hud", "pilot"));
+    let kind = refused(HEADER.replace("screen-layout", "pilot"));
     assert!(kind.contains("\"pilot\""), "{kind}");
     assert!(refused(file("[[layout]]\nviews = [9]\n")).contains("`views` has 9"));
     assert!(refused(file("[[layout]]\naspect = [2.0, 1.0]\n")).contains("`aspect`"));
@@ -108,7 +108,14 @@ fn a_refused_file_names_what_is_wrong() {
 
 #[test]
 fn a_file_without_a_header_still_loads() {
-    assert!(SplitHud::parse("[[layout]]\nviews = [2]\n").is_ok());
+    assert!(SplitHud::parse("screen = \"split-hud\"\n[[layout]]\nviews = [2]\n").is_ok());
+}
+
+#[test]
+fn a_file_for_another_screen_or_none_is_refused_by_name() {
+    let refused = |text: &str| SplitHud::parse(text).unwrap_err().to_string();
+    assert!(refused("[[layout]]\nviews = [2]\n").contains("absent"));
+    assert!(refused("screen = \"loading\"\n").contains("\"loading\""));
 }
 
 #[test]

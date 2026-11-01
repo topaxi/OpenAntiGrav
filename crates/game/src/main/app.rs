@@ -382,6 +382,7 @@ impl App {
                 &self.loading_assets,
                 self.trace,
                 self.settings.language.as_deref(),
+                self.settings.graphics.hud_safe_area,
             )?
         } else {
             return Ok(None);
