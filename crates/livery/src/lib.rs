@@ -543,9 +543,7 @@ fn one(
                     ships,
                     team,
                     ctx.mode,
-                    |dir, team| {
-                        oag_pulse::race::ships::entry_name_in(dir, team, absorb::SHELL_STEM)
-                    },
+                    |dir, team| entry::stem_entry_name(dir, team, absorb::SHELL_STEM),
                     report,
                 );
                 absorb::shell(archives, absorb_team, absorb_dir, ctx.absorb_shell, report)
@@ -572,7 +570,7 @@ fn one(
                     ships,
                     team,
                     ctx.mode,
-                    |dir, team| oag_pulse::race::ships::entry_name_in(dir, team, "shipshield"),
+                    |dir, team| entry::stem_entry_name(dir, team, entry::SHIELD_STEM),
                     report,
                 );
                 shell(archives, shell_team, shell_dir, team_model, report)

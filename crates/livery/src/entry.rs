@@ -75,6 +75,15 @@ pub fn model_directory(paths: oag_title::race::ShipPaths, team: &str, mode: Mode
     (paths.zone.root(paths.dir), paths.zone.directory(team))
 }
 
+/// The per-team shield shell's stem, which the Zone directory probe asks for.
+pub const SHIELD_STEM: &str = ships::SHIELD;
+
+/// `dir\team\stem.vex`, the entry a model stem names under a ship directory.
+#[must_use]
+pub fn stem_entry_name(dir: &str, team: &str, stem: &str) -> String {
+    ships::entry_name_in(dir, team, stem)
+}
+
 /// [`model_directory`], unless the Zone directory lacks `file`: then the team's
 /// own, and a line in `report` says so. `file` maps a `(directory, team)` pair
 /// to the entry name the caller is about to read.
