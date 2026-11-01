@@ -131,7 +131,10 @@ pub(super) fn track_model(
                         )
                     };
                     let mut behind = none();
-                    if split.out > 0 {
+                    if split.out == 0 {
+                        // No target, so nothing for the tunnel glass to sample.
+                        mesh::rcs::psp2::refraction::clear(&mut model);
+                    } else {
                         report.push(format!(
                             "{track}: {} mesh(es) named `wohdmeshrefract` left out of the main \
                              view and drawn into the refraction target with {} `0x30` mesh(es)",

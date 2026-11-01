@@ -160,8 +160,11 @@ left out and no target exists.
 
 **The glass** is `mt_tunnelrefraction` (26 submeshes on Vineta K, the only material of the whole
 package that declares `screenSpaceRefractionTex`; `data.psarc` and `dlc1.psarc` alike, `dlc2` none).
-Its two cached fragment permutations (Vita3K's SPIR-V by SHA-256 of the GXP container, walked
-symbolically; formulas written by hand) end on
+Its two cached fragment permutations end on (the GXP containers at `0x2a40` and `0x3460` of
+`Vineta_K/materials/mt_tunnelrefraction.rcsmaterial`, SHA-256 `150f15764b10...` and
+`a008c8f2ca9d...`; Vita3K's SPIR-V under `~/.cache/Vita3K/shaders/PCSF00007/eboot.bin/vk13-<sha>.spv`,
+walked symbolically as in [2048-material-params.md](../../../formats/2048-material-params.md),
+"Vertex-lit and lightmapped combines"; formulas written by hand)
 
 ```text
 out = mix(fogColour, W * 2.0039 * D.a * G^2 + spec + lit * D^2, fog visibility)
@@ -177,12 +180,21 @@ cached vertex permutation of this material exists, so the glass reads the target
 the surface point pushed one unit along its normal, projected through the target's matrix
 (`refraction.wesl`), **inherited from HD**.
 
+**Where the glass shows**: the mask render (the glass's colour replaced by magenta) puts 69,166 pixels
+of the tick-900 frame on glass, 66,059 at 1200, 1,743 at 1800 and 11,728 at 3600 (960x540), so most of
+the visible ceiling of a Vineta K tunnel is this material. Medians over exactly those pixels, before
+(the skip only) and after: tick 900 (2, 1, 2) to (3, 4, 5); 1200 (0, 0, 0) to (1, 2, 2); 1800 (9, 8, 8)
+to (10, 11, 11); 3600 (9, 9, 9) to (12, 15, 16). The panes look up at the dark rock and sky of the
+target, weighted by `W`, so the change is small; **no Vita3K frame of this tunnel exists to say whether
+the original's panes are brighter**, so the claim is that the glass reads the target by the program's
+law, not that it matches a capture.
+
 **Omega: ported with a gap.** Omega's `eboot` makes the same kind-0 and kind-1 tests
 ([the Omega page](../ps4-omega-eu/refraction-pass.md)), so the same split is drawn at 960x540 (half
 of 1920x1080, **inherited**: the Omega target's size is untraced). Its `mt_tunnelrefraction` records
 are 2048's exactly (same two samplers, same two parameters and values) and take the Vita's law,
 labelled inherited; its GCN programs are unread. Omega's `cl_tunnelrefraction` (3 submeshes, no
-2048 counterpart) takes HD's picture-less law. **`rt_icetunnel` on Sebenco Climb also declares the
+2048 counterpart) takes HD's picture-less law: its one sampler (`cl_tunnelhex_specv3`, a specular map) is not bound as a picture, the lit term is tinted by `DiffuseColour`, as HD's. Outside the target (Zone, or a circuit without tagged meshes) the glass keeps the generic reading: the refraction bit is cleared at load. **`rt_icetunnel` on Sebenco Climb also declares the
 grab and its law is unread**: its pixel program is GCN with five samplers and thirteen
 parameters, none of them HD's `0x78575769`, and 2048 has no such material. So Sebenco's rock
 sheet is in the target and nothing samples it yet.

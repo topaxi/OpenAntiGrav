@@ -66,6 +66,25 @@ fn is_glass(material: &Material) -> bool {
         || stem.eq_ignore_ascii_case("cl_tunnelrefraction")
 }
 
+/// Whether the material is glass whose program samples no diffuse picture
+/// (`cl_tunnelrefraction`: its one sampler is a specular map). HD's picture-less program takes
+/// the lit term untextured, tinted by `DiffuseColour`, so the builder binds no picture for it.
+pub(super) fn is_pictureless(material: &Material) -> bool {
+    is_glass(material) && material.sampler(DIFFUSE).is_none_or(str::is_empty)
+}
+
+/// Takes the glass back to the generic reading: clears the refraction bit and the table index
+/// from every vertex. A circuit without a target (Zone mode, where nothing is left out of the
+/// main view) has nothing for the glass to sample.
+pub fn clear(model: &mut crate::mesh::Model) {
+    let bits = slots::REFRACTION | (0x7f << slots::MATERIAL_SHIFT);
+    for vertex in &mut model.vertices {
+        if vertex.slots & slots::REFRACTION != 0 {
+            vertex.slots &= !bits;
+        }
+    }
+}
+
 /// Admits each glass material, writing its glow-table entry into `emissive`.
 pub(super) fn plan(
     materials: &[Material],

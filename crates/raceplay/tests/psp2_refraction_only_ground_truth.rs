@@ -153,12 +153,19 @@ fn assert_target_is_the_left_out_set(
     );
     assert_eq!(loads.main.behind_glass.size, size, "the target's size");
     let model = &loads.main.track_model;
-    let glass = model
-        .vertices
-        .iter()
-        .filter(|v| v.slots & oag_mesh::mesh::slots::REFRACTION != 0)
-        .count();
-    assert!(glass > 0, "the tunnel glass reads the target");
+    let glass = |model: &oag_mesh::mesh::Model| {
+        model
+            .vertices
+            .iter()
+            .filter(|v| v.slots & oag_mesh::mesh::slots::REFRACTION != 0)
+            .count()
+    };
+    assert!(glass(model) > 0, "the tunnel glass reads the target");
+    assert_eq!(
+        glass(&loads.zone.track_model),
+        0,
+        "with no target in Zone the glass keeps the generic reading"
+    );
 }
 
 /// Omega's tag census: `(archive, path, tagged meshes)` for every `track*.rcsmodel` under an

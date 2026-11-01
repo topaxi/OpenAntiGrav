@@ -927,6 +927,7 @@ fn bind_textures(
             let refused: Vec<u32> = rule.as_ref().map_or_else(Vec::new, |r| r.refused.clone());
             let path = match layer {
                 _ if twin_here.is_some() => twin_here.map(|t| t.first.as_str()),
+                _ if refraction::is_pictureless(material) => None,
                 Some(layer) => Some(layer.diffuse.as_str()),
                 None => material.diffuse_texture_without(&refused),
             };
