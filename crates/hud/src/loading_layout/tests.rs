@@ -75,8 +75,25 @@ fn a_refused_file_names_what_is_wrong() {
         ))
         .contains("one of `source` and `text`")
     );
-    assert!(refused(element("draw = \"label\"\nat = [0, 0]\n")).contains("`string_id` and `text`"));
+    assert!(
+        refused(element(
+            "draw = \"label\"\nat = [0, 0]\nasset = \"square\"\nsize = [1, 1]\ngap = 2\n"
+        ))
+        .contains("`string_id` and `text`")
+    );
     assert!(refused(element("draw = \"corners\"\n")).contains("needs `rect`"));
+    assert!(
+        refused(element(
+            "draw = \"corners\"\nrect = [0, 0, 1, 1]\nasset = \"corner\"\nsize = [1, 1]\n"
+        ))
+        .contains("needs `back`")
+    );
+    assert!(
+        refused(element(
+            "draw = \"label\"\nat = [0, 0]\ntext = \"x\"\nasset = \"square\"\nsize = [1, 1]\n"
+        ))
+        .contains("needs `gap`")
+    );
     assert!(
         refused(element("draw = \"dots\"\nasset = \"dot\"\nat = [0, 0]\n")).contains("`columns`")
     );
