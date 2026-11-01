@@ -27,12 +27,12 @@ fn mount_image(name: &str, image: &wasm_bindgen::JsValue) -> Result<String, wasm
     let blob: std::sync::Arc<dyn oag_disc::mount::Blob> =
         match image.dyn_ref::<js_sys::Uint8Array>() {
             Some(bytes) => {
-                log::info!("web: {path} held in memory ({} bytes)", bytes.length());
+                log::debug!("web: {path} held in memory ({} bytes)", bytes.length());
                 std::sync::Arc::new(bytes.to_vec())
             }
             None => {
                 let sliced = web_image::Sliced::new(image.clone())?;
-                log::info!(
+                log::debug!(
                     "web: {path} read in slices ({} bytes)",
                     oag_disc::mount::Blob::size(&sliced)
                 );

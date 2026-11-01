@@ -13,7 +13,7 @@
 //! [ADR-0043]: ../../../../docs/architecture/adr/0043-hd-bloom-joins-the-scalable-budget.md
 //! [ADR-0045]: ../../../../docs/architecture/adr/0045-fsr3-splits-into-a-scaled-and-a-presented-reading.md
 
-use log::{info, trace, warn};
+use log::{debug, trace, warn};
 use oag_game::settings;
 use oag_present::drs;
 
@@ -723,7 +723,7 @@ impl Session {
         // One line per flip of the blur rung (ADR-0075): it moves seldom by
         // construction, and a run that never says it moved cannot show it did.
         if self.drs.blur_shed() != shed {
-            info!(
+            debug!(
                 "dynamic resolution: motion blur gathers at {} resolution - scalable {:.3} ms, \
                  blur {:.3} ms, at {:.0}% of {}x{}",
                 if shed { "full" } else { "half" },

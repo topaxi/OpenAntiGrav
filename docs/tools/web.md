@@ -267,7 +267,7 @@ not turned on.
 The render target is held to **720 lines** on the web **by default**: only while
 render scale is at its default, 100 (a player cannot tell 100 picked from 100
 untouched, so 100 is the capped value; 125 and up go past 720, 50 and 75 below it, as on a desktop). The options row has no help line to say so, so this page does (`settings::web::render_target`, used by every
-`target_size` caller, width scaled by the same factor): a 1920x1080 surface logs
+`target_size` caller, width scaled by the same factor): a 1920x1080 surface logs (at `debug`)
 `render target 1271x720 for a 1920x1080 surface`, and the race held 60.4 fps in
 headless Chromium (2026-10-09). The surface is in CSS pixels, not physical ones: at
 `devicePixelRatio` 2 on a 960x544 page the canvas is 960x544 and the target is

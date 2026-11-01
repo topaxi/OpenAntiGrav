@@ -10,7 +10,7 @@
 //! in [`Session::governed_profile`], a copy handed to the draw; `settings.render_profiles` is
 //! never written, so a saved row cannot drift.
 
-use log::info;
+use log::debug;
 use oag_display::display::Shadows;
 use oag_mesh::mesh::ModelDetail;
 use oag_present::governor::{MAX_LEVEL, Sample};
@@ -117,7 +117,7 @@ impl Session {
         } else {
             ("restored", knob(change.from))
         };
-        info!(
+        debug!(
             "cpu governor: {verb} {} - cpu {:.2} ms, gpu {}, budget {:.2} ms, level {} to {}",
             what.unwrap_or_else(|| "(knobs changed)".to_string()),
             change.cpu * 1000.0,

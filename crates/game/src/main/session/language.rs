@@ -179,7 +179,7 @@ impl Session {
         let family = self.controls.prompt_family(style);
         if self.prompt.family_logged != Some(family) {
             self.prompt.family_logged = Some(family);
-            log::info!(
+            log::debug!(
                 "button prompts: {} (style {}, last used {:?})",
                 family.map_or("the disc's own", |family| family.name()),
                 style.name(),

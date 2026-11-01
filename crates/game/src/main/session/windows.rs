@@ -12,7 +12,7 @@
 //! like a split screen. Anything else gets a holding frame.
 
 use anyhow::Result;
-use log::{info, warn};
+use log::{debug, info, warn};
 
 use oag_display::display;
 use oag_present::perf;
@@ -119,7 +119,7 @@ impl Session {
                 });
             match opened {
                 Ok(screen) => {
-                    info!(
+                    debug!(
                         "window {}: {title} ({}x{})",
                         window + 1,
                         screen.output.config.width,
@@ -342,7 +342,7 @@ impl Session {
         if window < self.window_layout.len() {
             self.window_layout.remove(window);
         }
-        info!("window {} closed: slot(s) {slots:?} flown by the AI", window + 1);
+        debug!("window {} closed: slot(s) {slots:?} flown by the AI", window + 1);
     }
 
     /// Further window `index` was resized to `size`: its surface follows; its framebuffer

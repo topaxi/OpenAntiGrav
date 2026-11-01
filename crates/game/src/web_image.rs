@@ -118,7 +118,7 @@ impl Sliced {
         cache.fetches += 1;
         cache.fetched += into.len() as u64;
         if cache.fetches.is_power_of_two() || cache.fetches.is_multiple_of(1024) {
-            log::info!(
+            log::debug!(
                 "web: image read {} times, {} MiB fetched",
                 cache.fetches,
                 cache.fetched >> 20

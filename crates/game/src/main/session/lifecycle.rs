@@ -10,7 +10,7 @@
 //! Which events count, and the default of the one setting, are **chosen, not
 //! measured**: no original title was observed on a phone or a desktop window.
 
-use log::info;
+use log::debug;
 
 use crate::stage::Stage;
 
@@ -77,7 +77,7 @@ impl Session {
             running,
             self.shell.is_some(),
         );
-        info!("window away ({away:?}): {pause:?}");
+        debug!("window away ({away:?}): {pause:?}");
         match pause {
             Pause::Nothing => {}
             Pause::Menu => self.back(),

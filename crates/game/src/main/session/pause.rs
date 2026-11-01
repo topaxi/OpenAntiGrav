@@ -2,7 +2,7 @@
 //! what reads the live devices, the race and the clock into them and draws the
 //! line.
 
-use log::info;
+use log::debug;
 use oag_game::pause::{
     Line, State, Table, clock, go, line, present_seats, press_cue, several_people, step, strings,
 };
@@ -117,7 +117,7 @@ impl super::Session {
             return;
         }
         self.pause = after;
-        info!("pause: {before:?} -> {after:?}");
+        debug!("pause: {before:?} -> {after:?}");
         // Measured on Pulse (USA): START plays `ACCEPT` both on pausing a race
         // and on resuming it (`ConfirmButton_Update`). Only a press: the
         // countdown running out is not one.

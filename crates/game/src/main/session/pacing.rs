@@ -115,7 +115,7 @@ impl Session {
         let limit = self.active_limit();
         if self.logged_limit != Some(limit) {
             self.logged_limit = Some(limit);
-            log::info!(
+            log::debug!(
                 "frame limit in force: {limit} (configured {})",
                 self.settings.display.frame_limit
             );
