@@ -98,7 +98,9 @@ pub(super) fn capture(
     }
     let view = present(&chain, strings, title, &records);
     let mut choice =
-        oag_ui_screens::pure_chain::Choice::new(view.title, view.context, view.pitch, view.rows);
+        // The original draws no context line (a PPSSPP pair of each chain screen,
+        // 2026-10-29), so a still compared with it draws none: the line is ours and stays in the live screen.
+        oag_ui_screens::pure_chain::Choice::new(view.title, String::new(), view.pitch, view.rows);
     if let Some(tag) = focus {
         choice.select_tag(tag);
     }

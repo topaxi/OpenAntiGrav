@@ -689,3 +689,21 @@ fn a_description_types_across_its_wrapped_lines_and_loops() {
         "typed again from the first line"
     );
 }
+
+/// Pure's `scroll` text (the description, the `Confirm` prompt) and its `Stats` text draw from the one
+/// glyph role the title loads in its third slot: both fonts resolve to `LTe50325.fnt`.
+#[test]
+fn scroll_and_stats_text_ask_for_the_stats_glyph_role() {
+    for font in ["scroll", "Scroll", "stats", "Stats"] {
+        assert_eq!(
+            face_role(font),
+            Some(oag_ui::language::roles::STATS),
+            "{font}"
+        );
+    }
+    assert_eq!(
+        face_role("menu"),
+        None,
+        "the menu face stays the primary atlas"
+    );
+}

@@ -406,6 +406,7 @@ pub(super) fn selection_layouts(
     default_is_row_face: bool,
     space: oag_display::space::Space,
     front_end: Option<&oag_title::FrontEnd>,
+    entry_pitch: Option<f32>,
     report: &mut Vec<String>,
 ) -> (
     Option<oag_ui_screens::picker::Layout>,
@@ -439,6 +440,7 @@ pub(super) fn selection_layouts(
         })
         .map(|mut layout| {
             layout.override_labels(track_labels, strings);
+            layout.entry_pitch = entry_pitch;
             layout
         })
         .or_else(|| {
@@ -462,6 +464,10 @@ pub(super) fn selection_layouts(
                 faces,
                 [space.size.0, space.size.1],
             )
+            .map(|layout| oag_ui_screens::picker::Layout {
+                entry_pitch,
+                ..layout
+            })
         })
         .or_else(|| {
             let team_box = team_box?;

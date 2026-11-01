@@ -119,7 +119,8 @@ fn texts(draws: &[Draw]) -> Vec<String> {
     draws
         .iter()
         .filter_map(|draw| match draw {
-            Draw::Text { text, .. } => Some(text.clone()),
+            // The panel's `font="Stats"` labels are asked for in the `Stats` glyph role.
+            Draw::Text { text, .. } | Draw::FacedText { text, .. } => Some(text.clone()),
             _ => None,
         })
         .collect()

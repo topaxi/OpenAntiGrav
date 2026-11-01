@@ -110,6 +110,11 @@ pub mod roles {
     /// slot name is not yet checked; `Language::font` answers `None` for a
     /// title that does not, the same as any other role.
     pub const BUTTONS: &str = "Buttons";
+    /// The face a `font="Stats"` widget names: the stat labels and values of a
+    /// team's panel, a circuit's record and length cells. Pure fills it with
+    /// `LTe50325.fnt`, a small letter-spaced face (the table above), where Pulse
+    /// fills it with `Pulse_14.fnt`.
+    pub const STATS: &str = "Stats";
 }
 
 /// One language the disc ships.

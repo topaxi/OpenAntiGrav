@@ -217,6 +217,7 @@ pub fn read(
         hd_track: None,
         ready: String::new(),
         name_scale: 1.0,
+        entry_pitch: None,
     })
 }
 

@@ -196,3 +196,14 @@ fn wipeout_2048s_grid_gets_the_race_box_remix_and_multiplayer_tiles() {
         [Launch::RaceBox, Launch::Remix, Launch::Multiplayer]
     );
 }
+
+/// Pure names a `Stats` face and has no `Buttons` role, so its third glyph slot is labelled with the
+/// `Stats` role (the one a `font="Stats"` or `font="scroll"` draw asks for); a title that names none
+/// keeps the slot for the button glyphs.
+#[test]
+fn a_title_with_a_stats_face_labels_the_third_slot_with_it() {
+    let (_, role) = super::fonts::third_atlas_slot(oag_pure::FRONT_END.menu.unwrap(), None, None);
+    assert_eq!(role, oag_ui::language::roles::STATS);
+    let (_, role) = super::fonts::third_atlas_slot(oag_hd::frontend::MENU_SKIN, None, None);
+    assert_eq!(role, oag_ui::language::roles::BUTTONS);
+}

@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [hd, omega, 2048, pulse, pure]
-updated: 2026-10-29
+updated: 2026-11-01
 categories: [frontend, rendering]
 summary: "Menu pairs HD 5, Omega 4, 2048 7, Pulse 5, Pure 8 on the compare page; ranked differences, Omega campaign selector, XML main/racebox/options gaps"
 difficulty: medium (30)
@@ -102,12 +102,12 @@ Pure shows no difficulty control). No renderer or UI code changed. Ranked by the
 4. **Grid Selection, Cell Selection** (2.1 %, 1.8 %): the cursor hex halo (the front end's bloom, not a `SelectorGlow` image; undrawn, see `docs/ui/campaign-screens.md`, "The halo is the front end's bloom"; the cursor's position was 1.2-1.3 px low and is fixed, 59.3 to 52.4 grid and 69.2 to 65.1 cell controlled) and the scrolling footer ticker (empty at tick 0). 2026-10-29: `Selector` now pulses (`SelectorPulse`) and the pair script records `original.seconds_since_entry` and passes it as `--menu-picker-seconds` for these two; cursor-box mean grey 66.3 to 59.3 (grid), 77.2 to 69.2 (cell) on the same original frame, the rest is the glow and a ~0.2 s phase miss (`docs/ui/campaign-screens.md`, "The `Selector` pulse"). **Still open, same clock**: Ship Select hull turntable (`preview.rs` `orbit_for`: 12 s/rev and start yaw chosen), Track Select turntable and photo slideshow timing, footer ticker at tick 0; `CLOCKED` in `scripts/psp-menu-pair.py` takes their ids once each law is measured.
 
 **Pure**
-1. **Team Selection** (8.6 %, 7.5 % re-made 2026-10-29): eight teams on both sides now; open: the original's large type, the hull outline's angle, crowded stat labels.
-2. **Track Selection** (5.5 %): the `SINGLE RACE - VENOM - ALPHA` context line (chosen), record format `0.00.00` against `0'00"00`, `m` unit case.
+1. **Team Selection** (8.6 %, 7.5 % re-made 2026-10-29, 3.2 % on 2026-11-01 against a fresh capture, 7.57 % the same fresh capture before): the large type, the hull's angle (the slideshow's clock: `team` is now in `PURE_CLOCKED`) and the stat labels (the `Stats` face) are closed. Open: the description line the original types along the bottom (`YOU KNOW WHERE`, ours draws none on the picker), the dashed cyan rule at y 217 and the solid footer rule at y 251, the pink cursor arrow beside the selected row (ours draws the picker's two scroll arrows).
+2. **Track Selection** (5.5 %, 4.2 % on 2026-11-01, 5.63 % the same fresh capture before): the `SINGLE RACE - VENOM - ALPHA` context line is gone from the still (the original draws none on any chain screen; it stays on the live screen), the `m` unit and the labels come from the `Stats` face. Open: the record's separators. At 8x the original's `0.00.00` reads `0 . 00 . 00` with small mid-height dots and wide gaps, not `0'00"00` (the 2x reading); ours prints `.` at the baseline, and a sweep of every Latin-1 character as the separator found none that matches, so the format string is not recovered.
 3. **Every chain screen** (2.4 to 3.4 %): the context line (ours' chosen stand-in; Class, League, Tournament Selection), the description
    line is drawn settled since 2026-10-29 (the original types it in and its frame holds a prefix, so the share rose 0.8-1.6 points; its type-in rate is
-   not measured, its scale `0.7` chosen, its face the menu face where the original's is `Scroll`), the footer `Back` has its triangle; open: the
-   original's dashed cyan rule at y 217 and solid footer rule at y 251.
+   not measured, its scale `0.7` chosen; its face and the footer's `Confirm`/`Back` are the disc's `Scroll` face since 2026-11-01, the `Stats` glyph slot), the footer `Back` has its triangle; open: the
+   original's dashed cyan rule at y 217 and solid footer rule at y 251. The context line is no longer in the compare still.
 4. **Title** (0.3 %): no visible difference.
 
 Gaps (original kept, no pair): Pulse `Main Menu`, `Racebox`, `Single Player` (Racebox setup), `Additional` (Options+), the pause menu;
@@ -125,6 +125,6 @@ Pure `Main Menu` and the pause menu. Each is drawn from `menu.toml` or has no st
 5. 2048: a still route for Options, Profile, Extras and the Select Team grid (a `--screen` that draws the shell around the screen, or an
    `--until` that takes a button script), then pair them with `scripts/vita3k-2048-menu-pair.py` (move the `WALK` entries from
    `route: None` to a route).
-6. Pulse and Pure: (Track Select, Ship Select and Pure's team list closed 2026-10-29) check Pure's chain context line against the original's text, make `--menu-page cell-select` read the persisted campaign difficulty on Pulse (only the HD branch does, so a non-default rung cannot be paired); measure the description's type-in rate on PPSSPP, draw the `Scroll` face (`LTe50325.fnt`) for the legend and description, and the two frame rules; then re-run
+6. Pulse and Pure: (Track Select, Ship Select and Pure's team list closed 2026-10-29) make `--menu-page cell-select` read the persisted campaign difficulty on Pulse (only the HD branch does, so a non-default rung cannot be paired); measure the description's type-in rate on PPSSPP, draw the two frame rules, the team description line and the record separators (the `Scroll` face is drawn since 2026-11-01); then re-run
    `scripts/psp-menu-pair.py pairs`.
 7. Pulse and Pure pause menus: a `--menu-page pause` still would turn those two gaps into pairs.

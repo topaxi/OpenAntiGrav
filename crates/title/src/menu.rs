@@ -212,6 +212,14 @@ pub struct MenuSkin {
     /// the `menu` face or the same one as its title (HD, Pure, 2048, Omega),
     /// which needs no second face.
     pub body_font: Option<&'static str>,
+    /// The role of the face a `font="Stats"` widget draws in, **when the title
+    /// draws it in a face of its own** and has no `Buttons` face to hold the
+    /// renderer's third glyph slot: Pure's `Stats` (`LTe50325.fnt`), the small
+    /// letter-spaced face its team and circuit panels print their labels in
+    /// (PPSSPP capture of `Team Selection` and `Track Selection`, 2026-10-29).
+    /// `None` draws a `Stats` widget in the menu face, which is every other
+    /// title's current wiring.
+    pub stats_font: Option<&'static str>,
     /// Whether a selection screen's `font="default"` rows are drawn at their authored scale in
     /// the one face this title has (`true`: HD and Omega, which load no `menu`-role face, so the
     /// rows' face is the `default` face and the ratio of the two is 1), or as the `menu` face
@@ -686,6 +694,7 @@ mod tests {
         title_scale: 1.0,
         title_font: Some("Title"),
         body_font: Some("Default"),
+        stats_font: None,
         default_face_is_row_face: false,
         first_row_y: Some(32.0),
         row_extra_leading: Some(6.0),

@@ -269,6 +269,7 @@ pub fn read(
         hd_track: Some(Box::new(extra)),
         ready: String::new(),
         name_scale: 1.0,
+        entry_pitch: None,
     })
 }
 

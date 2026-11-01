@@ -714,3 +714,9 @@ just play usa --screenshot /tmp/mid.png --menu-page options --size 480x272 \
 `--menu-anim-phase` exists because `--ticks` does nothing alongside
 `--menu-page`: that path draws one frame and runs no clock, so without it a
 still cannot show a transition at all.
+
+## Pure's `Stats` and `Scroll` face is one small letter-spaced file (2026-11-01, `pure-menu-pairs`)
+
+Pure's `Stats` and `Scroll` roles resolve to `LTe50325.fnt` (the table in `oag_ui::language::roles`; `font_roles_ground_truth::pures_stats_slot_is_its_own_face_and_the_scroll_face` pins it on both pressings). Every `font="Stats"` widget of a team's `screen.xml` (the stat labels and `n/5` values, scale 0.8) and of a circuit's (`RACE RECORD`, `LAP RECORD`, `LENGTH`, `HEIGHT` and their values), the footer's `Confirm`/`Back` (`font="scroll"`) and the typed description all print in it: in a PPSSPP frame at 8x they are 5-pixel capitals with a wide letter space and an upper-case `M` for the unit, where this build had drawn them in the menu face (`FX300ANG.fnt`). It rides the renderer's third glyph slot (`oag_title::MenuSkin::stats_font`, Pure only: its `Buttons` role does not exist, so the slot is free), and a `Draw::FacedText { role: "Stats" }` falls back to the menu face on a title that loads no such face. The `<Menu>` rows of `Team Selection` name no `font`; they draw in the menu face at `MenuScale` 1.15, 18 grid lines apart (measured 18.2 on the frame, the chain's own `FlowFiles::row_pitch`). Confidence 90 (a frame measurement, one capture each).
+
+**Open, same capture:** the record's separators read `0 . 00 . 00` with small mid-height dots and wide gaps at 8x, which is neither this build's `0.00.00` (baseline dots) nor the `0'00"00` the 2x reading suggested; no Latin-1 character drawn in `LTe50325.fnt` as the separator matches the frame (a sweep, 2026-11-01), so the original's format string is not recovered.

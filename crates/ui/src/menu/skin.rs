@@ -952,6 +952,7 @@ mod tests {
         title_scale: 1.0,
         title_font: None,
         body_font: None,
+        stats_font: None,
         default_face_is_row_face: false,
         first_row_y: Some(32.0),
         row_extra_leading: Some(6.0),

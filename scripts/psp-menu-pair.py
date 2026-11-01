@@ -92,7 +92,7 @@ STOPPED = ("grid", "cell", "team", "track")
 #: 222 MHz CPU clock, which stops with the CPU and ran at 1.0000 of wall time over two 52 s recordings), read at the start of the pad
 #: press that entered the screen and again with the CPU stopped for the grab. Error: the press-to-screen latency (a frame or two) and
 #: the one frame the presented picture lags the stop. The `PURE_WALK` ids whose description types in (`oag_ui_screens::campaign::footer::typein`).
-PURE_CLOCKED = ("sr-class", "sr-league", "sr-track", "t-class", "t-sel")
+PURE_CLOCKED = ("sr-class", "sr-league", "sr-track", "team", "t-class", "t-sel")
 PSP_CPU_HZ = 222e6
 #: `team`: the ship's own `Anim Transform` node (loop `LoopEnd` 5.9833336 s on Assegai's `ship_FE.vex`) holds its own time at `+0x40`.
 SHIP_NODE_LOOP = 5.9833336
