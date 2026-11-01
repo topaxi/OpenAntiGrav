@@ -251,7 +251,8 @@ Three departures, each deliberate:
   every other mode id draws the panel's label and brackets and no icon, rather
   than a clip guessed from a file name. The base styling's
   `single_race_icon.bik` is the same name without `_fury` and **chosen, not
-  measured**.
+  measured** (it is a different file, 250 px square against the Fury clip's
+  400, so it is stretched to the same 240 px quad).
 - **The bar has 30 rows, as the original does**, since 2026-11-01. It had 21
   on the belief that this layout's bar was flatter; 30 rows of square tiles end
   above the closing rule, so the reason did not hold.
