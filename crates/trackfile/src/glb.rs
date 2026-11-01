@@ -716,6 +716,7 @@ pub(crate) fn read(m: Parsed, bytes: &[u8]) -> Result<Loaded, Error> {
         },
         triggers,
         art,
+        loading: m.loading,
         notes,
     };
     crate::props::check(&track)?;

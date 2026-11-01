@@ -221,6 +221,19 @@ pub(crate) fn run_windowless(
                     .clone()
                     .unwrap_or_else(oag_source::cache::default_cache_dir),
                 draw: cli.loading_draw,
+                track: race_options
+                    .foreign_track
+                    .as_deref()
+                    .filter(|path| oag_raceplay::foreign::is_track_file(path))
+                    .and_then(|path| {
+                        let loading = oag_trackfile::read_loading(path)
+                            .map_err(|why| log::warn!("{}: [loading]: {why}", path.display()))
+                            .ok()??;
+                        Some(loading::TrackLoading::read(
+                            path.parent().unwrap_or_else(|| std::path::Path::new("")),
+                            &loading,
+                        ))
+                    }),
                 safe_area: loaded
                     .title
                     .hud_art

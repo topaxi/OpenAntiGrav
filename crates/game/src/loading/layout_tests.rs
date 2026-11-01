@@ -57,9 +57,14 @@ fn assets(layout: Option<&str>) -> Assets {
     }
 }
 
-/// A screen of the HD title: its layout file, one feature, every mark.
+/// The assets of the HD title: its layout file, one feature, every mark.
+pub(super) fn hd_screen_assets() -> Assets {
+    assets(Some(HD_FILE))
+}
+
+/// A screen of the HD title.
 pub(super) fn hd_screen() -> Screen {
-    Screen::new(&assets(Some(HD_FILE)), AUTHORED_LINE_HEIGHT, 0, None)
+    Screen::new(&hd_screen_assets(), AUTHORED_LINE_HEIGHT, 0, None)
 }
 
 fn texts(list: &[Draw]) -> Vec<String> {

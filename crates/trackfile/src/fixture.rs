@@ -247,6 +247,7 @@ pub fn oval() -> Track {
         path_props: Vec::new(),
         triggers: Vec::new(),
         art: None,
+        loading: None,
         notes: vec![
             "authored by this project: a rounded octagon, 40 units wide (chosen, not measured)"
                 .to_string(),

@@ -189,11 +189,16 @@ impl Stage {
         // title's Safe Area for the player's `hud_safe_area`. See `Stage::loading`.
         title_font: Option<&oag_ui::font::Atlas>,
         safe_area: f32,
+        // What the track being raced supplies of its own loading screen, when it is a track
+        // file with a `[loading]` table.
+        track: Option<&loading::TrackLoading>,
     ) -> Result<Self> {
         // The mode icon's clip, where the title maps one for this mode: the
         // renderer's planes are sized from its header, and the clip itself is
         // opened on a thread of its own (`loading_icon::Icon`).
         let clip = loading::icon::clip(assets, mode);
+        // The track's own picture goes under the title's sheet when it supplies one.
+        let own_sheet = track.and_then(|track| track.sheet(assets));
         let mut renderer = Renderer::new(
             &gpu.device,
             &gpu.queue,
@@ -203,7 +208,11 @@ impl Stage {
             // The illustration's own sheet where the title ships one; see
             // `Stage::loading`, which chooses the same way and for the same
             // reason.
-            assets.art.as_ref().map_or(sprites, |art| &art.sheet),
+            own_sheet
+                .as_ref()
+                .map(|(sheet, _)| sheet)
+                .or(assets.art.as_ref().map(|art| &art.sheet))
+                .unwrap_or(sprites),
         )?;
         renderer.set_face_atlas(
             &gpu.device,
@@ -213,6 +222,12 @@ impl Stage {
         );
         let mut screen = loading::Screen::for_mode(assets, font.line_height, draw, language, mode);
         screen.set_safe_area(safe_area);
+        if let Some(track) = track {
+            for note in &track.notes {
+                log::warn!("{note}");
+            }
+            screen.apply_track(track, own_sheet.as_ref().map(|(_, rect)| *rect));
+        }
         renderer.set_space(screen.space());
         let wave = oag_render::loading::Pipeline::new(
             &gpu.device,

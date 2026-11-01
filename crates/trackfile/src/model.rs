@@ -72,9 +72,82 @@ pub struct Track {
     /// The art: meshes, textures, sun, sky, flare. `None` races as flat-shaded
     /// collision. The simulation never reads it, so it is in no world hash.
     pub art: Option<Art>,
+    /// The track's own loading screen (`[loading]`): what it supplies of it, the rest being
+    /// the running title's. `None` is the title's screen as it is.
+    pub loading: Option<Loading>,
     /// Free text the producer recorded: what it chose, ignored or could not map.
     /// Carried through a round trip so a loader report can print it.
     pub notes: Vec<String>,
+}
+
+/// What a track supplies of its own loading screen (`[loading]`, `docs/formats/screen-layout.md`).
+///
+/// **Names, not content.** `layout` and `feature_image` are file names relative to the manifest,
+/// read by whoever draws the screen (as `[[art.texture]] image` is); the four strings are the
+/// text itself. Every key is optional and a missing one falls back to the running title's.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Loading {
+    /// A screen-layout file (`screen = "loading"`) that replaces the title's.
+    pub layout: Option<String>,
+    /// The circuit's name on the caption line; absent is `track.title`.
+    pub caption: Option<String>,
+    /// The picture the layout's feature image draws, a PNG.
+    pub feature_image: Option<String>,
+    /// The feature's name, over the picture.
+    pub feature_title: Option<String>,
+    /// The heading over the paragraph.
+    pub feature_heading: Option<String>,
+    /// The paragraph.
+    pub feature_text: Option<String>,
+}
+
+impl Loading {
+    /// Whether any of the three feature texts or the picture is given: the track then **is** the
+    /// feature, and the title's random draw is not run.
+    #[must_use]
+    pub fn supplies_feature(&self) -> bool {
+        self.feature_image.is_some()
+            || self.feature_title.is_some()
+            || self.feature_heading.is_some()
+            || self.feature_text.is_some()
+    }
+
+    /// Refuses what a track may not name: an empty string, or a file outside its own folder (an
+    /// absolute path, a `..`).
+    ///
+    /// # Errors
+    ///
+    /// The first thing wrong, named.
+    pub fn validate(&self) -> Result<(), crate::Error> {
+        for (key, file) in [
+            ("layout", &self.layout),
+            ("feature_image", &self.feature_image),
+        ] {
+            let Some(file) = file else { continue };
+            let path = std::path::Path::new(file);
+            let own = !file.is_empty()
+                && path.is_relative()
+                && path
+                    .components()
+                    .all(|part| matches!(part, std::path::Component::Normal(_)));
+            if !own {
+                return Err(crate::Error::Manifest(format!(
+                    "loading.{key} {file:?} is not a file inside the track's own folder"
+                )));
+            }
+        }
+        for (key, text) in [
+            ("caption", &self.caption),
+            ("feature_title", &self.feature_title),
+            ("feature_heading", &self.feature_heading),
+            ("feature_text", &self.feature_text),
+        ] {
+            if text.as_deref().is_some_and(|t| t.trim().is_empty()) {
+                return Err(crate::Error::Manifest(format!("loading.{key} is empty")));
+            }
+        }
+        Ok(())
+    }
 }
 
 /// A read track and what the read itself has to say.

@@ -451,6 +451,7 @@ impl Session {
             .clone()
             .ok_or_else(|| anyhow::anyhow!("no disc image has been chosen yet"))?;
         let options_mode = options.mode;
+        let options_track = options.foreign_track.clone();
         // **Refreshed here, not trusted from whenever `race_options` was last
         // built or mutated** (boot, RACE REMIX, a campaign cell launch): the
         // OPTIONS page's LANGUAGE row writes `self.settings.language` without
@@ -616,6 +617,23 @@ impl Session {
         let shell = self.shell.clone().ok_or_else(|| {
             anyhow::anyhow!("this run has no menus, so it has no font to draw with")
         })?;
+        // A track file's own loading screen: its manifest's `[loading]` table, read now because
+        // the screen goes up before the track is built.
+        let track_loading = options_track
+            .as_deref()
+            .filter(|path| oag_raceplay::foreign::is_track_file(path))
+            .and_then(|path| match oag_trackfile::read_loading(path) {
+                Ok(loading) => loading.map(|loading| {
+                    crate::loading::TrackLoading::read(
+                        path.parent().unwrap_or_else(|| std::path::Path::new("")),
+                        &loading,
+                    )
+                }),
+                Err(why) => {
+                    log::warn!("{}: its [loading] table: {why}", path.display());
+                    None
+                }
+            });
         self.stage = Stage::race_loading(
             &self.gpu,
             worker,
@@ -632,6 +650,7 @@ impl Session {
                 .title
                 .hud_art
                 .safe_area_scale(self.settings.graphics.hud_safe_area),
+            track_loading.as_ref(),
         )?;
         Ok(())
     }

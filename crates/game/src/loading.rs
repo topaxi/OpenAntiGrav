@@ -156,6 +156,9 @@ pub struct Screen {
     /// `None` keeps the palette this build chose against a near-black frame,
     /// which is what both PSP titles get. See [`Assets::palette`].
     palette: Option<assets::Palette>,
+    /// The circuit's name a track supplied for the caption line, instead of the one the load
+    /// reports. See [`track`].
+    circuit: Option<String>,
     /// The slot of the feature on show in the title's own table, which is the number the
     /// original's `Feature type == N` line reports.
     feature_slot: Option<u8>,
@@ -284,6 +287,7 @@ impl Screen {
             dot: assets.art.as_ref().and_then(|art| art.dot),
             square: assets.art.as_ref().and_then(|art| art.square),
             palette: assets.palette,
+            circuit: None,
             feature_slot: shown
                 .and_then(|at| assets.features.get(at))
                 .map(|feature| feature.slot),
@@ -443,7 +447,7 @@ impl Screen {
             return heading(phase, progress, &self.strings);
         }
         let caption = self.caption.clone().unwrap_or_default();
-        match &progress.current {
+        match self.circuit.as_ref().or(progress.current.as_ref()) {
             Some(current) => format!("{caption} {current}"),
             None => caption,
         }
@@ -730,9 +734,11 @@ mod assets;
 mod feature;
 pub mod icon;
 mod layout;
+pub mod track;
 mod wording;
 pub use assets::{Art, Assets, Feature, Labels, ModeIcon, tips};
 pub use feature::executable_mode;
+pub use track::TrackLoading;
 use wording::{counted, counts, estimated_fraction, fraction, heading, percentage, step_line};
 
 #[cfg(test)]
@@ -742,3 +748,5 @@ mod fill;
 mod layout_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod track_tests;

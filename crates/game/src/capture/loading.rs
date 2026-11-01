@@ -52,6 +52,9 @@ pub struct LoadingOptions {
     pub draw: u64,
     /// The title's Safe Area as a scale about the centre, for `[graphics] hud_safe_area`.
     pub safe_area: f32,
+    /// What the track file being raced supplies of its own loading screen (`--track-file`
+    /// with a `[loading]` table), laid over the title's.
+    pub track: Option<crate::loading::TrackLoading>,
     /// The title's `Title`-role face, when it has one.
     pub title_font: Option<oag_ui::font::Atlas>,
     /// Which adapter to draw with, from `[graphics] renderer`.
@@ -106,6 +109,14 @@ pub fn loading(
         screen.feature_slot()
     );
     screen.set_safe_area(options.safe_area);
+    // The title's sheet, or the one with the track's own picture under it.
+    let own_sheet = options.track.as_ref().and_then(|track| track.sheet(assets));
+    if let Some(track) = &options.track {
+        for note in &track.notes {
+            log::warn!("{note}");
+        }
+        screen.apply_track(track, own_sheet.as_ref().map(|(_, rect)| *rect));
+    }
     screen.set_surface_aspect(
         oag_display::display::viewport((options.size.0, options.size.1), options.aspect).2
             / oag_display::display::viewport((options.size.0, options.size.1), options.aspect).3,
@@ -166,7 +177,11 @@ pub fn loading(
     // addresses whichever sheet the renderer was built with, so a capture given
     // the front end's would draw the loading screen's picture from the wrong
     // atlas and silently miss it.
-    let sprites = assets.art.as_ref().map_or(sprites, |art| &art.sheet);
+    let sprites = own_sheet
+        .as_ref()
+        .map(|(sheet, _)| sheet)
+        .or(assets.art.as_ref().map(|art| &art.sheet))
+        .unwrap_or(sprites);
     // The mode icon: the clip the window's stage plays, opened here whole and
     // read at the frame the screen is on. A clip that will not open is said
     // so and the panel stays empty, as in the window.

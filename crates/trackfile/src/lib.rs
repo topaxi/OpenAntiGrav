@@ -24,7 +24,7 @@ use std::path::{Path, PathBuf};
 
 pub use error::Error;
 pub use manifest::{FORMAT_MAJOR, SCHEMA_KIND};
-pub use model::{ABSENT, Loaded, Track};
+pub use model::{ABSENT, Loaded, Loading, Track};
 
 /// A manifest and its glb as bytes: what [`write`] puts on disk.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -94,6 +94,17 @@ pub fn read(manifest: &Path) -> Result<Loaded, Error> {
         .join(&parsed.glb);
     let bytes = std::fs::read(&glb_path).map_err(|e| Error::io(&glb_path, &e))?;
     glb::read(parsed, &bytes)
+}
+
+/// What the manifest at `manifest` supplies of its own loading screen (`[loading]`), without
+/// reading the glb: the loading screen goes up before the track is built.
+///
+/// # Errors
+///
+/// As [`from_parts`] for the manifest alone, and any I/O failure.
+pub fn read_loading(manifest: &Path) -> Result<Option<Loading>, Error> {
+    let text = std::fs::read_to_string(manifest).map_err(|e| Error::io(manifest, &e))?;
+    Ok(manifest::read(&text)?.loading)
 }
 
 fn glb_path_beside(manifest: &Path) -> PathBuf {

@@ -90,6 +90,7 @@ pub(super) fn map(wtrk: &Wtrk, track: &Track) -> anyhow::Result<OagTrack> {
         triggers: Vec::new(),
         channels: Vec::new(),
         art: None,
+        loading: None,
         notes: report,
     })
 }

@@ -32,8 +32,55 @@ pub(crate) struct Manifest {
     /// The event channels the track publishes; written only when it publishes any.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub channels: Option<ChannelsTable>,
+    /// The track's own loading screen; written only when it supplies one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub loading: Option<LoadingTable>,
     #[serde(flatten)]
     pub extra: BTreeMap<String, toml::Value>,
+}
+
+/// `[loading]`: what the track supplies of its loading screen.
+#[derive(Debug, Serialize, Deserialize)]
+pub(crate) struct LoadingTable {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layout: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caption: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub feature_image: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub feature_title: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub feature_heading: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub feature_text: Option<String>,
+    #[serde(flatten)]
+    pub extra: BTreeMap<String, toml::Value>,
+}
+
+impl LoadingTable {
+    fn of(loading: &crate::Loading) -> Self {
+        Self {
+            layout: loading.layout.clone(),
+            caption: loading.caption.clone(),
+            feature_image: loading.feature_image.clone(),
+            feature_title: loading.feature_title.clone(),
+            feature_heading: loading.feature_heading.clone(),
+            feature_text: loading.feature_text.clone(),
+            extra: BTreeMap::new(),
+        }
+    }
+
+    fn read(self) -> crate::Loading {
+        crate::Loading {
+            layout: self.layout,
+            caption: self.caption,
+            feature_image: self.feature_image,
+            feature_title: self.feature_title,
+            feature_heading: self.feature_heading,
+            feature_text: self.feature_text,
+        }
+    }
 }
 
 /// `[channels]`: what a trigger's `oag_emit` may name.
@@ -127,6 +174,7 @@ pub(crate) struct Parsed {
     pub art: Option<ArtTable>,
     pub props: crate::props::Props,
     pub channels: Vec<String>,
+    pub loading: Option<crate::Loading>,
     pub unread: Vec<String>,
 }
 
@@ -175,6 +223,11 @@ pub(crate) fn write(track: &Track, glb_name: &str) -> Result<String, Error> {
     }
     host_rule(track.host.as_deref(), track.art.as_ref(), &track.titles)
         .map_err(Error::Unwritable)?;
+    if let Some(loading) = &track.loading {
+        loading
+            .validate()
+            .map_err(|e| Error::Unwritable(e.to_string()))?;
+    }
     let manifest = Manifest {
         toml_schema: Some(oag_schema::Header {
             location: oag_schema::location(SCHEMA_KIND, FORMAT_MAJOR),
@@ -224,6 +277,7 @@ pub(crate) fn write(track: &Track, glb_name: &str) -> Result<String, Error> {
         channels: (!track.channels.is_empty()).then(|| ChannelsTable {
             publishes: track.channels.clone(),
         }),
+        loading: track.loading.as_ref().map(LoadingTable::of),
         extra: BTreeMap::new(),
     };
     toml::to_string(&manifest).map_err(|e| Error::Unwritable(e.to_string()))
@@ -254,6 +308,19 @@ pub(crate) fn read(text: &str) -> Result<Parsed, Error> {
                 .map(|k| format!("manifest key art.{k}")),
         );
     }
+    let loading = match m.loading {
+        Some(mut table) => {
+            unread.extend(
+                std::mem::take(&mut table.extra)
+                    .into_keys()
+                    .map(|k| format!("manifest key loading.{k}")),
+            );
+            let loading = table.read();
+            loading.validate()?;
+            Some(loading)
+        }
+        None => None,
+    };
     let n = m.spline.path.len();
     let range = |what: &str, v: i64, limit: usize| -> Result<Option<usize>, Error> {
         if v == -1 {
@@ -311,6 +378,7 @@ pub(crate) fn read(text: &str) -> Result<Parsed, Error> {
         art,
         props: crate::props::from_toml(m.props)?,
         channels: m.channels.map(|c| c.publishes).unwrap_or_default(),
+        loading,
         unread,
     })
 }
