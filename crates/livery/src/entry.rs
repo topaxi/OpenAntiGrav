@@ -75,6 +75,34 @@ pub fn model_directory(paths: oag_title::race::ShipPaths, team: &str, mode: Mode
     (paths.zone.root(paths.dir), paths.zone.directory(team))
 }
 
+/// [`model_directory`], unless the Zone directory lacks `file`: then the team's
+/// own, and a line in `report` says so. `file` maps a `(directory, team)` pair
+/// to the entry name the caller is about to read.
+///
+/// A Zone craft's engine light, shield shell and absorb shell are authored about
+/// its hull like the flare is, so they come from the same place; a title whose
+/// Zone directory ships none of one keeps the team's, never nothing.
+pub fn model_directory_with<'a>(
+    archives: &mut oag_assets::Archives,
+    paths: oag_title::race::ShipPaths,
+    team: &'a str,
+    mode: Mode,
+    file: impl Fn(&str, &str) -> String,
+    report: &mut Vec<String>,
+) -> (&'a str, &'a str) {
+    let (dir, owner) = model_directory(paths, team, mode);
+    if mode == Mode::Zone && (dir, owner) != (paths.dir, team) {
+        let zone = file(dir, owner);
+        if archives.read_name(&zone).is_err() {
+            report.push(format!(
+                "{zone}: the Zone directory ships none - the team's own file is read instead"
+            ));
+            return (paths.dir, team);
+        }
+    }
+    (dir, owner)
+}
+
 /// The boost plume that goes with [`ship_entry_name`]'s hull, or `None` when
 /// this title's own package names no standalone boost model at all.
 ///
