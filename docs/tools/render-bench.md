@@ -596,7 +596,7 @@ features and the limits under wgpu 30; the race log says which drawables took th
 git checkout main && cargo build --release -p oag-game --features perf-probe && cp target/release/oag-game /tmp/oag-game-bl
 mkdir -p /tmp/oag-bench
 XDG_CONFIG_HOME=/tmp/oag-bench/config XDG_DATA_HOME=/tmp/oag-bench/data XDG_STATE_HOME=/tmp/oag-bench/state \
-RUST_LOG=info,oag_mesh::mesh_render::bindless=debug /tmp/oag-game-bl data/images/hdfury-ps3-eu-dec.iso --race --no-audio \
+RUST_LOG=info,oag_mesh::mesh_render=debug /tmp/oag-game-bl data/images/hdfury-ps3-eu-dec.iso --race --no-audio \
   --mode single_race --ticks 60 --size 1280x800 --screenshot /tmp/oag-bench/shot.png 2>&1 | grep -E 'binding arrays|bindless:' | head
 vulkaninfo 2>/dev/null | grep -E 'descriptorBindingPartiallyBound|maxPushConstantsSize|maxPerStageDescriptorUpdateAfterBindSampledImages|maxPerStageDescriptorUpdateAfterBindSamplers'
 ```
