@@ -850,11 +850,16 @@ fn entry_rows(picker: &Picker, layout: &Layout, skin: &Skin) -> Vec<Draw> {
 /// grid lines, the chain's own 18 measured 2026-10-12). So the face ratio of a
 /// `font` role does not apply, and the step is [`Layout::entry_pitch`] where the
 /// title measured one, else one line of the menu face.
-pub(crate) fn entry_geometry(layout: &Layout, skin: &Skin, menu: &oag_ui::screen::Menu) -> (f32, f32) {
+pub(crate) fn entry_geometry(
+    layout: &Layout,
+    skin: &Skin,
+    menu: &oag_ui::screen::Menu,
+) -> (f32, f32) {
     let scale = menu.scale;
-    let pitch = layout
-        .entry_pitch
-        .map_or_else(|| skin.line_height() * scale, |measured| measured * layout.scale[1]);
+    let pitch = layout.entry_pitch.map_or_else(
+        || skin.line_height() * scale,
+        |measured| measured * layout.scale[1],
+    );
     (scale, pitch)
 }
 

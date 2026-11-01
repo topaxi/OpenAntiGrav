@@ -344,9 +344,7 @@ pub(super) fn load_buttons_font(
     skin: &oag_title::MenuSkin,
     report: &mut Vec<String>,
 ) -> Option<oag_ui::font::Atlas> {
-    let role = skin
-        .stats_font
-        .unwrap_or(oag_ui::language::roles::BUTTONS);
+    let role = skin.stats_font.unwrap_or(oag_ui::language::roles::BUTTONS);
     let name = role_font(languages, preferred, role)?;
     match archives.read_font(&name) {
         Ok(font) => {

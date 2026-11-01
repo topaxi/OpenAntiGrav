@@ -940,7 +940,8 @@ closes from the first. The order of the screens is read off their redirects
 (`oag_ui_screens::pure_chain::draw_list`, the same `Layers` the race box's pickers return, so
 the barcode, arrows and `Confirm` legend are the page's own), the rows 18 grid lines apart
 (`FlowFiles::row_pitch`, measured on PPSSPP); the medal word and the context line are ours
-(chosen, not measured).
+(chosen, not measured). The original draws no context line on any chain screen (PPSSPP pairs, 2026-10-29), so
+`--menu-page pure-chain` draws none and the live screen keeps it.
 Which campaign a title opens is
 [`oag_title::Campaign::dialect`](../../crates/title/src/campaign.rs), and the chain's
 files, the classes a fresh profile offers and the row's wording are fields beside it

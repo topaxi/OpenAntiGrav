@@ -598,8 +598,8 @@ fn a_menu_widget_lists_every_entry_at_its_own_position_and_step() {
         },
     ];
     let picker = Picker::new(Kind::Ship, entries, Some("Qirex"), None);
-    // A 20-unit line height and `FaceScales::default().default` of 1.0, so
-    // the step is the widget's own `scale="2"`: 40.
+    // A 20-unit line height and the widget's own `scale="2"`: a step of 40. The widget names no
+    // `font`, so the face ratio of a `font` role does not apply (it draws in the menu face).
     let skin = Skin::new(
         oag_pure::FRONT_END.menu.unwrap(),
         oag_display::space::Space::PSP,
@@ -633,7 +633,7 @@ fn a_menu_widget_lists_every_entry_at_its_own_position_and_step() {
         // Pulse's screens do; the list is what sits at the widget's own `x`.
         .filter(|row| (row.1 - 21.0).abs() < 1e-3)
         .collect();
-    let step = 20.0 * FaceScales::default().default * 2.0;
+    let step = 20.0 * 2.0;
     assert_eq!(rows.len(), 3, "{rows:?}");
     for (index, row) in rows.iter().enumerate() {
         assert_eq!(row.0, ["FEISAR", "QIREX", "AURICOM"][index]);
@@ -649,6 +649,65 @@ fn a_menu_widget_lists_every_entry_at_its_own_position_and_step() {
     assert_eq!(rows[1].4, oag_ui::screen::argb_to_rgba(0xFF16_AED1));
     assert_eq!(rows[0].4, oag_ui::screen::argb_to_rgba(0xFF88_D6E8));
     assert_ne!(rows[0].4, rows[1].4, "the selection has to be visible");
+}
+
+/// A title that measured its rows' pitch steps by that, not by a line of the face: the drawn
+/// rows and the click bands share the one geometry, so a click lands on the row it draws
+/// (Pure's `Team Selection`, rows 18 grid lines apart on PPSSPP).
+#[test]
+fn a_measured_entry_pitch_steps_both_the_rows_and_their_click_bands() {
+    let mut layout = listing_layout();
+    layout.entry_pitch = Some(18.0);
+    let ship = |id: &str| Entry {
+        id: id.into(),
+        label: id.to_uppercase(),
+        details: Details::Ship {
+            loyalty: None,
+            logo: None,
+            models: Vec::new(),
+            rating: None,
+            variants: Vec::new(),
+            stats: Vec::new(),
+        },
+    };
+    let picker = Picker::new(
+        Kind::Ship,
+        vec![ship("Feisar"), ship("Qirex"), ship("Auricom")],
+        Some("Feisar"),
+        None,
+    );
+    let skin = Skin::new(
+        oag_pure::FRONT_END.menu.unwrap(),
+        oag_display::space::Space::PSP,
+        20.0,
+    );
+    let drawn = draw_list(
+        &picker,
+        &layout,
+        &skin,
+        &Frame::default(),
+        None,
+        false,
+        &|_| None,
+        &|text| text.len() as f32 * 8.0,
+    );
+    let ys: Vec<f32> = drawn
+        .body
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::Text { x, y, .. } if (*x - 21.0).abs() < 1e-3 => Some(*y),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(ys, [45.0, 63.0, 81.0], "18 apart, from the widget's own y");
+    let bands: Vec<[f32; 4]> = pointer::targets(&picker, &layout, &skin, &|_| None)
+        .iter()
+        .filter(|target| matches!(target.what, pointer::What::Entry(_)))
+        .map(|target| target.rect)
+        .collect();
+    assert_eq!(bands.len(), 3);
+    assert!((bands[1][1] - bands[0][1] - 18.0).abs() < 1e-3, "{bands:?}");
+    assert!((bands[1][3] - 18.0).abs() < 1e-3, "{bands:?}");
 }
 
 /// Pulse's own selection screens author no `<Menu>`, so the listing draws
@@ -806,7 +865,7 @@ fn pures_listed_rows_select_on_hover_and_confirm_on_a_second_click() {
             .rect
     };
     // The rows step by the same pitch the drawing test measures.
-    let step = 20.0 * FaceScales::default().default * 2.0;
+    let step = 20.0 * 2.0;
     assert_eq!(row(0), [21.0, 45.0, row(0)[2], step]);
     assert!((row(2)[1] - (45.0 + 2.0 * step)).abs() < 1e-3);
     // With the face's ink measured, the same rows sit on the capitals:
@@ -821,7 +880,7 @@ fn pures_listed_rows_select_on_hover_and_confirm_on_a_second_click() {
         bottom: 16.0,
     }));
     let inked = pointer::targets(&picker, &layout, &inked, &|_| None);
-    let scale = FaceScales::default().default * 2.0;
+    let scale = 2.0;
     let expect = 45.0 + 11.5 * scale - step * 0.5;
     let first = inked
         .iter()
