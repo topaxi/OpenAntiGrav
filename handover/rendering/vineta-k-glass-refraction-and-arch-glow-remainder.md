@@ -2,7 +2,7 @@
 status: re-first
 titles: [hd, 2048, omega]
 updated: 2026-11-01
-summary: "Vineta K: HD rock-to-sand blend unread, sea ripple needs the paraboloid probe; 2048/Omega draw no refraction target; Sebenco check"
+summary: "Vineta K: HD rock-to-sand blend unread, sea ripple needs the paraboloid probe; 2048/Omega target drawn, rt_icetunnel (Sebenco) glass law unread"
 ---
 
 # Vineta K's glass refraction and arch glow: what is left
@@ -22,9 +22,11 @@ a scratch directory, not kept (`report.md`, `shots/`, `sweep/`).
 - **2048 Vineta K: the main view leaves out the meshes named `wohdmeshrefract` (wired 2026-11-01, `psp2-glass-re`).** It is not a file field. `Environment_Load` substring-matches each track mesh object's name and sets instance flag `0x20`. `TrackPass_FilterSubmesh` (`0x813b9670`) rejects that flag in the main view and draws flags `0x30` only into the half-size `screenSpaceRefractionTex` target. Confidence 82, evidence in `docs/ghidra/functions/vita-2048-eu-v104/refraction-pass.md`. There are 238 such meshes on Vineta K. The `tunnel_understruts*` are **not** among them, so the original 2048 draws them in its main view (HD's chunk 1574 has no 2048 counterpart in this rule). Wired for 2048 and Omega (`psp2::refraction_only`, `psp2_refraction_only_ground_truth`).
   - **Omega: ported (2026-11-01, `omega-glass-re`).** `TrackPass_FilterSubmesh` is at `0x01605760` with the same kind-0 `0x20` and kind-1 `0x30` tests (confidence 80, `docs/ghidra/functions/ps4-omega-eu/refraction-pass.md`). The `is_ps4` guard is gone. Omega skips 212 meshes on Vineta K, plus one on **Sebenco Climb** (`ice_tunnel_wohdmeshrefract2Shape`; the Vita's Sebenco has none).
   - **Zone keeps them (wired).** Zone pass kinds never test `0x20`: kinds 2 to 4 on the Vita, 3 to 5 on Omega. So the skip runs outside Zone only.
-  - **Sebenco Climb moved.** Its icy rock sheet above the track (tick 1800 of an autopilot lap) is gone, and our sky shows black there. Next: compare against an original Omega frame at that spot (the wipeout_pc native port).
+  - **Sebenco Climb moved.** Its icy rock sheet above the track (tick 1800 of an autopilot lap) is gone from the main view, and our sky shows black there until `rt_icetunnel` samples the target (below). Compare against an original Omega frame at that spot (the wipeout_pc native port).
   - The render target of Omega's kind-1 list `0x01f8f310` is not traced (`FUN_016304d0(5, ...)` in `FUN_015c63a0`).
-  - **Neither title draws a refraction target**, so the glass panes now show nothing behind them where the original shows these meshes. Next: build them into a psp2 counterpart of HD's `build_scene_views` target.
+  - **The refraction target is drawn (2026-11-01, `psp2-refraction-target`).** The left-out meshes go into a half-surface target (2048 480x272 measured, Omega 960x540 inherited) and `mt_tunnelrefraction` (2048, 26 submeshes) and Omega's `mt_`/`cl_tunnelrefraction` sample it: law `mix(fog, W * 2.0039 * D.a * G^2 + spec + lit * D^2, vis)` read off Vita3K's cached fragment SPIR-V (80). Test: `psp2_refraction_only_ground_truth` (target set == Zone's draws of the `0x30` meshes, main view == Zone minus refract, Zone has no target). **Inherited from HD, unread on the Vita:** the sample coordinate (the vertex program has no cached permutation), the 0.75 clip narrowing, single-sided drawing. **No alternate fog pair** exists in 2048/Omega `.envsettings`, so one primary-fog group; what the Vita does with flag `0x1000` (`wohdsecondaryfog`, 236 of 238) is unread. No Vita3K frame of a Vineta K tunnel exists to score the panes against.
+  - **Open: Sebenco Climb's `rt_icetunnel`** (one submesh, Omega only, `screenSpaceRefractionTex` declared, five samplers, thirteen parameters, no `0x78575769`): its GCN pixel program is unread, so the rock sheet sits in the target and nothing samples it; tick 1800's black stays. Next: read it with `oag_rcs::gcn` and add its law beside `psp2::refraction`.
+  - Next: Vita3K capture at a tunnel pose to score the panes and the sample coordinate; read the Vita's target camera and flag `0x1000`.
   - A Vita3K capture of the target's draws at the tunnel would take the confidence from 82 to 90+.
 - **The dunes inside the target are rock, the capture's are sand.** `and_rocktosand`'s red-channel blend mask
   (`j_rockblend5`) is read as the rock picture alone (rcsmaterial.md's table, "the red shape behind the glass"). It

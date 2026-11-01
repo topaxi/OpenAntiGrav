@@ -54,28 +54,28 @@ fn vineta_k_leaves_its_refraction_only_meshes_out_of_the_main_view() {
     );
     assert!(refract.is_disjoint(&struts), "the understruts carry no tag");
 
-    let loaded = race::load(&race::Options {
-        source: package.display().to_string(),
-        class: "VENOM".to_string(),
-        track: Some(VINETA_K.to_string()),
-        ..race::Options::default()
-    })
-    .expect("loading the race");
-    let model = &loaded.track_model;
-    let drawn: BTreeSet<u32> = model
-        .draws
-        .iter()
-        .chain(&model.alpha_tested_draws)
-        .chain(&model.transparent_draws)
-        .chain(&model.shine_draws)
-        .filter(|d| !d.range.is_empty())
-        .filter_map(|d| d.chunk)
-        .collect();
+    let load = |mode: oag_race::Mode| {
+        race::load(&race::Options {
+            source: package.display().to_string(),
+            class: "VENOM".to_string(),
+            track: Some(VINETA_K.to_string()),
+            mode,
+            ..race::Options::default()
+        })
+        .expect("loading the race")
+    };
+    let loads = Loads {
+        main: load(race::Options::default().mode),
+        zone: load(oag_race::Mode::Zone),
+    };
+    let loaded = &loads.main;
+    let drawn = drawn_chunks(&loaded.track_model);
     let leaked: Vec<_> = refract.intersection(&drawn).collect();
     assert!(
         leaked.is_empty(),
         "refraction-only meshes drawn: {leaked:?}"
     );
+    assert_target_is_the_left_out_set(&loads, &refract, &BTreeSet::new(), (480, 272));
     assert!(
         road.iter().filter(|c| drawn.contains(c)).count() * 2 > road.len(),
         "the road is drawn"
@@ -87,6 +87,84 @@ fn vineta_k_leaves_its_refraction_only_meshes_out_of_the_main_view() {
     assert!(
         loaded.report.iter().any(|l| l.contains("wohdmeshrefract")),
         "the load report names what it left out"
+    );
+}
+
+/// The mesh objects a model draws anything of.
+fn drawn_chunks(model: &oag_mesh::mesh::Model) -> BTreeSet<u32> {
+    model
+        .draws
+        .iter()
+        .chain(&model.alpha_tested_draws)
+        .chain(&model.transparent_draws)
+        .chain(&model.shine_draws)
+        .filter(|d| !d.range.is_empty())
+        .filter_map(|d| d.chunk)
+        .collect()
+}
+
+/// What a race loads for the refraction target and the main view, outside Zone and in it.
+struct Loads {
+    main: race::Loaded,
+    zone: race::Loaded,
+}
+
+/// The refraction target's draw set equals the main view's left-out set
+/// (`psp2::refraction_only`): with `refract` the `wohdmeshrefract` meshes and `reflect` the
+/// `wohdmeshreflect` ones, the main view draws everything Zone draws but `refract`, the target
+/// draws exactly Zone's draws of `refract` and `reflect`, and Zone, whose pass kinds never reject
+/// `0x20`, draws no target. Drop the partition from `load::geometry::track_model` and every
+/// assertion here fails.
+fn assert_target_is_the_left_out_set(
+    loads: &Loads,
+    refract: &BTreeSet<u32>,
+    reflect: &BTreeSet<u32>,
+    size: (u32, u32),
+) {
+    let zone = drawn_chunks(&loads.zone.track_model);
+    let main = drawn_chunks(&loads.main.track_model);
+    assert!(
+        loads.zone.behind_glass.groups.is_empty(),
+        "Zone keeps the meshes in the main view and draws no target"
+    );
+    assert_eq!(
+        main,
+        zone.difference(refract).copied().collect::<BTreeSet<_>>(),
+        "the main view is Zone's draws without the refract meshes"
+    );
+    let groups = &loads.main.behind_glass.groups;
+    assert!(
+        groups.alternate_fog.is_none(),
+        "no alternate fog pair is authored on these titles"
+    );
+    let target = drawn_chunks(groups.primary_fog.as_ref().expect("the target's draws"));
+    let wanted: BTreeSet<u32> = zone
+        .iter()
+        .copied()
+        .filter(|c| refract.contains(c) || reflect.contains(c))
+        .collect();
+    assert_eq!(
+        target, wanted,
+        "the target draws exactly the 0x30 meshes Zone draws"
+    );
+    assert!(
+        target.intersection(refract).count() * 2 > refract.len(),
+        "most of the refract meshes have geometry"
+    );
+    assert_eq!(loads.main.behind_glass.size, size, "the target's size");
+    let model = &loads.main.track_model;
+    let glass = |model: &oag_mesh::mesh::Model| {
+        model
+            .vertices
+            .iter()
+            .filter(|v| v.slots & oag_mesh::mesh::slots::REFRACTION != 0)
+            .count()
+    };
+    assert!(glass(model) > 0, "the tunnel glass reads the target");
+    assert_eq!(
+        glass(&loads.zone.track_model),
+        0,
+        "with no target in Zone the glass keeps the generic reading"
     );
 }
 
@@ -202,34 +280,27 @@ fn omega_vineta_k_leaves_its_refraction_only_meshes_out_of_the_main_view() {
     );
 
     let load = |mode: oag_race::Mode| {
-        let loaded = race::load(&race::Options {
+        race::load(&race::Options {
             source: root.display().to_string(),
             track: Some(r"Data\environments\01_vineta_k\track.vex".to_string()),
             mode,
             ..race::Options::default()
         })
-        .expect("loading the race");
-        let model = &loaded.track_model;
-        let drawn: BTreeSet<u32> = model
-            .draws
-            .iter()
-            .chain(&model.alpha_tested_draws)
-            .chain(&model.transparent_draws)
-            .chain(&model.shine_draws)
-            .filter(|d| !d.range.is_empty())
-            .filter_map(|d| d.chunk)
-            .collect();
-        (drawn, loaded.report)
+        .expect("loading the race")
     };
     // Omega's Zone passes (kinds 3 to 5) never test `0x20`: Zone keeps them in the main view.
-    let (zone_drawn, _) = load(oag_race::Mode::Zone);
+    let loads = Loads {
+        main: load(race::Options::default().mode),
+        zone: load(oag_race::Mode::Zone),
+    };
+    let zone_drawn = drawn_chunks(&loads.zone.track_model);
     assert!(
         refract.is_subset(&zone_drawn),
         "Zone drops {} refraction-only meshes",
         refract.difference(&zone_drawn).count()
     );
 
-    let (drawn, report) = load(race::Options::default().mode);
+    let drawn = drawn_chunks(&loads.main.track_model);
     let leaked: Vec<_> = refract.intersection(&drawn).collect();
     assert!(
         leaked.is_empty(),
@@ -241,8 +312,14 @@ fn omega_vineta_k_leaves_its_refraction_only_meshes_out_of_the_main_view() {
         road.iter().filter(|c| drawn.contains(c)).count() * 2 > road.len(),
         "the road is drawn"
     );
+    // Omega's target is not traced: half its 1920x1080 surface, inherited from the Vita's rule.
+    assert_target_is_the_left_out_set(&loads, &refract, &BTreeSet::new(), (960, 540));
     assert!(
-        report.iter().any(|l| l.contains("wohdmeshrefract")),
+        loads
+            .main
+            .report
+            .iter()
+            .any(|l| l.contains("wohdmeshrefract")),
         "the load report names what it left out"
     );
 }

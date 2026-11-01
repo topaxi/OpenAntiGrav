@@ -37,8 +37,11 @@ const NARROWING: f32 = 0.75;
 
 /// What a load hands the scene for the target: the chunks, split by fog, and
 /// the circuit's alternate fog pair.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct BehindGlassModels {
+    /// The target's size in pixels: HD's [`SIZE`], or the psp2 titles' own
+    /// (`oag_mesh::mesh::rcs::psp2::refraction_only::target_size`).
+    pub size: (u32, u32),
     /// The two fog groups, both `None` on every circuit but Vineta K.
     pub groups: oag_mesh::mesh::rcs::BehindGlass,
     /// `Fog.Alternate Fog Color` / `Alternate Fog Density`, read only when a
@@ -46,9 +49,20 @@ pub struct BehindGlassModels {
     pub alternate_fog: Option<mesh_render::Fog>,
 }
 
+impl Default for BehindGlassModels {
+    fn default() -> Self {
+        Self {
+            size: SIZE,
+            groups: oag_mesh::mesh::rcs::BehindGlass::default(),
+            alternate_fog: None,
+        }
+    }
+}
+
 /// The target and what draws into it.
 #[derive(Debug)]
 pub(super) struct Target {
+    size: (u32, u32),
     texture: wgpu::Texture,
     colour: wgpu::TextureView,
     depth: wgpu::TextureView,
@@ -74,7 +88,7 @@ fn colour_texture(
     }
     let texture = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("behind the glass"),
-        size: extent(),
+        size: extent(models.size),
         mip_level_count: 1,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
@@ -87,10 +101,10 @@ fn colour_texture(
     Some(texture)
 }
 
-fn extent() -> wgpu::Extent3d {
+fn extent(size: (u32, u32)) -> wgpu::Extent3d {
     wgpu::Extent3d {
-        width: SIZE.0,
-        height: SIZE.1,
+        width: size.0,
+        height: size.1,
         depth_or_array_layers: 1,
     }
 }
@@ -159,7 +173,7 @@ impl Target {
             device
                 .create_texture(&wgpu::TextureDescriptor {
                     label: Some(label),
-                    size: extent(),
+                    size: extent(models.size),
                     mip_level_count: 1,
                     sample_count: 1,
                     dimension: wgpu::TextureDimension::D2,
@@ -209,10 +223,13 @@ impl Target {
             )
         };
         let BehindGlassModels {
+            size,
             groups,
             alternate_fog,
+            ..
         } = models;
         Ok(Self {
+            size,
             colour: texture.create_view(&wgpu::TextureViewDescriptor::default()),
             texture,
             depth,
@@ -351,7 +368,7 @@ impl Target {
             stats.add(group.draw_lists(&mut pass, block, None, set, chunks, frustum, solid));
         }
         if let Some(sky) = &self.sky {
-            let (width, height) = (SIZE.0 as f32, SIZE.1 as f32);
+            let (width, height) = (self.size.0 as f32, self.size.1 as f32);
             pass.set_viewport(0.0, 0.0, width, height, 1.0, 1.0);
             let _ = sky.draw(&mut pass, block, None, None, None, None);
             pass.set_viewport(0.0, 0.0, width, height, 0.0, 1.0);
@@ -425,10 +442,10 @@ impl Scene {
             return Ok(());
         };
         let texel = target.texture.format().block_copy_size(None).unwrap_or(4);
-        let row = (SIZE.0 * texel).div_ceil(256) * 256;
+        let row = (target.size.0 * texel).div_ceil(256) * 256;
         let buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("behind the glass readback"),
-            size: u64::from(row * SIZE.1),
+            size: u64::from(row * target.size.1),
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
             mapped_at_creation: false,
         });
@@ -440,19 +457,19 @@ impl Scene {
                 layout: wgpu::TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(row),
-                    rows_per_image: Some(SIZE.1),
+                    rows_per_image: Some(target.size.1),
                 },
             },
-            extent(),
+            extent(target.size),
         );
         queue.submit([encoder.finish()]);
         let slice = buffer.slice(..);
         slice.map_async(wgpu::MapMode::Read, |_| {});
         device.poll(wgpu::PollType::wait_indefinitely())?;
         let mapped = slice.get_mapped_range()?;
-        let mut rgba = Vec::with_capacity((SIZE.0 * SIZE.1 * 4) as usize);
-        for line in mapped.chunks(row as usize).take(SIZE.1 as usize) {
-            for pixel in line[..(SIZE.0 * texel) as usize].chunks(texel as usize) {
+        let mut rgba = Vec::with_capacity((target.size.0 * target.size.1 * 4) as usize);
+        for line in mapped.chunks(row as usize).take(target.size.1 as usize) {
+            for pixel in line[..(target.size.0 * texel) as usize].chunks(texel as usize) {
                 if texel == 8 {
                     let channel = |i: usize| {
                         half_to_f32(u16::from_le_bytes([pixel[2 * i], pixel[2 * i + 1]]))
@@ -466,9 +483,15 @@ impl Scene {
         }
         drop(mapped);
         buffer.unmap();
-        std::fs::write(&dump, oag_texture::png::encode_rgba(SIZE.0, SIZE.1, &rgba))
-            .map_err(|error| anyhow::anyhow!("writing {dump}: {error}"))?;
-        println!("wrote {dump} (behind the glass, {}x{})", SIZE.0, SIZE.1);
+        std::fs::write(
+            &dump,
+            oag_texture::png::encode_rgba(target.size.0, target.size.1, &rgba),
+        )
+        .map_err(|error| anyhow::anyhow!("writing {dump}: {error}"))?;
+        println!(
+            "wrote {dump} (behind the glass, {}x{})",
+            target.size.0, target.size.1
+        );
         Ok(())
     }
 }
