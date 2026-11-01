@@ -407,7 +407,7 @@ the 90 % threshold (`149.4`, TOC `+0x60cc`, read at `0x002b7a44`) was not read;
 `0x002b7a44` is the widget-clock branch, not a wait.
 
 
-## 2026-11-02: the race load's layout, read for a screen-layout file
+## 2026-11-01: the race load's layout, read for a screen-layout file
 
 Lane `hd-loading-layout`. Read from the **disassembly** of `LoadingScreen_Draw` (`0x002b61c8`, the `+4 == 4`
 race-load kind with screen type `+0x440 == 0`) and its five drawing helpers, with every `lfs`/`lwz` through the

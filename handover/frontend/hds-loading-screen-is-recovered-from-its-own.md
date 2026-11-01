@@ -2,7 +2,7 @@
 status: re-first
 titles: [hd]
 updated: 2026-11-01
-summary: "HD loading screen: seven mode ids unnamed, the flag writer unread, the 90 percent hold unknown"
+summary: "HD loading screen: layout read, awaiting a screen-layout TOML; mode ids unnamed, flag writer unread, 90 percent hold unknown"
 ---
 
 # HD's loading screen is recovered; the seven unnamed mode ids and one flag writer are left
@@ -14,14 +14,14 @@ summary: "HD loading screen: seven mode ids unnamed, the flag writer unread, the
 - **Whether the original holds the screen until the bar crosses 90 %** (`149.4` columns). Our load ends in about 3 s, with the bar near 33 of 166 columns at the original's ease, so the screen snaps to full and fades (chosen, not measured). The threshold is read at `0x002b7a44`, what waits on it is not. `0x000b43b0` and `0x000b9380` (the second kinds of the track and world constructors) are unread.
 - **The inner two stage placements are by position**: `WorldBuilt` and `CraftsBuilt` in `race::load`, chosen, not measured, since our load reads the crafts before the track.
 - **The mode icon** plays `single_race_icon_fury.bik` for mode 3 only (RPCS3 frame match); the other mode ids' clips are unread (the executable's pick from the mode). Base styling's name is chosen.
-- **Layout**: ours draws heading, prose and illustration at other sizes and positions than the original (heading rule y 209 against 133 of 1080); share >40 grey is 10.5 % against 11.9 before this lane, mostly this. Refit to the RPCS3 pair in `docs/formats/hd-loading.md`.
+- **Layout**: ours draws the screen in a 480x272 PSP grid with a line-height normalisation; the original is native 1920x1080 with fonts `Title`/`default` at scales 1.0/0.8/0.45. The numbers are now read from `LoadingScreen_Draw` (loading-screen.md, "2026-11-01: the race load's layout"). The pair is promoted (`hd-loading`, baseline share 10.52 %). Next: a screen-layout TOML in the fallback layer (proposal awaiting the maintainer, lane `hd-loading-layout` phase 2), a mod track's `[loading]` manifest table.
 - The seven unnamed mode ids on `g_GameState` (`0`, `6`, `7`, `11`, `13`, `14`, `15`). Speed Lap and Zone draw from the default deck in this build, chosen, not measured.
 - The writer of the Fury-content flag at `0x00b979fd`; this build assumes `true` for every HD source.
 - Why one boot constructs two or three loading screens, only the last matching the frame.
 
 ## Next Steps
 
-- Refit the heading, feature and prose boxes to the pair's measured positions.
+- Phase 2 of `hd-loading-layout`: implement the screen-layout format, draw HD's loading screen from `LoadingScreen_HD.toml`, drop the share below 10.52 %.
 
 - Name the seven ids by the other places `g_GameState`'s mode picks a branch.
 - Follow the `[PARAM]` sites `0x0021ba9c`, `0x0005b3c8`, `0x00229a58` to the flag's writer.
