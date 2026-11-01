@@ -969,7 +969,7 @@ the evidence.
 
 | Screen (the original's name) | Ours | Pulse | Pure |
 | --- | --- | --- | --- |
-| title, `Show Logo` / `Title Screen` | Pulse `--until "Show Logo" --press cross --ticks 200` (the sequence draws the ray backdrop; `--screen "Show Logo"` leaves it out: 14.9 mean grey, 6.0 % against 4.7, 2.6 %), Pure `--screen "Intro Screen->Title Screen"` | pair | pair |
+| title, `Show Logo` / `Title Screen` | Pulse `--until "Show Logo" --press cross --press-until-reached --ticks 200` (the sequence draws the ray backdrop; `--screen "Show Logo"` leaves it out: 14.9 mean grey, 6.0 % against 4.7, 2.6 %), Pure `--screen "Intro Screen->Title Screen"` | pair | pair |
 | `Grid Selection`, `Cell Selection` (the Race Campaign) | `--menu-page grid-select`, `cell-select` (`CellMode_Definition.xml`, `grid_00.xml`) | pair, pair | none: Pure draws a list (`this source has no Race Campaign to show`) |
 | Pure's Single Player chain: `Single Player`, `Class Selection`, `League Selection`, `Tournament Selection`, `Track Selection` | `--menu-page pure-chain[:MODE[:ROW...]]` | none | pair x6 |
 | `Track Creation` (Track Select), `Team Selection` | `--menu-page track-select`, `ship-select` | pair, pair | `Team Selection` pair; Pure's circuit list is `Track Selection` above |
