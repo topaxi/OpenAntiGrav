@@ -282,7 +282,9 @@ impl FrontendStage {
         let ready = match drawn {
             Some((_, frontend::Video::Intro)) => self.feed.is_some() && self.shown,
             Some((_, frontend::Video::Backdrop)) => has_backdrop && self.backdrop_shown,
-            None => return Ok(()),
+            // The race loading screen's, fed by `LoadingStage`; a front-end
+            // list never carries it.
+            Some((_, frontend::Video::ModeIcon)) | None => return Ok(()),
         };
         if !ready {
             list.retain(|draw| !matches!(draw, frontend::Draw::Video { .. }));

@@ -41,6 +41,8 @@ mod headless;
 mod hints;
 #[path = "main/launcher_stage.rs"]
 mod launcher_stage;
+#[path = "main/loading_icon.rs"]
+mod loading_icon;
 #[path = "main/loading_stage.rs"]
 mod loading_stage;
 #[path = "main/menu_stage.rs"]

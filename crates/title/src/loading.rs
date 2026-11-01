@@ -270,6 +270,13 @@ pub struct FeatureStyle {
     pub name: &'static str,
     /// Its five, in the order the executable names them.
     pub features: &'static [Feature],
+    /// The Bink clip the mode icon's panel plays, by the race's mode id: the
+    /// source executable's own ids, as [`Deck::modes`] keys them.
+    ///
+    /// Empty on a title with no such panel. A mode with no row draws no icon:
+    /// which clip each unnamed mode id gets is unread. See
+    /// `oag_hd::loading::FEATURES`.
+    pub mode_icons: &'static [(u32, &'static str)],
 }
 
 /// One thing the loading screen teaches while it waits: a picture, a name and a

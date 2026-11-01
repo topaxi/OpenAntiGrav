@@ -245,13 +245,17 @@ executable as the illustrations.
 
 Three departures, each deliberate:
 
-- **The mode icon is not drawn.** The original puts an animated Bink clip
-  chosen by the mode in that panel; this build draws the panel's label and
-  brackets and no icon, rather than a stand-in.
-- **The bar has 21 rows, not 30.** It is 166 columns of `dot.gtf` tiled by
-  `Draw::TiledSprite`, as the original is (measured, see below), and the lit
-  columns are whole columns in `HD_Blue` over `HD_LightGrey` ones. The row count
-  is chosen to fit this layout's flatter bar, not measured.
+- **The mode icon plays for one mode only.** The panel plays a Bink clip, and
+  an RPCS3 frame of a `GetMode()==3` race matches `single_race_icon_fury.bik`
+  (see "The pair"). Only that mode is mapped (`oag_hd::loading::MODE_ICONS_FURY`);
+  every other mode id draws the panel's label and brackets and no icon, rather
+  than a clip guessed from a file name. The base styling's
+  `single_race_icon.bik` is the same name without `_fury` and **chosen, not
+  measured** (it is a different file, 250 px square against the Fury clip's
+  400, so it is stretched to the same 240 px quad).
+- **The bar has 30 rows, as the original does**, since 2026-11-01. It had 21
+  on the belief that this layout's bar was flatter; 30 rows of square tiles end
+  above the closing rule, so the reason did not hold.
 - **The bar's fill is driven by the race load's stages**, since 2026-10-06:
   a first target of 0.2, then 0.4, 0.5, 0.75 and 0.95 as `race::load` reaches
   `TrackRead`, `TrackBuilt`, `WorldBuilt` and `CraftsBuilt`
@@ -313,6 +317,44 @@ ad slot, and nothing draws them. The lesson is worth keeping with them: a run of
 strings in an executable is a *neighbourhood*, and taking the part of it you
 recognise for the whole is how a well-evidenced reading lands on the wrong
 object.
+
+## The pair (2026-11-01, `hd-loading-screen`)
+
+The original: RPCS3 cold boot, the Racebox path to Team Selection (Feisar) then
+Cross, grabbing the window at 1920x1080 about 1 s apart (`TTY.log`:
+`Team Launch Transition`, `Launch Game`, `InGame`, `GetMode()==3`, Vineta K,
+`Feature type` Barrel Roll). HD's log names no loading screen, so the screen
+name of this pair is declared. Ours: `oag-game ... --loading-screen 0/1
+--loading-step race --loading-live --ticks 100 --mode single_race --track
+"Data\Environments\01_Vineta_K\track.vex" --size 1920x1080`, `front_end_style
+= FURY`, `aspect = wide`.
+
+Measured off those frames (1080 px tall): the dot rows run y 703 to 929 and the
+closing rule is at y 960; the mode clip (400 px) is drawn at 0.6, 240 px square
+with its top left at (1488, 694); the clip loops (two grabs 2 s apart are on
+different beats) and builds the ring logo up, then shows a grey ship at its
+corner.
+
+Share of pixels differing by more than 40 grey (luma, 1920x1080), original
+frame 3 and frame 6 against ours:
+
+| ours | vs frame 3 | vs frame 6 |
+| --- | ---: | ---: |
+| before (21 rows, no icon) | 11.91 % | 12.41 % |
+| 30 rows and the bar and rule placed as measured | 10.33 % | 10.55 % |
+| plus the mode icon clip | 10.45 % | 10.56 % |
+
+Noise: original frame 2 against 3 is 0.05 %, 3 against 6 0.15 %, ours against
+itself 0.08 %. So the 30 rows and their placement are worth about 1.5 points,
+and **the icon is inside the noise**: a 240 px square of mostly black is under
+0.3 % of the frame, and our clip phase and bar fill are not locked to the
+original's. The remaining 10 % is the heading, feature and prose layout: ours
+draws the heading and prose larger and the illustration about half the
+original's size, the title rule at y 209 against 133. That is this build's
+chosen layout and is the next lane.
+
+**Omega:** not checkable here. Omega's front end is HD's, but no Omega loading
+frame exists and shadPS4 race shots are untrusted.
 
 ## Looking at it
 

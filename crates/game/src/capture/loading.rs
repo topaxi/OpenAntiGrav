@@ -41,6 +41,12 @@ pub struct LoadingOptions {
     /// `--loading-live`: the bar then shows the stage the load has reached by
     /// tick `ticks`, instead of a stated state. `None` draws a stated one.
     pub live: Option<oag_raceplay::Options>,
+    /// The source executable's mode id of the race the screen covers, which
+    /// narrows the feature deck and picks the mode icon's clip. `None` draws
+    /// as before: every feature, no icon.
+    pub mode: Option<u32>,
+    /// The movie cache the mode icon's clip is opened through.
+    pub movies: std::path::PathBuf,
     /// Which adapter to draw with, from `[graphics] renderer`.
     pub renderer: oag_display::display::Renderer,
     /// The shape the game is drawn in, from `[display] aspect`.
@@ -80,7 +86,8 @@ pub fn loading(
     // CLI capture has no `Settings` to read one from, so it takes the same
     // English fallback `oag_ui::strings::project_table` gives any other
     // caller with nothing to name.
-    let mut screen = crate::loading::Screen::new(assets, font.line_height, 0, None);
+    let mut screen =
+        crate::loading::Screen::for_mode(assets, font.line_height, 0, None, options.mode);
     // Stepped rather than jumped to: the tip rotation counts frames, and the
     // wave draws from its own `Rng` on every one of them, so frame `n` is only
     // reachable by having drawn the `n - 1` before it.
@@ -138,7 +145,31 @@ pub fn loading(
     // the front end's would draw the loading screen's picture from the wrong
     // atlas and silently miss it.
     let sprites = assets.art.as_ref().map_or(sprites, |art| &art.sheet);
-    let mut renderer = Renderer::new(&device, &queue, format, None, font, sprites)?;
+    // The mode icon: the clip the window's stage plays, opened here whole and
+    // read at the frame the screen is on. A clip that will not open is said
+    // so and the panel stays empty, as in the window.
+    let clip = crate::loading::icon::clip(assets, options.mode);
+    let mut renderer = Renderer::new(
+        &device,
+        &queue,
+        format,
+        clip.and_then(crate::loading::icon::format),
+        font,
+        sprites,
+    )?;
+    if let Some(clip) = clip.filter(|clip| crate::loading::icon::format(clip).is_some()) {
+        match crate::loading::icon::open(clip, &options.movies) {
+            Ok(movie) => {
+                let mut frames = movie.frames.context("the mode icon has no frames")?;
+                let mut picture = crate::movie::VideoFrame::default();
+                let at = screen.playhead() as usize % frames.len.max(1);
+                frames.read_frame(at, &mut picture)?;
+                renderer.upload_frame(&queue, &picture)?;
+                screen.set_mode_icon(true);
+            }
+            Err(why) => log::warn!("loading screen mode icon: {why:#}"),
+        }
+    }
     // Sample count 1, matching `upscale::Framebuffer`'s own target and this
     // capture's texture. The wave's pipeline bakes it in, so a mismatch here is
     // a validation error rather than a soft failure.
