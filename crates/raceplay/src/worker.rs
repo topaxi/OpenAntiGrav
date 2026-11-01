@@ -200,7 +200,7 @@ impl LoadWorker {
         // wasm32 caps the shared memory at 4 GiB and it never shrinks, so its
         // high-water mark is the number a load has to stay under.
         #[cfg(target_arch = "wasm32")]
-        log::info!(
+        log::debug!(
             "web: module memory {} MiB after the race load",
             core::arch::wasm32::memory_size::<0>() / 16
         );

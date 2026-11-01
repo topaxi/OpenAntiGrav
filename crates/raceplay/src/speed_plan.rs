@@ -8,7 +8,7 @@
 
 use oag_physics::Environment;
 
-use log::{info, warn};
+use log::{debug, warn};
 
 use super::*;
 
@@ -727,7 +727,7 @@ impl Race {
                 if job.matches(&self.sim) {
                     return;
                 }
-                info!("the race changed under the speed plans being learned ahead, starting again");
+                debug!("the race changed under the speed plans being learned ahead, starting again");
             }
             let inputs = PlanInputs::of(&self.sim);
             let mut copy = self.sim.clone();
@@ -794,7 +794,7 @@ impl Race {
                 |course, craft| oag_ai::SpeedPlan::build(course, craft, &oag_ai::Tuning::default()),
             );
             let clean = ring_clean(&report);
-            info!(
+            debug!(
                 "ai speed plan (learned on slot {slot}): {} steps, lap {:?} ticks, {} unresolved, \
                  {} of {} samples tight, verification {} - {}",
                 report.steps,
@@ -908,7 +908,7 @@ impl Race {
             );
             steps += report.steps;
             let clean = adapted_clean(&report);
-            info!(
+            debug!(
                 "ai speed plan for a hull of turn {:.3}, the reference's at {share} of its yaw \
                  share: lap {:?} ticks, {} wall ticks, verification {}",
                 handling.turning.amount,
@@ -961,7 +961,7 @@ impl Race {
                 |course, craft| reference_plan.adapt(course, craft, &tuning, HULL_PLAN_BUDGET),
             );
             let clean = adapted_clean(&report);
-            info!(
+            debug!(
                 "ai speed plan for a hull of turn {:.3}, the reference's adapted: {} steps, \
                  lap {:?} ticks, verification {} - {}",
                 handling.turning.amount,
@@ -1009,7 +1009,7 @@ impl Race {
                     },
                 );
                 let clean = route_clean(&report, route.kept);
-                info!(
+                debug!(
                     "ai speed plan for a hull of turn {:.3}, route {k}, adapted: {} steps, \
                      verification {}",
                     handling.turning.amount,
@@ -1070,7 +1070,7 @@ impl Race {
             },
         );
         let clean = route_clean(&report, route.kept);
-        info!(
+        debug!(
             "ai speed plan, route {k}: {} steps, lap {:?} ticks, {} contact ticks, \
              verification {}",
             report.steps,
