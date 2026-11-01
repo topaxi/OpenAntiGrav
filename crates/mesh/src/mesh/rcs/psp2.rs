@@ -604,10 +604,23 @@ fn build_planned(
     // zips on that; a hidden submesh still gets its draw, empty, so the
     // zip stays a binding.
     for submesh in &decoded.submeshes {
-        let place = submesh
+        let mut place = submesh
             .node
             .and_then(|n| plan.placements.get(n).copied())
             .unwrap_or(placement::Placement::STATIC);
+        // The diagnostic filter (`OAG_SKIP_MATERIAL` and friends) hides a submesh as a hidden
+        // node is, keeping its draw empty so `bind_textures` still zips.
+        let filtered = {
+            let material = submesh.material.and_then(|m| decoded.materials.get(m));
+            let paths: Vec<&str> = material
+                .into_iter()
+                .flat_map(|m| {
+                    std::iter::once(m.name.as_str()).chain(m.textures.iter().map(String::as_str))
+                })
+                .collect();
+            super::isolate::excludes_psp2(submesh.material, None, &paths)
+        };
+        place.hidden |= filtered;
         report.node_bound += usize::from(submesh.node.is_some());
         report.moving += usize::from(place.xform != 0);
         report.hidden += usize::from(place.hidden && !place.unplaced);
@@ -766,6 +779,13 @@ fn build_planned(
                     2.0 + f32::from(a) / 255.0,
                 ),
                 _ => (colour, 1.0),
+            };
+            // `rt_icetunnel` weights its grab by the baked colour's red (`refraction::is_ice`).
+            let colour = match submesh.colours.get(i) {
+                Some(&[r, ..]) if glass.is_ice(submesh.material) => {
+                    [1.0, 1.0, 1.0, f32::from(r) / 255.0]
+                }
+                _ => colour,
             };
             model.vertices.push(GpuVertex {
                 quake: 0.0,

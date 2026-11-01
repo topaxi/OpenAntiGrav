@@ -32,7 +32,12 @@ use super::Report;
 #[cfg(test)]
 use crate::mesh::rcs::refraction::SCREEN_GRAB;
 use crate::mesh::rcs::refraction::{DIFFUSE, DIFFUSE_COLOUR, WEIGHT, layer, table_index};
-use crate::mesh::{Emissive, slots};
+use crate::mesh::{Emissive, PROGRAM_ICE_GLASS, slots};
+
+/// `Constant1`, the colour `rt_icetunnel`'s program multiplies its grab by.
+const CONSTANT1: u32 = 0x7611_a2d8;
+/// `Refraction`, how far along the normal `rt_icetunnel`'s program pushes its sample point.
+const REFRACTION: u32 = 0x2c1d_4018;
 
 /// The factor the Vita program multiplies a picture-weighted grab by.
 pub const PICTURE_SCALE: f32 = 2.003_906_3;
@@ -41,9 +46,20 @@ pub const PICTURE_SCALE: f32 = 2.003_906_3;
 #[derive(Default)]
 pub(super) struct Plan {
     roles: Vec<u32>,
+    /// Per material, whether it is `rt_icetunnel`, whose weight `a` rides each vertex's
+    /// `colour.a` (the baked colour's red).
+    ice: Vec<bool>,
 }
 
 impl Plan {
+    /// Whether the material is `rt_icetunnel` and bound: its vertices carry `a` in `colour.a`.
+    pub fn is_ice(&self, material: Option<usize>) -> bool {
+        material
+            .and_then(|m| self.ice.get(m))
+            .copied()
+            .unwrap_or(false)
+    }
+
     /// The vertex bits for one material, `0` for any other.
     pub fn role(&self, material: Option<usize>) -> u32 {
         material
@@ -56,14 +72,36 @@ impl Plan {
 /// Whether the material is one of the family: a record that carries the grab's weight and
 /// whose file stem is `mt_` or `cl_tunnelrefraction`.
 fn is_glass(material: &Material) -> bool {
+    let stem = file_stem(material);
+    stem.eq_ignore_ascii_case("mt_tunnelrefraction")
+        || stem.eq_ignore_ascii_case("cl_tunnelrefraction")
+}
+
+/// The material's file stem: its `.rcsmaterial` name without directory or extension.
+fn file_stem(material: &Material) -> &str {
     let stem = material
         .name
         .rsplit(['/', '\\'])
         .next()
         .unwrap_or(&material.name);
-    let stem = stem.strip_suffix(".rcsmaterial").unwrap_or(stem);
-    stem.eq_ignore_ascii_case("mt_tunnelrefraction")
-        || stem.eq_ignore_ascii_case("cl_tunnelrefraction")
+    stem.strip_suffix(".rcsmaterial").unwrap_or(stem)
+}
+
+/// Whether the material is Omega's `rt_icetunnel` (Sebenco Climb's ice tunnel). Its GCN pixel
+/// program reads `screenSpaceRefractionTex`; see [`ice_glass`].
+fn is_ice(material: &Material) -> bool {
+    file_stem(material).eq_ignore_ascii_case("rt_icetunnel")
+}
+
+/// The glass's own glow-table entry: `2 * Constant1 * a * grab` (see [`ice_glass`]).
+fn ice_layer(constant1: [f32; 3], refraction: f32) -> Emissive {
+    Emissive {
+        tint: constant1,
+        offset: 1.0,
+        scale: 2.0,
+        rate: 0.0,
+        program: [PROGRAM_ICE_GLASS, refraction],
+    }
 }
 
 /// Whether the material is glass whose program samples no diffuse picture
@@ -94,10 +132,29 @@ pub(super) fn plan(
     let mut out = Plan::default();
     for material in materials {
         out.roles.push(0);
+        out.ice.push(false);
+        let at = out.roles.len() - 1;
+        if is_ice(material) {
+            let constant1 = material.param(CONSTANT1).filter(|c| c.len() >= 3);
+            let refraction = material.param(REFRACTION).and_then(|v| v.first().copied());
+            let (Some(c), Some(refraction)) = (constant1, refraction) else {
+                report.refraction_unread += 1;
+                continue;
+            };
+            let entry = ice_layer([c[0], c[1], c[2]], refraction);
+            let index = table_index(emissive, entry).and_then(|i| u32::try_from(i + 1).ok());
+            let Some(index) = index else {
+                report.refraction_unread += 1;
+                continue;
+            };
+            out.roles[at] = slots::REFRACTION | (index << slots::MATERIAL_SHIFT);
+            out.ice[at] = true;
+            report.refraction_bound += 1;
+            continue;
+        }
         if !is_glass(material) {
             continue;
         }
-        let at = out.roles.len() - 1;
         let weight = material.param(WEIGHT).filter(|w| w.len() >= 3);
         let Some(weight) = weight else {
             report.refraction_unread += 1;
