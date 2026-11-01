@@ -2,7 +2,7 @@
 status: re-first
 titles: [hd, 2048, omega]
 updated: 2026-11-01
-summary: "Vineta K: rock-to-sand mask blend (j_rockblend5) unread; the sea sheet ripple needs the paraboloid probe"
+summary: "Vineta K: HD rock-to-sand mask blend unread, sea ripple needs the paraboloid probe; 2048 has no refraction target yet, Omega pass filter unlocated"
 ---
 
 # Vineta K's glass refraction and arch glow: what is left

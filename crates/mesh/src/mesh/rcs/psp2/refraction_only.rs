@@ -57,6 +57,7 @@ pub fn leave_out_of_main_view(model: &mut Model, model_blob: &[u8]) -> usize {
     model.draws.retain(keep);
     model.alpha_tested_draws.retain(keep);
     model.transparent_draws.retain(keep);
+    model.shine_draws.retain(keep);
     out.iter().filter(|o| **o).count()
 }
 

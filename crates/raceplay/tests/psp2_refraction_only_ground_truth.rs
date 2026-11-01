@@ -64,6 +64,7 @@ fn vineta_k_leaves_its_refraction_only_meshes_out_of_the_main_view() {
         .iter()
         .chain(&model.alpha_tested_draws)
         .chain(&model.transparent_draws)
+        .chain(&model.shine_draws)
         .filter(|d| !d.range.is_empty())
         .filter_map(|d| d.chunk)
         .collect();

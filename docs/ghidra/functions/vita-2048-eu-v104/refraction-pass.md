@@ -35,6 +35,22 @@ chunk 1574, the original 2048 draws the tunnel's dark strut band in its main
 view. No mesh carries both `wohdtrack` and `wohdmeshrefract`, so the road is
 never left out.
 
+**Blast radius.** Over all 80 `track*.rcsmodel` under `environments/` in the
+EU package's five archives (base, patch `data1`/`data2`, `dlc1`, `dlc2`), only
+Vineta K carries the tag: forward 238 (`dlc1`; 238 of 1,833 in the base copy),
+reversed 242 (243 in the base copy). Every other circuit has none, so the rule
+moves no other circuit.
+
+**What the 12 `trackouter_*` pieces are.** Their boxes hug the tunnels
+(`trackouter_*4` spans x -877..-657, y -158..-135, z -61..395, around HD's
+tunnel pose A at (-841, -144, 203)). They are the tunnel's outer skin, seen
+from inside as a dark curved sheet across the roof. Frames before and after
+the skip, at pose A and at autopilot ticks 900, 1200, 1800 and 3600 of
+`oag-game data/extracted/vita/PCSF00007 --race --track
+'Data\art\published\DLC1\environments\Vineta_K\track.vex' --autopilot
+--ticks N --screenshot`: the sheet goes, and road and walls are unchanged in
+every frame.
+
 ## `Environment_Load` - `0x8102f6d0` (named on [zone-environment-fallback.md](zone-environment-fallback.md))
 
 After it allocates one 0x70-byte instance record per mesh object
