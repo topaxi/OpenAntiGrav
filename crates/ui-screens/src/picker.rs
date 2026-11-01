@@ -524,6 +524,11 @@ pub struct Layout {
     /// authored. A layout borrowed from the PS2 pressing for a smaller grid draws them
     /// smaller, as its stat rows are ([`borrow`]).
     pub name_scale: f32,
+    /// How far apart a `<Menu>`'s rows sit, where the title measured it: Pure's
+    /// `Main Menu`, chain screens and `Team Selection` all step 18 grid lines
+    /// (`oag_title::FlowFiles::row_pitch`). `None` steps one line of the menu
+    /// face, as the widget authors no pitch.
+    pub entry_pitch: Option<f32>,
 }
 
 impl Layout {
@@ -713,6 +718,7 @@ impl Layout {
             hd_track: None,
             ready: String::new(),
             name_scale: 1.0,
+            entry_pitch: None,
         })
     }
 
@@ -808,8 +814,7 @@ fn entry_rows(picker: &Picker, layout: &Layout, skin: &Skin) -> Vec<Draw> {
     let Some(menu) = layout.screen.menu.as_ref() else {
         return Vec::new();
     };
-    let scale = layout.face_scale(&menu.font) * menu.scale;
-    let pitch = skin.line_height() * scale;
+    let (scale, pitch) = entry_geometry(layout, skin, menu);
     let align = Align::parse(&menu.align);
     // The title's own measured pair, not the widget's `color` attribute -
     // see `oag_ui::frontend::draw`'s `DisplayLanguages` block for why: on
@@ -835,6 +840,31 @@ fn entry_rows(picker: &Picker, layout: &Layout, skin: &Skin) -> Vec<Draw> {
             wrap_width: None,
         })
         .collect()
+}
+
+/// The scale and row pitch a `<Menu>`'s entries are drawn and hit-tested at.
+///
+/// **The widget names no `font`, and the original draws its rows in the menu face**,
+/// the same face and `MenuScale` as the chain screens before it (a PPSSPP capture
+/// of Pure's `Team Selection`, 2026-10-29: rows 36.4 px apart in a 2x frame, 18.2
+/// grid lines, the chain's own 18 measured 2026-10-12). So the face ratio of a
+/// `font` role does not apply, and the step is [`Layout::entry_pitch`] where the
+/// title measured one, else one line of the menu face.
+pub(crate) fn entry_geometry(layout: &Layout, skin: &Skin, menu: &oag_ui::screen::Menu) -> (f32, f32) {
+    let scale = menu.scale;
+    let pitch = layout
+        .entry_pitch
+        .map_or_else(|| skin.line_height() * scale, |measured| measured * layout.scale[1]);
+    (scale, pitch)
+}
+
+/// The glyph role a widget's `font` asks for when it is the title's `Stats` face
+/// ([`oag_ui::language::roles::STATS`]): the team panel's labels and values and a
+/// circuit's record and length cells. A title that loads no such face draws the
+/// `FacedText` in the primary atlas, exactly as the plain text it replaces.
+pub(crate) fn stats_role(font: &str) -> Option<&'static str> {
+    font.eq_ignore_ascii_case("stats")
+        .then_some(oag_ui::language::roles::STATS)
 }
 
 /// A circuit's name split into the lines the panel has blocks for.

@@ -163,7 +163,9 @@ pub(super) fn load_role_fonts(
         scaled(load_title_font(
             archives, languages, preferred, skin, report,
         )),
-        scaled(load_buttons_font(archives, languages, preferred, report)),
+        scaled(load_buttons_font(
+            archives, languages, preferred, skin, report,
+        )),
     )
 }
 
@@ -290,7 +292,10 @@ pub fn third_atlas_slot(
 ) -> (Option<oag_ui::font::Atlas>, &'static str) {
     match (skin.title_font, skin.body_font) {
         (Some(role), Some(_)) => (title_font, role),
-        _ => (buttons_font, oag_ui::language::roles::BUTTONS),
+        _ => (
+            buttons_font,
+            skin.stats_font.unwrap_or(oag_ui::language::roles::BUTTONS),
+        ),
     }
 }
 
@@ -327,18 +332,26 @@ pub fn install_faces(
 /// a title that never authors a `font="buttons"` widget simply never emits
 /// a `Draw::FacedText` asking for it, so loading the face whenever the disc
 /// names one costs nothing extra to gate.
+///
+/// **The renderer's third glyph slot holds one role per title**: the
+/// button glyphs, or, on a title that names a [`oag_title::MenuSkin::stats_font`]
+/// (Pure, which has no `Buttons` role), its `Stats` face. That role is what
+/// is loaded here, and [`third_atlas_slot`] labels the slot with it.
 pub(super) fn load_buttons_font(
     archives: &mut oag_assets::Archives,
     languages: &[Language],
     preferred: Option<&Language>,
+    skin: &oag_title::MenuSkin,
     report: &mut Vec<String>,
 ) -> Option<oag_ui::font::Atlas> {
-    let role = oag_ui::language::roles::BUTTONS;
+    let role = skin
+        .stats_font
+        .unwrap_or(oag_ui::language::roles::BUTTONS);
     let name = role_font(languages, preferred, role)?;
     match archives.read_font(&name) {
         Ok(font) => {
             report.push(format!(
-                "buttons font {name} (role {role:?}): {}x{} atlas, {} glyphs",
+                "third-slot font {name} (role {role:?}): {}x{} atlas, {} glyphs",
                 font.width,
                 font.height,
                 font.glyphs.len()
@@ -350,8 +363,8 @@ pub(super) fn load_buttons_font(
         }
         Err(why) => {
             report.push(format!(
-                "buttons font {name} (role {role:?}) unavailable ({why}); \
-                 button glyphs draw as nothing rather than a wrong codepoint"
+                "third-slot font {name} (role {role:?}) unavailable ({why}); \
+                 the role's glyphs draw as nothing rather than a wrong codepoint"
             ));
             None
         }

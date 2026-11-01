@@ -836,6 +836,10 @@ pub fn load_shell(
         menu_skin.default_face_is_row_face,
         space,
         title.front_end,
+        title
+            .campaign
+            .flow
+            .map(|flow| f32::from(flow.row_pitch)),
         &mut report,
     );
     report.push(steps.describe("the boot's first half"));

@@ -373,6 +373,19 @@ fn text_draw(text: &Text, content: &str, layout: &Layout) -> Draw {
     let (x, y, scale) = (text.x, text.y, text.scale * layout.face_scale(&text.font));
     let color = argb_to_rgba(text.color);
     let text_in = content.to_string();
+    if let Some(role) = super::stats_role(&text.font) {
+        return Draw::FacedText {
+            role,
+            x,
+            y,
+            scale,
+            color,
+            border: None,
+            align,
+            text: text_in,
+            wrap_width: text.wrap_width,
+        };
+    }
     // `font="default"` in its own face when the renderer loaded one: lowercase
     // is real glyph art there, where the menu face has only capitals.
     if layout.faces.native_default && text.font.eq_ignore_ascii_case("default") {
