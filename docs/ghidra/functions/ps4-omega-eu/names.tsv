@@ -141,3 +141,9 @@
 0x01366150	function	Quake_Init	70	weapon-instance-limits.md
 0x01366760	function	QuakeManager_Update	65	weapon-instance-limits.md
 0x01372ee0	function	WeaponManager_DispatchFire	75	weapon-instance-limits.md
+# 2026-11-01 omega-glass-re (refraction-pass.md)
+0x015fb4c0	function	Environment_Load	78	refraction-pass.md
+0x01605760	function	TrackPass_FilterSubmesh	80	refraction-pass.md
+0x01789300	function	DrawList_BuildForTarget	72	refraction-pass.md
+0x01f8f6a0	data	g_track_mesh_instances	80	refraction-pass.md
+0x01f8f310	data	g_refraction_draw_list	65	refraction-pass.md

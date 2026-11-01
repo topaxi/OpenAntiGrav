@@ -2,7 +2,7 @@
 status: re-first
 titles: [hd, 2048, omega]
 updated: 2026-11-01
-summary: "Vineta K: HD rock-to-sand mask blend unread, sea ripple needs the paraboloid probe; 2048 has no refraction target yet, Omega pass filter unlocated"
+summary: "Vineta K: HD rock-to-sand blend unread, sea ripple needs the paraboloid probe; 2048/Omega draw no refraction target; Sebenco check"
 ---
 
 # Vineta K's glass refraction and arch glow: what is left
@@ -19,8 +19,11 @@ a scratch directory, not kept (`report.md`, `shots/`, `sweep/`).
 
 ## Open
 
-- **2048 Vineta K: the main view leaves out the meshes named `wohdmeshrefract` (wired 2026-11-01, `psp2-glass-re`).** It is not a file field. `Environment_Load` substring-matches each track mesh object's name and sets instance flag `0x20`. `TrackPass_FilterSubmesh` (`0x813b9670`) rejects that flag in the main view and draws flags `0x30` only into the half-size `screenSpaceRefractionTex` target. Confidence 82, evidence in `docs/ghidra/functions/vita-2048-eu-v104/refraction-pass.md`. There are 238 such meshes on Vineta K. The `tunnel_understruts*` are **not** among them, so the original 2048 draws them in its main view (HD's chunk 1574 has no 2048 counterpart in this rule). Wired for the Vita only (`psp2::refraction_only`, `psp2_refraction_only_ground_truth`).
-  - **Omega: checked, applies, not wired.** Omega's `FUN_015fb4c0` sets the same flags (record `+0xa0`, 212 meshes on `01_vineta_k`), but the pass filter that reads `+0xa0` is not located. Next: search the draw-list build callees for a `test` of `0x20`/`0x30` on `[reg+0xa0]`, then drop the `is_ps4` guard in `load::geometry::track_model`.
+- **2048 Vineta K: the main view leaves out the meshes named `wohdmeshrefract` (wired 2026-11-01, `psp2-glass-re`).** It is not a file field. `Environment_Load` substring-matches each track mesh object's name and sets instance flag `0x20`. `TrackPass_FilterSubmesh` (`0x813b9670`) rejects that flag in the main view and draws flags `0x30` only into the half-size `screenSpaceRefractionTex` target. Confidence 82, evidence in `docs/ghidra/functions/vita-2048-eu-v104/refraction-pass.md`. There are 238 such meshes on Vineta K. The `tunnel_understruts*` are **not** among them, so the original 2048 draws them in its main view (HD's chunk 1574 has no 2048 counterpart in this rule). Wired for 2048 and Omega (`psp2::refraction_only`, `psp2_refraction_only_ground_truth`).
+  - **Omega: ported (2026-11-01, `omega-glass-re`).** `TrackPass_FilterSubmesh` is at `0x01605760` with the same kind-0 `0x20` and kind-1 `0x30` tests (confidence 80, `docs/ghidra/functions/ps4-omega-eu/refraction-pass.md`). The `is_ps4` guard is gone. Omega skips 212 meshes on Vineta K, plus one on **Sebenco Climb** (`ice_tunnel_wohdmeshrefract2Shape`; the Vita's Sebenco has none).
+  - **Zone keeps them (wired).** Zone pass kinds never test `0x20`: kinds 2 to 4 on the Vita, 3 to 5 on Omega. So the skip runs outside Zone only.
+  - **Sebenco Climb moved.** Its icy rock sheet above the track (tick 1800 of an autopilot lap) is gone, and our sky shows black there. Next: compare against an original Omega frame at that spot (the wipeout_pc native port).
+  - The render target of Omega's kind-1 list `0x01f8f310` is not traced (`FUN_016304d0(5, ...)` in `FUN_015c63a0`).
   - **Neither title draws a refraction target**, so the glass panes now show nothing behind them where the original shows these meshes. Next: build them into a psp2 counterpart of HD's `build_scene_views` target.
   - A Vita3K capture of the target's draws at the tunnel would take the confidence from 82 to 90+.
 - **The dunes inside the target are rock, the capture's are sand.** `and_rocktosand`'s red-channel blend mask

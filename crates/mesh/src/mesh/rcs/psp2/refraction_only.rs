@@ -8,12 +8,18 @@
 //! Confidence 82, evidence in
 //! `docs/ghidra/functions/vita-2048-eu-v104/refraction-pass.md`. HD's
 //! counterpart is chunk render flag `0x10` (`rcsmodel::RENDER_BEHIND_GLASS`).
+//! Omega's loader (`0x015fb4c0`) sets the same flag into record `+0xa0` and its
+//! filter `0x01605760` makes the same two tests (confidence 80,
+//! `docs/ghidra/functions/ps4-omega-eu/refraction-pass.md`).
+//!
+//! **Outside Zone mode only.** The Zone passes (kinds 2 to 4 on the Vita at
+//! `0x813b96e6`, 3 to 5 on Omega) never reach the `0x20` test, so a Zone race
+//! keeps these meshes in its main view; the caller skips this in Zone.
 //!
 //! The rule is the environment track model's alone: the original applies it
 //! in `Environment_Load` only, so a caller applies it to the circuit, never to
-//! a craft or prop. This project draws no 2048 refraction target, so these
-//! meshes are drawn nowhere. Omega's loader sets the same flag, but its pass
-//! filter is not located, so the caller keeps Omega out.
+//! a craft or prop. This project draws no 2048 or Omega refraction target, so
+//! these meshes are drawn nowhere.
 
 use oag_rcs::rcsmodel::psp2;
 

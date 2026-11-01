@@ -415,6 +415,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &ps3_geometry,
         geometry_name.as_deref(),
         title.looks,
+        options.mode == Mode::Zone,
         &mut report,
     );
     #[cfg(feature = "view")]
