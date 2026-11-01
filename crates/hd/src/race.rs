@@ -521,18 +521,15 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
 /// is what the manifest stores.
 pub const ZONE_SHIP: &str = "zone";
 
-/// The per-stage colour grade a Zone race climbs, one file for the whole
-/// title.
+/// The per-stage colour grade a Zone race climbs on an ordinary circuit.
 ///
-/// **Title-wide rather than per-circuit**, which is what makes it usable on an
-/// ordinary circuit as well as on the four dedicated ones - the arrangement
+/// **Not per-circuit**: one file for every ordinary circuit, which is what makes
+/// Zone usable on them at all - the arrangement
 /// [`oag_title::ZoneCircuit::Separate`]'s own `also_race_circuits` flag
 /// already asserts for this title. 21,160 bytes, fifteen stages named `Start`
 /// through `Supersonic`, parsed by `oag_tables::effectsettings` and checked
-/// against the disc in `effectsettings_ground_truth.rs`.
-///
-/// **The base revision, which a Zone race takes on an ordinary circuit only.**
-/// The four Zone circuits take [`ZONE_CIRCUIT_PALETTE`].
+/// against the disc in `effectsettings_ground_truth.rs`. The four Zone
+/// circuits take [`ZONE_CIRCUIT_PALETTE`] instead.
 pub const ZONE_PALETTE: &str = "/data/environments/zonemode.effectsettings";
 
 /// The stage table a Zone race takes on one of the four [`ZONE_TRACKS`].

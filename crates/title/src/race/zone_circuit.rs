@@ -94,10 +94,11 @@ pub enum ZoneCircuit {
     /// of the other twelve is, consistent with being Zone-exclusive content
     /// rather than the substrate a per-circuit Zone effect would be laid
     /// over. Second, HD ships a title-wide `zonemode.effectsettings`
-    /// (`/data/environments/zonemode.effectsettings`, plus a
-    /// `zonemodedlc3.effectsettings` revision) that nothing in this engine
-    /// reads yet - the same "any circuit + a colour-grade effect" shape 2048
-    /// confirmed for its own `SameCircuit`. Neither is a decompiled selector.
+    /// that grades any ordinary circuit raced in Zone - the same "any circuit +
+    /// a colour-grade effect" shape 2048 confirmed for its own `SameCircuit` -
+    /// and its four Zone circuits take `zonemodedlc3.effectsettings` instead
+    /// ([`crate::ZonePalette::TitleWide`]). Neither is a decompiled selector of
+    /// which circuits a Zone race may offer.
     Separate(&'static [&'static str], bool),
     /// A Zone race runs the exact circuit a race would have, and nothing is
     /// derived or substituted at all. 2048.
