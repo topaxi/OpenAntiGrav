@@ -104,7 +104,7 @@ fn a_refused_file_names_what_is_wrong() {
         .contains("`scale` 0")
     );
     let twice = format!(
-        "{LAYOUT}[[layout.element]]\nid = \"e\"\ndraw = \"corners\"\nrect = [0, 0, 1, 1]\n[[layout.element]]\nid = \"e\"\ndraw = \"corners\"\nrect = [0, 0, 1, 1]\n"
+        "{LAYOUT}[[layout.element]]\nid = \"e\"\ndraw = \"corners\"\nrect = [0, 0, 1, 1]\nasset = \"corner\"\nsize = [1, 1]\nback = 1\n[[layout.element]]\nid = \"e\"\ndraw = \"corners\"\nrect = [0, 0, 1, 1]\nasset = \"corner\"\nsize = [1, 1]\nback = 1\n"
     );
     assert!(refused(file(&twice)).contains("used twice"));
 }
