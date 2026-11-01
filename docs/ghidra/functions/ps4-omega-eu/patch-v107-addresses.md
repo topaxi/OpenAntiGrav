@@ -129,8 +129,8 @@ Raw bytes read live at the grid:
 | `0x01a07390` | racer table, stride `0x9b0` | `0x01a7ae00` | 2 aligned loads in 2 functions | rows 0-7 start with two heap pointers each, row 8 does not (8 racers) | 86 |
 | `0x01926700` | `g_GameModeNames` | `0x0198f890` | 6 aligned loads in 5 functions | 23 relocated pointers to `Debug` ... `Multiplayer Ranked` | 92 |
 | `0x01926620` | class-name table | `0x0198f7b0` | 3 aligned loads in 2 functions | `Venom`, `Flash`, `Rapier`, `Phantom`, `SuperPhantom`, null | 90 |
-| `0x0212a7d8` | `ToneMap_Instance` ([tonemap](tonemap.md)) | `0x021dbdb8` | 2 aligned refs in `PostTarget_Create`, and the same reference pattern in 4 more function pairs (below) | a heap pointer (`0x10_0243_d740`): a pointer, not the object; fields unread | 84 |
-| `0x01e3de80` | `EnvSettings_NovaPrelitScaleBiasPower` ([lightmap-prelit](lightmap-prelit.md)) | `0x01eb4820` | 3 aligned refs in 3 functions | `2.0, 0.0, 2.5`, a triple six of the patch's `.EnvSettings` files carry (not the static default `1.4, 0.2, 1.5`); Vineta K's own file not read | 82 |
+| `0x0212a7d8` | `ToneMap_Instance` ([tonemap](tonemap.md)) | `0x021dbdb8` | 2 aligned refs in `PostTarget_Create`, and the same reference pattern in 4 more function pairs (below) | a heap pointer (`0x10_0243_d740`, the same value in two boots); its fields match Vineta K's file (below) | 92 |
+| `0x01e3de80` | `EnvSettings_NovaPrelitScaleBiasPower` ([lightmap-prelit](lightmap-prelit.md)) | `0x01eb4820` | 3 aligned refs in 3 functions | `2.0, 0.0, 2.5`: Vineta K's own patch file (`data08`, `data/environments/01_Vineta_K/track.EnvSettings`) says `"Lighting.Nova prelit scale bias power"=2 0 2.5`; the static default is `1.4, 0.2, 1.5` | 90 |
 | `0x01947160` | `Language_PluginTable` ([language](language.md)) | `0x019b89a0` | same rows (`0x12, 0x12`, name, `0xd`, ...); the patch function compares the same fields unrolled | relocated name pointers in the first rows | 86 |
 | `0x02037c98` | `Language_RegionMask` ([language](language.md)) | `0x020e89d8` | 2 aligned refs in `Game_Main` | `1`, the EU value the page states | 84 |
 | `0x0193f750` | `g_hud_pickup_widget_table` ([omega-pickup-table](omega-pickup-table.md)) | `0x0197b970` | 1 aligned ref; all 14 rows' names and words equal the base's | rows 0-3 read live: relocated name pointers, the same words | 88 |
@@ -155,6 +155,39 @@ Findings the table carries:
 - A second relro table at `0x0198d090` reads `Venom`, `Flash`, `Rapier`, `Phantom`,
   `Speed_Class_C_0`, `Speed_Class_B_0`: it is **not** the docs' class-name table; that one is
   `0x0198f7b0`.
+
+## The ToneMap object, read live through the pointer
+
+A second launch of the same port and walk read `0x210` bytes at the pointer held at `0x021dbdb8`
+(`0x10_0243_d740` again), with the state at `0x02012800` reading the same as before (class 0,
+mode 3 `Arcade`, one human at `+0x11`, `Feisar`). The expected values were written down before
+that launch, from Vineta K's patch `.EnvSettings` (`data08`,
+`data/environments/01_Vineta_K/track.EnvSettings`) through the law on [tonemap](tonemap.md):
+
+| Offset | Field | `.EnvSettings` key, value | Expected | Live (raw) | Confidence |
+| --- | --- | --- | --- | --- | ---: |
+| `+0x80` | lum a | `Tonemap.Luminance a-coefficient`=0.15 | 0.15 | 0.15 (`3e19999a`) | 92 |
+| `+0x84` | lum b | `Tonemap.Luminance b-coefficient`=0.498 | 0.498 | 0.498 (`3efef9db`) | 92 |
+| `+0x88` | response x 1/60 | `Tonemap.Exposure response`=0.5 | 0.0083333 | 0.0083333 (`3c088889`) | 92 |
+| `+0x8c` | `cL`, brightness | (menu setting, middle) | 1.0 | 1.0 | 88 |
+| `+0x90` | start angle, radians | `Tonemap.Start angle`=-6.93 | -0.120951 | -0.120951 (`bdf7b553`) | 92 |
+| `+0x94` | end angle, radians | `Tonemap.End angle`=-12.06 | -0.210487 | -0.210487 (`be5789d4`) | 92 |
+| `+0x98` | exposure min | `Tonemap.Exposure minimum`=0.2 | 0.2 | 0.2 | 92 |
+| `+0x9c` | exposure max | `Tonemap.Exposure maximum`=3 | 3.0 | 3.0 | 92 |
+| `+0xa8` | source colour end a | `Tonemap.Source color end a-coefficient`=1.506 | 1.506 | 1.506 (`3fc0c49c`) | 92 |
+| `+0xac` | source colour end b | `Tonemap.Source color end b-coefficient`=0 | 0 | 0 | 88 |
+| `+0xb8` | curve end, SDR | (1.0 SDR, 40.0 HDR) | 1.0 | 1.0 | 90 |
+| `+0xa0`, `+0xa4`, `+0xb0`, `+0xb4`, `+0xbc` | written 0 by the law | - | 0 | 0 | 88 |
+| `+0xc4` | 1 / sum of history weights | `Tonemap.Exposure time`=0.08333334, `round(t * 60)` = 5 weights of 1.0 | 0.2 | 0.2 | 90 |
+
+`+0x1f8..+0x208` holds three pointers (`begin`, `end`, `end`) `0x14` bytes apart: a 5-element
+float vector, the weights `ToneMap_SetHistoryWeights` stores, agreeing with `+0xc4`. The `TonemapHDR.*`
+block (source colour end 34.29 / 58.49775) is not the one in use: the SDR set is.
+
+What this verifies: the 1.07 build runs [tonemap](tonemap.md)'s CPU law as read on the base
+(`ToneMap_ApplyEnvSettings` at `0x0164bc80` on the patch), with the patch `.EnvSettings` copy, not
+the base one. Rubric: a runtime read, one binary, so capped at 94; one walk (two boots for the
+pointer). Not yet read: the coefficient texture and the running `LAvg` the GPU pass computes.
 
 ## Function translation (names.tsv rows)
 
@@ -291,8 +324,6 @@ does apply: on 2048 the docs' target of record is the patch (`v104`); on Omega i
 
 ## Open
 
-- The ToneMap object's fields at the grid (`+0x80..+0xc4` through the pointer at `0x021dbdb8`)
-  need another live read; the page's law has not been compared with a running value yet.
 - 34 unresolved rows; the low-similarity string rows (55) want a reading by hand before they are
   used for a live read.
 - Import into the main Ghidra project (command above) and re-point the base pages' readings that a
