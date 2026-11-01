@@ -1,7 +1,7 @@
 ---
 status: measure
 titles: [hd]
-updated: 2026-10-26
+updated: 2026-11-01
 summary: "HD exhaust: talons-pack trail whiter and wider than the original's; confirm live what sets craft+0xfc; engine-trail.md lists the rest"
 ---
 
@@ -11,6 +11,7 @@ summary: "HD exhaust: talons-pack trail whiter and wider than the original's; co
 
 ## Open (trimmed 2026-09-04 - three of the four original items are settled, not just narrowed)
 
+- **2026-11-01 (`hd-zone-exhaust`): the Zone flame was baked at the team hull's `EF_Main` origin, now the Zone directory's.** See hd-ship-materials.md, "The Zone flame hangs on the Zone hull". Still open: a pose-matched RPCS3 Zone pair (no Zone race state exists; `zone-moa-therma-hd-early` is a results screen), Zone's trail origin at speed, and the engine light, shield shell and wreck still reading the team directory in Zone.
 `engine-trail.md` kept moving after this file's 2026-08-24 snapshot and was
 never folded back; its later sessions already close three of the four items
 below. Do not requote this file - `engine-trail.md`'s "Open, in rough order

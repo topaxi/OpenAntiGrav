@@ -760,3 +760,57 @@ fn the_sprite_flare_skips_the_players_craft_and_fades_the_rest_by_the_law() {
         "half-height {half_height} outside {floor}..{ceiling}"
     );
 }
+
+/// A Zone race hangs its flame on the Zone hull, not the team's.
+///
+/// `Locators.vex` already came from `/data/ships/zone`, but the flare model
+/// (whose `EF_Main` node origin is where the flame is baked) came from the
+/// player's team directory, so the flame sat at the team hull's nozzle while the
+/// trail and the hull were the Zone's: a ring floating aft of the tube. The
+/// origin must now equal the Zone `engineflare.vex`'s own `EF_Main` node and
+/// differ from the team's.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn a_zone_race_takes_its_flame_origin_from_the_zone_hull() {
+    let Some(image) = image() else {
+        return;
+    };
+    let origin_of = |mode| {
+        let loaded = race::load(&race::Options {
+            source: image.display().to_string(),
+            class: "VENOM".to_string(),
+            mode,
+            opponent_teams: Vec::new(),
+            ..race::Options::default()
+        })
+        .expect("loading the race");
+        let livery = &loaded.liveries[0];
+        println!(
+            "{mode:?}: nozzle {:?} origins {:?}",
+            livery.nozzle, livery.flare_origins
+        );
+        assert!(
+            loaded.report.iter().any(|l| {
+                l.contains(r"Data\Ships\zone\engineflare.vex") == (mode == oag_race::Mode::Zone)
+                    && l.contains("EF_Main")
+            }),
+            "{mode:?}: the flare model comes from the directory the hull does"
+        );
+        (livery.nozzle, livery.flare_origins.always)
+    };
+    let (team_nozzle, team_origin) = origin_of(oag_race::Mode::SingleRace);
+    let (zone_nozzle, zone_origin) = origin_of(oag_race::Mode::Zone);
+    let (zone_nozzle, zone_origin) = (
+        zone_nozzle.expect("zone locator"),
+        zone_origin.expect("zone EF_Main"),
+    );
+    assert_ne!(
+        Some(zone_origin),
+        team_origin,
+        "the team's flare origin was kept"
+    );
+    assert_ne!(team_nozzle, Some(zone_nozzle));
+    // The flame sits at its own file's node, within a hull-scale of the Zone
+    // locator it is paired with (the team's was 0.5 off in y).
+    println!("zone origin - locator = {:?}", zone_origin - zone_nozzle);
+}

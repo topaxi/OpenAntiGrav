@@ -712,6 +712,23 @@ materials; HD's nine add `diffuse_with_specular_from_alpha_n`, `diffuse` and a s
 textures: **checked, applies, not wired** (Omega's hulls build through the PS4 path, which has none of this; it ships
 no `.probes`, so the tint is moot there). 2048's is **not checkable** from its `.pkg` here (PFS-encrypted).
 
+**The Zone flame hangs on the Zone hull (2026-11-01, `hd-zone-exhaust`).** The maintainer saw the exhaust flare and trail
+misplaced in HD Zone races. `Locators.vex` (the trail's nozzle, `(0, 0.518, -7.005)`) already came from
+`/data/ships/zone`, but the flare model, whose `EF_Main` node origin is where the flame is baked
+(`oag_livery::flare::per_team`), came from the **player's team** directory: the origin was the team hull's
+(Assegai `(0.005, 0.011, -6.809)`), 0.51 up and 0.2 aft of the Zone nozzle, so the flame sat in the air aft of the
+tube mouth with the trail starting beyond it. The Zone directory ships its own `engineflare.vex` (`EF_Main` at
+`(0, 0.547, -6.525)`, 0.48 ahead of the locator, the same inside-the-nozzle rule Harimau shows, `engine-trail.md`
+"EngineFlare_PlaceShapes"); `oag_livery::entry::model_directory` now reads the flare from where the hull is read.
+Measured by eye on a 1440x816 render and RPCS3's Zone frame (`data/reference/hd-zone-material/original-zone3.png`):
+ours before, the glow ring floated about 70 px below the tube mouth; after, it sits in the mouth (about 12 px, the
+original's glow also fills the mouth). Pinned by `hd_engine_flare_ground_truth::a_zone_race_takes_its_flame_origin_from_the_zone_hull`.
+No pose-matched pair was made: the saved Zone state is a results screen and `Restart Race` did not reload in 120 s.
+Open, the same fault one level over: `engine_light`, the shield shell and the wreck still read the team directory in
+Zone. Confidence 85 for the cause (origin numbers printed from the loaded liveries), 60 for the by-eye pixel offsets.
+Cross-title: Omega's `hdships/Zone` ships its own `engineflare.vex` and now loads it (locator-placed on the PS4 path,
+unchanged); 2048 is **not checkable** (PFS-encrypted `.pkg`).
+
 ## Hull normal maps (2026-10-20, `hd-hull-normals`)
 
 The lit hull programs (`diffuse_with_specular_from_alpha_n`, `_vcol`, `carbonfibre`, `nitro_body_new` and the Fury
