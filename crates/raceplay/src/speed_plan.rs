@@ -727,7 +727,9 @@ impl Race {
                 if job.matches(&self.sim) {
                     return;
                 }
-                debug!("the race changed under the speed plans being learned ahead, starting again");
+                debug!(
+                    "the race changed under the speed plans being learned ahead, starting again"
+                );
             }
             let inputs = PlanInputs::of(&self.sim);
             let mut copy = self.sim.clone();
