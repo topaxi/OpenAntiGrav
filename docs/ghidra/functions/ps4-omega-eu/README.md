@@ -74,6 +74,9 @@ unnamed rather than forced.
   `MusicManager_Construct` directly into `Game_Main` rather than keeping them
   as separate functions the way `vita-2048-eu-v104` and `ps3-hdfury-eu` both
   do.
+- [patch-v107-addresses.md](patch-v107-addresses.md) - **every address here is the base
+  (v1.00) eboot's**; the 1.07 patch eboot that actually runs is a different build. Base -> patch
+  table for 83 of 117 named functions and 15 data anchors, the data anchors checked live.
 - [colorscale.md](colorscale.md) - the 1.07 composite's `ColorScale`: handle, source global, rests at (1,1,1); gate unread.
 - [endrace-loyalty.md](endrace-loyalty.md) - 1 function: the loyalty award, HD's law repeated.
 - [weapons.md](weapons.md) - 30 functions: nine weapon-manager constructors
