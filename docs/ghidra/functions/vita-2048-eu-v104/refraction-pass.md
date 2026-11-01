@@ -119,18 +119,25 @@ FUN_810363a4())`. The slot names come from the registration table in
 `FUN_8101d068`. HD's glass target is 640x360, half of 1280x720, so the halving
 matches HD.
 
-## Omega: checked, applies (loader); pass filter not located
+## Omega: ported
 
-`eboot.bin`'s `FUN_015fb4c0` runs the same case-insensitive substring loop over
-the mesh name (PS4 mesh object `+0x18`) against `wohdsecondaryfog`
-(`0x0182ba21`), `wohdmeshreflect` (`0x0182ba54`) and `wohdmeshrefract`
-(`0x0182ba64`). It ORs `0x1000` (byte `+0xa1 |= 0x10`), `0x10` and `0x20` into
-the per-mesh record at `+0xa0`: the same bits as the Vita. Omega's
-`01_vineta_k/track.final.rcsmodel` has 212 `wohdmeshrefract` meshes of 2,878.
-The pass filter that reads `+0xa0` is not located. The next step is to search
-for a `test` of `0x20`/`0x30` against `[reg+0xa0]` in the callees of the draw
-list build. Because the filter is not located, the main-view skip is wired for
-the Vita only.
+`eboot.bin`'s `Environment_Load` (`0x015fb4c0`) runs the same case-insensitive
+substring loop over the mesh name (PS4 mesh object `+0x18`) against
+`wohdsecondaryfog` (`0x0182ba21`), `wohdmeshreflect` (`0x0182ba54`) and
+`wohdmeshrefract` (`0x0182ba64`). It ORs `0x1000`, `0x10` and `0x20` into the
+per-mesh record at `+0xa0`: the same bits as the Vita.
+
+Its `TrackPass_FilterSubmesh` (`0x01605760`, slot `+0x10` of context vtable
+`0x01926470`) makes the same two tests:
+- kind 0 rejects `0x20` (`0160584e TEST R14B,0x20`);
+- kind 1 requires `0x30` (`01605841 TEST R14B,0x30`).
+
+The 1.07 patch eboot carries the same body. Confidence 80. The evidence and
+the census are on [the Omega page](../ps4-omega-eu/refraction-pass.md): 212
+meshes on `01_vineta_k/track.final.rcsmodel` of 2,878, and one on Sebenco
+Climb, which the Vita's copy lacks. The skip runs on both titles. Omega's Zone
+pass kinds (3 to 5) never test `0x20`, so Omega keeps these meshes in its main
+view in Zone.
 
 ## Evidence still owed
 

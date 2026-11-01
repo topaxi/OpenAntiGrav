@@ -140,6 +140,11 @@ unnamed rather than forced.
   light is built, at two consumers. Authored 0.3 to 20 over Omega's circuits;
   2048's files carry none.
 
+- [refraction-pass.md](refraction-pass.md) - `TrackPass_FilterSubmesh`
+  (`0x01605760`): the main view's pass leaves out a track mesh named
+  `wohdmeshrefract` (flag `0x20`), as 2048 does. It is wired: 212 meshes on
+  Vineta K and 1 on Sebenco Climb.
+
 - [collision.md](collision.md) - a tag-located candidate for
   `ps3-hdfury-eu/collision.md`'s own `Collision_Construct`, not named: the
   structural evidence that first looked like a match turned out to be
