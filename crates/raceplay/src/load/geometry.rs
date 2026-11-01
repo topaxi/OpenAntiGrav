@@ -141,10 +141,11 @@ pub(super) fn track_model(
                             split.out, split.in_target
                         ));
                         let mut groups = split.target;
-                        for group in [&mut groups.alternate_fog, &mut groups.primary_fog] {
-                            if let Some(group) = group {
-                                group.material_lod_bias = material_lod_bias;
-                            }
+                        for group in [&mut groups.alternate_fog, &mut groups.primary_fog]
+                            .into_iter()
+                            .flatten()
+                        {
+                            group.material_lod_bias = material_lod_bias;
                         }
                         behind = crate::BehindGlassModels {
                             groups,
