@@ -18,8 +18,12 @@
 //! `0xffac0717`, and the lit dots of a live frame peak at (172, 7, 23), the same
 //! three bytes. So the red is the palette's value, not a team or style colour.
 //!
-//! **Where this build departs**: 166 columns are kept and the rows are 21, not
-//! 30, because this layout's bar is a flatter box (chosen, not measured).
+//! This build draws all 166 columns and 30 rows. It drew 21 rows until
+//! 2026-11-01, on the belief that this layout's bar was a flatter box; 30 rows
+//! of this layout's square tiles end at y 229.8 of 272, above the closing rule
+//! at 236, so the reason did not hold. Against an RPCS3 frame of the original
+//! (`docs/formats/hd-loading.md`, "The pair") the bar is 236 px tall of 1080
+//! and ours 229 px.
 
 use super::{
     Align, BAR_BOX, CORNER_SIZE, Draw, IMAGE_BOX, MARKER_SIZE, PANEL_RIGHT, PANEL_X, PROSE_BOX,
@@ -29,8 +33,8 @@ use super::{
 /// Dot columns across the bar. Measured: see the module documentation.
 pub(super) const COLUMNS: f32 = 166.0;
 
-/// Dot rows down the bar. Chosen, not measured: the original has 30.
-const ROWS: f32 = 21.0;
+/// Dot rows down the bar. Measured: see the module documentation.
+pub(super) const ROWS: f32 = 30.0;
 
 /// One dot tile's width, in this layout's units.
 const TILE: f32 = BAR_BOX.2 / COLUMNS;

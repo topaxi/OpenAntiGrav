@@ -839,7 +839,9 @@ const PANEL_RIGHT: f32 = 432.0;
 
 /// The rule under the title, and the one under the bar.
 const RULE_TOP_Y: f32 = 52.0;
-const RULE_BOTTOM_Y: f32 = 236.0;
+/// 242.0 where it was 236.0: the original's closing rule is at y 960 of 1080
+/// in an RPCS3 frame (`docs/formats/hd-loading.md`, "The pair"), 241.8 units.
+const RULE_BOTTOM_Y: f32 = 242.0;
 const RULE_HEIGHT: f32 = 1.0;
 
 /// What the rules and bracket marks are drawn in.
@@ -874,13 +876,14 @@ const BOXED_ROW_PITCH: f32 = 11.0;
 
 /// Where the progression bar goes: `x, y, width, height`.
 ///
-/// The original's runs most of the width with a gauge to its right; this build
-/// draws the bar and not the gauge, because the gauge is a mode icon and which
-/// icon a mode gets is unread.
-/// The height is the original's proportion rather than a thin rule: its bar is
-/// about a fifth of the frame tall, which is what makes it read as a gauge at a
-/// glance instead of as another horizontal line.
-const BAR_BOX: (f32, f32, f32, f32) = (PANEL_X, 172.0, 320.0, 42.0);
+/// The original's runs most of the width with the mode icon's panel to its
+/// right. The height is [`bar::ROWS`] square tiles of the width's
+/// [`bar::COLUMNS`], so the dots are square as `dot.gtf` draws them: 30 rows,
+/// the original's own count (`bar.rs`), about a fifth of the frame tall.
+///
+/// Its top is 177.0 where it was 172.0: the original's dot rows start at y 703
+/// of 1080 (177.1 units) and end at 929, 226 px against this build's 229.
+const BAR_BOX: (f32, f32, f32, f32) = (PANEL_X, 177.0, 320.0, bar::ROWS * 320.0 / bar::COLUMNS);
 
 /// The four bracket marks round a box.
 fn corners(bx: (f32, f32, f32, f32)) -> [(f32, f32); 4] {
