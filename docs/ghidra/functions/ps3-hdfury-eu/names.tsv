@@ -818,3 +818,9 @@
 0x002b2d38	function	LoadingScreen_DrawImage	82	loading-screen.md
 0x002b3190	function	LoadingScreen_DrawText	72	loading-screen.md
 0x002b3368	function	LoadingScreen_DrawTitleRow	78	loading-screen.md
+
+# 2026-11-01 hd-zone-hull-light: the Zone circuits' DLC3 stage table selector (zone-palette-select.md)
+0x0043e838	function	Str_CompareNoCase	80	zone-palette-select.md
+0x008b8104	data	g_ZoneCircuitTrackIds	88	zone-palette-select.md
+0x008b8114	data	g_ZonePalettePaths	88	zone-palette-select.md
+
