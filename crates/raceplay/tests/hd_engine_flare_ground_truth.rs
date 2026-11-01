@@ -814,3 +814,78 @@ fn a_zone_race_takes_its_flame_origin_from_the_zone_hull() {
     // locator it is paired with (the team's was 0.5 off in y).
     println!("zone origin - locator = {:?}", zone_origin - zone_nozzle);
 }
+
+/// A Zone race lights, shields and absorbs from the Zone directory's own files.
+///
+/// The census on both HD (`/data/ships/zone`) and Omega (`hdships\Zone`): the
+/// directory ships `EngineLightData.xml`, `shipshield` and `AbsorbEffect` of
+/// its own, and the engine light differs from a team's (HD's Assegai authors
+/// `Distance` 0.0, Zone 1.3). Each piece's load-report line names the entry it
+/// read, so keeping the team's file turns the Zone line red.
+fn zone_pieces_come_from(source: &str, zone_dir: &str, label: &str, pieces: &[&str]) {
+    for mode in [oag_race::Mode::SingleRace, oag_race::Mode::Zone] {
+        let zone = mode == oag_race::Mode::Zone;
+        let loaded = race::load(&race::Options {
+            source: source.to_string(),
+            class: "VENOM".to_string(),
+            mode,
+            opponent_teams: Vec::new(),
+            ..race::Options::default()
+        })
+        .expect("loading the race");
+        for piece in pieces {
+            let from_zone = loaded.report.iter().any(|line| {
+                line.to_ascii_lowercase()
+                    .starts_with(&format!("{}\\{piece}", zone_dir).to_ascii_lowercase())
+            });
+            assert_eq!(
+                from_zone, zone,
+                "{label} {mode:?}: {piece} read from the Zone directory"
+            );
+        }
+        if zone && pieces.contains(&"EngineLightData.xml") {
+            let light = loaded.liveries[0]
+                .engine_light
+                .expect("the Zone engine light");
+            assert!(
+                (light.data.distance - 1.3).abs() < 1e-6,
+                "{label}: Zone Distance {}",
+                light.data.distance
+            );
+        }
+    }
+}
+
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn an_hd_zone_race_takes_its_light_and_shells_from_the_zone_directory() {
+    let Some(image) = image() else {
+        return;
+    };
+    zone_pieces_come_from(
+        &image.display().to_string(),
+        r"Data\Ships\zone",
+        "HD",
+        &["EngineLightData.xml", "shipshield.vex", "AbsorbEffect.vex"],
+    );
+}
+
+#[test]
+#[ignore = "needs the corrected Omega extraction"]
+fn an_omega_zone_race_takes_its_light_and_shells_from_the_zone_directory() {
+    let path = match std::env::var_os("OAG_OMEGA_SOURCE") {
+        Some(path) => oag_testdata::repo_root().join(path),
+        None => match oag_testdata::exact("data/extracted/ps4") {
+            Some(path) => path,
+            None => return,
+        },
+    };
+    zone_pieces_come_from(
+        &path.display().to_string(),
+        r"Data\art\published\hdships\Zone",
+        "Omega",
+        // Omega's SPU vertex light is unread on this platform (engine_light.rs)
+        // and it draws no absorb shell (the title's rule is off).
+        &["shipshield.vex"],
+    );
+}

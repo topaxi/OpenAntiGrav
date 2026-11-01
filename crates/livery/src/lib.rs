@@ -507,8 +507,22 @@ fn one(
         let absorb = absorb::locators(archives, &hull_name, &blob, report);
         let cannon_flash = cannon_flash::locators(archives, &hull_name, &blob, report);
         let arc_anchor = arc_anchor::locator(archives, &hull_name, &blob, report);
-        let engine_light =
-            engine_light::load(archives, team, ships.dir, ctx.flare, nozzle_axis, report);
+        let (light_dir, light_team) = entry::model_directory_with(
+            archives,
+            ships,
+            team,
+            ctx.mode,
+            oag_tables::enginelight::entry_name_in,
+            report,
+        );
+        let engine_light = engine_light::load(
+            archives,
+            light_team,
+            light_dir,
+            ctx.flare,
+            nozzle_axis,
+            report,
+        );
         // **The plume comes from here too on this title.** HD ships no
         // `shipboost.vex`; `EF_Boost` inside the flare model is what a speed
         // pad reveals, so both halves come out of one load. See
@@ -523,7 +537,17 @@ fn one(
             leach_overlay: None,
             shine: None,
             wreck: None,
-            absorb_shell: absorb::shell(archives, team, ships.dir, ctx.absorb_shell, report),
+            absorb_shell: {
+                let (absorb_dir, absorb_team) = entry::model_directory_with(
+                    archives,
+                    ships,
+                    team,
+                    ctx.mode,
+                    |dir, team| entry::stem_entry_name(dir, team, absorb::SHELL_STEM),
+                    report,
+                );
+                absorb::shell(archives, absorb_team, absorb_dir, ctx.absorb_shell, report)
+            },
             hull,
             boost: lit.boost,
             flare: lit.always,
@@ -538,7 +562,19 @@ fn one(
             // beside it, under the same stem Pulse uses, for all eight teams and
             // Zone. `shell` takes the same external-geometry branch this hull
             // just took. See `crate::race::shield_entry_names`.
-            shield: shell(archives, team, ships.dir, team_model, report),
+            shield: {
+                // Authored about its hull like the flare: the Zone directory's
+                // own shell where it ships one.
+                let (shell_dir, shell_team) = entry::model_directory_with(
+                    archives,
+                    ships,
+                    team,
+                    ctx.mode,
+                    |dir, team| entry::stem_entry_name(dir, team, entry::SHIELD_STEM),
+                    report,
+                );
+                shell(archives, shell_team, shell_dir, team_model, report)
+            },
             engine_light,
             cannon_flash,
             arc_anchor,

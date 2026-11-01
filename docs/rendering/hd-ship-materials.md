@@ -724,10 +724,30 @@ Measured by eye on a 1440x816 render and RPCS3's Zone frame (`data/reference/hd-
 ours before, the glow ring floated about 70 px below the tube mouth; after, it sits in the mouth (about 12 px, the
 original's glow also fills the mouth). Pinned by `hd_engine_flare_ground_truth::a_zone_race_takes_its_flame_origin_from_the_zone_hull`.
 No pose-matched pair was made: the saved Zone state is a results screen and `Restart Race` did not reload in 120 s.
-Open, the same fault one level over: `engine_light`, the shield shell and the wreck still read the team directory in
-Zone. Confidence 85 for the cause (origin numbers printed from the loaded liveries), 60 for the by-eye pixel offsets.
+The same fault one level over was closed 2026-11-01 (`hd-zone-livery-rest`), see "The rest of the Zone livery" below.
+Confidence 85 for the cause (origin numbers printed from the loaded liveries), 60 for the by-eye pixel offsets.
 Cross-title: Omega's `hdships/Zone` ships its own `engineflare.vex` and now loads it (locator-placed on the PS4 path,
 unchanged); 2048 is **not checkable** (PFS-encrypted `.pkg`).
+
+## The rest of the Zone livery (2026-11-01, `hd-zone-livery-rest`)
+
+Census (`read_name` of each stem in `Data\Ships\zone` against `Data\Ships\Assegai`, and `hdships\Zone` against
+`hdships\Assegai` on Omega). The Zone directory ships its own `EngineLightData.xml`, `shipshield.vex`/`.rcsmodel`,
+`AbsorbEffect.vex`/`.rcsmodel`, `shipwreck.vex`/`.rcsmodel`, `engineflare.vex` and `Locators.vex`, on both titles; no
+`zonewreck.vex` anywhere. The engine light is authored about the Zone hull: HD Zone `Distance` 1.3, Assegai 0.0 (`Radius` not
+compared). Sizes: HD shield shell 4,064 B Zone against 2,912 B Assegai; Omega 3,504 against 2,352.
+
+What moved: `oag_livery::entry::model_directory_with` picks the Zone directory for the engine light, the shield shell and the
+absorb shell (the team's file when the Zone directory ships none, with a report line saying so). Pinned by
+`hd_engine_flare_ground_truth::an_hd_zone_race_takes_its_light_and_shells_from_the_zone_directory` and the Omega twin (red
+when `lib.rs` keeps the team's: checked). Omega loads the shield shell only: its SPU vertex light is unread on the platform
+and its absorb-shell rule is off. **Not moved: the wreck.** The PS3/Vita livery branch loads no wreck at all
+(`wreck: None`); where a title's rule loads one (Pulse), Zone keeps the player's team directory, and Pure's Zone
+directory was not measured for it. **Open:** what the original does with the HD Zone wreck is unread.
+Hull brightness: a headless Zone frame (Assegai, VENOM, `--camera-view far`) over the hull's bounding box went 75.1 to 73.6
+mean (tick 300) and 87.6 to 87.1 (tick 900): slightly darker, about 1-2 % (not isolated per piece; plausibly the Zone light's `Distance` 1.3 placing the
+light 1.3 behind the flare node where the team's 0.0 sat on it). It does not lighten the hull, so it is not the maintainer's
+"too dark" cause; the light-colour composition is the later `hd-zone-hull-light` lane's. 2048: **not checkable** (PFS-encrypted).
 
 ## Hull normal maps (2026-10-20, `hd-hull-normals`)
 
