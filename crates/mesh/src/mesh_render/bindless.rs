@@ -98,7 +98,7 @@ pub fn fits(model: &crate::mesh::Model) -> bool {
     .collect();
     let fits = textures.len() + 3 <= CAPACITY as usize;
     if !fits {
-        log::info!(
+        log::debug!(
             "{}: {} distinct textures, over the bindless array's {CAPACITY}: per-slot groups",
             model.label,
             textures.len()
@@ -238,7 +238,7 @@ impl Bindless {
     #[must_use]
     pub fn new(device: &wgpu::Device, used: Vec<bool>, materials: Vec<Material>) -> Option<Self> {
         let Some((group, rows, elements)) = group(device, &materials, &used) else {
-            log::info!(
+            log::debug!(
                 "bindless: {} material slots name more than {CAPACITY} textures or \
                  {SAMPLERS} samplers: per-slot groups",
                 materials.len()

@@ -3,7 +3,7 @@
 //! describe alongside - see that file's own doc for why it moved out.
 
 use anyhow::Result;
-use log::{error, info, warn};
+use log::{debug, error, warn};
 
 use oag_display::display;
 use oag_display::space::Space;
@@ -112,7 +112,7 @@ impl Session {
                 if stage.frontend.is_finished() || self.load_probe.is_some())
         {
             self.launched = true;
-            info!("{}: opening the menus", frontend::states::LAUNCH_GAME);
+            debug!("{}: opening the menus", frontend::states::LAUNCH_GAME);
             // Wipeout 2048's own Team/Options screens, read the same "only
             // if the player actually touched it" way the language above is -
             // `None` on every title without a touch front end, and on this
@@ -166,7 +166,7 @@ impl Session {
             if let Err(e) = self.open_menus() {
                 error!("cannot open the menus: {e:#}");
             } else {
-                info!(
+                debug!(
                     "opened the menus in {:.0} ms (a stall on the main thread, drawn as the held backdrop)",
                     opening.elapsed().as_secs_f32() * 1000.0
                 );

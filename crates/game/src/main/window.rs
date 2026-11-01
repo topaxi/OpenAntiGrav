@@ -4,7 +4,7 @@
 //! the display the window is going onto, which the settings menu asks again
 //! every time it is changed - see `Session::apply_window`.
 
-use log::{info, warn};
+use log::{debug, warn};
 use oag_display::display;
 use oag_game::icon;
 use oag_present::perf;
@@ -373,7 +373,7 @@ pub(crate) fn log_geometry(
 ) {
     let inner = surface_size(window);
     let raw = window.inner_size();
-    info!(
+    debug!(
         "{label}: requested {}x{} logical, scale {}, inner {}x{} (winit reports {}x{}), fullscreen {}",
         requested.width,
         requested.height,
@@ -386,7 +386,7 @@ pub(crate) fn log_geometry(
     );
     for monitor in monitors {
         let size = monitor.size();
-        info!(
+        debug!(
             "{label}: monitor {:?} {}x{} scale {}",
             monitor.name(),
             size.width,

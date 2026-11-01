@@ -11,7 +11,7 @@
 //! for those two modes never comes. See
 //! `docs/architecture/adr/0049-race-records-are-a-chosen-schema-captured-outside-the-tick.md`.
 
-use log::{error, info};
+use log::{debug, error, info};
 
 use oag_game::records;
 use oag_ui::strings;
@@ -165,7 +165,7 @@ impl Session {
     /// those places ignore Back. In a race it is the pause menu: escape parks
     /// the race and opens the menus, and backing out of them resumes it.
     pub(crate) fn back(&mut self) {
-        info!("system back");
+        debug!("system back");
         let was_quitting = self.quit;
         self.escape();
         self.quit = was_quitting;

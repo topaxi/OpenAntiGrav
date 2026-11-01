@@ -230,7 +230,7 @@ pub fn available_hud_style(
     let name = saved?;
     match title.hud.skin(Some(&name)) {
         Some(skin) if !hud_skin_unlocked(skin, records, title) => {
-            log::info!(
+            log::debug!(
                 "HUD Style {} is still locked ({} loyalty); the default skin is drawn",
                 skin.name,
                 skin.loyalty

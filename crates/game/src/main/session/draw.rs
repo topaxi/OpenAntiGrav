@@ -182,7 +182,7 @@ impl Session {
             own_wanted
         };
         if self.framebuffer.resize(&self.gpu.device, wanted) {
-            log::info!(
+            log::debug!(
                 "render target {}x{} for a {}x{} surface",
                 wanted.0,
                 wanted.1,

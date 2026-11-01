@@ -450,7 +450,7 @@ impl Audio {
             self.race_tracks = len;
         }
         match resolved.restore {
-            Some(Ok(saved)) => info!(
+            Some(Ok(saved)) => debug!(
                 "audio: race music resumes at track {} and {} s, as saved",
                 saved.index, saved.second
             ),

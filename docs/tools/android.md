@@ -240,7 +240,7 @@ so a newer target SDK's predictive-back cannot swallow the key. A key capture on
 CONTROLS page treats Back as cancel, like Escape.
 
 Verified on Waydroid (`adb shell input keyevent 4`): from the RACE page Back went to
-the root (log line `system back`), at the root and at the Language Selection the
+the root (log line `system back`, at `debug`), at the root and at the Language Selection the
 process stayed alive, and in a race it opened the root menu over the parked race.
 
 There is no QUIT row on Android (2026-10-07, maintainer): a phone app is left with
@@ -493,7 +493,7 @@ title was observed on a phone, so there is nothing to match and no confidence sc
 - A run with no menus (`--race` windowed) freezes the tick the way Start does instead.
   Nothing outside the input side changes, so a replay, a ghost or a state hash cannot tell.
   Decision table: `session/lifecycle.rs` (unit tested).
-- Verified on Waydroid: race running (timer 0:13), `input keyevent 3` (HOME) logged
+- Verified on Waydroid: race running (timer 0:13), `input keyevent 3` (HOME) logged (at `debug`)
   `window away (Suspended): Menu`, relaunch showed the root menu over the parked race, Back
   resumed it from 0:16 with the timer running. **Not exercised:** the audio actually going
   quiet (no listening allowed; `--no-audio` does not apply on Android, and the log showed no

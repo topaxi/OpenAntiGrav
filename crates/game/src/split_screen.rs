@@ -446,7 +446,7 @@ pub fn follow_devices<D: Copy + PartialEq>(race: &mut Race, assignment: &Assignm
         if have != want && matches!(have, Controller::Local | Controller::Ai) {
             race.sim.world.controllers[slot] = want;
             changed += 1;
-            log::info!("split screen: slot {slot} is now {want:?}");
+            log::debug!("split screen: slot {slot} is now {want:?}");
         }
     }
     changed

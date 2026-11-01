@@ -101,7 +101,7 @@ pub(super) fn racing_line(
         reach,
     );
     if moved > 0 {
-        log::info!("ai line: {moved} takeoff run-up sample(s) moved off a magstrip");
+        log::debug!("ai line: {moved} takeoff run-up sample(s) moved off a magstrip");
     }
     let unsupported = if moved > 0 {
         unsupported_under(&points)

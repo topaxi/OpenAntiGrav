@@ -13,7 +13,7 @@
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use log::{debug, info, warn};
+use log::{debug, warn};
 use oag_mesh::mesh_render::KeptBuildCache;
 use oag_ui_screens::picker::Kind;
 
@@ -136,7 +136,7 @@ impl Job {
                 debug!("menu source: no {:?} preview to build ahead: {error:#}", warm.kind);
             }
         }
-        info!(
+        debug!(
             "menu source: opened in {:.0} ms, {} preview pipeline(s) built in {:.0} ms more",
             opened_in.as_secs_f64() * 1e3,
             pipelines.pipelines(),
@@ -228,7 +228,7 @@ impl Session {
             self.menu_source = match task.join() {
                 Some(Ok(Some(mut opened))) => {
                     if !finished {
-                        info!(
+                        debug!(
                             "menu source: waited {:.0} ms for the worker",
                             waited.elapsed().as_secs_f64() * 1e3
                         );

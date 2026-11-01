@@ -669,7 +669,7 @@ impl Output {
         );
         if self.logged != Some(decision) {
             self.logged = Some(decision);
-            info!(
+            debug!(
                 "surface: present mode {:?} (offered {:?}), {} frame(s) queued, {}",
                 decision.0,
                 self.offered,

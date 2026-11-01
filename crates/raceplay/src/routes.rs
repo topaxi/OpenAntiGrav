@@ -20,7 +20,7 @@
 //! route our physics cannot drive (`07_Track`'s centre ramp) would park half
 //! of ours.
 
-use log::{info, warn};
+use log::{debug, warn};
 
 use super::*;
 
@@ -153,7 +153,7 @@ pub(super) fn route_lines(
             plan: None,
         });
     }
-    info!("ai routes: {} way(s) round {} fork(s)", out.len(), {
+    debug!("ai routes: {} way(s) round {} fork(s)", out.len(), {
         let mut forks: Vec<u16> = out.iter().map(|r| r.pre_fork).collect();
         forks.dedup();
         forks.len()
