@@ -63,6 +63,7 @@ impl SfxFade {
 impl Audio {
     /// The flyby's first call: the effects go silent and stay so until [`Self::fade_in_sfx`].
     pub fn silence_sfx(&mut self) {
+        debug!("audio: effects fade: silent");
         self.sfx_fade.silence();
         self.apply_sfx_fade();
     }
@@ -70,6 +71,7 @@ impl Audio {
     /// The flyby's counter reached the fade's value: the effects return from silence, `per_tick`
     /// more gain on each [`Self::tick`].
     pub fn fade_in_sfx(&mut self, per_tick: f32) {
+        debug!("audio: effects fade: rising from silence by {per_tick} a tick");
         self.sfx_fade.fade_in(per_tick);
         self.apply_sfx_fade();
     }
@@ -85,6 +87,9 @@ impl Audio {
         let before = self.sfx_fade.gain();
         self.sfx_fade.tick();
         if self.sfx_fade.gain() != before {
+            if self.sfx_fade.gain() >= 1.0 {
+                debug!("audio: effects fade: full");
+            }
             self.apply_sfx_fade();
         }
     }

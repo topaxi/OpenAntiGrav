@@ -201,6 +201,12 @@ impl IntroCamera {
         self
     }
 
+    /// Whether the title's rule has the race's sound effects sound under the flyby: it fades them in.
+    #[must_use]
+    pub fn plays_race_sounds(&self) -> bool {
+        self.rule.effects_fade_in.is_some()
+    }
+
     /// Whether the flyby is on screen.
     #[must_use]
     pub fn playing(&self) -> bool {
@@ -339,6 +345,16 @@ impl Race {
     #[must_use]
     pub fn intro_voice_entry(&self) -> Option<&str> {
         self.view.intro.as_ref()?.voice.as_deref()
+    }
+
+    /// Whether the flyby's title has the race's sound effects sound under it
+    /// ([`IntroCamera::plays_race_sounds`]).
+    #[must_use]
+    pub fn intro_plays_race_sounds(&self) -> bool {
+        self.view
+            .intro
+            .as_ref()
+            .is_some_and(IntroCamera::plays_race_sounds)
     }
 
     /// Takes the audio calls the flyby has raised since the last call, in order.

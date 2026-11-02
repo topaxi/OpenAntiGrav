@@ -55,6 +55,7 @@ fn flyby(held: bool) -> Option<(Vec<bool>, bool)> {
     while race.in_intro() {
         race.tick_intro(&if held { cross() } else { PlayerInputs::none() });
         oag_game::sound::intro_cues(&mut audio, &mut race);
+        oag_game::sound::flyby_tick(&mut audio, &mut race);
         audio.tick();
         sounding.push(audio.pre_race_voice_playing());
         assert!(sounding.len() < 3000, "the flyby never ended");
@@ -123,7 +124,7 @@ fn effects_gain(held: bool) -> Option<Vec<f32>> {
     while race.in_intro() {
         race.tick_intro(&if held { cross() } else { PlayerInputs::none() });
         oag_game::sound::intro_cues(&mut audio, &mut race);
-        oag_game::sound::race_tick(&mut audio, &mut race);
+        oag_game::sound::flyby_tick(&mut audio, &mut race);
         step(&mut audio, &mut gains);
         assert!(gains.len() < 3000, "the flyby never ended");
     }

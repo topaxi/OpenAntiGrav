@@ -62,8 +62,9 @@ node, played for `AnimEnd` seconds or until a held Cross, with the world held at
   The `0x28` fade **landed 2026-11-02 (`pulse-flyby-sfx`)**: the session runs `sound::race_tick`
   under the flyby, `PreRace::effects_fade_in` silences the Sfx bus on tick 0 and ramps it from tick
   20 ([race-intro.md](../../docs/gameplay/race-intro.md)). Open: what the original plays under its
-  flyby is unwatched (no PPSSPP audio dump), and on every circuit tried nothing is within earshot
-  of the flyby camera by tick 80, so the fade is wired and measured at the bus but inaudible; the
+  flyby is unwatched (no PPSSPP audio dump; only engine idle is wired, no ambience or cues), and on
+  every circuit tried nothing is within earshot of the flyby camera by tick 80, so the fade is wired
+  and measured at the bus but inaudible; the
   wash frames (`h0103` to `h0125`) fade faster than the executable's 0.7 s, unresolved whether a
   call is a tick.
 - **Demo mode** skips it (`g_game_mode == 2`); a byte at mode object `+0x40` also skips it
