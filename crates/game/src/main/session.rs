@@ -58,6 +58,8 @@ mod menu_source;
 mod music;
 #[path = "session/mods_page.rs"]
 mod mods_page;
+#[path = "session/music_pool_page.rs"]
+mod music_pool_page;
 pub(crate) use load_probe::LoadProbe;
 #[path = "session/menus.rs"]
 pub(crate) mod menus;
@@ -143,6 +145,8 @@ pub(crate) struct Session {
     pub(crate) audio: oag_sound::Audio,
     /// Which Pulse releases this machine has. See [`App::music_discs`].
     pub(crate) music_discs: oag_sound::MusicDiscs,
+    /// What the MUSIC page's rows were last made from. See `music_pool_page`.
+    pub(crate) music_pool_seen: String,
     /// The race playlist's saved place: whether this run has already put it back,
     /// what was last written and the ticks since a race last wrote it. See
     /// `oag_game::music_state` and `session/music.rs`.

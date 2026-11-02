@@ -819,6 +819,13 @@ impl Session {
                 self.switch_selected_mod(text == "on");
                 return;
             }
+            // A MUSIC page row: one source on or off, saved into `[audio] music_switches`.
+            other if oag_game::music_pool::source_of(other).is_some() => {
+                if let Some(id) = oag_game::music_pool::source_of(other) {
+                    self.switch_music_source(id, text == "on");
+                }
+                return;
+            }
             other => {
                 warn!("nothing applies {other}");
                 return;

@@ -10,6 +10,7 @@ fn discs() -> MusicDiscs {
         library: &NoLibrary,
         listings: Listings::default(),
         later: Default::default(),
+        pool: Default::default(),
         psp: Some("psp.chd".into()),
         ps2: Some("ps2.chd".into()),
         ps3: None,

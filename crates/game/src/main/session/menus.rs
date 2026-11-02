@@ -924,7 +924,9 @@ impl Session {
     /// every setting seeded, the window sized for `skin`. A MODS page switch builds the
     /// rebuilt tree's model with it too (`super::mods_page`), so the two cannot differ.
     pub(crate) fn menu_model(&mut self, shell: &super::Shell, skin: &menu::Skin) -> menu::Menu {
-        let mut model = menu::Menu::new(shell.definition.clone());
+        let mut definition = shell.definition.clone();
+        oag_game::music_pool::expand(&mut definition, self.music_discs.pool(), &shell.strings);
+        let mut model = menu::Menu::new(definition);
         // Just the first frame's own value - `MenuStage::render` refreshes
         // this every frame off whichever page is actually current, since a
         // player can navigate to a page with a different reservation need

@@ -299,7 +299,20 @@ impl Pending {
         // On a worker: a title picked in the launcher loads inside one frame,
         // and a PSP survey opens every image on the search path (359 ms on
         // the Steam Deck). Every music start waits for it on its own worker.
-        oag_sound::MusicDiscs::survey_in_background(source, &oag_game::sound::GameLibrary)
+        let discs =
+            oag_sound::MusicDiscs::survey_in_background(source, &oag_game::sound::GameLibrary);
+        // The other discs and the folders in settings are read on workers of their own, so a
+        // hung mount never delays the booted disc's music.
+        let reader: std::sync::Arc<dyn oag_sound::folders::Reader> =
+            std::sync::Arc::new(oag_sound::folders::Disk::cached_in(
+                oag_source::cache::default_audio_cache_dir(),
+            ));
+        discs.start_pool(
+            &self.settings.audio.music_switches,
+            &self.settings.audio.music_folders,
+            &reader,
+        );
+        discs
     }
 
     /// The whole windowed load for one source.

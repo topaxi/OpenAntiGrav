@@ -55,6 +55,10 @@ impl Library for GameLibrary {
         }
         found
     }
+
+    fn sources(&self) -> Vec<PathBuf> {
+        oag_source::source::candidates()
+    }
 }
 
 /// The front-end cue a menu's navigation sound is played as.

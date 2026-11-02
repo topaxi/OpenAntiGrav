@@ -474,6 +474,7 @@ impl App {
             touch_overlay: crate::touch::Overlay::default(),
             audio,
             music_discs: self.music_discs.clone(),
+            music_pool_seen: String::new(),
             music_place,
             screen_filters,
             missing_screen_filter: None,

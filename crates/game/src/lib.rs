@@ -65,6 +65,7 @@ pub mod medal_watch;
 pub mod mod_extensions;
 pub mod mods;
 pub mod movie;
+pub mod music_pool;
 pub mod music_state;
 pub mod net_play;
 #[cfg(not(target_arch = "wasm32"))]

@@ -36,6 +36,13 @@ pub trait Library: std::fmt::Debug + Send + Sync {
     /// Every disc image the host would search for a counterpart release, in
     /// search order (alphabetical within a directory, so two runs agree).
     fn containers(&self) -> Vec<PathBuf>;
+
+    /// Every source the host can open as a title, one path each, in search order: the
+    /// disc images [`Self::containers`] names and the extracted packages and directories
+    /// that stand in for a disc on some titles. What the music pool lists.
+    fn sources(&self) -> Vec<PathBuf> {
+        self.containers()
+    }
 }
 
 /// A [`Library`] that knows no source: a [`crate::MusicDiscs`] built without a

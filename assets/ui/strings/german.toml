@@ -208,6 +208,10 @@ OAG_AUDIO_SFX_VOLUME = { text = "SFX-LAUTSTÄRKE", human = false }
 OAG_AUDIO_ANNOUNCER_VOLUME = { text = "ANSAGERLAUTSTÄRKE", human = false }
 OAG_AUDIO_MASTER_VOLUME = { text = "GESAMTLAUTSTÄRKE", human = false }
 OAG_AUDIO_MUSIC_SOURCE = { text = "MUSIKQUELLE", human = false }
+OAG_AUDIO_MUSIC = { text = "MUSIK", human = false }
+OAG_MUSIC_PAGE_TITLE = { text = "MUSIK", human = false }
+OAG_MUSIC_SOURCE_ROW = { text = "QUELLE", human = false }
+OAG_MUSIC_SCANNING = { text = "SUCHE LÄUFT", human = false }
 OAG_CONTROLS_THRUST = { text = "SCHUB", human = false }
 OAG_CONTROLS_STEER_LEFT = { text = "NACH LINKS LENKEN", human = false }
 OAG_CONTROLS_STEER_RIGHT = { text = "NACH RECHTS LENKEN", human = false }

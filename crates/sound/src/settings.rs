@@ -75,4 +75,17 @@ pub struct Settings {
     /// falls back to the booted disc, not silence.
     #[serde(default)]
     pub music_source: MusicSource,
+    /// Folders of songs the race playlist may draw from, beside the discs.
+    ///
+    /// Each is `{ path = "...", enabled = true }`. Added by editing this file: the
+    /// menu lists them on the MUSIC page and switches them, but has no text input
+    /// yet to name one. A folder may sit on a slow mount (NFS, an SD card); it is
+    /// read on a worker and a hung one never stalls a frame (`oag_sound::folders`).
+    #[serde(default)]
+    pub music_folders: Vec<crate::pool::MusicFolder>,
+    /// The MUSIC page's switches, by source id, for the sources the player has
+    /// switched. Absent means the default: the booted disc on, every other
+    /// source off. A folder's `enabled` is its own default until it is here.
+    #[serde(default)]
+    pub music_switches: std::collections::BTreeMap<String, bool>,
 }

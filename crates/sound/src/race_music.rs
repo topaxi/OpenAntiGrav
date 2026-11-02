@@ -220,7 +220,7 @@ impl MusicFetchWorker {
         let task = oag_thread::Task::spawn(label, move || {
             discs.wait_surveyed();
             let len = Audio::booted_soundtrack_len(&discs);
-            let resolved = pick.resolve(&discs, len);
+            let resolved = pick.resolve(&discs, Audio::playlist_len(&discs, len));
             let fetched = fetch_track(&discs, choice, &cache_dir, resolved.index);
             Landed {
                 fetched,
@@ -283,6 +283,24 @@ pub(super) fn fetch_track(
     cache_dir: &Path,
     index: usize,
 ) -> Result<Option<Loaded>> {
+    // A playlist that leaves out the booted disc starts on whatever the other sources have
+    // listed by now; give a scan still running a moment to land (on this worker, never the
+    // frame thread) rather than start a race on nothing.
+    if !discs.pool.booted_enabled() {
+        discs.pool.wait_scans(POOL_WAIT);
+    }
+    let extras = discs.pool.extras();
+    let booted_on = discs.pool.booted_enabled();
+    if !extras.is_empty() || !booted_on {
+        let base = if booted_on {
+            Audio::booted_soundtrack_len(discs)
+        } else {
+            0
+        };
+        if index >= base {
+            return fetch_extra(discs, &extras, index - base, cache_dir);
+        }
+    }
     let Some((source, platform)) = discs.pick(choice) else {
         return Ok(None);
     };
@@ -306,6 +324,64 @@ pub(super) fn fetch_track(
         ),
     }))
 }
+
+/// Decodes song `at` of the pool beyond the booted soundtrack.
+///
+/// A song that will not read or decode (a folder whose mount went away) is
+/// logged and passed over for the next one, up to [`EXTRA_ATTEMPTS`], so one
+/// bad file does not end the race's music. `Loaded::from` is `None`: nothing
+/// pairs these with another release, so `MUSIC SOURCE` leaves them alone.
+fn fetch_extra(
+    discs: &MusicDiscs,
+    extras: &[pool::Extra],
+    at: usize,
+    cache_dir: &Path,
+) -> Result<Option<Loaded>> {
+    let mut last = None;
+    for step in 0..extras.len().min(EXTRA_ATTEMPTS) {
+        let Some(extra) = extras.get((at + step) % extras.len()) else {
+            break;
+        };
+        let loaded = match extra {
+            pool::Extra::Disc {
+                source,
+                platform,
+                track,
+                label,
+            } => load_track(
+                discs.library,
+                source,
+                *platform,
+                *track,
+                cache_dir,
+                &discs.listings,
+            )
+            .map(|sound| (sound, format!("{label} track at {}", track.at))),
+            pool::Extra::File(path) => folders::load(&*discs.pool.reader(), path)
+                .map(|sound| (sound, path.display().to_string())),
+        };
+        match loaded {
+            Ok((sound, what)) => {
+                return Ok(Some(Loaded {
+                    from: None,
+                    sound: Arc::new(sound),
+                    what: format!("pool song {what}"),
+                }));
+            }
+            Err(error) => {
+                warn!("audio: skipping a pool song: {error:#}");
+                last = Some(error);
+            }
+        }
+    }
+    last.map_or(Ok(None), Err)
+}
+
+/// How long a fetch for a playlist without the booted disc waits for a source's scan.
+const POOL_WAIT: std::time::Duration = std::time::Duration::from_secs(8);
+
+/// How many pool songs one fetch tries before giving up.
+const EXTRA_ATTEMPTS: usize = 4;
 
 /// What [`Audio::source_switch`]'s worker is fetching, and what to check before
 /// applying it: a switch spans several ticks and may be stale when it lands.
@@ -332,7 +408,7 @@ enum SwitchTarget {
     /// `discs`/`choice` let a landed switch update [`Audio::race_context`].
     Race {
         index: usize,
-        discs: MusicDiscs,
+        discs: Box<MusicDiscs>,
         choice: MusicSource,
     },
 }
@@ -410,6 +486,13 @@ impl Audio {
             pick,
             "race-music",
         ))
+    }
+
+    /// The pool's switches changed: what was decoded or fetched ahead was chosen
+    /// from the old playlist, so it is dropped. The song playing goes on.
+    pub fn music_pool_changed(&mut self) {
+        self.race_cache = None;
+        self.race_prefetch = None;
     }
 
     /// Stops the menu voice and any race voice, before a race track starts.
@@ -778,7 +861,7 @@ impl Audio {
             wanted,
             target: SwitchTarget::Race {
                 index,
-                discs: discs.clone(),
+                discs: Box::new(discs.clone()),
                 choice,
             },
             worker: MusicFetchWorker::spawn(
@@ -934,7 +1017,7 @@ impl Audio {
                 index,
                 discs,
                 choice,
-            } => self.apply_race_source_result(wanted, index, discs, choice, fetched),
+            } => self.apply_race_source_result(wanted, index, *discs, choice, fetched),
         }
     }
 }

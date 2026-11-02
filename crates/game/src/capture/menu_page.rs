@@ -175,6 +175,14 @@ pub(super) fn menu_page(
         );
     }
 
+    // The MUSIC page: a still waits for the survey and the other discs' scan, so it shows what
+    // a player would see once they have landed.
+    music_discs.wait_surveyed();
+    let until = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while music_discs.pool().scanning_discs() && std::time::Instant::now() < until {
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    crate::music_pool::expand(&mut definition, music_discs.pool(), strings);
     let mut model = oag_ui::menu::Menu::new(definition);
     race_sources::supply(
         &mut model,
