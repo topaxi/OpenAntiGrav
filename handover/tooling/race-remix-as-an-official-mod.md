@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-02
-summary: "ADR-0082/0083 accepted; lanes 1, 2, 4 and 6a done (mod pages in oag-ui, fingerprint, `values_from` query tables parsed); open: mods.rs load test, settings, 6b (resolve `of`), launch_race, the move"
+summary: "ADR-0082/0083 accepted; lanes 1, 2, 4, 6a done; open: mods.rs load test, mod settings, 6b (resolve of), launch_race, the move"
 size: XL (40)
 difficulty: hard (45)
 ---
