@@ -108,14 +108,14 @@ collapsing at the same moment.
 
 ## Omega and 2048
 
-- **Omega**: not checked in this pass: the code was not located statically, and there is no
+- **Omega**: open, not checked in this pass: the code was not located statically, and there is no
   live path. No `12.0f` immediate sits near the craft code (the five
   `0x41400000` immediates are elsewhere, so the box extents load from rodata), and the
   `vminss` census in `0x01310000`-`0x01330000` holds no steering ramp (`FUN_01320c10` is a
   geometry clamp). Next: Omega's craft update from `Craft_UpdateSurfaceProbes` (`0x0131b510`,
   reached by a virtual call, so no static caller), then its steering by the class block's
   `Turning` offsets. Omega's eboot is in Ghidra, so this is open work, not uncheckable.
-- **2048**: not checked.
+- **2048**: open, not checked.
 - **What the code carries meanwhile, and the open question.** `oag_omega::race::CRAFT_LAWS`
   and `oag_2048::race::CRAFT_LAWS` take HD's rotating tensor (`inertia_rotates`,
   `Sourced::inherited(true, "Wipeout HD")`) but keep **Pulse's** box mass `0.9`

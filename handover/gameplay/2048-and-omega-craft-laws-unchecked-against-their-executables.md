@@ -2,7 +2,7 @@
 status: re-first
 titles: [2048, omega]
 updated: 2026-11-02
-summary: "2048 and Omega craft laws are inherited, not read: the inertia mass (0.9 against HD's 1.0) and the wall point rate (2048 held world, Omega body-local) need each executable's constructor and contact resolver"
+summary: "2048/Omega inertia mass (0.9 vs HD 1.0) and wall point rate are inherited, unread in their executables"
 ---
 
 # 2048 and Omega craft laws: two inheritances nobody has checked
