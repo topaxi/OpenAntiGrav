@@ -221,6 +221,17 @@ pub struct Held {
     /// decremented every tick and reloaded with `<Stats rate>` when negative. Held at
     /// zero when [`Self::cannon_rounds`] is, so two worlds hash the same.
     pub cannon_reload: f32,
+    /// A Quake press made while a wave was live, waiting for it to end.
+    ///
+    /// **Measured on Pulse PSP, 2026-11-02, confidence 90; read from the
+    /// executables on HD, 2048 and Omega, confidence 65.** `Weapon_FireQuake`
+    /// returns on a busy wave before it clears the held slot or the request bit
+    /// (`craft+0x1b8 & 8`), and `Weapons_DispatchFire` calls it again every frame
+    /// the bit is set, so the press fires by itself on the first dispatch after the
+    /// last span ends, and the pickup is spent then (`Race::fire_armed_quakes`).
+    /// See `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
+    /// Cleared by [`Self::take`].
+    pub quake_armed: bool,
 }
 
 /// How far above zero [`Held::drop_reload`] may sit and still release the next mine.
@@ -249,6 +260,7 @@ impl Held {
             drop_reload: 0.0,
             cannon_rounds: 0,
             cannon_reload: 0.0,
+            quake_armed: false,
         }
     }
 
@@ -365,7 +377,13 @@ impl Held {
     /// (`CIRCLE`) a Mine mid-cluster would leave [`Self::dropping`] stuck, so
     /// `Race::lay_mines` does nothing forever and a later grant is swallowed by
     /// [`Self::begin_drop`]'s guard. Nothing pins what the original does.
+    ///
+    /// **Also cancels an armed Quake ([`Self::quake_armed`]): chosen, not
+    /// measured.** The original's absorb handler is not among the stores that
+    /// clear the request bit, so it probably leaves the request armed and the
+    /// wave fires from an empty slot; that is not replicated.
     pub const fn take(&mut self) -> Option<Weapon> {
+        self.quake_armed = false;
         self.dropping = 0;
         self.drop_reload = 0.0;
         // Same for the Cannon, so worlds that gave one up mid-magazine hash alike.

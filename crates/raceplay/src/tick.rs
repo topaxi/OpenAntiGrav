@@ -179,6 +179,8 @@ impl Race {
         // pressed. A mine never moves again, so this is the only tick that can
         // place it correctly.
         self.lay_mines();
+        // A Quake press made under a live wave, now that the wave may have ended.
+        self.fire_armed_quakes();
         // Right after, for the same reason: a Cannon's own countdown has to
         // see every tick the button is down, and a round fired this tick has
         // to leave from where the craft started it. It reads the snapshot for

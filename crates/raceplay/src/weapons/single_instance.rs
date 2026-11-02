@@ -17,6 +17,69 @@
 use super::*;
 
 impl Race {
+    /// Launches `slot`'s travelling wave, and says whether it left.
+    ///
+    /// `Weapon_FireQuake`'s own body: nothing when a wave is already up
+    /// (`q->active != 0`), when the table authors no Quake, or when the craft is
+    /// not located on the course yet. The cue is the press's, not this call's.
+    pub(crate) fn launch_quake(&mut self, slot: usize) -> bool {
+        if self.sim.world.quake.is_some() {
+            return false;
+        }
+        let Some(stats) = self
+            .sim
+            .weapons
+            .as_ref()
+            .and_then(oag_tables::weapons::WeaponStats::quake)
+        else {
+            return false;
+        };
+        let ship = &self.sim.world.ships[slot];
+        // Not yet located on the course: nowhere on the track's own spline to
+        // launch a travelling wave from. A moving craft clears it in a tick or two.
+        let Some(progress) = ship.standing.progress else {
+            return false;
+        };
+        // The direction sign: dot the firing craft's own forward against the
+        // track's own tangent where it stands, the dot product `Quake_Init` reads
+        // to pick which way the wave travels. `unwrap_or(1.0)` is the "forward,
+        // not stalled" default `Wave::launch` itself takes for an
+        // exactly-perpendicular dot.
+        let forward_dot_tangent = ship
+            .standing
+            .course_index
+            .and_then(|index| self.sim.course.as_ref()?.tangent(index as usize))
+            .map(|tangent| tangent.dot(ship.physics.body.forward()))
+            .unwrap_or(1.0);
+        self.sim.world.quake = Some(oag_weapons::projectile::quake::Wave::launch(
+            slot as u8,
+            progress,
+            forward_dot_tangent,
+            &stats,
+        ));
+        true
+    }
+
+    /// Fires every craft's armed Quake press ([`Held::quake_armed`]) whose wave is
+    /// now free to launch, in slot order, and spends the pickup.
+    ///
+    /// `Weapons_DispatchFire` calls `Weapon_FireQuake` on every frame the request
+    /// bit is set, so the press fires on the first dispatch after the busy byte
+    /// clears: measured on Pulse PSP (2026-11-02) as the same dispatch that first
+    /// reads it clear, one frame after the last span's update. Ours runs before
+    /// `advance_quake` retires a wave, so a wave retired on tick N relaunches on
+    /// N+1. No cue: `QUAKELAUNCH` belongs to the press.
+    pub(crate) fn fire_armed_quakes(&mut self) {
+        for slot in 0..self.sim.world.ship_count as usize {
+            if !self.sim.world.ships[slot].pickup.quake_armed {
+                continue;
+            }
+            if self.launch_quake(slot) {
+                self.sim.world.ships[slot].pickup.take();
+            }
+        }
+    }
+
     /// One tick of the Quake's own travelling wave: advances it along the
     /// course, moves every craft's smoothed wave height, and applies the
     /// hit/slowdown to every craft whose height just passed the gate.
