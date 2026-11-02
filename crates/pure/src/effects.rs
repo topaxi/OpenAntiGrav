@@ -21,7 +21,7 @@ pub const ABSORB_BURST: Burst = Burst::Sequential {
     stagger: 0.1,
 };
 
-/// Pure's tables. Hit sparks and the wreck are unread (`Ship_Damage` is not),
+/// Pure's tables. Hit sparks and the wreck's node effects are Pulse's rule (`Ship_Damage` is unread),
 /// and Pure's Cannon throws no weapon spark of its own that has been read. The
 /// engine's own names are Pulse's, taken by inheritance: Pure's loader tries
 /// each and a disc without it costs one report line.
@@ -34,7 +34,7 @@ pub const EFFECTS: &Effects = &{
         )
         // Hit sparks and the wreck's node blast and death sparks are Pulse's trigger rule, inherited: Pure's
         // `Ship_Damage` and `Ship_SetState` are unread, but its `Data.wad` authors those three
-        // effect files (not `WO_SHIP_EXPLOSION`: the big blast is left out) and its hulls carry the locators (`docs/formats/pure-status.md`).
+        // effect files and its hulls carry the locators (`docs/formats/pure-status.md`).
         .with(
             Trigger::HitSpark,
             EffectSpec::new(
@@ -55,6 +55,20 @@ pub const EFFECTS: &Effects = &{
                 engine_effects::DEATH_SPARKS_EFFECT,
                 Origin::InheritedFrom("Wipeout Pulse"),
             ),
+        )
+        // `FUN_089258b8`, the wreck's 1.5 s timeout (state 5, `Ship_SetState` case 5 arms it):
+        // `docs/ghidra/functions/psp-pure-usa/wreck-big-blast.md`.
+        .with(
+            Trigger::WreckBigNode,
+            EffectSpec::new(engine_effects::BIG_EXPLO_EFFECT, Origin::Measured),
+        )
+        .with(
+            Trigger::WreckDebris,
+            EffectSpec::new(engine_effects::EXPLOSION_DEBRIS_EFFECT, Origin::Measured),
+        )
+        .with(
+            Trigger::WreckSmoke,
+            EffectSpec::new(engine_effects::EXPLO_SMOKE_EFFECT, Origin::Measured),
         )
         // Pure ships no LeachBeam: its `weaponstats.xml` authors none, neither
         // pressing's executable names one and none of Pulse's six LeachBeam

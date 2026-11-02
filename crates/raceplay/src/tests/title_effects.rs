@@ -13,7 +13,7 @@ const ALL: [&Title; 5] = [
 ];
 
 /// The triggers a title answers for itself; the rest are the engine's.
-const OWN: [Trigger; 10] = [
+const OWN: [Trigger; 13] = [
     Trigger::BombRays,
     Trigger::HitSpark,
     Trigger::LeachHitSpark,
@@ -21,6 +21,9 @@ const OWN: [Trigger; 10] = [
     Trigger::ShieldAbsorb,
     Trigger::WreckNode,
     Trigger::WreckSparks,
+    Trigger::WreckBigNode,
+    Trigger::WreckDebris,
+    Trigger::WreckSmoke,
     Trigger::DamageMild,
     Trigger::DamageModerate,
     Trigger::DamageCritical,
@@ -105,6 +108,14 @@ fn each_trigger_is_answered_by_exactly_the_titles_that_read_it() {
         has(Trigger::WreckExplosion),
         [true, false, false, false, false]
     );
+    // Pure's own big blast is built from three names Pulse's executable does not carry.
+    for big in [
+        Trigger::WreckBigNode,
+        Trigger::WreckDebris,
+        Trigger::WreckSmoke,
+    ] {
+        assert_eq!(has(big), [false, true, false, false, false], "{big:?}");
+    }
     // `NormalBombBlast_Update` (HD, `0x001503d8`) spawns it; no other title's
     // blast does.
     assert_eq!(has(Trigger::BombRays), [false, false, true, false, false]);
@@ -316,8 +327,9 @@ fn a_race_loads_each_name_of_its_own_table_once_and_the_superset_covers_every_ti
         1
     );
     // 43 since Pure, the last title that named it, dropped `WO_SHIP_ENGINEFLARE`; 44 with
-    // `WO_SHIP_COLL_SPARK_NODAMAGE`, the collision cage's contact spark.
-    assert_eq!(crate::RACE_EFFECTS.len(), 44);
+    // `WO_SHIP_COLL_SPARK_NODAMAGE`, the collision cage's contact spark; 47 with Pure's three
+    // big-blast names.
+    assert_eq!(crate::RACE_EFFECTS.len(), 47);
 }
 
 #[test]

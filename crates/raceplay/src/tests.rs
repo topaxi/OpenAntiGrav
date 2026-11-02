@@ -261,7 +261,7 @@ fn setup(handling: Handling) -> Setup {
         weapon_spark_anchors: Vec::new(),
         cockpit_hit_noise: None,
         wreck_anchors: Vec::new(),
-        wreck_big_blast: true,
+        wreck_shockwave: true,
         magstrip_wake: None,
         magstrip_pob: false,
         leach_strip: None,

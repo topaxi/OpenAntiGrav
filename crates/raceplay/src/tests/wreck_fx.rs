@@ -138,3 +138,27 @@ fn a_source_with_no_wreck_throws_no_big_explosion() {
     race.throw_wreck_explosion(3, Mat4::IDENTITY);
     assert_eq!(race.wreck_explosion_at_for_tests(), None);
 }
+
+/// Pure's shape: the big blast at each locator and the debris and smoke at the matrix, from
+/// its own table's triggers, with neither Pulse's blast nor its shockwave.
+#[test]
+fn pures_timeout_throws_a_big_blast_per_locator_and_the_debris_and_smoke() {
+    use oag_title::Trigger::{WreckBigNode, WreckDebris, WreckSmoke};
+    let mut race = race_with_wreck_locators();
+    let mut anchors = vec![Vec::new(); 4];
+    anchors[3] = locators(3);
+    race.view.wreck_fx = WreckFx::new(anchors).with_shockwave(false);
+    for trigger in [WreckBigNode, WreckDebris, WreckSmoke] {
+        let blob = super::respawn::one_emitter_pob(super::respawn::trigger_name(trigger), 0);
+        let effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
+            .expect("the hand-laid effect parses");
+        race.view.handles.insert(trigger, effect);
+    }
+    race.throw_wreck_explosion(3, Mat4::IDENTITY);
+    assert_eq!(race.wreck_fx_started_for_tests(), 3 + 2);
+    assert_eq!(race.wreck_explosion_at_for_tests(), None);
+    assert!(
+        race.view.bomb_blasts.iter().flatten().next().is_none(),
+        "Pure has no ship shockwave read"
+    );
+}

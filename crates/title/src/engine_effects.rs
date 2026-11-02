@@ -425,6 +425,15 @@ pub const DEATH_SPARKS_EFFECT: &str = "WO_SHIP_DEATH_SPARKS";
 /// The big blast, 1.5 s after the state 5 edge.
 pub const EXPLOSION_EFFECT: &str = "WO_SHIP_EXPLOSION";
 
+/// Pure's big blast at each wreck node.
+pub const BIG_EXPLO_EFFECT: &str = "WO_SHIP_FXNODE_BIGEXPLO";
+
+/// Pure's debris cloud at the wreck.
+pub const EXPLOSION_DEBRIS_EFFECT: &str = "WO_SHIP_EXPLOSION_DEBRIS";
+
+/// Pure's smoke at the wreck.
+pub const EXPLO_SMOKE_EFFECT: &str = "WO_SHIP_EXPLO_SMOKE";
+
 /// What HD plays on a craft that flies through an engine trail.
 ///
 /// `Trail_SpawnHitEffect` (`0x002e3858`) consumes a per-trail "hit a ship" flag the

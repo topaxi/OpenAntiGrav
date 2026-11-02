@@ -1153,7 +1153,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             #[cfg(feature = "view")]
             wreck_anchors: super::wreck_fx::anchors(craft_title, &liveries),
             #[cfg(feature = "view")]
-            wreck_big_blast: craft_title
+            wreck_shockwave: craft_title
                 .effect_on(oag_title::Trigger::WreckExplosion)
                 .is_some(),
             #[cfg(feature = "view")]

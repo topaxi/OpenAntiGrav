@@ -278,3 +278,5 @@
 0x08821838	function	Hud_BindWidgets	75	pickup-icons.md
 0x088c9ce8	function	Mode3D_DrawQueued	72	hud-boost-smear.md
 0x088ef90c	function	Gu_SetOffset	88	hud-boost-smear.md
+0x08923db4	function	Ship_SpawnExplosionSmall	78	wreck-big-blast.md
+0x089258b8	function	Ship_UpdateDestroyed	76	wreck-big-blast.md
