@@ -97,17 +97,16 @@ pub(crate) fn read_inputs(settings: &Settings, keys: &menu::LaunchInputs) -> Res
     })
 }
 
-/// `base` with the two sources, circuit, team, mode, class and difficulty `inputs` name.
-///
-/// `base` comes back as the error when there is nothing to launch, so the caller can
-/// keep it for the next try. A track title left empty is the title `base` already
-/// reads from.
-pub(crate) fn two_source_options(
+/// Sets the two sources, circuit, team, mode, class and difficulty `inputs` name on
+/// `race_options`. Returns `false` when there is nothing to launch; what was set so far
+/// stays, so the caller keeps the options for the next try. A track title left empty
+/// is the title `race_options` already reads from.
+pub(crate) fn apply_two_source(
     titles: &[Candidate],
-    mut race_options: Options,
+    race_options: &mut Options,
     inputs: &Inputs,
     custom: Option<&Custom>,
-) -> Result<Options, Options> {
+) -> bool {
     // A launch names its own track: a disc circuit, or below a CUSTOM file.
     race_options.eliminator_kill_target = None;
     race_options.laps_override = None;
@@ -138,7 +137,7 @@ pub(crate) fn two_source_options(
             "no team of {} authors the speed class {:?}; pick another class or craft title",
             inputs.craft_title, race_options.class
         );
-        return Err(race_options);
+        return false;
     }
 
     let track_title = inputs.track_title.as_str();
@@ -161,10 +160,10 @@ pub(crate) fn two_source_options(
     };
     let Some(track_candidate) = track_candidate else {
         warn!("no track title chosen yet, so there is nothing to launch");
-        return Err(race_options);
+        return false;
     };
     if let Some(custom) = custom {
-        oag_game::custom_tracks::apply(&mut race_options, &custom.file);
+        oag_game::custom_tracks::apply(race_options, &custom.file);
     }
     race_options.source = track_candidate.source.clone();
 
@@ -264,7 +263,7 @@ pub(crate) fn two_source_options(
         },
         Err(e) => warn!("{craft_catalogue_source}: {e:#}"),
     }
-    Ok(race_options)
+    true
 }
 
 impl Session {
@@ -312,13 +311,10 @@ impl Session {
         } else {
             None
         };
-        let race_options = match two_source_options(&self.titles, race_options, &inputs, custom.as_ref()) {
-            Ok(options) => options,
-            Err(options) => {
-                self.race_options = Some(options);
-                return;
-            }
-        };
+        if !apply_two_source(&self.titles, &mut race_options, &inputs, custom.as_ref()) {
+            self.race_options = Some(race_options);
+            return;
+        }
         info!(
             "launching {}",
             race_options

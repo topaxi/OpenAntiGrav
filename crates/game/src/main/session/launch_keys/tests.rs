@@ -60,11 +60,10 @@ fn same_options_either_way(track_image: &str, craft_image: &str, class: &str) {
     let from_mod = read_inputs(&mod_settings, &mod_keys).unwrap();
     assert_eq!(from_remix, from_mod, "the same values, read by key");
 
-    let base = Options::default();
-    let remix_options = two_source_options(&titles, base.clone(), &from_remix, None)
-        .expect("the remix pair launches");
-    let mod_options =
-        two_source_options(&titles, base, &from_mod, None).expect("the mod's pair launches");
+    let mut remix_options = Options::default();
+    assert!(apply_two_source(&titles, &mut remix_options, &from_remix, None));
+    let mut mod_options = Options::default();
+    assert!(apply_two_source(&titles, &mut mod_options, &from_mod, None));
     assert_eq!(format!("{remix_options:?}"), format!("{mod_options:?}"));
     assert_eq!(remix_options.source, track.source, "the circuit's disc");
     assert_eq!(
