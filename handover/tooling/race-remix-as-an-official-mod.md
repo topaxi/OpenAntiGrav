@@ -250,6 +250,37 @@ Read today:
 - `packaging/appimage/` has no `mods` reference. `just play` runs from a checkout.
   A shipped build finds the examples only if the cwd is a checkout.
 
+**The repo is private** (`OpenAntiGrav/official-mods`, created 2026-11-02, empty,
+no default branch yet; maintainer). Consequences, read from `.github/workflows/`:
+- `ci.yml:38-42` is the only job that sets `submodules: true` (and `lfs: true`).
+  `actions/checkout` with a submodule the default `GITHUB_TOKEN` cannot read fails the
+  whole job. The same goes for forks and for any clone without access. Today the
+  examples repo is public, so this passes. A private submodule would turn that job red.
+- `release.yml` (checkout at :90, :146, :193, :249, :309) and `nightly.yml` do not
+  set `submodules`, so they already ship without the examples. They would build
+  without Remix and without a token, which is what the maintainer wants.
+- So the game must build and run with the mod absent. Remix simply does not appear:
+  no REMIX row, no 2048 tile, no CUSTOM title. The engine plumbing stays. Engine code
+  must not reference a mod that is not there. ADR-0066's "a broken mod never stops
+  the game" already covers a missing one.
+- Options for the mod's source, for ADR-B to pick:
+  (i) Keep the submodule but make CI fetch it with a token secret
+  (`actions/checkout` `token:`), and let fork PRs skip it. A private repo then
+  needs a secret in every consuming job, and forks never see the mod.
+  (ii) Keep the submodule and do not set `submodules: true` on the gate job.
+  The gate and tests then run with the mod absent, and a separate job with the token
+  checks the mod. Tests that need Remix skip when the folder is missing, as the
+  disc-backed tests do.
+  (iii) Not a submodule: the packaging step downloads a pinned release asset of
+  `official-mods` with a token, and the repo stays a plain repo. No `.gitmodules`
+  entry, no checkout cost.
+  (iv) Make `official-mods` public. The simplest, and the only one that needs no
+  token. A maintainer decision.
+- **Recommendation:** (ii) for the gate and tests, plus (iii) for release and
+  nightly. (iv) removes the token problem entirely and is the cheapest if the content
+  can be public. Either way, the lead's gate and `ci.yml`'s first job must not require
+  the private repo.
+
 Proposal, pending ADR-B's delivery choice: submodule `assets/mods/official` from
 `OpenAntiGrav/official-mods`, added to the default search list next to `EXAMPLES`
 (`pub const OFFICIAL` in `discover.rs`); the packaged builds copy it beside the
@@ -343,7 +374,8 @@ hours, M half a day, L a day, XL more than a day (split it).
    fresh clone; the packaged build's file list is checked by reading the recipe
    (the packaged build runs on CI and is verified locally only). Crates: `oag-mod`
    (one constant), `packaging/`. Size: M (45). Difficulty: medium (40). Depends on
-   8.
+   8. Acceptance also: `ci.yml` stays green without access to the private repo
+   (option ii or iv above), and release and nightly build with the mod absent.
 
 **Before lane 8 starts, the lead should confirm:** the repo exists, the launch
 option, and the delivery per target.
