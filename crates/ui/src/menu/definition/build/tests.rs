@@ -507,3 +507,23 @@ fn a_template_choice_row_on_a_mod_page_expands_like_one_on_an_engine_page() {
         ["test.mod_pool.a", "test.mod_pool.b"]
     );
 }
+#[test]
+fn a_mod_page_query_row_checks_its_of_against_the_mods_own_settings() {
+    let page = |of: &str| {
+        format!(
+            "[[page]]\nid = \"a\"\ntitle = \"X\"\n[[page.entry]]\nkind = \"choice\"\nlabel = \"T\"\nsetting = \"mod.test.mod.title\"\nvalues_from = \"titles\"\n[[page.entry]]\nkind = \"choice\"\nlabel = \"R\"\nsetting = \"mod.test.mod.track\"\nvalues_from = {{ query = \"tracks_of\", of = \"{of}\" }}\n[[entry]]\nid = \"r\"\nparent = \"top\"\nkind = \"submenu\"\nlabel = \"A\"\ntarget = \"a\"\n"
+        )
+    };
+    let (tree, _) = build_with(&with_header(&page("mod.test.mod.title"))).unwrap();
+    let Entry::Choice { query, .. } = &tree.page("test.mod/a").unwrap().entries[1] else {
+        panic!("a choice row");
+    };
+    assert_eq!(query.as_ref().unwrap().of, "mod.test.mod.title");
+    assert_eq!(
+        mod_error(&page("mod.test.mod.nothing")),
+        (
+            "test.mod".to_string(),
+            "page \"a\" entry 1 values_from".to_string()
+        )
+    );
+}

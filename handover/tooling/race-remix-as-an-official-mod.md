@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-02
-summary: "ADR-0082/0083 accepted; lanes 1-5 done (mod pages, check-strings, fingerprint, mod settings); open: queries, launch_race, the move"
+summary: "ADR-0082/0083 accepted; lanes 1-5 and 6a done (pages, fingerprint, settings, query parse); open: 6b resolve of, launch_race, the move"
 size: XL (40)
 difficulty: hard (45)
 ---
@@ -364,7 +364,13 @@ hours, M half a day, L a day, XL more than a day (split it).
    `[mod_settings."<id>"]` and survives a restart; a turned-off mod's values are kept.
    Acceptance: a round-trip test in `crates/game/src/settings/tests.rs`. Crates:
    `oag-game`. Size: L (45). Difficulty: easy (50). Skill update as lane 3.
-6. **Queries.** Split. **6a:** the closed `Query` enum and the parser; the seven
+6. **Queries.** Split. **6a DONE** (`oag_ui::menu::Query`/`QueryRef`, the table form
+   parsed and schema'd; `Entry::Choice.query` carries a non-empty `of`; the remix_*
+   names stay their own supply keys, so the Remix page still gets its own lists; an
+   empty `of` maps to the booted title's fixed name; `custom_tracks` has no supplier
+   yet; `of` must name a choice row's setting in the same file; nothing resolves a
+   `QueryRef` yet). **6b is not trivial**: it is `crates/game` (menus.rs supply, remix.rs,
+   settings) and needs mod-settings first. Was: the closed `Query` enum and the parser; the seven
    fixed names become aliases with empty `of`. Acceptance: all existing menu
    tests pass unchanged. Crates: `oag-ui`. Size: M (45). Difficulty: medium (40).
    **6b:** `of` takes a setting key; the ordinary RACE `tracks` is `tracks_of("")`.

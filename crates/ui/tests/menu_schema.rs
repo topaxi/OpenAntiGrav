@@ -14,6 +14,15 @@ fn with(extra: &str) -> String {
     format!("{HEADER}{PAGE}{extra}")
 }
 
+/// A page with the row a query's `of` can name, and a second row asking `values_from`.
+fn menu_queries(values_from: &str) -> String {
+    format!(
+        "{HEADER}root = \"main\"\n[[page]]\nid = \"main\"\n\
+         [[page.entry]]\nkind = \"choice\"\nlabel = \"A\"\nsetting = \"pick.title\"\nvalues = [\"a\"]\n\
+         [[page.entry]]\nkind = \"choice\"\nlabel = \"B\"\nsetting = \"pick.track\"\nvalues_from = {values_from}\n"
+    )
+}
+
 fn cases() -> Vec<(&'static str, String, bool)> {
     vec![
         ("minimal", with(""), true),
@@ -28,6 +37,31 @@ fn cases() -> Vec<(&'static str, String, bool)> {
                  [[page.entry]]\nkind = \"back\"\nlabel = \"X\"\n"
             ),
             true,
+        ),
+        (
+            "a query table naming a setting a row writes",
+            menu_queries("{ query = \"tracks_of\", of = \"pick.title\" }"),
+            true,
+        ),
+        (
+            "a query table without an of",
+            menu_queries("{ query = \"tracks_of\" }"),
+            true,
+        ),
+        (
+            "a query table without a query",
+            menu_queries("{ of = \"pick.title\" }"),
+            false,
+        ),
+        (
+            "a query table with an unknown key",
+            menu_queries("{ query = \"tracks_of\", from = \"pick.title\" }"),
+            false,
+        ),
+        (
+            "a values_from that is a number",
+            menu_queries("3"),
+            false,
         ),
         ("a warning on one setting alone", with("").replace("label = \"X\"", "label = \"X\"\nwarn_when = [{ message = \"m\", all = [{ setting = \"a\", value = 1 }] }]"), false),
         ("no header", PAGE.to_owned(), false),
@@ -92,6 +126,17 @@ fn the_shipped_menu_is_valid_and_loads() {
 const MOD_HEADER: &str = "toml-schema = { location = \"https://oag.topaxi.com/mods/schemas/v1/mod-menu.tosd\", version = \"1.0.0\" }\n";
 const ROW: &str = "[[entry]]\nid = \"extra\"\nparent = \"top\"\nkind = \"action\"\nlabel = \"X\"\naction = \"quit\"\n";
 
+/// A page of the mod's own with the row `of` names, a row asking `values_from`, and the row
+/// that reaches the page.
+fn mod_query(values_from: &str) -> String {
+    format!(
+        "[[page]]\nid = \"p\"\ntitle = \"P\"\n\
+         [[page.entry]]\nkind = \"choice\"\nlabel = \"A\"\nsetting = \"mod.t.title\"\nvalues = [\"a\"]\n\
+         [[page.entry]]\nkind = \"choice\"\nlabel = \"B\"\nsetting = \"mod.t.track\"\nvalues_from = {values_from}\n\
+         [[entry]]\nid = \"extra\"\nparent = \"top\"\nkind = \"submenu\"\nlabel = \"X\"\ntarget = \"p\"\n"
+    )
+}
+
 /// A mod's `menu.toml`, built onto the shipped tree: the verdict of the schema and
 /// of the loader on the shape of the file.
 fn mod_cases() -> Vec<(&'static str, String, bool)> {
@@ -140,6 +185,20 @@ fn mod_cases() -> Vec<(&'static str, String, bool)> {
                  [[entry]]\nid = \"extra\"\nparent = \"top\"\nkind = \"submenu\"\nlabel = \"X\"\ntarget = \"p\"\n",
             ),
             true,
+        ),
+        (
+            "a page row asking a query for its list",
+            file(&mod_query(
+                "{ query = \"tracks_of\", of = \"mod.t.title\" }",
+            )),
+            true,
+        ),
+        (
+            "a page row asking a query with an unknown key",
+            file(&mod_query(
+                "{ query = \"tracks_of\", from = \"mod.t.title\" }",
+            )),
+            false,
         ),
         (
             "a page row with an unknown key",

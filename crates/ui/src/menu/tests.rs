@@ -17,6 +17,7 @@ mod jump;
 mod nav;
 mod navigation;
 mod pointer;
+mod queries;
 mod reset;
 mod reveal;
 mod rows;

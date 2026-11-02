@@ -34,7 +34,8 @@ use oag_core::buttons::button_from_name;
 
 use super::{
     Action, CAMPAIGN_PICKER_PAGE, CUSTOM_CAMPAIGN_ROW, Choice, Condition, Entry,
-    ORIGINAL_CAMPAIGN_ROW, Page, Pin, Restart, RowMeta, Value, ValueSource, Warning,
+    ORIGINAL_CAMPAIGN_ROW, Page, Pin, Query, QueryRef, Restart, RowMeta, Value, ValueSource,
+    Warning,
 };
 
 /// The schema kind a menu file declares in its `[toml-schema]` header.
@@ -156,6 +157,23 @@ mod raw {
         pub entries: Vec<Entry>,
     }
 
+    /// `values_from = "<fixed name>"` or `values_from = { query = "<name>", of = "<setting>" }`.
+    /// Kept permissive here: [`super::resolve`] names the bad part with the row's context.
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    pub enum ValuesFrom {
+        Name(String),
+        Query(QuerySpec),
+    }
+
+    #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
+    pub struct QuerySpec {
+        pub query: String,
+        #[serde(default)]
+        pub of: String,
+    }
+
     #[derive(Deserialize)]
     #[serde(deny_unknown_fields)]
     pub struct Entry {
@@ -170,7 +188,7 @@ mod raw {
         pub setting: Option<String>,
         #[serde(default)]
         pub values: Vec<String>,
-        pub values_from: Option<String>,
+        pub values_from: Option<ValuesFrom>,
         pub button: Option<String>,
         /// `{ setting = "...", value = ... }`: what makes this row inert. Only
         /// `choice` and `toggle` rows may carry it.
@@ -312,6 +330,12 @@ impl Definition {
         }
 
         let definition = Self { pages, root };
+        if let Some((page, row, of)) = unknown_query_of(&definition.pages) {
+            return Err(Error::BadEntry {
+                context: format!("page {:?} entry {row}", definition.pages[page].id),
+                problem: format!("values_from `of` {of:?} is the setting of no choice row"),
+            });
+        }
         definition.check_rows()?;
         if reachable {
             definition.check_reachable()?;
@@ -805,6 +829,27 @@ impl Definition {
 ///
 /// Shared between a row's own `label`/`string_id` and a page's `title`/
 /// `title_string_id` - one lookup, two callers, the same fallback rule.
+/// The first row (page index, row index, `of`) whose query argument names a setting no choice
+/// row of `pages` writes: such a key never holds a value.
+pub(super) fn unknown_query_of(pages: &[Page]) -> Option<(usize, usize, String)> {
+    for (at, page) in pages.iter().enumerate() {
+        for (row, entry) in page.entries.iter().enumerate() {
+            if let Entry::Choice {
+                query: Some(query), ..
+            } = entry
+                && !pages.iter().any(|p| {
+                    p.entries
+                        .iter()
+                        .any(|e| matches!(e, Entry::Choice { setting, .. } if *setting == query.of))
+                })
+            {
+                return Some((at, row, query.of.clone()));
+            }
+        }
+    }
+    None
+}
+
 fn resolved(strings: &StringTable, string_id: Option<&str>, literal: &str) -> String {
     string_id
         .and_then(|id| strings.get(id))
@@ -933,19 +978,59 @@ fn resolve(
         }
         "choice" => {
             let setting = entry.setting.as_ref().ok_or_else(|| missing("setting"))?;
-            let source = match entry.values_from.as_deref() {
-                Some(name) => Some(ValueSource::parse(name).ok_or_else(|| Error::BadEntry {
-                    context: context.to_string(),
-                    problem: format!("{name:?} is not a value source (languages, tracks)"),
-                })?),
-                None => None,
+            let (source, query) = match &entry.values_from {
+                Some(raw::ValuesFrom::Name(name)) => {
+                    let source = ValueSource::parse(name).ok_or_else(|| Error::BadEntry {
+                        context: context.to_string(),
+                        problem: format!(
+                            "values_from {name:?} is not a value source or a query table \
+                             (queries: {})",
+                            Query::ALL.map(Query::name).join(", ")
+                        ),
+                    })?;
+                    (Some(source), None)
+                }
+                Some(raw::ValuesFrom::Query(spec)) => {
+                    let bad = |problem: String| Error::BadEntry {
+                        context: context.to_string(),
+                        problem,
+                    };
+                    let query = Query::parse(&spec.query).ok_or_else(|| {
+                        bad(format!(
+                            "values_from query {:?} is not a query ({})",
+                            spec.query,
+                            Query::ALL.map(Query::name).join(", ")
+                        ))
+                    })?;
+                    if !spec.of.is_empty() && !query.takes_of() {
+                        return Err(bad(format!(
+                            "values_from query {:?} takes no `of`",
+                            spec.query
+                        )));
+                    }
+                    if spec.of.is_empty() {
+                        (query.booted_source(), None)
+                    } else {
+                        (
+                            None,
+                            Some(QueryRef {
+                                query,
+                                of: spec.of.clone(),
+                            }),
+                        )
+                    }
+                }
+                None => (None, None),
             };
+            let has_list = source.is_some()
+                || query.is_some()
+                || matches!(&entry.values_from, Some(raw::ValuesFrom::Query(_)));
             // A list has to come from exactly one place. Both would leave it
             // ambiguous which wins when the source turns out to be empty, and
             // neither is a row with nothing on it.
-            match (source, entry.values.is_empty()) {
-                (None, true) => return Err(missing("values, or a values_from")),
-                (Some(_), false) => {
+            match (has_list, entry.values.is_empty()) {
+                (false, true) => return Err(missing("values, or a values_from")),
+                (true, false) => {
                     return Err(Error::BadEntry {
                         context: context.to_string(),
                         problem: "values and values_from are alternatives, not both".to_string(),
@@ -958,6 +1043,7 @@ fn resolve(
                 setting: setting.clone(),
                 values: entry.values.iter().map(Choice::plain).collect(),
                 source,
+                query,
                 current: 0,
                 disabled_by,
                 pins,

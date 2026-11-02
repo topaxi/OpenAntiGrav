@@ -63,6 +63,18 @@ type = "array"
 itemtype = "types.condition"
 minlength = 2
 
+# `values_from = "<fixed name>"` or `{ query = "<name>", of = "<setting key>" }` (ADR-0082). The
+# query's name and that `of` names a choice row's setting stay the loader's.
+[types.values-from-query]
+type = "table"
+
+[types.values-from-query.query]
+type = "string"
+
+[types.values-from-query.of]
+type = "string"
+optional = true
+
 [types.entry]
 type = "table"
 
@@ -95,7 +107,7 @@ itemtype = "string"
 optional = true
 
 [types.entry.values_from]
-type = "string"
+oneof = ["string", "types.values-from-query"]
 optional = true
 
 [types.entry.button]

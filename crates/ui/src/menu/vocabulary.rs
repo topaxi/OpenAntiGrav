@@ -449,3 +449,92 @@ impl ValueSource {
         }
     }
 }
+
+/// The closed set of lists a `values_from` table may ask for, with an optional argument:
+/// `values_from = { query = "tracks_of", of = "<setting key>" }` (ADR-0082).
+///
+/// `of` names the setting whose current value is the argument; empty means the booted title.
+/// A mod cannot define a query, only choose one, so a typo is a load error and a mod cannot
+/// invent behaviour for a list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Query {
+    /// Every title this machine can open a source for.
+    TitlesAvailable,
+    /// The circuits of the title `of` names.
+    TracksOf,
+    /// The teams of the title `of` names.
+    TeamsOf,
+    /// The craft variants of the team `of` names.
+    VariantsOf,
+    /// The speed classes of every available title, merged.
+    SpeedClassesUnion,
+    /// The AI difficulties.
+    AiDifficulties,
+    /// The custom circuits the player holds.
+    CustomTracks,
+}
+
+impl Query {
+    /// Every query, in documentation order.
+    pub const ALL: [Self; 7] = [
+        Self::TitlesAvailable,
+        Self::TracksOf,
+        Self::TeamsOf,
+        Self::VariantsOf,
+        Self::SpeedClassesUnion,
+        Self::AiDifficulties,
+        Self::CustomTracks,
+    ];
+
+    /// The spelling used in the definition file.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::TitlesAvailable => "titles_available",
+            Self::TracksOf => "tracks_of",
+            Self::TeamsOf => "teams_of",
+            Self::VariantsOf => "variants_of",
+            Self::SpeedClassesUnion => "speed_classes_union",
+            Self::AiDifficulties => "ai_difficulties",
+            Self::CustomTracks => "custom_tracks",
+        }
+    }
+
+    /// Parses a definition file's spelling.
+    #[must_use]
+    pub fn parse(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|query| query.name() == name)
+    }
+
+    /// Whether `of` means anything to this query. The others answer the same list
+    /// wherever they are asked.
+    #[must_use]
+    pub fn takes_of(self) -> bool {
+        matches!(self, Self::TracksOf | Self::TeamsOf | Self::VariantsOf)
+    }
+
+    /// The supply key a query with an empty `of` answers through: the lists the booted title
+    /// already gets under their fixed names.
+    #[must_use]
+    pub fn booted_source(self) -> Option<ValueSource> {
+        match self {
+            Self::TitlesAvailable => Some(ValueSource::Titles),
+            Self::TracksOf => Some(ValueSource::Tracks),
+            Self::TeamsOf => Some(ValueSource::Teams),
+            Self::VariantsOf => Some(ValueSource::RaceVariant),
+            Self::SpeedClassesUnion => Some(ValueSource::RemixSpeedClasses),
+            Self::AiDifficulties => Some(ValueSource::RemixAiDifficulty),
+            Self::CustomTracks => None,
+        }
+    }
+}
+
+/// A `values_from` table that names a query with an argument the fixed names cannot say.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QueryRef {
+    /// Which list.
+    pub query: Query,
+    /// The setting key whose value is the argument; never empty here (an empty `of` is one of
+    /// the fixed names' lists).
+    pub of: String,
+}
