@@ -42,6 +42,9 @@ const READY_TICK: u64 = 91;
 const GO_TICK: u64 = 271;
 /// Ticks of audio to render: past `go`'s own 0.8 s.
 const RENDER_TICKS: u64 = 340;
+/// Omega's start is checked to three-quarters of a second past `go`, which is
+/// all its onsets and the window after `go` need.
+const OMEGA_RENDER_TICKS: u64 = GO_TICK + 45;
 /// Frames of audio per tick at the dump's own sample rate.
 const FRAMES_PER_TICK: usize = (oag_sound::DUMP_SAMPLE_RATE / 60) as usize;
 /// A run of speech ends after this many silent frames (a fifth of a second).
@@ -51,6 +54,11 @@ const SILENCE: i16 = 8;
 
 fn image() -> Option<PathBuf> {
     oag_testdata::image("data/images/pulse-psp-usa.chd")
+}
+
+/// Omega's extracted packages: the race source the start is loaded from.
+fn omega_source() -> Option<PathBuf> {
+    oag_testdata::exact("data/extracted/ps4")
 }
 
 /// One run of non-silent frames in the dump.
@@ -85,16 +93,19 @@ fn runs(pcm: &[u8]) -> Vec<Run> {
     out
 }
 
-/// Runs a race from its first tick and returns `(tick, cue)` for every
-/// `Ready`/`Go` raised, plus the speech-only WAV's runs.
-/// What one rendered start raised, and the runs of speech it produced.
-type Rendered = (Vec<(u64, Cue)>, Vec<Run>);
+/// One rendered start: the `(tick, cue)` pairs raised for `Ready` and `Go`,
+/// the runs of speech in the speech-only dump, and the dump's PCM itself.
+struct Start {
+    raised: Vec<(u64, Cue)>,
+    runs: Vec<Run>,
+    pcm: Vec<u8>,
+}
 
-fn countdown(mode: oag_race::Mode, name: &str) -> Option<Rendered> {
-    let image = image()?;
+/// Renders `ticks` of a race's start from `source`, speech only.
+fn countdown(source: &Path, class: &str, mode: oag_race::Mode, name: &str, ticks: u64) -> Start {
     let loaded = race::load(&race::Options {
-        source: image.display().to_string(),
-        class: "VENOM".to_string(),
+        source: source.display().to_string(),
+        class: class.to_string(),
         mode,
         ..race::Options::default()
     })
@@ -124,7 +135,7 @@ fn countdown(mode: oag_race::Mode, name: &str) -> Option<Rendered> {
     );
 
     let mut raised = Vec::new();
-    for _ in 0..RENDER_TICKS {
+    for _ in 0..ticks {
         // `Race::tick` raises the cue for the tick it steps; `world.tick` has
         // already moved on by the time it returns.
         race.tick(&PlayerInputs::none());
@@ -138,8 +149,8 @@ fn countdown(mode: oag_race::Mode, name: &str) -> Option<Rendered> {
         audio.tick();
     }
     audio.finish().expect("writing the dump");
-    let file = std::fs::read(&wav).expect("the dump");
-    let found = runs(&file[44..]);
+    let pcm = std::fs::read(&wav).expect("the dump")[44..].to_vec();
+    let found = runs(&pcm);
     println!("{name}: raised {raised:?}");
     for run in &found {
         println!(
@@ -150,16 +161,25 @@ fn countdown(mode: oag_race::Mode, name: &str) -> Option<Rendered> {
             (run.end - run.start) as f32 / oag_sound::DUMP_SAMPLE_RATE as f32
         );
     }
-    Some((raised, found))
+    Start {
+        raised,
+        runs: found,
+        pcm,
+    }
 }
 
 /// The cues, the ticks and the onsets, for one mode. `ready_lead` is how many
 /// ticks after the cue's own start its first word is audible - what the mode's
 /// bank authors, not something this port adds.
 fn check(mode: oag_race::Mode, name: &str, ready_lead: std::ops::RangeInclusive<usize>) {
-    let Some((raised, found)) = countdown(mode, name) else {
+    let Some(image) = image() else {
         return;
     };
+    let Start {
+        raised,
+        runs: found,
+        ..
+    } = countdown(&image, "VENOM", mode, name, RENDER_TICKS);
     assert_eq!(
         raised,
         vec![(READY_TICK, Cue::Ready), (GO_TICK, Cue::Go)],
@@ -214,4 +234,63 @@ fn eliminator_counts_in_from_speech_elim_bnk() {
 #[ignore = "needs a disc image in data/images/"]
 fn zone_counts_in_from_speech_zone_bnk() {
     check(oag_race::Mode::Zone, "zone", 0..=1);
+}
+
+/// Below this RMS, one of Omega's authored onsets is not sounding.
+const LOUD_RMS: f64 = 100.0;
+
+/// Root-mean-square level of `frames` stereo frames from `from`, on the dump's
+/// 16-bit samples.
+fn rms(pcm: &[u8], from: usize, frames: usize) -> f64 {
+    let end = (from + frames).min(pcm.len() / 4);
+    let mut sum = 0.0;
+    for frame in from..end {
+        for channel in 0..2 {
+            let at = frame * 4 + channel * 2;
+            let sample = f64::from(i16::from_le_bytes([pcm[at], pcm[at + 1]]));
+            sum += sample * sample;
+        }
+    }
+    (sum / (2 * (end - from).max(1)) as f64).sqrt()
+}
+
+/// Omega's start, rendered speech only: its `Ready` and `Go` cues are raised on
+/// the same ticks as Pulse's, and the Wwise events they post are the voices.
+/// The windows are 0.25 s long and start on each authored onset.
+fn check_omega(mode: oag_race::Mode, name: &str) {
+    let Some(source) = omega_source() else {
+        return;
+    };
+    let start = countdown(&source, "VENOM", mode, name, OMEGA_RENDER_TICKS);
+    assert_eq!(
+        start.raised,
+        vec![(READY_TICK, Cue::Ready), (GO_TICK, Cue::Go)],
+        "{name}: the start must raise ready then go and nothing else"
+    );
+    let rate = oag_sound::DUMP_SAMPLE_RATE as usize;
+    let window = rate / 4;
+    let ready = READY_TICK as usize * FRAMES_PER_TICK;
+    let go = GO_TICK as usize * FRAMES_PER_TICK;
+    let before = rms(&start.pcm, 0, ready);
+    assert!(
+        before < f64::from(SILENCE),
+        "{name}: the start is audible before ready: rms {before:.1}"
+    );
+    let onsets = [400, 1300, 2150]
+        .map(|ms| (format!("ready +{ms} ms"), ready + ms * rate / 1000))
+        .into_iter()
+        .chain([("go".to_string(), go)]);
+    for (what, at) in onsets {
+        let level = rms(&start.pcm, at, window);
+        assert!(
+            level > LOUD_RMS,
+            "{name}: silent at {what} (frame {at}): rms {level:.1}, floor {LOUD_RMS}"
+        );
+    }
+}
+
+#[test]
+#[ignore = "needs the decrypted Omega packages in data/extracted/ps4/"]
+fn omega_time_trial_counts_in_from_wwise_events() {
+    check_omega(oag_race::Mode::TimeTrial, "omega-time-trial");
 }
