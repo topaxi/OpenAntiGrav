@@ -83,7 +83,11 @@ fn run(strength: f32) -> Option<[(&'static str, f32); 3]> {
 }
 
 #[test]
+#[ignore = "scratch: prints the line profile; set OAG_SWEEP"]
 fn line_profile_is_reported() {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
     let Some((device, queue)) = gpu() else {
         return;
     };
