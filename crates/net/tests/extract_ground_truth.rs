@@ -35,11 +35,15 @@ fn work_dir(name: &str) -> PathBuf {
     out
 }
 
-/// The state hash after each tick of `params` flown from `source`: `ticks` of them, or, when
+/// The state hash after each tick of the loaded `race`: `ticks` of them, or, when
 /// `to_the_finish`, until every person has finished (their craft flown by the autopilot, which
 /// stands in for the clients) and a second more, at most `ticks`.
-fn hashes(source: &str, params: &RaceParams, ticks: usize, to_the_finish: bool) -> Vec<u64> {
-    let (mut race, _) = oag_net::race::load(params, source).expect("the race loads");
+fn hashes(
+    mut race: Box<oag_raceplay::Race>,
+    params: &RaceParams,
+    ticks: usize,
+    to_the_finish: bool,
+) -> Vec<u64> {
     if to_the_finish {
         for slot in 0..usize::from(params.people) {
             race.sim.world.controllers[slot] = oag_gameplay::Controller::Local;
@@ -126,7 +130,7 @@ fn races(offer: &Offer) -> Vec<(Planned, usize, bool)> {
 fn check(source: &Path, name: &str, which: usize) {
     let out = work_dir(name);
     let source = source.display().to_string();
-    let report = oag_net::extract::extract(
+    let (report, mut pairs) = oag_net::extract::extract_keeping(
         &source,
         &out,
         "ground truth",
@@ -134,27 +138,31 @@ fn check(source: &Path, name: &str, which: usize) {
             let (planned, _, _) = races(offer).swap_remove(which);
             vec![planned]
         },
+        true,
         |_| {},
     )
     .expect("extracts");
     assert!(report.gaps.is_empty(), "{name}: {:#?}", report.gaps);
     assert_eq!(report.loaded, 1, "{name}: {:#?}", report.refused);
     let offer = oag_net::extract::offer(&source).expect("offers");
-    let extraction = out.display().to_string();
     let (planned, ticks, to_the_finish) = races(&offer).swap_remove(which);
     let params = planned.params;
     // One after the other, each on a thread with room for the race: a title's loaded race
     // is gigabytes resident, and six titles run at once.
-    let fly = |at: &str| {
-        let (at, params) = (at.to_string(), params.clone());
+    // The races `extract` loaded to prove the extraction are the ones flown: a race is loaded
+    // once from each side, not once to check and again to fly.
+    assert_eq!(pairs.len(), 1, "{name}: the race loaded from both sides");
+    let pair = pairs.remove(0);
+    let fly = |race: Box<oag_raceplay::Race>| {
+        let params = params.clone();
         std::thread::Builder::new()
             .stack_size(64 << 20)
-            .spawn(move || hashes(&at, &params, ticks, to_the_finish))
+            .spawn(move || hashes(race, &params, ticks, to_the_finish))
             .expect("spawns")
             .join()
             .expect("the race flies")
     };
-    let (from_source, from_extraction) = (fly(&source), fly(&extraction));
+    let (from_source, from_extraction) = (fly(pair.source), fly(pair.extraction));
     let missed = oag_assets::record::take_misses();
     assert!(
         missed.is_empty(),
