@@ -361,6 +361,12 @@ pub struct Pair {
     pub extraction: Box<Race>,
 }
 
+impl std::fmt::Debug for Pair {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Pair").finish_non_exhaustive()
+    }
+}
+
 /// As [`extract`], and with `keep` also returns, for each planned race that loaded from both,
 /// the two loaded races. A test that flies both loads each once instead of twice; both stay
 /// resident until the caller drops them. The source race is loaded while the recorder runs and
