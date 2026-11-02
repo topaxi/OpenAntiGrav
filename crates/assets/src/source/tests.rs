@@ -229,7 +229,10 @@ const TITLE: &Title = &Title {
     // No prompt glyph of this title's has been read; the disc's own draw unchanged.
     prompts: &oag_title::prompts::Prompts::UNREAD,
     effects_volume_law: oag_title::pre_race::Sourced::chosen(
-        oag_title::group_volume::EffectsVolumeLaw::Linear,
+        oag_title::group_volume::GroupVolumeLaw::Linear,
+    ),
+    speech_volume_law: oag_title::pre_race::Sourced::chosen(
+        oag_title::group_volume::GroupVolumeLaw::Linear,
     ),
     plugin_definition: r"Data\Plugins\PI000\Definition.xml",
     track_plugin_definition: None,

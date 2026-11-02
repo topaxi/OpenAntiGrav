@@ -318,6 +318,44 @@ measured square is on their product). Ours: the title's `effects_volume_law` (`S
 the square, as the original does. Whether the slider's own steady-state law is the square is read off
 the helper, not watched below 100.
 
+**The Speech group (2) is squared too (confidence 90; lane `pulse-speech-squared`, 2026-11-02).**
+Pulse's options menu has two rows, Music Volume and SFX Volume, so the original has no Speech
+slider; `SPEECH` (group 2) is one of the nine groups `Audio_UpdateGroupVolumes` writes, so its
+group volume is the SFX fraction. The knob for the measurement is therefore the SFX field: the
+settings-apply writes the slider's fraction to `mgr+0x90` and `mgr+0xd0`
+(`audio-levels.md`, "The two options-menu sliders"), and each run wrote `mgr+0xd0` at the first
+`RaceMode_UpdateIntro` call (the slider's own target field, not the options UI, which was not
+driven). Same probe as above (PPSSPP v1.20.4, `03_Track` via RESTART RACE, breakpoint on
+`Audio_UpdateGroupVolumes`, every call to tick 1,700), reading the group table, the second table
+(`0x08ac3990`) and each group-2 voice's SAS commit volume. The countdown's `SPEECH` 11 `ready`
+(frame 1,652 to 1,700) holds two voices steady for the 48 calls after it starts (stereo pair,
+left plus right 3,722 at full):
+
+| SFX fraction | group 2 (`/1024`) | `ready` L+R | ratio to full | fraction squared | linear |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 1.0 | 1024 | 3722 | 1.0000 | 1.00 | 1.0 |
+| 0.5 (2 runs) | 512 | 930 | 0.2499 | 0.25 | 0.5 |
+| 0.3 (2 runs) | 307 | 334 | 0.0897 | 0.09 | 0.3 |
+
+Largest deviation from the square 0.0003 (0.2499 and 0.0897 against 0.25 and 0.09); from linear 0.25 and 0.21. The second table's entry 2
+reads `65536` at every setting (constant, so the law is the first table's square alone). Four runs
+at the two lowered settings plus the full baseline; the nine faded groups all read `fraction * 1024`.
+Falsifiers written before the first run: a ratio near 0.5 at 0.5, group 2 not following the
+fraction, or an unsteady `ready` commit would each have made the claim false; none occurred.
+This also closes the effects page's open item: the slider's own steady-state law is the square
+for group 2, read off the same helper as the fade (group 0 and 3 voices move with range, so their
+ratio is not a clean law; the group volume itself read `512` and `307`).
+
+**The pre-race voice-over is not in this group.** `3_Track.at3` plays through the music player
+(above), outside the fade and outside `FUN_089957c0`, and ours plays it on `Bus::Music`; squaring
+the Speech bus never touches it. **Ours**: `Title::speech_volume_law` (Pulse `Squared` measured,
+Pure `Squared` inherited from Pulse, HD/2048/Omega `Linear` with their authored mix) set per race by
+`hold_race_song` and released to linear on leaving a race, like the effects law. **Differs, not
+wired**: the original's Speech has no slider of its own and follows the SFX slider and the flyby
+fade; ours squares its own Speech slider and does not fade (the announcer first speaks after the
+fade is full). HD, 2048 and Omega: `checked, differs` (an authored mix owns the speech bus; this
+helper is Pulse's), not measured on those titles.
+
 **What starts and when (`03_Track`, 4 cue runs and 3 envelope runs, ticks).**
 
 | Tick | Source | What | Audible? |

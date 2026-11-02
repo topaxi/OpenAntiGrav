@@ -74,8 +74,9 @@ node, played for `AnimEnd` seconds or until a held Cross, with the world held at
   the original's `~AMB` loop that sounds from its first call (which cue is unread, not an emitter in
   range) and the `~FLYBY_DIST_*` one-shots (no trigger recovered). Open from this: the fade's
   ceiling at a slider below 100 (the original's target is the slider; ours ramps slider times 0-1),
-  Speech presumably squared too (not wired), menus outside a race stay linear, Pure inherits the
-  square unmeasured.
+  ~~Speech presumably squared too~~ measured and wired (`Title::speech_volume_law`; the original's
+  Speech group follows the SFX slider and the fade, ours the Speech slider, see Next Steps), menus
+  outside a race stay linear, Pure inherits the square.
   Open: no WAV (SDL build has no record action), which cue the one ambience voice is, a circuit
   whose camera opens near the grid, other modes. The
   wash frames (`h0103` to `h0125`) fade faster than the executable's 0.7 s, unresolved whether a
@@ -98,7 +99,10 @@ node, played for `AnimEnd` seconds or until a held Cross, with the world held at
 
 1. ~~The SFX fade-in at the counter's `0x28`~~ landed; ~~what is audible~~ measured and ~~wired~~
    2026-11-02. Next: identify the tick-0 `~AMB` loop's cue, measure the fade's ceiling at a slider
-   below 100 and Speech's law (a capture lane).
+   below 100 (~~and Speech's law~~ measured). Speech in the original is group 2 and follows the
+   SFX slider and the flyby fade, not a slider of its own (Pulse's options have two); ours runs
+   the squared law on its own Speech slider and no fade. Wiring the announcer to the SFX fraction
+   is open.
 2. ~~Pulse's settle~~ closed (see Open). Optional: a view-side rise of the drawn pose over the first ~50
    flyby ticks, if the flyby camera shows the craft then (chosen, not measured).
 3. Re-measure one of the short circuits (`01_Track`) through to its end, and a fresh-load

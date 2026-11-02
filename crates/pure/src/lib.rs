@@ -68,7 +68,11 @@ pub const TITLE: &Title = &Title {
     prompts: &oag_title::prompts::Prompts::UNREAD,
     // Pure's effects law is unread; Pulse's commit helper squares the group volume.
     effects_volume_law: oag_title::pre_race::Sourced::inherited(
-        oag_title::group_volume::EffectsVolumeLaw::Squared,
+        oag_title::group_volume::GroupVolumeLaw::Squared,
+        "Pulse",
+    ),
+    speech_volume_law: oag_title::pre_race::Sourced::inherited(
+        oag_title::group_volume::GroupVolumeLaw::Squared,
         "Pulse",
     ),
     plugin_definition: names::GAME_PLUGIN_DEFINITION,

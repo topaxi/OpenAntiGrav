@@ -133,7 +133,7 @@ fn the_flyby_effects_fade_is_silent_then_a_002_ramp_to_the_slider() {
 /// the slider times the fade, through the flyby and after it. Fails if the bus stays linear.
 #[test]
 fn the_squared_law_puts_the_square_of_slider_times_fade_on_the_bus() {
-    use oag_title::group_volume::EffectsVolumeLaw;
+    use oag_title::group_volume::GroupVolumeLaw;
     let mut audio = Audio::open(
         &crate::settings::Settings::default(),
         None,
@@ -141,7 +141,7 @@ fn the_squared_law_puts_the_square_of_slider_times_fade_on_the_bus() {
         oag_audio::MIN_BUFFER,
         false,
     );
-    audio.set_effects_volume_law(EffectsVolumeLaw::Squared);
+    audio.set_effects_volume_law(GroupVolumeLaw::Squared);
     for tick in 0..=80u32 {
         if tick == 0 {
             audio.silence_sfx();
@@ -170,4 +170,34 @@ fn the_squared_law_puts_the_square_of_slider_times_fade_on_the_bus() {
         0.5,
         "leaving the race returns the menus to linear"
     );
+}
+
+/// Pulse's Speech group goes through the same squaring helper as the effects group, so in a race
+/// the speech bus reads the square of the Speech slider and in the menus the slider itself. Fails
+/// if the speech bus stays linear in a race, or stays squared after leaving one.
+#[test]
+fn the_squared_speech_law_puts_the_square_of_the_slider_on_the_speech_bus() {
+    use oag_title::group_volume::GroupVolumeLaw;
+    fn speech_bus(audio: &Audio) -> f32 {
+        audio
+            .output()
+            .with_mixer(|mixer| mixer.bus_gain(Bus::Speech))
+    }
+    let settings = crate::settings::Settings {
+        speech_volume: Volume(50),
+        ..Default::default()
+    };
+    let mut audio = Audio::open(&settings, None, None, oag_audio::MIN_BUFFER, false);
+    assert_eq!(speech_bus(&audio), 0.5, "the menus are linear");
+    audio.set_speech_volume_law(GroupVolumeLaw::Squared);
+    assert_eq!(speech_bus(&audio), 0.25, "a Pulse race squares it");
+    audio.apply(&settings);
+    assert_eq!(speech_bus(&audio), 0.25, "a settings apply keeps the law");
+    audio.apply(&crate::settings::Settings {
+        speech_volume: Volume(30),
+        ..Default::default()
+    });
+    assert!((speech_bus(&audio) - 0.09).abs() < 1e-6);
+    audio.stop_race_sfx();
+    assert_eq!(speech_bus(&audio), 0.3, "leaving the race restores linear");
 }

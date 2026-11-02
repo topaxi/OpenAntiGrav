@@ -148,9 +148,13 @@ pub struct Title {
     /// with a per-pad cycle, every other title keeps it.
     pub weapon_pad_glow: &'static weapon_pad::WeaponPadGlow,
     /// The curve from the SFX slider and the flyby fade to the effects bus. See
-    /// [`group_volume::EffectsVolumeLaw`]. A title whose mix is authored (HD and its lineage) keeps
+    /// [`group_volume::GroupVolumeLaw`]. A title whose mix is authored (HD and its lineage) keeps
     /// the bus to that mix and reads `Linear`.
-    pub effects_volume_law: pre_race::Sourced<group_volume::EffectsVolumeLaw>,
+    pub effects_volume_law: pre_race::Sourced<group_volume::GroupVolumeLaw>,
+    /// The curve from the Speech slider to the speech bus (the announcer). See
+    /// [`group_volume::GroupVolumeLaw`]. Same rule as [`Self::effects_volume_law`]: an authored mix
+    /// reads `Linear`. The flyby's voice-over is on the music player and never takes this.
+    pub speech_volume_law: pre_race::Sourced<group_volume::GroupVolumeLaw>,
     /// Which codepoints in this title's strings are controller-button glyphs,
     /// and which control each depicts. See [`prompts::Prompts`].
     pub prompts: &'static prompts::Prompts,

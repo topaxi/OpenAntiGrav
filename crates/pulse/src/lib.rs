@@ -74,7 +74,12 @@ pub const TITLE: &Title = &Title {
     // `FUN_089957c0` multiplies a voice by its group volume squared; the flyby's fade reads `fade ** 2`
     // (`docs/gameplay/race-intro.md`, "What the original plays under the flyby").
     effects_volume_law: oag_title::pre_race::Sourced::measured(
-        oag_title::group_volume::EffectsVolumeLaw::Squared,
+        oag_title::group_volume::GroupVolumeLaw::Squared,
+    ),
+    // The SPEECH bank's voices are group 2, committed by the same helper
+    // (`docs/gameplay/race-intro.md`, "The Speech group").
+    speech_volume_law: oag_title::pre_race::Sourced::measured(
+        oag_title::group_volume::GroupVolumeLaw::Squared,
     ),
     plugin_definition: names::GAME_PLUGIN_DEFINITION,
     track_plugin_definition: None,
