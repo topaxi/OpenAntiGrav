@@ -4,7 +4,7 @@ titles: [omega]
 size: M (55)
 difficulty: medium (50)
 updated: 2026-11-02
-summary: "Omega start plays its Wwise events; other race sfx need random/switch container rules read first (the missile launch reaches a ranseq)"
+summary: "Omega start plays Wwise events; random/switch containers are read and the missile launch loads; the cue table and the player _PC event are next"
 ---
 
 # Omega race sound effects through Wwise
@@ -41,10 +41,12 @@ cue still goes through the `SBlk` loader and is silent. The start is audible: `c
 
 ## Open (read before wiring a cue beyond the countdown)
 
-- **Container rules.** Random/sequence, switch and layer containers decide which of a target's children sound:
-  the countdown reaches 13 media candidates (VO "three", "two", "one", UI layers, ship layers, the legacy
-  `Weapons_NGP__321_stereo` and `beat1`) and the library lists all of them. Playing all at once is wrong for a
-  random container. `oag_formats::wwise::hirc` reads no playlist or switch key for sound containers.
+- ~~**Container rules.**~~ Done: `oag_formats::wwise::container` reads random/sequence and switch
+  containers (wwise.md, "Sound containers"); `wwise_start::load` draws one child of each random container
+  from a passed-in `Rng`. Still open: **switch containers are refused** at play (their group value is the
+  game's), one path-positioned `Ship_NGP` ranseq is refused by name, and the pick is made at load, not per
+  post (`Banks::load_wwise_event` picks once; per-post alternatives would be one `Timeline` per draw, which
+  `Banks::voices` already draws among with its never-repeat rule).
 - **Action kinds** `0x1e03` (two in the countdown, on sounds, delays 2,000 and 500), `0x0102` (on an
   actor-mixer), `0x1204` (`SetState`, in `Go_NGP`): bodies unread.
 - **Positioning.** The countdown plays on the speech manager's group, unpositioned in the code read. Each cue
@@ -59,10 +61,11 @@ cue still goes through the `SBlk` loader and is silent. The start is audible: `c
 ## Next Steps
 
 1. ~~Countdown~~ done (`the_start_plays_its_wwise_events_as_timelines`).
-2. Container rules for random/sequence and switch (the missile launch's `WPN_MISSILE_Fire` reaches
-   random/sequence container 275399150, which `wwise_start::load` refuses) in `oag_formats::wwise::hirc` (half a day to a day), then
-   the missile launch: a per-cue table from `oag_gameplay::cue::Cue` to Omega's cue strings and slots (the
-   weapon cues' strings are in the executable beside each weapon's launcher, e.g. `NGP_MissileFire`), loaded
-   through the same `wwise_start::load` from one `Library` over the race's banks (cross-bank media and relays).
+2. ~~Container rules~~ done; the missile launch loads (`omega_countdown_ground_truth::the_missile_launch_plays_one_child_of_each_random_layer`):
+   a layer container of five layers, four random containers and a sound, so five media per post, not one.
+   Next: the per-cue table from `oag_gameplay::cue::Cue` to Omega's cue strings and slots (the weapon cues'
+   strings are in the executable beside each weapon's launcher, e.g. `NGP_MissileFire`) calling
+   `Banks::load_wwise_event`, and the player's `NGP_MissileFire_PC` event, which is not a twin: its own sound,
+   a relay after 100 ms and a `SetState` (`0x1204`). Per-post draws (above) before it is audible as random.
 3. Live check of the countdown post (an hour): run the wipeout_pc port past GO and look for no
    `Failed Posting Audio Event` line (patch `0x017caf30` prints one on an unknown event).

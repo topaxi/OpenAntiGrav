@@ -129,3 +129,60 @@ fn the_start_plays_its_wwise_events_as_timelines() {
         "the three ship layers end at the Stop plus its fade: {ends:?}"
     );
 }
+
+/// The missile launch is the event `NGP_MissileFire__Weapons_NGP`, a relay to
+/// `WPN_MISSILE_Fire`, which plays one layer container: four random containers
+/// and a sound. A post sounds five media, one per layer, and the seed decides
+/// which child each random container gives. The player's `_PC` event is not a
+/// twin: it plays its own sound, relays to a second event 100 ms later and sets
+/// a state, so it is not loaded here.
+#[test]
+#[ignore = "needs the decrypted Omega packages in data/extracted/ps4/"]
+fn the_missile_launch_plays_one_child_of_each_random_layer() {
+    use oag_gameplay::cue::Cue;
+    let Some(source) = oag_testdata::exact("data/extracted/ps4") else {
+        return;
+    };
+    let mut archives = oag_omega::open(&source.display().to_string()).expect("the Omega source");
+    let entry = oag_omega::TITLE
+        .race
+        .countdown_voice
+        .and_then(|v| v.event)
+        .expect("Omega's start event")
+        .bank;
+    let mut media_of = |seed: u64, event: &str| {
+        let mut banks = oag_sound::sfx::Banks::default();
+        let mut rng = oag_core::Rng::new(seed);
+        assert!(
+            banks.load_wwise_event(&mut archives, entry, Cue::Rocket, event, &mut rng),
+            "{event}: {:?}",
+            banks.report
+        );
+        assert!(
+            banks.report[0].contains("5 voice(s)") && banks.report[0].contains("4 container(s)"),
+            "{event}: {:?}",
+            banks.report
+        );
+        let mut draw = oag_core::Rng::new(1);
+        let voices = banks.voices(Cue::Rocket, &mut draw).expect("loaded");
+        assert_eq!(voices.len(), 5, "{event}: one media per layer");
+        assert!(
+            voices.iter().all(|v| (0.0..1.0).contains(&v.delay)),
+            "{event}: the layers' initial delays are under a second"
+        );
+        let mut frames: Vec<usize> = voices.iter().map(|v| v.sound.frames()).collect();
+        frames.sort_unstable();
+        frames
+    };
+    let mut picks = std::collections::BTreeSet::new();
+    for seed in 0..32 {
+        picks.insert(media_of(seed, "NGP_MissileFire__Weapons_NGP"));
+    }
+    assert!(picks.len() > 1, "32 seeds all picked the same media");
+    let a = media_of(7, "NGP_MissileFire__Weapons_NGP");
+    assert_eq!(
+        a,
+        media_of(7, "NGP_MissileFire__Weapons_NGP"),
+        "a seed is repeatable"
+    );
+}
