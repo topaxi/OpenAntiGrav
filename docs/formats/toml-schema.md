@@ -49,11 +49,19 @@ compatible addition goes into the same `v1` schema, a breaking change gets `v2/`
 | `music-state` | `$XDG_CONFIG_HOME/oag/music.toml` ([race music resume](../architecture/race-music-resume.md)) | `oag_game::music_state` | [`music-state.tosd`](../../schemas/v1/music-state.tosd) |
 | `track` | `<name>.track.toml` ([track file](track-file.md)) | `oag_trackfile::read` | [`track.tosd`](../../schemas/v1/track.tosd) |
 
+| `settings` | `$XDG_CONFIG_HOME/oag/settings.toml` ([persistence](../architecture/persistence.md)) | `oag_game::settings` | [`settings.tosd`](../../schemas/v1/settings.tosd) |
 | `mod` | `oag-mod.toml` at the root of a mod ([mods](../tools/mods.md)) | `oag_mod` manifest reader | [`mod.tosd`](../../schemas/v1/mod.tosd) |
 | `mod-menu` | a mod's `menu.toml` ([mods](../tools/mods.md)) | `oag_ui::menu` mod rows | [`mod-menu.tosd`](../../schemas/v1/mod-menu.tosd) |
 | `campaign` | a mod's `campaigns/<id>.toml` ([custom campaign](custom-campaign.md)) | `oag_mod::campaign`, compiled by `oag_game::campaign::custom` | [`campaign.tosd`](../../schemas/v1/campaign.tosd) |
 
 Craft files get theirs when that format lands.
+
+`settings.toml` writes the header as the one-line form, after its comment block, and everything
+in the schema is optional because the loader fills a missing key from its default. The schema
+is open on token vocabularies (the loader falls back and warns) and on the keys of the three
+maps (`render_profiles`, `audio.music_switches`, `mod_settings."<mod id>"`); it refuses a key the
+game does not know. A header naming another kind or major is a warning, not a refusal. The
+`schema` test `settings_schema` writes a fresh file and a fully populated one and validates both.
 
 ## Checking a file by hand
 

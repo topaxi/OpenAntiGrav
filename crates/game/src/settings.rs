@@ -646,6 +646,46 @@ const HEADER: &str = "\
 
 ";
 
+/// The schema kind this file is written as (`schemas/v1/settings.tosd`).
+pub const SCHEMA_KIND: &str = "settings";
+
+/// The file as it is written: [`HEADER`], the schema declaration, then the settings.
+///
+/// The declaration is the one-line form, which parses to the `[toml-schema]` table and,
+/// being a top-level key, is not swallowed by the tables that follow.
+///
+/// # Errors
+///
+/// If the settings do not serialise.
+pub fn render(settings: &Settings) -> Result<String> {
+    Ok(format!(
+        "{HEADER}{}\n\n{}",
+        oag_schema::inline(SCHEMA_KIND, 1),
+        toml::to_string_pretty(settings).context("serialising settings")?
+    ))
+}
+
+/// Warns when a file's `[toml-schema]` table names another kind or major. A file without one
+/// is an older write and loads; the next rewrite adds it.
+fn check_header(path: &std::path::Path, table: &toml::Table) {
+    let Some(value) = table.get(oag_schema::TABLE) else {
+        return;
+    };
+    let checked = value
+        .clone()
+        .try_into::<oag_schema::Header>()
+        .map_err(|e| e.to_string())
+        .and_then(|header| {
+            oag_schema::check(Some(&header), SCHEMA_KIND, 1).map_err(|e| e.to_string())
+        });
+    if let Err(e) = checked {
+        warn!(
+            "{}: {e}; reading it as a settings file anyway",
+            path.display()
+        );
+    }
+}
+
 /// The keys that used to live in `[graphics]` and now live in `[display]`.
 ///
 /// Kept as a list rather than folded into [`migrate`] so the one thing a reader
@@ -830,6 +870,7 @@ fn load_from(path: &std::path::Path) -> Result<Settings> {
                 }
             };
 
+            check_header(path, &table);
             migrate(&mut table);
             migrate_render_profiles(&mut table);
             // After it, not before - see `migrate_reconstruction_keys`.
@@ -862,10 +903,7 @@ fn load_from(path: &std::path::Path) -> Result<Settings> {
     };
     ensure_known_titles(&mut settings);
 
-    let canonical = format!(
-        "{HEADER}{}",
-        toml::to_string_pretty(&settings).context("serialising settings")?
-    );
+    let canonical = render(&settings)?;
     if !keep_file && on_disk.as_deref() != Some(canonical.as_str()) {
         let written = path
             .parent()
@@ -1141,10 +1179,7 @@ pub fn save(settings: &Settings) -> Result<()> {
     let Some(path) = path() else {
         return Ok(());
     };
-    let text = format!(
-        "{HEADER}{}",
-        toml::to_string_pretty(settings).context("serialising settings")?
-    );
+    let text = render(settings)?;
     if let Some(parent) = path.parent() {
         crate::profile::create_dir_all(parent)
             .with_context(|| format!("creating {}", parent.display()))?;

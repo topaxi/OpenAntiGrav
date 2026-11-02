@@ -13,6 +13,7 @@
 //! letter falls in, and `every_test_file_is_listed` below fails until it is.
 
 mod selection_screens_ground_truth;
+mod settings_schema;
 mod sfx_ground_truth;
 mod sfx_weapon_ground_truth;
 mod shake_blur_ground_truth;

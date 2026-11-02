@@ -1,0 +1,17 @@
+# A hand-written settings file: a subset of the keys, as the loader accepts, with the
+# declaration the game writes. `schemas/v1/settings.tosd`.
+toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/settings.tosd", version = "1.0.0" }
+language = "English"
+
+[display]
+window_mode = "borderless"
+brightness = 110
+
+[audio]
+music_volume = 80
+
+[audio.music_switches]
+"folder:/music" = true
+
+[mod_settings."oag.example"]
+difficulty = "hard"
