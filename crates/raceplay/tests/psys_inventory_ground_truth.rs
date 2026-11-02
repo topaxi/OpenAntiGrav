@@ -145,18 +145,6 @@ const PS2_EXTRA_NO_TRIGGER: &[(&str, &str)] = &[
         "WO_TRACK_ROCK_DEBRIS",
         "scenery struck by something; no trigger read.",
     ),
-    (
-        "WO_SHIP_EXPLOSION_DEBRIS",
-        "the PS2 port's craft explosion; its destruction path is unread. The PSP's is `Ship_SpawnExplosionSmall`/`Big`.",
-    ),
-    (
-        "WO_SHIP_EXPLO_SMOKE",
-        "the PS2 port's craft explosion; its destruction path is unread. The PSP's is `Ship_SpawnExplosionSmall`/`Big`.",
-    ),
-    (
-        "WO_SHIP_FXNODE_BIGEXPLO",
-        "the PS2 port's craft explosion; its destruction path is unread. The PSP's is `Ship_SpawnExplosionSmall`/`Big`.",
-    ),
 ];
 
 /// And on the PS2 disc's main archive.
@@ -636,7 +624,7 @@ mod hd {
 mod v2048 {
     use oag_raceplay::RACE_EFFECTS;
 
-    const ABSENT: [&str; 8] = [
+    const ABSENT: [&str; 11] = [
         "WO_PLASMA_FLASH",
         "WO_LEACHBEAM_ENERGY",
         "WO_SHIP_FXNODE_EXPLO",
@@ -645,6 +633,9 @@ mod v2048 {
         "WO_RAIN",
         "WO_RAIN_LENS",
         "WO_SNOW",
+        "WO_SHIP_FXNODE_BIGEXPLO",
+        "WO_SHIP_EXPLOSION_DEBRIS",
+        "WO_SHIP_EXPLO_SMOKE",
     ];
 
     #[test]
