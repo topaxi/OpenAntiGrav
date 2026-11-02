@@ -121,7 +121,7 @@ where `main` moved on from the binary compared. A timer of zero draws the plain 
   target.
 - **Open:** the shake gate of the text copies (`+0x3c/+0x40`) is not modelled because ours has no shake; the
   shield bar's colour in the glow frame; a frame at the boost's start and end (`n = 0, 1`) against the original;
-  whether a `Model` widget's own draw (a `Vex` draw, not read) smears at all.
+  whether a `Model` widget smears: moot on Pulse, whose pickup icon is an Image (last section).
 - **The boost timer and its trigger are ours already**: `Exhaust::boost_timer` runs from a pad hit and a perfect
   start with their own tests (`crates/raceplay/src/tests/pads.rs`).
 
@@ -166,3 +166,69 @@ widget. So nothing in the 3D widget code reads the boost count. The `Model` widg
 renderer behind it) was not read, and no boost GE list was inspected for a model's prims, so "the 3D widgets draw
 once" is **unmeasured, not measured** (our 3D widgets - pickup icon, countdown, sights - are drawn once). Pure's
 `0x088c9dec` `lui 0x44e2` hit, cited above, should be re-read the same way before it is trusted as a copy loop.
+
+## The pickup icon at a boost: Image widgets, drawn n times (2026-11-02, `pulse-model-widget-smear`)
+
+**The question** (the lane's claim): is the pickup icon, taken as a Model HUD widget drawn through its own Vex model, drawn once or as
+offset copies during a speed-pad boost at `n >= 2`? **Falsifier written before the capture:** the icon's geometry appears once in a
+boost GE list as it does at rest (drawn once), or appears `n` times (smears).
+
+**Result: the pickup icon is not a model, and it smears.** Confidence 90 (runtime trace: three GE lists at `n = 1, 6, 10`, the
+count read live; one boot, one track, one held pickup, so seen once on the boot axis; no second binary). The hexagon the player sees
+is 13 distinct 4-vertex `0x19f` quads, the vertex type of `Image_Draw`, with bounding boxes inside x 207..273, y 5..65, and each
+quad is drawn exactly as many times as the HUD's count says. The authored widgets are `<Image name="PickupBackground">` and
+`<Image name="TurboIcon">`-style icons, `x="240" y="35" Centred="true"` (66 x 60 and 48 x 48; `crates/hud/src/pickup_look_tests.rs`
+carries the authored `Values`, `docs/ui/hud.md` "The pickup icon is found by name").
+
+**No Model widget drew in any captured frame** (confidence 75): the three lists use only two projection matrices, the scene's
+perspective and the 480 x 272 orthographic one the HUD's Images and text use, so no `Mode3D` widget (which sets its own
+projection, `Mode3D_DrawQueued`) was on screen. That is a statement about these frames (a race with the countdown over and no
+lock-on). Whether another Pulse layout names a `<Model>` widget is **not established here**: `docs/ui/hud.md` shows the
+26 `Data\HUD\*.vex` files are Pure's `Speed3D`/`Shield3D`/`Overlay3D` and says no Pulse layout names one, but that is a
+reading of the layout files I did not repeat; Pulse's countdown is a 3D model (`docs/ui/hud.md`, "Position at `x=0, y=0`"), which
+would be the place to look, and it is off the screen in a race. So "does a Model widget smear" stays **open for Pulse's countdown
+and for Pure's gauge models**, and closed for the pickup icon.
+
+Method: Absorb held in `race-talons-venom-alongside` (Single Race, Assegai, Talon's Junction, lap 2), PPSSPP 1.20.4 software
+renderer, `gpu.record.dump` (`scripts/psp-ge-dump.py dump`, `census`), the HUD's count read live at `*(hud+0x274)+0xa8` with
+`hud = a0` at `Hud_Update` (`0x0881bf50`). For the `n = 10` frame the flare's timer (`flare+0xb8`) was written to 0.4 s every 3 ms
+for the dump's duration (the count is a pure function of the timer, so this stands in for a pad hit; `n` read 9 to 10 meanwhile).
+The `n = 6` frame is a natural pad boost (timer 0.25 s at the start of the dump; the count fell from 6 to 5 across it). The rest
+frame is a dump taken with the timer 0 and the count 1.
+
+| Frame | Timer | `n` | Copies of each pickup quad | Text prims (`0x183`) | Scene 3D prims (`vt 289`) | Stencil ref of the HUD draws |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| rest | 0 | 1 | 1 (2 for two layers with the same box) | 31 | 49 | `0x0c` |
+| natural pad boost | 0.25 s | 6 | 6 (12) | 211 | 85 | `0x99` = 153 = `trunc(6/10 * 255)` |
+| forced timer | 0.4 s | 10 | 10 (20) | 331 | 85 | `0xff` |
+
+(`vt 289` differs between rest and the others because the rest frame is another part of the track; the two boost frames agree to
+the prim. The stencil refs are the speed bar's glow stamp above, `n / 10 * 255`, and back the counts.) The 13 images' set is
+identical in all three frames; only the copy count moves.
+
+**Per-copy law, read off the 10-copy frame** (GE `OFFSETX`/`OFFSETY` words in 1/16 pixel units, and the first vertex's colour; each
+chunk of the dump is a `PRIM` followed by the words that set the *next* draw's offset): the backdrop is drawn with `OFFSETX` 1808
+throughout and `OFFSETY` 1912, 1913, ... 1921 for copies 0 to 9 (copy `i` at `1912 + i`: a shift of `i` whole pixels up, none
+sideways), and every copy's vertex alpha is `0x0c` where the rest frame's is `0x80` (`trunc(128 / 10)`). The icon quads, whose boxes
+differ from the backdrop's (top-left (226, 20) against (207, 5)), carry the **same** offsets.
+
+**The direction is the line from the screen centre to the widget's authored `x`/`y`, not to the drawn box's top-left** (confidence
+80: one widget set with 13 quads of two different boxes sharing one vector, plus the three non-centred widgets read before, which
+fit the same rule because for them the authored point is the top-left). For the pickup, `(240, 35) - (240, 136) = (0, -101)`,
+normalised `(0, -1)`, so `trunc(1912 - dy * i)` is `1912 + i` and `trunc(1808 - dx * i)` is `1808`: exactly what was read. The
+box's top-left would give `(-0.245, -0.969)`, a 0 px shift at `i = 1` and a sideways step from `i = 5`, which was not seen, and the
+icon quads' different top-lefts would give different offsets, which was not seen either. `Image_ParseValues` reads `Centred` next
+to `x`/`y` (`0x088a6f38`), so a Centred widget's anchor is its middle. The four "not reproduced" markers listed under "The copies"
+are consistent with this if they are Centred (not checked).
+
+**Ours differs:** `oag_hud::boost_smear::expand` takes the direction from the drawn rect's top-left (`anchor`), which for
+a Centred widget is not the authored point, so the pickup's copies land 0 or 1 px sideways off the original's where the original
+has none. The count and the alpha division are right. The wiring is written up as the first open item of the boost-smear leftovers thread.
+
+The pair of 39-vertex `vt 289` batches (textures `1802816`, `1641536`, about 1.7 units across, screen (236, 165)) after the scene's
+last sprite appears in all three frames, once each, with the same boxes: a scene model between ship sprites, not a HUD widget
+(removing them with `scripts/psp-ge-replay.py --nop-prims` changes a 14 x 7 px box at (229..243, 160..167) and nothing else).
+
+Other titles: **checked, differs** for HD and Omega (HD's boost pass is `FunkLayerZoom`, above); 2048 **not checkable** here (no
+frame at a boost). Pure: **not checked**, its pickup icon and gauge models are `Model` widgets and its count source is unread
+(`pure-boost-reread`). Pulse PS2: **checked, applies, not measured**: the copies draw through the shared art ("Other titles").
