@@ -2,7 +2,7 @@
 status: parked
 titles: [all]
 updated: 2026-11-02
-summary: "History comments (dates, maintainer, lane names) remain in about 36 crates; cleanup parked by the maintainer after oag-raceplay, oag-title and oag-game"
+summary: "History comments (dates, maintainer, lane names) remain in about 36 crates; parked after oag-raceplay, oag-title and oag-game"
 size: L (40)
 difficulty: easy (60)
 kind: debt
