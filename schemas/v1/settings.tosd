@@ -1,0 +1,527 @@
+# The player's settings file, `$XDG_CONFIG_HOME/oag/settings.toml`: see
+# crates/game/src/settings.rs and its submodules, docs/tools/oag-game.md. The game
+# rewrites it with every key present, so a written file holds all of these; a
+# hand-written one may hold any subset (every section and key has a serde default),
+# which is why everything below is optional. The schema says shape. Which names a
+# token may take (`vsync`, `shadows`, `team`) is the loader's: it falls back and warns
+# instead of failing, so the schema does not close those vocabularies. A key the game
+# does not know is refused here, though the loader ignores it.
+
+[toml-schema]
+version = "1.0.0"
+
+[types.toml-schema-reference]
+type = "table"
+
+[types.toml-schema-reference.location]
+type = "string"
+pattern = "/v1/settings[.]tosd$"
+
+[types.toml-schema-reference.version]
+type = "string"
+allowedvalues = ["1.0.0"]
+
+[types.string-map]
+type = "collection"
+itemtype = "string"
+keypattern = "^.+$"
+
+[types.bool-map]
+type = "collection"
+itemtype = "boolean"
+keypattern = "^.+$"
+
+# Keyed by `<title> (<platform>)`, e.g. "Wipeout Pulse (PSP)". The keys are the titles
+# this build links, so the schema says any.
+[types.render-profiles]
+type = "collection"
+itemtype = "types.render-profile"
+keypattern = "^.+$"
+
+# `[mod_settings."<mod id>"]`: what a mod's own menu rows saved, key to value text. A mod
+# id carries dots and the mod may be turned off, so the keys are anyone's.
+[types.mod-settings]
+type = "collection"
+itemtype = "types.string-map"
+keypattern = "^.+$"
+
+# [display]: where and how the picture reaches a screen.
+[types.display]
+type = "table"
+
+[types.display.monitor]
+type = "string"
+optional = true
+
+[types.display.window_mode]
+type = "string"
+optional = true
+
+[types.display.window_size]
+type = "string"
+optional = true
+
+[types.display.fullscreen_resolution]
+type = "string"
+optional = true
+
+# Written on the web build only.
+[types.display.canvas_size]
+type = "string"
+optional = true
+
+[types.display.aspect]
+type = "string"
+optional = true
+
+[types.display.front_end_style]
+type = "string"
+optional = true
+
+[types.display.hud_style]
+type = "string"
+optional = true
+
+[types.display.dynamic_hud]
+type = "string"
+optional = true
+
+# A name; a file from before the names says true or false and is still read.
+[types.display.vsync]
+oneof = ["string", "boolean"]
+optional = true
+
+[types.display.frame_limit]
+type = "string"
+optional = true
+
+[types.display.brightness]
+type = "integer"
+optional = true
+
+[types.display.gamma]
+type = "integer"
+optional = true
+
+[types.display.pause_on_focus_loss]
+type = "boolean"
+optional = true
+
+# [graphics]: how the picture is drawn, whatever the source.
+[types.graphics]
+type = "table"
+
+[types.graphics.renderer]
+type = "string"
+optional = true
+
+[types.graphics.anisotropy]
+type = "string"
+optional = true
+
+[types.graphics.fov]
+type = "integer"
+optional = true
+
+[types.graphics.perf_overlay]
+type = "string"
+optional = true
+
+[types.graphics.hud_scale]
+type = "string"
+optional = true
+
+# Absent until the player sets it.
+[types.graphics.hud_safe_area]
+type = "integer"
+optional = true
+
+[types.graphics.frustum_culling]
+type = "boolean"
+optional = true
+
+[types.graphics.pvs_culling]
+type = "boolean"
+optional = true
+
+[types.graphics.boost_fov_kick]
+type = "integer"
+optional = true
+
+[types.graphics.boost_zoom]
+type = "boolean"
+optional = true
+
+[types.graphics.cpu_governor]
+type = "boolean"
+optional = true
+
+[types.graphics.camera_view]
+type = "string"
+optional = true
+
+# One [render_profiles."<title> (<platform>)"] table: the render-cost-sensitive slice of the picture.
+[types.render-profile]
+type = "table"
+
+[types.render-profile.render_scale]
+type = "integer"
+optional = true
+
+[types.render-profile.render_scale_chosen]
+type = "boolean"
+optional = true
+
+[types.render-profile.target_fps]
+type = "string"
+optional = true
+
+[types.render-profile.minimum_resolution]
+type = "integer"
+optional = true
+
+[types.render-profile.reconstruction]
+type = "string"
+optional = true
+
+[types.render-profile.upscale_sharpness]
+type = "string"
+optional = true
+
+[types.render-profile.msaa]
+type = "string"
+optional = true
+
+[types.render-profile.motion_blur]
+type = "string"
+optional = true
+
+[types.render-profile.motion_blur_resolution]
+type = "string"
+optional = true
+
+[types.render-profile.shadows]
+type = "string"
+optional = true
+
+[types.render-profile.screen_filter]
+type = "string"
+optional = true
+
+[types.render-profile.screen_filter_strength]
+type = "integer"
+optional = true
+
+[types.render-profile.model_detail]
+type = "string"
+optional = true
+
+[types.render-profile.texture_detail]
+type = "string"
+optional = true
+
+[types.render-profile.trail_order]
+type = "string"
+optional = true
+
+[types.render-profile.weather]
+type = "string"
+optional = true
+
+# One entry of audio.music_folders.
+[types.music-folder]
+type = "table"
+
+[types.music-folder.path]
+type = "string"
+
+[types.music-folder.enabled]
+type = "boolean"
+optional = true
+
+# [audio]: bus volumes (percent) and the music pool.
+[types.audio]
+type = "table"
+
+[types.audio.music_volume]
+type = "integer"
+optional = true
+
+[types.audio.sfx_volume]
+type = "integer"
+optional = true
+
+[types.audio.speech_volume]
+type = "integer"
+optional = true
+
+[types.audio.master_volume]
+type = "integer"
+optional = true
+
+[types.audio.music_source]
+type = "string"
+optional = true
+
+[types.audio.music_folders]
+type = "array"
+itemtype = "types.music-folder"
+optional = true
+
+# By source id; present only for the sources the player switched.
+[types.audio.music_switches]
+type = "types.bool-map"
+optional = true
+
+# [source]: the disc image and DLC folders opened when the command line names none.
+[types.source]
+type = "table"
+
+[types.source.image]
+type = "string"
+optional = true
+
+[types.source.dlc]
+type = "array"
+itemtype = "string"
+optional = true
+
+# [race]: the last race set-up. Tokens, so a value this build lacks falls back instead of failing the boot.
+[types.race]
+type = "table"
+
+[types.race.mode]
+type = "string"
+optional = true
+
+[types.race.class]
+type = "string"
+optional = true
+
+[types.race.team]
+type = "string"
+optional = true
+
+[types.race.track]
+type = "string"
+optional = true
+
+[types.race.variant]
+type = "string"
+optional = true
+
+[types.race.variant_chosen]
+type = "boolean"
+optional = true
+
+[types.race.skin]
+type = "string"
+optional = true
+
+[types.race.kill_target]
+type = "string"
+optional = true
+
+[types.race.weapons]
+type = "string"
+optional = true
+
+[types.race.window_seats]
+type = "string"
+optional = true
+
+[types.race.window_monitors]
+type = "array"
+itemtype = "string"
+optional = true
+
+[types.race.window_panes]
+type = "array"
+itemtype = "string"
+optional = true
+
+# [remix]: the Remix race's picks.
+[types.remix]
+type = "table"
+
+[types.remix.track_title]
+type = "string"
+optional = true
+
+[types.remix.track]
+type = "string"
+optional = true
+
+[types.remix.craft_title]
+type = "string"
+optional = true
+
+[types.remix.team]
+type = "string"
+optional = true
+
+[types.remix.variant]
+type = "string"
+optional = true
+
+# [online]: the lobby last connected to.
+[types.online]
+type = "table"
+
+[types.online.address]
+type = "string"
+optional = true
+
+[types.online.hash]
+type = "string"
+optional = true
+
+[types.online.name]
+type = "string"
+optional = true
+
+# [controls]: scheme, triggers, touch and key bindings.
+[types.controls]
+type = "table"
+
+[types.controls.scheme]
+type = "string"
+optional = true
+
+[types.controls.triggers]
+type = "string"
+optional = true
+
+[types.controls.trigger_sensitivity]
+type = "integer"
+optional = true
+
+[types.controls.touch_go_zones]
+type = "boolean"
+optional = true
+
+[types.controls.touch_scheme]
+type = "string"
+optional = true
+
+[types.controls.touch_opacity]
+type = "integer"
+optional = true
+
+# Key name to button name.
+[types.controls.bindings]
+type = "types.string-map"
+optional = true
+
+[types.controls.prompt_style]
+type = "string"
+optional = true
+
+# A level's name; the old on/off switch is still read.
+[types.controls.pilot_assist]
+oneof = ["string", "boolean"]
+optional = true
+
+# [ai]: what the opponents are like.
+[types.ai]
+type = "table"
+
+[types.ai.difficulty]
+type = "string"
+optional = true
+
+# [log]: the log file; both keys stay absent until the player writes them.
+[types.log]
+type = "table"
+
+[types.log.file]
+type = "string"
+optional = true
+
+[types.log.filter]
+type = "string"
+optional = true
+
+# [mods]: the MODS page's switches.
+[types.mods]
+type = "table"
+
+[types.mods.disabled]
+type = "array"
+itemtype = "string"
+optional = true
+
+# [dev]: developer switches, read in debug builds only.
+[types.dev]
+type = "table"
+
+[types.dev.unlock_everything]
+type = "boolean"
+optional = true
+
+[elements]
+
+[elements.toml-schema]
+type = "types.toml-schema-reference"
+optional = true
+
+# The language last picked, by the source's own English name; absent until the picker has been through.
+[elements.language]
+type = "string"
+optional = true
+
+[elements.display]
+type = "types.display"
+optional = true
+
+[elements.graphics]
+type = "types.graphics"
+optional = true
+
+[elements.render_profiles]
+type = "types.render-profiles"
+optional = true
+
+[elements.audio]
+type = "types.audio"
+optional = true
+
+[elements.source]
+type = "types.source"
+optional = true
+
+[elements.race]
+type = "types.race"
+optional = true
+
+[elements.remix]
+type = "types.remix"
+optional = true
+
+[elements.online]
+type = "types.online"
+optional = true
+
+[elements.controls]
+type = "types.controls"
+optional = true
+
+[elements.ai]
+type = "types.ai"
+optional = true
+
+[elements.log]
+type = "types.log"
+optional = true
+
+[elements.mods]
+type = "types.mods"
+optional = true
+
+[elements.mod_settings]
+type = "types.mod-settings"
+optional = true
+
+[elements.dev]
+type = "types.dev"
+optional = true

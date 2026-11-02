@@ -8,7 +8,7 @@ Support/oag` on macOS, and `%APPDATA%\oag` on Windows.
 
 | File | Owner module | What it holds |
 | --- | --- | --- |
-| `settings.toml` | `crates/game/src/settings.rs` | Display, graphics, audio, controls, and the last-picked race options - one row per key, rewritten canonically every run. |
+| `settings.toml` | `crates/game/src/settings.rs` | Display, graphics, audio, controls, and the last-picked race options - one row per key, rewritten canonically every run. Declares [`settings.tosd`](../../schemas/v1/settings.tosd) on its first line (`toml-schema = { ... }`, [TOML Schema](../formats/toml-schema.md)); a file without it loads and gets it on the next rewrite. |
 | `pilots/*.toml` | `crates/raceplay/src/pilots.rs` | Player-authored AI opponents - one file per pilot, hand-editable, never rewritten wholesale. |
 | `records.toml` | `crates/game/src/records.rs` | Best lap, best total time and the last result, per circuit/mode/class. This page. |
 | `ghosts/<title>/<mode>/<class>/<track>.oagr` | `crates/game/src/ghosts.rs` | The best lap raced as a ghost in Time Trial and Speed Lap, one replay file per `records.toml` key, written only when a lap beats it. See [ADR-0055](adr/0055-replays-are-inputs-and-a-ghost-is-poses.md). |
@@ -113,8 +113,8 @@ migration path for rows an earlier build kept per title.
 `[dev] unlock_everything` (bool) opens every gate like `--unlock-all`. **Absent means on in a
 debug build** (`cfg!(debug_assertions)`), ignored in release. The table is kept intact when a
 release build rewrites the file. A test or capture that checks locked state writes
-`unlock_everything = false` into its own settings. `settings.toml` has no TOML Schema under
-`schemas/v1/`, so there is none to update.
+`unlock_everything = false` into its own settings. The key is in
+[`settings.tosd`](../../schemas/v1/settings.tosd) with the rest of the file.
 
 ## Where a race's result is captured, and why there are two sites
 
