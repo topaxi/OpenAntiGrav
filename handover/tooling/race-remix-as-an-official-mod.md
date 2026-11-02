@@ -405,9 +405,11 @@ hours, M half a day, L a day, XL more than a day (split it).
    own (`mod.oag.remix.*`), no longer the RACE page's; a TEAM pick is kept across a CRAFT TITLE
    change when the new roster has it. Tests: `crates/game/tests/official_remix.rs`,
    `query_resolve_ground_truth.rs`, `boot::tests` (2048 tiles), `launch_keys::tests`. The
-   Hillside cell of NIGHT RUN was not driven to a race with the mod off (it is behind the
-   campaign's unlock chain in a fresh profile); `custom_campaign_ground_truth` resolves it from
-   the two example mods alone, and no campaign launch code changed.
+   Hillside cell of NIGHT RUN was not driven to a race with the mod off: from a fresh profile a
+   `--drive` raced the first cell, but pressing cross on any other cell left the cell screen
+   where it was until the wait timed out (cause not investigated);
+   `custom_campaign_ground_truth` resolves Hillside from the two example mods alone, and no
+   campaign launch code changed. Open: a drive test that races a mod campaign's Hillside event.
 9. **Bundle and enable.** Claim: the delivery chosen in ADR-B is in place for
    each target the ADR names. Acceptance: `just mods-list` shows `oag.remix` from a
    fresh clone; the packaged build's file list is checked by reading the recipe
