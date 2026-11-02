@@ -20,7 +20,13 @@ pub(super) struct Voices {
 /// How loud and where `slot` is heard from. A craft out of range or with no pose
 /// is silent, not refused: the hum is held and the craft may return to range.
 fn heard(slot: usize, listener: &oag_audio::Listener, craft: &[Option<(Vec3, f32)>]) -> VoicePlace {
-    let placed = place(CueEvent::new(Cue::Magstrip, slot), listener, craft);
+    // `Magstrip` is placed off its craft whoever owns it, so no seat is the dry one.
+    let placed = place(
+        CueEvent::new(Cue::Magstrip, slot),
+        listener,
+        craft,
+        usize::MAX,
+    );
     VoicePlace {
         gain: placed.map_or(0.0, |p| p.gain),
         pan: placed.and_then(|p| p.pan),

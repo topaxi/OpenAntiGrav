@@ -258,7 +258,7 @@ fn every_cue_states_where_it_is_heard_from() {
 
 #[test]
 fn an_opponents_collision_arrives_from_the_side_it_happened_on() {
-    let placed = place(CueEvent::new(Cue::Collision, 1), &ears(), &grid(60.0)).unwrap();
+    let placed = place(CueEvent::new(Cue::Collision, 1), &ears(), &grid(60.0), 0).unwrap();
     assert_eq!(
         placed.pan,
         Some(1.0),
@@ -271,7 +271,7 @@ fn an_opponents_collision_arrives_from_the_side_it_happened_on() {
 fn the_players_own_collision_is_placed_too() {
     // `ShipCollisionFx_Trigger` passes `craft+0x50` unbranched, so the player's
     // hull is positional too (always close).
-    let placed = place(CueEvent::new(Cue::Collision, 0), &ears(), &grid(60.0)).unwrap();
+    let placed = place(CueEvent::new(Cue::Collision, 0), &ears(), &grid(60.0), 0).unwrap();
     assert_eq!(placed.pan, Some(0.0));
     assert_eq!(placed.gain, 1.0);
 }
@@ -279,7 +279,7 @@ fn the_players_own_collision_is_placed_too() {
 #[test]
 fn a_rival_beyond_the_craft_radius_is_refused_rather_than_played_quietly() {
     let far = grid(oag_audio::Emitter::CRAFT_RADIUS + 1.0);
-    assert!(place(CueEvent::new(Cue::Collision, 1), &ears(), &far).is_none());
+    assert!(place(CueEvent::new(Cue::Collision, 1), &ears(), &far, 0).is_none());
 }
 
 #[test]
@@ -287,18 +287,28 @@ fn the_pad_cue_splits_the_player_off_from_the_field() {
     // The `racer+0x368` split: the player dry at full volume, a rival through its
     // emitter (`Placement::CraftUnlessPlayer`).
     let craft = grid(60.0);
-    let player = place(CueEvent::new(Cue::SpeedupPad, 0), &ears(), &craft).unwrap();
+    let player = place(CueEvent::new(Cue::SpeedupPad, 0), &ears(), &craft, 0).unwrap();
     assert_eq!(player.pan, None);
     assert_eq!(player.gain, 1.0);
 
-    let rival = place(CueEvent::new(Cue::SpeedupPad, 1), &ears(), &craft).unwrap();
+    let rival = place(CueEvent::new(Cue::SpeedupPad, 1), &ears(), &craft, 0).unwrap();
     assert_eq!(rival.pan, Some(1.0));
     assert!(rival.gain < 1.0);
 }
 
+/// A client seated at slot 1: its own pad cue is the dry one, slot 0's is a rival's.
+#[test]
+fn the_dry_branch_follows_the_listening_seat() {
+    let craft = grid(60.0);
+    let own = place(CueEvent::new(Cue::SpeedupPad, 1), &ears(), &craft, 1).unwrap();
+    assert_eq!((own.pan, own.gain), (None, 1.0));
+    let other = place(CueEvent::new(Cue::SpeedupPad, 0), &ears(), &craft, 1).unwrap();
+    assert!(other.pan.is_some());
+}
+
 #[test]
 fn the_announcer_is_left_dry() {
-    let placed = place(CueEvent::new(Cue::ShieldActive, 0), &ears(), &grid(0.0)).unwrap();
+    let placed = place(CueEvent::new(Cue::ShieldActive, 0), &ears(), &grid(0.0), 0).unwrap();
     assert_eq!(placed.pan, None);
     assert_eq!(placed.gain, 1.0);
 }
@@ -307,15 +317,15 @@ fn the_announcer_is_left_dry() {
 fn a_cue_from_a_slot_with_no_craft_is_dropped() {
     // Not played dry: a rival's collision at full volume the moment its slot
     // empties is louder and more wrong than silence.
-    assert!(place(CueEvent::new(Cue::Collision, 5), &ears(), &grid(10.0)).is_none());
-    assert!(place(CueEvent::new(Cue::Collision, 200), &ears(), &grid(10.0)).is_none());
+    assert!(place(CueEvent::new(Cue::Collision, 5), &ears(), &grid(10.0), 0).is_none());
+    assert!(place(CueEvent::new(Cue::Collision, 200), &ears(), &grid(10.0), 0).is_none());
 }
 
 #[test]
 fn an_unplaced_cue_survives_a_slot_that_has_no_craft() {
     // The announcer has no emitter at all, so it must not be gated by one.
     let empty = [None; oag_gameplay::MAX_SHIPS];
-    assert!(place(CueEvent::new(Cue::ShieldActive, 0), &ears(), &empty).is_some());
+    assert!(place(CueEvent::new(Cue::ShieldActive, 0), &ears(), &empty, 0).is_some());
 }
 
 #[test]

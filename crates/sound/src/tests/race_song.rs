@@ -36,6 +36,7 @@ fn step(audio: &mut Audio, gated: bool) {
         listener: oag_audio::Listener::at_origin(),
         craft: [None; oag_gameplay::MAX_SHIPS],
         slot_teams: [None; oag_gameplay::MAX_SHIPS],
+        player_slot: 0,
         throttle: 0.0,
         projectiles: oag_weapons::projectile::Projectiles::new().slots,
         running: true,

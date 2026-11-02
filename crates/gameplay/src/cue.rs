@@ -783,10 +783,4 @@ impl CueEvent {
             point: Some(point),
         }
     }
-
-    /// Whether the player raised it.
-    #[must_use]
-    pub fn is_player(self) -> bool {
-        self.slot == 0
-    }
 }
