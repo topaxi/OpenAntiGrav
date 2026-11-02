@@ -1,10 +1,10 @@
 ---
-status: ready-to-wire
+status: re-first
 titles: [omega]
 size: M (55)
 difficulty: medium (50)
 updated: 2026-11-02
-summary: "Omega's start plays its Wwise events; every other race sfx still silent: random/switch containers, positioning, cue mapping unread or unwired"
+summary: "Omega start plays its Wwise events; other race sfx need random/switch container rules read first (the missile launch reaches a ranseq)"
 ---
 
 # Omega race sound effects through Wwise
@@ -59,7 +59,8 @@ cue still goes through the `SBlk` loader and is silent.
 ## Next Steps
 
 1. ~~Countdown~~ done (`the_start_plays_its_wwise_events_as_timelines`).
-2. Container rules for random/sequence and switch in `oag_formats::wwise::hirc` (half a day to a day), then
+2. Container rules for random/sequence and switch (the missile launch's `WPN_MISSILE_Fire` reaches
+   random/sequence container 275399150, which `wwise_start::load` refuses) in `oag_formats::wwise::hirc` (half a day to a day), then
    the missile launch: a per-cue table from `oag_gameplay::cue::Cue` to Omega's cue strings and slots (the
    weapon cues' strings are in the executable beside each weapon's launcher, e.g. `NGP_MissileFire`), loaded
    through the same `wwise_start::load` from one `Library` over the race's banks (cross-bank media and relays).
