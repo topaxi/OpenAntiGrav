@@ -4,7 +4,7 @@
 [hooks.md](hooks.md), the overview and capability surface in [README.md](README.md).
 This page says how a mod's code can run inside the simulation without breaking what
 [determinism.md](../determinism.md) guarantees, where its state lives, what replays
-and network play need, and what the spike under `spikes/wasm-extensions/` measured.
+and network play need, and what the spike measured (removed from the tree; last present at `5dfa936d8`).
 
 Code citations are pinned to commit `b4b4cb3aa` (main, 2026-10-29) and name the
 function, so they survive drift.
@@ -330,10 +330,10 @@ AArch64 machine, where the default NaN differs.
 
 ## The spike
 
-`spikes/wasm-extensions/` is a standalone cargo project with its own `[workspace]`
-table: not a workspace member, its own lock file, and the repository's `Cargo.lock`
-untouched. Run it with `flock -o "$HOME/.cache/oag/gate.lock" ./run.sh` from that
-directory; its README carries the raw output.
+The spike lived in `spikes/wasm-extensions/` up to commit `5dfa936d8` and has
+since been removed. It was a standalone cargo project with its own `[workspace]`
+table: not a workspace member, its own lock file, and the repository's
+`Cargo.lock` untouched. Its README at that commit carries the raw output.
 
 **What it is.** A one-dimensional toy race (`f32` only, a speed, a distance on a
 1,000-unit loop, four speed pads, throttle from `oag_core::Rng` seed 42, 36,000 ticks

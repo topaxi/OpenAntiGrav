@@ -10,7 +10,7 @@ publish = false
 
 # Desktop only for now (docs/architecture/wasm-extensions/README.md, section 5):
 # Cranelift, no Pulley, no WASI, no component model, no threads, no cache, no
-# parallel compilation. The version is the spike's (`spikes/wasm-extensions/`).
+# parallel compilation. The version is the one the spike measured.
 [dependencies]
 # The layout, defined once for the host and the guest SDK.
 oag-ext-abi.workspace = true
