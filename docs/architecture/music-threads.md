@@ -171,10 +171,19 @@ time with its songs and subfolders in `<audio cache dir>/music-folder-<hash>.tsv
 stats a directory and reuses its entry when the time is unchanged, and lists only the
 directories that moved (a change below a directory moves only that directory's time).
 
-Measured on the host's two NFS shares (2026-11-02, loaded machine, a cold walk then a cached
-one): Beatport 90.6 s then 43.2 s (3,328 songs), Music 258.0 s then 126.1 s (16,225 songs); a
-share that does not exist fails in 20 ms; `FolderScan::start` returns in under 100 microseconds
-in every case. The cache halves the walk and does not remove it: the cost is a `stat` per
-directory over NFS. Because the walk is on a worker the menus and a race with the booted disc
-on are not affected; a pool without the booted disc waits at most 8 s and then plays what has
-been listed.
+Measured on the host's two NFS shares (2026-11-02, `Disk::list` called directly, a cold walk
+then a cached one; hidden entries and a NAS's `@eaDir` metadata folders are skipped, which is
+why the counts are the songs and not the `find` count that includes one folder named after every
+song):
+
+| Share | Songs | Cold walk | Cached walk | Remembered listing usable after |
+| --- | --- | --- | --- | --- |
+| Beatport | 3,328 | 30.5 s | 0.31 s | 12 ms |
+| Music | 16,199 | 49.6 s | 7.0 s | 117 ms |
+
+`FolderScan::start` returns in under 100 microseconds in every case, a share that does not
+exist fails in 20 ms, and a scan with no answer after 20 s reads `SLOW OR NO ANSWER` until it
+answers. From the second run on, the previous run's listing is offered as the folder's songs at
+once (`Reader::remembered`, read from the cache file on the worker) while the walk checks it,
+and a walk that then fails keeps that listing: a race with the booted disc off does not wait
+for a slow mount it has already listed.
