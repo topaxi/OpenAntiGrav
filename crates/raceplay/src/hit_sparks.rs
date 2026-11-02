@@ -66,12 +66,12 @@
 //!
 //! # Titles
 //!
-//! Pulse only here. HD's Cannon throws its own weapon spark from the weapon's side,
-//! a different mechanism (`docs/ghidra/functions/ps3-hdfury-eu/ship-collision-fx.md`),
-//! and Pure's `Ship_Damage` is unread; both keep an empty anchor list and draw
-//! and play nothing here, the `.COLLISIONS` cue included: it rides the same
-//! locators and the same gate, and no read of either title's weapon-hit sound
-//! exists.
+//! Pulse's `Ship_Damage` rule, and Pure inherits it (its `Ship_Damage` is unread; its
+//! `WO_SHIP_COLL_SPARK_DAMAGE` gate is Pulse's, `rocket-and-collision-fx.md`), so Pure's weapon
+//! hits throw the same sparks, and raise the `.COLLISIONS` cue with them. HD's Cannon throws its
+//! own weapon spark from the weapon's side, a different mechanism
+//! (`docs/ghidra/functions/ps3-hdfury-eu/ship-collision-fx.md`), which 2048 and Omega take from
+//! HD; they keep an empty anchor list here and draw and play nothing from this module.
 
 use super::*;
 use oag_livery::SparkAnchor;

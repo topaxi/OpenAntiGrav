@@ -568,6 +568,10 @@ pub struct Setup {
     /// effects spawn - see `race::wreck_fx`.
     #[cfg(feature = "view")]
     pub wreck_anchors: Vec<Vec<oag_livery::SparkAnchor>>,
+    /// Whether the title throws the big blast (and its shockwave) when a wreck's state times
+    /// out: its table names [`Trigger::WreckExplosion`]. See `race::wreck_fx`.
+    #[cfg(feature = "view")]
+    pub wreck_big_blast: bool,
     /// Each slot's `arc_anchor_point` in its hull's model space, when the title
     /// builds the HD-lineage magstrip arc wake (`Some`); a slot whose hull
     /// authors none is `None` and draws no wake. See `race::magstrip_wake`.

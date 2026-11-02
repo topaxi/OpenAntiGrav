@@ -14,7 +14,7 @@ use oag_title::{
 /// `FUN_000d9398`: six `absorb` locators, three mirrored pairs at `0.0`, `0.2`
 /// and `0.4` s (the settings block's `+0x54`, `0.2` in `.data`) -
 /// `docs/ghidra/functions/ps3-hdfury-eu/absorb-feedback.md`.
-pub const ABSORB_BURST: Burst = Burst::MirroredPairs { stagger: 0.2 };
+pub const ABSORB_BURST: Burst = Burst::HD;
 
 /// The scenery effects HD's own disc authors: `wo_blue_welder.pob` and
 /// `wo_modesto_steam_a.pob` in `DATA02`. Pulse's list also names `WO_RAIN`,

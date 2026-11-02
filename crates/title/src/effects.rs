@@ -233,6 +233,11 @@ pub enum Burst {
 }
 
 impl Burst {
+    /// Wipeout HD's absorb burst (`FUN_000d9398`): the six `absorb` locators in three mirrored
+    /// pairs 0.2 s apart (`docs/ghidra/functions/ps3-hdfury-eu/absorb-feedback.md`). 2048 and
+    /// Omega take it by inheritance.
+    pub const HD: Self = Self::MirroredPairs { stagger: 0.2 };
+
     /// `(locator index, delay in seconds)` for a hull that carries `nodes`
     /// locators of this title's class, in the order the original spawns them.
     ///

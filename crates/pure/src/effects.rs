@@ -32,6 +32,30 @@ pub const EFFECTS: &Effects = &{
             EffectSpec::new(engine_effects::ABSORB_EFFECT, Origin::Measured)
                 .with_burst(ABSORB_BURST),
         )
+        // Hit sparks and the wreck's node blast and death sparks are Pulse's trigger rule, inherited: Pure's
+        // `Ship_Damage` and `Ship_SetState` are unread, but its `Data.wad` authors those three
+        // effect files (not `WO_SHIP_EXPLOSION`: the big blast is left out) and its hulls carry the locators (`docs/formats/pure-status.md`).
+        .with(
+            Trigger::HitSpark,
+            EffectSpec::new(
+                engine_effects::COLLISION_SPARK_EFFECT,
+                Origin::InheritedFrom("Wipeout Pulse"),
+            ),
+        )
+        .with(
+            Trigger::WreckNode,
+            EffectSpec::new(
+                engine_effects::FXNODE_EXPLO_EFFECT,
+                Origin::InheritedFrom("Wipeout Pulse"),
+            ),
+        )
+        .with(
+            Trigger::WreckSparks,
+            EffectSpec::new(
+                engine_effects::DEATH_SPARKS_EFFECT,
+                Origin::InheritedFrom("Wipeout Pulse"),
+            ),
+        )
         // Pure ships no LeachBeam: its `weaponstats.xml` authors none, neither
         // pressing's executable names one and none of Pulse's six LeachBeam
         // entries is in its `Data.wad`
@@ -138,6 +162,12 @@ pub const LOOKS: &Looks = &Looks {
     // pair is built from the same `-1.0`/`0.3` radian literals
     // (`0x08a8e8ec`) in `FUN_08864018`
     // (`docs/ghidra/functions/psp-pure-usa/hull-shine.md`).
+    // The swap to `Shipwreck.vex` and its locators ride the same inherited rule as the wreck
+    // effects above.
+    hull_wreck: Rule {
+        on: Platforms::Any,
+        origin: Origin::InheritedFrom("Wipeout Pulse"),
+    },
     hull_shine: Rule {
         on: Platforms::Only(&[oag_title::Platform::Psp]),
         origin: Origin::Measured,

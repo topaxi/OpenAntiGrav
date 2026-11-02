@@ -39,6 +39,7 @@ mod hd_trackwall_ground_truth;
 mod hd_zone_hover_ground_truth;
 mod head_to_head_people_ground_truth;
 mod hillside_rain_ground_truth;
+mod hit_effects_inherit_ground_truth;
 mod hud_layout_ground_truth;
 mod hud_style_ground_truth;
 mod hull_gather_ground_truth;

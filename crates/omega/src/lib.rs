@@ -253,7 +253,28 @@ const EFFECTS: oag_title::Effects = {
         .without(Trigger::EngineFlare)
         .without(Trigger::LeachbeamEnergy)
         .without(Trigger::MagstripSparks)
-        .without(Trigger::MagstripZone);
+        .without(Trigger::MagstripZone)
+        // The absorb burst and the Cannon's craft-hit spark are Wipeout HD's measured laws
+        // (`Trigger::ShieldAbsorb`, `Trigger::WeaponSpark` in `oag_hd::effects`), taken by
+        // inheritance: this title ships HD's `absorb` locators and `Ship Collision Fx`
+        // locators on every hull and authors both effect files, and its executable carries
+        // the same strings. The trigger sites are unread here
+        // (`docs/gameplay/weapon-lineage.md`).
+        .with(
+            Trigger::ShieldAbsorb,
+            oag_title::EffectSpec::new(
+                oag_title::engine_effects::ABSORB_EFFECT,
+                oag_title::Origin::InheritedFrom("Wipeout HD"),
+            )
+            .with_burst(oag_title::Burst::HD),
+        )
+        .with(
+            Trigger::WeaponSpark,
+            oag_title::EffectSpec::new(
+                oag_title::engine_effects::WEAPON_SPARK_EFFECT,
+                oag_title::Origin::InheritedFrom("Wipeout HD"),
+            ),
+        );
     effects.scenery = &[oag_title::engine_effects::MODESTO_STEAM_EFFECT];
     effects
 };
