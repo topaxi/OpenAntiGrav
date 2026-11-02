@@ -155,6 +155,10 @@ pub struct Title {
     /// [`group_volume::GroupVolumeLaw`]. Same rule as [`Self::effects_volume_law`]: an authored mix
     /// reads `Linear`. The flyby's voice-over is on the music player and never takes this.
     pub speech_volume_law: pre_race::Sourced<group_volume::GroupVolumeLaw>,
+    /// Whether the speech bus is driven by the effects group (the SFX slider times the flyby
+    /// fade, through [`Self::speech_volume_law`]) instead of the Speech slider alone. The Speech
+    /// slider then multiplies in linearly on top. `false` on an authored mix.
+    pub speech_follows_effects: pre_race::Sourced<bool>,
     /// Which codepoints in this title's strings are controller-button glyphs,
     /// and which control each depicts. See [`prompts::Prompts`].
     pub prompts: &'static prompts::Prompts,

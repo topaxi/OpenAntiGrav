@@ -231,7 +231,7 @@ overlay draws them for HD yet.
   and the slider reaches the group as the same fraction (`Audio_SetSfxFadeTarget`), so every
   Pulse race's effects bus is squared (the default slider, 100, is unchanged; a lower slider is
   quieter than before: 50 reads 0.25). Menus outside a race stay linear: leaving a race resets the law (`stop_race_sfx`), launching one
-  arms it again; the original's menus are presumably squared too but ours are unmeasured there; Speech is in the same faded group and presumably squared too, not wired. The ramp's
+  arms it again; the original's menus are presumably squared too but ours are unmeasured there; Speech is in the same faded group, squared too and wired (see "The Speech group (2) is squared too"). The ramp's
   ceiling at a slider below 100 (the original's fade target is the slider) is unmeasured; ours
   still ramps slider times a 0-to-1 fade.
   **What is audible: watched 2026-11-02**, see "What the original plays under the flyby" below.
@@ -350,10 +350,14 @@ ratio is not a clean law; the group volume itself read `512` and `307`).
 (above), outside the fade and outside `FUN_089957c0`, and ours plays it on `Bus::Music`; squaring
 the Speech bus never touches it. **Ours**: `Title::speech_volume_law` (Pulse `Squared` measured,
 Pure `Squared` inherited from Pulse, HD/2048/Omega `Linear` with their authored mix) set per race by
-`hold_race_song` and released to linear on leaving a race, like the effects law. **Differs, not
-wired**: the original's Speech has no slider of its own and follows the SFX slider and the flyby
-fade; ours squares its own Speech slider and does not fade (the announcer first speaks after the
-fade is full). HD, 2048 and Omega: `checked, differs` (an authored mix owns the speech bus; this
+`hold_race_song` and released to linear on leaving a race, like the effects law. **Wired**
+(`Title::speech_follows_effects`: Pulse measured, Pure inherited from Pulse): the original's Speech
+has no slider of its own and follows the SFX slider and the flyby fade, so in a race the speech bus
+reads `(SFX slider x fade)^2` times our own Speech slider as a plain linear extra (default 1.0,
+which changes nothing against the original). Our Speech slider row stays; leaving a race returns
+the bus to the menu law (linear, the Speech slider alone). Test:
+`oag-sound` `the_speech_bus_follows_the_sfx_slider_and_the_flyby_fade_squared`, and
+`oag-game` `arming_a_race_sets_the_titles_speech_source` for the per-title binding. HD, 2048 and Omega: `checked, differs` (an authored mix owns the speech bus; this
 helper is Pulse's), not measured on those titles.
 
 **What starts and when (`03_Track`, 4 cue runs and 3 envelope runs, ticks).**

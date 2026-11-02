@@ -746,7 +746,10 @@ impl Audio {
             }
             mixer.set_bus_gain(
                 Bus::Speech,
-                self.sfx_fade.speech_bus_gain(settings.speech_volume.gain()),
+                self.sfx_fade.speech_bus_gain(
+                    settings.sfx_volume.gain(),
+                    settings.speech_volume.gain(),
+                ),
             );
             // Group volumes first, then the master, as the original's chain does.
             // See `settings::Audio::master_volume`.

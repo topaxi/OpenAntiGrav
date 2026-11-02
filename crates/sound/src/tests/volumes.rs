@@ -201,3 +201,43 @@ fn the_squared_speech_law_puts_the_square_of_the_slider_on_the_speech_bus() {
     audio.stop_race_sfx();
     assert_eq!(speech_bus(&audio), 0.3, "leaving the race restores linear");
 }
+
+/// Pulse's Speech group is the effects group: in a race the speech bus reads the square of the SFX
+/// slider times the flyby fade, with the Speech slider as a linear extra; leaving restores the
+/// menus' own slider. Fails if the speech bus ignores the SFX slider or the fade.
+#[test]
+fn the_speech_bus_follows_the_sfx_slider_and_the_flyby_fade_squared() {
+    use oag_title::group_volume::GroupVolumeLaw;
+    fn speech_bus(audio: &Audio) -> f32 {
+        audio
+            .output()
+            .with_mixer(|mixer| mixer.bus_gain(Bus::Speech))
+    }
+    let settings = crate::settings::Settings {
+        sfx_volume: Volume(50),
+        ..Default::default()
+    };
+    let mut audio = Audio::open(&settings, None, None, oag_audio::MIN_BUFFER, false);
+    assert_eq!(speech_bus(&audio), 1.0, "the menus use the Speech slider");
+    audio.set_speech_volume_law(GroupVolumeLaw::Squared);
+    audio.set_speech_follows_effects(true);
+    assert_eq!(speech_bus(&audio), 0.25, "SFX 0.5, Speech 1.0, fade full");
+    audio.silence_sfx();
+    assert_eq!(speech_bus(&audio), 0.0);
+    audio.fade_in_sfx(0.02);
+    for _ in 0..10 {
+        audio.tick();
+        let fade = audio.sfx_fade_gain();
+        let want = (0.5 * fade) * (0.5 * fade);
+        assert!((speech_bus(&audio) - want).abs() < 1e-6);
+    }
+    audio.apply(&crate::settings::Settings {
+        sfx_volume: Volume(50),
+        speech_volume: Volume(50),
+        ..Default::default()
+    });
+    let fade = audio.sfx_fade_gain();
+    assert!((speech_bus(&audio) - 0.25 * fade * fade * 0.5).abs() < 1e-6);
+    audio.stop_race_sfx();
+    assert_eq!(speech_bus(&audio), 0.5, "leaving restores the Speech slider");
+}
