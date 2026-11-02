@@ -230,8 +230,8 @@ overlay draws them for HD yet.
   **Scope of the square:** always, not only in the flyby. The helper squares every group volume
   and the slider reaches the group as the same fraction (`Audio_SetSfxFadeTarget`), so every
   Pulse race's effects bus is squared (the default slider, 100, is unchanged; a lower slider is
-  quieter than before: 50 reads 0.25). Menus outside a race stay linear (the law is armed per
-  race); Speech is in the same faded group and presumably squared too, not wired. The ramp's
+  quieter than before: 50 reads 0.25). Menus outside a race stay linear: leaving a race resets the law (`stop_race_sfx`), launching one
+  arms it again; the original's menus are presumably squared too but ours are unmeasured there; Speech is in the same faded group and presumably squared too, not wired. The ramp's
   ceiling at a slider below 100 (the original's fade target is the slider) is unmeasured; ours
   still ramps slider times a 0-to-1 fade.
   **What is audible: watched 2026-11-02**, see "What the original plays under the flyby" below.

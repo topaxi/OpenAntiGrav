@@ -165,5 +165,5 @@ fn the_squared_law_puts_the_square_of_slider_times_fade_on_the_bus() {
     });
     assert_eq!(sfx_bus(&audio), 0.25, "the slider at half is a quarter");
     audio.stop_race_sfx();
-    assert_eq!(sfx_bus(&audio), 0.25, "the race's law outlives the fade");
+    assert_eq!(sfx_bus(&audio), 0.5, "leaving the race returns the menus to linear");
 }

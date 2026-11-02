@@ -49,13 +49,10 @@ impl SfxFade {
         };
     }
 
-    /// Back to no fade at all: full gain, nothing climbing. The law is the race's, not the fade's,
-    /// and stays.
+    /// Back to no fade at all: full gain, nothing climbing, and the menus' linear law (the race
+    /// arms its own with [`Audio::set_effects_volume_law`] after this, on launching one).
     pub(super) fn release(&mut self) {
-        *self = Self {
-            law: self.law,
-            ..Self::default()
-        };
+        *self = Self::default();
     }
 
     /// The bus gain for the SFX slider's fraction under the fade.
