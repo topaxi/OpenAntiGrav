@@ -44,7 +44,8 @@ replaces it in Eliminator. Pads exist and trigger only in modes with weapons on.
 ### Absorb
 
 A press of the absorb button spends the held weapon and pays its `absorb`
-attribute into the shield pool, clamped at the pool maximum, never floored (90).
+attribute into the shield pool, clamped at the pool maximum, never floored
+(`Ship_SetShield` takes `min(amount, max)`; unscored in the evidence).
 Works for every weapon. In Eliminator absorb pays nothing and fires a one-second
 Shield instead (80).
 
@@ -85,14 +86,14 @@ then pin to the class speed.
 
 | Weapon | Law | Confidence |
 | --- | --- | --- |
-| **Turbo** | For `time` seconds: `T += Engine.turbo` after the thrust cap and before the doubling, so uncapped; with d-pad Up held, boost lift `turbo_jump * T`. Keeps the engine through a stun or slowdown, holds the speed pad at zero and fades it back over one second | 95 (running bit), 90 (rest) |
-| **Shield** | The duration `time` is authored. That it refuses all hull damage is this project's reading: the original's consumer was not found. A rocket's blast force still moves a shielded craft | chosen |
+| **Turbo** | For `time` seconds: `T += Engine.turbo` after the thrust cap and before the doubling, so uncapped; with d-pad Up held, boost lift `turbo_jump * T`. Keeps the engine through a stun or slowdown, holds the speed pad at zero and fades it back over one second | 95 (running bit); the rest unscored in the evidence |
+| **Shield** | The duration `time` is authored. A running Shield suppresses a posted collision impulse and its stun (85), blocks the slowdown add (85) and suppresses the LeachBeam drain (the first line of the drain, unscored). **Chosen:** that it also refuses all hull damage outright; the original's consumer of `time` was not found. A rocket's blast force still moves a shielded craft | 85 recovered parts |
 | **Autopilot** | The player's craft is flown by the original opponent driver for `time` seconds: lane 0, throttle 100, engine multiplier `x1.2` after the cap. Absorb cancels it, fire does nothing, no pad grant while it runs. The `1.2` is the same literal on every title | 90 |
 | **Rocket** | Three at once: one straight, one rotated `+spread`, one `-spread` (radians, authored). Lifetime 5 s, then vanishes with no blast. Detonates on its first wall. Speed is `class speed / 3.6` | 88 (fan), 90 (lifetime) |
 | **Missile** | One in the air. Lock: target within `acos(0.9)` of forward (about 26 degrees), within `lock_max_dist`, and `\|along-track gap\| / range < 1.4`. A press without a lock still fires. Speed ramps linearly from launch speed (floor 14.4 km/h) to class speed over 1 s. Guidance: `dir = v_unit + clamp(normalize(d - v_unit) * 4 dt, error)`, **not renormalised**, so a turning missile is up to 7 % slower. Survives five wall bounces (pushed 0.1 off), detonates on the sixth hit, or at age 3 s | 95 steer, 90 speed, 88 lock, 80 gap rule |
 | **Plasma** | One bolt. Charges 1.0 s before release (a code literal; the authored `charge_time` is read by nothing). Leaves 2.23 units ahead of the craft (75, one craft). Floor follower as the Rocket; ramp to class speed over 1 s | 85 launch ramp, 80 ride height |
 | **Cannon** | Fired by holding the button, not by a press: a countdown built from `rate` arms a round each time it reaches zero, alternating two muzzles; `rounds` rounds per pickup. Muzzle speed `craft speed + 500 km/h` (90). Round life 1 s (90). A floor glance reflects the velocity and pushes 3.0 along the normal (82). A wall hit throws sparks; a craft hit within 6.0 does `damage_per_bullet` and no spark (85) | 82 to 90 |
-| **Mine** | One press lays five, one every 0.1 s, from the craft's own position (92; measured on the original, position 90). They do not move. Fuse `timetodie`; a craft inside `trigger_radius` sets one off. The layer is exempt for 0.5 s (recovered for Pulse, HD filmed) | 92 count and interval |
+| **Mine** | One press lays five, one every 0.1 s, from the craft's own position (92; measured on the original, position 90). Fuse `timetodie`. The layer is exempt for 0.5 s (recovered for Pulse, HD filmed). **Chosen, not measured:** that a mine does not move, and that a craft inside `trigger_radius` sets one off (the attribute is authored, the code that spends it was not found) | 92 count and interval |
 | **Bomb** | A single large mine from the same code path. Pure's Bomb has no fuse. `damageradius` is read by nothing | 90 |
 | **Quake** | A travelling bump on the track's spline, not a projectile. Speed 270 units/s along the track, life 5 s, born 15 units ahead of the firer. Height rises linearly to peak 12 over 0.3 s, then falls to zero at 5 s. Half width `25 + 10 * age`. Each craft carries a smoothed height `h += (raw - h) * 8 * dt`, where `raw` is the wave height while the craft is within half the half-width of the centre. A hit lands on the rising edge of `h > 0.1`. The cockpit eye rises by `h`; there is no body kick. A laid mine trips on raw height above 0.1 | 85 to 90 |
 | **LeachBeam** | A link between two craft, not a projectile. With no lock the pickup is spent and the beam fizzles after 0.75 s (78). Locked: each tick the victim loses `damage`, the shooter gains `repair`, each times `energy_multiplier` on the first tick. Lives `active_time`; disconnects past `range` or on an invulnerable or shielded target, lingering 0.5 s (80). A shielded shooter suppresses both halves | 80 to 88 |

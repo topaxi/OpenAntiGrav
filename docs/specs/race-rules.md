@@ -7,7 +7,9 @@ the physics and weapons pages in one respect: most per-title rules are
 
 Confidences are 0-100 ([rubric](../reverse-engineering/confidence-rubric.md)).
 No score means chosen, not measured. Tuning values authored on the disc
-(Zone's start speed, increment and recharge, medal targets) are not reproduced.
+(Zone's start speed, increment and recharge) are not reproduced. A few
+campaign and race-box figures the evidence pages already quote (kill targets,
+the Head2Head medal) are restated.
 
 ## Timing
 
@@ -150,7 +152,7 @@ own last crossing; an opponent finishing first does not end it.
   and is counted as a death (the opponent wait measured live on PSP; respawn
   site 40).
 - A wrong-way craft has its airbrakes forced to 100 and its engine killed
-  (Pulse only; measured absent on Pure and HD).
+  (Pulse only; measured absent on Pure and HD; unscored in the evidence).
 - **Kill credit** is chosen: the last craft to land a direct weapon hit, cleared
   by a wall hit or another cause. The original's attribution was not traced.
 

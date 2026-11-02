@@ -20,8 +20,9 @@ Numbers on this page are code literals out of the executable.
   original stores angular velocity negated (`w_game = -w_physics`) and its
   cross-product coefficients are written for that convention, which is why its
   weathervane and alignment coefficients read negative where the effect below
-  needs a positive one. Apply exactly one flip, everywhere (confidence 93: the
-  textbook form reproduces the recorded momentum column to 100 %).
+  needs a positive one. Apply exactly one flip, everywhere. The sign convention
+  has no score of its own in the evidence; the recorded momentum column is
+  reproduced with it applied once.
 - **Timing.** The original runs a variable `dt`, clamped to `[0, 0.06666]`
   (Pure's craft update runs at 30 Hz, Pulse's at the display rate). This engine
   runs a fixed 60 Hz, which is what the original does at its target frame rate.
@@ -45,7 +46,7 @@ resolve wall contacts on the integrated pose
 Explicit Euler: position advances by the old velocity, then velocity by the
 acceleration. Forces are evaluated once, so the stability bound of a stiff term
 is set by the frame `dt`, not `dt/3` (a spring-damper `a = -k x - c v` is stable
-while `c >= (2/3) k dt`). Confidence 90.
+while `c >= (2/3) k dt`). Derived arithmetic, unscored in the evidence.
 
 | Step | Term | Reads contact |
 | --- | --- | --- |
@@ -75,8 +76,8 @@ so every passive term reads a non-negative speed.
 | State | Law | Confidence |
 | --- | --- | --- |
 | Throttle | `thrust = input * 100`, **no ramp**. `Engine.gain` and `Engine.falloff` are parsed and dead | 85 |
-| Airbrake L, R | linear ramp toward `input * 100` at `Airbrake.gain` up, `Airbrake.falloff` down. Linear is a reading: an exponential would also fit "per second" | 60 |
-| Brake | no axis: both airbrakes held raises it at `Brakes.gain` to a ceiling of 100, otherwise it falls at `Brakes.falloff` | 80 |
+| Airbrake L, R | ramp toward `input * 100` at `Airbrake.gain` up, `Airbrake.falloff` down. **Unsettled:** linear is a guess, an exponential would also fit "per second"; a capture of a released airbrake would settle it | unsettled |
+| Brake | no axis: both airbrakes held raises it at `Brakes.gain` to a ceiling of 100, otherwise it falls at `Brakes.falloff` | unscored in the evidence |
 | Steering | ramp toward `stick * 100`: `Turning.gain` per second toward a larger magnitude, `Turning.falloff` back toward centre; reaches zero exactly | 84 |
 
 The steering ramp on Pulse has no clamp, so a held lock overshoots by float
@@ -110,7 +111,7 @@ The doubling is a code literal (confidence 88 on `launch_multiplier` being
 [race rules](race-rules.md#zone)). The stun timer is armed by a posted weapon
 or rival impulse (`+= 0.5` s), not by touching a wall (confidence 85).
 
-**Brakes** (84). Only while `prev grounded > 0`:
+**Brakes** (unscored in the evidence). Only while `prev grounded > 0`:
 `F = unit(v) * Brakes.amount * brake`, `Brakes.amount` pre-scaled by `-0.01`
 (negative in memory), faded by `speed * 0.1` below 10 units/s.
 
@@ -169,7 +170,7 @@ is unreachable because `fs` is absolute. Lateral velocity is dragged too.
 **Rolling resistance** (92). `F = -unit(v) * 2.0`, constant, only while
 `fs > 0`.
 
-**Gravity** (90 for the structure, class scale 90).
+**Gravity** (class scale 90; the rest is read from the force site, unscored).
 
 ```text
 F.y = -( normal_gravity * class_scale * mass * grounded
@@ -189,7 +190,7 @@ airborne only, along the craft's own up.
 oriented so it turns the nose toward the direction of travel. This, not any
 control term, is what aligns the craft with its path.
 
-**Angular damping** (80). On the angular momentum `L = I w` in the body frame:
+**Angular damping** (74 to 80). On the angular momentum `L = I w` in the body frame:
 `torque = (-pitch_damping, -5.0, -2.0) * L` for (pitch, yaw, roll). Only the
 pitch coefficient is per ship.
 
@@ -211,7 +212,7 @@ F      = up * spring * (1 + rebound * damp) * (1 - mag_lock)      at the probe p
 - The spring's global stiffness `4/3` is written at construction (95).
 - `rebound` scales **damping only**. For `0.2` s after touchdown it is
   `0.5 * (rebound * t + landing_rebound * (1 - 5 t))`, discontinuous at the end
-  of the window; kept literal (open, see below).
+  of the window; kept literal and unscored (open, see below).
 - Only floor and magstrip surfaces hover; walls and reset geometry do not.
 - A probe with `h < 1.0` on a floor or wall teleports the body up by `1 - h`
   with no velocity change (penetration escape).
@@ -230,8 +231,9 @@ F      = up * spring * (1 + rebound * damp) * (1 - mag_lock)      at the probe p
   Zone's four-corner hover.
 - **Magstrip hold** (maglock): over a magstrip the suspension fades out as the
   blend ramps (`0.2` per frame, so five frames to full) and the craft is repositioned kinematically to
-  `0.8` of the target height along the strip's normal. This is what makes
-  inversions work.
+  `0.8` of the target height along the strip's surface axis. Inversions work
+  because the probes cast along the craft's own up axis and
+  `track_gravity` presses along the contact normal.
 
 ## Rigid body
 
@@ -245,8 +247,7 @@ F      = up * spring * (1 + rebound * damp) * (1 - mag_lock)      at the probe p
 
 ## Wall contact
 
-Resolved after integration, per contact (90 for the response, 88 for contact
-generation):
+Resolved after integration, per contact (scores per item below):
 
 ```text
 j        = -(1 + 0.4) * dot(v_point, n) / (1/m + dot(n, cross(I^-1 cross(r, n), r)))
@@ -302,14 +303,17 @@ Everything above is Pulse. Rows are the laws the engine carries per title;
 | Engine doubling | `x2.0` | none, M 92 | `x2.0` M | I:HD | I:HD |
 | Grounded drag | `-0.005` | `-0.0025` M 92 | `-0.005` M | I:HD | I:HD |
 | Bank-to-yaw gain | 30 | 50 M 92 | 30 M | I:Pulse | I:Pulse |
-| Pitch gain | XML | `0.1` air, `0.4` ground, code, M 92; no gate, no bias | XML; gate and in-air bias M | gate and bias I:HD | gate and bias I:HD |
+| Pitch gain | XML | `0.1` air, `0.4` ground, code, M 92; no gate, M | XML; gate and in-air bias M | gate and bias I:HD | gate and bias I:HD |
+| In-air pitch bias | `weight_distribution` | none, **chosen** (the law page presents it as a measured diff) | M | I:HD | I:HD |
 | Pitch damping | XML | `1.5` racing, `0.6` on grid, M 92 | XML | XML | XML |
 | Sideshift force | XML | `200.0`, code, M 92 | XML | XML | XML |
-| Inertia mass | 0.9 | 0.9 (I:Pulse) | 1.0 M; tensor rotates with the body | I:Pulse | I:Pulse |
+| Inertia mass | 0.9 | 0.9 (I:Pulse) | 1.0 M | 0.9 I:Pulse | 0.9 I:Pulse |
+| Inertia tensor frame | world axes | world axes, M | rotates with the body, M | rotates, I:HD | rotates, I:HD |
 | Steering ramp | unclamped | I:Pulse | clamped M | I:Pulse | I:Pulse |
 | Gravity class scale on | grounded term | I:Pulse | airborne term M 85 | I:HD | I:HD |
-| Wall contact | two-sided | I:Pulse | one-sided; steers away; restitution from data M | I:HD | I:HD |
-| Launch boost | `<StartBoost>` XML | code law, M 88 | XML (see [launch boost](../physics/launch-boost.md)) | not specified here | not specified here |
+| Wall contact | two-sided | I:Pulse | one-sided; steers away; restitution from data M | one-sided and steers away I:HD | one-sided and steers away I:HD |
+| Wall point rate | world | I:Pulse | world | world, **chosen** | body-local, I:HD |
+| Launch boost | `<StartBoost>` XML | code law, M 88 | XML (see [launch boost](../physics/launch-boost.md)) | XML law (no code law) | XML law (no code law) |
 
 Pure has no magstrips, no sideshift XML attribute and no `<pitch>` block. Not
 every row above is separately measured on 2048 and Omega: they inherit HD's
@@ -318,7 +322,7 @@ craft laws wholesale, and the tables record each inheritance with its source.
 ## Open and unsettled
 
 - The rebound blend (above) is discontinuous as transcribed; a factor may have
-  been lost. Kept literal. Confidence in the transcription: 70.
+  been lost. Kept literal and unscored; a capture across a landing would settle it.
 - The weathervane **magnitude** and the alignment stiffness gap (13 %) are
   unverified against play.
 - The `craft+0x2a4` mode enum (mode 0 changes damping and drag by roughly 180x
@@ -330,10 +334,9 @@ craft laws wholesale, and the tables record each inheritance with its source.
 
 ## Where this engine differs from the original
 
-Chosen, not measured: a fixed 60 Hz step; the fixed hash-friendly ordering of
-contacts (probe-major where the original is triangle-major); a two-point hover
-rig used unless a title selects the four-corner variant; wall contacts dropped
-past 40 per frame.
+Chosen, not measured: a fixed 60 Hz step; contacts built probe-major where the
+original is triangle-major (the set is identical, the order is not); wall
+contacts dropped past 40 per frame (the original's limit is a 128-entry array).
 
 ## Evidence
 
