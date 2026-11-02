@@ -1,37 +1,29 @@
 //! What a title ships, described in types a title package fills in.
 //!
-//! This crate is the *vocabulary* half of [ADR-0022]. It holds no constant that
-//! belongs to any game: `oag-pulse` and `oag-pure` supply those, and
-//! `oag-assets` reads them.
+//! The *vocabulary* half of [ADR-0022]: it holds no constant that belongs to a
+//! game. `oag-pulse` and `oag-pure` supply those and `oag-assets` reads them.
 //!
-//! # Two questions, and only one of them is here
+//! # Two questions, only one of them here
 //!
 //! **"How does this byte stream decode?" is answered by the file**, inside
-//! `oag-formats`, from the artifact's own version word. Class-ID tables, header
-//! shapes and schema variants live there and are selected per blob, the same way
-//! PSP and PS2 have always been told apart. No type in this crate describes a
-//! file's contents, and adding one would be the first step toward a decoder that
-//! has to be told which disc it is reading.
+//! `oag-formats`, from the artifact's own version word. No type here describes a
+//! file's contents; that would start a decoder that has to be told which disc it
+//! is reading.
 //!
 //! **"What does this title ship?" is answered here.** Which archives exist and
-//! what they are called is not in any file - it is a property of the release -
-//! so it is the one thing a title package has to state.
+//! what they are called is a property of the release, not of any file.
 //!
-//! # Why this is so small
+//! # Why this is small
 //!
-//! ADR-0022 supersedes ADR-0009's refusal to abstract at n=1, but only for the
-//! axes where a second corpus has actually been measured. `pure-status.md`
-//! measured Pure's archive layout; it did not map Pure's HUD atlas or its mode
-//! set. Types for those would be designed from one example, which is the failure
-//! ADR-0009 named and ADR-0022 does not license. They stay as plain constants
-//! inside the title crate that knows them until a second title forces their
-//! shape.
+//! ADR-0022 licenses an axis only where a second corpus has been measured.
+//! `pure-status.md` measured Pure's archive layout, not its HUD atlas or mode
+//! set; types for those would be designed from one example (the failure ADR-0009
+//! named). They stay plain constants in the title crate until a second title
+//! forces their shape.
 //!
-//! [`boot`] is the one axis that has since been forced, and by measurement:
-//! both titles' boot sequences were cold-booted, they differ in length as well as
-//! in content, and neither can be derived from the other or from its own XML. See
-//! [ADR-0023], which supersedes ADR-0022 item 4 for that axis alone.
-//!
+//! [`boot`] is such an axis: both titles' boot sequences were cold-booted, differ
+//! in length as well as content, and neither derives from the other or from its
+//! XML. See [ADR-0023], which supersedes ADR-0022 item 4 for that axis alone.
 //! [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 //! [ADR-0023]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0023-boot-sequence-as-title-data.md
 
@@ -104,40 +96,31 @@ pub use zoom::ZoomRing;
 
 /// One title's release-level facts.
 ///
-/// A `&'static Title` is chosen once, by the composition root, from the title
-/// crate the build is for. Nothing dispatches through it per call, and it is
-/// deliberately a struct of tables rather than a trait: the differences between
-/// two Wipeout releases are data, and a trait would put a virtual boundary
-/// exactly where the PSP/PS2 split proved none is needed.
-/// Not `Eq`: [`menu::MenuSkin`] carries the front end's offsets and scales as
-/// `f32`, which is the unit the disc authors them in. Comparing two titles for
-/// equality is not something this build does - selection is by `&'static`
-/// identity - so the bound is not worth converting a layout table to fixed
-/// point for.
+/// A `&'static Title` is chosen once by the composition root. Nothing dispatches
+/// through it per call, and it is a struct of tables rather than a trait: the
+/// differences between two Wipeout releases are data.
+///
+/// Not `Eq`: [`menu::MenuSkin`] carries offsets and scales as `f32`, the unit the
+/// disc authors them in, and selection is by `&'static` identity.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Title {
     /// The title as a person would name it, for reports and error messages.
     pub name: &'static str,
     /// Which bulk and companion archives its releases carry.
     pub archives: ArchiveCandidates,
-    /// Serials known to belong to a *different* title. See
-    /// [`ArchiveCandidates`] for why name matching alone cannot tell them apart.
+    /// Serials known to belong to a *different* title. See [`ArchiveCandidates`].
     pub foreign_serials: &'static [ForeignSerial],
-    /// This title's front end, or `None` when none of it has been recovered.
-    ///
-    /// See [`FrontEnd`] for why the layout and the boot chain are one field
-    /// rather than two, and why `None` is a measurement rather than a hole
-    /// waiting to be filled.
+    /// This title's front end, or `None` when none of it has been recovered. See
+    /// [`FrontEnd`] for why layout and boot chain are one field and why `None` is
+    /// a measurement.
     pub front_end: Option<&'static FrontEnd>,
     /// Which layout this title's in-race HUD is read from, per mode. See
     /// [`hud::HudLayouts`].
     pub hud: &'static hud::HudLayouts,
-    /// How this title's HUD sprites reach the screen: their textures, which of
-    /// them are always up, and the one colour this build substitutes. See
-    /// [`hud::HudArt`].
+    /// How this title's HUD sprites reach the screen. See [`hud::HudArt`].
     pub hud_art: &'static hud::HudArt,
-    /// The team ids this title's roster names and the shared identity each is kept
-    /// under, for loyalty. See [`team`].
+    /// The team ids this title's roster names and the shared identity each is
+    /// kept under, for loyalty. See [`team`].
     pub teams: team::Roster,
     /// How this title's races pay loyalty, or `None` when they pay none. See
     /// [`loyalty::LoyaltyEarning`].
@@ -145,29 +128,22 @@ pub struct Title {
     /// What a race falls back to when the caller names no circuit or team. See
     /// [`race::RaceDefaults`].
     ///
-    /// Hung off `Title` for the same reason [`Self::boot`] is: it is needed
-    /// **before** the archives are open, because a command line has to name a
-    /// circuit, and the alternative is a caller comparing titles to pick a
-    /// constant.
-    ///
-    /// That comparison is not merely awkward, it does not work: a title package
-    /// declares its `Title` as a `const`, so `std::ptr::eq` against it compares
-    /// promoted temporaries whose addresses need not be equal. Carrying the
-    /// answer removes the question.
+    /// Hung off `Title` like [`Self::boot`]: it is needed **before** the archives
+    /// are open, because a command line has to name a circuit. A caller comparing
+    /// titles to pick a constant does not work: a title package declares its
+    /// `Title` as a `const`, so `std::ptr::eq` compares promoted temporaries
+    /// whose addresses need not be equal.
     pub race: &'static race::RaceDefaults,
     /// Where this title keeps the exhaust ribbon's texture. See
-    /// [`exhaust::Exhaust`], which is an axis because the two answers are not
-    /// the same kind of thing: Pulse and Pure name a texture, Wipeout HD ships
-    /// a ribbon template whose material names its own.
+    /// [`exhaust::Exhaust`]: Pulse and Pure name a texture, HD ships a ribbon
+    /// template whose material names its own.
     pub exhaust: &'static exhaust::Exhaust,
-    /// Where this title keeps the **engine flare** - the light at the nozzle,
-    /// as distinct from the ribbon [`Self::exhaust`] answers for. See
-    /// [`flare::Flare`], and see that module for why the two are separate axes
-    /// rather than variants of one.
+    /// Where this title keeps the **engine flare**, the light at the nozzle (not
+    /// the ribbon [`Self::exhaust`]). See [`flare::Flare`].
     pub flare: &'static flare::Flare,
     /// What colours a weapon pad's light bars at run time. See
-    /// [`weapon_pad::WeaponPadGlow`]: Wipeout HD overwrites the material's
-    /// authored value with a per-pad cycle, every other title keeps it.
+    /// [`weapon_pad::WeaponPadGlow`]: HD overwrites the material's authored value
+    /// with a per-pad cycle, every other title keeps it.
     pub weapon_pad_glow: &'static weapon_pad::WeaponPadGlow,
     /// Which codepoints in this title's strings are controller-button glyphs,
     /// and which control each depicts. See [`prompts::Prompts`].
@@ -176,76 +152,61 @@ pub struct Title {
     /// one `PI_Team` node per team, one `PI_Track` per circuit, one `PI_Music`
     /// per soundtrack track.
     ///
-    /// **An axis because a third title disagreed**, on exactly the terms
-    /// [`FrontEnd::root`] became one: both PSP titles number the game plugin
-    /// (`Data\Plugins\PI001\Definition.xml`) and Wipeout HD names it
-    /// (`Data\Plugins\Frontend\Definition.xml`), so the `oag-pulse` constant
-    /// every caller reached for is a constant that is wrong for one of three.
-    /// Reaching for it anyway is what made an HD grid eight copies of the
-    /// player's craft: the read missed, the roster came back empty, and
-    /// `livery::teams_for_slots` did the only honest thing it could with no
-    /// teams.
+    /// **An axis because a third title disagreed**, as [`FrontEnd::root`] is: both
+    /// PSP titles number the game plugin (`Data\Plugins\PI001\Definition.xml`) and
+    /// HD names it (`Data\Plugins\Frontend\Definition.xml`). A single `oag-pulse`
+    /// constant missed on HD, the roster came back empty and an HD grid was eight
+    /// copies of the player's craft (`livery::teams_for_slots`).
     ///
-    /// The schema is shared, which is what makes one field enough - HD's file
-    /// carries the same three node kinds under the same attribute names, and
-    /// `oag_raceplay::catalogue` reads all three off it unchanged.
+    /// The schema is shared: HD's file carries the same three node kinds under the
+    /// same attribute names, and `oag_raceplay::catalogue` reads all three off it.
     ///
-    /// **Overlaps [`DeclaredTracks::declared_in`] and is deliberately not
-    /// merged with it.** The two agree on the two titles that carry both, and
-    /// that agreement is unmeasured rather than structural: `Music` is `None`
-    /// on a title whose music is unlocated and `tracks` is `None` on Pulse,
-    /// so routing this through it could not answer for Pulse at all.
+    /// **Overlaps [`DeclaredTracks::declared_in`] and is deliberately not merged
+    /// with it.** The two agree on the titles that carry both, but unmeasured
+    /// rather than structurally: `Music` is `None` where music is unlocated and
+    /// `tracks` is `None` on Pulse, so routing through it could not answer for
+    /// Pulse.
     pub plugin_definition: &'static str,
     /// Where `PI_Track` lives, when it is not [`Self::plugin_definition`].
     ///
-    /// **`None` on every title but one.** Pulse, Pure and Wipeout HD each ship
-    /// one file carrying all three node kinds, which is what makes
-    /// [`Self::plugin_definition`] a single field for them; Wipeout 2048 splits
-    /// into three, one file per kind, so its `plugin_definition` names the
-    /// *team* one (a race needs a roster before it needs a circuit list) and a
-    /// caller after `PI_Track` has nowhere else to read from `plugin_definition`
-    /// alone. `None` means "the same file", never "no circuits".
+    /// **`None` on every title but one.** Pulse, Pure and HD ship one file with all
+    /// three node kinds; 2048 splits them into three, so its `plugin_definition`
+    /// names the *team* one (a race needs a roster before a circuit list).
+    /// `None` means "the same file", never "no circuits".
     pub track_plugin_definition: Option<&'static str>,
     /// What this title puts on screen while it loads, or `None` when it puts up
     /// nothing of its own.
     ///
-    /// **`None` is a measurement here**, the same way [`Self::front_end`]'s is:
-    /// Pure ships neither the tips plugin nor the glow strip in any of its three
-    /// archives, checked 2026-08-12, so there is nothing of its own to draw and
-    /// the screen falls back to this build's own counts. See
-    /// [`loading::Loading`], whose module doc carries the three-way table this
-    /// axis exists for.
+    /// **`None` is a measurement**, like [`Self::front_end`]'s: Pure ships neither
+    /// the tips plugin nor the glow strip in any of its three archives, so the
+    /// screen falls back to this build's own counts. [`loading::Loading`]'s module
+    /// doc carries the three-way table.
     pub loading: Option<&'static loading::Loading>,
     /// Where this title keeps its music, or `None` when none of it has been
     /// located. See [`Music`].
     pub music: Option<&'static Music>,
     /// Which file this title tunes its weapons from. See [`weapons::Weapons`].
     ///
-    /// An axis because the answers differ in shape: Pulse and Wipeout HD ship
-    /// two tables and choose between them by race mode, Pure ships one. Until
-    /// 2026-08-26 every caller reached for `oag_tables::weapons::RACE_ENTRY`,
-    /// which is Pulse's spelling - so a Pure race found no table, parsed no
-    /// weapons and handed out no pickups, silently, with only a report line to
-    /// say so.
+    /// An axis because the answers differ in shape: Pulse and HD ship two tables
+    /// and choose by race mode, Pure ships one. `oag_tables::weapons::RACE_ENTRY`
+    /// is Pulse's spelling, so a Pure race reaching for it found no table and
+    /// handed out no pickups, with only a report line to say so.
     pub weapons: &'static weapons::Weapons,
     /// Where this title keeps each weapon's own body model. See
     /// [`weapons::WeaponModels`].
     ///
-    /// A required field rather than `Option<&'static WeaponModels>`, on the
-    /// same footing [`Self::weapons`] already takes: every title's `TITLE`
-    /// const supplies one, `Default` where nothing is recovered yet, so a
-    /// caller never has to ask "does this title even have a table" before
-    /// asking a field of it.
+    /// Required rather than `Option`, like [`Self::weapons`]: every `TITLE` const
+    /// supplies one (`Default` where nothing is recovered).
     pub weapon_models: &'static weapons::WeaponModels,
     /// What this title throws on each race [`effects::Trigger`], with where each
-    /// answer came from. `None` on a trigger means draw nothing. See
-    /// [`effects`] and ADR-0058.
+    /// answer came from. `None` on a trigger means draw nothing. See [`effects`]
+    /// and ADR-0058.
     pub effects: &'static effects::Effects,
     /// What this title draws or does in a race beyond its effect triggers, as
     /// per-platform rules with their origin. See [`effects::Looks`].
     pub looks: &'static effects::Looks,
-    /// Which campaign reader and draw list this title's front end uses, and
-    /// what of the campaign it authors. See [`campaign::Campaign`].
+    /// Which campaign reader and draw list this title's front end uses, and what
+    /// of the campaign it authors. See [`campaign::Campaign`].
     pub campaign: &'static campaign::Campaign,
     /// The rows of this title's own main menu, as the disc authors them, and how a
     /// row attached to one is drawn. See [`main_menu::MainMenu`].
@@ -254,72 +215,62 @@ pub struct Title {
     /// wordmark, a localised boot movie), or `None` when it resolves nothing
     /// per pressing. See [`pressing::Pressings`].
     pub pressings: Option<&'static pressing::Pressings>,
-    /// The flyby this title plays before its countdown, or `None` where it plays none or none
-    /// has been read. See [`pre_race::PreRace`].
+    /// The flyby this title plays before its countdown, or `None` where it plays
+    /// none or none has been read. See [`pre_race::PreRace`].
     pub pre_race: Option<&'static pre_race::PreRace>,
-    /// How this title draws its circuits' billboard adverts, or `None` where
-    /// they are not drawn. See [`adverts::Adverts`].
+    /// How this title draws its circuits' billboard adverts, or `None` where they
+    /// are not drawn. See [`adverts::Adverts`].
     ///
-    /// **`None` is "not measured or not shipped", never a default**: Pulse and
-    /// Wipeout HD each carry their own target size and clip planes, and a title
-    /// with none of its own draws no advert rather than borrowing another's.
+    /// **`None` is "not measured or not shipped", never a default**: Pulse and HD
+    /// each carry their own target size and clip planes, and a title with none
+    /// draws no advert rather than borrowing another's.
     pub adverts: Option<&'static adverts::Adverts>,
     /// The mouse pointer drawn over this title's screens, as SVG source.
     ///
-    /// **Ours, not the disc's, on every title.** Nothing in this lineage was
-    /// authored for a mouse, so there is no cursor to recover; each title
-    /// package draws one in its own menu palette and says so in the file -
-    /// see `assets/cursors/README.md`. On `Title` rather than on
-    /// [`MenuSkin`] because the one screen a title shows with no menu skin
-    /// at all (a placeholder for a title whose front end is unread) still
-    /// answers a pointer and still needs one to point with. Rasterised and
-    /// drawn by `oag_game::cursor`.
+    /// Nothing in this lineage was authored for a mouse; each title package draws
+    /// one in its own menu palette (`assets/cursors/README.md`). On `Title` rather
+    /// than [`MenuSkin`] because a title with no menu skin (front end unread) still
+    /// answers a pointer. Rasterised and drawn by `oag_game::cursor`.
     pub cursor: &'static str,
-    /// Whether this title's own `original` shadow tier is built, and so
-    /// whether the shadow setting defaults to it. See
-    /// [`shadow::OriginalShadows`].
+    /// Whether this title's own `original` shadow tier is built, and so whether
+    /// the shadow setting defaults to it. See [`shadow::OriginalShadows`].
     pub original_shadows: shadow::OriginalShadows,
-    /// Whether a circuit's rain and snow are played, and so whether the
-    /// weather setting is offered. See [`weather::Weather`].
+    /// Whether a circuit's rain and snow are played, and so whether the weather
+    /// setting is offered. See [`weather::Weather`].
     pub weather: weather::Weather,
 }
 
 /// Where a title keeps the music its front end and its races play.
 ///
-/// # A measured axis, not a designed one
-///
-/// Both PSP titles build their front end's music path in the executable rather
-/// than reading it from any file, and the two paths differ in shape as well as
-/// in spelling: Pulse expands a `Data\Music\FEMusic\frontend%d.at3` template
-/// and Pure names one literal file. Neither is derivable from the other, which
-/// is what ADR-0022 asks for before an axis becomes a type.
+/// Both PSP titles build the front end's music path in the executable, and the
+/// two differ in shape as well as spelling: Pulse expands a
+/// `Data\Music\FEMusic\frontend%d.at3` template, Pure names one literal file.
+/// Neither derives from the other, which is what ADR-0022 asks for before an axis
+/// becomes a type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Music {
-    /// The front end's own looping track, by entry name in the bulk archive,
-    /// or `None` when this build has not recovered one (Omega: no front-end
-    /// music event or state is as clear in its bank as the race tracks').
+    /// The front end's own looping track, by entry name in the bulk archive, or
+    /// `None` when not recovered (Omega: no front-end music event or state is as
+    /// clear in its bank as the race tracks').
     ///
-    /// Not one of the soundtrack tracks on either title: it is short, it loops,
-    /// and it is addressed by a name the executable spells out where a
-    /// soundtrack track is addressed by [`Self::track_file`] or not at all.
+    /// Not a soundtrack track: it is short, loops, and is addressed by a name the
+    /// executable spells out rather than [`Self::track_file`].
     pub front_end: Option<&'static str>,
-    /// How the soundtrack tracks are addressed, for a title whose entries this
-    /// build has recovered **by name**. See [`DeclaredTracks`].
+    /// How the soundtrack tracks are addressed, for a title whose entries are
+    /// recovered **by name**. See [`DeclaredTracks`].
     ///
-    /// `None` for Wipeout Pulse, and that is a statement about **this build**
-    /// rather than about the disc. Pulse's `Definition.xml` declares its sixteen
-    /// tracks exactly the way Pure's declares nineteen and every one of them
-    /// resolves to a real entry; switching Pulse over would reorder its race
-    /// playlist and change which track a PS2 boot's menu plays, which is a
-    /// separate change with its own evidence to record. `oag_sound` finds
-    /// Pulse's sixteen by what the entries *are* until then - see `HANDOVER.md`.
+    /// `None` for Pulse is a statement about **this build**, not the disc: Pulse's
+    /// `Definition.xml` declares its sixteen tracks as Pure's declares nineteen
+    /// and each resolves, but switching would reorder its race playlist and change
+    /// which track a PS2 boot's menu plays, a change needing its own evidence.
+    /// `oag_sound` finds Pulse's sixteen by what the entries *are* (`HANDOVER.md`).
     pub tracks: Option<DeclaredTracks>,
     /// A soundtrack addressed by a Wwise bank state rather than by file. See
     /// [`StateTracks`]. Exclusive with [`Self::tracks`] in practice.
     pub state_tracks: Option<StateTracks>,
-    /// How the playing song is shown during a race, when the title authors a display.
+    /// How the playing song is shown during a race, when the title authors one.
     pub now_playing: Option<now_playing::NowPlaying>,
-    /// When the race song begins to sound, and where that came from. The display follows it.
+    /// When the race song begins to sound, and where that came from.
     pub race_song_start: pre_race::Sourced<race_song::RaceSongStart>,
 }
 
@@ -331,13 +282,13 @@ impl Music {
     }
 }
 
-/// A soundtrack whose playlist is plugin XML and whose audio is picked by
-/// setting Wwise states, the way Wipeout: Omega Collection plays one.
+/// A soundtrack whose playlist is plugin XML and whose audio is picked by setting
+/// Wwise states, as Omega plays one.
 ///
 /// Each `PI_Music` entry's `location` is the `N` of an event
 /// ([`Self::set_track_event`]) that sets [`Self::track_group`] to that song's
-/// state; with the flow states of [`Self::race_flow`] also set, playing
-/// [`Self::play_event`] walks the bank's music switches down to the song.
+/// state; with the [`Self::race_flow`] states also set, [`Self::play_event`]
+/// walks the bank's music switches down to the song.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StateTracks {
     /// The plugin definition whose `PI_Music` nodes list the playlist.
@@ -358,22 +309,20 @@ pub struct StateTracks {
     pub none_state: &'static str,
     /// `(state group, state)` pairs set for a race.
     pub race_flow: &'static [(&'static str, &'static str)],
-    /// `(state group, state)` pairs set for the menus, or empty when this
-    /// build has not read which plays the front end's music.
+    /// `(state group, state)` pairs set for the menus, or empty when not read.
     pub front_end_flow: &'static [(&'static str, &'static str)],
 }
 
 /// Where a title declares its soundtrack, and what a declaration points at.
 ///
 /// One `PI_Music` node per track, each naming the directory the track lives in;
-/// the audio itself is [`Self::file`] inside that directory. Reading the
-/// declaration is what makes the soundtrack order the **disc's own** rather
-/// than whatever order the archive directory happens to be in - which matters
-/// because "the first track" is then something the release decides.
+/// the audio is [`Self::file`] inside it. Reading the declaration makes the
+/// soundtrack order the **disc's own**, so "the first track" is the release's
+/// decision.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DeclaredTracks {
-    /// The plugin definition whose `PI_Music` nodes declare them, by entry name
-    /// in the bulk archive.
+    /// The plugin definition whose `PI_Music` nodes declare them, by entry name in
+    /// the bulk archive.
     pub declared_in: &'static str,
     /// The file inside each declared location.
     pub file: &'static str,
@@ -383,328 +332,246 @@ pub struct DeclaredTracks {
 ///
 /// # Why the two are one field
 ///
-/// They are recovered together and they are useless apart. A boot chain walks
-/// screens whose layout comes from the skin; a skin with no chain has nothing
-/// to open it. Carrying them as two independent `Option`s would admit three
-/// states, two of which no title can be in - and `oag-game`'s `load_shell`
-/// would then need two refusals where one is the honest answer.
+/// They are recovered together and useless apart: a boot chain walks screens
+/// whose layout comes from the skin, and a skin with no chain has nothing to open
+/// it. Two independent `Option`s would admit three states, two impossible, and
+/// `oag-game`'s `load_shell` would need two refusals where one is honest.
 ///
 /// **[ADR-0054](https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md)
-/// narrows this for one axis, not both.** [`Self::menu`] became
-/// `Option<&'static menu::MenuSkin>` because a fourth title's chain *is*
-/// real and walkable while its menu vocabulary genuinely is not
-/// `MenuSkin`-shaped - "a chain with a skin that cannot be honestly filled"
-/// is a state a real title is in, unlike "a skin with no chain" above, which
-/// stays impossible: [`Self::boot`] is still mandatory on `FrontEnd`, so
-/// `oag-game` still needs exactly one refusal for "no front end at all"
-/// ([`crate::Title::front_end`] being `None`) and a second, narrower one for
-/// "no [`menu::MenuSkin`]-shaped menu to draw" - see
-/// [`Self::menu`]/[`Self::touch`].
+/// narrows this for one axis.** [`Self::menu`] is
+/// `Option<&'static menu::MenuSkin>` because a title's chain can be walkable
+/// while its menu vocabulary is not `MenuSkin`-shaped. [`Self::boot`] stays
+/// mandatory, so `oag-game` has one refusal for "no front end at all" and a
+/// narrower one for "no `MenuSkin`-shaped menu to draw" (see
+/// [`Self::menu`]/[`Self::touch`]).
 ///
 /// # Why `None` is a result
 ///
-/// Wipeout HD ships `/data/plugins/frontend/gui/skin.xml` and a directory of
-/// screen definitions beside it, and **not one number out of either has been
-/// read**. A [`MenuSkin`](menu::MenuSkin) filled in from Pulse's would be a
-/// table of measurements attributed to a disc nobody measured, which is exactly
-/// what `CLAUDE.md`'s "never invent what the assets already author" forbids.
-/// `None` says the front end is unrecovered; a caller that needs one refuses by
+/// HD ships `/data/plugins/frontend/gui/skin.xml` and a directory of screen
+/// definitions beside it, and **not one number out of either has been read**. A
+/// [`MenuSkin`](menu::MenuSkin) filled in from Pulse's would attribute
+/// measurements to a disc nobody measured (CLAUDE.md, "Never invent what the
+/// assets already author"). `None` is a visible absence a caller refuses by name.
 /// name and says so, which is a visible absence rather than a wrong picture.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct FrontEnd {
-    /// The archive entry holding this title's front-end root: every boot
-    /// screen, the `FEGlobals` block, and the `LoadXML` list pulling in the
-    /// rest.
+    /// The archive entry holding this title's front-end root: every boot screen,
+    /// the `FEGlobals` block, and the `LoadXML` list pulling in the rest.
     ///
-    /// **An axis because a third title disagreed**, which is the bar
-    /// [ADR-0022] sets. Both PSP titles keep it at
-    /// `Data\Plugins\PI001\GUI\Skin.xml` - a *numbered* plugin - and sharing
-    /// one constant between them was correct while the corpus was two. Wipeout
-    /// HD names its plugins instead (`Data\Plugins\Frontend\Gui\Skin.xml`), the
-    /// same way its soundtrack plugin is named rather than numbered, so a
-    /// constant in `oag-pulse` reached for by every title is now a constant
-    /// that is wrong for one of three.
+    /// **An axis because a third title disagreed** (the [ADR-0022] bar). Both PSP
+    /// titles keep it at `Data\Plugins\PI001\GUI\Skin.xml`, a *numbered* plugin;
+    /// HD names its plugins (`Data\Plugins\Frontend\Gui\Skin.xml`), as it names its
+    /// soundtrack plugin.
     ///
     /// [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
     pub root: &'static str,
     /// The plugins that carry a language, in the order the disc lists them.
     ///
-    /// A *token* rather than a path, joined into
-    /// `Data\Plugins\{token}\Definition.xml` by the caller - which is why the
-    /// PSP titles' `PI008` and Wipeout HD's `Languages\English` can share one
-    /// mechanism despite one being a numbered plugin and the other a named
-    /// directory two deep. Same divergence as [`Self::root`], same fix.
-    ///
-    /// The plugin token is the only stable handle: a language's own name is
-    /// inside its definition, not in its path, so this list is what is read back
-    /// from the archive rather than trusted.
+    /// A *token* joined into `Data\Plugins\{token}\Definition.xml` by the caller,
+    /// so the PSP titles' `PI008` and HD's `Languages\English` share one
+    /// mechanism (same divergence and fix as [`Self::root`]). A language's own
+    /// name is inside its definition, not its path, so this list is what is read
+    /// back from the archive rather than trusted.
     pub language_plugins: &'static [&'static str],
-    /// What each release of this title offers, keyed by disc serial, read off
-    /// the executable's own plugin manifest. Empty where no manifest has been
-    /// read; [`Self::language_plugins`] is then the whole answer.
+    /// What each release of this title offers, keyed by disc serial, read off the
+    /// executable's plugin manifest. Empty where no manifest has been read.
     ///
     /// [`Self::language_plugins`] stays the default for a caller with no serial
-    /// in hand and for a release not listed here, so it is the *superset* a
-    /// disc may carry, not an offered list. See [`Self::offered_languages`].
+    /// and a release not listed here, so it is the *superset* a disc may carry,
+    /// not an offered list. See [`Self::offered_languages`].
     pub language_manifests: &'static [language::LanguageManifest],
     /// The release a source that reports **no serial** is taken to be, for
-    /// [`Self::offered_languages`] alone. `None` where every source this title
-    /// opens names its own release, which is every title but Omega: its PS4
-    /// extract keeps no `param.sfo`, and the EU base-plus-patch pair is the only
-    /// one this project holds. **Chosen, not measured.**
+    /// [`Self::offered_languages`] alone. `None` where every source names its own
+    /// release (every title but Omega: its PS4 extract keeps no `param.sfo`, and
+    /// the EU base-plus-patch pair is the only one this project holds). **Chosen,
+    /// not measured.**
     pub assumed_release: Option<&'static str>,
-    /// The namespace under `assets/ui/strings/disc/` holding this project's own
-    /// translations of this title's disc text, keyed by this title's idstrings.
-    /// `None` for a title nobody has translated yet: Pure, HD and Omega reuse
-    /// id spellings, so a namespace is never shared between titles and a
-    /// project language there reads the disc's English until one is written.
-    /// A disc's own language only has its *gaps* filled from it (an id the
-    /// disc's table lacks or leaves empty); a project language is overlaid.
+    /// The namespace under `assets/ui/strings/disc/` holding this project's
+    /// translations of this title's disc text, keyed by its idstrings. `None` for
+    /// a title nobody has translated: Pure, HD and Omega reuse id spellings, so a
+    /// namespace is never shared between titles. A disc's own language only has
+    /// its *gaps* filled from it (an id the disc's table lacks or leaves empty); a
+    /// project language is overlaid.
     pub disc_strings: Option<&'static str>,
     /// How this title lays menus out, for a title that authors the
-    /// `FEGlobals`/`<Menu>`/`<HorizMenu>` vocabulary [`menu::MenuSkin`]
-    /// describes. See that type.
+    /// `FEGlobals`/`<Menu>`/`<HorizMenu>` vocabulary [`menu::MenuSkin`] describes.
     ///
-    /// A measured axis: both PSP titles' `Skin.xml` files were read and they
-    /// agree on nothing they share. Presentation only - the menu tree itself is
-    /// this project's, not the disc's, and lives in `assets/ui/menu.toml`.
+    /// Both PSP titles' `Skin.xml` files were read and agree on nothing they
+    /// share. Presentation only: the menu tree is this project's, in
+    /// `assets/ui/menu.toml`.
     ///
-    /// **`Option` since [ADR-0054], not because a fourth title's menu is
-    /// merely unread.** Wipeout 2048 authors no `<FEGlobals>` block and no
-    /// `<Menu>`/`<HorizMenu>` widget anywhere - a touch-icon grid over a
-    /// persistent scene instead, a vocabulary this type was never built to
-    /// hold. Filling it with placeholder numbers for a menu shape 2048 does
-    /// not draw would be exactly the invented-stand-in failure `CLAUDE.md`'s
-    /// "never invent what the assets already author" section forbids, so
-    /// `None` here is a measurement about *this front end's idiom*, on the
-    /// same footing [`Self::menu_frame`]'s own `None` already carries for a
-    /// title whose frame has not been read - except here no reading would
-    /// ever fill it. See [`Self::touch`] for what 2048 fills instead, and
-    /// `docs/formats/2048-frontend.md`'s "Why `front_end` stays `None`"
-    /// section (written before this field existed, when the whole struct had
-    /// to refuse for want of this one axis).
+    /// **`Option` since [ADR-0054].** 2048 authors no `<FEGlobals>` block and no
+    /// `<Menu>`/`<HorizMenu>` widget, only a touch-icon grid over a persistent
+    /// scene, a vocabulary this type cannot hold; placeholder numbers would be an
+    /// invented stand-in. `None` here is a measurement about the front end's
+    /// idiom that no reading will fill. See [`Self::touch`] and
+    /// `docs/formats/2048-frontend.md`, "Why `front_end` stays `None`".
     ///
     /// [ADR-0054]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md
     pub menu: Option<&'static menu::MenuSkin>,
-    /// [`Self::menu`] again, for a title's PS2 pressing specifically, when one
-    /// has been read off that pressing's own `Skin.xml` rather than approximated
-    /// from the other.
+    /// [`Self::menu`] again, for a title's PS2 pressing, when read off that
+    /// pressing's own `Skin.xml` rather than approximated from the other.
     ///
-    /// **Why this exists instead of `menu` alone scaling by [`menu::MenuSkin::space`]:**
-    /// `oag_game::menu::Skin::new`'s own doc already says the PS2 conversion
-    /// is "an approximation and says so" - `oag_display::space::Space` records
-    /// 30 of 43 shared `Skin.xml` coordinates landing within a pixel of a
-    /// uniform 640/480, 448/272 stretch and 13 not. Wipeout Pulse's own PS2
-    /// `Data\Plugins\PI001\GUI\MainMenu_Definition.xml` is one of the 13: its
-    /// `<Menu>` authors `y="53"` (not `32 * 448/272 = 52.7` - that one is
-    /// close by coincidence) and its `helptext0` a `y="75"`, 22 below the row
-    /// rather than PSP's 18 scaled to 29.6 - the gap the scaled number leaves
-    /// before the next row (`row_pitch` 41, authored in the same file's own
-    /// `<!-- +41 for each line -->` comment, against the scaled approximation's
-    /// 33.9) is what let that subtitle overrun `RACEBOX`/`COURSE` below it.
-    /// See `oag_pulse::frontend::PS2_MENU_SKIN`'s own doc for the full table.
+    /// Scaling `menu` by [`menu::MenuSkin::space`] is an approximation
+    /// (`oag_display::space::Space`: 30 of 43 shared `Skin.xml` coordinates land
+    /// within a pixel of a uniform 640/480, 448/272 stretch, 13 do not). Pulse's
+    /// PS2 `Data\Plugins\PI001\GUI\MainMenu_Definition.xml` is one of the 13:
+    /// `<Menu>` `y="53"` (not 52.7), `helptext0` `y="75"` (22 below the row, not
+    /// PSP's 18 scaled to 29.6), `row_pitch` 41 (not 33.9), which let that subtitle
+    /// overrun `RACEBOX`/`COURSE`. See `oag_pulse::frontend::PS2_MENU_SKIN`.
     ///
-    /// `None` for every title including Pulse's *other* pressings - a PSP-only
-    /// title has nothing to read here, and Pulse's own PSP pressings keep
-    /// using [`Self::menu`] unchanged. Falls back to [`Self::menu`] when
-    /// `None`, so filling this in only ever narrows an approximation, never
-    /// widens a gap: a title read for one pressing and not the other still
-    /// boots and draws on both.
+    /// `None` for every title but Pulse. Falls back to [`Self::menu`], so filling
+    /// this in only narrows an approximation.
     pub menu_ps2: Option<&'static menu::MenuSkin>,
-    /// How this title lays a touch-icon front end out, for a title that
-    /// authors *that* vocabulary instead of [`menu::MenuSkin`]'s. See
+    /// How this title lays a touch-icon front end out, for a title that authors
+    /// *that* vocabulary instead of [`menu::MenuSkin`]'s. See
     /// [`touch::TouchFrontEnd`].
     ///
-    /// `None` for every title but Wipeout 2048 today - not because the other
-    /// three were checked and found to lack one (Pulse and Pure are PSP
-    /// titles with no touchscreen at all; Wipeout HD's PS3 controller front
-    /// end was already measured as [`menu::MenuSkin`]-shaped), but because
-    /// only 2048 has ever been read for this axis. See [`Self::menu`] for the
-    /// vocabulary this is not a replacement for, and the module docs on
-    /// [`touch`] for why this stays a single-corpus type rather than an
-    /// [ADR-0022]-licensed one.
+    /// `None` for every title but 2048: Pulse and Pure are PSP titles with no
+    /// touchscreen, HD's PS3 front end is [`menu::MenuSkin`]-shaped, and only 2048
+    /// has been read for this axis. See [`touch`] for why this stays a
+    /// single-corpus type.
     pub touch: Option<&'static touch::TouchFrontEnd>,
     /// How this title's own boot sequence goes. See [`boot::BootProfile`].
     ///
-    /// Hung off [`Title`] rather than selected separately so that there is
-    /// **one** selection point: opening one title's archives while driving
-    /// another's chain is then not an inconsistency to be avoided but a state
-    /// that cannot be constructed. The build reached this design after three
-    /// independent screen-name probes had each been answering "which title is
-    /// this?" in their own words, with three chances to disagree.
-    ///
-    /// `oag-assets` receives this and never reads it, which is the price: the
-    /// asset layer holds a field of screen names it has no business in. Inert
-    /// data, and cheaper than two things to keep in step.
+    /// Hung off [`Title`] so there is **one** selection point: opening one title's
+    /// archives while driving another's chain cannot be constructed. `oag-assets`
+    /// receives this and never reads it; inert data is cheaper than two things to
+    /// keep in step.
     pub boot: &'static boot::BootProfile,
-    /// The screen whose own widgets frame every menu: the rules, the corner
-    /// marks and the colour the frame is cleared to.
+    /// The screen whose own widgets frame every menu: the rules, the corner marks
+    /// and the colour the frame is cleared to.
     ///
-    /// **A screen name, and deliberately not a table of coordinates.** Wipeout
-    /// HD authors its whole front-end frame on one screen - `FE Screen`, the
-    /// parent every menu screen is nested inside - as a `<ScreenClear>` and
-    /// three `<Image>` widgets. Naming the screen lets the caller *play the
-    /// data*, which is what `CLAUDE.md` asks for; transcribing the four numbers
-    /// per image into this crate is the hand-transcribed-table failure that rule
-    /// exists to prevent, and it would not survive the disc being re-read.
+    /// **A screen name, not a table of coordinates**, so the caller *plays the
+    /// data* (CLAUDE.md). HD authors its whole front-end frame on one screen, `FE
+    /// Screen`, as a `<ScreenClear>` and three `<Image>` widgets.
     ///
-    /// `None` for a title whose frame has not been read, which is Pure today.
-    /// **That is a gap and not a measurement.** Pulse's own `Top FE
-    /// Screen->FE Screen` carries its light angled top bar and the two bars
-    /// framing the footer's news ticker - one `<Image>` apiece, all three
-    /// patches of one shared `Data\FE\Images\pulse_assets.mip`, nested three
-    /// anonymous `<Screen>` levels down (an XML grouping idiom this build's
-    /// widget collection now walks through - see `oag_game::screen`'s own
-    /// `collect_widgets`). Not `topbarleft`/`topbarcenter`/`topbarright`: that
-    /// was a guess made before the XML was actually read: on the disc it is
-    /// one bar image, not three.
+    /// `None` where the frame has not been read, which is Pure: **a gap, not a
+    /// measurement.** Pulse's `Top FE Screen->FE Screen` carries its angled top
+    /// bar and two bars framing the footer's ticker, one `<Image>` apiece, patches
+    /// of `Data\FE\Images\pulse_assets.mip`, nested three anonymous `<Screen>`
+    /// levels down (`oag_game::screen`'s `collect_widgets` walks through them).
     pub menu_frame: Option<&'static str>,
     /// File stems (lower case, no extension) of the `.gnf` images stored with
     /// their rows in HD's `.gtf` order, bottom-up, so the sprite sheet must
     /// reverse them as it does a `.gtf`'s. Empty for every title but Omega.
     ///
     /// A `.gnf` carries no row-order flag, so which ones is a census: Omega's
-    /// packager re-authored the images its screens name top-down (135 of the 143 asymmetric ones
-    /// that match an HD file by name and size match its rows reversed), but
-    /// eight are HD's bytes exactly, rows in HD's file order. The names are
-    /// measured against HD's own `.gtf` of the same stem
-    /// (`docs/formats/omega-status.md`, "The menu blocks"); an image on this
-    /// list that no HD file matches would be a guess, which is why it is a
-    /// census and not a rule.
+    /// packager re-authored the images its screens name top-down (135 of the 143
+    /// asymmetric ones matching an HD file by name and size match rows reversed),
+    /// but eight are HD's bytes exactly. Measured against HD's `.gtf` of the same
+    /// stem (`docs/formats/omega-status.md`, "The menu blocks"); a listed image no
+    /// HD file matches would be a guess.
     pub bottom_up_gnf: &'static [&'static str],
-    /// The definition file that authors the race box's own selection
-    /// screens - `Track Creation`/`Track Selection` and `Team Selection` -
-    /// or `None` for a title whose race box has not been read.
+    /// The definition file that authors the race box's own selection screens
+    /// (`Track Creation`/`Track Selection`, `Team Selection`), or `None` for a
+    /// title whose race box has not been read.
     ///
-    /// Named here rather than found through the skin's `LoadXML` list
-    /// because the list is 23 files and reading every one at boot for two
-    /// screens is the wrong trade; and because which file holds them is a
-    /// fact about the title. Pulse and Pure both:
-    /// `Selection_Definition.xml` beside their own skin, the same relative
-    /// path on both discs (`docs/formats/race-setup.md`) - Pure's own
-    /// confirmed 2026-09-10, not assumed from Pulse's, despite Pure
-    /// otherwise splitting its race box into a chain of screens the rest of
-    /// which are not read. HD authors its two in separate files, in its own
-    /// dialect - `None` here, see [`Self::team_select`].
+    /// Named rather than found through the skin's `LoadXML` list (23 files, too
+    /// many to read at boot for two screens). Pulse and Pure both:
+    /// `Selection_Definition.xml` beside their skin, the same relative path on both
+    /// discs (`docs/formats/race-setup.md`), though Pure otherwise splits its race
+    /// box into a chain of screens. HD authors its two in separate files: `None`
+    /// here, see [`Self::team_select`].
     pub race_box: Option<&'static str>,
-    /// A standalone `Team Selection` definition, for a title that authors
-    /// its ship screen in a file of its own rather than in [`Self::race_box`]:
-    /// Wipeout HD/Fury's `Team_Selection_Definition.xml`, which its live
-    /// skin includes and its `Cell Selection` redirects to. `None` on every
-    /// other title. **Only the ship screen**: a title naming this and no
-    /// race box keeps its RACE page's own TRACK row, since nothing reads a
-    /// track screen for it.
+    /// A standalone `Team Selection` definition, for a title that authors its ship
+    /// screen in a file of its own rather than in [`Self::race_box`]: HD/Fury's
+    /// `Team_Selection_Definition.xml`, which its live skin includes and its `Cell
+    /// Selection` redirects to. `None` elsewhere. **Only the ship screen**: a
+    /// title naming this and no race box keeps its RACE page's own TRACK row.
     pub team_select: Option<&'static str>,
-    /// A standalone `Track Creation` definition, the track screen's
-    /// counterpart to [`Self::team_select`]: Wipeout HD/Fury's
-    /// `Track_Selection_Definition.xml`, which its live skin includes and
-    /// which only `DATA06` carries. `None` on every other title, whose
+    /// A standalone `Track Creation` definition, the track screen's counterpart to
+    /// [`Self::team_select`]: HD/Fury's `Track_Selection_Definition.xml`, which
+    /// its live skin includes and only `DATA06` carries. `None` elsewhere, whose
     /// track screen is in [`Self::race_box`] or unread.
     pub track_select: Option<&'static str>,
-    /// The definition holding the race box's `Single Player` screen, the page
-    /// whose lists are the settings a custom race is set up with. Read for
-    /// one thing today: the `Eliminations` list, the kill targets the
-    /// `KILLS` row offers (see `oag_game::boot::kill_targets`). `None` on a
-    /// title whose setup page is unread, which shows no kill target to pick.
+    /// The definition holding the race box's `Single Player` screen, whose lists
+    /// are the settings a custom race is set up with. Read today for the
+    /// `Eliminations` list, the kill targets the `KILLS` row offers
+    /// (`oag_game::boot::kill_targets`). `None` where unread: no kill target to pick.
     pub race_setup: Option<&'static str>,
-    /// Text widgets of the track screen whose string the screen's class sets in code in
-    /// place of the one its XML authors: `(widget name, string id)` pairs, empty where
-    /// the class takes the XML's own. Pulse's `TrackSelection_ApplySelection`
-    /// (`0x088ee2f8`) labels the first stat row with `MSC_DISTANCE` (`Distance(m)`)
-    /// where `Track Creation` authors `IG_HUD_DISTANCE` (`Distance`).
+    /// Text widgets of the track screen whose string the screen's class sets in
+    /// code in place of the one its XML authors: `(widget name, string id)` pairs,
+    /// empty where the class takes the XML's own. Pulse's
+    /// `TrackSelection_ApplySelection` (`0x088ee2f8`) labels the first stat row
+    /// `MSC_DISTANCE` (`Distance(m)`) where `Track Creation` authors
+    /// `IG_HUD_DISTANCE` (`Distance`).
     pub track_label_overrides: &'static [(&'static str, &'static str)],
     /// What the track screen's lap and race record rows read before a time is set.
-    /// Pulse's `0x088edd60` draws `-.--.--` for a record of `0` or `0xffff`; the other
-    /// titles keep the single dash this build has always drawn (unmeasured).
+    /// Pulse's `0x088edd60` draws `-.--.--` for a record of `0` or `0xffff`; the
+    /// other titles keep the single dash (unmeasured).
     pub track_record_empty: &'static str,
     /// Whether the track screen's `Distance` row is the circuit's own authored
-    /// `<Physical Length>` (`<location>\stats.xml`, `stats_reversed.xml` for a reversed
-    /// entry) rather than a length this build measures. Pulse's `TrackStats_ParseElement`
-    /// (`0x088c46f8`) reads it into the definition's `+0xdc`, which the screen prints
-    /// through `%d`. `false` where unmeasured: Pure's panel keeps the measured lap.
+    /// `<Physical Length>` (`<location>\stats.xml`, `stats_reversed.xml` for a
+    /// reversed entry) rather than a measured length. Pulse's
+    /// `TrackStats_ParseElement` (`0x088c46f8`) reads it into the definition's
+    /// `+0xdc`, printed through `%d`. `false` where unmeasured: Pure keeps the
+    /// measured lap.
     pub track_distance_authored: bool,
-    /// Whether this title's race-setup screens preview an entry with a
-    /// rendered mesh.
+    /// Whether this title's race-setup screens preview an entry with a rendered
+    /// mesh.
     ///
-    /// **An axis because Pure disagrees with Pulse**, which is the bar
-    /// [ADR-0022] sets, and the disagreement is total rather than a change of
-    /// file name. Pulse draws `<location>\FE\forward.vex` for a circuit and
-    /// `<location>\ship_FE.vex` for a craft, and neither file exists on
-    /// Pure's disc at all: every preview on both of Pure's screens is a
-    /// pre-rendered still, authored in the entry's own `screen.xml` the same
-    /// way Pulse's hexagon-window stills are, and matched to the pixels the
-    /// original draws at RMSE 0 (`docs/formats/race-setup.md`). Pulse draws
-    /// *both* - a mesh and a still chain - so "does this entry author
-    /// stills?" cannot stand in for this, which is why it is stated here
-    /// rather than inferred from the data.
+    /// **An axis because Pure disagrees with Pulse** ([ADR-0022]), totally. Pulse
+    /// draws `<location>\FE\forward.vex` for a circuit and `<location>\ship_FE.vex`
+    /// for a craft; neither exists on Pure's disc, where every preview is a
+    /// pre-rendered still authored in the entry's `screen.xml` and matched to the
+    /// original at RMSE 0 (`docs/formats/race-setup.md`). Pulse draws *both*, so
+    /// "does this entry author stills?" cannot stand in for this.
     ///
-    /// `false` for HD, where the screens preview with stills and widgets of
-    /// their own (its track screen's emblem, see [`Self::track_select`]) and
-    /// no mesh is loaded through this path: the craft is
-    /// [`Self::ship_preview_hull`] and the circuit is [`Self::circuit_models`].
-    /// HD authors `<Model name="TrackModel">` / `<Model name="ShipModel">`
-    /// widgets, a third convention again.
-    ///
-    /// [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
+    /// `false` for HD, which previews with stills and widgets of its own and loads
+    /// no mesh through this path: the craft is [`Self::ship_preview_hull`], the
+    /// circuit [`Self::circuit_models`] (`<Model name="TrackModel">` /
+    /// `<Model name="ShipModel">`, a third convention).
     pub preview_meshes: bool,
-    /// The file under a craft's own directory that its selection screen draws
-    /// as the 3-D craft when [`Self::preview_meshes`] is `false`: HD's
-    /// `Team Selection` draws the race hull (`ship.vex`, the pair
-    /// `ship.rcsmodel`) in its `ShipModel` frame, and ships no `ship_FE.vex`
-    /// (checked 2026-10-08: no `*FE*` mesh under any HD `Data\Ships\<team>`).
-    /// `None` everywhere a title has no such screen or draws stills.
+    /// The file under a craft's directory that its selection screen draws as the
+    /// 3-D craft when [`Self::preview_meshes`] is `false`: HD's `Team Selection`
+    /// draws the race hull (`ship.vex`, the pair `ship.rcsmodel`) in its
+    /// `ShipModel` frame, and no `*FE*` mesh exists under any HD
+    /// `Data\Ships\<team>` (`docs/ui/selection-screens.md`). `None` where a title
+    /// has no such screen or draws stills.
     pub ship_preview_hull: Option<&'static str>,
-    /// A pose the craft preview is drawn at in place of the `ShipModel` widget's own
-    /// `OriginX`/`OriginY`/`z`, for a title whose widget authors a camera this build
-    /// cannot reproduce. `None` draws the widget as authored (HD). See [`ShipPose`].
+    /// A pose the craft preview is drawn at in place of the `ShipModel` widget's
+    /// own `OriginX`/`OriginY`/`z`, for a title whose widget authors a camera this
+    /// build cannot reproduce. `None` draws the widget as authored (HD). See
+    /// [`ShipPose`].
     pub ship_preview_pose: Option<ShipPose>,
-    /// The model each circuit's selection screen draws in its circuit-model
-    /// frame, found by the circuit's environment folder: HD's track-select
-    /// record names `<environment>\FE\track0N.vex` per circuit, and the
-    /// number is not the folder's (`10_Sebenco_Climb` is `track06`). A circuit
-    /// with no row here has no model on the disc and the screen draws nothing
-    /// for it. Empty on a title whose screen draws no such model.
+    /// The model each circuit's selection screen draws in its circuit-model frame,
+    /// found by the circuit's environment folder: HD's track-select record names
+    /// `<environment>\FE\track0N.vex` per circuit, and the number is not the
+    /// folder's (`10_Sebenco_Climb` is `track06`). A circuit with no row has no
+    /// model on the disc. Empty where the screen draws no such model.
     pub circuit_models: &'static [CircuitModel],
-    /// The definition file that authors the three screens a race ends on -
-    /// `EndRace Results`/`EndRace Rewards`/`EndRace Menu` - or `None` for a
-    /// title whose copy has not been read.
+    /// The definition file that authors the three screens a race ends on
+    /// (`EndRace Results`/`EndRace Rewards`/`EndRace Menu`), or `None` for a title
+    /// whose copy has not been read.
     ///
-    /// **An axis for the same reason [`Self::root`] is: a second title
-    /// disagreed.** Both PSP titles keep Pulse's own numbered-plugin path,
-    /// `Data\Plugins\PI001\GUI\EndRace_Definition.xml`, dictionary-shortened
-    /// the way every PSP screen file is. Wipeout HD names its own plugin
-    /// instead, `Data\Plugins\Frontend\Gui\EndRace_Definition.xml` - plain
-    /// UTF-8, not shortened - and ships it in five of its seven archives, no
-    /// two copies alike by MD5. **Three of HD's own screen names match
-    /// Pulse's and almost none of the widgets underneath do**: HD's `EndRace
-    /// Results` is the whole field's finishing order (`Grid{col}.{row}`, a 4
-    /// column by 10 row template - two columns actually captioned, `POS` and
-    /// `TIME` - not Pulse's own per-lap table), and its `EndRace Menu` is one
-    /// `<Block>` per option shown by mode rather than a populated list. So
-    /// this field states *where the file is*, not that the two titles' own
-    /// screens share a reader - see `docs/formats/hd-endrace-screens.md` for
-    /// the widget-by-widget read and `oag_game::endrace`'s own title dispatch
-    /// for the two separate loaders this axis feeds.
+    /// **An axis as [`Self::root`] is.** Both PSP titles keep Pulse's numbered
+    /// path `Data\Plugins\PI001\GUI\EndRace_Definition.xml`, dictionary-shortened
+    /// like every PSP screen file. HD names its plugin
+    /// (`Data\Plugins\Frontend\Gui\EndRace_Definition.xml`), plain UTF-8, and ships
+    /// it in five of its seven archives, no two copies alike by MD5. **Three of
+    /// HD's screen names match Pulse's and almost none of the widgets do**: HD's
+    /// `EndRace Results` is the whole field's finishing order (`Grid{col}.{row}`, 4
+    /// columns by 10 rows, two captioned: `POS`, `TIME`), not Pulse's per-lap
+    /// table, and its `EndRace Menu` is one `<Block>` per option shown by mode. So
+    /// this states *where the file is*, not that the titles share a reader; see
+    /// `docs/formats/hd-endrace-screens.md` and `oag_game::endrace`.
     ///
-    /// `None` for Pure and Omega: neither this project's own build nor a
-    /// documented pass has wired whether either ships such a screen, so `None`
-    /// here is a gap, not a measurement that one is absent - the same
-    /// distinction [`Self::race_box`]'s own doc draws for the titles it is
-    /// `None` on. Wipeout 2048 ships one (`NEWGUI/EndRace_Definition.xml`).
+    /// `None` for Pure and Omega is a gap, not a measurement that none is shipped,
+    /// as for [`Self::race_box`]. 2048 ships one (`NEWGUI/EndRace_Definition.xml`).
     pub endrace_entry: Option<&'static str>,
-    /// The dialect [`Self::endrace_entry`]'s file is written in, which picks
-    /// the reader - see [`endrace`]. `None` for a title whose file is unread
-    /// (Pure) or read and not wired (Omega), neither of which is a
-    /// measurement that the title ships no such screen.
+    /// The dialect [`Self::endrace_entry`]'s file is written in, which picks the
+    /// reader, see [`endrace`]. `None` where the file is unread (Pure) or read and
+    /// not wired (Omega), neither a measurement that no such screen ships.
     pub endrace_style: Option<EndRaceStyle>,
-    /// Whether this title, on a pressing that authors no two-person screens of its own,
-    /// **borrows the PS2 pressing's design** for `Team SelectionSplit`, `EndRace Results
-    /// Split` and `EndRace Rewards Split`, built from the pressing's own assets with the
-    /// PS2's numbers rescaled into its grid. `true` for Pulse alone: the maintainer's rule
-    /// (2026-10-13) is that anything for Pulse is the same on both pressings, and only
-    /// the PS2 authors a split screen. **Chosen, not measured** on the pressings that
-    /// borrow it. `false` elsewhere: no title but Pulse has a PS2 pressing read, and the
-    /// ones with a split screen of their own author it.
+    /// Whether this title, on a pressing that authors no two-person screens of its
+    /// own, **borrows the PS2 pressing's design** for `Team SelectionSplit`,
+    /// `EndRace Results Split` and `EndRace Rewards Split`, built from the
+    /// pressing's own assets with the PS2's numbers rescaled into its grid. `true`
+    /// for Pulse alone, whose PSP and PS2 pressings share anything invented for
+    /// Pulse and only the PS2 authors a split screen. **Chosen, not measured** on
+    /// the pressings that borrow it. `false` elsewhere: no other title has a PS2
+    /// pressing read, and those with a split screen author it.
     pub borrows_ps2_split_screens: bool,
 }
 
@@ -772,29 +639,24 @@ impl FrontEnd {
 
 /// The archive names a title's releases carry, in the order they are tried.
 ///
-/// **Names, not paths, and found rather than derived.** The candidates are
-/// matched against a source's own file list by trailing path component, so a
-/// PS2 pressing whose serial directory differs needs no change here, and a
-/// source that identifies as neither console still opens if it holds an archive
-/// one of them would recognise. A path constant would be right for exactly one
-/// pressing.
+/// **Names, not paths, and found rather than derived.** Candidates are matched
+/// against a source's own file list by trailing path component, so a PS2 pressing
+/// whose serial directory differs needs no change, and a source that identifies
+/// as neither console still opens if it holds a recognised archive.
 ///
 /// The [`Platform`] on each candidate is what the archive *implies* about its
-/// source, used only when the source itself says nothing. Nothing branches on
-/// it: every decode this project has is chosen by the data rather than by the
-/// disc it came off.
+/// source, used only when the source says nothing. Nothing branches on it: every
+/// decode is chosen by the data.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ArchiveCandidates {
     /// Update archives the original mounts *over* the base package: every one
-    /// present is mounted, and they are searched **before** [`Self::data`], in
-    /// the order listed (first listed wins a collision).
+    /// present is mounted, and they are searched **before** [`Self::data`], in the
+    /// order listed (first listed wins a collision).
     ///
-    /// The role a title needs when its patch replaces entries its base also
-    /// holds. [`Self::extra`] cannot do it, because it is searched after
-    /// `data`, and a patch behind the entries it exists to replace is worse
-    /// than none. Empty for every title whose patch is not mounted or that has
-    /// none; Omega's mandatory patch sits in `data`/`extra` for its own
-    /// reasons, see `oag_omega::archives`.
+    /// For a title whose patch replaces entries its base also holds;
+    /// [`Self::extra`] is searched after `data`, so a patch there loses to the
+    /// entries it replaces. Empty where the patch is not mounted or absent;
+    /// Omega's mandatory patch sits in `data`/`extra`, see `oag_omega::archives`.
     pub patch: &'static [(&'static str, Platform)],
     /// The bulk archive: tracks, ships, handling.
     pub data: &'static [(&'static str, Platform)],
@@ -802,77 +664,66 @@ pub struct ArchiveCandidates {
     pub fe: &'static [(&'static str, Platform)],
     /// Every other archive the release ships, **all** of which are mounted.
     ///
-    /// The one field here that is not a candidate list: [`Self::data`] and
-    /// [`Self::fe`] are alternatives, tried in order until one is found, and
-    /// this is a set, every member of which is opened if present.
+    /// Not a candidate list: [`Self::data`] and [`Self::fe`] are alternatives tried
+    /// in order, this is a set, every member opened if present.
     ///
-    /// Two archives were enough while the corpus was Pulse and Pure, which ship
-    /// two apiece that anything reads. **Wipeout HD ships seven**, and they do
-    /// not split by kind: `data/environments` and `data/ships` each appear in
-    /// four of them, so a circuit's archive is not predictable from its path and
-    /// four of the twelve teams' `handlingstats.xml` are in the archive that
-    /// holds neither the circuits nor the other eight. Picking two would have
-    /// silently lost a third of the roster.
+    /// **HD ships seven** and they do not split by kind: `data/environments` and
+    /// `data/ships` each appear in four, so a circuit's archive is not predictable
+    /// from its path, and four of the twelve teams' `handlingstats.xml` are in the
+    /// archive holding neither the circuits nor the other eight.
     ///
-    /// **They overlap, and this list's order therefore decides which copy is
-    /// served.** 360 of HD's 11,139 distinct paths are in more than one of the
-    /// seven, worst of all `/data/plugins/frontend/gui/skin.xml`, which is in
-    /// six and differs by MD5 in every one - and which of those six the original
-    /// loads is unresolved. `oag_assets::Archives::holder_of` takes the first
-    /// hit walking `data` then `fe` then this, so first-listed wins, and that is
-    /// a documented choice rather than a measurement of what the original does.
+    /// **They overlap, so this list's order decides which copy is served.** 360 of
+    /// HD's 11,139 distinct paths are in more than one archive, worst
+    /// `/data/plugins/frontend/gui/skin.xml` (six, differing by MD5 in each; which
+    /// the original loads is unresolved). `oag_assets::Archives::holder_of` takes
+    /// the first hit walking `data`, `fe`, then this: a documented choice, not a
+    /// measurement of the original.
     ///
-    /// **It stopped being harmless on 2026-08-18.** A circuit and a team's
-    /// handling do each sit in exactly one archive, and that was the whole of
-    /// what this project read - until [`Self::plugin_definition`] wired the
-    /// roster up. That file is in **five** of the seven and the copies disagree
-    /// about how many teams exist: `DATA00`'s declares twelve and `DATA02`'s
-    /// eight. So the ordering now decides part of what a player sees, and
-    /// first-listed happens to serve the fullest copy rather than being chosen
-    /// to. See `oag_hd::names::FRONT_END_PLUGIN_DEFINITION` for the table.
+    /// That matters for [`Self::plugin_definition`]: the file is in **five** of the
+    /// seven and the copies disagree on how many teams exist (`DATA00`'s declares
+    /// twelve, `DATA02`'s eight, `docs/formats/hd-hud.md`). First-listed happens to
+    /// serve the fullest copy. See `oag_hd::names::FRONT_END_PLUGIN_DEFINITION`;
+    /// `crates/hd/tests/hd_title_ground_truth.rs` asserts the overlap, which copy
+    /// is served, and that the race path is outside it.
     ///
-    /// `crates/hd/tests/hd_title_ground_truth.rs` asserts the overlap, which of
-    /// the five is served, and that the race path is still outside it - so a
-    /// reordering fails there rather than quietly changing a roster.
-    ///
-    /// Empty for both PSP titles, so nothing about their load changes.
+    /// Empty for both PSP titles.
     pub extra: &'static [(&'static str, Platform)],
     /// The members of [`Self::extra`] that are optional downloadable packages,
-    /// each with what it declares for itself. Empty for every title whose
-    /// extras are all part of the release.
+    /// each with what it declares for itself. Empty where all extras are part of
+    /// the release.
     pub add_ons: &'static [AddOn],
 }
 
 /// A downloadable package the release mounts when the player owns it, in the
-/// original and here: Wipeout 2048's `dlc1.psarc` and `dlc2.psarc`.
+/// original and here: 2048's `dlc1.psarc` and `dlc2.psarc`.
 ///
-/// It is one of [`ArchiveCandidates::extra`], so its files resolve through the
-/// search order like any other; what this adds is what the package says about
-/// *itself*. That has to be read out of the package and not by name through
-/// the search order, because the base archive carries a skeleton of the same
-/// file (2048's `data.psarc` holds a sixteen-circuit, forward-only copy of the
-/// circuit list the packages ship in full) and the base wins a name.
+/// One of [`ArchiveCandidates::extra`], so its files resolve through the search
+/// order; this adds what the package says about *itself*. That has to be read out
+/// of the package, not by name through the search order, because the base archive
+/// carries a skeleton of the same file (2048's `data.psarc` holds a
+/// sixteen-circuit, forward-only copy of the circuit list the packages ship in
+/// full) and the base wins a name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AddOn {
-    /// The archive's file name, matched case-insensitively against the end of
-    /// a mounted extra archive's specifier.
+    /// The archive's file name, matched case-insensitively against the end of a
+    /// mounted extra archive's specifier.
     pub archive: &'static str,
     /// The entry the package declares its circuits in: `PI_Track` nodes in the
-    /// schema [`Title::track_plugin_definition`] names, read from this archive
+    /// schema [`Title::track_plugin_definition`] names, read from this archive alone.
     /// alone.
     pub tracks: &'static str,
     /// The entry listing the `PI_Grid` files (`Data\Plugins\grids\Definition.xml`
-    /// on 2048). The grids themselves ship in the base package and its patch;
-    /// what this package adds is the circuits they race.
+    /// on 2048). The grids ship in the base package and its patch; this package
+    /// adds the circuits they race.
     pub grids: &'static str,
     /// The `Campaign=` value of the `PI_Grid` files this package opens.
     pub campaign: &'static str,
     /// The `GameModeChoice` tile that enters that campaign (`FE_RC_HD`).
     pub tile: &'static str,
-    /// The team the campaign flies when the player's own pick is not on its
-    /// roster: the id Select Team opens on in that campaign.
+    /// The team the campaign flies when the player's pick is not on its roster:
+    /// the id Select Team opens on in that campaign.
     pub default_team: &'static str,
-    /// The HUD layouts the campaign's events read in place of [`Title::hud`]: the title's
+    /// The HUD layouts the campaign's events read in place of [`Title::hud`]: the
     /// race managers load other files for a downloadable campaign's modes.
     pub hud: &'static HudLayouts,
     /// Where the campaign's cells sit on the campaign map.
@@ -880,9 +731,9 @@ pub struct AddOn {
 }
 
 /// Where a downloadable campaign's cells land on the campaign map: a node's
-/// position in canvas units is the bias, plus the offset of the grid it is in,
-/// plus the cell's own `(x, y)` scaled. The numbers are the title's, read off its
-/// executable, so they live with the title and this is the arithmetic alone.
+/// position in canvas units is the bias, plus the offset of its grid, plus the
+/// cell's own `(x, y)` scaled. The numbers are the title's, read off its
+/// executable; this is the arithmetic alone.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NodeMap {
     /// Canvas units one cell step moves a node, across and down.
@@ -904,9 +755,9 @@ impl NodeMap {
         ))
     }
 
-    /// A node's position in cell steps, with the first row and column of the map
-    /// at `1`, the way a single-player event's coordinates are: [`Self::node`]
-    /// less the bias, over the scale, and one more. `None` as [`Self::node`].
+    /// A node's position in cell steps, with the first row and column at `1`, as
+    /// a single-player event's coordinates are: [`Self::node`] less the bias, over
+    /// the scale, plus one. `None` as [`Self::node`].
     #[must_use]
     #[expect(
         clippy::cast_precision_loss,
@@ -923,15 +774,13 @@ impl NodeMap {
 
 /// A serial positively identified as belonging to some other title.
 ///
-/// **This rules a source out, never in, and that asymmetry is the point.** The
-/// serials any one title has actually been verified against are not the full
-/// universe of its legitimate pressings, so an allow-list would hard-reject a
-/// real player's own disc - worse than not checking at all. A serial absent from
-/// every list gets no verdict and still has to find its archives by name.
+/// **This rules a source out, never in.** The serials a title has been verified
+/// against are not the universe of its legitimate pressings, so an allow-list
+/// would reject a real player's disc. A serial absent from every list gets no
+/// verdict and still has to find its archives by name.
 ///
-/// The check exists because sibling titles ship archives under identical names:
-/// Pure's PSP disc carries `Data.wad` and `FE.wad` exactly as Pulse does, so
-/// name matching alone would open it as if it were Pulse.
+/// Needed because sibling titles ship archives under identical names: Pure's PSP
+/// disc carries `Data.wad` and `FE.wad` as Pulse does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ForeignSerial {
     /// The serial, normalised as `AAAA-NNNNN`.
@@ -946,8 +795,8 @@ impl Title {
     pub fn team_identity(&self, team: &str) -> String {
         team::identity_of(self.teams, team)
     }
-    /// The name as a mod's `titles` list spells it: lowercase ASCII, every run
-    /// of anything else one `-` (`Wipeout: Omega Collection` is
+    /// The name as a mod's `titles` list spells it: lowercase ASCII, every run of
+    /// anything else one `-` (`Wipeout: Omega Collection` is
     /// `wipeout-omega-collection`).
     #[must_use]
     pub fn slug(&self) -> String {
@@ -962,8 +811,7 @@ impl Title {
         out.trim_end_matches('-').to_string()
     }
 
-    /// What this title throws on `trigger`, or `None` when it draws nothing
-    /// there (it does not do it, or it is unread).
+    /// What this title throws on `trigger`, or `None` when it draws nothing there.
     #[must_use]
     pub const fn effect_on(
         &self,
