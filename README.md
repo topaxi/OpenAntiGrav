@@ -24,6 +24,28 @@ As of 2026-10-14. Per-subsystem detail and the evidence behind every cell:
 | Wipeout 2048 | Vita | Races and draws textured; campaign events launch (Single Race, Speed Lap, Eliminator) |
 | Omega Collection | PS4 | Front end boots and 142 of 167 campaign cells launch; a race runs on Omega's own circuits but is incomplete |
 
+## What this offers over emulation
+
+- **No emulator in the way.** No shader-compile stutter from an emulated GPU, which helps most on phones and handhelds, and no emulator settings to set up.
+- **More than one game.** Pulse is the most complete. Pure and HD/Fury run too. 2048 and Omega run, but much less is worked out ([status](docs/overview/status.md)).
+- **Local multiplayer.** Split screen or several windows, up to eight seats: [split screen](docs/rendering/split-screen.md).
+- **Smooth above 30 fps.** The frame rate is not capped to the original's. The simulation runs at a fixed 60 Hz and each frame is drawn between ticks. The default limit is 240 fps and can be lifted: [between ticks](docs/rendering/between-ticks.md).
+- **Optional effects on top of the original**, such as mapped shadows and motion blur. Where the original has the effect, you can keep the original's look: [modern features](docs/overview/modern-features.md).
+- **Custom campaigns and tracks.** Campaigns are mod files, and tracks are authored in Blender: [mods](docs/tools/mods.md), [Blender add-on](docs/tools/blender.md).
+- **Mouse, keyboard and touch** as well as pads, with button hints that follow the device you use.
+- **Analogue L2 and R2 as the two airbrakes** on a pad that has analogue triggers, on every title. Thrust and brake on the triggers is the alternative.
+- **Easy to translate.** Text is in plain files; Brazilian Portuguese is already there on every title: [languages](docs/ui/project-languages.md).
+- **Network play, early.** Race on a dedicated server or a LAN host with every title; it has run on one machine so far, so expect rough edges: [networking](docs/networking/README.md).
+
+Downsides:
+
+- It is a rebuild. Some effects, graphics and behaviour will not match the original exactly. [Status](docs/overview/status.md) lists what is checked and what is not.
+- It is under heavy change. Expect bugs and missing features.
+
+## When an emulator is the better choice
+
+For the authentic original experience, use an emulator: PPSSPP, PCSX2, RPCS3, Vita3K or shadPS4. They run the real game code, which this project does not. For online play on the original games, the community revival servers at <https://agracingfoundation.org/> are the place to go.
+
 ## Legal
 
 **No game content is distributed with this project, and none ever will be.** You
@@ -80,6 +102,14 @@ has one short task each: a track from Blender or the Workshop, an AI pilot, a me
 row, packaging. The TOML schemas are published at
 <https://oag.topaxi.com/mods/schemas/>.
 
+## How this is built
+
+Most of the code is written by AI coding agents (Claude), working under a human maintainer who reviews and understands every merge. The method is clean-room: the original executables are a specification. Behaviour is observed, written down with evidence and a 0-100 confidence score, then reimplemented. Nothing is transliterated from a decompiler. The structure is enforced by the `just` gate, which every change must pass:
+
+- File length is capped (1,500 lines), and so are inline test modules.
+- Dependency rules keep the simulation free of rendering, audio, windowing and network code.
+- Determinism checks keep the simulation bit-identical across platforms.
+
 ## Contributing
 
 `cargo build`, and `just` is the gate every change must pass. Start at
@@ -91,6 +121,16 @@ session, the crate map and how work in flight is tracked.
 Every discovery is written down with its evidence and a confidence score, so the
 engine can be understood without reopening Ghidra. Start at
 [`docs/README.md`](docs/README.md).
+
+## Credits
+
+The measurements here depend on other people's tools. Thank you to:
+
+- [PPSSPP](https://www.ppsspp.org/), [PCSX2](https://pcsx2.net/), [RPCS3](https://rpcs3.net/), [Vita3K](https://vita3k.org/) and [shadPS4](https://shadps4.net/): the emulators we compare the original's behaviour against.
+- [Ghidra](https://ghidra-sre.org/): disassembly and decompilation, with [ghidra-allegrex](https://github.com/kotcrab/ghidra-allegrex) (PSP), [ghidra-emotionengine-reloaded](https://github.com/chaoticgd/ghidra-emotionengine-reloaded) (PS2), [Ps3GhidraScripts](https://github.com/clienthax/Ps3GhidraScripts) (PS3), [VitaLoaderRedux](https://github.com/CreepNT/VitaLoaderRedux) (Vita), [GhidraOrbis](https://github.com/astrelsky/GhidraOrbis) (PS4) and [GhidraMCP](https://github.com/LaurieWired/GhidraMCP) (the bridge our agents drive it through).
+- [psvpfstools](https://github.com/motoharu-gosuto/psvpfstools), [pkg2zip](https://github.com/mmozeiko/pkg2zip) and [LibOrbisPkg](https://github.com/maxton/LibOrbisPkg): opening the Vita and PS4 packages.
+- [Blender](https://www.blender.org/): the track add-on is built on it.
+- [wgpu](https://wgpu.rs/) and [winit](https://github.com/rust-windowing/winit): rendering and windowing.
 
 ## Licence
 
