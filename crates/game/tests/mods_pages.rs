@@ -140,3 +140,51 @@ fn check_strings_is_red_on_a_mod_page_missing_its_text_and_green_with_it() {
     assert!(!ok, "{said}");
     assert!(said.contains("TEST_PAGES_BACK"), "{said}");
 }
+
+fn setting_fixture(name: &str) -> mods::Built {
+    build(&folder(name, &["good", name]))
+}
+
+#[test]
+fn a_page_row_saving_under_its_own_mod_id_loads() {
+    let built = setting_fixture("setting-own");
+    let page = built
+        .definition
+        .pages
+        .iter()
+        .find(|page| page.id == "test.setting-own/shelf")
+        .unwrap_or_else(|| panic!("{:?}", built.report));
+    assert!(
+        page.entries
+            .iter()
+            .any(|e| e.setting() == Some("mod.test.setting-own.pick"))
+    );
+}
+
+#[test]
+fn a_page_row_naming_another_mods_setting_drops_its_mod_alone_naming_mod_and_key() {
+    let built = setting_fixture("setting-foreign");
+    assert!(
+        built
+            .definition
+            .pages
+            .iter()
+            .any(|page| page.id == "test.good/shelf"),
+        "the other mod still loads"
+    );
+    assert!(
+        !built
+            .definition
+            .pages
+            .iter()
+            .any(|page| page.id.starts_with("test.setting-foreign/")),
+        "the offending mod adds nothing"
+    );
+    let line = built
+        .report
+        .iter()
+        .find(|line| line.contains("left out") && line.contains("test.setting-foreign"))
+        .unwrap_or_else(|| panic!("{:?}", built.report));
+    assert!(line.contains("setting"), "{line}");
+    assert!(line.contains("mod.test.good.pick"), "{line}");
+}

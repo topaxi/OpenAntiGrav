@@ -181,7 +181,7 @@ fn mod_cases() -> Vec<(&'static str, String, bool)> {
         (
             "a page of its own, reached by a row",
             file(
-                "[[page]]\nid = \"p\"\ntitle = \"P\"\n[[page.entry]]\nkind = \"toggle\"\nlabel = \"B\"\nsetting = \"graphics.bloom\"\n\
+                "[[page]]\nid = \"p\"\ntitle = \"P\"\n[[page.entry]]\nkind = \"toggle\"\nlabel = \"B\"\nsetting = \"mod.t.bloom\"\n\
                  [[entry]]\nid = \"extra\"\nparent = \"top\"\nkind = \"submenu\"\nlabel = \"X\"\ntarget = \"p\"\n",
             ),
             true,
