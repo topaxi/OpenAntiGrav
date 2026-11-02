@@ -16,6 +16,8 @@ use oag_audio::Sound;
 use oag_disc::Platform;
 use oag_title::Title;
 
+use crate::listings::Listings;
+
 /// A source opened as a title this build knows.
 #[derive(Debug)]
 pub struct Opened {
@@ -100,9 +102,22 @@ pub fn named_listing(library: &dyn Library, source: &str) -> Result<Option<Named
 /// A source that is not a known archived title, or an entry that will not
 /// decode.
 pub fn load_entry(library: &dyn Library, source: &str, at: u32, cache_dir: &Path) -> Result<Sound> {
+    load_entry_kept(library, source, at, cache_dir, &Listings::default())
+}
+
+/// [`load_entry`], taking a bank-driven title's playlist and bank from `kept`
+/// (reading them there the first time) instead of reading them per track.
+pub(crate) fn load_entry_kept(
+    library: &dyn Library,
+    source: &str,
+    at: u32,
+    cache_dir: &Path,
+    kept: &Listings,
+) -> Result<Sound> {
     let (title, mut archives) = open_archived(library, source)
         .with_context(|| format!("opening {source} as a known title"))?;
-    oag_music::load_entry(title, &mut archives, at, cache_dir)
+    let prepared = kept.prepared(source, || oag_music::prepare(title, &mut archives))?;
+    oag_music::load_entry(title, &mut archives, at, cache_dir, prepared.as_deref())
 }
 
 /// Decodes the front end's own music loop, named alongside the sound.

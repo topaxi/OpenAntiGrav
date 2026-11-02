@@ -606,13 +606,10 @@ impl Session {
         // applies what the worker chose. See `LoadingStage::music` and
         // `oag_sound::MusicFetchWorker`.
         self.resume_race_music();
-        let music_pick = self.audio.race_music_pick();
-        let music = oag_sound::MusicFetchWorker::spawn(
-            self.music_discs.clone(),
+        let music = self.audio.race_music_fetch(
+            &self.music_discs,
             self.settings.audio.music_source,
-            oag_source::cache::default_audio_cache_dir(),
-            music_pick,
-            "race-music",
+            &oag_source::cache::default_audio_cache_dir(),
         );
         let shell = self.shell.clone().ok_or_else(|| {
             anyhow::anyhow!("this run has no menus, so it has no font to draw with")
@@ -995,11 +992,10 @@ impl Session {
                 self.settings.audio.music_source,
                 &oag_source::cache::default_audio_cache_dir(),
             ),
-            // Defensive rather than load-bearing: `Session::launch_race`
-            // always spawns one for the path this function only runs on
-            // (`Stage::race_loading`). Falls back to the old synchronous
-            // fetch rather than silently leaving the race without music if
-            // that invariant is ever violated.
+            // No fetch was spawned: `Audio::race_music_fetch` found the track
+            // already decoded in `race_cache`, which `start_race_music` applies
+            // without reading anything. Should the cache have changed since, it
+            // spawns the fetch itself, still off this thread.
             None => self.audio.start_race_music(
                 &self.music_discs,
                 self.settings.audio.music_source,

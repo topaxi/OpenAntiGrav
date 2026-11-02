@@ -13,7 +13,7 @@ that buffer (progressive decode was turned down for that reason).
 | --- | --- | --- |
 | Music survey (which releases exist; a PSP or PS2 boot lists its soundtrack and opens every image on the search path to find the other one) | `music-survey` (`MusicDiscs::survey_in_background`) | nothing; the discs read as "not known yet" until it lands |
 | Front-end music and HD's mix tables (`Audio::start_music`) | `menu-music` (`menu_music::MenuJob`) | starts the loop on the tick it lands; a race already started keeps it for after the race |
-| A race's first track at launch (`Session::launch_race`) | `race-music` (`MusicFetchWorker`) | `finish_race_music` applies it, or a later tick does |
+| A race's first track at launch (`Session::launch_race`) | `race-music` (`MusicFetchWorker`), none when the track is already in `race_cache` (`Audio::race_music_fetch`) | `finish_race_music` applies it, or a later tick does; a cached track is applied by `start_race_music` at the hand-off with no fetch |
 | `start_race_music` (`--race`, a resume from the menus) | `race-music`, unless the track is already decoded | a decoded track (the usual resume) starts at once from `race_cache` |
 | Next track (prefetch) and a track boundary | `race-music` | the prefetch is handed over at the boundary, never joined |
 | `MUSIC SOURCE` switch | `menu-source` / `race-source` | applies a held sound at once, else polls |
@@ -112,7 +112,17 @@ clock has to move.
   survey worker too, but the launcher's load itself (archives, front end) still opens the
   same source on the frame thread inside one stalled frame. That is the load's, not the
   music's.
-- **A menu-launched race whose track is already decoded** still fetches it again on the
-  `race-music` worker (`Session::launch_race` always spawns one). Off the frame thread, so
-  only a wasted decode.
-- **Omega's `load_entry`** re-reads the bank and re-plans for each track, on the worker.
+## Landed 2026-11-02
+
+- **A menu-launched race on a track already in `race_cache`** spawns no `MusicFetchWorker`
+  and decodes nothing: `Audio::race_music_fetch` returns `None`. Ground truth
+  (`music_resume_ground_truth.rs`, `*_second_launch_decodes_nothing`, Pulse PSP and HD):
+  the first launch is a fetch, the second is none and its hand-off does no music work on
+  the calling thread. The Deck count of `read and decode on race-music` lines is not
+  re-measured (the Deck was not offered).
+- **Omega's music bank is read and parsed once per run.** `Listings` keeps an
+  `oag_music::omega::Prepared` (the playlist and the bank's bytes) beside the listings;
+  `load_entry` takes it from there, and `mix_with` reads an embedded stem out of the kept
+  bytes. Ground truth: `omega_reads_its_music_bank_once_across_tracks` (two tracks,
+  `MusicDiscs::bank_reads() == 1`). 2048 and HD carry `state_tracks: None` and list their
+  tracks by name (`declared_names`, a directory read, no bank): **checked, differs**.

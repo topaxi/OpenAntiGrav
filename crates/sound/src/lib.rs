@@ -55,7 +55,7 @@ mod race_music;
 mod race_song;
 mod resume;
 mod survey;
-use library::{Library, NoLibrary, load_entry, load_front_end};
+use library::{Library, NoLibrary, load_entry_kept, load_front_end};
 use listings::Listings;
 use race_music::PendingSwitch;
 pub use race_music::{MusicFetchWorker, RacePick};
@@ -359,6 +359,13 @@ impl MusicDiscs {
     fn pick(&self, choice: MusicSource) -> Option<(&str, Platform)> {
         let discs = self.settled();
         discs.pick_here(choice)
+    }
+
+    /// How many times this run read and parsed a bank-driven title's music bank
+    /// (Omega's): once per source, however many tracks it plays.
+    #[must_use]
+    pub fn bank_reads(&self) -> u32 {
+        self.listings.bank_reads()
     }
 
     /// [`Self::pick`] on this value's own fields.
@@ -1200,12 +1207,13 @@ fn load_track(
     platform: Platform,
     track: Track,
     cache_dir: &Path,
+    kept: &Listings,
 ) -> Result<Sound> {
     let _work = probe::work("a soundtrack track's read and decode");
     match platform {
         Platform::Ps2 => load_ps2_track(source, track.at as usize)?
             .with_context(|| format!("{source} carries no {PS2_MUSIC_PATH}")),
-        _ => load_entry(library, source, track.at, cache_dir),
+        _ => load_entry_kept(library, source, track.at, cache_dir, kept),
     }
 }
 

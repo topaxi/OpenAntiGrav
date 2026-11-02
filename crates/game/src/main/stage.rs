@@ -174,7 +174,7 @@ impl Stage {
     pub(crate) fn race_loading(
         gpu: &Gpu,
         worker: race::LoadWorker,
-        music: oag_sound::MusicFetchWorker,
+        music: Option<oag_sound::MusicFetchWorker>,
         font: &oag_ui::font::Atlas,
         sprites: &oag_hud::sprite::Sheet,
         assets: &loading::Assets,
@@ -246,7 +246,7 @@ impl Stage {
             race: Some(worker),
             build: None,
             built_race: None,
-            music: Some(music),
+            music,
             trace,
             icon: clip
                 .filter(|clip| loading::icon::format(clip).is_some())
