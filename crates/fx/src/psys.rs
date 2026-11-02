@@ -674,20 +674,6 @@ impl System {
         self.ignitions += 1;
     }
 
-    /// The severity a particle's drawn size is multiplied by: a sprite
-    /// template reads the instance's current one every frame (the Plasma's
-    /// charging head grows with the charge it is rescaled to, and its
-    /// templates are born once, at the press, when the charge is zero), every
-    /// other particle keeps the one it spawned with. `docs/ghidra/functions/psp-pulse-usa/plasma.md`,
-    /// "the head's template playback".
-    fn drawn_scale(&self, spec: &EmitterSpec, particle: &Particle) -> f32 {
-        if spec.template {
-            self.scale
-        } else {
-            particle.scale
-        }
-    }
-
     /// Changes this system's own severity - see [`Self::ignite`]'s own
     /// `scale` argument for what it multiplies. Every particle already alive
     /// keeps the size and speed it spawned with; only particles emitted
