@@ -162,3 +162,87 @@ fn the_effects_are_silent_through_tick_19_then_fade_in_by_002_a_call() {
         );
     }
 }
+
+/// Per flyby tick of `03_Track` (the whole flyby, no skip): the effects bus gain, the circuit's
+/// emitters sounding, and the craft engines audible (open above zero gain: out of range an engine holds its voice at
+/// zero, as the original's commit volume 0).
+fn flyby_mix() -> Option<Vec<(f32, usize, usize)>> {
+    use oag_audio::Bus;
+    let source = oag_testdata::image(IMAGE)?.display().to_string();
+    let loaded = oag_raceplay::load(&oag_raceplay::Options {
+        source,
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::TimeTrial,
+        track: Some(r"Data\Environments\03_Track\track.vex".to_string()),
+        ..oag_raceplay::Options::default()
+    })
+    .expect("loading the race");
+    let mut audio = oag_sound::Audio::open(
+        &oag_sound::settings::Settings::default(),
+        None,
+        None,
+        oag_audio::MIN_BUFFER,
+        true,
+    );
+    oag_game::sound::hold_race_song(&mut audio, loaded.title);
+    let mut race = oag_raceplay::Race::start(loaded.setup);
+    assert!(race.begin_intro());
+    let mut mix = Vec::new();
+    while race.in_intro() {
+        race.tick_intro(&PlayerInputs::none());
+        oag_game::sound::intro_cues(&mut audio, &mut race);
+        oag_game::sound::flyby_tick(&mut audio, &mut race);
+        audio.tick();
+        let gain = audio.output().with_mixer(|mixer| mixer.bus_gain(Bus::Sfx));
+        mix.push((gain, audio.ambient_voices(), audio.audible_engines()));
+        assert!(mix.len() < 3000, "the flyby never ended");
+    }
+    Some(mix)
+}
+
+/// Under Pulse's flyby the effects fade quiets the circuit's ambience and the gain is the square
+/// of the fade. Fails if the circuit's first emitter does not sound near the original's tick 393 (the flyby once took
+/// none), if a craft engine is audible before about tick 1,150, where the original's grid comes into earshot, or if the bus gain is the fade rather than its square.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn the_flyby_plays_the_circuit_ambience_under_the_squared_fade_and_no_engines_early() {
+    let Some(mix) = flyby_mix() else {
+        return;
+    };
+    for (tick, &(gain, _, _)) in mix.iter().enumerate().take(70) {
+        let fade = if tick < 20 {
+            0.0
+        } else {
+            ((tick - 19) as f32 * 0.02).min(1.0)
+        };
+        assert!(
+            (gain - fade * fade).abs() < 1e-4,
+            "tick {tick}: bus {gain} against fade squared {}",
+            fade * fade
+        );
+    }
+    let first_ambient = mix.iter().position(|&(_, ambient, _)| ambient > 0);
+    eprintln!(
+        "first ambience tick {first_ambient:?}, flyby ticks {}",
+        mix.len()
+    );
+    // The original's first emitter-placed loop, `moather` cue 0 `NEON_RING`, starts at tick 393;
+    // its tick-0 `~AMB` loop is not among the placed emitters in range and nothing stands in for it.
+    assert!(
+        first_ambient.is_some_and(|tick| (380..=400).contains(&tick)),
+        "the circuit's first emitter sounds near tick 393, got {first_ambient:?}"
+    );
+    for tick in [673, 1033, 1200, 1500] {
+        eprintln!(
+            "tick {tick}: ambient {} engines audible {}",
+            mix[tick].1, mix[tick].2
+        );
+    }
+    let first_engine = mix.iter().position(|&(_, _, other)| other > 0);
+    eprintln!("first audible engine tick {first_engine:?}");
+    // The original's first non-zero engine volume is at about tick 1,150.
+    assert!(
+        first_engine.is_some_and(|tick| (1100..=1200).contains(&tick)),
+        "the first audible engine is near tick 1,150, got {first_engine:?}"
+    );
+}

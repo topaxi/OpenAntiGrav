@@ -742,7 +742,7 @@ impl Audio {
         self.output.with_mixer(|mixer| {
             if self.hd.live.is_none() {
                 mixer.set_bus_gain(Bus::Music, settings.music_volume.gain() * MUSIC_MASTER_TRIM);
-                mixer.set_bus_gain(Bus::Sfx, settings.sfx_volume.gain() * self.sfx_fade.gain());
+                mixer.set_bus_gain(Bus::Sfx, self.sfx_fade.bus_gain(settings.sfx_volume.gain()));
             }
             mixer.set_bus_gain(Bus::Speech, settings.speech_volume.gain());
             // Group volumes first, then the master, as the original's chain does.

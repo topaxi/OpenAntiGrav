@@ -8,6 +8,8 @@
 //! SFX slider on [`Bus::Sfx`]; the composition root raises the two calls as
 //! `oag_raceplay::intro_camera::IntroCue`s and one [`Audio::tick`] is one call.
 
+use oag_title::group_volume::EffectsVolumeLaw;
+
 use super::*;
 
 /// The fade's state: its gain and the step it climbs by each tick. A step of zero holds the gain.
@@ -15,6 +17,7 @@ use super::*;
 pub(super) struct SfxFade {
     gain: f32,
     per_tick: f32,
+    law: EffectsVolumeLaw,
 }
 
 impl Default for SfxFade {
@@ -22,6 +25,7 @@ impl Default for SfxFade {
         Self {
             gain: 1.0,
             per_tick: 0.0,
+            law: EffectsVolumeLaw::Linear,
         }
     }
 }
@@ -32,6 +36,7 @@ impl SfxFade {
         *self = Self {
             gain: 0.0,
             per_tick: 0.0,
+            ..*self
         };
     }
 
@@ -40,12 +45,22 @@ impl SfxFade {
         *self = Self {
             gain: 0.0,
             per_tick,
+            ..*self
         };
     }
 
-    /// Back to no fade at all: full gain, nothing climbing.
+    /// Back to no fade at all: full gain, nothing climbing. The law is the race's, not the fade's,
+    /// and stays.
     pub(super) fn release(&mut self) {
-        *self = Self::default();
+        *self = Self {
+            law: self.law,
+            ..Self::default()
+        };
+    }
+
+    /// The bus gain for the SFX slider's fraction under the fade.
+    pub(super) fn bus_gain(&self, slider: f32) -> f32 {
+        self.law.gain(slider * self.gain)
     }
 
     /// One call of `Audio_UpdateGroupVolumes`: adds the step, up to one.
@@ -61,6 +76,13 @@ impl SfxFade {
 }
 
 impl Audio {
+    /// The curve from the SFX slider and the fade to the effects bus, for the title about to race
+    /// (`oag_title::Title::effects_volume_law`). Applied at once.
+    pub fn set_effects_volume_law(&mut self, law: EffectsVolumeLaw) {
+        self.sfx_fade.law = law;
+        self.apply_sfx_fade();
+    }
+
     /// The flyby's first call: the effects go silent and stay so until [`Self::fade_in_sfx`].
     pub fn silence_sfx(&mut self) {
         debug!("audio: effects fade: silent");
@@ -109,6 +131,6 @@ impl Audio {
         }
         let slider = self.hd.sliders.get()[1];
         self.output
-            .with_mixer(|mixer| mixer.set_bus_gain(Bus::Sfx, slider * self.sfx_fade.gain()));
+            .with_mixer(|mixer| mixer.set_bus_gain(Bus::Sfx, self.sfx_fade.bus_gain(slider)));
     }
 }

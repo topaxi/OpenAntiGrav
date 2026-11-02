@@ -1,8 +1,8 @@
 ---
-status: ready-to-wire
+status: measure
 titles: [pulse]
 updated: 2026-11-02
-summary: "Landed: scenery clock, end wash, voice-over, SFX fade. Ready to wire: circuit ambience under the flyby and a squared fade"
+summary: "Landed: flyby clock, wash, voice-over, SFX fade, ambience, squared effects. Open: tick-0 ~AMB loop, ramp ceiling below slider 100"
 categories: [rendering, frontend]
 difficulty: medium (30)
 ---
@@ -67,15 +67,15 @@ node, played for `AnimEnd` seconds or until a held Cross, with the world held at
   3 at volume 0 and only sound from about tick 1,150), and the gain is the **square** of the fade
   (confidence 85; the whole group volume, slider included, is squared at the commit); see
   [race-intro.md](../../docs/gameplay/race-intro.md#what-the-original-plays-under-the-flyby-watched-2026-11-02-lane-pulse-flyby-audio-capture).
-  **Ready to wire** (not done): (1) play the circuit's ambience under the flyby, held voices of the
-  authored emitters in range of the flyby camera, starting at tick 0 (`~AMB` loop first, confidence
-  70), the one-shot `~FLYBY_DIST_*` picks and the later loops at their ticks (`NEON_RING` 393,
-  `yellowarrow` plus `crowd` 673, `bighum` and `birds` 1033; `03_Track`); (2) the original squares the
-  whole group volume (slider fraction times fade; `FUN_089957c0`), ours sets `slider * fade` linearly
-  on the bus (`sfx_fade.rs`): square the product, not the fade alone, and check the slider's law
-  at a setting below 100 first (unmeasured); (3) drop "engine idle only" as the claim: the
-  engine voices are inaudible until the camera nears the grid (tick about 1,150 on `03_Track`,
-  1,529 on `16_Track`, volume about a tenth of the ambience), which ours already gives by range.
+  **Landed 2026-11-02 (`pulse-flyby-ambience`)**: the flyby plays the circuit's placed ambience
+  emitters and the craft engines by range, and Pulse's effects bus is `(slider * fade) ** 2`
+  (`Title::effects_volume_law`; always in a race, not only the flyby). `03_Track`: first emitter
+  at tick 390 (original 393), first audible engine 1,144 (original about 1,150). Not played:
+  the original's `~AMB` loop that sounds from its first call (which cue is unread, not an emitter in
+  range) and the `~FLYBY_DIST_*` one-shots (no trigger recovered). Open from this: the fade's
+  ceiling at a slider below 100 (the original's target is the slider; ours ramps slider times 0-1),
+  Speech presumably squared too (not wired), menus outside a race stay linear, Pure inherits the
+  square unmeasured.
   Open: no WAV (SDL build has no record action), which cue the one ambience voice is, a circuit
   whose camera opens near the grid, other modes. The
   wash frames (`h0103` to `h0125`) fade faster than the executable's 0.7 s, unresolved whether a
@@ -96,9 +96,9 @@ node, played for `AnimEnd` seconds or until a held Cross, with the world held at
 
 ## Next Steps
 
-1. ~~The SFX fade-in at the counter's `0x28`~~ landed; ~~what is audible~~ measured 2026-11-02 (no WAV
-   possible on the SDL build; mixer state read instead). Next: wire the ambience under the flyby and
-   the squared fade (see Open, "Ready to wire"); an `oag-wire` lane, medium.
+1. ~~The SFX fade-in at the counter's `0x28`~~ landed; ~~what is audible~~ measured and ~~wired~~
+   2026-11-02. Next: identify the tick-0 `~AMB` loop's cue, measure the fade's ceiling at a slider
+   below 100 and Speech's law (a capture lane).
 2. ~~Pulse's settle~~ closed (see Open). Optional: a view-side rise of the drawn pose over the first ~50
    flyby ticks, if the flyby camera shows the craft then (chosen, not measured).
 3. Re-measure one of the short circuits (`01_Track`) through to its end, and a fresh-load

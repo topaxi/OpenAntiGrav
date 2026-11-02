@@ -71,6 +71,11 @@ pub const TITLE: &Title = &Title {
     // Measured: the six stand-in codepoints and the glyph each draws, read off
     // `pulse_text.fnt`, `Pulse_14.fnt` and `Pulse_20.fnt` - see `prompts`.
     prompts: prompts::PROMPTS,
+    // `FUN_089957c0` multiplies a voice by its group volume squared; the flyby's fade reads `fade ** 2`
+    // (`docs/gameplay/race-intro.md`, "What the original plays under the flyby").
+    effects_volume_law: oag_title::pre_race::Sourced::measured(
+        oag_title::group_volume::EffectsVolumeLaw::Squared,
+    ),
     plugin_definition: names::GAME_PLUGIN_DEFINITION,
     track_plugin_definition: None,
     loading: Some(&loading::LOADING),
