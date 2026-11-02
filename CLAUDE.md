@@ -80,6 +80,7 @@ whole read and decode again.
 2. Sniff before you read (`Archive::peek`, a few decompressed bytes) and read in full only what can match.
 3. A test that only prints is a scratch sweep: `#[ignore]` with a reason and an early return unless `OAG_SWEEP` is set.
 4. Remove redundancy before splitting for the tail: every slice pays its own fixture load.
+5. Do only the work the assertion needs: read only the bytes, entries or files it checks, and stop a simulation at the tick its claim is decided (a lap count, a first contact, a divergence), not at the race's end.
 
 **A new `tests/*.rs` file is a `mod` line in its crate's `tests/it*.rs`**, not a
 binary of its own. `oag-game` and `oag-raceplay` have five binaries
