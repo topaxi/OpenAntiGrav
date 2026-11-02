@@ -28,12 +28,27 @@ Pure carry `generaltrack.bnk` as a one-element list, HD five banks, Omega none.
 
 A node spells its cue (`~neoon_small`, `~startline`) and a v5 bank keys its
 table by `name_hash`. The name block carries 16-byte records from `+0x10`
-(`{u32 name offset, u32 hash, u16 cue, u16 next, u32 index}`) and a string pool
+(`{u32 name offset, u32 hash, u16 bucket, u16 next, u16 cue, u16}`) and a string pool
 at the offset `+0x0c` gives, so a bank **spells** most of its names beside the
 hashes: `Bank::hashed_names`. Across **33 hashed banks of the base `data.psarc` (the DLC and patch archives were not censused) and 1,603 spelled
 names every name hashes to its own record's hash**
 (`sblk_v5_hashed_names_ground_truth`), which takes the rule from "32 names" to
 exhaustive. Confidence 98.
+
+**Correction, 2026-11-02 (lane `countdown-voice`, confidence 90).** The u16 after the hash is the
+hash **bucket** (`hash % cue_count`), not the cue; the cue is the u16 at record `+0xc`, which is what the
+original's lookup returns (`FUN_813529f2`, [countdown-voice.md](../ghidra/functions/vita-2048-eu-v104/countdown-voice.md)).
+The "every name hashes to its own record's hash" check above is true and says nothing about the cue; the
+reader returned the bucket until this date, so every hashed lookup (the crossfade engine, the circuits'
+emitters, the countdown) landed on a wrong cue for nearly every name. In `speech.bnk` the thirty names take
+thirty distinct `+0xc` cues (pinned by `a_name_resolves_to_its_own_cue_not_its_hash_bucket`).
+
+Consumers checked: the only readers of the record are `Bank::cue_by_hash` and `Bank::hashed_names`
+(`cue_named_or_hashed`: the crossfade engine, `layers::timelines`, `load_track_cue`, the circuit emitters);
+all moved with the fix. Ground truth that moved: `track_audio_2048_ground_truth::the_downloadable_circuits_read_sound_first_then_dlc1_never_beside_the_track`
+re-pinned (emitters playing a sound, e.g. Metropia 4 of 13 to 13 of 13, Sebenco_Climb 9 to 37, Anulpha_Pass 18 to 45), because
+the new value is the original's `+0xc` cue; no golden hash changed. HD and Omega: *checked, differs* - their `SBlk`
+banks are version 3 (`is_hashed` false, spelled names) and Omega's are Wwise, so neither reads this record.
 
 The track path alone uses the hashed lookup (`load_track_cue`,
 `Bank::cue_named_or_hashed`); the race's own cues keep `Bank::cue_named`, whose

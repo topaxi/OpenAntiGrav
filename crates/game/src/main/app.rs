@@ -508,6 +508,7 @@ impl App {
             cursor_sheet,
             cursor_title: None,
             stalled: true,
+            stutter: Default::default(),
             pause: oag_game::pause::State::Running,
             wall: 0.0,
             go_at: None,

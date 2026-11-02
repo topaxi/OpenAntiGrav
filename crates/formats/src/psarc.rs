@@ -637,6 +637,11 @@ pub struct PathEntry {
 /// for any block table (see [`read_block_table`]) still yields a [`PathEntry`];
 /// [`Directory::entry_range`] reports it unreadable.
 #[must_use]
+#[expect(
+    clippy::disallowed_types,
+    reason = "lookup only: the map is never iterated, the result follows `entries` order, and \
+              `or_insert` keeps the first manifest path for a repeated digest"
+)]
 pub fn match_paths_to_entries(entries: &[Entry], manifest_paths: &[String]) -> Vec<PathEntry> {
     let mut path_by_digest: std::collections::HashMap<[u8; 16], &str> =
         std::collections::HashMap::with_capacity(manifest_paths.len());

@@ -110,6 +110,8 @@ pub(crate) mod timing;
 mod windows;
 #[path = "session/tournament.rs"]
 mod tournament;
+#[path = "session/stutter.rs"]
+mod stutter;
 // Named `remix_menu`, not `remix` - `oag_game::remix` is already imported
 // unaliased throughout `session::menus`, and a sibling module of the same
 // name would shadow it at every one of those call sites.
@@ -363,6 +365,8 @@ pub(crate) struct Session {
     /// Starts `true`: the first frame's `elapsed` reaches back to before the
     /// window existed.
     pub(crate) stalled: bool,
+    /// The `frame: N ms` warn's rate limit - see [`stutter::Stutter`].
+    pub(crate) stutter: stutter::Stutter,
     /// Moved by `Start` while a race is running: freezes the tick, nothing else,
     /// and counts a resume down in a race with more than one person. There is
     /// deliberately no pause screen behind it, only the line under it - see

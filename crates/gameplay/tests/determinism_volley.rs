@@ -5,6 +5,13 @@
 //! its own history, and shares only the fixture in `determinism_support`.
 //! `REFERENCE` in the history below is `determinism.rs`'s own table.
 
+#![expect(
+    clippy::disallowed_methods,
+    reason = "known gap: this scenario's starting pose comes off the platform libm, so its hash is \
+              not portable; it is not in CI's cross-platform `--test determinism` runs, and \
+              moving it to `oag_core::math` changes its committed reference"
+)]
+
 use oag_gameplay::hash::hash_world;
 use oag_gameplay::world::World;
 use oag_physics::DamageRules;

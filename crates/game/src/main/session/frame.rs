@@ -264,11 +264,9 @@ impl Session {
             // **A stutter, named where it happened.** An audio underrun and a
             // frame that took 90 ms are the same event seen from two threads,
             // and the only way to tell that from an audio path that is late on
-            // its own is to have both lines in one terminal. 40 ms is two and a
-            // half frames at 60 Hz - past any ordinary jitter and well under
-            // the load stalls `self.stalled` already excludes.
-            if elapsed > std::time::Duration::from_millis(40) {
-                warn!("frame: {:.1} ms", elapsed.as_secs_f32() * 1000.0);
+            // its own is to have both lines in one terminal.
+            if let Some(line) = self.stutter.observe(now, elapsed) {
+                warn!("{line}");
             }
         }
         // `--drive` steps exactly one tick a frame, so a script counts ticks, not milliseconds.

@@ -11,6 +11,21 @@ Two rules hold everywhere in this tree:
 2. **State the confidence.** Every reverse-engineering claim carries a score
    from the [confidence rubric](reverse-engineering/confidence-rubric.md).
 
+## Three kinds of pages
+
+- **Specs** ([`specs/`](specs/README.md)): short, standalone descriptions of the
+  file formats and the game's behaviour. Start here to learn how the engine
+  works.
+- **Evidence** (most of [`formats/`](formats/README.md), [`ghidra/`](ghidra/),
+  [`physics/`](physics/), [`rendering/`](rendering/), [`gameplay/`](gameplay/)):
+  the long record behind each claim, with addresses, captures, test corpora and
+  superseded readings. Read it to check a claim or to continue the
+  reverse-engineering, not to learn the engine. `ghidra/` alone is about half
+  of this tree.
+- **Working notes** (`HANDOVER.md` at the repository root and the thread
+  directory beside it): open work in flight, one file per thread, deleted when
+  the work lands. They are not documentation, and nothing here links into them.
+
 ## Reading order
 
 New to the project? Read these in order:
@@ -76,12 +91,7 @@ tools/                  command line tool reference, and packaging
 ## Status
 
 **[`overview/roadmap.md`](overview/roadmap.md) is the authority**; this page
-carries a one-paragraph summary and nothing per-item, because a status kept in
-two places is a status that drifts in one of them. It already had: this section
-still said "milestone M0, nothing about the game's runtime behaviour has been
-established yet" on 2026-08-18, several milestones and one booted HD front end
-later, which made the first page a new contributor reads the most wrong one
-(finding I5 of that day's review).
+carries a one-paragraph summary and nothing per item, so the two cannot drift.
 
 Where it actually stands: **M0-M4 (foundation, asset archaeology, binary
 understanding, the verification harness, playable core) are complete**. **M5

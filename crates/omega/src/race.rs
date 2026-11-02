@@ -95,8 +95,9 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     sounds: SOUND_BANKS,
     zone_announcer: None,
     eliminator_skin: None,
-    // Chosen, not measured: Pulse's start voice lent to this title, from its mode's speech bank.
-    // Omega's own start is Wwise events (`_321_NGP`, `Go_NGP`) this loader cannot play.
+    // Chosen, not measured: Pulse's start timing lent to this title. Omega's own start is the Wwise
+    // events `_321_NGP` and `Go_NGP`, which no shipped bank defines, so it is silent; the `Go` cue
+    // event still times the song's start (`now_playing_ground_truth`).
     countdown_voice: Some(COUNTDOWN_VOICE),
     // The same grid clamp as HD's, read in Omega's own craft update; see `LAUNCH_HOVER`.
     launch_hover: Some(&LAUNCH_HOVER),
@@ -451,7 +452,7 @@ mod team_identity_tests {
 
 /// The start-of-race voice's banks: the Zone bank is the one the Zone announcer reads, Eliminator
 /// reads the ordinary speech bank. Timing lent from Pulse, chosen, not measured - see
-/// `oag_title::CountdownVoice`.
+/// `oag_title::CountdownVoice`. `speech.bnk` is a Wwise stub, so no voice loads and the start is silent.
 pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoice {
     eliminator_bank: r"Data\audio\sound\speech.bnk",
     zone_bank: r"Data\audio\sound\speech.bnk",

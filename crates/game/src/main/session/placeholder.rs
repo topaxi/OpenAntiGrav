@@ -108,7 +108,7 @@ impl Session {
             title.name
         );
         for problem in &problems {
-            warn!("dlc: {problem}");
+            warn!("{}", oag_raceplay::loader_log::dlc_problem(problem));
         }
         let mut archives = opened.archives;
         let strings = language::StringTable::default();

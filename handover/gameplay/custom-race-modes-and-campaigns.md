@@ -254,14 +254,14 @@ every command's sink at a pinned `file:line`; the maintainer's examples mapped, 
 the engine changes each needs),
 [determinism-and-state.md](../../docs/architecture/wasm-extensions/determinism-and-state.md)
 (NaN, fuel, state blob, hash, replays, lobby, rollback cost), and ADR-0079 (Proposed).
-The spike `spikes/wasm-extensions/` (own `[workspace]`, root `Cargo.lock` untouched):
+Measured (see determinism-and-state.md, "Measurements"):
 wasmtime 50.0.0 Cranelift and Pulley bit-identical under fuel on one x86-64 host,
 including the out-of-fuel trap point; a guest keeping state in its own memory diverges
 after a rollback unless the instance is fresh per tick.
 
 Owed before the ADR can be accepted:
 
-- **The same spike on AArch64** (Android) and **a browser run**; the browser needs the
+- **The same measurements on AArch64** (Android) and **a browser run**; the browser needs the
   load-time NaN and fuel rewrite (README open question 1); wasmtime on `wasm32` is
   rejected unless a serious reason shows up (maintainer, 2026-10-29).
 - **iOS**: `cargo check --target aarch64-apple-ios` of wasmtime needs Apple's `xcrun`;

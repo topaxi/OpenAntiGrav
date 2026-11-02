@@ -105,6 +105,19 @@ through `oag_raceplay::loader_log`:
 - `loader_log::lines_at(Level::Trace, ...)` is the same for a report with one
   line per item.
 - **A dangling track-audio reference is not an absence.** A circuit's node that names a label no loaded bank carries, or a cue its bank does not spell, is the disc's own authoring: its per-cue line (`node(s) dangle`) is `debug` and the circuit gets one `warn` summary (`N cue(s) the circuit names and its banks do not author`). It only counts as dangling when every bank the circuit tried to load parsed, so a Wwise bank that did not read (Omega) keeps its `warn` lines. `docs/formats/hd-audio.md` has the proof for HD, `2048-audio.md` for 2048.
+- **A partial node count is not an absence.** A `.rcsmodel` line such as
+  HD Talon's Junction's `track.vex: 70 of 126 mesh node(s) drawn ... 56
+  addressed no chunk, 0 had no recoverable vertex stride, plus 904 chunk(s) no
+  node references, drawn in world space` stays `debug`: a node that addresses
+  no chunk names a hash the file does not carry, so no chunk is lost, and every
+  chunk the file does carry is drawn (none without a stride, the rest in the
+  world-space pass). Read off a `--race` load of `hdfury-ps3-eu` at
+  `RUST_LOG=oag=debug`, 2026-11-02. Treating it as an absence warned for a
+  picture that was on screen once already (the speed pads,
+  [`pads.md`](../rendering/pads.md)). Only `(0 triangle(s))` is an absence.
+- A DLC pack that would not open is one: the race, boot and placeholder paths
+  word it through `loader_log::dlc_problem`, whose `(not mounted)` is in
+  `ABSENCE`.
 - One report gives at most eight absences a `warn` line of their own. The rest go to `debug`
   and one more `warn` line names each of them: 2048 lacks thirty-odd
   particle effects, and thirty near-identical lines bury the three that differ.

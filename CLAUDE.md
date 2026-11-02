@@ -19,7 +19,7 @@ matrix) before assuming a subsystem exists.
 ## Commands
 
 ```sh
-just              # the gate every commit must pass: fmt-check lint test check-docs check-deps check-unused-deps check-determinism check-size check-title-branching check-title-reach check-names check-handover check-status check-weapon-lineage
+just              # the gate every commit must pass: fmt-check lint test check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-handover check-status check-weapon-lineage
 just fmt | lint | build | docs
 just test         # nextest, quick profile (our crates opt-level 0, examples not built)
 just test-data    # also the #[ignore]d ground-truth tests; needs data/images/; skips binaries that passed unchanged, --full runs all
@@ -29,6 +29,7 @@ just check-deps   # the six dependency rules below
 just check-unused-deps   # no unused or test-only-used normal dependency (cargo shear)
 just check-determinism   # no platform transcendental in simulation code
 just check-size   # ratchet: file length 1,500, inline #[cfg(test)] mod 500
+just check-comment-history   # ratchet: no dates, "maintainer" or lane names in code comments
 just check-title-branching   # ratchet on `title.name == oag_X::TITLE.name` in generic crates; per-title behaviour is `Title` data (ADR-0058)
 just check-title-reach       # ratchet on generic crates naming a title package by path; they go through `oag_title::Title`, the oag-source registry or the composition root
 just check-names  # every names.tsv row still matches its evidence page, offline
@@ -80,6 +81,7 @@ whole read and decode again.
 2. Sniff before you read (`Archive::peek`, a few decompressed bytes) and read in full only what can match.
 3. A test that only prints is a scratch sweep: `#[ignore]` with a reason and an early return unless `OAG_SWEEP` is set.
 4. Remove redundancy before splitting for the tail: every slice pays its own fixture load.
+5. Do only the work the assertion needs: read only the bytes, entries or files it checks, and stop a simulation at the tick its claim is decided (a lap count, a first contact, a divergence), not at the race's end.
 
 **A new `tests/*.rs` file is a `mod` line in its crate's `tests/it*.rs`**, not a
 binary of its own. `oag-game` and `oag-raceplay` have five binaries
@@ -339,6 +341,13 @@ score; a score means measured). Where it is self-evident the thing is ours
 (state-hash tag bytes, our file formats, settings, tooling, a module only this
 engine has), write no "chosen, not measured" or "this is ours" comment: it is
 redundant (maintainer, 2026-11-02).
+
+**Code comments say what and why, never when or who.** No dates, no
+"maintainer said", no lane names, no history ("moved out of `oag-game`",
+"was X before", "superseded"). The evidence (date, emulator, run count,
+address) lives on the doc page; a comment cites the page and section, e.g.
+`` (`docs/physics/<page>.md`, "<section>") ``. Git holds the history. This
+binds `.rs`, `.wgsl`/`.wesl` and scripts; docs pages keep their dates.
 
 ### A mod API change updates the mod author skill
 
