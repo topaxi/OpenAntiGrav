@@ -112,13 +112,9 @@ fn the_flyby_effects_fade_is_silent_then_a_002_ramp_to_the_slider() {
         curve[..=20].iter().all(|&g| g == 0.0),
         "silent through tick 20"
     );
-    for tick in 21..=70 {
+    for (tick, &gain) in curve.iter().enumerate().take(71).skip(21) {
         let want = (tick - 20) as f32 * 0.02;
-        assert!(
-            (curve[tick] - want.min(1.0)).abs() < 1e-5,
-            "tick {tick}: {}",
-            curve[tick]
-        );
+        assert!((gain - want.min(1.0)).abs() < 1e-5, "tick {tick}: {gain}");
     }
     // The original adds the step in `f32` too, so the last call may land a hair under one and
     // the clamp take it on the next.
