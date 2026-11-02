@@ -229,7 +229,8 @@ fires no weapon. The fix is all three - a
 [`quat_from_axis_angle`](../../crates/core/src/math.rs) wrapper beside `acos`,
 a third pattern here over the bare constructor names, and a committed volley
 scenario (now [`crates/gameplay/tests/determinism_volley.rs`](../../crates/gameplay/tests/determinism_volley.rs))
-that fires a real fan from a craft deliberately not axis-aligned. `from_mat3`, `from_rotation_arc` and
+that fires a real fan from a craft deliberately not axis-aligned. Its starting pose goes through `quat_from_axis_angle`, and CI runs it
+beside `--test determinism` (`--test determinism_volley`, release and debug). `from_mat3`, `from_rotation_arc` and
 `lerp` stay off the list: they are `sqrt` and arithmetic, and a gate that
 flags clean code is one people learn to skip.
 
@@ -304,13 +305,6 @@ resolution by type rather than by text (a renamed import cannot hide a call).
   depends on iteration order. They are over `Vec`s today, which is correct; a
   `HashMap` or `HashSet` in the six Clippy-checked crates now fails `just lint`,
   but `oag-weapons` and a third-party ordered-by-hash type are not covered.
-- **`determinism_volley.rs` is not portable and not cross-platform.** Its
-  craft's starting pose is glam's `Quat::from_rotation_y(0.11) *
-  Quat::from_rotation_z(0.23)` (platform `sin_cos`), so its committed reference
-  bakes this machine's libm; and CI's `determinism` job runs `--test
-  determinism` by name, which no longer includes it since the split. Moving the
-  pose to `oag_core::math` and adding the binary to CI is one change that moves
-  that scenario's reference, so it needs a deliberate decision, not a lint fix.
 - **`oag-race`**, which has no gate of its own; lap timing reaches the committed
   hashes only through `oag_gameplay`'s scenario.
 - **Anything that needs a disc image.** Every gate above builds its world in its

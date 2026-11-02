@@ -68,10 +68,6 @@ bit-exact equality is the point; do not adopt it there. #1 also needs the `oag-f
 
 ## Open
 
-- `crates/gameplay/tests/determinism_volley.rs` starts its craft from glam's
-  `Quat::from_rotation_y`/`_z` (platform `sin_cos`) and is not in CI's `--test determinism` runs.
-  Fixing it moves that scenario's committed reference: a decision for the maintainer, not a lint
-  fix (determinism.md, "What is still not covered").
 - Widen the Clippy lists to the script's other determinism-scanned crates (`oag-weapons` first,
   it builds hashed projectile state) if the script is ever to be retired.
 - The library-only share of #9: needs a rerun with `#[cfg(test)]` excluded (`--lib` without
