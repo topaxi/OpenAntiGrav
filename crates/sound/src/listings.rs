@@ -22,13 +22,16 @@ use oag_disc::Platform;
 use crate::Soundtrack;
 use crate::library::Library;
 
+/// A source and the bank-driven playlist kept for it.
+type KeptBank = (String, Arc<oag_music::omega::Prepared>);
+
 /// Listings already read, by source and platform.
 #[derive(Debug, Clone, Default)]
 pub struct Listings {
     read: Arc<Mutex<Vec<(String, Platform, Soundtrack)>>>,
     /// A bank-driven title's playlist and bank, by source: what Omega's
     /// `load_entry` used to read and parse again for every track.
-    prepared: Arc<Mutex<Vec<(String, Arc<oag_music::omega::Prepared>)>>>,
+    prepared: Arc<Mutex<Vec<KeptBank>>>,
     /// How many times a bank was read and parsed, for a test to count.
     prepares: Arc<AtomicU32>,
 }
@@ -80,7 +83,7 @@ impl Listings {
         source: &str,
         build: impl FnOnce() -> Result<Option<oag_music::omega::Prepared>>,
     ) -> Result<Option<Arc<oag_music::omega::Prepared>>> {
-        let find = |kept: &Vec<(String, Arc<oag_music::omega::Prepared>)>| {
+        let find = |kept: &[KeptBank]| {
             kept.iter()
                 .find(|(s, _)| s == source)
                 .map(|(_, p)| Arc::clone(p))

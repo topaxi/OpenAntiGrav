@@ -1,5 +1,5 @@
 ---
-status: needs-measurement
+status: measure
 titles: [all]
 updated: 2026-11-02
 summary: "Launch fetch skip and Omega bank-once landed; Deck count and the web boot re-time remain"
