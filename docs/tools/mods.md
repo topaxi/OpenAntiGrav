@@ -121,7 +121,7 @@ Rules:
   parent. On HD and Omega it is revealed below the parent tab while the parent or one of
   its attached rows has focus, with the pad (left and right step the top level, up and down
   step inside the family) and the pointer.
-- **No behaviour of its own.** A mod cannot add a page, a setting, a mode or an action.
+- **No behaviour of its own on a title's pages.** A mod's attached rows are a `submenu` or an `action` of the closed vocabulary. A mod's own pages, settings, queries and `launch_race` are decided in [ADR-0082](../architecture/adr/0082-a-mod-owns-pages-settings-queries-and-one-launch-action.md) and not built yet; until they are, a mod cannot add a page, a setting, a mode or an action.
 
 `assets/mods/oag-extras/` is the worked example: this project's own REMIX, RECORDS and
 QUIT, built into the program, in the same format, carrying the project's own licence.
