@@ -15,27 +15,14 @@ use oag_ui::{menu, strings};
 use crate::stage::Stage;
 
 use super::Session;
-use oag_game::livery_row::variant_choices;
 
-/// Brings a stored `remix.*` setting into step with the list its row is
-/// about to be given, by **`Menu::supply`'s own rule**: keep the stored value
-/// when the new list still offers it, take the first one otherwise, and hold
-/// nothing at all when the list is empty.
-///
-/// **Without this the page is dead on a fresh settings file.**
-/// `settings::Remix` defaults every field to the empty string, `Menu::seed`
-/// can only move a row to a value the row's own list carries, and `supply`
-/// resets an unmatched row to index 0 - so the row showed the first title
-/// while `self.settings` still held `""`, `Session::remix_catalogue_for`
-/// answered `None` for a title of that name, TRACK/TEAM/VARIANT were never
-/// supplied at all, and START reported "no track title chosen yet" and did
-/// nothing. Applying `supply`'s rule to the setting too is what makes the row
-/// and the setting agree by construction rather than by a second seed.
-///
-/// The same staleness the ordinary RACE page's own CIRCUIT row documents -
-/// see `Session::resupply_tracks_for_mode` - reached one row further here,
-/// because a remix's whole page is scoped to a title the settings file may
-/// name before the row it feeds has any list at all.
+/// Brings a stored setting into step with the list its row is about to be
+/// given, by **`Menu::supply`'s own rule**: keep the stored value when the new
+/// list still offers it, take the first one otherwise, and hold nothing at all
+/// when the list is empty. `Menu::seed` can only move a row to a value its list
+/// carries and `supply` resets an unmatched row to index 0, so without this the
+/// row would show one value while the setting a launch reads holds another
+/// (`oag_game::remix::settle_queries` is the same rule for a mod's picks).
 pub(super) fn settle(stored: &mut String, offered: &[menu::Choice]) {
     if !offered.iter().any(|choice| choice.value == *stored) {
         *stored = offered
@@ -43,19 +30,6 @@ pub(super) fn settle(stored: &mut String, offered: &[menu::Choice]) {
             .map(|choice| choice.value.clone())
             .unwrap_or_default();
     }
-}
-
-/// A remix catalogue's tracks, in the shape `Menu::supply` wants - the same
-/// `(Track, label)` -> `Choice::labelled` mapping [`Session::open_menus`]
-/// applies to a booted title's own `Shell::tracks`, pulled out because the
-/// RACE REMIX page needs it at two call sites and `Session::open_menus`'s
-/// own list is a different, already-in-scope local of the same shape.
-pub(super) fn remix_track_choices(catalogue: &remix::Catalogue) -> Vec<menu::Choice> {
-    catalogue
-        .tracks
-        .iter()
-        .map(|(track, name)| menu::Choice::labelled(&track.id, name))
-        .collect()
 }
 
 /// CRAFT TITLE's own offered list - `titles` plus a synthetic "Wipeout HD"
@@ -95,14 +69,14 @@ fn craft_title_choices(titles: &[oag_game::launcher::Candidate]) -> Vec<menu::Ch
 /// or Wipeout 2048's own package when "Wipeout HD" is named and no real HD
 /// source is among `titles`.
 ///
-/// **Race Remix only, and confined to the CRAFT TITLE row.** 2048 reships
+/// **For a craft title only** (a `craft_titles` row, `teams_of`, `variants_of`,
+/// the launch's craft side). 2048 reships
 /// Wipeout HD/Fury's own twelve-team roster verbatim under a tree of its own
 /// (`oag_title::RaceDefaults::guest_roster`) - a real disc still wins when
 /// this machine has one, matching `oag_assets::Archives::open_with_packs`'s
 /// own precedent that a more canonical source always wins a collision.
-/// TRACK TITLE's own resolver, [`Session::remix_catalogue_for`], does not
-/// call this: 2048's own circuits are not HD's, so no fallback applies
-/// there.
+/// A `tracks_of` answer does not call this: 2048's own circuits are not HD's,
+/// so no fallback applies there.
 ///
 /// A free function for the same testability reason [`craft_title_choices`]
 /// is.
@@ -130,121 +104,114 @@ pub(super) fn resolve_craft_backing<'a>(
         })
 }
 
-/// The list a table-form query offers for the title named `title_name`, off the survey
-/// `titles`; `None` when that title cannot be opened here.
+/// The list a table-form query offers, off the survey `titles` and the custom-track scan.
+/// `None` when the title the query names cannot be opened here.
+///
+/// `teams_of` is a craft title's roster ([`craft_catalogue`]: the guest roster of ADR-0035
+/// folded in, narrowed to the companion class); `variants_of` resolves its title the same way;
+/// `tracks_of` on CUSTOM is the scan's files, each checked against its host disc and the
+/// companion craft title.
 fn query_lists(
     titles: &[oag_game::launcher::Candidate],
+    custom: &oag_game::custom_tracks::Scan,
+    strings: &oag_ui::language::StringTable,
     query: menu::Query,
-    title_name: &str,
+    args: remix::QueryArgs<'_>,
 ) -> Option<Vec<menu::Choice>> {
-    let candidate = titles.iter().find(|candidate| candidate.title() == title_name)?;
-    let title = candidate.playable()?;
-    match remix::catalogue(&candidate.source) {
-        Ok(catalogue) => remix::query_choices(query, &catalogue, title),
-        Err(e) => {
-            warn!("{}: {e:#}", candidate.source);
-            None
+    match query {
+        menu::Query::TracksOf if args.title == oag_game::custom_tracks::CUSTOM => {
+            let craft = args
+                .companion
+                .and_then(|craft| resolve_craft_backing(titles, craft))
+                .and_then(oag_game::launcher::Candidate::playable);
+            Some(custom_track_choices(titles, custom, strings, craft))
+        }
+        menu::Query::TeamsOf => {
+            let title = resolve_craft_backing(titles, args.title)?.playable()?;
+            let catalogue = craft_catalogue(titles, args.title, args.companion.unwrap_or(""))?;
+            remix::query_choices(query, &catalogue, title, None)
+        }
+        menu::Query::VariantsOf => {
+            let candidate = resolve_craft_backing(titles, args.title)?;
+            let title = candidate.playable()?;
+            let catalogue = match args.companion {
+                Some(_) => remix::Catalogue {
+                    tracks: Vec::new(),
+                    teams: Vec::new(),
+                },
+                None => craft_catalogue(titles, args.title, "")?,
+            };
+            remix::query_choices(query, &catalogue, title, args.companion)
+        }
+        _ => {
+            let candidate = titles.iter().find(|candidate| candidate.title() == args.title)?;
+            let title = candidate.playable()?;
+            match remix::catalogue(&candidate.source) {
+                Ok(catalogue) => remix::query_choices(query, &catalogue, title, args.companion),
+                Err(e) => {
+                    warn!("{}: {e:#}", candidate.source);
+                    None
+                }
+            }
         }
     }
 }
 
-impl Session {
-    /// Opens `title_setting`'s own catalogue, if this machine can currently
-    /// open a source for it - the shared resolver for TRACK TITLE's own two
-    /// call sites. CRAFT TITLE uses [`Self::remix_craft_catalogue`] instead:
-    /// it can resolve to a different real title than the one named on
-    /// screen, which TRACK TITLE never does.
-    pub(super) fn remix_catalogue_for(&self, title_setting: &str) -> Option<remix::Catalogue> {
-        let candidate = self
-            .titles
-            .iter()
-            .find(|candidate| candidate.title() == title_setting)?;
-        match remix::catalogue(&candidate.source) {
-            Ok(catalogue) => Some(catalogue),
-            Err(e) => {
-                warn!("{}: {e:#}", candidate.source);
-                None
-            }
+/// The custom tracks as TRACK offers them under CUSTOM: the scan's files, each unavailable
+/// with the reason when its host disc is not here or `craft` cannot race it.
+fn custom_track_choices(
+    titles: &[oag_game::launcher::Candidate],
+    custom: &oag_game::custom_tracks::Scan,
+    strings: &oag_ui::language::StringTable,
+    craft: Option<&'static oag_title::Title>,
+) -> Vec<menu::Choice> {
+    let mut choices = custom.choices(strings);
+    for choice in &mut choices {
+        if choice.unavailable.is_some() {
+            continue;
+        }
+        let Some(listing) = custom.listing(&choice.value) else {
+            continue;
+        };
+        if let Some(host) = listing.host.as_deref()
+            && let Err(why) = oag_game::custom_tracks::host_disc(titles, host)
+        {
+            choice.unavailable = Some(why);
+        } else if let Some(why) = oag_game::custom_tracks::not_offered(listing, craft) {
+            choice.unavailable = Some(why);
         }
     }
+    choices
+}
 
-    /// Re-lists the mod rows whose `values_from` carries an `of`, for the title that setting
-    /// is on now. `changed` limits it to the queries that name that setting.
+impl Session {
+    /// Re-lists the rows whose `values_from` carries an `of`, for the values the settings they
+    /// read hold now, and settles the mod picks under them (`remix::settle_queries`).
+    /// `changed` limits it to the queries that read that setting.
     pub(crate) fn resupply_queries(&mut self, changed: Option<&str>) {
-        let titles = &self.titles;
+        let strings = strings::project_table(self.settings.language.as_deref());
+        let (titles, custom) = (&self.titles, &self.custom_tracks);
+        let mod_settings = &mut self.settings.mod_settings;
         if let Stage::Menu(stage) = &mut self.stage {
-            remix::resolve_queries(&mut stage.menu, changed, |query, title| {
-                query_lists(titles, query, title)
+            remix::settle_queries(&mut stage.menu, mod_settings, changed, |query, args| {
+                query_lists(titles, custom, &strings, query, args)
             });
         }
     }
 
     /// [`Self::resupply_queries`] on a model not yet on screen.
-    pub(crate) fn resolve_menu_queries(&self, model: &mut menu::Menu) {
-        remix::resolve_queries(model, None, |query, title| {
-            query_lists(&self.titles, query, title)
+    pub(crate) fn resolve_menu_queries(&mut self, model: &mut menu::Menu) {
+        let strings = strings::project_table(self.settings.language.as_deref());
+        let (titles, custom) = (&self.titles, &self.custom_tracks);
+        remix::settle_queries(model, &mut self.settings.mod_settings, None, |query, args| {
+            query_lists(titles, custom, &strings, query, args)
         });
-    }
-
-    /// Re-supplies the RACE REMIX page's TRACK row from whichever title
-    /// `remix.track_title` currently names - the `remix.track_title`-changed
-    /// counterpart to [`Self::resupply_tracks_for_mode`]. A no-op when the
-    /// menus are not open or [`Self::remix_catalogue_for`] found nothing.
-    pub(crate) fn resupply_remix_tracks(&mut self) {
-        let Some(tracks) = self.remix_track_options() else {
-            return;
-        };
-        settle(&mut self.settings.remix.track, &tracks);
-        if let Stage::Menu(stage) = &mut self.stage {
-            stage.menu.supply(menu::ValueSource::RemixTracks, &tracks);
-        }
-    }
-
-    /// [`Self::resupply_remix_tracks`]' sibling for TEAM, scoped to
-    /// `remix.craft_title` instead - [`Self::remix_craft_catalogue`], not
-    /// [`Self::remix_catalogue_for`], since CRAFT TITLE is the row that can
-    /// resolve to a different real title than the one named on screen.
-    pub(crate) fn resupply_remix_teams(&mut self) {
-        let Some(catalogue) = self.remix_craft_catalogue() else {
-            return;
-        };
-        settle(&mut self.settings.remix.team, &catalogue.teams);
-        if let Stage::Menu(stage) = &mut self.stage {
-            stage
-                .menu
-                .supply(menu::ValueSource::RemixTeams, &catalogue.teams);
-        }
     }
 
     /// CRAFT TITLE's own offered list - [`craft_title_choices`]'s own doc
     /// comment for the rule.
     pub(super) fn craft_title_choices(&self) -> Vec<menu::Choice> {
         craft_title_choices(&self.titles)
-    }
-
-    /// Settles TRACK TITLE and CRAFT TITLE against the titles this machine
-    /// can actually open, and hands back the two lists so the caller does not
-    /// build them twice - [`settle`]'s own rule, at the outermost level.
-    ///
-    /// **Run before anything scoped under them.** A remix's page is a chain -
-    /// a title decides its catalogue and the catalogue decides the
-    /// TRACK/TEAM under it - so settling inward-out would settle a row
-    /// against the list the title it no longer names would have given.
-    ///
-    /// No archive is opened here: both rows are answered from the survey
-    /// [`Session::titles`] already holds, which is why this is the one step
-    /// that is free to run on every menu-open.
-    pub(super) fn settle_remix_titles(&mut self) -> (Vec<menu::Choice>, Vec<menu::Choice>) {
-        let mut titles: Vec<menu::Choice> = self
-            .titles
-            .iter()
-            .map(|candidate| menu::Choice::plain(candidate.title()))
-            .collect();
-        titles.extend(self.custom_title_choice());
-        settle(&mut self.settings.remix.track_title, &titles);
-        let craft_titles = self.craft_title_choices();
-        settle(&mut self.settings.remix.craft_title, &craft_titles);
-        (titles, craft_titles)
     }
 
     /// Every speed class any title this machine can currently open a source
@@ -281,7 +248,7 @@ impl Session {
     /// RACE page still offers four while this one offers five. See
     /// `docs/architecture/menus.md`'s "SPEED CLASS: `VECTOR` is confined to
     /// RACE REMIX" section for why the two pages disagree.
-    pub(super) fn remix_speed_classes(&self) -> Vec<menu::Choice> {
+    pub(super) fn speed_classes_union(&self) -> Vec<menu::Choice> {
         let ladders = self
             .titles
             .iter()
@@ -301,7 +268,7 @@ impl Session {
     /// RACE REMIX's AI DIFFICULTY options: the four tiers and a `none` option
     /// the row is pinned to while the chosen class has no controller
     /// (`oag_ai::coverage`), labelled with the reason.
-    pub(super) fn remix_ai_difficulty(&self) -> Vec<menu::Choice> {
+    pub(super) fn ai_difficulties(&self) -> Vec<menu::Choice> {
         let table = strings::project_table(self.settings.language.as_deref());
         let mut choices: Vec<menu::Choice> = ["novice", "skilled", "elite", "ace"]
             .into_iter()
@@ -310,69 +277,18 @@ impl Session {
         choices.push(menu::Choice::labelled(
             "none",
             table
-                .get("OAG_REMIX_NO_DRIVER")
+                .get("OAG_RACE_NO_DRIVER")
                 .unwrap_or("NO OPPONENTS: NO DRIVER FOR THIS CLASS")
                 .to_string(),
         ));
         choices
     }
 
-    /// Which real candidate backs `remix.craft_title` -
-    /// [`resolve_craft_backing`]'s own doc comment for the rule.
-    pub(super) fn craft_backing(&self) -> Option<&oag_game::launcher::Candidate> {
-        resolve_craft_backing(&self.titles, &self.settings.remix.craft_title)
-    }
-
-    /// Which title `remix.craft_title` currently names, resolved through
-    /// [`Self::craft_backing`] so a guest-backed pick answers with the title
-    /// that will actually be opened (2048), not the one named on screen.
-    pub(super) fn craft_title(&self) -> Option<&'static oag_title::Title> {
-        self.craft_backing()
-            .and_then(|candidate| candidate.playable())
-    }
-
-    /// CRAFT TITLE's own team list - [`Self::remix_catalogue_for`] scoped to
-    /// [`Self::craft_backing`] instead of a direct survey match, and filtered
-    /// so 2048's own list and "Wipeout HD"'s never show the same twelve teams
-    /// twice:
-    ///
-    /// - 2048 picked directly: its own five native teams only - the reused
-    ///   twelve now live under "Wipeout HD" instead.
-    /// - "Wipeout HD" picked, backed by a real HD source: unfiltered, exactly
-    ///   today's list.
-    /// - "Wipeout HD" picked, backed by 2048 (no real HD source on this
-    ///   machine): only the reused twelve, off 2048's own catalogue.
-    /// - Every other title: unfiltered.
-    pub(super) fn remix_craft_catalogue(&self) -> Option<remix::Catalogue> {
-        craft_catalogue(
-            &self.titles,
-            &self.settings.remix.craft_title,
-            &self.settings.race.class,
-        )
-    }
-
-    /// [`super::menus::Session::resupply_race_variant`]'s sibling for RACE
-    /// REMIX's craft-side TEAM row, scoped to `remix.craft_title` and
-    /// `remix.team` instead of the booted title.
-    pub(crate) fn resupply_remix_variant(&mut self) {
-        let Some(title) = self.craft_title() else {
-            return;
-        };
-        let choices = variant_choices(title, &self.settings.remix.team);
-        settle(&mut self.settings.remix.variant, &choices);
-        if let Stage::Menu(stage) = &mut self.stage {
-            stage.menu.supply(menu::ValueSource::RemixVariant, &choices);
-        }
-    }
-
-    /// The RACE REMIX page's own launch: the `launch_remix` action is `launch_race`
-    /// with RACE REMIX's keys (`menu::LaunchInputs::remix`).
-    pub(crate) fn launch_remix(&mut self) {
-        self.launch_keyed(&menu::LaunchInputs::remix());
-    }
 }
 
-/// [`Session::remix_craft_catalogue`] over an explicit CRAFT TITLE and class.
+/// The roster a craft title offers: [`resolve_craft_backing`]'s title, with 2048's guest
+/// roster folded in or out by which name was picked, and narrowed to the teams that author
+/// `class` (none when `class` is empty).
 pub(super) fn craft_catalogue(
     titles: &[oag_game::launcher::Candidate],
     requested: &str,

@@ -33,6 +33,13 @@ pub fn set(table: &mut ModSettings, setting: &str, value: &str) -> bool {
     true
 }
 
+/// The stored value of `setting`, or `None` when it is not a `mod.<id>.<key>` or holds nothing.
+#[must_use]
+pub fn get<'a>(table: &'a ModSettings, setting: &str) -> Option<&'a str> {
+    let (id, key) = split(setting)?;
+    table.get(id)?.get(key).map(String::as_str)
+}
+
 /// Every stored value as a `(setting, value)` pair, for seeding the menu's rows.
 #[must_use]
 pub fn seeds(table: &ModSettings) -> Vec<(String, oag_ui::menu::Value)> {

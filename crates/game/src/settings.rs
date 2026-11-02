@@ -71,7 +71,7 @@ pub mod web;
 
 pub use controls::{Controls, TriggerSensitivity};
 pub use online::Online;
-pub use race::{Race, Remix};
+pub use race::Race;
 pub mod mod_settings;
 pub use render_profile::{RenderProfile, SCREEN_FILTER_OFF, profile_key};
 use render_profile::{
@@ -125,8 +125,6 @@ pub struct Settings {
     pub source: Source,
     #[serde(default)]
     pub race: Race,
-    #[serde(default)]
-    pub remix: Remix,
     /// The online lobby last connected to (`session::online`).
     #[serde(default)]
     pub online: Online,
@@ -1126,11 +1124,6 @@ pub fn menu_seeds(
         ("race.kill_target", text(&settings.race.kill_target)),
         ("race.weapons", text(&settings.race.weapons)),
         ("ai.difficulty", text(&settings.ai.difficulty)),
-        ("remix.track_title", text(&settings.remix.track_title)),
-        ("remix.track", text(&settings.remix.track)),
-        ("remix.craft_title", text(&settings.remix.craft_title)),
-        ("remix.team", text(&settings.remix.team)),
-        ("remix.variant", text(&settings.remix.variant)),
     ];
     // Offered only where the ribbon is the PSP preset; elsewhere the row is
     // dropped (`Definition::drop_unavailable_trail_order`) and nothing seeds it.

@@ -90,7 +90,7 @@ the release rather than of this project:
 | TRACK | `Data\Plugins\PI001\Definition.xml`, and the label from the language's string table |
 | LANGUAGE | the language plugins `PI008`-`PI012` |
 | TEAM | `values_from = "teams"` - the roster [`boot::load_teams`](../../crates/game/src/boot/roster.rs) read off the open source's own declared definition plus any mounted pack, not a repository list |
-| SPEED CLASS | `values_from = "speed_classes"` - the booted title's own per-team `handlingstats.xml` ladder, off `oag_title::SpeedClasses`, **narrowed to `is_offered_outside_remix`**: four rungs, always, even on a Wipeout Pure boot whose own ladder authors five. On the RACE REMIX page it is `values_from = "remix_speed_classes"` instead: the **union** across every title this machine can open a source for, filtered only by `is_selectable`. Four rungs on Pulse and HD, **five on Wipeout Pure**, whose `VECTOR` sits below `VENOM` - so the remix row is five exactly when a Pure source is mounted, and no flag implements that. See [below](#speed-class-vector-is-confined-to-race-remix) for why the two pages disagree |
+| SPEED CLASS | `values_from = "speed_classes"` - the booted title's own per-team `handlingstats.xml` ladder, off `oag_title::SpeedClasses`, **narrowed to `is_offered_outside_remix`**: four rungs, always, even on a Wipeout Pure boot whose own ladder authors five. On the RACE REMIX page (the official mod `oag.remix`, [mods](../tools/mods.md#official-mods-assetsmodsofficial)) it is `values_from = { query = "speed_classes_union" }` instead: the **union** across every title this machine can open a source for, filtered only by `is_selectable`. Four rungs on Pulse and HD, **five on Wipeout Pure**, whose `VECTOR` sits below `VENOM` - so the remix row is five exactly when a Pure source is mounted, and no flag implements that. See [below](#speed-class-vector-is-confined-to-race-remix) for why the two pages disagree |
 | MONITOR | winit's own monitor list, read every time the menus open |
 | WINDOW MODE / SIZE / ASPECT / RENDER SCALE / RECONSTRUCTION / MSAA / UPSCALER SHARPNESS / BRIGHTNESS / GAMMA / FIELD OF VIEW | `oag_display::display`, pinned to its own `ALL`/`OFFERED` lists by a test |
 | PERFORMANCE OVERLAY / FRAME LIMIT / VSYNC | `oag_present::perf`, pinned the same way |
@@ -214,12 +214,10 @@ person who gets to make it, and it is recorded here for the same reason: so
 the four-rung RACE page reads as this decision to the next contributor and
 not as an unimplemented feature or a bug to "fix" back to five.
 
-**The row shrinking is not enough by itself, because `race.class` is one
-setting shared with RACE REMIX.** `Session::launch_remix` reads the exact same
-`race.class` string RACE's own `LaunchRace` handler does, and RACE REMIX's own
-row still offers `VECTOR` when Pure is mounted - so settling it to `"vector"`
-there and then opening the ordinary RACE page leaves a stored value the RACE
-page's own row no longer lists. `Menu::supply` only ever moves the widget's
+**The row shrinking is not enough by itself, because a stored `race.class` can
+name a rung the row does not list**: a settings file written when RACE REMIX
+shared the key (it now saves its own class under `[mod_settings."oag.remix"]`),
+or one edited by hand. `Menu::supply` only ever moves the widget's
 *display* index, never the stored setting, so without a further check the row
 would show `"venom"` while the race launched on `"vector"` underneath it - a
 menu saying one thing and a race doing another, which is exactly the silent
@@ -230,12 +228,10 @@ first entry, the same fallback CIRCUIT and TEAM already use for a stored value
 their own source does not have.
 
 **The clamp deliberately never writes back to `settings.race.class`.** It
-changes only the `race::Options` this one launch builds, so a `"vector"`
-settled on RACE REMIX survives in storage and a visit to the ordinary RACE
-page warns and clamps again on every launch from that state rather than
-silently adopting `"venom"` as the player's new saved choice. Writing back
-would clobber the remix pick the moment the player so much as glanced at the
-ordinary page - the clamp is a per-launch correction, not a migration.
+changes only the `race::Options` this one launch builds, so a stored `"vector"`
+survives and a visit to the ordinary RACE page warns and clamps again on every
+launch from that state rather than silently adopting `"venom"` as the player's
+new saved choice - the clamp is a per-launch correction, not a migration.
 
 ### RACE REMIX offers every known class, and hides a team that lacks it (2026-10-12)
 
@@ -246,9 +242,9 @@ to remix on the same footing as `VECTOR` (chosen, not measured; 2048 has no race
 box anyway).
 
 **When a team's files do not author the chosen class, the TEAM row hides the
-team** (**chosen, not measured**). The class row is one shared setting while the
-team row is already scoped to the craft title and re-supplied when it changes, so
-it is the row that narrows; `race.class` changes now re-supply it too.
+team** (**chosen, not measured**). The TEAM row is `teams_of` scoped to the craft
+title with the class as its companion setting, so it is the row that narrows and a
+class change re-lists it.
 `oag_title::RaceDefaults::team_races_class` answers per team from data: a guest
 roster carries its own ladder (`GuestRoster::speed_classes`: 2048's twelve HD
 teams author four, its native five author five), every other team the title's
@@ -267,9 +263,10 @@ the original's driver covers the classes its title's AI tables author, in the
 campaign only. The set is data on the controller, so a later pilot-file
 `classes` key or a new sweep widens it in one place. RACE REMIX on `SUPERPHANTOM`
 therefore runs with no opponents, and its AI DIFFICULTY row is pinned to
-`NO OPPONENTS: NO DRIVER FOR THIS CLASS` (`OAG_REMIX_NO_DRIVER`) while that
-class is chosen; the `pinned` class list in `menu.toml` is held equal to the
-code's set by `the_remix_ai_row_is_pinned_for_exactly_the_uncovered_classes`.
+`NO OPPONENTS: NO DRIVER FOR THIS CLASS` (`OAG_RACE_NO_DRIVER`, the `ai_difficulties`
+list's last value) while that class is chosen; the `pinned` class list in the mod's
+`remix/menu.toml` is held equal to the code's set by
+`official_remix::the_ai_row_is_pinned_for_exactly_the_uncovered_classes`.
 `Options::no_driver_for_class` carries it to `Race::start`, which fields an
 empty grid. Campaign launches clear it.
 
@@ -285,9 +282,9 @@ empty grid. Campaign launches clear it.
 > `cargo run -p oag-game --features ballisticng`. `just check-ballisticng` builds and tests that half so it does
 > not rot.
 
-TRACK TITLE offers **CUSTOM** (`OAG_REMIX_CUSTOM`) after the titles this machine can open, whenever
-the track directories hold at least one file; none found, no entry. Choosing it fills TRACK with those
-files (`oag_game::custom_tracks`, drawn the same by the live session and `--menu-page remix`). A track
+TRACK TITLE (a `titles_available` row) offers **CUSTOM** (`OAG_CUSTOM_TRACKS`) after the titles this machine can open, whenever
+the track directories hold at least one file; none found, no entry. Choosing it fills TRACK (`tracks_of` on that row, with CRAFT TITLE as its companion) with those
+files (`oag_game::custom_tracks`, drawn the same by the live session and `--menu-page oag.remix/remix`). With the `oag.remix` mod off there is no CUSTOM title; campaign events and `--ballisticng-track` still race track files. A track
 file whose art borrows from a disc (`track.host`) loads its track side (collision, host textures, sky)
 from a disc of that title, never a guest standing in for it, and its craft from the **CRAFT TITLE** row's
 source (an unpicked CRAFT TITLE flies the host's own craft); a file whose host this machine has no disc of
@@ -307,8 +304,8 @@ physics, exactly as `--ballisticng-track` flies it on `--craft-source`; RACEBOX 
   names one; **neither format carries one today** (a `.wtrk` holds the Workshop title, tags and
   description, the author is a Steam account), so none is shown. There is no preview yet.
 - **The survey is lazy and cached.** Finding the files is a directory read at start-up (it decides
-  whether CUSTOM is offered). Reading them (`custom_tracks::Scan::begin`) starts only once RACE REMIX is on
-  screen with CUSTOM chosen, never while a race runs or is suspended behind its pause menu, and keeps
+  whether CUSTOM is offered). Reading them (`custom_tracks::Scan::begin`) starts only once a page on screen
+  has a `titles_available` row on CUSTOM, never while a race runs or is suspended behind its pause menu, and keeps
   what each file said in `<cache dir>/oag/custom-tracks/survey.toml` (`data/cache/custom-tracks` in a
   checkout), keyed by path and modification time, so an untouched file is not decoded twice across runs.
   Before this it ran at app start and cost 22% of the profile samples in a race (workstation, 2026-10-27).
@@ -321,7 +318,7 @@ physics, exactly as `--ballisticng-track` flies it on `--craft-source`; RACEBOX 
   of the list by `Menu::reserves_unavailable_note` joining `reserve_note` at `visible_rows`. Not
   `disabled_by`: that row refuses to step, and the player could never leave the broken option. START on
   a broken pick logs the reason and does nothing, and never races another track in its place.
-- **Launch** is `launch_remix`'s own path with `custom_tracks::apply`: `foreign_track = Some(file)`,
+- **Launch** is `launch_race` by keys (`session::launch_keys`) with `custom_tracks::apply`: `foreign_track = Some(file)`,
   `track` and `craft_source` cleared. That is what `--ballisticng-track`/`--track-file` set
   (`Pending::race_options`), so both routes build the same race: the same per-tick world hash for
   Lion's Den, asserted in `custom_tracks::tests::disc`. A command-line `--ballisticng-track` is put back after
@@ -330,7 +327,7 @@ physics, exactly as `--ballisticng-track` flies it on `--craft-source`; RACEBOX 
   spline is the track), so it is listed unusable rather than raced without opponents; the class rule
   that keeps the AI to classes the driver covers is the SPEED CLASS row's, not this one's.
 - **MODE Zone** with CUSTOM races the file's loop as the Zone circuit (2026-10-29): the title's Zone craft, speed ramp, HUD and sound, and the report names what a file has no Zone variant of ([track-file.md](../formats/track-file.md#zone-mode-on-a-track-file)).
-- `remix.track` stores the file's path (known before the file is read, unique, survives a restart);
+- `mod.oag.remix.track` stores the file's path (known before the file is read, unique, survives a restart);
   moved or deleted, the row falls back to the first track.
 
 ## The format
@@ -793,8 +790,7 @@ same "draw nothing and say so" rule `CLAUDE.md`'s own root doc states for a
 tree is ours, the same line every other section on this page draws.** The
 per-class rows and the time column underneath are the disc's.
 
-**Shares `race.mode`/`race.track` with the RACE page - the same reuse RACE
-REMIX's own MODE and AI DIFFICULTY rows already model**, and for the same
+**Shares `race.mode`/`race.track` with the RACE page**, for this
 reason: browsing here moves what a launched race would use next, which
 this project treats as a feature (the row you were just looking at is the
 row RACE opens on) rather than a leak to guard against. No new setting was
@@ -1008,7 +1004,6 @@ read, the base list is kept.
 | Row | `parent` | Where it lands |
 | --- | --- | --- |
 | RACEBOX, OPTIONS | `top` (only if missing) | their own rows on Pulse, HD, Omega; added on Pure and 2048 |
-| REMIX | `racebox` | after RACEBOX |
 | RECORDS | `options` (only if missing) | under OPTIONS on Pulse, Pure and 2048; HD and Omega author `FE_RECORDS`, so it is theirs |
 | QUIT | `options` | after OPTIONS' other attached rows |
 
@@ -1020,13 +1015,17 @@ The resulting main page:
 
 | Title | Top level | Attached |
 | --- | --- | --- |
-| Pulse, Pure | RACE CAMPAIGN (SINGLE PLAYER on Pure), RACEBOX, OPTIONS | REMIX after RACEBOX; RECORDS, QUIT after OPTIONS - drawn inline: SINGLE PLAYER, RACEBOX, REMIX, OPTIONS, RECORDS, QUIT |
-| HD, Omega | RACE CAMPAIGN, RACEBOX, OPTIONS, RECORDS | REMIX under RACEBOX, QUIT under OPTIONS, **revealed** |
-| 2048 | the disc's touch grid, plus this build's RACEBOX and REMIX tiles | the tiles take their words from the built tree's `racebox` and `remix` rows |
+| Pulse, Pure | RACE CAMPAIGN (SINGLE PLAYER on Pure), RACEBOX, OPTIONS | RECORDS, QUIT after OPTIONS - drawn inline: SINGLE PLAYER, RACEBOX, OPTIONS, RECORDS, QUIT |
+| HD, Omega | RACE CAMPAIGN, RACEBOX, OPTIONS, RECORDS | QUIT under OPTIONS, **revealed** |
+| 2048 | the disc's touch grid, plus this build's RACEBOX and MULTIPLAYER tiles | the tiles take their words from the built tree's `racebox` and `multiplayer` rows |
+
+A mod's row under RACEBOX joins its family: the official mod `oag.remix` adds REMIX there
+(after RACEBOX on Pulse and Pure, revealed under it on HD and Omega, a tile between RACEBOX
+and MULTIPLAYER on 2048).
 
 `Definition::build` does the merge (`crates/ui/src/menu/definition/build.rs`): the vanilla file,
 trimmed to the title's own rows in the disc's order, then each mod in turn. `Definition::parse` on
-the shipped file alone reports the `remix` and `records` pages unreachable, because only
+the shipped file alone reports the `records` page unreachable, because only
 the extras' rows open them; every caller builds (`oag_game::mods::Mods::build`, the same
 call the live menu and `--menu-page` make, so a captured page shows what a player sees).
 
@@ -1046,7 +1045,7 @@ ends; confirm opens the focused row. The head stays drawn as selected while its 
 focused. The pointer has a region for each drawn tab, so a hidden row cannot be hit, and
 tapping a revealed row opens it. Placement (one tab-height and the strip's gap below,
 under the same tab) and the keys are **chosen, not measured**: no disc authors a second
-level. `--menu-page main:remix` puts the cursor on a row by id for a still.
+level. `--menu-page main:records` puts the cursor on a row by id for a still.
 
 Pulse, Pure and 2048 draw an attached row inline after its parent, and need none of this.
 
@@ -1142,27 +1141,29 @@ every other sound outside it, not race state being kept alive - but it meant
 anything to invent. See `crates/sound/src/lib.rs`'s `start_race_music` and
 `pause_race_music`.
 
-## Wipeout 2048 reaches these menus from two tiles of its own
+## Wipeout 2048 reaches these menus from tiles of its own
 
 2048's front end is not a `MenuSkin` and is not this menu tree: it is the
 disc's own touch grids and campaign map, walked by `oag_ui::frontend`
 ([2048-frontend.md](../formats/2048-frontend.md#wired-the-boot-walks-and-the-grids-draw-2026-09-21)),
 and its `SINGLE PLAYER CAMPAIGN` starts a race without ever opening a page
-here. What it has no counterpart for is the race box and RACE REMIX - the
-disc ships neither, and every other title reaches both from this tree's
-root. So, at the user's request, two tiles that **are this build's own and
+here. What it has no counterpart for is the race box and the pages mods hang
+under it - the disc ships none, and every other title reaches them from this
+tree's root. So, at the user's request, tiles that **are this build's own and
 not on the disc** sit on 2048's `GameModeChoice` after the four the file
-authors: `RACEBOX` and `REMIX`, labelled as the built tree's `racebox` and `remix` rows are (the
-`OAG_MENU_RACEBOX`/`OAG_MENU_REMIX` ids, through `oag_game::mods::Mods::build` for
-2048, so a mod's wording reaches them), drawn in the 122x96 text-box
+authors: `RACEBOX`, each submenu row a mod attaches under it (REMIX, with the
+official `oag.remix` on), and `MULTIPLAYER`, labelled as the built tree's rows are
+(through `oag_game::mods::Mods::build` for 2048, so a mod's wording reaches them;
+`oag_game::boot::campaign2048::tiles_of`), each opening its row's page
+(`oag_ui::frontend::Launch::Page`), drawn in the 122x96 text-box
 shape the disc's own game-list screen authors, at positions **chosen, not
 measured** (`oag_ui::frontend::touch::EXTRA_TILES`). A tap opens these
-menus and walks straight into the `race` or `remix` page
+menus and walks straight into that page
 (`oag_ui::menu::Menu::push`, which keeps the stack so BACK lands on the
 root), where everything on this page applies as it does on any title - the
 race box offers 2048's ten circuits and five teams at their default craft
 slot, and REMIX degrades to an ordinary race when 2048 is the only title on
-the search path, exactly as the REMIX write-up above says it does.
+the search path. A mod turned off is no tile.
 
 ## A mouse and a finger
 

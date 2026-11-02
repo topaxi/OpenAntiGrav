@@ -131,7 +131,7 @@ pub(super) fn menu_page(
     ticker_tips: &[String],
 ) -> Result<(Vec<oag_ui::frontend::Draw>, TickerClip)> {
     // `page:ROW` puts the cursor on the row with that id once the page is open
-    // (`--menu-page main:remix`), which is how a revealing strip is looked at with
+    // (`--menu-page main:records`), which is how a revealing strip is looked at with
     // each of its rows in focus.
     let (page, focus) = match page.split_once(':') {
         Some((page, row)) => (page, Some(row)),
@@ -193,9 +193,7 @@ pub(super) fn menu_page(
         strings,
         &settings.race.team,
     );
-    if page == "remix" {
-        remix_sources::supply(&mut model, title, tracks, teams, settings, strings);
-    }
+    query_sources::supply(&mut model, title, tracks, teams, settings, strings);
     model.supply(
         oag_ui::menu::ValueSource::Mods,
         &crate::mods::choices(&mods, strings),
@@ -1050,8 +1048,8 @@ pub(super) fn picker_stills(
 // the *file* - code plus inline tests together - one line over
 // `scripts/check-file-size.py`'s separate 1,000-line cap on the file
 // itself, and moving the tests out is the same fix either cap asks for.
+mod query_sources;
 mod race_sources;
-mod remix_sources;
 mod track_entries;
 
 #[cfg(test)]

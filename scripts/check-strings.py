@@ -158,10 +158,14 @@ def load_strings(
 
 
 def mod_folders() -> list[Path]:
-    """The official mods checked against their own strings: the folders under
-    `assets/mods/examples/` plus every `--mod DIR` argument."""
+    """The repository's mods checked against their strings: the folders under
+    `assets/mods/examples/` and `assets/mods/official/`, plus every `--mod DIR`
+    argument. A submodule that is not checked out has no folders and is skipped."""
     folders = sorted(
-        path for path in (ROOT / "assets/mods/examples").glob("*") if path.is_dir()
+        path
+        for base in ("assets/mods/examples", "assets/mods/official")
+        for path in (ROOT / base).glob("*")
+        if path.is_dir() and not path.name.startswith(".")
     )
     args = sys.argv[1:]
     while args:
@@ -303,9 +307,12 @@ def main() -> int:
             uncovered_subtitles,
         )
 
-    # An official mod (a folder under `assets/mods/examples/`, or one named with
-    # `--mod DIR`) carries its own `strings/english.toml`: its ids resolve there,
-    # never in the project's (ADR-0082 decision 6).
+    # A repository mod (a folder under `assets/mods/examples/` or
+    # `assets/mods/official/`, or one named with `--mod DIR`) carries its own
+    # `strings/english.toml` (ADR-0082 decision 6). An id resolves there, or in the
+    # project's own table for a word a mod row shares with an engine page (MODE,
+    # TRACK, BACK), which the game layers the mod's strings over.
+    engine_texts, _, _ = load_strings(STRINGS_DIR / f"{BASE_LANGUAGE}.toml", [])
     mod_problems: list[str] = []
     mod_count = 0
     for mod_dir in mod_folders():
@@ -327,10 +334,10 @@ def main() -> int:
         if own.exists():
             own_texts, _, _ = load_strings(own, mod_problems)
         for id_ in sorted(mod_ids):
-            if not own_texts.get(id_):
+            if not own_texts.get(id_) and not engine_texts.get(id_):
                 mod_problems.append(
                     f"mod {mod_dir.name}: string id {id_!r} has no text in "
-                    f"strings/{BASE_LANGUAGE}.toml"
+                    f"strings/{BASE_LANGUAGE}.toml or the project's"
                 )
 
     vanished_labels = [f"{key!r}" for key in BASELINE_LABELS if key not in seen_labels]

@@ -243,12 +243,14 @@ Error: drive: step 5 (line 1): select "nonesuch" within 1800: no row "nonesuch":
   last state: {"tick":55,"stage":"menu","page":"race","screen":{"kind":"page","id":"race", ...}}
 ```
 
-RACE REMIX with a track file (`OAG_TRACKS` names the directory the CUSTOM title scans):
+RACE REMIX (the official mod `oag.remix`, so from a checkout with `assets/mods/official`)
+with a track file (`OAG_TRACKS` names the directory the CUSTOM title scans). A mod's page id
+is `<mod id>/<id>` and its settings `mod.<id>.<key>`:
 
 ```sh
 OAG_TRACKS=crates/trackfile/tests/fixtures oag-game data/images/pulse-psp-eu.chd --no-audio \
-  --no-intro --drive 'boot; select remix; press cross; until page=remix
-    set remix.track_title=CUSTOM; set remix.track=oval.track.toml
+  --no-intro --drive 'boot; select remix; press cross; until page=oag.remix/remix
+    set mod.oag.remix.track_title=CUSTOM; set mod.oag.remix.track=oval.track.toml
     select launch_remix; press cross; until stage=race within 3000'
 ```
 

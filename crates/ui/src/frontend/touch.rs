@@ -53,17 +53,17 @@
 //! cross-play are network sessions this build does not have. Confirming one
 //! of those says so in a note and stays.
 //!
-//! # Three tiles the disc does not author: RACE BOX, REMIX and MULTIPLAYER
+//! # Tiles the disc does not author: RACE BOX, the rows mods hang under it, MULTIPLAYER
 //!
 //! **This build's own, not on the disc**, and the one place this module
 //! adds to what the file draws. 2048 ships no race box and no
 //! `CellMode_Definition.xml` - its front end is the campaign map and the
 //! network modes - and every other title in this project reaches this
-//! build's own race box, RACE REMIX and MULTIPLAYER pages (`assets/ui/menu.toml`,
-//! ADR-0034) from its own front end. So the three are appended **after** the
-//! four authored tiles, never mixed into `Screen::touch_buttons`, labelled
-//! with this project's own `OAG_MENU_RACEBOX`/`OAG_MENU_REMIX`/`OAG_MENU_MULTIPLAYER` strings (the
-//! same ids the menu tree uses), and drawn as the labelled 122x96 box the
+//! build's own race box, the pages mods attach under it (RACE REMIX when the
+//! official `oag.remix` is on) and MULTIPLAYER from its own front end. So they are
+//! appended **after** the four authored tiles, never mixed into
+//! `Screen::touch_buttons`, labelled as the menu tree labels those rows, and drawn as the
+//! labelled 122x96 box the
 //! disc's own game-list screen authors for a text button - an authored
 //! shape holding an unauthored destination. Split screen is the MULTIPLAYER tile's
 //! page (LOCAL MULTIPLAYER). **Their positions are chosen,
@@ -74,8 +74,8 @@
 //! (`GameModeChoice` is nested inside `newFEshell`) authors a `<TouchNews>`
 //! at `(16, 432)`, but that widget carries no size and this build draws
 //! nothing for it, so the rect is empty in the picture. See
-//! [`EXTRA_TILES`]. No disc icon exists for either, so neither draws one. A
-//! compare shot leaves all three out (`oag-game --original-menu`, maintainer
+//! [`EXTRA_TILES`]; a fourth row has no slot and is dropped with a warning. No disc
+//! icon exists for any, so none draws one. A compare shot leaves them all out (`oag-game --original-menu`, maintainer
 //! 2026-10-27): the original's page has none, a player keeps them.
 
 use crate::pointer::{Pointer, contains};
@@ -115,13 +115,9 @@ pub enum Launch {
     /// node of one of [`super::Tier`]'s maps, resolved against the grids the
     /// boot read.
     Cell(String),
-    /// This build's own race box - the `race` page of `assets/ui/menu.toml`.
-    RaceBox,
-    /// This build's own RACE REMIX page (ADR-0034).
-    Remix,
-    /// This build's own MULTIPLAYER page (local and LAN, with online for later): the one
-    /// entry to split screen, here a tile where the other titles have a row.
-    Multiplayer,
+    /// A page of this build's menu tree, by id: what one of [`ExtraTile`]s opens (the race
+    /// box's `race`, a mod's page, `multiplayer`).
+    Page(String),
 }
 
 /// One of this build's own tiles on `GameModeChoice`, in the terms the
@@ -133,7 +129,7 @@ pub struct ExtraTile {
     pub launch: Launch,
 }
 
-/// Where the two extra tiles sit, in the order [`Frontend::set_extra_tiles`]
+/// Where the extra tiles sit, in the order [`Frontend::set_extra_tiles`]
 /// was given them. **Chosen, not measured** - see the module docs. The
 /// 122x96 is the tick's own authored size; the 20-unit gap between them
 /// is this build's. Stacked in the left column, clear of the v1.04 grid's

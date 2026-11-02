@@ -13,9 +13,13 @@ pub const SEARCH_ENV: &str = "OAG_MODS";
 /// nothing a player installs, which has no such folder.
 pub const EXAMPLES: &str = "assets/mods/examples";
 
+/// The project's official mods (`OpenAntiGrav/official-mods`, ADR-0083), relative to the
+/// working directory: a checkout's submodule. The game runs without it.
+pub const OFFICIAL: &str = "assets/mods/official";
+
 /// Where mods are looked for when nothing names a directory: `data/mods` in a
-/// checkout, [`EXAMPLES`] in a checkout, `mods` beside the program, and
-/// `<data dir>/oag/mods`.
+/// checkout, [`OFFICIAL`] and [`EXAMPLES`] in a checkout, `mods` beside the program,
+/// and `<data dir>/oag/mods`.
 #[must_use]
 pub fn mods_search_path() -> Vec<PathBuf> {
     if let Some(from_env) = std::env::var_os(SEARCH_ENV) {
@@ -25,6 +29,7 @@ pub fn mods_search_path() -> Vec<PathBuf> {
         }
     }
     let mut paths = vec![PathBuf::from("data/mods")];
+    paths.push(PathBuf::from(OFFICIAL));
     paths.push(PathBuf::from(EXAMPLES));
     let beside = std::env::var_os("APPIMAGE")
         .map(PathBuf::from)

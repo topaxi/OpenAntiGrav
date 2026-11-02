@@ -119,6 +119,20 @@ type = "string"
 type = "string"
 optional = true
 
+# The second setting a query reads: `craft_title` on `tracks_of`, `class` on `teams_of`,
+# `team` on `variants_of` (the loader refuses one on another query).
+[types.values-from-query.craft_title]
+type = "string"
+optional = true
+
+[types.values-from-query.class]
+type = "string"
+optional = true
+
+[types.values-from-query.team]
+type = "string"
+optional = true
+
 # `launch = { ... }` on a `launch_race` row: the setting each input of the race is read
 # from. An input left out is the booted title's own.
 [types.launch]
@@ -193,6 +207,11 @@ optional = true
 
 [types.page-row.values_from]
 oneof = ["string", "types.values-from-query"]
+optional = true
+
+# A choice row's value while its mod has saved nothing for it.
+[types.page-row.default]
+type = "string"
 optional = true
 
 [types.page-row.button]

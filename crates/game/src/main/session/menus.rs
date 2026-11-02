@@ -5,7 +5,7 @@ use log::{error, info, warn};
 
 use oag_display::display;
 use oag_game::render::{Renderer, VideoFormat};
-use oag_game::livery_row::{gated_variant_choices, variant_choices};
+use oag_game::livery_row::gated_variant_choices;
 use oag_game::{boot, movie, settings};
 use oag_raceplay::catalogue;
 use oag_raceplay::pilots;
@@ -44,12 +44,11 @@ pub(super) fn to_choices(names: Vec<&'static str>) -> Vec<menu::Choice> {
 /// `race.class` and the title it booted - `None` meaning "leave the previous
 /// class in place", the same as an empty stored value always has.
 ///
-/// **This exists because `race.class` is one setting shared with RACE
-/// REMIX.** `Session::launch_remix` reads the exact same key, and its own row
-/// offers every rung [`oag_title::SpeedClasses::is_selectable`] allows -
-/// `VECTOR` included, when a Pure source is mounted. So a player who settles
-/// `race.class` to `"vector"` on RACE REMIX and then opens the ordinary RACE
-/// page has a stored value this page's own row no longer lists (see
+/// **This exists because a stored `race.class` can name a rung this page does
+/// not offer**: a settings file written while a `speed_classes_union` row (every
+/// rung [`oag_title::SpeedClasses::is_selectable`] allows, `VECTOR` included
+/// when a Pure source is mounted) saved under it, or edited by hand. Such a
+/// value is one this page's own row no longer lists (see
 /// [`speed_class_choices`]'s confinement to
 /// [`oag_title::SpeedClasses::is_offered_outside_remix`]). `Menu::supply`
 /// only ever changes the widget's own display index, never the stored
@@ -513,13 +512,6 @@ impl Session {
             menu::MenuEvent::Fired(menu::Action::OpenOnline) => self.open_online(),
             menu::MenuEvent::Fired(menu::Action::OnlineCreate) => self.open_online_create(),
             menu::MenuEvent::Fired(menu::Action::OnlineJoin) => self.open_online_join(),
-            // The RACE REMIX page's own launch - see `menu::Action::LaunchRemix`'s
-            // own doc comment for why it is not a second meaning for
-            // `LaunchRace` above. `Self::launch_remix` builds `race::Options`
-            // the same way that one does, plus the two source fields neither
-            // the CLI's `--race` route nor the ordinary RACE page ever has to
-            // resolve.
-            menu::MenuEvent::Fired(menu::Action::LaunchRemix) => self.launch_remix(),
             // A `launch_race` row that names its inputs by setting key (`session::launch_keys`).
             menu::MenuEvent::Launch(keys) => self.launch_keyed(keys),
             // QUIT always quits, parked race or not - it is a row a player
@@ -985,28 +977,13 @@ impl Session {
             menu::ValueSource::SpeedClasses,
             &speed_class_choices(shell.title),
         );
-        // RACE REMIX's own axis: the union across every title this machine can
-        // currently open a source for, so a class is offered exactly when the
-        // data behind it is actually here. See `Self::remix_speed_classes`.
-        //
-        // **Settled only when the union has something in it**, the same rule
-        // the RACE REMIX rows below follow and for the same reason: an empty
-        // union is not evidence that a saved pick is wrong, and settling
-        // against it would clear `race.class` to the empty string. That is a
-        // reachable configuration rather than a hypothetical - a machine whose
-        // only playable source is Wipeout 2048, whose ladder is unread, unions
-        // to nothing - and it would silently lose the player's saved class
-        // while the RACE page above still displayed its own fallback.
-        //
-        // `supply` is unconditional because it does not touch `self.settings`:
-        // it keeps the row on its current value when the list still offers it
-        // and falls to the first entry for *display* otherwise.
-        let remix_classes = self.remix_speed_classes();
-        if !remix_classes.is_empty() {
-            remix_menu::settle(&mut self.settings.race.class, &remix_classes);
-        }
-        model.supply(menu::ValueSource::RemixSpeedClasses, &remix_classes);
-        model.supply(menu::ValueSource::RemixAiDifficulty, &self.remix_ai_difficulty());
+        // Every available title's ladder, for a `speed_classes_union` row. A mod row's
+        // saved class is settled against it by `Session::resolve_menu_queries`, which leaves
+        // it alone while the union is empty (a machine whose only title is 2048, whose ladder
+        // is unread).
+        let union_classes = self.speed_classes_union();
+        model.supply(menu::ValueSource::SpeedClassesUnion, &union_classes);
+        model.supply(menu::ValueSource::AiDifficulties, &self.ai_difficulties());
         model.supply(menu::ValueSource::Languages, &shell.languages);
         model.supply(menu::ValueSource::RaceModes, &shell.modes);
         model.supply(menu::ValueSource::KillTargets, &shell.kill_targets);
@@ -1070,45 +1047,17 @@ impl Session {
             menu::ValueSource::ScreenFilters,
             &self.screen_filters.choices(),
         );
-        // Race Remix's own axis - every title this machine can currently open
-        // a source for, surveyed once at `Session` construction. See the
-        // field's own doc comment. TRACK TITLE's own row: 2048's circuits are
-        // not HD's, so no synthetic entry applies here; CRAFT TITLE's does,
-        // see `Self::craft_title_choices`.
-        //
-        // **Settled, not merely supplied**, and outward-in: each row's stored
-        // setting is brought into step with the list it is about to be given
-        // before the row below it is resolved from that setting. See
-        // `remix_menu::settle`, which is what keeps a fresh settings file's
-        // empty `remix.*` from leaving every row showing one thing and
-        // `self.settings` holding another.
-        let (titles, craft_titles) = self.settle_remix_titles();
+        // Every title this machine can open a source for (with CUSTOM when the scan found a
+        // track file) and the craft titles, the lists a `titles_available` and a `craft_titles`
+        // row offer, off the survey `Session::titles` already holds.
+        let mut titles: Vec<menu::Choice> = self
+            .titles
+            .iter()
+            .map(|candidate| menu::Choice::plain(candidate.title()))
+            .collect();
+        titles.extend(self.custom_title_choice());
         model.supply(menu::ValueSource::Titles, &titles);
-        model.supply(menu::ValueSource::CraftTitles, &craft_titles);
-        // Scoped to whichever titles `remix.track_title`/`remix.craft_title`
-        // now name, the same reason the CIRCUIT row above is seeded from
-        // `race.mode` rather than left empty until MODE is next touched: a
-        // menu reopened on a saved pick should show that pick's own list from
-        // the first frame. Both are `None` and supply nothing when the named
-        // title's source is no longer on this machine's search path, or will
-        // not open - see `Self::remix_catalogue_for`/
-        // `Self::remix_craft_catalogue`. Nothing is settled in that case
-        // either: an unreadable source is not evidence that a saved pick is
-        // wrong, and clearing it would lose it.
-        if let Some(tracks) = self.remix_track_options() {
-            remix_menu::settle(&mut self.settings.remix.track, &tracks);
-            model.supply(menu::ValueSource::RemixTracks, &tracks);
-        }
-        if let Some(catalogue) = self.remix_craft_catalogue() {
-            remix_menu::settle(&mut self.settings.remix.team, &catalogue.teams);
-            model.supply(menu::ValueSource::RemixTeams, &catalogue.teams);
-        }
-        // Last, because it is scoped to the team the line above just settled.
-        if let Some(title) = self.craft_title() {
-            let variants = variant_choices(title, &self.settings.remix.team);
-            remix_menu::settle(&mut self.settings.remix.variant, &variants);
-            model.supply(menu::ValueSource::RemixVariant, &variants);
-        }
+        model.supply(menu::ValueSource::CraftTitles, &self.craft_title_choices());
         // Ours, and settings-backed like everything above it - except PILOT
         // and AXIS, which nothing persists, so this both supplies and seeds
         // LOW/HIGH in one call. See `super::pilot_editor`.

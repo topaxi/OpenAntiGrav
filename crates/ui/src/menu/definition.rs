@@ -187,6 +187,10 @@ mod raw {
         pub query: String,
         #[serde(default)]
         pub of: String,
+        /// [`super::Query::companion`]'s keys; at most the one its query takes.
+        pub craft_title: Option<String>,
+        pub class: Option<String>,
+        pub team: Option<String>,
     }
 
     #[derive(Deserialize)]
@@ -200,13 +204,15 @@ mod raw {
         pub label: String,
         pub target: Option<String>,
         pub action: Option<String>,
-        /// `launch = { track_title = "remix.track_title", ... }`: the settings keys
+        /// `launch = { track_title = "mod.<id>.track_title", ... }`: the settings keys
         /// a `launch_race` row reads its race's inputs from.
         pub launch: Option<Launch>,
         pub setting: Option<String>,
         #[serde(default)]
         pub values: Vec<String>,
         pub values_from: Option<ValuesFrom>,
+        /// A choice row's value while nothing is saved for it; read for `mod.<id>.<key>` rows.
+        pub default: Option<String>,
         pub button: Option<String>,
         /// `{ setting = "...", value = ... }`: what makes this row inert. Only
         /// `choice` and `toggle` rows may carry it.
@@ -367,7 +373,7 @@ impl Definition {
         if let Some((page, row, of)) = unknown_query_of(&definition.pages) {
             return Err(Error::BadEntry {
                 context: format!("page {:?} entry {row}", definition.pages[page].id),
-                problem: format!("values_from `of` {of:?} is the setting of no choice row"),
+                problem: format!("values_from names {of:?}, the setting of no choice row"),
             });
         }
         definition.check_rows()?;
@@ -518,9 +524,9 @@ impl Definition {
     /// at draw time would leave a gap in the strip with the cursor still
     /// able to land on it.
     ///
-    /// RACE REMIX's own VARIANT row is untouched: `remix.team` can name any
-    /// title's team regardless of which one booted, so it keeps offering
-    /// real variants even in a Pure-booted session.
+    /// A `variants_of` row is untouched: its title can be any title's, not
+    /// the booted one, so it keeps offering real variants even in a
+    /// Pure-booted session.
     pub fn drop_unavailable_race_variant(&mut self, title: &oag_title::Title) {
         if title.race.has_team_variants() {
             return;
@@ -869,18 +875,23 @@ impl Definition {
 /// The first row (page index, row index, `of`) whose query argument names a setting no choice
 /// row of `pages` writes: such a key never holds a value.
 pub(super) fn unknown_query_of(pages: &[Page]) -> Option<(usize, usize, String)> {
+    let edited = |key: &str| {
+        pages.iter().any(|p| {
+            p.entries
+                .iter()
+                .any(|e| matches!(e, Entry::Choice { setting, .. } if setting == key))
+        })
+    };
     for (at, page) in pages.iter().enumerate() {
         for (row, entry) in page.entries.iter().enumerate() {
             if let Entry::Choice {
                 query: Some(query), ..
             } = entry
-                && !pages.iter().any(|p| {
-                    p.entries
-                        .iter()
-                        .any(|e| matches!(e, Entry::Choice { setting, .. } if *setting == query.of))
-                })
+                && let Some(key) = std::iter::once(&query.of)
+                    .chain(&query.companion)
+                    .find(|key| !edited(key))
             {
-                return Some((at, row, query.of.clone()));
+                return Some((at, row, key.clone()));
             }
         }
     }
@@ -1020,7 +1031,6 @@ fn resolve(
                             .to_string(),
                     });
                 }
-                None if action == Action::LaunchRemix => Some(LaunchInputs::remix()),
                 None => None,
             };
             Ok(Entry::Run {
@@ -1061,6 +1071,26 @@ fn resolve(
                             spec.query
                         )));
                     }
+                    let mut companion = None;
+                    for (name, key) in [
+                        ("craft_title", &spec.craft_title),
+                        ("class", &spec.class),
+                        ("team", &spec.team),
+                    ] {
+                        let Some(key) = key else { continue };
+                        if query.companion() != Some(name) {
+                            return Err(bad(format!(
+                                "values_from query {:?} takes no `{name}`",
+                                spec.query
+                            )));
+                        }
+                        if spec.of.is_empty() {
+                            return Err(bad(format!(
+                                "values_from `{name}` needs an `of` beside it"
+                            )));
+                        }
+                        companion = Some(key.clone());
+                    }
                     if spec.of.is_empty() {
                         (query.booted_source(), None)
                     } else {
@@ -1069,6 +1099,7 @@ fn resolve(
                             Some(QueryRef {
                                 query,
                                 of: spec.of.clone(),
+                                companion,
                             }),
                         )
                     }
@@ -1091,12 +1122,22 @@ fn resolve(
                 }
                 _ => {}
             }
+            if let Some(default) = &entry.default
+                && !entry.values.is_empty()
+                && !entry.values.contains(default)
+            {
+                return Err(Error::BadEntry {
+                    context: context.to_string(),
+                    problem: format!("default {default:?} is not one of its values"),
+                });
+            }
             Ok(Entry::Choice {
                 label,
                 setting: setting.clone(),
                 values: entry.values.iter().map(Choice::plain).collect(),
                 source,
                 query,
+                default: entry.default.clone(),
                 current: 0,
                 disabled_by,
                 pins,

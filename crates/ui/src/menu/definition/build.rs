@@ -302,7 +302,7 @@ impl Definition {
             return Err(fault(
                 mod_id,
                 format!("page {:?} entry {row} values_from", pages[page].id),
-                format!("`of` {of:?} is the setting of no choice row on this mod's pages"),
+                format!("{of:?} is the setting of no choice row on this mod's pages"),
             ));
         }
         Ok(())
@@ -392,6 +392,7 @@ impl Definition {
             setting: None,
             values: Vec::new(),
             values_from: None,
+            default: None,
             button: None,
             disabled_by: None,
             pinned: None,

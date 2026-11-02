@@ -98,6 +98,19 @@ fn drive_args(
     Run { output, states }
 }
 
+/// Whether the official `oag.remix` mod is checked out (`assets/mods/official`), which the
+/// game finds on its default search path from the repository root; a test of its page
+/// skips without it.
+fn official_remix() -> bool {
+    let found = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../assets/mods/official/remix/oag-mod.toml")
+        .is_file();
+    if !found {
+        eprintln!("skipped: the official-mods submodule is not checked out");
+    }
+    found
+}
+
 fn pulse() -> Option<PathBuf> {
     oag_testdata::image("pulse-psp-eu.chd")
 }
@@ -242,12 +255,15 @@ fn race_remix_launches_a_track_file_from_its_custom_title() {
     let Some(image) = pulse() else {
         return;
     };
+    if !official_remix() {
+        return;
+    }
     let tracks = Path::new(env!("CARGO_MANIFEST_DIR")).join("../trackfile/tests/fixtures");
     let run = drive(
         &image,
         "remix-file",
-        "boot; select remix; press cross; until page=remix; \
-         set remix.track_title=CUSTOM; set remix.track=oval.track.toml; \
+        "boot; select remix; press cross; until page=oag.remix/remix; \
+         set mod.oag.remix.track_title=CUSTOM; set mod.oag.remix.track=oval.track.toml; \
          select launch_remix; press cross; until stage=race within 3000; ticks 30",
         Some(&tracks),
     );
@@ -268,13 +284,16 @@ fn race_remix_launches_a_track_file_in_zone_mode() {
     let Some(image) = pulse() else {
         return;
     };
+    if !official_remix() {
+        return;
+    }
     let tracks = Path::new(env!("CARGO_MANIFEST_DIR")).join("../trackfile/tests/fixtures");
     let run = drive(
         &image,
         "remix-file-zone",
-        "boot; select remix; press cross; until page=remix; \
-         set race.mode=zone; \
-         set remix.track_title=CUSTOM; set remix.track=oval.track.toml; \
+        "boot; select remix; press cross; until page=oag.remix/remix; \
+         set mod.oag.remix.mode=zone; \
+         set mod.oag.remix.track_title=CUSTOM; set mod.oag.remix.track=oval.track.toml; \
          select launch_remix; press cross; until stage=race within 3000; ticks 30",
         Some(&tracks),
     );
@@ -331,8 +350,9 @@ fn remix_tracks(run: &Run) -> Vec<Vec<String>> {
     for state in &run.states {
         let rows = state.pointer("/screen/rows").and_then(Value::as_array);
         let Some(track) = rows.and_then(|rows| {
-            rows.iter()
-                .find(|row| row.get("setting").and_then(Value::as_str) == Some("remix.track"))
+            rows.iter().find(|row| {
+                row.get("setting").and_then(Value::as_str) == Some("mod.oag.remix.track")
+            })
         }) else {
             continue;
         };
@@ -385,16 +405,20 @@ fn the_mods_page_turns_a_mod_off_and_on_and_what_it_adds_goes_and_comes_back_liv
         eprintln!("skipped: the mod-examples submodule is not checked out");
         return;
     }
+    if !official_remix() {
+        return;
+    }
     // Hillside is a track-only mod; NIGHT RUN (example-campaign) races its track.
     let run = drive(
         &image,
         "mods-switch",
-        "boot; select remix; press cross; until page=remix; \
-         set remix.track_title=CUSTOM; ticks 120; press circle; until page=main; \
+        "boot; select remix; press cross; until page=oag.remix/remix; \
+         set mod.oag.remix.track_title=CUSTOM; ticks 120; press circle; until page=main; \
          select mods; press cross; until page=mods; \
          set mods.selected=oag.hillside; set mods.enabled=off; expect page=mods; \
          press circle; until page=main; \
-         select remix; press cross; until page=remix; ticks 60; press circle; until page=main; \
+         select remix; press cross; until page=oag.remix/remix; ticks 60; press circle; \
+         until page=main; \
          select mods; press cross; until page=mods; \
          set mods.selected=oag.hillside; set mods.enabled=on; \
          press circle; until page=main; ticks 5",

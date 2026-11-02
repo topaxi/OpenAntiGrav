@@ -182,7 +182,7 @@ impl Scan {
     #[must_use]
     pub fn title_label(&self, strings: &StringTable) -> String {
         strings
-            .get("OAG_REMIX_CUSTOM")
+            .get("OAG_CUSTOM_TRACKS")
             .unwrap_or(CUSTOM)
             .to_string()
     }
@@ -192,7 +192,7 @@ impl Scan {
     pub fn choices(&self, strings: &StringTable) -> Vec<Choice> {
         if !self.is_settled() {
             let reason = strings
-                .get("OAG_REMIX_CUSTOM_CHECKING")
+                .get("OAG_CUSTOM_TRACKS_CHECKING")
                 .unwrap_or("still checking this file");
             return self
                 .files

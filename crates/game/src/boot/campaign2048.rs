@@ -168,13 +168,15 @@ pub(super) fn touch_menus(
     )
 }
 
-/// This build's own two tiles: the rows of the menu tree built for 2048 that open
-/// the race box and RACE REMIX, labelled as that tree labels them (so a mod that
-/// words them differently, or the language, reaches the tile too).
+/// This build's own tiles: the rows of the menu tree built for 2048 that open the race
+/// box, every submenu a mod attaches under it (RACE REMIX with `oag.remix` on), and
+/// MULTIPLAYER, in that order, labelled as that tree labels them (so a mod that words
+/// them differently, or the language, reaches the tile too). A row that is not there
+/// (a mod turned off) is no tile.
 ///
 /// 2048's grid is the disc's own touch front end and not a page of this tree, so
-/// the tree supplies only the words and the two destinations
-/// ([`oag_ui::frontend::Launch`]); the positions are chosen
+/// the tree supplies only the words and the destinations
+/// ([`oag_ui::frontend::Launch::Page`]); the positions are chosen
 /// (`oag_ui::frontend::EXTRA_TILES`). A language with no project file of its own
 /// falls back to the English text, as every row does.
 pub(super) fn extra_tiles(
@@ -196,19 +198,25 @@ pub(super) fn extra_tiles(
             return Vec::new();
         }
     };
-    let page = &built.definition.pages[built.definition.root];
-    ["racebox", "remix", "multiplayer"]
+    tiles_of(&built.definition)
+}
+
+/// [`extra_tiles`] off a built tree.
+pub(super) fn tiles_of(definition: &oag_ui::menu::Definition) -> Vec<ExtraTile> {
+    let page = &definition.pages[definition.root];
+    let racebox = page.row_with_id("racebox");
+    let under_racebox = (0..page.entries.len())
+        .filter(|&row| page.is_attached(row) && Some(page.family_of(row)) == racebox);
+    racebox
         .into_iter()
-        .filter_map(|id| {
-            let row = page.row_with_id(id)?;
-            Some(ExtraTile {
-                label: page.entries[row].label().to_string(),
-                launch: match id {
-                    "racebox" => Launch::RaceBox,
-                    "remix" => Launch::Remix,
-                    _ => Launch::Multiplayer,
-                },
-            })
+        .chain(under_racebox)
+        .chain(page.row_with_id("multiplayer"))
+        .filter_map(|row| match &page.entries[row] {
+            oag_ui::menu::Entry::Submenu { label, target } => Some(ExtraTile {
+                label: label.clone(),
+                launch: Launch::Page(definition.pages[*target].id.clone()),
+            }),
+            _ => None,
         })
         .collect()
 }
