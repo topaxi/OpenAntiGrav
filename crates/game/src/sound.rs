@@ -161,6 +161,7 @@ pub fn race_tick_keeping(
         listener: listener_of(race),
         craft: craft_positions(race),
         slot_teams: std::array::from_fn(|slot| race.slot_team(slot)),
+        player_slot: race.player_slot(),
         // The local player's throttle, `0..=100`: what
         // `Ship_UpdateEngineCrossfade` reads as `ctrl[+4]` for the craft whose
         // role is zero.

@@ -65,7 +65,7 @@ fn sitting_on_a_pad_raises_the_cue_once_and_not_every_tick() {
     slots.dedup();
     assert_eq!(slots.len(), first.len(), "two cues came from one slot");
     assert_eq!(
-        first.iter().filter(|e| e.is_player()).count(),
+        first.iter().filter(|e| e.slot == 0).count(),
         1,
         "the player raised it more than once, or not at all"
     );

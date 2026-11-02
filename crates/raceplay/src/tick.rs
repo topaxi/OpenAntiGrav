@@ -81,13 +81,14 @@ impl Race {
                 if self.sim.world.person_flown(slot) {
                     let board = &mut self.view.huds[slot].messages;
                     board.advance();
-                    shown |= board.just_shown();
+                    let showing = board.just_shown();
+                    shown |= showing && self.heard_here(slot);
                 }
             }
             if shown {
                 self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
                     oag_gameplay::cue::Cue::Message,
-                    0,
+                    self.player_slot(),
                 ));
             }
         }

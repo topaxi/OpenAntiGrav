@@ -226,6 +226,7 @@ impl Audio {
             listener,
             craft,
             slot_teams,
+            player_slot,
             throttle,
             projectiles,
             running,
@@ -311,7 +312,7 @@ impl Audio {
                 if event.cue.held() {
                     continue;
                 }
-                let Some(pan) = place(event, &listener, &craft) else {
+                let Some(pan) = place(event, &listener, &craft, player_slot) else {
                     // Out of range: the original's `Sound_Play` refuses a voice on an
                     // emitter whose out-of-range bit is latched, so it is not started
                     // rather than started silent.
@@ -629,7 +630,7 @@ impl Audio {
                     running,
                     position.to_array(),
                     &listener,
-                    slot != 0,
+                    slot != player_slot,
                     doppler_enabled,
                     DT,
                 );
@@ -648,7 +649,7 @@ impl Audio {
                     xfade.stop(mixer);
                     continue;
                 };
-                let player = slot == 0;
+                let player = slot == player_slot;
                 xfade.tick(
                     mixer,
                     XfadeInputs {
@@ -760,6 +761,7 @@ fn place(
     event: CueEvent,
     listener: &oag_audio::Listener,
     craft: &[Option<(Vec3, f32)>],
+    player_slot: usize,
 ) -> Option<Placed> {
     let dry = Placed {
         gain: 1.0,
@@ -786,7 +788,7 @@ fn place(
     let emitter = match event.cue.placement() {
         Placement::Unplaced => return Some(dry),
         // The player's own branch, on a hypothesis the type documents.
-        Placement::CraftUnlessPlayer if event.is_player() => return Some(dry),
+        Placement::CraftUnlessPlayer if usize::from(event.slot) == player_slot => return Some(dry),
         Placement::Craft | Placement::CraftUnlessPlayer => oag_audio::Emitter::craft,
         Placement::Engine => oag_audio::Emitter::engine,
         Placement::Point => unreachable!("handled above"),
