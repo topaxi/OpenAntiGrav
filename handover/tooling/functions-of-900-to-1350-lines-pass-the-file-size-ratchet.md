@@ -52,7 +52,7 @@ cfg lines make the sim-only build (`oag-server`) hard to reason about.
 - `load()` decomposition comes before the crate split in the thread on splitting `oag-raceplay`'s load
   and scene (`the-workspace-is-split-further-splits-are-ranked-and-unstarted`): the phases
   are the seam that thread's "does `load` need `Race`" question needs answered.
-- Threshold: `clippy::too_many_lines` at 300 would flag about 40 functions; a ratchet like
+- Threshold: `clippy::too_many_lines` at `too-many-lines-threshold = 300` flags 21 functions (measured 2026-11-02; 60 at 200, 201 at the default 100); a ratchet like
   `check-size` (frozen list, only shrinks) is the shape that fits this repo.
 
 ## Next Steps
