@@ -4,10 +4,9 @@
 //! **Chosen, not measured, on every title.** The original's own field never
 //! fires an Autopilot outside an Eliminator (`WeaponAi_Update`'s default arm,
 //! `docs/ghidra/functions/psp-pulse-usa/weapon-ai.md`), so there is no law to
-//! read: the maintainer chose (2026-10-19) to let an opponent on this
-//! project's driver fly the original's player driver for the pickup's `time`
-//! where that beats absorbing it, and (2026-10-20) to let the stronger
-//! difficulties absorb it where they are better without it. Each switch rests
+//! read: an opponent on this project's driver flies the original's player
+//! driver for the pickup's `time` where that beats absorbing it, and the
+//! stronger difficulties absorb it where they are better without it. Each switch rests
 //! on paired-fork measurements of this engine, not of the original:
 //! `docs/gameplay/ai.md`, "An opponent's Autopilot, per class and difficulty".
 //!
@@ -75,7 +74,7 @@ const fn cell(class: &'static str, difficulty: &'static str, flies: bool) -> Swi
 /// median of five runs: walls summed do not rise, rescues summed do not rise
 /// and no circuit is rescued where the absorb was not, and the gain summed is
 /// positive. RAPIER Novice fails on Pulse `03_Track` alone (rescues 0 -> 1)
-/// and flies anyway: the maintainer's choice (2026-10-20), clean in total.
+/// and flies anyway: a chosen exception, clean in total.
 /// RAPIER Ace fails on walls (3,321 -> 4,407) and 2048 (rescues 0 -> 1), PHANTOM on
 /// walls or rescues from zero at every level.
 pub const BY_CLASS_AND_DIFFICULTY: OpponentAutopilot = OpponentAutopilot {

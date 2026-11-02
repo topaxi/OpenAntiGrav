@@ -48,7 +48,7 @@
 /// **Authored**, confidence 92 the same cap `2048-frontend.md` puts on every
 /// claim read straight out of the disc's own XML. Read directly off
 /// `data/plugins/frontend/NEWGUI/Definition.xml` in `PSP2/data.psarc`
-/// (`data/extracted/vita/PCSF00007/base`), 2026-09-20 - not transcribed from
+/// (`data/extracted/vita/PCSF00007/base`) - not transcribed from
 /// the docs page's own prose, which quotes the shared `140x140` size and the
 /// button names but not their individual `x`/`y`; those were re-read from the
 /// archive for this type rather than guessed from the size alone.

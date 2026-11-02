@@ -1,7 +1,7 @@
 //! Which team a title's team id is, across titles.
 //!
 //! Loyalty is kept **per team and shared by every title that has that team**
-//! (maintainer, 2026-10-16): Feisar's total counts in Pulse, Pure, HD, 2048 and
+//! (`docs/architecture/persistence.md`): Feisar's total counts in Pulse, Pure, HD, 2048 and
 //! Omega alike. Each title spells its team ids its own way (`AG_Systems`,
 //! `ag_systems`, `Feisar2048`), so a title lists the ids its roster can name and
 //! the shared identity each stands for. The identity is a lower-case token; an id
