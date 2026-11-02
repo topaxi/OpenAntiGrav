@@ -1,7 +1,7 @@
 //! Omega's race start posts the Wwise events `_321_NGP` and `Go_NGP`, and no
-//! shipped bank defines either, so there is nothing to play: the title carries
-//! no start voice rather than Pulse's `ready` and `go` lent from a `speech.bnk`
-//! that is a Wwise stub the `SBlk` reader refuses.
+//! shipped bank defines either, so there is nothing to play (the lent Pulse
+//! `ready` and `go` load nothing from `speech.bnk`, a Wwise stub, and the start
+//! is silent; its `Go` cue event only times the song).
 //!
 //! **`#[ignore]`d and never run in CI**: it needs the decrypted Omega packages
 //! under `data/extracted/ps4`. Evidence:
@@ -10,14 +10,6 @@
 use std::path::Path;
 
 use oag_formats::wwise::{Bank, Kind, name_hash};
-
-#[test]
-fn omega_lends_no_pulse_voice_to_its_start() {
-    assert!(
-        oag_omega::TITLE.race.countdown_voice.is_none(),
-        "Omega's start is Wwise events; Pulse's ready/go are not its voice"
-    );
-}
 
 #[test]
 #[ignore = "needs the decrypted Omega packages in data/extracted/ps4/"]

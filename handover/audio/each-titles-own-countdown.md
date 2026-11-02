@@ -18,8 +18,8 @@ summary: "2048 start cues corrected (name table +0xc is the cue, not the bucket)
 mode; **2026-11-02 (`countdown-voice`)**: 2048's hashed name lookup returned the hash bucket, not the cue, so its
 start played other cues (`ready` was `rockets`'s cue); corrected to the record's `+0xc` field, the way
 `Scream_FindCueByName` does, and 2048's named start is now HD's shape (`ready` into `321_GO`'s 3.00 s pair, the
-three-group `HBEAT`, `go` cue 3). Omega checked: its events exist in no shipped bank, the title carries no start
-voice.
+three-group `HBEAT`, `go` cue 3). Omega checked: its events exist in no shipped bank, its start stays silent
+(the lent `Go` cue only times the song).
 
 ## Open
 

@@ -121,8 +121,9 @@ should hold them are 32-byte headers, [wwise.md](../../../formats/wwise.md)). Pi
 `crates/raceplay/tests/omega_countdown_ground_truth.rs`. So the start cannot be played from the data we hold;
 a later archive (or a patch layer) that defines them reopens it.
 
-**What the port did before:** `oag_omega::race::COUNTDOWN_VOICE` lent Pulse's `ready` and `go` from `speech.bnk`;
-that bank is the Wwise stub the `SBlk` reader refuses ("unsupported bank version 1145588546"), so the
-load report read `sfx: ready not loaded` and the start was **silent** under a title field claiming a voice.
-It is now `countdown_voice: None`. A maintainer report of "wrong cues" on Omega is therefore not from our start
+**What the port does:** `oag_omega::race::COUNTDOWN_VOICE` lends Pulse's `ready` and `go` from `speech.bnk`; that bank is
+the Wwise stub the `SBlk` reader refuses ("unsupported bank version 1145588546"), so the load report reads
+`sfx: ready not loaded` and the start is **silent**. The field stays (chosen, not measured) because the `Go` cue
+event times the song's start (`now_playing_ground_truth::omega_inherits_hds_start_and_holds_the_song_for_go`;
+setting it `None` fails that test). A maintainer report of "wrong cues" on Omega is therefore not from our start
 voice (we play none there): unexplained, see the lane report.
