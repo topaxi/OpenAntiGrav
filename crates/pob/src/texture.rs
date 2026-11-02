@@ -63,9 +63,9 @@
 //! Confidence **85** for the header layout and the positional-addressing
 //! rule (four independent corpus-wide checks agree: the root-emitter hit
 //! rate, the sibling-tree hit rate, the quakesmoke/orange_glow2 size and
-//! sharing match, and the PS2 zero-hit control); **40** for what, if
-//! anything, distinguishes the six root emitters with no positional texture
-//! from the twenty-nine that have one.
+//! sharing match, and the PS2 zero-hit control). The six root emitters once
+//! counted as having no positional texture were 4 bits per pixel (see below);
+//! no PSP emitter lacks one.
 //!
 //! # Four bits per pixel - 2026-10-01
 //!

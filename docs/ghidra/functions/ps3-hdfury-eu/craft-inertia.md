@@ -108,15 +108,24 @@ collapsing at the same moment.
 
 ## Omega and 2048
 
-- **Omega**: not checkable in this pass: the code was not located statically, and there is no
+- **Omega**: open, not checked in this pass: the code was not located statically, and there is no
   live path. No `12.0f` immediate sits near the craft code (the five
   `0x41400000` immediates are elsewhere, so the box extents load from rodata), and the
   `vminss` census in `0x01310000`-`0x01330000` holds no steering ramp (`FUN_01320c10` is a
   geometry clamp). Next: Omega's craft update from `Craft_UpdateSurfaceProbes` (`0x0131b510`,
   reached by a virtual call, so no static caller), then its steering by the class block's
-  `Turning` offsets. No PS4 emulator is in the toolchain, so Omega keeps Pulse's laws
-  (`craft_laws: None`).
-- **2048**: not checked.
+  `Turning` offsets. Omega's eboot is in Ghidra, so this is open work, not uncheckable.
+- **2048**: open, not checked.
+- **What the code carries meanwhile, and the open question.** `oag_omega::race::CRAFT_LAWS`
+  and `oag_2048::race::CRAFT_LAWS` take HD's rotating tensor (`inertia_rotates`,
+  `Sourced::inherited(true, "Wipeout HD")`) but keep **Pulse's** box mass `0.9`
+  (`inertia_mass`, `inherited(0.9, "Pulse")`), where HD builds it with `1.0`
+  (`(17.333, 24, 17.333)`). The two are inconsistent as a lineage: the project rule for an
+  unmeasured 2048/Omega law is HD's, which would make the mass `1.0`. The `0.9` predates the
+  table and was left as it was; the provenance labels are accurate (the value is Pulse's) and
+  no simulated value changed. What would settle it: the mass literal in Omega's and 2048's
+  ship-entity constructor (the `Body_SetMass` and `Body_SetBoxInertia` arguments, as at
+  `0x000debc8` here). Unsettled, no score.
 
 ## Wired
 

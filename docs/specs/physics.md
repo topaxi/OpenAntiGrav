@@ -304,20 +304,25 @@ Everything above is Pulse. Rows are the laws the engine carries per title;
 | Grounded drag | `-0.005` | `-0.0025` M 92 | `-0.005` M | I:HD | I:HD |
 | Bank-to-yaw gain | 30 | 50 M 92 | 30 M | I:Pulse | I:Pulse |
 | Pitch gain | XML | `0.1` air, `0.4` ground, code, M 92; no gate, M | XML; gate and in-air bias M | gate and bias I:HD | gate and bias I:HD |
-| In-air pitch bias | `weight_distribution` | none, **chosen** (the law page presents it as a measured diff) | M | I:HD | I:HD |
+| In-air pitch bias | `weight_distribution` | none, M 92 (no term in Pure's pitch code) | M | I:HD | I:HD |
 | Pitch damping | XML | `1.5` racing, `0.6` on grid, M 92 | XML | XML | XML |
 | Sideshift force | XML | `200.0`, code, M 92 | XML | XML | XML |
-| Inertia mass | 0.9 | 0.9 (I:Pulse) | 1.0 M | 0.9 I:Pulse | 0.9 I:Pulse |
+| Inertia mass | 0.9 | 0.9 (I:Pulse) | 1.0 M | 0.9 I:Pulse (open) | 0.9 I:Pulse (open) |
 | Inertia tensor frame | world axes | world axes, M | rotates with the body, M | rotates, I:HD | rotates, I:HD |
 | Steering ramp | unclamped | I:Pulse | clamped M | I:Pulse | I:Pulse |
 | Gravity class scale on | grounded term | I:Pulse | airborne term M 85 | I:HD | I:HD |
 | Wall contact | two-sided | I:Pulse | one-sided; steers away; restitution from data M | one-sided and steers away I:HD | one-sided and steers away I:HD |
-| Wall point rate | world | I:Pulse | world | world, **chosen** | body-local, I:HD |
+| Wall point rate | world | I:Pulse | body-local, M 85 | world, **chosen** (a hold for this engine's AI, not a 2048 measurement) | body-local, I:HD |
 | Launch boost | `<StartBoost>` XML | code law, M 88 | XML (see [launch boost](../physics/launch-boost.md)) | XML law (no code law) | XML law (no code law) |
 
 Pure has no magstrips, no sideshift XML attribute and no `<pitch>` block. Not
 every row above is separately measured on 2048 and Omega: they inherit HD's
-craft laws wholesale, and the tables record each inheritance with its source.
+craft laws, and the tables record each inheritance with its source. Two
+rows are not HD's. The inertia mass is Pulse's `0.9` while the tensor frame is
+HD's, which is inconsistent as a lineage and unsettled (HD builds it with
+`1.0`; the constructor literal in 2048 and Omega would settle it). The wall point
+rate differs between the two titles: 2048 holds the world rate, Omega takes HD's
+body-local one, and neither title's contact resolver has been read.
 
 ## Open and unsettled
 

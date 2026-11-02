@@ -569,8 +569,8 @@ pub const START_BOOST: oag_title::craft_laws::CodeStartBoost =
 pub const SIDESHIFT: f32 = 200.0;
 
 /// The craft-body laws. The box mass and the steering ramp are Pulse's, as before this
-/// table existed; the in-air `weight_distribution` pitch torque is off: Pure authors no
-/// `<Misc weight_distribution>`.
+/// table existed; the in-air `weight_distribution` pitch torque is off: Pure's pitch
+/// has no such term and it authors no `<Misc weight_distribution>`.
 ///
 /// **Measured on Pure PSP (USA)**, 2026-10-20 (`docs/physics/pure-physics.md`): the engine does
 /// not double its output (`Ship_UpdateEngine`, `0x0892f1f0`, live on 374 frames to `3e-6`), its
@@ -581,7 +581,9 @@ pub const SIDESHIFT: f32 = 200.0;
 pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::CraftLaws {
     inertia_mass: oag_title::pre_race::Sourced::inherited(0.9, "Pulse"),
     steer_ramp_clamped: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
-    air_pitch_bias: oag_title::pre_race::Sourced::chosen(false),
+    // Pure's `Ship_UpdatePitch` (`0x0892caf8`) has no `weight_distribution` term; read live
+    // (`docs/physics/pure-physics.md`, "Pitch is three code literals").
+    air_pitch_bias: oag_title::pre_race::Sourced::measured(false),
     // Pure's `Ship_UpdatePitch` (`0x0892caf8`) has no `Ship_TestPitchAlignment` call
     // (`docs/physics/pure-physics.md`).
     pitch_gate: oag_title::pre_race::Sourced::measured(false),

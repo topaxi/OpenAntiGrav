@@ -1295,8 +1295,8 @@ confidence scores in its own module doc; the summary:
   time.
 
 Confidence **85** for the header layout and positional-addressing rule;
-**40** for the two unknown header bytes and for what distinguishes the six
-texture-less root emitters from the twenty-nine with one. The **25.62%**
+**40** for the two unknown header bytes. (The six root emitters once
+counted as texture-less were 4 bits per pixel; no PSP emitter lacks one.) The **25.62%**
 coverage figure and the "past its last resolved string, unaccounted for"
 framing in the first "Not determined" bullet below are now stale by this
 section's own **56.76%** measurement - left in place with the correction

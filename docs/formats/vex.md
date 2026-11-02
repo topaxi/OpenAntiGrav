@@ -93,7 +93,8 @@ specification of what a track contains, which makes it the most valuable single
 find so far for M1 and M4.
 
 The IDs below were read out of the table in 2026-07, and the decode is
-**self-validating at confidence 95**: ten of them were already in
+**self-validating at confidence 94** (data agreement caps
+there, per the [rubric](../reverse-engineering/confidence-rubric.md)): ten of them were already in
 `crates/vex/src/vex.rs` from unrelated evidence, and every one agrees -
 including the two most easily confused, `Mag Floor Collision 0x3e6` and
 `Cage Collision 0x3e7`. Mirrored in that file's `CLASS_NAMES`.

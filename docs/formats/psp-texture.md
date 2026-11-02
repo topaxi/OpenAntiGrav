@@ -3,8 +3,8 @@
 **Status: understood.** Header, palette and pixel layout are decoded,
 implemented in [`oag-texture::texture`](../../crates/texture/src/texture.rs),
 and confirmed visually: decoded textures render as the Wipeout Pulse logo and
-front-end icon sheets. Three header bytes remain unidentified but do not affect
-decoding.
+front-end icon sheets. The meaning of `+0x05` and of the upper bits of `+0x07` is
+still open; neither affects decoding.
 
 Found inside [WAD](wad.md) archives. Confirmed on Wipeout Pulse PSP; not yet
 checked against PS2, whose blobs are compressed.
@@ -14,10 +14,11 @@ checked against PS2, whose blobs are compressed.
 ```
 +0x00  u16    width
 +0x02  u16    height
-+0x04  u16    bits_per_pixel      4 or 8
-+0x06  u8     unk_0x06            always 1 in the sample
-+0x07  u8     unk_0x07            2 or 3
-+0x08  u8     unk_0x08            0 or 1
++0x04  u8     bits_per_pixel      4 or 8
++0x05  u8     unk_0x05            0 in every standalone .mip seen
++0x06  u8     mip_levels          1 in FE.wad; 4 on the engine-flare sprite
++0x07  u8     flags               bit 0 = stored GE-swizzled
++0x08  u8     unk_0x08            complement of +0x07 bit 0
 +0x09  u8[7]  zero
 +0x10  RGBA8888 palette, (1 << bits_per_pixel) entries
        pixel indices, width * height * bits_per_pixel / 8 bytes
