@@ -126,11 +126,12 @@ engine can be understood without reopening Ghidra. Start at
 
 The measurements here depend on other people's tools. Thank you to:
 
-- [PPSSPP](https://www.ppsspp.org/), [PCSX2](https://pcsx2.net/), [RPCS3](https://rpcs3.net/), [Vita3K](https://vita3k.org/) and [shadPS4](https://shadps4.net/): the emulators we compare the original's behaviour against.
+- [PPSSPP](https://www.ppsspp.org/), [PCSX2](https://pcsx2.net/), [RPCS3](https://rpcs3.net/), [Vita3K](https://vita3k.org/) and [shadPS4](https://shadps4.net/), plus the native Omega port [wipeout_pc](https://github.com/AbdelmoumenDeghbouche/wipeout_pc): the emulators and ports we compare the original's behaviour against.
 - [Ghidra](https://ghidra-sre.org/): disassembly and decompilation, with [ghidra-allegrex](https://github.com/kotcrab/ghidra-allegrex) (PSP), [ghidra-emotionengine-reloaded](https://github.com/chaoticgd/ghidra-emotionengine-reloaded) (PS2), [Ps3GhidraScripts](https://github.com/clienthax/Ps3GhidraScripts) (PS3), [VitaLoaderRedux](https://github.com/CreepNT/VitaLoaderRedux) (Vita), [GhidraOrbis](https://github.com/astrelsky/GhidraOrbis) (PS4) and [GhidraMCP](https://github.com/LaurieWired/GhidraMCP) (the bridge our agents drive it through).
 - [psvpfstools](https://github.com/motoharu-gosuto/psvpfstools), [pkg2zip](https://github.com/mmozeiko/pkg2zip) and [LibOrbisPkg](https://github.com/maxton/LibOrbisPkg): opening the Vita and PS4 packages.
 - [Blender](https://www.blender.org/): the track add-on is built on it.
 - [wgpu](https://wgpu.rs/) and [winit](https://github.com/rust-windowing/winit): rendering and windowing.
+- Everything else we use, read or reimplemented from, with links and licences, is in [CREDITS.md](CREDITS.md).
 
 ## Licence
 
