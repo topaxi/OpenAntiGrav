@@ -24,7 +24,7 @@
 use std::path::Path;
 
 use anyhow::{Context, Result, anyhow};
-use oag_raceplay::catalogue;
+use oag_raceplay::{Race, catalogue};
 use oag_source::extract::{MANIFEST, Manifest};
 
 use crate::wire::RaceParams;
@@ -264,12 +264,29 @@ pub struct Outcome {
 }
 
 /// Loads every planned race from `source`, calling `each` after every one.
-pub fn run(source: &str, plan: &[Planned], mut each: impl FnMut(&Outcome)) -> Vec<Outcome> {
-    plan.iter()
+pub fn run(source: &str, plan: &[Planned], each: impl FnMut(&Outcome)) -> Vec<Outcome> {
+    run_keeping(source, plan, false, each).0
+}
+
+/// As [`run`], and with `keep` also hands back each loaded race (`None` for a race that did not
+/// load, or for all of them when `keep` is off) instead of dropping it, so a caller that flies
+/// the races does not load them a second time.
+fn run_keeping(
+    source: &str,
+    plan: &[Planned],
+    keep: bool,
+    mut each: impl FnMut(&Outcome),
+) -> (Vec<Outcome>, Vec<Option<Box<Race>>>) {
+    let mut kept = Vec::new();
+    let outcomes = plan
+        .iter()
         .map(|planned| {
-            let result = crate::race::load(&planned.params, source)
-                .map(|(race, _)| crate::race::fingerprint(&race))
+            let loaded = crate::race::load(&planned.params, source);
+            let result = loaded
+                .as_ref()
+                .map(|(race, _)| crate::race::fingerprint(race))
                 .map_err(|e| format!("{e:#}"));
+            kept.push(loaded.ok().filter(|_| keep).map(|(race, _)| race));
             let outcome = Outcome {
                 label: planned.label.clone(),
                 result,
@@ -277,7 +294,8 @@ pub fn run(source: &str, plan: &[Planned], mut each: impl FnMut(&Outcome)) -> Ve
             each(&outcome);
             outcome
         })
-        .collect()
+        .collect();
+    (outcomes, kept)
 }
 
 /// SHA-256 of a file, streamed, as lowercase hex.
@@ -330,8 +348,42 @@ pub fn extract(
     out: &Path,
     build: &str,
     races: &dyn Fn(&Offer) -> Vec<Planned>,
-    mut progress: impl FnMut(&str),
+    progress: impl FnMut(&str),
 ) -> Result<Report> {
+    extract_keeping(source, out, build, races, false, progress).map(|(report, _)| report)
+}
+
+/// The same race loaded from the source and from the extraction.
+pub struct Pair {
+    /// Loaded from the source the extraction was made of.
+    pub source: Box<Race>,
+    /// Loaded from the extraction.
+    pub extraction: Box<Race>,
+}
+
+impl std::fmt::Debug for Pair {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Pair").finish_non_exhaustive()
+    }
+}
+
+/// As [`extract`], and with `keep` also returns, for each planned race that loaded from both,
+/// the two loaded races. A test that flies both loads each once instead of twice; both stay
+/// resident until the caller drops them. The source race is loaded while the recorder runs and
+/// the extraction race while the misses are collected, so flying either afterwards reads
+/// nothing the extraction was built from.
+///
+/// # Errors
+///
+/// As [`extract`].
+pub fn extract_keeping(
+    source: &str,
+    out: &Path,
+    build: &str,
+    races: &dyn Fn(&Offer) -> Vec<Planned>,
+    keep: bool,
+    mut progress: impl FnMut(&str),
+) -> Result<(Report, Vec<Pair>)> {
     if out.join(MANIFEST).exists() {
         return Err(anyhow!(
             "{} already holds an extraction; remove it first",
@@ -352,7 +404,7 @@ pub fn extract(
         let plan = races(&offer);
         progress(&format!("loading {} races", plan.len()));
         let mut widest = 0;
-        let outcomes = run(source, &plan, |o| {
+        let (outcomes, source_races) = run_keeping(source, &plan, keep, |o| {
             if let Some((archive, len)) = oag_assets::record::largest_range()
                 && len > widest.max(64 << 20)
             {
@@ -369,11 +421,11 @@ pub fn extract(
                 o.label
             ));
         });
-        (offer, outcomes)
+        (offer, outcomes, source_races)
     });
     let recording =
         oag_assets::record::stop().ok_or_else(|| anyhow!("the recorder stopped early"))?;
-    let (offered, outcomes) = sweep?;
+    let (offered, outcomes, source_races) = sweep?;
     let swept = vec![
         format!(
             "{} circuits, {} zone circuits, {} teams, classes {}",
@@ -413,7 +465,7 @@ pub fn extract(
     let extraction = out.to_string_lossy().into_owned();
     let planned = races(&offered);
     progress("checking the extraction");
-    let again = run(&extraction, &planned, |_| {});
+    let (again, extraction_races) = run_keeping(&extraction, &planned, keep, |_| {});
     let mut gaps: Vec<String> = oag_assets::record::take_misses()
         .into_iter()
         .map(|miss| format!("a read the extraction could not answer: {miss}"))
@@ -430,10 +482,21 @@ pub fn extract(
         .filter(|o| o.result.is_err())
         .cloned()
         .collect();
-    Ok(Report {
+    let pairs = source_races
+        .into_iter()
+        .zip(extraction_races)
+        .filter_map(|(source, extraction)| {
+            Some(Pair {
+                source: source?,
+                extraction: extraction?,
+            })
+        })
+        .collect();
+    let report = Report {
         manifest,
         loaded: outcomes.iter().filter(|o| o.result.is_ok()).count(),
         refused,
         gaps,
-    })
+    };
+    Ok((report, pairs))
 }

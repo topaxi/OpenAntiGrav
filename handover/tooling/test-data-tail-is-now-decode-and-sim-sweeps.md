@@ -26,6 +26,8 @@ The 2026-10-07 gate-speed lane did two things. It removed the HD render tests' p
 
 - **2026-11-02 `test-trims`.** Done: the nextest priority-100 override now sits first and applies; the PS2 transcode tests, the `omega_wem` ffmpeg test and `omega_transparency`'s Tech De Ra check each do less work (numbers in `workspace-layout.md`). Still open: `omega_transparency`'s 19 per-circuit tests each open five archives and build one circuit (14-31 s each, about 430 s summed) and `omega_normal_map` builds all of them again (87 s); one pass over the circuits with each check as a function would drop the repeat. `the_intro_cache_is_lossless` spends 12.5 s of its 20 s decoding 90 lossless AV1 frames to compare them. Measure with the test alone, twice, then one `just test-data --full`.
 
+- **2026-11-02 `test-data-tail`.** Done: `extract_ground_truth` flies the races `extract` loaded (Omega first circuit 19.6-22.6 s CPU to 12.1 s). Measured and not done: `omega_transparency` (6-12 s CPU per circuit, about 170 s in all) and `omega_normal_map` (18 s) share no work worth merging (see `workspace-layout.md`, "What the `test-data-tail` pass measured"). Open: a run-time sim-only load switch in `oag-raceplay::load` would drop the texture decode (about 12% of the Omega extract test) but threads through every `cfg(feature = "view")` site; the extraction work dir lives on `target/` (encrypted home filesystem, about a third of the Omega extract test's samples in reads and writes); measure with `perf record -F 99 -g -- <it binary> --ignored --exact extract_ground_truth::omega::first_circuit_reproduces`.
+
 ## Next Steps
 
 1. Check `ai_fork_split_ground_truth` for independent races. If it has them, wrap them in `in_parallel::map` and diff the output.
