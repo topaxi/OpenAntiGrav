@@ -319,6 +319,62 @@ fn omega_resumes() {
     resumes_at("omega", oag_testdata::exact("data/extracted/ps4"));
 }
 
+/// Two menu-launched races on one track: the first spawns the fetch that decodes
+/// it, the second finds it in `race_cache` and spawns none (what
+/// `Session::launch_race` asks `Audio::race_music_fetch`). Dropping that call
+/// back to an unconditional `MusicFetchWorker::spawn` makes the second `Some`.
+fn a_second_launch_on_the_same_track_decodes_nothing(label: &str, image: &str) {
+    let Some(image) = oag_testdata::image(image) else {
+        return;
+    };
+    let discs = audio::MusicDiscs::survey(&image.display().to_string(), &GameLibrary);
+    let scratch = scratch(label);
+    let cache = scratch.0.clone();
+    let mut audio = open_audio(&cache);
+
+    let first = audio
+        .race_music_fetch(&discs, MusicSource::Auto, &cache)
+        .unwrap_or_else(|| panic!("{label}: the first launch has nothing decoded"));
+    audio.finish_race_music(first, &discs, MusicSource::Auto, &cache);
+    tick_until(&mut audio, label, "the first launch's music", |audio| {
+        audio.playhead_race().is_some()
+    });
+    audio.pause_race_music();
+
+    let second = here_does_no_music_work(label, "the second launch", || {
+        audio.race_music_fetch(&discs, MusicSource::Auto, &cache)
+    });
+    assert!(
+        second.is_none(),
+        "{label}: the second launch on the same track spawned a fetch"
+    );
+    here_does_no_music_work(label, "the second hand-off", || {
+        audio.start_race_music(&discs, MusicSource::Auto, &cache);
+    });
+    assert!(
+        audio.playhead_race().is_some(),
+        "{label}: the cached track did not play"
+    );
+}
+
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn pulse_psp_second_launch_decodes_nothing() {
+    a_second_launch_on_the_same_track_decodes_nothing(
+        "psp-relaunch",
+        "data/images/pulse-psp-eu.chd",
+    );
+}
+
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn hd_second_launch_decodes_nothing() {
+    a_second_launch_on_the_same_track_decodes_nothing(
+        "hd-relaunch",
+        "data/images/hdfury-ps3-eu-dec.iso",
+    );
+}
+
 /// A changed playlist falls back to the normal start, on the real disc.
 #[test]
 #[ignore = "needs a disc image in data/images/"]

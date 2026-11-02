@@ -224,3 +224,14 @@ fn a_source_switch_landing_after_the_release_moves_the_sounding_song() {
     audio.set_music_source(&discs(), MusicSource::Ps2, Path::new("unused"));
     assert_eq!(audio.race_from, Some(Platform::Ps2));
 }
+
+#[test]
+fn a_race_launch_on_a_decoded_track_spawns_no_fetch() {
+    let (mut audio, ..) = psp_boot_fixture();
+    let fetch = audio.race_music_fetch(&discs(), MusicSource::Auto, Path::new("unused"));
+    assert!(fetch.is_none(), "the cached track needs no worker");
+
+    audio.race_cache = None;
+    let fetch = audio.race_music_fetch(&discs(), MusicSource::Auto, Path::new("unused"));
+    assert!(fetch.is_some(), "an empty cache still fetches");
+}

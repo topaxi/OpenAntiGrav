@@ -384,6 +384,33 @@ impl Audio {
         }
     }
 
+    /// The fetch a race launch needs for its music, or [`None`] when the track
+    /// is already decoded in [`Self::race_cache`].
+    ///
+    /// A `None` costs the launch no thread and no decode: the hand-off's
+    /// [`Self::start_race_music`] applies the cached track on the spot. The pick
+    /// it asks for again names the same track, because only a pick with no saved
+    /// place can hit, and `race_music_pick` hands a saved place out once, so a
+    /// pick that carried one is a miss and keeps it.
+    pub fn race_music_fetch(
+        &mut self,
+        discs: &MusicDiscs,
+        choice: MusicSource,
+        cache_dir: &Path,
+    ) -> Option<MusicFetchWorker> {
+        let pick = self.race_music_pick();
+        if self.cached_race_track(discs, choice, &pick).is_some() {
+            return None;
+        }
+        Some(MusicFetchWorker::spawn(
+            discs.clone(),
+            choice,
+            cache_dir.to_path_buf(),
+            pick,
+            "race-music",
+        ))
+    }
+
     /// Stops the menu voice and any race voice, before a race track starts.
     pub(super) fn stop_music_voices(&mut self) {
         self.song_hold.drop_parked();
