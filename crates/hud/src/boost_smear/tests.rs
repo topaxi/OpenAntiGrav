@@ -171,3 +171,80 @@ fn a_frame_with_no_boost_is_the_plain_frame() {
         );
     });
 }
+
+fn copies_of(frame: &crate::Frame, width: f32) -> Vec<[f32; 2]> {
+    frame
+        .sprites
+        .iter()
+        .filter_map(|d| match d {
+            Draw::Sprite { rect, .. } if rect[2] == width => Some([rect[0], rect[1]]),
+            _ => None,
+        })
+        .collect()
+}
+
+/// The pickup box is `Centred` at the authored `(240, 35)`: its copies step `(0, -1)` each, where
+/// the drawn top-left `(207, 5)` would step `(-0.245, -0.969)` (`docs/ghidra/functions/
+/// psp-pulse-usa/hud-boost-smear.md`, "The pickup icon at a boost").
+#[test]
+fn a_centred_widgets_copies_step_away_from_its_authored_point() {
+    let layout = Layout::from_xml(
+        r#"<Screen>
+        <Image name="PickupBackground"><Values x="240" y="35" Centred="true" width="66" height="60"
+          U="3" V="111" TxtrWidth="66" TxtrHeight="60" Src="p.mip"/></Image>
+        <Image name="Off"><Values x="300" y="40" Centred="true" width="100" height="80"
+          U="0" V="0" TxtrWidth="100" TxtrHeight="80" Src="p.mip"/></Image>
+        <Image name="Plain"><Values x="306" y="220" width="30" height="26"
+          U="0" V="0" TxtrWidth="30" TxtrHeight="26" Src="p.mip"/></Image>
+        </Screen>"#,
+    );
+    let sprite = |rect: [f32; 4]| Draw::Sprite {
+        rect,
+        uv: [0.0; 4],
+        color: [1.0; 4],
+    };
+    let mut frame = crate::Frame {
+        sprites: vec![
+            sprite([207.0, 5.0, 66.0, 60.0]),
+            sprite([250.0, 0.0, 100.0, 80.0]),
+            sprite([306.0, 220.0, 30.0, 26.0]),
+        ],
+        ..crate::Frame::default()
+    };
+    smear(
+        &mut frame,
+        oag_pulse::hud::ART,
+        &layout,
+        &boosting(0.5),
+        &[],
+    );
+    let pickup = copies_of(&frame, 66.0);
+    assert_eq!(pickup.len(), 10);
+    for (i, at) in pickup.iter().enumerate() {
+        assert_eq!(
+            *at,
+            [207.0, 5.0 - i as f32],
+            "copy {i}: exactly (0, -1) a step"
+        );
+    }
+    // `(300, 40) - (240, 136)` normalised, not the box's top-left `(250, 0)`.
+    let dir = direction([300.0, 40.0], [240.0, 136.0]);
+    let off = copies_of(&frame, 100.0);
+    for (i, at) in off.iter().enumerate() {
+        let by = shift(dir, i as u32, [1808.0, 1912.0]);
+        assert_eq!(*at, [250.0 + by[0], 0.0 + by[1]], "copy {i}");
+    }
+    let wrong = direction([250.0, 0.0], [240.0, 136.0]);
+    assert_ne!(
+        shift(dir, 9, [1808.0, 1912.0]),
+        shift(wrong, 9, [1808.0, 1912.0]),
+        "the two readings part by the last copy"
+    );
+    // A plain widget keeps its top-left as the anchor.
+    let plain = copies_of(&frame, 30.0);
+    let dir = direction([306.0, 220.0], [240.0, 136.0]);
+    assert_eq!(plain[9], {
+        let by = shift(dir, 9, [1808.0, 1912.0]);
+        [306.0 + by[0], 220.0 + by[1]]
+    });
+}

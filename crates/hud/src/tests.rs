@@ -927,6 +927,7 @@ fn a_sprite_is_offset_by_its_own_texture() {
         src: src.to_string(),
         rotation: 0.0,
         gradient: None,
+        centred: false,
     };
 
     let Some(Draw::Sprite { rect, uv, .. }) = sprite_draw(&sprite("second.mip"), &sheet) else {

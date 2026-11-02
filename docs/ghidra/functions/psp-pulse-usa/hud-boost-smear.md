@@ -221,9 +221,15 @@ icon quads' different top-lefts would give different offsets, which was not seen
 to `x`/`y` (`0x088a6f38`), so a Centred widget's anchor is its middle. The four "not reproduced" markers listed under "The copies"
 are consistent with this if they are Centred (not checked).
 
-**Ours differs:** `oag_hud::boost_smear::expand` takes the direction from the drawn rect's top-left (`anchor`), which for
-a Centred widget is not the authored point, so the pickup's copies land 0 or 1 px sideways off the original's where the original
-has none. The count and the alpha division are right. The wiring is written up as the first open item of the boost-smear leftovers thread.
+**Ours now matches (wired):** `oag_hud::boost_smear` takes a sprite's direction from the layout's authored `x`/`y`: the
+middle for a `Centred="true"` widget (`Sprite::centred`, matched to the drawn box by its middle, which a fade or fold keeps),
+the top-left for any other. The pickup's copies step exactly `(0, -1)` (`boost_smear::tests`,
+`a_centred_widgets_copies_step_away_from_its_authored_point`, red with the centred lookup off, green with it). A boosting pair
+(`scripts/psp-pulse-pair.py --field --layout forward --team Assegai --track 16_Track --state race-talons-venom-alongside.ppst
+--run-ticks 100`; original and ours both at boost timer 0.683 s) reads the pickup box (207, 5, 66, 60) at RMSE 6720 before and
+6549 after, of 65535; the scene behind the box differs between the two sides, so the box's metric is mostly scene, not smear.
+Text widgets keep the chosen direction (`widget+0x172` unread). Titles: Pure, HD, 2048 and Omega carry no `boost_smear` law, so
+nothing to port; Pulse PS2 shares `oag_pulse::hud::ART` and gets it (**checked, applies**, not measured on PS2).
 
 The pair of 39-vertex `vt 289` batches (textures `1802816`, `1641536`, about 1.7 units across, screen (236, 165)) after the scene's
 last sprite appears in all three frames, once each, with the same boxes: a scene model between ship sprites, not a HUD widget

@@ -108,6 +108,7 @@ fn a_bar_is_cropped_horizontally_and_keeps_its_height() {
         src: oag_pulse::hud::ATLAS.to_string(),
         rotation: 0.0,
         gradient: None,
+        centred: false,
     };
     let half = crop_horizontally(&sprite, 0.5);
     assert_eq!(half.rect, [306.0, 220.0, 84.0, 26.0]);
@@ -130,6 +131,7 @@ fn a_bar_is_cropped_vertically_from_the_bottom_and_keeps_its_width() {
         src: oag_2048::hud::skins::played::ARCADE.to_string(),
         rotation: 0.0,
         gradient: None,
+        centred: false,
     };
 
     // Full: the identity, same as `crop_horizontally` at `1.0`.
