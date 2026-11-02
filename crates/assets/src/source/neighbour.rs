@@ -102,6 +102,21 @@ impl Archives {
     /// from a flattened view across all of them, which would hand a model the
     /// last entry of the previous archive and decode it as a texture set.
     fn read_neighbour(&mut self, name: &str, which: Neighbour) -> Result<Vec<u8>> {
+        let key = match which {
+            Neighbour::Before => format!("before\0{name}"),
+            Neighbour::After => format!("after\0{name}"),
+        };
+        if let Some(blob) = self.read_memo.as_mut().and_then(|memo| memo.get(&key)) {
+            return Ok(blob);
+        }
+        let blob = self.read_neighbour_uncached(name, which)?;
+        if let Some(memo) = self.read_memo.as_mut() {
+            memo.keep_up_to(&key, &blob, crate::read_memo::MAX_NEIGHBOUR);
+        }
+        Ok(blob)
+    }
+
+    fn read_neighbour_uncached(&mut self, name: &str, which: Neighbour) -> Result<Vec<u8>> {
         let hash = oag_formats::wad::hash_name(name);
         let at = self.holder_of_archive(name).unwrap_or(Held::Data);
         // A PSARC's entry order is its manifest's and carries no meaning, so it

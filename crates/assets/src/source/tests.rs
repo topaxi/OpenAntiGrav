@@ -731,3 +731,32 @@ fn a_memoised_read_answers_the_second_ask_with_the_same_bytes() {
     let memo = archives.read_memo.as_ref().expect("asked for");
     assert_eq!((memo.hits, memo.misses), (1, 3));
 }
+
+/// A memoised archive answers the second ask for a neighbour with the same bytes,
+/// and a neighbour that does not exist is never kept.
+#[test]
+fn a_memoised_neighbour_is_read_once() {
+    let dir = testing::temp_dir("mount-neighbour-memo");
+    let mut archives = mounted(
+        &dir,
+        &[("base.bin", b"disc")],
+        vec![pack(
+            &dir,
+            "one",
+            &[("before.bin", b"the neighbour"), ("model.bin", b"model")],
+        )],
+    )
+    .memoising_reads();
+
+    assert_eq!(
+        archives.read_preceding("model.bin").unwrap(),
+        b"the neighbour"
+    );
+    assert_eq!(
+        archives.read_preceding("model.bin").unwrap(),
+        b"the neighbour"
+    );
+    assert!(archives.read_preceding("before.bin").is_err());
+    let memo = archives.read_memo.as_ref().expect("asked for");
+    assert_eq!((memo.hits, memo.misses), (1, 2));
+}
