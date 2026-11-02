@@ -764,6 +764,12 @@ impl Session {
             "race.kill_target" => self.settings.race.kill_target = text,
             "race.weapons" => self.settings.race.weapons = text,
             "ai.difficulty" => self.settings.ai.difficulty = text,
+            _ if setting.starts_with("mod.") => {
+                if !settings::mod_settings::set(&mut self.settings.mod_settings, setting, &text) {
+                    warn!("ignoring {setting} = {text:?}: not mod.<id>.<key>");
+                    return;
+                }
+            }
             // The two title rows resupply their scoped TRACK/TEAM the same
             // way `race.mode` resupplies the ordinary TRACK row above -
             // `Menu::supply` only runs at menu-open, and nothing else tells

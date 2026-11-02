@@ -298,6 +298,9 @@ pub(super) fn menu_page(
     // draw one frame with. Supplying the settings value would draw a note that
     // is silent by construction; supplying this capture's adapter would say a
     // player had changed something they have not touched.
+    for (key, value) in crate::settings::mod_settings::seeds(&settings.mod_settings) {
+        model.seed(&key, &value);
+    }
     for (key, value) in crate::settings::menu_seeds(settings, anisotropy, title, platform) {
         model.seed(key, &value);
     }

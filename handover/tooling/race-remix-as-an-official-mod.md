@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-02
-summary: "ADR-0082/0083 accepted; lanes 1, 2 and 4 done (mod pages in oag-ui, fingerprint); open: mods.rs load test, settings, queries, launch_race, the move"
+summary: "ADR-0082/0083 accepted; lanes 1, 2, 4 and 5 done (mod pages, fingerprint, mod settings); open: mods.rs load test, queries, launch_race, the move"
 size: XL (40)
 difficulty: hard (45)
 ---
@@ -360,7 +360,7 @@ hours, M half a day, L a day, XL more than a day (split it).
    simulation mod still changes it. The filter lives in `oag-game` only: the net
    function takes a list of strings and knows no mods. Crates: `oag-game`. Size:
    S (60). Difficulty: easy (55). Can run as soon as ADR-B is accepted.
-5. **Mod settings namespace.** Claim: `setting = "mod.<id>.<key>"` saves to
+5. **Mod settings namespace (done; the row-side refusal `Definition::check_mod_setting` waits for lane 2's page rows to call it).** Claim: `setting = "mod.<id>.<key>"` saves to
    `[mod_settings."<id>"]` and survives a restart; a turned-off mod's values are kept.
    Acceptance: a round-trip test in `crates/game/src/settings/tests.rs`. Crates:
    `oag-game`. Size: L (45). Difficulty: easy (50). Skill update as lane 3.
