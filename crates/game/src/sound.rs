@@ -129,9 +129,11 @@ pub fn play_nav(
 /// Arms the race song for the title about to race: when its original starts the song at the
 /// release (`oag_title::Music::race_song_start`), the race hand-off holds it until
 /// [`race_tick`] sees the race leave its countdown. Called before every fresh race starts its
-/// music, whichever way it was reached; a resume mid-race does not call it.
+/// music, whichever way it was reached; a resume mid-race does not call it. Also sets the title's
+/// effects volume law ([`Audio::set_effects_volume_law`]) for that race.
 pub fn hold_race_song(audio: &mut Audio, title: &oag_title::Title) {
     audio.hold_race_song(title.music.is_some_and(oag_title::Music::song_waits_for_go));
+    audio.set_effects_volume_law(title.effects_volume_law.value);
 }
 
 /// Starts decoding `race`'s flyby voice-over, where it has one, off this thread: the clip is ready
@@ -176,11 +178,11 @@ pub fn race_tick_keeping(
 }
 
 /// One tick of the sound effects under a title's pre-race flyby, where its rule fades them in
-/// (`Race::intro_plays_race_sounds`): the held craft's engines at idle, from the flyby camera's
-/// ears, through the effects fade. Only the engines: which other effects the original plays under
-/// its flyby is unwatched (`docs/gameplay/race-intro.md`, "The sound effects"), so no cue is
-/// taken, no circuit emitter sounds and the song marquee is left alone. A title whose flyby does
-/// not fade its effects in stays silent, as before.
+/// (`Race::intro_plays_race_sounds`): the circuit's ambience emitters from the flyby camera's
+/// ears, through the effects fade, and the craft's engines by range (inaudible until the camera
+/// nears the grid, as the original's are). No cue is taken: the original starts no front-end or
+/// UI cue in the window, and the song marquee is left alone. A title whose flyby does not fade its
+/// effects in stays silent, as before (`docs/gameplay/race-intro.md`, "What ours does").
 pub fn flyby_tick(audio: &mut Audio, race: &mut Race) {
     if race.intro_plays_race_sounds() {
         tick_effects(audio, race, |_| false, true);
@@ -203,14 +205,9 @@ fn tick_effects(
         )
     };
     cues.retain(|event| keep(event));
-    let no_emitters = oag_sound::sfx::TrackEmitters::default();
     let frame = RaceFrame {
         banks: race.sounds(),
-        emitters: if flyby {
-            &no_emitters
-        } else {
-            race.track_emitters()
-        },
+        emitters: race.track_emitters(),
         announcer: race.announcer(),
         class_announcer: race.class_announcer(),
         cues,

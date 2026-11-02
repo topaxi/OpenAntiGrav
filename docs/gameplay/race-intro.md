@@ -203,24 +203,38 @@ overlay draws them for HD yet.
   ([the call sites](../ghidra/functions/psp-pulse-usa/race-intro.md#the-music-the-two-counter-calls-and-the-exit-stop-read-2026-11-02-lane-pulse-flyby-music)).
   Ours: `PreRace::effects_fade_in` (Pulse's, measured off the executable) raises
   `IntroCue::SilenceEffects` on tick 0 and `IntroCue::FadeInEffects` on tick 20; `oag_sound::Audio`
-  multiplies the Sfx bus by the fade, one step per `Audio::tick`, and `stop_race_sfx` releases it so
-  a flyby quit half-way leaves the menus at their slider. The session also runs
-  `sound::flyby_tick` under the flyby, on a title whose rule has the fade only
-  (`Race::intro_plays_race_sounds`; HD, Omega and 2048 stay as they were): the held craft's
-  **engines at idle**, from the flyby camera's ears, through the fade. The world still does not
-  tick (the cues are output, not `World` state). A held Cross ending the flyby at tick 60 leaves
-  the ramp at 0.8; it finishes in the countdown, as the original's per-frame update does.
+  steps the fade once per `Audio::tick`, and `stop_race_sfx` releases it so a flyby quit half-way
+  leaves the menus at their slider. The bus gain is the title's `effects_volume_law` applied to
+  slider times fade: Pulse's is `Squared` (measured, see below), so the bus reads
+  `(slider * fade) ** 2`, through the flyby and for the rest of the race (`hold_race_song` arms
+  it with the race); Pure inherits it from Pulse, HD, 2048 and Omega stay `Linear` (their mix is
+  authored and `hd.live` owns the buses). The session runs `sound::flyby_tick` under the flyby,
+  on a title whose rule has the fade only (`Race::intro_plays_race_sounds`): the circuit's
+  **placed ambience emitters** and the craft engines, both by range from the flyby camera's ears,
+  through the fade; no cue is taken. The world still does not tick (the cues are output, not
+  `World` state). Measured on `03_Track` (`flyby_voice_ground_truth`): the first emitter sounds at
+  tick 390 (the original's `NEON_RING` at 393) and the first audible engine at tick 1,144 (the
+  original's first non-zero engine volume at about 1,150); the engines hold their voices at gain 0
+  before that, as the original's commit volume 0. **Not played:** the original's `~AMB` loop that
+  sounds from its first call (conf 70, which cue it is is unread, and it is not among the
+  emitters in range), the `~FLYBY_DIST_*` one-shots (a command list's random picks, no trigger
+  recovered). A held Cross ending the flyby at tick 60 leaves the ramp at 0.8; it finishes in the
+  countdown, as the original's per-frame update does.
   **A call is one tick (60 Hz)**: the lock counter that times the fade is one decrement per
   `RaceMode_UpdateIntro` call and 60 of them are the 60 ticks the lock measured, and
   `Audio_UpdateGroupVolumes` runs once a frame beside it
   ([audio-levels.md](../ghidra/functions/psp-pulse-usa/audio-levels.md)); that the PSP holds 60
   frames a second through the flyby is **chosen, not measured**. Measured at the bus
-  (`flyby_voice_ground_truth`): the Sfx bus reads `0` through tick 19, `0.02` after tick 20's step,
-  `0.02 * (n - 19)` after tick `n`, and full after tick 69. Whether the original's cue lands a call
-  before or after the first step is unread.
+  (`flyby_voice_ground_truth`): the Sfx bus reads `0` through tick 19, `(0.02 * (n - 19)) ** 2`
+  after tick `n`, and full after tick 69.
+  **Scope of the square:** always, not only in the flyby. The helper squares every group volume
+  and the slider reaches the group as the same fraction (`Audio_SetSfxFadeTarget`), so every
+  Pulse race's effects bus is squared (the default slider, 100, is unchanged; a lower slider is
+  quieter than before: 50 reads 0.25). Menus outside a race stay linear: leaving a race resets the law (`stop_race_sfx`), launching one
+  arms it again; the original's menus are presumably squared too but ours are unmeasured there; Speech is in the same faded group and presumably squared too, not wired. The ramp's
+  ceiling at a slider below 100 (the original's fade target is the slider) is unmeasured; ours
+  still ramps slider times a 0-to-1 fade.
   **What is audible: watched 2026-11-02**, see "What the original plays under the flyby" below.
-  The "engine idle only" wiring above is **not** what the original does: its audible effect
-  under the fade is the circuit's ambience, not the engines.
 - **Other titles, effects fade (checked 2026-11-02)**: *checked, differs.* HD's fly-over sits on the
   `PreRace` mix row ([now-playing.md](../formats/now-playing.md)), which authors its own buses; its
   `PreRace` rule carries no `effects_fade_in` and the fade never touches an HD bus (the Sfx bus is
@@ -299,9 +313,10 @@ for each side; that helper multiplies the voice's volume by the group volume
 (`0x08ac3990`, also squared when below `0x10000`), and shifts. So every change of a group volume,
 the SFX slider's included, acts as its square, not only the fade; whether the slider's own law
 matches is unmeasured here (the fade and the slider both reach the group as one fraction, so the
-measured square is on their product). Ours: `slider.gain() * fade.gain()` set as one linear bus
-gain (`crates/sound/src/sfx_fade.rs`, `apply_sfx_fade`; `Volume::gain` is `percent / 100`), so
-at a ramp step ours sits above the original's, and a slider below 100 differs too.
+measured square is on their product). Ours: the title's `effects_volume_law` (`Squared` for Pulse) applied to `slider.gain() * fade.gain()`
+(`crates/sound/src/sfx_fade.rs`, `bus_gain`; `Volume::gain` is `percent / 100`), so the bus reads
+the square, as the original does. Whether the slider's own steady-state law is the square is read off
+the helper, not watched below 100.
 
 **What starts and when (`03_Track`, 4 cue runs and 3 envelope runs, ticks).**
 

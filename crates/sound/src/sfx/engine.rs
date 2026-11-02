@@ -246,6 +246,13 @@ impl Engine {
         }
     }
 
+    /// Whether the voice is open with a gain above zero: out of range it is held at zero.
+    pub fn audible(&self, mixer: &Mixer) -> bool {
+        self.voice
+            .and_then(|id| mixer.gain(id))
+            .is_some_and(|gain| gain > 0.0)
+    }
+
     /// Releases the voice, on leaving a race.
     pub fn stop(&mut self, mixer: &mut Mixer) {
         self.stopped = true;

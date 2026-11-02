@@ -685,6 +685,21 @@ impl Audio {
         });
     }
 
+    /// How many craft engines are audible now: open with a gain above zero (a craft out of the
+    /// listener's range holds its voice at zero).
+    #[must_use]
+    pub fn audible_engines(&self) -> usize {
+        self.sfx.as_ref().map_or(0, |voices| {
+            self.output.with_mixer(|mixer| {
+                voices
+                    .engines
+                    .iter()
+                    .filter(|engine| engine.audible(mixer))
+                    .count()
+            })
+        })
+    }
+
     /// How many of the circuit's own emitters are sounding now ("is the circuit
     /// audible"), apart from `Mixer::active_voices`, which counts cues too; the
     /// claim of `crates/game/tests/track_audio_ground_truth.rs`.

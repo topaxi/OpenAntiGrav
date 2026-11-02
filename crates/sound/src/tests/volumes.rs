@@ -128,3 +128,46 @@ fn the_flyby_effects_fade_is_silent_then_a_002_ramp_to_the_slider() {
     audio.stop_race_sfx();
     assert_eq!(sfx_bus(&audio), 0.5, "leaving the race restores the slider");
 }
+
+/// Pulse's effects group is squared at the commit (`FUN_089957c0`), so the bus reads the square of
+/// the slider times the fade, through the flyby and after it. Fails if the bus stays linear.
+#[test]
+fn the_squared_law_puts_the_square_of_slider_times_fade_on_the_bus() {
+    use oag_title::group_volume::EffectsVolumeLaw;
+    let mut audio = Audio::open(
+        &crate::settings::Settings::default(),
+        None,
+        None,
+        oag_audio::MIN_BUFFER,
+        false,
+    );
+    audio.set_effects_volume_law(EffectsVolumeLaw::Squared);
+    for tick in 0..=80u32 {
+        if tick == 0 {
+            audio.silence_sfx();
+        }
+        if tick == 20 {
+            audio.fade_in_sfx(0.02);
+        }
+        let fade = audio.sfx_fade_gain();
+        assert!(
+            (sfx_bus(&audio) - fade * fade).abs() < 1e-6,
+            "tick {tick}: {} against {}",
+            sfx_bus(&audio),
+            fade * fade
+        );
+        audio.tick();
+    }
+    assert_eq!(sfx_bus(&audio), 1.0);
+    audio.apply(&crate::settings::Settings {
+        sfx_volume: Volume(50),
+        ..Default::default()
+    });
+    assert_eq!(sfx_bus(&audio), 0.25, "the slider at half is a quarter");
+    audio.stop_race_sfx();
+    assert_eq!(
+        sfx_bus(&audio),
+        0.5,
+        "leaving the race returns the menus to linear"
+    );
+}

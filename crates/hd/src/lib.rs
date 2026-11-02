@@ -164,6 +164,10 @@ pub const TITLE: &Title = &Title {
     // [`names::FRONT_END_PLUGIN_DEFINITION`].
     // Measured: `PS_BUTTONS.fnt`'s three face-button glyphs - see `prompts`.
     prompts: prompts::PROMPTS,
+    // HD's authored mix owns the buses.
+    effects_volume_law: oag_title::pre_race::Sourced::chosen(
+        oag_title::group_volume::EffectsVolumeLaw::Linear,
+    ),
     plugin_definition: names::FRONT_END_PLUGIN_DEFINITION,
     track_plugin_definition: None,
     loading: Some(&loading::LOADING),

@@ -124,6 +124,10 @@ pub const TITLE: &Title = &Title {
     }),
     // No prompt glyph of this title's has been read; the disc's own draw unchanged.
     prompts: &oag_title::prompts::Prompts::UNREAD,
+    // 2048's authored mix owns the buses.
+    effects_volume_law: oag_title::pre_race::Sourced::chosen(
+        oag_title::group_volume::EffectsVolumeLaw::Linear,
+    ),
     plugin_definition: names::TEAM_PLUGIN_DEFINITION,
     track_plugin_definition: Some(names::TRACK_PLUGIN_DEFINITION),
     loading: None,
