@@ -39,25 +39,28 @@ impl MusicDiscs {
         }
         let cell = Arc::new(OnceLock::new());
         let listings = Listings::default();
+        let pool = super::pool::Pool::default();
         let discs = Self {
             library,
             listings: listings.clone(),
+            pool: pool.clone(),
             later: Later(Some(Arc::clone(&cell))),
             ..Self::default()
         };
         let booted = booted.to_string();
-        let (in_place, kept) = (booted.clone(), listings.clone());
+        let (in_place, kept, kept_pool) = (booted.clone(), listings.clone(), pool.clone());
         let filled = Arc::clone(&cell);
         // Detached: the answer lands in `cell`, which every clone holds.
         let task = oag_thread::Task::spawn("music-survey", move || {
             // A survey that panics still answers, with nothing found, so a
             // worker waiting on it is not left waiting.
             let found = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                Self::survey_into(&booted, library, listings.clone())
+                Self::survey_into(&booted, library, listings.clone(), pool.clone())
             }))
             .unwrap_or_else(|_| Self {
                 library,
                 listings,
+                pool,
                 ..Self::default()
             });
             log::debug!("audio: music discs, {}", found.describe());
@@ -66,7 +69,7 @@ impl MusicDiscs {
         // A thread that would not start reads as finished with the cell still
         // empty, and every music worker would wait on it forever: survey here.
         if task.is_finished() && cell.get().is_none() {
-            let _ = cell.set(Self::survey_into(&in_place, library, kept));
+            let _ = cell.set(Self::survey_into(&in_place, library, kept, kept_pool));
         }
         discs
     }

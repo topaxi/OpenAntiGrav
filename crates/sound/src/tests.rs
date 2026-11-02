@@ -12,6 +12,7 @@
 use super::*;
 
 mod no_audio;
+mod pool;
 mod race_pick;
 mod race_song;
 mod race_switch;
@@ -39,6 +40,7 @@ fn a_release_that_is_not_there_falls_back_to_the_booted_one() {
         library: &NoLibrary,
         listings: Listings::default(),
         later: Default::default(),
+        pool: Default::default(),
         psp: Some("psp.chd".into()),
         ps2: None,
         ps3: None,
@@ -59,6 +61,7 @@ fn a_release_that_is_not_there_falls_back_to_the_booted_one() {
         library: &NoLibrary,
         listings: Listings::default(),
         later: Default::default(),
+        pool: Default::default(),
         psp: Some("psp.chd".into()),
         ps2: Some("ps2.chd".into()),
         ps3: None,
@@ -256,6 +259,7 @@ fn changing_the_music_source_seeks_rather_than_restarting() {
         library: &NoLibrary,
         listings: Listings::default(),
         later: Default::default(),
+        pool: Default::default(),
         psp: Some("psp.chd".into()),
         ps2: Some("ps2.chd".into()),
         ps3: None,
@@ -362,6 +366,7 @@ fn asking_for_the_music_again_never_restarts_it() {
         library: &NoLibrary,
         listings: Listings::default(),
         later: Default::default(),
+        pool: Default::default(),
         psp: Some("psp.chd".into()),
         ps2: Some("ps2.chd".into()),
         ps3: None,
@@ -427,6 +432,7 @@ fn a_source_with_no_music_is_not_retried_every_tick() {
         library: &NoLibrary,
         listings: Listings::default(),
         later: Default::default(),
+        pool: Default::default(),
         psp: None,
         ps2: None,
         ps3: None,
@@ -470,6 +476,7 @@ fn a_source_with_no_music_is_not_retried_every_tick() {
         library: &NoLibrary,
         listings: Listings::default(),
         later: Default::default(),
+        pool: Default::default(),
         psp: None,
         ps2: Some("ps2.chd".into()),
         ps3: None,
@@ -497,6 +504,7 @@ fn music_with_no_counterpart_is_left_alone_whatever_the_row_says() {
         library: &NoLibrary,
         listings: Listings::default(),
         later: Default::default(),
+        pool: Default::default(),
         psp: Some("psp.chd".into()),
         ps2: Some("ps2.chd".into()),
         ps3: None,

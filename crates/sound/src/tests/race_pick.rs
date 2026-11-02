@@ -9,6 +9,7 @@ fn booted(platform: Platform) -> MusicDiscs {
         library: &NoLibrary,
         listings: Listings::default(),
         later: Default::default(),
+        pool: Default::default(),
         psp: (platform == Platform::Psp).then(|| "psp.chd".into()),
         ps2: (platform == Platform::Ps2).then(|| "ps2.chd".into()),
         ps3: None,

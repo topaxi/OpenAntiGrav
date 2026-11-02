@@ -281,6 +281,10 @@ OAG_AUDIO_SFX_VOLUME = { text = "SFX VOLUME", human = false }
 OAG_AUDIO_ANNOUNCER_VOLUME = { text = "ANNOUNCER VOLUME", human = false }
 OAG_AUDIO_MASTER_VOLUME = { text = "MASTER VOLUME", human = false }
 OAG_AUDIO_MUSIC_SOURCE = { text = "MUSIC SOURCE", human = false }
+OAG_AUDIO_MUSIC = { text = "MUSIC", human = false }
+OAG_MUSIC_PAGE_TITLE = { text = "MUSIC", human = false }
+OAG_MUSIC_SOURCE_ROW = { text = "SOURCE", human = false }
+OAG_MUSIC_SCANNING = { text = "SCANNING", human = false }
 
 # CONTROLS's own rows - its title is `OAG_OPTIONS_CONTROLS` above.
 # `OAG_CONTROLS_FIRE_PICKUP`/`OAG_CONTROLS_ABSORB_PICKUP` are already declared

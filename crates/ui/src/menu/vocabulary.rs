@@ -359,6 +359,13 @@ pub enum ValueSource {
     /// dimmed value with the reason for a mod that cannot be switched (the built-in, a
     /// candidate that never opened). Re-supplied each time the MOD row moves.
     ModSwitch,
+    /// Every music source the pool has (`oag_sound::pool`): the booted disc, other discs and
+    /// the folders named in settings, each by its id with its label. The row moves the
+    /// ENABLED row under it; nothing stores it.
+    MusicPool,
+    /// The MUSIC page's ENABLED row for the source the SOURCE row is on: `on` and `off`, or
+    /// one dimmed value with the reason for a source that cannot be switched yet.
+    MusicPoolSwitch,
 }
 
 impl ValueSource {
@@ -404,6 +411,8 @@ impl ValueSource {
             Self::Weapons => "weapons",
             Self::Mods => "mods",
             Self::ModSwitch => "mod_switch",
+            Self::MusicPool => "music_pool",
+            Self::MusicPoolSwitch => "music_pool_switch",
         }
     }
 
@@ -440,6 +449,8 @@ impl ValueSource {
             "weapons" => Some(Self::Weapons),
             "mods" => Some(Self::Mods),
             "mod_switch" => Some(Self::ModSwitch),
+            "music_pool" => Some(Self::MusicPool),
+            "music_pool_switch" => Some(Self::MusicPoolSwitch),
             _ => None,
         }
     }

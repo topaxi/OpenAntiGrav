@@ -1111,6 +1111,7 @@ impl Session {
             &oag_game::mods::choices(&shell.mods, &shell.strings),
         );
         oag_game::mods::resupply_switch(&mut model, &shell.mods, &shell.strings);
+        oag_game::music_pool::supply(&mut model, self.music_discs.pool(), &shell.strings);
         self.seed_menu(&mut model, shell.title, shell.platform);
         settings::supply_reset(
             &mut model,

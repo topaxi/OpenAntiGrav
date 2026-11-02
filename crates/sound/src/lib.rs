@@ -47,6 +47,8 @@ pub mod settings;
 pub mod sfx;
 
 mod listings;
+pub mod folders;
+pub mod pool;
 mod menu_music;
 mod now_playing;
 pub use now_playing::NowPlaying;
@@ -235,6 +237,9 @@ pub struct MusicDiscs {
     /// The answer of a survey still running, shared by every clone. See
     /// [`MusicDiscs::survey_in_background`].
     later: survey::Later,
+    /// Every source the race playlist may draw from, shared by every clone and
+    /// by the surveyed copy. See [`pool`].
+    pool: pool::Pool,
 }
 
 impl Default for MusicDiscs {
@@ -249,6 +254,7 @@ impl Default for MusicDiscs {
             library: &NoLibrary,
             listings: Listings::default(),
             later: survey::Later::default(),
+            pool: pool::Pool::default(),
         }
     }
 }
@@ -261,15 +267,21 @@ impl MusicDiscs {
     /// counterpart is missing collapses into "there is no counterpart".
     #[must_use]
     pub fn survey(booted: &str, library: &'static dyn Library) -> Self {
-        Self::survey_into(booted, library, Listings::default())
+        Self::survey_into(booted, library, Listings::default(), pool::Pool::default())
     }
 
-    /// [`Self::survey`] keeping its listings in `listings`.
-    fn survey_into(booted: &str, library: &'static dyn Library, listings: Listings) -> Self {
+    /// [`Self::survey`] keeping its listings in `listings` and its sources in `pool`.
+    fn survey_into(
+        booted: &str,
+        library: &'static dyn Library,
+        listings: Listings,
+        pool: pool::Pool,
+    ) -> Self {
         let _work = probe::work("the music survey");
         let mut discs = Self {
             library,
             listings,
+            pool,
             ..Self::default()
         };
         // Identified as whichever title it is, not as Pulse: Pulse's deny-list
@@ -278,6 +290,7 @@ impl MusicDiscs {
             return discs;
         };
         discs.booted = Some(layout.platform);
+        discs.pool.set_booted(title.name, layout.platform, booted);
         match layout.platform {
             Platform::Psp => discs.psp = Some(booted.to_string()),
             Platform::Ps2 => discs.ps2 = Some(booted.to_string()),
@@ -319,6 +332,33 @@ impl MusicDiscs {
             _ => discs.psp = Some(found),
         }
         discs
+    }
+
+    /// The sources the race playlist may draw from.
+    #[must_use]
+    pub fn pool(&self) -> &pool::Pool {
+        &self.pool
+    }
+
+    /// Applies the player's switches and folders and starts the scans for every
+    /// source beyond the booted disc, each on its own worker. Returns at once.
+    ///
+    /// Safe to call again with changed folders: a folder already scanned keeps
+    /// its scan.
+    pub fn start_pool(
+        &self,
+        switches: &std::collections::BTreeMap<String, bool>,
+        folders: &[pool::MusicFolder],
+        reader: &Arc<dyn folders::Reader>,
+    ) {
+        self.pool.configure(switches, folders);
+        self.pool.scan_folders(reader);
+        if self.pool.discs_unstarted() {
+            let waiting = self.clone();
+            self.pool.scan_discs(self.library, self.listings.clone(), move || {
+                waiting.wait_surveyed();
+            });
+        }
     }
 
     /// Whether both releases are reachable, which is when the row is offered.
@@ -767,6 +807,20 @@ impl Audio {
             .ok()
             .flatten()
             .map_or(0, |soundtrack| soundtrack.tracks.len())
+    }
+
+    /// How many songs the race playlist holds right now: the booted soundtrack
+    /// (when it is switched on) and every other enabled source's songs found so
+    /// far. `booted` is [`Self::booted_soundtrack_len`].
+    fn playlist_len(discs: &MusicDiscs, booted: usize) -> usize {
+        pool::playlist_len(&discs.pool, booted)
+    }
+
+    /// [`Self::playlist_len`] for a test that cannot reach the private function.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn playlist_len_for_test(discs: &MusicDiscs, booted: usize) -> usize {
+        Self::playlist_len(discs, booted)
     }
 
     /// Stops the race playlist where it stands and resumes the menu voice.

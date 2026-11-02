@@ -280,6 +280,12 @@ pub(super) fn menu_page(
             Vec::new()
         },
     );
+    // The MUSIC page: a still waits for the other discs' scan the way it waits for the survey,
+    // so it shows what a player would see once the scans have landed.
+    while music_discs.pool().scanning_discs() {
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    crate::music_pool::supply(&mut model, music_discs.pool(), strings);
     // Seeded after supplying, and from the same list the live menus use, so
     // what the flag draws is what a player would see rather than whatever each
     // row's list happened to start on.
@@ -363,6 +369,20 @@ pub(super) fn menu_page(
             ),
             "no mod {id:?} is listed"
         );
+    } else if page == crate::music_pool::PAGE
+        && let Some(label) = focus
+    {
+        // `--menu-page music:<part of a source's label>` puts the SOURCE row on it.
+        let rows = music_discs.pool().rows();
+        let wanted = label.to_lowercase();
+        let row = rows
+            .iter()
+            .find(|row| row.label.to_lowercase().contains(&wanted))
+            .with_context(|| format!("no music source matches {label:?}"))?;
+        model.seed(
+            crate::music_pool::SELECTED,
+            &oag_ui::menu::Value::Text(row.id.clone()),
+        );
     } else if let Some(row) = focus
         && !model.focus_row(row)
     {
@@ -370,6 +390,7 @@ pub(super) fn menu_page(
     }
     // The ENABLED row for whichever mod the MOD row now holds, as the live page has it.
     crate::mods::resupply_switch(&mut model, &mods, strings);
+    crate::music_pool::supply(&mut model, music_discs.pool(), strings);
     // A still shows the page at rest, not the tick it arrived on - see
     // `Menu::settle` for what the arrival tick would otherwise draw.
     model.settle();

@@ -345,6 +345,7 @@ impl Session {
             if let Stage::Menu(stage) = &mut self.stage {
                 stage.skin.set_touch_rows(self.pointer.touch_spoke_last());
             }
+            self.poll_music_pool();
             // The audio's whole tick, and it is inside this loop rather than
             // beside it on purpose. Cue emission and mixer control are driven by
             // the tick count, exactly as the exhaust and the chase camera are

@@ -58,6 +58,8 @@ mod menu_source;
 mod music;
 #[path = "session/mods_page.rs"]
 mod mods_page;
+#[path = "session/music_pool_page.rs"]
+mod music_pool_page;
 pub(crate) use load_probe::LoadProbe;
 #[path = "session/menus.rs"]
 pub(crate) mod menus;
