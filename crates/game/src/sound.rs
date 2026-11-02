@@ -130,10 +130,12 @@ pub fn play_nav(
 /// release (`oag_title::Music::race_song_start`), the race hand-off holds it until
 /// [`race_tick`] sees the race leave its countdown. Called before every fresh race starts its
 /// music, whichever way it was reached; a resume mid-race does not call it. Also sets the title's
-/// effects volume law ([`Audio::set_effects_volume_law`]) for that race.
+/// effects and speech volume laws ([`Audio::set_effects_volume_law`],
+/// [`Audio::set_speech_volume_law`]) for that race.
 pub fn hold_race_song(audio: &mut Audio, title: &oag_title::Title) {
     audio.hold_race_song(title.music.is_some_and(oag_title::Music::song_waits_for_go));
     audio.set_effects_volume_law(title.effects_volume_law.value);
+    audio.set_speech_volume_law(title.speech_volume_law.value);
 }
 
 /// Starts decoding `race`'s flyby voice-over, where it has one, off this thread: the clip is ready

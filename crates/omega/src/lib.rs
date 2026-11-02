@@ -126,7 +126,10 @@ pub const TITLE: &Title = &Title {
     prompts: &oag_title::prompts::Prompts::UNREAD,
     // Omega's authored mix owns the buses.
     effects_volume_law: oag_title::pre_race::Sourced::chosen(
-        oag_title::group_volume::EffectsVolumeLaw::Linear,
+        oag_title::group_volume::GroupVolumeLaw::Linear,
+    ),
+    speech_volume_law: oag_title::pre_race::Sourced::chosen(
+        oag_title::group_volume::GroupVolumeLaw::Linear,
     ),
     plugin_definition: names::TEAM_PLUGIN_DEFINITION,
     track_plugin_definition: Some(names::TRACK_PLUGIN_DEFINITION),

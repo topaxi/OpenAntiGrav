@@ -8,7 +8,7 @@
 //! SFX slider on [`Bus::Sfx`]; the composition root raises the two calls as
 //! `oag_raceplay::intro_camera::IntroCue`s and one [`Audio::tick`] is one call.
 
-use oag_title::group_volume::EffectsVolumeLaw;
+use oag_title::group_volume::GroupVolumeLaw;
 
 use super::*;
 
@@ -17,7 +17,8 @@ use super::*;
 pub(super) struct SfxFade {
     gain: f32,
     per_tick: f32,
-    law: EffectsVolumeLaw,
+    law: GroupVolumeLaw,
+    speech_law: GroupVolumeLaw,
 }
 
 impl Default for SfxFade {
@@ -25,7 +26,8 @@ impl Default for SfxFade {
         Self {
             gain: 1.0,
             per_tick: 0.0,
-            law: EffectsVolumeLaw::Linear,
+            law: GroupVolumeLaw::Linear,
+            speech_law: GroupVolumeLaw::Linear,
         }
     }
 }
@@ -50,7 +52,7 @@ impl SfxFade {
     }
 
     /// Back to no fade at all: full gain, nothing climbing, and the menus' linear law (the race
-    /// arms its own with [`Audio::set_effects_volume_law`] after this, on launching one).
+    /// arms its own with [`Audio::set_effects_volume_law`] and [`Audio::set_speech_volume_law`] after this, on launching one).
     pub(super) fn release(&mut self) {
         *self = Self::default();
     }
@@ -58,6 +60,12 @@ impl SfxFade {
     /// The bus gain for the SFX slider's fraction under the fade.
     pub(super) fn bus_gain(&self, slider: f32) -> f32 {
         self.law.gain(slider * self.gain)
+    }
+
+    /// The speech bus gain for the Speech slider's fraction. The fade does not reach it here: the
+    /// announcer only speaks after the flyby's fade is full.
+    pub(super) fn speech_bus_gain(&self, slider: f32) -> f32 {
+        self.speech_law.gain(slider)
     }
 
     /// One call of `Audio_UpdateGroupVolumes`: adds the step, up to one.
@@ -75,8 +83,15 @@ impl SfxFade {
 impl Audio {
     /// The curve from the SFX slider and the fade to the effects bus, for the title about to race
     /// (`oag_title::Title::effects_volume_law`). Applied at once.
-    pub fn set_effects_volume_law(&mut self, law: EffectsVolumeLaw) {
+    pub fn set_effects_volume_law(&mut self, law: GroupVolumeLaw) {
         self.sfx_fade.law = law;
+        self.apply_sfx_fade();
+    }
+
+    /// The curve from the Speech slider to the speech bus, for the title about to race
+    /// (`oag_title::Title::speech_volume_law`). Applied at once.
+    pub fn set_speech_volume_law(&mut self, law: GroupVolumeLaw) {
+        self.sfx_fade.speech_law = law;
         self.apply_sfx_fade();
     }
 
@@ -126,8 +141,10 @@ impl Audio {
         if self.hd.live.is_some() {
             return;
         }
-        let slider = self.hd.sliders.get()[1];
-        self.output
-            .with_mixer(|mixer| mixer.set_bus_gain(Bus::Sfx, self.sfx_fade.bus_gain(slider)));
+        let [_, sfx, speech] = self.hd.sliders.get();
+        self.output.with_mixer(|mixer| {
+            mixer.set_bus_gain(Bus::Sfx, self.sfx_fade.bus_gain(sfx));
+            mixer.set_bus_gain(Bus::Speech, self.sfx_fade.speech_bus_gain(speech));
+        });
     }
 }
