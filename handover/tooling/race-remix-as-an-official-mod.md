@@ -382,9 +382,11 @@ hours, M half a day, L a day, XL more than a day (split it).
    Acceptance: a test that `tracks_of("")` equals today's RACE list on Pulse and
    Pure. Crates: `oag-ui`, `oag-game`. Size: L (45). Difficulty: medium (40).
    Skill update.
-7. **Launch by keys (`launch_two_source`).** Claim: a page entry names its
-   two-source inputs by setting key; the launch builds the same `race::Options`
-   `launch_remix` builds now. Acceptance: the existing remix launch tests pass, and
+7. **Launch by keys (`launch_race`, landed).** The maintainer chose option 2: one
+   generic `launch_race` whose page entry names its inputs by setting key (no
+   `launch_two_source`). Claim: the launch builds the same `race::Options`
+   `launch_remix` builds now. Done: `session/launch_keys.rs`; open: mod `[[entry]]`
+   rows cannot carry `launch`, and mod key validation waits on `mod-setting-check`. Acceptance: the existing remix launch tests pass, and
    `just gate-affected`. Crates: `oag-ui`, `oag-game`. Size: L (45). Difficulty:
    medium (35). Skill update.
 8. **Move RACE REMIX to `oag.remix`.** Split. **8a:** the page, its rows, the

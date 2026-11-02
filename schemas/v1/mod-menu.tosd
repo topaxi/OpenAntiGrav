@@ -119,6 +119,43 @@ type = "string"
 type = "string"
 optional = true
 
+# `launch = { ... }` on a `launch_race` row: the setting each input of the race is read
+# from. An input left out is the booted title's own.
+[types.launch]
+type = "table"
+
+[types.launch.track_title]
+type = "string"
+optional = true
+
+[types.launch.track]
+type = "string"
+optional = true
+
+[types.launch.craft_title]
+type = "string"
+optional = true
+
+[types.launch.team]
+type = "string"
+optional = true
+
+[types.launch.variant]
+type = "string"
+optional = true
+
+[types.launch.mode]
+type = "string"
+optional = true
+
+[types.launch.class]
+type = "string"
+optional = true
+
+[types.launch.difficulty]
+type = "string"
+optional = true
+
 [types.page-row]
 type = "table"
 
@@ -139,6 +176,10 @@ optional = true
 
 [types.page-row.action]
 type = "string"
+optional = true
+
+[types.page-row.launch]
+type = "types.launch"
 optional = true
 
 [types.page-row.setting]

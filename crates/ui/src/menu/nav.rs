@@ -263,6 +263,13 @@ impl Menu {
                 self.nav.push(Nav::Decline);
                 Vec::new()
             }
+            Entry::Run {
+                inputs: Some(inputs),
+                ..
+            } => {
+                self.nav.push(Nav::Accept);
+                vec![MenuEvent::Launch(inputs.clone())]
+            }
             Entry::Run { action, .. } => {
                 self.nav.push(Nav::Accept);
                 vec![MenuEvent::Fired(*action)]

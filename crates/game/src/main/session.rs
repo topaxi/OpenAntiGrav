@@ -44,6 +44,8 @@ pub(crate) mod lifecycle;
 pub(crate) mod phases;
 #[path = "session/language.rs"]
 mod language;
+#[path = "session/launch_keys.rs"]
+mod launch_keys;
 #[path = "session/launch2048.rs"]
 mod launch2048;
 #[path = "session/load.rs"]

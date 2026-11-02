@@ -33,7 +33,7 @@ use crate::language::StringTable;
 use oag_core::buttons::button_from_name;
 
 use super::{
-    Action, CAMPAIGN_PICKER_PAGE, CUSTOM_CAMPAIGN_ROW, Choice, Condition, Entry,
+    Action, CAMPAIGN_PICKER_PAGE, CUSTOM_CAMPAIGN_ROW, Choice, Condition, Entry, LaunchInputs,
     ORIGINAL_CAMPAIGN_ROW, Page, Pin, Query, QueryRef, Restart, RowMeta, Value, ValueSource,
     Warning,
 };
@@ -128,6 +128,21 @@ mod build;
 mod mod_setting;
 pub use build::{Added, For, ModMenu};
 
+impl From<&raw::Launch> for LaunchInputs {
+    fn from(keys: &raw::Launch) -> Self {
+        Self {
+            track_title: keys.track_title.clone(),
+            track: keys.track.clone(),
+            craft_title: keys.craft_title.clone(),
+            team: keys.team.clone(),
+            variant: keys.variant.clone(),
+            mode: keys.mode.clone(),
+            class: keys.class.clone(),
+            difficulty: keys.difficulty.clone(),
+        }
+    }
+}
+
 /// The file's own shape, before it is checked and resolved.
 mod raw {
     use serde::Deserialize;
@@ -185,6 +200,9 @@ mod raw {
         pub label: String,
         pub target: Option<String>,
         pub action: Option<String>,
+        /// `launch = { track_title = "remix.track_title", ... }`: the settings keys
+        /// a `launch_race` row reads its race's inputs from.
+        pub launch: Option<Launch>,
         pub setting: Option<String>,
         #[serde(default)]
         pub values: Vec<String>,
@@ -218,6 +236,22 @@ mod raw {
         /// An id [`super::resolved`] looks up in place of `subtitle`, the same
         /// mechanism `string_id` is for `label`.
         pub subtitle_string_id: Option<String>,
+    }
+
+    /// A `launch_race` row's `launch = { ... }` table: which setting each input of
+    /// the race is read from. Every key is optional; an input left out is the
+    /// booted title's own.
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    pub struct Launch {
+        pub track_title: Option<String>,
+        pub track: Option<String>,
+        pub craft_title: Option<String>,
+        pub team: Option<String>,
+        pub variant: Option<String>,
+        pub mode: Option<String>,
+        pub class: Option<String>,
+        pub difficulty: Option<String>,
     }
 
     /// `disabled_by = { setting = "display.vsync", value = "on" }`,
@@ -609,6 +643,7 @@ impl Definition {
                 if let Entry::Run {
                     action: found,
                     label: shown,
+                    ..
                 } = entry
                     && *found == action
                 {
@@ -676,6 +711,7 @@ impl Definition {
             entries: vec![Entry::Run {
                 label: label.clone(),
                 action: Action::OpenCampaign,
+                inputs: None,
             }],
             subtitles: vec![subtitle],
             meta: vec![RowMeta {
@@ -688,6 +724,7 @@ impl Definition {
             picker.entries.push(Entry::Run {
                 label: name.clone(),
                 action: Action::OpenCustomCampaign,
+                inputs: None,
             });
             picker
                 .subtitles
@@ -974,7 +1011,23 @@ fn resolve(
                     .collect::<Vec<_>>()
                     .join(", "),
             })?;
-            Ok(Entry::Run { label, action })
+            let inputs = match &entry.launch {
+                Some(keys) if action == Action::LaunchRace => Some(LaunchInputs::from(keys)),
+                Some(_) => {
+                    return Err(Error::BadEntry {
+                        context: context.to_string(),
+                        problem: "only a launch_race action names its inputs with `launch`"
+                            .to_string(),
+                    });
+                }
+                None if action == Action::LaunchRemix => Some(LaunchInputs::remix()),
+                None => None,
+            };
+            Ok(Entry::Run {
+                label,
+                action,
+                inputs,
+            })
         }
         "choice" => {
             let setting = entry.setting.as_ref().ok_or_else(|| missing("setting"))?;
