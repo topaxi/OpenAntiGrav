@@ -5,6 +5,12 @@
 //! rather than as the constants they pin, so a constant that moves fails a test
 //! instead of moving it too.
 
+#![expect(
+    clippy::disallowed_methods,
+    reason = "test fixtures and reference values: poses and angles built with glam and the \
+              platform libm, which no simulation path calls"
+)]
+
 use super::*;
 use oag_core::math::camera::{look_at, perspective};
 

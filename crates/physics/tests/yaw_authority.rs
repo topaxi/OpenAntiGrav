@@ -15,6 +15,12 @@
 //! original's recorded captures; it lives there because it reads the player's disc and
 //! `oag-physics` depends on `oag-core` only.
 
+#![expect(
+    clippy::disallowed_methods,
+    reason = "test fixtures and reference values: poses and angles built with glam and the \
+              platform libm, which no simulation path calls"
+)]
+
 use oag_core::math::Vec3;
 use oag_physics::collide::{Surface, TriangleSoup};
 use oag_physics::engine::steering;

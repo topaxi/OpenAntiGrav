@@ -1,3 +1,9 @@
+#![expect(
+    clippy::disallowed_methods,
+    reason = "test fixtures and reference values: poses and angles built with glam and the \
+              platform libm, which no simulation path calls"
+)]
+
 use super::*;
 
 fn straight(n: usize) -> (Vec<Vec3>, Vec<Frame>) {

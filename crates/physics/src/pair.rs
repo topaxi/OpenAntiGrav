@@ -97,7 +97,8 @@ pub fn overlap(
     let between = a.position - b.position;
     // A sphere reject first; half the diagonal bounds the box, so it never drops a real
     // overlap.
-    if between.length_squared() >= (hull_radius(a_size) + hull_radius(b_size)).powi(2) {
+    let reach = hull_radius(a_size) + hull_radius(b_size);
+    if between.length_squared() >= reach * reach {
         return None;
     }
 

@@ -247,11 +247,13 @@ unsafe_code = "deny"
 missing_debug_implementations = "warn"
 
 [workspace.lints.clippy]
-# Determinism hazards. Every one of these can silently change results between
-# targets or between runs; see docs/architecture/determinism.md.
-float_arithmetic = "allow"     # enabled per-module in sim crates, not globally
+# Float lints, all off: the simulation is float arithmetic by design, and the
+# float *methods* it may not call (libm, `mul_add`, the wall clock, `HashMap`)
+# are refused by each simulation crate's own `clippy.toml`; see
+# docs/architecture/determinism.md, "How this is enforced".
+float_arithmetic = "allow"
 suboptimal_flops = "allow"     # would suggest mul_add, which is contraction
-imprecise_flops = "allow"
+imprecise_flops = "allow"      # would suggest ln_1p, exp_m1 and hypot, which are libm
 
 [profile.release]
 debug = 1

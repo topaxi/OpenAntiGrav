@@ -17,6 +17,12 @@
 ///
 /// Returns 0 for empty input.
 #[must_use]
+#[expect(
+    clippy::disallowed_methods,
+    reason = "a triage heuristic for `oag-unpack sniff`: no parser branches on it and no value \
+              derived from it reaches the simulation, so a last-bit `log2` difference only moves a \
+              printed number"
+)]
 pub fn shannon(data: &[u8]) -> f64 {
     if data.is_empty() {
         return 0.0;

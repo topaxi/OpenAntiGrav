@@ -19,6 +19,12 @@
 //! a differential one actually does"). [`noisy_oval_of`] is the one fixture here
 //! where that is no longer true.
 
+#![expect(
+    clippy::disallowed_methods,
+    reason = "test fixtures and reference values: poses and angles built with glam and the \
+              platform libm, which no simulation path calls"
+)]
+
 use oag_ai::{Context, Driver, Field, Frame, Line, Pilot, Tuning};
 use oag_core::math::{Quat, Vec3};
 use oag_physics::{
