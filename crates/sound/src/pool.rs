@@ -151,7 +151,9 @@ fn folder_id(path: &std::path::Path) -> String {
 
 impl Pool {
     fn with<R>(&self, f: impl FnOnce(&mut Inner) -> R) -> Option<R> {
-        oag_thread::lock(&self.inner).ok().map(|mut inner| f(&mut inner))
+        oag_thread::lock(&self.inner)
+            .ok()
+            .map(|mut inner| f(&mut inner))
     }
 
     fn bump(&self) {
@@ -180,12 +182,7 @@ impl Pool {
     }
 
     /// Records the booted disc, which is a row from the start.
-    pub(crate) fn set_booted(
-        &self,
-        title: &'static str,
-        platform: Platform,
-        source: &str,
-    ) {
+    pub(crate) fn set_booted(&self, title: &'static str, platform: Platform, source: &str) {
         let id = disc_id(title, platform, source);
         let label = format!("{title} ({platform})");
         let source_title = title;
@@ -223,7 +220,8 @@ impl Pool {
     /// not here is on only if it is the booted disc or a folder whose `enabled` is set.
     #[must_use]
     pub fn switches(&self) -> BTreeMap<String, bool> {
-        self.with(|inner| inner.switches.clone()).unwrap_or_default()
+        self.with(|inner| inner.switches.clone())
+            .unwrap_or_default()
     }
 
     fn enabled_in(inner: &Inner, id: &str) -> bool {
@@ -371,7 +369,10 @@ impl Pool {
                 .with(|inner| {
                     let discs = !inner.discs_scanned
                         && inner.discs_started
-                        && inner.switches.iter().any(|(id, on)| *on && id.starts_with("disc:"));
+                        && inner
+                            .switches
+                            .iter()
+                            .any(|(id, on)| *on && id.starts_with("disc:"));
                     let folders = inner.folders.iter().any(|folder| {
                         Self::enabled_in(inner, &folder.id)
                             && matches!(folder.scan.status(), folders::Status::Scanning)

@@ -60,8 +60,15 @@ fn two_titles_soundtracks_both_appear_in_the_pool() {
 
     let rows = discs.pool().rows();
     let labelled = |name: &str| rows.iter().filter(|row| row.id.contains(name)).count();
-    assert_eq!(labelled(oag_pulse::TITLE.name), 1, "only the booted Pulse: {rows:#?}");
-    assert!(labelled(oag_hd::TITLE.name) >= 1, "HD's disc is listed: {rows:#?}");
+    assert_eq!(
+        labelled(oag_pulse::TITLE.name),
+        1,
+        "only the booted Pulse: {rows:#?}"
+    );
+    assert!(
+        labelled(oag_hd::TITLE.name) >= 1,
+        "HD's disc is listed: {rows:#?}"
+    );
     assert!(
         rows.iter().filter(|row| row.enabled).count() == 1 && rows[0].enabled,
         "by default only the booted disc is on: {rows:#?}"
@@ -91,7 +98,10 @@ fn two_titles_soundtracks_both_appear_in_the_pool() {
             .max()
             .unwrap_or(0)
     };
-    let (hd, pure) = (per_title(oag_hd::TITLE.name), per_title(oag_pure::TITLE.name));
+    let (hd, pure) = (
+        per_title(oag_hd::TITLE.name),
+        per_title(oag_pure::TITLE.name),
+    );
     assert!(hd > 0, "HD contributes songs");
     let extras = audio::Audio::playlist_len_for_test(&discs, 0);
     assert!(

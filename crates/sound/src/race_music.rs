@@ -348,8 +348,15 @@ fn fetch_extra(
                 platform,
                 track,
                 label,
-            } => load_track(discs.library, source, *platform, *track, cache_dir, &discs.listings)
-                .map(|sound| (sound, format!("{label} track at {}", track.at))),
+            } => load_track(
+                discs.library,
+                source,
+                *platform,
+                *track,
+                cache_dir,
+                &discs.listings,
+            )
+            .map(|sound| (sound, format!("{label} track at {}", track.at))),
             pool::Extra::File(path) => folders::load(&*discs.pool.reader(), path)
                 .map(|sound| (sound, path.display().to_string())),
         };
@@ -401,7 +408,7 @@ enum SwitchTarget {
     /// `discs`/`choice` let a landed switch update [`Audio::race_context`].
     Race {
         index: usize,
-        discs: MusicDiscs,
+        discs: Box<MusicDiscs>,
         choice: MusicSource,
     },
 }
@@ -854,7 +861,7 @@ impl Audio {
             wanted,
             target: SwitchTarget::Race {
                 index,
-                discs: discs.clone(),
+                discs: Box::new(discs.clone()),
                 choice,
             },
             worker: MusicFetchWorker::spawn(
@@ -1010,7 +1017,7 @@ impl Audio {
                 index,
                 discs,
                 choice,
-            } => self.apply_race_source_result(wanted, index, discs, choice, fetched),
+            } => self.apply_race_source_result(wanted, index, *discs, choice, fetched),
         }
     }
 }

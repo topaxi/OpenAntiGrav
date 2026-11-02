@@ -156,7 +156,9 @@ fn a_song_past_the_booted_soundtrack_comes_from_the_pool_and_a_vanished_mount_is
     // With the booted disc off, index 0 is the folder's song; its file is gone (the fake
     // reader refuses), which comes back as an error naming the file, not a panic or silence
     // elsewhere in the playlist.
-    discs.pool.set_booted("Wipeout Pulse", Platform::Psp, "psp.chd");
+    discs
+        .pool
+        .set_booted("Wipeout Pulse", Platform::Psp, "psp.chd");
     let booted = discs.pool.rows().into_iter().next().expect("booted").id;
     discs.pool.set_enabled(&booted, false);
     let error = crate::race_music::fetch_track(&discs, MusicSource::Auto, Path::new("unused"), 0)
@@ -181,7 +183,10 @@ fn a_cached_walk_keeps_the_listing_and_follows_a_change_below_it() {
         files
     };
     let first = sorted(disk.list(&library).expect("first walk"));
-    assert_eq!(first, vec![library.join("a.mp3"), library.join("sub/b.mp3")]);
+    assert_eq!(
+        first,
+        vec![library.join("a.mp3"), library.join("sub/b.mp3")]
+    );
     assert!(
         std::fs::read_dir(&cache).expect("cache dir").count() == 1,
         "the walk kept its cache"
@@ -198,6 +203,9 @@ fn a_cached_walk_keeps_the_listing_and_follows_a_change_below_it() {
             library.join("sub/c.mp3")
         ]
     );
-    assert!(disk.list(&base.join("missing")).is_err(), "a missing folder is an error");
+    assert!(
+        disk.list(&base.join("missing")).is_err(),
+        "a missing folder is an error"
+    );
     std::fs::remove_dir_all(&base).expect("clean up");
 }

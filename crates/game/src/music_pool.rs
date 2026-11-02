@@ -35,7 +35,10 @@ fn fit(text: &str) -> String {
     if text.chars().count() <= LABEL_CHARS {
         return text.to_string();
     }
-    let keep: String = text.chars().skip(text.chars().count() - (LABEL_CHARS - 3)).collect();
+    let keep: String = text
+        .chars()
+        .skip(text.chars().count() - (LABEL_CHARS - 3))
+        .collect();
     format!("...{keep}")
 }
 

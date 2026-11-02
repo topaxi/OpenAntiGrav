@@ -156,7 +156,10 @@ fn write_cache(file: &Path, cache: &DirCache) {
         .and_then(|()| std::fs::write(&temporary, text))
         .and_then(|()| std::fs::rename(&temporary, file));
     if let Err(error) = written {
-        log::warn!("audio: could not keep the music folder cache {}: {error}", file.display());
+        log::warn!(
+            "audio: could not keep the music folder cache {}: {error}",
+            file.display()
+        );
     }
 }
 
@@ -317,7 +320,10 @@ impl FolderScan {
                     State::Ready(files)
                 }
                 Err(error) => {
-                    log::warn!("audio: music folder {} will not read: {error}", root.display());
+                    log::warn!(
+                        "audio: music folder {} will not read: {error}",
+                        root.display()
+                    );
                     State::Failed(error.to_string())
                 }
             };
@@ -373,8 +379,8 @@ pub fn load(reader: &dyn Reader, path: &Path) -> anyhow::Result<oag_audio::Sound
     let bytes = reader
         .read(path)
         .with_context(|| format!("reading {}", path.display()))?;
-    let pcm = oag_music::mp3::decode(&bytes)
-        .with_context(|| format!("decoding {}", path.display()))?;
+    let pcm =
+        oag_music::mp3::decode(&bytes).with_context(|| format!("decoding {}", path.display()))?;
     oag_audio::Sound::new(pcm.samples, pcm.channels, pcm.sample_rate)
         .with_context(|| path.display().to_string())
 }

@@ -46,11 +46,11 @@ pub mod library;
 pub mod settings;
 pub mod sfx;
 
-mod listings;
 pub mod folders;
-pub mod pool;
+mod listings;
 mod menu_music;
 mod now_playing;
+pub mod pool;
 pub use now_playing::NowPlaying;
 pub mod probe;
 mod race_music;
@@ -355,9 +355,10 @@ impl MusicDiscs {
         self.pool.scan_folders(reader);
         if self.pool.discs_unstarted() {
             let waiting = self.clone();
-            self.pool.scan_discs(self.library, self.listings.clone(), move || {
-                waiting.wait_surveyed();
-            });
+            self.pool
+                .scan_discs(self.library, self.listings.clone(), move || {
+                    waiting.wait_surveyed();
+                });
         }
     }
 
