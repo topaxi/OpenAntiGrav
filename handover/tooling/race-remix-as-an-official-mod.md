@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-02
-summary: "ADR-0082 and ADR-0083 accepted (lanes 1 and 4 done); lanes 2-3, 5-9 are code: mod pages, settings, queries, launch_race, the move"
+summary: "ADR-0082/0083 accepted; lanes 1, 2 and 4 done (mod pages in oag-ui, fingerprint); open: mods.rs load test, settings, queries, launch_race, the move"
 size: XL (40)
 difficulty: hard (45)
 ---
@@ -341,12 +341,12 @@ hours, M half a day, L a day, XL more than a day (split it).
    Acceptance: `just check-docs`, ADR index updated, ADR-0066 decision 4 cross-referenced.
    Crates: none. Size: M (50). Difficulty: easy (55). **Blocks everything.** Needs
    the maintainer on the launch option (1 or 2) and the delivery per target.
-2. **2a: mod `[[page]]` parse and merge.** Claim: a mod `menu.toml` may carry
+2. **2a: mod `[[page]]` parse and merge (done).** Claim: a mod `menu.toml` may carry
    `[[page]]`; the shipped vanilla file still parses with `parse_vanilla`.
    Acceptance: a unit test in `crates/ui/src/menu/definition/build/tests.rs`
    with an example mod that has a page. Crates: `oag-ui`. Size: L (50). Difficulty:
    medium (45).
-3. **2b: page reachability and namespacing.** Claim: a mod page is reachable from
+3. **2b: page reachability and namespacing (oag-ui half done; what remains: the `mods.rs` load test in `oag-game`, that a mod with a page loads and its row reaches it through `Mods`).** Claim: a mod page is reachable from
    an `entry` of the same mod; a bad id is a load error naming the mod. Acceptance:
    the build tests plus a `mods.rs` load test. Crates: `oag-ui`, `oag-game`
    (`mods.rs`). Size: M (40). Difficulty: medium (45). Updates the mod-author skill

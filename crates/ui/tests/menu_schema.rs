@@ -133,6 +133,21 @@ fn mod_cases() -> Vec<(&'static str, String, bool)> {
             )),
             true,
         ),
+        (
+            "a page of its own, reached by a row",
+            file(
+                "[[page]]\nid = \"p\"\ntitle = \"P\"\n[[page.entry]]\nkind = \"toggle\"\nlabel = \"B\"\nsetting = \"graphics.bloom\"\n\
+                 [[entry]]\nid = \"extra\"\nparent = \"top\"\nkind = \"submenu\"\nlabel = \"X\"\ntarget = \"p\"\n",
+            ),
+            true,
+        ),
+        (
+            "a page row with an unknown key",
+            file(
+                "[[page]]\nid = \"p\"\n[[page.entry]]\nkind = \"back\"\nlabel = \"B\"\ncolour = 1\n",
+            ),
+            false,
+        ),
     ]
 }
 

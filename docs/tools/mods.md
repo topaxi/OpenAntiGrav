@@ -121,7 +121,26 @@ Rules:
   parent. On HD and Omega it is revealed below the parent tab while the parent or one of
   its attached rows has focus, with the pad (left and right step the top level, up and down
   step inside the family) and the pointer.
-- **No behaviour of its own on a title's pages.** A mod's attached rows are a `submenu` or an `action` of the closed vocabulary. A mod's own pages, settings, queries and `launch_race` are decided in [ADR-0082](../architecture/adr/0082-a-mod-owns-pages-settings-queries-and-one-launch-action.md) and not built yet; until they are, a mod cannot add a page, a setting, a mode or an action.
+- **A page of its own.** A `[[page]]` (`id`, `title`/`title_string_id`, `[[page.entry]]` rows in the grammar of `assets/ui/menu.toml`) is added to the tree as `<mod id>/<id>`. An `entry` or a page row of the same mod names it by the short `id` (`target = "picker"`); a mod cannot name another mod's page, and a short id wins over a title page of the same name only for its own mod's rows. A page id is non-empty with no `/`. A page no row of the mod reaches, a `target`, `action` or string id that does not resolve, or a colliding page id is a load error naming the mod and the key (`page "picker" entry 0 target`). A template `choice` row (`values_from`, no values) on a mod page expands like any other. [ADR-0082](../architecture/adr/0082-a-mod-owns-pages-settings-queries-and-one-launch-action.md) supersedes ADR-0066 decision 4 for this.
+- **Not yet.** A mod's own settings, queries and `launch_race` are decided in ADR-0082 and not built; until they are, a mod page uses the project's existing settings and values, and a mod cannot add a mode.
+
+```toml
+[[page]]
+id = "picker"
+title = "PICKER"
+
+[[page.entry]]
+kind = "toggle"
+label = "BLOOM"
+setting = "graphics.bloom"
+
+[[entry]]
+id = "picker_row"
+parent = "racebox"
+kind = "submenu"
+label = "PICKER"
+target = "picker"
+```
 
 `assets/mods/oag-extras/` is the worked example: this project's own REMIX, RECORDS and
 QUIT, built into the program, in the same format, carrying the project's own licence.
