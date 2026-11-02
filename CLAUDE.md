@@ -340,6 +340,13 @@ score; a score means measured). Where it is self-evident the thing is ours
 engine has), write no "chosen, not measured" or "this is ours" comment: it is
 redundant (maintainer, 2026-11-02).
 
+**Code comments say what and why, never when or who.** No dates, no
+"maintainer said", no lane names, no history ("moved out of `oag-game`",
+"was X before", "superseded"). The evidence (date, emulator, run count,
+address) lives on the doc page; a comment cites the page and section, e.g.
+`` (`docs/physics/<page>.md`, "<section>") ``. Git holds the history. This
+binds `.rs`, `.wgsl`/`.wesl` and scripts; docs pages keep their dates.
+
 ### A mod API change updates the mod author skill
 
 A change to the wasm extension ABI (`oag-ext-abi`), the guest SDK (`oag-ext`),

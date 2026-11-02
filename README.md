@@ -119,7 +119,9 @@ session, the crate map and how work in flight is tracked.
 ## Documentation
 
 Every discovery is written down with its evidence and a confidence score, so the
-engine can be understood without reopening Ghidra. Start at
+engine can be understood without reopening Ghidra. To learn how the formats and
+the game work, read the short specs in [`docs/specs/`](docs/specs/README.md); the
+long pages elsewhere in `docs/` are the evidence behind them. Start at
 [`docs/README.md`](docs/README.md).
 
 ## Credits
