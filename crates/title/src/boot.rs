@@ -1,54 +1,45 @@
 //! How a title's own boot sequence goes, as a table rather than as branches.
 //!
-//! This is the [ADR-0023] half of a title package: `oag-game` holds one generic
-//! mechanism, and which screens it walks - in what order, playing which movies -
-//! is here, filled in by `oag-pulse` and `oag-pure`.
+//! The [ADR-0023] half of a title package: `oag-game` holds one generic mechanism,
+//! and which screens it walks, in what order, playing which movies, is here.
 //!
 //! # Measured, not derived
 //!
-//! The reason this is a table and not a rule is that **a front-end XML's
-//! declared entry point is not the runtime's.** Both titles' `Skin.xml` declare
-//! the language picker first. Pure's runtime agrees; Pulse's does not - a cold
-//! boot opens straight into `LogoFMV` playing its intro and runs on to
-//! `Show Logo`, with no picker in between. So the order cannot be read out of the
-//! data, cannot be inferred from a screen-name probe, and cannot be shared
-//! between titles by analogy. Each title's chain is a measurement, and the
-//! evidence for each is on that title's own page:
-//! `docs/architecture/pure-boot.md` and `docs/architecture/frontend-boot.md`.
+//! **A front-end XML's declared entry point is not the runtime's.** Both titles'
+//! `Skin.xml` declare the language picker first. Pure's runtime agrees; Pulse's
+//! does not: a cold boot opens straight into `LogoFMV` playing its intro and runs
+//! on to `Show Logo`, with no picker. So the order cannot be read out of the data,
+//! inferred from a screen-name probe, or shared between titles by analogy. Each
+//! title's chain is a measurement, evidenced on `docs/architecture/pure-boot.md`
+//! and `docs/architecture/frontend-boot.md`.
 //!
-//! # No `Screens`, and nothing here recognises a source
+//! # Nothing here recognises a source
 //!
-//! Nothing in this module names a type from `oag-game` - it could not, the
-//! dependency rules forbid the edge - and nothing here decides which title a
-//! source is either. That was settled from the source's serial before any XML was
-//! parsed, so a profile is *handed* to the mechanism rather than matched against
-//! it. Where a source's own screen list still matters, the mechanism passes a
-//! predicate and the screen model stays where it lives.
+//! Nothing here names a type from `oag-game` (the dependency rules forbid the
+//! edge), and which title a source is was settled from its serial before any XML
+//! was parsed: a profile is *handed* to the mechanism. Where a source's own screen
+//! list matters, the mechanism passes a predicate.
 //!
-//! # What is deliberately absent
+//! # What is absent
 //!
-//! **What a state does.** Which buttons leave it, how long it holds, how it
-//! draws: all behaviour, all in `oag-game`. A table that encoded it would be a
-//! state-machine interpreter living in a data crate, which is the `trait Game`
-//! ADR-0022 refused wearing a data hat. This module says *which* screens and
-//! *which* movies, and stops there.
+//! **What a state does** (which buttons leave it, how long it holds, how it
+//! draws) is behaviour, in `oag-game`. A table encoding it would be a
+//! state-machine interpreter in a data crate, the `trait Game` ADR-0022 refused.
+//! This module says *which* screens and *which* movies.
 //!
 //! [ADR-0023]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0023-boot-sequence-as-title-data.md
 
 /// One step of a boot sequence: a screen, and the movie it plays there.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BootStep {
-    /// The screen's name, spelled exactly as the title's own front-end XML
-    /// spells it - or as its executable does, where the two differ and the
-    /// runtime was what settled it.
+    /// The screen's name, spelled as the title's front-end XML spells it, or as its
+    /// executable does where the two differ and the runtime settled it.
     pub state: &'static str,
-    /// The archive entry this screen plays, or `None` for a step with no movie
-    /// at all.
+    /// The archive entry this screen plays, or `None` for a step with no movie.
     ///
-    /// `None` is a fact rather than a gap. Pure's boot step plays nothing: its
-    /// first frame after power-on is the picker itself, cold-boot confirmed on
-    /// both pressings. A `hash:`-prefixed spec is accepted for a movie whose name
-    /// has not been recovered.
+    /// `None` is a fact: Pure's boot step plays nothing, its first frame after
+    /// power-on is the picker itself (cold-boot confirmed on both pressings). A
+    /// `hash:`-prefixed spec is accepted for a movie whose name is unrecovered.
     pub movie: Option<&'static str>,
 }
 
@@ -72,66 +63,48 @@ impl BootStep {
 /// Where a chain's order came from, which is not the same question as what the
 /// order is.
 ///
-/// **This field exists because the alternative was a lie or a refusal.** This
-/// module's own docs open by recording that a front-end XML's declared entry
-/// point is not the runtime's, and [`BootProfile::chain`] was therefore defined
-/// as a measurement - so a title whose order is only declared could not be
-/// expressed at all. Wipeout HD was that title: its `skin.xml` declared the
-/// screens in order and no capture of a PS3 running existed, so filling `chain`
-/// in silently would have put a hypothesis in the one field whose contract was
-/// that it never held one, and leaving it empty refused a front end whose layout
-/// is fully recovered.
+/// **Exists because the alternative was a lie or a refusal.** [`BootProfile::chain`]
+/// is a measurement, so a title whose order is only declared could not be
+/// expressed: HD's `skin.xml` declared the screens in order and no capture of a PS3
+/// running existed, so filling `chain` silently would put a hypothesis in a field
+/// whose contract is that it never holds one, and leaving it empty refused a front
+/// end whose layout is fully recovered.
 ///
-/// **HD's chain has since been watched** (2026-09-05, three cold boots on
-/// RPCS3), and Wipeout 2048 landed `Declared` in its place under
-/// [ADR-0054](https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md) -
-/// one Vita3K boot corroborates its order, short of the three independent
-/// ones HD's own `Measured` needed. This field was never about any one
-/// title holding the value at a given moment; it is about *whichever*
-/// title's declaration arrives before its capture does, which on
-/// 2026-09-20 is 2048.
+/// HD's chain has since been watched (three cold boots on RPCS3,
+/// `docs/formats/hd-frontend.md`, "The boot chain, declared and then watched"), and
+/// 2048 is `Declared` in its place under
+/// [ADR-0054](https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md):
+/// one Vita3K boot corroborates its order, short of the three independent boots
+/// HD's `Measured` needed. The field is about *whichever* title's declaration
+/// arrives before its capture does.
 ///
-/// Widening the type is the third answer, and it is the honest one: the chain
-/// still says what the order is, and this says how much that is worth. Every
-/// caller that shows a boot to a person is expected to say which it got - see
-/// [ADR-0025].
-///
-/// [ADR-0025]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0025-a-boot-chain-carries-its-provenance.md
+/// Every caller that shows a boot to a person says which it got ([ADR-0025]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Provenance {
-    /// A cold boot of the original was watched, and this is the order it went
-    /// in.
+    /// A cold boot of the original was watched, and this is the order it went in.
     ///
-    /// Both PSP titles, and Wipeout HD since 2026-09-05. Pulse's is the reason
-    /// the distinction is needed at all: its XML declares the picker first and
-    /// its runtime opens on `LogoFMV` instead, so a build that had trusted the
-    /// declaration would have shipped the wrong sequence and had no way to know.
+    /// Both PSP titles and HD. Pulse's is why the distinction exists: its XML
+    /// declares the picker first and its runtime opens on `LogoFMV`, so a build
+    /// trusting the declaration would have shipped the wrong sequence unawares.
     ///
-    /// **"Watched" is not "watched on the console."** HD's is three boots on
-    /// RPCS3, which is why its docs page scores the chain 85 rather than higher.
-    /// This enum is deliberately two-valued and grades nothing - ADR-0025
-    /// rejected a confidence number in the type, and the rubric score lives on
-    /// the docs page where it can carry its evidence.
+    /// **"Watched" is not "watched on the console."** HD's is three boots on RPCS3,
+    /// which is why its docs page scores the chain 85. The enum grades nothing
+    /// (ADR-0025 rejected a confidence number in the type); the score lives on the
+    /// docs page with its evidence.
     Measured,
-    /// The title's own front-end XML declares this order, and nothing has
-    /// watched it run.
+    /// The title's own front-end XML declares this order, and nothing has watched it
+    /// run.
     ///
-    /// A real reading of real data - the redirects were followed screen by
-    /// screen - and **not** evidence about the runtime. Anything user-facing
-    /// that walks such a chain says so rather than presenting it as the disc's
-    /// behaviour.
+    /// A real reading of real data (the redirects were followed screen by screen)
+    /// and **not** evidence about the runtime. Anything user-facing that walks such
+    /// a chain says so rather than presenting it as the disc's behaviour.
     ///
-    /// **Wipeout 2048 is in this state since [ADR-0054]**, HD having held it
-    /// before that and had its own chain watched (2026-09-05). 2048's own
-    /// chain is corroborated by one Vita3K cold boot rather than watched
-    /// three independent times the way ADR-0025's own bar asks for, so it
-    /// stays `Declared` rather than moving to `Measured` on a single run -
-    /// see `oag_2048::frontend::BOOT_PROFILE`'s own doc comment. The variant
-    /// stays live either way, because the whole point of the field is that a
-    /// declaration arriving as a measurement by omission must not be
-    /// possible. `oag_game::boot::provenance::caveat` is where it is
-    /// enforced, and it is unit-tested rather than disc-tested for exactly
-    /// this reason.
+    /// **2048 is here since [ADR-0054]**: its chain is corroborated by one Vita3K
+    /// cold boot, not the three independent boots ADR-0025's bar asks for
+    /// (`oag_2048::frontend::BOOT_PROFILE`). The variant stays live because a
+    /// declaration arriving as a measurement by omission must not be possible;
+    /// `oag_game::boot::provenance::caveat` enforces it, unit-tested rather than
+    /// disc-tested for that reason.
     ///
     /// [ADR-0054]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md
     Declared,
@@ -150,95 +123,71 @@ impl Provenance {
 pub struct BootProfile {
     /// Where [`Self::chain`]'s order came from. See [`Provenance`].
     ///
-    /// Deliberately not defaulted and not an `Option`: a profile is a
-    /// compile-time constant in a title package, and making the author write
-    /// one of two words is what stops a fourth title's declaration from
-    /// arriving as a measurement by omission.
+    /// Not defaulted and not an `Option`: the author of a compile-time profile
+    /// writes one of two words, so a declaration cannot arrive as a measurement by
+    /// omission.
     pub provenance: Provenance,
     /// Every screen a default boot walks, in order, starting at index 0.
     ///
-    /// An ordered chain rather than a set of decision points, because the
-    /// sequences genuinely differ in *length*: Pulse's is three screens and
-    /// Pure's is five, two of which sit between the picker and the movie. An
-    /// earlier shape here - a boot leg plus a single after-the-picker target -
-    /// could not express those two at all, and was discarded once they were
-    /// measured.
+    /// An ordered chain because the sequences differ in *length*: Pulse's is three
+    /// screens and Pure's five, two between the picker and the movie.
     pub chain: &'static [BootStep],
-    /// Where `--reel` starts, for a title that has such a leg at all.
+    /// Where `--reel` starts, for a title that has such a leg.
     ///
-    /// `None` is not "no default": it is "this title has no off-path reel state
-    /// anyone has found", and the flag is refused by name rather than quietly
-    /// pointed at another title's screen. Both titles ship a reel *file*; only
-    /// Pulse has an evidenced state that plays it.
+    /// `None` is "no off-path reel state anyone has found", and the flag is refused
+    /// by name rather than pointed at another title's screen. Both titles ship a
+    /// reel *file*; only Pulse has an evidenced state that plays it.
     pub reel: Option<BootStep>,
-    /// The looping backdrop this title's menus sit on, if it ships one.
-    ///
-    /// `None` for a title that ships none, which is a measurement: neither Pure
-    /// pressing carries `Data\Movies\Backdrop.PMF`.
+    /// The looping backdrop this title's menus sit on, if it ships one. `None` is a
+    /// measurement: neither Pure pressing carries `Data\Movies\Backdrop.PMF`.
     pub menu_backdrop: Option<&'static str>,
-    /// Whether this title's menus sit on the HD-style `BackgroundAnim` widget:
-    /// a 3D scene named by the skin, filtered to a grey drawing and drawn
-    /// behind the rows.
+    /// Whether this title's menus sit on the HD-style `BackgroundAnim` widget: a 3D
+    /// scene named by the skin, filtered to a grey drawing and drawn behind the rows.
     ///
-    /// **A per-title switch because the widget is in every HD-lineage skin and
-    /// only some titles have a reading of it worth drawing.** Wipeout HD's
-    /// `skin.xml` authors the same `<BackgroundAnim>`, and this build draws
-    /// nothing there (`false`), which is the fact the Fury style's own widget
-    /// already sits beside. Omega ships no Fury clouds, so this widget is the
-    /// only backdrop it can have.
+    /// **Per-title because the widget is in every HD-lineage skin and only some
+    /// titles have a reading worth drawing.** HD's `skin.xml` authors the same
+    /// `<BackgroundAnim>` and this build draws nothing there (`false`). Omega ships
+    /// no Fury clouds, so this widget is the only backdrop it can have.
     pub menu_scene: bool,
-    /// The screen whose own solid fills the language picker inherits.
-    ///
-    /// `None` where the picker carries its own background. `Some` where it is a
-    /// child screen with no fill of its own and would otherwise draw on black -
-    /// Pure's, which sits on `Intro Screen`'s white.
+    /// The screen whose own solid fills the language picker inherits. `None` where
+    /// the picker carries its own background; `Some` where it is a child screen with
+    /// no fill and would draw on black (Pure's, on `Intro Screen`'s white).
     pub picker_backdrop_parent: Option<&'static str>,
-    /// Whether the language picker is drawn from the faces this build loaded
-    /// rather than from `oag_ui`'s hard-coded table of Pulse's line heights and
-    /// Pulse's `menu` face.
+    /// Whether the language picker is drawn from the faces this build loaded rather
+    /// than from `oag_ui`'s hard-coded table of Pulse's line heights and `menu` face.
     ///
-    /// Two things follow. The row pitch is one line of the loaded `Default`
-    /// face. And the picker's `ControlTextConfirmButton`/`ControlTextBackButton`
-    /// draw in the `Buttons` face: their strings are button-glyph codepoints
-    /// (`FE_CONFIRM_BUTTON` is `"\u{3b5}"`, present only in `PS_BUTTONS.fnt`),
-    /// they author `font="menu"`, and HD's language plugins declare no `menu`
-    /// role at all, so the glyph would otherwise draw as an empty box. The
-    /// original's own picker was never watched on HD, so which face it draws
-    /// them in is **chosen, not measured**.
+    /// Two things follow. The row pitch is one line of the loaded `Default` face.
+    /// And the picker's `ControlTextConfirmButton`/`ControlTextBackButton` draw in
+    /// the `Buttons` face: their strings are button-glyph codepoints
+    /// (`FE_CONFIRM_BUTTON` is `"\u{3b5}"`, present only in `PS_BUTTONS.fnt`), they
+    /// author `font="menu"`, and HD's plugins declare no `menu` role, so the glyph
+    /// would draw as an empty box. The original's picker was never watched on HD, so
+    /// the face is **chosen, not measured**.
     ///
-    /// The picker's `<Menu>` states no pitch (the disc authors x, y, scale,
-    /// colour and alignment only), so the step is one line of the widget's own
-    /// font. Pulse's table happens to be that for Pulse; on HD and Omega it is
-    /// 13 against a 33 or 64 unit face and the rows print over each other.
-    /// `false` keeps the table, which is what Pulse, Pure and 2048 draw
-    /// against captures matched with it.
+    /// The picker's `<Menu>` authors no pitch, so the step is one line of the
+    /// widget's font. Pulse's table is that for Pulse; on HD and Omega it is 13
+    /// against a 33 or 64 unit face and rows print over each other. `false` keeps
+    /// the table, which Pulse, Pure and 2048 draw against matched captures.
     pub picker_from_loaded_faces: bool,
-    /// `FEGlobals` this title's own `Skin.xml` leaves undeclared, measured.
-    ///
-    /// Merged in only for keys the disc does not declare; a real declaration
-    /// always wins. Empty for a title that declares everything its screens name.
+    /// `FEGlobals` this title's `Skin.xml` leaves undeclared, measured. Merged in
+    /// only for keys the disc does not declare; a real declaration wins.
     pub fallback_globals: &'static [(&'static str, &'static str)],
-    /// The `<Screen>` of name-only `<Variable>`s in this title's `skin.xml`
-    /// whose values overwrite the skin's own globals of the same name, if it
-    /// carries one - see `oag_ui::screen::Screens::from_xml_with_fallbacks`.
+    /// The `<Screen>` of name-only `<Variable>`s in this title's `skin.xml` whose
+    /// values overwrite the skin's globals of the same name, if it carries one (see
+    /// `oag_ui::screen::Screens::from_xml_with_fallbacks`).
     ///
-    /// Wipeout HD ships one baked skin per archive, Fury's colours in one and
-    /// HD's in another, so it has no such block; Omega folds the styles into one
-    /// file and the executable copies one style's values over the base block's.
-    /// `None` for a title whose skin has nothing to overwrite, and a name the
-    /// skin does not carry changes nothing.
+    /// HD ships one baked skin per archive (Fury's colours in one, HD's in another),
+    /// so it has no such block; Omega folds the styles into one file and the
+    /// executable copies one style's values over the base block's. `None` where
+    /// there is nothing to overwrite.
     pub colour_template: Option<&'static str>,
-    /// `Image` widgets this title's own XML gives no `src` at all - assigned
-    /// programmatically on the original, the same class of gap
-    /// [`Self::fallback_globals`] fills for a colour - matched here by the
-    /// widget's own `name` attribute against an archive entry a content scan
-    /// found by its picture rather than its (unrecovered) name.
+    /// `Image` widgets this title's XML gives no `src` at all (assigned
+    /// programmatically on the original, the gap [`Self::fallback_globals`] fills
+    /// for a colour), matched by the widget's `name` against an archive entry a
+    /// content scan found by its picture rather than its unrecovered name.
     ///
-    /// Each value takes [`BootStep::movie`]'s own `hash:`-prefixed spelling,
-    /// for the same reason: a WAD directory holds only a name's hash, so an
-    /// entry nobody has named a string for is still addressable by it. Merged
-    /// in only where a widget's own XML leaves `src` unset; a real one always
-    /// wins. Empty for a title with no such gap found yet.
+    /// Each value takes [`BootStep::movie`]'s `hash:` spelling: a WAD directory holds
+    /// only a name's hash. Merged in only where the widget's XML leaves `src` unset.
     pub fallback_images: &'static [(&'static str, &'static str)],
 }
 
@@ -247,9 +196,8 @@ impl BootProfile {
     ///
     /// # Panics
     ///
-    /// If the chain is empty. A title with no boot sequence is not a title this
-    /// build can open, and every profile is a compile-time constant, so an empty
-    /// one is a typo rather than a runtime condition.
+    /// If the chain is empty: a title with no boot sequence cannot be opened, and a
+    /// profile is a compile-time constant, so that is a typo.
     #[must_use]
     pub fn start(&'static self) -> &'static BootStep {
         self.chain
@@ -264,15 +212,11 @@ impl BootProfile {
     }
 
     /// The next step after `state` that `usable` accepts.
-    ///
-    /// `usable` is asked rather than a screen model passed, and it answers two
-    /// questions at once that the caller is better placed to answer than this
-    /// crate is: whether *this pressing* carries the screen, and whether this
-    /// build can drive it yet. A step failing either is stepped over rather than
-    /// stalling the boot on it.
-    ///
-    /// `None` once the chain runs out, which is the end of the boot sequence
-    /// rather than an error.
+    /// `usable` is asked rather than a screen model passed, and answers two
+    /// questions the caller is better placed for: whether *this pressing* carries
+    /// the screen, and whether this build can drive it yet. A step failing either is
+    /// stepped over. `None` once the chain runs out (the end of the boot, not an
+    /// error).
     #[must_use]
     pub fn next_after(
         &'static self,
@@ -328,8 +272,8 @@ mod tests {
 
     #[test]
     fn a_step_this_source_cannot_use_is_stepped_over() {
-        // The case the predicate exists for: a pressing missing the screen, or a
-        // screen this build cannot drive yet, must not stall the boot on it.
+        // A pressing missing the screen, or a screen this build cannot drive yet,
+        // must not stall the boot.
         assert_eq!(CHAIN.next_after(A, |state| state != B).unwrap().state, C);
     }
 

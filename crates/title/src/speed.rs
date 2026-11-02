@@ -1,71 +1,56 @@
 //! The speed-class ladder one title authors, and the union RACE REMIX offers.
-//!
-//! Split out of [`super`] under the 1,000-line rule in
-//! `scripts/check-file-size.py`; a move, with no behaviour change.
 
 /// The speed-class ladder one title authors, slowest first.
 ///
-/// # Why this is an axis and not `SpeedClass::ALL`
+/// # An axis, not `SpeedClass::ALL`
 ///
 /// [ADR-0022] licenses an axis once a *second* corpus disagrees, and this one
-/// disagrees in **cardinality**: Wipeout Pure's per-team `handlingstats.xml`
-/// authors **five** `<Class>` rungs and Wipeout Pulse's authors **four**, on
-/// discs read separately. A shared constant would have to be either wrong for
-/// Pure or silently reused as if measured - the exact trap
-/// [`crate::MenuStrip`] was created to close for the layout numbers.
+/// disagrees in **cardinality**: Pure's per-team `handlingstats.xml` authors
+/// **five** `<Class>` rungs and Pulse's **four**, on discs read separately. A
+/// shared constant would be wrong for Pure or reused as if measured (the trap
+/// [`crate::MenuStrip`] closes for layout numbers).
 ///
 /// # Names, not `SpeedClass` values
 ///
-/// Three reasons, in order of weight:
+/// 1. **The authored datum is a name**: the disc writes `<Class name="VENOM">` and
+///    `<GlobalClass name="VECTOR">`; an enum would record a decoding of the file
+///    ([`crate::MenuStrip::selected_fill`] makes the same call).
+/// 2. **`oag-title` is thin** and depends on `oag-disc` alone; carrying
+///    `oag_tables::handling::SpeedClass` would pull `oag-tables` into a vocabulary
+///    crate.
+/// 3. **A name can outrun the engine.** Pure authors a rung this build once could
+///    not *select* ([`Self::VECTOR`]); a name records that where an enum could not.
 ///
-/// 1. **The authored datum is literally a name.** The disc writes
-///    `<Class name="VENOM">` and `<GlobalClass name="VECTOR">`; a title
-///    package that carried an enum would be recording a decoding of the file
-///    rather than the file. [`crate::MenuStrip::selected_fill`] is the same
-///    call made the same way - "a name, not a colour".
-/// 2. **`oag-title` is deliberately thin**, and depends on `oag-disc` alone.
-///    Carrying `oag_tables::handling::SpeedClass` would drag `oag-tables` into a crate whose whole
-///    job is to hold vocabulary rather than mechanism.
-/// 3. **A name can outrun the engine, and here it does.** Pure authors a rung
-///    this build cannot yet *select* - see [`Self::VECTOR`] - and a name
-///    records that honestly where an enum could not represent it at all.
+/// # What "measured" means
 ///
-/// # What "measured" means for each entry
-///
-/// Every ladder below was read off that title's own per-team
-/// `Data\Ships\<Team>\handlingstats.xml` (or its equivalent), which is the
-/// file that decides what a class *does* rather than merely what a menu says.
-/// The distinction matters because the two disagree on Pulse: Pulse's
-/// **global** `Data\XML\HandlingStats.xml` authors five `<GlobalClass>` rungs
-/// with `VECTOR` first, and its per-team files author four. The original's own
-/// parser discards the global `VECTOR` block, so four is the real ladder. See
-/// `docs/formats/handling-stats.md`.
+/// Every ladder was read off that title's per-team
+/// `Data\Ships\<Team>\handlingstats.xml` (or equivalent), the file that decides what
+/// a class *does*. On Pulse it disagrees with the global file: Pulse's
+/// `Data\XML\HandlingStats.xml` authors five `<GlobalClass>` rungs with `VECTOR`
+/// first and its per-team files four; the original's parser discards the global
+/// `VECTOR` block, so four is the real ladder (`docs/formats/handling-stats.md`).
 ///
 /// [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SpeedClasses {
-    /// The class names this title authors, slowest first, exactly as the disc
-    /// spells them.
-    ///
-    /// Uppercase because that is what the XML writes. Matching is
-    /// case-insensitive everywhere it happens, so nothing depends on the
-    /// case; it is kept so a reviewer can compare a row against the file it
-    /// came from without transforming it.
+    /// The class names this title authors, slowest first, as the disc spells them.
+    /// Uppercase as the XML writes; matching is case-insensitive everywhere, the
+    /// case is kept so a row compares against its file without transformation.
     pub names: &'static [&'static str],
     /// The names among [`Self::names`] only RACE REMIX offers; the ordinary
     /// per-title RACE page draws the rest.
     ///
-    /// **Chosen, not measured**, per rung: the maintainer settled it for
-    /// `VECTOR` on 2026-09-05 ("the ordinary page offers four on every
-    /// title") and the same shape holds for 2048's `SUPERPHANTOM`, which no
-    /// ordinary page of that title offers either (it has no race box). Data on
-    /// the ladder so a rung is added or confined without a name check in code.
+    /// **Chosen, not measured**, per rung: `VECTOR` is confined to RACE REMIX and
+    /// 2048's `SUPERPHANTOM` follows (no ordinary page of that title offers it, it
+    /// has no race box); `docs/architecture/menus.md`, "SPEED CLASS: `VECTOR` is
+    /// confined to RACE REMIX". Data on the ladder so a rung is added or confined
+    /// without a name check in code.
     pub remix_only: &'static [&'static str],
 }
 
 impl SpeedClasses {
-    /// The rung Wipeout Pure authors below Venom, and the one name here that
-    /// only one measured title has.
+    /// The rung Pure authors below Venom, the one name here only one measured
+    /// title has.
     ///
     /// Pure authors it fully, on both pressings:
     ///
@@ -76,41 +61,28 @@ impl SpeedClasses {
     /// | `Data\XML\weaponstats.xml` | `<Pickupodds class="Vector">`, beside the four |
     /// | the front end | five `<Menu name="Class">` entries |
     ///
-    /// So every input a race needs is on the disc, and none of it is borrowed.
+    /// Every input a race needs is on the disc, none borrowed.
     ///
-    /// # It is selectable, and what had to change first
+    /// # Selectable
     ///
-    /// It used to be filtered out of every menu, because the class type was a
-    /// four-variant enum and nothing downstream could *name* a fifth rung.
-    /// `oag_tables::handling::SpeedClass` is now a name on one ladder; the
-    /// four-wide census tables stay four wide (`SpeedClass::slot`) so Pulse and
-    /// HD, which author four, are not given an invented fifth entry.
+    /// `oag_tables::handling::SpeedClass` is a name on one ladder, and the four-wide
+    /// census tables stay four wide (`SpeedClass::slot`) so Pulse and HD are given no
+    /// invented fifth entry. A race carries the rung's **name** and resolves it
+    /// against the file that authored it (`oag_tables::handling::Stats::class_named`,
+    /// `Global::class_named`, `oag_weapons::pickup::table_for`): a title authoring
+    /// four is asked for four, Pure for five. `SpeedClass::ALL` means "the rungs
+    /// every measured title has", which keeps `has_pulse_class_ladder` meaningful.
     ///
-    /// Instead a race carries the rung's **name** and resolves it against the
-    /// file that authored it -
-    /// `oag_tables::handling::Stats::class_named`,
-    /// `oag_tables::handling::Global::class_named` and
-    /// `oag_weapons::pickup::table_for`. A title that authors four is asked
-    /// for four and grows nothing; Pure is asked for five and answers with
-    /// five. `SpeedClass::ALL` still means "the rungs every measured title has",
-    /// which is what keeps `has_pulse_class_ladder` meaningful.
-    ///
-    /// **Pulse authors a `<GlobalClass name="VECTOR">` too and still offers
-    /// four**, because its per-team files author no such `<Class>` and its
-    /// weapon table no such `<Pickupodds>`. The ladder is measured from the
-    /// per-team files, which is the file that decides what a rung *does*. That
-    /// is why "only if Pure's data is available" needs no flag: the union is
-    /// built from the ladders of the titles actually mounted, and only Pure's
-    /// names this rung.
-    ///
-    /// Whether *Pulse* has a hidden fifth class is a separate, still-open
-    /// question - Pure authoring one says nothing about it.
+    /// **Pulse authors a `<GlobalClass name="VECTOR">` too and offers four**: its
+    /// per-team files author no such `<Class>` and its weapon table no such
+    /// `<Pickupodds>`. So "only if Pure's data is available" needs no flag: the
+    /// union is built from the ladders of the titles mounted, and only Pure's names
+    /// this rung. Whether *Pulse* has a hidden fifth class is open.
     pub const VECTOR: &'static str = "VECTOR";
 
-    /// The four rungs every title measured so far shares, slowest first.
-    ///
-    /// Not a default and not a fallback - each title names it explicitly, so a
-    /// title whose ladder was never read cannot silently inherit one that was.
+    /// The four rungs every title measured so far shares, slowest first. Not a
+    /// default: each title names it explicitly, so a title whose ladder was never
+    /// read cannot inherit one that was.
     pub const PULSE_LADDER: &'static [&'static str] = &["VENOM", "FLASH", "RAPIER", "PHANTOM"];
 
     /// Wipeout Pure's five rungs, `VECTOR` under Pulse's four.
@@ -122,25 +94,22 @@ impl SpeedClasses {
 
     /// Wipeout 2048's native roster: Pulse's four with `SUPERPHANTOM` above.
     ///
-    /// Read off the five native teams' `handlingstats.xml` (20 files per
-    /// region, both regions: `VENOM, FLASH, RAPIER, PHANTOM, SUPERPHANTOM` in
-    /// that order, `oag-tables`' `speed_ladder_ground_truth`). The twelve HD
-    /// teams 2048 reships author the four only - see [`crate::GuestRoster`].
+    /// Read off the five native teams' `handlingstats.xml` (20 files per region,
+    /// both regions, `VENOM, FLASH, RAPIER, PHANTOM, SUPERPHANTOM` in that order;
+    /// `oag-tables`' `speed_ladder_ground_truth`). The twelve HD teams 2048 reships
+    /// author the four only ([`crate::GuestRoster`]).
     pub const WIPEOUT_2048_LADDER: &'static [&'static str] =
         &["VENOM", "FLASH", "RAPIER", "PHANTOM", "SUPERPHANTOM"];
 
     /// Every rung any measured ladder names, slowest first.
     ///
-    /// **A spell-checking vocabulary, not a table to index.** It exists for one
-    /// caller: `--class` on the command line, which is parsed before a disc is
-    /// opened and so cannot yet know which title's ladder applies. Catching a
-    /// typo there is worth a list; racing on it is not, and nothing does - the
-    /// rung is resolved against the file that authored it, and a name that is
-    /// on this list but not in *that* file is still an honest load failure.
+    /// **A spell-checking vocabulary, not a table to index**, for one caller:
+    /// `--class`, parsed before a disc is opened, so it cannot know which ladder
+    /// applies. Racing resolves the rung against the file that authored it, and a
+    /// name on this list but not in *that* file is a load failure.
     ///
-    /// It is the union of [`Self::PULSE_LADDER`], [`Self::PURE_LADDER`] and
-    /// [`Self::WIPEOUT_2048_LADDER`], which is every ladder read so far. HD's
-    /// is Pulse's four; Omega's is unmeasured.
+    /// The union of [`Self::PULSE_LADDER`], [`Self::PURE_LADDER`] and
+    /// [`Self::WIPEOUT_2048_LADDER`]; HD's is Pulse's four, Omega's is unmeasured.
     pub const MEASURED: &'static [&'static str] = &[
         "VECTOR",
         "VENOM",
@@ -150,10 +119,8 @@ impl SpeedClasses {
         "SUPERPHANTOM",
     ];
 
-    /// Whether `name` is a rung some measured ladder carries.
-    ///
-    /// See [`Self::MEASURED`] for why this is not the check that decides a
-    /// race.
+    /// Whether `name` is a rung some measured ladder carries (not the check that
+    /// decides a race, see [`Self::MEASURED`]).
     #[must_use]
     pub fn is_measured_name(name: &str) -> bool {
         Self::MEASURED
@@ -167,36 +134,27 @@ impl SpeedClasses {
         self.names
     }
 
-    /// Whether this build can actually put a ship on the class called `name`.
+    /// Whether this build can put a ship on the class called `name`.
     ///
-    /// **Every name a measured ladder carries, since 2026-09-05.** It used to
-    /// reject [`Self::VECTOR`], because nothing downstream could name a fifth
-    /// rung; a race now carries the rung's name and resolves it against the
-    /// file that authored it, so there is nothing left to filter. See
-    /// [`Self::VECTOR`] for what that took.
+    /// Every name a measured ladder carries: a race carries the rung's name and
+    /// resolves it against the authoring file, so nothing is filtered (see
+    /// [`Self::VECTOR`]).
     ///
-    /// Kept as a function rather than deleted for two reasons. It is the one
-    /// place every caller - RACE REMIX's union, the ordinary RACE page
-    /// underneath [`Self::is_offered_outside_remix`], and any test - asks the
-    /// question, so the next rung that turns out to be authored-but-unraceable
-    /// has somewhere to go. And it states the invariant: **a class this
-    /// rejects is drawn nowhere, on either page.** Not greyed, not shown as a
-    /// locked row - an option that appears and then races on some other
-    /// class's tuning is the invented stand-in this project forbids, and an
-    /// honest absence is the alternative.
+    /// Kept as a function because every caller (RACE REMIX's union, the ordinary
+    /// RACE page via [`Self::is_offered_outside_remix`], tests) asks the question
+    /// here, so the next authored-but-unraceable rung has somewhere to go. The
+    /// invariant: **a class this rejects is drawn nowhere, on either page**, not
+    /// greyed or locked. An option that races on another class's tuning is the
+    /// invented stand-in this project forbids.
     #[must_use]
     pub fn is_selectable(_name: &str) -> bool {
         true
     }
 
-    /// The subset of [`Self::names`] this build can actually put a ship on.
-    ///
-    /// **This is engine capability, not a menu-page rule** - it is what
-    /// [`Self::is_selectable`] answers, and RACE REMIX's row is built from it
-    /// directly (see `Session::remix_speed_classes`). The ordinary RACE page
-    /// narrows this further, through [`Self::is_offered_outside_remix`],
-    /// because it wants a stricter question: not "can this build race it" but
-    /// "does this page offer it".
+    /// The subset of [`Self::names`] this build can put a ship on: engine
+    /// capability ([`Self::is_selectable`]), from which RACE REMIX's row is built
+    /// (`Session::remix_speed_classes`). The ordinary RACE page narrows it through
+    /// [`Self::is_offered_outside_remix`].
     pub fn selectable(&self) -> impl Iterator<Item = &'static str> + use<> {
         self.names
             .iter()
@@ -204,21 +162,17 @@ impl SpeedClasses {
             .filter(|name| Self::is_selectable(name))
     }
 
-    /// Whether `name` belongs on the ordinary per-title RACE page, as opposed
-    /// to only RACE REMIX: it is on this ladder and not in [`Self::remix_only`].
+    /// Whether `name` belongs on the ordinary per-title RACE page, as opposed to
+    /// only RACE REMIX: it is on this ladder and not in [`Self::remix_only`].
     ///
-    /// **`VECTOR` is confined to RACE REMIX, by a 2026-09-05 maintainer
-    /// decision**, and 2048's `SUPERPHANTOM` follows it (2026-10-12, chosen,
-    /// not measured). Making a rung selectable at all made a Pure boot's
-    /// ordinary RACE page offer five classes too, which is wider than what
-    /// was asked for - see `docs/architecture/menus.md`'s "SPEED CLASS:
-    /// `VECTOR` is confined to RACE REMIX" section for the reasoning and for
-    /// why this is written down as a deliberate divergence.
+    /// **`VECTOR` is confined to RACE REMIX** by decision, and 2048's
+    /// `SUPERPHANTOM` follows (chosen, not measured). Making a rung selectable at
+    /// all made a Pure boot's ordinary RACE page offer five classes, wider than
+    /// asked; `docs/architecture/menus.md`, "SPEED CLASS: `VECTOR` is confined to
+    /// RACE REMIX", has the reasoning and the deliberate divergence.
     ///
-    /// This is a **menu-page** rule layered on top of [`Self::is_selectable`],
-    /// not a narrower version of it: `is_selectable` still answers "can this
-    /// build put a ship on `name`" and RACE REMIX's union still offers the
-    /// rung. Only the ordinary RACE page's own row stops listing it.
+    /// A **menu-page** rule on top of [`Self::is_selectable`]: RACE REMIX's union
+    /// still offers the rung, only the ordinary page's row stops listing it.
     #[must_use]
     pub fn is_offered_outside_remix(&self, name: &str) -> bool {
         Self::is_selectable(name)
@@ -236,24 +190,18 @@ impl SpeedClasses {
 
     /// Every class any of `ladders` authors, as one ladder, slowest first.
     ///
-    /// This is what RACE REMIX offers: a grid that mixes titles is not
-    /// restricted to one title's rungs, so the row unions them. The ordinary
-    /// per-title RACE page does **not** use this - it offers its own title's
-    /// ladder and nothing else.
+    /// What RACE REMIX offers: a grid that mixes titles is not restricted to one
+    /// title's rungs. The ordinary per-title RACE page offers its own ladder only.
     ///
     /// # The merge preserves every ladder's own order
     ///
-    /// Not a sort and not a concatenation. Each ladder states an *ordering* of
-    /// the rungs it names - slowest first - and the union has to respect all
-    /// of them at once, whatever order the titles themselves arrive in. So an
-    /// unseen name is inserted directly after its own ladder's predecessor
-    /// rather than appended, which is what puts Pure's `VECTOR` at the front
-    /// even when Pulse's four-rung ladder was merged first.
-    ///
-    /// A name already present is never moved, so the result is deterministic
-    /// in the order `ladders` yields - and that order is the caller's, not a
-    /// `HashSet` iteration, which the determinism rules forbid feeding into
-    /// anything the simulation reads.
+    /// Not a sort or a concatenation: each ladder states an *ordering* the union
+    /// must respect at once, whatever order the titles arrive in. An unseen name is
+    /// inserted directly after its own ladder's predecessor, which puts Pure's
+    /// `VECTOR` at the front even when Pulse's four-rung ladder merged first. A name
+    /// already present is never moved, so the result is deterministic in the order
+    /// `ladders` yields (the caller's, not a `HashSet` iteration, which the
+    /// determinism rules forbid feeding anything the simulation reads).
     #[must_use]
     pub fn union(ladders: impl IntoIterator<Item = Self>) -> Vec<&'static str> {
         let mut merged: Vec<&'static str> = Vec::new();

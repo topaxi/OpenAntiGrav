@@ -1360,3 +1360,17 @@ text, bar; 480x272) went 9.46 to 5.63 over these three changes, speed text 15.8 
 record 10.8 to 7.4. Moa Therma Black (a tilted HUD in the original), the Zone Talon's pair and `talons-boost` (text the
 original draws mid-fade) are not text errors any more and keep their scene-bound scores.
 
+## HD HUD text: ink-aligned ends and half-unit glyph quads (2026-10-22, `hd-sharp-hud`, `hd-hud-leftovers`)
+
+`HudArt::ink_aligned_text` (HD **measured**, 2026-10-22): `LAP`, `Record` and `0 kmh` (right-aligned) sat 2.8, 3.9 and
+about 4 px left of the original's at 1920x1080, `100` and the lap digit (centred) 1.7 px, on all 13 cold pairs alike,
+while the whole-HUD, the bars and the left-aligned `KM/H` sat within 0.1 px. With the rule on, the text crops'
+phase-correlation peak is within 0.3 px on the pairs measured. Omega inherits HD's HUD engine and font, unmeasured;
+Pulse and Pure keep the narrower rule above (right-aligned only, on `HudArt::raster`); 2048 is unmeasured.
+
+`HudArt::half_unit_glyph_quads` (HD **measured**, 2026-10-22): the RPCS3 draw capture's lap `1` (scale 1.0) is a 15x81
+quad over the 14x80 cell, and the lap count `3` (scale 0.6) a 26.8x49.0 quad over the 43x80 cell, both with the uv grown
+0.5 texel (44x81): `43 * 0.6 + 1.0` and `80 * 0.6 + 1.0`, so the glyph is magnified 1.5 % past its scale. Omega
+inherits HD's HUD engine, unmeasured. Pulse's PSP path does the same on its own flag (`HudArt::raster`); 2048 is
+unmeasured.
+

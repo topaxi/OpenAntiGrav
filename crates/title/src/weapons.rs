@@ -1,17 +1,13 @@
 //! Where a title keeps the table its weapons are tuned by.
 //!
-//! An axis in the [ADR-0022] sense rather than a constant, because the two
-//! answers differ in **shape** and not only in spelling: Pulse and Wipeout HD
-//! ship two tables and pick between them by race mode, and Pure ships one that
-//! every mode reads. A single `&str` could carry the spelling and could not
-//! carry that.
+//! An axis ([ADR-0022]) because the answers differ in **shape**: Pulse and HD ship
+//! two tables and pick by race mode, Pure ships one that every mode reads.
 //!
-//! Recovered from each title's own executable. Pulse's two names are in
-//! `oag_tables::weapons`' own constants, taken off `BOOT.BIN`'s string table;
-//! Pure's is `Data\XML\weaponstats.xml` at `0x08a445a0` in
-//! `/psp-pure-usa/BOOT.BIN`, three strings before the `"WeaponStats"` and
-//! `"Weapon"` element names the parser matches - which is what says it is the
-//! file this parser reads rather than some other table.
+//! Recovered from each title's executable. Pulse's two names are in
+//! `oag_tables::weapons`' constants, off `BOOT.BIN`'s string table; Pure's is
+//! `Data\XML\weaponstats.xml` at `0x08a445a0` in `/psp-pure-usa/BOOT.BIN`, three
+//! strings before the `"WeaponStats"` and `"Weapon"` element names the parser
+//! matches, which says it is the file this parser reads.
 //!
 //! [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 
@@ -21,40 +17,35 @@ pub struct Weapons {
     /// The table a race reads, and the only one on a title that ships one.
     pub race: &'static str,
     /// The table Eliminator reads instead, or `None` for a title with one table.
+    /// The table Eliminator reads instead, or `None` for a title with one table.
     ///
     /// **`None` is a measurement.** `WeaponStats_Elimination.xml` is how Pulse
-    /// makes the same weapon hit differently in Eliminator - the global
-    /// `DAT_08b32428` selects the file and not the speed class, recovered on
-    /// `docs/ghidra/functions/psp-pulse-usa/missile.md`. Pure's single
-    /// `weaponstats.xml` is the whole of its tuning, so there is no second file
-    /// for a mode to reach for rather than one this build has not found.
+    /// makes the same weapon hit differently in Eliminator: the global
+    /// `DAT_08b32428` selects the file, not the speed class
+    /// (`docs/ghidra/functions/psp-pulse-usa/missile.md`). Pure's single
+    /// `weaponstats.xml` is its whole tuning.
     ///
-    /// `oag_raceplay`'s `load_weapons` opens it for `Mode::Eliminator` (since
-    /// 2026-09-08) and falls back to [`Self::race`], with a report line, on a
-    /// title where it is `None`.
+    /// `oag_raceplay`'s `load_weapons` opens it for `Mode::Eliminator` and falls
+    /// back to [`Self::race`], with a report line, where it is `None`.
     pub elimination: Option<&'static str>,
-    /// The table an opponent's fire odds are read from - `useAgainstPlayer`,
-    /// `useAgainstAI` and `absorb` a weapon, `oag_tables::weapons::ai` - or
-    /// `None` where it has not been looked for.
+    /// The table an opponent's fire odds are read from (`useAgainstPlayer`,
+    /// `useAgainstAI` and `absorb` per weapon, `oag_tables::weapons::ai`), or `None`
+    /// where it has not been looked for.
     ///
-    /// **`None` is not a measurement here**, unlike [`Self::elimination`]'s:
-    /// Pulse's is read by `weapon_ai_ground_truth`, and Pure's `Data.wad`
-    /// carries an entry under the same name's hash (`0xac744a8d`, case folded
-    /// by the hash, so the spelling is Pulse's) that parses (2026-10-03). HD,
-    /// Omega and 2048 each ship one too (searched the same day), so **every
-    /// title here runs Pulse's law on its own odds; no title's own decision
-    /// code is read** - the law is inherited from Pulse and unmeasured on the
-    /// rest. A race without the file fires on this project's own rule - see
-    /// `oag_raceplay::FireLaw` - which is what a title with no table would
-    /// get, and none of the five does.
+    /// **`None` is not a measurement here**, unlike [`Self::elimination`]'s. Every
+    /// title ships the table and **runs Pulse's law on its own odds; no other
+    /// title's decision code is read**: the law is inherited from Pulse and
+    /// unmeasured on the rest (`docs/ghidra/functions/psp-pulse-usa/weapon-ai.md`,
+    /// "Every title carries the table"). A race without the file fires on this
+    /// project's own rule (`oag_raceplay::FireLaw`).
     pub ai: Option<&'static str>,
     /// When a locked LeachBeam moves energy: every tick, or once a ball trip.
     pub leach_drain: LeachDrain,
     /// How many LeachBeams a race holds at once (at most
     /// `oag_weapons::projectile::leach_beam::POOL_SIZE`, which the race clamps to).
     ///
-    /// 2048 and Omega measure eight; Pulse and HD measure one and take eight as a chosen
-    /// divergence (maintainer, 2026-10-31), recorded in `docs/gameplay/weapon-lineage.md`.
+    /// 2048 and Omega measure eight; Pulse and HD measure one and take eight as a
+    /// chosen divergence, recorded in `docs/gameplay/weapon-lineage.md`.
     pub leach_beams: crate::pre_race::Sourced<u8>,
     /// How a Quake's wave reaches a craft: what gates its hit and whether the
     /// cockpit eye rides it.
@@ -62,20 +53,19 @@ pub struct Weapons {
     /// Whether the absorb press cancels a running Autopilot pickup.
     ///
     /// Pulse's `Ship_AbsorbHeldPickup` tests the running bit before it reads the
-    /// slot and stores `0.0` to the timer, so the craft is handed back on the next
-    /// tick whatever is held, and the held pickup is neither paid out nor spent
-    /// (`docs/ghidra/functions/psp-pulse-usa/autopilot.md`, "Absorb cancels it,
-    /// fire does not"). HD's `Ship_UpdatePickup_q` does the same. `false` is a
-    /// measurement on Pure: no function on its absorb side reads the running byte.
-    /// The fire press never cancels on any title; see `Race::spend_pickup`.
+    /// slot and stores `0.0` to the timer, so the craft is handed back next tick
+    /// whatever is held, and the held pickup is neither paid out nor spent
+    /// (`docs/ghidra/functions/psp-pulse-usa/autopilot.md`, "Absorb cancels it, fire
+    /// does not"). HD's `Ship_UpdatePickup_q` does the same. `false` is a
+    /// measurement on Pure: nothing on its absorb side reads the running byte. The
+    /// fire press never cancels on any title (`Race::spend_pickup`).
     pub autopilot_absorb_cancels: crate::pre_race::Sourced<bool>,
     /// Whether a weapon pad hands out a pickup to a craft whose Autopilot is
     /// running.
     ///
     /// Pulse's `Ship_TestWeaponPads` raises the grant request only with the running
-    /// bit clear (`0x0883f0c0`), so a pad crossed mid-stint grants nothing. The
-    /// pad still stamps its refresh timer. Read on Pulse alone; the other titles
-    /// run its law.
+    /// bit clear (`0x0883f0c0`), so a pad crossed mid-stint grants nothing; the pad
+    /// still stamps its refresh timer. Read on Pulse alone; the others run its law.
     pub autopilot_pad_grants: crate::pre_race::Sourced<bool>,
 }
 
@@ -85,10 +75,9 @@ pub struct Weapons {
 /// (`entity+0x870`, `h += (raw - h) * 8 * dt`), lands the hit on the rising edge
 /// of `h > 0.1`, trips a laid mine on the raw height `> 0.1`, and lifts the
 /// cockpit eye by `h` along the ship's up
-/// (`docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`, "2026-10-26:
-/// what a Quake does to the craft it reaches"). See
-/// `oag_weapons::projectile::quake`. A title whose own gate is read later gets
-/// its own variant.
+/// (`docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`, the section
+/// on what a Quake does to the craft it reaches; `oag_weapons::projectile::quake`).
+/// A title whose gate is read later gets its own variant.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QuakeHit {
     /// The smoothed wave-height law above.
@@ -96,10 +85,9 @@ pub enum QuakeHit {
         /// Where this came from.
         origin: crate::Origin,
     },
-    /// [`Self::WaveHeight`]'s gate with the cockpit eye held level: the hit,
-    /// the mine trip and the smoothed height are the same, only the eye stays
-    /// where the hull puts it. Wipeout Pure, whose road does not lift under a
-    /// Quake either.
+    /// [`Self::WaveHeight`]'s gate with the cockpit eye held level: hit, mine trip
+    /// and smoothed height unchanged, the eye stays where the hull puts it. Pure,
+    /// whose road does not lift under a Quake either.
     WaveHeightEyeLevel {
         /// Where the gate came from, as [`Self::WaveHeight`]'s `origin`.
         origin: crate::Origin,
@@ -109,10 +97,9 @@ pub enum QuakeHit {
 }
 
 impl QuakeHit {
-    /// Whether the cockpit eye rises by the craft's smoothed wave height.
-    ///
-    /// Read by the camera alone: the simulation keeps computing the height
-    /// either way, because the hit gate and a laid mine's trip read it.
+    /// Whether the cockpit eye rises by the craft's smoothed wave height. Read by
+    /// the camera alone: the simulation computes the height either way, since the
+    /// hit gate and a laid mine's trip read it.
     #[must_use]
     pub const fn lifts_cockpit_eye(self) -> bool {
         matches!(self, Self::WaveHeight { .. })
@@ -132,19 +119,16 @@ pub enum LeachDrain {
     PerTrip,
 }
 
-/// Where a title keeps each weapon's own body model - the projectile itself,
-/// not the pickup pad's icon.
+/// Where a title keeps each weapon's own body model: the projectile itself, not
+/// the pickup pad's icon.
 ///
-/// **An axis because HD and Pulse disagree in *name*, not just in whether a
-/// field is `None`.** `oag_raceplay`'s own `ROCKET_MODEL_ENTRY` and friends
-/// were Pulse spellings reached for on every source - `Data\Weapons\Rocket.vex`
-/// resolves on no PS3 archive at all, so every HD projectile fell back to a
-/// procedural billboard even though HD authors its own models under
-/// `Data\Weapons\hd_*` - see `docs/ghidra/functions/ps3-hdfury-eu/plasma.md`.
-/// `None` on a field is a title that authors no such model (or where it is not
-/// yet recovered), the same convention [`Weapons::elimination`] uses; whether a
-/// named entry actually resolves on the mounted archives is a load-time
-/// question the loader's own report line answers, not this table's.
+/// **An axis because HD and Pulse disagree in *name*.** `Data\Weapons\Rocket.vex`
+/// resolves on no PS3 archive, so every HD projectile fell back to a procedural
+/// billboard though HD authors its own models under `Data\Weapons\hd_*`
+/// (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`). `None` is a title that
+/// authors no such model (or where it is not recovered), as for
+/// [`Weapons::elimination`]; whether a named entry resolves on the mounted
+/// archives is the loader's report line.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct WeaponModels {
     /// The Rocket's own body, oriented along its flight velocity.
@@ -153,145 +137,132 @@ pub struct WeaponModels {
     pub mine: Option<&'static str>,
     /// The Bomb's own body - the Mine's, one size up.
     pub bomb: Option<&'static str>,
-    /// The Cannon's own model, named `muzzleflash` on both titles that author
-    /// one. On Pulse it is the round's body for its whole flight (see
-    /// `oag_raceplay::CANNON_MODEL_ENTRY`); on Wipeout HD it is what the
-    /// name says, a flash at the muzzle - [`Self::cannon_look`] says which.
+    /// The Cannon's own model, named `muzzleflash` on both titles that author one.
+    /// On Pulse it is the round's body for its whole flight
+    /// (`oag_raceplay::CANNON_MODEL_ENTRY`); on HD, a flash at the muzzle
+    /// ([`Self::cannon_look`]).
     pub cannon: Option<&'static str>,
-    /// The Plasma bolt's own head, ridden from charge through flight.
-    ///
-    /// **Not the wind-up/travel glow** - that is `WO_PLASMA_HEAD`/`_CHARGING`,
-    /// a `Data\Psys` effect every source shares. This is the bolt's own mesh,
-    /// which only HD authors (`HD_plasma_ball`); Pulse rides the glow alone.
+    /// The Plasma bolt's own head, ridden from charge through flight. Not the
+    /// wind-up/travel glow (`WO_PLASMA_HEAD`/`_CHARGING`, a `Data\Psys` effect every
+    /// source shares): the bolt's mesh, which only HD authors (`HD_plasma_ball`).
     pub plasma_ball: Option<&'static str>,
-    /// Pulse's own three-model detonation shell: a halo and two hemispheres,
-    /// scrubbed by a baked anim-time track. See
-    /// `oag_raceplay::blast_models` for the mechanism this plays back.
+    /// Pulse's three-model detonation shell: a halo and two hemispheres, scrubbed by
+    /// a baked anim-time track (`oag_raceplay::blast_models`).
     pub plasma_blast_pulse: Option<PulsePlasmaBlast>,
-    /// Wipeout HD's own three-model detonation shell: a ring, a sphere and a
-    /// halo, each eased by a per-tick `cur += (target - cur) * rate` scale
-    /// ramp read off the executable - a different mechanism from Pulse's baked
-    /// track, not a renamed copy of it. See
-    /// `docs/ghidra/functions/ps3-hdfury-eu/plasma.md`.
+    /// HD's three-model detonation shell: a ring, a sphere and a halo, each eased
+    /// by a per-tick `cur += (target - cur) * rate` scale ramp read off the
+    /// executable, a different mechanism from Pulse's baked track
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`).
     pub plasma_blast_hd: Option<HdPlasmaBlast>,
-    /// Pulse's own Bomb detonation: a hemisphere and a shockwave, each eased
-    /// by a per-tick `cur += (target - cur) * rate` scale ramp of its own -
-    /// see `oag_raceplay::bomb_blast`. `None` on HD, which has its own
-    /// [`Self::bomb_blast_hd`], and on titles whose Bomb is unread.
+    /// Pulse's Bomb detonation: a hemisphere and a shockwave, each eased by a
+    /// per-tick `cur += (target - cur) * rate` scale ramp (`oag_raceplay::bomb_blast`).
+    /// `None` on HD (see [`Self::bomb_blast_hd`]) and where the Bomb is unread.
     pub bomb_blast_pulse: Option<PulseBombBlast>,
-    /// Wipeout HD's Bomb detonation: a fireball, its white core, a camera-
-    /// facing bloom disc and eight shockwave rings, driven by one blast
-    /// object (`NormalBomb`'s, vtable `0x00864ab8`) - a different mechanism
-    /// from Pulse's, not a renamed copy. See `oag_raceplay::bomb_blast::hd`
-    /// and `docs/ghidra/functions/ps3-hdfury-eu/weapons.md`, 2026-10-07.
+    /// HD's Bomb detonation: a fireball, its white core, a camera-facing bloom disc
+    /// and eight shockwave rings, driven by one blast object (`NormalBomb`'s, vtable
+    /// `0x00864ab8`), a different mechanism from Pulse's
+    /// (`oag_raceplay::bomb_blast::hd`;
+    /// `docs/ghidra/functions/ps3-hdfury-eu/weapons.md`, "2026-10-07").
     pub bomb_blast_hd: Option<HdBombBlast>,
-    /// Wipeout HD's Missile detonation model, `Data\Weapons\HD_missile_explosion.vex`
-    /// (`MissileManager`'s pool of sixteen, `0x00154cf0` loads it): played when
-    /// a Missile reaches a craft, on its own keys over one second. See
-    /// `oag_raceplay::missile_blast` and `weapons.md`, 2026-10-07.
+    /// HD's Missile detonation model, `Data\Weapons\HD_missile_explosion.vex`
+    /// (`MissileManager`'s pool of sixteen, `0x00154cf0` loads it): played when a
+    /// Missile reaches a craft, on its own keys over one second
+    /// (`oag_raceplay::missile_blast`; `weapons.md`, "2026-10-07").
     pub missile_blast_hd: Option<&'static str>,
-    /// The Repulser's field model: a flat ring around the firer that shrinks,
-    /// then widens and fades - `Repulser_Construct` (`0x08875008`) loads it and
-    /// `Repulser_UpdateFieldModel` (`0x088758cc`) eases it. See
-    /// `oag_raceplay::repulser_field`. `None` on every title without a
-    /// Repulser law of its own.
+    /// The Repulser's field model: a flat ring around the firer that shrinks, then
+    /// widens and fades. `Repulser_Construct` (`0x08875008`) loads it and
+    /// `Repulser_UpdateFieldModel` (`0x088758cc`) eases it
+    /// (`oag_raceplay::repulser_field`). `None` without a Repulser law of its own.
     pub repulser_field: Option<&'static str>,
-    /// The two models a craft shows while it is on a magstrip, `[MagEffect1,
-    /// MagEffect2]`: one riding the craft, one laid on the track, both
-    /// `(0, -2.5, 0)` below it. `MagFloorFx_Construct` (`0x088590a8`) loads
-    /// them for every craft. See `oag_raceplay::mag_floor_fx`. `None` on every
-    /// title whose archive was not checked for them or does not carry them.
+    /// The two models a craft shows on a magstrip, `[MagEffect1, MagEffect2]`: one
+    /// riding the craft, one laid on the track, both `(0, -2.5, 0)` below it.
+    /// `MagFloorFx_Construct` (`0x088590a8`) loads them for every craft
+    /// (`oag_raceplay::mag_floor_fx`). `None` where the archive was not checked or
+    /// lacks them.
     pub mag_floor: Option<[&'static str; 2]>,
-    /// The HD-lineage magstrip arc wake: `MagstripWake` (`MagstripWake.cpp`),
-    /// one object per craft, drawn while it is over a magstrip. See
-    /// `oag_raceplay::magstrip_wake` and `oag_fx::magstrip`. `None` on every
-    /// title that does not build the class - Pulse and Pure draw their own
-    /// two-mesh `mag_floor` instead, and the 2048 modes play a `.pob`.
+    /// The HD-lineage magstrip arc wake: `MagstripWake` (`MagstripWake.cpp`), one
+    /// object per craft, drawn over a magstrip (`oag_raceplay::magstrip_wake`,
+    /// `oag_fx::magstrip`). `None` where the class is not built: Pulse and Pure draw
+    /// their two-mesh `mag_floor`, and the 2048 modes play a `.pob`.
     pub magstrip_wake: Option<MagstripWake>,
-    /// The `.pob` magstrip effect a craft plays over a strip instead of the
-    /// arc wake: `WO_MAGSTRIP_SPARKS`, or `WO_MAGSTRIP_ZONE` in a Zone. The
-    /// Vita 2048 build gates it on the opposite sense of the predicate that
-    /// builds the wake, so a title sets this or [`Self::magstrip_wake`], never
-    /// both. 2048's own events carry a CRC-id mode (`>= 0x17`), which is the
-    /// `.pob` side - measured live, `docs/ghidra/functions/vita-2048-eu-v104/
-    /// ships-effects.md`. See `oag_raceplay::magstrip_wake`.
+    /// The `.pob` magstrip effect a craft plays over a strip instead of the arc
+    /// wake: `WO_MAGSTRIP_SPARKS`, or `WO_MAGSTRIP_ZONE` in a Zone. The Vita 2048
+    /// build gates it on the opposite sense of the predicate that builds the wake,
+    /// so a title sets this or [`Self::magstrip_wake`], never both. 2048's events
+    /// carry a CRC-id mode (`>= 0x17`), the `.pob` side, measured live
+    /// (`docs/ghidra/functions/vita-2048-eu-v104/ships-effects.md`;
+    /// `oag_raceplay::magstrip_wake`).
     pub magstrip_pob: bool,
-    /// The Rocket's smoke ribbon: `RibbonEffects` pool 4, its texture and the
-    /// opacity ramp its nodes age through. See `oag_fx::rocket_smoke`. `None`
-    /// on a title whose ribbon law is unread, which is every title but HD's.
+    /// The Rocket's smoke ribbon: `RibbonEffects` pool 4, its texture and the opacity
+    /// ramp its nodes age through (`oag_fx::rocket_smoke`). `None` where the ribbon
+    /// law is unread, every title but HD.
     pub rocket_trail: Option<RocketTrail>,
-    /// Wipeout HD's LeachBeam strip: the ribbon `LeachBeam_DrawStrip` builds
-    /// from the target's anchor trail and its two textures. `None` on every
-    /// title that draws Pulse's own ribbon instead. See `oag_fx::leach_strip`.
+    /// HD's LeachBeam strip: the ribbon `LeachBeam_DrawStrip` builds from the
+    /// target's anchor trail and its two textures (`oag_fx::leach_strip`). `None`
+    /// where Pulse's ribbon is drawn instead.
     pub leach_strip: Option<LeachStrip>,
-    /// The LeachBeam's own ball, at the drawing end of the beam.
-    ///
-    /// **Named, not wired.** What places this model each tick has not been
-    /// read this session - see `oag_raceplay::load::weapon_models`'s own
-    /// doc comment for where that stopped.
+    /// The LeachBeam's own ball, at the drawing end of the beam. **Named, not
+    /// wired**: what places the model each tick is unread (see
+    /// `oag_raceplay::load::weapon_models`).
     pub leachbeam_ball: Option<&'static str>,
-    /// The Shuriken's own blade, drawn on the same basis the Rocket's dart
-    /// is. `None` on a title whose blade model is not recovered.
+    /// The Shuriken's own blade, drawn on the Rocket dart's basis. `None` where the
+    /// blade model is not recovered.
     pub shuriken: Option<&'static str>,
-    /// How the Cannon's two hand-built quads and its [`Self::cannon`] model
-    /// are drawn, where a title's own executable says so.
+    /// How the Cannon's two hand-built quads and its [`Self::cannon`] model are
+    /// drawn, where a title's executable says so.
     ///
-    /// `None` is Pulse's own reading, the one recovered first and the one
+    /// `None` is Pulse's reading, recovered first and carried by
     /// `oag_fx::weapon_quads::geometry`'s constants and
-    /// `oag_raceplay::CANNON_BOLT_TEXTURE_ENTRY` already carry - every
-    /// title without its own reading keeps drawing on those terms, as it did
-    /// before this field existed.
+    /// `oag_raceplay::CANNON_BOLT_TEXTURE_ENTRY`.
     pub cannon_look: Option<CannonLook>,
-    /// The texture the ghost ship's third pass stamps over the player's view,
-    /// or `None` for a title that binds none.
+    /// The texture the ghost ship's third pass stamps over the player's view, or
+    /// `None` for a title that binds none.
     ///
     /// **`None` is a measurement on HD only**: `MeshNode_Ghost_LoadStaticGlow`
-    /// (`0x08910ef8`) names `Data\Tex\staticglow.mip` in Pulse's `BOOT.BIN`,
-    /// and a string search of HD's `EBOOT.elf` finds no `staticglow` at all, so
-    /// HD never loads one. See `docs/ghidra/functions/psp-pulse-usa/ghost.md`.
+    /// (`0x08910ef8`) names `Data\Tex\staticglow.mip` in Pulse's `BOOT.BIN`, and a
+    /// string search of HD's `EBOOT.elf` finds no `staticglow`
+    /// (`docs/ghidra/functions/psp-pulse-usa/ghost.md`).
     pub ghost_static: Option<GhostStatic>,
-    /// The noise the cockpit view's hit static is drawn from, or `None` for a
-    /// title that draws no such static.
+    /// The noise the cockpit view's hit static is drawn from, or `None` for a title
+    /// that draws no such static.
     ///
-    /// `CockpitHitFx` (`Ship_Damage` arms it on every weapon hit to the human,
+    /// `CockpitHit` (`Ship_Damage` arms it on every weapon hit to the human,
     /// `CockpitHitFx_Draw` queues it in the internal view only) is measured on
-    /// Pulse's PSP; see `oag_fx::cockpit_hit`. **`None` is a measurement on HD
-    /// and 2048**: a string search of HD's `EBOOT.elf` and 2048's decrypted
-    /// `eboot.elf` finds no `noisematt` at all. Omega's executable cannot be
-    /// read here, so it follows HD (`None`, not measured).
+    /// Pulse's PSP (`oag_fx::cockpit_hit`). **`None` is a measurement on HD and
+    /// 2048**: a string search of HD's `EBOOT.elf` and 2048's decrypted `eboot.elf`
+    /// finds no `noisematt`. Omega's executable cannot be read here, so it follows
+    /// HD (`None`, not measured).
     pub cockpit_hit: Option<CockpitHit>,
 }
 
 /// The cockpit hit static's texture a title binds - see [`WeaponModels::cockpit_hit`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CockpitHit {
-    /// The archive entry, spelled as Pulse spells it (`.mip`); the loader swaps
-    /// the extension for another source's container.
+    /// The archive entry, spelled as Pulse spells it (`.mip`); the loader swaps the
+    /// extension for another source's container.
     pub entry: &'static str,
-    /// Where the entry came from: `Measured` where the title's own executable
-    /// names it and its arm and draw were read, `InheritedFrom` where the
-    /// executable names the texture but the weapon-hit call that arms it is
-    /// unread, so the law is Pulse's.
+    /// Where the entry came from: `Measured` where the title's executable names it
+    /// and its arm and draw were read, `InheritedFrom` where it names the texture
+    /// but the weapon-hit call that arms it is unread, so the law is Pulse's.
     pub origin: crate::Origin,
 }
 
 /// The ghost static texture a title binds - see [`WeaponModels::ghost_static`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GhostStatic {
-    /// The archive entry, spelled as Pulse spells it (`.mip`); the loader swaps
-    /// the extension for a Vita or PS4 source.
+    /// The archive entry, spelled as Pulse spells it (`.mip`); the loader swaps the
+    /// extension for a Vita or PS4 source.
     pub entry: &'static str,
     /// Where the entry came from: `Measured` where the title's own executable
     /// names it, `InheritedFrom` where it ships the file and runs Pulse's law.
     pub origin: crate::Origin,
 }
 
-/// The two textures and the one sound cue `MagstripWake` is built from.
+/// The two textures `MagstripWake` is built from.
 ///
-/// Names are archive entry names; the loader reads them through the same
-/// archive set a race loads from, so the case and separator folding of a PSARC
-/// applies. A title that ships them as another container (Omega's `.gnf`) names
-/// that spelling here.
+/// Archive entry names, read through the archive set a race loads from, so a
+/// PSARC's case and separator folding applies. A title shipping another container
+/// (Omega's `.gnf`) names that spelling here.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MagstripWake {
     /// `HD_electric_arc_8x8`: the 8-by-8 atlas the arc body samples.
@@ -301,8 +272,7 @@ pub struct MagstripWake {
 }
 
 /// What the Rocket's smoke ribbon draws with - see [`WeaponModels::rocket_trail`].
-///
-/// Archive entry names, folded the same way [`MagstripWake`]'s are.
+/// Archive entry names, folded as [`MagstripWake`]'s are.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RocketTrail {
     /// The texture the ribbon's material samples in a race.
@@ -313,9 +283,9 @@ pub struct RocketTrail {
 
 /// What HD's LeachBeam strip draws with - see [`WeaponModels::leach_strip`].
 ///
-/// Archive entry names. `hd_leachbeam.rcsmaterial` samples the noise on unit 0
-/// and the glow on unit 1 (the two sizes read off the live draw, the names off
-/// `leachbeam_triangle.rcsmodel`'s own material).
+/// Archive entry names. `hd_leachbeam.rcsmaterial` samples the noise on unit 0 and
+/// the glow on unit 1 (sizes read off the live draw, names off
+/// `leachbeam_triangle.rcsmodel`'s material).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LeachStrip {
     /// `hd_leechbeam_glow`: 256x256, unit 1.
@@ -325,12 +295,9 @@ pub struct LeachStrip {
 }
 
 impl WeaponModels {
-    /// Every field absent - a title with none of these recovered.
-    ///
-    /// A `const` rather than routing every all-`None` `TITLE` through
-    /// `#[derive(Default)]`'s own `default()`, which is not itself `const fn`
-    /// and so cannot sit inside another `const`'s initialiser the way a
-    /// `Title` const does.
+    /// Every field absent: a title with none of these recovered. A `const` because
+    /// `#[derive(Default)]`'s `default()` is not `const fn` and cannot sit inside a
+    /// `Title` const's initialiser.
     pub const EMPTY: Self = Self {
         rocket: None,
         mine: None,
@@ -359,9 +326,9 @@ impl WeaponModels {
 /// A title's own reading of how a Cannon round is drawn - see
 /// [`WeaponModels::cannon_look`].
 ///
-/// Only the parts that differ between the executables read so far are here:
-/// the flash window (`0.1` s) and the flash quad's `* 3.0` size scale read the
-/// same on both Pulse and HD, and stay `oag_render`'s own constants.
+/// Only the parts that differ between executables read so far: the flash window
+/// (`0.1` s) and the flash quad's `* 3.0` size scale read the same on Pulse and HD
+/// and stay `oag_render`'s constants.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CannonLook {
     /// The bolt streak's texture entry.
@@ -370,8 +337,8 @@ pub struct CannonLook {
     pub flash_texture: &'static str,
     /// The bolt streak's half-width, world units.
     pub bolt_half_width: f32,
-    /// How much of the previous-to-current segment, from the current end,
-    /// the streak leaves uncovered. `0.0` draws the whole segment.
+    /// How much of the previous-to-current segment, from the current end, the
+    /// streak leaves uncovered. `0.0` draws the whole segment.
     pub bolt_near_fraction: f32,
     /// The range the flash's half-size is rolled from each tick of the flash
     /// window, before the `* 3.0` scale.
@@ -385,30 +352,30 @@ pub struct CannonLook {
 pub enum CannonBody {
     /// On the round, for its whole flight: Pulse's dart.
     Round,
-    /// At the firing craft's `cannon_flash` locator, only for the flash
-    /// window, scaled by the same roll the flash quad's half-size takes and
-    /// stretched along its own Z by a second roll from `stretch_range`.
+    /// At the firing craft's `cannon_flash` locator, only for the flash window,
+    /// scaled by the flash quad's half-size roll and stretched along its Z by a
+    /// second roll from `stretch_range`.
     Muzzle {
         /// The range the Z stretch is rolled from each tick.
         stretch_range: (f32, f32),
     },
 }
 
-/// Pulse's own plasma-blast trio, in `PlasmaBlast_Construct`'s load order -
-/// see [`WeaponModels::plasma_blast_pulse`].
+/// Pulse's plasma-blast trio, in `PlasmaBlast_Construct`'s load order - see
+/// [`WeaponModels::plasma_blast_pulse`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PulsePlasmaBlast {
     /// `Data\Weapons\pulse_plasma_halo1.vex`.
     pub halo: &'static str,
-    /// `Data\Weapons\pulse_plasma_hemisphere2.vex` - loaded before
-    /// [`Self::hemisphere1`], the file's own order.
+    /// `Data\Weapons\pulse_plasma_hemisphere2.vex`, loaded before
+    /// [`Self::hemisphere1`] (the file's order).
     pub hemisphere2: &'static str,
     /// `Data\Weapons\pulse_plasma_hemisphere1.vex`.
     pub hemisphere1: &'static str,
 }
 
-/// Wipeout HD's own plasma-blast trio, in `WeaponExplosions_Start`'s load
-/// order - see [`WeaponModels::plasma_blast_hd`].
+/// HD's plasma-blast trio, in `WeaponExplosions_Start`'s load order - see
+/// [`WeaponModels::plasma_blast_hd`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HdPlasmaBlast {
     /// `Data\Weapons\HD_plasma_ring.vex`, target scale 100.0, rate 0.01.
@@ -419,10 +386,9 @@ pub struct HdPlasmaBlast {
     pub halo: &'static str,
 }
 
-/// Wipeout HD's own Bomb-blast set, in the blast constructor's load order
-/// (`0x00151ad8`, TOC slots `0x008ab18c..`) - see
-/// [`WeaponModels::bomb_blast_hd`]. The blast holds the shockwave model eight
-/// times over; that count is the executable's, not this table's.
+/// HD's Bomb-blast set, in the blast constructor's load order (`0x00151ad8`, TOC
+/// slots `0x008ab18c..`) - see [`WeaponModels::bomb_blast_hd`]. The blast holds
+/// the shockwave model eight times over; that count is the executable's.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HdBombBlast {
     /// `Data\Weapons\HD_bomb_sphere.vex`, the fireball (`BOMB_FIRE`).
@@ -434,12 +400,12 @@ pub struct HdBombBlast {
     /// `Data\Weapons\hd_bomb_shockwaves.vex`, one ring's mesh.
     pub shockwaves: &'static str,
     /// `Data\Weapons\HD_bomb_halo.vex`, the *laid* bomb's pulsing shell
-    /// (`NormalBomb`'s second model, not the blast's). It rides this struct
-    /// because HD is the only title that has one.
+    /// (`NormalBomb`'s second model, not the blast's); here because HD is the only
+    /// title with one.
     pub halo: &'static str,
 }
 
-/// Pulse's own Bomb-blast pair, in `BombBlast_Construct`'s load order - see
+/// Pulse's Bomb-blast pair, in `BombBlast_Construct`'s load order - see
 /// [`WeaponModels::bomb_blast_pulse`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PulseBombBlast {
@@ -449,9 +415,8 @@ pub struct PulseBombBlast {
     /// `Data\Weapons\Bomb_Shockwave.vex`, radial scale 0.0 -> 12.0, rate
     /// 0.075, gated to start after 0.1s.
     pub shockwave: &'static str,
-    /// Whether the shockwave's alpha eases `1.0 -> 0.0` while it widens.
-    /// Pulse's `BombBlast_Update` stamps that ease onto the ring's vertex
-    /// colours every tick; Pure's update (`0x08858ad0`) makes no such call
-    /// and leaves the ring at its authored alpha.
+    /// Whether the shockwave's alpha eases `1.0 -> 0.0` while it widens. Pulse's
+    /// `BombBlast_Update` stamps that ease onto the ring's vertex colours every
+    /// tick; Pure's (`0x08858ad0`) makes no such call and leaves the authored alpha.
     pub shockwave_fades: bool,
 }

@@ -68,7 +68,7 @@ pub struct FlowFiles {
     pub selection: &'static str,
     /// How far apart the chain's rows sit, in the PSP's 272-line grid. Not
     /// authored (the screens' `<Menu>` widgets state no pitch): **measured** on a
-    /// PPSSPP capture, 2026-10-12, as rows 36 px apart in a window drawn at 2x,
+    /// PPSSPP capture, as rows 36 px apart in a window drawn at 2x,
     /// the same on `Main Menu`, `Single Player`, `Class Selection` and the
     /// screens after it.
     pub row_pitch: u16,
@@ -126,7 +126,7 @@ pub struct Campaign {
     /// The speed classes a fresh profile offers, by the name the class menu
     /// authors; `None` offers every class from the start. Pure's
     /// `Class Selection` lists Vector and Venom on a fresh profile (PPSSPP
-    /// capture, 2026-09-10). Which later class opens when is not read.
+    /// capture). Which later class opens when is not read.
     pub classes_at_start: Option<&'static [&'static str]>,
     /// The main menu's campaign row where the title's original names it
     /// differently (`SINGLE PLAYER` on Pure); `None` keeps `RACE CAMPAIGN`.

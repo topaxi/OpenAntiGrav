@@ -83,11 +83,8 @@ fn a_union_of_no_ladders_is_empty() {
     assert!(SpeedClasses::union([]).is_empty());
 }
 
-/// `VECTOR` is authored by Pure **and is offered**, since 2026-09-05.
-///
-/// The filter that used to remove it is gone because the reason for it is:
-/// a race carries the rung's name and resolves it against the file that
-/// authored it, so there is no longer a measured-but-unnameable rung. Nothing
+/// `VECTOR` is authored by Pure and is offered: a race resolves a rung by name
+/// against the file that authored it, so nothing on a measured ladder is filtered.
 /// on any measured ladder is filtered now.
 #[test]
 fn every_name_a_measured_ladder_carries_is_selectable() {
