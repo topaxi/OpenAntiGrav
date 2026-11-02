@@ -24,11 +24,12 @@ fn is_pure(image: &str) -> bool {
 }
 
 fn open(image: &str, path: &str) -> oag_assets::Archives {
-    if is_pure(image) {
+    let archives = if is_pure(image) {
         oag_pure::open(path).expect("mounting the disc")
     } else {
         oag_pulse::open(path).expect("mounting the disc")
-    }
+    };
+    archives.memoising_reads()
 }
 
 fn circuits(image: &str, path: &str) -> Vec<String> {
