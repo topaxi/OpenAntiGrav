@@ -132,7 +132,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     for pack in &archives.packs {
         report.push(format!("dlc: {}", pack.label()));
     }
-    report.extend(problems.into_iter().map(|p| format!("dlc: {p}")));
+    report.extend(crate::loader_log::dlc_problems(problems));
 
     // `label`, `track_classes` and `nodes` build only what is drawn.
     #[cfg_attr(not(feature = "view"), allow(unused_variables))]
