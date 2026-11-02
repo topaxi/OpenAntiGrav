@@ -311,15 +311,15 @@ fn an_unusable_option_is_listed_dimmed_with_its_reason_and_can_be_left() {
         [[page.entry]]
         kind = "choice"
         label = "TRACK"
-        setting = "remix.track"
-        values_from = "remix_tracks"
+        setting = "race.track"
+        values_from = "tracks"
         "#,
         &crate::language::StringTable::default(),
     )
     .expect("parses");
     let mut menu = Menu::new(definition);
     menu.supply(
-        ValueSource::RemixTracks,
+        ValueSource::Tracks,
         &[
             Choice::labelled("good", "GOOD"),
             Choice::labelled("bad", "BAD").unusable("no lap loop"),

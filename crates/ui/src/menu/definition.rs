@@ -204,7 +204,7 @@ mod raw {
         pub label: String,
         pub target: Option<String>,
         pub action: Option<String>,
-        /// `launch = { track_title = "remix.track_title", ... }`: the settings keys
+        /// `launch = { track_title = "mod.<id>.track_title", ... }`: the settings keys
         /// a `launch_race` row reads its race's inputs from.
         pub launch: Option<Launch>,
         pub setting: Option<String>,
@@ -524,9 +524,9 @@ impl Definition {
     /// at draw time would leave a gap in the strip with the cursor still
     /// able to land on it.
     ///
-    /// RACE REMIX's own VARIANT row is untouched: `remix.team` can name any
-    /// title's team regardless of which one booted, so it keeps offering
-    /// real variants even in a Pure-booted session.
+    /// A `variants_of` row is untouched: its title can be any title's, not
+    /// the booted one, so it keeps offering real variants even in a
+    /// Pure-booted session.
     pub fn drop_unavailable_race_variant(&mut self, title: &oag_title::Title) {
         if title.race.has_team_variants() {
             return;
@@ -1031,7 +1031,6 @@ fn resolve(
                             .to_string(),
                     });
                 }
-                None if action == Action::LaunchRemix => Some(LaunchInputs::remix()),
                 None => None,
             };
             Ok(Entry::Run {

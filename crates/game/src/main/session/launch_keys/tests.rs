@@ -1,9 +1,48 @@
 use super::*;
 
-/// The remix launch and a mod page's `launch_race` with `mod.<id>.<key>` keys build the
-/// same options. The fixture is a candidate list surveyed off the discs `images` names;
-/// a missing disc skips the pair.
-fn same_options_either_way(track_image: &str, craft_image: &str, class: &str) {
+/// The keys the official `oag.remix` page's START row reads, off the mod's own file when the
+/// submodule is checked out, else the same keys written out.
+fn remix_keys() -> menu::LaunchInputs {
+    let official = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/mods/official");
+    if official.join("remix/oag-mod.toml").is_file() {
+        let mods = oag_game::mods::Mods::load_from(&[official], &Default::default()).unwrap();
+        let built = mods.build(oag_ui::menu::BUILT_IN, None, None).unwrap();
+        let page = built
+            .definition
+            .pages
+            .iter()
+            .find(|page| page.id == "oag.remix/remix")
+            .expect("the RACE REMIX page");
+        return page
+            .entries
+            .iter()
+            .find_map(|entry| match entry {
+                menu::Entry::Run {
+                    action: menu::Action::LaunchRace,
+                    inputs: Some(inputs),
+                    ..
+                } => Some(inputs.clone()),
+                _ => None,
+            })
+            .expect("START launches through launch_race with its keys");
+    }
+    let key = |name: &str| Some(format!("mod.oag.remix.{name}"));
+    menu::LaunchInputs {
+        track_title: key("track_title"),
+        track: key("track"),
+        craft_title: key("craft_title"),
+        team: key("team"),
+        variant: key("variant"),
+        mode: key("mode"),
+        class: key("class"),
+        difficulty: key("difficulty"),
+    }
+}
+
+/// RACE REMIX's picks, saved under `[mod_settings."oag.remix"]` and read by its START row's
+/// keys, build two-source options: the circuit off the track disc, the craft off the other.
+/// The fixture is a candidate list surveyed off the discs `images` names; a missing disc skips.
+fn remix_options(track_image: &str, craft_image: &str, class: &str) {
     let (Some(track_image), Some(craft_image)) = (
         oag_testdata::image(track_image),
         oag_testdata::image(craft_image),
@@ -20,74 +59,54 @@ fn same_options_either_way(track_image: &str, craft_image: &str, class: &str) {
     let circuit = track_catalogue.tracks.last().map(|(t, _)| t.id.clone()).unwrap();
     let team = craft_catalogue.teams.last().unwrap().value.clone();
 
-    let mut remix_settings = Settings::default();
-    remix_settings.remix.track_title = track.title().to_string();
-    remix_settings.remix.track = circuit.clone();
-    remix_settings.remix.craft_title = craft.title().to_string();
-    remix_settings.remix.team = team.clone();
-    remix_settings.race.mode = "single".into();
-    remix_settings.race.class = class.into();
-    remix_settings.ai.difficulty = "skilled".into();
-
-    let mut mod_settings = Settings::default();
+    let keys = remix_keys();
+    let mut settings = Settings::default();
     for (key, value) in [
-        ("track_title", track.title()),
-        ("track", circuit.as_str()),
-        ("craft_title", craft.title()),
-        ("team", team.as_str()),
-        ("mode", "single"),
-        ("class", class),
-        ("difficulty", "skilled"),
+        (&keys.track_title, track.title()),
+        (&keys.track, circuit.as_str()),
+        (&keys.craft_title, craft.title()),
+        (&keys.team, team.as_str()),
+        (&keys.mode, "single_race"),
+        (&keys.class, class),
+        (&keys.difficulty, "skilled"),
     ] {
-        assert!(settings::mod_settings::set(
-            &mut mod_settings.mod_settings,
-            &format!("mod.oag.test.{key}"),
-            value
-        ));
+        let key = key.as_deref().expect("START names every input");
+        assert!(settings::mod_settings::set(&mut settings.mod_settings, key, value));
     }
-    let mod_keys = menu::LaunchInputs {
-        track_title: Some("mod.oag.test.track_title".into()),
-        track: Some("mod.oag.test.track".into()),
-        craft_title: Some("mod.oag.test.craft_title".into()),
-        team: Some("mod.oag.test.team".into()),
-        variant: Some("mod.oag.test.variant".into()),
-        mode: Some("mod.oag.test.mode".into()),
-        class: Some("mod.oag.test.class".into()),
-        difficulty: Some("mod.oag.test.difficulty".into()),
-    };
-
-    let from_remix = read_inputs(&remix_settings, &menu::LaunchInputs::remix()).unwrap();
-    let from_mod = read_inputs(&mod_settings, &mod_keys).unwrap();
-    assert_eq!(from_remix, from_mod, "the same values, read by key");
-
-    let mut remix_options = Options::default();
-    assert!(apply_two_source(&titles, &mut remix_options, &from_remix, None));
-    let mut mod_options = Options::default();
-    assert!(apply_two_source(&titles, &mut mod_options, &from_mod, None));
-    assert_eq!(format!("{remix_options:?}"), format!("{mod_options:?}"));
-    assert_eq!(remix_options.source, track.source, "the circuit's disc");
+    let inputs = read_inputs(&settings, &keys).unwrap();
+    let mut options = Options::default();
+    assert!(apply_two_source(&titles, &mut options, &inputs, None));
+    assert_eq!(options.source, track.source, "the circuit's disc");
     assert_eq!(
-        remix_options.craft_source.as_deref(),
+        options.craft_source.as_deref(),
         Some(craft.source.as_str()),
         "the craft's disc"
     );
     assert_eq!(
-        remix_options.track,
+        options.track,
         track_catalogue.track(&circuit).map(catalogue::Track::entry_name),
         "the circuit named by key"
     );
+    assert!(
+        options.team.as_deref().is_some_and(|t| t.starts_with(team.as_str())),
+        "the team named by key: {:?}",
+        options.team
+    );
+    assert_eq!(options.class, class);
+    assert_eq!(options.mode, oag_race::Mode::from_name("single_race").unwrap());
+    assert_eq!(options.difficulty, oag_ai::Difficulty::from_name("skilled").unwrap());
 }
 
 #[test]
 #[ignore = "needs the Pulse and Pure disc images in data/images/"]
-fn a_pulse_craft_on_a_pure_track_launches_the_same_by_remix_or_mod_keys() {
-    same_options_either_way("pure-psp-eu.chd", "pulse-psp-eu.chd", "venom");
+fn a_pulse_craft_on_a_pure_track_launches_from_the_remix_mods_keys() {
+    remix_options("pure-psp-eu.chd", "pulse-psp-eu.chd", "venom");
 }
 
 #[test]
 #[ignore = "needs the Pulse and HD/Fury disc images in data/images/"]
-fn an_hd_craft_on_a_pulse_track_launches_the_same_by_remix_or_mod_keys() {
-    same_options_either_way("pulse-psp-eu.chd", "hdfury-ps3-eu-dec.iso", "venom");
+fn an_hd_craft_on_a_pulse_track_launches_from_the_remix_mods_keys() {
+    remix_options("pulse-psp-eu.chd", "hdfury-ps3-eu-dec.iso", "venom");
 }
 
 #[test]

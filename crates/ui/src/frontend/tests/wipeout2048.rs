@@ -615,11 +615,11 @@ fn the_extra_tiles_come_after_the_authored_ones_and_launch_this_builds_pages() {
     frontend.set_extra_tiles(vec![
         ExtraTile {
             label: "RACEBOX".to_string(),
-            launch: Launch::RaceBox,
+            launch: Launch::Page("race".to_string()),
         },
         ExtraTile {
             label: "REMIX".to_string(),
-            launch: Launch::Remix,
+            launch: Launch::Page("oag.remix/remix".to_string()),
         },
     ]);
     let mut input = Input::new();
@@ -636,23 +636,26 @@ fn the_extra_tiles_come_after_the_authored_ones_and_launch_this_builds_pages() {
     )));
     press(&mut frontend, &mut input, Button::Cross);
     assert!(frontend.is_finished());
-    assert_eq!(frontend.launch(), Some(&Launch::Remix));
+    assert_eq!(
+        frontend.launch(),
+        Some(&Launch::Page("oag.remix/remix".to_string()))
+    );
 }
 
-/// MULTIPLAYER is the third tile of this build's, below RACEBOX and REMIX: the grid's pad steps
+/// MULTIPLAYER is the third tile of this build's, below RACEBOX and a mod's REMIX: the grid's pad steps
 /// reach it after the other two and confirming it asks for the MULTIPLAYER page.
 #[test]
 fn the_multiplayer_tile_is_the_third_extra_and_launches_its_page() {
     let mut frontend = boot(0);
     frontend.set_extra_tiles(
         [
-            ("RACEBOX", Launch::RaceBox),
-            ("REMIX", Launch::Remix),
-            ("MULTIPLAYER", Launch::Multiplayer),
+            ("RACEBOX", "race"),
+            ("REMIX", "oag.remix/remix"),
+            ("MULTIPLAYER", "multiplayer"),
         ]
-        .map(|(label, launch)| ExtraTile {
+        .map(|(label, page)| ExtraTile {
             label: label.to_string(),
-            launch,
+            launch: Launch::Page(page.to_string()),
         })
         .to_vec(),
     );
@@ -680,7 +683,10 @@ fn the_multiplayer_tile_is_the_third_extra_and_launches_its_page() {
     );
     press(&mut frontend, &mut input, Button::Cross);
     assert!(frontend.is_finished());
-    assert_eq!(frontend.launch(), Some(&Launch::Multiplayer));
+    assert_eq!(
+        frontend.launch(),
+        Some(&Launch::Page("multiplayer".to_string()))
+    );
 }
 
 #[test]
@@ -688,7 +694,7 @@ fn a_click_on_the_race_box_tile_asks_for_the_race_box() {
     let mut frontend = boot(0);
     frontend.set_extra_tiles(vec![ExtraTile {
         label: "RACEBOX".to_string(),
-        launch: Launch::RaceBox,
+        launch: Launch::Page("race".to_string()),
     }]);
     let mut input = Input::new();
     reach_the_grid(&mut frontend, &mut input);
@@ -701,7 +707,7 @@ fn a_click_on_the_race_box_tile_asks_for_the_race_box() {
     };
     assert!(frontend.pointer(&click));
     tick(&mut frontend, &mut input, 0);
-    assert_eq!(frontend.launch(), Some(&Launch::RaceBox));
+    assert_eq!(frontend.launch(), Some(&Launch::Page("race".to_string())));
 }
 
 #[test]

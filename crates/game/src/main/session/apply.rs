@@ -746,13 +746,7 @@ impl Session {
                 // menu. See `Session::resupply_tracks_for_mode`.
                 self.resupply_tracks_for_mode();
             }
-            "race.class" => {
-                self.settings.race.class = text;
-                // RACE REMIX's TEAM row hides a team that does not author
-                // this class (`Session::remix_craft_catalogue`).
-                self.resupply_remix_teams();
-                self.resupply_remix_variant();
-            }
+            "race.class" => self.settings.race.class = text,
             // VARIANT's own list depends on which team this names - the
             // same reason `race.mode` above resupplies CIRCUIT.
             "race.team" => {
@@ -770,26 +764,6 @@ impl Session {
                     return;
                 }
             }
-            // The two title rows resupply their scoped TRACK/TEAM the same
-            // way `race.mode` resupplies the ordinary TRACK row above -
-            // `Menu::supply` only runs at menu-open, and nothing else tells
-            // RemixTracks/RemixTeams that the title underneath them moved.
-            "remix.track_title" => {
-                self.settings.remix.track_title = text;
-            }
-            "remix.craft_title" => {
-                self.settings.remix.craft_title = text;
-                self.resupply_remix_teams();
-                // VARIANT depends on the team, which just moved to whichever
-                // this craft title's roster offers first.
-                self.resupply_remix_variant();
-            }
-            "remix.track" => self.settings.remix.track = text,
-            "remix.team" => {
-                self.settings.remix.team = text;
-                self.resupply_remix_variant();
-            }
-            "remix.variant" => self.settings.remix.variant = text,
             // **Applied immediately now, not deferred to the next boot** -
             // this row used to be a bare settings write, and `Self::apply_window`'s
             // own doc comment named it beside anisotropy as the two rows a

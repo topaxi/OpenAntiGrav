@@ -28,7 +28,7 @@ pub(super) fn supply(
     model.supply(ValueSource::CraftTitles, &[Choice::plain(title.name)]);
     let ladder = oag_title::SpeedClasses::union(title.race.speed_classes);
     model.supply(
-        ValueSource::RemixSpeedClasses,
+        ValueSource::SpeedClassesUnion,
         &ladder
             .into_iter()
             .filter(|name| oag_title::SpeedClasses::is_selectable(name))

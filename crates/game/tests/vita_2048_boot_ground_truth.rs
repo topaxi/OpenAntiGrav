@@ -487,10 +487,12 @@ fn ship_model_data_forces_the_player_craft_on_some_events() {
     );
 }
 
-/// This build's two tiles are on the grid, after the authored six, and ask for this build's own pages.
+/// This build's tiles are on the grid, after the authored six, and ask for this build's own pages.
+/// A mod's tile under RACEBOX (REMIX) depends on the mods found, and is
+/// `boot::tests::a_mods_row_under_racebox_is_a_tile_between_them`'s.
 #[test]
 #[ignore = "needs the extracted package under data/extracted/vita/"]
-fn the_race_box_and_remix_tiles_follow_the_authored_grid() {
+fn the_race_box_tile_follows_the_authored_grid() {
     let Some(source) = source() else { return };
     let loaded = boot::load(&options(&source)).expect("the whole boot");
     let mut frontend = loaded.frontend;
@@ -500,15 +502,13 @@ fn the_race_box_and_remix_tiles_follow_the_authored_grid() {
         w2048::GAME_MODE_CHOICE
     ));
     let list = frontend.draw_list();
-    for label in ["RACEBOX", "REMIX"] {
-        assert!(
-            list.iter().any(
-                |draw| matches!(draw, oag_ui::frontend::Draw::Text { text, .. } if text == label)
-            ),
-            "{label} is on the grid"
-        );
-    }
-    // Six tiles (the tick is hidden), then the two: six rights land on RACEBOX.
+    assert!(
+        list.iter().any(
+            |draw| matches!(draw, oag_ui::frontend::Draw::Text { text, .. } if text == "RACEBOX")
+        ),
+        "RACEBOX is on the grid"
+    );
+    // Six tiles (the tick is hidden), then this build's: six rights land on RACEBOX.
     let mut input = Input::new();
     for _ in 0..6 {
         input.begin_frame(Button::Right.bit());
@@ -518,7 +518,10 @@ fn the_race_box_and_remix_tiles_follow_the_authored_grid() {
     }
     input.begin_frame(Button::Cross.bit());
     frontend.update(1.0 / 60.0, &mut input, None);
-    assert_eq!(frontend.launch(), Some(&oag_ui::frontend::Launch::RaceBox));
+    assert_eq!(
+        frontend.launch(),
+        Some(&oag_ui::frontend::Launch::Page("race".to_string()))
+    );
 }
 
 /// Presses `button` for one tick and releases it for the next - the same

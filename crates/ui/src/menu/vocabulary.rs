@@ -13,12 +13,6 @@
 pub enum Action {
     /// Leave the menus and start a race with whatever the race pages hold.
     LaunchRace,
-    /// Leave the menus and start a race whose track and craft may name
-    /// different titles - whatever the `remix` page holds. Its own action
-    /// rather than a second meaning for `LaunchRace`, since the two pages
-    /// store their picks under different settings keys (`remix.*` against
-    /// `race.*`) and a shared action would have to guess which page fired it.
-    LaunchRemix,
     /// Close the game.
     Quit,
     /// Writes the pilot editor's current axis edit to disk. See
@@ -89,7 +83,6 @@ impl Action {
     pub fn name(self) -> &'static str {
         match self {
             Self::LaunchRace => "launch_race",
-            Self::LaunchRemix => "launch_remix",
             Self::Quit => "quit",
             Self::SavePilot => "save_pilot",
             Self::NewPilot => "new_pilot",
@@ -122,7 +115,6 @@ impl Action {
     pub fn parse(name: &str) -> Option<Self> {
         match name {
             "launch_race" => Some(Self::LaunchRace),
-            "launch_remix" => Some(Self::LaunchRemix),
             "quit" => Some(Self::Quit),
             "save_pilot" => Some(Self::SavePilot),
             "new_pilot" => Some(Self::NewPilot),
@@ -142,10 +134,9 @@ impl Action {
 
     /// Every action, for error messages and for the integrity check.
     #[must_use]
-    pub fn all() -> [Self; 15] {
+    pub fn all() -> [Self; 14] {
         [
             Self::LaunchRace,
-            Self::LaunchRemix,
             Self::Quit,
             Self::SavePilot,
             Self::NewPilot,
@@ -262,12 +253,6 @@ pub enum ValueSource {
     /// of its own - see `oag_title::RaceDefaults::guest_roster` and
     /// `session::menus::Session::craft_title_choices`.
     CraftTitles,
-    /// The circuits the *currently chosen* `TRACK TITLE` offers - unlike
-    /// [`Self::Tracks`], resupplied every time `remix.track_title` changes
-    /// rather than fixed for the session.
-    RemixTracks,
-    /// [`Self::RemixTracks`]' sibling for `CRAFT TITLE`'s roster.
-    RemixTeams,
     /// Which of the *booted* title's own teams `race.team` names carries more
     /// than one selectable directory - Wipeout 2048's own five and Wipeout
     /// HD/Fury's twelve, both today. See
@@ -288,9 +273,9 @@ pub enum ValueSource {
     /// `oag_title::SpeedClasses` was added to close.
     ///
     /// The ordinary RACE page offers **this title's** ladder and no other's.
-    /// RACE REMIX unions them instead - see [`Self::RemixSpeedClasses`].
+    /// A `speed_classes_union` row unions them instead - see [`Self::SpeedClassesUnion`].
     SpeedClasses,
-    /// [`Self::SpeedClasses`]' sibling for RACE REMIX: every speed class any
+    /// [`Self::SpeedClasses`]' sibling for a page that mixes titles: every speed class any
     /// title whose source this machine can currently open authors, as one
     /// ladder.
     ///
@@ -299,15 +284,11 @@ pub enum ValueSource {
     /// the same way [`Self::Titles`] does. A machine holding one disc offers
     /// that disc's ladder; a class whose title is not on this machine is not
     /// offered at all, rather than shown and then unable to load.
-    RemixSpeedClasses,
-    /// RACE REMIX's AI DIFFICULTY: the four tiers, plus a `none` option the row
+    SpeedClassesUnion,
+    /// The AI difficulties: the four tiers, plus a `none` option the row
     /// is pinned to when the chosen class has no controller
     /// (`oag_ai::coverage`), labelled with the reason.
-    RemixAiDifficulty,
-    /// [`Self::RaceVariant`]'s sibling for RACE REMIX's craft-side `TEAM` -
-    /// scoped to whichever title `CRAFT TITLE` picked rather than to the
-    /// title this process booted from.
-    RemixVariant,
+    AiDifficulties,
     /// Every pilot the in-game editor's roster currently holds - the four
     /// built-ins plus whatever `crate::pilots::directory` has, in
     /// `crate::pilots::Roster`'s own order.
@@ -327,8 +308,8 @@ pub enum ValueSource {
     /// [`Self::PilotAxes`] currently hold, as a set of selectable numbers
     /// within `crate::pilots::limit`'s range for that axis.
     ///
-    /// Resupplied whenever the `PILOT` or `AXIS` row moves, the same idiom
-    /// [`Self::RemixTracks`] uses for `TRACK TITLE` - a menu whose PILOT row
+    /// Resupplied whenever the `PILOT` or `AXIS` row moves, the same idiom a
+    /// `tracks_of` row follows for its title - a menu whose PILOT row
     /// just changed should show that pilot's own bounds on the very next
     /// frame, not the previous one's.
     PilotAxisLow,
@@ -391,13 +372,10 @@ impl ValueSource {
             Self::Teams => "teams",
             Self::Titles => "titles",
             Self::CraftTitles => "craft_titles",
-            Self::RemixTracks => "remix_tracks",
-            Self::RemixTeams => "remix_teams",
             Self::SpeedClasses => "speed_classes",
-            Self::RemixSpeedClasses => "remix_speed_classes",
-            Self::RemixAiDifficulty => "remix_ai_difficulty",
+            Self::SpeedClassesUnion => "speed_classes_union",
+            Self::AiDifficulties => "ai_difficulties",
             Self::RaceVariant => "race_variant",
-            Self::RemixVariant => "remix_variant",
             Self::Pilots => "pilots",
             Self::PilotAxes => "pilot_axes",
             Self::PilotAxisLow => "pilot_axis_low",
@@ -428,13 +406,10 @@ impl ValueSource {
             "teams" => Some(Self::Teams),
             "titles" => Some(Self::Titles),
             "craft_titles" => Some(Self::CraftTitles),
-            "remix_tracks" => Some(Self::RemixTracks),
-            "remix_teams" => Some(Self::RemixTeams),
             "speed_classes" => Some(Self::SpeedClasses),
-            "remix_speed_classes" => Some(Self::RemixSpeedClasses),
-            "remix_ai_difficulty" => Some(Self::RemixAiDifficulty),
             "race_variant" => Some(Self::RaceVariant),
-            "remix_variant" => Some(Self::RemixVariant),
+            "speed_classes_union" => Some(Self::SpeedClassesUnion),
+            "ai_difficulties" => Some(Self::AiDifficulties),
             "pilots" => Some(Self::Pilots),
             "pilot_axes" => Some(Self::PilotAxes),
             "pilot_axis_low" => Some(Self::PilotAxisLow),
@@ -537,8 +512,8 @@ impl Query {
             Self::TracksOf => Some(ValueSource::Tracks),
             Self::TeamsOf => Some(ValueSource::Teams),
             Self::VariantsOf => Some(ValueSource::RaceVariant),
-            Self::SpeedClassesUnion => Some(ValueSource::RemixSpeedClasses),
-            Self::AiDifficulties => Some(ValueSource::RemixAiDifficulty),
+            Self::SpeedClassesUnion => Some(ValueSource::SpeedClassesUnion),
+            Self::AiDifficulties => Some(ValueSource::AiDifficulties),
             Self::CustomTracks => None,
         }
     }

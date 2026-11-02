@@ -340,30 +340,6 @@ type = "array"
 itemtype = "string"
 optional = true
 
-# [remix]: the Remix race's picks.
-[types.remix]
-type = "table"
-
-[types.remix.track_title]
-type = "string"
-optional = true
-
-[types.remix.track]
-type = "string"
-optional = true
-
-[types.remix.craft_title]
-type = "string"
-optional = true
-
-[types.remix.team]
-type = "string"
-optional = true
-
-[types.remix.variant]
-type = "string"
-optional = true
-
 # [online]: the lobby last connected to.
 [types.online]
 type = "table"
@@ -492,10 +468,6 @@ optional = true
 
 [elements.race]
 type = "types.race"
-optional = true
-
-[elements.remix]
-type = "types.remix"
 optional = true
 
 [elements.online]

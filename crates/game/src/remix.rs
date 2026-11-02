@@ -194,7 +194,19 @@ pub fn query_choices(
 pub fn resolve_queries(
     model: &mut menu::Menu,
     changed: Option<&str>,
+    lists: impl FnMut(menu::Query, QueryArgs<'_>) -> Option<Vec<menu::Choice>>,
+) {
+    resolve_each(model, changed, lists, |_| {});
+}
+
+/// [`resolve_queries`] with `after` run on the model after each row is re-listed, before the
+/// next query reads its arguments: a re-listed row falls to its first value, and `after` is
+/// where a saved pick goes back on it so a query below reads the pick, not the first value.
+fn resolve_each(
+    model: &mut menu::Menu,
+    changed: Option<&str>,
     mut lists: impl FnMut(menu::Query, QueryArgs<'_>) -> Option<Vec<menu::Choice>>,
+    mut after: impl FnMut(&mut menu::Menu),
 ) {
     for query in model.query_refs() {
         let reads =
@@ -216,6 +228,7 @@ pub fn resolve_queries(
         };
         if let Some(list) = lists(query.query, args) {
             model.supply_query(&query, &list);
+            after(model);
         }
     }
 }
@@ -247,16 +260,17 @@ pub fn settle_queries(
             .filter(|(key, _)| crate::settings::mod_settings::get(mod_settings, key).is_none())
             .map(|(key, value)| (key.to_owned(), value.to_owned()))
             .collect();
-        for (key, value) in &defaults {
-            model.seed(key, &menu::Value::Text(value.clone()));
-        }
-        resolve_queries(model, changed.as_deref(), &mut lists);
-        for (key, value) in &defaults {
-            model.seed(key, &menu::Value::Text(value.clone()));
-        }
-        for (key, value) in crate::settings::mod_settings::seeds(mod_settings) {
-            model.seed(&key, &value);
-        }
+        let saved = crate::settings::mod_settings::seeds(mod_settings);
+        let put_back = |model: &mut menu::Menu| {
+            for (key, value) in &defaults {
+                model.seed(key, &menu::Value::Text(value.clone()));
+            }
+            for (key, value) in &saved {
+                model.seed(key, value);
+            }
+        };
+        put_back(model);
+        resolve_each(model, changed.as_deref(), &mut lists, put_back);
         let settled: Vec<(String, String)> = model
             .held_choices()
             .into_iter()

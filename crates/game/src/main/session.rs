@@ -545,9 +545,9 @@ pub(crate) struct Session {
     /// The platform that same source is for - see `App::race_platform`.
     pub(crate) race_platform: Option<oag_disc::Platform>,
     /// Every title this machine can currently open a source for, one row per
-    /// distinct title - what the RACE REMIX page's TRACK TITLE and CRAFT
-    /// TITLE rows offer, and how `Action::LaunchRemix` turns a picked title's
-    /// name back into a source path.
+    /// distinct title - what a `titles_available` and a `craft_titles` row
+    /// offer, and how a `launch_race` row with a title key turns a picked
+    /// title's name back into a source path.
     ///
     /// Surveyed once here rather than reused from whatever decided the disc
     /// chooser in `main.rs`: the two run in different processes' worth of
@@ -659,8 +659,8 @@ pub(crate) struct Session {
     /// exists, only the composition root.
     ///
     /// `None` on every path but a campaign launch: an ordinary RACE-page or
-    /// RACE REMIX launch clears it defensively (`Session::launch_from_settings`,
-    /// `Session::launch_remix`) so a cell abandoned by backing out of `Team
+    /// keyed launch clears it defensively (`Session::launch_from_settings`,
+    /// `Session::launch_keyed`) so a cell abandoned by backing out of `Team
     /// Selection` cannot leak into the next unrelated race.
     pub(crate) campaign_cell: Option<oag_tables::race_campaign::Cell>,
     /// A mod campaign event's extras for the race [`Self::campaign_cell`]

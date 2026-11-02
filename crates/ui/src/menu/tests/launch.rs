@@ -63,34 +63,3 @@ fn an_unknown_launch_input_is_refused() {
         .is_err()
     );
 }
-
-/// The shipped RACE REMIX page launches through `launch_race` with the remix keys, and
-/// the `launch_remix` action is the same launch.
-#[test]
-fn race_remix_starts_through_launch_race_with_its_keys() {
-    let definition = built_in();
-    let page = definition
-        .pages
-        .iter()
-        .find(|page| page.id == "remix")
-        .expect("the RACE REMIX page");
-    let inputs: Vec<_> = page
-        .entries
-        .iter()
-        .filter_map(|entry| match entry {
-            Entry::Run {
-                action: Action::LaunchRace,
-                inputs: Some(inputs),
-                ..
-            } => Some(inputs.clone()),
-            _ => None,
-        })
-        .collect();
-    assert_eq!(inputs, [LaunchInputs::remix()]);
-    let row = page
-        .meta
-        .iter()
-        .position(|meta| meta.id.as_deref() == Some("launch_remix"))
-        .expect("the START row keeps the id launch_remix, which a drive script selects by");
-    assert!(matches!(page.entries[row], Entry::Run { .. }));
-}

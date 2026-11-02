@@ -1,9 +1,8 @@
-//! `launch_race` with its inputs named by setting key: one launch for the ordinary
-//! RACE page's two-source cousin RACE REMIX, and for any mod page
-//! (`docs/architecture/adr/0082-*.md`, decision 4; `docs/tools/mods.md`).
+//! `launch_race` with its inputs named by setting key: one launch for any page whose
+//! track and craft may come from two titles, a mod's page above all
+//! (`docs/architecture/adr/0082-*.md`, decision 5; `docs/tools/mods.md`).
 //!
-//! The row names where each input is read from (`remix.track`, `race.mode`,
-//! `mod.<id>.<key>`); the rules for combining them stay here: CUSTOM host, the
+//! The row names where each input is read from (`race.mode`, `mod.<id>.<key>`); the rules for combining them stay here: CUSTOM host, the
 //! craft falling back to the track's title, the class with no driver.
 
 use std::path::PathBuf;
@@ -65,11 +64,6 @@ fn setting_text(settings: &Settings, key: &str) -> Option<String> {
         "race.track" => settings.race.track.clone(),
         "race.variant" => settings.race.variant.clone(),
         "ai.difficulty" => settings.ai.difficulty.clone(),
-        "remix.track_title" => settings.remix.track_title.clone(),
-        "remix.track" => settings.remix.track.clone(),
-        "remix.craft_title" => settings.remix.craft_title.clone(),
-        "remix.team" => settings.remix.team.clone(),
-        "remix.variant" => settings.remix.variant.clone(),
         _ => return None,
     })
 }
@@ -122,7 +116,7 @@ pub(crate) fn apply_two_source(
         race_options.class = class.to_string();
     }
     // A class no controller covers races without opponents; the AI DIFFICULTY row says
-    // so (`Session::remix_ai_difficulty`).
+    // so (`Session::ai_difficulties`).
     race_options.no_driver_for_class = !oag_ai::coverage::project_driver_covers(&race_options.class);
     if let Some(difficulty) = oag_ai::Difficulty::from_name(&inputs.difficulty) {
         race_options.difficulty = difficulty;

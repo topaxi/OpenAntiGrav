@@ -152,8 +152,8 @@ impl SpeedClasses {
     }
 
     /// The subset of [`Self::names`] this build can put a ship on: engine
-    /// capability ([`Self::is_selectable`]), from which RACE REMIX's row is built
-    /// (`Session::remix_speed_classes`). The ordinary RACE page narrows it through
+    /// capability ([`Self::is_selectable`]), from which a `speed_classes_union` row is
+    /// built (`Session::speed_classes_union`). The ordinary RACE page narrows it through
     /// [`Self::is_offered_outside_remix`].
     pub fn selectable(&self) -> impl Iterator<Item = &'static str> + use<> {
         self.names

@@ -159,7 +159,7 @@ fn confirm_on_a_revealed_row_opens_it() {
     press(&mut menu, &[Button::Down]);
     assert_eq!(id(&menu), "remix");
     press(&mut menu, &[Button::Cross]);
-    assert_eq!(menu.page().id, "remix");
+    assert_eq!(menu.page().id, "test.mod/remix");
 }
 
 #[test]
@@ -214,7 +214,7 @@ fn a_hidden_row_has_no_pointer_region_and_a_revealed_one_is_clickable() {
         ..crate::pointer::Pointer::default()
     };
     menu.pointer(&click, &regions);
-    assert_eq!(menu.page().id, "remix");
+    assert_eq!(menu.page().id, "test.mod/remix");
 }
 
 /// A finger has no hover: its tap is a move and a click in one tick. On a row whose
@@ -257,7 +257,7 @@ fn a_tap_on_a_row_with_hidden_attached_rows_reveals_them_first() {
     tap_on(&mut menu, remix);
     assert_eq!(
         menu.page().id,
-        "remix",
+        "test.mod/remix",
         "a revealed row activates on its first tap"
     );
 }
