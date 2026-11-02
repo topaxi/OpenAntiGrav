@@ -7,17 +7,14 @@
 //! [`super::menus::combine_variant`] stay there: they are shared with the
 //! ordinary RACE page's own VARIANT row, not Race Remix's alone.
 
-use log::{error, info, warn};
+use log::warn;
 
 use oag_game::remix;
-use oag_raceplay::catalogue;
 use oag_ui::{menu, strings};
 
-use crate::hints;
 use crate::stage::Stage;
 
 use super::Session;
-use super::menus::combine_variant;
 use oag_game::livery_row::variant_choices;
 
 /// Brings a stored `remix.*` setting into step with the list its row is
@@ -109,7 +106,7 @@ fn craft_title_choices(titles: &[oag_game::launcher::Candidate]) -> Vec<menu::Ch
 ///
 /// A free function for the same testability reason [`craft_title_choices`]
 /// is.
-fn resolve_craft_backing<'a>(
+pub(super) fn resolve_craft_backing<'a>(
     titles: &'a [oag_game::launcher::Candidate],
     craft_title: &str,
 ) -> Option<&'a oag_game::launcher::Candidate> {
@@ -298,13 +295,6 @@ impl Session {
             .and_then(|candidate| candidate.playable())
     }
 
-    /// Whether `id` is one of `guest`'s reused teams - its own
-    /// [`oag_title::GuestRoster::variants`] list (2048's twelve HD/Fury teams),
-    /// reused here rather than duplicated a third time.
-    fn is_guest_team(guest: &oag_title::GuestRoster, id: &str) -> bool {
-        guest.variants.teams.contains(&id)
-    }
-
     /// CRAFT TITLE's own team list - [`Self::remix_catalogue_for`] scoped to
     /// [`Self::craft_backing`] instead of a direct survey match, and filtered
     /// so 2048's own list and "Wipeout HD"'s never show the same twelve teams
@@ -318,44 +308,11 @@ impl Session {
     ///   machine): only the reused twelve, off 2048's own catalogue.
     /// - Every other title: unfiltered.
     pub(super) fn remix_craft_catalogue(&self) -> Option<remix::Catalogue> {
-        let requested = &self.settings.remix.craft_title;
-        let candidate = self.craft_backing()?;
-        let mut catalogue = match remix::catalogue(&candidate.source) {
-            Ok(catalogue) => catalogue,
-            Err(e) => {
-                warn!("{}: {e:#}", candidate.source);
-                return None;
-            }
-        };
-        if let Some(guest) = candidate
-            .playable()
-            .and_then(|title| title.race.guest_roster)
-        {
-            if candidate.title() == requested {
-                catalogue
-                    .teams
-                    .retain(|choice| !Self::is_guest_team(guest, &choice.value));
-            } else if requested == guest.reships || guest.alongside_label == Some(requested) {
-                catalogue
-                    .teams
-                    .retain(|choice| Self::is_guest_team(guest, &choice.value));
-            }
-        }
-        // **A team whose files do not author the chosen class is hidden**
-        // (chosen, not measured; `oag_title::RaceDefaults::team_races_class`).
-        // Pure's VECTOR and 2048's SUPERPHANTOM are on one title's ladder or
-        // one roster only, and a remix can pair them with a craft title whose
-        // teams author neither: the TEAM row narrows, possibly to nothing,
-        // rather than offering a team that fails to load.
-        if let Some(title) = candidate.playable() {
-            let class = self.settings.race.class.trim();
-            if !class.is_empty() {
-                catalogue
-                    .teams
-                    .retain(|team| title.race.team_races_class(&team.value, class) != Some(false));
-            }
-        }
-        Some(catalogue)
+        craft_catalogue(
+            &self.titles,
+            &self.settings.remix.craft_title,
+            &self.settings.race.class,
+        )
     }
 
     /// [`super::menus::Session::resupply_race_variant`]'s sibling for RACE
@@ -372,236 +329,62 @@ impl Session {
         }
     }
 
-    /// The RACE REMIX page's own launch - see `menu::Action::LaunchRemix`'s
-    /// own doc comment for why it is not a second meaning for `LaunchRace`.
-    /// Builds `race::Options` the same way that one does, plus the two
-    /// source fields neither the CLI's `--race` route nor the ordinary RACE
-    /// page ever has to resolve.
+    /// The RACE REMIX page's own launch: the `launch_remix` action is `launch_race`
+    /// with RACE REMIX's keys (`menu::LaunchInputs::remix`).
     pub(crate) fn launch_remix(&mut self) {
-        // Defensive, the same reason `Session::launch_from_settings` clears
-        // both: RACE REMIX is not reachable from the campaign at all, but a
-        // cell abandoned mid-`Team Selection` must never leak its own
-        // eliminator target or lap override into an unrelated launch.
-        self.campaign_cell = None;
-        self.campaign_custom = None;
-        self.campaign_difficulty = None;
-        self.campaign_ai_skill_scale = None;
-        let Some(mut race_options) = self.race_options.take() else {
-            warn!("no disc image has been chosen yet, so there is nothing to race");
-            return;
-        };
-        // A remix names its own track: a disc circuit, or below a CUSTOM file.
-        self.inherit_cli_foreign_track(&mut race_options);
-        race_options.eliminator_kill_target = None;
-        race_options.laps_override = None;
-        race_options.weapons_override = None;
-        if let Some(mode) = oag_race::Mode::from_name(&self.settings.race.mode) {
-            race_options.mode = mode;
-        }
-        // Carried as a **name** - see the same assignment in `menus.rs`. The
-        // union this came from is built from the ladders of the titles this
-        // machine can actually open, so `VECTOR` is in it exactly when Pure's
-        // data is present.
-        let class = self.settings.race.class.trim();
-        if !class.is_empty() {
-            race_options.class = class.to_string();
-        }
-        // A class no controller covers races without opponents; the AI
-        // DIFFICULTY row says so (`Session::remix_ai_difficulty`).
-        race_options.no_driver_for_class =
-            !oag_ai::coverage::project_driver_covers(&race_options.class);
-        if let Some(difficulty) = oag_ai::Difficulty::from_name(&self.settings.ai.difficulty) {
-            race_options.difficulty = difficulty;
-        }
-        // The TEAM row hides every team that does not author the class; with
-        // none left there is nothing to launch, and racing a default team that
-        // cannot load the class is the failure the row exists to prevent.
-        if self
-            .remix_craft_catalogue()
-            .is_some_and(|catalogue| catalogue.teams.is_empty())
-        {
-            warn!(
-                "no team of {} authors the speed class {:?}; pick another class or craft title",
-                self.settings.remix.craft_title, race_options.class
-            );
-            self.race_options = Some(race_options);
-            return;
-        }
+        self.launch_keyed(&menu::LaunchInputs::remix());
+    }
+}
 
-        let track_title = self.settings.remix.track_title.clone();
-        let custom = self.custom_track_selected(&track_title);
-        // A CUSTOM file's track side loads from the disc of the title it names
-        // as its host (ADR-0076, decision 13), the craft from CRAFT TITLE's; a
-        // file that names none (a Workshop track) is flown on CRAFT TITLE's.
-        let custom_host = if custom {
-            match self.custom_track_host(&self.settings.remix.track) {
-                Ok(host) => host.cloned(),
-                Err(why) => {
-                    warn!("cannot race this custom track: {why}");
-                    self.race_options = Some(race_options);
-                    return;
-                }
-            }
-        } else {
-            None
-        };
-        let track_candidate = if custom {
-            custom_host.clone().or_else(|| self.craft_backing().cloned())
-        } else {
-            self.titles
-                .iter()
-                .find(|candidate| candidate.title() == track_title)
-                .cloned()
-        };
-        let Some(track_candidate) = track_candidate else {
-            warn!("no track title chosen yet, so there is nothing to remix");
-            self.race_options = Some(race_options);
-            return;
-        };
-        if custom {
-            match self.apply_custom_track(&mut race_options) {
-                Ok(()) => {}
-                Err(why) => {
-                    warn!("cannot race this custom track: {why}");
-                    self.race_options = Some(race_options);
-                    return;
-                }
-            }
+/// [`Session::remix_craft_catalogue`] over an explicit CRAFT TITLE and class.
+pub(super) fn craft_catalogue(
+    titles: &[oag_game::launcher::Candidate],
+    requested: &str,
+    class: &str,
+) -> Option<remix::Catalogue> {
+    let candidate = resolve_craft_backing(titles, requested)?;
+    let mut catalogue = match remix::catalogue(&candidate.source) {
+        Ok(catalogue) => catalogue,
+        Err(e) => {
+            warn!("{}: {e:#}", candidate.source);
+            return None;
         }
-        race_options.source = track_candidate.source.clone();
-
-        // An unpicked CRAFT TITLE means "the same as the track's",
-        // on the same terms `race::Options::craft_source: None`
-        // does - not a separate source opened redundantly. A picked
-        // one this machine can no longer find (its disc left the
-        // search path since it was saved) falls back the same way,
-        // reported rather than silent.
-        let craft_title = self.settings.remix.craft_title.clone();
-        let craft_source = if craft_title.is_empty() || (custom && custom_host.is_none()) {
-            None
-        } else {
-            // `craft_backing` is what resolves "Wipeout HD" to 2048's
-            // own package when this machine has no real HD source -
-            // see its own doc comment.
-            match self.craft_backing() {
-                Some(candidate) => Some(candidate.source.clone()),
-                None => {
-                    warn!(
-                        "{craft_title} is not a title this machine can currently \
-                         open; racing craft from {track_title} instead"
-                    );
-                    None
-                }
-            }
-        };
-        race_options.craft_source = craft_source.clone();
-
-        // A CUSTOM track is a file, not a circuit of the source's, so no name
-        // is looked up.
-        let track_catalogue = if custom {
-            None
-        } else {
-            Some(remix::catalogue(&track_candidate.source))
-        };
-        match track_catalogue {
-            None => {}
-            Some(Ok(catalogue)) => {
-                let chosen = catalogue
-                    .track(&self.settings.remix.track)
-                    .or_else(|| {
-                        warn!(
-                            "{track_title} does not offer {:?}; racing the first \
-                             circuit it does offer, which is what the menu shows",
-                            self.settings.remix.track
-                        );
-                        catalogue.tracks.first().map(|(track, _)| track)
-                    })
-                    .map(catalogue::Track::entry_name);
-                match chosen {
-                    Some(entry) => race_options.track = Some(entry),
-                    None => warn!(
-                        "{track_title} offers no circuit at all; racing whatever \
-                         was already selected"
-                    ),
-                }
-            }
-            Some(Err(e)) => warn!("{}: {e:#}", track_candidate.source),
-        }
-
-        // The team's own title, for VARIANT to combine against -
-        // whichever title actually supplied the craft: the picked
-        // one, or the track's when craft follows it unpicked.
-        let variant_title = if craft_source.is_some() {
-            self.craft_title()
-        } else {
-            match &track_candidate.state {
-                oag_game::launcher::State::Playable(title) => Some(*title),
-                oag_game::launcher::State::Unavailable(_) | oag_game::launcher::State::NeedsKey => None,
-            }
-        };
-        let craft_catalogue_source = craft_source.unwrap_or(track_candidate.source);
-        match remix::catalogue(&craft_catalogue_source) {
-            Ok(catalogue) => match catalogue.team(&self.settings.remix.team) {
-                Some(team) => {
-                    let team = team.to_string();
-                    let (combined, hull_variant) = match variant_title {
-                        Some(title) => {
-                            let (combined, hull_variant, warning) =
-                                combine_variant(title, &team, &self.settings.remix.variant);
-                            if let Some(warning) = warning {
-                                warn!("{warning}");
-                            }
-                            (combined, hull_variant)
-                        }
-                        // No title to check `team_variants`/`hull_variants`
-                        // against - racing the bare id, which fails the same
-                        // way this crate's own original bug report did if
-                        // `team` is one that needs a second directory. Warned
-                        // rather than silent, so a dead-end team picker names
-                        // itself instead of surfacing as `race::load`'s own
-                        // "no entry at ..." error.
-                        None => {
-                            warn!(
-                                "{team}: could not resolve its own title, so no \
-                                 VARIANT was applied; this fails if {team} needs one"
-                            );
-                            (team, None)
-                        }
-                    };
-                    race_options.team = Some(combined);
-                    race_options.hull_variant = hull_variant.map(str::to_string);
-                }
-                None => warn!(
-                    "this craft title does not offer team {:?}, racing as its own \
-                     default instead",
-                    self.settings.remix.team
-                ),
-            },
-            Err(e) => warn!("{craft_catalogue_source}: {e:#}"),
-        }
-
-        info!(
-            "remixing {}",
-            race_options
-                .foreign_track
-                .as_ref()
-                .map(|path| path.display().to_string())
-                .or_else(|| race_options.track.clone())
-                .unwrap_or_else(|| "this source's own default circuit".to_string())
-        );
-        self.race_options = Some(race_options);
-        match self.launch_race() {
-            Ok(()) => {
-                let strings = strings::project_table(self.settings.language.as_deref());
-                println!(
-                    "\n{}{}",
-                    hints::race_keys(&strings),
-                    hints::esc_to_menu(&strings)
-                );
-            }
-            Err(e) => error!("cannot start a remix race: {e:#}"),
+    };
+    if let Some(guest) = candidate
+        .playable()
+        .and_then(|title| title.race.guest_roster)
+    {
+        if candidate.title() == requested {
+            catalogue
+                .teams
+                .retain(|choice| !is_guest_team(guest, &choice.value));
+        } else if requested == guest.reships || guest.alongside_label == Some(requested) {
+            catalogue
+                .teams
+                .retain(|choice| is_guest_team(guest, &choice.value));
         }
     }
+    // **A team whose files do not author the chosen class is hidden**
+    // (chosen, not measured; `oag_title::RaceDefaults::team_races_class`).
+    // Pure's VECTOR and 2048's SUPERPHANTOM are on one title's ladder or
+    // one roster only, and a remix can pair them with a craft title whose
+    // teams author neither: the TEAM row narrows, possibly to nothing,
+    // rather than offering a team that fails to load.
+    if let Some(title) = candidate.playable() {
+        let class = class.trim();
+        if !class.is_empty() {
+            catalogue
+                .teams
+                .retain(|team| title.race.team_races_class(&team.value, class) != Some(false));
+        }
+    }
+    Some(catalogue)
+}
+
+/// Whether `id` is one of `guest`'s reused teams - its own
+/// [`oag_title::GuestRoster::variants`] list (2048's twelve HD/Fury teams).
+fn is_guest_team(guest: &oag_title::GuestRoster, id: &str) -> bool {
+    guest.variants.teams.contains(&id)
 }
 
 #[cfg(test)]

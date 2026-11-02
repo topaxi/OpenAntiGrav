@@ -63,6 +63,43 @@ type = "array"
 itemtype = "types.condition"
 minlength = 2
 
+# `launch = { ... }` on a `launch_race` row: the setting each input of the race is read
+# from. An input left out is the booted title's own.
+[types.launch]
+type = "table"
+
+[types.launch.track_title]
+type = "string"
+optional = true
+
+[types.launch.track]
+type = "string"
+optional = true
+
+[types.launch.craft_title]
+type = "string"
+optional = true
+
+[types.launch.team]
+type = "string"
+optional = true
+
+[types.launch.variant]
+type = "string"
+optional = true
+
+[types.launch.mode]
+type = "string"
+optional = true
+
+[types.launch.class]
+type = "string"
+optional = true
+
+[types.launch.difficulty]
+type = "string"
+optional = true
+
 [types.entry]
 type = "table"
 
@@ -83,6 +120,10 @@ optional = true
 
 [types.entry.action]
 type = "string"
+optional = true
+
+[types.entry.launch]
+type = "types.launch"
 optional = true
 
 [types.entry.setting]

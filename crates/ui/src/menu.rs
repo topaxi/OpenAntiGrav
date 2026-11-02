@@ -70,6 +70,8 @@ pub const CUSTOM_CAMPAIGN_ROW: &str = "campaign-custom:";
 
 mod vocabulary;
 pub use vocabulary::{Action, ValueSource};
+mod launch;
+pub use launch::LaunchInputs;
 
 /// What a race mode's row shows, out of the disc's own string table.
 ///
@@ -337,6 +339,9 @@ pub enum Entry {
         label: String,
         /// What to fire.
         action: Action,
+        /// The settings keys a `launch_race` row names its race's inputs by.
+        /// `None` is every other row, and an ordinary RACE launch.
+        inputs: Option<LaunchInputs>,
     },
     /// Cycles a setting through a fixed list of values.
     Choice {
@@ -525,6 +530,8 @@ pub use definition::{Added, Definition, Error, For, ModMenu};
 pub enum MenuEvent {
     /// An `action` row was activated.
     Fired(Action),
+    /// A `launch_race` row that names its inputs by setting key was activated.
+    Launch(LaunchInputs),
     /// A setting was moved. Apply it and persist it.
     Changed {
         /// The settings key from the definition.

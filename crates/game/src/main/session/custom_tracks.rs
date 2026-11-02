@@ -22,17 +22,6 @@ impl Session {
         track_title == oag_game::custom_tracks::CUSTOM
     }
 
-    /// Sets what racing the TRACK row's custom file needs on `options`, or says
-    /// why it cannot be raced.
-    pub(super) fn apply_custom_track(
-        &self,
-        options: &mut oag_raceplay::Options,
-    ) -> Result<(), String> {
-        let path = self.custom_tracks.raceable(&self.settings.remix.track)?;
-        oag_game::custom_tracks::apply(options, path);
-        Ok(())
-    }
-
     /// The source a CUSTOM file's track side loads from: the first disc this
     /// machine opens of the title the file names as its host (ADR-0076,
     /// decision 13), never a guest standing in for it, since only that disc holds

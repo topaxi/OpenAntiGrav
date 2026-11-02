@@ -10,7 +10,9 @@
 # row that does nothing when pressed:
 #
 #   - every `target` names a page in this file;
-#   - every `action` is one the game handles: launch_race, launch_remix, quit,
+#   - every `action` is one the game handles: launch_race (with `launch = { ... }`
+#     naming its inputs by setting key, or without it for the RACE page's own
+#     launch), launch_remix (the same with RACE REMIX's keys), quit,
 #     save_pilot, new_pilot, rename_pilot, delete_pilot, open_campaign, multiplayer_local,
 #     lan_host, lan_join, online_open, online_create, online_join;
 #   - every `button` is an abstract button name;
@@ -481,10 +483,12 @@ values_from = "remix_variant"
 disabled_by = { setting = "race.mode", value = "zone" }
 
 [[page.entry]]
+id = "launch_remix"
 kind = "action"
 label = "START"
 string_id = "OAG_RACE_START"
-action = "launch_remix"
+action = "launch_race"
+launch = { track_title = "remix.track_title", track = "remix.track", craft_title = "remix.craft_title", team = "remix.team", variant = "remix.variant", mode = "race.mode", class = "race.class", difficulty = "ai.difficulty" }
 
 [[page.entry]]
 kind = "back"

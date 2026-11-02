@@ -280,6 +280,7 @@ fn the_campaign_row_is_worded_by_the_title_and_keeps_its_place() {
                 Entry::Run {
                     action: Action::OpenCampaign,
                     label,
+                    ..
                 } => Some((index, label.clone())),
                 _ => None,
             })
@@ -398,11 +399,11 @@ fn the_campaign_picker_appears_only_with_a_mod_campaign() {
     assert_eq!(page.title, "CAMPAIGNS");
     assert!(matches!(
         &page.entries[0],
-        Entry::Run { label, action: Action::OpenCampaign } if label == "RACE CAMPAIGN"
+        Entry::Run { label, action: Action::OpenCampaign, .. } if label == "RACE CAMPAIGN"
     ));
     assert!(matches!(
         &page.entries[1],
-        Entry::Run { label, action: Action::OpenCustomCampaign } if label == "NIGHT RUN"
+        Entry::Run { label, action: Action::OpenCustomCampaign, .. } if label == "NIGHT RUN"
     ));
     assert_eq!(
         page.meta[1].id.as_deref(),

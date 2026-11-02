@@ -14,6 +14,7 @@ mod expand;
 mod frame;
 mod hide;
 mod jump;
+mod launch;
 mod nav;
 mod navigation;
 mod pointer;

@@ -378,6 +378,7 @@ impl Definition {
             label: row.label.clone(),
             target: row.target.clone(),
             action: row.action.clone(),
+            launch: None,
             setting: None,
             values: Vec::new(),
             values_from: None,

@@ -520,6 +520,8 @@ impl Session {
             // the CLI's `--race` route nor the ordinary RACE page ever has to
             // resolve.
             menu::MenuEvent::Fired(menu::Action::LaunchRemix) => self.launch_remix(),
+            // A `launch_race` row that names its inputs by setting key (`session::launch_keys`).
+            menu::MenuEvent::Launch(keys) => self.launch_keyed(&keys),
             // QUIT always quits, parked race or not - it is a row a player
             // chose deliberately, not a fall-through.
             menu::MenuEvent::Fired(menu::Action::Quit) => {
