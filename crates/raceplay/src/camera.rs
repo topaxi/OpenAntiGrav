@@ -80,8 +80,8 @@ pub(super) fn chase_pos_length(from_disc: f32) -> f32 {
 /// # Every racing title scales its external eye by the same `0.75`
 ///
 /// The value is not Pulse PSP's alone, so [`oag_physics::hover::TARGET_GLOBAL_SCALE`]
-/// is the right number for every title this crate races. Read statically,
-/// 2026-10-01, from each binary's own rig and craft constructor (nothing but
+/// is the right number for every title this crate races. Read statically
+/// from each binary's own rig and craft constructor (nothing but
 /// Pulse PSP and Pulse PS2 were observed running, so the rest are readings, not measurements):
 ///
 /// | Title | Where the `0.75` is written | The rig that scales by it | Confidence |
@@ -604,7 +604,7 @@ impl Race {
     /// player's field-of-view setting applied.
     ///
     /// **`<ExternalCameraFar fov>`'s unit is vertical degrees**, settled
-    /// 2026-08-09 at confidence 94 against `g_camera_fov_degrees`
+    /// at confidence 94 against `g_camera_fov_degrees`
     /// (`0x08b34310`) on the running game, and read here as such.
     /// `oag_render::camera::projection` still names its parameter
     /// `fov_radians` precisely so that the conversion has to be written at a call
@@ -648,9 +648,8 @@ impl Race {
     /// [`oag_gameplay::spawn::Ship::place_at`] resets the body, so a posed craft
     /// has zero velocity and this term contributes exactly `0` - the posed frame
     /// renders at the authored field whatever the captured tick's speed was.
-    /// Pass the fov computed from that tick's own forward velocity. Any
-    /// comparison taken before 2026-08-09 is misregistered by 1.12-1.26x
-    /// depending on the tick's speed and has to be re-taken.
+    /// Pass the fov computed from that tick's own forward velocity. A
+    /// fixed fov instead misregisters by 1.12-1.26x depending on the tick's speed.
     #[must_use]
     pub fn projection(&self, aspect: f32, far: f32, setting: oag_display::display::Fov) -> Mat4 {
         oag_render::camera::projection(self.vertical_fov(aspect, setting), aspect, 1.0, far)

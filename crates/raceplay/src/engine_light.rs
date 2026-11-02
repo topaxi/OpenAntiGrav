@@ -74,7 +74,7 @@
 //! capture shows, and boosted (`1 + 10 * blend`, a 440-unit light a hand's
 //! breadth from the housing) the whole rear of the hull washes warm.
 //!
-//! **The runtime half is read live (2026-09-25, confidence 90).** The
+//! **The runtime half is read live (confidence 90).** The
 //! original selects `SVC1` for the hull. `Ship_ReloadModelForSkin`
 //! registers the hull `ship.vex` with flag word `0x1ccb`
 //! (`0x000dc044`), and `ModelRecord_Create` (`0x003f0348`) stores it at
@@ -87,7 +87,7 @@
 //! "The hull's `record+0xe4 & 0x800` bit is set at load". So the craft
 //! binding below is the original's. It is also what whitens the housing
 //! rim and inner rear panels at a boost, and **the original does the same**
-//! (2026-10-12, confidence 85). Its flare node matches our locator on
+//! (confidence 85). Its flare node matches our locator on
 //! `Assegai`, `Assegai_c1` and `Harimau`. An injected light lights the same
 //! panels on both sides. In a real boosted race frame, holding the player's
 //! light at its rest colour removes the original's own white rim (Assegai)
@@ -97,7 +97,7 @@
 //! The track floor and walls light up only when a craft is
 //! within `D` of them: landings, wall scrapes and banked sections.
 //!
-//! # The circuit's switch does not reach the hull (read live, 2026-10-26)
+//! # The circuit's switch does not reach the hull (read live)
 //!
 //! `Lighting.Enable spu vertex lights` is authored `0` on Metropia and Sol 2.
 //! The original's hull still draws its `SVC1` variant there, and the

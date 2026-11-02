@@ -12,8 +12,7 @@
 //!   Pulse, Pure, and 2048's twelve HD-derived guest teams) runs [`NORMAL_CHOSEN`],
 //!   and a title with no ramp runs [`RAMP_CHOSEN`].
 //!
-//! **Chosen, not measured**, all of it: the maintainer's ruling of 2026-10-10 that
-//! every title offers 2048's three levels. The numbers are 2048's own, copied from
+//! **Chosen, not measured**, all of it: every title offers 2048's three levels. The numbers are 2048's own, copied from
 //! its disc, so they are re-derivable: `pilot_assist_levels_ground_truth` reads them
 //! back and fails if either set drifts. Speed units need no scaling: a Venom's top
 //! speed under thrust is 116-125 units/s on Pulse, Pure, HD, 2048 and Omega alike

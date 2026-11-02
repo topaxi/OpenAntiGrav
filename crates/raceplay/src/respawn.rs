@@ -377,10 +377,8 @@ impl Race {
         if self.sim.respawns_in_a_row[slot] >= RESPAWN_GIVE_UP {
             self.sim.respawn_disabled[slot] = true;
             // **Two causes, and naming only one sent people to the wrong place.**
-            // This message used to say the pose was probably inside a `Reset`
-            // volume, which is the right guess when the reset trigger is what
-            // fired. Since the stall rescue landed there is a second, measured
-            // one: the recovery pose is on the racing line, and some circuits
+            // A pose inside a `Reset` volume is the right guess when the reset
+            // trigger fired. The second, measured cause: the recovery pose is on the racing line, and some circuits
             // author a line that runs *above* their own collision surface -
             // `05_Track` for 134 samples - so a craft put back there comes off
             // again in the same place, however many times it is rescued.

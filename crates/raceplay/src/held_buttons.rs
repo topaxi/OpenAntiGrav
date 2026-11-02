@@ -96,17 +96,15 @@ impl HeldButtons {
     /// pulsed against `--held`.
     ///
     /// The branch every headless leg that can be script-driven needs, kept in
-    /// one place so two legs cannot read it two different ways again - see
-    /// `race::capture`'s `advance_one_tick`, which drove this out, and
-    /// `--trace-out`'s `write_trace`, which never had it at all until this
-    /// existed - a scripted `--trace-out` run used to write a plausible CSV
-    /// of a craft that never moved, with no error.
+    /// one place so two legs cannot read it two different ways - see
+    /// `race::capture`'s `advance_one_tick` and `--trace-out`'s `write_trace`;
+    /// without it a scripted `--trace-out` run writes a plausible CSV of a craft
+    /// that never moved, with no error.
     ///
     /// A script's analog axes (`stick_x=0.5`) ride on top of its buttons: the keyboard path
     /// derives the digital axes, and the script's own values replace them in
     /// [`Self::snapshot`], so a half-deflected stick reaches the race as `oag-trace run` applies
-    /// it. Before 2026-10-21 only the buttons reached the keyboard and `stick_x=0.7` steered
-    /// nothing.
+    /// it. Without that, `stick_x=0.7` would steer nothing.
     pub fn advance(
         &mut self,
         script: Option<&oag_trace::script::Script>,

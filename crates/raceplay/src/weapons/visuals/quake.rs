@@ -51,7 +51,7 @@ impl Race {
     /// same fields [`oag_render::track::build_model`] already draws the
     /// ribbon's own edges from.
     ///
-    /// **What the `/ 50` scales, read 2026-09-24:** the instance's extent
+    /// **What the `/ 50` scales, read:** the instance's extent
     /// co-factor (`+0x2c`) and nothing else, so `WO_QUAKE`'s line emitters
     /// spread their fire edge to edge while each fireball keeps its authored
     /// size - see `oag_fx::psys::spawn`. Until then this fed the value
@@ -62,7 +62,7 @@ impl Race {
     /// by choice, until its own executable is read
     /// (`oag_fx::psys::Effect::without_extents`). **The frame's `X` is measured**,
     /// `normalize(B - A)`; its `Y` is the track's own up at the midpoint on
-    /// Pulse, read 2026-10-06 (see the `orient` call below), and world `+Y` on
+    /// Pulse, read (see the `orient` call below), and world `+Y` on
     /// Pure, whose anchor also sits `10` units above the road
     /// (`oag_title::QuakeLook`, `psp-pure-usa/quake.md`).
     ///
@@ -107,8 +107,7 @@ impl Race {
         self.view.quake_surface = Some(surface_wave(left, right, track_up, wave.age));
         let scale = (right - left).length() / 50.0;
         // The frame's `X` runs edge to edge: `Quake_Update`'s basis starts
-        // from `normalize(B - A)` as its first row (`0x0891da08`, read
-        // 2026-09-24).
+        // from `normalize(B - A)` as its first row (`0x0891da08`).
         let across = right - left;
 
         let Some(effect) = self.view.handles.get(Trigger::Quake).cloned() else {

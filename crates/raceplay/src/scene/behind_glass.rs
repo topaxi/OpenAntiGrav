@@ -3,7 +3,7 @@
 //!
 //! **What the original draws, read off Vineta K's RPCS3 captures** (each draw
 //! tied to its chunk by vertex offset; `docs/ghidra/functions/ps3-hdfury-eu/visibility.md`
-//! and `docs/formats/rcsmaterial.md`, 2026-10-07, confidence 88): before the
+//! and `docs/formats/rcsmaterial.md`, confidence 88): before the
 //! main view, a **640x360** target (VRAM `0xC1E50000`, surface clip
 //! `0x280 x 0x168`) is cleared and drawn with the sky's six faces, then every
 //! chunk whose render flag has `0x10`, under the main camera with a projection

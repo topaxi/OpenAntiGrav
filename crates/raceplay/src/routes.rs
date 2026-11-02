@@ -3,9 +3,8 @@
 //!
 //! **The law is recovered**: every craft flips a fair coin at every fork,
 //! independently, on entering the path before it, and holds the choice to the
-//! merge (`Ai_ChooseBranch`, `0x08854920`; `oag_ai::branch`). Before this, every
-//! craft followed the ring and so took the same side at every fork, which is
-//! what the maintainer saw.
+//! merge (`Ai_ChooseBranch`, `0x08854920`; `oag_ai::branch`). Without it every
+//! craft follows the ring and takes the same side at every fork.
 //!
 //! **How a route is driven is ours.** A route line is the ring from the
 //! route's merge round to its split, then the route's own samples: a full lap,
@@ -200,7 +199,7 @@ const MOUTH_CORRIDOR: f32 = 1.0;
 /// whole road at its fork, and until the two roads separate that includes the
 /// ring's side: on `05_Track` a Novice holding the far side of the route's
 /// corridor rode the ring's take-off ramp at route sample 112, flew a second,
-/// and met the divider at 161, every lap (`fork_trace`, 2026-10-05), and an
+/// and met the divider at 161, every lap (`fork_trace`), and an
 /// Ace field lost two craft there. Past the mouth the corridor is the
 /// author's again.
 fn narrow_the_mouth(
@@ -446,7 +445,7 @@ impl Race {
         // **Not in the air, ours.** Over a jump both lines are under the craft
         // at once, neither is "the track", and scoring them flipped a craft
         // between them every tick across `05_Track`'s first jump (328 switches
-        // in one five-minute run, 2026-10-05).
+        // in one five-minute run).
         if ship.physics.time_airborne > 0.0 {
             return;
         }

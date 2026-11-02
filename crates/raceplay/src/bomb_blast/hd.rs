@@ -17,7 +17,7 @@
 //! the executable's own instructions**, not only by reading them: a scratch
 //! PowerPC interpreter drove `0x00151538`, `0x001503d8` and `0x001512f8` over
 //! random cameras, positions and orientations and this module's arithmetic
-//! (`weapons.md`, 2026-10-07) agrees with it to 4e-3 on rows of about ten
+//! (`weapons.md`) agrees with it to 4e-3 on rows of about ten
 //! units - the residue is the executable's own polynomial `sin`/`cos`.
 //!
 //! # What is read, and what this substitutes
@@ -117,8 +117,7 @@ const RIPPLE: [[f32; 5]; RIPPLES] = [
 /// (`{6, 1, 13, 3, 2, 18, ...}`), `w` the table's `2.0` or its `6.0` once `age`
 /// passes `18`; the bomb's rows times `s` become the halo's matrix. A sawtooth
 /// from `3` to `16` every `0.5` s of the bomb's `age`, then (past `18` s) every
-/// `1/6` s. Confidence 80 for the period (`weapons.md`, 2026-10-07,
-/// `hd-bomb-match`): the instructions are read and the film's flash period
+/// `1/6` s. Confidence 80 for the period (`weapons.md`): the instructions are read and the film's flash period
 /// agrees; the AltiVec mask that selects the rows is not read.
 pub(crate) fn halo_scale(age: f32) -> f32 {
     const PERIOD_RATE: f32 = 2.0;

@@ -14,7 +14,7 @@
 //! lands below the new window and is an immediate jump to its start.
 //!
 //! **What each window shows was measured on the original** (RPCS3, Talon's
-//! Junction, 2026-10-04, each window's bounds written over the pre-lap
+//! Junction, each window's bounds written over the pre-lap
 //! window's from the grid): the `FX-350` sponsor art animating onto the teal
 //! board between laps, a strobing `FINAL LAP` on the lap before the last, and
 //! a scrolling chequered flag on the last. All three are the asset's own
@@ -129,7 +129,7 @@ impl BoardWindow {
     /// under `windows`' selection.
     ///
     /// HD's counter is 0 on the grid and 1 from the first line crossing:
-    /// **read live** on RPCS3 (2026-10-04: `ship+0x7810 = 0`, `+0x7814 = 2`
+    /// **read live** on RPCS3 (`ship+0x7810 = 0`, `+0x7814 = 2`
     /// with the craft parked behind the line after the release) and in the
     /// ship constructor (`0x000ddd58` stores both). This build's
     /// [`Standing::lap`] is already 1 there, and the first crossing is the one

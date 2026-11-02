@@ -13,7 +13,7 @@
 //!
 //! # The clock starts 92 ticks in, so `GO` lands on the release
 //!
-//! **Measured against the original, 2026-09-29** (Time Trial, Talon's Junction,
+//! **Measured against the original** (Time Trial, Talon's Junction,
 //! `pulse-psp-usa.chd` in PPSSPP; one screenshot per tick through the countdown,
 //! the tick numbered by a breakpoint in `Ship_UpdateCraft`, on four runs that
 //! agree). The gantry does not start its timeline when the race starts:
@@ -37,8 +37,8 @@
 //! This **retires** the earlier reading of this module and of
 //! `docs/rendering/start-gantry.md`, which drove the gantry off `world.tick / 60`
 //! from tick 0 on the argument that the timeline and the countdown "share a
-//! zero", and so drew `GO` about 1.5 s before the craft could move (the
-//! maintainer's "noticeable delay after `GO`"). They do not share a zero:
+//! zero", and so drew `GO` about 1.5 s before the craft could move (a
+//! noticeable delay after `GO`). They do not share a zero:
 //! `g_ingame->0x40`, the clock that argument leaned on, is not reset by a
 //! restart (it read 41.9 s and 77.0 s at the start of two captures) and is not
 //! what this timeline rides. Nothing else on the track moves - the scenery's own
@@ -60,7 +60,7 @@
 //! and the stop at [`CLOCK_LIMIT`], which now holds only on a clock with no
 //! windows (every title that inherits Pulse's rule unread).
 //!
-//! **Measured against the original, 2026-09-30** (PPSSPP, Talon's Junction,
+//! **Measured against the original** (PPSSPP, Talon's Junction,
 //! craft stationary, about 21 s of race clock): the board shows a strobing `GO`
 //! throughout. It never replays `3 2 1`, the panel never leaves the aperture,
 //! and the `Board` dressing never arrives - the pre-lap window, which ends at
@@ -124,7 +124,7 @@ pub fn held_within(seconds: f32, (from, to): (f32, f32)) -> f32 {
 ///
 /// **`start_tick` is [`CLOCK_START_TICK`] on Pulse - measured - and, on every
 /// other title, the tick [`Clock::inherited`] derives from that title's own
-/// `GO` edge: Pulse's rule - measured on HD since 2026-10-04, unmeasured
+/// `GO` edge: Pulse's rule - measured on HD, unmeasured
 /// elsewhere.** Pulse's and HD's countdowns were captured; HD's and 2048's gantry files are different timelines (2048's own
 /// `GO` slides in at frame 200, not 181), so the literal 92 is not copied, the
 /// rule is. A title whose edge cannot be found keeps `0` - chosen, not
@@ -405,9 +405,9 @@ pub(super) fn place_card(
 /// Takes the card's model out of the stand-in rig.
 ///
 /// HD's slot 8 card passes are `TEX; MUL H0.xyz, H0, {1,1,1,1}` with no
-/// lighting term (RPCS3, 2026-10-18, final-lap and chequered windows, fragment
+/// lighting term (RPCS3, final-lap and chequered windows, fragment
 /// programs `0xb45941`, `0xb459c1`, `0xb45a41`); Pulse's have `LIGHTINGENABLE` 0
-/// (PPSSPP GE dumps, 2026-10-18): the track's `billboard8` quad lights the card
+/// (PPSSPP GE dumps): the track's `billboard8` quad lights the card
 /// once, afterwards. See [`oag_title::adverts::Adverts::card_unlit`]. A model vertex with no colour set is `lit`
 /// and takes the stand-in key and fill rig, which left a white texel at 131 on the
 /// card (0.514) where the original's reads 255.

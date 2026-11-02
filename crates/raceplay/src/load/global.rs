@@ -165,7 +165,7 @@ pub(super) fn resolve(
     // the trigger treats a zero as "grant once and never again on this pad"
     // rather than trusting it; see `Race::test_weapon_pads`.
     //
-    // **Eliminator reads a different figure, from 2026-09-08.**
+    // **Eliminator reads a different figure.**
     // `<WeaponPad elimination_refresh_time>` is an order of magnitude shorter
     // than the ordinary `refresh_time` on both shipped PSP discs (`0.05`
     // against `0.55`) - `oag_tables::handling::global::WeaponPad`'s own doc

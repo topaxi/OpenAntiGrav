@@ -67,11 +67,10 @@ pub(super) fn hud_roots(
 /// this function's, for the reason `oag_pulse::race` states about the Zone
 /// hull: `Mode` is the engine's type and a title package must not grow one.
 ///
-/// Until 2026-08-18 this returned `oag_pulse`'s names for every title, and HD
-/// worked only because PSARC path normalisation folds
-/// `Data\XML\Arcade_HUD.xml` onto the `/data/xml/arcade_hud.xml` its manifest
-/// stores - so HD's own tables had no reader at all. Finding S2 of that day's
-/// review. The row where the luck ran out is **speed lap**: neither PSP disc
+/// `oag_pulse`'s names would work for HD only because PSARC path
+/// normalisation folds `Data\XML\Arcade_HUD.xml` onto the
+/// `/data/xml/arcade_hud.xml` its manifest stores, leaving HD's own tables
+/// unread. The row where that breaks is **speed lap**: neither PSP disc
 /// ships a `SpeedLap_HUD.xml`, so both draw the time trial's, while HD ships a
 /// separate one that nothing here could ask for.
 ///
@@ -253,12 +252,12 @@ pub(super) fn load_hud(
 
     // The role names are this *title's* own, through `oag_title::HudArt` -
     // not the shared `oag_ui::language::roles::HUD`/`HUD_SMALL` literals
-    // every source used to be asked for regardless of what its own plugins
-    // actually name. That literal ask is what drew 2048's HUD in the 5x7
+    // asked of every source regardless of what its own plugins
+    // actually name. That literal ask draws 2048's HUD in the 5x7
     // fallback: none of its plugins fill `"HUD"`, they fill `"2048HUD"`
     // instead, and two of its seventeen plugins (`korean`,
     // `traditionalchinese`) carry a *leftover* `"HUD"`/`"HUDSmall"` role
-    // pointing at files 2048 does not ship - which the old literal ask could
+    // pointing at files 2048 does not ship - which the literal ask could
     // pick up ahead of the plugin the player actually chose. See
     // `oag_title::HudArt::hud_font_role`.
     let font = hud_font(
@@ -588,9 +587,8 @@ pub fn splice_assist_indicator(
 /// and still pinned by `the_layouts_name_at_most_one_texture` - so on those this
 /// builds the same one-image sheet it always did. HD's eighteen name twelve
 /// between them, up to six in one layout: 45 of the arcade HUD's 138 sprites
-/// name something other than `HUD_Components.gtf`, and until 2026-08-25 all 45
-/// were offset by `HUD_Components`'s placement and sampled it at coordinates
-/// meant for a different texture.
+/// name something other than `HUD_Components.gtf`, and each must be placed by
+/// its own texture, not `HUD_Components`'s.
 ///
 /// Keyed by the reference the layout spells, which is what
 /// [`oag_hud::sprite_draw`] looks up. Which entry that reference resolves to
@@ -976,11 +974,10 @@ fn read_hud_texture(
 ///
 /// `preferred` is the chosen language - the same one [`load_hud`] resolved
 /// `strings` from - asked for `role` first; `role_font`'s own fallback across
-/// every plugin only fires when the chosen one names nothing for it. **This
-/// used to scan every plugin in source order with no preference at all**,
-/// which is the same bug `load_hud`'s old `None` was: a HUD asking for the
-/// caption face got whichever plugin happened to be first, not the one the
-/// player picked.
+/// every plugin only fires when the chosen one names nothing for it. **Scanning
+/// every plugin in source order with no preference** would give a HUD asking
+/// for the caption face whichever plugin was first, not the one the player
+/// picked.
 ///
 /// A source whose plugins fill in no such slot draws in 5x7 and says which role
 /// went unanswered - see `oag_ui::language::roles` for what each disc fills in.

@@ -2,7 +2,7 @@
 //! explosion objects (vtable `0x00864b38`), each one `HD_missile_explosion.vex`
 //! played on its own keys.
 //!
-//! # What is read (`weapons.md`, 2026-10-07, `hd-weapon-fx`)
+//! # What is read (`weapons.md`)
 //!
 //! - **Who enters the pool.** Only a missile that reaches a craft: the
 //!   craft-hit branch of `0x001423a8` takes an entry, a wall never does.

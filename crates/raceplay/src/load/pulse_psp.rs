@@ -144,10 +144,8 @@ fn place_scenery_fx(loaded: &mut Loaded, track_blob: &[u8], nodes: &[oag_vex::ve
 ///
 /// Nothing in Zone: `TrackStartup_Parse` does not build the weather there.
 ///
-/// Outpost 7's `WO_SNOW` plays too. It was withheld until 2026-10-04 because
-/// ours drew no flakes past its first frames while the original kept 64: the
-/// emitter sets the immortal flag `0x800`, which `oag_fx::psys` did not
-/// honour. With it honoured, its faint speckle matches the original's A/B at
+/// Outpost 7's `WO_SNOW` plays too. The
+/// emitter sets the immortal flag `0x800`, which `oag_fx::psys` honours, so the original's 64 flakes persist; its faint speckle matches the original's A/B at
 /// the same spot. See `docs/ghidra/functions/psp-pulse-usa/weather.md`.
 fn place_weather(
     loaded: &mut Loaded,

@@ -13,7 +13,7 @@
 //!
 //! **The default is [`Recording::Interleaved`], one view after another, on every target.**
 //! Measured on an Intel Core Ultra 7 265H notebook (NVIDIA RTX PRO 2000, `powersave` governor,
-//! pinned to the P-cores, minimum of three interleaved rounds, 2026-10-15), threaded recording
+//! pinned to the P-cores, minimum of three interleaved rounds), threaded recording
 //! cost 10 to 100% more CPU a frame than interleaved: Pulse two views 1,527 against 2,025 us, HD
 //! two views 2,093 against 2,521, HD four 3,633 against 4,033, Pure two views 593 against 1,192
 //! (`docs/tools/render-bench.md`, "Threaded views"). The loss is the second core, not contention:
@@ -24,7 +24,7 @@
 //! clock up for. **[`Recording::Threaded`] stays selectable** (`OAG_SPLIT_RECORDING=threaded`,
 //! [`Scene::set_split_recording`]) for a machine where it measures faster, the Steam Deck first.
 //!
-//! **[`Recording::Overlapped`]** (2026-10-16) records view `k` on a worker while view `k + 1` is
+//! **[`Recording::Overlapped`]** records view `k` on a worker while view `k + 1` is
 //! prepared. It lost more than threads did on the same notebook (Pulse two views 1,272 against
 //! 2,123 us, HD two views 1,987 against 4,177): pinned to one core it is within 7 to 11 % of
 //! interleaved, so the loss is a worker woken once per view (`docs/tools/render-bench.md`,

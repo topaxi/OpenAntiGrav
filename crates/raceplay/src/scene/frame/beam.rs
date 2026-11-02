@@ -1,8 +1,7 @@
 //! The LeachBeam ribbon's own per-frame upload and draw, pulled out of
 //! `frame.rs` under the 1,000-line rule in `scripts/check-file-size.py`, the
 //! seam `frame/shadow.rs` already set - a move, with no behaviour change.
-//! `write_leach_ball` and `draw_leach_ball` joined it 2026-09-25: a second
-//! LeachBeam drawable, not a move.
+//! `write_leach_ball` and `draw_leach_ball` are a second LeachBeam drawable.
 
 use oag_core::math::Mat4;
 use oag_mesh::mesh_render;

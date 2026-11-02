@@ -65,7 +65,7 @@ impl Race {
     ///
     /// `Weapons_DispatchFire` calls `Weapon_FireQuake` on every frame the request
     /// bit is set, so the press fires on the first dispatch after the busy byte
-    /// clears: measured on Pulse PSP (2026-11-02) as the same dispatch that first
+    /// clears: measured on Pulse PSP as the same dispatch that first
     /// reads it clear, one frame after the last span's update. Ours runs before
     /// `advance_quake` retires a wave, so a wave retired on tick N relaunches on
     /// N+1. No cue: `QUAKELAUNCH` belongs to the press.
@@ -182,7 +182,7 @@ impl Race {
         // distance (`Wave::raw_lift`), unsmoothed as the original's is. Mines
         // only: the Bomb pool's own
         // update was not read for a Quake test, and one is not assumed. See
-        // `docs/ghidra/functions/psp-pulse-usa/mine.md`, 2026-09-16.
+        // `docs/ghidra/functions/psp-pulse-usa/mine.md`.
         let tripped: Vec<(usize, Vec3)> = self
             .sim
             .world

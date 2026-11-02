@@ -7,10 +7,8 @@ use oag_race::sight::Sight;
 /// Where the lock-on reticle lives and which law it runs.
 ///
 /// Both halves are title facts (the HUD's authored space, the title's sight
-/// dialect), read once at load. Before 2026-10-14 they were two setters on `Race`
-/// that the windowed game and the capture path called and nothing else did, so a
-/// race started without them ran Pulse's LeachBeam under the Missile's law (a lock
-/// at 48 ticks instead of 20).
+/// dialect), read once at load. Without them a race would run Pulse's LeachBeam under the
+/// Missile's law (a lock at 48 ticks instead of 20).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Sighting {
     /// The grid the **simulation's** locks are in: the title's whole HUD space,

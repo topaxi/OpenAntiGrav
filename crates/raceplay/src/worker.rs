@@ -3,8 +3,8 @@
 //!
 //! # Why this exists at all
 //!
-//! `Session::launch_race` used to be `self.stalled = true; race::load(options)?`
-//! on the frame thread. Measured across every circuit on all four discs in hand,
+//! Loading on the frame thread (`self.stalled = true; race::load(options)?`) is
+//! too slow. Measured across every circuit on all four discs in hand,
 //! that call is **1.5 to 5 seconds** - the PS3's circuits are the slow end - and
 //! for all of it the event loop is not pumping. A window that stops answering
 //! the compositor for four seconds is not a window that looks busy; on some it

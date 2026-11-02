@@ -39,7 +39,7 @@ pub(super) use visuals::{
 
 /// How far behind the body a title that lays from the craft's rear anchor
 /// starts its Mine or Bomb, world units. Pure's `Mine_Init` and `Bomb_Init`
-/// take the anchor matrix at `holder+0xa0`; live on PPSSPP (2026-10-08, Time
+/// take the anchor matrix at `holder+0xa0`; live on PPSSPP (Time
 /// Trial, Feisar, Vineta K and a second circuit) its translation sat
 /// `4.875` and `4.87` behind the body matrix at `ship+0x40` along the craft's
 /// own `-forward`, `6.5` hull units at the `0.75` craft scale, while the
@@ -190,7 +190,7 @@ impl Race {
                         return;
                     };
                     self.sim.world.ships[slot].physics.turbo_timer = simple.time;
-                    // **Recovered, 2026-10-06.** `Turbo_Fire` (`0x088614c4`) ends
+                    // **Recovered.** `Turbo_Fire` (`0x088614c4`) ends
                     // in `FUN_0890514c`, which stores `0.8f` to the exhaust
                     // flare's `+0xb8` and plays `TURBO` - the speed pad's own
                     // `ExhaustFlare_OnSpeedupPad` (`0x08904f10`) body with another
@@ -476,7 +476,7 @@ impl Race {
                     // unlocked one - see `Cue::Leach` and `Cue::LeachFail`.
                     //
                     // **The player's lock needs the reticle's lock, under the Pulse
-                    // law** (read 2026-10-01): `Ship_FireHeldWeapon` (`0x08844ae8`)
+                    // law** (read): `Ship_FireHeldWeapon` (`0x08844ae8`)
                     // passes `Weapon_RequestFire` the target only when
                     // `entity+0x860 & 1`, the flag `HudSight_UpdateLeachBeam` sets
                     // when its extent reaches `6.0`, about `0.34` s after a first
@@ -541,7 +541,7 @@ impl Race {
                     // keeps the pickup rather than spending it on nothing, and
                     // **stays armed**: `Race::fire_armed_quakes` launches it
                     // the tick after the live wave ends (measured on Pulse
-                    // PSP, 2026-11-02). See
+                    // PSP). See
                     // `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
                     if self.sim.world.quake.is_some() {
                         self.sim.world.ships[slot].pickup.quake_armed = true;
@@ -689,7 +689,7 @@ impl Race {
     /// button is held down.
     ///
     /// **The countdown only advances while fire is held**, which is what makes
-    /// this weapon behave as the maintainer describes the original: hold to
+    /// this weapon behave as the original does: hold to
     /// fire at the authored `rate`, or tap repeatedly for a few frames of
     /// countdown per tap. `Cannon_UpdateReload` (`0x0883f424`) opens with
     /// `if (*(*(entity+0x94)+0x78) + 0x16 == 0) return;`, and that byte is the
@@ -753,9 +753,8 @@ impl Race {
         let places = self.places();
         for slot in 0..self.sim.world.ship_count as usize {
             // A human slot follows its own pad; every other slot asks its own
-            // driver. This read the literal slot 0 until 2026-09-16 - the same
-            // single slot while slot 0 is the only human, and now the question
-            // the grid actually answers.
+            // driver. Not the literal slot 0, which is the same
+            // only while slot 0 is the only human.
             let holds_fire = if self.sim.world.controllers[slot].is_human() {
                 // That slot's own held state. An autopilot blend takes the pad
                 // out of the loop entirely, exactly as above.
@@ -835,7 +834,7 @@ impl Race {
         // banked craft is drawn rolled with it. Measured basis `(up x f, up, f)`
         // only on a near-flat track, where it cannot tell the two apart; that it
         // is the craft's up on a bank is the anchor copy read, not measured
-        // (`cannon-quake-leachbeam.md`, 2026-09-24).
+        // (`cannon-quake-leachbeam.md`).
         if self.sim.world.projectiles.spawn_riding(
             oag_tables::weapons::Weapon::Cannon,
             position,

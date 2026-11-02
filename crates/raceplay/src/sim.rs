@@ -235,7 +235,7 @@ pub struct RaceSim {
     /// all when the race has none. See [`crate::extensions`].
     pub(super) extensions: crate::extensions::Extensions,
     /// How many ticks each craft has spent **in contact with a wall**: every
-    /// opponent, and since 2026-10-19 every person's craft too
+    /// opponent and every person's craft
     /// (`Race::count_wall_contact`, from `Race::step_player` as well).
     ///
     /// Kept here, and outside [`Race::state_hash`], for exactly the reason

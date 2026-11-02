@@ -265,7 +265,7 @@ pub(super) fn flash_step(timer: f32, current: f32, dt: f32, dropped: bool) -> (f
 /// and the next blink resumes from that phase rather than starting fresh.
 /// Wraps to `0.0` once it exceeds `1.0`, the same up-counting shape
 /// [`shield_flash_step`] uses for `hud+0x11c`. See
-/// `docs/ghidra/functions/psp-pulse-usa/shield.md#hud_updateenergybar-the-absorb-flash-2026-09-25`.
+/// `docs/ghidra/functions/psp-pulse-usa/shield.md` ("HUD_UpdateEnergyBar: the absorb flash").
 pub(super) fn shield_blink_step(timer: f32, blinking: bool, dt: f32) -> f32 {
     if !blinking {
         return timer;

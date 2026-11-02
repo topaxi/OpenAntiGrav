@@ -32,9 +32,9 @@
 //! gaps of 13, 10, 14, 25, 26, 29 and 30_Track, so a craft cannot be put back
 //! over the hole it fell into.
 //!
-//! This project used to put the craft at rest on the racing line at the
-//! sample nearest where it fell (confidence 40, a placeholder), which on
-//! `13_Track` is over the gap: it fell straight back in, 389 times in 9,000
+//! Putting the craft at rest on the racing line at the
+//! sample nearest where it fell (confidence 40, a placeholder) is over the gap
+//! on `13_Track`: it fell straight back in, 389 times in 9,000
 //! ticks for the original driver's field with the player parked.
 //!
 //! Three departures, recorded rather than hidden: the locate is this

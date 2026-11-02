@@ -750,7 +750,7 @@ impl Scene {
         // `TEXMAPMODE` 0 (settled live - mesh-draw.md, "The plume is replayed
         // under `TEXMAPMODE` 0"), sampling its authored coordinates through
         // the keyframed `TEXSCALE`/`TEXOFFSET` transform the file itself
-        // carries. This replaced `oag_render::texgen` here 2026-08-10;
+        // carries. Not `oag_render::texgen`:
         // texgen's environment mapping is real but belongs to the
         // transparent-pass bracket, which the plume is not inside.
         //

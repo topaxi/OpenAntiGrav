@@ -1,11 +1,10 @@
 //! The original's own opponent (`oag_ai::original`), rubber banding included,
 //! flown on each craft's own team's physics (`Setup::opponent_handling`; the
 //! controller reads no handling, the step does): the AI every race with
-//! opponents flies by default (maintainer, 2026-10-13), until this project's
-//! own driver (`oag_ai::Driver`) is solid. It began as the campaign's third AI
-//! mode (2026-10-11), when only a campaign launch switched it on.
+//! opponents flies by default, until this project's
+//! own driver (`oag_ai::Driver`) is solid.
 //!
-//! **Still never a player setting** (the 2026-10-11 rule). What changed is who
+//! **Still never a player setting** (opponents race on this project's own driver). What changed is who
 //! asks: the composition root (`oag_game::ai_choice`) calls
 //! [`Race::use_original_ai`] for every race that fields opponents, and the only
 //! way back to this project's driver is the developer flag `oag-game --ai

@@ -8,7 +8,7 @@
 //! the identical shape. A move, with no behaviour change to the Rocket's own
 //! reporting.
 //!
-//! **Per-title since 2026-09-17.** Every entry name comes from the caller's
+//! **Per-title.** Every entry name comes from the caller's
 //! own `oag_title::weapons::WeaponModels`, not from a Pulse-spelled constant
 //! in this crate - `oag_raceplay::ROCKET_MODEL_ENTRY` and friends were
 //! reached for on every source, so a Wipeout HD race asked for
@@ -176,22 +176,19 @@ pub(super) fn load(
 /// weapon models: the Plasma's ring, sphere, halo and ball, the Rocket and
 /// the Bomb qualify; the Mine and the Cannon round do not.
 ///
-/// **Every HD weapon model asks for it since 2026-09-24.** Culling is only
+/// **Every HD weapon model asks for it.** Culling is only
 /// right under a placement matrix that is a rotation - a reflection reverses
 /// every triangle's winding on screen, and the cull then hides exactly the
-/// faces the original shows. Until that date
-/// `Race::projectile_model_matrices`, which places the Rocket, the Cannon
-/// round and the bolt's head, built a reflection, so only the Plasma
-/// explosion (placed by `blast_models::facing_away`, a rotation) could ask.
-/// Both are rotations now. The Mine and the Cannon round still draw both
+/// faces the original shows. `Race::projectile_model_matrices` (the Rocket,
+/// the Cannon round, the bolt's head) and `blast_models::facing_away` (the
+/// Plasma explosion) both place rotations. The Mine and the Cannon round still draw both
 /// faces: their materials disagree on the bit, and this function refuses a
 /// mixed model rather than half-applying it.
 ///
 /// This matters for the Plasma's own explosion in particular: its sphere
 /// and ring are each authored as **two** shells, one wound outward and one
 /// inward, and the halo as one disc facing `-Z` - which only reads as the
-/// original's picture once the back faces go. See `plasma.md`'s 2026-09-23
-/// section.
+/// original's picture once the back faces go. See `plasma.md`.
 fn cull_as_authored(model: &mut Model, states: &[Option<u32>]) -> bool {
     const CULL_FACE_ENABLE: u32 = 1 << 4;
     let culled = !states.is_empty()
@@ -425,8 +422,7 @@ pub(super) fn load_bodies(
     // body above. `cull` is asked for on the same grounds the Rocket's is,
     // and `cull_as_authored` declines it anyway: the ball's material culls
     // (state bit 4) and the bloomring's does not, and a mixed model draws
-    // both faces. **Drawn since 2026-09-25**, when `mesh::rcs::rim_glow`
-    // gave its `hd_leachbeam_ball_glow` program the shading it computes; the
+    // both faces. **Drawn**: `mesh::rcs::rim_glow` gives its `hd_leachbeam_ball_glow` program the shading it computes; the
     // bloomring's texture-only program already drew through
     // `slots::EMISSIVE`. See docs/rendering/hd-unlit-programs.md.
     let leach_ball = one(models.leachbeam_ball, "a leachbeam ball", true);

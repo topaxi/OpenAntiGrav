@@ -2,9 +2,7 @@
 //! test, and the HUD's readout.
 //!
 //! Split out of `race.rs` under the 1,000-line rule in
-//! `scripts/check-file-size.py`; a move, with no behaviour change. The
-//! [`Telemetry`] struct itself followed it out of the root on 2026-08-23, for
-//! the same reason and to the module it was always named for.
+//! `scripts/check-file-size.py`; a move, with no behaviour change.
 
 use super::*;
 
@@ -136,9 +134,7 @@ impl Race {
         let mut readout = oag_hud::Readout {
             speed_kmh: ship.physics.body.linear_velocity.length() * oag_fx::exhaust::SPEED_TO_KMH,
             // The ship's own pool, which wall contact spends and absorbing a
-            // pickup pays back into - `oag_physics::damage`. (This comment said
-            // "nothing depletes this yet" until 2026-08-11, three subsystems
-            // after it stopped being true.)
+            // pickup pays back into - `oag_physics::damage`.
             shield: ship.physics.shield,
             shield_max: ship.handling.dimensions.shield,
             lap: if counted {

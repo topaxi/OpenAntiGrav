@@ -41,7 +41,7 @@ pub const START_TICKS: u64 = 61;
 /// Ticks after a Single Race wreck's `race ended` tick on which the director takes the camera
 /// from the destroy camera: the wreck's state-6 timer (`entity + 0x874`, `2.0` s from the
 /// explosion) crosses zero, `Camera_UpdateSpectator` clears its subject and picks another craft.
-/// **Measured** (PPSSPP, 2026-10-02, two runs): the timer crossed zero on `k+240` after the
+/// **Measured** (PPSSPP, two runs): the timer crossed zero on `k+240` after the
 /// injected `Ship_SetState(4)` (`0.5 + 1.5 + 2.0` s), the same frame the subject changed, and the
 /// mode state went to 3 on `k+31`; this port's race ends on the tick state 5 begins, `k+30`, so
 /// the hand-off is `210` ticks on (pinned to the call by `the_director_starts_240_ticks_after_the_wreck_call`). The picture changes *later*, at the first cut: see

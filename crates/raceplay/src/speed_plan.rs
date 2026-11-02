@@ -118,7 +118,7 @@ impl RaceSim {
 /// 3. every other hull's copy of each route's plan ([`Race::hull_routes_for`]),
 ///    which needs that route's plan from stage 2.
 ///
-/// Until 2026-10-31 stage 2 learned the routes one after another and then the hulls;
+/// Stage 2 learns routes and hulls overlapped;
 /// written back in route and hull order as then. See `docs/gameplay/ai.md`, "The
 /// speed plan".
 pub(super) fn learn_speed_plans(sim: &mut RaceSim) {
@@ -165,7 +165,7 @@ pub(super) fn learn_speed_plans(sim: &mut RaceSim) {
         .collect();
 }
 
-/// [`learn_speed_plans`] as it ran before 2026-10-31: the routes one after
+/// [`learn_speed_plans`] as it ran serially: the routes one after
 /// another, then each hull on a thread of its own, its ring and then its route
 /// copies. What the overlapped learner is checked against.
 #[cfg(test)]
@@ -253,7 +253,7 @@ pub(super) struct SpeedPlanJob {
 /// spline, the collision world, the pads, the class's gravity, the laws, the
 /// damage rules, `dt`, the rescue distance) is fixed at [`Race::start`].
 ///
-/// **Not the state hash**, which it was until 2026-10-31: the launch's own
+/// **Not the state hash**: the launch's own
 /// setters move that without touching a plan input. A mod event's pilot writes
 /// each opponent's `driver.pilot` ([`Race::set_opponent_pilot`]), and the
 /// original driver ([`Race::use_original_ai`]) only decides whether a plan is
@@ -880,8 +880,8 @@ impl Race {
     /// with the fewest wall ticks, the yaw share alone on a tie or where none
     /// laps at all.
     ///
-    /// Until 2026-10-21 the reference at its yaw share was followed unchecked.
-    /// On Pulse `06_Track` RAPIER the lone Triakis followed it at `0.774` in 14
+    /// Following the reference at its yaw share unchecked is wrong:
+    /// on Pulse `06_Track` RAPIER the lone Triakis followed it at `0.774` in 14
     /// of the clean-lap gate's 45 perturbed runs and touched the wall 260-850
     /// ticks at samples 800-960, at full lock and drifting wide, where the
     /// reference hull's own verification lap went 160-183 units/s
@@ -1032,7 +1032,7 @@ impl Race {
     /// any wall contact (stricter than the ring, which may keep a plan that
     /// scrapes), **or clean without ever completing its verification lap** - a craft that
     /// stalls without touching a wall is neither a failure nor a respawn, and
-    /// that is what `07_Track`'s centre ramp does to ours (2026-10-05). A route
+    /// that is what `07_Track`'s centre ramp does to ours. A route
     /// with no plan is not offered to the coin at all - see
     /// `Race::steer_branching`.
     ///

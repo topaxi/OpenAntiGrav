@@ -558,7 +558,7 @@ pub(crate) fn track_blended<'a>(depth_plane: [f32; 4]) -> Lists<'a> {
 ///
 /// **Only the prepass reads it, and that is why it moves no pixel.** The depth `Less` leaves
 /// is the nearest surface whatever order it arrives in.
-/// Sorting the shading itself was tried first, 2026-10-03: 44.1 -> 37.4 ms at 3200x1800 on an
+/// Sorting the shading itself was slower to land: 44.1 -> 37.4 ms at 3200x1800 on an
 /// integrated GPU, at the cost of 1 to 419 pixels a capture where coplanar ties resolved to the
 /// nearer batch. The prepass took that to 32.4 ms with the original's picture back; the shading
 /// that follows keeps the model's own order. `sort_by` is stable, so equal keys keep the model's

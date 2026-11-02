@@ -91,9 +91,7 @@
 //! This file is the root: the constants, [`Telemetry`], the [`Race`] struct
 //! itself, and the re-exports that keep every path a caller already uses. The
 //! work is in the modules beside it, and each one is a move out of this file
-//! rather than a rewrite - the split landed on 2026-08-16 under the 1,000-line
-//! rule in `scripts/check-file-size.py`, with `just test` reporting the same
-//! 1,896 passed / 223 skipped either side of it.
+//! rather than a rewrite.
 //!
 //! Loading a race: `options` (what is asked for and what comes back), `load`
 //! (the read itself), `assets`, `hud`, `spawn`.
@@ -472,7 +470,7 @@ pub const AUTHORED_ASPECT: f32 = oag_display::space::SCREEN.0 / oag_display::spa
 /// Degrees of extra field of view per unit/s of **forward** speed.
 ///
 /// A recovered constant, not a taste decision, and it is the whole of a
-/// behaviour this project was missing until 2026-08-09: the original's field
+/// behaviour: the original's field
 /// widens as the craft goes faster. It is a code literal at `0x08a7b6a0`, read
 /// at the top of `FUN_088455ec` as
 /// `craft[0x790] = dot(fwd, vel) * 0.075 + craft[0x7c]`, and `craft+0x790` is
@@ -623,8 +621,7 @@ pub const BOMB_MODEL_ENTRY: &str = r"Data\Weapons\Pulse_Bomb.vex";
 /// `Cannon_muzzle_flash.mip` (`Cannon_LoadTextures`, `0x08864b00`) - see
 /// [`CANNON_BOLT_TEXTURE_ENTRY`]/[`CANNON_MUZZLE_FLASH_TEXTURE_ENTRY`],
 /// which list is which, and both quads' own geometry, now recovered and
-/// drawn; see `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`,
-/// the 2026-09-17 section.
+/// drawn; see `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
 pub const CANNON_MODEL_ENTRY: &str = r"Data\Weapons\pulse_muzzleflash.vex";
 
 /// The archive entry the Cannon round's bolt streak textures from.
@@ -721,10 +718,7 @@ pub use oag_gameplay::spawn::{box_inertia, capped_spawn_height, rig_spawn_height
 /// A race in progress: the world, the track it is on, and the camera behind it.
 ///
 /// **Two halves and nothing else.** [`RaceSim`] decides what happens;
-/// [`RaceView`] exists so it can be seen and heard. Until 2026-09-09 this was
-/// one struct of ninety-seven fields in which the two were interleaved, and the
-/// only thing keeping a renderer handle out of the simulation was that nobody
-/// had put one there. The eighteen `impl Race` blocks are unchanged and stay
+/// [`RaceView`] exists so it can be seen and heard, so no renderer handle can reach the simulation. The eighteen `impl Race` blocks are unchanged and stay
 /// here: most of them read both halves - drawing an exhaust needs a ship's
 /// position, and raising a cue needs the bank - and that is what `Race` is for.
 /// The one that did not, [`RaceSim::state_hash`], moved.

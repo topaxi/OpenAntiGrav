@@ -344,7 +344,7 @@ pub(super) fn read_envsettings(
 ///
 /// **This is the registrar's own persistence, read live rather than
 /// invented.** `renderer.md`'s "The resolve's Fury circuits carry the front
-/// end's own Tone triple" section (2026-09-13) found Sol 2's race running its
+/// end's own Tone triple" section found Sol 2's race running its
 /// exposure resolve at `(20, 3, 4)` although Sol 2's own file authors only the
 /// first of the three - because the front end's file loads first and a
 /// circuit's own file only overwrites the keys it declares, never resetting
@@ -855,8 +855,7 @@ pub(super) fn zone_grade(
     // - The original, played: a Zone race on Moa Therma is already showing
     //   `Sub Venom`'s cyan at the start line. That stage authors
     //   `Track.Base Colour` = `0.003922 0.847059 1.000000`; `Start` authors a
-    //   flat black, which is what this port drew before this and what the
-    //   maintainer reported as wrong.
+    //   flat black, which draws wrong.
     //
     // `show_zone` does this on a title whose ladder is recovered, and **is a
     // no-op on one whose is not** - which is every title but 2048, HD
@@ -881,7 +880,7 @@ pub(super) fn zone_grade(
     }
     // **The development override, applied after the title's own ladder and
     // pinned rather than merely committed once.** Both titles with a
-    // recovered ladder (2048, and HD/Fury since 2026-08-31) drive
+    // recovered ladder (2048, and HD/Fury) drive
     // `show_zone` from the scene every frame, so a plain commit here would be
     // overwritten on the very next call - see
     // `crate::zone_grade::ZoneGrade::pin_stage` and

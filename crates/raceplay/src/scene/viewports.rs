@@ -35,8 +35,7 @@
 //!   view's multisample resolve rewrites the whole target from the multisampled
 //!   colour. So every view is drawn first, and then [`Scene::prepare_split_bloom`]
 //!   reads each view's own rectangle of the finished picture (`oag_post::bloom`
-//!   honours the frame's origin since 2026-10-15; it read from the target's
-//!   top-left before, so a view anywhere else glowed from the first view's pixels)
+//!   honours the frame's origin, so a view anywhere glows from its own pixels)
 //!   into a scratch lane of its own. [`Scene::composite_bloom`] adds each back after
 //!   the HUD, as a single view's is. **Chosen, not measured**: each lane's size
 //!   keeps the glow's reach in proportion to the view (`oag_post::bloom::lane_extent`).
@@ -45,7 +44,7 @@
 //!   writes it into its rectangle of the velocity and depth attachments (a later view
 //!   *loads* them, as it loads the colour), and [`Scene::blur_split_views`] then runs the
 //!   blur over each rectangle, one submission each. **Camera jitter and the temporal
-//!   upscaler per view too** (2026-10-16): each view jitters on its seat's own sequence and
+//!   upscaler per view too**: each view jitters on its seat's own sequence and
 //!   records its frame in its seat's history, and [`Scene::temporal`] answers a frame per view
 //!   so the upscaler resolves each with a chain of its own; the window's own record is kept
 //!   cleared. **Chosen, not measured.**

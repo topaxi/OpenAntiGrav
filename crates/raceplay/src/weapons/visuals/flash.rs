@@ -4,8 +4,7 @@
 /// one that starts none - split out of [`Race::ignite_blast`] so every row is
 /// asserted without a disc, the way [`Race::blast_for`] is.
 ///
-/// Each row is one caller of `ScreenFlash_Start` (`0x088f00c0`), read
-/// 2026-09-30:
+/// Each row is one caller of `ScreenFlash_Start` (`0x088f00c0`), read:
 ///
 /// - **Rocket**: kind 0 from `Rocket_SpawnCraftExplosion_q` (`0x0886ed34`), a
 ///   craft hit only. `Rocket_Update`'s two track branches call no flash, so a

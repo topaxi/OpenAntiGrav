@@ -15,8 +15,8 @@ use super::*;
 /// broken one.
 ///
 /// **The glow always draws.** There is no bloom setting: the original offers
-/// none in any title, so the only faithful strength is the title's own
-/// (maintainer, 2026-10-02). `Glow::Suppressed` stays in `oag_render` for its
+/// none in any title, so the only faithful strength is the title's own.
+/// `Glow::Suppressed` stays in `oag_render` for its
 /// own tests; nothing here asks for it.
 ///
 /// Returns the chain itself (or `None`), the caller's own surface format -

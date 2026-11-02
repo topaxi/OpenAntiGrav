@@ -116,8 +116,8 @@ impl Race {
     /// instead**, keeping the pickup until it has somebody to fasten onto.
     ///
     /// **Chosen, not measured**, and tuned for a better race rather than for
-    /// fidelity - the licence `HANDOVER.md` records for opponent behaviour. Revisited
-    /// with the pool of eight (2026-10-31): an unlocked beam no longer locks the weapon
+    /// fidelity - the licence `HANDOVER.md` records for opponent behaviour. Under
+    /// the pool of eight, an unlocked beam no longer locks the weapon
     /// out of the race, since it holds one entry of the title's limit, but it still
     /// spends the opponent's pickup on nothing, and an opponent that holds the weapon
     /// until it can fasten onto somebody is a threat instead of a nuisance. So both
@@ -251,8 +251,8 @@ impl Race {
     ///
     /// # When a forward weapon fires or is absorbed is the original's; the rest is policy
     ///
-    /// **`WeaponAi_DecideFireOrAbsorb` (`0x088518b4`) is ported**, its fire
-    /// half on 2026-10-03 and its absorb half on 2026-10-19:
+    /// **`WeaponAi_DecideFireOrAbsorb` (`0x088518b4`) is ported**, fire
+    /// and absorb halves:
     /// `Race::opponent_decides` asks `oag_ai::weapon_ai` for the Rocket,
     /// Missile, Plasma, Shuriken, LeachBeam, Repulser and Quake, on the odds out
     /// of the title's `WeaponAIstats.xml`, and falls back to
@@ -285,9 +285,7 @@ impl Race {
     ///   holds the weapon until the last one is laid. This is the one arm that
     ///   returns rather than falling to the bottom of the function.
     /// - **A declined shot keeps the pickup**, on every armed weapon; only the
-    ///   original's own absorb roll above turns it into energy. It did not
-    ///   until 2026-08-26, and the bug was invisible because the comments here
-    ///   described the intended behaviour rather than the written one: each arm
+    ///   original's own absorb roll above turns it into energy. Each arm
     ///   was `weapon == X && self.fire_x(..)`, so a helper returning `false` -
     ///   the ordinary "not this tick" answer, nineteen ticks in twenty - made the
     ///   *condition* false and fell into the absorb branch. An opponent cashed
@@ -385,9 +383,8 @@ impl Race {
             // it still ends fast (`TURBO_GAIN`).
             let boosted = speed + TURBO_GAIN;
             // **Against the plan the driver follows, on this hull**, as
-            // `Race::step_opponents` builds its context. Until 2026-10-19 this
-            // asked the corner model with no plan and no yaw ceiling, and it
-            // passed five of eight Turbos that put a lone Ace into a wall
+            // `Race::step_opponents` builds its context. Asking the corner model
+            // with no plan and no yaw ceiling passed five of eight Turbos that put a lone Ace into a wall
             // (`docs/gameplay/ai.md`, "The Turbo gate reads the plan").
             let route = ship.driver.branching.route;
             let context = oag_ai::Context {

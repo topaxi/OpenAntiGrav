@@ -5,9 +5,7 @@
 //! gate and name.
 //!
 //! Split out of `visuals.rs` under the 1,000-line rule in
-//! `scripts/check-file-size.py` on 2026-09-16, when the Plasma's charge glow
-//! and its cockpit halving took that file to 1,008; a move, with no behaviour
-//! change. The seam is the one the file already had - `impl Race` above,
+//! `scripts/check-file-size.py`; a move, with no behaviour change. The seam is the one the file already had - `impl Race` above,
 //! free functions below - and every name keeps its `pub(crate)`
 //! visibility so `weapons.rs`'s test re-exports resolve unchanged.
 
@@ -95,7 +93,7 @@ pub(super) fn advance_one_flare(
 /// charging value" rather than needing a second branch for it - see below.
 ///
 /// **Ports the further `* 0.5` when the firing craft's `+0x6d` flag is set -
-/// closed 2026-09-16.** `craft+0x6d` is the internal/cockpit camera flag:
+/// closed.** `craft+0x6d` is the internal/cockpit camera flag:
 /// `camera.md`'s SELECT-view cycle writes `1` for `OPT_INT` and `0` for both
 /// external views, on the player craft alone, and `shield-pickup.md` found a
 /// second, independent consumer (`ShipShield_Update`'s own cockpit-shell
@@ -194,9 +192,8 @@ pub(crate) fn plasma_flare_scale(
 /// `WO_MISSILE_HEAD`, at entity offsets `+0xf0` and `+0x130`) and
 /// `Missile_Update`'s per-tick rewrite of both.
 ///
-/// **Independently consistent with a maintainer's own description from
-/// play**, given before any of this was decompiled: "the missile rotates
-/// with two trails".
+/// **Consistent with a description from play** given before any of this was
+/// decompiled: "the missile rotates with two trails".
 ///
 /// **What is not settled.** The handedness of `right = cross(up, back)` is
 /// cosmetic - it only swaps which of the two visually-interchangeable

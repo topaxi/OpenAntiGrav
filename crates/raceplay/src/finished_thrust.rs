@@ -2,7 +2,7 @@
 //! the line for the last time.
 //!
 //! **Recovered, confidence 90** (`docs/ghidra/functions/psp-pulse-usa/race-finish.md`,
-//! measured 2026-10-04 on PPSSPP): from the frame after the finish the
+//! measured on PPSSPP): from the frame after the finish the
 //! player's own AI driver runs `AI_ComputeOpponentThrust` indexed by the
 //! player's finishing place, and that law holds the thrust at
 //! [`oag_tables::ai_race_stats::AiRaceStats::finished_player_thrust`] -
@@ -18,8 +18,8 @@
 //! the clamp lets go, reads the opponents' `spread` wander, which
 //! `oag_ai::original` now models for the campaign's opponents; this cap still
 //! takes the lower stop and does not reproduce that regime. Outside the
-//! campaign the opponents race on this project's own driver (the maintainer's
-//! standing rule), and this is the finished player's own autopilot, which
+//! campaign the opponents race on this project's own driver (the AI obeys
+//! player physics), and this is the finished player's own autopilot, which
 //! matches the original.
 //!
 //! The campaign's original opponent reads the same file whole, through

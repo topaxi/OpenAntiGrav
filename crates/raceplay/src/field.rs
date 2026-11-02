@@ -252,10 +252,10 @@ impl Race {
     /// **The fourth is the finish line.** Once the player has crossed it for the
     /// last time the original stops reading the pad and flies the craft itself
     /// for as long as the race stays up behind the end-race panels - measured
-    /// 2026-10-01 on PPSSPP, three runs, with no input held at all: the craft kept
+    /// on PPSSPP, three runs, with no input held at all: the craft kept
     /// lapping the circuit for the 35 s logged. See
     /// `docs/gameplay/after-the-finish.md`. The same driver as the other three
-    /// routes, which is the maintainer's standing rule (the AI obeys player physics),
+    /// routes, as the AI obeys player physics,
     /// with its thrust capped at the original's own post-finish law - see
     /// `race::finished_thrust`.
     #[must_use]
@@ -1166,8 +1166,7 @@ impl Race {
     /// Craft against craft, every pair, once a tick.
     ///
     /// `oag_physics::pair::resolve` is `Body_ResolveContactPair` (`0x0884ef30`),
-    /// read 2026-08-11 - the function this engine was missing, and the reason
-    /// craft used to pass through each other. The response is recovered; the
+    /// read off the original. The response is recovered; the
     /// *shape* is not, and `pair::overlap` says so.
     ///
     /// **After every craft has been stepped**, not during. Stepping and

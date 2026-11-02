@@ -842,9 +842,8 @@ impl Drawable {
     /// uploads them: `uv' = uv * scale + offset`, the GE's own
     /// `TEXSCALE`/`TEXOFFSET` arithmetic.
     ///
-    /// Called only for the plume, and only on the frames it is visible. This
-    /// replaced environment-mapped generation (`oag_render::texgen`) on
-    /// 2026-08-10: the plume's compiled list is replayed under `TEXMAPMODE` 0
+    /// Called only for the plume, and only on the frames it is visible. Not
+    /// environment-mapped generation (`oag_render::texgen`): the plume's compiled list is replayed under `TEXMAPMODE` 0
     /// (settled live - mesh-draw.md, "The plume is replayed under
     /// `TEXMAPMODE` 0"), so the original reads the authored coordinates,
     /// through the keyframed transform `Loaded::boost_uv_transform` carries.

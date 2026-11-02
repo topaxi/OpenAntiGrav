@@ -3,7 +3,7 @@
 //! quads show.
 //!
 //! **What the original does, read off a live PPSSPP frame** (Pulse PSP,
-//! Talon's Junction, 2026-10-06, `docs/ghidra/functions/psp-pulse-usa/billboards.md`):
+//! Talon's Junction, `docs/ghidra/functions/psp-pulse-usa/billboards.md`):
 //! the GE list renders twice into a 128 x 128 offscreen buffer (`FBPTR`
 //! `0x04154000`, width `0x80`, viewport scale 64) before the scene pass samples
 //! that buffer on two of the track's quads. The advert's matrix there is the
@@ -443,7 +443,7 @@ impl Cards {
                         // purpose: a lit billboard material (`billboarddiffuse`,
                         // `cf_vex_billboard`) gates the shader's stand-in specular by the texel's
                         // alpha, so an opaque clear blows the board out to white on those
-                        // circuits (2026-10-18, docs/rendering/start-gantry.md).
+                        // circuits (docs/rendering/start-gantry.md).
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
                             store: wgpu::StoreOp::Store,
