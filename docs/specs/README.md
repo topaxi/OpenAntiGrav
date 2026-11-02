@@ -20,12 +20,10 @@ truth.
 | [`.pob` particle systems](pob.md) | Container, pointer fixups, emitter record, channels, flags, sprites | Pulse; HD, 2048, Omega |
 | [Textures](textures.md) | PSP `.mip`, embedded textures, the GE swizzle, PS2 GS upload packets | Pure, Pulse; links for PS3, Vita, PS4 |
 
-## Behaviour (in progress)
-
-These pages are being written and are not linked yet.
+## Behaviour
 
 | Page | Covers | Titles |
 | --- | --- | --- |
-| Physics (`physics.md`) | Ship dynamics | in progress |
-| Weapons (`weapons.md`) | Pickups, projectiles, blasts | in progress |
-| Race rules (`race-rules.md`) | Modes, lap timing, progress | in progress |
+| [Physics](physics.md) | Per-tick ship dynamics: thrust, drag, steering, airbrakes, hover, wall response | Pulse; differences for Pure, HD, 2048, Omega |
+| [Weapons](weapons.md) | Pickups and each weapon's measured behaviour | Pulse; lineage for the other titles |
+| [Race rules](race-rules.md) | Race modes, lap counting, start and finish | Pulse; differences where measured |
