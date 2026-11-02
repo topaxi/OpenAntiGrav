@@ -185,6 +185,12 @@ if (( strip_binary )); then
     strip "$app_dir/usr/bin/oag-game"
 fi
 
+# The official mods ride inside the image, in `mods` beside the program, which
+# `oag_mod::mods_search_path` reads through `current_exe` (ADR-0083 decision 5).
+# A file shipped beside the AppImage would not reach a player who downloads the
+# one file.
+"$project_root/scripts/stage-official-mods.sh" "$app_dir/usr/bin/mods"
+
 install -m 755 "$project_root/packaging/appimage/AppRun" "$app_dir/AppRun"
 install -m 644 "$project_root/packaging/appimage/oag-game.desktop" \
     "$app_dir/oag-game.desktop"

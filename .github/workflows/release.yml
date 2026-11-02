@@ -88,6 +88,8 @@ jobs:
       OAG_VERSION_SUFFIX: ${{ needs.version.outputs.suffix }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          submodules: true
       - name: Build the AppImage in the bookworm container
         run: |
           mkdir -p dist
@@ -105,6 +107,7 @@ jobs:
           binary="data/appimage/container/target/dist/oag-game"
           install -m 755 "$binary" "$stage/oag-game"
           strip "$stage/oag-game"
+          scripts/stage-official-mods.sh "$stage/mods"
           cp LICENSE-MIT LICENSE-APACHE "$stage/"
           cp -r licences "$stage/licences"
           cp packaging/appimage/oag-game.desktop "$stage/"
@@ -144,6 +147,8 @@ jobs:
       VERSION: ${{ needs.version.outputs.version }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          submodules: true
       # Same pinned toolchain as ci.yml; rust-toolchain.toml names it too.
       - uses: dtolnay/rust-toolchain@1.99.0
       - uses: Swatinem/rust-cache@v2
@@ -159,6 +164,7 @@ jobs:
           name="OpenAntiGrav-${VERSION}-windows-x86_64"
           mkdir -p "stage/${name}" dist
           cp target/dist/oag-game.exe "stage/${name}/"
+          scripts/stage-official-mods.sh "stage/${name}/mods"
           cp LICENSE-MIT LICENSE-APACHE "stage/${name}/"
           cp -r licences "stage/${name}/licences"
           (cd stage && 7z a -tzip "../dist/${name}.zip" "${name}" >/dev/null)
@@ -247,6 +253,8 @@ jobs:
       APPLE_API_KEY_JSON_B64: ${{ secrets.OAG_APPLE_API_KEY_JSON_B64 }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          submodules: true
       - uses: dtolnay/rust-toolchain@1.99.0
       - uses: Swatinem/rust-cache@v2
       - uses: actions/setup-python@v7

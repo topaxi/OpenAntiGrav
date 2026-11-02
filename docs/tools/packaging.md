@@ -703,6 +703,39 @@ MONITOR row offers `default` alone, dimmed with "GAMESCOPE SHOWS ONE DISPLAY" in
 gamescope). `--windows-fullscreen` has no per-monitor meaning there. Details:
 `docs/rendering/multi-window.md`, "Under gamescope".
 
+## Official mods
+
+The project's own mods (`OpenAntiGrav/official-mods`, the `assets/mods/official`
+submodule, ADR-0083) ship in every desktop build. Without them a release has no
+RACE REMIX at all, because `oag-extras` no longer carries it.
+`scripts/stage-official-mods.sh <dest>` copies each mod folder (`remix/`) into
+`<dest>` and fails when the submodule is not checked out. Each target puts the
+result in a `mods` folder that `oag_mod::mods_search_path` reaches by
+`current_exe`:
+
+| Build | Where | Recipe |
+| --- | --- | --- |
+| Linux AppImage (both flavours, the Deck's included) | **inside the image**, `usr/bin/mods/remix` | `build-appimage.sh` |
+| Linux tarball | `mods/remix` beside `oag-game` | `release.yml`, "Cut the tarball" |
+| Windows zip | `mods/remix` beside `oag-game.exe` | `release.yml`, "Stage the zip" |
+| macOS app | `Contents/MacOS/mods/remix`, beside the bundle's executable | `build-mac-app.sh` |
+
+**AppImage: inside the image, with a second search entry, not an archive beside
+the file.** A player downloads one file and runs it; a `mods/` folder beside it
+would need an archive around the AppImage and would be lost the first time the
+file is moved. `current_exe` inside a mounted AppImage is `$APPDIR/usr/bin/oag-game`,
+so `mods_search_path` now adds both `mods` beside the `.AppImage` file (a
+player's own mods) and `mods` beside the program (the official ones); before, the
+`APPIMAGE` directory replaced the program's. `just deploy deck` goes through
+`build-appimage.sh` and so ships the mod too; it initialises the submodule in its
+detached worktree first.
+
+`release.yml` checks out with `submodules: true` for the Linux, Windows and
+macOS jobs (the checkout action cannot pick one submodule, so `assets/mods/examples`
+comes with it and is not packaged). `nightly.yml` calls `release.yml`, so it needs
+no change. Not covered, named open in the Remix handover thread: the AUR
+PKGBUILDs, Android and iOS, and the web build.
+
 ## AUR packages
 
 Two PKGBUILDs live in [`packaging/aur/`](../../packaging/aur/), each with its

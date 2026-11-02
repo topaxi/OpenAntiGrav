@@ -18,8 +18,8 @@ pub const EXAMPLES: &str = "assets/mods/examples";
 pub const OFFICIAL: &str = "assets/mods/official";
 
 /// Where mods are looked for when nothing names a directory: `data/mods` in a
-/// checkout, [`OFFICIAL`] and [`EXAMPLES`] in a checkout, `mods` beside the program,
-/// and `<data dir>/oag/mods`.
+/// checkout, [`OFFICIAL`] and [`EXAMPLES`] in a checkout, `mods` beside the AppImage file and beside the program (inside the image
+/// for an AppImage), and `<data dir>/oag/mods`.
 #[must_use]
 pub fn mods_search_path() -> Vec<PathBuf> {
     if let Some(from_env) = std::env::var_os(SEARCH_ENV) {
@@ -31,17 +31,31 @@ pub fn mods_search_path() -> Vec<PathBuf> {
     let mut paths = vec![PathBuf::from("data/mods")];
     paths.push(PathBuf::from(OFFICIAL));
     paths.push(PathBuf::from(EXAMPLES));
-    let beside = std::env::var_os("APPIMAGE")
-        .map(PathBuf::from)
-        .or_else(|| std::env::current_exe().ok())
-        .and_then(|exe| exe.parent().map(Path::to_path_buf));
-    if let Some(directory) = beside {
-        paths.push(directory.join("mods"));
-    }
+    let appimage = std::env::var_os("APPIMAGE").map(PathBuf::from);
+    let program = std::env::current_exe().ok();
+    packaged_mods(appimage.as_deref(), program.as_deref(), &mut paths);
     if let Some(data) = dirs::data_dir() {
         paths.push(data.join("oag").join("mods"));
     }
     paths
+}
+
+/// Adds the `mods` folders a packaged build ships: beside the AppImage file (where a
+/// player puts their own) and beside the program, which for an AppImage is inside the
+/// mounted image (`usr/bin`, where the build puts the official mods).
+pub(crate) fn packaged_mods(
+    appimage: Option<&Path>,
+    program: Option<&Path>,
+    paths: &mut Vec<PathBuf>,
+) {
+    for file in [appimage, program].into_iter().flatten() {
+        if let Some(directory) = file.parent() {
+            let mods = directory.join("mods");
+            if !paths.contains(&mods) {
+                paths.push(mods);
+            }
+        }
+    }
 }
 
 /// One candidate under a search directory.

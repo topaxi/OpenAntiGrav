@@ -439,3 +439,28 @@ fn an_icon_name_longer_than_a_hud_icon_can_send_is_refused_at_parse() {
         "{error}"
     );
 }
+
+#[test]
+fn an_appimage_searches_beside_the_file_and_inside_the_image() {
+    let mut paths = Vec::new();
+    discover::packaged_mods(
+        Some(Path::new("/home/p/OpenAntiGrav.AppImage")),
+        Some(Path::new("/tmp/.mount_x/usr/bin/oag-game")),
+        &mut paths,
+    );
+    assert_eq!(
+        paths,
+        [
+            PathBuf::from("/home/p/mods"),
+            PathBuf::from("/tmp/.mount_x/usr/bin/mods")
+        ]
+    );
+}
+
+#[test]
+fn a_plain_program_searches_beside_itself_once() {
+    let mut paths = Vec::new();
+    discover::packaged_mods(None, Some(Path::new("/opt/oag/oag-game")), &mut paths);
+    discover::packaged_mods(None, Some(Path::new("/opt/oag/oag-game")), &mut paths);
+    assert_eq!(paths, [PathBuf::from("/opt/oag/mods")]);
+}

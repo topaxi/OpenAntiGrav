@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-02
-summary: "ADR-0082/0083 accepted; lanes 1-5 and 6a done (pages, fingerprint, settings, query parse); open: 6b resolve of, launch_race, the move"
+summary: "ADR-0082/0083 accepted; lanes 1-5, 6a, 9 (desktop packaging) done; open: 6b resolve of, launch_race, the move, AUR/mobile/web delivery"
 size: XL (40)
 difficulty: hard (45)
 ---
@@ -425,11 +425,19 @@ hours, M half a day, L a day, XL more than a day (split it).
    folder has no RACE REMIX at all: ADR-0083's consequence says not to ship lane 8 to players
    before the desktop recipes copy the folder.
 
+Lane 9, desktop part, done: `scripts/stage-official-mods.sh` copies `assets/mods/official/*`
+into `mods` in the AppImage (inside the image, `usr/bin/mods`, found through a second
+search entry beside the program), the Linux tarball, the Windows zip and the macOS app
+(`Contents/MacOS/mods`); `release.yml` checks out with `submodules: true` (nightly.yml calls
+it); `docs/tools/packaging.md`, "Official mods". Verified: a container-built AppImage run
+from outside the checkout, plus `act` on the Linux jobs; the macOS recipe by reading only.
+Still open: the AUR PKGBUILDs (`mods` beside `/usr/bin/oag-game`), Android/iOS, web.
+
 Lane 8 confirmed before it started: the repo exists (public), launch option 2, folder delivery.
 
 ## Next Steps
 
 1. Done: ADR-0082 and ADR-0083 accepted. Open: read whether the web and mobile builds can
    search for mods at all, and pick their delivery (ADR-0083 decision 7).
-2. Lane 9: the release and nightly recipes check out `assets/mods/official` and copy `remix/`
-   beside the executable (see item 9).
+2. Lane 9 left: AUR PKGBUILDs install the mods to `mods` beside `/usr/bin/oag-game`; Android,
+   iOS and web delivery (see item 9).
