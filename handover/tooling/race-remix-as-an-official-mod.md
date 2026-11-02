@@ -3,7 +3,7 @@ status: re-first
 titles: [all]
 updated: 2026-11-02
 summary: "Remix to an official mod needs two ADRs first; the LAN fingerprint counts every mod on, so Remix on and off would split lobbies"
-size: L (40)
+size: XL (40)
 difficulty: hard (45)
 ---
 
@@ -52,8 +52,18 @@ and the LAN fingerprint counts every mod that is on.
    `session/lan.rs:176`, `main/cli/extra.rs:719-721`. `oag_net::discovery::content_fingerprint`
    (`crates/net/src/discovery.rs:168`) is what a LAN host compares. So a machine
    with `oag.remix` on and one with it off fingerprint differently, and a join is
-   refused. **A menu-only mod would gate multiplayer.** Today's examples are
-   simulation or track mods, so this does not show yet.
+   refused. **A menu-only mod would gate multiplayer.** Verified: a LAN row with
+   `Compat::OtherContent` is unselectable and shows "DIFFERENT MODS OR CONTENT"
+   (`crates/game/src/main/session/lan.rs:491-505`, `crates/game/src/lan_list.rs:26`),
+   and the online rooms refuse it too (`crates/net/src/online/rooms.rs:294`).
+   Today's examples are simulation or track mods, so this does not show yet.
+
+6. **Plain gap, the one the maintainer must see.** A declarative mod moves the
+   page and the policy. The picker and launch logic stays in the engine, as generic
+   queries and actions (sections 2c and 2d). Only an ADR-0080 wasm screen would take
+   that logic out of the engine, and that ADR is proposed, not built. "Remove Remix's
+   logic" therefore means: remove Remix's names, page, settings and policy rows, not
+   the two-source rules.
 
 ### What the engine code is, by reading
 
@@ -62,7 +72,7 @@ and the LAN fingerprint counts every mod that is on.
 | Session pickers and launch | `crates/game/src/main/session/remix.rs` (609 lines) | Remix policy; moves into the mod's vocabulary |
 | Supply/apply call sites | `crates/game/src/main/session/menus.rs` (41 `remix` lines), `apply.rs` (17) | Remix policy |
 | Settings | `crates/game/src/settings/race.rs:183-199`, `settings.rs:128,1087-1091` | Moves to a mod namespace |
-| Catalogue of a title's circuits and roster | `crates/game/src/remix.rs` (143 lines) | Reads `oag_source::remix::Remix`; policy-shaped, moves with the pickers |
+| Catalogue of a title's circuits and roster | `crates/game/src/remix.rs` (143 lines) | Reads `oag_source::remix::Remix`; becomes the generic `TracksOf`/`TeamsOf` source, stays (lane 8b) |
 | Source pair | `crates/source/src/remix.rs` (`Remix::{Single,Split}`, `open` :46, `open_server` :68) | **Stays** (plumbing) |
 | Two-source load | `crates/raceplay/src/load.rs:61-124` (`open` :75, `open_server` :114-115) | **Stays** |
 | Speed-class union | `crates/title/src/speed.rs:223-240` (`is_offered_outside_remix`, `union`) | Title data (ADR-0058); name says Remix, rename later |
@@ -70,9 +80,9 @@ and the LAN fingerprint counts every mod that is on.
 | Page-id hooks | `crates/game/src/main/session/custom_tracks.rs:103` (`page.id == "remix"`), `crates/game/src/capture/menu_page.rs:188` | Engine-coded by id |
 | Strings | `assets/ui/strings/english.toml:69-70,206-211` (`OAG_MENU_REMIX*`, `OAG_REMIX_*`), the same 8 ids in `german.toml`, `french.toml`, `portuguesebr.toml` | Move with the page into the mod's `strings/` |
 
-Counting `remix` mentions is not Remix logic alone: the `remix.rs` count is
-mostly comments that describe Remix's rules. Rough estimate, not measured: the
-move removes several hundred engine lines and touches about 15 files.
+Counting `remix` mentions is not a measure of what leaves. Most of the
+`session/remix.rs` mentions are comments about Remix's rules, and most of its code
+is generalised by lanes 6 and 7, not deleted. No line count is claimed for the move.
 
 ### 1. Replays, lobby, saves, records: nothing names "remix"
 
@@ -287,12 +297,14 @@ hours, M half a day, L a day, XL more than a day (split it).
    (`mods.rs`). Size: M (40). Difficulty: medium (45). Updates the mod-author skill
    (`assets/mods/examples/.claude/skills/oag-mod-author/SKILL.md`, submodule branch)
    and `docs/tools/mods.md`.
-4. **LAN fingerprint: only race-changing mods.** Claim: `content_fingerprint`
-   leaves out mods with no simulation module, track or campaign; a menu-only mod on
-   one machine does not change the hash. Acceptance: a test in
-   `crates/game/src/mods.rs` tests and a `crates/net/src/discovery.rs` test that a
-   page-only mod gives `NO_MODS`. Crates: `oag-game`, `oag-net` (test only).
-   Size: S (60). Difficulty: easy (55). Can run as soon as ADR-B is accepted.
+4. **LAN fingerprint: only race-changing mods.** Claim: `Mods::content_fingerprint`
+   (`crates/game/src/mods.rs:503`) leaves out mods with no simulation module, track
+   or campaign, so a page-only mod on one machine does not change the hash.
+   Acceptance: tests in `crates/game/src/mods.rs` (or `crates/game/tests/`) that a
+   page-only mod leaves the value at `oag_net`'s `NO_MODS`, and that a
+   simulation mod still changes it. The filter lives in `oag-game` only: the net
+   function takes a list of strings and knows no mods. Crates: `oag-game`. Size:
+   S (60). Difficulty: easy (55). Can run as soon as ADR-B is accepted.
 5. **Mod settings namespace.** Claim: `setting = "mod.<id>.<key>"` saves to
    `[mod_settings."<id>"]` and survives a restart; a turned-off mod's values are kept.
    Acceptance: a round-trip test in `crates/game/src/settings/tests.rs`. Crates:
@@ -313,13 +325,19 @@ hours, M half a day, L a day, XL more than a day (split it).
    `OAG_REMIX_*` and `OAG_MENU_REMIX*` strings in all four language files, moved
    into the mod's `strings/`; `check-strings` ratchet updated. Acceptance:
    `just check-strings` and `just check-names` green; `--menu-page remix` before and
-   after on Pulse. Size: L (45). Difficulty: medium (40). **8b:** remove
-   `crates/game/src/remix.rs`, `session/remix.rs`, `Action::LaunchRemix`,
-   `settings::Remix`, the CUSTOM hook; the 2048 tile list reads the mod's racebox
-   rows. Acceptance: with the mod off, RACEBOX has no REMIX row, the 2048 tile list
-   has no crash, and campaign custom events still race Hillside. Size: XL (40),
-   split further when started. Difficulty: hard (35). Depends on 2-7 and on the
-   `official-mods` repo existing (the maintainer creates it).
+   after on Pulse. Size: L (45). Difficulty: medium (40). **8b:** what leaves the engine:
+   the page (`assets/ui/menu.toml:387-480`), `settings::Remix` and its flat keys,
+   the fixed `remix_*` value-source names, the `Action::LaunchRemix` name, the 2048
+   REMIX tile hardcode (`touch.rs:120-121`, `campaign2048.rs:200-208`,
+   `launch2048.rs:44`), the page-id hooks (`custom_tracks.rs:103`,
+   `capture/menu_page.rs:188`) and the strings. What stays, renamed and generalised,
+   not removed: the pickers' bodies (`session/remix.rs`),
+   `crates/game/src/remix.rs::catalogue` (it serves `TracksOf` and `TeamsOf` for any
+   title) and the two-source launch rules (as `launch_two_source`). Acceptance: with
+   the mod off, RACEBOX has no REMIX row, the 2048 tile list has no crash, and
+   campaign custom events still race Hillside. Size: XL (40), split further when
+   started. Difficulty: hard (35). Depends on 2-7 and on the `official-mods` repo
+   existing (the maintainer creates it).
 9. **Bundle and enable.** Claim: the delivery chosen in ADR-B is in place for
    each target the ADR names. Acceptance: `just mods-list` shows `oag.remix` from a
    fresh clone; the packaged build's file list is checked by reading the recipe
