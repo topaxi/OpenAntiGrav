@@ -1813,15 +1813,41 @@ and the dump's blend (`the_plasma_heads_five_draws_load_with_their_own_textures_
 root's 64x64 arc atlas and `plasma_spikes`' 128x64 star (additive emitters), and three **sprite
 templates** (`glow3`, 64x64 additive: the ring; `Glow`, 64x64 **alpha-over**: the dark disc; `glow2`,
 32x32 additive: the glow quad), none skipped. So the "root emitter's texture bind" the earlier read
-left open is not the gap. What is: in the original the three templates' extents scale exactly with the
-charge severity from the press to release (the glow quad 7.0 to 21.0 units, the ring 1.7 to 5.1, the
-dark disc 1.0 to 3.3: each x3.0-3.3 against severity 0.25 to 0.75), i.e. their size channels read as
-constant, where ours samples keys that run over a life of 60000/65535 ticks (`glow3` and `glow2`
-0.007 to 1.0, `Glow` a size decaying to 0.02 within five ticks as a looping channel). Their absolute
-sizes (the glow quad's 21 units against a channel value of 1.0 at severity 0.75) say the template
-size is also scaled by something the channels do not carry. Not changed here: the rule for which age a
-template samples its channels at is the open item (thread, `the-pulse-plasma-head-and-blast-differ-from-the-original.md`,
-item 2), and playing a guess is the stand-in the project forbids.
+left open is not the gap. What was open is the templates' playback, closed in "the head's template playback" below.
+
+### The head's template playback (pulse-plasma-head)
+
+The age the templates are sampled at was never the gap. Played alone on `Stage` (`glow2` Constant
+size 7.0, `glow3` Random 2.5-3.5, `Glow` Keyframed 2.0-2.5; lives 60000/65535 ticks, so the
+normalised age stays 0 for the whole charge) the three already draw the original's extents at a given
+severity: width 7.0 and 21.0 for `glow2` at 0.25 and 0.75, 1.6 and 4.8 for `glow3` (a random draw
+between its bounds, the original read 1.7 and 5.1), 1.25 falling to 1.09 and 3.75 falling to 3.26 for
+`Glow` (the original 1.0 and 3.3, taken after the first ticks). What ours got wrong is **which severity
+multiplies them**: a particle kept the system's scale *at spawn*, and a template is born once, at the
+instance's first update, which for the Plasma's flare is the press, at charge zero and so severity 0
+(`plasma_flare_scale`). The three were born at size 0 and stayed there while the stage rescaled the
+instance to 0.75; only the star (an emitter spawning a new particle every tick) grew. The original's
+extents follow the severity frame by frame (x3.0-3.3 across 0.25 to 0.75), so a template reads its
+instance's **current** severity at draw time (`System::drawn_scale`); every other particle keeps the
+one it spawned with. Confidence **70** (the extents agree at two severities on three templates; the
+draw-time read is inferred from them, not from a probe of `ParticleSystem_DrawParticle`, which would
+move it to 85+). Test: `the_plasma_heads_templates_draw_at_the_severity_the_instance_is_rescaled_to`
+(red before: `glow2` drew nothing) and the disc-free `a_template_draws_at_the_instances_current_severity`.
+
+**Pair (Talon's Junction, Assegai Venom, fire at GO + 120, shots k20, 36, 44, 60, 72, head box
+`200,112,90,80`, `scripts/weapon-pair-score.py`, one original, so no floor):** area x excess 168,685
+before, 102,300 after (fire grey diff 30.98 to 21.76 against the 7.55 control). Seen at k36 and k60: the dark
+core with a purple halo ring and the soft glow now sit on the nose where before only a 6 px white star
+did. **Still different**: the original's white crescent arcs (draw 1, the root emitter's 2x2 atlas,
+2.4 to 11.2 units across the charge) are much larger and brighter than ours (a few small arcs), and the
+glow is brighter there; the root emitter's size channel (0.9-5.0 units, keyed 0 to 1 over a 39 tick
+life) is the next head gap. The onset flash is untouched.
+
+**Cross-title:** Pure: **checked, applies, not wired**. The rule is in the shared `Stage`, but sprite
+templates are played on Pulse PSP only (`Effect::without_pulse_psp_draw` mutes them for every other
+source) and Pure's Plasma has no wired head. HD, Omega and 2048 mute them too; no other `.pob` effect
+rescales an attached instance (the Quake's rescale drives emitter spawns, not templates), so no other
+effect moves.
 
 ### Cross-title
 

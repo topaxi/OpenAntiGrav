@@ -727,3 +727,39 @@ fn a_titles_effect_directory_replaces_data_psys_and_nothing_else() {
         r"Data\Particles2048\WO_QUAKE.POB"
     );
 }
+
+/// A template is born once, at the instance's first update, and draws at the
+/// instance's severity of the moment: the Plasma's head attaches at severity
+/// zero and is rescaled every tick. An emitter's particle keeps the severity
+/// it spawned with.
+#[test]
+fn a_template_draws_at_the_instances_current_severity() {
+    let mut effect = (*effect("tpl", false, 1.0)).clone();
+    {
+        let spec = &mut effect.emitters[0];
+        spec.template = true;
+        spec.lifetime_ticks = (60000.0, 0.0);
+        spec.size = Channel {
+            period: 0.0,
+            mode: ChannelMode::Constant,
+            lo: 0.0,
+            hi: 2.0,
+            keys: vec![(0.0, 1.0), (1.0, 1.0)],
+        };
+    }
+    let mut rng = Rng::new(3);
+    let mut system = System::new();
+    system.ignite(&effect, Vec3::ZERO, 0.0);
+    run(&mut system, &effect, 1, &mut rng);
+    for severity in [0.25, 0.75] {
+        system.rescale(severity);
+        run(&mut system, &effect, 1, &mut rng);
+        let (additive, _) = system.vertices(&effect, Vec3::X, Vec3::Y);
+        let xs = additive.iter().map(|v| v.position[0]);
+        let half = (xs.clone().fold(f32::MIN, f32::max) - xs.fold(f32::MAX, f32::min)) / 2.0;
+        assert!(
+            (half - 2.0 * severity).abs() < 1e-4,
+            "severity {severity}: {half}"
+        );
+    }
+}

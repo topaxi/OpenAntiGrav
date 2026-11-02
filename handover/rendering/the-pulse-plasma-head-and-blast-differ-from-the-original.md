@@ -1,8 +1,8 @@
 ---
 status: re-first
 titles: [pulse]
-updated: 2026-10-31
-summary: "Plasma blast wired from the GE dumps (tail matches); the head's template playback and the onset flash are open; detonation timing fixed"
+updated: 2026-11-03
+summary: "Plasma blast wired from the GE dumps (tail matches); the head's templates are wired (its arcs and the onset flash are open); detonation timing fixed"
 ---
 
 # The Pulse Plasma head and blast differ from the original's
@@ -32,14 +32,14 @@ confidence scores and the replay evidence. What is left is wiring and two unread
    multiplies vertex colour where the original's lit pass ignores it; (e) the onset flash at shots
    k78-k82 is **not** these models (a 125 x 67 unit additive quad at craft z -28.8 and a 192-vertex
    `0x32` prim, emitter ownership open, conf 45; byte-match against `WO_PLASMA_FLASH.POB` not completed).
-2. **Head and charge orb (0.24 M): the loader is not the gap.** `WO_PLASMA_HEAD` builds all five draws
-   on their own textures and blends (two emitters, three sprite templates, none skipped; pinned).
-   Open is the **templates' playback**: in the original their extents scale exactly with the charge
-   severity (glow quad 7.0 to 21.0 units, ring 1.7 to 5.1, dark disc 1.0 to 3.3), i.e. the size
-   channels read as constant, where ours samples their keys over a 60000-65535 tick life (the glow
-   and ring sit at 0.007, the dark disc's looping channel decays to 0.02 in five ticks), so only the
-   star shows. Which age a template samples its channels at, and what else scales its size, is the
-   next read (a `ParticleSystem_DrawParticle` probe on `glow2` at two severities).
+2. **Head and charge orb (0.24 M)**: ~~the templates' playback~~ **wired 2026-11-03 (`pulse-plasma-head`)**,
+   `plasma.md` "the head's template playback": the three sprite templates (glow quad, ring, dark disc)
+   are born once at the press (severity 0) and now draw at the instance's current severity, so their
+   extents follow the charge as the original's do (7 to 21, 1.7 to 5.1, 1.0 to 3.3). Head box area x excess
+   168,685 to 102,300 on k20-72 (five shots). **Open inside it**: (a) the root emitter's white crescent
+   arcs (draw 1, 2.4 to 11.2 units) are far smaller and dimmer than the original's; (b) the glow reads
+   dimmer; (c) the draw-time severity read is inferred from the extents, not probed on
+   `ParticleSystem_DrawParticle` (conf 70).
 3. ~~**Detonation 3 ticks early**~~ Closed 2026-10-31 (`pulse-plasma-timing`): k76 now, per-update
    distance within 0.05 unit of the original. The cause was not the distance leg: the floor arm's
    steer, the 0.75 launch scale, a 3-update no-ride window, the Plasma's ride height 4.0 and a 2.23
@@ -51,6 +51,6 @@ confidence scores and the replay evidence. What is left is wiring and two unread
 
 ## Next Steps
 
-- Item 2 needs an `oag-re` read of the template age/size rule; then re-score the blast onset (item 3
+- Item 2(a): the root emitter's size/atlas playback against draw 1 (the arcs); then re-score the blast onset (item 3
   has landed).
 - Pulse PS2 is unmeasured here; its pair is `scripts/pcsx2-pulse-pair.py`.
