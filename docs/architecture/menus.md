@@ -194,6 +194,9 @@ with no enum widened to fit it. Despite that, **the ordinary per-title RACE
 page offers four**, even when the booted title is Wipeout Pure - `VECTOR` is
 offered on the RACE REMIX page only.
 
+Decided 2026-09-05 (maintainer: "the ordinary page offers four on every title"); 2048's `SUPERPHANTOM` followed on
+2026-10-12 (chosen, not measured), since no ordinary page of that title offers it (it has no race box).
+
 The mechanism is `oag_title::SpeedClasses::is_offered_outside_remix`, which reads the ladder's own
 `remix_only` list (Pure: `VECTOR`; 2048: `SUPERPHANTOM`), layered
 on top of `is_selectable` rather than replacing it: `is_selectable` still says
