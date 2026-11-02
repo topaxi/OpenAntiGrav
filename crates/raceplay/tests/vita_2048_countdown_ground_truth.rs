@@ -124,7 +124,9 @@ fn a_named_mode_starts_with_ready_the_beat_and_go_from_the_speech_bank() {
     assert_eq!(ready.len(), 1, "one timeline: {ready:?}");
     assert_eq!(ready[0].len(), 2, "a stereo pair: {ready:?}");
     assert!(
-        ready[0].iter().all(|v| v.starts_with("3.0") && v.ends_with("+0.000s")),
+        ready[0]
+            .iter()
+            .all(|v| v.starts_with("3.0") && v.ends_with("+0.000s")),
         "3.0 s from the start: {ready:?}"
     );
     let go = lengths(banks, Cue::Go);
@@ -146,8 +148,14 @@ fn a_campaign_event_names_its_own_pair_and_plays_neither_until_the_pan_has_a_rea
     let loaded =
         oag_raceplay::load_event(&options(&source), "2048 - Event 4").expect("the event loads");
     let banks = &loaded.setup.sounds;
-    assert!(report_has(&loaded, "sfx: 321_NGP not played: its pair is panned"));
-    assert!(report_has(&loaded, "sfx: Go_NGP not played: its pair is panned"));
+    assert!(report_has(
+        &loaded,
+        "sfx: 321_NGP not played: its pair is panned"
+    ));
+    assert!(report_has(
+        &loaded,
+        "sfx: Go_NGP not played: its pair is panned"
+    ));
     assert!(report_has(&loaded, "its start plays the event pair"));
     for cue in [Cue::Ready, Cue::Go, Cue::StartBeat] {
         assert!(

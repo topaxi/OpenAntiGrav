@@ -23,7 +23,10 @@ fn omega_lends_no_pulse_voice_to_its_start() {
 #[ignore = "needs the decrypted Omega packages in data/extracted/ps4/"]
 fn no_omega_bank_defines_the_start_events() {
     let mut checked = 0;
-    for (dir, file) in [("omega-eu", "data00.psarc"), ("omega-eu-patch", "data08.psarc")] {
+    for (dir, file) in [
+        ("omega-eu", "data00.psarc"),
+        ("omega-eu-patch", "data08.psarc"),
+    ] {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../data/extracted/ps4")
             .join(dir)
