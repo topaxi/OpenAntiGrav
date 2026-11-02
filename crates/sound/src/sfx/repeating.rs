@@ -92,6 +92,7 @@ impl Playing {
                 looping: layer.looping,
                 delay: offset,
                 angle: layer.angle,
+                rear_edge: false,
                 pitch: 1.0,
             })
             .collect();
