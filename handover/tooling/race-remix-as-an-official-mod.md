@@ -1,5 +1,5 @@
 ---
-status: re-first
+status: ready-to-wire
 titles: [all]
 updated: 2026-11-02
 summary: "Remix to an official mod needs two ADRs first; the LAN fingerprint counts every mod on, so Remix on and off would split lobbies"
@@ -17,6 +17,17 @@ whose track and craft come from two titles.
 `re-first` here means a decision first (two ADRs), not reverse-engineering.
 Scout reading, checked against `main` at ef51bd6be. Confidences in brackets are
 the scout's own estimates, not measurements.
+
+## Decided (maintainer, 2026-11-02)
+
+- **Launch: option 2.** One `launch_race` action with setting keys (track title, track, craft
+  title, team, variant, mode, class, difficulty), used by the ordinary RACE page, Remix and any
+  mod page; differing track and craft titles open two sources. No `launch_two_source`.
+- **Delivery: folder on disk**, found by the mod search path and copied beside the executable
+  in packaged builds; the game runs without it.
+- **LAN fingerprint counts only race-changing mods** (simulation modules, tracks, campaigns);
+  page-only and string-only mods are left out. ADR-B amends ADR-0078's consequence.
+- **`OpenAntiGrav/official-mods` is public** (no token, CI may check the submodule out).
 
 ## Open
 
