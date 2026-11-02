@@ -464,7 +464,7 @@ pub enum Query {
     TracksOf,
     /// The teams of the title `of` names.
     TeamsOf,
-    /// The craft variants of the team `of` names.
+    /// The craft variants of the title `of` names, scoped to that title's first team.
     VariantsOf,
     /// The speed classes of every available title, merged.
     SpeedClassesUnion,

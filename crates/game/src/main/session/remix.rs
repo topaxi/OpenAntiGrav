@@ -133,6 +133,24 @@ fn resolve_craft_backing<'a>(
         })
 }
 
+/// The list a table-form query offers for the title named `title_name`, off the survey
+/// `titles`; `None` when that title cannot be opened here.
+fn query_lists(
+    titles: &[oag_game::launcher::Candidate],
+    query: menu::Query,
+    title_name: &str,
+) -> Option<Vec<menu::Choice>> {
+    let candidate = titles.iter().find(|candidate| candidate.title() == title_name)?;
+    let title = candidate.playable()?;
+    match remix::catalogue(&candidate.source) {
+        Ok(catalogue) => remix::query_choices(query, &catalogue, title),
+        Err(e) => {
+            warn!("{}: {e:#}", candidate.source);
+            None
+        }
+    }
+}
+
 impl Session {
     /// Opens `title_setting`'s own catalogue, if this machine can currently
     /// open a source for it - the shared resolver for TRACK TITLE's own two
@@ -151,6 +169,24 @@ impl Session {
                 None
             }
         }
+    }
+
+    /// Re-lists the mod rows whose `values_from` carries an `of`, for the title that setting
+    /// is on now. `changed` limits it to the queries that name that setting.
+    pub(crate) fn resupply_queries(&mut self, changed: Option<&str>) {
+        let titles = &self.titles;
+        if let Stage::Menu(stage) = &mut self.stage {
+            remix::resolve_queries(&mut stage.menu, changed, |query, title| {
+                query_lists(titles, query, title)
+            });
+        }
+    }
+
+    /// [`Self::resupply_queries`] on a model not yet on screen.
+    pub(crate) fn resolve_menu_queries(&self, model: &mut menu::Menu) {
+        remix::resolve_queries(model, None, |query, title| {
+            query_lists(&self.titles, query, title)
+        });
     }
 
     /// Re-supplies the RACE REMIX page's TRACK row from whichever title

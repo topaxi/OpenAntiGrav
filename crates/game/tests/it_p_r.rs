@@ -32,6 +32,7 @@ mod pure_menu_art_ground_truth;
 mod pure_music_ground_truth;
 mod pure_original_ai_ground_truth;
 mod pure_sign_glow_ground_truth;
+mod query_resolve_ground_truth;
 mod race_end_photo_load_ground_truth;
 mod race_ground_truth;
 mod race_remix_ground_truth;

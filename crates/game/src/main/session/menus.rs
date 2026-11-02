@@ -1117,6 +1117,7 @@ impl Session {
         );
         oag_game::mods::resupply_switch(&mut model, &shell.mods, &shell.strings);
         self.seed_menu(&mut model, shell.title, shell.platform);
+        self.resolve_menu_queries(&mut model);
         settings::supply_reset(
             &mut model,
             shell.title,

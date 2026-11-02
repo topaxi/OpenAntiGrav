@@ -141,3 +141,58 @@ fn plugin_xml(
         .with_context(|| format!("reading {definition} out of {source}"))?;
     oag_tables::fexml::text(&blob).map_err(|e| anyhow::anyhow!("{definition}: {e}"))
 }
+
+/// The list a table-form `values_from` query offers for `title`, whose catalogue is `catalogue`.
+/// `None` for a query that takes no `of`.
+///
+/// `variants_of` is scoped to the catalogue's first team: the argument is one setting, so the
+/// team cannot also be named, and a title whose variants are hull stems rather than team
+/// suffixes answers the same for every team.
+#[must_use]
+pub fn query_choices(
+    query: menu::Query,
+    catalogue: &Catalogue,
+    title: &'static oag_title::Title,
+) -> Option<Vec<menu::Choice>> {
+    match query {
+        menu::Query::TracksOf => Some(
+            catalogue
+                .tracks
+                .iter()
+                .map(|(track, name)| menu::Choice::labelled(&track.id, name))
+                .collect(),
+        ),
+        menu::Query::TeamsOf => Some(catalogue.teams.clone()),
+        menu::Query::VariantsOf => {
+            let team = catalogue
+                .teams
+                .first()
+                .map_or("", |team| team.value.as_str());
+            Some(crate::livery_row::variant_choices(title, team))
+        }
+        _ => None,
+    }
+}
+
+/// Answers every table-form query on `model` from the value of the setting its `of` names, read
+/// off the row that edits it (an engine setting or a `mod.<id>.<key>` one alike). With
+/// `changed` set, only the queries whose `of` is that setting are re-listed. `lists` maps a
+/// query and a title name to its list, `None` when the title cannot be opened here (the row
+/// keeps its list: an unreadable source is not evidence the pick is wrong).
+pub fn resolve_queries(
+    model: &mut menu::Menu,
+    changed: Option<&str>,
+    mut lists: impl FnMut(menu::Query, &str) -> Option<Vec<menu::Choice>>,
+) {
+    for query in model.query_refs() {
+        if changed.is_some_and(|setting| setting != query.of) {
+            continue;
+        }
+        let Some(title) = model.value_of(&query.of).map(str::to_owned) else {
+            continue;
+        };
+        if let Some(list) = lists(query.query, &title) {
+            model.supply_query(&query, &list);
+        }
+    }
+}
