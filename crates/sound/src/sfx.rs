@@ -704,6 +704,7 @@ impl Audio {
         // The flyby's voice-over is a race voice too: quitting from the pause menu mid-flyby
         // must not leave it over the front end.
         self.stop_pre_race_voice();
+        self.release_sfx_fade();
         if let Some(voices) = &mut self.sfx {
             self.output.with_mixer(|mixer| {
                 for engine in &mut voices.engines {

@@ -149,17 +149,45 @@ fn the_scenery_clock_runs_through_the_flyby_and_its_end_washes_white() {
     );
 }
 
-/// Collects the flyby's music-player calls with the tick index each was raised on.
-fn voice_calls(race: &mut Race, held: bool) -> Vec<(u32, race::intro_camera::VoiceCue)> {
+/// Collects the flyby's audio calls with the tick index each was raised on.
+fn intro_calls(race: &mut Race, held: bool) -> Vec<(u32, race::intro_camera::IntroCue)> {
     let mut calls = Vec::new();
     let mut tick = 0u32;
     while race.in_intro() {
         race.tick_intro(&if held { cross() } else { PlayerInputs::none() });
-        calls.extend(race.take_intro_voice().into_iter().map(|cue| (tick, cue)));
+        calls.extend(race.take_intro_cues().into_iter().map(|cue| (tick, cue)));
         tick += 1;
         assert!(tick < 3000, "the flyby never ended");
     }
     calls
+}
+
+/// The music-player calls alone: the voice-over's start and stop.
+fn voice_calls(race: &mut Race, held: bool) -> Vec<(u32, race::intro_camera::IntroCue)> {
+    use race::intro_camera::IntroCue;
+    let mut calls = intro_calls(race, held);
+    calls.retain(|(_, cue)| matches!(cue, IntroCue::Start(_) | IntroCue::Stop));
+    calls
+}
+
+/// `RaceMode_UpdateIntro` snaps the sound effects to silence in its first call and starts their
+/// fade-in when the lock counter reads `0x28` (tick 20), skipped or not. Fails if the flyby raises
+/// neither call, or moves either off its tick.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn the_flyby_silences_the_effects_then_fades_them_in_at_counter_0x28() {
+    use race::intro_camera::IntroCue;
+    let want = vec![
+        (0, IntroCue::SilenceEffects),
+        (20, IntroCue::FadeInEffects { per_tick: 0.02 }),
+    ];
+    for held in [false, true] {
+        let Some(mut race) = started() else { return };
+        assert!(race.begin_intro());
+        let mut calls = intro_calls(&mut race, held);
+        calls.retain(|(_, cue)| !matches!(cue, IntroCue::Start(_) | IntroCue::Stop));
+        assert_eq!(calls, want, "held Cross: {held}");
+    }
 }
 
 /// `RaceMode_UpdateIntro` starts the circuit's `PreRaceDialogue` voice-over as its lock counter
@@ -168,7 +196,7 @@ fn voice_calls(race: &mut Race, held: bool) -> Vec<(u32, race::intro_camera::Voi
 #[test]
 #[ignore = "needs data/images/pulse-psp-usa.chd"]
 fn the_flyby_starts_its_voice_over_at_the_counters_zero_and_stops_it_at_the_end() {
-    use race::intro_camera::VoiceCue;
+    use race::intro_camera::IntroCue;
     let rule = &oag_pulse::pre_race::PRE_RACE;
     let Some(mut race) = started() else { return };
     assert_eq!(
@@ -182,8 +210,8 @@ fn the_flyby_starts_its_voice_over_at_the_counters_zero_and_stops_it_at_the_end(
     assert_eq!(
         calls,
         vec![
-            (rule.lock_ticks.value, VoiceCue::Start(entry)),
-            (rule.hold_ticks.value + 1500, VoiceCue::Stop),
+            (rule.lock_ticks.value, IntroCue::Start(entry)),
+            (rule.hold_ticks.value + 1500, IntroCue::Stop),
         ]
     );
 }

@@ -30,4 +30,5 @@ pub const PRE_RACE: PreRace = PreRace {
     skip: Sourced::measured(Skip::Press),
     panel: false,
     voice_over: None,
+    effects_fade_in: None,
 };

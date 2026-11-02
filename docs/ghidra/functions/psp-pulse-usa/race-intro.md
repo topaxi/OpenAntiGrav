@@ -193,6 +193,9 @@ ATRAC stream (`player+0x3bc = 0`) and, with its third argument non-zero, leaves 
 other player. The third argument's meaning (2 against 1) is a reading, confidence 55; the call
 passes 1.
 
+The `0x28` call is **ported** (`docs/gameplay/race-intro.md`, "The sound effects"): silence on tick
+0, ramp from tick 20, `0.02` a tick, `PreRace::effects_fade_in`.
+
 All 32 clips are on the PSP `Data.wad`: `Data\Sound\PreRaceDialogue\1_Track.at3` to `32_Track.at3`
 (`oag-wad list ... --names` over `{n}_Track.at3`, n from 1 to 32, unpadded: `03_Track` is `3_Track`).
 The 32 name hashes are the 32-stream run `crates/formats/tests/audio_ground_truth.rs` surveys on

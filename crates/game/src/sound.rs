@@ -142,14 +142,16 @@ pub fn prepare_intro_voice(audio: &mut Audio, discs: &oag_sound::MusicDiscs, rac
     }
 }
 
-/// Forwards the music-player calls `race`'s flyby raised this tick to the audio, in order.
+/// Forwards the audio calls `race`'s flyby raised this tick to the audio, in order.
 /// Called after every [`Race::tick_intro`].
-pub fn intro_voice(audio: &mut Audio, race: &mut Race) {
-    use oag_raceplay::intro_camera::VoiceCue;
-    for cue in race.take_intro_voice() {
+pub fn intro_cues(audio: &mut Audio, race: &mut Race) {
+    use oag_raceplay::intro_camera::IntroCue;
+    for cue in race.take_intro_cues() {
         match cue {
-            VoiceCue::Start(_) => audio.start_pre_race_voice(),
-            VoiceCue::Stop => audio.stop_pre_race_voice(),
+            IntroCue::Start(_) => audio.start_pre_race_voice(),
+            IntroCue::Stop => audio.stop_pre_race_voice(),
+            IntroCue::SilenceEffects => audio.silence_sfx(),
+            IntroCue::FadeInEffects { per_tick } => audio.fade_in_sfx(per_tick),
         }
     }
 }

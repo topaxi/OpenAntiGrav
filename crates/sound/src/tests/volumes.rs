@@ -74,3 +74,61 @@ fn a_cue_is_a_voice_line_exactly_when_its_bank_is_the_speech_one() {
         "no cue reaches the speech bus at all"
     );
 }
+
+fn sfx_bus(audio: &Audio) -> f32 {
+    audio.output().with_mixer(|mixer| mixer.bus_gain(Bus::Sfx))
+}
+
+/// The flyby's effects fade as the original's: silent from the first call, held silent until the
+/// counter reads `0x28` (tick 20), then `0.02` more on each call to the slider, and the slider
+/// alone from the countdown on. Fails if the fade is not on the Sfx bus, steps by another amount,
+/// or starts early.
+#[test]
+fn the_flyby_effects_fade_is_silent_then_a_002_ramp_to_the_slider() {
+    let mut audio = Audio::open(
+        &crate::settings::Settings {
+            sfx_volume: Volume(50),
+            ..Default::default()
+        },
+        None,
+        None,
+        oag_audio::MIN_BUFFER,
+        false,
+    );
+    assert_eq!(sfx_bus(&audio), 0.5, "no flyby: the slider alone");
+    let mut curve = Vec::new();
+    for tick in 0..=80u32 {
+        if tick == 0 {
+            audio.silence_sfx();
+        }
+        if tick == 20 {
+            audio.fade_in_sfx(0.02);
+        }
+        curve.push(audio.sfx_fade_gain());
+        assert_eq!(sfx_bus(&audio), 0.5 * audio.sfx_fade_gain(), "tick {tick}");
+        audio.tick();
+    }
+    assert!(
+        curve[..=20].iter().all(|&g| g == 0.0),
+        "silent through tick 20"
+    );
+    for tick in 21..=70 {
+        let want = (tick - 20) as f32 * 0.02;
+        assert!(
+            (curve[tick] - want.min(1.0)).abs() < 1e-5,
+            "tick {tick}: {}",
+            curve[tick]
+        );
+    }
+    // The original adds the step in `f32` too, so the last call may land a hair under one and
+    // the clamp take it on the next.
+    assert!(curve[69] < 0.99, "still climbing at tick 69");
+    assert!(curve[70] > 0.999, "full within a call of tick 70");
+    assert!(
+        curve[71..].iter().all(|&g| g == 1.0),
+        "exactly full from tick 71"
+    );
+    audio.silence_sfx();
+    audio.stop_race_sfx();
+    assert_eq!(sfx_bus(&audio), 0.5, "leaving the race restores the slider");
+}

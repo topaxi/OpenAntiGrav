@@ -195,9 +195,36 @@ overlay draws them for HD yet.
   starts the circuit's `Data\Sound\PreRaceDialogue\<n>_Track.at3` voice-over as the lock counter
   reaches zero (tick 60 of the flyby), and the flyby's end stops the music player
   ([the call sites](../ghidra/functions/psp-pulse-usa/race-intro.md#the-music-the-two-counter-calls-and-the-exit-stop-read-2026-11-02-lane-pulse-flyby-music)).
-  The race song is not touched: it waits for `go`. The counter's other call (`0x28`) fades the
-  **sound effects** back in over 50 calls after 20 silent ones; the flyby runs no race sounds here,
-  so that fade is not ported and the effects start with the countdown.
+  The race song is not touched: it waits for `go`.
+- **The sound effects** (ported 2026-11-02, lane `pulse-flyby-sfx`): substate 0 snaps the effects
+  fade to silence and the counter's other call (`0x28`, flyby tick 20) starts
+  `Audio_StartSfxFadeIn(0.02)`, so the effects are silent for 20 calls and then climb `0.02` a call
+  to the SFX Volume fraction, full 50 calls on (tick 70)
+  ([the call sites](../ghidra/functions/psp-pulse-usa/race-intro.md#the-music-the-two-counter-calls-and-the-exit-stop-read-2026-11-02-lane-pulse-flyby-music)).
+  Ours: `PreRace::effects_fade_in` (Pulse's, measured off the executable) raises
+  `IntroCue::SilenceEffects` on tick 0 and `IntroCue::FadeInEffects` on tick 20; `oag_sound::Audio`
+  multiplies the Sfx bus by the fade, one step per `Audio::tick`, and `stop_race_sfx` releases it so
+  a flyby quit half-way leaves the menus at their slider. The session now also runs
+  `sound::race_tick` under the flyby, so the held world's engines at idle and the circuit's ambience
+  sound from the flyby camera's ears; the world still does not tick (the cues are output, not
+  `World` state). A held Cross ending the flyby at tick 60 leaves the ramp at 0.8; it finishes in
+  the countdown, as the original's per-frame update does. **A call is one tick (60 Hz)**: the lock
+  counter that times the fade is one decrement per `RaceMode_UpdateIntro` call and 60 of them are
+  the 60 ticks the lock measured, and `Audio_UpdateGroupVolumes` runs once a frame beside it
+  ([audio-levels.md](../ghidra/functions/psp-pulse-usa/audio-levels.md)); that the PSP holds 60 frames
+  a second through the flyby is **chosen, not measured**. Whether the cue lands a call before or
+  after the first step is unread: ours reads `0` on tick 20 and `0.02` on tick 21 in a window, one
+  call earlier in a `--dump-audio` capture.
+  **What is audible is unwatched**: no PPSSPP audio dump was taken, so which effects the original
+  plays under its flyby is not known. Here the engines and ambience play through the usual spatial
+  law from the flyby camera; on `03_Track` the camera opens 932 units from the grid and the craft
+  is out of the engine's range for the whole fade (the first sound is at about tick 390), and on
+  `01` to `16` (eight circuits tried) none is within earshot by tick 80. So the fade is wired and
+  measured at the bus, but on these circuits nothing is in range to be quieted by it.
+- **Other titles, effects fade (checked 2026-11-02)**: *checked, differs.* HD's fly-over sits on the
+  `PreRace` mix row ([now-playing.md](../formats/now-playing.md)), which authors its own buses; its
+  `PreRace` rule carries no `effects_fade_in` and the fade never touches an HD bus (the Sfx bus is
+  left to the authored mix). 2048 and Omega inherit HD's mix; Pulse PS2's flyby is off.
 - **The screen wash** the original starts when the flyby ends (`ScreenFlash` kind 10) is drawn
   (0.7 s of white, the executable's).
 - **Other titles, music (checked 2026-11-02)**: *checked, differs.* Only Pulse's executable calls

@@ -64,14 +64,22 @@ enum Phase {
     Finished,
 }
 
-/// What the flyby asks of the music player, once per tick it happens on. A per-tick output like
-/// a sound cue: nothing here is `World` state.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum VoiceCue {
-    /// Play this archive entry (the circuit's voice-over).
+/// What the flyby asks of the audio, once per tick it happens on. A per-tick output like a sound
+/// cue: nothing here is `World` state.
+#[derive(Debug, Clone, PartialEq)]
+pub enum IntroCue {
+    /// Play this archive entry (the circuit's voice-over) through the music player.
     Start(String),
     /// Stop whatever the flyby started.
     Stop,
+    /// Snap the sound effects to silence (`Audio_SetSfxFadeTarget(0)`).
+    SilenceEffects,
+    /// Start the effects fade-in from silence, `per_tick` more gain on each tick after this one
+    /// (`Audio_StartSfxFadeIn`).
+    FadeInEffects {
+        /// The gain added per tick.
+        per_tick: f32,
+    },
 }
 
 /// What one tick of the flyby's clock says.
@@ -163,8 +171,8 @@ pub struct IntroCamera {
     skip_requested: bool,
     /// The voice-over's archive entry, where the title plays one.
     voice: Option<String>,
-    /// Music-player calls raised and not yet taken, in order.
-    cues: Vec<VoiceCue>,
+    /// Audio calls raised and not yet taken, in order.
+    cues: Vec<IntroCue>,
 }
 
 impl IntroCamera {
@@ -254,11 +262,21 @@ impl IntroCamera {
         // stops it in one call, so it is never heard.
         let k = self.timeline.ticks();
         let beat = self.timeline.step(skip || self.skip_requested, dt);
+        // The effects go silent in the intro's first call and the fade-in starts when the counter
+        // reads its value, both before the exit test, so a skip cannot cut the fade short.
+        if let Some((start, per_tick)) = self.rule.effects_fade_start() {
+            if k == 0 {
+                self.cues.push(IntroCue::SilenceEffects);
+            }
+            if k == start {
+                self.cues.push(IntroCue::FadeInEffects { per_tick });
+            }
+        }
         if let Some(entry) = &self.voice {
             match beat {
-                Beat::Over if k > self.rule.lock_ticks.value => self.cues.push(VoiceCue::Stop),
+                Beat::Over if k > self.rule.lock_ticks.value => self.cues.push(IntroCue::Stop),
                 Beat::Show(_) if k == self.rule.lock_ticks.value => {
-                    self.cues.push(VoiceCue::Start(entry.clone()));
+                    self.cues.push(IntroCue::Start(entry.clone()));
                 }
                 _ => {}
             }
@@ -323,8 +341,8 @@ impl Race {
         self.view.intro.as_ref()?.voice.as_deref()
     }
 
-    /// Takes the music-player calls the flyby has raised since the last call, in order.
-    pub fn take_intro_voice(&mut self) -> Vec<VoiceCue> {
+    /// Takes the audio calls the flyby has raised since the last call, in order.
+    pub fn take_intro_cues(&mut self) -> Vec<IntroCue> {
         self.view
             .intro
             .as_mut()

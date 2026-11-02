@@ -89,9 +89,33 @@ pub struct PreRace {
     /// number goes (the leading digits of its `PI_Track` id, as `atoi` reads them, so `03_Track`
     /// is `3`). `None`: the title plays none.
     pub voice_over: Option<Sourced<&'static str>>,
+    /// The sound effects held silent through the flyby and faded back in part-way through it.
+    /// `None`: the title's effects play from the first tick.
+    pub effects_fade_in: Option<Sourced<EffectsFade>>,
+}
+
+/// The flyby's sound-effects fade: silent from the first tick, then a linear ramp from silence
+/// that starts when the lock counter reaches a value.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct EffectsFade {
+    /// The lock counter value (it counts down to zero over `lock_ticks`) at which the ramp starts.
+    pub at_counter: u32,
+    /// The gain added on each tick after it, until it reaches one.
+    pub per_tick: f32,
 }
 
 impl PreRace {
+    /// The flyby tick the effects fade-in starts on, with its step per tick, or `None` for a title
+    /// with no such fade. The counter reads `lock_ticks - tick` after tick `tick`'s decrement.
+    #[must_use]
+    pub fn effects_fade_start(&self) -> Option<(u32, f32)> {
+        let fade = self.effects_fade_in?.value;
+        Some((
+            self.lock_ticks.value.saturating_sub(fade.at_counter),
+            fade.per_tick,
+        ))
+    }
+
     /// The entry holding the voice-over for the circuit whose `PI_Track` id is `track_id`, or
     /// `None` for a title with none or an id that starts with no digit.
     #[must_use]
