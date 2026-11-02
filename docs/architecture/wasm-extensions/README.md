@@ -11,7 +11,7 @@ and the maintainer's examples walked end to end. The engine half is beside it:
 [hooks.md](hooks.md) (where each event is raised and each command lands, at its
 `file:line`, and where the one guest call per tick sits) and
 [determinism-and-state.md](determinism-and-state.md) (floats, fuel, the state
-blob, the hash, replays, network play, web and iOS, the spike's measurements).
+blob, the hash, replays, network play, web and iOS, the measurements).
 Where this page and those two disagree, they own the engine facts and this page
 is to be corrected.
 
@@ -659,8 +659,8 @@ extension = "ext/a_to_b.wasm"      # what data cannot say; optional
   and never another's commands ([hooks.md](hooks.md#the-shape-one-call-per-tick-events-in-commands-out)).
 - **A module is compiled at race load, never per tick**, on the load thread the race
   already builds on (`docs/architecture/race-load-transition.md`); the browser
-  compiles asynchronously (section 5). The spike compiled a 1.6 KB guest in about
-  2 ms ([determinism-and-state.md](determinism-and-state.md#the-spike)).
+  compiles asynchronously (section 5). Measured: a 1.6 KB guest compiles in about
+  2 ms ([determinism-and-state.md](determinism-and-state.md#measurements)).
 - **One craft module per hull per race.** Two enabled mods binding the same team
   identity on the same title: the first by id wins, the second is left out **and
   named in the load report** (`mod B: craft extension for "feisar" already provided
@@ -1242,7 +1242,7 @@ load (an import outside `oag`) or faults at the command check.
 | Not exposed | Why |
 | --- | --- |
 | **No WASI, no files, no network, no environment, no clock, no threads.** The linker holds one import namespace, `oag`, with the functions of `sim-host` or `hud-host` and nothing else | Determinism: a clock or a file is an input the replay does not carry (`docs/architecture/determinism.md`). Safety: a mod is read in place from an untrusted archive; it gets no reach past its own files. The browser cannot grant them anyway ([determinism-and-state.md](determinism-and-state.md#no-threads-no-clock-no-wasi)) |
-| **No state in the guest's own memory across a tick.** One pooled instance per module per tick; the blob is the only thing that crosses a tick boundary | Network rollback restores the race state, not a guest's linear memory; the spike measured a guest with a counter in its own memory **diverging after a rollback** with a persistent instance ([determinism-and-state.md](determinism-and-state.md#mod-state-is-a-fixed-size-blob-in-the-race-state)). Enforced by construction rather than by asking authors to behave |
+| **No state in the guest's own memory across a tick.** One pooled instance per module per tick; the blob is the only thing that crosses a tick boundary | Network rollback restores the race state, not a guest's linear memory; measured: a guest with a counter in its own memory **diverging after a rollback** with a persistent instance ([determinism-and-state.md](determinism-and-state.md#mod-state-is-a-fixed-size-blob-in-the-race-state)). Enforced by construction rather than by asking authors to behave |
 | **No raw `World`, `Ship` or `Body` pointer, no shared memory with the host, no reading what the observation did not copy** (another module's blob, the game's `Rng` state, a projectile's internals) | `World` is plain data whose layout changes with nearly every simulation commit ([ADR-0003](../adr/0003-no-ecs.md), [ADR-0055](../adr/0055-replays-are-inputs-and-a-ghost-is-poses.md)). A guest reading it by offset breaks on the next field; a guest writing it bypasses every check. Copies in, commands out |
 | **No force, torque or position write; a velocity write only through the capped `impulse`**; no replacing the integrator | The force law is the measured original; a guest scales its inputs (`scale-thrust`), it does not step the body |
 | **No same-tick reaction to an event raised after the call** | The one-tick latency is the price of one call per tick (section 2); a law that needs same-tick reaction is a measured original's and belongs in the engine |
@@ -1264,7 +1264,7 @@ load (an import outside `oag`) or faults at the command check.
 
 ### 4.1 Engine configuration and the load-time rewrite
 
-wasmtime 50 (the version the spike pinned; `just test-wasm` runs the simulation
+wasmtime 50 (the version measured; `just test-wasm` runs the simulation
 suites under wasmtime already, `docs/tools/web.md`), configured so everything a
 guest can observe is pinned. The browser has neither fuel nor NaN canonicalisation,
 so both also run as **a rewrite of the module at load**, applied on every engine,
@@ -1273,7 +1273,7 @@ with wasmtime's own switches left on as a second line
 
 | Setting | Value | Why |
 | --- | --- | --- |
-| Fuel | on; a budget per call, set before `tick` (`Store::set_fuel`); plus the rewrite's own counter at function entries and loop headers, trapping at zero, identical on every engine; wasmtime's fuel a higher backstop | the only portable work bound; a wall-clock epoch traps at different instructions on different machines. The budget bounds loops and calls, not straight-line length (measured). The number is set with the first real hook; the spike's toy used about 168 units a tick |
+| Fuel | on; a budget per call, set before `tick` (`Store::set_fuel`); plus the rewrite's own counter at function entries and loop headers, trapping at zero, identical on every engine; wasmtime's fuel a higher backstop | the only portable work bound; a wall-clock epoch traps at different instructions on different machines. The budget bounds loops and calls, not straight-line length (measured). The number is set with the first real hook; the toy measured used about 168 units a tick |
 | NaN canonicalisation | `cranelift_nan_canonicalization(true)`, plus the rewrite inserting the same canonicalisation after every float op | measured: on, every arithmetic NaN read `7fc00000` on both engines; off, `ffc00000` with a payload |
 | Relaxed SIMD, threads, shared memory, memory64, SIMD | off / refused at load | the deterministic subset; `simd128` only after the conformance test passes with it |
 | Memory | the manifest's `memory_pages`, the same `StoreLimits` on every engine, ceiling 256 pages (16 MiB, proposed) | `memory.grow` fails at the same size everywhere |
@@ -1304,7 +1304,7 @@ with wasmtime's own switches left on as a second line
   author gets the tick.
 - **The fault edge is simulation state**: the fault flag and the tick are hashed;
   the fuel total is not (its per-operator costs are wasmtime's own and the browser
-  has none). Same inputs, same fault tick on every machine: the spike's runaway loop
+  has none). Same inputs, same fault tick on every machine: the measured runaway loop
   trapped at the same iteration on Cranelift and Pulley.
 - **Shown, not only logged**: the HUD's MODDED tag and the results screen name the
   mod and the tick.
@@ -1415,8 +1415,8 @@ registered? **No.**
 
 | Target | Engine | How the module gets in | Status |
 | --- | --- | --- | --- |
-| Linux, Windows, macOS | wasmtime 50, Cranelift | compiled at race load on the load thread | spike: Cranelift and Pulley bit-identical over a 36,000-tick race, fuel trap points included; the native Rust oracle of the same law gives the same hash ([determinism-and-state.md](determinism-and-state.md#the-spike)) |
-| Android | wasmtime, Cranelift (aarch64) | same | same host code; the mobile glue is `oag-mobile` ([ADR-0065](../adr/0065-one-mobile-crate-for-every-phone-os.md)). **Owed**: the spike on an AArch64 machine, where the default NaN differs; the x86 run says nothing about it |
+| Linux, Windows, macOS | wasmtime 50, Cranelift | compiled at race load on the load thread | measured: Cranelift and Pulley bit-identical over a 36,000-tick race, fuel trap points included; the native Rust oracle of the same law gives the same hash ([determinism-and-state.md](determinism-and-state.md#measurements)) |
+| Android | wasmtime, Cranelift (aarch64) | same | same host code; the mobile glue is `oag-mobile` ([ADR-0065](../adr/0065-one-mobile-crate-for-every-phone-os.md)). **Owed**: the measurements on an AArch64 machine, where the default NaN differs; the x86 run says nothing about it |
 | iOS | wasmtime, Cranelift compiling to **Pulley** bytecode on the device (no native code), +11.4 MB; the runtime-and-Pulley-only build (+0.8 MB) needs precompiled `.cwasm` per wasmtime build, brittle | same | **not checked on iOS**: `cargo check --target aarch64-apple-ios` of wasmtime 50 stops in a build script needing Apple's `xcrun`, the macOS-only toolchain `just ios-app` needs; whether `signals_based_traps` must be off there is owed to a macOS machine ([determinism-and-state.md](determinism-and-state.md#web-and-ios)) |
 | Web | the browser's own `WebAssembly`, through `js-sys`; **the web build never links wasmtime** | compiled asynchronously at race load, never per tick (browsers limit synchronous compiles on the main thread); the race load already runs on a Web Worker (`docs/tools/web.md`, "Threads"); per-tick calls copy the observation into the module's memory as on native | needs the load-time rewrite (fuel, NaN canonicalisation, call depth) before it can match; not run yet |
 
@@ -1439,11 +1439,11 @@ dependency fits inside that:
 
 | Crate | Licence | Role | Note |
 | --- | --- | --- | --- |
-| `wasmtime` 50 (with `cranelift`, `pulley`, `runtime`, `pooling-allocator`; without `wasi`, `cache`, `parallel-compilation`, `async`, `profiling`, `coredump`, `addr2line`, `debug-builtins`, `component-model`, `threads`) | Apache-2.0 WITH LLVM-exception (read off the crate's own `Cargo.toml` in the spike) | the engine | the LLVM exception only loosens Apache's attribution clause for binaries; compatible with both halves of ours |
+| `wasmtime` 50 (with `cranelift`, `pulley`, `runtime`, `pooling-allocator`; without `wasi`, `cache`, `parallel-compilation`, `async`, `profiling`, `coredump`, `addr2line`, `debug-builtins`, `component-model`, `threads`) | Apache-2.0 WITH LLVM-exception (read off the crate's own `Cargo.toml` in the measurements) | the engine | the LLVM exception only loosens Apache's attribution clause for binaries; compatible with both halves of ours |
 | `cranelift-codegen` 0.137 and family, `pulley-interpreter` 50 | Apache-2.0 WITH LLVM-exception | wasmtime's backends | transitive |
 | `wasmparser`, `wasm-encoder` | Apache-2.0 WITH LLVM-exception | the load-time rewrite (fuel counter, NaN canonicalisation, call depth) and the feature check before compiling | the same bytes go to wasmtime and to the browser |
 | `wasmtime-wasi` | Apache-2.0 WITH LLVM-exception | **not used** | listed to say so: no WASI |
-| `wit-bindgen`, `wasm-tools` | Apache-2.0 WITH LLVM-exception | **not a runtime dependency**: the WIT on this page is documentation; guests are plain `wasm32-unknown-unknown` Rust over the I/O buffer, as the spike's is | an example mod may generate its bindings with them at its own build time |
+| `wit-bindgen`, `wasm-tools` | Apache-2.0 WITH LLVM-exception | **not a runtime dependency**: the WIT on this page is documentation; guests are plain `wasm32-unknown-unknown` Rust over the I/O buffer, as the measured guest is | an example mod may generate its bindings with them at its own build time |
 | `js-sys`, `web-sys`, `wasm-bindgen` | MIT OR Apache-2.0 | the web host | already in the tree for the web build (`crates/game/Cargo.toml`) |
 | `sha2` | MIT OR Apache-2.0 | module hashes in the fingerprint and the replay header | or `ring`'s digest, already linked by `oag-net` |
 
@@ -1673,7 +1673,7 @@ channel; the HUD layout files are planned separately.
     maintainer.
 11. **Hot reload** of a module during a race for mod authors (a `--reload-extensions`
     debug flag): useful, and incompatible with the hash; debug builds only, if at all.
-12. **iOS and AArch64**: the spike on an AArch64 machine and the wasmtime build on
+12. **iOS and AArch64**: the measurements on an AArch64 machine and the wasmtime build on
     iOS (`xcrun`), both owed to hardware this machine does not have.
 13. **A per-seat tune on the wire** (section 2.3): the server receives each seat's
     tune bytes with the seat at race start, so players may differ; what that adds to
@@ -1707,7 +1707,7 @@ not move ([hooks.md](hooks.md#what-has-to-be-built-in-order)):
    I/O buffer ABI, fuel, the fault path, the pooled per-tick instance, the load-time
    checks), no call site wired, behind the `extensions` feature, built lazily at the
    first module load (section 4.5), with the no-`Engine` test and the
-   vanilla-hashes-unchanged test. The ADR accepted; the spike's result on this page.
+   vanilla-hashes-unchanged test. The ADR accepted; the result is on this page.
 2. **Phase 1, no simulation code**: the `hud` world, `[[extension.hud]]` and the
    `hud/*.toml` widget box, one example widget (the lap-delta graph) in
    `mod-examples`. Proves the host on low-stakes code.
