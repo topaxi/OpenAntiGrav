@@ -43,6 +43,7 @@
 //! "is it about racing".
 //!
 //! [ADR-0009]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0009-multi-game-fanout.md
+//!
 //! [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 
 /// The ship directory Pulse, Pure and HD all spell identically; 2048 does not.
@@ -363,15 +364,6 @@ impl ZoneStageTextures {
 /// 2048 reads this threshold table. HD/Fury's `Environment_UpdateStageBlend`
 /// (`0x003da540`) takes it from a per-craft field (`+0x640`) nothing found writes,
 /// so HD carries `None` rather than 2048's thirteen-stage ladder.
-///
-/// # Why this is an axis and not one shared rule
-///
-/// The two titles that ship a stage table disagree about where the index comes
-/// from. 2048 reads it off this threshold table. HD/Fury's own
-/// `Environment_UpdateStageBlend` (`0x003da540`) takes Zone's index from a
-/// per-craft field (`+0x640`) instead, and nothing found writes it - so HD
-/// carries `None` here rather than 2048's numbers, which name a
-/// thirteen-stage ladder HD does not have.
 ///
 /// [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

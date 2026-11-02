@@ -29,6 +29,7 @@
 /// `Data\XML\HandlingStats.xml` authors five `<GlobalClass>` rungs with `VECTOR`
 /// first and its per-team files four; the original's parser discards the global
 /// `VECTOR` block, so four is the real ladder (`docs/formats/handling-stats.md`).
+///
 /// [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SpeedClasses {

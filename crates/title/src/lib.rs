@@ -24,6 +24,7 @@
 //! [`boot`] is such an axis: both titles' boot sequences were cold-booted, differ
 //! in length as well as content, and neither derives from the other or from its
 //! XML. See [ADR-0023], which supersedes ADR-0022 item 4 for that axis alone.
+//!
 //! [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 //! [ADR-0023]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0023-boot-sequence-as-title-data.md
 

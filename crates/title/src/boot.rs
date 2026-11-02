@@ -105,6 +105,7 @@ pub enum Provenance {
     /// declaration arriving as a measurement by omission must not be possible;
     /// `oag_game::boot::provenance::caveat` enforces it, unit-tested rather than
     /// disc-tested for that reason.
+    ///
     /// [ADR-0054]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md
     Declared,
 }

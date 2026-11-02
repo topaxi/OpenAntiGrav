@@ -28,6 +28,7 @@
 /// in the first has not been found (as `Ship_LoadModel`'s `case 6` was for the
 /// hull). Everything here is name resolution against shipped archives, hence the 94
 /// of a direct probe.
+///
 /// [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ZoneCircuit {
