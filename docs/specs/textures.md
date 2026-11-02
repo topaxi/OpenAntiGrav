@@ -222,8 +222,8 @@ Multiply by 2 to get 0 to 255; no shipped palette entry exceeds 128.
 
 A PS2 `.vex` declares a texture block of length zero. Its textures are separate
 WAD entries named by the same path with the extension replaced by `.pct`
-(`.mip` and `.tga` both become `.pct`) after stripping a leading
-`WIPEOUT PSP\PS2\`. A name that resolves to nothing falls back to
+(`.mip` and `.tga` both become `.pct`) after stripping
+`WIPEOUT PSP\PS2\` wherever it occurs. A name that resolves to nothing falls back to
 `Data/Tex/Missing.pct`. A model's textures are also gathered into one nested
 WAD, one entry per `Texture` node in node order, for locality; each is also a
 top-level entry.

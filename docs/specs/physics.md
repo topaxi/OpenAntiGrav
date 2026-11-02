@@ -304,7 +304,7 @@ Everything above is Pulse. Rows are the laws the engine carries per title;
 | Grounded drag | `-0.005` | `-0.0025` M 92 | `-0.005` M | I:HD | I:HD |
 | Bank-to-yaw gain | 30 | 50 M 92 | 30 M | I:Pulse | I:Pulse |
 | Pitch gain | XML | `0.1` air, `0.4` ground, code, M 92; no gate, M | XML; gate and in-air bias M | gate and bias I:HD | gate and bias I:HD |
-| In-air pitch bias | `weight_distribution` | none, M (no term in Pure's pitch code) | M | I:HD | I:HD |
+| In-air pitch bias | `weight_distribution` | none, M 92 (no term in Pure's pitch code) | M | I:HD | I:HD |
 | Pitch damping | XML | `1.5` racing, `0.6` on grid, M 92 | XML | XML | XML |
 | Sideshift force | XML | `200.0`, code, M 92 | XML | XML | XML |
 | Inertia mass | 0.9 | 0.9 (I:Pulse) | 1.0 M | 0.9 I:Pulse (open) | 0.9 I:Pulse (open) |

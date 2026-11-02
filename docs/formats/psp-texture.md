@@ -3,8 +3,8 @@
 **Status: understood.** Header, palette and pixel layout are decoded,
 implemented in [`oag-texture::texture`](../../crates/texture/src/texture.rs),
 and confirmed visually: decoded textures render as the Wipeout Pulse logo and
-front-end icon sheets. Three header bytes remain unidentified but do not affect
-decoding.
+front-end icon sheets. The meaning of `+0x05` and of the upper bits of `+0x07` is
+still open; neither affects decoding.
 
 Found inside [WAD](wad.md) archives. Confirmed on Wipeout Pulse PSP; not yet
 checked against PS2, whose blobs are compressed.

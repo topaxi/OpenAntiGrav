@@ -101,7 +101,9 @@ frames; hold the first and last key outside the range.
 
 `LodGroup` (0x2ee): a 64-byte identity, position, `1.0`, a `child_count` u32 (1
 or 2), a fixed 12-byte constant, and, when `child_count` is 2, a switch
-distance `f32`. Confidence 88. Both children are real geometry.
+distance `f32` (`child_count - 1` distances). Confidence 88. Both children are
+real geometry, and the PSP selects one child per frame by view depth
+(`LodGroup_SelectChild`, 85; see `docs/formats/vex.md`).
 
 ## Mesh payload (0x125)
 

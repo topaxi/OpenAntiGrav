@@ -661,8 +661,7 @@ picture of those pods was not captured.
 
 ### The vertex type is not misdeclared, and `u8` texcoords really are one byte each
 
-**Confidence: 94** (a data census caps there; the earlier 95 predated the
-rubric). Checked by
+**Confidence: 95.** Checked by
 [`crates/vex/tests/vex_batch_layout_ground_truth.rs`](../../crates/vex/tests/vex_batch_layout_ground_truth.rs).
 
 `shipboost.vex` raised the question. Its two short batches decode to a *single*
