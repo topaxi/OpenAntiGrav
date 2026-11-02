@@ -389,38 +389,45 @@ hours, M half a day, L a day, XL more than a day (split it).
    rows cannot carry `launch`, and mod key validation waits on `mod-setting-check`. Acceptance: the existing remix launch tests pass, and
    `just gate-affected`. Crates: `oag-ui`, `oag-game`. Size: L (45). Difficulty:
    medium (35). Skill update.
-8. **Move RACE REMIX to `oag.remix`.** Split. **8a:** the page, its rows, the
-   `OAG_REMIX_*` and `OAG_MENU_REMIX*` strings in all four language files, moved
-   into the mod's `strings/`; `check-strings` ratchet updated. Acceptance:
-   `just check-strings` and `just check-names` green; `--menu-page remix` before and
-   after on Pulse. Size: L (45). Difficulty: medium (40). **8b:** what leaves the engine:
-   the page (`assets/ui/menu.toml:387-480`), `settings::Remix` and its flat keys,
-   the fixed `remix_*` value-source names, the `Action::LaunchRemix` name, the 2048
-   REMIX tile hardcode (`touch.rs:120-121`, `campaign2048.rs:200-208`,
-   `launch2048.rs:44`), the page-id hooks (`custom_tracks.rs:103`,
-   `capture/menu_page.rs:188`) and the strings. What stays, renamed and generalised,
-   not removed: the pickers' bodies (`session/remix.rs`),
-   `crates/game/src/remix.rs::catalogue` (it serves `TracksOf` and `TeamsOf` for any
-   title) and the two-source launch rules (as `launch_two_source`). Acceptance: with
-   the mod off, RACEBOX has no REMIX row, the 2048 tile list has no crash, and
-   campaign custom events still race Hillside. Size: XL (40), split further when
-   started. Difficulty: hard (35). Depends on 2-7 and on the `official-mods` repo
-   existing (the maintainer creates it).
+8. **Move RACE REMIX to `oag.remix` (done, 8a and 8b).** `OpenAntiGrav/official-mods` holds
+   `remix/` (manifest, `menu.toml`, `strings/` in four languages), mounted at
+   `assets/mods/official` and on the default search path (`oag_mod::OFFICIAL`). The engine lost
+   the page, the extras' REMIX row, `settings::Remix`/`[remix]`, `Action::LaunchRemix`,
+   `LaunchInputs::remix`, the `remix_tracks`/`remix_teams`/`remix_variant` sources, the per-key
+   resupply and the page-id hooks; `remix_speed_classes`/`remix_ai_difficulty` are
+   `speed_classes_union`/`ai_difficulties`. What the page needed became generic: a query's
+   companion setting (`tracks_of` `craft_title`, `teams_of` `class`, `variants_of` `team`), a
+   choice row's `default`, `oag_game::remix::settle_queries` (a mod pick follows its row, a change
+   re-lists down the chain), CUSTOM and `--menu-page` following `titles_available` rows, 2048's
+   tiles as `Launch::Page` for RACEBOX, the rows mods attach under it, and MULTIPLAYER. The strings
+   Rust reads are `OAG_RACE_NO_DRIVER`, `OAG_CUSTOM_TRACKS`, `OAG_CUSTOM_TRACKS_CHECKING`.
+   Differences from before, by design: the page's MODE, SPEED CLASS and AI DIFFICULTY are its
+   own (`mod.oag.remix.*`), no longer the RACE page's; a TEAM pick is kept across a CRAFT TITLE
+   change when the new roster has it. Tests: `crates/game/tests/official_remix.rs`,
+   `query_resolve_ground_truth.rs`, `boot::tests` (2048 tiles), `launch_keys::tests`. The
+   Hillside cell of NIGHT RUN was not driven to a race with the mod off (it is behind the
+   campaign's unlock chain in a fresh profile); `custom_campaign_ground_truth` resolves it from
+   the two example mods alone, and no campaign launch code changed.
 9. **Bundle and enable.** Claim: the delivery chosen in ADR-B is in place for
    each target the ADR names. Acceptance: `just mods-list` shows `oag.remix` from a
    fresh clone; the packaged build's file list is checked by reading the recipe
    (the packaged build runs on CI and is verified locally only). Crates: `oag-mod`
-   (one constant), `packaging/`. Size: M (45). Difficulty: medium (40). Depends on
-   8. Acceptance also: `ci.yml` stays green without access to the private repo
-   (option ii or iv above), and release and nightly build with the mod absent.
+   (none: `OFFICIAL` landed in lane 8), `packaging/`. Size: M (45). Difficulty: medium (40).
+   What it needs, read in lane 8: `ci.yml`'s `submodules: true` already checks out the public
+   `assets/mods/official` (no token); `release.yml` (checkouts at about :90, :146, :193, :249,
+   :309) and `nightly.yml` set no `submodules`, so a release ships without RACE REMIX until they
+   check it out and copy `assets/mods/official/remix` to `mods/remix` beside the executable
+   (AppImage: beside the `.AppImage` file, or inside the image with a new search entry; AUR:
+   beside `/usr/bin/oag-game`; macOS: beside the bundle's executable). Web and phones: none
+   (ADR-0083 decision 5). `oag-extras` no longer carries REMIX, so a release without the
+   folder has no RACE REMIX at all: ADR-0083's consequence says not to ship lane 8 to players
+   before the desktop recipes copy the folder.
 
-**Before lane 8 starts, the lead should confirm:** the repo exists, the launch
-option, and the delivery per target.
+Lane 8 confirmed before it started: the repo exists (public), launch option 2, folder delivery.
 
 ## Next Steps
 
 1. Done: ADR-0082 and ADR-0083 accepted. Open: read whether the web and mobile builds can
    search for mods at all, and pick their delivery (ADR-0083 decision 7).
-2. Populate the public `OpenAntiGrav/official-mods` with `remix/oag-mod.toml` (id `oag.remix`).
-3. Spawn lane 4 (fingerprint) first, since it is small and blocks nothing; then
-   lanes 2-3, 5, 6 and 7 in order; lane 8 last.
+2. Lane 9: the release and nightly recipes check out `assets/mods/official` and copy `remix/`
+   beside the executable (see item 9).

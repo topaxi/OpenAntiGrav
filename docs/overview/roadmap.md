@@ -1725,7 +1725,9 @@ byte-identical to an ordinary race, proven by `race_remix_ground_truth.rs`
 loading every combination twice, once plain and once naming its own source
 as `craft_source`, and diffing the result.
 
-A `RACE REMIX` entry on the front-end menu's main page wires the same path
+A `RACE REMIX` entry under RACEBOX, carried by the official mod `oag.remix`
+([mods](../tools/mods.md#official-mods-assetsmodsofficial), ADR-0083; with the mod off
+there is none), wires the same path
 to two title-then-scoped-list pickers (TRACK TITLE → TRACK, CRAFT TITLE →
 TEAM) - present unconditionally rather than gated on "more than one title
 available", since gating it would need new menu-engine machinery the
