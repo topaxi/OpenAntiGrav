@@ -346,6 +346,16 @@ pub(super) fn grid(
         &seat_paints,
         report,
     )?;
+    if craft_title
+        .effect_on(oag_title::Trigger::WreckNode)
+        .is_none()
+    {
+        report.push(format!(
+            "{}: no wreck effect is read for this title (no node blast, death sparks or big blast) \
+             - a wrecked craft draws none",
+            craft_title.name
+        ));
+    }
     report.push(format!(
         "grid liveries: {} - Pulse's roster draw (RaceSession_DrawAiRoster, grid.md) off the race \
          seed {seed:#x}; the original seeds it from the wall clock",

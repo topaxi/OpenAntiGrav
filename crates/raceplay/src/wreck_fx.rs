@@ -43,7 +43,15 @@
 //! smoke ring, the fireball's spread and rise and the debris's rise all read
 //! `0.75` of the unscaled law's (`psys::System::set_frame_scale`, `particle-system.md`).
 //!
-//! Pulse on a PSP disc only: no other title's wreck or `Ship_SetState` is read.
+//! # Titles
+//!
+//! Read on Pulse (PSP). Pure runs the node loop by inheritance: its executable names
+//! `WO_SHIP_FXNODE_EXPLO` and `WO_SHIP_DEATH_SPARKS` and its `Data.wad` authors both, but its
+//! `Ship_SetState` is unread. It throws no big blast: `WO_SHIP_EXPLOSION` is in neither its
+//! executable nor its archive (`WO_SHIP_FXNODE_BIGEXPLO`, `WO_SHIP_EXPLO_SMOKE` and
+//! `WO_SHIP_EXPLOSION_DEBRIS` are, unwired - `docs/formats/pure-status.md`). HD, 2048 and Omega
+//! draw no wreck effect: HD's executable names neither node effect
+//! (`docs/ghidra/functions/ps3-hdfury-eu/particle-triggers.md`).
 
 use super::*;
 use oag_livery::SparkAnchor;
@@ -94,6 +102,8 @@ pub(super) struct WreckFx {
     started: u32,
     /// Where the big blast last went, for tests.
     last_explosion_at: Option<Vec3>,
+    /// Whether the title throws the big blast and its shockwave at all.
+    big_blast: bool,
 }
 
 impl WreckFx {
@@ -103,7 +113,14 @@ impl WreckFx {
             riding: Vec::new(),
             started: 0,
             last_explosion_at: None,
+            big_blast: true,
         }
+    }
+
+    /// Whether the big blast is thrown when a wreck's state times out.
+    pub(super) fn with_big_blast(mut self, on: bool) -> Self {
+        self.big_blast = on;
+        self
     }
 }
 
@@ -147,7 +164,7 @@ impl Race {
     /// craft put back on the track in between is not where the blast goes). A
     /// source with no wreck read (every title but Pulse) throws nothing.
     pub(super) fn throw_wreck_explosion(&mut self, slot: usize, model: Mat4) {
-        if self.view.wreck_fx.anchors.get(slot).is_none() {
+        if !self.view.wreck_fx.big_blast || self.view.wreck_fx.anchors.get(slot).is_none() {
             return;
         }
         // The shockwave is built from the matrix before its translation is moved, and is

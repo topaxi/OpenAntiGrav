@@ -144,3 +144,27 @@ start and a coin) now turns; the struck craft's numbers above were taken
 **before** that, and the smoke was never the gap (see the paragraph before
 "Result"), so they are not re-measured here. Confidence 80 on the law, from the
 instructions alone, **not** yet measured live.
+
+## Other titles (inherited, 2026-11-02)
+
+Each title's table (`oag_title::Effects`) answers the triggers; the effect files and locators
+are the title's own. Provenance is `Origin::InheritedFrom`, never a measurement.
+
+| | Hit sparks (`HitSpark`) | Absorb burst (`ShieldAbsorb`) | Wreck (`WreckNode`, `WreckSparks`, `WreckExplosion`) |
+| --- | --- | --- | --- |
+| Pure | Pulse's `Ship_Damage` sparks on its `Ship Collision Fx` locators, plus `.COLLISIONS` (the `ShipCollisionFx_Trigger` gate is Pulse's, `psp-pure-usa/rocket-and-collision-fx.md`; the caller is unread on Pure) | already its own, measured (8 nodes) | node blast and death sparks on the five to seven `Ship Collision Fx` locators of `Shipwreck.vex` (both names are in Pure's executable and `Data.wad`); **no big blast and no shockwave**: `WO_SHIP_EXPLOSION` is in neither, and `WO_SHIP_FXNODE_BIGEXPLO`, `WO_SHIP_EXPLO_SMOKE`, `WO_SHIP_EXPLOSION_DEBRIS` are named but unwired |
+| 2048, Omega | HD's Cannon craft-hit spark (`WO_SHIP_SPARK_DAMAGE_WEAPON`, `Trigger::WeaponSpark`) | HD's three mirrored pairs over the six `absorb` locators (`Burst::HD`) | none: HD names neither node effect, so the loader reports "no wreck effect is read" |
+
+2048 and Omega take HD's law, not Pulse's, because HD has a measured mechanism for each (project
+rule: unmeasured 2048 rules take HD/Omega law). Cross-check against the other title of the pair:
+
+- **Absorb burst, 2048 and Omega: ported.** Both ship the six `absorb` locators on every hull
+  (census: Feisar2048 and `hdships` on 2048, every `hdships` team on Omega) and
+  `WO_WEAPON_ABSORB` under their own particle directory; the burst starts 2/4/6 craft-side
+  instances at 0.0/0.2/0.4 s on both (`absorb_ground_truth.rs`, one test each).
+- **Cannon craft-hit spark, 2048 and Omega: ported** (`hit_effects_inherit_ground_truth.rs`),
+  trigger site unread on both; Omega's `ShipCollisionFx_Trigger` `kind 1` names the same effect.
+- **Other weapons' hit sparks and the `WO_DAMAGE_*` smoke: checked, applies, not wired** (2048's
+  `Ship_RegisterEffectSet_q` preloads them, Omega's `FUN_016f3ef0` names them).
+- **Wreck effects: checked, differs.** HD's executable carries neither node-effect string; Pulse's
+  rule does not transfer. 2048's wreck preload is `WO_DEBRIS_SPARKS`/`WO_DEBRIS_FIRE`, unread.

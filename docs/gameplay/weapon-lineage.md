@@ -113,10 +113,10 @@ Values: a path is the exact string in the source; `set` is `Some(..)` (or
 | `weapon_models.cannon_look` | `none` - measured | `none` - absent | `set` - measured | `none` - unread | `set` - inherited |
 | `weapon_models.ghost_static` | `set` - measured | `set` - measured | `none` - measured | `set` - inherited | `set` - inherited |
 | `weapon_models.cockpit_hit` | `set` - measured | `set` - inherited | `none` - measured | `none` - measured | `none` - unread |
-| `effects.hit_spark` | `set` - measured | `none` - unread | `none` - unread | `none` - unread | `none` - unread |
+| `effects.hit_spark` | `set` - measured | `set` - inherited | `none` - unread | `none` - unread | `none` - unread |
 | `effects.leach_hit_spark` | `set` - measured | `none` - absent | `set` - measured | `none` - unread | `none` - unread |
-| `effects.weapon_spark` | `none` - unread | `none` - unread | `set` - measured | `none` - unread | `none` - unread |
-| `effects.shield_absorb` | `set` - measured | `set` - measured | `set` - measured | `none` - unread | `none` - unread |
+| `effects.weapon_spark` | `none` - unread | `none` - unread | `set` - measured | `set` - inherited | `set` - inherited |
+| `effects.shield_absorb` | `set` - measured | `set` - measured | `set` - measured | `set` - inherited | `set` - inherited |
 | `effects.bomb_rays` | `none` - absent | `none` - absent | `set` - measured | `none` - unread | `none` - unread |
 
 Notes on the cells the code does not explain by itself:
@@ -302,7 +302,7 @@ it fires, not that the rate matches any original's.
 | Shield | M: three colours, shell and sphere; PS2 draws `extrashield.vex` | ?: not investigated | M: two of three colours read | I:Pulse | I:Pulse |
 | HUD rounds left (`SubWeapon`, Cannon) | M: `PlayerStatus_Update` `%d` of `craft+0x154`, armed at the grant ([sub-weapon.md](../ghidra/functions/psp-pulse-usa/sub-weapon.md)); drawn under the icon | A | M: the same writer (`0x000cb928`), drawn under the icon | ?: checked, applies, not wired: the same writer, but the widget sits in the grant announcement's cluster, whose runtime visibility is unread | M: the same writer, read in Omega's own executable (`FUN_012e5470`, `%d` of `pickup+0x164`); drawn through HD's layouts |
 | HUD seconds left (`SubWeapon`, Autopilot) | M: `%1.2f` of the timer, seen live (`5.00`) and matched by ours; the icon stays up while it runs | M: read (`0x08922340`); drawn, though Pure's pickup icons do not | M: the same writer; drawn | ?: the same, held back with the line above | M: the same writer, read in Omega's own executable (`%1.2f` of `pickup+0x158`); drawn |
-| Hit sparks | M: `Ship_Damage` branch | ?: `Ship_Damage` unread | M: `WO_SHIP_SPARK_DAMAGE_WEAPON` | ?: unread | ?: names located (`ShipCollisionFx_Trigger` `kind 1`), the event that raises it unread |
+| Hit sparks | M: `Ship_Damage` branch | I:Pulse: the same sparks and `.COLLISIONS` cue (`Ship_Damage` unread; its `ShipCollisionFx_Trigger` is Pulse's) | M: `WO_SHIP_SPARK_DAMAGE_WEAPON` (the Cannon's craft hit) | I:HD: the Cannon's craft-hit spark; the other weapons' trigger unread | I:HD: the same; `ShipCollisionFx_Trigger` `kind 1` located, the event that raises it unread |
 | Disruptor | A | ?: effect blocks authored, four have no parser branch | A | A | A |
 
 **HD's blends are encoded (2026-10-22, `hd-blend-space`).** Every HD weapon visual drawn into

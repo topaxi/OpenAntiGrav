@@ -158,6 +158,55 @@ fn hd_plays_three_mirrored_pairs_on_its_absorb_locators() {
     );
 }
 
+/// Pure: Pulse's loop over its own eight-node cap, a tenth of a second apart. Its table's
+/// `ShieldAbsorb` entry carries the burst, so dropping it draws nothing.
+#[test]
+#[ignore = "needs data/images/pure-psp-eu.chd"]
+fn pure_plays_a_burst_per_collision_fx_node_up_to_its_cap_of_eight() {
+    let Some(loaded) = single_race("data/images/pure-psp-eu.chd", Some("Assegai")) else {
+        return;
+    };
+    let started = absorb_and_watch(loaded);
+    println!("started by each tick after the absorb: {started:?}");
+    assert_eq!(started[0], 1, "node 0 has no delay");
+    let last = started.last().copied().expect("ticks ran");
+    assert!(
+        (1..=8).contains(&last) && last > 1,
+        "Pure started {last} bursts, expected its hull's locators up to the cap of eight"
+    );
+}
+
+/// 2048 and Omega take HD's absorb burst by inheritance: the six `absorb` locators of a hull
+/// in three mirrored pairs, 0.2 s apart. Without the table entry's burst, nothing starts.
+fn hd_lineage_burst(image: &str) {
+    let Some(loaded) = single_race(image, None) else {
+        return;
+    };
+    assert!(
+        loaded
+            .report
+            .iter()
+            .any(|line| line.contains("6 absorb locator(s)")),
+        "the hull no longer reports six absorb locators"
+    );
+    let started = absorb_and_watch(loaded);
+    println!("started by each tick after the absorb: {started:?}");
+    assert_eq!(started[0], 2, "the outer pair starts together");
+    assert_eq!(started.last().copied(), Some(6), "three pairs of two");
+}
+
+#[test]
+#[ignore = "needs data/extracted/vita/PCSF00007"]
+fn the_2048_plays_hds_three_mirrored_pairs() {
+    hd_lineage_burst("data/extracted/vita/PCSF00007");
+}
+
+#[test]
+#[ignore = "needs data/images/omega-ps4-eu.pkg"]
+fn omega_plays_hds_three_mirrored_pairs() {
+    hd_lineage_burst("data/images/omega-ps4-eu.pkg");
+}
+
 /// Pulse's hull overlay: its projection resolves on the disc's own hull, and
 /// the pulse a pickup absorb starts runs its one-second window - climbing one
 /// frame's `2 * dt` a tick to `2.0`, and gone after.

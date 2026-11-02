@@ -254,11 +254,32 @@ pub const TITLE: &Title = &Title {
 /// hidden absence. See `docs/formats/pob.md`, "Effects Pulse names that
 /// Wipeout 2048 never authors".
 const EFFECTS: oag_title::Effects = {
-    use oag_title::Trigger;
+    use oag_title::{Burst, EffectSpec, Origin, Trigger, engine_effects};
     let mut effects = oag_title::Effects::engine(oag_title::Origin::InheritedFrom("Wipeout Pulse"))
         .without(Trigger::PlasmaBlast)
         .without(Trigger::EngineFlare)
-        .without(Trigger::LeachbeamEnergy);
+        .without(Trigger::LeachbeamEnergy)
+        // The absorb burst and the Cannon's craft-hit spark are Wipeout HD's measured laws
+        // (`Trigger::ShieldAbsorb`, `Trigger::WeaponSpark` in `oag_hd::effects`), taken by
+        // inheritance: this title ships HD's `absorb` locators and `Ship Collision Fx`
+        // locators on every hull and authors both effect files, and its executable carries
+        // the same strings. The trigger sites are unread here
+        // (`docs/gameplay/weapon-lineage.md`).
+        .with(
+            Trigger::ShieldAbsorb,
+            EffectSpec::new(
+                engine_effects::ABSORB_EFFECT,
+                Origin::InheritedFrom("Wipeout HD"),
+            )
+            .with_burst(Burst::HD),
+        )
+        .with(
+            Trigger::WeaponSpark,
+            EffectSpec::new(
+                engine_effects::WEAPON_SPARK_EFFECT,
+                Origin::InheritedFrom("Wipeout HD"),
+            ),
+        );
     effects.scenery = &[oag_title::engine_effects::MODESTO_STEAM_EFFECT];
     effects
 };

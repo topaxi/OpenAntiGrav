@@ -1153,6 +1153,10 @@ pub fn load(options: &Options) -> Result<Loaded> {
             #[cfg(feature = "view")]
             wreck_anchors: super::wreck_fx::anchors(craft_title, &liveries),
             #[cfg(feature = "view")]
+            wreck_big_blast: craft_title
+                .effect_on(oag_title::Trigger::WreckExplosion)
+                .is_some(),
+            #[cfg(feature = "view")]
             destroy_stations: super::destroy_camera::stations(circuit_fx, &track_blob, &mut report),
             #[cfg(feature = "view")]
             intro_camera: intro::read(&mut archives, &track, pre_race, &mut report),

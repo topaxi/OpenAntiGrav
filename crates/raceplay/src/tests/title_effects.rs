@@ -77,16 +77,13 @@ fn the_trigger_list_is_in_index_order_and_counts_itself() {
 fn each_trigger_is_answered_by_exactly_the_titles_that_read_it() {
     let has = |trigger| ALL.map(|t| t.effect_on(trigger).is_some());
     // Pulse, Pure, HD, 2048, Omega.
-    assert_eq!(has(Trigger::HitSpark), [true, false, false, false, false]);
+    assert_eq!(has(Trigger::HitSpark), [true, true, false, false, false]);
     assert_eq!(
         has(Trigger::LeachHitSpark),
         [true, false, true, false, false]
     );
-    assert_eq!(
-        has(Trigger::WeaponSpark),
-        [false, false, true, false, false]
-    );
-    assert_eq!(has(Trigger::ShieldAbsorb), [true, true, true, false, false]);
+    assert_eq!(has(Trigger::WeaponSpark), [false, false, true, true, true]);
+    assert_eq!(has(Trigger::ShieldAbsorb), [true, true, true, true, true]);
     // `ShipDamageFx_Update_q` is read on HD alone; 2048 and Omega are
     // "checked, applies, not wired" (their trigger unread).
     for damage in [
@@ -100,13 +97,14 @@ fn each_trigger_is_answered_by_exactly_the_titles_that_read_it() {
             "{damage:?}"
         );
     }
-    for wreck in [
-        Trigger::WreckNode,
-        Trigger::WreckSparks,
-        Trigger::WreckExplosion,
-    ] {
-        assert_eq!(has(wreck), [true, false, false, false, false], "{wreck:?}");
+    // Pure runs Pulse's node loop but has no `WO_SHIP_EXPLOSION`; HD, 2048 and Omega read none.
+    for wreck in [Trigger::WreckNode, Trigger::WreckSparks] {
+        assert_eq!(has(wreck), [true, true, false, false, false], "{wreck:?}");
     }
+    assert_eq!(
+        has(Trigger::WreckExplosion),
+        [true, false, false, false, false]
+    );
     // `NormalBombBlast_Update` (HD, `0x001503d8`) spawns it; no other title's
     // blast does.
     assert_eq!(has(Trigger::BombRays), [false, false, true, false, false]);
@@ -369,8 +367,9 @@ fn the_absorb_burst_is_each_titles_own() {
         burst(oag_hd::TITLE),
         Some(Burst::MirroredPairs { stagger: 0.2 })
     );
-    assert_eq!(burst(oag_2048::TITLE), None);
-    assert_eq!(burst(oag_omega::TITLE), None);
+    // 2048 and Omega take HD's burst by inheritance.
+    assert_eq!(burst(oag_2048::TITLE), Some(Burst::HD));
+    assert_eq!(burst(oag_omega::TITLE), Some(Burst::HD));
 }
 
 #[test]
@@ -389,11 +388,27 @@ fn a_burst_staggers_its_locators_the_way_the_original_spawns_them() {
 }
 
 #[test]
-fn no_title_labels_a_present_effect_chosen_and_the_others_are_measured() {
+fn no_title_labels_a_present_effect_chosen_and_the_others_are_measured_or_inherited() {
+    // What a title takes from another's measured law instead of reading its own, and from whom.
+    let inherited = |title: &Title, trigger: Trigger| match (title.name, trigger) {
+        (n, Trigger::HitSpark | Trigger::WreckNode | Trigger::WreckSparks)
+            if n == oag_pure::TITLE.name =>
+        {
+            Some("Wipeout Pulse")
+        }
+        (n, Trigger::ShieldAbsorb | Trigger::WeaponSpark)
+            if n == oag_2048::TITLE.name || n == oag_omega::TITLE.name =>
+        {
+            Some("Wipeout HD")
+        }
+        _ => None,
+    };
     for title in ALL {
         for trigger in OWN {
             if let Some(spec) = title.effect_on(trigger) {
-                assert_eq!(spec.origin, Origin::Measured, "{} {trigger:?}", title.name);
+                let want =
+                    inherited(title, trigger).map_or(Origin::Measured, Origin::InheritedFrom);
+                assert_eq!(spec.origin, want, "{} {trigger:?}", title.name);
             }
         }
     }
@@ -438,6 +453,8 @@ fn the_flags_the_loader_derived_from_a_name_are_the_titles() {
     }
     assert!(wreck(oag_pulse::TITLE, Platform::Psp));
     assert!(wreck(oag_pulse::TITLE, Platform::Ps2));
+    // Pure swaps in its `Shipwreck.vex` by Pulse's rule, inherited; it ships on PSP only.
+    assert!(wreck(oag_pure::TITLE, Platform::Psp));
     for other in [
         oag_pure::TITLE,
         oag_hd::TITLE,
@@ -445,6 +462,8 @@ fn the_flags_the_loader_derived_from_a_name_are_the_titles() {
         oag_omega::TITLE,
     ] {
         assert!(!psp(other) && !ps2(other), "{}", other.name);
+    }
+    for other in [oag_hd::TITLE, oag_2048::TITLE, oag_omega::TITLE] {
         assert!(!wreck(other, Platform::Psp), "{}", other.name);
     }
 }
