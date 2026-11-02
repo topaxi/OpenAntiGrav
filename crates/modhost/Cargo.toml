@@ -14,7 +14,7 @@ publish = false
 [dependencies]
 # The layout, defined once for the host and the guest SDK.
 oag-ext-abi.workspace = true
-wasmtime = { version = "=50.0.0", default-features = false, features = ["runtime", "cranelift", "std", "pooling-allocator"] }
+wasmtime = { version = "=50.0.1", default-features = false, features = ["runtime", "cranelift", "std", "pooling-allocator"] }
 
 [dev-dependencies]
 # The tests' guests are written in the text format.
