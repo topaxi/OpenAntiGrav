@@ -1,0 +1,9 @@
+toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/mod.tosd", version = "1.0.0" }
+
+[mod]
+id = "test.setting-own"
+name = "Setting own"
+version = "0.1.0"
+authors = ["A. Modder"]
+license = "CC0-1.0"
+description = "One page behind one row."

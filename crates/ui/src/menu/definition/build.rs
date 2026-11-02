@@ -273,6 +273,9 @@ impl Definition {
                 let key = |name: &str| format!("page {:?} entry {row} {name}", page.id);
                 known_string(key("string_id"), &entry.string_id)?;
                 known_string(key("subtitle_string_id"), &entry.subtitle_string_id)?;
+                if let Some(setting) = &entry.setting {
+                    Definition::check_mod_setting(mod_id, &format!("{} {row}", page.id), setting)?;
+                }
                 let context = format!("mod {mod_id} {}", key("row"));
                 let resolved_entry =
                     resolve(entry, &context, local, strings).map_err(|e| match e {

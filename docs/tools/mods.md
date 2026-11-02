@@ -157,7 +157,7 @@ track = "Vostok"
 
 - **Own id only.** A row of mod `oag.example` may name `mod.oag.example.<key>` and nothing
   else (another mod's key, an engine setting such as `race.track`): the load refuses it,
-  naming the mod and the key (`Definition::check_mod_setting`). A mod id carries dots and a
+  naming the mod and the key (`Definition::check_mod_setting`, called for every `[[page.entry]]` row as the page is added). The mod is left out alone and the game keeps running (`crates/game/tests/mods_pages.rs`). A mod id carries dots and a
   key never does, so the key is what follows the last dot.
 - **Kept while off.** Turning a mod off on the MODS page deletes nothing; turning it on
   restores its picks. There is no cleanup and no size cap.

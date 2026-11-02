@@ -332,7 +332,7 @@ title = \"PICKER\"
 [[page.entry]]
 kind = \"toggle\"
 label = \"SPARKS\"
-setting = \"graphics.bloom\"
+setting = \"mod.test.mod.bloom\"
 
 [[page.entry]]
 kind = \"submenu\"
@@ -457,7 +457,7 @@ fn a_mod_cannot_name_another_mods_page_by_its_short_id() {
             text: &extras,
         },
         ModMenu {
-            id: "owner.mod",
+            id: "test.mod",
             text: &owner,
         },
         ModMenu {
@@ -483,7 +483,7 @@ fn a_mod_cannot_name_another_mods_page_by_its_short_id() {
 #[test]
 fn a_template_choice_row_on_a_mod_page_expands_like_one_on_an_engine_page() {
     use crate::menu::{Choice, Menu, RowItem, ValueSource};
-    let text = "[[page]]\nid = \"pool\"\ntitle = \"POOL\"\n[[page.entry]]\nkind = \"choice\"\nlabel = \"SOURCE\"\nsetting = \"test.mod_pool\"\nvalues_from = \"music_pool\"\n[[entry]]\nid = \"pool_row\"\nparent = \"top\"\nkind = \"submenu\"\nlabel = \"POOL\"\ntarget = \"pool\"\n";
+    let text = "[[page]]\nid = \"pool\"\ntitle = \"POOL\"\n[[page.entry]]\nkind = \"choice\"\nlabel = \"SOURCE\"\nsetting = \"mod.test.mod.pool\"\nvalues_from = \"music_pool\"\n[[entry]]\nid = \"pool_row\"\nparent = \"top\"\nkind = \"submenu\"\nlabel = \"POOL\"\ntarget = \"pool\"\n";
     let (mut tree, _) = build_with(&with_header(text)).unwrap();
     let items: Vec<RowItem> = ["a", "b"]
         .iter()
@@ -500,10 +500,10 @@ fn a_template_choice_row_on_a_mod_page_expands_like_one_on_an_engine_page() {
     let page = tree.page("test.mod/pool").expect("the mod's page");
     assert_eq!(page.entries.len(), 2, "the template is replaced, not kept");
     assert_eq!(page.entries.len(), page.meta.len());
-    assert_eq!(page.entries[1].setting(), Some("test.mod_pool.b"));
+    assert_eq!(page.entries[1].setting(), Some("mod.test.mod.pool.b"));
     let menu = Menu::new(tree);
     assert_eq!(
-        menu.expanded_settings("test.mod_pool"),
-        ["test.mod_pool.a", "test.mod_pool.b"]
+        menu.expanded_settings("mod.test.mod.pool"),
+        ["mod.test.mod.pool.a", "mod.test.mod.pool.b"]
     );
 }

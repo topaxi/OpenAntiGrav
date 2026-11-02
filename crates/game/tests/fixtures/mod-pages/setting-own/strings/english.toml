@@ -1,0 +1,3 @@
+[strings]
+TEST_PAGES_SHELF = { text = "SHELF", human = true }
+TEST_PAGES_BACK = { text = "BACK", human = true }
