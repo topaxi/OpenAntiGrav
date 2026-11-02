@@ -64,6 +64,24 @@ cue: **retracted**. The opcode handlers named below (`Scream_OpLfo` `0x8134ee78`
 `0x813502fa`, `Scream_OpGotoRandomMarker` `0x8134fe5c`, the 240 Hz master tick) are real and read
 correctly; they just are not what these two cues use.
 
+## The Vita opcode handlers, read 2026-10-19 (not what `321_NGP` and `Go_NGP` use)
+
+The dispatch table is at `0x8153b4e0` (one 32-bit pointer per opcode, entry `n` at `+4n`; `0x01` and
+`0x09` share `FUN_8134e77e`, the tone-grain start, found by searching the executable for its
+address). It has Pulse's and HD's layout, and every handler logs its own name when tracing is on,
+which names them.
+
+| Opcode | Address | Name | Confidence | Reading |
+| --- | --- | --- | --- | --- |
+| `0x04` | `0x8134ee78` | `Scream_OpLfo` | 85 | Logs `"LFO"`, then `FUN_81351f6a` configures one of four 0x30-byte modulator slots (`byte0 % 4`) from a 16-byte record: `byte1` is what it drives (`FUN_81351cd4`'s switch: `1` volume, `2` pan angle, `3` pitch, `4` another quantity, `5`/`6` another modulator), `byte3` the wave shape, the u16 at `+6` the amplitude, the word at `+0xc` the phase step (one cycle is `0x8000000`) |
+| `0x23` | `0x8134fc16` | `Scream_OpMarker` | 85 | A no-op returning zero |
+| `0x24` | `0x8134fc58` | `Scream_OpGoto` | 88 | Scans the cue's commands for a marker whose **low operand byte** equals its own (`*param_3`), refuses a ninth goto in one tick (`DAT_819d975c < 9`), no marker ends the cue. Pulse and HD compare operand byte 1 (the port's `marker_id`) |
+| `0x29` | `0x813502fa` | `Scream_OpKeyOffVoices` | 88 | Keys off the handler's voices and its type-4 children (`FUN_81355dba`) |
+| `0x2e` | `0x8134fe5c` | `Scream_OpGotoRandomMarker` | 88 | Logs `"Goto Random Marker Ex"`. Record `[first, last, mode, history]`: mode `0` picks `first + rand % (last - first + 1)` (`FUN_813b1410` is `mls`, a signed remainder), no history; modes `1` and `2` keep a ring of the last picks. Then the goto above |
+| master tick | `0x81354b74` | `Scream_RunMasterTicks` | 82 | Accumulates the frames rendered (`DAT_819da2fc`) and runs one tick per `48000 / (240 * m)` frames, `m` = `DAT_8153bc9c`, initialised `1.0` in `FUN_8134af2c` (SCREAM 7.0.29) and written nowhere else; its other reader `FUN_8135718a` is the pitch scale. **240 Hz, read not run** |
+
+The handlers are read correctly. This page first tied them to `321_NGP` and `Go_NGP`, but it had resolved those two names to the wrong cues (`+8`, the bucket); the real cues 70 and 68 use only key-ons, markers, gotos and `0x22`. `0x04` and `0x29` belong to `PLASMA` (`Weapons_NGP.bnk` cue 2).
+
 ## What the port plays (2048)
 
 | Race | Before the correction | Now |
