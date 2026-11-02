@@ -14,10 +14,18 @@ use std::collections::HashMap;
 
 use serde::Deserialize;
 
-use super::{Definition, Error, RowMeta, StringTable, raw, resolve, resolve_subtitle};
+use super::{
+    Definition, Error, Page, RowMeta, StringTable, raw, resolve, resolve_subtitle, resolved,
+};
 
 /// The reserved `parent`: the top level of the main page.
 pub const TOP: &str = "top";
+
+/// Joins a mod's id and one of its page ids into the id the tree carries.
+#[must_use]
+pub fn page_id(mod_id: &str, page: &str) -> String {
+    format!("{mod_id}/{page}")
+}
 
 /// A mod's `menu.toml`, with the id of the mod it came from.
 #[derive(Debug, Clone, Copy)]
@@ -44,6 +52,8 @@ pub struct Added {
     pub mod_id: String,
     /// The ids of the rows it added, in file order.
     pub rows: Vec<String>,
+    /// The tree ids (`<mod id>/<id>`) of the pages it added, in file order.
+    pub pages: Vec<String>,
     /// Rows left out because the tree already had a row with that id
     /// (`only_if_missing`).
     pub skipped: Vec<String>,
@@ -58,6 +68,10 @@ struct ModFile {
     toml_schema: Option<oag_schema::Header>,
     #[serde(default, rename = "entry")]
     entries: Vec<ModEntry>,
+    /// Pages of the mod's own, in the grammar of `assets/ui/menu.toml`; the tree
+    /// names each `<mod id>/<id>` (ADR-0082).
+    #[serde(default, rename = "page")]
+    pages: Vec<raw::Page>,
 }
 
 #[derive(Deserialize)]
@@ -175,11 +189,13 @@ impl Definition {
                 mod_id: mod_id.to_string(),
                 ..Added::default()
             };
+            let mut local = index.clone();
+            tree.add_pages(mod_id, &file.pages, &mut local, strings, english, &mut done)?;
             for entry in &file.entries {
                 tree.attach(
                     mod_id,
                     entry,
-                    &index,
+                    &local,
                     strings,
                     english,
                     &known,
@@ -189,8 +205,97 @@ impl Definition {
             }
             report.push(done);
         }
-        tree.check()?;
+        tree.check().map_err(|e| match e {
+            Error::Unreachable(id) => match id.split_once('/') {
+                Some((owner, short)) => fault(
+                    owner,
+                    format!("page {short:?}"),
+                    "no entry of this mod reaches it (an entry's target names it)",
+                ),
+                None => Error::Unreachable(id),
+            },
+            other => other,
+        })?;
         Ok((tree, report))
+    }
+
+    /// Adds a mod's own pages under `<mod id>/<id>` and lets `local` (the page
+    /// index this mod's rows resolve a `target` against) name them by their short
+    /// id, over the vanilla ids. Another mod's page is never in `local`.
+    fn add_pages(
+        &mut self,
+        mod_id: &str,
+        pages: &[raw::Page],
+        local: &mut HashMap<String, usize>,
+        strings: &StringTable,
+        english: &StringTable,
+        done: &mut Added,
+    ) -> Result<(), Error> {
+        let known_string = |key: String, id: &Option<String>| match id {
+            Some(id) if english.get(id).is_none() && strings.get(id).is_none() => Err(fault(
+                mod_id,
+                key,
+                format!("{id:?} is in no strings file (the project's or this mod's)"),
+            )),
+            _ => Ok(()),
+        };
+        let first = self.pages.len();
+        for page in pages {
+            let key = format!("page {:?} id", page.id);
+            if page.id.is_empty() || page.id.contains('/') {
+                return Err(fault(
+                    mod_id,
+                    key,
+                    "a page id is non-empty and has no '/' (the tree adds the mod's id)",
+                ));
+            }
+            let full = page_id(mod_id, &page.id);
+            if self.pages.iter().any(|other| other.id == full) {
+                return Err(fault(mod_id, key, format!("{full:?} is already a page")));
+            }
+            known_string(
+                format!("page {:?} title_string_id", page.id),
+                &page.title_string_id,
+            )?;
+            local.insert(page.id.clone(), self.pages.len());
+            self.pages.push(Page {
+                id: full.clone(),
+                title: resolved(strings, page.title_string_id.as_deref(), &page.title),
+                entries: Vec::new(),
+                subtitles: Vec::new(),
+                meta: Vec::new(),
+                parked: Vec::new(),
+            });
+            done.pages.push(full);
+        }
+        for (page, at) in pages.iter().zip(first..) {
+            for (row, entry) in page.entries.iter().enumerate() {
+                let key = |name: &str| format!("page {:?} entry {row} {name}", page.id);
+                known_string(key("string_id"), &entry.string_id)?;
+                known_string(key("subtitle_string_id"), &entry.subtitle_string_id)?;
+                let context = format!("mod {mod_id} {}", key("row"));
+                let resolved_entry =
+                    resolve(entry, &context, local, strings).map_err(|e| match e {
+                        Error::NoSuchPage { id, .. } => {
+                            fault(mod_id, key("target"), format!("no page {id:?}"))
+                        }
+                        Error::NoSuchAction { name, known, .. } => fault(
+                            mod_id,
+                            key("action"),
+                            format!("{name:?} is not an action ({known})"),
+                        ),
+                        other => fault(mod_id, key("row"), other.to_string()),
+                    })?;
+                let target = &mut self.pages[at];
+                target.entries.push(resolved_entry);
+                target.subtitles.push(resolve_subtitle(entry, strings));
+                target.meta.push(RowMeta {
+                    id: entry.id.clone(),
+                    parent: None,
+                });
+            }
+        }
+        Ok(())
     }
 
     /// Keeps the main-page rows the title's own menu opens, in the disc's order.

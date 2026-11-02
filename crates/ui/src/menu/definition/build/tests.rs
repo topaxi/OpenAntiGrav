@@ -323,3 +323,159 @@ fn pulse_words_the_multiplayer_row_as_its_disc_does() {
     assert_eq!(label_of(oag_pure::TITLE).0, "MULTIPLAYER");
     assert_eq!(label_of(oag_hd::TITLE).0, "MULTIPLAYER");
 }
+
+const PAGE_MOD: &str = "
+[[page]]
+id = \"picker\"
+title = \"PICKER\"
+
+[[page.entry]]
+kind = \"toggle\"
+label = \"SPARKS\"
+setting = \"graphics.bloom\"
+
+[[page.entry]]
+kind = \"submenu\"
+label = \"DEEPER\"
+target = \"deeper\"
+
+[[page]]
+id = \"deeper\"
+title = \"DEEPER\"
+
+[[page.entry]]
+kind = \"action\"
+label = \"BACK\"
+action = \"quit\"
+
+[[entry]]
+id = \"picker_row\"
+parent = \"racebox\"
+kind = \"submenu\"
+label = \"PICKER\"
+target = \"picker\"
+";
+
+fn build_with(mod_text: &str) -> Result<(Definition, Vec<Added>), Error> {
+    let extras = extras();
+    let mods = [
+        ModMenu {
+            id: "oag.extras",
+            text: &extras,
+        },
+        ModMenu {
+            id: "test.mod",
+            text: mod_text,
+        },
+    ];
+    let english = english();
+    Definition::build(crate::menu::BUILT_IN, &english, &english, None, &mods)
+}
+
+fn with_header(body: &str) -> String {
+    format!("{HEADER}{body}")
+}
+
+fn mod_error(mod_text: &str) -> (String, String) {
+    match build_with(&with_header(mod_text)) {
+        Err(Error::Mod { mod_id, key, .. }) => (mod_id, key),
+        other => panic!("expected a mod error, got {:?}", other.map(|(_, a)| a)),
+    }
+}
+
+#[test]
+fn a_mod_page_merges_under_its_namespaced_id_and_its_row_reaches_it() {
+    let (tree, report) = build_with(&with_header(PAGE_MOD)).unwrap();
+    let picker = tree.page("test.mod/picker").expect("the mod's page");
+    assert_eq!(picker.entries.len(), 2);
+    assert!(tree.page("test.mod/deeper").is_some());
+    assert!(
+        tree.page("picker").is_none(),
+        "the short id is not a tree id"
+    );
+    let added = report.iter().find(|a| a.mod_id == "test.mod").unwrap();
+    assert_eq!(added.pages, ["test.mod/picker", "test.mod/deeper"]);
+    let at = tree
+        .pages
+        .iter()
+        .position(|p| p.id == "test.mod/picker")
+        .unwrap();
+    let racebox = tree
+        .pages
+        .iter()
+        .flat_map(|page| page.entries.iter())
+        .any(|entry| matches!(entry, Entry::Submenu { target, .. } if *target == at));
+    assert!(racebox, "the mod's row opens its page");
+}
+
+#[test]
+fn the_shipped_vanilla_file_still_parses_without_a_mod() {
+    Definition::parse_vanilla(crate::menu::BUILT_IN, &english()).unwrap();
+}
+
+#[test]
+fn a_mod_page_no_entry_reaches_names_the_mod_and_the_page() {
+    let orphan = "[[page]]\nid = \"lost\"\ntitle = \"LOST\"\n";
+    assert_eq!(
+        mod_error(orphan),
+        ("test.mod".to_string(), "page \"lost\"".to_string())
+    );
+}
+
+#[test]
+fn a_mod_page_id_must_be_plain_and_unique() {
+    let slash = "[[page]]\nid = \"a/b\"\ntitle = \"X\"\n";
+    assert_eq!(mod_error(slash).1, "page \"a/b\" id");
+    let twice = "[[page]]\nid = \"a\"\ntitle = \"X\"\n[[page]]\nid = \"a\"\ntitle = \"Y\"\n";
+    assert_eq!(mod_error(twice).1, "page \"a\" id");
+}
+
+#[test]
+fn a_mod_page_row_naming_a_missing_page_or_string_names_the_row() {
+    let target = "[[page]]\nid = \"a\"\ntitle = \"X\"\n[[page.entry]]\nkind = \"submenu\"\nlabel = \"Y\"\ntarget = \"nowhere\"\n[[entry]]\nid = \"r\"\nparent = \"top\"\nkind = \"submenu\"\nlabel = \"A\"\ntarget = \"a\"\n";
+    assert_eq!(
+        mod_error(target),
+        (
+            "test.mod".to_string(),
+            "page \"a\" entry 0 target".to_string()
+        )
+    );
+    let string = "[[page]]\nid = \"a\"\ntitle = \"X\"\ntitle_string_id = \"NO_SUCH_STRING\"\n";
+    assert_eq!(mod_error(string).1, "page \"a\" title_string_id");
+}
+
+#[test]
+fn a_mod_cannot_name_another_mods_page_by_its_short_id() {
+    let extras = extras();
+    let owner = with_header(PAGE_MOD);
+    let thief = with_header(
+        "[[entry]]\nid = \"t\"\nparent = \"top\"\nkind = \"submenu\"\nlabel = \"T\"\ntarget = \"picker\"\n",
+    );
+    let mods = [
+        ModMenu {
+            id: "oag.extras",
+            text: &extras,
+        },
+        ModMenu {
+            id: "owner.mod",
+            text: &owner,
+        },
+        ModMenu {
+            id: "thief.mod",
+            text: &thief,
+        },
+    ];
+    let english = english();
+    match Definition::build(crate::menu::BUILT_IN, &english, &english, None, &mods) {
+        Err(Error::Mod { mod_id, key, .. }) => {
+            assert_eq!(
+                (mod_id.as_str(), key.as_str()),
+                ("thief.mod", "entry \"t\" target")
+            );
+        }
+        other => panic!(
+            "expected the thief to be refused, got {:?}",
+            other.map(|(_, a)| a)
+        ),
+    }
+}
