@@ -239,5 +239,9 @@ fn the_speech_bus_follows_the_sfx_slider_and_the_flyby_fade_squared() {
     let fade = audio.sfx_fade_gain();
     assert!((speech_bus(&audio) - 0.25 * fade * fade * 0.5).abs() < 1e-6);
     audio.stop_race_sfx();
-    assert_eq!(speech_bus(&audio), 0.5, "leaving restores the Speech slider");
+    assert_eq!(
+        speech_bus(&audio),
+        0.5,
+        "leaving restores the Speech slider"
+    );
 }
