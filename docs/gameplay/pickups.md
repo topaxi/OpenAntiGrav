@@ -1028,3 +1028,5 @@ effect of this one.
 - [the pad runtime](../ghidra/functions/psp-pulse-usa/pads.md) - the trigger
 - [shield](../ghidra/functions/psp-pulse-usa/shield.md) - the pool absorb pays
 - [the HUD](../ui/hud.md) - the widgets
+
+**Eliminator reads `elimination_refresh_time` (since 2026-09-08):** `crates/raceplay/src/load/global.rs` uses the shorter figure (`0.05` against `0.55`) in that mode only.

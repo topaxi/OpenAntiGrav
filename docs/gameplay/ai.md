@@ -6972,3 +6972,9 @@ without banking the higher corner speed it permits (`v = omega_steer / (k - C)`,
 which `pace::corner_target` does not do) is pure loss. `1.0` is not an
 endorsement of the latch: it is the value that changes no behaviour until the
 differential becomes a plan.
+
+### Evidence moved from raceplay comments (dated measurements)
+
+- **The route's mouth (2026-10-05, `fork_trace`):** on `05_Track` a Novice holding the far side of the route's corridor rode the ring's take-off ramp at route sample 112, flew a second, and met the divider at 161, every lap; an Ace field lost two craft there. `narrow_the_mouth` (`crates/raceplay/src/routes.rs`) answers it.
+- **Airborne craft are not scored against the routes (2026-10-05):** scoring a craft that is airborne between two routes flipped it between them every tick across `05_Track`'s first jump (328 switches in one five-minute run).
+- **A stall without a wall touch is neither failure nor respawn (2026-10-05):** `07_Track`'s centre ramp does this to our craft; a route that stalls clean without completing its verification lap gets no plan.
