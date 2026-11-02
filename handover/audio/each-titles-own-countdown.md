@@ -1,8 +1,8 @@
 ---
 status: measure
-titles: [hd, 2048, pure]
+titles: [hd, 2048, pure, omega]
 updated: 2026-11-02
-summary: "2048 start cues corrected (name table +0xc is the cue, not the bucket); the event pair now plays (rear-edge pan); HD spacing inherited"
+summary: "2048 start cues corrected and playing; HD spacing inherited; Omega start events found (<cue>__Weapons_NGP), wiring in omega-wwise-sfx-path"
 ---
 
 # Each title's own countdown: what is left
@@ -18,8 +18,10 @@ summary: "2048 start cues corrected (name table +0xc is the cue, not the bucket)
 mode and `321_NGP` and `Go_NGP` in an event; **2026-11-02 (`countdown-voice`)**: 2048's hashed name lookup returned the hash bucket, not the cue, so its
 start played other cues (`ready` was `rockets`'s cue); corrected to the record's `+0xc` field, the way
 `Scream_FindCueByName` does, and 2048's named start is now HD's shape (`ready` into `321_GO`'s 3.00 s pair, the
-three-group `HBEAT`, `go` cue 3). Omega checked: its events exist in no shipped bank, its start stays silent
-(the lent `Go` cue only times the song).
+three-group `HBEAT`, `go` cue 3). Omega checked: the bare names are no event, but the executable posts
+`<cue>[_PC]__<bank>`, and `_321_NGP__Weapons_NGP` / `Go_NGP__Weapons_NGP` are in `English(US)/Weapons_NGP.bnk`
+(2026-11-02, `omega-wwise-sfx-re`, [wwise-sound.md](../../docs/ghidra/functions/ps4-omega-eu/wwise-sound.md)).
+Ours still plays nothing there.
 
 ## Open
 
@@ -39,8 +41,10 @@ three-group `HBEAT`, `go` cue 3). Omega checked: its events exist in no shipped 
   ([2048-xfx.md](../../docs/formats/2048-xfx.md)).
 - **Pure**: Zone and Eliminator banks and the EU pressing were not run; Pure's update runs at 30 Hz, so `go`
   against the release has 2 frame resolution.
-- **Omega**: `_321_NGP` and `Go_NGP` are Wwise events posted on every non-demo mode, and no shipped bank defines
-  them (`omega_countdown_ground_truth`); nothing to play until a bank that does ships or a mapping is chosen.
+- **Omega**: the start posts `_321_NGP__Weapons_NGP` (243270081) and `Go_NGP__Weapons_NGP` (744083536) on every
+  non-demo mode; both resolve to embedded ATRAC9 media in `English(US)/Weapons_NGP.bnk` (13 and 6 candidates,
+  with action delays 400/1,300/2,150 ms). Wiring needs a Wwise sfx path in `oag-sound`: see
+  `handover/audio/omega-wwise-sfx-path.md`.
 - Not heard by a human; checks are WAV renders and cue logs.
 
 ## Next Steps

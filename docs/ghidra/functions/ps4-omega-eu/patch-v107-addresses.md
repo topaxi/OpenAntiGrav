@@ -328,3 +328,13 @@ does apply: on 2048 the docs' target of record is the patch (`v104`); on Omega i
   used for a live read.
 - Import into the main Ghidra project (command above) and re-point the base pages' readings that a
   live read depends on.
+
+## Sound path rows (2026-11-02)
+
+The nine sound names of [wwise-sound](wwise-sound.md) (base and patch both read in Ghidra, matched by the
+same string xrefs or by the one call into the matched function): `SoundManager_PostEventByName`
+`0x01779800` -> `0x017caf30`, `SoundManager_LoadBank` `0x017361e0` -> `0x01784a10`, `Wwise_PostEventByName`
+`0x01095430` -> `0x010937d0`, `Wwise_LoadBankByName` `0x01097d20` -> `0x01096060`, `SoundGroup_Create`
+`0x01736840` -> `0x017850e0`; `SoundGroup_PlayCue`, `SpeechManager_PlayCue` and the two
+`SoundBankAliases_*` are not located in the patch (the first is inlined there). The table with the
+evidence for each is on [wwise-sound](wwise-sound.md#patch-107-addresses).

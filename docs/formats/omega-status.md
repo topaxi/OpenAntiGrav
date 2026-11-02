@@ -1420,6 +1420,10 @@ the player's craft swings, as on Pulse; a rival's flaps stay stowed.
   one LSB up to polarity, four-, six- and eight-channel files do not decode yet.
   The ten `.bnk` in `data02`, which an extension-based census had counted
   as Wwise, are the old `SBlk` container. One Tech De Ra cue plays through the mixer to a WAV.
+  **How the executable names a cue is read** (`omega-wwise-sfx-re`, 2026-11-02): it posts
+  `<cue>[_PC]__<bank>`, so the start is `_321_NGP__Weapons_NGP` in `English(US)/Weapons_NGP.bnk`; the
+  sixteen 32-byte banks are legacy names it never loads
+  ([wwise-sound.md](../ghidra/functions/ps4-omega-eu/wwise-sound.md)).
   **Particles play** (`omega-particles`, 2026-10-05): Omega keeps its effects in
   `Data\particles` and `Data\particles2048` (not `Data\Psys`), with `.gnf`
   sprites; a race reads `particles2048` on an `environments2048` circuit and

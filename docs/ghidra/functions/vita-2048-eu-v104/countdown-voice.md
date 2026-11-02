@@ -111,7 +111,7 @@ The handlers are read correctly. This page first tied them to `321_NGP` and `Go_
 
 ## Omega
 
-**Checked, differs; nothing to play, 2026-11-02.** Omega's banks are Audiokinetic Wwise, not `SBlk`: `speech.bnk` is a
+**Checked, differs, 2026-11-02** (the playable media is in the correction below). Omega's banks are Audiokinetic Wwise, not `SBlk`: `speech.bnk` is a
 32-byte `BKHD` header (version 118), its audio lives in `.wem` files, and the cue names are Wwise events. Its
 executable carries `_321_NGP` and `Go_NGP` (and `HBEAT_ZCHANGE`, not `HBEAT`) as event names and no `ready` or
 `go`. The race-state setter `FUN_012993b0` (state 1) posts `_321_NGP` through `FUN_0173ac30` for every mode but
@@ -120,12 +120,14 @@ countdown's end `FUN_0129a360` posts `Go_NGP`, then `Ship_Gear_up_PirProto`, on 
 has no `< 0x17` split in these two functions: it plays the NGP pair on every non-demo mode.** Confidence 80
 (decompile, no capture).
 
-**New: no shipped bank defines the events.** The event id is Wwise's FNV-1 over the lower-cased name
-(`oag_formats::wwise::name_hash`). None of `_321_NGP`, `321_NGP`, `Go_NGP`, `HBEAT_ZCHANGE` or `HBEAT` is an
-event in any of the 53 banks of `data00.psarc` or of the patch's `data08.psarc` (the empty stub banks that
-should hold them are 32-byte headers, [wwise.md](../../../formats/wwise.md)). Pinned by
-`crates/raceplay/tests/omega_countdown_ground_truth.rs`. So the start cannot be played from the data we hold;
-a later archive (or a patch layer) that defines them reopens it.
+**Corrected 2026-11-02: the events exist under their full names.** The executable does not post the bare cue:
+it posts `<cue>[_PC]__<bank>` with the bank of the slot the cue plays in, here `Weapons_NGP`, so the events are
+`_321_NGP__Weapons_NGP` (243270081) and `Go_NGP__Weapons_NGP` (744083536), both defined in
+`English(US)/Weapons_NGP.bnk`, which the sound manager loads at boot (confidence 88;
+[ps4-omega-eu/wwise-sound.md](../ps4-omega-eu/wwise-sound.md#the-countdown-end-to-end-confidence-88)). The bare names are
+still no event in any bank (`crates/raceplay/tests/omega_countdown_ground_truth.rs`); the suffixed ones resolve
+to media (`crates/formats/tests/wwise_ground_truth.rs`, `posted_events_resolve`). What follows was written
+before this was known: "nothing to play" and "the voice is not on any archive we hold" are wrong.
 
 **What the port does:** `oag_omega::race::COUNTDOWN_VOICE` lends Pulse's `ready` and `go` from `speech.bnk`; that bank is
 the Wwise stub the `SBlk` reader refuses ("unsupported bank version 1145588546"), so the load report reads

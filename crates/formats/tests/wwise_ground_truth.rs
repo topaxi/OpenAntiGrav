@@ -17,7 +17,7 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use oag_formats::wwise::hirc::{Action, Codec, Event, MusicTrack, Sound, StreamType};
-use oag_formats::wwise::{BANK_VERSION, Bank, Kind, Library};
+use oag_formats::wwise::{BANK_VERSION, Bank, Kind, Library, name_hash};
 
 fn archive_path(dir: &str, name: &str) -> Option<PathBuf> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -86,7 +86,11 @@ struct Census {
     events_empty: usize,
 }
 
-fn census(name_of_archive: (&str, &str), banks_expected: usize) -> Option<Census> {
+fn census(
+    name_of_archive: (&str, &str),
+    banks_expected: usize,
+    check: fn(&[String], &Library<'_>),
+) -> Option<Census> {
     let path = archive_path(name_of_archive.0, name_of_archive.1)?;
     let mut archive = oag_assets::psarc::Archive::open_file(&path).expect("the archive opens");
     let bank_paths: Vec<String> = archive
@@ -272,7 +276,96 @@ fn census(name_of_archive: (&str, &str), banks_expected: usize) -> Option<Census
     }
     let named_ids: BTreeSet<(bool, u32)> = named.clone();
     c.loose_orphans = loose.iter().filter(|k| !named_ids.contains(k)).count();
+    check(&bank_paths, &library);
     Some(c)
+}
+
+/// The executable posts `<event>[_PC]__<bank>`, hashed whole
+/// (`docs/ghidra/functions/ps4-omega-eu/wwise-sound.md`, "The event name"):
+/// the bare `_321_NGP` is no event, the suffixed one is, in the bank the
+/// sound manager loads into the `Weapons_NGP` slot. The `_PC` twin is one
+/// action that plays the other event, so the player and NPC variants reach the
+/// same media. The countdown's media ids are the "In Memory Audio" rows of the
+/// bank's own `Weapons_NGP.txt` listing; the missile's legacy event relays to
+/// the newer `WPN_MISSILE_Fire`.
+fn posted_events_resolve(paths: &[String], library: &Library<'_>) {
+    let weapons = paths
+        .iter()
+        .position(|p| p.eq_ignore_ascii_case("data/audio/sound/english(us)/weapons_ngp.bnk"))
+        .expect("English(US)/Weapons_NGP.bnk ships");
+    let bank = &library.banks()[weapons];
+    for (event, listed_media) in [
+        ("_321_NGP", Some(47_216_879u32)),
+        ("Go_NGP", Some(605_868_029)),
+        ("NGP_MissileFire", None),
+    ] {
+        assert!(
+            library.play_targets(name_hash(event)).is_none(),
+            "{event} is an event by its bare name"
+        );
+        let npc = name_hash(&format!("{event}__Weapons_NGP"));
+        let defined_in: Vec<usize> = library
+            .banks()
+            .iter()
+            .enumerate()
+            .filter(|(_, b)| b.objects_with_id(npc).any(|o| o.kind == Kind::Event))
+            .map(|(i, _)| i)
+            .collect();
+        assert_eq!(defined_in, [weapons], "{event}__Weapons_NGP's bank");
+        let media = reached_media(library, npc);
+        assert!(!media.is_empty(), "{event} reaches media");
+        if let Some(id) = listed_media {
+            assert!(media.contains(&id), "{event}: media {id} in {media:?}");
+        }
+
+        let player = name_hash(&format!("{event}_PC__Weapons_NGP"));
+        let relays = relays_of(bank, player);
+        assert_eq!(relays.len(), 1, "{event}_PC is one relay");
+        assert_eq!(reached_media(library, player), media, "{event}_PC");
+    }
+    assert_eq!(
+        relays_of(bank, name_hash("NGP_MissileFire__Weapons_NGP")),
+        [name_hash("WPN_MISSILE_Fire")]
+    );
+}
+
+/// Kind `0x2103`: an action whose target is another event, played in turn.
+const PLAY_EVENT: u16 = 0x2103;
+
+fn relays_of(bank: &Bank<'_>, event: u32) -> Vec<u32> {
+    let object = bank
+        .objects_with_id(event)
+        .find(|o| o.kind == Kind::Event)
+        .unwrap_or_else(|| panic!("event {event} in the bank"));
+    Event::parse(bank.body(object))
+        .expect("an event")
+        .actions
+        .into_iter()
+        .filter_map(|id| Action::parse(bank.body(bank.object(id)?)))
+        .filter(|a| a.kind == PLAY_EVENT)
+        .map(|a| a.target)
+        .collect()
+}
+
+/// The media an event's `Play` actions reach, following its relays.
+fn reached_media(library: &Library<'_>, event: u32) -> BTreeSet<u32> {
+    let mut media = BTreeSet::new();
+    let mut queue = vec![event];
+    let mut seen = BTreeSet::new();
+    while let Some(id) = queue.pop() {
+        if !seen.insert(id) {
+            continue;
+        }
+        let plan = library.resolve_event(id).expect("a relay names an event");
+        assert!(plan.unresolved.is_empty(), "event {id}: {plan:?}");
+        media.extend(plan.media.iter().map(|m| m.source.media_id));
+        for bank in library.banks() {
+            if bank.objects_with_id(id).any(|o| o.kind == Kind::Event) {
+                queue.extend(relays_of(bank, id));
+            }
+        }
+    }
+    media
 }
 
 fn library_has(library: &Library<'_>, id: u32) -> bool {
@@ -298,7 +391,7 @@ fn tally_parent(
 #[test]
 #[ignore = "needs data/extracted/ps4/omega-eu"]
 fn base_data00_banks() {
-    let Some(c) = census(("omega-eu", "data00.psarc"), 53) else {
+    let Some(c) = census(("omega-eu", "data00.psarc"), 53, posted_events_resolve) else {
         return;
     };
     assert_eq!(
@@ -376,7 +469,7 @@ fn data02_banks_are_the_old_container_and_wwise_refuses_them() {
 #[test]
 #[ignore = "needs data/extracted/ps4/omega-eu-patch"]
 fn patch_data05_banks() {
-    let Some(c) = census(("omega-eu-patch", "data05.psarc"), 1) else {
+    let Some(c) = census(("omega-eu-patch", "data05.psarc"), 1, |_, _| {}) else {
         return;
     };
     assert_eq!(
@@ -417,7 +510,11 @@ fn patch_data05_banks() {
 #[test]
 #[ignore = "needs data/extracted/ps4/omega-eu-patch"]
 fn patch_data08_banks() {
-    let Some(c) = census(("omega-eu-patch", "data08.psarc"), 53) else {
+    let Some(c) = census(
+        ("omega-eu-patch", "data08.psarc"),
+        53,
+        posted_events_resolve,
+    ) else {
         return;
     };
     assert_eq!(

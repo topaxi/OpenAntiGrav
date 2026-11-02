@@ -95,9 +95,10 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     sounds: SOUND_BANKS,
     zone_announcer: None,
     eliminator_skin: None,
-    // Chosen, not measured: Pulse's start timing lent to this title. Omega's own start is the Wwise
-    // events `_321_NGP` and `Go_NGP`, which no shipped bank defines, so it is silent; the `Go` cue
-    // event still times the song's start (`now_playing_ground_truth`).
+    // Chosen, not measured: Pulse's start timing lent to this title. Omega's own start posts the
+    // Wwise events `_321_NGP__Weapons_NGP` and `Go_NGP__Weapons_NGP`, which nothing here plays yet
+    // (`docs/ghidra/functions/ps4-omega-eu/wwise-sound.md`), so it is silent; the `Go` cue event still
+    // times the song's start (`now_playing_ground_truth`).
     countdown_voice: Some(COUNTDOWN_VOICE),
     // The same grid clamp as HD's, read in Omega's own craft update; see `LAUNCH_HOVER`.
     launch_hover: Some(&LAUNCH_HOVER),

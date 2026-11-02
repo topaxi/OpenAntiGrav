@@ -1,11 +1,13 @@
-//! Omega's race start posts the Wwise events `_321_NGP` and `Go_NGP`, and no
-//! shipped bank defines either, so there is nothing to play (the lent Pulse
-//! `ready` and `go` load nothing from `speech.bnk`, a Wwise stub, and the start
-//! is silent; its `Go` cue event only times the song).
+//! Omega's race start holds the cues `_321_NGP` and `Go_NGP`, and no shipped
+//! bank defines an event by either bare name: the executable posts
+//! `<cue>[_PC]__<bank>`, and `crates/formats/tests/wwise_ground_truth.rs`
+//! (`posted_events_resolve`) checks that those full names resolve. Ours still
+//! lends Pulse's `ready` and `go`, which load nothing from `speech.bnk`, a Wwise
+//! stub, so the start is silent; its `Go` cue event only times the song.
 //!
 //! **`#[ignore]`d and never run in CI**: it needs the decrypted Omega packages
 //! under `data/extracted/ps4`. Evidence:
-//! `docs/ghidra/functions/vita-2048-eu-v104/countdown-voice.md` ("Omega").
+//! `docs/ghidra/functions/ps4-omega-eu/wwise-sound.md` ("The countdown, end to end").
 
 use std::path::Path;
 

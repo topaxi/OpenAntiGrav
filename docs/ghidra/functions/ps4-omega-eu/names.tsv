@@ -147,3 +147,12 @@
 0x01789300	function	DrawList_BuildForTarget	72	refraction-pass.md
 0x01f8f6a0	data	g_track_mesh_instances	80	refraction-pass.md
 0x01f8f310	data	g_refraction_draw_list	65	refraction-pass.md
+0x01779800	function	SoundManager_PostEventByName	92	wwise-sound.md
+0x017361e0	function	SoundManager_LoadBank	88	wwise-sound.md
+0x01095430	function	Wwise_PostEventByName	85	wwise-sound.md
+0x01097d20	function	Wwise_LoadBankByName	80	wwise-sound.md
+0x01731480	function	SoundGroup_PlayCue	80	wwise-sound.md
+0x01736840	function	SoundGroup_Create	80	wwise-sound.md
+0x0173ac30	function	SpeechManager_PlayCue	75	wwise-sound.md
+0x01733e50	function	SoundBankAliases_Init	75	wwise-sound.md
+0x01736430	function	SoundBankAliases_Lookup	80	wwise-sound.md
