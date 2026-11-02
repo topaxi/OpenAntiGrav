@@ -650,6 +650,15 @@ at the one stop the screenshot is taken at. `just compare-rerender` re-makes it 
      a corner leans where ours is straight) and full thrust for every craft (the player's throttle reads 100; an opponent's is not
      read from RAM, nor any craft's flare block, `boost_timer` or `plume_timer`: all left at the engine's own values for a craft at that
      speed). The pair scripts pass it by default, so `just compare-rerender` picks it up from the stored `argv`.
+   - **Opponent lean (2026-11-02, `opponent-tilt`).** The field file also carries `steer_lean` and `roll_phase` per row (`entity+0x854`
+     and `+0x87c` read at the same stop by `psp-race-field.py`; every slot is the player's entity struct), and `--field-from` puts
+     them on each opponent's ship after the warm-up, as `--pose-lean` does for the player (`PoseLean::apply_to`). Without the
+     columns (an older `field.csv`, the RPCS3 path) an opponent is drawn flat, as before. `talons-alongside`: slot values
+     0.038, -0.008, 0.769, 0.786, 0.374, 0.869, -0.194 (roll phase 0 on all seven). Nearest opponent's hull box (x 210, y 112,
+     40x36 px, 480x272 frame): grey mean absolute difference against the original 0.0382 before, 0.0239 after; the fin tilt now
+     agrees with the original's. **HD: checked, applies, not wired**: the drawn lean is documented at `ship+0x6a54`
+     ([ship-lean](../ghidra/functions/ps3-hdfury-eu/ship-lean.md)) and `scripts/rpcs3_hd_field.py` reads other fields at the same
+     ship, but HD's roll-phase offset is not recorded, and a lean with a guessed zero roll would be a half-read pair; both are needed.
    - `--hud-state` (`race::CaptureHud`) imposes the original's place, lap, lap time, race clock, speed, shield (as a percentage
      of the pool: PSP's maximum is `*(*(craft+0x6c) + g_skill_level*4 + 0x84)`, 135 here, so the 134.5 pool reads 99 %, and
      HD's is 140; ours is the handling file's) and best lap on the primary readout: all read from RAM, none

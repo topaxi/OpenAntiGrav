@@ -337,20 +337,29 @@ def write_trace_row(path, values):
 
 FIELD_COLUMNS = ("slot,team,left_x,left_y,left_z,up_x,up_y,up_z,fwd_x,fwd_y,fwd_z,pos_x,pos_y,pos_z,"
                  "vel_x,vel_y,vel_z").split(",")
+FIELD_LEAN_COLUMNS = ["steer_lean", "roll_phase"]
 
 
 def write_field_csv(path, rows, with_player=False):
     """`oag-game --field-from`'s CSV: the opponents in slot order, slot numbered 1..N, and with `with_player`
     a first row numbered 0 that carries the player's own exact pose. Every row carries the craft's velocity as the
-    original's RAM held it (`vel`, units per second), which `--field-warmup` flies the exhaust history on."""
-    lines = [",".join(FIELD_COLUMNS)]
+    original's RAM held it (`vel`, units per second), which `--field-warmup` flies the exhaust history on. When every
+    row has them (a Pulse stop reads them, `psp-race-field.py`; an older `field.json` and the RPCS3 path do not) it
+    also carries the drawn lean and barrel-roll phase (`steer_lean`, `roll_phase`) that `--field-from` puts on each hull."""
+    lean = all(c in r for r in rows for c in FIELD_LEAN_COLUMNS)
+    lines = [",".join(FIELD_COLUMNS + (FIELD_LEAN_COLUMNS if lean else []))]
+
+    def cells(n, r):
+        values = (*r["left"], *r["up"], *r["fwd"], *r["pos"], *r["vel"])
+        if lean:
+            values += tuple(r[c] for c in FIELD_LEAN_COLUMNS)
+        return ",".join([str(n), r["team"]] + [repr(v) for v in values])
+
     if with_player:
-        p = next(r for r in rows if r["player"])
-        lines.append(",".join(["0", p["team"]] + [repr(v) for v in (*p["left"], *p["up"], *p["fwd"], *p["pos"], *p["vel"])]))
+        lines.append(cells(0, next(r for r in rows if r["player"])))
     others = sorted((r for r in rows if not r["player"]), key=lambda r: r["slot"])
     for n, r in enumerate(others, 1):
-        cells = [str(n), r["team"]] + [repr(v) for v in (*r["left"], *r["up"], *r["fwd"], *r["pos"], *r["vel"])]
-        lines.append(",".join(cells))
+        lines.append(cells(n, r))
     Path(path).write_text("\n".join(lines) + "\n")
     return [r["team"] for r in others]
 

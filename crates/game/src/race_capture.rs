@@ -251,6 +251,9 @@ pub struct CaptureOptions {
     /// `--pose-lean`: ship 0's drawn lean and roll phase as the pose's trace row recorded them, put on
     /// after the ticks. See [`pose_lean`].
     pub pose_lean: Option<pose_lean::PoseLean>,
+    /// `--field-from`'s `steer_lean` / `roll_phase` columns: the opponents' drawn lean and roll phase
+    /// as the original's RAM held them, slots 1.. in order; `None` for a craft whose row has no columns.
+    pub field_lean: Vec<Option<pose_lean::PoseLean>>,
     /// `--field-warmup`: each craft's captured velocity, slot order, the player first. The
     /// exhaust of every craft is replayed on a straight path to its pose before the frame
     /// ([`Race::warm_up_field`]).
@@ -889,6 +892,11 @@ pub fn capture(
     }
     if let Some(lean) = options.pose_lean {
         lean.apply(&mut race);
+    }
+    for (slot, lean) in options.field_lean.iter().enumerate() {
+        if let Some(lean) = lean {
+            lean.apply_to(&mut race, slot + 1);
+        }
     }
     println!(
         "after {} tick(s): {}",

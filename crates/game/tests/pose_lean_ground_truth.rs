@@ -7,18 +7,11 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-fn oag_game(image: &Path, scratch: &Path) -> Command {
+fn oag_game(image: &Path, scratch: &Path, mode: &str) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_oag-game"));
     command
         .arg(image)
-        .args([
-            "--race",
-            "--no-audio",
-            "--mode",
-            "time_trial",
-            "--class",
-            "venom",
-        ])
+        .args(["--race", "--no-audio", "--mode", mode, "--class", "venom"])
         .args(["--track", r"Data\Environments\09_Track\track.vex"])
         .env("XDG_CONFIG_HOME", scratch.join("config"))
         .env("XDG_DATA_HOME", scratch.join("data"))
@@ -69,7 +62,7 @@ steer_lean,roll_phase\n\
 
     let posed = |lean: bool| {
         let out = scratch.join(format!("posed-{lean}.csv"));
-        let mut command = oag_game(&image, &scratch);
+        let mut command = oag_game(&image, &scratch, "time_trial");
         command
             .arg("--pose-from")
             .arg(&source)
@@ -88,4 +81,52 @@ steer_lean,roll_phase\n\
 
     assert_eq!(flat_lean, 0.0, "a posed craft is flat without the flag");
     assert_eq!(drawn_lean, 0.32, "the row's lean is the drawn lean");
+}
+
+/// `--field-from`'s `steer_lean` / `roll_phase` columns reach an opponent's drawn hull: the same field, one
+/// opponent ahead of the player, renders differently with a lean on it and identically with the columns at zero.
+#[test]
+#[ignore = "needs a Pulse disc image in data/images/"]
+fn a_field_rows_lean_and_roll_phase_reach_the_drawn_opponent() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
+        return;
+    };
+    let scratch = scratch();
+    // The player (slot 0) at Amphiseum Black's start slot, one opponent 25 units ahead of it.
+    let row = |slot: usize, z: f32, tail: &str| {
+        format!("{slot},Feisar,1,0,0,0,1,0,0,0,1,-527.0,3.5039,{z}{tail}\n")
+    };
+    let render = |name: &str, lean: Option<(f32, f32)>| {
+        let tail = lean.map_or(String::new(), |(l, r)| format!(",{l},{r}"));
+        let head =
+            "slot,team,left_x,left_y,left_z,up_x,up_y,up_z,fwd_x,fwd_y,fwd_z,pos_x,pos_y,pos_z";
+        let head = if lean.is_some() {
+            format!("{head},steer_lean,roll_phase")
+        } else {
+            head.to_string()
+        };
+        let field = scratch.join(format!("{name}.csv"));
+        std::fs::write(
+            &field,
+            format!("{head}\n{}{}", row(0, 107.0, &tail), row(1, 132.0, &tail)),
+        )
+        .expect("writing the field");
+        let png = scratch.join(format!("{name}.png"));
+        let status = oag_game(&image, &scratch, "single_race")
+            .arg("--field-from")
+            .arg(&field)
+            .args(["--ticks", "0", "--size", "480x272", "--screenshot"])
+            .arg(&png)
+            .status()
+            .expect("running oag-game");
+        assert!(status.success());
+        std::fs::read(&png).expect("the screenshot")
+    };
+    let flat = render("flat", None);
+    let zero = render("zero", Some((0.0, 0.0)));
+    let leaning = render("leaning", Some((0.9, 0.0)));
+    std::fs::remove_dir_all(&scratch).ok();
+
+    assert_eq!(flat, zero, "zero columns draw what no columns draw");
+    assert_ne!(flat, leaning, "the opponent's recorded lean is drawn");
 }

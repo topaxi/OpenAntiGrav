@@ -1,7 +1,7 @@
 ---
 status: measure
 titles: [pulse, hd]
-updated: 2026-10-26
+updated: 2026-11-02
 summary: "Race shots: run the mid-pack hunt on more circuits; try closing the pack; Pure, 2048 and Omega races open"
 ---
 
@@ -51,6 +51,8 @@ the screenshot. Recipe, checks and caveats: [`docs/tools/compare-page.md`](../..
   compare the player's pose with our spline.
 - **Two captures of one state differ by about 4 ticks** (the CPU stops wall-clock after the load): the pose and camera of each
   capture are its own, so the pair is exact, but a state's picture is not byte-stable.
+
+- HD opponents' tilt (2026-11-02): Pulse PSP field rows now carry `steer_lean`/`roll_phase` and `--field-from` draws them. HD's race pair (`rpcs3_hd_field.py`) still draws opponents flat: the drawn lean is `ship+0x6a54` (ship-lean.md) but HD's roll-phase offset is not recorded. Locate it, then add both to `field_rows`.
 
 ## Next Steps
 
