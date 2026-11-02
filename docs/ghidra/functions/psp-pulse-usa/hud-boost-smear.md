@@ -119,10 +119,9 @@ where `main` moved on from the binary compared. A timer of zero draws the plain 
   smeared, the lock-on reticle included; the glow chain adds the bar's colour alone (`1 - (1 - a)^k` of it, the
   scene's colour under a half-covered bar is not added), and for a split screen the stamps take the whole
   target.
-- **Open:** the 3D widgets (`Mode3D_DrawQueued`, `0x088b8548`, carries the same `lui 0x44e2` loop at
-  `0x088b8748`) are drawn once in ours; the shake gate of the text copies (`+0x3c/+0x40`) is not modelled
-  because ours has no shake; the shield bar's colour in the glow frame; a frame at the boost's start and end
-  (`n = 0, 1`) against the original.
+- **Open:** the shake gate of the text copies (`+0x3c/+0x40`) is not modelled because ours has no shake; the
+  shield bar's colour in the glow frame; a frame at the boost's start and end (`n = 0, 1`) against the original;
+  whether a `Model` widget's own draw (a `Vex` draw, not read) smears at all.
 - **The boost timer and its trigger are ours already**: `Exhaust::boost_timer` runs from a pad hit and a perfect
   start with their own tests (`crates/raceplay/src/tests/pads.rs`).
 
@@ -147,3 +146,23 @@ field is `RealGlow` (`Image_ParseValues` (`0x088a6f38`, confidence 75: a table o
 value as written, not scaled by alpha (`Text_Draw` scales). Confidence 80 (decompile; the stamp's quad, the whole vertex array, is
 read from the draw call). `FUN_0889812c` (the other `Image` draw, flag `+0x2c & 0x200`) does not read `+0xf4`.
 
+
+## `Mode3D_DrawQueued` has no copy loop (2026-11-02, `pulse-boost-hud-3d`)
+
+**The earlier reading "`Mode3D_DrawQueued` (`0x088b8548`) carries the same `lui 0x44e2` copy loop at `0x088b8748`" is
+false** (confidence 90: full disassembly and decompile read). `0x44e20000` and `0x44ef0000` are `1808.0` and
+`1912.0`, the GE screen-offset base (`2048 - 240`, `2048 - 136`), which `Image_Draw` also uses but there inside a
+per-copy loop. In `Mode3D_DrawQueued` the same constants are the argument of one `Gu_SetOffset` call
+(`0x088b8748`-`0x088b8778`): `Gu_SetOffset(trunc(widget+0x9c + 1808.0), trunc(widget+0xa0 + 1912.0))`, i.e. the
+`Mode3D` widget's `OriginX`/`OriginY` shifting the viewport, then `b 0x088b8870`. There is no branch back, no
+counter and no load of the HUD's copy count (`*(hud+0x274)+0xa8`); the function sets the projection and view
+matrices (`Gu_SetMatrix`, the orthographic branch when `widget+0x94 == 1`), the offset, and ends with
+`ViewCull_BuildViewProjection(64.0)`. It draws nothing itself, so it cannot draw anything several times.
+
+Scan of the 44 functions in `0x088b7000`-`0x088bb000` (the `Mode3D` and `Model` widget code) for a load at
+`0x274(` or `0xa8(`: no function loads the HUD pointer's count; the `0xa8` hits are the `Mode3D` widget's `farZ`
+(`Mode3D_DrawQueued`, `Mode3D_EnterView`), a transform field (`Model_BuildTransform`) and a byte of an unrelated
+widget. So nothing in the 3D widget code reads the boost count. The `Model` widget's draw itself (the `Vex`
+renderer behind it) was not read, and no boost GE list was inspected for a model's prims, so "the 3D widgets draw
+once" is **unmeasured, not measured** (our 3D widgets - pickup icon, countdown, sights - are drawn once). Pure's
+`0x088c9dec` `lui 0x44e2` hit, cited above, should be re-read the same way before it is trusted as a copy loop.
