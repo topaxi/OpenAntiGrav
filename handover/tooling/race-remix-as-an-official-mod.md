@@ -20,8 +20,8 @@ the scout's own estimates, not measurements.
 
 ## Decided (maintainer, 2026-11-02)
 
-Recorded as ADR-0082 (the mod menu vocabulary) and ADR-0083 (Race Remix is the official mod
-`oag.remix`, the fingerprint rule, delivery per target). Lane 1 is done. ADR-0083 leaves web,
+Recorded as ADR-0082 (the mod menu vocabulary) and ADR-0083 (official mods are a public folder,
+the fingerprint rule, delivery per target). Lane 1 is done. ADR-0083 leaves web,
 Android and iOS delivery unread; settle those before lane 9 ships to them.
 
 - **Launch: option 2.** One `launch_race` action with setting keys (track title, track, craft
@@ -32,6 +32,15 @@ Android and iOS delivery unread; settle those before lane 9 ships to them.
 - **LAN fingerprint counts only race-changing mods** (simulation modules, tracks, campaigns);
   page-only and string-only mods are left out. ADR-B amends ADR-0078's consequence.
 - **`OpenAntiGrav/official-mods` is public** (no token, CI may check the submodule out).
+
+## Remix specifics (not in the ADRs)
+
+Mod id `oag.remix`, folder `remix/` in `official-mods`. It carries the REMIX row, the `remix`
+page, the `OAG_REMIX_*` and `OAG_MENU_REMIX*` strings in every language file, its picks under
+`[mod_settings."oag.remix"]` and its entry in the 2048 tile list. The built-in `oag-extras`
+loses its REMIX row (a row in both must not show twice). The saved `[remix]` picks are lost on
+the move (pre-release, no migration). With the mod off there is no REMIX row, no 2048 tile and
+no CUSTOM title; campaign events and `--ballisticng-track` still race custom tracks.
 
 ## Open
 

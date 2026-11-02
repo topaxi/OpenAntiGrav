@@ -14,7 +14,7 @@ page cannot be a closed list of pickers. ADR-0066 and ADR-0080 are not edited. B
 on [ADR-0078](0078-a-mod-is-turned-off-by-id-live-and-the-built-in-never.md) (mod ids,
 the `[mods]` settings table) and [ADR-0034](0034-a-race-may-open-two-titles-at-once.md)
 (a race may open two titles). The first user is
-[ADR-0083](0083-race-remix-is-the-official-mod-oag-remix.md).
+[ADR-0083](0083-official-mods-are-a-public-folder-and-the-fingerprint-counts-race-changers.md).
 
 ## Context
 

@@ -86,12 +86,12 @@ out to be wrong.
 | [0075](0075-dynamic-resolution-sheds-the-blur-gather-before-pixels.md) | Dynamic resolution sheds the blur gather before pixels | **Proposed** (2026-10-25); a second, discrete controller output beside ADR-0040/0042/0044/0073, which stand |
 | [0076](0076-a-track-file-carries-its-art-as-an-optional-section.md) | A track file carries its art as an optional section | **Proposed** |
 | [0077](0077-a-custom-campaign-compiles-to-the-titles-own-grid.md) | A custom campaign is a mod file that compiles to the title's own grid | Accepted |
-| [0078](0078-a-mod-is-turned-off-by-id-live-and-the-built-in-never.md) | A mod is turned off by id, live, and the built-in never | **Proposed**; its LAN-fingerprint consequence amended by [ADR-0083](0083-race-remix-is-the-official-mod-oag-remix.md) |
+| [0078](0078-a-mod-is-turned-off-by-id-live-and-the-built-in-never.md) | A mod is turned off by id, live, and the built-in never | **Proposed**; its LAN-fingerprint consequence amended by [ADR-0083](0083-official-mods-are-a-public-folder-and-the-fingerprint-counts-race-changers.md) |
 | [0079](0079-extensions-are-sandboxed-webassembly-guests-behind-two-worlds.md) | Extensions are sandboxed WebAssembly guests behind two worlds: a sim world of copies in and bounded commands out, and a HUD world that reaches no state | **Proposed** |
 | [0080](0080-a-wasm-mod-may-own-a-screen-and-save-a-small-blob.md) | A WebAssembly mod may own a screen in a third, frontend world and save one small blob; supersedes ADR-0066 decision 4 for wasm screens only | **Proposed** |
 | [0081](0081-screen-layouts-are-files-and-a-track-may-carry-its-loading-screen.md) | Screen layouts are files (`screen-layout.tosd`, a split HUD or a loading screen), and a track may carry its own loading screen in its manifest | **Accepted** |
 | [0082](0082-a-mod-owns-pages-settings-queries-and-one-launch-action.md) | A mod owns pages, settings, queries and one launch action | **Accepted** (2026-11-02); supersedes ADR-0066 decision 4 for declarative content, ADR-0080 stays for wasm screens |
-| [0083](0083-race-remix-is-the-official-mod-oag-remix.md) | Race Remix is the official mod `oag.remix` | **Accepted** (2026-11-02); amends ADR-0078's LAN-fingerprint consequence |
+| [0083](0083-official-mods-are-a-public-folder-and-the-fingerprint-counts-race-changers.md) | Official mods are a public folder, and the fingerprint counts only mods that change a race | **Accepted** (2026-11-02); amends ADR-0078's LAN-fingerprint consequence |
 
 ## Format
 
