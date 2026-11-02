@@ -37,50 +37,6 @@ fn root() -> Option<PathBuf> {
     None
 }
 
-#[test]
-#[ignore = "needs data/extracted/ps4/omega-eu"]
-fn tech_de_ras_glass_and_cutouts_leave_the_opaque_list() {
-    let Some(root) = root() else { return };
-    let mut archives: Vec<_> = ARCHIVES
-        .iter()
-        .filter_map(|a| oag_assets::psarc::Archive::open_file(&root.join(a)).ok())
-        .collect();
-    let path = "Data/environments/tech_de_ra/track.final.rcsmodel";
-    let blob = archives
-        .iter_mut()
-        .find_map(|a| a.read_path(path).ok())
-        .expect("the circuit model is in a base archive");
-    let (model, report) = psp2::build("tech_de_ra", &blob, None, &mut |p| {
-        archives.iter_mut().find_map(|a| a.read_path(p).ok())
-    })
-    .expect("builds");
-    assert!(model.transparent_draws.len() > 50, "{}", report.describe());
-    assert_eq!(report.blended_draws, model.transparent_draws.len());
-    assert!(
-        model
-            .transparent_draws
-            .iter()
-            .all(|d| d.blend_state.is_some() && d.texture.is_some())
-    );
-    // The blend is HD's authored pair where HD has one for the name: some draws
-    // are not alpha-over, and the count in the report is the draws that are not.
-    let default = Some(oag_mesh::mesh_render::TRANSPARENT_BLEND);
-    let off_default = model
-        .transparent_draws
-        .iter()
-        .filter(|d| d.blend_state != default)
-        .count();
-    assert!(off_default > 0, "{}", report.describe());
-    assert_eq!(report.inherited_blend_draws, off_default);
-    assert!(
-        !model.alpha_tested_draws.is_empty(),
-        "{}",
-        report.describe()
-    );
-    assert_eq!(model.alpha_test_ref, Some(0.5));
-    assert!(model.draws.len() > model.transparent_draws.len());
-}
-
 /// The Vita header carries the same word at `+0x12`, so 2048's circuits route
 /// the same way.
 #[test]

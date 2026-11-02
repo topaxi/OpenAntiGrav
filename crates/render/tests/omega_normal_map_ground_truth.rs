@@ -7,6 +7,14 @@
 //! material's own pixel programs say which sampler (`oag_rcs::gcn`, the `2x - 1` decode) and the
 //! instance says which file. Remove the `normal_map::plan` call in `psp2::build` and every count
 //! of `bound` reads zero, and the third binding stays empty.
+//!
+//! The same pass checks Tech De Ra's see-through materials, read off each material's own state
+//! word (`omega_circuits_bind_the_normal_map_their_programs_decode` calls
+//! `tech_de_ras_glass_and_cutouts_leave_the_opaque_list`'s checks): a PS4 material carries HD's
+//! state word at header `+0x22`, its low two bits select blended (1) or alpha-tested (2), and the
+//! build routes a textured draw of either kind out of the opaque list. Remove
+//! `psp2::transparency::route` and those assertions fail: the glass tubes and road panels are
+//! 100 % opaque draws again. The model is the one the game boots, the patch's where it ships one.
 
 use std::path::Path;
 
@@ -23,6 +31,38 @@ const ARCHIVES: [&str; 9] = [
     "ps4/omega-eu/uroot/data03.psarc",
     "ps4/omega-eu/uroot/data04.psarc",
 ];
+
+/// Tech De Ra's glass and cut-outs leave the opaque list.
+fn tech_de_ras_glass_and_cutouts_leave_the_opaque_list(
+    model: &oag_mesh::mesh::Model,
+    report: &psp2::Report,
+) {
+    assert!(model.transparent_draws.len() > 50, "{}", report.describe());
+    assert_eq!(report.blended_draws, model.transparent_draws.len());
+    assert!(
+        model
+            .transparent_draws
+            .iter()
+            .all(|d| d.blend_state.is_some() && d.texture.is_some())
+    );
+    // The blend is HD's authored pair where HD has one for the name: some draws
+    // are not alpha-over, and the count in the report is the draws that are not.
+    let default = Some(oag_mesh::mesh_render::TRANSPARENT_BLEND);
+    let off_default = model
+        .transparent_draws
+        .iter()
+        .filter(|d| d.blend_state != default)
+        .count();
+    assert!(off_default > 0, "{}", report.describe());
+    assert_eq!(report.inherited_blend_draws, off_default);
+    assert!(
+        !model.alpha_tested_draws.is_empty(),
+        "{}",
+        report.describe()
+    );
+    assert_eq!(model.alpha_test_ref, Some(0.5));
+    assert!(model.draws.len() > model.transparent_draws.len());
+}
 
 #[test]
 #[ignore = "needs data/extracted/ps4/omega-eu and omega-eu-patch"]
@@ -49,6 +89,7 @@ fn omega_circuits_bind_the_normal_map_their_programs_decode() {
     models.dedup();
     assert!(!models.is_empty(), "no Omega circuit model found");
     let mut total = psp2::NormalMapCensus::default();
+    let mut checked_tech_de_ra = false;
     for path in models {
         let index = archives
             .iter()
@@ -59,6 +100,13 @@ fn omega_circuits_bind_the_normal_map_their_programs_decode() {
             archives.iter_mut().find_map(|a| a.read_path(p).ok())
         })
         .expect("builds");
+        if path
+            .to_ascii_lowercase()
+            .ends_with("data/environments/tech_de_ra/track.final.rcsmodel")
+        {
+            tech_de_ras_glass_and_cutouts_leave_the_opaque_list(&model, &report);
+            checked_tech_de_ra = true;
+        }
         let c = &report.normal_maps;
         println!("{path}: {}", c.describe());
         for (material, why) in &c.unbound {
@@ -85,6 +133,10 @@ fn omega_circuits_bind_the_normal_map_their_programs_decode() {
             assert_eq!(carried, 0, "{path}: tangents written with no map bound");
         }
     }
+    assert!(
+        checked_tech_de_ra,
+        "Tech De Ra's circuit model was not among the models built"
+    );
     println!("TOTAL {}", total.describe());
     // The census, exactly: N bound of M tangent-carrying submeshes, and what the rest are.
     // `ambiguous` is a material that blends two normal maps (`DC_Rocks`, `Road_..._panelmap1`),
