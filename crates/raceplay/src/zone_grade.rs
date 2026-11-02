@@ -97,7 +97,7 @@ pub struct StageBlend {
     /// current stage alone and `0.0` for the stage before it - the convention
     /// [`oag_tables::effectsettings::cross_fade_rgba8`] documents.
     ///
-    /// **The direction is answered, 2026-09-15.** The commit writes `+0x18 =
+    /// **The direction is answered.** The commit writes `+0x18 =
     /// 0` and every later frame adds `0.01f` to it until it clamps at `1.0`
     /// (`Environment_UpdateStageBlend`, `0x003dd398`; reproduced live), so
     /// the weight is the *new* stage's share, rising from nothing on the
@@ -321,7 +321,7 @@ impl ZoneGrade {
     /// opens on the ladder's zone-0 stage (`Sub Venom` on HD), and whether
     /// the original runs a sphere out of `Start`'s black during the countdown
     /// or has already settled by the time the player sees the track is
-    /// unmeasured; the maintainer's own observation is the cyan already on
+    /// unmeasured; an observation of the original is the cyan already on
     /// the start line, which is what settling gives. So a stage whose ladder
     /// threshold is zone `0` carries no transition.
     ///
@@ -454,7 +454,7 @@ impl ZoneGrade {
     /// or a title with no recovered ladder.
     ///
     /// The HUD's "next speed class" bar is drawn beside **the zone number that
-    /// class starts at** - the maintainer's own observation of the original -
+    /// class starts at** - an observation of the original -
     /// so this is the row of the ladder it belongs on, counted from the current
     /// one.
     #[must_use]
@@ -728,8 +728,8 @@ impl ZoneGrade {
     /// selects per fragment. It matters: `Scene.Texture Colour` is authored
     /// black on stage `Start` and its `Track` sibling is `9.0` there, which
     /// is a dark environment around a lit road - the original's own opening
-    /// frame. Until 2026-09-15 this build bound the track group to every
-    /// chunk and drew the whole circuit in the road's colours.
+    /// frame. Binding the track group to every chunk would draw the whole
+    /// circuit in the road's colours.
     ///
     /// **Two stages' own palettes, not [`Self::palette`]'s cross-fade.** The
     /// original does not blend these in colour space at all: it hands the

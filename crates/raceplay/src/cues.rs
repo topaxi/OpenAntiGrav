@@ -28,13 +28,12 @@ impl Race {
     /// `oag_gameplay::cue::COLLISION_COOLDOWN` carries - one constant in the
     /// original, read twice here.
     ///
-    /// **A shielded contact is silent, and this used to raise `ABSORB` on
-    /// it.** The contact loop skips `Ship_DispatchCollisionFx` - and with it
+    /// **A shielded contact is silent: no `ABSORB`.** The contact loop skips `Ship_DispatchCollisionFx` - and with it
     /// the cue - behind the shield bit, and takes `ShipShield_Hit` instead,
     /// which writes four colour words and a timer and plays nothing
     /// (`shield-pickup.md`, gates `0x0884255c`/`0x08842684`). `ABSORB` is
     /// `Ship_PlayAbsorbFeedback` (`0x08840640`), whose four callers are all
-    /// read as of 2026-09-16 and none is a contact: the absorb handler, the
+    /// read and none is a contact: the absorb handler, the
     /// Eliminator's lap refill, and two network callbacks. The shell's own
     /// bulge is the whole of what a shielded contact shows or sounds. See
     /// `docs/ghidra/functions/psp-pulse-usa/shield.md`.

@@ -16,9 +16,7 @@ impl Race {
     ///
     /// # One snapshot per grid slot, and every person's craft stepped from its own
     ///
-    /// This took a single [`InputSnapshot`] until 2026-09-16, which made "the
-    /// player" and "slot 0" the same statement and left nowhere to put a second
-    /// person's controls. It now takes [`PlayerInputs`] - one snapshot per slot,
+    /// It takes [`PlayerInputs`] - one snapshot per slot,
     /// indexed the same way [`oag_gameplay::World::race`] and
     /// `World::controllers` are - so split screen, a second window and a remote
     /// client differ only in where a snapshot comes from.
@@ -29,9 +27,7 @@ impl Race {
     /// says. Each gets its own controls, autopilot, pickup spend, pads, force
     /// law, off-track rescue and race rules (`crate::player_step`); an AI slot
     /// is still flown by [`Self::step_opponents`] and a person's slot is
-    /// skipped by it. Until 2026-10-13 only the primary slot was stepped and a
-    /// second human's snapshot reached nothing (ADR-0052 recorded that as a
-    /// consequence of its own decision).
+    /// skipped by it.
     ///
     /// The return value is one [`Evaluations`] entry per stepped slot; the
     /// camera and the full-screen HUD read the primary's through
@@ -69,7 +65,7 @@ impl Race {
         // anything this tick can arm it, gives the same order - the frame an
         // impact lands in shows the shake at progress 0 and the next one at
         // one tick - where advancing at the end of the tick would show the
-        // impact frame already one tick in. Measured 2026-09-30, see
+        // impact frame already one tick in. Measured, see
         // `oag_render::camera::shake`.
         #[cfg(feature = "view")]
         if self.draws() {
@@ -105,7 +101,7 @@ impl Race {
         // and a restart, which rebuilds the race, always begins in it. Physics
         // reads the flag; see `oag_physics::ShipState::on_grid`.
         //
-        // **Zone is in it too** (2026-10-02, read live on a Zone engine): flags bit 1 is
+        // **Zone is in it too** (read live on a Zone engine): flags bit 1 is
         // the grid state and reads `0x3` through Zone's countdown with the craft still,
         // and Zone's auto-speed is gated on it (`Ship_UpdateEngine`'s `(flags & 1) &&
         // !(flags & 2)`), as the four-corner epilogue's `craft+0x2a4` guard is. See

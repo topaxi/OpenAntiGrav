@@ -22,7 +22,7 @@
 //! matrix's rows were 0.75 long (the craft model scale), its translation was
 //! the craft's node position moved 2.9995 units along `-up`, i.e. `4.0 * 0.7499`.
 //!
-//! Read live on PPSSPP (2026-10-01, Talon's Junction, `Ship_SetState(entity, 4)`
+//! Read live on PPSSPP (Talon's Junction, `Ship_SetState(entity, 4)`
 //! called on a grid opponent, a Piranha): at the state 5 edge, 7 pairs of those
 //! two names in a row, one pair per node, each parented to a distinct node;
 //! Piranha's `shipwreck.vex` authors 7 `Ship Collision Fx` locators. 1.5 s later
@@ -36,7 +36,7 @@
 //! way the hit sparks ride theirs ([`super::hit_sparks`]) - the original
 //! parents them to the node. **Chosen, not measured:** the severity is `1.0`
 //! (`Psys_Spawn_q`'s trailing arguments are zero and no wreck call passes one) and
-//! the effects are let go once their emitters stop. **Measured, 2026-10-01:** the
+//! the effects are let go once their emitters stop. **Measured:** the
 //! instance matrix has rows of `0.75` (the craft's model scale, read off every
 //! one of the explosion's and the nodes' instances), which scales each root
 //! emitter's spawn offset and velocity by `0.75` and not a particle's size - the

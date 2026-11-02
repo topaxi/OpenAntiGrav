@@ -80,7 +80,7 @@ impl Race {
     /// with `now == 0` at both (`LeachBeam_Advance`, and `FUN_08872e64`, the
     /// teardown `LeachBeam_UpdatePool` calls on retire), which sets the dead
     /// bit, and the manager frees the instance and its live particles on its
-    /// next tick (read 2026-09-30, see `particle-system.md`).
+    /// next tick (see `particle-system.md`).
     pub(crate) fn advance_leach_beam_ribbon(&mut self) {
         for at in 0..LEACH_POOL {
             self.advance_leach_beam_ribbon_at(at);
@@ -220,7 +220,7 @@ impl Race {
     /// "2026-09-25" section) but was not resolved past that, so nothing pins
     /// an orientation or a scale for this build to reproduce. An identity
     /// rotation is a determinant-`+1` matrix like every other HD weapon body's
-    /// placement since 2026-09-24, so `load::weapon_models::cull_as_authored`
+    /// placement, so `load::weapon_models::cull_as_authored`
     /// still applies correctly if the model's own materials ask for it.
     #[must_use]
     pub fn leach_ball_model_matrix(&self, entry: usize) -> Option<Mat4> {
@@ -352,12 +352,9 @@ impl Race {
     /// every effect here: an authored particle system is not something to
     /// approximate with billboards, and reusing *another* weapon's file is
     /// the same invention wearing a real asset - see [`Self::advance_projectile_flares`]'s
-    /// doc comment for the flare bug this was the blast-side twin of. Until
-    /// 2026-08-12 this method drew three expanding additive puffs and a
-    /// separate eight-billboard smoke trail, all invented; until 2026-08-26
-    /// it drew the *Rocket's* `Trigger::TrackBlast`/`Trigger::CraftBlast` for
-    /// every kind of impact, mine and missile included, because [`blast_for`]
-    /// took no `kind` at all; until 2026-09-23 a Bomb drew nothing at all.
+    /// doc comment for the flare bug this was the blast-side twin of. Drawing puffs,
+    /// smoke billboards, or the *Rocket's* `Trigger::TrackBlast`/`Trigger::CraftBlast`
+    /// for every kind would all be invention; [`blast_for`] takes the `kind`.
     ///
     /// [`RaceView::sparks`] is deliberately not reused for it: that system
     /// re-anchors to the hull every tick, so a burst ignited at an impact
@@ -441,10 +438,9 @@ impl Race {
     ///   (`0x0886b490`) runs one teardown pass over every bolt carrying the
     ///   destroy bit and calls `Plasma_SpawnDetonation` (`0x0886ac88`) with the
     ///   bolt's own position for each - a wall hit and a timed-out bolt reach
-    ///   it identically, so there is no split to mirror. Wired 2026-09-09; it
-    ///   returned `None` before, when the teardown was unread. **On HD,
+    ///   it identically, so there is no split to mirror. **On HD,
     ///   [`Trigger::PlasmaLightningExpand`] instead** - a different
-    ///   executable's own file, read 2026-09-17; see that constant's doc
+    ///   executable's own file; see that constant's doc
     ///   comment.
     /// - **`Bomb`**: [`Trigger::BombSmokering`] always, whatever it struck -
     ///   `Bomb_Detonate` (`0x088640c8`) calls `BombBlast_Construct`
@@ -454,10 +450,9 @@ impl Race {
     ///   `Bomb_Shockwave.vex`, their own `.vex` models this function cannot
     ///   carry - [`Self::ignite_blast`]'s own Bomb branch spawns those into
     ///   `bomb_blast`'s render-side pool alongside this effect. See
-    ///   `docs/ghidra/functions/psp-pulse-usa/mine.md#2026-09-23-the-blasts-own-per-tick-animator-read`.
+    ///   `docs/ghidra/functions/psp-pulse-usa/mine.md` ("the blast's own per-tick animator").
     /// - **Everything else**: `None`. Guessing here - playing the Mine's
-    ///   file, or the Rocket's, which is what this did for every kind before
-    ///   2026-08-26 - is exactly the invention `CLAUDE.md` forbids.
+    ///   file, or the Rocket's, is exactly the invention `CLAUDE.md` forbids.
     pub(crate) fn blast_for(
         &self,
         kind: oag_tables::weapons::Weapon,
@@ -630,14 +625,14 @@ impl Race {
     ///
     /// **Gated on the weapon specifically, not on "any live projectile".**
     /// A Mine or a Bomb has no flare at all in the source. Matching on
-    /// `kind.is_none()` alone used to attach the Rocket's looping flare to a
+    /// `kind.is_none()` alone would attach the Rocket's looping flare to a
     /// mine or a bomb the instant it was laid - a fire riding a charge from
     /// the moment it landed rather than from its detonation, which
     /// [`Race::ignite_blast`] is the only thing that plays.
     ///
     /// A projectile that stops riding a flare **releases** it, not kills it
     /// (`Psys_ReleaseHandle` with `now != 0`, which `RocketPool_Update`,
-    /// `MissilePool_Update` and `Plasmas_Update` all call, read 2026-09-30):
+    /// `MissilePool_Update` and `Plasmas_Update` all call):
     /// emission stops and the template particles go at once - the missile's
     /// `glow` lives 3600 ticks and the plasma head's 65535 - while the
     /// particles the emitters already put out finish their own lives, so the
@@ -706,7 +701,7 @@ impl Race {
             );
             // The Rocket's flare frame is its own basis turned `-pi/2` about
             // row 0, so the emitter's `+Y` is the velocity - measured live,
-            // `rocket-visuals.md`'s 2026-09-24 section. Every other rider
+            // `rocket-visuals.md`. Every other rider
             // keeps world up: none of their frames was read.
             if let (Some(oag_tables::weapons::Weapon::Rocket), Some(instance)) =
                 (projectile.kind, self.view.projectile_flare[slot])
@@ -763,13 +758,11 @@ impl Race {
     /// projectile would otherwise be invisible - see
     /// [`PROJECTILE_SPRITE_HALF_SIZE`].
     ///
-    /// **Was one flag for every kind at once, fixed 2026-09-05 alongside
-    /// [`Self::projectile_model_matrices`]'s own kind filter.** A single
-    /// `bool` gated *all* projectiles on whether the Rocket's model happened
+    /// **One flag per kind, not one for all.** A single
+    /// `bool` would gate *all* projectiles on whether the Rocket's model happened
     /// to load, so on a real disc (where it does) a live Missile, Plasma or
-    /// Shuriken (before its own model was drawn) drew nothing at all: no mesh, and no
-    /// billboard, because the flag said "modelled" for a kind it was never
-    /// about. `modelled` is now asked once per live projectile's own kind.
+    /// Shuriken (before its own model was drawn) would draw nothing at all: no mesh, and no
+    /// billboard. `modelled` is asked once per live projectile's own kind.
     #[must_use]
     pub fn projectile_sprites(
         &self,
@@ -808,8 +801,7 @@ impl Race {
     /// about its own row 0 (`Math_RotateByAxisAngle`, `0x08a6b6b4`) - and
     /// `+0xa0` is the frame `Rocket_Init` handed `WO_ROCKET_FLARE` by pointer,
     /// so the quarter-turn orients the flare, never the dart. Confidence 85;
-    /// see `docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`'s
-    /// 2026-09-24 section.
+    /// see `docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`.
     ///
     /// The original's second basis vector is the surface normal the rocket
     /// rides (`rocket+0x100`), which this engine carries as
@@ -896,19 +888,13 @@ impl Race {
     /// [`Self::mine_model_matrices`], [`Self::bomb_model_matrices`] and
     /// [`Self::cannon_model_matrices`].
     ///
-    /// **Filters on `kind` specifically, which is the fix over what this did
-    /// before 2026-09-05.** Before, the filter was `kind.is_some()` - any live
-    /// projectile at all - so a live Missile, Plasma, Shuriken, Mine or Bomb
-    /// was drawn as a **Rocket** mesh whenever one was airborne alongside a
+    /// **Filters on `kind` specifically.** Filtering on `kind.is_some()` - any live
+    /// projectile at all - would draw a live Missile, Plasma, Shuriken, Mine or Bomb
+    /// as a **Rocket** mesh whenever one was airborne alongside a
     /// loaded [`ROCKET_MODEL_ENTRY`], because [`Race::rocket_model_matrices`]'s
     /// one caller zips its result against the Rocket's own drawables with no
-    /// kind check on either side. No test caught it because every test here
-    /// only ever spawns a single Rocket - see
-    /// `a_rocket_and_a_missile_in_flight_do_not_share_a_model_slot` for the
-    /// one that does not. The same shape of bug, in the model path rather
-    /// than the effect path, as the mine that used to ride
-    /// [`Trigger::RocketFlare`] from the moment it landed - see
-    /// [`Race::advance_projectile_flares`]'s doc comment.
+    /// kind check on either side. See
+    /// `a_rocket_and_a_missile_in_flight_do_not_share_a_model_slot`.
     ///
     /// **Neither branch applies a [`MODEL_YAW`]-style correction.** `MODEL_YAW`
     /// exists because `Ship.vex`'s own hull is authored with its nose along a
@@ -926,16 +912,15 @@ impl Race {
     /// [`Body::orientation`]'s convention, a coarser question a single static
     /// mesh view cannot settle; `Pulse_Bomb.vex` was not separately viewed.
     ///
-    /// **Both branches are rotations (determinant `+1`) since 2026-09-24.**
-    /// The velocity branch used to build `side = forward x reference`, `up =
-    /// side x forward` - a reflection - so every Rocket, Cannon round and HD
-    /// Plasma head drew mirrored, and none could take its material's own
-    /// back-face cull (`load::weapon_models::cull_as_authored`). It now builds
+    /// **Both branches are rotations (determinant `+1`).**
+    /// A reflection (`side = forward x reference`) would draw every Rocket,
+    /// Cannon round and HD Plasma head mirrored and block its material's own
+    /// back-face cull (`load::weapon_models::cull_as_authored`). It builds
     /// `side = reference x forward`, `up = forward x side`, which is the
     /// original's own `Rocket_Update` basis, measured live, with
     /// `Projectile::surface` as its `n`. The `orientation` branch (the laid
-    /// Mine and Bomb) was always a rotation; on Pulse it is now the
-    /// executable's own measured pose instead - see `laid`.
+    /// Mine and Bomb) is a rotation too; on Pulse it is the
+    /// executable's own measured pose - see `laid`.
     #[must_use]
     fn projectile_model_matrices(&self, kind: oag_tables::weapons::Weapon) -> Vec<Mat4> {
         self.sim
@@ -1007,8 +992,7 @@ impl Race {
         // (determinant `+1`), mapping the model's own `+X` onto
         // `up x forward` - `Rocket_Update`'s own row 0 (`n x f`,
         // `vcrsp.t` at `0x0885d988`). The other order is a
-        // reflection, and drew every one of these mirrored until
-        // 2026-09-24.
+        // reflection, and draws these mirrored.
         let side = reference.cross(forward).normalize_or_zero();
         let up = forward.cross(side);
         Mat4::from_cols(

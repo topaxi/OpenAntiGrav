@@ -171,7 +171,7 @@ impl Race {
     /// seats when it ends - **chosen, not measured**); **and once the race is over, in every
     /// window that holds a seat, just as the flyby is** (the end screens sit over the spectator
     /// camera, as in a split: [`Self::views_drawn`], each window at its own size and aspect -
-    /// **chosen, not measured**, the maintainer's request of 2026-10-16). A window past the
+    /// **chosen, not measured**). A window past the
     /// layout, or with no seats, draws none.
     #[must_use]
     pub fn window_drawn(&self, window: usize) -> Vec<usize> {

@@ -1,7 +1,6 @@
 //! Where a laid Mine or Bomb is drawn, and how it is turned.
 //!
-//! **Pulse's two poses are the executable's own, measured live on PPSSPP on
-//! 2026-09-24** - see `docs/ghidra/functions/psp-pulse-usa/mine.md`, "a laid
+//! **Pulse's two poses are the executable's own, measured live on PPSSPP** - see `docs/ghidra/functions/psp-pulse-usa/mine.md`, "a laid
 //! mine spins, and the Bomb sits square to the world":
 //!
 //! - **The Mine** is re-posed every tick by `Mine_PoseNode` (`0x08859ce4`) as
@@ -61,7 +60,7 @@ pub(super) fn matrix(
     }
 }
 
-/// A laid Bomb's drawn scale. **Measured live, 2026-10-08:** the rows of
+/// A laid Bomb's drawn scale. **Measured live:** the rows of
 /// Pure's Bomb node matrix (entity `+0x90`, read at every `Bomb_UpdateSpin`
 /// hit on `0x088583d8`) are `0.40` long in every sample (`0.4`, `0.388 /
 /// 0.099`, ...), so the scale is the `0.4` written at `+0xdc`, not the `0.25`

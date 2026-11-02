@@ -19,7 +19,7 @@
 //! frames 192..330 for as long as the craft has not crossed, which is what the
 //! 21 s stationary capture showed. It replaces the chosen 216..349 loop.
 //!
-//! The maintainer's rule (2026-10-03) is that a title with no measured rule of
+//! Rule: a title with no measured rule of
 //! its own runs Pulse's, labelled **inherited from Pulse, unmeasured on
 //! <title>**. Inheriting means the *rule*, not the literal 92: the title's own
 //! `GO` edge lands on the same tick and the clock is held on `GO` from there.
@@ -36,7 +36,7 @@
 //! was measured: the first frame at which a drawn vertex samples the authored
 //! green. That is the frame the `u` offset finishes stepping across to the
 //! green marker column - the same "green step" Pulse's tick 273 was pinned on.
-//! HD's own countdown was captured on RPCS3 on 2026-10-04 (confidence 75): the
+//! HD's own countdown was captured on RPCS3 (confidence 75): the
 //! green step lands on the release within one 30 fps video frame. Since the
 //! release jump below, that bounds the start tick from below rather than
 //! measuring it: any start that keeps the free run short of the edge at the
@@ -124,7 +124,7 @@ pub struct ReleaseWindow {
 /// the player's lap counter (`ship+0x7810`) is 0, and calls `SetTime(3.83)`
 /// (`0x002c1b30` -> `0x002be978`) when it is outside. The window code runs in
 /// race phases 2 to 4 (`RaceManager+0x1970`); that phase 2 begins on the
-/// release is the 2026-10-04 RPCS3 capture (the green step on the race clock's
+/// release is the RPCS3 capture (the green step on the race clock's
 /// zero, confidence 75), so `from_tick` is the tick after the thrust gate, the
 /// tick the inherited rule already lands the green on. The same capture's `GO`
 /// dark centres, +23, +61 and +109 ticks from the step, are this window's

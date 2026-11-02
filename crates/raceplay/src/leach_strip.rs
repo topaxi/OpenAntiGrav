@@ -167,7 +167,7 @@ impl Race {
 
     /// `LeachTrail_RecordAnchor`, every tick, every craft; and the wobble's
     /// phases, which step once a tick while a beam lives and **carry over to the
-    /// next beam**: read live (2026-10-12, `hd-leach-2`), the original's phases
+    /// next beam**: read live: the original's phases
     /// start at 0 with the race, stand still between beams and go on from where
     /// the last beam left them (0.133 at one fire, then 0.15, 0.583, 0.917
     /// through states 2, 3 and 4), never reset at a fire.

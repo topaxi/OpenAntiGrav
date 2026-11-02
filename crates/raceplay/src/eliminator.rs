@@ -9,7 +9,7 @@
 //!
 //! # A destroyed craft outside the Eliminator stays down
 //!
-//! **Measured live, 2026-10-02 (pulse-state6, PPSSPP v1.20.4, Pulse USA,
+//! **Measured live (PPSSPP v1.20.4, Pulse USA,
 //! Single Race, two runs, two slots, two ways of destroying the craft)**: an AI
 //! craft that reaches state 5 goes to state 6 after `1.5` s, its `entity+0x874`
 //! timer (`0.8` s, `Ship_SetState`'s case 6) crosses zero about `0.8` s later,
@@ -21,8 +21,8 @@
 //! agrees with the per-state jump table at `0x08a7bb88`, which sends state 6
 //! to `FUN_08840500`, a bare timer countdown, and state 8 alone to
 //! `Ship_UpdateRespawn` - and state 8 is the Eliminator's. So **a destroyed
-//! craft in a single race does not come back**; this port used to return an
-//! opponent after `1.5 + 0.8` s on a misreading of `shield.md`. Confidence 85:
+//! craft in a single race does not come back**, so no opponent returns after
+//! `1.5 + 0.8` s. Confidence 85:
 //! two runs under injection (`Ship_SetState(4)` and `Ship_Damage`), 13 s each,
 //! not a natural death by a weapon and not a full race to the flag. See
 //! `docs/ghidra/functions/psp-pulse-usa/shield.md`.
@@ -78,21 +78,20 @@ pub(super) const DESTROYED_DWELL: f32 = 1.5;
 /// `entity+0x368` is zero. State 8's own update is `Ship_UpdateRespawn`
 /// (`0x08847914`): the per-state jump table at `0x08a7bb88` sends state `8` to
 /// the call at `0x08841e44`, counts the timer down, and at zero relocates the
-/// craft, refills the shield and goes to state 1. **Measured live 2026-10-02
-/// (pulse-state6, run `e3`)**: the player's craft wrecked by `Ship_Damage` in an
+/// craft, refills the shield and goes to state 1. **Measured live
+/// (run `e3`)**: the player's craft wrecked by `Ship_Damage` in an
 /// Eliminator went 4 (0.5 s), 5 (1.5 s), 8 with `+0x874` reading `1.0`, then state 1
 /// with a refilled shield 60 frames later. Confidence 90: one run, agreeing with the
 /// disassembly (`lui 0x3F80` on the zero branch).
 pub(super) const ELIMINATOR_PLAYER_WAIT: f32 = 1.0;
 
 /// The same wait for every other craft: **`0.8`**, the same constant state 6's
-/// case arms for a non-zero `entity+0x368`. **Measured live 2026-10-02
-/// (pulse-state6, runs `e1` and `e2`, two boots of one race, slots 2 and 4)**: an
+/// case arms for a non-zero `entity+0x368`. **Measured live
+/// (runs `e1` and `e2`, two boots of one race, slots 2 and 4)**: an
 /// Eliminator opponent destroyed by `Ship_Damage` on PPSSPP went 4 (0.5 s), 5 (1.5 s),
 /// 8 with `entity+0x874` reading `0.8`, then state 1 and a refilled shield `48` frames
-/// later, both times. This used to be `2.0`, read off `Ship_SetState`'s case 8
-/// with its branch-delay `lui 0x3F4C` (which executes on both paths) taken for
-/// dead code. Confidence 92: two runs and the corrected disassembly agree.
+/// later, both times, not `2.0`: `Ship_SetState`'s case 8 has a branch-delay
+/// `lui 0x3F4C` that executes on both paths. Confidence 92: two runs and the corrected disassembly agree.
 pub(super) const ELIMINATOR_OPPONENT_WAIT: f32 = 0.8;
 
 /// Seconds an Eliminator craft spends out before it returns: state 5's
@@ -235,8 +234,8 @@ impl Race {
 
     /// Refills a fifth of a craft's shield on a completed lap, Eliminator only.
     ///
-    /// **Measured as of 2026-09-16, and this used to be a full refill chosen
-    /// off `MSC_EVENT_ELIM`'s "you regain health after each lap".**
+    /// **Measured, not the full refill that `MSC_EVENT_ELIM`'s "you regain health
+    /// after each lap" suggests.**
     /// `Eliminator_UpdateKillTarget` (`0x0882ce18`) and the multiplayer
     /// mode's racing-state update both call `Ship_RefillLapShield`
     /// (`0x0883de30`) on the player's craft when its crossing count
@@ -333,12 +332,12 @@ impl Race {
     /// that follower is [`PACK_REACH`] + [`PACK_EASE_SPAN`] behind. The throttle
     /// is only ever *reduced*, so the AI obeys the player's physics and gets
     /// nothing the player's craft lacks. **Whether a throttle lift that exists
-    /// only to bunch the field is acceptable is the maintainer's call**: it is
+    /// only to bunch the field is acceptable is a design call**: it is
     /// catch-up by slowing the front. Measured with it off (`PACK_MIN_THRUST = 1.0`) on `16_Track`,
     /// player parked, eight fixed seeds, six game-minutes: 0 of 8 fields reach
     /// five kills, against 22 of 24 over three sets of eight with it on.
     ///
-    /// **Why the earlier setting looked insensitive, 2026-10-02**: the scale was
+    /// **Why the earlier setting looked insensitive**: the scale was
     /// logged per tick per slot. At `PACK_REACH = 60` a leader with any follower
     /// inside 60 units ran full, which a tight pack is nearly always, so the
     /// easing acted on 73 of 1,680 samples; and every craft the respawn fault

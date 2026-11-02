@@ -113,7 +113,7 @@ pub(in crate::load) fn envsettings_light(
     // static default `(1.4, 0.2, 1.5)` for a file that omits it - 9 of the
     // title's 97 files do, none of them a circuit's.
     // **2048's combination is the same law without the power**, read out of its own USSE
-    // fragment programs (Vita3K's translation of the `fc06_lambert_simple` family, 2026-10-31,
+    // fragment programs (Vita3K's translation of the `fc06_lambert_simple` family,
     // docs/formats/2048-material-params.md "Vertex-lit and lightmapped combines"): `scale *
     // lightmap + bias + sun * max(N.L, 0) * lightmap.a` multiplies the squared texel, with no
     // constant ambient; the `power` lane of `novaScaleBiasPower` is never read, so it is held at 1.

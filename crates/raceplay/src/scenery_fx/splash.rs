@@ -39,8 +39,7 @@ const SEED: u64 = 0x5b1a_5e07;
 const RAIN_LIFE: f32 = 0.35;
 const RING_RADIUS: (f32, f32) = (0.125, 0.65);
 
-/// Every length here is a quarter of the first version's (the maintainer's play
-/// report asked for much smaller drops); speeds and gravity scale with them so
+/// Every length here is small by design (drops a quarter of the first size); speeds and gravity scale with them so
 /// the flight takes the same time.
 ///
 /// A droplet's launch speed along the surface normal and across it, and the

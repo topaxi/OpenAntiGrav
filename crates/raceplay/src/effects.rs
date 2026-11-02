@@ -735,9 +735,8 @@ impl Race {
         // Whole ticks, then a **short final tick** for the remainder, so the
         // ramp lands exactly on `target` instead of up to one tick past it.
         //
-        // This used to be `ceil`, and the overshoot was real: the first numeric
-        // comparison against a capture measured `intensity` `+0.0041` high, one
-        // whole tick of `INTENSITY_RISE * dt`, purely from rounding the warmup
+        // `ceil` overshoots: a capture comparison measured `intensity` `+0.0041` high,
+        // one whole tick of `INTENSITY_RISE * dt`, purely from rounding the warmup
         // up. Still a replay of `advance` rather than a poked field - the
         // principle this function is built on - because a shortened step is
         // something the original's own variable timestep does anyway.

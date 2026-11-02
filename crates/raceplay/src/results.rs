@@ -43,7 +43,7 @@ pub struct RunStats {
     /// 0x94` each time a human-flown craft **enters a new pad** - the same edge that
     /// arms the exhaust flare and, in Zone, scores 100 - and `Race_BuildEndRaceResult`
     /// copies the four-or-five laps it reports into the third column. Read off a live
-    /// write watchpoint (2026-09-30): the field's only writer is that instruction.
+    /// write watchpoint: the field's only writer is that instruction.
     /// Indexed by lap - 1, like [`oag_race::RaceState::lap_splits`] and bounded by the
     /// same [`oag_race::MAX_RECORDED_LAPS`].
     pub boosts_by_lap: [u32; oag_race::MAX_RECORDED_LAPS],
@@ -118,7 +118,7 @@ impl Race {
     /// **Only the line.** A race that ended any other way - the player's craft
     /// destroyed in a single race, an Eliminator's kill target, a Zone run - is
     /// left standing as before: the original's behaviour there was not measured
-    /// (Time Trial and Single Race on Talon's Junction, 2026-10-01), and a wreck
+    /// (Time Trial and Single Race on Talon's Junction), and a wreck
     /// that respawns under the panels, or a Zone session that restarts itself,
     /// would be an invention. See `docs/gameplay/after-the-finish.md`.
     #[must_use]
@@ -132,12 +132,12 @@ impl Race {
     /// Whether the player's wreck in a **Single Race** is what ended the race: the
     /// one other ending whose world also goes on under the end-race screens.
     ///
-    /// **The original never leaves `InGame` after that wreck** - measured
-    /// 2026-10-02, 17,800+ frames with the field racing on, the HUD hidden and the
+    /// **The original never leaves `InGame` after that wreck** - measured,
+    /// 17,800+ frames with the field racing on, the HUD hidden and the
     /// spectator camera cutting, no legend and no panel
     /// (`docs/gameplay/after-the-finish.md`). Ours runs the world on in the same
     /// way and then shows `Race End Photo` and the panels, because a wrecked
-    /// player needs a way out: **the maintainer's decision of 2026-10-02**, "hold,
+    /// player needs a way out: a design decision, "hold,
     /// then results". That the legend shows at all, and when, is chosen, not
     /// measured. Zone is not included: it ends the same way but was not looked at.
     #[must_use]

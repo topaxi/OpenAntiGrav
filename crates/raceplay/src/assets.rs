@@ -37,7 +37,7 @@ pub const NOISE_TEXTURE: &str = r"Data\Tex\engineFlare\Engine_noise.mip";
 
 #[cfg(feature = "view")]
 /// The LeachBeam ribbon's own texture, a literal in the executable - found
-/// 2026-09-17, spelled "lee**ch**" on disc rather than "leach", which is why
+/// by its spelling, "lee**ch**" on disc rather than "leach", which is why
 /// the earlier `(?i)leach` search over `.rodata` missed it.
 ///
 /// At `0x08a7cc60`, loaded by `LeachBeam_LoadTexture` (`0x088730d4`) into
@@ -822,8 +822,8 @@ pub(super) fn zone_handling_note(mode: Mode, team: &str) -> Option<String> {
 /// **The title's own entry name, not `oag_tables::weapons::RACE_ENTRY`.** That
 /// constant is Pulse's spelling and Wipeout HD answers it too, but Pure names one
 /// lower-cased `Data\XML\weaponstats.xml` and ships no Eliminator variant - so
-/// until 2026-08-26 a Pure race found no table, parsed no weapons and handed out
-/// no pickups, with one report line to say so and nothing else. See
+/// a Pure race looking up that constant finds no table, parses no weapons and
+/// hands out no pickups. See
 /// `oag_title::weapons::Weapons`.
 ///
 /// Read on every mode rather than only the ones with weapons on: it is a
@@ -832,7 +832,7 @@ pub(super) fn zone_handling_note(mode: Mode, team: &str) -> Option<String> {
 /// they pick the mode that needs it.
 ///
 /// **`Mode::Eliminator` opens [`oag_title::weapons::Weapons::elimination`]
-/// instead, from 2026-09-08.** That is the recovered mechanism behind the
+/// instead.** That is the recovered mechanism behind the
 /// disc's own *"weapons do more damage"* in `MSC_EVENT_ELIM` - a whole second
 /// table, not a multiplier this build would have to invent - and it is the
 /// field `Weapons::elimination`'s own doc comment already named as unread. A

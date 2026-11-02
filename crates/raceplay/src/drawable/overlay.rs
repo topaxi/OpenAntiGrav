@@ -15,7 +15,7 @@ impl Drawable {
     /// bit, so they land in [`Model::draws`] and [`Self::draw`] would submit
     /// them through the opaque pipeline - which draws each nozzle as a solid
     /// hexagon with hard edges, occluding the hull behind it. A PCSX2 capture
-    /// of the original (2026-08-23, the first this project has taken) shows
+    /// of the original shows
     /// the opposite: soft violet plumes with no geometry edge anywhere and the
     /// hull visible through them. So the original blends this model, and the
     /// question is only where it says so.

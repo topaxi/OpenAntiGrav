@@ -240,15 +240,15 @@ pub(crate) fn grid_row(rank: usize, field: usize, front_anchored: bool) -> usize
 /// along the track instead of along a straight line.
 ///
 /// **Laterally, every slot sits `GRID_COLUMN_OFFSET / 2` from the AI corridor's
-/// midpoint at its own sample** (2026-09-29, `Race_ComputeGridLayout`): the even
+/// midpoint at its own sample** (`Race_ComputeGridLayout`): the even
 /// slots on the side of the midpoint `base` is on, the odd slots on the other.
-/// This replaced carrying `base`'s own lateral offset down the grid and adding
-/// the stagger on one fixed side, which put the odd column 30 units off the
-/// track on `01_Track` and `17_Track`, whose node is on the left. Slot 8 keeps
+/// Carrying `base`'s own lateral offset down the grid with the stagger on one
+/// fixed side would put the odd column 30 units off the track on `01_Track`
+/// and `17_Track`, whose node is on the left. Slot 8 keeps
 /// `base`'s place along the track and is moved laterally onto the same rule -
 /// the original does not use the raw node either, and it is 1.68 units nearer
 /// the original's eighth craft on `16_Track` for it.
-/// **Pulse PSP's grid is the original's own walk** (`walked`, 2026-10-02,
+/// **Pulse PSP's grid is the original's own walk** (`walked`,
 /// `oag_gameplay::grid_walk`): position and heading both, read from
 /// `Race_ComputeGridLayout` and `FUN_0882663c` and reproduced against the original's
 /// craft to 0.001 units on `01_Track`. The rest of this comment describes the **fallback**
@@ -298,8 +298,8 @@ pub(super) fn grid_poses(
     // the node is on (`Race_ComputeGridLayout`, `grid.md`): every slot is then
     // laid `GRID_COLUMN_OFFSET / 2` from the midpoint at its own sample, the
     // node's side first and alternating per slot. Carrying the node's own
-    // lateral offset down the grid and adding the stagger on one fixed side, as
-    // this did until 2026-09-29, put the odd column 30 units off the track on
+    // lateral offset down the grid and adding the stagger on one fixed side, would
+    // put the odd column 30 units off the track on
     // `01_Track` and `17_Track`, whose node is on the *left* of the midpoint.
     let anchor_sample = anchor.and_then(|index| spline.sample(index));
     let midpoint =

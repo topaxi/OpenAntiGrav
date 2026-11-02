@@ -21,15 +21,14 @@
 //!
 //! **Pulse** plays each model's authored node and texture tracks at the
 //! blast's age itself (`PlasmaBlast_Update`'s `Node_SetAnimTimeTree`,
-//! [`Drawable::write_node_anims`] below; the GE dumps match the tracks at rate
-//! 1, 2026-10-30) and eases each model's *scale* the way HD does, `cur +=
+//! [`Drawable::write_node_anims`] below; the GE dumps match the tracks at rate 1)
+//! and eases each model's *scale* the way HD does, `cur +=
 //! (target - cur) * rate`, with its own targets and the three small constants
-//! this module read as anim-time rates until then ([`PULSE_BLAST_RATES`]), and
-//! a grey tint ramp per model. **Wipeout HD** eases a per-model scale too -
+//! ([`PULSE_BLAST_RATES`]), and a grey tint ramp per model. **Wipeout HD** eases a per-model scale too -
 //! `WeaponExplosions_Draw`'s own `cur += (target - cur) * rate`, read off
 //! `ps3-hdfury-eu/plasma.md` - and hides all three at 1.3 s
 //! (`WeaponExplosions_Collapse`, confidence 85, independently corroborated
-//! 2026-09-17 by decompiling both `0x00127770` and its Draw counterpart:
+//! by decompiling both `0x00127770` and its Draw counterpart:
 //! Draw's own per-model window gate (1.7/1.3/1.3 s) is a *different*
 //! mechanism than Collapse's node-flag clear, so the ring's own ease
 //! technically keeps computing to 1.7 s, but nothing after 1.3 s is visible
@@ -69,8 +68,7 @@ pub(super) const PLASMA_BLAST_LIFETIME_SECONDS: f32 = 1.5;
 /// halo, then `hemisphere2`, then `hemisphere1`.
 ///
 /// **The rates are `PlasmaBlast_Update`'s three small constants** (`DAT_08ab0f6c`
-/// `0.1`, `DAT_08ab0f70` and `DAT_08ab0f74` `0.07`), which this module read as
-/// per-model anim-time rates until 2026-10-30: the GE dumps show the node
+/// `0.1`, `DAT_08ab0f70` and `DAT_08ab0f74` `0.07`), not anim-time rates: the GE dumps show the node
 /// animations and UV tracks play at the blast's age itself (rate 1), and the
 /// rates are this ease. **The targets are fitted, not read from the
 /// executable**: the first ease step puts the model matrix's first-row norm at
@@ -124,7 +122,7 @@ pub(super) fn pulse_tints(age: f32) -> [f32; 3] {
 pub(super) const HD_BLAST_LIFETIME_SECONDS: f32 = 3.5;
 
 /// When `WeaponExplosions_Collapse` fires and hides all three models -
-/// confidence 85 in plasma.md, independently re-derived 2026-09-17 by
+/// confidence 85 in plasma.md, independently re-derived by
 /// decompiling `0x00127770` itself. See this module's own doc comment for
 /// why the ring's own ease keeps running past this point with nothing to
 /// show for it.
@@ -142,10 +140,10 @@ pub(super) const HD_BLAST_HIDE_AT_SECONDS: f32 = 1.3;
 /// that big.** The ring and halo are discs of radius 8.8 and 9.0, the sphere
 /// a ball of radius 4.1, so at 60 Hz the sphere is a 29-metre bubble within
 /// a quarter of a second and the ring a disc of several hundred metres by
-/// 1.3 s. The scale was not what made the 2026-09-17 picture wrong; the
-/// trio now also culls as its materials say (each shell is authored twice,
+/// 1.3 s. The scale alone did not fix the picture; the
+/// trio also culls as its materials say (each shell is authored twice,
 /// once each way) and the discs take HD's own right-handed basis. See
-/// plasma.md's 2026-09-23 section and `load::weapon_models::cull_as_authored`.
+/// plasma.md and `load::weapon_models::cull_as_authored`.
 pub(super) const HD_BLAST_TARGETS: [f32; 3] = [100.0, 7.1, 7.0];
 /// See [`HD_BLAST_TARGETS`].
 pub(super) const HD_BLAST_RATES: [f32; 3] = [0.01, 0.3, 0.2];
@@ -239,7 +237,7 @@ pub(super) struct PlasmaBlast {
     /// `cur` from `0x00994070 + 4n`, which sits in `.bss` with no static
     /// writer - the only other reference to it is a read. Confidence 80: a
     /// runtime write through a computed pointer is not ruled out. See
-    /// plasma.md's 2026-09-23 section. Pulse's first drawn tick is one ease
+    /// plasma.md. Pulse's first drawn tick is one ease
     /// step in, matching the first dump (`target * rate`).
     pub(super) ease: [f32; 3],
 }
@@ -262,7 +260,7 @@ pub(super) struct PlasmaBlastDraw {
     /// to; on Pulse the `Node_SetAnimTimeTree` argument of all three models
     /// (`PlasmaBlast_Update` passes the age, not `age * rate`: the node spins
     /// and UV scrolls measured in the dumps are the authored tracks at rate
-    /// 1). See plasma.md, 2026-10-05 and 2026-10-30.
+    /// 1). See plasma.md.
     pub(super) clock: f32,
     /// Which title's mechanism drew it: HD binds the clock to its materials
     /// (`Drawable::write_clocked`), Pulse scrubs node and texture tracks.
@@ -320,7 +318,7 @@ impl Race {
     /// on HD, branched on `RaceView::hd_plasma_blast`. On HD this also, the
     /// tick a blast first crosses [`HD_BLAST_HIDE_AT_SECONDS`], plays
     /// `WO_PLASMA_LIGHTNING_COLLAPSE` at its position -
-    /// `WeaponExplosions_Collapse`'s own trigger, read 2026-09-17.
+    /// `WeaponExplosions_Collapse`'s own trigger.
     ///
     /// Called from [`Race::tick`], after the impacts loop that can spawn a
     /// new one this same tick - a blast spawned this tick draws at `age ==
@@ -386,7 +384,7 @@ impl Race {
     /// s while the eye travels through the shell): see [`pulse_frame`] and
     /// [`pulse_halo_frame`]. That a one-sided `hemisphere1` is world-fixed is
     /// what lets the craft's own travel carry the eye through its wall, which
-    /// is the white-out's cut at age 0.25 (plasma.md, 2026-10-30; confidence
+    /// is the white-out's cut at age 0.25 (plasma.md; confidence
     /// 80). **Which pose the hemispheres' frame is derived from is chosen**,
     /// see [`pulse_frame`].
     ///
@@ -398,7 +396,7 @@ impl Race {
     /// same camera-facing basis here as a stated substitute for that fit:
     /// it is round, so only where its texture's seam falls differs.
     /// **Chosen, not measured.** Each model is then scaled uniformly by its
-    /// own `cur` - read, confidence 90, see plasma.md's 2026-09-23 section.
+    /// own `cur` - read, confidence 90, see plasma.md.
     #[must_use]
     pub(crate) fn plasma_blast_draws(
         &self,
@@ -492,7 +490,7 @@ fn billboard_matrix(position: Vec3, camera_position: Vec3) -> Mat4 {
         Vec3::Y
     };
     // `reference x forward`, then `forward x right`: a rotation. The other
-    // order (this function's own until 2026-09-24) is a reflection, which
+    // order is a reflection, which
     // drew Pulse's blast shells mirrored - see
     // `Race::projectile_model_matrices`'s own doc comment for the same fix.
     let right = reference.cross(forward).normalize_or_zero();
@@ -508,8 +506,7 @@ fn billboard_matrix(position: Vec3, camera_position: Vec3) -> Mat4 {
 /// `billboard_matrix`'s basis rebuilt the way Wipeout HD builds its own for
 /// the two discs: `Z` pointing **away** from the camera, the billboard's up
 /// kept, and `X = Y x Z` - a rotation, as `billboard_matrix` itself now is
-/// too (it was a reflection until 2026-09-24; fixing it negated `X` alone,
-/// so this function's output did not move). The handedness matters once back
+/// too. The handedness matters once back
 /// faces are culled: a reflection reverses every triangle's winding on
 /// screen, so the cull would hide exactly the faces the original draws.
 ///
@@ -524,7 +521,7 @@ fn billboard_matrix(position: Vec3, camera_position: Vec3) -> Mat4 {
 /// culls back faces - so the only orientation in which the original can show
 /// it at all is `-Z` towards the viewer. Confidence 80: which camera column
 /// the vector is was not traced element by element, and the disc's own
-/// authoring is what settles the sign. See plasma.md's 2026-09-23 section.
+/// authoring is what settles the sign. See plasma.md.
 fn facing_away(matrix: Mat4) -> Mat4 {
     let up = matrix.y_axis.truncate();
     let away = -matrix.z_axis.truncate();

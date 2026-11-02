@@ -478,3 +478,7 @@ age of 3.0. A 0.3 s question in the simulation, not changed here.
 
 **Omega:** checked, differs (PS4 shaders; the profile trap is RPCS3's only). **2048:** no
 such strip.
+
+## The wobble phases carry over between beams (read live 2026-10-12, `hd-leach-2`)
+
+The original's three wobble phases start at 0 with the race, stand still between beams and go on from where the last beam left them (0.133 at one fire, then 0.15, 0.583, 0.917 through states 2, 3 and 4), never reset at a fire. Ours keeps them in `crates/raceplay/src/leach_strip.rs`.

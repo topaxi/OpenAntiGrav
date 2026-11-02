@@ -268,7 +268,7 @@ pub fn tracks_of_kind(definition_xml: &str, kind: &str) -> Vec<Track> {
 /// reliable way to ask "which are this title's Zone circuits".** Pure
 /// declares its four `type="Zone"`, which `tracks_of_kind(xml, "Zone")`
 /// finds; HD/Fury declares its own four `type="Race"` with a separate
-/// `zone="true"` flag - measured 2026-08-28 against
+/// `zone="true"` flag - measured against
 /// `hdfury-ps3-eu-dec.iso`'s `Data\Plugins\frontend\definition.xml`, all four
 /// and only the four pointing at `Zone_1`..`Zone_4`, out of 28 `PI_Track`
 /// entries total - so the same kind query answers empty there. Matching by
@@ -376,7 +376,7 @@ pub struct Team {
     /// at `+0xb4..+0xc0` - and it was in the plugin definition all along,
     /// under a child element named for the front end. Assegai's authored
     /// `8/8/9/7`, Qirex's `8/7/8/9`, AG Systems' `7/9/9/8` and Piranha's
-    /// `10/6/6/9` are exactly the four bars a 2026-09-09 PPSSPP capture of the
+    /// `10/6/6/9` are exactly the four bars a PPSSPP capture of the
     /// screen shows (`docs/ui/selection-screens.md`), which is what settles
     /// it as the source rather than a coincidence. Distinct from
     /// `HandlingStats.xml`: these are the *advertised* ratings, not the

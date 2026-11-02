@@ -667,8 +667,8 @@ impl super::Scene {
     /// Both play their authored animation on `seconds`: MagEffect2's `Anim
     /// Transform` (the halo's spin) through [`Drawable::write_node_anims`] and
     /// both meshes' texture-offset tracks (the lightning scrolls `v` about
-    /// 1.2 per second) through [`Drawable::write_anims`]. Until 2026-10-05
-    /// only the first was written, so the streaks held one texture phase.
+    /// 1.2 per second) through [`Drawable::write_anims`]. Both are
+    /// needed or the streaks hold one texture phase.
     fn write_mag_floor_fx(
         &self,
         race: &Race,
@@ -699,9 +699,8 @@ impl super::Scene {
 /// `anim-transform.md`) for a model whose own `Anim Transform` nodes play, or
 /// `None` to leave the identity table `mesh_render::build` initialised. The
 /// Mine and the Bomb pass it: the Bomb's `orbit` ring tumbles about its own `X`
-/// and its `bomb` body about `Y`; neither was ever written before, so both drew
-/// at their time-zero pose. Their texture-offset tracks ride the same clock
-/// (`Drawable::write_anims`, 2026-10-05).
+/// and its `bomb` body about `Y`, driven by the same clock. Their texture-offset tracks ride it
+/// (`Drawable::write_anims`).
 #[allow(clippy::too_many_arguments)]
 fn write_one_kind(
     drawables: &[Drawable],
@@ -756,7 +755,7 @@ impl super::Scene {
     /// weapon's materials are the GE's fixed pipeline, its stand-in light was
     /// never measured against a scene block, and that is another lane's.
     ///
-    /// **Written since 2026-10-07**: HD's Bomb blast (`write_hd_bomb_blasts`),
+    /// **Written**: HD's Bomb blast (`write_hd_bomb_blasts`),
     /// framed with `--force-bomb-trip`. **Not written, and open**: the Bomb
     /// blast's Pulse pair (Pulse draws no scene block), the Repulser field and
     /// the mag floor.

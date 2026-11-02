@@ -27,12 +27,12 @@
 //! **The same call plays `.COLLISIONS`** (`Sound_Play`, return `0x0892486c`),
 //! positional at the locator, once per call past that gate: the live
 //! `Sound_Play` log at a Quake hit on the player shows `QUAKEHIT` and two
-//! `.COLLISIONS`, volume `1.0` (`cannon-quake-leachbeam.md`, 2026-10-26,
+//! `.COLLISIONS`, volume `1.0` (`cannon-quake-leachbeam.md`,
 //! confidence 88). So every spark thrown here raises one [`oag_gameplay::cue::Cue::Collision`] on
 //! the struck craft, kind 1 (the LeachBeam's) included: `ShipCollisionFx_Trigger`
 //! plays it for "each surviving kind-0/1 call" (`contact-response.md`).
 //!
-//! Measured on PPSSPP (2026-09-24): a Cannon-tagged hit posted into the
+//! Measured on PPSSPP: a Cannon-tagged hit posted into the
 //! player's pending-damage channel stops at `ShipCollisionFx_Trigger` with
 //! `ra = 0x08844050` (inside `Ship_Damage`), kind 0, damaged 1, intensity 1.0,
 //! on one of the player's six locators, and the next `Psys_Spawn_q` is
@@ -262,8 +262,8 @@ impl Race {
     /// `source == 2` block), beside the spark and gated on `+0x368 == 0` like
     /// it. Magnitude `0.6` is passed as authored, where a wall contact's is
     /// its clamped severity times `0.3` - hence the division; the duration is
-    /// the same `0.6` s and the mode `1`, [`Side::Elsewhere`]. Read
-    /// 2026-09-30, confidence 85. **The game-mode gate** (not mode 2 or 12) is
+    /// the same `0.6` s and the mode `1`, [`Side::Elsewhere`]. Read,
+    /// confidence 85. **The game-mode gate** (not mode 2 or 12) is
     /// not applied: neither mode is one this port races in.
     pub(super) fn arm_weapon_hit_shake(&mut self, slot: usize) {
         use oag_render::camera::shake::{MAGNITUDE_SCALE, Side};

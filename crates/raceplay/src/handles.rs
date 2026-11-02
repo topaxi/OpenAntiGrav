@@ -1,9 +1,8 @@
 //! A race's effects, resolved once at load: each [`Trigger`] to the loaded
 //! effect it plays, or nothing.
 //!
-//! The firing sites used to look an effect up by its string in
-//! [`oag_fx::psys::Library`] every time one fired (some every frame), so a
-//! misspelt name drew nothing and said nothing. They index this by
+//! A string lookup in [`oag_fx::psys::Library`] at each firing (some every
+//! frame) would let a misspelt name draw nothing and say nothing. Firing sites index this by
 //! [`Trigger`] instead: the name is read once, off the title's own table
 //! ([`oag_title::Effects`]), and a trigger that does not exist is a compile
 //! error. The [`Library`] stays for what only the

@@ -196,7 +196,7 @@ impl Scene {
     ///
     /// True exactly when the track authored a mount `race::gantry::place`
     /// could measure and the model loaded. What reads it is the **HUD**
-    /// countdown: the maintainer's own account of the original is that the
+    /// countdown: the original shows
     /// `3`, `2`, `1`, `GO` is on the gantry, so the screen overlay stands
     /// down where the gantry is showing it and stays for a circuit with no
     /// gantry to show it on. See `oag_hud::countdown`.

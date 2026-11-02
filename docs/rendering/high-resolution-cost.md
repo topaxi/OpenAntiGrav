@@ -270,3 +270,7 @@ Omega, Pure and 2048 at 2573x1447 (scale 67) were not raced; GPU memory was not 
 the resolve was not measured at a steady 1,600 MHz (no forced performance level on the Deck:
 that is a system setting and the Deck is the maintainer's); SMAA/FXAA at scale below 100 were not
 run (they are resolve-only at scale 100 here).
+
+## Sorting the opaque batches: shading versus prepass (2026-10-03)
+
+Sorting the shading itself was tried first: 44.1 -> 37.4 ms at 3200x1800 on an integrated GPU, at the cost of 1 to 419 pixels a capture where coplanar ties resolved to the nearer batch. Sorting only the depth prepass took the frame to 32.4 ms with the original's picture back; the shading that follows keeps the model's own order (`Recorder::sorts_opaque`, `crates/raceplay/src/scene/record.rs`).

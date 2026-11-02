@@ -3,9 +3,8 @@
 //! law. Pulse's own two-mesh effect is [`super::mag_floor_fx`]; the two are
 //! never both on one title.
 //!
-//! Evidence: `docs/ghidra/functions/ps4-omega-eu/ships-effects.md`, "2026-10-05,
-//! magstrip-omega-law lane" (the predicate, the blend, the sound arming law) and
-//! "magstrip-wire-hd lane" (the update and the draw), and
+//! Evidence: `docs/ghidra/functions/ps4-omega-eu/ships-effects.md`, (the predicate, the blend, the sound arming law, the
+//! update and the draw), and
 //! `docs/ghidra/functions/ps3-hdfury-eu/magstrip-wake.md`.
 //!
 //! - **The predicate is the instantaneous contact**, the mag-floor probe of this

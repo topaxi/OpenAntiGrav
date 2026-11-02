@@ -51,11 +51,10 @@ impl Race {
     ///
     /// # There is no residual: the craft is the right size, and the old gap was the projection
     ///
-    /// This comment used to record a further `~1.3x` gap and name
-    /// `1/0.75^2 = 1.7778` as the live hypothesis for it. **That is refuted, and
-    /// the constant here must not be widened to swallow anything.**
+    /// A further `~1.3x` gap (hypothesis `1/0.75^2 = 1.7778`) is
+    /// **refuted, and the constant here must not be widened to swallow anything.**
     ///
-    /// Measured 2026-08-09 by similarity registration on high-passed gradient
+    /// Measured by similarity registration on high-passed gradient
     /// magnitude - no brightness threshold anywhere in it - against 16 emulator
     /// frames: **craft-only boxes register at `0.9989`/`0.9985`/`0.9987` once the
     /// background is zeroed, so the mesh is correct to 0.15 %.** The old figure

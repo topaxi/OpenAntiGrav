@@ -59,12 +59,9 @@ pub struct Options {
     /// **`None` rather than a constant, for the reason [`Self::track`] gives
     /// and one more of its own.** `--team`'s help has promised since it landed
     /// that leaving it out takes the value "from the source's own title, the
-    /// same way `--track` does" - and until 2026-08-18 the track half of that
-    /// refactor had landed and the team half had not, so every title was served
-    /// `oag_pulse::race::DEFAULT_TEAM`. It worked on HD only because a PSARC
-    /// folds case: `Data\Ships\Assegai\handlingstats.xml` normalises onto the
-    /// `assegai` the manifest actually stores. Finding S3 of that day's review,
-    /// and the reason `oag_title::RaceDefaults::team` existed with no reader.
+    /// same way `--track` does" - so a title is never served `oag_pulse::race::DEFAULT_TEAM`, which would work
+    /// on HD only because a PSARC folds case (`Data\Ships\Assegai\handlingstats.xml`
+    /// normalises onto the `assegai` the manifest stores).
     ///
     /// Resolved by [`load`] once the source is open and its title known, from
     /// [`oag_title::RaceDefaults::team`], and the choice is reported.
@@ -137,8 +134,7 @@ pub struct Options {
     pub seat_picks: Vec<SeatPick>,
     /// Whether a Wipeout 2048 Zone race draws its own `trackZone.rcsmodel`.
     ///
-    /// The game turns it on (2026-10-19, when `fc01_dummy`'s road was read as
-    /// the circuit's fog colour); [`Options::default`] keeps it off so a
+    /// The game turns it on (`fc01_dummy`'s road reads as the circuit's fog colour); [`Options::default`] keeps it off so a
     /// library caller that names no Zone model gets the ordinary circuit.
     pub zone_model: bool,
     /// Whether a Pulse hull's `0x2000` extra pass is built at all
@@ -937,7 +933,7 @@ pub struct Loaded {
     /// One hull, plume, nozzle and spark-anchor set per grid slot, each off
     /// its own team's directory. Slot 0 is the player's.
     ///
-    /// Per slot rather than one shared model since 2026-08-15: the eight teams
+    /// Per slot rather than one shared model: the eight teams
     /// the disc declares are eight *different* hulls (845 to 1,497 triangles),
     /// not one hull repainted, so a shared model was visibly one team's ship
     /// eight times over. See [`oag_livery`], which also records which half
