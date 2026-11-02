@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-02
-summary: "Remix to an official mod needs two ADRs first; the LAN fingerprint counts every mod on, so Remix on and off would split lobbies"
+summary: "ADR-0082 and ADR-0083 accepted (lane 1 done); lanes 2-9 are code: mod pages, fingerprint filter, settings, queries, launch_race, the move"
 size: XL (40)
 difficulty: hard (45)
 ---
@@ -19,6 +19,10 @@ Scout reading, checked against `main` at ef51bd6be. Confidences in brackets are
 the scout's own estimates, not measurements.
 
 ## Decided (maintainer, 2026-11-02)
+
+Recorded as ADR-0082 (the mod menu vocabulary) and ADR-0083 (Race Remix is the official mod
+`oag.remix`, the fingerprint rule, delivery per target). Lane 1 is done. ADR-0083 leaves web,
+Android and iOS delivery unread; settle those before lane 9 ships to them.
 
 - **Launch: option 2.** One `launch_race` action with setting keys (track title, track, craft
   title, team, variant, mode, class, difficulty), used by the ordinary RACE page, Remix and any
@@ -323,7 +327,7 @@ Ordered. Size and difficulty use the frontmatter vocabulary, each with the
 scout's confidence (0-100; scouts stay at 20-60). Size: XS under an hour, S a few
 hours, M half a day, L a day, XL more than a day (split it).
 
-1. **ADR-A and ADR-B** (docs only, maintainer decides). Claim: both are written
+1. **ADR-0082 and ADR-0083 (done)** (docs only, maintainer decides). Claim: both are written
    and accepted, including the fingerprint rule and the delivery choice per target.
    Acceptance: `just check-docs`, ADR index updated, ADR-0066 decision 4 cross-referenced.
    Crates: none. Size: M (50). Difficulty: easy (55). **Blocks everything.** Needs
@@ -393,9 +397,8 @@ option, and the delivery per target.
 
 ## Next Steps
 
-1. Maintainer: accept or change ADR-A and ADR-B (lane 1); pick the launch option
-   (1 or 2) and the delivery for each target (web, mobile and the packaged builds
-   are not read yet).
-2. Create `OpenAntiGrav/official-mods` with `remix/oag-mod.toml` (id `oag.remix`).
+1. Done: ADR-0082 and ADR-0083 accepted. Open: read whether the web and mobile builds can
+   search for mods at all, and pick their delivery (ADR-0083 decision 7).
+2. Populate the public `OpenAntiGrav/official-mods` with `remix/oag-mod.toml` (id `oag.remix`).
 3. Spawn lane 4 (fingerprint) first, since it is small and blocks nothing; then
    lanes 2-3, 5, 6 and 7 in order; lane 8 last.

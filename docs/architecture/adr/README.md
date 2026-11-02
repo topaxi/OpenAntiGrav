@@ -75,7 +75,7 @@ out to be wrong.
 | [0062](0062-unity-content-is-a-generic-reader-with-a-content-layer-on-top.md) | Unity content is a generic reader with a content-specific layer on top | Accepted; relates to [ADR-0061](0061-two-asset-layers-around-the-disc.md) |
 | [0063](0063-the-own-track-format-is-glb-plus-a-toml-manifest.md) | This project's own track format is a glTF binary plus a TOML manifest | Accepted; builds on [ADR-0062](0062-unity-content-is-a-generic-reader-with-a-content-layer-on-top.md) |
 | [0065](0065-one-mobile-crate-for-every-phone-os.md) | One mobile crate holds the glue for every phone OS | Accepted; the entry points stay in `oag-game` |
-| [0066](0066-the-menu-is-the-disc-plus-mods.md) | The main menu is each title's own, plus rows that mods attach | Accepted; a mod is a folder, `.zip` or `.oagmod`, our own rows are the built-in `oag-extras` |
+| [0066](0066-the-menu-is-the-disc-plus-mods.md) | The main menu is each title's own, plus rows that mods attach | Accepted; a mod is a folder, `.zip` or `.oagmod`, our own rows are the built-in `oag-extras`; decision 4 superseded for declarative content by [ADR-0082](0082-a-mod-owns-pages-settings-queries-and-one-launch-action.md) and for wasm screens by [ADR-0080](0080-a-wasm-mod-may-own-a-screen-and-save-a-small-blob.md) |
 | [0067](0067-a-multi-window-race-is-one-device-and-one-submission-per-window.md) | A multi-window race is one device and one submission per window | Accepted; a window per person, closing a seat window hands it to the AI, desktop only |
 | [0068](0068-a-window-holds-a-list-of-seats.md) | A window holds a list of seats | Accepted; amends 0067: a window is one seat or a split of several, `--windows` deals people, `--window-seats` spells them |
 | [0069](0069-remote-craft-are-predicted-in-one-timeline-and-corrected-on-a-threshold.md) | Remote craft are predicted in one timeline and corrected on a threshold | **Proposed**, not accepted: the S24 cost, weapons and an analog human stream are open |
@@ -86,10 +86,12 @@ out to be wrong.
 | [0075](0075-dynamic-resolution-sheds-the-blur-gather-before-pixels.md) | Dynamic resolution sheds the blur gather before pixels | **Proposed** (2026-10-25); a second, discrete controller output beside ADR-0040/0042/0044/0073, which stand |
 | [0076](0076-a-track-file-carries-its-art-as-an-optional-section.md) | A track file carries its art as an optional section | **Proposed** |
 | [0077](0077-a-custom-campaign-compiles-to-the-titles-own-grid.md) | A custom campaign is a mod file that compiles to the title's own grid | Accepted |
-| [0078](0078-a-mod-is-turned-off-by-id-live-and-the-built-in-never.md) | A mod is turned off by id, live, and the built-in never | **Proposed** |
+| [0078](0078-a-mod-is-turned-off-by-id-live-and-the-built-in-never.md) | A mod is turned off by id, live, and the built-in never | **Proposed**; its LAN-fingerprint consequence amended by [ADR-0083](0083-race-remix-is-the-official-mod-oag-remix.md) |
 | [0079](0079-extensions-are-sandboxed-webassembly-guests-behind-two-worlds.md) | Extensions are sandboxed WebAssembly guests behind two worlds: a sim world of copies in and bounded commands out, and a HUD world that reaches no state | **Proposed** |
 | [0080](0080-a-wasm-mod-may-own-a-screen-and-save-a-small-blob.md) | A WebAssembly mod may own a screen in a third, frontend world and save one small blob; supersedes ADR-0066 decision 4 for wasm screens only | **Proposed** |
 | [0081](0081-screen-layouts-are-files-and-a-track-may-carry-its-loading-screen.md) | Screen layouts are files (`screen-layout.tosd`, a split HUD or a loading screen), and a track may carry its own loading screen in its manifest | **Accepted** |
+| [0082](0082-a-mod-owns-pages-settings-queries-and-one-launch-action.md) | A mod owns pages, settings, queries and one launch action | **Accepted** (2026-11-02); supersedes ADR-0066 decision 4 for declarative content, ADR-0080 stays for wasm screens |
+| [0083](0083-race-remix-is-the-official-mod-oag-remix.md) | Race Remix is the official mod `oag.remix` | **Accepted** (2026-11-02); amends ADR-0078's LAN-fingerprint consequence |
 
 ## Format
 
