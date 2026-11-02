@@ -142,7 +142,24 @@ fn disc_id(title: &str, platform: Platform, source: &str) -> String {
     let stem = std::path::Path::new(source)
         .file_stem()
         .map_or_else(String::new, |stem| stem.to_string_lossy().into_owned());
-    format!("disc:{title}:{platform}:{stem}")
+    format!(
+        "disc:{}:{}:{stem}",
+        slug(title),
+        slug(&platform.to_string())
+    )
+}
+
+/// Lower case with every run of other characters as one `-`, so an id is one word.
+pub(crate) fn slug(text: &str) -> String {
+    let mut out = String::new();
+    for character in text.chars() {
+        if character.is_ascii_alphanumeric() {
+            out.push(character.to_ascii_lowercase());
+        } else if !out.ends_with('-') {
+            out.push('-');
+        }
+    }
+    out.trim_matches('-').to_string()
 }
 
 fn folder_id(path: &std::path::Path) -> String {
@@ -291,7 +308,8 @@ impl Pool {
     /// Whether the search for other discs is still running.
     #[must_use]
     pub fn scanning_discs(&self) -> bool {
-        self.with(|inner| !inner.discs_scanned).unwrap_or(false)
+        self.with(|inner| inner.discs_started && !inner.discs_scanned)
+            .unwrap_or(false)
     }
 
     /// The songs beyond the booted soundtrack, in playlist order. Never reads.
@@ -407,7 +425,15 @@ impl Pool {
         let task = oag_thread::Task::spawn("music-discs", move || {
             wait();
             let _work = probe::work("the other discs' soundtrack scan");
-            pool.read_discs(library, &listings);
+            // A scan that panics still answers, with what it found so far (nothing), so
+            // nothing waits on it for ever.
+            let read = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                pool.read_discs(library, &listings);
+            }));
+            if read.is_err() {
+                log::warn!("audio: the other discs' soundtrack scan panicked");
+                pool.with(|inner| inner.discs_scanned = true);
+            }
         });
         if task.is_finished() {
             self.with(|inner| inner.discs_scanned = true);
@@ -419,17 +445,26 @@ impl Pool {
             .with(|inner| inner.booted.as_ref().map(|booted| booted.title))
             .flatten();
         let mut found = Vec::new();
-        for path in library.containers() {
+        for path in library.sources() {
             let source = path.to_string_lossy().into_owned();
             let Some((title, layout)) = identify(library, &source) else {
+                log::debug!("audio: music pool: {source} is not a title this build opens");
                 continue;
             };
             if Some(title.name) == booted_title {
                 continue;
             }
             let platform = layout.platform;
-            let Ok(Some(soundtrack)) = listings.read(library, &source, platform) else {
-                continue;
+            let soundtrack = match listings.read(library, &source, platform) {
+                Ok(Some(soundtrack)) => soundtrack,
+                Ok(None) => {
+                    log::debug!("audio: music pool: {source} carries no soundtrack");
+                    continue;
+                }
+                Err(error) => {
+                    log::debug!("audio: music pool: {source} will not list: {error:#}");
+                    continue;
+                }
             };
             if soundtrack.tracks.is_empty() {
                 continue;

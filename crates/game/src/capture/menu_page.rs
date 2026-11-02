@@ -282,7 +282,8 @@ pub(super) fn menu_page(
     );
     // The MUSIC page: a still waits for the other discs' scan the way it waits for the survey,
     // so it shows what a player would see once the scans have landed.
-    while music_discs.pool().scanning_discs() {
+    let until = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while music_discs.pool().scanning_discs() && std::time::Instant::now() < until {
         std::thread::sleep(std::time::Duration::from_millis(20));
     }
     crate::music_pool::supply(&mut model, music_discs.pool(), strings);
@@ -372,12 +373,15 @@ pub(super) fn menu_page(
     } else if page == crate::music_pool::PAGE
         && let Some(label) = focus
     {
-        // `--menu-page music:<part of a source's label>` puts the SOURCE row on it.
+        // `--menu-page music:<part of a source's label or id>` puts the SOURCE row on it.
         let rows = music_discs.pool().rows();
         let wanted = label.to_lowercase();
         let row = rows
             .iter()
-            .find(|row| row.label.to_lowercase().contains(&wanted))
+            .find(|row| {
+                row.label.to_lowercase().contains(&wanted)
+                    || row.id.to_lowercase().contains(&wanted)
+            })
             .with_context(|| format!("no music source matches {label:?}"))?;
         model.seed(
             crate::music_pool::SELECTED,

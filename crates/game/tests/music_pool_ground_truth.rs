@@ -38,6 +38,18 @@ impl Library for Workspace {
         found.sort();
         found
     }
+
+    fn sources(&self) -> Vec<PathBuf> {
+        let extracted = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/extracted");
+        let mut found = self.containers();
+        found.extend(
+            ["vita", "ps4"]
+                .map(|name| extracted.join(name))
+                .into_iter()
+                .filter(|dir| dir.is_dir()),
+        );
+        found
+    }
 }
 
 #[test]
@@ -59,7 +71,11 @@ fn two_titles_soundtracks_both_appear_in_the_pool() {
     }
 
     let rows = discs.pool().rows();
-    let labelled = |name: &str| rows.iter().filter(|row| row.id.contains(name)).count();
+    let labelled = |name: &str| {
+        rows.iter()
+            .filter(|row| row.id.contains(&slug(name)))
+            .count()
+    };
     assert_eq!(
         labelled(oag_pulse::TITLE.name),
         1,
@@ -69,6 +85,18 @@ fn two_titles_soundtracks_both_appear_in_the_pool() {
         labelled(oag_hd::TITLE.name) >= 1,
         "HD's disc is listed: {rows:#?}"
     );
+    // 2048 and Omega are extracted directories, not disc images: the pool reads them through
+    // the host's own source list (`Library::sources`), so their soundtracks are listed too.
+    for (dir, id) in [("vita", "2048"), ("ps4", "omega")] {
+        let extracted = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/extracted");
+        if extracted.join(dir).is_dir() {
+            assert!(
+                rows.iter().any(|row| row.id.contains(id)
+                    && matches!(row.status, SourceStatus::Ready(songs) if songs > 0)),
+                "{id} is extracted and lists songs: {rows:#?}"
+            );
+        }
+    }
     assert!(
         rows.iter().filter(|row| row.enabled).count() == 1 && rows[0].enabled,
         "by default only the booted disc is on: {rows:#?}"
@@ -90,7 +118,7 @@ fn two_titles_soundtracks_both_appear_in_the_pool() {
     let on = discs.pool().rows();
     let per_title = |name: &str| -> usize {
         on.iter()
-            .filter(|row| row.id.contains(name))
+            .filter(|row| row.id.contains(&slug(name)))
             .filter_map(|row| match row.status {
                 SourceStatus::Ready(n) => Some(n),
                 _ => None,
@@ -113,7 +141,7 @@ fn two_titles_soundtracks_both_appear_in_the_pool() {
             extras,
             on.iter()
                 .map(|row| match row.status {
-                    SourceStatus::Ready(n) if !row.id.contains(oag_pulse::TITLE.name) => n,
+                    SourceStatus::Ready(n) if !row.id.contains(&slug(oag_pulse::TITLE.name)) => n,
                     _ => 0,
                 })
                 .sum::<usize>()
@@ -121,6 +149,10 @@ fn two_titles_soundtracks_both_appear_in_the_pool() {
             "a title on two pressings contributes once"
         );
     }
+}
+
+fn slug(name: &str) -> String {
+    name.to_lowercase().replace(' ', "-")
 }
 
 /// Songs counted twice by summing every row: the smaller pressing of each title listed twice.
@@ -131,7 +163,7 @@ fn duplicate_pressings(rows: &[oag_sound::pool::SourceRow]) -> usize {
         let SourceStatus::Ready(n) = row.status else {
             continue;
         };
-        if row.id.contains(oag_pulse::TITLE.name) {
+        if row.id.contains(&slug(oag_pulse::TITLE.name)) {
             continue;
         }
         let title = row.id.split(':').nth(1).unwrap_or_default().to_string();

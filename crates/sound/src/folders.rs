@@ -49,6 +49,12 @@ pub trait Reader: std::fmt::Debug + Send + Sync + 'static {
     ///
     /// A file that is gone or unreadable.
     fn read(&self, path: &Path) -> io::Result<Vec<u8>>;
+
+    /// The listing the last walk of `root` left behind, from local storage, so a
+    /// slow walk can start from it. `None` when there is none.
+    fn remembered(&self, _root: &Path) -> Option<Vec<PathBuf>> {
+        None
+    }
 }
 
 /// The real file system, with the walk's answer cached per directory.
@@ -181,6 +187,27 @@ impl Reader for Disk {
     fn read(&self, path: &Path) -> io::Result<Vec<u8>> {
         std::fs::read(path)
     }
+
+    fn remembered(&self, root: &Path) -> Option<Vec<PathBuf>> {
+        let cache = read_cache(&self.cache_file(root)?);
+        cache.contains_key(root).then(|| {
+            let mut found = Vec::new();
+            remember(root, 0, &cache, &mut found);
+            found
+        })
+    }
+}
+
+fn remember(dir: &Path, depth: usize, cache: &DirCache, found: &mut Vec<PathBuf>) {
+    let Some(listed) = cache.get(dir) else {
+        return;
+    };
+    found.extend(listed.files.iter().map(|name| dir.join(name)));
+    if depth < MAX_DEPTH {
+        for name in &listed.folders {
+            remember(&dir.join(name), depth + 1, cache, found);
+        }
+    }
 }
 
 fn modified_nanos(dir: &Path) -> io::Result<u128> {
@@ -202,6 +229,11 @@ fn list_dir(dir: &Path) -> io::Result<Listed> {
             continue;
         };
         let name = entry.file_name().to_string_lossy().into_owned();
+        // Hidden entries, a NAS's metadata folders (`@eaDir` holds a folder named after
+        // every song) and macOS's `._` companions are never songs.
+        if name.starts_with(['.', '@', '#']) {
+            continue;
+        }
         if kind.is_dir() {
             listed.folders.push(name);
         } else if is_song(Path::new(&name)) {
@@ -276,6 +308,8 @@ pub enum Status {
 #[derive(Debug)]
 enum State {
     Scanning,
+    /// The last run's listing, usable while the walk checks it.
+    Remembered(Vec<PathBuf>),
     Ready(Vec<PathBuf>),
     Failed(String),
 }
@@ -308,6 +342,12 @@ impl FolderScan {
         let task = oag_thread::Task::spawn(name, move || {
             let _work = crate::probe::work("a music folder's scan");
             let began = Instant::now();
+            if let Some(files) = reader.remembered(&root)
+                && let Ok(mut held) = oag_thread::lock(&state)
+                && matches!(*held, State::Scanning)
+            {
+                *held = State::Remembered(files);
+            }
             let answer = match reader.list(&root) {
                 Ok(mut files) => {
                     files.sort();
@@ -328,7 +368,12 @@ impl FolderScan {
                 }
             };
             if let Ok(mut held) = oag_thread::lock(&state) {
-                *held = answer;
+                // A mount that stopped answering keeps the listing the last run left.
+                let keep =
+                    matches!(answer, State::Failed(_)) && matches!(*held, State::Remembered(_));
+                if !keep {
+                    *held = answer;
+                }
             }
         });
         // Detached on purpose: see the module comment. A thread that would not
@@ -351,7 +396,7 @@ impl FolderScan {
         match &*held {
             State::Scanning if self.started.elapsed() >= self.deadline => Status::TimedOut,
             State::Scanning => Status::Scanning,
-            State::Ready(files) => Status::Ready(files.len()),
+            State::Remembered(files) | State::Ready(files) => Status::Ready(files.len()),
             State::Failed(why) => Status::Failed(why.clone()),
         }
     }
@@ -360,7 +405,7 @@ impl FolderScan {
     #[must_use]
     pub fn files(&self) -> Vec<PathBuf> {
         match oag_thread::lock(&self.state).as_deref() {
-            Ok(State::Ready(files)) => files.clone(),
+            Ok(State::Remembered(files) | State::Ready(files)) => files.clone(),
             _ => Vec::new(),
         }
     }

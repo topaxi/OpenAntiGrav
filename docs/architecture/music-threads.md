@@ -135,7 +135,7 @@ OPTIONS > AUDIO > MUSIC lists every soundtrack source this machine can open, eac
 the booted disc (on by default), each other title's disc image found on the search path (one
 row per image, off) and each folder under `[audio] music_folders` in `settings.toml` (off
 unless its `enabled` is set). Switches persist in `[audio] music_switches`, keyed by a stable
-source id (`disc:<title>:<platform>:<file stem>`, `folder:<path>`); an id absent from the table
+source id (`disc:<title slug>:<platform>:<file stem>`, `folder:<path>`); an id absent from the table
 takes the default. The page is the MODS page's shape (a SOURCE row that walks the sources and an
 ENABLED row for the one it is on), so pad, mouse and touch work as on every other choice row.
 Adding a folder from the menu needs a text input widget and is open.

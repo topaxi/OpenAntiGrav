@@ -55,21 +55,26 @@ pub fn choices(rows: &[SourceRow]) -> Vec<Choice> {
 #[must_use]
 pub fn switch_for(row: &SourceRow, strings: &StringTable) -> (Vec<Choice>, &'static str) {
     let say = |(id, english): (&str, &str)| strings.get_or_fallback(id, english).to_string();
+    let (value, word) = if row.enabled {
+        ("on", words::ON)
+    } else {
+        ("off", words::OFF)
+    };
     match &row.status {
         SourceStatus::Scanning => (
-            vec![Choice::labelled("off", say(words::OFF)).unusable(say(words::SCANNING))],
-            "off",
+            vec![Choice::labelled(value, say(word)).unusable(say(words::SCANNING))],
+            value,
         ),
         SourceStatus::Unavailable(why) => (
-            vec![Choice::labelled("off", say(words::OFF)).unusable(why.clone())],
-            "off",
+            vec![Choice::labelled(value, say(word)).unusable(why.clone())],
+            value,
         ),
         SourceStatus::Ready(_) => (
             vec![
                 Choice::labelled("on", say(words::ON)),
                 Choice::labelled("off", say(words::OFF)),
             ],
-            if row.enabled { "on" } else { "off" },
+            value,
         ),
     }
 }

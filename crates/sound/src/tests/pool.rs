@@ -177,6 +177,9 @@ fn a_cached_walk_keeps_the_listing_and_follows_a_change_below_it() {
     std::fs::write(library.join("a.mp3"), b"").expect("a");
     std::fs::write(library.join("sub/b.mp3"), b"").expect("b");
     std::fs::write(library.join("cover.jpg"), b"").expect("cover");
+    std::fs::write(library.join("._a.mp3"), b"").expect("apple double");
+    std::fs::create_dir_all(library.join("@eaDir")).expect("nas metadata");
+    std::fs::write(library.join("@eaDir/a.mp3"), b"").expect("nas metadata song");
     let disk = crate::folders::Disk::cached_in(cache.clone());
     let sorted = |mut files: Vec<PathBuf>| {
         files.sort();
@@ -208,4 +211,62 @@ fn a_cached_walk_keeps_the_listing_and_follows_a_change_below_it() {
         "a missing folder is an error"
     );
     std::fs::remove_dir_all(&base).expect("clean up");
+}
+
+#[derive(Debug)]
+struct Remembering {
+    gate: Mutex<Receiver<()>>,
+}
+
+impl Reader for Remembering {
+    fn list(&self, _root: &Path) -> io::Result<Vec<PathBuf>> {
+        let _ = self.gate.lock().expect("gate").recv();
+        Err(io::Error::other("the mount went away"))
+    }
+
+    fn read(&self, path: &Path) -> io::Result<Vec<u8>> {
+        Err(io::Error::other(format!("{} is gone", path.display())))
+    }
+
+    fn remembered(&self, _root: &Path) -> Option<Vec<PathBuf>> {
+        Some(vec![
+            PathBuf::from("/mnt/a.mp3"),
+            PathBuf::from("/mnt/b.mp3"),
+        ])
+    }
+}
+
+#[test]
+fn a_remembered_listing_is_usable_while_a_hung_mount_is_walked_and_survives_its_failure() {
+    let (release, gate) = channel();
+    let pool = Pool::default();
+    pool.configure(
+        &Default::default(),
+        &[MusicFolder {
+            path: PathBuf::from("/mnt"),
+            enabled: true,
+        }],
+    );
+    let reader: Arc<dyn Reader> = Arc::new(Remembering {
+        gate: Mutex::new(gate),
+    });
+    pool.scan_folders(&reader);
+    wait_for(|| crate::pool::playlist_len(&pool, 0) == 2);
+    assert_eq!(
+        pool.rows().last().map(|row| row.status.clone()),
+        Some(SourceStatus::Ready(2)),
+        "the remembered listing is offered while the walk has not answered"
+    );
+    release.send(()).expect("release");
+    std::thread::sleep(Duration::from_millis(100));
+    assert_eq!(
+        crate::pool::playlist_len(&pool, 0),
+        2,
+        "a walk that fails keeps the listing the last run left"
+    );
+}
+
+#[test]
+fn a_pool_that_never_started_a_disc_scan_is_not_scanning() {
+    assert!(!Pool::default().scanning_discs());
 }
