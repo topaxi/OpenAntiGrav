@@ -375,6 +375,48 @@ fn hd_second_launch_decodes_nothing() {
     );
 }
 
+/// Omega's music bank is read and parsed once for a run, however many tracks
+/// play: two different tracks, one `bank_reads`. A `load_entry` that planned per
+/// track reads 2 here; one that bypassed the kept bank reads 0.
+#[test]
+#[ignore = "needs game content in data/extracted/ps4"]
+fn omega_reads_its_music_bank_once_across_tracks() {
+    let Some(source) = oag_testdata::exact("data/extracted/ps4") else {
+        return;
+    };
+    let discs = audio::MusicDiscs::survey(&source.display().to_string(), &GameLibrary);
+    let scratch = scratch("omega-bank");
+    let cache = scratch.0.clone();
+    let listed = Audio::booted_track_seconds(&discs);
+    assert!(listed.len() > 1, "Omega lists several tracks");
+    assert_eq!(discs.bank_reads(), 0, "a survey reads no bank");
+
+    for index in [0, 1] {
+        let mut audio = open_audio(&cache);
+        let wanted = audio::RaceMusicState {
+            index,
+            second: 0,
+            tracks: listed.len(),
+            track_seconds: listed[index],
+        };
+        audio.restore_race_music(&discs, &wanted).unwrap();
+        audio.start_race_music(&discs, MusicSource::Auto, &cache);
+        tick_until(&mut audio, "omega-bank", "the track", |audio| {
+            audio.playhead_race().is_some()
+        });
+        assert_eq!(
+            audio.race_music_state().map(|s| s.index),
+            Some(index),
+            "track {index} is the one playing"
+        );
+    }
+    assert_eq!(
+        discs.bank_reads(),
+        1,
+        "the bank is read once for two tracks"
+    );
+}
+
 /// A changed playlist falls back to the normal start, on the real disc.
 #[test]
 #[ignore = "needs a disc image in data/images/"]

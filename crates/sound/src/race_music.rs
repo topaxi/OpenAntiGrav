@@ -295,6 +295,7 @@ pub(super) fn fetch_track(
         platform,
         track,
         cache_dir,
+        &discs.listings,
     )?);
     Ok(Some(Loaded {
         from: Some(platform),

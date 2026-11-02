@@ -317,20 +317,32 @@ fn decode(blob: &[u8], cache_dir: &Path) -> Result<Pcm> {
 /// # Errors
 ///
 /// An entry that will not read, and a decode that failed.
+///
+/// `prepared` is a title's [`omega::Prepared`] a caller kept from an earlier
+/// entry ([`prepare`]); `None` builds one for this entry alone.
 pub fn load_entry(
     title: &Title,
     archives: &mut Archives,
     at: u32,
     cache_dir: &Path,
+    prepared: Option<&omega::Prepared>,
 ) -> Result<Sound> {
     if let Some(state_tracks) = title.music.and_then(|music| music.state_tracks) {
-        let plan = omega::plan(archives, &state_tracks, false)?;
-        let song = plan
+        let fresh;
+        let prepared = match prepared {
+            Some(kept) => kept,
+            None => {
+                fresh = omega::prepare(archives, &state_tracks)?;
+                &fresh
+            }
+        };
+        let song = prepared
+            .plan
             .songs
             .iter()
             .find(|song| song.location == at)
             .with_context(|| format!("no playable song at location {at}"))?;
-        let pcm = omega::mix(archives, &state_tracks, song)
+        let pcm = omega::mix_with(archives, &state_tracks, song, Some(&prepared.bank))
             .with_context(|| format!("mixing {}", song.title))?;
         return Sound::new(pcm.samples, pcm.channels, pcm.sample_rate)
             .with_context(|| format!("location {at}"));
@@ -407,3 +419,17 @@ pub fn load_front_end(
 
 #[cfg(test)]
 mod tests;
+
+/// The bank-driven title's playlist and bank, read once for a caller to keep
+/// across [`load_entry`] calls; `Ok(None)` for a title that has no bank.
+///
+/// # Errors
+///
+/// A definition or bank that will not read or parse.
+pub fn prepare(title: &Title, archives: &mut Archives) -> Result<Option<omega::Prepared>> {
+    title
+        .music
+        .and_then(|music| music.state_tracks)
+        .map(|state_tracks| omega::prepare(archives, &state_tracks))
+        .transpose()
+}
