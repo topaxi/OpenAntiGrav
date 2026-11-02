@@ -81,6 +81,8 @@ pub const TITLE: &Title = &Title {
     speech_volume_law: oag_title::pre_race::Sourced::measured(
         oag_title::group_volume::GroupVolumeLaw::Squared,
     ),
+    // Group 2 takes the SFX fraction and the flyby fade (`docs/gameplay/race-intro.md`, "The Speech group").
+    speech_follows_effects: oag_title::pre_race::Sourced::measured(true),
     plugin_definition: names::GAME_PLUGIN_DEFINITION,
     track_plugin_definition: None,
     loading: Some(&loading::LOADING),

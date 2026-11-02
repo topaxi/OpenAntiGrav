@@ -131,11 +131,12 @@ pub fn play_nav(
 /// [`race_tick`] sees the race leave its countdown. Called before every fresh race starts its
 /// music, whichever way it was reached; a resume mid-race does not call it. Also sets the title's
 /// effects and speech volume laws ([`Audio::set_effects_volume_law`],
-/// [`Audio::set_speech_volume_law`]) for that race.
+/// [`Audio::set_speech_volume_law`], [`Audio::set_speech_follows_effects`]) for that race.
 pub fn hold_race_song(audio: &mut Audio, title: &oag_title::Title) {
     audio.hold_race_song(title.music.is_some_and(oag_title::Music::song_waits_for_go));
     audio.set_effects_volume_law(title.effects_volume_law.value);
     audio.set_speech_volume_law(title.speech_volume_law.value);
+    audio.set_speech_follows_effects(title.speech_follows_effects.value);
 }
 
 /// Starts decoding `race`'s flyby voice-over, where it has one, off this thread: the clip is ready
@@ -320,5 +321,26 @@ mod tests {
         assert_eq!(menu_cue(Nav::Stepped(None), None), Cue::MenuStepRight);
         assert_eq!(menu_cue(Nav::Accept, Some(Dir::Up)), Cue::MenuAccept);
         assert_eq!(menu_cue(Nav::Decline, None), Cue::MenuDecline);
+    }
+
+    /// Arming a race puts each title's speech source on the bus: Pulse's Speech group is the SFX
+    /// slider squared, HD's stays on the Speech slider. Fails if `hold_race_song` drops the field.
+    #[test]
+    fn arming_a_race_sets_the_titles_speech_source() {
+        use oag_audio::Bus;
+        use oag_sound::Volume;
+        use oag_sound::settings::Settings;
+        let settings = Settings {
+            sfx_volume: Volume::OFFERED[2],
+            ..Default::default()
+        };
+        let bus = |title: &oag_title::Title| {
+            let mut audio =
+                oag_sound::Audio::open(&settings, None, None, oag_audio::MIN_BUFFER, false);
+            super::hold_race_song(&mut audio, title);
+            audio.output().with_mixer(|m| m.bus_gain(Bus::Speech))
+        };
+        assert_eq!(bus(oag_pulse::TITLE), 0.25);
+        assert_eq!(bus(oag_hd::TITLE), 1.0);
     }
 }
