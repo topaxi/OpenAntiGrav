@@ -14,9 +14,10 @@ textures appended after the tree.
 
 This page covers version 6 as shipped by Pulse. All integers are little-endian
 unless stated; HD is the same layout byte-swapped. Confidence scores follow the
-[rubric](../reverse-engineering/confidence-rubric.md) (0-100). A page-wide note:
-nothing here has been verified against a live trace of the game reading the
-file, so structural claims cap at 94.
+[rubric](../reverse-engineering/confidence-rubric.md) (0-100). Most layout
+claims rest on shipped data agreeing with an exact invariant and so cap at 94; a
+few (the embedded texture swizzle flag, the `LodGroup` switch) were also
+measured live. A claim with no score has none on its evidence page.
 
 ## File and node framing
 
@@ -69,7 +70,8 @@ file's version word. Pure's `Transform` is `0x6d`, `Mesh` `0x11e`, `Texture`
 
 The class table in the Pulse executable holds 863 records. HD adds
 `collision_trackwall` 0x3ed and `absorb` 0x3ee; Pulse's table does not name
-them. Confidence 94 (ten ids checked independently against decoded payloads;
+them. Confidence 94 (the evidence page says 95, above the rubric's cap for
+data agreement; ten ids were checked independently against decoded payloads and
 the rest read from the table).
 
 ## `Transform` (0x6e) and `Anim Transform` (0x3c0)
@@ -94,8 +96,8 @@ Payload (all pointers are byte offsets from the payload start):
 +0x40 u32 scale values (s16 x3, /256)
 ```
 
-The six arrays tile `[0x50, payload_len)` exactly on all 393 Pulse nodes
-(confidence 90). Translation is `base + quantum * s16`. Key times are in
+The six arrays tile `[0x50, payload_len)` exactly on all 393 Pulse nodes (not
+scored on the evidence page). Translation is `base + quantum * s16`. Key times are in
 frames; hold the first and last key outside the range.
 
 `LodGroup` (0x2ee): a 64-byte identity, position, `1.0`, a `child_count` u32 (1
@@ -119,7 +121,7 @@ Material, 0x14 bytes: `u16 flags` (render state: `0x80` accompanies additive
 `_GLOW` textures, `0x2000` marks a second environment-map pass, `0x10` enables
 the texture transform), `u32 texture` (index into the model's `Texture` nodes
 in node order), `u32 second_texture`, and 8 bytes that are zero in every file.
-Confidence 85.
+Not scored on the evidence page.
 
 ### Batches
 
@@ -145,9 +147,9 @@ vertices    = batch + header_size (+ alternate offset if alternate is used)
 next batch  = batch + header_size + payload bytes
 ```
 
-Strips alternate winding per triangle. Confidence 90 (the vertex counts and
-bounding boxes agree with decoded vertices on all 20,832 Pure batches and every
-Pulse batch). The meaning of list B and of `pass_mask` bits is render-pass
+Strips alternate winding per triangle. Not scored on the evidence page; every
+decoded vertex falls inside its batch's own bounding box, which is the standing
+check on layout and scale, and Pure's 20,832 batches use the same header. The meaning of list B and of `pass_mask` bits is render-pass
 selection; the details are not specified here.
 
 ### PSP vertex format
@@ -172,9 +174,9 @@ texcoord = u8 / 128.0   (or two f32)
 Each component is aligned to its own size and the stride is the end of position
 rounded up to the largest component alignment. The twelve reachable types are
 `0x100, 0x101, 0x103, 0x11c, 0x11d, 0x11f, 0x120, 0x121, 0x123, 0x13c, 0x13d,
-0x13f`. Widen 16-bit colour channels by replication, not by shifting. Confidence
-92 on the table, 94 on the scale (every decoded vertex lies inside its batch's
-bounding box).
+0x13f`. Widen 16-bit colour channels by replication, not by shifting. Not scored
+on the evidence page; the scale and layout are checked by every vertex lying
+inside its batch's bounding box.
 
 ### PS2 batches
 
@@ -252,12 +254,14 @@ Control point:
 | +0x44 | f32 | half width, left |
 | +0x48 | f32 | half width, right |
 | +0x4c, +0x50 | f32 | AI corridor bounds, left and right |
+| +0x40 | f32 | normalised arc position round the circuit, 0 to 1 (lap progress); -1024 is a runtime "no sample" sentinel |
 | +0x54 | f32 | racing line offset |
-| +0x5c, +0x5d | u8 | AI lane band low and high end (`byte / 127.5 - 1`; `0xff, 0x00` disables); version 0x105+ |
+| +0x5c, +0x5d | u8 | AI lane band low and high end (`byte / 127.5 - 1`; `0xff, 0x00` disables); read from version 0x105, forced to `0xff, 0x00` before |
 | +0x60 | u8 | section id (at +0x5c from version 0x107) |
 | +0x61 | u8 | flags (at +0x5d from version 0x107) |
+| +0x62..+0x65 | u8[4] | hull light scales: ambient, directional, two point-light classes; `0xff` before version 0x103 and on the 0x107 short point |
 | +0x66 | u8 | AI opponent speed floor when below 35 |
-| +0x68..+0x6f | i8[8] | collision cage offsets, `s * |s| * 250` with `s = byte / 127` (version 0x104+) |
+| +0x68..+0x6f | i8[8] | collision cage offsets, `s * |s| * 250` with `s = byte / 127`; zeroed at load before version 0x104 |
 
 The spline does not pass through its control points. For segment `i` and
 parameter `t` use points `i-1, i, i+1, i+2` (clamped at the ends) with weights
@@ -265,18 +269,20 @@ parameter `t` use points `i-1, i, i+1, i+2` (clamped at the ends) with weights
 scalars alike.
 
 Confidence 94 for the layout (the decoded structure accounts for the payload
-length to the byte on all 40 PSP and 16 Pure tracks, and the 86 paths' `+0x04`
-gap matches measured spacing exactly). The reserved block is the trap: reading
+length to the byte on every shipped track, and the 86 paths' `+0x04` gap
+matches measured spacing exactly). The reserved block is the trap: reading
 paths at `+0x20` lands one field early. 92 for the frame semantics and the
-lift; 70 to 75 for the AI-only bytes (`+0x5c`, `+0x5d`, `+0x66`); 85 for the
-cage bytes.
+lift; 75 for the lane band (70 static, 75 after a census of 40 tracks; only
+`07_Track` authors one); 70 for `+0x66`. The light scale and cage bytes are not
+scored on the evidence page.
 
 ### `Start Position` (0x3bc)
 
 A 64-byte row-major matrix, one per track, a grid slot (3.3 to 20.5 units off
 the centreline). Row 2 is forward, row 3 the position; the game forces row 1 to
 `(0, 1, 0)` and re-orthonormalises. The other grid slots are not in the file.
-Confidence 85.
+Which of the two non-up rows the game preserves was not read; keeping forward is
+the reader's choice. Not scored on the evidence page.
 
 ### `section` (0x3c9): authored visibility
 

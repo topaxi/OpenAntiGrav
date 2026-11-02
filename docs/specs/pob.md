@@ -119,11 +119,10 @@ are per **tick**, lifetimes and schedules are integer ticks. Severity (an
 instance scalar the owner supplies, for example from collision strength) scales
 speed, extent and drawn size, never particle counts.
 
-Confidence 85 for the table as a whole: each row is grounded in a decompiled
-consumer, and one file's values were matched byte for byte against a live
-emulator session. Per-row notes: shape, velocity, lifetime, interval, size and
-alpha channels are 85 to 90; the playback rate is 90; the flags below are 75 to
-90.
+Confidence 85 for the table as a whole, and every row inherits it unless noted:
+each row is grounded in a decompiled consumer, and one file's values were
+matched byte for byte against a live emulator session. The playback rate is 90;
+the looping flag is 75.
 
 ### Flags (`+0x20`)
 

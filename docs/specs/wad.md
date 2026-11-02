@@ -57,10 +57,11 @@ archives has bit 31 clear and equal sizes, and the shortcut would decompress all
 of them. An incompressible blob that the encoder left at its own size is also
 stored, so equal sizes do not prove the encoder never ran.
 
-Confidence 92. The equal-size test comes first in both executables. No shipped
-Pulse or Pure disc archive sets bit 31; the zlib branch is confirmed only on
-Pure's downloadable content packs (187 of 192 entries in one pack), which use
-the same entry layout.
+The equal-size test comes first in both executables (the PS2 mount and lookup
+functions are scored 88 on the evidence page; the bit-31 branch carries no
+score of its own). No archive on the Pulse or Pure base discs sets bit 31. The
+zlib branch is exercised by Pure's downloadable content packs (187 of 192
+entries in one pack), which use the same entry layout.
 
 ### Worked example
 
@@ -101,8 +102,8 @@ case-insensitively with `\` and `/` equal, so `Data\FE\Images\hex_bg.mip`,
 | `Data\Psys\WO_SHIP_COLL_SPARK_DAMAGE.POB` | `0xeff1f331` |
 
 The original also accepts a name of `#` followed by exactly eight uppercase hex
-digits as a literal hash. Confidence 90 on that escape (read from both
-executables; no shipped name uses it).
+digits as a literal hash. Both executables' hash functions implement it with the same length
+guard; no shipped name uses it, so it is probably a tools feature. Not scored.
 
 Confidence 94 for the hash. Verified on 176 real entries across four archives,
 and three separate implementations in two binaries agree.

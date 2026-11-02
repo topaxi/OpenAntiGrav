@@ -22,8 +22,10 @@ truth.
 
 ## Behaviour (in progress)
 
-These pages are being written and are not linked yet:
+These pages are being written and are not linked yet.
 
-- Physics (`physics.md`)
-- Weapons (`weapons.md`)
-- Race rules (`race-rules.md`)
+| Page | Covers | Titles |
+| --- | --- | --- |
+| Physics (`physics.md`) | Ship dynamics | in progress |
+| Weapons (`weapons.md`) | Pickups, projectiles, blasts | in progress |
+| Race rules (`race-rules.md`) | Modes, lap timing, progress | in progress |

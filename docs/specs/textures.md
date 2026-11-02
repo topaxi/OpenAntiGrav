@@ -40,7 +40,9 @@ fixed by the header, so a reader can reject a non-texture by size alone:
 ```
 
 Level 0 uses the unpadded row, the rest the 16-byte padded row. Only level 0 is
-needed to draw.
+needed to draw. Whether level 0 would also pad a row narrower than 16 bytes is
+untested, because no shipped texture has one; the reader leaves level 0
+unpadded.
 
 Confidence:
 
@@ -50,8 +52,7 @@ Confidence:
 | 4-bit low nibble first | 92 | The other order combs edges into one-pixel teeth; the 4-bit font atlases agree |
 | `+0x06` is the mip count | 92 | The 128x64 engine flare is 11,920 bytes: `16 + 1024 + 8192 + 2048 + 512 + 128`, exactly |
 | Levels 1+ pad rows to 16 bytes | 88 | A 64x64 noise texture is 6,544 bytes, 64 more than packed, all in an 8x8 level 3 |
-| Level 0 is not padded | 70 | No texture has a level-0 row under 16 bytes, so this is untested |
-| Bit 0 of `+0x07` is the swizzle flag | 92 | Copied into the texture node's flags by the loader; the unswizzled result is seam-free on 11 of the 12 textures wide enough to judge |
+| Bit 0 of `+0x07` is the swizzle flag | not scored | Copied into the texture node's flags by the loader; the unswizzled result is seam-free on 11 of the 12 textures wide enough to judge |
 
 ## PSP embedded texture (inside `.vex`)
 
@@ -121,8 +122,8 @@ Rules that matter:
 The same swizzle applies to `.fnt` glyph atlases, `.mip` and `.vex` embedded
 textures.
 
-Confidence 92. It is the inverse of the game's own swizzle routine
-(`Texture_SwizzleForGe`), and the flag is read from the game's loader.
+This is the inverse of the game's own swizzle routine (`Texture_SwizzleForGe`),
+and the flag is read from the game's loader. Not scored on the evidence page.
 
 ## PS2 texture (`.pct`)
 
@@ -249,8 +250,9 @@ The newer titles use platform containers, not these:
 
 - `.mip` byte `+0x05`, and what bits other than 0 of `+0x07` mean.
 - The PS2 `flags` word (`0x2000` vs `0x2040`) and the unknown dword at `+0x08`.
-- Direct-colour PSP formats (5650, 4444, 8888, DXT) have never been seen in a
-  texture blob; only 4 and 8 bit indexed.
+- Direct-colour PSP formats (5650, 4444, 8888, DXT): only 4 and 8 bit indexed
+  textures appear in the archives surveyed (`FE.wad` and the standalone `.mip`
+  set); `Data.wad` has not been surveyed for others.
 - Level-0 row padding for a `.mip` narrower than 16 bytes.
 - `psmt8_offset` below width 16 or `psmt4_offset` below 128x128 is not defined
   for the PS2; the disc has no such swizzled texture.
