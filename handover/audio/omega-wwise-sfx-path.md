@@ -4,7 +4,7 @@ titles: [omega]
 size: M (55)
 difficulty: medium (50)
 updated: 2026-11-02
-summary: "Omega start plays its Wwise events; random/sequence and switch containers are read and the missile launch loads (one child per random layer); the cue table and the player _PC event are next"
+summary: "Omega start plays Wwise events; random/switch containers are read and the missile launch loads; the cue table and the player _PC event are next"
 ---
 
 # Omega race sound effects through Wwise
