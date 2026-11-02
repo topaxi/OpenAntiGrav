@@ -71,24 +71,24 @@ fn the_voice_over_sounds_from_the_counters_zero_until_the_flyby_ends() {
     let Some((sounding, song)) = flyby(false) else {
         return;
     };
-    assert!(sounding[..lock - 1].iter().all(|&on| !on), "before zero");
+    assert!(sounding[..lock].iter().all(|&on| !on), "before zero");
     assert!(
-        sounding[lock - 1..sounding.len() - 1].iter().all(|&on| on),
+        sounding[lock..sounding.len() - 1].iter().all(|&on| on),
         "from the counter's zero until the end"
     );
     assert!(!sounding[sounding.len() - 1], "stopped on the ending tick");
     assert!(!song, "the held race song is still parked");
 }
 
-/// A held Cross ends the flyby the tick after the counter's zero: the clip is up for one tick.
+/// A held Cross ends the flyby on the tick the counter reaches zero, where the original starts and
+/// stops the voice in one call: the clip never sounds.
 #[test]
 #[ignore = "needs data/images/pulse-psp-usa.chd and ffmpeg"]
-fn a_skipped_flyby_leaves_the_voice_over_silent_after_its_one_tick() {
+fn a_skipped_flyby_never_sounds_its_voice_over() {
     let lock = oag_pulse::pre_race::PRE_RACE.lock_ticks.value as usize;
     let Some((sounding, _)) = flyby(true) else {
         return;
     };
     assert_eq!(sounding.len(), lock + 1);
-    assert!(sounding[lock - 1], "started on the counter's zero");
-    assert!(!sounding[lock], "stopped by the skip");
+    assert!(sounding.iter().all(|&on| !on));
 }

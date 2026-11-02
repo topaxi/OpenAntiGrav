@@ -182,22 +182,18 @@ fn the_flyby_starts_its_voice_over_at_the_counters_zero_and_stops_it_at_the_end(
     assert_eq!(
         calls,
         vec![
-            (rule.lock_ticks.value - 1, VoiceCue::Start(entry)),
+            (rule.lock_ticks.value, VoiceCue::Start(entry)),
             (rule.hold_ticks.value + 1500, VoiceCue::Stop),
         ]
     );
 }
 
-/// A held Cross ends the flyby one tick after the counter reaches zero: the voice has started and
-/// is stopped on the next tick.
+/// A held Cross ends the flyby on the tick the counter reaches zero: the original starts and stops
+/// the voice in one call, so no call is raised.
 #[test]
 #[ignore = "needs data/images/pulse-psp-usa.chd"]
-fn a_skipped_flyby_stops_its_voice_over_the_tick_after_it_starts() {
-    let lock = oag_pulse::pre_race::PRE_RACE.lock_ticks.value;
+fn a_skipped_flyby_raises_no_voice_over_at_all() {
     let Some(mut race) = started() else { return };
     assert!(race.begin_intro());
-    let calls = voice_calls(&mut race, true);
-    let ticks: Vec<_> = calls.iter().map(|(tick, _)| *tick).collect();
-    assert_eq!(ticks, vec![lock - 1, lock]);
-    assert_eq!(calls[1].1, race::intro_camera::VoiceCue::Stop);
+    assert_eq!(voice_calls(&mut race, true), Vec::new());
 }

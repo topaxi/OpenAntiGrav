@@ -182,8 +182,8 @@ running original**. The two calls in substate 1 are not both music:
 
 | When | Call | What it does | Conf |
 | --- | --- | --- | ---: |
-| counter reads `0x28` (after its decrement, the 20th call: 40 calls to go) | `Audio_StartSfxFadeIn(0.02, g_sound_mgr)` (`0x0893a958`) | `mgr+0xd8 = 0.02; mgr+0x90 = 0; mgr+0xd4 = 1`: starts a **sound-effects** fade-in from silence. `Audio_UpdateGroupVolumes` (`0x0893ac70`) adds `mgr+0xd8` to the fade `mgr+0x90` once per call until it reaches the target `mgr+0xd0` (the SFX Volume fraction): 50 calls from 0 to 1 at `0.02`. Substate 0 had snapped the fade to 0 (`Audio_SetSfxFadeTarget(0)`), so the flyby's first 20 calls are SFX-silent and the effects return over the next 50. | 80 |
-| counter reads `0` (the 60th call) | `g_music_player+0x40 = +0x44` (the music volume restored from its saved copy), then `MusicPlayer_StartPreRaceDialogue(player)` (`0x089387e8`) | `atoi` of the race's `PI_Track` id (`DAT_08b310b4+0x74`, `"03_Track"` is 3), `sprintf("Data\\Sound\\PreRaceDialogue\\%d_Track.at3")` (`0x08a88ec8`), then `MusicPlayer_StartFile(player, path, 1, 0)`; it logs `After Pre-Race Intro`. The clip is the circuit's voice-over, a mono 44.1 kHz ATRAC3+ stream. | 85 |
+| counter reads `0x28` (after its decrement: flyby tick 20, tick 0 being the substate-0 call) | `Audio_StartSfxFadeIn(0.02, g_sound_mgr)` (`0x0893a958`) | `mgr+0xd8 = 0.02; mgr+0x90 = 0; mgr+0xd4 = 1`: starts a **sound-effects** fade-in from silence. `Audio_UpdateGroupVolumes` (`0x0893ac70`) adds `mgr+0xd8` to the fade `mgr+0x90` once per call until it reaches the target `mgr+0xd0` (the SFX Volume fraction): 50 calls from 0 to 1 at `0.02`. Substate 0 had snapped the fade to 0 (`Audio_SetSfxFadeTarget(0)`), so the flyby's first 20 calls are SFX-silent and the effects return over the next 50. | 80 |
+| counter reads `0` (flyby tick 60, the 60th substate-1 call) | `g_music_player+0x40 = +0x44` (the music volume restored from its saved copy), then `MusicPlayer_StartPreRaceDialogue(player)` (`0x089387e8`) | `atoi` of the race's `PI_Track` id (`DAT_08b310b4+0x74`, `"03_Track"` is 3), `sprintf("Data\\Sound\\PreRaceDialogue\\%d_Track.at3")` (`0x08a88ec8`), then `MusicPlayer_StartFile(player, path, 1, 0)`; it logs `After Pre-Race Intro`. The clip is the circuit's voice-over, a mono 44.1 kHz ATRAC3+ stream. | 85 |
 | the exit test passes | `MusicPlayer_Stop(player, 0, 1)` (`0x089385b4`), then the `ScreenFlash` kind 10 | stops whatever the player holds (here the voice-over), no fade | 75 |
 
 `MusicPlayer_StartFile` (`0x08938ca8`) stops the stream the player holds, checks the file exists
@@ -198,10 +198,9 @@ All 32 clips are on the PSP `Data.wad`: `Data\Sound\PreRaceDialogue\1_Track.at3`
 The 32 name hashes are the 32-stream run `crates/formats/tests/audio_ground_truth.rs` surveys on
 both PSP builds. Each is 163 to 235 KB, 13 to 19 s at 12,058 bytes a second.
 
-**Held Cross.** The counter's zero and the exit test run in the same call, so a skip at the lock's
-end starts the clip and stops it in that call: silence. Ours ends the flyby one tick after the
-counter's zero (`lock_ticks` 60 plus one, measured), so the clip is up for one tick before the
-stop.
+**Held Cross.** The counter's zero and the exit test run in the same call (the tick the
+measured `61`-tick skip ends on), so a skip at the lock's end starts the clip and stops it in that
+call: nothing sounds. Ours raises no call at all in that case.
 
 **PS2.** Not checked. The PS2 flyby is off (`PRE_RACE.on`), and its clips are `PRERACE.WAD`'s 32
 entries ([`ps2-voice.md`](../../../formats/ps2-voice.md)), whose index maps to the PSP names by the

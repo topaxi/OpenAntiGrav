@@ -248,16 +248,19 @@ impl IntroCamera {
             Skip::Held => skip_held,
             Skip::Press => pressed,
         };
-        // The original's counter reads zero after the lock's last tick, and the voice starts in
-        // that same call, before the exit test; ours ends one tick later (`Timeline::step`).
-        let counter_zero = self.rule.lock_ticks.value.checked_sub(1) == Some(self.timeline.ticks());
+        // Tick 0 is the intro's substate 0; the lock counter then counts 59 down to 0 over the
+        // next 60 ticks and reads zero on tick `lock_ticks`. The voice starts in that call,
+        // before the exit test: a flyby that ends on the same tick (a held Cross) starts and
+        // stops it in one call, so it is never heard.
+        let k = self.timeline.ticks();
         let beat = self.timeline.step(skip || self.skip_requested, dt);
         if let Some(entry) = &self.voice {
-            if counter_zero {
-                self.cues.push(VoiceCue::Start(entry.clone()));
-            }
-            if beat == Beat::Over {
-                self.cues.push(VoiceCue::Stop);
+            match beat {
+                Beat::Over if k > self.rule.lock_ticks.value => self.cues.push(VoiceCue::Stop),
+                Beat::Show(_) if k == self.rule.lock_ticks.value => {
+                    self.cues.push(VoiceCue::Start(entry.clone()));
+                }
+                _ => {}
             }
         }
         let shown = match beat {
