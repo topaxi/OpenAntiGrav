@@ -169,3 +169,33 @@ fn a_speech_bank_refuses_as_a_pool_of_stream_names() {
         "the stream speech_fe_NGP names"
     );
 }
+
+/// The u16 after a record's hash is its hash bucket (`hash % cue_count`), not
+/// the cue: `Scream_FindCueByName` (`FUN_813529f2` on the v1.04 Vita executable)
+/// returns the u16 at record `+0xc`. Read as the bucket, `speech.bnk`'s `ready`,
+/// `rockets` and `energycritical` all land on cue 21 and eleven of its thirty
+/// cues are named by no one; read as the cue, its thirty names take thirty cues.
+#[test]
+#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
+fn a_name_resolves_to_its_own_cue_not_its_hash_bucket() {
+    let Some(mut archive) = archive() else {
+        return;
+    };
+    let bytes = archive
+        .read_path("data/audio/sound/speech.bnk")
+        .expect("speech.bnk reads");
+    let bank = Bank::parse(&bytes).expect("speech.bnk parses");
+    let names = bank.hashed_names();
+    assert_eq!(names.len(), usize::from(bank.cue_count));
+    let mut cues: Vec<u16> = names.iter().map(|(_, cue, _)| *cue).collect();
+    cues.sort_unstable();
+    cues.dedup();
+    assert_eq!(cues.len(), names.len(), "every name has a cue of its own");
+    for (name, want) in [("ready", 0), ("321_GO", 2), ("go", 3), ("HBEAT", 27)] {
+        assert_eq!(
+            bank.cue_named_or_hashed(name).map(|c| c.index),
+            Some(want),
+            "{name}"
+        );
+    }
+}

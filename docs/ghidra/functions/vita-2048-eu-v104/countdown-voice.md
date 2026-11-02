@@ -27,20 +27,44 @@ holds. Priority argument `2` on all four.
 instance names in `SP.xml` and `MP.xml` is in the table, so **2048's own events take the `321_NGP` / `Go_NGP`
 side**, and only a free-play named mode takes `ready` / `go`.
 
-## What the banks author
+## Which cue a name is: the `+0xc` field, not the bucket (2026-11-02, lane `countdown-voice`)
 
-Names are FNV-hashed (`Bank::is_hashed`), resolved with `oag_formats::sblk::cue::name_hash`.
+**Every table below used to name the wrong cues.** A v5 bank's name record is 16 bytes,
+`{u32 name offset, u32 hash, u16 bucket, u16 next, u16 cue, u16}`. The lookup `FUN_813529f2` (called by
+`Scream_FindCueByName`, which hashes with `FUN_81352b9c`) takes `bucket = hash % cue_count`
+(`FUN_813b1400(hash, short at bank+0x16)`), checks the slot's u16 at `+8` equals the slot, walks the chain by
+the u16 at `+10`, compares hash and string, and **returns the u16 at `+0xc`**. The reader returned the u16 at
+`+8`, which is the bucket. Confidence 90: the decompile, plus two checks off the data.
 
-| Cue | Bank | Cue / commands | Body |
-| --- | --- | --- | --- |
-| `ready` | `speech.bnk` | 21, cmds 59..61 | two key-ons (a stereo pair), no delay |
-| `go` | `speech.bnk` | 24, cmds 65..71 | a goto into its marker: the pair at cmds 68-69 |
-| `321_GO` | `speech.bnk` | 27, cmds 75..90 | three stages on delays 125, 205, 205 ticks of the 240 Hz clock, each followed by a `0x1e` register write (`0x1fc`, `0x2fc`, `0x3fc`) and a final `0x1a` random wait. Nothing in the executable names `321_GO` |
-| `321_NGP` | `Weapons_NGP.bnk` | 2, cmds 7..11 | opcode `0x04` (an LFO), key-ons at delays `0x96` and `5` (volume 80), then `0x29` with `0x384` |
-| `Go_NGP` | `Weapons_NGP.bnk` | 44, cmds 356..370 | a `0x2e` switch and four marker arms (1, 4, 3, 2), each one key-on (volume 110) ending in a goto to marker `0x63` |
-| `ready` / `go` / `321_GO` | `speech_det.bnk` | 0 / 2 / 1 | the Detonator build of the same trio |
+- In `speech.bnk` the thirty names take thirty distinct `+0xc` values (a permutation of the thirty cues) and
+  `+8` repeats (`ready`, `rockets` and `energycritical` all 21) and leaves eleven cues unnamed.
+- `HBEAT`'s `+0xc` is cue 27, ten voices in three groups (3, 3, 4) on 125 / 205 / 205 ticks: **exactly HD's
+  `HBEAT`** (`crates/raceplay/tests/countdown_voice_hd_ground_truth.rs`). The bucket gave cue 26, the
+  Eliminator call.
+- 33 hashed banks of the base archive, all names: `+8` and `+0xc` agree on a handful of names per bank, so
+  the old reader was wrong for nearly every name it resolved, in every bank (the crossfade engine and the
+  circuits' emitters included; see [2048-audio.md](../../../formats/2048-audio.md)).
 
-## The opcodes `321_NGP` and `Go_NGP` use, read 2026-10-19
+## What the banks author (corrected)
+
+| Cue | Bank | Cue index | Cue / commands | Body |
+| --- | --- | --- | --- | --- |
+| `ready` | `speech.bnk` | 0 | 1 command, a lone `0x08` | hands its voice to child cue 2, `321_GO`, as on HD |
+| `321_GO` | `speech.bnk` | 2 | 16 commands | a goto over three stages (pairs of 1.62 s and 0.83 s on 125, 205, 205 ticks) to its marker, which keys a 3.00 s pair at 30 and 330 degrees |
+| `go` | `speech.bnk` | 3 | 9 commands | a goto to its marker: a 5.14 s pair at 30 and 330 degrees (the cue holds three pairs of 2.72, 4.67 and 5.14 s) |
+| `HBEAT` | `speech.bnk` | 27 | 15 commands | three groups of 3, 3 and 4 voices at ticks 125, 330 and 535 (1.75 s and 0.83 s clips), the last pair at 30 and 330 degrees |
+| `321_NGP` | `Weapons_NGP.bnk` | 70 | 9 commands | three groups at ticks 125, 330 and 535: a 0.50 s voice at 0 and a 0.67 s pair at 90 and 270 degrees |
+| `Go_NGP` | `Weapons_NGP.bnk` | 68 | 20 commands | one 0.66 s pair at 90 and 270 degrees keyed at tick 100, behind three `0x22` and gotos |
+| `ready` / `go` / `321_GO` | `speech_det.bnk` | 0 / 2 / 1 | | the Detonator build; not re-read under the corrected field |
+
+The walks are complete (no unread opcode, no unresolved child). Everything the earlier version of this
+page said about `321_NGP` and `Go_NGP` (an `0x04` LFO, looping key-ons keyed off by `0x29`, four uniform
+arms of one waveform) was read off cues 2 and 44 of `Weapons_NGP.bnk`, which are `PLASMA` and another
+cue: **retracted**. The opcode handlers named below (`Scream_OpLfo` `0x8134ee78`, `Scream_OpKeyOffVoices`
+`0x813502fa`, `Scream_OpGotoRandomMarker` `0x8134fe5c`, the 240 Hz master tick) are real and read
+correctly; they just are not what these two cues use.
+
+## The Vita opcode handlers, read 2026-10-19 (not what `321_NGP` and `Go_NGP` use)
 
 The dispatch table is at `0x8153b4e0` (one 32-bit pointer per opcode, entry `n` at `+4n`; `0x01` and
 `0x09` share `FUN_8134e77e`, the tone-grain start, found by searching the executable for its
@@ -56,48 +80,50 @@ which names them.
 | `0x2e` | `0x8134fe5c` | `Scream_OpGotoRandomMarker` | 88 | Logs `"Goto Random Marker Ex"`. Record `[first, last, mode, history]`: mode `0` picks `first + rand % (last - first + 1)` (`FUN_813b1410` is `mls`, a signed remainder), no history; modes `1` and `2` keep a ring of the last picks. Then the goto above |
 | master tick | `0x81354b74` | `Scream_RunMasterTicks` | 82 | Accumulates the frames rendered (`DAT_819da2fc`) and runs one tick per `48000 / (240 * m)` frames, `m` = `DAT_8153bc9c`, initialised `1.0` in `FUN_8134af2c` (SCREAM 7.0.29) and written nowhere else; its other reader `FUN_8135718a` is the pitch scale. **240 Hz, read not run** |
 
-**The cues, walked** (`WalkModel::vita`, `crates/formats/src/sblk/timeline.rs`):
-
-- `Go_NGP` (`Weapons_NGP.bnk` cue 44): `0x2e` mode 0 over markers 1..4, each arm one non-looping key-on at
-  tick 0 (4 waveforms of 33,520 to 48,448 samples), then a goto to marker
-  `0x63`. **Four uniform arms of one waveform: the flat pick plays it exactly.** Confidence 85.
-- `321_NGP` (cue 2): an `0x04` LFO (slot 0, drives **pan**, shape 1, amplitude `0x200` = 512, so a swing of
-  `512 / 1024 * 360 = +-180` degrees, phase step `0x88888` = 240 ticks a cycle, **1.0 s**), two **looping**
-  key-ons (15,936 samples each) at ticks 150 and 155 (0.625 s and 0.646 s) at descriptor angles 270 and 30
-  degrees, volume 80, and `0x29` keying them off 900 ticks (3.75 s) later, at tick 1055 (4.40 s). An earlier
-  note on this page said the pan swing was under a degree: that was a byte-order slip (`00 02` read as 2, not
-  512). Confidence 80 for the swing, 85 for the rest.
+The handlers are read correctly. This page first tied them to `321_NGP` and `Go_NGP`, but it had resolved those two names to the wrong cues (`+8`, the bucket); the real cues 70 and 68 use only key-ons, markers, gotos and `0x22`. `0x04` and `0x29` belong to `PLASMA` (`Weapons_NGP.bnk` cue 2).
 
 ## What the port plays (2048)
 
-| Race | Before | Now |
+| Race | Before the correction | Now |
 | --- | --- | --- |
-| a named mode (race box, free play) | nothing: `ready names no cue in SPEECH` (a hashed bank looked up plain) | `ready` (`speech.bnk` cue 21, a stereo pair), `HBEAT` (the start beat, with `ready`, as on HD) at tick 91 and `go` (cue 24, a goto into its marker, a pair, 1.15 s) at tick 271, as timelines on the 240 Hz tick |
-| a campaign event (`load_event`) | nothing | `Go_NGP` at tick 271, one of its four arms; **no `ready`**; `321_NGP` is authored and **not played** (loader report: `sfx: 321_NGP not played: ...`) |
+| a named mode (race box, free play) | `ready` the 0.87 s cue also named `rockets`, `HBEAT` the 0.94 s Eliminator call, `go` cue 24 | `ready` (cue 0 into `321_GO`: the 3.00 s pair at tick 91), `HBEAT` (the three beat groups from tick 91) and `go` (cue 3: the 5.14 s pair at tick 271), as timelines on the 240 Hz tick |
+| a campaign event (`load_event`) | `Go_NGP` bucket cue 44 (four 1.8 to 2.7 s clips), no `ready` | **nothing**: `321_NGP` and `Go_NGP` are named in the loader report and not played |
 
-- **Why `321_NGP` is not played.** It needs two looping voices stopped 3.75 s later and a pan swept through the
-  rear half at 1 Hz. The mixer has no key-off schedule, no pan modulation and the pan law has no rear half
-  (`oag_audio::spatial::pan_of_angle`), and flattening it to one waveform would be a different sound. It also
-  starts 0.625 s into a cue that lasts 4.40 s, against a `ready` to `go` spacing this lane lends from Pulse (180
-  ticks, 3.0 s): the loop would outlive `go` by 1.4 s, so the spacing is probably not Pulse's here. **Open**:
-  measure the start-to-go spacing on 2048 (Vita3K), add a key-off and a modulator to the mixer, then wire it.
+- **Why the event pair is not played.** Both cues pan a pair to 90 and 270 degrees. `oag_audio::spatial::pan_of_angle`
+  returns `None` for 90 (`a' = 180`, the first angle of the rear branch of `Scream_PanVolumePair`, which also
+  phase-inverts a channel), so the timeline builder refuses the walk, and a flat pick would be a different
+  sound. **Open, ready to wire**: model the `a' = 180` edge (hard right; the sign flip of a lone voice is
+  inaudible) *scoped to these two cues*, or the whole rear half.
 - **The split** is `oag_title::CountdownEvent` on `oag_2048::race::COUNTDOWN_VOICE`; `load_event` calls
   `Banks::use_event_start`, which swaps the event pair in for the named one. Multiplayer events (also CRC ids
   in the original) are not distinguished: a 2048 multiplayer race plays the named pair.
-- **Scoped to the countdown.** 2048's `zone_announcer.tick` stays `Unknown`, so no other 2048 cue changed; the
-  loader report differs from before by exactly the `ready`, `go` and `cont_elim` lines (`cont_elim`'s trigger on
-  2048 is unread, so it is not loaded on a hashed title).
-- **Timing is Pulse's, chosen, not measured** (`origin: Chosen`): `ready` at tick 91, `go` at tick 271.
-  `crates/raceplay/tests/vita_2048_countdown_ground_truth.rs` pins the two races.
+- **Timing is Pulse's, chosen, not measured** (`origin: Chosen`): `ready` at tick 91, `go` at tick 271. The
+  corrected `ready` is a 3.00 s pair, which ends exactly on `go` 180 ticks (3.0 s) later; that agrees with
+  the spacing but does not measure it.
+- **Pinned by** `crates/raceplay/tests/vita_2048_countdown_ground_truth.rs` (`the_start_names_resolve_to_the_cues_the_original_returns`
+  fails on the old reader: `ready` resolved to cue 21).
 
 ## Omega
 
-**Checked, differs, not wireable.** Omega's banks are Audiokinetic Wwise, not `SBlk`: `speech.bnk` is a 32-byte
-`BKHD` header (version 118), its audio lives in `.wem` files, and the cue names are Wwise events. Its
+**Checked, differs; nothing to play, 2026-11-02.** Omega's banks are Audiokinetic Wwise, not `SBlk`: `speech.bnk` is a
+32-byte `BKHD` header (version 118), its audio lives in `.wem` files, and the cue names are Wwise events. Its
 executable carries `_321_NGP` and `Go_NGP` (and `HBEAT_ZCHANGE`, not `HBEAT`) as event names and no `ready` or
 `go`. The race-state setter `FUN_012993b0` (state 1) posts `_321_NGP` through `FUN_0173ac30` for every mode but
 the demo (`DAT_01f999e4 != 2`), plus `RACE_Combat_Start` in modes 8 and 0x14 or for combat flags, and the
 countdown's end `FUN_0129a360` posts `Go_NGP`, then `Ship_Gear_up_PirProto`, on the same condition. **So Omega
-has no `< 0x17` split in these two functions: it plays the NGP pair on every non-demo mode.** Nothing here
-wires Wwise events to this project's cues (`docs/formats/wwise.md`), so it is not playable. Confidence 80
+has no `< 0x17` split in these two functions: it plays the NGP pair on every non-demo mode.** Confidence 80
 (decompile, no capture).
+
+**New: no shipped bank defines the events.** The event id is Wwise's FNV-1 over the lower-cased name
+(`oag_formats::wwise::name_hash`). None of `_321_NGP`, `321_NGP`, `Go_NGP`, `HBEAT_ZCHANGE` or `HBEAT` is an
+event in any of the 53 banks of `data00.psarc` or of the patch's `data08.psarc` (the empty stub banks that
+should hold them are 32-byte headers, [wwise.md](../../../formats/wwise.md)). Pinned by
+`crates/raceplay/tests/omega_countdown_ground_truth.rs`. So the start cannot be played from the data we hold;
+a later archive (or a patch layer) that defines them reopens it.
+
+**What the port does:** `oag_omega::race::COUNTDOWN_VOICE` lends Pulse's `ready` and `go` from `speech.bnk`; that bank is
+the Wwise stub the `SBlk` reader refuses ("unsupported bank version 1145588546"), so the load report reads
+`sfx: ready not loaded` and the start is **silent**. The field stays (chosen, not measured) because the `Go` cue
+event times the song's start (`now_playing_ground_truth::omega_inherits_hds_start_and_holds_the_song_for_go`;
+setting it `None` fails that test). A maintainer report of "wrong cues" on Omega is therefore not from our start
+voice (we play none there): unexplained, see the lane report.

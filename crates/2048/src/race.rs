@@ -781,7 +781,8 @@ mod team_identity_tests {
 /// original picks on the mode id, read statically (confidence 80,
 /// `docs/ghidra/functions/vita-2048-eu-v104/countdown-voice.md`). The 240 Hz tick is read from the
 /// executable (85). **The 180 tick spacing and the thrust gate are Pulse's, lent: chosen, not
-/// measured**, so `origin` is `Chosen`. Both banks resolve by hash.
+/// measured**, so `origin` is `Chosen`. Both banks resolve by hash, to the cue the name table's
+/// `+0xc` field names (not its bucket), as the original's lookup returns it.
 pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoice {
     eliminator_bank: r"Data\audio\sound\speech.bnk",
     zone_bank: ZONE_ANNOUNCER.bank,
@@ -790,17 +791,20 @@ pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoi
     hashed: true,
     event: Some(oag_title::CountdownEvent {
         bank: r"Data\audio\sound\Weapons_NGP.bnk",
-        // Two looping voices keyed on 150 and 155 ticks in and keyed off 900 ticks later (opcode
-        // 0x29), their pan swept by a modulator of +-180 degrees at 1 Hz (0x04), the second at 30
-        // degrees and the first in the rear half: none of it is in the mixer, and where it starts
-        // against `go` is unmeasured. Not played rather than played as one flat waveform.
+        // `321_NGP` is cue 70: three groups of beeps on delays 125, 205 and 205 ticks, a centre voice
+        // and a pair at 90 and 270 degrees. Its walk is complete; what stops it is the pan law, which
+        // has no rear half and puts 90 degrees exactly on the rear edge (`pan_of_angle`).
         ready: oag_title::StartCue::Unplayed {
             name: "321_NGP",
-            why: "two looping voices keyed off after 3.75 s under a rotating pan modulator, which the \
-                  mixer has no model for, and its offset from go is unmeasured",
+            why: "its pair is panned to 90 and 270 degrees, and 90 is on the rear edge of the pan \
+                  law, which the mixer does not model",
         },
-        // Four arms picked uniformly (opcode 0x2e, mode 0), each one waveform: the flat pick.
-        go: oag_title::StartCue::Plays("Go_NGP"),
+        // `Go_NGP` is cue 68: one pair at 90 and 270 degrees keyed 100 ticks in, the same edge.
+        go: oag_title::StartCue::Unplayed {
+            name: "Go_NGP",
+            why: "its pair is panned to 90 and 270 degrees, and 90 is on the rear edge of the pan \
+                  law, which the mixer does not model",
+        },
     }),
     beat: Some("HBEAT"),
 };
