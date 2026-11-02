@@ -65,13 +65,15 @@ node, played for `AnimEnd` seconds or until a held Cross, with the world held at
   (`pulse-flyby-audio-capture`)**: the fade is exact (silent 20 calls, `+0.02` a call, 50 calls), but
   what it quiets is the circuit ambience, not the engines (the grid's engines are keyed on at tick
   3 at volume 0 and only sound from about tick 1,150), and the gain is the **square** of the fade
-  (confidence 85); see
+  (confidence 85; the whole group volume, slider included, is squared at the commit); see
   [race-intro.md](../../docs/gameplay/race-intro.md#what-the-original-plays-under-the-flyby-watched-2026-11-02-lane-pulse-flyby-audio-capture).
   **Ready to wire** (not done): (1) play the circuit's ambience under the flyby, held voices of the
   authored emitters in range of the flyby camera, starting at tick 0 (`~AMB` loop first, confidence
   70), the one-shot `~FLYBY_DIST_*` picks and the later loops at their ticks (`NEON_RING` 393,
-  `yellowarrow` plus `crowd` 673, `bighum` and `birds` 1033; `03_Track`); (2) apply the fade as
-  `fade * fade` to the Sfx gain (ours is linear); (3) drop "engine idle only" as the claim: the
+  `yellowarrow` plus `crowd` 673, `bighum` and `birds` 1033; `03_Track`); (2) the original squares the
+  whole group volume (slider fraction times fade; `FUN_089957c0`), ours sets `slider * fade` linearly
+  on the bus (`sfx_fade.rs`): square the product, not the fade alone, and check the slider's law
+  at a setting below 100 first (unmeasured); (3) drop "engine idle only" as the claim: the
   engine voices are inaudible until the camera nears the grid (tick about 1,150 on `03_Track`,
   1,529 on `16_Track`, volume about a tenth of the ambience), which ours already gives by range.
   Open: no WAV (SDL build has no record action), which cue the one ambience voice is, a circuit

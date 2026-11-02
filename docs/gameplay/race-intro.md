@@ -292,15 +292,23 @@ off the voice table at about 70 cue starts in 2 runs).
 whose commit volume is a constant 1,262 (left plus right) at full reads
 `1262 * mgr+0x90 ** 2`: over the 50 ramp calls of three `03_Track` runs the largest deviation
 of `volume / volume_full` from `fade ** 2` is `0.0032`, from `fade` it is `0.25` (`0.4` gives
-200, `0.8` gives 806, `0.98` gives 1,210). Ours multiplies the Sfx bus by the fade
-linearly (`oag_sound::Audio`): it is louder than the original at every step of the ramp.
+200, `0.8` gives 806, `0.98` gives 1,210). **The mechanism** (decompiled, confidence 80): a
+voice's commit volume is recomputed by `FUN_0898c214`, which calls `FUN_089957c0(volume, group)`
+for each side; that helper multiplies the voice's volume by the group volume
+(`g_audio_group_volumes[group]`, `0..1024`) **squared**, then by a second per-group table
+(`0x08ac3990`, also squared when below `0x10000`), and shifts. So every change of a group volume,
+the SFX slider's included, acts as its square, not only the fade; whether the slider's own law
+matches is unmeasured here (the fade and the slider both reach the group as one fraction, so the
+measured square is on their product). Ours: `slider.gain() * fade.gain()` set as one linear bus
+gain (`crates/sound/src/sfx_fade.rs`, `apply_sfx_fade`; `Volume::gain` is `percent / 100`), so
+at a ramp step ours sits above the original's, and a slider below 100 differs too.
 
 **What starts and when (`03_Track`, 4 cue runs and 3 envelope runs, ticks).**
 
 | Tick | Source | What | Audible? |
 | ---: | --- | --- | --- |
 | about 0 (the 12-frame gap before tick 1) | circuit ambience | `moather` cues 3 `~CITY`, 4 `~AMB`, 5 `~FLYBY_DIST` start (CITY and FLYBY_DIST are command lists with no waveform of their own; one looping voice, group 3, exists from the first call: `~AMB`, confidence 70) | silent to tick 22, then ramps with the fade squared to its full 1,262 at tick 71, steady to tick 100 |
-| 2 to 3 | craft engines | seven `SHIP` `~ENGINE` key-ons in one frame, group 0 | **no**: commit volume 0, voices gone within a frame or two (the camera is far) |
+| 2 to 3 | craft engines | seven `SHIP` `~ENGINE` key-ons in one frame, group 0 | **no**: commit volume 0 (every faded group reads 0 at tick 3, so that alone says nothing of range), and the voices are released within a frame or two, which is the range evidence; they are keyed on again as the camera nears the grid from tick 1,151 |
 | 60 | voice-over | `3_Track.at3` through the music player (not a SAS voice, not in the fade), 60th substate-1 call at frame 70.5 to 71.0 | yes, full |
 | varies per run | circuit ambience | one-shots `~FLYBY_DIST_02..06`, `~CRAFT`, `~craft1` (cues 6 to 10, 12, 16), a command list's random picks, pan 100, volume argument 12 to 351 | yes, from tick 40 on in some runs (inside the ramp), after tick 70 in others |
 | 393 | `NEON_RING` loop | `moather` cue 0, in 4 of 4 runs at frame 403.5 to 404.4 | yes |
@@ -318,9 +326,11 @@ camera opens within earshot of the engines was **not found** in the two measured
 eight-circuit census found none within earshot by tick 80 either), so the brief's near-grid
 check is open.
 
+No front-end or menu bank (`fronten` or similar) started a cue in the window in 4 cue runs: the only banks are `SHIP`, `moather`, `gentrak` and, after the flyby, `SPEECH`; so there are no UI cues under the flyby.
+
 **Reading it for the port.** The effects fade is real and the right shape, but the sound it
 quiets is the ambience, which ours does not play under the flyby (engine idle only); and its
-gain law is the square. The engines are not audible under the fade at all. Ready to wire (not
+gain law is the square of the group volume. The engines are not audible under the fade at all. Ready to wire (not
 done here), written in the handover thread.
 
 **Open.** Whether `~AMB` or another cue is the one voice (a waveform-address compare on
