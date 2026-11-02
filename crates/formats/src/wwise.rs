@@ -83,6 +83,7 @@
 
 use std::ops::Range;
 
+pub mod container;
 pub mod hirc;
 mod library;
 pub mod music;

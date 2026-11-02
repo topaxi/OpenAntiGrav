@@ -16,7 +16,8 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use oag_formats::wwise::hirc::{Action, Codec, Event, MusicTrack, Sound, StreamType};
+use oag_formats::wwise::container::{ContainerError, RanSeq, Switch};
+use oag_formats::wwise::hirc::{self, Action, Codec, Event, MusicTrack, Sound, StreamType};
 use oag_formats::wwise::{BANK_VERSION, Bank, Kind, Library, name_hash};
 
 fn archive_path(dir: &str, name: &str) -> Option<PathBuf> {
@@ -84,6 +85,98 @@ struct Census {
     /// Events that resolve to at least one media, and to none.
     events_resolving: usize,
     events_empty: usize,
+    containers: Containers,
+}
+
+/// What the sound containers (random/sequence, switch) read as.
+#[derive(Debug, Default, PartialEq, Eq)]
+struct Containers {
+    ranseq: usize,
+    ranseq_random: usize,
+    ranseq_sequence: usize,
+    /// Random containers that weight their picks / forbid a repeat.
+    ranseq_weighted: usize,
+    ranseq_avoid_repeat: usize,
+    ranseq_playlist_items: usize,
+    switch: usize,
+    switch_state_group: usize,
+    switch_cases: usize,
+    /// Child ids the cases list; of them, direct children of the switch / objects
+    /// of the library.
+    switch_case_children: usize,
+    switch_case_direct: usize,
+    switch_case_resolving: usize,
+    /// Refused by name (`ContainerError::BaseParams`): a 3D block that opens a path.
+    ranseq_refused: usize,
+    switch_refused: usize,
+    /// Any other refusal; asserted zero.
+    refused_other: usize,
+    /// Child ids over both kinds, how many resolve to an object of the
+    /// library, and how many of those name the container as their parent.
+    children: usize,
+    children_resolving: usize,
+    children_parented: usize,
+}
+
+fn tally_container(
+    t: &mut Containers,
+    library: &Library<'_>,
+    bank: &Bank<'_>,
+    object: &oag_formats::wwise::Object,
+) {
+    let body = bank.body(object);
+    let (children, refused) = match object.kind {
+        Kind::RanSeqContainer => match RanSeq::parse(object.kind, body) {
+            Ok(r) => {
+                t.ranseq += 1;
+                if r.is_sequence() {
+                    t.ranseq_sequence += 1;
+                } else {
+                    t.ranseq_random += 1;
+                }
+                t.ranseq_weighted += usize::from(r.uses_weights());
+                t.ranseq_avoid_repeat += usize::from(r.avoid_repeat > 0);
+                t.ranseq_playlist_items += r.playlist.len();
+                (r.children, None)
+            }
+            Err(e) => (Vec::new(), Some(e)),
+        },
+        Kind::SwitchContainer => match Switch::parse(object.kind, body) {
+            Ok(s) => {
+                t.switch += 1;
+                t.switch_state_group += usize::from(s.group_type == 1);
+                t.switch_cases += s.cases.len();
+                for id in s.cases.iter().flat_map(|c| &c.children) {
+                    t.switch_case_children += 1;
+                    t.switch_case_direct += usize::from(s.children.contains(id));
+                    t.switch_case_resolving += usize::from(library_has(library, *id));
+                }
+                (s.children, None)
+            }
+            Err(e) => (Vec::new(), Some(e)),
+        },
+        _ => return,
+    };
+    match refused {
+        Some(ContainerError::BaseParams { .. }) if object.kind == Kind::RanSeqContainer => {
+            t.ranseq_refused += 1;
+        }
+        Some(ContainerError::BaseParams { .. }) => t.switch_refused += 1,
+        Some(_) => t.refused_other += 1,
+        None => {}
+    }
+    for child in children {
+        t.children += 1;
+        let resolved = library.banks().iter().find_map(|b| {
+            b.objects_with_id(child)
+                .next()
+                .map(|o| hirc::parent(o.kind, b.body(o)))
+        });
+        if let Some(parent) = resolved {
+            t.children_resolving += 1;
+            t.children_parented += usize::from(parent == Some(object.id));
+        }
+    }
 }
 
 fn census(
@@ -175,6 +268,7 @@ fn census(
         let own_id = bank.header().id;
         for object in bank.objects() {
             let body = bank.body(object);
+            tally_container(&mut c.containers, &library, bank, object);
             match object.kind {
                 Kind::Event => {
                     let event = Event::parse(body)
@@ -277,6 +371,7 @@ fn census(
     let named_ids: BTreeSet<(bool, u32)> = named.clone();
     c.loose_orphans = loose.iter().filter(|k| !named_ids.contains(k)).count();
     check(&bank_paths, &library);
+    println!("{}: {:?}", name_of_archive.1, c.containers);
     Some(c)
 }
 
@@ -451,7 +546,27 @@ fn base_data00_banks() {
             embedded_elsewhere: 140,
             embedded_nowhere: 0,
             events_resolving: 1337,
-            events_empty: 2369
+            events_empty: 2369,
+            containers: Containers {
+                ranseq: 462,
+                ranseq_random: 453,
+                ranseq_sequence: 9,
+                ranseq_weighted: 0,
+                ranseq_avoid_repeat: 458,
+                ranseq_playlist_items: 2116,
+                switch: 525,
+                switch_state_group: 340,
+                switch_cases: 4097,
+                switch_case_children: 4393,
+                switch_case_direct: 3771,
+                switch_case_resolving: 4391,
+                ranseq_refused: 1,
+                switch_refused: 0,
+                refused_other: 0,
+                children: 5460,
+                children_resolving: 5460,
+                children_parented: 5455,
+            },
         }
     );
 }
@@ -529,7 +644,27 @@ fn patch_data05_banks() {
             embedded_elsewhere: 0,
             embedded_nowhere: 0,
             events_resolving: 484,
-            events_empty: 268
+            events_empty: 268,
+            containers: Containers {
+                ranseq: 19,
+                ranseq_random: 18,
+                ranseq_sequence: 1,
+                ranseq_weighted: 0,
+                ranseq_avoid_repeat: 19,
+                ranseq_playlist_items: 111,
+                switch: 39,
+                switch_state_group: 17,
+                switch_cases: 328,
+                switch_case_children: 309,
+                switch_case_direct: 239,
+                switch_case_resolving: 239,
+                ranseq_refused: 0,
+                switch_refused: 0,
+                refused_other: 0,
+                children: 243,
+                children_resolving: 243,
+                children_parented: 243,
+            },
         }
     );
 }
@@ -574,7 +709,27 @@ fn patch_data08_banks() {
             embedded_elsewhere: 140,
             embedded_nowhere: 0,
             events_resolving: 1367,
-            events_empty: 2463
+            events_empty: 2463,
+            containers: Containers {
+                ranseq: 551,
+                ranseq_random: 538,
+                ranseq_sequence: 13,
+                ranseq_weighted: 0,
+                ranseq_avoid_repeat: 547,
+                ranseq_playlist_items: 2449,
+                switch: 626,
+                switch_state_group: 400,
+                switch_cases: 4517,
+                switch_case_children: 4746,
+                switch_case_direct: 4122,
+                switch_case_resolving: 4742,
+                ranseq_refused: 1,
+                switch_refused: 0,
+                refused_other: 0,
+                children: 6015,
+                children_resolving: 6015,
+                children_parented: 6008,
+            },
         }
     );
 }
