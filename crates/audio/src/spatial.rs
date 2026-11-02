@@ -387,6 +387,23 @@ pub fn pan_of_angle(degrees: i32) -> Option<f32> {
     (shifted <= 179).then(|| (wrapped as f32).to_radians().sin())
 }
 
+/// [`pan_of_angle`] with the first angle of the rear branch, `a' = 180`
+/// (an authored angle of 90 degrees), added.
+///
+/// There `Scream_PanVolumePair` reads table entry 0 with the pair swapped and one
+/// term negated: `(0, 1)` up to a sign, which is hard right, the same position
+/// `sin(90 degrees)` gives in the front half. The sign flip phase-inverts a lone
+/// voice, which is inaudible; it would matter only against a second voice in the
+/// same channel, and the callers that ask for this edge pan their voices to
+/// opposite sides. Every angle past the edge stays `None`.
+#[must_use]
+pub fn pan_of_angle_to_rear_edge(degrees: i32) -> Option<f32> {
+    if degrees.rem_euclid(360) == 90 {
+        return Some(1.0);
+    }
+    pan_of_angle(degrees)
+}
+
 /// The rightward component of the direction to a source, in `-1..=1`.
 fn pan_of(to_source: [f32; 3], right: [f32; 3]) -> f32 {
     let length = dot(to_source, to_source).sqrt();

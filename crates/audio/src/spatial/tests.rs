@@ -380,3 +380,17 @@ fn the_rear_half_is_refused_rather_than_guessed() {
     }
     assert!(pan_of_angle(89).is_some() && pan_of_angle(270).is_some());
 }
+
+#[test]
+fn the_rear_edge_pan_adds_only_ninety_degrees() {
+    assert_eq!(pan_of_angle_to_rear_edge(90), Some(1.0));
+    assert_eq!(pan_of_angle_to_rear_edge(450), Some(1.0));
+    assert_eq!(pan_of_angle(90), None);
+    for degrees in (0..360).filter(|&d| d != 90) {
+        assert_eq!(
+            pan_of_angle_to_rear_edge(degrees),
+            pan_of_angle(degrees),
+            "{degrees}"
+        );
+    }
+}

@@ -24,7 +24,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use oag_audio::spatial::{pan_of_angle, pan_volume_gain};
+use oag_audio::spatial::{pan_of_angle, pan_of_angle_to_rear_edge, pan_volume_gain};
 use oag_audio::{Bus, Mixer, Play, Sound, VoiceId};
 use oag_core::Rng;
 use oag_formats::sblk::Bank;
@@ -45,6 +45,9 @@ pub struct Layer {
     pub delay: f64,
     /// Pan angle in degrees, the descriptor's plus any child records'.
     pub angle: i32,
+    /// Whether the cue pans a 90 degree voice to the rear edge of the pan law
+    /// ([`pan_of_angle_to_rear_edge`]); only the countdown cues do.
+    pub rear_edge: bool,
     /// The random bend that detunes it, when one was in force.
     pub bend: Option<Bend>,
 }
@@ -76,6 +79,8 @@ pub struct CueVoice {
     /// Seconds after the cue starts.
     pub delay: f64,
     pub angle: i32,
+    /// See [`Layer::rear_edge`].
+    pub rear_edge: bool,
     /// Playback rate multiplier from the bend draw, `1.0` for none.
     pub pitch: f32,
 }
@@ -89,6 +94,7 @@ impl CueVoice {
             looping,
             delay: 0.0,
             angle: 0,
+            rear_edge: false,
             pitch: 1.0,
         }
     }
@@ -126,6 +132,7 @@ impl Timeline {
                     looping: layer.looping,
                     delay: layer.delay,
                     angle: layer.angle,
+                    rear_edge: layer.rear_edge,
                     pitch,
                 }
             })
@@ -203,12 +210,15 @@ pub(super) fn timelines(
         && all
             .iter()
             .flat_map(|t| &t.grains)
-            .any(|g| pan_of_angle(g.angle).is_none())
+            .any(|g| edge_pan(g.angle, replace_with_child).is_none())
     {
         return Ok(None);
     }
 
-    let mut decoder = Decoder::default();
+    let mut decoder = Decoder {
+        rear_edge: replace_with_child,
+        ..Decoder::default()
+    };
     let mut out = Vec::with_capacity(all.len());
     for timeline in &all {
         let mut layers = Vec::with_capacity(timeline.grains.len());
@@ -291,6 +301,8 @@ pub(super) fn guarded(
 /// waveform, the [`Sound`] once per waveform and gain.
 #[derive(Default)]
 struct Decoder {
+    /// Stamped on every [`Layer`] built: the cue pans to the rear edge.
+    rear_edge: bool,
     pcm: BTreeMap<u32, Vec<i16>>,
     sounds: BTreeMap<(u32, u32), Arc<Sound>>,
 }
@@ -332,6 +344,7 @@ impl Decoder {
             looping: grain.sound.is_looping(),
             delay: f64::from(grain.tick) / ticks_per_second,
             angle: grain.angle,
+            rear_edge: self.rear_edge,
             bend: grain.bend.map(|draw| Bend {
                 draw,
                 down: grain.sound.bend_down,
@@ -410,20 +423,29 @@ impl Where {
     };
 }
 
+/// [`pan_of_angle`], or with the rear edge when the cue asks for it.
+fn edge_pan(angle: i32, rear_edge: bool) -> Option<f32> {
+    if rear_edge {
+        pan_of_angle_to_rear_edge(angle)
+    } else {
+        pan_of_angle(angle)
+    }
+}
+
 /// The pan a voice at `angle` takes under `at`.
 ///
 /// A dry cue with all voices centred keeps no pan, as every single-waveform cue
 /// did. Once any voice is off-centre every voice takes its authored angle, so a
 /// centred grain is not 3 dB louder beside a panned one. A placed cue shifts the
 /// emitter's pan by the angle.
-fn pan_for(at: Where, angle: i32, any_off_centre: bool) -> Option<f32> {
+fn pan_for(at: Where, angle: i32, any_off_centre: bool, rear_edge: bool) -> Option<f32> {
     match at.pan {
         Some(pan) if angle == 0 => Some(pan),
         Some(pan) => {
             let emitter = pan.clamp(-1.0, 1.0).asin().to_degrees().round() as i32;
-            pan_of_angle(emitter + angle).or(Some(pan))
+            edge_pan(emitter + angle, rear_edge).or(Some(pan))
         }
-        None if any_off_centre => pan_of_angle(angle),
+        None if any_off_centre => edge_pan(angle, rear_edge),
         None => None,
     }
 }
@@ -443,7 +465,7 @@ pub fn start(mixer: &mut Mixer, voices: &[CueVoice], bus: Bus, at: Where) -> Vec
         };
         let Some(id) = mixer.play(Play {
             gain: at.gain,
-            pan: pan_for(at, voice.angle, any_off_centre),
+            pan: pan_for(at, voice.angle, any_off_centre, voice.rear_edge),
             pitch: voice.pitch,
             ..base
         }) else {
@@ -471,6 +493,7 @@ mod tests {
             looping: false,
             delay,
             angle,
+            rear_edge: false,
             bend,
         }
     }
@@ -518,10 +541,10 @@ mod tests {
 
     #[test]
     fn a_dry_cue_pans_only_once_a_voice_is_off_centre() {
-        assert_eq!(pan_for(Where::DRY, 0, false), None);
-        assert_eq!(pan_for(Where::DRY, 0, true), Some(0.0));
-        let right = pan_for(Where::DRY, 30, true).unwrap();
-        let left = pan_for(Where::DRY, 330, true).unwrap();
+        assert_eq!(pan_for(Where::DRY, 0, false, false), None);
+        assert_eq!(pan_for(Where::DRY, 0, true, false), Some(0.0));
+        let right = pan_for(Where::DRY, 30, true, false).unwrap();
+        let left = pan_for(Where::DRY, 330, true, false).unwrap();
         assert!((right - 0.5).abs() < 1e-6 && (left + 0.5).abs() < 1e-6);
     }
 
@@ -531,9 +554,9 @@ mod tests {
             gain: 0.5,
             pan: Some(0.5),
         };
-        assert_eq!(pan_for(at, 0, false), Some(0.5));
+        assert_eq!(pan_for(at, 0, false, false), Some(0.5));
         // 30 degrees from an emitter at 30 degrees is 60.
-        let shifted = pan_for(at, 30, true).unwrap();
+        let shifted = pan_for(at, 30, true, false).unwrap();
         assert!(
             (shifted - 60f32.to_radians().sin()).abs() < 1e-3,
             "{shifted}"

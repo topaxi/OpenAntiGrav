@@ -792,19 +792,10 @@ pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoi
     event: Some(oag_title::CountdownEvent {
         bank: r"Data\audio\sound\Weapons_NGP.bnk",
         // `321_NGP` is cue 70: three groups of beeps on delays 125, 205 and 205 ticks, a centre voice
-        // and a pair at 90 and 270 degrees. Its walk is complete; what stops it is the pan law, which
-        // has no rear half and puts 90 degrees exactly on the rear edge (`pan_of_angle`).
-        ready: oag_title::StartCue::Unplayed {
-            name: "321_NGP",
-            why: "its pair is panned to 90 and 270 degrees, and 90 is on the rear edge of the pan \
-                  law, which the mixer does not model",
-        },
-        // `Go_NGP` is cue 68: one pair at 90 and 270 degrees keyed 100 ticks in, the same edge.
-        go: oag_title::StartCue::Unplayed {
-            name: "Go_NGP",
-            why: "its pair is panned to 90 and 270 degrees, and 90 is on the rear edge of the pan \
-                  law, which the mixer does not model",
-        },
+        // and a pair at 90 and 270 degrees (hard right on the pan law's rear edge, hard left).
+        ready: oag_title::StartCue::Plays("321_NGP"),
+        // `Go_NGP` is cue 68: one pair at 90 and 270 degrees keyed 100 ticks in.
+        go: oag_title::StartCue::Plays("Go_NGP"),
     }),
     beat: Some("HBEAT"),
 };

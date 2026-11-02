@@ -8,10 +8,8 @@
 //!
 //! The original picks on the mode id (`docs/ghidra/functions/vita-2048-eu-v104/
 //! countdown-voice.md`): below `0x17`, every named mode, `ready` and `go`; from
-//! `0x17`, the CRC ids of its own events, `321_NGP` and `Go_NGP`. `321_NGP` is
-//! authored and not played (two looping voices keyed off 3.75 s later under a
-//! rotating pan, none of which the mixer models), so an event race starts with
-//! nothing: both of its cues pan a pair to 90 degrees, the rear edge of the pan law.
+//! `0x17`, the CRC ids of its own events, `321_NGP` and `Go_NGP`. Both pan a pair to 90
+//! and 270 degrees; 90 is the rear edge of the pan law (`a' = 180`), played hard right.
 //!
 //! **`#[ignore]`d and never run in CI**: it needs the extracted Vita package.
 //! Run with `just test-data`. Without the event/named split in
@@ -139,28 +137,86 @@ fn a_named_mode_starts_with_ready_the_beat_and_go_from_the_speech_bank() {
     assert!(!banks.voices_available(Cue::ContElim));
 }
 
+/// The summed output of one voice alone through a mixer: (left, right) energy.
+fn channels(voice: &oag_sound::sfx::CueVoice) -> (f64, f64) {
+    let mut mixer = oag_audio::Mixer::new(44_100);
+    let _ = oag_sound::sfx::start_voices(
+        &mut mixer,
+        std::slice::from_ref(voice),
+        oag_audio::Bus::Sfx,
+        oag_sound::sfx::VoicePlace::DRY,
+    );
+    let (mut left, mut right) = (0.0_f64, 0.0_f64);
+    let mut out = vec![0.0_f32; 2 * 4096];
+    for _ in 0..(4 * 44_100 / 4096) {
+        mixer.render(&mut out);
+        for frame in out.chunks(2) {
+            left += f64::from(frame[0]).powi(2);
+            right += f64::from(frame[1]).powi(2);
+        }
+    }
+    (left, right)
+}
+
 #[test]
 #[ignore = "needs the extracted Vita package in data/extracted/vita/"]
-fn a_campaign_event_names_its_own_pair_and_plays_neither_until_the_pan_has_a_rear_half() {
+fn a_campaign_event_plays_its_pair_panned_as_the_original_pans_it() {
     let Some(source) = source() else {
         return;
     };
     let loaded =
         oag_raceplay::load_event(&options(&source), "2048 - Event 4").expect("the event loads");
-    let banks = &loaded.setup.sounds;
-    assert!(report_has(
-        &loaded,
-        "sfx: 321_NGP not played: its pair is panned"
-    ));
-    assert!(report_has(
-        &loaded,
-        "sfx: Go_NGP not played: its pair is panned"
-    ));
-    assert!(report_has(&loaded, "its start plays the event pair"));
-    for cue in [Cue::Ready, Cue::Go, Cue::StartBeat] {
+    for name in ["321_NGP", "Go_NGP"] {
         assert!(
-            !banks.voices_available(cue),
-            "{cue:?}: the named cue must not play on an event, and the event's is unplayed"
+            report_has(&loaded, &format!(r"sfx: {name} -> "))
+                && report_has(&loaded, "plays its timeline"),
+            "{name} loads as a timeline"
+        );
+        assert!(!report_has(&loaded, &format!("sfx: {name} not played")));
+    }
+    assert!(report_has(&loaded, "its start plays the event pair"));
+    let banks = &loaded.setup.sounds;
+    let mut rng = Rng::new(7);
+    // `Go_NGP`: one pair keyed 100 ticks in, at 90 degrees (hard right, the rear edge) and 270
+    // (hard left).
+    let go = banks.voices(Cue::Go, &mut rng).expect("go plays");
+    assert_eq!(go.len(), 2, "a pair: {}", go.len());
+    for voice in &go {
+        assert!(
+            (voice.delay - 100.0 / 240.0).abs() < 1e-9,
+            "{}",
+            voice.delay
         );
     }
+    let mut angles: Vec<i32> = go.iter().map(|v| v.angle.rem_euclid(360)).collect();
+    angles.sort_unstable();
+    assert_eq!(angles, [90, 270]);
+    for voice in &go {
+        let (left, right) = channels(voice);
+        if voice.angle.rem_euclid(360) == 90 {
+            assert!(
+                right > 0.0 && left < right * 1e-6,
+                "90 is hard right: {left} {right}"
+            );
+        } else {
+            assert!(
+                left > 0.0 && right < left * 1e-6,
+                "270 is hard left: {left} {right}"
+            );
+        }
+    }
+    // `321_NGP`: three groups on delays 125, 205 and 205 ticks, each a centre voice and the pair.
+    let ready = banks.voices(Cue::Ready, &mut rng).expect("ready plays");
+    assert_eq!(ready.len(), 9, "three groups of three");
+    let mut delays: Vec<u32> = ready
+        .iter()
+        .map(|v| (v.delay * 240.0).round() as u32)
+        .collect();
+    delays.sort_unstable();
+    assert_eq!(delays, [125, 125, 125, 330, 330, 330, 535, 535, 535]);
+    assert_eq!(ready.iter().filter(|v| v.angle == 0).count(), 3);
+    assert!(
+        !banks.voices_available(Cue::StartBeat),
+        "an event plays no start beat"
+    );
 }

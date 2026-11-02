@@ -87,13 +87,19 @@ The handlers are read correctly. This page first tied them to `321_NGP` and `Go_
 | Race | Before the correction | Now |
 | --- | --- | --- |
 | a named mode (race box, free play) | `ready` the 0.87 s cue also named `rockets`, `HBEAT` the 0.94 s Eliminator call, `go` cue 24 | `ready` (cue 0 into `321_GO`: the 3.00 s pair at tick 91), `HBEAT` (the three beat groups from tick 91) and `go` (cue 3: the 5.14 s pair at tick 271), as timelines on the 240 Hz tick |
-| a campaign event (`load_event`) | `Go_NGP` bucket cue 44 (four 1.8 to 2.7 s clips), no `ready` | **nothing**: `321_NGP` and `Go_NGP` are named in the loader report and not played |
+| a campaign event (`load_event`) | `Go_NGP` bucket cue 44 (four 1.8 to 2.7 s clips), no `ready` | `321_NGP` as `ready` (three groups of centre voice plus a 90/270 pair at 125, 330, 535 ticks after the cue starts, tick 91) and `Go_NGP` as `go` (the pair 100 ticks after tick 271); no start beat |
 
-- **Why the event pair is not played.** Both cues pan a pair to 90 and 270 degrees. `oag_audio::spatial::pan_of_angle`
-  returns `None` for 90 (`a' = 180`, the first angle of the rear branch of `Scream_PanVolumePair`, which also
-  phase-inverts a channel), so the timeline builder refuses the walk, and a flat pick would be a different
-  sound. **Open, ready to wire**: model the `a' = 180` edge (hard right; the sign flip of a lone voice is
-  inaudible) *scoped to these two cues*, or the whole rear half.
+- **The event pair plays (2026-11-02, lane `event-countdown-2048`).** Both cues pan a pair to 90 and 270
+  degrees. 90 is `a' = 180`, the first angle of the rear branch of `Scream_PanVolumePair`, which reads table entry 0
+  with the pair swapped and one term negated: hard right, with a phase flip on a lone voice that is inaudible
+  (the other voice of the pair is on the left channel). `oag_audio::spatial::pan_of_angle_to_rear_edge` adds
+  exactly that angle (90) to `pan_of_angle` and nothing else; it is asked for only by the countdown cues
+  (`Layer::rear_edge`), so no other cue's rear voice starts playing. Confidence 80 for the position (decompile of
+  the branch, plus the table); the sign bookkeeping was not chased (it reads the previous frame's output signs).
+  `321_NGP` has **no** LFO or looping voices (that was the retracted `PLASMA` reading), so no modulator is needed.
+  Pinned by `a_campaign_event_plays_its_pair_panned_as_the_original_pans_it`: 9 voices on 125, 330 and 535 ticks
+  for `321_NGP`, `Go_NGP`'s pair at tick 100 with the 90 voice silent on the left and the 270 voice silent on the
+  right.
 - **The split** is `oag_title::CountdownEvent` on `oag_2048::race::COUNTDOWN_VOICE`; `load_event` calls
   `Banks::use_event_start`, which swaps the event pair in for the named one. Multiplayer events (also CRC ids
   in the original) are not distinguished: a 2048 multiplayer race plays the named pair.
