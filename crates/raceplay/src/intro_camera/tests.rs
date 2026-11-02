@@ -70,3 +70,10 @@ fn a_title_that_waits_for_a_press_loops_the_animation_and_never_runs_out() {
     }
     assert_eq!(clock.step(true, DT), Beat::Over);
 }
+
+#[test]
+fn pulses_effects_fade_starts_when_the_counter_reads_0x28() {
+    // The counter reads `60 - tick`, so `0x28` is tick 20; HD has no such fade.
+    assert_eq!(RULE.effects_fade_start(), Some((20, 0.02)));
+    assert_eq!(oag_hd::pre_race::PRE_RACE.effects_fade_start(), None);
+}

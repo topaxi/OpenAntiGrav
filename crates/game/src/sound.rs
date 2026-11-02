@@ -142,14 +142,16 @@ pub fn prepare_intro_voice(audio: &mut Audio, discs: &oag_sound::MusicDiscs, rac
     }
 }
 
-/// Forwards the music-player calls `race`'s flyby raised this tick to the audio, in order.
+/// Forwards the audio calls `race`'s flyby raised this tick to the audio, in order.
 /// Called after every [`Race::tick_intro`].
-pub fn intro_voice(audio: &mut Audio, race: &mut Race) {
-    use oag_raceplay::intro_camera::VoiceCue;
-    for cue in race.take_intro_voice() {
+pub fn intro_cues(audio: &mut Audio, race: &mut Race) {
+    use oag_raceplay::intro_camera::IntroCue;
+    for cue in race.take_intro_cues() {
         match cue {
-            VoiceCue::Start(_) => audio.start_pre_race_voice(),
-            VoiceCue::Stop => audio.stop_pre_race_voice(),
+            IntroCue::Start(_) => audio.start_pre_race_voice(),
+            IntroCue::Stop => audio.stop_pre_race_voice(),
+            IntroCue::SilenceEffects => audio.silence_sfx(),
+            IntroCue::FadeInEffects { per_tick } => audio.fade_in_sfx(per_tick),
         }
     }
 }
@@ -170,13 +172,45 @@ pub fn race_tick_keeping(
     race: &mut Race,
     keep: impl Fn(&oag_gameplay::cue::CueEvent) -> bool,
 ) {
-    let mut cues = race.drain_cues();
+    tick_effects(audio, race, keep, false);
+}
+
+/// One tick of the sound effects under a title's pre-race flyby, where its rule fades them in
+/// (`Race::intro_plays_race_sounds`): the held craft's engines at idle, from the flyby camera's
+/// ears, through the effects fade. Only the engines: which other effects the original plays under
+/// its flyby is unwatched (`docs/gameplay/race-intro.md`, "The sound effects"), so no cue is
+/// taken, no circuit emitter sounds and the song marquee is left alone. A title whose flyby does
+/// not fade its effects in stays silent, as before.
+pub fn flyby_tick(audio: &mut Audio, race: &mut Race) {
+    if race.intro_plays_race_sounds() {
+        tick_effects(audio, race, |_| false, true);
+    }
+}
+
+fn tick_effects(
+    audio: &mut Audio,
+    race: &mut Race,
+    keep: impl Fn(&oag_gameplay::cue::CueEvent) -> bool,
+    flyby: bool,
+) {
+    let (mut cues, announcements, class_announcements) = if flyby {
+        (Vec::new(), Vec::new(), Vec::new())
+    } else {
+        (
+            race.drain_cues(),
+            race.drain_announcements(),
+            race.drain_class_announcements(),
+        )
+    };
     cues.retain(|event| keep(event));
-    let announcements = race.drain_announcements();
-    let class_announcements = race.drain_class_announcements();
+    let no_emitters = oag_sound::sfx::TrackEmitters::default();
     let frame = RaceFrame {
         banks: race.sounds(),
-        emitters: race.track_emitters(),
+        emitters: if flyby {
+            &no_emitters
+        } else {
+            race.track_emitters()
+        },
         announcer: race.announcer(),
         class_announcer: race.class_announcer(),
         cues,
@@ -209,6 +243,9 @@ pub fn race_tick_keeping(
         leach_beams: race.sim.world.leach_beams,
     };
     audio.race_tick(frame);
+    if flyby {
+        return;
+    }
     // The song-name marquee shows each race song once, off the same audio state a `--no-audio`
     // run reaches: the selection does not wait on a device.
     race.note_song(audio.now_playing().as_ref());

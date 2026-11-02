@@ -54,7 +54,8 @@ fn flyby(held: bool) -> Option<(Vec<bool>, bool)> {
     let mut sounding = Vec::new();
     while race.in_intro() {
         race.tick_intro(&if held { cross() } else { PlayerInputs::none() });
-        oag_game::sound::intro_voice(&mut audio, &mut race);
+        oag_game::sound::intro_cues(&mut audio, &mut race);
+        oag_game::sound::flyby_tick(&mut audio, &mut race);
         audio.tick();
         sounding.push(audio.pre_race_voice_playing());
         assert!(sounding.len() < 3000, "the flyby never ended");
@@ -91,4 +92,73 @@ fn a_skipped_flyby_never_sounds_its_voice_over() {
     };
     assert_eq!(sounding.len(), lock + 1);
     assert!(sounding.iter().all(|&on| !on));
+}
+
+/// The effects bus gain after each audio step of a `16_Track` flyby, and then of 30 more steps once
+/// it is over, with the flyby's calls and the race's sounds forwarded as the session does.
+fn effects_gain(held: bool) -> Option<Vec<f32>> {
+    use oag_audio::Bus;
+    let source = oag_testdata::image(IMAGE)?.display().to_string();
+    let loaded = oag_raceplay::load(&oag_raceplay::Options {
+        source,
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::TimeTrial,
+        track: Some(r"Data\Environments\16_Track\track.vex".to_string()),
+        ..oag_raceplay::Options::default()
+    })
+    .expect("loading the race");
+    let mut audio = oag_sound::Audio::open(
+        &oag_sound::settings::Settings::default(),
+        None,
+        None,
+        oag_audio::MIN_BUFFER,
+        true,
+    );
+    let mut race = oag_raceplay::Race::start(loaded.setup);
+    assert!(race.begin_intro());
+    let mut gains = Vec::new();
+    let step = |audio: &mut oag_sound::Audio, gains: &mut Vec<f32>| {
+        audio.tick();
+        gains.push(audio.output().with_mixer(|mixer| mixer.bus_gain(Bus::Sfx)));
+    };
+    while race.in_intro() {
+        race.tick_intro(&if held { cross() } else { PlayerInputs::none() });
+        oag_game::sound::intro_cues(&mut audio, &mut race);
+        oag_game::sound::flyby_tick(&mut audio, &mut race);
+        step(&mut audio, &mut gains);
+        assert!(gains.len() < 3000, "the flyby never ended");
+    }
+    for _ in 0..30 {
+        step(&mut audio, &mut gains);
+    }
+    Some(gains)
+}
+
+/// `RaceMode_UpdateIntro` drops the effects to silence in its first call and fades them in from the
+/// counter's `0x28` (tick 20) by `0.02` a call. Fails if the effects bus is not silent through tick
+/// 19, does not climb by that step from tick 20 or is not full 50 calls on, whether the flyby runs
+/// out or a held Cross ends it at tick 60, mid-ramp: the ramp finishes in the countdown.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn the_effects_are_silent_through_tick_19_then_fade_in_by_002_a_call() {
+    for held in [false, true] {
+        let Some(gains) = effects_gain(held) else {
+            return;
+        };
+        assert!(
+            gains[..20].iter().all(|&g| g == 0.0),
+            "silent first 20 calls, held {held}"
+        );
+        for (call, &gain) in gains[20..70].iter().enumerate() {
+            let want = (call + 1) as f32 * 0.02;
+            assert!(
+                (gain - want).abs() < 1e-4,
+                "held {held}: call {call}: {gain} against {want}"
+            );
+        }
+        assert!(
+            gains[69..].iter().all(|&g| g > 0.999),
+            "full from call 69 on, held {held}"
+        );
+    }
 }

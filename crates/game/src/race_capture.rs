@@ -533,7 +533,8 @@ pub fn capture(
         crate::sound::prepare_intro_voice(audio, &options.music_discs, &race);
         for _ in 0..options.intro_ticks {
             race.tick_intro(&oag_gameplay::PlayerInputs::none());
-            crate::sound::intro_voice(audio, &mut race);
+            crate::sound::intro_cues(audio, &mut race);
+            crate::sound::flyby_tick(audio, &mut race);
             // One audio step per flyby tick, as the race ticks below make, so a `--dump-audio`
             // capture of a flyby is as long as the ticks it was given.
             audio.tick();

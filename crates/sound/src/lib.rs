@@ -45,6 +45,7 @@ pub mod hd_mix;
 pub mod library;
 pub mod settings;
 pub mod sfx;
+mod sfx_fade;
 
 pub mod folders;
 mod listings;
@@ -520,6 +521,8 @@ pub struct Audio {
     movie: Option<VoiceId>,
     /// The pre-race flyby's voice-over. See [`pre_race_voice`].
     pre_race_voice: pre_race_voice::PreRaceVoice,
+    /// The effects fade the pre-race flyby opens a race with. See [`sfx_fade`].
+    sfx_fade: sfx_fade::SfxFade,
     /// The voice playing under a race, distinct from [`Self::music`] (the menu's):
     /// [`Audio::start_race_music`] stops one before starting the other. `None`
     /// outside a race or with no decodable music.
@@ -700,6 +703,7 @@ impl Audio {
             held: Vec::new(),
             movie: None,
             pre_race_voice: pre_race_voice::PreRaceVoice::default(),
+            sfx_fade: sfx_fade::SfxFade::default(),
             race_voice: None,
             race_from: None,
             race_index: None,
@@ -738,7 +742,7 @@ impl Audio {
         self.output.with_mixer(|mixer| {
             if self.hd.live.is_none() {
                 mixer.set_bus_gain(Bus::Music, settings.music_volume.gain() * MUSIC_MASTER_TRIM);
-                mixer.set_bus_gain(Bus::Sfx, settings.sfx_volume.gain());
+                mixer.set_bus_gain(Bus::Sfx, settings.sfx_volume.gain() * self.sfx_fade.gain());
             }
             mixer.set_bus_gain(Bus::Speech, settings.speech_volume.gain());
             // Group volumes first, then the master, as the original's chain does.
@@ -993,6 +997,7 @@ impl Audio {
         self.poll_menu_job();
         self.poll_race_job();
         self.poll_pre_race_voice();
+        self.tick_sfx_fade();
         self.hd_mix_tick(self.hd.state);
         if let Some(id) = self.race_voice
             && !self.output.with_mixer(|mixer| mixer.is_playing(id))
