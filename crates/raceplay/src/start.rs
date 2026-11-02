@@ -165,7 +165,7 @@ impl Race {
             #[cfg(feature = "view")]
             wreck_anchors,
             #[cfg(feature = "view")]
-            wreck_big_blast,
+            wreck_shockwave,
             #[cfg(feature = "view")]
             magstrip_wake,
             #[cfg(feature = "view")]
@@ -909,7 +909,7 @@ impl Race {
                 },
                 craft_flashes: Default::default(),
                 wreck_fx: super::wreck_fx::WreckFx::new(wreck_anchors)
-                    .with_big_blast(wreck_big_blast),
+                    .with_shockwave(wreck_shockwave),
                 destroy_camera: super::destroy_camera::DestroyCamera::new(
                     destroy_stations,
                     destroy_focus_rate,

@@ -44,11 +44,12 @@ fn snapshot(extra: u32) -> oag_gameplay::InputSnapshot {
 }
 
 /// Pure: a weapon hit throws Pulse's hull sparks from its own `Ship Collision Fx` locators, and a
-/// wrecked craft throws the node blast and death sparks - and not the big blast, which Pure's
-/// disc and executable do not author.
+/// wrecked craft throws the node blast and death sparks on the edge, then 1.5 s on its own big
+/// blast (`FUN_089258b8`): `WO_SHIP_FXNODE_BIGEXPLO` per locator, `WO_SHIP_EXPLOSION_DEBRIS` and
+/// `WO_SHIP_EXPLO_SMOKE`, all from Pure's `Data.wad`, and never Pulse's `WO_SHIP_EXPLOSION`.
 #[test]
 #[ignore = "needs data/images/pure-psp-eu.chd"]
-fn pure_throws_hit_sparks_and_the_wreck_node_effects_and_no_big_blast() {
+fn pure_throws_hit_sparks_and_the_wreck_node_effects_and_its_own_big_blast() {
     let Some(mut race) = started("data/images/pure-psp-eu.chd") else {
         return;
     };
@@ -58,18 +59,23 @@ fn pure_throws_hit_sparks_and_the_wreck_node_effects_and_no_big_blast() {
         "a weapon hit threw no spark on Pure"
     );
     race.force_destroy(0);
-    for _ in 0..90 {
+    for _ in 0..60 {
         race.tick(&PlayerInputs::single(snapshot(0)));
     }
+    let nodes = race.wreck_fx_started_for_tests();
+    assert!(nodes >= 2, "a Pure wreck threw no node effect ({nodes})");
+    for _ in 0..120 {
+        race.tick(&PlayerInputs::single(snapshot(0)));
+    }
+    let big = race.wreck_fx_started_for_tests() - nodes;
     assert!(
-        race.wreck_fx_started_for_tests() >= 2,
-        "a Pure wreck threw no node effect ({})",
-        race.wreck_fx_started_for_tests()
+        big >= 3,
+        "Pure's wreck threw {big} big-blast effects, expected a blast per locator plus debris and smoke"
     );
     assert_eq!(
         race.wreck_explosion_at_for_tests(),
         None,
-        "Pure threw the big blast it does not author"
+        "Pure threw Pulse's WO_SHIP_EXPLOSION it does not author"
     );
 }
 

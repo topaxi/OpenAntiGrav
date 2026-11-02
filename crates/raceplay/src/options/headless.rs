@@ -113,7 +113,7 @@ impl Setup {
             #[cfg(feature = "view")]
             wreck_anchors: Vec::new(),
             #[cfg(feature = "view")]
-            wreck_big_blast: false,
+            wreck_shockwave: false,
             #[cfg(feature = "view")]
             magstrip_wake: None,
             #[cfg(feature = "view")]

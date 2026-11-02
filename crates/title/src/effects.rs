@@ -142,6 +142,12 @@ pub enum Trigger {
     WreckSparks,
     /// The big blast after it.
     WreckExplosion,
+    /// Pure's big blast: one at each wreck node when the wreck's state times out.
+    WreckBigNode,
+    /// Pure's debris cloud at the wreck's matrix beside it.
+    WreckDebris,
+    /// Pure's smoke beside that.
+    WreckSmoke,
     /// HD's damage smoke while a struck craft's shield is above its first
     /// threshold.
     DamageMild,
@@ -158,7 +164,7 @@ pub enum Trigger {
 
 impl Trigger {
     /// Every trigger, in load order.
-    pub const ALL: [Self; 41] = [
+    pub const ALL: [Self; 44] = [
         Self::CollisionSpark,
         Self::CollisionSparkNoDamage,
         Self::HitSpark,
@@ -195,6 +201,9 @@ impl Trigger {
         Self::WreckNode,
         Self::WreckSparks,
         Self::WreckExplosion,
+        Self::WreckBigNode,
+        Self::WreckDebris,
+        Self::WreckSmoke,
         Self::DamageMild,
         Self::DamageModerate,
         Self::DamageCritical,
