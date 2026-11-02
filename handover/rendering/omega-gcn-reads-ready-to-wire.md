@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [omega]
-updated: 2026-10-27
+updated: 2026-11-02
 summary: "Omega GCN reads: tangent w is ±1 raw, hologram is HD law without /2, 1.07 composite adds ColorScale; three wiring lanes"
 difficulty: medium (40)
 ---
@@ -20,17 +20,19 @@ difficulty: medium (40)
    [gcn.md](../../docs/formats/gcn.md)). **Left open:** 771 submeshes on materials that blend two normal maps (which frame belongs to which),
    203 whose normal map file is not in the archives or will not decode, and the Pro `_1`/`_2` decodes. Evidence:
    [hd-track-tone.md](../../docs/rendering/hd-track-tone.md), "Omega's normal maps are bound".
-2. **DONE 2026-10-27** - **Amphiseum hologram board on Omega** (mesh). Same law, units and constants as HD's mode 7
-   (`PROGRAM_STATIC_HOLOGRAM`), **without the `/2`**; Omega's draw goes through the `psp2` material route, which does
-   not run HD's mode 7 today. Evidence: hd-track-tone.md, "The Amphiseum hologram board", Omega paragraph. Before
-   porting, settle whether HD's `/2` is HD's `output_scale` (that section's "The `/2`") so Omega's port drops exactly
-   that and nothing else.
+2. **DONE 2026-10-27 (`omega-tangent-hologram`)** - **Amphiseum hologram board on Omega.** Wired: `mesh::rcs::psp2::static_hologram`
+   routes the plain `dc_hologramwithstatic` to `PROGRAM_STATIC_HOLOGRAM` with the record's own rates; the `/2` is HD's
+   `output_scale` (0.5 only where `lit_output_halved` applies, unread on Omega, so its scale is 1.0). Pinned by
+   `psp2_static_hologram_ground_truth` and `hd_static_hologram_lit_path` (both scales). No Omega Amphiseum reference frame
+   exists. Evidence: hd-track-tone.md, "The Amphiseum hologram board", Omega paragraph.
 3. **The 1.07 composite** (post, `oag_post::omega_tonemap`). **Ready to wire with `ColorScale = (1, 1, 1)`** (the
    patch's source global is initialised `(1,1,1,1)` and rests there; confidence 65; only a fade drives it lower, gate and
    trigger unread). The patch moves `ScreenTint` outside the vignette and multiplies `ColorScale` in. Evidence:
    [colorscale.md](../../docs/ghidra/functions/ps4-omega-eu/colorscale.md),
-   [tonemap.md](../../docs/ghidra/functions/ps4-omega-eu/tonemap.md), "Read with the decoder". Only matters once
-   bloom, tint and vignette are drawn at all.
+   [tonemap.md](../../docs/ghidra/functions/ps4-omega-eu/tonemap.md), "Read with the decoder". **Not wireable yet:** `oag_post::omega_tonemap`
+   draws only the tone curve and the heat-haze offset; bloom, `ScreenTint` and the vignette are not drawn on Omega (its module
+   doc, "Bloom and the low-resolution additive layer ... not drawn here"), so `ColorScale = (1, 1, 1)` has nothing to scale.
+   Wire it with the composite's bloom, tint and vignette.
 
 ## Later
 

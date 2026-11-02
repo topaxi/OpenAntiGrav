@@ -1809,7 +1809,7 @@ HD's program halves the sum where Omega's exports `A + C` to an fp16 target; HD'
 The Pro `_1` compile (66 instructions) loads the same four constants and samples the same three units in the same
 order, in `v_mad_mix*` fp16 arithmetic; one scale it applies (`s14`) is not attributed. 2048's DLC1 ships only `hologram.rcsmaterial` for Amphiseum and Modesto Heights: **checked,
 differs** (no `dc_hologramwithstatic`). `hologram.rcsmaterial` itself (slots 604-624 on Amphiseum) adds nothing to the start frame's
-box (skipping it changes the frame by 0.04 mean grey) and its program stays unread.
+box (skipping it changes the frame by 0.04 mean grey) and its program stays unread. 2048's `hologram.rcsmaterial`: **not checkable** (its pixel program is USSE microcode whose operands `gxp.md` does not yet decode; nothing says it shares this law, and it is a different material).
 
 ## Tech de Ra's near-left wall (slot 384): the wash is a bitangent sign (2026-10-27, `tech-de-ra-wash`)
 
