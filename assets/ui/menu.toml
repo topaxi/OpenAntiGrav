@@ -1537,12 +1537,13 @@ kind = "back"
 label = "BACK"
 string_id = "OAG_MENU_BACK"
 
-# Every soundtrack source this machine can open, one at a time: the booted disc, the
-# other titles' discs on the search path, and the folders listed in settings.toml under
-# `[audio] music_folders`. SOURCE walks them, ENABLED puts the one it is on in the
-# race playlist or takes it out. The booted disc starts on, everything else off.
-# Same shape as the MODS page above. Adding a folder from here needs a text input the
-# menus do not have yet, so a folder is named in the file.
+# One on/off row per soundtrack source this machine can open: the booted disc, the
+# other titles' discs on the search path, and the folders listed in settings.toml
+# under `[audio] music_folders`. The booted disc starts on, everything else off.
+# The one row below is a template: `oag_game::music_pool::expand` replaces it with a
+# row per source (`oag_ui::menu::Definition::expand_rows`), and with fewer than two
+# sources takes the page and the MUSIC row that opens it out. Adding a folder from
+# here needs a text input the menus do not have yet, so a folder is named in the file.
 [[page]]
 id = "music"
 title = "MUSIC"
@@ -1554,13 +1555,6 @@ label = "SOURCE"
 string_id = "OAG_MUSIC_SOURCE_ROW"
 setting = "audio.music_pool"
 values_from = "music_pool"
-
-[[page.entry]]
-kind = "choice"
-label = "ENABLED"
-string_id = "OAG_MODS_ENABLED"
-setting = "audio.music_pool_enabled"
-values_from = "music_pool_switch"
 
 [[page.entry]]
 kind = "back"

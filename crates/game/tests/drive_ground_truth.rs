@@ -434,7 +434,7 @@ fn the_mods_page_turns_a_mod_off_and_on_and_what_it_adds_goes_and_comes_back_liv
     );
 }
 
-/// The MUSIC page's rows reach the settings file: the ENABLED row on the booted disc's source
+/// The MUSIC page's rows reach the settings file: the booted disc's own row
 /// saves a switch into `[audio] music_switches`, and turning it back on saves that too.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
@@ -442,7 +442,7 @@ fn the_music_page_saves_its_switches() {
     let Some(image) = pulse() else {
         return;
     };
-    let booted = "disc:wipeout-pulse:psp:pulse-psp-eu";
+    let booted = "disc:wipeout-pulse:psp";
     let run = drive(
         &image,
         "music-switch",
@@ -450,7 +450,7 @@ fn the_music_page_saves_its_switches() {
             "boot; select options; press cross; until page=options; \
              select audio; press cross; until page=audio; \
              select music; press cross; until page=music; ticks 30; \
-             set audio.music_pool={booted}; set audio.music_pool_enabled=off; ticks 5; expect page=music; \
+             set audio.music_pool.{booted}=off; ticks 5; expect page=music; \
              press circle; until page=audio; ticks 5"
         ),
         None,

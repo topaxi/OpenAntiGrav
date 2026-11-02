@@ -10,6 +10,7 @@
 
 mod blocks;
 mod drawing;
+mod expand;
 mod frame;
 mod hide;
 mod jump;

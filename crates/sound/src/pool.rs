@@ -67,8 +67,11 @@ pub enum SourceStatus {
 pub struct SourceRow {
     /// The stable key the settings file keeps the switch under.
     pub id: String,
-    /// What the row shows: the title's name and release, or the folder.
+    /// What the row shows: the title's name (with its platform when two pressings of one
+    /// title are listed), or the folder's last path component.
     pub label: String,
+    /// The line under the row: the image's or folder's full path.
+    pub detail: Option<String>,
     /// Whether the source is in the pool.
     pub enabled: bool,
     /// What the scan found.
@@ -92,14 +95,14 @@ pub(crate) enum Extra {
 #[derive(Debug)]
 struct Booted {
     id: String,
-    label: String,
     title: &'static str,
+    platform: Platform,
+    source: String,
 }
 
 #[derive(Debug)]
 struct Disc {
     id: String,
-    label: String,
     title: &'static str,
     source: String,
     platform: Platform,
@@ -138,15 +141,8 @@ pub struct Pool {
     revision: Arc<AtomicU32>,
 }
 
-fn disc_id(title: &str, platform: Platform, source: &str) -> String {
-    let stem = std::path::Path::new(source)
-        .file_stem()
-        .map_or_else(String::new, |stem| stem.to_string_lossy().into_owned());
-    format!(
-        "disc:{}:{}:{stem}",
-        slug(title),
-        slug(&platform.to_string())
-    )
+fn disc_id(title: &str, platform: Platform) -> String {
+    format!("disc:{}:{}", slug(title), slug(&platform.to_string()))
 }
 
 /// Lower case with every run of other characters as one `-`, so an id is one word.
@@ -200,14 +196,13 @@ impl Pool {
 
     /// Records the booted disc, which is a row from the start.
     pub(crate) fn set_booted(&self, title: &'static str, platform: Platform, source: &str) {
-        let id = disc_id(title, platform, source);
-        let label = format!("{title} ({platform})");
-        let source_title = title;
+        let id = disc_id(title, platform);
         self.with(|inner| {
             inner.booted = Some(Booted {
                 id,
-                label,
-                title: source_title,
+                title,
+                platform,
+                source: source.to_string(),
             });
         });
         self.bump();
@@ -268,20 +263,32 @@ impl Pool {
     pub fn rows(&self) -> Vec<SourceRow> {
         self.with(|inner| {
             let mut rows = Vec::new();
+            // (id, title, platform, source, songs) of every disc row, booted first.
+            let mut discs: Vec<(&str, &str, Platform, &str, usize)> = Vec::new();
             if let Some(booted) = &inner.booted {
-                rows.push(SourceRow {
-                    id: booted.id.clone(),
-                    label: booted.label.clone(),
-                    enabled: Self::enabled_in(inner, &booted.id),
-                    status: SourceStatus::Ready(0),
-                });
+                discs.push((&booted.id, booted.title, booted.platform, &booted.source, 0));
             }
             for disc in &inner.discs {
+                discs.push((
+                    &disc.id,
+                    disc.title,
+                    disc.platform,
+                    &disc.source,
+                    disc.tracks.len(),
+                ));
+            }
+            for &(id, title, platform, source, songs) in &discs {
+                let same_title = discs.iter().filter(|other| other.1 == title).count();
+                let mut label = title.to_string();
+                if same_title > 1 {
+                    label = format!("{label} ({platform})");
+                }
                 rows.push(SourceRow {
-                    id: disc.id.clone(),
-                    label: disc.label.clone(),
-                    enabled: Self::enabled_in(inner, &disc.id),
-                    status: SourceStatus::Ready(disc.tracks.len()),
+                    id: id.to_string(),
+                    label,
+                    detail: Some(source.to_string()),
+                    enabled: Self::enabled_in(inner, id),
+                    status: SourceStatus::Ready(songs),
                 });
             }
             for folder in &inner.folders {
@@ -295,7 +302,11 @@ impl Pool {
                 };
                 rows.push(SourceRow {
                     id: folder.id.clone(),
-                    label: folder.path.display().to_string(),
+                    label: folder.path.file_name().map_or_else(
+                        || folder.path.display().to_string(),
+                        |name| name.to_string_lossy().into_owned(),
+                    ),
+                    detail: Some(folder.path.display().to_string()),
                     enabled: Self::enabled_in(inner, &folder.id),
                     status,
                 });
@@ -328,7 +339,7 @@ impl Pool {
                     source: disc.source.clone(),
                     platform: disc.platform,
                     track: *track,
-                    label: disc.label.clone(),
+                    label: disc.title.to_string(),
                 }));
             }
             for folder in &inner.folders {
@@ -469,28 +480,17 @@ impl Pool {
             if soundtrack.tracks.is_empty() {
                 continue;
             }
-            let id = disc_id(title.name, platform, &source);
+            let id = disc_id(title.name, platform);
             if found.iter().any(|known: &Disc| known.id == id) {
                 continue;
             }
             found.push(Disc {
                 id,
-                label: format!("{} ({platform})", title.name),
                 title: title.name,
                 source,
                 platform,
                 tracks: soundtrack.tracks,
             });
-        }
-        // Two images of one title and release (regional pressings, a decrypted copy) tell apart
-        // by file name, which names the title too and keeps the label short enough for a row.
-        let labels: Vec<String> = found.iter().map(|disc| disc.label.clone()).collect();
-        for disc in &mut found {
-            if labels.iter().filter(|label| **label == disc.label).count() > 1
-                && let Some(name) = std::path::Path::new(&disc.source).file_stem()
-            {
-                disc.label = format!("{} {}", disc.platform, name.to_string_lossy());
-            }
         }
         log::info!(
             "audio: music pool found {} other soundtracks on the search path",

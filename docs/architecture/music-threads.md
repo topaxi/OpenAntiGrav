@@ -133,11 +133,13 @@ clock has to move.
 
 OPTIONS > AUDIO > MUSIC lists every soundtrack source this machine can open, each on or off:
 the booted disc (on by default), each other title's disc image found on the search path (one
-row per image, off) and each folder under `[audio] music_folders` in `settings.toml` (off
+row per title and platform, off; the first image found stands for it) and each folder under `[audio] music_folders` in `settings.toml` (off
 unless its `enabled` is set). Switches persist in `[audio] music_switches`, keyed by a stable
-source id (`disc:<title slug>:<platform>:<file stem>`, `folder:<path>`); an id absent from the table
-takes the default. The page is the MODS page's shape (a SOURCE row that walks the sources and an
-ENABLED row for the one it is on), so pad, mouse and touch work as on every other choice row.
+source id (`disc:<title slug>:<platform>`, `folder:<path>`); an id absent from the table
+takes the default. The page has one on/off row per source (label left, ON or OFF right, the image's or folder's
+full path under the selected row), made from one template row in `menu.toml` by
+`Definition::expand_rows`, so pad, mouse and touch work as on every other choice row. With
+fewer than two sources the page and the MUSIC row that opens it are left out.
 Adding a folder from the menu needs a text input widget and is open.
 
 **What a race plays.** The playlist is one numbered list: the booted soundtrack in its own
@@ -148,9 +150,10 @@ booted disc on the list is the booted soundtrack, `playlist_len` equals its leng
 `RacePick` resolves as before (`tests::pool::with_only_the_booted_disc_on_the_playlist_is_the_booted_soundtrack`).
 The booted title's other pressing is not a row: choosing between the two encodes of one
 soundtrack stays the `MUSIC SOURCE` row's job and keeps its seek-across-encodes behaviour. A
-different title found on two pressings (HD's encrypted and decrypted image, Pure EU and USA) is
-two rows but contributes its songs once, from the first enabled image in id order, so no song
-plays from two encodes.
+different title found on two images of one platform (HD's encrypted and decrypted image, Pure EU
+and USA) is one row, from the first image found; a title on two platforms is two rows
+(`WIPEOUT X (PSP)`, `WIPEOUT X (PS2)`) and contributes its songs once, from the first enabled
+row in id order, so no song plays from two encodes.
 
 **Menus.** The front end's music is unchanged: it is the disc's authored loop (the PSP's
 `frontend1.at3`, HD's mix tables, the PS2's track 0), and the pool does not replace authored

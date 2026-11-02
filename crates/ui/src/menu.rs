@@ -515,6 +515,8 @@ mod hide;
 mod page;
 pub use page::{Page, RowMeta};
 
+mod expand;
+pub use expand::RowItem;
 mod definition;
 pub use definition::{Added, Definition, Error, For, ModMenu};
 

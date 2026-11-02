@@ -1,22 +1,20 @@
-//! The MUSIC page: one row that walks the music sources and one that switches
-//! the source it is on, the shape of the MODS page (`crate::mods`).
+//! The MUSIC page: one on/off row per music source.
 //!
-//! The sources are `oag_sound::pool`'s: the booted disc, other titles' discs and
-//! the folders named in `settings.toml`. The rows are re-supplied whenever the
-//! pool's [`oag_sound::pool::Pool::revision`] moves, so a scan that lands while
-//! the page is open shows up without leaving it.
+//! The sources are `oag_sound::pool`'s: the booted disc, other titles' discs and the
+//! folders named in `settings.toml`. `menu.toml` holds one template row
+//! ([`TEMPLATE`]); [`expand`] turns it into a row per source before the menu model is
+//! made (`oag_ui::menu::Definition::expand_rows`), and [`refresh`] moves a row's
+//! status afterwards. With fewer than two sources there is nothing to choose and
+//! neither the page nor the row that opens it is left in the tree.
 
 use oag_sound::pool::{Pool, SourceRow, SourceStatus};
 use oag_ui::language::StringTable;
-use oag_ui::menu::{Choice, Menu, Value, ValueSource};
+use oag_ui::menu::{Choice, Definition, Menu, RowItem, ValueSource};
 
 /// The page the sources are listed on.
 pub const PAGE: &str = "music";
-/// The SOURCE row. Never persisted: it only says which source ENABLED is about.
-pub const SELECTED: &str = "audio.music_pool";
-/// The ENABLED row: the switch of the source [`SELECTED`] is on, kept in
-/// `[audio] music_switches` rather than under this key.
-pub const ENABLED: &str = "audio.music_pool_enabled";
+/// The template row's setting; a source's row edits `<TEMPLATE>.<source id>`.
+pub const TEMPLATE: &str = "audio.music_pool";
 
 /// Words the page says, with their English fallback.
 pub mod words {
@@ -28,82 +26,73 @@ pub mod words {
     pub const OFF: (&str, &str) = ("OAG_MODS_OFF", "OFF");
 }
 
-/// The width a source's label may take in a row.
-const LABEL_CHARS: usize = 22;
-
-fn fit(text: &str) -> String {
-    if text.chars().count() <= LABEL_CHARS {
-        return text.to_string();
-    }
-    let keep: String = text
-        .chars()
-        .skip(text.chars().count() - (LABEL_CHARS - 3))
-        .collect();
-    format!("...{keep}")
+/// The source a row's setting edits, when it is one of the page's rows.
+#[must_use]
+pub fn source_of(setting: &str) -> Option<&str> {
+    setting.strip_prefix(TEMPLATE)?.strip_prefix('.')
 }
 
-/// The choices for `ValueSource::MusicPool`: every source, by id.
-#[must_use]
-pub fn choices(rows: &[SourceRow]) -> Vec<Choice> {
+fn choices(row: &SourceRow, strings: &StringTable) -> Vec<Choice> {
+    let say = |(id, english): (&str, &str)| strings.get_or_fallback(id, english).to_string();
+    let on = Choice::labelled("on", say(words::ON));
+    let off = Choice::labelled("off", say(words::OFF));
+    let reason = match &row.status {
+        SourceStatus::Ready(_) => return vec![on, off],
+        SourceStatus::Scanning => say(words::SCANNING),
+        SourceStatus::Unavailable(why) => why.clone(),
+    };
+    if row.enabled {
+        vec![on.unusable(reason)]
+    } else {
+        vec![off.unusable(reason)]
+    }
+}
+
+fn items(pool: &Pool, strings: &StringTable) -> Vec<RowItem> {
+    let rows = pool.rows();
+    if rows.len() < 2 {
+        return Vec::new();
+    }
     rows.iter()
-        .map(|row| Choice::labelled(&row.id, fit(&row.label)))
+        .map(|row| RowItem {
+            id: row.id.clone(),
+            label: row.label.clone(),
+            detail: row.detail.clone(),
+            values: choices(row, strings),
+            current: if row.enabled { "on" } else { "off" }.to_string(),
+        })
         .collect()
 }
 
-/// The ENABLED row's choices for `row`, and the value to seed: `on`/`off`, or the one
-/// dimmed value a source that cannot be switched yet holds.
-#[must_use]
-pub fn switch_for(row: &SourceRow, strings: &StringTable) -> (Vec<Choice>, &'static str) {
-    let say = |(id, english): (&str, &str)| strings.get_or_fallback(id, english).to_string();
-    let (value, word) = if row.enabled {
-        ("on", words::ON)
-    } else {
-        ("off", words::OFF)
-    };
-    match &row.status {
-        SourceStatus::Scanning => (
-            vec![Choice::labelled(value, say(word)).unusable(say(words::SCANNING))],
-            value,
-        ),
-        SourceStatus::Unavailable(why) => (
-            vec![Choice::labelled(value, say(word)).unusable(why.clone())],
-            value,
-        ),
-        SourceStatus::Ready(_) => (
-            vec![
-                Choice::labelled("on", say(words::ON)),
-                Choice::labelled("off", say(words::OFF)),
-            ],
-            value,
-        ),
+/// Makes the page's rows from the pool as it stands, or takes the page out when the pool
+/// has nothing to choose between.
+pub fn expand(definition: &mut Definition, pool: &Pool, strings: &StringTable) {
+    if definition.expand_rows(ValueSource::MusicPool, &items(pool, strings)) == 0 {
+        definition.drop_submenus_to(PAGE);
     }
 }
 
-/// The source the SOURCE row is on.
+/// What the rows would say, without the switches: a change in it means the tree needs
+/// expanding again (a scan landed, a source appeared).
 #[must_use]
-pub fn selected<'a>(model: &Menu, rows: &'a [SourceRow]) -> Option<&'a SourceRow> {
-    let held = model
-        .definition()
-        .pages
+pub fn signature(pool: &Pool) -> String {
+    pool.rows()
         .iter()
-        .flat_map(|page| page.entries.iter())
-        .find(|entry| entry.setting() == Some(SELECTED))
-        .and_then(oag_ui::menu::Entry::chosen)?;
-    let Value::Text(id) = held else {
-        return None;
-    };
-    rows.iter().find(|row| row.id == id)
+        .map(|row| format!("{}|{}|{:?}", row.id, row.label, row.status))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
-/// Supplies both rows from the pool as it stands, keeping the source the SOURCE row is on.
-pub fn supply(model: &mut Menu, pool: &Pool, strings: &StringTable) {
+/// Whether `menu` shows the rows [`expand`] would make for `pool` now.
+#[must_use]
+pub fn is_current(menu: &Menu, pool: &Pool) -> bool {
     let rows = pool.rows();
-    model.supply(ValueSource::MusicPool, &choices(&rows));
-    let Some(row) = selected(model, &rows) else {
-        model.supply(ValueSource::MusicPoolSwitch, &[]);
-        return;
+    let wanted: Vec<String> = if rows.len() < 2 {
+        Vec::new()
+    } else {
+        rows.iter()
+            .map(|row| format!("{TEMPLATE}.{}", row.id))
+            .collect()
     };
-    let (switch, value) = switch_for(row, strings);
-    model.supply(ValueSource::MusicPoolSwitch, &switch);
-    model.seed(ENABLED, &Value::Text(value.to_string()));
+    menu.expanded_settings(TEMPLATE) == wanted
 }

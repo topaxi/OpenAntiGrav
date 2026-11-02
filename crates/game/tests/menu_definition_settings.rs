@@ -930,8 +930,7 @@ fn every_settings_row_is_one_the_game_seeds() {
             if PILOT_EDITOR_ROWS.contains(&setting)
                 || setting == oag_game::mods::SELECTED
                 || setting == oag_game::mods::ENABLED
-                || setting == oag_game::music_pool::SELECTED
-                || setting == oag_game::music_pool::ENABLED
+                || setting == oag_game::music_pool::TEMPLATE
                 || oag_game::settings::web::WEB_ONLY_ROWS.contains(&setting)
             {
                 continue;

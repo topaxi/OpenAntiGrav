@@ -819,14 +819,11 @@ impl Session {
                 self.switch_selected_mod(text == "on");
                 return;
             }
-            // The MUSIC page: SOURCE moves the ENABLED row; ENABLED saves into
-            // `[audio] music_switches` and the pool follows.
-            oag_game::music_pool::SELECTED => {
-                self.resupply_music_pool();
-                return;
-            }
-            oag_game::music_pool::ENABLED => {
-                self.switch_selected_music(text == "on");
+            // A MUSIC page row: one source on or off, saved into `[audio] music_switches`.
+            other if oag_game::music_pool::source_of(other).is_some() => {
+                if let Some(id) = oag_game::music_pool::source_of(other) {
+                    self.switch_music_source(id, text == "on");
+                }
                 return;
             }
             other => {

@@ -13,48 +13,51 @@ use crate::stage::Stage;
 use super::Session;
 
 impl Session {
-    /// Supplies the SOURCE and ENABLED rows from the pool as it stands.
-    pub(crate) fn resupply_music_pool(&mut self) {
-        let Some(shell) = self.shell.as_ref() else {
-            return;
-        };
-        if let Stage::Menu(stage) = &mut self.stage {
-            music_pool::supply(&mut stage.menu, self.music_discs.pool(), &shell.strings);
-        }
-    }
-
-    /// Keeps the rows current while the page is open: a folder's scan answers on its own
-    /// thread, so a source can turn from SCANNING to usable under the player's cursor.
+    /// Builds the menus again where the player stood when what the rows say has changed
+    /// (a scan landed, a source appeared): the page's rows are made when the model is.
     pub(crate) fn poll_music_pool(&mut self) {
-        let on_page = matches!(&self.stage, Stage::Menu(stage) if stage.menu.page().id == music_pool::PAGE);
-        if on_page {
-            self.resupply_music_pool();
+        let Stage::Menu(stage) = &self.stage else {
+            return;
+        };
+        let pool = self.music_discs.pool();
+        let signature = music_pool::signature(pool);
+        if signature == self.music_pool_seen && music_pool::is_current(&stage.menu, pool) {
+            return;
+        }
+        self.music_pool_seen = signature;
+        let Some(shell) = self.shell.clone() else {
+            return;
+        };
+        let trail = stage.menu.trail();
+        let skin = stage.skin;
+        let mut model = self.menu_model(&shell, &skin);
+        if !model.restore_trail(&trail) {
+            return;
+        }
+        model.settle();
+        if let Stage::Menu(stage) = &mut self.stage {
+            stage.menu = model;
         }
     }
 
-    /// The ENABLED row moved to `on`: puts the source the SOURCE row is on into the playlist
-    /// or takes it out, and saves.
-    pub(crate) fn switch_selected_music(&mut self, on: bool) {
-        let (Some(_), Stage::Menu(stage)) = (self.shell.as_ref(), &self.stage) else {
-            return;
-        };
+    /// A source's row moved to `on`: puts the source into the playlist or takes it out,
+    /// and saves.
+    pub(crate) fn switch_music_source(&mut self, id: &str, on: bool) {
         let pool = self.music_discs.pool().clone();
-        let rows = pool.rows();
-        let Some(row) = music_pool::selected(&stage.menu, &rows) else {
-            return;
-        };
-        if row.enabled == on || !matches!(row.status, oag_sound::pool::SourceStatus::Ready(_)) {
-            self.resupply_music_pool();
+        let known = pool
+            .rows()
+            .into_iter()
+            .find(|row| row.id == id)
+            .is_some_and(|row| matches!(row.status, oag_sound::pool::SourceStatus::Ready(_)));
+        if !known {
             return;
         }
-        let id = row.id.clone();
         info!("music source {id}: turned {} on the MUSIC page", if on { "on" } else { "off" });
-        pool.set_enabled(&id, on);
+        pool.set_enabled(id, on);
         self.settings.audio.music_switches = pool.switches();
         if let Err(e) = oag_game::settings::save(&self.settings) {
             error!("could not save settings: {e:#}");
         }
         self.audio.music_pool_changed();
-        self.resupply_music_pool();
     }
 }
