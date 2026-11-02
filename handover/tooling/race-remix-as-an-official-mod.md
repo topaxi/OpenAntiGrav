@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-02
-summary: "ADR-0082 and ADR-0083 accepted (lane 1 done); lanes 2-9 are code: mod pages, fingerprint filter, settings, queries, launch_race, the move"
+summary: "ADR-0082 and ADR-0083 accepted (lanes 1 and 4 done); lanes 2-3, 5-9 are code: mod pages, settings, queries, launch_race, the move"
 size: XL (40)
 difficulty: hard (45)
 ---
@@ -352,7 +352,7 @@ hours, M half a day, L a day, XL more than a day (split it).
    (`mods.rs`). Size: M (40). Difficulty: medium (45). Updates the mod-author skill
    (`assets/mods/examples/.claude/skills/oag-mod-author/SKILL.md`, submodule branch)
    and `docs/tools/mods.md`.
-4. **LAN fingerprint: only race-changing mods.** Claim: `Mods::content_fingerprint`
+4. **LAN fingerprint: only race-changing mods (done).** Claim: `Mods::content_fingerprint`
    (`crates/game/src/mods.rs:503`) leaves out mods with no simulation module, track
    or campaign, so a page-only mod on one machine does not change the hash.
    Acceptance: tests in `crates/game/src/mods.rs` (or `crates/game/tests/`) that a

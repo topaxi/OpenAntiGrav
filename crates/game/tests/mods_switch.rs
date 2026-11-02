@@ -194,16 +194,60 @@ fn the_enabled_row_follows_the_mod_row() {
     );
 }
 
-#[test]
-fn a_mod_turned_off_is_not_in_the_lan_fingerprint() {
-    let dir = base("fingerprint");
-    let empty = std::env::temp_dir().join(format!("oag-mods-switch-{}-none", std::process::id()));
+/// A mod `folder` (id `test.<folder>`) with the manifest `extra` appended and `files` beside it.
+fn fingerprint_mod(dir: &Path, folder: &str, extra: &str, files: &[&str]) {
+    let path = dir.join(folder);
+    std::fs::create_dir_all(&path).unwrap();
+    let text = MANIFEST
+        .replace("test.garage", &format!("test.{folder}"))
+        .replace("Garage", folder)
+        + extra;
+    std::fs::write(path.join("oag-mod.toml"), text).unwrap();
+    for file in files {
+        let target = path.join(file);
+        std::fs::create_dir_all(target.parent().unwrap()).unwrap();
+        std::fs::write(target, b"x").unwrap();
+    }
+}
+
+fn fingerprint_of(dir: &Path) -> u64 {
+    load(dir, &BTreeSet::new()).content_fingerprint()
+}
+
+fn empty_base(name: &str) -> PathBuf {
+    let empty = std::env::temp_dir().join(format!("oag-mods-switch-{}-{name}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&empty);
     std::fs::create_dir_all(&empty).unwrap();
-    let none = load(&empty, &BTreeSet::new()).content_fingerprint();
-    let on = load(&dir, &BTreeSet::new()).content_fingerprint();
-    let turned_off = load(&dir, &off(&["test.garage"])).content_fingerprint();
-    assert_ne!(on, none);
-    assert_eq!(turned_off, none, "a mod that is off changes no race");
+    empty
+}
+
+#[test]
+fn a_page_or_string_only_mod_leaves_the_lan_fingerprint_alone() {
+    let dir = base("fingerprint-pages");
+    let none = fingerprint_of(&empty_base("fingerprint-pages-none"));
+    assert_eq!(none, oag_net::discovery::NO_MODS);
+    assert_eq!(fingerprint_of(&dir), none, "a row-only mod");
+    fingerprint_mod(&dir, "words", "", &["strings/english.toml"]);
+    fingerprint_mod(&dir, "pilots", "", &["pilots/ace.toml"]);
+    assert_eq!(fingerprint_of(&dir), none, "strings and pilots too");
+}
+
+#[test]
+fn a_simulation_track_or_campaign_mod_changes_the_lan_fingerprint() {
+    let none = oag_net::discovery::NO_MODS;
+    let simulation = "\n[extension]\nsimulation = true\napi = 1\nstate_bytes = 64\n\n[extension.rules]\nmodule = \"ext/rules.wasm\"\n";
+    let cases: [(&str, &str, &[&str]); 3] = [
+        ("sim", simulation, &["ext/rules.wasm"]),
+        ("track", "", &["tracks/lagoon.track.toml"]),
+        ("campaign", "", &["campaigns/run.toml"]),
+    ];
+    for (folder, extra, files) in cases {
+        let dir = base(&format!("fingerprint-{folder}"));
+        fingerprint_mod(&dir, folder, extra, files);
+        assert_ne!(fingerprint_of(&dir), none, "a {folder} mod changes a race");
+        let off = load(&dir, &off(&[&format!("test.{folder}")])).content_fingerprint();
+        assert_eq!(off, none, "and does not when it is off");
+    }
 }
 
 fn channel_mod(dir: &Path, folder: &str, id: &str, channels: &str) {

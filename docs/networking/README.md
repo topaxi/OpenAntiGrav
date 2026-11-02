@@ -939,7 +939,7 @@ to the menus; a LAN rematch is a new lobby; an online race has one, `online-lobb
 ### The join list says whether you can join (maintainer's requirement)
 
 Every host the browser finds stays in the list. The advert carries the title, the platform of its image, the build
-(`BUILD_VERSION`), the wire protocol, a content fingerprint (the player mods loaded, FNV-1a of their ids and releases;
+(`BUILD_VERSION`), the wire protocol, a content fingerprint (the player mods loaded that change a race - a simulation module, a track or a campaign - FNV-1a of their ids and releases;
 mods may change the sim), the circuit, the mode, and the people in out of the seats. `oag_net::discovery::compat` decides,
 on the joiner, before connecting, in this order: **OtherTitle** (another title, another platform's pressing, or this
 client lacks that image), **OtherVersion** (another protocol or build), **OtherContent** (other mods), **Full**, else

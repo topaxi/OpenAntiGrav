@@ -428,6 +428,16 @@ fn game_version() -> semver::Version {
         .unwrap_or_else(|_| semver::Version::new(0, 0, 0))
 }
 
+/// Whether a race with `m` on differs from one without: it carries a simulation module, a
+/// `tracks/*.track.toml` or a `campaigns/*.toml`.
+fn changes_a_race(m: &oag_mod::Mod) -> bool {
+    m.manifest.extension.as_ref().is_some_and(|e| e.simulation)
+        || m.files_under("tracks", "toml")
+            .iter()
+            .any(|name| name.ends_with(".track.toml"))
+        || !m.files_under("campaigns", "toml").is_empty()
+}
+
 impl Mods {
     /// The extras and whatever lies on the default search path, with the mods in
     /// `disabled` (the player's `settings::Mods::disabled`) turned off.
@@ -494,16 +504,19 @@ impl Mods {
             .collect()
     }
 
-    /// A fingerprint of the player mods loaded (id and release of each, in id order; the built-in
-    /// extras are the build's own). Mods may change the simulation, so a LAN host and a joiner
-    /// must agree on it (`oag_net::discovery::compat`). FNV-1a, **chosen**. The repository's
-    /// own examples ([`oag_mod::EXAMPLES`], found when the game runs from a checkout) are left
-    /// out: they change no race a LAN session plays, and an installed joiner has none.
+    /// A fingerprint of the player mods that are on and change a race (id and release of each,
+    /// in id order; the built-in extras are the build's own): a simulation module, a track or a
+    /// campaign. A mod of pages, rows, strings or pilots is left out, so a machine with one and
+    /// a machine without can race (`docs/architecture/adr/0083-official-mods-are-a-public-folder-and-the-fingerprint-counts-race-changers.md`).
+    /// FNV-1a, **chosen**. The repository's own examples ([`oag_mod::EXAMPLES`], found when the
+    /// game runs from a checkout) are left out: they change no race a LAN session plays, and an
+    /// installed joiner has none.
     #[must_use]
     pub fn content_fingerprint(&self) -> u64 {
         let named: Vec<String> = self
             .player()
             .filter(|m| !std::path::Path::new(&m.label()).starts_with(oag_mod::EXAMPLES))
+            .filter(|m| changes_a_race(m))
             .map(|m| format!("{}@{}", m.manifest.id, m.manifest.version))
             .collect();
         oag_net::discovery::content_fingerprint(&named)
