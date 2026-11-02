@@ -34,6 +34,7 @@ Then, depending on what you are here to do:
 | Reverse engineer something | [Methodology](reverse-engineering/methodology.md) |
 | Set up Ghidra and the emulators | [Toolchain](reverse-engineering/toolchain.md) |
 | Decode an asset format | [Format index](formats/README.md) |
+| Read a short standalone spec, without the evidence trail | [Specs](specs/README.md) |
 | Know what is on the discs | [PSP](psp/pulse-disc-layout.md) / [PS2](ps2/pulse-disc-layout.md) |
 | Use the tools | [Tool docs](tools/README.md) |
 | Mod the game: tracks, AI pilots, menu rows | [Modding guide](tools/modding.md) |
@@ -62,6 +63,7 @@ ghidra/                 conventions and per-function documentation
   functions/            one page per analysed function, per binary
   memory-maps/          address space layouts
 formats/                one page per asset format, plus a status index
+specs/                  concise standalone specifications distilled from formats/ and the behaviour pages
 psp/  ps2/              platform-specific findings
 comparisons/            PSP vs PS2, and cross-title comparisons
 gameplay/ physics/ rendering/ ui/ networking/
