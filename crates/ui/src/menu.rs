@@ -770,6 +770,71 @@ impl Menu {
         filled
     }
 
+    /// Fills in every row whose `values_from` is the table form `query`, with the argument
+    /// `query.of` names. Keeps the value a row was on if the new list still has it, as
+    /// [`Self::supply`] does. Returns how many rows were filled.
+    pub fn supply_query(&mut self, query: &QueryRef, values: &[Choice]) -> usize {
+        let mut filled = 0;
+        for page in &mut self.definition.pages {
+            for entry in &mut page.entries {
+                if let Entry::Choice {
+                    values: list,
+                    query: Some(from),
+                    current,
+                    ..
+                } = entry
+                    && from == query
+                {
+                    let held = list.get(*current).map(|option| option.value.clone());
+                    values.clone_into(list);
+                    *current = held
+                        .and_then(|value| list.iter().position(|option| option.value == value))
+                        .unwrap_or(0);
+                    filled += 1;
+                }
+            }
+        }
+        filled
+    }
+
+    /// Every distinct table-form query a row carries, in page order. The caller answers each
+    /// from the value of the setting `of` names ([`Self::value_of`]).
+    #[must_use]
+    pub fn query_refs(&self) -> Vec<QueryRef> {
+        let mut refs: Vec<QueryRef> = Vec::new();
+        for page in &self.definition.pages {
+            for entry in &page.entries {
+                if let Entry::Choice {
+                    query: Some(query), ..
+                } = entry
+                    && !refs.contains(query)
+                {
+                    refs.push(query.clone());
+                }
+            }
+        }
+        refs
+    }
+
+    /// The value the first choice row editing `setting` is on, or `None` when no such row
+    /// exists or its list is empty.
+    #[must_use]
+    pub fn value_of(&self, setting: &str) -> Option<&str> {
+        self.definition
+            .pages
+            .iter()
+            .flat_map(|page| &page.entries)
+            .find_map(|entry| match entry {
+                Entry::Choice {
+                    setting: key,
+                    values,
+                    current,
+                    ..
+                } if key == setting => values.get(*current).map(|v| v.value.as_str()),
+                _ => None,
+            })
+    }
+
     /// The definition, for reporting and for drawing.
     #[must_use]
     pub fn definition(&self) -> &Definition {

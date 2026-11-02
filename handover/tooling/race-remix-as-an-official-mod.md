@@ -369,8 +369,13 @@ hours, M half a day, L a day, XL more than a day (split it).
    names stay their own supply keys, so the Remix page still gets its own lists; an
    empty `of` maps to the booted title's fixed name; `custom_tracks` has no supplier
    yet; `of` must name a choice row's setting in the same file; nothing resolves a
-   `QueryRef` yet). **6b is not trivial**: it is `crates/game` (menus.rs supply, remix.rs,
-   settings) and needs mod-settings first. Was: the closed `Query` enum and the parser; the seven
+   `QueryRef` yet). **6b DONE**: `Menu::supply_query`/`query_refs`/`value_of` (`oag-ui`),
+   `oag_game::remix::query_choices`/`resolve_queries`; the session re-lists on menu open
+   (`menu_model`, after seeding) and on any setting change (`apply_setting`). The value of
+   `of` is read off the row that edits it, an engine or a `mod.<id>.<key>` setting alike.
+   `tracks_of`/`teams_of`/`variants_of` answer; `variants_of` takes a title (not a team)
+   and lists the variants of that title's first team. Open: `speed_classes_union` and
+   `titles_available` with a non-empty `of` have no argument to take. Was: the closed `Query` enum and the parser; the seven
    fixed names become aliases with empty `of`. Acceptance: all existing menu
    tests pass unchanged. Crates: `oag-ui`. Size: M (45). Difficulty: medium (40).
    **6b:** `of` takes a setting key; the ordinary RACE `tracks` is `tracks_of("")`.

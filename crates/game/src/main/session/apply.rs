@@ -837,6 +837,7 @@ impl Session {
                 return;
             }
         }
+        self.resupply_queries(Some(setting));
         if let Err(e) = settings::save(&self.settings) {
             error!("could not save settings: {e:#}");
         }
