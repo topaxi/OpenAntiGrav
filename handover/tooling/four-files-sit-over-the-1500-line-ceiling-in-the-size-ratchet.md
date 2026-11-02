@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-10-27
+updated: 2026-11-02
 summary: "Four files are frozen over check-size's 1,500-line ceiling; split each along its existing seams so BASELINE empties"
 size: M (30)
 difficulty: easy (35)
@@ -39,3 +39,12 @@ to lower it. The ratchet only lowers, so that row can drop to 1715 now.
 3. One lane per remaining file; each move checked with `cargo nextest list -p
    <crate>` before and after, so no test disappears.
 4. When `BASELINE` is empty, delete this thread.
+
+## 2026-11-02 addition: slack and the files just under
+
+- Re-measured: `movie.rs` 1,715 against a row of 1,756, `boot.rs` 1,657 against a row of 1,661.
+  Lowering both rows edits `scripts/check-file-size.py` (a code lane); nobody has done it.
+- 14 non-test files sit at 1,300 to 1,500 lines (`vex/src/vex.rs` 1,498, `fx/src/psys.rs` 1,489,
+  `raceplay/src/drawable.rs` 1,470), 83 over 1,000. The cap rose from 1,000 on 2026-10-12 and the tree
+  grew into it. A warn tier at 1,400 in `check-size` would show them before they are over. See the
+  thread on functions of 900+ lines for the function side of the same blind spot.
