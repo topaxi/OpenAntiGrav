@@ -4,8 +4,8 @@
 //! Every other title's boot ends on `Launch Game`, which opens this build's
 //! menus at their root and stops. 2048's ends on the disc's own
 //! `Launch 2048`, and it carries where the player was going: a campaign
-//! event tapped on the map, or one of this build's three own tiles (RACE BOX,
-//! REMIX, SPLIT SCREEN - `oag_ui::frontend::touch`'s module docs). The menus are opened
+//! event tapped on the map, or one of this build's own tiles (a page of its menu
+//! tree - `oag_ui::frontend::touch`'s module docs). The menus are opened
 //! first either way, so a race that fails to load has the same place to
 //! fall back to as one started from the menus themselves.
 
@@ -40,9 +40,7 @@ impl Session {
             // Walked into rather than jumped to, so BACK from either page
             // lands on the menu root the way it does from the root's own
             // row - `oag_ui::menu::Menu::push`.
-            Some(Launch::RaceBox) => self.push_page("race"),
-            Some(Launch::Remix) => self.push_page("remix"),
-            Some(Launch::Multiplayer) => self.push_page("multiplayer"),
+            Some(Launch::Page(id)) => self.push_page(&id),
         }
     }
 
@@ -71,7 +69,7 @@ impl Session {
         if let Stage::Menu(stage) = &mut self.stage
             && !stage.menu.push(id)
         {
-            log::warn!("assets/ui/menu.toml has no page {id:?}; staying on the root");
+            log::warn!("the menu tree has no page {id:?}; staying on the root");
         }
     }
 

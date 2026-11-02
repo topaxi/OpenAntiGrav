@@ -142,17 +142,27 @@ fn plugin_xml(
     oag_tables::fexml::text(&blob).map_err(|e| anyhow::anyhow!("{definition}: {e}"))
 }
 
+/// What a table-form `values_from` query is asked with: the value of the setting its `of`
+/// names, and of its [`menu::Query::companion`] setting when the row gives one.
+#[derive(Debug, Clone, Copy)]
+pub struct QueryArgs<'a> {
+    /// The title the `of` setting holds.
+    pub title: &'a str,
+    /// The companion setting's value: a craft title, a class or a team.
+    pub companion: Option<&'a str>,
+}
+
 /// The list a table-form `values_from` query offers for `title`, whose catalogue is `catalogue`.
-/// `None` for a query that takes no `of`.
+/// `None` for a query that takes no `of`. A `teams_of` answer is the catalogue's teams as
+/// given: the caller builds the catalogue a craft title offers (its guest roster and class).
 ///
-/// `variants_of` is scoped to the catalogue's first team: the argument is one setting, so the
-/// team cannot also be named, and a title whose variants are hull stems rather than team
-/// suffixes answers the same for every team.
+/// `variants_of` lists the variants of `team`, or of the catalogue's first team without one.
 #[must_use]
 pub fn query_choices(
     query: menu::Query,
     catalogue: &Catalogue,
     title: &'static oag_title::Title,
+    team: Option<&str>,
 ) -> Option<Vec<menu::Choice>> {
     match query {
         menu::Query::TracksOf => Some(
@@ -164,35 +174,103 @@ pub fn query_choices(
         ),
         menu::Query::TeamsOf => Some(catalogue.teams.clone()),
         menu::Query::VariantsOf => {
-            let team = catalogue
-                .teams
-                .first()
-                .map_or("", |team| team.value.as_str());
+            let team = team.unwrap_or_else(|| {
+                catalogue
+                    .teams
+                    .first()
+                    .map_or("", |team| team.value.as_str())
+            });
             Some(crate::livery_row::variant_choices(title, team))
         }
         _ => None,
     }
 }
 
-/// Answers every table-form query on `model` from the value of the setting its `of` names, read
-/// off the row that edits it (an engine setting or a `mod.<id>.<key>` one alike). With
-/// `changed` set, only the queries whose `of` is that setting are re-listed. `lists` maps a
-/// query and a title name to its list, `None` when the title cannot be opened here (the row
-/// keeps its list: an unreadable source is not evidence the pick is wrong).
+/// Answers every table-form query on `model` from the values of the settings its `of` and
+/// companion name, read off the rows that edit them (an engine setting or a `mod.<id>.<key>`
+/// one alike). With `changed` set, only the queries that read that setting are re-listed.
+/// `lists` maps a query and its arguments to its list, `None` when the title cannot be opened
+/// here (the row keeps its list: an unreadable source is not evidence the pick is wrong).
 pub fn resolve_queries(
     model: &mut menu::Menu,
     changed: Option<&str>,
-    mut lists: impl FnMut(menu::Query, &str) -> Option<Vec<menu::Choice>>,
+    mut lists: impl FnMut(menu::Query, QueryArgs<'_>) -> Option<Vec<menu::Choice>>,
 ) {
     for query in model.query_refs() {
-        if changed.is_some_and(|setting| setting != query.of) {
+        let reads =
+            |setting: &str| query.of == setting || query.companion.as_deref() == Some(setting);
+        if changed.is_some_and(|setting| !reads(setting)) {
             continue;
         }
         let Some(title) = model.value_of(&query.of).map(str::to_owned) else {
             continue;
         };
-        if let Some(list) = lists(query.query, &title) {
+        let companion = query
+            .companion
+            .as_deref()
+            .and_then(|key| model.value_of(key))
+            .map(str::to_owned);
+        let args = QueryArgs {
+            title: &title,
+            companion: companion.as_deref(),
+        };
+        if let Some(list) = lists(query.query, args) {
             model.supply_query(&query, &list);
         }
     }
+}
+
+/// [`resolve_queries`], then a mod's saved picks (or a row's `default` while nothing is saved)
+/// put back on the rows it re-listed and every
+/// `mod.<id>.<key>` row's saved value brought into step with the row: a value its list no
+/// longer offers becomes the one the row shows (the first), so what is saved is what a
+/// launch reads. A pick that changes re-lists the queries that read it, until nothing moves.
+/// A row with an empty list keeps its saved value. Returns whether anything saved changed.
+pub fn settle_queries(
+    model: &mut menu::Menu,
+    mod_settings: &mut crate::settings::mod_settings::ModSettings,
+    changed: Option<&str>,
+    mut lists: impl FnMut(menu::Query, QueryArgs<'_>) -> Option<Vec<menu::Choice>>,
+) -> bool {
+    let mut moved = false;
+    let mut pending: Vec<Option<String>> = vec![changed.map(str::to_owned)];
+    // Each pass settles at least one more row of a finite page, so this bound is never the
+    // reason it stops on a well-formed page; it only keeps a cycle of `of`s from spinning.
+    for _ in 0..16 {
+        let Some(changed) = pending.pop() else {
+            break;
+        };
+        // A row's `default` stands for a pick its mod has never saved.
+        let defaults: Vec<(String, String)> = model
+            .choice_defaults()
+            .into_iter()
+            .filter(|(key, _)| crate::settings::mod_settings::get(mod_settings, key).is_none())
+            .map(|(key, value)| (key.to_owned(), value.to_owned()))
+            .collect();
+        for (key, value) in &defaults {
+            model.seed(key, &menu::Value::Text(value.clone()));
+        }
+        resolve_queries(model, changed.as_deref(), &mut lists);
+        for (key, value) in &defaults {
+            model.seed(key, &menu::Value::Text(value.clone()));
+        }
+        for (key, value) in crate::settings::mod_settings::seeds(mod_settings) {
+            model.seed(&key, &value);
+        }
+        let settled: Vec<(String, String)> = model
+            .held_choices()
+            .into_iter()
+            .filter(|(key, value)| {
+                crate::settings::mod_settings::split(key).is_some()
+                    && crate::settings::mod_settings::get(mod_settings, key) != Some(*value)
+            })
+            .map(|(key, value)| (key.to_owned(), value.to_owned()))
+            .collect();
+        for (key, value) in settled {
+            crate::settings::mod_settings::set(mod_settings, &key, &value);
+            moved = true;
+            pending.push(Some(key));
+        }
+    }
+    moved
 }

@@ -776,7 +776,6 @@ impl Session {
             // RemixTracks/RemixTeams that the title underneath them moved.
             "remix.track_title" => {
                 self.settings.remix.track_title = text;
-                self.resupply_remix_tracks();
             }
             "remix.craft_title" => {
                 self.settings.remix.craft_title = text;

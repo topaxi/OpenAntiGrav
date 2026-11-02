@@ -41,6 +41,7 @@ impl Definition {
                 let meta = page.meta.remove(at);
                 let Entry::Choice {
                     setting,
+                    default,
                     disabled_by,
                     pins,
                     warnings,
@@ -64,6 +65,7 @@ impl Definition {
                             values: item.values.clone(),
                             source: None,
                             query: None,
+                            default: default.clone(),
                             current,
                             disabled_by: disabled_by.clone(),
                             pins: pins.clone(),

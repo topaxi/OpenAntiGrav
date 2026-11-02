@@ -1,11 +1,10 @@
-//! RACE REMIX's CUSTOM track title, on the session's side: what TRACK TITLE and
-//! TRACK offer and where a launch finds the file. The scan itself is
+//! The CUSTOM track title, on the session's side: what a `titles_available` row and a
+//! `tracks_of` row on it offer and where a launch finds the file. The scan itself is
 //! [`oag_game::custom_tracks`], which `--menu-page` draws from too.
 
-use oag_ui::menu::Choice;
+use oag_ui::menu::{self, Choice};
 
 use super::Session;
-use super::remix_menu;
 
 impl Session {
     /// Sets `options.foreign_track` to what the command line named, or none. Run
@@ -41,7 +40,7 @@ impl Session {
         oag_game::custom_tracks::host_disc(&self.titles, host).map(Some)
     }
 
-    /// CUSTOM, as TRACK TITLE offers it - none when the scan found no file.
+    /// CUSTOM, as a `titles_available` row offers it - none when the scan found no file.
     pub(super) fn custom_title_choice(&self) -> Option<Choice> {
         use oag_game::custom_tracks::CUSTOM;
         let strings = oag_ui::strings::project_table(self.settings.language.as_deref());
@@ -49,58 +48,54 @@ impl Session {
             .then(|| Choice::labelled(CUSTOM, self.custom_tracks.title_label(&strings)))
     }
 
-    /// The TRACK row's options for whatever `remix.track_title` names: the
-    /// scan's for CUSTOM, a title's own circuits otherwise. `None` when the
-    /// title's source will not open, which supplies and settles nothing.
-    pub(super) fn remix_track_options(&self) -> Option<Vec<Choice>> {
-        let title = &self.settings.remix.track_title;
-            if title == oag_game::custom_tracks::CUSTOM {
-            let strings = oag_ui::strings::project_table(self.settings.language.as_deref());
-            let mut choices = self.custom_tracks.choices(&strings);
-            // The title whose craft would race it: CRAFT TITLE's, or with none
-            // picked the file's host (its craft follow the track source).
-            let craft = self.craft_title();
-            for choice in &mut choices {
-                if choice.unavailable.is_some() {
-                    continue;
-                }
-                if let Err(why) = self.custom_track_host(&choice.value) {
-                    choice.unavailable = Some(why);
-                } else if let Some(why) = self
-                    .custom_tracks
-                    .listing(&choice.value)
-                    .and_then(|l| oag_game::custom_tracks::not_offered(l, craft))
-                {
-                    choice.unavailable = Some(why);
-                }
-            }
-            return Some(choices);
-        }
-        let catalogue = self.remix_catalogue_for(title)?;
-        Some(remix_menu::remix_track_choices(&catalogue))
-    }
-
-    /// Called once a frame. Starts reading the custom tracks the first time the
-    /// RACE REMIX page shows CUSTOM, and never while a race is running or
-    /// suspended behind its pause menu (a survey under way waits until the menus are back); when the read has just finished and the
-    /// TRACK row is showing it, hands the row its checked list.
+    /// Called once a frame. Starts reading the custom tracks the first time a page on screen
+    /// has a `titles_available` row on CUSTOM, and never while a race is running or
+    /// suspended behind its pause menu (a survey under way waits until the menus are back);
+    /// when the read has just finished, re-lists the rows that read that row's setting.
     pub(crate) fn poll_custom_tracks(&mut self) {
-        use oag_game::custom_tracks::CUSTOM;
+        let (on_screen, anywhere) = match &self.stage {
+            crate::stage::Stage::Menu(stage) => (
+                custom_title_row(stage.menu.page().entries.iter()),
+                custom_title_row(
+                    stage
+                        .menu
+                        .definition()
+                        .pages
+                        .iter()
+                        .flat_map(|page| &page.entries),
+                ),
+            ),
+            _ => (None, None),
+        };
         let in_menus = matches!(&self.stage, crate::stage::Stage::Menu(_));
-        let on_remix_page = matches!(
-            &self.stage,
-            crate::stage::Stage::Menu(stage) if stage.menu.page().id == "remix"
-        );
         let racing = !in_menus || self.suspended_race.is_some();
         self.custom_tracks.hold(racing);
-        if on_remix_page
-            && !racing
-            && self.settings.remix.track_title == CUSTOM
-        {
+        if on_screen.is_some() && !racing {
             self.custom_tracks.begin();
         }
-        if self.custom_tracks.poll() && self.settings.remix.track_title == CUSTOM {
-            self.resupply_remix_tracks();
+        if self.custom_tracks.poll()
+            && let Some(setting) = anywhere
+        {
+            self.resupply_queries(Some(&setting));
         }
     }
+}
+
+/// The setting of the first `titles_available` row among `entries` that is on CUSTOM.
+fn custom_title_row<'a>(entries: impl Iterator<Item = &'a menu::Entry>) -> Option<String> {
+    entries.into_iter().find_map(|entry| match entry {
+        menu::Entry::Choice {
+            setting,
+            source: Some(menu::ValueSource::Titles),
+            values,
+            current,
+            ..
+        } if values
+            .get(*current)
+            .is_some_and(|choice| choice.value == oag_game::custom_tracks::CUSTOM) =>
+        {
+            Some(setting.clone())
+        }
+        _ => None,
+    })
 }

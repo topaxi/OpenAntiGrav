@@ -45,19 +45,6 @@ pub(super) fn settle(stored: &mut String, offered: &[menu::Choice]) {
     }
 }
 
-/// A remix catalogue's tracks, in the shape `Menu::supply` wants - the same
-/// `(Track, label)` -> `Choice::labelled` mapping [`Session::open_menus`]
-/// applies to a booted title's own `Shell::tracks`, pulled out because the
-/// RACE REMIX page needs it at two call sites and `Session::open_menus`'s
-/// own list is a different, already-in-scope local of the same shape.
-pub(super) fn remix_track_choices(catalogue: &remix::Catalogue) -> Vec<menu::Choice> {
-    catalogue
-        .tracks
-        .iter()
-        .map(|(track, name)| menu::Choice::labelled(&track.id, name))
-        .collect()
-}
-
 /// CRAFT TITLE's own offered list - `titles` plus a synthetic "Wipeout HD"
 /// choice when 2048 is among them and a real HD source is not, so 2048's
 /// reused twelve teams stay reachable even with no real disc to reach them
@@ -130,74 +117,108 @@ pub(super) fn resolve_craft_backing<'a>(
         })
 }
 
-/// The list a table-form query offers for the title named `title_name`, off the survey
-/// `titles`; `None` when that title cannot be opened here.
+/// The list a table-form query offers, off the survey `titles` and the custom-track scan.
+/// `None` when the title the query names cannot be opened here.
+///
+/// `teams_of` is a craft title's roster ([`craft_catalogue`]: the guest roster of ADR-0035
+/// folded in, narrowed to the companion class); `variants_of` resolves its title the same way;
+/// `tracks_of` on CUSTOM is the scan's files, each checked against its host disc and the
+/// companion craft title.
 fn query_lists(
     titles: &[oag_game::launcher::Candidate],
+    custom: &oag_game::custom_tracks::Scan,
+    strings: &oag_ui::language::StringTable,
     query: menu::Query,
-    title_name: &str,
+    args: remix::QueryArgs<'_>,
 ) -> Option<Vec<menu::Choice>> {
-    let candidate = titles.iter().find(|candidate| candidate.title() == title_name)?;
-    let title = candidate.playable()?;
-    match remix::catalogue(&candidate.source) {
-        Ok(catalogue) => remix::query_choices(query, &catalogue, title),
-        Err(e) => {
-            warn!("{}: {e:#}", candidate.source);
-            None
+    match query {
+        menu::Query::TracksOf if args.title == oag_game::custom_tracks::CUSTOM => {
+            let craft = args
+                .companion
+                .and_then(|craft| resolve_craft_backing(titles, craft))
+                .and_then(oag_game::launcher::Candidate::playable);
+            Some(custom_track_choices(titles, custom, strings, craft))
+        }
+        menu::Query::TeamsOf => {
+            let title = resolve_craft_backing(titles, args.title)?.playable()?;
+            let catalogue = craft_catalogue(titles, args.title, args.companion.unwrap_or(""))?;
+            remix::query_choices(query, &catalogue, title, None)
+        }
+        menu::Query::VariantsOf => {
+            let candidate = resolve_craft_backing(titles, args.title)?;
+            let title = candidate.playable()?;
+            let catalogue = match args.companion {
+                Some(_) => remix::Catalogue {
+                    tracks: Vec::new(),
+                    teams: Vec::new(),
+                },
+                None => craft_catalogue(titles, args.title, "")?,
+            };
+            remix::query_choices(query, &catalogue, title, args.companion)
+        }
+        _ => {
+            let candidate = titles.iter().find(|candidate| candidate.title() == args.title)?;
+            let title = candidate.playable()?;
+            match remix::catalogue(&candidate.source) {
+                Ok(catalogue) => remix::query_choices(query, &catalogue, title, args.companion),
+                Err(e) => {
+                    warn!("{}: {e:#}", candidate.source);
+                    None
+                }
+            }
         }
     }
 }
 
-impl Session {
-    /// Opens `title_setting`'s own catalogue, if this machine can currently
-    /// open a source for it - the shared resolver for TRACK TITLE's own two
-    /// call sites. CRAFT TITLE uses [`Self::remix_craft_catalogue`] instead:
-    /// it can resolve to a different real title than the one named on
-    /// screen, which TRACK TITLE never does.
-    pub(super) fn remix_catalogue_for(&self, title_setting: &str) -> Option<remix::Catalogue> {
-        let candidate = self
-            .titles
-            .iter()
-            .find(|candidate| candidate.title() == title_setting)?;
-        match remix::catalogue(&candidate.source) {
-            Ok(catalogue) => Some(catalogue),
-            Err(e) => {
-                warn!("{}: {e:#}", candidate.source);
-                None
-            }
+/// The custom tracks as TRACK offers them under CUSTOM: the scan's files, each unavailable
+/// with the reason when its host disc is not here or `craft` cannot race it.
+fn custom_track_choices(
+    titles: &[oag_game::launcher::Candidate],
+    custom: &oag_game::custom_tracks::Scan,
+    strings: &oag_ui::language::StringTable,
+    craft: Option<&'static oag_title::Title>,
+) -> Vec<menu::Choice> {
+    let mut choices = custom.choices(strings);
+    for choice in &mut choices {
+        if choice.unavailable.is_some() {
+            continue;
+        }
+        let Some(listing) = custom.listing(&choice.value) else {
+            continue;
+        };
+        if let Some(host) = listing.host.as_deref()
+            && let Err(why) = oag_game::custom_tracks::host_disc(titles, host)
+        {
+            choice.unavailable = Some(why);
+        } else if let Some(why) = oag_game::custom_tracks::not_offered(listing, craft) {
+            choice.unavailable = Some(why);
         }
     }
+    choices
+}
 
-    /// Re-lists the mod rows whose `values_from` carries an `of`, for the title that setting
-    /// is on now. `changed` limits it to the queries that name that setting.
+impl Session {
+    /// Re-lists the rows whose `values_from` carries an `of`, for the values the settings they
+    /// read hold now, and settles the mod picks under them (`remix::settle_queries`).
+    /// `changed` limits it to the queries that read that setting.
     pub(crate) fn resupply_queries(&mut self, changed: Option<&str>) {
-        let titles = &self.titles;
+        let strings = strings::project_table(self.settings.language.as_deref());
+        let (titles, custom) = (&self.titles, &self.custom_tracks);
+        let mod_settings = &mut self.settings.mod_settings;
         if let Stage::Menu(stage) = &mut self.stage {
-            remix::resolve_queries(&mut stage.menu, changed, |query, title| {
-                query_lists(titles, query, title)
+            remix::settle_queries(&mut stage.menu, mod_settings, changed, |query, args| {
+                query_lists(titles, custom, &strings, query, args)
             });
         }
     }
 
     /// [`Self::resupply_queries`] on a model not yet on screen.
-    pub(crate) fn resolve_menu_queries(&self, model: &mut menu::Menu) {
-        remix::resolve_queries(model, None, |query, title| {
-            query_lists(&self.titles, query, title)
+    pub(crate) fn resolve_menu_queries(&mut self, model: &mut menu::Menu) {
+        let strings = strings::project_table(self.settings.language.as_deref());
+        let (titles, custom) = (&self.titles, &self.custom_tracks);
+        remix::settle_queries(model, &mut self.settings.mod_settings, None, |query, args| {
+            query_lists(titles, custom, &strings, query, args)
         });
-    }
-
-    /// Re-supplies the RACE REMIX page's TRACK row from whichever title
-    /// `remix.track_title` currently names - the `remix.track_title`-changed
-    /// counterpart to [`Self::resupply_tracks_for_mode`]. A no-op when the
-    /// menus are not open or [`Self::remix_catalogue_for`] found nothing.
-    pub(crate) fn resupply_remix_tracks(&mut self) {
-        let Some(tracks) = self.remix_track_options() else {
-            return;
-        };
-        settle(&mut self.settings.remix.track, &tracks);
-        if let Stage::Menu(stage) = &mut self.stage {
-            stage.menu.supply(menu::ValueSource::RemixTracks, &tracks);
-        }
     }
 
     /// [`Self::resupply_remix_tracks`]' sibling for TEAM, scoped to
@@ -310,7 +331,7 @@ impl Session {
         choices.push(menu::Choice::labelled(
             "none",
             table
-                .get("OAG_REMIX_NO_DRIVER")
+                .get("OAG_RACE_NO_DRIVER")
                 .unwrap_or("NO OPPONENTS: NO DRIVER FOR THIS CLASS")
                 .to_string(),
         ));

@@ -21,7 +21,7 @@
 # # What is translated and what is deferred, and why
 #
 # Every id here was translated with real confidence: menu nouns and short
-# verbs, the RACE/REMIX/CONTROLS vocabulary, the pilot editor's CRUD rows,
+# verbs, the RACE/CONTROLS vocabulary, the pilot editor's CRUD rows,
 # and the loading screen's prose. Deferred to `[untranslated]` instead,
 # rather than guessed at:
 #
@@ -63,7 +63,6 @@
 # subtitles are new text with no translation pass yet; see [untranslated].
 OAG_MENU_MAIN_TITLE = { text = "OPENANTIGRAV", human = false }
 OAG_MENU_RACEBOX = { text = "COURSE", human = false }
-OAG_MENU_REMIX = { text = "REMIX", human = false }
 OAG_MENU_MULTIPLAYER = { text = "MULTIJOUEUR", human = false }
 OAG_MENU_MULTIPLAYER_SUBTITLE = { text = "Courez avec d'autres joueurs, sur cette machine et plus tard en réseau", human = false }
 OAG_MENU_MULTIPLAYER_SHARING = { text = "MULTIJOUEUR ET PARTAGE", human = false }
@@ -176,7 +175,7 @@ OAG_PICK_READY = { text = "PRÊT", human = false }
 OAG_MENU_OPTIONS = { text = "OPTIONS", human = false }
 OAG_MENU_QUIT = { text = "QUITTER", human = false }
 
-# RACE / RACE REMIX shared rows.
+# RACE page rows, which mod pages reuse.
 OAG_RACE_PAGE_TITLE = { text = "COURSE", human = false }
 OAG_RACE_MODE = { text = "MODE", human = false }
 OAG_RACE_SPEED_CLASS = { text = "CLASSE DE VITESSE", human = false }
@@ -186,13 +185,10 @@ OAG_RACE_VARIANT = { text = "VARIANTE", human = false }
 OAG_RACE_TRACK = { text = "CIRCUIT", human = false }
 OAG_RACE_START = { text = "DÉPART", human = false }
 
-# RACE REMIX's own rows.
-OAG_REMIX_PAGE_TITLE = { text = "COURSE REMIX", human = false }
-OAG_REMIX_TRACK_TITLE = { text = "TITRE DU CIRCUIT", human = false }
-OAG_REMIX_NO_DRIVER = { text = "AUCUN ADVERSAIRE : PAS DE PILOTE POUR CETTE CLASSE", human = false }
-OAG_REMIX_CRAFT_TITLE = { text = "TITRE DU VAISSEAU", human = false }
-OAG_REMIX_CUSTOM = { text = "PERSONNALISÉ", human = false }
-OAG_REMIX_CUSTOM_CHECKING = { text = "vérification du fichier en cours", human = false }
+# Rows a page reads from Rust: the custom-track title and a class with no driver.
+OAG_RACE_NO_DRIVER = { text = "AUCUN ADVERSAIRE : PAS DE PILOTE POUR CETTE CLASSE", human = false }
+OAG_CUSTOM_TRACKS = { text = "PERSONNALISÉ", human = false }
+OAG_CUSTOM_TRACKS_CHECKING = { text = "vérification du fichier en cours", human = false }
 
 # OPTIONS and its submenu rows.
 OAG_OPTIONS_PAGE_TITLE = { text = "OPTIONS", human = false }
@@ -358,7 +354,6 @@ ids = [
     # header on `OAG_MENU_RACEBOX`.
     "OAG_MENU_RACE_CAMPAIGN_SUBTITLE",
     "OAG_MENU_RACEBOX_SUBTITLE",
-    "OAG_MENU_REMIX_SUBTITLE",
     "OAG_MENU_RECORDS_SUBTITLE",
     "OAG_MENU_OPTIONS_SUBTITLE",
     "OAG_MENU_QUIT_SUBTITLE",

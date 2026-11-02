@@ -23,7 +23,9 @@ mod manifest;
 pub mod pack;
 
 pub use container::{Container, Origin};
-pub use discover::{EXAMPLES, Failed, Found, Loaded, SEARCH_ENV, load, mods_search_path, search};
+pub use discover::{
+    EXAMPLES, Failed, Found, Loaded, OFFICIAL, SEARCH_ENV, load, mods_search_path, search,
+};
 pub use manifest::{
     Channels, Error as ManifestError, Extension, License, MANIFEST, MAX_CHANNELS, Manifest, Rules,
     SCHEMA_KIND, SCHEMA_MAJOR, Track,

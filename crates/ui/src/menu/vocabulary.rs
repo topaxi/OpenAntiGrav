@@ -460,11 +460,13 @@ impl ValueSource {
 pub enum Query {
     /// Every title this machine can open a source for.
     TitlesAvailable,
-    /// The circuits of the title `of` names.
+    /// The circuits of the title `of` names, or the custom tracks when it names CUSTOM.
     TracksOf,
-    /// The teams of the title `of` names.
+    /// The teams of the title `of` names, as a craft title offers them (ADR-0035's guest
+    /// roster folded in), narrowed to the ones that author the `class` setting's class.
     TeamsOf,
-    /// The craft variants of the title `of` names, scoped to that title's first team.
+    /// The craft variants of the title `of` names, for the team its `team` setting holds
+    /// (the title's first team without one).
     VariantsOf,
     /// The speed classes of every available title, merged.
     SpeedClassesUnion,
@@ -513,6 +515,19 @@ impl Query {
         matches!(self, Self::TracksOf | Self::TeamsOf | Self::VariantsOf)
     }
 
+    /// The second setting a query with an `of` may read, by the key it is written under:
+    /// `tracks_of` takes the `craft_title` a CUSTOM track must race with, `teams_of` the
+    /// `class` its teams must author, `variants_of` the `team` whose variants it lists.
+    #[must_use]
+    pub fn companion(self) -> Option<&'static str> {
+        match self {
+            Self::TracksOf => Some("craft_title"),
+            Self::TeamsOf => Some("class"),
+            Self::VariantsOf => Some("team"),
+            _ => None,
+        }
+    }
+
     /// The supply key a query with an empty `of` answers through: the lists the booted title
     /// already gets under their fixed names.
     #[must_use]
@@ -537,4 +552,6 @@ pub struct QueryRef {
     /// The setting key whose value is the argument; never empty here (an empty `of` is one of
     /// the fixed names' lists).
     pub of: String,
+    /// The setting key [`Query::companion`] names, when the row gives one.
+    pub companion: Option<String>,
 }

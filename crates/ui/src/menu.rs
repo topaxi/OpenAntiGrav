@@ -361,6 +361,9 @@ pub enum Entry {
         /// A parameterised query this row asked for, which `source` cannot name. `None` for a
         /// fixed name and for a query whose `of` is empty.
         query: Option<QueryRef>,
+        /// The value a `mod.<id>.<key>` row takes while its mod has saved nothing for it, when
+        /// its list offers it (`default` in the definition file).
+        default: Option<String>,
         /// Which one is current. Seeded by [`Menu::seed`], never read off disk.
         current: usize,
         /// What makes this row inert. See [`Menu::is_disabled`].
@@ -840,6 +843,45 @@ impl Menu {
                 } if key == setting => values.get(*current).map(|v| v.value.as_str()),
                 _ => None,
             })
+    }
+
+    /// Every choice row's setting and its declared `default`, for the rows that have one.
+    #[must_use]
+    pub fn choice_defaults(&self) -> Vec<(&str, &str)> {
+        self.definition
+            .pages
+            .iter()
+            .flat_map(|page| &page.entries)
+            .filter_map(|entry| match entry {
+                Entry::Choice {
+                    setting,
+                    default: Some(default),
+                    ..
+                } => Some((setting.as_str(), default.as_str())),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Every choice row's setting and the value it is on, first row per setting, leaving out
+    /// a row with an empty list.
+    #[must_use]
+    pub fn held_choices(&self) -> Vec<(&str, &str)> {
+        let mut held: Vec<(&str, &str)> = Vec::new();
+        for entry in self.definition.pages.iter().flat_map(|page| &page.entries) {
+            if let Entry::Choice {
+                setting,
+                values,
+                current,
+                ..
+            } = entry
+                && let Some(value) = values.get(*current)
+                && !held.iter().any(|(key, _)| key == setting)
+            {
+                held.push((setting.as_str(), value.value.as_str()));
+            }
+        }
+        held
     }
 
     /// The definition, for reporting and for drawing.

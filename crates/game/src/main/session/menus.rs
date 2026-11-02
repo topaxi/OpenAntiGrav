@@ -985,26 +985,11 @@ impl Session {
             menu::ValueSource::SpeedClasses,
             &speed_class_choices(shell.title),
         );
-        // RACE REMIX's own axis: the union across every title this machine can
-        // currently open a source for, so a class is offered exactly when the
-        // data behind it is actually here. See `Self::remix_speed_classes`.
-        //
-        // **Settled only when the union has something in it**, the same rule
-        // the RACE REMIX rows below follow and for the same reason: an empty
-        // union is not evidence that a saved pick is wrong, and settling
-        // against it would clear `race.class` to the empty string. That is a
-        // reachable configuration rather than a hypothetical - a machine whose
-        // only playable source is Wipeout 2048, whose ladder is unread, unions
-        // to nothing - and it would silently lose the player's saved class
-        // while the RACE page above still displayed its own fallback.
-        //
-        // `supply` is unconditional because it does not touch `self.settings`:
-        // it keeps the row on its current value when the list still offers it
-        // and falls to the first entry for *display* otherwise.
+        // Every available title's ladder, for a `speed_classes_union` row. A mod row's
+        // saved class is settled against it by `Session::resolve_menu_queries`, which leaves
+        // it alone while the union is empty (a machine whose only title is 2048, whose ladder
+        // is unread).
         let remix_classes = self.remix_speed_classes();
-        if !remix_classes.is_empty() {
-            remix_menu::settle(&mut self.settings.race.class, &remix_classes);
-        }
         model.supply(menu::ValueSource::RemixSpeedClasses, &remix_classes);
         model.supply(menu::ValueSource::RemixAiDifficulty, &self.remix_ai_difficulty());
         model.supply(menu::ValueSource::Languages, &shell.languages);
@@ -1095,10 +1080,6 @@ impl Session {
         // `Self::remix_craft_catalogue`. Nothing is settled in that case
         // either: an unreadable source is not evidence that a saved pick is
         // wrong, and clearing it would lose it.
-        if let Some(tracks) = self.remix_track_options() {
-            remix_menu::settle(&mut self.settings.remix.track, &tracks);
-            model.supply(menu::ValueSource::RemixTracks, &tracks);
-        }
         if let Some(catalogue) = self.remix_craft_catalogue() {
             remix_menu::settle(&mut self.settings.remix.team, &catalogue.teams);
             model.supply(menu::ValueSource::RemixTeams, &catalogue.teams);

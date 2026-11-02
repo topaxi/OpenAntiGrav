@@ -12,7 +12,7 @@
 #   - every `target` names a page in this file;
 #   - every `action` is one the game handles: launch_race (with `launch = { ... }`
 #     naming its inputs by setting key, or without it for the RACE page's own
-#     launch), launch_remix (the same with RACE REMIX's keys), quit,
+#     launch), quit,
 #     save_pilot, new_pilot, rename_pilot, delete_pilot, open_campaign, multiplayer_local,
 #     lan_host, lan_join, online_open, online_create, online_join;
 #   - every `button` is an abstract button name;
@@ -59,11 +59,11 @@ title_string_id = "OAG_MENU_MAIN_TITLE"
 # **This page holds the rows an original main menu can have, each with a stable
 # `id`, and nothing else.** A title shows the ones its own disc's main menu opens,
 # in the disc's order (`oag_title::Title::main_menu`); every other row of the main
-# page - REMIX, QUIT, RECORDS where the original has none, RACEBOX or OPTIONS
+# page - QUIT, RECORDS where the original has none, RACEBOX or OPTIONS
 # where the original has none - comes from the built-in mod `oag-extras`
 # (`assets/mods/oag-extras/menu.toml`), attached with `parent`. A row a player's
 # mod adds attaches the same way. See `docs/architecture/menus.md` and ADR-0066.
-# The `remix` and `records` pages below are reachable only through those rows, so
+# The `records` page below is reachable only through those rows, so
 # this file is whole only once `Definition::build` has merged the extras in.
 
 # **Ordered and worded to match `MainMenu_Definition.xml`'s own first two
@@ -267,7 +267,8 @@ values_from = "race_modes"
 # where Wipeout Pulse's authors four, each measured on its own disc. A literal
 # list here would have to be either wrong for Pure or silently reused as if
 # someone had checked - see `oag_title::SpeedClasses`. This row offers the
-# booted title's own ladder; RACE REMIX below unions every available title's.
+# booted title's own ladder; a mod page may offer every available title's
+# (`values_from = { query = "speed_classes_union" }`).
 [[page.entry]]
 kind = "choice"
 label = "SPEED CLASS"
@@ -385,116 +386,6 @@ kind = "back"
 label = "BACK"
 string_id = "OAG_MENU_BACK"
 
-[[page]]
-id = "remix"
-title = "RACE REMIX"
-title_string_id = "OAG_REMIX_PAGE_TITLE"
-
-# Mode and AI difficulty are title-agnostic and shared with the ordinary RACE
-# page verbatim - same settings keys, same values, same `disabled_by`.
-# Nothing about racing a mixed grid changes what a mode or a difficulty means.
-#
-# **SPEED CLASS is no longer one of them.** It shares the settings key, and
-# that is all: the RACE page offers the booted title's ladder and the row
-# below offers the union across every title this machine can open. A mixed
-# grid is exactly the case where one title's four rungs are the wrong list.
-[[page.entry]]
-kind = "choice"
-label = "MODE"
-string_id = "OAG_RACE_MODE"
-setting = "race.mode"
-values_from = "race_modes"
-
-# The union of every available title's ladder, not this one title's - the row
-# that makes RACE REMIX a cross-title surface for the class the way TRACK
-# TITLE and CRAFT TITLE already are for the circuit and the craft. Built from
-# whichever titles this machine can actually open a source for, so a class
-# whose title is absent is not offered at all rather than offered and then
-# unable to load. See `oag_title::SpeedClasses::union`.
-[[page.entry]]
-kind = "choice"
-label = "SPEED CLASS"
-string_id = "OAG_RACE_SPEED_CLASS"
-setting = "race.class"
-values_from = "remix_speed_classes"
-
-[[page.entry]]
-kind = "choice"
-label = "AI DIFFICULTY"
-string_id = "OAG_RACE_AI_DIFFICULTY"
-setting = "ai.difficulty"
-values_from = "remix_ai_difficulty"
-disabled_by = { setting = "race.mode", values = ["time_trial", "speed_lap", "zone", "head_to_head"] }
-# A class no controller covers races without opponents (`oag_ai::coverage`:
-# this project's driver is verified on Pulse's four and Pure's VECTOR; the
-# original's driver only in the campaign). The list below is the classes the
-# project driver does not cover - a test keeps it equal to `KNOWN` minus
-# `PROJECT_DRIVER_CLASSES`.
-pinned = [
-    { setting = "race.class", values = ["superphantom"], shows = "none" },
-]
-
-# Title first, then a title-scoped list, on both halves - the shape the
-# feature's own request asked for. TRACK TITLE and CRAFT TITLE are the same
-# `values_from` (every title this machine can open a source for); TRACK and
-# TEAM are resupplied every time the title above them changes, which is what
-# makes them different rows from the ordinary RACE page's `tracks`/`teams`
-# rather than the same ones reused.
-[[page.entry]]
-kind = "choice"
-label = "TRACK TITLE"
-string_id = "OAG_REMIX_TRACK_TITLE"
-setting = "remix.track_title"
-values_from = "titles"
-
-[[page.entry]]
-kind = "choice"
-label = "TRACK"
-string_id = "OAG_RACE_TRACK"
-setting = "remix.track"
-values_from = "remix_tracks"
-
-[[page.entry]]
-kind = "choice"
-label = "CRAFT TITLE"
-string_id = "OAG_REMIX_CRAFT_TITLE"
-setting = "remix.craft_title"
-values_from = "craft_titles"
-
-[[page.entry]]
-kind = "choice"
-label = "TEAM"
-string_id = "OAG_RACE_TEAM"
-setting = "remix.team"
-values_from = "remix_teams"
-
-# Most teams offer nothing here - `values_from = "remix_variant"` is supplied
-# empty for them, the same idiom MUSIC SOURCE uses on a machine with one
-# disc, which draws the row unusable rather than lying about having a choice.
-# Wipeout 2048's five-team roster and Wipeout HD/Fury's twelve are the ones
-# today whose teams carry more than one selectable directory - and 2048
-# reships HD/Fury's twelve, so this row is what reaches them there too.
-[[page.entry]]
-kind = "choice"
-label = "VARIANT"
-string_id = "OAG_RACE_VARIANT"
-setting = "remix.variant"
-values_from = "remix_variant"
-disabled_by = { setting = "race.mode", value = "zone" }
-
-[[page.entry]]
-id = "launch_remix"
-kind = "action"
-label = "START"
-string_id = "OAG_RACE_START"
-action = "launch_race"
-launch = { track_title = "remix.track_title", track = "remix.track", craft_title = "remix.craft_title", team = "remix.team", variant = "remix.variant", mode = "race.mode", class = "race.class", difficulty = "ai.difficulty" }
-
-[[page.entry]]
-kind = "back"
-label = "BACK"
-string_id = "OAG_MENU_BACK"
-
 # **The disc authors this screen too, and this page follows its shape rather
 # than inventing one.** `Data\Plugins\PI001\GUI\RecordGrid_Definition.xml`
 # (in `Data.wad`, on the same `Skin.xml` `LoadXML` list `docs/formats/
@@ -511,10 +402,9 @@ string_id = "OAG_MENU_BACK"
 # hand-authored layouts. TRACK and the four per-class rows below it are the
 # disc's own shape.
 #
-# **Shares `race.mode`/`race.track` with the RACE page, and that is all** -
-# the same precedent RACE REMIX's own MODE row already set: browsing here
-# moves what a launched race would use, which is a feature, not a leak - see
-# that page's own comment above.
+# **Shares `race.mode`/`race.track` with the RACE page, and that is all**:
+# browsing here moves what a launched race would use, which is a feature, not
+# a leak.
 [[page]]
 id = "records"
 title = "RACE RECORDS"
@@ -1779,7 +1669,7 @@ title_string_id = "OAG_PILOT_PAGE_TITLE"
 # draws opponents from, not something either original game's data authors.
 #
 # PILOT first, because it decides what AXIS below is even editing - the same
-# order TRACK TITLE puts ahead of TRACK on RACE REMIX. **A name with no `*`
+# order a title row puts ahead of the list it scopes. **A name with no `*`
 # after it is a built-in.** Editing one and saving does not touch the four
 # built into the binary - it writes a same-named file that *replaces* the
 # built-in the next time pilots are loaded, which is why SAVE always works
