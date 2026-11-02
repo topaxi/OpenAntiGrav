@@ -1041,6 +1041,7 @@ pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoi
     tick: oag_title::SequenceTick::Ps3,
     hashed: false,
     event: None,
+    event_every_mode: false,
     beat: Some("HBEAT"),
 };
 

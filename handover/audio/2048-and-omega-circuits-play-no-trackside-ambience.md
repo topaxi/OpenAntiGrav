@@ -1,8 +1,8 @@
 ---
 status: re-first
 titles: [omega, hd]
-updated: 2026-10-06
-summary: "Omega trackside ambience needs its Wwise banks read (oag_formats::wwise); HD ambience unchecked on RPCS3"
+updated: 2026-11-02
+summary: "Omega cue-to-event law read (1,212 of 1,272 trackside entries resolve), wiring in omega-wwise-sfx-path; HD ambience unchecked on RPCS3"
 ---
 
 # 2048's and Omega's circuits play no trackside ambience
@@ -32,8 +32,14 @@ Struck lines below landed 2026-10-06 (audio-2048); see
 3. **Omega's `.bnk` are Wwise (`BKHD`).** Checked, differs (format): the SBlk
    reader, hashed lookup and stale-size reading do not apply. A node's
    `bank~cue` is not mapped to a Wwise event; `oag_formats::wwise` reads the
-   banks (`docs/formats/wwise.md`). Its own lane. The name of the cue is
-   probably hashed too (`wwise::name_hash`); unchecked.
+   banks (`docs/formats/wwise.md`). **Answered 2026-11-02 (`omega-wwise-sfx-re`):**
+   the event is `name_hash("<cue>[_PC]__<bank>")` with a leading `~` turned into
+   `_` and the legacy 8-character bank name mapped through the executable's
+   50-entry alias table (`env_tec -> env12_techdera`, `gentrak -> generaltrack`,
+   `crowd -> crowd`, ...). Over all 38 `track.final.audio` files, 1,212 of 1,272
+   entries name an event a bank listing has
+   ([wwise-sound.md](../../docs/ghidra/functions/ps4-omega-eu/wwise-sound.md)).
+   Wiring: `handover/audio/omega-wwise-sfx-path.md`.
 4. ~~**Shared banks.**~~ Done for 2048 (`crowd_NGP.bnk`, `generaltrack.bnk`) as
    `TrackBanks::shared`, a list with an `Origin`. Which Omega file carries
    `env_tec`/`techder` is still unread.
@@ -74,13 +80,17 @@ Struck lines below landed 2026-10-06 (audio-2048); see
     `Data\audio\sound\` (set). Once the Wwise lane maps a node's cue to an event,
     classify Omega's misses the way HD's were: the loader only demotes a miss to
     "dangling" when every bank parsed, so Omega's lines stay WARN until then.
-    Omega's shared labels (`crowd`, `gentrak`, and HD's `voppler`/`radios`) need a
-    census of which `.bnk` carries them.
+    Omega's shared labels: `crowd -> crowd.bnk`, `gentrak -> generaltrack.bnk`,
+    `radios -> speech_PreRaceChatter` (a stub: its events are not in any listing),
+    `voppler -> voppler` (a stub; the five `*__voppler` events are in
+    `Ship_NGP.bnk`). The 60 unresolved entries: upper-case `CHENGOU`, `SEBCLIM`,
+    `GENTRAK` (the table is case-sensitive), `env_mal`, `general`, `techder`,
+    `shipHD` and two empty cues, which the alias table does not carry.
 
 ## Next Steps
 
-1. Omega via `oag_formats::wwise`: its own lane, a day or more. Start with
-   whether a node's cue is `wwise::name_hash` of the spelled name.
+1. Omega: wire through the Wwise sfx path (`handover/audio/omega-wwise-sfx-path.md`),
+   then classify the misses the way HD's were (a day once that path exists).
 2. RPCS3 on HD Tech De Ra and Modesto Heights: is there trackside ambience
    (a few hours)? It settles whether the stale manifests are played as written.
 3. An ATRAC9 decoder for 2048's `.at9` speech streams (a day or more).

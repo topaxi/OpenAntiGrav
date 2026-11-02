@@ -91,6 +91,7 @@ mod name_voice;
 mod repeating;
 mod track;
 mod travel;
+mod wwise_start;
 mod xfade;
 pub use announcer::{Announcer, ClassAnnouncer};
 pub use bank_name::BankName;

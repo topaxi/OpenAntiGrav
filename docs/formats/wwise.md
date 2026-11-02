@@ -47,9 +47,10 @@ Chunks `{ char[4] tag, u32 size, body }`, little-endian, tiling the file exactly
 | `STID` (bank names) | none | absent |
 
 Sixteen banks in each archive are a `BKHD` and nothing else - 32 bytes
-(`weapons`, `shipHD`, `voppler`, every `speech_*` but two). The names exist and
-their content is not in them; where it is has not been established (see
-"Where the references go").
+(`weapons`, `shipHD`, `voppler`, every `speech_*` but two). They are legacy
+names: the executable never loads them (but `Speech_NGP_Grid`, loaded and
+empty), and the events named after them live in the loaded `_NGP` banks (see
+"Event names and the stub banks", below).
 
 **`BKHD`**: `u32` version (118), `u32` bank id (the FNV-1 hash of the bank's
 name), `u32` language id (0 for SFX), `u16` alignment, `u16` device-allocated,
@@ -132,13 +133,51 @@ them leaves media unresolved.
 (counted within each archive's own banks; the base and the patch together do
 not close them either). They cluster: `Ship_NGP.bnk` 401 of 486 in the base,
 and the eight HD-heritage circuit banks (`env1_vinetak` to `env8_anulphapass`)
-about 30 of 46 each. The empty stub banks (`shipHD`, `weapons`, `speech_*`) are
-the likeliest home for what is missing. Nothing here guesses at them:
-`Library::resolve_event` reports the target ids and plays nothing for them.
+about 30 of 46 each. The stub banks are **not** their home (they are legacy
+names, below); where these targets went is still open, and nothing here
+guesses at them: `Library::resolve_event` reports the target ids and plays
+nothing for them.
 Of the 3,706 `data00` events, 2,369 resolve to no media - stop and state
 actions, music events (read in the Music section, below, but not followed by
 `resolve_event`, which reports them in `EventPlan::unread`), and those dangling
 targets - which is why "events reaching media" is a count and not a defect.
+
+### Event names and the stub banks (2026-11-02)
+
+Read in the executable and checked against the banks; the evidence is
+[`ps4-omega-eu/wwise-sound.md`](../ghidra/functions/ps4-omega-eu/wwise-sound.md).
+
+* **Every bank ships its Wwise listing.** Beside each `.bnk` is a `.txt` of the
+  same name (`Weapons_NGP.txt` 351,965 bytes in the patch) with sections
+  `Event`, `Switch Group`, `Switch`, `State Group`, `State`, `Custom State`,
+  `Game Parameter`, `Effect plug-ins`, `In Memory Audio`, `Streamed Audio`:
+  tab-separated id, name and authoring path. The stubs' listings are empty.
+* **The executable posts `<cue>[_PC]__<bank>`** and Wwise hashes that whole
+  string (FNV-1, lower case). The cue is the code's string (`_321_NGP`), `_PC`
+  is added when the emitter group belongs to the player, and the bank is the
+  name of the slot the cue plays in (`Weapons_NGP`). So `_321_NGP` is the
+  event `_321_NGP__Weapons_NGP` (243270081) and `Go_NGP` is
+  `Go_NGP__Weapons_NGP` (744083536), both in `English(US)/Weapons_NGP.bnk`.
+  Confidence 92: the listing ids, the music events (`Set_Music_Track_N__frontend`,
+  above) and 1,212 of 1,272 trackside emitters agree.
+* **`_PC` events are relays.** Kind `0x2103` is an action whose target is
+  another event, played in turn; `_321_NGP_PC__Weapons_NGP` is one such action
+  to `_321_NGP__Weapons_NGP`. Weapons go further: `NGP_MissileFire__Weapons_NGP`
+  is a single relay to `WPN_MISSILE_Fire`. `Library::resolve_event` follows
+  `Play` only and returns nothing for a relay; the ground-truth check
+  (`posted_events_resolve`) follows both.
+* **The stubs are never loaded** (all eleven bank-load call sites read), and
+  events named after them are in loaded banks: `*__voppler` in `Ship_NGP.bnk`,
+  `_AUTOPILOT__weapons` in `Weapons_NGP.bnk`, `_321_GO__speech` in
+  `Speech_NGP.bnk`, 482 `*__Speech_NGP` in `English(US)/frontend.bnk`. The
+  bank in an event name is a namespace. Legacy 8-character bank names in the
+  data (`track.final.audio`, `crowd`, `env_moa`, `shipHD`) reach a Wwise bank
+  through a 50-entry alias table in the executable.
+* **Which banks a race has loaded:** `frontend`, `Speech_NGP`, `generaltrack`,
+  `speech_fe`, `Ship_NGP`, `Weapons_NGP`, `crowd`, `Speech_NGP_Grid` from boot
+  (plus `Init` and `Music`), and the track's `TrackStartup.xml` bank, or
+  `env0_zone` (Zone, Nitro Battle) or `env0_det` (Detonator). Each is opened
+  under `English(US)/` first, then at the root (watched live once).
 
 **Prefetch.** A streamed source may have its first bytes in `DIDX`: 164
 (`data00`) and 175 (`data08`) embedded records are a **head** of a loose
@@ -371,11 +410,9 @@ Counts come from the ground-truth tests, over every bank of each archive.
 
 ## What is not done
 
-* **Event names.** A bank carries ids only: an event id is a hash of a name the
-  banks do not contain. Mapping Wwise events to the cue names the simulation
-  emits needs the simulation's own list beside the ids, and a hash function to
-  test candidate names against (FNV-1 over the lower-case name is what a bank id
-  is; the same for events is not verified).
+* **Event names.** A bank carries ids only, but its `.txt` listing names every
+  event, and the executable's name for a cue is `<cue>[_PC]__<bank>` (above).
+  Mapping this project's cues to Omega's cue strings is wiring, not reading.
 * **Multi-channel ATRAC9**, above.
 * **The unread parts of `HIRC`**: the rest of node base parameters, sound
   containers' playlists, `Init.bnk`'s bus and state definitions. Music
@@ -384,7 +421,10 @@ Counts come from the ground-truth tests, over every bank of each archive.
 * **Loop points.** 173 embedded files carry a `smpl` chunk; nothing reads it.
 * **The 1,450 dangling Play targets.**
 * **Race sound effects on this title** are not wired: the simulation's cues go
-  through `oag_sound::sfx`, which reads `SBlk` banks by name. (Music is.)
+  through `oag_sound::sfx`, which reads `SBlk` banks by name. (Music is.) The
+  start plays (`oag_sound::sfx`'s Wwise event timeline, the evidence page's
+  "What the port plays"); every other cue waits on the evidence page's "Open"
+  list (random and switch containers, positioning).
 
 ## Confidence
 
@@ -398,4 +438,6 @@ Counts come from the ground-truth tests, over every bank of each archive.
 | Plugin number 12 / 1 versus media tag `0xFFFC` / `0xFFFE` | 94 | 7,785 + 10 sources in `data00`, 8,503 + 10 in `data08`, 0 mismatches |
 | The 18 bytes of extra data | 90 | every field checked against `fmt ` and the frame count on every file |
 | Mono/stereo decode is right | 90 | two independent decoders agree to 1 LSB up to polarity |
+| Event id = FNV-1 of `<cue>[_PC]__<bank>` | 92 | listing ids, the music events, 1,212 of 1,272 trackside emitters; executable read ([wwise-sound.md](../ghidra/functions/ps4-omega-eu/wwise-sound.md)) |
+| Kind `0x2103` plays its target event | 80 | target is an event on every relay read (the `_PC` twins, the missile); fitted, not from the SDK |
 | Which polarity is Sony's | - | not known |

@@ -200,6 +200,27 @@ impl Banks {
         voice: &oag_title::CountdownVoice,
     ) {
         let mut report = Vec::new();
+        if voice.event_every_mode
+            && let Some(event) = voice.event
+        {
+            for (cue, event_cue) in [(Cue::Ready, event.ready), (Cue::Go, event.go)] {
+                match event_cue {
+                    oag_title::StartCue::Plays(name) => self.load_start_cues(
+                        archives,
+                        event.bank,
+                        voice,
+                        &[(cue, name)],
+                        None,
+                        &mut report,
+                    ),
+                    oag_title::StartCue::Unplayed { name, why } => {
+                        report.push(format!("sfx: {name} not played: {why}"));
+                    }
+                }
+            }
+            self.report.extend(report);
+            return;
+        }
         let mut named: Vec<(Cue, &str)> = if voice.hashed {
             vec![(Cue::Ready, "ready"), (Cue::Go, "go")]
         } else {
@@ -275,6 +296,28 @@ impl Banks {
                 return;
             }
         };
+        // A Wwise bank (Omega) plays its cues as the events the title posts.
+        if blob.starts_with(b"BKHD") {
+            for &(cue, name) in cues {
+                let (sounds, timelines) = match staged.as_deref_mut() {
+                    Some(area) => (&mut area.sounds, &mut area.timelines),
+                    None => (&mut self.sounds, &mut self.timelines),
+                };
+                match super::wwise_start::load(&blob, name) {
+                    Ok(event) => {
+                        report.push(format!(
+                            "sfx: {name} -> {} voice(s) from {entry}, the Wwise event's timeline",
+                            event.timeline.layers.len()
+                        ));
+                        report.extend(event.notes.iter().map(|n| format!("sfx: {name}: {n}")));
+                        sounds.insert(cue, event.loaded);
+                        timelines.insert(cue, vec![event.timeline]);
+                    }
+                    Err(e) => report.push(format!("sfx: {name} not loaded: {e:#}")),
+                }
+            }
+            return;
+        }
         for &pair in cues {
             let (sounds, timelines, programs) = match staged.as_deref_mut() {
                 Some(area) => (&mut area.sounds, &mut area.timelines, &mut area.programs),

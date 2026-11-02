@@ -392,3 +392,134 @@ pub fn parent(kind: Kind, body: &[u8]) -> Option<u32> {
         _ => None,
     }
 }
+
+/// A property bundle: `(id, value)` pairs, each value its four raw bytes.
+///
+/// Which ids mean what is fitted, not read out of the SDK, on the Omega start's
+/// events (`docs/ghidra/functions/ps4-omega-eu/wwise-sound.md`, "The countdown,
+/// end to end"): see [`prop`].
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Props(pub Vec<(u8, u32)>);
+
+/// Property ids, fitted.
+pub mod prop {
+    /// A node's volume offset in dB (`f32`), added down the actor-mixer tree.
+    pub const VOLUME: u8 = 0;
+    /// An action's delay in milliseconds (`i32`): the countdown's voices at 400,
+    /// 1,300 and 2,150.
+    pub const DELAY_MS: u8 = 15;
+    /// An action's fade time in milliseconds (`i32`): 50 on the start's `Stop`.
+    pub const FADE_MS: u8 = 16;
+    /// A node's initial delay in seconds (`f32`): the legacy beeps at 0.521,
+    /// 1.375 and 2.229.
+    pub const INITIAL_DELAY: u8 = 59;
+}
+
+impl Props {
+    fn read(r: &mut Reader<'_, Le>) -> Result<Self, Truncated> {
+        let n = usize::from(r.u8()?);
+        let ids = (0..n).map(|_| r.u8()).collect::<Result<Vec<_>, _>>()?;
+        let values = (0..n).map(|_| r.u32()).collect::<Result<Vec<_>, _>>()?;
+        Ok(Self(ids.into_iter().zip(values).collect()))
+    }
+
+    /// The raw value of `id`, when the bundle has it.
+    #[must_use]
+    pub fn raw(&self, id: u8) -> Option<u32> {
+        self.0.iter().find(|(i, _)| *i == id).map(|&(_, v)| v)
+    }
+
+    /// `id` read as an `i32`.
+    #[must_use]
+    pub fn int(&self, id: u8) -> Option<i32> {
+        self.raw(id).map(|v| i32::from_le_bytes(v.to_le_bytes()))
+    }
+
+    /// `id` read as an `f32`.
+    #[must_use]
+    pub fn float(&self, id: u8) -> Option<f32> {
+        self.raw(id).map(f32::from_bits)
+    }
+}
+
+impl Action {
+    /// The kind of an action whose target is another event, which it plays in
+    /// turn: every `_PC` twin of the Omega start, and the missile launch's
+    /// legacy event (`docs/formats/wwise.md`, "Event names and the stub banks").
+    pub const PLAY_EVENT: u16 = 0x2103;
+    /// Stop, on one object and what plays below it (`0x0102`, the start's
+    /// cut of its ship layers at 3,100 ms).
+    pub const STOP: u16 = 0x0102;
+
+    /// An action body's first property bundle, the one that follows the target
+    /// and its flag byte on every kind.
+    #[must_use]
+    pub fn props(body: &[u8]) -> Option<Props> {
+        let mut r = Reader::le(body);
+        r.skip(7).ok()?;
+        Props::read(&mut r).ok()
+    }
+}
+
+/// What a seek action (`0x1e02`, `0x1e03`) moves its target to.
+///
+/// Fitted on the Omega start's two seeks: after the two property bundles, a
+/// `u8` (1 on both: relative to the duration), an `f32` value (0.4 and 0.35),
+/// two `f32` randomiser bounds and a `u8`; the four bytes after that are zero
+/// on both and unread.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Seek {
+    pub relative: bool,
+    pub value: f32,
+}
+
+impl Seek {
+    /// Whether `kind` is a seek.
+    #[must_use]
+    pub fn is_seek(kind: u16) -> bool {
+        kind >> 8 == 0x1e
+    }
+
+    /// Reads a seek body.
+    #[must_use]
+    pub fn parse(body: &[u8]) -> Option<Self> {
+        let mut r = Reader::le(body);
+        Self::is_seek(r.u16().ok()?).then_some(())?;
+        r.skip(5).ok()?;
+        bundle(&mut r, 4).ok()?;
+        bundle(&mut r, 8).ok()?;
+        let relative = r.u8().ok()? != 0;
+        let value = r.f32().ok()?;
+        r.skip(9).ok()?;
+        Some(Self { relative, value })
+    }
+}
+
+/// A node's own property bundle, the one after its parent id and a flag byte
+/// (volume, initial delay; [`prop`]). Read on the same fitted head as
+/// [`parent`]; reads on every node of `data00` and `data08` but the sounds
+/// with a generator source, whose plugin parameters sit between the source and
+/// the node parameters and are not skipped here.
+#[must_use]
+pub fn node_props(kind: Kind, body: &[u8]) -> Option<Props> {
+    let at = match kind {
+        Kind::Sound => SOURCE_LEN,
+        Kind::RanSeqContainer | Kind::SwitchContainer | Kind::ActorMixer | Kind::LayerContainer => {
+            0
+        }
+        _ => return None,
+    };
+    let mut r = Reader::le(body);
+    r.seek(at).ok()?;
+    r.u8().ok()?;
+    let effects = usize::from(r.u8().ok()?);
+    if effects > 0 {
+        r.u8().ok()?;
+        r.skip(effects.checked_mul(7)?).ok()?;
+    }
+    r.u8().ok()?;
+    r.u32().ok()?;
+    r.u32().ok()?;
+    r.u8().ok()?;
+    Props::read(&mut r).ok()
+}

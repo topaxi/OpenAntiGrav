@@ -797,6 +797,7 @@ pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoi
         // `Go_NGP` is cue 68: one pair at 90 and 270 degrees keyed 100 ticks in.
         go: oag_title::StartCue::Plays("Go_NGP"),
     }),
+    event_every_mode: false,
     beat: Some("HBEAT"),
 };
 

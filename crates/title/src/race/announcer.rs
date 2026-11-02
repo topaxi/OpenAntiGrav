@@ -262,6 +262,11 @@ pub struct CountdownVoice {
     /// The start a title's **own events** play instead of `ready` and `go`, or
     /// `None` when every race plays the named pair.
     pub event: Option<CountdownEvent>,
+    /// Whether [`Self::event`] is the start of **every** race, named modes
+    /// included, rather than of the title's own events alone: Omega posts its
+    /// pair on every mode but the demo
+    /// (`docs/ghidra/functions/ps4-omega-eu/wwise-sound.md`).
+    pub event_every_mode: bool,
     /// The cue played with `ready` in a named mode (`HBEAT` on HD and 2048): the
     /// start beat, three groups of voices on the master tick. `None` where the
     /// title's start has none (Pulse's measured log shows none).
