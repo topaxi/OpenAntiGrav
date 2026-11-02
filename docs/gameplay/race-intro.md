@@ -218,13 +218,9 @@ overlay draws them for HD yet.
   (`flyby_voice_ground_truth`): the Sfx bus reads `0` through tick 19, `0.02` after tick 20's step,
   `0.02 * (n - 19)` after tick `n`, and full after tick 69. Whether the original's cue lands a call
   before or after the first step is unread.
-  **What is audible is unwatched**: no PPSSPP audio dump was taken, so which effects the original
-  plays under its flyby is not known. Engine idle only is wired (no cue, no circuit ambience, no
-  song marquee). Even so, the engine is out of its range from the flyby camera: on `03_Track`
-  the camera opens 932 units from the grid and the first sound of a 600-tick flyby is at about
-  tick 390, and on eight circuits (`01` to `16`) none is within earshot by tick 80. So the fade
-  is wired and measured at the bus, but with the original's spatial law nothing is in range to be
-  quieted by it in the fade's window.
+  **What is audible: watched 2026-11-02**, see "What the original plays under the flyby" below.
+  The "engine idle only" wiring above is **not** what the original does: its audible effect
+  under the fade is the circuit's ambience, not the engines.
 - **Other titles, effects fade (checked 2026-11-02)**: *checked, differs.* HD's fly-over sits on the
   `PreRace` mix row ([now-playing.md](../formats/now-playing.md)), which authors its own buses; its
   `PreRace` rule carries no `effects_fade_in` and the fade never touches an HD bus (the Sfx bus is
@@ -250,3 +246,85 @@ overlay draws them for HD yet.
   scrolling textures sit at their first frame through the 25 s (the original's keep running).
   Fixing it is a one-line change in `scene/frame.rs`, which is 1,000 lines of one function and
   has to be split first.
+
+## What the original plays under the flyby (watched 2026-11-02, lane `pulse-flyby-audio-capture`)
+
+**Claim**: the original's flyby plays craft engines under an effects fade, silent for 20 calls
+and then `+0.02` a call. **Outcome: the fade is true; "engines" is false.** Under the fade
+window the only effect voice that is audible is the circuit's looping ambience; the engines are
+keyed on and released inaudible, and the grid's engines only come into earshot about 1,150
+ticks in.
+
+**Method.** PPSSPP v1.20.4 (SDL, software renderer, muted, own profile) on the Pulse PSP USA
+image, a live race on `03_Track` (Moa Therma White; the id read off `0x08b310b8`), then the
+pause menu's RESTART RACE, so the intro plays in full. A WAV dump could **not** be taken: the
+SDL build has no "Record audio" binding (the Windows menu's action only), the `DumpAudio` key
+did not start a dump, and the instance is a "secondary" one (`Secondary instance 8 - silencing
+audio`), so a WAV would have been flat anyway. The envelope was read from the mixer's own state
+instead, one breakpoint per pass (v1.20.4 fires only the latest) and every pass anchored on the
+first `RaceMode_UpdateIntro` call (`0x08829e6c`, tick 0), the breakpoint then swapped:
+
+| Pass | Breakpoint | Reads |
+| --- | --- | --- |
+| cues | `Scream_StartSound` (`0x0898f864`) | bank name, cue index, `ra`, the 32-voice table `g_sas_voices` (`0x08b893d0`, `0x6c` stride) |
+| fade, envelope | `Audio_UpdateGroupVolumes` (`0x0893ac70`), every call | `mgr+0x90/0xd0/0xd4/0xd8`, the 16 group volumes (`0x08ac3910`), per active voice its group (`+0x1b`) and the SAS commit volume `+0x40/+0x44` (left, right) |
+| voice | `MusicPlayer_StartFile` (`0x08938ca8`) | the path argument |
+| intro | `RaceMode_UpdateIntro` | one row per call, the tick axis |
+
+**The tick axis.** Tick 0 is the substate-0 call; the first substate-1 call (tick 1) comes
+about 12 frames later (the load tail), then one call a frame: tick `k` is at frame `k + 10.5`
+(measured: tick 20 at 30.5, tick 60 at 70.5, tick 1528 at 1538.6; spacing 0.43 to 1.1 frames,
+mean 1.0). Cue times below are `frame - 10.5`, good to a tick.
+
+**The fade (confidence 92; 6 runs on `03_Track` and one on `16_Track`).** `mgr+0xd4` flips to
+1 at call index 20 (counter `0x28`), `mgr+0x90` reads 0 until then, then steps by exactly
+`0.02` (every step of every run), reaches 1.0 on the 50th call after, and `+0xd4` clears.
+`mgr+0xd8` reads `0.02`, `+0xd0` 1.0. The group table at the intro's start reads `0` for nine
+groups (`0 2 3 4 5 10 12 13 14`) and `1024` for `1 6 7 8 9 11 15`; the nine are exactly the ones
+`Audio_UpdateGroupVolumes` writes, and they step up together to 1024.
+
+**What the voices sit in.** Engine voices (`SHIP` bank `~ENGINE`, cue 0) are group 0; every
+circuit voice (`moather`, `gentrak` banks) is group 3; `SPEECH` is group 2. All three are in
+the faded nine, so the fade multiplies engines, ambience and crowd alike (confidence 85: read
+off the voice table at about 70 cue starts in 2 runs).
+
+**The law the fade is applied with: the square (confidence 85).** A looping ambience voice
+whose commit volume is a constant 1,262 (left plus right) at full reads
+`1262 * mgr+0x90 ** 2`: over the 50 ramp calls of three `03_Track` runs the largest deviation
+of `volume / volume_full` from `fade ** 2` is `0.0032`, from `fade` it is `0.25` (`0.4` gives
+200, `0.8` gives 806, `0.98` gives 1,210). Ours multiplies the Sfx bus by the fade
+linearly (`oag_sound::Audio`): it is louder than the original at every step of the ramp.
+
+**What starts and when (`03_Track`, 4 cue runs and 3 envelope runs, ticks).**
+
+| Tick | Source | What | Audible? |
+| ---: | --- | --- | --- |
+| about 0 (the 12-frame gap before tick 1) | circuit ambience | `moather` cues 3 `~CITY`, 4 `~AMB`, 5 `~FLYBY_DIST` start (CITY and FLYBY_DIST are command lists with no waveform of their own; one looping voice, group 3, exists from the first call: `~AMB`, confidence 70) | silent to tick 22, then ramps with the fade squared to its full 1,262 at tick 71, steady to tick 100 |
+| 2 to 3 | craft engines | seven `SHIP` `~ENGINE` key-ons in one frame, group 0 | **no**: commit volume 0, voices gone within a frame or two (the camera is far) |
+| 60 | voice-over | `3_Track.at3` through the music player (not a SAS voice, not in the fade), 60th substate-1 call at frame 70.5 to 71.0 | yes, full |
+| varies per run | circuit ambience | one-shots `~FLYBY_DIST_02..06`, `~CRAFT`, `~craft1` (cues 6 to 10, 12, 16), a command list's random picks, pan 100, volume argument 12 to 351 | yes, from tick 40 on in some runs (inside the ramp), after tick 70 in others |
+| 393 | `NEON_RING` loop | `moather` cue 0, in 4 of 4 runs at frame 403.5 to 404.4 | yes |
+| 673 | crowd and arrow | `gentrak` 3 `~yellowarrow` and 1 `~crowd`, together, 4 of 4 runs | yes |
+| 1033 to 1122 | track loops | `gentrak` 7 `~bighum` and `moather` 11 `~birds` (1033), `gentrak` 1 (1049), 2 (1103, 1122), 6 (1117) | yes |
+| 1151 to 1333 | craft engines | `SHIP` `~ENGINE` key-ons every 24 to 29 ticks, group 0 | **first non-zero engine volume at tick about 1,150** (sum 4 to 13), 160 to 380 by tick 1,200 to 1,300, against 3,000 to 4,000 for the ambience |
+| 1530 | craft engines | three `SHIP` `~ENGINE` at the flyby's end (tick 1529); sum 283 | yes (the race is about to start) |
+| 1621 | `SPEECH` 11 `ready` | the countdown, after the flyby | not the flyby |
+
+`16_Track` (the circuit the menu walk's third Track Select row reached): the same shape, three
+group-3 ambience voices from the first call (full level 1,533, the fade-squared ramp again:
+`0.4` gives 242), the seven engine key-ons at tick 3 at volume 0, and **no engine above 0 until
+tick 1,529** (three voices, 283). Neither circuit's camera starts near the grid: a circuit whose
+camera opens within earshot of the engines was **not found** in the two measured (our earlier
+eight-circuit census found none within earshot by tick 80 either), so the brief's near-grid
+check is open.
+
+**Reading it for the port.** The effects fade is real and the right shape, but the sound it
+quiets is the ambience, which ours does not play under the flyby (engine idle only); and its
+gain law is the square. The engines are not audible under the fade at all. Ready to wire (not
+done here), written in the handover thread.
+
+**Open.** Whether `~AMB` or another cue is the one voice (a waveform-address compare on
+`voice+0x54` is the check); the audible level of the one-shots (their volume argument, 12 to
+351, is the cue's, not a commit volume); a real WAV (PPSSPP's Windows menu action, or a build
+with the mixer's dump on an unsilenced instance); a circuit whose camera opens near the grid;
+Time Trial and the other modes; PS2 (flyby off).

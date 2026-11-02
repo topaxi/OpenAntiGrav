@@ -177,8 +177,7 @@ and `03_Track` and is **chosen, not measured**).
 
 ## The music: the two counter calls and the exit stop (read 2026-11-02, lane `pulse-flyby-music`)
 
-Read from the decompiler on the GUI bridge (`/pulse/BOOT-psp-pulse-usa.BIN`), **not watched on a
-running original**. The two calls in substate 1 are not both music:
+Read from the decompiler on the GUI bridge (`/pulse/BOOT-psp-pulse-usa.BIN`); the fade call and the voice-over start were **watched on a running original 2026-11-02** (`pulse-flyby-audio-capture`, [race-intro.md](../../../gameplay/race-intro.md#what-the-original-plays-under-the-flyby-watched-2026-11-02-lane-pulse-flyby-audio-capture): fade 0.02 a call, voice-over at the 60th substate-1 call; the `0x28` row's confidence 80 becomes 92). The two calls in substate 1 are not both music:
 
 | When | Call | What it does | Conf |
 | --- | --- | --- | ---: |
