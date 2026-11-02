@@ -270,3 +270,55 @@ fn a_remembered_listing_is_usable_while_a_hung_mount_is_walked_and_survives_its_
 fn a_pool_that_never_started_a_disc_scan_is_not_scanning() {
     assert!(!Pool::default().scanning_discs());
 }
+
+#[test]
+fn a_folder_scan_lists_every_format_it_decodes_and_nothing_else() {
+    let root = std::env::temp_dir().join(format!("oag-folder-formats-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("album")).expect("temp folder");
+    for name in [
+        "a.mp3",
+        "b.FLAC",
+        "album/c.ogg",
+        "album/d.oga",
+        "e.opus",
+        "f.jpg",
+        "g.txt",
+    ] {
+        std::fs::write(root.join(name), b"x").expect("temp file");
+    }
+    let scan = FolderScan::start(Arc::new(crate::folders::Disk::default()), root.clone());
+    wait_for(|| scan.status() != Status::Scanning);
+    let names: Vec<String> = scan
+        .files()
+        .iter()
+        .map(|path| path.strip_prefix(&root).unwrap().display().to_string())
+        .collect();
+    let _ = std::fs::remove_dir_all(&root);
+    assert_eq!(
+        names,
+        ["a.mp3", "album/c.ogg", "album/d.oga", "b.FLAC", "e.opus"]
+    );
+}
+
+#[test]
+fn a_song_of_each_decodable_format_loads_through_the_folder_path() {
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("../music/tests/fixtures");
+    let disk = crate::folders::Disk::default();
+    for name in ["sine.flac", "sine.ogg", "sine.opus"] {
+        crate::folders::load(&disk, &fixtures.join(name))
+            .unwrap_or_else(|e| panic!("{name}: {e:#}"));
+    }
+}
+
+#[test]
+fn a_missing_folder_fails_at_once_rather_than_scanning() {
+    let root = PathBuf::from("/nonexistent/oag-music-folder");
+    let scan = FolderScan::start(Arc::new(crate::folders::Disk::default()), root);
+    wait_for(|| scan.status() != Status::Scanning);
+    assert!(
+        matches!(scan.status(), Status::Failed(_)),
+        "{:?}",
+        scan.status()
+    );
+}

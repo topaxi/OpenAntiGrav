@@ -20,6 +20,7 @@ log.workspace = true
 # Wipeout HD's music is MP3, read and decoded in process. See the workspace
 # manifest for why this codec does not go through `ffmpeg` the way ATRAC3+ does.
 symphonia.workspace = true
+opus-rs.workspace = true
 # The Omega Collection's Wwise media is ATRAC9, decoded in process.
 atrac9dec.workspace = true
 

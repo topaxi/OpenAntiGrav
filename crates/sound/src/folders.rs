@@ -30,9 +30,7 @@ const MAX_DEPTH: usize = 6;
 /// the walk (and the menu's reading of it) for minutes.
 const MAX_FILES: usize = 100_000;
 
-/// The extensions this reads, lower case: only the formats `oag_music` decodes outside a
-/// disc (`docs/architecture/music-threads.md`, "The music pool").
-const EXTENSIONS: [&str; 1] = ["mp3"];
+use oag_music::file::EXTENSIONS;
 
 /// The file system as the scan sees it.
 pub trait Reader: std::fmt::Debug + Send + Sync + 'static {
@@ -424,8 +422,13 @@ pub fn load(reader: &dyn Reader, path: &Path) -> anyhow::Result<oag_audio::Sound
     let bytes = reader
         .read(path)
         .with_context(|| format!("reading {}", path.display()))?;
-    let pcm =
-        oag_music::mp3::decode(&bytes).with_context(|| format!("decoding {}", path.display()))?;
+    let extension = path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let pcm = oag_music::file::decode(&bytes, &extension)
+        .with_context(|| format!("decoding {}", path.display()))?;
     oag_audio::Sound::new(pcm.samples, pcm.channels, pcm.sample_rate)
         .with_context(|| path.display().to_string())
 }

@@ -202,7 +202,8 @@ png = "0.18"
 # own sources and leaves this workspace's `MIT OR Apache-2.0` untouched by
 # depending on it. `default-features = false` takes only the MP3 codec and
 # demuxer, leaving the other twenty-odd formats and the SIMD paths out.
-symphonia = { version = "0.6", default-features = false, features = ["mp3"] }
+symphonia = { version = "0.6", default-features = false, features = ["mp3", "flac", "vorbis", "ogg"] }
+opus-rs = "0.1"
 
 # The ATRAC9 decoder, for the Omega Collection's Wwise media: every `.wem` there
 # is ATRAC9 (`oag_formats::wwise::wem`). ADR-0024's order applies and puts a
