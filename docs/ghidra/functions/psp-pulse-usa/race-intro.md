@@ -177,12 +177,11 @@ and `03_Track` and is **chosen, not measured**).
 
 ## The music: the two counter calls and the exit stop (read 2026-11-02, lane `pulse-flyby-music`)
 
-Read from the decompiler on the GUI bridge (`/pulse/BOOT-psp-pulse-usa.BIN`), **not watched on a
-running original**. The two calls in substate 1 are not both music:
+Read from the decompiler on the GUI bridge (`/pulse/BOOT-psp-pulse-usa.BIN`); the fade call and the voice-over start were **watched on a running original 2026-11-02** (`pulse-flyby-audio-capture`, [race-intro.md](../../../gameplay/race-intro.md#what-the-original-plays-under-the-flyby-watched-2026-11-02-lane-pulse-flyby-audio-capture): fade 0.02 a call, voice-over at the 60th substate-1 call; the `0x28` row's confidence is now 92). The two calls in substate 1 are not both music:
 
 | When | Call | What it does | Conf |
 | --- | --- | --- | ---: |
-| counter reads `0x28` (after its decrement: flyby tick 20, tick 0 being the substate-0 call) | `Audio_StartSfxFadeIn(0.02, g_sound_mgr)` (`0x0893a958`) | `mgr+0xd8 = 0.02; mgr+0x90 = 0; mgr+0xd4 = 1`: starts a **sound-effects** fade-in from silence. `Audio_UpdateGroupVolumes` (`0x0893ac70`) adds `mgr+0xd8` to the fade `mgr+0x90` once per call until it reaches the target `mgr+0xd0` (the SFX Volume fraction): 50 calls from 0 to 1 at `0.02`. Substate 0 had snapped the fade to 0 (`Audio_SetSfxFadeTarget(0)`), so the flyby's first 20 calls are SFX-silent and the effects return over the next 50. | 80 |
+| counter reads `0x28` (after its decrement: flyby tick 20, tick 0 being the substate-0 call) | `Audio_StartSfxFadeIn(0.02, g_sound_mgr)` (`0x0893a958`) | `mgr+0xd8 = 0.02; mgr+0x90 = 0; mgr+0xd4 = 1`: starts a **sound-effects** fade-in from silence. `Audio_UpdateGroupVolumes` (`0x0893ac70`) adds `mgr+0xd8` to the fade `mgr+0x90` once per call until it reaches the target `mgr+0xd0` (the SFX Volume fraction): 50 calls from 0 to 1 at `0.02`. Substate 0 had snapped the fade to 0 (`Audio_SetSfxFadeTarget(0)`), so the flyby's first 20 calls are SFX-silent and the effects return over the next 50. | 92 |
 | counter reads `0` (flyby tick 60, the 60th substate-1 call) | `g_music_player+0x40 = +0x44` (the music volume restored from its saved copy), then `MusicPlayer_StartPreRaceDialogue(player)` (`0x089387e8`) | `atoi` of the race's `PI_Track` id (`DAT_08b310b4+0x74`, `"03_Track"` is 3), `sprintf("Data\\Sound\\PreRaceDialogue\\%d_Track.at3")` (`0x08a88ec8`), then `MusicPlayer_StartFile(player, path, 1, 0)`; it logs `After Pre-Race Intro`. The clip is the circuit's voice-over, a mono 44.1 kHz ATRAC3+ stream. | 85 |
 | the exit test passes | `MusicPlayer_Stop(player, 0, 1)` (`0x089385b4`), then the `ScreenFlash` kind 10 | stops whatever the player holds (here the voice-over), no fade | 75 |
 
