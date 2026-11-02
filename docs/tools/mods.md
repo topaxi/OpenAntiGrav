@@ -137,12 +137,18 @@ IN for `oag-extras`), authors, licence (**NO LICENSE STATED** when the manifest 
 characters are cut with `...`. Where the page has no room for every line (Pulse: four under the
 three rows), AUTHORS goes first, then VERSION, then LICENSE (`Listing::table_within`).
 
+**The LAN content fingerprint** ([ADR-0083](../architecture/adr/0083-official-mods-are-a-public-folder-and-the-fingerprint-counts-race-changers.md))
+counts only the mods that are on and change a race: a simulation module (`[extension] simulation = true`),
+a `tracks/*.track.toml` or a `campaigns/*.toml`. A mod of only pages, rows, strings or pilots is left
+out, so two machines that differ in one still match and can race. The filter is
+`oag_game::mods::Mods::content_fingerprint`; `oag_net::discovery::content_fingerprint` takes strings and knows no mods.
+
 **Turning a mod off** ([ADR-0078](../architecture/adr/0078-a-mod-is-turned-off-by-id-live-and-the-built-in-never.md)):
 
 - It is stored by id as `[mods] disabled = ["oag.hillside"]` in the settings file. A mod
   installed later is on; an id no installed mod has is kept.
 - An off mod adds nothing: no menu rows, no strings, no campaigns, no pilots, no tracks on RACE
-  REMIX's CUSTOM title, and it is left out of the LAN content fingerprint. It stays on the MODS
+  REMIX's CUSTOM title, and it is left out of the LAN content fingerprint (as is any mod that changes no race, below). It stays on the MODS
   page, its ADDS line reading **NOTHING, TURNED OFF**, so it can be turned back on. The gate is
   one place, `oag_game::mods::Mods` (`player()` and `build()`).
 - **It applies at once.** The menus are rebuilt as a boot builds them and reopen on the MODS page
