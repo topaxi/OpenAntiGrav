@@ -253,6 +253,26 @@ pub struct Archives {
 }
 
 impl Archives {
+    /// One label per mounted piece of downloadable content, for the boot log:
+    /// every pack by its directory (a pack's archives all sit in one), then
+    /// every owned add-on by its archive name.
+    #[must_use]
+    pub fn dlc_labels(&self) -> Vec<&str> {
+        let mut labels: Vec<&str> = Vec::new();
+        for archive in &self.packs {
+            let label = archive.label();
+            let dir = std::path::Path::new(label)
+                .parent()
+                .and_then(std::path::Path::to_str)
+                .unwrap_or(label);
+            if !labels.contains(&dir) {
+                labels.push(dir);
+            }
+        }
+        labels.extend(self.add_ons.iter().map(|add_on| add_on.archive));
+        labels
+    }
+
     /// Resolves the layout of `source` and opens what it names.
     ///
     /// # Errors

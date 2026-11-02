@@ -441,11 +441,8 @@ pub fn load_shell(
     report.push(archives.layout.describe());
     report.push(format!("{}: boot sequence", title.name));
     report.extend(provenance::caveat(title.name, profile.provenance));
-    if !archives.packs.is_empty() {
-        report.push(format!(
-            "dlc: {} archive(s) mounted behind this source",
-            archives.packs.len()
-        ));
+    for label in archives.dlc_labels() {
+        log::info!("dlc: {label}");
     }
     report.extend(oag_raceplay::loader_log::dlc_problems(problems));
     report.push(format!(

@@ -312,6 +312,42 @@ fn the_source_wins_a_collision_with_a_pack() {
 }
 
 #[test]
+fn every_mounted_pack_has_one_dlc_label() {
+    let dir = testing::temp_dir("mount-dlc-labels");
+    let archives = mounted(
+        &dir,
+        &[("base.bin", b"disc")],
+        vec![
+            pack(&dir, "one", &[("a.bin", b"a")]),
+            two_archive_pack(&dir, "two"),
+        ],
+    );
+
+    let labels = archives.dlc_labels();
+    assert_eq!(labels.len(), 2, "{labels:?}");
+    assert!(labels[0].ends_with("one"), "{labels:?}");
+    assert!(labels[1].ends_with("two"), "{labels:?}");
+}
+
+fn two_archive_pack(dir: &std::path::Path, name: &str) -> crate::dlc::Pack {
+    let sub = dir.join(name);
+    std::fs::create_dir_all(&sub).expect("a test pack directory");
+    let _ = testing::write_wad(&sub, "PACK.edat", &[("b.bin", b"b")]);
+    let _ = testing::write_wad(&sub, "PACK_UI1.edat", &[("c.bin", b"c")]);
+    let pack = crate::dlc::open_dir(&sub).expect("a pack");
+    assert_eq!(pack.archives.len(), 2);
+    pack
+}
+
+#[test]
+fn a_disc_with_no_dlc_has_no_dlc_label() {
+    let dir = testing::temp_dir("mount-no-dlc-labels");
+    let archives = mounted(&dir, &[("base.bin", b"disc")], Vec::new());
+
+    assert!(archives.dlc_labels().is_empty());
+}
+
+#[test]
 fn a_pack_answers_for_a_name_the_source_does_not_have() {
     let dir = testing::temp_dir("mount-pack-only");
     let mut archives = mounted(
