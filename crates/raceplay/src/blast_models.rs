@@ -21,11 +21,10 @@
 //!
 //! **Pulse** plays each model's authored node and texture tracks at the
 //! blast's age itself (`PlasmaBlast_Update`'s `Node_SetAnimTimeTree`,
-//! [`Drawable::write_node_anims`] below; the GE dumps match the tracks at rate
-//! 1) and eases each model's *scale* the way HD does, `cur +=
+//! [`Drawable::write_node_anims`] below; the GE dumps match the tracks at rate 1)
+//! and eases each model's *scale* the way HD does, `cur +=
 //! (target - cur) * rate`, with its own targets and the three small constants
-//! ([`PULSE_BLAST_RATES`]), and
-//! a grey tint ramp per model. **Wipeout HD** eases a per-model scale too -
+//! ([`PULSE_BLAST_RATES`]), and a grey tint ramp per model. **Wipeout HD** eases a per-model scale too -
 //! `WeaponExplosions_Draw`'s own `cur += (target - cur) * rate`, read off
 //! `ps3-hdfury-eu/plasma.md` - and hides all three at 1.3 s
 //! (`WeaponExplosions_Collapse`, confidence 85, independently corroborated
