@@ -3,7 +3,7 @@
 **Status: proposal (2026-10-29), nothing is built.** The overview, the capability
 surface and the interface sketch (the `sim` and `hud` worlds, their events and
 commands) are in [README.md](README.md); the determinism rules, the state model and
-the spike's measurements in [determinism-and-state.md](determinism-and-state.md).
+the measurements in [determinism-and-state.md](determinism-and-state.md).
 This page is the engine half: **where in today's code each event is raised, where
 each command lands, and where the one guest call per tick sits**, with what the
 host refuses at each.
@@ -40,7 +40,7 @@ client's rollback replays one call per module per tick.
 - **Failure has one answer.** A trap (out of fuel, `unreachable`, out-of-bounds
   memory, stack overflow) or a refused command turns the module off for the rest of
   the race; the tick it happened on is state, so every machine running the same
-  module switches it off on the same tick (the spike measured the trap point
+  module switches it off on the same tick (measured: the trap point
   identical on Cranelift and Pulley). Its commands from that call are discarded and
   its state blob keeps its value from before the call.
 
