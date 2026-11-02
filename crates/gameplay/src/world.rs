@@ -560,7 +560,7 @@ mod tests {
     #[cfg(target_pointer_width = "64")]
     #[test]
     fn the_world_snapshot_does_not_grow() {
-        const LIMIT: usize = 19_752; // +360 bytes: the LeachBeam pool of eight (was one Option<Beam>), 2026-10-31
+        const LIMIT: usize = 19_816; // +360 bytes: the LeachBeam pool of eight (was one Option<Beam>), 2026-10-31; +64: `Held::quake_armed`, one byte per ship, 2026-11-02
         let size = std::mem::size_of::<World>();
         assert!(
             size <= LIMIT,

@@ -387,7 +387,7 @@ fn write_reversed(hasher: &mut StateHasher, reversed: u32) {
 
 /// Marks an armed Quake press in the state stream. Any byte works; it only has to
 /// differ from the byte the next field starts with, so a set flag and an absent one
-/// cannot hash alike. Chosen, not measured (`write_reversed`'s `0xA5` is the same kind).
+/// cannot hash alike.
 const QUAKE_ARMED_TAG: u8 = 0xB7;
 
 fn write_held(hasher: &mut StateHasher, held: &Held) {
