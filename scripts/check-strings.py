@@ -157,6 +157,60 @@ def load_strings(
     return texts, data.get("untranslated", {}).get("ids", []), machine
 
 
+def mod_folders() -> list[Path]:
+    """The official mods checked against their own strings: the folders under
+    `assets/mods/examples/` plus every `--mod DIR` argument."""
+    folders = sorted(
+        path for path in (ROOT / "assets/mods/examples").glob("*") if path.is_dir()
+    )
+    args = sys.argv[1:]
+    while args:
+        flag = args.pop(0)
+        if flag == "--mod" and args:
+            folders.append(Path(args.pop(0)))
+        else:
+            raise SystemExit(f"usage: check-strings.py [--mod DIR]... (got {flag!r})")
+    return folders
+
+
+def check_mod_menu(
+    mod_menu: Path,
+    origin: str,
+    ids: set[str],
+    uncovered_labels: list[str],
+    uncovered_titles: list[str],
+    uncovered_subtitles: list[str],
+) -> None:
+    """A mod's `menu.toml`: its attached rows, and its pages with their rows.
+    Each label, title and subtitle names a string id; the ids join `ids`."""
+    with mod_menu.open("rb") as handle:
+        data = tomllib.load(handle)
+
+    def row(where: str, entry: dict) -> None:
+        label = entry.get("label", "")
+        if entry.get("string_id") is None:
+            uncovered_labels.append(f"{where} label {label!r}")
+        else:
+            ids.add(entry["string_id"])
+        if entry.get("subtitle"):
+            if entry.get("subtitle_string_id") is None:
+                uncovered_subtitles.append(f"{where} subtitle {entry['subtitle']!r}")
+            else:
+                ids.add(entry["subtitle_string_id"])
+
+    for entry in data.get("entry", []):
+        row(origin, entry)
+    for page in data.get("page", []):
+        where = f"{origin} page {page.get('id')!r}"
+        if page.get("title_string_id") is None:
+            uncovered_titles.append(f"{where}: title {page.get('title')!r}")
+        else:
+            ids.add(page["title_string_id"])
+        for entry in page.get("entry", []):
+            if entry.get("label"):
+                row(where, entry)
+
+
 def ids_from_consumers() -> set[str]:
     found: set[str] = set()
     for relative in STRING_CONSUMERS:
@@ -236,28 +290,48 @@ def main() -> int:
                 if baselined_subtitle:
                     graduated_subtitles.append(f"{subtitle_key!r}")
 
-    # The built-in mods' rows (`assets/mods/<mod>/menu.toml`, a top-level `entry`
-    # list) are this project's own rows just as the tree's are: same rule, and no
-    # baseline - they arrived after the debt was cleared.
+    # The built-in mods' rows and pages (`assets/mods/<mod>/menu.toml`) are this
+    # project's own just as the tree's are: same rule, no baseline, ids resolve in
+    # the project's english.toml.
     for mod_menu in sorted((ROOT / "assets/mods").glob("*/menu.toml")):
-        with mod_menu.open("rb") as handle:
-            rows = tomllib.load(handle).get("entry", [])
-        origin = f"mod {mod_menu.parent.name}"
-        for entry in rows:
-            label = entry.get("label", "")
-            string_id = entry.get("string_id")
-            if string_id is None:
-                uncovered_labels.append(f"{origin} label {label!r}")
-            else:
-                menu_ids.add(string_id)
-            if entry.get("subtitle"):
-                subtitle_id = entry.get("subtitle_string_id")
-                if subtitle_id is None:
-                    uncovered_subtitles.append(
-                        f"{origin} subtitle {entry['subtitle']!r}"
-                    )
-                else:
-                    menu_ids.add(subtitle_id)
+        check_mod_menu(
+            mod_menu,
+            f"mod {mod_menu.parent.name}",
+            menu_ids,
+            uncovered_labels,
+            uncovered_titles,
+            uncovered_subtitles,
+        )
+
+    # An official mod (a folder under `assets/mods/examples/`, or one named with
+    # `--mod DIR`) carries its own `strings/english.toml`: its ids resolve there,
+    # never in the project's (ADR-0082 decision 6).
+    mod_problems: list[str] = []
+    mod_count = 0
+    for mod_dir in mod_folders():
+        mod_menu = mod_dir / "menu.toml"
+        if not mod_menu.exists():
+            continue
+        mod_count += 1
+        mod_ids: set[str] = set()
+        check_mod_menu(
+            mod_menu,
+            f"mod {mod_dir.name}",
+            mod_ids,
+            mod_problems,
+            mod_problems,
+            mod_problems,
+        )
+        own = mod_dir / "strings" / f"{BASE_LANGUAGE}.toml"
+        own_texts: dict[str, str] = {}
+        if own.exists():
+            own_texts, _, _ = load_strings(own, mod_problems)
+        for id_ in sorted(mod_ids):
+            if not own_texts.get(id_):
+                mod_problems.append(
+                    f"mod {mod_dir.name}: string id {id_!r} has no text in "
+                    f"strings/{BASE_LANGUAGE}.toml"
+                )
 
     vanished_labels = [f"{key!r}" for key in BASELINE_LABELS if key not in seen_labels]
     vanished_titles = [page_id for page_id in BASELINE_TITLES if page_id not in seen_titles]
@@ -404,8 +478,16 @@ def main() -> int:
         "gap. A machine translation is allowed, marked human = false.",
     )
 
+    report(
+        "official mod problem(s):",
+        mod_problems,
+        "A mod's page title, row label and subtitle each name a string id, and "
+        "the mod's strings/english.toml carries its text (ADR-0082 decision 6).",
+    )
+
     failed = any(
         [
+            mod_problems,
             uncovered_labels,
             uncovered_titles,
             uncovered_subtitles,
@@ -427,7 +509,8 @@ def main() -> int:
         f"OK: {len(seen_labels)} menu row(s) ({len(BASELINE_LABELS)} baselined), "
         f"{len(seen_titles)} page title(s) ({len(BASELINE_TITLES)} baselined), "
         f"{len(seen_subtitles)} subtitle(s) ({len(BASELINE_SUBTITLES)} baselined), "
-        f"{len(all_ids)} string id(s) all resolve in {BASE_LANGUAGE}.toml"
+        f"{len(all_ids)} string id(s) all resolve in {BASE_LANGUAGE}.toml, "
+        f"{mod_count} official mod menu(s) against their own strings"
     )
     for line in human_report:
         print(f"  human flag: {line}")

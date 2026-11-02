@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-02
-summary: "ADR-0082/0083 accepted; lanes 1, 2, 4 and 5 done (mod pages, fingerprint, mod settings); open: mods.rs load test, queries, launch_race, the move"
+summary: "ADR-0082/0083 accepted; lanes 1-5 done (mod pages, check-strings, fingerprint, mod settings); open: queries, launch_race, the move"
 size: XL (40)
 difficulty: hard (45)
 ---
@@ -346,7 +346,7 @@ hours, M half a day, L a day, XL more than a day (split it).
    Acceptance: a unit test in `crates/ui/src/menu/definition/build/tests.rs`
    with an example mod that has a page. Crates: `oag-ui`. Size: L (50). Difficulty:
    medium (45).
-3. **2b: page reachability and namespacing (oag-ui half done; what remains: the `mods.rs` load test in `oag-game`, that a mod with a page loads and its row reaches it through `Mods`).** Claim: a mod page is reachable from
+3. **2b: page reachability and namespacing (done: oag-ui build tests, `crates/game/tests/mods_pages.rs` load test good and bad, `check-strings` on mod pages, template row on a mod page).** Claim: a mod page is reachable from
    an `entry` of the same mod; a bad id is a load error naming the mod. Acceptance:
    the build tests plus a `mods.rs` load test. Crates: `oag-ui`, `oag-game`
    (`mods.rs`). Size: M (40). Difficulty: medium (45). Updates the mod-author skill

@@ -479,3 +479,31 @@ fn a_mod_cannot_name_another_mods_page_by_its_short_id() {
         ),
     }
 }
+
+#[test]
+fn a_template_choice_row_on_a_mod_page_expands_like_one_on_an_engine_page() {
+    use crate::menu::{Choice, Menu, RowItem, ValueSource};
+    let text = "[[page]]\nid = \"pool\"\ntitle = \"POOL\"\n[[page.entry]]\nkind = \"choice\"\nlabel = \"SOURCE\"\nsetting = \"test.mod_pool\"\nvalues_from = \"music_pool\"\n[[entry]]\nid = \"pool_row\"\nparent = \"top\"\nkind = \"submenu\"\nlabel = \"POOL\"\ntarget = \"pool\"\n";
+    let (mut tree, _) = build_with(&with_header(text)).unwrap();
+    let items: Vec<RowItem> = ["a", "b"]
+        .iter()
+        .map(|id| RowItem {
+            id: (*id).to_string(),
+            label: id.to_uppercase(),
+            detail: None,
+            values: vec![Choice::labelled("on", "ON"), Choice::labelled("off", "OFF")],
+            current: "off".to_string(),
+        })
+        .collect();
+    // The engine's own MUSIC template expands in the same call.
+    assert!(tree.expand_rows(ValueSource::MusicPool, &items) >= 2);
+    let page = tree.page("test.mod/pool").expect("the mod's page");
+    assert_eq!(page.entries.len(), 2, "the template is replaced, not kept");
+    assert_eq!(page.entries.len(), page.meta.len());
+    assert_eq!(page.entries[1].setting(), Some("test.mod_pool.b"));
+    let menu = Menu::new(tree);
+    assert_eq!(
+        menu.expanded_settings("test.mod_pool"),
+        ["test.mod_pool.a", "test.mod_pool.b"]
+    );
+}
