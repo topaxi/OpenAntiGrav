@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [pulse, pure]
-updated: 2026-10-21
-summary: "Pulse boost HUD: 3D widget copy loop, text copy direction table by widget+0x172, PS2 glow and Pure unwired"
+updated: 2026-11-02
+summary: "Pulse boost HUD: text copy direction table by widget+0x172, PS2 glow and Pure unwired"
 categories: [rendering]
 difficulty: hard (30)
 ---
@@ -16,8 +16,10 @@ stamp under the speed bar's fill, driven by the exhaust flare's 0.8 s boost time
 
 ## Open
 
-- The 3D widgets (`Mode3D_DrawQueued`, `0x088b8548`) carry the same copy loop (`lui 0x44e2` at `0x088b8748`) and
-  are drawn once in ours.
+- ~~The 3D widgets' copy loop~~: false, `0x088b8748` is `Gu_SetOffset(OriginX + 1808, OriginY + 1912)`, no loop
+  (hud-boost-smear.md, "`Mode3D_DrawQueued` has no copy loop"). Whether a `Model` widget's own draw smears is
+  unmeasured: look at a boost GE list (`n >= 2`) with a pickup icon on screen for repeated model prims.
+- Pure's `FUN_088c9ce8` `lui 0x44e2` "copy loop" is probably the same `Gu_SetOffset` constant; re-read it.
 - A text widget's direction is the line from the screen's centre; the original indexes a 32-entry table
   (`0x08ab1c78`/`0x08ab1cf8`) by the byte at `widget+0x172`, whose writer was not read. The text copies' gates
   (HUD shake exactly zero, `flags & 4` clear, global `0x08ab0818` non-zero) are read, not modelled.
@@ -38,4 +40,4 @@ stamp under the speed bar's fill, driven by the exhaust flare's 0.8 s boost time
    (the lead adds the manifest row; `--run-ticks` runs the original that many ticks past the load, and the pair
    reads the flare's timer for `--hud-boost-phase`).
 2. Read the writer of the text direction byte, then drop the chosen direction.
-3. Give the 3D widgets their copies.
+3. ~~Give the 3D widgets their copies~~: nothing to give (see Open); only the GE-list check of a model's prims remains.
