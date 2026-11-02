@@ -65,7 +65,7 @@ native_video_flags := if os() == "linux" { "--features native-video" } else { ""
 # order they get there, so nothing here changes what either asserts. Output of
 # the recipes interleaves; a failure names its recipe.
 [parallel]
-check: fmt-check lint check-ballisticng check-extensions test check-docs check-deps check-unused-deps check-determinism check-size check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-schemas
+check: fmt-check lint check-ballisticng check-extensions test check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-schemas
 
 # Documentation is a deliverable, so its links are checked like any other build output
 check-docs:
@@ -196,7 +196,7 @@ test-data *ARGS:
 # selects nothing. The lead still runs the full `just` and `just test-data` once
 # per merge batch - see `.claude/skills/oag-drive/member-rules.md`.
 [parallel]
-gate-affected: fmt-check lint check-ballisticng check-extensions test-affected check-docs check-deps check-unused-deps check-determinism check-size check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-schemas
+gate-affected: fmt-check lint check-ballisticng check-extensions test-affected check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-schemas
 
 # `just test`, narrowed to what `scripts/affected.py` selects.
 test-affected:
@@ -1250,6 +1250,12 @@ type-sizes *CRATES:
 # over it grows. race.rs reached 11,294 lines before anything measured it
 check-size:
     python3 scripts/check-file-size.py
+
+# A ratchet on history in code comments: a date, "maintainer" or a drive lane
+# name in a `.rs`/`.wgsl`/`.wesl` comment (CLAUDE.md, "Code comments"). A crate
+# may lose counted lines, never gain them; `--table` prints the counts
+check-comment-history:
+    python3 -I scripts/check-comment-history.py
 
 # A ratchet on title-identity comparisons (`title.name == oag_hd::TITLE.name`)
 # in generic crates: per-title behaviour is `Title` data, ADR-0058. A file may

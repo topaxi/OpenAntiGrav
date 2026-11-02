@@ -19,7 +19,7 @@ matrix) before assuming a subsystem exists.
 ## Commands
 
 ```sh
-just              # the gate every commit must pass: fmt-check lint test check-docs check-deps check-unused-deps check-determinism check-size check-title-branching check-title-reach check-names check-handover check-status check-weapon-lineage
+just              # the gate every commit must pass: fmt-check lint test check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-handover check-status check-weapon-lineage
 just fmt | lint | build | docs
 just test         # nextest, quick profile (our crates opt-level 0, examples not built)
 just test-data    # also the #[ignore]d ground-truth tests; needs data/images/; skips binaries that passed unchanged, --full runs all
@@ -29,6 +29,7 @@ just check-deps   # the six dependency rules below
 just check-unused-deps   # no unused or test-only-used normal dependency (cargo shear)
 just check-determinism   # no platform transcendental in simulation code
 just check-size   # ratchet: file length 1,500, inline #[cfg(test)] mod 500
+just check-comment-history   # ratchet: no dates, "maintainer" or lane names in code comments
 just check-title-branching   # ratchet on `title.name == oag_X::TITLE.name` in generic crates; per-title behaviour is `Title` data (ADR-0058)
 just check-title-reach       # ratchet on generic crates naming a title package by path; they go through `oag_title::Title`, the oag-source registry or the composition root
 just check-names  # every names.tsv row still matches its evidence page, offline
