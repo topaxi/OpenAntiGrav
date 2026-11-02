@@ -207,13 +207,14 @@ itself compiled out, and its size independently pins the window at 8192 without
 reference to any decode path. Details on
 [the PS2 LZSS page](../ghidra/functions/ps2-pulse-eu/lzss.md).
 
-## Not implemented
+## zlib
 
 The game also supports **zlib 1.2.2**, selected by bit 31 of the entry's
-uncompressed-size field. No shipped archive sets that bit, so there is nothing
-to validate an implementation against; `oag-wad` refuses such entries rather
-than shipping an unverified decoder. If one ever turns up, the decoders are at
-`0x08940f48` (memory) and `0x08940f70` (streaming).
+uncompressed-size field. No base-disc archive sets that bit, but Pure's PSN DLC
+packs do (187 of 192 entries in Gamma), and `oag_formats::wad` decodes it
+(`decompress_zlib`, `Compression::Zlib`). See
+[DLC packs](dlc-pack.md#pures-packs-decrypt-with-an-external-key-table). The
+game's decoders are at `0x08940f48` (memory) and `0x08940f70` (streaming).
 
 The decoder in the game stages input through a **global** 4 KiB buffer at
 `0x08b66450`, so the original is not reentrant. Ours is, since it reads from a

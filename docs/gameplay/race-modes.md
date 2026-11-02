@@ -38,17 +38,15 @@ and Zone alike, screenshotted for all seven of the original's race types on
 [shield.md](../ghidra/functions/psp-pulse-usa/shield.md#g_weapons_enableds-per-mode-default-spelled-out-and-checked-against-every-race-type).
 Two consequences in `crates/raceplay/src/lib.rs`:
 
-- **The grid never spawns opponents for any mode yet.** For the three
-  single-ship modes that is the original's own answer; for a single race it is
-  not - `MSC_EVENT_SR` promises "a full grid of opponents" and the AI
-  `DIFFICULTY` row is selectable. Nothing drives an opponent here, and seven
-  parked hulls wearing the player's livery is a worse race than an empty track,
-  so `Mode::has_opponents` answers `false` for it too and says why.
-  The grid *arithmetic* is right and measured - [grid.md](../ghidra/functions/psp-pulse-usa/grid.md)
+- **The grid spawns opponents only for the modes that field them.**
+  `Mode::opponent_count` answers `7` for single race, Eliminator and Tournament,
+  `1` for Head2Head and `0` for the three single-ship modes (time trial, speed
+  lap, Zone), which is the original's own answer for those. The grid
+  *arithmetic* is measured: [grid.md](../ghidra/functions/psp-pulse-usa/grid.md)
   took it against a real *Single Race*, the "one reachable race type with a full
-  field" - it is only unused. `Options::opponents` is the escape hatch that
-  measurement's own ground-truth test and `--opponents` on `just play` use to
-  place all eight without a mode asking for them.
+  field". `Options::opponents` is the escape hatch that measurement's own
+  ground-truth test and `--opponents` on `just play` use to place all eight
+  without a mode asking for them.
 - **`Weapon Pad`s decode but are drawn and armed only in a single race.** The original does the
   equivalent at a different layer - `World_CollectNodeLists` clears the
   node's own visibility bits rather than skipping the decode - documented on
@@ -81,7 +79,8 @@ Two consequences in `crates/raceplay/src/lib.rs`:
   original's.
 
 The rules live in `crates/race`; how a lap is decided at all is
-[lap counting](lap-counting.md), and it is a convention rather than a recovery.
+[lap counting](lap-counting.md), where the loop's shape and the start of a lap are
+recovered (confidence 88).
 
 Selected on the RACE menu page, which opens on the time trial, or with
 `--mode time_trial|speed_lap|zone|single_race|eliminator` on the command line. `--race` skips the menus,
@@ -405,7 +404,7 @@ says so rather than substituting numbers.
   a clean zone pays back something a dirty run actually lost. See
   [shield](../ghidra/functions/psp-pulse-usa/shield.md).
 
-### Zone has no ending yet, and now we know what it should be
+### Zone ends when the ship is destroyed
 
 **A Zone run ends when the ship is destroyed.** The disc says so: `ER_ZONE_DEST`
 reads `"Ship destroyed on zone"`, and `MSC_EVENT_ZONE` describes the mode as
@@ -581,7 +580,7 @@ nothing until now.
 **A craft destroyed mid-race takes "Ship destroyed" as its result instead of a
 finishing place. It does not come back.** Confidence **75**, and the evidence is
 the disc's own text plus the executable's field list - the same method
-[`ER_ZONE_DEST`](#zone-has-no-ending-yet-and-now-we-know-what-it-should-be) was
+[`ER_ZONE_DEST`](#zone-ends-when-the-ship-is-destroyed) was
 settled by, one notch lower because the field-list ordering is read rather than
 traced to the widget that consumes it.
 
@@ -1136,7 +1135,7 @@ rule) and the `oag_ai::weapon_ai` unit tests.
   resolution above it are wired, 2026-09-14 - see
   `docs/architecture/persistence.md`'s "where a career system attaches".
 - **Presentation.** The same "the sound is built, the HUD hide and the camera
-  swing are not" gap [Zone's own ending](#zone-has-no-ending-yet-and-now-we-know-what-it-should-be)
+  swing are not" gap [Zone's own ending](#zone-ends-when-the-ship-is-destroyed)
   already carries applies here too.
 - **`ER_YOU_ELIM`'s exact wording** ("You have been eliminated!") is not
   drawn anywhere; nothing in this pass settled whether it belongs to the

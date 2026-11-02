@@ -511,8 +511,8 @@ impl Blob {
 ///
 /// # Where this comes from
 ///
-/// `Texture_FindOrLoad` (`0x0010c1e0` in `SCES_547.48`) strips a leading
-/// `WIPEOUT PSP\PS2\` build path, replaces `.TGA` then `.MIP` with `.PCT`,
+/// `Texture_FindOrLoad` (`0x0010c1e0` in `SCES_547.48`) strips a
+/// `WIPEOUT PSP\PS2\` build path wherever it occurs, replaces `.TGA` then `.MIP` with `.PCT`,
 /// hashes with the WAD name hash and looks it up. A name resolving to no file
 /// becomes `Data/Tex/Missing.pct` (entry 6910 of `WADS2.WAD`) and is retried.
 ///

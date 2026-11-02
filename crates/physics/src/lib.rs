@@ -48,10 +48,11 @@
 //!
 //! # What is not here
 //!
-//! Everything that would need a trigger nobody has decoded: turbo's boost lift, the four-corner
-//! hover variant and the auto-speed law behind its selector, and the flag-gated engine and
-//! steering variants. `docs/physics/README.md`'s "what is implemented" section is the full list
-//! and its still-open section records each sign and reading that had to be picked.
+//! Turbo's boost lift, the four-corner hover and the auto-speed law are implemented. What stays
+//! out is dead or unnamed in the original: the flag bits with no writer (the `craft+0x2e4`
+//! steering bias, reversed controls) and the `craft+0x2a4` mode enum.
+//! `docs/physics/README.md`'s "Deliberately not implemented" list is the full set and its
+//! still-open section records each sign and reading that had to be picked.
 
 pub mod airbrake;
 pub mod barrel_roll;

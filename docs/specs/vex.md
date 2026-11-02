@@ -70,9 +70,8 @@ file's version word. Pure's `Transform` is `0x6d`, `Mesh` `0x11e`, `Texture`
 
 The class table in the Pulse executable holds 863 records. HD adds
 `collision_trackwall` 0x3ed and `absorb` 0x3ee; Pulse's table does not name
-them. Confidence 94 (the evidence page says 95, above the rubric's cap for
-data agreement; ten ids were checked independently against decoded payloads and
-the rest read from the table).
+them. Confidence 94 (ten ids were checked independently against decoded payloads
+and the rest read from the table).
 
 ## `Transform` (0x6e) and `Anim Transform` (0x3c0)
 

@@ -313,3 +313,11 @@ and `1 0 1 0 1 0 0 0 0` law on: within the bar, but a finish-by-timeout assertio
 row to regenerate, so the law is held on 2048 (`Sourced::chosen(false)`) until the 2048
 field is flown against it, the same hold the inherited air bias carries. Omega inherits it from
 HD and passes.
+
+So the two titles differ on this one law: 2048 `chosen(false)` (a hold, not a measurement of
+2048's resolver), Omega `inherited(true, "Wipeout HD")`. Neither title's `Body_ResolveContact` is
+read, so whether the original 2048 or Omega crosses the lever arm with the body-local rate is
+**checked, not settled**: HD's measurement is the only source and the 2048 hold exists for this
+engine's AI, not because 2048 differs. What would settle it: the point-rate expression in 2048's
+and Omega's contact resolver (the `(R^T omega) x r` term at `0x000f7770` here). Until then a
+2048 result on this law is not evidence about Omega, and the reverse.

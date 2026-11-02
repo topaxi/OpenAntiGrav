@@ -792,10 +792,11 @@ Three consequences, and the first is the interesting one:
   The other arm, `if (controls->0x24 & 1) dir += craft+0x160 * speedpad_jump`, **is now
   implemented**: both of its unknowns were closed live - `craft+0x160` is the hull up axis
   and the gate is d-pad Up - so it is no longer a guess.
-- **The per-team in-air pitch bias** at `stats_base + 0x90`: `<Misc weight_distribution>`
+- ~~**The per-team in-air pitch bias**~~ at `stats_base + 0x90`: `<Misc weight_distribution>`
   (the PS2 parser; read live as `8.0` on the PSP, 2026-10-19), added to the pitch torque
-  whenever the craft is not grounded. `Handling::weight_distribution` carries it and
-  nothing reads it.
+  whenever the craft is not grounded. **Ported**: `oag_physics::engine::pitch` adds it behind
+  `ShipState::air_pitch_bias` (on by default; Pure's `CraftLaws` turn it off, measured). See
+  [airborne-ground-truth.md](airborne-ground-truth.md).
 - **The gate on pitch input**, `Ship_TestPitchAlignment` (`0x088492bc`), decoded
   2026-10-19: input applies only while `dot(hull_up, -spline_down) > 0.9`. HD has the same
   gate and bias. See [engine.md](../ghidra/functions/psp-pulse-usa/engine.md#pitch).

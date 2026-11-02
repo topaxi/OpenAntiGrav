@@ -16,7 +16,7 @@ pub struct CraftLaws {
     /// The steering ramp stops at its target rather than overshooting by a step.
     pub steer_ramp_clamped: Sourced<bool>,
     /// `Ship_UpdatePitch` adds the team's `<Misc weight_distribution>` as a pitch torque while
-    /// airborne (`oag_physics::engine::pitch`). Measured on Pulse and HD.
+    /// airborne (`oag_physics::engine::pitch`). Measured on Pulse and HD (on) and Pure (off).
     pub air_pitch_bias: Sourced<bool>,
     /// `Ship_UpdatePitch` drops the pitch input unless the hull is within the alignment cone
     /// (`Ship_TestPitchAlignment`, `oag_physics::engine::pitch_aligned`). A title with no

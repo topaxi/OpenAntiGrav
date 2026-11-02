@@ -113,9 +113,10 @@ pub const CLASS_ANIM_TRANSFORM: u32 = 0x3c0;
 
 /// Class ID of a `LodGroup` node: an authored level of detail.
 ///
-/// Its `child_count` (`u32` at `+0x50`) and, when `2`, a switch-distance `f32`
-/// after it are authoring data the PSP binary never reads; see
-/// `docs/formats/vex.md`, "`LodGroup`: authored, but never switched at runtime".
+/// Its `child_count` (`u32` at `+0x50`) and the switch distances after it pick
+/// one child per frame by view depth (`LodGroup_SelectChild`); see
+/// `docs/formats/vex.md`, "`LodGroup`: authored tiers, switched per frame by
+/// view depth".
 pub const CLASS_LOD_GROUP: u32 = 0x2ee;
 
 /// Class ID of an `Engine Flare` node: the ship's exhaust. Its handler is in
