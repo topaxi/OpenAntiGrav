@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [pulse]
-updated: 2026-10-29
-summary: "Scenery clock and the end wash landed; the intro music cue and an optional flyby rise of the pose remain"
+updated: 2026-11-02
+summary: "Scenery clock, end wash and the voice-over landed; the counter's SFX fade-in and an optional flyby rise of the pose remain"
 categories: [rendering, frontend]
 difficulty: medium (30)
 ---
@@ -54,10 +54,14 @@ node, played for `AnimEnd` seconds or until a held Cross, with the world held at
   `Race::world_clock_seconds` adds `flyby_seconds`; the gantry stays on the race clock (measured:
   it starts at the flyby's end). `scene/frame.rs` is 1,232 lines, under the ceiling, left unsplit.
   Open: clouds still read `World::tick`; no draw alpha during the flyby.
-- **The tail**: the music the intro starts and stops (`g_music_player` calls at the counter's
-  `0x28` and `0`) is not played. ~~The `ScreenFlash` kind 10 wash~~ **wired 2026-10-29**, the
-  executable's 0.7 s white; the 2026-10-02 frames (`h0103` to `h0125`) fade faster (half by two
-  calls, clear by about 17), unresolved whether a call is a tick.
+- ~~**The tail**~~ **landed 2026-11-02 (`pulse-flyby-music`)**: the counter's zero starts the
+  circuit's `PreRaceDialogue` voice-over on its own voice and the flyby's end stops it
+  (`oag_raceplay::intro_camera::VoiceCue`, `oag_sound::Audio::start_pre_race_voice`); the `0x28`
+  call is an **SFX fade-in** (50 calls at 0.02 from silence, after 20 silent calls), not music -
+  [the read](../../docs/ghidra/functions/psp-pulse-usa/race-intro.md#the-music-the-two-counter-calls-and-the-exit-stop-read-2026-11-02-lane-pulse-flyby-music).
+  Open: our flyby runs no race sounds at all, so the original's effects under the last 40 ticks
+  (engine idle fading in) are absent; the wash frames (`h0103` to `h0125`) fade faster than the
+  executable's 0.7 s, unresolved whether a call is a tick.
 - **Demo mode** skips it (`g_game_mode == 2`); a byte at mode object `+0x40` also skips it
   without a held button and is unread. Only Single Race and Time Trial were captured.
 - **A fresh menu-walk load on `03_Track` and Metropia reached the intro already in its fade-out
@@ -74,7 +78,7 @@ node, played for `AnimEnd` seconds or until a held Cross, with the world held at
 
 ## Next Steps
 
-1. The intro music cue (`g_music_player` at the counter's `0x28` and `0`), the disc's own cue only.
+1. The SFX fade-in at the counter's `0x28` (`Audio_StartSfxFadeIn`): needs the flyby to run the race's effects (engines idle on the held world) first; unwatched what is audible under the flyby.
 2. ~~Pulse's settle~~ closed (see Open). Optional: a view-side rise of the drawn pose over the first ~50
    flyby ticks, if the flyby camera shows the craft then (chosen, not measured).
 3. Re-measure one of the short circuits (`01_Track`) through to its end, and a fresh-load

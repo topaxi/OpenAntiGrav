@@ -52,6 +52,34 @@ pub(super) fn read(
     grid.map(|grid| (grid, rule))
 }
 
+/// The entry of the circuit `track`'s flyby voice-over, or `None` where the title plays none or
+/// the disc holds no such entry. Says which in `report`.
+pub(super) fn read_voice(
+    archives: &mut oag_assets::source::Archives,
+    title: &'static oag_title::Title,
+    track: &str,
+    rule: Option<&oag_title::pre_race::PreRace>,
+    report: &mut Vec<String>,
+) -> Option<String> {
+    let rule = rule.filter(|rule| rule.voice_over.is_some())?;
+    let Some(id) = track_id(archives, title, track) else {
+        report.push(format!(
+            "pre-race voice-over: no PI_Track in {} matches {track}; silent",
+            title.plugin_definition
+        ));
+        return None;
+    };
+    let entry = rule.voice_over_entry(&id)?;
+    if archives.locate(&entry).is_none() {
+        report.push(format!(
+            "pre-race voice-over: {entry} is not on the disc; silent"
+        ));
+        return None;
+    }
+    report.push(format!("pre-race voice-over: {entry}"));
+    Some(entry)
+}
+
 /// The `PI_Track` id of the circuit `track` (a `.vex` entry name) is the race on: the entry in
 /// the plugin definition with the same environment directory and the same `Reversed`.
 ///

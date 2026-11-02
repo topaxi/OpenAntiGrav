@@ -11,7 +11,7 @@ were then **watched on PPSSPP** ([Watched](#watched-on-ppsspp-2026-10-26-lane-no
 | `0x088290bc` | `RaceManager_ApplyNowPlayingAlpha` | 80 | Writes the text alpha and the background's four vertex alphas |
 | `0x08938e70` | `MusicPlayer_StartNextSong` | 65 | Picks the next song, loads it, copies its strings, calls `ShowNowPlaying` |
 | `0x089385b4` | `MusicPlayer_Stop` | 75 | Stops the stream the music player holds and sets its state to 0 |
-| `0x089387e8` | `MusicPlayer_StartPreRaceDialogue` | 65 | Plays the circuit's pre-race voice-over through the music player |
+| `0x089387e8` | `MusicPlayer_StartPreRaceDialogue` | 85 | Plays the circuit's pre-race voice-over through the music player |
 
 ## Layout (authored)
 
@@ -75,7 +75,9 @@ fly-over and then.
 - `RaceMode_UpdateIntro_q` (`0x08829e6c`), substate 1: at the fly-over counter's 0 it calls
   `MusicPlayer_StartPreRaceDialogue` (`Data\Sound\PreRaceDialogue\%d\Tr...`, the circuit's
   voice-over, through the same player); when the fly-over ends it calls `MusicPlayer_Stop`
-  again. This build plays no pre-race dialogue, so the fly-over is silent here.
+  again. The other counter call (`0x28`) is an SFX fade-in, not music; both are read in
+  [race-intro.md](race-intro.md#the-music-the-two-counter-calls-and-the-exit-stop-read-2026-11-02-lane-pulse-flyby-music).
+  The voice-over plays under the fly-over in this build (2026-11-02).
 - `RaceMode_UpdateCountdown` (`0x088274b4`), when the whole seconds left reach zero:
   `Race_StartRacing`, `RaceMode_SetState(mode, 2)`, the `go` cue, `player+0x9c |= 2`, then
   `MusicPlayer_StartNextSong(player, -1)`. The other start site, `0x08825bb0` (a countdown

@@ -174,6 +174,8 @@ impl Race {
             destroy_stations,
             #[cfg(feature = "view")]
             intro_camera,
+            #[cfg(feature = "view")]
+            intro_voice,
             slot_teams,
             sight,
             extensions,
@@ -805,7 +807,9 @@ impl Race {
                 contact: super::contact_fx::ContactFx::new(),
                 intro: intro_camera
                     .filter(|_| camera_override.is_none())
-                    .map(|(grid, rule)| super::intro_camera::IntroCamera::new(grid, rule)),
+                    .map(|(grid, rule)| {
+                        super::intro_camera::IntroCamera::new(grid, rule).with_voice(intro_voice)
+                    }),
                 camera_override,
                 capture_hud,
                 now_playing,

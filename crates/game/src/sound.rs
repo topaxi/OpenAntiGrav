@@ -134,6 +134,26 @@ pub fn hold_race_song(audio: &mut Audio, title: &oag_title::Title) {
     audio.hold_race_song(title.music.is_some_and(oag_title::Music::song_waits_for_go));
 }
 
+/// Starts decoding `race`'s flyby voice-over, where it has one, off this thread: the clip is ready
+/// by the time the flyby's counter reaches zero. See [`Audio::prepare_pre_race_voice`].
+pub fn prepare_intro_voice(audio: &mut Audio, discs: &oag_sound::MusicDiscs, race: &Race) {
+    if let Some(entry) = race.intro_voice_entry() {
+        audio.prepare_pre_race_voice(discs, entry, &oag_source::cache::default_audio_cache_dir());
+    }
+}
+
+/// Forwards the music-player calls `race`'s flyby raised this tick to the audio, in order.
+/// Called after every [`Race::tick_intro`].
+pub fn intro_voice(audio: &mut Audio, race: &mut Race) {
+    use oag_raceplay::intro_camera::VoiceCue;
+    for cue in race.take_intro_voice() {
+        match cue {
+            VoiceCue::Start(_) => audio.start_pre_race_voice(),
+            VoiceCue::Stop => audio.stop_pre_race_voice(),
+        }
+    }
+}
+
 /// Plays one tick of `race`'s sound effects. See [`Audio::race_tick`].
 ///
 /// Called from inside the fixed-timestep loop, immediately after `Race::tick`,

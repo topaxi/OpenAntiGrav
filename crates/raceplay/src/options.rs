@@ -591,6 +591,10 @@ pub struct Setup {
         oag_vex::grid_camera::GridCamera,
         &'static oag_title::pre_race::PreRace,
     )>,
+    /// The archive entry of the circuit's flyby voice-over, where the title plays one and the
+    /// disc holds it - see [`Race::intro_voice_entry`].
+    #[cfg(feature = "view")]
+    pub intro_voice: Option<String>,
     /// The team id each grid slot flies (`Feisar`), for the HUD's per-craft
     /// rows - the Eliminator's kill column. Ids, not names: the string table
     /// turns one into the name a player reads at draw time. Empty where a

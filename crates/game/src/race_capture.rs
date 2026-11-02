@@ -83,6 +83,8 @@ pub struct CaptureOptions {
     /// Play this many ticks of the pre-race flyby first, held to the grid's first
     /// tick. See `race::intro_camera`.
     pub intro_ticks: u32,
+    /// Where the flyby's voice-over is read from. See [`crate::sound::prepare_intro_voice`].
+    pub music_discs: oag_sound::MusicDiscs,
     /// `--force-wreck TICK:SLOT`: that craft is destroyed at the end of that
     /// tick. See [`Race::force_destroy`].
     pub force_wreck: Option<(u32, usize)>,
@@ -528,8 +530,13 @@ pub fn capture(
     }
     options.ghost.arm(&mut race)?;
     if options.net.is_none() && options.intro_ticks > 0 && race.begin_intro() {
+        crate::sound::prepare_intro_voice(audio, &options.music_discs, &race);
         for _ in 0..options.intro_ticks {
             race.tick_intro(&oag_gameplay::PlayerInputs::none());
+            crate::sound::intro_voice(audio, &mut race);
+            // One audio step per flyby tick, as the race ticks below make, so a `--dump-audio`
+            // capture of a flyby is as long as the ticks it was given.
+            audio.tick();
         }
     }
     let mut held = HeldButtons::new(options.held);

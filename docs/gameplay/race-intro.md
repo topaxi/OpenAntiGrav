@@ -3,8 +3,9 @@
 **Status: measured on Pulse PSP, 2026-10-01 (Single Race and Time Trial; `16_Track`,
 `03_Track`, and Metropia by RESTART RACE; ten capture runs).** The camera, its length, its
 cuts, its skip and its hand-over to the countdown are ported. The track-description panel is drawn
-over it, with its measured fade (below). The music, the screen wash at its end and the world
-settling under it are not (see [Open](#open)).
+over it, with its measured fade (below), the circuit's voice-over plays under it and its end
+starts the screen wash. The world settling under it and the SFX fade-in are not (see
+[Open](#open)).
 
 The maintainer's play report: before a race the original flies the circuit and ours went
 straight to the grid. The discriminating question was whether the camera starts on the grid
@@ -190,12 +191,19 @@ overlay draws them for HD yet.
   hash. Not a visible gap after the first second: the original's craft is placed 2.14 below rest
   and rises to rest by about frame 50, ours is placed at rest, so both sit level from then on
   ([grid-state.md](../physics/grid-state.md#pulse-has-no-lowered-grid-state-hover-target-2026-10-11-pulse-flyby-settle)).
-- **The music**: the flyby has its own - `MusicPlayer_StartPreRaceDialogue` at the counter's 0
-  (the circuit's `PreRaceDialogue` voice-over through the music player) and a stop when the
-  flyby ends ([now-playing.md](../ghidra/functions/psp-pulse-usa/now-playing.md#when-the-song-starts-read-2026-10-26-lane-race-music-at-green)).
-  The voice-over is not played here, so the flyby is silent; the race song waits for `go`.
-- **The screen wash** the original starts when the flyby ends (`ScreenFlash` kind 10) is not
-  drawn.
+- **The music** (ported 2026-11-02): the flyby has its own - `MusicPlayer_StartPreRaceDialogue`
+  starts the circuit's `Data\Sound\PreRaceDialogue\<n>_Track.at3` voice-over as the lock counter
+  reaches zero (tick 60 of the flyby), and the flyby's end stops the music player
+  ([the call sites](../ghidra/functions/psp-pulse-usa/race-intro.md#the-music-the-two-counter-calls-and-the-exit-stop-read-2026-11-02-lane-pulse-flyby-music)).
+  The race song is not touched: it waits for `go`. The counter's other call (`0x28`) fades the
+  **sound effects** back in over 50 calls after 20 silent ones; the flyby runs no race sounds here,
+  so that fade is not ported and the effects start with the countdown.
+- **The screen wash** the original starts when the flyby ends (`ScreenFlash` kind 10) is drawn
+  (0.7 s of white, the executable's).
+- **Other titles, music (checked 2026-11-02)**: *checked, differs.* Only Pulse's executable calls
+  a music player for a voice-over here. HD's fly-over sits on the `PreRace` mix row with music at
+  0 ([now-playing.md](../formats/now-playing.md)); 2048 and Omega inherit HD's mix. Pulse PS2's
+  flyby is off; its clips are `PRERACE.WAD` ([ps2-voice.md](../formats/ps2-voice.md)).
 - **Demo mode** skips it (`g_game_mode == 2`), and a byte at mode object `+0x40` also does
   without a held button; neither is read further. Only Single Race and Time Trial were
   captured; Zone, Eliminator, Head to Head and Tournament reach the same function through

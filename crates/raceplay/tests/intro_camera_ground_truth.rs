@@ -148,3 +148,56 @@ fn the_scenery_clock_runs_through_the_flyby_and_its_end_washes_white() {
         "continuous into the race"
     );
 }
+
+/// Collects the flyby's music-player calls with the tick index each was raised on.
+fn voice_calls(race: &mut Race, held: bool) -> Vec<(u32, race::intro_camera::VoiceCue)> {
+    let mut calls = Vec::new();
+    let mut tick = 0u32;
+    while race.in_intro() {
+        race.tick_intro(&if held { cross() } else { PlayerInputs::none() });
+        calls.extend(race.take_intro_voice().into_iter().map(|cue| (tick, cue)));
+        tick += 1;
+        assert!(tick < 3000, "the flyby never ended");
+    }
+    calls
+}
+
+/// `RaceMode_UpdateIntro` starts the circuit's `PreRaceDialogue` voice-over as its lock counter
+/// reaches zero (the 60th call) and stops the music player when the flyby ends. Fails if the flyby
+/// raises no voice calls, names another entry, or moves either off its tick.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn the_flyby_starts_its_voice_over_at_the_counters_zero_and_stops_it_at_the_end() {
+    use race::intro_camera::VoiceCue;
+    let rule = &oag_pulse::pre_race::PRE_RACE;
+    let Some(mut race) = started() else { return };
+    assert_eq!(
+        race.intro_voice_entry(),
+        Some(r"Data\Sound\PreRaceDialogue\16_Track.at3"),
+        "16_Track's voice-over is the disc's own entry"
+    );
+    assert!(race.begin_intro());
+    let calls = voice_calls(&mut race, false);
+    let entry = r"Data\Sound\PreRaceDialogue\16_Track.at3".to_string();
+    assert_eq!(
+        calls,
+        vec![
+            (rule.lock_ticks.value - 1, VoiceCue::Start(entry)),
+            (rule.hold_ticks.value + 1500, VoiceCue::Stop),
+        ]
+    );
+}
+
+/// A held Cross ends the flyby one tick after the counter reaches zero: the voice has started and
+/// is stopped on the next tick.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn a_skipped_flyby_stops_its_voice_over_the_tick_after_it_starts() {
+    let lock = oag_pulse::pre_race::PRE_RACE.lock_ticks.value;
+    let Some(mut race) = started() else { return };
+    assert!(race.begin_intro());
+    let calls = voice_calls(&mut race, true);
+    let ticks: Vec<_> = calls.iter().map(|(tick, _)| *tick).collect();
+    assert_eq!(ticks, vec![lock - 1, lock]);
+    assert_eq!(calls[1].1, race::intro_camera::VoiceCue::Stop);
+}

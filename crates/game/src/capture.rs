@@ -477,6 +477,7 @@ pub fn run(
                 force_shake: None,
                 force_boost_kick: None,
                 intro_ticks: 0,
+                music_discs: options.music_discs.clone(),
                 force_wreck: None,
                 force_hit: None,
                 force_wall_slide: None,

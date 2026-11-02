@@ -713,6 +713,7 @@ pub(crate) fn run_race(
                 force_shake: crate::args::force_shake(cli.force_shake.as_deref())?,
                 force_boost_kick: crate::args::force_boost_kick(cli.force_boost_kick.as_deref())?,
                 intro_ticks: cli.intro.intro_ticks,
+                music_discs: music_discs.clone(),
                 force_wreck: crate::args::force_at_slot(cli.wreck.force_wreck.as_deref(), "wreck")?,
                 force_hit: crate::args::force_at_slot(cli.wreck.force_hit.as_deref(), "hit")?,
                 force_wall_slide: crate::args::force_at_slot(

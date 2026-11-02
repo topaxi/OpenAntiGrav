@@ -23,6 +23,7 @@
 //! | the flyby ends when the animation reaches `AnimEnd`, or when [`Button::Cross`] is **held** | read (`GridCamera_Progress`, the `Input_IsHeld(5)` test) and measured: the animation ended at `24.99` s of `25.0`, and a held cross ended it as soon as the lock lifted |
 //! | neither can end it before the title's lock ticks have passed | read (`+0x1a04`, a counter from 60) and measured (it reads `57` at the third tick and `0` from the sixtieth) |
 //! | the world does not tick meanwhile: the countdown's 272 ticks start when the flyby ends | measured: the race clock reads zero and the mode state `0` throughout, and the first state after the flyby is the one a skip always reached |
+//! | the circuit's voice-over starts on the tick the lock counter reaches zero and stops when the flyby ends | read (`MusicPlayer_StartPreRaceDialogue` after the counter's last decrement, `MusicPlayer_Stop` in the exit branch) |
 //! | the HUD is hidden through the flyby and for the title's HUD delay ticks after it | read (`g_hud+0x2c` flags, cleared at the intro's start and set when its `0.5` s fade-out substate ends) and seen: no HUD at tick 30, HUD at tick 60 |
 //!
 //! # What is chosen, not measured
@@ -39,9 +40,9 @@
 //!
 //! # What is not ported
 //!
-//! The flyby's music, the screen wash the original starts when it ends (`RaceMode_UpdateIntro`
-//! calls `ScreenFlash` kind 10, which this port does not draw), the Demo mode's automatic skip,
-//! and the unread byte at mode object `+0x40` that also ends a flyby without a held button.
+//! The Demo mode's automatic skip, the unread byte at mode object `+0x40` that also ends a flyby
+//! without a held button, and the SFX fade-in the original starts at the counter's `0x28`
+//! (`FUN_0893a958`; the flyby here runs no race sounds, so there is nothing to fade).
 
 use super::*;
 
@@ -61,6 +62,16 @@ enum Phase {
     Playing,
     /// Over, by running out or by a held button.
     Finished,
+}
+
+/// What the flyby asks of the music player, once per tick it happens on. A per-tick output like
+/// a sound cue: nothing here is `World` state.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VoiceCue {
+    /// Play this archive entry (the circuit's voice-over).
+    Start(String),
+    /// Stop whatever the flyby started.
+    Stop,
 }
 
 /// What one tick of the flyby's clock says.
@@ -150,6 +161,10 @@ pub struct IntroCamera {
     /// A pointer press asked to skip. It stands in for a held Cross and **stays held until the
     /// lock lifts**: a tap is one tick long and the lock is 60, so an edge alone would miss it.
     skip_requested: bool,
+    /// The voice-over's archive entry, where the title plays one.
+    voice: Option<String>,
+    /// Music-player calls raised and not yet taken, in order.
+    cues: Vec<VoiceCue>,
 }
 
 impl IntroCamera {
@@ -166,7 +181,16 @@ impl IntroCamera {
             cuts: 0,
             last_shown: None,
             skip_requested: false,
+            voice: None,
+            cues: Vec::new(),
         }
+    }
+
+    /// Gives the flyby the voice-over entry it starts, or none.
+    #[must_use]
+    pub fn with_voice(mut self, entry: Option<String>) -> Self {
+        self.voice = entry;
+        self
     }
 
     /// Whether the flyby is on screen.
@@ -224,7 +248,19 @@ impl IntroCamera {
             Skip::Held => skip_held,
             Skip::Press => pressed,
         };
-        let shown = match self.timeline.step(skip || self.skip_requested, dt) {
+        // The original's counter reads zero after the lock's last tick, and the voice starts in
+        // that same call, before the exit test; ours ends one tick later (`Timeline::step`).
+        let counter_zero = self.rule.lock_ticks.value.checked_sub(1) == Some(self.timeline.ticks());
+        let beat = self.timeline.step(skip || self.skip_requested, dt);
+        if let Some(entry) = &self.voice {
+            if counter_zero {
+                self.cues.push(VoiceCue::Start(entry.clone()));
+            }
+            if beat == Beat::Over {
+                self.cues.push(VoiceCue::Stop);
+            }
+        }
+        let shown = match beat {
             Beat::Over => {
                 self.phase = Phase::Finished;
                 self.cuts = self.cuts.wrapping_add(1);
@@ -275,6 +311,21 @@ impl Race {
         self.view.intro.as_ref().is_some_and(|intro| {
             !intro.finished() && (intro.playing() || self.view.camera_override.is_none())
         })
+    }
+
+    /// The archive entry of the voice-over the flyby will start, for the session to have decoded
+    /// before the flyby reaches it.
+    #[must_use]
+    pub fn intro_voice_entry(&self) -> Option<&str> {
+        self.view.intro.as_ref()?.voice.as_deref()
+    }
+
+    /// Takes the music-player calls the flyby has raised since the last call, in order.
+    pub fn take_intro_voice(&mut self) -> Vec<VoiceCue> {
+        self.view
+            .intro
+            .as_mut()
+            .map_or_else(Vec::new, |intro| std::mem::take(&mut intro.cues))
     }
 
     /// Whether the flyby is still to play or playing - the session steps it instead of the world

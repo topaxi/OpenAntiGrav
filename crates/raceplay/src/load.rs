@@ -1156,6 +1156,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
             destroy_stations: super::destroy_camera::stations(circuit_fx, &track_blob, &mut report),
             #[cfg(feature = "view")]
             intro_camera: intro::read(&mut archives, &track, pre_race, &mut report),
+            #[cfg(feature = "view")]
+            intro_voice: intro::read_voice(&mut archives, title, &track, pre_race, &mut report),
             slot_teams: slot_teams.clone(),
             #[cfg(feature = "view")]
             sight: super::Sighting::of(&hud),
