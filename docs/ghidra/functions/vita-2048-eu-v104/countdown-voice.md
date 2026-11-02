@@ -126,4 +126,9 @@ the Wwise stub the `SBlk` reader refuses ("unsupported bank version 1145588546")
 `sfx: ready not loaded` and the start is **silent**. The field stays (chosen, not measured) because the `Go` cue
 event times the song's start (`now_playing_ground_truth::omega_inherits_hds_start_and_holds_the_song_for_go`;
 setting it `None` fails that test). A maintainer report of "wrong cues" on Omega is therefore not from our start
-voice (we play none there): unexplained, see the lane report.
+voice (we play none there). A 360-tick Omega race in ours raises exactly two cues, `Ready` at tick 91 and `Go` at
+tick 271, and neither has a loaded voice; no other cue is raised in the first six seconds, so what the
+maintainer hears is the song (held for `Go`) or the original's own Wwise voice remembered. **Measure result:** the
+original posts events `_321_NGP` and `Go_NGP` (Wwise ids `0923e3fa` and `24a19095`, FNV-1 of the lower-cased
+name); no bank of `data00` or `data08` defines them, so the voice is not on any archive we hold. Ready to wire
+the day a bank defining them is found (read recipe: `Library::resolve_event(id)`, [wwise.md](../../../formats/wwise.md)).
