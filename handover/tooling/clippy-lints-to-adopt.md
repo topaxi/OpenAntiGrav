@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-02
-summary: "Ten Clippy lints ranked by debt caught and violations measured; the config today is the default set plus three float allows"
+summary: "Ten Clippy lints ranked by debt caught and violations measured; #1 (sim-crate disallowed methods/types) landed, 2-10 open"
 size: L (35)
 difficulty: medium (35)
 kind: debt
@@ -27,7 +27,7 @@ read them as ceilings. Per-crate leaders in brackets.
 
 | # | lint | violations (src / tests) | catches | rollout |
 | --- | --- | --- | --- | --- |
-| 1 | `disallowed_methods` and `disallowed_types` via a `clippy.toml` (sim crates only) | 7 total across core, physics, gameplay, ai, race, weapons, formats | determinism: `mul_add`, platform transcendentals, `Instant::now`, `SystemTime::now`, `HashMap`/`HashSet`; a compiler-checked twin of `check-transcendentals.py` | deny now. Measured hits: 4 `HashMap` in `tables`, 2 in `formats`, 1 `f32::powi` at `crates/physics/src/pair.rs:100`. Needs a per-crate `clippy.toml` (clippy reads the one next to each manifest), so sim crates get a stricter file than render crates. Each hit is a review decision, not an automatic fix (`powi(2)` is exact, so likely allowed with a reason) |
+| 1 | ~~`disallowed_methods` and `disallowed_types` via a `clippy.toml` (sim crates only)~~ | landed | see "Landed" below | done |
 | 2 | `too_many_lines` with `too-many-lines-threshold = 300` | 21 over 300, 8 over 500 (201 at default 100) [game 76, raceplay 51, render 41 at default] | the 900+ line functions (long-functions thread) | warn plus ratchet: freeze the 21 in a baseline script beside `check-size`, deny new ones |
 | 3 | `allow_attributes_without_reason` | 120 / 19 [raceplay 41, game 33, fx 14] | the 95 `too_many_arguments` allows and 26 `dead_code` allows carry no recorded why | deny after one sweep; mechanical (add `reason = "..."`). About 2 hours per 40 sites |
 | 4 | `allow_attributes` (prefer `#[expect]`) | 167 / 11 [game 53, raceplay 39, ui-screens 26] | an `allow` never goes stale; `expect` errors when the lint stops firing, so the 95 argument allows delete themselves when fixed | warn per crate; pairs with #3, do #3 first |
@@ -54,10 +54,26 @@ the sim crates is *which* float methods, and that is #1. `clippy::suboptimal_flo
 bit-exact equality is the point; do not adopt it there. #1 also needs the `oag-formats`
 `HashMap` hits judged: lookup-only use is fine, iteration feeding state is not.
 
+## Landed
+
+- **#1, 2026-11-02.** An identical `clippy.toml` beside each of `oag-core`, `oag-physics`,
+  `oag-gameplay`, `oag-ai`, `oag-race`, `oag-formats`; `check-transcendentals.py` fails when the
+  copies differ. Design, lists, probe and the hits fixed: `docs/architecture/determinism.md`,
+  "Clippy refuses the same calls, and a few more". Test code is linted too, so 22 test files and
+  modules carry `#[expect(clippy::disallowed_methods, reason)]`. The `oag-tables` `HashMap`
+  (`fexml::dictionary`) is lookup-only and stays; `oag-tables` is not in the six.
+- `just check-determinism` is **not** redundant with it: it scans 22 crates against six and
+  matches rotation constructors by bare name. Keep both; retiring it would first need the six
+  widened to its crate list.
+
 ## Open
 
-- Whether clippy's per-crate `clippy.toml` lookup is enough, or a `CLIPPY_CONF_DIR` set in the
-  `justfile` is needed because `--workspace` runs from the root. Not tested here.
+- `crates/gameplay/tests/determinism_volley.rs` starts its craft from glam's
+  `Quat::from_rotation_y`/`_z` (platform `sin_cos`) and is not in CI's `--test determinism` runs.
+  Fixing it moves that scenario's committed reference: a decision for the maintainer, not a lint
+  fix (determinism.md, "What is still not covered").
+- Widen the Clippy lists to the script's other determinism-scanned crates (`oag-weapons` first,
+  it builds hashed projectile state) if the script is ever to be retired.
 - The library-only share of #9: needs a rerun with `#[cfg(test)]` excluded (`--lib` without
   `--tests`).
 - The measurement used the default `too-many-lines` and `cognitive` thresholds for counting
@@ -65,11 +81,9 @@ bit-exact equality is the point; do not adopt it there. #1 also needs the `oag-f
 
 ## Next Steps
 
-1. Add a sim-crate `clippy.toml` with the #1 disallow lists and deny both lints in those crates;
-   fix or `#[expect(reason)]` the 7 hits. Verify with `just lint` and `just check-determinism`.
-2. Sweep #3 then turn on #4 per crate.
-3. Add the function-length baseline (#2) with the long-functions thread.
-4. Leave 5 to 10 until 1 to 4 have landed.
+1. Sweep #3 then turn on #4 per crate.
+2. Add the function-length baseline (#2) with the long-functions thread.
+3. Leave 5 to 10 until 2 to 4 have landed.
 
 Verify: `just lint` and the full `just` gate; a lint change touches `Cargo.toml`, so the lead's full
 run is selected.

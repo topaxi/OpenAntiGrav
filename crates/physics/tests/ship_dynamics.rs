@@ -10,6 +10,12 @@
 //! **They are not values from any ship**
 //! (`docs/architecture/adr/0006-no-copyrighted-content.md`).
 
+#![expect(
+    clippy::disallowed_methods,
+    reason = "test fixtures and reference values: poses and angles built with glam and the \
+              platform libm, which no simulation path calls"
+)]
+
 use std::cell::Cell;
 
 use oag_core::math::Vec3;

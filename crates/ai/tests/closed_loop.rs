@@ -25,6 +25,12 @@
 //! `race_ground_truth::the_ai_drives_the_field_along_the_track` (needs a disc).
 //! This says the controller is stable against a plant of the right *shape*.
 
+#![expect(
+    clippy::disallowed_methods,
+    reason = "test fixtures and reference values: poses and angles built with glam and the \
+              platform libm, which no simulation path calls"
+)]
+
 use oag_ai::{Driver, Field, Frame, Line, Pilot, Rival, Span, Tuning};
 use oag_core::math::{Quat, Vec3};
 use oag_physics::{

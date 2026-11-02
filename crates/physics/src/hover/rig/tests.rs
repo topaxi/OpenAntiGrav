@@ -1,6 +1,12 @@
 //! What a [`Rig`] changes: the load it carries, and the pitch stiffness the derived rear hit
 //! takes away.
 
+#![expect(
+    clippy::disallowed_methods,
+    reason = "test fixtures and reference values: poses and angles built with glam and the \
+              platform libm, which no simulation path calls"
+)]
+
 use super::*;
 use crate::collide::{CollisionWorld, Surface, TriangleSoup};
 use crate::forces::Environment;

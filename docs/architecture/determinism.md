@@ -194,18 +194,19 @@ in. One ULP in an angle that sets a speed target is one bit in the world hash.
 **And it is enforced now, not merely stated.**
 [`scripts/check-transcendentals.py`](../../scripts/check-transcendentals.py)
 fails the `just` gate and the `check` CI job on any of the forbidden calls in
-`crates/{core,physics,gameplay,ai,race,formats}/src`, outside `#[cfg(test)]`.
+the `src/` of every crate on its `SCANNED_CRATES` list (the six below, and since
+widened to 22, `oag-weapons` among them), outside `#[cfg(test)]`.
 **`oag-formats` is in that set and is not simulation code**: handling stats,
 splines and track data are parsed there and handed straight to the simulation,
 so a transcendental applied to a parsed value at load time reaches the world
 hash exactly as surely as one applied at tick time. It joined on 2026-08-18
 (finding I2), when the crate set was narrower than the claim it was enforcing.
-Three files are allowed by name and each says why: `oag_core::math` holds the
-wrappers, `oag_core::probe` calls `sin` deliberately so that a platform whose
-libm differs shows up as a failing gate rather than as a mystery desync, and
+Files are allowed by name in the script's `ALLOWED` table and each says why:
+`oag_core::math` holds the wrappers, the render-only presentation curves in
+`oag-display` and `oag-ui` reach a pixel and never a hash, and
 `oag_formats::entropy` scores a byte histogram for `oag-unpack sniff` - a
 triage label a human reads, which no parser branches on and which reaches
-nothing. Adding a fourth entry is a decision about determinism, not a
+nothing. Adding an entry is a decision about determinism, not a
 formality. The script was
 checked against the bug that motivated it - restoring `f32::acos` in
 `Line::curvature` makes it fail, naming the line.
@@ -227,8 +228,8 @@ hand-written velocities and never called `launch`, and the physics probe, which
 fires no weapon. The fix is all three - a
 [`quat_from_axis_angle`](../../crates/core/src/math.rs) wrapper beside `acos`,
 a third pattern here over the bare constructor names, and a committed volley
-scenario in `crates/gameplay/tests/determinism.rs` that fires a real fan from a
-craft deliberately not axis-aligned. `from_mat3`, `from_rotation_arc` and
+scenario (now [`crates/gameplay/tests/determinism_volley.rs`](../../crates/gameplay/tests/determinism_volley.rs))
+that fires a real fan from a craft deliberately not axis-aligned. `from_mat3`, `from_rotation_arc` and
 `lerp` stay off the list: they are `sqrt` and arithmetic, and a gate that
 flags clean code is one people learn to skip.
 
@@ -240,13 +241,76 @@ not promised to be correctly rounded, because no libm is; it is promised to be
 the *same everywhere*, which is what determinism needs. Any further
 transcendental the simulation turns out to want goes in beside it.
 
+### Clippy refuses the same calls, and a few more
+
+Since 2026-11-02 `just lint` (`cargo clippy --workspace --all-targets -- -D
+warnings`, also CI's `check` job) enforces the rules above in the six
+determinism-bound crates: `oag-core`, `oag-physics`, `oag-gameplay`, `oag-ai`,
+`oag-race` and `oag-formats`. Each of them carries a `clippy.toml` beside its
+manifest with two lists:
+
+- `disallowed-methods`: every `f32::` and `f64::` method on
+  `check-transcendentals.py`'s list, plus `powi` and `mul_add`; glam's
+  libm-backed rotation methods on `Quat`, `Mat3`, `Mat4`, `Vec2` and `Vec3`
+  (`from_axis_angle`, `from_rotation_*`, `from_euler`, `slerp`, `from_angle`,
+  `angle_between`, ...); `std::time::Instant::now` and `SystemTime::now`.
+  `sqrt` is absent for the reason above.
+- `disallowed-types`: `std::collections::HashMap` and `HashSet`.
+
+Both lints are in Clippy's default `style` group, so `-D warnings` makes them
+errors with no `[lints]` change; a crate without a `clippy.toml` has empty lists
+and is unaffected. Probe, 2026-11-02: a temporary `let _ = x.sin();` in an
+`oag-physics` function fails `just lint` with ``use of a disallowed method
+`f32::sin` `` and the list's reason; the same line in `oag-render` passes.
+
+**Why one file per crate, not a workspace-wide list scoped by lint level.**
+Clippy reads the `clippy.toml` nearest the manifest of the crate it is linting,
+so a copy beside each simulation crate scopes the lists by itself, for every way
+Clippy is run (`just lint`, CI, a bare `cargo clippy`, rust-analyzer). The
+alternative, one root `clippy.toml` with the lints `allow`ed workspace-wide and
+`deny`ed per crate, needs a crate-level attribute in every `lib.rs` (a crate
+with `[lints] workspace = true` cannot override a single lint in its
+`Cargo.toml`) and an attribute again in every integration-test file, and a
+`CLIPPY_CONF_DIR` in the `justfile` would not reach CI or the editor. The cost
+of copies is drift, so `check-transcendentals.py` (`just check-determinism`)
+fails unless all six exist and are byte-identical.
+
+**Test code is linted too**, unlike the script, which skips `#[cfg(test)]` and
+`tests/`. A test module or file that builds fixtures with glam's rotations or
+the platform's libm says so with a
+`#[expect(clippy::disallowed_methods, reason = ...)]`, so a new call in
+simulation code beside it still fails, and the `expect` fails once the calls are
+gone. The hits on the day it landed: `f32::powi(2)` in `oag_physics::pair`'s
+sphere reject, now `reach * reach` (bit-identical: all 1,176,256,513 `f32`
+patterns in `[0, 1e4]` compare equal at `opt-level` 0 and 3; no determinism
+scenario reaches `pair::resolve`, which only `oag-raceplay` calls);
+`oag_formats::entropy`'s `f64::log2`, the script's allowed sniffing heuristic,
+now an `#[expect]` with the same reason; and one `HashMap` in
+`oag_formats::psarc::match_paths_to_entries`, which is only looked up (the
+result follows entry order, and `or_insert` keeps the first manifest path for a
+repeated digest), so it is kept with an `#[expect]` naming that.
+
+**The script is not redundant with the lint.** It scans 22 crates (`weapons`,
+`video`, `tables`, `vex`, `ui` and more) against Clippy's six, and matches the
+rotation constructors by bare name whatever type carries them. Clippy adds
+`powi`, `mul_add`, the wall clock, `HashMap`/`HashSet`, test code, and
+resolution by type rather than by text (a renamed import cannot hide a call).
+
 ### What is still not covered
 
 - **Order-dependent reductions over collections.** The nearest-hit scan across
   `CollisionWorld::colliders()`, the deepest-of-eight hull probe comparison, and
   the nearest-sample scan in the race loop are all reductions whose result
-  depends on iteration order. They are over `Vec`s today, which is correct - but
-  nothing would fail if one became a `HashMap`.
+  depends on iteration order. They are over `Vec`s today, which is correct; a
+  `HashMap` or `HashSet` in the six Clippy-checked crates now fails `just lint`,
+  but `oag-weapons` and a third-party ordered-by-hash type are not covered.
+- **`determinism_volley.rs` is not portable and not cross-platform.** Its
+  craft's starting pose is glam's `Quat::from_rotation_y(0.11) *
+  Quat::from_rotation_z(0.23)` (platform `sin_cos`), so its committed reference
+  bakes this machine's libm; and CI's `determinism` job runs `--test
+  determinism` by name, which no longer includes it since the split. Moving the
+  pose to `oag_core::math` and adding the binary to CI is one change that moves
+  that scenario's reference, so it needs a deliberate decision, not a lint fix.
 - **`oag-race`**, which has no gate of its own; lap timing reaches the committed
   hashes only through `oag_gameplay`'s scenario.
 - **Anything that needs a disc image.** Every gate above builds its world in its

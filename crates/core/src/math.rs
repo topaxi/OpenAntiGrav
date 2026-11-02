@@ -253,6 +253,11 @@ pub fn binary_angle_to_radians(units: u16) -> f32 {
     f32::from(units) * (core::f32::consts::TAU / 65536.0)
 }
 
+#[expect(
+    clippy::disallowed_methods,
+    reason = "test fixtures and reference values: poses and angles built with glam and the \
+              platform libm, which no simulation path calls"
+)]
 #[cfg(test)]
 mod tests {
     use super::*;
