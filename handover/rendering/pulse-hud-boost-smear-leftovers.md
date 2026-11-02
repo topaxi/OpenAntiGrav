@@ -19,14 +19,14 @@ stamp under the speed bar's fill, driven by the exhaust flare's 0.8 s boost time
 - ~~The 3D widgets' copy loop~~: false, `0x088b8748` is `Gu_SetOffset(OriginX + 1808, OriginY + 1912)`, no loop
   (hud-boost-smear.md, "`Mode3D_DrawQueued` has no copy loop"). Whether a `Model` widget's own draw smears is
   unmeasured: look at a boost GE list (`n >= 2`) with a pickup icon on screen for repeated model prims.
-- Pure's `FUN_088c9ce8` `lui 0x44e2` "copy loop" is probably the same `Gu_SetOffset` constant; re-read it.
+- ~~Pure's `FUN_088c9ce8` copy loop~~: false, it is Pure's `Mode3D_DrawQueued` (`0x088c9dec` is `Gu_SetOffset(OriginX + 1808, OriginY + 1912)`, no loop; psp-pure-usa/hud-boost-smear.md). Pure's real 2D copy loop (`Image_Draw`/`Text_Draw` twins) is unsearched.
 - A text widget's direction is the line from the screen's centre; the original indexes a 32-entry table
   (`0x08ab1c78`/`0x08ab1cf8`) by the byte at `widget+0x172`, whose writer was not read. The text copies' gates
   (HUD shake exactly zero, `flags & 4` clear, global `0x08ab0818` non-zero) are read, not modelled.
 - Pulse PS2: the copies draw through the shared art, the glow stamp does not (`Ps2Bloom` has no stamp pass);
   nothing was compared against a PS2 boost frame.
-- Pure has one widget draw with the same copy loop (`FUN_088c9ce8`); its `Hud_Update` and the count's source are
-  unread, so `boost_smear` is `None` there.
+- Pure's `FUN_088c9ce8` has no copy loop (it is `Mode3D_DrawQueued`); Pure's real 2D copy loop and its count's source
+  are unread, so `boost_smear` is `None` there.
 - The glow chain adds the bar's colour alone; the scene's colour under a half-covered bar copy is not mixed in.
 - A pair at the boost's first and last frames (`n = 0, 1`) and at its middle (`n = 10`) against the original; the
   maintainer's page should carry a boosting pair (below).
