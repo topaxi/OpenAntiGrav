@@ -1,8 +1,8 @@
 ---
-status: ready-to-wire
+status: re-first
 titles: [pulse, pure]
-updated: 2026-11-02
-summary: "Pulse boost HUD: wire the Centred-widget copy direction (pickup steps (0,-i)); text direction, PS2 glow, Pure unwired"
+updated: 2026-11-03
+summary: "Pulse boost HUD: text direction byte unread, PS2 glow, Pure unwired; Centred copy direction wired"
 categories: [rendering]
 difficulty: hard (30)
 ---
@@ -20,12 +20,8 @@ stamp under the speed bar's fill, driven by the exhaust flare's 0.8 s boost time
   (hud-boost-smear.md, "`Mode3D_DrawQueued` has no copy loop"). ~~Whether a `Model` widget's own draw smears~~:
   Pulse's pickup icon is not a Model widget; it is 13 `Image` quads and a boost GE list shows each drawn `n` times
   (hud-boost-smear.md, "The pickup icon at a boost"). No Model widget drew in any captured Pulse frame; the countdown's model and Pure's gauge models stay unmeasured.
-- **Ready to wire:** `oag_hud::boost_smear::expand` takes each Image's direction from the drawn rect's top-left. The original's
-  is `normalise(authored (x, y) - (240, 136))`, the middle for a `Centred="true"` widget (measured on the pickup backdrop and
-  icon: `OFFSETX` 1808, `OFFSETY` `1912 + i`, alpha `0x80 / n`, confidence 80,
-  hud-boost-smear.md "The direction is the line from the screen centre to the widget's authored x/y"). Give `Draw` (or the
-  frame's sprite list) the authored anchor, or the Centred flag, and use it in `anchor`; the pickup's copies then step
-  `(0, -i)` exactly. The same file's `Draw::Text` path is unaffected (text direction is a separate open item below).
+- ~~Ready to wire: the Centred-widget copy direction~~: wired, `oag_hud::boost_smear` steps from the authored `x`/`y`
+  (hud-boost-smear.md, "Ours now matches"); the pickup's copies step `(0, -1)`.
 - Pure's `FUN_088c9ce8` has no copy loop (it is `Mode3D_DrawQueued`); Pure's real 2D copy loop and its count's source
   are unread, so `boost_smear` is `None` there.
 - The glow chain adds the bar's colour alone; the scene's colour under a half-covered bar copy is not mixed in.
@@ -36,9 +32,8 @@ stamp under the speed bar's fill, driven by the exhaust flare's 0.8 s boost time
 
 ## Next Steps
 
-1. Adopt a boosting pair on the compare page: `scripts/psp-pulse-pair.py --field --layout forward --team Assegai
-   --track 16_Track --state data/saves/pulse-psp/race-talons-venom-alongside.ppst --run-ticks 28 --out <dir>`
-   (the lead adds the manifest row; `--run-ticks` runs the original that many ticks past the load, and the pair
-   reads the flare's timer for `--hud-boost-phase`).
+1. Adopt a boosting pair on the compare page: the same command with `--run-ticks 100` (28, 45 and 70 read boost timer 0
+   on this state; 100 reads 0.683 s) `--out <dir>` (the lead adds the manifest row; the pair reads the flare's timer for
+   `--hud-boost-phase`).
 2. Read the writer of the text direction byte, then drop the chosen direction.
 3. ~~Give the 3D widgets their copies~~: nothing to give; the GE-list check is done (the icon is an Image, it smears, `n` copies).

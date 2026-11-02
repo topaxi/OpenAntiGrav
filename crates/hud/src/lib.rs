@@ -344,7 +344,8 @@ impl Layout {
         // `Centred="true"` makes x/y the middle of the rectangle rather than its
         // top-left corner. 54 widgets use it, all of them screen-centre pieces
         // like the pickup box at x=240 - half of 480.
-        if node.flag("Centred").unwrap_or(false) {
+        let centred = node.flag("Centred").unwrap_or(false);
+        if centred {
             x -= width / 2.0;
             y -= height / 2.0;
         }
@@ -375,6 +376,7 @@ impl Layout {
             // Zone layout ships.
             rotation: number(&self.constants, node.value("RotationTheta")).unwrap_or(0.0),
             gradient: None,
+            centred,
         })
     }
 

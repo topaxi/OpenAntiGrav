@@ -16,7 +16,7 @@
 //!
 //! **Measured**: the count, the stamp, the shifts and the alpha division, on a PPSSPP frame at
 //! `n = 2` (a GE list) and at `n = 3` and `2` (the framebuffer's alpha, `76` and `51`), and the
-//! directions of three images. **Chosen, not measured**: a text widget's direction is the line
+//! directions of three images and of the centred pickup icon. **Chosen, not measured**: a text widget's direction is the line
 //! through its anchor where the original quantises it to one of 32 table entries, and every draw
 //! of the frame is smeared, the lock-on reticle included.
 
@@ -108,11 +108,24 @@ fn dimmed(draw: &Draw, copies: u32) -> Draw {
     out
 }
 
-fn anchor(draw: &Draw) -> Option<[f32; 2]> {
+/// Where the original's direction line ends: a widget's authored `x`/`y`, which is the middle of a
+/// `Centred="true"` widget and the top-left of any other. `centres` are the authored points of
+/// the layout's centred widgets; a drawn sprite whose own middle is one of them is that widget (a
+/// fade or a fold of the box keeps its middle).
+fn anchor(draw: &Draw, centres: &[[f32; 2]]) -> Option<[f32; 2]> {
     match draw {
         Draw::Sprite { rect, .. }
         | Draw::RotatedSprite { rect, .. }
-        | Draw::GradientSprite { rect, .. } => Some([rect[0], rect[1]]),
+        | Draw::GradientSprite { rect, .. } => {
+            let middle = [rect[0] + rect[2] * 0.5, rect[1] + rect[3] * 0.5];
+            Some(
+                centres
+                    .iter()
+                    .copied()
+                    .find(|c| (c[0] - middle[0]).abs() < 1e-3 && (c[1] - middle[1]).abs() < 1e-3)
+                    .unwrap_or([rect[0], rect[1]]),
+            )
+        }
         Draw::Text { x, y, .. } => Some([*x, *y]),
         _ => None,
     }
@@ -136,11 +149,11 @@ fn moved(draw: &Draw, by: [f32; 2]) -> Draw {
     out
 }
 
-fn expand(list: &mut Vec<Draw>, copies: u32, centre: [f32; 2], text: bool) {
+fn expand(list: &mut Vec<Draw>, copies: u32, centre: [f32; 2], centres: &[[f32; 2]], text: bool) {
     let base = [1808.0, 1912.0];
     let mut out = Vec::with_capacity(list.len() * copies as usize);
     for draw in list.iter() {
-        let Some(at) = anchor(draw) else {
+        let Some(at) = anchor(draw, centres) else {
             out.push(draw.clone());
             continue;
         };
@@ -161,6 +174,7 @@ fn expand(list: &mut Vec<Draw>, copies: u32, centre: [f32; 2], text: bool) {
 pub(super) fn smear(
     frame: &mut Frame,
     art: &oag_title::HudArt,
+    layout: &crate::Layout,
     readout: &Readout,
     fill: &[([f32; 4], [f32; 4])],
 ) {
@@ -188,11 +202,20 @@ pub(super) fn smear(
             }
         }
     }
-    expand(&mut frame.sprites, n, centre, false);
-    expand(&mut frame.hud_text, n, centre, true);
-    expand(&mut frame.small_text, n, centre, true);
-    expand(&mut frame.default_text, n, centre, true);
-    expand(&mut frame.skin_text, n, centre, true);
+    let centres: Vec<[f32; 2]> = layout
+        .sprites
+        .iter()
+        .filter(|sprite| sprite.centred)
+        .map(|sprite| {
+            let [x, y, w, h] = sprite.rect;
+            [x + w * 0.5, y + h * 0.5]
+        })
+        .collect();
+    expand(&mut frame.sprites, n, centre, &centres, false);
+    expand(&mut frame.hud_text, n, centre, &[], true);
+    expand(&mut frame.small_text, n, centre, &[], true);
+    expand(&mut frame.default_text, n, centre, &[], true);
+    expand(&mut frame.skin_text, n, centre, &[], true);
 }
 
 #[cfg(test)]

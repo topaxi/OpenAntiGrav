@@ -284,6 +284,7 @@ mod tests {
             src: "Data\\XML\\2048_hud\\Texture\\hud_2048.gxt".to_string(),
             rotation: 0.0,
             gradient: None,
+            centred: false,
         }
     }
 

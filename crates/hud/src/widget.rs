@@ -151,6 +151,10 @@ pub struct Sprite {
     /// shows only the part of the grade up to its value: see
     /// `draw::crop_horizontally`.
     pub gradient: Option<[[f32; 4]; 2]>,
+    /// The widget authors `Centred="true"`: its `x`/`y` is the middle of [`Self::rect`], not
+    /// its top-left. The boost's copies step away from the authored point
+    /// ([`crate::boost_smear`]).
+    pub centred: bool,
 }
 
 /// One `<Text>`: a string, a font, and where it goes.
