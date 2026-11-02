@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-02
-summary: "ADR-0082/0083 accepted (lane 1); mod [[page]] parse, merge and per-mod reachability done in oag-ui (lane 2, 3 half); open: mods.rs load test, fingerprint filter, settings, queries, launch_race, the move"
+summary: "Mod pages parse, merge and reach per mod in oag-ui (lanes 2, 3 half); open: mods.rs load test, fingerprint, settings, queries, launch_race, the move"
 size: XL (40)
 difficulty: hard (45)
 ---
