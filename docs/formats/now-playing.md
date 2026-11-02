@@ -87,8 +87,9 @@ says so per title, with where each rule came from:
 What plays meanwhile is **nothing**: Pulse's fly-over carries a pre-race voice-over of its own
 (`MusicPlayer_StartPreRaceDialogue`), stopped when the fly-over ends, and its countdown has no
 music and no fade; HD's fly-over and countdown sit on mix rows with music at 0. This build plays
-neither the voice-over nor any menu loop under the race: the front end's voice stops at the
-hand-off as it always did and the race song is parked until the release.
+Pulse's voice-over on its own voice (`oag_sound::Audio::start_pre_race_voice`, Pulse PSP only)
+and no menu loop under the race: the front end's voice stops at the hand-off as it always did and
+the race song stays parked until the release, whatever the voice-over's stop does.
 
 How it works here: the race hand-off arms `oag_sound::Audio::hold_race_song` from the title's
 rule before it starts the music (`--race` and the `--screenshot` captures do the same through

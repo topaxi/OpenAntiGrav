@@ -29,4 +29,5 @@ pub const PRE_RACE: PreRace = PreRace {
     // `docs/rendering/start-gantry.md`: the harness "taps cross once to skip the track fly-over".
     skip: Sourced::measured(Skip::Press),
     panel: false,
+    voice_over: None,
 };

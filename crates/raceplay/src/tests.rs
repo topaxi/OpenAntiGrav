@@ -268,6 +268,7 @@ fn setup(handling: Handling) -> Setup {
         finished_thrust: None,
         original_tables: None,
         intro_camera: None,
+        intro_voice: None,
         slot_teams: Vec::new(),
         sight: Sighting::default(),
         trail_sparks: false,

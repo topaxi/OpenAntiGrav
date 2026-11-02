@@ -418,6 +418,20 @@ pub fn load_front_end(
     Ok(Some((name.to_string(), sound)))
 }
 
+/// Decodes the ATRAC3+ archive entry `name` to PCM: a clip the game plays through its music
+/// player that is not part of the soundtrack (Pulse's pre-race voice-over).
+///
+/// # Errors
+///
+/// An entry that is not in the archives, will not read, or will not decode.
+pub fn load_named(archives: &mut Archives, name: &str, cache_dir: &Path) -> Result<Sound> {
+    let blob = archives
+        .read_name(name)
+        .with_context(|| format!("reading {name}"))?;
+    let pcm = decode(&blob, cache_dir).with_context(|| format!("decoding {name}"))?;
+    Sound::new(pcm.samples, pcm.channels, pcm.sample_rate).context(name.to_string())
+}
+
 #[cfg(test)]
 mod tests;
 

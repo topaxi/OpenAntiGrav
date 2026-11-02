@@ -826,6 +826,7 @@ impl Session {
                         stage.race.skip_intro();
                     }
                     stage.race.tick_intro(&inputs);
+                    oag_game::sound::intro_voice(&mut self.audio, &mut stage.race);
                 }
                 Stage::Race(stage) => {
                     // Outside `Race::tick`, so this cannot reach the hash: it

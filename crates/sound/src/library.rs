@@ -142,3 +142,19 @@ pub fn load_front_end(
     };
     oag_music::load_front_end(title, &mut archives, cache_dir)
 }
+
+/// Decodes the archive entry `name` of `source`, a clip outside the soundtrack.
+///
+/// # Errors
+///
+/// A source that is not a known archived title, or an entry that will not read or decode.
+pub fn load_named(
+    library: &dyn Library,
+    source: &str,
+    name: &str,
+    cache_dir: &Path,
+) -> Result<Sound> {
+    let (_, mut archives) = open_archived(library, source)
+        .with_context(|| format!("opening {source} as a known title"))?;
+    oag_music::load_named(&mut archives, name, cache_dir)
+}

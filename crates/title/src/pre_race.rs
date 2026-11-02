@@ -84,4 +84,21 @@ pub struct PreRace {
     pub skip: Sourced<Skip>,
     /// Whether the track-description panel (Pulse's `InGameTrackDescriptionScreen`) is drawn.
     pub panel: bool,
+    /// The circuit's voice-over, played through the music player from the tick the lock counter
+    /// reaches zero until the flyby ends: an archive entry name with `{}` where the circuit's
+    /// number goes (the leading digits of its `PI_Track` id, as `atoi` reads them, so `03_Track`
+    /// is `3`). `None`: the title plays none.
+    pub voice_over: Option<Sourced<&'static str>>,
+}
+
+impl PreRace {
+    /// The entry holding the voice-over for the circuit whose `PI_Track` id is `track_id`, or
+    /// `None` for a title with none or an id that starts with no digit.
+    #[must_use]
+    pub fn voice_over_entry(&self, track_id: &str) -> Option<String> {
+        let template = self.voice_over?.value;
+        let digits: String = track_id.chars().take_while(char::is_ascii_digit).collect();
+        let number: u64 = digits.parse().ok()?;
+        Some(template.replace("{}", &number.to_string()))
+    }
 }

@@ -943,8 +943,12 @@ impl Session {
                 // Begun here, at the hand-over, so no frame is drawn with the chase camera and
                 // the HUD before the flyby's first tick. A race resumed from the menus
                 // (`escape.rs`) is not a new one and does not come through here.
-                if !self.no_intro && self.net.is_none() {
-                    race_stage.race.begin_intro();
+                if !self.no_intro && self.net.is_none() && race_stage.race.begin_intro() {
+                    oag_game::sound::prepare_intro_voice(
+                        &mut self.audio,
+                        &self.music_discs,
+                        &race_stage.race,
+                    );
                 }
                 race_stage
             }

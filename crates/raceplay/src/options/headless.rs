@@ -124,6 +124,8 @@ impl Setup {
             original_tables: None,
             #[cfg(feature = "view")]
             intro_camera: None,
+            #[cfg(feature = "view")]
+            intro_voice: None,
             slot_teams: Vec::new(),
             sight: Sighting::default(),
             collision: CollisionWorld::new(),

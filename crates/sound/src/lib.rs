@@ -51,6 +51,7 @@ mod listings;
 mod menu_music;
 mod now_playing;
 pub mod pool;
+mod pre_race_voice;
 pub use now_playing::NowPlaying;
 pub mod probe;
 mod race_music;
@@ -517,6 +518,8 @@ pub struct Audio {
     /// [`Bus::Music`]: the music runs for the session, this lasts one movie. See
     /// [`Audio::start_movie`].
     movie: Option<VoiceId>,
+    /// The pre-race flyby's voice-over. See [`pre_race_voice`].
+    pre_race_voice: pre_race_voice::PreRaceVoice,
     /// The voice playing under a race, distinct from [`Self::music`] (the menu's):
     /// [`Audio::start_race_music`] stops one before starting the other. `None`
     /// outside a race or with no decodable music.
@@ -696,6 +699,7 @@ impl Audio {
             music_from: None,
             held: Vec::new(),
             movie: None,
+            pre_race_voice: pre_race_voice::PreRaceVoice::default(),
             race_voice: None,
             race_from: None,
             race_index: None,
@@ -988,6 +992,7 @@ impl Audio {
         self.poll_source_switch();
         self.poll_menu_job();
         self.poll_race_job();
+        self.poll_pre_race_voice();
         self.hd_mix_tick(self.hd.state);
         if let Some(id) = self.race_voice
             && !self.output.with_mixer(|mixer| mixer.is_playing(id))

@@ -25,4 +25,10 @@ pub const PRE_RACE: PreRace = PreRace {
     ending: Sourced::measured(Ending::AtAnimationEnd),
     skip: Sourced::measured(Skip::Held),
     panel: true,
+    // `MusicPlayer_StartPreRaceDialogue` (`0x089387e8`) formats `Data\Sound\PreRaceDialogue\%d_Track.at3`
+    // with `atoi` of the circuit's `PI_Track` id; all 32 entries resolve on the PSP `Data.wad`
+    // (`docs/ghidra/functions/psp-pulse-usa/race-intro.md`, "The music").
+    voice_over: Some(Sourced::measured(
+        r"Data\Sound\PreRaceDialogue\{}_Track.at3",
+    )),
 };
