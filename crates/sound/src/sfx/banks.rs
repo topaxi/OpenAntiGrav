@@ -13,6 +13,7 @@ use oag_assets::source::Archives;
 use oag_audio::Sound;
 use oag_core::Rng;
 use oag_formats::sblk;
+use oag_formats::wwise::name_hash;
 
 use super::CueTables;
 use super::layers::{self, CueVoice, Program, Timeline};
@@ -255,6 +256,41 @@ impl Banks {
         self.report.extend(report);
     }
 
+    /// Loads `cue` as the Wwise event `event` (the full name the title posts)
+    /// out of the bank `entry`, one child of every random/sequence container it
+    /// reaches drawn by `rng`. Returns whether it loaded; why not is one line
+    /// of [`Self::report`], and the cue stays silent.
+    pub fn load_wwise_event(
+        &mut self,
+        archives: &mut Archives,
+        entry: &str,
+        cue: Cue,
+        event: &str,
+        rng: &mut Rng,
+    ) -> bool {
+        let line = match archives.read_name(entry) {
+            Err(e) => format!("sfx: {entry} not read: {e}"),
+            Ok(blob) => match super::wwise_start::load(&blob, event, rng) {
+                Ok(loaded) => {
+                    self.report.push(format!(
+                        "sfx: {event} -> {} voice(s) from {entry}, one child of {} container(s)",
+                        loaded.timeline.layers.len(),
+                        loaded.picks.len()
+                    ));
+                    self.report
+                        .extend(loaded.notes.iter().map(|n| format!("sfx: {event}: {n}")));
+                    self.sounds.insert(cue, loaded.loaded);
+                    self.timelines.insert(cue, vec![loaded.timeline]);
+                    return true;
+                }
+                Err(e) => format!("sfx: {event} not loaded: {e:#}"),
+            },
+        };
+        warn!("{line}");
+        self.report.push(line);
+        false
+    }
+
     /// Swaps the title's event start in for `ready`, `go` and the start beat,
     /// when it has one: the race is one of the title's own events, not a named
     /// mode. A cue the event start does not play
@@ -303,7 +339,11 @@ impl Banks {
                     Some(area) => (&mut area.sounds, &mut area.timelines),
                     None => (&mut self.sounds, &mut self.timelines),
                 };
-                match super::wwise_start::load(&blob, name) {
+                match super::wwise_start::load(
+                    &blob,
+                    name,
+                    &mut Rng::new(u64::from(name_hash(name))),
+                ) {
                     Ok(event) => {
                         report.push(format!(
                             "sfx: {name} -> {} voice(s) from {entry}, the Wwise event's timeline",

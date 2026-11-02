@@ -11,8 +11,10 @@
 //!
 //! Read: which sounds, the action delays, the nodes' initial delays and volume
 //! offsets (summed down the actor-mixer tree), the stop time and fade, the seek
-//! fraction. Not read, so refused or reported: random/sequence and switch
-//! containers (which child plays), streamed media, a relay into another bank,
+//! fraction. A random/sequence container sounds exactly one child per post:
+//! the first playlist item of a sequence, a uniform draw from `rng` for a
+//! random one (a container that weights its picks is refused, none does). Not
+//! read, so refused or reported: switch containers (which child plays), streamed media, a relay into another bank,
 //! state and other action kinds, the busses' own volumes and every positioning
 //! parameter (the start plays centred). A seek's randomised delay range plays at
 //! its minimum, chosen.
@@ -22,6 +24,8 @@ use std::sync::Arc;
 
 use anyhow::{Context, bail, ensure};
 use oag_audio::Sound;
+use oag_core::Rng;
+use oag_formats::wwise::container::RanSeq;
 use oag_formats::wwise::hirc::{self, Action, Event, Kind, Seek, Sound as WwiseSound, prop};
 use oag_formats::wwise::{Bank, name_hash};
 
@@ -34,6 +38,8 @@ pub(super) struct EventCue {
     pub(super) timeline: Timeline,
     /// One line per thing the event does that does not play.
     pub(super) notes: Vec<String>,
+    /// Each random/sequence container reached and the child it played.
+    pub(super) picks: Vec<(u32, u32)>,
 }
 
 /// A sound an action starts, before its media is cut by stops and seeks.
@@ -52,6 +58,12 @@ struct Cut {
 enum CutKind {
     Stop { fade: f64 },
     Seek { fraction: f64 },
+}
+
+/// The draws a load makes.
+struct Picker<'a> {
+    rng: &'a mut Rng,
+    made: Vec<(u32, u32)>,
 }
 
 /// The objects of one bank, with every node's children.
@@ -119,8 +131,14 @@ impl<'a> Tree<'a> {
     /// The sounds playing `target` starts at `at`: the sound itself, or every
     /// child of a layer container or actor-mixer, each after its own initial
     /// delay.
-    fn starts(&self, target: u32, at: f64, out: &mut Vec<Start>) -> anyhow::Result<()> {
-        let (kind, _) = self
+    fn starts(
+        &self,
+        target: u32,
+        at: f64,
+        pick: &mut Picker<'_>,
+        out: &mut Vec<Start>,
+    ) -> anyhow::Result<()> {
+        let (kind, body) = self
             .kind_and_body(target)
             .with_context(|| format!("target {target} is in no object of the bank"))?;
         let at = at + self.initial_delay(target);
@@ -128,8 +146,28 @@ impl<'a> Tree<'a> {
             Kind::Sound => out.push(Start { sound: target, at }),
             Kind::LayerContainer | Kind::ActorMixer => {
                 for &child in self.children.get(&target).into_iter().flatten() {
-                    self.starts(child, at, out)?;
+                    self.starts(child, at, pick, out)?;
                 }
+            }
+            Kind::RanSeqContainer => {
+                let container =
+                    RanSeq::parse(kind, body).with_context(|| format!("container {target}"))?;
+                ensure!(
+                    !container.uses_weights(),
+                    "container {target} weights its picks, which is not read"
+                );
+                ensure!(
+                    !container.playlist.is_empty(),
+                    "container {target} is empty"
+                );
+                let item = if container.is_sequence() {
+                    0
+                } else {
+                    pick.rng.below(container.playlist.len() as u32) as usize
+                };
+                let child = container.playlist[item].id;
+                pick.made.push((target, child));
+                self.starts(child, at, pick, out)?;
             }
             other => bail!("target {target} is a {other:?}, whose choice of child is not read"),
         }
@@ -143,13 +181,17 @@ impl<'a> Tree<'a> {
 /// # Errors
 ///
 /// The bank does not parse, has no such event, an action starts something
-/// whose choice is unread, or no sound it starts decodes.
-pub(super) fn load(blob: &[u8], event: &str) -> anyhow::Result<EventCue> {
+/// whose choice is unread (a switch, a weighted container), or no sound it starts decodes.
+pub(super) fn load(blob: &[u8], event: &str, rng: &mut Rng) -> anyhow::Result<EventCue> {
     let bank = Bank::parse(blob).map_err(|e| anyhow::anyhow!("not a Wwise bank: {e}"))?;
     let tree = Tree::new(&bank);
     let mut starts = Vec::new();
     let mut cuts = Vec::new();
     let mut notes = Vec::new();
+    let mut pick = Picker {
+        rng,
+        made: Vec::new(),
+    };
     let mut queue = vec![(name_hash(event), 0.0)];
     let mut seen = Vec::new();
     while let Some((id, base)) = queue.pop() {
@@ -175,7 +217,7 @@ pub(super) fn load(blob: &[u8], event: &str) -> anyhow::Result<EventCue> {
             let props = Action::props(body).unwrap_or_default();
             let at = base + f64::from(props.int(prop::DELAY_MS).unwrap_or(0)) / 1000.0;
             match action.kind {
-                Action::PLAY => tree.starts(action.target, at, &mut starts)?,
+                Action::PLAY => tree.starts(action.target, at, &mut pick, &mut starts)?,
                 Action::PLAY_EVENT => queue.push((action.target, at)),
                 Action::STOP => cuts.push(Cut {
                     target: action.target,
@@ -305,5 +347,6 @@ pub(super) fn load(blob: &[u8], event: &str) -> anyhow::Result<EventCue> {
             bends: Vec::new(),
         },
         notes,
+        picks: pick.made,
     })
 }

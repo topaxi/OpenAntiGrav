@@ -423,6 +423,46 @@ fn posted_events_resolve(paths: &[String], library: &Library<'_>) {
         [name_hash("WPN_MISSILE_Fire")]
     );
 
+    // The relay's target plays one layer container of five layers: four
+    // random containers (a child each per post, every child a sound; 275399150
+    // has one item, the other three six) and one sound.
+    let fire = name_hash("WPN_MISSILE_Fire");
+    let targets = library.play_targets(fire).expect("the relayed event");
+    assert_eq!(targets, [117_129_590]);
+    let layers = &library.banks()[weapons];
+    let layer = layers.object(targets[0]).expect("the layer container");
+    assert_eq!(layer.kind, Kind::LayerContainer);
+    let mut shape = (0, 0, 0);
+    for object in layers.objects() {
+        if hirc::parent(object.kind, layers.body(object)) != Some(targets[0]) {
+            continue;
+        }
+        match object.kind {
+            Kind::RanSeqContainer => {
+                shape.0 += 1;
+                let r =
+                    RanSeq::parse(object.kind, layers.body(object)).expect("a random container");
+                assert!(
+                    !r.is_sequence() && !r.playlist.is_empty(),
+                    "{:?}",
+                    r.playlist
+                );
+                for item in &r.playlist {
+                    let child = layers.object(item.id).expect("a child of the bank");
+                    assert_eq!(child.kind, Kind::Sound, "container {}'s child", object.id);
+                }
+                shape.2 += r.playlist.len();
+            }
+            Kind::Sound => shape.1 += 1,
+            other => panic!("a {other:?} under the missile's layers"),
+        }
+    }
+    assert_eq!(
+        shape,
+        (4, 1, 19),
+        "(random containers, sounds, their children)"
+    );
+
     // The node property bundle `oag_sound`'s event timeline reads: present on
     // every node, a volume in dB and an initial delay in seconds when set.
     use oag_formats::wwise::hirc::{node_props, prop};

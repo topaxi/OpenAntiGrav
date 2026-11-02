@@ -92,9 +92,8 @@ random/sequence (61), plus settings, attenuations and effects.
   (playlist, clip automation) is unread. All 927 (`data00`) have one source.
 * **The parent id** of a node (sound, container, actor-mixer) is at the head of
   its base parameters, after a variable effect list, an `u8` and the override bus
-  id. The rest of the base parameters (positioning, sends, states, RTPCs) are
-  not read: nothing here needs them, and a fit for the whole structure was not
-  attempted.
+  id. The rest of the base parameters are read only for containers (below);
+  for sounds and actor-mixers they are not.
 
 The source's plugin id is `AKMAKECLASSID(type, company, number)`, `type |
 company << 4 | number << 16`. **Codec plugins** (`0x000N0001`): number 1 is PCM
@@ -408,14 +407,76 @@ Counts come from the ground-truth tests, over every bank of each archive.
 * **Looping.** Whether the ranseq's `loop 1` or the segment loops the song was
   not read; the engine plays each track once and advances the playlist.
 
+## Sound containers
+
+`oag_formats::wwise::container` reads a random/sequence container (type 5) and a
+switch container (type 6). Both open with the node's base parameters, read as far
+as it takes to reach what the kind adds, and end exactly at the body's last byte
+(`TrailingBytes` otherwise); a shape not read is refused by name.
+
+```text
+base      u8, u8 n fx [, u8, n * 7], u8, u32 bus, u32 parent, u8        (the head)
+          u8 n + n ids + n f32, u8 n + n ids + n * 8                    (two bundles)
+          u8 positioning   bits 6,7 set; bit 3 or 4 set: u8 1, u32 attenuation follow
+          u8 sends         bit 3 set: four u32 bus ids follow
+          u8, u8, u16, u8, u8   advanced settings (unread)
+          u32 groups, each { u32 id, u8, u16 n, n * { u32, u32 } }      state groups
+          u16 rtpc, each { u32, u8, u8, u8, u32, u8, u16 points, points * 12 }
+ranseq    u16 loop (0 forever), u16, u16, f32 transition + 2 f32 bounds,
+          u16 avoid repeat, u8 transition mode, u8 random mode, u8 mode (0 random,
+          1 sequence), u8 flags, u32 n + n child ids, u16 m + m * { u32 id, i32 weight }
+switch    u8 group type (1 = state group), u32 group, u32 default switch, u8,
+          u32 n + n child ids, u32 cases + cases * { u32 switch, u32 k, k ids },
+          u32 params + params * { u32 id, u8, u8, i32, i32 }   (14 bytes each)
+```
+
+Census, `crates/formats/tests/wwise_ground_truth.rs` (`Containers`, per archive):
+
+| | `data00` | `data05` | `data08` |
+| --- | ---: | ---: | ---: |
+| random/sequence containers read | 462 (453 random, 9 sequence) | 19 | 551 (538, 13) |
+| refused by name (`BaseParams`: a 3D block that opens a path) | 1 | 0 | 1 |
+| switch containers read (state groups) | 525 (340) | 39 (17) | 626 (400) |
+| any other refusal | 0 | 0 | 0 |
+| child ids / resolving to an object of the archive | 5,460 / 5,460 | 243 / 243 | 6,015 / 6,015 |
+| of them whose own parent id names the container | 5,455 | 243 | 6,008 |
+| playlist items / containers with avoid-repeat > 0 | 2,116 / 458 | 111 / 19 | 2,449 / 547 |
+| containers weighting their picks (flag bit 0) | 0 | 0 | 0 |
+
+The refused one is `Ship_NGP`'s, in both base and patch. Every `Weapons_NGP`
+container reads. Measured: the layouts above (exact consumption of the body on
+all of the above, a second source in the children's own parent ids), 85.
+Unknown, named: the six advanced-settings bytes (their values are not decoded
+beyond their length), the switch's `u8` after the default switch, a switch
+parameter's two bytes (`0, 1` on most, `2, 1` on a few) and its two `i32` (fade
+times in ms, a guess, 55), a random container's transition bytes, and the flag
+bits (names recalled from public Wwise documentation, 55; `0x12` or `0x1a` on
+every one). No container sets the weight bit, so a weighted pick is refused by
+the player rather than guessed.
+
+**What a post plays** (`oag_sound::sfx`, `wwise_start`): one child of a random
+container, drawn by the `Rng` passed in; the first playlist item of a sequence;
+a switch container is still refused (its group's current value is the game's).
+The missile launch (`NGP_MissileFire__Weapons_NGP` -> relay -> `WPN_MISSILE_Fire`)
+plays *one layer container* of five layers: four random containers (275399150 has
+one item, three others six) and one plain sound, so a post sounds five media, one
+per layer; the thread's earlier "resolves to one sounding media" was a
+misreading. The player's `NGP_MissileFire_PC` event is not a twin of the NPC one:
+it plays its own sound, relays to a second event after 100 ms and sets a state
+(`0x1204`), none of which is wired.
+
+**2048 and Omega:** 2048 ships `SBlk` banks, not Wwise: *checked, differs*
+(`oag_formats::sblk` opens 2048's `.bnk`; `Bank::parse` refuses them with
+`NoHeader`, the `data02` result above).
+
 ## What is not done
 
 * **Event names.** A bank carries ids only, but its `.txt` listing names every
   event, and the executable's name for a cue is `<cue>[_PC]__<bank>` (above).
   Mapping this project's cues to Omega's cue strings is wiring, not reading.
 * **Multi-channel ATRAC9**, above.
-* **The unread parts of `HIRC`**: the rest of node base parameters, sound
-  containers' playlists, `Init.bnk`'s bus and state definitions. Music
+* **The unread parts of `HIRC`**: the base parameters of sounds and
+  actor-mixers, switch values, `Init.bnk`'s bus and state definitions. Music
   objects are read (above); `EventPlan::unread` still lists the events that
   play one, and `Library::walk_music` is how they are followed.
 * **Loop points.** 173 embedded files carry a `smpl` chunk; nothing reads it.
@@ -424,7 +485,7 @@ Counts come from the ground-truth tests, over every bank of each archive.
   through `oag_sound::sfx`, which reads `SBlk` banks by name. (Music is.) The
   start plays (`oag_sound::sfx`'s Wwise event timeline, the evidence page's
   "What the port plays"); every other cue waits on the evidence page's "Open"
-  list (random and switch containers, positioning).
+  list (switch containers, positioning). Random containers are read and played.
 
 ## Confidence
 
@@ -440,4 +501,5 @@ Counts come from the ground-truth tests, over every bank of each archive.
 | Mono/stereo decode is right | 90 | two independent decoders agree to 1 LSB up to polarity |
 | Event id = FNV-1 of `<cue>[_PC]__<bank>` | 92 | listing ids, the music events, 1,212 of 1,272 trackside emitters; executable read ([wwise-sound.md](../ghidra/functions/ps4-omega-eu/wwise-sound.md)) |
 | Kind `0x2103` plays its target event | 80 | target is an event on every relay read (the `_PC` twins, the missile); fitted, not from the SDK |
+| Random/sequence and switch container layouts | 85 | exact consumption of every body in the three archives bar 2 path-positioned ones (refused by name); children resolve and name the container as parent on 11,706 of 11,718 |
 | Which polarity is Sony's | - | not known |

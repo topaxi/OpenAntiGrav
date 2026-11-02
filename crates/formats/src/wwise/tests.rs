@@ -234,3 +234,81 @@ fn a_target_in_no_bank_is_reported_and_not_guessed_at() {
     assert!(plan.media.is_empty());
     drop(library);
 }
+
+/// A container's base parameters in the plain shape: no effects, no bundle
+/// entries, positioning `0xc0`, no sends, six advanced bytes, no states, no RTPC.
+fn plain_base(parent: u32) -> Vec<u8> {
+    let mut body = vec![0, 0, 0];
+    body.extend_from_slice(&0u32.to_le_bytes());
+    body.extend_from_slice(&parent.to_le_bytes());
+    body.extend_from_slice(&[0, 0, 0, 0xc0, 0, 0x0c, 1, 1, 0, 0, 0]);
+    body.extend_from_slice(&0u32.to_le_bytes());
+    body.extend_from_slice(&0u16.to_le_bytes());
+    body
+}
+
+#[test]
+fn a_random_container_reads_its_playlist_and_refuses_what_it_does_not_know() {
+    use super::container::{ContainerError, RanSeq};
+    let mut body = plain_base(9);
+    body.extend_from_slice(&[1, 0, 0, 0, 0, 0]);
+    body.extend_from_slice(&[0; 12]);
+    body.extend_from_slice(&[1, 0, 0, 0, 0, 0x12]);
+    body.extend_from_slice(&2u32.to_le_bytes());
+    for id in [10u32, 11] {
+        body.extend_from_slice(&id.to_le_bytes());
+    }
+    body.extend_from_slice(&2u16.to_le_bytes());
+    for id in [10u32, 11] {
+        body.extend_from_slice(&id.to_le_bytes());
+        body.extend_from_slice(&50_000i32.to_le_bytes());
+    }
+    let read = RanSeq::parse(Kind::RanSeqContainer, &body).expect("a plain random container");
+    assert_eq!(read.children, [10, 11]);
+    assert_eq!(read.playlist.len(), 2);
+    assert!(!read.is_sequence() && !read.uses_weights());
+    assert_eq!(read.avoid_repeat, 1);
+
+    let mut long = body.clone();
+    long.push(0);
+    assert_eq!(
+        RanSeq::parse(Kind::RanSeqContainer, &long),
+        Err(ContainerError::TrailingBytes { at: body.len() })
+    );
+    assert_eq!(
+        RanSeq::parse(Kind::SwitchContainer, &body),
+        Err(ContainerError::WrongKind(Kind::SwitchContainer))
+    );
+    // A positioning byte without bits 6 and 7 is a shape this reader does not know.
+    let mut moved = body.clone();
+    moved[11 + 3] = 0x79;
+    assert!(matches!(
+        RanSeq::parse(Kind::RanSeqContainer, &moved),
+        Err(ContainerError::BaseParams { .. })
+    ));
+}
+
+#[test]
+fn a_switch_container_picks_the_default_case_for_an_unknown_switch() {
+    use super::container::Switch;
+    let mut body = plain_base(9);
+    body.push(1);
+    body.extend_from_slice(&77u32.to_le_bytes());
+    body.extend_from_slice(&2u32.to_le_bytes());
+    body.push(0);
+    body.extend_from_slice(&2u32.to_le_bytes());
+    for id in [10u32, 11] {
+        body.extend_from_slice(&id.to_le_bytes());
+    }
+    body.extend_from_slice(&2u32.to_le_bytes());
+    for (switch, child) in [(1u32, 10u32), (2, 11)] {
+        body.extend_from_slice(&switch.to_le_bytes());
+        body.extend_from_slice(&1u32.to_le_bytes());
+        body.extend_from_slice(&child.to_le_bytes());
+    }
+    body.extend_from_slice(&0u32.to_le_bytes());
+    let read = Switch::parse(Kind::SwitchContainer, &body).expect("a plain switch");
+    assert_eq!((read.group, read.default), (77, 2));
+    assert_eq!(read.children_for(1), [10]);
+    assert_eq!(read.children_for(99), [11]);
+}
