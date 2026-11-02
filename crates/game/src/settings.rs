@@ -72,6 +72,7 @@ pub mod web;
 pub use controls::{Controls, TriggerSensitivity};
 pub use online::Online;
 pub use race::{Race, Remix};
+pub mod mod_settings;
 pub use render_profile::{RenderProfile, SCREEN_FILTER_OFF, profile_key};
 use render_profile::{
     ensure_known_titles, migrate_platform_split, migrate_reconstruction_keys,
@@ -138,6 +139,10 @@ pub struct Settings {
     /// Which mods are turned off on the MODS page.
     #[serde(default)]
     pub mods: Mods,
+    /// What each mod's own menu rows saved, by mod id then key (`mod_settings`).
+    /// Kept whether or not the mod is turned on.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub mod_settings: mod_settings::ModSettings,
     /// Developer switches, read in debug builds only (see [`Dev`]).
     #[serde(default, skip_serializing_if = "Dev::is_empty")]
     pub dev: Dev,

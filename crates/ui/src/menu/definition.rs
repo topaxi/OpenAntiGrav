@@ -124,6 +124,7 @@ pub enum Error {
 }
 
 mod build;
+mod mod_setting;
 pub use build::{Added, For, ModMenu};
 
 /// The file's own shape, before it is checked and resolved.
