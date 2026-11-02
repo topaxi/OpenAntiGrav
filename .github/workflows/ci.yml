@@ -191,6 +191,9 @@ jobs:
       - name: Assert race-level hashes match the committed reference (release)
         if: ${{ !cancelled() }}
         run: cargo test -p oag-gameplay --release --test determinism -- --nocapture
+      - name: Assert fanned-volley hashes match the committed reference (release)
+        if: ${{ !cancelled() }}
+        run: cargo test -p oag-gameplay --release --test determinism_volley -- --nocapture
       # The force law above is driven by a *scripted* input, so no controller
       # decision is in its hash. This one drives the drivers, which is where
       # `Line::curvature` lives - the platform `acos` it used to call was
@@ -214,6 +217,9 @@ jobs:
       - name: Assert race-level hashes match the committed reference (debug)
         if: ${{ !cancelled() }}
         run: cargo test -p oag-gameplay --test determinism -- --nocapture
+      - name: Assert fanned-volley hashes match the committed reference (debug)
+        if: ${{ !cancelled() }}
+        run: cargo test -p oag-gameplay --test determinism_volley -- --nocapture
       - name: Assert driver hashes match the committed reference (debug)
         if: ${{ !cancelled() }}
         run: cargo test -p oag-ai --test determinism -- --nocapture
