@@ -1423,7 +1423,8 @@ the player's craft swings, as on Pulse; a rival's flaps stay stowed.
   **How the executable names a cue is read** (`omega-wwise-sfx-re`, 2026-11-02): it posts
   `<cue>[_PC]__<bank>`, so the start is `_321_NGP__Weapons_NGP` in `English(US)/Weapons_NGP.bnk`; the
   sixteen 32-byte banks are legacy names it never loads
-  ([wwise-sound.md](../ghidra/functions/ps4-omega-eu/wwise-sound.md)).
+  ([wwise-sound.md](../ghidra/functions/ps4-omega-eu/wwise-sound.md)). **The start plays** those two events
+  as their timelines (17 and 6 voices); no other effect does yet.
   **Particles play** (`omega-particles`, 2026-10-05): Omega keeps its effects in
   `Data\particles` and `Data\particles2048` (not `Data\Psys`), with `.gnf`
   sprites; a race reads `particles2048` on an `environments2048` circuit and

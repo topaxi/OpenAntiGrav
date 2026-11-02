@@ -327,6 +327,33 @@ fn posted_events_resolve(paths: &[String], library: &Library<'_>) {
         relays_of(bank, name_hash("NGP_MissileFire__Weapons_NGP")),
         [name_hash("WPN_MISSILE_Fire")]
     );
+
+    // The node property bundle `oag_sound`'s event timeline reads: present on
+    // every node, a volume in dB and an initial delay in seconds when set.
+    use oag_formats::wwise::hirc::{node_props, prop};
+    for bank in library.banks() {
+        for object in bank.objects().iter().filter(|o| o.kind.has_parent()) {
+            // A generator source (silence, tone) carries its plugin's
+            // parameters after the source, which the fitted head does not skip.
+            if object.kind == Kind::Sound
+                && Sound::parse(bank.body(object)).is_some_and(|s| s.source.plugin.class() != 1)
+            {
+                continue;
+            }
+            let props = node_props(object.kind, bank.body(object))
+                .unwrap_or_else(|| panic!("node {}'s property bundle", object.id));
+            if let Some(db) = props.float(prop::VOLUME) {
+                assert!(
+                    (-96.0..=24.0).contains(&db),
+                    "node {}: volume {db}",
+                    object.id
+                );
+            }
+            if let Some(s) = props.float(prop::INITIAL_DELAY) {
+                assert!((0.0..=60.0).contains(&s), "node {}: delay {s}", object.id);
+            }
+        }
+    }
 }
 
 /// Kind `0x2103`: an action whose target is another event, played in turn.

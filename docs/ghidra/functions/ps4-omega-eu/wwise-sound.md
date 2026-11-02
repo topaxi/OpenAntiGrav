@@ -225,14 +225,28 @@ countdown was not read.
 | `0x012993b0` | (stage setter) | `0x012acf10` | `_321_NGP` string xref |
 | `0x0129a360` | (go stage) | `0x012afb20` | `Go_NGP` string xref |
 
+## What the port plays (2026-11-02)
+
+`oag_omega::race::COUNTDOWN_VOICE` names the two events by their full names in `English(US)/Weapons_NGP.bnk`,
+on every mode (`event_every_mode`); `oag_sound::sfx` reads a `BKHD` bank's event into the timeline its voices
+already play (`crates/sound/src/sfx/wwise_start.rs`): `Play` on sounds and on layer containers (all children),
+relays within the bank, action delays, initial delays, node volumes summed up the tree (busses not), the `Stop`
+cut with its fade and the seeks spliced into the media. `_321_NGP__Weapons_NGP` loads 17 voices and
+`Go_NGP__Weapons_NGP` 6; Go's `SetState` and its relay's seek on a `Ship_NGP` object are reported, not played.
+Pinned by `crates/raceplay/tests/omega_countdown_ground_truth.rs`
+(`the_start_plays_its_wwise_events_as_timelines`). A rendered Time Trial start (speech only, ours raising Ready
+at tick 91 and Go at 271) rises at 1.50 s, then 2.0, 2.9 and 3.6 s (the VO's three delays after Ready) and at
+4.6 s for Go; one sample of 768,000 reaches full scale. The Ready-to-Go spacing is Pulse's, lent.
+
 ## Open
 
 * **The countdown post, live.** Drive the wipeout_pc run past GO and confirm no `Failed Posting Audio Event`
   line and the Wwise post of 243270081 (a breakpoint on patch `0x017caf30`, or its log).
-* **Container rules.** Random/sequence, switch and layer containers decide which of the 13 countdown media
-  sound; `oag_formats::wwise::hirc` does not read their playlists or switch keys.
-* **Action kinds `0x1e03` and `0x0102`** in the countdown and `0x1204` (`SetState`) in `Go_NGP`: read their
-  bodies before wiring.
+* **Container rules.** Random/sequence and switch containers decide which child sounds;
+  `oag_formats::wwise::hirc` does not read their playlists or switch keys, and the port refuses an event that
+  reaches one. The countdown has none (three layer containers, whose children all play).
+* **Seek and Stop layouts are fitted** on the countdown's two seeks and one stop (`hirc::Seek`, `prop`):
+  confidence 65. `0x1204` (`SetState`) in `Go_NGP` sets a state nothing here reads.
 * **Positioning.** The request's 23999.0, 0.0005 and 0.4, and each sound's 3D parameters (unread base
   parameters), decide pan and attenuation. The countdown plays on the speech manager's group, which no code
   read here positions.

@@ -95,10 +95,8 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     sounds: SOUND_BANKS,
     zone_announcer: None,
     eliminator_skin: None,
-    // Chosen, not measured: Pulse's start timing lent to this title. Omega's own start posts the
-    // Wwise events `_321_NGP__Weapons_NGP` and `Go_NGP__Weapons_NGP`, which nothing here plays yet
-    // (`docs/ghidra/functions/ps4-omega-eu/wwise-sound.md`), so it is silent; the `Go` cue event still
-    // times the song's start (`now_playing_ground_truth`).
+    // Omega's own start events, Pulse's spacing lent; the `Go` cue event also times the song's
+    // start (`now_playing_ground_truth`).
     countdown_voice: Some(COUNTDOWN_VOICE),
     // The same grid clamp as HD's, read in Omega's own craft update; see `LAUNCH_HOVER`.
     launch_hover: Some(&LAUNCH_HOVER),
@@ -451,16 +449,24 @@ mod team_identity_tests {
     }
 }
 
-/// The start-of-race voice's banks: the Zone bank is the one the Zone announcer reads, Eliminator
-/// reads the ordinary speech bank. Timing lent from Pulse, chosen, not measured - see
-/// `oag_title::CountdownVoice`. `speech.bnk` is a Wwise stub, so no voice loads and the start is silent.
+/// The start of every race but the demo: the Wwise events `_321_NGP__Weapons_NGP` and
+/// `Go_NGP__Weapons_NGP`, the name the executable posts for its cues `_321_NGP` and `Go_NGP` on the
+/// speech manager's (non-player) group, out of the bank its `Weapons_NGP` slot loads
+/// (`docs/ghidra/functions/ps4-omega-eu/wwise-sound.md`, "The countdown, end to end"). The spacing of
+/// the two is Pulse's, lent: chosen, not measured. The named-mode banks are unused (no mode plays a
+/// named pair).
 pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoice {
     eliminator_bank: r"Data\audio\sound\speech.bnk",
     zone_bank: r"Data\audio\sound\speech.bnk",
     origin: oag_title::Origin::Chosen,
     tick: oag_title::SequenceTick::Unknown,
     hashed: false,
-    event: None,
+    event: Some(oag_title::CountdownEvent {
+        bank: r"Data\audio\sound\English(US)\Weapons_NGP.bnk",
+        ready: oag_title::StartCue::Plays("_321_NGP__Weapons_NGP"),
+        go: oag_title::StartCue::Plays("Go_NGP__Weapons_NGP"),
+    }),
+    event_every_mode: true,
     beat: None,
 };
 

@@ -2,7 +2,7 @@
 status: measure
 titles: [hd, 2048, pure, omega]
 updated: 2026-11-02
-summary: "2048 start cues corrected and playing; HD spacing inherited; Omega start events found (<cue>__Weapons_NGP), wiring in omega-wwise-sfx-path"
+summary: "2048 start cues corrected and playing; HD spacing inherited; Omega plays its own <cue>__Weapons_NGP events, spacing lent"
 ---
 
 # Each title's own countdown: what is left
@@ -43,8 +43,8 @@ Ours still plays nothing there.
   against the release has 2 frame resolution.
 - **Omega**: the start posts `_321_NGP__Weapons_NGP` (243270081) and `Go_NGP__Weapons_NGP` (744083536) on every
   non-demo mode; both resolve to embedded ATRAC9 media in `English(US)/Weapons_NGP.bnk` (13 and 6 candidates,
-  with action delays 400/1,300/2,150 ms). Wiring needs a Wwise sfx path in `oag-sound`: see
-  `handover/audio/omega-wwise-sfx-path.md`.
+  with action delays 400/1,300/2,150 ms). **Played since 2026-11-02** as the events' timelines; open: the
+  Ready-to-Go spacing is Pulse's (a live wipeout_pc run past GO would time it).
 - Not heard by a human; checks are WAV renders and cue logs.
 
 ## Next Steps

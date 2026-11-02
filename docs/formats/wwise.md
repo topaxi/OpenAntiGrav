@@ -422,9 +422,9 @@ Counts come from the ground-truth tests, over every bank of each archive.
 * **The 1,450 dangling Play targets.**
 * **Race sound effects on this title** are not wired: the simulation's cues go
   through `oag_sound::sfx`, which reads `SBlk` banks by name. (Music is.) The
-  read side is now known end to end for the countdown and the missile launch;
-  what a wiring needs is on the evidence page's "Open" list (container rules,
-  action kinds `0x1e03`, `0x0102`, positioning).
+  start plays (`oag_sound::sfx`'s Wwise event timeline, the evidence page's
+  "What the port plays"); every other cue waits on the evidence page's "Open"
+  list (random and switch containers, positioning).
 
 ## Confidence
 

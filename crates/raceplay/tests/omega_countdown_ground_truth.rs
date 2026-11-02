@@ -64,3 +64,68 @@ fn no_omega_bank_defines_the_start_events() {
     }
     assert_eq!(checked, 2);
 }
+
+/// The start plays the events the executable posts, `<cue>__Weapons_NGP`, as
+/// their timelines: the VO and UI "three, two, one" on the action delays 400,
+/// 1,300 and 2,150 ms, the legacy beeps on their initial delays 0.521, 1.375 and
+/// 2.229 s, and the ship layers cut by the `Stop` at 3,100 ms with a 50 ms fade.
+/// Evidence: `docs/ghidra/functions/ps4-omega-eu/wwise-sound.md` ("The countdown,
+/// end to end").
+#[test]
+#[ignore = "needs the decrypted Omega packages in data/extracted/ps4/"]
+fn the_start_plays_its_wwise_events_as_timelines() {
+    let Some(source) = oag_testdata::exact("data/extracted/ps4") else {
+        return;
+    };
+    let mut archives = oag_omega::open(&source.display().to_string()).expect("the Omega source");
+    let race = oag_omega::TITLE.race;
+    let voice = race.countdown_voice.expect("Omega voices its start");
+    assert!(voice.event_every_mode, "every mode plays the event pair");
+    let mut banks = oag_sound::sfx::Banks::default();
+    banks.load_countdown(&mut archives, race.sounds.speech, voice);
+    let line = |name: &str| {
+        banks
+            .report
+            .iter()
+            .find(|l| l.starts_with(&format!("sfx: {name} -> ")))
+            .unwrap_or_else(|| panic!("{name} not loaded: {:?}", banks.report))
+            .clone()
+    };
+    assert!(
+        line("_321_NGP__Weapons_NGP").contains("17 voice(s)"),
+        "{:?}",
+        banks.report
+    );
+    assert!(
+        line("Go_NGP__Weapons_NGP").contains("6 voice(s)"),
+        "{:?}",
+        banks.report
+    );
+
+    let mut rng = oag_core::Rng::new(1);
+    let ready = banks
+        .voices(oag_gameplay::cue::Cue::Ready, &mut rng)
+        .expect("the start's first event");
+    let onset = |t: f64| ready.iter().filter(|v| (v.delay - t).abs() < 1e-3).count();
+    for (t, voices) in [
+        (0.4, 2),
+        (1.3, 2),
+        (2.15, 2),
+        (0.521, 2),
+        (1.375, 2),
+        (2.229, 2),
+    ] {
+        assert_eq!(onset(t), voices, "voices keyed at {t} s");
+    }
+    let ends: Vec<f64> = ready
+        .iter()
+        .map(|v| v.delay + v.sound.frames() as f64 / f64::from(v.sound.sample_rate()))
+        .collect();
+    assert!(
+        ends.iter()
+            .filter(|&&end| (end - 3.15).abs() < 0.002)
+            .count()
+            >= 3,
+        "the three ship layers end at the Stop plus its fade: {ends:?}"
+    );
+}

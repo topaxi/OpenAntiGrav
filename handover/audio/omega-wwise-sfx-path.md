@@ -4,7 +4,7 @@ titles: [omega]
 size: M (55)
 difficulty: medium (50)
 updated: 2026-11-02
-summary: "Omega race sfx need a Wwise path in oag-sound; read: bank list, <cue>[_PC]__<bank> law, relays; unread: container rules, positioning"
+summary: "Omega's start plays its Wwise events; every other race sfx still silent: random/switch containers, positioning, cue mapping unread or unwired"
 ---
 
 # Omega race sound effects through Wwise
@@ -14,8 +14,10 @@ summary: "Omega race sfx need a Wwise path in oag-sound; read: bank list, <cue>[
 [wwise.md](../../docs/formats/wwise.md) ("Event names and the stub banks"). Ground truth:
 `crates/formats/tests/wwise_ground_truth.rs`, `posted_events_resolve`.
 
-Omega races play the song and nothing else: every cue goes through `oag_sound::sfx`, which reads `SBlk` banks by
-name, and Omega's banks are Wwise. The read side now names what a Wwise sfx path needs.
+**Landed (2026-11-02, same lane, at the maintainer's request):** the start. `oag_sound::sfx` reads a `BKHD`
+bank's event into a timeline (`crates/sound/src/sfx/wwise_start.rs`; steps 1-4 below for one bank), and Omega's
+`COUNTDOWN_VOICE` names `_321_NGP__Weapons_NGP` and `Go_NGP__Weapons_NGP` on every mode. Every other Omega race
+cue still goes through the `SBlk` loader and is silent.
 
 ## What a wiring needs, in order
 
@@ -56,10 +58,10 @@ name, and Omega's banks are Wwise. The read side now names what a Wwise sfx path
 
 ## Next Steps
 
-1. Countdown first (a day): banks 1, law 2, relays 3, delays 4, with `Placement` 2D. Acceptance: a WAV render of
-   an Omega start that holds VO "three, two, one" at the action delays, and a test that fails if the suffix law
-   or the relay follow is dropped.
-2. Container rules for random/sequence and switch in `oag_formats::wwise::hirc` (half a day to a day), then the
-   missile launch.
+1. ~~Countdown~~ done (`the_start_plays_its_wwise_events_as_timelines`).
+2. Container rules for random/sequence and switch in `oag_formats::wwise::hirc` (half a day to a day), then
+   the missile launch: a per-cue table from `oag_gameplay::cue::Cue` to Omega's cue strings and slots (the
+   weapon cues' strings are in the executable beside each weapon's launcher, e.g. `NGP_MissileFire`), loaded
+   through the same `wwise_start::load` from one `Library` over the race's banks (cross-bank media and relays).
 3. Live check of the countdown post (an hour): run the wipeout_pc port past GO and look for no
    `Failed Posting Audio Event` line (patch `0x017caf30` prints one on an unknown event).

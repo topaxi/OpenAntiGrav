@@ -127,7 +127,8 @@ it posts `<cue>[_PC]__<bank>` with the bank of the slot the cue plays in, here `
 [ps4-omega-eu/wwise-sound.md](../ps4-omega-eu/wwise-sound.md#the-countdown-end-to-end-confidence-88)). The bare names are
 still no event in any bank (`crates/raceplay/tests/omega_countdown_ground_truth.rs`); the suffixed ones resolve
 to media (`crates/formats/tests/wwise_ground_truth.rs`, `posted_events_resolve`). What follows was written
-before this was known: "nothing to play" and "the voice is not on any archive we hold" are wrong.
+before this was known: "nothing to play" and "the voice is not on any archive we hold" are wrong, and the port
+now plays both events (`oag_omega::race::COUNTDOWN_VOICE`, [wwise-sound.md](../ps4-omega-eu/wwise-sound.md)).
 
 **What the port does:** `oag_omega::race::COUNTDOWN_VOICE` lends Pulse's `ready` and `go` from `speech.bnk`; that bank is
 the Wwise stub the `SBlk` reader refuses ("unsupported bank version 1145588546"), so the load report reads
