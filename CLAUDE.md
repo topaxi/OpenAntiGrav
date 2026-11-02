@@ -333,6 +333,13 @@ adding its name and its **trigger**, and the trigger needs reverse-engineering;
 an effect with no recovered trigger stays unwired rather than fired on a guess
 (`HANDOVER.md` lists them).
 
+**Label provenance only where it is in doubt.** A value standing in for
+something the original has is marked **chosen, not measured** (no confidence
+score; a score means measured). Where it is self-evident the thing is ours
+(state-hash tag bytes, our file formats, settings, tooling, a module only this
+engine has), write no "chosen, not measured" or "this is ours" comment: it is
+redundant (maintainer, 2026-11-02).
+
 ### A mod API change updates the mod author skill
 
 A change to the wasm extension ABI (`oag-ext-abi`), the guest SDK (`oag-ext`),
