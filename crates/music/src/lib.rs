@@ -44,6 +44,7 @@ use std::path::Path;
 
 pub mod at3;
 pub mod at9;
+pub mod file;
 pub mod mp3;
 pub mod omega;
 pub mod playlist;

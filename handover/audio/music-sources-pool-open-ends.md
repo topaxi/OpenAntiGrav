@@ -14,9 +14,9 @@ Phase 1 is in `docs/architecture/music-threads.md` ("The music pool"). The code 
 
 1. **Adding or removing a folder from the menu** needs a text input widget (none exists). A
    folder is named in `settings.toml` under `[audio] music_folders` today.
-2. **Other formats in a folder.** Only `.mp3` is read. `oag_music` decodes ATRAC3+, ATRAC9 and
-   WEM from the discs; WAV, FLAC and Ogg have no reader here. WAV would be trivial; the rest
-   wants a `symphonia` feature check.
+2. **Other formats in a folder.** ~~Only `.mp3`~~ FLAC, Ogg Vorbis and Opus landed
+   (`docs/architecture/music-threads.md`, "The music pool"). Left: WAV, and Opus with more than two
+   channels.
 3. **Menu music from the pool.** The front end keeps each disc's authored loop. A player who
    switches the booted disc off hears the authored menu loop and pool songs in races.
 4. **Playlist order and shuffle.** The pool order is fixed (booted soundtrack, discs, folders);
@@ -32,4 +32,4 @@ Phase 1 is in `docs/architecture/music-threads.md` ("The music pool"). The code 
 ## Next Steps
 
 - A text-input widget lets item 1 land; then a folder row could carry a REMOVE action.
-- Item 2: WAV first.
+- Item 2: WAV, if wanted (`symphonia`'s `wav` + `pcm` features).

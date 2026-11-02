@@ -166,8 +166,15 @@ it answers later; its thread is detached, never joined, so it cannot hold the me
 process's exit. A race whose booted disc is off waits up to 8 s on its own worker for a scan
 still running, then plays what is listed. A song that will not read or decode (a mount that
 went away) is logged and passed over for the next one, up to four, so the song playing and the
-rest of the playlist are untouched. Folder files are MP3 only (what `oag_music` reads next to
-the discs); other formats are not read yet.
+rest of the playlist are untouched. A folder plays `.mp3`, `.flac`, `.ogg`/`.oga` (Vorbis) and `.opus`
+(`oag_music::file::EXTENSIONS`), decoded in process on every target. `symphonia` 0.6 reads MP3, FLAC,
+Vorbis and the Ogg container (MPL-2.0); it has no Opus decoder, so Opus packets come out of its Ogg
+reader and into `opus-rs` (BSD-3-Clause, pure Rust, no C, builds for wasm, Android, Windows and macOS).
+`opus-decoder` (MIT/Apache) was tried first and panics on a plain 20 ms stereo CELT packet in a debug
+build (a `u8` shift overflow in its anti-collapse mask), so it was dropped. The Opus path applies the
+stream's pre-skip and the Ogg reader's end trim; a half-second fixture decodes to exactly 24,000
+frames, about 26-31 dB SNR against libopus (lossy 24 kbit/s). Opus with more than two channels is
+refused by name. WAV is not read.
 
 **The folder cache.** `folders::Disk` keeps, per walked folder, each directory's modification
 time with its songs and subfolders in `<audio cache dir>/music-folder-<hash>.tsv`; a later walk

@@ -25,12 +25,8 @@
 //!
 //! [ADR-0019]: ../../../docs/architecture/adr/0019-atrac3plus-out-of-process.md
 
-use anyhow::{Context, Result, bail};
-use symphonia::core::codecs::audio::AudioDecoderOptions;
-use symphonia::core::formats::probe::Hint;
-use symphonia::core::formats::{FormatOptions, FormatReader, Track, TrackType};
-use symphonia::core::io::MediaSourceStream;
-use symphonia::core::meta::MetadataOptions;
+use anyhow::Result;
+use symphonia::core::formats::{FormatReader, Track};
 
 use crate::at3::Pcm;
 
@@ -85,91 +81,12 @@ pub fn describe(blob: &[u8]) -> Option<Stream> {
 /// A blob that is not an MPEG stream, one whose codec `symphonia` will not
 /// open, or a stream that decodes to nothing at all.
 pub fn decode(blob: &[u8]) -> Result<Pcm> {
-    let (mut format, track) = probe(blob)?;
-    let track_id = track.id;
-    let params = track
-        .codec_params
-        .as_ref()
-        .context("the track declares no codec")?;
-    let audio = params.audio().context("the track is not audio")?;
-    let channels = u16::try_from(
-        audio
-            .channels
-            .as_ref()
-            .context("the track declares no channel layout")?
-            .count(),
-    )
-    .context("an implausible channel count")?;
-    let sample_rate = audio.sample_rate.context("the track declares no rate")?;
-
-    let mut decoder = symphonia::default::get_codecs()
-        .make_audio_decoder(audio, &AudioDecoderOptions::default())
-        .context("opening the MP3 decoder")?;
-
-    let mut samples: Vec<i16> = Vec::new();
-    let mut frame: Vec<i16> = Vec::new();
-    loop {
-        let packet = match format.next_packet() {
-            Ok(Some(packet)) => packet,
-            Ok(None) => break,
-            Err(error) => bail!("reading an MP3 packet: {error}"),
-        };
-        if packet.track_id != track_id {
-            continue;
-        }
-        // **A packet that will not decode is skipped, not fatal.** The disc's
-        // own files decode whole; this is the shape a truncated entry takes,
-        // and stopping at the first bad frame gives a short track rather than
-        // no music at all.
-        let Ok(decoded) = decoder.decode(&packet) else {
-            continue;
-        };
-        frame.clear();
-        decoded.copy_to_vec_interleaved(&mut frame);
-        samples.extend_from_slice(&frame);
-    }
-
-    if samples.is_empty() {
-        bail!("the MP3 stream decoded to no samples");
-    }
-    Ok(Pcm {
-        samples,
-        channels,
-        sample_rate,
-    })
+    crate::file::decode(blob, "mp3")
 }
 
 /// Opens `blob` as MPEG and returns its reader and its one audio track.
-///
-/// Hinted as `mp3` rather than sniffed, because every caller already knows what
-/// it has: the name came out of a title package's own declaration. The probe
-/// still checks the content, so a hint that turns out wrong is an error rather
-/// than a misreading.
-///
-/// The blob is copied into the cursor. The alternative is threading a lifetime
-/// through both public functions to save one copy of a file that is about to be
-/// decoded into twenty times its own size.
 fn probe(blob: &[u8]) -> Result<(Box<dyn FormatReader>, Track)> {
-    let source = MediaSourceStream::new(
-        Box::new(std::io::Cursor::new(blob.to_vec())),
-        <_>::default(),
-    );
-    let mut hint = Hint::new();
-    hint.with_extension("mp3");
-
-    let format = symphonia::default::get_probe()
-        .probe(
-            &hint,
-            source,
-            FormatOptions::default(),
-            MetadataOptions::default(),
-        )
-        .context("this is not an MPEG stream")?;
-    let track = format
-        .default_track(TrackType::Audio)
-        .context("the stream carries no audio track")?
-        .clone();
-    Ok((format, track))
+    crate::file::probe(blob, "mp3")
 }
 
 #[cfg(test)]
