@@ -17,7 +17,7 @@ summary: "Omega start plays its Wwise events; other race sfx need random/switch 
 **Landed (2026-11-02, same lane, at the maintainer's request):** the start. `oag_sound::sfx` reads a `BKHD`
 bank's event into a timeline (`crates/sound/src/sfx/wwise_start.rs`; steps 1-4 below for one bank), and Omega's
 `COUNTDOWN_VOICE` names `_321_NGP__Weapons_NGP` and `Go_NGP__Weapons_NGP` on every mode. Every other Omega race
-cue still goes through the `SBlk` loader and is silent.
+cue still goes through the `SBlk` loader and is silent. The start is audible: `countdown_voice_ground_truth::omega_time_trial_counts_in_from_wwise_events` renders it speech-only and asserts energy on each authored onset (400, 1,300, 2,150 ms after Ready, and Go), silence before Ready. The disc tests before it checked the events' names and timings, not sound.
 
 ## What a wiring needs, in order
 
