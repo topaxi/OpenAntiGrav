@@ -1105,7 +1105,8 @@ impl System {
             }
             let spec = &effect.emitters[usize::from(particle.spec)];
             let age = 1.0 - (particle.life / particle.max_life).clamp(0.0, 1.0);
-            let half = channel_sample(&spec.size, age, particle.size_sample) * particle.scale;
+            let half = channel_sample(&spec.size, age, particle.size_sample)
+                * self.drawn_scale(spec, particle);
             let alpha =
                 channel_sample(&spec.alpha, age, particle.alpha_sample) / spec.colour_divisor;
             let colour = match spec.colour_mode {

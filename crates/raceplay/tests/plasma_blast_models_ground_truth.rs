@@ -207,3 +207,66 @@ fn the_plasma_heads_five_draws_load_with_their_own_textures_and_blends() {
     );
     assert_eq!(effect.skipped_templates(), 0);
 }
+
+/// The head's three sprite templates are born once, when the flare attaches
+/// at the press (charge zero, severity zero), and draw at the severity the
+/// stage rescales the instance to: the original's extents across the charge,
+/// read off GE dumps at severity 0.25 and 0.75 (plasma.md, "the head's
+/// template playback"): glow quad 7.0 to 21.0 units wide, ring 1.7 to 5.1,
+/// dark disc 1.0 to 3.3. The ring's size is a random draw between two authored
+/// bounds, so it is held to 10 %, the disc's first tick to 15 %.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_plasma_heads_templates_draw_at_the_severity_the_instance_is_rescaled_to() {
+    use oag_core::math::Vec3;
+    use oag_core::rng::Rng;
+    use oag_fx::psys::{ColourScale, Effect, Stage};
+    let Some(image) = oag_testdata::image("pulse-psp-usa.chd") else {
+        return;
+    };
+    let mut archives = pulse::open(&image.display().to_string()).expect("opening the PSP archives");
+    let blob = archives
+        .read_name(r"Data\Psys\WO_PLASMA_HEAD.POB")
+        .expect("the head is on the disc");
+    let base = Effect::parse(&blob, ColourScale::Full).expect("the head parses");
+    let width_of = |name: &str, severity: f32| -> f32 {
+        let mut effect = base.clone();
+        for emitter in &mut effect.emitters {
+            if emitter.name != name {
+                emitter.per_emission = (0, 0);
+            }
+        }
+        let effect = std::sync::Arc::new(effect);
+        let mut stage = Stage::new();
+        let mut rng = Rng::new(3);
+        let playing = stage
+            .attach(&effect, Vec3::ZERO, 0.0)
+            .expect("an instance is free");
+        stage.advance(1.0 / 60.0, &mut rng);
+        stage.rescale(playing, severity);
+        for _ in 0..8 {
+            stage.advance(1.0 / 60.0, &mut rng);
+        }
+        let (additive, alpha_over) = stage.vertices(Vec3::X, Vec3::Y);
+        let xs: Vec<f32> = additive
+            .iter()
+            .chain(&alpha_over)
+            .map(|v| v.position[0])
+            .collect();
+        assert!(!xs.is_empty(), "{name} at severity {severity} drew nothing");
+        xs.iter().copied().fold(f32::MIN, f32::max) - xs.iter().copied().fold(f32::MAX, f32::min)
+    };
+    for (name, low, high, tolerance) in [
+        ("glow2", 7.0, 21.0, 0.10),
+        ("glow3", 1.7, 5.1, 0.10),
+        ("Glow", 1.0, 3.3, 0.15),
+    ] {
+        for (severity, want) in [(0.25, low), (0.75, high)] {
+            let got = width_of(name, severity);
+            assert!(
+                (got - want).abs() <= want * tolerance,
+                "{name} at severity {severity}: {got} units wide, the original's {want}"
+            );
+        }
+    }
+}
