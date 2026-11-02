@@ -473,7 +473,7 @@ pub struct Graphics {
     #[serde(default)]
     pub hud_scale: oag_display::display::HudScale,
     /// How much of the screen the HUD and the front-end pages use, in percent: the title's own
-    /// `Safe Area Setting`. One value for both (maintainer, 2026-10-27).
+    /// `Safe Area Setting`. One value for both.
     ///
     /// **Read only by a title that has the option** (`oag_title::HudArt::safe_area`, HD alone);
     /// the HUD is drawn at `percent / 100` about the centre of the screen, the value held to the
@@ -597,7 +597,7 @@ fn default_boost_fov_kick() -> oag_display::display::BoostFovKick {
 }
 
 /// See [`Graphics::camera_view`]: the nearer chase view, which is what a fresh
-/// profile of the original starts on (measured 2026-10-01) - see
+/// profile of the original starts on (measured) - see
 /// [`oag_display::display::CameraView`].
 fn default_camera_view() -> oag_display::display::CameraView {
     oag_display::display::CameraView::default()
@@ -1048,9 +1048,8 @@ pub fn menu_seeds(
             "audio.music_volume",
             text(&settings.audio.music_volume.to_string()),
         ),
-        // The second of the original's two volumes, and it was missing here
-        // until 2026-08-24 while its row sat on the AUDIO page: an unseeded
-        // `choice` opens on its list's *first* option, so SFX VOLUME read `0`
+        // The second of the original's two volumes, and it must be seeded:
+        // an unseeded `choice` opens on its list's *first* option, so SFX VOLUME read `0`
         // whatever the file said, and the first press moved a player at 100
         // straight to 25. `every_settings_row_is_one_the_game_seeds` only swept
         // the `display` and `graphics` pages, which is why nothing caught it;

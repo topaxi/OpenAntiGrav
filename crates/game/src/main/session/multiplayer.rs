@@ -1,5 +1,5 @@
 //! LOCAL MULTIPLAYER: the flow that replaces the per-title split-screen entries
-//! (2026-10-14, the maintainer's plan; **ours, chosen, not measured**).
+//! (**chosen, not measured**).
 //!
 //! 1. The **MULTIPLAYER** main-menu row opens the page whose LOCAL MULTIPLAYER row starts the
 //!    flow; LAN opens its own page (`session::lan`); ONLINE connects to a lobby and opens its own page (`session::online`).

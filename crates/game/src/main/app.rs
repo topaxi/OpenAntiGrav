@@ -1090,7 +1090,7 @@ impl ApplicationHandler for App {
         match session.next_frame_at() {
             // On the web winit's `Poll` and `WaitUntil` both wake the loop
             // through a `postTask` plus an `AbortController` per wake, a
-            // quarter of the page's thread in a race (measured, 2026-10-10).
+            // quarter of the page's thread in a race (measured).
             // `Wait` plus a redraw request is driven by
             // `requestAnimationFrame` alone, and the limit holds by skipping
             // redraws in `RedrawRequested`.

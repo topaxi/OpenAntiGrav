@@ -139,8 +139,8 @@ fn vs_main(@builtin(vertex_index) index: u32, instance: Instance) -> VertexOut {
     // that is not square: HD's `ZoneBG` is a 676x153 bar authored at a quarter
     // turn, and that order left it 676 wide and 153 tall with its art lying on
     // its side instead of standing it up as the 153x676 column it is. A square
-    // quad comes out the same either way, which is why the lock-on reticle -
-    // the only caller until 2026-08-31, and 8 pixels square - never showed it.
+    // quad comes out the same either way, which is why the lock-on reticle
+    // (8 pixels square) never showed it.
     //
     // The chamfers, before anything else touches the corners: they are a
     // change to where this vertex *is* on the quad, not a transform of the

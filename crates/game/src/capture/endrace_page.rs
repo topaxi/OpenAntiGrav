@@ -48,7 +48,7 @@ pub(super) enum EndRaceKind {
     },
     /// An Eliminator race's `EndRace Results` - `EndRaceResults_PopulateEliminationTable`
     /// (`0x088db1ec`). Fed the eight records a live PPSSPP race left in
-    /// `g_endrace_result` (2026-09-30), so the still can be laid beside the frame
+    /// `g_endrace_result`, so the still can be laid beside the frame
     /// it was taken from; only the team ids are this project's own spelling.
     EliminationResults,
     /// Wipeout HD/Fury's `EndRace Podium` - **a still only**, the live flow

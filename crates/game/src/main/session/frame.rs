@@ -193,7 +193,7 @@ impl Session {
         // wait counts toward this frame's `elapsed`, so the ticks below, the
         // input they sample (`player_snapshots` polls the pads) and the draw
         // alpha all describe the moment after it; taken in `Session::draw`, as
-        // it was until 2026-10-13, everything drawn was a wait older. After
+        // everything drawn would be a wait older. After
         // every stage change above, which may resize; `Session::draw` takes
         // the image, or draws nothing if there is none. See `Gpu::acquire`.
         let acquire_start = web_time::Instant::now();
@@ -311,8 +311,7 @@ impl Session {
             // snapshot is a value.
             // One snapshot per grid slot, from whichever device
             // `oag_input::pad::Assignment` says drives it - every device on
-            // slot 0 until something assigns one elsewhere, which is the single
-            // merged stream this was until 2026-09-16. The front end reads the
+            // slot 0 until something assigns one elsewhere (one merged stream). The front end reads the
             // button edges this same call computed, through `buttons_mut`, for
             // the one slot the keyboard drives; it has one menu and one cursor
             // however many people are racing.
@@ -397,7 +396,7 @@ impl Session {
             // race arm below already leaves it under the results table.
             // **Any seated player's Start**, not the keyboard's slot alone: in a
             // split race each pad drives its own slot, and a Deck's own Start
-            // was otherwise never seen (reported from play, 2026-10-13). And
+            // would otherwise never be seen. And
             // only the player who paused resumes, and a resume in a race with more
             // than one person counts down first - see `session::pause`.
             // A click on a paused race is slot 0's Start, through the same owner
@@ -712,9 +711,7 @@ impl Session {
                     // remaining catch-up steps would tick it with whatever
                     // closed the menu still held - Circle, say, read as the
                     // in-race absorb it also means. Bounded by the catch-up
-                    // cap, so usually zero or one step, which is exactly why
-                    // the `LaunchRace` shape of this went unnoticed the first
-                    // time: finding G1 of the 2026-08-18 review.
+                    // cap, so usually zero or one step, which is easy to miss.
                     if matches!(self.stage, Stage::Race(_)) {
                         break;
                     }

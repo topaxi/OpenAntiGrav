@@ -117,7 +117,7 @@ impl Session {
     /// Leaving a campaign cell's race lands on `Cell Selection`, in every
     /// campaign mode.
     ///
-    /// **Measured, PPSSPP 2026-10-08 (USA):** pause, QUIT RACE on a campaign
+    /// **Measured, PPSSPP (USA):** pause, QUIT RACE on a campaign
     /// Single Race and on a Head2Head cell (`grid4_5_2`) both land on
     /// `Cell Selection`, and from the Head2Head cell the cursor is on the
     /// grid's default cell, not the one raced. The authored road is

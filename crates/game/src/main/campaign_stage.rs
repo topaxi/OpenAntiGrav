@@ -38,7 +38,7 @@ pub(crate) enum Screen {
 /// `Cell Selection`'s cursor: **one `(x, y)` slot shared by every grid**, not a
 /// memory per grid.
 ///
-/// **Measured** (PPSSPP, `pulse-psp-usa.chd`, 2026-10-02, two boots,
+/// **Measured** (PPSSPP, `pulse-psp-usa.chd`, two boots,
 /// `docs/ui/campaign-screens.md`'s "Where the cursor lives"): the original
 /// keeps the cursor as the `Selector` widget's own `(x, y)` and re-resolves it
 /// by the *current* grid's name on entry. Left on `grid0_3_2`, entering `grid1`

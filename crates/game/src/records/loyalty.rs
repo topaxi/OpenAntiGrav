@@ -1,8 +1,7 @@
 //! The per-team loyalty half of [`Store`]: `Loyalty_AccumulateTotal`'s running
 //! total and the reads `Definition_IsUnlocked` compares against.
 //!
-//! **One total per team, shared by every title that has the team** (maintainer,
-//! 2026-10-16): a row is keyed by the team's shared identity
+//! **One total per team, shared by every title that has the team**: a row is keyed by the team's shared identity
 //! ([`oag_title::team`]), so Feisar's loyalty counts in Pulse, Pure, HD, 2048 and
 //! Omega alike. How a race *earns* it stays each title's own law; each title's
 //! unlock thresholds stay its own.

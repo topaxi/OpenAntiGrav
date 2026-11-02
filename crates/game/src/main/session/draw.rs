@@ -1,12 +1,8 @@
 //! The draw half of [`super::Session::frame`]: everything from acquiring the
 //! surface texture to presenting it.
 //!
-//! Split out of `frame.rs` on 2026-09-05, which the pause overlay's own scene
-//! render (`Stage::Menu` gaining a scene of its own, off
-//! `Session::suspended_race`) pushed past the 1,000-line ceiling
-//! `scripts/check-file-size.py` holds every file to. The seam was already
-//! named: `frame.rs`'s own module doc calls out "the fixed timestep, the
-//! stage update, and the draw" as three things, and this is the third.
+//! `frame.rs`'s own module doc names "the fixed timestep, the stage update,
+//! and the draw" as three things; this is the third.
 //!
 //! Three values cross the cut: `now` and `frame_seconds`, `frame()`'s own
 //! readings of the wall clock and the timestep, and `drs_limits`, moved down

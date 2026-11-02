@@ -236,7 +236,7 @@ pub(super) fn load_title_font(
 /// **A no-op everywhere but Pulse today.** 2048 and Omega both use Wipeout
 /// HD's own `Title`-role chrome (`oag_hd::frontend::MENU_SKIN` carried
 /// forward), so they never reach the `None` arm at all; Pure now joins them
-/// (`oag_pure::frontend::MENU_SKIN::title_font` is `Some("Title")`, 2026-09-25),
+/// (`oag_pure::frontend::MENU_SKIN::title_font` is `Some("Title")`),
 /// and its `Title` role happens to resolve to the same `.fnt` its `Default`
 /// role already does, so the slot's *contents* do not change for it either -
 /// only Pulse's `None` arm still swaps in a genuinely different atlas.

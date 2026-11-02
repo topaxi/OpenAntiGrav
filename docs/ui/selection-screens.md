@@ -622,3 +622,11 @@ keeps all three rows and launches from `START` as before.
 - The `small` face: the footer's `Help` / `Music playlist` prompts are
   authored in it and drawn in the menu face scaled by 17/22, since that face
   is not loaded for the menus.
+
+## HD hull framing: a stray vertex
+
+HD's `ship.vex` carries one chunk with a stray vertex hundreds of units from the
+craft (checked 2026-10-08 on `Assegai`: a bound of 257 against a hull some 13
+units long), so the bounding sphere draws the craft as a speck. `frame_hull`
+(`crates/game/src/preview.rs`) frames from the 1st-to-99th percentile box of the
+vertex positions instead.

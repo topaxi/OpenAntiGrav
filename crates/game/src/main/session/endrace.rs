@@ -130,7 +130,7 @@ impl Session {
             .collect();
         let new_best_lap_ticks = standing.best_lap_ticks;
         // `Race End Photo` follows a finish by the line (measured) and a Single
-        // Race wreck (the maintainer's "hold, then results" of 2026-10-02: the
+        // Race wreck ("hold, then results": the
         // original never leaves `InGame` after one, so that the legend shows at
         // all is chosen). Both are the endings whose world keeps running; an
         // Eliminator or Zone ending was not looked at and keeps its panels at

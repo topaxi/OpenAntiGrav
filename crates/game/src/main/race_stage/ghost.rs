@@ -14,7 +14,7 @@ use oag_raceplay::Ghost;
 
 /// Loads `key`'s stored ghost into `race` and starts recording, on a mode that
 /// races one with one person flying it. A no-op otherwise: a ghost is a single
-/// player's Time Trial or Speed Lap (maintainer, 2026-10-14).
+/// player's Time Trial or Speed Lap.
 pub(crate) fn arm(
     race: &mut race::Race,
     key: &records::Key,

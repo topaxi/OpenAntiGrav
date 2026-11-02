@@ -3,18 +3,17 @@
 //! **Chosen, not measured** throughout: the original is single-player and has no
 //! pause ownership, no timeout and no resume countdown. The rules, all ours:
 //!
-//! - **Only the player who paused resumes** (maintainer's rule, 2026-10-13): anyone
+//! - **Only the player who paused resumes**: anyone
 //!   seated can pause, and the pause belongs to them until they press Start again
 //!   or Circle to leave the race. A pause nobody pressed for (the window losing
 //!   focus, `Session::window_away`) has no owner, and any player may lift it. With
 //!   devices merged - every race that is not a split - every press is slot 0's, so a
 //!   one-player race behaves as it always did.
-//! - **The owner's claim expires** [`OWNER_TIMEOUT`] seconds after the pause itself
-//!   (maintainer, 2026-10-14), and at once when the owner's device is gone (the seat
+//! - **The owner's claim expires** [`OWNER_TIMEOUT`] seconds after the pause itself,
+//!   and at once when the owner's device is gone (the seat
 //!   has turned over to the AI). The pause then belongs to nobody.
 //! - **A resume in a race with more than one person counts down** `3`, `2`, `1`,
-//!   `GO` for [`RESUME_SECONDS`] before the race moves, so nobody is caught out
-//!   (maintainer, 2026-10-14). The race stays frozen through it. Start during the
+//!   `GO` for [`RESUME_SECONDS`] before the race moves, so nobody is caught out. The race stays frozen through it. Start during the
 //!   countdown pauses again, and whoever pressed owns the new pause.
 //!
 //! [`step`] is the whole rule as a pure function of the state, this tick's Start

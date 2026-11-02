@@ -8,8 +8,7 @@
 //! more than a menu should hold the window for. Until that finishes the rows are
 //! there, by file name, and cannot be started.
 //!
-//! **The survey is lazy** (maintainer, 2026-10-27: it was 22% of the profile
-//! samples in a race on the workstation). Finding the files is a directory read
+//! **The survey is lazy** (eager, it was 22% of the profile samples in a race). Finding the files is a directory read
 //! and happens at start-up, because it decides whether CUSTOM is offered at all.
 //! Reading them ([`Scan::begin`]) starts only when RACE REMIX's CUSTOM title is
 //! first on screen, never while a race is running, and its results are cached

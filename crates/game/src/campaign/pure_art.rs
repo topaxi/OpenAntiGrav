@@ -117,8 +117,8 @@ pub fn record_entry(location: &str) -> String {
 ///
 /// The files author `Race Record` and `Lap Record` as `00' 00' 00` and the
 /// Zone panel's counters as `00`, and the engine overwrites them
-/// (`<DisplayRecords track="...">`). **Measured on a fresh profile** (PPSSPP,
-/// 2026-10-12): `Race Record` and `Lap Record` read `0.00.00`, the Zone medal
+/// (`<DisplayRecords track="...">`). **Measured on a fresh profile** (PPSSPP):
+/// `Race Record` and `Lap Record` read `0.00.00`, the Zone medal
 /// counters `25`, `20`, `15` (the circuit's `<ZoneMedals>`), and `Best Zone` and
 /// `Best Score` `0`. **Chosen, not measured:** with a stored result, which of
 /// the profile's rows a record reads (the quickest finished race and the

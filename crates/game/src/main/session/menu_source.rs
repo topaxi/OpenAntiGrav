@@ -6,7 +6,7 @@
 //! cache). Here one worker, started on the first menu frame, opens the source once, reads the
 //! gate and builds the previews the two screens open on, so their pipelines are compiled before
 //! either screen is. The screens then share its archives. See
-//! `docs/rendering/frame-thread-cpu.md` (2026-10-31, "The race box's selection screens").
+//! `docs/rendering/frame-thread-cpu.md` ("The race box's selection screens").
 //!
 //! Natively only: wgpu's web types are not `Send`, so the web build opens on demand as before.
 

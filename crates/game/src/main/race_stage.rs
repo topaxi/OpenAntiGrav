@@ -762,8 +762,7 @@ impl RaceStage {
             // than adding a second, narrower guess on top.
             //
             // **Not while the gantry is showing it.** The countdown
-            // belongs on the start gantry - the maintainer's account
-            // of the original, and what `race::gantry` now draws -
+            // belongs on the start gantry - the original's, and what `race::gantry` now draws -
             // so this overlay is the fallback for a circuit that
             // stands no gantry, not a second countdown beside one.
             //

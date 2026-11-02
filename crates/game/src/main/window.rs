@@ -91,7 +91,7 @@ pub(crate) fn under_gamescope_cached(monitor: Option<&winit::monitor::MonitorHan
 /// The scale to turn a logical size into pixels with. Under gamescope it is 1, whatever winit
 /// reports: gamescope's game Xwayland advertises its 3840x2160 screen as 100mm x 160mm, which
 /// winit's X11 backend reads as a scale of 6, so a 1440x816 window opened as 8640x4896 pixels
-/// (measured on a Steam Deck, 2026-10-14; `docs/tools/packaging.md`, "Under gamescope").
+/// (measured on a Steam Deck; `docs/tools/packaging.md`, "Under gamescope").
 pub(crate) fn effective_scale(reported: f64, gamescope: bool) -> f64 {
     if gamescope { 1.0 } else { reported }
 }
@@ -99,7 +99,7 @@ pub(crate) fn effective_scale(reported: f64, gamescope: bool) -> f64 {
 /// The mode a window is opened in. Under gamescope a window frame means nothing (gamescope draws
 /// one window per output and no decoration), so `Windowed` is opened as `Borderless`, filling the
 /// output; the saved setting is left alone, so the same file still means windowed on a desktop
-/// (maintainer decision, 2026-10-14).
+/// (chosen, not measured).
 pub(crate) fn effective_mode(mode: display::WindowMode, gamescope: bool) -> display::WindowMode {
     if oag_game::settings::platform::surface_is_fixed(oag_mobile::MOBILE, gamescope) {
         display::WindowMode::Borderless
@@ -163,8 +163,8 @@ pub(crate) fn scene_rect_of(
 }
 
 /// The windows a multi-window layout opens. Under gamescope it is one: every window of a client
-/// is mapped full-output at 0,0 and gamescope shows one of them (measured on a Steam Deck,
-/// 2026-10-14; `docs/rendering/multi-window.md`, "Under gamescope"), so the seats of the windows
+/// is mapped full-output at 0,0 and gamescope shows one of them (measured on a Steam Deck;
+/// `docs/rendering/multi-window.md`, "Under gamescope"), so the seats of the windows
 /// that could not be seen are cut up in the one window instead, as a split screen is. Window 1
 /// keeps its cut. **Chosen, not measured.**
 pub(crate) fn one_window_under_gamescope(
@@ -282,8 +282,7 @@ pub(crate) struct Look<'a> {
 /// a window on rather than squeezing it into a column - measured under niri, which tiles it to a
 /// portrait slot without this and honours the requested size with it. Borderless has to be
 /// resizable, because the compositor is about to resize it to the monitor. A window built
-/// without this one (the further windows were, until 2026-10-14) tiles on niri while window 1
-/// floats.
+/// without this one tiles on niri while window 1 floats.
 ///
 /// The icon and the app id are the same for every window; a windowed position is asked for at
 /// creation (`with_position`), which X11 and Windows honour and Wayland has no protocol for - the
@@ -297,7 +296,7 @@ pub(crate) fn attributes(look: Look<'_>) -> winit::window::WindowAttributes {
 /// `inner` held to the monitor's size under gamescope, and untouched elsewhere. winit's X11
 /// backend reports a freshly fullscreened window as the monitor's size times its scale, so under
 /// gamescope's scale of 6 a 3840x2160 output reads 23040x12960 until the first `Resized`
-/// corrects it (measured on a Steam Deck, 2026-10-14). A surface configured from that first
+/// corrects it (measured on a Steam Deck). A surface configured from that first
 /// reading asked the driver for 6x the pixels and relied on the device limit to catch it.
 pub(crate) fn held_to_monitor(
     inner: winit::dpi::PhysicalSize<u32>,

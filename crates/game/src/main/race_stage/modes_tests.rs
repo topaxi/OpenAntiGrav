@@ -101,7 +101,7 @@ fn leg_board(order: [u8; 3]) -> Board {
     }
 }
 
-/// The maintainer's report: a person winning every leg of a Tournament saw 8 for themselves
+/// Regression: a person winning every leg of a Tournament saw 8 for themselves
 /// and 0 for everyone else on every end-race table. Two legs through the same calls
 /// `Session::frame` and `Session::build_endrace` make (`Progress::record_leg`, then
 /// `tournament_results` for the page's rows): each leg's own points for every slot, and the
