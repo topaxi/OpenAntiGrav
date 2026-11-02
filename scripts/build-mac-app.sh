@@ -45,6 +45,8 @@ rm -rf "$work"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$(dirname "$out")"
 
 install -m 755 "$binary" "$app/Contents/MacOS/oag-game"
+# Beside the bundle's executable, which is what `current_exe` resolves.
+"$root/scripts/stage-official-mods.sh" "$app/Contents/MacOS/mods"
 cp LICENSE-MIT LICENSE-APACHE "$app/Contents/Resources/"
 cp -r licences "$app/Contents/Resources/licences"
 

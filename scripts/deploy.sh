@@ -97,6 +97,8 @@ if [[ $target == android ]]; then
     "$script" "${pass[@]}" --apk "$apk"
 else
     out="$project_root/data/deploy-builds/OpenAntiGrav-x86_64-portable-$hash.AppImage"
+    # A detached worktree has no submodules; the build refuses to ship without the official mods.
+    git -C "$wt" submodule update --init assets/mods/official
     "$wt/scripts/build-appimage.sh" --container --out "$out"
     cleanup
     "$script" "${pass[@]}" --appimage "$out"
