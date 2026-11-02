@@ -61,6 +61,7 @@ mod multiplayer_time_trial;
 mod pads;
 mod people_grid;
 mod perfect_start;
+mod quake_armed;
 mod quake_lift;
 mod reconcile;
 mod reconcile_cost;

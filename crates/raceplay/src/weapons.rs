@@ -517,12 +517,12 @@ impl Race {
                     self.arm_leach_beam(beam);
                 }
                 oag_tables::weapons::Weapon::Quake => {
-                    let Some(stats) = weapons.quake() else {
+                    if weapons.quake().is_none() {
                         // No authored Quake, so nothing to launch - the same
                         // "keep the pickup" rule the Rocket's and the
                         // Plasma's arms follow for a missing table.
                         return;
-                    };
+                    }
                     // `QUAKELAUNCH`, on the press itself - see
                     // `Cue::QuakeLaunch`'s own doc comment for why this sits
                     // ahead of the busy check below: `Ship_FireHeldWeapon`'s
@@ -535,42 +535,21 @@ impl Race {
                     ));
                     // **The busy check - matching `Weapon_FireQuake`'s
                     // own `if (q->active != 0) return;`, which runs before
-                    // the original ever clears the held slot.** Only one
-                    // wave can be in flight in the whole race at once, so a
-                    // press while one is already travelling keeps the
-                    // pickup rather than spending it on nothing. See
+                    // the original ever clears the held slot or the request
+                    // bit.** Only one wave can be in flight in the whole race
+                    // at once, so a press while one is already travelling
+                    // keeps the pickup rather than spending it on nothing, and
+                    // **stays armed**: `Race::fire_armed_quakes` launches it
+                    // the tick after the live wave ends (measured on Pulse
+                    // PSP, 2026-11-02). See
                     // `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
                     if self.sim.world.quake.is_some() {
+                        self.sim.world.ships[slot].pickup.quake_armed = true;
                         return;
                     }
-                    let ship = &self.sim.world.ships[slot];
-                    let Some(progress) = ship.standing.progress else {
-                        // Not yet located on the course - nowhere on the
-                        // track's own spline to launch a travelling wave
-                        // from. Keep the pickup; this is a startup edge case
-                        // a moving craft clears within a tick or two.
+                    if !self.launch_quake(slot) {
                         return;
-                    };
-                    // The direction sign: dot the firing craft's own forward
-                    // against the track's own tangent where it currently
-                    // stands, the same dot product `Quake_Init` reads to
-                    // pick which way the wave travels. `unwrap_or(1.0)` is
-                    // the same "forward, not stalled" default
-                    // `oag_weapons::projectile::quake::Wave::launch` itself
-                    // takes for an exactly-perpendicular dot - see that
-                    // function's own doc comment for why.
-                    let forward_dot_tangent = ship
-                        .standing
-                        .course_index
-                        .and_then(|index| self.sim.course.as_ref()?.tangent(index as usize))
-                        .map(|tangent| tangent.dot(ship.physics.body.forward()))
-                        .unwrap_or(1.0);
-                    self.sim.world.quake = Some(oag_weapons::projectile::quake::Wave::launch(
-                        slot as u8,
-                        progress,
-                        forward_dot_tangent,
-                        &stats,
-                    ));
+                    }
                 }
                 oag_tables::weapons::Weapon::Repulser => {
                     // `Weapon_FireRepulser` - see `Race::fire_repulser` for

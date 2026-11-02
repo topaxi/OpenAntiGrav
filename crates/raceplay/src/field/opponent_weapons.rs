@@ -92,37 +92,10 @@ impl Race {
     /// `Race::opponent_decides`'s, as for every forward weapon; under the
     /// original's law the Quake is the one that needs nothing in its path.
     fn fire_opponent_quake(&mut self, slot: usize) -> bool {
-        if self.sim.world.quake.is_some() {
-            return false;
-        }
-        let Some(stats) = self
-            .sim
-            .weapons
-            .as_ref()
-            .and_then(oag_tables::weapons::WeaponStats::quake)
-        else {
-            return false;
-        };
-        let ship = &self.sim.world.ships[slot];
-        let Some(progress) = ship.standing.progress else {
-            return false;
-        };
-        // The direction sign, the same dot product `Race::spend_pickup`'s own
-        // Quake arm reads - see that arm's doc comment for the reasoning and
-        // the `unwrap_or(1.0)` default.
-        let forward_dot_tangent = ship
-            .standing
-            .course_index
-            .and_then(|index| self.sim.course.as_ref()?.tangent(index as usize))
-            .map(|tangent| tangent.dot(ship.physics.body.forward()))
-            .unwrap_or(1.0);
-        self.sim.world.quake = Some(oag_weapons::projectile::quake::Wave::launch(
-            slot as u8,
-            progress,
-            forward_dot_tangent,
-            &stats,
-        ));
-        true
+        // Chosen, not measured: a driver that wants a Quake while a wave is up
+        // keeps the pickup and asks again when it next decides, rather than arming
+        // the request as a person's press does (`Held::quake_armed`).
+        self.launch_quake(slot)
     }
 
     /// Fastens an opponent's beam onto whoever is in front of it, if its driver

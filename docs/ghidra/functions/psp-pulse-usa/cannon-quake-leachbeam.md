@@ -3783,4 +3783,34 @@ Re-read from the disassembly this pass, with HD, 2048 and Omega read side by sid
   `Weapons_DispatchFire` calls it again on that bit (the call at `0x08861b60`). A store search for `sw` to
   `+0x1b8` finds no clear of bit 3 apart from the fire handlers, `Weapon_RequestFire` and the
   whole-slot reset `FUN_088629f8`. So the original fires the second Quake by itself once the
-  first ends. Static, the same reading as HD's; not seen live.
+  first ends. Static, the same reading as HD's; **seen live 2026-11-02, below**.
+
+### 2026-11-02 (`quake-armed`): the armed press, seen live on Pulse PSP (90)
+
+PPSSPP v1.20.4 (software renderer, muted), Pulse USA, Time Trial, Talon's Junction, Venom, the
+grid save state. A breakpoint on `Weapons_DispatchFire` (`0x08861814`) reads, per dispatch frame,
+the player's record (`world + 0x70`, craft 0): `+0x1b8` (the request word), `+0x1bc` (held), and the
+Quake instance's busy byte (`*(*(world + 0x5c) + 0x60) + 0x48`) and id (`+0x44`). The press is
+**a write of bit `0x8` into `+0x1b8` inside the breakpoint** (`scripts/psp-fire-weapon.py`'s mechanism),
+not a pad press through `Ship_FireHeldWeapon`; the held id was written as `2` with the second press
+in the second run. Two runs, 420 dispatch frames each, identical:
+
+| Dispatch frame | busy | bit 3 of `+0x1b8` | held | id | |
+| ---: | ---: | ---: | ---: | ---: | --- |
+| 2 | 0 | 0 | -1 | 0 | press 1 written |
+| 3 | 1 | 0 | -1 | 1 | wave 1 live; the handler cleared the bit |
+| 60 | 1 | 0 | -1 / 2 | 1 | press 2 written (run 2 also writes held = 2) |
+| 61..306 | 1 | **1** | -1 / **2** | 1 | the bit and the held id stay set for 246 frames |
+| 307 | 0 | **1** | -1 / **2** | 1 | busy first reads clear, the bit is still set |
+| 308 | 1 | 0 | **-1** | **2** | a second wave, new id, bit cleared, held spent; no further write |
+
+So: a Quake request made while a wave is live is not cleared by `Weapon_FireQuake`'s busy return
+or by anything else in the 246 frames, and the dispatcher fires it on the very dispatch that first
+reads the busy byte clear (frame 307, visible at frame 308). Wave 1 lived from frame 3 to 306, 304
+frames, 5.07 s at 60 Hz, the page's 5.0 s lifetime. The pickup stays held until then. **Confidence
+90** for Pulse PSP (the press is a bit write, not a pad press: what `Ship_FireHeldWeapon` does to
+the bit on a real second press is read from the disassembly, not run). HD, 2048 and Omega: the
+same static reading, 65 ([weapon-instance-limits.md](../ps3-hdfury-eu/weapon-instance-limits.md)),
+**checked, applies, wired by the title-independent `Held::quake_armed`**. An absorb with the request
+armed is unread on every title (the original probably fires from an empty slot); ours cancels it,
+**chosen, not measured**.

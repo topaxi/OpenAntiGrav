@@ -385,6 +385,11 @@ fn write_reversed(hasher: &mut StateHasher, reversed: u32) {
     }
 }
 
+/// Marks an armed Quake press in the state stream. Any byte works; it only has to
+/// differ from the byte the next field starts with, so a set flag and an absent one
+/// cannot hash alike.
+const QUAKE_ARMED_TAG: u8 = 0xB7;
+
 fn write_held(hasher: &mut StateHasher, held: &Held) {
     let Held {
         weapon,
@@ -393,6 +398,7 @@ fn write_held(hasher: &mut StateHasher, held: &Held) {
         drop_reload,
         cannon_rounds,
         cannon_reload,
+        quake_armed,
     } = held;
     write_weapon(hasher, *weapon);
     // **The previous grant is state, not a convenience.** The draw refuses to
@@ -416,6 +422,12 @@ fn write_held(hasher: &mut StateHasher, held: &Held) {
     // `oag_weapons::pickup::Held::advance_cannon_reload`.
     hasher.write_u8(*cannon_rounds);
     hasher.write_f32(*cannon_reload);
+    // **A press waiting for the live Quake wave to end is state**: it decides
+    // whether a wave launches a few seconds from now. Written only when set, like
+    // `write_reversed`, so a world that never armed one hashes as before.
+    if *quake_armed {
+        hasher.write_u8(QUAKE_ARMED_TAG);
+    }
 }
 
 /// A weapon slot as a discriminant byte, with `0` reserved for "nothing".

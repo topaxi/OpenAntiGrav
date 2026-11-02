@@ -70,8 +70,8 @@ the binary for the `rlwinm rX, rY, 0x1c, 0x1, 0x1f` form that clears bit 3 (40 h
 `QuakeManager_Fire` as the only one on a slot `+0x200` in the weapon code. Two hits on generic
 pointers (`0x001118cc`, `0x0014c658`) were not resolved. So **the second press fires a new wave on
 its own, the first update after `Quake_Tick` frees the busy byte**, which is when the last span ends
-(`g_quake +0x70` lifetime, 5.0 s). Static only: not seen live. Read recipe for a live check is under
-"Open" below.
+(`g_quake +0x70` lifetime, 5.0 s). Static on HD; **seen live on Pulse PSP 2026-11-02** (90,
+[cannon-quake-leachbeam.md](../psp-pulse-usa/cannon-quake-leachbeam.md), "the armed press, seen live"), and wired on all four titles (`Held::quake_armed`). The RPCS3 recipe under "Open" would raise HD's own figure.
 
 Pulse has the same shape: `Weapon_FireQuake` (`0x0886c600`) returns on `q->active != 0` before it
 writes `held = -1` or clears `fire_flags & 8`, and Pulse's only other writer of `+0x1b8` that
@@ -129,7 +129,7 @@ disassembly: `sw a1(-1), 0x1bc(s1)` at `0x08866680` and the masked `sw` to `0x1b
 
 ## Open
 
-- **The Quake latch, live (65 -> 85+).** Recipe on RPCS3 (`scripts/rpcs3-hd-weapon.py --state 2`,
+- **The Quake latch, live on HD (65 -> 85+; Pulse PSP done, 90).** Recipe on RPCS3 (`scripts/rpcs3-hd-weapon.py --state 2`,
   then the poll of `scripts/rpcs3-hd-quake-poll.py`): fire a Quake, write state 2 into the player's
   slot `+0x204` again while `g_quake + 0x140` (age) is under 5, press triangle, and read slot
   `+0x200 & 0x8` (expect it to stay set) and the age (expect a reset to near 0 when the first wave
