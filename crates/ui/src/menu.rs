@@ -69,7 +69,7 @@ pub const ORIGINAL_CAMPAIGN_ROW: &str = "campaign-original";
 pub const CUSTOM_CAMPAIGN_ROW: &str = "campaign-custom:";
 
 mod vocabulary;
-pub use vocabulary::{Action, ValueSource};
+pub use vocabulary::{Action, Query, QueryRef, ValueSource};
 
 /// What a race mode's row shows, out of the disc's own string table.
 ///
@@ -353,6 +353,9 @@ pub enum Entry {
         values: Vec<Choice>,
         /// Where [`Self::Choice::values`] comes from, when not the definition.
         source: Option<ValueSource>,
+        /// A parameterised query this row asked for, which `source` cannot name. `None` for a
+        /// fixed name and for a query whose `of` is empty.
+        query: Option<QueryRef>,
         /// Which one is current. Seeded by [`Menu::seed`], never read off disk.
         current: usize,
         /// What makes this row inert. See [`Menu::is_disabled`].

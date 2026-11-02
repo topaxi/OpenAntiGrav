@@ -295,6 +295,13 @@ impl Definition {
                 });
             }
         }
+        if let Some((page, row, of)) = super::unknown_query_of(&self.pages[first..]) {
+            return Err(fault(
+                mod_id,
+                format!("page {:?} entry {row} values_from", pages[page].id),
+                format!("`of` {of:?} is the setting of no choice row on this mod's pages"),
+            ));
+        }
         Ok(())
     }
 

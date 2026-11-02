@@ -63,6 +63,7 @@ impl Definition {
                             setting: format!("{setting}.{}", item.id),
                             values: item.values.clone(),
                             source: None,
+                            query: None,
                             current,
                             disabled_by: disabled_by.clone(),
                             pins: pins.clone(),
