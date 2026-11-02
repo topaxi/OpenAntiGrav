@@ -1,12 +1,17 @@
-//! Wipeout 2048's race start: a named mode plays `ready` and `go` from the speech
-//! bank, a campaign event plays `Go_NGP` from `Weapons_NGP.bnk` and no `ready`.
+//! Wipeout 2048's race start: a named mode plays `ready`, `HBEAT` and `go` from the
+//! speech bank, a campaign event plays `321_NGP` and `Go_NGP` from `Weapons_NGP.bnk`.
+//!
+//! The names resolve to the cue the name table's `+0xc` field gives, as the
+//! original's `Scream_FindCueByName` returns it, **not** the hash bucket at `+8`
+//! (`docs/formats/2048-audio.md`): on the old reading `ready` played another
+//! word's cue (`rockets`), `HBEAT` the Eliminator call, `go` a different cue.
 //!
 //! The original picks on the mode id (`docs/ghidra/functions/vita-2048-eu-v104/
 //! countdown-voice.md`): below `0x17`, every named mode, `ready` and `go`; from
 //! `0x17`, the CRC ids of its own events, `321_NGP` and `Go_NGP`. `321_NGP` is
 //! authored and not played (two looping voices keyed off 3.75 s later under a
 //! rotating pan, none of which the mixer models), so an event race starts with
-//! `go` alone.
+//! nothing: both of its cues pan a pair to 90 degrees, the rear edge of the pan law.
 //!
 //! **`#[ignore]`d and never run in CI**: it needs the extracted Vita package.
 //! Run with `just test-data`. Without the event/named split in
@@ -66,7 +71,37 @@ fn lengths(banks: &oag_sound::sfx::Banks, cue: Cue) -> Vec<Vec<String>> {
 
 #[test]
 #[ignore = "needs the extracted Vita package in data/extracted/vita/"]
-fn a_named_mode_starts_with_ready_and_go_from_the_speech_bank() {
+fn the_start_names_resolve_to_the_cues_the_original_returns() {
+    let Some(source) = source() else {
+        return;
+    };
+    let mut archives = oag_2048::open(&source.display().to_string()).expect("open 2048");
+    for (entry, names) in [
+        (
+            r"Data\audio\sound\speech.bnk",
+            // `ready` is a lone `0x08` handing its voice to `321_GO`, as on HD.
+            vec![("ready", 0), ("321_GO", 2), ("go", 3), ("HBEAT", 27)],
+        ),
+        (
+            r"Data\audio\sound\Weapons_NGP.bnk",
+            vec![("Go_NGP", 68), ("321_NGP", 70)],
+        ),
+    ] {
+        let blob = archives.read_name(entry).expect("the bank reads");
+        let bank = oag_formats::sblk::Bank::parse(&blob).expect("the bank parses");
+        for (name, cue) in names {
+            assert_eq!(
+                bank.cue_named_or_hashed(name).map(|c| c.index),
+                Some(cue),
+                "{entry}: {name}"
+            );
+        }
+    }
+}
+
+#[test]
+#[ignore = "needs the extracted Vita package in data/extracted/vita/"]
+fn a_named_mode_starts_with_ready_the_beat_and_go_from_the_speech_bank() {
     let Some(source) = source() else {
         return;
     };
@@ -76,59 +111,48 @@ fn a_named_mode_starts_with_ready_and_go_from_the_speech_bank() {
     })
     .expect("the named mode loads");
     let banks = &loaded.setup.sounds;
-    assert!(report_has(
-        &loaded,
-        r"sfx: ready -> 2 waveform(s) from Data\audio\sound\speech.bnk; plays its timeline"
-    ));
-    assert!(report_has(
-        &loaded,
-        r"sfx: go -> 4 waveform(s) from Data\audio\sound\speech.bnk; plays its timeline"
-    ));
-    assert_eq!(lengths(banks, Cue::Ready).len(), 1, "one timeline");
-    assert_eq!(lengths(banks, Cue::Go).len(), 1, "one timeline");
-    assert_eq!(
-        lengths(banks, Cue::Ready)[0].len(),
-        2,
-        "ready keys a stereo pair"
+    // `ready` follows its child cue `321_GO` to the 3.0 s pair at its marker (14 waveforms in the
+    // walk), `go` is the long pair, `HBEAT` three groups of 3, 3 and 4 voices.
+    for line in [
+        r"sfx: ready -> 14 waveform(s) from Data\audio\sound\speech.bnk; plays its timeline",
+        r"sfx: go -> 6 waveform(s) from Data\audio\sound\speech.bnk; plays its timeline",
+        r"sfx: HBEAT -> 10 waveform(s) from Data\audio\sound\speech.bnk; plays its timeline: 1 variant(s) of 10 voice(s)",
+    ] {
+        assert!(report_has(&loaded, line), "{line}");
+    }
+    let ready = lengths(banks, Cue::Ready);
+    assert_eq!(ready.len(), 1, "one timeline: {ready:?}");
+    assert_eq!(ready[0].len(), 2, "a stereo pair: {ready:?}");
+    assert!(
+        ready[0].iter().all(|v| v.starts_with("3.0") && v.ends_with("+0.000s")),
+        "3.0 s from the start: {ready:?}"
     );
-    assert_eq!(lengths(banks, Cue::Go)[0].len(), 2, "go keys a pair");
+    let go = lengths(banks, Cue::Go);
+    assert_eq!(go.len(), 1, "one timeline: {go:?}");
+    assert_eq!(go[0].len(), 2, "a pair: {go:?}");
+    let beat = lengths(banks, Cue::StartBeat);
+    assert_eq!(beat.len(), 1);
+    assert_eq!(beat[0].len(), 10, "three groups of 3, 3 and 4: {beat:?}");
     // `cont_elim` resolves nowhere on this title: its trigger is unread.
     assert!(!banks.voices_available(Cue::ContElim));
 }
 
 #[test]
 #[ignore = "needs the extracted Vita package in data/extracted/vita/"]
-fn a_campaign_event_starts_with_go_ngp_alone() {
+fn a_campaign_event_names_its_own_pair_and_plays_neither_until_the_pan_has_a_rear_half() {
     let Some(source) = source() else {
         return;
     };
     let loaded =
         oag_raceplay::load_event(&options(&source), "2048 - Event 4").expect("the event loads");
     let banks = &loaded.setup.sounds;
-    assert!(report_has(
-        &loaded,
-        "sfx: 321_NGP not played: two looping voices"
-    ));
-    assert!(report_has(
-        &loaded,
-        r"sfx: Go_NGP -> 4 waveform(s) from Data\audio\sound\Weapons_NGP.bnk"
-    ));
+    assert!(report_has(&loaded, "sfx: 321_NGP not played: its pair is panned"));
+    assert!(report_has(&loaded, "sfx: Go_NGP not played: its pair is panned"));
     assert!(report_has(&loaded, "its start plays the event pair"));
-    assert!(
-        !banks.voices_available(Cue::Ready),
-        "the named `ready` must not play on an event"
-    );
-    let go = lengths(banks, Cue::Go);
-    assert_eq!(go.len(), 4, "Go_NGP's four arms, one waveform each: {go:?}");
-    assert!(go.iter().all(|shape| shape.len() == 1));
-    let named = oag_raceplay::load(&oag_raceplay::Options {
-        class: "VENOM".to_string(),
-        ..options(&source)
-    })
-    .expect("the named mode loads");
-    assert_ne!(
-        go,
-        lengths(&named.setup.sounds, Cue::Go),
-        "an event's go is not the named mode's"
-    );
+    for cue in [Cue::Ready, Cue::Go, Cue::StartBeat] {
+        assert!(
+            !banks.voices_available(cue),
+            "{cue:?}: the named cue must not play on an event, and the event's is unplayed"
+        );
+    }
 }
