@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [pure, 2048, omega]
-updated: 2026-10-04
-summary: "Wreck effects, hit sparks and absorb burst are Pulse-only; each title's locator names first; Pure VECTOR laps"
+updated: 2026-11-02
+summary: "Hit sparks, absorb and wreck nodes now inherited per title; open: Pure big wreck blast, 2048/Omega other hit triggers; Pure VECTOR laps"
 difficulty: medium (30)
 ---
 
@@ -16,10 +16,18 @@ the survey is below; none was trivial enough to fix in that lane.
 
 ## Open
 
-- **Wreck effects, hit sparks, absorb burst** (`wreck_fx.rs`, `hit_sparks.rs`, `absorb.rs`):
-  Pulse-only. Pure and 2048/Omega draw nothing; HD has its own mechanisms. An honest absence,
-  not a chosen rule, but under the maintainer's rule an unmeasured title would play Pulse's
-  emitters on its own locators. Needs each title's locator names first.
+- ~~**Wreck effects, hit sparks, absorb burst**~~ wired 2026-11-02 (`inherit-hit-effects`), each
+  title on its own disc data and locators, `Title` data with `InheritedFrom` provenance
+  (`docs/rendering/hull-sparks.md`, "Other titles"): Pure takes Pulse's hit sparks and wreck node
+  blast and death sparks (its absorb was already its own, measured); 2048 and Omega take HD's
+  absorb burst and Cannon craft-hit spark. **Still open from it:** (a) Pure's big wreck blast: its
+  executable names `WO_SHIP_FXNODE_BIGEXPLO`, `WO_SHIP_EXPLO_SMOKE` and `WO_SHIP_EXPLOSION_DEBRIS`
+  (not `WO_SHIP_EXPLOSION`) and `Ship_SetState` is unread, so the big blast and the ship shockwave
+  are left out there; recipe: xref those three strings in `/pure/BOOT-psp-pure-usa.BIN`. (b) 2048
+  and Omega draw no wreck effect (HD names none; their `WO_DEBRIS_SPARKS`/`WO_DEBRIS_FIRE` preload
+  is unread), and the non-Cannon weapon hit trigger and HD's `WO_DAMAGE_*` smoke are unwired there
+  (checked, applies, not wired). (c) Pure's weapon-hit `.COLLISIONS` cue now plays with the spark
+  (Pulse's gate, inherited).
 - **Pure's `VECTOR` lap count** falls back to Venom's `3` with a load warning (`race-modes.md`,
   campaign rungs): chosen, not measured. Pulse's rung table is the known rule.
 - **Zone ship handling on Pure and HD** is unread; Pulse's rule (the player's own team numbers)
@@ -59,4 +67,4 @@ the survey is below; none was trivial enough to fix in that lane.
 
 ## Next Steps
 
-1. Wreck effects, hit sparks and the absorb burst: each title's locator names first. (The gantry clock landed 2026-10-03: HD runs Pulse's rule on its own `GO` edge, frame 203 / tick 70; 2048 and Omega place no gantry - `docs/rendering/start-gantry.md`.)
+1. Pure's big wreck blast (the three `WO_SHIP_*` names above) and 2048/Omega's non-Cannon hit trigger and `WO_DAMAGE_*` smoke. (The gantry clock landed 2026-10-03: HD runs Pulse's rule on its own `GO` edge, frame 203 / tick 70; 2048 and Omega place no gantry - `docs/rendering/start-gantry.md`.)

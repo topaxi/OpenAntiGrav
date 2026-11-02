@@ -165,7 +165,7 @@ pub const LOOKS: &Looks = &Looks {
     // The swap to `Shipwreck.vex` and its locators ride the same inherited rule as the wreck
     // effects above.
     hull_wreck: Rule {
-        on: Platforms::Any,
+        on: Platforms::Only(&[oag_title::Platform::Psp]),
         origin: Origin::InheritedFrom("Wipeout Pulse"),
     },
     hull_shine: Rule {

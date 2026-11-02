@@ -25,15 +25,13 @@
 //!
 //! # 2048 and Omega
 //!
-//! Both carry [`Effects::engine`] only, taken from Pulse by inheritance, and
-//! none of the four triggers a title answers for itself (the weapon-hit
-//! sparks, the weapon spark, the absorb burst, the wreck), checked against
-//! each other as CLAUDE.md asks. Omega's executable carries HD's weapon-spark
-//! and absorb strings, so its entries are "checked, applies, not wired": the
-//! wiring is unread, and a string in a binary is not a measured trigger.
-//! 2048's are unread outright. Neither draws anything there, which is the same
-//! silence the loader had before this table; no report line was written for it
-//! then and none is now.
+//! Both carry [`Effects::engine`] plus two entries taken from HD's measured law
+//! ([`Origin::InheritedFrom`] `"Wipeout HD"`): the absorb burst ([`Burst::HD`], over the six
+//! `absorb` locators every hull ships) and the Cannon's craft-hit spark. Neither throws Pulse's
+//! `Ship_Damage` hull spark or its wreck effects: HD's own mechanisms are the nearer lineage,
+//! and HD names no wreck effect, so a wrecked 2048 or Omega craft draws none (the loader says
+//! so). The trigger sites are unread on both; a string in Omega's executable is not a measured
+//! trigger.
 //!
 //! [ADR-0058]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0058-per-title-behaviour-is-title-data-with-provenance.md
 
