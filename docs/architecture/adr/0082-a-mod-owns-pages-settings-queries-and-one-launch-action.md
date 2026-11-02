@@ -13,7 +13,7 @@ mod owns a screen) is not replaced: it stays the answer for editor-style mods wh
 page cannot be a closed list of pickers. ADR-0066 and ADR-0080 are not edited. Builds
 on [ADR-0078](0078-a-mod-is-turned-off-by-id-live-and-the-built-in-never.md) (mod ids,
 the `[mods]` settings table) and [ADR-0034](0034-a-race-may-open-two-titles-at-once.md)
-(a race may open two titles). The first user is
+(a race may open two titles). The first planned user is
 [ADR-0083](0083-official-mods-are-a-public-folder-and-the-fingerprint-counts-race-changers.md).
 
 ## Context
@@ -46,7 +46,7 @@ variant, a mode, a class. It should not need a second launch path.
 
 1. **A mod menu file may carry `[[page]]`.** The grammar is the shipped
    `assets/ui/menu.toml`'s. A page id is namespaced by its mod: `<mod id>/<page id>`
-   (`oag.remix/remix`). An `entry` of the same mod names a page of its own mod by the
+   (`oag.example/picker`). An `entry` of the same mod names a page of its own mod by the
    short id; a mod cannot name another mod's page by short id, and two mods cannot
    collide. Reachability is checked per mod: an unreachable page, an unknown id or a
    string id the mod does not ship is a load error naming the mod and the key (the
@@ -60,7 +60,7 @@ variant, a mode, a class. It should not need a second launch path.
    decision 1), so turning a mod back on restores its picks. Pre-release, no migration:
    the fixed `[remix]` section is removed in place when the Remix mod lands.
 3. **A closed `Query` set replaces the fixed value-source names.** In TOML,
-   `values_from = { query = "tracks_of", of = "mod.oag.remix.track_title" }`. `of`
+   `values_from = { query = "tracks_of", of = "mod.oag.example.track_title" }`. `of`
    names a setting key whose current value is the argument; an empty `of` means the
    booted title. The set is closed and lives in `oag-ui`'s vocabulary:
    `TitlesAvailable`, `TracksOf`, `TeamsOf`, `VariantsOf`, `SpeedClassesUnion`,
