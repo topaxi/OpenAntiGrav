@@ -656,7 +656,10 @@ at the one stop the screenshot is taken at. `just compare-rerender` re-makes it 
      columns (an older `field.csv`, the RPCS3 path) an opponent is drawn flat, as before. `talons-alongside`: slot values
      0.038, -0.008, 0.769, 0.786, 0.374, 0.869, -0.194 (roll phase 0 on all seven). Nearest opponent's hull box (x 210, y 112,
      40x36 px, 480x272 frame): grey mean absolute difference against the original 0.0382 before, 0.0239 after; the fin tilt now
-     agrees with the original's. **HD: checked, applies, not wired**: the drawn lean is documented at `ship+0x6a54`
+     agrees with the original's. **Stored pair re-made 2026-11-02 (`talons-recapture`)**: `pulse-psp-race/talons-alongside` was re-captured with
+     `psp-pulse-pair.py` at `--target-clock 38.4082` (24 parity checks passed, twice; `theirs.png` pixel-identical to the old one, `field.csv`
+     identical across both boots) so its `field.csv` now carries the lean columns. Old stored `ours.png` against new, same `theirs.png`: nearest
+     opponent's box grey MAD 0.0381 -> 0.0242; whole frame grey MAD 0.0094 -> 0.0092, RMSE 0.0293 -> 0.0283. **HD: checked, applies, not wired**: the drawn lean is documented at `ship+0x6a54`
      ([ship-lean](../ghidra/functions/ps3-hdfury-eu/ship-lean.md)) and `scripts/rpcs3_hd_field.py` reads other fields at the same
      ship, but HD's roll-phase offset is not recorded, and a lean with a guessed zero roll would be a half-read pair; both are needed.
    - `--hud-state` (`race::CaptureHud`) imposes the original's place, lap, lap time, race clock, speed, shield (as a percentage
