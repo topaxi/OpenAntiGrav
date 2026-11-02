@@ -428,7 +428,7 @@ fn load_hd(
     tracks: &[oag_raceplay::catalogue::Track],
 ) -> Result<Campaign> {
     // `DATA06`'s copy, not `oag_assets::Archives::read_name`'s own
-    // precedence (which lands on `DATA02`'s) - **switched 2026-09-27**, see
+    // precedence (which lands on `DATA02`'s), see
     // `oag_ui_screens::campaign::hd`'s own module doc ("The winning archive is
     // `DATA06`") for the full archive-precedence argument and
     // `oag_hd::campaign::SCREEN_ENTRY`'s doc for the file-level summary.
@@ -779,10 +779,8 @@ fn load_flyers(
 /// `Campaign Selection`/`Grid Selection Fury`, off the same already-parsed
 /// `DATA06` copy of [`oag_hd::campaign::SCREEN_ENTRY`] [`load_hd`] reads its
 /// base `Grid Selection`/`Cell Selection` from - **one parse serving all
-/// four screens now**, where this function used to open and parse the file
-/// a second time on its own (`load_hd_campaign_selection`, before
-/// 2026-09-27 switched `load_hd`'s own screen source to `DATA06` too, making
-/// the second read redundant - see `oag_ui_screens::campaign::hd`'s own module doc).
+/// four screens**, so the file is not opened and parsed a second time (see
+/// `oag_ui_screens::campaign::hd`'s own module doc).
 ///
 /// `(None, None)` when this copy's own XML does not carry both screens - a
 /// base, non-Fury HD pressing this project has not seen, say.

@@ -581,10 +581,6 @@ fn pose_lean(cli: &Cli) -> Result<Option<oag_game::race_capture::pose_lean::Pose
 /// performance overlay that the same file was setting for every other route -
 /// and the overlay is most wanted exactly here, where a track is on screen.
 /// Nothing on this path writes the file back.
-///
-/// This paragraph sat on `write_trace` until finding G5 of the 2026-08-18
-/// review - fused onto that function's own docs, leaving this one
-/// undocumented and that one describing something it does not do.
 pub(crate) fn run_race(
     cli: &Cli,
     options: race::Options,

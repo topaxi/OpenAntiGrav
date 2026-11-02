@@ -1,5 +1,5 @@
 //! What HD/Fury's `Team Selection` does to the craft when the screen opens
-//! and when the selection steps (measured off RPCS3, 2026-10-10).
+//! and when the selection steps (measured off RPCS3).
 //!
 //! The pose is fixed ([`super::hull_orbit`]); what moves is the *swap*:
 //!

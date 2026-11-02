@@ -688,11 +688,10 @@ pub fn load_shell(
     // silently shortened sequence is exactly the kind of thing that reads as
     // finished work, which is how this build once shipped Pure's order wrong.
     //
-    // **The chain's first step goes through the same two checks**, which it did
-    // not until finding G3 of the 2026-08-18 review: `walked` started with
-    // `profile.start()` unconditionally, so a pressing lacking the boot screen -
-    // a demo or trial disc - walked an unbacked state that any *later* step
-    // would have been skipped and reported for. The report is the point: a boot
+    // **The chain's first step goes through the same two checks**: starting
+    // `walked` with `profile.start()` unconditionally would let a pressing
+    // lacking the boot screen (a demo or trial disc) walk an unbacked state
+    // that any *later* step would have been skipped and reported for. The report is the point: a boot
     // that opens on a screen this source does not carry should say so, not
     // present as a blank one.
     //

@@ -793,3 +793,11 @@ a blended draw masked, `Attached` writes its motion weighted by alpha.
 the forced boost and the airbrake pose apply to the captured frame alone. The
 temporal upscaler's history (a windowed run with FSR3) was never exercised, so
 whether a ghost survives through reprojection there is open.
+
+## Cost seen by the dynamic-resolution controller
+
+Measured 2026-09-03 on an HD/Fury circuit at 2560x1440: `high` motion blur costs
+about 1.7 ms of a 9.3 ms frame, with the scene pass and the FSR 3.1 chain
+unmoved. Blur draws through the render extent, so its cost falls with the
+resolution like the scene pass's; the controller budgets it as its own meter
+(`oag_present::drs`, `crates/game/src/main/session.rs` `blur_cost`).

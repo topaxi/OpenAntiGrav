@@ -244,8 +244,7 @@ fn run(cli: Cli) -> Result<()> {
         // **Validated here, because `rasterize`'s `expect` is not a CLI error
         // message.** That function's own docs say no player input reaches it;
         // `--icon-size` does, and `--write-icon out.png --icon-size 0` panicked
-        // rather than saying what was wrong. Finding G2 of the 2026-08-18
-        // review.
+        // rather than saying what was wrong.
         anyhow::ensure!(cli.icon.icon_size > 0, "--icon-size must be at least 1");
         let oag_game::icon::Rgba {
             width,
@@ -604,9 +603,8 @@ fn run(cli: Cli) -> Result<()> {
             // One image is no choice - unless it is locked, when the screen is
             // how its key is asked for. **None at all is never a chooser**, not
             // even under `--launcher`: an empty list offers nothing but escape.
-            // It is the not-found screen below instead (it was the terminal
-            // message from `resolve` alone until 2026-10-07, which a
-            // double-click never shows), and the same message still goes to the
+            // It is the not-found screen below instead (a double-click never shows the
+            // terminal message from `resolve`), and the same message still goes to the
             // log.
             let locked = rows
                 .iter()

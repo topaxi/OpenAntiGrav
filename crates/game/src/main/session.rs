@@ -236,7 +236,7 @@ pub(crate) struct Session {
     /// **The third meter, and the one that made the budget honest.** Motion
     /// blur draws through the render extent, so its cost falls with the
     /// resolution exactly as the scene pass's does - and it was entirely
-    /// invisible: measured 2026-09-03 on an HD/Fury circuit at 2560x1440,
+    /// invisible: measured on an HD/Fury circuit at 2560x1440,
     /// `high` costs about 1.7 ms against a 9.3 ms frame, with the scene pass
     /// and the FSR 3.1 chain both unmoved. A controller that could not see it
     /// was budgeting against a fifth of the work it controls. See

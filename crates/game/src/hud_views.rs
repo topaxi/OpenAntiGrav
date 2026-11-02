@@ -30,8 +30,8 @@ use oag_raceplay::{Race, Scene};
 /// own ladder and any other Time Trial or Speed Lap races the record. See
 /// `oag_hud::Readout::time_trial_pace`. `campaign_cell` is title-blind (HD
 /// reuses the same `oag_tables::race_campaign::Cell`). `record_target` is
-/// whatever the circuit's own `stats.xml` gave: Pulse's, and since 2026-10-21
-/// HD's too (`<RaceTimes Venom="599">`, the `RECORD` the original counts down
+/// whatever the circuit's own `stats.xml` gave: Pulse's and
+/// HD's (`<RaceTimes Venom="599">`, the `RECORD` the original counts down
 /// from), so a Time Trial on either draws `RECORD`; a title whose file does not
 /// read keeps the plain `TOTAL` clock. The
 /// capture path has no cell and passes `None`.

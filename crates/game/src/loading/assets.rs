@@ -219,11 +219,9 @@ impl Assets {
     /// failing.
     ///
     /// **Which entries those are is the title's question**, not this module's.
-    /// Until 2026-08-24 this read `oag_pulse::loading`'s two names whatever disc
-    /// had booted, on the reasoning that the only other title shipped neither
-    /// and so had nothing to put in a table. Wipeout HD ships a full-screen
-    /// still and no tips at all, which makes three answers - see
-    /// [`oag_title::Loading`], whose module doc carries them.
+    /// Pulse ships a glow strip and tips, Pure neither, and Wipeout HD a
+    /// full-screen still and no tips - see [`oag_title::Loading`], whose module
+    /// doc carries the three answers.
     ///
     /// `style` names which front-end styling to take the illustrations from -
     /// `HD` or `FURY` on Wipeout HD, which ships every one of them twice. An

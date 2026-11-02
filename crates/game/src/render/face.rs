@@ -67,8 +67,8 @@ pub(super) fn face_atlas_size(atlas: Option<&Atlas>) -> [f32; 2] {
 
 impl super::Renderer {
     /// Loads (or clears) the face atlas `Draw::FacedText` samples, for a
-    /// title whose screen title draws in a named role - or, since
-    /// 2026-09-21, for Pulse's own `Default`-role body face, loaded beside
+    /// title whose screen title draws in a named role - or
+    /// for Pulse's own `Default`-role body face, loaded beside
     /// its unchanged `menu`-role primary so the two roles' widgets can draw
     /// in their own, disc-measured faces at once. See `docs/ui/menus-original.md`'s
     /// "Two faces, not one swapped for the other" section for why the

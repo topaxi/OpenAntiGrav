@@ -43,9 +43,8 @@ use oag_ui::language::StringTable;
 /// Pulse's own two entries, re-exported for the tests and reports that name
 /// them.
 ///
-/// **Not what a loader reaches for any more.** Which entries a source's loading
-/// screen reads is [`oag_title::Loading`]'s question since 2026-08-24, because
-/// the third title answers it differently: Pure ships neither of these and
+/// **Not what a loader reaches for.** Which entries a source's loading screen
+/// reads is [`oag_title::Loading`]'s question, because titles answer it differently: Pure ships neither of these and
 /// Wipeout HD ships a full-screen still instead. See [`Assets::load`].
 ///
 /// [ADR-0022]: ../../../docs/architecture/adr/0022-title-packages.md

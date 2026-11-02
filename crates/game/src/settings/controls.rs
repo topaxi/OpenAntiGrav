@@ -55,7 +55,7 @@ pub struct Controls {
     /// and right side (`true`), or is thrust alone (`false`). Only a
     /// touchscreen's overlay reads it.
     ///
-    /// **On by default - chosen, not measured**, at the maintainer's request;
+    /// **On by default - chosen, not measured**, by request;
     /// off for a phone whose screen or hands suit the separate BRAKE buttons
     /// better. See `oag_input::touch::GoZone`.
     #[serde(default = "default_touch_go_zones")]
@@ -113,7 +113,7 @@ pub struct Controls {
     /// title now does. A corridor spring that yaws the craft off a wall it is
     /// about to meet, at a few percent of thrust.
     ///
-    /// **Extreme by default on Android only, off elsewhere** (maintainer, 2026-10-10):
+    /// **Extreme by default on Android only, off elsewhere** (chosen, not measured):
     /// touch controls are far harder than a pad, and a desktop player is assumed to
     /// know Wipeout. Extreme rather than Normal because Normal barely moved a
     /// never-steering run off the wall (docs/physics/pilot-assist.md). A file written when this was a switch holds `true` or `false`;

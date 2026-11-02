@@ -558,8 +558,8 @@ impl Session {
         // every leg at the position its first track's own curve gives -
         // chosen, not measured, on the multi-leg case only.
         // `race_options` is out of `self` until just below, so the source is
-        // handed over rather than read back off `self` (which read `None`
-        // here and so never resolved a cell's skill, until 2026-10-12).
+        // handed over rather than read back off `self` (which reads `None`
+        // here and so would never resolve a cell's skill).
         let ours = extras
             .as_ref()
             .is_some_and(|e| e.ai == oag_game::campaign::custom::Ai::Ours);

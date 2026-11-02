@@ -1,7 +1,7 @@
 //! Booting a title with no front end this build can walk straight into this
 //! build's own menus instead of refusing.
 //!
-//! **Wipeout 2048 no longer lands here** (2026-09-21): its front end is
+//! **Wipeout 2048 does not land here**: its front end is
 //! `Some` since [ADR-0054], and `oag_game::boot::load_shell` walks its
 //! declared boot chain and draws its touch grids off
 //! `oag_title::FrontEnd::touch`, with `oag_ui::placeholder::MENU_SKIN`

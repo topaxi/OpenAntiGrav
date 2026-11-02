@@ -243,7 +243,7 @@ fn why_not(platform: Platform) -> String {
 ///
 /// `None` for a row that opened. Separate from what the screen draws because
 /// stdout has no right edge: this is where the pointer into `docs/` goes, and
-/// where a maintainer reading a terminal gets the whole story rather than the
+/// where a person reading a terminal gets the whole story rather than the
 /// half that fits in 480 units.
 #[must_use]
 pub fn advice(row: &Candidate) -> Option<String> {

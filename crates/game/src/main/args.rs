@@ -208,7 +208,7 @@ pub(crate) fn parse_progress(spec: &str) -> Result<prefetch::Progress> {
         // Pulse-only by construction anyway (`prefetch.rs` hardcodes
         // `oag_pulse::TITLE` - finding S11). Named here so a reader of an HD
         // preview knows the text is a stand-in for width rather than a claim
-        // about that disc. Finding G5 of the 2026-08-18 review.
+        // about that disc.
         current: (done < total).then(|| format!("Data.wad {}", oag_pulse::names::INTRO_MOVIE)),
         finished: done == total,
         load_stage: 0,

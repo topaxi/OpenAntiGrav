@@ -3,8 +3,8 @@
 //!
 //! **Pulse only.** `TrackSelection_PopulateList` (`0x088edf3c`) keeps a
 //! `PI_Track` only when `Definition_IsUnlocked` (`0x0888e29c`) passes - a
-//! locked circuit is **absent from the list, not greyed** (decompile; and the
-//! 2026-09-29 live capture, where the list went from 3 circuits to 24 with the
+//! locked circuit is **absent from the list, not greyed** (decompile; and a
+//! live capture, where the list went from 3 circuits to 24 with the
 //! dev byte set). A named `<Unlock Grid="GridN">` row evaluates
 //! `Unlock_GridPointsMet` (`0x0888ebd8`): the named grid's own medal points
 //! reach its `RequiredPoints`. See `docs/formats/race-setup.md`, "Two unlock

@@ -213,7 +213,7 @@ pub fn capture_orbit(hull_only: bool, kind: oag_ui_screens::picker::Kind) -> Orb
 ///
 /// HD's `ship.vex` carries one chunk with a stray vertex hundreds of units
 /// from the craft (a bound of 257 against a hull some 13 units long, checked
-/// 2026-10-08 on `Assegai`), and the bounding sphere the viewer frames from
+/// on `Assegai`), and the bounding sphere the viewer frames from
 /// then draws the craft as a speck. The 1st-to-99th percentile box of the
 /// vertex positions is the hull's own extent; the stray triangle is left in
 /// the mesh and simply sits outside the frame.
@@ -317,7 +317,7 @@ pub fn mode3d_view_projection(model: &oag_ui::screen::Model, space: Space) -> Op
     // The aspect is the grid's own, not the glass's: the PS2 draws 640x448 stretched to 16:9.
     let projection = camera::perspective(fov_y, space.size.0 / space.size.1, near, far);
     // The PS2 pressing's own OriginX/OriginY read negated relative to the
-    // PSP's - see this function's own doc - confirmed live 2026-09-28:
+    // PSP's - see this function's own doc - confirmed live:
     // applying the PSP sign to the PS2's raw values landed the outline
     // bottom-left of the panel instead of inside it.
     let sign = if space.size == Space::PS2.size {

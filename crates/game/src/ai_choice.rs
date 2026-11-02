@@ -1,11 +1,10 @@
 //! Which AI flies a race's opponents: the recovered original driver
 //! (`oag_ai::original`) or this project's own (`oag_ai::Driver`).
 //!
-//! **The original by default, in every race that has opponents** (maintainer,
-//! 2026-10-13), until this project's own driver is solid. It is a run flag,
-//! `--ai original|ours`, and never a player setting or a menu row: the AI is
-//! chosen by the build and the game mode, which keeps the 2026-10-11 rule
-//! recorded in `oag_raceplay`'s `original_ai.rs`. `--ai ours` is a developer's
+//! **The original by default, in every race that has opponents**, until this
+//! project's own driver is solid. It is a run flag, `--ai original|ours`, and
+//! never a player setting or a menu row: the AI is chosen by the build and the
+//! game mode, the rule recorded in `oag_raceplay`'s `original_ai.rs`. `--ai ours` is a developer's
 //! switch for testing our driver and overrides every race, the campaign's
 //! included.
 //!

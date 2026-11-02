@@ -279,7 +279,7 @@ pub(crate) struct Cli {
     ///
     /// Three mechanisms run off one clock, which a race takes from the tick:
     /// the two trackside ones - the per-material texture transform and the
-    /// `Anim Transform` node motion - and, since 2026-08-24, Wipeout HD's
+    /// `Anim Transform` node motion - and Wipeout HD's
     /// engine-flame surface scroll, which the original drives from the same
     /// kind of global clock (`time`, engine shader parameter slot 0). This
     /// overrides it, for a comparison harness that needs our phase matched to a
@@ -581,8 +581,8 @@ pub(crate) struct Cli {
     /// Development override: pin the Zone colour grade to a stage for the
     /// whole run.
     ///
-    /// **Both titles' ladders are recovered now** - 2048's own zone-number
-    /// table and, since 2026-08-31, HD/Fury's (`crates/hd/src/race.rs`'s
+    /// **Both titles' ladders are recovered** - 2048's own zone-number
+    /// table and HD/Fury's (`crates/hd/src/race.rs`'s
     /// `ZONE_STAGES`) - so a race normally escalates the grade on its own,
     /// re-deriving the stage from the zone counter every frame
     /// (`Scene::sync_zone_grade`). This flag exists for a **capture** rather
@@ -990,7 +990,7 @@ pub(crate) struct Cli {
 
     /// With `--pose-from`: render the recorded camera at this fov instead of
     /// the disc's authored value, in **vertical degrees** - the authored
-    /// value's own unit, settled at confidence 94 on 2026-08-09.
+    /// value's own unit (confidence 94).
     ///
     /// It was the calibration knob for settling that unit. It is now a
     /// *measurement instrument* rather than a leftover: `place_at` resets the
@@ -1096,10 +1096,9 @@ pub(crate) struct Cli {
     /// input produces both sides of a visual or CSV comparison. Ticks past
     /// the script's end hold its last state.
     ///
-    /// **`--trace-out` did not read this at all before 2026-09-10** - a run
-    /// combining the two produced a plausible-looking CSV of a craft that
-    /// never moved, with no error. `HeldButtons::advance` is where both legs
-    /// now make the same choice, so they cannot diverge on it again.
+    /// `--trace-out` reads it too: `HeldButtons::advance` is where both legs
+    /// make the same choice, so they cannot diverge (a trace that ignored it
+    /// would be a plausible CSV of a craft that never moved).
     #[arg(long, value_name = "FILE.inputs", requires = "race")]
     pub(crate) input_script: Option<std::path::PathBuf>,
 

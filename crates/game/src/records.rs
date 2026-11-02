@@ -223,7 +223,7 @@ pub struct Observation {
     /// campaign cell at all, and when the cell's own law says the value
     /// scored met no medal.
     ///
-    /// **Fed by a real race since 2026-09-14.** `RaceStage::observation`
+    /// **Fed by a real race.** `RaceStage::observation`
     /// (`crates/game/src/main/race_stage.rs`) calls `RaceStage::campaign_medal`,
     /// which evaluates a real `oag_tables::race_campaign::Cell` once one is
     /// selected - see that method's own doc for the per-mode law. Still
@@ -453,7 +453,7 @@ pub struct CampaignRecord {
     pub best_points: Option<u32>,
     /// **Wipeout HD/Fury only.** The rung [`Self::best_medal`] was earned
     /// at - `#[serde(default)]`, so a file [`Self::best_medal`] already
-    /// existed in before this field did (every pre-2026-09-28 row, and
+    /// existed in before this field did (every row written before the field, and
     /// every Pulse row forever) loads as `None` rather than refusing to
     /// parse. `oag_ui_screens::campaign::hd::hd_medal_frame`'s own doc names the
     /// default it falls back to when a saved medal carries no difficulty at
@@ -652,8 +652,7 @@ impl Store {
     /// [`Record::best_medal`].
     ///
     /// **`difficulty`'s own write rule is measured, not chosen** -
-    /// `Race_RecordResult`'s own `record+8`/`record+9` tail, decompiled in
-    /// full 2026-09-28
+    /// `Race_RecordResult`'s own `record+8`/`record+9` tail, decompiled in full
     /// (`docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "The
     /// `record+8`/`record+9` write" section, confidence 88): a **strict**
     /// medal improvement overwrites the stored difficulty unconditionally,
@@ -661,8 +660,7 @@ impl Store {
     /// at `Easy` replaces a stored `Gold`'s own difficulty if the run
     /// improves the medal - silver would, bronze would not, since neither
     /// beats a stored `Gold`); an **exact tie** in medal tier only ever
-    /// *raises* the stored rung, never lowers it. `None` on the pre-2026-09-28
-    /// Pulse call sites, and on 2048's own campaign progress, which has no
+    /// *raises* the stored rung, never lowers it. `None` on the Pulse call sites, and on 2048's own campaign progress, which has no
     /// difficulty concept to record - falls straight through to comparing
     /// `medal` alone, the same as before this field existed. Previously
     /// implemented as "the harder rung always wins outright, whatever either
@@ -715,7 +713,7 @@ impl Store {
                 if let Some(new_difficulty) = difficulty {
                     let overwrite_difficulty = match (row.best_medal, row.best_difficulty) {
                         // No stored medal, or a stored medal with no rung
-                        // recorded yet (a pre-2026-09-28 row): unconditional.
+                        // recorded yet (a row from before the field): unconditional.
                         (None, _) | (_, None) => true,
                         (Some(stored_medal), Some(stored_difficulty)) => {
                             medal < stored_medal || new_difficulty > stored_difficulty
