@@ -900,6 +900,7 @@ pub struct PickupFade {
 /// The dim the pickup bar is drawn in while it has nothing to show: the
 /// executable resets its widgets to white each tick and writes this colour over
 /// the ones with no content (HD's `0x0008df30`, `0x5affffff`, alpha 0.35).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PickupIdle {
     /// The hexagon behind a held pickup's icon: dim while nothing is held.
     pub backdrop: &'static str,

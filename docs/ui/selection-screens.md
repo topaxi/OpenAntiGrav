@@ -583,7 +583,8 @@ label and the four rating bars forced to 10
 (`docs/ghidra/functions/psp-pulse-usa/zone-mode.md`); the screen draws both, the
 preview is the team's own `Zone_FE.vex`, and the label has no arrows to press.
 `oag_title::ZoneTeamStep` is the per-title answer: Pure's own chain has no team
-step in Zone and keeps skipping it. Back from Track Select is the RACE
+step in Zone and keeps skipping it. HD/Fury, 2048 and Omega were not read in Zone; they take Pulse's
+rule without the ratings (maintainer, 2026-10-26: "the team matters for loyalty"). Back from Track Select is the RACE
 page; back from Ship Select is Track Select. A title that authors neither
 screen (`oag_title::FrontEnd::race_box` is `None` - Pure, HD, 2048 today)
 keeps all three rows and launches from `START` as before.
