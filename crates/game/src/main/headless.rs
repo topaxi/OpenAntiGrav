@@ -531,6 +531,14 @@ fn field_warmup_velocities(cli: &Cli) -> Result<Option<Vec<oag_core::math::Vec3>
     }
 }
 
+/// `--field-from`'s recorded lean and roll phase per opponent, empty without the flag.
+fn field_lean(cli: &Cli) -> Result<Vec<Option<oag_game::race_capture::pose_lean::PoseLean>>> {
+    match cli.field_from.as_deref() {
+        Some(path) => Ok(super::pose::field_from_csv(path)?.leans()),
+        None => Ok(Vec::new()),
+    }
+}
+
 /// `--pose-spark`: the contact sparks a posed capture throws before its frame.
 fn pose_sparks(cli: &Cli) -> Result<Vec<oag_raceplay::ContactSeed>> {
     cli.pose_spark
@@ -783,6 +791,7 @@ pub(crate) fn run_race(
                 pose_speed: cli.pose_speed,
                 pose_hold: cli.pose_hold,
                 pose_lean: pose_lean(cli)?,
+                field_lean: field_lean(cli)?,
                 field_warmup: field_warmup_velocities(cli)?,
                 pose_sparks: pose_sparks(cli)?,
                 presented: cli.presented.then_some(oag_game::race_capture::Presented {

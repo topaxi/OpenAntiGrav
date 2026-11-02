@@ -95,6 +95,8 @@ pub(crate) struct FieldCraft {
     pub(crate) team: String,
     /// The `vel_x..vel_z` columns, when the file has them: `--field-warmup` flies the craft at it.
     pub(crate) velocity: Option<oag_core::math::Vec3>,
+    /// The `steer_lean` and `roll_phase` columns (`entity+0x854`, `+0x87c`), when the file has both.
+    pub(crate) lean: Option<oag_game::race_capture::pose_lean::PoseLean>,
 }
 
 /// What `--field-from` carries: the opponents, and the player's own exact pose when the file has a
@@ -188,6 +190,19 @@ pub(crate) fn field_from_csv(path: &std::path::Path) -> Result<Field> {
         } else {
             None
         };
+        let lean = if header.contains(&"steer_lean") && header.contains(&"roll_phase") {
+            let number = |name: &str| -> Result<f32> {
+                let text = cells[column(name)?];
+                text.parse()
+                    .with_context(|| format!("{name} {text:?} is not a number"))
+            };
+            Some(oag_game::race_capture::pose_lean::PoseLean {
+                steer_lean: number("steer_lean")?,
+                roll_phase: number("roll_phase")?,
+            })
+        } else {
+            None
+        };
         if slot == 0 {
             player = Some(pose);
             player_velocity = velocity;
@@ -196,6 +211,7 @@ pub(crate) fn field_from_csv(path: &std::path::Path) -> Result<Field> {
                 pose,
                 team: cells[team_at].to_string(),
                 velocity,
+                lean,
             });
         }
     }
@@ -214,6 +230,11 @@ pub(crate) fn field_from_csv(path: &std::path::Path) -> Result<Field> {
 }
 
 impl Field {
+    /// Each opponent's recorded lean and roll phase in slot order (slot 1 first).
+    pub(crate) fn leans(&self) -> Vec<Option<oag_game::race_capture::pose_lean::PoseLean>> {
+        self.opponents.iter().map(|craft| craft.lean).collect()
+    }
+
     /// Every craft's velocity in slot order, the player first: what `--field-warmup` flies them at.
     /// Refused when the file lacks the `vel_*` columns or a player row, because a warm-up with a
     /// velocity guessed for a craft would be an invented one.

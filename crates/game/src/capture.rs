@@ -524,6 +524,7 @@ pub fn run(
                 pose_speed: None,
                 pose_hold: false,
                 pose_lean: None,
+                field_lean: Vec::new(),
                 field_warmup: None,
                 pose_sparks: Vec::new(),
                 presented: options.presented.then_some(crate::race_capture::Presented {
