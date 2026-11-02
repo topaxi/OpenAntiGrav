@@ -214,9 +214,8 @@ pub const MINE_EXPLO_EFFECT: &str = "WO_MINE_EXPLO";
 /// The smoke ring one third of the Bomb's detonation plays: `BombBlast_Construct`
 /// (`0x08872078`, confidence 90) spawns it by name at the blast's basis, beside
 /// two `.vex` models (`bomb_blast::BombBlastModels`) the generic
-/// `oag_fx::psys::Stage` cannot carry. The fourcc tag (`'BOSM'`) and the read:
-/// `docs/ghidra/functions/psp-pulse-usa/mine.md`, "2026-09-15: the bomb's teardown
-/// read - its own blast, not the mine's".
+/// `oag_fx::psys::Stage` cannot carry. The fourcc tag (`'BOSM'`) and the read are
+/// in `docs/ghidra/functions/psp-pulse-usa/mine.md`, the bomb's teardown section.
 pub const BOMB_SMOKERING_EFFECT: &str = "WO_BOMB_SMOKERING";
 
 /// The rays HD's Bomb blast spawns once, half a second after it starts:

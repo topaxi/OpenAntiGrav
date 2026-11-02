@@ -75,8 +75,8 @@ pub struct Weapons {
 /// (`entity+0x870`, `h += (raw - h) * 8 * dt`), lands the hit on the rising edge
 /// of `h > 0.1`, trips a laid mine on the raw height `> 0.1`, and lifts the
 /// cockpit eye by `h` along the ship's up
-/// (`docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`, "2026-10-26:
-/// what a Quake does to the craft it reaches"; `oag_weapons::projectile::quake`).
+/// (`docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`, the section
+/// on what a Quake does to the craft it reaches; `oag_weapons::projectile::quake`).
 /// A title whose gate is read later gets its own variant.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QuakeHit {
