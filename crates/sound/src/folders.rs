@@ -30,8 +30,8 @@ const MAX_DEPTH: usize = 6;
 /// the walk (and the menu's reading of it) for minutes.
 const MAX_FILES: usize = 100_000;
 
-/// The extensions this reads, lower case. Other audio formats are listed as open
-/// in `handover/audio/music-sources.md`.
+/// The extensions this reads, lower case: only the formats `oag_music` decodes outside a
+/// disc (`docs/architecture/music-threads.md`, "The music pool").
 const EXTENSIONS: [&str; 1] = ["mp3"];
 
 /// The file system as the scan sees it.
