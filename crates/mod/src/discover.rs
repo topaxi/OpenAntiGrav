@@ -43,7 +43,11 @@ pub fn mods_search_path() -> Vec<PathBuf> {
 /// Adds the `mods` folders a packaged build ships: beside the AppImage file (where a
 /// player puts their own) and beside the program, which for an AppImage is inside the
 /// mounted image (`usr/bin`, where the build puts the official mods).
-pub(crate) fn packaged_mods(appimage: Option<&Path>, program: Option<&Path>, paths: &mut Vec<PathBuf>) {
+pub(crate) fn packaged_mods(
+    appimage: Option<&Path>,
+    program: Option<&Path>,
+    paths: &mut Vec<PathBuf>,
+) {
     for file in [appimage, program].into_iter().flatten() {
         if let Some(directory) = file.parent() {
             let mods = directory.join("mods");
