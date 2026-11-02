@@ -627,7 +627,7 @@ do not expect a finished game outside Pulse.
 | The intro is skipped, and the log line `ffmpeg is not installed, so the intro is skipped and movies show no picture` | `ffmpeg` is missing (or `--no-video` was given, which logs nothing). Install `ffmpeg` and run once without the flag. The game is otherwise fine |
 | Window opens black, or no window | Vulkan driver missing or broken. The terminal prints a `renderer: vulkan: ...` line naming the adapter. A CPU adapter such as `llvmpipe` works but is slow |
 | Program does not start and the loader says it cannot open `libpipewire-0.3.so.0` (not run: needs a machine without it) | Install the PipeWire client library from the table in section 1 |
-| `frame: 50 ms` warnings fill the terminal | You are on a CPU renderer. Lower RENDER SCALE in the options. The log file is quieter |
+| A `frame: 50 ms` warning, then `frame: N more over 40 ms in the last 5.0 s` every few seconds | Frames are running slow, most often on a CPU renderer. Lower RENDER SCALE in the options |
 
 If something else fails, the log file named above has the detail. Include it
 when you report a problem.

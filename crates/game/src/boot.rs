@@ -447,7 +447,7 @@ pub fn load_shell(
             archives.packs.len()
         ));
     }
-    report.extend(problems.into_iter().map(|p| format!("dlc: {p}")));
+    report.extend(oag_raceplay::loader_log::dlc_problems(problems));
     report.push(format!(
         "{}: {} entries",
         archives.data.label(),
