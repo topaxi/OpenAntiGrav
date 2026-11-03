@@ -1,7 +1,7 @@
 ---
 status: re-first
 titles: [pure, hd, 2048, omega]
-updated: 2026-10-19
+updated: 2026-11-03
 summary: "Ranked list of weapon laws inherited from Pulse or HD: the fire law on four titles first, then 2048 LeachBeam"
 ---
 
@@ -22,13 +22,17 @@ not in the numbers, it is in what spends them.
 
 Ranked, most play impact first. Each names what would settle it.
 
-1. **The fire law on Pure, HD, 2048 and Omega.** Inherited from Pulse on four
-   titles and run in every race with weapons on, 38 to 288 opponent projectiles
-   per 240 s race (`docs/gameplay/ai.md`, "An original opponent never fired").
-   Only HD's table loader is read (`ps3-hdfury-eu/weapon-ai-stats.md`, 85);
-   its consumer (`RaceManager + 6240`) is not. Settles it: HD's decision
-   function, then a Pulse-vs-HD diff of the roll gates. Also open from the same
-   page: the absorb half's decision cadence (every tick or four a second).
+1. **The fire law on Pure, HD, 2048 and Omega.** **HD read 2026-11-03** (`hd-fire-law`,
+   `ps3-hdfury-eu/weapon-ai-fire.md`, `WeaponAi_DecideFireOrAbsorb` at `0x000f9a18`, 80): same
+   gates and rate tables as Pulse, **differs** in a per-step time scale `dt * 30` (0.5 at 1/60: HD
+   fires at half Pulse's per-step chance), the `AllWeapons` multiplier (`0.9 / 0.9 / 1.0`),
+   Eliminator `use * useScale[difficulty]` instead of `* 5`, and an unread Eliminator flip block.
+   Ours runs HD on Pulse's law, about 2.2x too often outside an Eliminator. **Ready to wire** (the
+   page's list; wire HD, then 2048 and Omega by inheritance labelled so). Still open: a live
+   breakpoint count on `0x000f9a18` (cadence and `dt`), the weapon AI's constructor (the
+   `RaceManager + 6240` pointer chain), Pure's, 2048's and Omega's own decision code (Omega: its
+   `eboot.bin` is in Ghidra, start at the reader of `stats + 0xc4`). The absorb half's cadence is
+   every step on both (read).
 2. **LeachBeam on 2048 and Omega.** 2048's own table authors `repair="30.0"`,
    fifteen times HD's 2.0 (HD and Omega's HD-named copy: 2.0). The per-trip law
    is HD's, carried by inheritance, and `energy_multiplier` is applied on the

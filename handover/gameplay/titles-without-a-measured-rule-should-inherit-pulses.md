@@ -33,12 +33,14 @@ the survey is below; none was trivial enough to fix in that lane.
 - **The absorb half and Mine/Bomb/Turbo/Cannon fire policy** of the opponent weapon AI are this
   project's own on every title, Pulse included: a Pulse gap, not a title one.
 - **HD's `EliminatorAIStats` row** is parsed since 2026-10-03 (`weapons::ai`, every copy
-  ground-truthed) and **not consumed**: no mapping to Pulse's mode-8 terms reaches 70 (use
-  scales 10.5/12.5/15.5 against a flat x5; absorb scale falling with difficulty against one
-  `0.001`), so HD stays on Pulse's terms. HD's loader is pinned (`weapon-ai-stats.md`,
-  RaceManager `+6240`, fields `+176..+228`); its **reader is not found** - next is a Ghidra
-  xref on that field or an RPCS3 watchpoint. Omega's named file has no row, its
-  `WeaponAIStats2048.xml` does: pick the file by evidence before wiring.
+  ground-truthed) and **not consumed**. Its **reader is found (2026-11-03, `hd-fire-law`)**:
+  `WeaponAi_DecideFireOrAbsorb` (`0x000f9a18`, 80), see `ps3-hdfury-eu/weapon-ai-fire.md`. HD
+  replaces Pulse's `use *= 5` with `use *= useScale[difficulty]` and the forced absorb index with
+  `absorb *= absorbScale[difficulty]` (only while `craft + 0x6ad8 == 0`), and adds a flip block
+  (flip x scale >= 131, so the roll always passes; its meaning is a hypothesis, 40) that stays
+  unwired. The score scales are not read by that function. **Ready to wire** (item list on the
+  page). Omega's named file has no row, its `WeaponAIStats2048.xml` does: pick the file by
+  evidence before wiring, and read Omega's own reader first (not checked).
 
 - ~~**HD's gantry `GO` pulse phase**~~ closed 2026-10-04 (`hd-go-pulse`): HD's race manager
   holds the gantry's time in `[3.83, 5.25)` s from the release, so `GO` is lit on the step and

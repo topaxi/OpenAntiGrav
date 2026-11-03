@@ -824,3 +824,9 @@
 0x008b8104	data	g_ZoneCircuitTrackIds	88	zone-palette-select.md
 0x008b8114	data	g_ZonePalettePaths	88	zone-palette-select.md
 
+
+# 2026-11-03 hd-fire-law: HD's opponent weapon decision (weapon-ai-fire.md)
+0x000f9a18	function	WeaponAi_DecideFireOrAbsorb	80	weapon-ai-fire.md
+0x000f98b8	function	WeaponAi_ScanTraffic	80	weapon-ai-fire.md
+0x008c175c	data	g_weapon_ai_rate	85	weapon-ai-fire.md
+0x008c1770	data	g_weapon_ai_rate_eliminator	85	weapon-ai-fire.md

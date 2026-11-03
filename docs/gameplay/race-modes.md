@@ -1030,8 +1030,9 @@ and `WeaponAIStats2048.xml`, both 1,369 bytes and byte-identical to each other a
 carries both spellings too; `oag_omega::TITLE` names the unsuffixed one, which has **no**
 Eliminator row (see the next section). So the maintainer's rule (an unmeasured title runs Pulse's
 law) needed no restated table: **every title runs `oag_ai::weapon_ai` on its own odds, inherited
-from Pulse and unmeasured on HD, Omega and 2048**, with no confidence score for those three. HD's
-and Omega's decision code is unread.
+from Pulse and unmeasured on HD, Omega and 2048**, with no confidence score for those three. Omega's
+decision code is unread; HD's is read since 2026-11-03 and differs
+([weapon-ai-fire.md](../ghidra/functions/ps3-hdfury-eu/weapon-ai-fire.md)).
 `crates/raceplay/tests/fire_law_inherit_ground_truth.rs` pins that a race on each of the three loads
 the table and runs `FireLaw::Original`. A title with no table would still have to run Pulse's
 odds; that case does not exist, so no cross-title read or restated constant was built for it.
@@ -1073,9 +1074,9 @@ at `+176 .. +228` of a 232-byte object embedded in the RaceManager at `+6240`, i
 `normalFlip`, `infrontFlip`, flip e/m/h, use e/m/h, absorb e/m/h, score e/m/h. The constructor
 defaults the two flips to `1.0` and every scale to `0.0`, so a file without the row (`DATA02`'s,
 Omega's unsuffixed one) leaves every scale at zero. `AllWeapons` is the 14th three-float row,
-stored after the thirteen weapons. **The consumer of those fields was not found** within the
-hour: no direct `lfs` of `RaceManager+6416..6468` exists, so the reads go through a computed
-pointer.
+stored after the thirteen weapons. **The consumer was found 2026-11-03**: the reads go through the weapon
+AI's own stats pointer (`ps3-hdfury-eu/weapon-ai-fire.md`, 80), which replaces the "no mapping
+reaches 70" verdicts below: use scale replaces `x5`, absorb scale replaces the forced index.
 
 **Against Pulse's hard-coded Eliminator terms** (`weapon-ai.md`, "Mode 8"):
 
