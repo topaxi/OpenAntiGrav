@@ -615,3 +615,20 @@ fn a_dropped_non_image_is_listed_as_one_that_will_not_open() {
     assert!(!l.rows()[1].is_playable());
     std::fs::remove_dir_all(&dir).ok();
 }
+
+/// The build's hash is drawn, with the commit's date after it when the build has one.
+#[test]
+fn the_build_hash_and_date_are_drawn() {
+    let list = draw_list(&Launcher::new(vec![playable("a.chd")]));
+    let expected = if oag_net::BUILD_DATE.is_empty() {
+        oag_net::GIT_HASH.to_string()
+    } else {
+        format!("{} {}", oag_net::GIT_HASH, oag_net::BUILD_DATE)
+    };
+    assert!(
+        list.iter()
+            .any(|draw| matches!(draw, Draw::Text { text, .. } if *text == expected)),
+        "{expected:?} not drawn"
+    );
+    assert_eq!(build_label(), expected);
+}

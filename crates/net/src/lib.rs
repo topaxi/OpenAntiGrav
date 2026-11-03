@@ -47,6 +47,11 @@ pub mod wt;
 /// `unknown`); see `build.rs`.
 pub const GIT_HASH: &str = env!("OAG_GIT_HASH");
 
+/// The date of the commit this build was made from, `YYYY-MM-DD`, or empty when unknown
+/// (`OAG_BUILD_DATE`, `SOURCE_DATE_EPOCH`, or `git`; see `build.rs`). Display only: never
+/// compared by a handshake or stored in a header.
+pub const BUILD_DATE: &str = env!("OAG_BUILD_DATE");
+
 /// The version suffix the build was given (`OAG_VERSION_SUFFIX`), empty for a release.
 pub const VERSION_SUFFIX: &str = env!("OAG_VERSION_SUFFIX");
 
