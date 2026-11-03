@@ -37,7 +37,8 @@ The engine never names the mod.
    for a second per-craft record (progress `f32`, place `u8`, course length in a header
    word). The clearance answer already reaches it as an event. Decide whether the Turbo
    gate stays the default `pickup-fire` for the AI or a manifest flag turns it off for a mod
-   that drives its own AI. Size M (40).
+   that drives its own AI. Any fire or use path built here goes through
+   `Race::may_use_pickup(slot)` (main, 37dfef768), so a mod never handles a wrecked craft. Size M (40).
 2. **Outputs (piece 7)**, none built:
    - a world-space mesh or sprite anchored ahead of a craft (the portal half disc);
    - a full-screen colour fill per view (`oag_fx::flash::ScreenFlash` is the one screen
