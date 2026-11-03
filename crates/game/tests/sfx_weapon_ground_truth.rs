@@ -509,7 +509,7 @@ fn quake_hit_render(drop_collisions: bool) -> (Vec<i16>, usize) {
     );
     // The limiter stays on: Pulse's own master trim keeps a busy mix under it, so the pair's
     // added energy is not taken back.
-    oag_game::sound::hold_race_song(&mut audio, &oag_pulse::TITLE);
+    oag_game::sound::hold_race_song(&mut audio, oag_pulse::TITLE);
     for tick in 0..LAUNCH + 40 {
         if tick == LAUNCH {
             assert!(race.force_quake(1), "the rival's wave never launched");
