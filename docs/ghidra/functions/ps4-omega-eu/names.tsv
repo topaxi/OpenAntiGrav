@@ -162,3 +162,10 @@
 0x012c8d60	function	WeaponAi_Construct	80	weapon-ai-fire.md
 0x0183d950	data	g_weapon_ai_rate_eliminator	85	weapon-ai-fire.md
 0x0183d970	data	g_weapon_ai_rate	85	weapon-ai-fire.md
+0x0136f5f0	function	ShipShield_Construct	82	shield.md
+0x0136fda0	function	ShipShield_BindColourParam	85	shield.md
+0x0136fed0	function	ShipShield_Activate	85	shield.md
+0x0136e880	function	ShipShield_Update	85	shield.md
+0x0136ef30	function	ShipShield_DrawCockpit	65	shield.md
+0x01a15700	data	g_shipshield_activation_colour	85	shield.md
+0x01a15710	data	g_shipshield_hit_colour	85	shield.md
