@@ -177,7 +177,7 @@ pub const TITLE: &Title = &Title {
     // but what raises each is unread, so those triggers draw nothing (ADR-0058: `None`
     // is the visible absence). The engine's own names are tried as Pulse's, by the
     // rule that an unmeasured title runs Pulse's, and the loader reports each
-    // its disc lacks. The shield tint likewise. `wo_composite` stays off: the
+    // its disc lacks. `wo_composite` stays off: the
     // executable registers 2048's `wo_*` programs and binds none, running its
     // `Tonemap` chain instead (checked, differs: exposure.md, "Omega").
     effects: &EFFECTS,
@@ -190,10 +190,12 @@ pub const TITLE: &Title = &Title {
             on: oag_title::Platforms::Any,
             origin: oag_title::Origin::InheritedFrom("Wipeout HD"),
         },
+        // HD's shield law with the cockpit-floored target alpha; the colour is each team's own
+        // `ShieldColour` (`docs/ghidra/functions/ps4-omega-eu/shield.md`).
         ..oag_title::Looks::unread(oag_title::ShieldPalettes {
-            ps2: oag_title::ShieldPalette::Hd,
-            elsewhere: oag_title::ShieldPalette::Hd,
-            origin: oag_title::Origin::InheritedFrom("Wipeout HD"),
+            ps2: oag_title::ShieldPalette::Omega,
+            elsewhere: oag_title::ShieldPalette::Omega,
+            origin: oag_title::Origin::Measured,
         })
     },
     // HD's `PI001` front end carried forward (`docs/formats/omega-frontend.md`),

@@ -678,6 +678,9 @@ pub enum ShieldPalette {
     Ps2Pulse,
     /// Wipeout HD's.
     Hd,
+    /// Omega's and 2048's: HD's, with the target alpha taken from the cockpit
+    /// sphere when it is larger.
+    Omega,
 }
 
 /// Which [`ShieldPalette`] a title's craft takes, by the platform of the

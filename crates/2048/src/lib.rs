@@ -215,10 +215,11 @@ pub const TITLE: &Title = &Title {
             on: oag_title::Platforms::Any,
             origin: oag_title::Origin::InheritedFrom("Wipeout HD"),
         },
+        // `docs/ghidra/functions/vita-2048-eu-v104/shield.md`: Omega's shield law, halves decoded.
         ..oag_title::Looks::unread(oag_title::ShieldPalettes {
-            ps2: oag_title::ShieldPalette::Hd,
-            elsewhere: oag_title::ShieldPalette::Hd,
-            origin: oag_title::Origin::InheritedFrom("Wipeout HD"),
+            ps2: oag_title::ShieldPalette::Omega,
+            elsewhere: oag_title::ShieldPalette::Omega,
+            origin: oag_title::Origin::Measured,
         })
     },
     // No campaign layout read (2048's campaign is its own event map): the

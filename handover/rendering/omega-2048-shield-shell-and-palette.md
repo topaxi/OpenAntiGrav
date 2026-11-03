@@ -1,8 +1,8 @@
 ---
-status: ready-to-wire
+status: re-first
 titles: [omega, 2048]
 updated: 2026-11-03
-summary: "Omega/2048 shield: build the psp2 shell, read own ShieldColour, mode-gated rate; open: how 2048_Magnetic_Shield uses alpha 0"
+summary: "Omega/2048 shield shell and own colour wired for named modes; open: 2048-content modes (rate 0.05, own cockpit) unlaunched, Vita program unread"
 size: M (65)
 difficulty: medium (60)
 ---
@@ -52,6 +52,10 @@ and the wire must not do that. Recipes: Omega,
 `cargo run -p oag-rcs --example gcn_dump -- data/extracted/ps4/omega-eu/uroot/data00.psarc data/art/published/ships/materials/2048_Magnetic_Shield.rcsmaterial`
 (entry name case as listed); Vita, `oag_rcs::gxp` over the material's programs, looking for the
 constant named `ShieldColour` and its readers. Does not block 1-4 for HD-content modes.
+
+## Wired
+
+Items 1, 2, 3 and 5 (HD-content target alpha) landed in lane `omega-2048-shield-wire`; the program read below shows `.a` is unused by the pixel program. Open now: 4 and 6 are unreachable (nothing launches a mode `>= 0x17`; `Palette::colour_rate` and `CONTENT_2048_COLOUR_RATE` are ready), the Vita program of `2048_Magnetic_Shield` is unread, and the HD target-alpha compare is still unrecorded for HD.
 
 ## Next Steps
 
