@@ -709,7 +709,9 @@ pub struct Emitter {
     pub animated_attributes: i32,
     /// `+0x940`'s records, in order - see [`attribute`].
     pub attribute_animations: Vec<attribute::AttributeAnimation>,
-    /// `+0x9a0`: sprite-atlas grid, columns and rows.
+    /// `+0x9a0`: sprite-atlas grid, columns and rows, one `u32` read in the
+    /// file's byte order with the columns in the high half (`docs/formats/pob.md`,
+    /// "The atlas grid word").
     pub atlas_grid: (u16, u16),
     /// `+0x9ac`. **Not the frame count**: `ParticleSystem_InitParticle`
     /// draws `Psys_RandIntRange(1, n)` into bits 4-7 of a per-particle flag
@@ -832,7 +834,6 @@ fn parse_emitter(
     let name = String::from_utf8_lossy(&record[..nul]).into_owned();
 
     let word = |at: usize| order.u32(record, at);
-    let half = |at: usize| order.u16(record, at);
     let float = |at: usize| order.f32(record, at);
     let int = |at: usize| order.u32(record, at) as i32;
 
@@ -888,7 +889,7 @@ fn parse_emitter(
         child_spawn_probability: float(0x4d4),
         animated_attributes: int(0x93c),
         attribute_animations: attribute::parse_list(data, order, base, record)?,
-        atlas_grid: (half(0x9a0), half(0x9a2)),
+        atlas_grid: ((word(0x9a0) >> 16) as u16, word(0x9a0) as u16),
         atlas_frames: int(0x9ac),
         modifiers,
         death_child: None,

@@ -738,3 +738,47 @@ fn the_repulser_wave_is_a_half_ring_of_bars() {
         assert!(centre.z > -1.0, "{centre}");
     }
 }
+
+/// The atlas grid word is columns in the high half, so Pure's debris word
+/// `4, 2` is two columns of four rows: eight square 32x32 cells on its 64x128
+/// sprite, which is what the original's batched quads sample
+/// (`docs/formats/pob.md`, "The atlas grid word"). Read as columns first the
+/// cells were 16x64 slivers through the shards, drawn as hard dark blocks.
+#[test]
+#[ignore = "needs data/images/pure-psp-usa.chd and pulse-psp-usa.chd"]
+fn an_atlas_grid_is_columns_in_the_high_half_so_its_cells_are_square() {
+    fn texels(effect: &Effect, emitter: usize) -> (u16, u16, f32, f32) {
+        let spec = &effect.emitters[emitter];
+        let sprite = spec.sprite.as_ref().expect("a sprite");
+        let rect = [0.0, 0.0, f32::from(sprite.width), f32::from(sprite.height)];
+        let cell = spec.atlas.cell(rect, 0);
+        let inset = 0.5 / oag_fx::psys::sprite::SHEET_SIZE as f32;
+        (
+            spec.atlas.columns,
+            spec.atlas.rows,
+            cell[2] - cell[0] + 2.0 * inset,
+            cell[3] - cell[1] + 2.0 * inset,
+        )
+    }
+
+    let (Some(pure), Some(pulse)) = (oag_testdata::image("data/images/pure-psp-usa.chd"), image())
+    else {
+        return;
+    };
+    let open = |image: &Path| {
+        Archive::open(&format!("{}:PSP_GAME/USRDIR/Data.wad", image.display())).expect("Data.wad")
+    };
+
+    let debris = effect(&mut open(&pure), "WO_SHIP_EXPLOSION_DEBRIS");
+    for emitter in [0, 1] {
+        let (columns, rows, width, height) = texels(&debris, emitter);
+        assert_eq!((columns, rows), (2, 4), "{}", debris.emitters[emitter].name);
+        assert_eq!((width, height), (32.0, 32.0));
+    }
+
+    // Two 64x64 frames side by side on a 128x64 sheet.
+    let flash = effect(&mut open(&pulse), "WO_PLASMA_FLASH");
+    let (columns, rows, width, height) = texels(&flash, 0);
+    assert_eq!((columns, rows), (2, 1));
+    assert_eq!((width, height), (64.0, 64.0));
+}

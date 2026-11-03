@@ -1416,6 +1416,36 @@ ones that animate - `hi > 0` and a grid of more than one frame - are:
 
 The PS2 and HD corpora parse unchanged (`pob_ground_truth.rs`).
 
+### The atlas grid word - 2026-11-03
+
+**`+0x9a0` is one `u32` read in the file's byte order, columns in the high half, rows in the low half** (confidence 90).
+It was read as two `u16` fields with the first as columns, which is the right order on HD's big-endian
+files and the wrong one on every little-endian title (PSP, PS2, Vita, PS4). The sprite templates' own
+grid (`+0x880`, `initial.rs`) was already read as the word.
+
+Evidence:
+
+- **The original's quads.** A GE dump of Pure's wreck blast (PPSSPP, `psp-pure-usa/wreck-big-blast.md`) holds
+  two 64x128 CLUT4 alpha-over draws, the debris root and `Debris2`. Their vertex UVs step `0, 0.5` across and
+  `0, 0.25, 0.5, 0.75` down: cells 0.5 wide and 0.25 tall, two columns of four rows. The word on disc is
+  `04 00 02 00`: low half 4, high half 2.
+- **The art.** The debris sprite decodes (swizzled CLUT4, 64x128) to eight shards in a 2x4 grid of 32x32 cells.
+  Pulse's `WO_PLASMA_FLASH` (128x64) and `WO_LEACHBEAM_CHARGING` (64x128), whose words read `1, 2`, are two
+  frames side by side (2 columns, 1 row), not a 1x2 stack.
+- **Wipeout 2048's own sprites.** Of 24 emitters with a non-square grid whose `.gxt` ships, the word gives
+  square cells on 22 (1024x512 on 8x4: 128x128) where the old order gave 256x64; the two it does not are
+  `WO_TRAIL_HITSHIP`/`_RED` `CORE_IMPACT` (256x512, 4x2: 64x256 tall cells).
+- **HD is unchanged** (big-endian: the high half is the first `u16`, as before; `8, 4` on 1024x512 sprites).
+
+Before, Pure's debris cells were 16x64 slivers through the shards, stretched to square quads: the hard dark
+rectangles over the wreck blast. Effects whose grid changes: Pulse PSP/PS2 `WO_PLASMA_FLASH`, `WO_PLASMA_HEAD`
+(`plasma_spikes`) and `WO_LEACHBEAM_CHARGING`; Pure's debris, plasma flash and plasma head; every 2048 and
+Omega emitter with a non-square grid (the 24 above in 2048; Omega's census is not run, its `.gnf` sprites are
+not read here). Checked visually on Pulse's plasma muzzle flash (it now picks a whole frame instead of a strip
+across both). Pinned by `oag_pob`'s `a_big_endian_blob_parses_to_exactly_what_its_little_endian_twin_does`
+(fixture word `2 << 16 | 4`) and
+`oag_fx`'s `an_atlas_grid_is_columns_in_the_high_half_so_its_cells_are_square` (ground truth).
+
 ### The sprite templates at `+0x9a4`/`+0x9a8` - 2026-09-30
 
 An emitter can carry **sprite templates**: records the instance turns into one

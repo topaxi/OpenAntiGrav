@@ -104,7 +104,7 @@ the walk and reject revisits (the largest shipped tree has seven records).
 | +0x778 | channel | Sprite atlas frame rate, frames per tick |
 | +0x858 | channel | Multiplier on the emitter extent, over the **emitter's** age |
 | +0x93c, +0x940 | i32, ptr | Animated attributes: count, and array of 0xec-byte records (a channel at +0x00, a selector at +0xe0) |
-| +0x9a0 | u16, u16 | Atlas grid, columns then rows. The frame count is their product |
+| +0x9a0 | u32 | Atlas grid: columns in the high half, rows in the low half, read in the file's byte order (`docs/formats/pob.md`, "The atlas grid word"). The frame count is their product |
 | +0x9a4, +0x9a8 | u32, ptr | Initial sprite templates (below) |
 | +0x9ac | i32 | Not the frame count; reader unknown |
 | +0x9b4 | ptr | Modifier list |
