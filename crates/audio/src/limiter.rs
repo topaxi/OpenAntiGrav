@@ -110,9 +110,8 @@ impl Limiter {
 
     /// Limits interleaved stereo `samples` in place.
     pub fn process(&mut self, samples: &mut [f32]) {
-        for frame in samples.chunks_exact_mut(CHANNELS) {
-            let mut incoming = [0.0; CHANNELS];
-            incoming.copy_from_slice(frame);
+        for frame in samples.as_chunks_mut::<CHANNELS>().0 {
+            let incoming = *frame;
             let loudest = incoming.iter().fold(0.0_f32, |m, s| m.max(s.abs()));
             self.peak = self.peak.max(loudest);
             let need = if loudest > CEILING {
