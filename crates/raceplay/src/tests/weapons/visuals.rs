@@ -412,3 +412,32 @@ fn the_plasma_heads_arcs_follow_the_charge_they_are_drawn_at() {
         "a head rescaled to 1.0 from 0.1 drew {live} tall, a spawn-time read {born}"
     );
 }
+
+/// The loader hands the Plasma head's arcs to the layer before the alpha-over dark disc
+/// on Pulse's PSP file alone: the original draws arcs, then the disc over them
+/// (`docs/ghidra/functions/psp-pulse-usa/plasma.md`, "the head's draw order").
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_loader_draws_the_pulse_psp_heads_arcs_under_the_alpha_over_layer() {
+    let Some(image) = oag_testdata::image("pulse-psp-usa.chd") else {
+        return;
+    };
+    let mut archives = oag_pulse::open(&image.display().to_string()).expect("archives");
+    let name = oag_title::engine_effects::PLASMA_FLARE_EFFECT;
+    let under = |pulse_psp: bool, archives: &mut oag_assets::Archives| -> Vec<bool> {
+        let (effect, _) = crate::assets::particle_effect(
+            archives,
+            r"Data\Psys",
+            name,
+            pulse_psp,
+            pulse_psp,
+            false,
+        )
+        .expect("the head loads");
+        effect.emitters.iter().map(|e| e.under_alpha).collect()
+    };
+    let psp = under(true, &mut archives);
+    assert_eq!(psp.iter().filter(|u| **u).count(), 1, "{psp:?}");
+    assert!(psp[0], "the root emitter is the arcs");
+    assert!(under(false, &mut archives).iter().all(|u| !u));
+}

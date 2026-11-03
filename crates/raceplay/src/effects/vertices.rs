@@ -50,6 +50,23 @@ impl Race {
         }
     }
 
+    /// The GE's guard band, on Pulse's PSP source alone - `psys::guard`.
+    /// That source is the one whose flash answers every kind; Pure's
+    /// Quake-only wash is not a sign of it.
+    fn stage_guard_band(&self) -> Option<psys::guard::GuardBand> {
+        let camera = self.camera_frame();
+        self.view
+            .screen_flash
+            .as_ref()
+            .is_some_and(oag_fx::flash::ScreenFlash::answers_every_kind)
+            .then_some(psys::guard::GuardBand {
+                eye: camera.position,
+                right: camera.right,
+                up: camera.up,
+                forward: -camera.back,
+            })
+    }
+
     /// Everything the [`psys::Stage`] is playing this frame, split by blend
     /// class the same way [`Self::spark_vertices`] is.
     ///
@@ -64,20 +81,7 @@ impl Race {
         up: Vec3,
     ) {
         let camera = self.camera_frame();
-        // The GE's guard band, on Pulse's PSP source alone - `psys::guard`.
-        // That source is the one whose flash answers every kind; Pure's
-        // Quake-only wash is not a sign of it.
-        let guard = self
-            .view
-            .screen_flash
-            .as_ref()
-            .is_some_and(oag_fx::flash::ScreenFlash::answers_every_kind)
-            .then_some(psys::guard::GuardBand {
-                eye: camera.position,
-                right: camera.right,
-                up: camera.up,
-                forward: -camera.back,
-            });
+        let guard = self.stage_guard_band();
         self.view
             .stage
             .extend_vertices(additive, alpha_over, right, up, guard.as_ref());
@@ -95,6 +99,21 @@ impl Race {
                 .weather()
                 .extend_splash_vertices(additive, alpha_over, right, up);
         }
+    }
+
+    /// The stage's additive geometry that draws before the alpha-over layer
+    /// (`oag_fx::psys::EmitterSpec::under_alpha`), with the guard band
+    /// [`Self::extend_stage_vertices`] uses.
+    pub fn extend_underlay_vertices(
+        &self,
+        out: &mut Vec<oag_mesh::mesh::GpuVertex>,
+        right: Vec3,
+        up: Vec3,
+    ) {
+        let guard = self.stage_guard_band();
+        self.view
+            .stage
+            .extend_underlay_vertices(out, right, up, guard.as_ref());
     }
 
     /// The blend class 8 quads (heat haze, shock rings) everything the stage

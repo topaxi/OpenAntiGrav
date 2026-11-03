@@ -352,6 +352,7 @@ fn build(
         frames: FrameAdvance::Still,
         sheet_rect: None,
         short_run: false,
+        under_alpha: false,
         world_space: false,
         template: false,
         rotation: None,

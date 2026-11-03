@@ -196,6 +196,8 @@ pub(super) fn particle_effect(
             effect.without_extents();
         }
         effect.without_pulse_psp_draw();
+    } else if effect.name == oag_title::engine_effects::PLASMA_FLARE_EFFECT {
+        effect.draw_root_under_alpha();
     }
     let sprite_note = if ext.is_some() {
         let mut note = format!(", {sprites} sprite(s) read");

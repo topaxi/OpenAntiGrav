@@ -44,14 +44,13 @@ use oag_core::Rng;
 use oag_core::math::Vec3;
 use oag_pob::{self as pob, Channel, ChannelMode, ParticleSystem};
 
-use oag_mesh::mesh::GpuVertex;
-
 mod distort;
 mod emitter_state;
 mod error;
 pub mod field;
 pub mod frames;
 pub mod guard;
+mod layers;
 mod library;
 pub mod parametric;
 mod path;
@@ -345,6 +344,11 @@ pub struct EmitterSpec {
     /// spikes `4`, 9; the glow's five draws). `false` for every other source -
     /// [`Effect::without_pulse_psp_draw`].
     pub short_run: bool,
+    /// Drawn in the layer before the alpha-over particles instead of with the
+    /// additive ones ([`System::extend_underlay_vertices`]), for the one
+    /// emitter whose draw the original issues ahead of an alpha-over draw of
+    /// its own effect ([`Effect::draw_root_under_alpha`]).
+    pub under_alpha: bool,
     /// Spawn offsets and velocities skip the emitter node's matrix -
     /// [`pob::flags::WORLD_SPACE`], so [`System::set_frame_scale`] does not reach them.
     pub world_space: bool,
@@ -589,6 +593,7 @@ impl EmitterSpec {
             frames: FrameAdvance::of(record, Atlas::of(record).frames()),
             sheet_rect: None,
             short_run: true,
+            under_alpha: false,
             world_space: record.flags & pob::flags::WORLD_SPACE != 0,
             template: false,
             rotation: roll::Rotation::of_emitter(record),
@@ -1077,78 +1082,6 @@ impl System {
     pub fn ignitions(&self) -> u32 {
         self.ignitions
     }
-
-    /// This frame's geometry, split by blend class: `(additive, alpha_over)`,
-    /// the two GE configurations the original's state selector switches
-    /// between. `right` and `up` come from the camera; streaks follow the
-    /// streak-quad builder at `0x08916820`.
-    #[must_use]
-    pub fn vertices(
-        &self,
-        effect: &Effect,
-        right: Vec3,
-        up: Vec3,
-    ) -> (Vec<GpuVertex>, Vec<GpuVertex>) {
-        let mut additive = Vec::new();
-        let mut alpha_over = Vec::new();
-        self.extend_vertices(&mut additive, &mut alpha_over, effect, right, up, None);
-        (additive, alpha_over)
-    }
-
-    /// [`Self::vertices`], appended to two lists the caller owns - the
-    /// renderer's form (a returned pair per effect allocated 1.99 MB a frame
-    /// with rockets in the air). `guard` is the GE's screen-range cull, or
-    /// `None` for a source it was not measured on.
-    pub fn extend_vertices(
-        &self,
-        additive: &mut Vec<GpuVertex>,
-        alpha_over: &mut Vec<GpuVertex>,
-        effect: &Effect,
-        right: Vec3,
-        up: Vec3,
-        guard: Option<&guard::GuardBand>,
-    ) {
-        for particle in &self.particles {
-            if !particle.alive() {
-                continue;
-            }
-            let spec = &effect.emitters[usize::from(particle.spec)];
-            let age = 1.0 - (particle.life / particle.max_life).clamp(0.0, 1.0);
-            let half = channel_sample(&spec.size, age, particle.size_sample)
-                * self.drawn_scale(spec, particle);
-            let alpha =
-                channel_sample(&spec.alpha, age, particle.alpha_sample) / spec.colour_divisor;
-            let colour = match spec.colour_mode {
-                ColourMode::RandomEntry => spec.palette[usize::from(particle.colour_index)],
-                // `palette[(int)(age * 255.999)]`, the original's own
-                // index; the alpha byte comes from the channel either way.
-                ColourMode::OverLife => spec.palette[(age * 255.999) as usize & 0xff],
-            };
-            let out: &mut Vec<GpuVertex> = match spec.blend {
-                Blend::Additive => additive,
-                Blend::AlphaOver => alpha_over,
-                Blend::Distort => continue,
-            };
-            let rgb = [colour[0], colour[1], colour[2]];
-            if let Render::Streak { .. } = spec.render {
-                streak::extend(
-                    out,
-                    spec,
-                    particle,
-                    half,
-                    [rgb[0], rgb[1], rgb[2], alpha],
-                    (right, up),
-                    guard,
-                );
-                continue;
-            }
-            let corners = billboard(spec, particle, age, half, right, up, rgb, alpha);
-            if guard::drops(guard, &effect.name, spec.template, &corners) {
-                continue;
-            }
-            out.extend_from_slice(&corners);
-        }
-    }
 }
 
 /// Effects a [`Stage`] plays at once.
@@ -1375,36 +1308,6 @@ impl Stage {
             instance
                 .system
                 .advance(effect, dt, instance.anchor, instance.up, rng);
-        }
-    }
-
-    /// Every playing instance's geometry, split by blend class the same way
-    /// [`System::vertices`] splits one.
-    #[must_use]
-    pub fn vertices(&self, right: Vec3, up: Vec3) -> (Vec<GpuVertex>, Vec<GpuVertex>) {
-        let mut additive = Vec::new();
-        let mut alpha_over = Vec::new();
-        self.extend_vertices(&mut additive, &mut alpha_over, right, up, None);
-        (additive, alpha_over)
-    }
-
-    /// [`Self::vertices`], appended to two lists the caller owns - the form
-    /// the renderer uses, for the reason [`System::extend_vertices`] gives.
-    pub fn extend_vertices(
-        &self,
-        additive: &mut Vec<GpuVertex>,
-        alpha_over: &mut Vec<GpuVertex>,
-        right: Vec3,
-        up: Vec3,
-        guard: Option<&guard::GuardBand>,
-    ) {
-        for instance in &self.instances {
-            let Some(effect) = instance.effect.as_deref() else {
-                continue;
-            };
-            instance
-                .system
-                .extend_vertices(additive, alpha_over, effect, right, up, guard);
         }
     }
 
