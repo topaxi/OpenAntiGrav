@@ -77,7 +77,7 @@ pub(super) fn spawn_pose(
     }
     spline
         .start()
-        .map(|sample| Pose::from_sample(sample, sample.racing_line, height))
+        .map(|sample| Pose::on_racing_line(sample, height))
 }
 
 /// How far the authored heading may be off the spline's own before the spline

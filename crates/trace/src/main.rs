@@ -750,7 +750,7 @@ fn drive_scenario(args: DriveArgs) -> Result<()> {
                     "{}: no Start Position node, starting on the spline",
                     args.track
                 );
-                Pose::from_sample(&start, start.racing_line, spawn_height(&handling))
+                Pose::on_racing_line(&start, spawn_height(&handling))
             }
         },
     };
@@ -923,7 +923,7 @@ fn plan_scenario(args: PlanArgs) -> Result<()> {
                 }
                 None => {
                     warn!("start: no Start Position node, starting on the spline");
-                    Pose::from_sample(&samples[0], samples[0].racing_line, spawn_height(&handling))
+                    Pose::on_racing_line(&samples[0], spawn_height(&handling))
                 }
             }
         }

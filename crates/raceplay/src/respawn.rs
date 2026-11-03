@@ -290,7 +290,7 @@ impl Race {
 
         let ship = &self.sim.world.ships[slot];
         let height = rig_spawn_height(&ship.handling, None, &ship.physics.hover_rig);
-        let pose = Pose::from_sample(&sample, sample.racing_line, height);
+        let pose = Pose::on_racing_line(&sample, height);
         self.put_back(slot, pose, Vec3::ZERO);
     }
 
