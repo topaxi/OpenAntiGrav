@@ -2,7 +2,7 @@
 status: measure
 titles: [all]
 updated: 2026-11-03
-summary: "Items 1-5 (reset triggers, spline placement, pickup lookup, ABI command table, FOV chain) done; items 6-10 stay open for the mod weapon lane."
+summary: "Items 1-6 done (6, the in-world predicate, with the portal pieces); items 7-10 open: enable state, rocket count, AI fire wrappers, trace spawn copy."
 kind: debt
 ---
 
@@ -219,7 +219,13 @@ are unmoved.
 
 ## Later
 
-### 6. One "in the world" predicate for a craft (sweep item 5)
+### 6. One "in the world" predicate for a craft (sweep item 5) - done
+
+**Done** with the portal pieces: `Ship::in_world` (`active` and not in a transit) is what
+`Craft::active` returns and what the draw (`Race::ship_active`, model matrices, shadow,
+exhaust), `resolve_craft_pairs`, `fire_law` targeting and the mine and cannon loops ask.
+The per-craft reset hold item 1 left open is `Race::reset_held`, read by `Race::armed`.
+The reading below is kept for the evidence.
 
 - `Craft::active()` (`crates/weapons/src/craft.rs:15`) is the weapons' gate, checked in
   about fifteen places (`projectile/quake.rs:248,280`, `mine.rs:326`, `missile.rs:314`
