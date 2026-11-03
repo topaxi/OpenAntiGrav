@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [pure, 2048, omega]
-updated: 2026-11-02
+updated: 2026-11-03
 summary: "Hit sparks, absorb, wreck nodes and Pure's own big blast wired per title; open: 2048/Omega other hit triggers; Pure VECTOR laps"
 difficulty: medium (30)
 ---
@@ -20,7 +20,8 @@ the survey is below; none was trivial enough to fix in that lane.
   title on its own disc data and locators, `Title` data with `InheritedFrom` provenance
   (`docs/rendering/hull-sparks.md`, "Other titles"): Pure takes Pulse's hit sparks and wreck node
   blast and death sparks (its absorb was already its own, measured); 2048 and Omega take HD's
-  absorb burst and Cannon craft-hit spark. **Still open from it:** (a) ~~Pure's big wreck blast~~ wired (`pure-wreck-big-blast`): measured on Pure (`psp-pure-usa/wreck-big-blast.md`), `WreckBigNode`/`WreckDebris`/`WreckSmoke`; left open: Pure's 0xa0 object at `0x0885a7d8` (Pulse's shockwave counterpart, unread), its sound, and a live PPSSPP read of the blast's scale. (b) 2048
+  absorb burst and Cannon craft-hit spark. **Still open from it:** (a) ~~Pure's big wreck blast~~ wired (`pure-wreck-big-blast`): measured on Pure (`psp-pure-usa/wreck-big-blast.md`), `WreckBigNode`/`WreckDebris`/`WreckSmoke`; left open: Pure's 0xa0 object at `0x0885a7d8` (Pulse's shockwave counterpart, unread), its sound, and the blast's scale at the spawn call (the draws' extents are in the page).
+  **Ready to wire (`pure-wreck-blast-look`, 2026-11-03):** ours alone draws dark hard-edged rectangles from `WO_SHIP_EXPLOSION_DEBRIS` (isolated by drawing each effect alone at ticks 160-172); the original's alpha-over draws are soft orange cloud shapes with graded palette alpha, and its smoke meshes are on screen 3 stops after the blast where ours' smoke is invisible. Next: bisect ours' debris emitters (root, `Debris2`, `trails`) for the one that draws the blocks, compare its texture decode and mesh/quad shape with the GE census in `psp-pure-usa/wreck-big-blast.md`, then the smoke's timing. (b) 2048
   and Omega draw no wreck effect (HD names none; their `WO_DEBRIS_SPARKS`/`WO_DEBRIS_FIRE` preload
   is unread), and the non-Cannon weapon hit trigger and HD's `WO_DAMAGE_*` smoke are unwired there
   (checked, applies, not wired). (c) Pure's weapon-hit `.COLLISIONS` cue now plays with the spark
