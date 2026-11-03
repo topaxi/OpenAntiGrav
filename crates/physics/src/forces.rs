@@ -438,6 +438,48 @@ pub struct Evaluated {
     pub roll_armed: bool,
 }
 
+impl Evaluated {
+    /// A frame in which nothing was evaluated: every force zero, no contact, no wall
+    /// response. For a craft that was not stepped this tick (one out of the world).
+    #[must_use]
+    pub fn idle(state: &ShipState) -> Self {
+        let probe = crate::hover::HoverProbe::miss(state.body.position);
+        Self {
+            accumulators: Accumulators::default(),
+            hover: Hover {
+                probes: [probe; crate::hover::MAX_PROBES],
+                count: 0,
+                contacts: 0,
+                average_normal: Vec3::ZERO,
+                alignment_torque: Vec3::ZERO,
+                downforce: Vec3::ZERO,
+                local_angular_torque: Vec3::ZERO,
+                escape: Vec3::ZERO,
+            },
+            mag_lock: None,
+            airbrake: AirbrakeForces::default(),
+            engine: engine::EngineForce::default(),
+            brakes: Vec3::ZERO,
+            lateral_grip: Vec3::ZERO,
+            gravity: Vec3::ZERO,
+            drag: Vec3::ZERO,
+            rolling_resistance: Vec3::ZERO,
+            vertical_damping: Vec3::ZERO,
+            speedup_pad: Vec3::ZERO,
+            weathervane: Vec3::ZERO,
+            angular_damping: Vec3::ZERO,
+            steering: 0.0,
+            pitch: 0.0,
+            forward_speed: 0.0,
+            control_grounded: state.grounded,
+            contact_grounded: state.grounded,
+            wall: crate::wall::WallResponse::default(),
+            shield: crate::damage::Shield::default(),
+            roll_armed: false,
+        }
+    }
+}
+
 /// Evaluates every force for one frame, at full `dt`, exactly once.
 ///
 /// Mutates `state`: control states, contact bookkeeping, the body's accumulators, and the

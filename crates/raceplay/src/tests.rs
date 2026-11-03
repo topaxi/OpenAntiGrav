@@ -94,6 +94,7 @@ mod title_effects;
 mod track_stages;
 mod trail_hits;
 mod trail_order;
+mod transit;
 mod velocity_gate;
 mod viewpoint;
 mod weapons;

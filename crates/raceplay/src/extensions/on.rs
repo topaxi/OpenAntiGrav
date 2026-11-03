@@ -98,6 +98,15 @@ pub(super) struct On {
     pub(super) drops: Drops,
     /// The race-wide outputs of this tick.
     pub(super) sky: super::Sky,
+    /// The slots whose `transit` ended this tick, before the call: their `transit-end`
+    /// is in this call's events.
+    pub(super) transit_ends: u32,
+    /// This call's `transit` and `probe-clearance` commands with their module's index,
+    /// for `Race` to run once the call is done.
+    pub(super) motion: Vec<(usize, Command)>,
+    /// Each slot's `probe-clearance` answer (fits, units ahead), for the next call's
+    /// `clearance` event: race state, hashed.
+    pub(super) clearance: [Option<(bool, f32)>; oag_gameplay::MAX_SHIPS],
 }
 
 impl On {
@@ -268,6 +277,9 @@ impl On {
             effects: Vec::new(),
             drops: Drops::default(),
             sky: super::Sky::default(),
+            transit_ends: 0,
+            motion: Vec::new(),
+            clearance: [None; oag_gameplay::MAX_SHIPS],
         }
     }
 
@@ -402,6 +414,15 @@ impl On {
             hasher.write_u64(*mask);
         }
         self.prefer.hash_into(hasher);
+        for answer in self.clearance {
+            match answer {
+                None => hasher.write_u8(0),
+                Some((fits, ahead)) => {
+                    hasher.write_u8(1 + u8::from(fits));
+                    hasher.write_f32(ahead);
+                }
+            }
+        }
         for slot in &self.slots {
             hasher.write(&slot.blob);
             match &slot.faulted {
@@ -474,6 +495,7 @@ fn crafts(sim: &RaceSim, inputs: &oag_gameplay::PlayerInputs) -> Vec<oag_ext_abi
                 fire_held,
                 racing,
                 shielded: ship.physics.shield_pickup_timer > 0.0,
+                in_transit: ship.transit.is_some(),
                 lap: u8::try_from(ship.standing.lap).unwrap_or(u8::MAX),
                 laps_target: sim
                     .world
@@ -638,6 +660,8 @@ fn engine_events(on: &On) -> impl Iterator<Item = Event> + '_ {
             let (inside, before) = (on.inside[i], on.reported[i]);
             let triggers = |mask: u64| (0..64_u16).filter(move |t| mask & (1 << t) != 0);
             [
+                bit(on.transit_ends).then_some(Event::TransitEnd { slot }),
+                on.clearance[i].map(|(fits, ahead)| Event::Clearance { slot, fits, ahead }),
                 bit(on.walls).then_some(Event::WallContact { slot }),
                 bit(on.fires).then_some(Event::PickupFire { slot }),
                 bit(on.absorbs).then_some(Event::PickupAbsorbed { slot }),
@@ -678,10 +702,24 @@ fn emit(sim: &mut RaceSim, index: usize, (slot, channel, value): (oag_ext_abi::S
     sim.extensions.note_fired(channel, value, tick);
 }
 
-pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs) {
+/// Whether module `index` is off for the race.
+pub(super) fn faulted(sim: &RaceSim, index: usize) -> bool {
+    sim.extensions.on.slots[index].faulted.is_some()
+}
+
+/// Faults module `index` for a refusal the race found after the call (a `transit` it
+/// could not start), taking back what it holds, as a refused reply does.
+pub(super) fn fault(sim: &mut RaceSim, index: usize, why: String) {
+    let tick = sim.world.tick;
+    sim.extensions.on.slots[index].fault(tick, why);
+    release(sim, index);
+}
+
+pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs, transited: u32) {
     if sim.extensions.on.slots.is_empty() {
         return;
     }
+    sim.extensions.on.transit_ends = transited;
     let crafts = crafts(sim, inputs);
     let tick = sim.world.tick;
     let active = sim
@@ -703,6 +741,8 @@ pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs) {
     on.drops
         .note(tick, mods_dropped, track_dropped, engine_dropped);
     on.walls = 0;
+    on.transit_ends = 0;
+    on.clearance = [None; oag_gameplay::MAX_SHIPS];
     on.hit_amount = [0.0; oag_gameplay::MAX_SHIPS];
     on.hit_weapon = [None; oag_gameplay::MAX_SHIPS];
     on.fires = 0;
@@ -844,6 +884,14 @@ fn apply(sim: &mut RaceSim, index: usize, command: Command) {
         }
         Command::PreferRoute { slot, route } => {
             sim.extensions.on.prefer.set(slot.index(), route);
+        }
+        // Once, at the call: two modules compose.
+        Command::ScaleSpeed { slot, factor } => {
+            sim.world.ships[slot.index()].physics.body.linear_velocity *= factor;
+        }
+        // Run by `Race` once every module's commands have landed (`crate::transit`).
+        Command::Transit { .. } | Command::ProbeClearance { .. } => {
+            sim.extensions.on.motion.push((index, command));
         }
     }
 }

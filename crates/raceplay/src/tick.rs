@@ -161,7 +161,10 @@ impl Race {
         // duration rather than a tick less, and so the cancel-on-absorb branch
         // inside `spend_pickup` is not immediately undone by a decrement.
         for slot in 0..MAX_PLAYERS {
-            if self.sim.world.person_flown(slot) {
+            // A press in a transit is not heard: the craft is out of the world.
+            if self.sim.world.person_flown(slot) && self.sim.world.ships[slot].transit.is_some() {
+                self.tick_autopilot(slot);
+            } else if self.sim.world.person_flown(slot) {
                 self.spend_pickup(slot, inputs.get(slot));
                 self.tick_autopilot(slot);
             } else if self.sim.opponent_autopilot {
@@ -183,8 +186,11 @@ impl Race {
         // the *held* state of fire rather than the press edge `spend_pickup`
         // above consumes - see `Race::advance_cannons`'s own doc comment.
         self.advance_cannons(inputs);
+        // A transit whose count ran out puts its craft further round before the call,
+        // so the modules see it out and it steps from there this tick.
+        let transited = self.advance_transits();
         // Phase C: each simulation mod's one call, its commands into the steps below.
-        self.tick_extensions(inputs);
+        self.tick_extensions(inputs, transited);
 
         // Each person's craft, in slot order, against the same unmoved
         // projectile pool and the same unspent field-wide effects: the force law

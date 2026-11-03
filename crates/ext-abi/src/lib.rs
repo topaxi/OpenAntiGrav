@@ -49,6 +49,7 @@ pub use hud::{
 };
 pub use kind::CommandKind;
 pub use malformed::Malformed;
+pub use motion::{Distance, MAX_PROBE_RADIUS, MAX_SPEED_FACTOR, MAX_TRANSIT_TICKS};
 pub use pickup::{Colour, Icon, ModIcon};
 
 /// The ABI major. A manifest's `[extension] api` names it.
@@ -169,6 +170,8 @@ pub const CRAFT_FIRE_HELD: u8 = 2;
 pub const CRAFT_RACING: u8 = 4;
 /// Craft flag: the craft's Shield is running, so a weapon hit this tick is absorbed.
 pub const CRAFT_SHIELDED: u8 = 8;
+/// Craft flag: the craft is in a `transit`, out of the world.
+pub const CRAFT_IN_TRANSIT: u8 = 16;
 
 /// The largest `scale-pad` factor, race-wide or per slot. Chosen.
 pub const MAX_PAD_FACTOR: f32 = 2.0;
@@ -188,6 +191,8 @@ const EVENT_TRIGGER_ENTER: u8 = 7;
 const EVENT_TRIGGER_EXIT: u8 = 8;
 const EVENT_HIT: u8 = 9;
 const EVENT_MOD: u8 = 10;
+const EVENT_TRANSIT_END: u8 = 11;
+const EVENT_CLEARANCE: u8 = 12;
 /// Bit 15 of a `hud-text`, `hud-icon` or `fire-effect` argument: the string or effect is
 /// the sending mod's own, not the title's. The pool offset or effect index is the rest.
 const OWN_FLAG: u16 = 1 << 15;
@@ -407,6 +412,8 @@ pub struct Craft {
     pub racing: bool,
     /// The craft's Shield is running: a weapon hit is absorbed (it still raises `hit`).
     pub shielded: bool,
+    /// The craft is in a `transit`, out of the world.
+    pub in_transit: bool,
     /// The lap being driven, 1-based, saturating at 255.
     pub lap: u8,
     /// The laps the race ends after; 0 when it has no target.
@@ -430,6 +437,7 @@ impl Craft {
             (self.fire_held, CRAFT_FIRE_HELD),
             (self.racing, CRAFT_RACING),
             (self.shielded, CRAFT_SHIELDED),
+            (self.in_transit, CRAFT_IN_TRANSIT),
         ]
         .into_iter()
         .fold(0, |flags, (on, bit)| if on { flags | bit } else { flags });
@@ -452,6 +460,7 @@ impl Craft {
             fire_held: flags & CRAFT_FIRE_HELD != 0,
             racing: flags & CRAFT_RACING != 0,
             shielded: flags & CRAFT_SHIELDED != 0,
+            in_transit: flags & CRAFT_IN_TRANSIT != 0,
             lap: record[CRAFT_LAP],
             laps_target: record[CRAFT_LAPS_TARGET],
             shield: f32::from_bits(get_u32(record, CRAFT_SHIELD)),
@@ -534,6 +543,21 @@ pub enum Event {
         /// What the sender attached.
         value: f32,
     },
+    /// A `transit` ended: the craft is back in the world, further round, this tick.
+    TransitEnd {
+        /// The grid slot.
+        slot: Slot,
+    },
+    /// The answer to the slot's `probe-clearance` of the tick before.
+    Clearance {
+        /// The grid slot.
+        slot: Slot,
+        /// The disc fits on the track there without touching its geometry.
+        fits: bool,
+        /// How far ahead was probed, in track units (the distance resolved); 0 when the
+        /// track has no course to probe along.
+        ahead: f32,
+    },
 }
 
 impl Event {
@@ -549,7 +573,9 @@ impl Event {
             | Self::TriggerEnter { slot, .. }
             | Self::TriggerExit { slot, .. }
             | Self::Hit { slot, .. }
-            | Self::Mod { slot, .. } => slot,
+            | Self::Mod { slot, .. }
+            | Self::TransitEnd { slot }
+            | Self::Clearance { slot, .. } => slot,
         }
     }
 
@@ -566,6 +592,8 @@ impl Event {
             Self::TriggerExit { trigger, .. } => (EVENT_TRIGGER_EXIT, trigger),
             Self::Hit { weapon, .. } => (EVENT_HIT, weapon.code() as u16),
             Self::Mod { .. } => (EVENT_MOD, 0),
+            Self::TransitEnd { .. } => (EVENT_TRANSIT_END, 0),
+            Self::Clearance { fits, .. } => (EVENT_CLEARANCE, u16::from(fits)),
         };
         let mut record = [0; EVENT_LEN];
         record[EVENT_KIND] = kind;
@@ -574,7 +602,9 @@ impl Event {
         record[EVENT_INDEX] = lo;
         record[EVENT_INDEX + 1] = hi;
         match self {
-            Self::Hit { amount, .. } => put_u32(&mut record, EVENT_VALUE, amount.to_bits()),
+            Self::Hit { amount, .. } | Self::Clearance { ahead: amount, .. } => {
+                put_u32(&mut record, EVENT_VALUE, amount.to_bits());
+            }
             Self::Mod {
                 from,
                 channel,
@@ -614,6 +644,12 @@ impl Event {
                 slot,
                 amount: f32::from_bits(get_u32(record, EVENT_VALUE)),
                 weapon: u8::try_from(index).ok().and_then(Weapon::from_code)?,
+            },
+            EVENT_TRANSIT_END => Self::TransitEnd { slot },
+            EVENT_CLEARANCE => Self::Clearance {
+                slot,
+                fits: index != 0,
+                ahead: f32::from_bits(get_u32(record, EVENT_VALUE)),
             },
             EVENT_MOD => Self::Mod {
                 slot,
@@ -854,6 +890,43 @@ pub enum Command {
         /// What to attach, finite.
         value: f32,
     },
+    /// Take the craft out of the world for `ticks` ticks, then put it `distance` further
+    /// round the circuit at `exit_factor` times the speed it had when this landed. Out of
+    /// the world it is frozen where it was: not stepped, not drawn, not collided with,
+    /// not hit, its controls and pickup presses ignored, its reset triggers held. Its
+    /// laps count through the jump; a finish in it is timed at the exit tick. A
+    /// `transit-end` event follows the exit. Refused (a fault) on a track with no
+    /// course, a craft not racing or already in one, or a distance not inside
+    /// `(0, half the lap)`.
+    Transit {
+        /// The grid slot.
+        slot: Slot,
+        /// Ticks out of the world, `1..=MAX_TRANSIT_TICKS`.
+        ticks: u16,
+        /// How far round it comes out.
+        distance: Distance,
+        /// Its exit speed over its entry speed, `[0, MAX_SPEED_FACTOR]`, in steps of
+        /// `1 / EXIT_FACTOR_STEPS`.
+        exit_factor: f32,
+    },
+    /// Multiply the craft's velocity by `factor`, once, at the call.
+    ScaleSpeed {
+        /// The grid slot.
+        slot: Slot,
+        /// The scale, in `[0, MAX_SPEED_FACTOR]`.
+        factor: f32,
+    },
+    /// Ask whether a disc of `radius` standing upright across the track `distance` ahead
+    /// of the craft fits without touching track geometry: answered by a `clearance`
+    /// event at the next call.
+    ProbeClearance {
+        /// The grid slot.
+        slot: Slot,
+        /// How far ahead along the circuit.
+        distance: Distance,
+        /// The disc's radius, `(0, MAX_PROBE_RADIUS]`.
+        radius: f32,
+    },
 }
 
 impl Command {
@@ -884,6 +957,9 @@ impl Command {
             Self::ClearShield { .. } => CommandKind::ClearShield,
             Self::PreferRoute { .. } => CommandKind::PreferRoute,
             Self::Emit { .. } => CommandKind::Emit,
+            Self::Transit { .. } => CommandKind::Transit,
+            Self::ScaleSpeed { .. } => CommandKind::ScaleSpeed,
+            Self::ProbeClearance { .. } => CommandKind::ProbeClearance,
         }
     }
 
@@ -909,7 +985,10 @@ impl Command {
             | Self::HoldShield { slot }
             | Self::ClearShield { slot }
             | Self::PreferRoute { slot, .. }
-            | Self::Emit { slot, .. } => Some(slot),
+            | Self::Emit { slot, .. }
+            | Self::Transit { slot, .. }
+            | Self::ScaleSpeed { slot, .. }
+            | Self::ProbeClearance { slot, .. } => Some(slot),
             Self::PickupRoll { .. }
             | Self::ScalePad { .. }
             | Self::SetWeather { .. }
@@ -983,6 +1062,9 @@ impl Command {
             Self::ClearShield { .. } => (0, 0, 0),
             Self::PreferRoute { route, .. } => (route, 0, 0),
             Self::Emit { channel, value, .. } => (0, value.to_bits(), channel),
+            Self::Transit { .. } | Self::ScaleSpeed { .. } | Self::ProbeClearance { .. } => {
+                motion::encode(self).unwrap_or_default()
+            }
         };
         let mut record = [0; COMMAND_LEN];
         record[COMMAND_KIND] = self.kind().code();
@@ -1204,6 +1286,9 @@ impl Command {
             CommandKind::HoldShield => Self::HoldShield { slot },
             CommandKind::ClearShield => Self::ClearShield { slot },
             CommandKind::PreferRoute => Self::PreferRoute { slot, route: arg },
+            CommandKind::Transit | CommandKind::ScaleSpeed | CommandKind::ProbeClearance => {
+                return motion::decode(kind, slot, (arg, value, word));
+            }
             CommandKind::Emit => {
                 if !value.is_finite() {
                     return Err(Malformed::EmitValue { slot, value });
@@ -1371,6 +1456,7 @@ mod channel;
 pub mod hud;
 mod kind;
 mod malformed;
+pub mod motion;
 mod pickup;
 pub mod track;
 

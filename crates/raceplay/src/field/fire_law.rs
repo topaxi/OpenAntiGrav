@@ -125,7 +125,7 @@ impl Race {
         let (mut gap_ahead, mut gap_behind, mut player_gap) = (None::<f32>, None::<f32>, None);
         // Every other craft, whatever its state, as the scan's own loop is.
         for (other, them) in ships.iter().enumerate() {
-            if other == slot || !them.active {
+            if other == slot || !them.in_world() {
                 continue;
             }
             let gap = fold(them.standing.distance(course) - my_distance, length);
@@ -150,7 +150,7 @@ impl Race {
                 speed,
                 ships.iter().enumerate().filter_map(|(other, them)| {
                     (other != slot
-                        && them.active
+                        && them.in_world()
                         && them.physics.craft_state == oag_physics::CraftState::Racing)
                         .then_some(Mover {
                             position: them.physics.body.position,

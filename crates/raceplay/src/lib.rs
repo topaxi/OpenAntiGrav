@@ -296,6 +296,7 @@ mod tick;
 pub mod tournament;
 #[cfg(feature = "view")]
 pub mod track_panel;
+pub mod transit;
 mod view;
 #[cfg(feature = "view")]
 mod viewpoint;

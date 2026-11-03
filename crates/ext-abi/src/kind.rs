@@ -52,11 +52,17 @@ pub enum CommandKind {
     HoldShield = 25,
     /// `clear-shield`, code 26.
     ClearShield = 26,
+    /// `transit`, code 27.
+    Transit = 27,
+    /// `scale-speed`, code 28.
+    ScaleSpeed = 28,
+    /// `probe-clearance`, code 29.
+    ProbeClearance = 29,
 }
 
 impl CommandKind {
     /// Every kind, in code order.
-    pub const ALL: [Self; 23] = [
+    pub const ALL: [Self; 26] = [
         Self::ScaleThrust,
         Self::ShieldDelta,
         Self::GivePickup,
@@ -80,6 +86,9 @@ impl CommandKind {
         Self::GiveShield,
         Self::HoldShield,
         Self::ClearShield,
+        Self::Transit,
+        Self::ScaleSpeed,
+        Self::ProbeClearance,
     ];
 
     /// The kind byte.
@@ -121,6 +130,9 @@ impl CommandKind {
             Self::GiveShield => "give-shield",
             Self::HoldShield => "hold-shield",
             Self::ClearShield => "clear-shield",
+            Self::Transit => "transit",
+            Self::ScaleSpeed => "scale-speed",
+            Self::ProbeClearance => "probe-clearance",
         }
     }
 

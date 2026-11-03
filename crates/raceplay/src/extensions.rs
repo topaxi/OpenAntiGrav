@@ -808,17 +808,53 @@ impl Extensions {
 impl crate::Race {
     /// Phase C: each module's `tick`, its commands into this tick's step. With no
     /// module, returns at once and touches nothing.
-    pub(super) fn tick_extensions(&mut self, inputs: &oag_gameplay::PlayerInputs) {
+    pub(super) fn tick_extensions(&mut self, inputs: &oag_gameplay::PlayerInputs, transited: u32) {
         #[cfg(feature = "extensions")]
         {
-            on::tick(&mut self.sim, inputs);
+            on::tick(&mut self.sim, inputs, transited);
+            self.run_motion();
             let gave = self.sim.extensions.take_shield_gives();
             for slot in (0..oag_gameplay::MAX_SHIPS).filter(|slot| gave & (1 << slot) != 0) {
                 self.shield_activate(slot);
             }
         }
         #[cfg(not(feature = "extensions"))]
-        let _ = inputs;
+        let _ = (inputs, transited);
+    }
+
+    /// The call's `transit` and `probe-clearance` commands, in module then reply order: a
+    /// transit the race refuses ([`Race::begin_transit`]) faults its module; a probe's
+    /// answer waits for the next call's `clearance` event.
+    #[cfg(feature = "extensions")]
+    fn run_motion(&mut self) {
+        let motion = std::mem::take(&mut self.sim.extensions.on.motion);
+        for (index, command) in motion {
+            if on::faulted(&self.sim, index) {
+                continue;
+            }
+            match command {
+                oag_ext_abi::Command::Transit {
+                    slot,
+                    ticks,
+                    distance,
+                    exit_factor,
+                } => {
+                    if let Err(why) = self.begin_transit(slot.index(), ticks, distance, exit_factor)
+                    {
+                        on::fault(&mut self.sim, index, format!("transit refused: {why}"));
+                    }
+                }
+                oag_ext_abi::Command::ProbeClearance {
+                    slot,
+                    distance,
+                    radius,
+                } => {
+                    let answer = self.clearance(slot.index(), distance, radius);
+                    self.sim.extensions.on.clearance[slot.index()] = Some(answer);
+                }
+                _ => {}
+            }
+        }
     }
 
     /// The modules' `fire-effect`s, each at its craft's nozzle (the hull's back end),

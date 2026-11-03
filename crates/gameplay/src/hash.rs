@@ -36,7 +36,7 @@ use oag_core::hash::StateHasher;
 use oag_race::{LapGate, Mode, RaceState};
 use oag_tables::weapons::{DisruptorEffectKind, Weapon};
 
-use crate::world::{Controller, Ship, World};
+use crate::world::{Controller, Ship, Transit, World};
 use oag_weapons::pickup::Held;
 use oag_weapons::projectile::leach_beam::{Beam, Kind as BeamKind};
 use oag_weapons::projectile::quake::Wave;
@@ -140,6 +140,7 @@ fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
         disruption,
         muzzle,
         active,
+        transit,
     } = ship;
 
     oag_physics::probe::hash_state(hasher, physics);
@@ -193,6 +194,18 @@ fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
     // time this struct has done that. See `oag_weapons::disruption`.
     write_disruption(hasher, disruption);
     hasher.write_u8(u8::from(*active));
+    // Only while a jump runs, so every race without one hashes as before.
+    if let Some(Transit {
+        ticks_left,
+        distance,
+        exit_speed,
+    }) = transit
+    {
+        hasher.write_u8(0x7a);
+        hasher.write_u32(u32::from(*ticks_left));
+        hasher.write_f32(*distance);
+        hasher.write_f32(*exit_speed);
+    }
 }
 
 fn write_disruption(hasher: &mut StateHasher, disruption: &oag_weapons::disruption::Disruption) {

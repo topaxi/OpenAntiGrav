@@ -231,6 +231,33 @@ pub struct Ship {
     pub muzzle: Option<Vec3>,
     /// Whether this slot holds a ship at all.
     pub active: bool,
+    /// A jump along the circuit in progress (a simulation mod's `transit`): while it
+    /// runs the craft is out of the world ([`Self::in_world`]). `None` in every vanilla
+    /// race, and hashed only while it is `Some`.
+    pub transit: Option<Transit>,
+}
+
+/// A craft out of the world on its way to a point further round the circuit: frozen
+/// where it entered, not stepped, not drawn, collided with or hit, its reset triggers
+/// held. When [`Self::ticks_left`] runs out it is put [`Self::distance`] further along
+/// at [`Self::exit_speed`] (`oag_raceplay`'s `transit` module).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Transit {
+    /// Ticks still to spend out of the world.
+    pub ticks_left: u16,
+    /// How far along the circuit it comes out, in track units, resolved when it entered.
+    pub distance: f32,
+    /// Its speed coming out, track units a second.
+    pub exit_speed: f32,
+}
+
+impl Ship {
+    /// Whether the craft is in play in the world: a slot holding a ship that is not in
+    /// a [`Transit`]. What drawing, craft-to-craft contact and weapon targeting ask.
+    #[must_use]
+    pub fn in_world(&self) -> bool {
+        self.active && self.transit.is_none()
+    }
 }
 
 impl Default for Ship {
@@ -250,6 +277,7 @@ impl Default for Ship {
             disruption: oag_weapons::disruption::Disruption::default(),
             muzzle: None,
             active: false,
+            transit: None,
         }
     }
 }
@@ -572,8 +600,9 @@ mod tests {
     #[test]
     fn the_world_snapshot_does_not_grow() {
         // +360 bytes: the LeachBeam pool of eight (was one Option<Beam>); +64: `Held::quake_armed`,
-        // one byte per ship; +128: `Ship::muzzle`, the hull's weapon node, 16 bytes per ship.
-        const LIMIT: usize = 19_944;
+        // one byte per ship; +128: `Ship::muzzle`, the hull's weapon node, 16 bytes per ship;
+        // +128: `Ship::transit`, a mod's jump along the circuit, 16 bytes per ship.
+        const LIMIT: usize = 20_072;
         let size = std::mem::size_of::<World>();
         assert!(
             size <= LIMIT,

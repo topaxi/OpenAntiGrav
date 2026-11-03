@@ -700,7 +700,8 @@ impl Race {
             // A craft a person flies is stepped by `Race::tick`'s player step,
             // not here. With one person in slot 0 this skips slot 0, which the
             // loop used to start past.
-            if !self.sim.world.ships[slot].active || self.sim.world.person_flown(slot) {
+            // A craft in a transit is out of the world and not stepped (`crate::transit`).
+            if !self.sim.world.ships[slot].in_world() || self.sim.world.person_flown(slot) {
                 continue;
             }
             self.seed_vacated_driver(slot);
@@ -1207,7 +1208,7 @@ impl Race {
         let eliminator_route = self.sim.world.mode() == Mode::Eliminator;
         for a in 0..self.sim.world.ship_count as usize {
             for b in (a + 1)..self.sim.world.ship_count as usize {
-                if !self.sim.world.ships[a].active || !self.sim.world.ships[b].active {
+                if !self.sim.world.ships[a].in_world() || !self.sim.world.ships[b].in_world() {
                     continue;
                 }
                 if !oag_physics::damage::solid_to_craft(

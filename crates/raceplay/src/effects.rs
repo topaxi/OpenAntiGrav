@@ -153,7 +153,7 @@ impl Race {
     pub(super) fn advance_exhausts(&mut self) {
         self.advance_zoom();
         for slot in 0..self.sim.world.ship_count as usize {
-            if !self.sim.world.ships[slot].active {
+            if !self.sim.world.ships[slot].in_world() {
                 continue;
             }
             let ship = &self.sim.world.ships[slot].physics;

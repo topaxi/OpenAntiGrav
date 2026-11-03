@@ -20,7 +20,7 @@ fn slot(index: usize) -> Slot {
 }
 
 /// One of every command, with arguments that touch every field.
-fn every_command() -> [Command; 24] {
+fn every_command() -> [Command; 27] {
     [
         Command::ScaleThrust {
             slot: slot(1),
@@ -120,10 +120,25 @@ fn every_command() -> [Command; 24] {
             channel: channel_key("oag.example/gate"),
             value: -2.5,
         },
+        Command::Transit {
+            slot: slot(2),
+            ticks: 60,
+            distance: crate::Distance::Seconds(2.0),
+            exit_factor: 0.9,
+        },
+        Command::ScaleSpeed {
+            slot: slot(3),
+            factor: 0.5,
+        },
+        Command::ProbeClearance {
+            slot: slot(4),
+            distance: crate::Distance::Units(120.0),
+            radius: 8.0,
+        },
     ]
 }
 
-fn every_event() -> [Event; 9] {
+fn every_event() -> [Event; 11] {
     [
         Event::WallContact { slot: slot(0) },
         Event::PickupFire { slot: slot(1) },
@@ -155,6 +170,12 @@ fn every_event() -> [Event; 9] {
             channel: channel_key("oag.example/gate"),
             value: 4.25,
         },
+        Event::TransitEnd { slot: slot(5) },
+        Event::Clearance {
+            slot: slot(6),
+            fits: true,
+            ahead: 250.0,
+        },
     ]
 }
 
@@ -163,6 +184,7 @@ fn a_craft() -> Craft {
         pickup: Pickup::Weapon(Weapon::Disruptor),
         person: true,
         fire_held: false,
+        in_transit: true,
         racing: true,
         shielded: true,
         lap: 3,
@@ -282,6 +304,11 @@ fn layout_fold() -> u64 {
         Cue::ALL.len() as u32,
         Effect::ALL.len() as u32,
         u32::from(Pickup::Ours.code()),
+        u32::from(crate::MAX_TRANSIT_TICKS),
+        crate::MAX_SPEED_FACTOR.to_bits(),
+        crate::MAX_PROBE_RADIUS.to_bits(),
+        crate::motion::EXIT_FACTOR_STEPS.to_bits(),
+        u32::from(crate::CRAFT_IN_TRANSIT),
     ];
     // Each code by name: a reordered variant moves a byte's meaning on the wire.
     let codes = [
@@ -328,7 +355,7 @@ fn layout_fold() -> u64 {
 
 /// The revision and the layout it names. The ABI changes in place before release (no
 /// revision bump); the fold is recorded again with each layout edit.
-const REVISION_AND_FOLD: (u32, u64) = (3, 0x0a8d_d83a_48a9_ad8a);
+const REVISION_AND_FOLD: (u32, u64) = (3, 0xaf74_334f_e369_27e1);
 
 #[test]
 fn the_layout_is_the_revision_it_says() {
@@ -508,10 +535,10 @@ fn the_observation_reads_back_through_the_guest_sections() {
     assert_eq!(Sections::active(sections.head), 0b11);
     assert_eq!(Sections::state_len(sections.head), 3);
     assert_eq!(&sections.state[..3], &[9, 8, 7]);
-    let events: [Option<Event>; 9] =
+    let events: [Option<Event>; 11] =
         core::array::from_fn(|i| Sections::event_record(sections.head, i).and_then(Event::decode));
     assert_eq!(events, every_event().map(Some));
-    assert_eq!(Sections::event_count(sections.head), 9);
+    assert_eq!(Sections::event_count(sections.head), 11);
     let craft = Sections::craft_record(sections.crafts, slot(1)).map(Craft::decode);
     assert_eq!(craft, Some(a_craft()));
     Sections::put_command(sections.reply, 0, &every_command()[4]);
@@ -826,7 +853,7 @@ fn a_channel_name_is_a_mod_id_a_slash_and_a_name() {
 
 /// The bytes of one of every command, in `every_command`'s order, as hex. Spelled out so a
 /// layout change shows in the diff, and so a refactor of the encoder is held to today's bytes.
-const COMMAND_BYTES: [&str; 24] = [
+const COMMAND_BYTES: [&str; 27] = [
     "010100000000803e00000000",
     "02020000000060c000000000",
     "030300000000000000000000",
@@ -851,10 +878,13 @@ const COMMAND_BYTES: [&str; 24] = [
     "1a0a00000000000000000000",
     "150b03000000000000000000",
     "170c0000000020c064a50f37",
+    "1b023c000000004001002823",
+    "1c0300000000003f00000000",
+    "1d0400000000f04200000041",
 ];
 
 /// The bytes of one of every event, in `every_event`'s order, as hex.
-const EVENT_BYTES: [&str; 9] = [
+const EVENT_BYTES: [&str; 11] = [
     "01000000000000000000000000000000",
     "02010000000000000000000000000000",
     "03020000000000000000000000000000",
@@ -864,6 +894,8 @@ const EVENT_BYTES: [&str; 9] = [
     "08050100000000000000000000000000",
     "0906040000008c410000000000000000",
     "0a0700000000884064a50f37ce86334d",
+    "0b050000000000000000000000000000",
+    "0c06010000007a430000000000000000",
 ];
 
 fn hex(bytes: &[u8]) -> std::string::String {
@@ -920,4 +952,47 @@ fn the_kind_table_agrees_with_the_commands() {
             kind.name()
         );
     }
+}
+
+/// The motion commands' own ranges: each out-of-range record is malformed, never clamped.
+#[test]
+fn a_motion_command_out_of_its_ranges_is_malformed() {
+    let transit = |ticks, distance, exit_factor| Command::Transit {
+        slot: slot(1),
+        ticks,
+        distance,
+        exit_factor,
+    };
+    let bad = [
+        transit(0, crate::Distance::Units(10.0), 1.0),
+        transit(
+            crate::MAX_TRANSIT_TICKS + 1,
+            crate::Distance::Units(10.0),
+            1.0,
+        ),
+        transit(60, crate::Distance::Lap(0.0), 1.0),
+        transit(60, crate::Distance::Seconds(f32::NAN), 1.0),
+        transit(60, crate::Distance::Units(10.0), 2.5),
+        Command::ScaleSpeed {
+            slot: slot(1),
+            factor: -0.1,
+        },
+        Command::ProbeClearance {
+            slot: slot(1),
+            distance: crate::Distance::Units(10.0),
+            radius: crate::MAX_PROBE_RADIUS * 2.0,
+        },
+    ];
+    for command in bad {
+        assert!(
+            matches!(
+                Command::decode(&command.encode()),
+                Err(Malformed::Motion { .. })
+            ),
+            "{command:?}"
+        );
+    }
+    let mut unknown = transit(60, crate::Distance::Units(10.0), 1.0).encode();
+    unknown[COMMAND_WORD] = 7;
+    assert!(Command::decode(&unknown).is_err(), "distance kind 7");
 }

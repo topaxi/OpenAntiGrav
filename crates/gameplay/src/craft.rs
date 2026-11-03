@@ -14,7 +14,8 @@ use crate::world::Ship;
 
 impl Craft for Ship {
     fn active(&self) -> bool {
-        self.active
+        // A craft in a transit is out of the world: nothing hits, drains or locks it.
+        self.in_world()
     }
 
     fn physics(&self) -> &ShipState {

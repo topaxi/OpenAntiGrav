@@ -140,6 +140,14 @@ impl Race {
         slot: usize,
         controls: &oag_physics::ShipControls,
     ) -> PlayerStep {
+        // Out of the world in a transit: frozen, nothing evaluated (`crate::transit`).
+        if self.sim.world.ships[slot].transit.is_some() {
+            return PlayerStep {
+                evaluated: Evaluated::idle(&self.sim.world.ships[slot].physics),
+                reset_contact: false,
+                located: None,
+            };
+        }
         // The two spline samples the magstrip hold reads. In the original these are
         // `AiTrack_LocatePosition`'s two output records on the ship entity; here
         // they are the nearest table entry and the one after it, which is the same
@@ -325,6 +333,10 @@ impl Race {
     /// after the tick's craft have all moved.
     pub(super) fn rescue_player(&mut self, slot: usize, step: &PlayerStep) {
         self.sim.respawn_cooldown[slot] = self.sim.respawn_cooldown[slot].saturating_sub(1);
+        // Held in a transit: no trigger reads, so no dwell is banked out of the world.
+        if self.reset_held(slot) {
+            return;
+        }
         // **Not a wreck**, the same gate `step_opponents` applies: in an
         // Eliminator the player sits `Eliminated` for the respawn dwell, and
         // a rescue firing inside it would rebuild the craft as a racing one

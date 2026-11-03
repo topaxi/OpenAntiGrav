@@ -633,7 +633,7 @@ impl Race {
             return;
         };
         for slot in 0..self.sim.world.ship_count as usize {
-            if !self.sim.world.ships[slot].active
+            if !self.sim.world.ships[slot].in_world()
                 || !self.sim.world.ships[slot].pickup.is_dropping()
             {
                 continue;
@@ -792,7 +792,7 @@ impl Race {
     /// One craft's Cannon countdown, and the round it puts in the air when the
     /// countdown reaches zero. See [`Self::advance_cannons`] for the gate.
     fn advance_one_cannon(&mut self, slot: usize, cannon: &oag_tables::weapons::CannonStats) {
-        if !self.sim.world.ships[slot].active
+        if !self.sim.world.ships[slot].in_world()
             || self.sim.world.ships[slot].pickup.weapon != Some(oag_tables::weapons::Weapon::Cannon)
         {
             return;

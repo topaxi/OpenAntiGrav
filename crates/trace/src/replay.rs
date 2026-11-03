@@ -498,6 +498,8 @@ pub fn replay<R: Raycaster + ?Sized>(
         // A replay has no hull, so a Plasma would leave from the hold point.
         muzzle: None,
         active: true,
+        // No mod moves a replayed craft.
+        transit: None,
     };
     world.ship_count = 1;
 
@@ -739,6 +741,8 @@ where
         // A replay has no hull, so a Plasma would leave from the hold point.
         muzzle: None,
         active: true,
+        // No mod moves a replayed craft.
+        transit: None,
     };
     world.ship_count = 1;
 
