@@ -2287,19 +2287,35 @@ probed value).
 
 After the release the head draws at the bolt's post-update position, the same convention as ours (k60 dump: head
 x 243.95 = the bolt after update 60; k68: 266.58 = after update 68, with the body draw at the same frame's body).
-**Ours' bolt is one step behind from the release on.** Head minus body along the craft's forward, per frame from the
-release (the original: the probe's bolt after each update minus the body; ours: the flare anchor per tick):
+
+**Correction (`plasma-release-step`, 2026-11-03): ours' bolt does not trail the original's.** An earlier version of this
+section tabled 4.42, 4.61, 4.80, ... for the original against ours' 2.23, 2.42, ... and read a constant 2.19 lag. Those
+original numbers paired the bolt of one `plasma_fly` record with the craft of the record before it (`vel` of the next
+record minus `craft_pos` of this one, 243.95 - 239.53 = 4.42). Within one record both are read at the same hook, one
+instant. Per record, from the release (3D distance, bolt to craft):
 
 | frame after release | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| original | 4.42 | 4.61 | 4.80 | 5.79 | 6.77 | 7.78 | 8.82 | 9.84 | 10.89 |
-| ours | 2.23 | 2.42 | 2.60 | 2.78 | 3.75 | 4.73 | 5.72 | 6.73 | 7.76 |
+| original | 2.224 | 2.414 | 2.600 | 2.757 | 3.808 | 4.768 | 5.751 | 6.863 | 7.866 |
+| ours | 2.23 | 2.42 | 2.60 | 2.78 | 3.75 | 4.73 | 5.72 | 6.74 | 7.76 |
 
-The steps agree to 0.02 and the offset is a constant **2.19**: the original releases the bolt at the weapon node's
-position of the frame before (4.24 ahead of the previous body) and moves it once before the draw; ours (`oag-weapons`,
-`MUZZLE_FORWARD` 2.23) starts it at the node minus one craft step and draws it before its first move. With the charging
-head now on the node, ours steps back 2.0 at the release where the original moves on. A sim fix (`oag-weapons`, not in
-this lane): release at the muzzle locator of the previous tick, which also makes `MUZZLE_FORWARD` per team and per speed.
+Seven frames agree to 0.1 (`plasma_timing_ground_truth`); after that ours' ride pin is 0.07 short per frame (the
+original's jump at the first ride is 1.05, ours 0.97). The head therefore steps back about 2 at the release in the
+original too: the charging head sits on the node (4.24 ahead, translation current at draw time), and the bolt is placed
+from the head's translation of the frame before (the hook copies it before the node update; `head_world` at the hook
+reads 2.2 ahead of `craft_pos`, constant through the charge). So the release offset is `node - craft step`:
+**2.23 here because the craft covers 2.0 a frame at 120 u/s**. Ours holds 2.23 as a constant, exact at that speed; a
+second speed would show the original's offset growing as the craft slows. Unmeasured, so not wired (confidence 70 for
+the stale-translation reading: one speed). A node-sourced release with one move before the draw was built and put the
+bolt 6.4 ahead of the craft at frame 0, which is wrong for this data.
+
+Hull locator across titles (census, `Ship.vex` of each default team): Pulse PSP USA and Pulse PS2 EU author the same
+`Ship Muzzle` `(0, 0, 5.653)` on Assegai, version 6 (PS2: **ported**, the head's locator reaches PS2 through the same
+reader whenever its pob flag allows; the head laws stay gated on the PSP flag). HD's `assegai` hull (version 6) authors
+none: **checked, differs**; 2048 and Omega: **not checked** (their hulls are `.rcsmodel`, a different locator
+reader; no Pulse-style head is drawn there, HD uses `HD_plasma_ball`). Pure (version 4): the class id is unrecovered; of the unnamed classes on its hull `0x394` is a single
+node on the centre line at `(0, 0, 6.068)`, the only one ahead of the origin on the axis, a candidate at confidence 40,
+not wired.
 
 ### The arcs' shape: the law matches, the rest is the draws
 
