@@ -73,6 +73,7 @@ const SHIFT_ATTRIBUTES: [wgpu::VertexAttribute; 2] = [
 /// each view keeps its own while a later view's upload refills the pipeline.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Drawn {
+    underlay_count: u32,
     additive_count: u32,
     alpha_count: u32,
     flash: crate::flash::Drawn,
@@ -86,6 +87,7 @@ pub struct Drawer {
     additive: wgpu::RenderPipeline,
     alpha_over: wgpu::RenderPipeline,
     bind_group: wgpu::BindGroup,
+    underlay_vertices: wgpu::Buffer,
     additive_vertices: wgpu::Buffer,
     alpha_vertices: wgpu::Buffer,
     flash: crate::flash::Drawer,
@@ -112,6 +114,7 @@ pub struct Pipeline {
     /// [`Sheet::generation`] of what [`Self::sheet`] holds.
     sheet_generation: Option<u64>,
     /// Vertices actually uploaded by the last [`Pipeline::upload`].
+    underlay_count: u32,
     additive_count: u32,
     alpha_count: u32,
     /// The screen flash, which shares this pass's targets - see
@@ -318,6 +321,7 @@ impl Pipeline {
         };
         let additive_vertices = buffer("psys additive vertices");
         let alpha_vertices = buffer("psys alpha-over vertices");
+        let underlay_vertices = buffer("psys underlay vertices");
 
         let flash = crate::flash::Pipeline::new(device, format, store, sample_count, velocity);
         let cockpit_hit =
@@ -327,6 +331,7 @@ impl Pipeline {
                 additive,
                 alpha_over,
                 bind_group,
+                underlay_vertices,
                 additive_vertices,
                 alpha_vertices,
                 flash: flash.drawer().clone(),
@@ -337,6 +342,7 @@ impl Pipeline {
             uniforms,
             sheet,
             sheet_generation: None,
+            underlay_count: 0,
             additive_count: 0,
             alpha_count: 0,
             distort,
@@ -427,6 +433,18 @@ impl Pipeline {
         self.alpha_count = n as u32;
     }
 
+    /// Uploads this frame's additive geometry that draws before the alpha-over layer,
+    /// [`super::Stage::extend_underlay_vertices`].
+    pub fn upload_underlay(&mut self, queue: &dyn oag_gpu::writes::Writes, vertices: &[GpuVertex]) {
+        let n = vertices.len().min(MAX_VERTICES);
+        queue.write_buffer(
+            &self.drawer.underlay_vertices,
+            0,
+            bytemuck::cast_slice(&vertices[..n]),
+        );
+        self.underlay_count = n as u32;
+    }
+
     /// Uploads this frame's blend class 8 quads, [`super::Stage::extend_distort_vertices`].
     pub fn upload_distort(&mut self, queue: &dyn oag_gpu::writes::Writes, vertices: &[GpuVertex]) {
         self.distort.upload(queue, vertices);
@@ -498,6 +516,7 @@ impl Pipeline {
     #[must_use]
     pub fn drawn(&self) -> Drawn {
         Drawn {
+            underlay_count: self.underlay_count,
             additive_count: self.additive_count,
             alpha_count: self.alpha_count,
             flash: self.flash.drawn(),
@@ -536,6 +555,12 @@ impl Drawer {
     /// draws cannot reproduce exactly; additive-last is the closer
     /// approximation since adding light commutes.
     pub fn draw(&self, pass: &mut wgpu::RenderPass<'_>, drawn: Drawn) {
+        if drawn.underlay_count > 0 {
+            pass.set_pipeline(&self.additive);
+            pass.set_bind_group(0, &self.bind_group, &[]);
+            pass.set_vertex_buffer(0, self.underlay_vertices.slice(..));
+            pass.draw(0..drawn.underlay_count, 0..1);
+        }
         if drawn.alpha_count > 0 {
             pass.set_pipeline(&self.alpha_over);
             pass.set_bind_group(0, &self.bind_group, &[]);

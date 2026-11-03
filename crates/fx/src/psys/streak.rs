@@ -82,12 +82,26 @@ impl Effect {
     pub fn without_pulse_psp_draw(&mut self) {
         self.rides_owner_frame = false;
         for spec in &mut self.emitters {
+            spec.under_alpha = false;
             spec.streak = StreakDraw::Procedural;
             spec.frames = super::FrameAdvance::Still;
             spec.short_run = false;
         }
         self.mute_templates();
         self.mute_rotation();
+    }
+}
+
+impl Effect {
+    /// Draws the root emitter in the layer before the alpha-over particles, as the
+    /// original's draw list for `WO_PLASMA_HEAD` does (arcs, then the dark disc over
+    /// them, then ring, spikes, glow: `docs/ghidra/functions/psp-pulse-usa/plasma.md`,
+    /// "the head's draw order"). Pulse's PSP file only; [`Self::without_pulse_psp_draw`]
+    /// takes it back.
+    pub fn draw_root_under_alpha(&mut self) {
+        if let Some(root) = self.emitters.first_mut() {
+            root.under_alpha = true;
+        }
     }
 }
 

@@ -31,6 +31,9 @@ impl super::super::Scene {
         // The effects' own sprites - a no-op after the first frame of a race.
         pipeline.sync_sheet(queue, race.view.effects.sheet());
         pipeline.upload(queue, vp, race.draw_alpha(), additive, alpha);
+        let mut underlay = Vec::new();
+        race.extend_underlay_vertices(&mut underlay, right, up);
+        pipeline.upload_underlay(queue, &underlay);
         let mut distort = Vec::new();
         race.extend_distort_vertices(&mut distort, right, up);
         pipeline.upload_distort(queue, &distort);

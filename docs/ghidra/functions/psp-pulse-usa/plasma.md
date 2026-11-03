@@ -2097,7 +2097,7 @@ closed the arcs. Test: `psys::tests::a_pool_bar_is_built_at_the_mean_depth_of_it
 (red before: the corners sit at -10 and -20). Another streak user, the Repulser's ring, drawn after the change:
 still a ring of streaks around the craft (`--give repulser`, tick 410).
 
-### Draw order, found and not changed
+### Draw order, found (wired in "the head's draw order" below)
 
 The dump draws the arcs (additive), then the **dark disc (source-alpha) over them**, then the ring, spikes and
 glow (additive). `Pipeline::draw` draws every alpha-over particle first and every additive one after, so
@@ -2112,3 +2112,53 @@ Pure: **checked, not wired**. Pure's `Plasma_Init` is unread (`psp-pure-usa/plas
 neither the ride (`rides_owner_frame`) nor the live severity is turned on for it; both need Pure's call site
 (confidence below 70 today). HD, Omega, 2048: the head differs (`HD_plasma_ball`), **checked, differs**. PS2
 **inherits** PSP's law when it loads through the PSP path, as with the ride.
+
+## 2026-11-03: the head's draw order (pulse-plasma-core-order)
+
+### The order, and the disc's colour was the order
+
+The dump's draw list for the head is arcs (additive), dark disc (source-alpha), ring, spikes, glow (additive).
+`Pipeline::draw` drew every alpha-over particle first and every additive one after, so the arcs washed the disc.
+An additive-first scratch run (last lane) put the ring, spikes and 21-unit glow **under** the disc too, which is
+why the disc read opaque black there: in the original those three add *over* it and carry the violet. Only the
+arcs need to land before the disc, and additive draws commute, so the fix is one layer, not a reorder:
+
+- `EmitterSpec::under_alpha` marks an emitter whose additive geometry goes in `System::extend_underlay_vertices`
+  (left out of `extend_vertices`), uploaded by `Pipeline::upload_underlay` and drawn **before** the alpha-over
+  layer (`Drawer::draw`: underlay, alpha-over, additive).
+- `Effect::draw_root_under_alpha` sets it on the root; `assets::particle_effect` calls it for `WO_PLASMA_HEAD`
+  on Pulse's PSP file only, and `without_pulse_psp_draw` clears it. Every other effect keeps the old order.
+- The disc's colour needed no change of its own: with the order right, the disc reads violet (the palette entry
+  times alpha over the ring, spikes and glow added on top), no vertex or blend edit.
+
+Confidence **75** (the order is the dump's, five draws, one boot per k; the layer is the minimum that
+reproduces it and the other effects' order inside the additive pass is unmeasured).
+
+Tests (red before): `psys_layer_order::the_underlay_is_drawn_before_the_alpha_over_layer` (GPU readback: an
+opaque black alpha-over quad over a white underlay reads black; red with the underlay drawn after, 255),
+`psys::tests::an_underlay_emitter_draws_in_its_own_layer_and_not_with_the_additive_ones`,
+`...a_source_without_pulse_psps_laws_keeps_every_emitter_in_the_additive_layer`, and the disc-backed
+`tests::weapons::visuals::the_loader_draws_the_pulse_psp_heads_arcs_under_the_alpha_over_layer` (red with the
+`assets.rs` call dropped).
+
+**Pair** (head box `200,112,90,80`, mean RGB, original / before / after): k20 142.0 / 143.6 / 143.2, k36
+106.9 / 116.6 / 115.3, k44 112.8 / 121.5 / 121.1, **k60 127.0 / 132.5 / 122.5, k72 111.1 / 123.4 / 115.1**. At k60
+and k72 ours now shows the original's violet core with the arcs around it, where before it was a washed white
+blob. The core is a little larger than the original's at k72 and the arcs are broader and whiter.
+
+### The arcs after the release: not closed
+
+Hypothesis: after `Plasma_Launch` the head's matrix is the bolt's, whose rows have length 0.75 (the launch-speed
+finding above), so local-space (flag `0x2`) particles are drawn at 0.75 of their offset. Ours, k56 and on, reads
+1.3 to 2.7 units too long (9.7 / 12.5 / 13.6 against 8.4 / 9.9 / 11.2), a ratio of 0.87 / 0.79 / 0.82, which a pure
+0.75 does not give. Experiment: `set_frame_scale(0.75)` on the instance once the projectile is flying
+(`charge <= 0`) changed no pixel at k56 to k72 (it scales only particles spawned afterwards, and the length is
+dominated by older ones). Not kept. What is open: draw the local-space particles through a scaled matrix (offsets
+from the instance anchor times 0.75 after the release) and re-measure strip extents at k56, 68, 74; also that k56
+is only three ticks before the release in the `391 + k` mapping, so some of the 1.3 is not post-release.
+Confidence **40** for the hypothesis.
+
+### Cross-title
+
+Pure: **checked, not wired** (`Plasma_Init` unread, the flag is Pulse PSP's only). Pulse PS2: **inherits** when it
+loads through the PSP path (it does not today). HD, Omega, 2048: **checked, differs** (`HD_plasma_ball`).

@@ -19,6 +19,7 @@ mod lens_flare_draw;
 mod psys_2048_ground_truth;
 mod psys_emitter_roll_ground_truth;
 mod psys_ground_truth;
+mod psys_layer_order;
 mod psys_omega_ground_truth;
 mod psys_template_ground_truth;
 

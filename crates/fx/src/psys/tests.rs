@@ -59,6 +59,7 @@ pub(super) fn effect(name: &str, looping: bool, duration_ticks: f32) -> std::syn
             frames: FrameAdvance::Still,
             sheet_rect: None,
             short_run: false,
+            under_alpha: false,
             world_space: false,
             template: false,
             rotation: None,
@@ -806,4 +807,31 @@ fn a_template_draws_at_the_instances_current_severity() {
             "severity {severity}: {half}"
         );
     }
+}
+
+#[test]
+fn an_underlay_emitter_draws_in_its_own_layer_and_not_with_the_additive_ones() {
+    let mut flagged = (*effect("underlay", true, 100.0)).clone();
+    flagged.draw_root_under_alpha();
+    let flagged = std::sync::Arc::new(flagged);
+    let plain = effect("plain", true, 100.0);
+    for (effect, in_underlay) in [(flagged, true), (plain, false)] {
+        let mut system = System::new();
+        system.ignite(&effect, Vec3::ZERO, 1.0);
+        let mut rng = Rng::new(1);
+        run(&mut system, &effect, 3, &mut rng);
+        let (additive, _) = system.vertices(&effect, Vec3::X, Vec3::Y);
+        let mut underlay = Vec::new();
+        system.extend_underlay_vertices(&mut underlay, &effect, Vec3::X, Vec3::Y, None);
+        assert_eq!(!additive.is_empty(), !in_underlay, "{}", effect.name);
+        assert_eq!(!underlay.is_empty(), in_underlay, "{}", effect.name);
+    }
+}
+
+#[test]
+fn a_source_without_pulse_psps_laws_keeps_every_emitter_in_the_additive_layer() {
+    let mut flagged = (*effect("underlay", true, 100.0)).clone();
+    flagged.draw_root_under_alpha();
+    flagged.without_pulse_psp_draw();
+    assert!(flagged.emitters.iter().all(|e| !e.under_alpha));
 }

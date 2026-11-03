@@ -345,6 +345,11 @@ pub struct EmitterSpec {
     /// spikes `4`, 9; the glow's five draws). `false` for every other source -
     /// [`Effect::without_pulse_psp_draw`].
     pub short_run: bool,
+    /// Drawn in the layer before the alpha-over particles instead of with the
+    /// additive ones ([`System::extend_underlay_vertices`]), for the one
+    /// emitter whose draw the original issues ahead of an alpha-over draw of
+    /// its own effect ([`Effect::draw_root_under_alpha`]).
+    pub under_alpha: bool,
     /// Spawn offsets and velocities skip the emitter node's matrix -
     /// [`pob::flags::WORLD_SPACE`], so [`System::set_frame_scale`] does not reach them.
     pub world_space: bool,
@@ -589,6 +594,7 @@ impl EmitterSpec {
             frames: FrameAdvance::of(record, Atlas::of(record).frames()),
             sheet_rect: None,
             short_run: true,
+            under_alpha: false,
             world_space: record.flags & pob::flags::WORLD_SPACE != 0,
             template: false,
             rotation: roll::Rotation::of_emitter(record),
@@ -1095,12 +1101,39 @@ impl System {
         (additive, alpha_over)
     }
 
+    /// The additive geometry of the emitters flagged [`EmitterSpec::under_alpha`], which
+    /// [`Self::extend_vertices`] leaves out: drawn before the alpha-over layer.
+    pub fn extend_underlay_vertices(
+        &self,
+        out: &mut Vec<GpuVertex>,
+        effect: &Effect,
+        right: Vec3,
+        up: Vec3,
+        guard: Option<&guard::GuardBand>,
+    ) {
+        self.extend_layer(true, out, &mut Vec::new(), effect, right, up, guard);
+    }
+
     /// [`Self::vertices`], appended to two lists the caller owns - the
     /// renderer's form (a returned pair per effect allocated 1.99 MB a frame
     /// with rockets in the air). `guard` is the GE's screen-range cull, or
     /// `None` for a source it was not measured on.
     pub fn extend_vertices(
         &self,
+        additive: &mut Vec<GpuVertex>,
+        alpha_over: &mut Vec<GpuVertex>,
+        effect: &Effect,
+        right: Vec3,
+        up: Vec3,
+        guard: Option<&guard::GuardBand>,
+    ) {
+        self.extend_layer(false, additive, alpha_over, effect, right, up, guard);
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn extend_layer(
+        &self,
+        underlay: bool,
         additive: &mut Vec<GpuVertex>,
         alpha_over: &mut Vec<GpuVertex>,
         effect: &Effect,
@@ -1124,6 +1157,9 @@ impl System {
                 // index; the alpha byte comes from the channel either way.
                 ColourMode::OverLife => spec.palette[(age * 255.999) as usize & 0xff],
             };
+            if spec.under_alpha != underlay {
+                continue;
+            }
             let out: &mut Vec<GpuVertex> = match spec.blend {
                 Blend::Additive => additive,
                 Blend::AlphaOver => alpha_over,
@@ -1405,6 +1441,24 @@ impl Stage {
             instance
                 .system
                 .extend_vertices(additive, alpha_over, effect, right, up, guard);
+        }
+    }
+
+    /// [`System::extend_underlay_vertices`] for every playing instance.
+    pub fn extend_underlay_vertices(
+        &self,
+        out: &mut Vec<GpuVertex>,
+        right: Vec3,
+        up: Vec3,
+        guard: Option<&guard::GuardBand>,
+    ) {
+        for instance in &self.instances {
+            let Some(effect) = instance.effect.as_deref() else {
+                continue;
+            };
+            instance
+                .system
+                .extend_underlay_vertices(out, effect, right, up, guard);
         }
     }
 
