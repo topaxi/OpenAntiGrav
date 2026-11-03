@@ -295,3 +295,8 @@
 0x08859b78	function	DisruptorFx_Construct	55	weapon-effects.md
 0x08858710	function	BombBlast_Construct	75	weapon-effects.md
 0x08858ad0	function	BombBlast_Update	75	weapon-effects.md
+0x089316ac	function	WeaponAi_Update	80	weapon-ai-fire.md
+0x08931964	function	WeaponAi_DecideFireOrAbsorb	85	weapon-ai-fire.md
+0x08ab3da0	data	g_weapon_ai_rate	85	weapon-ai-fire.md
+0x089322b0	function	WeaponAiStats_Load	80	weapon-ai-fire.md
+0x08932868	function	WeaponAiStats_ParseWeapon	80	weapon-ai-fire.md
