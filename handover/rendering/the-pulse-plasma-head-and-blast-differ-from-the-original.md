@@ -2,7 +2,7 @@
 status: re-first
 titles: [pulse]
 updated: 2026-11-03
-summary: "Plasma head arcs follow the charge and the dark core draws over them (violet); open: luminance overshoot k36-72, arcs too long after release, core slightly large"
+summary: "Plasma head: arcs follow the charge, dark core draws over them; open: luminance overshoot, arcs too long after release"
 ---
 
 # The Pulse Plasma head and blast differ from the original's
