@@ -579,6 +579,7 @@ mod tests {
             },
         ];
         let mut mixer = Mixer::new(8);
+        mixer.set_limiting(false);
         let ids = start(&mut mixer, &voices, Bus::Sfx, Where::DRY);
         assert_eq!(ids.len(), 2);
         let mut out = vec![0.0; 6 * 2];

@@ -1087,3 +1087,71 @@ per-buffer warning line). Nothing drops to silence or loops on itself - the
 same "quieter, not broken" shape every listening check on this thread has
 found, one step closer to the original's own -16.61 dBFS than before this
 port landed.
+
+## Our master limiter replaces the clamp (2026-11-03, ours, not the original)
+
+**The original clamps; we do not.** Everything above stands for the original:
+unity gain end to end into a 16-bit buffer that clamps
+(`Audio_Init_q` `0x089906e4`, `Audio_OutputThread_q` `0x0898ca54`). On the
+maintainer's direction ("clear and audible comes first", with a headphones
+report of crackle at 100 % volumes and many SFX) this port no longer reproduces
+that clamp. Per-cue volumes stay as authored; `oag_audio::limiter::Limiter`
+runs after the sum in `Mixer::render`. Where a reference is wanted, the modern
+originals (HD and Omega, Wwise master bus with headroom and a limiter) are the
+orientation, not the PSP.
+
+The limiter is stereo linked: a 2 ms look-ahead delay, a ceiling of 0.95, a
+moving-average ramp so the gain reaches its target as the peak leaves the delay
+line, a 25 ms hold (longer than a period of the lowest engine note, so the gain
+does not ride the waveform) and a linear 0.25 s release. The hard clamp stays
+behind it as a safety, and `Mixer::clipped` now counts what still reached it,
+which is zero.
+
+### Measured (30 s / 120 s of an autopilot grid race, 8 craft, volumes 100)
+
+`oag-game <image> --race --opponents --autopilot --seed 1 --screenshot f.png
+--ticks N --dump-audio f.wav`, spatial audio set per run, host load 30 to 40.
+Clipped means 16-bit samples at full scale in the WAV.
+
+| Run | before: clipped, RMS, loudest second | after: clipped, RMS, loudest second |
+| --- | --- | --- |
+| Pulse 30 s, headphones | 22,630 (0.79 %), -9.9, -7.2 dB | 0, -11.1, -9.1 dB |
+| Pulse 30 s, rear cue / auto here | 14,369 (0.50 %), -10.5, -7.9 dB | 0, -11.6, -9.5 dB |
+| Pulse 30 s, original | 15,354 (0.53 %), -10.4, -7.9 dB | 0, -11.4, -9.5 dB |
+| Pulse 120 s, headphones | 36,097 (0.31 %), -11.6, -6.9 dB | 0, -12.4, -9.1 dB |
+| Pulse 120 s, rear cue | 24,155 (0.21 %), -12.3, -7.8 dB | 0, -12.9, -9.5 dB |
+| HD 60 s, headphones | 44, -17.0, -13.6 dB | 0, -17.0, -13.9 dB |
+| HD 60 s, rear cue / original | 0, -17.2, -14.3 dB | 0, unchanged |
+
+Pulse's pre-limiter peak is 1.90 (rear cue) to 2.26 (headphones), so the
+loudest moments are pulled down by up to 7.5 dB. Over 30 s the gain was below
+0.94 for 29 % of frames, below 0.7 for 5.7 % and below 0.5 for under 0.1 %
+(headphones, 0.5 %), so a static master trim was not added: whole-mix RMS drops
+0.5 to 1.2 dB. HD has its own headroom and the limiter almost never acts.
+
+HRTF energy (`binaural::tests`, white and low-passed noise over a grid of
+directions): within 1.1 dB of the plain pan ahead and beside, 0.5 dB on a
+low-passed (engine-like) source everywhere, and quieter than the plain pan behind
+(white noise only). So the HRIR adds no gain; headphones peak about 1.5 dB above
+the other modes only because the decorrelated ears stack peaks differently. The
+rear cue is 2 dB under the HRTF behind on a low-passed source by design.
+Crossfade weights sum to 1 (by reading `Mixer::render`, not measured).
+
+**Open: the limiter takes back what an added cue contributes.** In a Pulse mix
+about 2x over full scale, `sfx_weapon_ground_truth::a_quake_hit_is_louder_with_its_collision_pair`
+(energy after the hit, with the `.COLLISIONS` pair against without) reads 2.286M
+against 2.344M with the limiter on, i.e. the pair is 2 % *quieter*, because the
+hold and release duck the rest of the mix longer than the cue lasts. Sweep (same
+test, `with` vs `without`): master trim 0 dB: 2.286M vs 2.344M (release 0.25 s),
+2.342M vs 2.389M (0.1 s); trim 3 dB: 2.238M vs 2.278M, 2.297M vs 2.328M; trim
+6 dB: 2.189M vs 2.136M (+2.5 %), 2.243M vs 2.154M (+4.1 %). Hold 10 ms with trim
+3 dB and release 0.1 s: 2.463M vs 2.459M. The test runs without the limiter
+until the lead decides between a 6 dB master trim (about 6 dB of RMS, Pulse
+would sit near HD's level) and a shorter hold.
+
+Cost (release, host load 42, `limiter::tests::limiter_cost`): 2.7 us per
+1024-frame callback when idle, 23.8 us while limiting.
+
+The realtime path renders through the same `Mixer::render` (nothing after it
+amplifies; the starved-buffer ramps only reduce), so the dump is what the
+device receives.

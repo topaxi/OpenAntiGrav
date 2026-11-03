@@ -790,6 +790,10 @@ fn the_whole_grid_is_audible_and_not_all_from_one_place() {
         oag_audio::MIN_BUFFER,
         false,
     );
+    // The limiter's gain is stereo linked, so it cannot move a pan. It is off
+    // here because the ambience is subtracted between two renders below, and
+    // two renders do not share a limiter gain.
+    audio.output().with_mixer(|mixer| mixer.set_limiting(false));
     for _ in 0..120 {
         race.tick(&PlayerInputs::none());
         oag_game::sound::race_tick(&mut audio, &mut race);

@@ -39,6 +39,7 @@
 //! run rather than approximate it.
 
 pub mod binaural;
+pub mod limiter;
 pub mod mixer;
 pub mod output;
 pub mod route;
