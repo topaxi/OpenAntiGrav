@@ -174,6 +174,7 @@ pub const TITLE: &Title = &Title {
         oag_title::group_volume::GroupVolumeLaw::Linear,
     ),
     speech_follows_effects: oag_title::pre_race::Sourced::chosen(false),
+    master_trim_db: oag_title::pre_race::Sourced::chosen(0.0),
     plugin_definition: names::FRONT_END_PLUGIN_DEFINITION,
     track_plugin_definition: None,
     loading: Some(&loading::LOADING),

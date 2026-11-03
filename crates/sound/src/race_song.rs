@@ -71,6 +71,12 @@ impl Audio {
         self.song_hold.parked = None;
     }
 
+    /// The title's fixed master trim in decibels (`oag_title::Title::master_trim_db`); applied to
+    /// the mixer at once, ahead of its limiter.
+    pub fn set_master_trim_db(&mut self, db: f32) {
+        self.output.with_mixer(|mixer| mixer.set_master_trim(10.0_f32.powf(db / 20.0)));
+    }
+
     /// The race left its countdown: starts the parked track, or lets one still being read start
     /// the moment it lands.
     pub(super) fn release_race_song(&mut self) {

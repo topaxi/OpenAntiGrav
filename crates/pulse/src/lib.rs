@@ -85,6 +85,10 @@ pub const TITLE: &Title = &Title {
     ),
     // Group 2 takes the SFX fraction and the flyby fade (`docs/gameplay/race-intro.md`, "The Speech group").
     speech_follows_effects: oag_title::pre_race::Sourced::measured(true),
+    // Pulse's cues sum to about twice full scale in a busy race (the original clamps). A fixed trim
+    // brings the integrated loudness near HD's so the limiter works on far fewer frames
+    // (`docs/ghidra/functions/psp-pulse-usa/audio-levels.md`, "Master trim").
+    master_trim_db: oag_title::pre_race::Sourced::chosen(-6.0),
     plugin_definition: names::GAME_PLUGIN_DEFINITION,
     track_plugin_definition: None,
     loading: Some(&loading::LOADING),

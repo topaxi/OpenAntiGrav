@@ -597,6 +597,24 @@ fn a_voice_follows_its_own_bus_and_the_master() {
     );
 }
 
+/// A title's trim scales the sum ahead of the limiter and is not the player's master volume.
+#[test]
+fn the_title_trim_scales_the_sum_and_leaves_the_master_alone() {
+    let mut mixer = bare(8);
+    mixer.set_limiting(false);
+    let sound = Arc::new(Sound::new(vec![i16::MAX; 64], 1, 8).unwrap());
+    mixer.play(Play::looping(sound, Bus::Sfx)).unwrap();
+    let mut out = vec![0.0; CHANNELS];
+
+    mixer.set_master_trim(0.5);
+    mixer.render(&mut out);
+    assert!((out[0] - 0.5).abs() < 1e-3, "the trim did not apply: {}", out[0]);
+
+    mixer.set_master_gain(0.5);
+    mixer.render(&mut out);
+    assert!((out[0] - 0.25).abs() < 1e-3, "trim and master do not multiply: {}", out[0]);
+}
+
 /// The measured reason the closing fade exists: a cue that stops loud was cut
 /// loud, and a step from four fifths of full scale to zero is a thump heard
 /// just *after* the effect rather than during it.

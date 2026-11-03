@@ -1126,8 +1126,8 @@ Clipped means 16-bit samples at full scale in the WAV.
 Pulse's pre-limiter peak is 1.90 (rear cue) to 2.26 (headphones), so the
 loudest moments are pulled down by up to 7.5 dB. Over 30 s the gain was below
 0.94 for 29 % of frames, below 0.7 for 5.7 % and below 0.5 for under 0.1 %
-(headphones, 0.5 %), so a static master trim was not added: whole-mix RMS drops
-0.5 to 1.2 dB. HD has its own headroom and the limiter almost never acts.
+(headphones, 0.5 %), so a static master trim was not added at first: whole-mix RMS drops
+0.5 to 1.2 dB (added below, "Master trim"). HD has its own headroom and the limiter almost never acts.
 
 HRTF energy (`binaural::tests`, white and low-passed noise over a grid of
 directions): within 1.1 dB of the plain pan ahead and beside, 0.5 dB on a
@@ -1137,17 +1137,51 @@ the other modes only because the decorrelated ears stack peaks differently. The
 rear cue is 2 dB under the HRTF behind on a low-passed source by design.
 Crossfade weights sum to 1 (by reading `Mixer::render`, not measured).
 
-**Open: the limiter takes back what an added cue contributes.** In a Pulse mix
-about 2x over full scale, `sfx_weapon_ground_truth::a_quake_hit_is_louder_with_its_collision_pair`
-(energy after the hit, with the `.COLLISIONS` pair against without) reads 2.286M
-against 2.344M with the limiter on, i.e. the pair is 2 % *quieter*, because the
-hold and release duck the rest of the mix longer than the cue lasts. Sweep (same
-test, `with` vs `without`): master trim 0 dB: 2.286M vs 2.344M (release 0.25 s),
-2.342M vs 2.389M (0.1 s); trim 3 dB: 2.238M vs 2.278M, 2.297M vs 2.328M; trim
-6 dB: 2.189M vs 2.136M (+2.5 %), 2.243M vs 2.154M (+4.1 %). Hold 10 ms with trim
-3 dB and release 0.1 s: 2.463M vs 2.459M. The test runs without the limiter
-until the lead decides between a 6 dB master trim (about 6 dB of RMS, Pulse
-would sit near HD's level) and a shorter hold.
+### Master trim (2026-11-03, ours, not measured off the original)
+
+`Title::master_trim_db` (`oag_title::Title`, labelled chosen) scales the whole sum
+ahead of the limiter (`Mixer::set_master_trim`, separate from the player's master
+volume; `oag_game::sound::hold_race_song` sets it when a race arms). Pulse -6 dB,
+Pure -3 dB, HD, Omega and 2048 0 dB. Direction: clear and audible first, the modern
+originals' level as the orientation.
+
+Integrated loudness (`scripts/wav_loudness.py`, BS.1770-4 K-weighted, gated), 60 s
+(3,600 ticks) autopilot grid race, 8 craft, volumes 100, `--seed 1`, `--dump-audio`:
+
+| Title | Mode | before trim | after trim |
+| --- | --- | --- | --- |
+| Pulse (PSP EU) | rear cue | -10.9 LUFS | -16.0 |
+| Pulse | headphones | -10.8 | -15.7 |
+| Pulse | original | -10.7 | -15.8 |
+| Pure (PSP EU) | rear cue | -13.7 | -16.2 |
+| Pure | headphones | -13.7 | -16.2 |
+| HD (PS3 EU) | rear cue | -15.0 | unchanged |
+| HD | headphones | -14.9 | unchanged |
+| Omega (PS4 EU) | rear cue / headphones | -22.6 | unchanged |
+
+Pulse lands 0.7 to 1.0 dB under HD (within the 1.5 dB aimed at). A 120 s Pulse rear
+cue run reads -11.7 before and -17.0 after (the race thins out; HD 120 s not
+measured). Omega's 60 s reads 7.6 dB under HD with its race audio incomplete
+(`docs/formats/omega-status.md`), so it is left at 0 rather than trimmed up. 2048
+does not race here (its `.pkg` is PFS-encrypted): not checkable. The trim was
+picked at -5 dB first; the quake pair needed -6 (below).
+
+Limiter work, 60 s (2.88 M frames), frames with gain below 0.94 / below 0.7:
+
+| Run | before | after |
+| --- | --- | --- |
+| Pulse rear cue | 652,717 (22.7 %) / 98,231 (3.4 %) | 0 / 0 |
+| Pulse headphones | 824,749 (28.6 %) / 175,256 (6.1 %) | 4,166 (0.14 %) / 0 |
+| Pure rear cue | 113,301 (3.9 %) / 28,131 (1.0 %) | 24,608 (0.85 %) / 4,652 (0.16 %) |
+| Pure headphones | 132,083 (4.6 %) / 23,509 (0.8 %) | 14,691 (0.5 %) / 0 |
+
+Pre-limiter peak: Pulse 1.90 / 2.26 -> 0.95 / 1.13 (rear cue / headphones).
+`sfx_weapon_ground_truth::a_quake_hit_is_louder_with_its_collision_pair` passes with the
+limiter on under Pulse's trim (it failed by 0.8 % at -5 dB and by 2 % untrimmed, because
+the limiter's hold and release duck the mix longer than the cue lasts). The pan test
+`sfx_ground_truth::the_whole_grid_is_audible_and_not_all_from_one_place` still fails with
+the limiter on (it subtracts two renders that do not share a limiter gain), so it keeps
+its `set_limiting(false)`.
 
 Cost (release, host load 42, `limiter::tests::limiter_cost`): 2.7 us per
 1024-frame callback when idle, 23.8 us while limiting.

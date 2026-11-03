@@ -2,7 +2,7 @@
 status: measure
 titles: [all]
 updated: 2026-11-03
-summary: "Limiter landed; open: underruns under load (no thread priority), Pulse peaks 2x full scale, HRTF behind 4-9 dB hotter"
+summary: "Limiter and per-title master trim landed; open: underruns under load (no thread priority), Pure still limits 0.5-0.9 % of frames"
 categories: [audio]
 ---
 
@@ -21,21 +21,22 @@ race to zero. Open, ranked:
    lock (real stream; plays on the host, so on the Deck only), read the
    "dropped" health line. A priority request would need a new dependency
    (`audio_thread_priority`).
-2. **Pulse mixes at up to 2.3x full scale before the limiter.** Cutting the
-   cause (eight `~ENGINE` voices at unity, `Scream_PanVolumePair` constant `a3`)
-   would let the limiter idle. Measure: the `mix:` line `--dump-audio` prints.
-3. **A cue added to a hot Pulse mix is partly taken back by the limiter.**
-   The quake `.COLLISIONS` pair measures 2 % quieter with the limiter on
-   (table in the audio-levels page); a 6 dB master trim restores +2.5 to
-   +4 %. Decide: a 6 dB trim (Pulse only, per-title data; HD peaks 0.94 and the
-   limiter is idle there), or a shorter hold (ripple vs punch). Measure:
-   `cargo nextest run -p oag-game --run-ignored all -E 'test(a_quake_hit_is_louder)'`
-   after removing its `set_limiting(false)`. Headphones HRTF was checked and
-   adds no gain (struck).
+2. **Pulse and Pure still sum hot before the trim.** The trim (Pulse -6 dB,
+   Pure -3 dB, `Title::master_trim_db`) took Pulse from limiting 23-29 % of
+   frames to under 0.2 %; Pure still limits 0.5-0.9 % of frames below 0.94.
+   Cutting the cause (eight `~ENGINE` voices at unity, `Scream_PanVolumePair`
+   constant `a3`) would let it idle. The trim is set when a race arms
+   (`oag_game::sound::hold_race_song`); menus keep the last race's value.
+   Measure: the `mix:` line `--dump-audio` prints.
+3. **The pan test still needs the limiter off.** The quake pair passes with the
+   limiter on (Pulse trim). `sfx_ground_truth::the_whole_grid_is_audible...`
+   subtracts two renders and still fails with the limiter on after the trim
+   (the limiter acts on the grid's headphone-free mix at -6 dB): keep its
+   `set_limiting(false)` or compare in a way that survives different gains.
 4. **Limiter activity is not on the perf overlay.** `Mixer::peak`, `limited`,
    `deepest_limit` and `limit_depth_frames` exist; `Health` still reports only
    starved and clipped.
 
 ## Next Steps
 
-Item 3 first (lead decision), then 1 (a Deck run).
+Item 1 (a Deck run), then 2.

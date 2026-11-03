@@ -346,3 +346,27 @@ fn auto_follows_the_output_and_a_remembered_choice_wins_for_its_device_only() {
     settle(&mut audio, &mut settings);
     assert_eq!(mode(&audio), SpatialMode::RearCue, "unknown: rear cue");
 }
+
+/// A title's master trim reaches the mixer in decibels; minus 6.02 dB halves the sum. Fails if
+/// `Audio::set_master_trim_db` stops reaching the mixer.
+#[test]
+fn a_title_master_trim_in_decibels_halves_the_sum_at_minus_six() {
+    use oag_audio::{Bus, Play, Sound};
+    let mut audio = Audio::open(
+        &crate::settings::Settings::default(),
+        None,
+        None,
+        oag_audio::MIN_BUFFER,
+        false,
+    );
+    audio.set_master_trim_db(-6.0206);
+    let level = audio.output().with_mixer(|mixer| {
+        mixer.set_limiting(false);
+        let sound = std::sync::Arc::new(Sound::new(vec![i16::MAX; 64], 1, 8).unwrap());
+        mixer.play(Play::looping(sound, Bus::Sfx)).unwrap();
+        let mut out = vec![0.0; 2 * 16];
+        mixer.render(&mut out);
+        out[8]
+    });
+    assert!((level - 0.5).abs() < 0.01, "level {level}");
+}
