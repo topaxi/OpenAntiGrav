@@ -1,8 +1,8 @@
 ---
-status: re-first
+status: ready-to-wire
 titles: [pulse]
 updated: 2026-11-03
-summary: "Plasma head on the weapon node, 0.75 rows; open: k68 luminance, release offset at a second speed (no post-release lag)"
+summary: "Plasma head drawn right; open in the sim: the bolt releases at the muzzle node (4.24), not the 2.23 hold point"
 ---
 
 # The Pulse Plasma head and blast differ from the original's
@@ -68,10 +68,19 @@ confidence scores and the replay evidence. What is left is wiring and two unread
   lag. The 2.19 pairs the bolt after an update with the craft of the previous hook read; read as one instant per record the
   original is 2.22, 2.41, 2.60, 2.76, 3.81, 4.77, 5.75 from the craft and ours matches to 0.1 for seven frames
   (`plasma_timing_ground_truth`, 0.12 at the seventh). The original's head also steps back about 2 at the release. The
-  k68 box luminance (131.9 against 121.3) is therefore not the release position and stays open;
-  (vi) the release offset is the node of the frame before minus nothing: it is `4.24 - craft step`, so `MUZZLE_FORWARD`
-  (2.23) is exact at the measured 120 u/s and the original's offset grows as the craft slows (a standing start: 4.2).
-  Measure one second speed before wiring the locator into `oag-weapons` (`Craft` method, the plumbing is small);
+  ~~k68 box luminance (131.9 against 121.3) is therefore not the release position and stays open~~ closed
+  2026-11-03 (`pulse-plasma-fable`, `plasma.md` "the head after the release"): it was the release position. The
+  drawn head is the bolt's own matrix, launched from the node, so it never steps back; ours anchored it on the sim
+  bolt 2.01 short and drew the glow 26 % too large. The view now keeps the node's lead: k68 126.7 (120.9 one tick
+  later) against 117.3-122.1 over five runs, k20-72 box 76,047 to 72,351;
+  (vi) ~~the release offset is the node of the frame before minus nothing: `4.24 - craft step`~~ corrected 2026-11-03
+  (`pulse-plasma-fable`): the 2.22 series paired a pre-move bolt with a post-move craft; at one instant the bolt is 4.43
+  ahead on its first frame, so **the release point is the `Ship Muzzle` locator itself (4.24 on Assegai), speed-independent**,
+  and `MUZZLE_FORWARD` (2.23) is 2.01 short in the sim (collision and detonation point). **Open, `oag-weapons`**: a per-craft
+  muzzle lead in the `World` (set from the hull by the composition root), the hash reference regenerated, and
+  `plasma_timing_ground_truth`'s series re-pinned at the draw instant (4.43, 4.62, 4.81, 5.79, 6.79, 7.81, 8.84, 9.89);
+  the view's `plasma_lead` then goes;
   Pure's candidate locator is class `0x394` at `(0, 0, 6.068)` on Assegai's v4 hull, unconfirmed (no name table);
-  (vii) k60 box luminance 117.0 against 127.0 (reference boot) and 121.1 (fresh boot): the original moves 6 between boots.
+  (vii) ~~k60 box luminance 117.0 against 127.0 (reference boot) and 121.1 (fresh boot)~~: five runs read 108.4 to 127.7 at
+  k60 (the release frame), so 117.0 is inside the original's own spread; closed 2026-11-03.
 - Pulse PS2 is unmeasured here; its pair is `scripts/pcsx2-pulse-pair.py`.

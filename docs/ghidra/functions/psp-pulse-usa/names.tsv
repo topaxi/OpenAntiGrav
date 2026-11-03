@@ -1449,3 +1449,4 @@
 0x088193ec	function	Ease_GaussianBump	90	pickup-colour.md
 0x08819458	function	Ease_CosineWithBump	90	pickup-colour.md
 0x088fa6fc	function	ParticleSystem_ApplyDrag	85	plasma.md
+0x0885c360	function	Plasma_BuildDrawMatrices	80	plasma.md
