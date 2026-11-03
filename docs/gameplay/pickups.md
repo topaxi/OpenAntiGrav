@@ -871,6 +871,24 @@ additive billboard per rocket and a fading one where it goes off, in the engine
 flare's own texture, because `Ship Muzzle` (`0x3e2`) and `cannon_flash`
 (`0x3eb`) are the original's own weapon effects and neither is built.
 
+## A destroyed craft
+
+A craft in its destroyed sequence (`CraftState::Destroyed`, then `Eliminated` until the
+Eliminator puts it back on the line) cannot fire, lay, absorb or hold a trigger: the
+player's press (`Race::spend_pickup`), an opponent's decision
+(`Race::spend_opponent_pickup`), a mine drop in progress (`Race::lay_mines`), a held
+Cannon trigger (`Race::advance_cannons`) and an armed Quake (`Race::fire_armed_quakes`)
+all stop at `Race::may_use_pickup`, which is true only while the craft is `Racing`.
+The gate is state-based, so it holds in every mode with a wreck and on every title;
+Eliminator is the one mode where the craft comes back. Before it, the player's fire and
+absorb presses, and an opponent under `FireLaw::Ours`, reached the pickup while the craft
+was blowing up (`FireLaw::Original` already refused).
+
+**What the held pickup does is undocumented in the original** (no page records it), so
+the existing behaviour stays: the pickup is kept in the slot, and
+`oag_physics::damage::reset` on the respawn does not clear it. Only the trigger is
+blocked. Test: `tests::destroyed_fire`.
+
 ## Absorbing
 
 `CIRCLE`, and it pays the weapon's own `<Stats absorb>` into the energy pool
