@@ -291,6 +291,16 @@ All below in `names.tsv` in this change.
   regardless of which palette tints it; the loader report says so on every
   HD boot.
 
+## Carried to Omega and 2048
+
+Omega and 2048 draw HD's two read colours (amber hit flash, dim-red
+activation) by inheritance: `Looks.shield_palette` is `ShieldPalette::Hd`
+labelled `InheritedFrom("Wipeout HD")` on both. Check status: inherited,
+unread. Neither title's own shield code has been read, so this is a stand-in
+law of the closest relative, not a measurement; reading Omega's and 2048's
+shield constructors and HD's steady-state target colour are queued as
+separate lanes.
+
 ## History
 
 - 2026-09-16: page created. `Shield.cpp`'s constructor, activate, update, hit

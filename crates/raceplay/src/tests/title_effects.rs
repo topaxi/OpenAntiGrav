@@ -527,18 +527,21 @@ fn only_2048_ends_its_race_in_the_wo_composite_and_it_is_measured() {
 }
 
 #[test]
-fn the_shield_tint_is_hds_own_and_everyone_elses_is_pulses_by_inheritance() {
+fn the_shield_tint_is_hds_own_and_carried_to_omega_and_2048_while_pulses_stays_on_pure() {
     let tint = |t: &Title, p| t.looks.shield_palette.on(p);
     assert_eq!(tint(oag_hd::TITLE, Platform::Psp), ShieldPalette::Hd);
     assert_eq!(tint(oag_hd::TITLE, Platform::Ps2), ShieldPalette::Hd);
-    for title in [
-        oag_pulse::TITLE,
-        oag_pure::TITLE,
-        oag_2048::TITLE,
-        oag_omega::TITLE,
-    ] {
+    for title in [oag_pulse::TITLE, oag_pure::TITLE] {
         assert_eq!(tint(title, Platform::Psp), ShieldPalette::Pulse);
         assert_eq!(tint(title, Platform::Ps2), ShieldPalette::Ps2Pulse);
+    }
+    for title in [oag_2048::TITLE, oag_omega::TITLE] {
+        assert_eq!(tint(title, Platform::Vita), ShieldPalette::Hd);
+        assert_eq!(tint(title, Platform::Ps4), ShieldPalette::Hd);
+        assert_eq!(
+            title.looks.shield_palette.origin,
+            Origin::InheritedFrom("Wipeout HD")
+        );
     }
     assert_eq!(
         oag_pure::TITLE.looks.shield_palette.origin,
