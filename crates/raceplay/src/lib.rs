@@ -506,11 +506,9 @@ const SPEED_FOV_GAIN_DEG: f32 = 0.075;
 /// for a craft that has been teleported or handed an absurd velocity by a test.
 const FOV_GUARD_DEG: (f32, f32) = (1.0, 179.0);
 
-/// The world's generator seed.
-///
-/// Fixed and arbitrary: nothing in the recovered force law draws from the
-/// generator, so this exists only so the seed is written down in one place for
-/// whenever something does. See `crates/core/src/rng.rs`.
+/// The world's generator seed when nothing names one: `--race`, headless runs
+/// and tests. The front end draws a fresh seed per race (`oag_game::race_seed`).
+/// See `crates/core/src/rng.rs`.
 pub const SEED: u64 = 1;
 
 /// Seed for the player's exhaust flicker, kept distinct from [`SEED`].

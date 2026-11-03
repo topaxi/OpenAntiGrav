@@ -697,7 +697,8 @@ pub(crate) struct Cli {
     #[arg(long, value_name = "TICK:OPEN", requires = "race")]
     pub(crate) force_boost_kick: Option<String>,
 
-    /// Seed the world generator, instead of `race::SEED`.
+    /// Seed the world generator, instead of `race::SEED` (`--race`, headless) or a fresh
+    /// seed per race (the front end).
     ///
     /// A verification aid - see `race::Options::seed`. The one thing in a race
     /// that draws from the generator today is which pickup a weapon pad hands

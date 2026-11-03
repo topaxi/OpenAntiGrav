@@ -450,6 +450,9 @@ impl Session {
             .race_options
             .clone()
             .ok_or_else(|| anyhow::anyhow!("no disc image has been chosen yet"))?;
+        // A fresh seed per race; `--seed` (already in the options) and a network race's server
+        // seed (`NetPlay::race_options`, below) replace it.
+        options.seed = Some(oag_game::race_seed::for_launch(options.seed));
         let options_mode = options.mode;
         let options_track = options.foreign_track.clone();
         // **Refreshed here, not trusted from whenever `race_options` was last

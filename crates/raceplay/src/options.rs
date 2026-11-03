@@ -334,8 +334,9 @@ pub struct Options {
     /// what keeps that assertion pointed at the weapon it is about, rather than
     /// weakening it to "whatever the pad handed over".
     ///
-    /// It changes nothing about a real race: every caller that does not set it
-    /// gets [`SEED`], which is the fixed value the field replaced.
+    /// A caller that does not set it gets [`SEED`]. The front end sets a fresh seed per
+    /// race (`oag_game::race_seed`), so only `--race`, headless runs and tests ride the fixed
+    /// one.
     pub seed: Option<u64>,
     /// Put the craft here instead of on its grid slot.
     ///

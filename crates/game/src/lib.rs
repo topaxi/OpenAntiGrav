@@ -76,6 +76,7 @@ pub mod preview;
 pub mod profile;
 pub mod prompts;
 pub mod race_capture;
+pub mod race_seed;
 pub mod records;
 pub mod remix;
 pub mod render;
