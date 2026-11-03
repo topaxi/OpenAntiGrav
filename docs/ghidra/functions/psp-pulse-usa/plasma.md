@@ -2174,6 +2174,10 @@ Single draws of ten random particles: the extent jitters by about 0.6 between ne
 Confidence **60**: the 0.75 rows are read off the entity at the launch probe (85), that the reparented head draws
 through that matrix, and keeps it as `Plasma_Update` rewrites it, is inferred from this extent table.
 
+**2026-11-03:** the 0.75 rows hold through the charge as well (read live on the head's node, 60 frames), so the
+step at the release is gone and the charging head is anchored on the craft's weapon node: "the head's matrix and
+node" below.
+
 Head box mean RGB (`200,112,90,80`, original / before / after): **k60 127.0 / 122.5 / 122.5, k72 111.1 / 115.1 /
 114.1**. k60 is the release frame, so nothing moves there; k72 moves 1.0. The frames (`orig`, before, after at k60
 and k72) differ more in shape than in size: the original's arcs are curved crescents looping round the disc, ours
@@ -2231,3 +2235,103 @@ on our side was found that shifts it: `WO_PLASMA_FLASH` is played at the dump's 
 already carries a lag of about two presented frames (`psp-weapon-pair.py`), which is the named suspect. Left open, unfixed.
 
 Cross-title: Pure **checked, not wired** (`Plasma_Init` unread); HD, Omega, 2048 **checked, differs** (`HD_plasma_ball`).
+
+## 2026-11-03: the head's matrix and node (pulse-plasma-crescents-opus)
+
+Fresh PPSSPP captures of the matched state (Talon's Junction, Time Trial, Assegai Venom, fire at GO + 120, speed
+106.21, software renderer): GE dumps at k44, k56, k60 and k68 (`psp-weapon-pair.py --ge-dump-k K --shots K plasma`),
+and three live probes added to `psp-weapon-pair.py`: `--probe plasma_charge` (`Plasma_UpdateCharge`, `0x0885c170`),
+the head's node on both plasma probes, and `--probe pool` (`ParticleSystem_DrawEmitterPool`, `0x08918bf8`, walking
+`WO_PLASMA_HEAD`'s own pool only).
+
+### The head sits on the craft's weapon node, 4.24 ahead of the body
+
+`Plasma_Init` stores the head's psys node at entity `+0x12c`; `PsysNode_Start` (`0x08916200`) keeps the spawn's flag
+word at node `+0x60` (`0x10` here) and the parent (`craft+0x60`) at `+0xbc`. `PsysNode_Update` (`0x08915cdc`) copies
+the parent's world rows, adds node `+0xa0` to the translation (`vadd.q`), swaps rows 1 and 2 only under
+`node+0x60 & 2` (clear here) and hands the result to `ParticleSystem_SetMatrix` (`0x088f4498`, a straight copy into
+`instance+0xf0`). Read live on every one of the 60 charging frames (`plasma_charge`):
+
+| Quantity | Live |
+| --- | --- |
+| node `+0xa0` | `(0, 0, 0)` |
+| head node world rows, parent world rows | `0.7500` each, frames 0 to 59 |
+| parent translation minus craft body, in the parent's own rows | `(0, 0, 5.653)` model units, `4.24` units, constant while the speed rose from 106 to 120 u/s |
+| head translation at the hook | the parent's one frame earlier (the hook runs before this frame's node update) |
+
+The GE dumps agree from the other side: the head's dark disc centre is at view depth **15.71** (k44, k56) and
+**15.90** (k60), the craft's body draw (`ci 755`) at **11.49**, so the head is drawn 4.1 to 4.4 ahead of the craft.
+Ours anchored the charging head on the bolt's hold point (`MUZZLE_FORWARD`, 2.23): view depth **13.71**, the whole
+head 1.16x too large on screen. Confidence **90** for the node offset and the rows (live, 60 frames, two sites:
+the probe and the dumps' depth), Assegai only: the node is a point in the craft model.
+
+So the 0.75 rows `the arcs after the release` inferred for the bolt hold through the charge too, which is also why
+the bolt's matrix carries them: `Plasma_Init` seeds it from this node. And the bolt's release point (2.23 ahead of
+the body on the next frame) is this node one frame earlier: 4.24 minus one craft step of about 2.0 at this speed.
+`MUZZLE_FORWARD` is therefore speed-dependent in the original; ours keeps the constant (sim, not touched here).
+
+Wired: a charging Plasma's flare anchor is `body + forward * 5.653 * 0.75` (`plasma_head_anchor`) on the source whose
+head rides its owner's frame (Pulse's PSP file), and `plasma_ride_scale` is 0.75 for the whole life of the head.
+Tests: `a_charging_plasma_head_is_drawn_on_the_crafts_weapon_node` (red with the anchor dropped: 2.23 against
+4.24), `the_plasma_heads_matrix_carries_the_craft_scale_through_the_charge`.
+
+After the release the head draws at the bolt's post-update position, the same convention as ours (k60 dump: head
+x 243.95 = the bolt after update 60; k68: 266.58 = after update 68, with the body draw at the same frame's body).
+The k68 dump shows the head 10.9 ahead of the body where ours, at the shot matched to it (`391 + 70`), is 7.8 ahead.
+Whether that is the shot-to-dump frame mapping or the sim bolt is **open**; it is not the head's draw.
+
+### The arcs' shape: the law matches, the rest is the draws
+
+Per-quad screen-space width and length (milliradians, the bar's along extent between its end-edge midpoints) of
+the arc strip against ours at the same shots, before and after the anchor and scale:
+
+| k | original (width / along, widest first) | ours before | ours after |
+| --- | --- | --- | --- |
+| 44 | 333/340 315/343 310/349 306/316 ... 64/103 | 370/385 362/405 362/386 321/383 ... 78/190 | 321/330 317/331 314/341 281/322 ... 69/140 |
+| 56 | 446/496 208/319 176/267 166/298 ... 93/224 | 473/532 471/521 233/453 220/426 ... 94/189 | 414/454 403/435 202/345 186/308 ... 83/148 |
+| 60 | 276/347 258/365 230/339 195/340 ... 84/172 | 553/602 297/517 286/490 221/480 ... 113/225 | 472/504 259/401 239/362 194/365 ... 96/168 |
+
+The strip build (one depth, `u`/`v`, cell, colour) was already the dump's (the section above). What still reads as
+"flatter" in ours is the spread: on screen the original's arcs measured `|dx| = |dy|` at k44 to k60 (mean 183 to
+193 against 156 to 208) and ours `|dx|` about twice `|dy|`. The cause is not a law:
+
+- The drag modifier (`0.5, 0.4, 0.5`) is applied lane for lane to the particle's local velocity: `ParticleSystem_Update`
+  precomputes `pow(k, dt)` per axis into `DAT_08b62090..98` (`0x088f5e20`-`0x088f5e58`), and `ParticleSystem_ApplyDrag`
+  (`0x088fa6fc`, called for modifier type 3 from `ParticleSystem_UpdateParticles` at `0x088f6668`) multiplies the
+  velocity at particle `+0x00` by it (`vmul.q` at `0x088fa720`) before `position += velocity * dt` (`0x088f6700`-`0x088f6710`).
+  With no row swap, local Y is the craft's up, as ours. Confidence **85**.
+- Live (`--probe pool`, 24 distinct at-rest particles in local space at frames 19, 38, 57): mean `|x| 0.62, |y| 0.46,
+  |z| 0.63`, so `|y|/|x| = 0.75` against the law's 0.67. The dumps' isotropy was sampling (about ten particles a dump).
+
+Particle counts agree dump by dump (10/9, 8/8, 9/9, 10/10 at k44, 56, 60, 68), so the spawn gate against the cap
+(`ParticleSystem_UpdateEmission`, `0x088f4f84`, not re-read) shows no gap. Which arcs are long or short in a given
+frame is the random stream, which also varies between boots of the original (below).
+
+### Measured, matched pair
+
+Head box `200,112,90,80`, k20-72, `weapon-pair-score.py`, area x excess (the reference pair set):
+
+| tree | area x excess |
+| --- | ---: |
+| before (reproduced) | 103,807 |
+| 0.75 rows alone | 100,059 |
+| 0.75 rows and the weapon-node anchor | **76,048** |
+
+Box mean RGB, original (reference boot / a fresh boot) against ours before and after:
+
+| k | 20 | 36 | 44 | 56 | 60 | 68 | 72 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| original, reference boot | 142.0 | 106.9 | 112.8 | | 127.0 | | 111.1 |
+| original, fresh boot | | | 108.9 | 111.6 | 121.1 | 121.3 | |
+| ours before | 143.2 | 115.3 | 121.1 | 122.0 | 122.5 | 131.9 | 114.1 |
+| ours after | 143.2 | 111.0 | 115.2 | 118.3 | 117.0 | 131.9 | 114.1 |
+
+The k36/k44 overshoot closes from 8 to 4 and 2. k60 reads 117.0 against 127.0 on the reference boot and 121.1 on a
+fresh one: the original itself moves 6 between boots there, so the ±3 band is inside its own spread. k68 (after the
+release) overshoots 10, the open placement above.
+
+### Cross-title
+
+Pure: **checked, not wired** (its `Plasma_Init` is unread; the anchor and the rows ride the flag `0x2` gate that only
+Pulse's PSP file sets). Pulse PS2: **inherits** when it loads through the PSP path. HD, Omega, 2048: **checked, differs**
+(`HD_plasma_ball`).
