@@ -435,6 +435,10 @@ pub struct SubMesh {
     /// by stride the attribute is found on 1 of 28 Vita twin-blend submeshes. Empty where the
     /// record names none. A non-finite value is replaced by the origin, as the coordinates above.
     pub bars_blend_texcoords: Vec<[f32; 4]>,
+    /// The first pair of the packed `Uv1_Uv2` attribute
+    /// ([`vertex_decl::UV1_UV2_HASH`]), one per vertex, from the record's own declaration; empty
+    /// where it names none. A non-finite value is replaced by the origin.
+    pub second_texcoords: Vec<[f32; 2]>,
     /// How many of [`Self::texcoords`] decoded to a non-finite value and were
     /// substituted with the origin.
     ///
@@ -887,6 +891,24 @@ fn one(
             });
         }
     }
+    let mut second_texcoords = Vec::new();
+    if let Some(off) = own
+        .and_then(|decl| decl.packed_uv_pair())
+        .filter(|attr| attr.gxm_type == half_type)
+        .map(|attr| usize::from(attr.offset))
+        && stride >= off + 4
+    {
+        second_texcoords.reserve_exact(vertex_count);
+        for v in 0..vertex_count {
+            let at = vertex_at + v * stride + off;
+            let uv = unpack_texcoord([file[at], file[at + 1], file[at + 2], file[at + 3]]);
+            second_texcoords.push(if uv[0].is_finite() && uv[1].is_finite() {
+                uv
+            } else {
+                [0.0, 0.0]
+            });
+        }
+    }
     let mut tangents = Vec::new();
     // The Vita's type is `5`; the PS4's is `0xe` (four signed bytes, `w` exactly +-127), and a
     // PS4 declaration is only sound through the record's own pointer.
@@ -932,6 +954,7 @@ fn one(
         texcoords,
         lightmap_texcoords,
         bars_blend_texcoords,
+        second_texcoords,
         non_finite_texcoords,
         tangents,
         colours,

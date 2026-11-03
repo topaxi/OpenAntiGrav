@@ -547,6 +547,27 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         let gamma = select(1.0 / 2.2, 0.5, square_decode > 0.5);
         picture = vec4<f32>(pow(max(linear, vec3<f32>(0.0)), vec3<f32>(gamma)), first.a);
     }
+    // **Omega's `2048_shipshield_old` shell** (`Emissive::program` mode 11,
+    // `oag_mesh::mesh::rcs::psp2::shield_lightning`), read off its pixel program:
+    //
+    //     colour    = ShieldColour * diffuse(u + A time, v)
+    //     noise     = lightning(u2, B v2 + C time).a
+    //     lightning = M * lightning(uv2 + time + noise).rgb
+    //
+    // the lightning third, `M`, `A`, `C` and `B` the entry's tint `x`, `y`, `z` and offset. The
+    // diffuse's alpha stays the unscrolled tap's, and the lightning is added after the shell's
+    // `ShieldColour` multiply below, as the program does not tint it.
+    var shield_lightning = vec3<f32>(0.0);
+    let lightning_entry = (in.slots >> 24u) & 127u;
+    if lightning_entry != 0u && emissives.scale[lightning_entry].z > 10.5 && emissives.scale[lightning_entry].z < 11.5 {
+        let row = emissives.tint_offset[lightning_entry];
+        let clock_now = scene.time.x;
+        let scrolled = material_sample(MATERIAL_ALBEDO, vec2<f32>(in.texcoord.x + row.y * clock_now, in.texcoord.y));
+        picture = vec4<f32>(scrolled.rgb, picture.a);
+        let uv2 = in.lightmap_texcoord.zw;
+        let noise = material_sample(MATERIAL_PAD_MASK, vec2<f32>(uv2.x, row.w * uv2.y + row.z * clock_now)).a;
+        shield_lightning = row.x * material_sample(MATERIAL_PAD_MASK, uv2 + vec2<f32>(clock_now + noise)).rgb;
+    }
     // **HD's Zone-mode light cells** (`slots::MAG_WAVE` with the glow entry's rate 3,
     // `oag_mesh::mesh::rcs::damage_lights`): the picture gains a scrolling flash,
     //
@@ -1289,7 +1310,8 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     }
     let composed_plain = mix(mix(cone_or_floor, flame, flame_shading), absorb, absorb_shading);
     let composed = vec4<f32>(
-        composed_plain.rgb * select(vec3<f32>(1.0), in.colour.rgb, shield_shading != 0.0),
+        composed_plain.rgb * select(vec3<f32>(1.0), in.colour.rgb, shield_shading != 0.0)
+            + shield_lightning,
         composed_plain.a,
     );
 

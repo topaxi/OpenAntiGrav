@@ -87,6 +87,7 @@ mod node_anim_pipeline;
 mod omega_normal_map_ground_truth;
 mod omega_nova_prelit;
 mod omega_pvs_placement_ground_truth;
+mod omega_shield_lightning_lit_path;
 mod omega_transparency_ground_truth;
 mod pad_alpha_test_ground_truth;
 mod ps2_blended_depth_ground_truth;

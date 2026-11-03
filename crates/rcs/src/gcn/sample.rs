@@ -90,7 +90,7 @@ pub fn signed_samplers(file: &[u8]) -> SignedSamplers {
     found
 }
 
-fn overlaps(operand: &Operand, first: u8, count: u8) -> bool {
+pub(super) fn overlaps(operand: &Operand, first: u8, count: u8) -> bool {
     matches!(*operand, Operand::Vgpr { first: f, count: c }
         if f < first + count && first < f + c)
 }
@@ -145,7 +145,7 @@ impl Program<'_> {
     }
 
     /// The API slot of the texture whose T# starts at SGPR `t` when instruction `k` samples it.
-    fn texture_slot(&self, k: usize, t: u8) -> Option<u8> {
+    pub(super) fn texture_slot(&self, k: usize, t: u8) -> Option<u8> {
         let record = |kind: u8, register: u32| {
             self.usage
                 .iter()

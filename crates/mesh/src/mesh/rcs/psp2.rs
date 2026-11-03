@@ -49,6 +49,7 @@ mod normal_map;
 pub mod placement;
 pub mod refraction;
 pub mod refraction_only;
+mod shield_lightning;
 mod static_hologram;
 mod transparency;
 mod twin_blend;
@@ -211,6 +212,10 @@ pub struct Report {
     /// Of that family, materials left to the generic reading: no `Texture2Alpha`, no `Constant1`,
     /// or a picture that would not decode.
     pub emissive_add_unread: usize,
+    /// `2048_shipshield_old` shells that draw their Lightning layer (`psp2::shield_lightning`).
+    pub shield_lightning_materials: usize,
+    /// Of that family, shells left to the diffuse alone: no picture, weight or program rates.
+    pub shield_lightning_unread: usize,
     /// Tunnel-glass materials that read the refraction target (`psp2::refraction`).
     pub refraction_bound: usize,
     /// Of that family, materials without the grab's weight or a table slot.
@@ -359,6 +364,14 @@ impl Report {
                 self.emissive_add_materials, self.emissive_add_unread
             )
         };
+        let lightning = if self.shield_lightning_materials + self.shield_lightning_unread == 0 {
+            String::new()
+        } else {
+            format!(
+                "; {} shield shell(s) draw their Lightning layer ({} left to the diffuse alone)",
+                self.shield_lightning_materials, self.shield_lightning_unread
+            )
+        };
         let refraction = if self.refraction_bound + self.refraction_unread == 0 {
             String::new()
         } else {
@@ -387,7 +400,7 @@ impl Report {
         };
         format!(
             "{} triangle(s) over {} submesh(es), {texture}, {} authored \
-             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{scrolls}{twins}{holograms}{tangents}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}{emissive_add}{refraction}",
+             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{scrolls}{twins}{holograms}{tangents}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}{emissive_add}{lightning}{refraction}",
             self.triangles, self.submeshes, self.authored_normals, self.unpaired
         )
     }
@@ -587,9 +600,18 @@ fn build_planned(
         &mut report,
     );
     // `diffuse_normal_specular_emmissive_alpha` adds `Texture2Alpha^2 * Constant1` after the light.
-    let emissive_add = emissive_add::plan(
+    let mut emissive_add = emissive_add::plan(
         &decoded,
         ps4,
+        &mut glow.emissive,
+        &mut *textures,
+        &mut report,
+    );
+    // `2048_shipshield_old`'s Lightning layer rides the same third binding.
+    shield_lightning::plan(
+        &decoded,
+        ps4,
+        &mut emissive_add,
         &mut glow.emissive,
         &mut *textures,
         &mut report,
@@ -768,6 +790,15 @@ fn build_planned(
             let pair = twin_here.and_then(|_| submesh.bars_blend_texcoords.get(i));
             let lightmap_texcoord = pair.map_or(lightmap_texcoord, |p| [p[2], p[3]]);
             let texcoord2 = pair.map_or([0.0, 0.0], |p| [p[0], p[1]]);
+            let texcoord2 = if emissive_add.of(submesh.material).is_some() {
+                submesh
+                    .second_texcoords
+                    .get(i)
+                    .copied()
+                    .unwrap_or(texcoord2)
+            } else {
+                texcoord2
+            };
             let (colour, sun_mask) = match submesh.colours.get(i) {
                 Some(&[r, g, b, a]) if nova_vertex => (
                     [

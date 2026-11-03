@@ -103,6 +103,12 @@ pub const PROGRAM_EMISSIVE_ALPHA_MASK: f32 = 9.0;
 /// `psp2::refraction::ice_layer`.
 pub const PROGRAM_ICE_GLASS: f32 = 10.0;
 
+/// [`Emissive::program`]'s mode for Omega's `2048_shipshield_old` shield shell: the diffuse
+/// colour scrolled along `u` at the tint's `y`, plus the third binding scrolled by the clock and
+/// a noise (its alpha, `v` scaled by the offset and moved at the tint's `z`), times the tint's
+/// `x`, at the second coordinate set. See `psp2::shield_lightning`.
+pub const PROGRAM_SHIELD_LIGHTNING: f32 = 11.0;
+
 /// [`Emissive::program`]'s mode for a PSP hull's alpha-weighted extra pass: the
 /// picture (the environment map) multiplied by the **second** texture's alpha at
 /// the second coordinate set, which carry the batch's own texture and its

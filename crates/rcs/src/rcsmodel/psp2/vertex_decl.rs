@@ -74,6 +74,10 @@ pub const NORMAL_HASH: u32 = 0xde7a_971b;
 pub const TANGENT_HASH: u32 = 0xdbe5_f417;
 /// `~crc32("Uv1")` - the diffuse texture coordinate.
 pub const UV1_HASH: u32 = 0x4272_14fc;
+/// `~crc32("Uv1_Uv2")`: four halves, two coordinate pairs, the vertex input of
+/// `2048_shipshield_old`'s programs. The declaration also names `Uv1` and `Uv2` outright, both at
+/// the offset of the **second** pair; the first pair is the Lightning layer's coordinate.
+pub const UV1_UV2_HASH: u32 = 0x1aef_e524;
 /// `~crc32("VertexColour1")`: four normalised bytes per vertex (type nibble 11 on PS4).
 pub const VERTEX_COLOUR1_HASH: u32 = 0x7493_d450;
 /// `~crc32("lightmapUV")`.
@@ -151,6 +155,13 @@ impl VertexDecl {
     #[must_use]
     pub fn diffuse_texcoord(&self) -> Option<&Attribute> {
         self.attribute(UV1_HASH)
+    }
+
+    /// The packed pair attribute, four halves; its first pair is the coordinate of the second
+    /// picture (see [`UV1_UV2_HASH`]).
+    #[must_use]
+    pub fn packed_uv_pair(&self) -> Option<&Attribute> {
+        self.attribute(UV1_UV2_HASH).filter(|a| a.components == 4)
     }
 
     /// The lightmap texture coordinate, on the same terms.
