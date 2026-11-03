@@ -128,6 +128,14 @@ impl Session {
         Some(self.settings.render_profiles.entry(key).or_default())
     }
 
+    /// Whether this race is a verification run that must leave no record, medal, loyalty or ghost.
+    /// See [`oag_game::official`].
+    pub(crate) fn race_is_unofficial(&self) -> bool {
+        self.race_options
+            .as_ref()
+            .is_some_and(|options| oag_game::official::unofficial(options, self.give))
+    }
+
     /// What this session's campaign rows are filed under - see
     /// [`oag_game::records::campaign_title`]. `None` before any source is open.
     pub(crate) fn campaign_title(&self) -> Option<String> {

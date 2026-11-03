@@ -69,7 +69,11 @@ if [ "$x86" = auto ] && rustup target list --installed 2>/dev/null | grep -qx x8
     ndk_targets+=(-t x86_64)
     mkdir -p "$stage/lib/x86_64"
 fi
-cargo ndk "${ndk_targets[@]}" -P "$api" build -p oag-game --example oag_android --features android "${cargo_profile[@]}"
+# A shipped app has no --seed/--give (the dev-cli feature). OAG_APK_DEV_CLI=1 builds the
+# perf-test app scripts/android-race-phases.sh drives with --seed.
+features=android,extensions
+[ -z "${OAG_APK_DEV_CLI:-}" ] || features+=,dev-cli
+cargo ndk "${ndk_targets[@]}" -P "$api" build -p oag-game --example oag_android --no-default-features --features "$features" "${cargo_profile[@]}"
 so="$root/target/aarch64-linux-android/$profile/examples/liboag_android.so"
 "$llvm_strip" --strip-all -o "$stage/lib/arm64-v8a/liboag_android.so" "$so"
 if [ "$x86" = yes ]; then

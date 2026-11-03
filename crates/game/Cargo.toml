@@ -161,7 +161,12 @@ ballisticng = ["oag-raceplay/ballisticng"]
 # Pulley interpreter are not built, and `oag-modhost` refuses to compile for either.
 # Off, a mod's module is named in the load report as left out and nothing of wasmtime
 # is linked. docs/architecture/wasm-extensions/.
-default = ["extensions"]
+default = ["extensions", "dev-cli"]
+# `--seed` and `--give`: flags that choose the world generator's seed and hand the player a
+# weapon. A race using either saves no record and no ghost (`oag_game::official`), but a
+# shipped binary does not carry them at all: packaging builds pass
+# `--no-default-features --features extensions` (docs/tools/packaging.md).
+dev-cli = []
 extensions = ["oag-raceplay/extensions"]
 native-video = ["dep:gstreamer", "dep:gstreamer-app", "dep:gstreamer-video"]
 # See `oag-render`'s feature of the same name. Off by default.

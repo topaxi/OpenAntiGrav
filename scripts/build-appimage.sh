@@ -147,7 +147,7 @@ Build natively instead and mind the glibc floor this script prints."
     [[ $engine == docker ]] && icon_args+=(--user "$(id -u):$(id -g)")
 
     "$engine" run "${engine_args[@]}" "$CONTAINER_IMAGE" \
-        bash -c 'ldd --version | head -1 && cargo build --profile dist -p oag-game'
+        bash -c 'ldd --version | head -1 && cargo build --profile dist -p oag-game --no-default-features --features extensions'
     binary="$container_target/dist/oag-game"
 elif (( skip_build )); then
     native_target="$project_root/target${target_cpu:+/cpu-$target_cpu}"
@@ -158,7 +158,7 @@ else
     # separate `release` and `dist` outputs there.
     native_target="$project_root/target${target_cpu:+/cpu-$target_cpu}"
     CARGO_TARGET_DIR="$native_target" RUSTFLAGS="$rustflags" \
-        cargo build --profile dist -p oag-game --manifest-path "$project_root/Cargo.toml"
+        cargo build --profile dist -p oag-game --no-default-features --features extensions --manifest-path "$project_root/Cargo.toml"
     binary="$native_target/dist/oag-game"
 fi
 

@@ -257,7 +257,7 @@ pub(crate) fn run_windowless(
             loaded,
             video_format,
             &capture::Options {
-                give: give_weapon(cli.give.as_deref())?,
+                give: give_weapon(cli.give())?,
                 autopilot: cli.driver.autopilot,
                 pilot_assist: cli.driver.pilot_assist.unwrap_or_default(),
                 autopilot_pilot: autopilot_pilot(cli.driver.autopilot_pilot.as_deref())?,
@@ -691,7 +691,7 @@ pub(crate) fn run_race(
                     loaded.setup.difficulty,
                     cli.driver.autopilot,
                     cli.driver.pilot_assist.unwrap_or_default(),
-                    give_weapon(cli.give.as_deref()).ok().flatten(),
+                    give_weapon(cli.give()).ok().flatten(),
                 );
                 (path, header)
             }),
@@ -701,7 +701,7 @@ pub(crate) fn run_race(
             loaded,
             &oag_game::race_capture::CaptureOptions {
                 gpu,
-                give: give_weapon(cli.give.as_deref())?,
+                give: give_weapon(cli.give())?,
                 autopilot: cli.driver.autopilot,
                 pilot_assist: cli.driver.pilot_assist.unwrap_or_default(),
                 autopilot_pilot: autopilot_pilot(cli.driver.autopilot_pilot.as_deref())?,
@@ -832,7 +832,7 @@ pub(crate) fn run_race(
         hints::esc_quits(&hint_strings)
     );
 
-    let give = give_weapon(cli.give.as_deref())?;
+    let give = give_weapon(cli.give())?;
 
     let event_loop = crate::new_event_loop()?;
     // Poll rather than Wait: the simulation runs whether or not input arrives.

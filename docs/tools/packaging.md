@@ -56,6 +56,19 @@ zip), `scripts/build-appimage.sh` and `scripts/build-apk.sh` build with
 `just build-dist` is a local dist build. `just build-cpu` stays `release`.
 Binary size is not a concern; load time and runtime speed are.
 
+### The `dev-cli` feature
+
+`--seed` and `--give` choose the world generator's seed and hand the player a weapon, so a
+shipped binary does not have them: they exist behind `oag-game`'s `dev-cli` feature, which is
+a default feature. Every packaging build (`release.yml`, `scripts/build-appimage.sh`,
+`just build-dist`, `just build-cpu`, `just mac-app`, `just ios-app`, `scripts/build-apk.sh`, the
+web build) passes `--no-default-features --features extensions` (or `android,extensions`) and
+so builds without it; clap then rejects both flags as unknown arguments. A perf-test APK that
+`scripts/android-race-phases.sh` drives (it passes `--seed 1`) is built with
+`OAG_APK_DEV_CLI=1 just apk`. `--pose` and the other capture flags stay in every build. A race
+run with `--seed`, `--give` or `--pose` is unofficial (`oag_game::official::unofficial`): it
+saves no record, medal, loyalty award or ghost.
+
 Measured 2026-10-09, AMD Ryzen 9 7900 (12 cores, 24 threads), Linux, rustc 1.99,
 `RUSTC_WRAPPER` unset (sccache would hide build times), the EU Pulse CHD and
 the EU HD/Fury ISO, `oag-game <image> --race --no-audio --screenshot out.png

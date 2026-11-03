@@ -155,7 +155,7 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - run: cargo build --profile dist -p oag-game
+      - run: cargo build --profile dist -p oag-game --no-default-features --features extensions
         env:
           OAG_VERSION_SUFFIX: ${{ needs.version.outputs.suffix }}
       - name: Stage the zip
@@ -260,7 +260,7 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - run: cargo build --profile dist -p oag-game
+      - run: cargo build --profile dist -p oag-game --no-default-features --features extensions
       - name: Bundle OpenAntiGrav.app
         run: |
           mkdir -p dist
