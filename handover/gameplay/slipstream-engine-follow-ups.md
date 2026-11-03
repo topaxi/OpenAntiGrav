@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-03
-summary: "Portal-weapon pieces 6-9 open: AI fire observation, mesh/fill/FOV outputs, per-title mod icons and slots, default-off mods; route exits."
+summary: "Portal pieces 6-9 landed on slipstream; open: wreck gate after merging main, mesh portal, route and island exits, two mod pickups."
 categories: [tooling, frontend]
 size: L (50)
 difficulty: medium (50)
@@ -29,66 +29,51 @@ The engine never names the mod.
 
 ## Open
 
-1. **AI firing of a mod pickup (piece 6).** Today an AI craft holding `Weapon::Extension`
-   raises `pickup-fire` through the Turbo's gate (`Race::spend_opponent_pickup`,
-   `Driver::affords_boost`). A guest may ignore that and decide itself, but it lacks
-   observation: its progress along the lap, its place, the track ahead. The craft record
-   is full (16 bytes). 348 bytes of `IO_LEN` are spare after `CRAFTS_AT + 16 * 16`, enough
-   for a second per-craft record (progress `f32`, place `u8`, course length in a header
-   word). The clearance answer already reaches it as an event. Decide whether the Turbo
-   gate stays the default `pickup-fire` for the AI or a manifest flag turns it off for a mod
-   that drives its own AI. Any fire or use path built here goes through
-   `Race::may_use_pickup(slot)` (main, 37dfef768), so a mod never handles a wrecked craft. Size M (40).
-2. **Outputs (piece 7)**, none built:
-   - a world-space mesh or sprite anchored ahead of a craft (the portal half disc);
-   - a full-screen colour fill per view (`oag_fx::flash::ScreenFlash` is the one screen
-     flash owner; `Race::screen_wash` reads it, so a `screen-fill{slot, rgba}` output
-     belongs beside it);
-   - a camera FOV curve (`camera::finish_vertical_fov` is the one FOV chain, from item 5 of
-     the refactor thread; a per-slot FOV offset output enters there).
+1. **Landed, see the checks below.** Item 1 (AI firing: `[extension] drives_ai_pickup`, the
+   tracking record `progress`/`place` and the course length in the observation), item 2 (outputs:
+   `screen-fill`, `fov-offset`, `fire-mod-effect-ahead`), item 3 (per-title icons
+   `[pickup.titles.<title>]`, icon placed on the title's own Turbo glyph box) and item 4
+   (`default-enabled`, ADR-0084) are on branch `slipstream`. What each left open:
+   - **The mod pickup's wreck gate.** `Race::may_use_pickup` is on main (`8b4f4dd5d`), not on this
+     branch. With `drives_ai_pickup` the engine raises nothing for an AI craft and the guest sees
+     `Craft::is_racing()`; once main is merged into `slipstream`, `clear-pickup` and any command
+     a guest sends for a wrecked craft want the same gate (the weapon-gate-unify lane's check).
+   - **The portal is a camera-facing sprite**, a mod PNG through the particle system placed at the
+     road ahead (`fire-mod-effect-ahead`), not a half disc standing across the road. A real mesh
+     or a custom shader is a later piece.
+   - **`screen-fill` is additive**, as the title's own flash is; a subtractive or alpha-over wash
+     needs a second blend.
+   - **Pure** draws the pickup backdrop and no mod PNG (its icons are `<Mode3D>` models, and no
+     Pure art ships). **2048** was not checked by a screenshot: a headless `--race` shows no
+     pickup box for `--give turbo` either. **Pulse PSP and PS2** are one title to a manifest, so
+     they share one `[pickup.titles.wipeout-pulse]` icon.
+   - **Mod checks**: the 2048 and Omega checks of CLAUDE.md "A 2048 finding is checked against
+     Omega": the same HUD code draws the mod icon on both (`oag_hud::pickup::mod_icon_draw`);
+     Omega is screenshot-verified, 2048 is not.
 
-   All are outputs, never hashed. Size L (50).
-3. **Per-title mod icons and the icon slot fixes (piece 8).**
-   - Per-title icons: a manifest `[icons]` key per title, or a guest choosing by title.
-   - Slot sizes and placement:
-     - Pulse PSP: the glyph is 27 px in a 24 px slot.
-     - Pulse PS2: 33 px in 26 px.
-     - Enlarge the slot; do not shrink the glyph.
-     - HD and Omega: the slot (34 and 38 px) is smaller than real glyphs and sits 2.5-3 px
-       below the frame centre.
-   - Backdrop and blank slots:
-     - A 2048 mod pickup gets no disc backdrop.
-     - Pure draws nothing for a mod icon. Draw it, or document why not.
-   - The adopted PNGs are on official-mods branch `slipstream` (`c8dc884`) under
-     `slipstream/icons/`.
-   - Size M (40).
-4. **Default-off mods (piece 9).** The manifest has no enable field; `settings::Mods` keeps
-   only a `disabled` set (`crates/game/src/mods.rs`), so a default-off mod needs an
-   `enabled` set too (or one resolver `is_enabled(manifest_default, settings)`, item 7 of
-   the refactor thread). Schema and the mod-author skill change with it. Size S (30).
-5. **Exit on a branch route.** `Race::move_to` re-seats the driver on the ring
+2. **Exit on a branch route.** `Race::move_to` re-seats the driver on the ring
    (`Race::reseat` uses `Branching::on_ring`), so an exit on a fork's route drives back to
    the ring. `Course::locate_on_route` already maps a route sample to ring progress; the
    work is seating the driver on the route, plus a test on a forked circuit
    (`branch_progress_ground_truth`'s). Size S, half a day (50). Slipstream itself uses the
    main ring (maintainer, 2026-11-03).
-6. **Exit with no spline near it (a floating island).** No lap fix, no AI line, and the
+3. **Exit with no spline near it (a floating island).** No lap fix, no AI line, and the
    distance reset would fire. Recommended rule for our track format: the author gives the
    island its own spline path that rejoins the circuit, which makes it item 5. An engine
    notion of an off-course stretch is a design question first. Size L if built (30).
-7. **Two mod pickups in one race.** A mod with `[[pickup.odds]]` owns the mod pickup from tick
+4. **Two mod pickups in one race.** A mod with `[[pickup.odds]]` owns the mod pickup from tick
    0, so with slipstream and energy-turbo both on, energy-turbo faults on its first
    `pickup-roll` ("the mod pickup belongs to mod ..."). One mod pickup a race is the rule
    today; more than one needs a pickup kind per mod.
-8. **`Distance::Trigger` with a real track file.** It is tested only through the
+5. **`Distance::Trigger` with a real track file.** It is tested only through the
    refusal path (a track with no trigger). A `track_props_ground_truth`-style test with a
    trigger pair is owed.
 
 ## Next Steps
 
-1. Item 4 first (small, and the mod ships disabled by default): add the enabled set and
-   resolver, then `schemas/v1/mod.tosd` and the mod-author skill.
-2. Item 1: decide the default AI gate with the lead, then add the second craft record.
-3. Items 2 and 3 together: they are the view half the guest draws with.
-4. Quote `race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`
+1. Merge main into `slipstream`, then put the mod pickup's wreck gate on the commands a guest
+   sends (see Open 1).
+2. Open items 2-5: a route exit, an island exit, two mod pickups, a `Distance::Trigger` test on a
+   real track file.
+3. Quote `race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`
    before and after any change that touches racing.

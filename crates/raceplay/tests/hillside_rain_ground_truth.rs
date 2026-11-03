@@ -45,6 +45,7 @@ fn hillside_rain() -> Option<(race::extensions::Source, std::path::PathBuf)> {
         effects: Vec::new(),
         files: Arc::new(|_| Err("no files".into())),
         pickup: module.manifest.pickup.clone(),
+        pickup_titles: Vec::new(),
         pickup_odds: module.manifest.pickup_odds.clone(),
         channels: race::extensions::Declared {
             publishes: module.manifest.channels.publishes.clone(),

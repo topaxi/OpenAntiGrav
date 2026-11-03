@@ -44,6 +44,7 @@ pub fn sources<'a>(mods: impl IntoIterator<Item = &'a oag_mod::Mod>) -> Vec<Sour
                     .collect(),
                 files: files_reader(m),
                 pickup: m.manifest.pickup.clone(),
+                pickup_titles: m.manifest.pickup_titles.clone(),
                 pickup_odds: m.manifest.pickup_odds.clone(),
                 channels: oag_raceplay::extensions::Declared {
                     publishes: m.manifest.channels.publishes.clone(),

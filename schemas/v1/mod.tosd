@@ -207,6 +207,14 @@ type = "array"
 itemtype = "types.pickup-odds"
 optional = true
 
+# `[pickup.titles.<title>]`: what differs on one title (its lowercased hyphenated name),
+# the same `icon` and `colour` shapes, each over `[pickup]` for what it leaves out: a
+# mod's own icon art per title. The loader checks the shapes as `[pickup]` does.
+
+[types.pickup.titles]
+type = "any"
+optional = true
+
 [types.pickup-odds]
 type = "table"
 

@@ -295,28 +295,109 @@ fn model_draw(cx: &Context<'_>, name: &str, color: [f32; 4]) -> Option<Draw> {
     })
 }
 
-/// A mod's own pickup icon, centred in the place the title draws a pickup's icon and fitted
-/// inside it with its own aspect, faded as the title's own icon is. **Chosen, not measured**:
-/// the place is the layout's `TurboIcon` sprite (2048: inside `PickupBgFrame`), since every
-/// title's weapon icons share one slot. A title that draws its icons as models (Pure) draws
-/// nothing for a mod's own PNG.
+/// The opaque box of the title's own Turbo icon, in layout pixels: its size and its middle.
+/// Read off the sheet's pixels (alpha above 32 inside the icon's own region), so it is what the
+/// title really draws, margins and all: the glyph a mod's icon stands in for. `None` where
+/// the layout, the sheet or the pixels do not give one (the icon is a model, the region is
+/// empty).
+fn reference_glyph(cx: &Context<'_>) -> Option<([f32; 2], [f32; 2])> {
+    let turbo = oag_tables::weapons::Weapon::Turbo;
+    let sprite = if let Some(table) = cx.art.pickup_icon_uv {
+        let uv = table.get(turbo as usize).copied().flatten()?;
+        let mut icon = cx
+            .layout
+            .sprite(super::dialect_2048::PICKUP_ICON_2048)?
+            .clone();
+        icon.uv = uv.map(f32::from);
+        if let Some(frame) = cx.layout.sprite(super::dialect_2048::PICKUP_BG_FRAME_2048) {
+            icon.rect[0] = frame.rect[0] + (frame.rect[2] - icon.rect[2]) * 0.5;
+            icon.rect[1] = frame.rect[1] + (frame.rect[3] - icon.rect[3]) * 0.5;
+        }
+        icon
+    } else {
+        cx.layout.sprite(&pickup_icon_name(turbo))?.clone()
+    };
+    let placed = cx.sheet.get(&sprite.src)?;
+    let [u, v, mut uw, mut vh] = sprite.uv;
+    if uw == 0.0 && vh == 0.0 {
+        (uw, vh) = (placed.width as f32, placed.height as f32);
+    }
+    if uw <= 0.0 || vh <= 0.0 || u < 0.0 || v < 0.0 {
+        return None;
+    }
+    let (x0, y0) = (placed.x + u as u32, placed.y + v as u32);
+    let (x1, y1) = (x0 + uw as u32, y0 + vh as u32);
+    let (mut min_x, mut min_y, mut max_x, mut max_y) = (u32::MAX, u32::MAX, 0, 0);
+    for y in y0..y1.min(cx.sheet.height) {
+        for x in x0..x1.min(cx.sheet.width) {
+            let alpha = cx
+                .sheet
+                .rgba
+                .get(((y * cx.sheet.width + x) * 4 + 3) as usize)?;
+            if *alpha > 32 {
+                (min_x, min_y) = (min_x.min(x), min_y.min(y));
+                (max_x, max_y) = (max_x.max(x), max_y.max(y));
+            }
+        }
+    }
+    if min_x > max_x {
+        return None;
+    }
+    let (sx, sy) = (sprite.rect[2] / uw, sprite.rect[3] / vh);
+    let extent = [
+        (max_x - min_x + 1) as f32 * sx,
+        (max_y - min_y + 1) as f32 * sy,
+    ];
+    let centre = [
+        sprite.rect[0] + ((min_x + max_x + 1) as f32 * 0.5 - x0 as f32) * sx,
+        sprite.rect[1] + ((min_y + max_y + 1) as f32 * 0.5 - y0 as f32) * sy,
+    ];
+    Some((extent, centre))
+}
+
+/// A mod's own pickup icon: its art (the opaque box of the PNG, [`crate::sprite::Placed::quad_extent`]
+/// and [`crate::sprite::Placed::quad_centre`] where the loader measured it, else the whole
+/// image) scaled, aspect kept, to fill the box the title's own Turbo glyph fills and centred
+/// on it ([`reference_glyph`]), so a mod's icon is as big as a real one and sits where it
+/// sits; where the title's glyph cannot be read, the art is drawn at its own size on the
+/// pickup's backdrop frame. Either way it is shrunk to the frame if it would not fit it.
+/// Faded as the title's own icon is. **Chosen, not measured**: the art's margin never
+/// counts, so a PNG authored on the title's own texture cell and one cropped to its glyph
+/// draw alike. The frame is the layout's `PickupBackground` (2048: `PickupBgFrame`), else the
+/// `TurboIcon` sprite. A title that draws its icons as models (Pure) draws nothing for a
+/// mod's own PNG.
 pub(super) fn mod_icon_draw(cx: &Context<'_>, src: &str, look: Option<Look>) -> Option<Draw> {
     let placed = cx.sheet.get(src)?;
-    let slot = if cx.art.pickup_icon_uv.is_some() {
-        cx.layout
-            .sprite(super::dialect_2048::PICKUP_BG_FRAME_2048)?
+    let frame = if cx.art.pickup_icon_uv.is_some() {
+        cx.layout.sprite(super::dialect_2048::PICKUP_BG_FRAME_2048)
     } else {
-        cx.layout
-            .sprite(&pickup_icon_name(oag_tables::weapons::Weapon::Turbo))?
+        cx.layout.sprite(PICKUP_BACKGROUND)
     }
+    .or_else(|| {
+        cx.layout
+            .sprite(&pickup_icon_name(oag_tables::weapons::Weapon::Turbo))
+    })?
     .rect;
-    let fit = (slot[2] / placed.width as f32).min(slot[3] / placed.height as f32);
-    let (w, h) = (placed.width as f32 * fit, placed.height as f32 * fit);
+    let canvas = [placed.width as f32, placed.height as f32];
+    let art = placed.quad_extent.unwrap_or(canvas);
+    let offset = placed.quad_centre.unwrap_or([0.0, 0.0]);
+    let (aim, centre, fill) = match reference_glyph(cx) {
+        Some((extent, centre)) => (extent, centre, true),
+        None => (
+            [frame[2], frame[3]],
+            [frame[0] + frame[2] * 0.5, frame[1] + frame[3] * 0.5],
+            false,
+        ),
+    };
+    let to_aim = (aim[0] / art[0]).min(aim[1] / art[1]);
+    let to_frame = (frame[2] / art[0]).min(frame[3] / art[1]);
+    let fit = if fill { to_aim } else { to_aim.min(1.0) }.min(to_frame);
+    let (w, h) = (canvas[0] * fit, canvas[1] * fit);
     let fade = look.map_or(1.0, |look| look.icon);
     Some(Draw::Sprite {
         rect: [
-            slot[0] + (slot[2] - w) * 0.5,
-            slot[1] + (slot[3] - h) * 0.5,
+            centre[0] - offset[0] * fit - w * 0.5,
+            centre[1] - offset[1] * fit - h * 0.5,
             w,
             h,
         ],

@@ -94,6 +94,7 @@ fn module(id: &str, body: &str) -> race::extensions::Source {
         effects: Vec::new(),
         files: Arc::new(|_| Err("no files".into())),
         pickup: None,
+        pickup_titles: Vec::new(),
         pickup_odds: Vec::new(),
         channels: race::extensions::Declared::default(),
     }

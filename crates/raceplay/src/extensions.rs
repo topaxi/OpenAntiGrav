@@ -111,6 +111,8 @@ pub struct Source {
     /// The mod's `[pickup]`: the look of the pickup it hands out. A mod without one that
     /// sends `give-pickup` or `pickup-roll` is faulted for the race, naming the table.
     pub pickup: Option<oag_tables::pickup_look::PickupLook>,
+    /// The mod's `[pickup.titles.<title>]` looks, each over [`Self::pickup`].
+    pub pickup_titles: Vec<(String, oag_tables::pickup_look::PickupLook)>,
     /// The mod's `[[pickup.odds]]`: the weapon pads draw its pickup with these.
     pub pickup_odds: Vec<oag_tables::pickup_look::OddsRow>,
     /// The mod's `[channels]`.
@@ -126,6 +128,17 @@ pub type Strings = std::collections::BTreeMap<String, String>;
 /// Reads a mod's [`Strings`] for the game's language (`None`: English alone), on the
 /// load thread. A language the mod ships no file for gives English's.
 pub type StringsReader = Arc<dyn Fn(Option<&str>) -> Strings + Send + Sync>;
+
+impl Source {
+    /// The look of the mod's pickup on `title`: its row for the title, else `[pickup]`.
+    fn look_for(&self, title: &str) -> Option<oag_tables::pickup_look::PickupLook> {
+        self.pickup_titles
+            .iter()
+            .find(|(name, _)| name.eq_ignore_ascii_case(title))
+            .map(|(_, look)| look.clone())
+            .or_else(|| self.pickup.clone())
+    }
+}
 
 impl std::fmt::Debug for Source {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -347,7 +360,7 @@ pub fn prepare(
                     }
                     modules.push((source.mod_id.clone(), module));
                     strings.push((source.strings)(language));
-                    pickups.push(source.pickup.clone());
+                    pickups.push(source.look_for(title));
                     drives_ai.push(source.drives_ai_pickup);
                     publishes.push(channel::publishes(&source.channels));
                 }
@@ -396,15 +409,20 @@ pub fn mod_icons(
             for (name, read) in &source.icons {
                 let label = format!("mod {}: icon {name}", source.mod_id);
                 match read().and_then(|bytes| decode_png(&bytes)) {
-                    Ok((width, height, rgba)) => out.push(oag_hud::sprite::DecodedImage {
-                        src: mod_icon_src(&source.mod_id, name),
-                        width,
-                        height,
-                        rgba,
-                        quad_extent: None,
-                        quad_centre: None,
-                        blend: None,
-                    }),
+                    Ok((width, height, rgba)) => {
+                        // Where the art is on the canvas, for the pickup's slot
+                        // (`oag_hud::pickup::mod_icon_draw`); `hud-icon` ignores it.
+                        let art = art_box(width, height, &rgba);
+                        out.push(oag_hud::sprite::DecodedImage {
+                            src: mod_icon_src(&source.mod_id, name),
+                            width,
+                            height,
+                            rgba,
+                            quad_extent: art.map(|(extent, _)| extent),
+                            quad_centre: art.map(|(_, centre)| centre),
+                            blend: None,
+                        });
+                    }
                     Err(e) => push(report, format!("{label} left out: {e}; draws nothing")),
                 }
             }
@@ -427,6 +445,30 @@ pub(crate) fn for_race<'a>(
             s.titles.is_empty() || s.titles.iter().any(|t| t.eq_ignore_ascii_case(title))
         })
         .filter(move |s| s.scope.runs_on(foreign_track))
+}
+
+/// The box of the pixels a PNG draws (alpha above 16): its size and where its middle is
+/// from the canvas's, in pixels, y down. `None` for an image with nothing drawn.
+#[cfg(all(feature = "view", feature = "extensions"))]
+pub(crate) fn art_box(width: u32, height: u32, rgba: &[u8]) -> Option<([f32; 2], [f32; 2])> {
+    let (mut min_x, mut min_y, mut max_x, mut max_y) = (u32::MAX, u32::MAX, 0, 0);
+    for (i, pixel) in rgba.as_chunks::<4>().0.iter().enumerate() {
+        if pixel[3] <= 16 {
+            continue;
+        }
+        let (x, y) = (i as u32 % width, i as u32 / width);
+        (min_x, min_y) = (min_x.min(x), min_y.min(y));
+        (max_x, max_y) = (max_x.max(x), max_y.max(y));
+    }
+    if min_x > max_x || min_y > max_y || width == 0 || height == 0 {
+        return None;
+    }
+    let extent = [(max_x - min_x + 1) as f32, (max_y - min_y + 1) as f32];
+    let centre = [
+        (min_x + max_x + 1) as f32 * 0.5 - width as f32 * 0.5,
+        (min_y + max_y + 1) as f32 * 0.5 - height as f32 * 0.5,
+    ];
+    Some((extent, centre))
 }
 
 /// A PNG as RGBA8: `(width, height, pixels)`.

@@ -54,6 +54,7 @@ pub(super) fn scripted(id: &str, guard: &str, commands: &[Command], publishes: &
         effects: Vec::new(),
         files: Arc::new(|_| Err("no files".into())),
         pickup: Some(crate::extension_pickup::a_look()),
+        pickup_titles: Vec::new(),
         pickup_odds: Vec::new(),
         channels: Declared {
             publishes: publishes.iter().map(|s| (*s).to_string()).collect(),

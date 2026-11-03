@@ -504,3 +504,27 @@ fn a_manifest_is_on_by_default_and_default_enabled_false_ships_it_off() {
     assert!(Mod::open(&on).unwrap().manifest.default_enabled);
     assert!(!Mod::open(&off).unwrap().manifest.default_enabled);
 }
+
+#[test]
+fn a_pickup_title_row_overrides_the_icon_and_colour_it_names_and_inherits_the_rest() {
+    let text = format!(
+        "{MANIFEST_TEXT}\n[icons]\nmain = \"icon.png\"\nhd = \"icon.png\"\n\n[pickup]\nicon = {{ mod = \"main\" }}\ncolour = {{ rgba = \"11223344\" }}\n\n[pickup.titles.wipeout-hd]\nicon = {{ mod = \"hd\" }}\n\n[pickup.titles.wipeout-pure]\ncolour = {{ title = \"shield\" }}\n"
+    );
+    let manifest = Manifest::parse(&text, &|path| path == "icon.png").unwrap();
+    let icon = |title| manifest.pickup_for(title).map(|look| look.icon.clone());
+    use oag_tables::pickup_look::{Colour, Icon};
+    assert_eq!(icon("wipeout-pulse"), Some(Icon::Mod("main".into())));
+    assert_eq!(icon("wipeout-hd"), Some(Icon::Mod("hd".into())));
+    assert_eq!(
+        manifest.pickup_for("wipeout-hd").unwrap().colour,
+        Colour::Rgba([0x11, 0x22, 0x33, 0x44]),
+        "the colour it leaves out is the base's"
+    );
+    assert_eq!(icon("wipeout-pure"), Some(Icon::Mod("main".into())));
+    assert!(matches!(
+        manifest.pickup_for("wipeout-pure").unwrap().colour,
+        Colour::Title(_)
+    ));
+    let missing = text.replace("icon = { mod = \"hd\" }", "icon = { mod = \"nope\" }");
+    assert!(Manifest::parse(&missing, &|path| path == "icon.png").is_err());
+}

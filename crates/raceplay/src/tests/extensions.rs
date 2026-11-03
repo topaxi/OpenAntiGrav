@@ -98,6 +98,7 @@ pub(super) mod on {
             effects: Vec::new(),
             files: Arc::new(|_| Err("no files".into())),
             pickup: Some(crate::extension_pickup::a_look()),
+            pickup_titles: Vec::new(),
             pickup_odds: Vec::new(),
             channels: crate::extensions::Declared::default(),
         }
@@ -944,6 +945,10 @@ colour = "#ff2010"
     }
 
     pub(in crate::tests) fn prepared(sources: &[Source]) -> Prepared {
+        prepared_for("wipeout-pulse", sources)
+    }
+
+    pub(in crate::tests) fn prepared_for(title: &str, sources: &[Source]) -> Prepared {
         let mut report = Vec::new();
         let props = crate::extensions::TrackProps::default();
         let track = crate::extensions::Track {
@@ -954,7 +959,7 @@ colour = "#ff2010"
             paths: &[],
             routes: &[],
         };
-        let prepared = prepare(sources, "wipeout-pulse", None, track, None, &mut report);
+        let prepared = prepare(sources, title, None, track, None, &mut report);
         assert!(
             report.iter().all(|line| !line.contains("left out")),
             "{report:?}"
@@ -1078,6 +1083,7 @@ mod triggers {
             effects: Vec::new(),
             files: Arc::new(|_| Err("no files".into())),
             pickup: Some(crate::extension_pickup::a_look()),
+            pickup_titles: Vec::new(),
             pickup_odds: Vec::new(),
             channels: crate::extensions::Declared::default(),
         }

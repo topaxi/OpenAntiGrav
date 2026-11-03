@@ -139,3 +139,56 @@ fn a_fire_effect_ahead_queues_the_mods_effect_on_the_road_in_front_of_its_craft(
         "20 units ahead of {from:?}: {at:?}"
     );
 }
+
+#[test]
+fn a_mods_pickup_look_is_its_row_for_the_title_and_the_base_look_elsewhere() {
+    use super::extensions::on::{module, prepared_for};
+    use oag_tables::pickup_look::{Colour, Icon, OddsRow, PickupLook};
+    use oag_tables::weapons::{PickupOdds, Weapon};
+    let mut source = module("test.looks", "i32.const 0");
+    source.pickup = Some(PickupLook {
+        icon: Icon::Title(Weapon::Turbo),
+        colour: Colour::Rgba([1, 2, 3, 4]),
+    });
+    source.pickup_titles = vec![(
+        "wipeout-hd".to_string(),
+        PickupLook {
+            icon: Icon::Mod("hd".to_string()),
+            colour: Colour::Rgba([1, 2, 3, 4]),
+        },
+    )];
+    // The odds make this module own the mod pickup from tick 0.
+    source.pickup_odds = vec![OddsRow {
+        title: None,
+        class: None,
+        odds: PickupOdds::default(),
+    }];
+    let look = |title| {
+        crate::extensions::Extensions::new(prepared_for(title, &[source.clone()]))
+            .pickup_look(0)
+            .map(|look| look.icon)
+    };
+    assert_eq!(
+        look("wipeout-hd"),
+        Some(Icon::Mod(crate::extensions::mod_icon_src(
+            "test.looks",
+            "hd"
+        )))
+    );
+    assert_eq!(look("wipeout-pulse"), Some(Icon::Title(Weapon::Turbo)));
+}
+
+#[test]
+fn an_icons_art_box_is_the_drawn_pixels_and_where_they_sit_on_the_canvas() {
+    // 8 by 6, a 2 by 3 block at x 4..6, y 1..4.
+    let mut rgba = vec![0_u8; 8 * 6 * 4];
+    for y in 1..4 {
+        for x in 4..6 {
+            rgba[(y * 8 + x) * 4 + 3] = 255;
+        }
+    }
+    let (extent, centre) = crate::extensions::art_box(8, 6, &rgba).unwrap();
+    assert_eq!(extent, [2.0, 3.0]);
+    assert_eq!(centre, [5.0 - 4.0, 2.5 - 3.0]);
+    assert_eq!(crate::extensions::art_box(8, 6, &[0; 8 * 6 * 4]), None);
+}

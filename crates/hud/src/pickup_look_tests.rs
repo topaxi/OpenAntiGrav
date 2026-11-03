@@ -154,11 +154,11 @@ fn a_mod_icon_draws_the_backdrop_and_no_title_icon() {
         panic!("the mod's icon draws as a sprite");
     };
     assert_eq!(rect[2] / rect[3], 2.0, "its own aspect");
-    assert!(rect[2] <= 48.0 && rect[3] <= 48.0, "inside the icon slot");
+    assert_eq!((rect[2], rect[3]), (32.0, 16.0), "at its own size");
     assert_eq!(
         (rect[0] + rect[2] * 0.5, rect[1] + rect[3] * 0.5),
         (240.0, 35.0),
-        "centred where the title's icon sits"
+        "centred on the backdrop frame"
     );
     assert!(mod_icon_draw(&cx, "mod:test/missing", None).is_none());
 }
@@ -269,4 +269,110 @@ fn hds_runtime_backdrop_takes_a_mod_pickups_look_through_the_same_fade() {
         super::runtime::colour(&cx, &by_mod, idle.backdrop),
         Some(argb_to_rgba(RED_WORD))
     );
+}
+
+/// The icon's art is what is drawn at native size and centred on the frame, not its canvas:
+/// the transparent margin of an icon authored on the title's own texture cell does not shrink
+/// the glyph, and an off-centre glyph is moved to the middle of the frame.
+#[test]
+fn a_padded_icon_draws_its_art_at_native_size_on_the_frame_centre_and_a_big_one_shrinks() {
+    let layout = Layout::from_xml(LAYOUT);
+    let strings = oag_ui::language::StringTable::default();
+    let placed = |width, height, art: [f32; 2], centre: [f32; 2]| {
+        crate::sprite::Sheet::placed_at(&[(
+            "mod:test/glyph",
+            crate::sprite::Placed {
+                x: 0,
+                y: 0,
+                width,
+                height,
+                quad_extent: Some(art),
+                quad_centre: Some(centre),
+                blend: None,
+            },
+        )])
+    };
+    let draw = |sheet: &crate::sprite::Sheet| {
+        let cx = Context {
+            default_border: layout.default_border(),
+            layout: &layout,
+            strings: &strings,
+            sheet,
+            art: oag_pulse::hud::ART,
+            hud_line_height: 25.0,
+            small_line_height: 10.0,
+            default_line_height: 10.0,
+            skin_line_height: 10.0,
+        };
+        let Some(Draw::Sprite { rect, .. }) = mod_icon_draw(&cx, "mod:test/glyph", None) else {
+            panic!("draws");
+        };
+        rect
+    };
+    // 66 by 60 canvas, a 22 by 27 glyph 3 pixels left of its middle and 2 above it.
+    let rect = draw(&placed(66, 60, [22.0, 27.0], [-3.0, -2.0]));
+    assert_eq!(
+        (rect[2], rect[3]),
+        (66.0, 60.0),
+        "the canvas at native size"
+    );
+    let art_centre = (rect[0] + 33.0 - 3.0, rect[1] + 30.0 - 2.0);
+    assert_eq!(
+        art_centre,
+        (240.0, 35.0),
+        "the glyph, not the canvas, is centred"
+    );
+    // A 132 by 120 glyph is wider than the 66 by 60 frame: halved, aspect kept.
+    let rect = draw(&placed(132, 120, [132.0, 120.0], [0.0, 0.0]));
+    assert_eq!((rect[2], rect[3]), (66.0, 60.0));
+}
+
+/// A mod's icon takes the box the title's own Turbo glyph fills, read off the sheet's pixels,
+/// and sits where that glyph sits, however the PNG's canvas is padded.
+#[test]
+fn a_mod_icon_fills_the_box_the_titles_own_turbo_glyph_fills() {
+    let layout = Layout::from_xml(LAYOUT);
+    let strings = oag_ui::language::StringTable::default();
+    // The Turbo region is (70, 111) 48 by 48 of the HUD texture; its glyph is 20 by 27 texels,
+    // opaque, 14 across and 5 down in it.
+    let (width, height) = (128_u32, 160_u32);
+    let mut hud = vec![0_u8; (width * height * 4) as usize];
+    for y in 111 + 5..111 + 5 + 27 {
+        for x in 70 + 14..70 + 14 + 20 {
+            hud[((y * width + x) * 4 + 3) as usize] = 255;
+        }
+    }
+    let image = |src: &str, width, height, rgba| crate::sprite::DecodedImage {
+        src: src.into(),
+        width,
+        height,
+        rgba,
+        quad_extent: (src == "mod:test/glyph").then_some([10.0, 10.0]),
+        quad_centre: (src == "mod:test/glyph").then_some([0.0, 0.0]),
+        blend: None,
+    };
+    let sheet = crate::sprite::Sheet::build_with(
+        &[],
+        vec![
+            image("Data\\HUD\\Textures\\PulseHUD.mip", width, height, hud),
+            image("mod:test/glyph", 16, 16, vec![255; 16 * 16 * 4]),
+        ],
+        &mut Vec::new(),
+    );
+    let cx = Context {
+        default_border: layout.default_border(),
+        layout: &layout,
+        strings: &strings,
+        sheet: &sheet,
+        art: oag_pulse::hud::ART,
+        hud_line_height: 25.0,
+        small_line_height: 10.0,
+        default_line_height: 10.0,
+        skin_line_height: 10.0,
+    };
+    let Some(Draw::Sprite { rect, .. }) = mod_icon_draw(&cx, "mod:test/glyph", None) else {
+        panic!("draws");
+    };
+    // 10 by 10 art into 20 by 27: doubled, aspect kept; centred on the glyph (240, 29.5).
+    assert_eq!(rect, [224.0, 13.5, 32.0, 32.0]);
 }
