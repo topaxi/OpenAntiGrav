@@ -653,8 +653,8 @@ impl Extensions {
                     prepared.drives_ai,
                     prepared.publishes,
                     prepared.odds,
-                    prepared.title,
-                ),
+                )
+                .with_title(prepared.title),
                 beacons: prepared.beacons,
                 fired: Vec::new(),
             }

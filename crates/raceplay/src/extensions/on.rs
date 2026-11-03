@@ -237,6 +237,12 @@ impl On {
         })
     }
 
+    /// The race's title key, for every observation.
+    pub(super) fn with_title(mut self, title: u32) -> Self {
+        self.title = title;
+        self
+    }
+
     pub(super) fn new(
         modules: Vec<(String, Module)>,
         region: super::track::Region,
@@ -245,10 +251,9 @@ impl On {
         drives_ai: Vec<bool>,
         publishes: Vec<Vec<(u32, String)>>,
         odds: Option<(usize, Vec<oag_tables::pickup_look::OddsRow>, String)>,
-        title: u32,
     ) -> Self {
         Self {
-            title,
+            title: 0,
             // The module whose mod declares pad odds owns the mod pickup from the start.
             owner: odds.as_ref().map_or(0, |(module, _, _)| *module as u8 + 1),
             odds,
