@@ -1,5 +1,5 @@
 //! The official mod Slipstream (`assets/mods/official/slipstream`) as the engine loads it:
-//! its odds, its look per title (and Pure left out), its committed module in the fuel
+//! its odds, its look per title, its committed module in the fuel
 //! budget, and its portal's colour per title through the observation's title key.
 //!
 //! The official mods are a submodule; a checkout without it skips with a line saying so.
@@ -15,8 +15,9 @@ const SLIPSTREAM: &str = concat!(
     "/../../assets/mods/official/slipstream"
 );
 
-const TITLES: [(&str, &str); 4] = [
+const TITLES: [(&str, &str); 5] = [
     ("wipeout-pulse", "pulse"),
+    ("wipeout-pure", "pure"),
     ("wipeout-hd", "hd"),
     ("wipeout-omega-collection", "omega"),
     ("wipeout-2048", "2048"),
@@ -43,14 +44,14 @@ fn source(module_: &oag_mod::Mod) -> crate::extensions::Source {
 }
 
 #[test]
-fn it_ships_off_and_each_title_has_its_own_icon_and_pure_is_left_out() {
+fn it_ships_off_and_each_title_has_its_own_icon() {
     let Some(slipstream) = open() else { return };
     let manifest = &slipstream.manifest;
     assert!(
         !manifest.default_enabled,
         "off until the player turns it on"
     );
-    assert!(!manifest.titles.iter().any(|t| t == "wipeout-pure"));
+    assert!(manifest.titles.iter().any(|t| t == "wipeout-pure"));
     let source = source(&slipstream);
     for (title, icon) in TITLES {
         let prepared = prepared_for(title, std::slice::from_ref(&source));
@@ -65,20 +66,6 @@ fn it_ships_off_and_each_title_has_its_own_icon_and_pure_is_left_out() {
         let png = slipstream.read(&manifest.icons[icon]).unwrap().unwrap();
         assert!(png.starts_with(b"\x89PNG"), "{title}: a PNG");
     }
-    // Pure: the module is left out of the race altogether.
-    let mut report = Vec::new();
-    let props = crate::extensions::TrackProps::default();
-    let track = crate::extensions::Track {
-        name: "t",
-        props: &props,
-        speedup_pads: &[],
-        weapon_pads: &[],
-        paths: &[],
-        routes: &[],
-    };
-    let left_out =
-        crate::extensions::prepare(&[source], "wipeout-pure", None, track, None, &mut report);
-    assert!(!crate::extensions::Extensions::new(left_out).any());
 }
 
 #[test]
@@ -227,7 +214,13 @@ fn its_portal_is_the_titles_own_and_a_fire_fits_the_fuel_budget() {
     let effects: Vec<&String> = slipstream.manifest.effects.keys().collect();
     assert_eq!(
         effects,
-        ["portal_2048", "portal_hd", "portal_omega", "portal_pulse"],
+        [
+            "portal_2048",
+            "portal_hd",
+            "portal_omega",
+            "portal_pulse",
+            "portal_pure"
+        ],
         "the guest's indices are this table's name order"
     );
     for (title, index) in [
@@ -235,6 +228,7 @@ fn its_portal_is_the_titles_own_and_a_fire_fits_the_fuel_budget() {
         ("wipeout-hd", 1),
         ("wipeout-omega-collection", 2),
         ("wipeout-pulse", 3),
+        ("wipeout-pure", 4),
     ] {
         let (commands, fuel) = fire_commands(&module, oag_ext_abi::channel_key(title));
         let portals: Vec<u16> = commands

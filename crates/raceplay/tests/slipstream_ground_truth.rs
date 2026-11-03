@@ -358,12 +358,13 @@ fn the_ai_fires_it_and_only_one_portal_is_open_at_a_time() {
 }
 
 #[test]
-#[ignore = "needs the Pulse, HD and 2048 images (and Omega's) and the official mods"]
+#[ignore = "needs the Pulse, Pure, HD and 2048 images (and Omega's) and the official mods"]
 fn its_share_of_the_pad_draws_is_a_fraction_of_a_turbo_on_every_titles_real_table() {
     let Some(source) = slipstream() else { return };
     let row = source.pickup_odds[0].odds;
     for (image, title) in [
         ("data/images/pulse-psp-eu.chd", "Pulse"),
+        ("data/images/pure-psp-eu.chd", "Pure"),
         ("data/images/hdfury-ps3-eu-dec.iso", "HD"),
         ("data/extracted/vita/PCSF00007", "2048"),
         ("data/images/omega-ps4-eu.pkg", "Omega"),

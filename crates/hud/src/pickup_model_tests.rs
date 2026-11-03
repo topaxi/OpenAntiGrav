@@ -232,3 +232,61 @@ fn a_title_with_no_icon_model_table_draws_nothing_through_this_path() {
         pickup_model_draws(&cx, Weapon::Turbo, &super::ext_draws::Outputs::default()).is_empty()
     );
 }
+
+/// A mod's own PNG on Pure draws over the backdrop grid, centred on the grid's quad at its own
+/// size, not nothing: the grid is the frame and the icon is the glyph alone.
+#[test]
+fn a_mod_icon_on_pure_draws_centred_on_the_backdrop_grid() {
+    use crate::sprite::Placed;
+    use oag_tables::pickup_look::{Colour, Icon, PickupLook};
+    use oag_tables::weapons::{ModKind, Weapon};
+    let layout = Layout::from_xml(PURE_PICKUP_ICONS);
+    let strings = strings();
+    let mut sheet = crate::sprite::Sheet::placed_at(&[
+        (
+            r"Data\HUD\grid.vex",
+            Placed {
+                x: 0,
+                y: 0,
+                width: 64,
+                height: 64,
+                quad_extent: Some([70.0, 40.0]),
+                quad_centre: None,
+                blend: None,
+            },
+        ),
+        (
+            "mod:test/glyph",
+            Placed {
+                x: 64,
+                y: 0,
+                width: 64,
+                height: 36,
+                quad_extent: None,
+                quad_centre: None,
+                blend: None,
+            },
+        ),
+    ]);
+    sheet.width = 128;
+    let cx = pure_pickup_context(&layout, &strings, &sheet);
+    let ext = super::ext_draws::Outputs {
+        pickup_look: Some(PickupLook {
+            icon: Icon::Mod("mod:test/glyph".into()),
+            colour: Colour::Rgba([0, 0, 0, 0]),
+        }),
+        ..super::ext_draws::Outputs::default()
+    };
+    let held = Weapon::Extension(ModKind::FIRST);
+    // The backdrop is drawn, and no title icon with it.
+    assert_eq!(pickup_model_draws(&cx, held, &ext).len(), 1);
+    let Some(Draw::Sprite { rect, .. }) = mod_icon_draw(&cx, "mod:test/glyph", None) else {
+        panic!("a mod icon draws on Pure");
+    };
+    assert_eq!((rect[2], rect[3]), (64.0, 36.0), "at its own size");
+    assert_eq!(
+        (rect[0] + rect[2] * 0.5, rect[1] + rect[3] * 0.5),
+        (240.0, 272.0 - 250.0),
+        "centred on the grid"
+    );
+}
