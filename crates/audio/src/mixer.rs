@@ -26,7 +26,7 @@
 
 use std::sync::Arc;
 
-use crate::binaural::{Binaural, VoiceState};
+use crate::binaural::{Binaural, LATENCY, VoiceState};
 use crate::spatial::SpatialMode;
 
 /// Output channel count. Everything is mixed to interleaved stereo.
@@ -315,6 +315,18 @@ struct Voice {
     /// The voice's place in the shared convolver, while it is a headphone
     /// voice.
     hrtf: Option<Box<VoiceState>>,
+    /// Set by the per-render ranking: this voice is among the loudest placed
+    /// voices and may run the HRTF. See [`Mixer::set_hrtf_voice_cap`].
+    hrtf_wanted: bool,
+    /// Share of the output taken from the HRTF path, the rest from the rear
+    /// cue. 1.0 for a voice that never sounded any other way.
+    hrtf_weight: f32,
+    /// Frames before a voice that was heard on the rear cue starts to fade
+    /// into the HRTF: the convolver's output is silent for [`LATENCY`] frames.
+    hrtf_warmup: u32,
+    /// The voice has sounded through the rear cue under `headphones`, so its
+    /// HRTF output must be faded in rather than started at full level.
+    heard_rear: bool,
     looping: bool,
     generation: u32,
     /// Output frames left of the fade a stopped voice goes out on, or `None`
@@ -337,6 +349,10 @@ impl Default for Voice {
             front: 1.0,
             rear_state: [0.0; CHANNELS],
             hrtf: None,
+            hrtf_wanted: false,
+            hrtf_weight: 1.0,
+            hrtf_warmup: 0,
+            heard_rear: false,
             looping: false,
             generation: 0,
             release: None,
@@ -419,6 +435,13 @@ impl Play {
     }
 }
 
+/// Placed voices that run the HRTF at once by default; the rest sound as the
+/// rear cue. Chosen, not measured: a Deck voice costs ~41 us per 512 frames, so
+/// 32 voices are ~8.6% of a core.
+pub const HRTF_VOICES: usize = 32;
+/// Frames over which a voice hands over between the HRTF and the rear cue.
+const HRTF_CROSSFADE_FRAMES: u32 = 256;
+
 /// The voice pool and the bus gains, and the loop that renders them.
 #[derive(Debug, Clone)]
 pub struct Mixer {
@@ -430,6 +453,11 @@ pub struct Mixer {
     /// The shared HRTF convolver, once built. See [`Self::set_binaural`].
     binaural: Option<Binaural>,
     binaural_requested: bool,
+    /// Most placed voices that run the HRTF at once.
+    hrtf_cap: usize,
+    /// Scratch for the per-render ranking, kept so the audio thread never
+    /// allocates.
+    hrtf_rank: Vec<(f32, bool, u16)>,
     generation: u32,
     /// Voices refused because every slot was busy, for the perf overlay and
     /// for tests. Silent starvation is the failure mode worth being able to
@@ -462,6 +490,8 @@ impl Mixer {
             spatial: SpatialMode::Original,
             binaural: None,
             binaural_requested: false,
+            hrtf_cap: HRTF_VOICES,
+            hrtf_rank: Vec::with_capacity(MAX_VOICES),
             generation: 0,
             starved: 0,
             clipped: 0,
@@ -574,6 +604,10 @@ impl Mixer {
             front: play.front,
             rear_state: [0.0; CHANNELS],
             hrtf: None,
+            hrtf_wanted: false,
+            hrtf_weight: 1.0,
+            hrtf_warmup: 0,
+            heard_rear: false,
             looping: play.looping,
             generation,
             release: None,
@@ -694,6 +728,50 @@ impl Mixer {
     #[must_use]
     pub fn has_binaural(&self) -> bool {
         self.binaural.is_some()
+    }
+
+    /// Sets how many placed voices run the HRTF at once under
+    /// [`SpatialMode::Headphones`]; the rest sound as the rear cue.
+    pub fn set_hrtf_voice_cap(&mut self, cap: usize) {
+        self.hrtf_cap = cap;
+    }
+
+    /// Voices currently sounding through the HRTF (fully or fading).
+    #[must_use]
+    pub fn hrtf_voices(&self) -> usize {
+        self.voices
+            .iter()
+            .filter(|v| v.hrtf.is_some() && v.hrtf_weight > 0.0)
+            .count()
+    }
+
+    /// Marks the `hrtf_cap` most audible placed voices as wanting the HRTF.
+    /// Audibility is the voice's own gain through its bus; ties keep a voice
+    /// that already holds a convolver, then take the lower slot, so the choice
+    /// is stable from render to render.
+    fn rank_hrtf_voices(&mut self) {
+        let mut rank = std::mem::take(&mut self.hrtf_rank);
+        rank.clear();
+        for (slot, voice) in self.voices.iter_mut().enumerate() {
+            voice.hrtf_wanted = false;
+            if voice.sound.is_none() || voice.pan.is_none() {
+                continue;
+            }
+            let Some(bus) = voice.bus else { continue };
+            let level = voice.gain * self.bus_gain[bus.index()];
+            rank.push((level, voice.hrtf.is_some(), slot as u16));
+        }
+        if rank.len() > self.hrtf_cap {
+            rank.sort_unstable_by(|a, b| {
+                b.0.total_cmp(&a.0)
+                    .then(b.1.cmp(&a.1))
+                    .then(a.2.cmp(&b.2))
+            });
+        }
+        for &(_, _, slot) in rank.iter().take(self.hrtf_cap) {
+            self.voices[usize::from(slot)].hrtf_wanted = true;
+        }
+        self.hrtf_rank = rank;
     }
 
     /// The current [`SpatialMode`].
@@ -830,6 +908,9 @@ impl Mixer {
         let bus_gain = self.bus_gain;
         let rate = f64::from(self.sample_rate);
         let spatial = self.spatial;
+        if spatial == SpatialMode::Headphones && self.binaural.is_some() {
+            self.rank_hrtf_voices();
+        }
         let binaural = &mut self.binaural;
 
         for voice in &mut self.voices {
@@ -847,21 +928,36 @@ impl Mixer {
             let channel_gain = voice.pan.map_or([1.0; CHANNELS], crate::spatial::pan_gains);
             // A headphone voice goes through the convolver; asked for before the
             // sphere has loaded, it takes the rear cue meanwhile.
-            let use_hrtf =
+            let hrtf_ready =
                 spatial == SpatialMode::Headphones && voice.pan.is_some() && binaural.is_some();
-            if use_hrtf {
-                voice
-                    .hrtf
-                    .get_or_insert_with(|| Box::new(VoiceState::new()));
-            } else {
-                voice.hrtf = None;
-            }
-            let (rear_coeff, rear_gain) =
-                if spatial != SpatialMode::Original && !use_hrtf && voice.pan.is_some() {
-                    rear_cue(voice.front, self.sample_rate)
+            let want_hrtf = hrtf_ready && voice.hrtf_wanted;
+            if want_hrtf && voice.hrtf.is_none() {
+                voice.hrtf = Some(Box::new(VoiceState::new()));
+                if voice.heard_rear {
+                    voice.hrtf_weight = 0.0;
+                    voice.hrtf_warmup = LATENCY as u32;
                 } else {
-                    (1.0, 1.0)
-                };
+                    voice.hrtf_weight = 1.0;
+                    voice.hrtf_warmup = 0;
+                }
+            }
+            if !hrtf_ready {
+                voice.hrtf = None;
+                voice.hrtf_weight = 1.0;
+            }
+            let hrtf_step = 1.0 / HRTF_CROSSFADE_FRAMES as f32;
+            let mut hrtf_weight = voice.hrtf_weight;
+            let mut hrtf_warmup = voice.hrtf_warmup;
+            let mut heard_rear = voice.heard_rear;
+            // The rear cue runs whenever the voice may sound through it at all.
+            let rear_active = spatial != SpatialMode::Original
+                && voice.pan.is_some()
+                && (voice.hrtf.is_none() || hrtf_weight < 1.0 || !want_hrtf);
+            let (rear_coeff, rear_gain) = if rear_active {
+                rear_cue(voice.front, self.sample_rate)
+            } else {
+                (1.0, 1.0)
+            };
             let (side, front) = (voice.pan.unwrap_or(0.0), voice.front);
             let step = f64::from(sound.sample_rate()) / rate * f64::from(voice.pitch);
             let frames = sound.frames();
@@ -939,25 +1035,50 @@ impl Mixer {
                             1.0
                         }
                     };
+                    let mut raw = [0.0; CHANNELS];
                     let mut heard = [0.0; CHANNELS];
-                    for (c, h) in heard.iter_mut().enumerate() {
-                        let mut x = a[c] + (b[c] - a[c]) * frac;
-                        if rear_coeff < 1.0 {
+                    for c in 0..CHANNELS {
+                        let x = a[c] + (b[c] - a[c]) * frac;
+                        raw[c] = x;
+                        heard[c] = if rear_coeff < 1.0 {
                             let state = &mut voice.rear_state[c];
                             *state += rear_coeff * (x - *state);
-                            x = *state;
+                            *state
                         } else {
                             voice.rear_state[c] = x;
-                        }
-                        *h = x;
+                            x
+                        };
                     }
                     if let (Some(state), Some(bin)) = (voice.hrtf.as_deref_mut(), binaural.as_mut())
                     {
-                        let mono = 0.5 * (heard[0] + heard[1]) * gain * fade * closing_fade;
+                        if hrtf_warmup > 0 {
+                            hrtf_warmup -= 1;
+                        } else if want_hrtf {
+                            hrtf_weight = (hrtf_weight + hrtf_step).min(1.0);
+                        } else {
+                            hrtf_weight = (hrtf_weight - hrtf_step).max(0.0);
+                        }
+                        let mono = 0.5 * (raw[0] + raw[1]) * gain * fade * closing_fade;
                         let (l, r) = state.push(bin, mono, side, front);
-                        chunk[0] += l;
-                        chunk[1] += r;
+                        chunk[0] += l * hrtf_weight;
+                        chunk[1] += r * hrtf_weight;
+                        let rear_weight = 1.0 - hrtf_weight;
+                        if rear_weight > 0.0 {
+                            heard_rear = true;
+                            for (c, sample) in chunk.iter_mut().enumerate() {
+                                *sample += heard[c]
+                                    * rear_gain
+                                    * gain
+                                    * channel_gain[c]
+                                    * fade
+                                    * closing_fade
+                                    * rear_weight;
+                            }
+                        }
                     } else {
+                        if spatial == SpatialMode::Headphones && voice.pan.is_some() {
+                            heard_rear = true;
+                        }
                         for (c, sample) in chunk.iter_mut().enumerate() {
                             *sample +=
                                 heard[c] * rear_gain * gain * channel_gain[c] * fade * closing_fade;
@@ -974,11 +1095,18 @@ impl Mixer {
                         finished = true;
                         break;
                     };
-                    chunk[0] += l;
-                    chunk[1] += r;
+                    chunk[0] += l * hrtf_weight;
+                    chunk[1] += r * hrtf_weight;
                 }
             }
 
+            if !finished && voice.hrtf.is_some() && hrtf_weight <= 0.0 && !want_hrtf {
+                voice.hrtf = None;
+                hrtf_weight = 1.0;
+            }
+            voice.hrtf_weight = hrtf_weight;
+            voice.hrtf_warmup = hrtf_warmup;
+            voice.heard_rear = heard_rear;
             if finished {
                 *voice = Voice::default();
             } else {

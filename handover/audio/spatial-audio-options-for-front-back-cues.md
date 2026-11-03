@@ -254,8 +254,8 @@ Recommended shape, for the maintainer to accept or change:
 6. **Deck cost is measured** (`docs/ghidra/functions/psp-pulse-usa/positional-audio.md`,
    "Cost on a Steam Deck"): a headphone voice is about 41 us per 512 frames (0.38 %
    of a core), 32 voices 8.6 %, a real Pulse race 1.11 % (`original`) against
-   2.44 % (`headphones`), no dropped or late buffer. Open: cap `headphones` at
-   32 voices for HD's 128-voice pool (about 49 % of the budget otherwise); an
+   2.44 % (`headphones`), no dropped or late buffer. Done: `headphones` is capped at
+   32 HRTF voices (the rest take `rear_cue`, crossfaded; HD-size mix 14.6 % -> 6.9 % of a core on the desktop, Deck confirmation not run). Open: an
    ended one-shot renders a 512-frame drain tail, probably why short cues cost
    more per voice (not profiled); the S24 is still an estimate; the count of live placed voices in a
    real race is unlogged (the Deck race above implies about 40). Measuring

@@ -251,3 +251,93 @@ fn spatial_sweep() {
         );
     }
 }
+
+fn placed_loop(mixer: &mut Mixer, sound: &Arc<Sound>, gain: f32, pan: f32) {
+    mixer
+        .play(Play {
+            pan: Some(pan),
+            front: 0.6,
+            gain,
+            ..Play::looping(sound.clone(), Bus::Sfx)
+        })
+        .expect("a free voice");
+}
+
+#[test]
+fn only_the_cap_loudest_placed_voices_run_the_hrtf() {
+    let sound = noise(RATE as usize);
+    for (cap, placed) in [(8, 20), (8, 8), (8, 3), (32, 40)] {
+        let mut mixer = headphone_mixer();
+        mixer.grow_pool(64);
+        mixer.set_hrtf_voice_cap(cap);
+        for i in 0..placed {
+            placed_loop(&mut mixer, &sound, 0.2 + 0.01 * i as f32, 0.3);
+        }
+        let mut out = vec![0.0; 512 * 2];
+        mixer.render(&mut out);
+        mixer.render(&mut out);
+        assert_eq!(mixer.hrtf_voices(), cap.min(placed), "cap {cap}, placed {placed}");
+    }
+}
+
+#[test]
+fn the_loudest_voices_keep_the_hrtf_when_a_louder_one_arrives() {
+    let sound = noise(RATE as usize);
+    let mut mixer = headphone_mixer();
+    mixer.set_hrtf_voice_cap(2);
+    placed_loop(&mut mixer, &sound, 0.5, 0.3);
+    placed_loop(&mut mixer, &sound, 0.4, -0.3);
+    placed_loop(&mut mixer, &sound, 0.1, 0.0);
+    let mut out = vec![0.0; 512 * 2];
+    mixer.render(&mut out);
+    assert_eq!(mixer.hrtf_voices(), 2);
+    placed_loop(&mut mixer, &sound, 0.9, 0.0);
+    for _ in 0..4 {
+        mixer.render(&mut out);
+    }
+    assert_eq!(mixer.hrtf_voices(), 2, "still exactly the cap after the swap");
+}
+
+fn largest_step(out: &[f32]) -> f32 {
+    out.chunks_exact(2)
+        .zip(out.chunks_exact(2).skip(1))
+        .flat_map(|(a, b)| [(b[0] - a[0]).abs(), (b[1] - a[1]).abs()])
+        .fold(0.0, f32::max)
+}
+
+/// One tone voice rendered through the HRTF, then pushed out of it by a cap of
+/// zero; returns the largest sample-to-sample step after that and the HRTF
+/// voices left.
+fn largest_step_after_losing_the_hrtf(lose: bool) -> (f32, usize) {
+    // A constant source, so the mix is flat and any step in it is the hand-over.
+    let tone: Vec<i16> = vec![12_000; RATE as usize];
+    let sound = Arc::new(Sound::new(tone, 1, RATE).expect("sound"));
+    let mut mixer = headphone_mixer();
+    placed_loop(&mut mixer, &sound, 0.5, 0.4);
+    let mut out = vec![0.0; 512 * 2];
+    for _ in 0..6 {
+        mixer.render(&mut out);
+    }
+    if lose {
+        mixer.set_hrtf_voice_cap(0);
+    }
+    // Keep the last settled frame, so a step at the switch itself is seen.
+    let mut after = out[out.len() - 2..].to_vec();
+    for _ in 0..8 {
+        mixer.render(&mut out);
+        after.extend_from_slice(&out);
+    }
+    (largest_step(&after), mixer.hrtf_voices())
+}
+
+#[test]
+fn handing_over_between_the_hrtf_and_the_rear_cue_has_no_step() {
+    let (steady, kept) = largest_step_after_losing_the_hrtf(false);
+    assert_eq!(kept, 1);
+    let (handed, left) = largest_step_after_losing_the_hrtf(true);
+    assert_eq!(left, 0, "the faded voice releases its convolver");
+    assert!(
+        handed < steady + 0.002,
+        "hand-over step {handed} against {steady} with no hand-over"
+    );
+}
