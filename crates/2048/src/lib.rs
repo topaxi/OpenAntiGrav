@@ -134,7 +134,7 @@ pub const TITLE: &Title = &Title {
         oag_title::group_volume::GroupVolumeLaw::Linear,
     ),
     speech_follows_effects: oag_title::pre_race::Sourced::chosen(false),
-    master_trim_db: oag_title::pre_race::Sourced::chosen(0.0),
+    master_trim_db: oag_title::pre_race::Sourced::chosen(-4.0),
     plugin_definition: names::TEAM_PLUGIN_DEFINITION,
     track_plugin_definition: Some(names::TRACK_PLUGIN_DEFINITION),
     loading: None,
