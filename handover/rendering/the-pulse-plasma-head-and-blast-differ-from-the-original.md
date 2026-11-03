@@ -2,7 +2,7 @@
 status: re-first
 titles: [pulse]
 updated: 2026-11-03
-summary: "Plasma head on the craft weapon node at 0.75 rows (box 103.8k to 76.0k); open: post-release head 3 units near, MUZZLE_FORWARD speed-dependent"
+summary: "Plasma head on the weapon node, 0.75 rows; open: k68 luminance, release offset at a second speed (no post-release lag)"
 ---
 
 # The Pulse Plasma head and blast differ from the original's
@@ -64,10 +64,14 @@ confidence scores and the replay evidence. What is left is wiring and two unread
   live: the hull's `Ship Muzzle` locator, per team) where ours used the bolt's hold point (2.23), so ours drew 2 units nearer the eye; the 0.75 rows hold through the
   charge too. Both wired, head box 103,807 to 76,048; k36/k44 overshoot 8 to 4 and 2. The arcs' Y damping is the original's
   (live pool read, `|y|/|x|` 0.75); what still differs frame by frame is the random stream. Open:
-  (v) **sim, `oag-weapons`**: from the release on ours' bolt trails the original's by a constant 2.19 along the craft's
-  forward (steps equal to 0.02 over nine frames; `plasma.md` table), so the head now steps back 2.0 at the release where the
-  original moves on, and k68 box luminance reads 131.9 against 121.3. The original releases at the weapon node (the hull's
-  `Ship Muzzle` locator) of the previous frame and moves the bolt once before the draw;
-  (vi) so `MUZZLE_FORWARD` (2.23) is that locator minus one craft step: per team and per speed in the original;
+  (v) ~~**sim, `oag-weapons`**: ours' bolt trails the original's by 2.19~~ closed 2026-11-03 (`plasma-release-step`): not a
+  lag. The 2.19 pairs the bolt after an update with the craft of the previous hook read; read as one instant per record the
+  original is 2.22, 2.41, 2.60, 2.76, 3.81, 4.77, 5.75 from the craft and ours matches to 0.1 for seven frames
+  (`plasma_timing_ground_truth`, 0.12 at the seventh). The original's head also steps back about 2 at the release. The
+  k68 box luminance (131.9 against 121.3) is therefore not the release position and stays open;
+  (vi) the release offset is the node of the frame before minus nothing: it is `4.24 - craft step`, so `MUZZLE_FORWARD`
+  (2.23) is exact at the measured 120 u/s and the original's offset grows as the craft slows (a standing start: 4.2).
+  Measure one second speed before wiring the locator into `oag-weapons` (`Craft` method, the plumbing is small);
+  Pure's candidate locator is class `0x394` at `(0, 0, 6.068)` on Assegai's v4 hull, unconfirmed (no name table);
   (vii) k60 box luminance 117.0 against 127.0 (reference boot) and 121.1 (fresh boot): the original moves 6 between boots.
 - Pulse PS2 is unmeasured here; its pair is `scripts/pcsx2-pulse-pair.py`.

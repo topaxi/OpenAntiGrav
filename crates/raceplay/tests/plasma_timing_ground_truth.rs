@@ -33,6 +33,16 @@ const ORIGINAL_DISTANCE: [f32; 17] = [
     40.63, 43.80, 47.01,
 ];
 
+/// Distance of the original's bolt from its craft at the end of each frame from the release
+/// on (`--probe plasma_fly`, `vel` against `craft_pos` of the same record: one hook read of
+/// both, so the pair is one instant). Entry 0 is the release frame, with the bolt 2.22 ahead
+/// of the craft at the node's previous position; the bolt then gains 0.19 a frame on the
+/// craft until its first floor ride at entry 4 (`plasma.md`, "the release leaves from the
+/// node of the frame before").
+const ORIGINAL_FROM_CRAFT: [f32; 9] = [
+    2.224, 2.414, 2.600, 2.757, 3.808, 4.768, 5.751, 6.863, 7.866,
+];
+
 /// The original's `PlasmaBlast_Construct`, in frames after the press.
 const ORIGINAL_DETONATION: usize = 76;
 /// The original's `Plasma_Launch`.
@@ -46,9 +56,12 @@ fn snap(input: &mut Input, buttons: u32) -> oag_gameplay::InputSnapshot {
     }
 }
 
-/// The bolt's position on each tick after the press, `None` once it is gone, up to
-/// `ticks`, plus the tick it was released on.
-fn fly(ticks: usize) -> Option<(Vec<Option<oag_core::math::Vec3>>, Option<usize>)> {
+/// A bolt's position and its distance from the craft.
+type Sample = (oag_core::math::Vec3, f32);
+
+/// The bolt's position and its distance from the craft on each tick after the press, `None`
+/// once it is gone, up to `ticks`, plus the tick it was released on.
+fn fly(ticks: usize) -> Option<(Vec<Option<Sample>>, Option<usize>)> {
     let image = oag_testdata::image("data/images/pulse-psp-usa.chd")?;
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
@@ -86,7 +99,8 @@ fn fly(ticks: usize) -> Option<(Vec<Option<oag_core::math::Vec3>>, Option<usize>
         if released.is_none() && bolt.is_some_and(|p| p.launch_speed_kmh > 0.0) {
             released = Some(k);
         }
-        positions.push(bolt.map(|p| p.position));
+        let craft = race.sim.world.ships[0].physics.body.position;
+        positions.push(bolt.map(|p| (p.position, (p.position - craft).length())));
     }
     Some((positions, released))
 }
@@ -107,15 +121,33 @@ fn the_plasma_releases_flies_and_detonates_on_the_originals_ticks() {
         "released on tick {released:?}, the original's Plasma_Launch is frame 59"
     );
 
-    let origin = positions[ORIGINAL_RELEASE].expect("the bolt exists on its release tick");
+    let origin = positions[ORIGINAL_RELEASE]
+        .expect("the bolt exists on its release tick")
+        .0;
     for (update, expected) in ORIGINAL_DISTANCE.iter().enumerate() {
         let at = positions[ORIGINAL_RELEASE + update]
-            .unwrap_or_else(|| panic!("the bolt is gone {update} updates after release"));
+            .unwrap_or_else(|| panic!("the bolt is gone {update} updates after release"))
+            .0;
         let flown = (at - origin).length();
         assert!(
             (flown - expected).abs() < 0.25,
             "after {update} updates the bolt has flown {flown:.2} units, the original's \
              {expected:.2}"
+        );
+    }
+
+    // And where it is against the craft it left, which the head's draw shows: the bolt
+    // leaves 2.2 ahead and gains on the craft by the difference of their speeds, as the
+    // original's does (it too is 2.0 behind the charging head's node at release). The first
+    // seven frames agree to 0.1; after that the ride's pin is 0.07 short per frame in ours
+    // and the gap opens, 0.12 at the seventh.
+    for (frame, expected) in ORIGINAL_FROM_CRAFT.iter().enumerate() {
+        let (_, from_craft) = positions[ORIGINAL_RELEASE + frame]
+            .unwrap_or_else(|| panic!("the bolt is gone {frame} frames after release"));
+        assert!(
+            (from_craft - expected).abs() < if frame < 7 { 0.1 } else { 0.2 },
+            "{frame} frames after release the bolt is {from_craft:.3} from the craft, the \
+             original's {expected:.3}"
         );
     }
 
