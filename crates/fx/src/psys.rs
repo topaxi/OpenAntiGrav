@@ -1135,6 +1135,7 @@ impl System {
                     [rgb[0], rgb[1], rgb[2], alpha],
                     right,
                     up,
+                    guard,
                 );
                 continue;
             }

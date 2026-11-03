@@ -308,7 +308,7 @@ fn streak_spec(draw: StreakDraw, rect: Option<[f32; 4]>) -> EmitterSpec {
 
 fn streak_vertices(spec: &EmitterSpec, particle: &Particle) -> Vec<GpuVertex> {
     let mut out = Vec::new();
-    streak::extend(&mut out, spec, particle, 1.0, [1.0; 4], Vec3::X, Vec3::Y);
+    streak::extend(&mut out, spec, particle, 1.0, [1.0; 4], Vec3::X, Vec3::Y, None);
     out
 }
 

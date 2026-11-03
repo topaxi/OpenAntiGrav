@@ -61,6 +61,7 @@
 use oag_core::math::Vec3;
 
 use super::between_ticks::set_shift;
+use super::guard::GuardBand;
 use super::{Effect, EmitterSpec, Particle, quad, sprite};
 use oag_mesh::mesh::GpuVertex;
 
@@ -131,6 +132,28 @@ impl StreakDraw {
     }
 }
 
+/// Both ends of a two-point particle moved onto one depth along the line to
+/// the eye, which keeps each on its own screen point and makes the pair
+/// co-planar, so the strip built in that plane is screen-parallel
+/// (`docs/ghidra/functions/psp-pulse-usa/particle-system.md`, "`FUN_08917c7c`"
+/// and "`FUN_08916d00`"): the mean of the two depths, except the template
+/// wedge, which takes the farther. Returned as `(position, origin)` in world
+/// space. A particle at or behind the eye keeps its own points.
+fn at_one_depth(view: &GuardBand, draw: StreakDraw, particle: &Particle) -> (Vec3, Vec3) {
+    let (position, origin) = (particle.position, particle.origin);
+    let depth = |p: Vec3| (p - view.eye).dot(view.forward);
+    let (dp, dor) = (depth(position), depth(origin));
+    if dp < 1e-3 || dor < 1e-3 {
+        return (position, origin);
+    }
+    let common = match draw {
+        StreakDraw::Wedge => dp.max(dor),
+        _ => (dp + dor) * 0.5,
+    };
+    let onto = |p: Vec3, d: f32| view.eye + (p - view.eye) * (common / d);
+    (onto(position, dp), onto(origin, dor))
+}
+
 /// `psys.wesl`'s `normal.x` for a class-7 bar: sample the sheet, and fold
 /// the along-coordinate into the capped `v`.
 const CAPPED: f32 = 2.0;
@@ -150,9 +173,10 @@ pub(super) fn extend(
     rgba: [f32; 4],
     right: Vec3,
     up: Vec3,
+    view: Option<&GuardBand>,
 ) {
     let start = out.len();
-    extend_at_tick(out, spec, particle, half, rgba, right, up);
+    extend_at_tick(out, spec, particle, half, rgba, right, up, view);
     let head = particle.shift();
     let from_spawn = matches!(spec.render, super::Render::Streak { from_spawn: true });
     let along = particle.position - particle.origin;
@@ -179,6 +203,7 @@ fn extend_at_tick(
     rgba: [f32; 4],
     right: Vec3,
     up: Vec3,
+    view: Option<&GuardBand>,
 ) {
     let [r, g, b, alpha] = rgba;
     let colour = [r, g, b];
@@ -191,13 +216,24 @@ fn extend_at_tick(
         return;
     };
     let cell = spec.atlas.cell(rect, particle.frame);
-    let along = particle.origin - particle.position;
-    let length = along.length();
+    let (position, origin) = match view {
+        Some(view) => at_one_depth(view, spec.streak, particle),
+        None => (particle.position, particle.origin),
+    };
     // `(0, 1, 0)` in view space for a zero-length streak: the camera's up.
-    let dir = if length > 1e-6 { along / length } else { up };
-    let perp = dir.cross(back).try_normalize().unwrap_or(right) * half;
+    let (dir, perp) = if view.is_some() {
+        let along = (origin - position) - back * (origin - position).dot(back);
+        let length = along.length();
+        let dir = if length > 1e-6 { along / length } else { up };
+        (dir, dir.cross(back) * half)
+    } else {
+        let along = origin - position;
+        let length = along.length();
+        let dir = if length > 1e-6 { along / length } else { up };
+        (dir, dir.cross(back).try_normalize().unwrap_or(right) * half)
+    };
     let cap = dir * half;
-    let (position, origin) = (particle.position, particle.origin);
+    let length = (origin - position).length();
     let corner = |at: Vec3, u: f32, v: f32| GpuVertex {
         position: at.to_array(),
         normal: [0.0, 0.0, 0.0],

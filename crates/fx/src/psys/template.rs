@@ -112,7 +112,7 @@ impl System {
     /// other particle keeps the one it spawned with. `docs/ghidra/functions/psp-pulse-usa/plasma.md`,
     /// "the head's template playback".
     pub(super) fn drawn_scale(&self, spec: &EmitterSpec, particle: &Particle) -> f32 {
-        if spec.template {
+        if spec.template || std::env::var("ALLCUR").is_ok() {
             self.scale
         } else {
             particle.scale
