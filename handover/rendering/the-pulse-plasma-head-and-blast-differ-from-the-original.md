@@ -2,7 +2,7 @@
 status: re-first
 titles: [pulse]
 updated: 2026-11-03
-summary: "Plasma blast, head templates and arcs wired (arcs now draw at the live charge severity); open: draw order of the dark disc under the arcs, disc colour, head luminance overshoot, arcs too big after release"
+summary: "Plasma head arcs now follow the charge; open: dark disc draw order and colour, luminance overshoot, arcs too big after release"
 ---
 
 # The Pulse Plasma head and blast differ from the original's
