@@ -7,6 +7,7 @@
 //! `scripts/check-file-size.py`, which is both rules as a gate.
 
 use super::*;
+use oag_mesh::mesh::GpuVertex;
 
 pub(super) const DT: f32 = 1.0 / TICK_HZ;
 
