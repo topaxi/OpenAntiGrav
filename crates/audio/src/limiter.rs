@@ -30,6 +30,8 @@ pub const HOLD_SECONDS: f32 = 0.025;
 /// climb is linear, so it ends exactly at 1.0 rather than creeping up to it.
 pub const RELEASE_SECONDS: f32 = 0.25;
 
+const DEPTHS: [f32; 3] = [0.94, 0.7, 0.5];
+
 /// Stereo-linked look-ahead peak limiter.
 #[derive(Debug, Clone)]
 pub struct Limiter {
@@ -46,6 +48,7 @@ pub struct Limiter {
     released: f32,
     release_step: f32,
     limited: u64,
+    depth: [u64; 3],
     deepest: f32,
     peak: f32,
 }
@@ -69,6 +72,7 @@ impl Limiter {
             released: 1.0,
             release_step: 1.0 / (RELEASE_SECONDS * sample_rate as f32),
             limited: 0,
+            depth: [0; 3],
             deepest: 1.0,
             peak: 0.0,
         }
@@ -84,6 +88,12 @@ impl Limiter {
     #[must_use]
     pub fn limited(&self) -> u64 {
         self.limited
+    }
+
+    /// Frames whose gain was below 0.94, 0.7 and 0.5 (about -0.5, -3 and -6 dB).
+    #[must_use]
+    pub fn depth_frames(&self) -> [u64; 3] {
+        self.depth
     }
 
     /// The lowest gain applied so far (1.0 is never touched).
@@ -144,6 +154,9 @@ impl Limiter {
             let gain = self.released;
             if gain < 1.0 {
                 self.limited += 1;
+                for (count, floor) in self.depth.iter_mut().zip(DEPTHS) {
+                    *count += u64::from(gain < floor);
+                }
                 self.deepest = self.deepest.min(gain);
             }
 

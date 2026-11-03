@@ -587,6 +587,12 @@ impl Mixer {
         self.limiter.limited()
     }
 
+    /// Frames with limiter gain below 0.94, 0.7 and 0.5.
+    #[must_use]
+    pub fn limit_depth_frames(&self) -> [u64; 3] {
+        self.limiter.depth_frames()
+    }
+
     /// The lowest limiter gain applied so far (1.0 means it never acted).
     #[must_use]
     pub fn deepest_limit(&self) -> f32 {
