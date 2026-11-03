@@ -295,6 +295,14 @@ pub struct RaceView {
     /// alone.
     pub(super) projectile_flare_orbit:
         [Option<psys::Playing>; oag_weapons::projectile::MAX_PROJECTILES],
+    /// How far ahead of a Plasma bolt its head draws once released, per slot, in
+    /// world units along the bolt's heading: the lead the craft's weapon node had
+    /// over the bolt's hold point while charging. The original launches the bolt's
+    /// matrix from the head's node and the head draws through that matrix, so it
+    /// never steps back to the hold point (`docs/ghidra/functions/psp-pulse-usa/plasma.md`,
+    /// "the head after the release"). `0.0` for a hull with no locator, a source whose
+    /// head was not measured, and every other weapon.
+    pub(super) plasma_lead: [f32; oag_weapons::projectile::MAX_PROJECTILES],
     /// The [`Trigger::Quake`] instance riding the travelling
     /// wave, or `None` when no Quake is in flight. One slot, not an array,
     /// the same shape [`oag_gameplay::World::quake`] itself takes - see that
