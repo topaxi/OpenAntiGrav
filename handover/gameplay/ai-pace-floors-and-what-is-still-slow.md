@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-03
-summary: "AI pace: 2048 sol has its floor now, a road gap at 3553-3620 still loops the field (pitch-up lever queued); 06 and others still slow"
+summary: "AI pace: 2048 sol has its floor now, a road gap at 3553-3620 still loops the field (air-pitch lever unproven, queued); 06 and others still slow"
 size: M (40)
 difficulty: medium (40)
 ---
@@ -74,16 +74,20 @@ scenario, a per-section profile, the campaign's Speed Lap gold, and
 ## Next Steps
 
 - **Decided 2026-10-11 (maintainer): campaign cells topping out at Elite (`tune_at_scale` clamps at 3.0, no cell reaches Ace) is intended.** Not a gap.
-1. `sol` gap (queued follow-up, opus): pitch-up held in the air cleared the
-   gap from 167.4 u/s in a one-off test (every airborne tick, every craft):
-   Ace field respawns 36/9/9/13/1/22/5 to 2/2/0/22/0/8/0. Make it a driver
-   rule that fires only airborne over an unsupported line run and heading
-   under the far lip (`Line::is_unsupported`), then prove the narrowness:
-   the lone board's twelve, `ai_clean_lap_gate` and the determinism hashes
-   unchanged. Also find why a race craft cruises 2-5 u/s under the verifier
-   on the same handling (personality wander costs ~2). Then the claim test: a
-   field of seven at every level laps on 2048 `sol` within 12,000 ticks.
-   About 3 hours. Size M (40), difficulty medium (40).
+1. `sol` gap (queued follow-up, opus). A one-off test held a constant air
+   pitch on every airborne tick in place of the trim (`steer_y`, positive
+   nose up): Ace field respawns summed 95 with the trim, 79 at 0, 45 at +0.5,
+   34 at +1, 33 at -1, and both signs cleared and fell from 167-169 u/s lips.
+   No sign effect: the gap is marginal. First find which held air pitch,
+   applied only over 3553-3620, changes the outcome, and its sign; and why a
+   race craft cruises 2-5 u/s under the verifier on the same handling
+   (personality wander costs ~2; four of 2048's seven opponents fly the
+   player's `feisar2048\3` because the native team ids lack their variant,
+   `handover/tooling/2048s-track-vex-parses-but-two-binary-formats-changed.md`).
+   Then a narrow rule (unsupported line run only) with the lone board,
+   `ai_clean_lap_gate` and the determinism hashes unchanged, and the claim
+   test: a field of seven at every level laps on 2048 `sol` within 12,000
+   ticks. About 3 hours. Size M (40), difficulty medium (40).
 2. `06_Track` VENOM: aim the run-up at the landing sample. About 2 hours.
 3. `cathedral` PHANTOM: a plan-aware roll or the rescue gap, then re-run
    the 2048 lone and field PHANTOM slices. About 2 hours.

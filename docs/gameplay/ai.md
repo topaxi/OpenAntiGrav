@@ -5814,9 +5814,13 @@ All of it is **chosen, not measured**.
   units into the `.vex`'s reset volume. Spline flag bit 0 ("lay no crumb") runs
   from line sample 3384 to 3647, so the original's relocation puts the craft
   back at about 3274 and it meets the lip at the same speed: the rescue is the
-  original's, the miss is the driver's. Full pitch-up held in the air (a
-  one-off test on every airborne tick) cleared it from 167.4 u/s, and the Ace
-  field's respawns fell from 36, 9, 9, 13, 1, 22, 5 to 2, 2, 0, 22, 0, 8, 0.
+  original's, the miss is the driver's. A one-off test held a constant air
+  pitch on every airborne tick of the lap (`steer_y`, positive nose up) in
+  place of the trim: the Ace field's respawns summed 95 with the trim, 79 at
+  0, 45 at +0.5, 34 at +1 and 33 at -1, and both signs cleared and fell from
+  lips of 167-169 u/s. **No sign effect**: the gap is marginal and any change
+  in air pitch reshuffles who clears it. Which held pitch over 3553-3620 alone
+  clears it, if any, is not measured.
   Omega's `sol` (HD hulls) already laps at Elite and Ace with 0-5 respawns.
 - **Pulse `06_Track` VENOM**, on the corner model, crawls at 15-33 u/s over
   samples 1100-1200. Its gap at 1196 clears near 60 u/s; from 90 u/s the craft
