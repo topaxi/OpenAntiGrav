@@ -359,7 +359,7 @@ fn reference_glyph(cx: &Context<'_>) -> Option<([f32; 2], [f32; 2])> {
 /// and [`crate::sprite::Placed::quad_centre`] where the loader measured it, else the whole
 /// image) scaled, aspect kept, to fill the box the title's own Turbo glyph fills and centred
 /// on it ([`reference_glyph`]), so a mod's icon is as big as a real one and sits where it
-/// sits; where the title's glyph cannot be read, the art is drawn at its own size on the
+/// sits (HD and Omega: the middle of the always-up frame instead); where the title's glyph cannot be read, the art is drawn at its own size on the
 /// pickup's backdrop frame. Either way it is shrunk to the frame if it would not fit it.
 /// Faded as the title's own icon is. **Chosen, not measured**: the art's margin never
 /// counts, so a PNG authored on the title's own texture cell and one cropped to its glyph
@@ -388,6 +388,13 @@ pub(super) fn mod_icon_draw(cx: &Context<'_>, src: &str, look: Option<Look>) -> 
             [frame[0] + frame[2] * 0.5, frame[1] + frame[3] * 0.5],
             false,
         ),
+    };
+    // A title whose backdrop frame is always up (HD, Omega) has the icon in the middle of
+    // it; the real glyph there sits a little below, and only its size is taken.
+    let centre = if fill && cx.art.always_on.contains(&PICKUP_BACKGROUND) {
+        [frame[0] + frame[2] * 0.5, frame[1] + frame[3] * 0.5]
+    } else {
+        centre
     };
     let to_aim = (aim[0] / art[0]).min(aim[1] / art[1]);
     let to_frame = (frame[2] / art[0]).min(frame[3] / art[1]);

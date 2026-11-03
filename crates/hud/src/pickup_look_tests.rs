@@ -376,3 +376,56 @@ fn a_mod_icon_fills_the_box_the_titles_own_turbo_glyph_fills() {
     // 10 by 10 art into 20 by 27: doubled, aspect kept; centred on the glyph (240, 29.5).
     assert_eq!(rect, [224.0, 13.5, 32.0, 32.0]);
 }
+
+/// HD and Omega keep the frame always up, and the mod icon sits in its middle.
+#[test]
+fn on_hd_and_omega_the_mod_icon_is_centred_on_the_always_up_frame() {
+    let layout = Layout::from_xml(LAYOUT);
+    let strings = oag_ui::language::StringTable::default();
+    // The Turbo region is (70, 111) 48 by 48 of the HUD texture; its glyph is 20 by 27 texels,
+    // opaque, 14 across and 5 down in it.
+    let (width, height) = (128_u32, 160_u32);
+    let mut hud = vec![0_u8; (width * height * 4) as usize];
+    for y in 111 + 5..111 + 5 + 27 {
+        for x in 70 + 14..70 + 14 + 20 {
+            hud[((y * width + x) * 4 + 3) as usize] = 255;
+        }
+    }
+    let image = |src: &str, width, height, rgba| crate::sprite::DecodedImage {
+        src: src.into(),
+        width,
+        height,
+        rgba,
+        quad_extent: (src == "mod:test/glyph").then_some([10.0, 10.0]),
+        quad_centre: (src == "mod:test/glyph").then_some([0.0, 0.0]),
+        blend: None,
+    };
+    let sheet = crate::sprite::Sheet::build_with(
+        &[],
+        vec![
+            image("Data\\HUD\\Textures\\PulseHUD.mip", width, height, hud),
+            image("mod:test/glyph", 16, 16, vec![255; 16 * 16 * 4]),
+        ],
+        &mut Vec::new(),
+    );
+    let cx = Context {
+        default_border: layout.default_border(),
+        layout: &layout,
+        strings: &strings,
+        sheet: &sheet,
+        art: oag_hd::hud::ART,
+        hud_line_height: 25.0,
+        small_line_height: 10.0,
+        default_line_height: 10.0,
+        skin_line_height: 10.0,
+    };
+    let Some(Draw::Sprite { rect, .. }) = mod_icon_draw(&cx, "mod:test/glyph", None) else {
+        panic!("draws");
+    };
+    // 10 by 10 art into 20 by 27: doubled, aspect kept; centred on the glyph (240, 29.5).
+    assert_eq!(
+        rect,
+        [224.0, 19.0, 32.0, 32.0],
+        "size from the glyph box, centre on the frame (240, 35)"
+    );
+}
