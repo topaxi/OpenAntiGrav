@@ -311,11 +311,11 @@ pub fn prepare(
                 );
                 continue;
             }
-            if source.look_for(title).is_some() {
-                if let Err(why) = on::pickup_kind(pickup_mods) {
-                    push(report, format!("{label} left out: {why}"));
-                    continue;
-                }
+            if source.look_for(title).is_some()
+                && let Err(why) = on::pickup_kind(pickup_mods)
+            {
+                push(report, format!("{label} left out: {why}"));
+                continue;
             }
             if source.api != oag_ext_abi::ABI {
                 push(

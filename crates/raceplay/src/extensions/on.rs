@@ -736,14 +736,14 @@ fn refusal(on: &On, index: usize, commands: &[Command]) -> Option<String> {
             }
             Command::GivePickup { .. }
             | Command::ClearPickup { .. }
-            | Command::PickupRoll { .. } => {
-                if on.module_kind[index].is_none() {
-                    return Some(
-                        "it gives, rolls or clears its own pickup but its oag-mod.toml has no \
-                         [pickup] table (icon and colour, each naming its source)"
-                            .to_string(),
-                    );
-                }
+            | Command::PickupRoll { .. }
+                if on.module_kind[index].is_none() =>
+            {
+                return Some(
+                    "it gives, rolls or clears its own pickup but its oag-mod.toml has no \
+                     [pickup] table (icon and colour, each naming its source)"
+                        .to_string(),
+                );
             }
             _ => {}
         }

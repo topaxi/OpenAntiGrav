@@ -59,10 +59,14 @@ fn copies_the_matrix() -> race::extensions::Source {
 
 fn matrix(state: &[u8]) -> Vec<Vec<Aim>> {
     state
-        .chunks_exact(AIM_SLOTS * AIM_LEN)
+        .as_chunks::<{ AIM_SLOTS * AIM_LEN }>()
+        .0
+        .iter()
         .map(|row| {
-            row.chunks_exact(AIM_LEN)
-                .map(|c| Aim::decode(&[c[0], c[1], c[2]]))
+            row.as_chunks::<AIM_LEN>()
+                .0
+                .iter()
+                .map(Aim::decode)
                 .collect()
         })
         .collect()
@@ -90,7 +94,7 @@ fn on_the_starting_grid_a_craft_ahead_reads_ahead_and_centred_and_one_across_doe
     // What the guest must read, from the bodies as the tick begins.
     let bodies: Vec<_> = race.sim.world.ships[..ships]
         .iter()
-        .map(|ship| ship.physics.body.clone())
+        .map(|ship| ship.physics.body)
         .collect();
     race.tick(&PlayerInputs::none());
     let read = matrix(race.extension_state(0).expect("the module ran"));
@@ -123,7 +127,7 @@ fn on_the_starting_grid_a_craft_ahead_reads_ahead_and_centred_and_one_across_doe
     // straight ahead of it (60).
     let place = |race: &mut race::Race, ahead: f32, right: f32| {
         // Posed from slot 0's body as the next tick will observe it.
-        let from = race.sim.world.ships[0].physics.body.clone();
+        let from = race.sim.world.ships[0].physics.body;
         race.sim.world.ships[1].physics.body.position =
             from.position + from.forward() * ahead + from.right() * right;
         race.tick(&PlayerInputs::none());
