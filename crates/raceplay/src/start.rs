@@ -60,6 +60,8 @@ impl Race {
             #[cfg(feature = "view")]
             nozzles,
             #[cfg(feature = "view")]
+            muzzles,
+            #[cfg(feature = "view")]
             engine_lights,
             #[cfg(feature = "view")]
             spu_vertex_lights,
@@ -859,6 +861,7 @@ impl Race {
                 hd_sprite: [exhaust::hd::Sprite::new(); MAX_SHIPS],
                 shield: [ShipShield::with_palette(shield_palette); MAX_SHIPS],
                 nozzles,
+                muzzles,
                 engine_lights,
                 spu_vertex_lights,
                 hull_points,

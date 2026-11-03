@@ -678,20 +678,18 @@ impl Race {
                 Some(oag_tables::weapons::Weapon::Shuriken) => {
                     (projectile.position, Some(projectile.position))
                 }
-                // A charging head sits on the craft's weapon node, not the hold point,
-                // on the source whose head rides its owner's frame (Pulse's PSP file).
+                // A charging head sits on the craft's weapon node, its hull's `Ship
+                // Muzzle` locator, not the bolt's hold point, on the source whose head
+                // rides its owner's frame (Pulse's PSP file): `plasma.md`, "the head's
+                // matrix and node".
                 Some(oag_tables::weapons::Weapon::Plasma)
                     if projectile.charge > 0.0 && head_rides_owner =>
                 {
-                    let anchor = self
-                        .sim
-                        .world
-                        .ships
-                        .get(usize::from(projectile.owner))
-                        .map_or(projectile.position, |ship| {
-                            plasma_head_anchor(&ship.physics)
-                        });
-                    (anchor, None)
+                    (
+                        self.muzzle_of(usize::from(projectile.owner))
+                            .unwrap_or(projectile.position),
+                        None,
+                    )
                 }
                 _ => (projectile.position, None),
             };

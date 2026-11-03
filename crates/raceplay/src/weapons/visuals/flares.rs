@@ -195,21 +195,6 @@ pub(crate) fn plasma_ride_scale(kind: Option<oag_tables::weapons::Weapon>) -> f3
     }
 }
 
-/// How far ahead of the craft's body, along its forward row, the weapon node a charging
-/// Plasma head is parented to sits: `(0, 0, 5.653)` model units through the craft's
-/// `0.75` rows. Measured live on Assegai Venom (constant over all 60 charging frames while
-/// the speed rose from 106 to 120 units a second, so a node offset and not a lead), and
-/// the GE dumps draw the head 4.1 to 4.3 units deeper than the hull
-/// (`docs/ghidra/functions/psp-pulse-usa/plasma.md`, "the head's matrix and node").
-pub(crate) const PLASMA_WEAPON_NODE_FORWARD: f32 = 5.653 * oag_physics::hover::TARGET_GLOBAL_SCALE;
-
-/// Where a charging Plasma's head is drawn: the firing craft's weapon node, which
-/// `Plasma_Init` parents the head to (`PsysNode_Update` copies that node's world
-/// translation with a zero offset), not the bolt's hold point.
-pub(crate) fn plasma_head_anchor(craft: &oag_physics::ShipState) -> Vec3 {
-    craft.body.position + craft.body.forward() * PLASMA_WEAPON_NODE_FORWARD
-}
-
 /// The Missile's own two flare anchors this tick, orbiting its flight line -
 /// the primary anchor first, the second in the returned tuple.
 ///

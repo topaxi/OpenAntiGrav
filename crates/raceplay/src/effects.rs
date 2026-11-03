@@ -1070,6 +1070,14 @@ impl Race {
         Some(self.ship_model_matrix_of(slot).transform_point3(local))
     }
 
+    /// One craft's `Ship Muzzle` locator in **world** space, through the same model
+    /// matrix as [`Self::nozzle_of`]; `None` when its hull authors none.
+    #[must_use]
+    pub fn muzzle_of(&self, slot: usize) -> Option<Vec3> {
+        let local = self.view.muzzles.get(slot).copied().flatten()?;
+        Some(self.ship_model_matrix_of(slot).transform_point3(local))
+    }
+
     /// The `engine_flare` locator in **model space** - the pivot a transform
     /// composed with the craft's own matrix wants, where [`Self::nozzle_of`]
     /// is the world-space point the trail is laid from. Mixing the two up

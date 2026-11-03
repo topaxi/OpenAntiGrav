@@ -113,6 +113,8 @@ pub struct Classes {
     pub engine_flare: Option<u32>,
     /// The collision-spark locator on a ship.
     pub ship_collision_fx: Option<u32>,
+    /// The weapon node on a ship (`Ship Muzzle`): where a charging Plasma's head sits.
+    pub ship_muzzle: Option<u32>,
     /// The locator Wipeout HD plays its weapon-absorb burst at ([`CLASS_ABSORB`]).
     pub absorb: Option<u32>,
     /// The road-span table a Quake ripples - see [`crate::quake`].
@@ -166,6 +168,7 @@ pub const V6: Classes = Classes {
     airbrake: Some(super::CLASS_AIRBRAKE),
     engine_flare: Some(super::CLASS_ENGINE_FLARE),
     ship_collision_fx: Some(super::CLASS_SHIP_COLLISION_FX),
+    ship_muzzle: Some(super::CLASS_SHIP_MUZZLE),
     // Same reason as `track_wall_collision`: HD's registration, no Pulse file.
     absorb: Some(CLASS_ABSORB),
     quake: Some(crate::quake::CLASS_QUAKE),
@@ -282,6 +285,8 @@ pub const V4: Classes = Classes {
     airbrake: Some(0x377),
     engine_flare: Some(0x371),
     ship_collision_fx: Some(0x382),
+    // Pure's `Ship Muzzle` id is not recovered.
+    ship_muzzle: None,
     absorb: None,
     quake: None,
     // **`AmbientLight` and `DirectionalLight`**, generic Maya classes outside the
@@ -344,6 +349,7 @@ pub const V3: Classes = Classes {
     airbrake: None,
     engine_flare: None,
     ship_collision_fx: None,
+    ship_muzzle: None,
     absorb: None,
     quake: None,
     ambient_light: None,

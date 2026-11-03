@@ -668,6 +668,10 @@ pub struct Setup {
     /// flare inside the fuselage.
     #[cfg(feature = "view")]
     pub nozzles: Vec<Option<Vec3>>,
+    /// Each slot's `Ship Muzzle` locator in its hull's model space (`Livery::muzzle`),
+    /// indexed like [`Self::nozzles`]: where a charging Plasma's head sits.
+    #[cfg(feature = "view")]
+    pub muzzles: Vec<Option<Vec3>>,
     /// Wipeout HD's engine light per slot - `EngineLightData.xml` and the
     /// flare locator's Z axis - or `None` on every other title and on a
     /// craft that ships neither. Indexed like [`Self::nozzles`], which
