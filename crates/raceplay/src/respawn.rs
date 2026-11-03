@@ -323,9 +323,7 @@ impl Race {
         }
         let rules = self.sim.damage_rules();
         let ship = &mut self.sim.world.ships[slot];
-        let charge = (ship.physics.shield - 1.0)
-            .min(RESET_SHIELD_CHARGE)
-            .max(0.0);
+        let charge = (ship.physics.shield - 1.0).clamp(0.0, RESET_SHIELD_CHARGE);
         if charge > 0.0 {
             oag_physics::damage::apply_weapon(
                 &mut ship.physics,
