@@ -91,6 +91,9 @@ pub struct Source {
     pub memory_pages: u32,
     /// `[extension] state_bytes`.
     pub state_bytes: u32,
+    /// `[extension] drives_ai_pickup`: the engine raises no `pickup-fire` for an AI craft
+    /// holding the mod pickup; the module decides and clears it itself.
+    pub drives_ai_pickup: bool,
     /// Where it runs.
     pub scope: Scope,
     /// Reads the module.
@@ -187,6 +190,9 @@ pub struct Prepared {
     /// Each module's mod's `[pickup]`, in module order.
     #[cfg(feature = "extensions")]
     pickups: Vec<Option<oag_tables::pickup_look::PickupLook>>,
+    /// Each module's `[extension] drives_ai_pickup`, in module order.
+    #[cfg(feature = "extensions")]
+    drives_ai: Vec<bool>,
     /// Each module's mod's `[channels]` publishes, in module order.
     #[cfg(feature = "extensions")]
     publishes: Vec<Vec<(u32, String)>>,
@@ -272,6 +278,7 @@ pub fn prepare(
         let mut modules = Vec::new();
         let mut strings = Vec::new();
         let mut pickups = Vec::new();
+        let mut drives_ai = Vec::new();
         let mut publishes = Vec::new();
         let mut odds = None;
         let mut track_module = false;
@@ -341,6 +348,7 @@ pub fn prepare(
                     modules.push((source.mod_id.clone(), module));
                     strings.push((source.strings)(language));
                     pickups.push(source.pickup.clone());
+                    drives_ai.push(source.drives_ai_pickup);
                     publishes.push(channel::publishes(&source.channels));
                 }
                 Err(e) => push(report, format!("{label} left out: {e}")),
@@ -352,6 +360,7 @@ pub fn prepare(
             region,
             strings,
             pickups,
+            drives_ai,
             publishes,
             odds,
             beacons,
@@ -594,6 +603,7 @@ impl Extensions {
                     prepared.region,
                     prepared.strings,
                     prepared.pickups,
+                    prepared.drives_ai,
                     prepared.publishes,
                     prepared.odds,
                 ),
@@ -752,6 +762,23 @@ impl Extensions {
         }
         #[cfg(feature = "extensions")]
         self.on.test_triggers(slot, sweep);
+    }
+
+    /// The module owning the mod pickup decides when an AI craft uses it, so the engine
+    /// raises no `pickup-fire` for one (`[extension] drives_ai_pickup`).
+    pub(super) fn guest_drives_ai_pickup(&self) -> bool {
+        #[cfg(feature = "extensions")]
+        {
+            self.on.guest_drives_ai_pickup()
+        }
+        #[cfg(not(feature = "extensions"))]
+        false
+    }
+
+    /// Whether a `pickup-fire` is raised for `slot` and not yet delivered.
+    #[cfg(all(test, feature = "extensions"))]
+    pub(crate) fn fire_raised(&self, slot: usize) -> bool {
+        self.on.fires & (1 << slot) != 0
     }
 
     /// The mod's own pickup's fire (`absorbed == false`) or absorb, raised for the module.

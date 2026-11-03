@@ -92,6 +92,7 @@ out to be wrong.
 | [0081](0081-screen-layouts-are-files-and-a-track-may-carry-its-loading-screen.md) | Screen layouts are files (`screen-layout.tosd`, a split HUD or a loading screen), and a track may carry its own loading screen in its manifest | **Accepted** |
 | [0082](0082-a-mod-owns-pages-settings-queries-and-one-launch-action.md) | A mod owns pages, settings, queries and one launch action | **Accepted** (2026-11-02); supersedes ADR-0066 decision 4 for declarative content, ADR-0080 stays for wasm screens |
 | [0083](0083-official-mods-are-a-public-folder-and-the-fingerprint-counts-race-changers.md) | Official mods are a public folder, and the fingerprint counts only mods that change a race | **Accepted** (2026-11-02); amends ADR-0078's LAN-fingerprint consequence |
+| [0084](0084-a-mod-may-ship-turned-off.md) | A mod may ship turned off | **Proposed** (2026-11-03); amends ADR-0078's "on until named" and ADR-0083's "enabled unless named" |
 
 ## Format
 

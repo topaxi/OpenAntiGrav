@@ -311,6 +311,11 @@ impl Race {
         // fire a Turbo (the Turbo's own gate below, on the Turbo's boost time), every tick
         // that gate passes, and never absorbs it. What a fire does is the mod's.
         let extension = weapon == oag_tables::weapons::Weapon::Extension;
+        // A module that drives its own AI decision is raised nothing: it reads the
+        // observation (progress, place, course) and clears the pickup itself.
+        if extension && self.sim.extensions.guest_drives_ai_pickup() {
+            return;
+        }
         let looked_up = if extension {
             oag_tables::weapons::Weapon::Turbo
         } else {

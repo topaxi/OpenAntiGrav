@@ -128,6 +128,10 @@ pub struct Extension {
     pub memory_pages: u32,
     /// The host-owned state blob's length, bytes.
     pub state_bytes: u32,
+    /// `drives_ai_pickup`: the module decides when an AI craft uses the mod's pickup, so
+    /// the engine never raises `pickup-fire` for one (default `false`: it does, wherever
+    /// the AI would fire a Turbo).
+    pub drives_ai_pickup: bool,
     /// `[extension.rules]`: a rules module, which may act on every craft of a race.
     pub rules: Option<Rules>,
     /// `[extension.track]`: a module that runs only on one track file the mod ships.
@@ -313,6 +317,8 @@ struct ExtensionTable {
     memory_pages: u32,
     #[serde(default)]
     state_bytes: u32,
+    #[serde(default)]
+    drives_ai_pickup: bool,
     rules: Option<RulesTable>,
     track: Option<TrackTable>,
 }
@@ -654,6 +660,7 @@ fn extension(e: ExtensionTable, has: &dyn Fn(&str) -> bool) -> Result<Extension,
         api: e.api,
         memory_pages: e.memory_pages,
         state_bytes: e.state_bytes,
+        drives_ai_pickup: e.drives_ai_pickup,
         rules,
         track,
     })

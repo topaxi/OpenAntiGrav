@@ -535,6 +535,18 @@ pub struct RaceSim {
 }
 
 impl RaceSim {
+    /// Every slot's place, as [`oag_race::places`] orders the field: the one ordering the
+    /// HUD, the results and a mod's observation read. Everyone is first on a track with
+    /// no closed ring.
+    pub(super) fn places(&self) -> [u8; oag_gameplay::MAX_SHIPS] {
+        let Some(course) = &self.course else {
+            return [1; oag_gameplay::MAX_SHIPS];
+        };
+        let standings: [oag_race::Standing; oag_gameplay::MAX_SHIPS] =
+            std::array::from_fn(|slot| self.world.ships[slot].standing);
+        oag_race::places(&standings, course)
+    }
+
     /// The mode's damage rules with this race's own weapons switch applied -
     /// what every damage and weapon-hit site asks instead of
     /// `oag_gameplay::damage_rules(mode)` alone, which knows only the mode.

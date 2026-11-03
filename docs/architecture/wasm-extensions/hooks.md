@@ -327,7 +327,8 @@ the backstop for a guest written without the SDK.
 - **`pickup-fire{slot}` / `pickup-absorbed{slot}`**: raised in `Race::spend_pickup`
   (`crates/raceplay/src/weapons.rs`, a person's fire or absorb press) and
   `Race::spend_opponent_pickup` (`crates/raceplay/src/field/opponent_weapons.rs`, the
-  driver's fire wherever the Turbo's gate passes; it never absorbs) for a slot holding
+  driver's fire wherever the Turbo's gate passes; it never absorbs, and raises nothing
+  when the mod's `[extension] drives_ai_pickup` is set) for a slot holding
   the mod's own pickup (`Weapon::Extension`). Delivered at the same tick's call (phase
   2 is before C).
 - **`speed-pad{slot, pad}`** / **`weapon-pad{slot, pad}`**: raised at the entry edge

@@ -26,6 +26,7 @@ pub fn sources<'a>(mods: impl IntoIterator<Item = &'a oag_mod::Mod>) -> Vec<Sour
                 api: extension.api,
                 memory_pages: extension.memory_pages,
                 state_bytes: extension.state_bytes,
+                drives_ai_pickup: extension.drives_ai_pickup,
                 scope,
                 read: reader(m, module),
                 strings: strings_reader(m),

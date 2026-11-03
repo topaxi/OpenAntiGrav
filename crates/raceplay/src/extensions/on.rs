@@ -14,6 +14,8 @@ pub(super) struct Slot {
     sender: u32,
     /// The channels its `emit` may name.
     publishes: Vec<(u32, String)>,
+    /// `[extension] drives_ai_pickup`.
+    drives_ai_pickup: bool,
     module: Module,
     pub(super) blob: Vec<u8>,
     faulted: Option<(u64, String)>,
@@ -56,7 +58,7 @@ pub(super) struct On {
     /// owner turns it back into.
     from_roll: u32,
     /// `pickup-fire` / `pickup-absorbed` raised since the last call, one bit a slot.
-    fires: u32,
+    pub(super) fires: u32,
     absorbs: u32,
     /// The `mod` events raised since the last call (the modules' `emit`s and the track's
     /// triggers'), delivered at the next one: race state, hashed.
@@ -234,6 +236,7 @@ impl On {
         region: super::track::Region,
         strings: Vec<super::Strings>,
         pickups: Vec<Option<oag_tables::pickup_look::PickupLook>>,
+        drives_ai: Vec<bool>,
         publishes: Vec<Vec<(u32, String)>>,
         odds: Option<(usize, Vec<oag_tables::pickup_look::OddsRow>, String)>,
     ) -> Self {
@@ -244,10 +247,12 @@ impl On {
             slots: modules
                 .into_iter()
                 .zip(publishes)
-                .map(|((mod_id, module), publishes)| Slot {
+                .zip(drives_ai)
+                .map(|(((mod_id, module), publishes), drives_ai_pickup)| Slot {
                     blob: vec![0; module.limits().state_bytes as usize],
                     sender: oag_ext_abi::channel_key(&mod_id),
                     publishes,
+                    drives_ai_pickup,
                     mod_id,
                     module,
                     faulted: None,
@@ -346,6 +351,15 @@ impl On {
             .enumerate()
             .filter(|(_, b)| sweep.iter().any(|p| b.contains(p.to_array())))
             .fold(0, |mask, (i, _)| mask | 1 << i);
+    }
+
+    /// The module that owns the mod pickup decides when an AI craft uses it: the engine
+    /// raises no `pickup-fire` for one.
+    pub(super) fn guest_drives_ai_pickup(&self) -> bool {
+        self.owner
+            .checked_sub(1)
+            .and_then(|module| self.slots.get(usize::from(module)))
+            .is_some_and(|slot| slot.drives_ai_pickup)
     }
 
     pub(super) fn pickup_used(&mut self, slot: usize, absorbed: bool) {
@@ -519,6 +533,21 @@ fn crafts(sim: &RaceSim, inputs: &oag_gameplay::PlayerInputs) -> Vec<oag_ext_abi
                 speed_kmh: ship.physics.body.linear_velocity.length()
                     * oag_core::math::SPEED_TO_KMH,
             }
+        })
+        .collect()
+}
+
+/// Each slot's distance along the circuit and place. The place is the one the HUD shows
+/// (`RaceSim::places`); an empty slot has none.
+fn tracking(sim: &RaceSim) -> Vec<oag_ext_abi::Tracking> {
+    let places = sim.places();
+    sim.world
+        .ships
+        .iter()
+        .zip(places)
+        .map(|(ship, place)| oag_ext_abi::Tracking {
+            progress: ship.standing.progress,
+            place: if ship.active { place } else { 0 },
         })
         .collect()
 }
@@ -734,6 +763,7 @@ pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs, trans
     }
     sim.extensions.on.transit_ends = transited;
     let crafts = crafts(sim, inputs);
+    let tracking = tracking(sim);
     let tick = sim.world.tick;
     let active = sim
         .world
@@ -775,6 +805,10 @@ pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs, trans
         active,
         events: &events,
         crafts: &crafts,
+        course: oag_ext_abi::Course {
+            length: sim.course.as_ref().map_or(0.0, oag_race::Course::length),
+            tracking: &tracking,
+        },
         track: &region.bytes,
         speed_pads: region.speed_pads,
         routes: region.routes,

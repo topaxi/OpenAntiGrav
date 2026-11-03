@@ -207,6 +207,7 @@ fn an_extension_table_names_its_rules_module_and_opens_nothing() {
             api: 1,
             memory_pages: 16,
             state_bytes: 64,
+            drives_ai_pickup: false,
             rules: Some(Rules {
                 module: "ext/curse.wasm".to_string()
             }),

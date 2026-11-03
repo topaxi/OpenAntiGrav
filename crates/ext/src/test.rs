@@ -73,6 +73,8 @@ impl TrackRecord {
 pub struct Race<E: Extension> {
     tick: u64,
     crafts: [Option<CraftRecord>; MAX_CRAFTS],
+    tracking: [oag_ext_abi::Tracking; MAX_CRAFTS],
+    course_length: f32,
     events: Vec<Event>,
     state: Vec<u8>,
     track: Vec<u8>,
@@ -92,6 +94,8 @@ impl<E: Extension> Race<E> {
         Self {
             tick: 0,
             crafts: [None; MAX_CRAFTS],
+            tracking: [oag_ext_abi::Tracking::default(); MAX_CRAFTS],
+            course_length: 0.0,
             events: Vec::new(),
             state: vec![0; E::State::BYTES],
             track: Vec::new(),
@@ -103,6 +107,21 @@ impl<E: Extension> Race<E> {
     #[must_use]
     pub fn with_craft(mut self, slot: Slot, craft: CraftRecord) -> Self {
         self.crafts[slot.index()] = Some(craft);
+        self
+    }
+
+    /// Sets the course's length and where `slot` runs on it: its distance along the lap
+    /// (`None`: no fix yet) and its place.
+    #[must_use]
+    pub fn with_course(
+        mut self,
+        length: f32,
+        slot: Slot,
+        progress: Option<f32>,
+        place: u8,
+    ) -> Self {
+        self.course_length = length;
+        self.tracking[slot.index()] = oag_ext_abi::Tracking { progress, place };
         self
     }
 
@@ -172,6 +191,10 @@ impl<E: Extension> Race<E> {
             active,
             &self.events,
             &records,
+            &oag_ext_abi::Course {
+                length: self.course_length,
+                tracking: &self.tracking,
+            },
             &self.state,
         );
         let status = crate::run::<E>(&mut io, &self.track);

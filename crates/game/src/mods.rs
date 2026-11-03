@@ -822,8 +822,13 @@ impl Mods {
             .filter(|m| self.disabled.contains(&m.manifest.id))
         {
             lines.push(format!(
-                "mod {} - turned off on the MODS page",
-                module.describe()
+                "mod {} - {}",
+                module.describe(),
+                if module.manifest.default_enabled {
+                    "turned off on the MODS page"
+                } else {
+                    "off until turned on on the MODS page (its manifest's default-enabled is false)"
+                }
             ));
         }
         lines.extend(self.failed.iter().map(|p| format!("mod problem: {p}")));

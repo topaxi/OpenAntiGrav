@@ -525,6 +525,25 @@ raises `transit-end` and its probe `clearance`; two runs hash alike; `scale-spee
 `tests::extension_odds`, `oag_weapons`' `a_mod_pickup_row_is_drawn_at_its_weight_and_absent_changes_nothing`,
 `oag_tables`' `odds_tests`, `oag_mod`'s manifest test, and the byte pins in `oag_ext_abi`.
 
+**An AI craft that holds the mod's pickup.** By default the engine raises `pickup-fire` for it
+wherever the driver would fire a Turbo (the Turbo's own gate, on the Turbo's boost time). A
+mod whose module decides for itself sets `[extension] drives_ai_pickup = true` (default
+`false`): the engine then raises nothing for an AI craft, and the module decides from the
+observation and clears the pickup itself with `clear-pickup` (and does what it fires, such as
+a `transit`). The observation carries what such a decision reads:
+
+| Piece | Kind | What it is |
+| --- | --- | --- |
+| tracking record | observation | A second per-craft record at `TRACKING_AT` (8 bytes a slot, `oag_ext_abi::Tracking`): `progress` (`f32`, units along the circuit within the lap, negative on the grid behind the line), `place` (`u8`, 1-based, 0 for an empty slot; the one ordering the HUD shows, `RaceSim::places`), a flags byte whose bit 0 says `progress` is a fix (no number stands for "no fix yet") |
+| course length | observation | `f32` units at header offset 4 (`COURSE_LENGTH_AT`), 0 without a closed course: `progress / length` is the lap share |
+| `drives_ai_pickup` | manifest | `[extension]`, boolean, default `false` |
+
+The observation is built before the tick's step, so `progress` and `place` are last tick's.
+The mod pickup's fire path for a person is unchanged. Proof: `oag_raceplay`'s
+`tests::extension_ai_pickup` (the default raises `pickup-fire` for an AI craft, the flag
+raises nothing, a module reads the course length and the HUD's place), `oag_ext_abi`'s
+tracking round trip and the recorded fold.
+
 ## Keeping the mod author skill current
 
 A change to the ABI, the guest SDK, `oag-mod.toml` or a mod-facing format updates

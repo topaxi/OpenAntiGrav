@@ -102,6 +102,10 @@ optional = true
 type = "integer"
 optional = true
 
+[types.extension.drives_ai_pickup]
+type = "boolean"
+optional = true
+
 [types.extension.rules]
 type = "table"
 optional = true

@@ -13,6 +13,7 @@
 //! | Offset | Size | Field |
 //! | --- | --- | --- |
 //! | [`ABI_AT`] | 4 | ABI major |
+//! | [`COURSE_LENGTH_AT`] | 4 | course length `f32`, units (0: no course) |
 //! | [`TICK_AT`] | 8 | world tick |
 //! | [`SLOTS_AT`] | 4 | slot count ([`MAX_SLOTS`]) |
 //! | [`ACTIVE_AT`] | 4 | active mask, one bit per slot holding a craft |
@@ -24,6 +25,7 @@
 //! | [`REPLY_AT`] + 4 | [`COMMAND_LEN`] x [`MAX_COMMANDS`] | commands ([`Command`]): kind `u8`, slot `u8`, `u16` argument, `f32`, `u32` |
 //! | [`POOL_AT`] | [`POOL_LEN`] | the reply's string pool: entries of a length byte then UTF-8, named by offset from a `hud-text` or `hud-icon` command |
 //! | [`CRAFTS_AT`] | [`CRAFT_LEN`] x [`MAX_CRAFTS`] | one record per grid slot ([`Craft`]): pickup `u8`, flags `u8`, lap `u8`, laps target `u8`, shield `f32`, shield maximum `f32`, speed km/h `f32` |
+//! | [`TRACKING_AT`] | [`TRACKING_LEN`] x [`MAX_CRAFTS`] | one record per grid slot ([`Tracking`]): progress `f32`, place `u8`, flags `u8` (bit 0: progress is a fix), 2 bytes unused |
 //!
 //! The track region is a second buffer, written by the host before each call when the
 //! guest exports `oag_track() -> u32`: [`track`] lays it out.
@@ -51,6 +53,10 @@ pub use kind::CommandKind;
 pub use malformed::Malformed;
 pub use motion::{Distance, MAX_PROBE_RADIUS, MAX_SPEED_FACTOR, MAX_TRANSIT_TICKS};
 pub use pickup::{Colour, Icon, ModIcon};
+pub use tracking::{
+    COURSE_LENGTH_AT, Course, TRACKING_AT, TRACKING_FIXED, TRACKING_FLAGS, TRACKING_LEN,
+    TRACKING_PLACE, TRACKING_PROGRESS, Tracking,
+};
 
 /// The ABI major. A manifest's `[extension] api` names it.
 pub const ABI: u32 = 1;
@@ -1309,17 +1315,19 @@ impl Command {
     }
 }
 /// Writes one tick's observation into a whole buffer, the state blob included. Events
-/// past [`MAX_EVENTS`] and crafts past [`MAX_CRAFTS`] are left out.
+/// past [`MAX_EVENTS`] and crafts and tracking records past [`MAX_CRAFTS`] are left out.
 pub fn write_observation(
     io: &mut [u8; IO_LEN],
     tick: u64,
     active: u32,
     events: &[Event],
     crafts: &[Craft],
+    course: &Course<'_>,
     state: &[u8],
 ) {
     let events = &events[..events.len().min(MAX_EVENTS)];
     put_u32(io, ABI_AT, ABI);
+    put_u32(io, COURSE_LENGTH_AT, course.length.to_bits());
     io[TICK_AT..TICK_AT + 8].copy_from_slice(&tick.to_le_bytes());
     put_u32(io, SLOTS_AT, MAX_SLOTS);
     put_u32(io, ACTIVE_AT, active);
@@ -1333,6 +1341,10 @@ pub fn write_observation(
     for (i, craft) in crafts.iter().take(MAX_CRAFTS).enumerate() {
         let at = CRAFTS_AT + i * CRAFT_LEN;
         io[at..at + CRAFT_LEN].copy_from_slice(&craft.encode());
+    }
+    for (i, tracking) in course.tracking.iter().take(MAX_CRAFTS).enumerate() {
+        let at = TRACKING_AT + i * TRACKING_LEN;
+        io[at..at + TRACKING_LEN].copy_from_slice(&tracking.encode());
     }
 }
 
@@ -1418,6 +1430,20 @@ impl<'a> Sections<'a> {
         head.get(at..at + EVENT_LEN)?.try_into().ok()
     }
 
+    /// The course length, units; 0 when the race has no course.
+    #[must_use]
+    pub fn course_length(head: &[u8]) -> f32 {
+        f32::from_bits(get_u32(head, COURSE_LENGTH_AT))
+    }
+
+    /// The slot's tracking record; `crafts` is [`Self::crafts`], which starts at
+    /// [`CRAFTS_AT`].
+    #[must_use]
+    pub fn tracking_record(crafts: &[u8], slot: Slot) -> Option<&[u8; TRACKING_LEN]> {
+        let at = (TRACKING_AT - CRAFTS_AT) + slot.index() * TRACKING_LEN;
+        crafts.get(at..at + TRACKING_LEN)?.try_into().ok()
+    }
+
     /// The slot's craft record.
     #[must_use]
     pub fn craft_record(crafts: &[u8], slot: Slot) -> Option<&[u8; CRAFT_LEN]> {
@@ -1459,6 +1485,7 @@ mod malformed;
 pub mod motion;
 mod pickup;
 pub mod track;
+mod tracking;
 
 #[cfg(test)]
 mod tests;

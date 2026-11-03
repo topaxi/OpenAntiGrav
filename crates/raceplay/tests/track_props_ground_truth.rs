@@ -86,6 +86,7 @@ fn module(id: &str, body: &str) -> race::extensions::Source {
         api: oag_ext_abi::ABI,
         memory_pages: 1,
         state_bytes: 4,
+        drives_ai_pickup: false,
         scope: race::extensions::Scope::Rules,
         read: Arc::new(move || Ok(wasm.clone())),
         strings: Arc::new(|_| Default::default()),

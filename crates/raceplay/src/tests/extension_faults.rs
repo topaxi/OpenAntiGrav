@@ -46,6 +46,7 @@ fn scripted(id: &str, guard: &str, commands: &[Command], publishes: &[&str]) -> 
         api: 1,
         memory_pages: 1,
         state_bytes: 8,
+        drives_ai_pickup: false,
         scope: Scope::Rules,
         read: Arc::new(move || Ok(wasm.clone())),
         strings: Arc::new(|_| Default::default()),

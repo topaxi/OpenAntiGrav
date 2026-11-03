@@ -143,7 +143,15 @@ fn the_observation_lists_active_crafts_and_skips_unknown_events() {
         },
         Event::PickupFire { slot: slot(0) },
     ];
-    oag_ext_abi::write_observation(&mut io, 77, 0b101, &events, &crafts, &[]);
+    oag_ext_abi::write_observation(
+        &mut io,
+        77,
+        0b101,
+        &events,
+        &crafts,
+        &Default::default(),
+        &[],
+    );
     // An event kind from a later revision.
     io[oag_ext_abi::EVENTS_AT + oag_ext_abi::EVENT_KIND] = 200;
     let sections = Sections::split(&mut io);
@@ -169,6 +177,7 @@ fn the_reply_refuses_what_the_host_would_fault_on() {
     let held = Craft {
         slot: slot(2),
         record: &record,
+        tracking: &[0; oag_ext_abi::TRACKING_LEN],
     };
     for bad in [2.5, -0.1, f32::NAN, f32::INFINITY] {
         assert_eq!(reply.scale_thrust(&held, bad), Err(Refused::Range));
@@ -226,9 +235,9 @@ const MAX_COMMANDS_FOR_TEST: usize = oag_ext_abi::MAX_COMMANDS;
 #[test]
 fn a_state_length_other_than_the_blobs_is_a_failed_tick() {
     let mut io = Box::new([0_u8; IO_LEN]);
-    oag_ext_abi::write_observation(&mut io, 0, 0, &[], &[], &[0; 8]);
+    oag_ext_abi::write_observation(&mut io, 0, 0, &[], &[], &Default::default(), &[0; 8]);
     assert_eq!(run::<Probe>(&mut io, &[]), 1);
-    oag_ext_abi::write_observation(&mut io, 0, 0, &[], &[], &[0; 12]);
+    oag_ext_abi::write_observation(&mut io, 0, 0, &[], &[], &Default::default(), &[0; 12]);
     assert_eq!(run::<Probe>(&mut io, &[]), 0);
 }
 
@@ -382,6 +391,7 @@ fn a_guest_draws_text_and_an_icon_and_the_cap_refuses_by_name() {
     let held = Craft {
         slot: slot(1),
         record: &[0; oag_ext_abi::CRAFT_LEN],
+        tracking: &[0; oag_ext_abi::TRACKING_LEN],
     };
     let place = HudPlace {
         anchor: Anchor::Top,
@@ -458,7 +468,15 @@ fn a_guest_finds_a_route_by_a_property_of_a_path_it_drives() {
     };
     let region = track.region();
     let mut io = Box::new([0_u8; IO_LEN]);
-    oag_ext_abi::write_observation(&mut io, 0, 0b1, &[], &[racer(1.0)], &[]);
+    oag_ext_abi::write_observation(
+        &mut io,
+        0,
+        0b1,
+        &[],
+        &[racer(1.0)],
+        &Default::default(),
+        &[],
+    );
     let sections = Sections::split(&mut io);
     let obs = Observation::read(sections.head, sections.crafts, &region);
     let track = obs.track();
@@ -482,6 +500,7 @@ fn a_pickup_look_is_one_record_and_a_mod_icon_rides_the_pool() {
     let held = Craft {
         slot: slot(2),
         record: &record,
+        tracking: &[0; oag_ext_abi::TRACKING_LEN],
     };
     let red = Colour::Rgba(Rgba::new(0xE0, 0x20, 0x20, 0x80));
     assert_eq!(reply.pickup_look(&held, icon::title::TURBO, red), Ok(()));
@@ -581,6 +600,7 @@ fn the_reply_refuses_an_emit_past_the_cap_and_a_non_finite_value() {
     let craft = Craft {
         slot: slot(0),
         record: &record,
+        tracking: &[0; oag_ext_abi::TRACKING_LEN],
     };
     for _ in 0..crate::MAX_EMITS_PER_TICK {
         assert_eq!(reply.emit(&craft, 1, 0.0), Ok(()));
@@ -598,6 +618,7 @@ fn the_reply_refuses_a_fire_effect_past_the_cap_counting_both_kinds() {
     let craft = Craft {
         slot: slot(0),
         record: &record,
+        tracking: &[0; oag_ext_abi::TRACKING_LEN],
     };
     for i in 0..oag_ext_abi::MAX_FIRE_EFFECTS_PER_TICK {
         let sent = if i % 2 == 0 {
@@ -626,6 +647,7 @@ fn the_motion_commands_refuse_what_the_host_would_fault_on() {
     let racing = Craft {
         slot: slot(1),
         record: &racing,
+        tracking: &[0; oag_ext_abi::TRACKING_LEN],
     };
     let out = CraftRecord {
         in_transit: true,
@@ -635,6 +657,7 @@ fn the_motion_commands_refuse_what_the_host_would_fault_on() {
     let out = Craft {
         slot: slot(2),
         record: &out,
+        tracking: &[0; oag_ext_abi::TRACKING_LEN],
     };
     let units = Distance::Seconds(2.0);
     assert_eq!(reply.transit(&out, 60, units, 0.9), Err(Refused::Range));
