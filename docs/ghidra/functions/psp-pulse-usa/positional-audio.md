@@ -799,7 +799,18 @@ about 128 x 41 us = 5.2 ms (49 % of the budget on one thread) would leave
 little room beside a loaded CPU, so cap `headphones` at the 32 nearest or
 loudest placed voices and let the rest take `rear_cue` (one shared
 convolver, a per-voice FIFO, so a voice can change mode at a block edge).
-That cap is a proposal, not built.
+**Built** (2026-11-03): `Mixer::set_hrtf_voice_cap`, default
+`HRTF_VOICES` = 32 (chosen, not measured). Each render ranks the placed voices
+by their own gain through their bus (ties keep a voice already holding a
+convolver, then the lower slot); the top 32 run the HRTF, the rest the rear
+cue. A voice changing sides crossfades over 256 frames (it keeps its convolver
+until the fade ends; a voice that was heard on the rear cue waits out the
+convolver's 512-frame latency before fading in); a voice that never sounded
+any other way starts on the HRTF at full level, so a mix under the cap is
+unchanged. Desktop bench (release, load about 29, 512-frame call, the HD-size
+mix of 72 placed + music + one-shots): `headphones` 1,558 us (14.6 % of the
+budget) uncapped, 737 us (6.9 %) capped at 32; `rear_cue` 382 us (3.6 %). The
+one-shot drain tail was not profiled.
 
 ## Not determined
 
