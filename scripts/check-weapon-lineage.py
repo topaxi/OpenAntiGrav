@@ -210,6 +210,12 @@ def code_cells() -> dict[str, dict[str, tuple[str, str | None]]]:
             value = "set" if sourced.group(2) == "true" else "none"
             cells.setdefault(f"weapons.{field}", {})[title] = (value, word)
 
+        # `Sourced::measured(OpponentFire::HD)`: the const is the value.
+        fire = re.search(r"Sourced::(\w+)\(\s*[\w:]*OpponentFire::(\w+)", weapons["opponent_fire"])
+        if fire is None:
+            raise SystemExit(f"check-weapon-lineage: {title}: `opponent_fire` is not a `Sourced` OpponentFire")
+        cells.setdefault("weapons.opponent_fire", {})[title] = (fire.group(2), fire.group(1))
+
         models = models_block(title)
         for field, value in models.items():
             if field.startswith("."):
