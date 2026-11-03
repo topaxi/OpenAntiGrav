@@ -82,7 +82,7 @@ fn every_omega_team_builds_a_shell_and_settles_to_its_own_colour() {
     };
     let mut archives = oag_omega::open(&path.display().to_string()).expect("omega");
     for (team, expected) in OMEGA {
-        let (colour, built, report) = shield_of(&mut archives, &oag_omega::TITLE, team);
+        let (colour, built, report) = shield_of(&mut archives, oag_omega::TITLE, team);
         let colour =
             colour.unwrap_or_else(|| panic!("{team}: no ShieldColour\n{}", report.join("\n")));
         assert!(built, "{team}: no shell model\n{}", report.join("\n"));
@@ -105,7 +105,7 @@ fn every_2048_team_builds_a_shell_and_settles_to_the_magnetic_colour() {
     let mut archives = oag_2048::open(&path.display().to_string()).expect("2048");
     for team in ["ag_systems", "auricom", "feisar", "piranha", "qirex"] {
         let team = format!(r"{team}2048\1");
-        let (colour, built, report) = shield_of(&mut archives, &oag_2048::TITLE, &team);
+        let (colour, built, report) = shield_of(&mut archives, oag_2048::TITLE, &team);
         let colour =
             colour.unwrap_or_else(|| panic!("{team}: no ShieldColour\n{}", report.join("\n")));
         assert!(built, "{team}: no shell model\n{}", report.join("\n"));
