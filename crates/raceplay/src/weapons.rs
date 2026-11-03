@@ -27,14 +27,15 @@ pub(crate) use visuals::{CannonAssets, CannonDraw};
 // this path, not only `race/tests/weapons.rs`.
 #[cfg(feature = "view")]
 pub(super) use visuals::bounced_this_tick;
-// The remaining four are only reached through `crate::weapons::<name>`
+// The remaining five are only reached through `crate::weapons::<name>`
 // by `race/tests/weapons.rs`, which asserts each pure gate without a disc -
 // see the doc comments on `visuals::flare_effect_for` and its neighbours.
 // `#[cfg(test)]` because nothing in a non-test build calls through this
 // path: `visuals.rs` reaches all three directly by their bare names.
 #[cfg(all(test, feature = "view"))]
 pub(super) use visuals::{
-    bounce_effect_for, flare_effect_for, flash_for, missile_flare_anchors, plasma_flare_scale,
+    advance_one_flare, bounce_effect_for, flare_effect_for, flash_for, missile_flare_anchors,
+    plasma_flare_scale,
 };
 
 /// How far behind the body a title that lays from the craft's rear anchor

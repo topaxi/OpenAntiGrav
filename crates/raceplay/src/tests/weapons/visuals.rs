@@ -311,3 +311,44 @@ fn each_detonation_starts_its_own_screen_flash() {
         }
     }
 }
+
+/// The Plasma's head carries particles in its own frame (flag `0x2`) and the
+/// original hands it the firer's, then the bolt's, matrix by pointer, so the
+/// root's arcs ride the craft instead of strewing a trail behind it. Dropping
+/// the ride leaves every earlier particle where it was born.
+#[test]
+fn the_plasma_heads_arcs_ride_the_anchor_they_were_born_on() {
+    use crate::weapons::advance_one_flare;
+    use oag_core::rng::Rng;
+
+    let blob = super::respawn::one_emitter_pob("WO_PLASMA_HEAD", 0x2);
+    let effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
+        .expect("the hand-laid effect parses");
+    let mut handles = EffectHandles::default();
+    handles.insert(Trigger::PlasmaFlare, effect);
+    let mut stage = oag_fx::psys::Stage::new();
+    let mut rng = Rng::new(5);
+    let mut playing = None;
+    for tick in 0..6 {
+        let at = Vec3::new(tick as f32 * 10.0, 0.0, 0.0);
+        advance_one_flare(
+            &mut stage,
+            &handles,
+            Some(Trigger::PlasmaFlare),
+            at,
+            0.5,
+            &mut playing,
+        );
+        stage.advance(1.0 / 60.0, &mut rng);
+    }
+    let (additive, alpha_over) = stage.vertices(Vec3::X, Vec3::Y);
+    let nearest = additive
+        .iter()
+        .chain(&alpha_over)
+        .map(|v| v.position[0])
+        .fold(f32::MAX, f32::min);
+    assert!(
+        nearest > 30.0,
+        "a particle born at the press stayed behind at x {nearest} while the head moved to 50"
+    );
+}

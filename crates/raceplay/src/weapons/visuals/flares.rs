@@ -40,7 +40,7 @@ pub(crate) fn flare_effect_for(kind: Option<oag_tables::weapons::Weapon>) -> Opt
 /// a `&mut Race` method, so the caller can hold two `&mut Option<Playing>`
 /// slots - [`RaceView::projectile_flare`] and [`RaceView::projectile_flare_orbit`] -
 /// live at once without a second borrow of `self`.
-pub(super) fn advance_one_flare(
+pub(crate) fn advance_one_flare(
     stage: &mut psys::Stage,
     handles: &EffectHandles,
     trigger: Option<Trigger>,
@@ -67,6 +67,13 @@ pub(super) fn advance_one_flare(
         (Some(trigger), None) => {
             if let Some(effect) = handles.get(trigger).cloned() {
                 *playing = stage.attach(&effect, at, scale);
+                // `Plasma_Init` hands the head the firer's and then the bolt's
+                // matrix by pointer, so the root's arcs (flag `0x2`) ride it
+                // (`docs/ghidra/functions/psp-pulse-usa/plasma.md`, "the head's
+                // arcs ride the craft").
+                if let (Trigger::PlasmaFlare, Some(instance)) = (trigger, *playing) {
+                    stage.set_rides_frame(instance, true);
+                }
             }
         }
     }
