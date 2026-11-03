@@ -4367,6 +4367,75 @@ elsewhere - the field takes only about 30 per cent of the track's speed
 pads, which looked like the next thing worth fixing. **It was not** - see
 [pads](#pads-built-measured-removed) below.
 
+#### Mistakes are never into a tight corner (2026-11-03, `pure-ai-measured-laws`)
+
+`Driver::blunder` does not roll within `TIGHT_REACH` (200 units) of a sample the speed plan
+passed a wall closely (`SpeedPlan::tight_within`). These are the corners `plan_slack` already
+holds to the plan's line, because there the line is the only one known to fit at the plan's
+speed. A missed braking point there has no recovery short of the wall. Ace (mistake rate `0`)
+and seed `0` are unchanged by construction: Pure Ace's eight races are byte-identical with
+the rule. Novice, Skilled and Elite move on every title with a plan.
+
+**Why: Wipeout Pure's speed pair.** Pure's engine does not double and its grounded drag is
+half Pulse's, both measured ([pure-physics.md](../physics/pure-physics.md#the-noise-bar)).
+On it the Novice field hit the walls far more than with the pair undone. The noise bar
+(twelve airborne pitch torques, eight seeds, `opponent_autopilot_sweep::races_others`,
+field alone) gave walls `562 -> 752` (median, `k = 10`) and end-of-run shield
+`90.8 -> 88.6` (`k = 8`). An ablation set one Novice knob to Ace's value at a time, on four
+torques. Walls, mean of four, speed pair undone against on:
+
+| Knob at Ace's value | Pair undone | Pair on |
+| --- | ---: | ---: |
+| none | `580` | `760` |
+| `grip_believed` | `1388` | `2042` |
+| `turn_allowed` | `560` | `695` |
+| `reaction_ticks` | `610` | `695` |
+| `pace_share` | `1280` | `1507` |
+| `mistakes` (none) | `429` | `321` |
+
+Only removing mistakes removes the gap. An instrumented run (eight seeds, unperturbed) then
+showed:
+
+- The mistake count is the same: `1721` with the pair undone, `1751` with it on.
+- A Pure mistake gains less speed (`4.3` against `9.4` u/s over its 30 ticks), but costs more.
+- Walls in the 150 ticks after a mistake ends: `325` with the pair undone, `482` with it on.
+  Walls with another craft within 12 units barely move (`121` against `149`).
+- The brake is saturated on `33,067` ticks of those windows with the pair undone and
+  `40,562` with it on: the craft cannot shed the overshoot in time.
+
+Shorter mistakes (15 or 20 ticks) or coasting through them lowered both states about
+equally and left most of the gap. Skipping the roll near a tight corner closed most of it:
+on four torques the gap went from `180` walls to `52`.
+
+**Measured with the rule** (twelve torques, eight seeds, Pure Novice, field alone):
+
+| Comparison | Walls, median | End-of-run shield | Per-lap shield | Lap |
+| --- | --- | --- | --- | --- |
+| Pair undone, no rule -> pair on, rule | `562 -> 598` (p `0.41`, `k = 2`) | `90.8 -> 89.2` (p `0.053`, `k = 5`) | `92.5 -> 90.9` (p `0.042`, `k = 5`) | `49.8 -> 55.2` s (the acceleration) |
+| Pair on: no rule -> rule | `752 -> 598` (better) | `88.6 -> 89.2` | `90.8 -> 90.9` | `54.1 -> 55.2` s (p `0.019`, `k = 3`) |
+| Residual: pair undone -> on, both with the rule | `520 -> 598` (p `0.067`, `k = 4`) | `90.0 -> 89.2` | `91.9 -> 90.9` | `50.4 -> 55.2` s |
+
+Unperturbed, eight seeds: walls `678 -> 508`, end-of-run shield `88.9 -> 90.8`, per-lap
+shield `91.8 -> 92.6`, no wreck either way. No metric is past the `P < 0.01` hold line
+against the pair-undone base, apart from the lap. The lap is the measured half acceleration,
+and the rule's own `+1.1` s is p `0.019`.
+
+**On Pulse the rule makes Novice cleaner and a little slower.** Measured on four torques
+(`0`, `1e-5`, `-1e-4`, `3e-4`), four seeds on each of the twelve circuits, so 48 races a
+sample (`opponent_autopilot_sweep::races_pulse`, field alone):
+
+| Metric | Before (four samples) | With the rule |
+| --- | --- | --- |
+| Race walls | `70945`-`76938` | `59076`-`66275` (every sample below every base sample) |
+| Respawns | `7`-`68` | `8`-`54` |
+| Wrecks | `0`-`2` | `0`-`1` |
+| Per-lap shield | `77.5`-`78.7` | `78.8`-`80.5` |
+| End-of-run shield | `67.1`-`68.1` | `69.4`-`71.7` |
+| Lap | `50.05`-`50.54` s | `50.41`-`50.83` s |
+
+The Pulse lone-craft gate is unchanged (`race_ground_truth`, twelve of twelve clean): its
+craft never errs.
+
 ### Pads: built, measured, removed
 
 The field crosses only about **30 per cent** of a real circuit's speed pads,

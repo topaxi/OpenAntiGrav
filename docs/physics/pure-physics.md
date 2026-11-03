@@ -355,6 +355,44 @@ longer (p `0.02`-`0.05`), above the `0.01` hold line; whether that is the physic
 it was not separated. So no driver change for Pure. Left open: the Ace grinding tail (two seeds at
 `eps = -1e-5`, one in the base too) and the lap split.
 
+## Our driver on Pure's laws, re-measured (2026-11-03, `pure-ai-measured-laws`)
+
+The same bar as [above](#the-noise-bar-on-the-combined-state-2026-10-21-ai-rejudge-after-switches)
+on today's tree: twelve torques a side, eight seeds, `races_others`, field alone. The laws
+were not touched. Each base is today's tree with one law undone by a scratch patch.
+
+**Ace pays nothing for bank-to-yaw `50` now.** Base: gain `30`. Law: today's `50`.
+
+| Metric, Ace | Median base -> law | Tail |
+| --- | --- | --- |
+| Race walls | `1853 -> 1814` (p `0.88`) | `k = 1` |
+| Wrecks | `2 -> 1.5` | none |
+| Laps | `44.7 -> 43.9` s (better) | none |
+| Per-lap shield | `75.1 -> 74.3` (p `0.19`) | `k = 3` (`P 0.11`) |
+| End-of-run shield | `66.7 -> 65.8` (p `0.24`) | `k = 1` |
+
+Unperturbed: walls `2110 -> 1745`, wrecks `3 -> 1`, per-lap shield `73.2 -> 75.0`, end-of-run
+shield `61.5 -> 67.9`. The `1899` walls the bank-to-yaw note held against are met. The note's
+`2058` was on HD's rotated inertia frame, and the world-axis frame has since replaced it.
+
+**Novice paid for the speed pair, and the cost was our driver's mistakes.** Base: the speed pair
+undone (engine doubling back on, drag `-0.005`). Law: today's pair.
+
+- Without a driver change: walls `562 -> 752` (`k = 10`), end-of-run shield `90.8 -> 88.6`
+  (`k = 8`), per-lap shield `92.5 -> 90.8` (`k = 5`).
+- The whole gap was in mistake recovery. On Pure's weaker brake, a missed braking point next
+  to a wall had no recovery.
+- The driver no longer misses a braking point into a tight corner. With that rule the field
+  is back inside the bar against the pair-undone base: walls `598` median (p `0.41`), end
+  shield `89.2` (p `0.053`). Unperturbed: walls `508`, end shield `90.8`.
+- The method, the ablation and Pulse's side of the change are in
+  [ai.md](../gameplay/ai.md#mistakes-are-never-into-a-tight-corner-2026-11-03-pure-ai-measured-laws).
+
+The pitch gate is a per-title craft law (`CraftLaws::pitch_gate`, Pure `measured(false)`).
+`pure_race_ground_truth::pure_crafts_fly_without_the_pitch_gate_and_pulse_crafts_with_it`
+checks every seated Pure craft is ungated and every Pulse one gated, at seating and after a
+reset.
+
 ## Cross-title
 
 Pure is not in the 2048/Omega lineage; the HD, Omega and 2048 tables carry each new field as

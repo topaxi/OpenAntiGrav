@@ -573,12 +573,11 @@ pub const SIDESHIFT: f32 = 200.0;
 /// table existed; the in-air `weight_distribution` pitch torque is off: Pure's pitch
 /// has no such term and it authors no `<Misc weight_distribution>`.
 ///
-/// **Measured on Pure PSP (USA)**, 2026-10-20 (`docs/physics/pure-physics.md`): the engine does
+/// **Measured on Pure PSP (USA)** (`docs/physics/pure-physics.md`): the engine does
 /// not double its output (`Ship_UpdateEngine`, `0x0892f1f0`, live on 374 frames to `3e-6`), its
 /// grounded drag is `-0.0025`, half Pulse's (`0x0892cba0`, every grounded frame), and its
-/// two-point hover's bank-to-yaw gain is `50`, not `30` (`0x0892dea8`, 129 banked frames). The
-/// speed pair, the pitch, the sideshift and the launch are on; the bank-to-yaw gain is held at
-/// Pulse's until our AI flies it.
+/// two-point hover's bank-to-yaw gain is `50`, not `30` (`0x0892dea8`, 129 banked frames). Every
+/// measured law here is on.
 pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::CraftLaws {
     inertia_mass: oag_title::pre_race::Sourced::inherited(0.9, "Pulse"),
     steer_ramp_clamped: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
