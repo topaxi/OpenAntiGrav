@@ -89,6 +89,10 @@ pub struct Manifest {
     /// (`schemas/v1/effect.tosd`). A module's `fire-mod-effect` names one by its index in
     /// this map's name order.
     pub effects: std::collections::BTreeMap<String, String>,
+    /// `[sounds]`: the mod's own sounds by name, as `.wav` paths in the mod
+    /// (`docs/formats/mod-sound.md`). A module's `play-mod-sound` names one by its index
+    /// in this map's name order.
+    pub sounds: std::collections::BTreeMap<String, String>,
     /// `[pickup]`: the look of the mod's own pickup, required of a simulation mod that
     /// hands one out.
     pub pickup: Option<PickupLook>,
@@ -175,6 +179,8 @@ struct File {
     icons: std::collections::BTreeMap<String, String>,
     #[serde(default)]
     effects: std::collections::BTreeMap<String, String>,
+    #[serde(default)]
+    sounds: std::collections::BTreeMap<String, String>,
     pickup: Option<PickupTable>,
 }
 
@@ -496,6 +502,27 @@ impl Manifest {
             ));
         }
 
+        for (name, path) in &file.sounds {
+            if !valid_key(name) {
+                return Err(bad(
+                    "sounds",
+                    format!("{name:?} is not a name: letters, digits, '-', '_'"),
+                ));
+            }
+            if !path.to_ascii_lowercase().ends_with(".wav") || !has(path) {
+                return Err(bad(
+                    "sounds",
+                    format!("{name}: {path:?} is not a .wav in the mod"),
+                ));
+            }
+        }
+        if file.sounds.len() > MAX_SOUNDS {
+            return Err(bad(
+                "sounds",
+                format!("{} sounds, at most {MAX_SOUNDS}", file.sounds.len()),
+            ));
+        }
+
         if !valid_id(&t.id) {
             return Err(bad(
                 "id",
@@ -569,6 +596,7 @@ impl Manifest {
             extension,
             icons: file.icons,
             effects: file.effects,
+            sounds: file.sounds,
             pickup,
             pickup_titles,
             pickup_odds,
@@ -727,6 +755,9 @@ fn extension(e: ExtensionTable, has: &dyn Fn(&str) -> bool) -> Result<Extension,
 
 /// What `fire-mod-effect`'s index (15 bits of an argument) can name, kept well inside it.
 const MAX_EFFECTS: usize = 256;
+
+/// What `play-mod-sound`'s index can name.
+const MAX_SOUNDS: usize = 64;
 
 /// A string key or icon name: letters, digits, '-', '_'.
 fn valid_key(key: &str) -> bool {

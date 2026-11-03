@@ -199,11 +199,12 @@ fn tick_effects(
     keep: impl Fn(&oag_gameplay::cue::CueEvent) -> bool,
     flyby: bool,
 ) {
-    let (mut cues, announcements, class_announcements) = if flyby {
-        (Vec::new(), Vec::new(), Vec::new())
+    let (mut cues, mod_sounds, announcements, class_announcements) = if flyby {
+        (Vec::new(), Vec::new(), Vec::new(), Vec::new())
     } else {
         (
             race.drain_cues(),
+            race.drain_mod_sounds(),
             race.drain_announcements(),
             race.drain_class_announcements(),
         )
@@ -215,10 +216,12 @@ fn tick_effects(
         announcer: race.announcer(),
         class_announcer: race.class_announcer(),
         cues,
+        mod_sounds,
         announcements,
         class_announcements,
         listener: listener_of(race),
-        craft: craft_positions(race),
+        craft: craft_positions(race, false),
+        mod_craft: craft_positions(race, true),
         slot_teams: std::array::from_fn(|slot| race.slot_team(slot)),
         player_slot: race.player_slot(),
         // The local player's throttle, `0..=100`: what
@@ -285,15 +288,20 @@ pub fn listener_of_view(view: oag_core::math::Mat4) -> oag_audio::Listener {
 ///
 /// [`None`] for a slot the race did not field. Read once per tick rather than
 /// per cue, because eight cues from one craft must all agree on where it was.
-fn craft_positions(race: &oag_raceplay::Race) -> [Option<(Vec3, f32)>; oag_gameplay::MAX_SHIPS] {
+fn craft_positions(
+    race: &oag_raceplay::Race,
+    in_transit: bool,
+) -> [Option<(Vec3, f32)>; oag_gameplay::MAX_SHIPS] {
     std::array::from_fn(|slot| {
         let ship = race.sim.world.ships.get(slot)?;
-        (slot < race.ship_count() as usize && ship.in_world()).then(|| {
-            (
-                ship.physics.body.position,
-                ship.physics.body.linear_velocity.length(),
-            )
-        })
+        (slot < race.ship_count() as usize && (ship.in_world() || in_transit && ship.active)).then(
+            || {
+                (
+                    ship.physics.body.position,
+                    ship.physics.body.linear_velocity.length(),
+                )
+            },
+        )
     })
 }
 

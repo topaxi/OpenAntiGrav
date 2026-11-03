@@ -61,6 +61,7 @@ pub use malformed::Malformed;
 pub use motion::{Distance, MAX_PROBE_RADIUS, MAX_SPEED_FACTOR, MAX_TRANSIT_TICKS};
 pub use pickup::{Colour, Icon, ModIcon};
 pub use scene::MAX_FOV_OFFSET_DEG;
+pub use sound::SoundMode;
 pub use tracking::{
     COURSE_LENGTH_AT, Course, TITLE_AT, TRACKING_AT, TRACKING_FIXED, TRACKING_FLAGS, TRACKING_LEN,
     TRACKING_PLACE, TRACKING_PROGRESS, Tracking,
@@ -878,6 +879,18 @@ pub enum Command {
         /// How far ahead along the circuit.
         distance: Distance,
     },
+    /// Play the sending mod's own sound number `index` (its place in `[sounds]`, name
+    /// order) from the craft, placed like a title cue (positioned, HRTF and rear cue
+    /// apply; the player's own craft is heard dry). One the mod lacks or that did not
+    /// load plays nothing and the load report says so. Heard, never hashed.
+    PlayModSound {
+        /// The grid slot the sound comes from.
+        slot: Slot,
+        /// The sound, by its place in the mod's `[sounds]`.
+        index: u16,
+        /// Once, a loop to start, or a loop to stop.
+        mode: SoundMode,
+    },
     /// Ask whether a disc of `radius` standing upright across the track `distance` ahead
     /// of the craft fits without touching track geometry: answered by a `clearance`
     /// event at the next call.
@@ -925,6 +938,7 @@ impl Command {
             Self::ScreenFill { .. } => CommandKind::ScreenFill,
             Self::FovOffset { .. } => CommandKind::FovOffset,
             Self::FireModEffectAhead { .. } => CommandKind::FireModEffectAhead,
+            Self::PlayModSound { .. } => CommandKind::PlayModSound,
         }
     }
 
@@ -956,7 +970,8 @@ impl Command {
             | Self::ProbeClearance { slot, .. }
             | Self::ScreenFill { slot, .. }
             | Self::FovOffset { slot, .. }
-            | Self::FireModEffectAhead { slot, .. } => Some(slot),
+            | Self::FireModEffectAhead { slot, .. }
+            | Self::PlayModSound { slot, .. } => Some(slot),
             Self::PickupRoll { .. }
             | Self::ScalePad { .. }
             | Self::SetWeather { .. }
@@ -1036,6 +1051,7 @@ impl Command {
             Self::ScreenFill { .. } | Self::FovOffset { .. } | Self::FireModEffectAhead { .. } => {
                 scene::encode(self).unwrap_or_default()
             }
+            Self::PlayModSound { .. } => sound::encode(self).unwrap_or_default(),
         };
         let mut record = [0; COMMAND_LEN];
         record[COMMAND_KIND] = self.kind().code();
@@ -1263,6 +1279,7 @@ impl Command {
             CommandKind::ScreenFill | CommandKind::FovOffset | CommandKind::FireModEffectAhead => {
                 return scene::decode(kind, slot, (arg, value, word));
             }
+            CommandKind::PlayModSound => return sound::decode(slot, arg, word),
             CommandKind::Emit => {
                 if !value.is_finite() {
                     return Err(Malformed::EmitValue { slot, value });
@@ -1465,6 +1482,7 @@ mod malformed;
 pub mod motion;
 mod pickup;
 mod scene;
+mod sound;
 pub mod track;
 mod tracking;
 

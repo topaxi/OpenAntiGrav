@@ -768,6 +768,7 @@ impl Race {
                 fire_terms: crate::field::fire_terms(opponent_fire, weapon_ai.as_ref(), difficulty),
                 autopilot: false,
                 cues: Vec::new(),
+                mod_sounds: Vec::new(),
                 announcements: Vec::new(),
                 class_announcements: Vec::new(),
                 contact_cue_cooldown: [0.0; oag_gameplay::MAX_SHIPS],

@@ -165,6 +165,14 @@ optional = true
 type = "any"
 optional = true
 
+# `[sounds]`: name = "path.wav", the mod's own sounds (PCM16, docs/formats/mod-sound.md).
+# The loader checks the names and that each is a .wav in the mod; the file itself is read,
+# and refused by name, when a race loads it.
+
+[elements.sounds]
+type = "any"
+optional = true
+
 # `[pickup]`: the look of the mod's own pickup, required of a simulation mod that hands
 # one out (give-pickup, pickup-roll). Each of `icon` and `colour` names its source:
 #   icon   = { title = "turbo" }  or  { mod = "<key of [icons]>" }

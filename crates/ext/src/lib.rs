@@ -47,7 +47,8 @@ pub use oag_ext_abi::{
     ABI_WORD, Aim, Anchor, Colour, Command, Cue, Distance, Effect, Event, HudElement, HudPlace,
     IO_LEN, Icon, MAX_CRAFTS, MAX_EMITS_PER_TICK, MAX_HUD_EXTRA, MAX_HUD_ITEMS, MAX_HUD_SHAKE,
     MAX_HUD_TEXT, MAX_PROBE_RADIUS, MAX_SPEED_FACTOR, MAX_STATE_BYTES, MAX_THRUST_FACTOR,
-    MAX_TRANSIT_TICKS, ModIcon, Pickup, Rgba, Slot, TRACK_SENDER, Weapon, WeatherKind, channel_key,
+    MAX_TRANSIT_TICKS, ModIcon, Pickup, Rgba, Slot, SoundMode, TRACK_SENDER, Weapon, WeatherKind,
+    channel_key,
 };
 pub use reply::{Refused, Reply};
 pub use track::{Entity, Track};

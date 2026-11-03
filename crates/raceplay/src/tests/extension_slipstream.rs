@@ -288,3 +288,53 @@ fn a_race_hands_its_module_the_titles_key() {
         );
     }
 }
+
+#[cfg(feature = "view")]
+#[test]
+fn its_three_sounds_load_through_the_engines_loader_in_name_order() {
+    let Some(slipstream) = open() else { return };
+    let mut source = source(&slipstream);
+    source.sounds = slipstream
+        .manifest
+        .sounds
+        .iter()
+        .map(|(name, path)| (name.clone(), path.clone()))
+        .collect();
+    let slipstream = std::sync::Arc::new(slipstream);
+    source.files = std::sync::Arc::new({
+        let slipstream = slipstream.clone();
+        move |name| {
+            slipstream
+                .read(name)
+                .map_err(|e| e.to_string())?
+                .ok_or_else(|| format!("{name}: not in the mod"))
+        }
+    });
+    let mut report = Vec::new();
+    let loaded = crate::extension_sounds::load(&[source], "wipeout-pulse", None, &mut report);
+    let names: Vec<&str> = slipstream
+        .manifest
+        .sounds
+        .keys()
+        .map(String::as_str)
+        .collect();
+    assert_eq!(names, ["portal-exit", "portal-open", "transit"]);
+    assert_eq!(report.len(), 3, "{report:?}");
+    for (index, name) in names.iter().enumerate() {
+        let sound = loaded
+            .get(&slipstream.manifest.id, index as u16)
+            .unwrap_or_else(|| panic!("{name} loads: {report:?}"));
+        assert_eq!(
+            (sound.channels(), sound.sample_rate()),
+            (1, 22_050),
+            "{name}"
+        );
+        assert!(sound.seconds() > 0.4 && sound.seconds() < 1.2, "{name}");
+        assert!(
+            report
+                .iter()
+                .any(|l| l.contains(name) && l.contains("loaded")),
+            "{name} is in the report"
+        );
+    }
+}

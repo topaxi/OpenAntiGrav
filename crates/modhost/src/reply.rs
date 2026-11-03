@@ -178,6 +178,7 @@ pub(crate) fn read(
             }
             Command::PickupRoll { .. }
             | Command::PlayCue { .. }
+            | Command::PlayModSound { .. }
             | Command::HudTint { .. }
             | Command::PickupLook { .. }
             | Command::HudShake { .. }

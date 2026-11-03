@@ -35,6 +35,8 @@ mod on;
 mod route;
 #[cfg(feature = "extensions")]
 mod shield;
+#[cfg(feature = "extensions")]
+mod sound;
 mod track;
 
 pub use channel::Declared;
@@ -106,6 +108,9 @@ pub struct Source {
     /// The mod's `[effects]`, in name order: name and the TOML's path in the mod. A
     /// module's `fire-mod-effect` names one by its place in this list.
     pub effects: Vec<(String, String)>,
+    /// The mod's `[sounds]`, in name order: name and the WAV's path in the mod. A
+    /// module's `play-mod-sound` names one by its place in this list.
+    pub sounds: Vec<(String, String)>,
     /// Reads any file of the mod by its path (an effect's TOML and PNGs).
     pub files: Files,
     /// The mod's `[pickup]`: the look of the pickup it hands out. A mod without one that

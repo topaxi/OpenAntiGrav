@@ -511,6 +511,9 @@ pub struct RaceSim {
     /// deliberately absent from [`Self::state_hash`]: a race that made no sound
     /// and one that made every sound must hash alike. See [`Race::drain_cues`].
     pub(super) cues: Vec<oag_gameplay::cue::CueEvent>,
+    /// The mods' own sounds this tick asked for, awaiting a drain: an output like
+    /// [`Self::cues`], never hashed.
+    pub(super) mod_sounds: Vec<oag_gameplay::cue::ModSoundEvent>,
     /// Zone milestone numbers reached this tick, awaiting a drain.
     ///
     /// Kept apart from [`Self::cues`] rather than folded into [`Cue`](oag_gameplay::cue::Cue):

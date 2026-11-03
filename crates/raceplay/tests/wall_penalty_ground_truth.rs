@@ -76,6 +76,7 @@ fn wall_penalty() -> Option<race::extensions::Source> {
         strings: Arc::new(|_| Default::default()),
         icons: Vec::new(),
         effects: Vec::new(),
+        sounds: Vec::new(),
         files: Arc::new(|_| Err("no files".into())),
         pickup: module.manifest.pickup.clone(),
         pickup_titles: Vec::new(),

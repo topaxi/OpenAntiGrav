@@ -4,7 +4,7 @@ use oag_ext_abi::{
     Colour, Command, Cue, Distance, Effect, HudElement, HudPlace, HudStr, Icon, MAX_COMMANDS,
     MAX_EMITS_PER_TICK, MAX_HUD_EXTRA, MAX_HUD_ITEMS, MAX_HUD_SHAKE, MAX_PAD_FACTOR,
     MAX_PROBE_RADIUS, MAX_SPEED_FACTOR, MAX_THRUST_FACTOR, MAX_TRANSIT_TICKS, POOL_AT, POOL_LEN,
-    Pickup, REPLY_AT, Rgba, Sections, Weapon, WeatherKind,
+    Pickup, REPLY_AT, Rgba, Sections, SoundMode, Weapon, WeatherKind,
 };
 
 use crate::Craft;
@@ -490,6 +490,27 @@ impl<'a> Reply<'a> {
         self.push(&Command::PlayCue {
             slot: craft.slot(),
             cue,
+        })
+    }
+
+    /// `play-mod-sound`: the mod's own sound at place `index` of its `[sounds]` (name
+    /// order) from the craft, once, as a loop to start, or as a loop to stop
+    /// ([`SoundMode`]). One the mod lacks or that did not load plays nothing, and the
+    /// load report says so. Heard, never hashed.
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`].
+    pub fn play_mod_sound(
+        &mut self,
+        craft: &Craft<'_>,
+        index: u16,
+        mode: SoundMode,
+    ) -> Result<(), Refused> {
+        self.push(&Command::PlayModSound {
+            slot: craft.slot(),
+            index,
+            mode,
         })
     }
 

@@ -20,7 +20,7 @@ fn slot(index: usize) -> Slot {
 }
 
 /// One of every command, with arguments that touch every field.
-fn every_command() -> [Command; 30] {
+fn every_command() -> [Command; 31] {
     [
         Command::ScaleThrust {
             slot: slot(1),
@@ -147,6 +147,11 @@ fn every_command() -> [Command; 30] {
             slot: slot(7),
             index: 3,
             distance: crate::Distance::Units(100.0),
+        },
+        Command::PlayModSound {
+            slot: slot(8),
+            index: 5,
+            mode: crate::SoundMode::Loop,
         },
     ]
 }
@@ -372,7 +377,8 @@ fn layout_fold() -> u64 {
     .chain([Effect::CollisionSpark, Effect::HitSpark].map(|effect| u32::from(effect.code())))
     .chain([WeatherKind::Rain].map(|kind| u32::from(kind.code())))
     .chain(HudElement::ALL.iter().map(|e| u32::from(e.code())))
-    .chain(Anchor::ALL.iter().map(|a| u32::from(a.code())));
+    .chain(Anchor::ALL.iter().map(|a| u32::from(a.code())))
+    .chain(SoundMode::ALL.iter().map(|m| m.code()));
     let commands = every_command().into_iter().flat_map(|c| c.encode_pooled(0));
     let events = every_event().into_iter().flat_map(Event::encode);
     let craft = a_craft().encode();
@@ -390,7 +396,7 @@ fn layout_fold() -> u64 {
 
 /// The revision and the layout it names. The ABI changes in place before release (no
 /// revision bump); the fold is recorded again with each layout edit.
-const REVISION_AND_FOLD: (u32, u64) = (3, 0x8b39_5c4f_8799_3de5);
+const REVISION_AND_FOLD: (u32, u64) = (3, 0xadfc_b7e8_5057_04bb);
 
 #[test]
 fn the_layout_is_the_revision_it_says() {
@@ -925,7 +931,7 @@ fn a_channel_name_is_a_mod_id_a_slash_and_a_name() {
 
 /// The bytes of one of every command, in `every_command`'s order, as hex. Spelled out so a
 /// layout change shows in the diff, and so a refactor of the encoder is held to today's bytes.
-const COMMAND_BYTES: [&str; 30] = [
+const COMMAND_BYTES: [&str; 31] = [
     "010100000000803e00000000",
     "02020000000060c000000000",
     "030300000000000000000000",
@@ -956,6 +962,7 @@ const COMMAND_BYTES: [&str; 30] = [
     "1e0500000000000010203040",
     "1f0600000000484100000000",
     "200703000000c84200000000",
+    "210805000000000001000000",
 ];
 
 /// The bytes of one of every event, in `every_event`'s order, as hex.
@@ -1178,4 +1185,27 @@ fn a_cone_is_in_front_inside_the_range_and_within_its_spread() {
     assert!(!at(150.0, 0.0, 0.0).in_cone(100.0, 0.3), "out of range");
     assert!(!at(-50.0, 0.0, 0.0).in_cone(100.0, 0.3), "behind");
     assert!(!at(0.0, 0.0, 0.0).in_cone(100.0, 0.3), "on top of it");
+}
+
+#[test]
+fn a_mod_sound_round_trips_each_mode_and_refuses_a_mode_the_abi_lacks() {
+    for mode in SoundMode::ALL {
+        let command = Command::PlayModSound {
+            slot: slot(3),
+            index: 700,
+            mode,
+        };
+        assert_eq!(Command::decode(&command.encode()), Ok(command));
+    }
+    let mut record = Command::PlayModSound {
+        slot: slot(1),
+        index: 0,
+        mode: SoundMode::Once,
+    }
+    .encode();
+    record[COMMAND_WORD] = 3;
+    assert!(matches!(
+        Command::decode(&record),
+        Err(Malformed::ModSound { word: 3, .. })
+    ));
 }
