@@ -308,7 +308,16 @@ fn streak_spec(draw: StreakDraw, rect: Option<[f32; 4]>) -> EmitterSpec {
 
 fn streak_vertices(spec: &EmitterSpec, particle: &Particle) -> Vec<GpuVertex> {
     let mut out = Vec::new();
-    streak::extend(&mut out, spec, particle, 1.0, [1.0; 4], Vec3::X, Vec3::Y, None);
+    streak::extend(
+        &mut out,
+        spec,
+        particle,
+        1.0,
+        [1.0; 4],
+        Vec3::X,
+        Vec3::Y,
+        None,
+    );
     out
 }
 
@@ -327,7 +336,16 @@ fn a_pool_bar_is_built_at_the_mean_depth_of_its_ends_when_the_eye_is_known() {
         forward: Vec3::NEG_Z,
     };
     let mut out = Vec::new();
-    streak::extend(&mut out, &spec, &particle, 1.0, [1.0; 4], Vec3::X, Vec3::Y, Some(&view));
+    streak::extend(
+        &mut out,
+        &spec,
+        &particle,
+        1.0,
+        [1.0; 4],
+        Vec3::X,
+        Vec3::Y,
+        Some(&view),
+    );
     assert_eq!(out.len(), 6);
     assert!(
         out.iter().all(|v| (v.position[2] + 15.0).abs() < 1e-4),

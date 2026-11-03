@@ -156,7 +156,16 @@ fn a_from_spawn_streaks_tail_stays_put() {
     };
     let shifts = |spec: &EmitterSpec| {
         let mut out = Vec::new();
-        streak::extend(&mut out, spec, &particle, 0.5, [1.0; 4], Vec3::Y, Vec3::Z, None);
+        streak::extend(
+            &mut out,
+            spec,
+            &particle,
+            0.5,
+            [1.0; 4],
+            Vec3::Y,
+            Vec3::Z,
+            None,
+        );
         out.iter()
             .map(|v| (Vec3::from(v.position).x, shift_of(v).x))
             .collect::<Vec<_>>()
