@@ -218,6 +218,21 @@ pub const MINE_EXPLO_EFFECT: &str = "WO_MINE_EXPLO";
 /// in `docs/ghidra/functions/psp-pulse-usa/mine.md`, the bomb's teardown section.
 pub const BOMB_SMOKERING_EFFECT: &str = "WO_BOMB_SMOKERING";
 
+/// A laid Bomb's glow, a child of the Bomb's scene node for its whole life:
+/// `Bomb_Init` (`0x088580d8`) on Pure spawns it with the fourcc `BOGL`
+/// (`docs/ghidra/functions/psp-pure-usa/weapon-effects.md`, "Bomb", confidence 70).
+/// Pure's alone: Pulse's `Bomb_Init` is not read for it.
+pub const BOMB_GLOW_EFFECT: &str = "WO_BOMB_GLOW";
+
+/// A Disruptor bolt in flight, attached to the projectile's matrix:
+/// `Disruptor_Init` (`0x08859010`), fourcc `DIHE`, confidence 80. Pure's alone.
+pub const DISRUPTOR_HEAD_EFFECT: &str = "WO_DISRUPTOR_HEAD";
+
+/// A Disruptor bolt ending, at a hit or after its `10.0` s timeout:
+/// `DisruptorExplo_Construct` (`0x0885a2c8`), fourcc `DIEX`, confidence 78.
+/// Pure's alone.
+pub const DISRUPTOR_EXPLO_EFFECT: &str = "WO_DISRUPTOR_EXPLO";
+
 /// The rays HD's Bomb blast spawns once, half a second after it starts:
 /// `NormalBombBlast_Update` (`0x001503d8`) calls `Psys_Spawn_q` with the string at
 /// `0x007855e8` and tag `'BORS'` at the blast's matrix, the first tick `age > 0.5`

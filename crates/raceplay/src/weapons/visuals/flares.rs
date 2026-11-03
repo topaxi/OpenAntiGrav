@@ -13,7 +13,8 @@ use super::super::*;
 
 /// Which flare effect, if any, a projectile of this kind rides - the
 /// Rocket's [`Trigger::RocketFlare`], the Missile's [`Trigger::MissileFlare`],
-/// or `None` for everything else, including a Mine or a Bomb.
+/// Pure's laid Bomb's [`Trigger::BombGlow`] and Disruptor's [`Trigger::DisruptorHead`], or
+/// `None` for everything else, a Mine included.
 ///
 /// Split out of [`Race::advance_projectile_flares`] so the gate is testable
 /// without a loaded `psys` library: the bug this replaced (`kind.is_none()`,
@@ -27,6 +28,9 @@ pub(crate) fn flare_effect_for(kind: Option<oag_tables::weapons::Weapon>) -> Opt
         oag_tables::weapons::Weapon::Missile => Some(Trigger::MissileFlare),
         oag_tables::weapons::Weapon::Plasma => Some(Trigger::PlasmaFlare),
         oag_tables::weapons::Weapon::Shuriken => Some(Trigger::ShurikenFlare),
+        // Pure's alone: a title whose table answers neither trigger rides nothing.
+        oag_tables::weapons::Weapon::Bomb => Some(Trigger::BombGlow),
+        oag_tables::weapons::Weapon::Disruptor => Some(Trigger::DisruptorHead),
         _ => None,
     }
 }

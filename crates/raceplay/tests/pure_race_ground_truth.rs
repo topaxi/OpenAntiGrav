@@ -502,3 +502,47 @@ fn a_pure_race_loads_its_own_plasma_blast_trio() {
         assert!(law.halo_hide_at.is_none(), "{label}");
     }
 }
+
+/// Pure spawns its own weapon effects: every trigger the executable was read
+/// for (`psp-pure-usa/weapon-effects.md`, `plasma.md`) resolves to a decoded
+/// `Data\Psys` effect on the disc, the Missile, Mine and Bomb group as well as
+/// the Disruptor's head and explosion and the Bomb's glow. Fails if a name is
+/// dropped from Pure's table or no longer decodes.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_pure_race_loads_the_effects_its_weapons_play() {
+    use oag_title::Trigger;
+    for (label, image) in images() {
+        let loaded = load(&image, oag_pure::race::DEFAULT_TRACK);
+        for (group, triggers) in [
+            ("Plasma", &[Trigger::PlasmaBlast, Trigger::PlasmaFlare][..]),
+            (
+                "Missile/Mine/Bomb",
+                &[
+                    Trigger::MissileFlare,
+                    Trigger::MissileBounce,
+                    Trigger::MissileExplo,
+                    Trigger::MineExplo,
+                    Trigger::BombGlow,
+                    Trigger::BombSmokering,
+                ][..],
+            ),
+            (
+                "Disruptor",
+                &[Trigger::DisruptorHead, Trigger::DisruptorExplo][..],
+            ),
+        ] {
+            for trigger in triggers {
+                let spec = oag_pure::TITLE
+                    .effect_on(*trigger)
+                    .unwrap_or_else(|| panic!("{label}: Pure's table has no {trigger:?}"));
+                assert!(
+                    loaded.setup.effects.get(spec.effect).is_some(),
+                    "{label}: {group} {trigger:?} ({}) did not decode: {:#?}",
+                    spec.effect,
+                    loaded.report
+                );
+            }
+        }
+    }
+}

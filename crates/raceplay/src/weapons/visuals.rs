@@ -476,6 +476,10 @@ impl Race {
             oag_tables::weapons::Weapon::Missile => Some((Trigger::MissileExplo, point)),
             oag_tables::weapons::Weapon::Mine => Some((Trigger::MineExplo, point)),
             oag_tables::weapons::Weapon::Bomb => Some((Trigger::BombSmokering, point)),
+            // `DisruptorExplo_Construct` (`0x0885a2c8`) at the hit matrix, at a hit and at the
+            // bolt's timeout alike (`psp-pure-usa/weapon-effects.md`). A title whose table
+            // answers no such trigger plays nothing.
+            oag_tables::weapons::Weapon::Disruptor => Some((Trigger::DisruptorExplo, point)),
             // `FUN_08870c78`, the blade's teardown: a fuse running out and a
             // craft hit both reach it.
             oag_tables::weapons::Weapon::Shuriken => Some((Trigger::ShurikenExpire, point)),
