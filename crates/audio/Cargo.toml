@@ -45,6 +45,13 @@ rtrb = "0.4.0"
 # impulse responses are ours to ship (assets/audio/hrtf/README.md).
 hrtf = "0.9.0"
 
+# The default output's kind on Linux, pushed by PipeWire's registry
+# (`route::live`). The same version cpal's `pipewire` feature builds, since
+# `pipewire-sys` links libpipewire once; `libspa` decodes the Route params.
+[target.'cfg(all(target_os = "linux", not(target_os = "android")))'.dependencies]
+pipewire = "0.10"
+libspa = "0.10"
+
 # The browser's output: an AudioWorklet the page starts, reading a ring in the
 # module's shared memory (`output::web`). See docs/tools/web.md, "Sound".
 [target.'cfg(target_arch = "wasm32")'.dependencies]

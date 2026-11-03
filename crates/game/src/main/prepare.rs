@@ -554,6 +554,14 @@ pub(crate) fn finish_definition(
     // And the MULTIPLAYER row where the title's own is worded differently (Pulse's
     // `MULTIPLAYER & SHARING`) - see `menu::Definition::rename_multiplayer_row`.
     definition.rename_multiplayer_row(title, strings);
+    // `auto` in the player's language; the other values are the setting's own
+    // spellings.
+    definition.relabel_choice_from(
+        "audio.spatial_audio",
+        "auto",
+        strings,
+        "OAG_AUDIO_SPATIAL_AUTO",
+    );
     // A phone app is left, not quit - see `menu::Definition::drop_quit`.
     if oag_mobile::MOBILE {
         definition.drop_quit();

@@ -274,6 +274,7 @@ OAG_AUDIO_ANNOUNCER_VOLUME = { text = "ANNOUNCER VOLUME", human = false }
 OAG_AUDIO_MASTER_VOLUME = { text = "MASTER VOLUME", human = false }
 OAG_AUDIO_MUSIC_SOURCE = { text = "MUSIC SOURCE", human = false }
 OAG_AUDIO_SPATIAL_AUDIO = { text = "SPATIAL AUDIO", human = false }
+OAG_AUDIO_SPATIAL_AUTO = { text = "AUTO", human = false }
 OAG_AUDIO_MUSIC = { text = "MUSIC", human = false }
 OAG_MUSIC_PAGE_TITLE = { text = "MUSIC", human = false }
 OAG_MUSIC_SOURCE_ROW = { text = "SOURCE", human = false }

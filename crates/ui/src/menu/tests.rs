@@ -19,6 +19,7 @@ mod nav;
 mod navigation;
 mod pointer;
 mod queries;
+mod relabel;
 mod reset;
 mod reveal;
 mod rows;

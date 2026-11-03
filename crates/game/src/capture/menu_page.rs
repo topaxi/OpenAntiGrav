@@ -159,6 +159,12 @@ pub(super) fn menu_page(
     definition.drop_unavailable_dynamic_hud(title);
     definition.rename_campaign_row(title, strings);
     definition.rename_multiplayer_row(title, strings);
+    definition.relabel_choice_from(
+        "audio.spatial_audio",
+        "auto",
+        strings,
+        "OAG_AUDIO_SPATIAL_AUTO",
+    );
     // A mod campaign's picker, as `crate::prepare` adds it; a cross-disc one
     // is kept here, since a still never races it.
     let installed = loaded.installed_for(title, &|_| true);

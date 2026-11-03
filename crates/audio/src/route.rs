@@ -1,18 +1,25 @@
 //! What the default output is: headphones, speakers or unknown.
 //!
 //! `auto` spatial audio follows this. The probe asks the platform and runs off
-//! the frame loop ([`RouteWatcher`] starts it on a worker and takes the answer
-//! a frame later); the render thread and the device callback never wait on it.
+//! the frame loop ([`RouteWatcher`] takes the answer a frame later); the render
+//! thread and the device callback never wait on it.
 //!
 //! cpal does not help for the default device: its PipeWire and PulseAudio hosts
 //! name the graph's `output_default` node whatever is plugged in, and the
-//! Android and iOS hosts name "Default Device". So the probe asks the platform
-//! itself: `pactl` on Linux, the `WASAPI` form factor on Windows. Anything it
-//! cannot read is [`RouteKind::Unknown`], which `auto` treats as speakers.
+//! Android and iOS hosts name "Default Device". So the platform is asked
+//! itself: on Linux PipeWire pushes every change (`live`, reduced by `graph`,
+//! no process is spawned), on Windows the `WASAPI` form factor is polled.
+//! Anything unreadable is [`RouteKind::Unknown`], which `auto` treats as
+//! speakers.
 
 use std::sync::Arc;
 
 use oag_thread::Task;
+
+#[cfg(all(target_os = "linux", not(target_os = "android")))]
+mod graph;
+#[cfg(all(target_os = "linux", not(target_os = "android")))]
+mod live;
 
 /// What kind of output the sound is going to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -52,70 +59,11 @@ fn names_speakers(word: &str) -> bool {
     )
 }
 
-/// The route out of `pactl --format=json list sinks` for the sink named
-/// `default_sink`. The id is the sink name plus its active port: on a Steam
-/// Deck or a laptop speakers and the headphone jack are one sink with two
-/// ports, and a choice made on one must not follow the other.
-#[must_use]
-pub fn from_pactl(default_sink: &str, sinks_json: &str) -> Route {
-    let Ok(sinks) = serde_json::from_str::<serde_json::Value>(sinks_json) else {
-        return Route::default();
-    };
-    let Some(sink) = sinks
-        .as_array()
-        .and_then(|all| all.iter().find(|s| s["name"] == default_sink))
-    else {
-        return Route::default();
-    };
-    let port = sink["active_port"].as_str().unwrap_or_default();
-    let device = Some(format!("{default_sink}|{port}"));
-    let port_type = sink["ports"]
-        .as_array()
-        .and_then(|ports| ports.iter().find(|p| p["name"] == port))
-        .and_then(|p| p["type"].as_str())
-        .unwrap_or_default();
-    let props = &sink["properties"];
-    let form_factor = props["device.form_factor"].as_str().unwrap_or_default();
-    let bluetooth = props["device.bus"] == "bluetooth";
-    let kind = if names_headphones(port_type) || names_headphones(form_factor) {
-        RouteKind::Headphones
-    } else if names_speakers(port_type) || names_speakers(form_factor) {
-        RouteKind::Speakers
-    } else if bluetooth {
-        // A Bluetooth sink with no form factor is overwhelmingly a headset.
-        RouteKind::Headphones
-    } else {
-        RouteKind::Unknown
-    };
-    Route { device, kind }
-}
-
-/// Asks the platform for the default output. Blocks (a subprocess on Linux),
-/// so only [`RouteWatcher`]'s worker calls it.
+/// Asks the platform for the default output. May block, so only
+/// [`RouteWatcher`]'s worker calls it.
 #[must_use]
 pub fn probe() -> Route {
     probe_platform()
-}
-
-#[cfg(all(target_os = "linux", not(target_os = "android")))]
-fn probe_platform() -> Route {
-    use std::process::Command;
-    let run = |args: &[&str]| {
-        Command::new("pactl")
-            .env("LC_ALL", "C")
-            .args(args)
-            .output()
-            .ok()
-            .filter(|out| out.status.success())
-            .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
-    };
-    let (Some(default), Some(sinks)) = (
-        run(&["get-default-sink"]),
-        run(&["--format=json", "list", "sinks"]),
-    ) else {
-        return Route::default();
-    };
-    from_pactl(&default, &sinks)
 }
 
 #[cfg(target_os = "windows")]
@@ -138,13 +86,10 @@ fn probe_platform() -> Route {
     }
 }
 
-// macOS, Android, iOS and the browser: nothing is read yet, so the answer is
-// `Unknown` and `auto` is the rear cue. The per-platform queries are listed in
-// the spatial audio handover thread.
-#[cfg(not(any(
-    all(target_os = "linux", not(target_os = "android")),
-    target_os = "windows"
-)))]
+// Linux is pushed by `live`. macOS, Android, iOS and the browser: nothing is
+// read yet, so the answer is `Unknown` and `auto` is the rear cue. The
+// per-platform queries are listed in the spatial audio handover thread.
+#[cfg(not(target_os = "windows"))]
 fn probe_platform() -> Route {
     Route::default()
 }
@@ -156,6 +101,9 @@ pub struct RouteWatcher {
     countdown: u32,
     task: Option<Task<Route>>,
     last: Option<Route>,
+    /// A source that pushes changes; when set, `probe` is never run.
+    #[cfg(all(target_os = "linux", not(target_os = "android")))]
+    live: Option<live::Live>,
 }
 
 impl std::fmt::Debug for RouteWatcher {
@@ -167,7 +115,8 @@ impl std::fmt::Debug for RouteWatcher {
 }
 
 impl RouteWatcher {
-    /// Polls roughly every two seconds at 60 calls per second.
+    /// Polls roughly every two seconds at 60 calls per second (Windows; Linux
+    /// is pushed).
     pub const POLL_EVERY: u32 = 120;
 
     /// A watcher over the platform probe. In the browser nothing is probed.
@@ -176,6 +125,13 @@ impl RouteWatcher {
         if cfg!(target_arch = "wasm32") {
             return Self::with_probe(Arc::new(Route::default), u32::MAX);
         }
+        #[cfg(all(target_os = "linux", not(target_os = "android")))]
+        {
+            let mut watcher = Self::with_probe(Arc::new(Route::default), u32::MAX);
+            watcher.live = Some(live::Live::start());
+            watcher
+        }
+        #[cfg(not(all(target_os = "linux", not(target_os = "android"))))]
         Self::with_probe(Arc::new(probe), Self::POLL_EVERY)
     }
 
@@ -189,12 +145,22 @@ impl RouteWatcher {
             countdown: 0,
             task: None,
             last: None,
+            #[cfg(all(target_os = "linux", not(target_os = "android")))]
+            live: None,
         }
     }
 
     /// Call once a frame. Returns the new route when the probe's answer differs
     /// from the last one (the first answer always counts), and never waits.
     pub fn poll(&mut self) -> Option<Route> {
+        #[cfg(all(target_os = "linux", not(target_os = "android")))]
+        if let Some(live) = &self.live {
+            let route = live.latest()?;
+            return (self.last.as_ref() != Some(&route)).then(|| {
+                self.last = Some(route.clone());
+                route
+            });
+        }
         if let Some(task) = self.task.as_mut()
             && task.is_finished()
         {
