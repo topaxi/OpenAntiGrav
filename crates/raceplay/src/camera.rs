@@ -732,7 +732,12 @@ impl Race {
         }
         .clamp(FOV_GUARD_DEG.0, FOV_GUARD_DEG.1);
         let authored = setting.apply(widened_deg.to_radians());
-        finish_vertical_fov(authored, boost_kick, self.view.boost_fov_kick.gain(), aspect)
+        finish_vertical_fov(
+            authored,
+            boost_kick,
+            self.view.boost_fov_kick.gain(),
+            aspect,
+        )
     }
 }
 

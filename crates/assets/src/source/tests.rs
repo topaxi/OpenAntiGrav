@@ -231,6 +231,7 @@ const TITLE: &Title = &Title {
     // this crate looks at.
     // No prompt glyph of this title's has been read; the disc's own draw unchanged.
     prompts: &oag_title::prompts::Prompts::UNREAD,
+    reset_enables: oag_title::recovery::ResetEnables::PULSE,
     effects_volume_law: oag_title::pre_race::Sourced::chosen(
         oag_title::group_volume::GroupVolumeLaw::Linear,
     ),

@@ -7,6 +7,7 @@
 
 use super::*;
 use oag_gameplay::PlayerInputs;
+use oag_race::recovery::{DISTANCE_RESET_TICKS, RESCUE_TICKS, STALL_TICKS};
 
 /// Craft used to pass through each other, which is what this catches.
 ///

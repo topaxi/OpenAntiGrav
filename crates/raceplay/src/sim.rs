@@ -386,6 +386,9 @@ pub struct RaceSim {
     pub(super) autopilot_absorb_cancels: bool,
     /// Whether a pad grants a craft whose Autopilot runs - see [`Setup::autopilot_pad_grants`].
     pub(super) autopilot_pad_grants: bool,
+    /// Which ways a craft is put back are on, and their numbers - see
+    /// [`Setup::reset_triggers`].
+    pub(super) reset_triggers: oag_race::recovery::ResetTriggers,
     /// The opponents' decision terms, resolved for this race's difficulty - see
     /// [`Setup::opponent_fire`].
     pub(super) fire_terms: oag_ai::weapon_ai::Law,

@@ -810,6 +810,10 @@ pub struct Setup {
     /// Whether a weapon pad grants a craft whose Autopilot runs,
     /// `oag_title::weapons::Weapons::autopilot_pad_grants`.
     pub autopilot_pad_grants: bool,
+    /// Which ways a craft is put back are on, and the numbers they fire on:
+    /// `oag_race::recovery::ResetTriggers::PULSE` with the title's
+    /// `oag_title::Title::reset_enables` applied.
+    pub reset_triggers: oag_race::recovery::ResetTriggers,
     /// Which terms the opponents' fire-or-absorb decision rolls by,
     /// `oag_title::weapons::Weapons::opponent_fire`.
     pub opponent_fire: oag_title::weapons::OpponentFire,

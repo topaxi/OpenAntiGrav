@@ -57,6 +57,7 @@ pub mod pressing;
 pub mod prompts;
 pub mod race;
 pub mod race_song;
+pub mod recovery;
 pub mod shadow;
 pub mod speed;
 pub mod team;
@@ -147,6 +148,8 @@ pub struct Title {
     /// [`weapon_pad::WeaponPadGlow`]: HD overwrites the material's authored value
     /// with a per-pad cycle, every other title keeps it.
     pub weapon_pad_glow: &'static weapon_pad::WeaponPadGlow,
+    /// Which of the ways a craft is put back this title has. See [`recovery::ResetEnables`].
+    pub reset_enables: recovery::ResetEnables,
     /// The curve from the SFX slider and the flyby fade to the effects bus. See
     /// [`group_volume::GroupVolumeLaw`]. A title whose mix is authored (HD and its lineage) keeps
     /// the bus to that mix and reads `Linear`.

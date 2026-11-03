@@ -372,6 +372,7 @@ fn setup(handling: Handling) -> Setup {
         },
         autopilot_absorb_cancels: true,
         autopilot_pad_grants: false,
+        reset_triggers: oag_race::recovery::ResetTriggers::PULSE,
         opponent_fire: oag_title::weapons::OpponentFire::PULSE,
         // A synthetic track authors no pads, which is also what every Pure
         // track does: an empty set is an ordinary state, not a stub.

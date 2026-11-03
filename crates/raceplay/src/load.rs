@@ -1256,6 +1256,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             quake_hit: title.weapons.quake_hit,
             autopilot_absorb_cancels: title.weapons.autopilot_absorb_cancels.value,
             autopilot_pad_grants: title.weapons.autopilot_pad_grants.value,
+            reset_triggers: crate::respawn::reset_triggers_for(&title.reset_enables),
             opponent_fire: title.weapons.opponent_fire.value,
             speedup_pads,
             weapon_pads,

@@ -7,6 +7,10 @@
 
 use super::*;
 use oag_gameplay::PlayerInputs;
+use oag_race::recovery::{
+    BENEATH_LINE, DISTANCE_RESET_TICKS, DISTANCE_RESET_UNITS, RESCUE_TICKS, RESPAWN_COOLDOWN_TICKS,
+    STALL_TICKS,
+};
 
 /// A respawn in flight teleports the craft and leaves the camera spring
 /// catching up, so neither position describes the shot.
