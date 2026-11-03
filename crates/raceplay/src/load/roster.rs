@@ -224,6 +224,7 @@ pub(super) fn shield_palette(
     }
 }
 
+#[cfg(feature = "view")]
 /// A slot's settled shield colour, with the alpha Omega's and 2048's
 /// constructor settles on: the larger of the shell's and the cockpit sphere's
 /// (`Palette::target_alpha_from_cockpit`). The other palettes take the shell's
@@ -388,6 +389,7 @@ pub(super) fn grid(
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "view")]
     #[test]
     fn omega_target_alpha_is_the_larger_of_shell_and_cockpit() {
         use super::shield_target;
