@@ -175,6 +175,81 @@ impl std::fmt::Display for SpatialMode {
     }
 }
 
+/// What the player picked on the SPATIAL AUDIO row: a [`SpatialMode`], or
+/// `auto`, which follows the output device.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SpatialChoice {
+    /// [`SpatialMode::Headphones`] on a headphone output, [`SpatialMode::RearCue`]
+    /// on anything else, including an output nothing is known about.
+    #[default]
+    Auto,
+    /// [`SpatialMode::Original`].
+    Original,
+    /// [`SpatialMode::RearCue`].
+    RearCue,
+    /// [`SpatialMode::Headphones`].
+    Headphones,
+}
+
+impl SpatialChoice {
+    /// Every value, in menu order.
+    pub const ALL: [Self; 4] = [Self::Auto, Self::Original, Self::RearCue, Self::Headphones];
+
+    /// The spelling used in a settings file and on a menu row.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Original => "original",
+            Self::RearCue => "rear_cue",
+            Self::Headphones => "headphones",
+        }
+    }
+
+    /// The mode the mixer runs for this choice on an output of kind `route`.
+    #[must_use]
+    pub fn resolve(self, route: crate::route::RouteKind) -> SpatialMode {
+        match self {
+            Self::Auto if route == crate::route::RouteKind::Headphones => SpatialMode::Headphones,
+            Self::Auto | Self::RearCue => SpatialMode::RearCue,
+            Self::Original => SpatialMode::Original,
+            Self::Headphones => SpatialMode::Headphones,
+        }
+    }
+}
+
+impl From<SpatialMode> for SpatialChoice {
+    fn from(mode: SpatialMode) -> Self {
+        match mode {
+            SpatialMode::Original => Self::Original,
+            SpatialMode::RearCue => Self::RearCue,
+            SpatialMode::Headphones => Self::Headphones,
+        }
+    }
+}
+
+impl std::str::FromStr for SpatialChoice {
+    type Err = String;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        Self::ALL
+            .into_iter()
+            .find(|choice| choice.name().eq_ignore_ascii_case(text))
+            .ok_or_else(|| {
+                format!(
+                    "{text:?} is not a spatial audio choice; try auto, original, rear_cue or headphones"
+                )
+            })
+    }
+}
+
+impl std::fmt::Display for SpatialChoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
 /// Something in the world that makes a noise.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Emitter {

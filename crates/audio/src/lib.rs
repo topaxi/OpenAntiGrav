@@ -15,6 +15,8 @@
 //! - [`spatial`] is the positional law: what distance and direction do to a
 //!   cue's level and its place between the speakers, recovered from the
 //!   original's own emitter records. Pure arithmetic, no voice and no device.
+//! - [`route`] asks what the default output is (headphones or speakers), off
+//!   the frame loop, so `auto` spatial audio can follow it.
 //! - [`output`] is the device: a `cpal` stream, or none at all.
 //! - [`spectrum`] is a coarse, render-facing frequency analysis of what the
 //!   mixer is actually producing - the input Wipeout HD/Fury's Zone
@@ -39,11 +41,15 @@
 pub mod binaural;
 pub mod mixer;
 pub mod output;
+pub mod route;
 pub mod spatial;
 pub mod spectrum;
 pub mod wav;
 
 pub use mixer::{Bus, GROUPS, Mixer, Play, Sound, VoiceId};
 pub use output::{MIN_BUFFER, Output, Tap, TapSpec};
-pub use spatial::{Cone, Doppler, Emitter, LISTENER_JUMP, Listener, Placed, SpatialMode};
+pub use route::{Route, RouteKind, RouteWatcher};
+pub use spatial::{
+    Cone, Doppler, Emitter, LISTENER_JUMP, Listener, Placed, SpatialChoice, SpatialMode,
+};
 pub use spectrum::{BANDS, Spectrum};

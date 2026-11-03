@@ -908,6 +908,12 @@ impl Mixer {
         let spatial = self.spatial;
         if spatial == SpatialMode::Headphones && self.binaural.is_some() {
             self.rank_hrtf_voices();
+        } else {
+            // Leaving `Headphones` mid-race: no voice wants the convolver, so
+            // each fades out over `HRTF_CROSSFADE_FRAMES` instead of cutting.
+            for voice in &mut self.voices {
+                voice.hrtf_wanted = false;
+            }
         }
         let binaural = &mut self.binaural;
 
@@ -926,9 +932,11 @@ impl Mixer {
             let channel_gain = voice.pan.map_or([1.0; CHANNELS], crate::spatial::pan_gains);
             // A headphone voice goes through the convolver; asked for before the
             // sphere has loaded, it takes the rear cue meanwhile.
+            // `Original` drops the convolver at once (it is bit-identical to a
+            // mixer that never had one); `RearCue` lets a live one fade out.
             let hrtf_ready =
-                spatial == SpatialMode::Headphones && voice.pan.is_some() && binaural.is_some();
-            let want_hrtf = hrtf_ready && voice.hrtf_wanted;
+                spatial != SpatialMode::Original && voice.pan.is_some() && binaural.is_some();
+            let want_hrtf = spatial == SpatialMode::Headphones && hrtf_ready && voice.hrtf_wanted;
             if want_hrtf && voice.hrtf.is_none() {
                 voice.hrtf = Some(Box::new(VoiceState::new()));
                 if voice.heard_rear {
@@ -1049,6 +1057,10 @@ impl Mixer {
                     }
                     if let (Some(state), Some(bin)) = (voice.hrtf.as_deref_mut(), binaural.as_mut())
                     {
+                        // A convolver entered mid-signal starts from silence; the
+                        // source is faded in over the warm-up so that start is
+                        // not a step the crossfade then has to hide.
+                        let fade_in = 1.0 - hrtf_warmup as f32 / LATENCY as f32;
                         if hrtf_warmup > 0 {
                             hrtf_warmup -= 1;
                         } else if want_hrtf {
@@ -1056,7 +1068,7 @@ impl Mixer {
                         } else {
                             hrtf_weight = (hrtf_weight - hrtf_step).max(0.0);
                         }
-                        let mono = 0.5 * (raw[0] + raw[1]) * gain * fade * closing_fade;
+                        let mono = 0.5 * (raw[0] + raw[1]) * gain * fade * closing_fade * fade_in;
                         let (l, r) = state.push(bin, mono, side, front);
                         chunk[0] += l * hrtf_weight;
                         chunk[1] += r * hrtf_weight;
@@ -1074,7 +1086,7 @@ impl Mixer {
                             }
                         }
                     } else {
-                        if spatial == SpatialMode::Headphones && voice.pan.is_some() {
+                        if spatial != SpatialMode::Original && voice.pan.is_some() {
                             heard_rear = true;
                         }
                         for (c, sample) in chunk.iter_mut().enumerate() {
