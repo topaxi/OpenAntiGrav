@@ -169,6 +169,10 @@ pub struct RaceSim {
     /// How many times each craft has been respawned this race, for tests and
     /// for the load report.
     pub(super) respawns: [u32; oag_gameplay::MAX_SHIPS],
+    /// How many times each craft has been moved along the circuit (`Race::move_to`): a
+    /// cut for the cameras and the between-ticks blend, as a respawn is. Bookkeeping
+    /// outside `state_hash`, like [`Self::respawns`].
+    pub(super) jumps: [u32; oag_gameplay::MAX_SHIPS],
     /// Which trigger fired the most recent respawn of each craft, `None` before
     /// the first. Bookkeeping outside `state_hash`, read by survey tests through
     /// [`Race::last_respawn_cause_of`].

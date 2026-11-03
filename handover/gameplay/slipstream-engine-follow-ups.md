@@ -76,7 +76,11 @@ The engine never names the mod.
    distance reset would fire. Recommended rule for our track format: the author gives the
    island its own spline path that rejoins the circuit, which makes it item 5. An engine
    notion of an off-course stretch is a design question first. Size L if built (30).
-7. **`Distance::Trigger` with a real track file.** It is tested only through the
+7. **Two mod pickups in one race.** A mod with `[[pickup.odds]]` owns the mod pickup from tick
+   0, so with slipstream and energy-turbo both on, energy-turbo faults on its first
+   `pickup-roll` ("the mod pickup belongs to mod ..."). One mod pickup a race is the rule
+   today; more than one needs a pickup kind per mod.
+8. **`Distance::Trigger` with a real track file.** It is tested only through the
    refusal path (a track with no trigger). A `track_props_ground_truth`-style test with a
    trigger pair is owed.
 

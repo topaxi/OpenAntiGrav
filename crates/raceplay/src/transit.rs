@@ -228,9 +228,11 @@ impl Race {
         body.linear_velocity = relocation.velocity;
         body.angular_velocity = Vec3::ZERO;
         ship.standing.jumped(course, to, tick, laps_target);
-        if let Some(race) = self.sim.world.race.get_mut(slot) {
-            race.jumped(course, to);
+        // Only a person's clock runs (`advance_player_rules`); an AI slot's is never read.
+        if self.sim.world.person_flown(slot) {
+            self.sim.world.race[slot].jumped(course, to);
         }
+        self.sim.jumps[slot] = self.sim.jumps[slot].wrapping_add(1);
         self.sim.pad_previous_position[slot] = None;
         // A lane snap computed from where it was would put it back.
         if let Some(rail) = self.sim.autopilot_rail.get_mut(slot) {

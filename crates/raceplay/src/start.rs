@@ -710,6 +710,7 @@ impl Race {
                 respawns_in_a_row: [0; oag_gameplay::MAX_SHIPS],
                 respawn_disabled: [false; oag_gameplay::MAX_SHIPS],
                 respawns: [0; oag_gameplay::MAX_SHIPS],
+                jumps: [0; oag_gameplay::MAX_SHIPS],
                 last_respawn_cause: [None; oag_gameplay::MAX_SHIPS],
                 cage_reset: [false; oag_gameplay::MAX_SHIPS],
                 breadcrumbs,

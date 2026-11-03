@@ -288,7 +288,7 @@ pub fn listener_of_view(view: oag_core::math::Mat4) -> oag_audio::Listener {
 fn craft_positions(race: &oag_raceplay::Race) -> [Option<(Vec3, f32)>; oag_gameplay::MAX_SHIPS] {
     std::array::from_fn(|slot| {
         let ship = race.sim.world.ships.get(slot)?;
-        (slot < race.ship_count() as usize && ship.active).then(|| {
+        (slot < race.ship_count() as usize && ship.in_world()).then(|| {
             (
                 ship.physics.body.position,
                 ship.physics.body.linear_velocity.length(),

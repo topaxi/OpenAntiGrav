@@ -1088,7 +1088,7 @@ impl Race {
             return oag_ai::Field::EMPTY;
         };
         let mine = &self.sim.world.ships[slot];
-        if !mine.active {
+        if !mine.in_world() {
             return oag_ai::Field::EMPTY;
         }
         let body = &mine.physics.body;
@@ -1106,7 +1106,7 @@ impl Race {
             (f32::INFINITY, f32::INFINITY, f32::INFINITY);
 
         for other in 0..self.sim.world.ship_count as usize {
-            if other == slot || !self.sim.world.ships[other].active {
+            if other == slot || !self.sim.world.ships[other].in_world() {
                 continue;
             }
             let them = &self.sim.world.ships[other];

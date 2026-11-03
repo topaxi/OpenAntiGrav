@@ -269,11 +269,11 @@ impl Race {
         }
         self.force_trail_sparks();
         for owner in 0..self.sim.world.ship_count as usize {
-            if !self.sim.world.ships[owner].active || !self.view.hd_trail[owner].ready() {
+            if !self.sim.world.ships[owner].in_world() || !self.view.hd_trail[owner].ready() {
                 continue;
             }
             for intruder in 0..self.sim.world.ship_count as usize {
-                if intruder == owner || !self.sim.world.ships[intruder].active {
+                if intruder == owner || !self.sim.world.ships[intruder].in_world() {
                     continue;
                 }
                 let at = self.sim.world.ships[intruder].physics.body.position;

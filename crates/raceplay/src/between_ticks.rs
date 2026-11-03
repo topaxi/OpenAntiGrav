@@ -391,8 +391,9 @@ impl Race {
 
     fn ship_key(&self, slot: usize) -> ShipKey {
         ShipKey {
-            respawns: self.respawns_of(slot),
-            active: self.sim.world.ships[slot].active,
+            respawns: self.placements_of(slot),
+            // Out of the world in a transit: not drawn, and a change either way is a cut.
+            active: self.sim.world.ships[slot].in_world(),
         }
     }
 

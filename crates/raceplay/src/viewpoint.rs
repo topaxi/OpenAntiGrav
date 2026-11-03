@@ -323,7 +323,7 @@ impl Race {
                 chase,
                 previous: view,
                 current: view,
-                respawns: self.respawns_of(slot),
+                respawns: self.placements_of(slot),
                 boost_kick: 0.0,
             });
         }
@@ -338,7 +338,7 @@ impl Race {
         let kicks = self.view.boost_fov_kick != oag_display::display::BoostFovKick::OFF;
         for slot in 0..MAX_SHIPS {
             let boosting = self.sim.world.ships[slot].physics.pad_timer > 0.0;
-            let respawns = self.respawns_of(slot);
+            let respawns = self.placements_of(slot);
             let target = target_of(&self.sim.world.ships[slot]);
             let Some(cam) = self.view.viewpoints.cams[slot].as_mut() else {
                 continue;
@@ -394,7 +394,7 @@ impl Race {
     #[must_use]
     pub fn viewed_camera_cuts(&self) -> u32 {
         match self.extra_viewpoint() {
-            Some(slot) => self.respawns_of(slot),
+            Some(slot) => self.placements_of(slot),
             None => self.camera_cuts(),
         }
     }
