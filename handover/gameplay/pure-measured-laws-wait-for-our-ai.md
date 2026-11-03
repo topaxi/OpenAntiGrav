@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [pure]
 updated: 2026-11-03
-summary: "Laws all on and our driver adapted (2026-11-03); open: bare Driver wall pin on Vineta K, unseparated laws, other classes"
+summary: "Laws all on and our driver adapted (2026-11-03); open: residual Novice gap, unseparated laws, other classes"
 size: S (40)
 difficulty: medium (35)
 ---
@@ -34,15 +34,10 @@ end-of-run shields.
   ([ai.md](../../docs/gameplay/ai.md#mistakes-are-never-into-a-tight-corner-2026-11-03-pure-ai-measured-laws)).
   Still open: the residual walls gap with the rule on both sides, `520 -> 598` (p `0.067`), and
   the rule's `+1.1` s Novice lap (p `0.019`).
-- **The bare `oag_ai::Driver` pins on Vineta K's first wall.**
-  - The pad: default tuning, on the racing line alone, with no speed plan, no field and no hull
-    yaw ceiling.
-  - It hits the wall at the end of the start straight and stays pinned, on Pulse's laws and on
-    Pure's alike. It crawls at about `10` u/s on Pulse's and about `5` on Pure's.
-  - The Pure replay test no longer uses it: its pad is now `Race::autopilot_wants`, which laps
-    in `2206`-`2250` ticks. Pulse, HD and 2048 keep the bare pad.
-  - This is a driver bug: with no plan, the bare driver does not back off a wall it is pressed
-    against.
+- ~~The bare `oag_ai::Driver` pins on Vineta K's first wall~~: the replay test's pad was
+  never seated on the line (its windowed search started at sample `0`, the grid is near `817`).
+  Seated now; the bare pad laps Pure
+  ([pure-physics.md](../../docs/physics/pure-physics.md#the-pure-pad-replay-test)).
 - ~~The inertia frame~~: world-axis since 2026-10-21, read off Pure's own `Body_Integrate`
   ([pure-physics.md](../../docs/physics/pure-physics.md#the-inertia-frame-is-pulses-world-axes-2026-10-21-deviations-to-original)).
   A Pure capture with the up axis well off world Y (a banked corner or a ramp) would take it
@@ -53,11 +48,9 @@ end-of-run shields.
 
 ## Next Steps
 
-1. Fix the bare driver's wall pin (step 1 of a driver lane): trace it with a per-120-tick print in
-   `replay_ground_truth.rs`'s `record()` with the Pure pad set back to the bare driver. 1-2 hours.
-2. Judge any later driver change on Pure with the bar in
+1. Judge any later driver change on Pure with the bar in
    [pure-physics.md](../../docs/physics/pure-physics.md#the-noise-bar) (the scratch `OAG_X_EPS`
    knob, one `it_m_o` binary copied per state and run directly, about 20 s a sample). Keep it
    only when no metric regresses at `P < 0.01` against the law-on base.
-3. To measure another class: unlock it in a profile and rerun `scripts/psp-pure-force-capture.py`.
+2. To measure another class: unlock it in a profile and rerun `scripts/psp-pure-force-capture.py`.
    30 minutes once unlocked.

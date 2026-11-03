@@ -90,13 +90,17 @@ struct Pad {
     /// ([`race::Race::autopilot_wants`]): the speed plan, the field and the
     /// hull's yaw ceiling, kept outside the world, as `--net-bot` flies.
     race_driver: Option<Option<oag_ai::Driver>>,
+    /// Whether the bare driver has been found on the line yet. Its search is
+    /// windowed round its last index, so it starts from a whole-line search,
+    /// as `Race::start` seats each opponent: a grid far from line index 0
+    /// (Pure's Vineta K, about sample 817) otherwise leaves it aiming at a
+    /// sample hundreds of units away, into the first wall.
+    seated: bool,
 }
 
 /// The titles whose pad is the race's own driver rather than a bare
-/// [`oag_ai::Driver`] on the line alone. Pure since 2026-10-20: on Pure's
-/// measured speed laws (no engine doubling, half the drag) the bare driver
-/// pins itself on the wall at the end of Vineta K's start straight and
-/// crawls too slowly to lap in [`TICKS`].
+/// [`oag_ai::Driver`] on the line alone, so the file also records the pad
+/// `--net-bot` flies.
 const RACE_DRIVER: [&str; 1] = ["pure"];
 
 impl Pad {
@@ -106,6 +110,7 @@ impl Pad {
             tuning: oag_ai::Tuning::default(),
             input: Input::new(),
             race_driver: RACE_DRIVER.contains(&title).then_some(None),
+            seated: false,
         }
     }
 
@@ -114,7 +119,13 @@ impl Pad {
             let slot = race.sim.world.primary_slot();
             race.autopilot_wants(slot, driver)
         } else {
-            let ctx = oag_ai::Context::new(race.racing_line(), &self.tuning);
+            let line = race.racing_line();
+            if !self.seated {
+                let position = race.ship().physics.body.position;
+                self.driver.index = line.nearest(position, 0, line.len()) as u32;
+                self.seated = true;
+            }
+            let ctx = oag_ai::Context::new(line, &self.tuning);
             self.driver.drive(&race.ship().physics, &ctx)
         };
         let mut held = 0;
@@ -304,4 +315,28 @@ fn hd_replays_reproduce_and_ghosts_change_nothing() {
 #[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
 fn wipeout_2048_replays_reproduce_and_ghosts_change_nothing() {
     properties("2048");
+}
+
+/// A bare pad finds its craft on the whole line before its windowed search takes over. Pure's
+/// Vineta K grid sits near line sample 817, far outside a search round sample 0: unseated, the
+/// pad aimed at a sample about 830 units away and pinned itself on the start straight's first
+/// wall. Fails if the seating is dropped.
+#[test]
+#[ignore = "needs data/images/pure-psp-eu.chd"]
+fn a_bare_pad_starts_on_the_line_where_the_grid_is_far_from_sample_zero() {
+    let Some(setup) = setup("pure") else {
+        return;
+    };
+    let mut race = race::Race::start(setup);
+    let mut pad = Pad::new("pure");
+    pad.race_driver = None;
+    let _ = pad.inputs(&mut race);
+    let line = race.racing_line();
+    let gap = line
+        .point(pad.driver.index as usize)
+        .distance(race.ship().physics.body.position);
+    assert!(
+        gap < 20.0,
+        "the pad's line sample is {gap} units from its craft"
+    );
 }

@@ -287,7 +287,15 @@ crawls at about `5` and does not.
 Pure's pad is now the race's own driver for the player's craft (`Race::autopilot_wants`, as
 `--net-bot` flies). It still records real stick inputs, and its best lap is `2206` ticks on the
 held laws and `2234`-`2250` with the laws on. The tampered stick is still caught at tick `420`.
-Pulse, HD and 2048 keep the bare pad. The bare driver's pin is open for the driver lane.
+Pulse, HD and 2048 keep the bare pad.
+
+**The pin was the test's pad, not the driver** (2026-11-03, `pure-ai-measured-laws`). The bare
+pad started at line index `0` and its search is windowed round its last index. Vineta K's grid
+sits near sample `817`, so the pad aimed at a sample about `830` units away for the whole run,
+with its steer near zero. Seated with a whole-line search first, as `Race::start` seats each
+opponent, the same bare pad laps Pure in 7,200 ticks: three laps, `78` wall ticks.
+`replay_ground_truth::a_bare_pad_starts_on_the_line_where_the_grid_is_far_from_sample_zero` holds
+it. Pure keeps the race's own driver as its pad, so the file also records that pad.
 
 ## The inertia frame is Pulse's world axes (2026-10-21, `deviations-to-original`)
 
