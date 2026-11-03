@@ -26,8 +26,9 @@ pub const LOOKAHEAD_SECONDS: f32 = 0.002;
 /// not ride the waveform.
 pub const HOLD_SECONDS: f32 = 0.025;
 
-/// Time constant of the gain's return to unity, in seconds.
-pub const RELEASE_SECONDS: f32 = 0.12;
+/// Time the gain would take to climb from silence to unity, in seconds. The
+/// climb is linear, so it ends exactly at 1.0 rather than creeping up to it.
+pub const RELEASE_SECONDS: f32 = 0.25;
 
 /// Stereo-linked look-ahead peak limiter.
 #[derive(Debug, Clone)]
@@ -43,7 +44,7 @@ pub struct Limiter {
     hold_len: u32,
     hold: u32,
     released: f32,
-    release_coeff: f32,
+    release_step: f32,
     limited: u64,
     deepest: f32,
     peak: f32,
@@ -66,7 +67,7 @@ impl Limiter {
             hold_len: (sample_rate as f32 * HOLD_SECONDS) as u32,
             hold: 0,
             released: 1.0,
-            release_coeff: 1.0 - (-1.0 / (RELEASE_SECONDS * sample_rate as f32)).exp(),
+            release_step: 1.0 / (RELEASE_SECONDS * sample_rate as f32),
             limited: 0,
             deepest: 1.0,
             peak: 0.0,
@@ -138,11 +139,7 @@ impl Limiter {
             } else if self.hold > 0 {
                 self.hold -= 1;
             } else {
-                self.released =
-                    target.min(self.released + (target - self.released) * self.release_coeff);
-            }
-            if self.released > 0.9999 && target >= 1.0 {
-                self.released = 1.0;
+                self.released = target.min(self.released + self.release_step);
             }
             let gain = self.released;
             if gain < 1.0 {
