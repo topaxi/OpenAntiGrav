@@ -667,10 +667,17 @@ confidence 84).
 and `RespawnCause::Airborne`. Since 2026-10-13 both it and a `Reset` contact
 put the craft back through the original's relocation (`Race::reset`,
 `crates/raceplay/src/breadcrumbs.rs`; [reset-relocation.md](reset-relocation.md)).
-Two departures remain, recorded rather than fixed: no shield charge for the
-player, and the `200`-unit distance trigger at `0x08841cec` is not ported -
-this project's invented `LostCircuit`/`OffTrack` dwells stand where it would,
-and they keep the old at-rest racing-line pose.
+Since 2026-11-03 the player's `min(5, shield - 1)` charge is paid on entry
+(`Race::reset`) and the `200`-unit distance trigger at `0x08841cec` is ported as
+`RespawnCause::Distance` (30 ticks at 60 Hz: `> 0.5` over summed `dt` is
+ambiguous in `f32`, so the tick count is the exact form), replacing the invented
+`LostCircuit`/`OffTrack` dwells. The reference `craft+0xaf0` is the located
+spline sample: the nearest for the player, the driver's believed sample for an
+opponent until it is 200 away, then the nearest. Departure: ours locates by
+global nearest, where `AiTrack_LocatePosition` is windowed from the previous
+record. Titles without their own reading inherit it (HD, Omega and 2048
+included; `checked, applies`, no title-specific wiring needed since the rule is
+in `oag_race::recovery`).
 
 ## The runtime leg, and what it did not reach
 

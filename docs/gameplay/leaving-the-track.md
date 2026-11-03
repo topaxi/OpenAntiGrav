@@ -17,16 +17,17 @@ they sweep, printing rather than asserting). Original-side comparisons exist for
 
 ## Which rescue triggers are the original's
 
-A "fall-off" in our engine is one of five things firing. Two are the original's:
-an authored `Reset` volume (`RespawnCause::ResetZone`) and, since 2026-09-29, four
+A "fall-off" in our engine is one of six things firing. Three are the original's:
+an authored `Reset` volume (`RespawnCause::ResetZone`), since 2026-09-29 four
 seconds with no hover probe touching anything (`RespawnCause::Airborne`,
-`FUN_088418e0` at `0x08841d30`). Three are dwells this project invented -
-`LostCircuit` (opponent 8 half-widths from its own driver's sample for 90 ticks),
-`Stalled`, and the player's `OffTrack` (2 half-widths from the nearest sample for
-45 ticks). See `oag_race::recovery`. **The original has a distance trigger too**,
-read but not ported: more than 200 units from the craft's tracked spline position
-for half a second (`0x08841cec`), which is where our invented dwells stand; and a
-fourth caller of the same reset state, the collision cage (`Cage_UpdateCraft`,
+`FUN_088418e0` at `0x08841d30`), and since 2026-11-03 more than 200 units from the
+craft's located spline sample for half a second (`RespawnCause::Distance`,
+`0x08841cec`; 30 ticks, every craft, the nearest sample for a player and the
+driver's believed sample, widened to the nearest when 200 away, for an opponent).
+Two are dwells this project invented, `Beneath` and `Stalled`; the invented
+`LostCircuit` and `OffTrack` are retired in favour of the distance trigger. See
+`oag_race::recovery`. A person's craft pays `min(5, shield - 1)` for every entry to
+the reset state. And a fourth caller of the same reset state, the collision cage (`Cage_UpdateCraft`,
 `0x0883191c`), read and ported 2026-10-20 as `RespawnCause::Cage`
 ([collision-cage.md](../ghidra/functions/psp-pulse-usa/collision-cage.md#the-cage-is-a-contact-source-live-2026-10-20)).
 All four are on [shield.md](../ghidra/functions/psp-pulse-usa/shield.md#state-3-is-the-reset-and-four-things-enter-it-2026-09-29).
@@ -239,11 +240,12 @@ counts as airborne.
     disc flags, at the track's width midpoint five up;
   - how fast: a quarter of its last grounded speed plus 50.
 
-  Still open: the player is charged no shield (the original: up to 5), and the
-  original's third trigger into the same state - more than 200 units from its
-  tracked spline position for 0.5 s (`0x08841cec`) - is not ported; the
-  invented `LostCircuit`/`OffTrack` dwells stand where it would, on the old
-  at-rest racing-line pose.
+  Since 2026-11-03 the player is charged the original's `min(5, shield - 1)`
+  and the distance trigger (`0x08841cec`) enters the same relocation, replacing
+  the invented `LostCircuit`/`OffTrack` dwells. Survey, VENOM, all 24
+  circuit-directions at four tiers: 55 events before, 31 after, no new cause
+  (the `13_Track`/`29_Track` Novice jump pathology is the rest; fewer reset
+  events there because each reset now costs shield).
 - **The AI no longer brakes for a bend over a gap** - chosen, not measured
   (maintainer decision: opponents obey the player's physics and drive smarter).
   The racing line carries a mask of samples with no track under them, and a
