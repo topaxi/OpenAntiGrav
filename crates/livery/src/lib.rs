@@ -115,6 +115,10 @@ pub struct Livery {
     /// inside the fuselage in places and outside it in others. See
     /// [`crate::race::shield_entry_names`].
     pub shield: Option<Model>,
+    /// The `ShieldColour` the shell's own material authors: the colour the
+    /// raised shield settles to. `None` where the shell is not an `.rcsmodel`
+    /// (the PSP and PS2 shells carry no such parameter) or has no shell.
+    pub shield_colour: Option<[f32; 4]>,
     /// The `Ship Collision Fx` locators in this hull's own model space, the
     /// spark anchors the original picks the nearest of.
     ///
@@ -332,6 +336,7 @@ pub fn load(
                 flare_spikes: source.flare_spikes.clone(),
                 flare_origins: source.flare_origins,
                 shield: source.shield.clone(),
+                shield_colour: source.shield_colour,
                 engine_light: source.engine_light,
                 cannon_flash: source.cannon_flash,
                 arc_anchor: source.arc_anchor,
@@ -380,6 +385,7 @@ pub fn load(
                     flare_spikes: player.flare_spikes.clone(),
                     flare_origins: player.flare_origins,
                     shield: player.shield.clone(),
+                    shield_colour: player.shield_colour,
                     engine_light: player.engine_light,
                     cannon_flash: player.cannon_flash,
                     arc_anchor: player.arc_anchor,
@@ -493,6 +499,7 @@ fn one(
                     flare_spikes: Vec::new(),
                     flare_origins: FlareOrigins::default(),
                     shield: None,
+                    shield_colour: None,
                     engine_light: None,
                     cannon_flash: [None, None],
                     arc_anchor: None,
@@ -535,6 +542,19 @@ fn one(
         // pad reveals, so both halves come out of one load. See
         // `flare::per_team`.
         let lit = authored_flare(archives, team, ships, ctx.mode, ctx.flare, nozzle, report);
+        let shield = {
+            // Authored about its hull like the flare: the Zone directory's
+            // own shell where it ships one.
+            let (shell_dir, shell_team) = entry::model_directory_with(
+                archives,
+                ships,
+                team,
+                ctx.mode,
+                |dir, team| entry::stem_entry_name(dir, team, entry::SHIELD_STEM),
+                report,
+            );
+            shell(archives, shell_team, shell_dir, team_model, report)
+        };
         return Ok(Livery {
             team: team.to_string(),
             nozzle,
@@ -570,19 +590,8 @@ fn one(
             // beside it, under the same stem Pulse uses, for all eight teams and
             // Zone. `shell` takes the same external-geometry branch this hull
             // just took. See `crate::race::shield_entry_names`.
-            shield: {
-                // Authored about its hull like the flare: the Zone directory's
-                // own shell where it ships one.
-                let (shell_dir, shell_team) = entry::model_directory_with(
-                    archives,
-                    ships,
-                    team,
-                    ctx.mode,
-                    |dir, team| entry::stem_entry_name(dir, team, entry::SHIELD_STEM),
-                    report,
-                );
-                shell(archives, shell_team, shell_dir, team_model, report)
-            },
+            shield_colour: shield.as_ref().and_then(|(_, colour)| *colour),
+            shield: shield.map(|(model, _)| model),
             engine_light,
             cannon_flash,
             arc_anchor,
@@ -616,7 +625,10 @@ fn one(
         engine_light::load(archives, team, ships.dir, ctx.flare, nozzle_axis, report);
 
     let (boost, boost_uv) = plume(archives, team, ships, ctx.mode, report);
-    let shield = shell(archives, team, ships.dir, team_model, report);
+    let (shield, shield_colour) = match shell(archives, team, ships.dir, team_model, report) {
+        Some((model, colour)) => (Some(model), colour),
+        None => (None, None),
+    };
     // Nothing on a title whose flare is a sprite, which is every source that
     // reaches this branch today - the match is here rather than at the PS3
     // branch alone so a fourth source is answered by its own axis and not by
@@ -671,6 +683,7 @@ fn one(
             boost: lit.boost_origin,
         },
         shield,
+        shield_colour,
         engine_light,
         cannon_flash: [None, None],
         arc_anchor: None,

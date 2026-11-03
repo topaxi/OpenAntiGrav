@@ -57,6 +57,7 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
 
         flame: None,
         absorb_shell: false,
+        shield_shell: false,
         material_lod_bias: 0.0,
         material_state: Vec::new(),
         alpha_test_ref: None,
@@ -269,6 +270,7 @@ mod merge_tests {
 
             flame: None,
             absorb_shell: false,
+            shield_shell: false,
             material_lod_bias: 0.0,
             material_state: Vec::new(),
             alpha_test_ref: None,

@@ -97,9 +97,9 @@ const SPRITES: &[&str] = &[
 /// its emitters at their anchors until a matched capture says otherwise.
 const EXTENTS: &[&str] = &[engine_effects::QUAKE_EFFECT];
 
-/// Two of the palette's three colours are read off HD's executable
-/// (`docs/ghidra/functions/ps3-hdfury-eu/shield.md`); the settled target is
-/// chosen, and `oag_render::shield::HD_PALETTE` says so.
+/// The activation and hit colours are read off HD's executable; the settled
+/// target is each team's own authored `ShieldColour`
+/// (`docs/ghidra/functions/ps3-hdfury-eu/shield.md`).
 const SHIELD: ShieldPalettes = ShieldPalettes {
     ps2: ShieldPalette::Hd,
     elsewhere: ShieldPalette::Hd,
