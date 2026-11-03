@@ -82,8 +82,8 @@ root and `Debris2` emitters and `WO_SHIP_EXPLO_SMOKE` are class 3 (alpha-over), 
 | Element | Verdict |
 | --- | --- |
 | Fireball (`WO_SHIP_FXNODE_BIGEXPLO`) | matches in kind: ours alone gives an orange fireball ring with no blocks; the original's fireball is additive sprites. Scale not compared (see below) |
-| Smoke (`WO_SHIP_EXPLO_SMOKE`) | ours draws nothing visible at ticks 160-172; the original's smoke meshes (240-tick life) are already on screen at +3 stops. **Differs: open** (its 11.5 unit spawn radius and 240 tick life make it late in ours; unmeasured when the original's reach full size) |
-| Debris (`WO_SHIP_EXPLOSION_DEBRIS`) | **differs**: ours alone is the source of the dark, hard-edged rectangular blocks above the fireball. The original draws the matching alpha-over class as soft orange cloud shapes (`psp-ge-replay.py`, the alpha-over draws kept and removed) and has no hard rectangles |
+| Smoke (`WO_SHIP_EXPLO_SMOKE`) | **matches** (see "The debris blocks"): not a bug, faint for its first 8 ticks |
+| Debris (`WO_SHIP_EXPLOSION_DEBRIS`) | **fixed** (`pure-debris-blocks`): the blocks were ours' atlas read the wrong way round (see "The debris blocks") |
 
 So the dark blocks are **ours alone** (confidence 65: one view of the original, from the destroy camera inside the blast, and one
 of ours from a rival's wreck; the two are not the same camera). Not shown to be a blend bug: the original's class 3 blend is
@@ -95,3 +95,35 @@ emitters' texture or mesh, not in this page's reading; it is open as a ready-to-
 read from the draws instead: sprite diagonals 20 to 24 world units, meshes 6 to 28), a clean original frame beside a
 rival's wreck (a Time Trial has no rivals; the player's wreck brings the destroy camera, the end-of-race menu and a yellow
 screen flash over the blast, so the replayed pictures are blast-through-flash, not a match for ours' framing), and the sound.
+
+## The debris blocks (2026-11-03, `pure-debris-blocks`)
+
+Cause found (confidence 90): ours read the emitter's atlas grid word with the columns in the wrong half.
+`WO_SHIP_EXPLOSION_DEBRIS`'s root and `Debris2` author `4, 2` on a 64x128 sprite whose picture is two columns
+of four 32x32 shards; ours cut 16x64 slivers (4 columns, 2 rows) and stretched each over a square quad, and
+the colour table starts black at alpha 255, so a sliver drew as a hard dark rectangle. `trails` (additive, 32x32)
+was never involved. The fix and its evidence are `docs/formats/pob.md`, "The atlas grid word".
+
+Re-read of the original's dump (`run2`/`run3`, `dump+3`), which also corrects the table above:
+
+| Original draw (texture dims, format, blend) | Emitter |
+| --- | --- |
+| 2 x 64x128 CLUT4 alpha-over, 96 vertices, UV cells 0.5 x 0.25, grey vertex colour 45-53, alpha 255 | the debris root and `Debris2` (the table above counted these two as smoke) |
+| 1 x 64x64 CLUT8 alpha-over, 36 vertices, black vertex colour, alpha 31-88 at +3 stops, 119-174 at +6 | `WO_SHIP_EXPLO_SMOKE` |
+| 4 x 32x32 CLUT8 additive, 12 vertices | `trails` |
+| 6 x 128x64 CLUT4 alpha-over, UV cells 0.25 x 0.25 | the node effects' fire atlas (4x4) |
+
+The debris is grey and dark in the original too (vertex colour 45-53), so "soft orange cloud shapes" in the
+replay reading was the neighbouring fire draws, not the debris.
+
+**Smoke: not a bug.** Ours' alpha channel is 1.7 at age 0, 90 at +6 ticks and 178 at +12 (the original's
+vertex alphas 31-88 at +3 stops = 6 ticks and 119-174 at +6 stops = 12 ticks, spawn ages being jittered over the
+8 emission ticks). Drawn alone, ours' smoke is faint from the blast tick, clearly visible by +8 ticks and a dense
+black cloud by +25. The earlier "draws nothing at ticks 160-172" was the first 8 ticks of that ramp seen under
+the fireball and debris.
+
+After the fix (`--race --opponents --force-wreck 40:7`, ticks 160 / 166 / 172, Pure USA): the debris is a soft
+dark shard cloud above the fireball, no rectangles; the smoke builds behind it. Not compared: scale at the spawn call.
+
+Cross-title: 2048, Vita sprites: **ported** in the reader (24 non-square emitters checked, 22 square); Omega:
+**checked, applies** (same reader and word; its `.gnf` sprites are not read in this census, so its per-emitter cells are unverified); HD: **checked, unchanged**.
