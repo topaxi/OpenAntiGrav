@@ -141,6 +141,8 @@ impl Setup {
             collision: CollisionWorld::new(),
             handling: Handling::ZERO,
             opponent_handling: Vec::new(),
+            weapon_counts: oag_weapons::counts::WeaponCounts::default(),
+            opponent_weapon_counts: Vec::new(),
             // Zero travel at zero speed: the flaps neither open nor move.
             #[cfg(feature = "view")]
             airbrake_graphics: oag_gameplay::AirbrakeGraphics {

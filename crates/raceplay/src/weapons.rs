@@ -321,6 +321,7 @@ impl Race {
                         &stats,
                         &self.sim.class,
                         slot as u8,
+                        ship.weapon_counts.rockets,
                     ) else {
                         return;
                     };
@@ -453,8 +454,9 @@ impl Race {
                     }
                 }
                 oag_tables::weapons::Weapon::Mine | oag_tables::weapons::Weapon::Bomb => {
+                    let counts = self.sim.world.ships[slot].weapon_counts;
                     let Some(drop) =
-                        oag_weapons::projectile::mine::Drop::for_weapon(weapon, weapons)
+                        oag_weapons::projectile::mine::Drop::for_weapon(weapon, weapons, counts)
                     else {
                         // As the Rocket: nothing to lay.
                         return;
@@ -685,7 +687,9 @@ impl Race {
             let Some(weapon) = self.sim.world.ships[slot].pickup.weapon else {
                 continue;
             };
-            let Some(drop) = oag_weapons::projectile::mine::Drop::for_weapon(weapon, weapons)
+            let counts = self.sim.world.ships[slot].weapon_counts;
+            let Some(drop) =
+                oag_weapons::projectile::mine::Drop::for_weapon(weapon, weapons, counts)
             else {
                 continue;
             };

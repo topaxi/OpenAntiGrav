@@ -65,6 +65,7 @@ fn run_volley(ticks: u32) -> (u64, u64) {
         &stats,
         "VENOM",
         0,
+        projectile::ROCKET_SHOTS as u8,
     )
     .expect("Pulse's weapon table authors a Venom rocket speed");
     assert_eq!(
@@ -344,8 +345,13 @@ fn the_volley_actually_fans() {
     ship.physics.body.orientation =
         quat_from_axis_angle(V::Y, 0.11) * quat_from_axis_angle(V::Z, 0.23);
 
-    let shots = projectile::launch(&ship.physics, &stats, "VENOM")
-        .expect("Pulse's weapon table authors a Venom rocket speed");
+    let shots = projectile::launch(
+        &ship.physics,
+        &stats,
+        "VENOM",
+        projectile::ROCKET_SHOTS as u8,
+    )
+    .expect("Pulse's weapon table authors a Venom rocket speed");
     let directions: Vec<V> = shots.iter().map(|&(_, velocity)| velocity).collect();
     assert!(
         directions[1].distance(directions[0]) > 1.0 && directions[2].distance(directions[0]) > 1.0,

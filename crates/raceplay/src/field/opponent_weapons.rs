@@ -72,6 +72,7 @@ impl Race {
             &stats,
             &self.sim.class,
             slot as u8,
+            ship.weapon_counts.rockets,
         ) else {
             return false;
         };
@@ -561,7 +562,9 @@ impl Race {
         let Some(weapons) = self.sim.weapons.as_ref() else {
             return false;
         };
-        let Some(drop) = oag_weapons::projectile::mine::Drop::for_weapon(weapon, weapons) else {
+        let counts = self.sim.world.ships[slot].weapon_counts;
+        let Some(drop) = oag_weapons::projectile::mine::Drop::for_weapon(weapon, weapons, counts)
+        else {
             // The table authors no block for this weapon, so nothing to lay.
             // Falls through to absorb, which is the right answer for a pickup
             // that cannot be spent.

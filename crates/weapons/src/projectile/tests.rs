@@ -521,11 +521,12 @@ fn a_launch_fires_three_fanned_about_the_craft_forward() {
     .rocket()
     .expect("a Rocket");
 
-    let shots = launch(&state, &stats, "VENOM").expect("the fixture authors a Venom rocket speed");
+    let shots = launch(&state, &stats, "VENOM", ROCKET_SHOTS as u8)
+        .expect("the fixture authors a Venom rocket speed");
     assert_eq!(shots.len(), ROCKET_SHOTS);
 
     let forward = state.body.forward();
-    for (origin, velocity) in shots {
+    for &(origin, velocity) in &*shots {
         // One origin, the craft's own position (measured 2026-10-01, not the nose).
         assert_eq!(origin, shots[0].0, "the three must share an origin");
         assert_eq!(
@@ -581,10 +582,10 @@ fn a_zero_spread_still_fires_three() {
     .rocket()
     .expect("a Rocket");
 
-    let shots = launch(&ShipState::default(), &stats, "VENOM")
+    let shots = launch(&ShipState::default(), &stats, "VENOM", ROCKET_SHOTS as u8)
         .expect("the fixture authors a Venom rocket speed");
     assert_eq!(shots.len(), ROCKET_SHOTS);
-    for (_, velocity) in shots {
+    for &(_, velocity) in &*shots {
         assert!(velocity.is_finite(), "{velocity:?}");
         assert!((velocity - shots[0].1).length() < 1e-4);
     }

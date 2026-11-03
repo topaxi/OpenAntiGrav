@@ -2,7 +2,7 @@
 status: measure
 titles: [all]
 updated: 2026-11-03
-summary: "Items 1-5 (reset triggers, spline placement, pickup lookup, ABI command table, FOV chain) done; items 6-10 stay open for the mod weapon lane."
+summary: "Items 1-5 and 8 done (resets, spline, pickup lookup, ABI table, FOV, rocket count); 6, 7, 9, 10 stay open for the mod weapon lane."
 kind: debt
 ---
 
@@ -31,16 +31,15 @@ so 20-40 by default). Ranking is payoff times the chance the lane touches the co
   (`docs/formats/2048-status.md:266-272`, confidence 90): **1 Fighter** (Feisar: Combat),
   **2 Agility**, **3 Speed**, **4 Prototype**. Across all five teams:
   - Fighter (1): no `number_of_rockets`, only `lockon_speed_multiplier`. The default is
-    not in the XML; the executable's default is unread.
+    not in the XML; the executable's default is three rockets and five mines (read).
   - Agility (2): `2` rockets, `4` mines, on all five teams.
   - Speed (3): `1` rocket, `3` mines, on all five teams.
   - Prototype (4): varies (`2`, `1`, or none with `gift_cannon_time`).
-  The brief's example (a speed ship fires one rocket, a fighter three) matches the data
-  **if** the fighter's default is three. That default is the code's `ROCKET_SHOTS`, not
-  read from anything. Consistent, not proven.
+  The brief's example (a speed ship fires one rocket, a fighter three) holds: the default
+  is read, three and five.
   **Omega carries the same field**: the `omega-data00` extract (`Data/handlingstats/<team>/<n>/handlingstats.xml`, line 17)
   equals the 2048 copy on all twenty folders (`rg`-equal `<Weapons>` lines, checked
-  2026-11-03). Verdict: **checked, applies, not wired**, on both titles. No crate reads
+  2026-11-03). Verdict: **ported**, wired on both titles (item 8). No crate reads
   `number_of_rockets`, `number_of_mines` or `weapon_damage_multiplier`
   (`rg` over `crates/` finds only the function `weapon_damage` in `physics/src/damage.rs`).
 - **The fire side is fixed at three.** `ROCKET_SHOTS: usize = 3`
@@ -250,15 +249,12 @@ are unmoved.
 - **Payoff.** One resolver `is_enabled(manifest_default, settings)`. Size S (20). Confidence 30.
 - **Check.** `rg -n "disabled\b|enabled" crates/game/src/mods.rs` shows one read path.
 
-### 8. The rocket count as data (sweep item 1, a law, not a refactor)
+### 8. ~~The rocket count as data~~ (landed)
 
-- `ROCKET_SHOTS` (`rocket.rs:19`) fixes the fan. The per-craft `number_of_rockets` (Agility 2,
-  Speed 1, Prototype 2 or 1 by team; Fighter absent) is unread on both titles. Making `launch`
-  return a count from the craft's stats changes 2048 and Omega play.
-- **Needs first:** the executable's default for an absent field (the Fighter's), and whether
-  Pulse, Pure and HD have the field at all (not checked). The folder-to-role mapping is now
-  known (confidence 90, `docs/formats/2048-status.md:266-272`).
-- Size M (45) once the default is read. Not in the lane's scope unless it asks.
+Per-craft rocket and mine counts are read from `<BespokeStats><Weapons>` and spent by
+`oag_weapons::counts::WeaponCounts` on 2048 and Omega; the executable's default for an absent
+field is three and five (`docs/ghidra/functions/ps4-omega-eu/weapon-counts.md`). Still open:
+the original's loop for a count below three (the 1 and 2 fans are chosen, not measured).
 
 ### 9. AI firing wrappers (sweep item 8)
 
@@ -301,8 +297,7 @@ are unmoved.
 
 - Whether item 1's airborne cooldown gap is reachable through any path other than the
   one argued above (a test would settle it).
-- The fighter's rocket count: the executable's default for an absent `number_of_rockets`
-  (item 8). Unread.
+- The original's rocket loop for a count below three (item 8): the 1 and 2 fans are chosen.
 
 ## Next Steps
 
@@ -310,5 +305,4 @@ are unmoved.
    cheapest to land ahead of the lane.
 2. Before item 1: `rg -n "AIRBORNE_RESET_SECONDS|RESET_SHIELD_CHARGE" crates --type rust`
    and a test that the cooldown-less airborne path cannot fire within 30 ticks of a respawn.
-3. Before item 8: read the executable's default for an absent `number_of_rockets`
-   (Omega's `eboot.bin` in Ghidra, or the 2048 Vita EBOOT), then decide whether it is three.
+3. ~~Before item 8~~ done: the default is three rockets and five mines.

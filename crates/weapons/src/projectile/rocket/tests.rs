@@ -64,6 +64,7 @@ fn a_rocket_with_no_floor_in_reach_keeps_the_launch_speed() {
         &stats(),
         "VENOM",
         0,
+        ROCKET_SHOTS as u8,
     )
     .expect("Venom is authored");
     assert_eq!(fired, ROCKET_SHOTS);
@@ -92,6 +93,7 @@ fn the_first_surface_hit_sets_the_class_speed() {
         &stats(),
         "VENOM",
         0,
+        ROCKET_SHOTS as u8,
     )
     .expect("Venom is authored");
     let before = projectiles.slots[0].velocity.length();
@@ -113,7 +115,15 @@ fn a_rocket_is_seeded_with_the_craft_up() {
     let mut state = ShipState::default();
     state.body.orientation = oag_core::math::Quat::from_rotation_z(0.2);
     let mut projectiles = Projectiles::new();
-    fire(&mut projectiles, &state, &stats(), "VENOM", 0).expect("Venom is authored");
+    fire(
+        &mut projectiles,
+        &state,
+        &stats(),
+        "VENOM",
+        0,
+        ROCKET_SHOTS as u8,
+    )
+    .expect("Venom is authored");
     for slot in &projectiles.slots[..ROCKET_SHOTS] {
         assert_eq!(slot.surface, state.body.up());
     }
@@ -166,4 +176,42 @@ fn a_rocket_steers_toward_the_ride_point_on_a_floor_hit() {
         "it did not steer down: {:?}",
         rocket.velocity
     );
+}
+
+fn fanned_stats() -> RocketStats {
+    oag_tables::weapons::parse(
+        r#"<WeaponStats>
+             <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
+             <Weapon type="Rocket"><Stats absorb="1" blastforce="2" blastradius="3"
+               damage="4" slowdown_time="5" venomspeed="800" flashspeed="900"
+               rapierspeed="1000" phantomspeed="1100" launchSpeed="200" spread="0.2"/></Weapon>
+           </WeaponStats>"#,
+    )
+    .expect("the fixture parses")
+    .rocket()
+    .expect("a Rocket")
+}
+
+/// The count sizes the volley: three is the original's fan in its order, one is the straight
+/// shot, two are the symmetric pair (chosen, not measured), and a count outside `1..=3` is
+/// clamped rather than out of bounds.
+#[test]
+fn the_count_sizes_the_volley() {
+    let state = ShipState::default();
+    let stats = fanned_stats();
+    let sideways = |count: u8| -> Vec<f32> {
+        launch(&state, &stats, "VENOM", count)
+            .expect("Venom is authored")
+            .iter()
+            .map(|&(_, velocity)| velocity.dot(state.body.right()))
+            .collect()
+    };
+    let three = sideways(3);
+    assert_eq!(three.len(), 3);
+    assert!(three[0].abs() < 1e-3, "straight first: {three:?}");
+    assert!(three[1] * three[2] < 0.0, "then the two sides: {three:?}");
+    assert_eq!(sideways(1), vec![three[0]]);
+    assert_eq!(sideways(2), vec![three[1], three[2]]);
+    assert_eq!(sideways(0).len(), 1);
+    assert_eq!(sideways(9).len(), 3);
 }
