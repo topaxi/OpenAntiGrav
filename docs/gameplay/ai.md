@@ -5672,7 +5672,7 @@ unchanged, so `race_ground_truth`'s twelve circuits read exactly as before.
 - Respawns 1 and 1.
 - A plan build costs a second search wherever the first verifies: median
   steps on Pulse and HD at VENOM go from about 11,500 to 23,093 (maximum
-  70,390). A course whose old plan does not verify (2048 `sol` and its
+  70,390). A course whose old plan does not verify (2048 `sol` before its floor was loaded, 2026-11-03, and its
   routes) costs exactly what it did. 2048's and Omega's other layouts were not
   timed.
 - Every AI ground truth passes with no bound or baseline moved, and
@@ -5800,14 +5800,28 @@ All of it is **chosen, not measured**.
 
 **Still open, by how much a player sees it:**
 
-- **2048 `sol`.** Every opponent hits a `ResetZone` about 65 ticks from the
-  grid. It is put back at its last on-track sample at standstill and hits it
-  again about 68 ticks later, never completing a lap: 176 respawns in 12,000
-  ticks for each craft. The first exit is the driver's. The player's own
-  autopilot, which is the same driver, flies off the edge at about 20 s, where
-  the road bends left while the craft is in the air (no plan verifies there,
-  so it drives the corner model). The loop is the rescue placement: the same
-  family as the `29_Track` reversed loop above. A human is not measured.
+- **2048 `sol`** (re-measured 2026-11-03). The loop above was not the
+  driver: `sol` had **no floor**. Its `.vex` authors a lone `Reset` node, which
+  kept `track_col.col` out of the load, so every craft fell from the grid into
+  that volume ([2048-collision.md](../formats/2048-collision.md#which-circuits-read-the-container-2026-11-03)).
+  With the floor the ring plan verifies (VENOM, 44,448 steps, 180 lowerings,
+  lap 3,770 ticks), and what is left is one **gap in the road at ring samples
+  3553-3620**, after a speed pad at about 3530 and before route 2's split at
+  about 3648, so every way round crosses it. A craft clears it from about 170
+  u/s at the lip: the verifier reaches 173, cruising at 129.4 u/s down the
+  approach; a field craft on the same `feisar2048\3` handling cruises at 124-125
+  (127.6 as a plain seed-0 driver) and reaches 166-169, then falls about 75
+  units into the `.vex`'s reset volume. Spline flag bit 0 ("lay no crumb") runs
+  from line sample 3384 to 3647, so the original's relocation puts the craft
+  back at about 3274 and it meets the lip at the same speed: the rescue is the
+  original's, the miss is the driver's. A one-off test held a constant air
+  pitch on every airborne tick of the lap (`steer_y`, positive nose up) in
+  place of the trim: the Ace field's respawns summed 95 with the trim, 79 at
+  0, 45 at +0.5, 34 at +1 and 33 at -1, and both signs cleared and fell from
+  lips of 167-169 u/s. **No sign effect**: the gap is marginal and any change
+  in air pitch reshuffles who clears it. Which held pitch over 3553-3620 alone
+  clears it, if any, is not measured.
+  Omega's `sol` (HD hulls) already laps at Elite and Ace with 0-5 respawns.
 - **Pulse `06_Track` VENOM**, on the corner model, crawls at 15-33 u/s over
   samples 1100-1200. Its gap at 1196 clears near 60 u/s; from 90 u/s the craft
   lands drifting right into the wall at 1238, and too slow it stalls in the
@@ -5888,7 +5902,7 @@ Omega's copy of `altima` both.
 2048: every route on `square`, `park`, `tower`, `mall`, `bridge`, `arena`,
 `subway` and `altima`; none on `cathedral` (both fail only their standing start,
 [below](#where-each-undriven-route-fails-its-verification-2026-10-31)) or `sol`
-(no route laps, and the ring's own plan does not verify there either).
+(no route laps, and the ring's own plan does not verify there either; measured while `sol` loaded no floor, its routes not re-measured since: [`sol`](#floors-in-the-speed-plan-2026-10-11)).
 Re-measured 2026-10-31 at Elite over four classes and seeds 1-3 (`route_plan_board`):
 the same except `square`, whose ring plan verifies at no class and whose routes 1-3
 verify only at RAPIER and in two of three PHANTOM seeds; Pulse's reversed
@@ -6023,7 +6037,7 @@ OAG_SWEEP=1 OAG_REQUIRE_GAME_DATA=1 OAG_ROUTE_BOARD_ONLY=pulse/07_Track \
 **The census** (every forked circuit of every title, four classes, seed 1; 168
 route plans, 3.5 minutes): 122 verify clean. Of the 46 that do not, 16 fail only
 on a lap-1 rescue on the ring stretch (all and only `cathedral`'s two routes, 2048
-and Omega, every class), 8 are Pulse `07_Track` both ways, 12 are `sol`, and 10 are
+and Omega, every class), 8 are Pulse `07_Track` both ways, 12 are `sol` (with no floor loaded; 2026-11-03), and 10 are
 `square`.
 
 #### `cathedral`'s two routes are offered (2026-10-31, lane `cathedral-route-start`)
