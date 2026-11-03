@@ -2263,22 +2263,43 @@ The GE dumps agree from the other side: the head's dark disc centre is at view d
 **15.90** (k60), the craft's body draw (`ci 755`) at **11.49**, so the head is drawn 4.1 to 4.4 ahead of the craft.
 Ours anchored the charging head on the bolt's hold point (`MUZZLE_FORWARD`, 2.23): view depth **13.71**, the whole
 head 1.16x too large on screen. Confidence **90** for the node offset and the rows (live, 60 frames, two sites:
-the probe and the dumps' depth), Assegai only: the node is a point in the craft model.
+the probe and the dumps' depth).
+
+**The node is the hull's authored `Ship Muzzle` locator** (class `0x3e2`): Assegai's `Ship.vex` places it at exactly
+`(0, 0, 5.653)`, the probed offset. It is per team (USA disc): Feisar `(0, 0, 6.544)`, Qirex `(0, 0, 4.732)`, Triakis
+`(0, -0.298, 4.183)`, Piranha `(0, -0.511, 7.158)`, EGX `(0, 0.279, 7.263)`, AG Systems `(0.009, -0.170, 7.057)`.
+Confidence **85** that the node is this locator (the probed value matches Assegai's to the digit; only Assegai was
+probed).
 
 So the 0.75 rows `the arcs after the release` inferred for the bolt hold through the charge too, which is also why
 the bolt's matrix carries them: `Plasma_Init` seeds it from this node. And the bolt's release point (2.23 ahead of
 the body on the next frame) is this node one frame earlier: 4.24 minus one craft step of about 2.0 at this speed.
 `MUZZLE_FORWARD` is therefore speed-dependent in the original; ours keeps the constant (sim, not touched here).
 
-Wired: a charging Plasma's flare anchor is `body + forward * 5.653 * 0.75` (`plasma_head_anchor`) on the source whose
-head rides its owner's frame (Pulse's PSP file), and `plasma_ride_scale` is 0.75 for the whole life of the head.
-Tests: `a_charging_plasma_head_is_drawn_on_the_crafts_weapon_node` (red with the anchor dropped: 2.23 against
-4.24), `the_plasma_heads_matrix_carries_the_craft_scale_through_the_charge`.
+Wired: `oag-vex`'s version 6 table names the class (`Classes::ship_muzzle`; Pure's version 4 id is unread),
+`oag-livery` reads the locator beside the engine flare (`Livery::muzzle`), and a charging Plasma's flare anchor is the
+slot's model matrix (0.75 rows, `MODEL_YAW`) times that locator (`Race::muzzle_of`), on the source whose head rides
+its owner's frame (Pulse's PSP file); a hull with none keeps the bolt's hold point. `plasma_ride_scale` is 0.75 for the
+whole life of the head. Tests: `a_charging_plasma_head_is_drawn_on_the_crafts_weapon_node` (red with the anchor
+dropped: 2.23 against 4.24), `the_plasma_heads_matrix_carries_the_craft_scale_through_the_charge`, and
+`livery_ground_truth::every_hull_carries_its_own_nozzle_and_plume` (every team authors a muzzle; Assegai's is the
+probed value).
 
 After the release the head draws at the bolt's post-update position, the same convention as ours (k60 dump: head
 x 243.95 = the bolt after update 60; k68: 266.58 = after update 68, with the body draw at the same frame's body).
-The k68 dump shows the head 10.9 ahead of the body where ours, at the shot matched to it (`391 + 70`), is 7.8 ahead.
-Whether that is the shot-to-dump frame mapping or the sim bolt is **open**; it is not the head's draw.
+**Ours' bolt is one step behind from the release on.** Head minus body along the craft's forward, per frame from the
+release (the original: the probe's bolt after each update minus the body; ours: the flare anchor per tick):
+
+| frame after release | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| original | 4.42 | 4.61 | 4.80 | 5.79 | 6.77 | 7.78 | 8.82 | 9.84 | 10.89 |
+| ours | 2.23 | 2.42 | 2.60 | 2.78 | 3.75 | 4.73 | 5.72 | 6.73 | 7.76 |
+
+The steps agree to 0.02 and the offset is a constant **2.19**: the original releases the bolt at the weapon node's
+position of the frame before (4.24 ahead of the previous body) and moves it once before the draw; ours (`oag-weapons`,
+`MUZZLE_FORWARD` 2.23) starts it at the node minus one craft step and draws it before its first move. With the charging
+head now on the node, ours steps back 2.0 at the release where the original moves on. A sim fix (`oag-weapons`, not in
+this lane): release at the muzzle locator of the previous tick, which also makes `MUZZLE_FORWARD` per team and per speed.
 
 ### The arcs' shape: the law matches, the rest is the draws
 

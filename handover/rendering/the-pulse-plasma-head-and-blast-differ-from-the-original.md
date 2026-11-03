@@ -61,12 +61,13 @@ confidence scores and the replay evidence. What is left is wiring and two unread
   (iii) ~~the arcs are 1.3 to 2.7 units too long from k56 on~~ closed to 0.9 / 0.8 units 2026-11-03 (`pulse-plasma-release-arcs`, `plasma.md` "the arcs after the release": the bolt matrix's 0.75 rows scale the local-space offsets at draw time, conf 60); what is left is a 1.3 pre-release gap at k56 (single random draws) and the arcs' shape (the original's curved crescents, ours straighter bars); (iv) Pure's `Plasma_Init` is unread, so Pure keeps the old arcs.
 - 2026-11-03 (`pulse-plasma-crescents-opus`, `plasma.md` "the head's matrix and node"): the "straighter bars" were mostly
   placement. The charging head sits on the craft's weapon node (`(0, 0, 5.653)` model units, 4.24 ahead of the body, read
-  live) where ours used the bolt's hold point (2.23), so ours drew 2 units nearer the eye; the 0.75 rows hold through the
+  live: the hull's `Ship Muzzle` locator, per team) where ours used the bolt's hold point (2.23), so ours drew 2 units nearer the eye; the 0.75 rows hold through the
   charge too. Both wired, head box 103,807 to 76,048; k36/k44 overshoot 8 to 4 and 2. The arcs' Y damping is the original's
   (live pool read, `|y|/|x|` 0.75); what still differs frame by frame is the random stream. Open:
-  (v) after the release ours draws the head about 3 units nearer than the k68 dump (10.9 ahead of the body against 7.8 at
-  the matched shot), box luminance k68 131.9 against 121.3: frame mapping or the sim bolt, not the head's draw;
-  (vi) `MUZZLE_FORWARD` (2.23, `oag-weapons`) is the weapon node one frame earlier, 4.24 minus one craft step, so it is
-  speed-dependent in the original; a sim lane should derive it rather than keep the constant;
+  (v) **sim, `oag-weapons`**: from the release on ours' bolt trails the original's by a constant 2.19 along the craft's
+  forward (steps equal to 0.02 over nine frames; `plasma.md` table), so the head now steps back 2.0 at the release where the
+  original moves on, and k68 box luminance reads 131.9 against 121.3. The original releases at the weapon node (the hull's
+  `Ship Muzzle` locator) of the previous frame and moves the bolt once before the draw;
+  (vi) so `MUZZLE_FORWARD` (2.23) is that locator minus one craft step: per team and per speed in the original;
   (vii) k60 box luminance 117.0 against 127.0 (reference boot) and 121.1 (fresh boot): the original moves 6 between boots.
 - Pulse PS2 is unmeasured here; its pair is `scripts/pcsx2-pulse-pair.py`.
