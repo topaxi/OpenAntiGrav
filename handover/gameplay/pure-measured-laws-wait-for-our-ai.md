@@ -1,5 +1,5 @@
 ---
-status: ready-to-wire
+status: measure
 titles: [pure]
 updated: 2026-11-03
 summary: "Laws all on and our driver adapted (2026-11-03); open: residual Novice gap, unseparated laws, other classes"

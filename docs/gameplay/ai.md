@@ -4409,16 +4409,19 @@ on four torques the gap went from `180` walls to `52`.
 
 **Measured with the rule** (twelve torques, eight seeds, Pure Novice, field alone):
 
-| Comparison | Walls, median | End-of-run shield | Per-lap shield | Lap |
-| --- | --- | --- | --- | --- |
-| Pair undone, no rule -> pair on, rule | `562 -> 598` (p `0.41`, `k = 2`) | `90.8 -> 89.2` (p `0.053`, `k = 5`) | `92.5 -> 90.9` (p `0.042`, `k = 5`) | `49.8 -> 55.2` s (the acceleration) |
-| Pair on: no rule -> rule | `752 -> 598` (better) | `88.6 -> 89.2` | `90.8 -> 90.9` | `54.1 -> 55.2` s (p `0.019`, `k = 3`) |
-| Residual: pair undone -> on, both with the rule | `520 -> 598` (p `0.067`, `k = 4`) | `90.0 -> 89.2` | `91.9 -> 90.9` | `50.4 -> 55.2` s |
+| Comparison | Walls, median | End-of-run shield | Per-lap shield | Lap | Sweep A (ours) / B (the original's driver) |
+| --- | --- | --- | --- | --- | --- |
+| Pair undone, no rule -> pair on, rule | `562 -> 598` (p `0.41`, `k = 2`) | `90.8 -> 89.2` (p `0.053`, `k = 5`) | `92.5 -> 90.9` (p `0.042`, `k = 5`) | `49.8 -> 55.2` s (the acceleration) | `54 -> 52.5` (p `0.77`) / `16.5 -> 40` (p `< 0.001`, `k = 5`) |
+| Pair on: no rule -> rule | `752 -> 598` (better) | `88.6 -> 89.2` | `90.8 -> 90.9` | `54.1 -> 55.2` s (p `0.019`, `k = 3`) | `74 -> 52.5` / `65.5 -> 40` |
+| Residual: pair undone -> on, both with the rule | `520 -> 598` (p `0.067`, `k = 4`) | `90.0 -> 89.2` | `91.9 -> 90.9` | `50.4 -> 55.2` s | `48 -> 52.5` (p `0.5`) / `15.5 -> 40` (p `< 0.001`, `k = 8`) |
 
 Unperturbed, eight seeds: walls `678 -> 508`, end-of-run shield `88.9 -> 90.8`, per-lap
-shield `91.8 -> 92.6`, no wreck either way. No metric is past the `P < 0.01` hold line
-against the pair-undone base, apart from the lap. The lap is the measured half acceleration,
-and the rule's own `+1.1` s is p `0.019`.
+shield `91.8 -> 92.6`, no wreck either way. None of our driver's metrics is past the
+`P < 0.01` hold line against the pair-undone base, apart from the lap. The lap is the measured
+half acceleration, and the rule's own `+1.1` s is p `0.019`. Sweep B is past it: those are
+stints flown by the original's driver (`oag_ai::original`), which this engine does not tune,
+so its rise is the speed pair acting on that driver. Against the pair-on base the rule
+lowers B too (`65.5 -> 40`).
 
 **On Pulse the rule makes Novice cleaner and a little slower.** Measured on four torques
 (`0`, `1e-5`, `-1e-4`, `3e-4`), four seeds on each of the twelve circuits, so 48 races a
@@ -4433,8 +4436,9 @@ sample (`opponent_autopilot_sweep::races_pulse`, field alone):
 | End-of-run shield | `67.1`-`68.1` | `69.4`-`71.7` |
 | Lap | `50.05`-`50.54` s | `50.41`-`50.83` s |
 
-The Pulse lone-craft gate is unchanged (`race_ground_truth`, twelve of twelve clean): its
-craft never errs.
+The Pulse lone-craft gate (`race_ground_truth`) printed byte-identical output before and
+after: twelve of twelve clean. Not measured: Skilled and Elite on any title, and every level
+on HD, Omega and 2048. Their gates pass.
 
 ### Pads: built, measured, removed
 

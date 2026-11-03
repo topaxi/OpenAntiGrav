@@ -378,6 +378,7 @@ were not touched. Each base is today's tree with one law undone by a scratch pat
 | Laps | `44.7 -> 43.9` s (better) | none |
 | Per-lap shield | `75.1 -> 74.3` (p `0.19`) | `k = 3` (`P 0.11`) |
 | End-of-run shield | `66.7 -> 65.8` (p `0.24`) | `k = 1` |
+| Sweep A (ours) / B (the original's driver) | `156 -> 149.5` (p `0.55`) / `89.5 -> 82.5` | `k = 1` / `k = 1` |
 
 Unperturbed: walls `2110 -> 1745`, wrecks `3 -> 1`, per-lap shield `73.2 -> 75.0`, end-of-run
 shield `61.5 -> 67.9`. The `1899` walls the bank-to-yaw note held against are met. The note's
@@ -387,7 +388,8 @@ shield `61.5 -> 67.9`. The `1899` walls the bank-to-yaw note held against are me
 undone (engine doubling back on, drag `-0.005`). Law: today's pair.
 
 - Without a driver change: walls `562 -> 752` (`k = 10`), end-of-run shield `90.8 -> 88.6`
-  (`k = 8`), per-lap shield `92.5 -> 90.8` (`k = 5`).
+  (`k = 8`), per-lap shield `92.5 -> 90.8` (`k = 5`). Sweep A (ours) `54 -> 74` (p `0.29`);
+  sweep B (the original's driver, not tuned here) `16.5 -> 65.5` (`k = 10`).
 - The whole gap was in mistake recovery. On Pure's weaker brake, a missed braking point next
   to a wall had no recovery.
 - The driver no longer misses a braking point into a tight corner. With that rule the field
