@@ -64,11 +64,13 @@ pub enum CommandKind {
     FovOffset = 31,
     /// `fire-mod-effect-ahead`, code 32.
     FireModEffectAhead = 32,
+    /// `play-mod-sound`, code 33.
+    PlayModSound = 33,
 }
 
 impl CommandKind {
     /// Every kind, in code order.
-    pub const ALL: [Self; 29] = [
+    pub const ALL: [Self; 30] = [
         Self::ScaleThrust,
         Self::ShieldDelta,
         Self::GivePickup,
@@ -98,6 +100,7 @@ impl CommandKind {
         Self::ScreenFill,
         Self::FovOffset,
         Self::FireModEffectAhead,
+        Self::PlayModSound,
     ];
 
     /// The kind byte.
@@ -145,6 +148,7 @@ impl CommandKind {
             Self::ScreenFill => "screen-fill",
             Self::FovOffset => "fov-offset",
             Self::FireModEffectAhead => "fire-mod-effect-ahead",
+            Self::PlayModSound => "play-mod-sound",
         }
     }
 

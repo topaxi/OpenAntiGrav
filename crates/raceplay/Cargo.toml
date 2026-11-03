@@ -36,6 +36,7 @@ oag-hud = { workspace = true, optional = true }
 oag-input = { workspace = true, optional = true }
 oag-livery = { workspace = true, optional = true }
 oag-mesh = { workspace = true, optional = true }
+oag-audio = { workspace = true, optional = true }
 oag-ext-abi.workspace = true
 oag-modhost = { workspace = true, optional = true }
 oag-physics.workspace = true
@@ -83,6 +84,7 @@ default = ["view"]
 # docs/architecture/workspace-layout.md, "The lean race".
 view = [
     "dep:bytemuck",
+    "dep:oag-audio",
     "dep:oag-fx",
     "dep:oag-gpu",
     "dep:oag-hud",

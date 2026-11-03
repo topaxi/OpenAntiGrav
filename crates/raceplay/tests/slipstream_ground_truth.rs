@@ -74,6 +74,12 @@ fn slipstream() -> Option<race::extensions::Source> {
             .iter()
             .map(|(name, path)| (name.clone(), path.clone()))
             .collect(),
+        sounds: module
+            .manifest
+            .sounds
+            .iter()
+            .map(|(name, path)| (name.clone(), path.clone()))
+            .collect(),
         files,
         pickup: module.manifest.pickup.clone(),
         pickup_titles: module.manifest.pickup_titles.clone(),

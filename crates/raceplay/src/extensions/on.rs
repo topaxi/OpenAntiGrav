@@ -9,7 +9,7 @@ use crate::sim::RaceSim;
 
 #[derive(Debug, Clone)]
 pub(super) struct Slot {
-    mod_id: String,
+    pub(super) mod_id: String,
     /// `channel_key` of the mod's id: a `mod` event's `from`.
     sender: u32,
     /// The channels its `emit` may name.
@@ -96,6 +96,8 @@ pub(super) struct On {
     /// Each module's `[pickup]`, in module order.
     pickups: Vec<Option<oag_tables::pickup_look::PickupLook>>,
     pub(super) effects: Vec<(usize, crate::extension_effects::Fired)>,
+    /// The `play-mod-sound` loops running, so a fault can stop them.
+    pub(super) sound_loops: super::sound::Loops,
     /// Each slot's `screen-fill` this tick (the later module wins) and `fov-offset` this
     /// tick (modules add): outputs, never hashed.
     pub(super) fill: [Option<oag_ext_abi::Rgba>; oag_gameplay::MAX_SHIPS],
@@ -298,6 +300,7 @@ impl On {
             strings,
             pickups,
             effects: Vec::new(),
+            sound_loops: Vec::new(),
             fill: [None; oag_gameplay::MAX_SHIPS],
             fov: [0.0; oag_gameplay::MAX_SHIPS],
             drops: Drops::default(),
@@ -690,6 +693,7 @@ fn refusal(on: &On, index: usize, commands: &[Command]) -> Option<String> {
 /// use it as if the module had never run; one that was given has no such weapon and is
 /// taken away. (Mail the module already sent stays: one tick of events.)
 fn release(sim: &mut RaceSim, index: usize) {
+    super::sound::release(sim, index);
     let on = &mut sim.extensions.on;
     let me = index as u8 + 1;
     for (scale, by) in on.pad_scale.iter_mut().zip(&mut on.pad_by) {
@@ -942,6 +946,13 @@ fn apply(sim: &mut RaceSim, index: usize, command: Command) {
                 self::cue(cue),
                 slot.index(),
             ));
+        }
+        Command::PlayModSound {
+            slot,
+            index: sound,
+            mode,
+        } => {
+            super::sound::apply(sim, index, slot.index() as u8, sound, mode);
         }
         Command::FireEffect { slot, effect } => sim
             .extensions

@@ -218,6 +218,7 @@ returns `Err(Refused)` where the host would fault:
 | `screen-fill{slot, rgba}` (30) | `ScreenFill` | `screen_fill(&craft, rgba)` | |
 | `fov-offset{slot, degrees}` (31) | `FovOffset` | `fov_offset(&craft, degrees)` | `degrees` outside `[-30, 30]` or not finite |
 | `fire-mod-effect-ahead{slot, index, distance}` (32) | `FireModEffectAhead` | `fire_mod_effect_ahead(&craft, index, distance)` | a distance the host would not accept; counts toward the 16 effects a tick |
+| `play-mod-sound{slot, index, mode}` (33) | `PlayModSound` | `play_mod_sound(&craft, index, mode)` | |
 | `hud-tint{slot, element, rgba}` | `HudTint` | `hud_tint(&craft, element, rgba)` | the `Pickup` element (`Refused::PickupTint`; use `pickup_look`); the host decodes one as malformed |
 | `pickup-look{slot, icon, colour}` (22) | `PickupLook` | `pickup_look(&craft, icon, colour)` | |
 | `hud-shake{slot, element, amplitude}` | `HudShake` | `hud_shake(&craft, element, amplitude)` | `amplitude` outside `[0, 16]` or not finite |
@@ -354,7 +355,9 @@ the backstop for a guest written without the SDK.
   (`crates/raceplay/src/pads.rs`).
 - **`scale-thrust` above 1.0** lands in `Environment::extension_thrust`, taken by the
   step (`player_step.rs`, `field.rs`).
-- **`play-cue`** pushes onto `RaceSim::cues`. **`fire-effect`** queues for
+- **`play-mod-sound`** pushes a `ModSoundEvent` onto `RaceSim::mod_sounds`, drained by the
+  host beside the cues; a loop's stop is queued when its module faults
+  (`docs/formats/mod-sound.md`). **`play-cue`** pushes onto `RaceSim::cues`. **`fire-effect`** queues for
   `Race::draw_extension_effects` (`tick.rs`'s drawn-tick block, beside the hit sparks).
   The five **`hud-*`** commands are collected per tick in `Extensions` and become one
   `oag_hud::ext_draws::Outputs` per slot in `Race::readout_for`

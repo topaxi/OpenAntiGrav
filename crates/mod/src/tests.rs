@@ -307,6 +307,28 @@ fn a_manifest_carries_effects_that_are_tomls_in_the_mod() {
 }
 
 #[test]
+fn a_manifest_carries_sounds_that_are_wavs_in_the_mod() {
+    let text = format!("{MANIFEST_TEXT}\n[sounds]\nhum = \"snd/hum.wav\"\n");
+    let parsed = Manifest::parse(&text, &|path| path == "snd/hum.wav").unwrap();
+    assert_eq!(parsed.sounds["hum"], "snd/hum.wav");
+    let missing = Manifest::parse(&text, &|_| false).unwrap_err().to_string();
+    assert!(
+        missing.contains("hum") && missing.contains("not a .wav in the mod"),
+        "{missing}"
+    );
+    let wrong = text.replace("hum.wav", "hum.ogg");
+    assert!(Manifest::parse(&wrong, &|_| true).is_err(), "only a WAV");
+    let spaced = text.replace("hum =", "\"bad name\" =");
+    assert!(Manifest::parse(&spaced, &|_| true).is_err());
+    assert!(
+        Manifest::parse(MANIFEST_TEXT, &|_| true)
+            .unwrap()
+            .sounds
+            .is_empty()
+    );
+}
+
+#[test]
 fn a_manifest_pickup_names_its_icon_and_colour_sources_and_a_bad_one_is_refused_by_name() {
     use oag_tables::pickup_look::{Colour, Icon};
     use oag_tables::weapons::Weapon;
