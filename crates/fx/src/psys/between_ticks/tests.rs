@@ -162,8 +162,7 @@ fn a_from_spawn_streaks_tail_stays_put() {
             &particle,
             0.5,
             [1.0; 4],
-            Vec3::Y,
-            Vec3::Z,
+            (Vec3::Y, Vec3::Z),
             None,
         );
         out.iter()

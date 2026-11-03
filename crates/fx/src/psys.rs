@@ -1137,8 +1137,7 @@ impl System {
                     particle,
                     half,
                     [rgb[0], rgb[1], rgb[2], alpha],
-                    right,
-                    up,
+                    (right, up),
                     guard,
                 );
                 continue;

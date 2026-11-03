@@ -174,12 +174,11 @@ pub(super) fn extend(
     particle: &Particle,
     half: f32,
     rgba: [f32; 4],
-    right: Vec3,
-    up: Vec3,
+    (right, up): (Vec3, Vec3),
     view: Option<&GuardBand>,
 ) {
     let start = out.len();
-    extend_at_tick(out, spec, particle, half, rgba, right, up, view);
+    extend_at_tick(out, spec, particle, half, rgba, (right, up), view);
     let head = particle.shift();
     let from_spawn = matches!(spec.render, super::Render::Streak { from_spawn: true });
     let along = particle.position - particle.origin;
@@ -204,8 +203,7 @@ fn extend_at_tick(
     particle: &Particle,
     half: f32,
     rgba: [f32; 4],
-    right: Vec3,
-    up: Vec3,
+    (right, up): (Vec3, Vec3),
     view: Option<&GuardBand>,
 ) {
     let [r, g, b, alpha] = rgba;

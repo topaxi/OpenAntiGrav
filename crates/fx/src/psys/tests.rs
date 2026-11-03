@@ -314,8 +314,7 @@ fn streak_vertices(spec: &EmitterSpec, particle: &Particle) -> Vec<GpuVertex> {
         particle,
         1.0,
         [1.0; 4],
-        Vec3::X,
-        Vec3::Y,
+        (Vec3::X, Vec3::Y),
         None,
     );
     out
@@ -342,8 +341,7 @@ fn a_pool_bar_is_built_at_the_mean_depth_of_its_ends_when_the_eye_is_known() {
         &particle,
         1.0,
         [1.0; 4],
-        Vec3::X,
-        Vec3::Y,
+        (Vec3::X, Vec3::Y),
         Some(&view),
     );
     assert_eq!(out.len(), 6);
