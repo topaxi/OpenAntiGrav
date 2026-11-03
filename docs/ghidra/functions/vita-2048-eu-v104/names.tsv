@@ -257,3 +257,8 @@
 0x810363a4	function	Render_GetRefractionTexture	80	refraction-pass.md
 0x8151c574	data	g_track_mesh_instances	85	refraction-pass.md
 0x816a3c94	data	g_refraction_draw_list	80	refraction-pass.md
+0x811d59b0	function	WeaponAi_DecideFireOrAbsorb	80	weapon-ai-fire.md
+0x811d664a	function	WeaponAi_Update	80	weapon-ai-fire.md
+0x811d5738	function	WeaponAi_Construct	80	weapon-ai-fire.md
+0x8151fe68	data	g_weapon_ai_rate	85	weapon-ai-fire.md
+0x8151fe7c	data	g_weapon_ai_rate_eliminator	85	weapon-ai-fire.md
