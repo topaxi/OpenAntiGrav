@@ -130,6 +130,7 @@ pub type Strings = std::collections::BTreeMap<String, String>;
 pub type StringsReader = Arc<dyn Fn(Option<&str>) -> Strings + Send + Sync>;
 
 impl Source {
+    #[cfg(feature = "extensions")]
     /// The look of the mod's pickup on `title`: its row for the title, else `[pickup]`.
     fn look_for(&self, title: &str) -> Option<oag_tables::pickup_look::PickupLook> {
         self.pickup_titles
