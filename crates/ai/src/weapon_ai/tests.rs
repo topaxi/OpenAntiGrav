@@ -279,7 +279,7 @@ fn the_all_weapons_row_multiplies_use_and_absorb() {
 #[test]
 fn an_authored_eliminator_scales_use_and_absorb_and_keeps_the_absorb_index() {
     let mut s = situation();
-    assert_eq!(s.eliminator, true);
+    assert!(s.eliminator);
     assert_eq!(s.fire_chance(), long_way(RATE_ELIMINATOR[1], 1.2 * 5.0));
     assert_eq!(s.absorb_index(0), 0);
     s.law = hd_law();
