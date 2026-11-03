@@ -92,7 +92,7 @@ Values: a path is the exact string in the source; `set` is `Some(..)` (or
 | `weapons.quake_hit` | `WaveHeight` - measured | `WaveHeightEyeLevel` - inherited | `WaveHeight` - inherited | `WaveHeight` - inherited | `WaveHeight` - inherited |
 | `weapons.autopilot_absorb_cancels` | `set` - measured | `none` - measured | `set` - measured | `set` - inherited | `set` - inherited |
 | `weapons.autopilot_pad_grants` | `none` - measured | `none` - inherited | `none` - inherited | `none` - inherited | `none` - inherited |
-| `weapons.opponent_fire` | `PULSE` - measured | `PULSE` - inherited | `HD` - measured | `HD` - inherited | `HD` - inherited |
+| `weapons.opponent_fire` | `PULSE` - measured | `PULSE` - inherited | `HD` - measured | `OMEGA` - inherited | `OMEGA` - measured |
 | `weapon_models.rocket` | `set` - measured | `set` - measured | `set` - measured | `none` - unread | `set` - inherited |
 | `weapon_models.mine` | `set` - measured | `set` - measured | `set` - measured | `none` - unread | `set` - inherited |
 | `weapon_models.bomb` | `set` - measured | `set` - measured | `set` - measured | `none` - unread | `set` - inherited |
@@ -270,13 +270,13 @@ Pulse's `WeaponAi_DecideFireOrAbsorb`, fire and absorb halves (`0x088518b4`, con
 own `WeaponAIstats.xml` odds. HD's loader for that file is read (85,
 [weapon-ai-stats.md](../ghidra/functions/ps3-hdfury-eu/weapon-ai-stats.md)) and so is
 HD's decision code (80, [weapon-ai-fire.md](../ghidra/functions/ps3-hdfury-eu/weapon-ai-fire.md): it **differs**, see the HD cell); **no
-other title's decision code is read**. HD's terms are wired (`Weapons.opponent_fire`, `oag_ai::weapon_ai::Law`); 2048 runs them inherited from HD, its decision code unread; Omega's is read (differs on a missing Eliminator row, not yet wired). A race whose title names no table, or
+other title's decision code is read**. HD's terms are wired (`Weapons.opponent_fire`, `oag_ai::weapon_ai::Law`); 2048 runs them inherited from HD, its decision code unread; Omega's is read and wired (a missing Eliminator row leaves scales `1.0`); 2048 takes that inherited. A race whose title names no table, or
 whose table fails to read, runs `FireLaw::Ours`, which is chosen, not measured
 (`crates/raceplay/src/field/fire_law.rs`).
 
 | Weapon | Pulse | Pure | HD / Fury | 2048 | Omega |
 | --- | --- | --- | --- | --- | --- |
-| Law that decides to fire | M: both halves ported, fire and absorb, once a tick (the cadence read 2026-10-19: `AiManager_Update` calls every `WeaponAi_Update` once a world step, [weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md#the-decision-cadence-every-call-confidence-85)) | I:Pulse; own odds | M: HD's own law, static (`dt * 30` step scale, `AllWeapons`, Eliminator use/absorb scales from `DATA00`'s `EliminatorAIStats`; 80, [weapon-ai-fire.md](../ghidra/functions/ps3-hdfury-eu/weapon-ai-fire.md)), wired; the Eliminator flip block is not | I:HD; own odds (decision code unread) | M: own law, static (`WeaponAi_Update` `0x01321000`, 80, [weapon-ai-fire.md](../ghidra/functions/ps4-omega-eu/weapon-ai-fire.md)): HD's skeleton, but a missing `EliminatorAIStats` row leaves scales `1.0` (an unscaled Eliminator fire, no `x5`), not HD's `0`; wired as HD's, the Eliminator keeps Pulse's terms (chosen) until the ready-to-wire item lands |
+| Law that decides to fire | M: both halves ported, fire and absorb, once a tick (the cadence read 2026-10-19: `AiManager_Update` calls every `WeaponAi_Update` once a world step, [weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md#the-decision-cadence-every-call-confidence-85)) | I:Pulse; own odds | M: HD's own law, static (`dt * 30` step scale, `AllWeapons`, Eliminator use/absorb scales from `DATA00`'s `EliminatorAIStats`; 80, [weapon-ai-fire.md](../ghidra/functions/ps3-hdfury-eu/weapon-ai-fire.md)), wired; the Eliminator flip block is not | I:HD; own odds (decision code unread) | M: own law, static (`WeaponAi_Update` `0x01321000`, 80, [weapon-ai-fire.md](../ghidra/functions/ps4-omega-eu/weapon-ai-fire.md)): HD's skeleton, but a missing `EliminatorAIStats` row leaves scales `1.0` (an unscaled Eliminator fire, no `x5`), not HD's `0`; wired (`OpponentFire::OMEGA`), Eliminator seed-1 projectiles 108 to 86 |
 | Rocket, Missile, Plasma, Shuriken, Repulser, LeachBeam | M: aimed, fired or absorbed on the law's rolls | I:Pulse (those it has) | I:Pulse | I:Pulse | I:Pulse |
 | Quake | M: rolled, not aimed; absorbed on the same law | I:Pulse | I:Pulse | I:Pulse | I:Pulse |
 | Cannon | ?: the original flags it a forward weapon, the port does not aim it (`opponent_fires`; see `Driver::holds_fire`) | A | ? | ? | ? |

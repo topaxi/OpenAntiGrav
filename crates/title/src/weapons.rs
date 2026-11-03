@@ -86,6 +86,23 @@ pub struct OpponentFire {
     /// Whether an Eliminator uses the `<EliminatorAIStats>` use and absorb
     /// scales (HD) or Pulse's `use *= 5` with the absorb index forced to zero.
     pub authored_eliminator: bool,
+    /// What an authored Eliminator does when the title's file has no
+    /// `<EliminatorAIStats>` row.
+    pub eliminator_without_row: MissingEliminatorRow,
+}
+
+/// What the decision reads for an Eliminator when `WeaponAIstats.xml` has no
+/// `<EliminatorAIStats>` row.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MissingEliminatorRow {
+    /// Pulse's `use *= 5` with the absorb index forced to zero. HD's loader
+    /// would leave its scales at zero (an Eliminator opponent never fires),
+    /// which is the loader's gap, so this stands in. **Chosen, not measured.**
+    PulseScale,
+    /// Scales `1.0`, the absorb index as the setup gives it: Omega's loader
+    /// (`0x01322f10`) defaults them so and its decision reads them as they are
+    /// (`docs/ghidra/functions/ps4-omega-eu/weapon-ai-fire.md`).
+    Unscaled,
 }
 
 impl OpponentFire {
@@ -94,12 +111,21 @@ impl OpponentFire {
         step_scale: 1.0,
         all_weapons: false,
         authored_eliminator: false,
+        eliminator_without_row: MissingEliminatorRow::PulseScale,
     };
     /// `WeaponAi_DecideFireOrAbsorb` on HD (`0x000f9a18`), with `dt = 1/60`.
     pub const HD: Self = Self {
         step_scale: 0.5,
         all_weapons: true,
         authored_eliminator: true,
+        eliminator_without_row: MissingEliminatorRow::PulseScale,
+    };
+    /// `WeaponAi_Update` on Omega (`0x01321000`): HD's terms, but a missing
+    /// Eliminator row leaves the scales at the loader's `1.0`. 2048's loader
+    /// (`0x811d75c6`) has the same defaults.
+    pub const OMEGA: Self = Self {
+        eliminator_without_row: MissingEliminatorRow::Unscaled,
+        ..Self::HD
     };
 }
 

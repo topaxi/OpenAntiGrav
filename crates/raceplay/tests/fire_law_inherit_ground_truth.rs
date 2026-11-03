@@ -30,7 +30,7 @@ use oag_gameplay::PlayerInputs;
 use oag_raceplay as race;
 use oag_raceplay::FireLaw;
 
-fn started(source: String, mode: oag_race::Mode, hd_terms: bool) -> race::Race {
+fn started(source: String, mode: oag_race::Mode, terms: &str) -> race::Race {
     let loaded = race::load(&race::Options {
         source,
         mode,
@@ -43,9 +43,8 @@ fn started(source: String, mode: oag_race::Mode, hd_terms: bool) -> race::Race {
             .report
             .iter()
             .any(|line| line.contains("opponents fire on its odds")
-                && line.contains("HD's decision terms") == hd_terms),
-        "no weapon-AI line naming the {} terms in the loader report: {:#?}",
-        if hd_terms { "HD" } else { "Pulse" },
+                && line.contains(&format!("{terms}'s decision terms"))),
+        "no weapon-AI line naming {terms}'s terms in the loader report: {:#?}",
         loaded.report
     );
     race::Race::start(loaded.setup)
@@ -97,13 +96,14 @@ fn opponents_fire_under_the_original_driver(mut race: race::Race) -> (u32, Vec<b
 /// Every opponent LeachBeam drains on its title's cadence
 /// (`oag_title::weapons::Weapons::leach_drain`): once a ball trip on HD, 2048
 /// and Omega, every tick on Pulse.
-fn fires_original(source: String, mode: oag_race::Mode, per_trip: bool) {
-    let race = started(source, mode, per_trip);
+fn fires_original(source: String, mode: oag_race::Mode, per_trip: bool, terms: &str) {
+    let fly_eliminator = source.contains("ps4");
+    let race = started(source, mode, terms);
     assert_eq!(race.fire_law(), FireLaw::Original, "{mode:?}");
-    if mode == oag_race::Mode::SingleRace {
+    if mode == oag_race::Mode::SingleRace || fly_eliminator {
         let (fired, beams) = opponents_fire_under_the_original_driver(race);
         println!(
-            "opponent projectiles in {SECONDS} s: {fired}, opponent beams (per trip): {beams:?}"
+            "{mode:?} opponent projectiles in {SECONDS} s: {fired}, opponent beams (per trip): {beams:?}"
         );
         assert!(fired > 0, "no opponent fired in {SECONDS} s");
         assert!(
@@ -123,6 +123,7 @@ fn a_pulse_single_race_fires_on_the_original_law() {
         image.display().to_string(),
         oag_race::Mode::SingleRace,
         false,
+        "Pulse",
     );
 }
 
@@ -136,6 +137,7 @@ fn a_pure_single_race_fires_on_the_original_law() {
         image.display().to_string(),
         oag_race::Mode::SingleRace,
         false,
+        "Pulse",
     );
 }
 
@@ -149,6 +151,7 @@ fn a_hd_single_race_fires_on_the_original_law() {
         image.display().to_string(),
         oag_race::Mode::SingleRace,
         true,
+        "HD",
     );
 }
 
@@ -162,6 +165,7 @@ fn a_hd_eliminator_fires_on_the_original_law() {
         image.display().to_string(),
         oag_race::Mode::Eliminator,
         true,
+        "HD",
     );
 }
 
@@ -171,7 +175,12 @@ fn a_2048_single_race_fires_on_the_original_law() {
     let Some(path) = oag_testdata::exact("data/extracted/vita/PCSF00007") else {
         return;
     };
-    fires_original(path.display().to_string(), oag_race::Mode::SingleRace, true);
+    fires_original(
+        path.display().to_string(),
+        oag_race::Mode::SingleRace,
+        true,
+        "Omega",
+    );
 }
 
 #[test]
@@ -180,7 +189,12 @@ fn a_2048_eliminator_fires_on_the_original_law() {
     let Some(path) = oag_testdata::exact("data/extracted/vita/PCSF00007") else {
         return;
     };
-    fires_original(path.display().to_string(), oag_race::Mode::Eliminator, true);
+    fires_original(
+        path.display().to_string(),
+        oag_race::Mode::Eliminator,
+        true,
+        "Omega",
+    );
 }
 
 #[test]
@@ -189,7 +203,12 @@ fn an_omega_single_race_fires_on_the_original_law() {
     let Some(path) = oag_testdata::exact("data/extracted/ps4") else {
         return;
     };
-    fires_original(path.display().to_string(), oag_race::Mode::SingleRace, true);
+    fires_original(
+        path.display().to_string(),
+        oag_race::Mode::SingleRace,
+        true,
+        "Omega",
+    );
 }
 
 #[test]
@@ -198,5 +217,10 @@ fn an_omega_eliminator_fires_on_the_original_law() {
     let Some(path) = oag_testdata::exact("data/extracted/ps4") else {
         return;
     };
-    fires_original(path.display().to_string(), oag_race::Mode::Eliminator, true);
+    fires_original(
+        path.display().to_string(),
+        oag_race::Mode::Eliminator,
+        true,
+        "Omega",
+    );
 }

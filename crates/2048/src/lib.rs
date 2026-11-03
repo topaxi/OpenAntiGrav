@@ -169,8 +169,8 @@ pub const TITLE: &Title = &Title {
         autopilot_absorb_cancels: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
         autopilot_pad_grants: oag_title::pre_race::Sourced::inherited(false, "Wipeout HD"),
         opponent_fire: oag_title::pre_race::Sourced::inherited(
-            oag_title::weapons::OpponentFire::HD,
-            "Wipeout HD",
+            oag_title::weapons::OpponentFire::OMEGA,
+            "Wipeout Omega Collection",
         ),
     },
     // Unread, like `exhaust` and `flare` above: 2048 is a Vita/PSP2 asset
