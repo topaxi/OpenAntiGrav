@@ -76,6 +76,12 @@
 /// `ShipShield_Update` multiplies the colour delta by it once per substep.
 pub const COLOUR_RATE: f32 = 0.15;
 
+/// The colour rate of Omega's and 2048's 2048-content modes (mode id `>= 0x17`),
+/// `ShipShield_Activate`'s `0.05` branch
+/// (`docs/ghidra/functions/ps4-omega-eu/shield.md`). No race this project
+/// launches is one, so no palette carries it yet.
+pub const CONTENT_2048_COLOUR_RATE: f32 = 0.05;
+
 /// How far the swell moves toward its target per 60 Hz substep.
 ///
 /// `+0x6c`, `0.2`. About a fifth of a second to settle a hit, which is what
@@ -229,6 +235,14 @@ pub struct Palette {
     /// is then drawn at its authored colours, scaled by the swell, until it
     /// switches off. See `docs/ghidra/functions/ps2-pulse-eu/shield-pickup.md`.
     pub tints_shell: bool,
+    /// How far the colour moves toward its target per substep ([`COLOUR_RATE`]
+    /// everywhere a race is launched; [`CONTENT_2048_COLOUR_RATE`] is the
+    /// 2048-content modes' value).
+    pub colour_rate: f32,
+    /// Whether the target alpha is the larger of the shell's and the cockpit
+    /// sphere's (Omega and 2048's `ShipShield_Construct`), a model that did not
+    /// load counting as `1.0`. The loader applies it to the authored target.
+    pub target_alpha_from_cockpit: bool,
 }
 
 /// Pulse's own palette - [`ACTIVATION_COLOUR`], [`TARGET_COLOUR`],
@@ -238,6 +252,8 @@ pub const PULSE_PALETTE: Palette = Palette {
     target: TARGET_COLOUR,
     hit: HIT_COLOUR,
     tints_shell: true,
+    colour_rate: COLOUR_RATE,
+    target_alpha_from_cockpit: false,
 };
 
 /// Pulse on the PS2: [`PULSE_PALETTE`]'s colours - the object's fields run the
@@ -263,6 +279,16 @@ pub const HD_PALETTE: Palette = Palette {
     target: TARGET_COLOUR,
     hit: HD_HIT_COLOUR,
     tints_shell: true,
+    colour_rate: COLOUR_RATE,
+    target_alpha_from_cockpit: false,
+};
+
+/// Omega's and 2048's: HD's colours and law, with the target alpha taken from
+/// the larger of the shell's and the cockpit sphere's
+/// (`docs/ghidra/functions/ps4-omega-eu/shield.md`, `ShipShield_Construct`).
+pub const OMEGA_PALETTE: Palette = Palette {
+    target_alpha_from_cockpit: true,
+    ..HD_PALETTE
 };
 
 /// The substep the update runs its two lerps at, `1.0 / 60.0` as the original
@@ -411,7 +437,7 @@ impl ShipShield {
         for _ in 0..steps {
             for channel in 0..4 {
                 self.rgba[channel] +=
-                    (self.rgba_target[channel] - self.rgba[channel]) * COLOUR_RATE;
+                    (self.rgba_target[channel] - self.rgba[channel]) * self.palette.colour_rate;
             }
             self.swell += (self.swell_target - self.swell) * SWELL_RATE;
         }

@@ -143,3 +143,15 @@ beside `shipshield.rcsmodel` in every directory above.
   `oag_rcs::gxp` over the material's `.gxp` programs for the constant named `ShieldColour` and its
   consumers; the 2048 shell is invisible if the program multiplies by `.a`.
 - The two draw routines were read for constants, not traced instruction for instruction.
+
+
+## Wired (lane `omega-2048-shield-wire`)
+
+- `oag_livery::shield` builds the shell through `psp2::build` and reads `ShieldColour` with `oag_rcs::rcsmodel::psp2` (a missing fourth component reads `0.0`, unread; the cockpit floor below makes it moot). Ground truth: `crates/raceplay/tests/omega_2048_shield_colour_ground_truth.rs` (every one of 13 teams' colours and a built shell).
+- Target alpha is `max(shell.a, cockpit.a)` (`ShieldPalette::Omega`, `Palette::target_alpha_from_cockpit`, `Origin::Measured`); the cockpit is `Data\Weapons\vr_shield_cockpit` with alpha 1, so Omega's HD-content shells always target alpha 1.
+- The colour rate is `Palette::colour_rate`; `0.05` (`CONTENT_2048_COLOUR_RATE`) exists but no palette carries it: every mode this project launches on Omega and 2048 is a named one (`< 0x17`), so the `0.15` branch is the one that runs. A mode `>= 0x17` (2048's own campaign events) would need the mode id threaded to the palette and `Data\Weapons2048\vr_shield_cockpit` as its cockpit.
+- Render-only: `ShipShield` is not simulation state; no hash or lone-craft gate moves.
+
+## The `2048_Magnetic_Shield` program (read 2026-11-03, PS4 pixel shader, confidence 70)
+
+`ShieldColour` is a 12-byte (three-component) constant in the pixel program's cbuffer: only `.rgb` is loaded. Output RGB is `ShieldColour.rgb * Texture1 * attr0.w * attr2.x`, lerped toward fog; output alpha is `tex.r * attr2.x`, where `attr2.x` is the vertex stream's `VertexColour1.w`. So `ShieldColour.a` never reaches a pixel through this program, and the alpha `0` authored on these shells does not by itself hide them. Drawn on 2048 (HDR cyan `(0, 4.59, 4.59)`, floored to target alpha 1 by the cockpit rule): a cyan lattice around the hull. Not read on the Vita `.gxp` side (`checked, applies, not wired` for the Vita program itself: the same material name and the same constant name).

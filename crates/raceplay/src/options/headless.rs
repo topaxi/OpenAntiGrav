@@ -81,6 +81,8 @@ impl Setup {
                 target: [0.0; 4],
                 hit: [0.0; 4],
                 tints_shell: true,
+                colour_rate: oag_render::shield::COLOUR_RATE,
+                target_alpha_from_cockpit: false,
             },
             // Nothing draws on this constructor, Pulse's mechanism included -
             // see `shield_palette` above for the same reasoning.

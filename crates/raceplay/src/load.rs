@@ -366,7 +366,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // reason: not per team, not per track, one entry for every craft in the
     // game. The shell beside it *is* per team and loads with the livery above.
     #[cfg(feature = "view")]
-    let shield_cockpit =
+    let (shield_cockpit, shield_cockpit_alpha) =
         oag_livery::cockpit_shield(craft_of(&mut craft, &mut archives), &mut report);
 
     // Shared with the sky and the pads below: all three are node classes inside
@@ -1118,7 +1118,16 @@ pub fn load(options: &Options) -> Result<Loaded> {
             #[cfg(feature = "view")]
             ps2_trail: title.looks.ps2_trail.applies(archives.layout.platform),
             #[cfg(feature = "view")]
-            shield_targets: liveries.iter().map(|l| l.shield_colour).collect(),
+            shield_targets: {
+                let palette = roster::shield_palette(
+                    craft_title,
+                    craft_of(&mut craft, &mut archives).layout.platform,
+                );
+                liveries
+                    .iter()
+                    .map(|l| roster::shield_target(l.shield_colour, shield_cockpit_alpha, &palette))
+                    .collect()
+            },
             #[cfg(feature = "view")]
             shield_palette: roster::shield_palette(
                 craft_title,

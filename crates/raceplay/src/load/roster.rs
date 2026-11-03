@@ -218,9 +218,28 @@ pub(super) fn shield_palette(
 ) -> oag_render::shield::Palette {
     match craft_title.looks.shield_palette.on(platform) {
         oag_title::ShieldPalette::Hd => oag_render::shield::HD_PALETTE,
+        oag_title::ShieldPalette::Omega => oag_render::shield::OMEGA_PALETTE,
         oag_title::ShieldPalette::Ps2Pulse => oag_render::shield::PS2_PULSE_PALETTE,
         oag_title::ShieldPalette::Pulse => oag_render::shield::PULSE_PALETTE,
     }
+}
+
+#[cfg(feature = "view")]
+/// A slot's settled shield colour, with the alpha Omega's and 2048's
+/// constructor settles on: the larger of the shell's and the cockpit sphere's
+/// (`Palette::target_alpha_from_cockpit`). The other palettes take the shell's
+/// colour as authored.
+pub(super) fn shield_target(
+    shell: Option<[f32; 4]>,
+    cockpit_alpha: f32,
+    palette: &oag_render::shield::Palette,
+) -> Option<[f32; 4]> {
+    shell.map(|mut colour| {
+        if palette.target_alpha_from_cockpit {
+            colour[3] = colour[3].max(cockpit_alpha);
+        }
+        colour
+    })
 }
 
 /// Fills the grid: slot teams out of `available`, then a [`oag_livery`] per
@@ -370,6 +389,21 @@ pub(super) fn grid(
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "view")]
+    #[test]
+    fn omega_target_alpha_is_the_larger_of_shell_and_cockpit() {
+        use super::shield_target;
+        use oag_render::shield::{HD_PALETTE, OMEGA_PALETTE};
+        let magnetic = Some([0.0, 4.59, 4.59, 0.0]);
+        assert_eq!(
+            shield_target(magnetic, 1.0, &OMEGA_PALETTE),
+            Some([0.0, 4.59, 4.59, 1.0])
+        );
+        assert_eq!(shield_target(magnetic, 0.0, &OMEGA_PALETTE), magnetic);
+        assert_eq!(shield_target(magnetic, 1.0, &HD_PALETTE), magnetic);
+        assert_eq!(shield_target(None, 1.0, &OMEGA_PALETTE), None);
+    }
+
     use super::{apply_grid_teams, apply_seat_picks};
     use crate::SeatPick;
 

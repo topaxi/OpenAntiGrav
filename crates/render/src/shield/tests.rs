@@ -471,3 +471,25 @@ fn a_shield_lerps_to_its_own_crafts_target() {
         assert!((b.colour()[channel] - piranha[channel]).abs() < 1e-3);
     }
 }
+
+/// The palette's colour rate is the rate the lerp runs at: the 2048-content
+/// rate takes more than three times the steps to cover the same distance.
+#[test]
+fn the_palette_sets_the_colour_rate() {
+    let steps_to_settle = |colour_rate: f32| {
+        let mut shell = ShipShield::with_palette(Palette {
+            colour_rate,
+            ..HD_PALETTE
+        });
+        shell.activate();
+        (1..1000)
+            .find(|_| {
+                shell.advance(DT);
+                (shell.colour()[0] - HD_PALETTE.target[0]).abs() < 0.01
+            })
+            .expect("settles")
+    };
+    let fast = steps_to_settle(COLOUR_RATE);
+    let slow = steps_to_settle(CONTENT_2048_COLOUR_RATE);
+    assert!(slow > fast * 3, "{fast} against {slow} steps");
+}

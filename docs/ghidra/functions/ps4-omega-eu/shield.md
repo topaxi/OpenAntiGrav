@@ -197,3 +197,24 @@ alpha does.
 - Whether `ship_dir` reaches `hdships/<team>_c1` or `ships/<team>2048/<n>` for each variant in a race
   is unmeasured here, as on HD.
 - `0x0136ef30`'s model slot, the second draw routine, and the Omega 1.07 addresses.
+
+
+## Wired (lane `omega-2048-shield-wire`)
+
+- `oag_livery::shield` builds the shell through `psp2::build` and reads `ShieldColour` with `oag_rcs::rcsmodel::psp2` (a missing fourth component reads `0.0`, unread; the cockpit floor below makes it moot). Ground truth: `crates/raceplay/tests/omega_2048_shield_colour_ground_truth.rs` (every one of 13 teams' colours and a built shell).
+- Target alpha is `max(shell.a, cockpit.a)` (`ShieldPalette::Omega`, `Palette::target_alpha_from_cockpit`, `Origin::Measured`); the cockpit is `Data\Weapons\vr_shield_cockpit` with alpha 1, so Omega's HD-content shells always target alpha 1.
+- The colour rate is `Palette::colour_rate`; `0.05` (`CONTENT_2048_COLOUR_RATE`) exists but no palette carries it: every mode this project launches on Omega and 2048 is a named one (`< 0x17`), so the `0.15` branch is the one that runs. A mode `>= 0x17` (2048's own campaign events) would need the mode id threaded to the palette and `Data\Weapons2048\vr_shield_cockpit` as its cockpit.
+- Render-only: `ShipShield` is not simulation state; no hash or lone-craft gate moves.
+
+## The `2048_Magnetic_Shield` program (read 2026-11-03, PS4 pixel shader, confidence 70)
+
+`ShieldColour` is a 12-byte (three-component) constant in the pixel program's cbuffer: only `.rgb` is loaded. Output RGB is `ShieldColour.rgb * Texture1 * attr0.w * attr2.x`, lerped toward fog; output alpha is `tex.r * attr2.x`, where `attr2.x` is the vertex stream's `VertexColour1.w`. So `ShieldColour.a` never reaches a pixel through this program, and the alpha `0` authored on these shells does not by itself hide them. Drawn on 2048 (HDR cyan `(0, 4.59, 4.59)`, floored to target alpha 1 by the cockpit rule): a cyan lattice around the hull. Not read on the Vita `.gxp` side (`checked, applies, not wired` for the Vita program itself: the same material name and the same constant name).
+
+## The two shell programs (PS4 GCN, read 2026-11-03, confidence 70)
+
+Per-team shells (`ships/materials/2048_shipshield_old`, Omega's `hdships/<team>` shell, state word `0x3d`, blended, culling) and the 2048-content shells (`2048_Magnetic_Shield`) run different pixel programs:
+
+- **`2048_shipshield_old`**: samples the diffuse texture's **alpha** (`image_sample ... dmask:0x8`), output alpha = `ShieldColour.a * tex.a * vertex alpha`; colour is `ShieldColour.rgb` times a second, **scrolling "Lightning" layer** (`Lightning_RGB_Multiplier`, a second sampler at `uv + 3*time`, here `cf_plasma`) plus the diffuse. Lit variants also read `constantAmbientColour` and `liveLighting0`. The shell reads `ShieldColour.a`, unlike the magnetic program.
+- **`2048_Magnetic_Shield`**: red channel as alpha, three-component `ShieldColour`.
+
+Wired: the alpha channel of the first (`slots::alpha_channel(3)`), and HD's `SRC_ALPHA`/`ONE` for the first material by equivalence with `hexagonalshield_rich` (`lineage_blend::EQUIVALENT`, census pinned in `hd_lineage_blend_ground_truth.rs`). **Not wired: the lightning layer and the scroll.** The picture is therefore much fainter than HD's shell (checked side by side, Assegai, far camera: HD shows a hex lattice over the whole hull, Omega only faint patches past the silhouette). Geometry is not the cause: HD and Omega Feisar shells are the same mesh (same vertex bounding box to 0.01, 2,193 triangles, winding agrees with the vertex normals on every triangle, same swell and live colour at the same tick). The builder's default for every Vita/PS4 model reads the **red** channel as alpha; that default is unexamined for other materials (open).
