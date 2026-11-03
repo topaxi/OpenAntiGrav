@@ -34,7 +34,8 @@ pub(super) struct Add {
     pub texture: Arc<ModelTexture>,
 }
 
-/// Per material, the add it draws.
+/// Per material, the add it draws. [`super::shield_lightning`] fills in the same table: both ride
+/// the third binding and one glow-table entry.
 #[derive(Default)]
 pub(super) struct Plan {
     pub adds: Vec<Option<Add>>,

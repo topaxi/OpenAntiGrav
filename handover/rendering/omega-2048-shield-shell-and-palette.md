@@ -2,7 +2,7 @@
 status: re-first
 titles: [omega, 2048]
 updated: 2026-11-03
-summary: "Omega/2048 shield shell and own colour wired for named modes; open: 2048-content modes (rate 0.05, own cockpit) unlaunched, Vita program unread"
+summary: "Omega/2048 shell, colour and Omega Lightning wired; open: Omega ambient and lit variants, Zone shell, 2048-content modes, Vita program"
 size: M (65)
 difficulty: medium (60)
 ---
@@ -56,6 +56,8 @@ constant named `ShieldColour` and its readers. Does not block 1-4 for HD-content
 ## Wired
 
 Items 1, 2, 3 and 5 (HD-content target alpha) landed in lane `omega-2048-shield-wire`; the program read below shows `.a` is unused by the pixel program. Open now: 4 and 6 are unreachable (nothing launches a mode `>= 0x17`; `Palette::colour_rate` and `CONTENT_2048_COLOUR_RATE` are ready), the Vita program of `2048_Magnetic_Shield` is unread, and the HD target-alpha compare is still unrecorded for HD.
+
+Landed in lane `omega-shield-lightning`: Omega's `2048_shipshield_old` Lightning layer (scrolled diffuse colour plus untinted `cf_plasma` term; `ps4-omega-eu/shield.md`, "The two shell programs"). Open from it: `constantAmbientColour` (implicit 1) and the lit variants' terms unread, Zone's `zonebattle_shield` program unread (no lightning there), the lightning is added after fog, the Vita `hdships` shells use the same material (`.gxp` unread, not wired), and a wipeout_pc frame with a raised shield would judge brightness and the pair assignment.
 
 ## Next Steps
 

@@ -44,7 +44,7 @@ fn shield_of(
     archives: &mut oag_assets::Archives,
     title: &'static oag_title::Title,
     team: &str,
-) -> (Option<[f32; 4]>, bool, Vec<String>) {
+) -> (Option<[f32; 4]>, bool, Vec<String>, Option<Lightning>) {
     let mut report = Vec::new();
     let liveries = oag_livery::load(
         archives,
@@ -71,7 +71,29 @@ fn shield_of(
         .shield
         .as_ref()
         .is_some_and(|model| !model.indices.is_empty() && model.shield_shell);
-    (livery.shield_colour, built, report)
+    let lightning = livery.shield.as_ref().and_then(|model| {
+        let entry = model
+            .emissive
+            .iter()
+            .find(|e| e.program[0] == oag_mesh::mesh::PROGRAM_SHIELD_LIGHTNING)?;
+        Some(Lightning {
+            weight: entry.tint[0],
+            diffuse_scroll: entry.tint[1],
+            noise_rate: entry.tint[2],
+            noise_scale: entry.offset,
+            picture: model.pad_masks.iter().any(Option::is_some),
+        })
+    });
+    (livery.shield_colour, built, report, lightning)
+}
+
+/// What a built shell carries of `2048_shipshield_old`'s Lightning layer.
+struct Lightning {
+    weight: f32,
+    diffuse_scroll: f32,
+    noise_rate: f32,
+    noise_scale: f32,
+    picture: bool,
 }
 
 #[test]
@@ -82,7 +104,25 @@ fn every_omega_team_builds_a_shell_and_settles_to_its_own_colour() {
     };
     let mut archives = oag_omega::open(&path.display().to_string()).expect("omega");
     for (team, expected) in OMEGA {
-        let (colour, built, report) = shield_of(&mut archives, oag_omega::TITLE, team);
+        let (colour, built, report, lightning) = shield_of(&mut archives, oag_omega::TITLE, team);
+        // The layer's rates are literals of the pixel program (`3.0`, `0.8`, `0.16`), its
+        // picture is `cf_plasma` on the third binding, and the weight is the team's own
+        // `Lightning_RGB_Multiplier` (Assegai authors 3, Icaras 1).
+        // Zone's shell is its own material (`zonebattle_shield`), a different program.
+        if *team == "zone" {
+            assert!(
+                lightning.is_none(),
+                "zone: another program, no Lightning layer"
+            );
+        } else {
+            let lightning = lightning
+                .unwrap_or_else(|| panic!("{team}: no Lightning layer\n{}", report.join("\n")));
+            assert!(lightning.picture, "{team}: no lightning picture bound");
+            assert!(lightning.weight > 0.0, "{team}: no lightning weight");
+            assert!((lightning.diffuse_scroll - 3.0).abs() < 1e-6, "{team}: A");
+            assert!((lightning.noise_scale - 0.8).abs() < 1e-6, "{team}: B");
+            assert!((lightning.noise_rate - 0.16).abs() < 1e-6, "{team}: C");
+        }
         let colour =
             colour.unwrap_or_else(|| panic!("{team}: no ShieldColour\n{}", report.join("\n")));
         assert!(built, "{team}: no shell model\n{}", report.join("\n"));
@@ -105,7 +145,11 @@ fn every_2048_team_builds_a_shell_and_settles_to_the_magnetic_colour() {
     let mut archives = oag_2048::open(&path.display().to_string()).expect("2048");
     for team in ["ag_systems", "auricom", "feisar", "piranha", "qirex"] {
         let team = format!(r"{team}2048\1");
-        let (colour, built, report) = shield_of(&mut archives, oag_2048::TITLE, &team);
+        let (colour, built, report, lightning) = shield_of(&mut archives, oag_2048::TITLE, &team);
+        assert!(
+            lightning.is_none(),
+            "{team}: the magnetic shield runs another program and has no Lightning layer"
+        );
         let colour =
             colour.unwrap_or_else(|| panic!("{team}: no ShieldColour\n{}", report.join("\n")));
         assert!(built, "{team}: no shell model\n{}", report.join("\n"));
