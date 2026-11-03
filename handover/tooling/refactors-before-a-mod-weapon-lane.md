@@ -24,25 +24,33 @@ so 20-40 by default). Ranking is payoff times the chance the lane touches the co
   caller `crates/raceplay/src/pads.rs:316` passes `self.sim.class`. A fifth class
   needs no code for the odds. (The `SpeedClass` enum has four rungs, as
   `docs/formats/2048-campaign.md:219` records; the odds do not go through it.)
-- **Rocket count: no class column.** It is a per-craft field. Each team folder
-  `HandlingStats/<team>/<1..4>/handlingstats.xml` has one `<Weapons>` line (line 17
-  in `feisar2048/2`, `number_of_rockets="2" number_of_mines="4"`). The values seen:
-  `1` or `2` rockets, `none` on folders 1 and 4 (which carry `lockon_speed_multiplier`
-  and `gift_cannon_time` instead). Example: `feisar2048/3` has `number_of_rockets="1"`.
-  No crate reads `number_of_rockets`, `number_of_mines` or `weapon_damage_multiplier`
+- **Rocket count: a per-craft modifier, not a class and not a weapon entry.** Each
+  team folder `HandlingStats/<team>/<1..4>/handlingstats.xml` has one `<Weapons>`
+  attribute line (line 17 in `feisar2048/2`: `number_of_rockets="2" number_of_mines="4"`).
+  The numbered folder is the craft the team flies, and the roles are named by the disc
+  (`docs/formats/2048-status.md:266-272`, confidence 90): **1 Fighter** (Feisar: Combat),
+  **2 Agility**, **3 Speed**, **4 Prototype**. Across all five teams:
+  - Fighter (1): no `number_of_rockets`, only `lockon_speed_multiplier`. The default is
+    not in the XML; the executable's default is unread.
+  - Agility (2): `2` rockets, `4` mines, on all five teams.
+  - Speed (3): `1` rocket, `3` mines, on all five teams.
+  - Prototype (4): varies (`2`, `1`, or none with `gift_cannon_time`).
+  The brief's example (a speed ship fires one rocket, a fighter three) matches the data
+  **if** the fighter's default is three. That default is the code's `ROCKET_SHOTS`, not
+  read from anything. Consistent, not proven.
+  **Omega carries the same field**: the `omega-data00` extract (`Data/handlingstats/<team>/<n>/handlingstats.xml`, line 17)
+  equals the 2048 copy on all twenty folders (`rg`-equal `<Weapons>` lines, checked
+  2026-11-03). Verdict: **checked, applies, not wired**, on both titles. No crate reads
+  `number_of_rockets`, `number_of_mines` or `weapon_damage_multiplier`
   (`rg` over `crates/` finds only the function `weapon_damage` in `physics/src/damage.rs`).
 - **The fire side is fixed at three.** `ROCKET_SHOTS: usize = 3`
   (`crates/weapons/src/projectile/rocket.rs:19`), and `launch` returns
   `[(Vec3, Vec3); ROCKET_SHOTS]` (`rocket.rs:89`), so the spawn count is a type, not data.
   Both the player (`crates/raceplay/src/weapons.rs:278`) and the AI
   (`crates/raceplay/src/field/opponent_weapons.rs:69`) call the same `fire_rocket`.
-- **The brief's example is not in the XML as stated.** No file says "a speed ship
-  fires one rocket, a fighter three". The counts are per craft folder, values 1 or 2.
-  Which folder is fighter and which is speed is not written in the files; the
-  livery names (`docs/formats/2048-status.md:263-270`) hint at it and nothing confirms it.
-  The three-rocket fan is the Pulse law (`docs/gameplay/pickups.md`, "Three at once").
-- **Fixing it is a law, not a refactor.** It changes 2048 gameplay (rockets per press)
-  and needs the folder-to-class mapping first. Item 8 below.
+- **The three-rocket fan is the Pulse law** (`docs/gameplay/pickups.md`, "Three at once").
+- **Fixing it is a law, not a refactor.** It changes 2048 gameplay (rockets per press),
+  and the fighter's default is still unread. Item 8 below.
 
 ## Do now (ranked)
 
@@ -66,11 +74,15 @@ so 20-40 by default). Ranking is payoff times the chance the lane touches the co
 - **`RESET_SHIELD_CHARGE` (a damage law) lives in `oag-race`**, read only by
   `charge_the_reset` (`respawn.rs` near 320). It belongs with the shield, not the trigger
   timings.
+- **The template already exists.** `oag_title::weapons::Weapons::autopilot_pad_grants`
+  (`crates/title/src/weapons.rs:69`) is a `Sourced<bool>` (value plus provenance, set per
+  title, e.g. `crates/pure/src/lib.rs:120` `inherited(false, "Wipeout Pulse")`), read at
+  `crates/raceplay/src/pads.rs:304`. Each trigger row takes the same shape.
 - **The payoff.** One struct per race, one row per trigger, carrying: the constant, the
-  enable (`bool`), the provenance (`original` / `chosen` / `measured`, per
-  `docs/gameplay/leaving-the-track.md` and ADR-0058 `Title` data), and the
-  `RespawnCause` it produces. A lane that needs a trigger off for one title, or a
-  mod that disables one, edits one row. Today it edits five guards and a ladder.
+  enable as `Sourced<bool>` (per ADR-0058), `cooldown_gated: bool` (true for four
+  triggers, **false for airborne**, which keeps today's behaviour exactly), and the
+  `RespawnCause` it produces. A lane that needs a trigger off for one title, or a mod
+  that disables one, edits one row. Today it edits five guards and a ladder.
 - **Size.** M (40). Confidence 40.
 - **How to check it is done.** `rg -c "respawn_disabled\[slot\]" crates/raceplay/src`
   drops to one. `systemd-run --user --scope -q -p MemoryMax=8G -p MemorySwapMax=0 cargo nextest run -p oag-raceplay respawn distance_reset` green, and
@@ -78,10 +90,10 @@ so 20-40 by default). Ranking is payoff times the chance the lane touches the co
   unchanged. Read the `state_hash` of a fixed race before and after: it must not move.
 - **Risk.** The consts sit in `oag-race` (a determinism crate). Moving them into a
   struct changes no arithmetic and no ordering if every guard keeps its evaluation order.
-  Only the airborne cooldown guard changes, and it is unreachable as argued above; a test
-  must show that before it is merged. Do not update the determinism reference constants.
-  Whether `Title` (ADR-0058) already has a home for per-title trigger data was not checked
-  (`crates/title` not read).
+  The refactor keeps the airborne trigger without a cooldown guard (`cooldown_gated: false`),
+  so behaviour is identical. Adding that guard is a separate change with its own test,
+  because the cooldown cannot reach 4 s of airtime today, as argued above. Do not update
+  the determinism reference constants.
 
 ### 2. One craft-placement path by spline sample (sweep item 4)
 
@@ -112,7 +124,7 @@ so 20-40 by default). Ranking is payoff times the chance the lane touches the co
   different on purpose (`course.rs:396-408`). Only the wrapper and the duplicated spawn are
   pure moves. The locate merge is a determinism change and must not be bundled.
 
-### 3. One pickup-table lookup, one case rule (sweep item 1 and 3)
+### 3. One pickup-table lookup, one case rule (sweep items 1 and 3)
 
 - **Where.** `crates/tables/src/weapons.rs:398` `WeaponStats::pickups_for`: exact
   `t.class == class`. `crates/weapons/src/pickup.rs:509` `table_for`: case-insensitive, and
@@ -121,7 +133,7 @@ so 20-40 by default). Ranking is payoff times the chance the lane touches the co
   and `crates/tables/src/weapons/tests.rs:349,367,368`.
 - **The payoff.** Two lookups of one table with two rules. A mod pickup adds its own
   weight row; that row must be found by the one lookup that runs. Pure cleanup, XS.
-- **Size.** XS (15). Confidence 60.
+- **Size.** XS (15). Confidence 40.
 - **How to check it is done.** `rg -n "pickups_for\(" crates --type rust | grep -v tests`
   is empty after the change; `cargo nextest run -p oag-tables -p oag-weapons` green. Move
   the tests to `table_for` or delete the method. No compatibility re-export (memory:
@@ -145,10 +157,12 @@ so 20-40 by default). Ranking is payoff times the chance the lane touches the co
   generate the enum, encode, decode and the no-op list. This is the second enum on the
   same pattern, so the "macro once a second enum uses it" rule in memory
   (`feedback_macro_two_enums`) is met.
-- **Size.** L (55). Confidence 25.
-- **How to check it is done.** Byte-identical encodings: the golden tests in
-  `ext-abi` must pass without edit. `cargo nextest run -p oag-ext-abi -p oag-ext -p oag-modhost`
-  green. The mod-author skill is unchanged if no byte changes.
+- **Size.** L (55). Confidence 25. The pinning test is an XS first step.
+- **How to check it is done.** `crates/ext-abi/src/tests.rs` exists, but it was not read
+  for a byte-exact test of every `Command` and `Event` variant. First add a test that pins
+  each variant's encoded bytes (it must pass on `main` unchanged), then refactor against it.
+  `cargo nextest run -p oag-ext-abi -p oag-ext -p oag-modhost` green. The mod-author skill
+  is unchanged if no byte changes.
 - **Risk.** Nothing ships yet (memory: no version bumps, edit v1 in place), so layout can
   move, but a silent layout change breaks any built mod. Golden bytes are the guard. Not
   simulation code.
@@ -187,9 +201,15 @@ so 20-40 by default). Ranking is payoff times the chance the lane touches the co
 - **Payoff.** One name for "in play": the draw list, the targeting and the collision
   would all ask it. Today each site asks the flag. Size XS (10). Confidence 40.
 - **Check.** `rg -n "\.active\b" crates --type rust | grep -v tests` lists one accessor
-  call per site. **Collision:** no craft-versus-craft gate was found by name in this sweep
-  (`rg` for `ship_collision`, `craft_vs_craft` and `collide_ships` is empty). Unknown; a
-  lane that needs "no collision" must find it first.
+  call per site.
+- **Collision gate, found.** Craft-versus-craft contact is `Race::resolve_craft_pairs`
+  (`crates/raceplay/src/field.rs:1201`). It has three gates in order: the mode
+  (`Mode::craft_collide(people)`, off in a Multiplayer Time Trial), `ships[a|b].active`
+  (`:1210`), and `oag_physics::damage::solid_to_craft` (a wreck that has sat out its
+  explosion is driven through). Then `oag_physics::pair::resolve`. A "no collision" state
+  for a craft would need to pass the second gate, and the first two are not one predicate.
+  The track collision is the cage and surface path (`crates/gameplay/src/collision.rs`, no
+  per-craft gate there).
 
 ### 7. Enable state kept in two places (sweep item 7)
 
@@ -203,11 +223,13 @@ so 20-40 by default). Ranking is payoff times the chance the lane touches the co
 
 ### 8. The rocket count as data (sweep item 1, a law, not a refactor)
 
-- `ROCKET_SHOTS` (`rocket.rs:19`) fixes the fan. The per-craft `number_of_rockets` (1 or 2 on
-  2048) is unread. Making `launch` return a count from the craft's stats changes 2048 play.
-- **Needs first:** the folder-to-class mapping for `HandlingStats/<team>/<1..4>`, and
-  whether Pulse, Pure and HD have the field at all (not checked). Confidence in the law: none yet.
-- Size M (45) once the law is known. Not in the lane's scope unless it asks.
+- `ROCKET_SHOTS` (`rocket.rs:19`) fixes the fan. The per-craft `number_of_rockets` (Agility 2,
+  Speed 1, Prototype 2 or 1 by team; Fighter absent) is unread on both titles. Making `launch`
+  return a count from the craft's stats changes 2048 and Omega play.
+- **Needs first:** the executable's default for an absent field (the Fighter's), and whether
+  Pulse, Pure and HD have the field at all (not checked). The folder-to-role mapping is now
+  known (confidence 90, `docs/formats/2048-status.md:266-272`).
+- Size M (45) once the default is read. Not in the lane's scope unless it asks.
 
 ### 9. AI firing wrappers (sweep item 8)
 
@@ -244,13 +266,14 @@ so 20-40 by default). Ranking is payoff times the chance the lane touches the co
 - No `just bench-render` or `oag-game` run. Every item is a reading. Counts are `rg` counts
   on `main` at `038fa0b3a`.
 - The `Title` (ADR-0058) home for per-trigger data was not read.
-- Craft-versus-craft collision was not located.
+- The mode and wreck rules behind `resolve_craft_pairs` were read, not their physics.
 
 ## Open
 
 - Whether item 1's airborne cooldown gap is reachable through any path other than the
   one argued above (a test would settle it).
-- Which 2048 team folder is fighter and which is speed (item 8).
+- The fighter's rocket count: the executable's default for an absent `number_of_rockets`
+  (item 8). Unread.
 
 ## Next Steps
 
@@ -258,5 +281,5 @@ so 20-40 by default). Ranking is payoff times the chance the lane touches the co
    cheapest to land ahead of the lane.
 2. Before item 1: `rg -n "AIRBORNE_RESET_SECONDS|RESET_SHIELD_CHARGE" crates --type rust`
    and a test that the cooldown-less airborne path cannot fire within 30 ticks of a respawn.
-3. Before item 8: map `HandlingStats/<team>/<1..4>` to a class (read the 2048 livery
-   names and the ship select in `docs/formats/2048-status.md`), then decide Pulse's answer.
+3. Before item 8: read the executable's default for an absent `number_of_rockets`
+   (Omega's `eboot.bin` in Ghidra, or the 2048 Vita EBOOT), then decide whether it is three.
