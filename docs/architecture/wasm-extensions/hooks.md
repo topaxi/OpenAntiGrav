@@ -437,6 +437,24 @@ lands there, for person slots, before the step, carrying what
 `pilot_assist_input` computes today. The README's command list must carry it, or
 the phase 2 proof has no sink.
 
+### Built for a portal weapon: `transit`, `scale-speed`, `probe-clearance` (2026-11-03)
+
+The engine pieces a portal-teleport pickup needs (a mod's, `oag.slipstream`; the engine
+names no mod). All three are per slot, from a rules or a track module.
+
+| What | Where | Notes |
+| --- | --- | --- |
+| The primitive: a forward move to a course point under a lap | `Race::move_to`, `crates/raceplay/src/transit.rs:210` | Pose by the reset's own placement (`breadcrumbs::relocate`); cursors reset through `Race::reseat` (`respawn.rs`), shared with `put_back`. No respawn counted, nothing charged |
+| A crossing of the line in the move | `Standing::jumped`, `crates/race/src/standing.rs:278`; `RaceState::jumped`, `crates/race/src/state.rs:504` | The standing credits it at once (lap, spawn crossing, deficit, finish); the person's clock seeds its previous reading so that tick's `update` reads one forward wrap, and its `Outcome` flows as for a driven crossing |
+| Resolving a distance | `Race::point_ahead`, `transit.rs:95` | Units, seconds at the current speed, lap share, a place on the lap (`Course::index_at_progress`), or a track trigger's centre located on the course |
+| `transit{slot, ticks, distance, exit_factor}` lands | `Race::run_motion`, `crates/raceplay/src/extensions.rs:891`, after the call | `Race::begin_transit` (`transit.rs:46`); a refusal faults the module. The host refuses earlier a craft not racing or already out (`modhost/src/reply.rs`) |
+| Out of the world | `Ship::in_world`, `crates/gameplay/src/world.rs:259` | `Craft::active` (weapons), `resolve_craft_pairs`, `fire_law` targeting, the draw (`Race::ship_active`, model matrices, shadow, exhaust), `step_opponents` skip; `step_player` returns an idle step (`player_step.rs:144`); pickup presses unheard (`tick.rs:165`) |
+| Reset triggers held | `Race::reset_held`, `transit.rs:241`, read by `Race::armed` (`respawn.rs:116`) and `rescue_player` | Independent of each trigger's gates, so cage and airborne are held too; no dwell banks |
+| Exit | `Race::advance_transits`, `transit.rs:182`, called at `tick.rs:191` before the call | Moved and stepped the same tick; `transit-end{slot}` is in that very call's events |
+| `scale-speed{slot, factor}` | `apply`, `crates/raceplay/src/extensions/on.rs:902` | Velocity times `factor`, once, at the call; before any `transit` of the same tick, so a transit's exit speed is taken after it |
+| `probe-clearance{slot, distance, radius}` | `Race::clearance`, `transit.rs:150` | Half disc standing across the track at the width midpoint: width at least `2r`, nine rays centre to rim (`Raycaster::raycast`, Reset volumes skipped). The answer is `clearance{slot, fits, ahead}` at the next call (hashed while pending) |
+| Pad odds for the mod's pickup | `[[pickup.odds]]`, read at `crates/raceplay/src/pads.rs:321` | The declaring module owns the mod pickup from the start; `oag_weapons::pickup::draw` walks `Weapon::Extension` after the title's weapons, so a table without the row draws as ever; an event's weapon set does not reach it; a fault ends it |
+
 ## `race-start`: the grid
 
 `race-start` runs once after the grid is placed: `Race::start`

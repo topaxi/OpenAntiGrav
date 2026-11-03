@@ -491,6 +491,40 @@ need not queue) and a *priority* that decides what is dropped past the cap, in p
 sort order. Each stays deterministic by the same rule: delivery order and drops are a function of
 the queued events alone, never of which module ran first.
 
+### And the pieces of a portal weapon (2026-11-03)
+
+What a guest needs to build a portal-teleport pickup (the official mod `oag.slipstream`
+is its first user; the engine names no mod). ABI 1 is edited in place; the layout fold
+in `crates/ext-abi/src/tests.rs` is recorded again. The engine side is in
+[hooks.md](hooks.md#built-for-a-portal-weapon-transit-scale-speed-probe-clearance-2026-11-03).
+
+| Piece | Kind | What it is |
+| --- | --- | --- |
+| `transit{slot, ticks, distance, exit_factor}` | command 27 | Out of the world for `ticks` (1 to `MAX_TRANSIT_TICKS` = 600): frozen where it was, not stepped, not drawn, not collided with, not hit or locked, controls and pickup presses ignored, reset triggers held. Then moved forward to `distance` and stepped from there the same tick, at `exit_factor` (0 to 2, steps of 1/10,000) times its entry speed. Laps count through the jump; a finish in it is timed at the exit tick. Refused (a fault) for a craft not racing or already out, or a distance that does not resolve |
+| `Distance` | vocabulary | `Units(u)` on, `Seconds(s)` at the speed it has when the command lands, `Lap(share)`, `Progress(p)` (a place on the lap, units from the start line), `Trigger(n)` (the course point nearest track trigger `n`'s centre: a portal's other end). Always forward, under a lap |
+| `transit-end{slot}` | event 11 | On the exit tick's own call |
+| `scale-speed{slot, factor}` | command 28 | Velocity times `factor` (0 to 2), once, at the call |
+| `probe-clearance{slot, distance, radius}` | command 29 | Does a half disc of `radius` (up to 64) standing across the track at `distance` fit: width at least `2r` and no geometry on nine rays from its centre to its rim. Answered next call |
+| `clearance{slot, fits, ahead}` | event 12 | The answer, with how far on it probed; a distance that does not resolve answers "does not fit" with `ahead` 0 |
+| `in-transit` | craft flag 16 | The craft is out of the world |
+| `[[pickup.odds]]` | manifest | Rows `{ title?, class?, ai, human, front, back }` inside `[pickup]`: the weapon pads draw the mod's pickup beside the title's weapons at the most specific row's weights (title and class, then title, then class, then neither), so a title with per-class tables (2048's five) gives each its own row. The declaring module owns the mod pickup for the race; a second mod's rows are left out with a load report line; a fault ends the odds |
+
+**A portal on a track, not a weapon.** A track module answers `trigger-enter{slot, n}` with
+`transit{slot, ticks, Trigger(m), 1.0}`. The exit must lie on the course ring (the authored
+spline the lap counter and AI follow), not on collision geometry: two portals on disconnected
+geometry work if the spline runs through both, its connecting stretch never driven. Landing on a
+branch route, and an exit with no spline near it, are not built.
+
+**A reset is a different move.** It goes back, to a breadcrumb, and earns nothing; it shares
+only the cursor reset (`Race::reseat`), not the lap rule.
+
+Proof: `oag_race`'s `standing::jump_tests` (a move over the line is a lap on its tick, most of a
+lap is one lap, a finish by a move is timed there), `oag_raceplay`'s `tests::transit` (frozen,
+undrawn, untargetable, triggers held, out at the asked place and speed; a guest's transit
+raises `transit-end` and its probe `clearance`; two runs hash alike; `scale-speed`),
+`tests::extension_odds`, `oag_weapons`' `a_mod_pickup_row_is_drawn_at_its_weight_and_absent_changes_nothing`,
+`oag_tables`' `odds_tests`, `oag_mod`'s manifest test, and the byte pins in `oag_ext_abi`.
+
 ## Keeping the mod author skill current
 
 A change to the ABI, the guest SDK, `oag-mod.toml` or a mod-facing format updates

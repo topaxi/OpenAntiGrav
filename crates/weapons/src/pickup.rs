@@ -493,8 +493,8 @@ fn draw_once(
     // Float slack only (`next_f32` is half-open on `1.0`); the last weighted
     // weapon is the right answer.
     walk()
-        .filter(|&weapon| gated_weight(driver, table, weapon, allowed) > 0.0)
-        .last()
+        .rev()
+        .find(|&weapon| gated_weight(driver, table, weapon, allowed) > 0.0)
 }
 
 #[cfg(test)]

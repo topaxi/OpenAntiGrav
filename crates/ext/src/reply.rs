@@ -1,9 +1,10 @@
 //! The reply: one typed method per command, refusing what the host would fault on.
 
 use oag_ext_abi::{
-    Colour, Command, Cue, Effect, HudElement, HudPlace, HudStr, Icon, MAX_COMMANDS,
+    Colour, Command, Cue, Distance, Effect, HudElement, HudPlace, HudStr, Icon, MAX_COMMANDS,
     MAX_EMITS_PER_TICK, MAX_HUD_EXTRA, MAX_HUD_ITEMS, MAX_HUD_SHAKE, MAX_PAD_FACTOR,
-    MAX_THRUST_FACTOR, POOL_AT, POOL_LEN, Pickup, REPLY_AT, Rgba, Sections, Weapon, WeatherKind,
+    MAX_PROBE_RADIUS, MAX_SPEED_FACTOR, MAX_THRUST_FACTOR, MAX_TRANSIT_TICKS, POOL_AT, POOL_LEN,
+    Pickup, REPLY_AT, Rgba, Sections, Weapon, WeatherKind,
 };
 
 use crate::Craft;
@@ -55,6 +56,8 @@ pub struct Reply<'a> {
     items: [u8; oag_ext_abi::MAX_CRAFTS],
     emits: usize,
     effects: usize,
+    /// `transit`, `scale-speed`, `probe-clearance` sent, one bit a slot each.
+    motion: [u32; 3],
 }
 
 impl<'a> Reply<'a> {
@@ -74,6 +77,7 @@ impl<'a> Reply<'a> {
             items: [0; oag_ext_abi::MAX_CRAFTS],
             emits: 0,
             effects: 0,
+            motion: [0; 3],
         }
     }
 
@@ -145,6 +149,101 @@ impl<'a> Reply<'a> {
         })?;
         self.shield |= bit;
         Ok(())
+    }
+
+    /// One motion command (`which`: 0 transit, 1 scale-speed, 2 probe) per craft a tick.
+    fn motion(&mut self, which: usize, craft: &Craft<'_>, command: Command) -> Result<(), Refused> {
+        let bit = craft.slot().bit();
+        if self.motion[which] & bit != 0 {
+            return Err(Refused::Repeated);
+        }
+        self.push(&command)?;
+        self.motion[which] |= bit;
+        Ok(())
+    }
+
+    /// `transit`: take the craft out of the world for `ticks` ticks (frozen, not drawn,
+    /// not collided with, not hit, its controls ignored), then put it at `distance` on
+    /// (forward, under a lap) at `exit_factor` times the speed it has now. Laps count
+    /// through the jump; a finish in it is timed at the exit tick. A `transit-end` event
+    /// comes on the exit tick's call. The host faults the module if the distance does not
+    /// resolve on this track (no course, a lap or more, a trigger it does not have).
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`], [`Refused::Repeated`]; [`Refused::Range`] for a craft not
+    /// racing or already in a transit, `ticks` outside `1..=MAX_TRANSIT_TICKS`,
+    /// `exit_factor` outside `[0, MAX_SPEED_FACTOR]`, or a distance that cannot be sent.
+    pub fn transit(
+        &mut self,
+        craft: &Craft<'_>,
+        ticks: u16,
+        distance: Distance,
+        exit_factor: f32,
+    ) -> Result<(), Refused> {
+        let (kind, amount) = distance.split();
+        if !craft.is_racing()
+            || craft.in_transit()
+            || ticks == 0
+            || ticks > MAX_TRANSIT_TICKS
+            || !(0.0..=MAX_SPEED_FACTOR).contains(&exit_factor)
+            || Distance::join(kind, amount) != Some(distance)
+        {
+            return Err(Refused::Range);
+        }
+        let command = Command::Transit {
+            slot: craft.slot(),
+            ticks,
+            distance,
+            exit_factor,
+        };
+        self.motion(0, craft, command)
+    }
+
+    /// `scale-speed`: multiply the craft's velocity by `factor`, in
+    /// `[0, MAX_SPEED_FACTOR]`, once, at this call. Once per craft per tick.
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`], [`Refused::Repeated`], [`Refused::Range`].
+    pub fn scale_speed(&mut self, craft: &Craft<'_>, factor: f32) -> Result<(), Refused> {
+        if !(0.0..=MAX_SPEED_FACTOR).contains(&factor) {
+            return Err(Refused::Range);
+        }
+        let command = Command::ScaleSpeed {
+            slot: craft.slot(),
+            factor,
+        };
+        self.motion(1, craft, command)
+    }
+
+    /// `probe-clearance`: ask whether a half disc of `radius` (`(0, MAX_PROBE_RADIUS]`)
+    /// standing across the track at `distance` on fits without touching its geometry.
+    /// The answer is a `clearance` event at the next call (fits, and how far on it
+    /// probed); a distance that does not resolve answers "does not fit". Once per craft
+    /// per tick.
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`], [`Refused::Repeated`], [`Refused::Range`].
+    pub fn probe_clearance(
+        &mut self,
+        craft: &Craft<'_>,
+        distance: Distance,
+        radius: f32,
+    ) -> Result<(), Refused> {
+        let (kind, amount) = distance.split();
+        if !(radius > 0.0 && radius <= MAX_PROBE_RADIUS)
+            || Distance::join(kind, amount) != Some(distance)
+        {
+            return Err(Refused::Range);
+        }
+        let command = Command::ProbeClearance {
+            slot: craft.slot(),
+            distance,
+            radius,
+        };
+        self.motion(2, craft, command)
     }
 
     /// `give-pickup`: the mod's own pickup to a craft holding nothing.

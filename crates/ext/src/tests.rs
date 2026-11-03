@@ -613,3 +613,53 @@ fn the_reply_refuses_a_fire_effect_past_the_cap_counting_both_kinds() {
     );
     assert_eq!(reply.fire_mod_effect(&craft, 0), Err(Refused::Effects));
 }
+
+/// The motion commands refuse what the host would fault on: a craft not racing or
+/// already out, a tick count or factor out of range, a distance that cannot be sent; one
+/// of each a craft a tick.
+#[test]
+fn the_motion_commands_refuse_what_the_host_would_fault_on() {
+    use oag_ext_abi::Distance;
+    let mut buffer = [0_u8; 4 + oag_ext_abi::COMMAND_LEN * oag_ext_abi::MAX_COMMANDS];
+    let mut reply = Reply::new(&mut buffer, 0, 0);
+    let racing = racer(50.0).encode();
+    let racing = Craft {
+        slot: slot(1),
+        record: &racing,
+    };
+    let out = CraftRecord {
+        in_transit: true,
+        ..racer(50.0)
+    }
+    .encode();
+    let out = Craft {
+        slot: slot(2),
+        record: &out,
+    };
+    let units = Distance::Seconds(2.0);
+    assert_eq!(reply.transit(&out, 60, units, 0.9), Err(Refused::Range));
+    assert_eq!(reply.transit(&racing, 0, units, 0.9), Err(Refused::Range));
+    assert_eq!(reply.transit(&racing, 601, units, 0.9), Err(Refused::Range));
+    assert_eq!(reply.transit(&racing, 60, units, 2.5), Err(Refused::Range));
+    assert_eq!(
+        reply.transit(&racing, 60, Distance::Lap(0.0), 0.9),
+        Err(Refused::Range)
+    );
+    assert_eq!(reply.transit(&racing, 60, units, 0.9), Ok(()));
+    assert_eq!(
+        reply.transit(&racing, 60, units, 0.9),
+        Err(Refused::Repeated)
+    );
+    assert_eq!(reply.scale_speed(&racing, -0.5), Err(Refused::Range));
+    assert_eq!(reply.scale_speed(&racing, 0.95), Ok(()));
+    assert_eq!(reply.scale_speed(&racing, 0.95), Err(Refused::Repeated));
+    assert_eq!(
+        reply.probe_clearance(&racing, Distance::Trigger(3), 0.0),
+        Err(Refused::Range)
+    );
+    assert_eq!(
+        reply.probe_clearance(&racing, Distance::Trigger(3), 8.0),
+        Ok(())
+    );
+    assert_eq!(reply.len(), 3);
+}

@@ -44,10 +44,10 @@ pub use line::Line;
 pub use look::{colour, icon};
 pub use oag_ext_abi::track::{Kind, TRACK_LEN, prop_key};
 pub use oag_ext_abi::{
-    ABI_WORD, Anchor, Colour, Command, Cue, Effect, Event, HudElement, HudPlace, IO_LEN, Icon,
-    MAX_CRAFTS, MAX_EMITS_PER_TICK, MAX_HUD_EXTRA, MAX_HUD_ITEMS, MAX_HUD_SHAKE, MAX_HUD_TEXT,
-    MAX_STATE_BYTES, MAX_THRUST_FACTOR, ModIcon, Pickup, Rgba, Slot, TRACK_SENDER, Weapon,
-    WeatherKind, channel_key,
+    ABI_WORD, Anchor, Colour, Command, Cue, Distance, Effect, Event, HudElement, HudPlace, IO_LEN,
+    Icon, MAX_CRAFTS, MAX_EMITS_PER_TICK, MAX_HUD_EXTRA, MAX_HUD_ITEMS, MAX_HUD_SHAKE,
+    MAX_HUD_TEXT, MAX_PROBE_RADIUS, MAX_SPEED_FACTOR, MAX_STATE_BYTES, MAX_THRUST_FACTOR,
+    MAX_TRANSIT_TICKS, ModIcon, Pickup, Rgba, Slot, TRACK_SENDER, Weapon, WeatherKind, channel_key,
 };
 pub use reply::{Refused, Reply};
 pub use track::{Entity, Track};
@@ -115,6 +115,12 @@ impl Craft<'_> {
     #[must_use]
     pub fn is_shielded(&self) -> bool {
         self.read().shielded
+    }
+
+    /// The craft is in a `transit`: out of the world until its `transit-end`.
+    #[must_use]
+    pub fn in_transit(&self) -> bool {
+        self.read().in_transit
     }
 
     /// The lap being driven, 1-based, saturating at 255.
