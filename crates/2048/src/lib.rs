@@ -168,9 +168,10 @@ pub const TITLE: &Title = &Title {
         // HD's law, inherited: 2048's own Autopilot update and cancel are unread.
         autopilot_absorb_cancels: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
         autopilot_pad_grants: oag_title::pre_race::Sourced::inherited(false, "Wipeout HD"),
-        opponent_fire: oag_title::pre_race::Sourced::inherited(
+        // Measured: 2048's `WeaponAi_DecideFireOrAbsorb` equals Omega's law
+        // (`vita-2048-eu-v104/weapon-ai-fire.md`).
+        opponent_fire: oag_title::pre_race::Sourced::measured(
             oag_title::weapons::OpponentFire::OMEGA,
-            "Wipeout Omega Collection",
         ),
     },
     // Unread, like `exhaust` and `flare` above: 2048 is a Vita/PSP2 asset
@@ -503,6 +504,13 @@ pub fn open(source: &str) -> Result<Archives> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_2048s_opponent_fire_law_is_measured_not_inherited() {
+        let fire = TITLE.weapons.opponent_fire;
+        assert_eq!(fire.origin, oag_title::Origin::Measured);
+        assert_eq!(fire.value, oag_title::weapons::OpponentFire::OMEGA);
+    }
 
     #[test]
     fn the_2048_culls_by_the_material_state_bit_as_hd_does() {
