@@ -19,6 +19,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // The directory three of the four titles spell identically; Wipeout 2048 is
     // the one that does not. See `oag_title::RaceDefaults::ship_dir`.
     ship_dir: oag_title::race::SHIP_DIR,
+    ship_hull: ships::HULL,
     // The same directory: this title keeps a team's tuning beside its models.
     handling_dir: oag_title::race::SHIP_DIR,
     effect_dir: oag_title::race::EFFECT_DIR,
@@ -366,24 +367,12 @@ pub mod ships {
     /// (`docs/ghidra/functions/psp-pulse-usa/zone-mode.md`).
     pub const ZONE_WRECK: &str = "zonewreck";
 
-    /// The archive entry name of one of a team's models, under the ship
-    /// directory this title keeps its roster in.
-    ///
-    /// Assembled the way the loader assembles it, with backslashes, which is
-    /// what the name hash needs. `dir` comes from
-    /// [`oag_title::RaceDefaults::ship_dir`] - see that field for why it is an
-    /// axis and not the constant this function used to spell inline.
-    #[must_use]
-    pub fn entry_name_in(dir: &str, team: &str, model: &str) -> String {
-        format!(r"{dir}\{team}\{model}.vex")
-    }
-
-    /// [`entry_name_in`] under
+    /// [`oag_title::race::entry_name_in`] under
     /// [`oag_title::race::SHIP_DIR`](oag_title::race::SHIP_DIR), which is where
     /// Pulse, Pure and Wipeout HD all keep their rosters.
     #[must_use]
     pub fn entry_name(team: &str, model: &str) -> String {
-        entry_name_in(oag_title::race::SHIP_DIR, team, model)
+        oag_title::race::entry_name_in(oag_title::race::SHIP_DIR, team, model)
     }
 }
 

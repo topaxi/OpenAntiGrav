@@ -138,6 +138,7 @@ fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
         pending_thrust_scale,
         quake_lift,
         disruption,
+        muzzle,
         active,
     } = ship;
 
@@ -148,6 +149,9 @@ fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
     // the simulation did. Named in the destructure so this is a decision rather
     // than an omission.
     let _ = handling;
+    // `muzzle` is the same kind of thing: the hull's locator, loaded once and
+    // constant through the race. Named for the same reason.
+    let _ = muzzle;
     hasher.write_u32(u32::from(*segment));
     write_held(hasher, pickup);
     write_driver(hasher, driver);

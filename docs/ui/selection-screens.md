@@ -300,7 +300,7 @@ hull is chosen, with the vertex agreement as its evidence, not a measured law.
 The one path: `oag_game::preview::variant::model_or_default` (live
 `PickerStage::load_preview` and the headless `--menu-page` capture both call it)
 takes the race hull's entry (`oag_game::preview::race_hull_entry`, the race's own
-`oag_livery::entry::ship_entry_name`) and calls `preview::seat_flaps`, which
+`oag_title::race::ShipPaths::hull_entry_name`) and calls `preview::seat_flaps`, which
 reads that model's `Flap` hinges. Nothing in the preview places a flap on its
 own, and the flap swing (`Flap::swung`, `Flap::seat`) shares one vertex
 transform. Pinned by `picker_flaps_ground_truth` (`oag-game`; every team, time

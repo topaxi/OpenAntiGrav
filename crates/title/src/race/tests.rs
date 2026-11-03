@@ -358,6 +358,7 @@ const DEFAULTS: RaceDefaults = RaceDefaults {
     track: "track.vex",
     team: r"Feisar2048\3",
     ship_dir: r"Data\art\published\Ships",
+    ship_hull: "Ship",
     handling_dir: r"Data\HandlingStats",
     effect_dir: r"Data\Psys",
     effect_dir_by_circuit: &[],

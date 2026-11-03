@@ -66,10 +66,62 @@ pub const EFFECT_DIR: &str = r"Data\Psys";
 pub struct ShipPaths {
     /// See [`RaceDefaults::ship_dir`].
     pub dir: &'static str,
+    /// See [`RaceDefaults::ship_hull`].
+    pub hull: &'static str,
     /// See [`RaceDefaults::zone_craft`].
     pub zone: ZoneCraft,
     /// See [`RaceDefaults::boost`].
     pub boost: Option<&'static str>,
+}
+
+/// The archive entry name of one of a team's models under a ship directory:
+/// `dir\team\model.vex`, assembled the way the loader assembles it, with
+/// backslashes, which is what the name hash needs.
+#[must_use]
+pub fn entry_name_in(dir: &str, team: &str, model: &str) -> String {
+    format!(r"{dir}\{team}\{model}.vex")
+}
+
+impl ShipPaths {
+    /// The archive entry name of a team's hull, the `.vex` every mode but Zone
+    /// draws ([`Self::hull`]) or the Zone craft's ([`ZoneCraft`]).
+    ///
+    /// `zone` is whether the race runs in Zone mode (`oag_race::Mode::Zone`, which
+    /// this crate does not name).
+    ///
+    /// **A Zone run flies a different hull, and where that hull lives is a title
+    /// fact** - [`ZoneCraft`], measured on all three titles. Pulse keeps it inside
+    /// the player's own team directory as `Zone.vex`; Pure and HD give Zone a ship
+    /// directory of its own, so the player's team stops reaching the hull at all.
+    ///
+    /// Pulse's is the branch with a recovered selector rather than a name probe:
+    /// `Ship_LoadModel` (`0x08843258`) switches on the same
+    /// `DAT_08ab07e3 == 0 && DAT_08b31048 == 6` expression already established as
+    /// the Zone selector (see `docs/ghidra/functions/psp-pulse-usa/zone-mode.md`),
+    /// and only that case builds the `%s\Zone.vex` path. Every team's `Zone.vex`
+    /// decodes to the same 1213 vertices / 1149 triangles / 8 meshes, so the hull
+    /// itself is shared there - only the livery painted on it still varies by team,
+    /// and that paint is the texture block embedded in each team's own `Zone.vex`
+    /// (the eight blocks differ, measured in `zone-mode.md`), not a `PI_ModelSkin`:
+    /// mode 6 applies none. On the other two there is no per-team Zone hull to share.
+    ///
+    /// **`hull_variant` is Pulse's Normal/Concept axis, and only applies here.**
+    /// [`HullVariant::stem`] names a file inside the *same* directory the hull
+    /// already resolves in, so a Zone run ignores it: Zone's own hull selection is a
+    /// title fact of its own ([`ZoneCraft`]), unaffected by which model variant the
+    /// RACE page has picked, and every Pulse team's `Zone.vex` is one shared hull
+    /// regardless. `None` keeps the title's own hull, [`Self::hull`].
+    #[must_use]
+    pub fn hull_entry_name(self, team: &str, zone: bool, hull_variant: Option<&str>) -> String {
+        if !zone {
+            return entry_name_in(self.dir, team, hull_variant.unwrap_or(self.hull));
+        }
+        entry_name_in(
+            self.zone.root(self.dir),
+            self.zone.directory(team),
+            self.zone.hull().unwrap_or(self.hull),
+        )
+    }
 }
 
 mod announcer;
@@ -111,6 +163,11 @@ pub struct RaceDefaults {
     ///
     /// [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
     pub ship_dir: &'static str,
+    /// The model stem of the hull every mode but Zone draws, under a team's own
+    /// directory in [`Self::ship_dir`]: `Ship` on every title so far, each one's
+    /// own spelling (Pulse's `%s\Ship.vex` at `0x08a7a5f4`'s sibling, Pure's at
+    /// `0x08a7a5f4`). A [`HullVariant`] names an alternate stem in the same place.
+    pub ship_hull: &'static str,
     /// The archive directory a team's `handlingstats.xml` sits under, one
     /// subdirectory per team id.
     ///
@@ -504,6 +561,7 @@ impl RaceDefaults {
     pub fn ships(&self) -> ShipPaths {
         ShipPaths {
             dir: self.ship_dir,
+            hull: self.ship_hull,
             zone: self.zone_craft,
             boost: self.boost,
         }

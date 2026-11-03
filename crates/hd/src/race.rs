@@ -31,6 +31,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // The directory three of the four titles spell identically; Wipeout 2048 is
     // the one that does not. See `oag_title::RaceDefaults::ship_dir`.
     ship_dir: oag_title::race::SHIP_DIR,
+    ship_hull: "Ship",
     // The same directory: this title keeps a team's tuning beside its models.
     handling_dir: oag_title::race::SHIP_DIR,
     effect_dir: oag_title::race::EFFECT_DIR,

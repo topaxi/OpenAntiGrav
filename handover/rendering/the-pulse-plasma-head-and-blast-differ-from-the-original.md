@@ -1,8 +1,8 @@
 ---
-status: ready-to-wire
+status: measure
 titles: [pulse]
 updated: 2026-11-03
-summary: "Plasma head drawn right; open in the sim: the bolt releases at the muzzle node (4.24), not the 2.23 hold point"
+summary: "Plasma head and release point match; left: k36/k44 box overshoot, fitted blast eases and halo end, Pure's locator class, the craft-start lead"
 ---
 
 # The Pulse Plasma head and blast differ from the original's
@@ -76,11 +76,24 @@ confidence scores and the replay evidence. What is left is wiring and two unread
   (vi) ~~the release offset is the node of the frame before minus nothing: `4.24 - craft step`~~ corrected 2026-11-03
   (`pulse-plasma-fable`): the 2.22 series paired a pre-move bolt with a post-move craft; at one instant the bolt is 4.43
   ahead on its first frame, so **the release point is the `Ship Muzzle` locator itself (4.24 on Assegai), speed-independent**,
-  and `MUZZLE_FORWARD` (2.23) is 2.01 short in the sim (collision and detonation point). **Open, `oag-weapons`**: a per-craft
-  muzzle lead in the `World` (set from the hull by the composition root), the hash reference regenerated, and
-  `plasma_timing_ground_truth`'s series re-pinned at the draw instant (4.43, 4.62, 4.81, 5.79, 6.79, 7.81, 8.84, 9.89);
-  the view's `plasma_lead` then goes;
-  Pure's candidate locator is class `0x394` at `(0, 0, 6.068)` on Assegai's v4 hull, unconfirmed (no name table);
+  and `MUZZLE_FORWARD` (2.23) is 2.01 short in the sim (collision and detonation point). ~~**Open, `oag-weapons`**~~
+  **wired 2026-11-03 (`plasma-muzzle-sim`, `plasma.md` "the bolt is released at the `Ship Muzzle` locator")**: the hook
+  pairing checked on both probes (the `plasma_fly` series is the draw series minus one craft step, to 0.02 on every
+  frame of three logs), `Ship::muzzle` set per slot from the hull in both halves of `oag-raceplay`, the bolt charges on
+  and leaves from the node (`plasma::muzzle`, through the 0.75 rows; a hull with no locator keeps 2.23),
+  `plasma_timing_ground_truth` re-pinned on the draw series (red on the hold point, green after), the view's
+  `plasma_lead` gone, no committed hash moved (the fixtures have no hull). k68 box 126.5 (view-only 126.7). The same
+  pairing had hidden a **3.1-unit craft-start lead** (not 1.1) at the release frame, so the bolt now ends one tick
+  before the original's frame 76 from the same place (288.51 against 288.60 on x; the test pins the place and says
+  why); the lead itself is a standing-start difference under the matched script, open and not this thread's law.
+  Pure's candidate locator is class `0x394` at `(0, 0, 6.068)` on Assegai's v4 hull, unconfirmed (no name table), so Pure's
+  bolt keeps the hold point; HD's hulls author none; 2048/Omega hulls are `.rcsmodel`, no locator reader;
   (vii) ~~k60 box luminance 117.0 against 127.0 (reference boot) and 121.1 (fresh boot)~~: five runs read 108.4 to 127.7 at
   k60 (the release frame), so 117.0 is inside the original's own spread; closed 2026-11-03.
+- The pair frames' HUD (2026-11-03, `plasma-muzzle-sim`): ours draws a full pink pickup hexagon through k20-k76 where the
+  original's is gone by k56. Not a HUD law: `--give plasma` refills the empty slot before every tick so the after-use fade
+  never starts, and the original's hexagon is green (the pair script arms the Plasma through the fire-request word, not
+  the held id), so the pair says nothing about a Plasma's own icon. Whether a natural press clears the held id on the
+  press frame or the release stays unread (`pickup-colour.md`). A compare render wanting a clean HUD needs a one-shot
+  grant rather than `--give`'s top-up.
 - Pulse PS2 is unmeasured here; its pair is `scripts/pcsx2-pulse-pair.py`.

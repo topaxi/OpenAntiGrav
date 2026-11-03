@@ -8,59 +8,8 @@ use oag_mesh::mesh;
 use oag_pulse::race::ships;
 use oag_race::Mode;
 
-/// The archive entry name of a team's `.vex` model, under the ship directory
-/// this title keeps its roster in.
-///
-/// `paths` is [`oag_title::RaceDefaults::ships`]; see
-/// [`oag_title::RaceDefaults::ship_dir`] for the third-title disagreement its
-/// directory exists for.
-///
-/// Assembled the way the loader assembles it, with backslashes, which is what the
-/// name hash needs.
-///
-/// **A [`Mode::Zone`] run flies a different hull, and where that hull lives is a
-/// title fact** - [`oag_title::ZoneCraft`], measured on all three titles. Pulse
-/// keeps it inside the player's own team directory as `Zone.vex`; Pure and HD
-/// give Zone a ship directory of its own, so the player's team stops reaching
-/// the hull at all.
-///
-/// Pulse's is the branch with a recovered selector rather than a name probe:
-/// `Ship_LoadModel` (`0x08843258`) switches on the same
-/// `DAT_08ab07e3 == 0 && DAT_08b31048 == 6` expression already established as
-/// the Zone selector (see `docs/ghidra/functions/psp-pulse-usa/zone-mode.md`),
-/// and only that case builds the `%s\Zone.vex` path. Every team's `Zone.vex`
-/// decodes to the same 1213 vertices / 1149 triangles / 8 meshes, so the hull
-/// itself is shared there - only the livery painted on it still varies by team, and that paint is
-/// the texture block embedded in each team's own `Zone.vex` (the eight blocks differ, measured in
-/// `zone-mode.md`), not a `PI_ModelSkin`: mode 6 applies none. On the other two there is no
-/// per-team Zone hull to share.
-///
-/// **`hull_variant` is Pulse's Normal/Concept axis, and only applies here.**
-/// `oag_title::race::HullVariant::stem` names a file inside the *same*
-/// directory `Ship.vex` already resolves in, so a Zone run ignores it: Zone's
-/// own hull selection is a title fact of its own
-/// ([`oag_title::ZoneCraft`]), unaffected by which model variant the RACE
-/// page has picked, and every Pulse team's `Zone.vex` is one shared hull
-/// regardless. `None` keeps today's behaviour - [`ships::HULL`] - exactly.
-#[must_use]
-pub fn ship_entry_name(
-    paths: oag_title::race::ShipPaths,
-    team: &str,
-    mode: Mode,
-    hull_variant: Option<&str>,
-) -> String {
-    if mode != Mode::Zone {
-        return ships::entry_name_in(paths.dir, team, hull_variant.unwrap_or(ships::HULL));
-    }
-    ships::entry_name_in(
-        paths.zone.root(paths.dir),
-        paths.zone.directory(team),
-        paths.zone.hull().unwrap_or(ships::HULL),
-    )
-}
-
 /// The ship tree and directory a craft's *other* model files (the engine
-/// flare) are read from: the same place [`ship_entry_name`] puts the hull.
+/// flare) are read from: the same place `oag_title::race::ShipPaths::hull_entry_name` puts the hull.
 ///
 /// A Zone race on a title whose Zone craft has a directory of its own (HD:
 /// `/data/ships/zone`) flies that hull, so its flare's `EF_Main` origin and
@@ -81,7 +30,7 @@ pub const SHIELD_STEM: &str = ships::SHIELD;
 /// `dir\team\stem.vex`, the entry a model stem names under a ship directory.
 #[must_use]
 pub fn stem_entry_name(dir: &str, team: &str, stem: &str) -> String {
-    ships::entry_name_in(dir, team, stem)
+    oag_title::race::entry_name_in(dir, team, stem)
 }
 
 /// [`model_directory`], unless the Zone directory lacks `file`: then the team's
@@ -112,7 +61,7 @@ pub fn model_directory_with<'a>(
     (dir, owner)
 }
 
-/// The boost plume that goes with [`ship_entry_name`]'s hull, or `None` when
+/// The boost plume that goes with `oag_title::race::ShipPaths::hull_entry_name`'s hull, or `None` when
 /// this title's own package names no standalone boost model at all.
 ///
 /// **`None` is a title fact, not a lookup failure.** [`oag_title::race::ShipPaths::boost`]
@@ -123,7 +72,7 @@ pub fn model_directory_with<'a>(
 /// found" - see `livery::plume`, the one caller today.
 ///
 /// **Zone mode has its own plume file and this used to load the wrong one.**
-/// `ship_entry_name` switches the hull between `Ship.vex` and `Zone.vex` on
+/// `oag_title::race::ShipPaths::hull_entry_name` switches the hull between `Ship.vex` and `Zone.vex` on
 /// mode; the plume load hardcoded `shipboost.vex`, so a Zone race drew a
 /// `Zone.vex` hull with the `Ship.vex` plume. Every team ships a `Zoneboost.vex`
 /// beside its `Zone.vex`, so the pairing exists in the data and we simply were
@@ -151,10 +100,14 @@ pub fn boost_entry_name(
     mode: Mode,
 ) -> Option<String> {
     if mode != Mode::Zone {
-        return Some(ships::entry_name_in(paths.dir, team, paths.boost?));
+        return Some(oag_title::race::entry_name_in(
+            paths.dir,
+            team,
+            paths.boost?,
+        ));
     }
     let stem = paths.zone.boost().or(paths.boost)?;
-    Some(ships::entry_name_in(
+    Some(oag_title::race::entry_name_in(
         paths.zone.root(paths.dir),
         paths.zone.directory(team),
         stem,
@@ -214,7 +167,7 @@ pub fn shield_entry_names(
         }
     };
     [
-        ships::entry_name_in(ship_dir, team, &stem),
+        oag_title::race::entry_name_in(ship_dir, team, &stem),
         oag_pulse::race::SHARED_SHIELD.to_string(),
     ]
 }

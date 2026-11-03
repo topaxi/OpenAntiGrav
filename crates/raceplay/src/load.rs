@@ -32,6 +32,7 @@ mod intro;
 mod lens_flare;
 #[cfg(feature = "view")]
 pub(crate) mod magstrip_wake;
+mod muzzle;
 mod original_laws;
 #[cfg(feature = "view")]
 mod pads;
@@ -48,7 +49,6 @@ mod surfaces;
 mod track_inputs;
 mod track_stats;
 pub use track_stats::authored_length;
-#[cfg(feature = "view")]
 mod variant;
 #[cfg(feature = "view")]
 mod weapon_models;
@@ -165,7 +165,6 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let team = roster::resolve_team(options.team.as_deref(), craft_title, &mut report);
 
     // The player's own alternate hull file, resolved where `team` is: `variant::resolve`.
-    #[cfg(feature = "view")]
     let hull_variant = variant::resolve(options.hull_variant.as_deref(), craft_title, &mut report);
 
     // A Zone race on a title that reads a Zone file of its own flies that file's one class
@@ -1203,8 +1202,14 @@ pub fn load(options: &Options) -> Result<Loaded> {
             internal,
             #[cfg(feature = "view")]
             nozzles: liveries.iter().map(|livery| livery.nozzle).collect(),
-            #[cfg(feature = "view")]
-            muzzles: liveries.iter().map(|livery| livery.muzzle).collect(),
+            muzzles: muzzle::per_slot(
+                craft_of(&mut craft, &mut archives),
+                craft_title,
+                &slot_teams,
+                options,
+                hull_variant,
+                &mut report,
+            ),
             #[cfg(feature = "view")]
             engine_lights: liveries.iter().map(|livery| livery.engine_light).collect(),
             #[cfg(feature = "view")]

@@ -1895,7 +1895,9 @@ Plus the release tick: sixty subtractions of f32 `1/60` from `1.0` leave `2.8e-7
 ended on the sixty-first update where the original's ends on the sixtieth (its `dt` is a little
 over `1/60`). The hold now ends when under half a tick is left (**chosen**, to reproduce the measured 60th-update release; no confidence score).
 
-**What is still different, and why it is not this lane's.** The whole flight sits **1.1 units
+**Correction (`plasma-muzzle-sim`, 2026-11-03): the 1.1 below pairs our craft at the release tick with the
+original's one frame later; on the release frame the lead is 3.1 units, see "the craft-start lead was one
+craft step too".** The whole flight sits **1.1 units
 ahead** of the original's in absolute x (289.69 against 288.61 after sixteen updates): our craft
 is 1.13 ahead of the original's at the release (240.67 against 239.54), a standing-start
 difference the Rocket lane found as well. It shows as a constant offset and does not move the
@@ -2470,3 +2472,113 @@ ours at k68 still reads a little larger and brighter for that frame.
 
 Cross-title: Pure **checked, not wired** (`Plasma_Init` unread, the lead rides the PSP flag); Pulse PS2
 **inherits** when it loads through the PSP path; HD, Omega, 2048 **checked, differs** (`HD_plasma_ball`).
+
+## 2026-11-03: the bolt is released at the `Ship Muzzle` locator (plasma-muzzle-sim)
+
+The sim finding of the section above, wired, with the hook pairing checked on both probes rather than trusted.
+
+### The two series are one series, read at two instants
+
+The `plasma_fly` probe hooks the entry of `Plasma_Update` (`0x0885c6cc`), where the bolt's `+0xa0` has not
+moved this frame and `craft_pos` has (the craft updates before the weapon pool). The `pool` probe hooks
+`ParticleSystem_DrawEmitterPool` (`0x08918bf8`) at the draw, after every update of the frame; the head's matrix
+there is the bolt's own after its move (`Plasma_BuildDrawMatrices`, `0x0885c360`). Per record, 3D distance
+(`probe-plasma_fly` and `probe-fly` of 2026-11-03, 12 and 15 records; `probe-pool`, 82 frames):
+
+| frame after fire | 59 (release) | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `plasma_fly`: bolt `+0xa0` against this record's craft | | 2.224 | 2.414 | 2.600 | 2.757 | 3.808 | 4.768 | 5.751 | 6.863 | 7.866 |
+| `plasma_fly`: the same bolt against the **previous** record's craft | | 4.431 | 4.619 | 4.806 | 5.802 | 6.790 | 7.808 | 8.857 | 9.890 | 10.953 |
+| `pool`: drawn head against the drawn craft | 4.240 | 4.431 | 4.620 | 4.806 | 5.788 | 6.790 | 7.808 | 8.841 | 9.890 | 10.954 |
+
+The second row equals the third to 0.02 on every frame of both logs: the `plasma_fly` series is the draw
+series minus one craft step (2.0 to 2.03 a frame at 106 to 120 u/s), not a lag and not a release offset.
+At one instant the bolt sits on the node (4.24, every one of the 59 charging frames reads 4.240 at the draw)
+and leaves from it. Confidence **90** (two probes, three logs, the arithmetic closes). The 2.23 of
+`plasma-release-step` and the 2.22 of `plasma-timing` were this pairing; `plasma_timing_ground_truth` had
+pinned it, so it went red on the wired sim and is re-pinned on the draw series.
+
+### Wired, simulation
+
+- `oag_gameplay::world::Ship::muzzle`: the hull's `Ship Muzzle` locator in model space, set by the composition
+  root for every grid slot (`oag_raceplay::load::muzzle`, the same hull file the livery is built from, read
+  in both halves of the crate so the headless server releases the bolt where the drawing client does); not
+  hashed, as `handling` is not (loaded once, constant through the race). `oag_weapons::Craft::muzzle` hands it
+  to the weapons.
+- `oag_weapons::projectile::plasma::muzzle` carries it into the body's frame through `LAUNCH_SPEED_SCALE`
+  (the craft's 0.75 rows): model `+Z` is the body's forward, model `+X` its left (the hull is drawn half a
+  turn about its up axis), model `+Y` its up. Assegai: 4.24 ahead on the axis; Triakis `(0, -0.298, 4.183)`:
+  3.14 ahead, 0.22 below. A hull with no locator (HD's; Pure, whose version-4 class id is unread) keeps
+  `MUZZLE_FORWARD` 2.23, now documented as the hold point of a hull without a node.
+- `oag_vex::vex::ship_muzzle` is the one reader (the livery's private copy went); `oag_title::race::ShipPaths::
+  hull_entry_name` names the hull for both halves (moved from `oag_livery::entry::ship_entry_name`, the hull stem
+  now `Title` data, `RaceDefaults::ship_hull`, so no generic crate names a title package for it).
+- The view's `plasma_lead` and its copy of the locators went: a released head draws on the bolt, which is now
+  where the original's bolt matrix is. The charging head keeps the drawn hull's matrix (display roll and lean).
+
+Tests: `plasma::tests::the_muzzle_is_the_hulls_weapon_node_or_the_hold_point_without_one` (2.23 without a
+locator, 4.24 on Assegai's, 3.14 ahead and 0.22 below on Triakis's, under a yawed body),
+`tests::weapons::visuals::a_charging_plasma_head_is_drawn_on_the_crafts_weapon_node` (the bolt held on the node
+too), `a_released_plasma_head_draws_on_the_bolt_that_left_from_the_weapon_node`, and
+`plasma_timing_ground_truth::the_plasma_releases_flies_and_detonates_on_the_originals_ticks` with
+`ORIGINAL_FROM_CRAFT` re-pinned to the draw series (4.240, 4.431, ... 10.954): red on the 2.23 release (two
+units short on every row), green after.
+
+### The craft-start lead was one craft step too, and the detonation tick moves by one
+
+The same pairing had put this engine's craft "1.13 ahead of the original's at the release" ("the detonation
+leg fixed"): ours at the release tick against the original's `craft_pos` of the frame after. On the release
+frame itself the original's craft is at x 237.5 (239.54 less one step) and ours at 240.66, so **ours leads by
+3.1 units**, one update's travel of the bolt (3.17 a tick on the ride). With the bolt two units short of the
+node that lead netted to 1.1 and the bolt still ended on frame 76; released on the node it reaches the wall one
+update sooner. The place is the wall's and matches: the last position before the blast is `(288.51, -39.46,
+-194.05)` in ours against `(288.60, -39.50, -193.86)` in the original (three boots agree to 0.02 on both the
+release point, 241.75 to 241.77, and the last position), 0.21 apart. `plasma_timing_ground_truth` now pins
+that place and the tick one before the original's frame 76, and says why; sixteen updates of flown distance
+stay pinned to 0.25. Bolt-to-craft, ours against the draw series: 4.240/4.240, 4.427/4.431, 4.611/4.620,
+4.793/4.806, 5.755/5.788, 6.738/6.790, 7.736/7.808, 8.749/8.841, 9.777/9.890, 10.820/10.954: within 0.1 for
+seven frames, 0.13 at the tenth (the ride pin's known shortfall per frame). The craft-start lead itself
+(3.1 units at GO + 120 under the same script) is not this lane's; it is a standing-start difference.
+
+### Measured, matched pair
+
+Head box `200,112,90,80`, mean RGB, the five original runs of the section above against ours before (the
+view-only lead) and after (the bolt itself on the node, the view's lead gone):
+
+| k | 56 | 60 | 68 | 69 | 72 | 76 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| original, five runs (min to max) | 108.4-115.5 | 108.4-127.7 | 117.3-122.1 | | 107.5-114.6 | 107.4-112.0 |
+| ours, view-only lead (`pulse-plasma-fable`) | 118.3 | 117.0 | 126.7 | 120.9 | 109.9 | 114.6 |
+| ours, bolt on the node | 118.2 | 116.9 | **126.5** | 120.8 | 109.8 | 114.5 |
+
+The picture is the view-only fix's to 0.2 on every frame, as it should be: the head draws where the lead
+had put it, now because the bolt is there. The 0.1 to 0.2 is the charging head's matrix (the drawn hull's,
+with roll and lean) against the released head's (the bolt's heading). The k68 residual over the originals'
+highest (+4.4) stays the one frame of phase that section explains (ours at k69 reads 120.8, inside the
+band). Side-by-side k68/k72/k76, original `a` and `b` against ours: the same head, the same arcs, the same
+blast onset at k76; nothing a player sees moved, and the sim's collision and detonation point moved two
+units forward to where the original's are.
+
+### The HUD's pickup hexagon in the pair frames
+
+Ours draws a full-strength pink hexagon at the top centre through the whole pair (k20 to k76) where the
+original shows a hexagon at k20, a fading wide shape at k36 and nothing from k56. Not a HUD law: the pair
+renders ours with `--give plasma`, which refills the empty pickup slot before every tick, so `held` is
+`Some(Plasma)` on every frame but the press and the measured after-use fade
+(`pickup-colour.md`, hold 17 updates then 24 of fade-out) never starts. Without `--give` ours fades on the
+same law (`tests::slot_hud`). The original's hexagon is green (a Turbo, Shield or Autopilot row) because
+`psp-weapon-pair.py` arms the Plasma through the fire-request word, not through the held id, so its frames
+say nothing about a Plasma's own icon. Whether a natural Plasma press clears the held id on the press frame
+or at the release is the question `pickup-colour.md` already leaves unread ("whether a real use clears the
+held id in one update or lingers"); nothing in `Hud_UpdatePickupWidgets` is weapon-specific. Not a fix in
+`oag-hud` or the readout; recorded.
+
+### Cross-title
+
+Pulse PS2: **ported by data** (its `Ship.vex` authors the same `Ship Muzzle` `(0, 0, 5.653)` on Assegai,
+version 6, read by the same reader; the release point follows). Pure: **checked, not wired** (version 4, the
+class id is unrecovered, the candidate `0x394` at `(0, 0, 6.068)` stays at confidence 40; the bolt keeps the
+hold point). HD: **checked, differs** (`assegai`'s hull authors no `Ship Muzzle`; the hold point). 2048 and
+Omega: **checked, not wired** (`.rcsmodel` hulls, no locator reader; both keep the hold point; their own
+`Plasma_Update` is read on `ps4-omega-eu/plasma.md`, the release point is not).
+

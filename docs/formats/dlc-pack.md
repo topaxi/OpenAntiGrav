@@ -227,7 +227,7 @@ own folder id has the same underscore-dropped shape as `Mirage`/`Mantis` - see
 [below](#pures-packs-decrypt-with-an-external-key-table).
 
 The ids are also the leaf of each `location`, for every team on both discs and
-in every pack - which is why `oag_livery::entry::ship_entry_name` can go on composing a path
+in every pack - which is why `oag_title::race::ShipPaths::hull_entry_name` can go on composing a path
 out of a team id alone.
 
 ## The circuits are new, and the four packs interlock

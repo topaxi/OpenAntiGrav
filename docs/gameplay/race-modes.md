@@ -226,7 +226,7 @@ executables. The ladder is 2048's; the clock driving it is not.
 `Ship_LoadModel` loads `<Team>\Zone.vex` instead of `<Team>\Ship.vex` under the
 same selector, and every team's `Zone.vex` decodes to the same hull - see
 [zone-mode.md](../ghidra/functions/psp-pulse-usa/zone-mode.md#the-ship-model-is-not-the-players-own-hull).
-Confidence 84. `oag_livery::entry::ship_entry_name` picks the model this way, and
+Confidence 84. `oag_title::race::ShipPaths::hull_entry_name` picks the model this way, and
 the menu greys the TEAM row while MODE is Zone so a player is not offered a
 choice that no longer changes the shape drawn - only the colour it is drawn in.
 

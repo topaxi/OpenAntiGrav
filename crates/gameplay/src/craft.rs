@@ -5,6 +5,7 @@
 //! field access, so a weapon reads and writes exactly the fields it did when it
 //! named `Ship` directly.
 
+use oag_core::math::Vec3;
 use oag_physics::{ShipState, params::Dimensions};
 use oag_weapons::Craft;
 use oag_weapons::disruption::Disruption;
@@ -54,6 +55,10 @@ impl Craft for Ship {
 
     fn disruption_mut(&mut self) -> &mut Disruption {
         &mut self.disruption
+    }
+
+    fn muzzle(&self) -> Option<Vec3> {
+        self.muzzle
     }
 
     fn progress(&self) -> Option<f32> {

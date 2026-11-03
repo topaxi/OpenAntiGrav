@@ -665,9 +665,6 @@ impl Race {
             .get(Trigger::PlasmaFlare)
             .is_some_and(|effect| effect.rides_owner_frame);
         for (slot, projectile) in self.sim.world.projectiles.slots.iter().enumerate() {
-            if projectile.kind.is_none() {
-                self.view.plasma_lead[slot] = 0.0;
-            }
             let name = flare_effect_for(projectile.kind);
             let (primary, orbiting) = match projectile.kind {
                 Some(oag_tables::weapons::Weapon::Missile) => {
@@ -682,32 +679,21 @@ impl Race {
                     (projectile.position, Some(projectile.position))
                 }
                 // A charging head sits on the craft's weapon node, its hull's `Ship
-                // Muzzle` locator, not the bolt's hold point, on the source whose head
-                // rides its owner's frame (Pulse's PSP file): `plasma.md`, "the head's
-                // matrix and node". Released, it keeps the node's lead over the bolt:
-                // the original's bolt matrix is launched from the head's node and the
-                // head draws through it, 4.24, 4.43, 4.62, 4.81, 5.79 ... ahead of the
-                // craft with no step back (`plasma.md`, "the head after the release").
-                Some(oag_tables::weapons::Weapon::Plasma) if head_rides_owner => {
-                    let heading = projectile.velocity.try_normalize();
-                    if projectile.charge > 0.0 {
-                        match self.muzzle_of(usize::from(projectile.owner)) {
-                            Some(muzzle) => {
-                                if let Some(heading) = heading {
-                                    self.view.plasma_lead[slot] =
-                                        (muzzle - projectile.position).dot(heading);
-                                }
-                                (muzzle, None)
-                            }
-                            None => {
-                                self.view.plasma_lead[slot] = 0.0;
-                                (projectile.position, None)
-                            }
-                        }
-                    } else {
-                        let lead = heading.unwrap_or(Vec3::ZERO) * self.view.plasma_lead[slot];
-                        (projectile.position + lead, None)
-                    }
+                // Muzzle` locator, through the drawn hull's matrix (display roll and
+                // lean included), on the source whose head rides its owner's frame
+                // (Pulse's PSP file): `plasma.md`, "the head's matrix and node". The
+                // bolt itself charges and is released on the same node in the
+                // simulation (`oag_weapons::projectile::plasma::muzzle`), so a released
+                // head draws where the bolt is, as the original's draws through the
+                // bolt's own matrix (`plasma.md`, "the head after the release").
+                Some(oag_tables::weapons::Weapon::Plasma)
+                    if head_rides_owner && projectile.charge > 0.0 =>
+                {
+                    (
+                        self.muzzle_of(usize::from(projectile.owner))
+                            .unwrap_or(projectile.position),
+                        None,
+                    )
                 }
                 _ => (projectile.position, None),
             };

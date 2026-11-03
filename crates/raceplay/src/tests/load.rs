@@ -6,7 +6,7 @@
 
 use super::*;
 use crate::hud::hud_roots;
-use oag_livery::entry::{boost_entry_name, shield_entry_names, ship_entry_name};
+use oag_livery::entry::{boost_entry_name, shield_entry_names};
 
 /// The hull and its plume must come from the same family, which is the
 /// regression this guards: the plume load hardcoded `shipboost.vex` while
@@ -17,7 +17,7 @@ use oag_livery::entry::{boost_entry_name, shield_entry_names, ship_entry_name};
 fn the_boost_plume_follows_the_hull_its_mode_selects() {
     let craft = oag_pulse::race::DEFAULTS.ships();
     for mode in [Mode::TimeTrial, Mode::SpeedLap, Mode::Zone] {
-        let hull = ship_entry_name(craft, "Feisar", mode, None);
+        let hull = craft.hull_entry_name("Feisar", mode == Mode::Zone, None);
         let plume = boost_entry_name(craft, "Feisar", mode).expect("Pulse ships one");
         let stem = if mode == Mode::Zone { "Zone" } else { "ship" };
         assert!(
@@ -53,25 +53,25 @@ fn a_title_with_no_ordinary_boost_model_has_none_in_zone_mode_either() {
 fn a_hull_variant_override_replaces_only_the_file_stem() {
     let craft = oag_pulse::race::DEFAULTS.ships();
     assert_eq!(
-        ship_entry_name(craft, "Assegai", Mode::TimeTrial, Some("extra")),
+        craft.hull_entry_name("Assegai", false, Some("extra")),
         r"Data\Ships\Assegai\extra.vex"
     );
     assert_eq!(
-        ship_entry_name(craft, "Assegai", Mode::TimeTrial, None),
+        craft.hull_entry_name("Assegai", false, None),
         r"Data\Ships\Assegai\Ship.vex",
         "no override is exactly today's baseline"
     );
 }
 
-/// A Zone run ignores the override - see [`ship_entry_name`]'s own doc
+/// A Zone run ignores the override - see `ShipPaths::hull_entry_name`'s own doc
 /// comment for why: Zone's hull is a title fact of its own, unaffected by
 /// which model variant the RACE page picked.
 #[test]
 fn a_hull_variant_override_does_not_reach_zone_mode() {
     let craft = oag_pulse::race::DEFAULTS.ships();
     assert_eq!(
-        ship_entry_name(craft, "Assegai", Mode::Zone, Some("extra")),
-        ship_entry_name(craft, "Assegai", Mode::Zone, None),
+        craft.hull_entry_name("Assegai", true, Some("extra")),
+        craft.hull_entry_name("Assegai", true, None),
         "Zone's own hull selection does not consult the override at all"
     );
 }

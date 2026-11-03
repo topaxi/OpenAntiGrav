@@ -59,7 +59,6 @@ impl Race {
             internal,
             #[cfg(feature = "view")]
             nozzles,
-            #[cfg(feature = "view")]
             muzzles,
             #[cfg(feature = "view")]
             engine_lights,
@@ -618,6 +617,11 @@ impl Race {
         } else {
             world.ship_count = 1;
         }
+        // Every slot's weapon node, the player's and the grid's alike: where a
+        // Plasma bolt charges and leaves from (`oag_weapons::projectile::plasma::muzzle`).
+        for (slot, ship) in world.ships.iter_mut().enumerate() {
+            ship.muzzle = muzzles.get(slot).copied().flatten();
+        }
 
         #[cfg(feature = "view")]
         if let Some(zone) = capture_hud.and_then(|hud| hud.zone) {
@@ -872,7 +876,6 @@ impl Race {
                     })
                 }),
                 nozzles,
-                muzzles,
                 engine_lights,
                 spu_vertex_lights,
                 hull_points,
@@ -895,7 +898,6 @@ impl Race {
                 engine_flare: [None; MAX_SHIPS],
                 projectile_flare: [None; oag_weapons::projectile::MAX_PROJECTILES],
                 projectile_flare_orbit: [None; oag_weapons::projectile::MAX_PROJECTILES],
-                plasma_lead: [0.0; oag_weapons::projectile::MAX_PROJECTILES],
                 quake_effect: None,
                 repulser_effects: [[None; 4]; oag_weapons::projectile::repulser::POOL_SIZE],
                 repulser_fields: [None; oag_weapons::projectile::repulser::POOL_SIZE],

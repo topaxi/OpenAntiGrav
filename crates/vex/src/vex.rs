@@ -65,8 +65,8 @@ pub mod matrix;
 
 pub use matrix::{
     Anchored, IDENTITY, NodeChain, anchor_world, anim_anchors, class_world_transforms,
-    leaves_directions, multiply, transform, transform_direction, transform_point, world_transforms,
-    world_transforms_at,
+    leaves_directions, multiply, ship_muzzle, transform, transform_direction, transform_point,
+    world_transforms, world_transforms_at,
 };
 
 /// Class ID of a `Mesh` node (version 6 only; ask [`classes::for_version`]).

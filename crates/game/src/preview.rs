@@ -119,15 +119,19 @@ pub fn ship_entry(title: &oag_title::Title, location: &str, mode: oag_race::Mode
 
 /// The hull the race flies for `team` in `mode`, on a title whose Ship Select draws a front-end
 /// twin of it (`ship_FE.vex`, [`draws_hull`] false): the file the twin's airbrake flaps are seated
-/// from ([`seat_flaps`]). Named by the race's own entry rule, [`oag_livery::entry::ship_entry_name`].
+/// from ([`seat_flaps`]). Named by the race's own entry rule, [`oag_title::race::ShipPaths::hull_entry_name`].
 #[must_use]
 pub fn race_hull_entry(
     title: &oag_title::Title,
     team: &str,
     mode: oag_race::Mode,
 ) -> Option<String> {
-    (!draws_hull(title, oag_ui_screens::picker::Kind::Ship))
-        .then(|| oag_livery::entry::ship_entry_name(title.race.ships_for(team), team, mode, None))
+    (!draws_hull(title, oag_ui_screens::picker::Kind::Ship)).then(|| {
+        title
+            .race
+            .ships_for(team)
+            .hull_entry_name(team, mode == oag_race::Mode::Zone, None)
+    })
 }
 
 /// Seats a front-end hull's airbrake flaps where `race_entry`'s model has them at rest.
@@ -195,7 +199,12 @@ pub fn zone_race_hull_entry(
     (mode == oag_race::Mode::Zone
         && outside_the_team
         && draws_hull(title, oag_ui_screens::picker::Kind::Ship))
-    .then(|| oag_livery::entry::ship_entry_name(title.race.ships_for(team), team, mode, None))
+    .then(|| {
+        title
+            .race
+            .ships_for(team)
+            .hull_entry_name(team, mode == oag_race::Mode::Zone, None)
+    })
 }
 
 /// The orbit a capture frames a preview with: the fixed hull pose, or the
