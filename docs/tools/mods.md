@@ -313,7 +313,9 @@ thrust bar, and `Thrust` draws nothing there) and shakes the energy bar while it
 [docs/architecture/wasm-extensions/](../architecture/wasm-extensions/README.md).
 
 A mod that hands out a pickup of its own (`give-pickup`, `pickup-roll`) declares its look in
-`oag-mod.toml`, and is faulted for the race at the first such command without it:
+`oag-mod.toml`, and is faulted for the race at the first such command without it. Each mod
+with a `[pickup]` has its own pickup kind (at most 32 a race), so two such mods run side by
+side:
 
 ```toml
 [pickup]

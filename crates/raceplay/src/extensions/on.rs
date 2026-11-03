@@ -621,6 +621,34 @@ fn crafts(sim: &RaceSim, inputs: &oag_gameplay::PlayerInputs) -> Vec<oag_ext_abi
         .collect()
 }
 
+/// Where each craft sits in each other craft's own frame: the dot of the offset between
+/// their bodies with the observer's forward, right and up axes, in `f32`. A slot with no craft
+/// has no row and no column.
+fn aiming(sim: &RaceSim) -> oag_ext_abi::Aiming {
+    let mut aiming = oag_ext_abi::Aiming::default();
+    let ships = &sim.world.ships;
+    for (observer, from) in ships.iter().enumerate().filter(|(_, ship)| ship.active) {
+        let body = &from.physics.body;
+        let (forward, right, up) = (body.forward(), body.right(), body.up());
+        for (target, to) in ships.iter().enumerate().filter(|(_, ship)| ship.active) {
+            if target == observer {
+                continue;
+            }
+            let offset = to.physics.body.position - body.position;
+            aiming.set(
+                observer,
+                target,
+                oag_ext_abi::Aim::from_offset(
+                    offset.dot(forward),
+                    offset.dot(right),
+                    offset.dot(up),
+                ),
+            );
+        }
+    }
+    aiming
+}
+
 /// Each slot's distance along the circuit and place. The place is the one the HUD shows
 /// (`RaceSim::places`); an empty slot has none.
 fn tracking(sim: &RaceSim) -> Vec<oag_ext_abi::Tracking> {
@@ -855,6 +883,7 @@ pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs, trans
     sim.extensions.on.transit_ends = transited;
     let crafts = crafts(sim, inputs);
     let tracking = tracking(sim);
+    let aiming = aiming(sim);
     let tick = sim.world.tick;
     let active = sim
         .world
@@ -939,6 +968,7 @@ pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs, trans
                 length: course_length,
                 tracking: &tracking,
                 title,
+                aiming: Some(&aiming),
             },
             track: &region.bytes,
             speed_pads: region.speed_pads,

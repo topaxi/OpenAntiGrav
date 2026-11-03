@@ -30,6 +30,7 @@ mod ai_loss_attribution_board;
 mod ai_plan_probe;
 mod ai_roll_ground_truth;
 mod ai_span_sweep;
+mod aiming_ground_truth;
 mod airtime_budget_ground_truth;
 mod asset_layers_ground_truth;
 mod autopilot_cancel_ground_truth;

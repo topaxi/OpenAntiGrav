@@ -44,8 +44,8 @@ pub use line::Line;
 pub use look::{colour, icon};
 pub use oag_ext_abi::track::{Kind, TRACK_LEN, prop_key};
 pub use oag_ext_abi::{
-    ABI_WORD, Anchor, Colour, Command, Cue, Distance, Effect, Event, HudElement, HudPlace, IO_LEN,
-    Icon, MAX_CRAFTS, MAX_EMITS_PER_TICK, MAX_HUD_EXTRA, MAX_HUD_ITEMS, MAX_HUD_SHAKE,
+    ABI_WORD, Aim, Anchor, Colour, Command, Cue, Distance, Effect, Event, HudElement, HudPlace,
+    IO_LEN, Icon, MAX_CRAFTS, MAX_EMITS_PER_TICK, MAX_HUD_EXTRA, MAX_HUD_ITEMS, MAX_HUD_SHAKE,
     MAX_HUD_TEXT, MAX_PROBE_RADIUS, MAX_SPEED_FACTOR, MAX_STATE_BYTES, MAX_THRUST_FACTOR,
     MAX_TRANSIT_TICKS, ModIcon, Pickup, Rgba, Slot, TRACK_SENDER, Weapon, WeatherKind, channel_key,
 };
@@ -81,6 +81,8 @@ pub struct Craft<'a> {
     slot: Slot,
     record: &'a [u8; oag_ext_abi::CRAFT_LEN],
     tracking: &'a [u8; oag_ext_abi::TRACKING_LEN],
+    /// The craft section from `CRAFTS_AT` on, where the aiming matrix is.
+    records: &'a [u8],
 }
 
 impl Craft<'_> {
@@ -169,6 +171,15 @@ impl Craft<'_> {
         oag_ext_abi::Tracking::decode(self.tracking).place
     }
 
+    /// Where the craft in `target` sits in this craft's own frame: how far ahead, to the right
+    /// and above, quantised ([`Aim`]). Zero for itself and for a slot holding no craft (check
+    /// [`Observation::craft`] first) and for a slot past the eight the matrix covers. Use
+    /// [`Aim::in_cone`] for "in front within some range and roughly in sight".
+    #[must_use]
+    pub fn aim_at(&self, target: Slot) -> Aim {
+        oag_ext_abi::read_aim(self.records, self.slot.index(), target.index())
+    }
+
     /// What it holds.
     #[must_use]
     pub fn pickup(&self) -> Pickup {
@@ -234,6 +245,7 @@ impl<'a> Observation<'a> {
             slot,
             record,
             tracking,
+            records: self.records,
         })
     }
 

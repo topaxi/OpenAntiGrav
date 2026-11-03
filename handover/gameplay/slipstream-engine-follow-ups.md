@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-03
-summary: "oag.slipstream wired; open: mesh portal, route and island exits, two mod pickups, Distance::Trigger on a real track."
+summary: "oag.slipstream wired; open: mesh portal, route and island exits, Distance::Trigger on a real track."
 categories: [tooling, frontend]
 size: L (50)
 difficulty: medium (50)
@@ -60,10 +60,8 @@ The engine never names the mod.
    distance reset would fire. Recommended rule for our track format: the author gives the
    island its own spline path that rejoins the circuit, which makes it item 5. An engine
    notion of an off-course stretch is a design question first. Size L if built (30).
-4. **Two mod pickups in one race.** A mod with `[[pickup.odds]]` owns the mod pickup from tick
-   0, so with slipstream and energy-turbo both on, energy-turbo faults on its first
-   `pickup-roll` ("the mod pickup belongs to mod ..."). One mod pickup a race is the rule
-   today; more than one needs a pickup kind per mod.
+4. ~~Two mod pickups in one race~~ (landed: a pickup kind per mod, `tests::extension_pickup_kinds`,
+   `slipstream_energy_turbo_ground_truth`).
 5. **`Distance::Trigger` with a real track file.** It is tested only through the
    refusal path (a track with no trigger). A `track_props_ground_truth`-style test with a
    trigger pair is owed.
@@ -97,7 +95,7 @@ found, for the engine:
 
 ## Next Steps
 
-1. Open items 2-5: a route exit, an island exit, two mod pickups, a `Distance::Trigger` test on a
+1. Open items 2, 3 and 5: a route exit, an island exit, a `Distance::Trigger` test on a
    real track file.
 2. Quote `race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`
    before and after any change that touches racing.

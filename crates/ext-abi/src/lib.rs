@@ -27,6 +27,7 @@
 //! | [`CRAFTS_AT`] | [`CRAFT_LEN`] x [`MAX_CRAFTS`] | one record per grid slot ([`Craft`]): pickup `u8`, flags `u8`, lap `u8`, laps target `u8`, shield `f32`, shield maximum `f32`, speed km/h `f32` |
 //! | [`TRACKING_AT`] | [`TRACKING_LEN`] x [`MAX_CRAFTS`] | one record per grid slot ([`Tracking`]): progress `f32`, place `u8`, flags `u8` (bit 0: progress is a fix), 2 bytes unused |
 //! | [`TITLE_AT`] | 4 | the title's key: `channel_key` of its lowercased hyphenated name (0: none) |
+//! | [`AIM_AT`] | [`AIM_TOTAL`] | [`AIM_SLOTS`] observers x [`AIM_SLOTS`] targets ([`Aim`]): where the target sits ahead of, right of and above the observer, three `i8` in [`AIM_STEP`] units |
 //!
 //! The track region is a second buffer, written by the host before each call when the
 //! guest exports `oag_track() -> u32`: [`track`] lays it out.
@@ -41,6 +42,7 @@
 #![no_std]
 #![forbid(unsafe_code)]
 
+pub use aiming::{AIM_AT, AIM_LEN, AIM_SLOTS, AIM_STEP, AIM_TOTAL, Aim, Aiming, read as read_aim};
 pub use channel::{
     BadChannel, MAX_CHANNEL_LEN, MAX_EMITS_PER_TICK, MAX_MOD_EVENTS, MAX_TRACK_EVENTS,
     TRACK_SENDER, channel_key, check_channel, namespace,
@@ -1313,6 +1315,9 @@ pub fn write_observation(
         io[at..at + TRACKING_LEN].copy_from_slice(&tracking.encode());
     }
     put_u32(io, TITLE_AT, course.title);
+    if let Some(aiming) = course.aiming {
+        aiming.write(io);
+    }
 }
 
 /// The reply's command count.
@@ -1451,6 +1456,7 @@ fn get_u32(buffer: &[u8], at: usize) -> u32 {
     }
 }
 
+mod aiming;
 mod channel;
 mod craft;
 pub mod hud;

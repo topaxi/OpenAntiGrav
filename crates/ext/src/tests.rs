@@ -163,6 +163,7 @@ fn the_observation_lists_active_crafts_and_skips_unknown_events() {
                 },
             ],
             title: crate::channel_key("wipeout-pulse"),
+            aiming: None,
         },
         &[],
     );
@@ -196,6 +197,7 @@ fn the_reply_refuses_what_the_host_would_fault_on() {
         slot: slot(2),
         record: &record,
         tracking: &[0; oag_ext_abi::TRACKING_LEN],
+        records: &[],
     };
     for bad in [2.5, -0.1, f32::NAN, f32::INFINITY] {
         assert_eq!(reply.scale_thrust(&held, bad), Err(Refused::Range));
@@ -410,6 +412,7 @@ fn a_guest_draws_text_and_an_icon_and_the_cap_refuses_by_name() {
         slot: slot(1),
         record: &[0; oag_ext_abi::CRAFT_LEN],
         tracking: &[0; oag_ext_abi::TRACKING_LEN],
+        records: &[],
     };
     let place = HudPlace {
         anchor: Anchor::Top,
@@ -519,6 +522,7 @@ fn a_pickup_look_is_one_record_and_a_mod_icon_rides_the_pool() {
         slot: slot(2),
         record: &record,
         tracking: &[0; oag_ext_abi::TRACKING_LEN],
+        records: &[],
     };
     let red = Colour::Rgba(Rgba::new(0xE0, 0x20, 0x20, 0x80));
     assert_eq!(reply.pickup_look(&held, icon::title::TURBO, red), Ok(()));
@@ -619,6 +623,7 @@ fn the_reply_refuses_an_emit_past_the_cap_and_a_non_finite_value() {
         slot: slot(0),
         record: &record,
         tracking: &[0; oag_ext_abi::TRACKING_LEN],
+        records: &[],
     };
     for _ in 0..crate::MAX_EMITS_PER_TICK {
         assert_eq!(reply.emit(&craft, 1, 0.0), Ok(()));
@@ -637,6 +642,7 @@ fn the_reply_refuses_a_fire_effect_past_the_cap_counting_both_kinds() {
         slot: slot(0),
         record: &record,
         tracking: &[0; oag_ext_abi::TRACKING_LEN],
+        records: &[],
     };
     for i in 0..oag_ext_abi::MAX_FIRE_EFFECTS_PER_TICK {
         let sent = if i % 2 == 0 {
@@ -666,6 +672,7 @@ fn the_motion_commands_refuse_what_the_host_would_fault_on() {
         slot: slot(1),
         record: &racing,
         tracking: &[0; oag_ext_abi::TRACKING_LEN],
+        records: &[],
     };
     let out = CraftRecord {
         in_transit: true,
@@ -676,6 +683,7 @@ fn the_motion_commands_refuse_what_the_host_would_fault_on() {
         slot: slot(2),
         record: &out,
         tracking: &[0; oag_ext_abi::TRACKING_LEN],
+        records: &[],
     };
     let units = Distance::Seconds(2.0);
     assert_eq!(reply.transit(&out, 60, units, 0.9), Err(Refused::Range));
@@ -747,6 +755,7 @@ fn the_view_commands_refuse_what_the_host_would_fault_on_and_count_the_effect() 
         slot: slot(1),
         record: &record,
         tracking: &[0; oag_ext_abi::TRACKING_LEN],
+        records: &[],
     };
     let range = oag_ext_abi::MAX_FOV_OFFSET_DEG;
     assert_eq!(reply.fov_offset(&craft, range * 2.0), Err(Refused::Range));
@@ -770,5 +779,60 @@ fn the_view_commands_refuse_what_the_host_would_fault_on_and_count_the_effect() 
         reply.fire_mod_effect_ahead(&craft, 1, Distance::Units(80.0)),
         Err(Refused::Effects),
         "it counts toward the effect cap"
+    );
+}
+
+crate::blob! {
+    #[derive(Debug, Default)]
+    struct Aimed {
+        /// Bit per target slot: in the cone ahead of slot 0.
+        in_front: u8,
+        ahead: f32,
+        across: f32,
+    }
+}
+
+/// Reads where slots 1 to 7 sit in slot 0's frame.
+struct Aimer;
+
+impl Extension for Aimer {
+    type State = Aimed;
+
+    fn tick(obs: &Observation<'_>, state: &mut Aimed, _reply: &mut Reply<'_>) {
+        let Some(me) = obs.craft(slot(0)) else { return };
+        state.in_front = 0;
+        for target in obs.crafts().filter(|c| c.slot() != me.slot()) {
+            let aim = me.aim_at(target.slot());
+            if aim.in_cone(200.0, 0.3) {
+                state.in_front |= 1 << target.slot().index();
+            }
+            if target.slot() == slot(1) {
+                state.ahead = aim.ahead();
+                state.across = aim.across();
+            }
+        }
+    }
+}
+
+#[test]
+fn a_guest_reads_where_another_craft_sits_in_its_own_frame() {
+    let mut race = Race::<Aimer>::new()
+        .with_craft(slot(0), racer(1.0))
+        .with_craft(slot(1), racer(1.0))
+        .with_craft(slot(2), racer(1.0))
+        .with_craft(slot(3), racer(1.0))
+        .with_craft(slot(4), racer(1.0))
+        // 60 ahead and 3 right, 8 ahead and 40 across, 60 behind, 400 ahead.
+        .with_aim(slot(0), slot(1), (60.0, 3.0, 0.0))
+        .with_aim(slot(0), slot(2), (8.0, 40.0, 0.0))
+        .with_aim(slot(0), slot(3), (-60.0, 0.0, 0.0))
+        .with_aim(slot(0), slot(4), (400.0, 0.0, 0.0));
+    race.tick();
+    let state = race.state();
+    assert_eq!(state.in_front, 0b10, "only slot 1 is in the cone");
+    assert_eq!(
+        (state.ahead, state.across),
+        (60.0, 4.0),
+        "quantised to 2 units"
     );
 }
