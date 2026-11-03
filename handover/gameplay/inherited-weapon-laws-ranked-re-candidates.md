@@ -27,7 +27,7 @@ Ranked, most play impact first. Each names what would settle it.
    gates and rate tables as Pulse, **differs** in a per-step time scale `dt * 30` (0.5 at 1/60: HD
    fires at half Pulse's per-step chance), the `AllWeapons` multiplier (`0.9 / 0.9 / 1.0`),
    Eliminator `use * useScale[difficulty]` instead of `* 5`, and an unread Eliminator flip block.
-   **Wired 2026-11-03** (`hd-fire-law-wire`, items 1 to 3; HD, 2048 and Omega by inheritance labelled so; the flip block is not). Still open: a live
+   **Wired 2026-11-03** (`hd-fire-law-wire`, items 1 to 3; HD, 2048 and Omega by inheritance labelled so; the flip block is not). HD's projectile count rose in the seed-1 ground truth (110 to 157; 12 seeds 1149 to 1037, 0.90): spend is pickup-limited, the per-decision chance is 0.45. Omega's unsuffixed table has no `EliminatorAIStats` row, so its Eliminator keeps Pulse's terms (chosen); Omega's own reader of `stats + 0xc4` is unread (next: `eboot.bin`'s `WeaponAIStats` loader, then that reader). Still open: a live
    breakpoint count on `0x000fb928` / `0x000f9a18` (cadence and `dt`; the static read says every
    step, `dt * 30`), which `weaponaistats.xml` copy HD loads (`DATA00` has the Eliminator row,
    `DATA02` not: item 3 of the page's wiring list depends on it), Pure's, 2048's and Omega's own decision code (Omega: its
