@@ -70,6 +70,7 @@ fn wall_penalty() -> Option<race::extensions::Source> {
         api: extension.api,
         memory_pages: extension.memory_pages,
         state_bytes: extension.state_bytes,
+        drives_ai_pickup: false,
         scope: race::extensions::Scope::Rules,
         read: Arc::new(move || Ok(wasm.clone())),
         strings: Arc::new(|_| Default::default()),
@@ -77,6 +78,7 @@ fn wall_penalty() -> Option<race::extensions::Source> {
         effects: Vec::new(),
         files: Arc::new(|_| Err("no files".into())),
         pickup: module.manifest.pickup.clone(),
+        pickup_titles: Vec::new(),
         pickup_odds: module.manifest.pickup_odds.clone(),
         channels: race::extensions::Declared {
             publishes: module.manifest.channels.publishes.clone(),

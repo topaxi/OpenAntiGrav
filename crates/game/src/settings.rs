@@ -202,13 +202,52 @@ pub struct Log {
 
 /// The MODS page's switches, by mod id (`oag_mod::Manifest::id`).
 ///
-/// A set of the mods turned **off**, so a mod installed later is on until the player
-/// says otherwise. An id no installed mod has is kept: a mod moved out of the search
-/// path and back stays off. A `BTreeSet` so the rewrite [`load`] makes is stable.
+/// `disabled` holds the mods turned **off** and `enabled` the mods turned **on** against
+/// their manifest's `default-enabled = false`, so a mod installed later follows its own
+/// default until the player says otherwise ([`Self::is_enabled`]). An id no installed mod
+/// has is kept: a mod moved out of the search path and back keeps its switch. `BTreeSet`s
+/// so the rewrite [`load`] makes is stable.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Mods {
     #[serde(default)]
     pub disabled: std::collections::BTreeSet<String>,
+    #[serde(default)]
+    pub enabled: std::collections::BTreeSet<String>,
+}
+
+impl Mods {
+    /// Whether the mod `id` is on: the player's switch if there is one, else the mod's
+    /// own `manifest_default` (`oag_mod::Manifest::default_enabled`). The one resolver.
+    #[must_use]
+    pub fn is_enabled(&self, id: &str, manifest_default: bool) -> bool {
+        if self.disabled.contains(id) {
+            false
+        } else if self.enabled.contains(id) {
+            true
+        } else {
+            manifest_default
+        }
+    }
+
+    /// Records the player's switch for `id`. A switch that equals the manifest default is
+    /// not stored, so the mod follows a later change of its default. Returns whether the
+    /// mod's state changed.
+    pub fn switch(&mut self, id: &str, manifest_default: bool, on: bool) -> bool {
+        if self.is_enabled(id, manifest_default) == on {
+            return false;
+        }
+        self.disabled.remove(id);
+        self.enabled.remove(id);
+        if on != manifest_default {
+            let set = if on {
+                &mut self.enabled
+            } else {
+                &mut self.disabled
+            };
+            set.insert(id.to_string());
+        }
+        true
+    }
 }
 
 /// What the opponents are like.

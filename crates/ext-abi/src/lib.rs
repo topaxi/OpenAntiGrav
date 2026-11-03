@@ -13,6 +13,7 @@
 //! | Offset | Size | Field |
 //! | --- | --- | --- |
 //! | [`ABI_AT`] | 4 | ABI major |
+//! | [`COURSE_LENGTH_AT`] | 4 | course length `f32`, units (0: no course) |
 //! | [`TICK_AT`] | 8 | world tick |
 //! | [`SLOTS_AT`] | 4 | slot count ([`MAX_SLOTS`]) |
 //! | [`ACTIVE_AT`] | 4 | active mask, one bit per slot holding a craft |
@@ -24,6 +25,7 @@
 //! | [`REPLY_AT`] + 4 | [`COMMAND_LEN`] x [`MAX_COMMANDS`] | commands ([`Command`]): kind `u8`, slot `u8`, `u16` argument, `f32`, `u32` |
 //! | [`POOL_AT`] | [`POOL_LEN`] | the reply's string pool: entries of a length byte then UTF-8, named by offset from a `hud-text` or `hud-icon` command |
 //! | [`CRAFTS_AT`] | [`CRAFT_LEN`] x [`MAX_CRAFTS`] | one record per grid slot ([`Craft`]): pickup `u8`, flags `u8`, lap `u8`, laps target `u8`, shield `f32`, shield maximum `f32`, speed km/h `f32` |
+//! | [`TRACKING_AT`] | [`TRACKING_LEN`] x [`MAX_CRAFTS`] | one record per grid slot ([`Tracking`]): progress `f32`, place `u8`, flags `u8` (bit 0: progress is a fix), 2 bytes unused |
 //!
 //! The track region is a second buffer, written by the host before each call when the
 //! guest exports `oag_track() -> u32`: [`track`] lays it out.
@@ -42,6 +44,10 @@ pub use channel::{
     BadChannel, MAX_CHANNEL_LEN, MAX_EMITS_PER_TICK, MAX_MOD_EVENTS, MAX_TRACK_EVENTS,
     TRACK_SENDER, channel_key, check_channel, namespace,
 };
+pub use craft::{
+    CRAFT_FIRE_HELD, CRAFT_FLAGS, CRAFT_IN_TRANSIT, CRAFT_LAP, CRAFT_LAPS_TARGET, CRAFT_PERSON,
+    CRAFT_PICKUP, CRAFT_RACING, CRAFT_SHIELD, CRAFT_SHIELD_MAX, CRAFT_SHIELDED, CRAFT_SPEED, Craft,
+};
 use hud::pool_string;
 pub use hud::{
     Anchor, HudElement, HudPlace, HudStr, MAX_FIRE_EFFECTS_PER_TICK, MAX_HUD_EXTRA, MAX_HUD_ITEMS,
@@ -51,6 +57,11 @@ pub use kind::CommandKind;
 pub use malformed::Malformed;
 pub use motion::{Distance, MAX_PROBE_RADIUS, MAX_SPEED_FACTOR, MAX_TRANSIT_TICKS};
 pub use pickup::{Colour, Icon, ModIcon};
+pub use scene::MAX_FOV_OFFSET_DEG;
+pub use tracking::{
+    COURSE_LENGTH_AT, Course, TRACKING_AT, TRACKING_FIXED, TRACKING_FLAGS, TRACKING_LEN,
+    TRACKING_PLACE, TRACKING_PROGRESS, Tracking,
+};
 
 /// The ABI major. A manifest's `[extension] api` names it.
 pub const ABI: u32 = 1;
@@ -140,20 +151,6 @@ pub const COMMAND_ARG: usize = 2;
 pub const COMMAND_VALUE: usize = 4;
 /// Within a command record: the `u32`.
 pub const COMMAND_WORD: usize = 8;
-/// Within a craft record: the pickup code.
-pub const CRAFT_PICKUP: usize = 0;
-/// Within a craft record: the flags.
-pub const CRAFT_FLAGS: usize = 1;
-/// Within a craft record: the lap being driven, 1-based, saturating at 255.
-pub const CRAFT_LAP: usize = 2;
-/// Within a craft record: the laps the race ends after; 0 for a race with no target.
-pub const CRAFT_LAPS_TARGET: usize = 3;
-/// Within a craft record: the shield, `f32`.
-pub const CRAFT_SHIELD: usize = 4;
-/// Within a craft record: the shield maximum, `f32`.
-pub const CRAFT_SHIELD_MAX: usize = 8;
-/// Within a craft record: the speed in km/h, `f32`.
-pub const CRAFT_SPEED: usize = 12;
 /// Within an event record: the `f32` of an event that carries an amount (`hit`).
 pub const EVENT_VALUE: usize = 4;
 /// Offset of a `mod` event's channel key, a `u32` ([`channel_key`]).
@@ -161,17 +158,6 @@ pub const EVENT_CHANNEL: usize = 8;
 /// Offset of a `mod` event's sender, a `u32`: the key of the sending mod's id, or
 /// [`TRACK_SENDER`].
 pub const EVENT_FROM: usize = 12;
-
-/// Craft flag: a person flies the slot.
-pub const CRAFT_PERSON: u8 = 1;
-/// Craft flag: a person flying the slot holds the fire button (`SQUARE`) this tick.
-pub const CRAFT_FIRE_HELD: u8 = 2;
-/// Craft flag: the craft is racing: past the start, not wrecked, not respawning.
-pub const CRAFT_RACING: u8 = 4;
-/// Craft flag: the craft's Shield is running, so a weapon hit this tick is absorbed.
-pub const CRAFT_SHIELDED: u8 = 8;
-/// Craft flag: the craft is in a `transit`, out of the world.
-pub const CRAFT_IN_TRANSIT: u8 = 16;
 
 /// The largest `scale-pad` factor, race-wide or per slot. Chosen.
 pub const MAX_PAD_FACTOR: f32 = 2.0;
@@ -396,77 +382,6 @@ impl Rgba {
     pub const fn from_u32(packed: u32) -> Self {
         let [r, g, b, a] = packed.to_le_bytes();
         Self { r, g, b, a }
-    }
-}
-
-/// One grid slot as a guest reads it: copies of what the HUD already shows.
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
-pub struct Craft {
-    /// The held pickup.
-    pub pickup: Pickup,
-    /// A person flies the slot.
-    pub person: bool,
-    /// A person flying the slot holds the fire button this tick.
-    pub fire_held: bool,
-    /// Racing: past the start, not wrecked, not respawning.
-    pub racing: bool,
-    /// The craft's Shield is running: a weapon hit is absorbed (it still raises `hit`).
-    pub shielded: bool,
-    /// The craft is in a `transit`, out of the world.
-    pub in_transit: bool,
-    /// The lap being driven, 1-based, saturating at 255.
-    pub lap: u8,
-    /// The laps the race ends after; 0 when it has no target.
-    pub laps_target: u8,
-    /// The energy pool.
-    pub shield: f32,
-    /// Its maximum: the bound of a `shield-delta` for this slot.
-    pub shield_max: f32,
-    /// The body's speed, km/h.
-    pub speed_kmh: f32,
-}
-
-impl Craft {
-    /// The record.
-    #[must_use]
-    pub fn encode(&self) -> [u8; CRAFT_LEN] {
-        let mut record = [0; CRAFT_LEN];
-        record[CRAFT_PICKUP] = self.pickup.code();
-        record[CRAFT_FLAGS] = [
-            (self.person, CRAFT_PERSON),
-            (self.fire_held, CRAFT_FIRE_HELD),
-            (self.racing, CRAFT_RACING),
-            (self.shielded, CRAFT_SHIELDED),
-            (self.in_transit, CRAFT_IN_TRANSIT),
-        ]
-        .into_iter()
-        .fold(0, |flags, (on, bit)| if on { flags | bit } else { flags });
-        record[CRAFT_LAP] = self.lap;
-        record[CRAFT_LAPS_TARGET] = self.laps_target;
-        put_u32(&mut record, CRAFT_SHIELD, self.shield.to_bits());
-        put_u32(&mut record, CRAFT_SHIELD_MAX, self.shield_max.to_bits());
-        put_u32(&mut record, CRAFT_SPEED, self.speed_kmh.to_bits());
-        record
-    }
-
-    /// The craft a record describes. A pickup code this revision does not know reads
-    /// as [`Pickup::None`]; the host writes none.
-    #[must_use]
-    pub fn decode(record: &[u8; CRAFT_LEN]) -> Self {
-        let flags = record[CRAFT_FLAGS];
-        Self {
-            pickup: Pickup::from_code(record[CRAFT_PICKUP]).unwrap_or_default(),
-            person: flags & CRAFT_PERSON != 0,
-            fire_held: flags & CRAFT_FIRE_HELD != 0,
-            racing: flags & CRAFT_RACING != 0,
-            shielded: flags & CRAFT_SHIELDED != 0,
-            in_transit: flags & CRAFT_IN_TRANSIT != 0,
-            lap: record[CRAFT_LAP],
-            laps_target: record[CRAFT_LAPS_TARGET],
-            shield: f32::from_bits(get_u32(record, CRAFT_SHIELD)),
-            shield_max: f32::from_bits(get_u32(record, CRAFT_SHIELD_MAX)),
-            speed_kmh: f32::from_bits(get_u32(record, CRAFT_SPEED)),
-        }
     }
 }
 
@@ -916,6 +831,37 @@ pub enum Command {
         /// The scale, in `[0, MAX_SPEED_FACTOR]`.
         factor: f32,
     },
+    /// This tick, wash the slot's view with `rgba` over the whole picture (the alpha is
+    /// the strength). Re-sent each tick it should hold; never hashed. The slot's own
+    /// view: a split-screen seat flown by that slot wears it, no other.
+    ScreenFill {
+        /// The grid slot whose view is filled.
+        slot: Slot,
+        /// The colour, straight alpha.
+        rgba: Rgba,
+    },
+    /// This tick, widen (positive) or narrow (negative) the vertical field of view of the
+    /// slot's view by `degrees`, in `[-MAX_FOV_OFFSET_DEG, MAX_FOV_OFFSET_DEG]`, before the
+    /// player's setting and the aspect fit. Re-sent each tick it should hold; never hashed.
+    FovOffset {
+        /// The grid slot whose view changes.
+        slot: Slot,
+        /// Degrees.
+        degrees: f32,
+    },
+    /// Play the sending mod's own effect number `index` (its place in `[effects]`) at the
+    /// course point `distance` ahead of the craft, on the road's centre line, where it
+    /// stays for the effect's own lifetime: a sprite of the mod's texture standing in the
+    /// world (a portal). Counts toward [`MAX_FIRE_EFFECTS_PER_TICK`]; a distance that
+    /// does not resolve draws nothing. Never hashed.
+    FireModEffectAhead {
+        /// The grid slot the point is ahead of.
+        slot: Slot,
+        /// The effect, by its place in the mod's `[effects]`.
+        index: u16,
+        /// How far ahead along the circuit.
+        distance: Distance,
+    },
     /// Ask whether a disc of `radius` standing upright across the track `distance` ahead
     /// of the craft fits without touching track geometry: answered by a `clearance`
     /// event at the next call.
@@ -960,6 +906,9 @@ impl Command {
             Self::Transit { .. } => CommandKind::Transit,
             Self::ScaleSpeed { .. } => CommandKind::ScaleSpeed,
             Self::ProbeClearance { .. } => CommandKind::ProbeClearance,
+            Self::ScreenFill { .. } => CommandKind::ScreenFill,
+            Self::FovOffset { .. } => CommandKind::FovOffset,
+            Self::FireModEffectAhead { .. } => CommandKind::FireModEffectAhead,
         }
     }
 
@@ -988,7 +937,10 @@ impl Command {
             | Self::Emit { slot, .. }
             | Self::Transit { slot, .. }
             | Self::ScaleSpeed { slot, .. }
-            | Self::ProbeClearance { slot, .. } => Some(slot),
+            | Self::ProbeClearance { slot, .. }
+            | Self::ScreenFill { slot, .. }
+            | Self::FovOffset { slot, .. }
+            | Self::FireModEffectAhead { slot, .. } => Some(slot),
             Self::PickupRoll { .. }
             | Self::ScalePad { .. }
             | Self::SetWeather { .. }
@@ -1064,6 +1016,9 @@ impl Command {
             Self::Emit { channel, value, .. } => (0, value.to_bits(), channel),
             Self::Transit { .. } | Self::ScaleSpeed { .. } | Self::ProbeClearance { .. } => {
                 motion::encode(self).unwrap_or_default()
+            }
+            Self::ScreenFill { .. } | Self::FovOffset { .. } | Self::FireModEffectAhead { .. } => {
+                scene::encode(self).unwrap_or_default()
             }
         };
         let mut record = [0; COMMAND_LEN];
@@ -1289,6 +1244,9 @@ impl Command {
             CommandKind::Transit | CommandKind::ScaleSpeed | CommandKind::ProbeClearance => {
                 return motion::decode(kind, slot, (arg, value, word));
             }
+            CommandKind::ScreenFill | CommandKind::FovOffset | CommandKind::FireModEffectAhead => {
+                return scene::decode(kind, slot, (arg, value, word));
+            }
             CommandKind::Emit => {
                 if !value.is_finite() {
                     return Err(Malformed::EmitValue { slot, value });
@@ -1309,17 +1267,19 @@ impl Command {
     }
 }
 /// Writes one tick's observation into a whole buffer, the state blob included. Events
-/// past [`MAX_EVENTS`] and crafts past [`MAX_CRAFTS`] are left out.
+/// past [`MAX_EVENTS`] and crafts and tracking records past [`MAX_CRAFTS`] are left out.
 pub fn write_observation(
     io: &mut [u8; IO_LEN],
     tick: u64,
     active: u32,
     events: &[Event],
     crafts: &[Craft],
+    course: &Course<'_>,
     state: &[u8],
 ) {
     let events = &events[..events.len().min(MAX_EVENTS)];
     put_u32(io, ABI_AT, ABI);
+    put_u32(io, COURSE_LENGTH_AT, course.length.to_bits());
     io[TICK_AT..TICK_AT + 8].copy_from_slice(&tick.to_le_bytes());
     put_u32(io, SLOTS_AT, MAX_SLOTS);
     put_u32(io, ACTIVE_AT, active);
@@ -1333,6 +1293,10 @@ pub fn write_observation(
     for (i, craft) in crafts.iter().take(MAX_CRAFTS).enumerate() {
         let at = CRAFTS_AT + i * CRAFT_LEN;
         io[at..at + CRAFT_LEN].copy_from_slice(&craft.encode());
+    }
+    for (i, tracking) in course.tracking.iter().take(MAX_CRAFTS).enumerate() {
+        let at = TRACKING_AT + i * TRACKING_LEN;
+        io[at..at + TRACKING_LEN].copy_from_slice(&tracking.encode());
     }
 }
 
@@ -1418,6 +1382,20 @@ impl<'a> Sections<'a> {
         head.get(at..at + EVENT_LEN)?.try_into().ok()
     }
 
+    /// The course length, units; 0 when the race has no course.
+    #[must_use]
+    pub fn course_length(head: &[u8]) -> f32 {
+        f32::from_bits(get_u32(head, COURSE_LENGTH_AT))
+    }
+
+    /// The slot's tracking record; `crafts` is [`Self::crafts`], which starts at
+    /// [`CRAFTS_AT`].
+    #[must_use]
+    pub fn tracking_record(crafts: &[u8], slot: Slot) -> Option<&[u8; TRACKING_LEN]> {
+        let at = (TRACKING_AT - CRAFTS_AT) + slot.index() * TRACKING_LEN;
+        crafts.get(at..at + TRACKING_LEN)?.try_into().ok()
+    }
+
     /// The slot's craft record.
     #[must_use]
     pub fn craft_record(crafts: &[u8], slot: Slot) -> Option<&[u8; CRAFT_LEN]> {
@@ -1453,12 +1431,15 @@ fn get_u32(buffer: &[u8], at: usize) -> u32 {
 }
 
 mod channel;
+mod craft;
 pub mod hud;
 mod kind;
 mod malformed;
 pub mod motion;
 mod pickup;
+mod scene;
 pub mod track;
+mod tracking;
 
 #[cfg(test)]
 mod tests;

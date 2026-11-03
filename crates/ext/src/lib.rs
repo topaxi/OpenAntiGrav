@@ -80,6 +80,7 @@ pub trait Extension {
 pub struct Craft<'a> {
     slot: Slot,
     record: &'a [u8; oag_ext_abi::CRAFT_LEN],
+    tracking: &'a [u8; oag_ext_abi::TRACKING_LEN],
 }
 
 impl Craft<'_> {
@@ -154,6 +155,20 @@ impl Craft<'_> {
         self.read().speed_kmh
     }
 
+    /// Its distance along the circuit, units, negative on the grid behind the line; `None`
+    /// before its first course fix. Divide by [`Observation::course_length`] for a share
+    /// of the lap.
+    #[must_use]
+    pub fn progress(&self) -> Option<f32> {
+        oag_ext_abi::Tracking::decode(self.tracking).progress
+    }
+
+    /// Its place in the field, 1-based, as the HUD shows it.
+    #[must_use]
+    pub fn place(&self) -> u8 {
+        oag_ext_abi::Tracking::decode(self.tracking).place
+    }
+
     /// What it holds.
     #[must_use]
     pub fn pickup(&self) -> Pickup {
@@ -188,6 +203,12 @@ impl<'a> Observation<'a> {
         Track::new(self.track)
     }
 
+    /// The length of one lap, units; 0 when the race has no course.
+    #[must_use]
+    pub fn course_length(&self) -> f32 {
+        Sections::course_length(self.head)
+    }
+
     /// The world tick.
     #[must_use]
     pub fn tick(&self) -> u64 {
@@ -201,7 +222,12 @@ impl<'a> Observation<'a> {
             return None;
         }
         let record = Sections::craft_record(self.records, slot)?;
-        Some(Craft { slot, record })
+        let tracking = Sections::tracking_record(self.records, slot)?;
+        Some(Craft {
+            slot,
+            record,
+            tracking,
+        })
     }
 
     /// Every slot holding a craft, in slot order.

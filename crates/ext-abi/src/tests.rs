@@ -20,7 +20,7 @@ fn slot(index: usize) -> Slot {
 }
 
 /// One of every command, with arguments that touch every field.
-fn every_command() -> [Command; 27] {
+fn every_command() -> [Command; 30] {
     [
         Command::ScaleThrust {
             slot: slot(1),
@@ -134,6 +134,19 @@ fn every_command() -> [Command; 27] {
             slot: slot(4),
             distance: crate::Distance::Units(120.0),
             radius: 8.0,
+        },
+        Command::ScreenFill {
+            slot: slot(5),
+            rgba: Rgba::new(0x10, 0x20, 0x30, 0x40),
+        },
+        Command::FovOffset {
+            slot: slot(6),
+            degrees: 12.5,
+        },
+        Command::FireModEffectAhead {
+            slot: slot(7),
+            index: 3,
+            distance: crate::Distance::Units(100.0),
         },
     ]
 }
@@ -288,6 +301,13 @@ fn layout_fold() -> u64 {
         CRAFT_SHIELD as u32,
         CRAFT_SHIELD_MAX as u32,
         CRAFT_SPEED as u32,
+        COURSE_LENGTH_AT as u32,
+        TRACKING_AT as u32,
+        TRACKING_LEN as u32,
+        TRACKING_PROGRESS as u32,
+        TRACKING_PLACE as u32,
+        TRACKING_FLAGS as u32,
+        u32::from(TRACKING_FIXED),
         u32::from(CRAFT_PERSON),
         u32::from(CRAFT_FIRE_HELD),
         u32::from(CRAFT_RACING),
@@ -307,6 +327,7 @@ fn layout_fold() -> u64 {
         u32::from(crate::MAX_TRANSIT_TICKS),
         crate::MAX_SPEED_FACTOR.to_bits(),
         crate::MAX_PROBE_RADIUS.to_bits(),
+        crate::MAX_FOV_OFFSET_DEG.to_bits(),
         crate::motion::EXIT_FACTOR_STEPS.to_bits(),
         u32::from(crate::CRAFT_IN_TRANSIT),
     ];
@@ -347,15 +368,19 @@ fn layout_fold() -> u64 {
     let commands = every_command().into_iter().flat_map(|c| c.encode_pooled(0));
     let events = every_event().into_iter().flat_map(Event::encode);
     let craft = a_craft().encode();
-    fnv(consts
-        .into_iter()
-        .chain(codes)
-        .chain(commands.chain(events).chain(craft).map(u32::from)))
+    let tracking = a_tracking().encode();
+    fnv(consts.into_iter().chain(codes).chain(
+        commands
+            .chain(events)
+            .chain(craft)
+            .chain(tracking)
+            .map(u32::from),
+    ))
 }
 
 /// The revision and the layout it names. The ABI changes in place before release (no
 /// revision bump); the fold is recorded again with each layout edit.
-const REVISION_AND_FOLD: (u32, u64) = (3, 0xaf74_334f_e369_27e1);
+const REVISION_AND_FOLD: (u32, u64) = (3, 0xe800_a1ec_56da_28a2);
 
 #[test]
 fn the_layout_is_the_revision_it_says() {
@@ -518,6 +543,32 @@ fn a_record_breaking_its_own_rules_is_malformed() {
     assert_eq!(Command::decode(&unknown), Err(Malformed::Kind(200)));
 }
 
+fn a_tracking() -> Tracking {
+    Tracking {
+        progress: Some(-12.5),
+        place: 3,
+    }
+}
+
+#[test]
+fn a_negative_progress_is_a_fix_and_no_fix_is_a_flag_not_a_number() {
+    let grid = Tracking {
+        progress: Some(-40.0),
+        place: 8,
+    };
+    assert_eq!(Tracking::decode(&grid.encode()), grid);
+    let none = Tracking {
+        progress: None,
+        place: 1,
+    };
+    assert_eq!(Tracking::decode(&none.encode()), none);
+    assert_eq!(
+        Tracking::decode(&Tracking::default().encode()).progress,
+        None,
+        "an empty record has no fix"
+    );
+}
+
 #[test]
 fn the_observation_reads_back_through_the_guest_sections() {
     let mut io = [0; IO_LEN];
@@ -528,6 +579,10 @@ fn the_observation_reads_back_through_the_guest_sections() {
         0b11,
         &every_event(),
         &crafts,
+        &Course {
+            length: 5120.0,
+            tracking: &[Tracking::default(), a_tracking()],
+        },
         &[9, 8, 7],
     );
     let sections = Sections::split(&mut io);
@@ -541,6 +596,10 @@ fn the_observation_reads_back_through_the_guest_sections() {
     assert_eq!(Sections::event_count(sections.head), 11);
     let craft = Sections::craft_record(sections.crafts, slot(1)).map(Craft::decode);
     assert_eq!(craft, Some(a_craft()));
+    assert_eq!(Sections::course_length(sections.head), 5120.0);
+    let tracking = |s| Sections::tracking_record(sections.crafts, slot(s)).map(Tracking::decode);
+    assert_eq!(tracking(1), Some(a_tracking()));
+    assert_eq!(tracking(0), Some(Tracking::default()), "no fix, no place");
     Sections::put_command(sections.reply, 0, &every_command()[4]);
     Sections::put_count(sections.reply, 1);
     assert_eq!(reply_count(&io), Ok(1));
@@ -853,7 +912,7 @@ fn a_channel_name_is_a_mod_id_a_slash_and_a_name() {
 
 /// The bytes of one of every command, in `every_command`'s order, as hex. Spelled out so a
 /// layout change shows in the diff, and so a refactor of the encoder is held to today's bytes.
-const COMMAND_BYTES: [&str; 27] = [
+const COMMAND_BYTES: [&str; 30] = [
     "010100000000803e00000000",
     "02020000000060c000000000",
     "030300000000000000000000",
@@ -881,6 +940,9 @@ const COMMAND_BYTES: [&str; 27] = [
     "1b023c000000004001002823",
     "1c0300000000003f00000000",
     "1d0400000000f04200000041",
+    "1e0500000000000010203040",
+    "1f0600000000484100000000",
+    "200703000000c84200000000",
 ];
 
 /// The bytes of one of every event, in `every_event`'s order, as hex.
@@ -1008,4 +1070,46 @@ fn a_motion_command_out_of_its_ranges_is_malformed() {
     let mut unknown = transit(60, crate::Distance::Units(10.0), 1.0).encode();
     unknown[COMMAND_WORD] = 7;
     assert!(Command::decode(&unknown).is_err(), "distance kind 7");
+}
+
+/// The view commands' own ranges: each out-of-range record is malformed, never clamped.
+#[test]
+fn a_scene_command_out_of_its_ranges_is_malformed() {
+    let bad = [
+        Command::FovOffset {
+            slot: slot(1),
+            degrees: crate::MAX_FOV_OFFSET_DEG * 1.5,
+        },
+        Command::FovOffset {
+            slot: slot(1),
+            degrees: f32::NAN,
+        },
+        Command::FireModEffectAhead {
+            slot: slot(1),
+            index: 0,
+            distance: crate::Distance::Units(0.0),
+        },
+        Command::FireModEffectAhead {
+            slot: slot(1),
+            index: 0,
+            distance: crate::Distance::Units(f32::NAN),
+        },
+    ];
+    for command in bad {
+        assert!(
+            matches!(
+                Command::decode(&command.encode()),
+                Err(Malformed::Scene { .. })
+            ),
+            "{command:?}"
+        );
+    }
+    let mut unknown = Command::FireModEffectAhead {
+        slot: slot(1),
+        index: 0,
+        distance: crate::Distance::Units(10.0),
+    }
+    .encode();
+    unknown[COMMAND_WORD] = 9;
+    assert!(Command::decode(&unknown).is_err(), "distance kind 9");
 }

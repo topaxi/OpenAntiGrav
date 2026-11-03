@@ -207,6 +207,7 @@ fn an_extension_table_names_its_rules_module_and_opens_nothing() {
             api: 1,
             memory_pages: 16,
             state_bytes: 64,
+            drives_ai_pickup: false,
             rules: Some(Rules {
                 module: "ext/curse.wasm".to_string()
             }),
@@ -486,4 +487,44 @@ fn a_manifest_pickup_reads_its_pad_odds_and_refuses_a_bad_weight() {
     assert_eq!(rows[1].class.as_deref(), Some("Speed"));
     let bad = with("[[pickup.odds]]\nai = -1.0\nhuman = 1.0\nfront = 0.0\nback = 0.0\n");
     assert!(bad.unwrap_err().to_string().contains("pickup.odds"));
+}
+
+#[test]
+fn a_manifest_is_on_by_default_and_default_enabled_false_ships_it_off() {
+    let dir = scratch("default-enabled");
+    let on = dir.join("on");
+    let off = dir.join("off");
+    std::fs::create_dir_all(&on).unwrap();
+    std::fs::create_dir_all(&off).unwrap();
+    folder(&on, MANIFEST_TEXT);
+    folder(
+        &off,
+        &MANIFEST_TEXT.replace("[mod]\n", "[mod]\ndefault-enabled = false\n"),
+    );
+    assert!(Mod::open(&on).unwrap().manifest.default_enabled);
+    assert!(!Mod::open(&off).unwrap().manifest.default_enabled);
+}
+
+#[test]
+fn a_pickup_title_row_overrides_the_icon_and_colour_it_names_and_inherits_the_rest() {
+    let text = format!(
+        "{MANIFEST_TEXT}\n[icons]\nmain = \"icon.png\"\nhd = \"icon.png\"\n\n[pickup]\nicon = {{ mod = \"main\" }}\ncolour = {{ rgba = \"11223344\" }}\n\n[pickup.titles.wipeout-hd]\nicon = {{ mod = \"hd\" }}\n\n[pickup.titles.wipeout-pure]\ncolour = {{ title = \"shield\" }}\n"
+    );
+    let manifest = Manifest::parse(&text, &|path| path == "icon.png").unwrap();
+    let icon = |title| manifest.pickup_for(title).map(|look| look.icon.clone());
+    use oag_tables::pickup_look::{Colour, Icon};
+    assert_eq!(icon("wipeout-pulse"), Some(Icon::Mod("main".into())));
+    assert_eq!(icon("wipeout-hd"), Some(Icon::Mod("hd".into())));
+    assert_eq!(
+        manifest.pickup_for("wipeout-hd").unwrap().colour,
+        Colour::Rgba([0x11, 0x22, 0x33, 0x44]),
+        "the colour it leaves out is the base's"
+    );
+    assert_eq!(icon("wipeout-pure"), Some(Icon::Mod("main".into())));
+    assert!(matches!(
+        manifest.pickup_for("wipeout-pure").unwrap().colour,
+        Colour::Title(_)
+    ));
+    let missing = text.replace("icon = { mod = \"hd\" }", "icon = { mod = \"nope\" }");
+    assert!(Manifest::parse(&missing, &|path| path == "icon.png").is_err());
 }

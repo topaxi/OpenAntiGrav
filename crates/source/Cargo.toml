@@ -30,6 +30,7 @@ zip = { version = "9.0.5", default-features = false, features = ["deflate"] }
 [dev-dependencies]
 oag-tables.workspace = true
 oag-testdata.workspace = true
+oag-weapons.workspace = true
 
 [lints]
 workspace = true

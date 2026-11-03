@@ -215,6 +215,9 @@ returns `Err(Refused)` where the host would fault:
 | `scale-pad{slot, factor}` | `ScaleSlotPads` | `scale_slot_pads(&craft, factor)` | a factor outside `[0, 2]` or not finite; a second for the craft this tick |
 | `play-cue{slot, cue}` | `PlayCue` | `play_cue(&craft, cue)` | |
 | `fire-effect{slot, effect}` | `FireEffect` | `fire_effect(&craft, effect)` | a 17th `fire-effect` or `fire-mod-effect` in one tick (`Refused::Effects`; the host faults the module) |
+| `screen-fill{slot, rgba}` (30) | `ScreenFill` | `screen_fill(&craft, rgba)` | |
+| `fov-offset{slot, degrees}` (31) | `FovOffset` | `fov_offset(&craft, degrees)` | `degrees` outside `[-30, 30]` or not finite |
+| `fire-mod-effect-ahead{slot, index, distance}` (32) | `FireModEffectAhead` | `fire_mod_effect_ahead(&craft, index, distance)` | a distance the host would not accept; counts toward the 16 effects a tick |
 | `hud-tint{slot, element, rgba}` | `HudTint` | `hud_tint(&craft, element, rgba)` | the `Pickup` element (`Refused::PickupTint`; use `pickup_look`); the host decodes one as malformed |
 | `pickup-look{slot, icon, colour}` (22) | `PickupLook` | `pickup_look(&craft, icon, colour)` | |
 | `hud-shake{slot, element, amplitude}` | `HudShake` | `hud_shake(&craft, element, amplitude)` | `amplitude` outside `[0, 16]` or not finite |
@@ -327,7 +330,8 @@ the backstop for a guest written without the SDK.
 - **`pickup-fire{slot}` / `pickup-absorbed{slot}`**: raised in `Race::spend_pickup`
   (`crates/raceplay/src/weapons.rs`, a person's fire or absorb press) and
   `Race::spend_opponent_pickup` (`crates/raceplay/src/field/opponent_weapons.rs`, the
-  driver's fire wherever the Turbo's gate passes; it never absorbs) for a slot holding
+  driver's fire wherever the Turbo's gate passes; it never absorbs, and raises nothing
+  when the mod's `[extension] drives_ai_pickup` is set) for a slot holding
   the mod's own pickup (`Weapon::Extension`). Delivered at the same tick's call (phase
   2 is before C).
 - **`speed-pad{slot, pad}`** / **`weapon-pad{slot, pad}`**: raised at the entry edge

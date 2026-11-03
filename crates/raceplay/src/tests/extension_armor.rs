@@ -43,6 +43,7 @@ fn source(id: &str, body: &str) -> Source {
         api: 1,
         memory_pages: 1,
         state_bytes: 32,
+        drives_ai_pickup: false,
         scope: Scope::Rules,
         read: Arc::new(move || Ok(wasm.clone())),
         strings: Arc::new(|_| Default::default()),
@@ -50,6 +51,7 @@ fn source(id: &str, body: &str) -> Source {
         effects: Vec::new(),
         files: Arc::new(|_| Err("no files".into())),
         pickup: Some(crate::extension_pickup::a_look()),
+        pickup_titles: Vec::new(),
         pickup_odds: Vec::new(),
         channels: crate::extensions::Declared::default(),
     }

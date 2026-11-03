@@ -27,7 +27,7 @@ use pipewire::node::Node;
 use pipewire::types::ObjectType;
 
 use super::Route;
-use super::graph::{DeviceRoute, Graph, Sink};
+use super::graph::{Announcer, DeviceRoute, Graph, Sink};
 
 /// `SPA_PARAM_ROUTE_*` keys and `SPA_DIRECTION_OUTPUT` (`spa/param/route.h`).
 const ROUTE_DIRECTION: u32 = 2;
@@ -98,16 +98,19 @@ struct Bound {
 
 struct State {
     graph: RefCell<Graph>,
-    sent: RefCell<Option<Route>>,
+    announcer: RefCell<Announcer>,
     bound: RefCell<HashMap<u32, Bound>>,
     tx: mpsc::Sender<Route>,
 }
 
 impl State {
     fn publish(&self) {
-        let route = self.graph.borrow().route();
-        if self.sent.borrow().as_ref() != Some(&route) {
-            *self.sent.borrow_mut() = Some(route.clone());
+        let route = self.announcer.borrow_mut().publish(&self.graph.borrow());
+        self.send(route);
+    }
+
+    fn send(&self, route: Option<Route>) {
+        if let Some(route) = route {
             let _ = self.tx.send(route);
         }
     }
@@ -123,6 +126,12 @@ fn run(tx: &mpsc::Sender<Route>, quit_rx: pipewire::channel::Receiver<()>) -> an
         let main_loop = main_loop.clone();
         move |()| main_loop.quit()
     });
+    let state = Rc::new(State {
+        graph: RefCell::new(Graph::default()),
+        announcer: RefCell::new(Announcer::new()),
+        bound: RefCell::new(HashMap::new()),
+        tx: tx.clone(),
+    });
     let lost = Rc::new(RefCell::new(false));
     let _core_listener = core
         .add_listener_local()
@@ -137,14 +146,29 @@ fn run(tx: &mpsc::Sender<Route>, quit_rx: pipewire::channel::Receiver<()>) -> an
                 }
             }
         })
+        .done({
+            let core = core.clone();
+            let state = Rc::clone(&state);
+            move |id, _seq| {
+                if id != pipewire::core::PW_ID_CORE || state.announcer.borrow().settled() {
+                    return;
+                }
+                let route = state
+                    .announcer
+                    .borrow_mut()
+                    .round_done(&state.graph.borrow());
+                if !state.announcer.borrow().settled() && core.sync(0).is_err() {
+                    let route = state
+                        .announcer
+                        .borrow_mut()
+                        .settle_now(&state.graph.borrow());
+                    state.send(route);
+                }
+                state.send(route);
+            }
+        })
         .register();
 
-    let state = Rc::new(State {
-        graph: RefCell::new(Graph::default()),
-        sent: RefCell::new(None),
-        bound: RefCell::new(HashMap::new()),
-        tx: tx.clone(),
-    });
     let _registry_listener = registry
         .add_listener_local()
         .global({
@@ -255,6 +279,15 @@ fn run(tx: &mpsc::Sender<Route>, quit_rx: pipewire::channel::Receiver<()>) -> an
         })
         .register();
 
+    // The barrier after the registry's first burst: nothing is announced
+    // before the two roundtrips it queues have landed.
+    if core.sync(0).is_err() {
+        let route = state
+            .announcer
+            .borrow_mut()
+            .settle_now(&state.graph.borrow());
+        state.send(route);
+    }
     main_loop.run();
     state.bound.borrow_mut().clear();
     if *lost.borrow() {

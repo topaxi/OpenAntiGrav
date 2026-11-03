@@ -734,6 +734,7 @@ impl Race {
         let authored = setting.apply(widened_deg.to_radians());
         finish_vertical_fov(
             authored,
+            self.extension_fov_offset(self.player_slot()),
             boost_kick,
             self.view.boost_fov_kick.gain(),
             aspect,
@@ -749,7 +750,20 @@ impl Race {
 /// input untouched rather than through `atan(tan(x))`, for the reason `Fov::apply` gives:
 /// every capture taken before this effect existed has to stay bit-identical.
 #[cfg(feature = "view")]
-pub(super) fn finish_vertical_fov(authored: f32, kick: f32, gain: f32, aspect: f32) -> f32 {
+pub(super) fn finish_vertical_fov(
+    authored: f32,
+    offset_deg: f32,
+    kick: f32,
+    gain: f32,
+    aspect: f32,
+) -> f32 {
+    // A module's `fov-offset`: zero skips the arithmetic, so a race with none is bit-identical.
+    let authored = if offset_deg == 0.0 {
+        authored
+    } else {
+        (authored + offset_deg.to_radians())
+            .clamp(FOV_GUARD_DEG.0.to_radians(), FOV_GUARD_DEG.1.to_radians())
+    };
     let kicked = if kick == 0.0 {
         authored
     } else {

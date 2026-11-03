@@ -137,7 +137,7 @@ pub(super) fn menu_page(
         Some((page, row)) => (page, Some(row)),
         None => (page, None),
     };
-    let loaded = crate::mods::Mods::load(&settings.mods.disabled)?;
+    let loaded = crate::mods::Mods::load(&settings.mods)?;
     let built = loaded
         .build_with_strings(
             oag_ui::menu::BUILT_IN,

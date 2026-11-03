@@ -445,7 +445,7 @@ impl Pending {
 pub(crate) fn definition(
     cli: &Cli,
     language: Option<&str>,
-    disabled: &std::collections::BTreeSet<String>,
+    switches: &oag_game::settings::Mods,
 ) -> Result<(menu::Definition, MenuSource)> {
     match cli.menu_args.menu.as_deref() {
         Some(path) => {
@@ -457,7 +457,7 @@ pub(crate) fn definition(
             Ok((tree, MenuSource::Custom))
         }
         None => {
-            let mods = oag_game::mods::Mods::load(disabled)?;
+            let mods = oag_game::mods::Mods::load(switches)?;
             let built = mods
                 .build(menu::BUILT_IN, language, None)
                 .context("building the menu definition")?;

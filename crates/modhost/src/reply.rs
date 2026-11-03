@@ -139,7 +139,9 @@ pub(crate) fn read(
                     )));
                 }
             }
-            Command::FireEffect { .. } | Command::FireModEffect { .. } => {
+            Command::FireEffect { .. }
+            | Command::FireModEffect { .. }
+            | Command::FireModEffectAhead { .. } => {
                 effects_seen += 1;
                 if effects_seen > oag_ext_abi::MAX_FIRE_EFFECTS_PER_TICK {
                     return Err(Fault::Reply(format!(
@@ -183,6 +185,8 @@ pub(crate) fn read(
             | Command::SetWeather { .. }
             | Command::SetSun { .. }
             | Command::GradeSky { .. }
+            | Command::ScreenFill { .. }
+            | Command::FovOffset { .. }
             | Command::Emit { .. } => {}
         }
         commands.push(command);

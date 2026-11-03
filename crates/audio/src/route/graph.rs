@@ -141,5 +141,59 @@ impl Graph {
     }
 }
 
+/// Decides when a [`Route`] is worth sending. The registry announces its
+/// objects one by one, so the graph passes through half-built answers (a sink
+/// with no route yet reads as [`RouteKind::Unknown`]) before the real one. The
+/// announcer says nothing until [`Self::SETTLE_ROUNDS`] server roundtrips have
+/// completed, then sends the graph's answer and afterwards every change.
+#[derive(Debug)]
+pub(super) struct Announcer {
+    rounds_left: u8,
+    sent: Option<Route>,
+}
+
+impl Announcer {
+    /// The first roundtrip delivers the registry's globals and the binds'
+    /// requests; the second delivers the bound objects' `info` and `Route`
+    /// replies.
+    pub const SETTLE_ROUNDS: u8 = 2;
+
+    pub fn new() -> Self {
+        Self {
+            rounds_left: Self::SETTLE_ROUNDS,
+            sent: None,
+        }
+    }
+
+    pub fn settled(&self) -> bool {
+        self.rounds_left == 0
+    }
+
+    /// A roundtrip completed. Returns the route to send when that settles the
+    /// startup.
+    pub fn round_done(&mut self, graph: &Graph) -> Option<Route> {
+        self.rounds_left = self.rounds_left.saturating_sub(1);
+        self.publish(graph)
+    }
+
+    /// Gives up waiting (the roundtrip could not be requested).
+    pub fn settle_now(&mut self, graph: &Graph) -> Option<Route> {
+        self.rounds_left = 0;
+        self.publish(graph)
+    }
+
+    /// The route to send now: nothing while settling, then only a change.
+    pub fn publish(&mut self, graph: &Graph) -> Option<Route> {
+        if !self.settled() {
+            return None;
+        }
+        let route = graph.route();
+        (self.sent.as_ref() != Some(&route)).then(|| {
+            self.sent = Some(route.clone());
+            route
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests;

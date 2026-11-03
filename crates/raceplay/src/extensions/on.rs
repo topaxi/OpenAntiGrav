@@ -14,6 +14,8 @@ pub(super) struct Slot {
     sender: u32,
     /// The channels its `emit` may name.
     publishes: Vec<(u32, String)>,
+    /// `[extension] drives_ai_pickup`.
+    drives_ai_pickup: bool,
     module: Module,
     pub(super) blob: Vec<u8>,
     faulted: Option<(u64, String)>,
@@ -56,7 +58,7 @@ pub(super) struct On {
     /// owner turns it back into.
     from_roll: u32,
     /// `pickup-fire` / `pickup-absorbed` raised since the last call, one bit a slot.
-    fires: u32,
+    pub(super) fires: u32,
     absorbs: u32,
     /// The `mod` events raised since the last call (the modules' `emit`s and the track's
     /// triggers'), delivered at the next one: race state, hashed.
@@ -94,6 +96,10 @@ pub(super) struct On {
     /// Each module's `[pickup]`, in module order.
     pickups: Vec<Option<oag_tables::pickup_look::PickupLook>>,
     pub(super) effects: Vec<(usize, crate::extension_effects::Fired)>,
+    /// Each slot's `screen-fill` this tick (the later module wins) and `fov-offset` this
+    /// tick (modules add): outputs, never hashed.
+    pub(super) fill: [Option<oag_ext_abi::Rgba>; oag_gameplay::MAX_SHIPS],
+    pub(super) fov: [f32; oag_gameplay::MAX_SHIPS],
     /// Events dropped past a cap, counted for the report: an output, never hashed.
     pub(super) drops: Drops,
     /// The race-wide outputs of this tick.
@@ -234,6 +240,7 @@ impl On {
         region: super::track::Region,
         strings: Vec<super::Strings>,
         pickups: Vec<Option<oag_tables::pickup_look::PickupLook>>,
+        drives_ai: Vec<bool>,
         publishes: Vec<Vec<(u32, String)>>,
         odds: Option<(usize, Vec<oag_tables::pickup_look::OddsRow>, String)>,
     ) -> Self {
@@ -244,10 +251,12 @@ impl On {
             slots: modules
                 .into_iter()
                 .zip(publishes)
-                .map(|((mod_id, module), publishes)| Slot {
+                .zip(drives_ai)
+                .map(|(((mod_id, module), publishes), drives_ai_pickup)| Slot {
                     blob: vec![0; module.limits().state_bytes as usize],
                     sender: oag_ext_abi::channel_key(&mod_id),
                     publishes,
+                    drives_ai_pickup,
                     mod_id,
                     module,
                     faulted: None,
@@ -280,6 +289,8 @@ impl On {
             strings,
             pickups,
             effects: Vec::new(),
+            fill: [None; oag_gameplay::MAX_SHIPS],
+            fov: [0.0; oag_gameplay::MAX_SHIPS],
             drops: Drops::default(),
             sky: super::Sky::default(),
             transit_ends: 0,
@@ -346,6 +357,36 @@ impl On {
             .enumerate()
             .filter(|(_, b)| sweep.iter().any(|p| b.contains(p.to_array())))
             .fold(0, |mask, (i, _)| mask | 1 << i);
+    }
+
+    /// The module that owns the mod pickup decides when an AI craft uses it: the engine
+    /// raises no `pickup-fire` for one.
+    pub(super) fn guest_drives_ai_pickup(&self) -> bool {
+        self.owner
+            .checked_sub(1)
+            .and_then(|module| self.slots.get(usize::from(module)))
+            .is_some_and(|slot| slot.drives_ai_pickup)
+    }
+
+    /// Queues module `module`'s own effect `index` for the view at `at`.
+    pub(super) fn fire_effect_at(
+        &mut self,
+        module: usize,
+        slot: usize,
+        index: u16,
+        at: oag_core::math::Vec3,
+        up: oag_core::math::Vec3,
+    ) {
+        let mod_id = self.slots[module].mod_id.clone();
+        self.effects.push((
+            slot,
+            crate::extension_effects::Fired::OwnAt {
+                mod_id,
+                index,
+                at,
+                up,
+            },
+        ));
     }
 
     pub(super) fn pickup_used(&mut self, slot: usize, absorbed: bool) {
@@ -523,10 +564,29 @@ fn crafts(sim: &RaceSim, inputs: &oag_gameplay::PlayerInputs) -> Vec<oag_ext_abi
         .collect()
 }
 
+/// Each slot's distance along the circuit and place. The place is the one the HUD shows
+/// (`RaceSim::places`); an empty slot has none.
+fn tracking(sim: &RaceSim) -> Vec<oag_ext_abi::Tracking> {
+    let places = sim.places();
+    sim.world
+        .ships
+        .iter()
+        .zip(places)
+        .map(|(ship, place)| oag_ext_abi::Tracking {
+            progress: ship.standing.progress,
+            place: if ship.active { place } else { 0 },
+        })
+        .collect()
+}
+
 /// `give-pickup`, `clear-pickup` and `pickup-roll` from module `index`, already checked
 /// by [`refusal`]: the first module to send one owns the mod pickup kind for the race. A
 /// race without weapons gives nothing and rolls nothing.
 fn pickup_command(sim: &mut RaceSim, index: usize, command: Command) {
+    let may = match command {
+        Command::ClearPickup { slot } => sim.may_use_pickup(slot.index()),
+        _ => true,
+    };
     let on = &mut sim.extensions.on;
     on.owner = index as u8 + 1;
     if !sim.weapons_on {
@@ -543,6 +603,8 @@ fn pickup_command(sim: &mut RaceSim, index: usize, command: Command) {
                 on.from_roll &= !(1 << slot.index());
             }
         }
+        // A guest never uses a pickup for a craft that may not (`Race::may_use_pickup`).
+        Command::ClearPickup { .. } if !may => {}
         Command::ClearPickup { slot } => {
             let pickup = &mut sim.world.ships[slot.index()].pickup;
             if pickup.weapon == Some(extension) {
@@ -734,6 +796,7 @@ pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs, trans
     }
     sim.extensions.on.transit_ends = transited;
     let crafts = crafts(sim, inputs);
+    let tracking = tracking(sim);
     let tick = sim.world.tick;
     let active = sim
         .world
@@ -769,12 +832,18 @@ pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs, trans
     // This tick's alone: a tick that draws nothing (a replayed one, a server's) drops
     // them rather than piling them up.
     on.effects.clear();
+    on.fill = [None; oag_gameplay::MAX_SHIPS];
+    on.fov = [0.0; oag_gameplay::MAX_SHIPS];
     let region = on.region.clone();
     let observation = Observation {
         tick,
         active,
         events: &events,
         crafts: &crafts,
+        course: oag_ext_abi::Course {
+            length: sim.course.as_ref().map_or(0.0, oag_race::Course::length),
+            tracking: &tracking,
+        },
         track: &region.bytes,
         speed_pads: region.speed_pads,
         routes: region.routes,
@@ -876,6 +945,14 @@ fn apply(sim: &mut RaceSim, index: usize, command: Command) {
                 .effects
                 .push((slot.index(), Fired::Own { mod_id, index: own }));
         }
+        Command::ScreenFill { slot, rgba } => sim.extensions.on.fill[slot.index()] = Some(rgba),
+        Command::FovOffset { slot, degrees } => {
+            let fov = &mut sim.extensions.on.fov[slot.index()];
+            *fov = (*fov + degrees).clamp(
+                -oag_ext_abi::MAX_FOV_OFFSET_DEG,
+                oag_ext_abi::MAX_FOV_OFFSET_DEG,
+            );
+        }
         Command::PickupLook { .. }
         | Command::HudTint { .. }
         | Command::HudShake { .. }
@@ -899,11 +976,14 @@ fn apply(sim: &mut RaceSim, index: usize, command: Command) {
             sim.extensions.on.prefer.set(slot.index(), route);
         }
         // Once, at the call: two modules compose.
+        Command::ScaleSpeed { slot, .. } if !sim.may_use_pickup(slot.index()) => {}
         Command::ScaleSpeed { slot, factor } => {
             sim.world.ships[slot.index()].physics.body.linear_velocity *= factor;
         }
         // Run by `Race` once every module's commands have landed (`crate::transit`).
-        Command::Transit { .. } | Command::ProbeClearance { .. } => {
+        Command::Transit { .. }
+        | Command::ProbeClearance { .. }
+        | Command::FireModEffectAhead { .. } => {
             sim.extensions.on.motion.push((index, command));
         }
     }

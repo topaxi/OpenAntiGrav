@@ -38,11 +38,12 @@ impl Session {
         let (Some(shell), Stage::Menu(stage)) = (self.shell.as_ref(), &self.stage) else {
             return;
         };
-        let Some(id) = mods::selected(&stage.menu, &shell.mods).map(|mod_| mod_.id.clone())
+        let Some((id, default)) = mods::selected(&stage.menu, &shell.mods)
+            .map(|mod_| (mod_.id.clone(), mod_.default_enabled))
         else {
             return;
         };
-        if !mods::switch(&mut self.settings.mods.disabled, &id, on) {
+        if !mods::switch(&mut self.settings.mods, &id, default, on) {
             self.resupply_mod_switch();
             return;
         }
@@ -63,7 +64,7 @@ impl Session {
             info!("a --menu file has no mods to rebuild; the switch is saved");
             return;
         };
-        let built = mods::Mods::load(&self.settings.mods.disabled).and_then(|loaded| {
+        let built = mods::Mods::load(&self.settings.mods).and_then(|loaded| {
             crate::prepare::mods_menu(
                 &loaded,
                 self.settings.language.as_deref(),

@@ -74,7 +74,7 @@ added to the engine and the ABI, each its own commit with the vanilla fold uncha
 | `fire-effect{slot, effect}` | output | The title's own `CollisionSpark` or `HitSpark` `.pob`, at the hull's back end, drawn by the view half; a title without it draws nothing. A module may send at most `MAX_FIRE_EFFECTS_PER_TICK` = **16** (`MAX_CRAFTS`: two for each of the grid's eight craft) `fire-effect`s of either kind a tick (**chosen, not measured**); the 17th faults the module, because a full stage evicts the title's own one-shot sparks. SDK: `Refused::Effects` |
 | `fire-effect{slot, own index}` | output | The sending mod's own particle effect (`[effects]` of its manifest, `docs/formats/mod-effect.md`), arg bit 15 set, at the hull's back end; one that did not load draws nothing |
 | `hud-tint{slot, element, rgba}` | output | Recolours a HUD element of that slot. `Pickup` is **not** tintable any more: a `hud-tint` of it is a malformed record (`pickup-look` colours the pickup). Elements are title-agnostic (`Speed`, `Thrust`, `Energy`, `Pickup`, `Position`, `Lap`, `Time`) and `oag_hud::ext_draws::element_of` maps each to the title's widgets; an element the title has no widget for draws nothing |
-| `pickup-look{slot, icon, colour}` | output | Command 22. The look of that slot's held mod pickup: `icon` is `{title: weapon}` (the title's own icon sprite for the weapon; a title with none draws none) or `{mod: name}` (a PNG of the mod's `[icons]`), `colour` is `{title: weapon}` (the title's own backdrop row for the weapon: Pulse's recovered table, HD's and Omega's own) or `{rgba}` (a colour of the mod's own). Re-sent each tick it should hold; with none sent the manifest's `[pickup]` is the look, and the last look is kept while the pickup fades out after use. The title's fade-in, overshoot, size pulse, hold and fade-out (Pulse, HD, Omega) play on any look. **Per title:** Pulse, HD and Omega draw both colour kinds; **Pure has no backdrop widget, so both colour kinds draw nothing there** (its icon is the title's model for the weapon, or nothing for a mod icon); 2048 has no backdrop colour table, so its backdrop stays as authored and a `rgba` or title colour draws nothing there (its icon goes through the UV table, a mod icon is fitted inside `PickupBgFrame`). A mod icon is fitted, aspect kept, in the slot the title's weapon icons share (**chosen, not measured**). An output: drawn, never hashed |
+| `pickup-look{slot, icon, colour}` | output | Command 22. The look of that slot's held mod pickup: `icon` is `{title: weapon}` (the title's own icon sprite for the weapon; a title with none draws none) or `{mod: name}` (a PNG of the mod's `[icons]`), `colour` is `{title: weapon}` (the title's own backdrop row for the weapon: Pulse's recovered table, HD's and Omega's own) or `{rgba}` (a colour of the mod's own). Re-sent each tick it should hold; with none sent the manifest's `[pickup]` is the look, and the last look is kept while the pickup fades out after use. The title's fade-in, overshoot, size pulse, hold and fade-out (Pulse, HD, Omega) play on any look. **Per title:** Pulse, HD and Omega draw both colour kinds; **Pure has no backdrop widget, so both colour kinds draw nothing there** (its icon is the title's model for the weapon, or nothing for a mod icon); 2048 has no backdrop colour table, so its backdrop stays as authored and a `rgba` or title colour draws nothing there (its icon goes through the UV table, a mod icon is fitted inside `PickupBgFrame`). A mod icon is scaled, aspect kept, to the box the title's own Turbo glyph fills and centred on it: the loader measures the PNG's drawn pixels (alpha above 16, so a margin never counts) and the HUD reads the title's glyph off the HUD sheet (alpha above 32 in the Turbo icon's own region; for 2048 the Turbo row of its UV table, centred in `PickupBgFrame`), then both are shrunk to the backdrop frame if they would not fit it (**chosen, not measured**; where the title's glyph cannot be read the art is drawn at its own size on the frame). A title with a different look per title names it in `[pickup.titles.<title>]` (below). An output: drawn, never hashed |
 | `hud-shake{slot, element, amplitude}` | output | Jitters the element's widgets by up to `amplitude` HUD pixels (at most 16) this tick. The offset is an integer hash of tick, slot and element, never zero while `amplitude` is above 0 (chosen, not measured) |
 | `hud-bar-extra{slot, element, extra, rgba}` | output | A bar shows `extra` times its value on top: it is rescaled so value x (1 + extra) fills it, the base share keeps the bar's colour and the added share (`extra / (1 + extra)` of the fill, 47 % at 0.9) blends from the bar's colour into `rgba`. Each element means the same on every title: `Thrust` is the thrust bar and draws nothing on a title without one (Pulse); `Speed` is the speed bar |
 | `hud-text{slot, anchor, x, y, text, rgba, size}` | output | Text in the title's HUD font at one of nine anchors of the HUD layout grid, offset `x`, `y` HUD pixels (12-bit signed), `size` in quarters of the title's own text height. The string is at most 48 bytes, carried in the reply's string pool |
@@ -507,6 +507,7 @@ in `crates/ext-abi/src/tests.rs` is recorded again. The engine side is in
 | `probe-clearance{slot, distance, radius}` | command 29 | Does a half disc of `radius` (up to 64) standing across the track at `distance` fit: width at least `2r` and no geometry on nine rays from its centre to its rim. Answered next call |
 | `clearance{slot, fits, ahead}` | event 12 | The answer, with how far on it probed; a distance that does not resolve answers "does not fit" with `ahead` 0 |
 | `in-transit` | craft flag 16 | The craft is out of the world |
+| `[pickup.titles.<title>]` | manifest | `icon` and/or `colour` (the `[pickup]` shapes) for one title (its lowercased hyphenated name), each over `[pickup]` for what it leaves out: one mod icon per title (`oag_mod::Manifest::pickup_for`, resolved when the race prepares its modules). Pulse's PSP and PS2 pressings are one title here and share a row |
 | `[[pickup.odds]]` | manifest | Rows `{ title?, class?, ai, human, front, back }` inside `[pickup]`: the weapon pads draw the mod's pickup beside the title's weapons at the most specific row's weights (title and class, then title, then class, then neither), so a title with per-class tables (2048's five) gives each its own row. The declaring module owns the mod pickup for the race; a second mod's rows are left out with a load report line; a fault ends the odds |
 
 **A portal on a track, not a weapon.** A track module answers `trigger-enter{slot, n}` with
@@ -524,6 +525,39 @@ undrawn, untargetable, triggers held, out at the asked place and speed; a guest'
 raises `transit-end` and its probe `clearance`; two runs hash alike; `scale-speed`),
 `tests::extension_odds`, `oag_weapons`' `a_mod_pickup_row_is_drawn_at_its_weight_and_absent_changes_nothing`,
 `oag_tables`' `odds_tests`, `oag_mod`'s manifest test, and the byte pins in `oag_ext_abi`.
+
+**An AI craft that holds the mod's pickup.** By default the engine raises `pickup-fire` for it
+wherever the driver would fire a Turbo (the Turbo's own gate, on the Turbo's boost time). A
+mod whose module decides for itself sets `[extension] drives_ai_pickup = true` (default
+`false`): the engine then raises nothing for an AI craft, and the module decides from the
+observation and clears the pickup itself with `clear-pickup` (and does what it fires, such as
+a `transit`). The observation carries what such a decision reads:
+
+| Piece | Kind | What it is |
+| --- | --- | --- |
+| tracking record | observation | A second per-craft record at `TRACKING_AT` (8 bytes a slot, `oag_ext_abi::Tracking`): `progress` (`f32`, units along the circuit within the lap, negative on the grid behind the line), `place` (`u8`, 1-based, 0 for an empty slot; the one ordering the HUD shows, `RaceSim::places`), a flags byte whose bit 0 says `progress` is a fix (no number stands for "no fix yet") |
+| course length | observation | `f32` units at header offset 4 (`COURSE_LENGTH_AT`), 0 without a closed course: `progress / length` is the lap share |
+| `drives_ai_pickup` | manifest | `[extension]`, boolean, default `false` |
+
+The observation is built before the tick's step, so `progress` and `place` are last tick's.
+The mod pickup's fire path for a person is unchanged. Proof: `oag_raceplay`'s
+`tests::extension_ai_pickup` (the default raises `pickup-fire` for an AI craft, the flag
+raises nothing, a module reads the course length and the HUD's place), `oag_ext_abi`'s
+tracking round trip and the recorded fold.
+
+**View outputs for a portal (outputs, never hashed).** Three commands draw into a view; each
+is re-sent every tick it should hold, and a slot with no craft is a fault.
+
+| Piece | Kind | What it is |
+| --- | --- | --- |
+| `screen-fill{slot, rgba}` | command 30 | Washes the slot's own view. It joins `Race::screen_wash`, the one wash the screen flash draws through: the colour times its alpha is added over the picture (an additive wash, as the title's flash is), and beside a running flash the two are summed into the same one pass. A split-screen seat wears only its own slot's fill; the flash stays the player's |
+| `fov-offset{slot, degrees}` | command 31 | Added to the slot's vertical field of view, `[-30, 30]` degrees (`MAX_FOV_OFFSET_DEG`), inside `camera::finish_vertical_fov` after the player's setting and before the boost kick and the aspect fit. Zero skips the arithmetic, so a race with none is bit-identical. Two modules add |
+| `fire-mod-effect-ahead{slot, index, distance}` | command 32 | The sending mod's own effect number `index` (its `[effects]`), played at the middle of the road `distance` ahead of the craft (the same `Distance` and `Race::point_ahead` as `transit`, lifted off the surface as `probe-clearance` lifts its disc). It stands in the world for the effect's own lifetime (up to 600 ticks): a mod PNG as a camera-facing sprite, the half disc of a portal. It is a sprite, not a mesh: a disc that stands across the road and a custom shader are a later piece. Counts toward `MAX_FIRE_EFFECTS_PER_TICK`; a distance that does not resolve, or a road with no spline there, draws nothing |
+
+Proof: `oag_ext_abi`'s byte pins and range tests, `oag_modhost`'s refusal test,
+`oag_raceplay`'s `tests::extension_view` (the fill is its slot's view's alone, beside a flash it
+adds, a zero offset is bit-identical, the effect lands on the road ahead) and the
+`outputter` test (a module's fill and offset leave the state hash alone).
 
 ## Keeping the mod author skill current
 

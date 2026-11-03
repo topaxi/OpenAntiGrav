@@ -52,6 +52,8 @@ impl Race {
             collision,
             handling,
             opponent_handling,
+            weapon_counts,
+            opponent_weapon_counts,
             chase,
             #[cfg(feature = "view")]
             chase_close,
@@ -282,6 +284,7 @@ impl Race {
         let ship = &mut world.ships[0];
         ship.active = true;
         ship.handling = handling;
+        ship.weapon_counts = weapon_counts;
         ship.physics.body.mass = handling.physical.mass;
         ship.physics.body.inertia = inertia;
         ship.physics.hover_rig = rig;
@@ -514,6 +517,11 @@ impl Race {
                 let opponent = &mut world.ships[ship_index];
                 opponent.active = true;
                 opponent.handling = handling;
+                opponent.weapon_counts = opponent_weapon_counts
+                    .get(ship_index)
+                    .copied()
+                    .flatten()
+                    .unwrap_or(weapon_counts);
                 opponent.physics.body.mass = handling.physical.mass;
                 opponent.physics.body.inertia = inertia;
                 opponent.physics.hover_rig = rig;

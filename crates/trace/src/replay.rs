@@ -475,6 +475,7 @@ pub fn replay<R: Raycaster + ?Sized>(
     world.ships[0] = Ship {
         physics: initial_state(first, handling, options.basis, options.angular),
         handling: *handling,
+        weapon_counts: oag_weapons::counts::WeaponCounts::default(),
         segment: 0,
         // Slot 0 is flown by the script, not by a driver, and a replay has no
         // racing line for one to follow anyway.
@@ -718,6 +719,7 @@ where
     world.ships[0] = Ship {
         physics: initial,
         handling: *handling,
+        weapon_counts: oag_weapons::counts::WeaponCounts::default(),
         segment: 0,
         // Slot 0 is flown by the script, not by a driver, and a replay has no
         // racing line for one to follow anyway.

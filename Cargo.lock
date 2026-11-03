@@ -3688,6 +3688,7 @@ dependencies = [
  "oag-tables",
  "oag-testdata",
  "oag-title",
+ "oag-weapons",
  "zip",
 ]
 

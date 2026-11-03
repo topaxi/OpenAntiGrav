@@ -26,6 +26,7 @@ pub fn sources<'a>(mods: impl IntoIterator<Item = &'a oag_mod::Mod>) -> Vec<Sour
                 api: extension.api,
                 memory_pages: extension.memory_pages,
                 state_bytes: extension.state_bytes,
+                drives_ai_pickup: extension.drives_ai_pickup,
                 scope,
                 read: reader(m, module),
                 strings: strings_reader(m),
@@ -43,6 +44,7 @@ pub fn sources<'a>(mods: impl IntoIterator<Item = &'a oag_mod::Mod>) -> Vec<Sour
                     .collect(),
                 files: files_reader(m),
                 pickup: m.manifest.pickup.clone(),
+                pickup_titles: m.manifest.pickup_titles.clone(),
                 pickup_odds: m.manifest.pickup_odds.clone(),
                 channels: oag_raceplay::extensions::Declared {
                     publishes: m.manifest.channels.publishes.clone(),
@@ -124,17 +126,17 @@ fn files_reader(module: &oag_mod::Mod) -> oag_raceplay::extensions::Files {
 }
 
 /// Sets `options.find_extensions` for a race: the load thread searches the mods that are
-/// on (switched off by `disabled`) for rules modules, or none for a race that stays
+/// on (as `switches` has them) for rules modules, or none for a race that stays
 /// `vanilla` (an original campaign, a network race). Nothing is read here.
 pub fn attach(
     options: &mut oag_raceplay::Options,
-    disabled: &std::collections::BTreeSet<String>,
+    switches: &crate::settings::Mods,
     vanilla: bool,
 ) {
     options.find_extensions = (!vanilla).then(|| {
-        let disabled = disabled.clone();
+        let switches = switches.clone();
         oag_raceplay::extensions::Finder(Arc::new(move || {
-            crate::mods::Mods::load(&disabled)
+            crate::mods::Mods::load(&switches)
                 .map(|mods| sources(mods.player()))
                 .map_err(|e| format!("{e:#}"))
         }))

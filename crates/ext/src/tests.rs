@@ -143,7 +143,28 @@ fn the_observation_lists_active_crafts_and_skips_unknown_events() {
         },
         Event::PickupFire { slot: slot(0) },
     ];
-    oag_ext_abi::write_observation(&mut io, 77, 0b101, &events, &crafts, &[]);
+    oag_ext_abi::write_observation(
+        &mut io,
+        77,
+        0b101,
+        &events,
+        &crafts,
+        &oag_ext_abi::Course {
+            length: 4000.0,
+            tracking: &[
+                oag_ext_abi::Tracking {
+                    progress: Some(-30.0),
+                    place: 2,
+                },
+                oag_ext_abi::Tracking::default(),
+                oag_ext_abi::Tracking {
+                    progress: Some(1500.0),
+                    place: 1,
+                },
+            ],
+        },
+        &[],
+    );
     // An event kind from a later revision.
     io[oag_ext_abi::EVENTS_AT + oag_ext_abi::EVENT_KIND] = 200;
     let sections = Sections::split(&mut io);
@@ -152,6 +173,9 @@ fn the_observation_lists_active_crafts_and_skips_unknown_events() {
     let shields: Vec<_> = obs.crafts().map(|c| (c.slot(), c.shield())).collect();
     assert_eq!(shields, [(slot(0), 1.0), (slot(2), 3.0)]);
     assert!(obs.craft(slot(1)).is_none());
+    assert_eq!(obs.course_length(), 4000.0);
+    let tracked: Vec<_> = obs.crafts().map(|c| (c.progress(), c.place())).collect();
+    assert_eq!(tracked, [(Some(-30.0), 2), (Some(1500.0), 1)]);
     let seen: Vec<_> = obs.events().collect();
     assert_eq!(seen, [Event::PickupFire { slot: slot(0) }]);
     assert_eq!(obs.track().speed_pads(), 0);
@@ -169,6 +193,7 @@ fn the_reply_refuses_what_the_host_would_fault_on() {
     let held = Craft {
         slot: slot(2),
         record: &record,
+        tracking: &[0; oag_ext_abi::TRACKING_LEN],
     };
     for bad in [2.5, -0.1, f32::NAN, f32::INFINITY] {
         assert_eq!(reply.scale_thrust(&held, bad), Err(Refused::Range));
@@ -226,9 +251,9 @@ const MAX_COMMANDS_FOR_TEST: usize = oag_ext_abi::MAX_COMMANDS;
 #[test]
 fn a_state_length_other_than_the_blobs_is_a_failed_tick() {
     let mut io = Box::new([0_u8; IO_LEN]);
-    oag_ext_abi::write_observation(&mut io, 0, 0, &[], &[], &[0; 8]);
+    oag_ext_abi::write_observation(&mut io, 0, 0, &[], &[], &Default::default(), &[0; 8]);
     assert_eq!(run::<Probe>(&mut io, &[]), 1);
-    oag_ext_abi::write_observation(&mut io, 0, 0, &[], &[], &[0; 12]);
+    oag_ext_abi::write_observation(&mut io, 0, 0, &[], &[], &Default::default(), &[0; 12]);
     assert_eq!(run::<Probe>(&mut io, &[]), 0);
 }
 
@@ -382,6 +407,7 @@ fn a_guest_draws_text_and_an_icon_and_the_cap_refuses_by_name() {
     let held = Craft {
         slot: slot(1),
         record: &[0; oag_ext_abi::CRAFT_LEN],
+        tracking: &[0; oag_ext_abi::TRACKING_LEN],
     };
     let place = HudPlace {
         anchor: Anchor::Top,
@@ -458,7 +484,15 @@ fn a_guest_finds_a_route_by_a_property_of_a_path_it_drives() {
     };
     let region = track.region();
     let mut io = Box::new([0_u8; IO_LEN]);
-    oag_ext_abi::write_observation(&mut io, 0, 0b1, &[], &[racer(1.0)], &[]);
+    oag_ext_abi::write_observation(
+        &mut io,
+        0,
+        0b1,
+        &[],
+        &[racer(1.0)],
+        &Default::default(),
+        &[],
+    );
     let sections = Sections::split(&mut io);
     let obs = Observation::read(sections.head, sections.crafts, &region);
     let track = obs.track();
@@ -482,6 +516,7 @@ fn a_pickup_look_is_one_record_and_a_mod_icon_rides_the_pool() {
     let held = Craft {
         slot: slot(2),
         record: &record,
+        tracking: &[0; oag_ext_abi::TRACKING_LEN],
     };
     let red = Colour::Rgba(Rgba::new(0xE0, 0x20, 0x20, 0x80));
     assert_eq!(reply.pickup_look(&held, icon::title::TURBO, red), Ok(()));
@@ -581,6 +616,7 @@ fn the_reply_refuses_an_emit_past_the_cap_and_a_non_finite_value() {
     let craft = Craft {
         slot: slot(0),
         record: &record,
+        tracking: &[0; oag_ext_abi::TRACKING_LEN],
     };
     for _ in 0..crate::MAX_EMITS_PER_TICK {
         assert_eq!(reply.emit(&craft, 1, 0.0), Ok(()));
@@ -598,6 +634,7 @@ fn the_reply_refuses_a_fire_effect_past_the_cap_counting_both_kinds() {
     let craft = Craft {
         slot: slot(0),
         record: &record,
+        tracking: &[0; oag_ext_abi::TRACKING_LEN],
     };
     for i in 0..oag_ext_abi::MAX_FIRE_EFFECTS_PER_TICK {
         let sent = if i % 2 == 0 {
@@ -626,6 +663,7 @@ fn the_motion_commands_refuse_what_the_host_would_fault_on() {
     let racing = Craft {
         slot: slot(1),
         record: &racing,
+        tracking: &[0; oag_ext_abi::TRACKING_LEN],
     };
     let out = CraftRecord {
         in_transit: true,
@@ -635,6 +673,7 @@ fn the_motion_commands_refuse_what_the_host_would_fault_on() {
     let out = Craft {
         slot: slot(2),
         record: &out,
+        tracking: &[0; oag_ext_abi::TRACKING_LEN],
     };
     let units = Distance::Seconds(2.0);
     assert_eq!(reply.transit(&out, 60, units, 0.9), Err(Refused::Range));
@@ -662,4 +701,58 @@ fn the_motion_commands_refuse_what_the_host_would_fault_on() {
         Ok(())
     );
     assert_eq!(reply.len(), 3);
+}
+
+#[test]
+fn the_test_harness_hands_a_guest_its_course_and_place() {
+    struct Reader;
+    impl Extension for Reader {
+        type State = u32;
+        fn tick(obs: &Observation<'_>, state: &mut u32, _: &mut Reply<'_>) {
+            let first = obs.craft(slot(1)).expect("the craft is on the grid");
+            *state = obs.course_length() as u32 + u32::from(first.place());
+            assert_eq!(first.progress(), Some(250.0));
+        }
+    }
+    let mut race = crate::test::Race::<Reader>::new()
+        .with_craft(slot(1), racer(1.0))
+        .with_course(3000.0, slot(1), Some(250.0), 3);
+    race.tick();
+    assert_eq!(race.state(), 3003);
+}
+
+#[test]
+fn the_view_commands_refuse_what_the_host_would_fault_on_and_count_the_effect() {
+    use oag_ext_abi::Distance;
+    let mut buffer = [0_u8; 4 + oag_ext_abi::COMMAND_LEN * oag_ext_abi::MAX_COMMANDS];
+    let mut reply = Reply::new(&mut buffer, 0, 0);
+    let record = racer(50.0).encode();
+    let craft = Craft {
+        slot: slot(1),
+        record: &record,
+        tracking: &[0; oag_ext_abi::TRACKING_LEN],
+    };
+    let range = oag_ext_abi::MAX_FOV_OFFSET_DEG;
+    assert_eq!(reply.fov_offset(&craft, range * 2.0), Err(Refused::Range));
+    assert_eq!(reply.fov_offset(&craft, f32::NAN), Err(Refused::Range));
+    assert_eq!(reply.fov_offset(&craft, -range), Ok(()));
+    assert_eq!(
+        reply.screen_fill(&craft, Rgba::new(255, 255, 255, 200)),
+        Ok(())
+    );
+    assert_eq!(
+        reply.fire_mod_effect_ahead(&craft, 0, Distance::Units(0.0)),
+        Err(Refused::Range)
+    );
+    for _ in 0..oag_ext_abi::MAX_FIRE_EFFECTS_PER_TICK {
+        assert_eq!(
+            reply.fire_mod_effect_ahead(&craft, 1, Distance::Units(80.0)),
+            Ok(())
+        );
+    }
+    assert_eq!(
+        reply.fire_mod_effect_ahead(&craft, 1, Distance::Units(80.0)),
+        Err(Refused::Effects),
+        "it counts toward the effect cap"
+    );
 }

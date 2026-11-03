@@ -91,6 +91,9 @@ pub struct Source {
     pub memory_pages: u32,
     /// `[extension] state_bytes`.
     pub state_bytes: u32,
+    /// `[extension] drives_ai_pickup`: the engine raises no `pickup-fire` for an AI craft
+    /// holding the mod pickup; the module decides and clears it itself.
+    pub drives_ai_pickup: bool,
     /// Where it runs.
     pub scope: Scope,
     /// Reads the module.
@@ -108,6 +111,8 @@ pub struct Source {
     /// The mod's `[pickup]`: the look of the pickup it hands out. A mod without one that
     /// sends `give-pickup` or `pickup-roll` is faulted for the race, naming the table.
     pub pickup: Option<oag_tables::pickup_look::PickupLook>,
+    /// The mod's `[pickup.titles.<title>]` looks, each over [`Self::pickup`].
+    pub pickup_titles: Vec<(String, oag_tables::pickup_look::PickupLook)>,
     /// The mod's `[[pickup.odds]]`: the weapon pads draw its pickup with these.
     pub pickup_odds: Vec<oag_tables::pickup_look::OddsRow>,
     /// The mod's `[channels]`.
@@ -123,6 +128,18 @@ pub type Strings = std::collections::BTreeMap<String, String>;
 /// Reads a mod's [`Strings`] for the game's language (`None`: English alone), on the
 /// load thread. A language the mod ships no file for gives English's.
 pub type StringsReader = Arc<dyn Fn(Option<&str>) -> Strings + Send + Sync>;
+
+impl Source {
+    #[cfg(feature = "extensions")]
+    /// The look of the mod's pickup on `title`: its row for the title, else `[pickup]`.
+    fn look_for(&self, title: &str) -> Option<oag_tables::pickup_look::PickupLook> {
+        self.pickup_titles
+            .iter()
+            .find(|(name, _)| name.eq_ignore_ascii_case(title))
+            .map(|(_, look)| look.clone())
+            .or_else(|| self.pickup.clone())
+    }
+}
 
 impl std::fmt::Debug for Source {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -187,6 +204,9 @@ pub struct Prepared {
     /// Each module's mod's `[pickup]`, in module order.
     #[cfg(feature = "extensions")]
     pickups: Vec<Option<oag_tables::pickup_look::PickupLook>>,
+    /// Each module's `[extension] drives_ai_pickup`, in module order.
+    #[cfg(feature = "extensions")]
+    drives_ai: Vec<bool>,
     /// Each module's mod's `[channels]` publishes, in module order.
     #[cfg(feature = "extensions")]
     publishes: Vec<Vec<(u32, String)>>,
@@ -272,6 +292,7 @@ pub fn prepare(
         let mut modules = Vec::new();
         let mut strings = Vec::new();
         let mut pickups = Vec::new();
+        let mut drives_ai = Vec::new();
         let mut publishes = Vec::new();
         let mut odds = None;
         let mut track_module = false;
@@ -340,7 +361,8 @@ pub fn prepare(
                     }
                     modules.push((source.mod_id.clone(), module));
                     strings.push((source.strings)(language));
-                    pickups.push(source.pickup.clone());
+                    pickups.push(source.look_for(title));
+                    drives_ai.push(source.drives_ai_pickup);
                     publishes.push(channel::publishes(&source.channels));
                 }
                 Err(e) => push(report, format!("{label} left out: {e}")),
@@ -352,6 +374,7 @@ pub fn prepare(
             region,
             strings,
             pickups,
+            drives_ai,
             publishes,
             odds,
             beacons,
@@ -387,15 +410,20 @@ pub fn mod_icons(
             for (name, read) in &source.icons {
                 let label = format!("mod {}: icon {name}", source.mod_id);
                 match read().and_then(|bytes| decode_png(&bytes)) {
-                    Ok((width, height, rgba)) => out.push(oag_hud::sprite::DecodedImage {
-                        src: mod_icon_src(&source.mod_id, name),
-                        width,
-                        height,
-                        rgba,
-                        quad_extent: None,
-                        quad_centre: None,
-                        blend: None,
-                    }),
+                    Ok((width, height, rgba)) => {
+                        // Where the art is on the canvas, for the pickup's slot
+                        // (`oag_hud::pickup::mod_icon_draw`); `hud-icon` ignores it.
+                        let art = art_box(width, height, &rgba);
+                        out.push(oag_hud::sprite::DecodedImage {
+                            src: mod_icon_src(&source.mod_id, name),
+                            width,
+                            height,
+                            rgba,
+                            quad_extent: art.map(|(extent, _)| extent),
+                            quad_centre: art.map(|(_, centre)| centre),
+                            blend: None,
+                        });
+                    }
                     Err(e) => push(report, format!("{label} left out: {e}; draws nothing")),
                 }
             }
@@ -418,6 +446,30 @@ pub(crate) fn for_race<'a>(
             s.titles.is_empty() || s.titles.iter().any(|t| t.eq_ignore_ascii_case(title))
         })
         .filter(move |s| s.scope.runs_on(foreign_track))
+}
+
+/// The box of the pixels a PNG draws (alpha above 16): its size and where its middle is
+/// from the canvas's, in pixels, y down. `None` for an image with nothing drawn.
+#[cfg(all(feature = "view", feature = "extensions"))]
+pub(crate) fn art_box(width: u32, height: u32, rgba: &[u8]) -> Option<([f32; 2], [f32; 2])> {
+    let (mut min_x, mut min_y, mut max_x, mut max_y) = (u32::MAX, u32::MAX, 0, 0);
+    for (i, pixel) in rgba.as_chunks::<4>().0.iter().enumerate() {
+        if pixel[3] <= 16 {
+            continue;
+        }
+        let (x, y) = (i as u32 % width, i as u32 / width);
+        (min_x, min_y) = (min_x.min(x), min_y.min(y));
+        (max_x, max_y) = (max_x.max(x), max_y.max(y));
+    }
+    if min_x > max_x || min_y > max_y || width == 0 || height == 0 {
+        return None;
+    }
+    let extent = [(max_x - min_x + 1) as f32, (max_y - min_y + 1) as f32];
+    let centre = [
+        (min_x + max_x + 1) as f32 * 0.5 - width as f32 * 0.5,
+        (min_y + max_y + 1) as f32 * 0.5 - height as f32 * 0.5,
+    ];
+    Some((extent, centre))
 }
 
 /// A PNG as RGBA8: `(width, height, pixels)`.
@@ -594,6 +646,7 @@ impl Extensions {
                     prepared.region,
                     prepared.strings,
                     prepared.pickups,
+                    prepared.drives_ai,
                     prepared.publishes,
                     prepared.odds,
                 ),
@@ -754,6 +807,23 @@ impl Extensions {
         self.on.test_triggers(slot, sweep);
     }
 
+    /// The module owning the mod pickup decides when an AI craft uses it, so the engine
+    /// raises no `pickup-fire` for one (`[extension] drives_ai_pickup`).
+    pub(super) fn guest_drives_ai_pickup(&self) -> bool {
+        #[cfg(feature = "extensions")]
+        {
+            self.on.guest_drives_ai_pickup()
+        }
+        #[cfg(not(feature = "extensions"))]
+        false
+    }
+
+    /// Whether a `pickup-fire` is raised for `slot` and not yet delivered.
+    #[cfg(all(test, feature = "extensions"))]
+    pub(crate) fn fire_raised(&self, slot: usize) -> bool {
+        self.on.fires & (1 << slot) != 0
+    }
+
     /// The mod's own pickup's fire (`absorbed == false`) or absorb, raised for the module.
     pub(super) fn pickup_used(&mut self, slot: usize, absorbed: bool) {
         #[cfg(feature = "extensions")]
@@ -894,6 +964,12 @@ impl crate::Race {
             if on::faulted(&self.sim, index) {
                 continue;
             }
+            // A craft that may not use its pickup is not moved by a module (a wreck).
+            if let oag_ext_abi::Command::Transit { slot, .. } = command
+                && !self.may_use_pickup(slot.index())
+            {
+                continue;
+            }
             match command {
                 oag_ext_abi::Command::Transit {
                     slot,
@@ -914,9 +990,37 @@ impl crate::Race {
                     let answer = self.clearance(slot.index(), distance, radius);
                     self.sim.extensions.on.clearance[slot.index()] = Some(answer);
                 }
+                oag_ext_abi::Command::FireModEffectAhead {
+                    slot,
+                    index: own,
+                    distance,
+                } => self.fire_effect_ahead(index, slot.index(), own, distance),
                 _ => {}
             }
         }
+    }
+
+    /// `fire-mod-effect-ahead`: the effect, queued for the view at the middle of the road
+    /// `distance` ahead of `slot`'s craft. A distance that does not resolve, or a road with
+    /// no spline there, draws nothing.
+    #[cfg(feature = "extensions")]
+    fn fire_effect_ahead(
+        &mut self,
+        module: usize,
+        slot: usize,
+        own: u16,
+        distance: oag_ext_abi::Distance,
+    ) {
+        let Ok((to, _)) = self.point_ahead(slot, distance) else {
+            return;
+        };
+        let Some((_, up, at, _)) = self.road_frame(to) else {
+            return;
+        };
+        self.sim
+            .extensions
+            .on
+            .fire_effect_at(module, slot, own, at, up);
     }
 
     /// The modules' `fire-effect`s, each at its craft's nozzle (the hull's back end),
@@ -926,6 +1030,36 @@ impl crate::Race {
     pub(super) fn draw_extension_effects(&mut self) {
         for (slot, fired) in self.sim.extensions.take_effects() {
             self.play_fired(slot, &fired);
+        }
+    }
+
+    /// `slot`'s view's `screen-fill` this tick as straight-alpha `RGBA` in `0..=1`, or
+    /// `None` with none (and in a race without a module).
+    #[must_use]
+    pub fn extension_fill(&self, slot: usize) -> Option<[f32; 4]> {
+        #[cfg(feature = "extensions")]
+        {
+            let rgba = (*self.sim.extensions.on.fill.get(slot)?).filter(|rgba| rgba.a > 0)?;
+            Some([rgba.r, rgba.g, rgba.b, rgba.a].map(|c| f32::from(c) / 255.0))
+        }
+        #[cfg(not(feature = "extensions"))]
+        {
+            let _ = slot;
+            None
+        }
+    }
+
+    /// `slot`'s view's `fov-offset` this tick, degrees: `0.0` with none.
+    #[must_use]
+    pub fn extension_fov_offset(&self, slot: usize) -> f32 {
+        #[cfg(feature = "extensions")]
+        {
+            self.sim.extensions.on.fov.get(slot).copied().unwrap_or(0.0)
+        }
+        #[cfg(not(feature = "extensions"))]
+        {
+            let _ = slot;
+            0.0
         }
     }
 

@@ -43,7 +43,7 @@ license = "CC-BY-4.0"        # an SPDX expression ("MIT OR Apache-2.0"), or:
 # license-file = "LICENSE"   # a file in the mod (not both)
 description = "What it adds."
 repository = "https://example.org/example"   # optional
-# homepage, keywords = [...], titles = ["wipeout-pulse"], oag = ">=0.1"
+# homepage, keywords = [...], titles = ["wipeout-pulse"], oag = ">=0.1", default-enabled = false (optional)
 ```
 
 A mod **with no licence loads**, and the mods list and the load report print `no license
@@ -218,7 +218,10 @@ out, so two machines that differ in one still match and can race. The filter is
 **Turning a mod off** ([ADR-0078](../architecture/adr/0078-a-mod-is-turned-off-by-id-live-and-the-built-in-never.md)):
 
 - It is stored by id as `[mods] disabled = ["oag.hillside"]` in the settings file. A mod
-  installed later is on; an id no installed mod has is kept.
+  installed later follows its manifest's `default-enabled` (default `true`; `false` ships it
+  off); an id no installed mod has is kept. A mod that ships off and is turned on is stored
+  as `[mods] enabled = [...]`. `oag_game::settings::Mods::is_enabled(id, manifest_default)`
+  is the one resolver, and a switch that equals the default is not stored.
 - An off mod adds nothing: no menu rows, no strings, no campaigns, no pilots, no tracks on a
   CUSTOM title, and it is left out of the LAN content fingerprint (as is any mod that changes no race, below). It stays on the MODS
   page, its ADDS line reading **NOTHING, TURNED OFF**, so it can be turned back on. The gate is

@@ -1,10 +1,10 @@
 //! The MODS page's ENABLED row: a mod turned off adds nothing and stays listed, the
 //! built-in cannot be turned off, and the row follows the MOD row.
 
-use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use oag_game::mods::{self, Mods};
+use oag_game::settings::Mods as Switches;
 use oag_ui::language::StringTable;
 use oag_ui::menu::{BUILT_IN, Menu, Value, ValueSource};
 
@@ -43,12 +43,15 @@ fn base(name: &str) -> PathBuf {
     dir
 }
 
-fn off(ids: &[&str]) -> BTreeSet<String> {
-    ids.iter().map(|id| (*id).to_string()).collect()
+fn off(ids: &[&str]) -> Switches {
+    Switches {
+        disabled: ids.iter().map(|id| (*id).to_string()).collect(),
+        ..Switches::default()
+    }
 }
 
-fn load(base: &Path, disabled: &BTreeSet<String>) -> Mods {
-    Mods::load_from(&[base.to_path_buf()], disabled).unwrap()
+fn load(base: &Path, switches: &Switches) -> Mods {
+    Mods::load_from(&[base.to_path_buf()], switches).unwrap()
 }
 
 fn build(mods: &Mods) -> mods::Built {
@@ -72,7 +75,7 @@ fn has_row(built: &mods::Built, id: &str) -> bool {
 #[test]
 fn a_mod_turned_off_adds_no_row_and_stays_listed_to_be_turned_back_on() {
     let dir = base("off");
-    let on = build(&load(&dir, &BTreeSet::new()));
+    let on = build(&load(&dir, &Switches::default()));
     assert!(has_row(&on, "garage"), "{:?}", on.listing);
     let turned_off = load(&dir, &off(&["test.garage"]));
     let built = build(&turned_off);
@@ -124,9 +127,14 @@ fn the_built_in_cannot_be_turned_off() {
         "the MODS row is the built-in's; it stays"
     );
     assert_eq!(built.listing[0].enabled, Some(true));
-    let mut disabled = BTreeSet::new();
-    assert!(!mods::switch(&mut disabled, oag_mod::extras::ID, false));
-    assert!(disabled.is_empty());
+    let mut switches = Switches::default();
+    assert!(!mods::switch(
+        &mut switches,
+        oag_mod::extras::ID,
+        true,
+        false
+    ));
+    assert_eq!(switches, Switches::default());
     let (choices, value) = mods::switch_for(&built.listing[0], &StringTable::default());
     assert_eq!(value, "on");
     assert_eq!(choices.len(), 1, "one value: nothing to step to");
@@ -139,15 +147,54 @@ fn the_built_in_cannot_be_turned_off() {
 
 #[test]
 fn the_switch_turns_a_mod_off_and_on_again_in_the_set() {
-    let mut disabled = BTreeSet::new();
-    assert!(mods::switch(&mut disabled, "test.garage", false));
+    let mut switches = Switches::default();
+    assert!(mods::switch(&mut switches, "test.garage", true, false));
     assert!(
-        !mods::switch(&mut disabled, "test.garage", false),
+        !mods::switch(&mut switches, "test.garage", true, false),
         "already off"
     );
-    assert_eq!(disabled, off(&["test.garage"]));
-    assert!(mods::switch(&mut disabled, "test.garage", true));
-    assert!(disabled.is_empty());
+    assert_eq!(switches, off(&["test.garage"]));
+    assert!(mods::switch(&mut switches, "test.garage", true, true));
+    assert_eq!(switches, Switches::default());
+}
+
+#[test]
+fn a_mod_that_ships_off_is_off_until_the_player_turns_it_on() {
+    let dir = base("default-off");
+    let manifest = dir.join("garage/oag-mod.toml");
+    let text = std::fs::read_to_string(&manifest).unwrap();
+    std::fs::write(
+        &manifest,
+        text.replace("[mod]\n", "[mod]\ndefault-enabled = false\n"),
+    )
+    .unwrap();
+
+    let none = Switches::default();
+    let shipped = load(&dir, &none);
+    assert!(
+        shipped.is_disabled("test.garage"),
+        "default-enabled = false"
+    );
+    assert!(!has_row(&build(&shipped), "garage"));
+    let listing = build(&shipped).listing;
+    let entry = listing.iter().find(|m| m.id == "test.garage").unwrap();
+    assert_eq!(entry.enabled, Some(false), "the MODS page shows it off");
+    assert!(!entry.default_enabled);
+
+    let mut switches = none;
+    assert!(mods::switch(&mut switches, "test.garage", false, true));
+    assert!(switches.enabled.contains("test.garage") && switches.disabled.is_empty());
+    let on = load(&dir, &switches);
+    assert!(!on.is_disabled("test.garage"));
+    assert!(has_row(&build(&on), "garage"), "the player's switch wins");
+
+    assert!(mods::switch(&mut switches, "test.garage", false, false));
+    assert_eq!(
+        switches,
+        Switches::default(),
+        "back at the default, nothing stored"
+    );
+    assert!(load(&dir, &switches).is_disabled("test.garage"));
 }
 
 #[test]
@@ -211,7 +258,7 @@ fn fingerprint_mod(dir: &Path, folder: &str, extra: &str, files: &[&str]) {
 }
 
 fn fingerprint_of(dir: &Path) -> u64 {
-    load(dir, &BTreeSet::new()).content_fingerprint()
+    load(dir, &Switches::default()).content_fingerprint()
 }
 
 fn empty_base(name: &str) -> PathBuf {
@@ -285,7 +332,7 @@ fn a_channel_nobody_loaded_sends_is_warned_about_by_name_on_the_listener() {
             .unwrap()
             .table(&strings)
     };
-    let both = build(&load(&dir, &BTreeSet::new()));
+    let both = build(&load(&dir, &Switches::default()));
     let ear = lines(&both, "test.ear");
     assert!(
         ear.contains(&("HEARS".into(), "test.mouth/hello".into())),
@@ -311,7 +358,7 @@ fn a_flat_list_front_end_with_four_lines_keeps_the_no_one_sends_warning() {
         "listens = [\"test.mouth/hello\"]\n",
     );
     let strings = StringTable::default();
-    let built = build(&load(&dir, &BTreeSet::new()));
+    let built = build(&load(&dir, &Switches::default()));
     let ear = built.listing.iter().find(|m| m.id == "test.ear").unwrap();
     let lines = ear.table_within(&strings, 4);
     assert!(lines.len() <= 4, "{lines:?}");

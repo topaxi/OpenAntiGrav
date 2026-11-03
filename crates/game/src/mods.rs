@@ -70,6 +70,8 @@ pub struct Listing {
     /// The player's switch for it: `None` for a candidate that never opened (its id is a
     /// file name, nothing to switch). The built-in is always `Some(true)`.
     pub enabled: Option<bool>,
+    /// The mod's own `default-enabled`: what the switch is stored against.
+    pub default_enabled: bool,
     /// Why it is not in the game, when it is not.
     pub error: Option<String>,
     /// What of it is left out while the mod itself is in, as detail lines (label,
@@ -258,17 +260,16 @@ pub fn resupply_switch(model: &mut oag_ui::menu::Menu, listing: &[Listing], stri
     model.seed(ENABLED, &oag_ui::menu::Value::Text(value.to_string()));
 }
 
-/// Turns `id` on or off in `disabled`. Returns whether anything changed. The built-in is
-/// never turned off ([`words::ALWAYS_ON`]).
-pub fn switch(disabled: &mut BTreeSet<String>, id: &str, on: bool) -> bool {
-    if id == oag_mod::extras::ID {
-        return false;
-    }
-    if on {
-        disabled.remove(id)
-    } else {
-        disabled.insert(id.to_string())
-    }
+/// Turns `id` on or off in `switches`, against `manifest_default` (the mod's
+/// `default-enabled`). Returns whether anything changed. The built-in is never turned off
+/// ([`words::ALWAYS_ON`]).
+pub fn switch(
+    switches: &mut crate::settings::Mods,
+    id: &str,
+    manifest_default: bool,
+    on: bool,
+) -> bool {
+    id != oag_mod::extras::ID && switches.switch(id, manifest_default, on)
 }
 
 /// The choices for `ValueSource::Mods`.
@@ -311,6 +312,7 @@ impl Listing {
             rows,
             builtin,
             enabled: Some(enabled || builtin),
+            default_enabled: m.default_enabled,
             error,
             problems: Vec::new(),
             publishes: m
@@ -334,6 +336,7 @@ impl Listing {
             rows: Vec::new(),
             builtin: false,
             enabled: None,
+            default_enabled: true,
             error: Some(failed.cause().to_string()),
             problems: Vec::new(),
             publishes: Vec::new(),
@@ -439,14 +442,14 @@ fn changes_a_race(m: &oag_mod::Mod) -> bool {
 }
 
 impl Mods {
-    /// The extras and whatever lies on the default search path, with the mods in
-    /// `disabled` (the player's `settings::Mods::disabled`) turned off.
+    /// The extras and whatever lies on the default search path, with the player's
+    /// `switches` (`settings::Mods`) applied.
     ///
     /// # Errors
     ///
     /// The built-in extras will not open, which is a build defect.
-    pub fn load(disabled: &BTreeSet<String>) -> Result<Self> {
-        Self::load_from(&oag_mod::mods_search_path(), disabled)
+    pub fn load(switches: &crate::settings::Mods) -> Result<Self> {
+        Self::load_from(&oag_mod::mods_search_path(), switches)
     }
 
     /// [`Self::load`] with the switches of the profile's own settings file: for a
@@ -457,18 +460,24 @@ impl Mods {
     /// As [`Self::load`].
     pub fn load_for_profile() -> Result<Self> {
         let settings = crate::settings::load().unwrap_or_default();
-        Self::load(&settings.mods.disabled)
+        Self::load(&settings.mods)
     }
 
-    /// The extras and whatever lies in `bases`, `disabled` turned off.
+    /// The extras and whatever lies in `bases`, with the player's `switches` resolved
+    /// against each mod's `default-enabled` ([`crate::settings::Mods::is_enabled`]).
     ///
     /// # Errors
     ///
     /// As [`Self::load`].
-    pub fn load_from(bases: &[PathBuf], disabled: &BTreeSet<String>) -> Result<Self> {
+    pub fn load_from(bases: &[PathBuf], switches: &crate::settings::Mods) -> Result<Self> {
         let extras = oag_mod::extras::builtin().context("opening the built-in oag-extras")?;
         let found = oag_mod::load(bases, &game_version());
-        let mut disabled = disabled.clone();
+        let mut disabled: BTreeSet<String> = found
+            .mods
+            .iter()
+            .filter(|m| !switches.is_enabled(&m.manifest.id, m.manifest.default_enabled))
+            .map(|m| m.manifest.id.clone())
+            .collect();
         disabled.remove(oag_mod::extras::ID);
         Ok(Self {
             extras,
@@ -484,7 +493,7 @@ impl Mods {
     ///
     /// As [`Self::load`].
     pub fn extras_only() -> Result<Self> {
-        Self::load_from(&[], &BTreeSet::new())
+        Self::load_from(&[], &crate::settings::Mods::default())
     }
 
     /// Whether the mod `id` is turned off.
@@ -813,8 +822,13 @@ impl Mods {
             .filter(|m| self.disabled.contains(&m.manifest.id))
         {
             lines.push(format!(
-                "mod {} - turned off on the MODS page",
-                module.describe()
+                "mod {} - {}",
+                module.describe(),
+                if module.manifest.default_enabled {
+                    "turned off on the MODS page"
+                } else {
+                    "off until turned on on the MODS page (its manifest's default-enabled is false)"
+                }
             ));
         }
         lines.extend(self.failed.iter().map(|p| format!("mod problem: {p}")));

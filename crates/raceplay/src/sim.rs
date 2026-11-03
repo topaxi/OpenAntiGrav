@@ -535,6 +535,24 @@ pub struct RaceSim {
 }
 
 impl RaceSim {
+    /// [`Race::may_use_pickup`]'s check, for the paths that hold a `RaceSim` alone (a
+    /// module's commands): only a racing craft uses a pickup.
+    pub(super) fn may_use_pickup(&self, slot: usize) -> bool {
+        self.world.ships[slot].physics.craft_state == oag_physics::CraftState::Racing
+    }
+
+    /// Every slot's place, as [`oag_race::places`] orders the field: the one ordering the
+    /// HUD, the results and a mod's observation read. Everyone is first on a track with
+    /// no closed ring.
+    pub(super) fn places(&self) -> [u8; oag_gameplay::MAX_SHIPS] {
+        let Some(course) = &self.course else {
+            return [1; oag_gameplay::MAX_SHIPS];
+        };
+        let standings: [oag_race::Standing; oag_gameplay::MAX_SHIPS] =
+            std::array::from_fn(|slot| self.world.ships[slot].standing);
+        oag_race::places(&standings, course)
+    }
+
     /// The mode's damage rules with this race's own weapons switch applied -
     /// what every damage and weapon-hit site asks instead of
     /// `oag_gameplay::damage_rules(mode)` alone, which knows only the mode.

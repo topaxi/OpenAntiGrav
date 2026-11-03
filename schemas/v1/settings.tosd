@@ -447,6 +447,11 @@ type = "array"
 itemtype = "string"
 optional = true
 
+[types.mods.enabled]
+type = "array"
+itemtype = "string"
+optional = true
+
 # [dev]: developer switches, read in debug builds only.
 [types.dev]
 type = "table"

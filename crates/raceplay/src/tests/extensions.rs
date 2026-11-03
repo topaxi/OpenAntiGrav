@@ -90,6 +90,7 @@ pub(super) mod on {
             api: 1,
             memory_pages: 1,
             state_bytes: 8,
+            drives_ai_pickup: false,
             scope: crate::extensions::Scope::Rules,
             read: Arc::new(move || Ok(wasm.clone())),
             strings: Arc::new(|_| Default::default()),
@@ -97,6 +98,7 @@ pub(super) mod on {
             effects: Vec::new(),
             files: Arc::new(|_| Err("no files".into())),
             pickup: Some(crate::extension_pickup::a_look()),
+            pickup_titles: Vec::new(),
             pickup_odds: Vec::new(),
             channels: crate::extensions::Declared::default(),
         }
@@ -491,7 +493,7 @@ pub(super) mod on {
                     w = POOL + 5,
                 );
             format!(
-                "(i32.store (i32.const {REPLY}) (i32.const 10))
+                "(i32.store (i32.const {REPLY}) (i32.const 12))
                  (i32.store8 (i32.const {c0}) (i32.const 5)) (i32.store8 (i32.const {s0}) (i32.const 1))
                  (i32.store16 (i32.const {a0}) (i32.const 1))
                  (i32.store8 (i32.const {c1}) (i32.const 6)) (i32.store8 (i32.const {s1}) (i32.const 1))
@@ -500,7 +502,7 @@ pub(super) mod on {
                  (i32.store16 (i32.const {a2}) (i32.const 6))
                  (i32.store (i32.const {b2}) (i32.const 0xff0000ff))
                  {weather} {sun} {grade}
-                 {shake} {extra} {text} {icon} {pool}
+                 {shake} {extra} {text} {icon} {fill} {fov} {pool}
                  i32.const 0",
                 c0 = REPLY + 4,
                 s0 = REPLY + 5,
@@ -516,6 +518,8 @@ pub(super) mod on {
                 extra = hud(7, 18, 2, 0.5_f32.to_bits(), 0xff20_20e0),
                 text = hud(8, 19, 0, 0x0050_0344, 0xffff_ffff),
                 icon = hud(9, 20, 3, 0x0050_0344, 0xffff_ffff),
+                fill = hud(10, 30, 0, 0, 0x80ff_2010),
+                fov = hud(11, 31, 0, 8.0_f32.to_bits(), 0),
                 weather = race_wide(3, 10, 0.5),
                 sun = race_wide(4, 11, 0.5),
                 grade = race_wide(5, 12, 0.25),
@@ -552,6 +556,17 @@ pub(super) mod on {
                 crate::extension_effects::Fired::Title(oag_title::effects::Trigger::CollisionSpark)
             )]
         );
+        // The view outputs reach the race's readers for slot 1 alone, and the quiet race has
+        // none: the same equal hashes above show they are never state.
+        assert_eq!(
+            loud.extension_fill(1),
+            Some([16.0 / 255.0, 32.0 / 255.0, 1.0, 128.0 / 255.0])
+        );
+        assert_eq!(loud.extension_fill(0), None);
+        assert_eq!(loud.extension_fov_offset(1), 8.0);
+        assert_eq!(loud.extension_fov_offset(0), 0.0);
+        assert_eq!(quiet.extension_fill(1), None);
+        assert_eq!(quiet.extension_fov_offset(1), 0.0);
         let tick = loud.sim.world.tick;
         let hud = loud.sim.extensions.hud(1, tick);
         assert_eq!(
@@ -930,6 +945,10 @@ colour = "#ff2010"
     }
 
     pub(in crate::tests) fn prepared(sources: &[Source]) -> Prepared {
+        prepared_for("wipeout-pulse", sources)
+    }
+
+    pub(in crate::tests) fn prepared_for(title: &str, sources: &[Source]) -> Prepared {
         let mut report = Vec::new();
         let props = crate::extensions::TrackProps::default();
         let track = crate::extensions::Track {
@@ -940,7 +959,7 @@ colour = "#ff2010"
             paths: &[],
             routes: &[],
         };
-        let prepared = prepare(sources, "wipeout-pulse", None, track, None, &mut report);
+        let prepared = prepare(sources, title, None, track, None, &mut report);
         assert!(
             report.iter().all(|line| !line.contains("left out")),
             "{report:?}"
@@ -1056,6 +1075,7 @@ mod triggers {
             api: 1,
             memory_pages: 1,
             state_bytes: 8,
+            drives_ai_pickup: false,
             scope: crate::extensions::Scope::Rules,
             read: Arc::new(move || Ok(wasm.clone())),
             strings: Arc::new(|_| Default::default()),
@@ -1063,6 +1083,7 @@ mod triggers {
             effects: Vec::new(),
             files: Arc::new(|_| Err("no files".into())),
             pickup: Some(crate::extension_pickup::a_look()),
+            pickup_titles: Vec::new(),
             pickup_odds: Vec::new(),
             channels: crate::extensions::Declared::default(),
         }

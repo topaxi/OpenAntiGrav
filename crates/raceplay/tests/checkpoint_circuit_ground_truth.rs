@@ -48,6 +48,7 @@ fn checkpoint_circuit() -> Option<(race::extensions::Source, std::path::PathBuf)
         api: extension.api,
         memory_pages: extension.memory_pages,
         state_bytes: extension.state_bytes,
+        drives_ai_pickup: false,
         scope: race::extensions::Scope::Track(Some(file.clone())),
         read: Arc::new(move || Ok(wasm.clone())),
         strings: Arc::new(|_| Default::default()),
@@ -55,6 +56,7 @@ fn checkpoint_circuit() -> Option<(race::extensions::Source, std::path::PathBuf)
         effects: Vec::new(),
         files: Arc::new(|_| Err("no files".into())),
         pickup: module.manifest.pickup.clone(),
+        pickup_titles: Vec::new(),
         pickup_odds: module.manifest.pickup_odds.clone(),
         channels: race::extensions::Declared {
             publishes: module.manifest.channels.publishes.clone(),
@@ -429,6 +431,7 @@ fn preferring(slot: Option<u8>) -> race::extensions::Source {
         api: oag_ext_abi::ABI,
         memory_pages: 1,
         state_bytes: 4,
+        drives_ai_pickup: false,
         scope: race::extensions::Scope::Rules,
         read: Arc::new(move || Ok(wasm.clone())),
         strings: Arc::new(|_| Default::default()),
@@ -436,6 +439,7 @@ fn preferring(slot: Option<u8>) -> race::extensions::Source {
         effects: Vec::new(),
         files: Arc::new(|_| Err("no files".into())),
         pickup: None,
+        pickup_titles: Vec::new(),
         pickup_odds: Vec::new(),
         channels: race::extensions::Declared::default(),
     }

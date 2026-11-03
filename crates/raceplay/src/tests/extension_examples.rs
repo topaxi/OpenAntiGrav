@@ -102,6 +102,7 @@ fn full_grid_fuel(module: &Module) -> Vec<u64> {
                 active: 0xff,
                 events,
                 crafts: &crafts,
+                course: Default::default(),
                 track: &region[..used],
                 speed_pads: 2,
                 routes: 1,

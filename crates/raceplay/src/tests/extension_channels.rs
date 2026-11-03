@@ -123,6 +123,7 @@ mod with_modules {
             api: 1,
             memory_pages: 1,
             state_bytes: 32,
+            drives_ai_pickup: false,
             scope: Scope::Rules,
             read: Arc::new(move || Ok(wasm.clone())),
             strings: Arc::new(|_| Default::default()),
@@ -130,6 +131,7 @@ mod with_modules {
             effects: Vec::new(),
             files: Arc::new(|_| Err("no files".into())),
             pickup: None,
+            pickup_titles: Vec::new(),
             pickup_odds: Vec::new(),
             channels: Declared {
                 publishes: publishes.iter().map(|s| (*s).to_string()).collect(),

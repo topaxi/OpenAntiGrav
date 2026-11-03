@@ -2,7 +2,6 @@
 //! a bad page leaves only its mod out, and `scripts/check-strings.py` holds a mod page to
 //! its string ids (ADR-0082 decisions 1 and 6).
 
-use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -35,7 +34,7 @@ fn folder(tag: &str, names: &[&str]) -> PathBuf {
 }
 
 fn build(dir: &Path) -> mods::Built {
-    Mods::load_from(&[dir.to_path_buf()], &BTreeSet::new())
+    Mods::load_from(&[dir.to_path_buf()], &Default::default())
         .unwrap()
         .build(
             BUILT_IN,

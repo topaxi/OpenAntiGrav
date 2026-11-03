@@ -246,6 +246,66 @@ impl<'a> Reply<'a> {
         self.motion(2, craft, command)
     }
 
+    /// `fire-mod-effect-ahead`: the mod's own effect at place `index` of its `[effects]`,
+    /// played at the course point `distance` ahead of the craft and left there for the
+    /// effect's own lifetime: a sprite of the mod's texture standing in the world. Counts
+    /// toward `MAX_FIRE_EFFECTS_PER_TICK`. Drawn, never hashed.
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`], [`Refused::Effects`], [`Refused::Range`] for a distance that
+    /// is not one the host accepts.
+    pub fn fire_mod_effect_ahead(
+        &mut self,
+        craft: &Craft<'_>,
+        index: u16,
+        distance: Distance,
+    ) -> Result<(), Refused> {
+        let (kind, amount) = distance.split();
+        if Distance::join(kind, amount) != Some(distance) {
+            return Err(Refused::Range);
+        }
+        self.room_for_effect()?;
+        self.push(&Command::FireModEffectAhead {
+            slot: craft.slot(),
+            index,
+            distance,
+        })?;
+        self.effects += 1;
+        Ok(())
+    }
+
+    /// `screen-fill`: wash the craft's view with `rgba` this tick; re-send it each tick
+    /// it should hold. The slot's own view, never hashed.
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`].
+    pub fn screen_fill(&mut self, craft: &Craft<'_>, rgba: Rgba) -> Result<(), Refused> {
+        self.push(&Command::ScreenFill {
+            slot: craft.slot(),
+            rgba,
+        })
+    }
+
+    /// `fov-offset`: widen (positive) or narrow the craft's view by `degrees`, within
+    /// `MAX_FOV_OFFSET_DEG` either way, this tick; re-send it each tick it should hold.
+    /// Never hashed.
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`], [`Refused::Range`].
+    pub fn fov_offset(&mut self, craft: &Craft<'_>, degrees: f32) -> Result<(), Refused> {
+        if !(-oag_ext_abi::MAX_FOV_OFFSET_DEG..=oag_ext_abi::MAX_FOV_OFFSET_DEG).contains(&degrees)
+        {
+            return Err(Refused::Range);
+        }
+        self.push(&Command::FovOffset {
+            slot: craft.slot(),
+            degrees,
+        })
+    }
+
     /// `give-pickup`: the mod's own pickup to a craft holding nothing.
     ///
     /// # Errors

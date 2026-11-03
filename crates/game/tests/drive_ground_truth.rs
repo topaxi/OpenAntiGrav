@@ -90,6 +90,12 @@ fn drive_args(
         None => command.env("OAG_TRACKS", scratch.join("no-tracks")),
     };
     let output = command.output().expect("running oag-game");
+    // A scripted run must not open the host's gamepad: a pad in use there would steer it.
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !stderr.contains("gamepad:"),
+        "--drive opened a gamepad:\n{stderr}"
+    );
     let states = std::fs::read_to_string(&log)
         .unwrap_or_default()
         .lines()

@@ -220,6 +220,14 @@ pub(crate) struct BroughtUp {
 }
 
 impl Gpu {
+    /// Whether this device has no window or surface: a `--drive` run. Such a run
+    /// is non-interactive, so it must not open the host's gamepad
+    /// (`crate::app::controls_for`).
+    pub(crate) fn is_headless(&self) -> bool {
+        self.output.surface.is_none()
+    }
+
+
     /// Everything downstream of picking an adapter, so it can be *re*-run.
     ///
     /// Split out because `apply_setting` saves on every keypress: the moment a

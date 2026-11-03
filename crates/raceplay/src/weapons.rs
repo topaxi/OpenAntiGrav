@@ -126,6 +126,43 @@ impl Race {
         self.sim.world.ships[slot].pickup.weapon = Some(oag_tables::weapons::Weapon::Turbo);
     }
 
+    /// Whether the craft may fire or absorb its pickup: only while racing.
+    ///
+    /// A craft in its destroyed sequence (`Destroyed`, then `Eliminated` until the
+    /// Eliminator puts it back on the line) cannot fire, lay, absorb or hold a
+    /// trigger, for a person and for the AI alike. The pickup is not touched: what
+    /// it held stays in the slot for after the respawn (`docs/gameplay/pickups.md`,
+    /// "A destroyed craft").
+    ///
+    /// Every use of a pickup asks this: the player's and the opponent's fire, the
+    /// held Cannon trigger, and a mod's own pickup (`Weapon::Extension`), which
+    /// reaches the mod only through those two fire paths. A mod adding a weapon
+    /// handles nothing itself.
+    pub(crate) fn may_use_pickup(&self, slot: usize) -> bool {
+        self.sim.may_use_pickup(slot)
+    }
+
+    /// Ends the use in progress of every craft that may not use its pickup: a mine
+    /// cluster part laid, a Cannon magazine part fired, an armed Quake press.
+    ///
+    /// Cancelled, not paused: nothing resumes after the respawn. A started mine
+    /// cluster or Cannon magazine is the pickup being used, so it is spent; an armed
+    /// Quake was never fired, so its pickup stays like any unused one. Runs first in
+    /// the weapon step, so the laying, Cannon and armed-Quake steps after it find
+    /// nothing to continue.
+    pub(super) fn cancel_pickup_use_of_downed_crafts(&mut self) {
+        for slot in 0..self.sim.world.ship_count as usize {
+            if self.may_use_pickup(slot) {
+                continue;
+            }
+            let held = &mut self.sim.world.ships[slot].pickup;
+            if held.is_dropping() || held.cannon_rounds > 0 {
+                held.take();
+            }
+            held.quake_armed = false;
+        }
+    }
+
     /// Fires or absorbs whatever the craft is holding.
     ///
     /// **The buttons are recovered and the actions are not.**
@@ -154,6 +191,9 @@ impl Race {
             .buttons
             .is_pressed(oag_gameplay::input::Button::Circle);
         if !fire && !absorb {
+            return;
+        }
+        if !self.may_use_pickup(slot) {
             return;
         }
         if self.sim.world.ships[slot].autopilot_timer > 0.0 {
@@ -281,6 +321,7 @@ impl Race {
                         &stats,
                         &self.sim.class,
                         slot as u8,
+                        ship.weapon_counts.rockets,
                     ) else {
                         return;
                     };
@@ -413,8 +454,9 @@ impl Race {
                     }
                 }
                 oag_tables::weapons::Weapon::Mine | oag_tables::weapons::Weapon::Bomb => {
+                    let counts = self.sim.world.ships[slot].weapon_counts;
                     let Some(drop) =
-                        oag_weapons::projectile::mine::Drop::for_weapon(weapon, weapons)
+                        oag_weapons::projectile::mine::Drop::for_weapon(weapon, weapons, counts)
                     else {
                         // As the Rocket: nothing to lay.
                         return;
@@ -645,7 +687,9 @@ impl Race {
             let Some(weapon) = self.sim.world.ships[slot].pickup.weapon else {
                 continue;
             };
-            let Some(drop) = oag_weapons::projectile::mine::Drop::for_weapon(weapon, weapons)
+            let counts = self.sim.world.ships[slot].weapon_counts;
+            let Some(drop) =
+                oag_weapons::projectile::mine::Drop::for_weapon(weapon, weapons, counts)
             else {
                 continue;
             };
@@ -754,6 +798,9 @@ impl Race {
             // A human slot follows its own pad; every other slot asks its own
             // driver. Not the literal slot 0, which is the same
             // only while slot 0 is the only human.
+            if !self.may_use_pickup(slot) {
+                continue;
+            }
             let holds_fire = if self.sim.world.controllers[slot].is_human() {
                 // That slot's own held state. An autopilot blend takes the pad
                 // out of the loop entirely, exactly as above.

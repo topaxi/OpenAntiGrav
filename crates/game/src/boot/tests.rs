@@ -187,7 +187,7 @@ fn a_name_that_looks_like_a_hash_is_still_a_name() {
 
 /// The tiles of 2048's grid for the mods under `bases`: the page each opens.
 fn tiles_with(bases: &[std::path::PathBuf]) -> Vec<String> {
-    let mods = crate::mods::Mods::load_from(bases, &std::collections::BTreeSet::new()).unwrap();
+    let mods = crate::mods::Mods::load_from(bases, &Default::default()).unwrap();
     let built = mods
         .build(
             oag_ui::menu::BUILT_IN,

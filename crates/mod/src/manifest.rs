@@ -75,6 +75,9 @@ pub struct Manifest {
     pub keywords: Vec<String>,
     /// The titles it is for (their lowercased hyphenated names); empty means any.
     pub titles: Vec<String>,
+    /// `default-enabled`: whether the mod is on until the player says otherwise (default
+    /// `true`). `false` ships it off: the MODS page turns it on.
+    pub default_enabled: bool,
     /// The game versions it works with.
     pub oag: Option<semver::VersionReq>,
     /// `[extension]`: the WebAssembly modules the mod runs, if any.
@@ -89,6 +92,9 @@ pub struct Manifest {
     /// `[pickup]`: the look of the mod's own pickup, required of a simulation mod that
     /// hands one out.
     pub pickup: Option<PickupLook>,
+    /// `[pickup.titles.<title>]`: the look on one title (its lowercased hyphenated name),
+    /// each over `[pickup]` for what it leaves out: a mod's own art per title.
+    pub pickup_titles: Vec<(String, PickupLook)>,
     /// `[[pickup.odds]]`: the weights the weapon pads hand the mod's own pickup out with,
     /// per title and class (`oag_tables::pickup_look::odds_for`). Empty: the pads never
     /// do, and only a module's `give-pickup` or `pickup-roll` hands it out.
@@ -125,6 +131,10 @@ pub struct Extension {
     pub memory_pages: u32,
     /// The host-owned state blob's length, bytes.
     pub state_bytes: u32,
+    /// `drives_ai_pickup`: the module decides when an AI craft uses the mod's pickup, so
+    /// the engine never raises `pickup-fire` for one (default `false`: it does, wherever
+    /// the AI would fire a Turbo).
+    pub drives_ai_pickup: bool,
     /// `[extension.rules]`: a rules module, which may act on every craft of a race.
     pub rules: Option<Rules>,
     /// `[extension.track]`: a module that runs only on one track file the mod ships.
@@ -175,6 +185,16 @@ struct PickupTable {
     colour: ColourTable,
     #[serde(default)]
     odds: Vec<OddsTable>,
+    #[serde(default)]
+    titles: std::collections::BTreeMap<String, TitleLookTable>,
+}
+
+/// `[pickup.titles.<title>]`: what differs on one title, over `[pickup]`.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TitleLookTable {
+    icon: Option<IconTable>,
+    colour: Option<ColourTable>,
 }
 
 #[derive(Deserialize)]
@@ -249,8 +269,39 @@ fn weapon(key: &'static str, name: &str) -> Result<oag_tables::weapons::Weapon, 
 fn pickup(
     table: PickupTable,
     icons: &std::collections::BTreeMap<String, String>,
+) -> Result<(PickupLook, Vec<(String, PickupLook)>), Error> {
+    let base = look(table.icon, table.colour, icons)?;
+    let mut titles = Vec::new();
+    for (title, over) in table.titles {
+        let icon = match over.icon {
+            Some(icon) => look_icon(icon, icons)?,
+            None => base.icon.clone(),
+        };
+        let colour = match over.colour {
+            Some(colour) => look_colour(colour)?,
+            None => base.colour,
+        };
+        titles.push((title, PickupLook { icon, colour }));
+    }
+    Ok((base, titles))
+}
+
+fn look(
+    icon: IconTable,
+    colour: ColourTable,
+    icons: &std::collections::BTreeMap<String, String>,
 ) -> Result<PickupLook, Error> {
-    let icon = match (table.icon.title, table.icon.module) {
+    Ok(PickupLook {
+        icon: look_icon(icon, icons)?,
+        colour: look_colour(colour)?,
+    })
+}
+
+fn look_icon(
+    icon: IconTable,
+    icons: &std::collections::BTreeMap<String, String>,
+) -> Result<Icon, Error> {
+    Ok(match (icon.title, icon.module) {
         (Some(title), None) => Icon::Title(weapon("pickup.icon", &title)?),
         (None, Some(name)) if icons.contains_key(&name) => Icon::Mod(name),
         (None, Some(name)) => {
@@ -265,8 +316,11 @@ fn pickup(
                 "exactly one of `title = \"<weapon>\"` and `mod = \"<icon>\"`",
             ));
         }
-    };
-    let colour = match (table.colour.title, table.colour.rgba) {
+    })
+}
+
+fn look_colour(colour: ColourTable) -> Result<Colour, Error> {
+    Ok(match (colour.title, colour.rgba) {
         (Some(title), None) => Colour::Title(weapon("pickup.colour", &title)?),
         (None, Some(hex)) => {
             let digits = hex.len() == 8 && hex.bytes().all(|b| b.is_ascii_hexdigit());
@@ -287,8 +341,7 @@ fn pickup(
                 "exactly one of `title = \"<weapon>\"` and `rgba = \"RRGGBBAA\"`",
             ));
         }
-    };
-    Ok(PickupLook { icon, colour })
+    })
 }
 
 #[derive(Deserialize)]
@@ -310,6 +363,8 @@ struct ExtensionTable {
     memory_pages: u32,
     #[serde(default)]
     state_bytes: u32,
+    #[serde(default)]
+    drives_ai_pickup: bool,
     rules: Option<RulesTable>,
     track: Option<TrackTable>,
 }
@@ -349,7 +404,13 @@ struct Table {
     keywords: Vec<String>,
     #[serde(default)]
     titles: Vec<String>,
+    #[serde(rename = "default-enabled", default = "on")]
+    default_enabled: bool,
     oag: Option<String>,
+}
+
+const fn on() -> bool {
+    true
 }
 
 fn bad(key: &'static str, problem: impl Into<String>) -> Error {
@@ -360,6 +421,17 @@ fn bad(key: &'static str, problem: impl Into<String>) -> Error {
 }
 
 impl Manifest {
+    /// The look of the mod's own pickup on `title` (a lowercased hyphenated title name):
+    /// its `[pickup.titles.<title>]` row, else `[pickup]`.
+    #[must_use]
+    pub fn pickup_for(&self, title: &str) -> Option<&PickupLook> {
+        self.pickup_titles
+            .iter()
+            .find(|(name, _)| name.eq_ignore_ascii_case(title))
+            .map(|(_, look)| look)
+            .or(self.pickup.as_ref())
+    }
+
     /// Reads and checks a manifest. `has` says whether the mod holds a path,
     /// for `license-file`.
     ///
@@ -370,12 +442,13 @@ impl Manifest {
         let file: File = toml::from_str(text)?;
         oag_schema::check(file.header.as_ref(), SCHEMA_KIND, SCHEMA_MAJOR)?;
         let extension = file.extension.map(|e| extension(e, has)).transpose()?;
-        let (pickup, pickup_odds) = match file.pickup {
+        let (pickup, pickup_titles, pickup_odds) = match file.pickup {
             Some(mut table) => {
                 let rows = odds(std::mem::take(&mut table.odds))?;
-                (Some(pickup(table, &file.icons)?), rows)
+                let (base, titles) = pickup(table, &file.icons)?;
+                (Some(base), titles, rows)
             }
-            None => (None, Vec::new()),
+            None => (None, Vec::new(), Vec::new()),
         };
         let t = file.module;
         for (name, path) in &file.icons {
@@ -491,11 +564,13 @@ impl Manifest {
             homepage: t.homepage,
             keywords: t.keywords,
             titles: t.titles,
+            default_enabled: t.default_enabled,
             oag,
             extension,
             icons: file.icons,
             effects: file.effects,
             pickup,
+            pickup_titles,
             pickup_odds,
             channels,
         })
@@ -644,6 +719,7 @@ fn extension(e: ExtensionTable, has: &dyn Fn(&str) -> bool) -> Result<Extension,
         api: e.api,
         memory_pages: e.memory_pages,
         state_bytes: e.state_bytes,
+        drives_ai_pickup: e.drives_ai_pickup,
         rules,
         track,
     })

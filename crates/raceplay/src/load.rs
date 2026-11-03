@@ -332,7 +332,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let slot_teams = roster::teams(craft_title, options, &team, &available, &mut report);
     // Each AI slot's own tuning where the title's variant family says it flies a
     // different team's file than the player's - see `family`.
-    let opponent_handling = family::opponent_handling(
+    let (opponent_handling, opponent_weapon_counts) = family::opponent_handling(
         craft_of(&mut craft, &mut archives),
         craft_title.race,
         &slot_teams,
@@ -1193,6 +1193,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
             collision,
             handling,
             opponent_handling,
+            weapon_counts: oag_weapons::counts::WeaponCounts::from_stats(&stats),
+            opponent_weapon_counts,
             #[cfg(feature = "view")]
             airbrake_graphics,
             chase,

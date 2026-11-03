@@ -1058,14 +1058,7 @@ impl Race {
     /// reads [`Self::ship_count`] first.
     #[must_use]
     pub fn places(&self) -> [u8; MAX_SHIPS] {
-        let Some(course) = &self.sim.course else {
-            // No closed ring, so no positions. Everyone is first, which is the
-            // honest answer for a track that cannot count a lap at all.
-            return [1; MAX_SHIPS];
-        };
-        let standings: [oag_race::Standing; MAX_SHIPS] =
-            std::array::from_fn(|slot| self.sim.world.ships[slot].standing);
-        oag_race::places(&standings, course)
+        self.sim.places()
     }
 
     /// What slot `slot` can see of the rest of the grid.

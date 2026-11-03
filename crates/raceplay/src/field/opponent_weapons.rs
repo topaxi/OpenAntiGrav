@@ -72,6 +72,7 @@ impl Race {
             &stats,
             &self.sim.class,
             slot as u8,
+            ship.weapon_counts.rockets,
         ) else {
             return false;
         };
@@ -301,6 +302,9 @@ impl Race {
         controls: &oag_physics::ShipControls,
         field: &oag_ai::Field,
     ) {
+        if !self.may_use_pickup(slot) {
+            return;
+        }
         // Before anything returns: it advances this craft's weapon-AI clocks.
         let decision = self.opponent_decides(slot, field);
         let fires = decision == oag_ai::weapon_ai::Decision::Fire;
@@ -311,6 +315,11 @@ impl Race {
         // fire a Turbo (the Turbo's own gate below, on the Turbo's boost time), every tick
         // that gate passes, and never absorbs it. What a fire does is the mod's.
         let extension = weapon == oag_tables::weapons::Weapon::Extension;
+        // A module that drives its own AI decision is raised nothing: it reads the
+        // observation (progress, place, course) and clears the pickup itself.
+        if extension && self.sim.extensions.guest_drives_ai_pickup() {
+            return;
+        }
         let looked_up = if extension {
             oag_tables::weapons::Weapon::Turbo
         } else {
@@ -558,7 +567,9 @@ impl Race {
         let Some(weapons) = self.sim.weapons.as_ref() else {
             return false;
         };
-        let Some(drop) = oag_weapons::projectile::mine::Drop::for_weapon(weapon, weapons) else {
+        let counts = self.sim.world.ships[slot].weapon_counts;
+        let Some(drop) = oag_weapons::projectile::mine::Drop::for_weapon(weapon, weapons, counts)
+        else {
             // The table authors no block for this weapon, so nothing to lay.
             // Falls through to absorb, which is the right answer for a pickup
             // that cannot be spent.

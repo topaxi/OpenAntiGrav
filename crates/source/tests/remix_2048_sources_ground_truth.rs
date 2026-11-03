@@ -85,3 +85,96 @@ fn census_of_the_two_2048_sources() {
         "a craft model is the same size on both sources"
     );
 }
+
+/// Each native craft's own rocket and mine counts, off its `<Weapons>` line, on both sources
+/// (`docs/ghidra/functions/ps4-omega-eu/weapon-counts.md`). Roles are the numbered folder:
+/// 1 Fighter (no count authored, so the executable's default 3 and 5), 2 Agility, 3 Speed,
+/// 4 Prototype.
+#[test]
+#[ignore = "needs the Vita 2048 and Omega extractions"]
+fn rocket_and_mine_counts_per_craft() {
+    use oag_weapons::counts::WeaponCounts;
+    let Some((vita, omega)) = both() else { return };
+    let counts = |craft: &Craft| WeaponCounts::from_stats(&craft.stats);
+    let named = |rockets, mines| WeaponCounts { rockets, mines };
+    for (source, craft) in [("2048", &vita), ("Omega", &omega)] {
+        assert_eq!(craft.len(), 20);
+        let mut prototypes = Vec::new();
+        for (i, craft) in craft.iter().enumerate() {
+            let got = counts(craft);
+            match i % 4 {
+                0 => assert_eq!(got, named(3, 5), "{source} {} (Fighter)", craft.id),
+                1 => assert_eq!(got, named(2, 4), "{source} {} (Agility)", craft.id),
+                2 => assert_eq!(got, named(1, 3), "{source} {} (Speed)", craft.id),
+                _ => prototypes.push((craft.id.clone(), got)),
+            }
+        }
+        println!("{source} prototypes: {prototypes:?}");
+        let by_team: Vec<_> = prototypes
+            .iter()
+            .map(|(id, counts)| (id.to_ascii_lowercase(), counts.rockets, counts.mines))
+            .collect();
+        assert_eq!(
+            by_team,
+            [
+                ("ag_systems2048\\4".to_string(), 2, 4),
+                ("auricom2048\\4".to_string(), 3, 5),
+                ("feisar2048\\4".to_string(), 1, 3),
+                ("piranha2048\\4".to_string(), 1, 3),
+                ("qirex2048\\4".to_string(), 3, 5),
+            ],
+            "{source} Prototypes"
+        );
+    }
+    let omega_counts: Vec<_> = omega.iter().map(counts).collect();
+    let vita_counts: Vec<_> = vita.iter().map(counts).collect();
+    assert_eq!(omega_counts, vita_counts, "Omega's counts equal 2048's");
+}
+
+/// Pulse, Pure and HD author neither count (their executables carry neither attribute string),
+/// so every team's file must parse to no `<Weapons>` line: the one place a stray authored line
+/// would switch the count on for a title whose executable never read it.
+#[test]
+#[ignore = "needs the Pulse, Pure and HD images"]
+fn the_other_titles_author_no_weapon_counts() {
+    fn census(
+        what: &str,
+        mut archives: oag_assets::Archives,
+        defaults: &oag_title::RaceDefaults,
+        teams: &[&str],
+    ) {
+        for team in teams {
+            let name = handling::entry_name_in(defaults.handling_dir_for(team), team);
+            let blob = archives
+                .read_name(&name)
+                .unwrap_or_else(|e| panic!("{what} {name}: {e}"));
+            let stats = handling::from_blob(&blob).unwrap_or_else(|e| panic!("{what} {name}: {e}"));
+            assert_eq!(stats.weapons, None, "{what} {name} authors a weapon count");
+            println!("{what}: {name} authors none");
+        }
+    }
+    let ids = |roster: oag_title::team::Roster| roster.iter().map(|t| t.id).collect::<Vec<_>>();
+    if let Some(image) = oag_testdata::exact("pulse-psp-eu.chd") {
+        let archives = oag_pulse::open(&image.display().to_string()).expect("Pulse");
+        let defaults = oag_pulse::race::DEFAULTS;
+        census("Pulse", archives, defaults, &[defaults.team]);
+    }
+    if let Some(image) = oag_testdata::exact("pure-psp-eu.chd") {
+        let archives = oag_pure::open(&image.display().to_string()).expect("Pure");
+        census(
+            "Pure",
+            archives,
+            oag_pure::race::DEFAULTS,
+            &ids(oag_pure::race::TEAM_IDENTITIES),
+        );
+    }
+    if let Some(image) = oag_testdata::exact("hdfury-ps3-eu-dec.iso") {
+        let archives = oag_hd::open(&image.display().to_string()).expect("HD");
+        census(
+            "HD",
+            archives,
+            oag_hd::race::DEFAULTS,
+            &ids(oag_hd::race::TEAM_IDENTITIES),
+        );
+    }
+}
