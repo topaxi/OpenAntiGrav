@@ -1138,7 +1138,8 @@ fn slipstream_pass(path: &Path, fire: bool) -> Option<(usize, (u64, u64))> {
         step(&mut audio, &mut race, &throttle);
     }
     if fire {
-        race.sim.world.ships[0].pickup.weapon = Some(Weapon::Extension);
+        race.sim.world.ships[0].pickup.weapon =
+            Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST));
     }
     for _ in 0..4 {
         step(&mut audio, &mut race, &throttle);
