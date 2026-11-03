@@ -249,6 +249,7 @@ fn layout_fold() -> u64 {
         COMMAND_LEN as u32,
         CRAFTS_AT as u32,
         CRAFT_LEN as u32,
+        TITLE_AT as u32,
         EVENT_KIND as u32,
         EVENT_SLOT as u32,
         EVENT_INDEX as u32,
@@ -380,7 +381,7 @@ fn layout_fold() -> u64 {
 
 /// The revision and the layout it names. The ABI changes in place before release (no
 /// revision bump); the fold is recorded again with each layout edit.
-const REVISION_AND_FOLD: (u32, u64) = (3, 0xe800_a1ec_56da_28a2);
+const REVISION_AND_FOLD: (u32, u64) = (3, 0x8b5c_30e2_e0b8_311f);
 
 #[test]
 fn the_layout_is_the_revision_it_says() {
@@ -582,6 +583,7 @@ fn the_observation_reads_back_through_the_guest_sections() {
         &Course {
             length: 5120.0,
             tracking: &[Tracking::default(), a_tracking()],
+            title: channel_key("wipeout-hd"),
         },
         &[9, 8, 7],
     );
@@ -597,6 +599,7 @@ fn the_observation_reads_back_through_the_guest_sections() {
     let craft = Sections::craft_record(sections.crafts, slot(1)).map(Craft::decode);
     assert_eq!(craft, Some(a_craft()));
     assert_eq!(Sections::course_length(sections.head), 5120.0);
+    assert_eq!(Sections::title(sections.crafts), channel_key("wipeout-hd"));
     let tracking = |s| Sections::tracking_record(sections.crafts, slot(s)).map(Tracking::decode);
     assert_eq!(tracking(1), Some(a_tracking()));
     assert_eq!(tracking(0), Some(Tracking::default()), "no fix, no place");

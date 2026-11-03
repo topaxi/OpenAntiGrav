@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-03
-summary: "Portal pieces 6-9 landed on slipstream; open: wreck gate after merging main, mesh portal, route and island exits, two mod pickups."
+summary: "oag.slipstream wired; open: mesh portal, route and island exits, two mod pickups, Distance::Trigger on a real track."
 categories: [tooling, frontend]
 size: L (50)
 difficulty: medium (50)
@@ -67,6 +67,33 @@ The engine never names the mod.
 5. **`Distance::Trigger` with a real track file.** It is tested only through the
    refusal path (a track with no trigger). A `track_props_ground_truth`-style test with a
    trigger pair is owed.
+
+## Slipstream mod wired (lane slipstream-mod, 2026-11-03)
+
+`oag.slipstream` (official-mods `slipstream/`) is the first user of the pieces above and is proven
+by `tests::extension_slipstream` and `slipstream_ground_truth` (Pulse PSP EU `16_Track`). What it
+found, for the engine:
+
+- **A guest could not tell the title it ran on**, so a per-title portal colour was impossible.
+  Added `Observation::title()` / `title!` (key after the tracking records, no offset moved).
+- **A mod effect is an upright billboard centred on its point**: a portal art's flat edge belongs
+  on the middle row of the PNG, or the depth test hides it under the road. An additive effect on
+  Pulse's pale track is nearly invisible; the mod draws alpha-over in a deep colour.
+- **Fire path**: a person's press raises `pickup-fire` and leaves the pickup, and the AI's Turbo
+  gate does the same, so the guest refuses a fire by simply not clearing the pickup. The mod keeps
+  the default gate (`drives_ai_pickup` false): the gate already needs a straight and a clear road,
+  and the guest adds the portal-room check on the same event.
+- **The half-way gate still applies to a jump**: a jump over the line from a lap whose half-way
+  gate is shut (a lap entered by a late jump) is no lap and no finish. Right for a mod; a mod
+  that wants "skip the lap" needs a separate command.
+- **Pulse PSP and PS2 are one title to a manifest**, so one icon (PS2's, the larger) is shipped.
+- 2048 and Omega: checked, the same guest, icon and fill run on both. To see it:
+  `OAG_MODS=assets/mods/official oag-game <disc or folder> --race --no-audio --mode single_race --give extension --autopilot --input-script fire.inputs --ticks 730 --screenshot out.png`
+  with `[mods] enabled = ["oag.slipstream"]` in the settings file and `fire.inputs` = `700 cross`,
+  `1 cross square`, `200 cross`. 2048's disc icon (`2048.png`) is drawn by the mod and the frame by
+  the engine; the pickup box shows with `--give extension` (it did not without a pickup).
+- The pad odds are one row for every title and class, checked against each real table
+  (`slipstream_ground_truth::its_share_of_the_pad_draws_is_a_fraction_of_a_turbo_on_every_titles_real_table`).
 
 ## Next Steps
 

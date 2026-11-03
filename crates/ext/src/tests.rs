@@ -162,6 +162,7 @@ fn the_observation_lists_active_crafts_and_skips_unknown_events() {
                     place: 1,
                 },
             ],
+            title: crate::channel_key("wipeout-pulse"),
         },
         &[],
     );
@@ -174,6 +175,7 @@ fn the_observation_lists_active_crafts_and_skips_unknown_events() {
     assert_eq!(shields, [(slot(0), 1.0), (slot(2), 3.0)]);
     assert!(obs.craft(slot(1)).is_none());
     assert_eq!(obs.course_length(), 4000.0);
+    assert_eq!(obs.title(), crate::title!("wipeout-pulse"));
     let tracked: Vec<_> = obs.crafts().map(|c| (c.progress(), c.place())).collect();
     assert_eq!(tracked, [(Some(-30.0), 2), (Some(1500.0), 1)]);
     let seen: Vec<_> = obs.events().collect();
@@ -719,6 +721,20 @@ fn the_test_harness_hands_a_guest_its_course_and_place() {
         .with_course(3000.0, slot(1), Some(250.0), 3);
     race.tick();
     assert_eq!(race.state(), 3003);
+}
+
+#[test]
+fn the_test_harness_hands_a_guest_its_title() {
+    struct Reader;
+    impl Extension for Reader {
+        type State = u32;
+        fn tick(obs: &Observation<'_>, state: &mut u32, _: &mut Reply<'_>) {
+            *state = u32::from(obs.title() == crate::title!("wipeout-hd"));
+        }
+    }
+    let mut race = crate::test::Race::<Reader>::new().with_title(crate::title!("wipeout-hd"));
+    race.tick();
+    assert_eq!(race.state(), 1);
 }
 
 #[test]

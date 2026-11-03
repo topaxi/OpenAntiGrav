@@ -106,6 +106,8 @@ pub(super) struct On {
     pub(super) sky: super::Sky,
     /// The `[[pickup.odds]]` the pads draw with: the declaring module, its rows, the title.
     odds: Option<(usize, Vec<oag_tables::pickup_look::OddsRow>, String)>,
+    /// The race's title key, written into every observation.
+    title: u32,
     /// The slots whose `transit` ended this tick, before the call: their `transit-end`
     /// is in this call's events.
     pub(super) transit_ends: u32,
@@ -235,6 +237,12 @@ impl On {
         })
     }
 
+    /// The race's title key, for every observation.
+    pub(super) fn with_title(mut self, title: u32) -> Self {
+        self.title = title;
+        self
+    }
+
     pub(super) fn new(
         modules: Vec<(String, Module)>,
         region: super::track::Region,
@@ -245,6 +253,7 @@ impl On {
         odds: Option<(usize, Vec<oag_tables::pickup_look::OddsRow>, String)>,
     ) -> Self {
         Self {
+            title: 0,
             // The module whose mod declares pad odds owns the mod pickup from the start.
             owner: odds.as_ref().map_or(0, |(module, _, _)| *module as u8 + 1),
             odds,
@@ -843,6 +852,7 @@ pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs, trans
         course: oag_ext_abi::Course {
             length: sim.course.as_ref().map_or(0.0, oag_race::Course::length),
             tracking: &tracking,
+            title: on.title,
         },
         track: &region.bytes,
         speed_pads: region.speed_pads,

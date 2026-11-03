@@ -214,6 +214,9 @@ pub struct Prepared {
     /// order with any), its rows, and the race's title.
     #[cfg(feature = "extensions")]
     odds: Option<(usize, Vec<oag_tables::pickup_look::OddsRow>, String)>,
+    /// The race's title as the observation's key (`oag_ext_abi::channel_key` of its slug).
+    #[cfg(feature = "extensions")]
+    title: u32,
     /// The track's triggers that send a channel: with no module too.
     beacons: channel::Beacons,
 }
@@ -377,6 +380,7 @@ pub fn prepare(
             drives_ai,
             publishes,
             odds,
+            title: oag_ext_abi::channel_key(&title.to_ascii_lowercase()),
             beacons,
         }
     }
@@ -649,7 +653,8 @@ impl Extensions {
                     prepared.drives_ai,
                     prepared.publishes,
                     prepared.odds,
-                ),
+                )
+                .with_title(prepared.title),
                 beacons: prepared.beacons,
                 fired: Vec::new(),
             }

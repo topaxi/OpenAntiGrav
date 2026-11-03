@@ -500,7 +500,7 @@ in `crates/ext-abi/src/tests.rs` is recorded again. The engine side is in
 
 | Piece | Kind | What it is |
 | --- | --- | --- |
-| `transit{slot, ticks, distance, exit_factor}` | command 27 | Out of the world for `ticks` (1 to `MAX_TRANSIT_TICKS` = 600): frozen where it was, not stepped, not drawn, not collided with, not hit or locked, controls and pickup presses ignored, reset triggers held. Then moved forward to `distance` and stepped from there the same tick, at `exit_factor` (0 to 2, steps of 1/10,000) times its entry speed. Laps count through the jump; a finish in it is timed at the exit tick. Refused (a fault) for a craft not racing or already out, or a distance that does not resolve |
+| `transit{slot, ticks, distance, exit_factor}` | command 27 | Out of the world for `ticks` (1 to `MAX_TRANSIT_TICKS` = 600): frozen where it was, not stepped, not drawn, not collided with, not hit or locked, controls and pickup presses ignored, reset triggers held. Then moved forward to `distance` and stepped from there the same tick, at `exit_factor` (0 to 2, steps of 1/10,000) times its entry speed. Laps count through the jump (not across a shut half-way gate, as for a driven crossing); a finish in it is timed at the exit tick. Refused (a fault) for a craft not racing or already out, or a distance that does not resolve |
 | `Distance` | vocabulary | `Units(u)` on, `Seconds(s)` at the speed it has when the command lands, `Lap(share)`, `Progress(p)` (a place on the lap, units from the start line), `Trigger(n)` (the course point nearest track trigger `n`'s centre: a portal's other end). Always forward, under a lap |
 | `transit-end{slot}` | event 11 | On the exit tick's own call |
 | `scale-speed{slot, factor}` | command 28 | Velocity times `factor` (0 to 2), once, at the call |
@@ -537,13 +537,14 @@ a `transit`). The observation carries what such a decision reads:
 | --- | --- | --- |
 | tracking record | observation | A second per-craft record at `TRACKING_AT` (8 bytes a slot, `oag_ext_abi::Tracking`): `progress` (`f32`, units along the circuit within the lap, negative on the grid behind the line), `place` (`u8`, 1-based, 0 for an empty slot; the one ordering the HUD shows, `RaceSim::places`), a flags byte whose bit 0 says `progress` is a fix (no number stands for "no fix yet") |
 | course length | observation | `f32` units at header offset 4 (`COURSE_LENGTH_AT`), 0 without a closed course: `progress / length` is the lap share |
+| title key | observation | `u32` at `TITLE_AT` (after the tracking records): `channel_key` of the title's lowercased hyphenated name (`wipeout-hd`, the slug a manifest's `titles` uses), 0 when the host says none. SDK `Observation::title()` and the compile-time `title!("wipeout-hd")`; `test::Race::with_title`. A guest that looks different per title (a portal's colour) reads it; PSP and PS2 Pulse are one title. Appended after the last region, so no offset moves |
 | `drives_ai_pickup` | manifest | `[extension]`, boolean, default `false` |
 
 The observation is built before the tick's step, so `progress` and `place` are last tick's.
 The mod pickup's fire path for a person is unchanged. Proof: `oag_raceplay`'s
 `tests::extension_ai_pickup` (the default raises `pickup-fire` for an AI craft, the flag
 raises nothing, a module reads the course length and the HUD's place), `oag_ext_abi`'s
-tracking round trip and the recorded fold.
+tracking round trip (title key included) and the recorded fold.
 
 **View outputs for a portal (outputs, never hashed).** Three commands draw into a view; each
 is re-sent every tick it should hold, and a slot with no craft is a fault.
@@ -552,7 +553,7 @@ is re-sent every tick it should hold, and a slot with no craft is a fault.
 | --- | --- | --- |
 | `screen-fill{slot, rgba}` | command 30 | Washes the slot's own view. It joins `Race::screen_wash`, the one wash the screen flash draws through: the colour times its alpha is added over the picture (an additive wash, as the title's flash is), and beside a running flash the two are summed into the same one pass. A split-screen seat wears only its own slot's fill; the flash stays the player's |
 | `fov-offset{slot, degrees}` | command 31 | Added to the slot's vertical field of view, `[-30, 30]` degrees (`MAX_FOV_OFFSET_DEG`), inside `camera::finish_vertical_fov` after the player's setting and before the boost kick and the aspect fit. Zero skips the arithmetic, so a race with none is bit-identical. Two modules add |
-| `fire-mod-effect-ahead{slot, index, distance}` | command 32 | The sending mod's own effect number `index` (its `[effects]`), played at the middle of the road `distance` ahead of the craft (the same `Distance` and `Race::point_ahead` as `transit`, lifted off the surface as `probe-clearance` lifts its disc). It stands in the world for the effect's own lifetime (up to 600 ticks): a mod PNG as a camera-facing sprite, the half disc of a portal. It is a sprite, not a mesh: a disc that stands across the road and a custom shader are a later piece. Counts toward `MAX_FIRE_EFFECTS_PER_TICK`; a distance that does not resolve, or a road with no spline there, draws nothing |
+| `fire-mod-effect-ahead{slot, index, distance}` | command 32 | The sending mod's own effect number `index` (its `[effects]`), played at the middle of the road `distance` ahead of the craft (the same `Distance` and `Race::point_ahead` as `transit`, lifted off the surface as `probe-clearance` lifts its disc). It stands in the world for the effect's own lifetime (up to 600 ticks): a mod PNG as a camera-facing sprite, the half disc of a portal, centred on the point (a half disc's art belongs in the PNG's upper half, its flat edge on the middle row). It is a sprite, not a mesh: a disc that stands across the road and a custom shader are a later piece. Counts toward `MAX_FIRE_EFFECTS_PER_TICK`; a distance that does not resolve, or a road with no spline there, draws nothing |
 
 Proof: `oag_ext_abi`'s byte pins and range tests, `oag_modhost`'s refusal test,
 `oag_raceplay`'s `tests::extension_view` (the fill is its slot's view's alone, beside a flash it
