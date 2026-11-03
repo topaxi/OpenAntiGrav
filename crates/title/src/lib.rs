@@ -162,6 +162,10 @@ pub struct Title {
     /// fade, through [`Self::speech_volume_law`]) instead of the Speech slider alone. The Speech
     /// slider then multiplies in linearly on top. `false` on an authored mix.
     pub speech_follows_effects: pre_race::Sourced<bool>,
+    /// A fixed trim on the whole mix, in decibels, applied ahead of the master limiter. Pulse's
+    /// mix is authored for a 16-bit clamp and sums to about twice full scale in a busy race; HD's
+    /// authored mix has headroom and reads `0.0`.
+    pub master_trim_db: pre_race::Sourced<f32>,
     /// Which codepoints in this title's strings are controller-button glyphs,
     /// and which control each depicts. See [`prompts::Prompts`].
     pub prompts: &'static prompts::Prompts,

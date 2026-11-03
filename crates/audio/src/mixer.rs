@@ -449,6 +449,8 @@ pub struct Mixer {
     voices: Vec<Voice>,
     bus_gain: [f32; Bus::COUNT],
     master_gain: f32,
+    /// A fixed gain a title asks for, ahead of the limiter; see [`Self::set_master_trim`].
+    master_trim: f32,
     sample_rate: u32,
     spatial: SpatialMode,
     /// The shared HRTF convolver, once built. See [`Self::set_binaural`].
@@ -491,6 +493,7 @@ impl Mixer {
             voices: vec![Voice::default(); MAX_VOICES],
             bus_gain: [1.0; Bus::COUNT],
             master_gain: 1.0,
+            master_trim: 1.0,
             sample_rate: sample_rate.max(1),
             spatial: SpatialMode::Original,
             binaural: None,
@@ -547,6 +550,14 @@ impl Mixer {
     /// Scales everything, after the buses. Used to mute wholesale.
     pub fn set_master_gain(&mut self, gain: f32) {
         self.master_gain = gain.max(0.0);
+    }
+
+    /// Scales everything like [`Self::set_master_gain`], but is the title's, not the
+    /// player's: the master volume slider does not move it. Applied to every voice before the
+    /// sum reaches the limiter, so a mix authored hotter than the limiter's ceiling is brought
+    /// down once here instead of being ridden down by the limiter all race.
+    pub fn set_master_trim(&mut self, gain: f32) {
+        self.master_trim = gain.max(0.0);
     }
 
     /// How many voices are live - started, not stopped, not finished.
@@ -931,7 +942,7 @@ impl Mixer {
     /// what the limiter saw.
     pub fn render(&mut self, out: &mut [f32]) {
         out.fill(0.0);
-        let master = self.master_gain;
+        let master = self.master_gain * self.master_trim;
         let bus_gain = self.bus_gain;
         let rate = f64::from(self.sample_rate);
         let spatial = self.spatial;

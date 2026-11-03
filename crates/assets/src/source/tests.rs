@@ -240,6 +240,7 @@ const TITLE: &Title = &Title {
         oag_title::group_volume::GroupVolumeLaw::Linear,
     ),
     speech_follows_effects: oag_title::pre_race::Sourced::chosen(false),
+    master_trim_db: oag_title::pre_race::Sourced::chosen(0.0),
     plugin_definition: r"Data\Plugins\PI000\Definition.xml",
     track_plugin_definition: None,
     // This crate opens archives; nothing here draws a loading screen.
