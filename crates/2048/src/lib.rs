@@ -202,6 +202,13 @@ pub const TITLE: &Title = &Title {
     // rule that an unmeasured title runs Pulse's. The shield tint likewise.
     effects: &EFFECTS,
     looks: &oag_title::Looks {
+        // The launch boost: the title authors `<StartBoost>`; the grading law is HD's, which is
+        // Pulse PSP's, unmeasured on 2048 and Omega alike (`docs/physics/launch-boost.md`).
+        // Whichever of the two is measured first supplies the other.
+        start_boost: oag_title::Rule {
+            on: oag_title::Platforms::Any,
+            origin: oag_title::Origin::InheritedFrom("Wipeout HD (itself Wipeout Pulse PSP's)"),
+        },
         // The race composite and its exposure, read off the eboot and its
         // programs: `docs/ghidra/functions/vita-2048-eu-v104/exposure.md`.
         wo_composite: oag_title::Rule {

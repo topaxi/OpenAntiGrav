@@ -736,6 +736,14 @@ pub struct Looks {
     /// bloom's glow mask, the quake, weather and track stats.
     /// Keyed on the race's own archive.
     pub measured_draws: Rule,
+    /// The launch boost: the title's authored `<Handling><Global><StartBoost>` graded by when
+    /// thrust first lands (`docs/physics/launch-boost.md`). Where it applies, its origin names
+    /// whose law it is. A title with its own compiled-in boost (`CraftLaws::code_start_boost`)
+    /// leaves it unread. See [`Self::start_boost_origin`].
+    pub start_boost: Rule,
+    /// A second platform's [`Self::start_boost`], for a title whose platforms differ in
+    /// provenance (Pulse: PSP measured, PS2 carried over).
+    pub start_boost_carried: Rule,
     /// The PSP's glow mask and the bloom over it: every `.vex` model the race draws
     /// stamps the framebuffer's alpha through the stencil, per batch, and the four-pass
     /// bloom reads it (`docs/rendering/glow-mask.md`). Keyed on the race's own archive.
@@ -834,6 +842,16 @@ pub struct Looks {
 pub const MATERIAL_LOD_BIAS: f32 = -1.5;
 
 impl Looks {
+    /// Where this title's authored launch boost comes from on a disc of `platform`, or `None`
+    /// where the title does not fly one.
+    #[must_use]
+    pub fn start_boost_origin(&self, platform: Platform) -> Option<Origin> {
+        [self.start_boost, self.start_boost_carried]
+            .into_iter()
+            .find(|rule| rule.applies(platform))
+            .map(|rule| rule.origin)
+    }
+
     /// The LOD bias this title's circuit materials are sampled with, in levels:
     /// [`MATERIAL_LOD_BIAS`] where [`Self::material_lod_bias`] applies, else `0.0`
     /// (the sampler's own selection).
@@ -861,6 +879,8 @@ impl Looks {
             laid_pose_scaled: Rule::UNREAD,
             laid_from_rear: Rule::UNREAD,
             measured_draws: Rule::UNREAD,
+            start_boost: Rule::UNREAD,
+            start_boost_carried: Rule::UNREAD,
             psp_glow_mask: Rule::UNREAD,
             bloom_under_hud: Rule::UNREAD,
             particle_laws: Rule::UNREAD,

@@ -121,6 +121,16 @@ pub const LOOKS: &Looks = &Looks {
         on: PSP,
         origin: Origin::Measured,
     },
+    // The launch boost, watched on PPSSPP: `docs/physics/launch-boost.md`. The PS2 disc authors
+    // the same `<StartBoost>` and its law is carried over, unmeasured there.
+    start_boost: Rule {
+        on: PSP,
+        origin: Origin::Measured,
+    },
+    start_boost_carried: Rule {
+        on: Platforms::Only(&[Platform::Ps2]),
+        origin: Origin::InheritedFrom("Wipeout Pulse (PSP)"),
+    },
     // The stencil-stamped mask and the bloom over it: `docs/rendering/glow-mask.md`,
     // `docs/ghidra/functions/psp-pulse-usa/bloom.md`.
     psp_glow_mask: Rule {
