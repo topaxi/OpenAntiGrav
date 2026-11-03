@@ -255,6 +255,11 @@ neither has been withdrawn; see that page for the full account of what is and
 is not settled. Do not treat `body+0x50` specifically as confirmed tensor
 storage until this is reconciled.
 
+**Reconciled 2026-11-03**: the `+0x50` the blast function reads is not on this
+body. Its `T` is a separate node-transform object whose `+0x50` is a nose point
+(body position + 4.875 x forward). See
+[contact-response.md](contact-response.md#weapon_postblastimpulses-t0x50-is-not-body0x50-t-is-a-different-object).
+
 **So the trace's fitted per-axis factor is the inertia tensor, and the sign is the
 `w_game = -w_physics` convention.** The recorded `+0x160` column is `I * w`, so
 dividing it by a body-local angular velocity recovers the **diagonal of `I`** -

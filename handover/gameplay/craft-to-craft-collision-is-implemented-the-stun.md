@@ -1,8 +1,8 @@
 ---
-status: re-first
+status: ready-to-wire
 titles: [pulse]
-updated: 2026-09-10
-summary: "Craft stun not armed; body+0x50 reading in tension with rigid-body.md; settle whether FUN_0885bf84 arms the fuse"
+updated: 2026-11-03
+summary: "No craft stun exists (measured 2026-11-03); pending_impulse still unset; port Weapon_PostBlastImpulse nose-point distance; ring consumer unread"
 ---
 
 # Craft-to-craft collision is implemented; the stun is still not armed
@@ -93,12 +93,14 @@ than patched here.
 
 ## Open
 
-- `pending_impulse` is set by nothing in this crate, so `apply_pending_impulse` is a correct but fully inert no-op.
-- `body+0x50` as position is in direct tension with rigid-body.md's confidence-88 reading of `body+0x40..0x70` as inverse-inertia storage; flagged in both docs, reconciled in neither.
-- The stun is not armed: craft-craft elasticity (`e = 0.1`) disagrees with the ship's own track elasticity (`e = 0.4`), no friction is applied, and no severity logic is modelled.
-- `FUN_0885bf84` is still an unconfirmed fuse-arming candidate for `craft->0x48` - not for `pending_impulse`, which it never touches. Slot arithmetic and the written field match `MinePool_Update`'s reader exactly; the cap (`16` vs `32`) and cursor offset (`+0xa4` vs `+0x164`) still don't. Re-checked this pass: no static `jal` anywhere in the image targets `0x0885bf84` (`search_instructions`, 525,283 instructions scanned, zero hits), confirming the indirect-dispatch shape already on record rather than turning up a new lead - settling it still needs one of the three routes below.
+- **Closed 2026-11-03, measured (80): a craft-to-craft hit arms no stun, fuse, flag or timer.** The struck craft's only changes beyond pose following are its velocity and one contact-ring record at `body+0x170`; craft law is `Body_ResolveContactPair` as ported (`e = 0.1`, no friction, centred impulse). Nothing to wire. Evidence: [contact-response.md](../../docs/ghidra/functions/psp-pulse-usa/contact-response.md#measured-2026-11-03-a-craft-to-craft-hit-arms-nothing-on-the-craft).
+- **Closed 2026-11-03: `FUN_0885bf84` is `Plasma_Launch`**, its `+0x48` a bolt's launch speed; the `craft->0x48` fuse was always the Mine entity's `+0x48` (`timetodie`). The "fuse-arming candidate" is refuted.
+- **Closed 2026-11-03: the `body+0x50` tension was two structs.** `Weapon_PostBlastImpulse`'s `T` is a node-transform object whose `+0x50` is the craft's nose point (body position + 4.875 x forward), not the rigid body. Confidence 75, read off two single-craft states; not checked across the eight-craft grid.
+- `pending_impulse` is still set by nothing in this crate: `apply_pending_impulse` is inert. `wall::post_blast_impulse` measures from the body's position; the original measures from the nose point (`T+0x50`). Wire that when a weapon calls it.
+- The contact ring at `body+0x170` (flag word, point, normal, depth) has no read consumer; `psp-contact-fx-read.py` is the starting point.
 
 ## Next Steps
 
-- Settle whether `FUN_0885bf84` arms `craft->0x48`'s fuse, by one of the three routes `contact-response.md` already narrowed it to: read what `+0xbc`'s per-type table actually enumerates, find `FUN_0886b458`'s own caller (unresolved by static `jal` search, same indirect-dispatch shape as `MinePool_Update` itself), or catch a slot at the *moment* it is armed and read its `+0x48` on every tick thereafter rather than trusting a watchpoint to report absence.
+- Port `Weapon_PostBlastImpulse`'s nose-point distance into `wall::post_blast_impulse` when a Mine blast is wired (`T+0x50 = position + 4.875 * forward`, `+0xd0` the tail point).
 - Port `FUN_08868ea4` now that both its callers (`FUN_08868a10`, `FUN_088690fc`) are read, or wire `post_blast_impulse` to a real weapon.
+- Optionally: repeat the node-layout read across the eight-craft grid (find `T` per craft by pointer refs from the craft's `+0x4c` side, not by `0x08b3bf88`).
