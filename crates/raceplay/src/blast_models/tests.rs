@@ -308,6 +308,28 @@ fn the_halo_is_hidden_inside_the_measured_bracket() {
     assert!(scale(43, 1) > 0.0 && scale(43, 2) > 0.0);
 }
 
+/// Pulse's hemispheres sit 3.5 below the impact point along the frame's up
+/// while the halo stays on it: the dumps put the halo at y -39.31 and both
+/// hemispheres at -42.7 under a surface normal of (-0.093, 0.968, 0.234)
+/// (`psp-pulse-usa/plasma.md`, "the hemisphere drop"). Fails with a zero drop.
+#[test]
+fn pulses_hemispheres_sit_three_and_a_half_below_the_halo_along_the_up() {
+    let (race, draw) = pulse_blast_after(3);
+    let up = race
+        .view
+        .plasma_blasts
+        .iter()
+        .flatten()
+        .next()
+        .unwrap()
+        .frame[1];
+    let halo = draw.matrices[0].w_axis.truncate();
+    for model in [1, 2] {
+        let apart = draw.matrices[model].w_axis.truncate() - halo;
+        assert!((apart + up * 3.5).length() < 1e-4, "model {model}: {apart}");
+    }
+}
+
 fn pure_law() -> oag_title::weapons::PlasmaBlastLaw {
     oag_pure::TITLE
         .weapon_models

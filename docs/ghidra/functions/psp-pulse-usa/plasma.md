@@ -2017,3 +2017,31 @@ may move; HD's site unread, `particle-triggers.md`), 2048 (Omega's lineage) and 
 keep the arcs where they are born. **Checked, applies, not wired.** `pure-weapons-wire` turns
 the same switch for Pure by leaving `without_pulse_psp_draw` off the head or setting
 `rides_owner_frame`; the lead should sequence that lane with this one.
+
+## 2026-11-03: the hemisphere drop and the dark discs (plasma-dome-specks)
+
+### The hemisphere drop
+
+`PlasmaBlast_Construct` moves the basis position by `-3.5 x row1` (Pure's page, "Placement and basis"; the same
+constant and call on Pulse). The 16 GE dumps give the sign with no new capture: at k80 to k100 the halo's world
+translation is (291.87, -39.31, -193.59) (the impact point) and both hemispheres' (292.12, -42.70, -194.41), a
+difference of (0.25, -3.39, -0.82), length 3.5, direction (0.07, -0.968, -0.234). The hemispheres' basis row 1 is
+(-0.093, 0.968, 0.234), so the difference is **minus the frame's up times 3.5**: the hemispheres sit 3.5 units below
+the impact point along the track's down, the sign `Race::plasma_blast_draws` already used for Pure. Confidence **85**
+(16 dumps agree to 0.02 units; the "row 1 is the track's up" is read off the same dumps' basis).
+`PlasmaBlastLaw::hemisphere_drop` on Pulse's row is now `3.5` (it was `0.0`, the constant unapplied). PS2 shares the
+row (inherited from PSP). Test: `blast_models::tests::pulses_hemispheres_sit_three_and_a_half_below_the_halo_along_the_up`
+(red with a zero drop). **Pair**, whole frame with the HUD masked, Talon's Junction, Assegai Venom, fire at GO + 120,
+mean absolute grey difference against `orig-kNNN` (before, after): k80 6.8, 6.7; k88 51.0, 47.5; k92 79.4, 29.5; k96
+28.4, 24.2; k100 27.9, 24.7. At k92 the original is a white-out and ours now holds the eye inside the shell too.
+
+### The dark discs are `WO_PLASMA_FLASH`'s particles, not the shell's texture
+
+The hemispheres' and the halo's textures are fully opaque with no dark content (alpha 255 everywhere, a noise
+pattern). The dark discs with purple halos on a Pure or Pulse blast are the 32 alpha-over particles of
+`WO_PLASMA_FLASH`'s root emitter, and they stay with all three models zeroed. Two things made them read as arches and
+as a swarm: a pre-fix `.pob` atlas grid word (columns in the high half, fixed in `35fcc4d57`) cut each particle's
+cell, and `--give` with `--press square` re-fires every other tick so dozens of blasts overlap. A single blast on
+the matched Pulse pair draws a handful of small dots at k96 and k100, as the original does (`orig-k096`, `orig-k100`),
+so there is nothing to fix. Pure: a single bolt at the default circuit (tick 500, `weapon-after-go-matched.inputs`)
+shows three discs in a violet shell, no arches.

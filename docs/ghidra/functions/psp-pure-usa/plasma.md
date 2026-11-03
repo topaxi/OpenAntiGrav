@@ -135,13 +135,13 @@ mechanism (`oag_raceplay::blast_models`) now reads all of it from that law; Puls
   but not twice as large on screen: the halo reaches `15 x 5.01 = 75` units against Pulse's `8 x 10 = 80`, the hemispheres
   `32` and `31` against `30` and `23`. Confidence 70 that the Pulse-fitted unit carries over (same loader, same
   decoder; not matched against a Pure frame).
-- **Placement.** The `-3.5` drop is applied to Pure's hemispheres only. Pulse's code reads the same drop
-  (the GE dumps put its halo and hemispheres 3.49 apart) and ours applies none yet: `hemisphere_drop` is `0.0` on Pulse's
-  row. Which side of the road the original's `-3.5 x row1` points is not read: ours moves the hemispheres against the
-  track's up, which puts the dome on the road under a bolt that flies above it.
+- **Placement.** The `-3.5` drop is applied to Pure's hemispheres, against the frame's up: Pulse's GE dumps settle the
+  sign for the shared code path (hemispheres 3.5 below the halo along minus row 1 = minus up, confidence 85;
+  [Pulse's plasma.md](../psp-pulse-usa/plasma.md), "the hemisphere drop"). Pulse's row now applies it too. A Pure
+  frame has not been captured; the sign is Pulse's, **inherited**.
 - **Look.** The headless pair at Pure's default circuit shows a large violet dome around the craft at age 0.05 s and the
-  halo's tint gone by 0.5 s; small black holes in the hemisphere's texture show on Pulse's blast too (cause not investigated: not
-  a tint or scale matter, nothing in this lane draws them).
+  halo's tint gone by 0.5 s; the dark discs and arches seen in this lane's shot are `WO_PLASMA_FLASH`'s particles drawn with the atlas grid
+  bug (fixed since; not the shell's texture, which is opaque), see Pulse's page, "the dark discs".
 - Open: a Pure capture of the blast (this is read, not matched), the craft-hit count (`plasma_craft_hit_blast_point` spawns
   Pulse's two on Pure too, unmeasured).
 
