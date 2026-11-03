@@ -503,7 +503,7 @@ fn translate(model: &mut Model, offset: Vec3) {
 }
 
 /// `<ship_dir>\<Team>\<stem>.vex`, the way every other per-team model is
-/// composed - see [`crate::race::ship_entry_name`].
+/// composed - see `oag_pulse::race::ships::hull_entry_name`.
 fn ship_entry_name_for(ship_dir: &str, team: &str, stem: &str) -> String {
     oag_pulse::race::ships::entry_name_in(ship_dir, team, stem)
 }

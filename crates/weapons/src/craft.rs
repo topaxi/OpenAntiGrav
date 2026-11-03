@@ -6,6 +6,7 @@
 //! Generic use, not `dyn`: monomorphisation keeps the float operations exactly
 //! as they were when the code named `Ship` directly.
 
+use oag_core::math::Vec3;
 use oag_physics::{ShipState, params::Dimensions};
 
 use crate::disruption::Disruption;
@@ -25,6 +26,12 @@ pub trait Craft {
     /// The authored hull dimensions, which size a blast's reach and a beam's
     /// anchor.
     fn dimensions(&self) -> Dimensions;
+
+    /// The hull's `Ship Muzzle` locator in the hull's own model space, the
+    /// weapon node a Plasma bolt charges on and leaves from
+    /// ([`crate::projectile::plasma::muzzle`]); `None` where the hull authors
+    /// none or its class id is unread.
+    fn muzzle(&self) -> Option<Vec3>;
 
     /// Seconds of slowdown credited this tick and not yet drained into the
     /// engine's timer; see [`crate::slowdown::drain`].

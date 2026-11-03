@@ -33,14 +33,17 @@ const ORIGINAL_DISTANCE: [f32; 17] = [
     40.63, 43.80, 47.01,
 ];
 
-/// Distance of the original's bolt from its craft at the end of each frame from the release
-/// on (`--probe plasma_fly`, `vel` against `craft_pos` of the same record: one hook read of
-/// both, so the pair is one instant). Entry 0 is the release frame, with the bolt 2.22 ahead
-/// of the craft at the node's previous position; the bolt then gains 0.19 a frame on the
-/// craft until its first floor ride at entry 4 (`plasma.md`, "the release leaves from the
-/// node of the frame before").
-const ORIGINAL_FROM_CRAFT: [f32; 9] = [
-    2.224, 2.414, 2.600, 2.757, 3.808, 4.768, 5.751, 6.863, 7.866,
+/// Distance of the original's drawn bolt from its craft at the end of each frame from the
+/// release frame on, both read at one hook after every update of the frame
+/// (`--probe pool` on `ParticleSystem_DrawEmitterPool`: the head's matrix, which
+/// `Plasma_BuildDrawMatrices` copies from the bolt's own after its move, against
+/// `craft_pos`; 82 frames, `plasma.md`, "the head after the release"). Entry 0 is the
+/// release frame: the bolt sits on the craft's weapon node, 4.24 ahead on Assegai, where
+/// it charged; it then gains 0.19 a frame on the craft until its first floor ride at
+/// entry 4. A pre-move bolt against a post-move craft (the `plasma_fly` probe at
+/// `Plasma_Update`'s entry) reads one craft step less, 2.22, 2.41 ...: not one instant.
+const ORIGINAL_FROM_CRAFT: [f32; 10] = [
+    4.240, 4.431, 4.620, 4.806, 5.788, 6.790, 7.808, 8.841, 9.890, 10.954,
 ];
 
 /// The original's `PlasmaBlast_Construct`, in frames after the press.
@@ -137,10 +140,10 @@ fn the_plasma_releases_flies_and_detonates_on_the_originals_ticks() {
     }
 
     // And where it is against the craft it left, which the head's draw shows: the bolt
-    // leaves 2.2 ahead and gains on the craft by the difference of their speeds, as the
-    // original's does (it too is 2.0 behind the charging head's node at release). The first
-    // seven frames agree to 0.1; after that the ride's pin is 0.07 short per frame in ours
-    // and the gap opens, 0.12 at the seventh.
+    // leaves from the weapon node 4.24 ahead and gains on the craft by the difference of
+    // their speeds, as the original's does. Fails with the release on the hold point
+    // (2.23: two units short on every row). The first seven frames agree to 0.1; after
+    // that the ride's pin is a little short per frame in ours and the gap opens.
     for (frame, expected) in ORIGINAL_FROM_CRAFT.iter().enumerate() {
         let (_, from_craft) = positions[ORIGINAL_RELEASE + frame]
             .unwrap_or_else(|| panic!("the bolt is gone {frame} frames after release"));

@@ -56,7 +56,7 @@ fn a_charging_bolt_rides_the_craft_and_leaves_along_its_new_heading() {
     let mut ships = one_ship(Vec3::ZERO, 0.0);
     let mut projectiles = Projectiles::new();
 
-    let (nose, forward) = muzzle(&ships[0].physics);
+    let (nose, forward) = muzzle(&ships[0]);
     assert!(projectiles.charge_up(nose, forward * 100.0, 0, CHARGE_SECONDS));
 
     // The wind-up with the craft turning. The hold is counted: `charge` is a float
@@ -81,7 +81,7 @@ fn a_charging_bolt_rides_the_craft_and_leaves_along_its_new_heading() {
         assert_eq!(bolt.kind, Some(Weapon::Plasma), "the slot stays taken");
         // The reseat runs on the releasing tick too: the original calls
         // `Plasma_UpdateCharge` before testing the countdown.
-        let (nose_now, _) = muzzle(&ships[0].physics);
+        let (nose_now, _) = muzzle(&ships[0]);
         assert!(
             bolt.position.distance(nose_now) < 1e-3,
             "tick {tick}: the bolt sits on the nose, not where it was fired"
@@ -101,7 +101,7 @@ fn a_charging_bolt_rides_the_craft_and_leaves_along_its_new_heading() {
     let bolt = projectiles.slots[0];
     assert_eq!(bolt.charge, 0.0, "the hold is over after CHARGE_SECONDS");
     let heading = bolt.velocity.normalize();
-    let (_, forward_now) = muzzle(&ships[0].physics);
+    let (_, forward_now) = muzzle(&ships[0]);
     assert!(
         heading.distance(forward_now) < 1e-3,
         "the bolt leaves along the craft's heading at release: {heading:?} against {forward_now:?}"
@@ -116,7 +116,7 @@ fn a_charging_bolt_rides_the_craft_and_leaves_along_its_new_heading() {
     );
 
     // And the tick after the hold it is flying: it leaves the nose behind.
-    let (nose_at_release, _) = muzzle(&ships[0].physics);
+    let (nose_at_release, _) = muzzle(&ships[0]);
     projectiles.advance(
         TICK,
         &geometry,
@@ -487,7 +487,7 @@ fn the_launch_speed_reads_the_crafts_velocity_at_release_not_at_the_press() {
     let geometry = CollisionWorld::new();
     let mut ships = one_ship(Vec3::ZERO, 0.0);
     let mut projectiles = Projectiles::new();
-    let (nose, forward) = muzzle(&ships[0].physics);
+    let (nose, forward) = muzzle(&ships[0]);
     // Still at the press: read now, the launch speed would be `launchSpeed`, `0.0`.
     assert!(projectiles.charge_up(nose, forward * 100.0, 0, CHARGE_SECONDS));
 
@@ -538,7 +538,7 @@ fn a_flying_plasma_bolts_speed_blends_from_launch_to_class_over_one_second() {
     // the speed.
     ships[0].physics.body.linear_velocity = Vec3::Z * 100.0;
     let mut projectiles = Projectiles::new();
-    let (nose, forward) = muzzle(&ships[0].physics);
+    let (nose, forward) = muzzle(&ships[0]);
     assert!(projectiles.charge_up(nose, forward * 100.0, 0, CHARGE_SECONDS));
 
     let advance = |projectiles: &mut Projectiles, ships: &[crate::test_craft::Ship]| {
@@ -602,7 +602,7 @@ fn released_over_a_floor() -> (
     let mut ships = one_ship(Vec3::new(0.0, crate::projectile::RIDE_HEIGHT, 0.0), 0.0);
     ships[0].physics.body.linear_velocity = Vec3::Z * 100.0;
     let mut projectiles = Projectiles::new();
-    let (nose, forward) = muzzle(&ships[0].physics);
+    let (nose, forward) = muzzle(&ships[0]);
     assert!(projectiles.charge_up(nose, forward * 100.0, 0, CHARGE_SECONDS));
     let mut tick = 0;
     loop {
@@ -643,15 +643,32 @@ fn the_wind_up_ends_on_the_sixtieth_tick() {
     assert_eq!(tick, 59, "released on tick {tick}, counting the press as 0");
 }
 
-/// A bolt waits on the weapon node [`MUZZLE_FORWARD`] ahead of the craft's body, not
-/// at the hull's far edge: the original's bolt leaves 2.23 units ahead of its craft.
+/// A bolt waits on the hull's `Ship Muzzle` locator through the craft's display scale:
+/// 4.24 ahead of the body on Assegai (`(0, 0, 5.653)` x 0.75), below the centre line
+/// where the hull authors it so (Triakis), and on the measured hold point 2.23 ahead
+/// on a hull with none. Fails with the locator ignored (2.23 everywhere) or carried
+/// through the wrong axis.
 #[test]
-fn the_muzzle_is_the_weapon_node_ahead_of_the_body() {
-    let ships = one_ship(Vec3::new(5.0, 0.0, 0.0), 0.0);
-    let (nose, forward) = muzzle(&ships[0].physics);
-    let ahead = (nose - ships[0].physics.body.position).dot(forward);
+fn the_muzzle_is_the_hulls_weapon_node_or_the_hold_point_without_one() {
+    let mut ships = one_ship(Vec3::new(5.0, 0.0, 0.0), 0.7);
+    let body = ships[0].physics.body;
+    let ahead_of = |nose: Vec3| (nose - body.position).dot(body.forward());
+
+    let (nose, _) = muzzle(&ships[0]);
     // The literal is the probe's: 241.77 against the craft at 239.54.
-    assert!((ahead - 2.23).abs() < 1e-4, "{ahead} ahead");
+    assert!((ahead_of(nose) - 2.23).abs() < 1e-4, "{} ahead", ahead_of(nose));
+
+    ships[0].muzzle = Some(Vec3::new(0.0, 0.0, 5.653));
+    let (nose, _) = muzzle(&ships[0]);
+    let off = nose - body.position;
+    assert!((ahead_of(nose) - 4.24).abs() < 1e-3, "Assegai: {} ahead", ahead_of(nose));
+    assert!(off.dot(body.up()).abs() < 1e-4 && off.dot(body.right()).abs() < 1e-4);
+
+    ships[0].muzzle = Some(Vec3::new(0.0, -0.298, 4.183));
+    let (nose, _) = muzzle(&ships[0]);
+    let off = nose - body.position;
+    assert!((ahead_of(nose) - 4.183 * 0.75).abs() < 1e-3, "Triakis: {} ahead", ahead_of(nose));
+    assert!((off.dot(body.up()) + 0.298 * 0.75).abs() < 1e-3, "Triakis: {} up", off.dot(body.up()));
 }
 
 /// The measured first four updates (`plasma.md`, "the detonation leg"): three that

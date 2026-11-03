@@ -495,6 +495,8 @@ pub fn replay<R: Raycaster + ?Sized>(
         quake_lift: 0.0,
         // Nor a Disruptor bolt to land one, for the same reason again.
         disruption: oag_weapons::disruption::Disruption::default(),
+        // A replay has no hull, so a Plasma would leave from the hold point.
+        muzzle: None,
         active: true,
     };
     world.ship_count = 1;
@@ -734,6 +736,8 @@ where
         quake_lift: 0.0,
         // Nor a Disruptor bolt to land one, for the same reason again.
         disruption: oag_weapons::disruption::Disruption::default(),
+        // A replay has no hull, so a Plasma would leave from the hold point.
+        muzzle: None,
         active: true,
     };
     world.ship_count = 1;

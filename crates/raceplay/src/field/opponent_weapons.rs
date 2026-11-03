@@ -185,7 +185,7 @@ impl Race {
         };
         let ship = &self.sim.world.ships[slot];
         let Some((position, velocity)) =
-            oag_weapons::projectile::plasma::launch(&ship.physics, &stats, &self.sim.class)
+            oag_weapons::projectile::plasma::launch(ship, &stats, &self.sim.class)
         else {
             return false;
         };

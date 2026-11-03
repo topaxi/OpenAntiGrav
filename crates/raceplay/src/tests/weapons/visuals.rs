@@ -382,12 +382,13 @@ fn the_plasma_heads_matrix_carries_the_craft_scale_through_the_charge() {
 
 /// A charging Plasma's head sits on the craft's weapon node, its hull's `Ship Muzzle`
 /// locator carried through the craft's model matrix (Assegai's `(0, 0, 5.653)` is 4.24
-/// units ahead through the 0.75 rows), not on the bolt's hold point 2.23 ahead; a hull
-/// with no locator, and a source whose head was not measured, keep the bolt
+/// units ahead through the 0.75 rows), where the simulation holds the bolt too; a hull
+/// with no locator keeps the bolt on the hold point 2.23 ahead, and a source whose head
+/// was not measured draws its head on the bolt wherever that is
 /// (`docs/ghidra/functions/psp-pulse-usa/plasma.md`, "the head's matrix and node").
 #[test]
 fn a_charging_plasma_head_is_drawn_on_the_crafts_weapon_node() {
-    let anchor_ahead = |pulse_psp: bool, muzzle: Option<Vec3>| -> f32 {
+    let anchor_ahead = |pulse_psp: bool, muzzle: Option<Vec3>| -> (f32, f32) {
         let blob = super::respawn::one_emitter_pob("WO_PLASMA_HEAD", 0x2);
         let mut effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
             .expect("the hand-laid effect parses");
@@ -397,7 +398,9 @@ fn a_charging_plasma_head_is_drawn_on_the_crafts_weapon_node() {
         let mut race =
             race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_plasma_table());
         race.view.handles.insert(Trigger::PlasmaFlare, effect);
-        race.view.muzzles = vec![muzzle; oag_gameplay::MAX_SHIPS];
+        for ship in &mut race.sim.world.ships {
+            ship.muzzle = muzzle;
+        }
         let mut buttons = Buttons::new();
         race.tick(&PlayerInputs::single(buttons.tick(0)));
         race.tick(&PlayerInputs::single(buttons.tick(SQUARE)));
@@ -409,37 +412,46 @@ fn a_charging_plasma_head_is_drawn_on_the_crafts_weapon_node() {
         let instance = race.view.projectile_flare[0].expect("the head is playing");
         let anchor = race.view.stage.anchor_of(instance).expect("a live head");
         let body = race.ship().physics.body;
-        (anchor - body.position).dot(body.forward())
+        (
+            (anchor - body.position).dot(body.forward()),
+            (bolt.position - body.position).dot(body.forward()),
+        )
     };
     let assegai = Some(Vec3::new(0.0, 0.0, 5.653));
-    let on_node = anchor_ahead(true, assegai);
     let expected = 5.653 * 0.75;
+    let (on_node, bolt) = anchor_ahead(true, assegai);
     assert!(
         (on_node - expected).abs() < 0.05,
         "the head sits {on_node} ahead of the body, not on the weapon node at {expected}"
     );
-    let hold = oag_weapons::projectile::plasma::MUZZLE_FORWARD;
-    let no_locator = anchor_ahead(true, None);
     assert!(
-        (no_locator - hold).abs() < 0.05,
-        "a hull with no Ship Muzzle moved the head off the bolt: {no_locator} ahead"
+        (bolt - expected).abs() < 0.05,
+        "the bolt is held {bolt} ahead of the body, not on the weapon node at {expected}"
     );
-    let other = anchor_ahead(false, assegai);
+    let hold = oag_weapons::projectile::plasma::MUZZLE_FORWARD;
+    let (no_locator, bolt) = anchor_ahead(true, None);
     assert!(
-        (other - hold).abs() < 0.05,
-        "an unmeasured source's head left the bolt: {other} ahead"
+        (no_locator - hold).abs() < 0.05 && (bolt - hold).abs() < 0.05,
+        "a hull with no Ship Muzzle moved the head or the bolt off the hold point: \
+         {no_locator} and {bolt} ahead"
+    );
+    let (other, bolt) = anchor_ahead(false, assegai);
+    assert!(
+        (other - bolt).abs() < 0.05,
+        "an unmeasured source's head left the bolt: {other} against {bolt} ahead"
     );
 }
 
-/// A released Plasma's head keeps the lead the weapon node had over the bolt's hold
-/// point: the original launches the bolt's matrix from the head's node and the head
-/// draws through that matrix, so at draw time it sits 4.24, 4.43, 4.62, 4.81, 5.79 ...
-/// ahead of the craft, never stepping back to the hold point 2.23 ahead
-/// (`docs/ghidra/functions/psp-pulse-usa/plasma.md`, "the head after the release"). A
-/// hull with no locator, and a source whose head was not measured, keep the bolt.
+/// A released Plasma's head draws on the bolt, and the bolt left from the weapon node:
+/// the original launches the bolt's matrix from the head's node and the head draws
+/// through that matrix, so at draw time it sits 4.24, 4.43, 4.62, 4.81, 5.79 ... ahead
+/// of the craft, never stepping back to the hold point 2.23 ahead
+/// (`docs/ghidra/functions/psp-pulse-usa/plasma.md`, "the head after the release").
+/// Fails with the bolt released on the hold point (the head would sit 2 units short
+/// of the node's path) or the head anchored anywhere but the bolt.
 #[test]
-fn a_released_plasma_head_keeps_the_weapon_nodes_lead_over_the_bolt() {
-    let lead_over_bolt = |pulse_psp: bool, muzzle: Option<Vec3>| -> f32 {
+fn a_released_plasma_head_draws_on_the_bolt_that_left_from_the_weapon_node() {
+    let released = |pulse_psp: bool, muzzle: Option<Vec3>| -> (f32, f32) {
         let blob = super::respawn::one_emitter_pob("WO_PLASMA_HEAD", 0x2);
         let mut effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
             .expect("the hand-laid effect parses");
@@ -449,11 +461,14 @@ fn a_released_plasma_head_keeps_the_weapon_nodes_lead_over_the_bolt() {
         let mut race =
             race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_plasma_table());
         race.view.handles.insert(Trigger::PlasmaFlare, effect);
-        race.view.muzzles = vec![muzzle; oag_gameplay::MAX_SHIPS];
+        for ship in &mut race.sim.world.ships {
+            ship.muzzle = muzzle;
+        }
         let mut buttons = Buttons::new();
         race.tick(&PlayerInputs::single(buttons.tick(0)));
         race.tick(&PlayerInputs::single(buttons.tick(SQUARE)));
         let mut released_for = 0;
+        let mut at_release = 0.0;
         for _ in 0..90 {
             race.tick(&PlayerInputs::single(buttons.tick(0)));
             let bolt = race.sim.world.projectiles.slots[0];
@@ -463,6 +478,10 @@ fn a_released_plasma_head_keeps_the_weapon_nodes_lead_over_the_bolt() {
                 "the bolt is alive"
             );
             if bolt.charge <= 0.0 {
+                if released_for == 0 {
+                    let body = race.ship().physics.body;
+                    at_release = (bolt.position - body.position).dot(body.forward());
+                }
                 released_for += 1;
             }
             if released_for == 4 {
@@ -474,24 +493,29 @@ fn a_released_plasma_head_keeps_the_weapon_nodes_lead_over_the_bolt() {
         let instance = race.view.projectile_flare[0].expect("the head is playing");
         let anchor = race.view.stage.anchor_of(instance).expect("a live head");
         let heading = bolt.velocity.normalize();
-        (anchor - bolt.position).dot(heading)
+        ((anchor - bolt.position).dot(heading), at_release)
     };
     let assegai = Some(Vec3::new(0.0, 0.0, 5.653));
-    let expected = 5.653 * 0.75 - oag_weapons::projectile::plasma::MUZZLE_FORWARD;
-    let on_node = lead_over_bolt(true, assegai);
+    let node = 5.653 * 0.75;
+    let (lead, at_release) = released(true, assegai);
     assert!(
-        (on_node - expected).abs() < 0.05,
-        "the released head leads the bolt by {on_node}, not the node's {expected}"
+        (at_release - node).abs() < 0.05,
+        "the bolt was released {at_release} ahead of the body, not on the node at {node}"
     );
-    let no_locator = lead_over_bolt(true, None);
     assert!(
-        no_locator.abs() < 0.05,
-        "a hull with no Ship Muzzle led the bolt by {no_locator}"
+        lead.abs() < 0.05,
+        "the released head leads the bolt by {lead}; it draws through the bolt's matrix"
     );
-    let other = lead_over_bolt(false, assegai);
+    let hold = oag_weapons::projectile::plasma::MUZZLE_FORWARD;
+    let (lead, at_release) = released(true, None);
     assert!(
-        other.abs() < 0.05,
-        "an unmeasured source's head led the bolt by {other}"
+        (at_release - hold).abs() < 0.05 && lead.abs() < 0.05,
+        "a hull with no Ship Muzzle: released {at_release} ahead, head leading by {lead}"
+    );
+    let (lead, _) = released(false, assegai);
+    assert!(
+        lead.abs() < 0.05,
+        "an unmeasured source's head led the bolt by {lead}"
     );
 }
 

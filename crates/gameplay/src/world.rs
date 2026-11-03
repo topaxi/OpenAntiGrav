@@ -5,6 +5,7 @@
 //! `docs/architecture/adr/0003-no-ecs.md` for why this is not an ECS.
 
 use oag_core::Rng;
+use oag_core::math::Vec3;
 use oag_physics::{DamageRules, Handling, ShipState};
 use oag_race::{Mode, RaceState};
 
@@ -219,6 +220,15 @@ pub struct Ship {
     /// root decides that. Hashed, because a craft that cannot thrust is a
     /// different race from one that can.
     pub disruption: oag_weapons::disruption::Disruption,
+    /// The hull's `Ship Muzzle` locator in the hull's own model space: the weapon
+    /// node a Plasma bolt charges on and is released from
+    /// (`oag_weapons::projectile::plasma::muzzle`). `None` where the hull authors
+    /// none or its class id is unread, which keeps the measured hold point.
+    ///
+    /// Set by the composition root from the slot's hull, per team, and read-only
+    /// through the race like [`Self::handling`]; not hashed, for that field's
+    /// reason.
+    pub muzzle: Option<Vec3>,
     /// Whether this slot holds a ship at all.
     pub active: bool,
 }
@@ -238,6 +248,7 @@ impl Default for Ship {
             pending_thrust_scale: 1.0,
             quake_lift: 0.0,
             disruption: oag_weapons::disruption::Disruption::default(),
+            muzzle: None,
             active: false,
         }
     }
@@ -560,7 +571,9 @@ mod tests {
     #[cfg(target_pointer_width = "64")]
     #[test]
     fn the_world_snapshot_does_not_grow() {
-        const LIMIT: usize = 19_816; // +360 bytes: the LeachBeam pool of eight (was one Option<Beam>), 2026-10-31; +64: `Held::quake_armed`, one byte per ship, 2026-11-02
+        // +360 bytes: the LeachBeam pool of eight (was one Option<Beam>); +64: `Held::quake_armed`,
+        // one byte per ship; +128: `Ship::muzzle`, the hull's weapon node, 16 bytes per ship.
+        const LIMIT: usize = 19_944;
         let size = std::mem::size_of::<World>();
         assert!(
             size <= LIMIT,

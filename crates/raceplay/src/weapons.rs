@@ -301,11 +301,9 @@ impl Race {
                     // (`0x0886a868`) spawns once and clears its own request
                     // bit; the `<Stats>` carry no `spread` to fan a volley
                     // with. See `oag_weapons::projectile::plasma::launch`.
-                    let Some((position, velocity)) = oag_weapons::projectile::plasma::launch(
-                        &ship.physics,
-                        &stats,
-                        &self.sim.class,
-                    ) else {
+                    let Some((position, velocity)) =
+                        oag_weapons::projectile::plasma::launch(ship, &stats, &self.sim.class)
+                    else {
                         return;
                     };
                     // **Held for a second before it flies.** `Plasma_Init`

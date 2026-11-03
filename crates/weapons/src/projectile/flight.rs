@@ -61,7 +61,7 @@ impl Projectiles {
                 // the bolt where the craft is now.
                 let ship = ships.get(projectile.owner as usize);
                 let heading = ship.map(|ship| {
-                    let (position, heading) = plasma::muzzle(ship.physics());
+                    let (position, heading) = plasma::muzzle(ship);
                     projectile.position = position;
                     projectile.velocity = heading * projectile.velocity.length();
                     // `Plasma_Launch` writes `-craft+0xb10` as the ridden normal;

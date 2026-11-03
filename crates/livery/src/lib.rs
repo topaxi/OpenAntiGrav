@@ -10,12 +10,12 @@
 //! declares: 845 to 1,497 triangles, 1,273 to 1,650 vertices, radius 6.45 to
 //! 7.09. That is worth stating because the *Zone* hull is the other way round -
 //! every team's `Zone.vex` decodes to the same 1213 vertices / 1149 triangles /
-//! 8 meshes, and only its paint varies (see `race::ship_entry_name`). So a
+//! 8 meshes, and only its paint varies (see `oag_pulse::race::ships::hull_entry_name`). So a
 //! livery here is a model load, and a Zone livery would be a texture swap.
 //!
 //! # What is recovered and what is ours
 //!
-//! **The hull paths are the disc's**: `ship_entry_name` builds
+//! **The hull paths are the disc's**: `oag_pulse::race::ships::hull_entry_name` builds
 //! `Data\Ships\<Team>\Ship.vex` from the team id the definition declares, and
 //! `PI_TeamModel`'s `location` is a *file stem* (the literal `"ship"`), not a
 //! team name - which is the naming trap `HANDOVER.md` records. Nothing here
@@ -47,10 +47,11 @@
 use anyhow::{Context, Result};
 use oag_core::math::Vec3;
 use oag_mesh::mesh::{self, Model};
+use oag_pulse::race::ships;
 use oag_race::Mode;
 use oag_vex::vex;
 
-use entry::{boost_entry_name, ps2_texture_set, ship_entry_name};
+use entry::{boost_entry_name, ps2_texture_set};
 
 mod absorb;
 mod arc_anchor;
@@ -194,7 +195,7 @@ pub struct LoadContext<'a> {
     /// Where a team's hull, plume, shield and handling stats resolve - see
     /// [`oag_title::RaceDefaults::ships_for`].
     pub race: &'a oag_title::RaceDefaults,
-    /// Which mode's rules the race runs under - selects [`ship_entry_name`]'s
+    /// Which mode's rules the race runs under - selects `ships::hull_entry_name`'s
     /// Zone/non-Zone branch.
     pub mode: Mode,
     /// This title's own engine-flare mechanism - geometry, a sprite, or
@@ -228,7 +229,7 @@ pub struct LoadContext<'a> {
 /// caller: [`load`] takes one per seated slot after the first.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Paint<'a> {
-    /// The hull stem override, [`crate::race::ship_entry_name`]'s own.
+    /// The hull stem override, `ships::hull_entry_name`'s own.
     pub hull_variant: Option<&'a str>,
     /// A `PI_ModelSkin`'s archive entry, already resolved by [`ship_skin::resolve`].
     pub skin: Option<&'a str>,
@@ -260,7 +261,7 @@ fn forced_paint<'a>(forced_skins: &'a [(String, String)], team: &str) -> Paint<'
 /// player's, and a race with no hull for the player is not a race; every other
 /// failure falls back to slot 0's hull and says so in `report`.
 ///
-/// `hull_variant` is [`crate::race::ship_entry_name`]'s own override, applied
+/// `hull_variant` is `ships::hull_entry_name`'s own override, applied
 /// to **slot 0**, plus each slot `seats` names: it is the RACE page's own pick
 /// for a person's craft, and nothing offers an opponent a choice of their own -
 /// see `oag_title::race::HullVariant`'s doc comment for why there is no unlock
@@ -419,7 +420,7 @@ fn one(
     skin: Option<&str>,
     report: &mut Vec<String>,
 ) -> Result<Livery> {
-    let hull_name = ship_entry_name(ships, team, ctx.mode, hull_variant);
+    let hull_name = ships::hull_entry_name(ships, team, ctx.mode == Mode::Zone, hull_variant);
     let blob = archives
         .read_name(&hull_name)
         .with_context(|| format!("reading {hull_name}"))?;
@@ -558,7 +559,7 @@ fn one(
         return Ok(Livery {
             team: team.to_string(),
             nozzle,
-            muzzle: ship_muzzle(&blob),
+            muzzle: vex::ship_muzzle(&blob).map(Vec3::from),
             collision_fx,
             absorb,
             absorb_overlay: None,
@@ -666,7 +667,7 @@ fn one(
         team: team.to_string(),
         hull,
         nozzle,
-        muzzle: ship_muzzle(&blob),
+        muzzle: vex::ship_muzzle(&blob).map(Vec3::from),
         collision_fx,
         absorb: Vec::new(),
         absorb_overlay,
@@ -809,18 +810,6 @@ fn engine_flare(ship_blob: &[u8]) -> Option<(Vec3, Vec3)> {
     Some((Vec3::new(m[12], m[13], m[14]), Vec3::new(m[8], m[9], m[10])))
 }
 
-/// The `Ship Muzzle` locator's position in a hull's own model space, decoded like
-/// [`engine_flare`]; `None` where the version's class id is unread or the hull
-/// authors none.
-fn ship_muzzle(ship_blob: &[u8]) -> Option<Vec3> {
-    let class = vex::classes_of(ship_blob).ok()?.ship_muzzle?;
-    let nodes = vex::nodes(ship_blob).ok()?;
-    let m = vex::class_world_transforms(ship_blob, &nodes, class)
-        .into_iter()
-        .next()?;
-    Some(Vec3::new(m[12], m[13], m[14]))
-}
-
 /// Every `Ship Collision Fx` locator in a hull's own model space - the same
 /// 4x4-payload decode as [`engine_flare`], kept all rather than first: the
 /// original picks the nearest to each contact. [`SparkAnchor::up`] is read
@@ -846,7 +835,7 @@ fn collision_fx_locators(ship_blob: &[u8]) -> Vec<SparkAnchor> {
 
 /// The plume `ExhaustFlare_Init` reveals once `boost_timer` passes
 /// `exhaust::BOOST_GATE`: `shipboost.vex`, or `Zoneboost.vex` in Zone mode,
-/// matching whichever hull [`ship_entry_name`] picked.
+/// matching whichever hull `ships::hull_entry_name` picked.
 ///
 /// Absence is reported rather than failing the race: the PS2 set may not carry
 /// it under the same name the PSP one does, and a missing boost plume is a

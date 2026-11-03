@@ -25,8 +25,8 @@ fn check(
 ) {
     for team in teams {
         let paths = defaults.ships_for(team);
-        let racing = oag_livery::entry::ship_entry_name(paths, team, Mode::TimeTrial, None);
-        let zoning = oag_livery::entry::ship_entry_name(paths, team, Mode::Zone, None);
+        let racing = oag_pulse::race::ships::hull_entry_name(paths, team, false, None);
+        let zoning = oag_pulse::race::ships::hull_entry_name(paths, team, true, None);
         assert_ne!(
             racing, zoning,
             "{title}/{team}: Zone must not fly the race hull"

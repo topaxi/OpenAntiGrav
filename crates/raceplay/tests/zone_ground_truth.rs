@@ -779,8 +779,8 @@ fn every_titles_zone_craft_resolves_and_is_not_the_race_hull() {
             .expect("opening the source");
 
         let racing =
-            oag_livery::entry::ship_entry_name(craft, team, oag_race::Mode::TimeTrial, None);
-        let zoning = oag_livery::entry::ship_entry_name(craft, team, oag_race::Mode::Zone, None);
+            oag_pulse::race::ships::hull_entry_name(craft, team, false, None);
+        let zoning = oag_pulse::race::ships::hull_entry_name(craft, team, true, None);
         assert_ne!(
             racing, zoning,
             "{name}: a zone race should not fly the same hull a race does"

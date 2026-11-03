@@ -378,6 +378,58 @@ pub mod ships {
         format!(r"{dir}\{team}\{model}.vex")
     }
 
+    /// The archive entry name of a team's `.vex` model, under the ship directory
+    /// this title keeps its roster in.
+    ///
+    /// `paths` is [`oag_title::race::RaceDefaults::ships`]; see
+    /// [`oag_title::race::RaceDefaults::ship_dir`] for the third-title disagreement its
+    /// directory exists for. `zone` is whether the race runs in Zone mode (`oag_race::Mode::Zone`,
+    /// which this crate does not name).
+    ///
+    /// Assembled the way the loader assembles it, with backslashes, which is what the
+    /// name hash needs.
+    ///
+    /// **A Zone run flies a different hull, and where that hull lives is a
+    /// title fact** - [`oag_title::ZoneCraft`], measured on all three titles. Pulse
+    /// keeps it inside the player's own team directory as `Zone.vex`; Pure and HD
+    /// give Zone a ship directory of its own, so the player's team stops reaching
+    /// the hull at all.
+    ///
+    /// Pulse's is the branch with a recovered selector rather than a name probe:
+    /// `Ship_LoadModel` (`0x08843258`) switches on the same
+    /// `DAT_08ab07e3 == 0 && DAT_08b31048 == 6` expression already established as
+    /// the Zone selector (see `docs/ghidra/functions/psp-pulse-usa/zone-mode.md`),
+    /// and only that case builds the `%s\Zone.vex` path. Every team's `Zone.vex`
+    /// decodes to the same 1213 vertices / 1149 triangles / 8 meshes, so the hull
+    /// itself is shared there - only the livery painted on it still varies by team, and that paint is
+    /// the texture block embedded in each team's own `Zone.vex` (the eight blocks differ, measured in
+    /// `zone-mode.md`), not a `PI_ModelSkin`: mode 6 applies none. On the other two there is no
+    /// per-team Zone hull to share.
+    ///
+    /// **`hull_variant` is Pulse's Normal/Concept axis, and only applies here.**
+    /// `oag_title::race::HullVariant::stem` names a file inside the *same*
+    /// directory `Ship.vex` already resolves in, so a Zone run ignores it: Zone's
+    /// own hull selection is a title fact of its own
+    /// ([`oag_title::ZoneCraft`]), unaffected by which model variant the RACE
+    /// page has picked, and every Pulse team's `Zone.vex` is one shared hull
+    /// regardless. `None` keeps today's behaviour - [`HULL`] - exactly.
+    #[must_use]
+    pub fn hull_entry_name(
+        paths: oag_title::race::ShipPaths,
+        team: &str,
+        zone: bool,
+        hull_variant: Option<&str>,
+    ) -> String {
+        if !zone {
+            return entry_name_in(paths.dir, team, hull_variant.unwrap_or(HULL));
+        }
+        entry_name_in(
+            paths.zone.root(paths.dir),
+            paths.zone.directory(team),
+            paths.zone.hull().unwrap_or(HULL),
+        )
+    }
+
     /// [`entry_name_in`] under
     /// [`oag_title::race::SHIP_DIR`](oag_title::race::SHIP_DIR), which is where
     /// Pulse, Pure and Wipeout HD all keep their rosters.

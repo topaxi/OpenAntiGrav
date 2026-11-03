@@ -1071,10 +1071,12 @@ impl Race {
     }
 
     /// One craft's `Ship Muzzle` locator in **world** space, through the same model
-    /// matrix as [`Self::nozzle_of`]; `None` when its hull authors none.
+    /// matrix as [`Self::nozzle_of`]; `None` when its hull authors none. The
+    /// locator is the simulation's (`oag_gameplay::world::Ship::muzzle`, where the
+    /// bolt itself is released); the drawn matrix adds the display roll and lean.
     #[must_use]
     pub fn muzzle_of(&self, slot: usize) -> Option<Vec3> {
-        let local = self.view.muzzles.get(slot).copied().flatten()?;
+        let local = self.sim.world.ships.get(slot)?.muzzle?;
         Some(self.ship_model_matrix_of(slot).transform_point3(local))
     }
 
