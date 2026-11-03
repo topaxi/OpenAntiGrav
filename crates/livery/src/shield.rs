@@ -70,6 +70,12 @@ fn shield_model(
         .map_err(|error| format!("{name}: its .rcsmodel does not build ({error})"))?;
         (model, built.describe(), shield_colour(&geometry))
     };
+    if psp2_alpha_from_texture_alpha(&geometry) {
+        for vertex in &mut model.vertices {
+            vertex.slots =
+                (vertex.slots & !mesh::slots::alpha_channel(3)) | mesh::slots::alpha_channel(3);
+        }
+    }
     if colour.is_some() {
         // The program multiplies its output by `ShieldColour`. The race writes
         // that colour into the vertex colour each frame, so the authored baked
@@ -146,6 +152,22 @@ fn shield_colour_psp2(geometry: &[u8], half: bool) -> Option<[f32; 4]> {
         [r, g, b] => Some([flush(r), flush(g), flush(b), 0.0]),
         _ => None,
     }
+}
+
+/// Whether a Vita/PS4 shell's material is `2048_shipshield_old`, whose pixel program takes
+/// its output alpha from the diffuse texture's **alpha** channel (`image_sample ... dmask:0x8`)
+/// times `ShieldColour.a` and the vertex alpha; the builder's default reads the red channel,
+/// which on the hexagon atlas is a dim gradient. `2048_Magnetic_Shield` reads red, so it keeps
+/// the default (`docs/ghidra/functions/ps4-omega-eu/shield.md`, "The two shell programs").
+fn psp2_alpha_from_texture_alpha(geometry: &[u8]) -> bool {
+    oag_rcs::rcsmodel::psp2::parse(geometry).is_ok_and(|model| {
+        model.materials.iter().any(|material| {
+            material
+                .name
+                .to_ascii_lowercase()
+                .ends_with("2048_shipshield_old.rcsmaterial")
+        })
+    })
 }
 
 /// The smallest normal binary16, `2^-14`; anything under it is a subnormal.

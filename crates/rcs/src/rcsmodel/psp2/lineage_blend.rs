@@ -153,10 +153,17 @@ pub const INHERITED: &[(&str, u16, u16)] = &[
 /// ships (`docs/ghidra/functions/ps3-hdfury-eu/material-state.md`, draw 551), and Pulse's is
 /// `startline_laser_ADD_GLOW`. Neither 2048 nor Omega authors a factor pair.
 /// `crates/rcs/tests/hd_lineage_blend_ground_truth.rs` re-derives the census.
-pub const EQUIVALENT: &[(&str, &str)] = &[(
-    "fc01_effects_vscroll_emissive_alpha_glow",
-    "cf_startbeam_glow",
-)];
+///
+/// `2048_shipshield_old` is the **per-team shield shell** on Omega: it wraps the same hull as HD's
+/// `hexagonalshield_rich` shell (the vertex bounding boxes of the two shells agree to within a few
+/// percent for Feisar), is a blended state word, and neither authors anything else for it.
+pub const EQUIVALENT: &[(&str, &str)] = &[
+    (
+        "fc01_effects_vscroll_emissive_alpha_glow",
+        "cf_startbeam_glow",
+    ),
+    ("2048_shipshield_old", "hexagonalshield_rich"),
+];
 
 /// A material's own name from its `.rcsmaterial` path, as [`INHERITED`] keys it.
 fn stem(path: &str) -> String {
