@@ -361,17 +361,50 @@ pub enum CannonBody {
     },
 }
 
-/// Pulse's plasma-blast trio, in `PlasmaBlast_Construct`'s load order - see
-/// [`WeaponModels::plasma_blast_pulse`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// A three-model Plasma detonation shell: a halo and two hemispheres, in
+/// `PlasmaBlast_Construct`'s load order - see [`WeaponModels::plasma_blast_pulse`].
+/// Pulse and Pure run the same mechanism (a grey tint ramp and an eased scale
+/// per model) over their own models and constants ([`Self::law`]); the fields
+/// keep Pulse's names and are matched by ordinal position (Pure's
+/// `plasma_hemisphere_noglow` is the second, `plasma_hemisphere` the third).
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PulsePlasmaBlast {
-    /// `Data\Weapons\pulse_plasma_halo1.vex`.
+    /// The halo: `Data\Weapons\pulse_plasma_halo1.vex`, Pure's `plasma_halo.vex`.
     pub halo: &'static str,
-    /// `Data\Weapons\pulse_plasma_hemisphere2.vex`, loaded before
-    /// [`Self::hemisphere1`] (the file's order).
+    /// The second model, loaded before [`Self::hemisphere1`] (the file's order):
+    /// `Data\Weapons\pulse_plasma_hemisphere2.vex`, Pure's `plasma_hemisphere_noglow.vex`.
     pub hemisphere2: &'static str,
-    /// `Data\Weapons\pulse_plasma_hemisphere1.vex`.
+    /// The third: `Data\Weapons\pulse_plasma_hemisphere1.vex`, Pure's `plasma_hemisphere.vex`.
     pub hemisphere1: &'static str,
+    /// The tints, scale eases, life and placement this title's `PlasmaBlast_Update` runs.
+    pub law: PlasmaBlastLaw,
+}
+
+/// One title's Plasma-blast constants, in [`PulsePlasmaBlast`]'s ordinal order
+/// (halo, second model, third model).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PlasmaBlastLaw {
+    /// Each model's grey tint as `(hold, end)` seconds of age: full white up to
+    /// `hold`, linear to black at `end`, black after (a three-key table `255,
+    /// 255, 0` at `0, hold, end`).
+    pub tint: [(f32, f32); 3],
+    /// Each model's scale-ease target, `cur += (target - cur) * rate` per 60 Hz
+    /// tick from `0`, in the unit `oag_raceplay`'s `PULSE_MODEL_UNIT` multiplies
+    /// by the model's extent: the executable's own target divided by that unit.
+    pub ease_targets: [f32; 3],
+    /// Each model's ease rate per tick.
+    pub ease_rates: [f32; 3],
+    /// The age at which the object retires, seconds.
+    pub life: f32,
+    /// The age at which the halo stops drawing, if the title hides it before
+    /// its tint reaches black. `None` where nothing hides it.
+    pub halo_hide_at: Option<f32>,
+    /// How far the two hemispheres sit below the impact point along the
+    /// track's up, world units (`PlasmaBlast_Construct`'s `-3.5 x row1`).
+    /// `0.0` where the offset is read but not yet applied.
+    pub hemisphere_drop: f32,
+    /// Where these constants come from.
+    pub origin: crate::Origin,
 }
 
 /// HD's plasma-blast trio, in `WeaponExplosions_Start`'s load order - see

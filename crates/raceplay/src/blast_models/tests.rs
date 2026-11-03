@@ -6,7 +6,7 @@ use super::*;
 use crate::tests::race_with_a_grid;
 
 /// A blast spawns in the first free slot, ages every tick, and is gone
-/// exactly at [`PLASMA_BLAST_LIFETIME_SECONDS`] - the same hardcoded retire
+/// exactly at its law's life - the same hardcoded retire
 /// time `PlasmaBlast_Update` carries, see `plasma.md`.
 #[test]
 fn a_blast_ages_and_retires_at_the_hardcoded_lifetime() {
@@ -24,7 +24,8 @@ fn a_blast_ages_and_retires_at_the_hardcoded_lifetime() {
     // repeated `age += dt` cannot leave this short of the threshold by a
     // fraction of a tick.
     let dt = 1.0 / 60.0;
-    let ticks = (PLASMA_BLAST_LIFETIME_SECONDS / dt).ceil() as u32 + 2;
+    let life = race.view.plasma_blast_law.expect("Pulse's law").life;
+    let ticks = (life / dt).ceil() as u32 + 2;
     for _ in 0..ticks {
         race.advance_plasma_blast_models(dt);
     }
@@ -156,6 +157,13 @@ fn an_hd_blast_draws_with_its_age_as_the_model_clock_and_pulse_with_none() {
 
 const DT: f32 = 1.0 / 60.0;
 
+fn pulse_law() -> oag_title::weapons::PlasmaBlastLaw {
+    oag_pulse::race::WEAPON_MODELS
+        .plasma_blast_pulse
+        .expect("Pulse's blast")
+        .law
+}
+
 fn pulse_blast_after(ticks: u32) -> (Race, PlasmaBlastDraw) {
     let mut race = race_with_a_grid();
     race.view.hd_plasma_blast = false;
@@ -214,15 +222,16 @@ fn the_pulse_blast_scale_is_the_dumps_per_tick_ease() {
 fn the_tints_are_the_dumps_three_linear_ramps() {
     // The GE's float-to-byte conversion truncates.
     let byte = |t: f32| (t * 255.0) as i32;
-    let at = |age: f32| pulse_tints(age).map(byte);
+    let law = pulse_law();
+    let at = |age: f32| plasma_tints(&law, age).map(byte);
     assert_eq!(at(0.3833)[2], 0x9d);
     assert_eq!(at(0.55)[2], 0x72);
     assert_eq!(at(0.3833)[0], 0xc4);
     assert_eq!(at(0.55)[1], 0xc9);
     assert_eq!(at(1.05)[1], 0x5f);
     assert_eq!(at(0.0), [255, 255, 255]);
-    assert_eq!(pulse_tints(1.2)[2], 0.0);
-    assert_eq!(pulse_tints(1.0)[0], 0.0);
+    assert_eq!(plasma_tints(&law, 1.2)[2], 0.0);
+    assert_eq!(plasma_tints(&law, 1.0)[0], 0.0);
 }
 
 /// The hemispheres are placed once and stay: turning the camera and moving
@@ -297,4 +306,76 @@ fn the_halo_is_hidden_inside_the_measured_bracket() {
     assert!(scale(33, 0) > 0.0, "drawn at 0.55 s");
     assert_eq!(scale(43, 0), 0.0, "gone at 0.717 s");
     assert!(scale(43, 1) > 0.0 && scale(43, 2) > 0.0);
+}
+
+fn pure_law() -> oag_title::weapons::PlasmaBlastLaw {
+    oag_pure::TITLE
+        .weapon_models
+        .plasma_blast_pulse
+        .expect("Pure's blast")
+        .law
+}
+
+/// Pure's three key tables (`psp-pure-usa/plasma.md`): the halo to black at
+/// 0.5 s, the second model at 1.0 s, the third `1 - age`.
+#[test]
+fn pures_tints_are_its_own_key_tables() {
+    let law = pure_law();
+    let early = plasma_tints(&law, 0.1);
+    assert_eq!(early[..2], [1.0; 2]);
+    assert!((early[2] - 0.9).abs() < 1e-5);
+    let at = plasma_tints(&law, 0.35);
+    assert!((at[0] - 0.5).abs() < 1e-5, "{at:?}");
+    assert!((at[1] - (1.0 - 0.05 / 0.7)).abs() < 1e-5, "{at:?}");
+    assert!((at[2] - 0.65).abs() < 1e-5, "{at:?}");
+    assert_eq!(plasma_tints(&law, 0.5)[0], 0.0);
+    assert_eq!(plasma_tints(&law, 1.0)[1], 0.0);
+}
+
+/// Pure's blast lives 2.0 s (Pulse 1.5), keeps its halo drawn to the end (its
+/// tint is the only fade) and sinks its hemispheres 3.5 along the track's
+/// down while the halo stays at the impact point.
+#[test]
+fn a_pure_blast_lives_two_seconds_with_dropped_hemispheres() {
+    let mut race = race_with_a_grid();
+    race.view.plasma_blast_law = Some(pure_law());
+    let at = Vec3::new(1.0, 2.0, 3.0);
+    race.spawn_plasma_blast_model(at);
+    for _ in 0..90 {
+        race.advance_plasma_blast_models(DT);
+    }
+    let draw = race
+        .plasma_blast_draws(Mat4::IDENTITY)
+        .into_iter()
+        .flatten()
+        .next()
+        .expect("alive at 1.5 s");
+    assert!(
+        draw.matrices[0].x_axis.length() > 0.0,
+        "the halo stays drawn"
+    );
+    assert_eq!(draw.matrices[0].w_axis.truncate(), at);
+    let up = race
+        .view
+        .plasma_blasts
+        .iter()
+        .flatten()
+        .next()
+        .unwrap()
+        .frame[1];
+    let hemisphere = draw.matrices[2].w_axis.truncate();
+    assert!(
+        (hemisphere - (at - up * 3.5)).length() < 1e-4,
+        "{hemisphere}"
+    );
+    for _ in 0..40 {
+        race.advance_plasma_blast_models(DT);
+    }
+    assert_eq!(
+        race.plasma_blast_draws(Mat4::IDENTITY)
+            .iter()
+            .flatten()
+            .count(),
+        0
+    );
 }

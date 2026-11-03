@@ -499,6 +499,10 @@ pub struct Setup {
     /// read off different executables and do not unify (`blast_models`).
     #[cfg(feature = "view")]
     pub hd_plasma_blast: bool,
+    /// The constants Pulse's and Pure's shared three-model blast runs:
+    /// `plasma_blast_pulse`'s law, `None` where the title has no such blast.
+    #[cfg(feature = "view")]
+    pub plasma_blast_law: Option<oag_title::weapons::PlasmaBlastLaw>,
     /// Whether a Bomb detonation plays HD's own blast object rather than Pulse's
     /// two eased models: `bomb_blast_hd.is_some()`. See `bomb_blast::hd`.
     #[cfg(feature = "view")]

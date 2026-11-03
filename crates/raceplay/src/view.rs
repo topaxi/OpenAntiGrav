@@ -150,6 +150,8 @@ pub struct RaceView {
     /// ease rather than Pulse's baked anim-time scrub. See
     /// `options::Setup::hd_plasma_blast`.
     pub(super) hd_plasma_blast: bool,
+    /// See `options::Setup::plasma_blast_law`.
+    pub(super) plasma_blast_law: Option<oag_title::weapons::PlasmaBlastLaw>,
     /// See `options::Setup::pulse_laid_pose`.
     pub(super) pulse_laid_pose: bool,
     /// See `options::Setup::laid_pose_scaled`.

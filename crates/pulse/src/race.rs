@@ -409,6 +409,20 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
         halo: r"Data\Weapons\pulse_plasma_halo1.vex",
         hemisphere2: r"Data\Weapons\pulse_plasma_hemisphere2.vex",
         hemisphere1: r"Data\Weapons\pulse_plasma_hemisphere1.vex",
+        // The tint ramps and the 1.5 s life are read to the byte off the GE dumps; the scale
+        // targets are fitted to them (`oag_raceplay`'s `PULSE_MODEL_UNIT` is the unit), the halo's
+        // hide age is chosen between two dumped frames, and the hemispheres' `-3.5` drop (the
+        // page's "placement and basis") is read in the executable but not wired for Pulse yet
+        // (`docs/ghidra/functions/psp-pulse-usa/plasma.md`).
+        law: oag_title::weapons::PlasmaBlastLaw {
+            tint: [(0.2, 1.0), (0.3, 1.5), (0.0, 1.0)],
+            ease_targets: [320.0, 135.3, 112.75],
+            ease_rates: [0.1, 0.07, 0.07],
+            life: 1.5,
+            halo_hide_at: Some(0.65),
+            hemisphere_drop: 0.0,
+            origin: oag_title::Origin::Measured,
+        },
     }),
     plasma_blast_hd: None,
     // `BombBlast_Construct`'s own load order - see

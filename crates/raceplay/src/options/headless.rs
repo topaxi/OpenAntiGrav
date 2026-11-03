@@ -85,6 +85,8 @@ impl Setup {
             #[cfg(feature = "view")]
             hd_plasma_blast: false,
             #[cfg(feature = "view")]
+            plasma_blast_law: None,
+            #[cfg(feature = "view")]
             hd_bomb_blast: false,
             #[cfg(feature = "view")]
             bomb_shockwave_fades: false,

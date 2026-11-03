@@ -268,7 +268,7 @@ impl super::Scene {
     /// **Sparse, unlike [`Self::write_weapon_models`]'s four pools.** A
     /// projectile pool swap-removes to keep its live entries packed from
     /// slot 0, so those four are bounded by a simple live *count*; a blast
-    /// frees its own slot the moment [`blast_models::PLASMA_BLAST_LIFETIME_SECONDS`]
+    /// frees its own slot the moment its title's `PlasmaBlastLaw::life`
     /// runs out, independent of every other slot, so this hands back which
     /// slots are live rather than how many.
     ///

@@ -137,6 +137,8 @@ impl Race {
             #[cfg(feature = "view")]
             hd_plasma_blast,
             #[cfg(feature = "view")]
+            plasma_blast_law,
+            #[cfg(feature = "view")]
             hd_bomb_blast,
             #[cfg(feature = "view")]
             bomb_shockwave_fades,
@@ -900,6 +902,7 @@ impl Race {
                 hd_missile_blasts: [None; missile_blast::SLOTS],
                 hd_missile_blast,
                 hd_plasma_blast,
+                plasma_blast_law,
                 pulse_laid_pose,
                 laid_pose_scaled,
                 screen_flash: if screen_flash {
