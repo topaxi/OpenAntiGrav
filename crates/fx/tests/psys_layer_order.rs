@@ -89,7 +89,11 @@ fn centre_red(underlay: [f32; 4], alpha: [f32; 4], additive: [f32; 4]) -> Option
         format,
         wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
     );
-    let depth = texture("depth", DEPTH_FORMAT, wgpu::TextureUsages::RENDER_ATTACHMENT);
+    let depth = texture(
+        "depth",
+        DEPTH_FORMAT,
+        wgpu::TextureUsages::RENDER_ATTACHMENT,
+    );
     let view = target.create_view(&Default::default());
     let depth_view = depth.create_view(&Default::default());
     let mut encoder = device.create_command_encoder(&Default::default());
