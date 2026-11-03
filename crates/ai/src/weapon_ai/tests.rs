@@ -66,6 +66,7 @@ fn situation() -> Situation {
             absorb: 1.0,
         },
         shield: 100.0,
+        law: Law::PULSE,
     }
 }
 
@@ -215,4 +216,83 @@ fn a_failed_fire_roll_absorbs_on_the_absorb_roll_after_the_short_hold() {
     s.shield = 100.0;
     s.gap_ahead = Some(50.0);
     assert_eq!(s.absorb_chance(0), 0.0);
+}
+
+/// HD's law with the authored `AllWeapons` row (`0.9 / 0.9 / 1.0`).
+fn hd_law() -> Law {
+    Law {
+        step_scale: 0.5,
+        all_weapons: Odds {
+            use_against_player: 0.9,
+            use_against_ai: 0.9,
+            absorb: 1.0,
+        },
+        eliminator: EliminatorTerms::Authored {
+            use_scale: 12.5,
+            absorb_scale: 2.6,
+        },
+    }
+}
+
+fn long_way(rate: f32, odds: f32) -> f32 {
+    1.0 / ((1.0 / rate) * (1.0 / odds))
+}
+
+#[test]
+fn the_step_scale_halves_fire_absorb_and_the_early_out() {
+    let mut s = situation();
+    s.eliminator = false;
+    s.gap_ahead = Some(50.0);
+    s.shield = 10.0;
+    let pulse_fire = s.fire_chance();
+    let pulse_absorb = s.absorb_chance(0);
+    s.law.step_scale = 0.5;
+    assert_eq!(s.fire_chance(), long_way(0.5 * RATE[3], 1.2));
+    assert!(s.fire_chance() < pulse_fire * 0.51);
+    assert_eq!(s.absorb_chance(0), long_way(0.5 * RATE[4], 1.0));
+    assert!(s.absorb_chance(0) < pulse_absorb * 0.51);
+    // The window's flat chance is `k * rate[4]`: 0.03 passes Pulse's 0.05 and
+    // fails HD's 0.025.
+    let mut ai = WeaponAi {
+        held_ticks: 0,
+        wait_ticks: 5,
+    };
+    assert_eq!(ai.decide(&s, 0.03, 1.0, 1.0), Decision::Hold);
+    s.law.step_scale = 1.0;
+    assert_eq!(ai.decide(&s, 0.03, 1.0, 1.0), Decision::Fire);
+}
+
+#[test]
+fn the_all_weapons_row_multiplies_use_and_absorb() {
+    let mut s = situation();
+    s.eliminator = false;
+    s.gap_ahead = Some(50.0);
+    s.shield = 10.0;
+    s.law.all_weapons = hd_law().all_weapons;
+    assert_eq!(s.fire_chance(), long_way(RATE[3], 1.2 * 0.9));
+    s.player_gap = Some(100.0);
+    assert_eq!(s.fire_chance(), long_way(RATE[3], 1.1 * 0.9));
+    s.law.all_weapons.absorb = 0.5;
+    assert_eq!(s.absorb_chance(0), long_way(RATE[4], 0.5));
+}
+
+#[test]
+fn an_authored_eliminator_scales_use_and_absorb_and_keeps_the_absorb_index() {
+    let mut s = situation();
+    assert!(s.eliminator);
+    assert_eq!(s.fire_chance(), long_way(RATE_ELIMINATOR[1], 1.2 * 5.0));
+    assert_eq!(s.absorb_index(0), 0);
+    s.law = hd_law();
+    s.shield = 10.0;
+    assert_eq!(
+        s.fire_chance(),
+        long_way(0.5 * RATE_ELIMINATOR[1], 1.2 * 0.9 * 12.5)
+    );
+    // The index is the setup's, not forced to zero: four shield tiers and the
+    // nobody-ahead step clamp to four.
+    assert_eq!(s.absorb_index(0), 4);
+    assert_eq!(
+        s.absorb_chance(0),
+        long_way(0.5 * RATE_ELIMINATOR[4], 1.0 * 1.0 * 2.6)
+    );
 }

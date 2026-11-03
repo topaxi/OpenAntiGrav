@@ -13,6 +13,7 @@ mod opponent_weapons;
 mod pad_seek;
 
 pub use fire_law::FireLaw;
+pub(crate) use fire_law::fire_terms;
 pub use pad_seek::PadSeeking;
 pub(super) use pad_seek::line_positions as pad_seek_positions;
 

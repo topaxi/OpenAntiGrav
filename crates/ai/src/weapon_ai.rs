@@ -15,7 +15,9 @@
 //! quarter-second gate opens once and stays open. The chance is a rate from
 //! a five-entry table, indexed by how close the nearest craft ahead and behind
 //! are, times the weapon's authored `useAgainstPlayer` or `useAgainstAI`
-//! (`Data\XML\WeaponAIstats.xml`), times five in an Eliminator. Nothing fires
+//! (`Data\XML\WeaponAIstats.xml`), times five in an Eliminator. HD's differences
+//! (a per-step scale, the `AllWeapons` row, authored Eliminator scales) are
+//! the [`Law`] a title hands in. Nothing fires
 //! before 0.8 s held. An **aimed** weapon (anything leaving the nose as a shot
 //! or beam) also needs a craft in its predicted path ([`target_in_path`]); a roll
 //! with nothing there arms a three-second window in which a target that appears
@@ -132,6 +134,55 @@ pub struct Odds {
     pub absorb: f32,
 }
 
+impl Odds {
+    /// Multiplies every term by one: no `AllWeapons` row.
+    pub const IDENTITY: Self = Self {
+        use_against_player: 1.0,
+        use_against_ai: 1.0,
+        absorb: 1.0,
+    };
+}
+
+/// What an Eliminator does to the use and absorb odds.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum EliminatorTerms {
+    /// Pulse's: `use *= `[`ELIMINATOR_USE`], the absorb index forced to zero and
+    /// the absorb odds left alone (`docs/ghidra/functions/psp-pulse-usa/weapon-ai.md`).
+    Pulse,
+    /// HD's `EliminatorAIStats` scales for the race's difficulty
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/weapon-ai-fire.md`): `use *= use_scale`,
+    /// `absorb *= absorb_scale`, the absorb index as the setup gives it.
+    Authored {
+        /// `easy`/`medium`/`hardUseScale`, the race's tier.
+        use_scale: f32,
+        /// `easy`/`medium`/`hardAbsorbScale`, the race's tier.
+        absorb_scale: f32,
+    },
+}
+
+/// The per-title terms of the decision: what differs between Pulse's law and
+/// HD's (`WeaponAi_DecideFireOrAbsorb`, `0x000f9a18`). Resolved by the caller
+/// from the title's data and the race's difficulty, so this crate reads no title.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Law {
+    /// Multiplies every table rate on fire, absorb and the early-out: HD's
+    /// `k = dt * 30`, `0.5` at 60 Hz. Pulse has no such term.
+    pub step_scale: f32,
+    /// The `AllWeapons` row, multiplied into every weapon's odds.
+    pub all_weapons: Odds,
+    /// The Eliminator's terms.
+    pub eliminator: EliminatorTerms,
+}
+
+impl Law {
+    /// Pulse's: no step scale, no `AllWeapons` row, `use *= 5` in an Eliminator.
+    pub const PULSE: Self = Self {
+        step_scale: 1.0,
+        all_weapons: Odds::IDENTITY,
+        eliminator: EliminatorTerms::Pulse,
+    };
+}
+
 /// What the decision reads this tick, measured by the caller.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Situation {
@@ -152,6 +203,8 @@ pub struct Situation {
     pub shield: f32,
     /// This weapon's row of `WeaponAIstats.xml`.
     pub odds: Odds,
+    /// The title's terms.
+    pub law: Law,
 }
 
 impl Situation {
@@ -182,10 +235,10 @@ impl Situation {
     /// The absorb index (`+0x34`) a forward weapon's setup builds for a
     /// weapon held `held_ticks`, clamped: one per [`SHIELD_TIERS`] the shield
     /// is at or below, one past [`ITCHY_TICKS`] held, one with nobody inside
-    /// [`NOTHING_AHEAD`]. An Eliminator forces it to zero (`0x08851a8c`).
+    /// [`NOTHING_AHEAD`]. Pulse's Eliminator forces it to zero (`0x08851a8c`).
     #[must_use]
     pub fn absorb_index(&self, held_ticks: u32) -> usize {
-        if self.eliminator {
+        if self.eliminator && self.law.eliminator == EliminatorTerms::Pulse {
             return 0;
         }
         let mut index = SHIELD_TIERS
@@ -208,11 +261,17 @@ impl Situation {
     /// [`Self::fire_chance`] is.
     #[must_use]
     pub fn absorb_chance(&self, held_ticks: u32) -> f32 {
-        let rate = self.rates()[self.absorb_index(held_ticks)];
-        if rate == 0.0 || self.odds.absorb == 0.0 {
+        let rate = self.law.step_scale * self.rates()[self.absorb_index(held_ticks)];
+        let mut odds = self.odds.absorb * self.law.all_weapons.absorb;
+        if self.eliminator
+            && let EliminatorTerms::Authored { absorb_scale, .. } = self.law.eliminator
+        {
+            odds *= absorb_scale;
+        }
+        if rate == 0.0 || odds == 0.0 {
             return 0.0;
         }
-        1.0 / ((1.0 / rate) * (1.0 / self.odds.absorb))
+        1.0 / ((1.0 / rate) * (1.0 / odds))
     }
 
     /// The table this race reads.
@@ -231,17 +290,20 @@ impl Situation {
     /// is not the same function as `rate * use` in `f32`.
     #[must_use]
     pub fn fire_chance(&self) -> f32 {
-        let rate = self.rates()[self.fire_index()];
+        let rate = self.law.step_scale * self.rates()[self.fire_index()];
         let player_in_reach = self
             .player_gap
             .is_some_and(|gap| gap > 0.0 && gap < PLAYER_AHEAD);
         let mut odds = if player_in_reach {
-            self.odds.use_against_player
+            self.odds.use_against_player * self.law.all_weapons.use_against_player
         } else {
-            self.odds.use_against_ai
+            self.odds.use_against_ai * self.law.all_weapons.use_against_ai
         };
         if self.eliminator {
-            odds *= ELIMINATOR_USE;
+            odds *= match self.law.eliminator {
+                EliminatorTerms::Pulse => ELIMINATOR_USE,
+                EliminatorTerms::Authored { use_scale, .. } => use_scale,
+            };
         }
         if rate == 0.0 {
             return 0.0;
@@ -281,7 +343,7 @@ impl WeaponAi {
         if situation.aimed
             && self.wait_ticks != 0
             && situation.target_in_path
-            && early < situation.rates()[4]
+            && early < situation.law.step_scale * situation.rates()[4]
         {
             self.wait_ticks = 0;
             return Decision::Fire;

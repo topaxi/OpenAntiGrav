@@ -12,7 +12,7 @@
 //! [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 
 /// The tables a title tunes its weapons from.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Weapons {
     /// The table a race reads, and the only one on a title that ships one.
     pub race: &'static str,
@@ -33,10 +33,10 @@ pub struct Weapons {
     /// where it has not been looked for.
     ///
     /// **`None` is not a measurement here**, unlike [`Self::elimination`]'s. Every
-    /// title ships the table and **runs Pulse's law on its own odds; no other
-    /// title's decision code is read**: the law is inherited from Pulse and
-    /// unmeasured on the rest (`docs/ghidra/functions/psp-pulse-usa/weapon-ai.md`,
-    /// "Every title carries the table"). A race without the file fires on this
+    /// title ships the table and rolls [`Self::opponent_fire`]'s law on its own
+    /// odds: Pulse's and HD's decision code are read, the others inherit
+    /// (`docs/ghidra/functions/psp-pulse-usa/weapon-ai.md`, "Every title carries
+    /// the table"). A race without the file fires on this
     /// project's own rule (`oag_raceplay::FireLaw`).
     pub ai: Option<&'static str>,
     /// When a locked LeachBeam moves energy: every tick, or once a ball trip.
@@ -67,6 +67,40 @@ pub struct Weapons {
     /// bit clear (`0x0883f0c0`), so a pad crossed mid-stint grants nothing; the pad
     /// still stamps its refresh timer. Read on Pulse alone; the others run its law.
     pub autopilot_pad_grants: crate::pre_race::Sourced<bool>,
+    /// Which terms of `WeaponAi_DecideFireOrAbsorb` the title's opponents roll
+    /// by, on the [`Self::ai`] odds.
+    pub opponent_fire: crate::pre_race::Sourced<OpponentFire>,
+}
+
+/// What differs between titles in the opponents' fire-or-absorb decision.
+///
+/// Pulse's skeleton (gates, rate tables, hold times) is shared; these are the
+/// terms HD changed (`docs/ghidra/functions/ps3-hdfury-eu/weapon-ai-fire.md`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct OpponentFire {
+    /// Multiplies the per-step rates at the 60 Hz step: HD's `dt * 30` is
+    /// `0.5`, Pulse has no such term (`1.0`).
+    pub step_scale: f32,
+    /// Whether the `<AllWeapons>` row multiplies every weapon's odds.
+    pub all_weapons: bool,
+    /// Whether an Eliminator uses the `<EliminatorAIStats>` use and absorb
+    /// scales (HD) or Pulse's `use *= 5` with the absorb index forced to zero.
+    pub authored_eliminator: bool,
+}
+
+impl OpponentFire {
+    /// `WeaponAi_DecideFireOrAbsorb` on Pulse (`0x088518b4`).
+    pub const PULSE: Self = Self {
+        step_scale: 1.0,
+        all_weapons: false,
+        authored_eliminator: false,
+    };
+    /// `WeaponAi_DecideFireOrAbsorb` on HD (`0x000f9a18`), with `dt = 1/60`.
+    pub const HD: Self = Self {
+        step_scale: 0.5,
+        all_weapons: true,
+        authored_eliminator: true,
+    };
 }
 
 /// How a Quake's wave reaches a craft.

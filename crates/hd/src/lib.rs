@@ -192,10 +192,8 @@ pub const TITLE: &Title = &Title {
         // `Data\XML\WeaponAIstats.xml` is in `DATA00.PSARC` (searched
         // 2026-10-03) and carries Pulse's thirteen element names (with its
         // own values) plus an `AllWeapons` row and an `EliminatorAIStats` row,
-        // both parsed and neither consumed; `DATA02`'s base-game copy has
-        // neither. The
-        // opponents run Pulse's fire law on these odds: the law is **inherited
-        // from Pulse, unmeasured on HD** - HD's own decision code is unread.
+        // both consumed by `opponent_fire`; `DATA02`'s base-game copy has
+        // neither.
         ai: Some(r"Data\XML\WeaponAIstats.xml"),
         // Read off HD's own EBOOT: one transfer per ball trip.
         leach_drain: oag_title::weapons::LeachDrain::PerTrip,
@@ -211,6 +209,7 @@ pub const TITLE: &Title = &Title {
         autopilot_absorb_cancels: oag_title::pre_race::Sourced::measured(true),
         // Pulse's law, inherited: HD's pad grant is unread.
         autopilot_pad_grants: oag_title::pre_race::Sourced::inherited(false, "Wipeout Pulse"),
+        opponent_fire: oag_title::pre_race::Sourced::measured(oag_title::weapons::OpponentFire::HD),
     },
     weapon_models: race::WEAPON_MODELS,
     effects: effects::EFFECTS,

@@ -869,7 +869,15 @@ pub(super) fn load_weapon_ai(
         .and_then(|blob| Ok(oag_tables::weapons::ai::from_blob(&blob)?));
     match parsed {
         Ok(stats) => {
-            report.push(format!("{entry}: opponents fire on its odds"));
+            let terms = title.weapons.opponent_fire.value;
+            let law = if terms == oag_title::weapons::OpponentFire::PULSE {
+                "Pulse's decision terms"
+            } else if terms == oag_title::weapons::OpponentFire::HD {
+                "HD's decision terms (step scale, AllWeapons, Eliminator scales)"
+            } else {
+                "its own decision terms"
+            };
+            report.push(format!("{entry}: opponents fire on its odds, {law}"));
             Some(stats)
         }
         Err(e) => {

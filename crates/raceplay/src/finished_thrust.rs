@@ -53,7 +53,7 @@ impl FinishedThrust {
 /// Easy, `Skilled` Medium, `Elite` Hard (the equivalence
 /// `oag_ai::Difficulty::tune_at_scale` documents), and `Ace`, which the
 /// original has no rung for, Hard.
-fn rung(difficulty: oag_ai::Difficulty) -> Difficulty {
+pub(crate) fn rung(difficulty: oag_ai::Difficulty) -> Difficulty {
     match difficulty {
         oag_ai::Difficulty::Novice => Difficulty::Easy,
         oag_ai::Difficulty::Skilled => Difficulty::Medium,

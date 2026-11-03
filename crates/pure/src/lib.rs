@@ -118,6 +118,10 @@ pub const TITLE: &Title = &Title {
         autopilot_absorb_cancels: oag_title::pre_race::Sourced::measured(false),
         // Pulse's law, inherited: Pure's pad grant is unread.
         autopilot_pad_grants: oag_title::pre_race::Sourced::inherited(false, "Wipeout Pulse"),
+        opponent_fire: oag_title::pre_race::Sourced::inherited(
+            oag_title::weapons::OpponentFire::PULSE,
+            "Wipeout Pulse",
+        ),
     },
     // **Pure's own names, read off `BOOT.BIN` (2026-10-08), not Pulse's.**
     // Every Pulse literal this table used to carry (`Pulse_Mine.vex`,

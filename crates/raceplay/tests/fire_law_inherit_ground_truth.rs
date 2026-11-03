@@ -12,8 +12,10 @@
 //! The maintainer's rule (2026-10-03): a title with no measured law of its
 //! own runs Pulse's, never this project's chosen fallback. HD, Omega and 2048
 //! each ship a `WeaponAIstats.xml` (`docs/gameplay/ai.md`), so each runs
-//! `oag_ai::weapon_ai` on its own odds: **inherited from Pulse, unmeasured on
-//! that title.** Dropping a title's `Weapons::ai` falls back to
+//! `oag_ai::weapon_ai` on its own odds: Pulse and Pure on Pulse's terms, HD on
+//! its own (`docs/ghidra/functions/ps3-hdfury-eu/weapon-ai-fire.md`), 2048 and
+//! Omega on HD's, **inherited, decision code unread there.** The loader report
+//! names which terms a race runs, and this test asserts it. Dropping a title's `Weapons::ai` falls back to
 //! `FireLaw::Ours` and fails here.
 //!
 //! Each title's single race then flies two minutes under the original driver
@@ -28,7 +30,7 @@ use oag_gameplay::PlayerInputs;
 use oag_raceplay as race;
 use oag_raceplay::FireLaw;
 
-fn started(source: String, mode: oag_race::Mode) -> race::Race {
+fn started(source: String, mode: oag_race::Mode, hd_terms: bool) -> race::Race {
     let loaded = race::load(&race::Options {
         source,
         mode,
@@ -40,8 +42,10 @@ fn started(source: String, mode: oag_race::Mode) -> race::Race {
         loaded
             .report
             .iter()
-            .any(|line| line.contains("opponents fire on its odds")),
-        "no weapon-AI line in the loader report: {:#?}",
+            .any(|line| line.contains("opponents fire on its odds")
+                && line.contains("HD's decision terms") == hd_terms),
+        "no weapon-AI line naming the {} terms in the loader report: {:#?}",
+        if hd_terms { "HD" } else { "Pulse" },
         loaded.report
     );
     race::Race::start(loaded.setup)
@@ -94,7 +98,7 @@ fn opponents_fire_under_the_original_driver(mut race: race::Race) -> (u32, Vec<b
 /// (`oag_title::weapons::Weapons::leach_drain`): once a ball trip on HD, 2048
 /// and Omega, every tick on Pulse.
 fn fires_original(source: String, mode: oag_race::Mode, per_trip: bool) {
-    let race = started(source, mode);
+    let race = started(source, mode, per_trip);
     assert_eq!(race.fire_law(), FireLaw::Original, "{mode:?}");
     if mode == oag_race::Mode::SingleRace {
         let (fired, beams) = opponents_fire_under_the_original_driver(race);

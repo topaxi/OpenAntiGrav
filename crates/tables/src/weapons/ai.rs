@@ -129,9 +129,9 @@ pub struct WeaponAiStats {
 /// The `<EliminatorAIStats>` row HD, 2048 and Omega author and Pulse's does not:
 /// thirteen floats, named as the file names them.
 ///
-/// **Parsed, not consumed.** What it tunes is a hypothesis in
-/// `docs/gameplay/race-modes.md` ("HD's `EliminatorAIStats` row"); the field
-/// names are the file's words, not a claim about the consumer. The
+/// The use and absorb scales are consumed by `oag_ai::weapon_ai`
+/// (`docs/ghidra/functions/ps3-hdfury-eu/weapon-ai-fire.md`); the flip and score
+/// fields are not. The field names are the file's words. The
 /// `easy`/`medium`/`hard` scales are kept by tier.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct EliminatorAiStats {
@@ -160,14 +160,14 @@ impl WeaponAiStats {
     }
 
     /// The `<AllWeapons>` row HD, 2048 and Omega author after the thirteen: the
-    /// same three attributes, no weapon (none in Pulse's). Parsed, unconsumed.
+    /// same three attributes, no weapon (none in Pulse's). Multiplied into every weapon's odds by HD's decision.
     #[must_use]
     pub fn all_weapons(&self) -> Option<WeaponAiOdds> {
         self.all_weapons
     }
 
-    /// The `<EliminatorAIStats>` row, `None` for Pulse and Pure. Parsed,
-    /// unconsumed.
+    /// The `<EliminatorAIStats>` row, `None` for Pulse and Pure. Its scales
+    /// feed an Eliminator's use and absorb odds.
     #[must_use]
     pub fn eliminator(&self) -> Option<EliminatorAiStats> {
         self.eliminator
