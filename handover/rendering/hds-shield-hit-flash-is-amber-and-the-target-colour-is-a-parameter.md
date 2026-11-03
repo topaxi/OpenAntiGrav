@@ -2,7 +2,7 @@
 status: re-first
 titles: [hd]
 updated: 2026-11-03
-summary: "HD per-team ShieldColour target wired (2026-11-03); open: Zone Battle copy (unverified), activation model tint, Omega/2048 shell build + value decode, hit flash unwatched"
+summary: "HD per-team ShieldColour wired; open: activation tint, Omega/2048 shell build + value decode, Zone Battle copy (unverified), hit flash"
 ---
 
 # HD's shield hit-flash is amber, not Pulse's cyan - and the steady-state colour is a parameter this pass did not trace to its source
