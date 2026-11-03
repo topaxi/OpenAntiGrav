@@ -87,6 +87,7 @@ mod hd;
 mod layers;
 mod magstrip;
 mod menu;
+mod mod_sound;
 mod name_voice;
 mod repeating;
 mod track;
@@ -101,6 +102,7 @@ pub use cue::CueTables;
 pub use engine::Engine;
 pub use layers::{CueVoice, Where as VoicePlace, start as start_voices};
 pub use menu::MenuSfx;
+pub use mod_sound::ModSounds;
 pub use name_voice::NameVoices;
 pub use repeating::Playing;
 pub use track::TrackEmitters;
@@ -190,6 +192,8 @@ pub(super) struct SfxVoices {
     leach_attach: Option<VoiceId>,
     /// The magstrip hum, per grid slot. See [`Cue::Magstrip`].
     magstrip: magstrip::Voices,
+    /// The mods' own sounds that are held, as loops.
+    mod_sounds: mod_sound::Voices,
     rng: Rng,
 }
 
@@ -222,6 +226,7 @@ impl Audio {
             announcer,
             class_announcer,
             cues,
+            mod_sounds,
             announcements,
             class_announcements,
             listener,
@@ -245,6 +250,7 @@ impl Audio {
             self.release_race_song();
         }
         if banks.is_empty()
+            && banks.mod_sounds.is_empty()
             && announcer.is_empty()
             && class_announcer.is_empty()
             && emitters.omni.is_empty()
@@ -278,6 +284,7 @@ impl Audio {
                 quake_travel: TravelVoices::new(),
                 leach_attach: None,
                 magstrip: magstrip::Voices::default(),
+                mod_sounds: mod_sound::Voices::default(),
                 rng: Rng::new(SFX_SEED),
             }
         });
@@ -674,6 +681,13 @@ impl Audio {
             }
 
             voices.magstrip.follow(mixer, &listener, &craft);
+            voices.mod_sounds.play(
+                &mod_sounds,
+                &banks.mod_sounds,
+                mixer,
+                (&listener, &craft, player_slot),
+                running,
+            );
 
             // The circuit's ambience, same ears and law, after the craft so a
             // starved pool serves the race's cues first: the original's pool is
@@ -756,6 +770,7 @@ impl Audio {
                     mixer.stop(id);
                 }
                 voices.magstrip.stop_all(mixer);
+                voices.mod_sounds.stop_all(mixer);
                 voices.ambience.stop(mixer);
             });
         }
@@ -789,11 +804,6 @@ fn place(
     craft: &[Option<(Vec3, f32)>],
     player_slot: usize,
 ) -> Option<Placed> {
-    let dry = Placed {
-        gain: 1.0,
-        pan: None,
-        front: 1.0,
-    };
     if event.cue.placement() == Placement::Point {
         // An arbitrary world point ([`Placement::Point`]). `None` means the event
         // was built wrong (no [`CueEvent::at_point`]), not out of range; that
@@ -813,17 +823,40 @@ fn place(
             front: placed.front,
         });
     }
-    let emitter = match event.cue.placement() {
+    place_on_craft(
+        event.cue.placement(),
+        usize::from(event.slot),
+        listener,
+        craft,
+        player_slot,
+    )
+}
+
+/// Where a sound on a craft's emitter is heard from: `placement` is one of the craft
+/// placements, never [`Placement::Point`].
+fn place_on_craft(
+    placement: Placement,
+    slot: usize,
+    listener: &oag_audio::Listener,
+    craft: &[Option<(Vec3, f32)>],
+    player_slot: usize,
+) -> Option<Placed> {
+    let dry = Placed {
+        gain: 1.0,
+        pan: None,
+        front: 1.0,
+    };
+    let emitter = match placement {
         Placement::Unplaced => return Some(dry),
         // The player's own branch, on a hypothesis the type documents.
-        Placement::CraftUnlessPlayer if usize::from(event.slot) == player_slot => return Some(dry),
+        Placement::CraftUnlessPlayer if slot == player_slot => return Some(dry),
         Placement::Craft | Placement::CraftUnlessPlayer => oag_audio::Emitter::craft,
         Placement::Engine => oag_audio::Emitter::engine,
-        Placement::Point => unreachable!("handled above"),
+        Placement::Point => unreachable!("handled by the caller"),
     };
     // A cue from a slot with no craft is dropped, not played dry: a rival's
     // collision would arrive at full volume the moment a slot is emptied.
-    let (position, _) = (*craft.get(usize::from(event.slot))?)?;
+    let (position, _) = (*craft.get(slot)?)?;
     let placed = emitter(position.to_array()).place(listener, 1.0)?;
     Some(Placed {
         gain: placed.gain,

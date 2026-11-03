@@ -199,11 +199,12 @@ fn tick_effects(
     keep: impl Fn(&oag_gameplay::cue::CueEvent) -> bool,
     flyby: bool,
 ) {
-    let (mut cues, announcements, class_announcements) = if flyby {
-        (Vec::new(), Vec::new(), Vec::new())
+    let (mut cues, mod_sounds, announcements, class_announcements) = if flyby {
+        (Vec::new(), Vec::new(), Vec::new(), Vec::new())
     } else {
         (
             race.drain_cues(),
+            race.drain_mod_sounds(),
             race.drain_announcements(),
             race.drain_class_announcements(),
         )
@@ -215,6 +216,7 @@ fn tick_effects(
         announcer: race.announcer(),
         class_announcer: race.class_announcer(),
         cues,
+        mod_sounds,
         announcements,
         class_announcements,
         listener: listener_of(race),

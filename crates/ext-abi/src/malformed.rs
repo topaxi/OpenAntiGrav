@@ -125,6 +125,13 @@ pub enum Malformed {
         /// The record's word.
         word: u32,
     },
+    /// A `play-mod-sound` whose mode is not one of [`crate::SoundMode::ALL`].
+    ModSound {
+        /// The command kind code.
+        kind: u8,
+        /// The record's word.
+        word: u32,
+    },
 }
 
 impl fmt::Display for Malformed {
@@ -210,6 +217,11 @@ impl fmt::Display for Malformed {
             } => write!(
                 f,
                 "command {kind} arg {arg} value {value} word {word:#x}: an fov-offset in [-{MAX_FOV_OFFSET_DEG}, {MAX_FOV_OFFSET_DEG}] degrees, a distance kind 0..=4 with an amount above 0"
+            ),
+            Self::ModSound { kind, word } => write!(
+                f,
+                "command {kind} word {word}: a play-mod-sound mode of 0..={} (once, loop, stop)",
+                crate::SoundMode::ALL.len() - 1
             ),
             Self::Roll {
                 slot,

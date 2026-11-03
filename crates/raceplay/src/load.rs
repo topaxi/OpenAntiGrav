@@ -868,7 +868,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let handles = super::EffectHandles::resolve(craft_title, &effects).with_own(mod_effects);
 
     #[cfg(feature = "view")]
-    let (sounds, announcer, class_announcer) = audio::banks_and_announcers(
+    let (mut sounds, announcer, class_announcer) = audio::banks_and_announcers(
         &mut archives,
         title.race,
         title.hud_art.lap_hud,
@@ -876,6 +876,15 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &slot_teams,
         &mut report,
     );
+    #[cfg(feature = "view")]
+    {
+        sounds.mod_sounds = crate::extension_sounds::load(
+            &extension_sources,
+            &title.slug(),
+            options.foreign_track.as_deref(),
+            &mut report,
+        );
+    }
     #[cfg(feature = "view")]
     let track_emitters = audio::track_emitters(
         &mut archives,

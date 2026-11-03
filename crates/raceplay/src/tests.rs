@@ -49,6 +49,8 @@ mod extension_odds;
 #[cfg(feature = "extensions")]
 mod extension_slipstream;
 #[cfg(feature = "extensions")]
+mod extension_sounds;
+#[cfg(feature = "extensions")]
 mod extension_view;
 mod extensions;
 mod field;

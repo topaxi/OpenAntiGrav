@@ -22,6 +22,8 @@ pub struct RaceFrame<'a> {
     pub class_announcer: &'a ClassAnnouncer,
     /// The cues the race raised this tick, drained.
     pub cues: Vec<CueEvent>,
+    /// The mods' own sounds the race asked for this tick, drained.
+    pub mod_sounds: Vec<oag_gameplay::cue::ModSoundEvent>,
     /// The Zone milestones raised this tick, drained.
     pub announcements: Vec<u16>,
     /// The Zone speed-class stages raised this tick, drained.
