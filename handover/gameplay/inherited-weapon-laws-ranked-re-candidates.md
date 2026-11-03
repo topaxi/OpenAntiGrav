@@ -29,8 +29,9 @@ Ranked, most play impact first. Each names what would settle it.
    Eliminator `use * useScale[difficulty]` instead of `* 5`, and an unread Eliminator flip block.
    Ours runs HD on Pulse's law, about 2.2x too often outside an Eliminator. **Ready to wire** (the
    page's list; wire HD, then 2048 and Omega by inheritance labelled so). Still open: a live
-   breakpoint count on `0x000f9a18` (cadence and `dt`), the weapon AI's constructor (the
-   `RaceManager + 6240` pointer chain), Pure's, 2048's and Omega's own decision code (Omega: its
+   breakpoint count on `0x000fb928` / `0x000f9a18` (cadence and `dt`; the static read says every
+   step, `dt * 30`), which `weaponaistats.xml` copy HD loads (`DATA00` has the Eliminator row,
+   `DATA02` not: item 3 of the page's wiring list depends on it), Pure's, 2048's and Omega's own decision code (Omega: its
    `eboot.bin` is in Ghidra, start at the reader of `stats + 0xc4`). The absorb half's cadence is
    every step on both (read).
 2. **LeachBeam on 2048 and Omega.** 2048's own table authors `repair="30.0"`,

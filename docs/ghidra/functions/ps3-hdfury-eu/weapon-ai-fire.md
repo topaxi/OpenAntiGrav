@@ -12,15 +12,20 @@ of Pulse's `use *= 5`, and an Eliminator-only "flip" block.
 
 | Address | Name | Confidence |
 | --- | --- | --- |
+| `0x000fb928` | `WeaponAi_Update` | 80 |
 | `0x000f9a18` | `WeaponAi_DecideFireOrAbsorb` | 80 |
 | `0x000f98b8` | `WeaponAi_ScanTraffic` | 80 |
+| `0x000fa210` | `WeaponAi_Construct` | 80 |
+| `0x000fa140` | `WeaponAi_BiasAbsorbByDistance_q` | 55 |
 | `0x008c175c` | `g_weapon_ai_rate` | 85 |
 | `0x008c1770` | `g_weapon_ai_rate_eliminator` | 85 |
 
-`0x000f9a18` is Pulse's `WeaponAi_Update` and `WeaponAi_DecideFireOrAbsorb` merged: it has the
-signature `(double dt, WeaponAi *self)` and no `0.25` s accumulator, no per-weapon direction switch
-(those inputs are already in the object). 80 and not 90 because the only static call path is a
-virtual one (below) and nothing was observed running.
+HD splits Pulse's pair the same way Pulse does: `WeaponAi_Update` (`0x000fb928`, `(double dt,
+WeaponAi *self)`, the `0.25` s gate and the per-weapon switch) calls `WeaponAi_DecideFireOrAbsorb`
+(`0x000f9a18`, same `(dt, self)` signature, **now with a `dt` argument Pulse's lacks**) from one
+`bl` at `0x000fc074`. Ghidra's xref index misses that `bl` (it lists only the descriptor word at
+`0x874fe8`), which is why the earlier lane saw "no caller". 80 and not 90 because nothing was
+observed running.
 
 ## Why this is the reader of `RaceManager + 6240`
 
@@ -37,31 +42,54 @@ Two independent agreements, which is what lifts it from a decompile to a reading
    rate)`), the same `0.8 s` / `0.2 s` gates, the `150` / `-200` window, the `3.0` s wait and the
    early-out all match `psp-pulse-usa/weapon-ai.md`.
 
-That `stats` is `RaceManager + 6240` is **not** shown: the weapon AI's `+0x1c` is set somewhere the
-`addi 6240` scan (only the constructor and three destructors take that address) does not reach, so
-the pointer provenance stays open. The layout match above is the evidence, not an address chain.
-This is why the earlier lane found "no `lfs` of `RaceManager + 6416 .. 6468`": the reads go through
-the weapon AI's own pointer, as predicted, and the ones that matter are `+0xa4 .. +0xd0`.
+**Where `stats` comes from.** `WeaponAi_Construct` (`0x000fa210`) stores it at `this + 0x1c`
+(`param_1[7]`) from a resource-registry lookup by the name `WeaponAIStats` (TOC string
+`0x782998`), the same registry that hands it `Race manager` (`0x782978`) and `AI track data`
+(`0x782988`). That is why no `addi 6240` outside the RaceManager constructor and destructors takes
+the object's address, and why the earlier lane found no `lfs` of `RaceManager + 6416 .. 6468`:
+the reads go through this pointer. That the registered `WeaponAIStats` is the `+6240` object the
+loader fills is the natural reading (same name, same layout above) and is not shown by an address
+chain (confidence 80). A second constructor `0x000fa400` is the same function for the other
+`WEAPON SYSTEM %d` path; not diffed.
 
 ## How it is called (cadence)
 
 `AIManager_Update` (`0x000bb960`) ends with a loop over `mgr + 0x78` (count) and `mgr + 0x7c`
 (pointers): `lwz 9, 0(obj); lwz 11, 8(9); lwz 0, 0(11); ... bctrl` at `0x000bba70..0x000bba84`, with
-`dt` in `f1` (`fmr 1, 31` at `0x000bba5c`) and the object in `r3`. So it runs **once per world step
-for every weapon AI**, with no accumulator. `0x000f9a18` has no `bl` caller and one data reference
-(`0x00874fe8`, its function descriptor), consistent with a virtual slot. Which object class owns
-that slot is not shown statically (the class's vtable pointer was not found: no TOC slot, no
-`addis/addi` pair points into `0x874f80..0x875000` other than a type-lookup slot). Confidence 75 on
-"this slot is the one `AIManager_Update` calls"; its neighbour `0x000f98b8` (`WeaponAi_ScanTraffic`,
-below) sits at the adjacent slot.
+`dt` in `f1` (`fmr 1, 31` at `0x000bba5c`) and the object in `r3`. The object's vtable pointer is
+`0x008637c0` (stored by the constructor `0x000fa210` from TOC `0x8a9404`); its slot at `+8` is the
+descriptor at `0x00875070`, whose code is **`0x000fb928`**, `WeaponAi_Update`. So `Update` runs
+once per world step for every weapon AI (confidence 85: constructor, vtable word and call site all
+read).
+
+`WeaponAi_Update` (`0x000fb928`), outside mode `0xd` (identity open, `mode-manager.md` lists it as
+an unassigned bucket; it has its own simpler law, not read for the odds):
+
+- `+0x68 -= dt`, floored at `0` (the wait timer: **Pulse's decrement at the top of its Update is
+  kept**), then, if the held id is valid, `+0x34 += dt` with **no reset anywhere** (the only other
+  stores of `+0x34` are the two constructors' zero). Once it passes `0.25` (TOC `-0x4034`, decoded
+  `0x3e800000`) the gate stays open: **the decision runs every step**, exactly
+  Pulse's reading (`weapon-ai.md`, "the decision cadence").
+- `+0x30` (the held clock the `0.8` / `0.2` gates read) is zeroed while nothing is held and gains
+  `dt` per step while holding; Pulse's `+0x2c`.
+- A 13-way jump table (`0x000fbd90 .. 0x000fc06c`) sets the direction flags `+0x64 / +0x65 /
+  +0x6c`, the nearest gaps `+0x50 / +0x54` and the skill indices `+0x48 / +0x4c` per weapon id
+  (with `WeaponAi_BiasAbsorbByDistance_q`, `0x000fa140`, adding `1..4` to `+0x48` by a distance
+  tier, Pulse's `WeaponAi_BiasAbsorbByShield`-shaped step), then falls into the common tail
+  `bl 0x000f9a18`. These per-weapon setups were **not diffed case by case** against Pulse's
+  `WeaponAi_Score*` functions: the stores are the same fields, so this page treats them as
+  **assumed Pulse's, setup unread** (confidence 50).
+- A craft whose controller byte `+0x1a` is set (HD only) runs a timer `+0x38 += dt`, cleared past
+  `0.7` (`-0x4044`) or when nothing is held, and skips the decision that step.
 
 **The cadence is every step, and the chance is scaled by the step**: `k = dt * 30.0`
-(`0x008a9434` holds `0x41f00000`; `param_1 * DAT_008a9434` at the top). Pulse draws against
-`rate * use` per call with **no** time term (`weapon-ai.md`, "The decision"). At HD's `dt = 1/60`
-(the world step the other HD pages read, e.g. `engine-trail.md`), `k = 0.5`: **every per-step chance
-on HD is half of the number Pulse's law would give for the same table row**. Confidence 80 for the
-`dt * 30` (read directly), 70 that HD's world step is exactly `1/60` at the point this runs (not
-measured here).
+(`0x008a9434` holds `0x41f00000`; `param_1 * DAT_008a9434` at the top of `0x000f9a18`). Pulse's
+`WeaponAi_DecideFireOrAbsorb` takes **no `dt` at all** (`int param_1` only; re-decompiled on
+`/pulse/BOOT-psp-pulse-usa.BIN`: no frame-scale term in the rolls, `rate * use` against a bare
+`rand * 4.656613e-10`). At HD's `dt = 1/60` (the world step the other HD pages read, e.g.
+`engine-trail.md`), `k = 0.5`: **every per-step chance on HD is half of the number Pulse's law
+would give for the same table row**. Confidence 80 for the `dt * 30` (read directly), 70 that HD's
+world step is exactly `1/60` at the point this runs (not measured here).
 
 ## The law
 
@@ -80,11 +108,11 @@ measured here).
 | `+0x64` / `+0x65` / `+0x66` | `+0x50` / `+0x51` / `+0x52` | works ahead / works behind / "no craft in the shot's path" |
 | `+0x68` | `+0x54` | wait timer, set to `3.0` (`0x40400000`) |
 | `+0x6c` | `+0x58` | aimed projectile weapon |
-| `+0x74` | `+0x60` | signed gap to **the player**: `ScanTraffic` stores it only when the scanned craft is `mgr + 8`'s (the player), `0x000f9928..0x000f9944` |
+| `+0x74` | `+0x60` | signed gap to one particular craft: `ScanTraffic` stores it only when the scanned racer's craft equals the word at `+8` of the object at `0x009879f0` (`0x000f994c .. 0x000f9958`; the skip-self test is `0x000f9928 .. 0x000f9930`) |
 
-`+0x74` being written for the player alone is a second, direct corroboration of Pulse's open
-"`+0x60` is the gap to the player" step (75 on Pulse): HD's `ScanTraffic` is the same function and
-tests `racer == player`. The attribute names `useAgainstPlayer` / `useAgainstAI` are right.
+That `+8` of the object at `0x009879f0` is the player's craft is an inference (its writer was not
+found): it matches Pulse's open "`+0x60` is the gap to the player" reading (75 on Pulse) and the
+attribute names, so both are at **60** here, not a corroboration.
 
 ```c
 k     = dt * 30.0;
@@ -140,8 +168,11 @@ Pulse calls `0x12`, not read further here.
 
 ### The Eliminator-only flip block (read, not interpreted)
 
-Two pieces, both only when `E`; `rec` is this craft's own racer-table entry (`mgr_table + idx *
-0x9c0 + 0x14`, `idx` found by walking the table for `self + 4`), `+0x78` and `+0x79` are bytes on
+Two pieces, both only when `E`; `rec` is the record at entry `+4` of this craft's own row in the racer table (`table + 0x14 +
+idx * 0x9c0`, `idx` found by walking the table for `self + 4`), which `ai-controls.md`
+(`AiManager_AddDriver`) documents as **the driver**; `Ai_Construct` zeroes its `+0x24` / `+0x28`
+(`param_1[9]`, `param_1[10]`), fields in the prefix HD's driver adds over Pulse's, a lead for
+whoever names the flip, `+0x78` and `+0x79` are bytes on
 the weapon AI, `+0x7c` a float:
 
 - **Before the rolls** (after the `use` scale): `+0x7c -= dt`, floored at `0`; if `+0x78 == 0`,
@@ -164,7 +195,9 @@ toward the craft behind, by the numbers and the controller byte) is a hypothesis
 
 | Term | Pulse (`weapon-ai.md`) | HD (`0x000f9a18`) | Same? |
 | --- | --- | --- | --- |
-| Gates `0.8` s / `0.2` s, window `0..150` ahead / `-200..0` behind, `3.0` s wait | yes | yes, same constants | same |
+| Gates `0.8` s / `0.2` s, window `0..150` ahead / `-200..0` behind, `3.0` s wait (decremented by `dt` in `Update`) | yes | yes, same constants and decrement | same |
+| `0.25` s gate, never reset, decision every step | yes | yes (`0x000fb928`) | same |
+| Per-weapon direction flags and skill indices | `WeaponAi_Score*` | same fields set by a jump table | assumed same, **setup unread** |
 | Rate tables | `0.0005 .. 0.05`, Eliminator `0.001 .. 0.1` | same five floats each | same |
 | Skill index clamp `0..4`, fire floor `1` in mode 8 | yes | yes | same |
 | "Long way" product `1/((1/a)/b)` | yes | yes | same |
@@ -211,6 +244,13 @@ Omega's code is HD's. Not checked on Omega's binary; recorded as the next addres
 3. Eliminator on HD: replace `use *= 5` with `use *= useScale[difficulty]`, absorb with
    `rate_elim[idx] * absorb * AllWeapons.absorb * absorbScale[difficulty]` (index as the setup
    gives it, no forced `0`), and only while the craft's `+0x6ad8` byte is `0` (not identified).
+   **Conditional on which `weaponaistats.xml` HD loads**: `DATA00`'s copy carries the
+   `EliminatorAIStats` row (above); `DATA02`'s has `AllWeapons` but no such row, and the loader
+   then leaves every scale `0` (and both flips `1.0`), so in an Eliminator `use` is `0` and an
+   HD opponent would **never fire or absorb a forward weapon**. `race-modes.md` records that
+   which copy the runtime reads is not established (`Archives::read_name` takes `DATA00`'s). Wire
+   with `DATA00`'s, say so, and settle the question with the live breakpoint below (read the
+   `+0xc4` scale at the first call).
 4. Do not wire the flip block until `+0x1a` and `+0x78 / +0x79` are named.
 5. Moves two things at once, so gate with the fire-law ground truth
    (`fire_law_inherit_ground_truth.rs`) before and after: HD's opponent projectile count should drop
@@ -218,8 +258,9 @@ Omega's code is HD's. Not checked on Omega's binary; recorded as the next addres
 
 ## What would raise it
 
-A live count under RPCS3: a breakpoint on `0x000f9a18` (the `rpcs3-hd-escape-gate.py` recipe, a
+A live count under RPCS3: a breakpoint on `0x000fb928` (the `Update`) and `0x000f9a18` (the `rpcs3-hd-escape-gate.py` recipe, a
 `serve --interpreter` instance) logging calls per second per opponent (expect the world step, 60 a
 second) and `f1` (`dt`). That settles the cadence and `dt = 1/60` (70 to 90) and the virtual-slot
-question. Locating the weapon AI's constructor (the `stw X, 0x1c(this)`) would settle the
-`RaceManager + 6240` provenance.
+question. Reading `0x000fa210`'s registry hit under the watchpoint would settle the
+`RaceManager + 6240` provenance, and the first call's `stats + 0xc4` settles `DATA00` versus
+`DATA02`.
