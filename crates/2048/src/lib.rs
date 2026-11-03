@@ -213,9 +213,9 @@ pub const TITLE: &Title = &Title {
             origin: oag_title::Origin::InheritedFrom("Wipeout HD"),
         },
         ..oag_title::Looks::unread(oag_title::ShieldPalettes {
-            ps2: oag_title::ShieldPalette::Ps2Pulse,
-            elsewhere: oag_title::ShieldPalette::Pulse,
-            origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
+            ps2: oag_title::ShieldPalette::Hd,
+            elsewhere: oag_title::ShieldPalette::Hd,
+            origin: oag_title::Origin::InheritedFrom("Wipeout HD"),
         })
     },
     // No campaign layout read (2048's campaign is its own event map): the
