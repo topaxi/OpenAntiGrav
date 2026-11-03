@@ -118,9 +118,9 @@ pub const TITLE: &Title = &Title {
         autopilot_absorb_cancels: oag_title::pre_race::Sourced::measured(false),
         // Pulse's law, inherited: Pure's pad grant is unread.
         autopilot_pad_grants: oag_title::pre_race::Sourced::inherited(false, "Wipeout Pulse"),
-        opponent_fire: oag_title::pre_race::Sourced::inherited(
+        // Measured: Pure's decision code equals Pulse's law (`psp-pure-usa/weapon-ai-fire.md`).
+        opponent_fire: oag_title::pre_race::Sourced::measured(
             oag_title::weapons::OpponentFire::PULSE,
-            "Wipeout Pulse",
         ),
     },
     // **Pure's own names, read off `BOOT.BIN` (2026-10-08), not Pulse's.**
@@ -772,6 +772,13 @@ pub const LANGUAGE_MANIFESTS: &[oag_title::LanguageManifest] = &[
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pures_opponent_fire_law_is_measured_not_inherited() {
+        let fire = TITLE.weapons.opponent_fire;
+        assert_eq!(fire.origin, oag_title::Origin::Measured);
+        assert_eq!(fire.value, oag_title::weapons::OpponentFire::PULSE);
+    }
 
     /// The deny-list rules out, never in - the same asymmetry `oag_pulse`'s has.
     #[test]
