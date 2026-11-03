@@ -55,7 +55,9 @@ fn render_chunked(pan: f32, front: f32, once: bool, chunks: &[usize]) -> Vec<f32
 }
 
 fn ear_energy(out: &[f32]) -> (f32, f32) {
-    out.chunks_exact(2)
+    out.as_chunks::<2>()
+        .0
+        .iter()
         .skip(LATENCY + 64)
         .fold((0.0, 0.0), |(l, r), f| (l + f[0] * f[0], r + f[1] * f[1]))
 }
@@ -80,7 +82,7 @@ fn headphones_tell_a_source_ahead_from_the_same_source_behind() {
     let behind = render_chunked(0.0, -1.0, false, &[512]);
     let spectral = |out: &[f32]| {
         // Energy in the top of the band: the pinna's front/back cue.
-        let mono: Vec<f32> = out.chunks_exact(2).map(|f| f[0] + f[1]).collect();
+        let mono: Vec<f32> = out.as_chunks::<2>().0.iter().map(|f| f[0] + f[1]).collect();
         mono.windows(2)
             .skip(LATENCY + 64)
             .map(|w| (w[1] - w[0]).powi(2))
