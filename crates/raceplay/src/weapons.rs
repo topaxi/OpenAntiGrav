@@ -139,7 +139,7 @@ impl Race {
     /// reaches the mod only through those two fire paths. A mod adding a weapon
     /// handles nothing itself.
     pub(crate) fn may_use_pickup(&self, slot: usize) -> bool {
-        self.sim.world.ships[slot].physics.craft_state == oag_physics::CraftState::Racing
+        self.sim.may_use_pickup(slot)
     }
 
     /// Ends the use in progress of every craft that may not use its pickup: a mine

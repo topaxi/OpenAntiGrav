@@ -964,6 +964,12 @@ impl crate::Race {
             if on::faulted(&self.sim, index) {
                 continue;
             }
+            // A craft that may not use its pickup is not moved by a module (a wreck).
+            if let oag_ext_abi::Command::Transit { slot, .. } = command
+                && !self.may_use_pickup(slot.index())
+            {
+                continue;
+            }
             match command {
                 oag_ext_abi::Command::Transit {
                     slot,

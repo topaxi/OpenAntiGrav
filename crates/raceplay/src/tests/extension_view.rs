@@ -192,3 +192,39 @@ fn an_icons_art_box_is_the_drawn_pixels_and_where_they_sit_on_the_canvas() {
     assert_eq!(centre, [5.0 - 4.0, 2.5 - 3.0]);
     assert_eq!(crate::extensions::art_box(8, 6, &[0; 8 * 6 * 4]), None);
 }
+
+/// A guest's `clear-pickup`, `scale-speed` and `transit` for a wrecked craft are ignored
+/// engine-side (`Race::may_use_pickup`), and the same commands act on a racing one.
+#[test]
+fn a_guests_pickup_and_motion_commands_for_a_wrecked_craft_are_ignored() {
+    use oag_physics::CraftState;
+    let cmds = [
+        Command::ClearPickup { slot: slot(1) },
+        Command::ScaleSpeed {
+            slot: slot(1),
+            factor: 0.0,
+        },
+    ];
+    let run = |state: CraftState| {
+        let mut race = grid(prepared(&[scripted("test.wreck", "", &cmds, &[])]));
+        let ship = &mut race.sim.world.ships[1];
+        ship.pickup.weapon = Some(oag_tables::weapons::Weapon::Extension);
+        ship.physics.body.linear_velocity = oag_core::math::Vec3::new(30.0, 0.0, 0.0);
+        ship.physics.craft_state = state;
+        race.tick_sim_only(&PlayerInputs::none());
+        let ship = &race.sim.world.ships[1];
+        (
+            ship.pickup.weapon,
+            ship.physics.body.linear_velocity.length(),
+        )
+    };
+    let (held, speed) = run(CraftState::Destroyed);
+    assert_eq!(
+        held,
+        Some(oag_tables::weapons::Weapon::Extension),
+        "kept for after the respawn"
+    );
+    assert!(speed > 1.0, "not scaled to zero: {speed}");
+    let (held, _) = run(CraftState::Racing);
+    assert_eq!(held, None, "a racing craft's pickup is cleared");
+}

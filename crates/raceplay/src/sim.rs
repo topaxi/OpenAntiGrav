@@ -535,6 +535,12 @@ pub struct RaceSim {
 }
 
 impl RaceSim {
+    /// [`Race::may_use_pickup`]'s check, for the paths that hold a `RaceSim` alone (a
+    /// module's commands): only a racing craft uses a pickup.
+    pub(super) fn may_use_pickup(&self, slot: usize) -> bool {
+        self.world.ships[slot].physics.craft_state == oag_physics::CraftState::Racing
+    }
+
     /// Every slot's place, as [`oag_race::places`] orders the field: the one ordering the
     /// HUD, the results and a mod's observation read. Everyone is first on a track with
     /// no closed ring.

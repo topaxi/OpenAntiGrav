@@ -583,6 +583,10 @@ fn tracking(sim: &RaceSim) -> Vec<oag_ext_abi::Tracking> {
 /// by [`refusal`]: the first module to send one owns the mod pickup kind for the race. A
 /// race without weapons gives nothing and rolls nothing.
 fn pickup_command(sim: &mut RaceSim, index: usize, command: Command) {
+    let may = match command {
+        Command::ClearPickup { slot } => sim.may_use_pickup(slot.index()),
+        _ => true,
+    };
     let on = &mut sim.extensions.on;
     on.owner = index as u8 + 1;
     if !sim.weapons_on {
@@ -599,6 +603,8 @@ fn pickup_command(sim: &mut RaceSim, index: usize, command: Command) {
                 on.from_roll &= !(1 << slot.index());
             }
         }
+        // A guest never uses a pickup for a craft that may not (`Race::may_use_pickup`).
+        Command::ClearPickup { .. } if !may => {}
         Command::ClearPickup { slot } => {
             let pickup = &mut sim.world.ships[slot.index()].pickup;
             if pickup.weapon == Some(extension) {
@@ -970,6 +976,7 @@ fn apply(sim: &mut RaceSim, index: usize, command: Command) {
             sim.extensions.on.prefer.set(slot.index(), route);
         }
         // Once, at the call: two modules compose.
+        Command::ScaleSpeed { slot, .. } if !sim.may_use_pickup(slot.index()) => {}
         Command::ScaleSpeed { slot, factor } => {
             sim.world.ships[slot.index()].physics.body.linear_velocity *= factor;
         }

@@ -34,10 +34,9 @@ The engine never names the mod.
    `screen-fill`, `fov-offset`, `fire-mod-effect-ahead`), item 3 (per-title icons
    `[pickup.titles.<title>]`, icon placed on the title's own Turbo glyph box) and item 4
    (`default-enabled`, ADR-0084) are on branch `slipstream`. What each left open:
-   - **The mod pickup's wreck gate.** `Race::may_use_pickup` is on main (`8b4f4dd5d`), not on this
-     branch. With `drives_ai_pickup` the engine raises nothing for an AI craft and the guest sees
-     `Craft::is_racing()`; once main is merged into `slipstream`, `clear-pickup` and any command
-     a guest sends for a wrecked craft want the same gate (the weapon-gate-unify lane's check).
+   - **Wreck gate: landed** (main merged). A guest's `clear-pickup`, `scale-speed` and `transit` for a
+     craft `may_use_pickup` refuses are ignored engine-side (`RaceSim::may_use_pickup`, which
+     `Race::may_use_pickup` calls); proof `tests::extension_view`.
    - **The portal is a camera-facing sprite**, a mod PNG through the particle system placed at the
      road ahead (`fire-mod-effect-ahead`), not a half disc standing across the road. A real mesh
      or a custom shader is a later piece.
@@ -71,9 +70,7 @@ The engine never names the mod.
 
 ## Next Steps
 
-1. Merge main into `slipstream`, then put the mod pickup's wreck gate on the commands a guest
-   sends (see Open 1).
-2. Open items 2-5: a route exit, an island exit, two mod pickups, a `Distance::Trigger` test on a
+1. Open items 2-5: a route exit, an island exit, two mod pickups, a `Distance::Trigger` test on a
    real track file.
-3. Quote `race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`
+2. Quote `race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`
    before and after any change that touches racing.
