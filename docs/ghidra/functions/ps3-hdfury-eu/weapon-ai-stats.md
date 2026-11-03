@@ -47,3 +47,10 @@ The reader of `+176 .. +228`. There is no `lfs` of `RaceManager + 6416 .. 6468` 
 RaceManager register, and a search for indexed (`slwi 2`) loads of the four array bases found
 nothing; the object is reached through a computed pointer. The next step is a Ghidra data xref
 on the RaceManager field `+6240`, or a write watchpoint under RPCS3 on `+6416`.
+
+## Update 2026-11-03: the reader is found
+
+The consumer is `WeaponAi_DecideFireOrAbsorb` (`0x000f9a18`), read through the weapon AI's own
+stats pointer (`this + 0x1c`), not through `RaceManager + 6416`. It reads `AllWeapons`
+(`+0xa4 .. +0xac`), the flips and the use/absorb/flip scales; the score scales are not read there.
+Everything is on [weapon-ai-fire.md](weapon-ai-fire.md) (confidence 80).
