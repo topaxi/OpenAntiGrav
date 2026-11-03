@@ -85,15 +85,16 @@ below the table.
 | 2 | Public HRIR dataset + own convolution (needs a convolver such as 1a's, or `sofar`) | per dataset, see "Datasets" | dataset size 0.7 to a few MB | n/a | n/a | n/a | n/a | as the convolver | as the convolver | headphones | M, plus a data decision and attribution file |
 | 3 | Cheap rear cue (low-pass plus slight attenuation behind) | ours | none | n/a | yes | yes | yes | **E**: one biquad per voice, under 0.01 % of a core (a few multiply-adds per sample) | per-sample, no block, state-free except 1 filter state | works on both; a weak cue, front/back confusion remains | S: filter state in `Voice`, cutoff and gain from `dot(dir, forward)` |
 | 4 | Ambisonics (1st or 2nd order) + binaural decode (Resonance Audio style) | Resonance Audio Apache-2.0 but **archived 2023-11-11**; own implementation is ours; SADIE II decoder data Apache-2.0 | none for a hand-written encoder, or a C++ library for Resonance | Resonance dead; own code is ours | yes (own code) | yes | yes | **E**: encode is a few multiply-adds per voice (4 gains at 1st order, 9 at 2nd), decode is one fixed convolution for all voices | per-voice no block; the decoder runs on a bus once | headphones via HRTF decode; **speakers via a loudspeaker decoder** | L: encoder plus bus plus decoder, rotation by head yaw is free |
-| 5 | Real multichannel through cpal (5.1, 7.1) | cpal 0.18.2 Apache-2.0 (already a dependency) | none | active | **No**: the web path is an AudioWorklet reading a stereo ring | phones are stereo | Deck is stereo | **E**: a panner per voice, cheaper than 1 | per-sample | **Speakers and home theatre only**; headphone users get nothing | L: `spread` today puts silence in extra channels; needs a channel layout, a multichannel ring, a downmix for the rest |
+| 5 | Real multichannel through cpal (5.1, 7.1) | cpal 0.18.2 Apache-2.0 (already a dependency) | none | active | Not today: the ring and the worklet are stereo (a worklet can output more channels if the destination allows; not tried) | phones are stereo | Deck is stereo | **E**: a panner per voice, cheaper than 1 | per-sample | **Speakers and home theatre only**; headphone users get nothing | L: `spread` today puts silence in extra channels; needs a channel layout, a multichannel ring, a downmix for the rest |
 | 6 | Omega's own 3D audio (patch 1.03) | game data | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | **Pending**: unread; lane `omega-3d-audio-read` owns it. Its answer may be the `original` value for Omega and could change the ranking. |
 
 Rule 6 (`just check-deps`), all options: `cargo tree -p oag-net -e normal`
 matches neither `oag-audio` nor `oag-sound` (checked 2026-11-03, no output),
 so `oag-server` links no audio. Every option lands in `oag-audio` or
 `oag-sound`; a new third-party audio crate stays out of the server as long as
-it is a dependency of those two only. Options 1d (native library) and 1b
-(Firewheel) are the ones that would also change `check-deps` allowlists.
+it is a dependency of those two only. Rule 6 is a deny-list of crate names
+(`FORBIDDEN_FOR_SERVER`); a new audio crate is out of the server by not being
+reached, and could be added to that list as a tripwire (optional).
 
 ### The `hrtf` benchmark (B)
 
@@ -102,10 +103,11 @@ Scratch benchmark, `hrtf` 0.9.0, release build, one thread, Ryzen 9 7900,
 the numbers as an upper-leaning order of magnitude, not a result.
 
 - Sphere: one real IRCAM file, `IRC_1002_C.bin` from
-  `mrDIMAS/hrir_sphere_builder` `hrtf_base/IRCAM` (44.1 kHz, 512 taps, 558
-  points; resampled on load to 48 kHz), loaded with `HrirSphere::from_file`.
-  A 6-point, 128-tap synthetic sphere measured about 4x cheaper, which is why
-  the first run is not quoted.
+  `mrDIMAS/hrir_sphere_builder` `hrtf_base/IRCAM` (44.1 kHz, header: 187 points, 1,110
+  indices so 370 faces, 512 taps; `HrirSphere::len()` is the tap count and
+  reads 558 after the load-time resample to 48 kHz), loaded with `HrirSphere::from_file`.
+  A 6-point, 128-tap synthetic sphere measured 1.2x to 4x cheaper depending
+  on the block size, which is why that first run is not quoted.
 - Method: `HrtfProcessor::process_samples` on a mono sine, source moving, 400
   calls per run, minimum of 7 runs.
 - Per source, cost as a share of one core of audio time:
@@ -118,15 +120,21 @@ the numbers as an upper-leaning order of magnitude, not a result.
 | 256 x 2 | 512 | 27 | 0.25 | 8 % | 33 % |
 | 256 x 3 | 768 | 52 | 0.32 | 10 % | 42 % |
 
-- The spread across block sizes is large because the FFT length is
-  `block + taps - 1` and does not land on a power of two for every choice;
-  the 256-sample block is the cheap one here. That needs a finer sweep before
-  any claim.
+- The spread across block sizes follows the overlap-save arithmetic: each FFT
+  of `block + taps - 1` points yields only `block` useful samples, about 19 %
+  at block 128 and 31 % at block 256 with 558 taps. A larger block amortises
+  better; the trade is fewer interpolation steps per call, which raises the
+  click risk the crate documents. Whether the FFT length hitting a power of
+  two matters was not tested. A finer sweep is needed before any claim.
 - **Estimate, not measured**: a Steam Deck or an S24 core runs roughly 2 to 3
   times slower than this core, so a 256-sample block costs about 0.6 to 1 % of
   a core per voice. Not every pooled voice is positioned and audible, and the
   original gates sources beyond 200 units, so a race holds far fewer than 32
-  convolving voices; the count was not measured here.
+  convolving voices. Pulse measured that a race left alone is down to the
+  player's engine about two seconds after the flag (engine radius 50,
+  positional-audio.md, "A consequence the numbers do not advertise"); that
+  bounds the Pulse count at the start, not through a real race, and the other
+  titles were not counted.
 - To reproduce: a standalone cargo project (add an empty `[workspace]`
   table) on `hrtf = "0.9.0"` that calls `HrirSphere::from_file(path, 48000)`,
   then `HrtfProcessor::new(sphere, steps, block)` and `process_samples` in a
@@ -154,11 +162,11 @@ HRIRs per vertex; `mrDIMAS/hrir_sphere_builder` is MIT). `sofar` 0.4.0
 convolution, bundles BSD-3-Clause libmysofa and a KD-tree) reads SADIE II's
 SOFA files directly; its platform support is not stated in what was read.
 
-## Reading the table (no pick made)
+## Reading the table
 
 - Options 1b, 1c, 1e, 1f do not fit this engine: they replace the mixer or do
   not do front/back.
-- Option 5 helps only speaker owners, and cannot reach the web build, so it
+- Option 5 helps only speaker owners and the web path is stereo today, so it
   cannot be the default.
 - The real choice is between **3** (cheap, weak cue, works for speakers and
   headphones and on the web), **1a plus a redistributable sphere** (the
@@ -169,6 +177,34 @@ SOFA files directly; its platform support is not stated in what was read.
   native build per target and no confirmed web build.
 - A layered answer is possible (3 as the fallback when the HRTF data or CPU
   is missing, or on the web), and it is a choice, not a finding.
+
+## Recommendation (not a decision)
+
+The constraint that separates the options is **ON by default**. A default-on
+setting reaches people on speakers (Deck, phones, laptops, the web build), and
+`cpal` gives no reliable headphone detection. Binaural rendering on speakers
+colours the sound (comb filtering, a changed timbre), so a binaural option
+(1a, 4 with an HRTF decode) is a poor default and a good opt-in.
+
+Recommended shape, for the maintainer to accept or change:
+
+1. **Default ON: option 3**, the cheap rear cue. It costs almost nothing, is
+   safe on speakers and headphones, builds everywhere including the web, and
+   needs only the forward axis plus a per-voice filter. It is a weaker cue, and
+   that is the price of a safe default. Label it **chosen, not measured**.
+2. **Setting values**: `original` (today's `pan_gains`, measured: the original
+   cannot tell front from back), `rear cue` (option 3, the default), and a
+   later `headphones` value for a binaural stage. The binaural value must say
+   in its name that it is for headphones.
+3. **Binaural stage later, as 1a with a SADIE II sphere** (Apache-2.0, the
+   one dataset whose terms were read off the owner's record) once its licence
+   file is read, or **4** if the 128-voice HD pool makes per-voice convolution
+   too dear. 1a is pure Rust and cheapest to try; 4 scales flat. Choosing
+   between them needs a listening prototype, which this lane could not make.
+4. Do not pursue 1b, 1c, 1e, 1f; 5 only if a speaker-owner request appears;
+   1d only if a native dependency per target is accepted.
+5. Wait for item 6 of the table (Omega's 3D audio) before fixing the Omega
+   value of `original`.
 
 ## Open
 
