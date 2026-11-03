@@ -982,8 +982,12 @@ impl Race {
                 self.sim.world.ships[slot].physics.craft_state == oag_physics::CraftState::Racing;
             let reset = self.reset_zone_touched(slot, reset_contact);
             let airborne = self.airborne_too_long(slot);
+            let located = self
+                .ai_sample_for(slot, index)
+                .map(|sample| Vec3::from_array(sample.pos));
+            let distant = self.far_from_the_sample(slot, located);
             let cage = std::mem::take(&mut self.sim.cage_reset[slot]);
-            if alive && (lost || stalled || airborne || reset || cage) {
+            if alive && (lost || stalled || airborne || distant || reset || cage) {
                 let cause = if lost && self.beneath_the_line(slot) {
                     respawn::RespawnCause::Beneath
                 } else if lost {
@@ -992,6 +996,8 @@ impl Race {
                     respawn::RespawnCause::Stalled
                 } else if airborne {
                     respawn::RespawnCause::Airborne
+                } else if distant {
+                    respawn::RespawnCause::Distance
                 } else if cage {
                     respawn::RespawnCause::Cage
                 } else {

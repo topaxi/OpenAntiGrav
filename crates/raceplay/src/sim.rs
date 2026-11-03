@@ -316,6 +316,10 @@ pub struct RaceSim {
     /// craft has left the circuit, the other is still on it and going nowhere.
     /// Slot 0's entry is never written, for the reason [`Self::lost_ticks`] gives.
     pub(super) stalled_ticks: [u32; oag_gameplay::MAX_SHIPS],
+    /// How many consecutive ticks each craft has spent more than
+    /// [`DISTANCE_RESET_UNITS`] from its located spline sample: the original's
+    /// `craft+0x788` (`0x08841cec`). Every slot, person or AI.
+    pub(super) distant_ticks: [u32; oag_gameplay::MAX_SHIPS],
     /// [`RESCUE_HALF_WIDTHS`] in track units, resolved once against this
     /// circuit's widest half-width rather than folded over the sample table
     /// every tick.

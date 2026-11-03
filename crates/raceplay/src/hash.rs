@@ -98,6 +98,10 @@ impl RaceSim {
         for dwell in self.stalled_ticks {
             hasher.write_u32(dwell);
         }
+        // The original's distance dwell, on the same terms as the two above.
+        for dwell in self.distant_ticks {
+            hasher.write_u32(dwell);
+        }
         // Where a reset puts each craft, and how fast: a crumb laid a tick
         // apart is a reset somewhere else.
         for crumbs in &self.breadcrumbs {

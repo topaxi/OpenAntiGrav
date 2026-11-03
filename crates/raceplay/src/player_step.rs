@@ -85,6 +85,9 @@ pub(super) struct PlayerStep {
     /// [`Race::reset_zone_contact`], read before the collision cage moved the craft.
     reset_contact: bool,
     spline_distance: Option<f32>,
+    /// The position of the spline sample the craft was located on, the
+    /// original's `craft+0xaf0` record.
+    located: Option<Vec3>,
 }
 
 impl Race {
@@ -154,6 +157,7 @@ impl Race {
         // and a second fold would double the tick's hottest loop to move a
         // measurement one tick, under a dwell of [`PLAYER_RESCUE_TICKS`].
         let spline_distance = nearest.map(|(_, _, distance)| distance);
+        let located = nearest.map(|(_, sample, _)| Vec3::from_array(sample.pos));
         let track_sample = nearest.map(|(_, sample, _)| Spline::track_sample(sample));
         let crumb_flags = nearest.map(|(_, sample, _)| sample.flags);
         // The neighbour is the next entry in table order, which at the end of a
@@ -294,6 +298,7 @@ impl Race {
             evaluated,
             reset_contact,
             spline_distance,
+            located,
         }
     }
 
@@ -333,12 +338,15 @@ impl Race {
             self.sim.world.ships[slot].physics.craft_state == oag_physics::CraftState::Racing;
         let reset = self.reset_zone_touched(slot, step.reset_contact);
         let airborne = self.airborne_too_long(slot);
+        let distant = self.far_from_the_sample(slot, step.located);
         let cage = std::mem::take(&mut self.sim.cage_reset[slot]);
-        if alive && (off_the_track || airborne || reset || cage) {
+        if alive && (off_the_track || airborne || distant || reset || cage) {
             let cause = if off_the_track {
                 respawn::RespawnCause::OffTrack
             } else if airborne {
                 respawn::RespawnCause::Airborne
+            } else if distant {
+                respawn::RespawnCause::Distance
             } else if cage {
                 respawn::RespawnCause::Cage
             } else {

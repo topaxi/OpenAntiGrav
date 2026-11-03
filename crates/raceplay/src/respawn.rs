@@ -34,6 +34,10 @@ pub enum RespawnCause {
     /// the original's own rescue for a craft beached upside down or on its
     /// flank, `FUN_088418e0` at `0x08841d30`.
     Airborne,
+    /// More than [`oag_race::recovery::DISTANCE_RESET_UNITS`] from its located spline
+    /// sample for [`oag_race::recovery::DISTANCE_RESET_TICKS`]: `FUN_088418e0` at
+    /// `0x08841cec`, for any craft. The original's own.
+    Distance,
     /// The collision cage sent the craft to its reset state: the located control
     /// point more than 200 units away, a corner more than 15 outside the tube,
     /// or a corner under its floor (`Cage_ResolveCraft`, `0x08831aa4`, returning
@@ -50,7 +54,10 @@ impl RespawnCause {
     /// project's racing-line pose ([`Race::respawn`]).
     #[must_use]
     pub fn is_the_originals(self) -> bool {
-        matches!(self, Self::ResetZone | Self::Airborne | Self::Cage)
+        matches!(
+            self,
+            Self::ResetZone | Self::Airborne | Self::Distance | Self::Cage
+        )
     }
 
     /// A short lowercase label for a survey line.
@@ -63,6 +70,7 @@ impl RespawnCause {
             Self::Stalled => "stalled",
             Self::OffTrack => "offtrack",
             Self::Airborne => "airborne",
+            Self::Distance => "distance",
             Self::Cage => "cage",
             Self::Destroyed => "wrecked",
         }
@@ -259,6 +267,36 @@ impl Race {
                 > oag_race::recovery::AIRBORNE_RESET_SECONDS
     }
 
+    /// Whether this craft has stayed more than
+    /// [`oag_race::recovery::DISTANCE_RESET_UNITS`] from `located`, its spline
+    /// sample, for [`oag_race::recovery::DISTANCE_RESET_TICKS`] ticks:
+    /// `FUN_088418e0` at `0x08841cec`. `located` is `None` on a track with no
+    /// samples, which measures nothing.
+    ///
+    /// Advances the dwell counter as a side effect, so it must be called once per
+    /// craft per tick and not conditionally, for the reason
+    /// [`Self::lost_off_the_circuit`] gives. The wreck gate is the caller's
+    /// (`alive`), applied after the counter as the original skips only the
+    /// state change.
+    pub(super) fn far_from_the_sample(&mut self, slot: usize, located: Option<Vec3>) -> bool {
+        let far = located.is_some_and(|sample| {
+            self.sim.world.ships[slot]
+                .physics
+                .body
+                .position
+                .distance_squared(sample)
+                > DISTANCE_RESET_UNITS * DISTANCE_RESET_UNITS
+        });
+        self.sim.distant_ticks[slot] = if far {
+            self.sim.distant_ticks[slot].saturating_add(1)
+        } else {
+            0
+        };
+        !self.sim.respawn_disabled[slot]
+            && self.sim.respawn_cooldown[slot] == 0
+            && self.sim.distant_ticks[slot] >= DISTANCE_RESET_TICKS
+    }
+
     /// Puts the ship back at rest on the racing line, at the spline sample
     /// `sample_index`: this project's own rescues (`LostCircuit`, `Beneath`,
     /// `Stalled`, `OffTrack`) and the Eliminator's return.
@@ -311,6 +349,34 @@ impl Race {
         );
     }
 
+    /// What entering the reset state costs a person's craft: `min(5, shield - 1)`
+    /// floored at zero, taken through `Ship_Damage` when the state returns
+    /// (`Ship_SetState` arm 3, `0x08844100`; `docs/ghidra/functions/psp-pulse-usa/shield.md`,
+    /// "State 3 is the reset"). The state returns on the entry tick, so the charge
+    /// is paid here. An AI craft pays nothing (`craft+0x368 != 0`).
+    ///
+    /// Through the shared damage gate, so a damage-off race halves it with
+    /// weapons off and a running Shield pickup absorbs it, as `Ship_Damage` does.
+    /// Mode `6`'s fixed `10` is not ported (that mode has no counterpart here).
+    fn charge_the_reset(&mut self, slot: usize) {
+        if !self.sim.world.person_flown(slot) {
+            return;
+        }
+        let rules = self.sim.damage_rules();
+        let ship = &mut self.sim.world.ships[slot];
+        let charge = (ship.physics.shield - 1.0)
+            .min(RESET_SHIELD_CHARGE)
+            .max(0.0);
+        if charge > 0.0 {
+            oag_physics::damage::apply_weapon(
+                &mut ship.physics,
+                &ship.handling.dimensions,
+                charge,
+                rules,
+            );
+        }
+    }
+
     /// Puts the ship back the way the original's reset state does, after a
     /// `Reset` contact or the airborne clock: on the oldest of its grounded
     /// crumbs, at the track's width midpoint five up, launched down the track
@@ -320,6 +386,7 @@ impl Race {
     /// Falls back to [`Self::respawn`] at `sample_index` on a track with no
     /// samples to locate on.
     pub(super) fn reset(&mut self, slot: usize, sample_index: Option<usize>) {
+        self.charge_the_reset(slot);
         let crumbs = &mut self.sim.breadcrumbs[slot];
         let speed = crumbs.launch_speed();
         let crumb = crumbs.take_oldest();
@@ -363,6 +430,7 @@ impl Race {
         // out.
         self.sim.lost_ticks[slot] = 0;
         self.sim.stalled_ticks[slot] = 0;
+        self.sim.distant_ticks[slot] = 0;
 
         // Otherwise the ribbon spans the teleport: ten samples of history from
         // wherever the craft fell off, stretched across the track to where it was

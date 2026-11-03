@@ -722,6 +722,7 @@ impl Race {
                 wall_racing_ticks: [0; oag_gameplay::MAX_SHIPS],
                 lost_ticks: [0; oag_gameplay::MAX_SHIPS],
                 stalled_ticks: [0; oag_gameplay::MAX_SHIPS],
+                distant_ticks: [0; oag_gameplay::MAX_SHIPS],
                 rescue_distance,
                 player_rescue_distance,
                 last_on_track,
