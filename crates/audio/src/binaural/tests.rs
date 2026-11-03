@@ -399,3 +399,44 @@ fn a_mode_switch_mid_race_crossfades_in_both_directions() {
         "entering: step {entering} against {steady}"
     );
 }
+
+/// Energy gain of the HRTF path over the rear-cue path for the same noise
+/// source, over a grid of directions. Ahead and to the side it is within 1.1 dB;
+/// behind it is 4 to 9 dB louder because the rear cue darkens and trims what is
+/// behind and the HRTF does not on white noise. Asserts the front hemisphere.
+#[test]
+fn the_hrtf_is_energy_neutral_ahead_and_beside() {
+    let energy = |mode: SpatialMode, pan: f32, front: f32| {
+        let mut mixer = headphone_mixer();
+        mixer.set_limiting(false);
+        mixer.set_spatial_mode(mode);
+        mixer.play(Play {
+            pan: Some(pan),
+            front,
+            ..Play::looping(noise(6_000), Bus::Sfx)
+        });
+        let mut out = vec![0.0; 2 * 9_000];
+        mixer.render(&mut out);
+        let (l, r) = ear_energy(&out[2 * 2_000..]);
+        l + r
+    };
+    let mut total = 0.0;
+    let mut count = 0.0;
+    for pan in [-1.0, -0.5, 0.0, 0.5, 1.0] {
+        for front in [1.0, 0.0, -1.0] {
+            let db = 10.0
+                * (energy(SpatialMode::Headphones, pan, front)
+                    / energy(SpatialMode::RearCue, pan, front))
+                .log10();
+            println!("pan {pan:+.1} front {front:+.1}: {db:+.2} dB");
+            if front >= 0.0 {
+                assert!(db.abs() < 2.0, "{db} dB at pan {pan} front {front}");
+            }
+            total += db;
+            count += 1.0;
+        }
+    }
+    let mean = total / count;
+    println!("mean {mean:+.2} dB");
+    let _ = mean;
+}
