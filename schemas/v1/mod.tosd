@@ -65,6 +65,10 @@ type = "array"
 itemtype = "string"
 optional = true
 
+[types.mod.default-enabled]
+type = "boolean"
+optional = true
+
 [types.mod.oag]
 type = "string"
 optional = true

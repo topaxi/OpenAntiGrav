@@ -75,6 +75,9 @@ pub struct Manifest {
     pub keywords: Vec<String>,
     /// The titles it is for (their lowercased hyphenated names); empty means any.
     pub titles: Vec<String>,
+    /// `default-enabled`: whether the mod is on until the player says otherwise (default
+    /// `true`). `false` ships it off: the MODS page turns it on.
+    pub default_enabled: bool,
     /// The game versions it works with.
     pub oag: Option<semver::VersionReq>,
     /// `[extension]`: the WebAssembly modules the mod runs, if any.
@@ -349,7 +352,13 @@ struct Table {
     keywords: Vec<String>,
     #[serde(default)]
     titles: Vec<String>,
+    #[serde(rename = "default-enabled", default = "on")]
+    default_enabled: bool,
     oag: Option<String>,
+}
+
+const fn on() -> bool {
+    true
 }
 
 fn bad(key: &'static str, problem: impl Into<String>) -> Error {
@@ -491,6 +500,7 @@ impl Manifest {
             homepage: t.homepage,
             keywords: t.keywords,
             titles: t.titles,
+            default_enabled: t.default_enabled,
             oag,
             extension,
             icons: file.icons,

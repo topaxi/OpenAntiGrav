@@ -124,17 +124,17 @@ fn files_reader(module: &oag_mod::Mod) -> oag_raceplay::extensions::Files {
 }
 
 /// Sets `options.find_extensions` for a race: the load thread searches the mods that are
-/// on (switched off by `disabled`) for rules modules, or none for a race that stays
+/// on (as `switches` has them) for rules modules, or none for a race that stays
 /// `vanilla` (an original campaign, a network race). Nothing is read here.
 pub fn attach(
     options: &mut oag_raceplay::Options,
-    disabled: &std::collections::BTreeSet<String>,
+    switches: &crate::settings::Mods,
     vanilla: bool,
 ) {
     options.find_extensions = (!vanilla).then(|| {
-        let disabled = disabled.clone();
+        let switches = switches.clone();
         oag_raceplay::extensions::Finder(Arc::new(move || {
-            crate::mods::Mods::load(&disabled)
+            crate::mods::Mods::load(&switches)
                 .map(|mods| sources(mods.player()))
                 .map_err(|e| format!("{e:#}"))
         }))

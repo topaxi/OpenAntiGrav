@@ -1380,6 +1380,32 @@ fn the_reset_prompt_sits_on_confirms_row_and_only_off_default() {
 }
 
 #[test]
+fn the_player_switch_beats_the_manifest_default_and_both_sets_round_trip() {
+    let mut mods = read("[mods]\nenabled = [\"a.on\"]\ndisabled = [\"a.off\"]\n").mods;
+    assert!(
+        mods.is_enabled("a.on", false),
+        "turned on against a default-off"
+    );
+    assert!(
+        !mods.is_enabled("a.off", true),
+        "turned off against a default-on"
+    );
+    assert!(
+        !mods.is_enabled("a.new", false),
+        "no switch: the manifest default"
+    );
+    assert!(mods.is_enabled("a.new", true));
+    assert!(mods.switch("a.new", false, true));
+    assert!(!mods.switch("a.new", false, true), "already on");
+    assert!(mods.enabled.contains("a.new"));
+    assert!(mods.switch("a.new", false, false));
+    assert!(!mods.enabled.contains("a.new") && !mods.disabled.contains("a.new"));
+    let settings = Settings { mods, ..fresh() };
+    let written = toml::to_string_pretty(&settings).expect("serialise");
+    assert_eq!(read(&written).mods, settings.mods, "{written}");
+}
+
+#[test]
 fn the_mods_turned_off_round_trip_and_a_fresh_file_turns_none_off() {
     assert!(
         fresh().mods.disabled.is_empty(),

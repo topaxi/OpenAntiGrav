@@ -487,3 +487,19 @@ fn a_manifest_pickup_reads_its_pad_odds_and_refuses_a_bad_weight() {
     let bad = with("[[pickup.odds]]\nai = -1.0\nhuman = 1.0\nfront = 0.0\nback = 0.0\n");
     assert!(bad.unwrap_err().to_string().contains("pickup.odds"));
 }
+
+#[test]
+fn a_manifest_is_on_by_default_and_default_enabled_false_ships_it_off() {
+    let dir = scratch("default-enabled");
+    let on = dir.join("on");
+    let off = dir.join("off");
+    std::fs::create_dir_all(&on).unwrap();
+    std::fs::create_dir_all(&off).unwrap();
+    folder(&on, MANIFEST_TEXT);
+    folder(
+        &off,
+        &MANIFEST_TEXT.replace("[mod]\n", "[mod]\ndefault-enabled = false\n"),
+    );
+    assert!(Mod::open(&on).unwrap().manifest.default_enabled);
+    assert!(!Mod::open(&off).unwrap().manifest.default_enabled);
+}

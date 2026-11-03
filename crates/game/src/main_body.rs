@@ -462,7 +462,7 @@ fn run(cli: Cli) -> Result<()> {
         .or_else(|| cli.track_file.clone())
         .map(|path| race::foreign::entry(&path))
         .transpose()?;
-    let (definition, menu_source) = prepare::definition(&cli, settings.language.as_deref(), &settings.mods.disabled)?;
+    let (definition, menu_source) = prepare::definition(&cli, settings.language.as_deref(), &settings.mods)?;
     let pending = prepare::Pending {
         foreign_entry,
         definition,
@@ -534,7 +534,7 @@ fn run(cli: Cli) -> Result<()> {
         #[cfg(feature = "extensions")]
         {
             let vanilla = net.is_some() || cli.wreck.campaign_cell.is_some() || cli.event.is_some();
-            oag_game::mod_extensions::attach(&mut options, &settings.mods.disabled, vanilla);
+            oag_game::mod_extensions::attach(&mut options, &settings.mods, vanilla);
         }
         let options = match &net {
             Some(net) => net.race_options(options)?,
