@@ -24,7 +24,7 @@ confidence scores and the replay evidence. What is left is wiring and two unread
 1. ~~Blast envelope~~ **wired 2026-10-30 (`pulse-plasma-blast-wire`), `plasma.md` "the blast wired from the dumps"**:
    tracks at the age, the per-tick scale ease, the tint ramps, the world-fixed hemispheres and the
    camera-oriented halo. The tail (k96-140) area x excess went 1.95 M to 0.92 M. **Open inside it**:
-   (a) the onset k76-92 reads 4.02 M against 3.69 M because our bolt detonates 10 units short and 3
+   (a0) the hemispheres' 3.5 drop is applied since plasma-dome-specks (whole-frame k92 79.4 to 29.5 against the original), the dark discs are `WO_PLASMA_FLASH` particles and match; (a) the onset k76-92 reads 4.02 M against 3.69 M because our bolt detonates 10 units short and 3
    ticks early, so the eye is inside `hemisphere1` by shot 88 where the original's is at 94 (item 3);
    re-score the onset after that lands; (b) the ease targets (135.3, 112.75, 320) and the 0.025 model
    unit are fitted (conf 70-75), and the halo's end (0.65 s, chosen inside 0.55-0.717); (c) the frame

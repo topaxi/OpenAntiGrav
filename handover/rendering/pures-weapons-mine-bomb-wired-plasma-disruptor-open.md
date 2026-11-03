@@ -18,15 +18,13 @@ targets, 2.0 s life, 3.5 hemisphere drop, through `PlasmaBlastLaw`), the Missile
 `WO_BOMB_GLOW`, the Bomb tumble axes (confidence 60), `WO_DISRUPTOR_HEAD`, `WO_DISRUPTOR_EXPLO` and `electric_halo2`. Still open:
 
 1. **A Pure capture of the blast and the halo.** All of it is read, none matched: the Pulse-fitted model unit (`0.025`) is
-   assumed for Pure's models, the halo's texture clock is the age by analogy, and the hemisphere drop's sign is chosen
-   (against the track's up). A `scripts/psp-pure-weapon-fire.py` shot of Plasma and Disruptor settles all three.
+   assumed for Pure's models, the halo's texture clock is the age by analogy, and the hemisphere drop's sign is Pulse's (against the track's up, read off Pulse's GE dumps). A `scripts/psp-pure-weapon-fire.py` shot of Plasma and Disruptor settles all three.
 2. **Craft-hit blast count on Pure** (ours spawns Pulse's two; Pure's callers were not walked, confidence 50).
 3. **`WO_DISRUPTOR_LAUNCH`**: gated on `*(weapon+0x3c + 0xe0)` of the firing craft's weapon record; map the offset to a table
    field and add the trigger.
 4. **The on-craft Disruptor effect** (`DisruptorFx_Construct` `0x08859b78`, confidence 55: `disruptor_effect`, `disruptor_cockpit`;
    read the update slot of the vtable at `0x08abc690`).
-5. **Pulse's own hemisphere drop** (`PlasmaBlastLaw::hemisphere_drop` is `0.0` on Pulse's row though the GE dumps put its halo
-   and hemispheres 3.49 apart), for a Pulse lane.
+5. ~~Pulse's own hemisphere drop~~ done (plasma-dome-specks): `3.5` on Pulse's row, sign read off the dumps; the dark discs are `WO_PLASMA_FLASH` particles, not the shell texture.
 6. **The laid Bomb's glow** was not seen in a headless shot (the bomb had not left the craft); a detonating Bomb has not been
    seen on either side.
 7. **Mine shading**: our Pure Mine draws darker than the original's light grey.
