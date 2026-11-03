@@ -65,6 +65,7 @@ pub(super) fn livery() -> Livery {
         flare_spikes: Vec::new(),
         flare_origins: oag_livery::FlareOrigins::default(),
         shield: None,
+        shield_colour: None,
         collision_fx: Vec::new(),
         absorb: Vec::new(),
         absorb_overlay: None,

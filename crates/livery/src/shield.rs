@@ -21,7 +21,7 @@ use super::*;
 fn shield_model(
     archives: &mut oag_assets::Archives,
     name: &str,
-) -> Result<(Model, String), String> {
+) -> Result<(Model, String, Option<[f32; 4]>), String> {
     let blob = archives
         .read_name(name)
         .map_err(|_| format!("{name}: not in the archive set"))?;
@@ -43,7 +43,7 @@ fn shield_model(
                 note.push_str(line.strip_prefix(&format!("{name}: ")).unwrap_or(&line));
             }
         }
-        return Ok((model, note));
+        return Ok((model, note, None));
     }
     let sibling = mesh::rcs::sibling_name(name);
     let geometry = sibling
@@ -58,6 +58,7 @@ fn shield_model(
         |c| c.mesh,
     )
     .map_err(|error| format!("{name}: its .rcsmodel does not build ({error})"))?;
+    let colour = shield_colour(&geometry);
     // **Said out loud because the picture does not say it.** A shield model
     // draws additively and `mesh::rcs` resolves no material - HD authors one per
     // team (`/data/materials/ships/<team>_shield.rcsmaterial`) and nothing here
@@ -67,14 +68,33 @@ fn shield_model(
     // still right - it is real decoded geometry, and the substitute is for the
     // missing material alone - but a reviewer looking at an HD capture has to be
     // told which half is recovered.
+    let colour_note = match colour {
+        Some([r, g, b, a]) => format!("ShieldColour ({r:.3}, {g:.3}, {b:.3}, {a:.3})"),
+        None => "no ShieldColour parameter".to_string(),
+    };
     Ok((
         model,
         format!(
             "{}, and no material - HD's own .rcsmaterial is not read, so it is \
-             brighter and flatter than the disc's",
+             brighter and flatter than the disc's; {colour_note}",
             built.describe()
         ),
+        colour,
     ))
+}
+
+/// The `ShieldColour` a shell's `.rcsmodel` authors on its material: the colour
+/// the raised shield settles to (`ShipShield_BindColourParam`,
+/// `docs/ghidra/functions/ps3-hdfury-eu/shield.md`, "The steady-state colour is
+/// read"). `None` when the file does not parse or no material carries it.
+fn shield_colour(geometry: &[u8]) -> Option<[f32; 4]> {
+    let model = oag_rcs::rcsmodel::Model::parse(geometry).ok()?;
+    model
+        .materials
+        .iter()
+        .flat_map(|material| material.parameters.iter())
+        .find(|parameter| parameter.hash == oag_fx::absorb_shell::SHIELD_COLOUR)
+        .map(|parameter| parameter.value)
 }
 
 /// The shell a fired Shield pickup raises, from the first of
@@ -101,7 +121,7 @@ pub(super) fn shell(
     ship_dir: &str,
     team_model: Option<&str>,
     report: &mut Vec<String>,
-) -> Option<Model> {
+) -> Option<(Model, Option<[f32; 4]>)> {
     let names =
         crate::entry::shield_entry_names(ship_dir, team, archives.layout.platform, team_model);
     for (index, name) in names.iter().enumerate() {
@@ -111,9 +131,9 @@ pub(super) fn shell(
             "shared - this source carries no per-team shell"
         };
         match shield_model(archives, name) {
-            Ok((model, note)) => {
+            Ok((model, note, colour)) => {
                 report.push(format!("{name}: {note} - the shield shell, {provenance}"));
-                return Some(model);
+                return Some((model, colour));
             }
             Err(line) => report.push(line),
         }
@@ -142,7 +162,7 @@ pub fn cockpit_shield(
 ) -> Option<Model> {
     let name = oag_pulse::race::COCKPIT_SHIELD;
     match shield_model(archives, name) {
-        Ok((model, note)) => {
+        Ok((model, note, _)) => {
             report.push(format!(
                 "{name}: {note} - the shield seen from inside the cockpit"
             ));

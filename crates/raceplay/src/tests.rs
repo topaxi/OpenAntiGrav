@@ -245,6 +245,7 @@ fn setup(handling: Handling) -> Setup {
         ps2_trail: false,
         // Pulse's own palette - these tests build a synthetic Pulse fixture.
         shield_palette: oag_render::shield::PULSE_PALETTE,
+        shield_targets: Vec::new(),
         // Pulse's own mechanism, same reasoning as `shield_palette` above.
         hd_plasma_blast: false,
         disruptor_halo_law: None,

@@ -250,19 +250,14 @@ pub const PS2_PULSE_PALETTE: Palette = Palette {
 
 /// HD/Fury's palette.
 ///
-/// **Two of three are measured, one is not.** [`HD_ACTIVATION_COLOUR`] and
-/// [`HD_HIT_COLOUR`] are read off `/ps3-hdfury-eu/EBOOT.elf`. The steady-state
-/// `target` is **not**: HD's own `ShipShield_Activate` counterpart
-/// (`FUN_00125ae8`) takes the settled colour as a call argument rather than
-/// hardcoding it the way Pulse's does, which reads as a per-team
-/// `ShieldColour` hook (`FUN_000dba30` parses a config key of that name), and
-/// the call site that supplies the argument was not traced through HD's
-/// TOC-corrupted decompile in the time this pass had. So `target` here is
-/// **[`TARGET_COLOUR`], chosen rather than measured** - Pulse's white is the
-/// multiply identity against the mesh's own vertex colours regardless of
-/// title, so it is the least-invented default until the real argument is
-/// read. See the "What is not verified" section of
-/// `docs/ghidra/functions/ps3-hdfury-eu/shield.md`.
+/// [`HD_ACTIVATION_COLOUR`] and [`HD_HIT_COLOUR`] are read off
+/// `/ps3-hdfury-eu/EBOOT.elf`. The steady-state `target` is per team: each
+/// `shipshield.rcsmodel` authors a `ShieldColour` on its material
+/// (`ShipShield_BindColourParam`, `docs/ghidra/functions/ps3-hdfury-eu/shield.md`,
+/// "The steady-state colour is read"), which the loader reads
+/// (`oag_livery::Livery::shield_colour`) and replaces `target` with. The
+/// [`TARGET_COLOUR`] here is only the constructor default the original also
+/// starts from, used when a shell carries no such parameter.
 pub const HD_PALETTE: Palette = Palette {
     activation: HD_ACTIVATION_COLOUR,
     target: TARGET_COLOUR,

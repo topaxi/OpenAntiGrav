@@ -74,6 +74,8 @@ impl Setup {
             // than picking one title's real palette for a race that draws
             // nothing.
             #[cfg(feature = "view")]
+            shield_targets: Vec::new(),
+            #[cfg(feature = "view")]
             shield_palette: oag_render::shield::Palette {
                 activation: [0.0; 4],
                 target: [0.0; 4],

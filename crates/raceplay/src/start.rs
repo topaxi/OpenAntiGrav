@@ -139,6 +139,8 @@ impl Race {
             #[cfg(feature = "view")]
             shield_palette,
             #[cfg(feature = "view")]
+            shield_targets,
+            #[cfg(feature = "view")]
             hd_plasma_blast,
             #[cfg(feature = "view")]
             plasma_blast_law,
@@ -859,7 +861,16 @@ impl Race {
                 trail_inside: [0; MAX_SHIPS],
                 hd_flame: [exhaust::hd::Flame::new(); MAX_SHIPS],
                 hd_sprite: [exhaust::hd::Sprite::new(); MAX_SHIPS],
-                shield: [ShipShield::with_palette(shield_palette); MAX_SHIPS],
+                shield: std::array::from_fn(|slot| {
+                    ShipShield::with_palette(oag_render::shield::Palette {
+                        target: shield_targets
+                            .get(slot)
+                            .copied()
+                            .flatten()
+                            .unwrap_or(shield_palette.target),
+                        ..shield_palette
+                    })
+                }),
                 nozzles,
                 muzzles,
                 engine_lights,

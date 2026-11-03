@@ -495,6 +495,11 @@ pub struct Setup {
     /// each title's palette carries and which parts are measured.
     #[cfg(feature = "view")]
     pub shield_palette: oag_render::shield::Palette,
+    /// Each slot's authored settled shield colour (`Livery::shield_colour`),
+    /// which replaces `shield_palette.target` for that slot's shell. Empty or
+    /// `None` where the craft's shell authors none.
+    #[cfg(feature = "view")]
+    pub shield_targets: Vec<Option<[f32; 4]>>,
     /// Whether a Plasma detonation plays HD's three-model scale ease rather than
     /// Pulse's baked anim-time scrub: `plasma_blast_hd.is_some()`. The two are
     /// read off different executables and do not unify (`blast_models`).

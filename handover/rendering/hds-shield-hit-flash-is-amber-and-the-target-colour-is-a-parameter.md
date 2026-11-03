@@ -1,8 +1,8 @@
 ---
-status: ready-to-wire
+status: re-first
 titles: [hd]
 updated: 2026-11-03
-summary: "HD shield target colour read: per-team ShieldColour float4 in shipshield.rcsmodel (not white); wire per-team palette; hit flash unwatched"
+summary: "HD per-team ShieldColour target wired (2026-11-03); open: Zone copy, activation model tint, Omega/2048 shell build + value decode, hit flash unwatched"
 ---
 
 # HD's shield hit-flash is amber, not Pulse's cyan - and the steady-state colour is a parameter this pass did not trace to its source
@@ -83,14 +83,12 @@ steady-state colour is read".
 
 ## Open
 
-- **Ready to wire:** `HD_PALETTE.target` must become per team. Read
-  `ShieldColour` (`0xaaf53119`) from the shield model's material record with
-  `oag_rcs::rcsmodel::material::parameters` at load and feed it as the palette
-  target; white only if the record has none. Also set the models' activation
-  tint (`FUN_002c32c8`, packed `(0.547, 0.1, 0.1, 0) * 255`) on activation.
-  Zone has two values on disc (DATA00 vs DATA02): confirm which archive HD
-  loads. Omega and 2048: census their shield models for the same parameter
-  (unchecked).
+- **Landed:** HD's per-team `ShieldColour` target
+  (`Livery::shield_colour`, `Setup::shield_targets`). Still open: the models'
+  activation tint (`FUN_002c32c8`, packed `(0.547, 0.1, 0.1, 0) * 255`); Zone's
+  two values (ours loads DATA00's alpha-0 copy, original unknown); Omega and 2048
+  carry the `ShieldColour` entry in their PS4/Vita `.rcsmodel` but no shield
+  shell builds there at all, and the value pointer is not decoded.
 - The amber hit flash is still unwatched in a frame (static read only). Recipe:
   gdb-break `ShipShield_Hit` (`0x00125660`) in a race where a rival hits the
   player, read `object+0xc0` (expected `(1, 0.2, 0, 1)`).
@@ -100,8 +98,6 @@ steady-state colour is read".
 
 ## Next Steps
 
-1. Wire the per-team target as above; test: Feisar's shell target equals
-   `(0, 0.0314, 0.9961, 1)` and differs from Piranha's `(1, 0.5333, 0, 1)`.
-2. Compare one of our frames against `shield_t6.5.png` (same team, same
-   circuit) after wiring.
+1. Build the Vita/PS4 shield shell (the PS3 build refuses their container), decode the 8-byte `ShieldColour` value, tint per team.
+2. Settle which Zone copy the original reads.
 3. Decompile `FUN_00125d98` and `FUN_00676fe8`.

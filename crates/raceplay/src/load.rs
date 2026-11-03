@@ -1118,6 +1118,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
             #[cfg(feature = "view")]
             ps2_trail: title.looks.ps2_trail.applies(archives.layout.platform),
             #[cfg(feature = "view")]
+            shield_targets: liveries.iter().map(|l| l.shield_colour).collect(),
+            #[cfg(feature = "view")]
             shield_palette: roster::shield_palette(
                 craft_title,
                 craft_of(&mut craft, &mut archives).layout.platform,

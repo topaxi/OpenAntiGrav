@@ -462,9 +462,35 @@ the race manager's mode is 2, calls `ShipShield_Activate`, and then starts the
 state 5 plus triangle ran it. Which of the two handlers state 5 selects is
 unread.
 
+### Wired (2026-11-03, `hd-shield-wire`)
+
+**Ported on HD.** `oag_livery::shield` reads `ShieldColour` (`0xaaf53119`) off the
+shell's `.rcsmodel` material at load (`Livery::shield_colour`); the race
+builds each slot's `ShipShield` with that colour as the palette `target`
+(`oag_raceplay::Setup::shield_targets`). A shell with no such parameter (every
+PSP and PS2 shell, a `.vex`-only source) keeps its title palette's target.
+Ground truth: `crates/raceplay/tests/hd_shield_colour_ground_truth.rs` checks all
+13 table rows through `oag_livery::load` and lerps a shell to each. In a race
+the live colour reads `(0.0, 0.031, 0.996)` for Feisar once settled.
+
+**Zone, open.** Our archive order mounts `DATA00` first, so a Zone shell loads
+DATA00's older copy `(1.0, 0.302, 0.0, 0.0)` and its alpha-0 target draws the
+shell invisible once settled. Which copy the original reads is unmeasured; the
+ground-truth test pins what ours resolves.
+
 ### Carried to Omega and 2048
 
-**Not checked yet.** Omega and 2048 currently inherit HD's white target. Whether their shield models carry a `ShieldColour` entry, and whether their shield code binds it the same way, is a census plus a read of their own constructors; open in the handover thread.
+**Checked, applies, not wired.** Both ship `shipshield.rcsmodel` in the PS4/Vita
+container (magic bytes `ed ad 5c ca`, 8-byte pointers) with a `ShieldColour`
+parameter entry (`0xaaf53119`, offset 1520 on Omega's feisar/assegai/piranha/
+qirex/goteki/egx/ag_systems/triakis/auricom/mirage, 1528 on harimau/icaras; offset
+1252 on 2048's feisar, piranha, auricom, mirage). The entry's value pointer is a
+relocation-style offset that reads zeros when followed naively, so the values are
+**not decoded**. Neither title draws a shield shell today: the PS3 shell build
+refuses these files (`version 0xedad5cca, expected 0x000a0000`, the loader-report
+line `shipshield.vex: its .rcsmodel does not build`), so there is no shell to
+tint. Both stay on the inherited palette until the Vita/PS4 shell build and the
+value decode land.
 
 ## History
 
@@ -476,4 +502,5 @@ unread.
   Pulse's white pending the real call site). Ported behind a
   `oag_render::shield::Palette` selected by title in
   `crates/raceplay/src/load.rs`.
+- 2026-11-03: `hd-shield-wire`. Per-team target wired on HD; Omega and 2048 checked.
 - 2026-11-03: `hd-shield-read`. Target colour read (per-team `ShieldColour` material parameter), `Activate`'s prototype corrected, live RPCS3 shield object read.

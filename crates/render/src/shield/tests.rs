@@ -303,12 +303,10 @@ fn hds_palette_starts_the_fade_up_from_a_different_hue_at_the_same_alpha() {
     assert_ne!(pulse.rgba, hd.rgba);
 }
 
-/// Both palettes settle to the same target: HD's own steady-state colour was
-/// not recovered (see [`HD_PALETTE`]'s doc comment), so it is Pulse's white,
-/// chosen rather than measured. This pins that choice rather than letting a
-/// future palette silently start differing here too.
+/// A title-level palette's `target` is only the default a shell with no
+/// authored `ShieldColour` keeps: Pulse's white on both.
 #[test]
-fn both_palettes_settle_to_the_same_unmeasured_target() {
+fn both_palettes_default_to_the_constructor_target() {
     assert_eq!(PULSE_PALETTE.target, HD_PALETTE.target);
     assert_eq!(HD_PALETTE.target, TARGET_COLOUR);
 }
@@ -444,5 +442,32 @@ fn the_ps2_shell_is_never_tinted_and_the_other_palettes_are() {
         assert_eq!(ps2.colour(), reference.colour(), "the law moved");
         ps2.advance(DT);
         reference.advance(DT);
+    }
+}
+
+/// A craft whose palette carries its own authored target fades up to that
+/// colour, not to the title default, and two crafts do not share one.
+#[test]
+fn a_shield_lerps_to_its_own_crafts_target() {
+    let feisar = [0.0, 0.0314, 0.9961, 1.0];
+    let piranha = [1.0, 0.5333, 0.0, 1.0];
+    let mut a = ShipShield::with_palette(Palette {
+        target: feisar,
+        ..HD_PALETTE
+    });
+    let mut b = ShipShield::with_palette(Palette {
+        target: piranha,
+        ..HD_PALETTE
+    });
+    a.activate();
+    b.activate();
+    for _ in 0..180 {
+        a.advance(DT);
+        b.advance(DT);
+    }
+    // Alpha is modulated by the flicker; the three colour channels are not.
+    for channel in 0..3 {
+        assert!((a.colour()[channel] - feisar[channel]).abs() < 1e-3);
+        assert!((b.colour()[channel] - piranha[channel]).abs() < 1e-3);
     }
 }
