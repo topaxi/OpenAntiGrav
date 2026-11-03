@@ -270,3 +270,46 @@ fn the_plasma_heads_templates_draw_at_the_severity_the_instance_is_rescaled_to()
         }
     }
 }
+
+/// The onset flash of the original's GE dumps (a 125 x 67 unit additive quad
+/// and a 192-vertex source-alpha prim, shots k78-k82) is `WO_PLASMA_FLASH`
+/// itself: its template `PLASMA_GLOW` (64x64, additive, one quad) one update
+/// after the burst at severity 1.0 is 125.2 x 66.8 units, and its root
+/// (128x64, source-alpha, 32 particles of six vertices) is 192 vertices
+/// (plasma.md, "the onset flash is `WO_PLASMA_FLASH`").
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_onset_flash_of_the_original_is_the_plasma_flash_effect() {
+    use oag_core::math::Vec3;
+    use oag_core::rng::Rng;
+    use oag_fx::psys::{ColourScale, Effect, Stage};
+    let Some(image) = oag_testdata::image("pulse-psp-usa.chd") else {
+        return;
+    };
+    let mut archives = pulse::open(&image.display().to_string()).expect("opening the PSP archives");
+    let blob = archives
+        .read_name(r"Data\Psys\WO_PLASMA_FLASH.POB")
+        .expect("the flash is on the disc");
+    let effect = std::sync::Arc::new(Effect::parse(&blob, ColourScale::Full).expect("it parses"));
+    let mut stage = Stage::new();
+    let mut rng = Rng::new(3);
+    stage
+        .attach(&effect, Vec3::ZERO, 1.0)
+        .expect("an instance is free");
+    stage.advance(1.0 / 60.0, &mut rng);
+    stage.advance(1.0 / 60.0, &mut rng);
+    let (additive, alpha_over) = stage.vertices(Vec3::X, Vec3::Y);
+    let extent = |v: &[oag_mesh::mesh::GpuVertex], axis: usize| {
+        let at =
+            |f: fn(f32, f32) -> f32, init: f32| v.iter().map(|x| x.position[axis]).fold(init, f);
+        at(f32::max, f32::MIN) - at(f32::min, f32::MAX)
+    };
+    assert_eq!(additive.len(), 6, "one additive quad");
+    for (got, want) in [(extent(&additive, 0), 125.0), (extent(&additive, 1), 67.0)] {
+        assert!(
+            (got - want).abs() <= want * 0.02,
+            "the glow quad is {got} units, the original's {want}"
+        );
+    }
+    assert_eq!(alpha_over.len(), 192, "32 particles of six vertices");
+}

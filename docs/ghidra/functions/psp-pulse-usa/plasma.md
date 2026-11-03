@@ -1943,3 +1943,77 @@ runs Pulse's way on HD. The launch scale, the no-ride window and the muzzle node
 checkable** from
 this lane (no HD probe of the bolt's records). Pure: inherits Pulse (I:Pulse), unprobed.
 
+
+## 2026-11-03: the head's arcs ride the craft, and the onset flash is `WO_PLASMA_FLASH` (pulse-plasma-arcs-flash)
+
+### The arcs: the root emitter's particles live in the instance's frame (flag `0x2`)
+
+The head's root emitter `WO_PLASMA_HEAD` carries flag `0x2` (local space,
+`particle-system.md`, "Flag `0x2` is local space, not world space"): its particles are stored in the
+instance's frame and drawn through its **live** matrix, which `Plasma_Init` hands the firer's matrix
+and, after the release, the bolt's. Its parameters (read with the loader, `Effect::parse`): radial
+direction, speed 6.25 per tick, drag 0.5/0.4/0.5, 39 +/- 3 ticks of life, one particle every two
+ticks (cap 10), size channel 0.9 to 5.0, draw class 6 (`Streak { from_spawn }`, `Bar { aspect 1.0 }`)
+on the 2x2 crescent atlas. A streak runs from the spawn point to the particle.
+
+Ours kept those particles in **world** space (nothing but `WO_REPULSER_BLAST` opted into
+`System::set_rides_frame`), so while the craft flew at 106 units a second each streak was left behind and
+strung back toward the camera: one small arc where the original shows a ring of large loops. The same
+emitter played on a parked anchor (a scratch `Stage` at severity 0.75) already spans 13 units, the
+original's 10 to 11, so the size channel, speed and spawn rate were never the gap. `advance_one_flare`
+now rides the frame for `Trigger::PlasmaFlare`, **on Pulse's PSP file only** (`Effect::rides_owner_frame`,
+cleared by `without_pulse_psp_draw` like the template and streak laws).
+
+**The owner's matrix does move (decompiled, `/pulse/BOOT-psp-pulse-usa.BIN`).** `Plasma_Init`
+(`0x0885bd18`) calls `Psys_Spawn_q(node, "WO_PLASMA_HEAD", 'PLHE', 0, 0x10, craft->+0x60)`: matrix
+argument 0, flags `0x10` (bit 0 clear, so not by pointer), and the craft's weapon node as the sixth
+argument. `PsysNode_Start` (`0x08916200`) stores that sixth argument at node `+0xbc` under flag `0x10`
+and gives the node an identity local matrix; `PsysNode_Update` (`0x08915cdc`) then, for a node whose
+`+0xbc` is set, reads the **parent's** world matrix (`Vex_UpdateNodeWorldMatrix`, then `+0x30`) every
+frame before `ParticleSystem_SetMatrix`. So through the charge the head's matrix is the craft's live
+weapon node. Confidence **85**. After the release `Psys_Reparent_q(head, &bolt->matrix)` re-points it to
+the bolt's matrix; that this matrix keeps moving with the bolt (`Plasma_Update` rewriting `+0x70`)
+is inferred from the dumps (the head rides the bolt, z -22.2 to -29.0), not read: confidence **60**.
+The Plasma's own (`WO_PLASMA_HEAD`, `PLHE`) flag `0x2` meaning is `particle-system.md`'s (88).
+
+Test: `tests::weapons::visuals::the_plasma_heads_arcs_ride_the_anchor_they_were_born_on` (hand-laid
+flag-`0x2` effect moved 50 units: red before, "stayed behind at x 0", green after).
+
+**Pair** (same setup as "the head's template playback": Talon's Junction, Assegai Venom, fire at
+GO + 120, head box `200,112,90,80`, k20, 36, 44, 60, 72, native 480x272, one original). The
+per-pixel metric `weapon-pair-score.py` reads **102,648 before and 122,178 after (worse)**, and
+a hypothesis, not measured (no noise floor was taken): the arcs are placed by random draws, so a
+bright loop in the wrong place may cost twice, where before there was nothing to miss. Mean luminance inside the box
+(original / before / after): k36 106.9 / 102.5 / 104.9; k44 112.8 / 104.6 / 105.7; **k60 127.0 /
+110.7 / 126.3; k72 111.1 / 96.7 / 115.3**. The brightness gap is closed; at k72 ours is a little
+hazier than the original's clean ring around the dark disc. **Still different**: the loops'
+shapes (ours are straighter, flatter bars; the original's are curved crescents around the disc, and
+the strips are built in view space in the original but in world space here, `streak.rs`), the glow
+drawing dimmer, and the dark core being less visible at k72.
+
+### The onset flash is `WO_PLASMA_FLASH`, already played (item 1e closed)
+
+The two onset draws of the GE dumps (a 125 x 67 unit additive quad, and a 192-vertex `0x32` prim)
+were not byte-matched, but they need not be: `WO_PLASMA_FLASH` has two emitters, the root
+(128x64 sprite, **source-alpha**, 32 particles a burst, six vertices each = **192**) and the template
+`PLASMA_GLOW` (64x64 CLUT4, additive, one quad, half-size 15 to 36). Played at severity 1.0, two
+updates after the burst the glow quad is **125.2 x 66.8** units (the dump's 125 x 67) and the root
+is 192 alpha-over vertices (the dump's prim 62 x 35, ours 62.9 x 31.5). Confidence **85** (two
+sizes and a count agree, blend class and texture shapes agree; the texel bytes were not compared).
+The effect is the one `Race::blast_for` already spawns at the detonation, so nothing is left to wire:
+the whole-frame onset is the known one-shot lateness (ours k79 at 228,189,244 against the
+original's k78 ramping 209 to 239 at k80), which `pulse-plasma-timing` traced to the `391 + k`
+mapping. Race severity: `Race::ignite_blast` plays the effect at 1.0, the severity measured here. Test:
+`plasma_blast_models_ground_truth::the_onset_flash_of_the_original_is_the_plasma_flash_effect` (disc;
+it pins the effect's sizes and counts to the dump, and passes on `main` too: not a red-before test). The onset whole-frame metric (k78 and k80, `weapon-pair-score.py`): 1,002,886 before,
+982,035 after (the arcs' ride only).
+
+**Cross-title.** `WO_PLASMA_FLASH`: Pure **checked, applies** (the same effect, Pure's page "Effects at
+spawn"). The arcs' ride is scoped to Pulse PSP: Pure (`pure-weapons-wire` wires its head; its
+file carries the same flag, the original's call site is unread there), HD and Omega (Omega's
+`Plasma_Init` attaches `WO_PLASMA_HEAD` to `p + 0xf0`, ps4-omega-eu `plasma.md`, a matrix that
+may move; HD's site unread, `particle-triggers.md`), 2048 (Omega's lineage) and Pulse PS2
+(**inherits PSP's** law, but ships through the non-PSP loader path today, like its templates) all
+keep the arcs where they are born. **Checked, applies, not wired.** `pure-weapons-wire` turns
+the same switch for Pure by leaving `without_pulse_psp_draw` off the head or setting
+`rides_owner_frame`; the lead should sequence that lane with this one.

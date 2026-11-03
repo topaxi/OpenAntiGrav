@@ -44,7 +44,7 @@ pub(crate) fn flare_effect_for(kind: Option<oag_tables::weapons::Weapon>) -> Opt
 /// a `&mut Race` method, so the caller can hold two `&mut Option<Playing>`
 /// slots - [`RaceView::projectile_flare`] and [`RaceView::projectile_flare_orbit`] -
 /// live at once without a second borrow of `self`.
-pub(super) fn advance_one_flare(
+pub(crate) fn advance_one_flare(
     stage: &mut psys::Stage,
     handles: &EffectHandles,
     trigger: Option<Trigger>,
@@ -71,6 +71,16 @@ pub(super) fn advance_one_flare(
         (Some(trigger), None) => {
             if let Some(effect) = handles.get(trigger).cloned() {
                 *playing = stage.attach(&effect, at, scale);
+                // `Plasma_Init` spawns the head with flag `0x10` and the craft's
+                // weapon node as its parent (`+0xbc`), whose world matrix
+                // `PsysNode_Update` reads every frame, so the root's arcs (flag
+                // `0x2`) ride the craft (`docs/ghidra/functions/psp-pulse-usa/plasma.md`,
+                // "the head's arcs ride the craft"). Pulse's PSP file only.
+                if let (Trigger::PlasmaFlare, Some(instance), true) =
+                    (trigger, *playing, effect.rides_owner_frame)
+                {
+                    stage.set_rides_frame(instance, true);
+                }
             }
         }
     }

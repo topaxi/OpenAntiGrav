@@ -370,6 +370,10 @@ pub struct Effect {
     /// Which emitters start on [`System::ignite`]: the root and its sibling
     /// chain, but not a child, which starts when its parent's particle does.
     roots: Vec<usize>,
+    /// Whether a local-space root (flag `0x2`) rides the frame of whatever the
+    /// effect is attached to, as the original's node does for an owner that
+    /// parents it. Pulse on the PSP only - [`Self::without_pulse_psp_draw`].
+    pub rides_owner_frame: bool,
     /// See [`Effect::skipped_templates`].
     skipped_templates: usize,
 }
@@ -423,6 +427,7 @@ impl Effect {
                 .and_then(|root| system.view_depth(data, root))
                 .unwrap_or(0.0),
             roots,
+            rides_owner_frame: true,
             skipped_templates: 0,
         };
         effect.add_templates(&system, data, &records, scale, external);
