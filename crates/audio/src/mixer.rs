@@ -26,6 +26,7 @@
 
 use std::sync::Arc;
 
+use crate::binaural::{Binaural, VoiceState};
 use crate::spatial::SpatialMode;
 
 /// Output channel count. Everything is mixed to interleaved stereo.
@@ -311,6 +312,9 @@ struct Voice {
     front: f32,
     /// One-pole low-pass state per ear for [`SpatialMode::RearCue`].
     rear_state: [f32; CHANNELS],
+    /// The voice's place in the shared convolver, while it is a headphone
+    /// voice.
+    hrtf: Option<Box<VoiceState>>,
     looping: bool,
     generation: u32,
     /// Output frames left of the fade a stopped voice goes out on, or `None`
@@ -332,6 +336,7 @@ impl Default for Voice {
             pan: None,
             front: 1.0,
             rear_state: [0.0; CHANNELS],
+            hrtf: None,
             looping: false,
             generation: 0,
             release: None,
@@ -422,6 +427,9 @@ pub struct Mixer {
     master_gain: f32,
     sample_rate: u32,
     spatial: SpatialMode,
+    /// The shared HRTF convolver, once built. See [`Self::set_binaural`].
+    binaural: Option<Binaural>,
+    binaural_requested: bool,
     generation: u32,
     /// Voices refused because every slot was busy, for the perf overlay and
     /// for tests. Silent starvation is the failure mode worth being able to
@@ -452,6 +460,8 @@ impl Mixer {
             master_gain: 1.0,
             sample_rate: sample_rate.max(1),
             spatial: SpatialMode::Original,
+            binaural: None,
+            binaural_requested: false,
             generation: 0,
             starved: 0,
             clipped: 0,
@@ -563,6 +573,7 @@ impl Mixer {
             pan: play.pan,
             front: play.front,
             rear_state: [0.0; CHANNELS],
+            hrtf: None,
             looping: play.looping,
             generation,
             release: None,
@@ -661,6 +672,28 @@ impl Mixer {
     /// Chooses how placed voices are rendered. See [`SpatialMode`].
     pub fn set_spatial_mode(&mut self, mode: SpatialMode) {
         self.spatial = mode;
+    }
+
+    /// Installs the HRTF convolver [`SpatialMode::Headphones`] needs. Built by
+    /// [`Binaural::new`] off the audio thread; until it is here that mode
+    /// sounds as the rear cue.
+    pub fn set_binaural(&mut self, binaural: Option<Binaural>) {
+        self.binaural = binaural;
+        self.binaural_requested = false;
+    }
+
+    /// Whether the caller should now build the HRTF convolver: `true` once,
+    /// until [`Self::set_binaural`] lands or fails.
+    pub fn request_binaural(&mut self) -> bool {
+        let wanted = self.binaural.is_none() && !self.binaural_requested;
+        self.binaural_requested |= wanted;
+        wanted
+    }
+
+    /// Whether the HRTF convolver is installed.
+    #[must_use]
+    pub fn has_binaural(&self) -> bool {
+        self.binaural.is_some()
     }
 
     /// The current [`SpatialMode`].
@@ -797,6 +830,7 @@ impl Mixer {
         let bus_gain = self.bus_gain;
         let rate = f64::from(self.sample_rate);
         let spatial = self.spatial;
+        let binaural = &mut self.binaural;
 
         for voice in &mut self.voices {
             let Some(sound) = voice.sound.clone() else {
@@ -811,12 +845,24 @@ impl Mixer {
             // enough that stepping it here would model an interpolator we have
             // not read.
             let channel_gain = voice.pan.map_or([1.0; CHANNELS], crate::spatial::pan_gains);
-            let (rear_coeff, rear_gain) = if spatial == SpatialMode::RearCue && voice.pan.is_some()
-            {
-                rear_cue(voice.front, self.sample_rate)
+            // A headphone voice goes through the convolver; asked for before the
+            // sphere has loaded, it takes the rear cue meanwhile.
+            let use_hrtf =
+                spatial == SpatialMode::Headphones && voice.pan.is_some() && binaural.is_some();
+            if use_hrtf {
+                voice
+                    .hrtf
+                    .get_or_insert_with(|| Box::new(VoiceState::new()));
             } else {
-                (1.0, 1.0)
-            };
+                voice.hrtf = None;
+            }
+            let (rear_coeff, rear_gain) =
+                if spatial != SpatialMode::Original && !use_hrtf && voice.pan.is_some() {
+                    rear_cue(voice.front, self.sample_rate)
+                } else {
+                    (1.0, 1.0)
+                };
+            let (side, front) = (voice.pan.unwrap_or(0.0), voice.front);
             let step = f64::from(sound.sample_rate()) / rate * f64::from(voice.pitch);
             let frames = sound.frames();
 
@@ -837,72 +883,100 @@ impl Mixer {
                     delay -= 1;
                     continue;
                 }
-                if frames == 0 {
-                    finished = true;
-                    break;
-                }
-                let fade = match release {
-                    None => 1.0,
-                    Some(0) => {
-                        finished = true;
-                        break;
+                let mut ended = false;
+                'frame: {
+                    if frames == 0 {
+                        ended = true;
+                        break 'frame;
                     }
-                    Some(left) => {
-                        release = Some(left - 1);
-                        left as f32 / RELEASE_FRAMES as f32
+                    let fade = match release {
+                        None => 1.0,
+                        Some(0) => {
+                            ended = true;
+                            break 'frame;
+                        }
+                        Some(left) => {
+                            release = Some(left - 1);
+                            left as f32 / RELEASE_FRAMES as f32
+                        }
+                    };
+                    if voice.position >= frames as f64 {
+                        if voice.looping {
+                            // Modulo rather than reset: at a step above one frame
+                            // the overshoot is real time, and dropping it makes a
+                            // looped bed drift slow.
+                            voice.position %= frames as f64;
+                        } else {
+                            ended = true;
+                            break 'frame;
+                        }
                     }
-                };
-                if voice.position >= frames as f64 {
-                    if voice.looping {
-                        // Modulo rather than reset: at a step above one frame
-                        // the overshoot is real time, and dropping it makes a
-                        // looped bed drift slow.
-                        voice.position %= frames as f64;
-                    } else {
-                        finished = true;
-                        break;
-                    }
-                }
 
-                let index = voice.position as usize;
-                let frac = (voice.position - index as f64) as f32;
-                let a = sound.frame(index);
-                let b = if voice.looping && index + 1 >= frames {
-                    sound.frame(0)
-                } else {
-                    sound.frame(index + 1)
-                };
-                // **The closing fade, on the waveform rather than after it.** A
-                // one-shot that stops mid-signal is cut at whatever value it
-                // reached, and on Wipeout HD that is routinely most of full
-                // scale - so the last stretch of the source is ramped down
-                // instead. Ramping the *signal* rather than holding its last
-                // sample and decaying that matters: a held value ramped to zero
-                // is a unipolar pulse, which is itself a low-frequency thump,
-                // and the longer the ramp the deeper it sits. This costs the
-                // cue the level of its final few milliseconds and adds nothing.
-                let closing_fade = if voice.looping {
-                    1.0
-                } else {
-                    let left = frames as f64 - voice.position;
-                    if closing > 0.0 && left < closing {
-                        (left / closing).clamp(0.0, 1.0) as f32
+                    let index = voice.position as usize;
+                    let frac = (voice.position - index as f64) as f32;
+                    let a = sound.frame(index);
+                    let b = if voice.looping && index + 1 >= frames {
+                        sound.frame(0)
                     } else {
+                        sound.frame(index + 1)
+                    };
+                    // **The closing fade, on the waveform rather than after it.** A
+                    // one-shot that stops mid-signal is cut at whatever value it
+                    // reached, and on Wipeout HD that is routinely most of full
+                    // scale - so the last stretch of the source is ramped down
+                    // instead. Ramping the *signal* rather than holding its last
+                    // sample and decaying that matters: a held value ramped to zero
+                    // is a unipolar pulse, which is itself a low-frequency thump,
+                    // and the longer the ramp the deeper it sits. This costs the
+                    // cue the level of its final few milliseconds and adds nothing.
+                    let closing_fade = if voice.looping {
                         1.0
-                    }
-                };
-                for (c, sample) in chunk.iter_mut().enumerate() {
-                    let mut heard = a[c] + (b[c] - a[c]) * frac;
-                    if rear_coeff < 1.0 {
-                        let state = &mut voice.rear_state[c];
-                        *state += rear_coeff * (heard - *state);
-                        heard = *state;
                     } else {
-                        voice.rear_state[c] = heard;
+                        let left = frames as f64 - voice.position;
+                        if closing > 0.0 && left < closing {
+                            (left / closing).clamp(0.0, 1.0) as f32
+                        } else {
+                            1.0
+                        }
+                    };
+                    let mut heard = [0.0; CHANNELS];
+                    for (c, h) in heard.iter_mut().enumerate() {
+                        let mut x = a[c] + (b[c] - a[c]) * frac;
+                        if rear_coeff < 1.0 {
+                            let state = &mut voice.rear_state[c];
+                            *state += rear_coeff * (x - *state);
+                            x = *state;
+                        } else {
+                            voice.rear_state[c] = x;
+                        }
+                        *h = x;
                     }
-                    *sample += heard * rear_gain * gain * channel_gain[c] * fade * closing_fade;
+                    if let (Some(state), Some(bin)) = (voice.hrtf.as_deref_mut(), binaural.as_mut())
+                    {
+                        let mono = 0.5 * (heard[0] + heard[1]) * gain * fade * closing_fade;
+                        let (l, r) = state.push(bin, mono, side, front);
+                        chunk[0] += l;
+                        chunk[1] += r;
+                    } else {
+                        for (c, sample) in chunk.iter_mut().enumerate() {
+                            *sample +=
+                                heard[c] * rear_gain * gain * channel_gain[c] * fade * closing_fade;
+                        }
+                    }
+                    voice.position += step;
                 }
-                voice.position += step;
+                if ended {
+                    let tail = match (voice.hrtf.as_deref_mut(), binaural.as_mut()) {
+                        (Some(state), Some(bin)) => state.flush(bin, side, front),
+                        _ => None,
+                    };
+                    let Some((l, r)) = tail else {
+                        finished = true;
+                        break;
+                    };
+                    chunk[0] += l;
+                    chunk[1] += r;
+                }
             }
 
             if finished {

@@ -754,6 +754,9 @@ impl Audio {
             mixer.set_master_gain(settings.master_volume.gain());
             mixer.set_spatial_mode(settings.spatial_audio);
         });
+        if settings.spatial_audio == oag_audio::SpatialMode::Headphones {
+            self.output.ensure_binaural();
+        }
     }
 
     /// The output, and through it the mixer: the seam a cue goes through.

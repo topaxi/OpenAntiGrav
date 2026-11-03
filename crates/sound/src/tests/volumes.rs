@@ -45,6 +45,24 @@ fn the_spatial_audio_setting_reaches_the_mixer_and_defaults_to_the_rear_cue() {
     audio
         .output()
         .with_mixer(|mixer| assert_eq!(mixer.spatial_mode(), SpatialMode::Original));
+    assert!(
+        !audio.output().with_mixer(|mixer| mixer.has_binaural()),
+        "the convolver is built only when headphones are asked for"
+    );
+
+    let headphones = crate::settings::Settings {
+        spatial_audio: SpatialMode::Headphones,
+        ..Default::default()
+    };
+    audio.apply(&headphones);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    while !audio.output().with_mixer(|mixer| mixer.has_binaural()) {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the sphere never landed"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
 }
 
 #[test]

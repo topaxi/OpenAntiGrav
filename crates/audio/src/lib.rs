@@ -36,6 +36,7 @@
 //! the caller renders. That is what lets `--dump-audio` reproduce a real-time
 //! run rather than approximate it.
 
+pub mod binaural;
 pub mod mixer;
 pub mod output;
 pub mod spatial;

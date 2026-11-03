@@ -40,6 +40,10 @@ log.workspace = true
 cpal = { version = "0.18.2", features = ["pipewire"] }
 rtrb = "0.4.0"
 
+# The HRTF convolver for `SpatialMode::Headphones` (`binaural`). Pure Rust; the
+# impulse responses are ours to ship (assets/audio/hrtf/README.md).
+hrtf = "0.9.0"
+
 # The browser's output: an AudioWorklet the page starts, reading a ring in the
 # module's shared memory (`output::web`). See docs/tools/web.md, "Sound".
 [target.'cfg(target_arch = "wasm32")'.dependencies]
