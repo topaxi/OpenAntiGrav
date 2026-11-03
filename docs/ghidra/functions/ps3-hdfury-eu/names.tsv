@@ -833,3 +833,5 @@
 0x000fb928	function	WeaponAi_Update	80	weapon-ai-fire.md
 0x000fa210	function	WeaponAi_Construct	80	weapon-ai-fire.md
 0x000fa140	function	WeaponAi_BiasAbsorbByDistance	55	weapon-ai-fire.md
+0x00125690	function	ShipShield_BindColourParam	90	shield.md
+0x000d5610	function	Craft_ActivateShield	82	shield.md
