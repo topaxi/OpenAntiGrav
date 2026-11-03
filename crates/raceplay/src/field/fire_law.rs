@@ -9,6 +9,7 @@
 use super::*;
 use oag_ai::weapon_ai::{Decision, Mover, Odds, Situation, target_in_path};
 use oag_tables::weapons::Weapon;
+use oag_title::weapons::OpponentFire;
 
 /// Which rule decides when an opponent fires a forward weapon.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -171,6 +172,7 @@ impl Race {
                 use_against_ai: odds.use_against_ai,
                 absorb: odds.absorb,
             },
+            law: self.sim.fire_terms,
         })
     }
 
@@ -187,6 +189,51 @@ impl Race {
             _ => weapons.rocket()?.speed_for_named(class),
         }
     }
+}
+
+/// The decision's terms for a race: the title's [`OpponentFire`] resolved
+/// against its `WeaponAIstats.xml` rows and the race's difficulty tier.
+///
+/// A title whose terms ask for `<AllWeapons>` or `<EliminatorAIStats>` and whose
+/// file lacks the row takes Pulse's term for it: HD's code would read the
+/// loader's zero defaults and an Eliminator opponent would never fire, which
+/// is the loader's gap and not a measured behaviour (`weapon-ai-fire.md`,
+/// "Ready to wire" 3). **Chosen, not measured.**
+pub(crate) fn fire_terms(
+    terms: OpponentFire,
+    stats: Option<&oag_tables::weapons::ai::WeaponAiStats>,
+    difficulty: oag_ai::Difficulty,
+) -> oag_ai::weapon_ai::Law {
+    use oag_ai::weapon_ai::{EliminatorTerms, Law};
+    use oag_tables::race_campaign::Difficulty;
+    let mut law = Law::PULSE;
+    law.step_scale = terms.step_scale;
+    let Some(stats) = stats else {
+        return law;
+    };
+    if terms.all_weapons
+        && let Some(all) = stats.all_weapons()
+    {
+        law.all_weapons = Odds {
+            use_against_player: all.use_against_player,
+            use_against_ai: all.use_against_ai,
+            absorb: all.absorb,
+        };
+    }
+    if terms.authored_eliminator
+        && let Some(row) = stats.eliminator()
+    {
+        let tier = match super::super::finished_thrust::rung(difficulty) {
+            Difficulty::Easy => 0,
+            Difficulty::Medium => 1,
+            Difficulty::Hard => 2,
+        };
+        law.eliminator = EliminatorTerms::Authored {
+            use_scale: row.use_scale[tier],
+            absorb_scale: row.absorb_scale[tier],
+        };
+    }
+    law
 }
 
 /// A signed along-track gap folded into half a lap either way, as

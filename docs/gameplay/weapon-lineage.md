@@ -269,13 +269,13 @@ Pulse's `WeaponAi_DecideFireOrAbsorb`, fire and absorb halves (`0x088518b4`, con
 own `WeaponAIstats.xml` odds. HD's loader for that file is read (85,
 [weapon-ai-stats.md](../ghidra/functions/ps3-hdfury-eu/weapon-ai-stats.md)) and so is
 HD's decision code (80, [weapon-ai-fire.md](../ghidra/functions/ps3-hdfury-eu/weapon-ai-fire.md): it **differs**, see the HD cell); **no
-other title's decision code is read**. A race whose title names no table, or
+other title's decision code is read**. HD's terms are wired (`Weapons.opponent_fire`, `oag_ai::weapon_ai::Law`); 2048 and Omega run them inherited from HD, their own decision code unread. A race whose title names no table, or
 whose table fails to read, runs `FireLaw::Ours`, which is chosen, not measured
 (`crates/raceplay/src/field/fire_law.rs`).
 
 | Weapon | Pulse | Pure | HD / Fury | 2048 | Omega |
 | --- | --- | --- | --- | --- | --- |
-| Law that decides to fire | M: both halves ported, fire and absorb, once a tick (the cadence read 2026-10-19: `AiManager_Update` calls every `WeaponAi_Update` once a world step, [weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md#the-decision-cadence-every-call-confidence-85)) | I:Pulse; own odds | I:Pulse; own odds. HD's own law is read and differs (`dt * 30`, `AllWeapons`, Eliminator use/absorb scales; 80, [weapon-ai-fire.md](../ghidra/functions/ps3-hdfury-eu/weapon-ai-fire.md)), not wired | I:Pulse; own odds | I:Pulse; own odds |
+| Law that decides to fire | M: both halves ported, fire and absorb, once a tick (the cadence read 2026-10-19: `AiManager_Update` calls every `WeaponAi_Update` once a world step, [weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md#the-decision-cadence-every-call-confidence-85)) | I:Pulse; own odds | M: HD's own law, static (`dt * 30` step scale, `AllWeapons`, Eliminator use/absorb scales from `DATA00`'s `EliminatorAIStats`; 80, [weapon-ai-fire.md](../ghidra/functions/ps3-hdfury-eu/weapon-ai-fire.md)), wired; the Eliminator flip block is not | I:HD; own odds (decision code unread) | I:HD; own odds (decision code unread); its unsuffixed table has no `EliminatorAIStats` row, so the Eliminator keeps Pulse's terms (chosen) |
 | Rocket, Missile, Plasma, Shuriken, Repulser, LeachBeam | M: aimed, fired or absorbed on the law's rolls | I:Pulse (those it has) | I:Pulse | I:Pulse | I:Pulse |
 | Quake | M: rolled, not aimed; absorbed on the same law | I:Pulse | I:Pulse | I:Pulse | I:Pulse |
 | Cannon | ?: the original flags it a forward weapon, the port does not aim it (`opponent_fires`; see `Driver::holds_fire`) | A | ? | ? | ? |

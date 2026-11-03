@@ -118,6 +118,9 @@ pub const TITLE: &Title = &Title {
         autopilot_absorb_cancels: oag_title::pre_race::Sourced::measured(true),
         // Read statically, confidence 80: the grant request sits behind `craft+0x1b8 & 0x800`.
         autopilot_pad_grants: oag_title::pre_race::Sourced::measured(false),
+        opponent_fire: oag_title::pre_race::Sourced::measured(
+            oag_title::weapons::OpponentFire::PULSE,
+        ),
     },
     weapon_models: race::WEAPON_MODELS,
     effects: effects::EFFECTS,

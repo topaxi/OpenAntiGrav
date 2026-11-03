@@ -165,6 +165,10 @@ pub const TITLE: &Title = &Title {
         // HD's law, inherited: Omega's own Autopilot update and cancel are unread.
         autopilot_absorb_cancels: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
         autopilot_pad_grants: oag_title::pre_race::Sourced::inherited(false, "Wipeout HD"),
+        opponent_fire: oag_title::pre_race::Sourced::inherited(
+            oag_title::weapons::OpponentFire::HD,
+            "Wipeout HD",
+        ),
     },
     weapon_models: weapons::WEAPON_MODELS,
     // Omega's executable carries HD's weapon-spark, damage-smoke, absorb and bomb-ray

@@ -809,6 +809,9 @@ pub struct Setup {
     /// Whether a weapon pad grants a craft whose Autopilot runs,
     /// `oag_title::weapons::Weapons::autopilot_pad_grants`.
     pub autopilot_pad_grants: bool,
+    /// Which terms the opponents' fire-or-absorb decision rolls by,
+    /// `oag_title::weapons::Weapons::opponent_fire`.
+    pub opponent_fire: oag_title::weapons::OpponentFire,
     /// The track's speedup pads, as trigger volumes.
     ///
     /// The same nodes [`Loaded::pad_model`] draws, decoded for what they *do*

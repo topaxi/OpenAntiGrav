@@ -371,6 +371,7 @@ fn setup(handling: Handling) -> Setup {
         },
         autopilot_absorb_cancels: true,
         autopilot_pad_grants: false,
+        opponent_fire: oag_title::weapons::OpponentFire::PULSE,
         // A synthetic track authors no pads, which is also what every Pure
         // track does: an empty set is an ordinary state, not a stub.
         speedup_pads: Vec::new(),

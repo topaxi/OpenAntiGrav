@@ -234,14 +234,14 @@ leaves every scale `0` (loader defaults), i.e. an Eliminator `use` of `0` and no
 Omega's code is HD's. Not checked on Omega's binary; recorded as the next address to try
 (Omega `eboot.bin`'s `WeaponAIStats` loader, then the function that reads `stats + 0xc4`).
 
-## Ready to wire (do not wire in this lane)
+## Ready to wire (items 1 to 3 wired 2026-11-03, `hd-fire-law-wire`)
 
-1. `oag_ai::weapon_ai`: add a per-step time term `k = dt * 30` (`0.5` at 60 Hz) to fire, absorb and
+1. **Wired.** `oag_ai::weapon_ai`: add a per-step time term `k = dt * 30` (`0.5` at 60 Hz) to fire, absorb and
    the early-out, **on HD only** (Pulse and Pure keep none; Omega and 2048 inherit HD's, labelled
    inherited).
-2. Multiply `use` by `AllWeapons.useAgainst*` and `absorb` by `AllWeapons.absorb` on HD (and
+2. **Wired.** Multiply `use` by `AllWeapons.useAgainst*` and `absorb` by `AllWeapons.absorb` on HD (and
    inheriting titles).
-3. Eliminator on HD: replace `use *= 5` with `use *= useScale[difficulty]`, absorb with
+3. **Wired**, with `DATA00`'s copy (the `DATA00`/`DATA02` question stays open) and the `+0x6ad8` byte treated as always `0` (unidentified). Eliminator on HD: replace `use *= 5` with `use *= useScale[difficulty]`, absorb with
    `rate_elim[idx] * absorb * AllWeapons.absorb * absorbScale[difficulty]` (index as the setup
    gives it, no forced `0`), and only while the craft's `+0x6ad8` byte is `0` (not identified).
    **Conditional on which `weaponaistats.xml` HD loads**: `DATA00`'s copy carries the
@@ -251,10 +251,20 @@ Omega's code is HD's. Not checked on Omega's binary; recorded as the next addres
    which copy the runtime reads is not established (`Archives::read_name` takes `DATA00`'s). Wire
    with `DATA00`'s, say so, and settle the question with the live breakpoint below (read the
    `+0xc4` scale at the first call).
-4. Do not wire the flip block until `+0x1a` and `+0x78 / +0x79` are named.
-5. Moves two things at once, so gate with the fire-law ground truth
+4. **Not wired.** Do not wire the flip block until `+0x1a` and `+0x78 / +0x79` are named.
+5. **Measured after wiring.** Moves two things at once, so gate with the fire-law ground truth
    (`fire_law_inherit_ground_truth.rs`) before and after: HD's opponent projectile count should drop
    to roughly 0.45 of its present value (not 0.5: the `0.9` is separate).
+
+## Wired (2026-11-03, `hd-fire-law-wire`)
+
+`Weapons.opponent_fire` (`oag_title::weapons::OpponentFire`, `Sourced`) carries the per-title terms; `oag_raceplay::field::fire_terms` resolves them against the title's `WeaponAIstats.xml` and the race's difficulty tier into `oag_ai::weapon_ai::Law`. Pulse measured, Pure inherited from Pulse, HD measured (static, 80), 2048 and Omega inherited from HD.
+
+Measured, `fire_law_inherit_ground_truth`, seed 1, 120 s of opponent projectiles: HD **110 to 157**, Pulse 185 and Pure 13 unchanged, 2048 122 to 128, Omega 101 (was 102). The page's "about 0.45" does not show in this count: spend is pickup-limited (about 7 fire decisions in 120 s), halving absorb as well keeps pickups held longer, and the count is dominated by which weapons get fired. Over seeds 1 to 12 the total is 1149 before, 1037 after (0.90). The per-decision chance does fall to 0.45 (`oag_ai` unit tests).
+
+Omega: its unsuffixed table has no `EliminatorAIStats` row (its `WeaponAIStats2048.xml` does). HD's code would read zero scales and never fire in an Eliminator; the port keeps Pulse's Eliminator terms there (chosen, not measured).
+
+2048 and Omega: **checked, applies, wired by inheritance from HD**; their decision code is unread (Omega: start at the reader of `stats + 0xc4`).
 
 ## What would raise it
 

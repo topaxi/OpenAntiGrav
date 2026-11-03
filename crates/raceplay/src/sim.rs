@@ -387,6 +387,9 @@ pub struct RaceSim {
     pub(super) autopilot_absorb_cancels: bool,
     /// Whether a pad grants a craft whose Autopilot runs - see [`Setup::autopilot_pad_grants`].
     pub(super) autopilot_pad_grants: bool,
+    /// The opponents' decision terms, resolved for this race's difficulty - see
+    /// [`Setup::opponent_fire`].
+    pub(super) fire_terms: oag_ai::weapon_ai::Law,
     /// The per-class grounded-gravity scale - see [`Setup::class_gravity_scale`].
     pub(super) class_gravity_scale: f32,
     /// Which gravity term that scale multiplies, the title's craft law.
