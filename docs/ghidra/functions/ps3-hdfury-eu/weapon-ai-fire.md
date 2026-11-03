@@ -253,8 +253,10 @@ Omega's code is HD's. Not checked on Omega's binary; recorded as the next addres
    `+0xc4` scale at the first call).
 4. **Not wired.** Do not wire the flip block until `+0x1a` and `+0x78 / +0x79` are named.
 5. **Measured after wiring.** Moves two things at once, so gate with the fire-law ground truth
-   (`fire_law_inherit_ground_truth.rs`) before and after: HD's opponent projectile count should drop
-   to roughly 0.45 of its present value (not 0.5: the `0.9` is separate).
+   (`fire_law_inherit_ground_truth.rs`) before and after: the per-decision chance is 0.45 of the old one
+   (not 0.5: the `0.9` is separate), but HD's opponent projectile count does **not** fall by that factor:
+   seed 1 went 110 to 157 and seeds 1 to 12 summed 1149 to 1037 (0.90), because spend is pickup-limited
+   (see "Wired" below). The earlier expectation of about 0.45 was wrong.
 
 ## Wired (2026-11-03, `hd-fire-law-wire`)
 
@@ -264,7 +266,7 @@ Measured, `fire_law_inherit_ground_truth`, seed 1, 120 s of opponent projectiles
 
 Omega: its unsuffixed table has no `EliminatorAIStats` row (its `WeaponAIStats2048.xml` does). HD's code would read zero scales and never fire in an Eliminator; the port keeps Pulse's Eliminator terms there (chosen, not measured).
 
-2048 and Omega: **checked, applies, wired by inheritance from HD**; their decision code is unread (Omega: start at the reader of `stats + 0xc4`).
+2048 and Omega: **checked, applies, wired by inheritance from HD**; their decision code is unread. Omega's own reader of `stats + 0xc4` is unread; the next addresses to try are Omega `eboot.bin`'s `WeaponAIStats` loader, then the function that reads `stats + 0xc4`.
 
 ## What would raise it
 
