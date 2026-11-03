@@ -332,6 +332,47 @@ impl super::Scene {
         active
     }
 
+    /// Writes this tick's matrix and grey tint onto every live Disruptor
+    /// halo's drawable and hands back which slots are live.
+    pub(super) fn write_disruptor_halos(
+        &self,
+        race: &Race,
+        queue: &Uploads<'_>,
+        view_projection: Mat4,
+        weapon_scene: &mesh_render::Scene,
+    ) -> [bool; blast_models::PLASMA_BLAST_SLOTS] {
+        let mut active = [false; blast_models::PLASMA_BLAST_SLOTS];
+        for (slot, draw) in race
+            .disruptor_halo_draws(race.view().inverse())
+            .into_iter()
+            .enumerate()
+        {
+            let (Some((matrix, tint)), Some(drawable)) =
+                (draw, self.plasma_blast.disruptor_halo.get(slot))
+            else {
+                continue;
+            };
+            active[slot] = true;
+            write_fog(drawable, queue, weapon_scene);
+            drawable.write(queue, view_projection, matrix, view_projection * matrix);
+            drawable.tint(queue, [tint, tint, tint, 1.0], &mut Vec::new());
+        }
+        active
+    }
+
+    /// Draws the live Disruptor halos [`Self::write_disruptor_halos`] wrote.
+    pub(super) fn draw_disruptor_halos<'a>(
+        &'a self,
+        active: &[bool; blast_models::PLASMA_BLAST_SLOTS],
+        list: &mut super::record::DrawList<'a>,
+    ) {
+        for (slot, _) in active.iter().enumerate().filter(|(_, live)| **live) {
+            if let Some(drawable) = self.plasma_blast.disruptor_halo.get(slot) {
+                list.mesh(drawable);
+            }
+        }
+    }
+
     /// Draws every live blast's three models - `active` is
     /// [`Self::write_plasma_blasts`]'s own return, sparse rather than a
     /// leading count the way the four kinds above are bounded.

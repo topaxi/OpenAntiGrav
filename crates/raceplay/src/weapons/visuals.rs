@@ -380,6 +380,9 @@ impl Race {
         if kind == oag_tables::weapons::Weapon::Plasma {
             self.spawn_plasma_blast_model(at);
         }
+        if kind == oag_tables::weapons::Weapon::Disruptor {
+            self.spawn_disruptor_halo(at);
+        }
         // The Bomb's own two-model detonation - `Trigger::BombSmokering`
         // below is one third of it, the psys smoke ring; the hemisphere and
         // the shockwave are their own `.vex` models, on `bomb_blast`'s own

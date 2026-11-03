@@ -153,6 +153,15 @@ pub const TITLE: &Title = &Title {
             },
         }),
         plasma_blast_hd: None,
+        // `DisruptorExplo_Construct` loads it and `DisruptorExplo_Update` eases it
+        // (`docs/ghidra/functions/psp-pure-usa/weapon-effects.md`, "Disruptor", confidence 80).
+        disruptor_halo: Some(oag_title::weapons::DisruptorHalo {
+            model: r"Data\Weapons\electric_halo2.vex",
+            target: 16.0,
+            rate: 0.05,
+            life: 1.0,
+            origin: oag_title::Origin::Measured,
+        }),
         // Pure's Bomb has no fuse, but it does detonate when a craft enters
         // its `trigger_radius` (`BombPool_Detonate`, `0x0884f214`), which
         // builds this pair (`0x08858710`: the same two models, the same

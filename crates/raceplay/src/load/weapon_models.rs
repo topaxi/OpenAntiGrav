@@ -363,6 +363,7 @@ pub(super) fn load_bodies(
             hemisphere1: one(Some(hd.halo), "a plasma blast halo", true),
             ball: None, // overwritten below
             shuriken: None,
+            disruptor_halo: None,
         }
     } else if let Some(pulse) = models.plasma_blast_pulse {
         blast_models::PlasmaBlastModels {
@@ -371,6 +372,7 @@ pub(super) fn load_bodies(
             hemisphere1: one(Some(pulse.hemisphere1), "a plasma blast hemisphere", false),
             ball: None, // overwritten below
             shuriken: None,
+            disruptor_halo: None,
         }
     } else {
         blast_models::PlasmaBlastModels::default()
@@ -442,6 +444,11 @@ pub(super) fn load_bodies(
         blast_models::PlasmaBlastModels {
             ball,
             shuriken: one(models.shuriken, "a shuriken blade", true),
+            disruptor_halo: one(
+                models.disruptor_halo.map(|halo| halo.model),
+                "a disruptor explosion halo",
+                false,
+            ),
             ..plasma_blast
         },
         bomb_blast,

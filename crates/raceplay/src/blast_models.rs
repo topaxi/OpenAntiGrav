@@ -179,6 +179,8 @@ pub struct PlasmaBlastModels {
     pub ball: Option<Model>,
     /// The Shuriken's blade, which rides here for the same reason.
     pub shuriken: Option<Model>,
+    /// Pure's Disruptor explosion halo, which rides here for the same reason.
+    pub disruptor_halo: Option<Model>,
 }
 
 /// The drawable pools [`Scene`] builds from a [`PlasmaBlastModels`] -
@@ -193,6 +195,8 @@ pub(crate) struct PlasmaBlastDrawables {
     pub(crate) ball: Vec<Drawable>,
     /// The Shuriken's blade, one per projectile slot.
     pub(crate) shuriken: Vec<Drawable>,
+    /// The Disruptor's explosion halo, one per [`PLASMA_BLAST_SLOTS`] slot.
+    pub(crate) disruptor_halo: Vec<Drawable>,
 }
 
 impl PlasmaBlastDrawables {
@@ -210,6 +214,7 @@ impl PlasmaBlastDrawables {
             hemisphere1: build_one(models.hemisphere1)?,
             ball: build_one(models.ball)?,
             shuriken: build_one(models.shuriken)?,
+            disruptor_halo: build_one(models.disruptor_halo)?,
         })
     }
 }
@@ -236,6 +241,17 @@ pub(super) struct PlasmaBlast {
     /// plasma.md. Pulse's first drawn tick is one ease
     /// step in, matching the first dump (`target * rate`).
     pub(super) ease: [f32; 3],
+}
+
+/// One live Disruptor explosion halo: where the bolt ended, how long ago, and
+/// the eased scale so far (`DisruptorExplo_Update`, `0x0885a5bc`).
+///
+/// **View state, not `World` state**, like [`PlasmaBlast`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) struct DisruptorHaloBlast {
+    pub(super) position: Vec3,
+    pub(super) age: f32,
+    pub(super) ease: f32,
 }
 
 /// One blast's own transforms, tints and animation clock, for one frame.
@@ -290,6 +306,54 @@ impl Race {
         }
     }
 
+    /// Starts a Disruptor explosion halo at `position`, in the first free slot,
+    /// when the title authors one; dropped when the pool is full.
+    pub(crate) fn spawn_disruptor_halo(&mut self, position: Vec3) {
+        if self.view.disruptor_halo_law.is_none() {
+            return;
+        }
+        if let Some(slot) = self.view.disruptor_halos.iter().position(Option::is_none) {
+            self.view.disruptor_halos[slot] = Some(DisruptorHaloBlast {
+                position,
+                age: 0.0,
+                ease: 0.0,
+            });
+        }
+    }
+
+    /// Ages every live Disruptor halo one tick, steps its scale ease and
+    /// retires it at its law's life.
+    fn advance_disruptor_halos(&mut self, dt: f32) {
+        let Some(law) = self.view.disruptor_halo_law else {
+            return;
+        };
+        for slot in &mut self.view.disruptor_halos {
+            let Some(halo) = slot else { continue };
+            halo.age += dt;
+            halo.ease += (law.target - halo.ease) * law.rate;
+            if halo.age >= law.life {
+                *slot = None;
+            }
+        }
+    }
+
+    /// Each live Disruptor halo's matrix (the camera-facing frame the Plasma
+    /// halo takes, at the bolt's end, scaled by the ease) and grey tint
+    /// `1 - age / life`, in slot order.
+    #[must_use]
+    pub(crate) fn disruptor_halo_draws(
+        &self,
+        camera: Mat4,
+    ) -> [Option<(Mat4, f32)>; PLASMA_BLAST_SLOTS] {
+        let law = self.view.disruptor_halo_law;
+        std::array::from_fn(|slot| {
+            let (halo, law) = (self.view.disruptor_halos[slot]?, law?);
+            let matrix =
+                pulse_halo_frame(halo.position, camera) * Mat4::from_scale(Vec3::splat(halo.ease));
+            Some((matrix, (1.0 - halo.age / law.life).clamp(0.0, 1.0)))
+        })
+    }
+
     /// `(heading, up, right)` of the circuit at the sample nearest `position`:
     /// the tangent, the sample's own up (the negated down axis, made square to
     /// the heading) and `heading x up`. The axes the original's first
@@ -326,6 +390,7 @@ impl Race {
     /// one-tick order [`Race::advance_projectile_flares`] already runs a
     /// freshly-placed flare in.
     pub(crate) fn advance_plasma_blast_models(&mut self, dt: f32) {
+        self.advance_disruptor_halos(dt);
         let hd = self.view.hd_plasma_blast;
         // Looked up once, before the loop borrows `plasma_blasts` mutably -
         // `self.view.stage.play` needs `&mut self.view` too, and nothing

@@ -489,6 +489,7 @@ fn a_pure_race_loads_its_own_plasma_blast_trio() {
             ("plasma_halo", &blast.halo),
             ("plasma_hemisphere_noglow", &blast.hemisphere2),
             ("plasma_hemisphere", &blast.hemisphere1),
+            ("electric_halo2", &blast.disruptor_halo),
         ] {
             assert!(
                 model.is_some(),

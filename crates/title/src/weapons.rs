@@ -154,6 +154,9 @@ pub struct WeaponModels {
     /// executable, a different mechanism from Pulse's baked track
     /// (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`).
     pub plasma_blast_hd: Option<HdPlasmaBlast>,
+    /// Pure's Disruptor explosion halo, a camera-facing model on an eased scale
+    /// beside the `WO_DISRUPTOR_EXPLO` effect. `None` where there is no Disruptor.
+    pub disruptor_halo: Option<DisruptorHalo>,
     /// Pulse's Bomb detonation: a hemisphere and a shockwave, each eased by a
     /// per-tick `cur += (target - cur) * rate` scale ramp (`oag_raceplay::bomb_blast`).
     /// `None` on HD (see [`Self::bomb_blast_hd`]) and where the Bomb is unread.
@@ -306,6 +309,7 @@ impl WeaponModels {
         plasma_ball: None,
         plasma_blast_pulse: None,
         plasma_blast_hd: None,
+        disruptor_halo: None,
         bomb_blast_pulse: None,
         bomb_blast_hd: None,
         missile_blast_hd: None,
@@ -403,6 +407,24 @@ pub struct PlasmaBlastLaw {
     /// track's up, world units (`PlasmaBlast_Construct`'s `-3.5 x row1`).
     /// `0.0` where the offset is read but not yet applied.
     pub hemisphere_drop: f32,
+    /// Where these constants come from.
+    pub origin: crate::Origin,
+}
+
+/// Pure's Disruptor explosion halo - see [`WeaponModels::disruptor_halo`]
+/// (`DisruptorExplo_Update`, `0x0885a5bc`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DisruptorHalo {
+    /// `Data\Weapons\electric_halo2.vex`.
+    pub model: &'static str,
+    /// The eased scale's target: `cur += (target - cur) * rate` per 60 Hz tick
+    /// from `0`, as a multiple of the model's own extent.
+    pub target: f32,
+    /// The ease's rate per tick.
+    pub rate: f32,
+    /// The age the object retires at, seconds; its grey tint is `1 - age / life`
+    /// before that.
+    pub life: f32,
     /// Where these constants come from.
     pub origin: crate::Origin,
 }

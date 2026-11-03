@@ -67,22 +67,35 @@ pub(super) fn matrix(
 /// at `+0xd0` that the constructor's literal at `0x08858018` suggested.
 pub(crate) const SCALED_BOMB_SCALE: f32 = 0.4;
 
-/// The two spin rates `Bomb_Init` writes at `+0xd4` (`-4.0`) and `+0xd8`
-/// (`0.5`), radians per second of age. `Bomb_UpdateSpin` builds two turns from
-/// them about axes it reads from tables the decompile does not resolve; both
-/// are taken as the model's own up, so the pair sums to one yaw.
-/// **Chosen, not measured:** the axes and the final alignment to the floor
-/// normal (blend `0.4` at `+0xdc`) are not read.
-pub(crate) const SCALED_BOMB_SPIN_RATE: f32 = -4.0 + 0.5;
+/// Pure's two Bomb turns, read off `Bomb_UpdateSpin` (`0x088583d8`) at
+/// confidence 60 (`docs/ghidra/functions/psp-pure-usa/weapon-effects.md`,
+/// "Bomb tumble axes"): `-4.0` rad/s (`Bomb_Init`'s `+0xd4`) about
+/// `(0, cos 0.25, sin 0.25)`, the second row of a `0.25` rad turn about `X`
+/// (`+0xd0`), and `0.5` rad/s (`+0xd8`) about `+Y`. The row-versus-column
+/// convention, the order the two matrices multiply in and whether the model's
+/// own `Y` is the bomb's up are unread; the order here is the tilted turn
+/// outermost, **chosen, not measured**.
+pub(crate) const BOMB_TILT: f32 = 0.25;
+/// See [`BOMB_TILT`]: the tilted turn's rate, radians per second of age.
+pub(crate) const BOMB_TILTED_SPIN_RATE: f32 = -4.0;
+/// See [`BOMB_TILT`]: the turn about `+Y`'s rate, radians per second of age.
+pub(crate) const BOMB_UPRIGHT_SPIN_RATE: f32 = 0.5;
 
 /// A laid Bomb in a title whose Bomb is scaled and tumbling: the craft's up at
-/// the drop (standing in for the floor normal `Bomb_Init` probes), yawed by the
-/// combined spin, at [`SCALED_BOMB_SCALE`].
+/// the drop (standing in for the floor normal `Bomb_Init` probes), turned by
+/// [`BOMB_TILT`]'s two spins, at [`SCALED_BOMB_SCALE`]. The final alignment to
+/// the floor normal (blend `0.4` at `+0xdc`) is not read.
 pub(crate) fn scaled_bomb(position: Vec3, orientation: Quat, age: f32) -> Mat4 {
     let up = (orientation * Vec3::Y).try_normalize().unwrap_or(Vec3::Y);
     let basis = bomb_blast::bomb_blast_basis(position, up);
+    let turn = |rate: f32| (rate * age).rem_euclid(std::f32::consts::TAU);
+    let tilted_axis = Vec3::new(0.0, BOMB_TILT.cos(), BOMB_TILT.sin());
     basis
-        * Mat4::from_quat(Quat::from_rotation_y(SCALED_BOMB_SPIN_RATE * age))
+        * Mat4::from_quat(Quat::from_axis_angle(
+            tilted_axis,
+            turn(BOMB_TILTED_SPIN_RATE),
+        ))
+        * Mat4::from_quat(Quat::from_rotation_y(turn(BOMB_UPRIGHT_SPIN_RATE)))
         * Mat4::from_scale(Vec3::splat(SCALED_BOMB_SCALE))
 }
 
@@ -166,18 +179,28 @@ mod tests {
         assert!(matrix.determinant() > 0.0);
     }
 
-    /// A scaled Bomb is two-fifths of its authored size, upright on the craft's
-    /// up whatever its age, and turns with age.
+    /// A scaled Bomb is two-fifths of its authored size and tumbles about
+    /// Pure's read axes: at age `t` its local `Y` is the tilted spin's axis
+    /// carried by the `0.5` rad/s turn, so it leaves the drop's up.
     #[test]
-    fn a_scaled_bomb_is_two_fifths_size_and_turns() {
+    fn a_scaled_bomb_is_two_fifths_size_and_tumbles_about_the_read_axes() {
         let at = Vec3::new(1.0, 2.0, 3.0);
         let a = scaled_bomb(at, Quat::IDENTITY, 0.0);
         let b = scaled_bomb(at, Quat::IDENTITY, 0.5);
         for column in [a.x_axis, a.y_axis, a.z_axis] {
             assert!((column.truncate().length() - SCALED_BOMB_SCALE).abs() < 1e-5);
         }
-        assert!(a.y_axis.abs_diff_eq(b.y_axis, 1e-5));
+        assert!(!a.y_axis.abs_diff_eq(b.y_axis, 1e-3));
         assert!(!a.x_axis.abs_diff_eq(b.x_axis, 1e-3));
+        // The tilted axis is invariant under its own turn, so a model axis along it
+        // keeps its direction whatever the first spin does: at 0.5 s the turn is
+        // exactly `-4 * 0.5 = -2` rad about it.
+        let axis = Vec3::new(0.0, BOMB_TILT.cos(), BOMB_TILT.sin());
+        let r = Quat::from_axis_angle(axis, -2.0) * Quat::from_rotation_y(0.25);
+        let want = (r * Vec3::X) * SCALED_BOMB_SCALE;
+        let basis = bomb_blast::bomb_blast_basis(at, Vec3::Y);
+        let got = basis.inverse().transform_vector3(b.x_axis.truncate());
+        assert!(got.abs_diff_eq(want, 1e-4), "{got} vs {want}");
         assert!(a.w_axis.truncate().abs_diff_eq(at, 1e-5));
     }
 

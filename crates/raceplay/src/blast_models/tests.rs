@@ -379,3 +379,48 @@ fn a_pure_blast_lives_two_seconds_with_dropped_hemispheres() {
         0
     );
 }
+
+fn pure_halo_law() -> oag_title::weapons::DisruptorHalo {
+    oag_pure::TITLE
+        .weapon_models
+        .disruptor_halo
+        .expect("Pure's Disruptor halo")
+}
+
+/// Pure's Disruptor halo eases to `16` extents at rate `0.05`, fades its grey
+/// `1 - age`, faces the camera at the bolt's end and retires at 1.0 s; a title
+/// with no such halo spawns none (`DisruptorExplo_Update`, `0x0885a5bc`).
+#[test]
+fn a_disruptor_halo_eases_fades_and_retires_at_one_second() {
+    let mut race = race_with_a_grid();
+    race.spawn_disruptor_halo(Vec3::ZERO);
+    assert!(
+        race.view.disruptor_halos.iter().all(Option::is_none),
+        "no law, no halo"
+    );
+
+    race.view.disruptor_halo_law = Some(pure_halo_law());
+    let at = Vec3::new(4.0, 5.0, 6.0);
+    race.spawn_disruptor_halo(at);
+    for _ in 0..30 {
+        race.advance_plasma_blast_models(DT);
+    }
+    let (matrix, tint) = race
+        .disruptor_halo_draws(Mat4::IDENTITY)
+        .into_iter()
+        .flatten()
+        .next()
+        .expect("alive at 0.5 s");
+    let scale = 16.0 * (1.0 - 0.95_f32.powi(30));
+    assert!((matrix.x_axis.truncate().length() - scale).abs() < 0.01 * scale);
+    assert!((tint - 0.5).abs() < 0.02, "{tint}");
+    assert_eq!(matrix.w_axis.truncate(), at);
+    for _ in 0..31 {
+        race.advance_plasma_blast_models(DT);
+    }
+    assert!(
+        race.disruptor_halo_draws(Mat4::IDENTITY)
+            .iter()
+            .all(Option::is_none)
+    );
+}
