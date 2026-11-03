@@ -67,11 +67,14 @@ pub(crate) fn advance_one_flare(
         (Some(trigger), None) => {
             if let Some(effect) = handles.get(trigger).cloned() {
                 *playing = stage.attach(&effect, at, scale);
-                // `Plasma_Init` hands the head the firer's and then the bolt's
-                // matrix by pointer, so the root's arcs (flag `0x2`) ride it
-                // (`docs/ghidra/functions/psp-pulse-usa/plasma.md`, "the head's
-                // arcs ride the craft").
-                if let (Trigger::PlasmaFlare, Some(instance)) = (trigger, *playing) {
+                // `Plasma_Init` spawns the head with flag `0x10` and the craft's
+                // weapon node as its parent (`+0xbc`), whose world matrix
+                // `PsysNode_Update` reads every frame, so the root's arcs (flag
+                // `0x2`) ride the craft (`docs/ghidra/functions/psp-pulse-usa/plasma.md`,
+                // "the head's arcs ride the craft"). Pulse's PSP file only.
+                if let (Trigger::PlasmaFlare, Some(instance), true) =
+                    (trigger, *playing, effect.rides_owner_frame)
+                {
                     stage.set_rides_frame(instance, true);
                 }
             }

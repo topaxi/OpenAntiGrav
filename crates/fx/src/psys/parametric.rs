@@ -234,6 +234,7 @@ pub fn parse(
             field: None,
             view_depth: 0.0,
             roots,
+            rides_owner_frame: true,
             skipped_templates: 0,
         },
         axis: file.axis,

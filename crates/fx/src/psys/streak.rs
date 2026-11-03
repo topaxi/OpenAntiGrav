@@ -76,6 +76,7 @@ impl Effect {
     /// off Pulse's PSP `BOOT.BIN` alone, and Pure's is a different
     /// executable that ships sprites of its own.
     pub fn without_pulse_psp_draw(&mut self) {
+        self.rides_owner_frame = false;
         for spec in &mut self.emitters {
             spec.streak = StreakDraw::Procedural;
             spec.frames = super::FrameAdvance::Still;
