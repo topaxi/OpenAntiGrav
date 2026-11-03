@@ -287,7 +287,15 @@ crawls at about `5` and does not.
 Pure's pad is now the race's own driver for the player's craft (`Race::autopilot_wants`, as
 `--net-bot` flies). It still records real stick inputs, and its best lap is `2206` ticks on the
 held laws and `2234`-`2250` with the laws on. The tampered stick is still caught at tick `420`.
-Pulse, HD and 2048 keep the bare pad. The bare driver's pin is open for the driver lane.
+Pulse, HD and 2048 keep the bare pad.
+
+**The pin was the test's pad, not the driver** (2026-11-03, `pure-ai-measured-laws`). The bare
+pad started at line index `0` and its search is windowed round its last index. Vineta K's grid
+sits near sample `817`, so the pad aimed at a sample about `830` units away for the whole run,
+with its steer near zero. Seated with a whole-line search first, as `Race::start` seats each
+opponent, the same bare pad laps Pure in 7,200 ticks: three laps, `78` wall ticks.
+`replay_ground_truth::a_bare_pad_starts_on_the_line_where_the_grid_is_far_from_sample_zero` holds
+it. Pure keeps the race's own driver as its pad, so the file also records that pad.
 
 ## The inertia frame is Pulse's world axes (2026-10-21, `deviations-to-original`)
 
@@ -354,6 +362,46 @@ held bank-to-yaw (`k = 7`) are gone once the world-axis frame is on with it. The
 longer (p `0.02`-`0.05`), above the `0.01` hold line; whether that is the physics or our driver on
 it was not separated. So no driver change for Pure. Left open: the Ace grinding tail (two seeds at
 `eps = -1e-5`, one in the base too) and the lap split.
+
+## Our driver on Pure's laws, re-measured (2026-11-03, `pure-ai-measured-laws`)
+
+The same bar as [above](#the-noise-bar-on-the-combined-state-2026-10-21-ai-rejudge-after-switches)
+on today's tree: twelve torques a side, eight seeds, `races_others`, field alone. The laws
+were not touched. Each base is today's tree with one law undone by a scratch patch.
+
+**Ace pays nothing for bank-to-yaw `50` now.** Base: gain `30`. Law: today's `50`.
+
+| Metric, Ace | Median base -> law | Tail |
+| --- | --- | --- |
+| Race walls | `1853 -> 1814` (p `0.88`) | `k = 1` |
+| Wrecks | `2 -> 1.5` | none |
+| Laps | `44.7 -> 43.9` s (better) | none |
+| Per-lap shield | `75.1 -> 74.3` (p `0.19`) | `k = 3` (`P 0.11`) |
+| End-of-run shield | `66.7 -> 65.8` (p `0.24`) | `k = 1` |
+| Sweep A (ours) / B (the original's driver) | `156 -> 149.5` (p `0.55`) / `89.5 -> 82.5` | `k = 1` / `k = 1` |
+
+Unperturbed: walls `2110 -> 1745`, wrecks `3 -> 1`, per-lap shield `73.2 -> 75.0`, end-of-run
+shield `61.5 -> 67.9`. The `1899` walls the bank-to-yaw note held against are met. The note's
+`2058` was on HD's rotated inertia frame, and the world-axis frame has since replaced it.
+
+**Novice paid for the speed pair, and the cost was our driver's mistakes.** Base: the speed pair
+undone (engine doubling back on, drag `-0.005`). Law: today's pair.
+
+- Without a driver change: walls `562 -> 752` (`k = 10`), end-of-run shield `90.8 -> 88.6`
+  (`k = 8`), per-lap shield `92.5 -> 90.8` (`k = 5`). Sweep A (ours) `54 -> 74` (p `0.29`);
+  sweep B (the original's driver, not tuned here) `16.5 -> 65.5` (`k = 10`).
+- The whole gap was in mistake recovery. On Pure's weaker brake, a missed braking point next
+  to a wall had no recovery.
+- The driver no longer misses a braking point into a tight corner. With that rule the field
+  is back inside the bar against the pair-undone base: walls `598` median (p `0.41`), end
+  shield `89.2` (p `0.053`). Unperturbed: walls `508`, end shield `90.8`.
+- The method, the ablation and Pulse's side of the change are in
+  [ai.md](../gameplay/ai.md#mistakes-are-never-into-a-tight-corner-2026-11-03-pure-ai-measured-laws).
+
+The pitch gate is a per-title craft law (`CraftLaws::pitch_gate`, Pure `measured(false)`).
+`pure_race_ground_truth::pure_crafts_fly_without_the_pitch_gate_and_pulse_crafts_with_it`
+checks every seated Pure craft is ungated and every Pulse one gated, at seating and after a
+reset.
 
 ## Cross-title
 

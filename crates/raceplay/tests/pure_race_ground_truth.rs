@@ -547,3 +547,61 @@ fn a_pure_race_loads_the_effects_its_weapons_play() {
         }
     }
 }
+
+/// The pitch-input gate is a per-title craft law (`oag_title::craft_laws::CraftLaws::pitch_gate`):
+/// Pure's `Ship_UpdatePitch` (`0x0892caf8`) never calls `Ship_TestPitchAlignment`, so every Pure
+/// craft flies ungated, while Pulse (no `CraftLaws`) runs the gate (`docs/physics/pure-physics.md`,
+/// "Pitch is three code literals"; `docs/physics/airborne-ground-truth.md`). Checked on every slot
+/// of a full field at seating, which is when the speed plan simulates the craft, and again after
+/// a reset, which must keep the title's laws. Fails if the flag stops reaching the craft or
+/// either title's value moves.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn pure_crafts_fly_without_the_pitch_gate_and_pulse_crafts_with_it() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut sources: Vec<(&str, PathBuf, bool)> = images()
+        .into_iter()
+        .map(|(label, image)| (label, image, false))
+        .collect();
+    let pulse = root.join("data/images/pulse-psp-usa.chd");
+    if pulse.exists() {
+        sources.push(("pulse-psp-usa", pulse, true));
+    } else {
+        assert!(
+            std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+            "OAG_REQUIRE_GAME_DATA is set but {} is missing",
+            pulse.display()
+        );
+    }
+    for (label, image, gated) in sources {
+        let loaded = race::load(&race::Options {
+            source: image.display().to_string(),
+            class: "VENOM".to_string(),
+            mode: oag_race::Mode::SingleRace,
+            weapons_override: Some(false),
+            ..race::Options::default()
+        })
+        .unwrap_or_else(|e| panic!("{label}: loading its default race: {e:#}"));
+        let mut race = race::Race::start(loaded.setup);
+        let count = race.sim.world.ship_count as usize;
+        assert!(count > 1, "{label}: a single race seats a field");
+        for slot in 0..count {
+            assert_eq!(
+                race.sim.world.ships[slot].physics.pitch_gate, gated,
+                "{label}: slot {slot} pitch gate at seating"
+            );
+        }
+        for slot in 0..count {
+            let body = &race.sim.world.ships[slot].physics.body;
+            let pose = oag_gameplay::spawn::Pose {
+                position: body.position,
+                orientation: body.orientation,
+            };
+            race.sim.world.ships[slot].place_at(pose);
+            assert_eq!(
+                race.sim.world.ships[slot].physics.pitch_gate, gated,
+                "{label}: slot {slot} pitch gate after a reset"
+            );
+        }
+    }
+}
