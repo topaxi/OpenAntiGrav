@@ -895,3 +895,29 @@ fn the_own_flag_rides_bit_15_of_the_argument() {
     assert_eq!(hex(&effect.encode()), "060305800000000000000000");
     assert_eq!(Command::decode(&effect.encode()), Ok(effect));
 }
+
+#[test]
+fn the_kind_table_agrees_with_the_commands() {
+    for (i, kind) in CommandKind::ALL.iter().enumerate() {
+        assert_eq!(CommandKind::from_code(kind.code()), Some(*kind));
+        assert!(
+            CommandKind::ALL[..i]
+                .iter()
+                .all(|k| k.code() != kind.code()),
+            "{} repeats a code",
+            kind.name()
+        );
+    }
+    assert_eq!(CommandKind::from_code(0), None);
+    assert_eq!(CommandKind::from_code(4), None);
+    for command in every_command() {
+        let kind = command.kind();
+        assert_eq!(command.encode()[COMMAND_KIND], kind.code());
+        assert_eq!(
+            command.slot().is_none(),
+            kind.race_wide(),
+            "{}",
+            kind.name()
+        );
+    }
+}
