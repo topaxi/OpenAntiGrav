@@ -70,9 +70,9 @@ fn frame(source: &Path, scratch: &Path, name: &str, mode: &str, hold: &str) -> V
         .args(["--mode", mode, "--hold", hold, "--ticks", "240"])
         .arg("--screenshot")
         .arg(&out)
-        .env("XDG_CONFIG_HOME", scratch.join("config"))
-        .env("XDG_DATA_HOME", scratch.join("data"))
-        .env("XDG_STATE_HOME", scratch.join("state"))
+        .env("XDG_CONFIG_HOME", scratch.join(format!("{name}-config")))
+        .env("XDG_DATA_HOME", scratch.join(format!("{name}-data")))
+        .env("XDG_STATE_HOME", scratch.join(format!("{name}-state")))
         .output()
         .expect("running oag-game");
     assert!(run.status.success(), "oag-game {name}");
@@ -109,10 +109,13 @@ fn columns(brake: &[u8], rest: &[u8]) -> (usize, usize, usize) {
 }
 
 fn check(source: &Path, tag: &str, mode: &str) {
-    let scratch = std::env::temp_dir().join(format!("oag-zone-flaps-{tag}-{mode}"));
+    // Per checkout (not the shared /tmp), so two checkouts' runs never write one PNG.
+    let scratch = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("zone-flaps-{tag}-{mode}"));
     std::fs::create_dir_all(&scratch).unwrap();
     // The two frames are independent runs of the game, each a full race
     // load; side by side they cost one load's wall clock rather than two.
+    // Each has its own profile directories: two processes sharing one settings
+    // file read and rewrite it under each other.
     let (rest, brake) = std::thread::scope(|scope| {
         let rest = scope.spawn(|| frame(source, &scratch, &format!("{mode}-rest"), mode, "cross"));
         let brake = frame(
