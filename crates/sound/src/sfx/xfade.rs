@@ -722,6 +722,7 @@ impl Craft {
                     if audible {
                         mixer.set_gain(id, gain);
                         mixer.set_pan(id, pan);
+                        mixer.set_front(id, placed.map_or(1.0, |p| p.front));
                     } else {
                         mixer.stop(id);
                         *slot = None;
@@ -735,6 +736,7 @@ impl Craft {
                     gain,
                     pitch: bend_ratio(level.bend, sound.down, sound.up),
                     pan,
+                    front: placed.map_or(1.0, |p| p.front),
                     ..Play::looping(
                         Arc::clone(&sound.sound),
                         self.bus.unwrap_or_else(|| Cue::Engine.bus()),

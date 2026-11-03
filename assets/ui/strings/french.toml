@@ -228,6 +228,7 @@ OAG_AUDIO_SFX_VOLUME = { text = "VOLUME DES EFFETS", human = false }
 OAG_AUDIO_ANNOUNCER_VOLUME = { text = "VOLUME DU COMMENTATEUR", human = false }
 OAG_AUDIO_MASTER_VOLUME = { text = "VOLUME GÉNÉRAL", human = false }
 OAG_AUDIO_MUSIC_SOURCE = { text = "SOURCE MUSICALE", human = false }
+OAG_AUDIO_SPATIAL_AUDIO = { text = "AUDIO SPATIAL", human = false }
 OAG_AUDIO_MUSIC = { text = "MUSIQUE", human = false }
 OAG_MUSIC_PAGE_TITLE = { text = "MUSIQUE", human = false }
 OAG_MUSIC_SOURCE_ROW = { text = "SOURCE", human = false }

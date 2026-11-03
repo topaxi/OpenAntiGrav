@@ -2980,6 +2980,7 @@ dependencies = [
  "oag-formats",
  "oag-thread",
  "rtrb",
+ "serde",
  "wasm-bindgen",
 ]
 

@@ -413,6 +413,9 @@ pub struct Where {
     pub gain: f32,
     /// The emitter's pan, or [`None`] for a dry cue.
     pub pan: Option<f32>,
+    /// The emitter's place along the listener's forward axis, `1.0` for a dry
+    /// cue (see [`oag_audio::Play::front`]).
+    pub front: f32,
 }
 
 impl Where {
@@ -420,6 +423,7 @@ impl Where {
     pub const DRY: Self = Self {
         gain: 1.0,
         pan: None,
+        front: 1.0,
     };
 }
 
@@ -466,6 +470,7 @@ pub fn start(mixer: &mut Mixer, voices: &[CueVoice], bus: Bus, at: Where) -> Vec
         let Some(id) = mixer.play(Play {
             gain: at.gain,
             pan: pan_for(at, voice.angle, any_off_centre, voice.rear_edge),
+            front: at.front,
             pitch: voice.pitch,
             ..base
         }) else {
@@ -553,6 +558,7 @@ mod tests {
         let at = Where {
             gain: 0.5,
             pan: Some(0.5),
+            front: 1.0,
         };
         assert_eq!(pan_for(at, 0, false, false), Some(0.5));
         // 30 degrees from an emitter at 30 degrees is 60.

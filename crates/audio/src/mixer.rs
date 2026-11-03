@@ -26,6 +26,8 @@
 
 use std::sync::Arc;
 
+use crate::spatial::SpatialMode;
+
 /// Output channel count. Everything is mixed to interleaved stereo.
 pub const CHANNELS: usize = 2;
 
@@ -292,7 +294,7 @@ pub struct VoiceId {
     generation: u32,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 struct Voice {
     sound: Option<Arc<Sound>>,
     bus: Option<Bus>,
@@ -305,6 +307,10 @@ struct Voice {
     /// The recovered stereo position, or [`None`] for a voice that has none.
     /// See [`Play::pan`].
     pan: Option<f32>,
+    /// See [`Play::front`].
+    front: f32,
+    /// One-pole low-pass state per ear for [`SpatialMode::RearCue`].
+    rear_state: [f32; CHANNELS],
     looping: bool,
     generation: u32,
     /// Output frames left of the fade a stopped voice goes out on, or `None`
@@ -313,6 +319,25 @@ struct Voice {
     /// Output frames of silence left before the voice starts. See
     /// [`Mixer::delay_start`].
     delay: u32,
+}
+
+impl Default for Voice {
+    fn default() -> Self {
+        Self {
+            sound: None,
+            bus: None,
+            position: 0.0,
+            pitch: 0.0,
+            gain: 0.0,
+            pan: None,
+            front: 1.0,
+            rear_state: [0.0; CHANNELS],
+            looping: false,
+            generation: 0,
+            release: None,
+            delay: 0,
+        }
+    }
 }
 
 impl Voice {
@@ -356,6 +381,10 @@ pub struct Play {
     /// through the panner at zero would come out quieter than it is meant to
     /// be. A voice whose position was never recovered is left alone.
     pub pan: Option<f32>,
+    /// How far ahead of the listener the voice is: `+1.0` dead ahead, `-1.0`
+    /// dead behind. Read only for a voice with a [`Self::pan`], and only when
+    /// the mixer's [`SpatialMode`] is not `Original`.
+    pub front: f32,
     /// Whether to restart at the end instead of stopping.
     pub looping: bool,
 }
@@ -370,6 +399,7 @@ impl Play {
             gain: 1.0,
             pitch: 1.0,
             pan: None,
+            front: 1.0,
             looping: false,
         }
     }
@@ -391,6 +421,7 @@ pub struct Mixer {
     bus_gain: [f32; Bus::COUNT],
     master_gain: f32,
     sample_rate: u32,
+    spatial: SpatialMode,
     generation: u32,
     /// Voices refused because every slot was busy, for the perf overlay and
     /// for tests. Silent starvation is the failure mode worth being able to
@@ -420,6 +451,7 @@ impl Mixer {
             bus_gain: [1.0; Bus::COUNT],
             master_gain: 1.0,
             sample_rate: sample_rate.max(1),
+            spatial: SpatialMode::Original,
             generation: 0,
             starved: 0,
             clipped: 0,
@@ -529,6 +561,8 @@ impl Mixer {
             pitch: play.pitch,
             gain: (play.gain * pan_volume_gain).max(0.0),
             pan: play.pan,
+            front: play.front,
+            rear_state: [0.0; CHANNELS],
             looping: play.looping,
             generation,
             release: None,
@@ -614,6 +648,25 @@ impl Mixer {
         if let Some(voice) = self.voice_mut(id) {
             voice.pan = pan;
         }
+    }
+
+    /// Where a live voice is along the listener's forward axis. See
+    /// [`Play::front`].
+    pub fn set_front(&mut self, id: VoiceId, front: f32) {
+        if let Some(voice) = self.voice_mut(id) {
+            voice.front = front;
+        }
+    }
+
+    /// Chooses how placed voices are rendered. See [`SpatialMode`].
+    pub fn set_spatial_mode(&mut self, mode: SpatialMode) {
+        self.spatial = mode;
+    }
+
+    /// The current [`SpatialMode`].
+    #[must_use]
+    pub fn spatial_mode(&self) -> SpatialMode {
+        self.spatial
     }
 
     /// Whether the handle still addresses a sounding voice.
@@ -743,6 +796,7 @@ impl Mixer {
         let master = self.master_gain;
         let bus_gain = self.bus_gain;
         let rate = f64::from(self.sample_rate);
+        let spatial = self.spatial;
 
         for voice in &mut self.voices {
             let Some(sound) = voice.sound.clone() else {
@@ -757,6 +811,12 @@ impl Mixer {
             // enough that stepping it here would model an interpolator we have
             // not read.
             let channel_gain = voice.pan.map_or([1.0; CHANNELS], crate::spatial::pan_gains);
+            let (rear_coeff, rear_gain) = if spatial == SpatialMode::RearCue && voice.pan.is_some()
+            {
+                rear_cue(voice.front, self.sample_rate)
+            } else {
+                (1.0, 1.0)
+            };
             let step = f64::from(sound.sample_rate()) / rate * f64::from(voice.pitch);
             let frames = sound.frames();
 
@@ -832,11 +892,15 @@ impl Mixer {
                     }
                 };
                 for (c, sample) in chunk.iter_mut().enumerate() {
-                    *sample += (a[c] + (b[c] - a[c]) * frac)
-                        * gain
-                        * channel_gain[c]
-                        * fade
-                        * closing_fade;
+                    let mut heard = a[c] + (b[c] - a[c]) * frac;
+                    if rear_coeff < 1.0 {
+                        let state = &mut voice.rear_state[c];
+                        *state += rear_coeff * (heard - *state);
+                        heard = *state;
+                    } else {
+                        voice.rear_state[c] = heard;
+                    }
+                    *sample += heard * rear_gain * gain * channel_gain[c] * fade * closing_fade;
                 }
                 voice.position += step;
             }
@@ -876,6 +940,32 @@ impl Mixer {
         frames
     }
 }
+
+/// Low-pass coefficient and gain for a voice `front` of the listener under
+/// [`SpatialMode::RearCue`]: `(1.0, 1.0)` ahead (the filter is then a bit-exact
+/// pass), easing to the rear values dead behind.
+///
+/// **Chosen, not measured**: the original cannot tell front from back
+/// (`docs/ghidra/functions/psp-pulse-usa/positional-audio.md`, "The angle loses
+/// front from back"). Dead behind: one pole at [`REAR_CUTOFF_HZ`] and
+/// [`REAR_GAIN`], both eased linearly in the rear half only.
+fn rear_cue(front: f32, sample_rate: u32) -> (f32, f32) {
+    let behind = (-front).clamp(0.0, 1.0);
+    if behind <= 0.0 {
+        return (1.0, 1.0);
+    }
+    let full = 1.0 - (-std::f32::consts::TAU * REAR_CUTOFF_HZ / sample_rate as f32).exp();
+    (
+        1.0 + behind * (full - 1.0),
+        1.0 + behind * (REAR_GAIN - 1.0),
+    )
+}
+
+/// Cutoff of the rear-cue low-pass for a voice dead behind the listener.
+pub const REAR_CUTOFF_HZ: f32 = 2_500.0;
+
+/// Gain of a voice dead behind the listener under the rear cue.
+pub const REAR_GAIN: f32 = 0.8;
 
 #[cfg(test)]
 mod tests;

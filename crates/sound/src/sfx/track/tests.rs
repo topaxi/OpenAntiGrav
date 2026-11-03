@@ -121,6 +121,7 @@ fn a_cone_is_placed_after_the_omni_nodes_and_only_inside_its_angle() {
     let listener = oag_audio::Listener {
         position: [0.0, 0.0, -10.0],
         right: [1.0, 0.0, 0.0],
+        forward: [0.0, 0.0, -1.0],
     };
     let emitters = TrackEmitters {
         omni: vec![omni([0.0, 0.0, 0.0], 5.0)],
@@ -146,6 +147,7 @@ fn a_cone_outside_its_half_angle_is_silent_rather_than_dim() {
     let listener = oag_audio::Listener {
         position: [10.0, 0.0, 0.0],
         right: [0.0, 0.0, 1.0],
+        forward: [1.0, 0.0, 0.0],
     };
     let emitters = TrackEmitters {
         omni: Vec::new(),
@@ -234,6 +236,7 @@ fn a_looping_cue_keeps_one_voice_for_as_long_as_it_is_in_range() {
     let far = oag_audio::Listener {
         position: [1000.0, 0.0, 0.0],
         right: [1.0, 0.0, 0.0],
+        forward: [0.0, 0.0, -1.0],
     };
     ambience.tick(&mut mixer, &emitters, &far, &mut rng, true, 1.0 / 60.0);
     assert_eq!(ambience.playing(&mixer), 0, "the latch did not close it");

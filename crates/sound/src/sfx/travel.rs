@@ -90,6 +90,7 @@ impl TravelVoices {
                     self.voices[slot] = mixer.play(Play {
                         gain,
                         pan,
+                        front: placed.map_or(1.0, |p| p.front),
                         ..Play::looping(sound, cue.bus())
                     });
                 }
@@ -107,6 +108,7 @@ impl TravelVoices {
                 let (gain, pan) = placed.map_or((0.0, None), |p| (p.gain, Some(p.pan)));
                 mixer.set_gain(id, gain);
                 mixer.set_pan(id, pan);
+                mixer.set_front(id, placed.map_or(1.0, |p| p.front));
             }
             // The pool reclaimed the voice before the bolt ended (starved, not
             // stopped): forget the stale handle so a later tick does not stop

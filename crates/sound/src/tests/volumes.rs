@@ -29,6 +29,25 @@ fn full_volume_is_unattenuated() {
 }
 
 #[test]
+fn the_spatial_audio_setting_reaches_the_mixer_and_defaults_to_the_rear_cue() {
+    use oag_audio::SpatialMode;
+    let settings = crate::settings::Settings::default();
+    assert_eq!(settings.spatial_audio, SpatialMode::RearCue);
+    let audio = Audio::open(&settings, None, None, oag_audio::MIN_BUFFER, false);
+    audio
+        .output()
+        .with_mixer(|mixer| assert_eq!(mixer.spatial_mode(), SpatialMode::RearCue));
+    let original = crate::settings::Settings {
+        spatial_audio: SpatialMode::Original,
+        ..Default::default()
+    };
+    audio.apply(&original);
+    audio
+        .output()
+        .with_mixer(|mixer| assert_eq!(mixer.spatial_mode(), SpatialMode::Original));
+}
+
+#[test]
 fn every_settings_volume_reaches_the_bus_it_names() {
     // The four rows against the four gains in one pass: a row wired to the wrong
     // bus is inaudible by ear when three are at 100 (ADR-0027).

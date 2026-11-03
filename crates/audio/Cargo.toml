@@ -17,6 +17,7 @@ oag-core.workspace = true
 oag-formats.workspace = true
 oag-thread.workspace = true
 anyhow.workspace = true
+serde.workspace = true
 log.workspace = true
 
 # The device layer only. Voices, mixing, pitch and volume are this crate's job,

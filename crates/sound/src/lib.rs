@@ -752,6 +752,7 @@ impl Audio {
             // Group volumes first, then the master, as the original's chain does.
             // See `settings::Audio::master_volume`.
             mixer.set_master_gain(settings.master_volume.gain());
+            mixer.set_spatial_mode(settings.spatial_audio);
         });
     }
 
