@@ -72,6 +72,7 @@ impl Race {
             &stats,
             &self.sim.class,
             slot as u8,
+            ship.weapon_counts.rockets,
         ) else {
             return false;
         };
@@ -301,6 +302,9 @@ impl Race {
         controls: &oag_physics::ShipControls,
         field: &oag_ai::Field,
     ) {
+        if !self.may_use_pickup(slot) {
+            return;
+        }
         // Before anything returns: it advances this craft's weapon-AI clocks.
         let decision = self.opponent_decides(slot, field);
         let fires = decision == oag_ai::weapon_ai::Decision::Fire;
@@ -563,7 +567,9 @@ impl Race {
         let Some(weapons) = self.sim.weapons.as_ref() else {
             return false;
         };
-        let Some(drop) = oag_weapons::projectile::mine::Drop::for_weapon(weapon, weapons) else {
+        let counts = self.sim.world.ships[slot].weapon_counts;
+        let Some(drop) = oag_weapons::projectile::mine::Drop::for_weapon(weapon, weapons, counts)
+        else {
             // The table authors no block for this weapon, so nothing to lay.
             // Falls through to absorb, which is the right answer for a pickup
             // that cannot be spent.

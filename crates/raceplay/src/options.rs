@@ -627,6 +627,12 @@ pub struct Setup {
     /// the player, on every title; `None`, or an empty list, is the player's [`Self::handling`], as every opponent
     /// flew before.
     pub opponent_handling: Vec<Option<Handling>>,
+    /// The player's rocket and mine counts, from the same `handlingstats.xml` as
+    /// [`Self::handling`] (`oag_weapons::counts`).
+    pub weapon_counts: oag_weapons::counts::WeaponCounts,
+    /// Each grid slot's own counts, from the file [`Self::opponent_handling`] read; `None`,
+    /// or an empty list, is the player's [`Self::weapon_counts`].
+    pub opponent_weapon_counts: Vec<Option<oag_weapons::counts::WeaponCounts>>,
     /// How far and how fast the airbrake flaps move, from the same document.
     ///
     /// Separate from [`Self::handling`] because it is per *team* rather than

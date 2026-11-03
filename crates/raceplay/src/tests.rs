@@ -31,6 +31,7 @@ mod cue_endings;
 mod cues;
 mod damage_fx;
 mod destroy_camera;
+mod destroyed_fire;
 mod distance_reset;
 mod eliminator;
 mod energy_bar_delay;
@@ -292,6 +293,8 @@ fn setup(handling: Handling) -> Setup {
         collision: CollisionWorld::new(),
         handling,
         opponent_handling: Vec::new(),
+        weapon_counts: oag_weapons::counts::WeaponCounts::default(),
+        opponent_weapon_counts: Vec::new(),
         // Round numbers, chosen to make the geometry readable. None of these
         // claims to be the game's; a real race reads all seven off the disc.
         chase: ChaseParams {

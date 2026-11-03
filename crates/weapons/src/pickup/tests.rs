@@ -426,7 +426,7 @@ fn every_rear_weapon_can_be_laid_and_tripped() {
     let radii = TriggerRadii::from_table(Some(&table));
 
     for &weapon in IMPLEMENTED {
-        let laid = Drop::for_weapon(weapon, &table);
+        let laid = Drop::for_weapon(weapon, &table, Default::default());
         let trippable = radii.get(weapon);
         assert_eq!(
             laid.is_some(),

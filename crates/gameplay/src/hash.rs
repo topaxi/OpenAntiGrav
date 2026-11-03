@@ -128,6 +128,7 @@ fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
     let Ship {
         physics,
         handling,
+        weapon_counts,
         segment,
         pickup,
         driver,
@@ -150,6 +151,8 @@ fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
     // the simulation did. Named in the destructure so this is a decision rather
     // than an omission.
     let _ = handling;
+    // `weapon_counts` is load-time data from the same file, constant through the race.
+    let _ = weapon_counts;
     // `muzzle` is the same kind of thing: the hull's locator, loaded once and
     // constant through the race. Named for the same reason.
     let _ = muzzle;

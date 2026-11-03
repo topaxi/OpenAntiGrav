@@ -85,6 +85,7 @@ fn a_volley_from_the_originals_pose_is_laid_at_the_craft_and_cruises_at_the_clas
         &stats,
         &class,
         0,
+        world.ships[0].weapon_counts.rockets,
     )
     .expect("Venom is authored");
     assert_eq!(fired, projectile::ROCKET_SHOTS);

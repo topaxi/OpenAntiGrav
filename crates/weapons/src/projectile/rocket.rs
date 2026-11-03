@@ -1,4 +1,4 @@
-//! The Rocket: three at once, fanned by the angle its own `<Stats>` authors.
+//! The Rocket: up to three at once, fanned by the angle its own `<Stats>` authors.
 //!
 //! Split from `projectile.rs` under the 1,000-line rule, like [`super::missile`]
 //! and [`super::mine`]. The flight model stays in [`super::Projectiles::advance`]:
@@ -10,13 +10,14 @@ use oag_tables::weapons::RocketStats;
 
 use super::KMH_PER_UNIT_PER_SECOND;
 
-/// How many rockets one press puts in the air.
+/// How many rockets a press puts in the air at most, and the volley of a craft that
+/// authors no count ([`crate::counts::WeaponCounts`]).
 ///
 /// **Recovered, confidence 88.** `Weapon_FireRocket` (`0x0886e104`) makes three
 /// calls to one spawn helper, no timer between them: the craft's matrix, rotated
 /// `+spread`, rotated `-spread`. See
 /// `docs/ghidra/functions/psp-pulse-usa/weapon-fire.md`.
-pub const ROCKET_SHOTS: usize = 3;
+pub const ROCKET_SHOTS: usize = crate::counts::MAX_ROCKETS as usize;
 
 /// How long a rocket that hits nothing stays in the air, in seconds.
 ///
@@ -41,11 +42,28 @@ pub const LIFETIME_SECONDS: f32 = 5.0;
 /// It is [`oag_physics::hover::TARGET_GLOBAL_SCALE`], the same global.
 pub const LAUNCH_SPEED_SCALE: f32 = oag_physics::hover::TARGET_GLOBAL_SCALE;
 
+/// One press's rockets: `(position, velocity)` pairs, as many as the craft's count says.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Volley {
+    shots: [(Vec3, Vec3); ROCKET_SHOTS],
+    len: usize,
+}
+
+impl core::ops::Deref for Volley {
+    type Target = [(Vec3, Vec3)];
+
+    fn deref(&self) -> &Self::Target {
+        &self.shots[..self.len]
+    }
+}
+
 /// Where a craft launches its rockets from, and how fast.
 ///
-/// Returns [`ROCKET_SHOTS`] `(position, velocity)` pairs in the original's order
-/// (straight, `+spread`, `-spread`): it decides each projectile's slot, and the
-/// slot is hashed state.
+/// Returns `count` `(position, velocity)` pairs (`count` is clamped to
+/// `1..=`[`ROCKET_SHOTS`]). Three are the original's order (straight, `+spread`,
+/// `-spread`): it decides each projectile's slot, and the slot is hashed state. Two are
+/// `+spread` and `-spread`, one is straight: **chosen, not measured**, the centred
+/// subsets of the three; the executable's loop over a count below three is unread.
 ///
 /// # What is recovered here, and what is not
 ///
@@ -82,11 +100,7 @@ pub const LAUNCH_SPEED_SCALE: f32 = oag_physics::hover::TARGET_GLOBAL_SCALE;
 /// The conversion is at the call site, not in [`RocketStats::speed_for`],
 /// mirroring the original.
 #[must_use]
-pub fn launch(
-    state: &ShipState,
-    stats: &RocketStats,
-    class: &str,
-) -> Option<[(Vec3, Vec3); ROCKET_SHOTS]> {
+pub fn launch(state: &ShipState, stats: &RocketStats, class: &str, count: u8) -> Option<Volley> {
     let forward = state.body.forward();
     let up = state.body.up();
     // The craft's own position, shared by all three (`Rocket_Init` places the
@@ -96,10 +110,20 @@ pub fn launch(
 
     // The original's order. A zero `spread` collapses all three onto one ray: a
     // file authoring no fan, not a broken weapon.
-    Some([0.0, stats.spread, -stats.spread].map(|angle| {
+    let angles = match count.clamp(1, ROCKET_SHOTS as u8) {
+        1 => &[0.0][..],
+        2 => &[stats.spread, -stats.spread][..],
+        _ => &[0.0, stats.spread, -stats.spread][..],
+    };
+    let mut volley = Volley {
+        shots: [(origin, Vec3::ZERO); ROCKET_SHOTS],
+        len: angles.len(),
+    };
+    for (shot, &angle) in volley.shots.iter_mut().zip(angles) {
         let direction = oag_core::math::quat_from_axis_angle(up, angle) * forward;
-        (origin, direction * speed)
-    }))
+        *shot = (origin, direction * speed);
+    }
+    Some(volley)
 }
 
 /// Puts a volley in the air, each rocket carrying the class speed it is
@@ -120,11 +144,12 @@ pub fn fire(
     stats: &RocketStats,
     class: &str,
     owner: u8,
+    count: u8,
 ) -> Option<usize> {
     let class_kmh = stats.speed_for_named(class)?;
-    let shots = launch(state, stats, class)?;
+    let shots = launch(state, stats, class, count)?;
     let mut fired = 0;
-    for (position, velocity) in shots {
+    for &(position, velocity) in &*shots {
         if projectiles.spawn_riding(
             oag_tables::weapons::Weapon::Rocket,
             position,

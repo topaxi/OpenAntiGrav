@@ -194,6 +194,48 @@ fn a_fired_plasma_puts_exactly_one_projectile_in_the_air() {
     );
 }
 
+/// A craft whose stats author one rocket puts one in the air, not three: the count is the
+/// craft's own (`Ship::weapon_counts`), read where the press spawns the volley. Drops with
+/// the wiring, because the default is three.
+#[test]
+fn a_craft_with_one_rocket_fires_one() {
+    let mut race =
+        race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_rocket_table());
+    race.sim.world.ships[0].weapon_counts =
+        oag_weapons::counts::WeaponCounts::from_authored(Some(1.0), None);
+    let mut buttons = Buttons::new();
+
+    race.tick(&PlayerInputs::single(buttons.tick(0)));
+    assert_eq!(
+        race.ship_pickup(),
+        Some(oag_tables::weapons::Weapon::Rocket)
+    );
+    race.tick(&PlayerInputs::single(buttons.tick(SQUARE)));
+    assert_eq!(race.sim.world.projectiles.live(), 1);
+}
+
+/// A craft whose stats author three mines lays three, not the default five.
+#[test]
+fn a_craft_with_three_mines_lays_three() {
+    let mut race = race_with_a_grid();
+    race.sim.weapons = Some(one_mine_table());
+    race.sim.world.ships[0].weapon_counts =
+        oag_weapons::counts::WeaponCounts::from_authored(None, Some(3.0));
+    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Mine);
+    let mut buttons = Buttons::new();
+    let mut laid = 0;
+    race.tick(&PlayerInputs::single(buttons.tick(SQUARE)));
+    for _ in 0..120 {
+        laid += race
+            .drain_cues()
+            .iter()
+            .filter(|e| e.cue == oag_gameplay::cue::Cue::MineLaunch)
+            .count();
+        race.tick(&PlayerInputs::single(buttons.tick(0)));
+    }
+    assert_eq!(laid, 3);
+}
+
 /// Firing a Rocket puts **three** in the air at once, ahead of the craft,
 /// at the class's own speed - and spends the pickup.
 ///

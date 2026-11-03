@@ -449,6 +449,36 @@ impl Tilt {
     }
 }
 
+/// `<BespokeStats><Weapons number_of_rockets number_of_mines .../></BespokeStats>`: the craft's
+/// own weapon counts.
+///
+/// 2048 and Omega author it per craft (Agility 2 rockets and 4 mines, Speed 1 and 3); Pulse,
+/// Pure and HD do not (their executables carry neither attribute string). The values are
+/// kept as written: the executable truncates and clamps them
+/// (`oag_weapons::pickup::WeaponCounts::from_authored`), and an attribute the file leaves out
+/// stays `None` so the default is the reader's, not the parser's.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Weapons {
+    /// `number_of_rockets`, absent on a craft that fires the default volley.
+    pub number_of_rockets: Option<f32>,
+    /// `number_of_mines`, absent on a craft that lays the default cluster.
+    pub number_of_mines: Option<f32>,
+}
+
+impl Weapons {
+    const ELEMENT: &'static str = "Weapons";
+    /// The element the line sits in: `<Stats><BespokeStats><Weapons/></BespokeStats></Stats>`.
+    const PARENT: &'static str = "BespokeStats";
+
+    fn from_node(node: &Node) -> Result<Self> {
+        let e = Self::ELEMENT;
+        Ok(Self {
+            number_of_rockets: optional_number(node, e, "number_of_rockets")?,
+            number_of_mines: optional_number(node, e, "number_of_mines")?,
+        })
+    }
+}
+
 /// Engine response. `<Engine accelcap amount falloff gain turbo/>`.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Engine {
@@ -807,6 +837,9 @@ pub struct Stats {
     pub fe: Option<Fe>,
     /// `<Tilt/>`: the steering lean's gains, when the file authors them (HD, 2048, Omega).
     pub tilt: Option<Tilt>,
+    /// `<BespokeStats><Weapons/>`: the craft's rocket and mine counts, when the file authors the
+    /// element (2048 and Omega's own five teams).
+    pub weapons: Option<Weapons>,
     /// The `<Class>` blocks, in ladder order, slowest first.
     ///
     /// Look one up with [`Self::class`], which matches on name; indexing by
@@ -930,6 +963,13 @@ fn parse_with(expanded: &str, classless: Option<(&str, Unauthored)>) -> Result<S
         },
         tilt: match stats.children_named(Tilt::ELEMENT).next() {
             Some(node) => Some(Tilt::from_node(node)?),
+            None => None,
+        },
+        weapons: match stats
+            .children_named(Weapons::PARENT)
+            .find_map(|parent| parent.children_named(Weapons::ELEMENT).next())
+        {
+            Some(node) => Some(Weapons::from_node(node)?),
             None => None,
         },
         classes: match classless {

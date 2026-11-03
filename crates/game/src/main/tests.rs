@@ -467,3 +467,8 @@ fn a_release_build_rejects_seed_and_give() {
 fn pose_parses_in_every_build() {
     Cli::try_parse_from(["oag-game", "--race", "--pose", "0,0,0"]).expect("--pose is a capture flag");
 }
+
+#[test]
+fn a_run_with_no_window_opens_no_gamepad() {
+    assert!(!app::controls_for(true).pad().is_available());
+}

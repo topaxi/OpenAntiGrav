@@ -160,6 +160,7 @@ impl Race {
             self.sim.weapons.as_ref().map(|table| table.slowdown_limit),
         );
 
+        self.cancel_pickup_use_of_downed_crafts();
         // Before the force law, so a Turbo fired this tick boosts this tick.
         // `tick_autopilot` after it, so a pickup armed this tick gets its whole
         // duration rather than a tick less, and so the cancel-on-absorb branch
