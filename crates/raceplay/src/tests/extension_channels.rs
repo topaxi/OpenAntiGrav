@@ -51,7 +51,7 @@ fn gate(from: f32, to: f32, channel: &str) -> TrackProps {
 }
 
 /// Where slot 1 is after `ticks` ticks of the fixture race, and the gate that straddles
-/// the stretch it drives between 260 and 300 ticks: it is entered once.
+/// the stretch it drives between 284 and 312 ticks: it is entered once.
 fn gate_on_the_road(channel: &str) -> TrackProps {
     let x_at = |ticks| {
         run(grid(Prepared::default()), ticks).0.sim.world.ships[1]
@@ -60,7 +60,7 @@ fn gate_on_the_road(channel: &str) -> TrackProps {
             .position
             .x
     };
-    let (from, to) = (x_at(260), x_at(300));
+    let (from, to) = (x_at(284), x_at(312));
     assert!(to > from + 10.0, "slot 1 drives along +x: {from} to {to}");
     gate(from + (to - from) * 0.25, from + (to - from) * 0.5, channel)
 }
@@ -75,7 +75,7 @@ fn a_trigger_raises_its_channel_with_no_module_and_a_race_without_one_hashes_as_
     assert!(!race.is_modded());
     let started = race.channel_started(any(key("test.track/passed")));
     assert!(
-        started.is_some_and(|s| (260.0 / 60.0..320.0 / 60.0).contains(&s)),
+        started.is_some_and(|s| (284.0 / 60.0..320.0 / 60.0).contains(&s)),
         "the trigger fired while the craft crossed it: {started:?}"
     );
     assert_eq!(race.channel_started(any(key("test.track/other"))), None);
@@ -433,7 +433,7 @@ mod with_modules {
         let channel = "test.track/passed";
         let props = gate_on_the_road(channel);
         let mut race = grid(prepared_on(&[listener("test.b")], &props));
-        for _ in 0..400 {
+        for _ in 0..320 {
             race.tick(&PlayerInputs::none());
         }
         let h = heard(&race, 0);
@@ -441,7 +441,7 @@ mod with_modules {
         assert_eq!(h.channel, key(channel));
         assert_eq!(h.from, oag_ext_abi::TRACK_SENDER);
         assert_eq!(h.slot, 1);
-        assert!(h.tick > 300, "{h:?}");
+        assert!(h.tick > 280, "{h:?}");
         assert!(race.channel_started(any(key(channel))).is_some());
     }
 }
