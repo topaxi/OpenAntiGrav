@@ -624,7 +624,7 @@ mod hd {
 mod v2048 {
     use oag_raceplay::RACE_EFFECTS;
 
-    const ABSENT: [&str; 11] = [
+    const ABSENT: [&str; 14] = [
         "WO_PLASMA_FLASH",
         "WO_LEACHBEAM_ENERGY",
         "WO_SHIP_FXNODE_EXPLO",
@@ -633,6 +633,9 @@ mod v2048 {
         "WO_RAIN",
         "WO_RAIN_LENS",
         "WO_SNOW",
+        "WO_BOMB_GLOW",
+        "WO_DISRUPTOR_HEAD",
+        "WO_DISRUPTOR_EXPLO",
         "WO_SHIP_FXNODE_BIGEXPLO",
         "WO_SHIP_EXPLOSION_DEBRIS",
         "WO_SHIP_EXPLO_SMOKE",
