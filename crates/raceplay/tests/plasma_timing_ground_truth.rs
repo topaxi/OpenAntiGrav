@@ -14,10 +14,13 @@
 //! `Plasma_Update`s on frames 60 to 76, and its `PlasmaBlast_Construct` on frame 76.
 //!
 //! **What is compared.** The distance of the bolt from its release point after each
-//! update, not its absolute position: this engine's craft is 1.1 units ahead of the
-//! original's at release (239.54 against 240.67 on x), a craft-start difference this
-//! file does not own, and it would show as a constant offset on every row. The tick
-//! the bolt ends on needs the craft to be level and is within a tick of it.
+//! update, not its absolute position: this engine's craft is 3.1 units ahead of the
+//! original's on the release frame (240.66 against 237.5 on x; the 1.1 once quoted
+//! here paired our craft with the original's one frame later), a craft-start
+//! difference this file does not own, and it would show as a constant offset on every
+//! row. The wall decides where the bolt ends, so that place is compared outright; the
+//! tick it ends on is one before the original's, the craft's lead being one update's
+//! travel.
 
 use oag_gameplay::PlayerInputs;
 use oag_gameplay::input::{Button, Input};
@@ -48,6 +51,11 @@ const ORIGINAL_FROM_CRAFT: [f32; 10] = [
 
 /// The original's `PlasmaBlast_Construct`, in frames after the press.
 const ORIGINAL_DETONATION: usize = 76;
+/// Where the original's bolt was at the entry of the update that detonated it (`--probe
+/// plasma_fly`, the last record, frame 76.03): the last position before the wall, which
+/// is the wall's and the path's, not the craft start's.
+const ORIGINAL_LAST_BEFORE_BLAST: oag_core::math::Vec3 =
+    oag_core::math::Vec3::new(288.60, -39.50, -193.86);
 /// The original's `Plasma_Launch`.
 const ORIGINAL_RELEASE: usize = 59;
 
@@ -127,7 +135,9 @@ fn the_plasma_releases_flies_and_detonates_on_the_originals_ticks() {
     let origin = positions[ORIGINAL_RELEASE]
         .expect("the bolt exists on its release tick")
         .0;
-    for (update, expected) in ORIGINAL_DISTANCE.iter().enumerate() {
+    // Sixteen updates of flight; the seventeenth is the one the wall takes in ours (below),
+    // so its distance is not a row here.
+    for (update, expected) in ORIGINAL_DISTANCE.iter().enumerate().take(16) {
         let at = positions[ORIGINAL_RELEASE + update]
             .unwrap_or_else(|| panic!("the bolt is gone {update} updates after release"))
             .0;
@@ -154,11 +164,26 @@ fn the_plasma_releases_flies_and_detonates_on_the_originals_ticks() {
         );
     }
 
-    let gone = positions.iter().position(Option::is_none);
+    // The wall takes the bolt from the same place: the last position before the blast is
+    // the original's to a third of a unit. The tick is one before the original's frame 76
+    // because this engine's craft leads the original's by 3.1 units on the release frame
+    // (one update's travel at 3.2 a tick), so the bolt reaches that place one update
+    // sooner. With the bolt two units short of the node it used to end on frame 76 by
+    // the same arithmetic.
+    let gone = positions
+        .iter()
+        .position(Option::is_none)
+        .expect("the bolt ends inside ninety ticks");
+    let last = positions[gone - 1].expect("the tick before the blast").0;
+    assert!(
+        (last - ORIGINAL_LAST_BEFORE_BLAST).length() < 0.5,
+        "the bolt's last position before the blast is {last:?}, the original's \
+         {ORIGINAL_LAST_BEFORE_BLAST:?}"
+    );
     assert_eq!(
         gone,
-        Some(ORIGINAL_DETONATION),
-        "the bolt ends on tick {gone:?}; the original's PlasmaBlast_Construct is frame \
-         76, after 17 updates"
+        ORIGINAL_DETONATION - 1,
+        "the bolt ends on tick {gone}; the original's PlasmaBlast_Construct is frame 76 and \
+         this engine's craft leads by one update's travel at the release"
     );
 }
