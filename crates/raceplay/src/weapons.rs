@@ -126,6 +126,17 @@ impl Race {
         self.sim.world.ships[slot].pickup.weapon = Some(oag_tables::weapons::Weapon::Turbo);
     }
 
+    /// Whether the craft may fire or absorb its pickup: only while racing.
+    ///
+    /// A craft in its destroyed sequence (`Destroyed`, then `Eliminated` until the
+    /// Eliminator puts it back on the line) cannot fire, lay, absorb or hold a
+    /// trigger, for a person and for the AI alike. The pickup is not touched: what
+    /// it held stays in the slot for after the respawn (`docs/gameplay/pickups.md`,
+    /// "A destroyed craft").
+    pub(crate) fn may_use_pickup(&self, slot: usize) -> bool {
+        self.sim.world.ships[slot].physics.craft_state == oag_physics::CraftState::Racing
+    }
+
     /// Fires or absorbs whatever the craft is holding.
     ///
     /// **The buttons are recovered and the actions are not.**
@@ -154,6 +165,9 @@ impl Race {
             .buttons
             .is_pressed(oag_gameplay::input::Button::Circle);
         if !fire && !absorb {
+            return;
+        }
+        if !self.may_use_pickup(slot) {
             return;
         }
         if self.sim.world.ships[slot].autopilot_timer > 0.0 {
@@ -635,6 +649,7 @@ impl Race {
         for slot in 0..self.sim.world.ship_count as usize {
             if !self.sim.world.ships[slot].active
                 || !self.sim.world.ships[slot].pickup.is_dropping()
+                || !self.may_use_pickup(slot)
             {
                 continue;
             }
@@ -754,6 +769,9 @@ impl Race {
             // A human slot follows its own pad; every other slot asks its own
             // driver. Not the literal slot 0, which is the same
             // only while slot 0 is the only human.
+            if !self.may_use_pickup(slot) {
+                continue;
+            }
             let holds_fire = if self.sim.world.controllers[slot].is_human() {
                 // That slot's own held state. An autopilot blend takes the pad
                 // out of the loop entirely, exactly as above.

@@ -301,6 +301,9 @@ impl Race {
         controls: &oag_physics::ShipControls,
         field: &oag_ai::Field,
     ) {
+        if !self.may_use_pickup(slot) {
+            return;
+        }
         // Before anything returns: it advances this craft's weapon-AI clocks.
         let decision = self.opponent_decides(slot, field);
         let fires = decision == oag_ai::weapon_ai::Decision::Fire;
