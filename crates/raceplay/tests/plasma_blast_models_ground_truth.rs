@@ -300,9 +300,8 @@ fn the_onset_flash_of_the_original_is_the_plasma_flash_effect() {
     stage.advance(1.0 / 60.0, &mut rng);
     let (additive, alpha_over) = stage.vertices(Vec3::X, Vec3::Y);
     let extent = |v: &[oag_mesh::mesh::GpuVertex], axis: usize| {
-        let at = |f: fn(f32, f32) -> f32, init: f32| {
-            v.iter().map(|x| x.position[axis]).fold(init, f)
-        };
+        let at =
+            |f: fn(f32, f32) -> f32, init: f32| v.iter().map(|x| x.position[axis]).fold(init, f);
         at(f32::max, f32::MIN) - at(f32::min, f32::MAX)
     };
     assert_eq!(additive.len(), 6, "one additive quad");
