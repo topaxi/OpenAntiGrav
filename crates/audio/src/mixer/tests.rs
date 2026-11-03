@@ -608,11 +608,19 @@ fn the_title_trim_scales_the_sum_and_leaves_the_master_alone() {
 
     mixer.set_master_trim(0.5);
     mixer.render(&mut out);
-    assert!((out[0] - 0.5).abs() < 1e-3, "the trim did not apply: {}", out[0]);
+    assert!(
+        (out[0] - 0.5).abs() < 1e-3,
+        "the trim did not apply: {}",
+        out[0]
+    );
 
     mixer.set_master_gain(0.5);
     mixer.render(&mut out);
-    assert!((out[0] - 0.25).abs() < 1e-3, "trim and master do not multiply: {}", out[0]);
+    assert!(
+        (out[0] - 0.25).abs() < 1e-3,
+        "trim and master do not multiply: {}",
+        out[0]
+    );
 }
 
 /// The measured reason the closing fade exists: a cue that stops loud was cut
