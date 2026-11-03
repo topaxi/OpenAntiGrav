@@ -149,7 +149,20 @@ fn the_observation_lists_active_crafts_and_skips_unknown_events() {
         0b101,
         &events,
         &crafts,
-        &Default::default(),
+        &oag_ext_abi::Course {
+            length: 4000.0,
+            tracking: &[
+                oag_ext_abi::Tracking {
+                    progress: Some(-30.0),
+                    place: 2,
+                },
+                oag_ext_abi::Tracking::default(),
+                oag_ext_abi::Tracking {
+                    progress: Some(1500.0),
+                    place: 1,
+                },
+            ],
+        },
         &[],
     );
     // An event kind from a later revision.
@@ -160,6 +173,9 @@ fn the_observation_lists_active_crafts_and_skips_unknown_events() {
     let shields: Vec<_> = obs.crafts().map(|c| (c.slot(), c.shield())).collect();
     assert_eq!(shields, [(slot(0), 1.0), (slot(2), 3.0)]);
     assert!(obs.craft(slot(1)).is_none());
+    assert_eq!(obs.course_length(), 4000.0);
+    let tracked: Vec<_> = obs.crafts().map(|c| (c.progress(), c.place())).collect();
+    assert_eq!(tracked, [(Some(-30.0), 2), (Some(1500.0), 1)]);
     let seen: Vec<_> = obs.events().collect();
     assert_eq!(seen, [Event::PickupFire { slot: slot(0) }]);
     assert_eq!(obs.track().speed_pads(), 0);
@@ -685,4 +701,22 @@ fn the_motion_commands_refuse_what_the_host_would_fault_on() {
         Ok(())
     );
     assert_eq!(reply.len(), 3);
+}
+
+#[test]
+fn the_test_harness_hands_a_guest_its_course_and_place() {
+    struct Reader;
+    impl Extension for Reader {
+        type State = u32;
+        fn tick(obs: &Observation<'_>, state: &mut u32, _: &mut Reply<'_>) {
+            let first = obs.craft(slot(1)).expect("the craft is on the grid");
+            *state = obs.course_length() as u32 + u32::from(first.place());
+            assert_eq!(first.progress(), Some(250.0));
+        }
+    }
+    let mut race = crate::test::Race::<Reader>::new()
+        .with_craft(slot(1), racer(1.0))
+        .with_course(3000.0, slot(1), Some(250.0), 3);
+    race.tick();
+    assert_eq!(race.state(), 3003);
 }
