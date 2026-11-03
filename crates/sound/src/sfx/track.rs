@@ -541,6 +541,7 @@ impl Ambience {
                 (Some(placed), Some(id)) if mixer.is_playing(id) => {
                     mixer.set_gain(id, placed.gain);
                     mixer.set_pan(id, Some(placed.pan));
+                    mixer.set_front(id, placed.front);
                     mixer.set_pitch(id, doppler.ratio(placed.distance, dt, doppler_enabled));
                 }
                 // In range, opened once, finished: leave it alone. Not every
@@ -569,6 +570,7 @@ impl Ambience {
                         mixer.play(oag_audio::Play {
                             gain: placed.gain,
                             pan: Some(placed.pan),
+                            front: placed.front,
                             ..play
                         })
                     });

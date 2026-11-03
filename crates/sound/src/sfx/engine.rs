@@ -219,6 +219,7 @@ impl Engine {
                 mixer.set_pitch(id, pitch);
                 mixer.set_gain(id, gain);
                 mixer.set_pan(id, pan);
+                mixer.set_front(id, placed.map_or(1.0, |p| p.front));
             }
             // Never re-opened once the spin-down closed it: a finished race would
             // restart the engine the tick after it went quiet.
@@ -240,6 +241,7 @@ impl Engine {
                     gain,
                     pitch,
                     pan,
+                    front: placed.map_or(1.0, |p| p.front),
                     ..Play::looping(sound, Cue::Engine.bus())
                 });
             }

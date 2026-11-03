@@ -203,6 +203,7 @@ OAG_AUDIO_SFX_VOLUME = { text = "SFX-LAUTSTÄRKE", human = false }
 OAG_AUDIO_ANNOUNCER_VOLUME = { text = "ANSAGERLAUTSTÄRKE", human = false }
 OAG_AUDIO_MASTER_VOLUME = { text = "GESAMTLAUTSTÄRKE", human = false }
 OAG_AUDIO_MUSIC_SOURCE = { text = "MUSIKQUELLE", human = false }
+OAG_AUDIO_SPATIAL_AUDIO = { text = "RÄUMLICHER KLANG", human = false }
 OAG_AUDIO_MUSIC = { text = "MUSIK", human = false }
 OAG_MUSIC_PAGE_TITLE = { text = "MUSIK", human = false }
 OAG_MUSIC_SOURCE_ROW = { text = "QUELLE", human = false }

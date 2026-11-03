@@ -266,10 +266,17 @@ fn tick_effects(
 /// craft cues are, and the two must not be allowed to disagree about where the
 /// listener is - see [`TrackEmitters`].
 pub fn listener_of(race: &oag_raceplay::Race) -> oag_audio::Listener {
-    let camera = race.view().inverse();
+    listener_of_view(race.view())
+}
+
+/// [`listener_of`] for a world-to-camera matrix. A right-handed camera looks
+/// down its own `-Z`, so the forward axis is the negated third column.
+pub fn listener_of_view(view: oag_core::math::Mat4) -> oag_audio::Listener {
+    let camera = view.inverse();
     oag_audio::Listener {
         position: camera.w_axis.truncate().to_array(),
         right: camera.x_axis.truncate().normalize_or_zero().to_array(),
+        forward: (-camera.z_axis.truncate()).normalize_or_zero().to_array(),
     }
 }
 
@@ -294,7 +301,29 @@ mod tests {
     use oag_gameplay::cue::Cue;
     use oag_ui::menu::nav::{Dir, Nav};
 
-    use super::menu_cue;
+    use super::{listener_of_view, menu_cue};
+
+    /// The chase camera sits behind and above its craft, so the craft is ahead
+    /// of the listener and a point at the camera's back is behind it. Fails if
+    /// the forward axis takes the wrong sign of the camera's third column.
+    #[test]
+    fn the_listener_faces_the_way_the_chase_camera_looks() {
+        use oag_core::math::{Vec3, camera};
+        let eye = Vec3::new(0.0, 5.0, 10.0);
+        let view = camera::look_at(eye, Vec3::ZERO, Vec3::Y);
+        let ears = listener_of_view(view);
+        let toward = |p: Vec3| {
+            let d = (p - eye).normalize();
+            d.dot(Vec3::from(ears.forward))
+        };
+        assert!(toward(Vec3::ZERO) > 0.9, "the craft is ahead of the camera");
+        assert!(
+            toward(Vec3::new(0.0, 8.0, 20.0)) < -0.5,
+            "behind the camera"
+        );
+        assert!((Vec3::from(ears.forward).length() - 1.0).abs() < 1e-5);
+        assert!(Vec3::from(ears.forward).dot(Vec3::from(ears.right)).abs() < 1e-5);
+    }
 
     #[test]
     fn a_move_takes_its_own_direction_before_the_pads() {

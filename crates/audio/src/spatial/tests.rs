@@ -176,6 +176,7 @@ fn a_rotated_listener_pans_by_its_own_right_axis() {
     let turned = Listener {
         position: [0.0; 3],
         right: [-1.0, 0.0, 0.0],
+        forward: [0.0, 0.0, 1.0],
     };
     let placed = Emitter::craft([10.0, 0.0, 0.0])
         .place(&turned, 1.0)
@@ -188,6 +189,7 @@ fn a_listener_away_from_the_origin_measures_from_itself() {
     let ears = Listener {
         position: [1000.0, 0.0, 0.0],
         right: [1.0, 0.0, 0.0],
+        forward: [0.0, 0.0, -1.0],
     };
     assert!(
         Emitter::craft([1000.0, 0.0, 0.0])
@@ -280,6 +282,7 @@ fn a_wider_cone_is_still_audible_where_a_narrower_one_is_not() {
     let listener = Listener {
         position: [-angle.sin() * 20.0, 0.0, -angle.cos() * 20.0],
         right: [1.0, 0.0, 0.0],
+        forward: [0.0, 0.0, -1.0],
     };
     let axis = [0.0, 0.0, 1.0];
     let narrow = Emitter {
@@ -393,4 +396,20 @@ fn the_rear_edge_pan_adds_only_ninety_degrees() {
             "{degrees}"
         );
     }
+}
+
+#[test]
+fn a_placed_emitter_knows_whether_it_is_ahead_of_or_behind_the_listener() {
+    let ahead = Emitter::craft([0.0, 0.0, -10.0])
+        .place(&ears(), 1.0)
+        .expect("in range");
+    let behind = Emitter::craft([0.0, 0.0, 10.0])
+        .place(&ears(), 1.0)
+        .expect("in range");
+    assert!((ahead.front - 1.0).abs() < 1e-6 && (behind.front + 1.0).abs() < 1e-6);
+    assert_eq!(
+        ahead.pan.to_bits(),
+        behind.pan.to_bits(),
+        "the original's law cannot tell"
+    );
 }

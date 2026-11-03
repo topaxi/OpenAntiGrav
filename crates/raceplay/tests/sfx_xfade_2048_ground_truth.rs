@@ -69,6 +69,7 @@ fn ears() -> Listener {
     Listener {
         position: [0.0; 3],
         right: [1.0, 0.0, 0.0],
+        forward: [0.0, 0.0, -1.0],
     }
 }
 

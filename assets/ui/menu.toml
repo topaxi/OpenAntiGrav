@@ -1420,6 +1420,20 @@ string_id = "OAG_AUDIO_MUSIC_SOURCE"
 setting = "audio.music_source"
 values_from = "music_sources"
 
+# Whether a placed sound (a craft, a weapon) is heard ahead of or behind the camera.
+# `original` is the stereo pan alone, which cannot tell front from back (measured:
+# `docs/ghidra/functions/psp-pulse-usa/positional-audio.md`); `rear_cue` low-passes and
+# lowers a sound behind the camera; `headphones` renders it through a head-related
+# transfer function and is meant for headphones. Every title offers all three. The
+# reference for "behind" is the camera, the original's listener. Music and unplaced
+# cues are never touched.
+[[page.entry]]
+kind = "choice"
+label = "SPATIAL AUDIO"
+string_id = "OAG_AUDIO_SPATIAL_AUDIO"
+setting = "audio.spatial_audio"
+values = ["original", "rear_cue", "headphones"]
+
 [[page.entry]]
 kind = "submenu"
 label = "MUSIC"

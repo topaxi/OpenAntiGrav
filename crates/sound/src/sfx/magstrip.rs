@@ -30,6 +30,7 @@ fn heard(slot: usize, listener: &oag_audio::Listener, craft: &[Option<(Vec3, f32
     VoicePlace {
         gain: placed.map_or(0.0, |p| p.gain),
         pan: placed.and_then(|p| p.pan),
+        front: placed.map_or(1.0, |p| p.front),
     }
 }
 
@@ -109,6 +110,7 @@ impl Voices {
             for &id in held.iter() {
                 mixer.set_gain(id, at.gain);
                 mixer.set_pan(id, at.pan);
+                mixer.set_front(id, at.front);
             }
         }
     }

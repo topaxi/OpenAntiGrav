@@ -1112,6 +1112,10 @@ pub fn menu_seeds(
             text(&settings.audio.music_source.to_string()),
         ),
         (
+            "audio.spatial_audio",
+            text(&settings.audio.spatial_audio.to_string()),
+        ),
+        (
             "display.front_end_style",
             text(&settings.display.front_end_style),
         ),

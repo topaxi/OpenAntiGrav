@@ -75,6 +75,11 @@ pub struct Settings {
     /// falls back to the booted disc, not silence.
     #[serde(default)]
     pub music_source: MusicSource,
+    /// How a placed sound (a craft, a weapon) is heard to be ahead of or behind
+    /// the camera: `original`, `rear_cue` (the default) or `headphones`. See
+    /// [`oag_audio::SpatialMode`]. Music and unplaced cues are never touched.
+    #[serde(default)]
+    pub spatial_audio: oag_audio::SpatialMode,
     /// Folders of songs the race playlist may draw from, beside the discs.
     ///
     /// Each is `{ path = "...", enabled = true }`. Added by editing this file: the

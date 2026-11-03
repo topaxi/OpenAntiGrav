@@ -331,6 +331,7 @@ impl Audio {
                     VoicePlace {
                         gain: pan.gain,
                         pan: pan.pan,
+                        front: pan.front,
                     },
                 );
             }
@@ -580,7 +581,11 @@ impl Audio {
                         // The cue keys a one-shot and a loop: the loop is the held
                         // voice this arm steers, the one-shot fires once where the
                         // beam attached.
-                        let place = VoicePlace { gain, pan };
+                        let place = VoicePlace {
+                            gain,
+                            pan,
+                            front: placed.map_or(1.0, |p| p.front),
+                        };
                         let (held, once): (Vec<_>, Vec<_>) =
                             started.into_iter().partition(|v| v.looping);
                         let _ = layers::start(mixer, &once, Cue::LeachAttach.bus(), place);
@@ -605,6 +610,7 @@ impl Audio {
                         let (gain, pan) = placed.map_or((0.0, None), |p| (p.gain, Some(p.pan)));
                         mixer.set_gain(id, gain);
                         mixer.set_pan(id, pan);
+                        mixer.set_front(id, placed.map_or(1.0, |p| p.front));
                     }
                 }
                 (Some(_), Some(_)) => voices.leach_attach = None,
@@ -786,6 +792,7 @@ fn place(
     let dry = Placed {
         gain: 1.0,
         pan: None,
+        front: 1.0,
     };
     if event.cue.placement() == Placement::Point {
         // An arbitrary world point ([`Placement::Point`]). `None` means the event
@@ -803,6 +810,7 @@ fn place(
         return Some(Placed {
             gain: placed.gain,
             pan: Some(placed.pan),
+            front: placed.front,
         });
     }
     let emitter = match event.cue.placement() {
@@ -820,6 +828,7 @@ fn place(
     Some(Placed {
         gain: placed.gain,
         pan: Some(placed.pan),
+        front: placed.front,
     })
 }
 
@@ -828,6 +837,7 @@ fn place(
 struct Placed {
     gain: f32,
     pan: Option<f32>,
+    front: f32,
 }
 
 /// Which emitter a cue is heard from.

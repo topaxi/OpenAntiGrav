@@ -2,10 +2,41 @@
 status: blocked-maintainer
 titles: [all]
 updated: 2026-11-03
-summary: "Six options for hearing a craft or weapon behind, compared on licence, platforms, CPU and wiring; the pick is the maintainer's"
+summary: "SPATIAL AUDIO built (original, rear_cue default, headphones via SADIE II D1 + hrtf); open: a listening judgement, Deck and S24 cost, elevation"
 ---
 
 # Spatial audio options for front/back cues
+
+## Built (2026-11-03, lane `spatial-audio-wire`)
+
+The maintainer picked: one lane, all three values, default `rear cue`, "behind"
+is the camera, `original` on every title. Landed in `oag-audio`/`oag-sound`:
+
+- `SPATIAL AUDIO` row (`audio.spatial_audio`: `original`, `rear_cue`,
+  `headphones`) on the audio page, every title (one `menu.toml` page serves all).
+- Listener `forward` from the camera; per-voice `front`; `Mixer::set_spatial_mode`.
+  `original` is bit-identical (test). `rear_cue` is a one-pole low-pass and a
+  0.8 gain behind, bit-identical in front. Both **chosen, not measured**.
+- `headphones`: `oag_audio::binaural`, `hrtf` 0.9.0 and 200 directions of
+  **SADIE II subject D1, 48 kHz, 256 taps**. The licence is settled: Zenodo
+  record 12092466 (version 2-2), its `LICENSE.txt` is the Apache License 2.0.
+  Shipped with the licence and attribution in `assets/audio/hrtf/`; converter
+  `scripts/sofa-to-hrtf-sphere.py`. One shared convolver, a block FIFO per voice,
+  built on a thread when the setting asks for it.
+- Cost, one headphone voice, 512 frames, dev profile (opt-level 2 deps), load
+  average about 35 on 24 cores: 78 to 98 us per voice (0.75 % of a core for
+  one, 29 % for 32). The rear cue is a few multiply-adds per sample.
+- Builds checked: `wasm32-unknown-unknown` (oag-audio, oag-sound),
+  `aarch64-linux-android` and `aarch64-apple-ios` (oag-audio).
+- WAV pairs (front vs behind per mode, and a circling source) were written for
+  the lead; nothing was played.
+
+Still open: nobody has listened (is the rear cue enough, does headphones click on
+a passing craft); Deck and S24 cost are estimates from the x86 figure;
+elevation is dropped (horizontal plane only); a headphone voice is 512 frames
+late against a plain one; the dump path (`--dump-audio`) builds the sphere on a
+thread, so a headphones dump is not reproducible to the sample.
+
 
 2026-11-03, a measure lane. **Nothing is decided and nothing is built.** The
 maintainer wants front/back cues and plans to try them ON by default first,

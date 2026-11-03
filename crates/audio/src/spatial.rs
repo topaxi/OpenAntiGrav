@@ -103,6 +103,10 @@ pub struct Listener {
     /// column. `docs/.../camera.md` measured that transposition independently
     /// from the rendering side.
     pub right: [f32; 3],
+    /// The camera's world-space **forward** axis (the way it looks), expected
+    /// normalised. Read only by the front/back cue ([`SpatialMode`]); the
+    /// original's law never uses it.
+    pub forward: [f32; 3],
 }
 
 impl Listener {
@@ -114,7 +118,60 @@ impl Listener {
         Self {
             position: [0.0; 3],
             right: [1.0, 0.0, 0.0],
+            forward: [0.0, 0.0, -1.0],
         }
+    }
+}
+
+/// How a placed voice is rendered into the two ears.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SpatialMode {
+    /// The original's law: equal-power pan only, so a source ahead and a
+    /// source behind sound the same.
+    Original,
+    /// A source behind the listener is low-passed and slightly lowered. Cheap,
+    /// safe on speakers and headphones.
+    #[default]
+    RearCue,
+    /// A head-related transfer function per voice. For headphones; on speakers
+    /// it colours the sound.
+    Headphones,
+}
+
+impl SpatialMode {
+    /// Every value, in menu order.
+    pub const ALL: [Self; 3] = [Self::Original, Self::RearCue, Self::Headphones];
+
+    /// The spelling used in a settings file and on a menu row.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Original => "original",
+            Self::RearCue => "rear_cue",
+            Self::Headphones => "headphones",
+        }
+    }
+}
+
+impl std::str::FromStr for SpatialMode {
+    type Err = String;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        Self::ALL
+            .into_iter()
+            .find(|mode| mode.name().eq_ignore_ascii_case(text))
+            .ok_or_else(|| {
+                format!(
+                    "{text:?} is not a spatial audio mode; try original, rear_cue or headphones"
+                )
+            })
+    }
+}
+
+impl std::fmt::Display for SpatialMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name())
     }
 }
 
@@ -218,6 +275,7 @@ impl Emitter {
         Some(Placed {
             gain: volume_curve(atten * volume),
             pan: pan_of(to_source, listener.right),
+            front: pan_of(to_source, listener.forward),
             distance,
         })
     }
@@ -231,6 +289,9 @@ pub struct Placed {
     pub gain: f32,
     /// `-1.0` hard left, `0.0` centred, `+1.0` hard right.
     pub pan: f32,
+    /// `+1.0` dead ahead of the listener, `-1.0` dead behind, `0.0` abeam. Not
+    /// part of the original's law (see [`SpatialMode`]).
+    pub front: f32,
     /// How far the ear is from the source, the input to [`Doppler`].
     pub distance: f32,
 }
@@ -404,7 +465,8 @@ pub fn pan_of_angle_to_rear_edge(degrees: i32) -> Option<f32> {
     pan_of_angle(degrees)
 }
 
-/// The rightward component of the direction to a source, in `-1..=1`.
+/// The component of the direction to a source along `axis`, in `-1..=1`.
+/// `right` gives the pan, `forward` the front/back cue.
 fn pan_of(to_source: [f32; 3], right: [f32; 3]) -> f32 {
     let length = dot(to_source, to_source).sqrt();
     if length <= 0.0 {

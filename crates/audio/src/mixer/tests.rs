@@ -6,6 +6,7 @@
 //! may hold. See `scripts/check-file-size.py`, which is the rule as a gate.
 
 use super::*;
+use crate::spatial::SpatialMode;
 
 fn tone(frames: usize, channels: u16, rate: u32) -> Arc<Sound> {
     let samples = (0..frames * channels as usize)
@@ -703,4 +704,79 @@ fn a_delay_carries_across_render_calls() {
     mixer.render(&mut out);
     assert_eq!(out[0], 0.0, "one frame of delay was left");
     assert!(out[CHANNELS] > 0.9);
+}
+
+/// A bright, loud mono source: an alternating sign at the Nyquist rate.
+fn buzz() -> Arc<Sound> {
+    let samples = (0..2048)
+        .map(|i| if i % 2 == 0 { 12_000 } else { -12_000 })
+        .collect();
+    Arc::new(Sound::new(samples, 1, 44_100).expect("sound"))
+}
+
+fn rendered(mode: SpatialMode, pan: Option<f32>, front: f32) -> Vec<f32> {
+    let mut mixer = Mixer::new(44_100);
+    mixer.set_spatial_mode(mode);
+    mixer
+        .play(Play {
+            pan,
+            front,
+            ..Play::looping(buzz(), Bus::Sfx)
+        })
+        .expect("voice");
+    let mut out = vec![0.0; 2 * 512];
+    mixer.render(&mut out);
+    out
+}
+
+fn energy(out: &[f32]) -> f32 {
+    out.iter().skip(64).map(|s| s * s).sum()
+}
+
+#[test]
+fn original_ignores_where_a_voice_is_along_the_forward_axis() {
+    let ahead = rendered(SpatialMode::Original, Some(0.3), 1.0);
+    let behind = rendered(SpatialMode::Original, Some(0.3), -1.0);
+    assert_eq!(
+        ahead.iter().map(|s| s.to_bits()).collect::<Vec<_>>(),
+        behind.iter().map(|s| s.to_bits()).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn rear_cue_leaves_the_front_half_bit_identical_to_original() {
+    for front in [1.0, 0.5, 0.0] {
+        let original = rendered(SpatialMode::Original, Some(-0.4), front);
+        let cued = rendered(SpatialMode::RearCue, Some(-0.4), front);
+        assert_eq!(
+            original.iter().map(|s| s.to_bits()).collect::<Vec<_>>(),
+            cued.iter().map(|s| s.to_bits()).collect::<Vec<_>>(),
+            "front = {front}"
+        );
+    }
+}
+
+#[test]
+fn rear_cue_filters_and_lowers_a_voice_behind_the_listener() {
+    let original = rendered(SpatialMode::Original, Some(0.0), -1.0);
+    let cued = rendered(SpatialMode::RearCue, Some(0.0), -1.0);
+    assert!(
+        energy(&cued) < energy(&original) * 0.05,
+        "a Nyquist buzz behind is mostly removed: {} vs {}",
+        energy(&cued),
+        energy(&original)
+    );
+    let half = rendered(SpatialMode::RearCue, Some(0.0), -0.5);
+    assert!(energy(&half) > energy(&cued), "the cue eases in");
+    assert!(energy(&half) < energy(&original), "and has begun at -0.5");
+}
+
+#[test]
+fn rear_cue_leaves_an_unplaced_voice_alone() {
+    let original = rendered(SpatialMode::Original, None, -1.0);
+    let cued = rendered(SpatialMode::RearCue, None, -1.0);
+    assert_eq!(
+        original.iter().map(|s| s.to_bits()).collect::<Vec<_>>(),
+        cued.iter().map(|s| s.to_bits()).collect::<Vec<_>>()
+    );
 }

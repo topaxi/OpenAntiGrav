@@ -329,6 +329,17 @@ impl Session {
                     return;
                 }
             },
+            // Applied on the spot: the mixer reads the mode on its next block.
+            "audio.spatial_audio" => match text.parse::<oag_audio::SpatialMode>() {
+                Ok(mode) => {
+                    self.settings.audio.spatial_audio = mode;
+                    self.audio.apply(&self.settings.audio);
+                }
+                Err(e) => {
+                    warn!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
             "audio.music_source" => match text.parse::<oag_sound::MusicSource>() {
                 Ok(source) => {
                     self.settings.audio.music_source = source;

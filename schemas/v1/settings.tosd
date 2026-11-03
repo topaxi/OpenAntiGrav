@@ -263,6 +263,10 @@ optional = true
 type = "string"
 optional = true
 
+[types.audio.spatial_audio]
+type = "string"
+optional = true
+
 [types.audio.music_folders]
 type = "array"
 itemtype = "types.music-folder"
