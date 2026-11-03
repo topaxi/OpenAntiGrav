@@ -638,6 +638,20 @@ impl Definition {
         }
     }
 
+    /// [`Self::relabel_choice`] with the words `strings` has under `id`; the
+    /// label stays when the table has none.
+    pub fn relabel_choice_from(
+        &mut self,
+        setting: &str,
+        value: &str,
+        strings: &StringTable,
+        id: &str,
+    ) {
+        if let Some(label) = strings.get(id) {
+            self.relabel_choice(setting, value, label);
+        }
+    }
+
     /// Words the row that fires `action` as `label`, with `subtitle` under it
     /// while it is selected, for a title whose original names that row
     /// differently (Wipeout Pure's `SINGLE PLAYER` where this project's tree

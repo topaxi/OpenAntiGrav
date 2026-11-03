@@ -2,7 +2,7 @@
 status: blocked-maintainer
 titles: [all]
 updated: 2026-11-03
-summary: "SPATIAL AUDIO built (auto default); open: macOS, Android, iOS output detection, a listening judgement, S24 cost, elevation"
+summary: "SPATIAL AUDIO built (auto default, Linux via PipeWire); open: macOS, Android, iOS detection, a listening judgement, S24 cost, elevation"
 ---
 
 # Spatial audio options for front/back cues
@@ -38,17 +38,24 @@ output, `rear_cue` on speakers and on anything unknown
 (`oag_audio::SpatialChoice::resolve`). The mixer still runs only the three
 `SpatialMode`s.
 
-- **Detection** is `oag_audio::route`, polled every ~2 s on a worker
-  (`RouteWatcher`, one `oag_thread::Task` at a time), never on the render-ahead
-  thread or the device callback. cpal cannot say: its PipeWire/PulseAudio hosts
-  name the graph's `output_default` node, and its Android/iOS hosts name
-  "Default Device".
-  - **Linux/Deck**: `pactl get-default-sink` plus `pactl --format=json list sinks`;
-    the active port's type (`Headphones`, `Headset`) or `device.form_factor` says
-    headphones, `Speaker`/`HDMI`/`SPDIF`/... say speakers, a Bluetooth sink with
-    neither is a headset. The id is `<sink>|<active port>`, because on a Deck or
-    a laptop speakers and the jack are one sink with two ports. No `pactl`
-    (bare ALSA): `Unknown`.
+- **Detection** is `oag_audio::route`, never on the render-ahead thread or the
+  device callback. cpal cannot say: its PipeWire/PulseAudio hosts name the
+  graph's `output_default` node, and its Android/iOS hosts name "Default
+  Device".
+  - **Linux/Deck**: event driven, no process spawned (`route::live`, the
+    `pipewire` crate on its own thread; `route::graph` is the reducer, unit
+    tested). It follows the `default` metadata's `default.audio.sink`, finds the
+    sink node's device, and reads the active `Route` param whose `device` equals
+    the sink's `card.profile.device`: its `port.type` (`headphones`, `headset`)
+    or the `device.form_factor` says headphones, `speaker`/`hdmi`/`spdif`/...
+    say speakers, a Bluetooth sink with neither is a headset. The id is
+    `<sink>|<route name>`, because on a Deck or a laptop speakers and the jack
+    are one sink with two routes. No PipeWire (or a dropped connection): one
+    `Unknown`, no retry. Needs `libpipewire-0.3-dev` and `libclang-dev` to
+    build (already in the AppImage container, `docs/overview/installing.md`).
+    Probe: `cargo run -p oag-audio --example route_probe`. Checked live on the
+    maintainer's PC: `Speakers`, id `<sink>|[Out] Speaker`; plugging events were
+    not exercised (that would reroute the desktop), the reducer tests cover them.
   - **Windows**: cpal's WASAPI default device carries a form factor; headphones
     and headset are headphones, speaker and dock are speakers. Compiles for
     `x86_64-pc-windows-gnu`; **not run here**.
@@ -81,10 +88,16 @@ Open for `auto`:
 - **iOS**: `AVAudioSession.sharedInstance.currentRoute.outputs[*].portType`
   (`headphones`, `bluetoothA2DP`, `bluetoothLE`, `bluetoothHFP`), `objc2-avf-audio`
   is already in the tree through cpal; id from the port UID. Today `Unknown`.
-- A device change is polled, not notified; a PipeWire/WASAPI event would shave
-  up to 2 s.
-- Choice values are drawn as the stored word (`AUTO`, `REAR_CUE`), not through a
-  string id: `menu.toml` has no per-value labels, so `auto` has no string row.
+- A Linux device change is pushed by PipeWire (no 2 s lag); Windows is still
+  polled every ~2 s (an `IMMNotificationClient` event would shave that). The
+  PipeWire plug path (same sink, new route) is covered by the `route::graph`
+  reducer tests, not exercised live.
+- Android and iOS were checked and stay open: `oag-mobile` has no JNI and no
+  objc call path today (`rg jni|objc crates/mobile` finds nothing), so the two
+  calls above are more than a small addition.
+- Only `auto` has a translated label (`OAG_AUDIO_SPATIAL_AUTO`, via
+  `Definition::relabel_choice_from`); `original`, `rear_cue` and `headphones`
+  are still drawn as the stored word, since `menu.toml` has no per-value labels.
 
 Still open: nobody has listened (is the rear cue enough, does headphones click on
 a passing craft); Deck cost is measured (below), S24 cost is an estimate;

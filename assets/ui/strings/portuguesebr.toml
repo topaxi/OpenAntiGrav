@@ -202,6 +202,7 @@ OAG_AUDIO_ANNOUNCER_VOLUME = { text = "VOLUME DO LOCUTOR", human = false }
 OAG_AUDIO_MASTER_VOLUME = { text = "VOLUME GERAL", human = false }
 OAG_AUDIO_MUSIC_SOURCE = { text = "FONTE DA MÚSICA", human = false }
 OAG_AUDIO_SPATIAL_AUDIO = { text = "ESPACIALIZAÇÃO DO ÁUDIO", human = false }
+OAG_AUDIO_SPATIAL_AUTO = { text = "AUTOMÁTICO", human = false }
 OAG_AUDIO_MUSIC = { text = "MÚSICA", human = false }
 OAG_MUSIC_PAGE_TITLE = { text = "MÚSICA", human = false }
 OAG_MUSIC_SOURCE_ROW = { text = "FONTE", human = false }
