@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-11-02
+updated: 2026-11-03
 summary: "test-data suite was 470 s over the 450 s ceiling; wrap independent races in in_parallel, speed plan learning, 2048 sweeps"
 difficulty: medium (35)
 ---
@@ -27,6 +27,8 @@ The 2026-10-07 gate-speed lane did two things. It removed the HD render tests' p
 - **2026-11-02 `test-trims`.** Done: the nextest priority-100 override now sits first and applies; the PS2 transcode tests, the `omega_wem` ffmpeg test and `omega_transparency`'s Tech De Ra check each do less work (numbers in `workspace-layout.md`). Still open: `omega_transparency`'s 19 per-circuit tests each open five archives and build one circuit (14-31 s each, about 430 s summed) and `omega_normal_map` builds all of them again (87 s); one pass over the circuits with each check as a function would drop the repeat. `the_intro_cache_is_lossless` spends 12.5 s of its 20 s decoding 90 lossless AV1 frames to compare them. Measure with the test alone, twice, then one `just test-data --full`.
 
 - **2026-11-02 `test-data-tail`.** Done: `extract_ground_truth` flies the races `extract` loaded (Omega first circuit 19.6-22.6 s CPU to 12.1 s). Measured and not done: `omega_transparency` (6-12 s CPU per circuit, about 170 s in all) and `omega_normal_map` (18 s) share no work worth merging (see `workspace-layout.md`, "What the `test-data-tail` pass measured"). Open: a run-time sim-only load switch in `oag-raceplay::load` would drop the texture decode (about 12% of the Omega extract test) but threads through every `cfg(feature = "view")` site; the extraction work dir lives on `target/` (encrypted home filesystem, about a third of the Omega extract test's samples in reads and writes); measure with `perf record -F 99 -g -- <it binary> --ignored --exact extract_ground_truth::omega::first_circuit_reproduces`.
+
+- **2026-11-03 `test-data-tail-2`.** Done: the Autopilot class/difficulty test, the HD opponent-variant test and (for track art) nothing else load with `ribbon: true` where only a rule or handling is read (47 to 18 s and 35 to 13 s CPU); the Omega extraction tests write under `/var/tmp` (Omega first circuit 12.2 to 9.4 s CPU). Numbers in `workspace-layout.md`. `test-data --full`: 423 s, slowest test 93 s. Still open: the Omega extraction tests keep the view half of their loads (texture decode, `bc7`, `untile_level`) and `sha256` of the extraction (7% of one); a run-time sim-only load switch in `oag-raceplay::load` would take both. Any other test that loads a race to read a rule or a table (`rg 'oag_raceplay::load' crates/*/tests`) is a candidate for `ribbon: true`; measure it alone, twice, before and after.
 
 ## Next Steps
 
