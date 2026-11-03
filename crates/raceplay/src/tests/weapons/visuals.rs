@@ -366,3 +366,49 @@ fn the_plasma_heads_arcs_ride_the_anchor_they_were_born_on() {
         "a source whose head was not measured rode the frame: x {other}"
     );
 }
+
+/// The charging head's arcs draw at the head's severity of the moment, not the one they
+/// were born with: `ParticleSystem_UpdateParticleFields` multiplies the size channel by
+/// the instance's `+0x34` every update, and the original's strip grows 2.4, 5.4, 7.5
+/// units across k20, 36, 44 while a spawn-time read gives 2.3, 3.1, 3.6. Dropping the
+/// switch leaves old particles at the size they had at the press.
+#[test]
+fn the_plasma_heads_arcs_follow_the_charge_they_are_drawn_at() {
+    use crate::weapons::advance_one_flare;
+    use oag_core::rng::Rng;
+
+    let drawn_height = |pulse_psp: bool| -> f32 {
+        let blob = super::respawn::one_emitter_pob("WO_PLASMA_HEAD", 0x2);
+        let mut effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
+            .expect("the hand-laid effect parses");
+        if !pulse_psp {
+            effect.without_pulse_psp_draw();
+        }
+        let mut handles = EffectHandles::default();
+        handles.insert(Trigger::PlasmaFlare, effect);
+        let mut stage = oag_fx::psys::Stage::new();
+        let mut rng = Rng::new(5);
+        let mut playing = None;
+        for tick in 0..10 {
+            let scale = if tick < 9 { 0.1 } else { 1.0 };
+            advance_one_flare(
+                &mut stage,
+                &handles,
+                Some(Trigger::PlasmaFlare),
+                Vec3::ZERO,
+                scale,
+                &mut playing,
+            );
+            stage.advance(1.0 / 60.0, &mut rng);
+        }
+        let (additive, alpha_over) = stage.vertices(Vec3::X, Vec3::Y);
+        let ys = additive.iter().chain(&alpha_over).map(|v| v.position[1]);
+        ys.clone().fold(f32::MIN, f32::max) - ys.fold(f32::MAX, f32::min)
+    };
+    let live = drawn_height(true);
+    let born = drawn_height(false);
+    assert!(
+        live > born * 2.0,
+        "a head rescaled to 1.0 from 0.1 drew {live} tall, a spawn-time read {born}"
+    );
+}

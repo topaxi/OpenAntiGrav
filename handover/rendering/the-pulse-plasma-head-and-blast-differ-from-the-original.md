@@ -2,7 +2,7 @@
 status: re-first
 titles: [pulse]
 updated: 2026-11-03
-summary: "Plasma blast, head templates and arcs wired; onset flash is WO_PLASMA_FLASH (played); arc shapes and glow brightness open"
+summary: "Plasma head arcs now follow the charge; open: dark disc draw order and colour, luminance overshoot, arcs too big after release"
 ---
 
 # The Pulse Plasma head and blast differ from the original's
@@ -54,6 +54,12 @@ confidence scores and the replay evidence. What is left is wiring and two unread
 
 ## Next Steps
 
-- Item 2(a) remainder: the arcs' shape (class-6 bars built in view space, `streak.rs`) and (b) the glow's brightness;
-  the per-pixel box metric cannot judge random arcs, score mean luminance and read the frames.
+- Item 2(a) closed for shape 2026-11-03 (`pulse-plasma-arc-shape`, `plasma.md` "the arcs' size follows the charge"):
+  the arcs draw at the head's live severity (strip extent 2.5, 5.4, 7.2 at k20, 36, 44 against the dump's 2.4, 5.4, 7.5)
+  and the strips are built at one depth. Still open: (i) `Pipeline::draw` puts every alpha-over particle first, the
+  original draws the arcs, then the dark disc over them, then ring, spikes, glow: ours washes the core at k60 and k72, and
+  an additive-first scratch run shows the disc opaque black where the original's is violet, so the disc colour is a
+  second gap (a per-effect layer, not a global order change); (ii) box luminance overshoots 9 to 12 at k36, k44, k72;
+  (iii) the arcs are 1.2 to 2.4 units too big after the release (k56 on): what severity the head holds after
+  `Plasma_Launch`; (iv) Pure's `Plasma_Init` is unread, so Pure keeps the old arcs.
 - Pulse PS2 is unmeasured here; its pair is `scripts/pcsx2-pulse-pair.py`.

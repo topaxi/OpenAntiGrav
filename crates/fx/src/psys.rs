@@ -630,6 +630,9 @@ pub struct System {
     azimuth: Option<f32>,
     /// The frame local-space particles were last carried to, while they ride it.
     ridden: Option<playback::Frame>,
+    /// Whether every particle draws at the instance's current severity rather than the
+    /// one it spawned with - see [`System::set_draws_live_severity`].
+    live_severity: bool,
     ignitions: u32,
 }
 
@@ -654,6 +657,7 @@ impl System {
             up: Vec3::Y,
             azimuth: None,
             ridden: None,
+            live_severity: false,
             ignitions: 0,
         }
     }
@@ -1133,8 +1137,8 @@ impl System {
                     particle,
                     half,
                     [rgb[0], rgb[1], rgb[2], alpha],
-                    right,
-                    up,
+                    (right, up),
+                    guard,
                 );
                 continue;
             }

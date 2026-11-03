@@ -256,6 +256,14 @@ impl Stage {
         }
     }
 
+    /// Sets whether an instance's particles draw at its live severity - see
+    /// [`System::set_draws_live_severity`]. A no-op on a stale handle.
+    pub fn set_draws_live_severity(&mut self, playing: Playing, live: bool) {
+        if let Some(instance) = self.get_mut(playing) {
+            instance.system.set_draws_live_severity(live);
+        }
+    }
+
     /// The `+Y` [`Self::orient`] last gave an attached instance, or world up
     /// when none did. `None` on a stale handle.
     #[must_use]

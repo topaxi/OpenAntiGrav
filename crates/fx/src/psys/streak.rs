@@ -47,13 +47,16 @@
 //! each of the three spans, and keeps a streak to the six vertices
 //! [`super::MAX_VERTICES`] budgets for.
 //!
-//! **Built in world space, not view space - chosen, not measured.** The
-//! original pushes both endpoints to one depth before building the strip
-//! (the farther, `min(z)`, for class 6; the mean for class 7), so the strip
-//! is screen-parallel with a width that is `half` at that depth. Here the
-//! perpendicular is `dir x (right x up)`, which is the view-space
-//! `(dir.y, -dir.x)` for a streak lying in the screen plane, and each end
-//! keeps its own depth. No eye position reaches this code to do otherwise.
+//! **View space when the camera is known.** The original pushes both endpoints
+//! onto one depth along the line to the eye before building the strip (the
+//! mean of the two for the pool bar and class 7, the farther for the template
+//! wedge), so the strip is screen-parallel and its width is `half` at that
+//! depth; [`at_one_depth`] does it, and the perpendicular is then exactly the
+//! view-space `(dir.y, -dir.x)`. Without a camera (`view` is `None`: a source
+//! the strips were not read on, and the pools whose caller passes none) the
+//! perpendicular is `dir x (right x up)` and each end keeps its own depth,
+//! which is the same for a streak lying in the screen plane - chosen, not
+//! measured.
 //!
 //! **Pulse on the PSP only.** A source whose executable is unread keeps the
 //! procedural profile - see [`super::Effect::without_pulse_psp_draw`].
@@ -61,6 +64,7 @@
 use oag_core::math::Vec3;
 
 use super::between_ticks::set_shift;
+use super::guard::GuardBand;
 use super::{Effect, EmitterSpec, Particle, quad, sprite};
 use oag_mesh::mesh::GpuVertex;
 
@@ -131,6 +135,28 @@ impl StreakDraw {
     }
 }
 
+/// Both ends of a two-point particle moved onto one depth along the line to
+/// the eye, which keeps each on its own screen point and makes the pair
+/// co-planar, so the strip built in that plane is screen-parallel
+/// (`docs/ghidra/functions/psp-pulse-usa/particle-system.md`, "`FUN_08917c7c`"
+/// and "`FUN_08916d00`"): the mean of the two depths, except the template
+/// wedge, which takes the farther. Returned as `(position, origin)` in world
+/// space. A particle at or behind the eye keeps its own points.
+fn at_one_depth(view: &GuardBand, draw: StreakDraw, particle: &Particle) -> (Vec3, Vec3) {
+    let (position, origin) = (particle.position, particle.origin);
+    let depth = |p: Vec3| (p - view.eye).dot(view.forward);
+    let (dp, dor) = (depth(position), depth(origin));
+    if dp < 1e-3 || dor < 1e-3 {
+        return (position, origin);
+    }
+    let common = match draw {
+        StreakDraw::Wedge => dp.max(dor),
+        _ => (dp + dor) * 0.5,
+    };
+    let onto = |p: Vec3, d: f32| view.eye + (p - view.eye) * (common / d);
+    (onto(position, dp), onto(origin, dor))
+}
+
 /// `psys.wesl`'s `normal.x` for a class-7 bar: sample the sheet, and fold
 /// the along-coordinate into the capped `v`.
 const CAPPED: f32 = 2.0;
@@ -148,11 +174,11 @@ pub(super) fn extend(
     particle: &Particle,
     half: f32,
     rgba: [f32; 4],
-    right: Vec3,
-    up: Vec3,
+    (right, up): (Vec3, Vec3),
+    view: Option<&GuardBand>,
 ) {
     let start = out.len();
-    extend_at_tick(out, spec, particle, half, rgba, right, up);
+    extend_at_tick(out, spec, particle, half, rgba, (right, up), view);
     let head = particle.shift();
     let from_spawn = matches!(spec.render, super::Render::Streak { from_spawn: true });
     let along = particle.position - particle.origin;
@@ -177,8 +203,8 @@ fn extend_at_tick(
     particle: &Particle,
     half: f32,
     rgba: [f32; 4],
-    right: Vec3,
-    up: Vec3,
+    (right, up): (Vec3, Vec3),
+    view: Option<&GuardBand>,
 ) {
     let [r, g, b, alpha] = rgba;
     let colour = [r, g, b];
@@ -191,13 +217,24 @@ fn extend_at_tick(
         return;
     };
     let cell = spec.atlas.cell(rect, particle.frame);
-    let along = particle.origin - particle.position;
-    let length = along.length();
+    let (position, origin) = match view {
+        Some(view) => at_one_depth(view, spec.streak, particle),
+        None => (particle.position, particle.origin),
+    };
     // `(0, 1, 0)` in view space for a zero-length streak: the camera's up.
-    let dir = if length > 1e-6 { along / length } else { up };
-    let perp = dir.cross(back).try_normalize().unwrap_or(right) * half;
+    let (dir, perp) = if view.is_some() {
+        let along = (origin - position) - back * (origin - position).dot(back);
+        let length = along.length();
+        let dir = if length > 1e-6 { along / length } else { up };
+        (dir, dir.cross(back) * half)
+    } else {
+        let along = origin - position;
+        let length = along.length();
+        let dir = if length > 1e-6 { along / length } else { up };
+        (dir, dir.cross(back).try_normalize().unwrap_or(right) * half)
+    };
     let cap = dir * half;
-    let (position, origin) = (particle.position, particle.origin);
+    let length = (origin - position).length();
     let corner = |at: Vec3, u: f32, v: f32| GpuVertex {
         position: at.to_array(),
         normal: [0.0, 0.0, 0.0],

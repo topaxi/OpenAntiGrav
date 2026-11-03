@@ -2045,3 +2045,70 @@ cell, and `--give` with `--press square` re-fires every other tick so dozens of 
 the matched Pulse pair draws a handful of small dots at k96 and k100, as the original does (`orig-k096`, `orig-k100`),
 so there is nothing to fix. Pure: a single bolt at the default circuit (tick 500, `weapon-after-go-matched.inputs`)
 shows three discs in a violet shell, no arches.
+
+## 2026-11-03: the arcs' size follows the charge, and the strips are built in view space (pulse-plasma-arc-shape)
+
+### The cause: pool particles drew at the severity they were born with
+
+`ParticleSystem_UpdateParticleFields` multiplies the size channel by the instance's severity (`+0x34`)
+on every update (`particle-system.md`, "Channel animation": "drawn size = size-channel * `instance+0x34`").
+Ours applied that live read to sprite templates only and kept every other particle at its spawn-time
+severity. The Plasma's severity is rewritten every charging tick (`(1 - remaining) * 0.75`), so the
+head's arcs, born while the charge was small, stayed small: a thin hazy loop where the original shows a
+ring of large crescents. Confidence **80** (the per-frame multiply is read; the match below is the
+measured side).
+
+Measured: the root emitter's strip extent (the largest bounding-box side of the strip's vertices, ours,
+at ticks `391 + k`) against the dump's draw 1 (2.4, 5.4, 7.5, 8.4, 9.9, 11.2 units at k20, 36, 44, 56, 68, 74):
+
+| k | 20 | 36 | 44 | 56 | 68 | 74 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| original | 2.4 | 5.4 | 7.5 | 8.4 | 9.9 | 11.2 |
+| spawn-time severity (before) | 2.3 | 3.1 | 3.6 | 9.1 | 10.8 | 11.7 |
+| live severity (after) | 2.5 | 5.4 | 7.2 | 9.7 | 12.5 | 13.6 |
+
+The live read matches through the charge (k20-44) where the spawn-time one lags by half. After the
+release (k56 on) both read larger than the original, the live one more so; the severity after the release
+is the open part (`plasma_flare_scale` freezes it at 0.75 by inference, and the arcs are 1.2 to 2.4
+units too big there). Particle counts agree (8 at k56 = the dump's 46 vertices, 10 elsewhere = 58).
+Wired for the Plasma head alone (`System::set_draws_live_severity`, turned on in `advance_one_flare` next to
+the ride, on Pulse's PSP file only): the Quake and the collision sparks also rescale or carry a severity, and
+their pool particles were not measured against it.
+Test: `tests::weapons::visuals::the_plasma_heads_arcs_follow_the_charge_they_are_drawn_at` (red before: a head
+rescaled 0.1 to 1.0 draws no taller than at its spawn size).
+
+Pair (head box `200,112,90,80`, k20, 36, 44, 60, 72, mean RGB in the box, original / before / after):
+k20 142.0 / 143.3 / 143.6, k36 106.9 / 105.5 / 116.6, k44 112.8 / 105.7 / 121.5, k60 127.0 / 126.3 / 132.5, k72 111.1 /
+115.3 / 123.4. The per-pixel metric (`weapon-pair-score.py`, area x excess) reads 122,340 before and **120,946**
+after (one original, no noise floor: not a measured improvement, the arcs are random draws). The frames
+are the evidence: at k36 and k44 ours now shows the original's ring of large pale-violet crescents around a
+dark disc, where before it showed a small bright blob and one stray bar. The luminance overshoots 9 to 12 at
+k36, k44 and k72, which is the next gap.
+
+### The strips are built at one depth when the camera is known
+
+`FUN_08917c7c` (pool bars) and `FUN_08916d00` (class 7) scale both ends onto the mean of their depths, the
+template wedge onto the farther, then build the strip in the view plane (`particle-system.md`).
+`streak.rs` now does the same (`at_one_depth`) when `extend_vertices` is given the camera
+(`GuardBand`, which the race passes on Pulse's PSP source for the stage only); the pools whose caller
+passes none (the collision sparks, the scenery stage) keep the world-space construction. The change is
+faithful and on its own barely moves the head (the bars point mostly across the screen), so it is not what
+closed the arcs. Test: `psys::tests::a_pool_bar_is_built_at_the_mean_depth_of_its_ends_when_the_eye_is_known`
+(red before: the corners sit at -10 and -20). Another streak user, the Repulser's ring, drawn after the change:
+still a ring of streaks around the craft (`--give repulser`, tick 410).
+
+### Draw order, found and not changed
+
+The dump draws the arcs (additive), then the **dark disc (source-alpha) over them**, then the ring, spikes and
+glow (additive). `Pipeline::draw` draws every alpha-over particle first and every additive one after, so
+ours puts the arcs over the disc: at k60 and k72 the original's dark core is clear and ours is washed white.
+Drawing additive first (a scratch test) shows the disc but as an opaque black disc (ours has no purple
+interior where the original's reads about 90/50/110), so the disc's own colour is a second gap. The order is
+global to every effect; a per-effect layer is the open lane (handover thread).
+
+### Cross-title
+
+Pure: **checked, not wired**. Pure's `Plasma_Init` is unread (`psp-pure-usa/plasma.md` has the blast only), so
+neither the ride (`rides_owner_frame`) nor the live severity is turned on for it; both need Pure's call site
+(confidence below 70 today). HD, Omega, 2048: the head differs (`HD_plasma_ball`), **checked, differs**. PS2
+**inherits** PSP's law when it loads through the PSP path, as with the ride.

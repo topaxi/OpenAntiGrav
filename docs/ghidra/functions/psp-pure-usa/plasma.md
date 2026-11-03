@@ -149,3 +149,12 @@ mechanism (`oag_raceplay::blast_models`) now reads all of it from that law; Puls
 
 HD and Omega run their own blast (ring, sphere and halo on eased scale ramps, `plasma.md` on those binaries): **checked, differs**
 (the same eased `(cur, target, rate)` shape, different models). 2048: **not checkable** here (no PSP code).
+
+## The head's arcs (checked against Pulse, 2026-11-03)
+
+Pulse's charging head draws its root emitter's arcs through the craft's live matrix and at the
+instance's live severity ([Pulse's plasma.md](../psp-pulse-usa/plasma.md), "the arcs' size follows the
+charge"). **Checked, not wired for Pure.** Pure's `WO_PLASMA_HEAD` file carries the same flag `0x2`, but
+`Plasma_Init`'s `Psys_Spawn` call (the parent argument that makes the matrix move) is unread, so the
+evidence is below 70 and `Effect::rides_owner_frame` and `System::set_draws_live_severity` stay off for Pure.
+Reading Pure's `Plasma_Init` is the step that would turn both on.
