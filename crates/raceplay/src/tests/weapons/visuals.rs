@@ -431,6 +431,70 @@ fn a_charging_plasma_head_is_drawn_on_the_crafts_weapon_node() {
     );
 }
 
+/// A released Plasma's head keeps the lead the weapon node had over the bolt's hold
+/// point: the original launches the bolt's matrix from the head's node and the head
+/// draws through that matrix, so at draw time it sits 4.24, 4.43, 4.62, 4.81, 5.79 ...
+/// ahead of the craft, never stepping back to the hold point 2.23 ahead
+/// (`docs/ghidra/functions/psp-pulse-usa/plasma.md`, "the head after the release"). A
+/// hull with no locator, and a source whose head was not measured, keep the bolt.
+#[test]
+fn a_released_plasma_head_keeps_the_weapon_nodes_lead_over_the_bolt() {
+    let lead_over_bolt = |pulse_psp: bool, muzzle: Option<Vec3>| -> f32 {
+        let blob = super::respawn::one_emitter_pob("WO_PLASMA_HEAD", 0x2);
+        let mut effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
+            .expect("the hand-laid effect parses");
+        if !pulse_psp {
+            effect.without_pulse_psp_draw();
+        }
+        let mut race =
+            race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_plasma_table());
+        race.view.handles.insert(Trigger::PlasmaFlare, effect);
+        race.view.muzzles = vec![muzzle; oag_gameplay::MAX_SHIPS];
+        let mut buttons = Buttons::new();
+        race.tick(&PlayerInputs::single(buttons.tick(0)));
+        race.tick(&PlayerInputs::single(buttons.tick(SQUARE)));
+        let mut released_for = 0;
+        for _ in 0..90 {
+            race.tick(&PlayerInputs::single(buttons.tick(0)));
+            let bolt = race.sim.world.projectiles.slots[0];
+            assert_eq!(
+                bolt.kind,
+                Some(oag_tables::weapons::Weapon::Plasma),
+                "the bolt is alive"
+            );
+            if bolt.charge <= 0.0 {
+                released_for += 1;
+            }
+            if released_for == 4 {
+                break;
+            }
+        }
+        assert_eq!(released_for, 4, "the bolt was released within ninety ticks");
+        let bolt = race.sim.world.projectiles.slots[0];
+        let instance = race.view.projectile_flare[0].expect("the head is playing");
+        let anchor = race.view.stage.anchor_of(instance).expect("a live head");
+        let heading = bolt.velocity.normalize();
+        (anchor - bolt.position).dot(heading)
+    };
+    let assegai = Some(Vec3::new(0.0, 0.0, 5.653));
+    let expected = 5.653 * 0.75 - oag_weapons::projectile::plasma::MUZZLE_FORWARD;
+    let on_node = lead_over_bolt(true, assegai);
+    assert!(
+        (on_node - expected).abs() < 0.05,
+        "the released head leads the bolt by {on_node}, not the node's {expected}"
+    );
+    let no_locator = lead_over_bolt(true, None);
+    assert!(
+        no_locator.abs() < 0.05,
+        "a hull with no Ship Muzzle led the bolt by {no_locator}"
+    );
+    let other = lead_over_bolt(false, assegai);
+    assert!(
+        other.abs() < 0.05,
+        "an unmeasured source's head led the bolt by {other}"
+    );
+}
+
 /// The charging head's arcs draw at the head's severity of the moment, not the one they
 /// were born with: `ParticleSystem_UpdateParticleFields` multiplies the size channel by
 /// the instance's `+0x34` every update, and the original's strip grows 2.4, 5.4, 7.5

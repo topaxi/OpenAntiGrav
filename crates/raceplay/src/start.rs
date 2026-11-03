@@ -895,6 +895,7 @@ impl Race {
                 engine_flare: [None; MAX_SHIPS],
                 projectile_flare: [None; oag_weapons::projectile::MAX_PROJECTILES],
                 projectile_flare_orbit: [None; oag_weapons::projectile::MAX_PROJECTILES],
+                plasma_lead: [0.0; oag_weapons::projectile::MAX_PROJECTILES],
                 quake_effect: None,
                 repulser_effects: [[None; 4]; oag_weapons::projectile::repulser::POOL_SIZE],
                 repulser_fields: [None; oag_weapons::projectile::repulser::POOL_SIZE],
