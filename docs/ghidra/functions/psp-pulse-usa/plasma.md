@@ -2189,3 +2189,45 @@ its evidence.
 
 Pure: **checked, not wired** (`Plasma_Init` unread, the flag is Pulse PSP's only). Pulse PS2: **inherits** when it
 loads through the PSP path (it does not today). HD, Omega, 2048: **checked, differs** (`HD_plasma_ball`).
+
+## 2026-11-03: the head's arcs against the dump, quad by quad (pulse-plasma-crescents)
+
+The k50 GE dump of the charging head (draw 1, the 58-vertex strip on the arc atlas: ten four-vertex quads with two
+degenerate vertices between each pair) decoded vertex by vertex against ours at the same charge. Result: **no
+construction difference found; the remaining shape gap is the random draws.** Confidence **70** (one dump, ten quads a side).
+
+| | original (k50 dump) | ours (tick 441) |
+| --- | --- | --- |
+| white quads (opaque, frames 0, 1, 3) width / length between the end-edge midpoints | 1.4-2.5 / 2.9-4.1 | 1.2-2.0 / 3.0-5.0 |
+| purple quads (low alpha, frame 2 and 1) width / length | 5.5-6.1 / 6.3-6.8 | 4.7-5.8 / 5.4-6.7 |
+| one depth per quad (screen-parallel, both ends) | yes (z -15.4 to -16.8) | yes |
+| strip build | `A - a -+ n`, `B + a -+ n`, `n = (d.y, -d.x) * size`, `u` 1 on the `-n` edge, `v` 0.5 or 0 at `A` | the same (`streak.rs`) |
+| vertex colour, white | `ffeffdff` (R, G, B, A bytes), purple `791e7e15` to `89378e6e` | `(1.0, 0.99, 1.0, 1.0)`; purple `(0.55, 0.24, 0.56)` at alpha 0.43 = the dump's `89378e6e` colour at its alpha 0.43 |
+
+The colour and alpha are one palette walked over the particle's life in both (an original purple at alpha 0.08 reads
+`(0.475, 0.118, 0.494)`, ours at 0.037 reads `(0.467, 0.110, 0.490)`), so the vertex colours match by age. What differs is the
+**age of the old cohort**: the original's five purples sit at ages about 0.875 to 0.99 (alphas 0.43, 0.24, 0.08, 0.075,
+0.004) and ours at 0.74 to 0.97 (0.92 to 0.115), so ours draws the purples brighter on this tick. That is the emission
+cohort timing (cap 10 with a 39 +- 3 tick life and a random life draw each), which depends on the random stream, not on a law
+read; it is not fitted. The head template draws were compared too: the glow's vertex colour is `(0x5a, 0x3d, 0x68, 0xff)`
+(0.353, 0.239, 0.408, 1.0) and ours is exactly that at k50 and k60, with the 2:1 extent (dump 17.5 x 8.7, ours 16.8 x 8.4 at
+the same tick); the ring's colour matches (`cac7ff`) and its alpha, a **random channel** (0 to 255, drawn once at the
+press), reads 0.518 in the dump and 0.364 ours. So "the glow reads dimmer" is not the glow: its colour, blend and
+size are the dump's. The box luminance gap at k60 (122.5 against 127.0) is arcs and the ring's random alpha.
+
+Box score (`weapon-pair-score.py`, head box `200,112,90,80`, k20-72, five shots, one deterministic run a side, no noise
+floor): **103,807** area x excess on this tree; mean luminance original / ours at k20, 36, 44, 60, 72: 142.0 / 143.2,
+106.9 / 115.3, 112.8 / 121.1, 127.0 / 122.5, 111.1 / 114.1. The 102,300 of the head lane was a different shot set; every
+later lane that scored the arcs read 120,000 or more, so none of the figures is a trend.
+
+The view-space build is not open: it landed with `pulse-plasma-arc-shape` (`at_one_depth`), and the dump confirms the
+quads are built at one depth in the screen plane exactly so. The frames at k36, 44, 50, 56, 60, 68 show a ring of
+violet crescents round the dark disc on both sides; where ours differs is the placement of a few long white
+strokes (random). To close the shape further the draw would need the original's random stream (not recoverable) or
+a count of how its particle cohort is timed (`ParticleSystem_Update`'s spawn gate against the cap, unread here).
+
+**The onset flash one shot late** was not re-measured in this pass (no new original frames were captured). Nothing
+on our side was found that shifts it: `WO_PLASMA_FLASH` is played at the dump's extent (above), and the `391 + k` mapping
+already carries a lag of about two presented frames (`psp-weapon-pair.py`), which is the named suspect. Left open, unfixed.
+
+Cross-title: Pure **checked, not wired** (`Plasma_Init` unread); HD, Omega, 2048 **checked, differs** (`HD_plasma_ball`).
