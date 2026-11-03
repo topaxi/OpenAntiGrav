@@ -23,6 +23,7 @@ mod shadow_ground_truth;
 mod shadow_stability_ground_truth;
 mod ship_spawn_ground_truth;
 mod shuriken_ground_truth;
+mod sol_ground_truth;
 mod speed_plan_ground_truth;
 mod stall_rescue_ground_truth;
 mod start_gantry_clock_inherit_ground_truth;
