@@ -169,3 +169,4 @@
 0x0136ef30	function	ShipShield_DrawCockpit	65	shield.md
 0x01a15700	data	g_shipshield_activation_colour	85	shield.md
 0x01a15710	data	g_shipshield_hit_colour	85	shield.md
+0x012d8e30	function	HandlingStats_ParseXml	75	weapon-counts.md

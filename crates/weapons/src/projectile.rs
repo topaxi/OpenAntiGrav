@@ -73,7 +73,7 @@ pub use blast::{BlastStats, blast, blast_stats};
 pub use mine::TriggerRadii;
 pub use rocket::{
     LAUNCH_SPEED_SCALE as ROCKET_LAUNCH_SPEED_SCALE, LIFETIME_SECONDS as ROCKET_LIFETIME_SECONDS,
-    ROCKET_SHOTS, fire as fire_rocket, launch,
+    ROCKET_SHOTS, Volley, fire as fire_rocket, launch,
 };
 
 use crate::Craft;

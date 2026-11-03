@@ -63,7 +63,7 @@ pub(super) fn follow_player(
     ));
 }
 
-/// Each AI slot's own handling on every title, `None` where it flies the
+/// Each AI slot's own handling and weapon counts on every title, `None` where it flies the
 /// player's (the slot's team is the player's, or its file would not load - said
 /// in the report, never invented). The class, pad tunables and `<Special>` are the
 /// race's, as they are for the player.
@@ -75,10 +75,14 @@ pub(super) fn opponent_handling(
     pad_tunables: handling::SpeedupPads,
     special: handling::Special,
     report: &mut Vec<String>,
-) -> Vec<Option<oag_physics::Handling>> {
+) -> (
+    Vec<Option<oag_physics::Handling>>,
+    Vec<Option<oag_weapons::counts::WeaponCounts>>,
+) {
     let mut out = vec![None; slot_teams.len()];
+    let mut counts = vec![None; slot_teams.len()];
     let Some(player) = slot_teams.first() else {
-        return out;
+        return (out, counts);
     };
     for (slot, team) in slot_teams.iter().enumerate().skip(1) {
         if team == player {
@@ -93,14 +97,20 @@ pub(super) fn opponent_handling(
                 let mut handling = oag_gameplay::handling_for(&stats, class, pad_tunables, special)
                     .ok_or_else(|| format!("authors no <Class name=\"{class}\">"))?;
                 super::code_laws::apply(&mut handling, &stats, class, race.craft_laws);
-                Ok(handling)
+                Ok((
+                    handling,
+                    oag_weapons::counts::WeaponCounts::from_stats(&stats),
+                ))
             });
         match loaded {
-            Ok(handling) => out[slot] = Some(handling),
+            Ok((handling, weapon_counts)) => {
+                out[slot] = Some(handling);
+                counts[slot] = Some(weapon_counts);
+            }
             Err(error) => report.push(format!(
                 "{name}: {error} - slot {slot} flies the player's tuning instead"
             )),
         }
     }
-    out
+    (out, counts)
 }

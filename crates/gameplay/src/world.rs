@@ -113,6 +113,10 @@ pub struct Ship {
     /// `ShipState::turbo_timer` instead, and the inventory itself changes no
     /// force.
     pub pickup: oag_weapons::pickup::Held,
+    /// How many rockets a press fires and how many mines a drop lays, from this craft's own
+    /// `handlingstats.xml` (`oag_weapons::counts`). Load-time data like [`Self::handling`]:
+    /// no tick writes it.
+    pub weapon_counts: oag_weapons::counts::WeaponCounts,
     /// Where this craft's driver last found itself on the racing line.
     ///
     /// Only an opponent uses it - slot 0 is flown by the player - and it is the
@@ -240,6 +244,7 @@ impl Default for Ship {
             handling: Handling::ZERO,
             segment: 0,
             pickup: oag_weapons::pickup::Held::empty(),
+            weapon_counts: oag_weapons::counts::WeaponCounts::default(),
             driver: oag_ai::Driver::default(),
             weapon_ai: oag_ai::weapon_ai::WeaponAi::default(),
             standing: oag_race::Standing::default(),

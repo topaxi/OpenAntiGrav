@@ -58,6 +58,9 @@ gets. The ground-truth tests assert shapes and signs, never magnitudes.
     <AirbrakeGraphics amount down_speed up_speed/>
     <Misc height length shield easyshield width weight_distribution/>
     <FE speed thrust handling shield/>
+    <BespokeStats>             <!-- 2048 and Omega's own five teams -->
+      <Weapons number_of_rockets number_of_mines weapon_damage_multiplier lockon_speed_multiplier gift_cannon_time/>
+    </BespokeStats>
 
     <Class name="VENOM|FLASH|RAPIER|PHANTOM">
       <Engine   accelcap amount falloff gain turbo/>
@@ -77,6 +80,15 @@ gets. The ground-truth tests assert shapes and signs, never magnitudes.
 presentation only and need not agree with the physics.
 
 `easyshield` alongside `shield` implies a difficulty-scaled shield pool.
+
+`<Stats><BespokeStats><Weapons number_of_rockets number_of_mines/></BespokeStats></Stats>` is
+authored only by 2048's and Omega's own five teams (`weapon_damage_multiplier`,
+`lockon_speed_multiplier` and `gift_cannon_time` ride on the same line, unread). Both titles'
+executables read the two counts, truncate and clamp them to `1..=3` and `1..=5`, and give a
+craft that omits one three rockets and five mines; Pulse, Pure and HD author and read none
+([weapon-counts.md](../ghidra/functions/ps4-omega-eu/weapon-counts.md)). Parsed to
+`handling::Stats::weapons`, spent by `oag_weapons::counts::WeaponCounts`
+(`remix_2048_sources_ground_truth::rocket_and_mine_counts_per_craft`).
 
 ## What is decoded
 
