@@ -107,6 +107,12 @@ pub enum Trigger {
     MineExplo,
     /// A Bomb's smoke ring.
     BombSmokering,
+    /// A laid Bomb's glow, riding it for as long as it lies (Pure).
+    BombGlow,
+    /// A Disruptor bolt in flight (Pure).
+    DisruptorHead,
+    /// A Disruptor bolt ending (Pure).
+    DisruptorExplo,
     /// HD's Bomb detonation, 0.5 s in: the rays `0x001503d8` spawns once.
     BombRays,
     /// A Cannon bolt's impact.
@@ -164,7 +170,7 @@ pub enum Trigger {
 
 impl Trigger {
     /// Every trigger, in load order.
-    pub const ALL: [Self; 44] = [
+    pub const ALL: [Self; 47] = [
         Self::CollisionSpark,
         Self::CollisionSparkNoDamage,
         Self::HitSpark,
@@ -184,6 +190,9 @@ impl Trigger {
         Self::MissileBounce,
         Self::MineExplo,
         Self::BombSmokering,
+        Self::BombGlow,
+        Self::DisruptorHead,
+        Self::DisruptorExplo,
         Self::BombRays,
         Self::CannonSparks,
         Self::EngineFlare,

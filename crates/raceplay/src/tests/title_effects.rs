@@ -13,7 +13,10 @@ const ALL: [&Title; 5] = [
 ];
 
 /// The triggers a title answers for itself; the rest are the engine's.
-const OWN: [Trigger; 13] = [
+const OWN: [Trigger; 16] = [
+    Trigger::BombGlow,
+    Trigger::DisruptorHead,
+    Trigger::DisruptorExplo,
     Trigger::BombRays,
     Trigger::HitSpark,
     Trigger::LeachHitSpark,
@@ -68,6 +71,18 @@ fn the_vita_and_ps4_titles_drop_what_they_never_author_and_the_rest_keep_it() {
     }
 }
 
+/// The engine-table triggers Pure's own executable was read for, so its table says
+/// `Measured` where the rest inherit Pulse's
+/// (`docs/ghidra/functions/psp-pure-usa/weapon-effects.md`, `plasma.md`).
+const PURE_MEASURED: [Trigger; 6] = [
+    Trigger::MissileFlare,
+    Trigger::MissileBounce,
+    Trigger::MissileExplo,
+    Trigger::MineExplo,
+    Trigger::BombSmokering,
+    Trigger::PlasmaBlast,
+];
+
 #[test]
 fn the_trigger_list_is_in_index_order_and_counts_itself() {
     assert_eq!(Trigger::COUNT, Trigger::ALL.len());
@@ -119,6 +134,14 @@ fn each_trigger_is_answered_by_exactly_the_titles_that_read_it() {
     // `NormalBombBlast_Update` (HD, `0x001503d8`) spawns it; no other title's
     // blast does.
     assert_eq!(has(Trigger::BombRays), [false, false, true, false, false]);
+    // Pure's laid Bomb glow and Disruptor bolt are read on its executable alone.
+    for own in [
+        Trigger::BombGlow,
+        Trigger::DisruptorHead,
+        Trigger::DisruptorExplo,
+    ] {
+        assert_eq!(has(own), [false, true, false, false, false], "{own:?}");
+    }
 }
 
 /// The engine-table triggers whose effect no Pulse archive holds and no Pulse
@@ -244,7 +267,9 @@ fn every_title_tries_the_engines_own_effects_as_pulses() {
             let spec = title
                 .effect_on(trigger)
                 .unwrap_or_else(|| panic!("{} has no {trigger:?}", title.name));
-            let want = if title.name == oag_pulse::TITLE.name {
+            let want = if title.name == oag_pulse::TITLE.name
+                || (title.name == oag_pure::TITLE.name && PURE_MEASURED.contains(&trigger))
+            {
                 Origin::Measured
             } else {
                 Origin::InheritedFrom("Wipeout Pulse")
@@ -328,8 +353,8 @@ fn a_race_loads_each_name_of_its_own_table_once_and_the_superset_covers_every_ti
     );
     // 43 since Pure, the last title that named it, dropped `WO_SHIP_ENGINEFLARE`; 44 with
     // `WO_SHIP_COLL_SPARK_NODAMAGE`, the collision cage's contact spark; 47 with Pure's three
-    // big-blast names.
-    assert_eq!(crate::RACE_EFFECTS.len(), 47);
+    // big-blast names; 50 with Pure's Bomb glow and Disruptor head and explosion.
+    assert_eq!(crate::RACE_EFFECTS.len(), 50);
 }
 
 #[test]

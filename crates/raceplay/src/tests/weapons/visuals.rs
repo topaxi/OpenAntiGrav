@@ -30,6 +30,8 @@ fn each_projectile_rides_only_its_own_flare() {
             Weapon::Missile => Some(Trigger::MissileFlare),
             Weapon::Plasma => Some(Trigger::PlasmaFlare),
             Weapon::Shuriken => Some(Trigger::ShurikenFlare),
+            Weapon::Bomb => Some(Trigger::BombGlow),
+            Weapon::Disruptor => Some(Trigger::DisruptorHead),
             _ => None,
         };
         assert_eq!(

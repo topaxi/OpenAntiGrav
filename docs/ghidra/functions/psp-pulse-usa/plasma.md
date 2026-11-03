@@ -1187,7 +1187,12 @@ For each of the three models (index 0 = the halo, 1 = `hemisphere2`, 2 =
   `PlasmaBlast_Construct` builds once at spawn - the two coexist, and this one
   is recomputed from the camera every tick, so the model re-orients as the
   camera moves even though the group's anchor point does not.
-- **`Node_SetAnimTimeTree(age * rate[i], model)`** - already a named, shared
+- **`Node_SetAnimTimeTree(age * m[i], model)`** (corrected 2026-11-03, lane
+  `pure-weapons-wire`: the multiplier `m` is `DAT_08ab0f60`, `1.0` for all three, so the time is the age;
+  `0.1`, `0.07`, `0.07` below are the per-tick **scale-ease rates**, not anim-time rates, as the 2026-10-30
+  section "the blast scale is an ease" measures and Pure's own constructor confirms, `psp-pure-usa/plasma.md`,
+  "Animation time, life and basis". The paragraph below is the superseded first reading, kept for its
+  evidence) - already a named, shared
   engine function (not touched here), called with `0.0` once at spawn
   (`PlasmaBlast_Construct`'s own three-iteration loop, `FUN_08912890(0, ...)`
   before it carried this name) and with `age * rate[i]` every tick after. The

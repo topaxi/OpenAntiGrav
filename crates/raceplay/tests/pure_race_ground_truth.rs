@@ -474,3 +474,76 @@ fn a_pulse_source_has_no_fifth_rung_and_says_so() {
     assert_eq!(ladder.names(), oag_title::SpeedClasses::PULSE_LADDER);
     assert!(!ladder.names().contains(&oag_title::SpeedClasses::VECTOR));
 }
+
+/// Pure's Plasma blast plays its own three models: `plasma_halo`,
+/// `plasma_hemisphere_noglow` and `plasma_hemisphere` resolve on the disc and
+/// the race carries Pure's law (2.0 s life, the 3.5 hemisphere drop). Fails if
+/// the title's `plasma_blast_pulse` row is dropped (nothing loads, no law).
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_pure_race_loads_its_own_plasma_blast_trio() {
+    for (label, image) in images() {
+        let loaded = load(&image, oag_pure::race::DEFAULT_TRACK);
+        let blast = &loaded.plasma_blast_models;
+        for (name, model) in [
+            ("plasma_halo", &blast.halo),
+            ("plasma_hemisphere_noglow", &blast.hemisphere2),
+            ("plasma_hemisphere", &blast.hemisphere1),
+            ("electric_halo2", &blast.disruptor_halo),
+        ] {
+            assert!(
+                model.is_some(),
+                "{label}: {name} did not load: {:#?}",
+                loaded.report
+            );
+        }
+        let law = loaded.setup.plasma_blast_law.expect("Pure's blast law");
+        assert_eq!(law.life, 2.0, "{label}");
+        assert_eq!(law.hemisphere_drop, 3.5, "{label}");
+        assert!(law.halo_hide_at.is_none(), "{label}");
+    }
+}
+
+/// Pure spawns its own weapon effects: every trigger the executable was read
+/// for (`psp-pure-usa/weapon-effects.md`, `plasma.md`) resolves to a decoded
+/// `Data\Psys` effect on the disc, the Missile, Mine and Bomb group as well as
+/// the Disruptor's head and explosion and the Bomb's glow. Fails if a name is
+/// dropped from Pure's table or no longer decodes.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_pure_race_loads_the_effects_its_weapons_play() {
+    use oag_title::Trigger;
+    for (label, image) in images() {
+        let loaded = load(&image, oag_pure::race::DEFAULT_TRACK);
+        for (group, triggers) in [
+            ("Plasma", &[Trigger::PlasmaBlast, Trigger::PlasmaFlare][..]),
+            (
+                "Missile/Mine/Bomb",
+                &[
+                    Trigger::MissileFlare,
+                    Trigger::MissileBounce,
+                    Trigger::MissileExplo,
+                    Trigger::MineExplo,
+                    Trigger::BombGlow,
+                    Trigger::BombSmokering,
+                ][..],
+            ),
+            (
+                "Disruptor",
+                &[Trigger::DisruptorHead, Trigger::DisruptorExplo][..],
+            ),
+        ] {
+            for trigger in triggers {
+                let spec = oag_pure::TITLE
+                    .effect_on(*trigger)
+                    .unwrap_or_else(|| panic!("{label}: Pure's table has no {trigger:?}"));
+                assert!(
+                    loaded.setup.effects.get(spec.effect).is_some(),
+                    "{label}: {group} {trigger:?} ({}) did not decode: {:#?}",
+                    spec.effect,
+                    loaded.report
+                );
+            }
+        }
+    }
+}

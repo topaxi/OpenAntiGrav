@@ -540,6 +540,11 @@ fn each_weapon_plays_only_its_own_recovered_explosion() {
          what was struck, unlike the Rocket's"
     );
     assert_eq!(
+        race.blast_for(Weapon::Disruptor, point, None),
+        Some((Trigger::DisruptorExplo, point)),
+        "the Disruptor's own explosion (DisruptorExplo_Construct), at a hit and at the timeout"
+    );
+    assert_eq!(
         race.blast_for(Weapon::Bomb, point, None),
         Some((Trigger::BombSmokering, point)),
         "the Bomb's own smoke ring (BombBlast_Construct), at the impact \

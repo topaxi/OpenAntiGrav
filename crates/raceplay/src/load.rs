@@ -1125,6 +1125,10 @@ pub fn load(options: &Options) -> Result<Loaded> {
             #[cfg(feature = "view")]
             hd_plasma_blast: models.plasma_blast_hd.is_some(),
             #[cfg(feature = "view")]
+            plasma_blast_law: models.plasma_blast_pulse.map(|blast| blast.law),
+            #[cfg(feature = "view")]
+            disruptor_halo_law: models.disruptor_halo,
+            #[cfg(feature = "view")]
             hd_bomb_blast: models.bomb_blast_hd.is_some(),
             #[cfg(feature = "view")]
             bomb_shockwave_fades: models.bomb_blast_pulse.is_some_and(|b| b.shockwave_fades),

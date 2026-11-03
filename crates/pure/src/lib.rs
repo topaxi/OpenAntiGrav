@@ -134,12 +134,34 @@ pub const TITLE: &Title = &Title {
         // Pure hands out no Cannon (no `Cannon` string in the executable).
         cannon: None,
         plasma_ball: None,
-        // Pure's Plasma blast is a three-model shell too (`plasma_halo`,
-        // `plasma_hemisphere_noglow`, `plasma_hemisphere`, built by
-        // `0x0885b2a0`) but over three 255-to-0 key tables of its own, not
-        // Pulse's baked anim-time track: unread, so nothing is wired.
-        plasma_blast_pulse: None,
+        plasma_blast_pulse: Some(oag_title::weapons::PulsePlasmaBlast {
+            halo: r"Data\Weapons\plasma_halo.vex",
+            hemisphere2: r"Data\Weapons\plasma_hemisphere_noglow.vex",
+            hemisphere1: r"Data\Weapons\plasma_hemisphere.vex",
+            // `PlasmaBlast_Construct` (`0x0885b2a0`) and `PlasmaBlast_Update` (`0x0885ae9c`),
+            // confidence 85 for the tables and 88 for the life; the targets are the read `15, 8,
+            // 7.8` divided by `PULSE_MODEL_UNIT` (`0.025`), which carries over only if Pure's
+            // three models share Pulse's extents (`docs/ghidra/functions/psp-pure-usa/plasma.md`).
+            law: oag_title::weapons::PlasmaBlastLaw {
+                tint: [(0.2, 0.5), (0.3, 1.0), (0.0, 1.0)],
+                ease_targets: [600.0, 320.0, 312.0],
+                ease_rates: [0.1, 0.07, 0.07],
+                life: 2.0,
+                halo_hide_at: None,
+                hemisphere_drop: 3.5,
+                origin: oag_title::Origin::Measured,
+            },
+        }),
         plasma_blast_hd: None,
+        // `DisruptorExplo_Construct` loads it and `DisruptorExplo_Update` eases it
+        // (`docs/ghidra/functions/psp-pure-usa/weapon-effects.md`, "Disruptor", confidence 80).
+        disruptor_halo: Some(oag_title::weapons::DisruptorHalo {
+            model: r"Data\Weapons\electric_halo2.vex",
+            target: 16.0,
+            rate: 0.05,
+            life: 1.0,
+            origin: oag_title::Origin::Measured,
+        }),
         // Pure's Bomb has no fuse, but it does detonate when a craft enters
         // its `trigger_radius` (`BombPool_Detonate`, `0x0884f214`), which
         // builds this pair (`0x08858710`: the same two models, the same

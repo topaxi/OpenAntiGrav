@@ -246,6 +246,10 @@ fn setup(handling: Handling) -> Setup {
         shield_palette: oag_render::shield::PULSE_PALETTE,
         // Pulse's own mechanism, same reasoning as `shield_palette` above.
         hd_plasma_blast: false,
+        disruptor_halo_law: None,
+        plasma_blast_law: oag_pulse::race::WEAPON_MODELS
+            .plasma_blast_pulse
+            .map(|blast| blast.law),
         hd_bomb_blast: false,
         hd_missile_blast: false,
         bomb_shockwave_fades: false,
