@@ -136,6 +136,8 @@ Build natively instead and mind the glibc floor this script prints."
     # mount, so build.rs is handed the hash `oag-game --version` prints.
     git_hash="$(git -C "$project_root" rev-parse --short=7 HEAD 2>/dev/null || true)"
     [[ -n $git_hash ]] && engine_args+=(-e "OAG_GIT_HASH=$git_hash")
+    build_date="$(git -C "$project_root" log -1 --format=%cs HEAD 2>/dev/null || true)"
+    [[ -n $build_date ]] && engine_args+=(-e "OAG_BUILD_DATE=$build_date")
     [[ -n ${OAG_VERSION_SUFFIX:-} ]] && engine_args+=(-e "OAG_VERSION_SUFFIX=$OAG_VERSION_SUFFIX")
     # Always set, even empty: RUSTFLAGS replaces every config-file rustflags, so
     # a host-only `.cargo/config.toml` in the mounted checkout (a mold linker
