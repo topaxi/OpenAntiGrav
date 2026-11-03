@@ -108,8 +108,38 @@ pub enum Weapon {
     /// A simulation mod's own pickup (`oag_raceplay::extensions`, README 7.5): no title
     /// authors it, no table row describes it, and the engine neither fires nor absorbs
     /// it - the mod that gives it does. **Not in [`Self::ALL`]**, which is the titles'
-    /// pool and indexes their per-weapon tables; a race with no mod never holds one.
-    Extension,
+    /// pool and indexes their per-weapon tables; a race with no mod never holds one. One
+    /// kind per mod that declares a pickup ([`ModKind`]).
+    Extension(ModKind),
+}
+
+/// Which mod's pickup an [`Weapon::Extension`] is: the mod's place among the race's
+/// pickup-declaring simulation modules, in id order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ModKind(u8);
+
+impl ModKind {
+    /// Kinds a race can hold: the cap on mods that declare a pickup.
+    pub const MAX: usize = 32;
+
+    /// The first mod's kind: the only one in a race with one pickup mod.
+    pub const FIRST: Self = Self(0);
+
+    /// The kind at `index`, if there is one.
+    #[must_use]
+    pub const fn new(index: usize) -> Option<Self> {
+        if index < Self::MAX {
+            Some(Self(index as u8))
+        } else {
+            None
+        }
+    }
+
+    /// Its place, for indexing a per-kind array.
+    #[must_use]
+    pub const fn index(self) -> usize {
+        self.0 as usize
+    }
 }
 
 impl Weapon {
@@ -133,6 +163,29 @@ impl Weapon {
         Self::Disruptor,
     ];
 
+    /// Its place in [`Self::ALL`], the index of every per-weapon table; a mod's pickup is
+    /// one past the end, outside them.
+    #[must_use]
+    pub const fn index(self) -> usize {
+        match self {
+            Self::Rocket => 0,
+            Self::Missile => 1,
+            Self::Quake => 2,
+            Self::Cannon => 3,
+            Self::Turbo => 4,
+            Self::Shield => 5,
+            Self::Autopilot => 6,
+            Self::Plasma => 7,
+            Self::Bomb => 8,
+            Self::Mine => 9,
+            Self::LeachBeam => 10,
+            Self::Repulser => 11,
+            Self::Shuriken => 12,
+            Self::Disruptor => 13,
+            Self::Extension(_) => 14,
+        }
+    }
+
     /// The `type` attribute's spelling, exactly as the file has it.
     ///
     /// `LeachBeam` and `Repulser` are the game's spellings, kept as matched.
@@ -154,7 +207,7 @@ impl Weapon {
             Self::Shuriken => "Shuriken",
             Self::Disruptor => "Disruptor",
             // No disc file spells it, so `from_type` never answers it.
-            Self::Extension => "Extension",
+            Self::Extension(_) => "Extension",
         }
     }
 
@@ -175,7 +228,7 @@ impl Weapon {
     pub fn damages(self) -> bool {
         !matches!(
             self,
-            Self::Turbo | Self::Shield | Self::Autopilot | Self::Disruptor | Self::Extension
+            Self::Turbo | Self::Shield | Self::Autopilot | Self::Disruptor | Self::Extension(_)
         )
     }
 }

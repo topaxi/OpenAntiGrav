@@ -210,10 +210,10 @@ pub struct Prepared {
     /// Each module's mod's `[channels]` publishes, in module order.
     #[cfg(feature = "extensions")]
     publishes: Vec<Vec<(u32, String)>>,
-    /// The module whose mod's `[[pickup.odds]]` the weapon pads draw with (the first in id
-    /// order with any), its rows, and the race's title.
+    /// Each module whose mod declares `[[pickup.odds]]` (the weapon pads draw its pickup
+    /// with them), in module order, with its rows and the race's title.
     #[cfg(feature = "extensions")]
-    odds: Option<(usize, Vec<oag_tables::pickup_look::OddsRow>, String)>,
+    odds: Vec<(usize, Vec<oag_tables::pickup_look::OddsRow>, String)>,
     /// The race's title as the observation's key (`oag_ext_abi::channel_key` of its slug).
     #[cfg(feature = "extensions")]
     title: u32,
@@ -297,7 +297,8 @@ pub fn prepare(
         let mut pickups = Vec::new();
         let mut drives_ai = Vec::new();
         let mut publishes = Vec::new();
-        let mut odds = None;
+        let mut odds = Vec::new();
+        let mut pickup_mods = 0;
         let mut track_module = false;
         for source in sorted {
             let label = format!("mod {}: {}", source.mod_id, source.module);
@@ -309,6 +310,12 @@ pub fn prepare(
                     ),
                 );
                 continue;
+            }
+            if source.look_for(title).is_some() {
+                if let Err(why) = on::pickup_kind(pickup_mods) {
+                    push(report, format!("{label} left out: {why}"));
+                    continue;
+                }
             }
             if source.api != oag_ext_abi::ABI {
                 push(
@@ -346,22 +353,9 @@ pub fn prepare(
                     );
                     track_module |= matches!(source.scope, Scope::Track(_));
                     if !source.pickup_odds.is_empty() {
-                        match &odds {
-                            None => {
-                                odds = Some((
-                                    modules.len(),
-                                    source.pickup_odds.clone(),
-                                    title.to_string(),
-                                ))
-                            }
-                            Some((owner, _, _)) => push(
-                                report,
-                                format!(
-                                    "{label}: [[pickup.odds]] left out: the weapon pads already hand out module {owner}'s pickup, and a race has one mod pickup"
-                                ),
-                            ),
-                        }
+                        odds.push((modules.len(), source.pickup_odds.clone(), title.to_string()));
                     }
+                    pickup_mods += usize::from(source.look_for(title).is_some());
                     modules.push((source.mod_id.clone(), module));
                     strings.push((source.strings)(language));
                     pickups.push(source.look_for(title));
@@ -525,6 +519,12 @@ fn push(report: &mut Vec<String>, line: String) {
     report.push(line);
 }
 
+/// The kind the `held`-th pickup-declaring mod gets: for the test of the cap.
+#[cfg(all(test, feature = "extensions"))]
+pub(crate) fn pickup_kind_for_tests(held: usize) -> Result<oag_tables::weapons::ModKind, String> {
+    on::pickup_kind(held)
+}
+
 /// Faults module `index` as a refused reply does: for tests.
 #[cfg(all(test, feature = "extensions"))]
 pub(crate) fn fault_for_tests(race: &mut crate::Race, index: usize) {
@@ -674,10 +674,13 @@ impl Extensions {
         }
     }
 
-    /// The weights a weapon pad draws the mod's own pickup with in `class`, while the
-    /// module whose mod declares them owns the pickup: `None` in every race without one,
-    /// and once that module has faulted.
-    pub(super) fn pickup_odds(&self, class: &str) -> Option<oag_tables::weapons::PickupOdds> {
+    /// The weights a weapon pad draws each mod's own pickup with in `class`, one row per
+    /// mod that declares them, in kind order: none in every race without one, and none
+    /// for a module that has faulted.
+    pub(super) fn pickup_odds(
+        &self,
+        class: &str,
+    ) -> Vec<(oag_tables::weapons::Weapon, oag_tables::weapons::PickupOdds)> {
         #[cfg(feature = "extensions")]
         {
             self.on.pickup_odds(class)
@@ -685,7 +688,7 @@ impl Extensions {
         #[cfg(not(feature = "extensions"))]
         {
             let _ = class;
-            None
+            Vec::new()
         }
     }
 
@@ -704,9 +707,13 @@ impl Extensions {
         }
     }
 
-    /// A weapon pad just drew `weapon`: whether a module's `pickup-roll` turns this grant
-    /// into the mod's own pickup. Counts the grant. `false` in every race without one.
-    pub(super) fn rolls(&mut self, slot: usize, weapon: oag_tables::weapons::Weapon) -> bool {
+    /// A weapon pad just drew `weapon`: the mod whose `pickup-roll` turns this grant into
+    /// its own pickup, if any. Counts the grant. `None` in every race without one.
+    pub(super) fn rolls(
+        &mut self,
+        slot: usize,
+        weapon: oag_tables::weapons::Weapon,
+    ) -> Option<oag_tables::weapons::ModKind> {
         #[cfg(feature = "extensions")]
         {
             self.on.rolls(slot, weapon)
@@ -714,7 +721,7 @@ impl Extensions {
         #[cfg(not(feature = "extensions"))]
         {
             let _ = (slot, weapon);
-            false
+            None
         }
     }
 
@@ -734,17 +741,21 @@ impl Extensions {
         }
     }
 
-    /// The look of `slot`'s held mod pickup this tick, for the HUD to keep while the pickup
-    /// fades out after its use. Never hashed.
+    /// The look of `slot`'s held mod pickup of `kind` this tick, for the HUD to keep while
+    /// the pickup fades out after its use. Never hashed.
     #[must_use]
-    pub fn pickup_look(&self, slot: usize) -> Option<oag_tables::pickup_look::PickupLook> {
+    pub fn pickup_look(
+        &self,
+        slot: usize,
+        kind: oag_tables::weapons::ModKind,
+    ) -> Option<oag_tables::pickup_look::PickupLook> {
         #[cfg(feature = "extensions")]
         {
-            self.on.pickup_look(slot)
+            self.on.pickup_look(slot, kind)
         }
         #[cfg(not(feature = "extensions"))]
         {
-            let _ = slot;
+            let _ = (slot, kind);
             None
         }
     }
@@ -812,29 +823,37 @@ impl Extensions {
         self.on.test_triggers(slot, sweep);
     }
 
-    /// The module owning the mod pickup decides when an AI craft uses it, so the engine
-    /// raises no `pickup-fire` for one (`[extension] drives_ai_pickup`).
-    pub(super) fn guest_drives_ai_pickup(&self) -> bool {
+    /// The module owning the mod pickup of `kind` decides when an AI craft uses it, so the
+    /// engine raises no `pickup-fire` for one (`[extension] drives_ai_pickup`).
+    pub(super) fn guest_drives_ai_pickup(&self, kind: oag_tables::weapons::ModKind) -> bool {
         #[cfg(feature = "extensions")]
         {
-            self.on.guest_drives_ai_pickup()
+            self.on.guest_drives_ai_pickup(kind)
         }
         #[cfg(not(feature = "extensions"))]
-        false
+        {
+            let _ = kind;
+            false
+        }
     }
 
     /// Whether a `pickup-fire` is raised for `slot` and not yet delivered.
     #[cfg(all(test, feature = "extensions"))]
     pub(crate) fn fire_raised(&self, slot: usize) -> bool {
-        self.on.fires & (1 << slot) != 0
+        self.on.fires.iter().any(|fires| fires & (1 << slot) != 0)
     }
 
     /// The mod's own pickup's fire (`absorbed == false`) or absorb, raised for the module.
-    pub(super) fn pickup_used(&mut self, slot: usize, absorbed: bool) {
+    pub(super) fn pickup_used(
+        &mut self,
+        slot: usize,
+        kind: oag_tables::weapons::ModKind,
+        absorbed: bool,
+    ) {
         #[cfg(feature = "extensions")]
-        self.on.pickup_used(slot, absorbed);
+        self.on.pickup_used(slot, kind, absorbed);
         #[cfg(not(feature = "extensions"))]
-        let _ = (slot, absorbed);
+        let _ = (slot, kind, absorbed);
     }
 
     /// `slot`'s mod engine scale for this tick's step, reset to `1.0` as it is taken:

@@ -137,7 +137,7 @@ pub(super) fn pickup_sprites_uv_rewrite(
     announcing: bool,
 ) -> Vec<Sprite> {
     let uv_of = |weapon: Option<oag_tables::weapons::Weapon>| {
-        weapon.and_then(|weapon| uv_table.get(weapon as usize).copied().flatten())
+        weapon.and_then(|weapon| uv_table.get(weapon.index()).copied().flatten())
     };
     if announcing {
         return match (uv_of(weapon), layout.sprite(PICKUP_ICON_2048)) {
@@ -192,7 +192,9 @@ pub(super) const fn pickup_caption_id(weapon: oag_tables::weapons::Weapon) -> Op
         Weapon::Bomb => "FE_BOMB",
         Weapon::Cannon => "FE_CANNON",
         Weapon::LeachBeam => "FE_LEECHBEAM",
-        Weapon::Repulser | Weapon::Shuriken | Weapon::Disruptor | Weapon::Extension => return None,
+        Weapon::Repulser | Weapon::Shuriken | Weapon::Disruptor | Weapon::Extension(_) => {
+            return None;
+        }
     })
 }
 

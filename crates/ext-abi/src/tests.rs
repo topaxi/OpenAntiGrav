@@ -1116,3 +1116,21 @@ fn a_scene_command_out_of_its_ranges_is_malformed() {
     unknown[COMMAND_WORD] = 9;
     assert!(Command::decode(&unknown).is_err(), "distance kind 9");
 }
+
+/// Another mod's pickup has a code of its own per kind: never a title weapon's, never the
+/// reader's own, and back to the same kind.
+#[test]
+fn another_mods_pickup_codes_are_one_per_kind_and_collide_with_nothing() {
+    let mut seen = [false; 256];
+    for weapon in Weapon::ALL {
+        seen[usize::from(weapon.code())] = true;
+    }
+    seen[usize::from(Pickup::None.code())] = true;
+    seen[usize::from(Pickup::Ours.code())] = true;
+    for kind in 0..MAX_PICKUP_KINDS {
+        let code = Pickup::Other(kind).code();
+        assert!(!seen[usize::from(code)], "kind {kind} reuses code {code}");
+        seen[usize::from(code)] = true;
+        assert_eq!(Pickup::from_code(code), Some(Pickup::Other(kind)));
+    }
+}

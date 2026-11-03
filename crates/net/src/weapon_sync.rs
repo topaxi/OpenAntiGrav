@@ -28,7 +28,7 @@ pub fn digest(sim: &RaceSim) -> u64 {
     let mut shots = 0_u64;
     for p in world.projectiles.slots.iter().filter(|p| p.kind.is_some()) {
         let mut h = oag_core::hash::StateHasher::new();
-        h.write_u8(p.kind.map_or(0, |k| k as u8 + 1));
+        h.write_u8(p.kind.map_or(0, |k| k.index() as u8 + 1));
         h.write_u8(p.owner);
         h.write_u8(p.target.unwrap_or(255));
         shots = shots.wrapping_add(h.finish());
@@ -47,7 +47,7 @@ pub fn digest(sim: &RaceSim) -> u64 {
         .iter()
         .take(usize::from(world.ship_count).min(MAX_SHIPS))
     {
-        h.write_u8(ship.pickup.weapon.map_or(0, |w| w as u8 + 1));
+        h.write_u8(ship.pickup.weapon.map_or(0, |w| w.index() as u8 + 1));
         h.write_i32((ship.physics.shield / SHIELD_STEP).floor() as i32);
     }
     h.finish()
@@ -73,7 +73,7 @@ pub fn shots(sim: &RaceSim) -> Vec<Shot> {
         .iter()
         .filter_map(|p| {
             Some(Shot {
-                kind: p.kind? as u8,
+                kind: p.kind?.index() as u8,
                 owner: p.owner,
                 age_ticks: (p.age * 60.0).round().max(0.0) as u32,
             })

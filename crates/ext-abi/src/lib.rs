@@ -185,6 +185,13 @@ const EVENT_CLEARANCE: u8 = 12;
 const OWN_FLAG: u16 = 1 << 15;
 /// The craft record's pickup code for a simulation mod's own pickup.
 const PICKUP_OURS: u8 = u8::MAX;
+/// The craft record's first pickup code for another mod's pickup: [`MAX_PICKUP_KINDS`] codes
+/// from the code after the last title weapon.
+const PICKUP_OTHER_FIRST: u8 = Weapon::Disruptor.code() + 1;
+/// The mods that can each hand out a pickup of their own in one race.
+pub const MAX_PICKUP_KINDS: u8 = 32;
+const PICKUP_OTHER_LAST: u8 = PICKUP_OTHER_FIRST + MAX_PICKUP_KINDS - 1;
+const _: () = assert!(PICKUP_OTHER_LAST < PICKUP_OURS);
 
 /// A grid slot that may hold a craft: below [`MAX_CRAFTS`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -326,8 +333,12 @@ pub enum Pickup {
     None,
     /// One of the title's weapons.
     Weapon(Weapon),
-    /// A simulation mod's own pickup (`give-pickup`).
+    /// The reading mod's own pickup (`give-pickup`).
     Ours,
+    /// Another mod's pickup, by that mod's kind in the race (below [`MAX_PICKUP_KINDS`], in
+    /// module id order among the mods that declare a `[pickup]`). A module sees its own
+    /// kind as [`Self::Ours`], never as this.
+    Other(u8),
 }
 
 impl Pickup {
@@ -338,6 +349,7 @@ impl Pickup {
             Self::None => 0,
             Self::Weapon(weapon) => weapon.code(),
             Self::Ours => PICKUP_OURS,
+            Self::Other(kind) => PICKUP_OTHER_FIRST + kind,
         }
     }
 
@@ -347,6 +359,7 @@ impl Pickup {
         match code {
             0 => Some(Self::None),
             PICKUP_OURS => Some(Self::Ours),
+            PICKUP_OTHER_FIRST..=PICKUP_OTHER_LAST => Some(Self::Other(code - PICKUP_OTHER_FIRST)),
             _ => Weapon::from_code(code).map(Self::Weapon),
         }
     }

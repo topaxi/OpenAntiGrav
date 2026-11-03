@@ -46,20 +46,23 @@ pub(super) struct On {
     /// Each slot's engine scale above 1.0 for this tick's step
     /// (`Environment::extension_thrust`), set at the call and taken by the step.
     pub(super) boost: [f32; oag_gameplay::MAX_SHIPS],
-    /// The module that owns the mod pickup kind (its index plus one, 0 for none):
-    /// the first to give, clear or roll it. Another module doing so faults.
-    owner: u8,
-    /// The `pickup-roll` rule (weapon, every) and how many grants of that weapon
+    /// Each module's pickup kind, in module order: a mod that declares a `[pickup]` has one,
+    /// by its place among those, and only it gives, clears or rolls it.
+    module_kind: Vec<Option<oag_tables::weapons::ModKind>>,
+    /// The module of each kind, in kind order.
+    kind_module: Vec<usize>,
+    /// Each module's `pickup-roll` rule (weapon, every) and how many grants of that weapon
     /// it has counted.
-    roll: Option<(oag_tables::weapons::Weapon, u8)>,
-    rolled: u32,
+    roll: Vec<Option<(oag_tables::weapons::Weapon, u8)>>,
+    rolled: Vec<u32>,
     /// One bit per slot whose held mod pickup came from a `pickup-roll` (the grant's
     /// weapon is the craft's `last`), not from a `give-pickup`: what a fault of the
     /// owner turns it back into.
     from_roll: u32,
-    /// `pickup-fire` / `pickup-absorbed` raised since the last call, one bit a slot.
-    pub(super) fires: u32,
-    absorbs: u32,
+    /// `pickup-fire` / `pickup-absorbed` raised since the last call, one bit a slot, per
+    /// kind: the event goes to the module of the kind the craft held when it was used.
+    pub(super) fires: [u32; oag_tables::weapons::ModKind::MAX],
+    absorbs: [u32; oag_tables::weapons::ModKind::MAX],
     /// The `mod` events raised since the last call (the modules' `emit`s and the track's
     /// triggers'), delivered at the next one: race state, hashed.
     mail: Vec<super::channel::Mail>,
@@ -104,8 +107,8 @@ pub(super) struct On {
     pub(super) drops: Drops,
     /// The race-wide outputs of this tick.
     pub(super) sky: super::Sky,
-    /// The `[[pickup.odds]]` the pads draw with: the declaring module, its rows, the title.
-    odds: Option<(usize, Vec<oag_tables::pickup_look::OddsRow>, String)>,
+    /// The `[[pickup.odds]]` the pads draw with: each declaring module, its rows, the title.
+    odds: Vec<(usize, Vec<oag_tables::pickup_look::OddsRow>, String)>,
     /// The race's title key, written into every observation.
     title: u32,
     /// The slots whose `transit` ended this tick, before the call: their `transit-end`
@@ -230,9 +233,14 @@ impl On {
         out
     }
 
-    /// The look of `slot`'s mod pickup this tick ([`crate::extension_pickup::resolve`]).
-    pub(super) fn pickup_look(&self, slot: usize) -> Option<oag_tables::pickup_look::PickupLook> {
-        crate::extension_pickup::resolve(&self.hud, slot, self.owner, &self.pickups, |m| {
+    /// The look of `slot`'s mod pickup of `kind` this tick ([`crate::extension_pickup::resolve`]).
+    pub(super) fn pickup_look(
+        &self,
+        slot: usize,
+        kind: oag_tables::weapons::ModKind,
+    ) -> Option<oag_tables::pickup_look::PickupLook> {
+        let module = *self.kind_module.get(kind.index())?;
+        crate::extension_pickup::resolve(&self.hud, slot, module, &self.pickups, |m| {
             &self.slots[m].mod_id
         })
     }
@@ -250,12 +258,25 @@ impl On {
         pickups: Vec<Option<oag_tables::pickup_look::PickupLook>>,
         drives_ai: Vec<bool>,
         publishes: Vec<Vec<(u32, String)>>,
-        odds: Option<(usize, Vec<oag_tables::pickup_look::OddsRow>, String)>,
+        odds: Vec<(usize, Vec<oag_tables::pickup_look::OddsRow>, String)>,
     ) -> Self {
+        let mut kind_module = Vec::new();
+        let module_kind = pickups
+            .iter()
+            .enumerate()
+            .map(|(module, look)| {
+                let kind = look
+                    .as_ref()
+                    .and_then(|_| oag_tables::weapons::ModKind::new(kind_module.len()))?;
+                kind_module.push(module);
+                Some(kind)
+            })
+            .collect();
+        let modules_len = modules.len();
         Self {
             title: 0,
-            // The module whose mod declares pad odds owns the mod pickup from the start.
-            owner: odds.as_ref().map_or(0, |(module, _, _)| *module as u8 + 1),
+            module_kind,
+            kind_module,
             odds,
             slots: modules
                 .into_iter()
@@ -280,11 +301,11 @@ impl On {
             hit_weapon: [None; oag_gameplay::MAX_SHIPS],
             gave: 0,
             boost: [1.0; oag_gameplay::MAX_SHIPS],
-            roll: None,
-            rolled: 0,
+            roll: vec![None; modules_len],
+            rolled: vec![0; modules_len],
             from_roll: 0,
-            fires: 0,
-            absorbs: 0,
+            fires: [0; oag_tables::weapons::ModKind::MAX],
+            absorbs: [0; oag_tables::weapons::ModKind::MAX],
             pad_scale: vec![1.0; region.speed_pads],
             pad_by: vec![0; region.speed_pads],
             region,
@@ -313,27 +334,45 @@ impl On {
         self.slots[index].blob.clone()
     }
 
-    pub(super) fn pickup_odds(&self, class: &str) -> Option<oag_tables::weapons::PickupOdds> {
-        let (module, rows, title) = self.odds.as_ref()?;
-        if usize::from(self.owner) != module + 1 {
-            return None;
-        }
-        oag_tables::pickup_look::odds_for(rows, title, class)
+    /// One row per module that declares odds for `class`, in kind order, for the pad's
+    /// draw: not a module that has faulted.
+    pub(super) fn pickup_odds(
+        &self,
+        class: &str,
+    ) -> Vec<(oag_tables::weapons::Weapon, oag_tables::weapons::PickupOdds)> {
+        self.odds
+            .iter()
+            .filter(|(module, _, _)| self.slots[*module].faulted.is_none())
+            .filter_map(|(module, rows, title)| {
+                let kind = self.module_kind[*module]?;
+                let odds = oag_tables::pickup_look::odds_for(rows, title, class)?;
+                Some((oag_tables::weapons::Weapon::Extension(kind), odds))
+            })
+            .collect()
     }
 
-    pub(super) fn rolls(&mut self, slot: usize, weapon: oag_tables::weapons::Weapon) -> bool {
-        let Some((rolled, every)) = self.roll else {
-            return false;
-        };
-        if weapon != rolled {
-            return false;
+    /// The first module, in id order, whose `pickup-roll` turns a grant of `weapon` into
+    /// its own pickup. Every rolling module counts a grant of the weapon it rolls on, up to
+    /// the one that turns it.
+    pub(super) fn rolls(
+        &mut self,
+        slot: usize,
+        weapon: oag_tables::weapons::Weapon,
+    ) -> Option<oag_tables::weapons::ModKind> {
+        for module in 0..self.roll.len() {
+            let Some((rolled, every)) = self.roll[module] else {
+                continue;
+            };
+            if weapon != rolled {
+                continue;
+            }
+            self.rolled[module] += 1;
+            if self.rolled[module].is_multiple_of(u32::from(every)) {
+                self.from_roll |= 1 << slot;
+                return self.module_kind[module];
+            }
         }
-        self.rolled += 1;
-        let turns = self.rolled.is_multiple_of(u32::from(every));
-        if turns {
-            self.from_roll |= 1 << slot;
-        }
-        turns
+        None
     }
 
     pub(super) fn pad_factor(&self, slot: usize, pad: usize) -> f32 {
@@ -368,12 +407,12 @@ impl On {
             .fold(0, |mask, (i, _)| mask | 1 << i);
     }
 
-    /// The module that owns the mod pickup decides when an AI craft uses it: the engine
+    /// The module of the pickup `kind` decides when an AI craft uses it: the engine
     /// raises no `pickup-fire` for one.
-    pub(super) fn guest_drives_ai_pickup(&self) -> bool {
-        self.owner
-            .checked_sub(1)
-            .and_then(|module| self.slots.get(usize::from(module)))
+    pub(super) fn guest_drives_ai_pickup(&self, kind: oag_tables::weapons::ModKind) -> bool {
+        self.kind_module
+            .get(kind.index())
+            .and_then(|module| self.slots.get(*module))
             .is_some_and(|slot| slot.drives_ai_pickup)
     }
 
@@ -398,12 +437,18 @@ impl On {
         ));
     }
 
-    pub(super) fn pickup_used(&mut self, slot: usize, absorbed: bool) {
-        if absorbed {
-            self.absorbs |= 1 << slot;
+    pub(super) fn pickup_used(
+        &mut self,
+        slot: usize,
+        kind: oag_tables::weapons::ModKind,
+        absorbed: bool,
+    ) {
+        let raised = if absorbed {
+            &mut self.absorbs
         } else {
-            self.fires |= 1 << slot;
-        }
+            &mut self.fires
+        };
+        raised[kind.index()] |= 1 << slot;
     }
 
     /// Folds a step's weapon hits into the `hit` event buffer: per slot the amounts
@@ -449,23 +494,26 @@ impl On {
         super::channel::hash_mail(&self.mail, hasher);
         for (amount, weapon) in self.hit_amount.iter().zip(&self.hit_weapon) {
             hasher.write_f32(*amount);
-            hasher.write_u8(weapon.map_or(0, |weapon| weapon as u8 + 1));
+            hasher.write_u8(weapon.map_or(0, |weapon| weapon.index() as u8 + 1));
         }
         for boost in self.boost {
             hasher.write_f32(boost);
         }
-        hasher.write_u8(self.owner);
-        match self.roll {
-            None => hasher.write_u8(0),
-            Some((weapon, every)) => {
-                hasher.write_u8(weapon as u8 + 1);
-                hasher.write_u8(every);
+        for (roll, rolled) in self.roll.iter().zip(&self.rolled) {
+            match roll {
+                None => hasher.write_u8(0),
+                Some((weapon, every)) => {
+                    hasher.write_u8(weapon.index() as u8 + 1);
+                    hasher.write_u8(*every);
+                }
             }
+            hasher.write_u32(*rolled);
         }
-        hasher.write_u32(self.rolled);
         hasher.write_u32(self.from_roll);
-        hasher.write_u32(self.fires);
-        hasher.write_u32(self.absorbs);
+        for kind in 0..self.kind_module.len() {
+            hasher.write_u32(self.fires[kind]);
+            hasher.write_u32(self.absorbs[kind]);
+        }
         for scale in self.pad_scale.iter().chain(&self.slot_pad_scale) {
             hasher.write_f32(*scale);
         }
@@ -589,19 +637,21 @@ fn tracking(sim: &RaceSim) -> Vec<oag_ext_abi::Tracking> {
 }
 
 /// `give-pickup`, `clear-pickup` and `pickup-roll` from module `index`, already checked
-/// by [`refusal`]: the first module to send one owns the mod pickup kind for the race. A
-/// race without weapons gives nothing and rolls nothing.
+/// by [`refusal`]: each acts on the module's own pickup kind. A race without weapons gives
+/// nothing and rolls nothing.
 fn pickup_command(sim: &mut RaceSim, index: usize, command: Command) {
     let may = match command {
         Command::ClearPickup { slot } => sim.may_use_pickup(slot.index()),
         _ => true,
     };
     let on = &mut sim.extensions.on;
-    on.owner = index as u8 + 1;
+    let Some(kind) = on.module_kind[index] else {
+        return;
+    };
     if !sim.weapons_on {
         return;
     }
-    let extension = oag_tables::weapons::Weapon::Extension;
+    let extension = oag_tables::weapons::Weapon::Extension(kind);
     match command {
         // The slot's `last` stays what it was: the repeat rule is about the title's
         // own weapons.
@@ -622,9 +672,9 @@ fn pickup_command(sim: &mut RaceSim, index: usize, command: Command) {
         }
         Command::PickupRoll { weapon, every } => {
             let weapon = crate::extension_pickup::weapon(weapon);
-            if on.roll != Some((weapon, every)) {
-                on.roll = Some((weapon, every));
-                on.rolled = 0;
+            if on.roll[index] != Some((weapon, every)) {
+                on.roll[index] = Some((weapon, every));
+                on.rolled[index] = 0;
             }
         }
         _ => {}
@@ -632,13 +682,11 @@ fn pickup_command(sim: &mut RaceSim, index: usize, command: Command) {
 }
 
 /// Why module `index`'s commands this tick are refused, if any is: an `emit` past the
-/// cap or on a channel its mod does not publish, a pickup command from a module that
-/// does not own the mod pickup, or one that hands out a pickup its `oag-mod.toml`
-/// does not describe. Checked over the whole reply before any of it lands, so a refused
+/// cap or on a channel its mod does not publish, or a pickup command from a module whose
+/// `oag-mod.toml` describes no pickup of its own. Checked over the whole reply before any of it lands, so a refused
 /// reply lands nothing (the module's other commands included).
 fn refusal(on: &On, index: usize, commands: &[Command]) -> Option<String> {
     let module = &on.slots[index];
-    let me = index as u8 + 1;
     let mut emits = 0;
     for command in commands {
         match command {
@@ -661,18 +709,10 @@ fn refusal(on: &On, index: usize, commands: &[Command]) -> Option<String> {
             Command::GivePickup { .. }
             | Command::ClearPickup { .. }
             | Command::PickupRoll { .. } => {
-                if on.owner != 0 && on.owner != me {
-                    let owner = &on.slots[usize::from(on.owner - 1)].mod_id;
-                    return Some(format!("the mod pickup belongs to mod {owner}"));
-                }
-                let hands_out = matches!(
-                    command,
-                    Command::GivePickup { .. } | Command::PickupRoll { .. }
-                );
-                if hands_out && on.pickups[index].is_none() {
+                if on.module_kind[index].is_none() {
                     return Some(
-                        "it hands out its own pickup but its oag-mod.toml has no [pickup] table \
-                         (icon and colour, each naming its source)"
+                        "it gives, rolls or clears its own pickup but its oag-mod.toml has no \
+                         [pickup] table (icon and colour, each naming its source)"
                             .to_string(),
                     );
                 }
@@ -684,8 +724,8 @@ fn refusal(on: &On, index: usize, commands: &[Command]) -> Option<String> {
 }
 
 /// Takes back everything module `index` holds for the rest of the race, as it faults:
-/// the pads it scaled go back to 1.0, and if it owned the mod pickup, the roll ends and
-/// the pickups crafts still hold become the title's again. A pickup that came from a
+/// the pads it scaled go back to 1.0, and if it has a mod pickup, the roll ends and
+/// the pickups crafts still hold of its kind become the title's again. A pickup that came from a
 /// roll is the weapon the pad drew (the craft's `last`), so the AI and the person can
 /// use it as if the module had never run; one that was given has no such weapon and is
 /// taken away. (Mail the module already sent stays: one tick of events.)
@@ -698,18 +738,18 @@ fn release(sim: &mut RaceSim, index: usize) {
             *by = 0;
         }
     }
-    if on.owner != me {
+    let Some(kind) = on.module_kind[index] else {
         return;
-    }
-    on.owner = 0;
-    on.roll = None;
-    on.rolled = 0;
-    let from_roll = std::mem::take(&mut on.from_roll);
-    let extension = Some(oag_tables::weapons::Weapon::Extension);
+    };
+    on.roll[index] = None;
+    on.rolled[index] = 0;
+    let from_roll = on.from_roll;
+    let extension = Some(oag_tables::weapons::Weapon::Extension(kind));
     for (slot, ship) in sim.world.ships.iter_mut().enumerate() {
         if ship.pickup.weapon != extension {
             continue;
         }
+        on.from_roll &= !(1 << slot);
         match ship.pickup.last.filter(|_| from_roll & (1 << slot) != 0) {
             Some(drawn) => ship.pickup.weapon = Some(drawn),
             None => {
@@ -724,21 +764,28 @@ fn release(sim: &mut RaceSim, index: usize) {
 /// the triggers entered (each in index order). Past `MAX_EVENTS` the rest are
 /// dropped. The `mod` events (`mail`, sorted) come first, so a crowd of engine events
 /// cannot crowd out a mod's.
-fn events(on: &On, mail: &[super::channel::Mail]) -> (Vec<Event>, usize) {
+fn events(
+    on: &On,
+    mail: &[super::channel::Mail],
+    kind: Option<oag_tables::weapons::ModKind>,
+) -> (Vec<Event>, usize) {
     let mut all: Vec<Event> = mail
         .iter()
         .filter_map(|m| m.event())
-        .chain(engine_events(on))
+        .chain(engine_events(on, kind))
         .collect();
     let dropped = all.len().saturating_sub(MAX_EVENTS);
     all.truncate(MAX_EVENTS);
     (all, dropped)
 }
 
-fn engine_events(on: &On) -> impl Iterator<Item = Event> + '_ {
+fn engine_events(
+    on: &On,
+    kind: Option<oag_tables::weapons::ModKind>,
+) -> impl Iterator<Item = Event> + '_ {
     (0..oag_gameplay::MAX_SHIPS)
         .filter_map(oag_ext_abi::Slot::new)
-        .flat_map(|slot| {
+        .flat_map(move |slot| {
             let i = slot.index();
             let bit = |mask: u32| mask & slot.bit() != 0;
             let (inside, before) = (on.inside[i], on.reported[i]);
@@ -747,8 +794,10 @@ fn engine_events(on: &On) -> impl Iterator<Item = Event> + '_ {
                 bit(on.transit_ends).then_some(Event::TransitEnd { slot }),
                 on.clearance[i].map(|(fits, ahead)| Event::Clearance { slot, fits, ahead }),
                 bit(on.walls).then_some(Event::WallContact { slot }),
-                bit(on.fires).then_some(Event::PickupFire { slot }),
-                bit(on.absorbs).then_some(Event::PickupAbsorbed { slot }),
+                kind.filter(|kind| bit(on.fires[kind.index()]))
+                    .map(|_| Event::PickupFire { slot }),
+                kind.filter(|kind| bit(on.absorbs[kind.index()]))
+                    .map(|_| Event::PickupAbsorbed { slot }),
                 on.speed_entered[i].map(|pad| Event::SpeedPad { slot, pad }),
                 on.weapon_entered[i].map(|pad| Event::WeaponPad { slot, pad }),
                 on.hit_weapon[i].and_then(|weapon| match pickup(weapon) {
@@ -821,7 +870,30 @@ pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs, trans
     on.slot_pad_scale = [1.0; oag_gameplay::MAX_SHIPS];
     let queued = std::mem::take(&mut on.mail);
     let mail = super::channel::sorted(&queued);
-    let (events, engine_dropped) = events(on, &mail);
+    // Each module's own view: the events of its own pickup kind alone, and the crafts
+    // holding its kind as `Pickup::Ours`.
+    let mut engine_dropped = 0;
+    let views: Vec<(Vec<Event>, Vec<oag_ext_abi::Craft>)> = on
+        .module_kind
+        .iter()
+        .map(|&kind| {
+            let (events, dropped) = events(on, &mail, kind);
+            engine_dropped = engine_dropped.max(dropped);
+            let own = kind.map(|kind| Pickup::Other(kind.index() as u8));
+            let crafts = crafts
+                .iter()
+                .map(|craft| oag_ext_abi::Craft {
+                    pickup: if Some(craft.pickup) == own {
+                        Pickup::Ours
+                    } else {
+                        craft.pickup
+                    },
+                    ..*craft
+                })
+                .collect();
+            (events, crafts)
+        })
+        .collect();
     let (mods_dropped, track_dropped) = super::channel::dropped(&queued);
     on.drops
         .note(tick, mods_dropped, track_dropped, engine_dropped);
@@ -830,8 +902,8 @@ pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs, trans
     on.clearance = [None; oag_gameplay::MAX_SHIPS];
     on.hit_amount = [0.0; oag_gameplay::MAX_SHIPS];
     on.hit_weapon = [None; oag_gameplay::MAX_SHIPS];
-    on.fires = 0;
-    on.absorbs = 0;
+    on.fires = [0; oag_tables::weapons::ModKind::MAX];
+    on.absorbs = [0; oag_tables::weapons::ModKind::MAX];
     on.speed_entered = [None; oag_gameplay::MAX_SHIPS];
     on.weapon_entered = [None; oag_gameplay::MAX_SHIPS];
     on.reported = on.inside;
@@ -844,20 +916,8 @@ pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs, trans
     on.fill = [None; oag_gameplay::MAX_SHIPS];
     on.fov = [0.0; oag_gameplay::MAX_SHIPS];
     let region = on.region.clone();
-    let observation = Observation {
-        tick,
-        active,
-        events: &events,
-        crafts: &crafts,
-        course: oag_ext_abi::Course {
-            length: sim.course.as_ref().map_or(0.0, oag_race::Course::length),
-            tracking: &tracking,
-            title: on.title,
-        },
-        track: &region.bytes,
-        speed_pads: region.speed_pads,
-        routes: region.routes,
-    };
+    let course_length = sim.course.as_ref().map_or(0.0, oag_race::Course::length);
+    let title = on.title;
     let mut commands = Vec::new();
     // Every module's checked commands, in id order, with the blob it had before the call:
     // applied once all have run, so each saw the same observation.
@@ -869,6 +929,21 @@ pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs, trans
             continue;
         }
         let prior = slot.blob.clone();
+        let (events, crafts) = &views[index];
+        let observation = Observation {
+            tick,
+            active,
+            events,
+            crafts,
+            course: oag_ext_abi::Course {
+                length: course_length,
+                tracking: &tracking,
+                title,
+            },
+            track: &region.bytes,
+            speed_pads: region.speed_pads,
+            routes: region.routes,
+        };
         // Timed for the overlay only; nothing simulated reads it.
         let started = web_time::Instant::now();
         let outcome = slot
@@ -997,4 +1072,15 @@ fn apply(sim: &mut RaceSim, index: usize, command: Command) {
             sim.extensions.on.motion.push((index, command));
         }
     }
+}
+
+/// The kind the `held`-th pickup-declaring module gets, or why there is none: a race has at
+/// most [`oag_tables::weapons::ModKind::MAX`] mod pickups.
+pub(super) fn pickup_kind(held: usize) -> Result<oag_tables::weapons::ModKind, String> {
+    oag_tables::weapons::ModKind::new(held).ok_or_else(|| {
+        format!(
+            "a race runs at most {} mod pickups",
+            oag_tables::weapons::ModKind::MAX
+        )
+    })
 }

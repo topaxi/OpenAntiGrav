@@ -3,7 +3,7 @@
 //! (`scripts/check-file-size.py`).
 
 use super::*;
-use oag_tables::weapons::PickupOdds;
+use oag_tables::weapons::{ModKind, PickupOdds};
 
 fn table(odds: &[(Weapon, f32, f32)]) -> PickupTable {
     PickupTable {
@@ -453,7 +453,7 @@ fn a_mod_pickup_row_is_drawn_at_its_weight_and_absent_changes_nothing() {
     let vanilla = table(&[(Weapon::Turbo, 1.0, 1.0), (Weapon::Shield, 1.0, 1.0)]);
     let mut modded = vanilla.clone();
     modded.odds.push((
-        Weapon::Extension,
+        Weapon::Extension(ModKind::FIRST),
         PickupOdds {
             human: 2.0,
             ai: 2.0,
@@ -463,7 +463,10 @@ fn a_mod_pickup_row_is_drawn_at_its_weight_and_absent_changes_nothing() {
     ));
     let mut rng = Rng::new(9);
     let extensions = (0..4000)
-        .filter(|_| draw(&mut rng, &modded, Driver::Ai, None, None) == Some(Weapon::Extension))
+        .filter(|_| {
+            draw(&mut rng, &modded, Driver::Ai, None, None)
+                == Some(Weapon::Extension(ModKind::FIRST))
+        })
         .count();
     // Half the live weight: 2 of 4.
     assert!((1800..2200).contains(&extensions), "{extensions} of 4000");
@@ -475,7 +478,7 @@ fn a_mod_pickup_row_is_drawn_at_its_weight_and_absent_changes_nothing() {
             Some(Weapon::Turbo),
             Some(&[])
         ),
-        Some(Weapon::Extension),
+        Some(Weapon::Extension(ModKind::FIRST)),
         "the event's weapon set does not reach the mod's pickup"
     );
     let sequence = |table: &PickupTable| {
@@ -485,7 +488,8 @@ fn a_mod_pickup_row_is_drawn_at_its_weight_and_absent_changes_nothing() {
             .collect::<Vec<_>>()
     };
     let mut zero = vanilla.clone();
-    zero.odds.push((Weapon::Extension, PickupOdds::default()));
+    zero.odds
+        .push((Weapon::Extension(ModKind::FIRST), PickupOdds::default()));
     assert_eq!(
         sequence(&zero),
         sequence(&vanilla),

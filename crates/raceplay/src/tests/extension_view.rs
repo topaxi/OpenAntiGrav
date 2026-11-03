@@ -165,7 +165,7 @@ fn a_mods_pickup_look_is_its_row_for_the_title_and_the_base_look_elsewhere() {
     }];
     let look = |title| {
         crate::extensions::Extensions::new(prepared_for(title, &[source.clone()]))
-            .pickup_look(0)
+            .pickup_look(0, oag_tables::weapons::ModKind::FIRST)
             .map(|look| look.icon)
     };
     assert_eq!(
@@ -208,7 +208,9 @@ fn a_guests_pickup_and_motion_commands_for_a_wrecked_craft_are_ignored() {
     let run = |state: CraftState| {
         let mut race = grid(prepared(&[scripted("test.wreck", "", &cmds, &[])]));
         let ship = &mut race.sim.world.ships[1];
-        ship.pickup.weapon = Some(oag_tables::weapons::Weapon::Extension);
+        ship.pickup.weapon = Some(oag_tables::weapons::Weapon::Extension(
+            oag_tables::weapons::ModKind::FIRST,
+        ));
         ship.physics.body.linear_velocity = oag_core::math::Vec3::new(30.0, 0.0, 0.0);
         ship.physics.craft_state = state;
         race.tick_sim_only(&PlayerInputs::none());
@@ -221,7 +223,9 @@ fn a_guests_pickup_and_motion_commands_for_a_wrecked_craft_are_ignored() {
     let (held, speed) = run(CraftState::Destroyed);
     assert_eq!(
         held,
-        Some(oag_tables::weapons::Weapon::Extension),
+        Some(oag_tables::weapons::Weapon::Extension(
+            oag_tables::weapons::ModKind::FIRST
+        )),
         "kept for after the respawn"
     );
     assert!(speed > 1.0, "not scaled to zero: {speed}");

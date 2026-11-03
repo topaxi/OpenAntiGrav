@@ -115,7 +115,7 @@ fn pure_draws_the_backdrop_grid_and_the_held_weapons_own_coloured_icon() {
     let cx = pure_pickup_context(&layout, &strings, &sheet);
 
     assert_eq!(
-        oag_pure::hud::PICKUP_ICON_MODELS[Weapon::Turbo as usize],
+        oag_pure::hud::PICKUP_ICON_MODELS[Weapon::Turbo.index()],
         Some("TURBO_icon")
     );
 
@@ -198,7 +198,7 @@ fn a_weapon_with_no_icon_model_still_draws_the_backdrop_and_nothing_else() {
     let cx = pure_pickup_context(&layout, &strings, &sheet);
 
     assert_eq!(
-        oag_pure::hud::PICKUP_ICON_MODELS[Weapon::Shuriken as usize],
+        oag_pure::hud::PICKUP_ICON_MODELS[Weapon::Shuriken.index()],
         None,
         "this test is asserting the no-icon path, which only fires when this is None"
     );

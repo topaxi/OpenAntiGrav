@@ -1,9 +1,9 @@
-//! How a simulation mod's own pickup (`Weapon::Extension`) resolves to what is drawn: the
+//! How a simulation mod's own pickup (`Weapon::Extension(ModKind::FIRST)`) resolves to what is drawn: the
 //! look it declared names an icon and a backdrop colour, each from the title or the mod.
 //! Pulse's sprites, HD's and Omega's backdrop words, Pure's models, 2048's UV rewrite.
 
 use oag_tables::pickup_look::{Colour, Icon, PickupLook};
-use oag_tables::weapons::Weapon;
+use oag_tables::weapons::{ModKind, Weapon};
 use oag_ui::screen::argb_to_rgba;
 
 use super::draw::*;
@@ -45,7 +45,7 @@ fn pulse_takes_the_titles_own_row_for_a_title_colour_and_its_own_sprite_for_a_ti
     let ext = with(Icon::Title(Weapon::Turbo), Colour::Title(Weapon::Mine));
     let drawn = pickup_sprites(
         &layout,
-        Weapon::Extension,
+        Weapon::Extension(ModKind::FIRST),
         &ext,
         oag_pulse::hud::ART,
         false,
@@ -54,7 +54,7 @@ fn pulse_takes_the_titles_own_row_for_a_title_colour_and_its_own_sprite_for_a_ti
     assert_eq!(names(&drawn), ["PickupBackground", "TurboIcon"]);
     assert_eq!(
         drawn[0].color,
-        argb_to_rgba(oag_pulse::hud::PICKUP_COLOURS[Weapon::Mine as usize].unwrap()),
+        argb_to_rgba(oag_pulse::hud::PICKUP_COLOURS[Weapon::Mine.index()].unwrap()),
         "Mine's row (blue), not Turbo's (green)"
     );
 }
@@ -65,7 +65,7 @@ fn a_mod_rgba_is_the_backdrop_word_as_given_and_the_title_fade_plays_on_it() {
     let ext = with(Icon::Title(Weapon::Turbo), Colour::Rgba(RED_RGBA));
     let settled = pickup_sprites(
         &layout,
-        Weapon::Extension,
+        Weapon::Extension(ModKind::FIRST),
         &ext,
         oag_pulse::hud::ART,
         false,
@@ -77,12 +77,12 @@ fn a_mod_rgba_is_the_backdrop_word_as_given_and_the_title_fade_plays_on_it() {
 
     let mut fade = pickup_fade::Fade::default();
     for _ in 0..13 {
-        fade.advance(Some(Weapon::Extension), 1.2, 1.0 / 60.0);
+        fade.advance(Some(Weapon::Extension(ModKind::FIRST)), 1.2, 1.0 / 60.0);
     }
-    let look = fade.look(Some(Weapon::Extension)).unwrap();
+    let look = fade.look(Some(Weapon::Extension(ModKind::FIRST))).unwrap();
     let fading = pickup_sprites(
         &layout,
-        Weapon::Extension,
+        Weapon::Extension(ModKind::FIRST),
         &ext,
         oag_pulse::hud::ART,
         false,
@@ -101,7 +101,7 @@ fn a_mod_pickup_with_no_look_draws_nothing_and_never_borrows_an_icon() {
     let layout = Layout::from_xml(LAYOUT);
     let drawn = pickup_sprites(
         &layout,
-        Weapon::Extension,
+        Weapon::Extension(ModKind::FIRST),
         &Outputs::default(),
         oag_pulse::hud::ART,
         false,
@@ -116,7 +116,7 @@ fn a_mod_icon_draws_the_backdrop_and_no_title_icon() {
     let ext = with(Icon::Mod("mod:test/bolt".into()), Colour::Rgba(RED_RGBA));
     let drawn = pickup_sprites(
         &layout,
-        Weapon::Extension,
+        Weapon::Extension(ModKind::FIRST),
         &ext,
         oag_pulse::hud::ART,
         false,
@@ -148,7 +148,7 @@ fn a_mod_icon_draws_the_backdrop_and_no_title_icon() {
         default_line_height: 10.0,
         skin_line_height: 10.0,
     };
-    let shown = shown(Weapon::Extension, &ext);
+    let shown = shown(Weapon::Extension(ModKind::FIRST), &ext);
     assert_eq!(shown.mod_icon, Some("mod:test/bolt"));
     let Some(Draw::Sprite { rect, .. }) = mod_icon_draw(&cx, "mod:test/bolt", None) else {
         panic!("the mod's icon draws as a sprite");
@@ -171,22 +171,22 @@ fn hd_and_omega_resolve_a_title_colour_through_their_own_tables_and_take_a_mod_r
     ] {
         let by_title = with(Icon::Title(Weapon::Turbo), Colour::Title(Weapon::Mine));
         assert_eq!(
-            backdrop_word(art, Weapon::Extension, &by_title),
-            table[Weapon::Mine as usize]
+            backdrop_word(art, Weapon::Extension(ModKind::FIRST), &by_title),
+            table[Weapon::Mine.index()]
         );
-        assert!(table[Weapon::Mine as usize].is_some());
+        assert!(table[Weapon::Mine.index()].is_some());
         let by_mod = with(Icon::Title(Weapon::Turbo), Colour::Rgba(RED_RGBA));
         assert_eq!(
-            backdrop_word(art, Weapon::Extension, &by_mod),
+            backdrop_word(art, Weapon::Extension(ModKind::FIRST), &by_mod),
             Some(RED_WORD)
         );
         assert_eq!(
-            backdrop_word(art, Weapon::Extension, &Outputs::default()),
+            backdrop_word(art, Weapon::Extension(ModKind::FIRST), &Outputs::default()),
             None
         );
         assert_eq!(
             backdrop_word(art, Weapon::Mine, &Outputs::default()),
-            table[Weapon::Mine as usize],
+            table[Weapon::Mine.index()],
             "a weapon of the title's is unchanged"
         );
     }
@@ -197,7 +197,7 @@ fn pure_has_no_backdrop_colours_so_both_colour_kinds_draw_nothing_there() {
     for colour in [Colour::Title(Weapon::Mine), Colour::Rgba(RED_RGBA)] {
         let ext = with(Icon::Title(Weapon::Turbo), colour);
         assert_eq!(
-            backdrop_word(oag_pure::hud::ART, Weapon::Extension, &ext),
+            backdrop_word(oag_pure::hud::ART, Weapon::Extension(ModKind::FIRST), &ext),
             None
         );
     }
@@ -209,15 +209,15 @@ fn a_mod_pickup_on_2048_never_indexes_past_its_tables() {
     for ext in [
         Outputs::default(),
         with(
-            Icon::Title(Weapon::Extension),
-            Colour::Title(Weapon::Extension),
+            Icon::Title(Weapon::Extension(ModKind::FIRST)),
+            Colour::Title(Weapon::Extension(ModKind::FIRST)),
         ),
         with(Icon::Mod("mod:x/y".into()), Colour::Rgba(RED_RGBA)),
     ] {
         for announcing in [false, true] {
             let _ = pickup_sprites(
                 &layout,
-                Weapon::Extension,
+                Weapon::Extension(ModKind::FIRST),
                 &ext,
                 oag_2048::hud::ART,
                 announcing,
@@ -245,10 +245,10 @@ fn hds_runtime_backdrop_takes_a_mod_pickups_look_through_the_same_fade() {
     };
     let mut fade = pickup_fade::Fade::default();
     for _ in 0..60 {
-        fade.advance(Some(Weapon::Extension), 1.5, 1.0 / 60.0);
+        fade.advance(Some(Weapon::Extension(ModKind::FIRST)), 1.5, 1.0 / 60.0);
     }
     let readout = |ext: Outputs| Readout {
-        pickup: Some(Weapon::Extension),
+        pickup: Some(Weapon::Extension(ModKind::FIRST)),
         pickup_fade: fade,
         ext,
         ..Readout::default()
@@ -261,7 +261,7 @@ fn hds_runtime_backdrop_takes_a_mod_pickups_look_through_the_same_fade() {
     assert_eq!(
         super::runtime::colour(&cx, &by_title, idle.backdrop),
         Some(argb_to_rgba(
-            oag_hd::hud::PICKUP_COLOURS[Weapon::Mine as usize].unwrap()
+            oag_hd::hud::PICKUP_COLOURS[Weapon::Mine.index()].unwrap()
         ))
     );
     let by_mod = readout(with(Icon::Title(Weapon::Turbo), Colour::Rgba(RED_RGBA)));

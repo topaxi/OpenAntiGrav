@@ -55,7 +55,7 @@ fn it_ships_off_and_each_title_has_its_own_icon_and_pure_is_left_out() {
     for (title, icon) in TITLES {
         let prepared = prepared_for(title, std::slice::from_ref(&source));
         let look = crate::extensions::Extensions::new(prepared)
-            .pickup_look(0)
+            .pickup_look(0, oag_tables::weapons::ModKind::FIRST)
             .unwrap_or_else(|| panic!("{title}: a look"));
         assert_eq!(
             look.icon,
@@ -90,7 +90,7 @@ fn the_pads_draw_it_beside_the_titles_weapons_at_its_own_odds() {
         "wipeout-pulse",
         std::slice::from_ref(&source),
     ));
-    let odds = extensions.pickup_odds("VENOM").expect("its row");
+    let odds = extensions.pickup_odds("VENOM").first().expect("its row").1;
     assert_eq!(odds, slipstream.manifest.pickup_odds[0].odds);
     let plain = PickupTable {
         class: "VENOM".to_string(),
@@ -116,13 +116,18 @@ fn the_pads_draw_it_beside_the_titles_weapons_at_its_own_odds() {
         .collect(),
     };
     let mut modded = plain.clone();
-    modded.odds.push((Weapon::Extension, odds));
+    modded
+        .odds
+        .push((Weapon::Extension(oag_tables::weapons::ModKind::FIRST), odds));
     for driver in [Driver::Ai, Driver::Human { place: 5, field: 8 }] {
         let share = |table: &PickupTable| {
             let mut rng = oag_core::Rng::new(11);
             let n = 20_000;
             let hits = (0..n)
-                .filter(|_| draw(&mut rng, table, driver, None, None) == Some(Weapon::Extension))
+                .filter(|_| {
+                    draw(&mut rng, table, driver, None, None)
+                        == Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST))
+                })
                 .count();
             hits as f32 / n as f32
         };

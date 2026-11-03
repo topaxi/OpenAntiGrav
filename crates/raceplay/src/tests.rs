@@ -46,6 +46,9 @@ mod extension_examples;
 mod extension_faults;
 #[cfg(feature = "extensions")]
 mod extension_odds;
+
+#[cfg(feature = "extensions")]
+mod extension_pickup_kinds;
 #[cfg(feature = "extensions")]
 mod extension_slipstream;
 #[cfg(feature = "extensions")]

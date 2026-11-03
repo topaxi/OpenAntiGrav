@@ -318,16 +318,14 @@ impl Race {
         };
         // A mod's own pickup, drawn beside the title's weapons at its `[[pickup.odds]]`.
         let with_mod;
-        let table = match self.sim.extensions.pickup_odds(&self.sim.class) {
-            Some(odds) => {
-                let mut modded = table.clone();
-                modded
-                    .odds
-                    .push((oag_tables::weapons::Weapon::Extension, odds));
-                with_mod = modded;
-                &with_mod
-            }
-            None => table,
+        let mod_odds = self.sim.extensions.pickup_odds(&self.sim.class);
+        let table = if mod_odds.is_empty() {
+            table
+        } else {
+            let mut modded = table.clone();
+            modded.odds.extend(mod_odds);
+            with_mod = modded;
+            &with_mod
         };
         // **The `human` column for a person's craft and the `ai` column for the rest**, and
         // the player's is blended with `front`/`back` by their place - which is
@@ -361,8 +359,8 @@ impl Race {
             pickup.grant(weapon);
             // A simulation mod's `pickup-roll`: this grant becomes the mod's own pickup,
             // with `last` still the drawn weapon, so the title's repeat rule is unchanged.
-            if self.sim.extensions.rolls(slot, weapon) {
-                pickup.weapon = Some(oag_tables::weapons::Weapon::Extension);
+            if let Some(kind) = self.sim.extensions.rolls(slot, weapon) {
+                pickup.weapon = Some(oag_tables::weapons::Weapon::Extension(kind));
             }
         }
     }
