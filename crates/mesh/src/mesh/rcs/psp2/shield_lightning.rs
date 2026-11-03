@@ -8,7 +8,7 @@
 //! parameter.
 //!
 //! The picture rides the third binding (the same carrier as [`super::emissive_add`], whose
-//! [`Plan`] this fills in), the second coordinate set rides `texcoord2`, and the four numbers
+//! [`Plan`] this fills in), the first pair of the packed `Uv1_Uv2` is the diffuse and the second rides `texcoord2`, and the four numbers
 //! are one glow-table entry of [`PROGRAM_SHIELD_LIGHTNING`]: tint `(multiplier, A, C)`, offset
 //! `B`. `shade.wesl` adds the term after the shell's colour multiply, so the lightning is not
 //! tinted by `ShieldColour`.

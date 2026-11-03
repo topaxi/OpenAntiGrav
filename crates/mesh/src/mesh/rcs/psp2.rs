@@ -790,14 +790,13 @@ fn build_planned(
             let pair = twin_here.and_then(|_| submesh.bars_blend_texcoords.get(i));
             let lightmap_texcoord = pair.map_or(lightmap_texcoord, |p| [p[2], p[3]]);
             let texcoord2 = pair.map_or([0.0, 0.0], |p| [p[0], p[1]]);
-            let texcoord2 = if emissive_add.of(submesh.material).is_some() {
-                submesh
-                    .second_texcoords
-                    .get(i)
-                    .copied()
-                    .unwrap_or(texcoord2)
-            } else {
-                texcoord2
+            // `2048_shipshield_old` reads both pairs of its packed `Uv1_Uv2`: the first is the
+            // diffuse's, the second the Lightning layer's.
+            let (texcoord, texcoord2) = match submesh.packed_texcoords.get(i) {
+                Some(&[a, b, c, d]) if emissive_add.of(submesh.material).is_some() => {
+                    ([a, b], [c, d])
+                }
+                _ => (texcoord, texcoord2),
             };
             let (colour, sun_mask) = match submesh.colours.get(i) {
                 Some(&[r, g, b, a]) if nova_vertex => (
