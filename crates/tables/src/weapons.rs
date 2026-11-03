@@ -186,6 +186,15 @@ impl Weapon {
         }
     }
 
+    /// The mod whose pickup this is, for a mod's own pickup.
+    #[must_use]
+    pub const fn mod_kind(self) -> Option<ModKind> {
+        match self {
+            Self::Extension(kind) => Some(kind),
+            _ => None,
+        }
+    }
+
     /// The `type` attribute's spelling, exactly as the file has it.
     ///
     /// `LeachBeam` and `Repulser` are the game's spellings, kept as matched.

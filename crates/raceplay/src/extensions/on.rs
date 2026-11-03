@@ -778,7 +778,13 @@ fn release(sim: &mut RaceSim, index: usize) {
             continue;
         }
         on.from_roll &= !(1 << slot);
-        match ship.pickup.last.filter(|_| from_roll & (1 << slot) != 0) {
+        // Only a title weapon is handed back: a stale roll bit must not return another mod's
+        // kind (drawn by its odds, so the craft's `last`) that the AI could never use up.
+        let handed_back = ship
+            .pickup
+            .last
+            .filter(|last| from_roll & (1 << slot) != 0 && last.mod_kind().is_none());
+        match handed_back {
             Some(drawn) => ship.pickup.weapon = Some(drawn),
             None => {
                 ship.pickup.take();

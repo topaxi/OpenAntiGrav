@@ -237,3 +237,82 @@ fn a_race_holds_at_most_thirty_two_pickup_kinds_and_the_refusal_names_the_limit(
     let why = crate::extensions::pickup_kind_for_tests(ModKind::MAX).unwrap_err();
     assert!(why.contains("32"), "{why}");
 }
+
+fn looking(icon: &str) -> oag_tables::pickup_look::PickupLook {
+    oag_tables::pickup_look::PickupLook {
+        icon: oag_tables::pickup_look::Icon::Mod(icon.to_string()),
+        colour: oag_tables::pickup_look::Colour::Rgba([1, 2, 3, 4]),
+    }
+}
+
+#[test]
+fn the_hud_draws_the_look_of_the_kind_held_and_another_mods_look_command_does_not_reach_it() {
+    use super::extension_faults::scripted;
+    use oag_ext_abi::{Colour, Command, Icon, ModIcon, Rgba, Slot};
+    use oag_tables::pickup_look::Icon as LookIcon;
+    // `test.a` (kind 0) declares the icon "a" and sends a `pickup-look` for slot 0 every
+    // tick; `test.b` (kind 1) declares "b" and sends nothing.
+    let sent = Command::PickupLook {
+        slot: Slot::new(0).unwrap(),
+        icon: Icon::Mod(ModIcon::new("sent").unwrap()),
+        colour: Colour::Rgba(Rgba::new(9, 9, 9, 9)),
+    };
+    let mut a = scripted("test.a", "", &[sent], &[]);
+    a.pickup = Some(looking("a"));
+    let mut b = module("test.b", "i32.const 0");
+    b.pickup = Some(looking("b"));
+    let key = |mod_id, icon| LookIcon::Mod(crate::extensions::mod_icon_src(mod_id, icon));
+
+    let mut race = grid(prepared(&[a.clone(), b.clone()]));
+    race.sim.world.ships[0].pickup.weapon = kind(1);
+    race.tick(&PlayerInputs::none());
+    let look = race.view.huds[0].pickup_look.clone().expect("a look");
+    assert_eq!(
+        look.icon,
+        key("test.b", "b"),
+        "the held kind's manifest look"
+    );
+    assert_eq!(
+        look.colour,
+        oag_tables::pickup_look::Colour::Rgba([1, 2, 3, 4])
+    );
+
+    let mut race = grid(prepared(&[a, b]));
+    race.sim.world.ships[0].pickup.weapon = kind(0);
+    race.tick(&PlayerInputs::none());
+    let look = race.view.huds[0].pickup_look.clone().expect("a look");
+    // `scripted` writes the command with no string pool, so the sent icon's name is empty:
+    // what tells it from the manifest's "a" is that it is the command's.
+    assert_eq!(look.icon, key("test.a", ""), "its own module's pickup-look");
+    assert_eq!(
+        look.colour,
+        oag_tables::pickup_look::Colour::Rgba([9, 9, 9, 9])
+    );
+}
+
+#[test]
+fn a_stale_roll_bit_never_hands_a_dead_mods_pickup_back_as_another_mods() {
+    use super::extension_faults::scripted;
+    use oag_ext_abi::Command;
+    let rolls = Command::PickupRoll {
+        weapon: oag_ext_abi::Weapon::Turbo,
+        every: 1,
+    };
+    let mut race = grid(prepared(&[
+        scripted("test.a", "", &[rolls], &[]),
+        module("test.b", "i32.const 0"),
+    ]));
+    race.tick(&PlayerInputs::none());
+    // Slot 0 was rolled into a's kind once and spent it: the roll bit stays set.
+    assert_eq!(race.sim.extensions.rolls(0, Weapon::Turbo), ModKind::new(0));
+    race.sim.world.ships[0].pickup.weapon = None;
+    // A pad then draws b's kind by its odds: the craft's `last` is that kind.
+    race.sim.world.ships[0]
+        .pickup
+        .grant(Weapon::Extension(ModKind::new(1).unwrap()));
+    crate::extensions::fault_for_tests(&mut race, 1);
+    assert_eq!(
+        race.sim.world.ships[0].pickup.weapon, None,
+        "b's pickup is taken away, not handed back as b's kind"
+    );
+}

@@ -47,7 +47,10 @@ pub fn digest(sim: &RaceSim) -> u64 {
         .iter()
         .take(usize::from(world.ship_count).min(MAX_SHIPS))
     {
-        h.write_u8(ship.pickup.weapon.map_or(0, |w| w.index() as u8 + 1));
+        // A mod's pickup is told apart by kind, as the state hash does.
+        h.write_u8(ship.pickup.weapon.map_or(0, |w| {
+            w.index() as u8 + 1 + w.mod_kind().map_or(0, |kind| kind.index() as u8)
+        }));
         h.write_i32((ship.physics.shield / SHIELD_STEP).floor() as i32);
     }
     h.finish()
