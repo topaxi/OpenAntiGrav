@@ -262,7 +262,7 @@ pub(super) mod on {
         race.tick(&PlayerInputs::none()); // the give
         assert_eq!(
             race.sim.world.ships[0].pickup.weapon,
-            Some(Weapon::Extension)
+            Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST))
         );
         assert_eq!(
             race.sim.world.ships[0].pickup.last, None,
@@ -271,7 +271,7 @@ pub(super) mod on {
         race.tick(&pressed(Button::Square));
         assert_eq!(
             race.sim.world.ships[0].pickup.weapon,
-            Some(Weapon::Extension),
+            Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST)),
             "fire does not spend it"
         );
         assert_eq!(
@@ -302,7 +302,7 @@ pub(super) mod on {
         use oag_tables::weapons::Weapon;
         let mut race = grid(prepared(&[roller()]));
         assert!(
-            !race.sim.extensions.rolls(0, Weapon::Turbo),
+            race.sim.extensions.rolls(0, Weapon::Turbo).is_none(),
             "no rule before the first call"
         );
         race.tick(&PlayerInputs::none());
@@ -314,7 +314,7 @@ pub(super) mod on {
             Weapon::Turbo,
         ]
         .into_iter()
-        .map(|weapon| race.sim.extensions.rolls(0, weapon))
+        .map(|weapon| race.sim.extensions.rolls(0, weapon).is_some())
         .collect();
         assert_eq!(
             rolled,
@@ -323,25 +323,8 @@ pub(super) mod on {
         );
         // Re-sent every tick, the same rule keeps its count.
         race.tick(&PlayerInputs::none());
-        assert!(!race.sim.extensions.rolls(0, Weapon::Turbo));
-        assert!(race.sim.extensions.rolls(0, Weapon::Turbo));
-    }
-
-    #[test]
-    fn a_second_module_reaching_for_the_mods_pickup_faults_and_the_first_keeps_it() {
-        let mut race = grid(prepared(&[giver("test.a"), giver("test.b")]));
-        race.tick(&PlayerInputs::none());
-        let reports = race.extension_reports();
-        assert!(reports[0].faulted.is_none(), "{:?}", reports[0].faulted);
-        let (_, why) = reports[1]
-            .faulted
-            .clone()
-            .expect("the second giver faulted");
-        assert!(why.contains("test.a"), "{why}");
-        assert_eq!(
-            race.sim.world.ships[0].pickup.weapon,
-            Some(oag_tables::weapons::Weapon::Extension)
-        );
+        assert!(race.sim.extensions.rolls(0, Weapon::Turbo).is_none());
+        assert!(race.sim.extensions.rolls(0, Weapon::Turbo).is_some());
     }
 
     #[test]
@@ -391,12 +374,18 @@ pub(super) mod on {
         let mut source = giver("test.giver");
         source.pickup = Some(declared.clone());
         let mut race = grid(prepared(&[source]));
-        assert_eq!(race.sim.extensions.pickup_look(0), None, "no owner yet");
+        let first = oag_tables::weapons::ModKind::FIRST;
+        let second = oag_tables::weapons::ModKind::new(1).unwrap();
+        assert_eq!(
+            race.sim.extensions.pickup_look(0, second),
+            None,
+            "no module has the second kind"
+        );
         race.tick(&PlayerInputs::none());
         let mut resolved = declared;
         resolved.icon = Icon::Mod(crate::extensions::mod_icon_src("test.giver", "bolt"));
         assert_eq!(
-            race.sim.extensions.pickup_look(0),
+            race.sim.extensions.pickup_look(0, first),
             Some(resolved.clone()),
             "the manifest's icon key is the HUD sheet's key"
         );

@@ -350,7 +350,7 @@ the backstop for a guest written without the SDK.
 - **`shield-delta`** lands at C: a loss through `oag_physics::damage::apply_weapon`, a
   gain through `damage::add`.
 - **`give-pickup` / `clear-pickup`** write the slot's pickup at C. **`pickup-roll`**
-  is host state (`RaceSim::extensions`: the rule, its count and the owning module),
+  is host state (`RaceSim::extensions`: each module's rule and its count),
   hashed, and is read at the weapon pad's grant in `Race::test_weapon_pads`
   (`crates/raceplay/src/pads.rs`).
 - **`scale-thrust` above 1.0** lands in `Environment::extension_thrust`, taken by the
@@ -460,7 +460,7 @@ names no mod). All three are per slot, from a rules or a track module.
 | Exit | `Race::advance_transits`, `transit.rs:182`, called at `tick.rs:191` before the call | Moved and stepped the same tick; `transit-end{slot}` is in that very call's events |
 | `scale-speed{slot, factor}` | `apply`, `crates/raceplay/src/extensions/on.rs:902` | Velocity times `factor`, once, at the call; before any `transit` of the same tick, so a transit's exit speed is taken after it |
 | `probe-clearance{slot, distance, radius}` | `Race::clearance`, `transit.rs:150` | Half disc standing across the track at the width midpoint: width at least `2r`, nine rays centre to rim (`Raycaster::raycast`, Reset volumes skipped). The answer is `clearance{slot, fits, ahead}` at the next call (hashed while pending) |
-| Pad odds for the mod's pickup | `[[pickup.odds]]`, read at `crates/raceplay/src/pads.rs:321` | The declaring module owns the mod pickup from the start; `oag_weapons::pickup::draw` walks `Weapon::Extension` after the title's weapons, so a table without the row draws as ever; an event's weapon set does not reach it; a fault ends it |
+| Pad odds for the mod's pickup | `[[pickup.odds]]`, read at `crates/raceplay/src/pads.rs:321` | Every declaring module has its own kind from the start; `oag_weapons::pickup::draw` walks each `Weapon::Extension(kind)` row after the title's weapons, in kind order, so a table without the row draws as ever; an event's weapon set does not reach it; a fault ends it |
 
 ## `race-start`: the grid
 

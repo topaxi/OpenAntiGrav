@@ -76,6 +76,7 @@ pub struct Race<E: Extension> {
     tracking: [oag_ext_abi::Tracking; MAX_CRAFTS],
     course_length: f32,
     title: u32,
+    aiming: oag_ext_abi::Aiming,
     events: Vec<Event>,
     state: Vec<u8>,
     track: Vec<u8>,
@@ -98,6 +99,7 @@ impl<E: Extension> Race<E> {
             tracking: [oag_ext_abi::Tracking::default(); MAX_CRAFTS],
             course_length: 0.0,
             title: 0,
+            aiming: oag_ext_abi::Aiming::default(),
             events: Vec::new(),
             state: vec![0; E::State::BYTES],
             track: Vec::new(),
@@ -124,6 +126,23 @@ impl<E: Extension> Race<E> {
     ) -> Self {
         self.course_length = length;
         self.tracking[slot.index()] = oag_ext_abi::Tracking { progress, place };
+        self
+    }
+
+    /// Sets where `target` sits in `observer`'s frame, in world units ahead, to the right and
+    /// above: what [`Craft::aim_at`](crate::Craft::aim_at) reads.
+    #[must_use]
+    pub fn with_aim(
+        mut self,
+        observer: Slot,
+        target: Slot,
+        (forward, right, up): (f32, f32, f32),
+    ) -> Self {
+        self.aiming.set(
+            observer.index(),
+            target.index(),
+            oag_ext_abi::Aim::from_offset(forward, right, up),
+        );
         self
     }
 
@@ -204,6 +223,7 @@ impl<E: Extension> Race<E> {
                 length: self.course_length,
                 tracking: &self.tracking,
                 title: self.title,
+                aiming: Some(&self.aiming),
             },
             &self.state,
         );

@@ -336,6 +336,13 @@ fn layout_fold() -> u64 {
         crate::MAX_FOV_OFFSET_DEG.to_bits(),
         crate::motion::EXIT_FACTOR_STEPS.to_bits(),
         u32::from(crate::CRAFT_IN_TRANSIT),
+        AIM_AT as u32,
+        AIM_SLOTS as u32,
+        AIM_LEN as u32,
+        AIM_STEP.to_bits(),
+        u32::from(MAX_PICKUP_KINDS),
+        u32::from(Pickup::Other(0).code()),
+        u32::from(Pickup::Other(MAX_PICKUP_KINDS - 1).code()),
     ];
     // Each code by name: a reordered variant moves a byte's meaning on the wire.
     let codes = [
@@ -376,18 +383,20 @@ fn layout_fold() -> u64 {
     let events = every_event().into_iter().flat_map(Event::encode);
     let craft = a_craft().encode();
     let tracking = a_tracking().encode();
+    let aim = Aim::from_offset(61.0, -3.0, 0.4).encode();
     fnv(consts.into_iter().chain(codes).chain(
         commands
             .chain(events)
             .chain(craft)
             .chain(tracking)
+            .chain(aim)
             .map(u32::from),
     ))
 }
 
 /// The revision and the layout it names. The ABI changes in place before release (no
 /// revision bump); the fold is recorded again with each layout edit.
-const REVISION_AND_FOLD: (u32, u64) = (3, 0x1224_386b_70cf_ea51);
+const REVISION_AND_FOLD: (u32, u64) = (3, 0xadfc_b7e8_5057_04bb);
 
 #[test]
 fn the_layout_is_the_revision_it_says() {
@@ -590,6 +599,7 @@ fn the_observation_reads_back_through_the_guest_sections() {
             length: 5120.0,
             tracking: &[Tracking::default(), a_tracking()],
             title: channel_key("wipeout-hd"),
+            aiming: None,
         },
         &[9, 8, 7],
     );
@@ -1122,6 +1132,59 @@ fn a_scene_command_out_of_its_ranges_is_malformed() {
     .encode();
     unknown[COMMAND_WORD] = 9;
     assert!(Command::decode(&unknown).is_err(), "distance kind 9");
+}
+
+/// Another mod's pickup has a code of its own per kind: never a title weapon's, never the
+/// reader's own, and back to the same kind.
+#[test]
+fn another_mods_pickup_codes_are_one_per_kind_and_collide_with_nothing() {
+    let mut seen = [false; 256];
+    for weapon in Weapon::ALL {
+        seen[usize::from(weapon.code())] = true;
+    }
+    seen[usize::from(Pickup::None.code())] = true;
+    seen[usize::from(Pickup::Ours.code())] = true;
+    for kind in 0..MAX_PICKUP_KINDS {
+        let code = Pickup::Other(kind).code();
+        assert!(!seen[usize::from(code)], "kind {kind} reuses code {code}");
+        seen[usize::from(code)] = true;
+        assert_eq!(Pickup::from_code(code), Some(Pickup::Other(kind)));
+    }
+}
+
+#[test]
+fn an_aim_quantises_to_steps_saturates_and_survives_the_buffer() {
+    let aim = Aim::from_offset(61.0, -3.0, 0.4);
+    assert_eq!((aim.forward, aim.right, aim.up), (31, -2, 0));
+    assert_eq!((aim.ahead(), aim.across(), aim.above()), (62.0, -4.0, 0.0));
+    let far = Aim::from_offset(1.0e9, -1.0e9, f32::NAN);
+    assert_eq!((far.forward, far.right, far.up), (127, -127, 0));
+    assert_eq!(Aim::decode(&aim.encode()), aim);
+
+    let mut aiming = Aiming::default();
+    aiming.set(2, 5, aim);
+    aiming.set(AIM_SLOTS, 0, aim);
+    let mut io = [0; IO_LEN];
+    aiming.write(&mut io);
+    let sections = Sections::split(&mut io);
+    assert_eq!(read_aim(sections.crafts, 2, 5), aim);
+    assert_eq!(
+        read_aim(sections.crafts, 5, 2),
+        Aim::default(),
+        "not symmetric"
+    );
+    assert_eq!(read_aim(sections.crafts, AIM_SLOTS, 0), Aim::default());
+}
+
+#[test]
+fn a_cone_is_in_front_inside_the_range_and_within_its_spread() {
+    let at = |forward, right, up| Aim::from_offset(forward, right, up);
+    assert!(at(50.0, 10.0, 0.0).in_cone(100.0, 0.3));
+    assert!(!at(50.0, 20.0, 0.0).in_cone(100.0, 0.3), "too far across");
+    assert!(!at(50.0, 0.0, 20.0).in_cone(100.0, 0.3), "too far up");
+    assert!(!at(150.0, 0.0, 0.0).in_cone(100.0, 0.3), "out of range");
+    assert!(!at(-50.0, 0.0, 0.0).in_cone(100.0, 0.3), "behind");
+    assert!(!at(0.0, 0.0, 0.0).in_cone(100.0, 0.3), "on top of it");
 }
 
 #[test]

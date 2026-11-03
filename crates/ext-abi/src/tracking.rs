@@ -38,6 +38,8 @@ pub struct Course<'a> {
     pub tracking: &'a [Tracking],
     /// The title's key (`channel_key` of its slug); 0 when unknown.
     pub title: u32,
+    /// Where each craft sits in each other's frame; zero when the host does not say.
+    pub aiming: Option<&'a crate::Aiming>,
 }
 
 /// One slot's place on the course.

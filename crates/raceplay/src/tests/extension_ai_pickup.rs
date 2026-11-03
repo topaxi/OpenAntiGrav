@@ -47,7 +47,8 @@ fn fire_raised(drives_ai_pickup: bool) -> bool {
     race.sim.extensions = crate::extensions::Extensions::new(prepared(&[owner(drives_ai_pickup)]));
     let slot = 1;
     assert!(race.sim.world.ships[slot].active, "no opponent on the grid");
-    race.sim.world.ships[slot].pickup.weapon = Some(Weapon::Extension);
+    race.sim.world.ships[slot].pickup.weapon =
+        Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST));
     let controls = oag_physics::ShipControls {
         thrust: 1.0,
         ..oag_physics::ShipControls::default()

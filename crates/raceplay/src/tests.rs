@@ -38,6 +38,8 @@ mod energy_bar_delay;
 #[cfg(feature = "extensions")]
 mod extension_ai_pickup;
 #[cfg(feature = "extensions")]
+mod extension_aiming;
+#[cfg(feature = "extensions")]
 mod extension_armor;
 mod extension_channels;
 #[cfg(feature = "extensions")]
@@ -46,6 +48,9 @@ mod extension_examples;
 mod extension_faults;
 #[cfg(feature = "extensions")]
 mod extension_odds;
+
+#[cfg(feature = "extensions")]
+mod extension_pickup_kinds;
 #[cfg(feature = "extensions")]
 mod extension_slipstream;
 #[cfg(feature = "extensions")]

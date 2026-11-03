@@ -28,7 +28,12 @@ const MOD: &str = "assets/mods/official/slipstream";
 /// The mod as the game builds its source from the manifest (`oag_game::mod_extensions`):
 /// every field, so the icons, effects and look rows are the real ones.
 fn slipstream() -> Option<race::extensions::Source> {
-    let manifest = oag_testdata::exact(&format!("{MOD}/oag-mod.toml"))?;
+    source_of(MOD)
+}
+
+/// The mod at `dir` (relative to the repository) as the game builds its source.
+pub(crate) fn source_of(dir: &str) -> Option<race::extensions::Source> {
+    let manifest = oag_testdata::exact(&format!("{dir}/oag-mod.toml"))?;
     let module = Arc::new(oag_mod::Mod::open(manifest.parent().unwrap()).expect("the mod opens"));
     let extension = module.manifest.extension.clone().expect("[extension]");
     let rules = extension.rules.expect("a rules module");
@@ -130,7 +135,8 @@ fn press_fire() -> PlayerInputs {
 }
 
 fn give(race: &mut race::Race, slot: usize) {
-    race.sim.world.ships[slot].pickup.weapon = Some(Weapon::Extension);
+    race.sim.world.ships[slot].pickup.weapon =
+        Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST));
 }
 
 fn no_fault(race: &race::Race) -> bool {
@@ -201,7 +207,11 @@ fn a_press_where_the_portal_does_not_fit_keeps_the_pickup() {
     race.tick(&press_fire());
     race.tick(&throttle());
     assert_eq!(ship(&race).transit, None, "no portal, no transit");
-    assert_eq!(race.ship_pickup(), Some(Weapon::Extension), "kept");
+    assert_eq!(
+        race.ship_pickup(),
+        Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST)),
+        "kept"
+    );
     assert!(no_fault(&race), "a refusal is not a fault");
 }
 

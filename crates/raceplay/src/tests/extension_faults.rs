@@ -85,7 +85,8 @@ fn roll_every_turbo() -> Command {
 }
 
 #[test]
-fn a_faulted_owner_hands_a_rolled_pickup_back_as_the_weapon_the_pad_drew_and_frees_the_kind() {
+fn a_faulted_owner_hands_a_rolled_pickup_back_as_the_weapon_the_pad_drew_and_the_other_mod_keeps_its_own_kind()
+ {
     let giver = Command::GivePickup { slot: slot(1) };
     // Its third call: after the roller has rolled (call 1) and trapped (call 2).
     let late = scripted(
@@ -105,8 +106,9 @@ fn a_faulted_owner_hands_a_rolled_pickup_back_as_the_weapon_the_pad_drew_and_fre
     // A pad draws a Turbo for slot 0 and the roll turns it into the mod's own pickup.
     let held = &mut race.sim.world.ships[0].pickup;
     held.grant(Weapon::Turbo);
-    assert!(race.sim.extensions.rolls(0, Weapon::Turbo));
-    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Extension);
+    assert!(race.sim.extensions.rolls(0, Weapon::Turbo).is_some());
+    race.sim.world.ships[0].pickup.weapon =
+        Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST));
 
     race.tick(&PlayerInputs::none());
     let reports = race.extension_reports();
@@ -117,7 +119,7 @@ fn a_faulted_owner_hands_a_rolled_pickup_back_as_the_weapon_the_pad_drew_and_fre
         "the rolled pickup is the vanilla grant it replaced"
     );
     assert!(
-        !race.sim.extensions.rolls(1, Weapon::Turbo),
+        race.sim.extensions.rolls(1, Weapon::Turbo).is_none(),
         "pads hand out vanilla weapons again"
     );
 
@@ -125,12 +127,14 @@ fn a_faulted_owner_hands_a_rolled_pickup_back_as_the_weapon_the_pad_drew_and_fre
     let reports = race.extension_reports();
     assert_eq!(
         reports[1].faulted, None,
-        "the dead owner no longer holds the mod pickup kind"
+        "the second module is not the dead one's problem"
     );
     assert_eq!(
         race.sim.world.ships[1].pickup.weapon,
-        Some(Weapon::Extension),
-        "the second module gave its own"
+        Some(Weapon::Extension(
+            oag_tables::weapons::ModKind::new(1).unwrap()
+        )),
+        "the second module gave its own kind"
     );
 }
 
@@ -141,7 +145,7 @@ fn a_faulted_owners_given_pickup_is_taken_away() {
     race.tick(&PlayerInputs::none());
     assert_eq!(
         race.sim.world.ships[1].pickup.weapon,
-        Some(Weapon::Extension)
+        Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST))
     );
     race.tick(&PlayerInputs::none());
     assert!(race.extension_reports()[0].faulted.is_some());
@@ -251,4 +255,36 @@ fn a_fault_found_while_applying_lands_none_of_the_modules_commands_that_tick() {
         bad.sim.world.ships, vanilla.sim.world.ships,
         "no thrust command of the faulted reply landed, so the race is the vanilla one"
     );
+}
+
+#[test]
+fn a_faulted_module_takes_back_its_own_kind_alone() {
+    let a = once_then_traps("test.a", &[Command::GivePickup { slot: slot(0) }]);
+    let b = scripted(
+        "test.b",
+        &format!(
+            "(if (i32.load (i32.const {STATE})) (then (return (i32.const 0))))
+             (i32.store (i32.const {STATE}) (i32.const 1))"
+        ),
+        &[Command::GivePickup { slot: slot(1) }],
+        &[],
+    );
+    let mut race = grid(prepared(&[a, b]));
+    race.tick(&PlayerInputs::none());
+    let kind = |i| {
+        Some(Weapon::Extension(
+            oag_tables::weapons::ModKind::new(i).unwrap(),
+        ))
+    };
+    assert_eq!(race.sim.world.ships[0].pickup.weapon, kind(0));
+    assert_eq!(race.sim.world.ships[1].pickup.weapon, kind(1));
+    race.tick(&PlayerInputs::none());
+    assert!(race.extension_reports()[0].faulted.is_some(), "a trapped");
+    assert_eq!(race.sim.world.ships[0].pickup.weapon, None, "a's is gone");
+    assert_eq!(
+        race.sim.world.ships[1].pickup.weapon,
+        kind(1),
+        "b's is the other mod's and stays"
+    );
+    assert_eq!(race.extension_reports()[1].faulted, None);
 }

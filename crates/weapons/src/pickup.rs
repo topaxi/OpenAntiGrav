@@ -450,7 +450,9 @@ fn gated_weight(
     allowed: Option<&[Weapon]>,
 ) -> f32 {
     // A mod's own pickup is the mod's to weigh: an event's weapon set names the title's.
-    if weapon != Weapon::Extension && allowed.is_some_and(|allowed| !allowed.contains(&weapon)) {
+    if !matches!(weapon, Weapon::Extension(_))
+        && allowed.is_some_and(|allowed| !allowed.contains(&weapon))
+    {
         return 0.0;
     }
     driver.weight(table, weapon).max(0.0)
@@ -464,13 +466,17 @@ fn draw_once(
     driver: Driver,
     allowed: Option<&[Weapon]>,
 ) -> Option<Weapon> {
-    // The title's weapons, then a mod's own pickup if the table carries a row for it
-    // (`oag_raceplay`'s race table): a table without one walks exactly as before.
+    // The title's weapons, then each mod's own pickup the table carries a row for
+    // (`oag_raceplay`'s race table, in kind order): a table without one walks exactly as
+    // before.
     let walk = || {
-        IMPLEMENTED
-            .iter()
-            .copied()
-            .chain(table.get(Weapon::Extension).map(|_| Weapon::Extension))
+        IMPLEMENTED.iter().copied().chain(
+            table
+                .odds
+                .iter()
+                .map(|(weapon, _)| *weapon)
+                .filter(|weapon| matches!(weapon, Weapon::Extension(_))),
+        )
     };
     let total: f32 = walk()
         .map(|weapon| gated_weight(driver, table, weapon, allowed))

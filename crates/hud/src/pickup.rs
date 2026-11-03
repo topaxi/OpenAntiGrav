@@ -49,7 +49,7 @@ pub(super) fn shown<'a>(
 ) -> Shown<'a> {
     use oag_tables::pickup_look::Icon;
     use oag_tables::weapons::Weapon;
-    if held != Weapon::Extension {
+    if !matches!(held, Weapon::Extension(_)) {
         return Shown {
             icon: Some(held),
             mod_icon: None,
@@ -87,7 +87,7 @@ pub(super) fn backdrop_word(
     use oag_tables::pickup_look::Colour;
     use oag_tables::weapons::Weapon;
     let table = art.pickup_colours?;
-    let row = if held == Weapon::Extension {
+    let row = if matches!(held, Weapon::Extension(_)) {
         match ext.pickup_look.as_ref()?.colour {
             Colour::Title(weapon) => weapon,
             Colour::Rgba([r, g, b, a]) => {
@@ -97,7 +97,7 @@ pub(super) fn backdrop_word(
     } else {
         held
     };
-    table.get(row as usize).copied().flatten()
+    table.get(row.index()).copied().flatten()
 }
 
 /// The fade's look this frame on a title that plays one ([`oag_title::HudArt::pickup_fade`]),
@@ -230,7 +230,7 @@ pub(super) fn pickup_model_draws(
     }
     let icon = shown
         .icon
-        .and_then(|weapon| models.get(weapon as usize).copied().flatten());
+        .and_then(|weapon| models.get(weapon.index()).copied().flatten());
     if let Some(name) = icon {
         // The model's own authored `colour` - see `Model::colour`'s doc for
         // why this is not routed through `pickup_colours`' substitution at
@@ -303,7 +303,7 @@ fn model_draw(cx: &Context<'_>, name: &str, color: [f32; 4]) -> Option<Draw> {
 fn reference_glyph(cx: &Context<'_>) -> Option<([f32; 2], [f32; 2])> {
     let turbo = oag_tables::weapons::Weapon::Turbo;
     let sprite = if let Some(table) = cx.art.pickup_icon_uv {
-        let uv = table.get(turbo as usize).copied().flatten()?;
+        let uv = table.get(turbo.index()).copied().flatten()?;
         let mut icon = cx
             .layout
             .sprite(super::dialect_2048::PICKUP_ICON_2048)?

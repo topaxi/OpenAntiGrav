@@ -27,6 +27,7 @@
 //! | [`CRAFTS_AT`] | [`CRAFT_LEN`] x [`MAX_CRAFTS`] | one record per grid slot ([`Craft`]): pickup `u8`, flags `u8`, lap `u8`, laps target `u8`, shield `f32`, shield maximum `f32`, speed km/h `f32` |
 //! | [`TRACKING_AT`] | [`TRACKING_LEN`] x [`MAX_CRAFTS`] | one record per grid slot ([`Tracking`]): progress `f32`, place `u8`, flags `u8` (bit 0: progress is a fix), 2 bytes unused |
 //! | [`TITLE_AT`] | 4 | the title's key: `channel_key` of its lowercased hyphenated name (0: none) |
+//! | [`AIM_AT`] | [`AIM_TOTAL`] | [`AIM_SLOTS`] observers x [`AIM_SLOTS`] targets ([`Aim`]): where the target sits ahead of, right of and above the observer, three `i8` in [`AIM_STEP`] units |
 //!
 //! The track region is a second buffer, written by the host before each call when the
 //! guest exports `oag_track() -> u32`: [`track`] lays it out.
@@ -41,6 +42,7 @@
 #![no_std]
 #![forbid(unsafe_code)]
 
+pub use aiming::{AIM_AT, AIM_LEN, AIM_SLOTS, AIM_STEP, AIM_TOTAL, Aim, Aiming, read as read_aim};
 pub use channel::{
     BadChannel, MAX_CHANNEL_LEN, MAX_EMITS_PER_TICK, MAX_MOD_EVENTS, MAX_TRACK_EVENTS,
     TRACK_SENDER, channel_key, check_channel, namespace,
@@ -186,6 +188,13 @@ const EVENT_CLEARANCE: u8 = 12;
 const OWN_FLAG: u16 = 1 << 15;
 /// The craft record's pickup code for a simulation mod's own pickup.
 const PICKUP_OURS: u8 = u8::MAX;
+/// The craft record's first pickup code for another mod's pickup: [`MAX_PICKUP_KINDS`] codes
+/// from the code after the last title weapon.
+const PICKUP_OTHER_FIRST: u8 = Weapon::Disruptor.code() + 1;
+/// The mods that can each hand out a pickup of their own in one race.
+pub const MAX_PICKUP_KINDS: u8 = 32;
+const PICKUP_OTHER_LAST: u8 = PICKUP_OTHER_FIRST + MAX_PICKUP_KINDS - 1;
+const _: () = assert!(PICKUP_OTHER_LAST < PICKUP_OURS);
 
 /// A grid slot that may hold a craft: below [`MAX_CRAFTS`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -327,8 +336,12 @@ pub enum Pickup {
     None,
     /// One of the title's weapons.
     Weapon(Weapon),
-    /// A simulation mod's own pickup (`give-pickup`).
+    /// The reading mod's own pickup (`give-pickup`).
     Ours,
+    /// Another mod's pickup, by that mod's kind in the race (below [`MAX_PICKUP_KINDS`], in
+    /// module id order among the mods that declare a `[pickup]`). A module sees its own
+    /// kind as [`Self::Ours`], never as this.
+    Other(u8),
 }
 
 impl Pickup {
@@ -339,6 +352,7 @@ impl Pickup {
             Self::None => 0,
             Self::Weapon(weapon) => weapon.code(),
             Self::Ours => PICKUP_OURS,
+            Self::Other(kind) => PICKUP_OTHER_FIRST + kind,
         }
     }
 
@@ -348,6 +362,7 @@ impl Pickup {
         match code {
             0 => Some(Self::None),
             PICKUP_OURS => Some(Self::Ours),
+            PICKUP_OTHER_FIRST..=PICKUP_OTHER_LAST => Some(Self::Other(code - PICKUP_OTHER_FIRST)),
             _ => Weapon::from_code(code).map(Self::Weapon),
         }
     }
@@ -1317,6 +1332,9 @@ pub fn write_observation(
         io[at..at + TRACKING_LEN].copy_from_slice(&tracking.encode());
     }
     put_u32(io, TITLE_AT, course.title);
+    if let Some(aiming) = course.aiming {
+        aiming.write(io);
+    }
 }
 
 /// The reply's command count.
@@ -1455,6 +1473,7 @@ fn get_u32(buffer: &[u8], at: usize) -> u32 {
     }
 }
 
+mod aiming;
 mod channel;
 mod craft;
 pub mod hud;

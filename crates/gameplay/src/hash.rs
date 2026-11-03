@@ -460,8 +460,9 @@ fn write_weapon(hasher: &mut StateHasher, weapon: Option<Weapon>) {
     let discriminant = match weapon {
         None => 0,
         // A mod's pickup: outside the titles' pool, so a code no position in it reaches
-        // (no vanilla race holds one, so no committed hash moves).
-        Some(Weapon::Extension) => u8::MAX,
+        // (no vanilla race holds one, so no committed hash moves). The first kind keeps the
+        // byte a race with one pickup mod always wrote; the next count down from it.
+        Some(Weapon::Extension(kind)) => u8::MAX - kind.index() as u8,
         Some(weapon) => Weapon::ALL
             .iter()
             .position(|&candidate| candidate == weapon)

@@ -93,7 +93,7 @@ fn race_on(
     let ship = &mut race.sim.world.ships[0];
     ship.physics.shield = ship.handling.dimensions.shield * 0.5;
     if turbo {
-        ship.pickup.weapon = Some(Weapon::Extension);
+        ship.pickup.weapon = Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST));
     }
     Some(race)
 }
@@ -178,7 +178,7 @@ fn holding_fire_boosts_on_shield_and_an_absorb_pays_back_at_most_half() {
     assert!(a[479].shield < b[479].shield, "and paid for in shield");
     assert_eq!(
         boosted.sim.world.ships[0].pickup.weapon,
-        Some(Weapon::Extension),
+        Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST)),
         "firing keeps it"
     );
 
@@ -297,7 +297,7 @@ fn in_a_full_field_every_second_turbo_is_the_mods_and_the_ai_boosts_on_it() {
             player.push(weapon);
             match weapon {
                 Weapon::Turbo => turbos += 1,
-                Weapon::Extension => energy += 1,
+                Weapon::Extension(oag_tables::weapons::ModKind::FIRST) => energy += 1,
                 _ => {}
             }
         }
@@ -307,7 +307,7 @@ fn in_a_full_field_every_second_turbo_is_the_mods_and_the_ai_boosts_on_it() {
             if carried[slot].is_none() {
                 match now {
                     Some(Weapon::Turbo) => turbos += 1,
-                    Some(Weapon::Extension) => energy += 1,
+                    Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST)) => energy += 1,
                     _ => {}
                 }
             }
@@ -315,7 +315,9 @@ fn in_a_full_field_every_second_turbo_is_the_mods_and_the_ai_boosts_on_it() {
             // the pool on most ticks: a drop of that size while carrying it is a boost.
             let drop = prior[slot] - ship.physics.shield;
             let drain = ship.handling.dimensions.shield * DRAIN_SHARE;
-            if now == Some(Weapon::Extension) && (drop - drain).abs() < 1e-4 {
+            if now == Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST))
+                && (drop - drain).abs() < 1e-4
+            {
                 boost_ticks += 1;
             }
             carried[slot] = now;
