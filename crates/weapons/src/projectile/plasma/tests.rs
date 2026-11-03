@@ -656,19 +656,35 @@ fn the_muzzle_is_the_hulls_weapon_node_or_the_hold_point_without_one() {
 
     let (nose, _) = muzzle(&ships[0]);
     // The literal is the probe's: 241.77 against the craft at 239.54.
-    assert!((ahead_of(nose) - 2.23).abs() < 1e-4, "{} ahead", ahead_of(nose));
+    assert!(
+        (ahead_of(nose) - 2.23).abs() < 1e-4,
+        "{} ahead",
+        ahead_of(nose)
+    );
 
     ships[0].muzzle = Some(Vec3::new(0.0, 0.0, 5.653));
     let (nose, _) = muzzle(&ships[0]);
     let off = nose - body.position;
-    assert!((ahead_of(nose) - 4.24).abs() < 1e-3, "Assegai: {} ahead", ahead_of(nose));
+    assert!(
+        (ahead_of(nose) - 4.24).abs() < 1e-3,
+        "Assegai: {} ahead",
+        ahead_of(nose)
+    );
     assert!(off.dot(body.up()).abs() < 1e-4 && off.dot(body.right()).abs() < 1e-4);
 
     ships[0].muzzle = Some(Vec3::new(0.0, -0.298, 4.183));
     let (nose, _) = muzzle(&ships[0]);
     let off = nose - body.position;
-    assert!((ahead_of(nose) - 4.183 * 0.75).abs() < 1e-3, "Triakis: {} ahead", ahead_of(nose));
-    assert!((off.dot(body.up()) + 0.298 * 0.75).abs() < 1e-3, "Triakis: {} up", off.dot(body.up()));
+    assert!(
+        (ahead_of(nose) - 4.183 * 0.75).abs() < 1e-3,
+        "Triakis: {} ahead",
+        ahead_of(nose)
+    );
+    assert!(
+        (off.dot(body.up()) + 0.298 * 0.75).abs() < 1e-3,
+        "Triakis: {} up",
+        off.dot(body.up())
+    );
 }
 
 /// The measured first four updates (`plasma.md`, "the detonation leg"): three that

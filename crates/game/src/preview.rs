@@ -126,8 +126,14 @@ pub fn race_hull_entry(
     team: &str,
     mode: oag_race::Mode,
 ) -> Option<String> {
-    (!draws_hull(title, oag_ui_screens::picker::Kind::Ship))
-        .then(|| oag_pulse::race::ships::hull_entry_name(title.race.ships_for(team), team, mode == oag_race::Mode::Zone, None))
+    (!draws_hull(title, oag_ui_screens::picker::Kind::Ship)).then(|| {
+        oag_pulse::race::ships::hull_entry_name(
+            title.race.ships_for(team),
+            team,
+            mode == oag_race::Mode::Zone,
+            None,
+        )
+    })
 }
 
 /// Seats a front-end hull's airbrake flaps where `race_entry`'s model has them at rest.
@@ -195,7 +201,14 @@ pub fn zone_race_hull_entry(
     (mode == oag_race::Mode::Zone
         && outside_the_team
         && draws_hull(title, oag_ui_screens::picker::Kind::Ship))
-    .then(|| oag_pulse::race::ships::hull_entry_name(title.race.ships_for(team), team, mode == oag_race::Mode::Zone, None))
+    .then(|| {
+        oag_pulse::race::ships::hull_entry_name(
+            title.race.ships_for(team),
+            team,
+            mode == oag_race::Mode::Zone,
+            None,
+        )
+    })
 }
 
 /// The orbit a capture frames a preview with: the fixed hull pose, or the

@@ -30,9 +30,9 @@ mod glow_mask;
 mod intro;
 #[cfg(feature = "view")]
 mod lens_flare;
-mod muzzle;
 #[cfg(feature = "view")]
 pub(crate) mod magstrip_wake;
+mod muzzle;
 mod original_laws;
 #[cfg(feature = "view")]
 mod pads;

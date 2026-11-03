@@ -778,8 +778,7 @@ fn every_titles_zone_craft_resolves_and_is_not_the_race_hull() {
         let archives = oag_source::title::open_source(&source, Vec::new(), Vec::new())
             .expect("opening the source");
 
-        let racing =
-            oag_pulse::race::ships::hull_entry_name(craft, team, false, None);
+        let racing = oag_pulse::race::ships::hull_entry_name(craft, team, false, None);
         let zoning = oag_pulse::race::ships::hull_entry_name(craft, team, true, None);
         assert_ne!(
             racing, zoning,
