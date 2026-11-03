@@ -706,6 +706,15 @@ impl Race {
                 scale,
                 &mut self.view.projectile_flare[slot],
             );
+            // `Plasma_Launch` hands the head the bolt's matrix, whose rows are 0.75 long,
+            // so the arcs (flag `0x2`) draw at 0.75 of their local offsets from the
+            // release on (`plasma.md`, "the arcs after the release").
+            if let Some(instance) = self.view.projectile_flare[slot] {
+                self.view.stage.set_ride_scale(
+                    instance,
+                    plasma_ride_scale(projectile.kind, projectile.charge),
+                );
+            }
             // The Rocket's flare frame is its own basis turned `-pi/2` about
             // row 0, so the emitter's `+Y` is the velocity - measured live,
             // `rocket-visuals.md`. Every other rider

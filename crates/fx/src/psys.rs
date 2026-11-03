@@ -622,6 +622,9 @@ pub struct System {
     /// multiplies every root emitter's spawn offset and ejection velocity
     /// and nothing else - see [`System::set_frame_scale`].
     frame_scale: f32,
+    /// The row length of the matrix local-space particles are drawn through, see
+    /// [`System::set_ride_scale`].
+    ride_scale: f32,
     /// World-space direction the emitter frame's `X` points along - what a
     /// [`Spawn::Line`] spreads its particles over. Unit length and
     /// perpendicular to `up` once [`System::advance`] has run.
@@ -657,6 +660,7 @@ impl System {
             scale: 1.0,
             extent_scale: 1.0,
             frame_scale: 1.0,
+            ride_scale: 1.0,
             across: Vec3::X,
             anchor: Vec3::ZERO,
             up: Vec3::Y,
@@ -915,7 +919,11 @@ impl System {
     ) -> Option<(usize, Vec3, Vec3)> {
         let spec = &effect.emitters[usize::from(spec_index)];
         let frame_scale = if spec.world_space {
-            1.0
+            if self.ridden.is_some() {
+                self.ride_scale
+            } else {
+                1.0
+            }
         } else {
             burst.frame_scale
         };

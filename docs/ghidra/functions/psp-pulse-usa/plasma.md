@@ -2146,17 +2146,44 @@ opaque black alpha-over quad over a white underlay reads black; red with the und
 and k72 ours now shows the original's violet core with the arcs around it, where before it was a washed white
 blob. The core is a little larger than the original's at k72 and the arcs are broader and whiter.
 
-### The arcs after the release: not closed
+### The arcs after the release (pulse-plasma-release-arcs)
 
-Hypothesis: after `Plasma_Launch` the head's matrix is the bolt's, whose rows have length 0.75 (the launch-speed
-finding above), so local-space (flag `0x2`) particles are drawn at 0.75 of their offset. Ours, k56 and on, reads
-1.3 to 2.7 units too long (9.7 / 12.5 / 13.6 against 8.4 / 9.9 / 11.2), a ratio of 0.87 / 0.79 / 0.82, which a pure
-0.75 does not give. Experiment: `set_frame_scale(0.75)` on the instance once the projectile is flying
-(`charge <= 0`) changed no pixel at k56 to k72 (it scales only particles spawned afterwards, and the length is
-dominated by older ones). Not kept. What is open: draw the local-space particles through a scaled matrix (offsets
-from the instance anchor times 0.75 after the release) and re-measure strip extents at k56, 68, 74; also that k56
-is only three ticks before the release in the `391 + k` mapping, so some of the 1.3 is not post-release.
-Confidence **40** for the hypothesis.
+After `Plasma_Launch` the head's matrix is the bolt's, whose rows are 0.75 long (the launch-speed finding above), so
+the local-space (flag `0x2`) arcs are drawn at 0.75 of their offset from the anchor. The last lane's
+`set_frame_scale(0.75)` could change nothing by construction: `frame_scale` scales a spawn offset and velocity
+only for emitters **without** flag `0x2` (a local-space particle is born in local units and the matrix scales it
+at draw time). The scale is now a draw-time one: `System::set_ride_scale` puts a row length on the riding `Frame`,
+a change carries every live local-space particle's offset, streak origin and velocity from the old length to the
+new about the anchor, and newborns spawn at it (`plasma_ride_scale`: 0.75 once `charge <= 0`, else 1.0).
+
+Strip extent (the arcs' layer, largest bounding-box side, ours at ticks `391 + k`, one run each) against the dump:
+
+| k | 20 | 36 | 44 | 56 | 68 | 74 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| original | 2.4 | 5.4 | 7.5 | 8.4 | 9.9 | 11.2 |
+| before | 2.52 | 5.45 | 7.23 | 9.73 | 12.45 | 13.64 |
+| after | 2.52 | 5.45 | 7.23 | 9.73 | 10.82 | 12.01 |
+
+The overshoot after the release goes from 2.5 / 2.4 to 0.9 / 0.8 units (ratio 1.26 / 1.22 to 1.09 / 1.07).
+k56 is before the release (frame 59 in the original, tick 59 in ours) and is untouched: its 1.3 is a pre-release
+gap, and the same size as the residual after it, so the residual reads as that gap carried, not as a wrong
+scale. The strip's width is not scaled by the matrix, which is why a bare 0.75 does not give a ratio of 0.75.
+Single draws of ten random particles: the extent jitters by about 0.6 between neighbouring ticks (k58 10.23, k60
+10.75, k62 9.65 after), so the table is one sample, not a fit.
+
+Confidence **60**: the 0.75 rows are read off the entity at the launch probe (85), that the reparented head draws
+through that matrix, and keeps it as `Plasma_Update` rewrites it, is inferred from this extent table.
+
+Head box mean RGB (`200,112,90,80`, original / before / after): **k60 127.0 / 122.5 / 122.5, k72 111.1 / 115.1 /
+114.1**. k60 is the release frame, so nothing moves there; k72 moves 1.0. The frames (`orig`, before, after at k60
+and k72) differ more in shape than in size: the original's arcs are curved crescents looping round the disc, ours
+are still straighter bars and flares to the right (open: the shape, and the k36 to k72 luminance overshoot).
+
+Tests: `psys::playback::tests::a_riding_frame_scale_shrinks_local_space_offsets_from_the_anchor` (old particle at
+0.75 of its reach, newborn inside it; red before: the API did not exist, and with the carry dropped the old
+particle keeps its reach) and `tests::weapons::visuals::the_plasma_heads_matrix_is_scaled_from_the_release_on`.
+The wiring call in `advance_projectile_flares` has no test of its own (it needs a race); the extent table above is
+its evidence.
 
 ### Cross-title
 
