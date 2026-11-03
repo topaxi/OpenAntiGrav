@@ -220,6 +220,13 @@ impl Standing {
         if !wrapped_forward(delta, half) {
             return false;
         }
+        self.crossed_forward(tick, laps_target)
+    }
+
+    /// A forward crossing of the line, the gate already advanced to where the craft now
+    /// is: a lap if the gate allows it, the spawn-to-line crossing if not, and a paid-back
+    /// deficit if the craft had been shoved back over. Returns `true` on a lap.
+    fn crossed_forward(&mut self, tick: u64, laps_target: Option<u32>) -> bool {
         if self.reversed > 0 {
             // Back over the line the craft was pushed across: the crossing count
             // is restored and nothing is earned. The lap it was on is still
@@ -262,12 +269,36 @@ impl Standing {
         true
     }
 
-    /// The craft was moved forward along the circuit to ring point `index`
-    /// ([`Course::jump`]): the next [`Self::update`] searches from there. Progress is
-    /// left where it was, so that update sees the jump as one forward step and counts
-    /// a crossing of the line in it on its own tick (a finish included).
-    pub fn jumped(&mut self, index: usize) {
+    /// The craft was moved forward along the circuit, less than a lap, to ring point
+    /// `index` ([`Course::jump`]), on `tick`. The ground jumped over counts as driven: a
+    /// crossing of the line in it is credited now, as [`Self::update`] credits a driven
+    /// one (a lap, the spawn-to-line crossing, a paid-back deficit, a finish), and the
+    /// next update searches from `index`. Returns `true` on a lap. Before the first fix,
+    /// only the search moves.
+    pub fn jumped(
+        &mut self,
+        course: &Course,
+        index: usize,
+        tick: u64,
+        laps_target: Option<u32>,
+    ) -> bool {
         self.course_index = u32::try_from(index).ok();
+        let (Some(from), Some(to)) = (self.progress, course.progress_at(index)) else {
+            return false;
+        };
+        if self.finished() {
+            return false;
+        }
+        let half = course.length() * 0.5;
+        self.progress = Some(to);
+        self.gate = self.gate.advanced(from, half);
+        if to >= from {
+            self.gate = self.gate.advanced(to, half);
+            return false;
+        }
+        // Over the line: the stretch from `from` to the line is the far half's end.
+        self.gate = self.gate.advanced(half, half).advanced(to, half);
+        self.crossed_forward(tick, laps_target)
     }
 
     /// How far round the race this craft is, for ordering.

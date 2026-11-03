@@ -81,12 +81,14 @@ fn a_craft_in_transit_is_out_of_the_world_then_comes_out_further_round() {
 #[test]
 fn a_transit_the_course_or_the_craft_cannot_take_is_refused_and_changes_nothing() {
     let mut race = moving();
-    let half = race.sim.course.as_ref().unwrap().max_jump();
+    let lap = race.sim.course.as_ref().unwrap().length();
     for (ticks, distance, factor) in [
         (0, Distance::Units(10.0), 1.0),
         (601, Distance::Units(10.0), 1.0),
-        (30, Distance::Units(half), 1.0),
-        (30, Distance::Lap(0.5), 1.0),
+        (30, Distance::Units(lap), 1.0),
+        (30, Distance::Lap(1.0), 1.0),
+        (30, Distance::Progress(lap + 1.0), 1.0),
+        (30, Distance::Trigger(0), 1.0),
         (30, Distance::Units(-1.0), 1.0),
         (30, Distance::Units(10.0), 2.5),
     ] {
@@ -103,6 +105,31 @@ fn a_transit_the_course_or_the_craft_cannot_take_is_refused_and_changes_nothing(
             .is_err(),
         "already in one"
     );
+}
+
+/// A transit to a fixed place on the lap (a portal's other end) comes out there, however
+/// far round that is from where the craft went in.
+#[test]
+fn a_transit_to_a_place_on_the_lap_comes_out_there() {
+    let mut race = moving();
+    let course = race.sim.course.clone().unwrap();
+    let entry = race.sim.world.ships[1].standing.progress.unwrap();
+    // A ring point just past the start line, behind the craft: reached forward, that is
+    // most of a lap on (the fixture's ring closes over one 68-unit step, so the target is
+    // a ring point rather than a share of the lap).
+    let target = course.progress_at(2).unwrap();
+    assert!(target < entry, "{target} behind {entry}");
+    let (to, ahead) = race.point_ahead(1, Distance::Progress(target)).unwrap();
+    assert!(ahead > course.length() * 0.5, "{ahead} on");
+    race.begin_transit(1, 2, Distance::Progress(target), 1.0)
+        .unwrap();
+    race.tick(&PlayerInputs::none());
+    race.tick(&PlayerInputs::none());
+    let ship = &race.sim.world.ships[1];
+    assert_eq!(ship.transit, None);
+    let at = course.progress_at(to).unwrap();
+    let off = (ship.standing.progress.unwrap() - at).abs();
+    assert!(off < 4.0, "came out {off} units from the place asked");
 }
 
 /// Its triggers are held: a craft frozen out of the world banks no dwell.
@@ -130,7 +157,7 @@ fn a_clearance_probe_reads_the_width_and_the_geometry() {
     assert!(fits);
     assert_eq!(ahead, 20.0);
     assert!(!race.clearance(1, Distance::Units(20.0), 13.0).0);
-    assert_eq!(race.clearance(1, Distance::Lap(0.6), 8.0), (false, 0.0));
+    assert_eq!(race.clearance(1, Distance::Lap(1.5), 8.0), (false, 0.0));
 }
 
 #[cfg(feature = "extensions")]
@@ -197,6 +224,28 @@ mod guest {
         // Landed at tick N's call, the craft is out for the steps of N..N+19 and comes out
         // at N+20's, before its step: twenty ticks end with it out.
         assert_eq!(out, 20, "out of the world for its twenty ticks");
+    }
+
+    /// Every call stops slot 1 dead (`scale-speed` 0): it keeps only the one tick of
+    /// thrust each step gives it.
+    #[test]
+    fn a_guest_scale_speed_scales_the_velocity_at_the_call() {
+        let stopper = module(
+            "test.stopper",
+            &format!(
+                "(i32.store (i32.const {REPLY}) (i32.const 1))
+                 (i32.store8 (i32.const {c}) (i32.const 28))
+                 (i32.store8 (i32.add (i32.const {c}) (i32.const 1)) (i32.const 1))
+                 (f32.store (i32.add (i32.const {c}) (i32.const 4)) (f32.const 0.0))
+                 i32.const 0",
+                c = REPLY + 4,
+            ),
+        );
+        let (vanilla, _) = super::super::extensions::run(grid(Prepared::default()), 600);
+        let (stopped, _) = super::super::extensions::run(grid(prepared(&[stopper])), 600);
+        assert_eq!(stopped.extension_reports()[0].faulted, None);
+        let (v, s) = (speed(&vanilla, 1), speed(&stopped, 1));
+        assert!(v > 1.0 && s < v * 0.1, "{s} against {v}");
     }
 
     #[test]

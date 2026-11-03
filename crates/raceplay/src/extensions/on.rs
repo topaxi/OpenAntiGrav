@@ -62,7 +62,7 @@ pub(super) struct On {
     /// triggers'), delivered at the next one: race state, hashed.
     mail: Vec<super::channel::Mail>,
     /// The track as the modules read it.
-    region: super::track::Region,
+    pub(super) region: super::track::Region,
     /// Each speed pad's race-wide `scale-pad`, held until replaced.
     pad_scale: Vec<f32>,
     /// The module (index plus one, 0 for none) whose `scale-pad` holds each pad.

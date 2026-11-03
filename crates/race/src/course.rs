@@ -521,24 +521,34 @@ impl Course {
         order
     }
 
-    /// The ring point a forward jump of `by` units from `from` lands on, for a
-    /// relocation along the circuit (a mod's `transit`).
-    ///
-    /// `None` unless `0 < by < length / 2`: a lap is a wrap of the distance-along
-    /// ([`crate::state::wrapped_forward`]), so a jump of half a lap or more would read
-    /// as a backward crossing of the line on the next locate. Below that the next
-    /// [`crate::Standing::update`] and [`crate::RaceState::update`] count a crossing of
-    /// the line made by the jump, on the tick they run, exactly as a driven one.
+    /// The ring point a forward move of `by` units from `from` lands on, for a
+    /// relocation along the circuit (a mod's `transit`): `None` unless `0 < by` and it is
+    /// under a lap ([`Self::max_jump`]). [`crate::Standing::jumped`] and
+    /// [`crate::RaceState::jumped`] credit a crossing of the line in it.
     #[must_use]
     pub fn jump(&self, from: usize, by: f32) -> Option<usize> {
-        let ok = by.is_finite() && by > 0.0 && by < self.length * 0.5;
+        let ok = by.is_finite() && by > 0.0 && by < self.length;
         (ok && !self.positions.is_empty()).then(|| self.advance(from, by))
     }
 
-    /// The longest forward jump [`Self::jump`] takes: just under half a lap.
+    /// The longest forward move [`Self::jump`] takes: just under a lap.
     #[must_use]
     pub fn max_jump(&self) -> f32 {
-        self.length * 0.5
+        self.length
+    }
+
+    /// The ring point nearest `progress` units from the start line, for a move to a fixed
+    /// place on the lap: `None` outside `[0, length)` or on an empty ring.
+    #[must_use]
+    pub fn index_at_progress(&self, progress: f32) -> Option<usize> {
+        if !(progress.is_finite() && (0.0..self.length).contains(&progress)) {
+            return None;
+        }
+        let from = self.start_index;
+        if progress == 0.0 {
+            return Some(from);
+        }
+        self.jump(from, progress)
     }
 
     /// The ring point `by` units further along than `from`.

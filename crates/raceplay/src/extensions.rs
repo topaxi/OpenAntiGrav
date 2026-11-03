@@ -631,6 +631,21 @@ impl Extensions {
         }
     }
 
+    /// The centre of the track file's trigger volume `index`, for a move to it: `None`
+    /// where the track has none (or this build has no `extensions` feature).
+    pub(super) fn trigger_centre(&self, index: usize) -> Option<oag_core::math::Vec3> {
+        #[cfg(feature = "extensions")]
+        {
+            let trigger = self.on.region.triggers.get(index)?;
+            Some(oag_core::math::Vec3::from_array(trigger.centre()))
+        }
+        #[cfg(not(feature = "extensions"))]
+        {
+            let _ = index;
+            None
+        }
+    }
+
     /// A weapon pad just drew `weapon`: whether a module's `pickup-roll` turns this grant
     /// into the mod's own pickup. Counts the grant. `false` in every race without one.
     pub(super) fn rolls(&mut self, slot: usize, weapon: oag_tables::weapons::Weapon) -> bool {

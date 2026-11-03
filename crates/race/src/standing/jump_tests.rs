@@ -1,6 +1,7 @@
-//! A forward jump along the circuit ([`Course::jump`], [`Standing::jumped`],
-//! [`crate::RaceState::jumped`]): a crossing of the line made by the jump is a lap,
-//! timed on the tick of the update after the jump, and a finish made by it lands there.
+//! A forward move along the circuit ([`Course::jump`], [`Standing::jumped`],
+//! [`crate::RaceState::jumped`]): the ground moved over counts as driven, so a crossing of
+//! the line in it is a lap (or a finish) on the tick of the move, whatever its length
+//! under a lap.
 
 use super::*;
 use crate::testing;
@@ -26,60 +27,79 @@ fn drive(standing: &mut Standing, course: &Course, from: f32, tick0: u64, ticks:
         .collect()
 }
 
-/// Jumps `standing` `by` units from where it is located and returns where it lands.
-fn jump(standing: &mut Standing, course: &Course, by: f32) -> Vec3 {
+/// Moves `standing` `by` units on at `tick`; whether that made a lap, and where it is.
+fn jump(standing: &mut Standing, course: &Course, by: f32, tick: u64) -> (bool, Vec3) {
     let from = standing.course_index.expect("located") as usize;
-    let to = course.jump(from, by).expect("a jump below half a lap");
-    standing.jumped(to);
-    course.position(to).expect("a ring point")
+    let to = course.jump(from, by).expect("a move under a lap");
+    let lap = standing.jumped(course, to, tick, Some(3));
+    (lap, course.position(to).expect("a ring point"))
 }
 
 #[test]
-fn a_jump_of_half_a_lap_or_more_is_refused() {
+fn a_move_of_a_lap_or_more_is_refused() {
     let course = testing::ring_course();
-    let half = course.length() * 0.5;
-    assert_eq!(course.max_jump(), half);
-    assert!(course.jump(0, half - 1.0).is_some());
-    for by in [half, half + 1.0, 0.0, -5.0, f32::NAN, f32::INFINITY] {
+    let lap = course.length();
+    assert_eq!(course.max_jump(), lap);
+    assert!(course.jump(0, lap - 1.0).is_some());
+    for by in [lap, lap + 1.0, 0.0, -5.0, f32::NAN, f32::INFINITY] {
         assert_eq!(course.jump(0, by), None, "{by}");
     }
+    assert_eq!(course.index_at_progress(0.0), Some(course.start_index()));
+    assert_eq!(course.index_at_progress(lap), None);
+    let at = course.index_at_progress(60.0).unwrap();
+    assert!((course.progress_at(at).unwrap() - 60.0).abs() < 3.0);
 }
 
-/// From the grid to lap 2, 20 units short of the line, then a 40-unit jump: the lap
-/// completes on the tick of the update after the jump, and is timed to it.
+/// From the grid to lap 2, 20 units short of the line, then a 40-unit move: the lap
+/// completes on the move's tick, and the next update counts nothing more.
 #[test]
-fn a_jump_over_the_line_completes_the_lap_on_the_jump_tick() {
+fn a_move_over_the_line_completes_the_lap_on_its_tick() {
     let course = testing::ring_course();
     let mut standing = Standing::default();
-    // Off the grid ten behind the line, round once, and on to 100 into lap 2.
     let laps = drive(&mut standing, &course, 110.0, 0, 230);
     assert_eq!(laps.len(), 1, "{laps:?}");
     assert_eq!(standing.lap, 2);
     let tick = 230;
     let lap_two_started = standing.lap_start_tick.expect("lap 2 running");
-    let landed = jump(&mut standing, &course, 40.0);
+    let (lap, landed) = jump(&mut standing, &course, 40.0, tick);
+    assert!(lap, "the move crossed the line");
     assert!(
-        standing.update(&course, landed, tick, Some(3)),
-        "the jump crossed the line"
+        !standing.update(&course, landed, tick, Some(3)),
+        "counted once"
     );
     assert_eq!(standing.lap, 3);
     assert_eq!(standing.lap_start_tick, Some(tick));
-    // Timed to the jump's tick: the 40 units it covered took one tick.
     let split = u64::from(standing.lap_splits[1].expect("lap 2 timed"));
     assert_eq!(split, tick - lap_two_started);
-    assert!(split < 120, "shorter than a driven lap: {split}");
 }
 
-/// A jump that does not reach the line counts nothing, and the gate still lets the
-/// next real crossing count: a jump across the half-way point is driven ground.
+/// Longer than half a lap, which a driven wrap could not tell from a reverse one: still
+/// one lap, and the next real crossing is the next lap.
 #[test]
-fn a_jump_short_of_the_line_counts_nothing_and_keeps_the_next_lap() {
+fn a_move_of_most_of_a_lap_counts_one_lap() {
+    let course = testing::ring_course();
+    let mut standing = Standing::default();
+    drive(&mut standing, &course, 110.0, 0, 50);
+    assert_eq!(standing.lap, 1);
+    let (lap, landed) = jump(&mut standing, &course, 100.0, 50);
+    assert!(lap, "over the line");
+    assert!(!standing.update(&course, landed, 50, Some(3)));
+    assert_eq!((standing.lap, standing.reversed), (2, 0));
+    let at = standing.progress.unwrap();
+    let laps = drive(&mut standing, &course, at + 1.0 + 4.0, 51, 125);
+    assert_eq!(laps.len(), 1, "one lap a lap after: {laps:?}");
+}
+
+/// A move that does not reach the line counts nothing, and the gate still lets the next
+/// real crossing count: a move across the half-way point is driven ground.
+#[test]
+fn a_move_short_of_the_line_counts_nothing_and_keeps_the_next_lap() {
     let course = testing::ring_course();
     let mut standing = Standing::default();
     drive(&mut standing, &course, 110.0, 0, 30);
     assert_eq!(standing.lap, 1);
-    // Twenty into lap 1, jumped to 70: over the half-way point.
-    let landed = jump(&mut standing, &course, 50.0);
+    let (lap, landed) = jump(&mut standing, &course, 50.0, 30);
+    assert!(!lap);
     assert!(!standing.update(&course, landed, 30, Some(3)));
     assert_eq!(standing.lap, 1);
     let laps = drive(&mut standing, &course, 71.0, 31, 60);
@@ -87,16 +107,16 @@ fn a_jump_short_of_the_line_counts_nothing_and_keeps_the_next_lap() {
     assert_eq!(standing.lap, 2);
 }
 
-/// The last lap ended by a jump: the finish is the tick of the update after it.
+/// The last lap ended by a move: the standing's finish is the move's tick, and the
+/// person's clock sees it on the same tick's update.
 #[test]
-fn a_finish_made_by_a_jump_is_timed_on_the_jump_tick() {
+fn a_finish_made_by_a_move_is_timed_on_its_tick() {
     let course = testing::ring_course();
     let mut standing = Standing::default();
     let mut race = RaceState::new(Mode::SingleRace, SpeedClass::VENOM);
     race.laps_target = Some(3);
     let mut tick = 0;
-    // Drive the person's clock and the standing together to 20 short of the finish.
-    for d in 0..(10 + 2 * 120 + 100) {
+    for d in 0..(10 + 2 * 120 + 50) {
         let at = on_ring(110.0 + d as f32);
         standing.update(&course, at, tick, Some(3));
         race.update(&course, at, tick, 1.0 / 60.0, false);
@@ -104,12 +124,13 @@ fn a_finish_made_by_a_jump_is_timed_on_the_jump_tick() {
     }
     assert_eq!((standing.lap, race.lap), (3, 3));
     let from = standing.course_index.unwrap() as usize;
-    let to = course.jump(from, 40.0).unwrap();
-    standing.jumped(to);
-    race.jumped(to);
+    // Ninety units: over half the lap and over the line.
+    let to = course.jump(from, 90.0).unwrap();
+    assert!(standing.jumped(&course, to, tick, Some(3)));
+    race.jumped(&course, to);
     let landed = course.position(to).unwrap();
-    assert!(standing.update(&course, landed, tick, Some(3)));
+    assert!(!standing.update(&course, landed, tick, Some(3)));
     let outcome = race.update(&course, landed, tick, 1.0 / 60.0, false);
     assert_eq!(standing.finish_tick, Some(tick));
-    assert!(outcome.finished && race.finished);
+    assert!(outcome.finished && race.finished && outcome.lap_completed);
 }

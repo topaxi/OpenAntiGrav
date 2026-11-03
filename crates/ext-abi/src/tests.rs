@@ -992,6 +992,19 @@ fn a_motion_command_out_of_its_ranges_is_malformed() {
             "{command:?}"
         );
     }
+    for (kind, amount) in [(3, -1.0), (4, 2.5), (4, 70_000.0), (0, 0.0)] {
+        assert_eq!(crate::Distance::join(kind, amount), None, "{kind} {amount}");
+    }
+    assert_eq!(
+        crate::Distance::join(3, 0.0),
+        Some(crate::Distance::Progress(0.0))
+    );
+    assert_eq!(
+        crate::Distance::join(4, 3.0),
+        Some(crate::Distance::Trigger(3))
+    );
+    let portal = transit(30, crate::Distance::Trigger(5), 1.0);
+    assert_eq!(Command::decode(&portal.encode()), Ok(portal));
     let mut unknown = transit(60, crate::Distance::Units(10.0), 1.0).encode();
     unknown[COMMAND_WORD] = 7;
     assert!(Command::decode(&unknown).is_err(), "distance kind 7");

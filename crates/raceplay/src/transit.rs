@@ -1,19 +1,23 @@
 //! A craft's jump along the circuit (a simulation mod's `transit`): out of the world for
 //! a number of ticks, then put further round at a given speed.
 //!
-//! - **Entry** ([`Race::begin_transit`]): the distance is resolved at once (track units,
-//!   seconds at the speed it has now, or a share of the lap) and checked against
-//!   [`oag_race::Course::jump`]'s bound; the craft keeps its pose and is frozen there.
+//! - **The primitive** ([`Race::move_to`]): a craft put at a course point forward of it,
+//!   under a lap on, with the ground between credited as driven (a crossing of the line in
+//!   it is a lap or a finish on that tick: [`oag_race::Standing::jumped`]). A transit is
+//!   this behind a stay out of the world; a reset is not (it goes back, to a crumb, and
+//!   earns nothing), and shares only the cursor reset, [`Race::reseat`].
+//! - **Entry** ([`Race::begin_transit`]): the exit point is resolved at once
+//!   ([`Race::point_ahead`]: units on, seconds at the speed it has now, a share of the lap,
+//!   a place on the lap, or a track trigger); the craft keeps its pose and is frozen there.
 //! - **Out of the world** ([`oag_gameplay::Ship::in_world`]): not stepped (no physics, no
 //!   pads, no triggers, its controls and pickup presses ignored), not drawn, no
 //!   craft-to-craft contact, and `oag_weapons::Craft::active` is false, so no weapon hits,
 //!   drains or locks it. Its reset triggers are held ([`Race::reset_held`]). Its standing
 //!   is still updated on the frozen pose, so nothing wraps and the Zone clock runs.
 //! - **Exit** ([`Race::advance_transits`], at the start of phase C): on the tick the
-//!   count runs out, the craft is placed [`oag_gameplay::Transit::distance`] further
-//!   along ([`Race::relocate`]) and stepped from there the same tick. The lap counters
-//!   see the jump on that tick's update, so a crossing of the line in the jump, a finish
-//!   included, is timed at the exit tick.
+//!   count runs out, the craft is moved to [`oag_gameplay::Transit::to`]
+//!   ([`Race::move_to`]) and stepped from there the same tick, so a crossing of the line in
+//!   the jump, a finish included, is timed at the exit tick.
 
 use oag_core::math::Vec3;
 use oag_gameplay::Transit;
@@ -30,11 +34,11 @@ const CLEARANCE_RAYS: usize = 9;
 const CLEARANCE_LIFT: f32 = 0.5;
 
 impl Race {
-    /// Starts slot `slot`'s transit: `ticks` out of the world, then `distance` further
-    /// along at `exit_factor` times the speed it has now. A refusal names why and changes
-    /// nothing: no course to jump along, a craft not racing or already in a transit, a
-    /// tick count of 0 or past [`MAX_TRANSIT_TICKS`], a distance not inside
-    /// `(0, half a lap)`.
+    /// Starts slot `slot`'s transit: `ticks` out of the world, then out at `distance`
+    /// ([`Self::point_ahead`]) at `exit_factor` times the speed it has now. A refusal names
+    /// why and changes nothing: a craft not racing or already in a transit, a tick count
+    /// of 0 or past [`MAX_TRANSIT_TICKS`], a factor out of `[0, MAX_SPEED_FACTOR]`, a
+    /// point that does not resolve.
     ///
     /// # Errors
     ///
@@ -63,44 +67,77 @@ impl Race {
                 "exit speed factor {exit_factor} is not within [0, {MAX_SPEED_FACTOR}]"
             ));
         }
-        let units = self.resolve_distance(slot, distance)?;
-        let speed = self.sim.world.ships[slot]
-            .physics
-            .body
-            .linear_velocity
-            .length();
+        let (to, _) = self.point_ahead(slot, distance)?;
+        let speed = self.speed_of(slot);
         self.sim.world.ships[slot].transit = Some(Transit {
             ticks_left: ticks,
-            distance: units,
+            to: u32::try_from(to).unwrap_or(u32::MAX),
             exit_speed: speed * exit_factor,
         });
         Ok(())
     }
 
-    /// `distance` from slot `slot`'s craft as track units, checked against
-    /// [`oag_race::Course::max_jump`].
-    fn resolve_distance(&self, slot: usize, distance: Distance) -> Result<f32, String> {
-        let Some(course) = &self.sim.course else {
-            return Err("the track has no course to jump along".into());
-        };
-        let speed = self.sim.world.ships[slot]
+    fn speed_of(&self, slot: usize) -> f32 {
+        self.sim.world.ships[slot]
             .physics
             .body
             .linear_velocity
-            .length();
+            .length()
+    }
+
+    /// The course ring point `distance` names, forward of slot `slot`'s craft and less
+    /// than a lap on, with how far on it is in track units.
+    ///
+    /// # Errors
+    ///
+    /// Why it does not resolve: no course, an amount that is a lap or more on (or not
+    /// above zero), a progress off the lap, a trigger the track does not have.
+    pub fn point_ahead(&self, slot: usize, distance: Distance) -> Result<(usize, f32), String> {
+        let Some(course) = &self.sim.course else {
+            return Err("the track has no course to move along".into());
+        };
+        let ship = &self.sim.world.ships[slot];
+        let hint = ship.standing.course_index.map(|index| index as usize);
+        let Some(from) = hint.or_else(|| {
+            course
+                .locate(ship.physics.body.position, None)
+                .map(|located| located.index)
+        }) else {
+            return Err(format!("slot {slot}'s craft is not on the course"));
+        };
+        let length = course.length();
+        let on = |to: usize| {
+            let from = course.progress_at(from).unwrap_or(0.0);
+            let to = course.progress_at(to).unwrap_or(0.0);
+            (to - from).rem_euclid(length)
+        };
         let units = match distance {
             Distance::Units(units) => units,
-            Distance::Seconds(seconds) => seconds * speed,
-            Distance::Lap(share) => share * course.length(),
+            Distance::Seconds(seconds) => seconds * self.speed_of(slot),
+            Distance::Lap(share) => share * length,
+            Distance::Progress(progress) => {
+                let to = course.index_at_progress(progress).ok_or_else(|| {
+                    format!("progress {progress} is not within [0, {length}), the lap")
+                })?;
+                return Ok((to, on(to)));
+            }
+            Distance::Trigger(index) => {
+                let centre = self
+                    .sim
+                    .extensions
+                    .trigger_centre(usize::from(index))
+                    .ok_or_else(|| format!("the track has no trigger {index}"))?;
+                let to = course
+                    .locate(centre, None)
+                    .ok_or_else(|| format!("trigger {index} is off the course"))?
+                    .index;
+                return Ok((to, on(to)));
+            }
         };
-        if units.is_finite() && units > 0.0 && units < course.max_jump() {
-            Ok(units)
-        } else {
-            Err(format!(
-                "a jump of {units} units is not within (0, {}), half the lap",
-                course.max_jump()
-            ))
-        }
+        let to = course
+            .jump(from, units)
+            .ok_or_else(|| format!("a move of {units} units is not within (0, {length}), a lap"))?;
+        Ok((to, units))
     }
 
     /// Whether a half disc of `radius`, standing on the track across its width at the
@@ -111,26 +148,10 @@ impl Race {
     /// distance does not resolve or there is no course or spline to probe.
     #[must_use]
     pub fn clearance(&self, slot: usize, distance: Distance, radius: f32) -> (bool, f32) {
-        let Ok(ahead) = self.resolve_distance(slot, distance) else {
+        let Ok((to, ahead)) = self.point_ahead(slot, distance) else {
             return (false, 0.0);
         };
-        let Some(course) = &self.sim.course else {
-            return (false, 0.0);
-        };
-        let ship = &self.sim.world.ships[slot];
-        let from = ship
-            .standing
-            .course_index
-            .map(|index| index as usize)
-            .or_else(|| {
-                course
-                    .locate(ship.physics.body.position, None)
-                    .map(|located| located.index)
-            });
-        let Some(target) = from
-            .and_then(|from| course.jump(from, ahead))
-            .and_then(|to| course.position(to))
-        else {
+        let Some(target) = self.sim.course.as_ref().and_then(|c| c.position(to)) else {
             return (false, ahead);
         };
         let Some((_, at, _)) = self.sim.spline.nearest(target) else {
@@ -168,40 +189,26 @@ impl Race {
             if transit.ticks_left > 0 {
                 continue;
             }
-            let Transit {
-                distance,
-                exit_speed,
-                ..
-            } = *transit;
+            let Transit { to, exit_speed, .. } = *transit;
             self.sim.world.ships[slot].transit = None;
-            self.relocate(slot, distance, exit_speed);
+            self.move_to(slot, to as usize, exit_speed);
             out |= 1 << slot;
         }
         out
     }
 
-    /// Puts slot `slot`'s craft `distance` units further round the circuit, at the
-    /// width midpoint facing down the track (the reset's own placement,
-    /// [`crate::breadcrumbs::relocate`]), moving at `speed`. Everything a race keys on
-    /// where the craft is goes with it: the lap counters' search ([`oag_race::Standing::jumped`]),
-    /// the driver's index, the dwells, the pad sweep and the crumb ring. Not a respawn:
-    /// nothing is counted and nothing is charged. `false` when the course or the spline
-    /// has nothing to place on, and the craft stays where it is.
-    pub fn relocate(&mut self, slot: usize, distance: f32, speed: f32) -> bool {
+    /// Puts slot `slot`'s craft at course ring point `to`, which must be forward of it and
+    /// less than a lap on ([`Self::point_ahead`] gives one), at the width midpoint facing
+    /// down the track (the reset's own placement, [`crate::breadcrumbs::relocate`]),
+    /// moving at `speed`. The ground between counts as driven: the lap counters credit a
+    /// crossing of the line in it now ([`oag_race::Standing::jumped`],
+    /// [`oag_race::RaceState::jumped`]), a finish included. Everything a race keys on where
+    /// the craft is goes with it: the driver's index, the dwells, the pad sweep and the
+    /// crumb ring ([`Self::reseat`]). Not a respawn: nothing is counted and nothing is
+    /// charged. `false` when the course or the spline has nothing to place on, and the
+    /// craft stays where it is.
+    pub fn move_to(&mut self, slot: usize, to: usize, speed: f32) -> bool {
         let Some(course) = &self.sim.course else {
-            return false;
-        };
-        let ship = &self.sim.world.ships[slot];
-        let from = ship
-            .standing
-            .course_index
-            .map(|index| index as usize)
-            .or_else(|| {
-                course
-                    .locate(ship.physics.body.position, None)
-                    .map(|located| located.index)
-            });
-        let Some(to) = from.and_then(|from| course.jump(from, distance)) else {
             return false;
         };
         let Some(target) = course.position(to) else {
@@ -210,15 +217,17 @@ impl Race {
         let Some(relocation) = crate::breadcrumbs::relocate(&self.sim.spline, target, speed) else {
             return false;
         };
+        let tick = self.sim.world.tick;
+        let laps_target = self.sim.world.laps_target();
         let ship = &mut self.sim.world.ships[slot];
         let body = &mut ship.physics.body;
         body.position = relocation.pose.position;
         body.orientation = relocation.pose.orientation;
         body.linear_velocity = relocation.velocity;
         body.angular_velocity = Vec3::ZERO;
-        ship.standing.jumped(to);
+        ship.standing.jumped(course, to, tick, laps_target);
         if let Some(race) = self.sim.world.race.get_mut(slot) {
-            race.jumped(to);
+            race.jumped(course, to);
         }
         self.sim.pad_previous_position[slot] = None;
         self.sim.breadcrumbs[slot] =

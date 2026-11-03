@@ -239,14 +239,15 @@ pub struct Ship {
 
 /// A craft out of the world on its way to a point further round the circuit: frozen
 /// where it entered, not stepped, not drawn, collided with or hit, its reset triggers
-/// held. When [`Self::ticks_left`] runs out it is put [`Self::distance`] further along
-/// at [`Self::exit_speed`] (`oag_raceplay`'s `transit` module).
+/// held. When [`Self::ticks_left`] runs out it is put at course point [`Self::to`],
+/// forward of where it went in, at [`Self::exit_speed`] (`oag_raceplay`'s `transit`
+/// module).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Transit {
     /// Ticks still to spend out of the world.
     pub ticks_left: u16,
-    /// How far along the circuit it comes out, in track units, resolved when it entered.
-    pub distance: f32,
+    /// The course ring point it comes out at, resolved when it entered.
+    pub to: u32,
     /// Its speed coming out, track units a second.
     pub exit_speed: f32,
 }
