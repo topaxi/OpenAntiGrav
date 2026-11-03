@@ -983,7 +983,8 @@ impl Race {
             let airborne = self.airborne_too_long(slot);
             let located = self.located_sample_of(slot, index);
             let distant = self.far_from_the_sample(slot, located);
-            let cage = std::mem::take(&mut self.sim.cage_reset[slot]);
+            let cage = std::mem::take(&mut self.sim.cage_reset[slot])
+                && self.armed(slot, self.sim.reset_triggers.cage);
             if alive && (beneath || stalled || airborne || distant || reset || cage) {
                 let cause = if beneath {
                     respawn::RespawnCause::Beneath

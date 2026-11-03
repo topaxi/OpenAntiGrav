@@ -368,6 +368,14 @@ fn each_class_gets_its_own_table() {
     assert!(stats.pickups_for("Flash").is_none());
 }
 
+/// The handling file spells a class `VENOM`, the weapon file `Venom`: one lookup finds it.
+#[test]
+fn a_class_is_found_whatever_its_case() {
+    let stats = parse(FIXTURE).expect("the fixture parses");
+    assert!(stats.pickups_for("VENOM").is_some());
+    assert!(stats.pickups_for("venom").is_some());
+}
+
 /// A missing required attribute is an error, not a zero.
 #[test]
 fn a_missing_attribute_is_an_error() {

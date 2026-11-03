@@ -66,6 +66,8 @@ pub const TITLE: &Title = &Title {
     flare: &oag_title::flare::Flare::Sprite(r"Data\Tex\EngineFlare\grabbedEngineFlare128x64x8.mip"),
     // No prompt glyph of this title's has been read; the disc's own draw unchanged.
     prompts: &oag_title::prompts::Prompts::UNREAD,
+    // Pure's own recovery is unread; Pulse's law.
+    reset_enables: oag_title::recovery::ResetEnables::inherited("Wipeout Pulse"),
     // Pure's effects law is unread; Pulse's commit helper squares the group volume.
     effects_volume_law: oag_title::pre_race::Sourced::inherited(
         oag_title::group_volume::GroupVolumeLaw::Squared,

@@ -221,3 +221,114 @@ pub const DISTANCE_RESET_UNITS: f32 = 200.0;
 /// is a coin flip in `f32`, so the tick count is the exact form of "half a second
 /// of ticks" (the thirtieth tick fires, the twenty-ninth does not).
 pub const DISTANCE_RESET_TICKS: u32 = 30;
+
+/// One way a craft is put back, and the two gates every way shares.
+///
+/// The values are a race's own: a title's table supplies the enables
+/// (`oag_title::recovery::ResetEnables`), and a mod may hold or arm a row for a race.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Trigger {
+    /// Whether the trigger can fire at all. The dwell counters behind it keep counting
+    /// when it is off, so arming it later does not bank or lose time.
+    pub enabled: bool,
+    /// Whether it is held back while [`ResetTriggers::cooldown_ticks`] runs after a
+    /// respawn.
+    pub cooldown_gated: bool,
+    /// Whether it is held back once respawning has given up on the craft
+    /// ([`RESPAWN_GIVE_UP`]).
+    pub give_up_gated: bool,
+}
+
+impl Trigger {
+    /// On, held back by both gates.
+    pub const GATED: Self = Self {
+        enabled: true,
+        cooldown_gated: true,
+        give_up_gated: true,
+    };
+
+    /// Whether the trigger may fire for a craft with `cooldown` ticks left and respawning
+    /// `given_up` on it: the one place the gates are read.
+    #[must_use]
+    pub const fn armed(self, cooldown: u32, given_up: bool) -> bool {
+        self.enabled
+            && (!self.cooldown_gated || cooldown == 0)
+            && (!self.give_up_gated || !given_up)
+    }
+
+    /// The same row with `enabled` set.
+    #[must_use]
+    pub const fn enabled(self, enabled: bool) -> Self {
+        Self { enabled, ..self }
+    }
+}
+
+/// Every way a craft is put back in one race: which triggers are on, which gates hold each,
+/// and the numbers they fire on. Pulse's values are [`Self::PULSE`]; each number's evidence
+/// is on the constant it is built from.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ResetTriggers {
+    /// An authored `Reset` volume was touched.
+    pub reset_zone: Trigger,
+    /// No hover probe has touched anything for [`Self::airborne_seconds`]. The original
+    /// does not hold it back for the cooldown, so neither does this row.
+    pub airborne: Trigger,
+    /// Beyond [`Self::distance_units`] of the located spline sample for
+    /// [`Self::distance_ticks`].
+    pub distance: Trigger,
+    /// The collision cage sent the craft to its reset state. Neither gate applies.
+    pub cage: Trigger,
+    /// An opponent on a road [`Self::beneath_line`] under its line for
+    /// [`Self::beneath_ticks`].
+    pub beneath: Trigger,
+    /// An opponent stopped while asking to move: under [`Self::stall_speed`] for
+    /// [`Self::stall_ticks`].
+    pub stalled: Trigger,
+    /// [`AIRBORNE_RESET_SECONDS`].
+    pub airborne_seconds: f32,
+    /// [`DISTANCE_RESET_UNITS`].
+    pub distance_units: f32,
+    /// [`DISTANCE_RESET_TICKS`].
+    pub distance_ticks: u32,
+    /// [`BENEATH_LINE`].
+    pub beneath_line: f32,
+    /// [`RESCUE_TICKS`].
+    pub beneath_ticks: u32,
+    /// [`STALL_SPEED`].
+    pub stall_speed: f32,
+    /// [`STALL_TICKS`].
+    pub stall_ticks: u32,
+    /// The most shield a person's craft pays for the reset state, [`RESET_SHIELD_CHARGE`].
+    pub shield_charge: f32,
+    /// Ticks the cooldown-gated triggers are held back after a respawn,
+    /// [`RESPAWN_COOLDOWN_TICKS`].
+    pub cooldown_ticks: u32,
+}
+
+impl ResetTriggers {
+    /// Pulse's table, every trigger on.
+    pub const PULSE: Self = Self {
+        reset_zone: Trigger::GATED,
+        airborne: Trigger {
+            cooldown_gated: false,
+            ..Trigger::GATED
+        },
+        distance: Trigger::GATED,
+        cage: Trigger {
+            enabled: true,
+            cooldown_gated: false,
+            give_up_gated: false,
+        },
+        beneath: Trigger::GATED,
+        stalled: Trigger::GATED,
+        airborne_seconds: AIRBORNE_RESET_SECONDS,
+        distance_units: DISTANCE_RESET_UNITS,
+        distance_ticks: DISTANCE_RESET_TICKS,
+        beneath_line: BENEATH_LINE,
+        beneath_ticks: RESCUE_TICKS,
+        stall_speed: STALL_SPEED,
+        stall_ticks: STALL_TICKS,
+        shield_charge: RESET_SHIELD_CHARGE,
+        cooldown_ticks: RESPAWN_COOLDOWN_TICKS,
+    };
+}

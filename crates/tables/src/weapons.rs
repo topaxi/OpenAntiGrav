@@ -394,9 +394,18 @@ impl WeaponStats {
     }
 
     /// One class's pickup table, matched on the `class` attribute.
+    ///
+    /// Matched case-insensitively: `HandlingStats.xml` authors
+    /// `<GlobalClass name="VENOM">` and `WeaponStats_Race.xml`
+    /// `<Pickupodds class="Venom">` (measured on the USA disc), so
+    /// [`SpeedClass::as_str`](crate::handling::SpeedClass::as_str) cannot reach the table
+    /// by exact match. The rung arrives as a name, so a non-Pulse ladder works: Pure
+    /// authors a `Vector` class beside its four; Pulse has none, so that lookup is `None`.
     #[must_use]
     pub fn pickups_for(&self, class: &str) -> Option<&PickupTable> {
-        self.pickups.iter().find(|t| t.class == class)
+        self.pickups
+            .iter()
+            .find(|t| t.class.eq_ignore_ascii_case(class))
     }
 }
 

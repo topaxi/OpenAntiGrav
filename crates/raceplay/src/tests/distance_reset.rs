@@ -81,3 +81,49 @@ fn a_reset_costs_an_opponent_nothing() {
     race.reset(3, None);
     assert_eq!(race.sim.world.ships[3].physics.shield, before);
 }
+
+/// The enable is the race's: with the distance row off the craft stays where it is put,
+/// and the dwell still counts so arming the row later does not start from nothing.
+#[test]
+fn a_disabled_distance_trigger_never_resets_the_craft() {
+    let (mut race, away) = far_race();
+    race.sim.reset_triggers.distance.enabled = false;
+    for _ in 0..DISTANCE_RESET_TICKS * 3 {
+        race.tick(&PlayerInputs::none());
+        race.sim.world.ships[0].physics.body.position = away;
+    }
+    assert_eq!(race.respawns(), 0);
+    assert!(race.sim.distant_ticks[0] >= DISTANCE_RESET_TICKS);
+}
+
+/// A row's own gates: the airborne row honours the give-up gate and not the cooldown, as
+/// the original's clock does; the cage row honours neither.
+#[test]
+fn each_row_reads_its_own_gates() {
+    use oag_race::recovery::ResetTriggers;
+    let t = ResetTriggers::PULSE;
+    assert!(t.airborne.armed(10, false));
+    assert!(!t.airborne.armed(0, true));
+    assert!(!t.reset_zone.armed(10, false));
+    assert!(t.reset_zone.armed(0, false));
+    assert!(t.cage.armed(10, true));
+    assert!(!t.cage.enabled(false).armed(0, false));
+}
+
+/// A title's enables reach the race's table: Pulse's own turns everything on and a title
+/// with a trigger off switches only that row.
+#[test]
+fn a_titles_enables_set_the_races_rows() {
+    use crate::respawn::reset_triggers_for;
+    use oag_race::recovery::ResetTriggers;
+    use oag_title::{pre_race::Sourced, recovery::ResetEnables};
+    assert_eq!(
+        reset_triggers_for(&ResetEnables::PULSE),
+        ResetTriggers::PULSE
+    );
+    let mut enables = ResetEnables::PULSE;
+    enables.airborne = Sourced::chosen(false);
+    let triggers = reset_triggers_for(&enables);
+    assert!(!triggers.airborne.enabled);
+    assert!(triggers.distance.enabled && triggers.cage.enabled);
+}

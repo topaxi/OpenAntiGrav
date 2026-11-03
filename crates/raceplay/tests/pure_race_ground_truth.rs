@@ -412,14 +412,14 @@ fn vector_loads_pures_own_tuning_and_not_venoms() {
         );
 
         // The pickup odds. `<Pickupodds class="Vector">` is authored beside the
-        // four, and `pickup::table_for` matches the name case-insensitively.
+        // four, and `pickups_for` matches the name case-insensitively.
         let weapons = vector
             .setup
             .weapons
             .as_ref()
             .expect("Pure authors a weapon table");
         assert!(
-            oag_weapons::pickup::table_for(weapons, "VECTOR").is_some(),
+            weapons.pickups_for("VECTOR").is_some(),
             "{label}: Pure authors <Pickupodds class=\"Vector\"> and it was not found"
         );
 

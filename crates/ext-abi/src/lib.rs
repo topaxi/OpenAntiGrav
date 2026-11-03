@@ -47,6 +47,7 @@ pub use hud::{
     Anchor, HudElement, HudPlace, HudStr, MAX_FIRE_EFFECTS_PER_TICK, MAX_HUD_EXTRA, MAX_HUD_ITEMS,
     MAX_HUD_SHAKE, MAX_HUD_TEXT,
 };
+pub use kind::CommandKind;
 pub use malformed::Malformed;
 pub use pickup::{Colour, Icon, ModIcon};
 
@@ -187,33 +188,9 @@ const EVENT_TRIGGER_ENTER: u8 = 7;
 const EVENT_TRIGGER_EXIT: u8 = 8;
 const EVENT_HIT: u8 = 9;
 const EVENT_MOD: u8 = 10;
-/// Command kind codes.
-const COMMAND_SCALE_THRUST: u8 = 1;
-const COMMAND_SHIELD_DELTA: u8 = 2;
-const COMMAND_GIVE_PICKUP: u8 = 3;
-const COMMAND_PLAY_CUE: u8 = 5;
-const COMMAND_FIRE_EFFECT: u8 = 6;
-const COMMAND_CLEAR_PICKUP: u8 = 8;
-const COMMAND_PICKUP_ROLL: u8 = 9;
-const COMMAND_SET_WEATHER: u8 = 10;
-const COMMAND_SET_SUN: u8 = 11;
-const COMMAND_GRADE_SKY: u8 = 12;
-const COMMAND_SCALE_PAD: u8 = 13;
-const COMMAND_SCALE_SLOT_PADS: u8 = 14;
-const COMMAND_HUD_TINT: u8 = 16;
-const COMMAND_HUD_SHAKE: u8 = 17;
-const COMMAND_HUD_BAR_EXTRA: u8 = 18;
-const COMMAND_HUD_TEXT: u8 = 19;
-const COMMAND_HUD_ICON: u8 = 20;
-const COMMAND_PREFER_ROUTE: u8 = 21;
-const COMMAND_PICKUP_LOOK: u8 = 22;
-const COMMAND_EMIT: u8 = 23;
 /// Bit 15 of a `hud-text`, `hud-icon` or `fire-effect` argument: the string or effect is
 /// the sending mod's own, not the title's. The pool offset or effect index is the rest.
 const OWN_FLAG: u16 = 1 << 15;
-const COMMAND_GIVE_SHIELD: u8 = 24;
-const COMMAND_HOLD_SHIELD: u8 = 25;
-const COMMAND_CLEAR_SHIELD: u8 = 26;
 /// The craft record's pickup code for a simulation mod's own pickup.
 const PICKUP_OURS: u8 = u8::MAX;
 
@@ -880,6 +857,36 @@ pub enum Command {
 }
 
 impl Command {
+    /// Its record's kind.
+    #[must_use]
+    pub const fn kind(&self) -> CommandKind {
+        match *self {
+            Self::ScaleThrust { .. } => CommandKind::ScaleThrust,
+            Self::ShieldDelta { .. } => CommandKind::ShieldDelta,
+            Self::GivePickup { .. } => CommandKind::GivePickup,
+            Self::ClearPickup { .. } => CommandKind::ClearPickup,
+            Self::PickupRoll { .. } => CommandKind::PickupRoll,
+            Self::ScalePad { .. } => CommandKind::ScalePad,
+            Self::ScaleSlotPads { .. } => CommandKind::ScaleSlotPads,
+            Self::PlayCue { .. } => CommandKind::PlayCue,
+            Self::FireEffect { .. } | Self::FireModEffect { .. } => CommandKind::FireEffect,
+            Self::HudTint { .. } => CommandKind::HudTint,
+            Self::HudShake { .. } => CommandKind::HudShake,
+            Self::HudBarExtra { .. } => CommandKind::HudBarExtra,
+            Self::HudText { .. } => CommandKind::HudText,
+            Self::HudIcon { .. } => CommandKind::HudIcon,
+            Self::PickupLook { .. } => CommandKind::PickupLook,
+            Self::SetWeather { .. } => CommandKind::SetWeather,
+            Self::SetSun { .. } => CommandKind::SetSun,
+            Self::GradeSky { .. } => CommandKind::GradeSky,
+            Self::GiveShield { .. } => CommandKind::GiveShield,
+            Self::HoldShield { .. } => CommandKind::HoldShield,
+            Self::ClearShield { .. } => CommandKind::ClearShield,
+            Self::PreferRoute { .. } => CommandKind::PreferRoute,
+            Self::Emit { .. } => CommandKind::Emit,
+        }
+    }
+
     /// The slot it names; a race-wide command names none.
     #[must_use]
     pub const fn slot(&self) -> Option<Slot> {
@@ -922,43 +929,30 @@ impl Command {
     /// reply's pool.
     #[must_use]
     pub fn encode_pooled(&self, pool_at: u16) -> [u8; COMMAND_LEN] {
-        let (kind, arg, value, word) = match *self {
-            Self::ScaleThrust { factor, .. } => (COMMAND_SCALE_THRUST, 0, factor.to_bits(), 0),
-            Self::ShieldDelta { amount, .. } => (COMMAND_SHIELD_DELTA, 0, amount.to_bits(), 0),
-            Self::GivePickup { .. } => (COMMAND_GIVE_PICKUP, 0, 0, 0),
-            Self::ClearPickup { .. } => (COMMAND_CLEAR_PICKUP, 0, 0, 0),
-            Self::PickupRoll { weapon, every } => (
-                COMMAND_PICKUP_ROLL,
-                u16::from(weapon.code()),
-                0,
-                u32::from(every),
-            ),
-            Self::ScalePad { pad, factor } => (COMMAND_SCALE_PAD, pad, factor.to_bits(), 0),
-            Self::ScaleSlotPads { factor, .. } => (COMMAND_SCALE_SLOT_PADS, 0, factor.to_bits(), 0),
-            Self::PlayCue { cue, .. } => (COMMAND_PLAY_CUE, cue.code(), 0, 0),
-            Self::FireEffect { effect, .. } => (COMMAND_FIRE_EFFECT, effect.code(), 0, 0),
-            Self::FireModEffect { index, .. } => (COMMAND_FIRE_EFFECT, index | OWN_FLAG, 0, 0),
-            Self::HudTint { element, rgba, .. } => {
-                (COMMAND_HUD_TINT, element.code(), 0, rgba.to_u32())
-            }
+        let (arg, value, word) = match *self {
+            Self::ScaleThrust { factor, .. } => (0, factor.to_bits(), 0),
+            Self::ShieldDelta { amount, .. } => (0, amount.to_bits(), 0),
+            Self::GivePickup { .. } => (0, 0, 0),
+            Self::ClearPickup { .. } => (0, 0, 0),
+            Self::PickupRoll { weapon, every } => (u16::from(weapon.code()), 0, u32::from(every)),
+            Self::ScalePad { pad, factor } => (pad, factor.to_bits(), 0),
+            Self::ScaleSlotPads { factor, .. } => (0, factor.to_bits(), 0),
+            Self::PlayCue { cue, .. } => (cue.code(), 0, 0),
+            Self::FireEffect { effect, .. } => (effect.code(), 0, 0),
+            Self::FireModEffect { index, .. } => (index | OWN_FLAG, 0, 0),
+            Self::HudTint { element, rgba, .. } => (element.code(), 0, rgba.to_u32()),
             Self::HudShake {
                 element, amplitude, ..
-            } => (COMMAND_HUD_SHAKE, element.code(), amplitude.to_bits(), 0),
+            } => (element.code(), amplitude.to_bits(), 0),
             Self::HudBarExtra {
                 element,
                 extra,
                 rgba,
                 ..
-            } => (
-                COMMAND_HUD_BAR_EXTRA,
-                element.code(),
-                extra.to_bits(),
-                rgba.to_u32(),
-            ),
+            } => (element.code(), extra.to_bits(), rgba.to_u32()),
             Self::HudText {
                 place, rgba, own, ..
             } => (
-                COMMAND_HUD_TEXT,
                 pool_at | if own { OWN_FLAG } else { 0 },
                 place.to_bits(),
                 rgba.to_u32(),
@@ -966,7 +960,6 @@ impl Command {
             Self::HudIcon {
                 place, rgba, own, ..
             } => (
-                COMMAND_HUD_ICON,
                 pool_at | if own { OWN_FLAG } else { 0 },
                 place.to_bits(),
                 rgba.to_u32(),
@@ -980,21 +973,19 @@ impl Command {
                     Icon::Title(weapon) => u16::from(weapon.code()),
                     Icon::Mod(_) => pool_at | OWN_FLAG,
                 };
-                (COMMAND_PICKUP_LOOK, arg, value, word)
+                (arg, value, word)
             }
-            Self::SetWeather { kind, strength } => {
-                (COMMAND_SET_WEATHER, kind.code(), strength.to_bits(), 0)
-            }
-            Self::SetSun { intensity } => (COMMAND_SET_SUN, 0, intensity.to_bits(), 0),
-            Self::GradeSky { grey } => (COMMAND_GRADE_SKY, 0, grey.to_bits(), 0),
-            Self::GiveShield { .. } => (COMMAND_GIVE_SHIELD, 0, 0, 0),
-            Self::HoldShield { .. } => (COMMAND_HOLD_SHIELD, 0, 0, 0),
-            Self::ClearShield { .. } => (COMMAND_CLEAR_SHIELD, 0, 0, 0),
-            Self::PreferRoute { route, .. } => (COMMAND_PREFER_ROUTE, route, 0, 0),
-            Self::Emit { channel, value, .. } => (COMMAND_EMIT, 0, value.to_bits(), channel),
+            Self::SetWeather { kind, strength } => (kind.code(), strength.to_bits(), 0),
+            Self::SetSun { intensity } => (0, intensity.to_bits(), 0),
+            Self::GradeSky { grey } => (0, grey.to_bits(), 0),
+            Self::GiveShield { .. } => (0, 0, 0),
+            Self::HoldShield { .. } => (0, 0, 0),
+            Self::ClearShield { .. } => (0, 0, 0),
+            Self::PreferRoute { route, .. } => (route, 0, 0),
+            Self::Emit { channel, value, .. } => (0, value.to_bits(), channel),
         };
         let mut record = [0; COMMAND_LEN];
-        record[COMMAND_KIND] = kind;
+        record[COMMAND_KIND] = self.kind().code();
         record[COMMAND_SLOT] = self.slot().map_or(0, |slot| slot.0);
         let [lo, hi] = arg.to_le_bytes();
         record[COMMAND_ARG] = lo;
@@ -1020,11 +1011,12 @@ impl Command {
     ///
     /// A [`Malformed`] naming the broken rule.
     pub fn decode_in(record: &[u8; COMMAND_LEN], pool: &[u8]) -> Result<Self, Malformed> {
-        let (kind, raw_slot) = (record[COMMAND_KIND], record[COMMAND_SLOT]);
+        let (raw_kind, raw_slot) = (record[COMMAND_KIND], record[COMMAND_SLOT]);
+        let known = CommandKind::from_code(raw_kind);
         let arg = u16::from_le_bytes([record[COMMAND_ARG], record[COMMAND_ARG + 1]]);
         let value = f32::from_bits(get_u32(record, COMMAND_VALUE));
         let word = get_u32(record, COMMAND_WORD);
-        if kind == COMMAND_PICKUP_ROLL {
+        if known == Some(CommandKind::PickupRoll) {
             let weapon = u8::try_from(arg).ok().and_then(Weapon::from_code);
             let every = u8::try_from(word).ok().filter(|every| *every > 0);
             return match (raw_slot, weapon, every) {
@@ -1036,15 +1028,17 @@ impl Command {
                 }),
             };
         }
-        if matches!(kind, COMMAND_SCALE_PAD | COMMAND_SCALE_SLOT_PADS)
-            && !(0.0..=MAX_PAD_FACTOR).contains(&value)
+        if matches!(
+            known,
+            Some(CommandKind::ScalePad | CommandKind::ScaleSlotPads)
+        ) && !(0.0..=MAX_PAD_FACTOR).contains(&value)
         {
             return Err(Malformed::PadFactor {
                 slot: raw_slot,
                 factor: value,
             });
         }
-        if kind == COMMAND_SCALE_PAD {
+        if known == Some(CommandKind::ScalePad) {
             if raw_slot != 0 {
                 return Err(Malformed::PadSlot { slot: raw_slot });
             }
@@ -1053,30 +1047,31 @@ impl Command {
                 factor: value,
             });
         }
-        if matches!(
-            kind,
-            COMMAND_SET_WEATHER | COMMAND_SET_SUN | COMMAND_GRADE_SKY
-        ) {
+        if let Some(
+            kind @ (CommandKind::SetWeather | CommandKind::SetSun | CommandKind::GradeSky),
+        ) = known
+        {
             if raw_slot != 0 || !(0.0..=1.0).contains(&value) {
                 return Err(Malformed::Unit {
-                    kind,
+                    kind: raw_kind,
                     slot: raw_slot,
                     value,
                 });
             }
             return Ok(match kind {
-                COMMAND_SET_WEATHER => Self::SetWeather {
+                CommandKind::SetWeather => Self::SetWeather {
                     kind: WeatherKind::from_code(arg).ok_or(Malformed::Weather(arg))?,
                     strength: value,
                 },
-                COMMAND_SET_SUN => Self::SetSun { intensity: value },
+                CommandKind::SetSun => Self::SetSun { intensity: value },
                 _ => Self::GradeSky { grey: value },
             });
         }
         let slot = Slot::new(usize::from(raw_slot)).ok_or(Malformed::Slot(raw_slot))?;
         let hud_element = || HudElement::from_code(arg).ok_or(Malformed::HudElement(arg));
+        let kind = known.ok_or(Malformed::Kind(raw_kind))?;
         Ok(match kind {
-            COMMAND_SCALE_THRUST => {
+            CommandKind::ScaleThrust => {
                 if !(0.0..=MAX_THRUST_FACTOR).contains(&value) {
                     return Err(Malformed::Factor {
                         slot,
@@ -1088,7 +1083,7 @@ impl Command {
                     factor: value,
                 }
             }
-            COMMAND_SHIELD_DELTA => {
+            CommandKind::ShieldDelta => {
                 if !value.is_finite() {
                     return Err(Malformed::Amount {
                         slot,
@@ -1100,35 +1095,38 @@ impl Command {
                     amount: value,
                 }
             }
-            COMMAND_GIVE_PICKUP => Self::GivePickup { slot },
-            COMMAND_CLEAR_PICKUP => Self::ClearPickup { slot },
-            COMMAND_SCALE_SLOT_PADS => Self::ScaleSlotPads {
+            CommandKind::GivePickup => Self::GivePickup { slot },
+            CommandKind::ClearPickup => Self::ClearPickup { slot },
+            CommandKind::ScaleSlotPads => Self::ScaleSlotPads {
                 slot,
                 factor: value,
             },
-            COMMAND_PLAY_CUE => Self::PlayCue {
+            CommandKind::PlayCue => Self::PlayCue {
                 slot,
                 cue: Cue::from_code(arg).ok_or(Malformed::Cue(arg))?,
             },
-            COMMAND_FIRE_EFFECT if arg & OWN_FLAG != 0 => Self::FireModEffect {
+            CommandKind::FireEffect if arg & OWN_FLAG != 0 => Self::FireModEffect {
                 slot,
                 index: arg & !OWN_FLAG,
             },
-            COMMAND_FIRE_EFFECT => Self::FireEffect {
+            CommandKind::FireEffect => Self::FireEffect {
                 slot,
                 effect: Effect::from_code(arg).ok_or(Malformed::Effect(arg))?,
             },
-            COMMAND_HUD_TINT if arg == HudElement::Pickup.code() => {
+            CommandKind::HudTint if arg == HudElement::Pickup.code() => {
                 return Err(Malformed::PickupTint);
             }
-            COMMAND_HUD_TINT => Self::HudTint {
+            CommandKind::HudTint => Self::HudTint {
                 slot,
                 element: hud_element()?,
                 rgba: Rgba::from_u32(word),
             },
-            COMMAND_HUD_SHAKE => {
+            CommandKind::HudShake => {
                 if !(0.0..=MAX_HUD_SHAKE).contains(&value) {
-                    return Err(Malformed::HudValue { kind, value });
+                    return Err(Malformed::HudValue {
+                        kind: raw_kind,
+                        value,
+                    });
                 }
                 Self::HudShake {
                     slot,
@@ -1136,9 +1134,12 @@ impl Command {
                     amplitude: value,
                 }
             }
-            COMMAND_HUD_BAR_EXTRA => {
+            CommandKind::HudBarExtra => {
                 if !(value > 0.0 && value <= MAX_HUD_EXTRA) {
-                    return Err(Malformed::HudValue { kind, value });
+                    return Err(Malformed::HudValue {
+                        kind: raw_kind,
+                        value,
+                    });
                 }
                 Self::HudBarExtra {
                     slot,
@@ -1147,14 +1148,14 @@ impl Command {
                     rgba: Rgba::from_u32(word),
                 }
             }
-            COMMAND_HUD_TEXT | COMMAND_HUD_ICON => {
+            CommandKind::HudText | CommandKind::HudIcon => {
                 let place = HudPlace::from_bits(get_u32(record, COMMAND_VALUE))
                     .ok_or(Malformed::HudPlace)?;
                 let own = arg & OWN_FLAG != 0;
                 let at = arg & !OWN_FLAG;
                 let string = pool_string(pool, at).ok_or(Malformed::Pool(at))?;
                 let rgba = Rgba::from_u32(word);
-                if kind == COMMAND_HUD_TEXT {
+                if kind == CommandKind::HudText {
                     Self::HudText {
                         slot,
                         place,
@@ -1172,7 +1173,7 @@ impl Command {
                     }
                 }
             }
-            COMMAND_PICKUP_LOOK => {
+            CommandKind::PickupLook => {
                 let raw = get_u32(record, COMMAND_VALUE);
                 let bad = Malformed::PickupLook { arg, value: raw };
                 let icon = if arg & OWN_FLAG != 0 {
@@ -1199,11 +1200,11 @@ impl Command {
                 };
                 Self::PickupLook { slot, icon, colour }
             }
-            COMMAND_GIVE_SHIELD => Self::GiveShield { slot },
-            COMMAND_HOLD_SHIELD => Self::HoldShield { slot },
-            COMMAND_CLEAR_SHIELD => Self::ClearShield { slot },
-            COMMAND_PREFER_ROUTE => Self::PreferRoute { slot, route: arg },
-            COMMAND_EMIT => {
+            CommandKind::GiveShield => Self::GiveShield { slot },
+            CommandKind::HoldShield => Self::HoldShield { slot },
+            CommandKind::ClearShield => Self::ClearShield { slot },
+            CommandKind::PreferRoute => Self::PreferRoute { slot, route: arg },
+            CommandKind::Emit => {
                 if !value.is_finite() {
                     return Err(Malformed::EmitValue { slot, value });
                 }
@@ -1213,7 +1214,12 @@ impl Command {
                     value,
                 }
             }
-            other => return Err(Malformed::Kind(other)),
+            // The race-wide kinds returned above.
+            CommandKind::PickupRoll
+            | CommandKind::ScalePad
+            | CommandKind::SetWeather
+            | CommandKind::SetSun
+            | CommandKind::GradeSky => return Err(Malformed::Kind(raw_kind)),
         })
     }
 }
@@ -1363,6 +1369,7 @@ fn get_u32(buffer: &[u8], at: usize) -> u32 {
 
 mod channel;
 pub mod hud;
+mod kind;
 mod malformed;
 mod pickup;
 pub mod track;

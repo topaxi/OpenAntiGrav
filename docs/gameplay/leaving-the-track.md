@@ -38,6 +38,16 @@ cause of the most recent respawn is now recorded per craft
 value, `Destroyed`, separates a wreck from a fall - without it the `Wrecked` rows
 below read as falls. `Race::respawn_given_up_of` exposes the five-in-a-row give-up.
 
+## One table per race
+
+Every way a craft is put back is a row of `oag_race::recovery::ResetTriggers` (reset zone,
+airborne, distance, cage, beneath, stalled): an `enabled` flag, whether the respawn cooldown
+holds it back, whether it stops once respawning has given up, and the numbers it fires on.
+Pulse's table is `ResetTriggers::PULSE`; each title carries which rows exist as
+`Title::reset_enables` with provenance (Pulse measured for the original's four, the beneath
+and stall rescues chosen; Pure, HD, Omega and 2048 inherit). The airborne row is not held
+back by the cooldown, as the original's clock is not.
+
 ## The survey
 
 One craft alone, 18,000 ticks, all 24 circuit-directions, all four tiers, `VENOM`.

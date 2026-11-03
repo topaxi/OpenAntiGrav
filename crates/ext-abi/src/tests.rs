@@ -823,3 +823,101 @@ fn a_channel_name_is_a_mod_id_a_slash_and_a_name() {
     assert_eq!(check_channel(&long), Err(BadChannel::TooLong));
     assert_eq!(namespace("oag.example/gate"), "oag.example");
 }
+
+/// The bytes of one of every command, in `every_command`'s order, as hex. Spelled out so a
+/// layout change shows in the diff, and so a refactor of the encoder is held to today's bytes.
+const COMMAND_BYTES: [&str; 24] = [
+    "010100000000803e00000000",
+    "02020000000060c000000000",
+    "030300000000000000000000",
+    "080400000000000000000000",
+    "090005000000000002000000",
+    "0d002c010000c03f00000000",
+    "0e0500000000000000000000",
+    "050603000000000000000000",
+    "060701000000000000000000",
+    "100f050000000000e02021ff",
+    "1603050000000000e0202080",
+    "160900800600000000000000",
+    "110103000000204000000000",
+    "120202006666663fff2020ff",
+    "1303008068d8ff7f01020304",
+    "1404000044001080ffffffff",
+    "0a0000000000403f00000000",
+    "0b0000000000003f00000000",
+    "0c0000000000803e00000000",
+    "180800000000000000000000",
+    "190900000000000000000000",
+    "1a0a00000000000000000000",
+    "150b03000000000000000000",
+    "170c0000000020c064a50f37",
+];
+
+/// The bytes of one of every event, in `every_event`'s order, as hex.
+const EVENT_BYTES: [&str; 9] = [
+    "01000000000000000000000000000000",
+    "02010000000000000000000000000000",
+    "03020000000000000000000000000000",
+    "050f0201000000000000000000000000",
+    "06030700000000000000000000000000",
+    "07043f00000000000000000000000000",
+    "08050100000000000000000000000000",
+    "0906040000008c410000000000000000",
+    "0a0700000000884064a50f37ce86334d",
+];
+
+fn hex(bytes: &[u8]) -> std::string::String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+#[test]
+fn every_command_encodes_to_the_bytes_it_always_has() {
+    for (command, expected) in every_command().iter().zip(COMMAND_BYTES) {
+        assert_eq!(hex(&command.encode_pooled(0)), expected, "{command:?}");
+    }
+}
+
+#[test]
+fn every_event_encodes_to_the_bytes_it_always_has() {
+    for (event, expected) in every_event().iter().zip(EVENT_BYTES) {
+        assert_eq!(hex(&event.encode()), expected, "{event:?}");
+    }
+}
+
+/// `fire-mod-effect` shares `fire-effect`'s code, told apart by bit 15 of the argument; the
+/// pool offset of an own-string `hud-text` rides in the same argument with the same flag.
+#[test]
+fn the_own_flag_rides_bit_15_of_the_argument() {
+    let effect = Command::FireModEffect {
+        slot: slot(3),
+        index: 5,
+    };
+    assert_eq!(hex(&effect.encode()), "060305800000000000000000");
+    assert_eq!(Command::decode(&effect.encode()), Ok(effect));
+}
+
+#[test]
+fn the_kind_table_agrees_with_the_commands() {
+    for (i, kind) in CommandKind::ALL.iter().enumerate() {
+        assert_eq!(CommandKind::from_code(kind.code()), Some(*kind));
+        assert!(
+            CommandKind::ALL[..i]
+                .iter()
+                .all(|k| k.code() != kind.code()),
+            "{} repeats a code",
+            kind.name()
+        );
+    }
+    assert_eq!(CommandKind::from_code(0), None);
+    assert_eq!(CommandKind::from_code(4), None);
+    for command in every_command() {
+        let kind = command.kind();
+        assert_eq!(command.encode()[COMMAND_KIND], kind.code());
+        assert_eq!(
+            command.slot().is_none(),
+            kind.race_wide(),
+            "{}",
+            kind.name()
+        );
+    }
+}

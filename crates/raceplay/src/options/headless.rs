@@ -210,6 +210,7 @@ impl Setup {
             },
             autopilot_absorb_cancels: true,
             autopilot_pad_grants: false,
+            reset_triggers: oag_race::recovery::ResetTriggers::PULSE,
             opponent_fire: oag_title::weapons::OpponentFire::PULSE,
             speedup_pads: Vec::new(),
             weapon_pads: Vec::new(),

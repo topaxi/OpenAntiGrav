@@ -71,6 +71,8 @@ pub const TITLE: &Title = &Title {
     // Measured: the six stand-in codepoints and the glyph each draws, read off
     // `pulse_text.fnt`, `Pulse_14.fnt` and `Pulse_20.fnt` - see `prompts`.
     prompts: prompts::PROMPTS,
+    // The reset state `FUN_088418e0` enters (`docs/gameplay/leaving-the-track.md`).
+    reset_enables: oag_title::recovery::ResetEnables::PULSE,
     // `FUN_089957c0` multiplies a voice by its group volume squared; the flyby's fade reads `fade ** 2`
     // (`docs/gameplay/race-intro.md`, "What the original plays under the flyby").
     effects_volume_law: oag_title::pre_race::Sourced::measured(

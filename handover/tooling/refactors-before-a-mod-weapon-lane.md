@@ -2,7 +2,7 @@
 status: measure
 titles: [all]
 updated: 2026-11-03
-summary: "Open cleanups before a mod pickup lane: reset triggers, spline placement, pickup lookup, mod ABI command table, camera FOV chain."
+summary: "Items 1-5 (reset triggers, spline placement, pickup lookup, ABI command table, FOV chain) done; items 6-10 stay open for the mod weapon lane."
 kind: debt
 ---
 
@@ -52,7 +52,36 @@ so 20-40 by default). Ranking is payoff times the chance the lane touches the co
 - **Fixing it is a law, not a refactor.** It changes 2048 gameplay (rockets per press),
   and the fighter's default is still unread. Item 8 below.
 
-## Do now (ranked)
+## Done (items 1-5, no behaviour change)
+
+Every simulation hash and the lone-craft ground truth (all twelve clean, `01_Track` respawns 0)
+are unmoved.
+
+- **1. Reset triggers.** `oag_race::recovery::ResetTriggers` (rows `reset_zone`, `airborne`,
+  `distance`, `cage`, `beneath`, `stalled`; each a `Trigger { enabled, cooldown_gated,
+  give_up_gated }`, plus the numbers and `cooldown_ticks`/`shield_charge`) is
+  `Sim::reset_triggers`, built at load by `respawn::reset_triggers_for` from
+  `Title::reset_enables` (`oag_title::recovery::ResetEnables`, `Sourced<bool>` per row, as
+  `autopilot_pad_grants`). The one gate read is `Race::armed` -> `Trigger::armed`; airborne
+  keeps `cooldown_gated: false`, cage has neither gate. The constants stay in `recovery.rs`
+  with their evidence and build `ResetTriggers::PULSE`. **Open for the mod lane:** a per-craft
+  hold/arm (the table is per race), and the `RESPAWN_GIVE_UP` count itself is still a const.
+- **2. Placement.** `Pose::on_racing_line(sample, height)` replaces five
+  `from_sample(s, s.racing_line, h)` sites (grid fallback, respawn, rescue plan, two trace
+  tools). `breadcrumbs::locate` is a one-line named wrapper and stays; the locate/nearest
+  merge is a determinism change and was not attempted.
+- **3. Pickup lookup.** `WeaponStats::pickups_for` is the one lookup, case-insensitive;
+  `oag_weapons::pickup::table_for` is gone.
+- **4. ABI command table.** `oag_ext_abi::CommandKind` is the one table of kind codes (`code`,
+  `from_code`, `name`, `race_wide`); `encode` and `decode` read it. Pinned first by
+  `COMMAND_BYTES` / `EVENT_BYTES` in `crates/ext-abi/src/tests.rs`, green before and after.
+  No byte moved, no revision bump, the mod-author skill is unchanged. The SDK push sites and
+  the host `match` stay: they are typed per-command code, not a table.
+- **5. FOV chain.** `camera::finish_vertical_fov` is the boost kick plus aspect fit for the
+  player and the extra viewpoints. The authored 65 still sits in `FOV_DEGREES` (render),
+  `REFERENCE_FOV_DEGREES` (mesh, which may not reach a title crate) and the handling XML.
+
+## Do now (ranked) - done, kept for the evidence
 
 ### 1. Reset triggers as one per-race struct (sweep item 2)
 
