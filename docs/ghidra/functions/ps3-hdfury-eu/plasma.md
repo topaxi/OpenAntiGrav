@@ -802,3 +802,18 @@ fixed on the shell (537,340 pixels differ at tick 185, 41,672 at 200, 152,234
 at 215, 58,312 at 230; 0 at 175, before the blast). Subtle by construction:
 0.1 per second over a 1.3 s window is 0.13 of the texture. Pulse's frame of
 the same shot is pixel-identical before and after (ticks 200 and 230).
+
+## 2026-11-03: the 2026-10-05 reading rechecked, and the Omega/2048 cross-check
+
+A lane briefed to play `UV_offset` from keys parsed out of the explosion `.vex`
+found the work already done: the trio's `Anim Transform` track has a single
+scale key and a single translation key (static), and `UV_offset` is the
+blast's age, played on the ring and halo (`slots::CLOCK_SCROLL_RING`/`_HALO`,
+`model_clock`). No reader or test was added; there is no curve to decode.
+
+Cross-check: Omega loads the same trio (`oag_omega::weapons::WEAPON_MODELS`,
+`docs/formats/omega-status.md` "Weapon bodies") through `mesh::rcs::psp2`, so
+the same age-driven slots apply to it as **checked, applies, not measured on
+PS4** (the PS4 program's `UV_offset` use was not read; the draw is HD's
+inherited). 2048 ships `Data/Weapons2048` bodies under a different root and
+mode, unwired: **checked, applies, not wired**.

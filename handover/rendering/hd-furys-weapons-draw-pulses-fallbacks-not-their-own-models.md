@@ -57,7 +57,7 @@ The executable's own load-path strings name every model above
   honours for the trio, on HD's own right-handed basis (halo checked by
   pixel diff). The 09-17 solid-grey frame was **not reproduced** on this tree
   either way; under continuous fire several overlapping blasts still fill the
-  frame purple, culled or not. See plasma.md's 2026-09-23 section. Not played yet: (1) the `UV_offset`
+  frame purple, culled or not. See plasma.md's 2026-09-23 section. (1) **closed 2026-10-05, rechecked 2026-11-03: the trio's Anim Transform keys are static (one scale key 1.0, one translation key, no rotation) and `UV_offset` is the blast's age, already played on the ring and halo (plasma.md, 2026-10-05); nothing to parse.** Formerly: the `UV_offset`
   binding `WeaponExplosions_Construct` makes to `node + 0xc0` of each model's
   first `PTR_PTR_008b3988`-class node, driven by `age` through
   `_opd_FUN_002c1b30` - **2026-09-25: the bind mechanism is read (by
