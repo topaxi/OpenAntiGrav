@@ -507,8 +507,6 @@ fn quake_hit_render(drop_collisions: bool) -> (Vec<i16>, usize) {
         oag_audio::MIN_BUFFER,
         false,
     );
-    // The limiter would compress the very ratio this measures.
-    audio.output().with_mixer(|mixer| mixer.set_limiting(false));
     for tick in 0..LAUNCH + 40 {
         if tick == LAUNCH {
             assert!(race.force_quake(1), "the rival's wave never launched");

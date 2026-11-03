@@ -790,8 +790,6 @@ fn the_whole_grid_is_audible_and_not_all_from_one_place() {
         oag_audio::MIN_BUFFER,
         false,
     );
-    // The limiter would compress the very ratio this measures.
-    audio.output().with_mixer(|mixer| mixer.set_limiting(false));
     for _ in 0..120 {
         race.tick(&PlayerInputs::none());
         oag_game::sound::race_tick(&mut audio, &mut race);
