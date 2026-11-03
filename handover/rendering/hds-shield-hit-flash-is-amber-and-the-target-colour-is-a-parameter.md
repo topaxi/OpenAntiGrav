@@ -1,8 +1,8 @@
 ---
-status: re-first
+status: ready-to-wire
 titles: [hd]
-updated: 2026-09-16
-summary: "HD shield target colour source (FUN_000d5610 argument) unread; per-team ShieldColour possible; flicker call arguments"
+updated: 2026-11-03
+summary: "HD shield target colour read: per-team ShieldColour float4 in shipshield.rcsmodel (not white); wire per-team palette; hit flash unwatched"
 ---
 
 # HD's shield hit-flash is amber, not Pulse's cyan - and the steady-state colour is a parameter this pass did not trace to its source
@@ -71,34 +71,37 @@ edge it should coincide with) or something else is unresolved; a Weapon Pad
 crossing in a real race, or a rival-contact hit while carrying one, would
 sidestep it.
 
+## Read 2026-11-03 (`hd-shield-read`): the target colour is per team
+
+`ShipShield_Activate` takes no colour argument. The target is the
+`ShieldColour` material parameter authored in each team's `shipshield.rcsmodel`
+(`ShipShield_BindColourParam`, `0x00125690`); live RPCS3 read of the shield
+object on a Feisar race gave target `(0.0, 0.031, 0.996, 1.0)` (blue), lerping
+from activation `(0.547, 0.1, 0.1, 0)` over about 2 s. Table of all teams and
+the read recipe: `docs/ghidra/functions/ps3-hdfury-eu/shield.md`, "The
+steady-state colour is read".
+
 ## Open
 
-- The steady-state target colour's real source (`FUN_000d5610`'s call
-  argument to `ShipShield_Activate`) is unread. If it turns out to be a
-  per-team `ShieldColour` rather than a constant white, `HD_PALETTE.target`
-  needs to become per-team too, which is a bigger change than this pass made.
-- `FUN_00676fe8`, HD's flicker call, takes three arguments where Pulse's
-  `sinf` takes one. Kept as `sin` in the port on literal-pool-proximity
-  grounds; not decompiled.
-- `FUN_00125d98`, the external-camera shell draw HD's `ShipShield_Update`
-  dispatches to (the sibling of the decompiled `ShipShield_DrawCockpit_q`).
-  Not read at all.
-- The `--give shield` CLI recipe never demonstrably fired in this pass's
-  screenshot attempts - worth a look from whoever next needs a headless
-  shield capture, since it is also `weapons/visuals.rs`'s own documented
-  debug affordance for other pickups.
-- HD's per-team `<team>_shield.rcsmaterial` is still unread (a standing gap
-  from `shield-pickup.md`, not new here): the shell draws untextured and
-  additive regardless of which palette tints it, brighter and flatter than
-  the disc's own material.
+- **Ready to wire:** `HD_PALETTE.target` must become per team. Read
+  `ShieldColour` (`0xaaf53119`) from the shield model's material record with
+  `oag_rcs::rcsmodel::material::parameters` at load and feed it as the palette
+  target; white only if the record has none. Also set the models' activation
+  tint (`FUN_002c32c8`, packed `(0.547, 0.1, 0.1, 0) * 255`) on activation.
+  Zone has two values on disc (DATA00 vs DATA02): confirm which archive HD
+  loads. Omega and 2048: census their shield models for the same parameter
+  (unchecked).
+- The amber hit flash is still unwatched in a frame (static read only). Recipe:
+  gdb-break `ShipShield_Hit` (`0x00125660`) in a race where a rival hits the
+  player, read `object+0xc0` (expected `(1, 0.2, 0, 1)`).
+- The `--give shield` CLI in our own engine never demonstrably fired (below).
+- `FUN_00676fe8`, the three-argument flicker call, and `FUN_00125d98`, the
+  external-camera shell draw, are still unread.
 
 ## Next Steps
 
-1. Resolve `FUN_000d5610`'s TOC with `scripts/ps3-toc.py` and read what it
-   passes as `ShipShield_Activate`'s target-colour argument. Settles whether
-   `HD_PALETTE.target` should be per-team.
-2. Get one live screenshot of the amber flash - a Weapon Pad crossing in a
-   real `single_race` with `--autopilot`, or a rival collision while holding
-   the pickup, rather than fighting `--give`'s timing.
-3. Decompile `FUN_00125d98` for symmetry with the cockpit branch, and
-   `FUN_00676fe8` to settle whether the flicker really is a bare `sin`.
+1. Wire the per-team target as above; test: Feisar's shell target equals
+   `(0, 0.0314, 0.9961, 1)` and differs from Piranha's `(1, 0.5333, 0, 1)`.
+2. Compare one of our frames against `shield_t6.5.png` (same team, same
+   circuit) after wiring.
+3. Decompile `FUN_00125d98` and `FUN_00676fe8`.

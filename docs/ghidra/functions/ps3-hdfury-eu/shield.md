@@ -67,7 +67,7 @@ which its size and this pass's TOC-corrupted decompile did not allow.
 ## `FUN_00125ae8` is `ShipShield_Activate`, and here the law moves
 
 ```c
-void ShipShield_Activate(ShipShield *self, Colour target)
+void ShipShield_Activate(ShipShield *self)   // one argument (2026-11-03: no colour parameter)
 {
     self->rgba = g_colours.activation;      // 0x00994000+0x10, see below
     self->rgba_target = target;             // an ARGUMENT, not a constant
@@ -79,6 +79,8 @@ void ShipShield_Activate(ShipShield *self, Colour target)
     self->fading = false;
 }
 ```
+
+**(Corrected 2026-11-03, see "The steady-state colour is read" below: `ShipShield_Activate` takes no colour argument; the target is a per-team material value.)**
 
 **The steady-state colour is a call argument on HD, not a hardcoded
 constant.** Pulse's `ShipShield_Activate` writes `TARGET_COLOUR` (white)
@@ -301,6 +303,169 @@ law of the closest relative, not a measurement; reading Omega's and 2048's
 shield constructors and HD's steady-state target colour are queued as
 separate lanes.
 
+## The steady-state colour is read (2026-11-03, `hd-shield-read`)
+
+**Result: the target colour is the `ShieldColour` material parameter authored
+in each team's `shipshield.rcsmodel`, a vec4 per team. It is neither a
+constant nor a `ShieldColour` config key.** Confidence **90** (static read of
+all three functions plus a live read of the shield object on RPCS3, below).
+
+### Correction to the section above
+
+`ShipShield_Activate` (`0x00125ae8`) takes **one** argument, the shield. Its
+only caller, `FUN_000d5610`, passes `*(craft+0x6f6c)` and nothing else; the
+earlier "target is an argument" reading came from a decompile whose prototype
+invented a second parameter. The target is copied from a field of the shield
+object itself, `object+0x104..0x110`:
+
+```text
+Activate (0x00125ae8, TOC 0x008ad4d8, exact):
+  object+0xc0..0xcc   = g_colours.activation   // 0x00994010, (0.547, 0.1, 0.1, 0.0)
+  object+0xd0..0xdc   = object+0x104..0x110    // the target, set at construction
+  object+0xe0 = 0.15 (colour rate), object+0xe4 = [0x008c18a4] (swell start),
+  object+0xe8 = 1.0, object+0xec = 0.2, object+0xf4 = 1 (active), object+0xf8 = 0
+  both models (object+0xfc cockpit, object+0x100 shell): FUN_002c32c8(model,
+      packed ARGB of g_colours.activation * 255)   // model tint, see open items
+```
+
+### Where `object+0x104` comes from: `FUN_00125690`, `ShipShield_BindColourParam`
+
+`ShipShield_Construct` calls `0x00125690` once per model, cockpit first
+(`0x0012676c`, model `+0xfc`) and the shell last (`0x00126694`, model
+`+0x100`), so **the shell's value is the one left in `object+0x104`**:
+
+```text
+void ShipShield_BindColourParam(ShipShield *self, Model *model)
+{
+    mat = FUN_003e4df8(model + 0x204c);            // 0x00677008, the model's material
+    h   = ~crc32("ShieldColour");                  // 0x00676ff8 on the string at 0x00783b00
+    p   = FUN_005d4c68(mat, h);                    // 0x00677c88, find the param record
+    self->target_colour = *p;                      // object+0x104..0x110, the authored vec4
+    Material_SetInstanceParamPointer(mat, h, &self->live_colour);  // object+0xc0
+}
+```
+
+So the live colour (`object+0xc0`, lerped by `Update`) is *bound as the
+shader's `ShieldColour` instance parameter* on both the cockpit and the shell,
+and the value it lerps toward is whatever the model's own material authors.
+That is the whole "parameter": the `ShieldColour` string at `0x00782148` that
+`FUN_000dba30` parses is a different use of the same name (it binds a pointer
+on the craft's own models at `craft+0x7a50`), not the source of this colour.
+Constructor default, before the bind, is `(1, 1, 1, 1)` (`0x008aa1f4` = 1.0,
+stored to `+0xc0`, `+0xd0`, `+0x104`).
+
+`ShieldColour` is `0xaaf53119` (`~crc32`); the `.rcsmodel` material record
+carries it as a `0x20`-byte parameter entry whose value offset (`+0x18`) points
+at four big-endian floats
+([`rcsmodel.md`](../../../formats/rcsmodel.md), "A material record carries the
+shipped values"). Read off every shield model on the disc:
+
+| Team (`Data\Ships\<team>\shipshield.rcsmodel`) | `ShieldColour` RGBA | Archive |
+| --- | --- | --- |
+| feisar | (0.0000, 0.0314, 0.9961, 1) | DATA02 |
+| assegai | (0.2110, 0.6567, 1.0000, 1) | DATA02 |
+| piranha | (1.0000, 0.5333, 0.0000, 1) | DATA02 |
+| qirex | (0.7294, 0.1843, 0.5490, 1) | DATA02 |
+| goteki | (0.7490, 0.2039, 0.7725, 1) | DATA02 |
+| egx | (0.2196, 1.0000, 0.2196, 1) | DATA02 |
+| ag_systems | (0.2652, 1.0000, 1.0000, 1) | DATA02 |
+| triakis | (0.4078, 0.3804, 0.1137, 1) | DATA02 |
+| zone | (0.4078, 0.3804, 0.1137, 1) | DATA02 (DATA00's older copy: (1.0, 0.3022, 0.0, **0.0**)) |
+| auricom | (1.0000, 1.0000, 1.0000, 1) | DATA03 |
+| harimau | (0.0000, 1.0000, 1.0000, 1) | DATA03 |
+| icaras | (0.0000, 0.0314, 0.9961, 1) | DATA03 |
+| mirage | (1.0000, 0.1142, 1.0000, 1) | DATA03 (DATA06's copy: (0.0, 0.0314, 0.9961, 1)) |
+| `vr_shield_cockpit.rcsmodel` | (0.2652, 1.0000, 1.0000, 1) | DATA02 (its own, not used as the target) |
+
+The DATA06 `_c1`/`_n1` variants each carry their own value (24 files, all
+alpha 1; for example `feisar_c1` (0.0, 1.0, 0.7177), `goteki_c1`
+(1.0, 1.0, 0.0), `assegai_c1` (0.7790, 0.7450, 0.1387)); the full census is 81 rows (every `shipshield`, `absorbeffect` and cockpit
+model), by walking each shield `.rcsmodel` for entry hash `0xaaf53119`, kind
+`!= 0x8001`, and reading four floats at the entry's `+0x18` offset.
+
+The shell of the live race below, Feisar `feisar_c1` hull on the Fury campaign
+default, read `(0.0, 0.031, 0.996, 1.0)` at `object+0x104` (and later at
+`+0xd0`), which is the DATA02/DATA03 `feisar`/`icaras` value, not `feisar_c1`'s
+(0.0, 1.0, 0.7177): so the race loaded the DATA02 `Data\Ships\Feisar\shipshield`
+model, matching `shield_entry_names`' per-team path (`%s\%sshield.vex` with
+`team_dir = Feisar`), the `_c1` hull variant not being a separate shield
+directory. Which of the DATA06 `_c1`/`_n1` values a HD variant race would read is
+**not** measured: only the base-team directory was seen live.
+
+### Live on RPCS3 (state 5 with triangle; `scripts/rpcs3-hd-weapon.py` recipe)
+
+Boot, Fury campaign Talon's Junction, write pickup state `5` into the slot at
+`*(craft+0x5edc)+0x204`, press triangle, pause the guest every 0.6 s and read
+`0x120` bytes at `*(craft+0x6f6c)` (a copy of `rpcs3-hd-weapon.py` that samples instead of recording only):
+
+| t (s) | active | live `object+0xc0` | target `+0xd0` | swell |
+| --- | --- | --- | --- | --- |
+| before fire | 0 | (1, 1, 1, 1) | (1, 1, 1, 1) | 0 |
+| 0.79 | 1 | (0.547, 0.100, 0.100, 0.0) | (0.000, 0.031, 0.996, 1.0) | 0.70 |
+| 1.39 | 1 | (0.035, 0.036, 0.940, 0.937) | same | 0.993 |
+| 2.00 | 1 | (0.001, 0.032, 0.994, 0.998) | same | 1.000 |
+| 2.60 on | 1 | (0.000, 0.031, 0.996, 1.0) | same | 1.000 |
+
+This confirms in one run: the activation start `(0.547, 0.1, 0.1, 0)` and the
+constructor default; `+0xd0` takes the per-team value, which equals the
+authored Feisar `ShieldColour` read statically from the disc; the colour lerp
+reaches the target in about 2 s (rate 0.15 per 1/60 s step) and holds; the
+swell starts near 0.7 and settles at 1.0. The recorded frames show a Feisar hull wrapped in a
+**blue** translucent shell, with a purple-red tinge on the activation frame
+(kept untracked under the lane's scratch directory). The amber hit flash was **not** captured: a hit needs a damage
+source on the player; `ShipShield_Hit` has two callers (`FUN_000e8de0`,
+`FUN_000eadb8`) and no emulator-side trigger was built. Recipe if wanted: write
+a rival's rocket in front of the player, or gdb-break `ShipShield_Hit` at
+`0x00125660` and read the live colour (expected `(1, 0.2, 0, 1)`).
+
+A later sample after the same press with state `6` showed the fade path
+(`fading = 1`, target `(0, 0, 0, 0)`, swell `1.166` then `1.194`, then
+`active = 0`), consistent with the third colour vec4 being the fade target; the
+trigger that ended the shield was a second fire press, not a measured timer, so
+this is left at the structural reading.
+
+### What differs in shape and colour from our port
+
+- **Colour (measured):** ours draws every HD team with `HD_PALETTE.target` =
+  white; the original lerps to the team's authored colour, blue for Feisar. The
+  wire lane needs per-team data: read `ShieldColour` out of the team's
+  `shipshield.rcsmodel` material record (the reader
+  `oag_rcs::rcsmodel::material::parameters` already returns it) instead of the
+  palette's constant. Zone's `shipshield` has two values on disc (DATA00
+  `(1, 0.3022, 0, 0)` with alpha 0; DATA02 `(0.4078, 0.3804, 0.1137, 1)`): HD
+  loads the later archive's, to be confirmed with the existing archive-priority
+  rule.
+- **Activation tint (measured, unwired):** `Activate` also writes the packed
+  activation colour onto both models through `FUN_002c32c8`, so the shell's
+  vertex tint is `(0.547, 0.1, 0.1, 0)` at the instant of activation as well as
+  the shader parameter; our port only feeds the lerped colour.
+- **Shape (not measured here):** the original's shell comes from the
+  `.rcsmodel` (the per-team `.vex` is a 2 KB wrapper); the existing loader
+  report says ours draws it untextured and additive. No side-by-side of our
+  frame was made in this lane (`--give shield` was not reliable, see the
+  handover thread). The visible difference in the original frames is the
+  hexagonal translucent pattern from `shieldhexagonal_alpha.gtf`, which an
+  untextured shell cannot show.
+
+### Names
+
+| Address | Name | Confidence |
+| --- | --- | --- |
+| `0x00125690` | `ShipShield_BindColourParam` | 90 |
+| `0x000d5610` | `Craft_ActivateShield` | 82 |
+
+`FUN_000d5610` reads `GameState`, queues the `shieldactive` announcer cue when
+the race manager's mode is 2, calls `ShipShield_Activate`, and then starts the
+`_SHIELD` HUD message (`FUN_002fcc20`); it is reached from two fire handlers
+(`0x00129690`, `0x001297d0`, handler-table rows at `0x00876560` and
+`0x00876570`) that clear the slot's state to `-1` and set slot bit `0x10`. Live,
+state 5 plus triangle ran it. Which of the two handlers state 5 selects is
+unread.
+
+### Carried to Omega and 2048
+
+**Not checked yet.** Omega and 2048 currently inherit HD's white target. Whether their shield models carry a `ShieldColour` entry, and whether their shield code binds it the same way, is a census plus a read of their own constructors; open in the handover thread.
+
 ## History
 
 - 2026-09-16: page created. `Shield.cpp`'s constructor, activate, update, hit
@@ -311,3 +476,4 @@ separate lanes.
   Pulse's white pending the real call site). Ported behind a
   `oag_render::shield::Palette` selected by title in
   `crates/raceplay/src/load.rs`.
+- 2026-11-03: `hd-shield-read`. Target colour read (per-team `ShieldColour` material parameter), `Activate`'s prototype corrected, live RPCS3 shield object read.
