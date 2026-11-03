@@ -2,7 +2,7 @@
 status: re-first
 titles: [hd]
 updated: 2026-11-03
-summary: "HD per-team ShieldColour wired; open: activation tint, Omega/2048 shell build + value decode, Zone Battle copy (unverified), hit flash"
+summary: "HD per-team ShieldColour wired; open: activation tint, Zone Battle copy (unverified), hit flash"
 ---
 
 # HD's shield hit-flash is amber, not Pulse's cyan - and the steady-state colour is a parameter this pass did not trace to its source
@@ -87,9 +87,8 @@ steady-state colour is read".
   (`Livery::shield_colour`, `Setup::shield_targets`). Still open: the models'
   activation tint (`FUN_002c32c8`, packed `(0.547, 0.1, 0.1, 0) * 255`); Zone's
   two values are not a bug (normal Zone mode has no shield, so DATA00's alpha-0
-  copy, which ours loads, is consistent; Zone Battle on Fury may differ, unverified); Omega and 2048
-  carry the `ShieldColour` entry in their PS4/Vita `.rcsmodel` but no shield
-  shell builds there at all, and the value pointer is not decoded.
+  copy, which ours loads, is consistent; Zone Battle on Fury may differ, unverified); Omega and 2048:
+  values decoded, shell build and wire in `omega-2048-shield-shell-and-palette.md`.
 - The amber hit flash is still unwatched in a frame (static read only). Recipe:
   gdb-break `ShipShield_Hit` (`0x00125660`) in a race where a rival hits the
   player, read `object+0xc0` (expected `(1, 0.2, 0, 1)`).
@@ -99,6 +98,6 @@ steady-state colour is read".
 
 ## Next Steps
 
-1. Build the Vita/PS4 shield shell (the PS3 build refuses their container), decode the 8-byte `ShieldColour` value, tint per team.
+1. Omega/2048 shell and palette: see `omega-2048-shield-shell-and-palette.md` (decoded; ready to wire).
 2. Only if Zone Battle (Fury) turns out to raise a shield: check which Zone copy it reads.
 3. Decompile `FUN_00125d98` and `FUN_00676fe8`.
