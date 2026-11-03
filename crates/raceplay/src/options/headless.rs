@@ -166,6 +166,8 @@ impl Setup {
             #[cfg(feature = "view")]
             nozzles: Vec::new(),
             #[cfg(feature = "view")]
+            muzzles: Vec::new(),
+            #[cfg(feature = "view")]
             engine_lights: Vec::new(),
             #[cfg(feature = "view")]
             spu_vertex_lights: true,

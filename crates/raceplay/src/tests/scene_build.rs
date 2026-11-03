@@ -59,6 +59,7 @@ pub(super) fn livery() -> Livery {
         team: "Test".to_string(),
         hull: triangle(),
         nozzle: None,
+        muzzle: None,
         boost: None,
         flare: None,
         flare_spikes: Vec::new(),

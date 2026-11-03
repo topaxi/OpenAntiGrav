@@ -1193,6 +1193,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
             #[cfg(feature = "view")]
             nozzles: liveries.iter().map(|livery| livery.nozzle).collect(),
             #[cfg(feature = "view")]
+            muzzles: liveries.iter().map(|livery| livery.muzzle).collect(),
+            #[cfg(feature = "view")]
             engine_lights: liveries.iter().map(|livery| livery.engine_light).collect(),
             #[cfg(feature = "view")]
             spu_vertex_lights,

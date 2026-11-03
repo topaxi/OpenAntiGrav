@@ -103,6 +103,7 @@ BOMB_BLAST_UPDATE = 0x0887250C
 # whole-instance draws of a pool-emitter's particles for render modes 0/1 (a plain square quad) and
 # 2 (the rolled quad). Hit once per live instance per frame.
 FLARE_DRAW = 0x089194D0
+POOL_DRAW = 0x08918BF8
 ROLLED_DRAW = 0x089178C0
 # The Plasma's own landmarks (plasma.md): `Plasma_Launch` ends the charge and re-parents the head
 # to the bolt; `PlasmaBlast_Construct` runs once per detonation object (two on a craft hit).
@@ -114,12 +115,15 @@ PLASMA_BLAST_UPDATE = 0x0885F680
 # `Plasma_Update` (dt in `f12`, the bolt in `a0`): once a tick of flight. `+0x48` the launch speed in
 # km/h, `+0x54` the age, `+0xa0` the position, `+0xf0` the velocity (the default probe's words dump).
 PLASMA_UPDATE = 0x0885C6CC
+PLASMA_UPDATE_CHARGE = 0x0885C170
 PROBES = {
     "plasma_fly": PLASMA_UPDATE,
+    "plasma_charge": PLASMA_UPDATE_CHARGE,
     "plasma_blast": PLASMA_BLAST_UPDATE,
     "plasma_launch": PLASMA_LAUNCH,
     "plasma_det": PLASMA_BLAST_CONSTRUCT,
     "flare": FLARE_DRAW,
+    "pool": POOL_DRAW,
     "rolled": ROLLED_DRAW,
     "spawns": PSYS_SPAWN,
     "rocket": ROCKET_UPDATE,
@@ -281,12 +285,20 @@ def _probe_loop(dbg, kind, address, frames, start, out, detonate=None, condition
             entry["matrix"] = list(struct.unpack_from("<16f", blob, 0x60))
             entry["fuse"] = struct.unpack_from("<f", blob, 0x48)[0]
             entry["owner"] = struct.unpack_from("<I", blob, 0x40)[0]
-        elif kind in ("flare", "rolled"):
+        elif kind in ("flare", "rolled", "pool"):
             instance = regs["a0"]
             entry["instance"] = instance
-            entry["view"] = list(struct.unpack("<16f", dbg.read(regs["a1"], 64)))
+            if kind != "pool":
+                entry["view"] = list(struct.unpack("<16f", dbg.read(regs["a1"], 64)))
             head = dbg.read(instance, 0x180)
             entry["resource"] = struct.unpack_from("<I", head, 0x20)[0]
+            if ram(entry["resource"]):
+                entry["resource_name"] = dbg.read_cstring(entry["resource"], 32)
+            if kind == "pool" and entry.get("resource_name") != "WO_PLASMA_HEAD":
+                # `ParticleSystem_DrawEmitterPool` runs for every instance a frame; only the
+                # Plasma head's pool is walked (its particles are local, flag `0x2`).
+                continue
+            entry["matrix"] = list(struct.unpack_from("<16f", head, 0xF0))
             entry["scale_params"] = list(struct.unpack_from("<7f", head, 0x28))
             entry["age_words"] = list(struct.unpack_from("<4I", head, 0x138))
             pool = struct.unpack_from("<I", head, 0x74)[0]
@@ -303,8 +315,9 @@ def _probe_loop(dbg, kind, address, frames, start, out, detonate=None, condition
                     size = struct.unpack_from("<f", block, base + 0x70)[0]
                     rgba = list(block[base + 0x74:base + 0x78])
                     frame = struct.unpack_from("<I", block, base + 0x78)[0]
-                    entry["particles"].append({"pos": pos, "roll": roll, "size": size,
-                                               "rgba": rgba, "frame": frame})
+                    velocity = struct.unpack_from("<4f", block, base + 0x00)
+                    entry["particles"].append({"pos": pos, "velocity": velocity, "roll": roll,
+                                               "size": size, "rgba": rgba, "frame": frame})
                 pool = dbg.read_u32(pool + 0x1410)
         elif kind == "sweep":
             entry["v0"] = regs["v0"]
@@ -318,6 +331,21 @@ def _probe_loop(dbg, kind, address, frames, start, out, detonate=None, condition
             entry["vel"] = list(struct.unpack_from("<3f", blob, 0xE0))
             entry["prev"] = list(struct.unpack_from("<3f", blob, 0xF0))
             entry["normal"] = list(struct.unpack_from("<3f", blob, 0x100))
+            if kind in ("plasma_fly", "plasma_charge"):
+                # The head's psys node (`Plasma_Init` stores it at `+0x12c`), its world
+                # matrix (`node+0x30`) and its parent's (`node+0xbc`, the craft's weapon
+                # node while charging): the matrix the local-space arcs draw through.
+                node = entry["words"][0x12C // 4]
+                if ram(node):
+                    entry["head_node"] = node
+                    # `PsysNode_Update` adds this to the parent's translation (`vadd.q` with
+                    # `node+0xa0`) before it sets the node's world matrix.
+                    entry["head_offset"] = list(struct.unpack("<4f", dbg.read(node + 0xA0, 16)))
+                    for name, owner in (("head_world", node),
+                                        ("head_parent_world", dbg.read_u32(node + 0xBC))):
+                        if ram(owner) and ram(dbg.read_u32(owner + 0x30)):
+                            world = dbg.read_u32(owner + 0x30)
+                            entry[name] = list(struct.unpack("<16f", dbg.read(world, 64)))
         out.append(entry)
 
 

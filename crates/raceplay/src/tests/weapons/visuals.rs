@@ -367,17 +367,68 @@ fn the_plasma_heads_arcs_ride_the_anchor_they_were_born_on() {
     );
 }
 
-/// After `Plasma_Launch` the head draws through the bolt's matrix, whose rows are
-/// 0.75 long; before it, through the craft's. Only the Plasma, only from the release
-/// (`docs/ghidra/functions/psp-pulse-usa/plasma.md`, "the arcs after the release").
+/// The head draws through the craft's weapon node while charging and the bolt's matrix
+/// after `Plasma_Launch`, and both carry `g_craft_scale`: the head node's rows read
+/// `0.7500` on all 60 charging frames. Only the Plasma
+/// (`docs/ghidra/functions/psp-pulse-usa/plasma.md`, "the head's matrix and node").
 #[test]
-fn the_plasma_heads_matrix_is_scaled_from_the_release_on() {
+fn the_plasma_heads_matrix_carries_the_craft_scale_through_the_charge() {
     use crate::weapons::plasma_ride_scale;
     use oag_tables::weapons::Weapon;
-    assert_eq!(plasma_ride_scale(Some(Weapon::Plasma), 0.4), 1.0);
-    assert_eq!(plasma_ride_scale(Some(Weapon::Plasma), 0.0), 0.75);
-    assert_eq!(plasma_ride_scale(Some(Weapon::Rocket), 0.0), 1.0);
-    assert_eq!(plasma_ride_scale(None, 0.0), 1.0);
+    assert_eq!(plasma_ride_scale(Some(Weapon::Plasma)), 0.75);
+    assert_eq!(plasma_ride_scale(Some(Weapon::Rocket)), 1.0);
+    assert_eq!(plasma_ride_scale(None), 1.0);
+}
+
+/// A charging Plasma's head sits on the craft's weapon node, its hull's `Ship Muzzle`
+/// locator carried through the craft's model matrix (Assegai's `(0, 0, 5.653)` is 4.24
+/// units ahead through the 0.75 rows), not on the bolt's hold point 2.23 ahead; a hull
+/// with no locator, and a source whose head was not measured, keep the bolt
+/// (`docs/ghidra/functions/psp-pulse-usa/plasma.md`, "the head's matrix and node").
+#[test]
+fn a_charging_plasma_head_is_drawn_on_the_crafts_weapon_node() {
+    let anchor_ahead = |pulse_psp: bool, muzzle: Option<Vec3>| -> f32 {
+        let blob = super::respawn::one_emitter_pob("WO_PLASMA_HEAD", 0x2);
+        let mut effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
+            .expect("the hand-laid effect parses");
+        if !pulse_psp {
+            effect.without_pulse_psp_draw();
+        }
+        let mut race =
+            race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_plasma_table());
+        race.view.handles.insert(Trigger::PlasmaFlare, effect);
+        race.view.muzzles = vec![muzzle; oag_gameplay::MAX_SHIPS];
+        let mut buttons = Buttons::new();
+        race.tick(&PlayerInputs::single(buttons.tick(0)));
+        race.tick(&PlayerInputs::single(buttons.tick(SQUARE)));
+        for _ in 0..5 {
+            race.tick(&PlayerInputs::single(buttons.tick(0)));
+        }
+        let bolt = race.sim.world.projectiles.slots[0];
+        assert!(bolt.charge > 0.0, "the bolt was released within six ticks");
+        let instance = race.view.projectile_flare[0].expect("the head is playing");
+        let anchor = race.view.stage.anchor_of(instance).expect("a live head");
+        let body = race.ship().physics.body;
+        (anchor - body.position).dot(body.forward())
+    };
+    let assegai = Some(Vec3::new(0.0, 0.0, 5.653));
+    let on_node = anchor_ahead(true, assegai);
+    let expected = 5.653 * 0.75;
+    assert!(
+        (on_node - expected).abs() < 0.05,
+        "the head sits {on_node} ahead of the body, not on the weapon node at {expected}"
+    );
+    let hold = oag_weapons::projectile::plasma::MUZZLE_FORWARD;
+    let no_locator = anchor_ahead(true, None);
+    assert!(
+        (no_locator - hold).abs() < 0.05,
+        "a hull with no Ship Muzzle moved the head off the bolt: {no_locator} ahead"
+    );
+    let other = anchor_ahead(false, assegai);
+    assert!(
+        (other - hold).abs() < 0.05,
+        "an unmeasured source's head left the bolt: {other} ahead"
+    );
 }
 
 /// The charging head's arcs draw at the head's severity of the moment, not the one they

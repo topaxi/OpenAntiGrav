@@ -82,6 +82,10 @@ pub struct Livery {
     /// Per team because the hulls differ: mounting eight ribbons on one team's
     /// nozzle put the flare inside the fuselage on some of them.
     pub nozzle: Option<Vec3>,
+    /// The `Ship Muzzle` locator in this hull's own model space: the weapon node a
+    /// charging Plasma's head is parented to. Per team; Assegai's is `(0, 0, 5.653)`
+    /// (`docs/ghidra/functions/psp-pulse-usa/plasma.md`, "the head's matrix and node").
+    pub muzzle: Option<Vec3>,
     /// The additive plume a speed pad reveals, `shipboost.vex` beside the hull.
     ///
     /// **On Wipeout HD this is the `EF_Boost` group of the flare model**, not a
@@ -314,6 +318,7 @@ pub fn load(
                 team: team.clone(),
                 hull: source.hull.clone(),
                 nozzle: source.nozzle,
+                muzzle: source.muzzle,
                 collision_fx: source.collision_fx.clone(),
                 absorb: source.absorb.clone(),
                 absorb_overlay: source.absorb_overlay.clone(),
@@ -361,6 +366,7 @@ pub fn load(
                     team: player.team.clone(),
                     hull: player.hull.clone(),
                     nozzle: player.nozzle,
+                    muzzle: player.muzzle,
                     collision_fx: player.collision_fx.clone(),
                     absorb: player.absorb.clone(),
                     absorb_overlay: player.absorb_overlay.clone(),
@@ -473,6 +479,7 @@ fn one(
                     team: team.to_string(),
                     hull: mesh::Model::none(&hull_name),
                     nozzle: None,
+                    muzzle: None,
                     collision_fx: Vec::new(),
                     absorb: Vec::new(),
                     absorb_overlay: None,
@@ -531,6 +538,7 @@ fn one(
         return Ok(Livery {
             team: team.to_string(),
             nozzle,
+            muzzle: ship_muzzle(&blob),
             collision_fx,
             absorb,
             absorb_overlay: None,
@@ -646,6 +654,7 @@ fn one(
         team: team.to_string(),
         hull,
         nozzle,
+        muzzle: ship_muzzle(&blob),
         collision_fx,
         absorb: Vec::new(),
         absorb_overlay,
@@ -785,6 +794,18 @@ fn engine_flare(ship_blob: &[u8]) -> Option<(Vec3, Vec3)> {
         .into_iter()
         .next()?;
     Some((Vec3::new(m[12], m[13], m[14]), Vec3::new(m[8], m[9], m[10])))
+}
+
+/// The `Ship Muzzle` locator's position in a hull's own model space, decoded like
+/// [`engine_flare`]; `None` where the version's class id is unread or the hull
+/// authors none.
+fn ship_muzzle(ship_blob: &[u8]) -> Option<Vec3> {
+    let class = vex::classes_of(ship_blob).ok()?.ship_muzzle?;
+    let nodes = vex::nodes(ship_blob).ok()?;
+    let m = vex::class_world_transforms(ship_blob, &nodes, class)
+        .into_iter()
+        .next()?;
+    Some(Vec3::new(m[12], m[13], m[14]))
 }
 
 /// Every `Ship Collision Fx` locator in a hull's own model space - the same

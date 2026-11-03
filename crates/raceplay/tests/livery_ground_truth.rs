@@ -125,6 +125,23 @@ fn every_hull_carries_its_own_nozzle_and_plume() {
             "{}: no boost plume beside its hull",
             livery.team
         );
+        // The weapon node a charging Plasma's head sits on: on the hull's centre line,
+        // ahead of its origin (`docs/ghidra/functions/psp-pulse-usa/plasma.md`, "the
+        // head's matrix and node").
+        let muzzle = livery
+            .muzzle
+            .unwrap_or_else(|| panic!("{}: no Ship Muzzle locator", livery.team));
+        assert!(
+            muzzle.x.abs() < 0.05 && muzzle.z > 4.0,
+            "{}: Ship Muzzle at {muzzle:?}",
+            livery.team
+        );
+        if livery.team == "Assegai" {
+            assert!(
+                (muzzle - oag_core::math::Vec3::new(0.0, 0.0, 5.653)).length() < 1e-3,
+                "Assegai's Ship Muzzle is {muzzle:?}, the probe read (0, 0, 5.653)"
+            );
+        }
     }
 
     let nozzles: std::collections::BTreeSet<[u32; 3]> = loaded

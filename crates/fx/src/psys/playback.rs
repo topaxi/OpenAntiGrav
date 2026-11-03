@@ -234,8 +234,10 @@ impl System {
     /// Carries every live particle of a local-space root emitter from the frame it
     /// was last carried to into the instance's current one, as drawing it through
     /// the live matrix does. Velocity turns with the frame; drag and gravity act on
-    /// it in world axes, which equals the frame's own for the only emitter riding
-    /// today (`WO_REPULSER_BLAST`: isotropic drag, no gravity flag).
+    /// it in world axes, where the original's act in the frame's
+    /// (`ParticleSystem_ApplyDrag`). The two agree for `WO_REPULSER_BLAST` (isotropic
+    /// drag, no gravity flag) and are a few degrees apart for `WO_PLASMA_HEAD`, whose
+    /// `0.4` lands on world up rather than on a banked craft's up.
     pub(super) fn ride(&mut self, effect: &super::Effect) {
         let Some(from) = self.ridden else {
             return;
