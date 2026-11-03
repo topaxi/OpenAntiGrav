@@ -312,6 +312,33 @@ fn streak_vertices(spec: &EmitterSpec, particle: &Particle) -> Vec<GpuVertex> {
     out
 }
 
+/// `FUN_08917c7c` scales both ends onto the mean of their depths before it builds the
+/// bar, so the strip is one plane and each end keeps its screen point
+/// (`particle-system.md`, "`FUN_08917c7c`"; the `WO_REPULSER` dump's four corners share
+/// one depth, `-12.125`).
+#[test]
+fn a_pool_bar_is_built_at_the_mean_depth_of_its_ends_when_the_eye_is_known() {
+    let spec = streak_spec(StreakDraw::Bar { aspect: 1.0 }, Some([0.0, 0.0, 1.0, 1.0]));
+    let particle = streak_particle(Vec3::new(0.0, 0.0, -10.0), Vec3::new(10.0, 0.0, -20.0));
+    let view = guard::GuardBand {
+        eye: Vec3::ZERO,
+        right: Vec3::X,
+        up: Vec3::Y,
+        forward: Vec3::NEG_Z,
+    };
+    let mut out = Vec::new();
+    streak::extend(&mut out, &spec, &particle, 1.0, [1.0; 4], Vec3::X, Vec3::Y, Some(&view));
+    assert_eq!(out.len(), 6);
+    assert!(
+        out.iter().all(|v| (v.position[2] + 15.0).abs() < 1e-4),
+        "one depth, the mean -15: {:?}",
+        out.iter().map(|v| v.position[2]).collect::<Vec<_>>()
+    );
+    // The origin's screen point (10 / 20) is kept: x 7.5 at depth 15, plus the cap and half.
+    let max_x = out.iter().map(|v| v.position[0]).fold(f32::MIN, f32::max);
+    assert!((max_x - 8.5).abs() < 1e-3, "{max_x}");
+}
+
 /// `ParticleSystem_DrawStreak`'s third vertex sits by the particle, not
 /// its tail (`0x08916ba0`), so class 6 is a wedge: a head at the particle
 /// and one vertex out past the tail.

@@ -80,6 +80,9 @@ pub(crate) fn advance_one_flare(
                     (trigger, *playing, effect.rides_owner_frame)
                 {
                     stage.set_rides_frame(instance, true);
+                    // The arcs' drawn size follows the charge, not the severity they
+                    // were born with (`plasma.md`, "the arcs' size follows the charge").
+                    stage.set_draws_live_severity(instance, true);
                 }
             }
         }

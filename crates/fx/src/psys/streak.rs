@@ -47,13 +47,16 @@
 //! each of the three spans, and keeps a streak to the six vertices
 //! [`super::MAX_VERTICES`] budgets for.
 //!
-//! **Built in world space, not view space - chosen, not measured.** The
-//! original pushes both endpoints to one depth before building the strip
-//! (the farther, `min(z)`, for class 6; the mean for class 7), so the strip
-//! is screen-parallel with a width that is `half` at that depth. Here the
-//! perpendicular is `dir x (right x up)`, which is the view-space
-//! `(dir.y, -dir.x)` for a streak lying in the screen plane, and each end
-//! keeps its own depth. No eye position reaches this code to do otherwise.
+//! **View space when the camera is known.** The original pushes both endpoints
+//! onto one depth along the line to the eye before building the strip (the
+//! mean of the two for the pool bar and class 7, the farther for the template
+//! wedge), so the strip is screen-parallel and its width is `half` at that
+//! depth; [`at_one_depth`] does it, and the perpendicular is then exactly the
+//! view-space `(dir.y, -dir.x)`. Without a camera (`view` is `None`: a source
+//! the strips were not read on, and the pools whose caller passes none) the
+//! perpendicular is `dir x (right x up)` and each end keeps its own depth,
+//! which is the same for a streak lying in the screen plane - chosen, not
+//! measured.
 //!
 //! **Pulse on the PSP only.** A source whose executable is unread keeps the
 //! procedural profile - see [`super::Effect::without_pulse_psp_draw`].

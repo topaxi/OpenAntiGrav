@@ -105,14 +105,26 @@ impl Effect {
 }
 
 impl System {
+    /// Makes every particle of this instance, not only a template, draw at the
+    /// instance's current severity: `ParticleSystem_UpdateParticleFields` multiplies the
+    /// size channel by `instance + 0x34` every update
+    /// (`docs/ghidra/functions/psp-pulse-usa/particle-system.md`, "Channel animation").
+    /// Off unless a caller turns it on: only the Plasma's head, whose severity is
+    /// re-written every charging tick, has been measured against it
+    /// (`docs/ghidra/functions/psp-pulse-usa/plasma.md`, "the arcs' size follows the charge").
+    pub fn set_draws_live_severity(&mut self, live: bool) {
+        self.live_severity = live;
+    }
+
     /// The severity a particle's drawn size is multiplied by: a sprite
     /// template reads the instance's current one every frame (the Plasma's
     /// charging head grows with the charge it is rescaled to, and its
     /// templates are born once, at the press, when the charge is zero), every
-    /// other particle keeps the one it spawned with. `docs/ghidra/functions/psp-pulse-usa/plasma.md`,
+    /// other particle keeps the one it spawned with, unless the caller turned on
+    /// [`Self::set_draws_live_severity`]. `docs/ghidra/functions/psp-pulse-usa/plasma.md`,
     /// "the head's template playback".
     pub(super) fn drawn_scale(&self, spec: &EmitterSpec, particle: &Particle) -> f32 {
-        if spec.template || std::env::var("ALLCUR").is_ok() {
+        if spec.template || self.live_severity {
             self.scale
         } else {
             particle.scale
