@@ -130,6 +130,7 @@ mod with_modules {
             effects: Vec::new(),
             files: Arc::new(|_| Err("no files".into())),
             pickup: None,
+            pickup_odds: Vec::new(),
             channels: Declared {
                 publishes: publishes.iter().map(|s| (*s).to_string()).collect(),
                 listens: Vec::new(),

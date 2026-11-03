@@ -50,6 +50,7 @@ fn source(id: &str, body: &str) -> Source {
         effects: Vec::new(),
         files: Arc::new(|_| Err("no files".into())),
         pickup: Some(crate::extension_pickup::a_look()),
+        pickup_odds: Vec::new(),
         channels: crate::extensions::Declared::default(),
     }
 }

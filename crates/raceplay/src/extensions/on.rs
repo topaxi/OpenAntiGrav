@@ -98,6 +98,8 @@ pub(super) struct On {
     pub(super) drops: Drops,
     /// The race-wide outputs of this tick.
     pub(super) sky: super::Sky,
+    /// The `[[pickup.odds]]` the pads draw with: the declaring module, its rows, the title.
+    odds: Option<(usize, Vec<oag_tables::pickup_look::OddsRow>, String)>,
     /// The slots whose `transit` ended this tick, before the call: their `transit-end`
     /// is in this call's events.
     pub(super) transit_ends: u32,
@@ -233,8 +235,12 @@ impl On {
         strings: Vec<super::Strings>,
         pickups: Vec<Option<oag_tables::pickup_look::PickupLook>>,
         publishes: Vec<Vec<(u32, String)>>,
+        odds: Option<(usize, Vec<oag_tables::pickup_look::OddsRow>, String)>,
     ) -> Self {
         Self {
+            // The module whose mod declares pad odds owns the mod pickup from the start.
+            owner: odds.as_ref().map_or(0, |(module, _, _)| *module as u8 + 1),
+            odds,
             slots: modules
                 .into_iter()
                 .zip(publishes)
@@ -256,7 +262,6 @@ impl On {
             hit_weapon: [None; oag_gameplay::MAX_SHIPS],
             gave: 0,
             boost: [1.0; oag_gameplay::MAX_SHIPS],
-            owner: 0,
             roll: None,
             rolled: 0,
             from_roll: 0,
@@ -286,6 +291,14 @@ impl On {
     #[cfg(test)]
     pub(super) fn slot_blob(&self, index: usize) -> Vec<u8> {
         self.slots[index].blob.clone()
+    }
+
+    pub(super) fn pickup_odds(&self, class: &str) -> Option<oag_tables::weapons::PickupOdds> {
+        let (module, rows, title) = self.odds.as_ref()?;
+        if usize::from(self.owner) != module + 1 {
+            return None;
+        }
+        oag_tables::pickup_look::odds_for(rows, title, class)
     }
 
     pub(super) fn rolls(&mut self, slot: usize, weapon: oag_tables::weapons::Weapon) -> bool {

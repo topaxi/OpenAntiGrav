@@ -97,6 +97,7 @@ pub(super) mod on {
             effects: Vec::new(),
             files: Arc::new(|_| Err("no files".into())),
             pickup: Some(crate::extension_pickup::a_look()),
+            pickup_odds: Vec::new(),
             channels: crate::extensions::Declared::default(),
         }
     }
@@ -1062,6 +1063,7 @@ mod triggers {
             effects: Vec::new(),
             files: Arc::new(|_| Err("no files".into())),
             pickup: Some(crate::extension_pickup::a_look()),
+            pickup_odds: Vec::new(),
             channels: crate::extensions::Declared::default(),
         }
     }

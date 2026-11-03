@@ -464,3 +464,26 @@ fn a_plain_program_searches_beside_itself_once() {
     discover::packaged_mods(None, Some(Path::new("/opt/oag/oag-game")), &mut paths);
     assert_eq!(paths, [PathBuf::from("/opt/oag/mods")]);
 }
+
+/// `[[pickup.odds]]` rows read into the manifest; a negative or non-finite weight is
+/// refused by name; no rows is no pad odds.
+#[test]
+fn a_manifest_pickup_reads_its_pad_odds_and_refuses_a_bad_weight() {
+    let with = |odds: &str| {
+        let text = format!(
+            "{MANIFEST_TEXT}\n[pickup]\nicon = {{ title = \"turbo\" }}\ncolour = {{ rgba = \"E0202080\" }}\n{odds}"
+        );
+        Manifest::parse(&text, &|_| true).map(|m| m.pickup_odds)
+    };
+    assert_eq!(with("").unwrap(), Vec::new());
+    let rows = with(
+        "[[pickup.odds]]\nai = 2.0\nhuman = 3.0\nfront = 1.0\nback = 4.0\n\n\
+         [[pickup.odds]]\ntitle = \"2048\"\nclass = \"Speed\"\nai = 1.0\nhuman = 1.0\nfront = 0.0\nback = 0.0\n",
+    )
+    .unwrap();
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0].odds.back, 4.0);
+    assert_eq!(rows[1].class.as_deref(), Some("Speed"));
+    let bad = with("[[pickup.odds]]\nai = -1.0\nhuman = 1.0\nfront = 0.0\nback = 0.0\n");
+    assert!(bad.unwrap_err().to_string().contains("pickup.odds"));
+}

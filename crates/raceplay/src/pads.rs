@@ -316,6 +316,19 @@ impl Race {
         let Some(table) = weapons.pickups_for(&self.sim.class) else {
             return;
         };
+        // A mod's own pickup, drawn beside the title's weapons at its `[[pickup.odds]]`.
+        let with_mod;
+        let table = match self.sim.extensions.pickup_odds(&self.sim.class) {
+            Some(odds) => {
+                let mut modded = table.clone();
+                modded
+                    .odds
+                    .push((oag_tables::weapons::Weapon::Extension, odds));
+                with_mod = modded;
+                &with_mod
+            }
+            None => table,
+        };
         // **The `human` column for a person's craft and the `ai` column for the rest**, and
         // the player's is blended with `front`/`back` by their place - which is
         // the original's own arrangement, recovered from `WeaponPickup_Grant`

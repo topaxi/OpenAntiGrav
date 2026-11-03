@@ -108,6 +108,8 @@ pub struct Source {
     /// The mod's `[pickup]`: the look of the pickup it hands out. A mod without one that
     /// sends `give-pickup` or `pickup-roll` is faulted for the race, naming the table.
     pub pickup: Option<oag_tables::pickup_look::PickupLook>,
+    /// The mod's `[[pickup.odds]]`: the weapon pads draw its pickup with these.
+    pub pickup_odds: Vec<oag_tables::pickup_look::OddsRow>,
     /// The mod's `[channels]`.
     pub channels: Declared,
 }
@@ -188,6 +190,10 @@ pub struct Prepared {
     /// Each module's mod's `[channels]` publishes, in module order.
     #[cfg(feature = "extensions")]
     publishes: Vec<Vec<(u32, String)>>,
+    /// The module whose mod's `[[pickup.odds]]` the weapon pads draw with (the first in id
+    /// order with any), its rows, and the race's title.
+    #[cfg(feature = "extensions")]
+    odds: Option<(usize, Vec<oag_tables::pickup_look::OddsRow>, String)>,
     /// The track's triggers that send a channel: with no module too.
     beacons: channel::Beacons,
 }
@@ -267,6 +273,7 @@ pub fn prepare(
         let mut strings = Vec::new();
         let mut pickups = Vec::new();
         let mut publishes = Vec::new();
+        let mut odds = None;
         let mut track_module = false;
         for source in sorted {
             let label = format!("mod {}: {}", source.mod_id, source.module);
@@ -314,6 +321,23 @@ pub fn prepare(
                         ),
                     );
                     track_module |= matches!(source.scope, Scope::Track(_));
+                    if !source.pickup_odds.is_empty() {
+                        match &odds {
+                            None => {
+                                odds = Some((
+                                    modules.len(),
+                                    source.pickup_odds.clone(),
+                                    title.to_string(),
+                                ))
+                            }
+                            Some((owner, _, _)) => push(
+                                report,
+                                format!(
+                                    "{label}: [[pickup.odds]] left out: the weapon pads already hand out module {owner}'s pickup, and a race has one mod pickup"
+                                ),
+                            ),
+                        }
+                    }
                     modules.push((source.mod_id.clone(), module));
                     strings.push((source.strings)(language));
                     pickups.push(source.pickup.clone());
@@ -329,6 +353,7 @@ pub fn prepare(
             strings,
             pickups,
             publishes,
+            odds,
             beacons,
         }
     }
@@ -442,6 +467,12 @@ pub fn resolve_string(strings: Option<&Strings>, key: &str) -> Option<String> {
 fn push(report: &mut Vec<String>, line: String) {
     log::info!("{line}");
     report.push(line);
+}
+
+/// Faults module `index` as a refused reply does: for tests.
+#[cfg(all(test, feature = "extensions"))]
+pub(crate) fn fault_for_tests(race: &mut crate::Race, index: usize) {
+    on::fault(&mut race.sim, index, "a test faulted it".into());
 }
 
 /// The race-wide outputs of `set-weather`, `set-sun` and `grade-sky` this tick. Each is
@@ -564,6 +595,7 @@ impl Extensions {
                     prepared.strings,
                     prepared.pickups,
                     prepared.publishes,
+                    prepared.odds,
                 ),
                 beacons: prepared.beacons,
                 fired: Vec::new(),
@@ -581,6 +613,21 @@ impl Extensions {
         #[cfg(not(feature = "extensions"))]
         {
             false
+        }
+    }
+
+    /// The weights a weapon pad draws the mod's own pickup with in `class`, while the
+    /// module whose mod declares them owns the pickup: `None` in every race without one,
+    /// and once that module has faulted.
+    pub(super) fn pickup_odds(&self, class: &str) -> Option<oag_tables::weapons::PickupOdds> {
+        #[cfg(feature = "extensions")]
+        {
+            self.on.pickup_odds(class)
+        }
+        #[cfg(not(feature = "extensions"))]
+        {
+            let _ = class;
+            None
         }
     }
 

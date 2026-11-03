@@ -1,6 +1,6 @@
 //! `oag-mod.toml`: who a mod is, and under what licence it travels.
 
-use oag_tables::pickup_look::{Colour, Icon, PickupLook};
+use oag_tables::pickup_look::{Colour, Icon, OddsRow, PickupLook};
 use serde::Deserialize;
 
 /// The manifest's name at a mod's root.
@@ -53,7 +53,7 @@ impl License {
 }
 
 /// A checked manifest.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Manifest {
     /// Unique and stable: `topaxi.example`.
     pub id: String,
@@ -89,6 +89,10 @@ pub struct Manifest {
     /// `[pickup]`: the look of the mod's own pickup, required of a simulation mod that
     /// hands one out.
     pub pickup: Option<PickupLook>,
+    /// `[[pickup.odds]]`: the weights the weapon pads hand the mod's own pickup out with,
+    /// per title and class (`oag_tables::pickup_look::odds_for`). Empty: the pads never
+    /// do, and only a module's `give-pickup` or `pickup-roll` hands it out.
+    pub pickup_odds: Vec<OddsRow>,
     /// `[channels]`: the event channels the mod's modules publish and listen to.
     pub channels: Channels,
 }
@@ -169,6 +173,44 @@ struct File {
 struct PickupTable {
     icon: IconTable,
     colour: ColourTable,
+    #[serde(default)]
+    odds: Vec<OddsTable>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct OddsTable {
+    title: Option<String>,
+    class: Option<String>,
+    ai: f32,
+    human: f32,
+    front: f32,
+    back: f32,
+}
+
+/// `[[pickup.odds]]` checked: every weight finite and not negative.
+fn odds(rows: Vec<OddsTable>) -> Result<Vec<OddsRow>, Error> {
+    rows.into_iter()
+        .map(|row| {
+            let weights = [row.ai, row.human, row.front, row.back];
+            if weights.iter().any(|w| !w.is_finite() || *w < 0.0) {
+                return Err(bad(
+                    "pickup.odds",
+                    format!("weights {weights:?}: each finite and not below 0"),
+                ));
+            }
+            Ok(OddsRow {
+                title: row.title,
+                class: row.class,
+                odds: oag_tables::weapons::PickupOdds {
+                    ai: row.ai,
+                    human: row.human,
+                    front: row.front,
+                    back: row.back,
+                },
+            })
+        })
+        .collect()
 }
 
 #[derive(Deserialize)]
@@ -328,10 +370,13 @@ impl Manifest {
         let file: File = toml::from_str(text)?;
         oag_schema::check(file.header.as_ref(), SCHEMA_KIND, SCHEMA_MAJOR)?;
         let extension = file.extension.map(|e| extension(e, has)).transpose()?;
-        let pickup = file
-            .pickup
-            .map(|table| pickup(table, &file.icons))
-            .transpose()?;
+        let (pickup, pickup_odds) = match file.pickup {
+            Some(mut table) => {
+                let rows = odds(std::mem::take(&mut table.odds))?;
+                (Some(pickup(table, &file.icons)?), rows)
+            }
+            None => (None, Vec::new()),
+        };
         let t = file.module;
         for (name, path) in &file.icons {
             if name.len() > oag_ext_abi::MAX_HUD_TEXT {
@@ -451,6 +496,7 @@ impl Manifest {
             icons: file.icons,
             effects: file.effects,
             pickup,
+            pickup_odds,
             channels,
         })
     }
