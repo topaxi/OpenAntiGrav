@@ -313,7 +313,7 @@ impl Race {
         let Some(weapons) = self.sim.weapons.as_ref() else {
             return;
         };
-        let Some(table) = oag_weapons::pickup::table_for(weapons, &self.sim.class) else {
+        let Some(table) = weapons.pickups_for(&self.sim.class) else {
             return;
         };
         // **The `human` column for a person's craft and the `ai` column for the rest**, and

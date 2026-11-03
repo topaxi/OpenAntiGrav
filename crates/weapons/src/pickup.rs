@@ -84,7 +84,7 @@
 //!   `Missile_Update` (`0x0885a918`); see [`crate::projectile::missile`].
 
 use oag_core::Rng;
-use oag_tables::weapons::{PickupTable, Weapon, WeaponStats};
+use oag_tables::weapons::{PickupTable, Weapon};
 
 /// The weapons a pad in this engine can hand out.
 ///
@@ -489,28 +489,6 @@ fn draw_once(
         .rev()
         .copied()
         .find(|&weapon| gated_weight(driver, table, weapon, allowed) > 0.0)
-}
-
-/// The class's own table out of a whole weapon file.
-///
-/// `HandlingStats.xml` authors `<GlobalClass name="VENOM">` and
-/// `WeaponStats_Race.xml` `<Pickupodds class="Venom">` (measured on the USA disc),
-/// so [`SpeedClass::as_str`] cannot reach the table through
-/// [`WeaponStats::pickups_for`]. Matched case-insensitively here, as the
-/// difference is between two documents, not two concepts.
-///
-/// The rung arrives as a name, so a non-Pulse ladder works: Pure authors a
-/// `Vector` class beside its four; Pulse has none, so that lookup is `None`.
-///
-///
-/// [`SpeedClass`]: oag_tables::handling::SpeedClass
-/// [`SpeedClass::as_str`]: oag_tables::handling::SpeedClass::as_str
-#[must_use]
-pub fn table_for<'a>(stats: &'a WeaponStats, class: &str) -> Option<&'a PickupTable> {
-    stats
-        .pickups
-        .iter()
-        .find(|table| table.class.eq_ignore_ascii_case(class))
 }
 
 #[cfg(test)]

@@ -69,7 +69,7 @@ impl SpeedClasses {
     /// census tables stay four wide (`SpeedClass::slot`) so Pulse and HD are given no
     /// invented fifth entry. A race carries the rung's **name** and resolves it
     /// against the file that authored it (`oag_tables::handling::Stats::class_named`,
-    /// `Global::class_named`, `oag_weapons::pickup::table_for`): a title authoring
+    /// `Global::class_named`, `WeaponStats::pickups_for`): a title authoring
     /// four is asked for four, Pure for five. `SpeedClass::ALL` means "the rungs
     /// every measured title has", which keeps `has_pulse_class_ladder` meaningful.
     ///
