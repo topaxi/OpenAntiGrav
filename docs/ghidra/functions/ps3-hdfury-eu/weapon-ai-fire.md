@@ -226,13 +226,16 @@ Pulse's flat `5`: easy is close, hard fires 40 % more. The absorb chance per ste
 
 ## Cross-check (2048 and Omega)
 
-`checked, applies, not wired`. 2048 and Omega's `WeaponAIStats2048.xml` is byte-identical to HD's
-`DATA00` copy (`race-modes.md`, "HD's `EliminatorAIStats` row"), so the same rows exist. 2048's and
-Omega's own decision functions are **not read** (Omega's `eboot.bin` is in Ghidra; 2048's module is
-a Vita3K read). Omega's unsuffixed file has no `EliminatorAIStats` row: with HD's code a missing row
-leaves every scale `0` (loader defaults), i.e. an Eliminator `use` of `0` and no fire at all, if
-Omega's code is HD's. Not checked on Omega's binary; recorded as the next address to try
-(Omega `eboot.bin`'s `WeaponAIStats` loader, then the function that reads `stats + 0xc4`).
+**Omega: checked, differs; read 2026-11-03** ([ps4-omega-eu/weapon-ai-fire.md](../ps4-omega-eu/weapon-ai-fire.md),
+`WeaponAi_Update` `0x01321000`, loader `0x01322f10`, both re-found on 1.07). Omega has the same skeleton
+(`dt * 30`, `AllWeapons`, gates, rate tables) but its loader's defaults are the opposite of HD's (rows and scales
+`1.0`, flips `0`), so a missing `EliminatorAIStats` row does **not** silence the Eliminator as the line this
+section used to carry said: Omega's Eliminator (mode `8` / `0x14`, unsuffixed file) fires unscaled and never
+flips. The decision is inlined in `Update`, the stats object is chosen by mode (`< 0x17` unsuffixed, else the
+2048 file), and a game-mode object adds multipliers in events (unread).
+
+**2048: checked, loader differs from HD's** (its defaults match Omega's: `0x811d75c6`); its decision code is
+not read. 2048's `WeaponAIStats2048.xml` is byte-identical to HD's `DATA00` copy, so the same rows exist.
 
 ## Ready to wire (items 1 to 3 wired 2026-11-03, `hd-fire-law-wire`)
 
@@ -264,9 +267,9 @@ Omega's code is HD's. Not checked on Omega's binary; recorded as the next addres
 
 Measured, `fire_law_inherit_ground_truth`, seed 1, 120 s of opponent projectiles: HD **110 to 157**, Pulse 185 and Pure 13 unchanged, 2048 122 to 128, Omega 101 (was 102). The page's "about 0.45" does not show in this count: spend is pickup-limited (about 7 fire decisions in 120 s), halving absorb as well keeps pickups held longer, and the count is dominated by which weapons get fired. Over seeds 1 to 12 the total is 1149 before, 1037 after (0.90). The per-decision chance does fall to 0.45 (`oag_ai` unit tests).
 
-Omega: its unsuffixed table has no `EliminatorAIStats` row (its `WeaponAIStats2048.xml` does). HD's code would read zero scales and never fire in an Eliminator; the port keeps Pulse's Eliminator terms there (chosen, not measured).
+Omega: its unsuffixed table has no `EliminatorAIStats` row (its `WeaponAIStats2048.xml` does). The port keeps Pulse's Eliminator terms there (chosen, not measured); Omega's own code was read afterwards and is **not** HD's: a missing row leaves scales `1.0`, so the Eliminator fires with no `x5` (see the Omega page's ready-to-wire item).
 
-2048 and Omega: **checked, applies, wired by inheritance from HD**; their decision code is unread. Omega's own reader of `stats + 0xc4` is unread; the next addresses to try are Omega `eboot.bin`'s `WeaponAIStats` loader, then the function that reads `stats + 0xc4`.
+2048 and Omega: wired by inheritance from HD. Omega's decision code is now read and differs where the row is missing (cross-check above); 2048's is unread.
 
 ## What would raise it
 

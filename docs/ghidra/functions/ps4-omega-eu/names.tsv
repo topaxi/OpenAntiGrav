@@ -156,3 +156,9 @@
 0x0173ac30	function	SpeechManager_PlayCue	75	wwise-sound.md
 0x01733e50	function	SoundBankAliases_Init	75	wwise-sound.md
 0x01736430	function	SoundBankAliases_Lookup	80	wwise-sound.md
+# 2026-11-03 omega-eliminator-fire-reader: Omega's opponent weapon decision and loader (weapon-ai-fire.md)
+0x01321000	function	WeaponAi_Update	80	weapon-ai-fire.md
+0x01322f10	function	WeaponAiStats_Load	85	weapon-ai-fire.md
+0x012c8d60	function	WeaponAi_Construct	80	weapon-ai-fire.md
+0x0183d950	data	g_weapon_ai_rate_eliminator	85	weapon-ai-fire.md
+0x0183d970	data	g_weapon_ai_rate	85	weapon-ai-fire.md

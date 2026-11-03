@@ -1031,7 +1031,8 @@ carries both spellings too; `oag_omega::TITLE` names the unsuffixed one, which h
 Eliminator row (see the next section). So the maintainer's rule (an unmeasured title runs Pulse's
 law) needed no restated table: **every title runs `oag_ai::weapon_ai` on its own odds, inherited
 from Pulse and unmeasured on HD, Omega and 2048**, with no confidence score for those three. Omega's
-decision code is unread; HD's is read since 2026-11-03 and differs
+decision code is read since 2026-11-03 and differs on a missing Eliminator row
+([weapon-ai-fire.md](../ghidra/functions/ps4-omega-eu/weapon-ai-fire.md)); HD's is read and differs from Pulse
 ([weapon-ai-fire.md](../ghidra/functions/ps3-hdfury-eu/weapon-ai-fire.md)).
 `crates/raceplay/tests/fire_law_inherit_ground_truth.rs` pins that a race on each of the three loads
 the table and runs `FireLaw::Original`. A title with no table would still have to run Pulse's
