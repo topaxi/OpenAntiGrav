@@ -94,6 +94,26 @@ the local `Y` is the bomb model's up, are unread: **60**.
   the `disruptor_cockpit` placement are unread: **address plus recipe**, read the update slot of the vtable at `0x08abc690`,
   confidence 55.
 
+## Wired (2026-11-03, lane `pure-weapons-wire`)
+
+All names resolve and decode on both Pure pressings (disc test `a_pure_race_loads_the_effects_its_weapons_play`).
+
+| Trigger | Wiring | Pure's table |
+| --- | --- | --- |
+| `WO_MISSILE_HEAD` (twice), `WO_MISSILE_BOUNCE`, `WO_MISSILE_EXPLO`, `WO_MINE_EXPLO`, `WO_BOMB_SMOKERING`, `WO_PLASMA_FLASH` | the engine triggers Pulse already fires (`flare_effect_for`, `ignite_missile_bounces`, `blast_for`) | now `Origin::Measured`, no longer inherited |
+| `WO_BOMB_GLOW` | `Trigger::BombGlow`, a riding flare for a laid Bomb (`flare_effect_for`) | measured, Pure only |
+| `WO_DISRUPTOR_HEAD` | `Trigger::DisruptorHead`, a riding flare for the bolt | measured, Pure only |
+| `WO_DISRUPTOR_EXPLO` and `electric_halo2.vex` | `blast_for` arm for `Weapon::Disruptor`; the halo is `DisruptorHalo` (target 16, rate 0.05, grey `1 - age`, 1.0 s), camera-facing at the bolt's end | measured, Pure only |
+| `WO_DISRUPTOR_LAUNCH` | **not wired**: its gate, `*(weapon+0x3c + 0xe0)`, is a field of the firing craft's weapon record that this lane did not map to a table field | no trigger |
+
+The Bomb tumble is wired as read (confidence 60): `-4.0` rad/s about `(0, cos 0.25, sin 0.25)` and `0.5` rad/s about `+Y`,
+the tilted turn outermost (the multiply order is unread, **chosen, not measured**), then the `0.4` scale. Ours is render-side
+(`scaled_bomb` reads the projectile's age); no simulation state moved.
+
+The halo's texture tracks play at the halo's age, rate 1 (not read on this object: the Bomb blast's reading, applied by
+analogy). It draws faint in the headless shot against the wall it hits; no Pure capture of it exists.
+Not captured headlessly: the laid Bomb's glow (the shot's bomb had not left the craft).
+
 ## Checked against HD and the other titles
 
 HD/Omega's weapon psys are in other binaries; Pulse is the sibling and matches (same triggers, same fourccs for

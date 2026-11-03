@@ -347,7 +347,7 @@ impl super::Scene {
             .into_iter()
             .enumerate()
         {
-            let (Some((matrix, tint)), Some(drawable)) =
+            let (Some((matrix, tint, age)), Some(drawable)) =
                 (draw, self.plasma_blast.disruptor_halo.get(slot))
             else {
                 continue;
@@ -355,6 +355,8 @@ impl super::Scene {
             active[slot] = true;
             write_fog(drawable, queue, weapon_scene);
             drawable.write(queue, view_projection, matrix, view_projection * matrix);
+            drawable.write_node_anims(queue, age);
+            drawable.write_anims(queue, age);
             drawable.tint(queue, [tint, tint, tint, 1.0], &mut Vec::new());
         }
         active

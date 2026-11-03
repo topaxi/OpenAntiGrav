@@ -121,6 +121,30 @@ Pure's blast can reuse Pulse's wired blast pass with Pure's own data (confidence
 **Not measured live:** no Pure capture of the blast exists; a PPSSPP probe on `0x0885ae9c` (age at `+0x50`, tint via
 `FUN_08863898`'s second argument) would turn the key times into a measured ramp.
 
+## Wired (2026-11-03, lane `pure-weapons-wire`)
+
+Pure's `plasma_blast_pulse` row (`crates/pure/src/lib.rs`) names the three models and carries a `PlasmaBlastLaw`
+(`crates/title/src/weapons.rs`): the three `(hold, end)` tint pairs `(0.2, 0.5)`, `(0.3, 1.0)`, `(0, 1.0)`, the scale
+targets, rates `0.1, 0.07, 0.07`, life `2.0` s, no halo hide, and the hemispheres dropped `3.5` along the track's up. Pulse's
+mechanism (`oag_raceplay::blast_models`) now reads all of it from that law; Pulse's own row carries its constants (tints
+`(0.2, 1.0)`, `(0.3, 1.5)`, `(0, 1.0)`, life 1.5), and its tint test is unchanged.
+
+- **Unit.** Our decoder returns the `.vex` extent and the world size is `ease x 0.025 x extent`: the ease targets are stored
+  as the read target divided by `0.025` (`15, 8, 7.8` become `600, 320, 312`). Pure's models are `plasma_halo` radius
+  5.01 and the two hemispheres radius 4.0 (Pulse's 10.0, 8.65, 7.6), so Pure's blast is larger in its targets (`15/8`)
+  but not twice as large on screen: the halo reaches `15 x 5.01 = 75` units against Pulse's `8 x 10 = 80`, the hemispheres
+  `32` and `31` against `30` and `23`. Confidence 70 that the Pulse-fitted unit carries over (same loader, same
+  decoder; not matched against a Pure frame).
+- **Placement.** The `-3.5` drop is applied to Pure's hemispheres only. Pulse's code reads the same drop
+  (the GE dumps put its halo and hemispheres 3.49 apart) and ours applies none yet: `hemisphere_drop` is `0.0` on Pulse's
+  row. Which side of the road the original's `-3.5 x row1` points is not read: ours moves the hemispheres against the
+  track's up, which puts the dome on the road under a bolt that flies above it.
+- **Look.** The headless pair at Pure's default circuit shows a large violet dome around the craft at age 0.05 s and the
+  halo's tint gone by 0.5 s; small black holes in the hemisphere's texture show on Pulse's blast too (cause not investigated: not
+  a tint or scale matter, nothing in this lane draws them).
+- Open: a Pure capture of the blast (this is read, not matched), the craft-hit count (`plasma_craft_hit_blast_point` spawns
+  Pulse's two on Pure too, unmeasured).
+
 ## Checked against HD and the other titles
 
 HD and Omega run their own blast (ring, sphere and halo on eased scale ramps, `plasma.md` on those binaries): **checked, differs**

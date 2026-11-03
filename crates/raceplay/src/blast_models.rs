@@ -339,18 +339,22 @@ impl Race {
 
     /// Each live Disruptor halo's matrix (the camera-facing frame the Plasma
     /// halo takes, at the bolt's end, scaled by the ease) and grey tint
-    /// `1 - age / life`, in slot order.
+    /// `1 - age / life`, and the age its textures play at, in slot order.
     #[must_use]
     pub(crate) fn disruptor_halo_draws(
         &self,
         camera: Mat4,
-    ) -> [Option<(Mat4, f32)>; PLASMA_BLAST_SLOTS] {
+    ) -> [Option<(Mat4, f32, f32)>; PLASMA_BLAST_SLOTS] {
         let law = self.view.disruptor_halo_law;
         std::array::from_fn(|slot| {
             let (halo, law) = (self.view.disruptor_halos[slot]?, law?);
             let matrix =
                 pulse_halo_frame(halo.position, camera) * Mat4::from_scale(Vec3::splat(halo.ease));
-            Some((matrix, (1.0 - halo.age / law.life).clamp(0.0, 1.0)))
+            Some((
+                matrix,
+                (1.0 - halo.age / law.life).clamp(0.0, 1.0),
+                halo.age,
+            ))
         })
     }
 

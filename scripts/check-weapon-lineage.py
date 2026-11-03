@@ -47,6 +47,9 @@ EFFECT_ROWS = {
     "effects.weapon_spark": "WeaponSpark",
     "effects.shield_absorb": "ShieldAbsorb",
     "effects.bomb_rays": "BombRays",
+    "effects.bomb_glow": "BombGlow",
+    "effects.disruptor_head": "DisruptorHead",
+    "effects.disruptor_explo": "DisruptorExplo",
 }
 
 # Where each title's `Effects` are built. 2048 and Omega build them in lib.rs.

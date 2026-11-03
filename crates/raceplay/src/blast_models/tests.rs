@@ -405,7 +405,7 @@ fn a_disruptor_halo_eases_fades_and_retires_at_one_second() {
     for _ in 0..30 {
         race.advance_plasma_blast_models(DT);
     }
-    let (matrix, tint) = race
+    let (matrix, tint, age) = race
         .disruptor_halo_draws(Mat4::IDENTITY)
         .into_iter()
         .flatten()
@@ -415,6 +415,7 @@ fn a_disruptor_halo_eases_fades_and_retires_at_one_second() {
     assert!((matrix.x_axis.truncate().length() - scale).abs() < 0.01 * scale);
     assert!((tint - 0.5).abs() < 0.02, "{tint}");
     assert_eq!(matrix.w_axis.truncate(), at);
+    assert!((age - 0.5).abs() < 0.02, "{age}");
     for _ in 0..31 {
         race.advance_plasma_blast_models(DT);
     }
