@@ -1938,3 +1938,62 @@ runs Pulse's way on HD. The launch scale, the no-ride window and the muzzle node
 checkable** from
 this lane (no HD probe of the bolt's records). Pure: inherits Pulse (I:Pulse), unprobed.
 
+
+## 2026-11-03: the head's arcs ride the craft, and the onset flash is `WO_PLASMA_FLASH` (pulse-plasma-arcs-flash)
+
+### The arcs: the root emitter's particles live in the instance's frame (flag `0x2`)
+
+The head's root emitter `WO_PLASMA_HEAD` carries flag `0x2` (local space,
+`particle-system.md`, "Flag `0x2` is local space, not world space"): its particles are stored in the
+instance's frame and drawn through its **live** matrix, which `Plasma_Init` hands the firer's matrix
+and, after the release, the bolt's. Its parameters (read with the loader, `Effect::parse`): radial
+direction, speed 6.25 per tick, drag 0.5/0.4/0.5, 39 +/- 3 ticks of life, one particle every two
+ticks (cap 10), size channel 0.9 to 5.0, draw class 6 (`Streak { from_spawn }`, `Bar { aspect 1.0 }`)
+on the 2x2 crescent atlas. A streak runs from the spawn point to the particle.
+
+Ours kept those particles in **world** space (nothing but `WO_REPULSER_BLAST` opted into
+`System::set_rides_frame`), so while the craft flew at 106 units a second each streak was left behind and
+strung back toward the camera: one small arc where the original shows a ring of large loops. The same
+emitter played on a parked anchor (a scratch `Stage` at severity 0.75) already spans 13 units, the
+original's 10 to 11, so the size channel, speed and spawn rate were never the gap. `advance_one_flare`
+now rides the frame for `Trigger::PlasmaFlare`. Confidence **88** for the flag's meaning (the page
+above), **80** that the Plasma's flare owner keeps its matrix moving (the arcs' extents and
+brightness agree, no probe of the head's matrix pointer).
+
+Test: `tests::weapons::visuals::the_plasma_heads_arcs_ride_the_anchor_they_were_born_on` (hand-laid
+flag-`0x2` effect moved 50 units: red before, "stayed behind at x 0", green after).
+
+**Pair** (same setup as "the head's template playback": Talon's Junction, Assegai Venom, fire at
+GO + 120, head box `200,112,90,80`, k20, 36, 44, 60, 72, native 480x272, one original). The
+per-pixel metric `weapon-pair-score.py` reads **102,648 before and 122,178 after (worse)**, and
+that is the metric's fault here: the arcs are placed by random draws, so a bright loop in the
+wrong place costs twice, where before there was nothing to miss. Mean luminance inside the box
+(original / before / after): k36 106.9 / 102.5 / 104.9; k44 112.8 / 104.6 / 105.7; **k60 127.0 /
+110.7 / 126.3; k72 111.1 / 96.7 / 115.3**. The brightness gap is closed; at k72 ours is a little
+hazier than the original's clean ring around the dark disc. **Still different**: the loops'
+shapes (ours are straighter, flatter bars; the original's are curved crescents around the disc, and
+the strips are built in view space in the original but in world space here, `streak.rs`), the glow
+drawing dimmer, and the dark core being less visible at k72.
+
+### The onset flash is `WO_PLASMA_FLASH`, already played (item 1e closed)
+
+The two onset draws of the GE dumps (a 125 x 67 unit additive quad, and a 192-vertex `0x32` prim)
+were not byte-matched, but they need not be: `WO_PLASMA_FLASH` has two emitters, the root
+(128x64 sprite, **source-alpha**, 32 particles a burst, six vertices each = **192**) and the template
+`PLASMA_GLOW` (64x64 CLUT4, additive, one quad, half-size 15 to 36). Played at severity 1.0, two
+updates after the burst the glow quad is **125.2 x 66.8** units (the dump's 125 x 67) and the root
+is 192 alpha-over vertices (the dump's prim 62 x 35, ours 62.9 x 31.5). Confidence **85** (two
+sizes and a count agree, blend class and texture shapes agree; the texel bytes were not compared).
+The effect is the one `Race::blast_for` already spawns at the detonation, so nothing is left to wire:
+the whole-frame onset is the known one-shot lateness (ours k79 at 228,189,244 against the
+original's k78 ramping 209 to 239 at k80), which `pulse-plasma-timing` traced to the `391 + k`
+mapping. Test: `plasma_blast_models_ground_truth::the_onset_flash_of_the_original_is_the_plasma_flash_effect`
+(disc). The onset whole-frame metric (k78 and k80, `weapon-pair-score.py`): 1,002,886 before,
+982,035 after (the arcs' ride only).
+
+**Cross-title.** Pure: **checked, applies**. `WO_PLASMA_FLASH` is the same effect (Pure's page
+"Effects at spawn"), so the ownership holds there; the ride is not gated by title and applies to
+any source whose `PlasmaFlare` resolves a head whose root carries flag `0x2` (Pure's own head is
+`pure-weapons-wire`'s, and its templates are muted by `without_pulse_psp_draw`). HD/Omega: their
+bolt is `WO_PLASMA_LIGHTNING_*`, no `PlasmaFlare` head, **checked, differs**. PS2 shares the
+path and **inherits** PSP's read.

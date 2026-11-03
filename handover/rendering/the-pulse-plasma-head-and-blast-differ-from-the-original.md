@@ -2,7 +2,7 @@
 status: re-first
 titles: [pulse]
 updated: 2026-11-03
-summary: "Plasma blast wired from the GE dumps (tail matches); the head's templates are wired (its arcs and the onset flash are open); detonation timing fixed"
+summary: "Plasma blast, head templates and arcs wired; onset flash is WO_PLASMA_FLASH (played); arc shapes and glow brightness open"
 ---
 
 # The Pulse Plasma head and blast differ from the original's
@@ -29,15 +29,18 @@ confidence scores and the replay evidence. What is left is wiring and two unread
    re-score the onset after that lands; (b) the ease targets (135.3, 112.75, 320) and the 0.025 model
    unit are fitted (conf 70-75), and the halo's end (0.65 s, chosen inside 0.55-0.717); (c) the frame
    is the nearest spline sample's, inferred from `PlasmaBlast_Construct`'s track fit; (d) the tint
-   multiplies vertex colour where the original's lit pass ignores it; (e) the onset flash at shots
-   k78-k82 is **not** these models (a 125 x 67 unit additive quad at craft z -28.8 and a 192-vertex
-   `0x32` prim, emitter ownership open, conf 45; byte-match against `WO_PLASMA_FLASH.POB` not completed).
+   multiplies vertex colour where the original's lit pass ignores it; (e) ~~the onset flash at shots
+   k78-k82~~ is not these models but `WO_PLASMA_FLASH` itself (2026-11-03, `plasma.md` "the onset flash is
+   `WO_PLASMA_FLASH`", conf 85): the glow quad measures 125.2 x 66.8 and the root is 192 vertices; already played,
+   one shot late (the `391 + k` mapping).
 2. **Head and charge orb (0.24 M)**: ~~the templates' playback~~ **wired 2026-11-03 (`pulse-plasma-head`)**,
    `plasma.md` "the head's template playback": the three sprite templates (glow quad, ring, dark disc)
    are born once at the press (severity 0) and now draw at the instance's current severity, so their
    extents follow the charge as the original's do (7 to 21, 1.7 to 5.1, 1.0 to 3.3). Head box area x excess
-   168,685 to 102,300 on k20-72 (five shots). **Open inside it**: (a) the root emitter's white crescent
-   arcs (draw 1, 2.4 to 11.2 units) are far smaller and dimmer than the original's; (b) the glow reads
+   168,685 to 102,300 on k20-72 (five shots). **Open inside it**: (a) ~~the root emitter's white crescent
+   arcs far smaller and dimmer~~ closed 2026-11-03 for size and brightness: the arcs are local-space (flag `0x2`)
+   and now ride the craft (box luminance k60 127.0 against the original's 127.0); their shapes still differ
+   (straighter bars, strips built in world not view space); (b) the glow reads
    dimmer; (c) the draw-time severity read is inferred from the extents, not probed on
    `ParticleSystem_DrawParticle` (conf 70).
 3. ~~**Detonation 3 ticks early**~~ Closed 2026-10-31 (`pulse-plasma-timing`): k76 now, per-update
@@ -51,6 +54,6 @@ confidence scores and the replay evidence. What is left is wiring and two unread
 
 ## Next Steps
 
-- Item 2(a): the root emitter's size/atlas playback against draw 1 (the arcs); then re-score the blast onset (item 3
-  has landed).
+- Item 2(a) remainder: the arcs' shape (class-6 bars built in view space, `streak.rs`) and (b) the glow's brightness;
+  the per-pixel box metric cannot judge random arcs, score mean luminance and read the frames.
 - Pulse PS2 is unmeasured here; its pair is `scripts/pcsx2-pulse-pair.py`.
