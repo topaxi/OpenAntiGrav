@@ -84,7 +84,9 @@ pub(super) struct PlayerStep {
     pub(super) evaluated: Evaluated,
     /// [`Race::reset_zone_contact`], read before the collision cage moved the craft.
     reset_contact: bool,
-    spline_distance: Option<f32>,
+    /// The position of the spline sample the craft was located on, the
+    /// original's `craft+0xaf0` record.
+    located: Option<Vec3>,
 }
 
 impl Race {
@@ -152,8 +154,9 @@ impl Race {
         // is, which is the player's own off-track trigger. Taken from here
         // rather than scanned again after the step - the table is ~3,400 samples
         // and a second fold would double the tick's hottest loop to move a
-        // measurement one tick, under a dwell of [`PLAYER_RESCUE_TICKS`].
+        // measurement one tick, under a dwell of [`DISTANCE_RESET_TICKS`].
         let spline_distance = nearest.map(|(_, _, distance)| distance);
+        let located = nearest.map(|(_, sample, _)| Vec3::from_array(sample.pos));
         let track_sample = nearest.map(|(_, sample, _)| Spline::track_sample(sample));
         let crumb_flags = nearest.map(|(_, sample, _)| sample.flags);
         // The neighbour is the next entry in table order, which at the end of a
@@ -293,7 +296,7 @@ impl Race {
         PlayerStep {
             evaluated,
             reset_contact,
-            spline_distance,
+            located,
         }
     }
 
@@ -322,9 +325,6 @@ impl Race {
     /// after the tick's craft have all moved.
     pub(super) fn rescue_player(&mut self, slot: usize, step: &PlayerStep) {
         self.sim.respawn_cooldown[slot] = self.sim.respawn_cooldown[slot].saturating_sub(1);
-        // Unconditionally and before the `||`, so the dwell sees every tick -
-        // the same argument `step_opponents` makes for its two counters.
-        let off_the_track = self.lost_off_the_track(slot, step.spline_distance);
         // **Not a wreck**, the same gate `step_opponents` applies: in an
         // Eliminator the player sits `Eliminated` for the respawn dwell, and
         // a rescue firing inside it would rebuild the craft as a racing one
@@ -333,12 +333,13 @@ impl Race {
             self.sim.world.ships[slot].physics.craft_state == oag_physics::CraftState::Racing;
         let reset = self.reset_zone_touched(slot, step.reset_contact);
         let airborne = self.airborne_too_long(slot);
+        let distant = self.far_from_the_sample(slot, step.located);
         let cage = std::mem::take(&mut self.sim.cage_reset[slot]);
-        if alive && (off_the_track || airborne || reset || cage) {
-            let cause = if off_the_track {
-                respawn::RespawnCause::OffTrack
-            } else if airborne {
+        if alive && (airborne || distant || reset || cage) {
+            let cause = if airborne {
                 respawn::RespawnCause::Airborne
+            } else if distant {
+                respawn::RespawnCause::Distance
             } else if cage {
                 respawn::RespawnCause::Cage
             } else {

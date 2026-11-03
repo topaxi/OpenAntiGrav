@@ -132,18 +132,6 @@ pub const RESCUE_TICKS: u32 = 90;
 /// Ours, not the original's, exactly as [`RESCUE_HALF_WIDTHS`] is.
 pub const PLAYER_RESCUE_HALF_WIDTHS: f32 = 2.0;
 
-/// How long the player has to stay that far out before they are put back.
-///
-/// Three quarters of a second at 60 Hz, and **half [`RESCUE_TICKS`] because the
-/// measurement behind it is direct**: the opponents' dwell absorbs the noise in a
-/// believed index, and there is no believed index here. What it still buys is the
-/// tick or two either side of a hard landing where a craft is momentarily far from
-/// the sample table and about to be near it again.
-///
-/// It is also the whole latency budget the player feels: a craft that leaves is
-/// falling, and every tick of dwell is a tick further down before the recovery.
-pub const PLAYER_RESCUE_TICKS: u32 = 45;
-
 /// How slowly a craft has to be moving to count as stopped, in units per second.
 ///
 /// # Invented, like [`RESCUE_HALF_WIDTHS`], and measured before it was chosen
@@ -207,3 +195,29 @@ pub const STALL_TICKS: u32 = 120;
 /// was relocated upright on the tick it passed 4.0. See
 /// `docs/gameplay/leaving-the-track.md`. Confidence **90**.
 pub const AIRBORNE_RESET_SECONDS: f32 = 4.0;
+
+/// The most shield a person's craft pays for entering the reset state:
+/// `min(5, shield - 1)` (`Ship_SetState` arm 3, `0x08844100`). Confidence **84**
+/// (`docs/ghidra/functions/psp-pulse-usa/shield.md`).
+pub const RESET_SHIELD_CHARGE: f32 = 5.0;
+
+/// How far from its located spline record a craft may be before the distance
+/// dwell starts counting, in units.
+///
+/// **The original's, read (decompile).** `FUN_088418e0` accumulates `dt` into
+/// `craft+0x788` while `|body.pos - craft+0xaf0|^2 > 40000` and zeroes it
+/// otherwise; `craft+0xaf0` is the `SplinePt` record `AiTrack_LocatePosition`
+/// keeps for the craft. Skipped for a wrecked craft (`craft+0x860 & 0x1000`) and
+/// applied to every craft, person or AI. Confidence **80**
+/// (`docs/ghidra/functions/psp-pulse-usa/shield.md`, "State 3 is the reset").
+/// Titles that have not read their own inherit it.
+pub const DISTANCE_RESET_UNITS: f32 = 200.0;
+
+/// How many ticks the craft has to stay beyond [`DISTANCE_RESET_UNITS`] before
+/// the reset state is entered: the original's `craft+0x788 > 0.5` at
+/// `0x08841cec`, half a second at 60 Hz.
+///
+/// An integer count rather than a sum of `dt`: `> 0.5` over thirty `1/60` steps
+/// is a coin flip in `f32`, so the tick count is the exact form of "half a second
+/// of ticks" (the thirtieth tick fires, the twenty-ninth does not).
+pub const DISTANCE_RESET_TICKS: u32 = 30;

@@ -141,8 +141,9 @@ use oag_physics::{CollisionWorld, Environment, Evaluated, Handling};
 use oag_present::perf::SceneStats;
 use oag_race::chase_rig::{ChaseParams, Target};
 use oag_race::recovery::{
-    BENEATH_LINE, PLAYER_RESCUE_HALF_WIDTHS, PLAYER_RESCUE_TICKS, RESCUE_HALF_WIDTHS, RESCUE_TICKS,
-    RESPAWN_COOLDOWN_TICKS, RESPAWN_GIVE_UP, STALL_SPEED, STALL_TICKS,
+    BENEATH_LINE, DISTANCE_RESET_TICKS, DISTANCE_RESET_UNITS, PLAYER_RESCUE_HALF_WIDTHS,
+    RESCUE_HALF_WIDTHS, RESCUE_TICKS, RESET_SHIELD_CHARGE, RESPAWN_COOLDOWN_TICKS, RESPAWN_GIVE_UP,
+    STALL_SPEED, STALL_TICKS,
 };
 use oag_race::sight;
 use oag_race::{Course, Mode, RaceState};

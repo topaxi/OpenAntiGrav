@@ -319,7 +319,7 @@ fn giving_up_on_one_craft_leaves_the_others_recoverable() {
     race.sim.respawns_in_a_row[1] = RESPAWN_GIVE_UP;
 
     let away = race.sim.world.ships[2].physics.body.position + Vec3::Y * 100_000.0;
-    for _ in 0..=RESCUE_TICKS {
+    for _ in 0..DISTANCE_RESET_TICKS {
         race.sim.world.ships[1].physics.body.position += Vec3::Y * 100_000.0;
         race.sim.world.ships[2].physics.body.position = away;
         race.tick(&PlayerInputs::none());

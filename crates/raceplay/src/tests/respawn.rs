@@ -130,47 +130,17 @@ fn falling_through_any_other_class_does_not_respawn() {
     }
 }
 
-/// **The second way a craft is lost, and the one the reset volumes cannot
-/// catch**: the player leaves the circuit sideways into open space, where there
-/// is no authored geometry of any class to touch. Nothing recovered them before
-/// 2026-08-17 - a craft that came off after a Turbo fell for the rest of the
-/// race. See [`PLAYER_RESCUE_HALF_WIDTHS`].
-#[test]
-fn a_player_that_leaves_the_circuit_is_put_back_after_the_dwell() {
-    let mut race = Race::start(setup(hulled_handling()));
-    // Well past the threshold and nowhere near anything: this fixture has no
-    // colliders at all, so no reset volume can be what puts the craft back.
-    let away = Vec3::new(20.0, 6.0, 400.0);
-    race.sim.world.ships[0].physics.body.position = away;
-    assert!(
-        race.spline().distance_to(away).expect("a sample") > race.sim.player_rescue_distance,
-        "the fixture does not put the craft off the track"
-    );
-
-    // One short of the dwell: still out there, still not touched.
-    for _ in 0..PLAYER_RESCUE_TICKS - 1 {
-        race.tick(&PlayerInputs::none());
-        race.sim.world.ships[0].physics.body.position = away;
-    }
-    assert_eq!(race.respawns(), 0, "recovered before the dwell elapsed");
-
-    race.tick(&PlayerInputs::none());
-    assert_eq!(race.respawns(), 1, "the dwell elapsed and nothing happened");
-    let position = race.sim.world.ships[0].physics.body.position;
-    let distance = race.spline().distance_to(position).expect("a sample");
-    assert!(distance < 20.0, "recovered {distance} from the spline");
-}
-
 /// **The control**: a craft on the track is never taken off it.
 ///
-/// Held just inside the threshold for three times the dwell, which is the shape
+/// Held just inside the distance for three times the dwell, which is the shape
 /// of the failure that would matter - a rescue that fires during ordinary wide
 /// cornering would teleport a player who was driving perfectly well.
 #[test]
 fn a_player_inside_the_threshold_is_left_alone() {
     let mut race = Race::start(setup(hulled_handling()));
-    let inside = Vec3::new(20.0, 6.0, race.sim.player_rescue_distance - 1.0);
-    for _ in 0..PLAYER_RESCUE_TICKS * 3 {
+    let start = Vec3::from_array(race.sim.spline.start().expect("a sample").pos);
+    let inside = start + Vec3::new(0.0, DISTANCE_RESET_UNITS - 1.0, 0.0);
+    for _ in 0..DISTANCE_RESET_TICKS * 3 {
         race.sim.world.ships[0].physics.body.position = inside;
         race.tick(&PlayerInputs::none());
     }
@@ -229,7 +199,7 @@ fn an_opponent_holding_no_throttle_never_stalls() {
     }
 }
 
-/// **Where the craft is put back is where it left, not where it ended up.**
+/// **The Eliminator's return reads where the craft left, not where it ended up.**
 ///
 /// By the time the dwell expires the craft is a long way from the circuit, and
 /// the nearest sample *there* can belong to a different part of it - recovering
@@ -237,7 +207,7 @@ fn an_opponent_holding_no_throttle_never_stalls() {
 /// drives to one end of the straight and is then thrown out to where the far end
 /// is the nearer, which is the same shape at fixture scale.
 #[test]
-fn the_recovery_pose_is_the_last_place_the_craft_was_on_the_track() {
+fn the_last_on_track_latch_keeps_the_place_the_craft_left() {
     let mut race = Race::start(setup(hulled_handling()));
     // On the line, at the far end of the straight: this is the sample the latch
     // has to keep.
@@ -248,17 +218,16 @@ fn the_recovery_pose_is_the_last_place_the_craft_was_on_the_track() {
     // And now out beyond the *near* end, so the nearest sample to the craft is
     // sample zero rather than anything it drove past.
     let away = Vec3::new(0.0, -400.0, 0.0);
-    for _ in 0..PLAYER_RESCUE_TICKS {
-        race.sim.world.ships[0].physics.body.position = away;
-        race.tick(&PlayerInputs::none());
-    }
-    assert_eq!(race.respawns(), 1, "the craft was never recovered");
+    race.sim.world.ships[0].physics.body.position = away;
+    race.tick(&PlayerInputs::none());
 
-    let position = race.sim.world.ships[0].physics.body.position;
+    let kept = race.sim.last_on_track[0] as usize;
+    let sample = race.sim.spline.sample(kept).expect("a sample");
     assert!(
-        position.x > 40.0,
-        "recovered at {position:?}, which is the end of the straight the craft \
-         had not reached rather than the one it left from"
+        sample.pos[0] > 40.0,
+        "the latch holds sample {kept} at {:?}, which is the end of the straight the \
+         craft had not reached rather than the one it left from",
+        sample.pos
     );
 }
 
@@ -672,12 +641,12 @@ fn an_opponent_on_the_ground_well_below_its_line_is_lost_after_the_dwell() {
     assert!(race.beneath_the_line(1));
     for _ in 0..RESCUE_TICKS - 1 {
         assert!(
-            !race.lost_off_the_circuit(1),
+            !race.beneath_too_long(1),
             "flagged before the dwell elapsed"
         );
     }
     assert!(
-        race.lost_off_the_circuit(1),
+        race.beneath_too_long(1),
         "the dwell elapsed and nothing happened"
     );
 }

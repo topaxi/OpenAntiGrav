@@ -299,23 +299,22 @@ pub struct RaceSim {
     /// the two against each other without this is how a wreck resting on a wall
     /// reads as the worst driver on the board.
     pub(super) wall_racing_ticks: [u32; oag_gameplay::MAX_SHIPS],
-    /// How many consecutive ticks each craft has spent away from the track.
-    ///
-    /// **The two halves of the grid measure "away" differently and share this
-    /// counter.** An opponent's distance is to the sample its own driver believes
-    /// it is on, over [`RESCUE_TICKS`]; the player's is the true distance to the
-    /// nearest spline sample, over [`PLAYER_RESCUE_TICKS`]. Nobody steers the player's
-    /// craft for them, so there is no believed index to compare against - see
-    /// [`Race::lost_off_the_track`].
-    pub(super) lost_ticks: [u32; oag_gameplay::MAX_SHIPS],
+    /// How many consecutive ticks each opponent has spent on the ground beneath
+    /// its driver's line. See [`RESCUE_TICKS`] and [`BENEATH_LINE`]. Slot 0's
+    /// entry is never written.
+    pub(super) beneath_ticks: [u32; oag_gameplay::MAX_SHIPS],
     /// How many consecutive ticks each opponent has spent stopped while asking to
     /// move. See [`STALL_TICKS`].
     ///
-    /// A **second** dwell rather than a widening of [`Self::lost_ticks`], because
+    /// A **second** dwell rather than a widening of [`Self::beneath_ticks`], because
     /// the two measure different failures and share only their response: one
-    /// craft has left the circuit, the other is still on it and going nowhere.
-    /// Slot 0's entry is never written, for the reason [`Self::lost_ticks`] gives.
+    /// craft is under the circuit, the other is on it and going nowhere.
+    /// Slot 0's entry is never written, for the reason [`Self::beneath_ticks`] gives.
     pub(super) stalled_ticks: [u32; oag_gameplay::MAX_SHIPS],
+    /// How many consecutive ticks each craft has spent more than
+    /// [`DISTANCE_RESET_UNITS`] from its located spline sample: the original's
+    /// `craft+0x788` (`0x08841cec`). Every slot, person or AI.
+    pub(super) distant_ticks: [u32; oag_gameplay::MAX_SHIPS],
     /// [`RESCUE_HALF_WIDTHS`] in track units, resolved once against this
     /// circuit's widest half-width rather than folded over the sample table
     /// every tick.

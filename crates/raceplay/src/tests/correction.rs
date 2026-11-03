@@ -223,6 +223,9 @@ fn every_seat_camera_follows_its_own_craft() {
             for (slot, ship) in client.sim.world.ships.iter_mut().enumerate() {
                 ship.physics.body.position.z += 300.0 * slot as f32;
             }
+            // Far from the toy track the distance trigger would put them back; this
+            // test is about the camera.
+            client.sim.respawn_disabled.fill(true);
             for t in 0..120 {
                 client.tick(&sc.truth(START + t.min(59)));
             }

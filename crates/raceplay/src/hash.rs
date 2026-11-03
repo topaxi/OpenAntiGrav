@@ -89,13 +89,17 @@ impl RaceSim {
         for run in self.respawns_in_a_row {
             hasher.write_u32(run);
         }
-        for dwell in self.lost_ticks {
+        for dwell in self.beneath_ticks {
             hasher.write_u32(dwell);
         }
         // The second dwell, on the same terms: a stall counter one tick out moves
         // which tick a craft is put back on, and a respawn moves everything after
         // it.
         for dwell in self.stalled_ticks {
+            hasher.write_u32(dwell);
+        }
+        // The original's distance dwell, on the same terms as the two above.
+        for dwell in self.distant_ticks {
             hasher.write_u32(dwell);
         }
         // Where a reset puts each craft, and how fast: a crumb laid a tick

@@ -65,7 +65,7 @@ fn both_recovery_dwells_move_the_race_hash() {
     // written, so a test on slot 0 would assert the hash sees a field the
     // simulation never moves.
     let before = race.sim.state_hash();
-    race.sim.lost_ticks[1] += 1;
+    race.sim.beneath_ticks[1] += 1;
     let after_lost = race.sim.state_hash();
     assert_ne!(
         before, after_lost,
