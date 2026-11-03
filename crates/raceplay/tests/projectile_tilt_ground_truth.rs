@@ -75,7 +75,7 @@ struct Ride {
 
 fn start(image: &str, track: &str) -> Option<race::Race> {
     let image = oag_testdata::image(image)?;
-    let loaded = race::load(&race::Options {
+    let mut loaded = race::load(&race::Options {
         source: image.display().to_string(),
         track: Some(track.to_string()),
         class: "VENOM".to_string(),
@@ -84,6 +84,9 @@ fn start(image: &str, track: &str) -> Option<race::Race> {
         ..race::Options::default()
     })
     .expect("loading the race");
+    // The ride law is judged on the line the shots were measured on; the launch boost, which
+    // every title that authors it now flies, moves where the autopilot fires.
+    loaded.setup.start_boost = None;
     Some(race::Race::start(loaded.setup))
 }
 

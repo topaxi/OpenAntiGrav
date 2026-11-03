@@ -183,6 +183,13 @@ pub const TITLE: &Title = &Title {
     // `Tonemap` chain instead (checked, differs: exposure.md, "Omega").
     effects: &EFFECTS,
     looks: &oag_title::Looks {
+        // The launch boost: the title authors `<StartBoost>`; the grading law is HD's, which is
+        // Pulse PSP's, unmeasured on 2048 and Omega alike (`docs/physics/launch-boost.md`).
+        // Whichever of the two is measured first supplies the other.
+        start_boost: oag_title::Rule {
+            on: oag_title::Platforms::Any,
+            origin: oag_title::Origin::InheritedFrom("Wipeout HD (itself Wipeout Pulse PSP's)"),
+        },
         // State bit 4 (back-face culling) of the PS4 header's `+0x22` word, **inherited from
         // HD**: 4,751 of 4,918 to 13,568 of 13,722 materials per base archive carry it
         // (`docs/ghidra/functions/ps3-hdfury-eu/chunk-cull.md`, "2048 / Omega"). Only the cull
