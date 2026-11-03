@@ -11,6 +11,9 @@ use crate::sim::RaceSim;
 /// The loops a module started and has not stopped: module, sound, slot.
 pub(super) type Loops = Vec<(usize, u16, u8)>;
 
+/// Events kept for a drain that has not come.
+const MAX_QUEUED: usize = 1024;
+
 fn event(sim: &RaceSim, module: usize, index: u16, slot: u8, mode: ModSoundMode) -> ModSoundEvent {
     ModSoundEvent {
         mod_id: sim.extensions.on.slots[module].mod_id.clone(),
@@ -34,6 +37,11 @@ pub(super) fn apply(sim: &mut RaceSim, module: usize, slot: u8, index: u16, mode
         ModSoundMode::Loop if loops.contains(&key) => return,
         ModSoundMode::Loop => loops.push(key),
         ModSoundMode::Stop => loops.retain(|held| *held != key),
+    }
+    // A host that never drains (a server) keeps a bounded queue; loop bookkeeping above
+    // is unaffected, only a one-shot is dropped.
+    if sim.mod_sounds.len() >= MAX_QUEUED && mode == ModSoundMode::Once {
+        return;
     }
     let queued = event(sim, module, index, slot, mode);
     sim.mod_sounds.push(queued);

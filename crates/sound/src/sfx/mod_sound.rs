@@ -360,4 +360,24 @@ mod tests {
         let (l, r) = rig.tick(&[], &near, true);
         assert!(l + r > 0.0, "{l} {r}");
     }
+
+    #[test]
+    fn a_sound_at_its_own_rate_lasts_its_own_time_in_the_mixers() {
+        // Half a second at 22,050 Hz in a 48,000 Hz mixer: 24,000 output frames, not
+        // the 11,025 of an unconverted copy.
+        let sound = Arc::new(Sound::new(vec![8000; 11_025], 1, 22_050).unwrap());
+        let mut rig = Rig::new(&sound);
+        let at = craft(&[(0, [0.0; 3])]);
+        rig.tick(&[event(0, 0, ModSoundMode::Once)], &at, true);
+        let mut ticks = 1;
+        while rig.mixer.active_voices() > 0 && ticks < 1000 {
+            rig.tick(&[], &at, true);
+            ticks += 1;
+        }
+        let frames = ticks * 96;
+        assert!(
+            (23_000..=25_000).contains(&frames),
+            "{frames} output frames"
+        );
+    }
 }

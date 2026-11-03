@@ -19,8 +19,8 @@ digits, `-`, `_`) and that each path is a `.wav` in the mod, at most 64 sounds
 RIFF/WAVE, **16-bit integer PCM, mono or stereo**, any sample rate (`oag_audio::wav::decode`,
 beside the writer). The mixer steps through a sound at `file rate / mixer rate`, as it does
 for the banks' sounds, so there is no resampler of ours and nothing to convert. At most 4 MiB
-of PCM. Mono is the one to use for a sound that is placed (a stereo file is played through
-the same pan as a mono one). Anything else (float, 24-bit, ADPCM, more than two channels, a
+of PCM. Use mono for a sound that is placed (how the mixer pans a stereo
+voice is not checked here). Anything else (float, 24-bit, ADPCM, more than two channels, a
 truncated chunk) is refused by name. OGG/Vorbis is not read: the engine decodes no Vorbis.
 
 ## Playing it
@@ -73,6 +73,10 @@ A sound that fails to load plays nothing, and the load report names it
 
 ## Other titles
 
-Nothing here depends on a title: the path is the engine's own cue path, so every title that
-runs a simulation mod plays mod sounds identically (**ported**, one mechanism; 2048 and Omega
-are checked by the same code, not by a second one).
+**Pulse:** built and tested end to end (a real race through `Audio`). **HD, Omega, 2048:
+checked, applies, not wired** to a race test: the path is the engine's own cue path and a
+title's craft cues play on `Cue::bus()` (`Bus::Sfx`), as mod sounds do; HD's authored mix
+groups (`Banks::group_bus`) carry the engines and ambience, not cues. No race test runs a
+mod sound on those titles; `Race::tick_sim_only` (a predicting client's replay) drops the
+sounds of a replayed tick, as it does cues, and a server that never drains keeps at most
+1,024 queued one-shots.
