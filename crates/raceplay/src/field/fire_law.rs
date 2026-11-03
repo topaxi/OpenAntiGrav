@@ -9,7 +9,7 @@
 use super::*;
 use oag_ai::weapon_ai::{Decision, Mover, Odds, Situation, target_in_path};
 use oag_tables::weapons::Weapon;
-use oag_title::weapons::OpponentFire;
+use oag_title::weapons::{MissingEliminatorRow, OpponentFire};
 
 /// Which rule decides when an opponent fires a forward weapon.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -194,11 +194,11 @@ impl Race {
 /// The decision's terms for a race: the title's [`OpponentFire`] resolved
 /// against its `WeaponAIstats.xml` rows and the race's difficulty tier.
 ///
-/// A title whose terms ask for `<AllWeapons>` or `<EliminatorAIStats>` and whose
-/// file lacks the row takes Pulse's term for it: HD's code would read the
-/// loader's zero defaults and an Eliminator opponent would never fire, which
-/// is the loader's gap and not a measured behaviour (`weapon-ai-fire.md`,
-/// "Ready to wire" 3). **Chosen, not measured.**
+/// A title whose terms ask for `<AllWeapons>` and whose file lacks the row
+/// takes Pulse's term for it. A missing `<EliminatorAIStats>` row follows
+/// [`OpponentFire::eliminator_without_row`]: Omega's scales default to `1.0`;
+/// HD's would read the loader's zero and never fire, so HD takes Pulse's
+/// `use *= 5` (`weapon-ai-fire.md`, "Ready to wire" 3; chosen, not measured).
 pub(crate) fn fire_terms(
     terms: OpponentFire,
     stats: Option<&oag_tables::weapons::ai::WeaponAiStats>,
@@ -220,18 +220,27 @@ pub(crate) fn fire_terms(
             absorb: all.absorb,
         };
     }
-    if terms.authored_eliminator
-        && let Some(row) = stats.eliminator()
-    {
+    if terms.authored_eliminator {
         let tier = match super::super::finished_thrust::rung(difficulty) {
             Difficulty::Easy => 0,
             Difficulty::Medium => 1,
             Difficulty::Hard => 2,
         };
-        law.eliminator = EliminatorTerms::Authored {
-            use_scale: row.use_scale[tier],
-            absorb_scale: row.absorb_scale[tier],
-        };
+        match (stats.eliminator(), terms.eliminator_without_row) {
+            (Some(row), _) => {
+                law.eliminator = EliminatorTerms::Authored {
+                    use_scale: row.use_scale[tier],
+                    absorb_scale: row.absorb_scale[tier],
+                };
+            }
+            (None, MissingEliminatorRow::Unscaled) => {
+                law.eliminator = EliminatorTerms::Authored {
+                    use_scale: 1.0,
+                    absorb_scale: 1.0,
+                };
+            }
+            (None, MissingEliminatorRow::PulseScale) => {}
+        }
     }
     law
 }
@@ -265,5 +274,32 @@ fn nearer_person(held: Option<f32>, gap: f32) -> Option<f32> {
         None => Some(gap),
         Some(held) if gap > 0.0 && (held <= 0.0 || gap < held) => Some(gap),
         kept => kept,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use oag_ai::weapon_ai::EliminatorTerms;
+
+    fn no_row(terms: OpponentFire) -> oag_ai::weapon_ai::Law {
+        let stats = oag_tables::weapons::ai::WeaponAiStats::default();
+        fire_terms(terms, Some(&stats), oag_ai::Difficulty::default())
+    }
+
+    #[test]
+    fn omega_without_an_eliminator_row_runs_its_loaders_unit_scales() {
+        assert_eq!(
+            no_row(OpponentFire::OMEGA).eliminator,
+            EliminatorTerms::Authored {
+                use_scale: 1.0,
+                absorb_scale: 1.0
+            }
+        );
+    }
+
+    #[test]
+    fn hd_without_an_eliminator_row_keeps_pulses_scale() {
+        assert_eq!(no_row(OpponentFire::HD).eliminator, EliminatorTerms::Pulse);
     }
 }

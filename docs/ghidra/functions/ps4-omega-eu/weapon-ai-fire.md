@@ -142,7 +142,9 @@ and absorbs `0.5 * rate_elim[idx] * 1.0 * row.absorb` while the craft's `+0x727c
 object's multipliers apply in campaign events only and are unread, so the Race Box case is complete
 and the campaign case is open.
 
-### Ready to wire (not wired)
+### Ready to wire (wired 2026-11-03, `omega-eliminator-fire-wire`)
+
+Wired as `OpponentFire::OMEGA` (`eliminator_without_row: Unscaled`) in `oag_raceplay::field::fire_law::fire_terms`; 2048 carries it inherited from Omega (its file has the row, so only a missing row differs). `fire_law_inherit_ground_truth`, seed 1, 120 s under the original driver: Omega Eliminator opponent projectiles 108 before, 86 after (Pulse's `x5` gone); Omega single race 101, HD 157, 2048 128, Pulse 185, Pure 13, all unchanged.
 
 1. `OpponentFire` gains Omega's own value (measured, static, 80): `step_scale 0.5`, `all_weapons true`, and
    an Eliminator rule "scales default `1.0` when the row is absent" instead of `authored_eliminator`'s

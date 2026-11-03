@@ -874,6 +874,8 @@ pub(super) fn load_weapon_ai(
                 "Pulse's decision terms"
             } else if terms == oag_title::weapons::OpponentFire::HD {
                 "HD's decision terms (step scale, AllWeapons, Eliminator scales)"
+            } else if terms == oag_title::weapons::OpponentFire::OMEGA {
+                "Omega's decision terms (HD's, a missing Eliminator row unscaled)"
             } else {
                 "its own decision terms"
             };
