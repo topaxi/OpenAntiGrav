@@ -231,6 +231,7 @@ impl Audio {
             class_announcements,
             listener,
             craft,
+            mod_craft,
             slot_teams,
             player_slot,
             throttle,
@@ -685,7 +686,7 @@ impl Audio {
                 &mod_sounds,
                 &banks.mod_sounds,
                 mixer,
-                (&listener, &craft, player_slot),
+                (&listener, &mod_craft, player_slot),
                 running,
             );
 
@@ -703,6 +704,14 @@ impl Audio {
                 DT,
             );
         });
+    }
+
+    /// How many loops of the mods' own sounds are running (`play-mod-sound`'s `Loop`).
+    #[must_use]
+    pub fn mod_sound_loops(&self) -> usize {
+        self.sfx
+            .as_ref()
+            .map_or(0, |voices| voices.mod_sounds.count())
     }
 
     /// How many craft engines are audible now: open with a gain above zero (a craft out of the

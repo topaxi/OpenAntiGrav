@@ -156,9 +156,8 @@ impl Voices {
         }
     }
 
-    /// How many loops are running, for tests.
-    #[cfg(test)]
-    pub(super) fn len(&self) -> usize {
+    /// How many loops are running.
+    pub(super) fn count(&self) -> usize {
         self.held.len()
     }
 }
@@ -296,13 +295,13 @@ mod tests {
         let start = [event(0, 1, ModSoundMode::Loop)];
         let (l, r) = rig.tick(&start, &right, true);
         assert!(r > l, "starts at the craft: {l} {r}");
-        assert_eq!(rig.voices.len(), 1);
+        assert_eq!(rig.voices.count(), 1);
         for _ in 0..5 {
             // Asked again every tick, as a module that holds a sound does.
             let (l, r) = rig.tick(&start, &right, true);
             assert!(r > l && l > 0.0, "still sounding: {l} {r}");
         }
-        assert_eq!(rig.voices.len(), 1, "a running loop is not started twice");
+        assert_eq!(rig.voices.count(), 1, "a running loop is not started twice");
         assert_eq!(rig.mixer.active_voices(), 1);
 
         // The mixer ramps a voice's pan and gain, so give the move a few steps.
@@ -314,7 +313,7 @@ mod tests {
         assert!(l > r, "the loop moved with the craft: {l} {r}");
 
         rig.tick(&[event(0, 1, ModSoundMode::Stop)], &left, true);
-        assert_eq!(rig.voices.len(), 0);
+        assert_eq!(rig.voices.count(), 0);
         let mut tail = (1.0, 1.0);
         for _ in 0..8 {
             tail = rig.tick(&[], &left, true);
@@ -331,19 +330,19 @@ mod tests {
 
         let mut rig = Rig::new(&sound);
         rig.tick(&[event(0, 1, ModSoundMode::Loop)], &both, true);
-        assert_eq!(rig.voices.len(), 1);
+        assert_eq!(rig.voices.count(), 1);
         rig.tick(&[], &alone, true);
-        assert_eq!(rig.voices.len(), 0, "the slot's craft is gone");
+        assert_eq!(rig.voices.count(), 0, "the slot's craft is gone");
 
         let mut rig = Rig::new(&sound);
         rig.tick(&[event(0, 1, ModSoundMode::Loop)], &both, true);
         rig.tick(&[], &both, false);
-        assert_eq!(rig.voices.len(), 0, "a finished race ends it");
+        assert_eq!(rig.voices.count(), 0, "a finished race ends it");
 
         let mut rig = Rig::new(&sound);
         rig.tick(&[event(0, 1, ModSoundMode::Loop)], &both, true);
         rig.voices.stop_all(&mut rig.mixer);
-        assert_eq!(rig.voices.len(), 0, "leaving the race ends it");
+        assert_eq!(rig.voices.count(), 0, "leaving the race ends it");
     }
 
     #[test]
@@ -355,7 +354,7 @@ mod tests {
             rig.tick(&[event(0, 1, ModSoundMode::Loop)], &far, true),
             (0.0, 0.0)
         );
-        assert_eq!(rig.voices.len(), 1);
+        assert_eq!(rig.voices.count(), 1);
         let (l, r) = rig.tick(&[], &near, true);
         assert!(l + r > 0.0, "{l} {r}");
     }

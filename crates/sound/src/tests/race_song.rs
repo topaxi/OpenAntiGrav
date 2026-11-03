@@ -37,6 +37,7 @@ fn step(audio: &mut Audio, gated: bool) {
         class_announcements: Vec::new(),
         listener: oag_audio::Listener::at_origin(),
         craft: [None; oag_gameplay::MAX_SHIPS],
+        mod_craft: [None; oag_gameplay::MAX_SHIPS],
         slot_teams: [None; oag_gameplay::MAX_SHIPS],
         player_slot: 0,
         throttle: 0.0,
