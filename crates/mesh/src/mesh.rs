@@ -194,6 +194,11 @@ pub struct Model {
     /// Wipeout HD's absorb shell program (`hd_absorbinternal`), for the one
     /// model that is one. See `oag_fx::absorb_shell`.
     pub absorb_shell: bool,
+    /// Wipeout HD's shield shell: the drawn colour is multiplied by the vertex
+    /// colour, which the caller sets each frame to the shield's `ShieldColour`
+    /// (on an HD model the vertex colour is otherwise a light term the generic
+    /// path ignores as a tint).
+    pub shield_shell: bool,
     /// Levels added to the sampler's own selection for this model's material
     /// textures (negative reads finer), `0.0` for none. A title's own number -
     /// Wipeout HD's is `-1.5` on a circuit's albedo, normal and lightmap units
@@ -313,6 +318,7 @@ impl Model {
 
             flame: None,
             absorb_shell: false,
+            shield_shell: false,
             material_lod_bias: 0.0,
             material_state: Vec::new(),
             alpha_test_ref: None,
@@ -1013,6 +1019,7 @@ fn build_class(
 
         flame: None,
         absorb_shell: false,
+        shield_shell: false,
         material_lod_bias: 0.0,
         material_state: Vec::new(),
         alpha_test_ref: None,

@@ -88,6 +88,7 @@ pub(in crate::mesh_render) fn triangle_model() -> Model {
         glow_from_program: false,
         flame: None,
         absorb_shell: false,
+        shield_shell: false,
         material_lod_bias: 0.0,
         material_state: Vec::new(),
         alpha_test_ref: None,

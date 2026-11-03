@@ -473,6 +473,17 @@ Ground truth: `crates/raceplay/tests/hd_shield_colour_ground_truth.rs` checks al
 13 table rows through `oag_livery::load` and lerps a shell to each. In a race
 the live colour reads `(0.0, 0.031, 0.996)` for Feisar once settled.
 
+**Why a plain vertex-colour tint showed nothing (found in review).** On an HD
+model the vertex colour is a baked light term, not a tint (`mesh.wesl`'s
+`colour_is_light` path forces the tint to white), so multiplying it by the
+shield colour left the shell white. The shell is now a `Model::shield_shell`
+(set when its material authors `ShieldColour`): its vertex colour is white at
+load, the race writes the shield colour into it each frame, and `shade.wesl`
+multiplies the composed output by it (`shield_shading`). The original's own
+`shipshield` fragment program is unread, so this multiply is the stand-in for
+"`ShieldColour` is a shader instance parameter" (shell frames: Feisar deep
+blue, Piranha orange, EGX green).
+
 **Zone, open.** Our archive order mounts `DATA00` first, so a Zone shell loads
 DATA00's older copy `(1.0, 0.302, 0.0, 0.0)` and its alpha-0 target draws the
 shell invisible once settled. Which copy the original reads is unmeasured; the

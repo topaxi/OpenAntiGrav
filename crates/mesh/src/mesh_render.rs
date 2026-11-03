@@ -462,6 +462,9 @@ pub fn build_with(
     if model.absorb_shell {
         constants.push(("absorb_shading", 1.0));
     }
+    if model.shield_shell {
+        constants.push(("shield_shading", 1.0));
+    }
     constants.push(("slots_present", f64::from(slots_present(model))));
     constants.extend(pipeline_cache::scope_constants());
     let constants = constants.as_slice();

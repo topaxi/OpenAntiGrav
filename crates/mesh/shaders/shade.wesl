@@ -1,6 +1,6 @@
 // `lit_texel`, the one fragment shading function every entry point calls.
 
-import package::absorb::{absorb_shading};
+import package::absorb::{absorb_shading, shield_shading};
 import package::bindings::{emissives, env_probe_tex, scene, shadow_exempt, shadow_sampler, sky_probe_tex, sun_delta, sun_known, uniforms};
 @if(!bindless) import package::bindings::{albedo, albedo_sampler, fifth_map, lightmap, pad_mask, sixth_map, wave_map};
 @if(bindless) import package::bindings::{material, samplers, textures};
@@ -1287,7 +1287,11 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         ).rgb;
         absorb = vec4<f32>(absorb_rgb, in.colour.a);
     }
-    let composed = mix(mix(cone_or_floor, flame, flame_shading), absorb, absorb_shading);
+    let composed_plain = mix(mix(cone_or_floor, flame, flame_shading), absorb, absorb_shading);
+    let composed = vec4<f32>(
+        composed_plain.rgb * select(vec3<f32>(1.0), in.colour.rgb, shield_shading != 0.0),
+        composed_plain.a,
+    );
 
     // **Wipeout HD's two rim-shaded weapon glows**, `slots::RIM_GLOW` (the
     // LeachBall) and `slots::RIM_EDGE` (the Plasma bolt's head), each set only

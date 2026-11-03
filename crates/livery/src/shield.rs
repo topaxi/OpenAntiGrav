@@ -50,7 +50,7 @@ fn shield_model(
         .as_deref()
         .and_then(|s| archives.read_name(s).ok())
         .ok_or_else(|| format!("{name}: a PS3 .vex with no .rcsmodel beside it"))?;
-    let (model, built) = mesh::rcs::build(
+    let (mut model, built) = mesh::rcs::build(
         name,
         &blob,
         &geometry,
@@ -59,6 +59,15 @@ fn shield_model(
     )
     .map_err(|error| format!("{name}: its .rcsmodel does not build ({error})"))?;
     let colour = shield_colour(&geometry);
+    if colour.is_some() {
+        // The program multiplies its output by `ShieldColour`. The race writes
+        // that colour into the vertex colour each frame, so the authored baked
+        // light must not scale it.
+        model.shield_shell = true;
+        for vertex in &mut model.vertices {
+            vertex.colour[..3].fill(1.0);
+        }
+    }
     // **Said out loud because the picture does not say it.** A shield model
     // draws additively and `mesh::rcs` resolves no material - HD authors one per
     // team (`/data/materials/ships/<team>_shield.rcsmaterial`) and nothing here
