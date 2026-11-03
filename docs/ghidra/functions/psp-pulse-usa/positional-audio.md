@@ -738,8 +738,68 @@ other two values are additions, **chosen, not measured**:
 
 Music and unplaced cues (`pan: None`) are never touched. Pre-mixed sequences
 (`sfx/compose.rs`) keep the pan they were baked with. Cost of a headphone
-voice: see the lane thread; `rear_cue` is a handful of multiply-adds per
-sample.
+voice: see below; `rear_cue` is a handful of multiply-adds per sample.
+
+### Cost on a Steam Deck
+
+Measured on the Deck (Zen 2, `powersave` governor, AC, load 0.4 to 2), release
+build with `-C target-cpu=znver2` in the Debian bookworm container (glibc 2.36).
+The audio render thread draws 512 frames per call at 48 kHz, so a call has a
+budget of 10,667 us. Per call, mean of 2,000 calls, two repeats within 2 %,
+voices looping with a pitch spread, half a second of white noise each:
+
+| placed voices | `original` | `rear_cue` | `headphones` | `headphones` share of a core |
+| --- | --- | --- | --- | --- |
+| 1 | 11.6 us | 11.3 us | 42.3 us | 0.40 % |
+| 8 | 79 us | 83 us | 326 us | 3.1 % |
+| 16 | 157 us | 164 us | 657 us | 6.2 % |
+| 32 | 315 us | 250 us | 912 us | 8.6 % |
+| 64 | 431 us | 453 us | 1,835 us | 17.2 % |
+
+- **Per voice**: `original` and `rear_cue` about 10 us (0.1 % of a core), within
+  noise of each other. `headphones` about 41 us for 1 to 16 voices (0.38 % of a
+  core), about 29 us at 32 and 64 voices. The extra over `original` is about
+  31 us per voice. The desktop figure (80 us, dev profile, load 35) was a
+  noisier and slower build; this one is the release build.
+- **p99 / max** stay within 1.2 / 1.4 times the mean (headphones, 64 voices:
+  mean 1,835 us, p99 2,078 us, max 2,416 us, 22.6 % of the budget). No call
+  came near the budget, `Mixer::starved` was 0 in every row.
+- **One-shots cost more per voice in `headphones`**: a race-shaped mix (16
+  placed loops, 2 music loops, 8 placed 250 ms one-shots retriggered every 8th
+  call, about 41 voices live) cost 1,159 us (10.9 %) against 282 us for
+  `original`. The ended one-shot keeps rendering its drain tail
+  (`binaural::LATENCY`), which probably explains the cost (not profiled).
+- **A full 128-voice HD pool**, 72 placed plus music plus one-shots, about 97
+  live: `headphones` 2,800 us (26 %, p99 28.7 %), `original` 656 us (6.2 %).
+
+A real race on the Deck (Pulse PSP EU, `--race --autopilot`, eight craft, the
+default field, 1280x800, vsync off, no frame limit, 90 fps under gamescope,
+master volume 0, 27 s window after the track loaded), the `oag-audio-render`
+thread's CPU from `/proc`, in percent of one core:
+
+| render size | `original` | `rear_cue` | `headphones` |
+| --- | --- | --- | --- |
+| 1280x800 | 1.11 | 1.11 | 2.44 |
+| 1920x1200 | 1.11 | not run | 2.44 |
+| 2560x1600 | 1.29 | not run | 2.77 |
+
+The game's `Health` counters (dropped buffers, late callbacks, starved
+renders) logged nothing in any run, at the default buffer. `headphones` costs
+about 1.3 points of one core more than `original` in a real race, so about 40
+placed voices at the synthetic 29 to 41 us each. A heavier render raises every
+mode by about 0.2 points (shared L2/L3 and memory), the HRTF cost by 0.3.
+Not reachable here: a 3840x2160 output (gamescope fixes the output at the
+panel's 1280x800; `--render-scale` stops at 200 %), so the 4K row is the
+2560x1600 render. Whether the autopilot fired weapons in the window was not
+checked, so a race with every weapon in use may have more one-shots.
+
+**Recommendation.** No voice cap is needed on the Deck for Pulse and Pure (32
+voices: 8.6 % of a core, p99 under 10 %). For HD's 128-voice pool, worst case
+about 128 x 41 us = 5.2 ms (49 % of the budget on one thread) would leave
+little room beside a loaded CPU, so cap `headphones` at the 32 nearest or
+loudest placed voices and let the rest take `rear_cue` (one shared
+convolver, a per-voice FIFO, so a voice can change mode at a block edge).
+That cap is a proposal, not built.
 
 ## Not determined
 
