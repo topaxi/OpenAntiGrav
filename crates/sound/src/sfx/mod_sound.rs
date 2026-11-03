@@ -238,7 +238,9 @@ mod tests {
             // Two milliseconds, the same length every time, summed per ear.
             let mut out = vec![0.0; 96 * CHANNELS];
             self.mixer.render(&mut out);
-            out.chunks_exact(2)
+            out.as_chunks::<2>()
+                .0
+                .iter()
                 .fold((0.0, 0.0), |(l, r), f| (l + f[0].abs(), r + f[1].abs()))
         }
     }
