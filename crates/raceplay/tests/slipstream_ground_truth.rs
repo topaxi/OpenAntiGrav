@@ -217,6 +217,7 @@ fn a_fire_is_a_second_out_of_the_world_and_two_seconds_on_at_a_slower_speed() {
     while ship(&race).transit.is_some() {
         assert_eq!(ship(&race).physics.body.position, entry, "frozen at {out}");
         assert!(!race.ship_active(0), "not drawn");
+        assert!(!ship(&race).in_world(), "out of the world: untouchable");
         race.tick(&throttle());
         out += 1;
         assert!(out < 100, "never came back");
@@ -338,4 +339,56 @@ fn the_ai_fires_it_and_only_one_portal_is_open_at_a_time() {
     );
     assert_eq!(most_out, 1, "one portal pair at a time");
     assert!(no_fault(&race), "no fault");
+}
+
+#[test]
+#[ignore = "needs the Pulse, HD and 2048 images (and Omega's) and the official mods"]
+fn its_share_of_the_pad_draws_is_a_fraction_of_a_turbo_on_every_titles_real_table() {
+    let Some(source) = slipstream() else { return };
+    let row = source.pickup_odds[0].odds;
+    for (image, title) in [
+        ("data/images/pulse-psp-eu.chd", "Pulse"),
+        ("data/images/hdfury-ps3-eu-dec.iso", "HD"),
+        ("data/extracted/vita/PCSF00007", "2048"),
+        ("data/images/omega-ps4-eu.pkg", "Omega"),
+    ] {
+        let Some(image) = oag_testdata::image(image) else {
+            continue;
+        };
+        let loaded = race::load(&race::Options {
+            source: image.display().to_string(),
+            class: "VENOM".to_string(),
+            mode: oag_race::Mode::SingleRace,
+            ..race::Options::default()
+        })
+        .unwrap_or_else(|e| panic!("{title}: {e}"));
+        let weapons = loaded.setup.weapons.as_ref().expect("a weapon table");
+        assert!(!weapons.pickups.is_empty(), "{title}");
+        for table in &weapons.pickups {
+            let turbo = table
+                .odds
+                .iter()
+                .find(|(w, _)| *w == Weapon::Turbo)
+                .map(|(_, o)| *o)
+                .expect("a Turbo row");
+            let ai: f32 = table.odds.iter().map(|(_, o)| o.ai).sum();
+            let human: f32 = table.odds.iter().map(|(_, o)| o.human).sum();
+            let ai_share = row.ai / (ai + row.ai);
+            let human_share = row.human / (human + row.human);
+            println!(
+                "{title} {}: AI {:.1} % (turbo {:.1} %), human {:.1} %",
+                table.class,
+                ai_share * 100.0,
+                turbo.ai / (ai + row.ai) * 100.0,
+                human_share * 100.0
+            );
+            assert!((0.03..0.15).contains(&ai_share), "{title} {}", table.class);
+            assert!(
+                (0.03..0.15).contains(&human_share),
+                "{title} {}",
+                table.class
+            );
+            assert!(ai_share < turbo.ai / (ai + row.ai), "less than a Turbo");
+        }
+    }
 }

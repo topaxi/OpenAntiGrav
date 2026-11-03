@@ -94,20 +94,26 @@ fn the_pads_draw_it_beside_the_titles_weapons_at_its_own_odds() {
     assert_eq!(odds, slipstream.manifest.pickup_odds[0].odds);
     let plain = PickupTable {
         class: "VENOM".to_string(),
-        odds: [Weapon::Turbo, Weapon::Rocket, Weapon::Shield, Weapon::Mine]
-            .into_iter()
-            .map(|w| {
-                (
-                    w,
-                    PickupOdds {
-                        ai: 10.0,
-                        human: 10.0,
-                        front: 0.0,
-                        back: 0.0,
-                    },
-                )
-            })
-            .collect(),
+        // Pulse's real table sums to 86 with a Turbo at 14.
+        odds: [
+            (Weapon::Turbo, 14.0),
+            (Weapon::Rocket, 20.0),
+            (Weapon::Shield, 20.0),
+            (Weapon::Mine, 32.0),
+        ]
+        .into_iter()
+        .map(|(w, weight)| {
+            (
+                w,
+                PickupOdds {
+                    ai: weight,
+                    human: weight,
+                    front: 0.0,
+                    back: 0.0,
+                },
+            )
+        })
+        .collect(),
     };
     let mut modded = plain.clone();
     modded.odds.push((Weapon::Extension, odds));
@@ -121,7 +127,18 @@ fn the_pads_draw_it_beside_the_titles_weapons_at_its_own_odds() {
             hits as f32 / n as f32
         };
         let with = share(&modded);
-        assert!((0.02..0.3).contains(&with), "{driver:?}: {with}");
+        // The AI's column is flat; a person's blends `back` in by place.
+        let low = odds.ai / (86.0 + odds.ai);
+        let high = (odds.human + odds.back) / (86.0 + odds.human + odds.back);
+        let (min, max) = if matches!(driver, Driver::Ai) {
+            (low - 0.012, low + 0.012)
+        } else {
+            (low - 0.012, high + 0.012)
+        };
+        assert!(
+            (min..max).contains(&with),
+            "{driver:?}: {with} in {min}..{max}"
+        );
         assert_eq!(share(&plain), 0.0, "never without its row");
     }
 }
@@ -232,5 +249,37 @@ fn its_portal_is_the_titles_own_and_a_fire_fits_the_fuel_budget() {
         )));
         assert!(fuel < oag_modhost::FUEL_PER_TICK / 4, "{title}: {fuel}");
         eprintln!("slipstream {title}: fuel on a fire {fuel}");
+    }
+}
+
+/// A module that stores the observation's title key, as the host writes it, in its state.
+fn title_reader() -> crate::extensions::Source {
+    module(
+        "test.title",
+        &format!(
+            "(i32.store (i32.const {state}) (i32.load (i32.const {title})))
+             i32.const 0",
+            state = super::extensions::on::STATE,
+            title = 1024 + oag_ext_abi::TITLE_AT,
+        ),
+    )
+}
+
+#[test]
+fn a_race_hands_its_module_the_titles_key() {
+    for title in [
+        "wipeout-pulse",
+        "wipeout-hd",
+        "wipeout-omega-collection",
+        "wipeout-2048",
+    ] {
+        let mut race = super::extensions::grid(prepared_for(title, &[title_reader()]));
+        race.tick(&oag_gameplay::PlayerInputs::none());
+        let blob = race.sim.extensions.blob_for_tests(0);
+        assert_eq!(
+            u32::from_le_bytes(blob[..4].try_into().unwrap()),
+            oag_ext_abi::channel_key(title),
+            "{title}"
+        );
     }
 }

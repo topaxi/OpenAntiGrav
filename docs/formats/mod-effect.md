@@ -62,6 +62,16 @@ model's `+Z`, which put them near the nose (seen 2026-10-30 on Pulse PSP's Energ
 now share the body anchor. The orange sparks at the nose of a craft scraping a wall are the
 vanilla wall-scrape sparks (a run without the mod shows them).
 
+## Placed ahead: `fire-mod-effect-ahead`
+
+The effect stands at the middle of the road `distance` ahead, lifted a little off the surface, and a
+particle sprite is a billboard centred on that point. A half disc standing on the road is therefore
+a PNG with its flat edge on the **middle row** and the disc in the upper half (the lower half is
+under the road and the depth test hides it). The stage draws half-size in world units (a portal
+of radius 12 is `size = 12`). On a pale circuit an `additive` sprite is nearly invisible: use
+`alpha-over` in a deep colour. Seen on Pulse PSP EU `16_Track` and HD (the official mod
+`oag.slipstream`, `slipstream_ground_truth`).
+
 ## Open
 
 - Only billboard emitters, cone directions and point spawns: no child emitters, streaks,

@@ -87,8 +87,13 @@ found, for the engine:
   gate is shut (a lap entered by a late jump) is no lap and no finish. Right for a mod; a mod
   that wants "skip the lap" needs a separate command.
 - **Pulse PSP and PS2 are one title to a manifest**, so one icon (PS2's, the larger) is shipped.
-- 2048 and Omega: checked, the same guest, icon and fill run on both (screenshots in the lane
-  report); 2048's disc icon (`2048.png`) sits correctly in the engine's frame.
+- 2048 and Omega: checked, the same guest, icon and fill run on both. To see it:
+  `OAG_MODS=assets/mods/official oag-game <disc or folder> --race --no-audio --mode single_race --give extension --autopilot --input-script fire.inputs --ticks 730 --screenshot out.png`
+  with `[mods] enabled = ["oag.slipstream"]` in the settings file and `fire.inputs` = `700 cross`,
+  `1 cross square`, `200 cross`. 2048's disc icon (`2048.png`) is drawn by the mod and the frame by
+  the engine; the pickup box shows with `--give extension` (it did not without a pickup).
+- The pad odds are one row for every title and class, checked against each real table
+  (`slipstream_ground_truth::its_share_of_the_pad_draws_is_a_fraction_of_a_turbo_on_every_titles_real_table`).
 
 ## Next Steps
 
