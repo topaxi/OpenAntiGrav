@@ -71,7 +71,7 @@ impl Race {
     /// N+1. No cue: `QUAKELAUNCH` belongs to the press.
     pub(crate) fn fire_armed_quakes(&mut self) {
         for slot in 0..self.sim.world.ship_count as usize {
-            if !self.sim.world.ships[slot].pickup.quake_armed || !self.may_use_pickup(slot) {
+            if !self.sim.world.ships[slot].pickup.quake_armed {
                 continue;
             }
             if self.launch_quake(slot) {

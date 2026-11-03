@@ -133,8 +133,34 @@ impl Race {
     /// trigger, for a person and for the AI alike. The pickup is not touched: what
     /// it held stays in the slot for after the respawn (`docs/gameplay/pickups.md`,
     /// "A destroyed craft").
+    ///
+    /// Every use of a pickup asks this: the player's and the opponent's fire, the
+    /// held Cannon trigger, and a mod's own pickup (`Weapon::Extension`), which
+    /// reaches the mod only through those two fire paths. A mod adding a weapon
+    /// handles nothing itself.
     pub(crate) fn may_use_pickup(&self, slot: usize) -> bool {
         self.sim.world.ships[slot].physics.craft_state == oag_physics::CraftState::Racing
+    }
+
+    /// Ends the use in progress of every craft that may not use its pickup: a mine
+    /// cluster part laid, a Cannon magazine part fired, an armed Quake press.
+    ///
+    /// Cancelled, not paused: nothing resumes after the respawn. A started mine
+    /// cluster or Cannon magazine is the pickup being used, so it is spent; an armed
+    /// Quake was never fired, so its pickup stays like any unused one. Runs first in
+    /// the weapon step, so the laying, Cannon and armed-Quake steps after it find
+    /// nothing to continue.
+    pub(super) fn cancel_pickup_use_of_downed_crafts(&mut self) {
+        for slot in 0..self.sim.world.ship_count as usize {
+            if self.may_use_pickup(slot) {
+                continue;
+            }
+            let held = &mut self.sim.world.ships[slot].pickup;
+            if held.is_dropping() || held.cannon_rounds > 0 {
+                held.take();
+            }
+            held.quake_armed = false;
+        }
     }
 
     /// Fires or absorbs whatever the craft is holding.
@@ -649,7 +675,6 @@ impl Race {
         for slot in 0..self.sim.world.ship_count as usize {
             if !self.sim.world.ships[slot].active
                 || !self.sim.world.ships[slot].pickup.is_dropping()
-                || !self.may_use_pickup(slot)
             {
                 continue;
             }

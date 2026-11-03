@@ -874,20 +874,29 @@ flare's own texture, because `Ship Muzzle` (`0x3e2`) and `cannon_flash`
 ## A destroyed craft
 
 A craft in its destroyed sequence (`CraftState::Destroyed`, then `Eliminated` until the
-Eliminator puts it back on the line) cannot fire, lay, absorb or hold a trigger: the
-player's press (`Race::spend_pickup`), an opponent's decision
-(`Race::spend_opponent_pickup`), a mine drop in progress (`Race::lay_mines`), a held
-Cannon trigger (`Race::advance_cannons`) and an armed Quake (`Race::fire_armed_quakes`)
-all stop at `Race::may_use_pickup`, which is true only while the craft is `Racing`.
-The gate is state-based, so it holds in every mode with a wreck and on every title;
-Eliminator is the one mode where the craft comes back. Before it, the player's fire and
-absorb presses, and an opponent under `FireLaw::Ours`, reached the pickup while the craft
-was blowing up (`FireLaw::Original` already refused).
+Eliminator puts it back on the line) cannot fire, lay, absorb or hold a trigger, and
+every use it had under way is **cancelled, not paused**. Our rule.
 
-**What the held pickup does is undocumented in the original** (no page records it), so
-the existing behaviour stays: the pickup is kept in the slot, and
-`oag_physics::damage::reset` on the respawn does not clear it. Only the trigger is
-blocked. Test: `tests::destroyed_fire`.
+- **The gate**: `Race::may_use_pickup`, true only while the craft is `Racing`. Every way
+  to use a pickup goes through it: the player's press (`Race::spend_pickup`), an
+  opponent's decision (`Race::spend_opponent_pickup`) and a held Cannon trigger
+  (`Race::advance_cannons`). A mod's own pickup (`Weapon::Extension`, `pickup-fire`,
+  `pickup-absorbed`) is raised from the first two and nowhere else, so a mod adding a
+  weapon handles nothing itself.
+- **The cancel**: `Race::cancel_pickup_use_of_downed_crafts`, first in the weapon step,
+  ends a mine or bomb cluster part laid, a Cannon magazine part fired and an armed Quake
+  press. A started mine cluster or magazine is the pickup being used, so the pickup is
+  spent with it (the craft respawns with the slot empty, no fresh cluster); an armed
+  Quake was never fired, so its pickup stays. Nothing resumes after the respawn.
+- **A pickup not yet used stays in the slot** for after the respawn
+  (`oag_physics::damage::reset` does not clear it); only the trigger is blocked.
+
+The state test holds in every mode with a wreck and on every title; Eliminator is the one
+mode where the craft comes back. Before it, the player's fire and absorb presses, and an
+opponent under `FireLaw::Ours`, reached the pickup while the craft was blowing up.
+Test: `tests::destroyed_fire`. The AI Rocket has no in-progress state to cancel; the
+synthetic test track never lets the driver aim, so its fire-positive control is the
+Turbo, which passes the same `spend_opponent_pickup` gate.
 
 ## Absorbing
 
