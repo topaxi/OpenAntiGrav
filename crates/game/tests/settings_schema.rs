@@ -32,6 +32,8 @@ fn populated() -> Settings {
         enabled: true,
     }];
     s.audio.music_switches.insert("folder:/music".into(), true);
+    s.audio
+        .choose_spatial(Some("usb-codec"), oag_audio::SpatialChoice::Headphones);
     s.race.window_monitors = vec!["DP-1".into()];
     s.race.window_panes = vec!["a".into()];
     s.online.address = "example.org:4433".into();
@@ -55,6 +57,7 @@ fn a_settings_file_with_every_section_populated_validates() {
         "[mod_settings.\"oag.example\"]",
         "[audio.music_switches]",
         "[[audio.music_folders]]",
+        "[[audio.spatial_devices]]",
         "hud_safe_area",
         "language",
     ] {
@@ -107,4 +110,17 @@ fn a_wrong_type_is_named() {
         .unwrap_err()
         .join("\n");
     assert!(errors.contains('k'), "{errors}");
+}
+
+#[test]
+fn a_remembered_spatial_audio_choice_survives_a_settings_reload() {
+    use oag_audio::SpatialChoice;
+    let mut s = settings::fresh();
+    s.audio
+        .choose_spatial(Some("usb-codec"), SpatialChoice::Headphones);
+    let mut back: settings::Settings = toml::from_str(&written(&s)).expect("read");
+    back.audio.recall_spatial("usb-codec");
+    assert_eq!(back.audio.spatial_audio, SpatialChoice::Headphones);
+    back.audio.recall_spatial("speakers");
+    assert_eq!(back.audio.spatial_audio, SpatialChoice::Auto);
 }

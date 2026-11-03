@@ -2,7 +2,7 @@
 status: blocked-maintainer
 titles: [all]
 updated: 2026-11-03
-summary: "SPATIAL AUDIO built (original, rear_cue default, headphones via SADIE II D1 + hrtf); open: a listening judgement, Deck and S24 cost, elevation"
+summary: "SPATIAL AUDIO built (auto default); open: macOS, Android, iOS output detection, a listening judgement, S24 cost, elevation"
 ---
 
 # Spatial audio options for front/back cues
@@ -30,6 +30,61 @@ is the camera, `original` on every title. Landed in `oag-audio`/`oag-sound`:
   `aarch64-linux-android` and `aarch64-apple-ios` (oag-audio).
 - WAV pairs (front vs behind per mode, and a circling source) were written for
   the lead; nothing was played.
+
+## Auto (2026-11-03, lane `spatial-audio-auto`)
+
+`auto` is the default and resolves per output: `headphones` on a headphone
+output, `rear_cue` on speakers and on anything unknown
+(`oag_audio::SpatialChoice::resolve`). The mixer still runs only the three
+`SpatialMode`s.
+
+- **Detection** is `oag_audio::route`, polled every ~2 s on a worker
+  (`RouteWatcher`, one `oag_thread::Task` at a time), never on the render-ahead
+  thread or the device callback. cpal cannot say: its PipeWire/PulseAudio hosts
+  name the graph's `output_default` node, and its Android/iOS hosts name
+  "Default Device".
+  - **Linux/Deck**: `pactl get-default-sink` plus `pactl --format=json list sinks`;
+    the active port's type (`Headphones`, `Headset`) or `device.form_factor` says
+    headphones, `Speaker`/`HDMI`/`SPDIF`/... say speakers, a Bluetooth sink with
+    neither is a headset. The id is `<sink>|<active port>`, because on a Deck or
+    a laptop speakers and the jack are one sink with two ports. No `pactl`
+    (bare ALSA): `Unknown`.
+  - **Windows**: cpal's WASAPI default device carries a form factor; headphones
+    and headset are headphones, speaker and dock are speakers. Compiles for
+    `x86_64-pc-windows-gnu`; **not run here**.
+  - **Browser**: nothing probed, `Unknown`.
+- **Per-device memory**: `audio.spatial_devices` (oldest first, 16 at most,
+  `auto` never stored). A pick made while an output with an id is active is
+  stored under it; `auto` forgets it. When an output becomes active its entry
+  (or `auto`) becomes `audio.spatial_audio`. A pick with no id is only the
+  current value.
+- **Click-free switch**: the mixer lets a live HRTF voice fade out over the
+  256-frame path crossfade when the mode leaves `headphones` (it used to drop
+  the convolver at once), enters `headphones` from the rear cue through the same
+  crossfade, and fades the source into a convolver entered mid-signal.
+  `original` is still bit-identical (the convolver drops at once).
+- Maintainer's PC: headphones on a USB codec that reports "USB Audio
+  Speakers" resolve to `rear_cue` under `auto`; pick HEADPHONES once and it is
+  remembered for that sink and port.
+
+Open for `auto`:
+
+- **macOS**: read the default output's transport and data source
+  (CoreAudio `kAudioDevicePropertyTransportType`, `kAudioDevicePropertyDataSource`
+  `'ispk'`/`'hdpn'`) in `route::probe_platform`; id from the device UID. Today
+  `Unknown`.
+- **Android**: `AudioManager.getDevices(GET_DEVICES_OUTPUTS)` and the routed
+  device's `AudioDeviceInfo.getType()` (WIRED_HEADPHONES, WIRED_HEADSET,
+  USB_HEADSET, BLUETOOTH_A2DP, BLE_HEADSET); `oag-mobile` has no JNI yet and
+  `NativeActivity` has no Java, so this needs a `jni` call through
+  `ndk-context`. Id from `getProductName` + type. Today `Unknown`.
+- **iOS**: `AVAudioSession.sharedInstance.currentRoute.outputs[*].portType`
+  (`headphones`, `bluetoothA2DP`, `bluetoothLE`, `bluetoothHFP`), `objc2-avf-audio`
+  is already in the tree through cpal; id from the port UID. Today `Unknown`.
+- A device change is polled, not notified; a PipeWire/WASAPI event would shave
+  up to 2 s.
+- Choice values are drawn as the stored word (`AUTO`, `REAR_CUE`), not through a
+  string id: `menu.toml` has no per-value labels, so `auto` has no string row.
 
 Still open: nobody has listened (is the rear cue enough, does headphones click on
 a passing craft); Deck cost is measured (below), S24 cost is an estimate;

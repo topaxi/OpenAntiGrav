@@ -722,9 +722,13 @@ describe. Unexplained, and worth a look by whoever next opens `SCES_547.48`.
 The law above cannot tell front from back, so the `original` value of the
 SPATIAL AUDIO setting is exactly it (bit-identical, pinned by
 `mixer::tests::original_ignores_where_a_voice_is_along_the_forward_axis`). The
-other two values are additions, **chosen, not measured**:
+other values are additions, **chosen, not measured**:
 
-- `rear_cue` (the default): the listener now carries a forward axis (the
+- `auto` (the default): `headphones` on a headphone output, `rear_cue` on
+  speakers and on any output the platform cannot name
+  (`oag_audio::SpatialChoice::resolve`, `oag_audio::route`); a pick is
+  remembered per output.
+- `rear_cue`: the listener now carries a forward axis (the
   camera's `-Z`, `oag_game::sound::listener_of_view`), `Emitter::place` returns
   `front = dot(direction, forward)`, and a voice with `front < 0` is run
   through a one-pole low-pass (2.5 kHz dead behind) and lowered to 0.8,

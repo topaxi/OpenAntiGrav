@@ -29,16 +29,16 @@ fn full_volume_is_unattenuated() {
 }
 
 #[test]
-fn the_spatial_audio_setting_reaches_the_mixer_and_defaults_to_the_rear_cue() {
-    use oag_audio::SpatialMode;
+fn the_spatial_audio_setting_reaches_the_mixer_and_defaults_to_auto() {
+    use oag_audio::{SpatialChoice, SpatialMode};
     let settings = crate::settings::Settings::default();
-    assert_eq!(settings.spatial_audio, SpatialMode::RearCue);
+    assert_eq!(settings.spatial_audio, SpatialChoice::Auto);
     let audio = Audio::open(&settings, None, None, oag_audio::MIN_BUFFER, false);
     audio
         .output()
         .with_mixer(|mixer| assert_eq!(mixer.spatial_mode(), SpatialMode::RearCue));
     let original = crate::settings::Settings {
-        spatial_audio: SpatialMode::Original,
+        spatial_audio: SpatialChoice::Original,
         ..Default::default()
     };
     audio.apply(&original);
@@ -51,7 +51,7 @@ fn the_spatial_audio_setting_reaches_the_mixer_and_defaults_to_the_rear_cue() {
     );
 
     let headphones = crate::settings::Settings {
-        spatial_audio: SpatialMode::Headphones,
+        spatial_audio: SpatialChoice::Headphones,
         ..Default::default()
     };
     audio.apply(&headphones);
@@ -281,4 +281,68 @@ fn the_speech_bus_follows_the_sfx_slider_and_the_flyby_fade_squared() {
         0.5,
         "leaving restores the Speech slider"
     );
+}
+
+#[test]
+fn auto_follows_the_output_and_a_remembered_choice_wins_for_its_device_only() {
+    use std::sync::{Arc, Mutex};
+
+    use oag_audio::{Route, RouteKind, RouteWatcher, SpatialChoice, SpatialMode};
+
+    let now = Arc::new(Mutex::new(Route {
+        device: Some("jack|speaker".into()),
+        kind: RouteKind::Speakers,
+    }));
+    let probe = Arc::clone(&now);
+    let mut settings = crate::settings::Settings::default();
+    let mut audio = Audio::open(&settings, None, None, oag_audio::MIN_BUFFER, true);
+    audio.watch_route(RouteWatcher::with_probe(
+        Arc::new(move || probe.lock().expect("lock").clone()),
+        1,
+    ));
+    let mode = |audio: &Audio| audio.output().with_mixer(|mixer| mixer.spatial_mode());
+    let settle = |audio: &mut Audio, settings: &mut crate::settings::Settings| {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while !audio.poll_route(settings) && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+    };
+    let set_route = |device: &str, kind| {
+        *now.lock().expect("lock") = Route {
+            device: Some(device.into()),
+            kind,
+        };
+    };
+
+    settle(&mut audio, &mut settings);
+    assert_eq!(mode(&audio), SpatialMode::RearCue, "speakers: rear cue");
+
+    set_route("jack|headphones", RouteKind::Headphones);
+    settle(&mut audio, &mut settings);
+    assert_eq!(mode(&audio), SpatialMode::Headphones, "headphones: HRTF");
+    assert_eq!(settings.spatial_audio, SpatialChoice::Auto);
+
+    // A pick on a USB codec that reports itself as speakers, then away and back.
+    set_route("usb-codec", RouteKind::Speakers);
+    settle(&mut audio, &mut settings);
+    assert_eq!(mode(&audio), SpatialMode::RearCue);
+    settings.choose_spatial(audio.route_device(), SpatialChoice::Headphones);
+    audio.apply(&settings);
+    assert_eq!(mode(&audio), SpatialMode::Headphones);
+
+    set_route("jack|speaker", RouteKind::Speakers);
+    settle(&mut audio, &mut settings);
+    assert_eq!(mode(&audio), SpatialMode::RearCue, "the pick is not global");
+
+    set_route("usb-codec", RouteKind::Speakers);
+    settle(&mut audio, &mut settings);
+    assert_eq!(
+        mode(&audio),
+        SpatialMode::Headphones,
+        "the pick returns with its device"
+    );
+
+    set_route("mystery", RouteKind::Unknown);
+    settle(&mut audio, &mut settings);
+    assert_eq!(mode(&audio), SpatialMode::RearCue, "unknown: rear cue");
 }

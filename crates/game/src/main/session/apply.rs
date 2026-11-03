@@ -330,9 +330,12 @@ impl Session {
                 }
             },
             // Applied on the spot: the mixer reads the mode on its next block.
-            "audio.spatial_audio" => match text.parse::<oag_audio::SpatialMode>() {
-                Ok(mode) => {
-                    self.settings.audio.spatial_audio = mode;
+            "audio.spatial_audio" => match text.parse::<oag_audio::SpatialChoice>() {
+                Ok(choice) => {
+                    let device = self.audio.route_device().map(str::to_owned);
+                    self.settings
+                        .audio
+                        .choose_spatial(device.as_deref(), choice);
                     self.audio.apply(&self.settings.audio);
                 }
                 Err(e) => {

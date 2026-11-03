@@ -135,6 +135,7 @@ fn music_source_changed_while_a_race_is_live_moves_the_race_voice() {
     let ps2_track = silence(180.0, 2, 48_000);
 
     let mut audio = Audio {
+        route: Default::default(),
         output: Output::null(DUMP_SAMPLE_RATE),
         dump: Some(Dump {
             path: PathBuf::from("unused"),
@@ -205,6 +206,7 @@ fn a_source_with_no_decodable_race_music_still_resumes_menu_music_cleanly() {
     };
     let menu_sound = silence(28.0, 2, 44_100);
     let mut audio = Audio {
+        route: Default::default(),
         output: Output::null(DUMP_SAMPLE_RATE),
         dump: Some(Dump {
             path: PathBuf::from("unused"),

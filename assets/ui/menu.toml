@@ -1424,7 +1424,10 @@ values_from = "music_sources"
 # `original` is the stereo pan alone, which cannot tell front from back (measured:
 # `docs/ghidra/functions/psp-pulse-usa/positional-audio.md`); `rear_cue` low-passes and
 # lowers a sound behind the camera; `headphones` renders it through a head-related
-# transfer function and is meant for headphones. Every title offers all three. The
+# transfer function and is meant for headphones; `auto` (the default) is `headphones` on
+# a headphone output and `rear_cue` on any other, and follows the output when it
+# changes. A pick is remembered for the output it was made on. Every title offers all
+# four. The
 # reference for "behind" is the camera, the original's listener. Music and unplaced
 # cues are never touched.
 [[page.entry]]
@@ -1432,7 +1435,7 @@ kind = "choice"
 label = "SPATIAL AUDIO"
 string_id = "OAG_AUDIO_SPATIAL_AUDIO"
 setting = "audio.spatial_audio"
-values = ["original", "rear_cue", "headphones"]
+values = ["auto", "original", "rear_cue", "headphones"]
 
 [[page.entry]]
 kind = "submenu"

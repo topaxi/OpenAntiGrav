@@ -44,6 +44,7 @@ fn a_menu_source_switch_does_not_block_the_caller() {
     };
     let ps2_sound = silence(180.0, 2, 48_000);
     let mut audio = Audio {
+        route: Default::default(),
         output: Output::null(DUMP_SAMPLE_RATE),
         dump: Some(Dump {
             path: PathBuf::from("unused"),
@@ -157,6 +158,7 @@ fn a_press_back_to_the_current_release_drops_a_switch_still_in_flight() {
     };
     let ps2_sound = silence(180.0, 2, 48_000);
     let mut audio = Audio {
+        route: Default::default(),
         output: Output::null(DUMP_SAMPLE_RATE),
         dump: Some(Dump {
             path: PathBuf::from("unused"),

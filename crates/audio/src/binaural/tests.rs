@@ -351,3 +351,51 @@ fn handing_over_between_the_hrtf_and_the_rear_cue_has_no_step() {
         "hand-over step {handed} against {steady} with no hand-over"
     );
 }
+
+/// A constant tone voice settled in `from`, switched to `to`; the largest
+/// sample-to-sample step from the last settled frame on, and the HRTF voices
+/// still alive 128 frames after the switch.
+fn switch_modes(from: SpatialMode, to: SpatialMode) -> (f32, usize) {
+    // A 100 Hz sine, whole cycles to the loop: a source with no steps of its
+    // own, so a step in the mix is the switch (a constant would ring through
+    // the convolver's own start-up).
+    let tone: Vec<i16> = (0..RATE as usize)
+        .map(|i| ((i as f32 * std::f32::consts::TAU * 100.0 / RATE as f32).sin() * 12_000.0) as i16)
+        .collect();
+    let sound = Arc::new(Sound::new(tone, 1, RATE).expect("sound"));
+    let mut mixer = headphone_mixer();
+    mixer.set_spatial_mode(from);
+    placed_loop(&mut mixer, &sound, 0.5, 0.4);
+    let mut out = vec![0.0; 512 * 2];
+    for _ in 0..6 {
+        mixer.render(&mut out);
+    }
+    mixer.set_spatial_mode(to);
+    let mut after = out[out.len() - 2..].to_vec();
+    // Half the 256-frame fade: a cut would already have dropped the convolver.
+    let mut half = vec![0.0; 128 * 2];
+    mixer.render(&mut half);
+    after.extend_from_slice(&half);
+    let alive = mixer.hrtf_voices();
+    for _ in 0..8 {
+        mixer.render(&mut out);
+        after.extend_from_slice(&out);
+    }
+    (largest_step(&after), alive)
+}
+
+#[test]
+fn a_mode_switch_mid_race_crossfades_in_both_directions() {
+    let (steady, _) = switch_modes(SpatialMode::RearCue, SpatialMode::RearCue);
+    let (leaving, alive) = switch_modes(SpatialMode::Headphones, SpatialMode::RearCue);
+    assert_eq!(alive, 1, "the convolver outlives the switch by its fade");
+    assert!(
+        leaving < steady * 3.0,
+        "leaving: step {leaving} against {steady}"
+    );
+    let (entering, _) = switch_modes(SpatialMode::RearCue, SpatialMode::Headphones);
+    assert!(
+        entering < steady * 3.0,
+        "entering: step {entering} against {steady}"
+    );
+}
