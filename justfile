@@ -262,7 +262,7 @@ build:
 # slow to build and into `target/dist/`. The local `--release` recipes stay on
 # the quick profile. See docs/tools/packaging.md, "The dist profile".
 build-dist *ARGS:
-    cargo build --profile dist -p oag-game {{ARGS}}
+    cargo build --profile dist -p oag-game --no-default-features --features extensions {{ARGS}}
 
 # A release `oag-game` tuned for a CPU tier, in its own target directory so the
 # baseline build is untouched: `just build-cpu` for `x86-64-v3` (AVX2, FMA,
@@ -270,7 +270,7 @@ build-dist *ARGS:
 # Steam Deck's own core. The simulation hashes are unchanged under either -
 # see docs/tools/packaging.md, "A CPU-tier build", for what was measured.
 build-cpu cpu="x86-64-v3" *ARGS:
-    CARGO_TARGET_DIR=target/cpu-{{cpu}} RUSTFLAGS="-C target-cpu={{cpu}}" cargo build --release -p oag-game {{ARGS}}
+    CARGO_TARGET_DIR=target/cpu-{{cpu}} RUSTFLAGS="-C target-cpu={{cpu}}" cargo build --release -p oag-game --no-default-features --features extensions {{ARGS}}
 
 docs:
     cargo doc --workspace --no-deps --document-private-items
@@ -684,7 +684,7 @@ apk *ARGS:
 # OpenAntiGrav.app zipped, from a dist build of oag-game (macOS only for a bundle
 # that launches; the layout assembles anywhere). See docs/tools/macos.md.
 mac-app *ARGS:
-    cargo build --profile dist -p oag-game
+    cargo build --profile dist -p oag-game --no-default-features --features extensions
     ./scripts/build-mac-app.sh {{ARGS}}
 
 # OpenAntiGrav.app inside an unsigned-for-the-store .ipa, for aarch64-apple-ios

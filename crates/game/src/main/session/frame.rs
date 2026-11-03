@@ -911,8 +911,10 @@ impl Session {
             // Neither a ghost nor a record comes out of a network race: its
             // inputs are predictions corrected by a server, under the server's
             // settings, not this player's run.
+            let unofficial = self.race_is_unofficial();
             if let Stage::Race(stage) = &mut self.stage
                 && self.net.is_none()
+                && !unofficial
             {
                 crate::race_stage::ghost::save(&mut stage.race, &stage.result_key);
             }
@@ -952,6 +954,7 @@ impl Session {
                     .campaign_cell
                     .as_ref()
                     .filter(|cell| !oag_tables::pure_campaign::is_free_play(&cell.name))
+                    .filter(|_| !unofficial)
                 {
                     self.records.record_campaign(
                         stage
@@ -965,7 +968,7 @@ impl Session {
                         observation.campaign_difficulty,
                     );
                 }
-                if let Some(progress) = stage.campaign_2048_event.as_ref() {
+                if let Some(progress) = stage.campaign_2048_event.as_ref().filter(|_| !unofficial) {
                     self.records.record_campaign(
                         campaign_title.as_deref().unwrap_or(&key.title),
                         &progress.name,
@@ -978,6 +981,7 @@ impl Session {
                 // law its `Title::loyalty` names.
                 if let (Some(shell), Some(options)) =
                     (self.shell.as_ref(), self.race_options.as_ref())
+                    && !unofficial
                     && let Some(earning) = shell.title.loyalty.filter(|e| !e.banked_by_endrace)
                     && let Some(team) = options.team.as_deref()
                 {
@@ -1001,8 +1005,10 @@ impl Session {
                         .filter(|_| stage.campaign_custom.is_none()),
                     ..observation
                 };
-                self.records.record(key, observation);
-                records::save_in_background(&self.records);
+                if !unofficial {
+                    self.records.record(key, observation);
+                    records::save_in_background(&self.records);
+                }
             }
         }
 

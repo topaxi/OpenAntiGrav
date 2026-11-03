@@ -209,11 +209,15 @@ impl Session {
         // `stage` and `self.records` are different fields of the same
         // `self`, so the first has to stop being borrowed before the second
         // can be.
-        if let Stage::Race(stage) = &mut self.stage {
+        let unofficial = self.race_is_unofficial();
+        if let Stage::Race(stage) = &mut self.stage
+            && !unofficial
+        {
             crate::race_stage::ghost::save(&mut stage.race, &stage.result_key);
         }
         let campaign_title = self.campaign_title();
         if let Stage::Race(stage) = &mut self.stage
+            && !unofficial
             && !stage.result_saved
             // Not a split screen's: see the finish site in `Session::frame`.
             && stage.race.viewport_count() <= 1

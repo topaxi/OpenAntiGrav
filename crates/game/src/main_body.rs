@@ -696,7 +696,7 @@ fn run(cli: Cli) -> Result<()> {
         };
 
     let scheme = pending.scheme();
-    let give = give_weapon(cli.give.as_deref())?;
+    let give = give_weapon(cli.give())?;
     let autopilot_pilot = autopilot_pilot(cli.driver.autopilot_pilot.as_deref())?;
     let autopilot_skill = cli.driver.autopilot_skill;
     let ai_choice = cli.driver.ai;

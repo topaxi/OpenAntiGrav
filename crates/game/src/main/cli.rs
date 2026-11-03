@@ -703,6 +703,7 @@ pub(crate) struct Cli {
     /// A verification aid - see `race::Options::seed`. The one thing in a race
     /// that draws from the generator today is which pickup a weapon pad hands
     /// over, so this is how a capture is made to show a chosen weapon.
+    #[cfg(feature = "dev-cli")]
     #[arg(long)]
     pub(crate) seed: Option<u64>,
 
@@ -733,6 +734,7 @@ pub(crate) struct Cli {
     /// cargo run -p oag-game -- --race --mode single_race --give rocket \
     ///     --hold cross --press square --ticks 900 --screenshot /tmp/shot.png
     /// ```
+    #[cfg(feature = "dev-cli")]
     #[arg(long, value_name = "WEAPON")]
     pub(crate) give: Option<String>,
 
@@ -1167,4 +1169,22 @@ pub(crate) struct Cli {
     pub(crate) net: extra::NetArgs,
     #[command(flatten)]
     pub(crate) log: oag_log::tool::LogArgs,
+}
+
+impl Cli {
+    /// `--seed`; always `None` in a build without `dev-cli`.
+    pub(crate) fn seed(&self) -> Option<u64> {
+        #[cfg(feature = "dev-cli")]
+        return self.seed;
+        #[cfg(not(feature = "dev-cli"))]
+        None
+    }
+
+    /// `--give`; always `None` in a build without `dev-cli`.
+    pub(crate) fn give(&self) -> Option<&str> {
+        #[cfg(feature = "dev-cli")]
+        return self.give.as_deref();
+        #[cfg(not(feature = "dev-cli"))]
+        None
+    }
 }

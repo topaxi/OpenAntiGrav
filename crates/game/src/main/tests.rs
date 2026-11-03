@@ -443,3 +443,27 @@ slot,team,left_x,left_y,left_z,up_x,up_y,up_z,fwd_x,fwd_y,fwd_z,pos_x,pos_y,pos_
         ]
     );
 }
+
+#[cfg(feature = "dev-cli")]
+#[test]
+fn a_development_build_accepts_seed_and_give() {
+    let cli = Cli::try_parse_from(["oag-game", "--race", "--seed", "7", "--give", "rocket"])
+        .expect("dev-cli builds take --seed and --give");
+    assert_eq!(cli.seed(), Some(7));
+    assert_eq!(cli.give(), Some("rocket"));
+}
+
+#[cfg(not(feature = "dev-cli"))]
+#[test]
+fn a_release_build_rejects_seed_and_give() {
+    for flag in [["--seed", "7"], ["--give", "rocket"]] {
+        let error = Cli::try_parse_from(["oag-game", "--race", flag[0], flag[1]])
+            .expect_err("a build without dev-cli has no such flag");
+        assert_eq!(error.kind(), clap::error::ErrorKind::UnknownArgument, "{flag:?}");
+    }
+}
+
+#[test]
+fn pose_parses_in_every_build() {
+    Cli::try_parse_from(["oag-game", "--race", "--pose", "0,0,0"]).expect("--pose is a capture flag");
+}
