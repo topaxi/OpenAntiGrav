@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-10-12
-summary: "AI pace: 2048 sol never laps (ResetZone loop), 06 and others still slow; find where the craft leaves the road"
+updated: 2026-11-03
+summary: "AI pace: 2048 sol has its floor now, a road gap at 3553-3620 still loops the field (pitch-up lever queued); 06 and others still slow"
 size: M (40)
 difficulty: medium (40)
 ---
@@ -18,17 +18,22 @@ scenario, a per-section profile, the campaign's Speed Lap gold, and
 
 ## Open
 
-- **2048 `sol`: no opponent ever laps.** Every craft hits a `ResetZone` about
-  65 ticks from the grid. It is put back at its last on-track sample at
-  standstill and hits the same volume again about 68 ticks later, creeping on
-  about 5 samples a time: 176 respawns per craft in 12,000 ticks.
-  - The first exit is the driver's: the autopilot player flies off the edge
-    at about 20 s, where the road bends left while the craft is in the air,
-    and no plan verifies there.
-  - The loop is rescue placement in `crates/raceplay/src/respawn.rs`, the same
-    family as `29_Track` reversed (one craft at sample 45, 52 respawns in one
-    Ace VENOM field seed).
-  - A human is not measured.
+- **2048 `sol`: the floor is in (2026-11-03, lane `2048-sol-ai-laps`); a gap
+  in the road still loops 2048's field.** The 153-respawn loop was a missing
+  floor, not the driver: the `.vex`'s lone `Reset` node kept `track_col.col`
+  out (`docs/formats/2048-collision.md`, "Which circuits read the container";
+  `crates/raceplay/tests/sol_ground_truth.rs`). Left: ring samples 3553-3620
+  are a gap after a speed pad (~3530), shared by every route. It clears from
+  about 170 u/s at the lip; the verifier reaches 173 (cruise 129.4 u/s), the
+  field 166-169 (cruise 124-125, plain seed-0 driver 127.6). Bit 0 covers line
+  3384-3647, so the original's relocation puts the craft back at ~3274 and it
+  meets the lip at the same speed: the rescue is faithful, the miss is the
+  driver's. Numbers on `docs/gameplay/ai.md`, "Floors in the speed plan".
+  2048 after the floor, field of seven, VENOM, 12,000 ticks, respawns per craft:
+  Novice 6/35/12/34/34/3/33, Skilled 19/21/4/35/8/8/22, Elite 21/2/2/21/3/13/6,
+  Ace 36/9/9/13/1/22/5 (craft with a flying lap: 2, 3, 4, 3 of 7). Omega's
+  `sol` (HD hulls): Elite 0/1/1/3/5/1/4 and Ace 3/2/1/2/1/3/3, every craft
+  laps; Novice and Skilled 1-35.
 - **Floors still in use** (plans holding a ceiling at or under 20 u/s): Pulse
   `07_Track` VENOM (2141, 2144-2145, 2375), HD `04_Track` PHANTOM (2307), Pure
   Citta Nuova VENOM (1493). The trough plan does not win there.
@@ -69,10 +74,16 @@ scenario, a per-section profile, the campaign's Speed Lap gold, and
 ## Next Steps
 
 - **Decided 2026-10-11 (maintainer): campaign cells topping out at Elite (`tune_at_scale` clamps at 3.0, no cell reaches Ace) is intended.** Not a gap.
-1. `sol`: find where the craft leaves the road around 20 s, the same
-   landing-aim lever as `06_Track` VENOM. Then decide where a rescue should
-   place a craft in front of a reset volume it cannot clear from standstill.
-   About 2 hours.
+1. `sol` gap (queued follow-up, opus): pitch-up held in the air cleared the
+   gap from 167.4 u/s in a one-off test (every airborne tick, every craft):
+   Ace field respawns 36/9/9/13/1/22/5 to 2/2/0/22/0/8/0. Make it a driver
+   rule that fires only airborne over an unsupported line run and heading
+   under the far lip (`Line::is_unsupported`), then prove the narrowness:
+   the lone board's twelve, `ai_clean_lap_gate` and the determinism hashes
+   unchanged. Also find why a race craft cruises 2-5 u/s under the verifier
+   on the same handling (personality wander costs ~2). Then the claim test: a
+   field of seven at every level laps on 2048 `sol` within 12,000 ticks.
+   About 3 hours. Size M (40), difficulty medium (40).
 2. `06_Track` VENOM: aim the run-up at the landing sample. About 2 hours.
 3. `cathedral` PHANTOM: a plan-aware roll or the rescue gap, then re-run
    the 2048 lone and field PHANTOM slices. About 2 hours.
