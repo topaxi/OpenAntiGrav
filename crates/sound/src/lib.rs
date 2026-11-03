@@ -46,6 +46,7 @@ pub mod library;
 pub mod settings;
 pub mod sfx;
 mod sfx_fade;
+mod spatial_route;
 
 pub mod folders;
 mod listings;
@@ -479,6 +480,9 @@ fn find_release(
 /// One per run, made in `main` before either way in (boot or `--race`).
 pub struct Audio {
     output: Output,
+    /// The default output as last seen, for `auto` SPATIAL AUDIO. See
+    /// [`spatial_route`].
+    route: spatial_route::Follow,
     /// HD's authored mix, when the booted title has one. See [`hd_mix`].
     hd: hd_mix::Hd,
     /// The race song held until the race leaves its countdown. See [`race_song`].
@@ -689,8 +693,14 @@ impl Audio {
         if let Some(name) = output.device_name() {
             info!("audio: {name} at {} Hz", output.sample_rate());
         }
+        let route = if output.is_streaming() {
+            spatial_route::Follow::watching(oag_audio::RouteWatcher::new())
+        } else {
+            spatial_route::Follow::default()
+        };
         let audio = Self {
             output,
+            route,
             hd: hd_mix::Hd::default(),
             song_hold: race_song::Hold::default(),
             dump: dump.map(|path| Dump {
@@ -732,6 +742,7 @@ impl Audio {
     /// sliders reach `Audio_SetSfxFadeTarget`, a separate chain; see
     /// `MUSIC_MASTER_TRIM` for the evidence.
     pub fn apply(&self, settings: &crate::settings::Settings) {
+        let spatial = settings.spatial_audio.resolve(self.route.kind());
         // HD sets music and effects from its authored mix every tick, so only
         // the sliders are kept here. See `hd_mix`.
         self.hd.sliders.set([
@@ -752,11 +763,47 @@ impl Audio {
             // Group volumes first, then the master, as the original's chain does.
             // See `settings::Audio::master_volume`.
             mixer.set_master_gain(settings.master_volume.gain());
-            mixer.set_spatial_mode(settings.spatial_audio);
+            mixer.set_spatial_mode(spatial);
         });
-        if settings.spatial_audio == oag_audio::SpatialMode::Headphones {
+        if spatial == oag_audio::SpatialMode::Headphones {
             self.output.ensure_binaural();
         }
+    }
+
+    /// Follows the default output: call once a tick. When it changes, the
+    /// output's remembered SPATIAL AUDIO value becomes the current one (see
+    /// [`crate::settings::Settings::recall_spatial`]) and the mixer is
+    /// re-pointed, which crossfades. Returns whether `settings` changed.
+    pub fn poll_route(&mut self, settings: &mut crate::settings::Settings) -> bool {
+        let Some(route) = self.route.poll() else {
+            return false;
+        };
+        let before = settings.spatial_audio;
+        if let Some(device) = route.device.clone() {
+            settings.recall_spatial(&device);
+        }
+        info!(
+            "audio: output is {:?} ({}); spatial audio {} -> {}",
+            route.kind,
+            route.device.as_deref().unwrap_or("unnamed"),
+            settings.spatial_audio,
+            settings.spatial_audio.resolve(route.kind),
+        );
+        self.apply(settings);
+        settings.spatial_audio != before
+    }
+
+    /// Follows `watcher`'s output instead of the platform's: the seam a test
+    /// drives with a mocked device.
+    pub fn watch_route(&mut self, watcher: oag_audio::RouteWatcher) {
+        self.route = spatial_route::Follow::watching(watcher);
+    }
+
+    /// The stable id of the active output, if the platform gave one: what a
+    /// SPATIAL AUDIO pick is remembered against.
+    #[must_use]
+    pub fn route_device(&self) -> Option<&str> {
+        self.route.device()
     }
 
     /// The output, and through it the mixer: the seam a cue goes through.

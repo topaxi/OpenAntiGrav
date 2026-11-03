@@ -239,6 +239,16 @@ type = "string"
 type = "boolean"
 optional = true
 
+# One entry of audio.spatial_devices.
+[types.spatial-device]
+type = "table"
+
+[types.spatial-device.device]
+type = "string"
+
+[types.spatial-device.mode]
+type = "string"
+
 # [audio]: bus volumes (percent) and the music pool.
 [types.audio]
 type = "table"
@@ -265,6 +275,12 @@ optional = true
 
 [types.audio.spatial_audio]
 type = "string"
+optional = true
+
+# Oldest first, at most 16; `auto` is never stored.
+[types.audio.spatial_devices]
+type = "array"
+itemtype = "types.spatial-device"
 optional = true
 
 [types.audio.music_folders]

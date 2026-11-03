@@ -76,10 +76,23 @@ pub struct Settings {
     #[serde(default)]
     pub music_source: MusicSource,
     /// How a placed sound (a craft, a weapon) is heard to be ahead of or behind
-    /// the camera: `original`, `rear_cue` (the default) or `headphones`. See
-    /// [`oag_audio::SpatialMode`]. Music and unplaced cues are never touched.
+    /// the camera: `auto` (the default), `original`, `rear_cue` or `headphones`.
+    /// `auto` is `headphones` on a headphone output and `rear_cue` on any other.
+    /// See [`oag_audio::SpatialChoice`]. Music and unplaced cues are never
+    /// touched.
+    ///
+    /// While an output with a stable id is active this is that output's own
+    /// choice, read back from [`Self::spatial_devices`] whenever it becomes the
+    /// active output (see [`Self::recall_spatial`]).
     #[serde(default)]
-    pub spatial_audio: oag_audio::SpatialMode,
+    pub spatial_audio: oag_audio::SpatialChoice,
+    /// The SPATIAL AUDIO value picked while a given output was active, oldest
+    /// first, at most [`SPATIAL_DEVICES_MAX`]. `auto` is never stored: picking
+    /// it forgets the output's entry. Exists because some outputs (headphones on
+    /// a USB codec that reports itself as speakers) cannot be told from their
+    /// route, so `auto` alone guesses wrong there.
+    #[serde(default)]
+    pub spatial_devices: Vec<SpatialDevice>,
     /// Folders of songs the race playlist may draw from, beside the discs.
     ///
     /// Each is `{ path = "...", enabled = true }`. Added by editing this file: the
@@ -94,3 +107,57 @@ pub struct Settings {
     #[serde(default)]
     pub music_switches: std::collections::BTreeMap<String, bool>,
 }
+
+/// How many outputs [`Settings::spatial_devices`] remembers.
+pub const SPATIAL_DEVICES_MAX: usize = 16;
+
+/// A SPATIAL AUDIO value remembered for one output.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SpatialDevice {
+    /// The output's stable id (`oag_audio::Route::device`).
+    pub device: String,
+    /// What the player picked while it was active.
+    pub mode: oag_audio::SpatialMode,
+}
+
+impl Settings {
+    /// Records a SPATIAL AUDIO pick made while `device` is the active output.
+    ///
+    /// `auto` forgets the output's entry; anything else sets it as the most
+    /// recent, evicting the oldest past [`SPATIAL_DEVICES_MAX`]. With no stable
+    /// id (`None`) nothing is remembered and the pick is only the current value.
+    pub fn choose_spatial(&mut self, device: Option<&str>, choice: oag_audio::SpatialChoice) {
+        self.spatial_audio = choice;
+        let Some(device) = device else { return };
+        self.spatial_devices.retain(|entry| entry.device != device);
+        let mode = match choice {
+            oag_audio::SpatialChoice::Auto => return,
+            oag_audio::SpatialChoice::Original => oag_audio::SpatialMode::Original,
+            oag_audio::SpatialChoice::RearCue => oag_audio::SpatialMode::RearCue,
+            oag_audio::SpatialChoice::Headphones => oag_audio::SpatialMode::Headphones,
+        };
+        self.spatial_devices.push(SpatialDevice {
+            device: device.to_string(),
+            mode,
+        });
+        let extra = self
+            .spatial_devices
+            .len()
+            .saturating_sub(SPATIAL_DEVICES_MAX);
+        self.spatial_devices.drain(..extra);
+    }
+
+    /// Makes `device`'s remembered value the current one (`auto` when it has
+    /// none), as it becomes the active output. A remembered value wins for its
+    /// own output only.
+    pub fn recall_spatial(&mut self, device: &str) {
+        self.spatial_audio = self
+            .spatial_devices
+            .iter()
+            .find(|entry| entry.device == device)
+            .map_or(oag_audio::SpatialChoice::Auto, |entry| entry.mode.into());
+    }
+}
+
+#[cfg(test)]
+mod tests;
