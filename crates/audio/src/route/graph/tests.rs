@@ -130,3 +130,58 @@ fn the_cards_form_factor_is_read_when_the_sink_has_none() {
     graph.remove_card(1);
     assert_eq!(graph.route().kind, RouteKind::Unknown);
 }
+
+fn headphone_graph() -> Graph {
+    let mut graph = Graph::default();
+    graph.set_default_sink(Some(DEFAULT));
+    graph.set_sink(10, sink("speaker_sink", 1, 11));
+    graph.set_card_route(1, route(11, "headphones-out", "headphones"));
+    graph
+}
+
+#[test]
+fn startup_sends_the_settled_route_not_the_transient_unknown() {
+    let mut announcer = Announcer::new();
+    let mut graph = Graph::default();
+    let mut sent = Vec::new();
+    // The sink arrives before its card's route: the raw answer is Unknown.
+    graph.set_default_sink(Some(DEFAULT));
+    graph.set_sink(10, sink("speaker_sink", 1, 11));
+    assert_eq!(graph.route().kind, RouteKind::Unknown);
+    sent.extend(announcer.publish(&graph));
+    sent.extend(announcer.round_done(&graph));
+    graph.set_card_route(1, route(11, "headphones-out", "headphones"));
+    sent.extend(announcer.publish(&graph));
+    sent.extend(announcer.round_done(&graph));
+    assert_eq!(
+        sent.len(),
+        1,
+        "one announcement, no Unknown first: {sent:?}"
+    );
+    assert_eq!(sent[0].kind, RouteKind::Headphones);
+}
+
+#[test]
+fn no_pipewire_objects_still_settles_on_unknown() {
+    let mut announcer = Announcer::new();
+    let graph = Graph::default();
+    assert!(announcer.round_done(&graph).is_none());
+    assert_eq!(announcer.round_done(&graph), Some(Route::default()));
+}
+
+#[test]
+fn a_later_change_still_switches_at_once() {
+    let mut announcer = Announcer::new();
+    let mut graph = headphone_graph();
+    announcer.round_done(&graph);
+    assert_eq!(
+        announcer.round_done(&graph).map(|r| r.kind),
+        Some(RouteKind::Headphones)
+    );
+    assert!(announcer.publish(&graph).is_none());
+    graph.set_card_route(1, route(11, "speaker-out", "speaker"));
+    assert_eq!(
+        announcer.publish(&graph).map(|r| r.kind),
+        Some(RouteKind::Speakers)
+    );
+}
