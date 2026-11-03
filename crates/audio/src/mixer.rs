@@ -763,9 +763,7 @@ impl Mixer {
         }
         if rank.len() > self.hrtf_cap {
             rank.sort_unstable_by(|a, b| {
-                b.0.total_cmp(&a.0)
-                    .then(b.1.cmp(&a.1))
-                    .then(a.2.cmp(&b.2))
+                b.0.total_cmp(&a.0).then(b.1.cmp(&a.1)).then(a.2.cmp(&b.2))
             });
         }
         for &(_, _, slot) in rank.iter().take(self.hrtf_cap) {

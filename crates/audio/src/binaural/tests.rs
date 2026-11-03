@@ -276,7 +276,11 @@ fn only_the_cap_loudest_placed_voices_run_the_hrtf() {
         let mut out = vec![0.0; 512 * 2];
         mixer.render(&mut out);
         mixer.render(&mut out);
-        assert_eq!(mixer.hrtf_voices(), cap.min(placed), "cap {cap}, placed {placed}");
+        assert_eq!(
+            mixer.hrtf_voices(),
+            cap.min(placed),
+            "cap {cap}, placed {placed}"
+        );
     }
 }
 
@@ -295,7 +299,11 @@ fn the_loudest_voices_keep_the_hrtf_when_a_louder_one_arrives() {
     for _ in 0..4 {
         mixer.render(&mut out);
     }
-    assert_eq!(mixer.hrtf_voices(), 2, "still exactly the cap after the swap");
+    assert_eq!(
+        mixer.hrtf_voices(),
+        2,
+        "still exactly the cap after the swap"
+    );
 }
 
 fn largest_step(out: &[f32]) -> f32 {
