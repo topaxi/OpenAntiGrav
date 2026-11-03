@@ -94,7 +94,7 @@ fn a_transit_over_the_line_is_a_lap_and_a_finish_on_its_exit_tick() {
     for _ in 0..300 {
         race.tick(&throttle());
     }
-    let ship = |r: &race::Race| r.sim.world.ships[0].clone();
+    let ship = |r: &race::Race| r.sim.world.ships[0];
     assert_eq!(ship(&race).standing.lap, 1);
     let respawns = race.respawns();
 
@@ -113,8 +113,7 @@ fn a_transit_over_the_line_is_a_lap_and_a_finish_on_its_exit_tick() {
     assert_eq!(person.lap, 2);
     assert_eq!(person.lap_start_tick, exit, "the person's clock agrees");
     assert_eq!(
-        person.lap_splits[0],
-        standing.lap_splits[0].map(|t| t),
+        person.lap_splits[0], standing.lap_splits[0],
         "same lap 1 time"
     );
 
