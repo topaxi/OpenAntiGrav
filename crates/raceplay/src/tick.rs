@@ -126,6 +126,10 @@ impl Race {
         }
         self.set_wrong_way_kill();
         self.set_hover_caps();
+        // A transit whose count ran out puts its craft further round before anything
+        // reads where it is: its controls, its autopilot's lane snap, the modules' call
+        // (whose `transit-end` this is) and its step all see it out.
+        let transited = self.advance_transits();
         // Every craft a person is flying this tick. Slot 0 alone under
         // `World::SINGLE_PLAYER`, which is every session this engine starts
         // today; a second `Local` or `Remote` slot is stepped the same way and
@@ -186,9 +190,6 @@ impl Race {
         // the *held* state of fire rather than the press edge `spend_pickup`
         // above consumes - see `Race::advance_cannons`'s own doc comment.
         self.advance_cannons(inputs);
-        // A transit whose count ran out puts its craft further round before the call,
-        // so the modules see it out and it steps from there this tick.
-        let transited = self.advance_transits();
         // Phase C: each simulation mod's one call, its commands into the steps below.
         self.tick_extensions(inputs, transited);
 

@@ -14,7 +14,7 @@
 //!   craft-to-craft contact, and `oag_weapons::Craft::active` is false, so no weapon hits,
 //!   drains or locks it. Its reset triggers are held ([`Race::reset_held`]). Its standing
 //!   is still updated on the frozen pose, so nothing wraps and the Zone clock runs.
-//! - **Exit** ([`Race::advance_transits`], at the start of phase C): on the tick the
+//! - **Exit** ([`Race::advance_transits`], before the tick reads any craft's controls): on the tick the
 //!   count runs out, the craft is moved to [`oag_gameplay::Transit::to`]
 //!   ([`Race::move_to`]) and stepped from there the same tick, so a crossing of the line in
 //!   the jump, a finish included, is timed at the exit tick.
@@ -217,7 +217,9 @@ impl Race {
         let Some(relocation) = crate::breadcrumbs::relocate(&self.sim.spline, target, speed) else {
             return false;
         };
-        let tick = self.sim.world.tick;
+        // The stamp a crossing driven in this tick's step gets: the lap counters run
+        // after the world's count has moved on (`Race::tick_body`).
+        let tick = self.sim.world.tick + 1;
         let laps_target = self.sim.world.laps_target();
         let ship = &mut self.sim.world.ships[slot];
         let body = &mut ship.physics.body;
@@ -230,6 +232,10 @@ impl Race {
             race.jumped(course, to);
         }
         self.sim.pad_previous_position[slot] = None;
+        // A lane snap computed from where it was would put it back.
+        if let Some(rail) = self.sim.autopilot_rail.get_mut(slot) {
+            *rail = None;
+        }
         self.sim.breadcrumbs[slot] =
             crate::breadcrumbs::Breadcrumbs::seeded(relocation.pose.position);
         self.reseat(slot, relocation.pose.position);

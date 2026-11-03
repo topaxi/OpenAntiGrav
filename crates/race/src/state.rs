@@ -513,9 +513,10 @@ impl RaceState {
             self.progress = Some(to);
         } else {
             self.lap_gate = self.lap_gate.advanced(half, half);
-            // Only the next update's difference reads this: past `to` by over half a lap
-            // is a forward wrap there.
-            self.progress = Some(to + half + 1.0);
+            // Only the next update's difference reads this: past `to` by nine tenths of a
+            // lap, so the craft's own step before that update (a few units) still leaves
+            // the difference a forward wrap (below minus half a lap).
+            self.progress = Some(to + course.length() * 0.9);
         }
     }
 
