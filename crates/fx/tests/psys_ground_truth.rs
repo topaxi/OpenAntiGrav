@@ -761,10 +761,8 @@ fn an_atlas_grid_is_columns_in_the_high_half_so_its_cells_are_square() {
         )
     }
 
-    let (Some(pure), Some(pulse)) = (
-        oag_testdata::image("data/images/pure-psp-usa.chd"),
-        image(),
-    ) else {
+    let (Some(pure), Some(pulse)) = (oag_testdata::image("data/images/pure-psp-usa.chd"), image())
+    else {
         return;
     };
     let open = |image: &Path| {
