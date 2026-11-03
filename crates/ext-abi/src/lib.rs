@@ -26,6 +26,7 @@
 //! | [`POOL_AT`] | [`POOL_LEN`] | the reply's string pool: entries of a length byte then UTF-8, named by offset from a `hud-text` or `hud-icon` command |
 //! | [`CRAFTS_AT`] | [`CRAFT_LEN`] x [`MAX_CRAFTS`] | one record per grid slot ([`Craft`]): pickup `u8`, flags `u8`, lap `u8`, laps target `u8`, shield `f32`, shield maximum `f32`, speed km/h `f32` |
 //! | [`TRACKING_AT`] | [`TRACKING_LEN`] x [`MAX_CRAFTS`] | one record per grid slot ([`Tracking`]): progress `f32`, place `u8`, flags `u8` (bit 0: progress is a fix), 2 bytes unused |
+//! | [`TITLE_AT`] | 4 | the title's key: `channel_key` of its lowercased hyphenated name (0: none) |
 //!
 //! The track region is a second buffer, written by the host before each call when the
 //! guest exports `oag_track() -> u32`: [`track`] lays it out.
@@ -59,7 +60,7 @@ pub use motion::{Distance, MAX_PROBE_RADIUS, MAX_SPEED_FACTOR, MAX_TRANSIT_TICKS
 pub use pickup::{Colour, Icon, ModIcon};
 pub use scene::MAX_FOV_OFFSET_DEG;
 pub use tracking::{
-    COURSE_LENGTH_AT, Course, TRACKING_AT, TRACKING_FIXED, TRACKING_FLAGS, TRACKING_LEN,
+    COURSE_LENGTH_AT, Course, TITLE_AT, TRACKING_AT, TRACKING_FIXED, TRACKING_FLAGS, TRACKING_LEN,
     TRACKING_PLACE, TRACKING_PROGRESS, Tracking,
 };
 
@@ -1298,6 +1299,7 @@ pub fn write_observation(
         let at = TRACKING_AT + i * TRACKING_LEN;
         io[at..at + TRACKING_LEN].copy_from_slice(&tracking.encode());
     }
+    put_u32(io, TITLE_AT, course.title);
 }
 
 /// The reply's command count.
@@ -1394,6 +1396,12 @@ impl<'a> Sections<'a> {
     pub fn tracking_record(crafts: &[u8], slot: Slot) -> Option<&[u8; TRACKING_LEN]> {
         let at = (TRACKING_AT - CRAFTS_AT) + slot.index() * TRACKING_LEN;
         crafts.get(at..at + TRACKING_LEN)?.try_into().ok()
+    }
+
+    /// The title's key; `crafts` is [`Self::crafts`], which starts at [`CRAFTS_AT`].
+    #[must_use]
+    pub fn title(crafts: &[u8]) -> u32 {
+        get_u32(crafts, TITLE_AT - CRAFTS_AT)
     }
 
     /// The slot's craft record.

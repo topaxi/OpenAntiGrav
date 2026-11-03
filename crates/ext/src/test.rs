@@ -75,6 +75,7 @@ pub struct Race<E: Extension> {
     crafts: [Option<CraftRecord>; MAX_CRAFTS],
     tracking: [oag_ext_abi::Tracking; MAX_CRAFTS],
     course_length: f32,
+    title: u32,
     events: Vec<Event>,
     state: Vec<u8>,
     track: Vec<u8>,
@@ -96,6 +97,7 @@ impl<E: Extension> Race<E> {
             crafts: [None; MAX_CRAFTS],
             tracking: [oag_ext_abi::Tracking::default(); MAX_CRAFTS],
             course_length: 0.0,
+            title: 0,
             events: Vec::new(),
             state: vec![0; E::State::BYTES],
             track: Vec::new(),
@@ -122,6 +124,13 @@ impl<E: Extension> Race<E> {
     ) -> Self {
         self.course_length = length;
         self.tracking[slot.index()] = oag_ext_abi::Tracking { progress, place };
+        self
+    }
+
+    /// Races a title: `title` is `oag_ext::title!("wipeout-hd")`.
+    #[must_use]
+    pub fn with_title(mut self, title: u32) -> Self {
+        self.title = title;
         self
     }
 
@@ -194,6 +203,7 @@ impl<E: Extension> Race<E> {
             &oag_ext_abi::Course {
                 length: self.course_length,
                 tracking: &self.tracking,
+                title: self.title,
             },
             &self.state,
         );

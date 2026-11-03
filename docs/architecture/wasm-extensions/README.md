@@ -537,13 +537,14 @@ a `transit`). The observation carries what such a decision reads:
 | --- | --- | --- |
 | tracking record | observation | A second per-craft record at `TRACKING_AT` (8 bytes a slot, `oag_ext_abi::Tracking`): `progress` (`f32`, units along the circuit within the lap, negative on the grid behind the line), `place` (`u8`, 1-based, 0 for an empty slot; the one ordering the HUD shows, `RaceSim::places`), a flags byte whose bit 0 says `progress` is a fix (no number stands for "no fix yet") |
 | course length | observation | `f32` units at header offset 4 (`COURSE_LENGTH_AT`), 0 without a closed course: `progress / length` is the lap share |
+| title key | observation | `u32` at `TITLE_AT` (after the tracking records): `channel_key` of the title's lowercased hyphenated name (`wipeout-hd`, the slug a manifest's `titles` uses), 0 when the host says none. SDK `Observation::title()` and the compile-time `title!("wipeout-hd")`; `test::Race::with_title`. A guest that looks different per title (a portal's colour) reads it; PSP and PS2 Pulse are one title. Appended after the last region, so no offset moves |
 | `drives_ai_pickup` | manifest | `[extension]`, boolean, default `false` |
 
 The observation is built before the tick's step, so `progress` and `place` are last tick's.
 The mod pickup's fire path for a person is unchanged. Proof: `oag_raceplay`'s
 `tests::extension_ai_pickup` (the default raises `pickup-fire` for an AI craft, the flag
 raises nothing, a module reads the course length and the HUD's place), `oag_ext_abi`'s
-tracking round trip and the recorded fold.
+tracking round trip (title key included) and the recorded fold.
 
 **View outputs for a portal (outputs, never hashed).** Three commands draw into a view; each
 is re-sent every tick it should hold, and a slot with no craft is a fault.

@@ -209,6 +209,13 @@ impl<'a> Observation<'a> {
         Sections::course_length(self.head)
     }
 
+    /// The title raced, as `title!("wipeout-hd")`'s key (the lowercased hyphenated name a
+    /// manifest's `titles` uses); 0 when the host does not say.
+    #[must_use]
+    pub fn title(&self) -> u32 {
+        Sections::title(self.records)
+    }
+
     /// The world tick.
     #[must_use]
     pub fn tick(&self) -> u64 {

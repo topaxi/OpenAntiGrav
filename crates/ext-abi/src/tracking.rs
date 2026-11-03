@@ -22,16 +22,22 @@ pub const TRACKING_FLAGS: usize = 5;
 /// negative on the grid behind the line, so no number can stand for "no fix".
 pub const TRACKING_FIXED: u8 = 1;
 
-const _: () = assert!(TRACKING_AT + TRACKING_LEN * MAX_CRAFTS <= crate::IO_LEN);
+/// Where the title key is written, after the tracking records: [`crate::channel_key`] of the
+/// title's lowercased hyphenated name (`wipeout-hd`), 0 when the race has none.
+pub const TITLE_AT: usize = TRACKING_AT + TRACKING_LEN * MAX_CRAFTS;
 
-/// What a tick tells a guest about the course: its length and each slot's [`Tracking`]
-/// in slot order.
+const _: () = assert!(TITLE_AT + 4 <= crate::IO_LEN);
+
+/// What a tick tells a guest about the course: its length, each slot's [`Tracking`]
+/// in slot order, and the title raced.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Course<'a> {
     /// One lap's length, units; 0 when the race has no course.
     pub length: f32,
     /// Each grid slot, in slot order.
     pub tracking: &'a [Tracking],
+    /// The title's key (`channel_key` of its slug); 0 when unknown.
+    pub title: u32,
 }
 
 /// One slot's place on the course.
