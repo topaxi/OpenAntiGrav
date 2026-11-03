@@ -133,9 +133,8 @@ impl Race {
     ///
     /// It replaces the mapped input snapshot outright rather than blending with
     /// it, so a run under autopilot is a run nobody is steering. It is flown with
-    /// the *player's* recovery - [`Self::lost_off_the_track`], not the opponents'
-    /// [`Self::lost_off_the_circuit`] - because it is still a person's craft going through
-    /// [`Self::tick`]. That is the same net a human gets, which is what makes a
+    /// the *player's* recovery, not the opponents', because it is still a person's
+    /// craft going through [`Self::tick`]. That is the same net a human gets, which is what makes a
     /// measurement taken under it mean anything about a hand-driven lap.
     ///
     /// **Not the Autopilot pickup**, and the distinction is worth keeping:
@@ -968,7 +967,7 @@ impl Race {
             // spent away. Two `let`s rather than two terms of the `if`, because
             // `||` short-circuits and the second counter would then only advance
             // on ticks the first one happened not to fire.
-            let lost = self.lost_off_the_circuit(slot);
+            let beneath = self.beneath_too_long(slot);
             let stalled = self.stalled(slot);
             // **Not a wreck.** A destroyed craft is coasting by definition, so
             // the stall dwell would fire on it and `Race::respawn` - whose
@@ -982,16 +981,12 @@ impl Race {
                 self.sim.world.ships[slot].physics.craft_state == oag_physics::CraftState::Racing;
             let reset = self.reset_zone_touched(slot, reset_contact);
             let airborne = self.airborne_too_long(slot);
-            let located = self
-                .ai_sample_for(slot, index)
-                .map(|sample| Vec3::from_array(sample.pos));
+            let located = self.located_sample_of(slot, index);
             let distant = self.far_from_the_sample(slot, located);
             let cage = std::mem::take(&mut self.sim.cage_reset[slot]);
-            if alive && (lost || stalled || airborne || distant || reset || cage) {
-                let cause = if lost && self.beneath_the_line(slot) {
+            if alive && (beneath || stalled || airborne || distant || reset || cage) {
+                let cause = if beneath {
                     respawn::RespawnCause::Beneath
-                } else if lost {
-                    respawn::RespawnCause::LostCircuit
                 } else if stalled {
                     respawn::RespawnCause::Stalled
                 } else if airborne {

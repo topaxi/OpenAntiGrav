@@ -720,7 +720,7 @@ impl Race {
                 wall_inbound_ticks: [0; oag_gameplay::MAX_SHIPS],
                 wall_damage: [0.0; oag_gameplay::MAX_SHIPS],
                 wall_racing_ticks: [0; oag_gameplay::MAX_SHIPS],
-                lost_ticks: [0; oag_gameplay::MAX_SHIPS],
+                beneath_ticks: [0; oag_gameplay::MAX_SHIPS],
                 stalled_ticks: [0; oag_gameplay::MAX_SHIPS],
                 distant_ticks: [0; oag_gameplay::MAX_SHIPS],
                 rescue_distance,

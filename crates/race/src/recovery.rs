@@ -132,18 +132,6 @@ pub const RESCUE_TICKS: u32 = 90;
 /// Ours, not the original's, exactly as [`RESCUE_HALF_WIDTHS`] is.
 pub const PLAYER_RESCUE_HALF_WIDTHS: f32 = 2.0;
 
-/// How long the player has to stay that far out before they are put back.
-///
-/// Three quarters of a second at 60 Hz, and **half [`RESCUE_TICKS`] because the
-/// measurement behind it is direct**: the opponents' dwell absorbs the noise in a
-/// believed index, and there is no believed index here. What it still buys is the
-/// tick or two either side of a hard landing where a craft is momentarily far from
-/// the sample table and about to be near it again.
-///
-/// It is also the whole latency budget the player feels: a craft that leaves is
-/// falling, and every tick of dwell is a tick further down before the recovery.
-pub const PLAYER_RESCUE_TICKS: u32 = 45;
-
 /// How slowly a craft has to be moving to count as stopped, in units per second.
 ///
 /// # Invented, like [`RESCUE_HALF_WIDTHS`], and measured before it was chosen

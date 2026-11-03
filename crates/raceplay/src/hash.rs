@@ -89,7 +89,7 @@ impl RaceSim {
         for run in self.respawns_in_a_row {
             hasher.write_u32(run);
         }
-        for dwell in self.lost_ticks {
+        for dwell in self.beneath_ticks {
             hasher.write_u32(dwell);
         }
         // The second dwell, on the same terms: a stall counter one tick out moves

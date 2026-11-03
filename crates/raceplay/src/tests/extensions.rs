@@ -1107,7 +1107,7 @@ mod triggers {
 
     #[test]
     fn a_craft_passing_through_a_trigger_enters_and_leaves_it_once_and_the_guest_reads_it() {
-        // Where slot 1 is at 300 and at 380 ticks of the fixture race: the gate sits
+        // Where slot 1 is at 260 and at 300 ticks of the fixture race: the gate sits
         // between, so it is driven into and out of once (the fixture's ring sends the
         // craft back round after that).
         let x_at = |ticks| {
@@ -1117,10 +1117,10 @@ mod triggers {
                 .position
                 .x
         };
-        let (from, to) = (x_at(300), x_at(380));
+        let (from, to) = (x_at(260), x_at(300));
         assert!(to > from + 10.0, "slot 1 drives along +x: {from} to {to}");
         let props = gate(from + (to - from) * 0.25, from + (to - from) * 0.5);
-        let (race, _) = run(grid(prepared_on(&props)), 380);
+        let (race, _) = run(grid(prepared_on(&props)), 300);
         let blob = race.extension_state(0).unwrap();
         assert_eq!(
             blob[..3],
@@ -1129,7 +1129,7 @@ mod triggers {
         );
         assert_eq!(blob[4..8], 0.25_f32.to_le_bytes(), "its gate property");
         // A gate the craft never reaches is never entered.
-        let (race, _) = run(grid(prepared_on(&gate(to + 1000.0, to + 1010.0))), 380);
+        let (race, _) = run(grid(prepared_on(&gate(to + 1000.0, to + 1010.0))), 300);
         assert_eq!(race.extension_state(0).unwrap()[..2], [0, 0]);
     }
 

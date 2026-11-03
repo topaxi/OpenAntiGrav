@@ -21,15 +21,11 @@ use log::warn;
 pub enum RespawnCause {
     /// An authored `Reset` volume was touched. The original's own mechanism.
     ResetZone,
-    /// An opponent stayed far from its driver's sample - invented.
-    LostCircuit,
     /// An opponent stayed on the ground well below its driver's sample, on a
     /// road under the circuit - invented, see [`BENEATH_LINE`].
     Beneath,
     /// An opponent stayed stopped while asking to move - invented.
     Stalled,
-    /// The player stayed far from the nearest spline sample - invented.
-    OffTrack,
     /// No hover probe touched anything for [`oag_race::recovery::AIRBORNE_RESET_SECONDS`]:
     /// the original's own rescue for a craft beached upside down or on its
     /// flank, `FUN_088418e0` at `0x08841d30`.
@@ -65,10 +61,8 @@ impl RespawnCause {
     pub fn label(self) -> &'static str {
         match self {
             Self::ResetZone => "reset",
-            Self::LostCircuit => "lost",
             Self::Beneath => "beneath",
             Self::Stalled => "stalled",
-            Self::OffTrack => "offtrack",
             Self::Airborne => "airborne",
             Self::Distance => "distance",
             Self::Cage => "cage",
@@ -78,38 +72,27 @@ impl RespawnCause {
 }
 
 impl Race {
-    /// Whether this opponent has been away from its own driver's idea of where
-    /// it is for long enough to count as lost.
+    /// Whether this opponent has stayed on the ground beneath its driver's line
+    /// for [`RESCUE_TICKS`]: the invented rescue for a road under the circuit, see
+    /// [`BENEATH_LINE`]. Far from the line is the original's distance trigger
+    /// ([`Self::far_from_the_sample`]), not this.
     ///
     /// Advances the dwell counter as a side effect, so it must be called once
     /// per craft per tick and not conditionally - a caller that skipped it
     /// while a cooldown ran would let a craft bank dwell it never spent.
-    ///
-    /// See [`RESCUE_HALF_WIDTHS`] for why this exists next to the reset volumes
-    /// rather than instead of them.
-    pub(super) fn lost_off_the_circuit(&mut self, slot: usize) -> bool {
-        let index = self.sim.world.ships[slot].driver.index as usize;
-        let away = self.sim.world.ships[slot]
-            .physics
-            .body
-            .position
-            .distance(self.line_of(slot).point(index))
-            > self.sim.rescue_distance
-            || self.beneath_the_line(slot);
-        self.sim.lost_ticks[slot] = if away {
-            self.sim.lost_ticks[slot].saturating_add(1)
+    pub(super) fn beneath_too_long(&mut self, slot: usize) -> bool {
+        let beneath = self.beneath_the_line(slot);
+        self.sim.beneath_ticks[slot] = if beneath {
+            self.sim.beneath_ticks[slot].saturating_add(1)
         } else {
             0
         };
-        // An empty line puts every point at the origin, so a track with no
-        // spline would read every craft as lost and respawn it onto nothing.
-        //
         // The same two guards `reset_zone_touched` applies, applied *after* the
         // counter so the dwell is still measured while they hold.
         !self.sim.racing_line.is_empty()
             && !self.sim.respawn_disabled[slot]
             && self.sim.respawn_cooldown[slot] == 0
-            && self.sim.lost_ticks[slot] >= RESCUE_TICKS
+            && self.sim.beneath_ticks[slot] >= RESCUE_TICKS
     }
 
     /// Whether this opponent is on the ground more than [`BENEATH_LINE`] below
@@ -135,13 +118,13 @@ impl Race {
     /// Whether this opponent has been stopped, while asking to move, for long
     /// enough to count as beached.
     ///
-    /// The other half of [`Self::lost_off_the_circuit`], and deliberately a
+    /// The other half of [`Self::beneath_too_long`], and deliberately a
     /// separate dwell: that one asks whether a craft is *far from* its line, which
     /// a craft wedged against the scenery is not. See [`STALL_SPEED`] for the
     /// measurement the two constants come from.
     ///
     /// Advances the dwell counter as a side effect, on the same terms and for the
-    /// same reason [`Self::lost_off_the_circuit`] does.
+    /// same reason [`Self::beneath_too_long`] does.
     ///
     /// **Three conditions, and each excludes a craft that is stopped legitimately.**
     /// `thrust` above zero excludes one held on the grid before the lights.
@@ -168,61 +151,13 @@ impl Race {
         };
         // The same two guards the other two triggers apply, applied *after* the
         // counter so the dwell is still measured while they hold. No emptiness
-        // check on the racing line here: unlike `lost_off_the_circuit` this
+        // check on the racing line here: unlike `beneath_too_long` this
         // measures nothing that comes off it - but the respawn it leads to does,
         // so the guard stays where it is needed.
         !self.sim.racing_line.is_empty()
             && !self.sim.respawn_disabled[slot]
             && self.sim.respawn_cooldown[slot] == 0
             && self.sim.stalled_ticks[slot] >= STALL_TICKS
-    }
-
-    /// Whether the **player** has been off the track for long enough to be put
-    /// back.
-    ///
-    /// `distance` is the player's distance to the nearest spline sample, measured
-    /// where the tick already measures it - `None` on a track with no samples,
-    /// which is a track this cannot recover anybody onto.
-    ///
-    /// # Why the player needs a trigger of their own
-    ///
-    /// The authored `Reset` volumes catch a craft that falls *through* the floor.
-    /// They do not catch one that leaves the circuit sideways into open space -
-    /// [`RESCUE_HALF_WIDTHS`] records the measurement, and the player reaches that
-    /// state the same way an opponent does: `docs/gameplay/ai.md` has a
-    /// hand-driven lap of `06_Track` going through the same drop the AI does,
-    /// with no AI involved. Measured again for this: an autopiloted craft on
-    /// `05_Track` left at tick 591 and was 7,983 units away by the end of the run.
-    ///
-    /// [`Self::lost_off_the_circuit`] cannot be reused for it. That one asks
-    /// whether the craft and *its driver's* idea of where it is have come apart,
-    /// and slot 0 has no driver unless `Self::set_autopilot` is on - its
-    /// `driver.index` would sit wherever it was left, which is sample zero on an
-    /// ordinary race.
-    ///
-    /// **The stall rescue is deliberately not extended to the player.** Being
-    /// teleported off a wall one is scraping along, while holding the throttle, is
-    /// a thing done *to* a player rather than for them; a human who is wedged can
-    /// see it and back off, which is exactly what an opponent cannot do.
-    ///
-    /// Advances the dwell counter as a side effect, so it must be called once per
-    /// tick and not conditionally, for the reason [`Self::lost_off_the_circuit`]
-    /// gives.
-    pub(super) fn lost_off_the_track(&mut self, slot: usize, distance: Option<f32>) -> bool {
-        let away = distance.is_some_and(|distance| distance > self.sim.player_rescue_distance);
-        self.sim.lost_ticks[slot] = if away {
-            self.sim.lost_ticks[slot].saturating_add(1)
-        } else {
-            0
-        };
-        // A circuit that authors no width at all states no scale for "off the
-        // track", so it gets no threshold rather than one at zero. The same
-        // shape as the racing-line emptiness guard next door, and applied after
-        // the counter for the same reason.
-        self.sim.player_rescue_distance > 0.0
-            && !self.sim.respawn_disabled[slot]
-            && self.sim.respawn_cooldown[slot] == 0
-            && self.sim.lost_ticks[slot] >= PLAYER_RESCUE_TICKS
     }
 
     /// Whether a `Reset` contact this tick (`contact`, [`Self::reset_zone_contact`])
@@ -267,6 +202,30 @@ impl Race {
                 > oag_race::recovery::AIRBORNE_RESET_SECONDS
     }
 
+    /// The position of the spline sample opponent `slot` is located on, for
+    /// [`Self::far_from_the_sample`]: the original's `craft+0xaf0` record.
+    ///
+    /// The sample its driver believes it is on (`index`) when the craft is within
+    /// [`DISTANCE_RESET_UNITS`] of it, since the nearest sample cannot then be
+    /// farther; otherwise the nearest sample to the craft, scanned only then. A
+    /// driver's believed index lags a craft that has left the line, and the
+    /// distance is meant to be the craft's own.
+    pub(super) fn located_sample_of(&self, slot: usize, index: usize) -> Option<Vec3> {
+        let position = self.sim.world.ships[slot].physics.body.position;
+        let believed = self
+            .ai_sample_for(slot, index)
+            .map(|sample| Vec3::from_array(sample.pos));
+        if believed.is_some_and(|at| {
+            at.distance_squared(position) <= DISTANCE_RESET_UNITS * DISTANCE_RESET_UNITS
+        }) {
+            return believed;
+        }
+        self.sim
+            .spline
+            .nearest(position)
+            .map(|(_, sample, _)| Vec3::from_array(sample.pos))
+    }
+
     /// Whether this craft has stayed more than
     /// [`oag_race::recovery::DISTANCE_RESET_UNITS`] from `located`, its spline
     /// sample, for [`oag_race::recovery::DISTANCE_RESET_TICKS`] ticks:
@@ -275,7 +234,7 @@ impl Race {
     ///
     /// Advances the dwell counter as a side effect, so it must be called once per
     /// craft per tick and not conditionally, for the reason
-    /// [`Self::lost_off_the_circuit`] gives. The wreck gate is the caller's
+    /// [`Self::beneath_too_long`] gives. The wreck gate is the caller's
     /// (`alive`), applied after the counter as the original skips only the
     /// state change.
     pub(super) fn far_from_the_sample(&mut self, slot: usize, located: Option<Vec3>) -> bool {
@@ -428,7 +387,7 @@ impl Race {
         // put back is also moving again shortly, and a stall counter that
         // survived the teleport would fire once more the moment the cooldown ran
         // out.
-        self.sim.lost_ticks[slot] = 0;
+        self.sim.beneath_ticks[slot] = 0;
         self.sim.stalled_ticks[slot] = 0;
         self.sim.distant_ticks[slot] = 0;
 
