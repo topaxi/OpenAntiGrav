@@ -723,6 +723,10 @@ fn an_opponent_flies_its_autopilot_by_class_and_difficulty() {
                 track: track.map(str::to_string),
                 seed: Some(1),
                 difficulty,
+                // The switch is read off the class, the difficulty and the
+                // title, never the track's art: the derived ribbon skips the
+                // `.rcsmodel` decode that is most of an Omega load.
+                ribbon: true,
                 ..oag_raceplay::Options::default()
             })
             .expect("loading the track");
