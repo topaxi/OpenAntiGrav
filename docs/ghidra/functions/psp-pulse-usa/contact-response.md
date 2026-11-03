@@ -1735,6 +1735,16 @@ session confirms it against a weapon-select UI string or inventory label.
 
 ### A fuse-arming candidate, found by searching for the write directly - unconfirmed
 
+> **Corrected 2026-11-03: this candidate is refuted.** `FUN_0885bf84` is
+> `Plasma_Launch` ([plasma.md](plasma.md), confidence 90): the `+0x48` it writes is
+> the Plasma bolt's launch speed (`|craft velocity| * 3.6 + stats->launchspeed`,
+> `stats+0xbc`), not a fuse and not on a craft. `FUN_0886a920` is its pool's
+> allocator (`Plasma_SpawnRemote`). The `+0x164`/`+0x64` pool `MinePool_Update`
+> walks is the Mine's own, and its `+0x48` is `mine+0x48`, armed from
+> `stats+0xf4` (`timetodie`, [mine.md](mine.md)). No craft-side fuse exists. The
+> text below is kept as the record of how the wrong lead arose; the measurement
+> that closes the stun question is the last section of this page.
+
 **Read 2026-08-19**, after the register-provenance chase into `0x0885f188`
 (the previous section's own spawn-helper call) turned out too ambiguous to
 resolve statically - two callers jump directly into that address, past the
@@ -2284,3 +2294,91 @@ the last 0.6 s and tests each call's instance gate (`instance + 100`) against th
   and its pair and cage contact paths are unread ([ps3-hdfury-eu/ship-collision-fx.md](../ps3-hdfury-eu/ship-collision-fx.md));
   it runs no cage. Pure: the cage is off by its data and `Ship_Damage` is unread. 2048 and Omega: not
   wired, no locators read and no cage; not checkable from the PSP side.
+
+## Measured 2026-11-03: a craft-to-craft hit arms nothing on the craft
+
+**Claim tested** (`pulse-craft-stun` lane): whether Pulse arms a stun, fuse, flag or
+timer on a craft that another craft hits. **Result: no. The effect of a pair
+contact on a craft is its velocity change plus one contact-ring record in its
+body. Confidence 80** (one staged rear-end, struck rival, placed craft and an
+untouched control; weapons off).
+
+**Method** (PPSSPP v1.20.4, `pulse-psp-usa.chd`, SINGLE RACE, eight-craft grid,
+weapons off, software renderer). Player craft `0x09b781e0` placed 20 units ahead
+of the first rival at 10 units/s (`psp-pair-capture.py`'s `stage_head_on`, same
+facing: the rival ran at 95 units/s, closing 105). Breakpoint on
+`Body_ResolveContactPair`'s first applier call (`0x0884f630`) until the staged pair
+arrived (first pair visited, 0 skipped). At that stop, and then at each of the
+struck craft's, the placed craft's and a control craft's next `Ship_UpdateCraft`
+entries (ticks 1, 3, 10, 30), the whole craft struct (`0x800` bytes from the craft
+pointer) and the whole body (`0x420` bytes from `*(craft+0x1cc)`) were dumped and
+diffed word for word. A snapshot diff reads memory directly, so it does not depend
+on a write watch's blind spot
+([ppsspp-debugger.md](../../../reverse-engineering/ppsspp-debugger.md#a-controlled-watch-can-still-miss-a-write---the-pool-slot-outlives-the-log-does-not)).
+
+**What changed from contact to tick 1 on the struck craft (58 craft words, 16 body
+words)**, split by whether the control craft changed the same word:
+
+- Pose following, changed on every craft: the basis rows, the node
+  transforms and position copies (`craft+0x80..0x258`, `0x3a0`, `body+0x30`).
+- **Velocity (`body+0x140`, mirrored at `craft+0x4b0`): rival `(37.86, -14.04,
+  -86.47)` (95.0) to `(17.57, -7.58, -44.95)` (48.9); the placed craft
+  `(4.6, -2.2, -9.2)` to `(24.9, -8.6, -50.7)`.** The control moved by
+  `0.13`. This is `Body_ResolveContactPair`'s impulse, the only effect.
+- **Rival-only, placed also, control never: `body+0x170..0x1e0`** (mirrored at
+  `craft+0x4e0..0x550`, same memory because the body sits at `craft+0x370`). At
+  contact it holds stale ASCII (an XML buffer's leftovers, in the control too, at
+  tick 30 still); at tick 1 it holds a record: word `+0x170 = 1`, `+0x180` the
+  contact point `(-625.5, -9.07, -222.0)` (track scale), `+0x190` the normal,
+  `+0x1a0 = 0.02` (`0x3ca3d70a`), and by tick 30 a second record at `+0x1b0..`. This is the
+  ring `Body_RecordContact` fills (sits with the contact-fx data in
+  `psp-contact-fx-read.py`). Its consumer is not read here.
+
+**Nothing else is rival-only.** At ticks 3, 10 and 30 the rival-only word set is
+that same ring region (`craft+0x4e0..0x550`) and nothing more; no counter, flag
+or timer steps at contact and decays afterwards, on the struck or the placed craft.
+So the craft-to-craft law is exactly what `Body_ResolveContactPair` reads: the
+`-1.1` restitution term (`e = 0.1`), no friction, a centred impulse (no spin).
+Shield damage is separately absent, as established above (only wall scrape and
+weapon blasts charge it).
+
+**The pair-versus-wall elasticity gap stays as recorded** (`0.1` pair, `0.4`
+wall, same build): nothing found arms or scales anything else.
+
+**What this does not close**, by address: the ring record's consumer (what reads
+`body+0x170`), PS2 (not captured; corroboration only), and a hit with weapons on
+or from a heavier closing speed than `105`.
+
+### `Weapon_PostBlastImpulse`'s `T+0x50` is not `body+0x50`: `T` is a different object
+
+The tension recorded in rigid-body.md and in the 2026-08-19 section above
+("`body+0x50` as position against `body+0x40..0x70` as inverse inertia") came from
+treating `T` (the pointer `Weapon_PostBlastImpulse` loads at
+`0x088679c0`/`0x088679d8`: `lw a0,0x44(s0)`, `s0 = subsystem + targetIndex * 4`)
+as the rigid body. **It is not the rigid body.** Live, in a single-craft Time
+Trial state (`time-trial-talons-venom-grid`, stopped at `Ship_UpdateCraft`):
+
+| object | address | `+0x30` | `+0x50` | `+0x110` |
+| --- | --- | --- | --- | --- |
+| craft (`Ship_UpdateCraft`'s `a0`) | `0x09a0dea0` | not a vector | not a vector | a position-shaped value |
+| body (`*(craft+0x1cc)`) | `0x09a0e210` | position `(5.655, -50.083, -196.662, 1)` | tensor row 1: `(0, 0.046, 0, 0)` (the diagonal at `+0x54`, as rigid-body.md reads it) | `0` |
+| `T` (`*(*0x08b3bf88 + 0x44)`) | `0x09a4a880` | `(-0.004, 0.750, -0.014)` | **`(8.039, -50.151, -200.914, 1)`** | `(0, 0, 0, 1)` |
+
+`T` holds three 4x4 transforms at `+0x20`, `+0x60`, `+0xa0`, each with the same
+basis (the up row scaled `0.75`) and a translation at `+0x50`, `+0x90`, `+0xd0`.
+`T+0x90` is bit-for-bit the body's position; `T+0x50` is the body position plus
+`4.875 * forward`, and `T+0xd0` is the body position minus `4.875 * forward`
+(measured: length `4.875`, projection on the forward row `4.875` and `-4.875`, in
+both of two loads of single-craft states). So **`Weapon_PostBlastImpulse` measures its
+blast distance and direction from the craft's nose point, `4.875` units ahead of
+the body's position, not from the centre.** The blast direction (`T+0x50 - S`)
+therefore points at the nose. Confidence **75** on "`T` is a separate node object
+and `+0x50` is the nose point" (one craft, one pose, exact lengths, direct pointer
+inequality against the body). The sign of `4.875` as hull nose/tail hardpoints
+rather than something else is a reading (50), and the object is left unnamed.
+
+The rigid-body.md confidence-88 reading of `body+0x40..0x70` is untouched; the
+contradiction came from two different structs. **Not generalised to all eight
+craft**: the race-time pointer `0x08b3bf88` pointed at a different 0x1f0-stride
+pool in the eight-craft run and the pattern search for `T` per craft found nothing
+in that race, so the layout is read off the single-craft states only.
