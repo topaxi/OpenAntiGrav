@@ -182,17 +182,32 @@ pub(crate) fn plasma_flare_scale(
 }
 
 /// The row length of the matrix the Plasma head's local-space arcs are drawn through:
-/// the craft's weapon node while charging (`charge > 0`), the bolt's after
-/// `Plasma_Launch`, whose rows are as long as the launch speed's scale. `1.0` for any
-/// other weapon. Confidence 60: the 0.75 rows are read off the entity at the launch
-/// probe, that the head draws through that matrix is inferred from the arcs' extents
-/// (`docs/ghidra/functions/psp-pulse-usa/plasma.md`, "the arcs after the release").
-pub(crate) fn plasma_ride_scale(kind: Option<oag_tables::weapons::Weapon>, charge: f32) -> f32 {
-    if kind == Some(oag_tables::weapons::Weapon::Plasma) && charge <= 0.0 {
-        oag_weapons::projectile::plasma::LAUNCH_SPEED_SCALE
+/// the craft's weapon node while charging, the bolt's after `Plasma_Launch`, both
+/// carrying `g_craft_scale` (`0.75`); `1.0` for any other weapon. Read live through the
+/// whole charge (the head node's world rows are `0.7500` on all 60 charging frames) and
+/// off the bolt's matrix at the launch probe
+/// (`docs/ghidra/functions/psp-pulse-usa/plasma.md`, "the head's matrix and node").
+pub(crate) fn plasma_ride_scale(kind: Option<oag_tables::weapons::Weapon>) -> f32 {
+    if kind == Some(oag_tables::weapons::Weapon::Plasma) {
+        oag_physics::hover::TARGET_GLOBAL_SCALE
     } else {
         1.0
     }
+}
+
+/// How far ahead of the craft's body, along its forward row, the weapon node a charging
+/// Plasma head is parented to sits: `(0, 0, 5.653)` model units through the craft's
+/// `0.75` rows. Measured live on Assegai Venom (constant over all 60 charging frames while
+/// the speed rose from 106 to 120 units a second, so a node offset and not a lead), and
+/// the GE dumps draw the head 4.1 to 4.3 units deeper than the hull
+/// (`docs/ghidra/functions/psp-pulse-usa/plasma.md`, "the head's matrix and node").
+pub(crate) const PLASMA_WEAPON_NODE_FORWARD: f32 = 5.653 * oag_physics::hover::TARGET_GLOBAL_SCALE;
+
+/// Where a charging Plasma's head is drawn: the firing craft's weapon node, which
+/// `Plasma_Init` parents the head to (`PsysNode_Update` copies that node's world
+/// translation with a zero offset), not the bolt's hold point.
+pub(crate) fn plasma_head_anchor(craft: &oag_physics::ShipState) -> Vec3 {
+    craft.body.position + craft.body.forward() * PLASMA_WEAPON_NODE_FORWARD
 }
 
 /// The Missile's own two flare anchors this tick, orbiting its flight line -

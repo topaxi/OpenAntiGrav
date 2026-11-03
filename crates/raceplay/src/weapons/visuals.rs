@@ -659,6 +659,11 @@ impl Race {
     /// **Called after `projectile::step`**, so a flare is anchored where its
     /// weapon ended the tick.
     pub(crate) fn advance_projectile_flares(&mut self) {
+        let head_rides_owner = self
+            .view
+            .handles
+            .get(Trigger::PlasmaFlare)
+            .is_some_and(|effect| effect.rides_owner_frame);
         for (slot, projectile) in self.sim.world.projectiles.slots.iter().enumerate() {
             let name = flare_effect_for(projectile.kind);
             let (primary, orbiting) = match projectile.kind {
@@ -672,6 +677,21 @@ impl Race {
                 // own quarter-turned frame - see `Trigger::ShurikenTrail`.
                 Some(oag_tables::weapons::Weapon::Shuriken) => {
                     (projectile.position, Some(projectile.position))
+                }
+                // A charging head sits on the craft's weapon node, not the hold point,
+                // on the source whose head rides its owner's frame (Pulse's PSP file).
+                Some(oag_tables::weapons::Weapon::Plasma)
+                    if projectile.charge > 0.0 && head_rides_owner =>
+                {
+                    let anchor = self
+                        .sim
+                        .world
+                        .ships
+                        .get(usize::from(projectile.owner))
+                        .map_or(projectile.position, |ship| {
+                            plasma_head_anchor(&ship.physics)
+                        });
+                    (anchor, None)
                 }
                 _ => (projectile.position, None),
             };
@@ -706,14 +726,14 @@ impl Race {
                 scale,
                 &mut self.view.projectile_flare[slot],
             );
-            // `Plasma_Launch` hands the head the bolt's matrix, whose rows are 0.75 long,
-            // so the arcs (flag `0x2`) draw at 0.75 of their local offsets from the
-            // release on (`plasma.md`, "the arcs after the release").
+            // The head draws through the craft's weapon node while charging and the
+            // bolt's matrix after `Plasma_Launch`, both with 0.75 rows, so the arcs
+            // (flag `0x2`) draw at 0.75 of their local offsets (`plasma.md`, "the head's
+            // matrix and node").
             if let Some(instance) = self.view.projectile_flare[slot] {
-                self.view.stage.set_ride_scale(
-                    instance,
-                    plasma_ride_scale(projectile.kind, projectile.charge),
-                );
+                self.view
+                    .stage
+                    .set_ride_scale(instance, plasma_ride_scale(projectile.kind));
             }
             // The Rocket's flare frame is its own basis turned `-pi/2` about
             // row 0, so the emitter's `+Y` is the velocity - measured live,

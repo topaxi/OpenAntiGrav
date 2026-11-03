@@ -114,8 +114,10 @@ PLASMA_BLAST_UPDATE = 0x0885F680
 # `Plasma_Update` (dt in `f12`, the bolt in `a0`): once a tick of flight. `+0x48` the launch speed in
 # km/h, `+0x54` the age, `+0xa0` the position, `+0xf0` the velocity (the default probe's words dump).
 PLASMA_UPDATE = 0x0885C6CC
+PLASMA_UPDATE_CHARGE = 0x0885C170
 PROBES = {
     "plasma_fly": PLASMA_UPDATE,
+    "plasma_charge": PLASMA_UPDATE_CHARGE,
     "plasma_blast": PLASMA_BLAST_UPDATE,
     "plasma_launch": PLASMA_LAUNCH,
     "plasma_det": PLASMA_BLAST_CONSTRUCT,
@@ -318,6 +320,21 @@ def _probe_loop(dbg, kind, address, frames, start, out, detonate=None, condition
             entry["vel"] = list(struct.unpack_from("<3f", blob, 0xE0))
             entry["prev"] = list(struct.unpack_from("<3f", blob, 0xF0))
             entry["normal"] = list(struct.unpack_from("<3f", blob, 0x100))
+            if kind in ("plasma_fly", "plasma_charge"):
+                # The head's psys node (`Plasma_Init` stores it at `+0x12c`), its world
+                # matrix (`node+0x30`) and its parent's (`node+0xbc`, the craft's weapon
+                # node while charging): the matrix the local-space arcs draw through.
+                node = entry["words"][0x12C // 4]
+                if ram(node):
+                    entry["head_node"] = node
+                    # `PsysNode_Update` adds this to the parent's translation (`vadd.q` with
+                    # `node+0xa0`) before it sets the node's world matrix.
+                    entry["head_offset"] = list(struct.unpack("<4f", dbg.read(node + 0xA0, 16)))
+                    for name, owner in (("head_world", node),
+                                        ("head_parent_world", dbg.read_u32(node + 0xBC))):
+                        if ram(owner) and ram(dbg.read_u32(owner + 0x30)):
+                            world = dbg.read_u32(owner + 0x30)
+                            entry[name] = list(struct.unpack("<16f", dbg.read(world, 64)))
         out.append(entry)
 
 
