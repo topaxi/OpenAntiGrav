@@ -285,3 +285,13 @@
 0x08a32e94	function	AnimKeyTrack_Construct	80	plasma.md
 0x08854b70	function	PlasmaBlast_Spawn	80	plasma.md
 0x088552a0	function	Plasmas_Update	75	plasma.md
+0x0885c884	function	Missile_Init	70	weapon-effects.md
+0x0885cf30	function	Missile_Update	65	weapon-effects.md
+0x08852ebc	function	Missile_SpawnExplosion	78	weapon-effects.md
+0x08851f98	function	Mine_SpawnExplosion	80	weapon-effects.md
+0x088513cc	function	Mines_Update	72	weapon-effects.md
+0x0885a2c8	function	DisruptorExplo_Construct	78	weapon-effects.md
+0x0885a5bc	function	DisruptorExplo_Update	80	weapon-effects.md
+0x08859b78	function	DisruptorFx_Construct	55	weapon-effects.md
+0x08858710	function	BombBlast_Construct	75	weapon-effects.md
+0x08858ad0	function	BombBlast_Update	75	weapon-effects.md
