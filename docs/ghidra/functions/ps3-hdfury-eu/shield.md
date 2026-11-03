@@ -484,10 +484,10 @@ multiplies the composed output by it (`shield_shading`). The original's own
 "`ShieldColour` is a shader instance parameter" (shell frames: Feisar deep
 blue, Piranha orange, EGX green).
 
-**Zone, open.** Our archive order mounts `DATA00` first, so a Zone shell loads
-DATA00's older copy `(1.0, 0.302, 0.0, 0.0)` and its alpha-0 target draws the
-shell invisible once settled. Which copy the original reads is unmeasured; the
-ground-truth test pins what ours resolves.
+**Zone.** Our archive order mounts `DATA00` first, so a Zone shell loads
+DATA00's copy `(1.0, 0.302, 0.0, 0.0)`. Normal Zone mode has no shield (maintainer), so
+the alpha-0 target is consistent and not a bug. Zone Battle (Fury) may differ;
+unverified. The ground-truth test pins what ours resolves.
 
 ### Carried to Omega and 2048
 
