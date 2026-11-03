@@ -60,3 +60,37 @@ fn a_single_sample_spike_is_caught() {
     let out = run(&mut limiter, 5_000, |i| if i == 2_500 { 10.0 } else { 0.1 });
     assert!(out.iter().all(|s| s.abs() <= CEILING + 1e-5));
 }
+
+#[test]
+fn a_sustained_low_note_over_full_scale_does_not_ripple_the_gain() {
+    let mut limiter = Limiter::new(RATE);
+    let tau = std::f32::consts::TAU;
+    let out = run(&mut limiter, RATE as usize, |i| {
+        2.0 * (tau * 50.0 * i as f32 / RATE as f32).sin()
+    });
+    let settled = &out[RATE as usize / 4 * CHANNELS..];
+    let periods = RATE as usize / 50 * CHANNELS;
+    let peaks: Vec<f32> = settled
+        .chunks(periods)
+        .filter(|c| c.len() == periods)
+        .map(|c| c.iter().step_by(2).fold(0.0_f32, |m, s| m.max(s.abs())))
+        .collect();
+    let (lo, hi) = peaks
+        .iter()
+        .fold((f32::MAX, 0.0_f32), |(lo, hi), p| (lo.min(*p), hi.max(*p)));
+    assert!(hi <= CEILING + 1e-5, "{hi}");
+    assert!((hi - lo) / hi < 0.01, "envelope moved {lo}..{hi}");
+}
+
+#[test]
+fn after_a_long_burst_the_limiter_goes_idle_and_stays_idle() {
+    let mut limiter = Limiter::new(RATE);
+    run(&mut limiter, RATE as usize * 20, |i| {
+        if i % 3000 < 1500 { 4.0 } else { 0.3 }
+    });
+    run(&mut limiter, RATE as usize * 3, |_| 0.1);
+    let before = limiter.limited();
+    run(&mut limiter, RATE as usize, |_| 0.1);
+    assert_eq!(limiter.limited(), before);
+    assert_eq!(limiter.average, limiter.len as f64);
+}

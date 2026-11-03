@@ -21,6 +21,11 @@ pub const CEILING: f32 = 0.95;
 /// reached its target by the time the peak leaves the delay line.
 pub const LOOKAHEAD_SECONDS: f32 = 0.002;
 
+/// How long the gain stays down after the signal stops demanding it, in
+/// seconds. Longer than a period of the lowest engine note, so the gain does
+/// not ride the waveform.
+pub const HOLD_SECONDS: f32 = 0.025;
+
 /// Time constant of the gain's return to unity, in seconds.
 pub const RELEASE_SECONDS: f32 = 0.12;
 
@@ -33,7 +38,10 @@ pub struct Limiter {
     floor: Vec<f32>,
     pos: usize,
     hot: usize,
+    floor_hot: usize,
     average: f64,
+    hold_len: u32,
+    hold: u32,
     released: f32,
     release_coeff: f32,
     limited: u64,
@@ -53,7 +61,10 @@ impl Limiter {
             floor: vec![1.0; len],
             pos: 0,
             hot: 0,
+            floor_hot: 0,
             average: len as f64,
+            hold_len: (sample_rate as f32 * HOLD_SECONDS) as u32,
+            hold: 0,
             released: 1.0,
             release_coeff: 1.0 - (-1.0 / (RELEASE_SECONDS * sample_rate as f32)).exp(),
             limited: 0,
@@ -104,21 +115,32 @@ impl Limiter {
             self.hot += usize::from(need < 1.0);
             self.required[slot] = need;
 
-            let quiet = self.hot == 0 && self.average >= self.len as f64 - 1e-9;
+            let quiet = self.hot == 0 && self.floor_hot == 0;
             let target = if quiet {
+                self.average = self.len as f64;
                 self.floor[slot] = 1.0;
                 1.0
             } else {
                 let lowest = self.required.iter().fold(1.0_f32, |m, g| m.min(*g));
+                self.floor_hot -= usize::from(self.floor[slot] < 1.0);
+                self.floor_hot += usize::from(lowest < 1.0);
                 self.average += f64::from(lowest) - f64::from(self.floor[slot]);
                 self.floor[slot] = lowest;
+                if self.floor_hot == 0 && self.hot == 0 {
+                    self.average = self.len as f64;
+                }
                 (self.average / self.len as f64) as f32
             };
-            if quiet && self.average < self.len as f64 {
-                self.average = self.len as f64;
-            }
 
-            self.released = target.min(self.released + (1.0 - self.released) * self.release_coeff);
+            if target <= self.released {
+                self.released = target;
+                self.hold = self.hold_len;
+            } else if self.hold > 0 {
+                self.hold -= 1;
+            } else {
+                self.released =
+                    target.min(self.released + (target - self.released) * self.release_coeff);
+            }
             if self.released > 0.9999 && target >= 1.0 {
                 self.released = 1.0;
             }
