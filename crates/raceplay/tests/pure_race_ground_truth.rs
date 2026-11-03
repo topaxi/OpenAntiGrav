@@ -474,3 +474,31 @@ fn a_pulse_source_has_no_fifth_rung_and_says_so() {
     assert_eq!(ladder.names(), oag_title::SpeedClasses::PULSE_LADDER);
     assert!(!ladder.names().contains(&oag_title::SpeedClasses::VECTOR));
 }
+
+/// Pure's Plasma blast plays its own three models: `plasma_halo`,
+/// `plasma_hemisphere_noglow` and `plasma_hemisphere` resolve on the disc and
+/// the race carries Pure's law (2.0 s life, the 3.5 hemisphere drop). Fails if
+/// the title's `plasma_blast_pulse` row is dropped (nothing loads, no law).
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_pure_race_loads_its_own_plasma_blast_trio() {
+    for (label, image) in images() {
+        let loaded = load(&image, oag_pure::race::DEFAULT_TRACK);
+        let blast = &loaded.plasma_blast_models;
+        for (name, model) in [
+            ("plasma_halo", &blast.halo),
+            ("plasma_hemisphere_noglow", &blast.hemisphere2),
+            ("plasma_hemisphere", &blast.hemisphere1),
+        ] {
+            assert!(
+                model.is_some(),
+                "{label}: {name} did not load: {:#?}",
+                loaded.report
+            );
+        }
+        let law = loaded.setup.plasma_blast_law.expect("Pure's blast law");
+        assert_eq!(law.life, 2.0, "{label}");
+        assert_eq!(law.hemisphere_drop, 3.5, "{label}");
+        assert!(law.halo_hide_at.is_none(), "{label}");
+    }
+}
