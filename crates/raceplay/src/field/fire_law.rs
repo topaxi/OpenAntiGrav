@@ -76,11 +76,6 @@ impl Race {
                 Decision::Hold
             };
         }
-        // **Chosen, not measured**: a craft that is not racing does not fire.
-        // The original's own guard is `entity+0xae4`, which is not read.
-        if self.sim.world.ships[slot].physics.craft_state != oag_physics::CraftState::Racing {
-            return Decision::Hold;
-        }
         let Some(situation) = self.fire_situation(slot, weapon, aimed) else {
             return Decision::Hold;
         };
