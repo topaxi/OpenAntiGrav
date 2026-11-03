@@ -250,6 +250,23 @@ pub(super) fn pickup_model_draws(
     out
 }
 
+/// Where one `<Mode3D><Model>` widget's flat quad sits on the layout's screen: `[x, y, w, h]`.
+fn model_rect(cx: &Context<'_>, name: &str) -> Option<[f32; 4]> {
+    let model = cx.layout.models.iter().find(|model| model.name == name)?;
+    let placed = cx.sheet.get(&model.src)?;
+    let [w, h] = placed.quad_extent?;
+    let [x, y, _z] = model.position;
+    // Orthographic `y` counts up from the bottom of the screen, as the gauge's
+    // models do (`bar_models`): (240, 250) is the top middle, where the
+    // original draws the pickup box.
+    let y = oag_display::space::SCREEN.1 - y;
+    // A flat-rasterised model (Pure's icons) says where its canvas sits from
+    // the model's origin; a plain quad is centred on it. Centred on its own
+    // authored position, the same convention the sight brackets' quads use.
+    let [dx, dy] = placed.quad_centre.unwrap_or([0.0, 0.0]);
+    Some([x + dx - w * 0.5, y + dy - h * 0.5, w, h])
+}
+
 /// One `<Mode3D><Model>` widget as a flat, tinted quad - the icon and grid
 /// widgets' shared shape, neither of which rotates the way the sight brackets
 /// do.
@@ -263,19 +280,8 @@ pub(super) fn pickup_model_draws(
 fn model_draw(cx: &Context<'_>, name: &str, color: [f32; 4]) -> Option<Draw> {
     let model = cx.layout.models.iter().find(|model| model.name == name)?;
     let placed = cx.sheet.get(&model.src)?;
-    let [w, h] = placed.quad_extent?;
-    let [x, y, _z] = model.position;
-    // Orthographic `y` counts up from the bottom of the screen, as the gauge's
-    // models do (`bar_models`): (240, 250) is the top middle, where the
-    // original draws the pickup box.
-    let y = oag_display::space::SCREEN.1 - y;
-    // A flat-rasterised model (Pure's icons) says where its canvas sits from
-    // the model's origin; a plain quad is centred on it.
-    let [dx, dy] = placed.quad_centre.unwrap_or([0.0, 0.0]);
     Some(Draw::BlendedSprite {
-        // Centred on its own authored position, the same convention the sight
-        // brackets' quads use - see `bracket_draws`.
-        rect: [x + dx - w * 0.5, y + dy - h * 0.5, w, h],
+        rect: model_rect(cx, name)?,
         uv: [
             placed.x as f32,
             placed.y as f32,
@@ -364,20 +370,25 @@ fn reference_glyph(cx: &Context<'_>) -> Option<([f32; 2], [f32; 2])> {
 /// Faded as the title's own icon is. **Chosen, not measured**: the art's margin never
 /// counts, so a PNG authored on the title's own texture cell and one cropped to its glyph
 /// draw alike. The frame is the layout's `PickupBackground` (2048: `PickupBgFrame`), else the
-/// `TurboIcon` sprite. A title that draws its icons as models (Pure) draws nothing for a
-/// mod's own PNG.
+/// `TurboIcon` sprite. A title that draws its icons as models (Pure) takes the backdrop
+/// model's quad as the frame and draws the PNG on it at its own size (the art is the glyph alone).
 pub(super) fn mod_icon_draw(cx: &Context<'_>, src: &str, look: Option<Look>) -> Option<Draw> {
     let placed = cx.sheet.get(src)?;
-    let frame = if cx.art.pickup_icon_uv.is_some() {
-        cx.layout.sprite(super::dialect_2048::PICKUP_BG_FRAME_2048)
+    let frame = if cx.art.pickup_icon_models.is_some() {
+        // Pure draws its icons as models: the frame is the striped backdrop's quad.
+        model_rect(cx, cx.art.pickup_icon_backdrop_model?)?
     } else {
-        cx.layout.sprite(PICKUP_BACKGROUND)
-    }
-    .or_else(|| {
-        cx.layout
-            .sprite(&pickup_icon_name(oag_tables::weapons::Weapon::Turbo))
-    })?
-    .rect;
+        if cx.art.pickup_icon_uv.is_some() {
+            cx.layout.sprite(super::dialect_2048::PICKUP_BG_FRAME_2048)
+        } else {
+            cx.layout.sprite(PICKUP_BACKGROUND)
+        }
+        .or_else(|| {
+            cx.layout
+                .sprite(&pickup_icon_name(oag_tables::weapons::Weapon::Turbo))
+        })?
+        .rect
+    };
     let canvas = [placed.width as f32, placed.height as f32];
     let art = placed.quad_extent.unwrap_or(canvas);
     let offset = placed.quad_centre.unwrap_or([0.0, 0.0]);

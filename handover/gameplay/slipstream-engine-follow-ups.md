@@ -42,8 +42,10 @@ The engine never names the mod.
      or a custom shader is a later piece.
    - **`screen-fill` is additive**, as the title's own flash is; a subtractive or alpha-over wash
      needs a second blend.
-   - **Pure** draws the pickup backdrop and no mod PNG (its icons are `<Mode3D>` models, and no
-     Pure art ships). **2048** was not checked by a screenshot: a headless `--race` shows no
+   - **Pure** draws its backdrop grid model and the mod's PNG centred on it at its own size
+     (`pure_psp.png`, glyph alone, variant b; checked by screenshot on `pure-psp-eu.chd`). The
+     pad share there is 5.9-6.5 % (AI) and 4.3-4.5 % (person) against a Turbo's 13-15 %; the
+     portal colour is Pure's glyph green `#40ff40` (chosen), near 2048's green. **2048** was not checked by a screenshot: a headless `--race` shows no
      pickup box for `--give turbo` either. **Pulse PSP and PS2** are one title to a manifest, so
      they share one `[pickup.titles.wipeout-pulse]` icon.
    - **Mod checks**: the 2048 and Omega checks of CLAUDE.md "A 2048 finding is checked against
