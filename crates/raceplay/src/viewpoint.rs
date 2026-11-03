@@ -457,18 +457,12 @@ impl Race {
         let degrees = (self.view.chase_far.fov + SPEED_FOV_GAIN_DEG * speed)
             .clamp(FOV_GUARD_DEG.0, FOV_GUARD_DEG.1);
         let authored = setting.apply(degrees.to_radians());
-        // The player's order and its zero case (`Race::vertical_fov`): the kick widens the
-        // field after the setting, and a closed one leaves it untouched.
+        // The player's order and its zero case (`finish_vertical_fov`).
         let kick = self.view.viewpoints.cams[slot].map_or(0.0, |cam| cam.boost_kick);
-        let kicked = if kick == 0.0 {
-            authored
-        } else {
-            let widen = 1.0 + kick * self.view.boost_fov_kick.gain();
-            2.0 * ((authored * 0.5).tan() * widen).atan()
-        };
-        Some(oag_render::camera::fit_vertical_fov(
-            kicked,
-            AUTHORED_ASPECT,
+        Some(super::camera::finish_vertical_fov(
+            authored,
+            kick,
+            self.view.boost_fov_kick.gain(),
             aspect,
         ))
     }

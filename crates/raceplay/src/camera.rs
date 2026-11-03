@@ -732,17 +732,24 @@ impl Race {
         }
         .clamp(FOV_GUARD_DEG.0, FOV_GUARD_DEG.1);
         let authored = setting.apply(widened_deg.to_radians());
-        // Composed *after* the setting, so a player who has widened the field
-        // gets the same proportional kick rather than a fixed number of degrees.
-        // The zero case returns the input untouched rather than through
-        // `atan(tan(x))`, for the reason `Fov::apply` gives: every capture taken
-        // before this effect existed has to stay bit-identical.
-        let kicked = if boost_kick == 0.0 {
-            authored
-        } else {
-            let widen = 1.0 + boost_kick * self.view.boost_fov_kick.gain();
-            2.0 * ((authored * 0.5).tan() * widen).atan()
-        };
-        oag_render::camera::fit_vertical_fov(kicked, AUTHORED_ASPECT, aspect)
+        finish_vertical_fov(authored, boost_kick, self.view.boost_fov_kick.gain(), aspect)
     }
+}
+
+/// The last two steps of every view's vertical field of view: the boost kick, then the fit to
+/// the window's aspect. `authored` has already passed the player's setting.
+///
+/// The kick is composed *after* the setting, so a player who has widened the field gets the
+/// same proportional kick rather than a fixed number of degrees. The zero case returns the
+/// input untouched rather than through `atan(tan(x))`, for the reason `Fov::apply` gives:
+/// every capture taken before this effect existed has to stay bit-identical.
+#[cfg(feature = "view")]
+pub(super) fn finish_vertical_fov(authored: f32, kick: f32, gain: f32, aspect: f32) -> f32 {
+    let kicked = if kick == 0.0 {
+        authored
+    } else {
+        let widen = 1.0 + kick * gain;
+        2.0 * ((authored * 0.5).tan() * widen).atan()
+    };
+    oag_render::camera::fit_vertical_fov(kicked, AUTHORED_ASPECT, aspect)
 }
