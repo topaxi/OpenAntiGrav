@@ -1095,6 +1095,12 @@ impl Audio {
             dump.path.display(),
             frames as f32 / rate as f32
         );
+        let (peak, limited, deepest, clipped) = self
+            .output
+            .with_mixer(|m| (m.peak(), m.limited(), m.deepest_limit(), m.clipped()));
+        println!(
+            "mix: pre-limiter peak {peak:.2}, limited {limited} frame(s), deepest gain {deepest:.3}, hard-clamped {clipped} sample(s)"
+        );
         Ok(())
     }
 }

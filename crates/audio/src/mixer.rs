@@ -27,6 +27,7 @@
 use std::sync::Arc;
 
 use crate::binaural::{Binaural, LATENCY, VoiceState};
+use crate::limiter::Limiter;
 use crate::spatial::SpatialMode;
 
 /// Output channel count. Everything is mixed to interleaved stereo.
@@ -466,6 +467,11 @@ pub struct Mixer {
     /// Output samples the sum drove past full scale, for the same reason
     /// [`Self::starved`] is counted. See [`Self::render`].
     clipped: u64,
+    /// The master limiter that runs after the sum.
+    limiter: Limiter,
+    /// Whether the limiter runs. Only tests that read exact sample positions
+    /// switch it off, since it delays the signal by [`Limiter::latency`].
+    limiting: bool,
     /// Sample-rate remainder carried between [`Self::render_tick`] calls.
     ///
     /// **Because `sample_rate / tick_hz` is not always a whole number.** 48,000
@@ -495,6 +501,8 @@ impl Mixer {
             generation: 0,
             starved: 0,
             clipped: 0,
+            limiter: Limiter::new(sample_rate.max(1)),
+            limiting: true,
             tick_frame_remainder: 0,
         }
     }
@@ -558,14 +566,31 @@ impl Mixer {
         self.starved
     }
 
-    /// How many output samples the voice sum has driven past full scale.
+    /// How many output samples reached the hard clamp after the limiter.
     ///
-    /// Zero is a mix with headroom left. Anything else is the mix saturating -
-    /// see [`Self::render`] for why that is what the console does rather than
-    /// something to be fixed by turning a bus down.
+    /// Zero is the limiter doing its job; see [`Self::render`].
     #[must_use]
     pub fn clipped(&self) -> u64 {
         self.clipped
+    }
+
+    /// The largest absolute sample the voice sum has produced, before the
+    /// limiter.
+    #[must_use]
+    pub fn peak(&self) -> f32 {
+        self.limiter.peak()
+    }
+
+    /// Frames the limiter pulled down.
+    #[must_use]
+    pub fn limited(&self) -> u64 {
+        self.limiter.limited()
+    }
+
+    /// The lowest limiter gain applied so far (1.0 means it never acted).
+    #[must_use]
+    pub fn deepest_limit(&self) -> f32 {
+        self.limiter.deepest()
     }
 
     /// Starts a voice, returning a handle to steer it with.
@@ -880,26 +905,18 @@ impl Mixer {
     ///
     /// Eight craft on the grid hold eight `~ENGINE` voices inside the flare's
     /// 50-unit radius at once, so the sum leaves full scale long before
-    /// anything unusual has happened. **Nothing in the original's chain
-    /// reserves headroom for that**: `Audio_Init_q` (`0x089906e4`) sets all
-    /// fifteen group volumes *and* the master to `0x400`, and
-    /// `Audio_OutputThread_q` (`0x0898ca54`) hands `master << 5` = `0x8000` -
-    /// `PSP_AUDIO_VOLUME_MAX` - to `sceAudioOutputPannedBlocking`. Unity end to
-    /// end, into a 16-bit buffer that clamps. See
-    /// [`audio-levels.md`](../../../../docs/ghidra/functions/psp-pulse-usa/audio-levels.md).
+    /// anything unusual has happened. The original reserves no headroom for
+    /// that (`Audio_Init_q` `0x089906e4` and `Audio_OutputThread_q`
+    /// `0x0898ca54` run unity end to end into a clamping 16-bit buffer,
+    /// [`audio-levels.md`](../../../../docs/ghidra/functions/psp-pulse-usa/audio-levels.md)),
+    /// and a hard clamp of a mix that far over is audible as crackle.
     ///
-    /// So the clamp below is the port of a hardware behaviour, not a limiter
-    /// invented to make a loud mix comfortable - there is no evidenced
-    /// attenuation to apply, and picking one would be exactly the
-    /// plausible-looking stand-in `CLAUDE.md` forbids. What the clamp does buy
-    /// is that an `f32` device and an `i16` device now receive the same
-    /// samples, where before the mixer handed the host whatever the sum
-    /// reached and each backend saturated it in its own place.
-    ///
-    /// [`Self::clipped`] counts what it cost. **Nothing reads it yet** - it is
-    /// there for tests and for the perf overlay to pick up, the way
-    /// [`Self::starved`] is, so that a mix saturating for a whole race is a
-    /// number somebody can ask for rather than only a sound.
+    /// So the sum goes through [`Limiter`] before the final clamp: per-cue
+    /// levels stay as authored and only the peaks that would leave full scale
+    /// are pulled down, ahead of time. [`Self::clipped`] now counts what still
+    /// reached the clamp after the limiter, which should be nothing.
+    /// [`Self::peak`], [`Self::limited`] and [`Self::deepest_limit`] report
+    /// what the limiter saw.
     pub fn render(&mut self, out: &mut [f32]) {
         out.fill(0.0);
         let master = self.master_gain;
@@ -1125,6 +1142,9 @@ impl Mixer {
             }
         }
 
+        if self.limiting {
+            self.limiter.process(out);
+        }
         for sample in out.iter_mut() {
             if *sample < -1.0 || *sample > 1.0 {
                 self.clipped += 1;
