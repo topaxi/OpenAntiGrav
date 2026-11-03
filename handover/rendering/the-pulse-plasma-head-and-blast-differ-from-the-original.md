@@ -40,8 +40,8 @@ confidence scores and the replay evidence. What is left is wiring and two unread
    168,685 to 102,300 on k20-72 (five shots). **Open inside it**: (a) ~~the root emitter's white crescent
    arcs far smaller and dimmer~~ closed 2026-11-03 for size and brightness: the arcs are local-space (flag `0x2`)
    and now ride the craft (box luminance k60 127.0 against the original's 127.0); their shapes still differ
-   (straighter bars, strips built in world not view space); (b) the glow reads
-   dimmer; (c) the draw-time severity read is inferred from the extents, not probed on
+   (straighter bars, strips built in world not view space; checked quad by quad against the k50 dump 2026-11-03, `plasma.md` "the head's arcs against the dump": the view-space build is in, the geometry and colours match, the rest is random draws, so no construction fix is open); (b) ~~the glow reads
+   dimmer~~ not the glow: its colour, blend and extent equal the dump's, the ring's alpha is a random channel (0.518 dump, 0.364 ours); (c) the draw-time severity read is inferred from the extents, not probed on
    `ParticleSystem_DrawParticle` (conf 70).
 3. ~~**Detonation 3 ticks early**~~ Closed 2026-10-31 (`pulse-plasma-timing`): k76 now, per-update
    distance within 0.05 unit of the original. The cause was not the distance leg: the floor arm's
