@@ -262,6 +262,14 @@ impl Standing {
         true
     }
 
+    /// The craft was moved forward along the circuit to ring point `index`
+    /// ([`Course::jump`]): the next [`Self::update`] searches from there. Progress is
+    /// left where it was, so that update sees the jump as one forward step and counts
+    /// a crossing of the line in it on its own tick (a finish included).
+    pub fn jumped(&mut self, index: usize) {
+        self.course_index = u32::try_from(index).ok();
+    }
+
     /// How far round the race this craft is, for ordering.
     ///
     /// Laps times the circuit plus the distance into the current one, so one
@@ -341,3 +349,6 @@ pub fn places<const N: usize>(standings: &[Standing; N], course: &Course) -> [u8
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod jump_tests;

@@ -521,6 +521,26 @@ impl Course {
         order
     }
 
+    /// The ring point a forward jump of `by` units from `from` lands on, for a
+    /// relocation along the circuit (a mod's `transit`).
+    ///
+    /// `None` unless `0 < by < length / 2`: a lap is a wrap of the distance-along
+    /// ([`crate::state::wrapped_forward`]), so a jump of half a lap or more would read
+    /// as a backward crossing of the line on the next locate. Below that the next
+    /// [`crate::Standing::update`] and [`crate::RaceState::update`] count a crossing of
+    /// the line made by the jump, on the tick they run, exactly as a driven one.
+    #[must_use]
+    pub fn jump(&self, from: usize, by: f32) -> Option<usize> {
+        let ok = by.is_finite() && by > 0.0 && by < self.length * 0.5;
+        (ok && !self.positions.is_empty()).then(|| self.advance(from, by))
+    }
+
+    /// The longest forward jump [`Self::jump`] takes: just under half a lap.
+    #[must_use]
+    pub fn max_jump(&self) -> f32 {
+        self.length * 0.5
+    }
+
     /// The ring point `by` units further along than `from`.
     ///
     /// Walks point to point rather than doing arithmetic on the cumulative table,

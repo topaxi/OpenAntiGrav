@@ -495,6 +495,12 @@ impl RaceState {
         outcome
     }
 
+    /// The craft was moved forward along the circuit to ring point `index`
+    /// ([`Course::jump`]); see [`crate::Standing::jumped`].
+    pub fn jumped(&mut self, index: usize) {
+        self.course_index = u32::try_from(index).ok();
+    }
+
     /// Steps the zone counter, and pays out a zone that ended clean.
     fn advance_zone(&mut self, dt: f32, outcome: &mut Outcome) {
         self.score = self.score.saturating_add(zone::SCORE_PER_TICK);
