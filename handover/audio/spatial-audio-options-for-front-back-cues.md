@@ -32,7 +32,7 @@ is the camera, `original` on every title. Landed in `oag-audio`/`oag-sound`:
   the lead; nothing was played.
 
 Still open: nobody has listened (is the rear cue enough, does headphones click on
-a passing craft); Deck and S24 cost are estimates from the x86 figure;
+a passing craft); Deck cost is measured (below), S24 cost is an estimate;
 elevation is dropped (horizontal plane only); a headphone voice is 512 frames
 late against a plain one; the dump path (`--dump-audio`) builds the sphere on a
 thread, so a headphones dump is not reproducible to the sample.
@@ -251,9 +251,17 @@ Recommended shape, for the maintainer to accept or change:
 5. Omega's patch-1.03 3D audio is unread (`omega-3d-audio-read`). If it is a
    binaural or object-based path, it defines the `original` value for Omega
    and may favour one option.
-6. CPU per voice on the Deck and the S24 is an estimate; a timed run on each
-   would turn it into a measurement. The count of simultaneously positioned,
-   in-range voices in a real race is also unmeasured.
+6. **Deck cost is measured** (`docs/ghidra/functions/psp-pulse-usa/positional-audio.md`,
+   "Cost on a Steam Deck"): a headphone voice is about 41 us per 512 frames (0.38 %
+   of a core), 32 voices 8.6 %, a real Pulse race 1.11 % (`original`) against
+   2.44 % (`headphones`), no dropped or late buffer. Open: cap `headphones` at
+   32 voices for HD's 128-voice pool (about 49 % of the budget otherwise); an
+   ended one-shot renders a 512-frame drain tail, probably why short cues cost
+   more per voice (not profiled); the S24 is still an estimate; the count of live placed voices in a
+   real race is unlogged (the Deck race above implies about 40). Measuring
+   harness: a throwaway `crates/audio/examples/spatial_cost.rs` that builds
+   a `Mixer`, plays N placed looping voices in a mode and times `render` over
+   512-frame chunks, run on the Deck under `~/.cache/oag/deck.lock`.
 7. Whether the click `hrtf` documents on fast-moving sources is audible on a
    passing craft: cannot be judged without playback, and no audio plays from
    spawned processes on this machine.
