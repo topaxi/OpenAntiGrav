@@ -307,8 +307,10 @@ fn the_loudest_voices_keep_the_hrtf_when_a_louder_one_arrives() {
 }
 
 fn largest_step(out: &[f32]) -> f32 {
-    out.chunks_exact(2)
-        .zip(out.chunks_exact(2).skip(1))
+    let frames = out.as_chunks::<2>().0;
+    frames
+        .iter()
+        .zip(frames.iter().skip(1))
         .flat_map(|(a, b)| [(b[0] - a[0]).abs(), (b[1] - a[1]).abs()])
         .fold(0.0, f32::max)
 }
