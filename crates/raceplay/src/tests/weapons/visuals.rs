@@ -367,6 +367,19 @@ fn the_plasma_heads_arcs_ride_the_anchor_they_were_born_on() {
     );
 }
 
+/// After `Plasma_Launch` the head draws through the bolt's matrix, whose rows are
+/// 0.75 long; before it, through the craft's. Only the Plasma, only from the release
+/// (`docs/ghidra/functions/psp-pulse-usa/plasma.md`, "the arcs after the release").
+#[test]
+fn the_plasma_heads_matrix_is_scaled_from_the_release_on() {
+    use crate::weapons::plasma_ride_scale;
+    use oag_tables::weapons::Weapon;
+    assert_eq!(plasma_ride_scale(Some(Weapon::Plasma), 0.4), 1.0);
+    assert_eq!(plasma_ride_scale(Some(Weapon::Plasma), 0.0), 0.75);
+    assert_eq!(plasma_ride_scale(Some(Weapon::Rocket), 0.0), 1.0);
+    assert_eq!(plasma_ride_scale(None, 0.0), 1.0);
+}
+
 /// The charging head's arcs draw at the head's severity of the moment, not the one they
 /// were born with: `ParticleSystem_UpdateParticleFields` multiplies the size channel by
 /// the instance's `+0x34` every update, and the original's strip grows 2.4, 5.4, 7.5

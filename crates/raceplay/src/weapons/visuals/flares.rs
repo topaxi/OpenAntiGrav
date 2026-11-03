@@ -181,6 +181,20 @@ pub(crate) fn plasma_flare_scale(
     if cockpit { scale * 0.5 } else { scale }
 }
 
+/// The row length of the matrix the Plasma head's local-space arcs are drawn through:
+/// the craft's weapon node while charging (`charge > 0`), the bolt's after
+/// `Plasma_Launch`, whose rows are as long as the launch speed's scale. `1.0` for any
+/// other weapon. Confidence 60: the 0.75 rows are read off the entity at the launch
+/// probe, that the head draws through that matrix is inferred from the arcs' extents
+/// (`docs/ghidra/functions/psp-pulse-usa/plasma.md`, "the arcs after the release").
+pub(crate) fn plasma_ride_scale(kind: Option<oag_tables::weapons::Weapon>, charge: f32) -> f32 {
+    if kind == Some(oag_tables::weapons::Weapon::Plasma) && charge <= 0.0 {
+        oag_weapons::projectile::plasma::LAUNCH_SPEED_SCALE
+    } else {
+        1.0
+    }
+}
+
 /// The Missile's own two flare anchors this tick, orbiting its flight line -
 /// the primary anchor first, the second in the returned tuple.
 ///

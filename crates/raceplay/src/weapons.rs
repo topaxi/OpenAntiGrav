@@ -35,7 +35,7 @@ pub(super) use visuals::bounced_this_tick;
 #[cfg(all(test, feature = "view"))]
 pub(super) use visuals::{
     advance_one_flare, bounce_effect_for, flare_effect_for, flash_for, missile_flare_anchors,
-    plasma_flare_scale,
+    plasma_flare_scale, plasma_ride_scale,
 };
 
 /// How far behind the body a title that lays from the craft's rear anchor

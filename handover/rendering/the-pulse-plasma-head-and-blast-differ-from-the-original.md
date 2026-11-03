@@ -2,7 +2,7 @@
 status: re-first
 titles: [pulse]
 updated: 2026-11-03
-summary: "Plasma head: arcs follow the charge, dark core draws over them; open: luminance overshoot, arcs too long after release"
+summary: "Plasma head: arcs follow the charge, dark core draws over them; open: luminance overshoot, arcs shape differs"
 ---
 
 # The Pulse Plasma head and blast differ from the original's
@@ -58,6 +58,5 @@ confidence scores and the replay evidence. What is left is wiring and two unread
   the arcs draw at the head's live severity (strip extent 2.5, 5.4, 7.2 at k20, 36, 44 against the dump's 2.4, 5.4, 7.5)
   and the strips are built at one depth. Still open: (i) ~~draw order and disc colour~~ closed 2026-11-03 (`pulse-plasma-core-order`, `plasma.md` "the head's draw order"):
   the arcs draw in a layer before the alpha-over disc, the colour was the order (box k60 122.5, k72 115.1 against 127.0, 111.1); (ii) box luminance overshoots 9 to 12 at k36, k44, k72;
-  (iii) the arcs are 1.3 to 2.7 units too long from k56 on: hypothesis the bolt matrix's 0.75 rows scale local-space
-  offsets (a spawn-time `set_frame_scale` changed nothing; needs a draw-time scale), `plasma.md` "the arcs after the release"; (iv) Pure's `Plasma_Init` is unread, so Pure keeps the old arcs.
+  (iii) ~~the arcs are 1.3 to 2.7 units too long from k56 on~~ closed to 0.9 / 0.8 units 2026-11-03 (`pulse-plasma-release-arcs`, `plasma.md` "the arcs after the release": the bolt matrix's 0.75 rows scale the local-space offsets at draw time, conf 60); what is left is a 1.3 pre-release gap at k56 (single random draws) and the arcs' shape (the original's curved crescents, ours straighter bars); (iv) Pure's `Plasma_Init` is unread, so Pure keeps the old arcs.
 - Pulse PS2 is unmeasured here; its pair is `scripts/pcsx2-pulse-pair.py`.
