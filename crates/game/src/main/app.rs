@@ -388,7 +388,7 @@ impl App {
             return Ok(None);
         };
 
-        let mut controls = Controls::new();
+        let mut controls = controls_for(gpu.is_headless());
         // `--players N`: the keyboard and the first pad on slot 0, each further
         // pad on the next slot in connection order. Chosen, not measured; the
         // join screen (`Session::open_join`) seats by who pressed instead.
@@ -686,6 +686,17 @@ impl App {
             // never came. There is nothing to write and no reason to complain.
             None => Ok(()),
         }
+    }
+}
+
+/// The devices a run reads. A run with no window (`--drive`) is non-interactive
+/// and gets no gamepad, so a pad in use on the host cannot steer it; a test that
+/// needs pad input injects a synthetic one. The one place that decides.
+pub(crate) fn controls_for(headless: bool) -> Controls {
+    if headless {
+        Controls::without_pad()
+    } else {
+        Controls::new()
     }
 }
 
