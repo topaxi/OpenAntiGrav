@@ -717,6 +717,30 @@ looked for any 64-entry run of `floor(k * cos/sin(i * step))` pairs over
 the PS2 build either computes its pan or tabulates it in a form none of those
 describe. Unexplained, and worth a look by whoever next opens `SCES_547.48`.
 
+## Our front/back cue (ours, not the original's)
+
+The law above cannot tell front from back, so the `original` value of the
+SPATIAL AUDIO setting is exactly it (bit-identical, pinned by
+`mixer::tests::original_ignores_where_a_voice_is_along_the_forward_axis`). The
+other two values are additions, **chosen, not measured**:
+
+- `rear_cue` (the default): the listener now carries a forward axis (the
+  camera's `-Z`, `oag_game::sound::listener_of_view`), `Emitter::place` returns
+  `front = dot(direction, forward)`, and a voice with `front < 0` is run
+  through a one-pole low-pass (2.5 kHz dead behind) and lowered to 0.8,
+  both eased linearly over the rear half. The front half is bit-identical to
+  `original`. "Behind" is the camera, as the original's listener is.
+- `headphones`: `oag_audio::binaural`, the `hrtf` crate over 200 directions of
+  SADIE II subject D1 (Apache-2.0, `assets/audio/hrtf/README.md`). Horizontal
+  plane only (the direction is rebuilt from `pan` and `front`; elevation is not
+  carried). 512 frames of latency per voice. Until the sphere has loaded it
+  sounds as `rear_cue`.
+
+Music and unplaced cues (`pan: None`) are never touched. Pre-mixed sequences
+(`sfx/compose.rs`) keep the pan they were baked with. Cost of a headphone
+voice: see the lane thread; `rear_cue` is a handful of multiply-adds per
+sample.
+
 ## Not determined
 
 - **Nine of the fourteen emitter construction sites** (2026-09-01: `Mine_Init`
