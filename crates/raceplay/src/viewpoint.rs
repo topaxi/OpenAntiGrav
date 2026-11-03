@@ -461,6 +461,7 @@ impl Race {
         let kick = self.view.viewpoints.cams[slot].map_or(0.0, |cam| cam.boost_kick);
         Some(super::camera::finish_vertical_fov(
             authored,
+            self.extension_fov_offset(slot),
             kick,
             self.view.boost_fov_kick.gain(),
             aspect,

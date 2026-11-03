@@ -3,9 +3,9 @@
 use core::fmt;
 
 use crate::{
-    Cue, Effect, HudElement, MAX_COMMANDS, MAX_HUD_EXTRA, MAX_HUD_SHAKE, MAX_HUD_TEXT,
-    MAX_PAD_FACTOR, MAX_PROBE_RADIUS, MAX_ROLL_EVERY, MAX_SPEED_FACTOR, MAX_THRUST_FACTOR,
-    MAX_TRANSIT_TICKS, Slot, Weapon, WeatherKind,
+    Cue, Effect, HudElement, MAX_COMMANDS, MAX_FOV_OFFSET_DEG, MAX_HUD_EXTRA, MAX_HUD_SHAKE,
+    MAX_HUD_TEXT, MAX_PAD_FACTOR, MAX_PROBE_RADIUS, MAX_ROLL_EVERY, MAX_SPEED_FACTOR,
+    MAX_THRUST_FACTOR, MAX_TRANSIT_TICKS, Slot, Weapon, WeatherKind,
 };
 
 /// A reply record that breaks a rule of its own. The host faults the module; it never
@@ -113,6 +113,18 @@ pub enum Malformed {
         /// The record's word.
         word: u32,
     },
+    /// A `fov-offset` out of its range or a `fire-mod-effect-ahead` with a bad distance
+    /// ([`crate::scene`]).
+    Scene {
+        /// The command kind code.
+        kind: u8,
+        /// The record's argument.
+        arg: u16,
+        /// The record's value.
+        value: f32,
+        /// The record's word.
+        word: u32,
+    },
 }
 
 impl fmt::Display for Malformed {
@@ -189,6 +201,15 @@ impl fmt::Display for Malformed {
             } => write!(
                 f,
                 "command {kind} arg {arg} value {value} word {word:#x}: a transit of 1..={MAX_TRANSIT_TICKS} ticks, a distance kind 0..=2 with an amount above 0, factors in [0, {MAX_SPEED_FACTOR}], a radius in (0, {MAX_PROBE_RADIUS}]"
+            ),
+            Self::Scene {
+                kind,
+                arg,
+                value,
+                word,
+            } => write!(
+                f,
+                "command {kind} arg {arg} value {value} word {word:#x}: an fov-offset in [-{MAX_FOV_OFFSET_DEG}, {MAX_FOV_OFFSET_DEG}] degrees, a distance kind 0..=4 with an amount above 0"
             ),
             Self::Roll {
                 slot,

@@ -45,6 +45,8 @@ mod extension_examples;
 mod extension_faults;
 #[cfg(feature = "extensions")]
 mod extension_odds;
+#[cfg(feature = "extensions")]
+mod extension_view;
 mod extensions;
 mod field;
 mod hash;

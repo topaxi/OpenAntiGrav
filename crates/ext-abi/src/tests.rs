@@ -20,7 +20,7 @@ fn slot(index: usize) -> Slot {
 }
 
 /// One of every command, with arguments that touch every field.
-fn every_command() -> [Command; 27] {
+fn every_command() -> [Command; 30] {
     [
         Command::ScaleThrust {
             slot: slot(1),
@@ -134,6 +134,19 @@ fn every_command() -> [Command; 27] {
             slot: slot(4),
             distance: crate::Distance::Units(120.0),
             radius: 8.0,
+        },
+        Command::ScreenFill {
+            slot: slot(5),
+            rgba: Rgba::new(0x10, 0x20, 0x30, 0x40),
+        },
+        Command::FovOffset {
+            slot: slot(6),
+            degrees: 12.5,
+        },
+        Command::FireModEffectAhead {
+            slot: slot(7),
+            index: 3,
+            distance: crate::Distance::Units(100.0),
         },
     ]
 }
@@ -314,6 +327,7 @@ fn layout_fold() -> u64 {
         u32::from(crate::MAX_TRANSIT_TICKS),
         crate::MAX_SPEED_FACTOR.to_bits(),
         crate::MAX_PROBE_RADIUS.to_bits(),
+        crate::MAX_FOV_OFFSET_DEG.to_bits(),
         crate::motion::EXIT_FACTOR_STEPS.to_bits(),
         u32::from(crate::CRAFT_IN_TRANSIT),
     ];
@@ -366,7 +380,7 @@ fn layout_fold() -> u64 {
 
 /// The revision and the layout it names. The ABI changes in place before release (no
 /// revision bump); the fold is recorded again with each layout edit.
-const REVISION_AND_FOLD: (u32, u64) = (3, 0x3ddb_4c54_c775_c5e0);
+const REVISION_AND_FOLD: (u32, u64) = (3, 0xe800_a1ec_56da_28a2);
 
 #[test]
 fn the_layout_is_the_revision_it_says() {
@@ -898,7 +912,7 @@ fn a_channel_name_is_a_mod_id_a_slash_and_a_name() {
 
 /// The bytes of one of every command, in `every_command`'s order, as hex. Spelled out so a
 /// layout change shows in the diff, and so a refactor of the encoder is held to today's bytes.
-const COMMAND_BYTES: [&str; 27] = [
+const COMMAND_BYTES: [&str; 30] = [
     "010100000000803e00000000",
     "02020000000060c000000000",
     "030300000000000000000000",
@@ -926,6 +940,9 @@ const COMMAND_BYTES: [&str; 27] = [
     "1b023c000000004001002823",
     "1c0300000000003f00000000",
     "1d0400000000f04200000041",
+    "1e0500000000000010203040",
+    "1f0600000000484100000000",
+    "200703000000c84200000000",
 ];
 
 /// The bytes of one of every event, in `every_event`'s order, as hex.
@@ -1053,4 +1070,46 @@ fn a_motion_command_out_of_its_ranges_is_malformed() {
     let mut unknown = transit(60, crate::Distance::Units(10.0), 1.0).encode();
     unknown[COMMAND_WORD] = 7;
     assert!(Command::decode(&unknown).is_err(), "distance kind 7");
+}
+
+/// The view commands' own ranges: each out-of-range record is malformed, never clamped.
+#[test]
+fn a_scene_command_out_of_its_ranges_is_malformed() {
+    let bad = [
+        Command::FovOffset {
+            slot: slot(1),
+            degrees: crate::MAX_FOV_OFFSET_DEG * 1.5,
+        },
+        Command::FovOffset {
+            slot: slot(1),
+            degrees: f32::NAN,
+        },
+        Command::FireModEffectAhead {
+            slot: slot(1),
+            index: 0,
+            distance: crate::Distance::Units(0.0),
+        },
+        Command::FireModEffectAhead {
+            slot: slot(1),
+            index: 0,
+            distance: crate::Distance::Units(f32::NAN),
+        },
+    ];
+    for command in bad {
+        assert!(
+            matches!(
+                Command::decode(&command.encode()),
+                Err(Malformed::Scene { .. })
+            ),
+            "{command:?}"
+        );
+    }
+    let mut unknown = Command::FireModEffectAhead {
+        slot: slot(1),
+        index: 0,
+        distance: crate::Distance::Units(10.0),
+    }
+    .encode();
+    unknown[COMMAND_WORD] = 9;
+    assert!(Command::decode(&unknown).is_err(), "distance kind 9");
 }

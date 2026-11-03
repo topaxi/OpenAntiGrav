@@ -58,11 +58,17 @@ pub enum CommandKind {
     ScaleSpeed = 28,
     /// `probe-clearance`, code 29.
     ProbeClearance = 29,
+    /// `screen-fill`, code 30.
+    ScreenFill = 30,
+    /// `fov-offset`, code 31.
+    FovOffset = 31,
+    /// `fire-mod-effect-ahead`, code 32.
+    FireModEffectAhead = 32,
 }
 
 impl CommandKind {
     /// Every kind, in code order.
-    pub const ALL: [Self; 26] = [
+    pub const ALL: [Self; 29] = [
         Self::ScaleThrust,
         Self::ShieldDelta,
         Self::GivePickup,
@@ -89,6 +95,9 @@ impl CommandKind {
         Self::Transit,
         Self::ScaleSpeed,
         Self::ProbeClearance,
+        Self::ScreenFill,
+        Self::FovOffset,
+        Self::FireModEffectAhead,
     ];
 
     /// The kind byte.
@@ -133,6 +142,9 @@ impl CommandKind {
             Self::Transit => "transit",
             Self::ScaleSpeed => "scale-speed",
             Self::ProbeClearance => "probe-clearance",
+            Self::ScreenFill => "screen-fill",
+            Self::FovOffset => "fov-offset",
+            Self::FireModEffectAhead => "fire-mod-effect-ahead",
         }
     }
 

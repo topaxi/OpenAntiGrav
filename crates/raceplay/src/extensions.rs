@@ -941,9 +941,37 @@ impl crate::Race {
                     let answer = self.clearance(slot.index(), distance, radius);
                     self.sim.extensions.on.clearance[slot.index()] = Some(answer);
                 }
+                oag_ext_abi::Command::FireModEffectAhead {
+                    slot,
+                    index: own,
+                    distance,
+                } => self.fire_effect_ahead(index, slot.index(), own, distance),
                 _ => {}
             }
         }
+    }
+
+    /// `fire-mod-effect-ahead`: the effect, queued for the view at the middle of the road
+    /// `distance` ahead of `slot`'s craft. A distance that does not resolve, or a road with
+    /// no spline there, draws nothing.
+    #[cfg(feature = "extensions")]
+    fn fire_effect_ahead(
+        &mut self,
+        module: usize,
+        slot: usize,
+        own: u16,
+        distance: oag_ext_abi::Distance,
+    ) {
+        let Ok((to, _)) = self.point_ahead(slot, distance) else {
+            return;
+        };
+        let Some((_, up, at, _)) = self.road_frame(to) else {
+            return;
+        };
+        self.sim
+            .extensions
+            .on
+            .fire_effect_at(module, slot, own, at, up);
     }
 
     /// The modules' `fire-effect`s, each at its craft's nozzle (the hull's back end),
@@ -953,6 +981,36 @@ impl crate::Race {
     pub(super) fn draw_extension_effects(&mut self) {
         for (slot, fired) in self.sim.extensions.take_effects() {
             self.play_fired(slot, &fired);
+        }
+    }
+
+    /// `slot`'s view's `screen-fill` this tick as straight-alpha `RGBA` in `0..=1`, or
+    /// `None` with none (and in a race without a module).
+    #[must_use]
+    pub fn extension_fill(&self, slot: usize) -> Option<[f32; 4]> {
+        #[cfg(feature = "extensions")]
+        {
+            let rgba = (*self.sim.extensions.on.fill.get(slot)?).filter(|rgba| rgba.a > 0)?;
+            Some([rgba.r, rgba.g, rgba.b, rgba.a].map(|c| f32::from(c) / 255.0))
+        }
+        #[cfg(not(feature = "extensions"))]
+        {
+            let _ = slot;
+            None
+        }
+    }
+
+    /// `slot`'s view's `fov-offset` this tick, degrees: `0.0` with none.
+    #[must_use]
+    pub fn extension_fov_offset(&self, slot: usize) -> f32 {
+        #[cfg(feature = "extensions")]
+        {
+            self.sim.extensions.on.fov.get(slot).copied().unwrap_or(0.0)
+        }
+        #[cfg(not(feature = "extensions"))]
+        {
+            let _ = slot;
+            0.0
         }
     }
 

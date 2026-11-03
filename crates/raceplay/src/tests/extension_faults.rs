@@ -19,7 +19,7 @@ fn slot(index: usize) -> Slot {
 
 /// A module that runs `guard` (WAT, may `return`) and then writes `commands` as its
 /// reply. The guard sees the blob's first word.
-fn scripted(id: &str, guard: &str, commands: &[Command], publishes: &[&str]) -> Source {
+pub(super) fn scripted(id: &str, guard: &str, commands: &[Command], publishes: &[&str]) -> Source {
     let mut bytes = (commands.len() as u32).to_le_bytes().to_vec();
     for command in commands {
         bytes.extend(command.encode());

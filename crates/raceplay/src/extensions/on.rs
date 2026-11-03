@@ -96,6 +96,10 @@ pub(super) struct On {
     /// Each module's `[pickup]`, in module order.
     pickups: Vec<Option<oag_tables::pickup_look::PickupLook>>,
     pub(super) effects: Vec<(usize, crate::extension_effects::Fired)>,
+    /// Each slot's `screen-fill` this tick (the later module wins) and `fov-offset` this
+    /// tick (modules add): outputs, never hashed.
+    pub(super) fill: [Option<oag_ext_abi::Rgba>; oag_gameplay::MAX_SHIPS],
+    pub(super) fov: [f32; oag_gameplay::MAX_SHIPS],
     /// Events dropped past a cap, counted for the report: an output, never hashed.
     pub(super) drops: Drops,
     /// The race-wide outputs of this tick.
@@ -285,6 +289,8 @@ impl On {
             strings,
             pickups,
             effects: Vec::new(),
+            fill: [None; oag_gameplay::MAX_SHIPS],
+            fov: [0.0; oag_gameplay::MAX_SHIPS],
             drops: Drops::default(),
             sky: super::Sky::default(),
             transit_ends: 0,
@@ -360,6 +366,27 @@ impl On {
             .checked_sub(1)
             .and_then(|module| self.slots.get(usize::from(module)))
             .is_some_and(|slot| slot.drives_ai_pickup)
+    }
+
+    /// Queues module `module`'s own effect `index` for the view at `at`.
+    pub(super) fn fire_effect_at(
+        &mut self,
+        module: usize,
+        slot: usize,
+        index: u16,
+        at: oag_core::math::Vec3,
+        up: oag_core::math::Vec3,
+    ) {
+        let mod_id = self.slots[module].mod_id.clone();
+        self.effects.push((
+            slot,
+            crate::extension_effects::Fired::OwnAt {
+                mod_id,
+                index,
+                at,
+                up,
+            },
+        ));
     }
 
     pub(super) fn pickup_used(&mut self, slot: usize, absorbed: bool) {
@@ -799,6 +826,8 @@ pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs, trans
     // This tick's alone: a tick that draws nothing (a replayed one, a server's) drops
     // them rather than piling them up.
     on.effects.clear();
+    on.fill = [None; oag_gameplay::MAX_SHIPS];
+    on.fov = [0.0; oag_gameplay::MAX_SHIPS];
     let region = on.region.clone();
     let observation = Observation {
         tick,
@@ -910,6 +939,14 @@ fn apply(sim: &mut RaceSim, index: usize, command: Command) {
                 .effects
                 .push((slot.index(), Fired::Own { mod_id, index: own }));
         }
+        Command::ScreenFill { slot, rgba } => sim.extensions.on.fill[slot.index()] = Some(rgba),
+        Command::FovOffset { slot, degrees } => {
+            let fov = &mut sim.extensions.on.fov[slot.index()];
+            *fov = (*fov + degrees).clamp(
+                -oag_ext_abi::MAX_FOV_OFFSET_DEG,
+                oag_ext_abi::MAX_FOV_OFFSET_DEG,
+            );
+        }
         Command::PickupLook { .. }
         | Command::HudTint { .. }
         | Command::HudShake { .. }
@@ -937,7 +974,9 @@ fn apply(sim: &mut RaceSim, index: usize, command: Command) {
             sim.world.ships[slot.index()].physics.body.linear_velocity *= factor;
         }
         // Run by `Race` once every module's commands have landed (`crate::transit`).
-        Command::Transit { .. } | Command::ProbeClearance { .. } => {
+        Command::Transit { .. }
+        | Command::ProbeClearance { .. }
+        | Command::FireModEffectAhead { .. } => {
             sim.extensions.on.motion.push((index, command));
         }
     }

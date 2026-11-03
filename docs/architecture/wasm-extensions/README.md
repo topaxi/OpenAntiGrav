@@ -544,6 +544,20 @@ The mod pickup's fire path for a person is unchanged. Proof: `oag_raceplay`'s
 raises nothing, a module reads the course length and the HUD's place), `oag_ext_abi`'s
 tracking round trip and the recorded fold.
 
+**View outputs for a portal (outputs, never hashed).** Three commands draw into a view; each
+is re-sent every tick it should hold, and a slot with no craft is a fault.
+
+| Piece | Kind | What it is |
+| --- | --- | --- |
+| `screen-fill{slot, rgba}` | command 30 | Washes the slot's own view. It joins `Race::screen_wash`, the one wash the screen flash draws through: the colour times its alpha is added over the picture (an additive wash, as the title's flash is), and beside a running flash the two are summed into the same one pass. A split-screen seat wears only its own slot's fill; the flash stays the player's |
+| `fov-offset{slot, degrees}` | command 31 | Added to the slot's vertical field of view, `[-30, 30]` degrees (`MAX_FOV_OFFSET_DEG`), inside `camera::finish_vertical_fov` after the player's setting and before the boost kick and the aspect fit. Zero skips the arithmetic, so a race with none is bit-identical. Two modules add |
+| `fire-mod-effect-ahead{slot, index, distance}` | command 32 | The sending mod's own effect number `index` (its `[effects]`), played at the middle of the road `distance` ahead of the craft (the same `Distance` and `Race::point_ahead` as `transit`, lifted off the surface as `probe-clearance` lifts its disc). It stands in the world for the effect's own lifetime (up to 600 ticks): a mod PNG as a camera-facing sprite, the half disc of a portal. It is a sprite, not a mesh: a disc that stands across the road and a custom shader are a later piece. Counts toward `MAX_FIRE_EFFECTS_PER_TICK`; a distance that does not resolve, or a road with no spline there, draws nothing |
+
+Proof: `oag_ext_abi`'s byte pins and range tests, `oag_modhost`'s refusal test,
+`oag_raceplay`'s `tests::extension_view` (the fill is its slot's view's alone, beside a flash it
+adds, a zero offset is bit-identical, the effect lands on the road ahead) and the
+`outputter` test (a module's fill and offset leave the state hash alone).
+
 ## Keeping the mod author skill current
 
 A change to the ABI, the guest SDK, `oag-mod.toml` or a mod-facing format updates

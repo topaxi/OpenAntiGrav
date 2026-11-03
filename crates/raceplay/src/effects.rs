@@ -1000,10 +1000,22 @@ impl Race {
     /// view of a split. **Chosen, not measured**: a seat has no wash of its own yet.
     #[must_use]
     pub fn screen_wash(&self) -> Option<[f32; 4]> {
-        if self.extra_viewpoint().is_some() {
-            return None;
+        let flash = match self.extra_viewpoint() {
+            Some(_) => None,
+            None => self.view.screen_flash.as_ref().and_then(|f| f.colour()),
+        };
+        // A module's `screen-fill` is the view's own slot's, so a seat wears its own.
+        let fill = self.extension_fill(self.viewed_slot());
+        match (flash, fill) {
+            (flash, None) => flash,
+            (None, fill) => fill,
+            // Both are additive washes (colour times alpha added over the picture), so
+            // together they are the sum, at full alpha.
+            (Some(flash), Some(fill)) => {
+                let add = |c: usize| flash[c] * flash[3] + fill[c] * fill[3];
+                Some([add(0).min(1.0), add(1).min(1.0), add(2).min(1.0), 1.0])
+            }
         }
-        self.view.screen_flash.as_ref()?.colour()
     }
 
     /// Whether the player's shield pickup is currently up.

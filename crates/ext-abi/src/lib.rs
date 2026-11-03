@@ -57,6 +57,7 @@ pub use kind::CommandKind;
 pub use malformed::Malformed;
 pub use motion::{Distance, MAX_PROBE_RADIUS, MAX_SPEED_FACTOR, MAX_TRANSIT_TICKS};
 pub use pickup::{Colour, Icon, ModIcon};
+pub use scene::MAX_FOV_OFFSET_DEG;
 pub use tracking::{
     COURSE_LENGTH_AT, Course, TRACKING_AT, TRACKING_FIXED, TRACKING_FLAGS, TRACKING_LEN,
     TRACKING_PLACE, TRACKING_PROGRESS, Tracking,
@@ -830,6 +831,37 @@ pub enum Command {
         /// The scale, in `[0, MAX_SPEED_FACTOR]`.
         factor: f32,
     },
+    /// This tick, wash the slot's view with `rgba` over the whole picture (the alpha is
+    /// the strength). Re-sent each tick it should hold; never hashed. The slot's own
+    /// view: a split-screen seat flown by that slot wears it, no other.
+    ScreenFill {
+        /// The grid slot whose view is filled.
+        slot: Slot,
+        /// The colour, straight alpha.
+        rgba: Rgba,
+    },
+    /// This tick, widen (positive) or narrow (negative) the vertical field of view of the
+    /// slot's view by `degrees`, in `[-MAX_FOV_OFFSET_DEG, MAX_FOV_OFFSET_DEG]`, before the
+    /// player's setting and the aspect fit. Re-sent each tick it should hold; never hashed.
+    FovOffset {
+        /// The grid slot whose view changes.
+        slot: Slot,
+        /// Degrees.
+        degrees: f32,
+    },
+    /// Play the sending mod's own effect number `index` (its place in `[effects]`) at the
+    /// course point `distance` ahead of the craft, on the road's centre line, where it
+    /// stays for the effect's own lifetime: a sprite of the mod's texture standing in the
+    /// world (a portal). Counts toward [`MAX_FIRE_EFFECTS_PER_TICK`]; a distance that
+    /// does not resolve draws nothing. Never hashed.
+    FireModEffectAhead {
+        /// The grid slot the point is ahead of.
+        slot: Slot,
+        /// The effect, by its place in the mod's `[effects]`.
+        index: u16,
+        /// How far ahead along the circuit.
+        distance: Distance,
+    },
     /// Ask whether a disc of `radius` standing upright across the track `distance` ahead
     /// of the craft fits without touching track geometry: answered by a `clearance`
     /// event at the next call.
@@ -874,6 +906,9 @@ impl Command {
             Self::Transit { .. } => CommandKind::Transit,
             Self::ScaleSpeed { .. } => CommandKind::ScaleSpeed,
             Self::ProbeClearance { .. } => CommandKind::ProbeClearance,
+            Self::ScreenFill { .. } => CommandKind::ScreenFill,
+            Self::FovOffset { .. } => CommandKind::FovOffset,
+            Self::FireModEffectAhead { .. } => CommandKind::FireModEffectAhead,
         }
     }
 
@@ -902,7 +937,10 @@ impl Command {
             | Self::Emit { slot, .. }
             | Self::Transit { slot, .. }
             | Self::ScaleSpeed { slot, .. }
-            | Self::ProbeClearance { slot, .. } => Some(slot),
+            | Self::ProbeClearance { slot, .. }
+            | Self::ScreenFill { slot, .. }
+            | Self::FovOffset { slot, .. }
+            | Self::FireModEffectAhead { slot, .. } => Some(slot),
             Self::PickupRoll { .. }
             | Self::ScalePad { .. }
             | Self::SetWeather { .. }
@@ -978,6 +1016,9 @@ impl Command {
             Self::Emit { channel, value, .. } => (0, value.to_bits(), channel),
             Self::Transit { .. } | Self::ScaleSpeed { .. } | Self::ProbeClearance { .. } => {
                 motion::encode(self).unwrap_or_default()
+            }
+            Self::ScreenFill { .. } | Self::FovOffset { .. } | Self::FireModEffectAhead { .. } => {
+                scene::encode(self).unwrap_or_default()
             }
         };
         let mut record = [0; COMMAND_LEN];
@@ -1203,6 +1244,9 @@ impl Command {
             CommandKind::Transit | CommandKind::ScaleSpeed | CommandKind::ProbeClearance => {
                 return motion::decode(kind, slot, (arg, value, word));
             }
+            CommandKind::ScreenFill | CommandKind::FovOffset | CommandKind::FireModEffectAhead => {
+                return scene::decode(kind, slot, (arg, value, word));
+            }
             CommandKind::Emit => {
                 if !value.is_finite() {
                     return Err(Malformed::EmitValue { slot, value });
@@ -1393,6 +1437,7 @@ mod kind;
 mod malformed;
 pub mod motion;
 mod pickup;
+mod scene;
 pub mod track;
 mod tracking;
 

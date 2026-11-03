@@ -720,3 +720,39 @@ fn the_test_harness_hands_a_guest_its_course_and_place() {
     race.tick();
     assert_eq!(race.state(), 3003);
 }
+
+#[test]
+fn the_view_commands_refuse_what_the_host_would_fault_on_and_count_the_effect() {
+    use oag_ext_abi::Distance;
+    let mut buffer = [0_u8; 4 + oag_ext_abi::COMMAND_LEN * oag_ext_abi::MAX_COMMANDS];
+    let mut reply = Reply::new(&mut buffer, 0, 0);
+    let record = racer(50.0).encode();
+    let craft = Craft {
+        slot: slot(1),
+        record: &record,
+        tracking: &[0; oag_ext_abi::TRACKING_LEN],
+    };
+    let range = oag_ext_abi::MAX_FOV_OFFSET_DEG;
+    assert_eq!(reply.fov_offset(&craft, range * 2.0), Err(Refused::Range));
+    assert_eq!(reply.fov_offset(&craft, f32::NAN), Err(Refused::Range));
+    assert_eq!(reply.fov_offset(&craft, -range), Ok(()));
+    assert_eq!(
+        reply.screen_fill(&craft, Rgba::new(255, 255, 255, 200)),
+        Ok(())
+    );
+    assert_eq!(
+        reply.fire_mod_effect_ahead(&craft, 0, Distance::Units(0.0)),
+        Err(Refused::Range)
+    );
+    for _ in 0..oag_ext_abi::MAX_FIRE_EFFECTS_PER_TICK {
+        assert_eq!(
+            reply.fire_mod_effect_ahead(&craft, 1, Distance::Units(80.0)),
+            Ok(())
+        );
+    }
+    assert_eq!(
+        reply.fire_mod_effect_ahead(&craft, 1, Distance::Units(80.0)),
+        Err(Refused::Effects),
+        "it counts toward the effect cap"
+    );
+}

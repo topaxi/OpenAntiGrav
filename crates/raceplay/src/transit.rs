@@ -151,20 +151,12 @@ impl Race {
         let Ok((to, ahead)) = self.point_ahead(slot, distance) else {
             return (false, 0.0);
         };
-        let Some(target) = self.sim.course.as_ref().and_then(|c| c.position(to)) else {
+        let Some((lateral, up, centre, width)) = self.road_frame(to) else {
             return (false, ahead);
         };
-        let Some((_, at, _)) = self.sim.spline.nearest(target) else {
-            return (false, ahead);
-        };
-        if at.half_width_left + at.half_width_right < radius * 2.0 {
+        if width < radius * 2.0 {
             return (false, ahead);
         }
-        let lateral = Vec3::from_array(at.lateral);
-        let up = -Vec3::from_array(at.down);
-        let centre = Vec3::from_array(at.pos)
-            + lateral * ((at.half_width_right - at.half_width_left) * 0.5)
-            + up * CLEARANCE_LIFT;
         let blocked = (0..CLEARANCE_RAYS).any(|k| {
             let angle = core::f32::consts::PI * k as f32 / (CLEARANCE_RAYS - 1) as f32;
             let (sin, cos) = oag_core::math::sin_cos(angle);
@@ -174,6 +166,25 @@ impl Race {
                 .is_some()
         });
         (!blocked, ahead)
+    }
+
+    /// The road at course point `to`: its lateral and up directions, the middle of its
+    /// width lifted [`CLEARANCE_LIFT`] off the surface, and its width. `None` with no
+    /// course position or spline near it. What a portal's probe and its drawn disc stand on.
+    pub(crate) fn road_frame(&self, to: usize) -> Option<(Vec3, Vec3, Vec3, f32)> {
+        let target = self.sim.course.as_ref().and_then(|c| c.position(to))?;
+        let (_, at, _) = self.sim.spline.nearest(target)?;
+        let lateral = Vec3::from_array(at.lateral);
+        let up = -Vec3::from_array(at.down);
+        let centre = Vec3::from_array(at.pos)
+            + lateral * ((at.half_width_right - at.half_width_left) * 0.5)
+            + up * CLEARANCE_LIFT;
+        Some((
+            lateral,
+            up,
+            centre,
+            at.half_width_left + at.half_width_right,
+        ))
     }
 
     /// Counts every transit down by a tick and brings out each craft whose count ran out
