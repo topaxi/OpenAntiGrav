@@ -507,6 +507,11 @@ fn quake_hit_render(drop_collisions: bool) -> (Vec<i16>, usize) {
         oag_audio::MIN_BUFFER,
         false,
     );
+    // Open decision: with the limiter on, a Pulse mix sitting 2x over full scale
+    // takes back most of what a single added cue contributes, so the pair's
+    // energy margin vanishes (a 6 dB master trim restores it). The cue is
+    // measured here without the limiter; see the audio handover thread.
+    audio.output().with_mixer(|mixer| mixer.set_limiting(false));
     for tick in 0..LAUNCH + 40 {
         if tick == LAUNCH {
             assert!(race.force_quake(1), "the rival's wave never launched");

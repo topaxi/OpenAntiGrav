@@ -1129,11 +1129,25 @@ loudest moments are pulled down by up to 7.5 dB. Over 30 s the gain was below
 (headphones, 0.5 %), so a static master trim was not added: whole-mix RMS drops
 0.5 to 1.2 dB. HD has its own headroom and the limiter almost never acts.
 
-HRTF energy: a noise source through the HRTF is within 1.1 dB of the rear-cue
-path ahead and to the side (`binaural::tests`), so the headphones mode is not
-louder by HRIR scaling. Behind the listener it is 4 to 9 dB louder than the rear
-cue, which darkens and trims what is behind; that, plus the crowd of placed
-voices, is why headphones peak about 1.5 dB above the others.
+HRTF energy (`binaural::tests`, white and low-passed noise over a grid of
+directions): within 1.1 dB of the plain pan ahead and beside, 0.5 dB on a
+low-passed (engine-like) source everywhere, and quieter than the plain pan behind
+(white noise only). So the HRIR adds no gain; headphones peak about 1.5 dB above
+the other modes only because the decorrelated ears stack peaks differently. The
+rear cue is 2 dB under the HRTF behind on a low-passed source by design.
+Crossfade weights sum to 1 (by reading `Mixer::render`, not measured).
+
+**Open: the limiter takes back what an added cue contributes.** In a Pulse mix
+about 2x over full scale, `sfx_weapon_ground_truth::a_quake_hit_is_louder_with_its_collision_pair`
+(energy after the hit, with the `.COLLISIONS` pair against without) reads 2.286M
+against 2.344M with the limiter on, i.e. the pair is 2 % *quieter*, because the
+hold and release duck the rest of the mix longer than the cue lasts. Sweep (same
+test, `with` vs `without`): master trim 0 dB: 2.286M vs 2.344M (release 0.25 s),
+2.342M vs 2.389M (0.1 s); trim 3 dB: 2.238M vs 2.278M, 2.297M vs 2.328M; trim
+6 dB: 2.189M vs 2.136M (+2.5 %), 2.243M vs 2.154M (+4.1 %). Hold 10 ms with trim
+3 dB and release 0.1 s: 2.463M vs 2.459M. The test runs without the limiter
+until the lead decides between a 6 dB master trim (about 6 dB of RMS, Pulse
+would sit near HD's level) and a shorter hold.
 
 Cost (release, host load 42, `limiter::tests::limiter_cost`): 2.7 us per
 1024-frame callback when idle, 23.8 us while limiting.

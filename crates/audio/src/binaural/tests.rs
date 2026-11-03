@@ -7,15 +7,18 @@ use crate::spatial::SpatialMode;
 const RATE: u32 = 48_000;
 
 /// A noisy mono source, so every frequency band is exercised.
-fn noise(frames: usize) -> Arc<Sound> {
+fn noise_samples(frames: usize) -> Vec<i16> {
     let mut state = 0x1234_5678_u32;
-    let samples = (0..frames)
+    (0..frames)
         .map(|_| {
             state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
             ((state >> 16) as i16) / 2
         })
-        .collect();
-    Arc::new(Sound::new(samples, 1, RATE).expect("sound"))
+        .collect()
+}
+
+fn noise(frames: usize) -> Arc<Sound> {
+    Arc::new(Sound::new(noise_samples(frames), 1, RATE).expect("sound"))
 }
 
 fn headphone_mixer() -> Mixer {
@@ -400,43 +403,56 @@ fn a_mode_switch_mid_race_crossfades_in_both_directions() {
     );
 }
 
-/// Energy gain of the HRTF path over the rear-cue path for the same noise
-/// source, over a grid of directions. Ahead and to the side it is within 1.1 dB;
-/// behind it is 4 to 9 dB louder because the rear cue darkens and trims what is
-/// behind and the HRTF does not on white noise. Asserts the front hemisphere.
+/// Energy of `mode` for a looping source in direction (`pan`, `front`);
+/// `lowpass` smooths the noise towards an engine-like spectrum.
+fn mode_energy(mode: SpatialMode, pan: f32, front: f32, lowpass: bool) -> f32 {
+    let mut mixer = headphone_mixer();
+    mixer.set_limiting(false);
+    mixer.set_spatial_mode(mode);
+    let source = if lowpass {
+        let mut state = 0.0_f32;
+        let samples = noise_samples(6_000)
+            .into_iter()
+            .map(|x| {
+                state += 0.05 * (f32::from(x) - state);
+                state as i16
+            })
+            .collect();
+        Arc::new(Sound::new(samples, 1, RATE).expect("sound"))
+    } else {
+        noise(6_000)
+    };
+    mixer.play(Play {
+        pan: Some(pan),
+        front,
+        ..Play::looping(source, Bus::Sfx)
+    });
+    let mut out = vec![0.0; 2 * 9_000];
+    mixer.render(&mut out);
+    let (l, r) = ear_energy(&out[2 * 2_000..]);
+    l + r
+}
+
+/// HRTF energy against the original's plain pan (the baseline for "does the
+/// HRIR add gain") and against the rear cue, on white and low-passed noise.
+/// Prints the grid. Ahead and beside it stays within 2 dB of the plain pan.
 #[test]
 fn the_hrtf_is_energy_neutral_ahead_and_beside() {
-    let energy = |mode: SpatialMode, pan: f32, front: f32| {
-        let mut mixer = headphone_mixer();
-        mixer.set_limiting(false);
-        mixer.set_spatial_mode(mode);
-        mixer.play(Play {
-            pan: Some(pan),
-            front,
-            ..Play::looping(noise(6_000), Bus::Sfx)
-        });
-        let mut out = vec![0.0; 2 * 9_000];
-        mixer.render(&mut out);
-        let (l, r) = ear_energy(&out[2 * 2_000..]);
-        l + r
-    };
-    let mut total = 0.0;
-    let mut count = 0.0;
-    for pan in [-1.0, -0.5, 0.0, 0.5, 1.0] {
-        for front in [1.0, 0.0, -1.0] {
-            let db = 10.0
-                * (energy(SpatialMode::Headphones, pan, front)
-                    / energy(SpatialMode::RearCue, pan, front))
-                .log10();
-            println!("pan {pan:+.1} front {front:+.1}: {db:+.2} dB");
-            if front >= 0.0 {
-                assert!(db.abs() < 2.0, "{db} dB at pan {pan} front {front}");
+    for lowpass in [false, true] {
+        for pan in [-1.0, -0.5, 0.0, 0.5, 1.0] {
+            for front in [1.0, 0.0, -1.0] {
+                let hrtf = mode_energy(SpatialMode::Headphones, pan, front, lowpass);
+                let db = |other: SpatialMode| {
+                    10.0 * (hrtf / mode_energy(other, pan, front, lowpass)).log10()
+                };
+                let (vs_original, vs_rear) = (db(SpatialMode::Original), db(SpatialMode::RearCue));
+                println!(
+                    "lowpass {lowpass} pan {pan:+.1} front {front:+.1}: {vs_original:+.2} dB vs original, {vs_rear:+.2} vs rear cue"
+                );
+                if front >= 0.0 {
+                    assert!(vs_original.abs() < 2.0, "{vs_original} dB");
+                }
             }
-            total += db;
-            count += 1.0;
         }
     }
-    let mean = total / count;
-    println!("mean {mean:+.2} dB");
-    let _ = mean;
 }

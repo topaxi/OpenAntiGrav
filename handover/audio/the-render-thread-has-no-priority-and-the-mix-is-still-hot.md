@@ -24,14 +24,18 @@ race to zero. Open, ranked:
 2. **Pulse mixes at up to 2.3x full scale before the limiter.** Cutting the
    cause (eight `~ENGINE` voices at unity, `Scream_PanVolumePair` constant `a3`)
    would let the limiter idle. Measure: the `mix:` line `--dump-audio` prints.
-3. **Headphones behind the listener is 4-9 dB hotter than the rear cue** on
-   white noise (`binaural::tests::the_hrtf_is_energy_neutral_ahead_and_beside`
-   prints the grid). Decide whether the HRTF rear should be trimmed to the rear
-   cue's 0.8 gain; needs a listening check on real engines, which are low pass.
+3. **A cue added to a hot Pulse mix is partly taken back by the limiter.**
+   The quake `.COLLISIONS` pair measures 2 % quieter with the limiter on
+   (table in the audio-levels page); a 6 dB master trim restores +2.5 to
+   +4 %. Decide: a 6 dB trim (Pulse only, per-title data; HD peaks 0.94 and the
+   limiter is idle there), or a shorter hold (ripple vs punch). Measure:
+   `cargo nextest run -p oag-game --run-ignored all -E 'test(a_quake_hit_is_louder)'`
+   after removing its `set_limiting(false)`. Headphones HRTF was checked and
+   adds no gain (struck).
 4. **Limiter activity is not on the perf overlay.** `Mixer::peak`, `limited`,
    `deepest_limit` and `limit_depth_frames` exist; `Health` still reports only
    starved and clipped.
 
 ## Next Steps
 
-Item 1 first (a Deck run), then 3.
+Item 3 first (lead decision), then 1 (a Deck run).
