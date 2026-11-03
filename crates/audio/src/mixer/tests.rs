@@ -784,7 +784,7 @@ fn rear_cue_leaves_an_unplaced_voice_alone() {
 /// A mixer with the limiter off, for tests that read exact sample positions.
 fn bare(rate: u32) -> Mixer {
     let mut mixer = Mixer::new(rate);
-    mixer.limiting = false;
+    mixer.set_limiting(false);
     mixer
 }
 

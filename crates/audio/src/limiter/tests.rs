@@ -94,3 +94,26 @@ fn after_a_long_burst_the_limiter_goes_idle_and_stays_idle() {
     assert_eq!(limiter.limited(), before);
     assert_eq!(limiter.average, limiter.len as f64);
 }
+
+/// Cost of the limiter per device callback. Run in release:
+/// `cargo nextest run --release -p oag-audio --run-ignored only limiter_cost`.
+#[test]
+#[ignore = "a timing probe; prints microseconds per 1024-frame callback"]
+fn limiter_cost() {
+    let tau = std::f32::consts::TAU;
+    for (name, level) in [("idle (0.3 sine)", 0.3_f32), ("limiting (2.0 sine)", 2.0)] {
+        let mut limiter = Limiter::new(RATE);
+        let mut buffer: Vec<f32> = (0..1024 * CHANNELS)
+            .map(|i| level * (tau * 90.0 * (i / 2) as f32 / RATE as f32).sin())
+            .collect();
+        let template = buffer.clone();
+        let callbacks = 20_000;
+        let start = std::time::Instant::now();
+        for _ in 0..callbacks {
+            buffer.copy_from_slice(&template);
+            limiter.process(&mut buffer);
+        }
+        let micros = start.elapsed().as_secs_f64() * 1e6 / f64::from(callbacks);
+        println!("{name}: {micros:.1} us per 1024-frame callback");
+    }
+}

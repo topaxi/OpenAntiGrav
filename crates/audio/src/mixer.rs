@@ -469,8 +469,7 @@ pub struct Mixer {
     clipped: u64,
     /// The master limiter that runs after the sum.
     limiter: Limiter,
-    /// Whether the limiter runs. Only tests that read exact sample positions
-    /// switch it off, since it delays the signal by [`Limiter::latency`].
+    /// Whether the limiter runs; see [`Self::set_limiting`].
     limiting: bool,
     /// Sample-rate remainder carried between [`Self::render_tick`] calls.
     ///
@@ -505,6 +504,13 @@ impl Mixer {
             limiting: true,
             tick_frame_remainder: 0,
         }
+    }
+
+    /// Turns the master limiter on or off (on by default). Off, the sum goes
+    /// to the final clamp unchanged and nothing is delayed, which tests that
+    /// read exact sample positions rely on.
+    pub fn set_limiting(&mut self, on: bool) {
+        self.limiting = on;
     }
 
     /// Grows the voice pool to at least `voices`; a smaller number is ignored.
