@@ -139,7 +139,7 @@ fn the_gamma_pack_carries_a_full_vanuber_team() {
         .expect("one of the packs under data/dlc/ names Vanuber - is the Gamma pack present?");
     assert!(
         gamma.contains(r"Data\Ships\Vanuber"),
-        "Vanuber is named but not under the folder id oag_pulse::race::ships::hull_entry_name composes paths from"
+        "Vanuber is named but not under the folder id oag_title::race::ShipPaths::hull_entry_name composes paths from"
     );
 
     let archives = dlc::pure_packs(&[dlc_root().unwrap()], &cache(), &keys().unwrap()).0;

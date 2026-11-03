@@ -44,6 +44,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     track: DEFAULT_TRACK,
     team: DEFAULT_TEAM,
     ship_dir: SHIP_DIR,
+    ship_hull: "Ship",
     handling_dir: HANDLING_DIR,
     effect_dir: EFFECT_DIR,
     effect_dir_by_circuit: &[],

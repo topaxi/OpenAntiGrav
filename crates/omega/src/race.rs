@@ -58,6 +58,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // tree. **Not [`oag_title::race::SHIP_DIR`]** - that constant is
     // `Data\Ships`, the path Pulse/Pure/HD share and Omega does not.
     ship_dir: SHIP_DIR,
+    ship_hull: "Ship",
     // **Measured.** `hdships\ag_systems\handlingstats.xml` is there and
     // `oag_tables::handling` reads it unmodified, so the handling file sits
     // beside the hull, as it does for every title but 2048's native roster.

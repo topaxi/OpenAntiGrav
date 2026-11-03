@@ -2510,8 +2510,9 @@ pinned it, so it went red on the wired sim and is re-pinned on the draw series.
   turn about its up axis), model `+Y` its up. Assegai: 4.24 ahead on the axis; Triakis `(0, -0.298, 4.183)`:
   3.14 ahead, 0.22 below. A hull with no locator (HD's; Pure, whose version-4 class id is unread) keeps
   `MUZZLE_FORWARD` 2.23, now documented as the hold point of a hull without a node.
-- `oag_vex::vex::ship_muzzle` is the one reader (the livery's private copy went); `oag_pulse::race::ships::
-  hull_entry_name` names the hull for both halves (moved from `oag_livery::entry::ship_entry_name`).
+- `oag_vex::vex::ship_muzzle` is the one reader (the livery's private copy went); `oag_title::race::ShipPaths::
+  hull_entry_name` names the hull for both halves (moved from `oag_livery::entry::ship_entry_name`, the hull stem
+  now `Title` data, `RaceDefaults::ship_hull`, so no generic crate names a title package for it).
 - The view's `plasma_lead` and its copy of the locators went: a released head draws on the bolt, which is now
   where the original's bolt matrix is. The charging head keeps the drawn hull's matrix (display roll and lean).
 

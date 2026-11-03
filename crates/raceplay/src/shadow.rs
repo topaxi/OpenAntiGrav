@@ -195,12 +195,9 @@ pub fn silhouettes(
     let mut out = Vec::with_capacity(teams.len());
     let mut fallbacks = 0;
     for (slot, team) in teams.iter().enumerate() {
-        let hull = oag_pulse::race::ships::hull_entry_name(
-            race.ships_for(team),
-            team,
-            mode == oag_race::Mode::Zone,
-            None,
-        );
+        let hull = race
+            .ships_for(team)
+            .hull_entry_name(team, mode == oag_race::Mode::Zone, None);
         let name = silhouette_entry(archives, &hull);
         match super::assets::decode_texture(archives, &name) {
             Ok(image) => {
@@ -276,12 +273,9 @@ pub fn hulls(
         // its shadow geometry, and threading the player's choice through
         // here would only matter the day the two shapes are shown to
         // disagree.
-        let name = oag_pulse::race::ships::hull_entry_name(
-            race.ships_for(team),
-            team,
-            mode == oag_race::Mode::Zone,
-            None,
-        );
+        let name = race
+            .ships_for(team)
+            .hull_entry_name(team, mode == oag_race::Mode::Zone, None);
         let found = archives.read_name(&name).ok().and_then(|blob| {
             let tree = vex::nodes(&blob).ok()?;
             let found: Vec<usize> = tree

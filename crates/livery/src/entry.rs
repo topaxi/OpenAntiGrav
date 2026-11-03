@@ -9,7 +9,7 @@ use oag_pulse::race::ships;
 use oag_race::Mode;
 
 /// The ship tree and directory a craft's *other* model files (the engine
-/// flare) are read from: the same place `ships::hull_entry_name` puts the hull.
+/// flare) are read from: the same place `oag_title::race::ShipPaths::hull_entry_name` puts the hull.
 ///
 /// A Zone race on a title whose Zone craft has a directory of its own (HD:
 /// `/data/ships/zone`) flies that hull, so its flare's `EF_Main` origin and
@@ -30,7 +30,7 @@ pub const SHIELD_STEM: &str = ships::SHIELD;
 /// `dir\team\stem.vex`, the entry a model stem names under a ship directory.
 #[must_use]
 pub fn stem_entry_name(dir: &str, team: &str, stem: &str) -> String {
-    ships::entry_name_in(dir, team, stem)
+    oag_title::race::entry_name_in(dir, team, stem)
 }
 
 /// [`model_directory`], unless the Zone directory lacks `file`: then the team's
@@ -61,7 +61,7 @@ pub fn model_directory_with<'a>(
     (dir, owner)
 }
 
-/// The boost plume that goes with `ships::hull_entry_name`'s hull, or `None` when
+/// The boost plume that goes with `oag_title::race::ShipPaths::hull_entry_name`'s hull, or `None` when
 /// this title's own package names no standalone boost model at all.
 ///
 /// **`None` is a title fact, not a lookup failure.** [`oag_title::race::ShipPaths::boost`]
@@ -72,7 +72,7 @@ pub fn model_directory_with<'a>(
 /// found" - see `livery::plume`, the one caller today.
 ///
 /// **Zone mode has its own plume file and this used to load the wrong one.**
-/// `ships::hull_entry_name` switches the hull between `Ship.vex` and `Zone.vex` on
+/// `oag_title::race::ShipPaths::hull_entry_name` switches the hull between `Ship.vex` and `Zone.vex` on
 /// mode; the plume load hardcoded `shipboost.vex`, so a Zone race drew a
 /// `Zone.vex` hull with the `Ship.vex` plume. Every team ships a `Zoneboost.vex`
 /// beside its `Zone.vex`, so the pairing exists in the data and we simply were
@@ -100,10 +100,14 @@ pub fn boost_entry_name(
     mode: Mode,
 ) -> Option<String> {
     if mode != Mode::Zone {
-        return Some(ships::entry_name_in(paths.dir, team, paths.boost?));
+        return Some(oag_title::race::entry_name_in(
+            paths.dir,
+            team,
+            paths.boost?,
+        ));
     }
     let stem = paths.zone.boost().or(paths.boost)?;
-    Some(ships::entry_name_in(
+    Some(oag_title::race::entry_name_in(
         paths.zone.root(paths.dir),
         paths.zone.directory(team),
         stem,
@@ -163,7 +167,7 @@ pub fn shield_entry_names(
         }
     };
     [
-        ships::entry_name_in(ship_dir, team, &stem),
+        oag_title::race::entry_name_in(ship_dir, team, &stem),
         oag_pulse::race::SHARED_SHIELD.to_string(),
     ]
 }

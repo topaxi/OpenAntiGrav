@@ -367,6 +367,7 @@ impl RaceDefaults {
             dir: self
                 .guest_for(team)
                 .map_or(self.ship_dir, |guest| guest.dir),
+            hull: self.ship_hull,
             zone: self.zone_craft,
             boost: self.boost,
         }

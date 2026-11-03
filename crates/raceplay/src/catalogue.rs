@@ -905,7 +905,7 @@ fn raceable(
         // The ordinary hull, spelled directly rather than through the mode-aware
         // `race::ship_entry_name`: this asks whether a team is *raceable*, which is a question
         // about the normal hull and never about the Zone one.
-        .locate(&oag_pulse::race::ships::entry_name_in(
+        .locate(&oag_title::race::entry_name_in(
             ship_dir,
             id,
             oag_pulse::race::ships::HULL,

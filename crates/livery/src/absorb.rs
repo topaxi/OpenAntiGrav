@@ -164,7 +164,7 @@ pub(super) fn shell(
     if !wanted {
         return None;
     }
-    let name = oag_pulse::race::ships::entry_name_in(ship_dir, team, SHELL_STEM);
+    let name = oag_title::race::entry_name_in(ship_dir, team, SHELL_STEM);
     let pair = archives.read_name(&name).ok().and_then(|blob| {
         let sibling = oag_mesh::mesh::rcs::sibling_name(&name)?;
         Some((blob, archives.read_name(&sibling).ok()?))

@@ -284,7 +284,7 @@ fn raceable_teams(
         .filter(|team| team.location.starts_with(oag_2048::race::SHIP_DIR))
         .filter_map(|team| {
             let id = format!("{}\\{CRAFT}", team.id);
-            let ship = oag_pulse::race::ships::entry_name_in(
+            let ship = oag_title::race::entry_name_in(
                 oag_2048::race::SHIP_DIR,
                 &id,
                 oag_pulse::race::ships::HULL,

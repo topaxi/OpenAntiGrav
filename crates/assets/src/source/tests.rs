@@ -55,6 +55,7 @@ const TITLE: &Title = &Title {
         team: "Nobody",
         // Named after nothing on any disc, for the reason `sounds` below is.
         ship_dir: r"Data\Nowhere",
+        ship_hull: "Ship",
         handling_dir: r"Data\Nowhere",
         effect_dir: r"Data\Nowhere",
         effect_dir_by_circuit: &[],

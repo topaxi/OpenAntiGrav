@@ -5,7 +5,7 @@
 //! Read here, in both halves of the crate, rather than taken off the liveries:
 //! the headless server links no livery and must release the bolt where the
 //! drawing client does. The hull entry is the one the livery reads
-//! (`oag_pulse::race::ships::hull_entry_name`), so the archive's memoised read
+//! (`oag_title::race::ShipPaths::hull_entry_name`), so the archive's memoised read
 //! serves both.
 
 use oag_core::math::Vec3;
@@ -37,12 +37,10 @@ pub(super) fn per_slot(
                     .get(slot - 1)
                     .and_then(|pick| pick.hull_variant.as_deref()),
             };
-            let name = oag_pulse::race::ships::hull_entry_name(
-                title.race.ships_for(team),
-                team,
-                zone,
-                variant,
-            );
+            let name = title
+                .race
+                .ships_for(team)
+                .hull_entry_name(team, zone, variant);
             match archives.read_name(&name) {
                 Ok(blob) => oag_vex::vex::ship_muzzle(&blob).map(Vec3::from),
                 Err(error) => {
