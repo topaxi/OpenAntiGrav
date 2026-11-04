@@ -24,7 +24,8 @@ on 2026-10-27: the threaded encoder finish adds about 1 ms of `scene` on the pho
 2. An Intel hybrid part on Linux reports `cpu_capacity` only on kernels with asymmetric capacity
    support; unreadable means the split stays on.
 3. **Under an interleaved split the split finish gains nothing on the Deck** (measured 2026-11-04,
-   two-player Pure, frame-thread `total` ms, split finish on / off: 800p 7.65 / 7.40, 1080p 7.47 /
+   two-player Pure, frame-thread `total` ms, split finish on / off: "800p" (a 1280x800 window drawn at
+   1920x1200, so not comparable with the other sizes) 7.65 / 7.40, 1080p 7.47 /
    7.20, 4K 10.10 / 10.10; one view it helps, 4.27 / 4.86 at 800p). The fix that made the picture
    right (`submit_with_closed`) put the finish back on the critical path. Candidates, each an
    Opus perf lane: no split frame when more than one view is drawn (recovers 0.25 ms at 800p and

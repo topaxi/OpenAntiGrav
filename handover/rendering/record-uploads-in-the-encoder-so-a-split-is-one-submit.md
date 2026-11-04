@@ -48,7 +48,8 @@ submits on top of that.
    `ca91c9c5b`'s parent chain, `0fb333c97`) overlapped every view's finish with recording the next
    view, which is what one submission with the finish on the worker would do, at the price of a
    wrong picture (the post work ran ahead of its scene pass; GPU time is not comparable, CPU is).
-   Deck, two-player Pure, frame-thread `total` ms, 800p / 1080p / 4K: that build 6.06 / 5.69 / 7.71,
+   Deck, two-player Pure, frame-thread `total` ms, 800p window drawn at 1920x1200 / 1080p / 4K (render
+   scale 100 on the last two): that build 6.06 / 5.69 / 7.71,
    the fixed interleaved path 7.65 / 7.47 / 10.10, `OAG_SPLIT_FINISH=0` 7.40 / 7.20 / 10.10
    (`docs/rendering/split-screen.md`). So the ceiling is 1.3 to 1.6 ms at 800p, 1.5 to 1.8 at 1080p
    and 2.4 at 4K, about a fifth of the frame thread. HD is not measured: the same A/B on HD

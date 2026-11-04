@@ -2029,8 +2029,11 @@ plain `queue.submit`, green with the helper); `split_finish::tests` covers the h
 The batched recordings (`Serial`, `Reversed`, `Threaded`, `Overlapped`) never call
 `Scene::render`, so they split nothing.
 
-**On the Steam Deck (2026-11-04).** Two-player Pure on Vineta K, vertical split, 1280x800 in a
-headless gamescope, `vsync = "off"`, `frame_limit = "unlimited"`, `target_fps = "off"`, dist
+**On the Steam Deck (2026-11-04).** Two-player Pure on Vineta K, vertical split, in a headless
+gamescope. **The "800p" rows are a 1280x800 window drawn at 1920x1200**: the Deck profile's render
+scale 150 applied there, while the 1080p and 4K rows pass `--render-scale 100` so the render size
+is the window's. Compare arms within one size, never across sizes (the 1080p rows draw fewer
+pixels than the "800p" ones). Settings: `vsync = "off"`, `frame_limit = "unlimited"`, `target_fps = "off"`, dist
 build with znver2 in the Debian container, mean of the phase line after the first six seconds,
 the Deck's lock held, arms interleaved, 4 rounds (3 for the modes). Frame-thread ms a frame
 (`scene` / `submit` / `total`): before the fix, split finish on, 4.4 / 0.83 / 6.06 (the picture

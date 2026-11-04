@@ -32,7 +32,8 @@ needed because padding the arrays to a fixed length made `finish` slower than th
 ## Open
 
 - **The Steam Deck, measured 2026-11-04 (CPU at 800p; GPU time, 1080p and 4K not yet).** RADV VANGOGH
-  exposes the features (the arrays are in use). Pure on Vineta K, 1280x800, headless gamescope,
+  exposes the features (the arrays are in use). Pure on Vineta K, a 1280x800 window drawn at 1920x1200 (the Deck profile's render scale 150),
+  headless gamescope,
   `vsync = "off"`, `frame_limit = "unlimited"`, dist build (znver2), `OAG_BINDLESS=0` against the
   default on one binary, 3 interleaved rounds, mean frame-thread ms a frame (`frame-phases` total):
   two-player split 8.19 -> 7.33 with the split finish on, 7.95 -> 7.15 with `OAG_SPLIT_FINISH=0`;
