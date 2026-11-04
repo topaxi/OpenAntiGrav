@@ -14,14 +14,13 @@ impl Scene {
         &self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        format: wgpu::TextureFormat,
         shaders: &[Option<oag_fx::mod_shader::Shader>],
     ) {
         *self.mod_shaders.borrow_mut() = (!shaders.is_empty()).then(|| {
             let stage = oag_fx::mod_shader::Stage::new(
                 device,
                 queue,
-                format,
+                self.pass_format,
                 self.store(),
                 self.sample_count(),
                 mesh_render::Velocity::Write,

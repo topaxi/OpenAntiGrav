@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-11-03
+updated: 2026-11-04
 summary: "oag.slipstream wired; open: mesh portal, route and island exits, Distance::Trigger on a real track."
 categories: [tooling, frontend]
 size: L (50)
@@ -38,10 +38,10 @@ The engine never names the mod.
      craft `may_use_pickup` refuses are ignored engine-side (`RaceSim::may_use_pickup`, which
      `Race::may_use_pickup` calls); proof `tests::extension_view`.
    - **The portal is a camera-facing sprite**, a mod PNG through the particle system placed at the
-     road ahead (`fire-mod-effect-ahead`), not a half disc standing across the road. A real mesh
-     or a custom shader is a later piece.
-   - **`screen-fill` is additive**, as the title's own flash is; a subtractive or alpha-over wash
-     needs a second blend.
+     road ahead (`fire-mod-effect-ahead`), not a half disc standing across the road. A shader can
+     draw it now (`docs/architecture/wasm-extensions/mod-shaders.md`); a real mesh is a later piece.
+   - ~~`screen-fill` is additive~~: a fill through a shader is alpha over or added, as its header
+     says. The flat fill stays additive.
    - **Pure** draws its backdrop grid model and the mod's PNG centred on it at its own size
      (`pure_psp.png`, glyph alone, variant b; checked by screenshot on `pure-psp-eu.chd`). The
      pad share there is 5.9-6.5 % (AI) and 4.3-4.5 % (person) against a Turbo's 13-15 %; the
@@ -94,6 +94,37 @@ found, for the engine:
   the engine; the pickup box shows with `--give extension` (it did not without a pickup).
 - The pad odds are one row for every title and class, checked against each real table
   (`slipstream_ground_truth::its_share_of_the_pad_draws_is_a_fraction_of_a_turbo_on_every_titles_real_table`).
+
+## Mod shaders, the portal's lane A (lane mod-shaders, 2026-11-04)
+
+`[shaders]`, an emitter's `shader` key, a shaded `screen-fill`, `draw-beam` and `set-shader-param`
+landed; the contract, refusals and what a hung GPU is still open to are
+`docs/architecture/wasm-extensions/mod-shaders.md`. For the next two lanes:
+
+- **portal-view (B):** fill the slot with `oag_fx::mod_shader::Stage::set_engine_texture(device,
+  Some((view, view_projection)))` (rebuilds the bind groups) and
+  `set_engine_view_projection` per frame; a shader reads `engine_texture(input.screen_uv)` or
+  `engine_texture(engine_uv(input.world))` and `engine_texture_bound()`. The stage lives in
+  `Scene::mod_shaders`. **One matrix per stage**: a split screen with a portal in two views needs
+  that written per view beside the rest of `Stage::upload`.
+- **slipstream-portal (C):** `shader = "<name>"` on the portal's emitter, its PNG moved to the
+  shader's `texture` header; a sprite is centred on its point, as today. The mod's quality row
+  reaches the shader as a `set_shader_param` scalar.
+
+Open from it, each small:
+
+1. **A bounded loop is refused with the rest.** Recognising `for (i < constant)` in naga's IR is
+   about 100 lines (the counter's store in `continuing`, no other store, no pointer to it handed
+   on, the product of nested counts capped). Portal noise can live without it. Size S (50).
+2. **`.wesl` is read as WGSL**: no `import`. Runtime linking pulls `wesl` into every build. Size S (40).
+3. **A device refusal on the web** is caught by nothing: `oag_gpu::shader_file::scoped` runs bare
+   there, because the scope resolves through a promise the page's thread may not block on. No module
+   runs on the web yet, so nothing reaches it.
+4. **`attach_mist` and `attach_lens_flare` take the caller's format**, not the race pass's: a mod
+   shader's stage panicked on exactly that on HD's float target (`Scene::pass_format` is the fix
+   there). Whether mist or the lens flare ever run on a chain's float target was not checked.
+5. **`docs/architecture/wasm-extensions/README.md` still lists no shader in its section 2 sketch**;
+   its "And a mod's own shaders" points at the page.
 
 ## Next Steps
 

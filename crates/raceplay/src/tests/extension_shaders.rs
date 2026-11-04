@@ -192,3 +192,53 @@ fn shader_draws_never_reach_the_hash() {
     };
     assert_eq!(hashes(&[]), hashes(&[beam(Some(0)), fill, param]));
 }
+
+/// An effect file's `shader` key, played where `fire-mod-effect-ahead` plays it: its particles
+/// land on the shader's list, and on neither blend class's.
+#[test]
+fn an_effect_naming_a_shader_lands_on_its_list_when_fired() {
+    use crate::extension_effects::{Fired, ModEffects, OwnEffect};
+    let file = "toml-schema = { location = \"https://oag.topaxi.com/mods/schemas/v1/effect.tosd\", version = \"1.0.0\" }\n[[emitter]]\nduration = 1\nlifetime = [60, 0]\nlive-cap = 2\nsize = 4.0\nalpha = 1.0\ncolour = \"#ffffff\"\nshader = \"a-good\"\n";
+    let parsed = oag_fx::psys::parametric::parse(
+        file,
+        &mut |_| Err("no textures".to_string()),
+        &mut |name| {
+            assert_eq!(name, "a-good");
+            Ok(1)
+        },
+    )
+    .unwrap();
+    let own = OwnEffect {
+        effect: Arc::new(parsed.effect),
+        axis: parsed.axis,
+    };
+    let mut race = race(&[]);
+    race.view.handles = std::mem::take(&mut race.view.handles).with_own(ModEffects(vec![(
+        "test.shaders".to_string(),
+        vec![Some(own)],
+    )]));
+    race.tick(&PlayerInputs::none());
+    let at = race.sim.world.ships[0].physics.body.position;
+    race.play_fired(
+        0,
+        &Fired::OwnAt {
+            mod_id: "test.shaders".to_string(),
+            index: 0,
+            at,
+            up: Vec3::Y,
+        },
+    );
+    for _ in 0..3 {
+        race.tick(&PlayerInputs::none());
+    }
+    let surfaces = race.mod_surfaces(Vec3::X, Vec3::Y, Vec3::new(0.0, 500.0, 0.0));
+    let [(1, quad)] = &surfaces[..] else {
+        panic!("one list, the shader's: {surfaces:?}");
+    };
+    assert_eq!(quad.len(), 6, "one particle");
+    let (mut additive, mut alpha) = (Vec::new(), Vec::new());
+    race.view
+        .stage
+        .extend_vertices(&mut additive, &mut alpha, Vec3::X, Vec3::Y, None);
+    assert!(additive.is_empty() && alpha.is_empty());
+}

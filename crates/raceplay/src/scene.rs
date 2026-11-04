@@ -277,6 +277,9 @@ pub struct Scene {
     clouds: std::cell::RefCell<clouds::Clouds>,
     /// The weather's mist overlay, once [`Scene::attach_mist`] built it.
     mist: std::cell::RefCell<Option<oag_fx::mist::Pipeline>>,
+    /// What the race pass writes: a chain's linear target where a title has one, so not
+    /// always the format the scene was built for.
+    pass_format: wgpu::TextureFormat,
     /// The race's mod shaders, once [`Scene::attach_mod_shaders`] built them; `None` in a
     /// race with no mod.
     mod_shaders: std::cell::RefCell<Option<oag_fx::mod_shader::Stage>>,
@@ -1136,6 +1139,7 @@ impl Scene {
             weapon_quads,
             clouds: clouds::Clouds::build(device, queue, format, store, sample_count, cloud_layer),
             mist: std::cell::RefCell::new(None),
+            pass_format: format,
             mod_shaders: std::cell::RefCell::new(None),
             lens_flare: std::cell::RefCell::new(None),
             beam,
