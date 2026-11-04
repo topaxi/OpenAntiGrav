@@ -123,9 +123,12 @@ draw its own fallback.
 
 ## Builds
 
-- **Web:** builds; inactive, as every module is there. [`web.md`](../../tools/web.md), "What is missing".
+- **Web:** the library checks for `wasm32-unknown-unknown`; inactive, as every module is there, and
+  not run in a browser. [`web.md`](../../tools/web.md), "What is missing".
 - **Android:** `oag-fx` and `oag-gpu` check for `aarch64-linux-android`. Modules there are as the
   rest of the app; not run on a device.
-- **2048 and Omega:** checked, applies, ported. The stage is title-blind: `oag.tether`'s beam and fill
-  were screenshot on Pulse PSP, Pure, HD, Omega and 2048. HD and Pulse are held by
-  `mod_shader_frame_ground_truth`.
+- **2048 and Omega: checked, applies, not wired separately.** The stage is title-blind and
+  `oag.tether` runs on both: a frame with the mod against one without, 960x544, 2026-11-04, share of
+  texels that differ, the view's middle and a corner: 2048 (tick 800) 0.098 and 0.93, Omega
+  (tick 700) 0.58 and 0.97. Omega's middle is too high to be the beam alone and the cause was not
+  looked for. Neither has a test of its own: `mod_shader_frame_ground_truth` holds Pulse and HD.
