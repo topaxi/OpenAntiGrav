@@ -127,6 +127,8 @@ impl Scene {
             return;
         };
         let stage = grade.stage_art_pair();
+        // The next frame writes every lookup whatever it held across the stage change.
+        *self.zone_vis_written.get_mut() = Default::default();
         self.track.rebind_zone(device, queue, &stage);
         for drawable in [
             self.sky.as_mut(),

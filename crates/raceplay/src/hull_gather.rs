@@ -125,6 +125,20 @@ impl HullGather {
         alpha: f32,
     ) -> Option<Vec<GpuVertex>> {
         let mut out = Vec::with_capacity(current.vertices.len());
+        Self::blend_into(race, previous, current, alpha, &mut out).then_some(out)
+    }
+
+    /// [`Self::blend`] into `out`, emptied first, so a list kept from frame to frame is
+    /// refilled rather than a new one made. Returns `false` where the two cannot be blended,
+    /// with `out` holding no meaningful vertices.
+    pub fn blend_into(
+        race: &Race,
+        previous: &Self,
+        current: &Self,
+        alpha: f32,
+        out: &mut Vec<GpuVertex>,
+    ) -> bool {
+        out.clear();
         for (slot, range) in &current.slots {
             let now = &current.vertices[range.clone()];
             let Some(from) = race.ship_swept_from(*slot) else {
@@ -132,16 +146,18 @@ impl HullGather {
                 continue;
             };
             if previous.models.get(*slot) != Some(&from) {
-                return None;
+                return false;
             }
-            let (_, before) = previous.slots.iter().find(|(s, _)| s == slot)?;
+            let Some((_, before)) = previous.slots.iter().find(|(s, _)| s == slot) else {
+                return false;
+            };
             let before = &previous.vertices[before.clone()];
             if before.len() != now.len() {
-                return None;
+                return false;
             }
             out.extend(before.iter().zip(now).map(|(a, b)| lerp(a, b, alpha)));
         }
-        Some(out)
+        true
     }
 }
 

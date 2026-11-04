@@ -773,7 +773,34 @@ pub fn write_vis(
     bands: &[f32],
     tint: Option<[u8; 3]>,
 ) {
+    upload_vis(queue, texture, &vis_pixels(bands, tint));
+}
+
+/// The lookup's 256 RGBA texels, as [`write_vis`] uploads them.
+pub type VisTexels = [[u8; 4]; VIS_WIDTH as usize];
+
+/// [`write_vis`], made only when the texels differ from `last`, what this texture was last
+/// given; `last` then holds them. `None` (never written) always writes. Returns whether it
+/// wrote. A race calls this for four drawables per view per frame, Zone or not, and outside a
+/// Zone race the texels are all zero every time: the write it skips is a queue staging copy of
+/// a kilobyte that changes nothing.
+pub fn write_vis_changed(
+    queue: &dyn oag_gpu::writes::Writes,
+    texture: &wgpu::Texture,
+    bands: &[f32],
+    tint: Option<[u8; 3]>,
+    last: &mut Option<VisTexels>,
+) -> bool {
     let pixels = vis_pixels(bands, tint);
+    if last.as_ref() == Some(&pixels) {
+        return false;
+    }
+    upload_vis(queue, texture, &pixels);
+    *last = Some(pixels);
+    true
+}
+
+fn upload_vis(queue: &dyn oag_gpu::writes::Writes, texture: &wgpu::Texture, pixels: &VisTexels) {
     let pixels: &[u8] = pixels.as_flattened();
     queue.write_texture(
         wgpu::TexelCopyTextureInfo {
@@ -806,7 +833,7 @@ pub fn write_vis(
 /// by `li r15,0`), and that is also the explicit "draw nothing" a `None`
 /// tint or an empty `bands` gets, rather than leaving whatever the texture
 /// held from a previous frame.
-fn vis_pixels(bands: &[f32], tint: Option<[u8; 3]>) -> [[u8; 4]; VIS_WIDTH as usize] {
+fn vis_pixels(bands: &[f32], tint: Option<[u8; 3]>) -> VisTexels {
     let mut texels = [[0u8; 4]; VIS_WIDTH as usize];
     let Some(tint) = tint.filter(|_| !bands.is_empty()) else {
         return texels;

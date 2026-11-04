@@ -320,13 +320,20 @@ pub struct Scene {
     /// the frame in progress. A split screen gathers once, on its first view, and
     /// every later view uploads the same lists: where the craft cast is not a
     /// property of the camera. See `Scene::upload_shadow_geometry`.
-    shadow_gathered: std::cell::RefCell<(
-        Vec<oag_render::shadow::Placement>,
-        Vec<oag_mesh::mesh::GpuVertex>,
-    )>,
+    shadow_gathered: std::cell::RefCell<frame::ShadowGathered>,
     /// The last two ticks' projected hulls, so the `original` tier gathers once
     /// per tick rather than once per drawn frame. See `frame/hull_cache.rs`.
     hull_cache: std::cell::RefCell<frame::HullCache>,
+    /// The texels the track's, the collision overlay's, the pads' and the weapon pads' Zone
+    /// lookups were last given, in that order, so a frame writes only texels that changed
+    /// (`Drawable::write_zone_vis`). Here rather than on each drawable, which every view
+    /// walks, to keep a kilobyte each out of them; reset by [`Self::rebind_zone_art`].
+    zone_vis_written: std::cell::RefCell<[Option<oag_mesh::mesh_render::zone::VisTexels>; 4]>,
+    /// The lists a view's pass carries, kept from frame to frame: see
+    /// `Scene::keep_view_lists`.
+    view_lists: std::cell::RefCell<record::ViewLists>,
+    /// What the craft shadow map's ranking works in, kept from frame to frame.
+    shadow_rank: std::cell::RefCell<frame::ShadowRank>,
     /// The `original` tier's two per-craft maps on Wipeout HD: the track
     /// under the craft drawn from the sun as its own baked sun-occlusion mask,
     /// and the craft's own depth from the sun, which together gate the hull's
@@ -1143,6 +1150,9 @@ impl Scene {
             generated_silhouettes_said: std::cell::Cell::new(false),
             shadow_gathered: Default::default(),
             hull_cache: Default::default(),
+            zone_vis_written: Default::default(),
+            view_lists: Default::default(),
+            shadow_rank: Default::default(),
             frame_work: Default::default(),
             reuse_frame_work: std::cell::Cell::new(false),
             sun_occlusion: std::cell::RefCell::new(sun_occlusion),

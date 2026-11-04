@@ -403,6 +403,7 @@ pub fn draw(
     countdown: Option<&str>,
     viewport: (f32, f32, f32, f32),
 ) {
+    oag_gpu::perfprobe::mark("hud-begin");
     let (slots, cut) = if race.windowed() {
         (race.window_drawn(window), race.window_cut(window))
     } else if race.viewport_count() <= 1 {

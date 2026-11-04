@@ -28,7 +28,7 @@
 //!   racing, a move past `SNAP_DISTANCE`: [`Race::ship_swept_from`]) draws its
 //!   current gather, which is where the per-frame gather put it too.
 
-use oag_core::math::{Mat4, Vec3};
+use oag_core::math::Vec3;
 use oag_mesh::mesh::GpuVertex;
 
 use crate::Race;
@@ -64,6 +64,13 @@ impl HullCache {
         }
         self.misses = 0;
     }
+
+    /// The current tick's gathered hull vertices, empty with none.
+    pub(in crate::scene) fn current_vertices(&self) -> &[GpuVertex] {
+        self.current
+            .as_ref()
+            .map_or(&[], |gather| &gather.vertices[..])
+    }
 }
 
 impl super::super::Scene {
@@ -75,15 +82,18 @@ impl super::super::Scene {
 
     /// The projected hulls the `original` tier draws this frame, at the race's
     /// draw alpha, cast along `axis` (the title's own shadow direction).
-    pub(super) fn original_hulls(&self, race: &Race, axis: Vec3) -> Vec<GpuVertex> {
+    ///
+    /// Returns `true` when they are the cache's current gather as it stands
+    /// ([`HullCache::current_vertices`], a draw at alpha `1.0`), which is read in
+    /// place rather than copied; otherwise they are in `out`, emptied first.
+    pub(super) fn original_hulls(&self, race: &Race, axis: Vec3, out: &mut Vec<GpuVertex>) -> bool {
+        out.clear();
         let alpha = race.draw_alpha();
         let generation = race.pose_generations();
-        let models: Vec<Mat4> = (0..usize::from(race.ship_count()))
-            .map(|slot| race.ship_tick_model(slot))
-            .collect();
+        let models = || (0..usize::from(race.ship_count())).map(|slot| race.ship_tick_model(slot));
         let mut cache = self.hull_cache.borrow_mut();
         let fresh = cache.current.as_ref().is_some_and(|gather| {
-            gather.generation == generation.current && gather.models == models
+            gather.generation == generation.current && gather.models.iter().copied().eq(models())
         });
         if !fresh {
             let predecessor = match cache.current.take() {
@@ -104,7 +114,8 @@ impl super::super::Scene {
                     cache.scratch.recycle(predecessor);
                 }
                 drop(cache);
-                return self.live_hulls(race, axis);
+                out.append(&mut self.live_hulls(race, axis));
+                return false;
             }
             cache.misses = if predecessor.is_some() {
                 0
@@ -131,19 +142,21 @@ impl super::super::Scene {
             ..
         } = &*cache
         else {
-            return Vec::new();
+            return false;
         };
         if alpha >= 1.0 {
-            return current.vertices.clone();
+            return true;
         }
-        if let Some(blended) = previous
+        if previous
             .as_ref()
-            .and_then(|previous| HullGather::blend(race, previous, current, alpha))
+            .is_some_and(|previous| HullGather::blend_into(race, previous, current, alpha, out))
         {
-            return blended;
+            return false;
         }
         drop(cache);
-        self.live_hulls(race, axis)
+        out.clear();
+        out.append(&mut self.live_hulls(race, axis));
+        false
     }
 
     /// The hulls projected from the poses this draw blends to, as the per-frame

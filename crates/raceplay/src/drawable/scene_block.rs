@@ -137,10 +137,67 @@ impl SceneBlocks {
         let at = u64::from(view.scene) + kind.index() * mesh_render::SCENE_STRIDE;
         oag_gpu::perfprobe::write_buffer(queue, &self.buffer, at, bytemuck::bytes_of(scene));
     }
+
+    /// Writes the four blocks every view composes, `scenes` in [`Self::VIEW_KINDS`] order, as
+    /// one `queue.write_buffer` for each run of used kinds: the four sit back to back in the
+    /// view's region, so with all four used it is one write where [`Self::write`] made four.
+    /// The padding between two blocks of a run is written as the zeros [`Self::new`] left
+    /// there; an unused kind's block is still never written.
+    pub(crate) fn write_view(
+        &self,
+        queue: &dyn oag_gpu::writes::Writes,
+        view: ViewBlock,
+        scenes: [&mesh_render::Scene; 4],
+    ) {
+        const STRIDE: usize = mesh_render::SCENE_STRIDE as usize;
+        const SIZE: usize = mesh_render::SCENE_SIZE as usize;
+        let mut staged = [0u8; 4 * STRIDE];
+        let used = Self::VIEW_KINDS.map(|kind| self.used[kind as usize]);
+        let mut next = 0;
+        while next < used.len() {
+            if !used[next] {
+                next += 1;
+                continue;
+            }
+            let first = next;
+            while next < used.len() && used[next] {
+                let at = (next - first) * STRIDE;
+                staged[at..at + SIZE].copy_from_slice(bytemuck::bytes_of(scenes[next]));
+                next += 1;
+            }
+            let len = (next - 1 - first) * STRIDE + SIZE;
+            let at =
+                u64::from(view.scene) + Self::VIEW_KINDS[first].index() * mesh_render::SCENE_STRIDE;
+            oag_gpu::perfprobe::write_buffer(queue, &self.buffer, at, &staged[..len]);
+        }
+    }
+
+    /// The kinds [`Self::write_view`] writes, in buffer order: adjacent, the first four.
+    pub(crate) const VIEW_KINDS: [SceneKind; 4] = [
+        SceneKind::Circuit,
+        SceneKind::Ship,
+        SceneKind::Shine,
+        SceneKind::Flame,
+    ];
 }
+
+// `write_view` stages the four as one span from the first: they must be the first four kinds.
+const _: () = {
+    let kinds = SceneBlocks::VIEW_KINDS;
+    let mut i = 0;
+    while i < kinds.len() {
+        assert!(kinds[i] as usize == i);
+        i += 1;
+    }
+};
 
 #[cfg(test)]
 impl SceneBlocks {
+    /// Marks `kind` used, as [`Drawable::share_scene`] does, without a drawable.
+    pub(crate) fn mark_used(&mut self, kind: SceneKind) {
+        self.used[kind as usize] = true;
+    }
+
     /// `kind`'s block of the view following craft `slot`, read back.
     pub(crate) fn read(
         &self,

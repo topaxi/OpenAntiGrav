@@ -130,12 +130,22 @@ pub(super) struct ViewPass<'a> {
     /// title's ribbon is the PSP preset's; see [`Recorder::draw_ribbons`].
     pub(super) ribbon_first: bool,
     pub(super) shadow_runs: Vec<oag_render::shadow::Run>,
+    /// The list the depth prepass's order is sorted into while the view records
+    /// ([`opaque_order`]), carried in so a list kept from the last frame is refilled.
+    pub(super) opaque_order: std::cell::Cell<Vec<(f32, u32)>>,
     pub(super) ghost: Option<(oag_render::ghost::Hull<'a>, oag_render::ghost::Fade)>,
     /// What the prepare already drew (the behind-the-glass target), counted in.
     pub(super) stats: SceneStats,
     /// The camera lens's own screen motion (its shake and its field of view), for the blur
     /// after the pass - see `Race::lens_screen_motion`.
     pub(super) blur_lens: Mat4,
+}
+
+/// A [`ViewPass`]'s lists, kept between frames by the scene.
+#[derive(Debug, Default)]
+pub(super) struct ViewLists {
+    pub(super) shadow_runs: Vec<oag_render::shadow::Run>,
+    pub(super) opaque_order: Vec<(f32, u32)>,
 }
 
 impl Scene {
@@ -173,6 +183,21 @@ impl Scene {
                 .map(|mist| (mist.drawer().clone(), mist.drawn())),
             shadow: self.shadow.borrow().drawer().clone(),
         }
+    }
+
+    /// The lists a recorded [`ViewPass`] carried, kept for the next view's
+    /// [`Self::take_view_lists`] so a frame refills them rather than making new ones. A pass
+    /// that is dropped instead (a split recorded in a batch) costs only new lists next time.
+    pub(super) fn keep_view_lists(&self, pass: ViewPass<'_>) {
+        *self.view_lists.borrow_mut() = ViewLists {
+            shadow_runs: pass.shadow_runs,
+            opaque_order: pass.opaque_order.into_inner(),
+        };
+    }
+
+    /// The lists [`Self::keep_view_lists`] kept, or empty ones.
+    pub(super) fn take_view_lists(&self) -> ViewLists {
+        std::mem::take(&mut *self.view_lists.borrow_mut())
     }
 
     /// The shadow pipeline's runs as the view's upload left them.
@@ -389,7 +414,8 @@ impl Recorder<'_> {
             match stage {
                 TrackStage::Solid => {
                     oag_gpu::perfprobe::marks::mark(render, "track solid");
-                    let order = opaque_order(self.track, pass.eye);
+                    let mut order = pass.opaque_order.take();
+                    opaque_order(self.track, pass.eye, &mut order);
                     stats.add(self.track.draw_lists(
                         render,
                         block,
@@ -401,6 +427,7 @@ impl Recorder<'_> {
                             order: Some(&order),
                         },
                     ));
+                    pass.opaque_order.set(order);
                 }
                 TrackStage::Sky => {
                     oag_gpu::perfprobe::marks::mark(render, "sky");
@@ -562,19 +589,14 @@ pub(crate) fn track_blended<'a>(depth_plane: [f32; 4]) -> Lists<'a> {
 /// integrated GPU, at the cost of 1 to 419 pixels a capture where coplanar ties resolved to the
 /// nearer batch. The prepass took that to 32.4 ms with the original's picture back; the shading
 /// that follows keeps the model's own order. `sort_by` is stable, so equal keys keep the model's
-/// order. Per view, from its own eye, while the view records.
-fn opaque_order(track: &Drawable, eye: Vec3) -> Vec<(f32, u32)> {
-    let mut order: Vec<(f32, u32)> = track
-        .opaque_draws()
-        .iter()
-        .zip(0u32..)
-        .map(|(draw, i)| {
-            let centre = Vec3::from_array(draw.bounds.centre);
-            (centre.distance(eye) - draw.bounds.radius, i)
-        })
-        .collect();
+/// order. Per view, from its own eye, while the view records, into `order`, emptied first.
+fn opaque_order(track: &Drawable, eye: Vec3, order: &mut Vec<(f32, u32)>) {
+    order.clear();
+    order.extend(track.opaque_draws().iter().zip(0u32..).map(|(draw, i)| {
+        let centre = Vec3::from_array(draw.bounds.centre);
+        (centre.distance(eye) - draw.bounds.radius, i)
+    }));
     order.sort_by(|a, b| a.0.total_cmp(&b.0));
-    order
 }
 
 // A view's recording reads only these, from a thread of its own (`Scene::render_slots`). wgpu's

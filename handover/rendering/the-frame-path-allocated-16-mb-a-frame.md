@@ -2,7 +2,7 @@
 status: measure
 titles: [all]
 updated: 2026-11-04
-summary: "Frame path allocations: shadow, pad and advert churn fixed 2026-11-04; Zone lookup, hull clone, exhaust Vec, scene blocks and wgpu encoder growth left"
+summary: "Frame path allocations: scout items 1-9, 11, 12 fixed; DrawList, split lists, HD HUD draw list, wgpu encoder growth and batch two Deck numbers left"
 ---
 
 # The frame path allocated 1.6 MB a frame, and five of the reasons are fixed
@@ -255,27 +255,29 @@ only `Scene::render`.
 
 ## Open
 
-**The 2026-11-04 scout's list, after its first five items landed** (shadow upload list, hull
-gather, HD sun-occlusion writes, weapon-pad tint, advert card uniforms; numbers and the dropped
-advert-pass skip in `docs/rendering/frame-thread-cpu.md`, "Per-frame allocations: five
-removed"). What it ranked next, none done, each measured the same way (`cargo build --release -p
-oag-game --features perf-probe`, `OAG_RENDER_BENCH=50 OAG_RENDER_PERF=1 OAG_RENDER_PERF_SITES=1
+**The 2026-11-04 scout's list: items 1 to 9, 11 and 12 landed** (numbers in
+`docs/rendering/frame-thread-cpu.md`, "Per-frame allocations: five removed" and "Per-frame
+allocations, batch two"). What is left of it, each measured the same way (`cargo build --release
+-p oag-game --features perf-probe`, `OAG_RENDER_BENCH=50 OAG_RENDER_PERF=1 OAG_RENDER_PERF_SITES=1
 oag-game <image> --race --mode single_race --seed 1 --autopilot --no-audio --ticks 300
---screenshot x.png`, the stage named):
+--screenshot x.png`, the stage named; the HUD by the `hud-frame` and `hud-paint` marks):
 
-- **Zone visualiser lookup**: `Drawable::write_zone_vis` writes a 256-texel lookup for four
-  drawables per view per frame, Zone or not (about 21 allocations a frame on Pulse). Remember the
-  last bytes per drawable; reset the memo in `rebind_zone_art`. Stage `fog+zonevis`.
-- **`original_hulls` clones the cached gather** (`scene/frame/hull_cache.rs`, `current.vertices
-  .clone()` at alpha 1, a `models` list built to compare, `HullGather::blend`'s fresh list):
-  about 165 KiB a frame on Pulse is left in `shadow-gather` after the fix, most of it this.
-- **`Exhaust::vertices` returns a `Vec` of six** (`crates/fx/src/exhaust.rs`): one allocation per
-  craft per frame on the PSP and PS2 flare path. Stage `exhaust-gather`.
-- **Four scene-block writes per view where one would do** (`SceneBlocks::write`, from
-  `Scene::write_scene_blocks`): the kinds of a view are adjacent.
-- **Small per-view lists** (`DrawList`, `shadow_runs`, the opaque sort, `rank_by_distance`,
-  `ChunkSet::around`, the split's `noted` list) and the **HUD** (`crop_horizontally`'s `Sprite`
-  clone, `text_for`'s `String`s): about 10 and 82 a view.
+- **The view's `DrawList`** (`frame.rs`, `DrawList(Vec::with_capacity(64))`): borrows the
+  frame's drawables, so keeping it between frames needs its lifetime erased. One a view.
+- **The split's `noted` list and `timestamp_clones`** (`viewports.rs`, `split_record.rs`): left
+  while the split-recording lane owned those files. One each a split frame.
+- **`ChunkSet::around`'s bits** (`oag_render::pvs`, HD) and **`order_blended`**
+  (`oag_mesh::mesh::order`): an API change for one list each.
+- **HUD**: `runtime::tinted` copies a sprite per tinted widget (8 a view on HD); `text_for`'s
+  `String` per label is owned by `Draw::Text` (structural); HD four views still makes 837
+  allocations in its draw list, worth a heaptrack pass of its own; `Overlay::paint` (about 48 a
+  frame) was not looked at.
+- **Steam Deck numbers for batch two were not taken** (the Deck was in use): the 800p, 1080p and
+  4K matrix of batch one, same harness, base `cb561e9c6`.
+- **Pure one view's bench CPU read slower on the branch** (408 against 498 us, 0 of 6 pairs) while
+  Pulse and HD read 3 to 5 percent faster; Pure's base alone spans 358 to 642 us and a
+  round-robin found no step between the intermediate binaries. Unexplained; the Deck run, or a
+  `perf stat` pair on an idle machine, should settle it (`frame-thread-cpu.md`, batch two).
 
 **Not fixed, with numbers, in the order they are worth fixing:**
 

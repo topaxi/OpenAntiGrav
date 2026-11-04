@@ -445,6 +445,29 @@ fn a_locked_reticle_draws_its_four_brackets_and_its_inner_box() {
     assert!((turns[4] - 3.0 * quarter).abs() < 1e-4, "{turns:?}");
 }
 
+/// `draw_list_without_sight` is `draw_list` of the readout with its sight taken out, which is
+/// what a split view drew before it stopped copying the readout to take it out.
+#[test]
+fn a_list_without_the_sight_is_the_list_of_a_readout_without_one() {
+    let layout = Layout::from_xml(SIGHTS);
+    let sheet = sheet();
+    let strings = strings();
+    let cx = context(&layout, &strings, &sheet);
+    let readout = Readout {
+        sight: Some(locked_on([240.0, 136.0])),
+        ..Readout::blank()
+    };
+    let without = Readout {
+        sight: None,
+        ..readout.clone()
+    };
+    assert_eq!(
+        crate::draw_list_without_sight(&cx, &readout),
+        draw_list(&cx, &without)
+    );
+    assert_ne!(draw_list(&cx, &readout), draw_list(&cx, &without));
+}
+
 /// The brackets straddle the target, and the whole reticle sits over it.
 ///
 /// The check that the piece centres are used as centres rather than as
