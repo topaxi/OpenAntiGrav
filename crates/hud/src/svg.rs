@@ -70,8 +70,8 @@ impl VectorIcon {
 /// pixels of every layout unit, and marked with that density
 /// ([`Sheet::texel_density`]) so the draw lays it on whole pixels.
 ///
-/// An icon whose slot cannot be measured (a layout with no pickup frame) is left out and
-/// named in `report`: it would draw nothing anyway.
+/// An icon whose slot cannot be measured (a layout with no pickup frame) is rasterised at its
+/// own size in layout units, for `hud-icon`.
 #[must_use]
 pub fn place(
     base: &Sheet,
@@ -89,13 +89,9 @@ pub fn place(
             sheet: base,
             art,
         };
-        let Some(size) = mod_icon_size(frame, icon.size()) else {
-            report.push(format!(
-                "{}: no pickup slot to size the vector icon in; draws nothing",
-                icon.src
-            ));
-            continue;
-        };
+        // Where the HUD has no pickup slot (a mode without one), the drawing's own size in
+        // layout units, as a PNG is drawn at its own size.
+        let size = mod_icon_size(frame, icon.size()).unwrap_or_else(|| icon.size());
         let (width, height) = (
             (size[0] * pixels_per_unit).round().max(1.0) as u32,
             (size[1] * pixels_per_unit).round().max(1.0) as u32,

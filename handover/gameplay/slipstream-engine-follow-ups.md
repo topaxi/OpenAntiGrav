@@ -164,7 +164,11 @@ rasterises again on a worker thread (`oag_thread::Task`) when its measured size 
 changes and swaps the sheet in; `--screenshot` rasterises synchronously. `resvg` is built
 without `text` and `raster-images`: `<text>` draws nothing, `<image>` is never read. Example:
 `oag.energy-turbo`'s `icons/energy.svg`. Open: a split-screen window rasterises for the whole
-viewport, so a view scaled down samples a larger raster; the fallback-layer HUD art
+viewport, so a view scaled down samples a larger raster; windows of different sizes sharing
+one overlay never start a raster (a change must be asked for in two draws running);
+under `hud_scale = "integer"` at a non-integer factor (1280x800 Pulse) the title's backdrop
+snaps down to a whole factor while the icon keeps its exact measured size, so it sits low and
+right in the smaller hex (the raster itself stays one texel to one pixel; a PNG was not compared); the fallback-layer HUD art
 (`assets/`) does not use SVG; `oag.slipstream` keeps its PNGs on purpose.
 
 ## Next Steps

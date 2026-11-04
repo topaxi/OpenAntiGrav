@@ -179,6 +179,10 @@ struct Retarget {
     /// Pixels per layout unit the sheet in use was rasterised at.
     density: f32,
     pending: Option<(f32, oag_thread::Task<oag_hud::sprite::Sheet>)>,
+    /// The size the last draw asked for. A change is acted on only when the next draw asks
+    /// for the same, so windows of different sizes drawing through one overlay in turn never
+    /// start a raster each frame.
+    asked: f32,
 }
 
 impl std::fmt::Debug for Overlay {
@@ -300,6 +304,7 @@ impl Overlay {
                         .and_then(|icon| assets.sheet.texel_density(&icon.src))
                         .unwrap_or(0.0),
                     pending: None,
+                    asked: 0.0,
                 }),
         }))
     }
@@ -388,7 +393,13 @@ impl Overlay {
         }
         let wanted =
             crate::render::hud_pixels_per_grid(self.space, viewport) * self.safe_area_scale;
-        if wanted <= 0.0 || (wanted - vector.density).abs() <= vector.density * 0.005 {
+        let same = |a: f32, b: f32| (a - b).abs() <= b * 0.005;
+        if wanted <= 0.0 || same(wanted, vector.density) {
+            vector.asked = 0.0;
+            return;
+        }
+        if !same(wanted, vector.asked) {
+            vector.asked = wanted;
             return;
         }
         let (icons, base, layout, art) = (
@@ -403,6 +414,13 @@ impl Overlay {
                 oag_hud::svg::place(&base, &layout, art, &icons, wanted, &mut Vec::new())
             }),
         ));
+    }
+
+    /// Texels per layout unit the first vector icon of the sheet in use was rasterised at.
+    #[must_use]
+    pub fn vector_density(&self) -> Option<f32> {
+        let icon = self.vector.as_ref()?.icons.first()?;
+        self.sheet.texel_density(&icon.src)
     }
 
     /// The context [`draw_list`] takes.
@@ -590,3 +608,6 @@ impl Overlay {
         }
     }
 }
+
+#[cfg(test)]
+mod retarget_tests;

@@ -159,3 +159,19 @@ fn text_and_images_in_an_svg_draw_nothing() {
     let pixels = icon.rasterise(8, 8).unwrap();
     assert!(pixels.iter().all(|&b| b == 0), "no glyph, no file");
 }
+
+#[test]
+fn a_layout_without_a_pickup_slot_still_gets_the_icon_at_its_own_size() {
+    let layout = Layout::from_xml("<Screen/>");
+    let icon = VectorIcon::parse(SRC.into(), BAR.as_bytes()).unwrap();
+    let sheet = svg::place(
+        &crate::sprite::Sheet::default(),
+        &layout,
+        oag_pulse::hud::ART,
+        std::slice::from_ref(&icon),
+        2.0,
+        &mut Vec::new(),
+    );
+    let at = sheet.get(SRC).expect("drawn for hud-icon");
+    assert_eq!((at.width, at.height), (32, 32), "16 units at 2 px/unit");
+}
