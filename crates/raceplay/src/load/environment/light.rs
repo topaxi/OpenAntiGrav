@@ -214,10 +214,10 @@ pub(in crate::load) fn envsettings_tonemap(
     Some(params)
 }
 
-/// The composite's disc-authored terms: the `Vignette.*` keys. `ColorScale`
-/// and `ScreenTint` rest at `(1, 1, 1)` and zero (`colorscale.md`). A file with
-/// no vignette draws none, and says so. `Bloom.*` is authored too and is not
-/// drawn: its chain is unread (`tonemap.md`, "Open").
+/// The composite's disc-authored terms: the `Vignette.*` and `Bloom.*` keys.
+/// `ColorScale` and `ScreenTint` rest at `(1, 1, 1)` and zero (`colorscale.md`).
+/// A file with neither draws neither, and says so. The bright pass's mask is not
+/// drawn: no draw writes the scene's `m_Alpha` (`tonemap.md`, "The bloom chain").
 fn omega_composite(
     env: &EnvSettings,
     name: &str,
@@ -233,8 +233,31 @@ fn omega_composite(
         ));
         return oag_post::omega_tonemap::Composite::NONE;
     };
-    report.push(format!(
-        "{name}: composite vignette inner radius {inner:.3}, edge intensity {outer:.3};          bloom and the low-resolution additive layer not drawn (the bloom chain is unread)"
-    ));
-    oag_post::omega_tonemap::Composite::at_rest(inner, outer)
+    let bloom = env
+        .bright_pass("Bloom")
+        .map(|b| oag_post::omega_tonemap::Bloom {
+            threshold: b.threshold,
+            offset: b.offset,
+            scale: b.scale,
+            power: b.power,
+            alpha_scale: b.alpha_scale,
+            blend_factors: b.blend_factors,
+        });
+    report.push(match bloom {
+        Some(b) => format!(
+            "{name}: composite vignette inner radius {inner:.3}, edge intensity {outer:.3}; \
+             bloom threshold {:.3} scale {:.3} over four levels from 960x540, factors {:?}; \
+             its mask term (alpha scale {:.3} on the scene's m_Alpha) and the low-resolution \
+             additive layer not drawn",
+            b.threshold, b.scale, b.blend_factors, b.alpha_scale,
+        ),
+        None => format!(
+            "{name}: composite vignette inner radius {inner:.3}, edge intensity {outer:.3}; \
+             no complete Bloom block, so no bloom; the low-resolution additive layer not drawn"
+        ),
+    });
+    oag_post::omega_tonemap::Composite {
+        bloom,
+        ..oag_post::omega_tonemap::Composite::at_rest(inner, outer)
+    }
 }

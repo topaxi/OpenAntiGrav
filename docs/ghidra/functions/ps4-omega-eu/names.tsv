@@ -180,3 +180,12 @@
 0x010976a0	function	Wwise_RegisterGameObj	80	audio-3d.md
 0x01092890	function	Wwise_SetListenerPosition	80	audio-3d.md
 0x01092460	function	Wwise_SetPosition	78	audio-3d.md
+0x0177fbc0	function	Bloom_RunChain	80	tonemap.md
+0x016247c0	function	Bloom_CreateTargets	76	tonemap.md
+0x0177e870	function	Bloom_CreateLevels	80	tonemap.md
+0x0177f510	function	Bloom_CreatePrograms	80	tonemap.md
+0x01784570	function	Bloom_CreateBlurPrograms	82	tonemap.md
+0x01785290	function	Bloom_BlurHorizontal	80	tonemap.md
+0x017856f0	function	Bloom_BlurVertical	80	tonemap.md
+0x0177e1e0	function	Bloom_AddLevel	76	tonemap.md
+0x01625490	function	Environment_ApplyBloomVignette	82	tonemap.md
