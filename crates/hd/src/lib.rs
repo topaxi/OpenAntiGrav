@@ -184,6 +184,8 @@ pub const TITLE: &Title = &Title {
     // Built 2026-09-04: the craft render into a coverage map the track samples.
     original_shadows: oag_title::shadow::OriginalShadows::Built,
     weather: oag_title::weather::Weather::Unplayed,
+    // Measured, confidence 84: any non-zero small byte is full on (`docs/gameplay/rumble.md`).
+    rumble: oag_title::rumble::Rumble::Patterns(oag_title::rumble::SmallMotor::OnOff),
     // **Pulse's two names, and HD answers them.** `Data\XML\WeaponStats_Race.xml`
     // resolves in `DATA00.PSARC` through the same path normalisation every other
     // HD entry goes through, and parses with thirteen weapons and four pickup

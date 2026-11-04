@@ -33,6 +33,10 @@
 use log::warn;
 use oag_gameplay::input::Button;
 
+mod rumble;
+
+pub use rumble::{silence_on_panic, silence_registered};
+
 /// How far a trigger has to travel before it counts as a button press.
 ///
 /// A resting trigger on a worn pad does not read exactly zero, and thrust that
@@ -721,6 +725,8 @@ pub struct Pad {
     /// counts, and the join screen can tell two pads apart before either has a
     /// slot.
     presses: Vec<(gilrs::GamepadId, u32)>,
+    /// The motors opened so far. See [`rumble`].
+    rumble: rumble::Effects,
 }
 
 impl std::fmt::Debug for Pad {
@@ -750,6 +756,7 @@ impl Pad {
                 launch: crate::prompt::Launch::from_process(),
                 active: None,
                 presses: Vec::new(),
+                rumble: rumble::Effects::default(),
             },
             Err(e) => {
                 warn!("no gamepad support ({e}); keyboard only");
@@ -760,6 +767,7 @@ impl Pad {
                     launch: crate::prompt::Launch::default(),
                     active: None,
                     presses: Vec::new(),
+                    rumble: rumble::Effects::default(),
                 }
             }
         }
@@ -780,6 +788,7 @@ impl Pad {
             launch: crate::prompt::Launch::default(),
             active: None,
             presses: Vec::new(),
+            rumble: rumble::Effects::default(),
         }
     }
 
@@ -885,6 +894,9 @@ impl Pad {
         let mut readings = [Reading::default(); oag_gameplay::MAX_PLAYERS];
         if let Some(gilrs) = &mut self.gilrs {
             while let Some(event) = gilrs.next_event() {
+                if matches!(event.event, gilrs::EventType::Disconnected) {
+                    self.rumble.forget(event.id);
+                }
                 if let gilrs::EventType::ButtonPressed(button, _) = event.event
                     && let Some(bit) = map_button(button).map(Button::bit)
                     && is_real_pad(&gilrs.gamepad(event.id))

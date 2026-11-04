@@ -791,6 +791,23 @@ pub(crate) struct DevArgs {
     #[arg(long, value_name = "SCRIPT")]
     pub(crate) script: Option<String>,
 
+    /// Play one rumble pattern on the connected pad and exit: a disc pattern by name
+    /// (`Missile_Fired_Rumble`, read from `--source`) or the path of a `.toml` pattern.
+    ///
+    /// Opens the pad subsystem with no window, steps the pattern at 60 Hz through the
+    /// same player and `gilrs` backend a race uses, prints every level it sends, and
+    /// silences the motors. The law is `[controls] rumble` (`ps3` or `ps4`; `original`
+    /// is the booted title's own). A looping pattern is held for `--rumble-hold` seconds.
+    /// Dev only.
+    #[cfg(feature = "dev-cli")]
+    #[arg(long, value_name = "NAME|FILE.toml")]
+    pub(crate) rumble_pattern: Option<String>,
+
+    /// Seconds `--rumble-pattern` holds a looping pattern before finishing it.
+    #[cfg(feature = "dev-cli")]
+    #[arg(long, default_value_t = 2.0, requires = "rumble_pattern")]
+    pub(crate) rumble_hold: f32,
+
     /// Log one line a second on every stage, menus included: stage, fps, frame/CPU/GPU/present
     /// time, target rate, window, surface and render size. `OAG_FRAME_LOG=1` does the same.
     /// To the terminal and the log file. Dev only.

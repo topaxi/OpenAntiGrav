@@ -360,6 +360,29 @@ motion_blur = \"medium\"
 /// answer - proven at the boundary `menu_seeds` resolves through, without
 /// needing a live `Session`.
 #[test]
+fn the_rumble_row_opens_on_ps4_and_follows_the_setting() {
+    let seed = |settings: &Settings| {
+        menu_seeds(
+            settings,
+            Anisotropy::default(),
+            oag_hd::TITLE,
+            oag_disc::Platform::Psp,
+        )
+        .into_iter()
+        .find(|(setting, _)| *setting == "controls.rumble")
+        .map(|(_, value)| value)
+    };
+    let (ps4, none) = (
+        oag_ui::menu::Value::Text("ps4".to_string()),
+        oag_ui::menu::Value::Text("none".to_string()),
+    );
+    let mut settings = Settings::default();
+    assert_eq!(seed(&settings), Some(ps4), "the newest law by default");
+    settings.controls.rumble = "none".to_string();
+    assert_eq!(seed(&settings), Some(none));
+}
+
+#[test]
 fn menu_seeds_resolves_the_render_profile_by_title() {
     let mut settings = Settings::default();
     ensure_known_titles(&mut settings);

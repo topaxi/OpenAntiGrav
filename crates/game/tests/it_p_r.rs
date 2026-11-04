@@ -40,6 +40,7 @@ mod record_readout_ground_truth;
 mod render_bench_ground_truth;
 mod resume_countdown_ground_truth;
 mod roster_declared_ground_truth;
+mod rumble_ground_truth;
 
 /// A `tests/*.rs` file missing from every `tests/it*.rs` listing compiles into
 /// nothing, and its tests stop running without a word.

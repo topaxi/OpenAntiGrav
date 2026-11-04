@@ -599,6 +599,26 @@ impl Definition {
         }
     }
 
+    /// Drops the RUMBLE row's `original` value on a title whose original plays
+    /// no pattern rumble (`oag_title::rumble::Rumble::is_played`): Pulse, Pure
+    /// and 2048. Same once-before-read timing as [`Self::drop_unavailable_boost_zoom`].
+    pub fn drop_unavailable_rumble_original(&mut self, title: &oag_title::Title) {
+        if title.rumble.is_played() {
+            return;
+        }
+        for page in &mut self.pages {
+            for entry in &mut page.entries {
+                if let Entry::Choice {
+                    setting, values, ..
+                } = entry
+                    && setting == "controls.rumble"
+                {
+                    values.retain(|choice| choice.value != "original");
+                }
+            }
+        }
+    }
+
     /// Drops every QUIT row, for a platform whose apps are not quit from
     /// inside (Android: the player leaves with the system's home or app
     /// switcher, and the app is suspended, not ended). Same once-before-read

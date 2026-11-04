@@ -313,6 +313,50 @@ fn the_weather_row_is_offered_only_where_the_weather_is_played() {
     }
 }
 
+/// The RUMBLE row offers `original` only where the original plays patterns (HD and
+/// Omega), and every other value everywhere. Its values are `oag_input::rumble::Mode`.
+#[test]
+fn the_rumble_row_offers_original_only_where_the_original_plays_patterns() {
+    let values = |definition: &Definition| -> Vec<String> {
+        let mut found = Vec::new();
+        for entry in definition.pages.iter().flat_map(|page| page.entries.iter()) {
+            if let oag_ui::menu::Entry::Choice {
+                setting, values, ..
+            } = entry
+                && setting == "controls.rumble"
+            {
+                found.extend(values.iter().map(|choice| choice.value.clone()));
+            }
+        }
+        found
+    };
+    let every: Vec<String> = oag_input::rumble::Mode::ALL
+        .iter()
+        .map(|mode| mode.name().to_string())
+        .collect();
+    let without: Vec<String> = every
+        .iter()
+        .filter(|name| *name != "original")
+        .cloned()
+        .collect();
+    for (title, offered) in [
+        (oag_pulse::TITLE, &without),
+        (oag_pure::TITLE, &without),
+        (oag_hd::TITLE, &every),
+        (oag_omega::TITLE, &every),
+        (oag_2048::TITLE, &without),
+    ] {
+        let mut definition = built_in();
+        assert_eq!(
+            values(&definition),
+            every,
+            "the definition ships every value"
+        );
+        definition.drop_unavailable_rumble_original(title);
+        assert_eq!(&values(&definition), offered, "{}", title.name);
+    }
+}
+
 /// The HUD STYLE row is offered where the disc authors a `HUD Style` list (HD and Omega)
 /// and dropped on the titles that author none, and what it offers is that list.
 #[test]

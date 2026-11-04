@@ -545,6 +545,8 @@ pub(crate) fn finish_definition(
     definition.drop_unavailable_trail_order(title);
     // And the WEATHER row, where the weather is played: Pulse.
     definition.drop_unavailable_weather(title);
+    // And the RUMBLE row's `original` value, where the original plays patterns: HD and Omega.
+    definition.drop_unavailable_rumble_original(title);
     // And the three rows the race box's own screens pick, on a title
     // that authors them - see `menu::Definition::drop_rows_picked_on_screen`.
     definition.drop_rows_picked_on_screen(title);

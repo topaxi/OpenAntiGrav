@@ -148,6 +148,8 @@ pub const TITLE: &Title = &Title {
     // The proximity and environment shadows are not built (`docs/rendering/shadows.md`).
     original_shadows: oag_title::shadow::OriginalShadows::Unbuilt,
     weather: oag_title::weather::Weather::Unplayed,
+    // Ships the 69 files and reads none (`docs/gameplay/rumble.md`).
+    rumble: oag_title::rumble::Rumble::Absent,
     // **2048's own tables, beside the HD-derived ones.** The archive carries
     // five `weaponstats*` documents: HD's three (`_Race`, `_Elimination`,
     // `_Detonator`) and two suffixed `_2048`. The suffixed pair is this

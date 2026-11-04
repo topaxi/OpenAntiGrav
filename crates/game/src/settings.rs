@@ -968,6 +968,7 @@ pub fn menu_seeds(
         ),
         ("controls.scheme", text(&settings.controls.scheme)),
         ("controls.triggers", text(&settings.controls.triggers)),
+        ("controls.rumble", text(&settings.controls.rumble)),
         (
             "controls.touch_go_zones",
             text(if settings.controls.touch_go_zones {

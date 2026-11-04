@@ -51,6 +51,10 @@ pub struct Controls {
     /// than a control discovered by feel to do nothing.
     #[serde(default)]
     pub trigger_sensitivity: TriggerSensitivity,
+    /// What the pad's motors play: `none`, `original`, `ps3` or `ps4`
+    /// (`oag_input::rumble::Mode`). A token, resolved like `triggers`.
+    #[serde(default = "default_rumble")]
+    pub rumble: String,
     /// Whether the on-screen GO button adds an airbrake in a wing on its left
     /// and right side (`true`), or is thrust alone (`false`). Only a
     /// touchscreen's overlay reads it.
@@ -312,6 +316,11 @@ fn default_triggers() -> String {
     TriggerMode::default().name().to_string()
 }
 
+/// `ps4`: the newest law (Omega's), by the maintainer's decision.
+fn default_rumble() -> String {
+    oag_input::rumble::Mode::default().name().to_string()
+}
+
 impl Controls {
     /// The overlay's scheme and zone setting; an unrecognised scheme token
     /// is standard.
@@ -347,6 +356,7 @@ impl Default for Controls {
         Self {
             scheme: default_scheme(),
             triggers: default_triggers(),
+            rumble: default_rumble(),
             trigger_sensitivity: TriggerSensitivity::default(),
             touch_go_zones: default_touch_go_zones(),
             touch_scheme: default_touch_scheme(),

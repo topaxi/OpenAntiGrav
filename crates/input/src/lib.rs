@@ -17,6 +17,7 @@ pub mod keys;
 pub mod lobby;
 pub mod pad;
 pub mod prompt;
+pub mod rumble;
 pub mod touch;
 
 use oag_gameplay::InputSnapshot;
@@ -705,6 +706,16 @@ impl Controls {
     #[must_use]
     pub fn pad(&self) -> &Pad {
         &self.pad
+    }
+
+    /// Stops every motor on every pad. See [`rumble::MotorOutput::silence`].
+    pub fn silence_motors(&mut self) {
+        rumble::MotorOutput::silence(&mut self.pad);
+    }
+
+    /// The pad, to drive its motors.
+    pub fn pad_mut(&mut self) -> &mut Pad {
+        &mut self.pad
     }
 
     /// Binds the pad's analog triggers. See [`Pad::set_trigger_mode`].

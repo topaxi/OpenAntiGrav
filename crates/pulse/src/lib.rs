@@ -103,6 +103,8 @@ pub const TITLE: &Title = &Title {
         // lens); Outpost 7's is snow.
         rain_circuit: Some(r"Data\Environments\14_Track\track.vex"),
     },
+    // PSP: no motors; the PS2 level-and-timer law is documented and not played (`docs/gameplay/rumble.md`).
+    rumble: oag_title::rumble::Rumble::Absent,
     // The two tables Pulse picks between by race mode. `DAT_08b32428` is what
     // selects the file - measured `0` in a single race and `1` in Eliminator,
     // at Venom both times, so it is the *file* and not the speed class. See

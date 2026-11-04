@@ -97,6 +97,8 @@ pub const TITLE: &Title = &Title {
     // Pure authors none of the seven shadow classes (`docs/formats/pure-status.md`): nothing is the right picture.
     original_shadows: oag_title::shadow::OriginalShadows::Absent,
     weather: oag_title::weather::Weather::Unplayed,
+    // No motors on a PSP (`docs/gameplay/rumble.md`, "Provenance per title").
+    rumble: oag_title::rumble::Rumble::Absent,
     // **One table, all lower case, and no Eliminator variant.**
     // `Data\XML\weaponstats.xml` at `0x08a445a0` in `/psp-pure-usa/BOOT.BIN`,
     // three strings before the `"WeaponStats"` and `"Weapon"` element names the

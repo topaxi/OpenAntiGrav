@@ -1622,6 +1622,18 @@ string_id = "OAG_CONTROLS_TRIGGER_SENSITIVITY"
 setting = "controls.trigger_sensitivity"
 values = ["50", "75", "100", "125", "150", "200"]
 
+# What the pad's motors play (`docs/gameplay/rumble.md`). `original` is the
+# title's own small-motor law and is offered only where the original plays
+# patterns (`oag_title::rumble::Rumble`, HD and Omega; `Definition::
+# drop_choice_value`). `ps3` is HD's on/off small motor, `ps4` is Omega's byte
+# sum, the default. See `oag_input::rumble::Mode`.
+[[page.entry]]
+kind = "choice"
+label = "RUMBLE"
+string_id = "OAG_CONTROLS_RUMBLE"
+setting = "controls.rumble"
+values = ["none", "original", "ps3", "ps4"]
+
 # A page of its own, with a live picture of the overlay beside the rows
 # (`oag_game::touch_controls::preview`). Only a touchscreen has an overlay to
 # set, so `Definition::drop_touch_controls` takes this row away off Android

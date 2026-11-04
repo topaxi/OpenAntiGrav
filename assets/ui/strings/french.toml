@@ -248,6 +248,7 @@ OAG_CONTROLS_CAMERA_VIEW = { text = "VUE DE LA CAMÉRA", human = false }
 OAG_CONTROLS_TRIGGERS = { text = "GÂCHETTES", human = false }
 OAG_CONTROLS_PILOT_ASSIST = { text = "AIDE AU PILOTAGE", human = false }
 OAG_CONTROLS_TRIGGER_SENSITIVITY = { text = "SENSIBILITÉ DES GÂCHETTES", human = false }
+OAG_CONTROLS_RUMBLE = { text = "VIBRATION", human = false }
 OAG_CONTROLS_FIRE_PICKUP = { text = "TIRER L'ARME", human = false }
 OAG_CONTROLS_ABSORB_PICKUP = { text = "ABSORBER L'ARME", human = false }
 

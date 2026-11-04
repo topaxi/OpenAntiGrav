@@ -713,6 +713,18 @@ impl Session {
                     return;
                 }
             },
+            // Applies now: the next pattern played reads it; what is sounding
+            // stops, so a change to NONE is felt at once.
+            "controls.rumble" => match oag_input::rumble::Mode::from_name(&text) {
+                Some(mode) => {
+                    self.settings.controls.rumble = mode.name().to_string();
+                    self.controls.silence_motors();
+                }
+                None => {
+                    warn!("ignoring {setting} = {text:?}: not none, original, ps3 or ps4");
+                    return;
+                }
+            },
             "controls.touch_go_zones" => match text.as_str() {
                 // Read by the next tick's `feed_touch`.
                 "on" => self.settings.controls.touch_go_zones = true,

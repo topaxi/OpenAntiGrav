@@ -75,6 +75,7 @@ impl Session {
         self.shell = Some(prepared.shell);
         self.prefetch_pending = prepared.prefetch;
         let assets = prepared.loading_assets;
+        self.controls.silence_motors();
         self.stage = Stage::loading(
             &self.gpu,
             prepared.boot_shell,
@@ -364,6 +365,7 @@ impl Session {
                 touch.team_model_origin,
             )
         });
+        self.controls.silence_motors();
         self.stage = Stage::frontend(&self.gpu, loaded, video_format, trace, &mut self.audio)?;
         if let Stage::Frontend(stage) = &mut self.stage {
             stage.team_hull = hull;
@@ -634,6 +636,7 @@ impl Session {
                     None
                 }
             });
+        self.controls.silence_motors();
         self.stage = Stage::race_loading(
             &self.gpu,
             worker,

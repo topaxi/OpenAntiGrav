@@ -250,6 +250,7 @@ const TITLE: &Title = &Title {
     cursor: "",
     original_shadows: oag_title::shadow::OriginalShadows::Unbuilt,
     weather: oag_title::weather::Weather::Unplayed,
+    rumble: oag_title::rumble::Rumble::Absent,
 };
 
 /// The bulk archive's PSP and PS2 names, as the fixture spells them.

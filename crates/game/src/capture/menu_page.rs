@@ -156,6 +156,7 @@ pub(super) fn menu_page(
     definition.drop_rows_picked_on_screen(title);
     definition.drop_unavailable_trail_order(title);
     definition.drop_unavailable_weather(title);
+    definition.drop_unavailable_rumble_original(title);
     definition.drop_unavailable_dynamic_hud(title);
     definition.rename_campaign_row(title, strings);
     definition.rename_multiplayer_row(title, strings);

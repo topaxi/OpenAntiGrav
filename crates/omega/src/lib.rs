@@ -146,6 +146,8 @@ pub const TITLE: &Title = &Title {
     // Not tried on Omega: its sun and craft carry-over from HD are unmeasured.
     original_shadows: oag_title::shadow::OriginalShadows::Unbuilt,
     weather: oag_title::weather::Weather::Unplayed,
+    // Measured, confidence 80: the small bytes are summed (`docs/gameplay/rumble.md`).
+    rumble: oag_title::rumble::Rumble::Patterns(oag_title::rumble::SmallMotor::Sum),
     // Unread, on `oag_2048::TITLE`'s own terms: this crate never opened
     // either weapon-stats table this lane, so nothing here can say which of
     // Omega's copies (HD's own two, or a fourth `_2048`-suffixed pair the way
