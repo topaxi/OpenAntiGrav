@@ -163,6 +163,22 @@ pub struct Overlay {
     /// Whether the HUD is drawn: `false` under Pulse's `Dynamic HUD` set to off
     /// ([`Self::set_dynamic_hud`]). The resume countdown is the host's own and still draws.
     hud_shown: bool,
+    /// The mods' vector icons, kept so they are rasterised again when the HUD's pixel size
+    /// changes (a resize, another HUD scale, a window of another shape).
+    vector: Option<Retarget>,
+}
+
+/// Rasterises a race's vector icons again, off the frame loop, for the pixels per layout unit
+/// the HUD is now drawn at.
+struct Retarget {
+    icons: Vec<oag_hud::svg::VectorIcon>,
+    /// The sheet before any vector icon was put in it.
+    base: oag_hud::sprite::Sheet,
+    layout: Layout,
+    art: &'static oag_title::HudArt,
+    /// Pixels per layout unit the sheet in use was rasterised at.
+    density: f32,
+    pending: Option<(f32, oag_thread::Task<oag_hud::sprite::Sheet>)>,
 }
 
 impl std::fmt::Debug for Overlay {
@@ -266,6 +282,25 @@ impl Overlay {
             split_hud: assets.split_hud.clone(),
             safe_area_scale: assets.art.safe_area_scale(None),
             hud_shown: true,
+            vector: assets
+                .layout
+                .as_ref()
+                .filter(|_| !assets.vector_icons.is_empty())
+                .map(|layout| Retarget {
+                    icons: assets.vector_icons.clone(),
+                    base: assets
+                        .vector_base
+                        .clone()
+                        .unwrap_or_else(|| assets.sheet.clone()),
+                    layout: layout.clone(),
+                    art: assets.art,
+                    density: assets
+                        .vector_icons
+                        .first()
+                        .and_then(|icon| assets.sheet.texel_density(&icon.src))
+                        .unwrap_or(0.0),
+                    pending: None,
+                }),
         }))
     }
 
@@ -319,6 +354,57 @@ impl Overlay {
         self.art.resume_countdown
     }
 
+    /// Keeps the vector icons at the pixel size the HUD is drawn at in `viewport`: when it
+    /// differs from the size they were rasterised at, they are rasterised again on another
+    /// thread and the sheet swapped in the frame the work finishes. Until then the icon is
+    /// drawn from the old raster, as a PNG would be.
+    fn retarget(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        viewport: (f32, f32, f32, f32),
+    ) {
+        let Some(vector) = self.vector.as_mut() else {
+            return;
+        };
+        if let Some((density, task)) = vector.pending.as_mut() {
+            if !task.is_finished() {
+                return;
+            }
+            let density = *density;
+            let finished = vector.pending.take().and_then(|(_, mut task)| task.join());
+            if let Some(Ok(sheet)) = finished {
+                self.sheet = sheet;
+                vector.density = density;
+                for renderer in [
+                    &mut self.values,
+                    &mut self.captions,
+                    &mut self.rows,
+                    &mut self.skin,
+                ] {
+                    renderer.set_sprites(device, queue, &self.sheet);
+                }
+            }
+        }
+        let wanted =
+            crate::render::hud_pixels_per_grid(self.space, viewport) * self.safe_area_scale;
+        if wanted <= 0.0 || (wanted - vector.density).abs() <= vector.density * 0.005 {
+            return;
+        }
+        let (icons, base, layout, art) = (
+            vector.icons.clone(),
+            vector.base.clone(),
+            vector.layout.clone(),
+            vector.art,
+        );
+        vector.pending = Some((
+            wanted,
+            oag_thread::Task::spawn("hud-vector-icons", move || {
+                oag_hud::svg::place(&base, &layout, art, &icons, wanted, &mut Vec::new())
+            }),
+        ));
+    }
+
     /// The context [`draw_list`] takes.
     #[must_use]
     pub fn context(&self) -> Context<'_> {
@@ -357,6 +443,7 @@ impl Overlay {
         countdown: Option<&str>,
         viewport: (f32, f32, f32, f32),
     ) -> Vec<oag_hud::boost_smear::GlowStamp> {
+        self.retarget(device, queue, viewport);
         let mut frame = if self.hud_shown {
             let cx = self.context();
             let mut list = draw_list(&cx, readout);
@@ -412,6 +499,7 @@ impl Overlay {
         viewport: (f32, f32, f32, f32),
     ) -> Vec<oag_hud::boost_smear::GlowStamp> {
         let count = readouts.len();
+        self.retarget(device, queue, viewport);
         let mut frame = if self.hud_shown {
             views_frame(&crate::hud_views::view_draws(
                 self.context(),

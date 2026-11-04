@@ -82,7 +82,7 @@ pub struct Manifest {
     pub oag: Option<semver::VersionReq>,
     /// `[extension]`: the WebAssembly modules the mod runs, if any.
     pub extension: Option<Extension>,
-    /// `[icons]`: the mod's own PNGs by name, as paths in the mod. A module's `hud-icon`
+    /// `[icons]`: the mod's own PNGs or SVGs by name, as paths in the mod. A module's `hud-icon`
     /// may name one.
     pub icons: std::collections::BTreeMap<String, String>,
     /// `[effects]`: the mod's own particle effects by name, as `.toml` paths in the mod
@@ -479,10 +479,11 @@ impl Manifest {
                     format!("{name:?} is not a name: letters, digits, '-', '_'"),
                 ));
             }
-            if !path.to_ascii_lowercase().ends_with(".png") || !has(path) {
+            let lower = path.to_ascii_lowercase();
+            if !(lower.ends_with(".png") || lower.ends_with(".svg")) || !has(path) {
                 return Err(bad(
                     "icons",
-                    format!("{name}: {path:?} is not a .png in the mod"),
+                    format!("{name}: {path:?} is not a .png or .svg in the mod"),
                 ));
             }
         }

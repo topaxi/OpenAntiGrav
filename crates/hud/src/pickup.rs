@@ -251,7 +251,7 @@ pub(super) fn pickup_model_draws(
 }
 
 /// Where one `<Mode3D><Model>` widget's flat quad sits on the layout's screen: `[x, y, w, h]`.
-fn model_rect(cx: &Context<'_>, name: &str) -> Option<[f32; 4]> {
+fn model_rect(cx: &IconFrame<'_>, name: &str) -> Option<[f32; 4]> {
     let model = cx.layout.models.iter().find(|model| model.name == name)?;
     let placed = cx.sheet.get(&model.src)?;
     let [w, h] = placed.quad_extent?;
@@ -281,7 +281,7 @@ fn model_draw(cx: &Context<'_>, name: &str, color: [f32; 4]) -> Option<Draw> {
     let model = cx.layout.models.iter().find(|model| model.name == name)?;
     let placed = cx.sheet.get(&model.src)?;
     Some(Draw::BlendedSprite {
-        rect: model_rect(cx, name)?,
+        rect: model_rect(&cx.frame(), name)?,
         uv: [
             placed.x as f32,
             placed.y as f32,
@@ -306,7 +306,7 @@ fn model_draw(cx: &Context<'_>, name: &str, color: [f32; 4]) -> Option<Draw> {
 /// title really draws, margins and all: the glyph a mod's icon stands in for. `None` where
 /// the layout, the sheet or the pixels do not give one (the icon is a model, the region is
 /// empty).
-fn reference_glyph(cx: &Context<'_>) -> Option<([f32; 2], [f32; 2])> {
+fn reference_glyph(cx: &IconFrame<'_>) -> Option<([f32; 2], [f32; 2])> {
     let turbo = oag_tables::weapons::Weapon::Turbo;
     let sprite = if let Some(table) = cx.art.pickup_icon_uv {
         let uv = table.get(turbo.index()).copied().flatten()?;
@@ -361,19 +361,49 @@ fn reference_glyph(cx: &Context<'_>) -> Option<([f32; 2], [f32; 2])> {
     Some((extent, centre))
 }
 
-/// A mod's own pickup icon: its art (the opaque box of the PNG, [`crate::sprite::Placed::quad_extent`]
-/// and [`crate::sprite::Placed::quad_centre`] where the loader measured it, else the whole
-/// image) scaled, aspect kept, to fill the box the title's own Turbo glyph fills and centred
-/// on it ([`reference_glyph`]), so a mod's icon is as big as a real one and sits where it
-/// sits (HD and Omega: the middle of the always-up frame instead); where the title's glyph cannot be read, the art is drawn at its own size on the
-/// pickup's backdrop frame. Either way it is shrunk to the frame if it would not fit it.
-/// Faded as the title's own icon is. **Chosen, not measured**: the art's margin never
-/// counts, so a PNG authored on the title's own texture cell and one cropped to its glyph
-/// draw alike. The frame is the layout's `PickupBackground` (2048: `PickupBgFrame`), else the
-/// `TurboIcon` sprite. A title that draws its icons as models (Pure) takes the backdrop
-/// model's quad as the frame and draws the PNG on it at its own size (the art is the glyph alone).
-pub(super) fn mod_icon_draw(cx: &Context<'_>, src: &str, look: Option<Look>) -> Option<Draw> {
-    let placed = cx.sheet.get(src)?;
+/// What a mod icon's slot is measured from: the layout, the sheet the title's own glyph is
+/// read off and the title's art table. Everything [`mod_icon_draw`] needs of a
+/// [`Context`], so a loader can size an icon before there is a context to draw it in.
+#[derive(Debug, Clone, Copy)]
+pub struct IconFrame<'a> {
+    /// The mode's parsed layout.
+    pub layout: &'a crate::Layout,
+    /// The sheet the title's Turbo glyph and backdrop model are read from.
+    pub sheet: &'a crate::sprite::Sheet,
+    /// How the title's HUD sprites reach the screen.
+    pub art: &'a oag_title::HudArt,
+}
+
+impl Context<'_> {
+    fn frame(&self) -> IconFrame<'_> {
+        IconFrame {
+            layout: self.layout,
+            sheet: self.sheet,
+            art: self.art,
+        }
+    }
+}
+
+/// Where a mod's icon goes: the pickup's frame, the box the art aims at, its middle, and
+/// whether the art fills that box (a title whose Turbo glyph is readable) or is only
+/// shrunk to the frame (Pure, which has no glyph to measure).
+struct Slot {
+    frame: [f32; 4],
+    aim: [f32; 2],
+    centre: [f32; 2],
+    fill: bool,
+}
+
+impl Slot {
+    /// The scale that takes art of `art` layout units to the slot.
+    fn fit(&self, art: [f32; 2]) -> f32 {
+        let to_aim = (self.aim[0] / art[0]).min(self.aim[1] / art[1]);
+        let to_frame = (self.frame[2] / art[0]).min(self.frame[3] / art[1]);
+        if self.fill { to_aim } else { to_aim.min(1.0) }.min(to_frame)
+    }
+}
+
+fn slot(cx: &IconFrame<'_>) -> Option<Slot> {
     let frame = if cx.art.pickup_icon_models.is_some() {
         // Pure draws its icons as models: the frame is the striped backdrop's quad.
         model_rect(cx, cx.art.pickup_icon_backdrop_model?)?
@@ -389,9 +419,6 @@ pub(super) fn mod_icon_draw(cx: &Context<'_>, src: &str, look: Option<Look>) -> 
         })?
         .rect
     };
-    let canvas = [placed.width as f32, placed.height as f32];
-    let art = placed.quad_extent.unwrap_or(canvas);
-    let offset = placed.quad_centre.unwrap_or([0.0, 0.0]);
     let (aim, centre, fill) = match reference_glyph(cx) {
         Some((extent, centre)) => (extent, centre, true),
         None => (
@@ -407,15 +434,68 @@ pub(super) fn mod_icon_draw(cx: &Context<'_>, src: &str, look: Option<Look>) -> 
     } else {
         centre
     };
-    let to_aim = (aim[0] / art[0]).min(aim[1] / art[1]);
-    let to_frame = (frame[2] / art[0]).min(frame[3] / art[1]);
-    let fit = if fill { to_aim } else { to_aim.min(1.0) }.min(to_frame);
-    let (w, h) = (canvas[0] * fit, canvas[1] * fit);
+    Some(Slot {
+        frame,
+        aim,
+        centre,
+        fill,
+    })
+}
+
+/// The size, in layout units, a vector icon whose drawing is `svg` layout units across is
+/// drawn at in the pickup's slot, so a loader can rasterise it at exactly that many pixels
+/// ([`crate::sprite::Sheet::texel_density`]). `None` where the slot cannot be measured.
+#[must_use]
+pub fn mod_icon_size(cx: IconFrame<'_>, svg: [f32; 2]) -> Option<[f32; 2]> {
+    if svg[0] <= 0.0 || svg[1] <= 0.0 {
+        return None;
+    }
+    let fit = slot(&cx)?.fit(svg);
+    Some([svg[0] * fit, svg[1] * fit])
+}
+
+/// A mod's own pickup icon: its art (the opaque box of the PNG, [`crate::sprite::Placed::quad_extent`]
+/// and [`crate::sprite::Placed::quad_centre`] where the loader measured it, else the whole
+/// image) scaled, aspect kept, to fill the box the title's own Turbo glyph fills and centred
+/// on it ([`reference_glyph`]), so a mod's icon is as big as a real one and sits where it
+/// sits (HD and Omega: the middle of the always-up frame instead); where the title's glyph cannot be read, the art is drawn at its own size on the
+/// pickup's backdrop frame. Either way it is shrunk to the frame if it would not fit it.
+/// Faded as the title's own icon is. **Chosen, not measured**: the art's margin never
+/// counts, so a PNG authored on the title's own texture cell and one cropped to its glyph
+/// draw alike. The frame is the layout's `PickupBackground` (2048: `PickupBgFrame`), else the
+/// `TurboIcon` sprite. A title that draws its icons as models (Pure) takes the backdrop
+/// model's quad as the frame and draws the PNG on it at its own size (the art is the glyph alone).
+pub(super) fn mod_icon_draw(cx: &Context<'_>, src: &str, look: Option<Look>) -> Option<Draw> {
+    let placed = cx.sheet.get(src)?;
+    let slot = slot(&cx.frame())?;
+    // Texels per layout unit: 1 for a PNG, the raster's own for a vector icon, whose
+    // quad is then laid on whole screen pixels so each texel lands on one.
+    let rasterised = cx.sheet.texel_density(src);
+    let density = rasterised.unwrap_or(1.0);
+    let canvas = [
+        placed.width as f32 / density,
+        placed.height as f32 / density,
+    ];
+    let art = placed
+        .quad_extent
+        .map_or(canvas, |e| e.map(|v| v / density));
+    let offset = placed
+        .quad_centre
+        .map_or([0.0, 0.0], |o| o.map(|v| v / density));
+    let fit = slot.fit(art);
+    let snap = |v: f32| {
+        if rasterised.is_some() {
+            (v * density).round() / density
+        } else {
+            v
+        }
+    };
+    let (w, h) = (snap(canvas[0] * fit), snap(canvas[1] * fit));
     let fade = look.map_or(1.0, |look| look.icon);
     Some(Draw::Sprite {
         rect: [
-            centre[0] - offset[0] * fit - w * 0.5,
-            centre[1] - offset[1] * fit - h * 0.5,
+            snap(slot.centre[0] - offset[0] * fit - w * 0.5),
+            snap(slot.centre[1] - offset[1] * fit - h * 0.5),
             w,
             h,
         ],
@@ -427,4 +507,9 @@ pub(super) fn mod_icon_draw(cx: &Context<'_>, src: &str, look: Option<Look>) -> 
         ],
         color: [fade.min(1.0); 4],
     })
+}
+
+#[cfg(test)]
+pub(crate) fn mod_icon_draw_for_test(cx: &Context<'_>, src: &str) -> Option<Draw> {
+    mod_icon_draw(cx, src, None)
 }

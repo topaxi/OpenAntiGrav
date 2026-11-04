@@ -67,7 +67,7 @@ pub(super) mod on {
     use std::sync::Arc;
 
     use super::*;
-    use crate::extensions::{Prepared, Source, prepare};
+    use crate::extensions::{IconSource, Prepared, Source, prepare};
 
     pub(in crate::tests) const STATE: i32 = 1024 + oag_ext_abi::STATE_AT as i32;
     pub(in crate::tests) const REPLY: i32 = 1024 + oag_ext_abi::REPLY_AT as i32;
@@ -730,18 +730,57 @@ pub(super) mod on {
     fn a_mods_icons_are_read_and_decoded_for_the_sheet_and_a_bad_one_is_named() {
         let png = oag_texture::png::encode_rgba(2, 1, &[255, 0, 0, 255, 0, 0, 255, 128]);
         let mut source = namer();
+        let icon = |name: &str, path: &str, read: crate::extensions::Reader| IconSource {
+            name: name.to_string(),
+            path: path.to_string(),
+            read,
+        };
         source.icons = vec![
-            ("badge".to_string(), Arc::new(move || Ok(png.clone()))),
-            ("broken".to_string(), Arc::new(|| Ok(b"not a png".to_vec()))),
-            (
-                "gone".to_string(),
+            icon("badge", "ui/badge.png", Arc::new(move || Ok(png.clone()))),
+            icon(
+                "broken",
+                "ui/broken.png",
+                Arc::new(|| Ok(b"not a png".to_vec())),
+            ),
+            icon(
+                "gone",
+                "ui/gone.png",
                 Arc::new(|| Err("no such file".to_string())),
+            ),
+            icon(
+                "vector",
+                "ui/vector.svg",
+                Arc::new(|| {
+                    Ok(
+                        br#"<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"/>"#
+                            .to_vec(),
+                    )
+                }),
+            ),
+            icon(
+                "torn",
+                "ui/torn.svg",
+                Arc::new(|| Ok(b"<svg xmlns=\"http://www.w3.org/2000/svg\" width=".to_vec())),
             ),
         ];
         let mut report = Vec::new();
-        let icons =
+        let all =
             crate::extensions::mod_icons(&[source.clone()], "wipeout-pulse", None, &mut report);
+        let icons = all.raster;
         assert_eq!(icons.len(), 1);
+        assert_eq!(
+            all.vector
+                .iter()
+                .map(|v| v.src.as_str())
+                .collect::<Vec<_>>(),
+            ["mod:test.names/vector"],
+            "an .svg is parsed, not decoded as a PNG; a torn one is left out"
+        );
+        let said = report.join("\n");
+        assert!(
+            said.contains("icon torn (ui/torn.svg) left out:") && said.contains("draws nothing"),
+            "the file and the parser's error: {said}"
+        );
         assert_eq!(icons[0].src, "mod:test.names/badge");
         assert_eq!((icons[0].width, icons[0].height), (2, 1));
         assert_eq!(icons[0].rgba, [255, 0, 0, 255, 0, 0, 255, 128]);
@@ -755,6 +794,7 @@ pub(super) mod on {
         other.titles = vec!["wipeout-pulse".to_string()];
         assert!(
             crate::extensions::mod_icons(&[other], "wipeout-pure", None, &mut Vec::new())
+                .raster
                 .is_empty(),
             "a mod for another title loads none of its icons"
         );

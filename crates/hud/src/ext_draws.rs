@@ -334,9 +334,11 @@ pub fn append(frame: &mut Frame, cx: &Context<'_>, outputs: &Outputs, grid: (f32
                 let Some(placed) = cx.sheet.get(src) else {
                     continue;
                 };
+                // A vector icon's raster has `density` texels to a layout unit.
+                let density = cx.sheet.texel_density(src).unwrap_or(1.0);
                 let (w, h) = (
-                    placed.width as f32 * item.scale,
-                    placed.height as f32 * item.scale,
+                    placed.width as f32 / density * item.scale,
+                    placed.height as f32 / density * item.scale,
                 );
                 frame.sprites.push(Draw::Sprite {
                     rect: [

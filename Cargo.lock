@@ -3272,6 +3272,7 @@ dependencies = [
  "oag-title",
  "oag-ui",
  "oag-vex",
+ "resvg",
  "serde",
  "thiserror 2.0.21",
  "toml",

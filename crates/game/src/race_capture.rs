@@ -406,7 +406,7 @@ pub fn capture(
         shadows,
         shadow_hulls,
         setup,
-        hud,
+        mut hud,
         track_panel,
         track_model,
         behind_glass,
@@ -1265,6 +1265,15 @@ pub fn capture(
             Some(framebuffer) => (framebuffer.output().clone(), rect),
             None => (view.clone(), viewport),
         };
+        // The mods' vector icons, rasterised at the pixels the capture draws them at (the
+        // window rasterises them on another thread, as it is resized).
+        let mut notes = Vec::new();
+        let pixels = crate::render::hud_pixels_per_grid(hud.space, hud_viewport)
+            * hud.art.safe_area_scale(options.hud_safe_area);
+        hud.rasterise_vector_icons(pixels, &mut notes);
+        for note in notes {
+            warn!("{note}");
+        }
         // Pure's glow lands before the panel and the HUD, so neither takes its haze
         // (`Looks::bloom_under_hud`); a no-op elsewhere.
         scene.composite_bloom_under_hud(&mut encoder, &hud_view, hud_viewport);

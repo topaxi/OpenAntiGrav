@@ -263,17 +263,26 @@ fn a_track_module_names_its_module_and_its_track_file() {
 }
 
 #[test]
-fn a_manifest_carries_icons_that_are_pngs_in_the_mod() {
+fn a_manifest_carries_icons_that_are_pngs_or_svgs_in_the_mod() {
     let text = format!("{MANIFEST_TEXT}\n[icons]\nbadge = \"ui/badge.png\"\n");
     let parsed = Manifest::parse(&text, &|path| path == "ui/badge.png").unwrap();
     assert_eq!(parsed.icons["badge"], "ui/badge.png");
     let missing = Manifest::parse(&text, &|_| false).unwrap_err().to_string();
     assert!(
-        missing.contains("badge") && missing.contains("not a .png in the mod"),
+        missing.contains("badge") && missing.contains("not a .png or .svg in the mod"),
         "{missing}"
     );
     let wrong = text.replace("ui/badge.png", "ui/badge.jpg");
-    assert!(Manifest::parse(&wrong, &|_| true).is_err(), "only a PNG");
+    assert!(
+        Manifest::parse(&wrong, &|_| true).is_err(),
+        "only a PNG or SVG"
+    );
+    let vector = text.replace("ui/badge.png", "ui/badge.SVG");
+    let parsed = Manifest::parse(&vector, &|_| true).unwrap();
+    assert_eq!(
+        parsed.icons["badge"], "ui/badge.SVG",
+        "a vector icon, any case"
+    );
     let spaced = text.replace("badge =", "\"bad name\" =");
     assert!(Manifest::parse(&spaced, &|_| true).is_err());
     assert!(
