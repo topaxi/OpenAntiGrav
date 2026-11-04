@@ -64,6 +64,7 @@ unnamed rather than forced.
 - [ships-effects.md](ships-effects.md) - `MagstripWake_Construct`, the first
   name recovered here, transferred from and to `vita-2048-eu-v104` in the
   same pass.
+- [audio-3d.md](audio-3d.md) - the patch's 3D audio: a 7.1 bed for everyone, audio objects for VR alone, authored pass-by front/back, `RearOcclusion` dead here and live on HD and 2048, and how SPATIAL AUDIO compares.
 - [wwise-sound.md](wwise-sound.md) - the sound path: banks loaded per mode and track,
   the `<cue>[_PC]__<bank>` event name, the legacy bank alias table, the countdown
   and the missile launch followed to their media.
