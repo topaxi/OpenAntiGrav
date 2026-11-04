@@ -611,6 +611,7 @@ impl Session {
                     // assume it is broken, and the frame limiter that comes
                     // with it would then look broken too.
                     self.gpu.output.set_vsync(&self.gpu.device, vsync);
+                    self.display.reset();
                     // The frames either side of a surface reconfigure are not
                     // frames anyone is going to present at that rate.
                     self.stalled = true;

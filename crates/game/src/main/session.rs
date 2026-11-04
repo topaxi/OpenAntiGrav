@@ -320,9 +320,25 @@ pub(crate) struct Session {
     /// The newest whole-frame GPU time the resolution controller was fed, in seconds: the
     /// governor's "is the GPU the bound side" reading.
     pub(crate) governor_gpu: Option<f32>,
+    /// The frame index [`Session::governor_gpu`] was written on, so a reading older than a few
+    /// frames (a build with no scene, a skipped window) is not taken for this frame's.
+    pub(crate) governor_gpu_at: u64,
     /// The last frame's swapchain acquire plus `present` time, in seconds, so the governor
     /// reads CPU time without the wait.
     pub(crate) last_present_seconds: f32,
+    /// What the output can show: the monitor's report and the frames that prove it
+    /// (`oag_present::refresh`), read through [`oag_present::refresh::held_hz`].
+    pub(crate) display: oag_present::refresh::Display,
+    /// The last display rate logged, so a change is one `debug` line.
+    pub(crate) logged_display_hz: Option<Option<u32>>,
+    /// When the monitor's report was last asked for.
+    pub(crate) display_polled: Option<web_time::Instant>,
+    /// The present mode the current race's display frames were taken under, or `None` outside a
+    /// race; a change drops the measurement.
+    pub(crate) display_mode: Option<wgpu::PresentMode>,
+    /// The surface's configure count the display frames were taken under; a rebuilt swapchain
+    /// (a resize, an outdated or lost surface) drops the measurement.
+    pub(crate) display_configures: u64,
     /// Where each window frame's input sample sat against its swapchain
     /// acquire, summed a second at a time and logged at `debug`. See
     /// [`frame_timing`].

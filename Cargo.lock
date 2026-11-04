@@ -3207,6 +3207,7 @@ dependencies = [
  "web-time",
  "wgpu",
  "winit",
+ "x11rb",
  "zip",
 ]
 

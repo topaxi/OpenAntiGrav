@@ -48,6 +48,9 @@ pub(crate) struct Output {
     /// The queue depth and fullscreen state the last configure logged, so the decision is said
     /// once per change rather than on every resize.
     logged: Option<(wgpu::PresentMode, u32, bool)>,
+    /// How many times the surface has been configured, so a reader that holds state about the
+    /// swapchain (`oag_present::refresh`) can tell it was rebuilt without every call site saying so.
+    pub(crate) configures: u64,
 }
 
 /// The window of an [`Output`], or nothing in a headless session.
@@ -60,6 +63,10 @@ pub(crate) struct Output {
 /// which is the loud failure for a path nobody has taught to run headless.
 pub(crate) struct Host {
     window: Option<Arc<Window>>,
+    /// The X server's own answer for the window's output, where winit's monitor report goes
+    /// stale after window creation.
+    #[cfg(target_os = "linux")]
+    live: Option<crate::x11_refresh::LiveRefresh>,
     /// A headless session's size, which no window reports.
     size: winit::dpi::PhysicalSize<u32>,
 }
@@ -67,6 +74,30 @@ pub(crate) struct Host {
 impl Host {
     pub(crate) fn window(window: Arc<Window>) -> Self {
         Self {
+            #[cfg(target_os = "linux")]
+            live: crate::x11_refresh::LiveRefresh::start(&window),
+            window: Some(window),
+            size: winit::dpi::PhysicalSize::new(0, 0),
+        }
+    }
+
+    /// The refresh rate of the window's output in millihertz, as live as the platform lets it
+    /// be: on X11 the server's answer through RandR, elsewhere (and before its first answer)
+    /// winit's monitor report.
+    pub(crate) fn refresh_millihertz(&self) -> Option<u32> {
+        #[cfg(target_os = "linux")]
+        if let Some(mhz) = self.live.as_ref().and_then(|live| live.millihertz()) {
+            return Some(mhz);
+        }
+        self.current_monitor()
+            .and_then(|monitor| monitor.refresh_rate_millihertz())
+    }
+
+    /// A seat's extra window: nothing reads its refresh, so it starts no X reader.
+    fn seat_window(window: Arc<Window>) -> Self {
+        Self {
+            #[cfg(target_os = "linux")]
+            live: None,
             window: Some(window),
             size: winit::dpi::PhysicalSize::new(0, 0),
         }
@@ -74,7 +105,12 @@ impl Host {
 
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     fn headless(size: winit::dpi::PhysicalSize<u32>) -> Self {
-        Self { window: None, size }
+        Self {
+            window: None,
+            #[cfg(target_os = "linux")]
+            live: None,
+            size,
+        }
     }
 
     pub(crate) fn current_monitor(&self) -> Option<winit::monitor::MonitorHandle> {
@@ -441,6 +477,7 @@ impl Gpu {
                 offered,
                 latency: 1,
                 logged: None,
+                configures: 0,
             },
             instance,
             adapter,
@@ -491,6 +528,7 @@ impl Gpu {
                 offered,
                 latency: 1,
                 logged: None,
+                configures: 0,
             },
             instance,
             adapter,
@@ -567,7 +605,7 @@ impl Gpu {
         config.view_formats = vec![config.format];
         let offered = surface.get_capabilities(&self.adapter).present_modes;
         let mut output = Output {
-            window: Host::window(window),
+            window: Host::seat_window(window),
             held: None,
             surface: Some(surface),
             offscreen: None,
@@ -576,6 +614,7 @@ impl Gpu {
             offered,
             latency: 1,
             logged: None,
+            configures: 0,
         };
         output.apply_modes(modes, 1);
         output.configure(&self.device);
@@ -639,6 +678,7 @@ impl Output {
     /// draw, which the caller already counts as a stall.
     pub(crate) fn configure(&mut self, device: &wgpu::Device) {
         self.held = None;
+        self.configures += 1;
         let max = device.limits().max_texture_dimension_2d;
         let (width, height) = clamp_extent(self.config.width, self.config.height, max);
         if (width, height) != (self.config.width, self.config.height) {

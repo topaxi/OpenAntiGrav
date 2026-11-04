@@ -118,6 +118,7 @@ web-time = "1.1.0"
 wayland-backend.workspace = true
 wayland-client.workspace = true
 wayland-protocols.workspace = true
+x11rb.workspace = true
 
 # Platform-native H.264 decode for the PSP `.PMF` path, behind the
 # `native-video` feature: `just build`/`just check`/CI never touch

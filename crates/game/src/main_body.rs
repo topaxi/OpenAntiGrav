@@ -85,6 +85,9 @@ mod typing;
 mod window;
 #[path = "main/windows.rs"]
 mod windows;
+#[cfg(target_os = "linux")]
+#[path = "main/x11_refresh.rs"]
+mod x11_refresh;
 
 use crate::app::App;
 use crate::args::{autopilot_pilot, give_weapon};
