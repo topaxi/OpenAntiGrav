@@ -102,12 +102,12 @@ impl Idle {
             self.rule.pad_spoke(now);
         }
         let want = !self.hidden && self.rule.wanted(race_running, now);
-        if want != self.held {
-            if let Some(backend) = &mut self.backend {
-                backend.hold(want);
-                self.held = want;
-                trace!("idle inhibitor: {}", if want { "held" } else { "released" });
-            }
+        if want != self.held
+            && let Some(backend) = &mut self.backend
+        {
+            backend.hold(want);
+            self.held = want;
+            trace!("idle inhibitor: {}", if want { "held" } else { "released" });
         }
     }
 
