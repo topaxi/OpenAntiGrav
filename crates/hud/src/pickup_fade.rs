@@ -7,9 +7,10 @@
 //! weapon's table word scaled, alpha included, by [`ease_with_bump`]`(3 T, 1)`. After use `T`
 //! runs on from `0.5` to `1.0` and the word is scaled by [`ease_with_bump`]`((2 - 2 T) * 1.5, 1)`,
 //! after a hold at full strength while the icon's own timer is above `0.1`. HD's
-//! `Hud_UpdatePickupBar` (`0x0008df30`) has the same shape with rate `1.5` (read: the rate, the
-//! cap, the `x3`, the `-25.0`); its hold threshold and fade-out branch are **inherited from
-//! Pulse, not read**. Omega inherits HD's.
+//! `Hud_UpdatePickupBar` (`0x0008df30`) has the same shape with rate `1.5`; its icon gate, hold
+//! threshold, fade-out branch and the absence of a size pulse are read and were followed live
+//! (`docs/ghidra/functions/ps3-hdfury-eu/hd-pickup-table.md`). Omega's update steps by the same
+//! `1.5`.
 //!
 //! Render-side only: the state advances per rendered tick off the held weapon and `dt`, lives in
 //! the HUD's per-slot memory and never reaches the simulation or the race hash.
