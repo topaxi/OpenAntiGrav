@@ -145,6 +145,13 @@ impl Scene {
         projection: Mat4,
         settings: &ViewSettings<'_>,
     ) {
+        let camera = shot.view.inverse();
+        log::debug!(
+            "portal view from {} forward {} up {}",
+            camera.w_axis.truncate(),
+            -camera.z_axis.truncate(),
+            camera.y_axis.truncate(),
+        );
         let mut portal = self.portal.borrow_mut();
         let target = portal.get_or_insert_with(|| {
             let target = Target::new(device, self.pass_format, self.sample_count());

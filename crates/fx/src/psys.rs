@@ -1123,6 +1123,9 @@ pub const MAX_INSTANCES: usize = 32;
 /// looking at - would be the ones dropped.
 const RESERVED_FOR_BURSTS: usize = 6;
 
+/// How many instances [`Stage::play_held`] keeps at once; past it, it is [`Stage::play`].
+const MAX_HELD: usize = 4;
+
 /// A [`Stage`] instance a caller still owns.
 ///
 /// Carries the instance's generation, so a handle kept past
@@ -1146,6 +1149,8 @@ struct Instance {
     /// Set while a caller owns this instance. An attached instance is never
     /// recycled out from under its owner.
     attached: bool,
+    /// Not recycled by a burst while it runs: see [`Stage::play_held`].
+    held: bool,
     /// Bumped every time the slot is claimed.
     generation: u32,
     /// The emitter frame's `+Y` in world space - see [`Stage::orient`].
@@ -1158,6 +1163,7 @@ impl Instance {
         system: System::new(),
         anchor: Vec3::ZERO,
         attached: false,
+        held: false,
         generation: 0,
         up: Vec3::Y,
     };
@@ -1227,11 +1233,33 @@ impl Stage {
             self.instances
                 .iter()
                 .enumerate()
-                .filter(|(_, instance)| !instance.attached)
+                .filter(|(_, instance)| {
+                    !instance.attached && !(instance.held && instance.system.is_running())
+                })
                 .min_by_key(|(_, instance)| instance.system.alive_count())
                 .map(|(index, _)| index)
         })?;
         Some(self.claim(index, effect, point, scale, false))
+    }
+
+    /// [`Self::play`] for a surface that stands somewhere, a mod's portal or marker: it holds
+    /// its slot until it ends. A burst recycles the live instance with the fewest particles,
+    /// which is the one lone quad a surface is, and a pool full of a title's sparks would take
+    /// it on the next tick. At most [`MAX_HELD`], so bursts always have the rest.
+    pub fn play_held(
+        &mut self,
+        effect: &std::sync::Arc<Effect>,
+        point: Vec3,
+        scale: f32,
+    ) -> Option<Playing> {
+        let held = self
+            .instances
+            .iter()
+            .filter(|instance| instance.held && instance.system.is_running())
+            .count();
+        let playing = self.play(effect, point, scale)?;
+        self.instances[usize::from(playing.index)].held = held < MAX_HELD;
+        Some(playing)
     }
 
     /// Starts `effect` at `point` and hands the caller a handle to keep it
@@ -1368,6 +1396,7 @@ impl Stage {
         instance.system = System::new();
         instance.anchor = point;
         instance.attached = attached;
+        instance.held = false;
         instance.up = Vec3::Y;
         instance.system.ignite(effect, point, scale);
         Playing {

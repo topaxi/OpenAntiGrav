@@ -157,6 +157,45 @@ fn a_burst_never_recycles_an_attached_instance() {
     }
 }
 
+/// A mod's surface is one quad, the fewest particles in a pool a title's sparks have filled, so
+/// a plain burst would take its slot on the next tick (Omega's grid: all 32 were
+/// `WO_TRAIL_HITSHIP`, and the surface drew on no frame).
+#[test]
+fn a_full_pool_of_bursts_leaves_a_held_surface_standing() {
+    let mut stage = Stage::new();
+    let burst = effect("burst", false, 4.0);
+    let surface = effect("surface", false, 1.0);
+    let standing = |stage: &Stage| {
+        stage
+            .instances
+            .iter()
+            .filter(|instance| {
+                instance
+                    .effect
+                    .as_ref()
+                    .is_some_and(|e| e.name == "surface")
+            })
+            .count()
+    };
+    for _ in 0..MAX_INSTANCES {
+        stage.play(&burst, Vec3::ZERO, 1.0);
+    }
+    assert!(stage.play_held(&surface, Vec3::ZERO, 1.0).is_some());
+    for _ in 0..MAX_INSTANCES * 2 {
+        assert!(stage.play(&burst, Vec3::ZERO, 1.0).is_some());
+    }
+    assert_eq!(standing(&stage), 1, "a burst took the surface's slot");
+
+    // The cap: bursts always have the rest of the pool.
+    for _ in 0..MAX_HELD * 2 {
+        stage.play_held(&surface, Vec3::ZERO, 1.0);
+    }
+    for _ in 0..MAX_INSTANCES * 2 {
+        stage.play(&burst, Vec3::ZERO, 1.0);
+    }
+    assert_eq!(standing(&stage), MAX_HELD);
+}
+
 #[test]
 fn a_handle_kept_past_detach_moves_nothing() {
     let mut stage = Stage::new();
