@@ -776,6 +776,10 @@ texture, none diffuse", archive miss and decode refused are 0. Two causes were o
 | Truncated path in the Vita texture scan outranked the lighting-only fallback (`fc15_effects_vscroll_water`, `ata/art/.../brick_win emissivea.gxt`) | 2048 `square` | 4 | 0 |
 | Micro-tiled BC1 refused (`grass_terrain_bc1.gnf` and the four `grass_patch_*_terrain_bc1.gnf`; `gnf.md`, "BC1 under `TileMode(13)`") | Omega `park` 61, `arena` 42, `square` 32, `tower` 25 | 160 | 0 |
 
+Square's water is four draws at the edge of a frame: of five frames of 2048 Square read before and
+after (grid, and the autopilot at 500, 1,000, 1,600 and 2,300 ticks) four are pixel-identical and
+one (1,600) differs by a faint global shift, so no frame shows the water as a surface that changed.
+
 The Vita scan took any word that holds an address inside a longer path as a texture; it now
 requires a string to start where the pointer says (the PS4 scan already did).
 
@@ -796,12 +800,25 @@ or the vertex colour is unmeasured.
 
 ### Omega `Uv1` of type 0
 
-The 23 submeshes are in the Zone circuits' `Data/environments/zone_1` to `zone_4`
-`track.rcsmodel` (4, 5, 7 and 7), which the game does not load: it races `track.final.rcsmodel`.
-A race render of `zone_2` and `zone_4` is pixel-identical before and after (0 of 2,073,600
-pixels differ), so the change moves no race frame; the census pins it (a reader that takes the
-pair as halves disagrees with its own declaration on exactly these 23). 2048 against Omega:
-**checked, differs**: the Vita pair is type `9`, already decoded.
+The 23 submeshes are in the Omega Zone circuits' `Data/environments/zone_1` to `zone_4`
+`track.rcsmodel` (4, 5, 7 and 7); no `.final` model exists for them, so a race loads exactly these
+(`zone_2`: 115 submeshes, 84 of them "name no texture"). Their material is
+`tracktexture_with_normal`. **No frame I could produce moves**: `zone_2` before against after is
+pixel-identical (0 of 2,073,600) on the grid in `single_race` and `zone` mode, and in `zone` mode
+with the autopilot at 600 and 1,500 ticks. Not shown, only suspected: the draws that carry these
+coordinates sample no diffuse picture (the material names none), so the coordinate is read by
+nothing the frame shows. The census pins the reader: one that takes the pair as halves disagrees
+with its own declaration on exactly these 23. Lineage, 2048 against Omega: **checked, differs**
+(the Vita pair is type `9`, already decoded).
+
+### Lineage of the exit counts (2048 and Omega)
+
+- The exit census itself: **ported**. Both titles are counted by the same `Report::unbound` and
+  asserted by the same `only_by_design`, 2048 on base, `dlc1`, `dlc2` and the patch archives, Omega
+  on every circuit of the five base archives.
+- The string-start check in the Vita texture scan: **checked, differs**. The PS4 scan already
+  required a NUL before the string; only the Vita one lacked it.
+- Micro-tiled BC1: **checked, differs**. 2048's textures are `.gxt`; none refuses on a 2048 circuit.
 
 ## What is not decoded
 

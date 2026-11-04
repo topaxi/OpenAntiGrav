@@ -301,11 +301,11 @@ fn the_2048_circuits_bind_no_more_lookups_than_the_known_gap() {
     only_by_design("2048", &unbound);
 }
 
-/// 2048's DLC circuits, the two DLC packages over the base archive for the textures they
-/// borrow. Their materials are the ones the base circuits' were: no named texture is missing.
+/// 2048's DLC circuits and the patch's re-shipped ones, the two DLC packages and the two patch
+/// archives over the base archive for the textures they borrow. Their materials are the ones the base circuits' were: no named texture is missing.
 #[test]
 #[ignore = "needs data/extracted/vita/PCSF00007"]
-fn the_2048_dlc_circuits_bind_every_texture_they_name() {
+fn the_2048_dlc_and_patch_circuits_bind_every_texture_they_name() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .join("data/extracted/vita/PCSF00007");
@@ -313,6 +313,8 @@ fn the_2048_dlc_circuits_bind_every_texture_they_name() {
         "base/PSP2/data.psarc",
         "dlc1/PSP2/dlc1.psarc",
         "dlc2/PSP2/dlc2.psarc",
+        "patch-v104/PSP2/data1.psarc",
+        "patch-v104/PSP2/data2.psarc",
     ];
     if !root.join(paths[1]).exists() {
         assert!(
@@ -333,5 +335,5 @@ fn the_2048_dlc_circuits_bind_every_texture_they_name() {
             || p.contains("/environments/") && p.ends_with("/track_reversed.rcsmodel")
     });
     assert!(n >= 4, "the DLC circuits were found: {n}");
-    only_by_design("2048 DLC", &unbound);
+    only_by_design("2048 DLC and patch", &unbound);
 }
