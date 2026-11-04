@@ -187,10 +187,13 @@ pub const ROWS: &[Row] = &[
 /// The name of every pattern a row fires, once each: what a title's loader
 /// reads from its archive.
 pub fn pattern_names() -> impl Iterator<Item = &'static str> {
-    ROWS.iter()
+    let rows = ROWS
+        .iter()
         .enumerate()
         .filter(|(i, row)| ROWS[..*i].iter().all(|r| r.pattern != row.pattern))
-        .map(|(_, row)| row.pattern)
+        .map(|(_, row)| row.pattern);
+    rows.chain(super::contact::WALL)
+        .chain(super::contact::LANDING)
 }
 
 /// Patterns the disc loads and no row fires yet, each with the reason.

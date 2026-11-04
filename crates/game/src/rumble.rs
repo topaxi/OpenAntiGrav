@@ -182,7 +182,16 @@ pub fn plays(token: &str, original: Rumble) -> Option<(Set, SmallMotor)> {
 /// writes to the pads. Nothing here is state a replay or a hash sees.
 #[derive(Debug)]
 pub struct Rumbler {
-    seats: Vec<(usize, Feed)>,
+    seats: Vec<Seat>,
+}
+
+/// One person's feed and what carries from tick to tick.
+#[derive(Debug)]
+struct Seat {
+    slot: usize,
+    feed: Feed,
+    /// Last tick's speed towards the ground, the touchdown speed's source.
+    falling: f32,
 }
 
 impl Rumbler {
@@ -199,9 +208,13 @@ impl Rumbler {
             set,
             drop_position: Mode::from_name(token) == Some(Mode::Original) && race.people() <= 1,
         };
-        let seats: Vec<(usize, Feed)> = (0..oag_gameplay::MAX_PLAYERS)
+        let seats: Vec<Seat> = (0..oag_gameplay::MAX_PLAYERS)
             .filter(|&slot| race.sim.world.person_flown(slot) && race.heard_here(slot))
-            .map(|slot| (slot, Feed::new(library.clone(), law, rules)))
+            .map(|slot| Seat {
+                slot,
+                feed: Feed::new(library.clone(), law, rules),
+                falling: 0.0,
+            })
             .collect();
         (!seats.is_empty()).then_some(Self { seats })
     }
@@ -209,18 +222,30 @@ impl Rumbler {
     /// One simulation tick. Call it after `Race::tick` and before the sound
     /// drains the cues.
     pub fn tick(&mut self, race: &Race, paused: bool, out: &mut dyn MotorOutput) {
-        for (slot, feed) in &mut self.seats {
+        let dt = race.dt();
+        for seat in &mut self.seats {
+            let slot = seat.slot;
             for event in race.pending_cues() {
-                feed.event(event, *slot);
+                seat.feed.event(event, slot);
             }
-            feed.levels(levels_of(race, *slot));
-            let ship = race.sim.world.ships.get(*slot);
+            seat.feed.levels(levels_of(race, slot));
+            seat.feed
+                .wall(race.wall_contact_of(slot).map(|c| (c.size, c.side)), dt);
+            let ship = race.sim.world.ships.get(slot);
+            let physics = ship.map(|s| &s.physics);
+            // Touching down: grounded now and not on the tick before. The speed
+            // is the last airborne tick's, since the hover response has already
+            // taken the rest out of this one.
+            let touching = physics.is_some_and(|p| p.grounded > 0.0 && p.grounded_prev <= 0.0);
+            seat.feed
+                .touchdown(if touching { seat.falling } else { 0.0 }, dt);
+            seat.falling = physics.map_or(0.0, |p| -p.body.linear_velocity.dot(p.body.up()));
             let ctx = StepContext {
                 race: true,
                 paused,
-                listener: ship.map_or([0.0; 3], |s| s.physics.body.position.to_array()),
+                listener: physics.map_or([0.0; 3], |p| p.body.position.to_array()),
             };
-            feed.drive(ctx, *slot, out);
+            seat.feed.drive(ctx, slot, out);
         }
     }
 
@@ -228,8 +253,8 @@ impl Rumbler {
     #[must_use]
     pub fn fired(&self) -> Vec<(&'static str, u32)> {
         let mut total: Vec<(&'static str, u32)> = Vec::new();
-        for (_, feed) in &self.seats {
-            for &(name, count) in feed.fired() {
+        for seat in &self.seats {
+            for &(name, count) in seat.feed.fired() {
                 match total.iter_mut().find(|(n, _)| *n == name) {
                     Some((_, c)) => *c += count,
                     None => total.push((name, count)),
@@ -241,8 +266,8 @@ impl Rumbler {
 
     /// Ends every voice and silences the pads: a race left.
     pub fn stop(&mut self, out: &mut dyn MotorOutput) {
-        for (_, feed) in &mut self.seats {
-            feed.clear();
+        for seat in &mut self.seats {
+            seat.feed.clear();
         }
         out.silence();
     }

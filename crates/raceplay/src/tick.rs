@@ -688,6 +688,7 @@ impl Race {
         {
             let shielded = self.sim.world.ships[slot].physics.shield_pickup_timer > 0.0;
             self.raise_contact_cue(slot, evaluated.wall.impact, shielded);
+            self.note_wall_contact(slot, &evaluated.wall);
         }
         // The sparks, the shake and the shield edge are the seat's own: the
         // craft this machine's person flies, which is `primary_slot` except on a

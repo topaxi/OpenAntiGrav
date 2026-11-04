@@ -8,6 +8,7 @@
 
 use oag_gameplay::cue::CueEvent;
 
+use super::contact::{LANDING, Selector, WALL};
 use super::map::{Edge, End, Level, ROWS, Row, Scope, Set, Shape, Trigger};
 use super::{Handle, MotorOutput, Motors, Player, SmallMotor, StepContext};
 use oag_tables::rumble::Library;
@@ -58,6 +59,7 @@ pub struct Feed {
     /// How many voices each pattern has started, by name, in first-fired
     /// order: what a run reports.
     fired: Vec<(&'static str, u32)>,
+    selector: Selector,
 }
 
 impl Feed {
@@ -65,6 +67,7 @@ impl Feed {
     #[must_use]
     pub fn new(library: Library, law: SmallMotor, rules: Rules) -> Self {
         let ids = ROWS.iter().map(|r| library.index_of(r.pattern)).collect();
+        let selector = Selector::new(&library);
         Self {
             player: Player::new(library, law),
             rules,
@@ -72,6 +75,7 @@ impl Feed {
             held: vec![None; ROWS.len()],
             previous: Levels::default(),
             fired: Vec::new(),
+            selector,
         }
     }
 
@@ -173,11 +177,28 @@ impl Feed {
         }
     }
 
+    /// This tick's wall contact `(size, side)`, `None` with none, over `dt`
+    /// seconds (`docs/gameplay/rumble.md`, "Contact and landing").
+    pub fn wall(&mut self, reading: Option<(f32, f32)>, dt: f32) {
+        if let Some(band) = self.selector.contact(&mut self.player, reading, dt) {
+            self.note(WALL[band]);
+        }
+    }
+
+    /// The speed the craft meets the ground at this tick, 0 when it is not
+    /// touching down.
+    pub fn touchdown(&mut self, v: f32, dt: f32) {
+        if let Some(band) = self.selector.landing(&mut self.player, v, dt) {
+            self.note(LANDING[band]);
+        }
+    }
+
     /// Ends every voice: a race left, a pad lost.
     pub fn clear(&mut self) {
         self.player.stop_all();
         self.held.iter_mut().for_each(|h| *h = None);
         self.previous = Levels::default();
+        self.selector.clear();
     }
 
     /// One pad update, sent to `seat`'s pad.
