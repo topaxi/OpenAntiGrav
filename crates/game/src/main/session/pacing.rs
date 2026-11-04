@@ -110,7 +110,7 @@ impl Session {
     /// a second so a window moved to another monitor follows. Only race frames with a timed
     /// GPU cost count: without the cost a slow GPU cannot be told from a slow display.
     pub(super) fn feed_display(&mut self, frame_seconds: Option<f32>, wait: f32) {
-        if self.frame_index % 60 == 0 {
+        if self.frame_index.is_multiple_of(60) {
             let monitor = self.gpu.output.window.current_monitor();
             let reported = monitor.as_ref().and_then(|m| m.refresh_rate_millihertz());
             log::trace!("monitor reports {reported:?} mHz");
