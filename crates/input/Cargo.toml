@@ -19,6 +19,8 @@ winit.workspace = true
 
 [dev-dependencies]
 oag-mod.workspace = true
+[dev-dependencies]
+oag-core.workspace = true
 
 [lints]
 workspace = true

@@ -11,6 +11,7 @@
 
 use oag_tables::rumble::{Class, Library, Pattern, Priority};
 
+pub mod feed;
 pub mod map;
 
 /// How the small motor reads the mixed voices' small tracks.
