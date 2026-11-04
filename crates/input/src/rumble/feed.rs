@@ -3,8 +3,8 @@
 //! A [`Feed`] turns a race's per-tick output into voices. Edges arrive as the
 //! [`CueEvent`]s the simulation already raises for sound; held conditions
 //! arrive as a [`Levels`] set recomputed every tick, so a seek, a restart or a
-//! lost cue cannot leave a motor running (`handover/gameplay/controller-rumble.md`
-//! is the design; `docs/gameplay/rumble.md` the law).
+//! lost cue cannot leave a motor running (`docs/gameplay/rumble.md`, "Player and
+//! device").
 
 use oag_gameplay::cue::CueEvent;
 
