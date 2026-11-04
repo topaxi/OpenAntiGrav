@@ -1,8 +1,8 @@
 ---
-status: measure
+status: parked
 titles: [hd]
 updated: 2026-11-04
-summary: "With HD's inherited launch boost on, the Plasma ride test's worst height error reads 2.37 against its 2.0 tolerance; the test now pins the boost off"
+summary: "Measured: the 2.37 is a reattach ripple over a dip the unboosted craft also crosses, not a ride-law error; pin stays, thread can be deleted"
 ---
 
 # Plasma ride height under HD's launch boost
@@ -15,13 +15,12 @@ against the test's 2.0 tolerance. Nobody has looked at why.
 
 ## Open
 
-- Whether 2.37 is only a different firing point (a bank the shots never covered) or a
-  real error in the Plasma's ride over a bank at the higher launch speed.
+- Nothing in the ride law. 2.37 is a reattach ripple over a dip (the same one the
+  unboosted craft crosses, hidden by the settling window); evidence in
+  `docs/gameplay/projectile-floor.md`, "HD Plasma, launch boost on". Optional: an HD
+  capture over that stretch (x ~770, y -131, `01_Vineta_K`) to show the original rings
+  the same way; not needed to keep the pin.
 
 ## Next Steps
 
-1. Run the test with the boost on and log, per tick, where the bolt fires and where its
-   worst error falls; compare against the same bank without the boost.
-2. If the error tracks the bank and not the boost, the ride law over banks needs a
-   capture on that stretch; if it tracks the boost alone, keep the pin and say why on
-   the test.
+1. Delete this thread when the maintainer accepts the verdict.
