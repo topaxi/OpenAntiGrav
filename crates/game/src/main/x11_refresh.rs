@@ -49,9 +49,12 @@ impl LiveRefresh {
             .name("x11-refresh".into())
             .spawn(move || {
                 loop {
-                    let rate = read(&connection, root, id).unwrap_or(UNKNOWN);
-                    if shared.swap(rate, Ordering::Relaxed) != rate {
-                        log::debug!("X server reports {rate} mHz for the window's output (0: none)");
+                    // A failed round keeps the last answer: the fallback is a frozen monitor
+                    // report, which is wrong through a dock.
+                    if let Some(rate) = read(&connection, root, id)
+                        && shared.swap(rate, Ordering::Relaxed) != rate
+                    {
+                        log::debug!("X server reports {rate} mHz for the window's output");
                     }
                     if wake.recv_timeout(POLL_EVERY) != Err(RecvTimeoutError::Timeout) {
                         return;
@@ -65,8 +68,7 @@ impl LiveRefresh {
         })
     }
 
-    /// The last rate the server gave for the window's output, `None` before the first answer or
-    /// when it gave none.
+    /// The last rate the server gave for the window's output, `None` before its first answer.
     pub(crate) fn millihertz(&self) -> Option<u32> {
         Some(self.millihertz.load(Ordering::Relaxed)).filter(|&mhz| mhz != UNKNOWN)
     }
@@ -120,7 +122,9 @@ fn mode_millihertz(mode: &randr::ModeInfo) -> Option<u32> {
         clock *= 2;
     }
     let scan = u64::from(mode.htotal) * vtotal;
-    (scan != 0).then(|| ((clock + scan / 2) / scan) as u32)
+    (scan != 0)
+        .then(|| (clock + scan / 2) / scan)
+        .and_then(|mhz| u32::try_from(mhz).ok())
 }
 
 /// One round of questions: the window's rectangle on the root, and each active output's

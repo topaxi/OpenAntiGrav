@@ -93,6 +93,16 @@ impl Host {
             .and_then(|monitor| monitor.refresh_rate_millihertz())
     }
 
+    /// A seat's extra window: nothing reads its refresh, so it starts no X reader.
+    fn seat_window(window: Arc<Window>) -> Self {
+        Self {
+            #[cfg(target_os = "linux")]
+            live: None,
+            window: Some(window),
+            size: winit::dpi::PhysicalSize::new(0, 0),
+        }
+    }
+
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     fn headless(size: winit::dpi::PhysicalSize<u32>) -> Self {
         Self {
@@ -595,7 +605,7 @@ impl Gpu {
         config.view_formats = vec![config.format];
         let offered = surface.get_capabilities(&self.adapter).present_modes;
         let mut output = Output {
-            window: Host::window(window),
+            window: Host::seat_window(window),
             held: None,
             surface: Some(surface),
             offscreen: None,

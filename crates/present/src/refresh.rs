@@ -197,7 +197,9 @@ impl Display {
     /// scale rises until the loop fills it.
     #[must_use]
     pub fn hz(&self) -> Option<u32> {
-        let reported = self.reported_millihertz.map(|mhz| (mhz + 500) / 1000);
+        let reported = self
+            .reported_millihertz
+            .map(|mhz| mhz.saturating_add(500) / 1000);
         match (self.measured.hz(), reported) {
             (Some(m), Some(r)) => Some(m.max(r)),
             (m, r) => m.or(r),
