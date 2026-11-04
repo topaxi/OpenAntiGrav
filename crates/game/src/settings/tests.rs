@@ -1342,7 +1342,7 @@ fn the_reset_prompt_is_offered_only_off_default() {
         oag_disc::Platform::Ps4,
         &strings,
     );
-    assert_eq!(menu.reset_glyph(), None, "Omega's glyphs are unread");
+    assert_eq!(menu.reset_glyph(), Some('δ'), "Omega's Square stand-in");
 }
 
 /// The footer's reset prompt, as `MenuStage` and `--menu-page` ask for it: nothing while the

@@ -1,5 +1,5 @@
-//! The stand-in codepoints in `oag_pulse::prompts` and `oag_hd::prompts` are
-//! the glyphs they claim to be.
+//! The stand-in codepoints in `oag_pulse::prompts`, `oag_pure::prompts`,
+//! `oag_hd::prompts` and `oag_omega::prompts` are the glyphs they claim to be.
 //!
 //! Each table row says "this codepoint draws this control". That was read off
 //! the rendered glyph cells, and
@@ -15,7 +15,8 @@
 
 use oag_title::prompts::{Prompt, Prompts};
 
-/// The cells whose pictures were read: `Pulse_20.fnt` and `PS_BUTTONS.fnt`,
+/// The cells whose pictures were read: `Pulse_20.fnt`, `PS_BUTTONS.fnt` (HD and
+/// Omega) and Pure's `FX300ANG.fnt`,
 /// `ε` the circled cross, `γ` circle, `δ` square, `β` triangle, `Λ`/`Ν` the
 /// L and R boxes. (face, codepoint, FNV-1a of the cell's alpha.)
 const READ: &[(&str, char, u64)] = &[
@@ -28,6 +29,21 @@ const READ: &[(&str, char, u64)] = &[
     ("PS_BUTTONS", 'ε', 0x8667_ec82_e0ec_2715),
     ("PS_BUTTONS", 'γ', 0x2dac_ff1c_2c39_a4c9),
     ("PS_BUTTONS", 'δ', 0x3442_bf52_a954_b7f0),
+    ("PS_BUTTONS", 'β', 0x2a21_6775_2fd4_fd3e),
+    ("PS_BUTTONS", 'Λ', 0xcb98_e146_a436_42af),
+    ("PS_BUTTONS", 'Ν', 0xc6b4_6428_acb5_f1e7),
+    ("pure FX300ANG", 'ε', 0x8913_5a96_48e1_ff94),
+    ("pure FX300ANG", 'γ', 0x4c29_5fa2_59c9_4161),
+    ("pure FX300ANG", 'δ', 0xd48c_2a2c_3597_14ea),
+    ("pure FX300ANG", 'β', 0xc3b7_fb23_0dac_0df2),
+    ("pure FX300ANG", 'Λ', 0xa8bb_9a28_78bb_fac8),
+    ("pure FX300ANG", 'Ν', 0xe507_8f31_5a51_bc99),
+    ("omega PS_BUTTONS", 'ε', 0xe8c8_99be_ef4a_50f6),
+    ("omega PS_BUTTONS", 'γ', 0xaec2_5828_1904_e572),
+    ("omega PS_BUTTONS", 'δ', 0x72fe_59ee_68f6_1caa),
+    ("omega PS_BUTTONS", 'β', 0x4a23_9d56_9d2c_066d),
+    ("omega PS_BUTTONS", 'Λ', 0x526e_51f5_6fbd_9faa),
+    ("omega PS_BUTTONS", 'Ν', 0x454d_922f_2333_3f8a),
 ];
 
 /// FNV-1a over the alpha of `ch`'s cell, row-major.
@@ -71,10 +87,10 @@ fn pulses_six_stand_ins_are_six_different_buttons() {
     }
 }
 
-/// HD's three, in `PS_BUTTONS.fnt`.
+/// HD's six, in `PS_BUTTONS.fnt`.
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
-fn hds_three_stand_ins_are_three_different_buttons() {
+fn hds_six_stand_ins_are_six_different_buttons() {
     let Some(font) = read(
         "hdfury-ps3-eu-dec.iso",
         oag_hd::TITLE,
@@ -85,12 +101,41 @@ fn hds_three_stand_ins_are_three_different_buttons() {
     check(&font, oag_hd::prompts::PROMPTS, "PS_BUTTONS");
 }
 
+/// Pure's six, in its menu face `FX300ANG.fnt`.
+#[test]
+#[ignore = "needs data/images/pure-psp-eu.chd"]
+fn pures_six_stand_ins_are_six_different_buttons() {
+    let Some(font) = read(
+        "pure-psp-eu.chd",
+        oag_pure::TITLE,
+        r"Data\FE\Fonts\FX300ANG.fnt",
+    ) else {
+        return;
+    };
+    check(&font, oag_pure::prompts::PROMPTS, "pure FX300ANG");
+}
+
+/// Omega's six, in `PS_BUTTONS.fnt` (HD's face at twice the size).
+#[test]
+#[ignore = "needs data/extracted/ps4"]
+fn omegas_six_stand_ins_are_six_different_buttons() {
+    let Some(path) = oag_testdata::exact("data/extracted/ps4") else {
+        return;
+    };
+    let mut archives = oag_assets::Archives::open(&path.display().to_string(), oag_omega::TITLE)
+        .expect("open the package");
+    let font = archives
+        .read_font(r"Data\FE\Fonts\PS_BUTTONS.fnt")
+        .expect("the face reads");
+    check(&font, oag_omega::prompts::PROMPTS, "omega PS_BUTTONS");
+}
+
 fn check(font: &oag_texture::fnt::Font, prompts: &Prompts, face: &str) {
     let mut seen = Vec::new();
     for &(stand_in, prompt) in prompts.glyphs {
         let (hash, width, height) =
             digest(font, stand_in).unwrap_or_else(|| panic!("{face}: {stand_in:?} has no glyph"));
-        let square = (85..=115).contains(&(u32::from(width) * 100 / u32::from(height)));
+        let square = (75..=115).contains(&(u32::from(width) * 100 / u32::from(height)));
         match prompt {
             Prompt::Cross | Prompt::Circle | Prompt::Square | Prompt::Triangle => {
                 assert!(

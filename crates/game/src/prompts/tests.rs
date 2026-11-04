@@ -83,3 +83,27 @@ fn the_keyboard_family_shows_the_bound_key() {
         format!("{} {}", sub_char(0, cross), sub_char(1, circle))
     );
 }
+
+#[test]
+fn every_title_that_read_its_glyphs_swaps_all_six() {
+    for title in [
+        oag_pulse::TITLE,
+        oag_pure::TITLE,
+        oag_hd::TITLE,
+        oag_omega::TITLE,
+    ] {
+        let prompts = title.prompts;
+        let out = substitution(prompts, Some(PromptFamily::Xbox), &no_keys);
+        let in_buttons_face = prompts.scope == oag_title::prompts::Scope::ButtonsFace;
+        assert_eq!(prompts.glyphs.len(), 6, "{}", title.name);
+        for &(stand_in, _) in prompts.glyphs {
+            let text = stand_in.to_string();
+            assert_ne!(
+                out.apply(&text, in_buttons_face).as_ref(),
+                text,
+                "{}: {stand_in:?} is not swapped",
+                title.name
+            );
+        }
+    }
+}
