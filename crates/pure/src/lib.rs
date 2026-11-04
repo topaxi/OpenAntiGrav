@@ -82,6 +82,7 @@ pub const TITLE: &Title = &Title {
     // Measured lower than Pulse in the same race, so a smaller trim than Pulse's
     // (`docs/ghidra/functions/psp-pulse-usa/audio-levels.md`, "Master trim").
     master_trim_db: oag_title::pre_race::Sourced::chosen(-3.0),
+    rear_occlusion: None,
     plugin_definition: names::GAME_PLUGIN_DEFINITION,
     track_plugin_definition: None,
     // **`None`, and it is a measurement.** Neither

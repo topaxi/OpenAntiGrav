@@ -140,6 +140,18 @@ pub fn hold_race_song(audio: &mut Audio, title: &oag_title::Title) {
     audio.set_master_trim_db(title.master_trim_db.value);
 }
 
+/// Arms the rear low-pass of the race about to start: the layout the title's original reads
+/// (`oag_title::Title::rear_occlusion`) and whether the circuit's own `AudioConfig.xml` turns the
+/// filter off (`TrackEmitters::low_pass_off`). Called after the race is built, on every fresh start.
+pub fn arm_rear_low_pass(
+    audio: &mut Audio,
+    title: &oag_title::Title,
+    emitters: &oag_sound::sfx::TrackEmitters,
+) {
+    audio.set_rear_occlusion_layout(title.rear_occlusion.map(|layout| layout.value));
+    audio.set_circuit_low_pass_off(emitters.low_pass_off);
+}
+
 /// Starts decoding `race`'s flyby voice-over, where it has one, off this thread: the clip is ready
 /// by the time the flyby's counter reaches zero. See [`Audio::prepare_pre_race_voice`].
 pub fn prepare_intro_voice(audio: &mut Audio, discs: &oag_sound::MusicDiscs, race: &Race) {
@@ -302,7 +314,7 @@ mod tests {
     use oag_gameplay::cue::Cue;
     use oag_ui::menu::nav::{Dir, Nav};
 
-    use super::{listener_of_view, menu_cue};
+    use super::{arm_rear_low_pass, listener_of_view, menu_cue};
 
     /// The chase camera sits behind and above its craft, so the craft is ahead
     /// of the listener and a point at the camera's back is behind it. Fails if
@@ -372,5 +384,43 @@ mod tests {
         };
         assert_eq!(bus(oag_pulse::TITLE), 0.25);
         assert_eq!(bus(oag_hd::TITLE), 1.0);
+    }
+
+    const REAR_FILE: &str = r#"<AudioConfig><RearOcclusion><Stereo max_frequency="14000.0"/></RearOcclusion>
+<ParameterMaps><ParameterMapFrontEnd><Stereo><GroupVolumes music="1" user1="1" user2="1" user3="1" user4="1" user5="1" user6="1" user7="1" user8="1" user9="1" user10="1" user11="1" user12="1"/></Stereo></ParameterMapFrontEnd></ParameterMaps></AudioConfig>"#;
+
+    /// Fails if a title's layout or a circuit's low-pass switch stops reaching the audio, or if a
+    /// title that names no layout plays the law because its file carries one.
+    #[test]
+    fn a_race_arms_the_rear_low_pass_from_its_title_and_its_circuit() {
+        let mut audio = oag_sound::Audio::open(
+            &oag_sound::settings::Settings::default(),
+            None,
+            None,
+            oag_audio::MIN_BUFFER,
+            false,
+        );
+        audio.set_hd_mix(oag_sound::hd_mix::Maps::parse(REAR_FILE));
+        let mut emitters = oag_sound::sfx::TrackEmitters::default();
+        let law = |audio: &oag_sound::Audio| audio.rear_low_pass();
+
+        arm_rear_low_pass(&mut audio, oag_hd::TITLE, &emitters);
+        assert_eq!(
+            law(&audio),
+            Some(14_000.0),
+            "HD reads its file's stereo value"
+        );
+        emitters.low_pass_off = true;
+        arm_rear_low_pass(&mut audio, oag_hd::TITLE, &emitters);
+        assert_eq!(law(&audio), None, "a circuit with its low-pass off");
+        emitters.low_pass_off = false;
+        arm_rear_low_pass(&mut audio, oag_pulse::TITLE, &emitters);
+        assert_eq!(law(&audio), None, "Pulse names no layout");
+        arm_rear_low_pass(&mut audio, oag_omega::TITLE, &emitters);
+        assert_eq!(
+            law(&audio),
+            None,
+            "Omega's file has the element and nothing reads it"
+        );
     }
 }

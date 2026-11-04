@@ -89,6 +89,7 @@ pub const TITLE: &Title = &Title {
     // brings the integrated loudness near HD's so the limiter works on far fewer frames
     // (`docs/ghidra/functions/psp-pulse-usa/audio-levels.md`, "Master trim").
     master_trim_db: oag_title::pre_race::Sourced::chosen(-6.0),
+    rear_occlusion: None,
     plugin_definition: names::GAME_PLUGIN_DEFINITION,
     track_plugin_definition: None,
     loading: Some(&loading::LOADING),

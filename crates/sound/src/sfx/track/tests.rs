@@ -80,6 +80,7 @@ fn only_what_is_inside_its_own_radius_is_counted() {
         ],
         directional: Vec::new(),
         report: Vec::new(),
+        low_pass_off: false,
     };
     let listener = oag_audio::Listener::at_origin();
     assert_eq!(emitters.in_range(&listener), 3);
@@ -96,6 +97,7 @@ fn the_near_field_is_flat_and_the_far_field_falls_off() {
         omni: vec![omni([10.0, 0.0, 0.0], 100.0), omni([90.0, 0.0, 0.0], 100.0)],
         directional: Vec::new(),
         report: Vec::new(),
+        low_pass_off: false,
     };
     let listener = oag_audio::Listener::at_origin();
     let placed: Vec<_> = emitters.placed(&listener).map(|(_, p)| p).collect();
@@ -127,6 +129,7 @@ fn a_cone_is_placed_after_the_omni_nodes_and_only_inside_its_angle() {
         omni: vec![omni([0.0, 0.0, 0.0], 5.0)],
         directional: vec![cone([0.0, 0.0, 0.0], 100.0, 20.0)],
         report: Vec::new(),
+        low_pass_off: false,
     };
     // Index 0 is the omni node (out of its 5-unit radius at distance 10), index 1
     // the cone, placed because the listener is on its axis.
@@ -153,6 +156,7 @@ fn a_cone_outside_its_half_angle_is_silent_rather_than_dim() {
         omni: Vec::new(),
         directional: vec![cone([0.0, 0.0, 0.0], 100.0, 20.0)],
         report: Vec::new(),
+        low_pass_off: false,
     };
     let placed: Vec<_> = emitters.placed(&listener).collect();
     assert_eq!(placed.len(), 1, "past the radius entirely, not off-angle");
@@ -180,6 +184,7 @@ fn a_finished_one_shot_is_not_restarted_while_its_emitter_is_in_range() {
         omni: vec![omni([0.0, 0.0, 0.0], 100.0)],
         directional: Vec::new(),
         report: Vec::new(),
+        low_pass_off: false,
     };
     emitters.omni[0].sound = Some(cue(64, false));
 
@@ -216,6 +221,7 @@ fn a_looping_cue_keeps_one_voice_for_as_long_as_it_is_in_range() {
         omni: vec![omni([0.0, 0.0, 0.0], 100.0)],
         directional: Vec::new(),
         report: Vec::new(),
+        low_pass_off: false,
     };
     emitters.omni[0].sound = Some(cue(64, true));
 

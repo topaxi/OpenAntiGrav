@@ -719,8 +719,8 @@ describe. Unexplained, and worth a look by whoever next opens `SCES_547.48`.
 
 ## Our front/back cue (ours, not the original's)
 
-This is Pulse's law. HD and 2048 add a measured rear low-pass that `original` does not
-play, and Omega pans through Wwise: the title-by-title comparison of every value is in
+This is Pulse's law. HD and 2048 add a measured rear low-pass (HD's plays under `original`,
+2048's is not wired), and Omega pans through Wwise: the title-by-title comparison of every value is in
 [audio-3d.md](../ps4-omega-eu/audio-3d.md#spatial-audio-against-the-originals).
 
 The law above cannot tell front from back, so the `original` value of the
