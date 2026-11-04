@@ -21,6 +21,19 @@ Pulse (PSP and PS2) and Pure **as our own**; consider extra patterns for mod
 support, perhaps on the slipstream branch; propose a unified handling across all
 titles, with implementation detail and alternatives.
 
+## Decided
+
+Maintainer, 2026-11-04, replacing decisions 1 to 3 below: a `RUMBLE` setting with the
+values `None`, `Original`, `PS2`, `PS3`, `PS4`. The default is the newest law, `PS4`;
+titles whose original has a law of their own keep it where the row says `Original`.
+A title whose original has no rumble (Pulse PSP, Pure, 2048) does not show `Original`.
+`PS3` is HD's small motor (any non-zero is full on), `PS4` is Omega's (the byte sum).
+Our patterns for Pulse and Pure stay own authored, in the fallback layer.
+
+Open under it: what `PS2` means on a title with patterns (the PS2 build has a level and
+a timer, no pattern table), and whether the row keeps `Original` where it equals a
+named value (HD and `PS3`, Omega and `PS4`, Pulse PS2 and `PS2`).
+
 ## Open
 
 Decisions, each with a recommendation. The first two change what gets built.
