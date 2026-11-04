@@ -343,6 +343,11 @@ pub struct CraftCaster<'a> {
     pub fit: Fit,
     /// The craft's own geometry.
     pub caster: Caster<'a>,
+    /// Whether any surface in the picture can read this craft's square. The record is written
+    /// either way, so a craft left out keeps its rank and every other craft its square; only
+    /// its draw goes, and the receiver's own [`CRAFT_CULL_RADIUS`] test never reaches the
+    /// square left clear.
+    pub seen: bool,
 }
 
 /// The coverage atlas, the `mapped` tier's depth map, their caster pipelines
@@ -767,6 +772,7 @@ impl Map {
             occlusion_query_set: None,
             multiview_mask: None,
         });
+        oag_gpu::perfprobe::marks::mark(&mut pass, "shadow depth map");
         pass.set_pipeline(&self.depth_pipeline);
         for (slot, caster) in casters.iter().enumerate() {
             if caster.ranges.is_empty() {
@@ -779,6 +785,7 @@ impl Map {
                 pass.draw_indexed(range.clone(), 0, 0..1);
             }
         }
+        oag_gpu::perfprobe::marks::close(&mut pass);
     }
 
     /// How many atlas and depth passes have been recorded; an empty one over a
@@ -866,11 +873,12 @@ impl Map {
             occlusion_query_set: None,
             multiview_mask: None,
         });
+        oag_gpu::perfprobe::marks::mark(&mut pass, "shadow map atlas");
         pass.set_pipeline(&self.pipeline);
         for (index, craft) in crafts.iter().enumerate() {
             // Nothing to draw (a drawable with every chunk filtered out holds
             // zero-size buffers, which have no slice to bind).
-            if craft.caster.ranges.is_empty() {
+            if craft.caster.ranges.is_empty() || !craft.seen {
                 continue;
             }
             let (x, y, side) = RANK_SQUARES[craft.rank.min(MAX_CASTERS - 1)];
@@ -886,6 +894,7 @@ impl Map {
                 pass.draw_indexed(range.clone(), 0, 0..1);
             }
         }
+        oag_gpu::perfprobe::marks::close(&mut pass);
     }
 
     /// The texture behind [`Self::view`].

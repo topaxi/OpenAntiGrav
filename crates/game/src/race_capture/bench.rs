@@ -100,7 +100,11 @@ pub(super) fn run(
             std::array::from_fn(|_| PassTimer::new(device, queue));
         let mut spans: [Vec<f64>; 3] = Default::default();
         let marks = oag_gpu::perfprobe::marks::Marks::new(device, queue);
-        let mut groups: Vec<(&'static str, Vec<f64>, Option<u64>)> = Vec::new();
+        let mut groups = Groups::default();
+        let mut dropped = 0;
+        // The `queue.submit` call alone, on the CPU: wgpu's own submission work, which the
+        // wall clock above holds and no timestamp sees.
+        let mut submits = Vec::with_capacity(runs);
         // The first tenth warms caches and clocks and is not counted.
         let warmup = runs / 10;
         for run in 0..warmup + runs {
@@ -110,6 +114,7 @@ pub(super) fn run(
             }
             if let Some(marks) = &marks {
                 marks.begin();
+                bookend(&mut encoder);
             }
             let [scene, blur, bloom] = &timers;
             record(
@@ -130,16 +135,18 @@ pub(super) fn run(
                     }),
                 },
             );
+            if let Some(marks) = &marks {
+                bookend(&mut encoder);
+                marks.resolve(&mut encoder);
+            }
             for timer in timers.iter_mut().flatten() {
                 timer.resolve(&mut encoder);
-            }
-            if let Some(marks) = &marks {
-                marks.resolve(&mut encoder);
             }
             let commands = encoder.finish();
             let _ = device.poll(wgpu::PollType::wait_indefinitely());
             let start = web_time::Instant::now();
             queue.submit(Some(commands));
+            let submitted = start.elapsed().as_secs_f64() * 1e6;
             let _ = device.poll(wgpu::PollType::wait_indefinitely());
             let elapsed = start.elapsed().as_secs_f64() * 1e6;
             for (timer, span) in timers.iter_mut().zip(&mut spans) {
@@ -157,20 +164,16 @@ pub(super) fn run(
             }
             if run >= warmup {
                 samples.push(elapsed);
-                for span in marks.as_ref().map(|m| m.read(device)).unwrap_or_default() {
-                    // The same frame each time, so the count is the same
-                    // each time; the last one is kept.
-                    match groups.iter_mut().find(|(l, ..)| *l == span.label) {
-                        Some((_, list, fragments)) => {
-                            list.push(span.micros);
-                            *fragments = span.fragments;
-                        }
-                        None => groups.push((span.label, vec![span.micros], span.fragments)),
-                    }
+                submits.push(submitted);
+                if let Some(marks) = &marks {
+                    groups.add_run(&marks.read(device));
+                    dropped = dropped.max(oag_gpu::perfprobe::marks::dropped());
                 }
             }
         }
         report("Scene::render GPU", &mut samples);
+        report("  of it, the queue.submit call (CPU)", &mut submits);
+        let floor = submit_floor(device, queue, runs);
         for (name, span) in ["race pass", "motion blur", "HD bloom"]
             .iter()
             .zip(&mut spans)
@@ -183,13 +186,124 @@ pub(super) fn run(
                 report(name, span);
             }
         }
-        for (label, span, fragments) in &mut groups {
-            report(&format!("  span / {label}"), span);
+        let submit = median(&mut submits);
+        groups.report(median(&mut samples), submit, floor, dropped);
+    }
+}
+
+/// The marks' spans of every benched run, summed by label within a run: a label
+/// taken once per craft (the sun-occlusion and self-shadow passes) is one row,
+/// the frame's cost of all of them, with how many there were.
+#[derive(Default)]
+struct Groups {
+    /// Label, each run's sum, how many spans a run had, and the fragments of
+    /// the last run.
+    rows: Vec<(&'static str, Vec<f64>, usize, Option<u64>)>,
+    /// Each run's first-to-last span sum.
+    totals: Vec<f64>,
+}
+
+impl Groups {
+    fn add_run(&mut self, spans: &[oag_gpu::perfprobe::marks::Span]) {
+        let mut run: Vec<(&'static str, f64, usize, Option<u64>)> = Vec::new();
+        for span in spans {
+            match run.iter_mut().find(|(label, ..)| *label == span.label) {
+                Some((_, micros, count, fragments)) => {
+                    *micros += span.micros;
+                    *count += 1;
+                    if let Some(more) = span.fragments {
+                        *fragments = Some(fragments.unwrap_or(0) + more);
+                    }
+                }
+                None => run.push((span.label, span.micros, 1, span.fragments)),
+            }
+        }
+        if run.is_empty() {
+            return;
+        }
+        self.totals
+            .push(run.iter().map(|(_, micros, ..)| micros).sum());
+        for (label, micros, count, fragments) in run {
+            match self.rows.iter_mut().find(|(l, ..)| *l == label) {
+                Some((_, list, n, f)) => {
+                    list.push(micros);
+                    *n = count;
+                    *f = fragments;
+                }
+                None => self.rows.push((label, vec![micros], count, fragments)),
+            }
+        }
+    }
+
+    /// Prints each label's row, then the spans' total against `scene` (the
+    /// median `Scene::render GPU`) less the `submit` call's CPU time and the
+    /// empty submission's `floor`: what is left is GPU work no timestamp sees
+    /// (the queue's staged writes, which run ahead of the encoder) and the wait
+    /// for the first command to start.
+    fn report(&mut self, scene: f64, submit: f64, floor: Option<f64>, dropped: u32) {
+        if self.rows.is_empty() {
+            return;
+        }
+        for (label, span, count, fragments) in &mut self.rows {
+            let name = if *count > 1 {
+                format!("  span / {label} (x{count})")
+            } else {
+                format!("  span / {label}")
+            };
+            report(&name, span);
             if let Some(fragments) = fragments {
                 println!("bench   span / {label}: {fragments} fragment invocation(s)");
             }
         }
+        let total = median(&mut self.totals);
+        report("sum of spans", &mut self.totals);
+        let floor = floor.unwrap_or(0.0);
+        println!(
+            "bench unattributed: {:.1} us (Scene::render GPU median {scene:.1} - spans {total:.1} - submit call {submit:.1} - empty submit floor {floor:.1})",
+            scene - total - submit - floor
+        );
+        if dropped > 0 {
+            println!(
+                "bench marks dropped: {dropped} (past the marks' capacity; the spans are short)"
+            );
+        }
     }
+}
+
+/// An empty pass that only takes a mark, at each end of the encoder: without it
+/// the barriers and clears ahead of the frame's first mark, and the store after
+/// its last, would be in no span.
+fn bookend(encoder: &mut wgpu::CommandEncoder) {
+    let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+        label: Some("race bench bookend"),
+        timestamp_writes: None,
+    });
+    oag_gpu::perfprobe::marks::close_compute(&mut pass);
+}
+
+/// The submit-to-idle wall clock of an empty command buffer, median of `runs`:
+/// the part of `Scene::render GPU` that is no work at all.
+fn submit_floor(device: &wgpu::Device, queue: &wgpu::Queue, runs: usize) -> Option<f64> {
+    let mut samples: Vec<f64> = (0..runs)
+        .map(|_| {
+            let commands = encoder(device).finish();
+            let _ = device.poll(wgpu::PollType::wait_indefinitely());
+            let start = web_time::Instant::now();
+            queue.submit(Some(commands));
+            let _ = device.poll(wgpu::PollType::wait_indefinitely());
+            start.elapsed().as_secs_f64() * 1e6
+        })
+        .collect();
+    if samples.is_empty() {
+        return None;
+    }
+    report("submit floor (empty submit-to-idle)", &mut samples);
+    Some(median(&mut samples))
+}
+
+fn median(samples: &mut [f64]) -> f64 {
+    samples.sort_by(f64::total_cmp);
+    samples.get(samples.len() / 2).copied().unwrap_or(0.0)
 }
 
 fn runs(var: &str) -> Option<usize> {
@@ -390,5 +504,40 @@ pub(super) fn run_resolve(
     } else {
         report("FSR3 REN (render-extent dispatches), GPU", &mut ren);
         report("FSR3 OUT (accumulate + rcas), GPU", &mut out);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Groups;
+    use oag_gpu::perfprobe::marks::Span;
+
+    fn span(label: &'static str, micros: f64, fragments: Option<u64>) -> Span {
+        Span {
+            label,
+            micros,
+            fragments,
+        }
+    }
+
+    /// Eight per-craft passes are one row of what the frame paid for them, not
+    /// eight samples of one craft's pass.
+    #[test]
+    fn a_label_taken_many_times_in_a_run_is_summed_within_the_run() {
+        let mut groups = Groups::default();
+        for _ in 0..3 {
+            groups.add_run(&[
+                span("sun occlusion", 100.0, Some(10)),
+                span("race", 1_000.0, Some(50)),
+                span("sun occlusion", 40.0, Some(5)),
+            ]);
+        }
+        assert_eq!(groups.rows.len(), 2);
+        let (label, runs, count, fragments) = &groups.rows[0];
+        assert_eq!(*label, "sun occlusion");
+        assert_eq!(runs, &vec![140.0; 3]);
+        assert_eq!(*count, 2);
+        assert_eq!(*fragments, Some(15));
+        assert_eq!(groups.totals, vec![1_140.0; 3]);
     }
 }

@@ -365,6 +365,7 @@ impl Recorder<'_> {
                 Draw::Effects => self.draw_effects(&mut render, pass, &mut stats),
             }
         }
+        oag_gpu::perfprobe::marks::close(&mut render);
         stats
     }
 
@@ -522,7 +523,6 @@ impl Recorder<'_> {
             mist.draw(render, *drawn);
         }
         effects.sparks.0.draw_flash(render, effects.sparks.1);
-        oag_gpu::perfprobe::marks::mark(render, "end");
     }
 }
 

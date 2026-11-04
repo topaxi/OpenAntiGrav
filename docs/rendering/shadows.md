@@ -1115,6 +1115,16 @@ renders one caster, reads the texels back, and asserts coverage at the centre,
 clear texels at the border, the fitted edges within two texels, and that a
 second pass with no casters clears it.
 
+**A craft whose shadow cannot be in the picture is not drawn into the atlas** (2026-11-04, `lf`).
+The receiver reads a square only within `CRAFT_CULL_RADIUS` (56 units) of its craft, so in a view of
+one whole picture a craft whose sphere misses the frustum leaves its square clear: its record, its
+rank and every other craft's square stay as they were (`CraftCaster::seen`, a tenth wider than the
+reach for the camera's jitter, **chosen, not measured**). A split draws every craft, the frame's
+work serving all its views. HD, Talon's Junction, tick 2,500, 1920x1080, Intel iGPU, 3 rounds, load
+2 to 4: `shadow map atlas` 466 to 57 us; `Scene::render GPU` moves inside its noise. Pictures `cmp`
+equal against the binary before on the nine title shots and at HD ticks 60, 300, 600, 1,800, 3,000
+and 3,600. The Deck is not measured.
+
 ### HD's hull is a receiver too, of the road's own mask
 
 Read 2026-09-21 -

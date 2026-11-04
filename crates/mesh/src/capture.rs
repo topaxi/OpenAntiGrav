@@ -183,6 +183,7 @@ pub fn capture_pixels_from(
         node_anim_buffer,
         emissive_buffer: _,
         stamp_pipeline: _,
+        plain_draws: _,
         prepass: _,
         culled: _,
         unwritten: _,

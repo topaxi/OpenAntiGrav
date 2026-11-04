@@ -28,6 +28,7 @@ pub use tables::{EMISSIVES_SIZE, Emissives, NODE_ANIMS_SIZE, NodeAnims, TEX_ANIM
 pub use texlod::{PSP_TEXLOD_BIAS, PSP_TEXLOD_SLOPE, TextureDetail};
 use uniforms::Uniforms;
 mod prepass;
+mod specialise;
 mod velocity;
 mod vertex_layout;
 pub use prepass::Prepass;
@@ -109,6 +110,9 @@ pub struct Built {
     /// The depth prepass pair, when [`build_with`] was asked for it - see
     /// [`Prepass`].
     pub prepass: Option<Prepass>,
+    /// Per entry of [`Model::draws`], whether it shades through [`Prepass::plain`]. Empty on a
+    /// model with no such pipeline.
+    pub plain_draws: Vec<bool>,
     /// Cutout pass: depth write on, no blending, `discard` below
     /// `shaders/alpha_test.wesl`'s `alpha_test_ref`. Draws [`Model::alpha_tested_draws`] as
     /// a second `set_pipeline` in the same render pass as `pipeline`, before
@@ -242,35 +246,6 @@ pub enum Depth {
     /// `crate::hull_overlay`: test `LessEqual` so a coplanar redraw passes,
     /// write nothing. The original tests `EQUAL`; this is the chosen stand-in.
     Overlay,
-}
-
-/// The value of `shade.wesl`'s `slots_present` override for `model`: every `slots` bit one of
-/// its vertices carries, so the driver compiles out the branches none of them takes. Any superset
-/// draws the same picture (`x & present == x` for every vertex), so two choices trade a little of
-/// that folding for pipelines shared between models, each specialised pipeline being a fresh
-/// compile when the driver's shader cache is cold:
-///
-/// - **Always set:** the alpha channel, `NO_AMBIENT`/`NO_SUN`, `LIT_ALPHA` and the material
-///   index. They tell apart HD's sky, hulls and engine flares, which branch on little else.
-/// - **All bits for a weapon effect** (a model carrying one of the five weapon-only role bits):
-///   each has a role set of its own and covers a few pixels. Specialising them took HD's race
-///   from 90 to 168 distinct pipelines.
-fn slots_present(model: &Model) -> u32 {
-    use crate::mesh::slots;
-    const ALWAYS: u32 = slots::alpha_channel(3)
-        | slots::EMISSIVE
-        | slots::LIT_ALPHA
-        | (0x7f << slots::MATERIAL_SHIFT);
-    const WEAPON_ONLY: u32 = slots::RIM_GLOW
-        | slots::RIM_EDGE
-        | slots::CLOCK_SCROLL_RING
-        | slots::CLOCK_SCROLL_HALO
-        | slots::BOMB_HALO;
-    let carried = model.vertices.iter().fold(0, |all, v| all | v.slots);
-    if carried & WEAPON_ONLY != 0 {
-        return u32::MAX;
-    }
-    carried | ALWAYS
 }
 
 /// Builds the pipeline, geometry and texture bindings for `model`.
@@ -465,9 +440,26 @@ pub fn build_with(
     if model.shield_shell {
         constants.push(("shield_shading", 1.0));
     }
-    constants.push(("slots_present", f64::from(slots_present(model))));
+    let present = specialise::slots_present(model);
+    constants.push(("slots_present", f64::from(present)));
+    constants.push((
+        "emissive_rows",
+        f64::from(specialise::emissive_rows(present)),
+    ));
     constants.extend(pipeline_cache::scope_constants());
     let constants = constants.as_slice();
+    // The plain half of a prepassed model's opaque list and what its shading is told.
+    let plain = prepass.then(|| specialise::plain_draws(model)).flatten();
+    let plain_constants = plain.as_ref().map(|plain| {
+        let mut constants = constants.to_vec();
+        constants.retain(|(name, _)| !matches!(*name, "slots_present" | "emissive_rows"));
+        constants.push(("slots_present", f64::from(plain.present)));
+        constants.push((
+            "emissive_rows",
+            f64::from(specialise::emissive_rows(plain.present)),
+        ));
+        constants
+    });
 
     let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("mesh"),
@@ -704,6 +696,7 @@ pub fn build_with(
                 layout: &pipeline_layout,
                 vertex_buffers: &vertex_buffers,
                 constants,
+                plain_constants: plain_constants.as_deref(),
                 velocity,
                 targets,
                 fragment_entry,
@@ -1196,6 +1189,7 @@ pub fn build_with(
 
     Ok(Built {
         prepass,
+        plain_draws: plain.map_or_else(Vec::new, |plain| plain.draws),
         anim_bind,
         anim_buffer,
         node_anim_buffer,

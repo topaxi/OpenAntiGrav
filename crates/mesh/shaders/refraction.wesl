@@ -4,7 +4,7 @@
 // projected through `scene.refraction`.
 
 import oag_shaders::target::{target_in};
-import package::bindings::{behind_glass_tex, emissives, scene, shadow_sampler};
+import package::bindings::{behind_glass_tex, emissive_scale, emissive_tint, scene, shadow_sampler};
 import package::fog::{fogged};
 import package::shadow::{shadowed};
 import package::types::{VertexOutput};
@@ -27,8 +27,8 @@ fn opaque_colour(in: VertexOutput, shaded: vec4<f32>) -> vec3<f32> {
     }
     let lit = shadowed(shaded.rgb, in.world);
     let slot = in.slots >> MATERIAL_SHIFT;
-    let tint = emissives.tint_offset[slot];
-    let weight = emissives.scale[slot];
+    let tint = emissive_tint(slot);
+    let weight = emissive_scale(slot);
     // `mt_tunnelrefraction` weights the grab by its picture's alpha (rate 1),
     // `cl_tunnelrefraction` by a constant 2 (scale) and its lit term by
     // `DiffuseColour` (offset).

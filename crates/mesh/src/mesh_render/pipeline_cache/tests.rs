@@ -301,20 +301,44 @@ fn lit_by_compiles_the_nova_curve_out_only_under_a_rig_that_never_takes_it() {
         "no scope, no constants"
     );
 
+    let authored =
+        mesh_render::Light::authored([0.0, 1.0, 0.0], [1.0; 3], [0.0; 3], [1.0; 3], [1.0; 3], 1.0);
     let scope = Scope::open();
-    scope.lit_by(&mesh_render::Light::stand_in().with_nova_prelit(1.4, 0.2, 1.5));
+    scope.lit_by(&authored.with_nova_prelit(1.4, 0.2, 1.5));
     assert_eq!(super::scope_constants(), Vec::new());
     drop(scope);
 
     let scope = Scope::open();
-    scope.lit_by(&mesh_render::Light::stand_in());
+    scope.lit_by(&authored);
     assert_eq!(super::scope_constants(), vec![("nova_prelit", 0.0)]);
+    drop(scope);
+
+    // A stand-in light has no rig at all, so that path goes as well.
+    let scope = Scope::open();
+    scope.lit_by(&mesh_render::Light::stand_in());
+    assert_eq!(
+        super::scope_constants(),
+        vec![("nova_prelit", 0.0), ("light_rig", 0.0)]
+    );
     drop(scope);
     assert_eq!(
         super::scope_constants(),
         Vec::new(),
         "closed with its scope"
     );
+}
+
+/// A race with no Zone grade compiles the recolour out; a Zone race keeps the uniform deciding.
+#[test]
+fn zoned_compiles_the_recolour_out_only_outside_a_zone_race() {
+    let scope = Scope::open();
+    scope.zoned(true);
+    assert_eq!(super::scope_constants(), Vec::new());
+    drop(scope);
+
+    let scope = Scope::open();
+    scope.zoned(false);
+    assert_eq!(super::scope_constants(), vec![("zone_race", 0.0)]);
 }
 
 /// A PS3 model whose draw carries `culled` gets the culling twin of the opaque,

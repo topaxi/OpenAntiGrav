@@ -637,6 +637,21 @@ msaa = \"4x\"
     assert_eq!(profile.msaa, oag_display::display::Msaa::X4);
 }
 
+/// MSAA is an opt-in on every title: it costs 27 % of HD's race pass on the Steam Deck at
+/// 1080p (`docs/rendering/hires-gpu-levers.md`). A file that says `4x` keeps it (above).
+#[test]
+fn a_fresh_profile_has_msaa_off_on_every_title() {
+    let settings = read("");
+    for (title, platform) in known_profiles() {
+        let key = profile_key(title, platform);
+        assert_eq!(
+            settings.render_profiles[&key].msaa,
+            oag_display::display::Msaa::Off,
+            "{key}"
+        );
+    }
+}
+
 /// `Bindings`'s own tests prove it round-trips through a `BTreeMap`; this is
 /// the other half, that the map itself survives a real TOML file - `settings`'s
 /// actual persistence format, which nothing above exercises. `bindings` has

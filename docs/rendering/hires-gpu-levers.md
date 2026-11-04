@@ -24,7 +24,9 @@ container, run offscreen over ssh with no gamescope). GPU timestamps, median of 
 tick-2,500 frame, then the median of **3 separate processes**. HD is Talon's Junction, Pulse is PSP
 EU's default circuit. Devices: `MESA_VK_DEVICE_SELECT=1002:747e` (RADV NAVI32) and `1002:164e`
 (RADV RAPHAEL_MENDOCINO), each confirmed in the log's `bench split:` line; Deck `RADV VANGOGH`.
-"Deck profile" is `--msaa 4x --motion-blur high`. The "present composite" row is the same run
+"Deck profile" is a heavy case chosen for this page, `--msaa 4x --motion-blur high`; it is no
+default of the game on the Deck or anywhere else: MSAA and the blur are off in every fresh
+profile. The "present composite" row is the same run
 with `--presented` and `OAG_RESOLVE_BENCH=60` (no upscaler, scale 100; it is serialised CPU plus
 GPU wall time, so it carries about 60 us of submit and wait floor on the dGPU). "Rest of
 `Scene::render`" is `Scene::render GPU` minus the race pass, the blur chain and the bloom: the shadow
@@ -110,8 +112,23 @@ reconstruct is 85 to 92 % of the chain on every device and scales 2.8x (Deck) to
 | blur high, full gather (the chain) | 6.56 | 6.26 | |
 | blur high, `--motion-blur-resolution half` | 3.24 (-3.3) | 3.19 (-3.1) | the DRS rung, [half rung](motion-blur-half-rung.md) |
 
-`Scene::render GPU` after `--shadows off` still leaves 3.7 ms (HD) and 2.0 ms (Pulse) that no span
-names: open.
+**Anti-aliasing with MSAA off (the default, 2026-11-04).** `msaa` is `off` and `reconstruction` is
+`off` in every fresh profile, on every title and device, pinned by
+`settings::tests::a_fresh_profile_has_msaa_off_on_every_title`; a file that says `4x` keeps it, so a
+player who chose it is untouched. With both off a player sees stair-stepped geometry edges and no
+softening. The cheapest anti-aliasing the engine has is `--reconstruction fxaa`, one fullscreen
+pass. HD at 1920x1080 on
+the Intel iGPU, 2 rounds at load 21 to 25 (relative only, not a Deck number; the Deck is not
+measured): present resolve median 499 to 730 us with `off`, 1,073 to 1,363 with `fxaa`, 1,470 to
+1,479 with `smaa` (three passes), against `--msaa 4x` adding 2,611 us to the race pass and 597 us
+between passes. So FXAA costs roughly a fifth of what MSAA 4x does here. The default stays `off`:
+FXAA softens the picture ([ADR-0013](../architecture/adr/0013-anti-aliasing-architecture.md)), and
+it is a player's choice like the others on that row.
+
+`Scene::render GPU` after `--shadows off` still left 3.7 ms (HD) and 2.0 ms (Pulse) that no span
+named. Every pass of the frame has a span now
+([render-bench.md](../tools/render-bench.md), "Every pass of one frame by name"); the rows that
+split those two numbers on the Deck are not taken yet.
 
 ## The presented 4K output on the Deck (headless gamescope, 3840x2160)
 
@@ -162,8 +179,9 @@ levers; lever 3 is one we can pull. Estimates are **estimates, not measurements*
 
 Passes the brief named that this tooling cannot separate or that are small: **fog** has no span (it is shaded inside track solid); **MSAA resolve** lands inside the race pass span (the +2.8 ms HD at 1080p is in the pass, while the rest of `Scene::render` does not grow with it); **glass and transparent overdraw** is the `track blended` span, +0.4 ms 4K-1080p on the Deck HD, small; **render-target formats and bandwidth** are not measured directly, the iGPU's bloom and composite growing faster than the dGPU's is the indirect evidence.
 
-Also open, not top three: the 2.0 to 3.7 ms of `Scene::render` no span names on the Deck, MSAA 4x
-(+2.8 ms HD at 1080p), and the iGPU's bandwidth-shaped bloom and composite (+3.6 and +2.0 ms at 4K).
+Also open, not top three: the Deck's split of the 2.0 to 3.7 ms of `Scene::render` outside the
+spans above (every pass is named now, the Deck has not run it), MSAA 4x (+2.8 ms HD at 1080p), and
+the iGPU's bandwidth-shaped bloom and composite (+3.6 and +2.0 ms at 4K).
 
 ## The three levers measured (2026-10-31, `hires-track-and-present`)
 
@@ -213,6 +231,122 @@ The pipelined per-frame bench (HD 1080p) went 10.09 to 8.69 ms. Picture: 24 fram
 and 3600, with the defaults and with `--msaa 4x --motion-blur high`. Cost: race load with a cold
 shader cache (`MESA_SHADER_CACHE_DISABLE=true`, `--ticks 1`, 3 runs) HD 8.8 to 10.1 s to 9.8 to
 9.9 s, Pulse 7.0 to 7.1 s; with a warm cache +0.08 s HD, +0.05 s Pulse.
+
+#### The emissive table folds where no vertex names a row (2026-11-04, `lf`)
+
+`slots_present` could not touch the tests on the emissive table (`emissives.scale[entry].z > 3.5`
+and thirty more): they read a uniform buffer, which a driver cannot fold whatever the index folds
+to, and `ALWAYS` kept the material index for every model. Row 0 of the table is all zeros
+(`Emissives::of`), so a pipeline whose vertices name no row now keeps no material bits and sets the
+`emissive_rows` override to 0, and `bindings.wesl`'s two accessors return that zero as a constant
+(`mesh_render::specialise`). `lit_texel` reads the row once, so a table that is read keeps no
+extra loads.
+
+Intel ARL iGPU (`anv`, Mesa 26.2.6, not the Deck): the largest fragment shaders of a Pulse race
+went 3,075 to 1,858 and 2,009 to 1,461 instructions (`INTEL_DEBUG=fs`,
+`MESA_SHADER_CACHE_DISABLE=true`), and 20 more compile at SIMD16 (29 to 49); HD's largest 4,870 to
+4,849, unmoved as expected: its track names rows. Spans, 1920x1080, tick 2,500, A B interleaved,
+3 rounds that agree to 0.3 %, load 12 to 18:
+
+| Intel iGPU, us, medians | before | after |
+|---|---:|---:|
+| Pulse `track solid, shaded` | 1,707 | 1,350 (-21 %) |
+| Pulse race pass | 3,177 | 2,615 (-18 %) |
+| Pulse `Scene::render GPU` | 5,563 | 5,011 (-10 %) |
+| HD `track solid, shaded` (2 rounds) | 6,383 | 6,271 (two clock modes, read as no change) |
+
+Picture: `cmp` equal on HD, Pulse and Pure at ticks 1,200 and 2,500 with and without `--msaa 4x
+--motion-blur high`, and on Omega at 2,500. 2048 at 2,500 differs in 3 of 921,600 pixels by one
+level; three runs of one binary are equal, so it is the compiler's float order, not the logic.
+The gap between the Intel and NVIDIA pictures of one binary is far larger (rmse 0.05 on a pair).
+Deck: not run, Deck unavailable; the expected win on the Deck is **an estimate**, in the block's
+direction (Pulse more than HD).
+
+#### A circuit's plain draws shade through a pipeline of their own (2026-11-04, `lf`)
+
+One `Model` is a whole circuit, so `slots_present` is the OR of every material on it, and one rare
+material keeps every branch for every pixel. By draw the list is lopsided (opaque indices of the
+race's circuit, `slots` role bits per draw):
+
+| Circuit | draws | signatures | emissive rows | indices naming no row |
+|---|---:|---:|---:|---:|
+| HD Talon's Junction | 1,783 | 18 | 17 | 2,108,769 of 2,268,321 (93 %) |
+| Omega Tech de Ra | 2,950 | 4 | 4 | 6,976,659 of 6,980,733 (99.9 %) |
+| 2048 Altima | 2,391 | 3 | 0 named | all |
+| Pulse, Pure | 1,013 to 1,555 | 1 | 0 | all (the emissive fold above already has them) |
+
+`specialise::plain_draws` marks each opaque draw that names no row and no weapon role, and a model
+with both kinds gets a second shading pipeline for the depth prepass's shaded half
+(`Prepass::plain`, four on HD: culled or not, velocity written or not), told the OR of those draws
+alone and `emissive_rows = 0`. `Drawable::draw_lists` picks per draw and keeps the draw order, so
+coplanar ties resolve as before. The rest of the list, the cutouts and the blended list keep
+the model-wide pipelines. The same exactness argument as `slots_present`: each draw's bits are a
+subset of its pipeline's.
+
+| Intel ARL iGPU, us, medians, 1080p, A B interleaved, load 2 to 5 | before | after |
+|---|---:|---:|
+| HD `track solid, shaded` (3 rounds) | 7,260 | 3,820 (-47 %) |
+| HD race pass | 9,702 | 6,194 (-36 %) |
+| HD `Scene::render GPU` | 15,655 | 11,678 (-25 %) |
+| HD pipelined per frame (3 rounds) | 6,125 | 5,013 (-18 %) |
+| Omega `track solid, shaded` (2 rounds) | 5,206 | 3,507 (-33 %) |
+| Omega race pass | 11,157 | 9,097 (-18 %) |
+| 2048 `track solid, shaded` against the commit before the fold above (2 rounds) | 2,431 | 1,808 (-26 %) |
+| 2048 race pass, same | 3,767 | 2,882 (-24 %) |
+
+The rich pipeline is SIMD8 with spills on this compiler, so Intel gains more than a driver without
+that cliff will. Costs: HD `pipeline_sets` over the same bench run 16,385 to 24,215 (+48 %, the
+classes interleave); `Scene::render CPU` read bimodal in both binaries with no shift (559 to 1,098
+us) and pipelined per frame fell, so the CPU side is not visible here. Cold race load (no shader
+cache, HD, 3 rounds) 14.7 to 15.8 s against 14.6 to 15.7 s, inside the noise.
+
+Picture: `cmp` equal against the commit before on nine shots (HD, Pulse, Pure, Omega, 2048, ticks
+1,200 and 2,500, MSAA and blur on and off). On the 13 race pairs drawn with the pairs' own flags,
+9 are byte-identical and 4 HD pairs move 1 to 11 pixels of 2,073,600, by one level except on Moa
+Therma, where 8 pixels reach 6 levels (not traced; the two pipelines compile differently). Distance
+to the original, track crop:
+mean rmse 18.929 to 18.929, SSIM 0.8339 to 0.8339, every pair equal to three decimals; the same
+binary's gap between the Intel and NVIDIA GPUs is 0.008 rmse in the mean and up to 0.056 on a pair.
+
+**Deck: not run, Deck unavailable.** RADV's cost is its VGPR count (128 to 168 for these shaders),
+which this split should lower for the plain half; the win there is **an estimate** until the Deck
+block (`RADV_DEBUG=shaderstats` and the span bench) has run.
+
+#### The rig and the Zone recolour fold where the race has neither (2026-11-04, `lf`)
+
+`scene.light.enabled` is 0 for a whole race on every circuit with no `.envsettings` (Pulse, Pure),
+and `scene.zone.enabled` is 0 for every race with no Zone grade, but both are uniforms, so every
+pipeline kept both paths' registers and fetches. `BuildCacheScope` pins two overrides to 0, as it
+does `nova_prelit`: `light_rig` from `lit_by` and `zone_race` from `zoned`, and `lit_texel` reads a
+constant zero for them. Neither moves mid-race: `ZoneGrade::light` hands a stand-in back untouched
+and nothing else writes the scene's light; a race with no grade writes a zero `Zone`.
+
+| Intel ARL iGPU, us, medians, 1080p, 3 rounds, load 2 to 5 | before | after |
+|---|---:|---:|
+| Pulse `track solid, shaded` | 1,350 | 887 (-34 %) |
+| Pulse race pass | 2,614 | 1,944 (-26 %) |
+| Pulse `Scene::render GPU` | 4,955 | 4,224 (-15 %) |
+| HD `track solid, shaded` | 3,815 | 3,048 (-20 %) |
+| HD race pass | 6,187 | 5,340 (-14 %) |
+| HD `Scene::render GPU` | 11,570 | 10,667 (-8 %) |
+
+**End to end, the binary with the spans alone against the one with all four changes**, A B
+interleaved in one session, 3 rounds, medians of the rounds' medians, Intel iGPU, 1080p, load 2.6 to
+4.4. HD's before binary reads in two clock modes (track shaded 6,166 to 7,261), so its row is the
+one to take with a range; the after binary stayed at 3,076 to 3,307:
+
+| us | HD before | HD after | Pulse before | Pulse after |
+|---|---:|---:|---:|---:|
+| `track solid, shaded` | 6,393 | 3,157 (-51 %) | 1,709 | 903 (-47 %) |
+| race pass | 9,042 | 5,522 (-39 %) | 3,178 | 1,967 (-38 %) |
+| `Scene::render GPU` | 14,847 | 10,789 (-27 %) | 5,561 | 4,217 (-24 %) |
+| pipelined per frame | 6,088 | 4,200 (-31 %) | 1,887 | 1,365 (-28 %) |
+
+`INTEL_DEBUG=fs`: Pulse's largest fragment shader 1,858 to 1,431 instructions, and all 67 shaders
+now have a SIMD16 build (49 before; 29 before the emissive fold); HD's largest 4,849 to 4,343,
+spills 111 to 80. Picture: `cmp` equal against the commit before on the same nine shots, and on HD
+and Pulse Zone races (`--mode zone`, tick 2,400) against the binary from before this lane, which
+is the case the fold must not touch. Deck: not run, Deck unavailable.
 
 ### Lever 3, our 4K present against a 1080p gamescope window: dropped
 

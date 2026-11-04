@@ -608,7 +608,7 @@ impl Bloom {
         // The three scratch passes fill their whole buffer, which is the lane's own
         // size - the fixed 240x136 for a whole picture - always at that buffer's own
         // origin, whatever `origin` says about the scene's placement.
-        let mut pass = |label: &str,
+        let mut pass = |label: &'static str,
                         pipeline: &wgpu::RenderPipeline,
                         group: &wgpu::BindGroup,
                         target: &wgpu::TextureView| {
@@ -628,6 +628,7 @@ impl Bloom {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
+            oag_gpu::perfprobe::marks::mark(&mut pass, label);
             pass.set_pipeline(pipeline);
             pass.set_viewport(
                 0.0,
@@ -639,6 +640,7 @@ impl Bloom {
             );
             pass.set_bind_group(0, group, &[]);
             pass.draw(0..3, 0..1);
+            oag_gpu::perfprobe::marks::close(&mut pass);
         };
 
         pass("bloom bright", &self.bright, &bright_group, &lane.a.view);
@@ -703,6 +705,7 @@ impl Bloom {
             occlusion_query_set: None,
             multiview_mask: None,
         });
+        oag_gpu::perfprobe::marks::mark(&mut pass, "bloom composite");
         pass.set_pipeline(&self.composite);
         pass.set_viewport(
             origin.0,
@@ -714,6 +717,7 @@ impl Bloom {
         );
         pass.set_bind_group(0, &lane.composite_group, &[]);
         pass.draw(0..3, 0..1);
+        oag_gpu::perfprobe::marks::close(&mut pass);
     }
 }
 

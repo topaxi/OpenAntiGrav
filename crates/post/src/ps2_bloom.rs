@@ -432,7 +432,7 @@ impl Ps2Bloom {
                 ],
             },
         );
-        let mut pass = |label: &str,
+        let mut pass = |label: &'static str,
                         pipeline: &wgpu::RenderPipeline,
                         group: &wgpu::BindGroup,
                         target: &wgpu::TextureView,
@@ -455,6 +455,7 @@ impl Ps2Bloom {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
+            oag_gpu::perfprobe::marks::mark(&mut pass, label);
             pass.set_pipeline(pipeline);
             pass.set_viewport(
                 origin.0,
@@ -466,6 +467,7 @@ impl Ps2Bloom {
             );
             pass.set_bind_group(0, group, &[]);
             pass.draw(0..3, 0..1);
+            oag_gpu::perfprobe::marks::close(&mut pass);
         };
         let clear = wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT);
         let buffer = lane.extent;
@@ -551,6 +553,7 @@ impl Ps2Bloom {
             occlusion_query_set: None,
             multiview_mask: None,
         });
+        oag_gpu::perfprobe::marks::mark(&mut pass, "ps2 bloom composite");
         pass.set_pipeline(&self.composite);
         pass.set_viewport(
             origin.0,
@@ -562,6 +565,7 @@ impl Ps2Bloom {
         );
         pass.set_bind_group(0, &lane.composite_group, &[]);
         pass.draw(0..3, 0..1);
+        oag_gpu::perfprobe::marks::close(&mut pass);
     }
 }
 

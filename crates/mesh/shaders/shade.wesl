@@ -1,7 +1,7 @@
 // `lit_texel`, the one fragment shading function every entry point calls.
 
 import package::absorb::{absorb_shading, shield_shading};
-import package::bindings::{emissives, env_probe_tex, scene, shadow_exempt, shadow_sampler, sky_probe_tex, sun_delta, sun_known, uniforms};
+import package::bindings::{emissive_scale, emissive_tint, env_probe_tex, scene, shadow_exempt, shadow_sampler, sky_probe_tex, sun_delta, sun_known, uniforms};
 @if(!bindless) import package::bindings::{albedo, albedo_sampler, fifth_map, lightmap, pad_mask, sixth_map, wave_map};
 @if(bindless) import package::bindings::{material, samplers, textures};
 import package::flame::{flame_alpha_scale, flame_colour_scale, flame_rim_min, flame_rim_power, flame_rim_scale, flame_shading, flame_speed};
@@ -10,7 +10,7 @@ import package::holo::{holo_billboard};
 import package::hull_normal::{hull_normal};
 import package::pad::{pad_normal};
 import oag_shaders::target::{decode, encoded_out, linear_out, square_decode};
-import package::shading_modes::{colour_is_light, nova_prelit};
+import package::shading_modes::{colour_is_light, light_rig, nova_prelit, zone_race};
 import package::shadow::{receives_shadow, sun_occlusion};
 import package::texture_lod::{MATERIAL_ALBEDO, MATERIAL_FIFTH_MAP, MATERIAL_LIGHTMAP, MATERIAL_PAD_MASK, MATERIAL_SIXTH_MAP, MATERIAL_WAVE_MAP, material_lod_bias, material_sample, sample_at_slope_level, texlod_bias, texlod_slope};
 import package::types::{VertexOutput};
@@ -68,6 +68,8 @@ override slots_present: u32 = 4294967295u;
 fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     var in = raw;
     in.slots = raw.slots & slots_present;
+    let rig_on = select(0.0, scene.light.enabled, light_rig != 0.0);
+    let zone_on = select(0.0, scene.zone.enabled, zone_race != 0.0);
     // The `bindless` variant: this draw's slot of each group 1 array, under the
     // names the per-draw variant binds them by - see `bindings.wesl`.
     @if(bindless) {
@@ -82,6 +84,9 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     if (in.slots & 8388608u) != 0u {
         return holo_billboard(in);
     }
+    // The row of the emissive table this vertex names, read once for every test below.
+    let row_scale = emissive_scale((in.slots >> 24u) & 127u);
+    let row_tint = emissive_tint((in.slots >> 24u) & 127u);
     let n = normalize(in.normal);
     // **HD's pads** (`slots::PAD_NE`): the `_ne` texel replaces the vertex
     // normal in the program's own `N.L` and `N.H` below, and its alpha gates
@@ -106,12 +111,12 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // rock are read at the diffuse coordinate times the entry's scale (the rock's; the snow's
     // normal at the coordinate itself).
     let snow_entry = (in.slots >> 24u) & 127u;
-    let snow = snow_entry != 0u && emissives.scale[snow_entry].z > 3.5
-        && emissives.scale[snow_entry].z < 4.5;
+    let snow = snow_entry != 0u && row_scale.z > 3.5
+        && row_scale.z < 4.5;
     var snow_mask = 0.0;
     var rock = vec4<f32>(0.0);
     if snow {
-        let rock_uv = in.texcoord * emissives.scale[snow_entry].x;
+        let rock_uv = in.texcoord * row_scale.x;
         snow_mask = material_sample(MATERIAL_PAD_MASK, in.lightmap_texcoord.zw).x;
         rock = material_sample(MATERIAL_FIFTH_MAP, rock_uv);
         let bump = mix(
@@ -186,7 +191,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     var sun_light = vec3<f32>(0.0);
     var mask = 0.0;
     var emissive = false;
-    if scene.light.enabled != 0.0 {
+    if rig_on != 0.0 {
         let atlas = material_sample(MATERIAL_LIGHTMAP, in.lightmap_texcoord.xy);
         let baked = select(
             vec4<f32>(0.0, 0.0, 0.0, 1.0),
@@ -407,13 +412,13 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         );
         // `water_test_2`: `ambient + sun * sat(N.L)` with no vertex light or
         // prelit term added (the vertex colour is the picture there).
-        if (in.slots & 4194304u) != 0u && emissives.scale[(in.slots >> 24u) & 127u].y > 1.5 {
+        if (in.slots & 4194304u) != 0u && row_scale.y > 1.5 {
             authored = ambient_term + sun_diffuse;
             sun_light = sun_diffuse;
         }
         // `cf_vex_billboard` (`Emissive::program` mode 1): `ambient + sun * sat(N.L)`, no
         // prelit term, no sun mask and no shadow - `oag_mesh::mesh::rcs::billboard_glass`.
-        if emissives.scale[(in.slots >> 24u) & 127u].z > 0.5 && emissives.scale[(in.slots >> 24u) & 127u].z < 1.5 {
+        if row_scale.z > 0.5 && row_scale.z < 1.5 {
             authored = ambient_term + scene.light.sun * ndl;
             sun_light = scene.light.sun * ndl;
         }
@@ -508,7 +513,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // consecutive glow-table entries. Chosen, not measured: `F` uses the
     // vertex normal, and the constants are display values decoded to the
     // domain the textures are sampled in.
-    if (in.slots & 4194304u) != 0u && emissives.scale[(in.slots >> 24u) & 127u].y > 1.5 {
+    if (in.slots & 4194304u) != 0u && row_scale.y > 1.5 {
         // **`water_test_2`** (`mesh::rcs::water`): the program's picture is the
         // vertex colour itself (`TC1 * (ambient + sun * sat(N.L))`), kept in
         // the gamma domain the branch below decodes. The light is set where
@@ -516,9 +521,9 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         picture = vec4<f32>(pow(max(in.colour.rgb, vec3<f32>(0.0)), vec3<f32>(1.0 / 2.2)), picture.a);
     } else if (in.slots & 4194304u) != 0u {
         let ice_slot = (in.slots >> 24u) & 127u;
-        let deep = decode(emissives.tint_offset[ice_slot].rgb);
-        let cyan = decode(emissives.tint_offset[ice_slot + 1u].rgb);
-        let pale = decode(emissives.tint_offset[ice_slot + 2u].rgb);
+        let deep = decode(row_tint.rgb);
+        let cyan = decode(emissive_tint(ice_slot + 1u).rgb);
+        let pale = decode(emissive_tint(ice_slot + 2u).rgb);
         let pond = material_sample(MATERIAL_PAD_MASK, in.lightmap_texcoord.zw).x;
         let facing = clamp(ramp_facing, 0.0, 1.0);
         let water = deep + facing * (cyan - deep);
@@ -535,9 +540,9 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // raw (chosen, not measured); the product is put back in the domain `picture` is
     // decoded from below.
     let twin_entry = (in.slots >> 24u) & 127u;
-    if twin_entry != 0u && emissives.scale[twin_entry].z > 5.5 && emissives.scale[twin_entry].z < 6.5 {
+    if twin_entry != 0u && row_scale.z > 5.5 && row_scale.z < 6.5 {
         let wipe_uv = vec2<f32>(
-            in.lightmap_texcoord.x + emissives.tint_offset[twin_entry].x * scene.time.x,
+            in.lightmap_texcoord.x + row_tint.x * scene.time.x,
             in.lightmap_texcoord.y,
         );
         let fade = 1.0 - material_sample(MATERIAL_PAD_MASK, wipe_uv).x;
@@ -559,8 +564,8 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // `ShieldColour` multiply below, as the program does not tint it.
     var shield_lightning = vec3<f32>(0.0);
     let lightning_entry = (in.slots >> 24u) & 127u;
-    if lightning_entry != 0u && emissives.scale[lightning_entry].z > 10.5 && emissives.scale[lightning_entry].z < 11.5 {
-        let row = emissives.tint_offset[lightning_entry];
+    if lightning_entry != 0u && row_scale.z > 10.5 && row_scale.z < 11.5 {
+        let row = row_tint;
         let clock_now = scene.time.x;
         let scrolled = material_sample(MATERIAL_ALBEDO, vec2<f32>(in.texcoord.x + row.y * clock_now, in.texcoord.y));
         picture = vec4<f32>(scrolled.rgb, picture.a);
@@ -579,12 +584,12 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     var cell_picture = vec3<f32>(0.0);
     let cell_entry = (in.slots >> 24u) & 127u;
     let is_cell = (in.slots & 131072u) != 0u && cell_entry != 0u
-        && emissives.scale[cell_entry].y > 2.5 && emissives.scale[cell_entry].y < 3.5;
+        && row_scale.y > 2.5 && row_scale.y < 3.5;
     if is_cell {
-        let shift = emissives.scale[cell_entry].x;
-        let flash_c = emissives.tint_offset[cell_entry].rgb;
+        let shift = row_scale.x;
+        let flash_c = row_tint.rgb;
         let uv2 = in.lightmap_texcoord.zw;
-        let mask = material_sample(MATERIAL_WAVE_MAP, vec2<f32>(uv2.x + emissives.tint_offset[cell_entry].w * scene.time.x, uv2.y - shift),
+        let mask = material_sample(MATERIAL_WAVE_MAP, vec2<f32>(uv2.x + row_tint.w * scene.time.x, uv2.y - shift),
         ).x;
         let blue = material_sample(MATERIAL_PAD_MASK, vec2<f32>(uv2.x + shift, uv2.y)).rgb;
         picture = vec4<f32>(picture.rgb + mask * (blue - flash_c) + flash_c, picture.a);
@@ -595,7 +600,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // the batch's authored coordinate - the `GU_SRC_ALPHA` the original's ordinary pass
     // blends this pass's result by (`BLENDMODE 0x2a`, read off a recorded GE list of Pure).
     let mask_entry = (in.slots >> 24u) & 127u;
-    if mask_entry != 0u && emissives.scale[mask_entry].z > 4.5 && emissives.scale[mask_entry].z < 5.5 {
+    if mask_entry != 0u && row_scale.z > 4.5 && row_scale.z < 5.5 {
         picture = vec4<f32>(picture.rgb * material_sample(MATERIAL_LIGHTMAP, in.lightmap_texcoord.xy).a, picture.a);
     }
     // **HD's `dc_hologramwithstatic`** (`Emissive::program` mode 7,
@@ -611,8 +616,8 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // the colour sum, halved by the program's closing `/2` (`scene.light.output_scale`), is put
     // back in the domain `picture` is decoded from below.
     var coverage = select(first, second, (in.slots & 4u) != 0u);
-    if twin_entry != 0u && emissives.scale[twin_entry].z > 6.5 && emissives.scale[twin_entry].z < 7.5 {
-        let holo = emissives.tint_offset[twin_entry];
+    if twin_entry != 0u && row_scale.z > 6.5 && row_scale.z < 7.5 {
+        let holo = row_tint;
         let advert = material_sample(MATERIAL_LIGHTMAP, vec2<f32>(in.texcoord.x + holo.x * scene.time.x, in.texcoord.y));
         let noise = material_sample(MATERIAL_PAD_MASK, vec2<f32>(in.texcoord.x, in.texcoord.y + holo.y * scene.time.x));
         let linear = scene.light.output_scale * (decode(advert.rgb) + decode(noise.rgb));
@@ -654,8 +659,8 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // `texcoord` is unestablished. Only `v` moves, so a mismatch shows as a
     // glow tiled wrongly across the surface rather than as a missing one.
     let glow_slot = (in.slots >> 24u) & 127u;
-    let glow_tint_offset = emissives.tint_offset[glow_slot];
-    let glow_scale = emissives.scale[glow_slot];
+    let glow_tint_offset = row_tint;
+    let glow_scale = row_scale;
     let ramp_sun = scene.light.sun * ndl;
     let sheen_prelit = scene.light.prelit_scale * pow(in.colour.rgb, scene.light.prelit_power);
     // **The lightmapped variant** (`SECOND_IS_LIGHTMAP` beside the sheen bit, fragment `0x7704c0`
@@ -723,10 +728,10 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // (`Emissive::program`, `oag_mesh::mesh::rcs::billboard_glass`): mode 1, the lit
     // billboard, whose glow tap's `u` is scaled too, and mode 2, Tech de Ra's stand glass,
     // which reads `bwgradient` at the chunk's second coordinate set.
-    let glow_program = emissives.scale[glow_slot].z;
+    let glow_program = row_scale.z;
     let glow_is_billboard = glow_program > 0.5 && glow_program < 1.5;
     let glow_is_bw_glass = glow_program > 1.5 && glow_program < 2.5;
-    let glow_u_scale = select(1.0, emissives.scale[glow_slot].w, emissives.scale[glow_slot].w > 0.0);
+    let glow_u_scale = select(1.0, row_scale.w, row_scale.w > 0.0);
     let glow_uv = select(
         vec2<f32>(in.texcoord.x * glow_u_scale, glow_v),
         in.lightmap_texcoord.zw,
@@ -810,7 +815,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // combine below, stay off. The condition is a branch and not a mix so the
     // Time Trial picture is untouched to the byte.
     var mag_glow = decode(cell_picture);
-    if (in.slots & 131072u) != 0u && !is_cell && scene.zone.enabled == 0.0 {
+    if (in.slots & 131072u) != 0u && !is_cell && zone_on == 0.0 {
         let e = material_sample(MATERIAL_PAD_MASK, in.texcoord);
         let w = material_sample(MATERIAL_WAVE_MAP, in.texcoord * glow_scale.x + vec2<f32>(scene.time.x * glow_scale.y),
         );
@@ -832,7 +837,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // **Not in a Zone race**: every Zone variant of `cf_chevron_pulse` (blocks #15-#34, #45-#64,
     // #75-#93) declares neither the emask nor the wave, as the magstrips' do not (`mag_glow`).
     let chevron = (in.slots & 2147483648u) != 0u && glow_program > 2.5 && glow_program < 3.5
-        && scene.zone.enabled == 0.0;
+        && zone_on == 0.0;
     var chevron_surface = vec3<f32>(0.0);
     var chevron_glow = vec3<f32>(0.0);
     if chevron {
@@ -862,14 +867,14 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // mix weights and not to the `enabled` branch below, which has to stay uniform.
     let zone_entry = (in.slots >> 24u) & 127u;
     let zone_weight = select(
-        scene.zone.enabled,
+        zone_on,
         0.0,
-        zone_entry != 0u && emissives.scale[zone_entry].y > 3.5 && emissives.scale[zone_entry].y < 7.5,
+        zone_entry != 0u && row_scale.y > 3.5 && row_scale.y < 7.5,
     );
     var zone_linear = vec3<f32>(0.0);
     var zone_gamma = vec3<f32>(0.0);
     var zone_glow_term = vec3<f32>(0.0);
-    if scene.zone.enabled != 0.0 {
+    if zone_on != 0.0 {
         let zone_to_eye = normalize(scene.fog.camera - in.world);
         let zone_colours = zone_set(in.slots, in.world);
         let zone_base = zone_base_term(1.0 - dot(n, zone_to_eye), zone_colours);
@@ -902,7 +907,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     var authored_rgb = vec3<f32>(0.0);
     // What the sun adds to `authored_rgb`, in its output space.
     var sun_removed = vec3<f32>(0.0);
-    if scene.light.enabled != 0.0 {
+    if rig_on != 0.0 {
         let half_vector = to_eye + scene.light.direction;
         let ndh = clamp(
             dot(half_vector, n_lit) / max(length(half_vector), 1e-6),
@@ -930,14 +935,14 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         // specular colour each mixed the same way - the program's `@0x29`..`@0x43`. `pale` is
         // the program's constant beside the decoded texels, as its arithmetic has it.
         if snow {
-            let snow_c = emissives.tint_offset[snow_entry];
+            let snow_c = row_tint;
             let shaded = mix(snow_c.rgb, albedo_linear, dot(n_lit, to_eye));
             albedo_linear = mix(shaded, decode(rock.rgb), snow_mask);
-            specular_exponent = mix(snow_c.w, emissives.scale[snow_entry].w, snow_mask);
+            specular_exponent = mix(snow_c.w, row_scale.w, snow_mask);
             specular_mask = 1.0;
             specular_tint = mix(
-                texel.a * emissives.tint_offset[snow_entry + 1u].rgb,
-                rock.a * emissives.tint_offset[snow_entry + 2u].rgb,
+                texel.a * emissive_tint(snow_entry + 1u).rgb,
+                rock.a * emissive_tint(snow_entry + 2u).rgb,
                 snow_mask,
             );
         }
@@ -946,15 +951,15 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         // mask must not weight it a second time.
         let pane_entry = (in.slots >> 24u) & 127u;
         if pane_entry != 0u
-            && emissives.scale[pane_entry].y > 8.5
-            && emissives.scale[pane_entry].y < 9.5
-            && emissives.tint_offset[pane_entry].y > 0.5
+            && row_scale.y > 8.5
+            && row_scale.y < 9.5
+            && row_tint.y > 0.5
         {
             specular_mask = 1.0;
         }
         let specular = scene.light.sun
             * (pow(ndh, specular_exponent) * ndl_spec * mask * specular_mask * scene.light.specular_scale
-                * scene.light.enabled * in.lit * select(1.0, 0.0, emissive))
+                * rig_on * in.lit * select(1.0, 0.0, emissive))
             * specular_tint
             * select(vec3<f32>(1.0), in.colour.rgb, colour_factor)
             * select(1.0, 0.0, no_specular);
@@ -970,13 +975,13 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         // (`docs/rendering/hd-ship-materials.md`, "Hull brightness").
         var probe_reflection = vec3<f32>(0.0);
         let probe_entry = (in.slots >> 24u) & 127u;
-        if uniforms.env_layer > 0.5 && probe_entry != 0u && emissives.scale[probe_entry].y > 7.5 {
+        if uniforms.env_layer > 0.5 && probe_entry != 0u && row_scale.y > 7.5 {
             let r = reflect(-to_eye, n_hull);
             let probe = textureSampleLevel(
                 env_probe_tex, shadow_sampler, env_probe_uv(r), env_probe_layer(1), 0.0,
             ).rgb;
             probe_reflection = probe_tint(probe)
-                * (texel.a * emissives.tint_offset[probe_entry].x);
+                * (texel.a * row_tint.x);
         }
 
         // **Scenery glass's reflection of the sky** (`slots` entry of rate 9, `mesh::rcs::window_glass`):
@@ -996,22 +1001,22 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         var pane_cover = 1.0;
         var pane_clear = 1.0;
         let sky_entry = (in.slots >> 24u) & 127u;
-        if sky_entry != 0u && emissives.scale[sky_entry].y > 8.5 && emissives.scale[sky_entry].y < 9.5 {
+        if sky_entry != 0u && row_scale.y > 8.5 && row_scale.y < 9.5 {
             let r = reflect(-to_eye, n);
             let sky = textureSampleLevel(sky_probe_tex, shadow_sampler, env_probe_uv(r), 0.0).rgb;
-            if emissives.tint_offset[sky_entry].y > 0.5 {
+            if row_tint.y > 0.5 {
                 pane_cover = texel.a;
                 pane_clear = 1.0 - texel.a;
             }
-            let gate = emissives.tint_offset[sky_entry].z;
+            let gate = row_tint.z;
             let reflect_clear = select(select(1.0, 1.0 - texel.a, gate > 0.5), texel.a, gate > 1.5);
-            sky_reflection = probe_tint(sky) * (emissives.tint_offset[sky_entry].x * reflect_clear);
+            sky_reflection = probe_tint(sky) * (row_tint.x * reflect_clear);
             // `offset` 1: the program also adds `colour * (1 - mask.a)`, the colour in the next
             // entry's tint and the mask bound third at the second coordinate set
             // (`glass_2nduv_reflect_glow`). The colour is added raw, as the program adds it.
-            if emissives.tint_offset[sky_entry].w > 0.5 {
+            if row_tint.w > 0.5 {
                 let mask = material_sample(MATERIAL_PAD_MASK, in.lightmap_texcoord.zw).a;
-                sky_reflection += emissives.tint_offset[sky_entry + 1u].xyz * (1.0 - mask);
+                sky_reflection += emissive_tint(sky_entry + 1u).xyz * (1.0 - mask);
             }
         }
 
@@ -1219,7 +1224,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     }
 
     let shaded = vec4<f32>(
-        mix(plain_rgb, authored_rgb, scene.light.enabled * in.lit),
+        mix(plain_rgb, authored_rgb, rig_on * in.lit),
         texel.a * in.colour.a,
     );
     // **The facing-ramp combine replaces the generic rig entirely**, the
@@ -1235,7 +1240,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // is the glow entry's `offset`. Left out, named: the paraboloid
     // reflection term, which this renderer has no probe for.
     var mag_floor = shaded_or_sheen;
-    if (in.slots & 262144u) != 0u && scene.zone.enabled == 0.0 {
+    if (in.slots & 262144u) != 0u && zone_on == 0.0 {
         let grid = textureSample(albedo, albedo_sampler, in.texcoord).r;
         let ramp = textureSample(lightmap, albedo_sampler, ramp_uv).rgb;
         let loop_light = in.colour.rgb;
@@ -1517,7 +1522,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     shadow_exempt = select(
         0.0,
         1.0,
-        ramp_sheen || ((in.slots & 262144u) != 0u && scene.zone.enabled == 0.0),
+        ramp_sheen || ((in.slots & 262144u) != 0u && zone_on == 0.0),
     );
     if !(rim_glow_on || rim_edge_on) {
         // **Only where the colour returned is still the generic combine's**, which is
@@ -1528,12 +1533,12 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         // `shadowed` falls back to its multiply for them. Their own `ShadowToAlpha`
         // programs are unread.
         let generic_combine = !ramp_sheen
-            && !((in.slots & 262144u) != 0u && scene.zone.enabled == 0.0)
+            && !((in.slots & 262144u) != 0u && zone_on == 0.0)
             && (in.slots & 524288u) == 0u
             && flame_shading == 0.0
             && absorb_shading == 0.0;
-        if generic_combine && scene.light.enabled != 0.0 {
-            sun_delta = scene.light.enabled * in.lit * sun_removed;
+        if generic_combine && rig_on != 0.0 {
+            sun_delta = rig_on * in.lit * sun_removed;
             sun_known = 1.0;
         }
         // `grade-sky`: the sky draw only, and only when a track module asked, so every
