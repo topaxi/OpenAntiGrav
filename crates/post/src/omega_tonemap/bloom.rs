@@ -7,8 +7,8 @@
 use super::{Target, draw, law};
 use oag_gpu::formats::SCENE_FORMAT;
 
-/// The levels' format. The executable's are `R11G11B10F` (`0x3ac706`), which is not a
-/// render target on every device; alpha is unused either way.
+/// The levels' format, **chosen, not measured**: the executable's are `R11G11B10F`
+/// (`0x3ac706`), which is not a render target on every device; alpha is unused either way.
 pub const LEVEL_FORMAT: wgpu::TextureFormat = SCENE_FORMAT;
 
 /// One pass's constants, `Step` in `omega_bloom.wesl`.

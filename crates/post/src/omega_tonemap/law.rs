@@ -341,7 +341,8 @@ pub fn bloom_level_size(base: (u32, u32), level: usize) -> (u32, u32) {
 
 /// Level 0 for a frame of `size`: the executable's height, and its width kept to the
 /// frame's shape so the blur reaches as far across any window as it does across 16:9.
-/// The executable only ever draws 16:9, where this is [`BLOOM_BASE`].
+/// The executable only ever draws 16:9, where this is [`BLOOM_BASE`]; the width rule for
+/// any other shape is **chosen, not measured**.
 #[must_use]
 pub fn bloom_base(size: (u32, u32)) -> (u32, u32) {
     let (width, height) = (size.0.max(1) as f32, size.1.max(1) as f32);

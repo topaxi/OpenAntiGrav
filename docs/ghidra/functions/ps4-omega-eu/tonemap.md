@@ -336,7 +336,8 @@ programs (a `Program` method in `oag_rcs::gcn`, the census over `gcn_ground_trut
 
 **Also not the original's.** The accumulated motion blur's target is not the source here, because this renderer has none. `LowResAdditive`
 (slot 1, view `DAT_01fc6a50` of `DAT_01fc6a08`) stays undrawn: the particles draw into the scene and so pass through the curve. Drawing it needs
-those draws moved to a half-size target past the curve, depth-tested against the `m_Distance` target, and which draws go there is unread.
+those draws moved to a half-size target past the curve, depth-tested against the `m_Distance` target, and which draws go there is unread. It has a
+second consequence: the original's additive layer joins after the bright pass, so what draws there does not feed its bloom, while ours, in the scene, does.
 
 **Drawn** (`oag_post::omega_tonemap::bloom`, `omega_tonemap.wesl` `fs_bright`, `omega_bloom.wesl`). Chosen, not measured: level 0 keeps height 540 and
 takes its width from the frame's shape, because the executable only draws 16:9; the levels are `Rgba16Float`, since `R11G11B10F` is not renderable on every
@@ -355,7 +356,8 @@ sizes come out of that. No setting: the 2026-10-02 ruling (bloom has none, only 
 
 Tech De Ra's light strips and start board glow, Vineta K's white crowd and hull highlights. **It does not blow out Vineta K's sky** (a lead on the
 output-encode section above): ours draws that sky mid-grey, under `Threshold` 0.784, so the bright pass passes nothing there. The gap is the sky's
-level before the chain, not the chain. An HD and a Pulse frame are byte-identical to a pre-change build (`sha256` equal at tick 100).
+level before the chain, not the chain. An HD and a Pulse frame are byte-identical to a pre-change build (`sha256` equal at tick 100), and so is an Omega
+frame with no `Bloom` block read, so the composite's change is the term alone.
 
 **Cost**: 0.55 ms a frame more at 1920x1080 on an RX 7800 XT (1.32 against 0.75 ms for the whole chain, 400 frames twice each, load 16, `quick` profile), 0.31 ms
 of it recording twelve passes on the CPU in that unoptimised profile. Not measured on the Deck.

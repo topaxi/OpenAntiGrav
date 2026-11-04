@@ -43,7 +43,7 @@ stays unread, and the start laser is a material whose program writes its texture
 ## Open
 
 - Option A, a psp2 bloom: 2048 from `BloomFactor`/`BloomGate` or HD's chain inherited
-  (labelled inherited from HD); Omega from its `Tonemap.*` block. Touches `environment.rs`
+  (labelled inherited from HD). Omega's is done (see the update above). Touches `environment.rs`
   and `oag_post` wiring. Needs: the keys' meaning (RE or inheritance), a render target the
   chain can read, a Deck CPU cost check.
 - Option B, after A: mask wiring. `glow_from_program = true` on psp2 models, `GpuVertex::glow`
