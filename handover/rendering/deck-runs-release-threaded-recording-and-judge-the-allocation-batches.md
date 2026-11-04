@@ -24,7 +24,7 @@ and 4K is GPU-bound, so judge CPU by mean `total` from `frame-phases`, and say w
 
 The harnesses and full commands are on the lead's notebook, gitignored, in its scratch directory `lf`:
 `split-threaded-plan.md` ("Ready-to-run Deck block"), `batch2-plan.md` ("Steam Deck"),
-`gpu-report.md` ("Deck block", once that lane reports). On the Deck: `~/oag-perf/split-threaded/`
+`gpu/deck-block.sh` (not the early copy in `gpu-plan.md`). On the Deck: `~/oag-perf/split-threaded/`
 (`cell.sh`, `run.sh`, `avg.sh`, `xdg/`) and `~/oag-perf/batch1/` (`all.sh`, `abba.sh`, `freq.sh`).
 
 ## Open
@@ -38,9 +38,12 @@ The harnesses and full commands are on the lead's notebook, gitignored, in its s
    allocations down, CPU measured on the notebook only. Not run: the base-against-merge matrix, three
    rounds, Pure, Pulse, HD Anulpha, one and two views, three sizes. Also the open Pure 2v 1080p
    +0.25 ms from batch 1 (ABBA with the CPU clock sampled).
-3. **GPU spans and MSAA default, Deck effect.** In progress on the notebook, unmerged. Its Deck block
-   (span bench, `RADV_DEBUG=shaderstats`) joins this list when it lands: the notebook cannot read
-   RADV's VGPR counts or real GPU magnitudes, so its wins stay estimates until then.
+3. **GPU folds, Deck effect.** Spans, track shader folds, the plain-draw pipeline and the atlas skip
+   are merged; `docs/rendering/hires-gpu-levers.md` holds the Intel iGPU numbers, which do not
+   forecast the Deck. Not run: before and after at three sizes, `RADV_DEBUG=shaderstats` for VGPRs,
+   and the plain draws' CPU side with `OAG_RENDER_BENCH=300` (+48 % `pipeline_sets`; the notebook
+   shows no penalty, HD `render_viewports` 2,047 to 1,884 us). The Deck is submit-bound, so a CPU
+   rise there overrules the notebook: fall back to the rich pipeline over short plain runs.
 
 ## Next Steps
 
