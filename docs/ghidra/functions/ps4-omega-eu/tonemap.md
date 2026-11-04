@@ -238,8 +238,42 @@ read off the tails: base `v_add_f32 v0, s16, v14` (tint added) then `v_mul_f32 v
 `v_mul_f32 v3, s4, v4` (`ColorScale.r * vignette`, `ColorScale` the new member at dword 24, three floats) then
 `v_mad_f32 v3, v3, v14, s16` (`* sum + tint`). Confidence 80 for the shader law. **The value of `ColorScale` is not
 read**: its CPU writer is in the patch's eboot, whose functions this page's addresses do not cover (they are the base
-build's). **Not wired**: `oag_post::omega_tonemap` draws the curve and the composite's distortion offset, not its bloom,
-tint or vignette (its module docs), so neither form is drawn; the follow-up is in the HD fidelity handover thread.
+build's). **Wired in part (`omega-composite`, 2026-11-04)**: see the next section. Bloom and the low-resolution additive layer are not.
+
+## The composite's constants: where each comes from (2026-11-04, `omega-composite`)
+
+Static, base `eboot.bin` (`/omega/eboot-ps4-omega-eu.bin`), all read in Ghidra; no live readout. The composite's constant
+writer is `FUN_01625750` (the per-frame pass setup): it writes `BloomScale_abVignette` and `ScreenTint_Aspect`
+(handles `DAT_01940588` / `DAT_01940586`) from three globals, so each term has a source:
+
+| Term | Written at | Source | Value in a race |
+| --- | --- | --- | --- |
+| vignette `(a, b)` | `FUN_01625490`, `DAT_01fc7c30` | the circuit's `Vignette.Inner radius` (object `+0x278`) and `Vignette.Outer radius intensity` (`+0x27c`): `b = (I - 1) / (0.25 - r^2)`, `a = 1 - b r^2` | disc-authored. At `\|uv-0.5\|^2 = r^2` the factor is 1, at `0.25` (an edge's middle) it is `I`. Tech De Ra authors `r = 0.375`; two files read raw carry `I` = 0.716 and 0.8 |
+| `ScreenTint.rgb` | `DAT_02134630` | reset from the zero at `0x01fc80a0` on `InGame` entry (`FUN_0129bd10`'s sibling at `0x0129bda1`); other writers (`FUN_013895d0`, `FUN_013db460`, `FUN_01299d30`, `FUN_015a3810`, `FUN_01280ca0`) store a scalar broadcast, one of them `s^5` | **0 at rest**; the flashes' triggers are unread |
+| `ColorScale.rgb` | patch `0x104a520` | `(1, 1, 1)` at rest ([colorscale.md](colorscale.md)) | 1 |
+| `BloomScale` | `FUN_01625490`, level array `DAT_01fc7848` (stride `0x108`, `DAT_01fc7820` levels) | `Bloom.Blend factors[level]` (object `+0x244`, four numbers; Tech De Ra-like files carry `0.15 1.004 0.906 0.85` and `0.384 1.404 0.904 1.268`), x `1.075` on the PS4 Pro's checkerboard mode | level 0's factor is the composite's `BloomScale` |
+
+Confidence: **80** for the vignette law and its keys (the registrar `FUN_015c1f20` names `Vignette.Inner radius` at `+0x278`
+and `Vignette.Outer radius intensity` at `+0x27c`, and `FUN_01625490` reads exactly those two), **70** that `DAT_01fc7c30`
+is what `FUN_01625750` writes as the vignette dwords (one store of its eight bytes at `0x01628f23`), **65** for tint at rest.
+
+**Drawn** (`oag_post::omega_tonemap::law::Composite`, `omega_tonemap.wesl` `fs_apply`): between the curve and the scanout
+encode, `ColorScale * vignette * curved + ScreenTint`, tint outside the vignette (the patch's order; with the rest values the
+base's order differs only in where a nonzero tint would sit, and no code path draws the base's). Pinned by
+`the_composite_is_colour_scale_times_vignette_plus_tint` (frame 0.4, vignette 0.5, tint 0.1: patch 0.30, base 0.25),
+`the_chain_draws_the_composite_after_the_curve` (a real device; red when the shader drops the term) and
+`omega_lightmap_ground_truth` (Tech De Ra's keys reach the composite).
+
+**Not drawn, open: `Bloom` and `LowResAdditive`.** The disc authors the bloom (`Bloom.Bright-pass threshold/scale/offset/
+power/alpha scale`, `Blend factors`; the `BloomHDR` twins), but these are **not HD's `HDR and Bloom` keys** and `hd_bloom`'s
+FunkLayerBloom law does not apply by name. The chain that builds `BloomTexture` is `FUN_0177fbc0` (reads the level array
+`DAT_01fc7848`), whose targets `FUN_016247c0` creates; neither is read. Recipe: decompile `FUN_0177fbc0` and `FUN_016247c0`,
+find the bright-pass program by its reflection names (`oag_rcs::gcn`), then the blur and per-level blend, then the level
+count and sizes; the `Bloom.*` parameters are already authored per circuit. The loader report names the gap.
+**2048:** checked, differs: its composite is `wo_composite` with its own vignette output and `vignetteTint`
+(`oag_post::wo_composite`), no `Vignette.*` keys were found in the extracted Vita files, and the
+Omega composite is gated to the PS4 geometry. **HD:** checked, differs: `hd_bloom` is its composite; a Fury frame is
+byte-identical before and after this change.
 
 ## Not live, recorded so nobody chases them
 

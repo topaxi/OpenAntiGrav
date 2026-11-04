@@ -291,3 +291,33 @@ Pure shares the code and authors the Rocket, Missile, Plasma and Shuriken:
 **checked, applies, not wired** (no circuit with a bank chosen, no Pure test).
 2048 and Omega: **checked, applies, not wired** - the shared code reaches them,
 no weapon is raced on either (`docs/overview/status.md`).
+
+## HD Plasma, launch boost on: the 2.37 is the ride's own ripple, not a ride-law error (2026-11-04)
+
+`projectile_tilt_ground_truth` pins `start_boost = None`. With HD's inherited launch
+boost left on, the HD Plasma test's worst height error reads 2.37 against 2.0 (off:
+1.21; same 294 shots, 4,487 against 4,480 judged ticks, worst angle 4.9 both ways).
+Per-tick log of every judged Plasma tick, one run each (the sim is deterministic):
+
+- The 2.37 is tick 5090, `01_Vineta_K` at (768.5, -130.5, 370.7), craft up.y 0.997 (flat,
+  not a bank), 116 speed. The bolt reattaches there after a miss (probe distance 9.30, a
+  dip in the road of about 3 units) and rides 6.37, 3.42, 6.01, 3.60, 4.25, 4.00: a
+  period-2 overshoot that decays in five updates, the ride law's own shape.
+- The unboosted craft crosses the same dip: tick 5780 at (770.3, -131.0, 369.3) reads
+  5.87, 3.20, 4.85, 3.88, 4.01, 4.00 (errors 1.87, -0.80, 0.85, -0.12). Its ripple is
+  the same; it is mostly hidden because the bolt reaches the dip at update 5, inside the
+  test's "settling" window (updates 5 and 6), so only 0.85 is judged. The boosted bolt
+  reaches it at update 8 to 12, outside the window.
+- Unboosted worst, 1.21, is the same kind: (-629.9, -141.3, 397.9), tick 440. Boosted
+  errors above 1.0: 9 ticks, all at the two dips (x ~770..785, y -131; x ~-640, y -139);
+  unboosted: 1.
+- Bolt and craft speed at the worst ticks match the unboosted line (116 against 117);
+  the boost moves the firing point by a few metres, not the speed at the bolt.
+
+**Verdict (a), firing point.** The error follows the dip, not the boost speed. The
+test's settling window covers the first ride after the release, not a reattach
+after a dip, so a shifted firing point can put the dip's ripple inside or outside it.
+The pin stays. Not measured: whether the original's Plasma shows the same ripple over
+that dip (needs an HD capture at that stretch, not taken; confidence the ripple is the
+original's own: 55, from the ride law matching on flat road, 0.00 error in 16-tick
+runs). Ran on two of two HD runs only (one seed each; the sim is deterministic).

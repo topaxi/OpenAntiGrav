@@ -30,6 +30,8 @@ pub struct Params {
     pub start_angle: f32,
     /// `End angle`, degrees: the same at its shoulder.
     pub end_angle: f32,
+    /// The race composite's terms that follow the curve.
+    pub composite: Composite,
 }
 
 /// The output end of the curve under SDR video out. `ToneMap_ApplyEnvSettings`
@@ -160,5 +162,83 @@ pub fn scanout_encode(linear: f32) -> f32 {
         c * 12.92
     } else {
         1.055 * c.powf(1.0 / 2.4) - 0.055
+    }
+}
+
+/// The race composite that follows the curve (patch 1.07's program, `Shdr` at
+/// `0x9c9f94`):
+/// `out.rgb = ColorScale.rgb * vignette * (curved + LowResAdditive + BloomScale * Bloom) + ScreenTint.rgb`
+/// (`docs/ghidra/functions/ps4-omega-eu/tonemap.md`, "Read with the decoder").
+///
+/// The curve's output is linear light in `[0, 1]`, so bloom, vignette and tint
+/// all act on it before [`scanout_encode`]. **`LowResAdditive` and
+/// `Bloom` are not drawn** (the bloom chain behind `BloomTexture` is unread);
+/// this holds the terms the disc and the executable author for the rest.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Composite {
+    /// `Vignette.Inner radius`: the distance from the centre, in uv, inside
+    /// which the picture is untouched.
+    pub vignette_inner_radius: f32,
+    /// `Vignette.Outer radius intensity`: the factor the picture reaches at
+    /// `|uv - 0.5| = 0.5`, the middle of an edge.
+    pub vignette_outer_intensity: f32,
+    /// `ColorScale`, which rests at `(1, 1, 1)`; a fade drives it lower and its
+    /// trigger is unread (`colorscale.md`).
+    pub color_scale: [f32; 3],
+    /// `ScreenTint.rgb`, which rests at zero (`InGame` entry resets it from the
+    /// zero at `0x01fc80a0`); flash effects raise it and their triggers are unread.
+    pub screen_tint: [f32; 3],
+}
+
+impl Composite {
+    /// No vignette, no fade, no tint: the composite changes nothing.
+    pub const NONE: Self = Self {
+        vignette_inner_radius: 0.0,
+        vignette_outer_intensity: 1.0,
+        color_scale: [1.0; 3],
+        screen_tint: [0.0; 3],
+    };
+
+    /// The circuit's vignette with the rest values for the other two terms.
+    #[must_use]
+    pub fn at_rest(inner_radius: f32, outer_intensity: f32) -> Self {
+        Self {
+            vignette_inner_radius: inner_radius,
+            vignette_outer_intensity: outer_intensity,
+            ..Self::NONE
+        }
+    }
+
+    /// The shader's `(a, b)` in `sat(a + b * |uv - 0.5|^2)`, as
+    /// `FUN_01625490` writes them to
+    /// `DAT_01fc7c30`: `b = (intensity - 1) / (0.25 - r^2)`, `a = 1 - b r^2`.
+    /// A radius of 0.5 or more would divide by zero or flip the sign; the
+    /// executable has no guard and no circuit authors one, so it draws no
+    /// vignette there.
+    #[must_use]
+    pub fn vignette_ab(&self) -> [f32; 2] {
+        let r2 = self.vignette_inner_radius * self.vignette_inner_radius;
+        let den = 0.25 - r2;
+        if den <= 1e-6 {
+            return [1.0, 0.0];
+        }
+        let b = (self.vignette_outer_intensity - 1.0) / den;
+        [1.0 - b * r2, b]
+    }
+
+    /// The vignette factor at a uv: `sat(a + b * |uv - 0.5|^2)`.
+    #[must_use]
+    pub fn vignette(&self, uv: [f32; 2]) -> f32 {
+        let [a, b] = self.vignette_ab();
+        let (dx, dy) = (uv[0] - 0.5, uv[1] - 0.5);
+        (a + b * (dx * dx + dy * dy)).clamp(0.0, 1.0)
+    }
+
+    /// One colour channel of the composite on the curve's output:
+    /// `ColorScale * vignette * curved + ScreenTint`. The tint sits **outside**
+    /// the vignette (the base program had it inside).
+    #[must_use]
+    pub fn apply(&self, channel: usize, curved: f32, uv: [f32; 2]) -> f32 {
+        self.color_scale[channel] * self.vignette(uv) * curved + self.screen_tint[channel]
     }
 }

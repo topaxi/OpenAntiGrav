@@ -33,6 +33,12 @@ struct Params {
     // Where the drawn rectangle starts in the scene target: a split view's rectangle
     // need not be at the corner. Zero for a whole picture.
     uv_offset: vec2<f32>,
+    // The composite's vignette `(a, b)` in `sat(a + b * |uv - 0.5|^2)`.
+    vignette: vec2<f32>,
+    _pad: vec2<f32>,
+    // `ColorScale.rgb` and `ScreenTint.rgb` (w unused).
+    color_scale: vec4<f32>,
+    screen_tint: vec4<f32>,
 }
 
 struct State {
@@ -160,7 +166,13 @@ fn fs_apply(in: VertexOutput) -> @location(0) vec4<f32> {
     let x = clamp(c * w.z, vec3<f32>(w.x), vec3<f32>(w.y));
     let k = curve.abcd;
     let y = k.x + x * (k.y + x * (k.z + k.w * x));
-    return vec4<f32>(scanout_encode(clamp(y, vec3<f32>(0.0), vec3<f32>(1.0))), 1.0);
+    // The race composite after the curve (patch 1.07):
+    // `ColorScale * vignette * (curved + LowResAdditive + BloomScale * Bloom) + ScreenTint`.
+    // LowResAdditive and Bloom are not drawn; the tint sits outside the vignette.
+    let d_uv = in.uv - vec2<f32>(0.5);
+    let vignette = clamp(params.vignette.x + params.vignette.y * dot(d_uv, d_uv), 0.0, 1.0);
+    let composed = params.color_scale.rgb * vignette * y + params.screen_tint.rgb;
+    return vec4<f32>(scanout_encode(clamp(composed, vec3<f32>(0.0), vec3<f32>(1.0))), 1.0);
 }
 
 // The video-out encode of the curve's linear [0, 1]: the scanout buffer is
