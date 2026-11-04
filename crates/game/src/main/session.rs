@@ -40,6 +40,8 @@ mod frame;
 pub(crate) mod frame_timing;
 #[path = "session/lifecycle.rs"]
 pub(crate) mod lifecycle;
+#[path = "session/rumble.rs"]
+mod rumble;
 #[path = "session/phases.rs"]
 pub(crate) mod phases;
 #[path = "session/language.rs"]
@@ -377,6 +379,8 @@ pub(crate) struct Session {
     /// `session::pause`, which owns the rules and the one gate
     /// (`pause::State::ticks`).
     pub(crate) pause: oag_game::pause::State,
+    /// The live race's pad rumble, or `None` (`session::rumble`).
+    pub(crate) rumbler: Option<oag_game::rumble::Rumbler>,
     /// The session's wall clock in seconds, read once a frame: what a pause's
     /// owner timeout and the resume countdown are measured on. A race that is
     /// frozen has no ticks to count, so this is not simulation time and is never

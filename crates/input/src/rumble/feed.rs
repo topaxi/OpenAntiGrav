@@ -55,6 +55,9 @@ pub struct Feed {
     /// The held voice of each [`Trigger::Level`] row.
     held: Vec<Option<Handle>>,
     previous: Levels,
+    /// How many voices each pattern has started, by name, in first-fired
+    /// order: what a run reports.
+    fired: Vec<(&'static str, u32)>,
 }
 
 impl Feed {
@@ -68,6 +71,20 @@ impl Feed {
             ids,
             held: vec![None; ROWS.len()],
             previous: Levels::default(),
+            fired: Vec::new(),
+        }
+    }
+
+    /// Voices started per pattern name, in first-fired order.
+    #[must_use]
+    pub fn fired(&self) -> &[(&'static str, u32)] {
+        &self.fired
+    }
+
+    fn note(&mut self, name: &'static str) {
+        match self.fired.iter_mut().find(|(n, _)| *n == name) {
+            Some((_, count)) => *count += 1,
+            None => self.fired.push((name, 1)),
         }
     }
 
@@ -89,15 +106,17 @@ impl Feed {
     /// carries a point) reaches every pad.
     pub fn event(&mut self, event: &CueEvent, own: usize) {
         let mine = event.point.is_none() && usize::from(event.slot) == own;
-        let plays: Vec<(usize, Scope)> = self
+        let plays: Vec<(usize, Scope, &'static str)> = self
             .rows()
             .filter(|(_, row, _)| row.trigger == Trigger::Cue(event.cue))
-            .map(|(_, row, id)| (id, row.scope))
+            .map(|(_, row, id)| (id, row.scope, row.pattern))
             .collect();
-        for (id, scope) in plays {
+        for (id, scope, name) in plays {
             match scope {
                 Scope::OwnShip if mine => {
-                    self.player.one_shot(id, None);
+                    if self.player.one_shot(id, None) {
+                        self.note(name);
+                    }
                 }
                 Scope::World if event.point.is_some() => {
                     let at = if self.rules.drop_position {
@@ -105,7 +124,9 @@ impl Feed {
                     } else {
                         event.point.map(|p| p.to_array())
                     };
-                    self.player.one_shot(id, at);
+                    if self.player.one_shot(id, at) {
+                        self.note(name);
+                    }
                 }
                 _ => {}
             }
@@ -120,10 +141,14 @@ impl Feed {
         for (i, row, id) in rows {
             match row.trigger {
                 Trigger::Edge(level, Edge::Rise) if now.get(level) && !previous.get(level) => {
-                    self.player.one_shot(id, None);
+                    if self.player.one_shot(id, None) {
+                        self.note(row.pattern);
+                    }
                 }
                 Trigger::Edge(level, Edge::Fall) if !now.get(level) && previous.get(level) => {
-                    self.player.one_shot(id, None);
+                    if self.player.one_shot(id, None) {
+                        self.note(row.pattern);
+                    }
                 }
                 Trigger::Level(level) => {
                     let Shape::Held(end) = row.shape else {
@@ -132,6 +157,9 @@ impl Feed {
                     if now.get(level) {
                         if self.held[i].is_none() {
                             self.held[i] = self.player.hold(id);
+                            if self.held[i].is_some() {
+                                self.note(row.pattern);
+                            }
                         }
                     } else if let Some(handle) = self.held[i].take() {
                         match end {

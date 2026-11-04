@@ -773,6 +773,9 @@ impl Session {
                         }
                         None => stage.race.tick_finished(),
                     }
+                    if let Some(rumbler) = &mut self.rumbler {
+                        rumbler.tick(&stage.race, false, self.controls.pad_mut());
+                    }
                     oag_game::sound::race_tick(&mut self.audio, &mut stage.race);
                     // `stage`'s own last use - the reborrow inside
                     // `Session::tick_endrace` is legal from here on, the
@@ -810,6 +813,9 @@ impl Session {
                     // reason: the audio is not simulation state, so ticking
                     // it is what keeps the engine note honest while `World`
                     // itself sits frozen at whatever tick `Start` caught it on.
+                    if let Some(rumbler) = &mut self.rumbler {
+                        rumbler.tick(&stage.race, true, self.controls.pad_mut());
+                    }
                     oag_game::sound::race_tick(&mut self.audio, &mut stage.race);
                 }
                 // **The pre-race flyby steps instead of the world**: the circuit's own
@@ -882,7 +888,10 @@ impl Session {
                     // Immediately after the tick and inside this loop, so a cue
                     // lands on the tick that raised it whether the frame
                     // stepped once, twice or not at all. See
-                    // `oag_sound::Audio::race_tick`.
+                    // `oag_sound::Audio::race_tick`. Rumble reads the same cues first.
+                    if let Some(rumbler) = &mut self.rumbler {
+                        rumbler.tick(&stage.race, false, self.controls.pad_mut());
+                    }
                     oag_game::sound::race_tick(&mut self.audio, &mut stage.race);
                     if self.log_every > 0
                         && stage.race.sim.world.tick % u64::from(self.log_every) == 0

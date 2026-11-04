@@ -111,6 +111,24 @@ impl Race {
         std::mem::take(&mut self.sim.announcements)
     }
 
+    /// Whether a locked Leech beam is fastened to `slot`, at either end. The
+    /// level the pad's `leeching_energy_rumble` holds on; which end the original
+    /// rumbles is unread (`docs/gameplay/rumble.md`, "Triggers").
+    #[must_use]
+    pub fn leach_beam_on(&self, slot: usize) -> bool {
+        self.sim.world.leach_beams_iter().any(|beam| {
+            beam.kind == oag_weapons::projectile::leach_beam::Kind::Locked
+                && (usize::from(beam.owner) == slot || usize::from(beam.target) == slot)
+        })
+    }
+
+    #[cfg(feature = "view")]
+    /// The rumble patterns this race's title ships, for the pad.
+    #[must_use]
+    pub fn rumble_library(&self) -> &oag_tables::rumble::Library {
+        &self.view.rumble
+    }
+
     #[cfg(feature = "view")]
     /// The decoded Zone speed-class announcer this race loaded.
     #[must_use]

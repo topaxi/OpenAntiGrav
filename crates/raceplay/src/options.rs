@@ -773,6 +773,11 @@ pub struct Setup {
     /// has one.
     #[cfg(feature = "view")]
     pub class_announcer: oag_sound::sfx::ClassAnnouncer,
+    /// The pad rumble patterns the event map fires, out of this title's archive
+    /// (`oag_input::rumble::map::pattern_names`). Empty where the title ships
+    /// none (Pulse and Pure): such a race rumbles nothing.
+    #[cfg(feature = "view")]
+    pub rumble: oag_tables::rumble::Library,
     /// This title's own zone-number-to-speed-class ladder, when it is recovered - the same
     /// [`oag_title::ZoneStages`] [`crate::zone_grade::ZoneGrade`] carries, copied here so
     /// [`Self::class_announcer`] can be triggered off the same edge without reaching into the

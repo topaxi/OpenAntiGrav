@@ -9,40 +9,13 @@
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
-use oag_assets::Archives;
 use oag_input::Pad;
+use oag_input::rumble::feed::{Feed, Levels, Rules};
+use oag_input::rumble::map::Set;
 use oag_input::rumble::{Mode, MotorOutput, Motors, Player, SmallMotor, StepContext};
-use oag_tables::rumble::{Kind, Library, Pattern};
-use oag_title::rumble::Rumble;
-
-/// Spellings of the pattern directory across the titles' archives
-/// (`docs/formats/rumble-xml.md`, "Census"); each archive looks entries up by
-/// the digest of one exact path.
-const DIRECTORIES: [&str; 5] = [
-    "Data/XML/Rumble",
-    "Data/xml/rumble",
-    "Data/xml/Rumble",
-    "data/xml/rumble",
-    "data/xml/Rumble",
-];
-
-/// Reads the disc's pattern called `name`, trying each spelling of its path.
-///
-/// # Errors
-///
-/// No spelling resolves, or the file is refused by the reader.
-pub fn disc_pattern(archives: &mut Archives, name: &str) -> Result<Pattern> {
-    for directory in DIRECTORIES {
-        let path = format!("{directory}/{name}.xml");
-        for candidate in [path.replace('/', "\\"), path] {
-            if let Ok(blob) = archives.read_name(&candidate) {
-                return oag_tables::rumble::parse(&blob)
-                    .map_err(|e| anyhow::anyhow!("{candidate}: refused: {e}"));
-            }
-        }
-    }
-    bail!("no rumble pattern called {name:?} on this disc")
-}
+use oag_raceplay::Race;
+use oag_tables::rumble::{Kind, Library};
+use oag_title::rumble::{Rumble, Triggers};
 
 /// The small-motor law the `RUMBLE` token plays on a title, or `None` for
 /// nothing (`none`, or `original` on a title whose original has no patterns).
@@ -174,6 +147,116 @@ fn library(probe: &Probe<'_>) -> Result<(Library, Rumble)> {
     let opened = oag_source::title::open_source(&source, Vec::new(), Vec::new())
         .with_context(|| format!("opening {source}"))?;
     let mut archives = opened.archives;
-    library.insert(probe.pattern, disc_pattern(&mut archives, probe.pattern)?);
+    library.insert(
+        probe.pattern,
+        oag_raceplay::rumble_library::disc_pattern(&mut archives, probe.pattern)?,
+    );
     Ok((library, opened.title.rumble))
+}
+
+/// The trigger set `token` plays on a title whose original has `original`, with
+/// the small-motor law, or `None` for nothing (`docs/gameplay/rumble.md`,
+/// "Player and device"). `ps3` and `ps4` are the same on every title; `original`
+/// is the title's own and plays nothing where it has none.
+#[must_use]
+pub fn plays(token: &str, original: Rumble) -> Option<(Set, SmallMotor)> {
+    let mode = Mode::from_name(token).unwrap_or_default();
+    let law = mode.law(original_law(original))?;
+    let set = match mode {
+        Mode::None => return None,
+        Mode::Ps3 => Set::Ps3,
+        Mode::Ps4 => Set::Ps4,
+        Mode::Original => match original.triggers()? {
+            Triggers::Hd => Set::Ps3,
+            Triggers::Omega => Set::Ps4,
+        },
+    };
+    Some((set, law))
+}
+
+/// A race's pad rumble: one [`Feed`] per local person, each on the pad
+/// assigned to that person's slot.
+///
+/// Rumble is an output of the race (ADR-0018): [`Self::tick`] reads the cues
+/// the tick raised before the sound drains them, and levels off the world, and
+/// writes to the pads. Nothing here is state a replay or a hash sees.
+#[derive(Debug)]
+pub struct Rumbler {
+    seats: Vec<(usize, Feed)>,
+}
+
+impl Rumbler {
+    /// The race's feeds, or `None` where the title ships no patterns, the
+    /// setting plays nothing or no person flies here.
+    #[must_use]
+    pub fn new(race: &Race, token: &str, original: Rumble) -> Option<Self> {
+        let (set, law) = plays(token, original)?;
+        let library = race.rumble_library();
+        if library.is_empty() {
+            return None;
+        }
+        let rules = Rules {
+            set,
+            drop_position: Mode::from_name(token) == Some(Mode::Original) && race.people() <= 1,
+        };
+        let seats: Vec<(usize, Feed)> = (0..oag_gameplay::MAX_PLAYERS)
+            .filter(|&slot| race.sim.world.person_flown(slot) && race.heard_here(slot))
+            .map(|slot| (slot, Feed::new(library.clone(), law, rules)))
+            .collect();
+        (!seats.is_empty()).then_some(Self { seats })
+    }
+
+    /// One simulation tick. Call it after `Race::tick` and before the sound
+    /// drains the cues.
+    pub fn tick(&mut self, race: &Race, paused: bool, out: &mut dyn MotorOutput) {
+        for (slot, feed) in &mut self.seats {
+            for event in race.pending_cues() {
+                feed.event(event, *slot);
+            }
+            feed.levels(levels_of(race, *slot));
+            let ship = race.sim.world.ships.get(*slot);
+            let ctx = StepContext {
+                race: true,
+                paused,
+                listener: ship.map_or([0.0; 3], |s| s.physics.body.position.to_array()),
+            };
+            feed.drive(ctx, *slot, out);
+        }
+    }
+
+    /// Voices started per pattern name across every seat, in first-fired order.
+    #[must_use]
+    pub fn fired(&self) -> Vec<(&'static str, u32)> {
+        let mut total: Vec<(&'static str, u32)> = Vec::new();
+        for (_, feed) in &self.seats {
+            for &(name, count) in feed.fired() {
+                match total.iter_mut().find(|(n, _)| *n == name) {
+                    Some((_, c)) => *c += count,
+                    None => total.push((name, count)),
+                }
+            }
+        }
+        total
+    }
+
+    /// Ends every voice and silences the pads: a race left.
+    pub fn stop(&mut self, out: &mut dyn MotorOutput) {
+        for (_, feed) in &mut self.seats {
+            feed.clear();
+        }
+        out.silence();
+    }
+}
+
+/// The held conditions of `slot`'s ship this tick.
+fn levels_of(race: &Race, slot: usize) -> Levels {
+    let world = &race.sim.world;
+    Levels {
+        mag_strip: race.over_magstrip(slot),
+        autopilot: world
+            .ships
+            .get(slot)
+            .is_some_and(|ship| ship.autopilot_timer > 0.0),
+        leech_beam: race.leach_beam_on(slot),
+    }
 }

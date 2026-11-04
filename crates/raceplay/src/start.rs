@@ -86,6 +86,8 @@ impl Race {
             announcer,
             #[cfg(feature = "view")]
             class_announcer,
+            #[cfg(feature = "view")]
+            rumble,
             zone_stages,
             countdown_voice,
             countdown_beat,
@@ -901,6 +903,7 @@ impl Race {
                 track_emitters,
                 announcer,
                 class_announcer,
+                rumble,
                 stage: psys::Stage::new(),
                 scenery_fx: super::scenery_fx::SceneryFx::new(scenery_fx),
                 engine_flare: [None; MAX_SHIPS],
