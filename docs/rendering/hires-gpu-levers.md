@@ -232,6 +232,36 @@ and 3600, with the defaults and with `--msaa 4x --motion-blur high`. Cost: race 
 shader cache (`MESA_SHADER_CACHE_DISABLE=true`, `--ticks 1`, 3 runs) HD 8.8 to 10.1 s to 9.8 to
 9.9 s, Pulse 7.0 to 7.1 s; with a warm cache +0.08 s HD, +0.05 s Pulse.
 
+#### The emissive table folds where no vertex names a row (2026-11-04, `lf`)
+
+`slots_present` could not touch the tests on the emissive table (`emissives.scale[entry].z > 3.5`
+and thirty more): they read a uniform buffer, which a driver cannot fold whatever the index folds
+to, and `ALWAYS` kept the material index for every model. Row 0 of the table is all zeros
+(`Emissives::of`), so a pipeline whose vertices name no row now keeps no material bits and sets the
+`emissive_rows` override to 0, and `bindings.wesl`'s two accessors return that zero as a constant
+(`mesh_render::specialise`). `lit_texel` reads the row once, so a table that is read keeps no
+extra loads.
+
+Intel ARL iGPU (`anv`, Mesa 26.2.6, not the Deck): the largest fragment shaders of a Pulse race
+went 3,075 to 1,858 and 2,009 to 1,461 instructions (`INTEL_DEBUG=fs`,
+`MESA_SHADER_CACHE_DISABLE=true`), and 20 more compile at SIMD16 (29 to 49); HD's largest 4,870 to
+4,849, unmoved as expected: its track names rows. Spans, 1920x1080, tick 2,500, A B interleaved,
+3 rounds that agree to 0.3 %, load 12 to 18:
+
+| Intel iGPU, us, medians | before | after |
+|---|---:|---:|
+| Pulse `track solid, shaded` | 1,707 | 1,350 (-21 %) |
+| Pulse race pass | 3,177 | 2,615 (-18 %) |
+| Pulse `Scene::render GPU` | 5,563 | 5,011 (-10 %) |
+| HD `track solid, shaded` (2 rounds) | 6,383 | 6,271 (two clock modes, read as no change) |
+
+Picture: `cmp` equal on HD, Pulse and Pure at ticks 1,200 and 2,500 with and without `--msaa 4x
+--motion-blur high`, and on Omega at 2,500. 2048 at 2,500 differs in 3 of 921,600 pixels by one
+level; three runs of one binary are equal, so it is the compiler's float order, not the logic.
+The gap between the Intel and NVIDIA pictures of one binary is far larger (rmse 0.05 on a pair).
+Deck: not run, Deck unavailable; the expected win on the Deck is **an estimate**, in the block's
+direction (Pulse more than HD).
+
 ### Lever 3, our 4K present against a 1080p gamescope window: dropped
 
 The Deck has no 4K display (`DP-1` disconnected), so the real output path was not measured. Per

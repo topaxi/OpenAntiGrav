@@ -135,6 +135,27 @@ import package::types::{Emissives, NodeAnims, Scene, TexAnims, Uniforms};
 
 @group(3) @binding(2) var<uniform> emissives: Emissives;
 
+// **Whether any draw of this pipeline names a row of `emissives`**
+// (`mesh_render::emissive_rows`). Row 0 is all zeros (`Emissives::of`), so where no vertex
+// carries a material index a read is that zero, and spelling it out lets the driver drop every
+// test on the table: a read through a uniform buffer is a value it cannot fold, whatever the
+// index folds to. Every `emissive_*` read goes through these two.
+override emissive_rows: u32 = 1u;
+
+fn emissive_scale(entry: u32) -> vec4<f32> {
+    if emissive_rows == 0u {
+        return vec4<f32>(0.0);
+    }
+    return emissives.scale[entry];
+}
+
+fn emissive_tint(entry: u32) -> vec4<f32> {
+    if emissive_rows == 0u {
+        return vec4<f32>(0.0);
+    }
+    return emissives.tint_offset[entry];
+}
+
 // What the sun added to the colour `lit_texel` last returned, in that colour's
 // own space: the amount the track's shadowed redraw takes back out. Written by
 // `shade::lit_texel` and read by `shadow::shadowed` within one fragment, so it
