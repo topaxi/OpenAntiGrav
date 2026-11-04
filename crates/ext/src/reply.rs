@@ -37,6 +37,9 @@ pub enum Refused {
     /// More than `MAX_FIRE_EFFECTS_PER_TICK` `fire_effect` and `fire_mod_effect` commands
     /// this tick: the host faults the module on the next one.
     Effects,
+    /// More than `MAX_BEAMS_PER_TICK` `draw_beam` commands this tick: the host faults the
+    /// module on the next one.
+    Beams,
 }
 
 /// This tick's commands. The count is written when the tick returns.
@@ -56,6 +59,7 @@ pub struct Reply<'a> {
     items: [u8; oag_ext_abi::MAX_CRAFTS],
     emits: usize,
     effects: usize,
+    beams: usize,
     /// `transit`, `scale-speed`, `probe-clearance` sent, one bit a slot each.
     motion: [u32; 3],
 }
@@ -77,6 +81,7 @@ impl<'a> Reply<'a> {
             items: [0; oag_ext_abi::MAX_CRAFTS],
             emits: 0,
             effects: 0,
+            beams: 0,
             motion: [0; 3],
         }
     }
@@ -285,6 +290,91 @@ impl<'a> Reply<'a> {
         self.push(&Command::ScreenFill {
             slot: craft.slot(),
             rgba,
+            shader: None,
+        })
+    }
+
+    /// `screen-fill` through the shader at place `shader` of the mod's `[shaders]` (name
+    /// order), `rgba` being the colour it is handed. One that did not load draws nothing.
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`], [`Refused::Range`] past `MAX_SHADER_INDEX`.
+    pub fn screen_fill_shaded(
+        &mut self,
+        craft: &Craft<'_>,
+        rgba: Rgba,
+        shader: u16,
+    ) -> Result<(), Refused> {
+        if shader > oag_ext_abi::MAX_SHADER_INDEX {
+            return Err(Refused::Range);
+        }
+        self.push(&Command::ScreenFill {
+            slot: craft.slot(),
+            rgba,
+            shader: Some(shader),
+        })
+    }
+
+    /// `draw-beam`: a ribbon from `craft` to the craft in `to` this tick, flat `rgba` or
+    /// through the shader at that place of the mod's `[shaders]`; re-send it each tick it
+    /// should hold. Draws nothing while either craft is out of the world. Never hashed.
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`], [`Refused::Beams`], [`Refused::Range`] for a beam to `craft`
+    /// itself, a `half_width` outside `(0, MAX_BEAM_HALF_WIDTH]`, or a shader past
+    /// `MAX_SHADER_INDEX`.
+    pub fn draw_beam(
+        &mut self,
+        craft: &Craft<'_>,
+        to: oag_ext_abi::Slot,
+        rgba: Rgba,
+        half_width: f32,
+        shader: Option<u16>,
+    ) -> Result<(), Refused> {
+        let width = half_width > 0.0 && half_width <= oag_ext_abi::MAX_BEAM_HALF_WIDTH;
+        let index = shader.is_none_or(|shader| shader <= oag_ext_abi::MAX_SHADER_INDEX);
+        if to == craft.slot() || !width || !index {
+            return Err(Refused::Range);
+        }
+        if self.beams >= oag_ext_abi::MAX_BEAMS_PER_TICK {
+            return Err(Refused::Beams);
+        }
+        self.push(&Command::DrawBeam {
+            slot: craft.slot(),
+            to,
+            rgba,
+            half_width,
+            shader,
+        })?;
+        self.beams += 1;
+        Ok(())
+    }
+
+    /// `set-shader-param`: scalar `index` (its place in the shader's header) of the shader
+    /// at place `shader` of the mod's `[shaders]`, in `craft`'s view, this tick; unset, the
+    /// header's default. Never hashed.
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`], [`Refused::Range`] for a value that is not finite or an `index`
+    /// from `MAX_SHADER_PARAMS` up.
+    pub fn set_shader_param(
+        &mut self,
+        craft: &Craft<'_>,
+        shader: u16,
+        index: u8,
+        value: f32,
+    ) -> Result<(), Refused> {
+        if !value.is_finite() || index >= oag_ext_abi::MAX_SHADER_PARAMS {
+            return Err(Refused::Range);
+        }
+        self.push(&Command::SetShaderParam {
+            slot: craft.slot(),
+            shader,
+            index,
+            value,
         })
     }
 

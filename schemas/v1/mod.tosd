@@ -165,6 +165,14 @@ optional = true
 type = "any"
 optional = true
 
+# `[shaders]`: name = "path.wgsl", the mod's own fragment shaders, `.wgsl` or `.wesl`
+# (docs/architecture/wasm-extensions/mod-shaders.md). The loader checks the names and that each
+# is such a file in the mod; the file itself is read, and refused by name, when a race loads it.
+
+[elements.shaders]
+type = "any"
+optional = true
+
 # `[sounds]`: name = "path.wav", the mod's own sounds (PCM16, docs/formats/mod-sound.md).
 # The loader checks the names and that each is a .wav in the mod; the file itself is read,
 # and refused by name, when a race loads it.

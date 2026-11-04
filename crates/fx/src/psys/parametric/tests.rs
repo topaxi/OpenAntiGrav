@@ -24,13 +24,17 @@ fn none(_: &TextureRef<'_>) -> Result<Sprite, String> {
     Err("no such picture".to_string())
 }
 
+fn no_shader(_: &str) -> Result<u16, String> {
+    Err("no such shader".to_string())
+}
+
 fn file(body: &str) -> String {
     format!("{HEADER}{body}")
 }
 
 #[test]
 fn an_effect_file_plays_through_the_same_system_as_a_disc_effect() {
-    let parsed = parse(&file(GOOD), &mut none).expect("a good file parses");
+    let parsed = parse(&file(GOOD), &mut none, &mut no_shader).expect("a good file parses");
     assert_eq!(parsed.axis, Axis::Rear);
     assert_eq!(parsed.effect.emitters.len(), 1);
     assert_eq!(parsed.effect.roots(), &[0]);
@@ -52,7 +56,7 @@ fn an_effect_file_plays_through_the_same_system_as_a_disc_effect() {
 
 #[test]
 fn the_gradient_is_baked_over_a_particles_life() {
-    let parsed = parse(&file(GOOD), &mut none).unwrap();
+    let parsed = parse(&file(GOOD), &mut none, &mut no_shader).unwrap();
     let palette = &parsed.effect.emitters[0].palette;
     assert_eq!(palette[0][..3], [1.0, 1.0, 1.0]);
     let mid = palette[(0.3_f32 * 255.0).round() as usize];
@@ -94,7 +98,7 @@ fn a_broken_file_is_refused_by_name() {
         ),
     ];
     for (what, text, names) in cases {
-        let error = parse(&text, &mut none).expect_err(what);
+        let error = parse(&text, &mut none, &mut no_shader).expect_err(what);
         assert!(
             error.to_string().contains(names),
             "{what}: {error} should name {names}"
@@ -110,10 +114,14 @@ fn a_texture_of_the_mod_reaches_the_emitter() {
         rgba: vec![255; 4].into(),
     };
     let text = file(&GOOD.replace("drag = 0.95", "drag = 0.95\ntexture = \"fx/glow.png\""));
-    let parsed = parse(&text, &mut |wanted| match wanted {
-        TextureRef::Mod("fx/glow.png") => Ok(sprite.clone()),
-        _ => Err("no".to_string()),
-    })
+    let parsed = parse(
+        &text,
+        &mut |wanted| match wanted {
+            TextureRef::Mod("fx/glow.png") => Ok(sprite.clone()),
+            _ => Err("no".to_string()),
+        },
+        &mut no_shader,
+    )
     .unwrap();
     assert_eq!(parsed.effect.emitters[0].sprite.as_ref(), Some(&sprite));
 
@@ -122,11 +130,60 @@ fn a_texture_of_the_mod_reaches_the_emitter() {
         "drag = 0.95\ntexture = { entry = \"Data\\\\x.vex\", name = \"spark.tga\" }",
     ));
     let mut asked = None;
-    let parsed = parse(&host, &mut |wanted| {
-        asked = Some(format!("{wanted:?}"));
-        Ok(sprite.clone())
-    })
+    let parsed = parse(
+        &host,
+        &mut |wanted| {
+            asked = Some(format!("{wanted:?}"));
+            Ok(sprite.clone())
+        },
+        &mut no_shader,
+    )
     .unwrap();
     assert!(asked.unwrap().contains("spark.tga"));
     assert!(parsed.effect.emitters[0].sprite.is_some());
+}
+
+/// A `shader` key names a place through the caller, draws that emitter out of both blend
+/// classes and onto its shader's list, and leaves the quad's uv `0..1`.
+#[test]
+fn an_emitter_with_a_shader_draws_through_it_alone() {
+    let text = file(GOOD).replacen("[[emitter]]", "[[emitter]]\nshader = \"portal\"", 1);
+    let parsed = parse(&text, &mut none, &mut |name| {
+        assert_eq!(name, "portal");
+        Ok(7)
+    })
+    .unwrap();
+    assert_eq!(parsed.effect.emitters[0].shader, Some(7));
+    let mut system = System::new();
+    system.ignite(&parsed.effect, Vec3::ZERO, 1.0);
+    let mut rng = Rng::new(1);
+    for _ in 0..4 {
+        system.advance(&parsed.effect, 1.0 / 60.0, Vec3::ZERO, Vec3::Y, &mut rng);
+    }
+    let (additive, alpha) = system.vertices(&parsed.effect, Vec3::X, Vec3::Y);
+    assert!(additive.is_empty() && alpha.is_empty());
+    let mut shaded = Vec::new();
+    system.extend_shaded(&mut shaded, &parsed.effect, Vec3::X, Vec3::Y, None);
+    assert_eq!(shaded.len(), 1, "every particle on its one list");
+    assert_eq!(shaded[0].0, 7);
+    assert!(!shaded[0].1.is_empty());
+    assert_eq!(shaded[0].1[0].texcoord, [0.0, 1.0]);
+}
+
+#[test]
+fn a_shader_is_refused_beside_a_texture_and_when_the_mod_has_none_of_that_name() {
+    let named = file(GOOD).replacen("[[emitter]]", "[[emitter]]\nshader = \"gone\"", 1);
+    let why = parse(&named, &mut none, &mut no_shader)
+        .unwrap_err()
+        .to_string();
+    assert!(why.contains("shader gone: no such shader"), "{why}");
+    let both = named.replacen(
+        "shader = \"gone\"",
+        "shader = \"a\"\ntexture = \"a.png\"",
+        1,
+    );
+    let why = parse(&both, &mut none, &mut |_| Ok(1))
+        .unwrap_err()
+        .to_string();
+    assert!(why.contains("its own texture"), "{why}");
 }

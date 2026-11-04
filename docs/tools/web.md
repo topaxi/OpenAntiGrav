@@ -1003,6 +1003,12 @@ the cache is made by `ffmpeg`, which a page cannot run.
 
 ## What is missing
 
+- **Mod shaders, with every mod module.** The web build has no `extensions` feature, so no
+  race there runs a module or lists a shader; `oag_fx::mod_shader` compiles in it unchanged
+  (`cargo check --target wasm32-unknown-unknown -p oag-game --no-default-features --features web
+  --lib`, 2026-11-04). WGSL is WebGPU's own language; run in a browser it is
+  untried, and there the device's refusals reach the browser's log and not the load report
+  ([`mod-shaders.md`](../architecture/wasm-extensions/mod-shaders.md)).
 - **Images over about 2 GB in a browser without synchronous slice reads.**
   The fallback copies the whole image into the module's memory, which wasm32
   caps at 4 GiB. Every browser tried reads slices (Chromium, Firefox, WebKit).

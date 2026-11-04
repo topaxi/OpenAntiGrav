@@ -42,6 +42,12 @@ pub fn sources<'a>(mods: impl IntoIterator<Item = &'a oag_mod::Mod>) -> Vec<Sour
                     .iter()
                     .map(|(name, path)| (name.clone(), path.clone()))
                     .collect(),
+                shaders: m
+                    .manifest
+                    .shaders
+                    .iter()
+                    .map(|(name, path)| (name.clone(), path.clone()))
+                    .collect(),
                 sounds: m
                     .manifest
                     .sounds

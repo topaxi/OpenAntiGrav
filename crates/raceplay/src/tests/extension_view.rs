@@ -21,6 +21,7 @@ fn a_screen_fill_washes_its_slots_view_alone() {
     let fill = Command::ScreenFill {
         slot: slot(1),
         rgba: FILL,
+        shader: None,
     };
     for views in [2, 4] {
         let mut race = local_people(views, false);
@@ -63,6 +64,7 @@ fn a_screen_fill_beside_a_flash_adds_to_it_and_without_one_the_flash_is_untouche
         &[Command::ScreenFill {
             slot: slot(0),
             rgba: FILL,
+            shader: None,
         }],
         &[],
     )]));

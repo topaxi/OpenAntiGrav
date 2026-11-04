@@ -92,6 +92,7 @@ fn module(id: &str, body: &str) -> race::extensions::Source {
         strings: Arc::new(|_| Default::default()),
         icons: Vec::new(),
         effects: Vec::new(),
+        shaders: Vec::new(),
         sounds: Vec::new(),
         files: Arc::new(|_| Err("no files".into())),
         pickup: None,

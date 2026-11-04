@@ -657,6 +657,7 @@ pub fn capture(
     );
     scene.attach_bloom_order(race.scenery_fx().bloom_under_hud());
     scene.attach_lens_flare(&device, &queue, format, race.scenery_fx().lens_flare());
+    scene.attach_mod_shaders(&device, &queue, race.mod_shaders());
     scene.prepare_ghost(
         &device,
         &queue,

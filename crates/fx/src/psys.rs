@@ -349,6 +349,10 @@ pub struct EmitterSpec {
     /// emitter whose draw the original issues ahead of an alpha-over draw of
     /// its own effect ([`Effect::draw_root_under_alpha`]).
     pub under_alpha: bool,
+    /// The place in the race's [`crate::mod_shader::Stage`] that draws this emitter's
+    /// particles, each a quad with a `0..1` uv, instead of either blend class
+    /// ([`System::extend_shaded`]). A mod's alone.
+    pub shader: Option<u16>,
     /// Spawn offsets and velocities skip the emitter node's matrix -
     /// [`pob::flags::WORLD_SPACE`], so [`System::set_frame_scale`] does not reach them.
     pub world_space: bool,
@@ -594,6 +598,7 @@ impl EmitterSpec {
             sheet_rect: None,
             short_run: true,
             under_alpha: false,
+            shader: None,
             world_space: record.flags & pob::flags::WORLD_SPACE != 0,
             template: false,
             rotation: roll::Rotation::of_emitter(record),
@@ -1390,6 +1395,7 @@ use direction::{direction_for, signed_unit};
 use sample::{channel_sample, random_range};
 mod frame;
 mod pipeline;
+pub(crate) use pipeline::SURFACE_ATTRIBUTES;
 pub use pipeline::{BLEND, BLEND_ALPHA_OVER, Drawer, Drawn, MAX_VERTICES, Pipeline};
 
 mod between_ticks;

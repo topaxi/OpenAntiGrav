@@ -108,6 +108,9 @@ pub struct Source {
     /// The mod's `[effects]`, in name order: name and the TOML's path in the mod. A
     /// module's `fire-mod-effect` names one by its place in this list.
     pub effects: Vec<(String, String)>,
+    /// The mod's `[shaders]`, in name order: name and the file's path in the mod. A
+    /// module's draws name one by its place in this list, an effect file by its name.
+    pub shaders: Vec<(String, String)>,
     /// The mod's `[sounds]`, in name order: name and the WAV's path in the mod. A
     /// module's `play-mod-sound` names one by its place in this list.
     pub sounds: Vec<(String, String)>,
@@ -122,6 +125,27 @@ pub struct Source {
     pub pickup_odds: Vec<oag_tables::pickup_look::OddsRow>,
     /// The mod's `[channels]`.
     pub channels: Declared,
+}
+
+/// A `draw-beam` of this tick: an output, never hashed.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Beam {
+    /// The craft it starts at.
+    pub from: usize,
+    /// The craft it ends at.
+    pub to: usize,
+    /// Straight-alpha `RGBA` in `0..=1`.
+    pub rgba: [f32; 4],
+    /// Half its width in world units.
+    pub half_width: f32,
+    /// The shader, by its place in the sending mod's `[shaders]`.
+    pub shader: Option<u16>,
+}
+
+/// A wire colour as straight-alpha `RGBA` in `0..=1`.
+#[cfg(feature = "extensions")]
+fn unit(rgba: oag_ext_abi::Rgba) -> [f32; 4] {
+    [rgba.r, rgba.g, rgba.b, rgba.a].map(|c| f32::from(c) / 255.0)
 }
 
 /// Reads a file of a mod by its path in the mod, on the load thread.
@@ -1068,13 +1092,77 @@ impl crate::Race {
     pub fn extension_fill(&self, slot: usize) -> Option<[f32; 4]> {
         #[cfg(feature = "extensions")]
         {
-            let rgba = (*self.sim.extensions.on.fill.get(slot)?).filter(|rgba| rgba.a > 0)?;
-            Some([rgba.r, rgba.g, rgba.b, rgba.a].map(|c| f32::from(c) / 255.0))
+            let (rgba, shader) = (*self.sim.extensions.on.fill.get(slot)?)?;
+            (shader.is_none() && rgba.a > 0).then(|| unit(rgba))
         }
         #[cfg(not(feature = "extensions"))]
         {
             let _ = slot;
             None
+        }
+    }
+
+    /// `slot`'s view's `screen-fill` this tick where a shader draws it: the sending mod, the
+    /// shader's place in its `[shaders]`, the colour. A wash of alpha 0 still runs: the
+    /// shader says what the colour means.
+    #[cfg(feature = "view")]
+    #[must_use]
+    pub(crate) fn extension_shaded_fill(&self, slot: usize) -> Option<(&str, u16, [f32; 4])> {
+        #[cfg(feature = "extensions")]
+        {
+            let on = &self.sim.extensions.on;
+            let (rgba, shader) = (*on.fill.get(slot)?)?;
+            let (module, shader) = shader?;
+            Some((on.module_id(module), shader, unit(rgba)))
+        }
+        #[cfg(not(feature = "extensions"))]
+        {
+            let _ = slot;
+            None
+        }
+    }
+
+    /// This tick's `draw-beam`s, with the sending mod.
+    #[cfg(feature = "view")]
+    pub(crate) fn extension_beams(&self) -> impl Iterator<Item = (&str, Beam)> {
+        #[cfg(feature = "extensions")]
+        {
+            let on = &self.sim.extensions.on;
+            on.beams
+                .iter()
+                .map(|(module, beam)| (on.module_id(*module), *beam))
+        }
+        #[cfg(not(feature = "extensions"))]
+        {
+            std::iter::empty()
+        }
+    }
+
+    /// This tick's `set-shader-param`s for `slot`'s view: mod, shader place, scalar, value.
+    #[cfg(feature = "view")]
+    pub(crate) fn extension_shader_params(
+        &self,
+        slot: usize,
+    ) -> impl Iterator<Item = (&str, u16, u8, f32)> {
+        #[cfg(feature = "extensions")]
+        {
+            let on = &self.sim.extensions.on;
+            on.shader_params
+                .iter()
+                .filter(move |sent| sent.slot == slot)
+                .map(|sent| {
+                    (
+                        on.module_id(sent.module),
+                        sent.shader,
+                        sent.index,
+                        sent.value,
+                    )
+                })
+        }
+        #[cfg(not(feature = "extensions"))]
+        {
+            let _ = slot;
+            std::iter::empty()
         }
     }
 

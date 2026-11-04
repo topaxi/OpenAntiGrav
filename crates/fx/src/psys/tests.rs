@@ -61,6 +61,7 @@ pub(super) fn effect(name: &str, looping: bool, duration_ticks: f32) -> std::syn
             sheet_rect: None,
             short_run: false,
             under_alpha: false,
+            shader: None,
             world_space: false,
             template: false,
             rotation: None,

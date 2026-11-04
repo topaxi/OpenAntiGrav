@@ -79,6 +79,12 @@ pub(crate) fn source_of(dir: &str) -> Option<race::extensions::Source> {
             .iter()
             .map(|(name, path)| (name.clone(), path.clone()))
             .collect(),
+        shaders: module
+            .manifest
+            .shaders
+            .iter()
+            .map(|(name, path)| (name.clone(), path.clone()))
+            .collect(),
         sounds: module
             .manifest
             .sounds

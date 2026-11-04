@@ -120,13 +120,22 @@ mod view {
         sources: &[Source],
         title: &str,
         foreign_track: Option<&std::path::Path>,
+        shaders: &crate::extension_shaders::ModShaders,
         library: &mut Library,
         host: &mut dyn FnMut(&str, &str) -> Result<Sprite, String>,
         report: &mut Vec<String>,
     ) -> ModEffects {
         #[cfg(not(feature = "extensions"))]
         {
-            let _ = (sources, title, foreign_track, library, host, report);
+            let _ = (
+                sources,
+                title,
+                foreign_track,
+                shaders,
+                library,
+                host,
+                report,
+            );
             ModEffects::default()
         }
         #[cfg(feature = "extensions")]
@@ -140,7 +149,14 @@ mod view {
                 let mut loaded = Vec::new();
                 for (name, path) in &source.effects {
                     let label = format!("mod {}: effect {name}", source.mod_id);
-                    match read(source, path, library, host, &key(&source.mod_id, name)) {
+                    match read(
+                        source,
+                        path,
+                        shaders,
+                        library,
+                        host,
+                        &key(&source.mod_id, name),
+                    ) {
                         Ok(own) => {
                             report.push(format!("{label}: {path} loaded"));
                             report.extend(crate::assets::sheet_note(
@@ -167,6 +183,7 @@ mod view {
     fn read(
         source: &Source,
         path: &str,
+        shaders: &crate::extension_shaders::ModShaders,
         library: &mut Library,
         host: &mut dyn FnMut(&str, &str) -> Result<Sprite, String>,
         key: &str,
@@ -187,7 +204,9 @@ mod view {
                 parametric::TextureRef::Host { entry, name } => host(entry, name),
             }
         };
-        let parsed = parametric::parse(&text, &mut texture).map_err(|e| format!("{path}: {e}"))?;
+        let mut shader = |name: &str| shaders.place_by_name(source, name);
+        let parsed = parametric::parse(&text, &mut texture, &mut shader)
+            .map_err(|e| format!("{path}: {e}"))?;
         library.insert(key, parsed.effect);
         let effect = library
             .get(key)

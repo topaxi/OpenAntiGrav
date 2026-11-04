@@ -103,8 +103,11 @@ pub(super) struct On {
     pub(super) sound_loops: super::sound::Loops,
     /// Each slot's `screen-fill` this tick (the later module wins) and `fov-offset` this
     /// tick (modules add): outputs, never hashed.
-    pub(super) fill: [Option<oag_ext_abi::Rgba>; oag_gameplay::MAX_SHIPS],
+    pub(super) fill: [Option<Fill>; oag_gameplay::MAX_SHIPS],
     pub(super) fov: [f32; oag_gameplay::MAX_SHIPS],
+    /// This tick's `draw-beam`s and `set-shader-param`s: outputs, never hashed.
+    pub(super) beams: Vec<(usize, super::Beam)>,
+    pub(super) shader_params: Vec<ShaderParam>,
     /// Events dropped past a cap, counted for the report: an output, never hashed.
     pub(super) drops: Drops,
     /// The race-wide outputs of this tick.
@@ -124,7 +127,26 @@ pub(super) struct On {
     pub(super) clearance: [Option<(bool, f32)>; oag_gameplay::MAX_SHIPS],
 }
 
+/// A `screen-fill` of this tick: its colour, and the shader as the sending module and the
+/// place in its `[shaders]`.
+pub(super) type Fill = (oag_ext_abi::Rgba, Option<(usize, u16)>);
+
+/// A `set-shader-param` of this tick.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct ShaderParam {
+    pub(super) module: usize,
+    pub(super) slot: usize,
+    pub(super) shader: u16,
+    pub(super) index: u8,
+    pub(super) value: f32,
+}
+
 impl On {
+    /// The mod module `module` belongs to.
+    pub(super) fn module_id(&self, module: usize) -> &str {
+        &self.slots[module].mod_id
+    }
+
     /// The `hud-*` commands of `slot` as the HUD's own vocabulary. A later command for
     /// the same element replaces an earlier one (modules run in id order).
     #[cfg(feature = "view")]
@@ -321,6 +343,8 @@ impl On {
             strings,
             pickups,
             effects: Vec::new(),
+            beams: Vec::new(),
+            shader_params: Vec::new(),
             sound_loops: Vec::new(),
             fill: [None; oag_gameplay::MAX_SHIPS],
             fov: [0.0; oag_gameplay::MAX_SHIPS],
@@ -953,6 +977,8 @@ pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs, trans
     // them rather than piling them up.
     on.effects.clear();
     on.fill = [None; oag_gameplay::MAX_SHIPS];
+    on.beams.clear();
+    on.shader_params.clear();
     on.fov = [0.0; oag_gameplay::MAX_SHIPS];
     let region = on.region.clone();
     let course_length = sim.course.as_ref().map_or(0.0, oag_race::Course::length);
@@ -1077,7 +1103,38 @@ fn apply(sim: &mut RaceSim, index: usize, command: Command) {
                 .effects
                 .push((slot.index(), Fired::Own { mod_id, index: own }));
         }
-        Command::ScreenFill { slot, rgba } => sim.extensions.on.fill[slot.index()] = Some(rgba),
+        Command::ScreenFill { slot, rgba, shader } => {
+            sim.extensions.on.fill[slot.index()] =
+                Some((rgba, shader.map(|shader| (index, shader))));
+        }
+        Command::DrawBeam {
+            slot,
+            to,
+            rgba,
+            half_width,
+            shader,
+        } => sim.extensions.on.beams.push((
+            index,
+            super::Beam {
+                from: slot.index(),
+                to: to.index(),
+                rgba: super::unit(rgba),
+                half_width,
+                shader,
+            },
+        )),
+        Command::SetShaderParam {
+            slot,
+            shader,
+            index: scalar,
+            value,
+        } => sim.extensions.on.shader_params.push(ShaderParam {
+            module: index,
+            slot: slot.index(),
+            shader,
+            index: scalar,
+            value,
+        }),
         Command::FovOffset { slot, degrees } => {
             let fov = &mut sim.extensions.on.fov[slot.index()];
             *fov = (*fov + degrees).clamp(

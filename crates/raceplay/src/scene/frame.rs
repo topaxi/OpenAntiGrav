@@ -1021,6 +1021,7 @@ impl Scene {
         self.upload_cannon_quads(queue, &vp, cannon_bolt, cannon_flash);
         self.upload_beam(race, queue, &vp);
         self.upload_ribbons(race, queue, &vp);
+        self.upload_mod_shaders(race, queue, &vp);
 
         // Both shadow tiers' geometry - its own file, see `frame/shadow.rs`.
         self.upload_shadow_geometry(queue, &vp, race, shadows);

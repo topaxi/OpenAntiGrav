@@ -53,7 +53,7 @@ impl Race {
     /// The GE's guard band, on Pulse's PSP source alone - `psys::guard`.
     /// That source is the one whose flash answers every kind; Pure's
     /// Quake-only wash is not a sign of it.
-    fn stage_guard_band(&self) -> Option<psys::guard::GuardBand> {
+    pub(crate) fn stage_guard_band(&self) -> Option<psys::guard::GuardBand> {
         let camera = self.camera_frame();
         self.view
             .screen_flash

@@ -89,6 +89,10 @@ pub struct Manifest {
     /// (`schemas/v1/effect.tosd`). A module's `fire-mod-effect` names one by its index in
     /// this map's name order.
     pub effects: std::collections::BTreeMap<String, String>,
+    /// `[shaders]`: the mod's own fragment shaders by name, as `.wgsl` or `.wesl` paths in
+    /// the mod (`docs/architecture/wasm-extensions/mod-shaders.md`). A module's draws and an
+    /// effect's `shader` key name one, the module by its index in this map's name order.
+    pub shaders: std::collections::BTreeMap<String, String>,
     /// `[sounds]`: the mod's own sounds by name, as `.wav` paths in the mod
     /// (`docs/formats/mod-sound.md`). A module's `play-mod-sound` names one by its index
     /// in this map's name order.
@@ -179,6 +183,8 @@ struct File {
     icons: std::collections::BTreeMap<String, String>,
     #[serde(default)]
     effects: std::collections::BTreeMap<String, String>,
+    #[serde(default)]
+    shaders: std::collections::BTreeMap<String, String>,
     #[serde(default)]
     sounds: std::collections::BTreeMap<String, String>,
     pickup: Option<PickupTable>,
@@ -502,6 +508,28 @@ impl Manifest {
             ));
         }
 
+        for (name, path) in &file.shaders {
+            if !valid_key(name) {
+                return Err(bad(
+                    "shaders",
+                    format!("{name:?} is not a name: letters, digits, '-', '_'"),
+                ));
+            }
+            let lower = path.to_ascii_lowercase();
+            if !(lower.ends_with(".wgsl") || lower.ends_with(".wesl")) || !has(path) {
+                return Err(bad(
+                    "shaders",
+                    format!("{name}: {path:?} is not a .wgsl or .wesl in the mod"),
+                ));
+            }
+        }
+        if file.shaders.len() > MAX_SHADERS {
+            return Err(bad(
+                "shaders",
+                format!("{} shaders, at most {MAX_SHADERS}", file.shaders.len()),
+            ));
+        }
+
         for (name, path) in &file.sounds {
             if !valid_key(name) {
                 return Err(bad(
@@ -596,6 +624,7 @@ impl Manifest {
             extension,
             icons: file.icons,
             effects: file.effects,
+            shaders: file.shaders,
             sounds: file.sounds,
             pickup,
             pickup_titles,
@@ -755,6 +784,8 @@ fn extension(e: ExtensionTable, has: &dyn Fn(&str) -> bool) -> Result<Extension,
 
 /// What `fire-mod-effect`'s index (15 bits of an argument) can name, kept well inside it.
 const MAX_EFFECTS: usize = 256;
+/// Every place `oag_ext_abi::MAX_SHADER_INDEX` can name.
+const MAX_SHADERS: usize = oag_ext_abi::MAX_SHADER_INDEX as usize + 1;
 
 /// What `play-mod-sound`'s index can name.
 const MAX_SOUNDS: usize = 64;

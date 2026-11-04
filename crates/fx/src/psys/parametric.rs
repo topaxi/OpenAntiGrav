@@ -121,6 +121,9 @@ struct Emitter {
     /// a texture of a circuit on the player's disc; drawn on every particle. None draws
     /// the soft round default.
     texture: Option<TextureName>,
+    /// A name in the mod's `[shaders]`: that shader draws each particle, a quad with a `0..1`
+    /// uv, in place of `texture` and the blend (`docs/architecture/wasm-extensions/mod-shaders.md`).
+    shader: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -203,6 +206,7 @@ impl Pair {
 pub fn parse(
     text: &str,
     texture: &mut dyn FnMut(&TextureRef<'_>) -> Result<Sprite, String>,
+    shader: &mut dyn FnMut(&str) -> Result<u16, String>,
 ) -> Result<Parsed, ParseError> {
     let file: File = toml::from_str(text).map_err(|e| ParseError(e.to_string()))?;
     oag_schema::check(file.header.as_ref(), SCHEMA_KIND, SCHEMA_MAJOR)
@@ -223,7 +227,8 @@ pub fn parse(
             .clone()
             .unwrap_or_else(|| format!("emitter {index}"));
         emitters.push(
-            build(emitter, &label, texture).map_err(|e| ParseError(format!("{label}: {e}")))?,
+            build(emitter, &label, texture, shader)
+                .map_err(|e| ParseError(format!("{label}: {e}")))?,
         );
     }
     let roots = Effect::roots_of(&emitters);
@@ -253,6 +258,7 @@ fn build(
     e: &Emitter,
     label: &str,
     texture: &mut dyn FnMut(&TextureRef<'_>) -> Result<Sprite, String>,
+    shader: &mut dyn FnMut(&str) -> Result<u16, String>,
 ) -> Result<EmitterSpec, ParseError> {
     let duration = finite(e.duration, "duration")?;
     if !(0.0..=MAX_DURATION_TICKS).contains(&duration) || (!e.looping && duration < 1.0) {
@@ -300,6 +306,13 @@ fn build(
     }
     let size = curve(&e.size, "size", 1.0)?;
     let alpha = curve(&e.alpha, "alpha", 255.0)?;
+    if e.shader.is_some() && e.texture.is_some() {
+        return bad("a shader names its own texture, in its header");
+    }
+    let shader = match &e.shader {
+        None => None,
+        Some(name) => Some(shader(name).or_else(|why| bad(format!("shader {name}: {why}")))?),
+    };
     let sprite = match &e.texture {
         None => None,
         Some(name) => {
@@ -353,6 +366,7 @@ fn build(
         sheet_rect: None,
         short_run: false,
         under_alpha: false,
+        shader,
         world_space: false,
         template: false,
         rotation: None,

@@ -56,6 +56,7 @@ fn energy_turbo() -> Option<race::extensions::Source> {
         strings: Arc::new(|_| Default::default()),
         icons: Vec::new(),
         effects: Vec::new(),
+        shaders: Vec::new(),
         sounds: Vec::new(),
         files: Arc::new(|_| Err("no files".into())),
         pickup: module.manifest.pickup.clone(),
@@ -359,16 +360,20 @@ fn the_discharge_finds_the_discs_energy_glow_by_name() {
     let mut archives =
         oag_assets::Archives::open(&image.to_string_lossy(), oag_pulse::TITLE).expect("archives");
     let mut asked = Vec::new();
-    let parsed = oag_fx::psys::parametric::parse(&text, &mut |wanted| match *wanted {
-        oag_fx::psys::parametric::TextureRef::Host { entry, name } => {
-            asked.push(name.to_string());
-            race::foreign::art::host_texture(&mut archives, entry, name)
-                .and_then(|texture| race::extension_effects::sprite_of(&texture))
-        }
-        oag_fx::psys::parametric::TextureRef::Mod(path) => {
-            Err(format!("{path}: no mod files here"))
-        }
-    })
+    let parsed = oag_fx::psys::parametric::parse(
+        &text,
+        &mut |wanted| match *wanted {
+            oag_fx::psys::parametric::TextureRef::Host { entry, name } => {
+                asked.push(name.to_string());
+                race::foreign::art::host_texture(&mut archives, entry, name)
+                    .and_then(|texture| race::extension_effects::sprite_of(&texture))
+            }
+            oag_fx::psys::parametric::TextureRef::Mod(path) => {
+                Err(format!("{path}: no mod files here"))
+            }
+        },
+        &mut |name| Err(format!("{name}: no shaders here")),
+    )
     .expect("the example's effect parses with its disc texture");
     assert_eq!(asked, ["energy_GLOW.tga"]);
     let sprite = parsed

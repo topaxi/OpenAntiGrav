@@ -853,10 +853,18 @@ pub fn load(options: &Options) -> Result<Loaded> {
     }
     // The mods' own effects land after every title effect, so no title sprite moves.
     #[cfg(feature = "view")]
+    let mod_shaders = crate::extension_shaders::load(
+        &extension_sources,
+        &title.slug(),
+        options.foreign_track.as_deref(),
+        &mut report,
+    );
+    #[cfg(feature = "view")]
     let mod_effects = crate::extension_effects::load(
         &extension_sources,
         &title.slug(),
         options.foreign_track.as_deref(),
+        &mod_shaders,
         &mut effects,
         &mut |entry, name| {
             crate::foreign::art::host_texture(&mut archives, entry, name)
@@ -865,7 +873,9 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &mut report,
     );
     #[cfg(feature = "view")]
-    let handles = super::EffectHandles::resolve(craft_title, &effects).with_own(mod_effects);
+    let handles = super::EffectHandles::resolve(craft_title, &effects)
+        .with_own(mod_effects)
+        .with_shaders(mod_shaders);
 
     #[cfg(feature = "view")]
     let (mut sounds, announcer, class_announcer) = audio::banks_and_announcers(
