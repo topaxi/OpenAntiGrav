@@ -968,7 +968,7 @@ impl Scene {
                 && !race.engine_flare_effect()
                 && !self.is_wrecked(race, slot)
             {
-                vertices.extend(exhaust.vertices(nozzle, right, up));
+                vertices.extend_from_slice(&exhaust.vertices(nozzle, right, up));
             }
             // HD's sprite flare - Engine_Flare_Rich.gtf, enabled by the
             // disc's own tuning file - is the bright core the exhaust's
