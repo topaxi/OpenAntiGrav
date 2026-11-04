@@ -65,18 +65,23 @@ fn altimas_glass_and_cutouts_leave_the_opaque_list_on_the_vita_too() {
     assert!(model.draws.len() > model.transparent_draws.len());
 }
 
-/// Builds every circuit model in `archives` whose path matches `is_track` and
-/// returns how many there were and how many drawn colour slots are not
-/// pictures (`track_albedo`). psp2 resolves no shader variant (the Vita and PS4
+/// Builds every circuit model in `archives` whose path matches `is_track`
+/// (`track_albedo` counts the colour slots that are not pictures). psp2 resolves no shader variant (the Vita and PS4
 /// programs are unread), so there is no variant clause on these two titles, and
 /// its `unresolved_draws` is not ratcheted: Amphiseum alone reports about 2,100,
 /// which this census did not take apart.
-fn every_circuit_binds_pictures(
+/// Builds every model, and returns how many there were, how many drawn colour slots are not
+/// pictures, and the draws left without a picture by the exit of `bind_textures` that left
+/// them, summed over the models. Each model's line is printed: `--no-capture` reads the
+/// per-circuit counts.
+fn every_circuit_binds(
     archives: &mut [oag_assets::psarc::Archive],
+    first_track_archive: usize,
     is_track: impl Fn(&str) -> bool,
-) -> (usize, usize) {
+) -> (usize, usize, psp2::UnboundDraws) {
+    let mut unbound = psp2::UnboundDraws::default();
     let mut tracks: Vec<(usize, String)> = Vec::new();
-    for (i, a) in archives.iter().enumerate() {
+    for (i, a) in archives.iter().enumerate().skip(first_track_archive) {
         tracks.extend(
             a.paths()
                 .iter()
@@ -89,17 +94,24 @@ fn every_circuit_binds_pictures(
     for (i, path) in &tracks {
         let blob = archives[*i].read_path(path).expect("the model reads");
         let name = path.rsplit('/').nth(1).unwrap_or(path).to_string();
-        let (model, _) = psp2::build(&name, &blob, None, &mut |p| {
+        let (model, report) = psp2::build(&name, &blob, None, &mut |p| {
             archives.iter_mut().find_map(|a| a.read_path(p).ok())
         })
         .expect("builds");
+        println!(
+            "{path}: {} submesh(es), {} unresolved{}",
+            report.submeshes,
+            report.unresolved_draws,
+            report.unbound.describe()
+        );
+        unbound.add(&report.unbound);
         let faults = crate::track_albedo::faults(&model, true);
         if !faults.is_empty() {
             println!("{path}: {}", crate::track_albedo::describe(&faults));
         }
         faulty += faults.len();
     }
-    (tracks.len(), faulty)
+    (tracks.len(), faulty, unbound)
 }
 
 /// Altima's road binds its `DiffuseMap`, not the first sampler listed.
@@ -169,12 +181,23 @@ fn omega_circuit(dir: &str, known: usize) {
         .filter_map(|a| oag_assets::psarc::Archive::open_file(&root.join(a)).ok())
         .collect();
     let marker = format!("/{dir}/track");
-    let (n, faulty) = every_circuit_binds_pictures(&mut archives, |p| {
+    let (n, faulty, unbound) = every_circuit_binds(&mut archives, 0, |p| {
         p.contains(&marker) && p.ends_with(".final.rcsmodel") && !p.contains(".final.pvs")
     });
     println!("{dir}: {n} model(s), {faulty} drawn colour slot(s) that are not pictures");
     assert!(n >= 1, "{dir} was found");
     assert!(faulty <= known, "{dir}: {faulty} > {known}");
+    only_by_design(dir, &unbound);
+}
+
+/// A draw that names a texture of its own never goes without it, and a texture that is
+/// named is in the archive set and decodes: what is left unbound is a placeholder, a Zone
+/// colour, glass, or a material that names no texture (`fc05_colour_lambert` and kin), which
+/// draw flat on the disc's own terms.
+fn only_by_design(what: &str, unbound: &psp2::UnboundDraws) {
+    assert_eq!(unbound.no_diffuse_path, 0, "{what}: {unbound:?}");
+    assert_eq!(unbound.archive_miss, 0, "{what}: {unbound:?}");
+    assert_eq!(unbound.decode_refused, 0, "{what}: {unbound:?}");
 }
 
 macro_rules! omega_circuit_test {
@@ -268,11 +291,49 @@ fn the_2048_circuits_bind_no_more_lookups_than_the_known_gap() {
     }
     let mut archives =
         vec![oag_assets::psarc::Archive::open(path.to_str().expect("utf-8")).expect("opens")];
-    let (n, faulty) = every_circuit_binds_pictures(&mut archives, |p| {
+    let (n, faulty, unbound) = every_circuit_binds(&mut archives, 0, |p| {
         p.contains("/environments/") && p.ends_with("/track.rcsmodel")
             || p.contains("/environments/") && p.ends_with("/track_reversed.rcsmodel")
     });
     println!("{n} circuit model(s), {faulty} drawn colour slot(s) that are not pictures");
     assert!(n > 4, "2048's circuits were found: {n}");
     assert!(faulty <= VITA_FAULTS, "{faulty} > {VITA_FAULTS}");
+    only_by_design("2048", &unbound);
+}
+
+/// 2048's DLC circuits and the patch's re-shipped ones, the two DLC packages and the two patch
+/// archives over the base archive for the textures they borrow. Their materials are the ones the base circuits' were: no named texture is missing.
+#[test]
+#[ignore = "needs data/extracted/vita/PCSF00007"]
+fn the_2048_dlc_and_patch_circuits_bind_every_texture_they_name() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("data/extracted/vita/PCSF00007");
+    let paths = [
+        "base/PSP2/data.psarc",
+        "dlc1/PSP2/dlc1.psarc",
+        "dlc2/PSP2/dlc2.psarc",
+        "patch-v104/PSP2/data1.psarc",
+        "patch-v104/PSP2/data2.psarc",
+    ];
+    if !root.join(paths[1]).exists() {
+        assert!(
+            std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+            "OAG_REQUIRE_GAME_DATA is set but {} is missing",
+            root.display()
+        );
+        return;
+    }
+    let mut archives: Vec<_> = paths
+        .iter()
+        .map(|p| {
+            oag_assets::psarc::Archive::open(root.join(p).to_str().expect("utf-8")).expect("opens")
+        })
+        .collect();
+    let (n, _, unbound) = every_circuit_binds(&mut archives, 1, |p| {
+        p.contains("/environments/") && p.ends_with("/track.rcsmodel")
+            || p.contains("/environments/") && p.ends_with("/track_reversed.rcsmodel")
+    });
+    assert!(n >= 4, "the DLC circuits were found: {n}");
+    only_by_design("2048 DLC and patch", &unbound);
 }

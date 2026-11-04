@@ -212,14 +212,19 @@ fn census_of(blob: &[u8], ps4: bool) -> Census {
             })
         });
         let half = if ps4 { vertex_decl::PS4_HALF2 } else { 8 };
+        let float = if ps4 {
+            vertex_decl::PS4_FLOAT2
+        } else {
+            vertex_decl::FLOAT2
+        };
         let own_attr = own.own_diffuse_texcoord(half).copied();
-        if own_attr.is_some_and(|a| a.gxm_type == vertex_decl::FLOAT2) {
+        if own_attr.is_some_and(|a| a.gxm_type == float) {
             out.own_float.add(tris);
         }
         if own.diffuse_texcoord_is_fallback(half) {
             out.own_fallback.add(tris);
         }
-        if own_attr.is_some_and(|a| a.gxm_type != half && a.gxm_type != vertex_decl::FLOAT2) {
+        if own_attr.is_some_and(|a| a.gxm_type != half && a.gxm_type != float) {
             out.own_undecoded.add(tris);
         }
         let own_off = own_attr.map(|a| a.offset);
@@ -228,14 +233,13 @@ fn census_of(blob: &[u8], ps4: bool) -> Census {
             (true, false) => out.own_uv_no_named_diffuse += 1,
             _ => {}
         }
-        let width = if !ps4 && own_attr.is_some_and(|a| a.gxm_type == vertex_decl::FLOAT2) {
+        let width = if own_attr.is_some_and(|a| a.gxm_type == float) {
             8
         } else {
             4
         };
         let off = own_off.map(usize::from).filter(|&o| s.stride >= o + width);
-        let decoded = ps4
-            || own_attr.is_some_and(|a| a.gxm_type == half || a.gxm_type == vertex_decl::FLOAT2);
+        let decoded = ps4 || own_attr.is_some_and(|a| a.gxm_type == half || a.gxm_type == float);
         let Some(off) = off.filter(|_| decoded) else {
             out.own_empty.add(tris);
             if !s.texcoords.is_empty() {
