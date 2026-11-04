@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-04
-summary: "Nothing plays yet. Reader landed; design decided: one 20-voice pattern player, cues in, motors out, RUMBLE None, Original, PS3, PS4; lanes 2-4 next, mods with Slipstream."
+summary: "Reader landed, nothing plays yet; one pattern player, RUMBLE None, Original, PS3, PS4; lanes 2-4 next, mods with Slipstream."
 categories: [tooling]
 size: L (60)
 difficulty: medium (50)
