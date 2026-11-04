@@ -175,13 +175,15 @@ mod race {
         }
     }
 
+    type Fired = Vec<(&'static str, u32)>;
+
     /// A lone craft on the autopilot for `ticks`, its pad recorded under `token`.
     fn fly(
         image: &str,
         title: &oag_title::Title,
         token: &str,
         ticks: usize,
-    ) -> Option<(Option<Vec<(&'static str, u32)>>, Recorder)> {
+    ) -> Option<(Fired, Recorder)> {
         let image = oag_testdata::image(image)?;
         let loaded = oag_raceplay::load(&oag_raceplay::Options {
             source: image.display().to_string(),
@@ -202,14 +204,13 @@ mod race {
         }
         let fired = rumbler.fired();
         rumbler.stop(&mut out);
-        Some((Some(fired), out))
+        Some((fired, out))
     }
 
     fn assert_rumbles(image: &str, title: &oag_title::Title) {
         let Some((fired, out)) = fly(image, title, "ps4", 3000) else {
             return;
         };
-        let fired = fired.unwrap();
         assert!(!fired.is_empty(), "no pattern fired in 3000 ticks");
         assert!(out.sent.iter().any(|m| m.large > 0), "{fired:?}");
         assert_eq!(out.silenced, 1, "the race's end silences the pad");
