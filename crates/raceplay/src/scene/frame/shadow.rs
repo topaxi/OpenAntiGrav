@@ -177,16 +177,23 @@ impl super::super::Scene {
     ) {
         let mut gathered = self.shadow_gathered.borrow_mut();
         if self.does_frame_work() {
-            *gathered = self.shadow_geometry(race, shadows);
+            self.shadow_geometry(race, shadows, &mut gathered);
         }
-        let (quads, hull_vertices) = &*gathered;
+        // At a tick's own alpha the hulls are the cached gather itself, read in place.
+        let cache;
+        let hull_vertices = if gathered.cached {
+            cache = self.hull_cache.borrow();
+            cache.current_vertices()
+        } else {
+            &gathered.hulls[..]
+        };
         self.shadow
             .borrow_mut()
-            .upload(queue, vp, quads, hull_vertices);
+            .upload(queue, vp, &gathered.quads, hull_vertices);
     }
 
     /// The quads and the projected hulls this frame draws, for the tier the
-    /// caller is on.
+    /// caller is on, into `into`.
     ///
     /// Both lists are empty at `off`, and each tier fills exactly one of them:
     /// they are alternatives, not layers.
@@ -194,7 +201,11 @@ impl super::super::Scene {
         &self,
         race: &Race,
         shadows: oag_display::display::Shadows,
-    ) -> (Vec<Placement>, Vec<GpuVertex>) {
+        into: &mut ShadowGathered,
+    ) {
+        into.quads.clear();
+        into.hulls.clear();
+        into.cached = false;
         // The blob shadows, gathered here with the rest of the per-frame
         // geometry and uploaded whether or not the tier is on - `upload` with
         // no placements clears the runs, which is what makes turning the row
@@ -223,14 +234,26 @@ impl super::super::Scene {
             // The quads are not drawn at all: the two tiers are alternatives,
             // not layers.
             let axis = Vec3::from_array(oag_pulse::shadow::WORLD_AXIS);
-            return (Vec::new(), self.original_hulls(race, axis));
+            into.cached = self.original_hulls(race, axis, &mut into.hulls);
+            return;
         }
         if shadows == oag_display::display::Shadows::Blob {
-            (race.shadow_placements(), Vec::new())
-        } else {
-            (Vec::new(), Vec::new())
+            into.quads = race.shadow_placements();
         }
     }
+}
+
+/// What a frame's first view gathered for the shadow upload, kept so every later view of the
+/// frame uploads the same, and kept between frames so the lists are refilled rather than made.
+#[derive(Debug, Default)]
+pub(in crate::scene) struct ShadowGathered {
+    /// The blob tier's quads.
+    quads: Vec<Placement>,
+    /// The `original` tier's projected hulls, when they are not [`Self::cached`].
+    hulls: Vec<GpuVertex>,
+    /// The hulls are the hull cache's current gather as it stands (a draw at a tick's own
+    /// alpha), uploaded from there rather than copied here.
+    cached: bool,
 }
 
 impl super::super::Scene {

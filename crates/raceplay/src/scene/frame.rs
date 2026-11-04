@@ -1244,3 +1244,4 @@ mod road;
 mod shadow;
 pub(super) use attachments::{depth_texture, msaa_color_texture};
 pub(super) use hull_cache::HullCache;
+pub(super) use shadow::ShadowGathered;

@@ -320,10 +320,7 @@ pub struct Scene {
     /// the frame in progress. A split screen gathers once, on its first view, and
     /// every later view uploads the same lists: where the craft cast is not a
     /// property of the camera. See `Scene::upload_shadow_geometry`.
-    shadow_gathered: std::cell::RefCell<(
-        Vec<oag_render::shadow::Placement>,
-        Vec<oag_mesh::mesh::GpuVertex>,
-    )>,
+    shadow_gathered: std::cell::RefCell<frame::ShadowGathered>,
     /// The last two ticks' projected hulls, so the `original` tier gathers once
     /// per tick rather than once per drawn frame. See `frame/hull_cache.rs`.
     hull_cache: std::cell::RefCell<frame::HullCache>,
