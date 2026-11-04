@@ -77,7 +77,7 @@ mod widget;
 
 pub use assets::{Assets, SplitAssets, split_family};
 pub use compose::{Composed, compose};
-pub use draw::{Context, Frame, Span, draw_list, sprite_draw};
+pub use draw::{Context, Frame, Span, draw_list, draw_list_without_sight, sprite_draw};
 pub use head_to_head::HeadToHead;
 pub use kill_tags::KillTag;
 pub use pickup::pickup_icon_name;

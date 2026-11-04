@@ -13,7 +13,7 @@
 //! [`crate::Readout::shield_forced_red`]'s neighbour
 //! [`crate::Readout::shield_blinking`] for what each field measures.
 
-use super::{Draw, Readout, Sprite, sprite_draw};
+use super::{Draw, Readout, Sprite};
 
 /// Applies `ShieldBar`'s forced-red and blink to `cropped` in place, and
 /// returns the absorb flash layer's own draw, if this tick is absorbing.
@@ -44,6 +44,7 @@ use super::{Draw, Readout, Sprite, sprite_draw};
 ///   approximated - see `crate::race::Race::advance_shield_blink`.
 pub(super) fn tint(
     cropped: &mut Sprite,
+    src: &str,
     readout: &Readout,
     sheet: &crate::sprite::Sheet,
 ) -> Option<Draw> {
@@ -51,7 +52,7 @@ pub(super) fn tint(
     if readout.shield_absorbing {
         let mut white = cropped.clone();
         white.color = [1.0, 1.0, 1.0, 1.0];
-        flash = sprite_draw(&white, sheet);
+        flash = super::draw::sprite_draw_from(src, &white, sheet);
     }
     if readout.shield_forced_red() {
         cropped.color = [1.0, 0.0, 0.0, cropped.color[3]];

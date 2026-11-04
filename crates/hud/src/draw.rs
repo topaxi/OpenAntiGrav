@@ -71,7 +71,18 @@ pub(super) fn bar_fraction(name: &str, readout: &Readout, art: &oag_title::HudAr
 /// established is that the crop is *linear* in the value, or that it grows from
 /// the left. A reference frame at a known speed settles both.
 pub(super) fn crop_horizontally(sprite: &Sprite, fraction: f32) -> Sprite {
-    let mut out = sprite.clone();
+    Sprite {
+        name: sprite.name.clone(),
+        src: sprite.src.clone(),
+        ..crop_geometry(sprite, fraction)
+    }
+}
+
+/// [`crop_horizontally`]'s geometry alone: the cropped sprite with an empty `name` and `src`,
+/// so a bar drawn every frame copies no strings. Draw it with [`sprite_draw_from`] and the
+/// whole sprite's `src`.
+pub(super) fn crop_geometry(sprite: &Sprite, fraction: f32) -> Sprite {
+    let mut out = bare(sprite);
     out.rect[2] = sprite.rect[2] * fraction;
     out.uv[2] = sprite.uv[2] * fraction;
     // The grade belongs to the whole bar, so a part-full bar shows the part of
@@ -83,6 +94,21 @@ pub(super) fn crop_horizontally(sprite: &Sprite, fraction: f32) -> Sprite {
         *right = end;
     }
     out
+}
+
+/// `sprite` without its `name` and `src`: a copy that allocates nothing, for a crop drawn with
+/// [`sprite_draw_from`].
+pub(super) fn bare(sprite: &Sprite) -> Sprite {
+    Sprite {
+        name: String::new(),
+        src: String::new(),
+        rect: sprite.rect,
+        uv: sprite.uv,
+        color: sprite.color,
+        rotation: sprite.rotation,
+        gradient: sprite.gradient,
+        centred: sprite.centred,
+    }
 }
 
 /// Crops a sprite vertically to `fraction` of its height, anchored at the
@@ -794,6 +820,25 @@ pub(super) fn top_edge(label: &Label, line_height: f32) -> f32 {
 /// too faint to see at that exposure, this rule is what to revisit.
 #[must_use]
 pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
+    list(cx, readout, Sight::Drawn)
+}
+
+/// [`draw_list`] without the lock-on reticle, for a caller that places the reticle itself
+/// (a split view's, which goes where that view's own sight is): the same frame as
+/// [`draw_list`] given the readout with `sight` taken out, without copying the readout.
+#[must_use]
+pub fn draw_list_without_sight(cx: &Context<'_>, readout: &Readout) -> Frame {
+    list(cx, readout, Sight::Left)
+}
+
+/// Whether [`list`] draws the readout's lock-on reticle.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Sight {
+    Drawn,
+    Left,
+}
+
+fn list(cx: &Context<'_>, readout: &Readout, sight: Sight) -> Frame {
     // The kill column is Pulse's alone - see [`oag_title::HudArt::kill_column`] -
     // and so are the message lines, [`oag_title::HudArt::message_slots`].
     let ungated;
@@ -882,27 +927,29 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
                 let extra = super::ext_draws::bar_extra(&readout.ext, &sprite.name);
                 // A tipped bar's cropped fill ends in the art's pointed tip, so the added
                 // share is split off that fill whole.
-                let (whole, share) = if tipped {
-                    (super::bar_tip::crop(sprite, fraction), 1.0)
-                } else {
-                    (sprite.clone(), fraction)
-                };
+                // The fill is cropped without its strings and drawn from the widget's own
+                // `src`; only a bar with an added share splits a whole copy.
                 let mut cropped = if let Some(extra) = extra {
-                    let (base, tail) = super::ext_draws::split_bar(&whole, share, extra);
+                    let (base, tail) = if tipped {
+                        let whole = super::bar_tip::crop(sprite, fraction);
+                        super::ext_draws::split_bar(&whole, 1.0, extra)
+                    } else {
+                        super::ext_draws::split_bar(sprite, fraction, extra)
+                    };
                     added = tail.and_then(|tail| sprite_draw(&tail, cx.sheet));
                     base
                 } else if tipped {
-                    whole
+                    super::bar_tip::crop_geometry(sprite, fraction)
                 } else {
-                    crop_horizontally(sprite, fraction)
+                    crop_geometry(sprite, fraction)
                 };
                 // `ShieldBar` alone: confirmed against the digits this
                 // function formats, `"%"` and not `"kmh"`. See
                 // `shield_bar::tint` for the three rules it applies.
                 if sprite.name == "ShieldBar" {
-                    flash = super::shield_bar::tint(&mut cropped, readout, cx.sheet);
+                    flash = super::shield_bar::tint(&mut cropped, &sprite.src, readout, cx.sheet);
                 }
-                sprite_draw(&cropped, cx.sheet)
+                sprite_draw_from(&sprite.src, &cropped, cx.sheet)
             }
             // `EnergyBar`/`EnergyBarDelay`, 2048 only - see
             // `dialect_2048::vertical_bar_fraction`. Both crop without
@@ -958,7 +1005,7 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
     // The lock-on reticle, over the bars and under the text - it is the only
     // HUD sprite anchored on the *world* rather than on the screen, so it moves
     // across everything else and must not be under it.
-    if let Some(sight) = &readout.sight {
+    if let Some(sight) = readout.sight.as_ref().filter(|_| sight == Sight::Drawn) {
         frame
             .sprites
             .extend(super::sight_draw::sight_draws(cx, sight));
@@ -1249,7 +1296,17 @@ pub(super) fn lap_one_dx(cx: &Context<'_>, readout: &Readout, name: &str) -> f32
 /// [`super::Layout`] has already converted to a top-left corner, still turns
 /// about the position the layout authored. See [`Sprite::rotation`].
 pub fn sprite_draw(sprite: &Sprite, sheet: &crate::sprite::Sheet) -> Option<Draw> {
-    let placed = sheet.get(&sprite.src)?;
+    sprite_draw_from(&sprite.src, sprite, sheet)
+}
+
+/// [`sprite_draw`] with the sheet entry named by `src` rather than by `sprite.src`: how a
+/// sprite cropped without its strings ([`crop_geometry`]) is drawn from its widget's own.
+pub(super) fn sprite_draw_from(
+    src: &str,
+    sprite: &Sprite,
+    sheet: &crate::sprite::Sheet,
+) -> Option<Draw> {
+    let placed = sheet.get(src)?;
     // The texture is packed into a shared sheet, so its own pixel coordinates
     // are offset by wherever the packer put it. The width and height are *not*
     // offset, and may be negative: 26 of HD's sprites author a negative

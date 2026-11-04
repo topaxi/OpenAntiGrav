@@ -112,7 +112,7 @@ impl Scene {
         oag_gpu::split_finish::split(device, encoder);
         oag_gpu::perfprobe::mark("scene-pass");
         let blur_lens = pass.blur_lens;
-        drop(pass);
+        self.keep_view_lists(pass);
         let (hd_bloom_encoded, blur_encoded) = self.finish_view(
             device,
             queue,
@@ -468,21 +468,25 @@ impl Scene {
             recoloured,
         } = &mut *scratch;
 
-        for drawable in [
+        let mut written = self.zone_vis_written.borrow_mut();
+        for (drawable, last) in [
             Some(&self.track),
             self.collision.as_ref(),
             self.pads.as_ref(),
             self.weapon_pads.as_ref(),
         ]
         .into_iter()
-        .flatten()
+        .zip(written.iter_mut())
+        .filter_map(|(drawable, last)| Some((drawable?, last)))
         {
-            // Written for every drawable on this list regardless of whether a
+            // Called for every drawable on this list regardless of whether a
             // Zone race is running: it blanks the lookup with no spectrum or
             // no tint, and `scene.zone.enabled` already gates the glow off
-            // outside a Zone race, so this is cheap and never wrong to call.
-            drawable.write_zone_vis(queue, zone_spectrum, zone_tint);
+            // outside a Zone race. It writes only texels that changed, so a
+            // race with no Zone writes the blank lookup once.
+            drawable.write_zone_vis(queue, zone_spectrum, zone_tint, last);
         }
+        drop(written);
         // **The craft get the same scene with the Zone half switched off**,
         // because the disc says they are not in it. The twelve
         // `data/materials/ships/*.rcsmaterial` in `DATA03.PSARC` carry no Zone
@@ -968,12 +972,12 @@ impl Scene {
                 && !race.engine_flare_effect()
                 && !self.is_wrecked(race, slot)
             {
-                vertices.extend(exhaust.vertices(nozzle, right, up));
+                vertices.extend_from_slice(&exhaust.vertices(nozzle, right, up));
             }
             // HD's sprite flare - Engine_Flare_Rich.gtf, enabled by the
             // disc's own tuning file - is the bright core the exhaust's
             // "solidity" comes from; the flare texture slot holds it on HD.
-            vertices.extend(race.hd_sprite_quad(slot, right, up));
+            vertices.extend_from_slice(&race.hd_sprite_quad(slot, right, up));
             // Wipeout HD draws its own measured tube - three fins over a
             // 54-sample ring, extruded in the craft's frame rather than the
             // camera's - and every other source the PSP preset's ribbon.
@@ -1204,7 +1208,8 @@ impl Scene {
         // depth-tested-not-written geometry, so they follow right after for the
         // same reason.
         draws.push(Draw::Effects);
-        let mut shadow_runs = Vec::new();
+        let lists = self.take_view_lists();
+        let mut shadow_runs = lists.shadow_runs;
         self.shadow_runs(&mut shadow_runs);
         ViewPass {
             layer: self.layer.get(),
@@ -1226,6 +1231,7 @@ impl Scene {
             effects: self.effects_drawn(),
             ribbon_first,
             shadow_runs,
+            opaque_order: std::cell::Cell::new(lists.opaque_order),
             ghost: self.ghost_draw(race, lod_eye),
             stats: behind_glass,
             blur_lens,
@@ -1243,3 +1249,4 @@ mod road;
 mod shadow;
 pub(super) use attachments::{depth_texture, msaa_color_texture};
 pub(super) use hull_cache::HullCache;
+pub(super) use shadow::{ShadowGathered, ShadowRank};

@@ -1081,3 +1081,59 @@ fn the_total_time_precision_follows_the_title() {
     assert!(!oag_pulse::hud::ART.total_time_hundredths);
     assert!(!oag_hd::hud::ART.total_time_hundredths);
 }
+
+/// A bar cropped without its strings draws exactly what the full crop draws, flat or graded,
+/// with an authored patch or the whole texture: the bar path's `crop_geometry` and
+/// `sprite_draw_from` are `crop_horizontally` and `sprite_draw` without the copies.
+#[test]
+fn a_bar_cropped_without_its_strings_draws_the_same() {
+    let placed = crate::sprite::Placed {
+        x: 3,
+        y: 100,
+        width: 256,
+        height: 128,
+        quad_extent: None,
+        quad_centre: None,
+        blend: None,
+    };
+    let sheet = crate::sprite::Sheet::placed_at(&[("bar.mip", placed)]);
+    let bar = Sprite {
+        name: "SpeedBar".to_string(),
+        src: "bar.mip".to_string(),
+        rect: [10.0, 20.0, 120.0, 8.0],
+        uv: [4.0, 2.0, 96.0, 8.0],
+        color: [0.5, 0.75, 1.0, 0.8],
+        rotation: 0.0,
+        gradient: None,
+        centred: false,
+    };
+    let graded = Sprite {
+        gradient: Some([[1.0, 1.0, 0.0, 1.0], [1.0, 0.5, 0.0, 1.0]]),
+        ..bar.clone()
+    };
+    let whole = Sprite {
+        uv: [0.0, 0.0, 0.0, 0.0],
+        ..bar.clone()
+    };
+    for sprite in [&bar, &graded, &whole] {
+        for fraction in [0.0, 0.37, 1.0] {
+            let full = sprite_draw(&crop_horizontally(sprite, fraction), &sheet);
+            let bare = crop_geometry(sprite, fraction);
+            assert!(bare.name.is_empty() && bare.src.is_empty());
+            assert_eq!(
+                sprite_draw_from(&sprite.src, &bare, &sheet),
+                full,
+                "{fraction} of {sprite:?}"
+            );
+            assert!(full.is_some());
+            let tipped = sprite_draw(&super::bar_tip::crop(sprite, fraction), &sheet);
+            let bare = super::bar_tip::crop_geometry(sprite, fraction);
+            assert!(bare.name.is_empty() && bare.src.is_empty());
+            assert_eq!(
+                sprite_draw_from(&sprite.src, &bare, &sheet),
+                tipped,
+                "tipped {fraction} of {sprite:?}"
+            );
+        }
+    }
+}

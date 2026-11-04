@@ -75,7 +75,7 @@ fn the_exhaust_pipeline_builds_and_draws_on_a_real_device() {
     // The flare is one quad. **It used to be the whole buffer**, and this
     // assertion read `== MAX_VERTICES` until `exhaust::sprite` gave it company -
     // see that function and `exhaust::MAX_SPRITES`.
-    let mut vertices = state.vertices(Vec3::ZERO, Vec3::X, Vec3::Y);
+    let mut vertices = state.vertices(Vec3::ZERO, Vec3::X, Vec3::Y).to_vec();
     assert_eq!(vertices.len(), 6, "the flare is one quad");
 
     // Fill the rest of the budget with caller sprites, so this exercises a

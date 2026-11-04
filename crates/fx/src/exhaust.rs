@@ -761,9 +761,9 @@ impl Exhaust {
     /// (`(intensity * 0.6 + 0.4) * 2.5`), so an idle engine shows a small
     /// glow rather than nothing - as the original does on the start line.
     #[must_use]
-    pub fn vertices(&self, nozzle: Vec3, right: Vec3, up: Vec3) -> Vec<GpuVertex> {
+    pub fn vertices(&self, nozzle: Vec3, right: Vec3, up: Vec3) -> [GpuVertex; 6] {
         let half = self.half_size;
-        quad(nozzle, right * half, up * half, self.alpha).to_vec()
+        quad(nozzle, right * half, up * half, self.alpha)
     }
 }
 

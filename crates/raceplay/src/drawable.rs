@@ -624,15 +624,22 @@ impl Drawable {
 
     /// Rewrites the Zone visualiser's lookup from `bands` levels, tinted by
     /// `tint` - or blanks it when `tint` is `None`, which is what a stage
-    /// with no authored `EQ colour tint` gets. See
-    /// `oag_mesh::mesh_render::zone::write_vis`, which this forwards to.
+    /// with no authored `EQ colour tint` gets. Writes nothing when the texels
+    /// equal `last`, what this drawable's lookup was last given (`None`: never
+    /// written), and leaves this frame's there. See
+    /// `oag_mesh::mesh_render::zone::write_vis_changed`, which this forwards to.
+    ///
+    /// Safe to skip because every view's writes land in the order the views were
+    /// prepared (`oag_gpu::writes`): the texture holds the last texels written.
+    /// Returns whether it wrote.
     pub(super) fn write_zone_vis(
         &self,
         queue: &dyn oag_gpu::writes::Writes,
         bands: &[f32],
         tint: Option<[u8; 3]>,
-    ) {
-        mesh_render::zone::write_vis(queue, &self.zone_vis, bands, tint);
+        last: &mut Option<mesh_render::zone::VisTexels>,
+    ) -> bool {
+        mesh_render::zone::write_vis_changed(queue, &self.zone_vis, bands, tint, last)
     }
 
     /// `prev_mvp` is the previous simulation tick's `view_projection * model`,

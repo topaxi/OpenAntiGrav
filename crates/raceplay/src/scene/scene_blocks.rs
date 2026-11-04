@@ -153,11 +153,11 @@ impl Scene {
         ship: &mesh_render::Scene,
         flame: &mesh_render::Scene,
     ) {
-        let blocks = &self.scene_blocks;
-        blocks.write(queue, block, SceneKind::Circuit, circuit);
-        blocks.write(queue, block, SceneKind::Ship, ship);
-        blocks.write(queue, block, SceneKind::Shine, &shine::shine_scene(ship));
-        blocks.write(queue, block, SceneKind::Flame, flame);
+        self.scene_blocks.write_view(
+            queue,
+            block,
+            [circuit, ship, &shine::shine_scene(ship), flame],
+        );
     }
 }
 
