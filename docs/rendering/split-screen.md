@@ -2077,5 +2077,5 @@ follows from it:
   better: HD -1.17 / -1.42 / -1.54 ms (800p / 1080p / 4K), Pure -0.89 ms at 800p and -0.37 ms at
   1080p (three rounds). It gets about 40 to 50% of the gap to the ceiling.
 - The ceiling is 1.3 ms on Pure at 800p and 2.4 / 3.0 / 4.0 ms on HD: about a fifth of the frame
-  thread, which is what one submission with the finish overlapped could recover
-  (`handover/rendering/record-uploads-in-the-encoder-so-a-split-is-one-submit.md`).
+  thread, which is what one submission with the finish overlapped could recover (uploads recorded in
+  the encoder instead of `queue.write_buffer`, so a view's data no longer depends on its submit).
