@@ -290,7 +290,7 @@ impl ModelTexture {
 
     /// Decodes one `.gnf` blob, or says `None` for one this build cannot.
     ///
-    /// **A BC7 chain the file authors keeps its blocks**, the way
+    /// **A BC7 or BC1 chain the file authors keeps its blocks**, the way
     /// [`Self::from_gtf`] keeps a DXT one: 1 byte a texel on the CPU and on the
     /// GPU where the decoded picture is 4, and the authored chain in place of a
     /// box-filtered one. The conditions are [`Self::gtf_blocks`]'s: a chain of
@@ -322,7 +322,11 @@ impl ModelTexture {
         };
         let texels = match blocks {
             Some(levels) => Texels::Blocks {
-                format: BlockFormat::Bc7,
+                format: if parsed.surface_format == oag_texture::gnf::SurfaceFormat::Bc1 {
+                    BlockFormat::Bc1
+                } else {
+                    BlockFormat::Bc7
+                },
                 levels,
             },
             None => Texels::Rgba8(parsed.decode(blob).ok()?.into_iter().flatten().collect()),
