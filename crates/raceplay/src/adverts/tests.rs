@@ -185,6 +185,10 @@ fn distinct_colours(rgba: &[u8]) -> usize {
 /// Loads `source`'s default circuit, draws its cards at two clock readings and
 /// returns each card's pixels; also writes PNGs to `$OAG_ADVERT_DUMP` when set, and
 /// `$OAG_ADVERT_TRACK` names another circuit.
+///
+/// Then draws them again at the first reading: each card's uniforms were written once,
+/// on the first draw, and a card drawn without its write is the picture it drew with
+/// it, byte for byte.
 fn drawn_cards(source: &str, tag: &str) -> Option<Vec<(u32, usize)>> {
     let image = oag_testdata::image(source)?;
     let instance = wgpu::Instance::default();
@@ -206,8 +210,11 @@ fn drawn_cards(source: &str, tag: &str) -> Option<Vec<(u32, usize)>> {
     let times: Vec<f32> = std::env::var("OAG_ADVERT_TIMES")
         .map(|v| v.split(',').filter_map(|t| t.parse().ok()).collect())
         .unwrap_or_else(|_| vec![0.0, 2.5]);
+    let mut first = None;
     for &seconds in &times {
-        for (slot, (width, height), pixels) in cards.read_back(&device, &queue, seconds) {
+        let drawn = cards.read_back(&device, &queue, seconds);
+        first.get_or_insert_with(|| drawn.clone());
+        for (slot, (width, height), pixels) in drawn {
             if let Ok(dir) = std::env::var("OAG_ADVERT_DUMP") {
                 let mut shown = pixels.clone();
                 shown
@@ -221,6 +228,21 @@ fn drawn_cards(source: &str, tag: &str) -> Option<Vec<(u32, usize)>> {
             }
             counts.push((slot, distinct_colours(&pixels)));
         }
+    }
+    if let (Some(first), Some(&seconds)) = (first, times.first()) {
+        let again = cards.read_back(&device, &queue, seconds);
+        for (want, got) in first.iter().zip(&again) {
+            assert!(
+                want == got,
+                "slot {}: drawn again at {seconds} s without its uniform write, it differs",
+                want.0
+            );
+        }
+        assert_eq!(
+            cards.uniform_writes.get(),
+            cards.cards.len(),
+            "a card's uniforms are written once, not once a draw"
+        );
     }
     Some(counts)
 }
