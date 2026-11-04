@@ -86,3 +86,58 @@ fn pulse_has_no_patterns_and_its_original_offers_none() {
         None
     );
 }
+
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu.iso"]
+fn every_pattern_the_disc_numbers_is_fired_or_unfired_with_a_reason() {
+    use oag_input::rumble::map::{UNFIRED, pattern_names};
+    let Some(mut archives) = hd() else { return };
+    let mut names: Vec<&str> = pattern_names()
+        .chain(UNFIRED.iter().map(|(n, _)| *n))
+        .collect();
+    names.sort_unstable();
+    let total = names.len();
+    names.dedup();
+    assert_eq!(names.len(), total, "a pattern is both fired and unfired");
+    for name in &names {
+        oag_raceplay::rumble_library::disc_pattern(&mut archives, name)
+            .unwrap_or_else(|e| panic!("{name}: {e}"));
+    }
+    assert_eq!(
+        names.len(),
+        64,
+        "ids 0..=64 span 65 slots with 64 files (id 11 has none)"
+    );
+}
+
+/// 2048 ships HD's 69 files and Omega reads them; both resolve every mapped
+/// pattern through the same loader, so the map plays 2048's own files
+/// (inherited from Omega) and Omega's (`docs/gameplay/rumble.md`, "Provenance
+/// per title").
+#[test]
+#[ignore = "needs data/images/omega-ps4-eu.pkg and data/extracted/vita/PCSF00007"]
+fn omega_and_2048_resolve_every_mapped_pattern_through_the_same_loader() {
+    let extracted = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/extracted");
+    let omega = oag_testdata::image("omega-ps4-eu.pkg");
+    let vita = extracted.join("vita/PCSF00007");
+    let sources = [
+        ("omega-ps4-eu.pkg", omega),
+        ("2048 extracted", vita.exists().then_some(vita)),
+    ];
+    for (image, path) in sources {
+        let Some(path) = path else {
+            continue;
+        };
+        let mut opened =
+            oag_source::title::open_source(&path.to_string_lossy(), Vec::new(), Vec::new())
+                .unwrap_or_else(|e| panic!("{image}: {e:#}"));
+        let mut missing = Vec::new();
+        for name in oag_input::rumble::map::pattern_names() {
+            if oag_raceplay::rumble_library::disc_pattern(&mut opened.archives, name).is_err() {
+                missing.push(name);
+            }
+        }
+        assert!(missing.is_empty(), "{image}: not found: {missing:?}");
+        println!("{image}: all mapped patterns resolve");
+    }
+}

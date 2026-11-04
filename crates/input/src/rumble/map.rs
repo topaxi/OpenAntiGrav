@@ -57,6 +57,10 @@ pub enum Level {
     Autopilot,
     /// A Leech beam drains the local ship.
     LeechBeam,
+    /// The wrong-way warning is up.
+    WrongWay,
+    /// The ship is blowing up.
+    Exploding,
 }
 
 /// Which side of a condition a row watches.
@@ -179,6 +183,16 @@ pub const ROWS: &[Row] = &[
         "exit_mag_rumble",
         Set::Ps3,
     ),
+    own(
+        Trigger::Edge(Level::WrongWay, Edge::Rise),
+        "wrong_way",
+        Set::Ps3,
+    ),
+    own(
+        Trigger::Edge(Level::Exploding, Edge::Rise),
+        "ship_exploding_player_rumble",
+        Set::Ps4,
+    ),
     held(Level::MagStrip, "travel_mag_rumble", End::Finish),
     held(Level::Autopilot, "autopilot_active_rumble", End::Finish),
     held(Level::LeechBeam, "leeching_energy_rumble", End::Stop),
@@ -211,6 +225,39 @@ pub const UNFIRED: &[(&str, &str)] = &[
     ("weapon_impact_shield_rumble", "the original never fires it"),
     ("photo_click", "the original never fires it"),
     ("heartbeat", "HD's counter in FUN_00055848 is unread"),
+    (
+        "pad_weapon",
+        "collecting a weapon pad raises no event to read",
+    ),
+    (
+        "rlr_barrell_roll",
+        "the roll gesture arms timers; no single edge says which way",
+    ),
+    (
+        "lrl_barrell_roll",
+        "the roll gesture arms timers; no single edge says which way",
+    ),
+    (
+        "turbo_start_rumble",
+        "the boost-start event is unread (confidence 60) and Cue::Turbo also fires for the perfect start, a pad and a roll payout",
+    ),
+    ("fire_engine", "no afterburner-ignition event"),
+    (
+        "turbo_fired_rumble",
+        "Cue::Turbo does not say the pickup fired it",
+    ),
+    (
+        "ship_exploding_rumble",
+        "a rival's explosion needs a per-craft edge: only the local ship's is read",
+    ),
+    (
+        "side_shift_left",
+        "the gesture machines arm timers; no single edge says a shift started",
+    ),
+    (
+        "side_shift_right",
+        "the gesture machines arm timers; no single edge says a shift started",
+    ),
     (
         "bomb_fired_rumble",
         "no bomb cue: Weapon_FireBomb raises none",

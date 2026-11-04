@@ -283,5 +283,7 @@ fn levels_of(race: &Race, slot: usize) -> Levels {
             .get(slot)
             .is_some_and(|ship| ship.autopilot_timer > 0.0),
         leech_beam: race.leach_beam_on(slot),
+        wrong_way: race.wrong_way_for(slot),
+        exploding: race.craft_destroyed(slot),
     }
 }
