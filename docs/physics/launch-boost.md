@@ -96,11 +96,19 @@ falsifier.
   Read from the decompile, **not watched**, confidence 80. That is the original's AI
   getting a launch boost the player cannot earn without a thrust edge in the window,
   and the maintainer's rule is that the AI obeys the player's physics.
-- **Applied on Pulse PSP only** (`is_pulse_psp`: the USA and EU discs), where it was
-  measured (USA). Pulse PS2's and Wipeout HD's `HandlingStats.xml` author the same
-  `<StartBoost>` and the loader reads it, but neither was watched, so the loader drops
-  it for them and says so in its report; `only_pulse_psp_gets_the_launch_boost` pins
-  this. Pure authors none.
+- **Applied on every title that authors it, the law inherited where not measured** (maintainer,
+  2026-11-03). The grading law was watched on Pulse PSP (USA) only. Title data
+  (`Looks::start_boost`, `start_boost_carried`) says who flies it and whose it is, and the loader
+  reports it: Pulse PSP **measured**; Pulse PS2 **inherited from Pulse PSP**; HD **inherited from
+  Pulse PSP**; Omega and 2048 **inherited from HD** (itself Pulse PSP's; whichever of the two is
+  measured first supplies the other). Each title's own `<StartBoost>` figures are used: checked
+  on the discs (`every_title_flies_a_launch_boost_and_names_its_source`), the PSP USA and EU, PS2
+  EU, HD EU, Omega EU and 2048 (base `.vpk` DLC1) all author the same seven figures (window
+  0.1-0.35 s, stall to 0.45 s, 1.0 s held, stall 1.2, normal 1.4, boost 1.7). Pulse PS2 times the
+  start like the PSP (`pulse_ps2_times_its_launch_like_the_psp`: 30 frames after first thrust,
+  perfect 41.4, held through 25.9, late 31.3; PSP 43.3, 27.0, 32.2). Not watched on PS2, HD, Omega
+  or 2048. Pure authors none and flies its own compiled-in boost (`code_start_boost`, measured). The
+  2048/Omega check is `ported`: both read the same element through the same loader.
 - The craft enters state 1 a tick before thrust is released, so
   `ShipState::on_grid` falls one tick earlier than it did
   (`thrust_gated(tick + 1)`); the yaw coupling gains the same tick and its first-30-tick

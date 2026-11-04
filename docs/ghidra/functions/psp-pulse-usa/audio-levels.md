@@ -1142,7 +1142,7 @@ Crossfade weights sum to 1 (by reading `Mixer::render`, not measured).
 `Title::master_trim_db` (`oag_title::Title`, labelled chosen) scales the whole sum
 ahead of the limiter (`Mixer::set_master_trim`, separate from the player's master
 volume; `oag_game::sound::hold_race_song` sets it when a race arms). Pulse -6 dB,
-Pure -3 dB, HD, Omega and 2048 0 dB. Direction: clear and audible first, the modern
+Pure -3 dB, 2048 -4 dB, HD and Omega 0 dB. Direction: clear and audible first, the modern
 originals' level as the orientation.
 
 Integrated loudness (`scripts/wav_loudness.py`, BS.1770-4 K-weighted, gated), 60 s
@@ -1155,6 +1155,8 @@ Integrated loudness (`scripts/wav_loudness.py`, BS.1770-4 K-weighted, gated), 60
 | Pulse | original | -10.7 | -15.8 |
 | Pure (PSP EU) | rear cue | -13.7 | -16.2 |
 | Pure | headphones | -13.7 | -16.2 |
+| 2048 (Vita) | rear cue | -12.3 | -14.4 |
+| 2048 | headphones | -12.9 | -15.4 |
 | HD (PS3 EU) | rear cue | -15.0 | unchanged |
 | HD | headphones | -14.9 | unchanged |
 | Omega (PS4 EU) | rear cue / headphones | -22.6 | unchanged |
@@ -1163,7 +1165,9 @@ Pulse lands 0.7 to 1.0 dB under HD (within the 1.5 dB aimed at). A 120 s Pulse r
 cue run reads -11.7 before and -17.0 after (the race thins out; HD 120 s not
 measured). Omega's 60 s reads 7.6 dB under HD with its race audio incomplete
 (`docs/formats/omega-status.md`), so it is left at 0 rather than trimmed up. 2048
-does not race here (its `.pkg` is PFS-encrypted): not checkable. The trim was
+races from the decrypted extract (`data/extracted/vita/PCSF00007`) and was measured the same way: 2.7 dB
+(rear cue) and 2.0 dB (headphones) over HD untrimmed; -4 dB lands 0.6 over / 0.5 under HD. The limiter
+compresses, so the loudness moves less than the trim (-2.5 dB gave -13.6 / -14.5). The trim was
 picked at -5 dB first; the quake pair needed -6 (below).
 
 Limiter work, 60 s (2.88 M frames), frames with gain below 0.94 / below 0.7:
@@ -1174,6 +1178,8 @@ Limiter work, 60 s (2.88 M frames), frames with gain below 0.94 / below 0.7:
 | Pulse headphones | 824,749 (28.6 %) / 175,256 (6.1 %) | 4,166 (0.14 %) / 0 |
 | Pure rear cue | 113,301 (3.9 %) / 28,131 (1.0 %) | 24,608 (0.85 %) / 4,652 (0.16 %) |
 | Pure headphones | 132,083 (4.6 %) / 23,509 (0.8 %) | 14,691 (0.5 %) / 0 |
+| 2048 rear cue | 206,912 (7.2 %) / 157,135 (5.5 %) | 148,321 (5.2 %) / 84,824 (2.9 %) |
+| 2048 headphones | 233,652 (8.1 %) / 160,484 (5.6 %) | 148,924 (5.2 %) / 134,686 (4.7 %) |
 
 Pre-limiter peak: Pulse 1.90 / 2.26 -> 0.95 / 1.13 (rear cue / headphones).
 `sfx_weapon_ground_truth::a_quake_hit_is_louder_with_its_collision_pair` passes with the

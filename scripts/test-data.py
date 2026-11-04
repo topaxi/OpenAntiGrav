@@ -364,6 +364,7 @@ def main() -> int:
     # `oag-game`'s build script embeds the commit hash, which would make every
     # `oag-game` binary differ after every commit whether or not its code did.
     os.environ.setdefault("OAG_GIT_HASH", "test-data")
+    os.environ.setdefault("OAG_BUILD_DATE", "")
 
     record = load_record()
     cache = record.setdefault("hash-cache", {})

@@ -810,11 +810,28 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let extents = pulse_psp::is_pulse_psp(title, &archives);
     #[cfg(feature = "view")]
     let particle_laws = title.looks.particle_laws.applies(archives.layout.platform);
-    // The launch boost is measured on Pulse PSP only; Pulse PS2 and HD author the
-    // same element and are left without it, not applied by extension.
-    let start_boost = start_boost.filter(|_| extents);
-    if !extents {
-        report.push("<StartBoost>: not applied, only measured on Pulse PSP".to_string());
+    // The authored `<StartBoost>` is flown where the craft's title carries the rule, and the
+    // report names whose law it is.
+    let start_boost_origin = craft_title
+        .looks
+        .start_boost_origin(archives.layout.platform);
+    let start_boost = start_boost.filter(|_| start_boost_origin.is_some());
+    match (start_boost_origin, &start_boost) {
+        (Some(oag_title::Origin::Measured), Some(_)) => {
+            report.push("<StartBoost>: the launch law is measured on this title".to_string());
+        }
+        (Some(oag_title::Origin::InheritedFrom(from)), Some(_)) => {
+            report.push(format!(
+                "<StartBoost>: the launch law is inherited from {from}, not measured on this title"
+            ));
+        }
+        (Some(oag_title::Origin::Chosen), Some(_)) => {
+            report.push("<StartBoost>: the launch law is chosen, not measured".to_string());
+        }
+        (None, _) => {
+            report.push("<StartBoost>: this title flies no authored launch boost".to_string());
+        }
+        (Some(_), None) => {}
     }
     // A title that compiles its launch in (Pure) flies its own, measured on its own disc.
     let code_start_boost = craft_title

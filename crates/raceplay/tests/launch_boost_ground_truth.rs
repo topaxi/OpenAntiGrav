@@ -199,34 +199,126 @@ fn a_held_through_launch_covers_the_originals_ground_on_two_circuits() {
     }
 }
 
-/// The boost is applied on Pulse PSP, where it was measured, and not by extension
-/// to the discs that author the same `<StartBoost>`: Pulse PS2's and Wipeout HD's
-/// files carry it too, and neither was watched.
+/// Every title that authors `<StartBoost>` flies it, and the loader says whose law it is: Pulse
+/// PSP's own (measured), the carried-over law everywhere else, Pure's compiled-in boost its own.
+/// Fails if a title's `start_boost` rule is dropped, or its report line stops naming the source.
 #[test]
 #[ignore = "needs disc images in data/images/"]
-fn only_pulse_psp_gets_the_launch_boost() {
-    for (image, expected) in [
-        ("data/images/pulse-psp-usa.chd", true),
-        ("data/images/pulse-psp-eu.chd", true),
-        ("data/images/pulse-ps2-eu.chd", false),
-        ("data/images/hdfury-ps3-eu-dec.iso", false),
+fn every_title_flies_a_launch_boost_and_names_its_source() {
+    let psp = authored("data/images/pulse-psp-usa.chd").expect("the PSP disc");
+    for (image, line, equals_psp) in [
+        (
+            "data/images/pulse-psp-usa.chd",
+            "is measured on this title",
+            true,
+        ),
+        (
+            "data/images/pulse-psp-eu.chd",
+            "is measured on this title",
+            true,
+        ),
+        (
+            "data/images/pulse-ps2-eu.chd",
+            "inherited from Wipeout Pulse (PSP)",
+            true,
+        ),
+        (
+            "data/images/hdfury-ps3-eu-dec.iso",
+            "inherited from Wipeout Pulse (PSP)",
+            false,
+        ),
+        (
+            "data/images/omega-ps4-eu.pkg",
+            "inherited from Wipeout HD",
+            false,
+        ),
+        (
+            "data/test-vpk/2048-PCSF00007-dlc1.vpk",
+            "inherited from Wipeout HD",
+            false,
+        ),
     ] {
-        let Some(path) = oag_testdata::image(image) else {
+        let Some((boost, report)) = authored(image) else {
             continue;
         };
+        let boost = boost.unwrap_or_else(|| panic!("{image}: no launch boost"));
+        assert!(
+            report
+                .iter()
+                .any(|l| l.starts_with("<StartBoost>") && l.contains(line)),
+            "{image}: report names no source ({line}): {report:?}"
+        );
+        println!("{image}: {boost:?} equals PSP's: {}", Some(boost) == psp.0);
+        if equals_psp {
+            assert_eq!(
+                Some(boost),
+                psp.0,
+                "{image}: authors a different StartBoost"
+            );
+        }
+    }
+}
+
+fn authored(image: &str) -> Option<(Option<oag_physics::launch::StartBoost>, Vec<String>)> {
+    let path = oag_testdata::image(image)?;
+    let loaded = race::load(&race::Options {
+        source: path.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        ..race::Options::default()
+    })
+    .unwrap_or_else(|e| panic!("{image}: loading the race: {e}"));
+    Some((loaded.setup.start_boost, loaded.report))
+}
+
+/// On Pulse PS2 a correctly timed thrust at GO boosts and one held through the countdown stalls,
+/// the PSP's graded law carried over (`start_boost_carried`). Ratios, not the PSP's absolute
+/// speeds: the PS2 is unmeasured. Fails if the PS2 loses its launch boost (the two launches then
+/// fly the same).
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd"]
+fn pulse_ps2_times_its_launch_like_the_psp() {
+    let Some(image) = oag_testdata::image("data/images/pulse-ps2-eu.chd") else {
+        return;
+    };
+    let speed_after = |edge: u64, frames: u64| {
         let loaded = race::load(&race::Options {
-            source: path.display().to_string(),
+            source: image.display().to_string(),
             class: "VENOM".to_string(),
-            mode: oag_race::Mode::SingleRace,
+            mode: oag_race::Mode::TimeTrial,
             ..race::Options::default()
         })
-        .expect("loading the race");
-        assert_eq!(
-            loaded.setup.start_boost.is_some(),
-            expected,
-            "{image}: the launch boost's presence"
-        );
-    }
+        .expect("loading the PS2 race");
+        let mut race = race::Race::start(loaded.setup);
+        for _ in 0..COUNTDOWN_TICKS - 1 {
+            race.tick(&PlayerInputs::single(held(false)));
+        }
+        let mut speed = 0.0;
+        for frame in 0..edge + frames {
+            race.tick(&PlayerInputs::single(held(frame >= edge)));
+            let body = &race.ship().physics.body;
+            speed = body
+                .linear_velocity
+                .dot(body.orientation * oag_core::math::Vec3::NEG_Z);
+        }
+        speed
+    };
+    let perfect = speed_after(12, 30);
+    let stalled = speed_after(1, 30);
+    let late = speed_after(32, 30);
+    println!(
+        "PS2 30 frames after first thrust: perfect {perfect:.2}, held {stalled:.2}, late {late:.2}"
+    );
+    // PSP: 43.3 / 27.0 / 32.2.
+    assert!(
+        perfect > stalled * 1.4,
+        "perfect {perfect} against stalled {stalled}"
+    );
+    assert!(late > stalled, "late {late} against stalled {stalled}");
+    assert!(
+        perfect > late * 1.25,
+        "perfect {perfect} against late {late}"
+    );
 }
 
 /// The perfect start's own effect (`ExhaustFlare_OnPerfectStart`, `0x08904fd4`,

@@ -817,7 +817,7 @@ fn list_draw(launcher: &Launcher) -> Vec<Draw> {
     // soon as something is wrong is a screen that helps least when it matters.
     out.push(text(MARGIN, SCREEN.1 - 20.0, 1.0, DIM, HINT));
 
-    // The build's own short commit hash, bottom right - `env!` reads
+    // The build's own short commit hash and commit date, bottom right - `env!` reads
     // `oag_net::GIT_HASH`, set at compile time by `oag-net`'s `build.rs`. This is the one
     // screen every build shows before anything else can go wrong, which
     // makes it the answer to "which build is this" for a bug report or a
@@ -829,11 +829,20 @@ fn list_draw(launcher: &Launcher) -> Vec<Draw> {
         color: DIM,
         border: None,
         align: Align::Right,
-        text: oag_net::GIT_HASH.to_string(),
+        text: build_label(),
         wrap_width: None,
     });
 
     out
+}
+
+/// The hash, then the commit's date when the build knows it.
+fn build_label() -> String {
+    if oag_net::BUILD_DATE.is_empty() {
+        oag_net::GIT_HASH.to_string()
+    } else {
+        format!("{} {}", oag_net::GIT_HASH, oag_net::BUILD_DATE)
+    }
 }
 
 /// Which row a point is over: the band [`draw_list`] highlights the
