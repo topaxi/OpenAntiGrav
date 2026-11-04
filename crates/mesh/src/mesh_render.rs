@@ -110,6 +110,9 @@ pub struct Built {
     /// The depth prepass pair, when [`build_with`] was asked for it - see
     /// [`Prepass`].
     pub prepass: Option<Prepass>,
+    /// Per entry of [`Model::draws`], whether it shades through [`Prepass::plain`]. Empty on a
+    /// model with no such pipeline.
+    pub plain_draws: Vec<bool>,
     /// Cutout pass: depth write on, no blending, `discard` below
     /// `shaders/alpha_test.wesl`'s `alpha_test_ref`. Draws [`Model::alpha_tested_draws`] as
     /// a second `set_pipeline` in the same render pass as `pipeline`, before
@@ -445,6 +448,18 @@ pub fn build_with(
     ));
     constants.extend(pipeline_cache::scope_constants());
     let constants = constants.as_slice();
+    // The plain half of a prepassed model's opaque list and what its shading is told.
+    let plain = prepass.then(|| specialise::plain_draws(model)).flatten();
+    let plain_constants = plain.as_ref().map(|plain| {
+        let mut constants = constants.to_vec();
+        constants.retain(|(name, _)| !matches!(*name, "slots_present" | "emissive_rows"));
+        constants.push(("slots_present", f64::from(plain.present)));
+        constants.push((
+            "emissive_rows",
+            f64::from(specialise::emissive_rows(plain.present)),
+        ));
+        constants
+    });
 
     let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("mesh"),
@@ -681,6 +696,7 @@ pub fn build_with(
                 layout: &pipeline_layout,
                 vertex_buffers: &vertex_buffers,
                 constants,
+                plain_constants: plain_constants.as_deref(),
                 velocity,
                 targets,
                 fragment_entry,
@@ -1173,6 +1189,7 @@ pub fn build_with(
 
     Ok(Built {
         prepass,
+        plain_draws: plain.map_or_else(Vec::new, |plain| plain.draws),
         anim_bind,
         anim_buffer,
         node_anim_buffer,

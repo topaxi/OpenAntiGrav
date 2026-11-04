@@ -178,6 +178,7 @@ impl Drawable {
             authored_pipelines: self.authored_pipelines.clone(),
             stamp_pipeline: self.stamp_pipeline.clone(),
             prepass: self.prepass.clone(),
+            plain_draws: self.plain_draws.clone(),
             hidden: std::sync::Mutex::default(),
             reversed_indices: self.reversed_indices.clone(),
             vertices: self.vertices.clone(),

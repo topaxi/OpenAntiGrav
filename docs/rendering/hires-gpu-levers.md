@@ -262,6 +262,56 @@ The gap between the Intel and NVIDIA pictures of one binary is far larger (rmse 
 Deck: not run, Deck unavailable; the expected win on the Deck is **an estimate**, in the block's
 direction (Pulse more than HD).
 
+#### A circuit's plain draws shade through a pipeline of their own (2026-11-04, `lf`)
+
+One `Model` is a whole circuit, so `slots_present` is the OR of every material on it, and one rare
+material keeps every branch for every pixel. By draw the list is lopsided (opaque indices of the
+race's circuit, `slots` role bits per draw):
+
+| Circuit | draws | signatures | emissive rows | indices naming no row |
+|---|---:|---:|---:|---:|
+| HD Talon's Junction | 1,783 | 18 | 17 | 2,108,769 of 2,268,321 (93 %) |
+| Omega Tech de Ra | 2,950 | 4 | 4 | 6,976,659 of 6,980,733 (99.9 %) |
+| 2048 Altima | 2,391 | 3 | 0 named | all |
+| Pulse, Pure | 1,013 to 1,555 | 1 | 0 | all (the emissive fold above already has them) |
+
+`specialise::plain_draws` marks each opaque draw that names no row and no weapon role, and a model
+with both kinds gets a second shading pipeline for the depth prepass's shaded half
+(`Prepass::plain`, four on HD: culled or not, velocity written or not), told the OR of those draws
+alone and `emissive_rows = 0`. `Drawable::draw_lists` picks per draw and keeps the draw order, so
+coplanar ties resolve as before. The rest of the list, the cutouts and the blended list keep
+the model-wide pipelines. The same exactness argument as `slots_present`: each draw's bits are a
+subset of its pipeline's.
+
+| Intel ARL iGPU, us, medians, 1080p, A B interleaved, load 2 to 5 | before | after |
+|---|---:|---:|
+| HD `track solid, shaded` (3 rounds) | 7,260 | 3,820 (-47 %) |
+| HD race pass | 9,702 | 6,194 (-36 %) |
+| HD `Scene::render GPU` | 15,655 | 11,678 (-25 %) |
+| HD pipelined per frame (3 rounds) | 6,125 | 5,013 (-18 %) |
+| Omega `track solid, shaded` (2 rounds) | 5,206 | 3,507 (-33 %) |
+| Omega race pass | 11,157 | 9,097 (-18 %) |
+| 2048 `track solid, shaded` against the commit before the fold above (2 rounds) | 2,431 | 1,808 (-26 %) |
+| 2048 race pass, same | 3,767 | 2,882 (-24 %) |
+
+The rich pipeline is SIMD8 with spills on this compiler, so Intel gains more than a driver without
+that cliff will. Costs: HD `pipeline_sets` over the same bench run 16,385 to 24,215 (+48 %, the
+classes interleave); `Scene::render CPU` read bimodal in both binaries with no shift (559 to 1,098
+us) and pipelined per frame fell, so the CPU side is not visible here. Cold race load (no shader
+cache, HD, 3 rounds) 14.7 to 15.8 s against 14.6 to 15.7 s, inside the noise.
+
+Picture: `cmp` equal against the commit before on nine shots (HD, Pulse, Pure, Omega, 2048, ticks
+1,200 and 2,500, MSAA and blur on and off). On the 13 race pairs drawn with the pairs' own flags,
+9 are byte-identical and 4 HD pairs move 1 to 11 pixels of 2,073,600, by one level except on Moa
+Therma, where 8 pixels reach 6 levels (not traced; the two pipelines compile differently). Distance
+to the original, track crop:
+mean rmse 18.929 to 18.929, SSIM 0.8339 to 0.8339, every pair equal to three decimals; the same
+binary's gap between the Intel and NVIDIA GPUs is 0.008 rmse in the mean and up to 0.056 on a pair.
+
+**Deck: not run, Deck unavailable.** RADV's cost is its VGPR count (128 to 168 for these shaders),
+which this split should lower for the plain half; the win there is **an estimate** until the Deck
+block (`RADV_DEBUG=shaderstats` and the span bench) has run.
+
 ### Lever 3, our 4K present against a 1080p gamescope window: dropped
 
 The Deck has no 4K display (`DP-1` disconnected), so the real output path was not measured. Per

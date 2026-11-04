@@ -50,6 +50,8 @@ pub(super) struct Drawable {
     /// The depth prepass pair, for the one drawable built with it - Wipeout
     /// HD's circuit. See `mesh_render::Prepass`.
     prepass: Option<mesh_render::Prepass>,
+    /// `mesh_render::Built::plain_draws`.
+    plain_draws: Vec<bool>,
     /// The index buffer with its triangles in reverse order, each triangle's
     /// own vertices untouched, for the prepass's shaded half - see
     /// `draw_lists`. `None` without a prepass.
@@ -245,6 +247,7 @@ impl Drawable {
         let mesh_render::Built {
             pipeline,
             prepass,
+            plain_draws,
             alpha_test_pipeline,
             cutout_pipelines,
             culled,
@@ -384,6 +387,7 @@ impl Drawable {
             authored_pipelines,
             stamp_pipeline,
             prepass,
+            plain_draws,
             hidden: std::sync::Mutex::default(),
             reversed_indices,
             vertices,

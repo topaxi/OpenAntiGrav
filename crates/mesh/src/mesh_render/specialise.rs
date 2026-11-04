@@ -51,6 +51,52 @@ pub(super) fn emissive_rows(present: u32) -> u32 {
     u32::from(present & MATERIAL_BITS != 0)
 }
 
+/// The half of a circuit's opaque list that is worth a pipeline of its own.
+///
+/// One `Model` is a whole circuit, so one rare material keeps every branch for every pixel: on
+/// HD's Talon's Junction 17 emissive rows held the shading of the 93 % of its opaque indices that
+/// name none, and Omega's Tech de Ra the same with 99.9 % (`docs/rendering/hires-gpu-levers.md`).
+/// The draws naming no row and no weapon role shade through a pipeline told so.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct PlainDraws {
+    /// Per opaque draw, whether it is one of them.
+    pub(super) draws: Vec<bool>,
+    /// `slots_present` for those draws alone.
+    pub(super) present: u32,
+}
+
+/// The plain half of `model`'s opaque list, or `None` where one pipeline already says everything:
+/// none of the draws is plain, or all of them are.
+pub(super) fn plain_draws(model: &Model) -> Option<PlainDraws> {
+    let carried = |draw: &crate::mesh::DrawCall| {
+        model.indices[draw.range.start as usize..draw.range.end as usize]
+            .iter()
+            .fold(0, |all, &i| all | model.vertices[i as usize].slots)
+    };
+    split_plain(model.draws.iter().map(carried))
+}
+
+/// [`plain_draws`] from each draw's OR of its vertices' `slots`.
+fn split_plain(carried: impl Iterator<Item = u32>) -> Option<PlainDraws> {
+    let mut present = 0;
+    let mut rest = false;
+    let draws: Vec<bool> = carried
+        .map(|carried| {
+            let plain = carried & (MATERIAL_BITS | WEAPON_ONLY) == 0;
+            if plain {
+                present |= carried;
+            } else {
+                rest = true;
+            }
+            plain
+        })
+        .collect();
+    (rest && draws.contains(&true)).then(|| PlainDraws {
+        draws,
+        present: present_for(present),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -72,6 +118,29 @@ mod tests {
         let present = present_for(1 << slots::MATERIAL_SHIFT);
         assert_eq!(present & MATERIAL_BITS, MATERIAL_BITS);
         assert_eq!(emissive_rows(present), 1);
+    }
+
+    #[test]
+    fn the_plain_half_is_told_only_what_its_own_draws_carry() {
+        let row = 3 << slots::MATERIAL_SHIFT;
+        let glow = slots::ADD_SECOND | row;
+        let plain = split_plain([slots::SECOND_IS_LIGHTMAP, glow, slots::NO_AMBIENT].into_iter())
+            .expect("a list with both kinds splits");
+        assert_eq!(plain.draws, [true, false, true]);
+        assert_eq!(plain.present & slots::ADD_SECOND, 0);
+        assert_eq!(emissive_rows(plain.present), 0);
+        for carried in [slots::SECOND_IS_LIGHTMAP, slots::NO_AMBIENT] {
+            assert_eq!(carried & plain.present, carried);
+        }
+    }
+
+    #[test]
+    fn a_list_of_one_kind_needs_no_second_pipeline() {
+        assert_eq!(split_plain([slots::NO_AMBIENT, 0].into_iter()), None);
+        assert_eq!(
+            split_plain([1 << slots::MATERIAL_SHIFT, slots::RIM_GLOW].into_iter()),
+            None
+        );
     }
 
     #[test]

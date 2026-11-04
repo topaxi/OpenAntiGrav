@@ -295,15 +295,17 @@ impl Drawable {
                             index: u32,
                             reversed: bool,
                             shade: bool,
-                            culling: &mut bool| {
+                            culling: &mut (bool, bool)| {
             let draw = &opaque_draws[index as usize];
             let want = self.wants_cull(draw);
-            if want != *culling {
-                *culling = want;
+            // The shaded half's pipeline also follows the draw's class (`Built::plain_draws`).
+            let plain = shade && self.plain_draws.get(index as usize) == Some(&true);
+            if (want, plain) != *culling {
+                *culling = (want, plain);
                 oag_gpu::perfprobe::pipeline_set();
                 let (opaque, prepass, ..) = self.solid(want);
                 pass.set_pipeline(match prepass {
-                    Some(prepass) if shade => &prepass.shade,
+                    Some(prepass) if shade => prepass.shading(plain),
                     _ => opaque,
                 });
             }
@@ -365,7 +367,7 @@ impl Drawable {
                 }
                 oag_gpu::perfprobe::marks::mark(pass, "track solid, shaded");
                 pass.set_pipeline(&prepass.shade);
-                let mut culling = false;
+                let mut culling = (false, false);
                 let reversed = self.reversed_indices.as_ref();
                 if let Some(reversed) = reversed {
                     pass.set_index_buffer(reversed.slice(..), wgpu::IndexFormat::Uint32);
@@ -378,7 +380,7 @@ impl Drawable {
                 }
             }
             _ => {
-                let mut culling = false;
+                let mut culling = (false, false);
                 for &index in shown.iter() {
                     draw_one(pass, index, false, false, &mut culling);
                 }
