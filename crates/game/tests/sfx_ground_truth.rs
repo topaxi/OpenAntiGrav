@@ -1154,6 +1154,13 @@ fn slipstream_pass(path: &Path, fire: bool) -> Option<(usize, (u64, u64))> {
     for _ in 0..3 {
         step(&mut audio, &mut race, &throttle);
     }
+    // The craft flies to the portal first and goes through at the entrance.
+    for _ in 0..40 {
+        if !fire || race.sim.world.ships[0].transit.is_some() {
+            break;
+        }
+        step(&mut audio, &mut race, &throttle);
+    }
     if !fire {
         for _ in 0..70 {
             step(&mut audio, &mut race, &throttle);
