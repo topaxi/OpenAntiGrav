@@ -306,41 +306,6 @@ fn median(samples: &mut [f64]) -> f64 {
     samples.get(samples.len() / 2).copied().unwrap_or(0.0)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::Groups;
-    use oag_gpu::perfprobe::marks::Span;
-
-    fn span(label: &'static str, micros: f64, fragments: Option<u64>) -> Span {
-        Span {
-            label,
-            micros,
-            fragments,
-        }
-    }
-
-    /// Eight per-craft passes are one row of what the frame paid for them, not
-    /// eight samples of one craft's pass.
-    #[test]
-    fn a_label_taken_many_times_in_a_run_is_summed_within_the_run() {
-        let mut groups = Groups::default();
-        for _ in 0..3 {
-            groups.add_run(&[
-                span("sun occlusion", 100.0, Some(10)),
-                span("race", 1_000.0, Some(50)),
-                span("sun occlusion", 40.0, Some(5)),
-            ]);
-        }
-        assert_eq!(groups.rows.len(), 2);
-        let (label, runs, count, fragments) = &groups.rows[0];
-        assert_eq!(*label, "sun occlusion");
-        assert_eq!(runs, &vec![140.0; 3]);
-        assert_eq!(*count, 2);
-        assert_eq!(*fragments, Some(15));
-        assert_eq!(groups.totals, vec![1_140.0; 3]);
-    }
-}
-
 fn runs(var: &str) -> Option<usize> {
     std::env::var(var).ok()?.parse().ok().filter(|&n| n > 0)
 }
@@ -539,5 +504,40 @@ pub(super) fn run_resolve(
     } else {
         report("FSR3 REN (render-extent dispatches), GPU", &mut ren);
         report("FSR3 OUT (accumulate + rcas), GPU", &mut out);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Groups;
+    use oag_gpu::perfprobe::marks::Span;
+
+    fn span(label: &'static str, micros: f64, fragments: Option<u64>) -> Span {
+        Span {
+            label,
+            micros,
+            fragments,
+        }
+    }
+
+    /// Eight per-craft passes are one row of what the frame paid for them, not
+    /// eight samples of one craft's pass.
+    #[test]
+    fn a_label_taken_many_times_in_a_run_is_summed_within_the_run() {
+        let mut groups = Groups::default();
+        for _ in 0..3 {
+            groups.add_run(&[
+                span("sun occlusion", 100.0, Some(10)),
+                span("race", 1_000.0, Some(50)),
+                span("sun occlusion", 40.0, Some(5)),
+            ]);
+        }
+        assert_eq!(groups.rows.len(), 2);
+        let (label, runs, count, fragments) = &groups.rows[0];
+        assert_eq!(*label, "sun occlusion");
+        assert_eq!(runs, &vec![140.0; 3]);
+        assert_eq!(*count, 2);
+        assert_eq!(*fragments, Some(15));
+        assert_eq!(groups.totals, vec![1_140.0; 3]);
     }
 }

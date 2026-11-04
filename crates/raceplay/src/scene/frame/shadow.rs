@@ -967,9 +967,8 @@ mod tests {
     /// the road inside it, and one a whole reach away reads nothing.
     #[test]
     fn a_craft_shadow_counts_as_seen_up_to_the_receivers_reach() {
-        let projection = Mat4::orthographic_rh(-10.0, 10.0, -10.0, 10.0, 0.1, 1000.0);
-        let view = Mat4::look_at_rh(Vec3::new(0.0, 0.0, 10.0), Vec3::ZERO, Vec3::Y);
-        let frustum = Frustum::from_view_projection(projection * view);
+        // The clip box itself: `x` and `y` within 1 of the origin.
+        let frustum = Frustum::from_view_projection(Mat4::IDENTITY);
         assert!(craft_shadow_seen(None, Vec3::splat(1.0e6)));
         assert!(craft_shadow_seen(Some(&frustum), Vec3::ZERO));
         assert!(craft_shadow_seen(Some(&frustum), Vec3::new(60.0, 0.0, 0.0)));

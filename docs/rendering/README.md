@@ -70,7 +70,7 @@
   gamescope, and three ranked levers; the track lever landed (2026-10-31: per-model `slots_present`
   folds `lit_texel`'s unused branches, Deck 1080p HD track solid -7 %, Pulse -52 %, byte-identical,
   then 2026-11-04: the emissive table, a pipeline for a circuit's plain draws and the rig and Zone
-  folds, Intel iGPU 1080p HD track shaded -58 %, Pulse -48 %, the Deck not run),
+  folds, Intel iGPU 1080p HD track shaded -51 %, Pulse -47 %, the Deck not run),
   the blur skip and the 1080p gamescope window were measured and dropped - see
   [`hires-gpu-levers.md`](hires-gpu-levers.md)
 - **Where the frame thread's CPU goes** (2026-10-21): `--frame-log` prints a per-phase line; a

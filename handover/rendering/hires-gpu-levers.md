@@ -21,7 +21,11 @@ pipeline for a circuit's plain draws, and the rig and Zone folds. Levers 2 (blur
   `RADV_DEBUG=shaderstats` before and after, on `RADV VANGOGH`. Size 60, difficulty 20.
 - **What the 2.0 (Pulse) and 3.7 ms (HD) of `Scene::render` the old spans left are on the Deck.**
   The spans now split them; the iGPU has HD's `between passes` at 1.1 to 1.3 ms and its unattributed
-  residue at 1.4 ms (230 KiB of staged writes a frame, so not those). Size 40, difficulty 20.
+  residue at 1.3 to 1.4 ms at 1080p and at 320x180 alike, so a fixed cost, not pixels, and not the
+  230 KiB of staged writes a frame. Size 40, difficulty 20.
+- **The plain draws' CPU side**: `pipeline_sets` +48 % on HD. Unresolved on the notebook; the Deck's
+  frame thread is what would feel it. Measure: `OAG_RENDER_BENCH=300` before and after. The
+  fallback is to stay in the rich pipeline over a short run of plain draws.
 - **`between passes` is the largest unnamed thing left** (x28 on HD). Split it by what it holds
   (the race pass's clears and resolve first). Measure: read the span on the Deck, then move a mark.
 - **Advert cards**: five are drawn every frame, 400 to 550 us and 900 k fragments on the iGPU.

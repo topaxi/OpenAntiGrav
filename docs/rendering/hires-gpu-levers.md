@@ -321,14 +321,26 @@ does `nova_prelit`: `light_rig` from `lit_by` and `zone_race` from `zoned`, and 
 constant zero for them. Neither moves mid-race: `ZoneGrade::light` hands a stand-in back untouched
 and nothing else writes the scene's light; a race with no grade writes a zero `Zone`.
 
-| Intel ARL iGPU, us, medians, 1080p, 3 rounds, load 2 to 5 | before | after | from before this lane's folds |
-|---|---:|---:|---:|
-| Pulse `track solid, shaded` | 1,350 | 887 (-34 %) | 1,707 to 887 (-48 %) |
-| Pulse race pass | 2,614 | 1,944 (-26 %) | 3,177 to 1,944 (-39 %) |
-| Pulse `Scene::render GPU` | 4,955 | 4,224 (-15 %) | 5,563 to 4,224 (-24 %) |
-| HD `track solid, shaded` | 3,815 | 3,048 (-20 %) | 7,260 to 3,048 (-58 %) |
-| HD race pass | 6,187 | 5,340 (-14 %) | 9,702 to 5,340 (-45 %) |
-| HD `Scene::render GPU` | 11,570 | 10,667 (-8 %) | 15,655 to 10,667 (-32 %) |
+| Intel ARL iGPU, us, medians, 1080p, 3 rounds, load 2 to 5 | before | after |
+|---|---:|---:|
+| Pulse `track solid, shaded` | 1,350 | 887 (-34 %) |
+| Pulse race pass | 2,614 | 1,944 (-26 %) |
+| Pulse `Scene::render GPU` | 4,955 | 4,224 (-15 %) |
+| HD `track solid, shaded` | 3,815 | 3,048 (-20 %) |
+| HD race pass | 6,187 | 5,340 (-14 %) |
+| HD `Scene::render GPU` | 11,570 | 10,667 (-8 %) |
+
+**End to end, the binary with the spans alone against the one with all four changes**, A B
+interleaved in one session, 3 rounds, medians of the rounds' medians, Intel iGPU, 1080p, load 2.6 to
+4.4. HD's before binary reads in two clock modes (track shaded 6,166 to 7,261), so its row is the
+one to take with a range; the after binary stayed at 3,076 to 3,307:
+
+| us | HD before | HD after | Pulse before | Pulse after |
+|---|---:|---:|---:|---:|
+| `track solid, shaded` | 6,393 | 3,157 (-51 %) | 1,709 | 903 (-47 %) |
+| race pass | 9,042 | 5,522 (-39 %) | 3,178 | 1,967 (-38 %) |
+| `Scene::render GPU` | 14,847 | 10,789 (-27 %) | 5,561 | 4,217 (-24 %) |
+| pipelined per frame | 6,088 | 4,200 (-31 %) | 1,887 | 1,365 (-28 %) |
 
 `INTEL_DEBUG=fs`: Pulse's largest fragment shader 1,858 to 1,431 instructions, and all 67 shaders
 now have a SIMD16 build (49 before; 29 before the emissive fold); HD's largest 4,849 to 4,343,

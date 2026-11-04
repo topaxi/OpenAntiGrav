@@ -836,10 +836,10 @@ start and closes its end (`oag_gpu::perfprobe::marks`), so no span runs across a
 - **`sum of spans`** is the rows added up per run. **`bench unattributed`** is the median
   `Scene::render GPU` (a wall clock, submit to idle) less that sum, less the `queue.submit` call's
   own CPU time (printed under `Scene::render GPU`) and less `submit floor`, the same wall clock on an
-  empty command buffer. What is left is what no encoder timestamp can see: wgpu's staged
-  `write_buffer` copies, which run ahead of the encoder, and the time before the first command and
-  after the last one. `bench marks dropped` appears if a frame takes more marks than the query set
-  holds (512), and then the spans are short.
+  empty command buffer. It is not named further. It is not pixel work: HD reads 1,361 us at
+  1920x1080 and 1,323 us at 320x180. It is not wgpu's staged
+  `write_buffer` copies either, about 230 KiB a frame. `bench marks dropped` appears if a frame
+  takes more marks than the query set holds (512), and then the spans are short.
 - The HUD and the present composite are not in `Scene::render` and so not in this sum.
   `OAG_RESOLVE_BENCH` times the resolve.
 
@@ -861,8 +861,8 @@ structure, not magnitudes: this GPU is the wrong shape for them):
 | empty submit floor | 148 | 220 |
 | unattributed | 1,361 | 902 |
 
-`--motion-blur high --msaa 4x` on HD, Omega, 2048, Pulse PS2 and Pure ran the same way with no
-validation error. The Deck's numbers are not taken.
+HD with `--motion-blur high --msaa 4x`, and Omega, 2048, Pulse PS2 and Pure at their defaults, ran
+the same way with no validation error. The Deck's numbers are not taken.
 
 ## On the Steam Deck (the maintainer runs this)
 
