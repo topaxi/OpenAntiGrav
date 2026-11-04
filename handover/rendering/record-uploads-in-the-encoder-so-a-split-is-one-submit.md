@@ -2,7 +2,7 @@
 status: measure
 titles: [all]
 updated: 2026-11-04
-summary: "A split submits per view because queue writes land before the submission; uploads recorded in the encoder would allow one submit"
+summary: "A split submits per view; one submit with the finish overlapped has a ceiling of 1.6 to 2.4 ms a frame on the Deck (Pure)"
 categories: [rendering]
 size: L
 difficulty: hard
@@ -44,9 +44,14 @@ submits on top of that.
 
 ## Next Steps
 
-1. Measure the ceiling before building anything: a build that submits a two-player split once per
-   frame with the views' uploads going wrong (a throwaway, never committed), Deck, Pure and HD, 800p,
-   1080p and 4K, the harness in `docs/rendering/split-screen.md`. If the ceiling is under about 0.3 ms
-   a frame, close this thread with the number.
-2. If it is worth it: one view's uploads as one staged buffer plus copies, byte-identical pictures
+1. **The ceiling is already measured, by accident.** The build before the split-finish fix (commit
+   `ca91c9c5b`'s parent chain, `0fb333c97`) overlapped every view's finish with recording the next
+   view, which is what one submission with the finish on the worker would do, at the price of a
+   wrong picture (the post work ran ahead of its scene pass; GPU time is not comparable, CPU is).
+   Deck, two-player Pure, frame-thread `total` ms, 800p / 1080p / 4K: that build 6.06 / 5.69 / 7.71,
+   the fixed interleaved path 7.65 / 7.47 / 10.10, `OAG_SPLIT_FINISH=0` 7.40 / 7.20 / 10.10
+   (`docs/rendering/split-screen.md`). So the ceiling is 1.3 to 1.6 ms at 800p, 1.5 to 1.8 at 1080p
+   and 2.4 at 4K, about a fifth of the frame thread. HD is not measured: the same A/B on HD
+   Anulpha needs that build again.
+2. The ceiling is worth it:  one view's uploads as one staged buffer plus copies, byte-identical pictures
    against the interleaved path, the batched modes on top. Perf work goes to an Opus lane.
