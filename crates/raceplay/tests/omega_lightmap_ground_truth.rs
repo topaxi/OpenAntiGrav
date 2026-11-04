@@ -29,6 +29,70 @@ fn source() -> Option<String> {
     Some(path.display().to_string())
 }
 
+/// Every circuit's own file, through the reader the race uses so the patch's copy wins,
+/// carries the five bright-pass scalars and four blend factors (a census of 38 files;
+/// `tonemap.md`, "The bloom chain"). The Bloom keys differ by circuit, and one circuit's
+/// threshold sits above the curve's `1.0`, so its frame term never fires.
+fn every_circuit_authors_a_whole_bloom_block(archives: &mut oag_assets::Archives) {
+    const HD_LINEAGE: [&str; 14] = [
+        "01_vineta_k",
+        "02_metropia",
+        "03_moa_therma",
+        "04_chenghou_project",
+        "05_ubermall",
+        "10_sebenco_climb",
+        "12_sol_2",
+        "15_anulpha_pass",
+        "amphiseum",
+        "modesto_heights",
+        "talons_junction",
+        "tech_de_ra",
+        "zone_1",
+        "zone_2",
+    ];
+    const LINEAGE_2048: [&str; 10] = [
+        "altima",
+        "arena",
+        "bridge",
+        "cathedral",
+        "mall",
+        "park",
+        "sol",
+        "square",
+        "subway",
+        "tower",
+    ];
+    let mut names: Vec<String> = HD_LINEAGE
+        .iter()
+        .map(|c| format!(r"Data\environments\{c}\track.envsettings"))
+        .collect();
+    names.extend(
+        HD_LINEAGE[..12]
+            .iter()
+            .map(|c| format!(r"Data\environments\{c}\track_reversed.envsettings")),
+    );
+    names.extend(["zone_3", "zone_4"].map(|c| format!(r"Data\environments\{c}\track.envsettings")));
+    names.extend(
+        LINEAGE_2048
+            .iter()
+            .map(|c| format!(r"Data\environments2048\{c}\track.envsettings")),
+    );
+    assert_eq!(names.len(), 38);
+    let mut thresholds = Vec::new();
+    for name in &names {
+        let bytes = archives.read_name(name).unwrap_or_else(|e| panic!("{name}: {e}"));
+        let text = String::from_utf8(bytes).expect("text");
+        let env = EnvSettings::parse(&text).expect("parses");
+        let block = env
+            .bright_pass("Bloom")
+            .unwrap_or_else(|| panic!("{name} lacks a whole Bloom block"));
+        assert!(block.blend_factors.iter().all(|f| *f > 0.0), "{name}");
+        thresholds.push(block.threshold);
+    }
+    assert!(thresholds.contains(&1.252), "Sol 2's own number");
+    assert!(thresholds.contains(&0.784), "Vineta K's own number");
+}
+
 #[test]
 #[ignore = "needs the corrected Omega extraction"]
 fn tech_de_ras_authored_triple_reaches_the_rig() {
@@ -41,6 +105,7 @@ fn tech_de_ras_authored_triple_reaches_the_rig() {
     )
     .expect("text");
     let env = EnvSettings::parse(&text).expect("parses");
+    every_circuit_authors_a_whole_bloom_block(&mut archives);
     assert_eq!(
         env.vec3(NOVA_PRELIT),
         Some([2.5, 0.2, 2.0]),
@@ -112,6 +177,15 @@ fn tech_de_ras_authored_triple_reaches_the_rig() {
     );
     assert_eq!(composite.color_scale, [1.0; 3]);
     assert_eq!(composite.screen_tint, [0.0; 3]);
+    // The circuit's `Bloom` keys reach the composite; dropping them draws no bloom.
+    let bloom = composite.bloom.expect("Tech De Ra's Bloom block");
+    let authored = env.bright_pass("Bloom").expect("the block reads whole");
+    assert_eq!(bloom.threshold, authored.threshold);
+    assert_eq!(bloom.offset, authored.offset);
+    assert_eq!(bloom.scale, authored.scale);
+    assert_eq!(bloom.power, authored.power);
+    assert_eq!(bloom.alpha_scale, authored.alpha_scale);
+    assert_eq!(bloom.blend_factors, authored.blend_factors);
     assert!(
         loaded
             .report
