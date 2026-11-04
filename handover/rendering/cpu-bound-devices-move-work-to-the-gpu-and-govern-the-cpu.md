@@ -60,6 +60,18 @@ frame-thread profile recipe in that section.
    - **Parked, not dropped** (maintainer): the working implementation (feature check, `OAG_INDIRECT`
      switch, tests, byte-identical proof) is on the pushed branch `park/indirect-depth-prepass`,
      rebased on main at the time. Later steps (compute culling, colour passes) start from it.
+   - **Re-measured under an interleaved split, colour half prototyped (2026-11-04, lane
+     `indirect`)**, numbers in `docs/rendering/frame-thread-cpu.md` ("Re-measured under an
+     interleaved split"). The port to main (two depth runs per view, by cull mode) and a
+     measure-only colour half (`OAG_INDIRECT=colour`, slot as first instance, non-uniform
+     index) are byte-identical on HD, Pure and Pulse. Pure and Pulse circuits take the depth
+     path too: they have a prepass. In the shipped split (about 0.3 ms resolvable), depth
+     alone is inside the noise. The colour step is 0.08 to 0.30 ms under depth alone, at or
+     under the floor. The combination is +0.17 ms worse than none at 800p. The colour arm
+     costs 2 to 3% GPU on the Deck, so fps drops at 4K. Not worth shipping as built: on this
+     path the saving and the non-uniform index come together. The commits are `aa54e2afa`
+     (port) and `fc967bd1a` (colour), on the lane's branch.
+     Measure: the doc section's commands, `OAG_INDIRECT` in `0 1 colour`.
    - **Re-measure on Omega** (maintainer's idea, unmeasured): Omega's PS4 scenes may carry many more
      draws per pass than HD's, where the per-draw saving could outweigh the indirect validation's
      fixed per-pass cost again. First count draws per pass on an Omega race (the perf overlay's

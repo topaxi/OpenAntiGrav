@@ -465,6 +465,101 @@ did not shorten the wait measurably. Its own work is the larger lever:
 A fourth upstreamable wgpu-core change: pool indirect validation's staging buffer and source
 bind group across frames instead of making them per pass.
 
+### Re-measured under an interleaved split, with the colour half too (2026-11-04)
+
+The split finish now puts each view's split-off scene pass back on the frame thread
+(`split-screen.md`, "Split finish under an interleaved split"), so the parked depth half was
+ported to that main and measured again, with a measure-only colour half on top. Neither
+is on main: the port is commit `aa54e2afa`, the colour half `fc967bd1a`.
+
+- **Depth half, ported.** Main's depth half now switches to the culling twin per draw, so a
+  view's list is two runs (two-sided, then culled), each in the depth order. On Anulpha the
+  culled run is empty: one multi-draw per view, 1,042 draws in two views.
+- **Colour half, measure-only** (`OAG_INDIRECT=colour`). The shaded half goes out as
+  multi-draws too, each draw's material slot as its first instance. A third mesh shader
+  variant (`indirect_material`) reads the slot's row from a storage buffer at group 1
+  binding 2, so the texture-array index is non-uniform. The list keeps the per-draw
+  order, backwards with reversed indices, split only where the cull mode changes, so
+  every coplanar tie under `LessEqual` resolves as before. Bucketing by material would
+  reorder those ties.
+- **Pictures.** Byte-identical across `OAG_INDIRECT=0`, `1` and `colour`: HD Anulpha at
+  ticks 300 and 1500, one view and a two-player vertical split, Pure's Vineta K split, and
+  Pulse's `16_Track`. Pure and Pulse circuits take the depth path too, since they have a
+  prepass.
+
+**Deck, HD Anulpha Pass, `--render-scale 100`.** Dist build (znver2, Debian container),
+headless gamescope at the window size, `vsync = "off"`, `frame_limit = "unlimited"`, a
+36 s race, mean after the first 6 s. One binary, the arms interleaved, 2 rounds, Deck load
+0.8 to 2.5. Frame-thread `total` ms, GPU ms where the log has it (one view only):
+
+| Views, split finish | Size | none | depth | depth + colour | GPU none / depth / colour | fps none / colour |
+| --- | --- | --- | --- | --- | --- | --- |
+| 2, on | 1280x800 | 12.55 | 12.80 | 12.72 | - | 78.4 / 77.3 |
+| 2, on | 1920x1080 | 14.79 | 14.89 | 14.72 | - | 66.2 / 66.3 |
+| 2, on | 3840x2160 | 19.14 | 19.09 | 18.79 | - | 26.6 / 26.2 |
+| 2, off | 1280x800 | 12.24 | 12.32 | 12.01 | - | 80.2 / 81.7 |
+| 2, off | 1920x1080 | 14.30 | 14.25 | 14.01 | - | 67.5 / 67.9 |
+| 2, off | 3840x2160 | 19.00 | 18.57 | 17.68 | - | 26.6 / 26.3 |
+| 1, on | 1280x800 | 7.19 | 7.32 | 7.22 | 3.58 / 3.59 / 3.65 | 128.5 / 127.7 |
+| 1, on | 1920x1080 | 8.25 | 8.40 | 8.25 | 5.50 / 5.53 / 5.64 | 86.4 / 85.4 |
+| 1, on | 3840x2160 | 11.81 | 11.74 | 11.13 | 16.04 / 16.13 / 16.52 | 29.6 / 29.2 |
+
+Round-to-round spread of a paired delta is about 0.1 to 0.3 ms in the split and 0.05 in
+one view below 4K. A depth-only matrix of 3 rounds on the first binary agreed: in the
+split with the split finish on, depth against none was -0.08, +0.05 and +0.12 ms at the
+three sizes, all inside the spread; one view lost 0.08 to 0.10 ms below 4K and gained 0.2
+at 4K; Pure's split lost 0.16 ms.
+
+What it says:
+
+**The resolvable floor is about 0.3 ms in a split.** The same depth-against-none cell
+(800p, split, split finish on) read -0.08 in one session and +0.25 in the other.
+
+- **Depth alone does not pay in a split.** Every split delta is inside that floor.
+- **The colour step against depth alone:** 0.08, 0.17 and 0.30 ms less frame thread in the
+  shipped split (split finish on). That is at or under the floor; the 800p one ranges -0.27
+  to +0.11. With the split finish off, where all of `finish` runs on the frame thread, it is
+  0.24 to 0.89 ms, which clears the floor at 4K.
+- **Against none, the combination is worse at 800p in the shipped split:** +0.17 ms (+0.11
+  to +0.22 over rounds). At 1080p it is -0.07 and at 4K -0.35, both inside the floor.
+- **It costs GPU time.** The colour arm adds 0.07, 0.14 and 0.49 ms of GPU a frame at the
+  three sizes, 2 to 3%, against none. That bundles the non-uniform material index, a
+  storage-buffer row load per fragment and wgpu's GPU-side validation of 1,042 more
+  indirect draws (the depth step alone costs 0.01 to 0.10), so it is an upper bound for
+  non-uniform indexing on RADV VANGOGH. At 4K, where the frame is GPU-bound, fps drops
+  (29.6 to 29.2 in one view, 26.6 to 26.2 in the split) and p99 rises up to 1.1 ms in one
+  view.
+- **The largest frame-thread cut is the split finish off plus the colour half:** 12.01
+  against the default 12.55 ms at 800p, 14.01 against 14.79 at 1080p. That is mostly the
+  split finish itself (off is 0.3 to 0.5 ms cheaper in a split below 4K, as
+  `split-screen.md` measured on Pure).
+
+**Verdict:** not worth shipping as built. On this path the frame-thread saving and the
+non-uniform index come together. The saving is collapsing about a thousand shaded
+`draw_indexed` calls into multi-draws, and inside a multi-draw the material slot can only
+be per-draw data. Bucketing by material would avoid that, but reorders coplanar ties under
+`LessEqual`, so no known variant gets one without the other. The dynamic-offset material
+buffer ("Material data in one buffer" in the cpu-bound-devices handover) is a separate
+lever: still one bind and one draw per draw, with an unmeasured saving.
+
+Commands (one binary for all three arms; one run per arm):
+
+```sh
+# workstation: Deck binary from the worktree
+podman run --rm -v <worktree>:/src -v data/appimage/container:/cache -w /src \
+  -e CARGO_HOME=/cache/cargo -e CARGO_TARGET_DIR=/cache/target-indirect \
+  -e RUSTFLAGS="-C target-cpu=znver2" oag-appimage-build:bookworm \
+  cargo build --profile dist -p oag-game --no-default-features --features extensions,dev-cli
+# Deck, under flock -o ~/.cache/oag/deck.lock, for W H, VIEWS (add --players 2
+# --split-cut vertical), OAG_INDIRECT in 0 1 colour and OAG_SPLIT_FINISH in 1 0:
+env ENABLE_GAMESCOPE_WSI=0 OAG_INDIRECT=$I OAG_SPLIT_FINISH=$SF \
+  gamescope --backend headless -W $W -H $H -w $W -h $H -r 90 -- \
+  ./oag-game ~/.local/share/oag/images/hdfury-ps3-eu-dec.iso --race --mode single_race \
+  --seed 1 --track 'Data\Environments\15_Anulpha_Pass\track.vex' --autopilot --no-audio \
+  --no-intro --frame-log --render-scale 100 --script "36:quit"
+# mean of the frame-phases and frame-log stage=race lines after the first six
+```
+
 ## What `prepare_view` spends on the Deck (2026-10-27, `prepare-view-breakdown`)
 
 The per-thread profile above puts `Scene::prepare_view` at 3.4 ms of the frame thread's 8.2 ms on
