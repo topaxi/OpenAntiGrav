@@ -1,24 +1,6 @@
 use super::*;
 
-const TOML: &str = r#"
-[toml-schema]
-location = "https://oag.topaxi.com/mods/schemas/v1/rumble.tosd"
-version = "1.0.0"
-
-[pattern]
-type = "Looping"
-class = "UI"
-priority = "High"
-loop = [1, 3]
-
-[pattern.positional]
-fall_off_inner = 30
-fall_off_outer = 20.5
-
-[tracks]
-large = [9, 8, 7, 6]
-small = [1, 0, 1]
-"#;
+const TOML: &str = include_str!("../../tests/fixtures/example.rumble.toml");
 
 const XML: &str = "<?xml version=\"1.0\"?><RumbleApp><RumbleEditor><Zoom>1</Zoom></RumbleEditor><RumbleData><FPS>60</FPS><Type LoopStart=\"1\" LoopEnd=\"3\">Looping</Type><Class>UI</Class><Priority>High</Priority><Behaviour>Positional</Behaviour><LargeActuator FallOffInner=\"30\" FallOffOuter=\"20.5\">9 8 7 6 </LargeActuator><SmallActuator>1 0 1 </SmallActuator></RumbleData></RumbleApp>";
 
