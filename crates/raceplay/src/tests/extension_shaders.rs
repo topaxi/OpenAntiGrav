@@ -190,7 +190,15 @@ fn shader_draws_never_reach_the_hash() {
             })
             .collect::<Vec<_>>()
     };
-    assert_eq!(hashes(&[]), hashes(&[beam(Some(0)), fill, param]));
+    let portal = Command::PortalView {
+        slot: slot(0),
+        entrance: 10.0,
+        exit: 40.0,
+        radius: 8,
+        update: oag_ext_abi::ViewUpdate::Continuous,
+        generation: 0,
+    };
+    assert_eq!(hashes(&[]), hashes(&[beam(Some(0)), fill, param, portal]));
 }
 
 /// An effect file's `shader` key, played where `fire-mod-effect-ahead` plays it: its particles

@@ -209,9 +209,15 @@ impl Scene {
         });
     }
 
+    /// Whether a target was ever built.
+    #[cfg(test)]
+    pub(crate) fn has_portal_target(&self) -> bool {
+        self.portal.borrow().is_some()
+    }
+
     /// The matrix `engine_uv` projects with in the view being drawn, `None` where the frame's
     /// texture is not this view's.
-    pub(super) fn portal_engine_of(&self, race: &Race) -> Option<[[f32; 4]; 4]> {
+    pub(crate) fn portal_engine_of(&self, race: &Race) -> Option<[[f32; 4]; 4]> {
         let (slot, matrix) = self.portal_engine.get()?;
         (slot == race.viewed_slot()).then(|| matrix.to_cols_array_2d())
     }

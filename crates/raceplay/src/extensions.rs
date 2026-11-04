@@ -676,6 +676,12 @@ pub struct Extensions {
 }
 
 impl Extensions {
+    /// This tick's `portal-view` of `slot`, as a guest changing what it asks would leave it.
+    #[cfg(all(test, feature = "extensions"))]
+    pub(crate) fn set_portal_view(&mut self, slot: usize, request: PortalRequest) {
+        self.on.portal_views[slot] = Some(request);
+    }
+
     /// The state for the modules `prepared` holds, blobs zeroed.
     #[must_use]
     pub fn new(prepared: Prepared) -> Self {
