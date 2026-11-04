@@ -85,11 +85,15 @@ impl Session {
         drs::Limits::new(
             ceiling,
             floor,
-            // Held under the limiter: aiming above a rate the loop is not
-            // allowed to produce would drop the resolution permanently to buy
-            // frames that are never presented. The menu warns about the same
-            // pairing; this is what stops it costing anything.
-            profile.target_fps.at_most(self.limiter_hz()),
+            // Held under the limiter and under the output: aiming above a rate
+            // the loop is not allowed to produce, or the display cannot show,
+            // would drop the resolution permanently to buy frames that are
+            // never presented. The menu warns about the limiter pairing; this
+            // is what stops either costing anything.
+            profile
+                .target_fps
+                .at_most(self.limiter_hz())
+                .at_most(self.display.hz()),
         )
         // The blur rung's ceiling is the player's gather resolution, and
         // there is nothing to shed with the blur off (ADR-0075).
@@ -1049,6 +1053,7 @@ impl Session {
             self.present_cost.record(present_seconds);
         }
         self.last_present_seconds = present_seconds;
+        self.feed_display(frame_seconds, present_seconds);
         // `--frame-log`'s once-a-second line, on every stage.
         self.dev_log(has_scene.then(|| self.framebuffer.extent()));
         // The third and last diagnostic timestamp - see `Session::race_ready_at`.

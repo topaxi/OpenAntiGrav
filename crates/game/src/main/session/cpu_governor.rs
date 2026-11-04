@@ -106,7 +106,7 @@ impl Session {
         let sample = Sample {
             cpu: cpu_seconds,
             gpu: self.governor_gpu,
-            period: self.limiter_hz().map(|hz| 1.0 / hz as f32),
+            period: self.held_hz().map(|hz| 1.0 / hz as f32),
         };
         let Some(change) = self.governor.record(sample, steps.len()) else {
             return;

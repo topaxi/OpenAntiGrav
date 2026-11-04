@@ -323,6 +323,11 @@ pub(crate) struct Session {
     /// The last frame's swapchain acquire plus `present` time, in seconds, so the governor
     /// reads CPU time without the wait.
     pub(crate) last_present_seconds: f32,
+    /// What the output can show: the monitor's report and the frames that prove it
+    /// (`oag_present::refresh`), asked by [`Session::display_hz`].
+    pub(crate) display: oag_present::refresh::Display,
+    /// The last display rate logged, so a change is one `debug` line.
+    pub(crate) logged_display_hz: Option<Option<u32>>,
     /// Where each window frame's input sample sat against its swapchain
     /// acquire, summed a second at a time and logged at `debug`. See
     /// [`frame_timing`].

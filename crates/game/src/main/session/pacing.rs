@@ -67,31 +67,73 @@ impl Session {
     /// run - the default - drew a pacing graph that conveyed nothing. The rule
     /// line means "one target frame" and the target has to be the one in force.
     ///
-    /// With vsync on the display is the target and this build cannot ask a
-    /// surface what its refresh is, so it falls back to the simulation's own
-    /// rate. On a 144 Hz panel that reads pessimistically - the numbers are
-    /// still measured, only the graph's scale is off - and getting it right
-    /// needs a refresh rate off the monitor, which is work of its own.
+    /// With no limit in force the display is the target: its refresh as
+    /// [`Self::display_hz`] knows it, and the simulation's own rate while
+    /// nothing says.
     pub(super) fn presentation_hz(&self) -> u32 {
         self.frame_period()
             .and_then(|_| self.active_limit().hz())
+            .or_else(|| self.display.hz())
             .unwrap_or_else(|| self.clock.rate().hz())
     }
 
     /// The rate the frame limiter is actually holding the loop to, or `None`
     /// when nothing is.
     ///
-    /// `None` for `FrameLimit::UNLIMITED` and for [`oag_present::perf::Vsync::On`],
-    /// where the display is the bound and this build cannot ask a surface what
-    /// its refresh is. **Deliberately not the `presentation_hz` fallback**:
-    /// guessing the simulation's 60 is a fine default for a graph's scale and
-    /// a bad one for a clamp, because a 144 Hz panel would silently have its
-    /// `target_fps` capped at 60. See [`oag_present::drs::Target::at_most`].
+    /// `None` for `FrameLimit::UNLIMITED`. The display is a bound of its own
+    /// ([`Self::display_hz`]); neither falls back to the simulation's 60, which
+    /// is a fine default for a graph's scale and a bad one for a clamp, because
+    /// a 144 Hz panel would silently have its `target_fps` capped at 60. See
+    /// [`oag_present::drs::Target::at_most`].
     pub(super) fn limiter_hz(&self) -> Option<u32> {
         // The race's own limit, not `active_limit`: this feeds dynamic
         // resolution's clamp, which is a race concern.
         self.frame_period()
             .and_then(|_| self.settings.display.frame_limit.hz())
+    }
+
+    /// The most the output can show, or `None` while nothing says
+    /// ([`oag_present::refresh`]).
+    pub(super) fn display_hz(&self) -> Option<u32> {
+        self.display.hz()
+    }
+
+    /// The rate the loop is held to by the limiter or the output, whichever is lower.
+    pub(super) fn held_hz(&self) -> Option<u32> {
+        match (self.limiter_hz(), self.display_hz()) {
+            (Some(limit), Some(shown)) => Some(limit.min(shown)),
+            (limit, shown) => limit.or(shown),
+        }
+    }
+
+    /// One frame's evidence about the output, and the monitor's report asked again about once
+    /// a second so a window moved to another monitor follows. Only race frames with a timed
+    /// GPU cost count: without the cost a slow GPU cannot be told from a slow display.
+    pub(super) fn feed_display(&mut self, frame_seconds: Option<f32>, wait: f32) {
+        if self.frame_index % 60 == 0 {
+            let monitor = self.gpu.output.window.current_monitor();
+            let reported = monitor.as_ref().and_then(|m| m.refresh_rate_millihertz());
+            log::trace!("monitor reports {reported:?} mHz");
+            self.display.report(reported);
+        }
+        if matches!(self.stage, Stage::Race(_))
+            && let (Some(interval), Some(gpu)) = (frame_seconds, self.governor_gpu)
+        {
+            self.display.observe(oag_present::refresh::Frame {
+                interval,
+                wait,
+                gpu,
+            });
+        }
+        let shown = self.display.hz();
+        if self.logged_display_hz != Some(shown) {
+            self.logged_display_hz = Some(shown);
+            log::debug!(
+                "display refresh in force: {} (target {} held under it)",
+                shown.map_or_else(|| "unknown".to_string(), |hz| format!("{hz} Hz")),
+                self.render_profile().target_fps
+            );
+        }
     }
 
     /// Puts the next frame on the schedule, one period after the last one was

@@ -593,23 +593,42 @@ other two share the RECONSTRUCTION row.
 floor halves against `upscale::magnifies`, the same guard the `off` halves were
 already pinned to.
 
-### The target is held to the frame limiter
+### The target is held to the frame limiter and to the display
 
 Aiming above the limiter asks for frames the loop is not allowed to produce. At
 `target_fps = 144` behind a 60 limit the budget is 2.4x too tight, so the
 controller drops the resolution permanently to hold a rate the limiter forbids
-whatever it does - every pixel given up buys nothing.
+whatever it does - every pixel given up buys nothing. The display is a bound of
+the same kind: a Steam Deck docked to a 60 Hz TV under gamescope holds the output
+to 60 whatever the limit says.
 
-`drs::Target::at_most` is the clamp and the menu row's own `warn_when` is the
-visible half: the row says what was asked for, the clamp holds the controller
-to what will actually be produced. Neither would be honest alone.
+`drs::Target::at_most` is the clamp, applied twice: to `Session::limiter_hz` and to
+`Session::display_hz`. The menu row's own `warn_when` is the visible half for the
+limiter pairing only: it reads settings, so it cannot see a runtime refresh. The
+display clamp is logged once per change at `debug` (`display refresh in force`).
 
-**Both stop at `Vsync::On`.** There the *display* is the bound and this build
-cannot ask a surface what its refresh is. The only fallback available is the
-simulation's 60 - which `Session::presentation_hz` does take for the overlay's
-graph scale, and says so - and taking it here would silently cap a 144 Hz
-panel's target at 60 while the row still read 144. A wrong clamp is worse than
-none.
+**Where the display rate comes from** ([ADR-0084](../architecture/adr/0084-the-target-is-held-to-what-the-display-shows.md),
+`oag_present::refresh`):
+
+- *The report*: the current monitor's `refresh_rate_millihertz`, asked again about
+  once a second so a window moved between monitors follows. Believed everywhere but
+  under gamescope, whose monitor is virtual. Measured here: Xvfb reports none; a
+  nested headless `gamescope -r 60` reports 59855 mHz and names its monitor
+  `gamescope`.
+- *The measurement*, which outranks the report both ways. An interval is evidence of
+  the output only if the frame spent at least half of it in acquire plus present
+  **and** the timed GPU cost was at most half of it (the way `drs::residual` accepts a
+  reading only when it can prove it is uncontaminated): a slow GPU fills the interval
+  with work, so it never reads as a slow display. 90 such intervals within 4 % spread
+  give the rate; wider spread (variable refresh) gives none. The last rate is kept
+  when evidence stops, because once the clamp holds the scale the GPU fills the budget
+  and the wait shrinks.
+- *Neither*: no clamp. A 144 Hz panel keeps 144; an unknown refresh never caps at the
+  simulation's 60. `Session::presentation_hz` (the overlay graph's scale) takes the
+  display rate before that fallback.
+
+The CPU governor's budget is the lower of the limiter and the display
+(`Session::held_hz`).
 
 **On an adapter with no `TIMESTAMP_QUERY` there is no signal and the extent
 never moves, and the row cannot say so by greying out.** `disabled_by` names a

@@ -499,6 +499,8 @@ impl App {
             governor: oag_present::governor::Governor::new(),
             governor_gpu: None,
             last_present_seconds: 0.0,
+            display: oag_present::refresh::Display::new(!gamescope),
+            logged_display_hz: None,
             frame_timing: Default::default(),
             phases: crate::session::phases::PhaseClock::new(self.dev.frame_log),
             drs_unreachable_said: false,
