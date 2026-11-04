@@ -59,7 +59,7 @@ pub use hud::{
 pub use kind::CommandKind;
 pub use malformed::Malformed;
 pub use motion::{Distance, MAX_PROBE_RADIUS, MAX_SPEED_FACTOR, MAX_TRANSIT_TICKS};
-pub use pickup::{Colour, Icon, ModIcon};
+pub use pickup::{Colour, Icon, ModIcon, Pickup};
 pub use scene::{
     MAX_BEAM_HALF_WIDTH, MAX_BEAMS_PER_TICK, MAX_FOV_OFFSET_DEG, MAX_SHADER_INDEX,
     MAX_SHADER_PARAMS,
@@ -328,46 +328,6 @@ coded! {
     WeatherKind: u16, first 0 {
         /// The title's authored rain.
         Rain,
-    }
-}
-
-/// What a craft holds.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub enum Pickup {
-    /// Nothing.
-    #[default]
-    None,
-    /// One of the title's weapons.
-    Weapon(Weapon),
-    /// The reading mod's own pickup (`give-pickup`).
-    Ours,
-    /// Another mod's pickup, by that mod's kind in the race (below [`MAX_PICKUP_KINDS`], in
-    /// module id order among the mods that declare a `[pickup]`). A module sees its own
-    /// kind as [`Self::Ours`], never as this.
-    Other(u8),
-}
-
-impl Pickup {
-    /// Its code in a craft record.
-    #[must_use]
-    pub const fn code(self) -> u8 {
-        match self {
-            Self::None => 0,
-            Self::Weapon(weapon) => weapon.code(),
-            Self::Ours => PICKUP_OURS,
-            Self::Other(kind) => PICKUP_OTHER_FIRST + kind,
-        }
-    }
-
-    /// The pickup a code names, if any.
-    #[must_use]
-    pub fn from_code(code: u8) -> Option<Self> {
-        match code {
-            0 => Some(Self::None),
-            PICKUP_OURS => Some(Self::Ours),
-            PICKUP_OTHER_FIRST..=PICKUP_OTHER_LAST => Some(Self::Other(code - PICKUP_OTHER_FIRST)),
-            _ => Weapon::from_code(code).map(Self::Weapon),
-        }
     }
 }
 

@@ -103,8 +103,7 @@ pub(super) struct On {
     pub(super) sound_loops: super::sound::Loops,
     /// Each slot's `screen-fill` this tick (the later module wins) and `fov-offset` this
     /// tick (modules add): outputs, never hashed.
-    /// A fill's shader is the sending module and the place in its `[shaders]`.
-    pub(super) fill: [Option<(oag_ext_abi::Rgba, Option<(usize, u16)>)>; oag_gameplay::MAX_SHIPS],
+    pub(super) fill: [Option<Fill>; oag_gameplay::MAX_SHIPS],
     pub(super) fov: [f32; oag_gameplay::MAX_SHIPS],
     /// This tick's `draw-beam`s and `set-shader-param`s: outputs, never hashed.
     pub(super) beams: Vec<(usize, super::Beam)>,
@@ -127,6 +126,10 @@ pub(super) struct On {
     /// `clearance` event: race state, hashed.
     pub(super) clearance: [Option<(bool, f32)>; oag_gameplay::MAX_SHIPS],
 }
+
+/// A `screen-fill` of this tick: its colour, and the shader as the sending module and the
+/// place in its `[shaders]`.
+pub(super) type Fill = (oag_ext_abi::Rgba, Option<(usize, u16)>);
 
 /// A `set-shader-param` of this tick.
 #[derive(Debug, Clone, Copy)]
