@@ -21,6 +21,7 @@ pub mod extras;
 mod manifest;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod pack;
+pub mod rumble;
 
 pub use container::{Container, Origin};
 pub use discover::{

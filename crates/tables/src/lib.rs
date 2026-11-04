@@ -41,6 +41,7 @@ pub mod pure_ai_stats;
 pub mod pure_campaign;
 pub mod pure_flow;
 pub mod race_campaign;
+pub mod rumble;
 pub mod track_stats;
 pub mod trackstartup;
 pub mod weapons;
