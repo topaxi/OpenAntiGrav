@@ -156,10 +156,8 @@ Open from it, each small:
 `oag.slipstream` draws a window (`fx/portal.wgsl`) with a QUALITY row under OPTIONS; the pick reaches the
 guest as `Observation::option` (new ABI bytes, `mod-shaders.md` "A mod's quality row"). Open from it:
 
-1. **The firer barely sees the window.** `transit` starts on the fire tick with the camera still, so the
-   entrance 30 units ahead shows its view for about 10 ticks under the fill ramp. Another person's
-   portal (split screen, first seat only) or a scratch variant with no transit shows it properly; Medium and
-   High then differ by under 1 % of texels at the closest approach (a held snapshot stays on the surface).
+1. ~~The firer barely sees the window~~: landed. The guest holds the transit until the craft's
+   progress reaches the entrance (see item 6).
 2. **A queued fire whose clearance fails at its turn is dropped** (the pickup is kept), where a Quake's armed
    press stays armed. Chosen, kept.
 3. **Online a server's guest has no pick**: settings are not read there; only drawn outputs depend on it.
@@ -168,9 +166,18 @@ guest as `Observation::option` (new ABI bytes, `mod-shaders.md` "A mod's quality
    split a replay, a LAN race or a server from the player's own run. Slipstream reads it for drawn outputs
    only; the contract says nothing yet. Either state it on `hooks.md` or carry the picks with the replay and
    the handshake.
-6. **Question for the maintainer:** should the firer see the window? Transit keeps its fill and FOV jump as
-   decided, so the portal lanes are mostly seen by other people. Holding the transit until the craft reaches
-   the entrance would show it, and changes the timing of the weapon.
+6. ~~Question: should the firer see the window?~~ Done, the guest's approach phase. The portal and
+   its sound open at the press, the craft keeps flying and goes through when its progress reaches
+   the entrance (about 13 ticks at 500 km/h on Pulse's `16_Track`); the pickup is spent there, and the
+   fill, FOV jump and hum start there. **Chosen, not measured:** a craft that has not arrived 50 ticks
+   after the press (stopped, wall-hit, wrecked, pickup lost) closes the portal and keeps the pickup;
+   50 is under the portal effect's 60 tick life. The exit stays where the view looks (entrance
+   plus two seconds of the press speed). No course fix: through on the press, as before. Another
+   craft cannot enter a held portal (the transit is per craft); a fire while the portal is held queues
+   as before. The AI goes through the same path (`the_ai_fires_it_and_only_one_portal_is_open_at_a_time`).
+   Seen at the player's size on `16_Track`: window ahead for about 13 ticks with no fill, then the
+   craft is gone at the entrance and the fill ramps over 10 ticks. At 500 km/h the window is on
+   screen for about 0.2 s before the fill.
 
 ## SVG icons (lane svg-assets, 2026-11-04)
 
