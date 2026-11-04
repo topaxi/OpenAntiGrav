@@ -1,8 +1,8 @@
 ---
-status: blocked-hardware
+status: measure
 titles: [all]
-updated: 2026-10-16
-summary: "Bindless textures on the Steam Deck (RADV): wgpu features, limits and split-frame level unchecked"
+updated: 2026-11-04
+summary: "Bindless textures on the Deck: 5 to 10% less frame-thread CPU, no clash with the split finish; 1080p and 4K and GPU time unmeasured"
 categories: [rendering]
 ---
 
@@ -31,10 +31,15 @@ needed because padding the arrays to a fixed length made `finish` slower than th
 
 ## Open
 
-- **The Steam Deck (RADV) is unchecked**: whether wgpu 30 exposes the three features and the
-  binding-array and immediate limits there, and whether its pipelined split frame stays level. It is
-  GPU-bound like the iGPU, so that frame decides. Commands: `docs/tools/render-bench.md`, "Bindless
-  textures".
+- **The Steam Deck, measured 2026-11-04 (CPU at 800p; GPU time, 1080p and 4K not yet).** RADV VANGOGH
+  exposes the features (the arrays are in use). Pure on Vineta K, 1280x800, headless gamescope,
+  `vsync = "off"`, `frame_limit = "unlimited"`, dist build (znver2), `OAG_BINDLESS=0` against the
+  default on one binary, 3 interleaved rounds, mean frame-thread ms a frame (`frame-phases` total):
+  two-player split 8.19 -> 7.33 with the split finish on, 7.95 -> 7.15 with `OAG_SPLIT_FINISH=0`;
+  one view 4.53 -> 4.27 with it on, 5.15 -> 4.86 off. The same 0.8 ms in a split and 0.3 ms in one
+  view with the split finish on or off, so the two do not clash. fps was 102.6 (split) and 120.5
+  (one view) in every arm, paced by something other than this CPU time, so these are CPU headroom
+  figures. Open: the GPU side (`gpu_ms`) on the Deck, 1080p and 4K, HD and Pulse.
 - **The web smoke test** (`just check-web-shaders`) skips the variant by its `enable
   wgpu_binding_array;` directive; it ran only in CI, not in this lane.
 - **What is left of the ceiling**: the arrays take 53 to 70% of what the no-switch hack removed.
@@ -47,7 +52,6 @@ needed because padding the arrays to a fixed length made `finish` slower than th
 
 ## Next Steps
 
-1. On the Deck: the first command block in `docs/tools/render-bench.md` ("Bindless textures"); if
-   the race log names drawables on binding arrays, the A/B block.
-2. If the Deck lacks a feature, nothing changes there; if its pipelined frame rises, gate the variant
-   per adapter and say why in `bindless.rs`.
+1. On the Deck: the GPU side of the A/B (`OAG_RENDER_GPU_BENCH`, the block in
+   `docs/tools/render-bench.md`, "Bindless textures") at 1080p and 4K, and HD and Pulse beside Pure.
+2. If the Deck's GPU time rises at a size, gate the variant per adapter and say why in `bindless.rs`.

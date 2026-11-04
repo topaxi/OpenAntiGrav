@@ -61,10 +61,19 @@ impl Frame {
     /// Opens a frame on this thread when [`wanted`] says this machine gains from the split.
     pub fn begin() -> Self {
         static WANTED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-        let wanted = *WANTED.get_or_init(wanted);
-        if wanted {
-            OPEN.with(|open| *open.borrow_mut() = Some(Vec::new()));
+        if *WANTED.get_or_init(wanted) {
+            Self::open()
+        } else {
+            Self {
+                _thread: std::marker::PhantomData,
+            }
         }
+    }
+
+    /// Opens a frame on this thread whatever [`wanted`] says: for a test of what a split
+    /// frame draws on a machine that would not split.
+    pub fn open() -> Self {
+        OPEN.with(|open| *open.borrow_mut() = Some(Vec::new()));
         Self {
             _thread: std::marker::PhantomData,
         }
@@ -91,6 +100,21 @@ impl Drop for Frame {
     fn drop(&mut self) {
         OPEN.with(|open| open.borrow_mut().take());
     }
+}
+
+/// Submits `last`, behind everything this thread's open frame has split off so far, in one
+/// submission; with no frame open it is `queue.submit` of `last` alone.
+///
+/// For a caller that submits part of a frame ahead of [`Frame::submit`] (a split screen's view,
+/// whose post work reads the picture its own scene pass drew): the split-off passes go out
+/// first, or `last` would run ahead of the passes it follows. The frame stays open.
+pub fn submit_with_closed(queue: &wgpu::Queue, last: wgpu::CommandBuffer) -> wgpu::SubmissionIndex {
+    let closed = OPEN
+        .with(|open| open.borrow_mut().as_mut().map(std::mem::take))
+        .unwrap_or_default();
+    let mut buffers: Vec<wgpu::CommandBuffer> = closed.into_iter().map(Closed::buffer).collect();
+    buffers.push(last);
+    queue.submit(buffers)
 }
 
 /// Whether frames split their encoder: `OAG_SPLIT_FINISH` when set (`0` off, anything else
@@ -237,6 +261,58 @@ mod tests {
             .expect("a mapped buffer reads")
             .to_vec();
         assert_eq!(bytes, [0, 0, 0, 0, 1, 1, 1, 1]);
+    }
+
+    /// A part submitted ahead of the frame's own submit still runs behind what was split off
+    /// before it: a clear, then a copy over half of it submitted by `submit_with_closed`.
+    #[test]
+    fn a_part_submitted_early_runs_behind_what_was_split_off_before_it() {
+        let Some((device, queue)) = device() else {
+            return;
+        };
+        let target = buffer(
+            &device,
+            wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,
+            &[9; 8],
+        );
+        let ones = buffer(&device, wgpu::BufferUsages::COPY_SRC, &[1; 4]);
+        let out = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("split test readback"),
+            size: 8,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let frame = Frame::open();
+        let mut encoder = device.create_command_encoder(&Default::default());
+        encoder.clear_buffer(&target, 0, None);
+        split(&device, &mut encoder);
+        encoder.copy_buffer_to_buffer(&ones, 0, &target, 4, 4);
+        submit_with_closed(&queue, encoder.finish());
+        let mut rest = device.create_command_encoder(&Default::default());
+        rest.copy_buffer_to_buffer(&target, 0, &out, 0, 8);
+        frame.submit(&queue, rest);
+        out.slice(..)
+            .map_async(wgpu::MapMode::Read, |r| r.expect("maps"));
+        device
+            .poll(wgpu::PollType::wait_indefinitely())
+            .expect("the readback lands");
+        let bytes = out
+            .slice(..)
+            .get_mapped_range()
+            .expect("a mapped buffer reads")
+            .to_vec();
+        assert_eq!(bytes, [0, 0, 0, 0, 1, 1, 1, 1]);
+    }
+
+    /// With no frame open `submit_with_closed` is a plain submit.
+    #[test]
+    fn with_no_open_frame_it_submits_the_one_buffer() {
+        let Some((device, queue)) = device() else {
+            return;
+        };
+        let encoder = device.create_command_encoder(&Default::default());
+        submit_with_closed(&queue, encoder.finish());
+        assert!(OPEN.with(|open| open.borrow().is_none()));
     }
 
     /// The S24's capacities split nothing; the Deck's and unreadable ones split.
