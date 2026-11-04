@@ -1329,7 +1329,7 @@ around its draw (`hud-readout`, `hud-frame`, `hud-paint`, in `hud_views::draw` a
 | Pure, one view | 247 / 365 | 212 / 346 |
 | Pure, split | 525 / 779 | 455 / 742 |
 | HD, one view | 867 / 1039 | 844 / 1022 |
-| HD, split | 1441 / 1786 | 1398 / 1752 |
+| HD, split | 1441 / 1786 | 1398 / 1754 |
 
 | HUD draw list (`hud-frame`), allocs a frame | one view | split | four views |
 | --- | --- | --- | --- |
