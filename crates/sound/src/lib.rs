@@ -51,9 +51,11 @@ mod spatial_route;
 pub mod folders;
 mod listings;
 mod menu_music;
+mod music_line;
 mod now_playing;
 pub mod pool;
 mod pre_race_voice;
+mod song_control;
 pub use now_playing::NowPlaying;
 pub mod probe;
 mod race_music;
@@ -487,6 +489,8 @@ pub struct Audio {
     hd: hd_mix::Hd,
     /// The race song held until the race leaves its countdown. See [`race_song`].
     song_hold: race_song::Hold,
+    /// The race-only music control's position; see [`music_line`].
+    music_line: music_line::Line,
     /// Where `--dump-audio` writes. `None` with a device attached, because
     /// [`Output::render_tick`] refuses to pull samples the hardware callback
     /// is already draining.
@@ -703,6 +707,7 @@ impl Audio {
             route,
             hd: hd_mix::Hd::default(),
             song_hold: race_song::Hold::default(),
+            music_line: music_line::Line::default(),
             dump: dump.map(|path| Dump {
                 path,
                 samples: Vec::new(),
@@ -742,6 +747,7 @@ impl Audio {
     /// sliders reach `Audio_SetSfxFadeTarget`, a separate chain; see
     /// `MUSIC_MASTER_TRIM` for the evidence.
     pub fn apply(&self, settings: &crate::settings::Settings) {
+        self.reset_music_line();
         let spatial = settings.spatial_audio.resolve(self.route.kind());
         // HD sets music and effects from its authored mix every tick, so only
         // the sliders are kept here. See `hd_mix`.
@@ -895,6 +901,7 @@ impl Audio {
     /// [`Self::start_music`] is idempotent and would do nothing. Silent when no
     /// menu sound was ever loaded.
     pub fn pause_race_music(&mut self) {
+        self.reset_music_line();
         if let Some(id) = self.race_voice.take() {
             self.race_position = self
                 .output

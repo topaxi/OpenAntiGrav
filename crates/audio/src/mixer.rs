@@ -453,6 +453,8 @@ const HRTF_CROSSFADE_FRAMES: u32 = 256;
 pub struct Mixer {
     voices: Vec<Voice>,
     bus_gain: [f32; Bus::COUNT],
+    /// A second gain per bus that [`Self::set_bus_gain`] never writes; see [`Self::set_bus_trim`].
+    bus_trim: [f32; Bus::COUNT],
     master_gain: f32,
     /// A fixed gain a title asks for, ahead of the limiter; see [`Self::set_master_trim`].
     master_trim: f32,
@@ -500,6 +502,7 @@ impl Mixer {
         Self {
             voices: vec![Voice::default(); MAX_VOICES],
             bus_gain: [1.0; Bus::COUNT],
+            bus_trim: [1.0; Bus::COUNT],
             master_gain: 1.0,
             master_trim: 1.0,
             sample_rate: sample_rate.max(1),
@@ -548,6 +551,19 @@ impl Mixer {
     /// Sets one bus's gain, which is what a volume slider moves.
     pub fn set_bus_gain(&mut self, bus: Bus, gain: f32) {
         self.bus_gain[bus.index()] = gain.max(0.0);
+    }
+
+    /// Multiplies one bus by `trim` on top of [`Self::set_bus_gain`]. Kept apart from it so a
+    /// caller that rewrites the bus gains every tick (HD's authored mix, the effects fade) does
+    /// not undo it, and [`Self::bus_gain`] still reads the level the settings asked for.
+    pub fn set_bus_trim(&mut self, bus: Bus, trim: f32) {
+        self.bus_trim[bus.index()] = trim.max(0.0);
+    }
+
+    /// Reads one bus's trim, `1.0` unless [`Self::set_bus_trim`] moved it.
+    #[must_use]
+    pub fn bus_trim(&self, bus: Bus) -> f32 {
+        self.bus_trim[bus.index()]
     }
 
     /// Reads one bus's gain.
@@ -845,7 +861,7 @@ impl Mixer {
                 continue;
             }
             let Some(bus) = voice.bus else { continue };
-            let level = voice.gain * self.bus_gain[bus.index()];
+            let level = voice.gain * self.bus_gain[bus.index()] * self.bus_trim[bus.index()];
             rank.push((level, voice.hrtf.is_some(), slot as u16));
         }
         if rank.len() > self.hrtf_cap {
@@ -983,6 +999,7 @@ impl Mixer {
         out.fill(0.0);
         let master = self.master_gain * self.master_trim;
         let bus_gain = self.bus_gain;
+        let bus_trim = self.bus_trim;
         let rate = f64::from(self.sample_rate);
         let spatial = self.spatial;
         let rear_occlusion = self.rear_occlusion;
@@ -1004,7 +1021,7 @@ impl Mixer {
             let Some(bus) = voice.bus else {
                 continue;
             };
-            let gain = voice.gain * bus_gain[bus.index()] * master;
+            let gain = voice.gain * bus_gain[bus.index()] * bus_trim[bus.index()] * master;
             // One pair for the whole buffer. The original moves a pan over a
             // ramp inside SCREAM rather than per sample, and a tick is short
             // enough that stepping it here would model an interpolator we have

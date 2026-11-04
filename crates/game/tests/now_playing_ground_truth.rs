@@ -718,3 +718,106 @@ fn the_2048_borrows_hds_display_and_names_its_own_songs() {
     let shown = shown.expect("shown");
     assert_eq!(shown, "DirtyLoud - School of Funk");
 }
+
+/// Pulse's pad music controls through a real race on a null audio backend: restart seeks the
+/// song to zero, next and previous move the playlist and the name the display shows, the volume
+/// line comes back to where it started, and none of it reaches the simulation - the state hash
+/// equals a run with no pad input. Dropping `oag_game::music_pad::drive` from the run, or the
+/// `Audio` methods behind it, leaves this red.
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd"]
+fn pulse_pad_music_controls_move_the_song_and_leave_the_simulation_alone() {
+    use oag_gameplay::PlayerInputs;
+    use oag_input::music::{MusicAction, MusicInput};
+
+    struct Outcome {
+        hash: u64,
+        names: Vec<String>,
+        playhead_after_restart: Option<f64>,
+        line_after_hold: i32,
+        line_at_end: i32,
+    }
+
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
+        return;
+    };
+    let source = image.display().to_string();
+    let run = |paddles: bool| -> Outcome {
+        let loaded = oag_raceplay::load(&oag_raceplay::Options {
+            source: source.clone(),
+            mode: oag_race::Mode::TimeTrial,
+            class: "VENOM".to_string(),
+            seed: Some(1),
+            ..oag_raceplay::Options::default()
+        })
+        .expect("loading the race");
+        let cache = Path::new(env!("CARGO_TARGET_TMPDIR")).join("pad-music-audio");
+        let discs = oag_sound::MusicDiscs::survey(&source, &GameLibrary);
+        let settings = oag_sound::settings::Settings::default();
+        let mut audio = oag_sound::Audio::open(&settings, None, None, oag_audio::MIN_BUFFER, true);
+        oag_game::sound::hold_race_song(&mut audio, loaded.title);
+        audio.start_race_music(&discs, oag_sound::MusicSource::Auto, &cache);
+        audio.settle_music();
+        let mut race = oag_raceplay::Race::start(loaded.setup);
+
+        let mut out = Outcome {
+            hash: 0,
+            names: Vec::new(),
+            playhead_after_restart: None,
+            line_after_hold: 0,
+            line_at_end: 0,
+        };
+        let go = oag_race::COUNTDOWN_TICKS as usize;
+        let name = |audio: &oag_sound::Audio| {
+            audio
+                .now_playing()
+                .and_then(|song| song.name)
+                .map_or_else(String::new, |name| name.text(" - "))
+        };
+        let press = |action: MusicAction| MusicInput::new(&[action], &[]);
+        let hold = |action: MusicAction| MusicInput::new(&[], &[action]);
+        for tick in 0..go + 900 {
+            race.tick(&PlayerInputs::none());
+            oag_game::sound::race_tick(&mut audio, &mut race);
+            let input = match (paddles, tick.checked_sub(go)) {
+                (true, Some(0)) => MusicInput::default(),
+                (true, Some(300)) => press(MusicAction::RestartSong),
+                (true, Some(320)) => press(MusicAction::NextSong),
+                (true, Some(330)) => press(MusicAction::ShowSong),
+                (true, Some(400)) => press(MusicAction::PreviousSong),
+                (true, Some(500..700)) => hold(MusicAction::MusicUp),
+                (true, Some(700..900)) => hold(MusicAction::MusicDown),
+                _ => MusicInput::default(),
+            };
+            oag_game::music_pad::drive(&mut audio, &mut race, settings.music_volume, input);
+            audio.settle_music();
+            audio.tick();
+            match tick.checked_sub(go) {
+                Some(301) => out.playhead_after_restart = audio.playhead_race(),
+                Some(319 | 329 | 399 | 450) => out.names.push(name(&audio)),
+                Some(699) => out.line_after_hold = audio.music_line_ticks(),
+                _ => {}
+            }
+        }
+        out.line_at_end = audio.music_line_ticks();
+        out.hash = race.sim.state_hash();
+        out
+    };
+    let with = run(true);
+    let without = run(false);
+    assert_eq!(
+        with.hash, without.hash,
+        "pad music input reached the simulation"
+    );
+    let playhead = with.playhead_after_restart.expect("a song is playing");
+    assert!(playhead < 0.5, "restart seeks to zero: {playhead}");
+    let [before, next, again, previous, ..] = with.names.as_slice() else {
+        panic!("{:?}", with.names);
+    };
+    assert_eq!(before, "Aphex Twin - Fenix Funk 5 (Wipeout Edit)");
+    assert_ne!(next, before, "next changes the song");
+    assert_eq!(again, next);
+    assert_eq!(previous, before, "previous goes back");
+    assert!(with.line_after_hold > 0, "the volume line moved up");
+    assert_eq!(with.line_at_end, 0, "down walked it back exactly");
+}

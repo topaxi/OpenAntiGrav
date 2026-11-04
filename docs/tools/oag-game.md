@@ -790,6 +790,45 @@ through it.
   specifier, so a caller that also wants the file's collision nodes - which every
   caller that wants to drive on it does - decompresses the same blob twice.
 
+## Music controls in a race
+
+Six pad actions steer the race music while a race is running and not paused (`oag_input::music::MusicAction`,
+glued by `oag_game::music_pad`). Output only: they never reach `World`, the state hash or a replay, and
+the keyboard has no route. A press made in a menu or in pause is spent there and does nothing on resume.
+Each action is a row of `oag_input::music::MUSIC_BINDINGS`, the one place a pad control is chosen
+(a control the backend names, or a raw event code for a back paddle the kernel only numbers); a control
+that is also a game button is refused by a test. **The table is empty today**: the back paddles of the
+maintainer's 8BitDo Ultimate (2dc8:3109 dongle, 2dc8:3106 wired) send no event the kernel or `gilrs` reports
+(probed with `gilrs` and evdev; the dongle's hidraw node is a vendor channel that is silent at rest), and
+the stick clicks (`gilrs` `LeftThumb`/`RightThumb`) were ruled out as clicks players use. A row is added once
+the remapped paddle's event is seen, e.g. `(PadControl::Raw(code), MusicAction::MusicUp)`. A pad without these
+controls has the actions unbound.
+
+| Action | Gesture | Does |
+| --- | --- | --- |
+| Show song | press | shows the current song's name on the title's own now-playing display again |
+| Restart song | press | seeks the playing song to its start (not a new song for the display) |
+| Next song | press | the playlist's next index, wrapping |
+| Previous song | press | the playlist's previous index, wrapping |
+| Music up | hold | raises the music to the slider's maximum, then lowers every other bus together down to 25 % |
+| Music down | hold | walks the same line back (restores the others first), then lowers the music to 10 % of its level |
+
+- **The playlist** is one numbered list (the booted soundtrack, then enabled folders and discs). There is no shuffle,
+  so previous is exactly the song that played before when the player has only gone forward. A list of one
+  song, no race music, a song still held for the green light, or a track still being fetched: skip does nothing.
+- **The volume line** is one integer position, so up then down returns exactly. A full sweep of either stage is 120 ticks
+  (2 s). The trims sit on the mixer apart from the bus gains (`Mixer::set_bus_trim`), so HD's authored mix, which rewrites
+  its bus gains every tick, does not undo them. The music's floor is 10 % of the player's level (-20 dB), never silence;
+  a muted music slider does not go up. Nothing is saved: a new race, leaving or restarting a race, and any settings change
+  put the player's settings back.
+- **The song line**: Pulse, Pure, HD, Omega and 2048 all author a now-playing marquee, so show-song re-shows that and
+  no title needs a line of ours. A split screen draws no marquee (`Race::now_playing`), so show-song is silent there. In the
+  countdown restart and skip act on a song already sounding; the song is held for the green light on titles that hold it.
+
+Evidence: `now_playing_ground_truth::pulse_pad_music_controls_move_the_song_and_leave_the_simulation_alone`
+(restart seeks to zero, next and previous change the displayed song, the state hash equals a run with no pad input) and
+the unit tests in `oag-sound` (`music_line`, `song_control`) and `oag-input` (`music`).
+
 ## Idle inhibition
 
 On a Wayland desktop the window holds an `idle-inhibit-unstable-v1` inhibitor while

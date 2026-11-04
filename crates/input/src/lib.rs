@@ -15,6 +15,7 @@ pub mod android;
 pub mod bindings;
 pub mod keys;
 pub mod lobby;
+pub mod music;
 pub mod pad;
 pub mod prompt;
 pub mod rumble;
@@ -711,6 +712,12 @@ impl Controls {
     /// Stops every motor on every pad. See [`rumble::MotorOutput::silence`].
     pub fn silence_motors(&mut self) {
         rumble::MotorOutput::silence(&mut self.pad);
+    }
+
+    /// What the pads did with the music controls since the last call (see [`music`]). Spends
+    /// the presses; call once a frame in a race, and not at all elsewhere.
+    pub fn take_music(&mut self) -> music::MusicInput {
+        self.pad.take_music()
     }
 
     /// The pad, to drive its motors.

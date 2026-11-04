@@ -321,6 +321,9 @@ impl Session {
                 self.controls.let_go_extra_seats();
             }
             let inputs = self.controls.player_snapshots();
+            // Taken every tick so a press made while paused or in a menu is spent there, and
+            // acted on only by the unpaused race arm below.
+            let music_input = self.controls.take_music();
             self.frame_timing.sampled(web_time::Instant::now());
             self.pad_dir = super::menu_sound::pad_direction(self.controls.buttons());
             // The pad spoke: the drawn cursor goes until the mouse moves
@@ -875,6 +878,12 @@ impl Session {
                         stage.race.tick(&inputs);
                     }
                     stage.tick_messages();
+                    oag_game::music_pad::drive(
+                        &mut self.audio,
+                        &mut stage.race,
+                        self.settings.audio.music_volume,
+                        music_input,
+                    );
                     // A server that ends a race nobody had finished (the host left, a link
                     // died) leaves a frozen world: after a second of it, back to the menus.
                     match self.net.as_ref().and_then(oag_game::net_play::NetPlay::over) {

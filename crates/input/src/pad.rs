@@ -727,6 +727,8 @@ pub struct Pad {
     presses: Vec<(gilrs::GamepadId, u32)>,
     /// The motors opened so far. See [`rumble`].
     rumble: rumble::Effects,
+    /// The music controls, read off the same events and kept out of the abstract buttons.
+    music: crate::music::Tracker,
 }
 
 impl std::fmt::Debug for Pad {
@@ -757,6 +759,7 @@ impl Pad {
                 active: None,
                 presses: Vec::new(),
                 rumble: rumble::Effects::default(),
+                music: crate::music::Tracker::default(),
             },
             Err(e) => {
                 warn!("no gamepad support ({e}); keyboard only");
@@ -768,6 +771,7 @@ impl Pad {
                     active: None,
                     presses: Vec::new(),
                     rumble: rumble::Effects::default(),
+                    music: crate::music::Tracker::default(),
                 }
             }
         }
@@ -789,6 +793,7 @@ impl Pad {
             active: None,
             presses: Vec::new(),
             rumble: rumble::Effects::default(),
+            music: crate::music::Tracker::default(),
         }
     }
 
@@ -896,6 +901,28 @@ impl Pad {
             while let Some(event) = gilrs.next_event() {
                 if matches!(event.event, gilrs::EventType::Disconnected) {
                     self.rumble.forget(event.id);
+                    self.music.release_all();
+                }
+                if is_real_pad(&gilrs.gamepad(event.id)) {
+                    match event.event {
+                        gilrs::EventType::ButtonPressed(button, code) => {
+                            self.music.note(
+                                crate::music::MUSIC_BINDINGS,
+                                button,
+                                code.into_u32(),
+                                true,
+                            );
+                        }
+                        gilrs::EventType::ButtonReleased(button, code) => {
+                            self.music.note(
+                                crate::music::MUSIC_BINDINGS,
+                                button,
+                                code.into_u32(),
+                                false,
+                            );
+                        }
+                        _ => {}
+                    }
                 }
                 if let gilrs::EventType::ButtonPressed(button, _) = event.event
                     && let Some(bit) = map_button(button).map(Button::bit)
@@ -954,6 +981,11 @@ impl Pad {
     /// confirm, and before anyone has joined every pad is merged into slot 0.
     pub fn take_presses(&mut self) -> Vec<(gilrs::GamepadId, u32)> {
         std::mem::take(&mut self.presses)
+    }
+
+    /// What the music controls did since the last call (see [`crate::music`]).
+    pub fn take_music(&mut self) -> crate::music::MusicInput {
+        self.music.take()
     }
 
     /// The real pads connected now, in the order the backend lists them.
