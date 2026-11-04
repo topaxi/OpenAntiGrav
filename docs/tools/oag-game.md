@@ -790,6 +790,31 @@ through it.
   specifier, so a caller that also wants the file's collision nodes - which every
   caller that wants to drive on it does - decompresses the same blob twice.
 
+## Idle inhibition
+
+On a Wayland desktop the window holds an `idle-inhibit-unstable-v1` inhibitor while
+someone is playing, so a controller-only session is not locked or blanked mid-race. A
+compositor counts only input it handles itself, and the pad is read straight from the
+device, so without this a pad player looks idle to swayidle or a screen saver.
+
+It is held while **a race is running and not paused, or a pad was touched in the last
+60 seconds** (`oag_game::idle::Rule`). A paused race, a finished one and a menu nobody
+touches let the machine idle; navigating a menu with the pad does not. A minimised or hidden
+window releases it, because the protocol is per surface. Only the first window holds it in
+a `--windows` run. A compositor without the protocol gets one `debug` line and nothing else.
+
+winit 0.30 does not expose the protocol, so the inhibitor is created on winit's own
+connection from the window's raw display and surface handles (`oag_game::idle::wayland`,
+the one `unsafe` block, scoped with a comment). X11, XWayland (so a gamescope session, whose
+own session handles idle), Windows, macOS, phones, the web and `--screenshot` runs hold
+nothing. It is output-side state: never in `World`, never hashed.
+
+Checking it with no window on your desktop: start a private headless sway
+(`WLR_BACKENDS=headless WLR_RENDERER=pixman WLR_LIBINPUT_NO_DEVICES=1`, its own
+`XDG_RUNTIME_DIR`), run `oag-game` against its `WAYLAND_DISPLAY`, and read `inhibit_idle`
+from `swaymsg -t get_tree`: `true` in a `--race`, `false` in an untouched front end with no
+pad attached.
+
 ## Requirements
 
 A GPU with a Vulkan, Metal or DX12 driver, as for [`oag-view`](oag-view.md). The

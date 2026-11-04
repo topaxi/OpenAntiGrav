@@ -134,6 +134,11 @@ thiserror = "2"
 # GPU rendering and windowing.
 wgpu = "30.0.1"
 winit = "0.30"
+# Idle inhibition on a Wayland desktop (`oag_game::idle`): the protocol bound over winit's own
+# connection. Already in the lockfile through winit.
+wayland-backend = { version = "0.3", features = ["client_system", "dlopen"] }
+wayland-client = "0.31"
+wayland-protocols = { version = "0.32", features = ["client", "unstable"] }
 pollster = "1"
 
 # Diagnostics. Everything that used to be a bare `println!`/`eprintln!` note

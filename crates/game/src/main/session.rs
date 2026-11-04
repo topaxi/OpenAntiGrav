@@ -124,6 +124,9 @@ mod remix_menu;
 
 /// Everything that only exists once there is a window.
 pub(crate) struct Session {
+    /// Keeps the desktop awake while someone plays. Before `gpu` so it lets go of the window's
+    /// surface before the window can drop.
+    pub(crate) idle: oag_game::idle::Idle,
     pub(crate) gpu: Gpu,
     pub(crate) stage: Stage,
     /// One set of devices for both stages: they belong to the window rather than

@@ -41,6 +41,7 @@ pub mod hud_countdown;
 pub mod hud_overlay;
 pub mod hud_views;
 pub mod icon;
+pub mod idle;
 pub mod pause;
 pub mod pending_race;
 pub mod touch_controls;
