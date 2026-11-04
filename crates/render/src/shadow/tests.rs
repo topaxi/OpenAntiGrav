@@ -545,3 +545,46 @@ fn a_refilled_batch_holds_only_the_new_upload_and_allocates_nothing() {
     assert_eq!(batch.vertices.len(), MAX_VERTICES);
     assert_eq!(allocations, 0);
 }
+
+/// One craft's shadow as the tick gathers it: cast, then laid on the ramp.
+fn cast_and_conform(cast: &Cast, out: &mut Vec<GpuVertex>, scratch: &mut HullScratch) {
+    out.clear();
+    hull_triangles_with(cast, out, scratch);
+    conform_to_floor_with(out, 0, ramp, scratch);
+}
+
+#[test]
+fn a_warm_hull_scratch_casts_what_a_fresh_one_does_without_allocating() {
+    let hull = hull();
+    let straight = cast_from(&hull, 5.0, 1.0);
+    let tilted = Cast {
+        axis: Vec3::new(-0.6, -1.0, 0.0),
+        ..straight
+    };
+    let fresh = |cast: &Cast| {
+        let mut out = Vec::new();
+        hull_triangles(cast, &mut out);
+        conform_to_floor(&mut out, 0, ramp);
+        out
+    };
+    let (want_straight, want_tilted) = (fresh(&straight), fresh(&tilted));
+    // Two silhouettes of different sizes, so a scratch that kept the last ring would show.
+    assert_ne!(want_straight.len(), want_tilted.len());
+
+    let mut scratch = HullScratch::default();
+    let mut out = Vec::new();
+    cast_and_conform(&tilted, &mut out, &mut scratch);
+    cast_and_conform(&straight, &mut out, &mut scratch);
+    assert_eq!(
+        bytemuck::cast_slice::<_, u8>(&out),
+        bytemuck::cast_slice::<_, u8>(&want_straight)
+    );
+    let ((), allocations) = crate::alloc_count::allocations(|| {
+        cast_and_conform(&tilted, &mut out, &mut scratch);
+    });
+    assert_eq!(
+        bytemuck::cast_slice::<_, u8>(&out),
+        bytemuck::cast_slice::<_, u8>(&want_tilted)
+    );
+    assert_eq!(allocations, 0);
+}
