@@ -659,9 +659,63 @@ pub struct Pipeline {
     uniforms: wgpu::Buffer,
     /// Where the appended solid silhouette sits in [`Drawer`]'s list.
     solid: usize,
-    /// `(silhouette, first vertex, count)` per run, as the last
-    /// [`Pipeline::upload`] grouped them.
+    /// The last [`Pipeline::upload`]'s vertices and runs, refilled in place.
+    batch: Batch,
+}
+
+/// One upload's vertices and the runs they draw in, kept between frames.
+///
+/// A frame's shadow is a few dozen vertices against room for [`MAX_VERTICES`] (192 KiB), so
+/// the list is reserved once and refilled, never allocated per view per frame.
+#[derive(Debug)]
+struct Batch {
+    vertices: Vec<GpuVertex>,
+    /// `(silhouette, first vertex, count)` per run.
     runs: Vec<Run>,
+}
+
+impl Batch {
+    fn new() -> Self {
+        Self {
+            vertices: Vec::with_capacity(MAX_VERTICES),
+            runs: Vec::new(),
+        }
+    }
+
+    /// Replaces the batch with `placements`' quads and `hulls`' triangles.
+    ///
+    /// The blob quads first, grouped so each texture is one draw; then the `original`
+    /// tier's polygons, which all sample the solid texel (`solid`) and are therefore one
+    /// draw however many craft cast one.
+    fn refill(&mut self, solid: usize, placements: &[Placement], hulls: &[GpuVertex]) {
+        let Self { vertices, runs } = self;
+        vertices.clear();
+        runs.clear();
+        for index in 0..solid {
+            let first = vertices.len() as u32;
+            for placement in placements
+                .iter()
+                .filter(|p| p.silhouette == index && p.strength > 0.0)
+                .take(MAX_QUADS.saturating_sub(vertices.len() / 6))
+                .take(MAX_QUAD_VERTICES / 6)
+            {
+                vertices.extend(quad(placement));
+            }
+            let count = vertices.len() as u32 - first;
+            if count > 0 {
+                runs.push((index, first, count));
+            }
+        }
+        let first = vertices.len() as u32;
+        let room = MAX_VERTICES - vertices.len();
+        // Truncated at a whole triangle: a partial one is a stray wedge across
+        // the road, which is worse than a shadow that stops.
+        let kept = hulls.len().min(room) / 3 * 3;
+        vertices.extend_from_slice(&hulls[..kept]);
+        if kept > 0 {
+            runs.push((solid, first, kept as u32));
+        }
+    }
 }
 
 impl Pipeline {
@@ -842,7 +896,7 @@ impl Pipeline {
             },
             uniforms,
             solid,
-            runs: Vec::new(),
+            batch: Batch::new(),
         }
     }
 
@@ -869,37 +923,13 @@ impl Pipeline {
         block[7] = [0.0, 0.0, 0.0, 1.0];
         queue.write_buffer(&self.uniforms, 0, bytemuck::cast_slice(&block));
 
-        self.runs.clear();
-        let mut vertices: Vec<GpuVertex> = Vec::with_capacity(MAX_VERTICES);
-        // The blob quads first, grouped so each texture is one draw; then the
-        // `original` tier's polygons, which all sample the solid texel and are
-        // therefore one draw however many craft cast one.
-        for index in 0..self.solid {
-            let first = vertices.len() as u32;
-            for placement in placements
-                .iter()
-                .filter(|p| p.silhouette == index && p.strength > 0.0)
-                .take(MAX_QUADS.saturating_sub(vertices.len() / 6))
-                .take(MAX_QUAD_VERTICES / 6)
-            {
-                vertices.extend(quad(placement));
-            }
-            let count = vertices.len() as u32 - first;
-            if count > 0 {
-                self.runs.push((index, first, count));
-            }
-        }
-        let first = vertices.len() as u32;
-        let room = MAX_VERTICES - vertices.len();
-        // Truncated at a whole triangle: a partial one is a stray wedge across
-        // the road, which is worse than a shadow that stops.
-        let kept = hulls.len().min(room) / 3 * 3;
-        vertices.extend_from_slice(&hulls[..kept]);
-        if kept > 0 {
-            self.runs.push((self.solid, first, kept as u32));
-        }
-        if !vertices.is_empty() {
-            queue.write_buffer(&self.drawer.vertices, 0, bytemuck::cast_slice(&vertices));
+        self.batch.refill(self.solid, placements, hulls);
+        if !self.batch.vertices.is_empty() {
+            queue.write_buffer(
+                &self.drawer.vertices,
+                0,
+                bytemuck::cast_slice(&self.batch.vertices),
+            );
         }
     }
 
@@ -917,7 +947,7 @@ impl Pipeline {
     /// What the last [`Pipeline::upload`] left to draw, for [`Self::draw`].
     #[must_use]
     pub fn runs(&self) -> &[Run] {
-        &self.runs
+        &self.batch.runs
     }
 
     /// How many blob quads the last [`Pipeline::upload`] kept.
@@ -927,7 +957,8 @@ impl Pipeline {
     /// difference needs something to read.
     #[must_use]
     pub fn quads(&self) -> usize {
-        self.runs
+        self.batch
+            .runs
             .iter()
             .filter(|(index, _, _)| *index != self.solid)
             .map(|(_, _, count)| *count as usize / 6)
@@ -937,7 +968,8 @@ impl Pipeline {
     /// How many hull triangles it kept, the same way.
     #[must_use]
     pub fn hull_triangles(&self) -> usize {
-        self.runs
+        self.batch
+            .runs
             .iter()
             .filter(|(index, _, _)| *index == self.solid)
             .map(|(_, _, count)| *count as usize / 3)

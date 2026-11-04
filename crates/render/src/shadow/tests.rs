@@ -507,3 +507,41 @@ fn a_banked_road_carries_the_axis_with_it() {
         assert!(on_ray, "{p:?} is not a corner cast along the tilted axis");
     }
 }
+
+#[test]
+fn a_refilled_batch_holds_only_the_new_upload_and_allocates_nothing() {
+    let mut batch = Batch::new();
+    let hulls = quad_of_two_triangles();
+    let two = [
+        placement(),
+        Placement {
+            silhouette: 1,
+            ..placement()
+        },
+    ];
+    batch.refill(2, &two, &hulls);
+    assert_eq!(batch.vertices.len(), 12 + 6);
+    assert_eq!(batch.runs, vec![(0, 0, 6), (1, 6, 6), (2, 12, 6)]);
+
+    // A smaller frame after a larger one: what a fresh batch would hold, not a tail of the
+    // last frame's quads behind it.
+    batch.refill(2, &[placement()], &[]);
+    let mut fresh = Batch::new();
+    fresh.refill(2, &[placement()], &[]);
+    assert_eq!(batch.runs, fresh.runs);
+    assert_eq!(
+        bytemuck::cast_slice::<_, u8>(&batch.vertices),
+        bytemuck::cast_slice::<_, u8>(&fresh.vertices)
+    );
+
+    // A full batch fits the reservation, and once the run list has grown no upload allocates.
+    let full = vec![quad_of_two_triangles()[0]; MAX_HULL_VERTICES];
+    let many = [placement(); MAX_QUADS];
+    let ((), allocations) = crate::alloc_count::allocations(|| {
+        batch.refill(1, &many, &full);
+        batch.refill(2, &two, &hulls);
+        batch.refill(1, &many, &full);
+    });
+    assert_eq!(batch.vertices.len(), MAX_VERTICES);
+    assert_eq!(allocations, 0);
+}
