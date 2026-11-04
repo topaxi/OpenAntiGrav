@@ -301,6 +301,10 @@ Each is one lane, in order.
 3. **Wire HD, carry to Omega and 2048** (L, 50): the edge map, then held levels, then
    the contact and landing selector. 2048 by inheritance; check against Omega in the
    same change.
-4. **Pulse and Pure** (M, 50): own TOML patterns in the fallback layer, Pulse PS2
-   the same as Pulse PSP.
+4. ~~**Pulse and Pure**~~ landed on `rumble-pulse-pure`: 33 own TOML patterns in
+   `assets/fallback/Data/XML/Rumble/`, one set for Pulse PSP, Pulse PS2 and Pure, loaded by
+   `oag_raceplay::rumble_library::load` (override, disc, fallback; a loader-report line).
+   See `docs/gameplay/rumble.md`, "Our own patterns". **Owed: the maintainer's feel test of
+   the set on an 8BitDo.** Not authored for want of an event: weapon impacts on a victim,
+   mine and bomb explosions, side shift, barrel roll, a rival's explosion.
 5. **Mods** (S, 60): override and remap, then the ABI record and the skill.
