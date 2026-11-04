@@ -345,6 +345,21 @@ four-tap's at 3840, with no extra full-size target. A split view runs the chain 
 sizes come out of that. No setting: the 2026-10-02 ruling (bloom has none, only the original's). Pinned by `a_flat_frame_blooms_by_the_nested_sum`,
 `bloom_bleeds_past_an_edge_and_only_with_a_block`, `a_split_view_blooms_alone` (red with the term dropped from `fs_apply`, or the add), and the law's tests.
 
+**What it does to a frame**, 1920x1080, same craft and grid, ticks 100 and 900, ours with the chain against ours without (whole-frame mean grey; bloom only adds, no pixel fell):
+
+| Circuit | Mean grey, before to after | Pixels up by more than 8 | Up by more than 32 |
+| --- | --- | --- | --- |
+| Vineta K | 70.2 to 71.3, 72.2 to 73.3 | 3.7 %, 3.9 % | 0.73 %, 0.69 % |
+| Anulpha Pass | 73.0 to 73.4, 72.5 to 72.9 | 0.3 %, 0.4 % | 0.01 %, 0.02 % |
+| Tech De Ra | 97.7 to 101.3, 99.0 to 103.3 | 11.4 %, 14.1 % | 2.96 %, 3.46 % |
+
+Tech De Ra's light strips and start board glow, Vineta K's white crowd and hull highlights. **It does not blow out Vineta K's sky** (a lead on the
+output-encode section above): ours draws that sky mid-grey, under `Threshold` 0.784, so the bright pass passes nothing there. The gap is the sky's
+level before the chain, not the chain. An HD and a Pulse frame are byte-identical to a pre-change build (`sha256` equal at tick 100).
+
+**Cost**: 0.55 ms a frame more at 1920x1080 on an RX 7800 XT (1.32 against 0.75 ms for the whole chain, 400 frames twice each, load 16, `quick` profile), 0.31 ms
+of it recording twelve passes on the CPU in that unoptimised profile. Not measured on the Deck.
+
 **2048:** checked, differs. No `Threshold_Offset_Scale_Power` in its `eboot.elf`; 50 `.envsettings` carry no `Bright-pass` key (base, patch, both DLC). It has
 `Lighting.BloomFactor` and `BloomGate`, and `oag_post::wo_composite` draws that chain ([vita-2048-eu-v104/exposure.md](../vita-2048-eu-v104/exposure.md)).
 **HD:** checked, differs. No such program in `EBOOT.elf`, none of 33 files carries the key; `hd_bloom`'s `FunkLayerBloom` is another chain: a gate on luminance and
