@@ -38,6 +38,7 @@ mod shield;
 #[cfg(feature = "extensions")]
 mod sound;
 mod track;
+#[cfg(feature = "extensions")]
 mod view_pass;
 
 pub use channel::Declared;
