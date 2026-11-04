@@ -1311,3 +1311,92 @@ branch, twice):
   the base's. A GPU-bound frame with less CPU work in it lets the governor clock down, and the
   same work then takes longer. That fits, but it is not proven, and it is not attributed to one
   item: Vineta K runs only the shadow upload (item 1) and the pad tint (item 4) of the five.
+
+## Per-frame allocations, batch two: the Zone lookup, the hull copy, the exhaust quad, the scene blocks, the small view lists and the HUD (2026-11-04, `alloc-batch2`)
+
+The scout's items 6 to 9, 11 and 12, one commit each, every picture byte-identical (26
+captures: Pulse, Pure, HD's default circuit and Anulpha Pass; one, two and four views; ticks 300,
+900 and 1800; a rocket fired; a Zone race on each of the three). Same instrument and command as
+batch one above; the HUD, which the bench loop does not draw, is counted by `perf-probe` marks
+around its draw (`hud-readout`, `hud-frame`, `hud-paint`, in `hud_views::draw` and
+`Overlay::draw`/`draw_views`), once per capture at tick 300.
+
+| Rust allocs / KiB per frame, scene (bench median) | before | after |
+| --- | --- | --- |
+| Pulse, one view, tick | 376 / 576 | 334 / 389 |
+| Pulse, one view, hit | 375 / 576 | 333 / 389 |
+| Pulse, split, tick | 671 / 1017 | 591 / 816 |
+| Pure, one view | 247 / 365 | 212 / 346 |
+| Pure, split | 525 / 779 | 455 / 742 |
+| HD, one view | 867 / 1039 | 844 / 1022 |
+| HD, split | 1441 / 1786 | 1398 / 1752 |
+
+| HUD draw list (`hud-frame`), allocs a frame | one view | split | four views |
+| --- | --- | --- | --- |
+| Pulse | 34 to 30 | 144 to 94 | 303 to 191 |
+| Pure | 26 to 26 | 105 to 69 | 200 to 128 |
+| HD | 148 to 103 | 290 to 202 | 1042 to 837 |
+
+What each item took off (the stage marks, per view unless said):
+
+6. **The Zone visualiser lookup** (`zone::write_vis_changed`, `Drawable::write_zone_vis`): four
+   1 KiB texture writes a view, Zone or not, now made only when the texels change. The scene
+   keeps what each of the four lookups was last given, `None` at build and after
+   `rebind_zone_art`. Skipping is safe across a
+   split because every view's writes land in the order the views were prepared
+   (`oag_gpu::writes`). 17 allocations a view on Pulse and Pure, 11 on HD.
+7. **The `original` tier's hull copy** (`ShadowGathered`, `HullCache::current_vertices`,
+   `HullGather::blend_into`): at a tick's own alpha the upload reads the cached gather in place
+   instead of a clone, a blend refills a kept list, and the models are compared without
+   collecting. 163 KiB and 2 allocations a frame on Pulse.
+8. **The flare quad** (`Exhaust::vertices`): six vertices returned on the stack, not in a `Vec`.
+   8 a view on Pulse and Pure.
+9. **The scene blocks** (`SceneBlocks::write_view`): a view's circuit, ship, shine and flame
+   blocks are adjacent, so one write for each run of used kinds, one where four were. 12 a view
+   on Pulse, 8 on Pure, 4 on HD.
+11. **The small per-view lists**: the shadow runs and the prepass's sort list come back from the
+   `ViewPass` after `Scene::render` records it (`keep_view_lists`); `MotionState::advance` lends
+   the previous snapshot rather than cloning it; `Race::hd_sprite_quad` returns its quad in place;
+   HD's craft shadow ranking works in kept lists. 3 to 4 a view and 12 KiB, 8 on HD.
+12. **The HUD**: a bar's fill is cropped without copying its `name` and `src` (`crop_geometry`,
+   `bar_tip::crop_geometry`, drawn by `sprite_draw_from`), an untipped bar no longer copies the
+   whole sprite first, a split view with a lock-on sight draws without copying its `Readout`
+   (`draw_list_without_sight`), and a frame placed into a view or the safe area moves its draws
+   instead of copying them (`Frame::into_placed`). The last is the largest (52 of HD's 148 in one
+   view were `Draw` copies there) though the scout did not name it.
+
+**Left, with the reason.** The `DrawList` borrows the frame's drawables, so keeping it between
+frames needs its lifetime erased; the split's `noted` list and `timestamp_clones` live in the
+split-recording files; `ChunkSet::around` (HD) and `oag_mesh`'s `order_blended` each need an API
+change for one list. On the HUD, `text_for`'s `String` per label is what `Draw::Text` owns, HD's
+`runtime::tinted` copies a sprite per tinted widget (8 a view), and `Overlay::paint` (about 48 a
+frame, the renderer's own buffers and wgpu's writes) was not in scope.
+
+**A kilobyte in every drawable cost Pulse a slow mode; on the scene instead it is gone.** Item 6
+first kept its memo inline in each `Drawable` (a `Mutex<Option<[[u8; 4]; 256]>>`, about 1 KiB,
+also copied into every weapon-pool instance). `render_viewports CPU` (median per run,
+`OAG_RENDER_BENCH=300`, `taskset -c 4`, round-robin over the binaries, load 1.8 to 4.7) then put
+Pulse one view in a slow mode in about half its runs (855 to 952 us) that the base never showed
+in 30 runs (648 to 700 us); the split's slow runs were about 480 us over, so about 240 us a view.
+The binary with items 6, 8 and 9 alone already had it; with the four memos on the `Scene` it went
+away (20 of 20 runs 627 to 682 us). The allocation counts and the pictures are the same either
+way. Read: a drawable is walked by every view, and its size is part of what a frame touches.
+
+Six interleaved pairs of the final branch against its base (same command, load 2.3 to 3.4):
+
+| us, mean of the six medians (range) | base | branch | pairs faster |
+| --- | --- | --- | --- |
+| Pulse, one view | 685 (668-692) | 652 (629-673) | 5 of 6 |
+| Pulse, split | 1057 (1044-1071) | 1027 (1014-1048) | 6 of 6 |
+| Pure, one view | 408 (359-516) | 498 (406-649) | 0 of 6 |
+| HD, one view | 2125 (1972-2251) | 2032 (1904-2122) | 6 of 6 |
+
+Pulse (3 to 5 percent) and HD (4 percent) read faster in every or all but one pair. **Pure one view
+reads slower and is not explained**: its base alone spans 358 to 642 us across runs, a
+round-robin of base and the intermediate binaries put the medians at 417, 421, 417 and 433 us
+(base, items 6/8/9, plus 7/11, final), and a second one, taken as the machine's load rose to 9.9,
+at 425 against 493. Vineta K runs items 6, 8, 9 and 11 of these (no hull shadow, no HUD in the
+bench), none of which adds work there; the Steam Deck run is what should settle it.
+
+**The Steam Deck was not measured for this batch** (the Deck was in use): the matrix and the
+harness are batch one's above, with the base at `cb561e9c6`.
