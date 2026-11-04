@@ -17,7 +17,7 @@ pub(super) struct Slot {
     /// `[extension] drives_ai_pickup`.
     drives_ai_pickup: bool,
     /// The player's picks on the mod's choice rows (`Source::options`).
-    options: [u8; oag_ext_abi::OPTIONS_LEN],
+    options: super::Picks,
     module: Module,
     pub(super) blob: Vec<u8>,
     faulted: Option<(u64, String)>,
@@ -274,7 +274,7 @@ impl On {
     }
 
     /// Each module's options, in module order, for its observations.
-    pub(super) fn with_options(mut self, options: &[[u8; oag_ext_abi::OPTIONS_LEN]]) -> Self {
+    pub(super) fn with_options(mut self, options: &[super::Picks]) -> Self {
         for (slot, options) in self.slots.iter_mut().zip(options) {
             slot.options = *options;
         }
@@ -323,7 +323,7 @@ impl On {
                     sender: oag_ext_abi::channel_key(&mod_id),
                     publishes,
                     drives_ai_pickup,
-                    options: [0; oag_ext_abi::OPTIONS_LEN],
+                    options: super::Picks::default(),
                     mod_id,
                     module,
                     faulted: None,
@@ -576,6 +576,12 @@ impl On {
             }
         }
         for slot in &self.slots {
+            // Only a `sim` row's pick, and only off index 0: a module with none writes nothing,
+            // and a `view` row never reaches the hash.
+            for (row, pick) in slot.options.identity() {
+                hasher.write_u8(row as u8);
+                hasher.write_u8(pick);
+            }
             hasher.write(&slot.blob);
             match &slot.faulted {
                 None => hasher.write_u8(0),
@@ -1010,7 +1016,7 @@ pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs, trans
         }
         let prior = slot.blob.clone();
         let (events, crafts) = &views[index];
-        let observation = Observation {
+        let observe = |options: [u8; oag_ext_abi::OPTIONS_LEN]| Observation {
             tick,
             active,
             events,
@@ -1020,12 +1026,13 @@ pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs, trans
                 tracking: &tracking,
                 title,
                 aiming: Some(&aiming),
-                options: slot.options,
+                options,
             },
             track: &region.bytes,
             speed_pads: region.speed_pads,
             routes: region.routes,
         };
+        let observation = observe(slot.options.sim);
         // Timed for the overlay only; nothing simulated reads it.
         let started = web_time::Instant::now();
         let outcome = slot
@@ -1034,7 +1041,27 @@ pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs, trans
         slot.call_us = started.elapsed().as_secs_f32() * 1.0e6;
         let cost = match outcome {
             Ok(cost) => {
-                applied.push((index, prior, std::mem::take(&mut commands)));
+                let acted = std::mem::take(&mut commands);
+                // A second call for this device's picks on `view` rows, drawn outputs only.
+                // Its fault, fuel and blob are dropped: the module is not faulted by it,
+                // or a device's setting would decide whether the race still has the module.
+                let (acted, drawn) = if slot.options.differs() {
+                    let mut scratch = prior.clone();
+                    let called =
+                        slot.module
+                            .tick(&observe(slot.options.view), &mut scratch, &mut commands);
+                    let drawn = called
+                        .is_ok()
+                        .then(|| super::view_pass::split(std::mem::take(&mut commands)).1);
+                    commands.clear();
+                    match drawn {
+                        Some(drawn) => (super::view_pass::split(acted).0, Some(drawn)),
+                        None => (acted, None),
+                    }
+                } else {
+                    (acted, None)
+                };
+                applied.push((index, prior, acted, drawn));
                 cost
             }
             Err((fault, cost)) => {
@@ -1049,7 +1076,7 @@ pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs, trans
     for index in faulted {
         release(sim, index);
     }
-    for (index, prior, commands) in applied {
+    for (index, prior, commands, drawn) in applied {
         if let Some(why) = refusal(&sim.extensions.on, index, &commands) {
             let slot = &mut sim.extensions.on.slots[index];
             slot.fault(tick, why);
@@ -1060,6 +1087,14 @@ pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs, trans
         }
         for command in commands {
             apply(sim, index, command);
+        }
+        // A refused view call draws nothing; it never faults the module.
+        if let Some(drawn) = drawn
+            && refusal(&sim.extensions.on, index, &drawn).is_none()
+        {
+            for command in drawn {
+                apply(sim, index, command);
+            }
         }
     }
 }

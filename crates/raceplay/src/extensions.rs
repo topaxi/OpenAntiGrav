@@ -38,6 +38,7 @@ mod shield;
 #[cfg(feature = "extensions")]
 mod sound;
 mod track;
+mod view_pass;
 
 pub use channel::Declared;
 pub use track::{Track, TrackProps};
@@ -153,14 +154,55 @@ pub struct Source {
     /// The mod's `[[pickup.odds]]`: the weapon pads draw its pickup with these.
     pub pickup_odds: Vec<oag_tables::pickup_look::OddsRow>,
     /// The player's picks on the mod's own choice rows, as indices
-    /// (`oag_ext_abi::OPTIONS_AT`): a drawn choice, read by `Observation::option`.
-    pub options: [u8; OPTIONS],
+    /// (`oag_ext_abi::OPTIONS_AT`), read by `Observation::option`.
+    pub options: Picks,
     /// The mod's `[channels]`.
     pub channels: Declared,
 }
 
 /// How many choice rows' picks a module is given ([`Source::options`]).
 pub const OPTIONS: usize = oag_ext_abi::OPTIONS_LEN;
+
+/// A module's picks on its choice rows, split by the row's `scope`
+/// (`docs/architecture/wasm-extensions/hooks.md`, "Picks: sim and view"). A `sim` row's pick
+/// reaches the simulation tick and is part of the race's identity; a `view` row's pick reaches
+/// only the call whose outputs are drawn, and stays on this device.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Picks {
+    /// What the simulation tick reads: a `sim` row's pick, and a `view` row's own default.
+    pub sim: [u8; OPTIONS],
+    /// What the view call reads: every row's pick, `view` rows included.
+    pub view: [u8; OPTIONS],
+    /// Bit `n` set: row `n` is a `view` row.
+    pub view_rows: u8,
+}
+
+impl Picks {
+    /// Every row a `sim` row, read the same by both calls.
+    #[must_use]
+    pub fn all_sim(picks: [u8; OPTIONS]) -> Self {
+        Self {
+            sim: picks,
+            view: picks,
+            view_rows: 0,
+        }
+    }
+
+    /// Whether a view call would read anything the simulation call does not.
+    #[must_use]
+    pub fn differs(&self) -> bool {
+        self.sim != self.view
+    }
+
+    /// The `(row, pick)` pairs that belong to the race's identity: a `sim` row off index 0.
+    pub fn identity(&self) -> impl Iterator<Item = (usize, u8)> + '_ {
+        self.sim
+            .iter()
+            .copied()
+            .enumerate()
+            .filter(|&(row, pick)| pick != 0 && self.view_rows >> row & 1 == 0)
+    }
+}
 
 /// A `draw-beam` of this tick: an output, never hashed.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -291,7 +333,7 @@ pub struct Prepared {
     publishes: Vec<Vec<(u32, String)>>,
     /// Each module's [`Source::options`], in module order.
     #[cfg(feature = "extensions")]
-    options: Vec<[u8; oag_ext_abi::OPTIONS_LEN]>,
+    options: Vec<Picks>,
     /// Each module whose mod declares `[[pickup.odds]]` (the weapon pads draw its pickup
     /// with them), in module order, with its rows and the race's title.
     #[cfg(feature = "extensions")]

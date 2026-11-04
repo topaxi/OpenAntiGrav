@@ -173,7 +173,9 @@ impl Session {
                 .shell
                 .as_ref()
                 .map_or_else(String::new, |s| s.platform.to_string()),
-            content: mods.as_ref().map_or(0, oag_game::mods::Mods::content_fingerprint),
+            content: mods
+                .as_ref()
+                .map_or(0, |mods| mods.content_fingerprint(&self.settings.mod_settings)),
         }
     }
 

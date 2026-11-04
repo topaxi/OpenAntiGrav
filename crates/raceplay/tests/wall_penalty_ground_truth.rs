@@ -82,7 +82,7 @@ fn wall_penalty() -> Option<race::extensions::Source> {
         pickup: module.manifest.pickup.clone(),
         pickup_titles: Vec::new(),
         pickup_odds: module.manifest.pickup_odds.clone(),
-        options: [0; race::extensions::OPTIONS],
+        options: Default::default(),
         channels: race::extensions::Declared {
             publishes: module.manifest.channels.publishes.clone(),
             listens: module.manifest.channels.listens.clone(),

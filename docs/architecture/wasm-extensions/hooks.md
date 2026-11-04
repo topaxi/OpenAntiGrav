@@ -475,6 +475,43 @@ it cannot move it (README: no grid changes). An arena's authored spawn points, a
 respawn at a point rather than a spline sample (`Race::respawn` places a craft on a
 sample), are engine changes in the track file and `respawn.rs` first.
 
+## Picks: sim and view
+
+A `choice` row of a mod's `menu.toml` declares `scope = "sim"` (the default) or `scope = "view"`
+(`oag_ui::menu` refuses another value, or a `scope` on a row that is not a `choice`;
+`schemas/v1/mod-menu.tosd`). The guest reads either with `Observation::option(n)`, `n` the row's place
+among the mod's own choice rows in file order, so adding a scope renumbers nothing.
+
+| | `sim` row | `view` row |
+| --- | --- | --- |
+| Reaches | the simulation tick | only the call whose outputs are drawn |
+| State hash | yes (`On::hash_into`: row and pick, only a pick off index 0, nothing for a mod with none) | never |
+| LAN and lobby fingerprint | yes (`Mods::content_fingerprint`: `id@version#row=pick`) | never: a Deck on Low and a desktop on High still race together |
+| Replay | in the state hash, so a replay run on another pick desyncs at tick 0 (a MODDED race records no replay yet, README 4.4) | stays per device |
+| Server's or host's guest | the host's or lobby's pick (owner: whoever builds the race; none is carried yet, see below) | the row's default: no device draws there |
+
+How a `view` row cannot steer the race (`crates/raceplay/src/extensions/view_pass.rs`):
+
+- The **simulation call** (every tick, every device) reads a `view` row's **default**, so what it
+  returns is the same on every device.
+- When a device's view picks differ from the defaults (`Picks::differs`) the host makes a **second
+  call** with the real picks, on a copy of the blob the first call started from, and keeps only its
+  **outputs** (`view_pass::is_output`: `fire-effect`, `fire-mod-effect`, `screen-fill`, `fov-offset`,
+  `draw-beam`, `set-shader-param`, `portal-view` and the `hud-*` and `pickup-look` commands). Its blob,
+  its other commands, its fuel and its faults are dropped: a trap in the view call draws nothing and
+  never faults the module. The first call's own outputs are replaced by the view call's.
+- `is_output` is an exhaustive `match`: a new command cannot compile until it is classed. A command is
+  an output if it writes a field cleared every tick that no simulated state, hash or reply reads.
+- Cost: one more wasm call a tick while a view pick is off its default (none on the default).
+- A guest cannot tell which call it is in; a view pick only ever shows in the call whose commands are
+  filtered.
+
+**Online.** No network race runs a guest today (`oag_net::race::load` opens none, a client races
+vanilla, the lobby advertises `NO_MODS`), so no server has a pick to receive. When one does, the owner
+of a `sim` pick is the host (LAN) or the lobby (online): carried in `RaceParams` beside the mode and
+seed, applied by `oag_net::race::options` on every end, so the tick-0 state hash already refuses a
+mismatch; a `view` pick is never sent.
+
 ## Render side: the `hud` world
 
 These run on the render thread, once a frame, and never touch the simulation

@@ -8,7 +8,7 @@
 
 use std::sync::Arc;
 
-use oag_raceplay::extensions::{Scope, Source};
+use oag_raceplay::extensions::{Picks, Scope, Source};
 
 use crate::settings::mod_settings::ModSettings;
 
@@ -99,16 +99,16 @@ pub fn sources_with<'a>(
 /// the rows of its `menu.toml` pages whose `setting` is `mod.<id>.<key>`, in file order, the
 /// first [`oag_raceplay::extensions::OPTIONS`] of them. A row with nothing saved takes its `default`,
 /// and a value the row does not list is index 0. What `Observation::option` reads.
-fn options_of(
-    module: &oag_mod::Mod,
-    settings: &ModSettings,
-) -> [u8; oag_raceplay::extensions::OPTIONS] {
-    let mut options = [0; oag_raceplay::extensions::OPTIONS];
+///
+/// A row's `scope` is `sim` (the default) or `view`: the simulation call reads a `view` row's
+/// default, only the view call reads the saved pick ([`oag_raceplay::extensions::Picks`]).
+pub fn options_of(module: &oag_mod::Mod, settings: &ModSettings) -> Picks {
+    let mut picks = Picks::default();
     let Ok(Some(text)) = module.menu() else {
-        return options;
+        return picks;
     };
     let Ok(menu) = text.parse::<toml::Table>() else {
-        return options;
+        return picks;
     };
     let id = &module.manifest.id;
     let prefix = format!("mod.{id}.");
@@ -124,17 +124,25 @@ fn options_of(
             let key = row.get("setting")?.as_str()?.strip_prefix(&prefix)?;
             let values = row.get("values")?.as_array()?;
             let default = row.get("default").and_then(toml::Value::as_str);
-            Some((key, values, default))
+            let view = row.get("scope").and_then(toml::Value::as_str) == Some("view");
+            Some((key, values, default, view))
         });
-    for (slot, (key, values, default)) in options.iter_mut().zip(rows) {
+    for (row, (key, values, default, view)) in
+        rows.take(oag_raceplay::extensions::OPTIONS).enumerate()
+    {
+        let index = |name: Option<&str>| {
+            values
+                .iter()
+                .position(|value| value.as_str() == name)
+                .map_or(0, |at| u8::try_from(at).unwrap_or(0))
+        };
         let saved = settings.get(id).and_then(|keys| keys.get(key));
-        let pick = saved.map(String::as_str).or(default);
-        *slot = values
-            .iter()
-            .position(|value| value.as_str() == pick)
-            .map_or(0, |at| u8::try_from(at).unwrap_or(0));
+        let pick = index(saved.map(String::as_str).or(default));
+        picks.view[row] = pick;
+        picks.sim[row] = if view { index(default) } else { pick };
+        picks.view_rows |= u8::from(view) << row;
     }
-    options
+    picks
 }
 
 /// The mod's own text for a language: `strings/english.toml` with `strings/<language>.toml`
@@ -337,6 +345,7 @@ kind = "choice"
 label = "C"
 setting = "mod.test.opt.mode"
 values = ["x", "y"]
+scope = "view"
 [[page.entry]]
 kind = "choice"
 label = "Other mod's"
@@ -379,14 +388,29 @@ module = "ext/m.wasm"
             sources_with([&module], &table)[0].options
         };
         assert_eq!(
-            picks(&[]),
+            picks(&[]).sim,
             [2, 0, 0, 0],
             "high by default, the other rows first"
         );
-        assert_eq!(picks(&[("quality", "low"), ("mode", "y")]), [0, 1, 0, 0]);
-        assert_eq!(picks(&[("quality", "medium")]), [1, 0, 0, 0]);
+        assert!(!picks(&[]).differs(), "nothing saved: no view call");
+        // Row 1 (`mode`) is a view row: the simulation reads its default, the view call the pick.
+        let both = picks(&[("quality", "low"), ("mode", "y")]);
+        assert_eq!(both.sim, [0, 0, 0, 0]);
+        assert_eq!(both.view, [0, 1, 0, 0]);
+        assert_eq!(both.view_rows, 0b10);
         assert_eq!(
-            picks(&[("quality", "gone")]),
+            both.identity().collect::<Vec<_>>(),
+            Vec::<(usize, u8)>::new()
+        );
+        assert_eq!(picks(&[("quality", "medium")]).sim, [1, 0, 0, 0]);
+        assert_eq!(
+            picks(&[("quality", "medium")])
+                .identity()
+                .collect::<Vec<_>>(),
+            [(0, 1)]
+        );
+        assert_eq!(
+            picks(&[("quality", "gone")]).sim,
             [0, 0, 0, 0],
             "a value the row does not list"
         );

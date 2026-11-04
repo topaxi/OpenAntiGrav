@@ -258,7 +258,7 @@ fn fingerprint_mod(dir: &Path, folder: &str, extra: &str, files: &[&str]) {
 }
 
 fn fingerprint_of(dir: &Path) -> u64 {
-    load(dir, &Switches::default()).content_fingerprint()
+    load(dir, &Switches::default()).content_fingerprint(&Default::default())
 }
 
 fn empty_base(name: &str) -> PathBuf {
@@ -292,7 +292,8 @@ fn a_simulation_track_or_campaign_mod_changes_the_lan_fingerprint() {
         let dir = base(&format!("fingerprint-{folder}"));
         fingerprint_mod(&dir, folder, extra, files);
         assert_ne!(fingerprint_of(&dir), none, "a {folder} mod changes a race");
-        let off = load(&dir, &off(&[&format!("test.{folder}")])).content_fingerprint();
+        let off =
+            load(&dir, &off(&[&format!("test.{folder}")])).content_fingerprint(&Default::default());
         assert_eq!(off, none, "and does not when it is off");
     }
 }
@@ -367,4 +368,55 @@ fn a_flat_list_front_end_with_four_lines_keeps_the_no_one_sends_warning() {
         "{lines:?}"
     );
     assert!(lines.iter().any(|(l, _)| l == "ADDS"), "{lines:?}");
+}
+
+/// A simulation mod's `sim` pick is in the LAN fingerprint, so two machines on different picks
+/// are refused as having different mods; its `view` pick is not, so a Deck on Low and a desktop
+/// on High still race together.
+#[test]
+fn a_sim_pick_changes_the_lan_fingerprint_and_a_view_pick_does_not() {
+    let simulation = "\n[extension]\nsimulation = true\napi = 1\nstate_bytes = 64\n\n[extension.rules]\nmodule = \"ext/rules.wasm\"\n";
+    let dir = base("fingerprint-picks");
+    fingerprint_mod(&dir, "picks", simulation, &["ext/rules.wasm"]);
+    std::fs::write(
+        dir.join("picks/menu.toml"),
+        r#"
+[[page]]
+id = "p"
+title = "P"
+[[page.entry]]
+kind = "choice"
+label = "RULES"
+setting = "mod.test.picks.rules"
+values = ["a", "b"]
+default = "a"
+[[page.entry]]
+kind = "choice"
+label = "LOOK"
+setting = "mod.test.picks.look"
+values = ["low", "high"]
+default = "high"
+scope = "view"
+"#,
+    )
+    .unwrap();
+    let mods = load(&dir, &Switches::default());
+    let picks = |saved: &[(&str, &str)]| {
+        let mut table = oag_game::settings::mod_settings::ModSettings::new();
+        for (key, value) in saved {
+            oag_game::settings::mod_settings::set(
+                &mut table,
+                &format!("mod.test.picks.{key}"),
+                value,
+            );
+        }
+        mods.content_fingerprint(&table)
+    };
+    let rest = picks(&[]);
+    assert_ne!(
+        picks(&[("rules", "b")]),
+        rest,
+        "a sim pick is part of the identity"
+    );
+    assert_eq!(picks(&[("look", "low")]), rest, "a view pick is not");
 }
