@@ -189,3 +189,9 @@
 0x017856f0	function	Bloom_BlurVertical	80	tonemap.md
 0x0177e1e0	function	Bloom_AddLevel	76	tonemap.md
 0x01625490	function	Environment_ApplyBloomVignette	82	tonemap.md
+0x0174b8d0	function	Rumble_LoadLibrary	84	rumble.md
+0x0174abf0	function	Rumble_ParsePatternXml	84	rumble.md
+0x0174a880	function	Rumble_QueueOnPad	84	rumble.md
+0x0174a4f0	function	Rumble_PlayOnLocalPads	80	rumble.md
+0x012f8370	function	Ship_UpdateContactRumble	82	rumble.md
+0x012fb780	function	Ship_ReportWeaponHit	75	rumble.md
