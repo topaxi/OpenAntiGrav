@@ -738,8 +738,10 @@ serial, and on that machine (`powersave` governor, other lanes' builds on the E-
 scoped spawn and join between frames costs about 200 us, and a parked worker gains nothing on a
 2 x 250 us split while a spinning one halves it. A view's recording is a 0.2 to 0.4 ms burst once a
 frame, which a sleeping core does not wake and clock up for. **So the default is `interleaved`**
-(prepare, record and submit per view, as before) on every target, and `OAG_SPLIT_RECORDING=serial`,
-`reversed` or `threaded` selects the others. On the web the views always record on the page's
+(prepare, record and submit per view, as before), and `OAG_SPLIT_RECORDING=serial`,
+`reversed` or `threaded` selects the others. On the Steam Deck, whose cores are equal, threads win
+instead; the rule that picks them there only, and why it is still off, is under "Threaded
+recording on equal cores" below. On the web the views always record on the page's
 thread. Numbers in [render bench](../tools/render-bench.md#threaded-views-2026-10-15-threaded-views);
 `split_recording_ground_truth` captures one frame interleaved, reversed and threaded and fails on a
 difference, which found the one leak there was (a drawable with no slot on the shared matrix
@@ -1157,7 +1159,8 @@ evidence here.
 4. ~~**Recording the views on several threads**~~ **Built and measured, 2026-10-15**
    (`threaded-views`): the views are independent at record time, and recording them at once
    cost 10 to 100% more CPU on the notebook, so it is opt-in (`OAG_SPLIT_RECORDING=threaded`);
-   see "Prepare and record" under "Cost". The Steam Deck reading decides any other default.
+   see "Prepare and record" under "Cost". On the Deck it wins; see "Threaded recording on equal
+   cores" at the end.
 5. ~~Per-view bloom~~ **Done, 2026-10-15** (rule 4); what it costs is measured under
    "Per-view glow". ~~Motion blur~~ **Done, 2026-10-15** (rule 3), measured under "Per-view
    blur". ~~The temporal upscaler stays omitted~~ **Done, 2026-10-16** (rule 3, "Per-view
@@ -2052,3 +2055,79 @@ before the fix 5.69, after 7.47 (7.27 and 7.68), `OAG_SPLIT_FINISH=0` 7.20, `thr
 and 7.86, noisy). 4K: before 7.71, after 10.10, `OAG_SPLIT_FINISH=0` 10.10, `threaded` 9.52.
 So the split finish costs 0.25 ms at 800p, 0.27 ms at 1080p and nothing at 4K under an
 interleaved split, and `threaded` saves 0.6 to 0.7 ms at 800p and 4K. Pure only.
+
+## Threaded recording on equal cores (2026-11-04)
+
+`oag_raceplay::Recording::default_for_target` has a rule for `threaded`: native Linux, at least
+two cores, every `/sys/devices/system/cpu/cpu<N>/cpu_capacity` readable and the same. The Steam Deck
+(8 x 1024) passes; a hybrid Intel part (the Core Ultra 7 265H reads 6 x 1024, 8 x 758, 2 x 301), a
+Galaxy S24 (253 x 4, 653 x 3, 730 x 2, 1024), an unreadable list, one core, Android, Windows, macOS
+and the web do not, and keep `interleaved` whatever the rule says. Positive evidence only: an
+unreadable list counts as uniform for the split finish (`oag_gpu::split_finish::uniform_cores`) but
+not here. The rule sits behind `THREADS_ON_EQUAL_CORES` in `scene/split_record.rs`, **false
+for now**: the production default with the rule on has been run on the Deck at three and four
+views, not yet at two views or on Pulse. `OAG_SPLIT_RECORDING` overrides it both ways, the choice
+is logged once (`split recording: Threaded (probe, core capacities [...])`), and one view is always
+drawn interleaved. Pictures: `split_recording_ground_truth` (Pure two views, Pulse four) passes,
+and two-view `--screenshot`s of HD Anulpha Pass and Pulse at tick 900 are byte-identical threaded
+and interleaved.
+
+**Deck numbers.** Same setup as the section above (headless gamescope, `--render-scale 100` so the
+render size is the window's, vsync and frame limit off, dist build with znver2, mean of the phase
+line after the first six seconds, the Deck lock held per run, arms alternated). "Threads" is a build
+with the rule on and no variable (the production default it would be); "interleaved" is the same
+binary with `OAG_SPLIT_RECORDING=interleaved`. Frame-thread `total` ms, then mean p99 ms, then fps;
+two rounds, four for HD three views at 1080p and Pure three views at 800p, and at Pure three views
+1080p three rounds of threads and four of interleaved (the threads arm of its fourth round was cut
+short). Load 1.2 to 2.6.
+
+| Title, views, size | threads `total` | interleaved `total` | threads p99 | interleaved p99 | fps |
+| --- | ---: | ---: | ---: | ---: | --- |
+| HD, 3, 1280x800 | 14.03 | 16.72 | 16.08 | 19.87 | 70.2 / 59.1 |
+| HD, 3, 1920x1080 | 15.81 | 18.16 | 21.51 | 21.36 | 60.7 / 54.3 |
+| HD, 3, 3840x2160 | 20.04 | 24.02 | 44.21 | 44.69 | 25.6 / 25.6 (GPU) |
+| HD, 4, 1280x800 | 16.63 | 21.13 | 18.68 | 24.81 | 59.5 / 47.1 |
+| HD, 4, 1920x1080 | 18.37 | 21.93 | 23.80 | 25.72 | 52.9 / 45.2 |
+| HD, 4, 3840x2160 | 22.84 | 28.34 | 45.91 | 46.95 | 23.9 / 23.9 (GPU) |
+| Pure, 3, 1280x800 | 9.30 | 9.37 | 10.45 | 10.39 | 105.2 / 104.5 (paced) |
+| Pure, 3, 1920x1080 | 10.95 | 10.98 | 14.32 | 13.53 | 89.4 / 89.4 |
+| Pure, 3, 3840x2160 | 17.24 | 17.57 | 38.39 | 38.75 | 27.8 / 27.9 (GPU) |
+| Pure, 4, 1280x800 | 8.63 | 11.37 | 10.04 | 12.64 | 113.1 / 86.2 |
+| Pure, 4, 1920x1080 | 10.20 | 12.52 | 12.38 | 13.98 | 87.4 / 78.4 |
+| Pure, 4, 3840x2160 | 14.80 | 17.69 | 39.89 | 40.04 | 26.8 / 26.8 (GPU) |
+
+Threads take 2.3 to 5.5 ms off the frame thread at three and four views in HD and at four in Pure,
+and change nothing at Pure's three views. Why is not measured; a guess is the layout (one wide
+view over two), whose wide view, recorded on the calling thread, may be the critical path. The p99 rows within the spread of the rounds are HD three
+views at 1080p (threads 21.09 to 21.83, interleaved 21.01 to 21.82) and Pure three views at 800p.
+**Pure three views at 1080p is the one to watch**: threads 13.85 to 14.65, interleaved 13.21 to
+14.02, the ranges touching but the mean 0.8 ms worse with no gain in `total`. Per-second p99 in a
+threaded run swings more (HD three views 1080p: 18.5 to 24.7 ms against 20.1 to 22.5), so the mean
+of p99 hides a wider tail. Earlier two-view runs with `OAG_SPLIT_RECORDING=threaded` on the same
+setup: HD 12.73 to 11.56 at 800p, 15.01 to 13.59 at 1080p, 18.44 to 16.90 at 4K; Pure 6.62 to
+5.73 at 800p, 7.34 to 6.97 at 1080p, p99 equal or lower.
+
+**Not run yet** (the Deck was taken back): the production default against `interleaved` at two
+views (Pure and HD, three sizes) and Pulse at two views (800p and 1080p). The flip is setting
+`THREADS_ON_EQUAL_CORES` to `true`, after those runs; the threads arm needs a binary built with it
+`true` (the `def` arm is the production default only then). Commands, from a directory holding that
+binary as `oag-st` and an `xdg/config` with vsync and the frame limit off; `run.sh` runs
+`gamescope --backend headless -W W -H H -w W -h H -r 90 -- ./oag-st <image> [--track ...] --race
+--mode single_race --seed 1 --autopilot --no-audio --no-intro --frame-log --players N --split-cut
+vertical --render-scale 100 --script 26:quit` with `ENABLE_GAMESCOPE_WSI=0`, and `avg.sh` takes the
+mean of the `frame-phases` and `frame-log stage=race` lines after the first six:
+
+```sh
+# run.sh TITLE LABEL BIN WxH PLAYERS [ENV=VAL...]: one 26 s autopilot race, render scale 100
+for round in 1 2; do for c in "pure 2" "hd 2"; do for size in 1280x800 1920x1080 3840x2160; do
+  for arm in def int; do set -- $c; label=$1-$2p-$arm-$size-$round
+    extra=(); [ $arm = int ] && extra=(OAG_SPLIT_RECORDING=interleaved)
+    flock -o ~/.cache/oag/deck.lock ./run.sh $1 $label oag-st $size $2 "${extra[@]}"; ./avg.sh $label
+  done; done; done
+  for size in 1280x800 1920x1080; do for arm in def int; do label=pulse-2p-$arm-$size-$round
+    extra=(); [ $arm = int ] && extra=(OAG_SPLIT_RECORDING=interleaved)
+    flock -o ~/.cache/oag/deck.lock ./run.sh pulse $label oag-st $size 2 "${extra[@]}"; ./avg.sh $label
+  done; done
+done
+```
+
