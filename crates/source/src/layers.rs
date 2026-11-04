@@ -118,6 +118,7 @@ pub const RUMBLE_PATTERNS: &[(&str, &[u8])] = rumble_patterns![
     "ship_exploding_player_rumble",
     "shuriken_fired_rumble",
     "travel_mag_rumble",
+    "wrong_way",
 ];
 
 /// This project's own substitutes, carried in the binary.

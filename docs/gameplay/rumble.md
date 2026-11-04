@@ -267,7 +267,7 @@ seconds (default 2), then finished.
 ## Our own patterns (Pulse PSP, Pulse PS2, Pure)
 
 None of these titles ships a pattern, and the disc's cannot be committed, so the three
-rumble from 32 TOML patterns of ours in the fallback layer
+rumble from 33 TOML patterns of ours in the fallback layer
 ([ADR-0061](../architecture/adr/0061-two-asset-layers-around-the-disc.md)):
 `assets/fallback/Data/XML/Rumble/<name>.toml`, embedded by `oag_source::layers`, validated
 by `just check-schemas` against `schemas/v1/rumble.tosd`. The names are the disc's
@@ -289,6 +289,7 @@ and the report says so ("rumble: no pattern found for this title, so the pad sta
 | Pattern | Plays on | Feel |
 | --- | --- | --- |
 | `pad_speed` | speed pad | firm kick, fades |
+| `wrong_way` | wrong-way warning shown | two insistent knocks |
 | `absorb_any_pickup_rumble` | weapon absorbed | two soft pulses |
 | `lockon_rumble` | reticle locks | one tick |
 | `rockets_fired_rumble`, `missile_fired_rumble`, `cannon_fired_rumble`, `mine_fired_rumble`, `shuriken_fired_rumble`, `repulser_fired_rumble` | the weapon leaves | short thump, hardest recoil for the cannon |

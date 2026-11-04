@@ -132,6 +132,31 @@ mod feed {
         assert_eq!(peak_after(&mut feed, 30), 0);
     }
 
+    /// The rising edge of the wrong-way warning and of the wreck each play once.
+    #[test]
+    fn the_wrong_way_and_the_wreck_edges_rumble() {
+        for (name, up) in [
+            (
+                "wrong way",
+                Levels {
+                    wrong_way: true,
+                    ..Levels::default()
+                },
+            ),
+            (
+                "wreck",
+                Levels {
+                    exploding: true,
+                    ..Levels::default()
+                },
+            ),
+        ] {
+            let mut feed = feed();
+            feed.levels(up);
+            assert!(peak_after(&mut feed, 60) > 0, "{name}");
+        }
+    }
+
     #[test]
     fn the_held_levels_rumble_while_up_and_fall_silent_after() {
         for (name, up) in [
