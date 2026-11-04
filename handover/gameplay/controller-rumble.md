@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-04
-summary: "Player, gilrs backend, RUMBLE row and --rumble-pattern probe landed (maintainer feel test owed on an 8BitDo); no race event fires yet; lanes 3-4 wire HD/Omega/2048 then Pulse/Pure, mods with Slipstream."
+summary: "Player, gilrs backend, RUMBLE row, probe landed; feel test owed on a real pad. No race event fires yet: lanes 3-4 wire HD/Omega/2048, Pulse/Pure."
 categories: [tooling]
 size: L (60)
 difficulty: medium (50)
