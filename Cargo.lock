@@ -3282,6 +3282,7 @@ dependencies = [
  "gilrs",
  "log",
  "oag-gameplay",
+ "oag-mod",
  "oag-tables",
  "winit",
 ]
