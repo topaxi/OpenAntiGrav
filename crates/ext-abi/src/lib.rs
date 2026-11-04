@@ -62,7 +62,7 @@ pub use motion::{Distance, MAX_PROBE_RADIUS, MAX_SPEED_FACTOR, MAX_TRANSIT_TICKS
 pub use pickup::{Colour, Icon, ModIcon, Pickup};
 pub use scene::{
     MAX_BEAM_HALF_WIDTH, MAX_BEAMS_PER_TICK, MAX_FOV_OFFSET_DEG, MAX_SHADER_INDEX,
-    MAX_SHADER_PARAMS,
+    MAX_SHADER_PARAMS, MAX_VIEW_GENERATION, ViewUpdate,
 };
 pub use sound::SoundMode;
 pub use tracking::{
@@ -875,6 +875,26 @@ pub enum Command {
         /// Its value, finite.
         value: f32,
     },
+    /// This tick, the view of `slot` wants what its camera would see through a portal pair on
+    /// the course, in the texture a mod shader reads as `engine_texture`. Re-sent each tick
+    /// it should hold; a progress off the lap, or a race with no shader, asks for nothing.
+    /// Never hashed.
+    PortalView {
+        /// The grid slot whose camera looks through it.
+        slot: Slot,
+        /// The entrance, its progress on the lap in track units.
+        entrance: f32,
+        /// The exit, its progress on the lap in track units.
+        exit: f32,
+        /// How far from the entrance's centre the surface reaches, in whole world units,
+        /// from 1: what decides whether the view has the portal in it.
+        radius: u8,
+        /// When the texture is drawn.
+        update: ViewUpdate,
+        /// Under [`ViewUpdate::Once`], a new value draws the snapshot again. Under
+        /// [`MAX_VIEW_GENERATION`].
+        generation: u8,
+    },
     /// Play the sending mod's own sound number `index` (its place in `[sounds]`, name
     /// order) from the craft, placed like a title cue (positioned, HRTF and rear cue
     /// apply; the player's own craft is heard dry). One the mod lacks or that did not
@@ -936,6 +956,7 @@ impl Command {
             Self::FireModEffectAhead { .. } => CommandKind::FireModEffectAhead,
             Self::DrawBeam { .. } => CommandKind::DrawBeam,
             Self::SetShaderParam { .. } => CommandKind::SetShaderParam,
+            Self::PortalView { .. } => CommandKind::PortalView,
             Self::PlayModSound { .. } => CommandKind::PlayModSound,
         }
     }
@@ -971,6 +992,7 @@ impl Command {
             | Self::FireModEffectAhead { slot, .. }
             | Self::DrawBeam { slot, .. }
             | Self::SetShaderParam { slot, .. }
+            | Self::PortalView { slot, .. }
             | Self::PlayModSound { slot, .. } => Some(slot),
             Self::PickupRoll { .. }
             | Self::ScalePad { .. }
@@ -1052,7 +1074,8 @@ impl Command {
             | Self::FovOffset { .. }
             | Self::FireModEffectAhead { .. }
             | Self::DrawBeam { .. }
-            | Self::SetShaderParam { .. } => scene::encode(self).unwrap_or_default(),
+            | Self::SetShaderParam { .. }
+            | Self::PortalView { .. } => scene::encode(self).unwrap_or_default(),
             Self::PlayModSound { .. } => sound::encode(self).unwrap_or_default(),
         };
         let mut record = [0; COMMAND_LEN];
@@ -1282,7 +1305,8 @@ impl Command {
             | CommandKind::FovOffset
             | CommandKind::FireModEffectAhead
             | CommandKind::DrawBeam
-            | CommandKind::SetShaderParam => {
+            | CommandKind::SetShaderParam
+            | CommandKind::PortalView => {
                 return scene::decode(kind, slot, (arg, value, word));
             }
             CommandKind::PlayModSound => return sound::decode(slot, arg, word),

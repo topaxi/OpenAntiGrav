@@ -16,6 +16,7 @@ impl Scene {
         queue: &wgpu::Queue,
         shaders: &[Option<oag_fx::mod_shader::Shader>],
     ) {
+        *self.portal.borrow_mut() = None;
         *self.mod_shaders.borrow_mut() = (!shaders.is_empty()).then(|| {
             let stage = oag_fx::mod_shader::Stage::new(
                 device,
@@ -52,6 +53,7 @@ impl Scene {
             queue,
             &oag_fx::mod_shader::Frame {
                 view_projection: *vp,
+                engine_view_projection: self.portal_engine_of(race),
                 // The offset and the flyby are the world meshes' epoch; a mod counts race time.
                 time: self.anim_clock.get() - race.world_clock_offset() - race.flyby_seconds(),
                 draw_alpha: race.draw_alpha(),

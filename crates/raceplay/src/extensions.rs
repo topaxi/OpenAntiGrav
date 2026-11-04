@@ -142,6 +142,21 @@ pub struct Beam {
     pub shader: Option<u16>,
 }
 
+/// A `portal-view` of this tick: an output, never hashed.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PortalRequest {
+    /// The entrance's progress on the lap, in track units.
+    pub entrance: f32,
+    /// The exit's progress on the lap, in track units.
+    pub exit: f32,
+    /// How far the surface reaches from the entrance's centre, in world units.
+    pub radius: f32,
+    /// When the texture is drawn.
+    pub update: oag_ext_abi::ViewUpdate,
+    /// A new value draws a snapshot again.
+    pub generation: u8,
+}
+
 /// A wire colour as straight-alpha `RGBA` in `0..=1`.
 #[cfg(feature = "extensions")]
 fn unit(rgba: oag_ext_abi::Rgba) -> [f32; 4] {
@@ -1135,6 +1150,20 @@ impl crate::Race {
         #[cfg(not(feature = "extensions"))]
         {
             std::iter::empty()
+        }
+    }
+
+    /// This tick's `portal-view` for `slot`'s view.
+    #[cfg(feature = "view")]
+    pub(crate) fn extension_portal_view(&self, slot: usize) -> Option<PortalRequest> {
+        #[cfg(feature = "extensions")]
+        {
+            self.sim.extensions.on.portal_views[slot]
+        }
+        #[cfg(not(feature = "extensions"))]
+        {
+            let _ = slot;
+            None
         }
     }
 

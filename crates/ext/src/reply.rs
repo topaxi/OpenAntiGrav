@@ -378,6 +378,44 @@ impl<'a> Reply<'a> {
         })
     }
 
+    /// `portal-view`: `craft`'s view wants what its camera would see through the pair of
+    /// portals at lap progress `entrance` and `exit` (track units), in the texture a mod
+    /// shader reads as `engine_texture`; re-send it each tick it should hold. `radius`, whole
+    /// world units from 1, is how far the surface reaches from the entrance's centre.
+    /// [`oag_ext_abi::ViewUpdate::Once`] draws one snapshot, and another when `generation`
+    /// changes; [`oag_ext_abi::ViewUpdate::Continuous`] draws every frame the portal is in the
+    /// view, at the cost of one more scene a frame. Never hashed.
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`], [`Refused::Range`] for a progress that is not a number or is below
+    /// zero, a `radius` of 0, a `generation` from `MAX_VIEW_GENERATION` up.
+    pub fn portal_view(
+        &mut self,
+        craft: &Craft<'_>,
+        (entrance, exit): (f32, f32),
+        radius: u8,
+        update: oag_ext_abi::ViewUpdate,
+        generation: u8,
+    ) -> Result<(), Refused> {
+        let on_a_lap = |progress: f32| progress.is_finite() && progress >= 0.0;
+        if !on_a_lap(entrance)
+            || !on_a_lap(exit)
+            || radius == 0
+            || generation >= oag_ext_abi::MAX_VIEW_GENERATION
+        {
+            return Err(Refused::Range);
+        }
+        self.push(&Command::PortalView {
+            slot: craft.slot(),
+            entrance,
+            exit,
+            radius,
+            update,
+            generation,
+        })
+    }
+
     /// `fov-offset`: widen (positive) or narrow the craft's view by `degrees`, within
     /// `MAX_FOV_OFFSET_DEG` either way, this tick; re-send it each tick it should hold.
     /// Never hashed.

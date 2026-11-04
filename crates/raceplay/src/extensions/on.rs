@@ -108,6 +108,8 @@ pub(super) struct On {
     /// This tick's `draw-beam`s and `set-shader-param`s: outputs, never hashed.
     pub(super) beams: Vec<(usize, super::Beam)>,
     pub(super) shader_params: Vec<ShaderParam>,
+    /// Each slot's `portal-view` this tick (the later module wins): an output, never hashed.
+    pub(super) portal_views: [Option<super::PortalRequest>; oag_gameplay::MAX_SHIPS],
     /// Events dropped past a cap, counted for the report: an output, never hashed.
     pub(super) drops: Drops,
     /// The race-wide outputs of this tick.
@@ -344,6 +346,7 @@ impl On {
             pickups,
             effects: Vec::new(),
             beams: Vec::new(),
+            portal_views: [None; oag_gameplay::MAX_SHIPS],
             shader_params: Vec::new(),
             sound_loops: Vec::new(),
             fill: [None; oag_gameplay::MAX_SHIPS],
@@ -978,6 +981,7 @@ pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs, trans
     on.effects.clear();
     on.fill = [None; oag_gameplay::MAX_SHIPS];
     on.beams.clear();
+    on.portal_views = [None; oag_gameplay::MAX_SHIPS];
     on.shader_params.clear();
     on.fov = [0.0; oag_gameplay::MAX_SHIPS];
     let region = on.region.clone();
@@ -1123,6 +1127,22 @@ fn apply(sim: &mut RaceSim, index: usize, command: Command) {
                 shader,
             },
         )),
+        Command::PortalView {
+            slot,
+            entrance,
+            exit,
+            radius,
+            update,
+            generation,
+        } => {
+            sim.extensions.on.portal_views[slot.index()] = Some(super::PortalRequest {
+                entrance,
+                exit,
+                radius: f32::from(radius),
+                update,
+                generation,
+            });
+        }
         Command::SetShaderParam {
             slot,
             shader,

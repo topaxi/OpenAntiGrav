@@ -199,6 +199,7 @@ pub(crate) fn read(
             | Command::ScreenFill { .. }
             | Command::FovOffset { .. }
             | Command::SetShaderParam { .. }
+            | Command::PortalView { .. }
             | Command::Emit { .. } => {}
         }
         commands.push(command);
